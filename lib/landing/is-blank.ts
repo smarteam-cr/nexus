@@ -50,6 +50,13 @@ export const NO_CONTENIDO = new Set([
   // en una sección cuyo HTML nunca pegó (o después de "Limpiar"): sin esta entrada, esa
   // sección vacía se publicaría y el cliente vería un hueco con título.
   "altoEmbed",
+  // Los tres de la tabla de inversión dinámica. Son PRESENTACIÓN y ninguno sobrevive solo:
+  // una línea apagada, una clasificada como mensual, o una sección donde solo se eligió el
+  // plazo del contrato no tienen una palabra que mostrarle a nadie. Misma trampa de
+  // `anchoRecurrente`, con la que el botón "Limpiar" mentía.
+  "activa",
+  "recurrencia",
+  "contrato",
 ]);
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. */

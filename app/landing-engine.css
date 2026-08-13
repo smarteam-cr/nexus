@@ -674,6 +674,52 @@
 }
 .stl .stl-inv-asist .stl-add { margin-top: 0; }
 .stl .stl-inv-asist-warn { color: #B45309; font-weight: 600; }
+/* ── La tabla DINÁMICA: check, aritmética por línea y plazo ──────────────────
+   El check y el plazo son CONTROLES dentro de un documento: se usan en vivo en la reunión
+   (se apaga un producto y el total baja). Por eso son discretos —el documento manda— pero
+   con área de clic real y foco visible: se manejan con el cliente mirando la pantalla. */
+.stl .stl-inv-check {
+  grid-row: 1;
+  width: 15px; height: 15px;
+  margin: 4px 10px 0 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+  flex: none;
+}
+.stl .stl-inv-check:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Una línea apagada NO se esconde: se ve tachada. Desaparecer sería peor —el cliente
+   perdería de vista lo que acaba de sacar y no podría volver a prenderlo. */
+.stl .stl-inv-row--off { opacity: 0.45; }
+.stl .stl-inv-row--off .stl-inv-concept,
+.stl .stl-inv-row--off .stl-inv-amount { text-decoration: line-through; }
+/* La aritmética de la línea, debajo del concepto: "3 × $1,500 · −15%". */
+.stl .stl-inv-calc {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px;
+  margin-top: 4px;
+  font-size: 12px; line-height: 1.5; color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.stl .stl-inv-x { opacity: 0.55; }
+.stl .stl-inv-num { min-width: 3ch; }
+.stl .stl-inv-recur {
+  padding: 1px 6px; border-radius: 7px; border: 1px solid var(--border);
+  background: #fff; color: var(--text-2); font-size: 11.5px; cursor: pointer;
+}
+/* Plazo del contrato: control segmentado, sobrio. */
+.stl .stl-inv-plazo { display: inline-flex; gap: 0; margin: 0 0 14px; }
+.stl .stl-inv-plazo-btn {
+  padding: 5px 14px; border: 1px solid var(--border); background: #fff;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 12px; font-weight: 700; color: var(--text-2); cursor: pointer;
+}
+.stl .stl-inv-plazo-btn:first-child { border-radius: 999px 0 0 999px; }
+.stl .stl-inv-plazo-btn:last-child { border-radius: 0 999px 999px 0; border-left: 0; }
+.stl .stl-inv-plazo-btn.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.stl .stl-inv-plazo-btn:disabled { cursor: default; }
+.stl .stl-inv-plazo-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* El cierre de dos números (pago único + recurrente). */
+.stl .stl-inv-cierre { margin-top: 24px; display: grid; gap: 8px; }
+
 .stl .stl-inv-concept {
   display: block; overflow-wrap: anywhere;
   font-family: var(--font-jakarta), system-ui, sans-serif;

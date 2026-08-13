@@ -110,6 +110,55 @@ export function parseMonto(monto: string | null | undefined, moneda?: string | n
   return { min: Math.min(...nums), max: Math.max(...nums) };
 }
 
+/**
+ * Una CANTIDAD ("3", "1,5", "12 usuarios" → 3 · 1.5 · null). Estricta a propósito: si no es
+ * un número limpio devuelve null y el llamador cae a 1, en vez de multiplicar por un valor
+ * inventado. Sin tope superior —una cuenta puede tener 400 licencias— pero sí sin ceros ni
+ * negativos: una línea con cantidad 0 es una línea que se borra, no una que vale 0.
+ */
+export function parseCantidad(txt: string | null | undefined): number | null {
+  const raw = (txt ?? "").trim();
+  if (!raw || !/^[\d.,]+$/.test(raw)) return null;
+  const n = aNumero(raw);
+  return n != null && n > 0 ? n : null;
+}
+
+/** Un descuento resuelto: porcentaje sobre la línea, o monto fijo en la moneda de la sección. */
+export type Descuento = { tipo: "pct"; valor: number } | { tipo: "monto"; valor: number };
+
+/**
+ * El descuento de UNA línea: `"15%"` · `"$200"` · `"200"`.
+ *
+ * Es POR LÍNEA y no global porque los descuentos de HubSpot no se comportan igual entre Hubs
+ * —bajan mucho en unos y casi nada en otros—, así que un porcentaje único sobre el total no
+ * describe ninguna negociación real.
+ *
+ * `"sucio"` = hay algo escrito que no se pudo leer. Nunca se ignora en silencio: una línea con
+ * un descuento ilegible se muestra SIN descuento, y quien la escribió tiene que verlo.
+ * Un porcentaje > 100 es sucio (no existe un descuento que devuelva plata).
+ */
+export function parseDescuento(txt: string | null | undefined): Descuento | "sucio" | null {
+  const raw = (txt ?? "").trim();
+  if (!raw) return null;
+  if (raw.endsWith("%")) {
+    const n = aNumero(raw.slice(0, -1).trim());
+    if (n == null || n > 100) return "sucio";
+    return { tipo: "pct", valor: n };
+  }
+  const r = parseMonto(raw);
+  if (r === null || r === "sucio") return "sucio";
+  // Un descuento en rango no tiene sentido: se toma el piso y se avisa por el camino sucio.
+  if (r.min !== r.max) return "sucio";
+  return { tipo: "monto", valor: r.min };
+}
+
+/** Aplica un descuento a un importe ya multiplicado. Nunca baja de 0. */
+export function aplicarDescuento(bruto: number, d: Descuento | null): number {
+  if (!d) return bruto;
+  const neto = d.tipo === "pct" ? bruto * (1 - d.valor / 100) : bruto - d.valor;
+  return Math.max(0, Math.round(neto * 100) / 100);
+}
+
 export interface SumaLineas {
   /** null = ninguna línea aportó un monto sumable → no se pinta total. */
   total: Rango | null;

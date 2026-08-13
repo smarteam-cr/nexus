@@ -203,7 +203,31 @@ export interface WebMethodologyData { fases: Phase[]; cotizaAparte: string }
 //    recurrentes separados (card oscura) + nota de exclusiones + moneda configurable.
 /** Una línea de la sección de Inversión. `hub` (opcional) es el slug del Hub de HubSpot que
  *  esa línea factura — de ahí sale su ícono. Ver `LineaInversion` en lib/landing/inversion.ts. */
-export interface WebInvestLine { concepto: string; monto: string; detalle: string; hub?: string }
+/**
+ * Una línea de la tabla de inversión. Espejo de `LineaInversion` (lib/landing/inversion.ts),
+ * que es donde vive la aritmética y el porqué de cada campo. Todo string: `coerceToSchema`
+ * aplana cualquier hoja que no lo sea. Los campos de cotización son OPCIONALES y ausentes en
+ * todo lo publicado — sin `precioUnitario`, el importe sale de `monto` como siempre.
+ */
+export interface WebInvestLine {
+  concepto: string;
+  monto: string;
+  detalle: string;
+  hub?: string;
+  /** Unidades (vacío = 1). */
+  cantidad?: string;
+  /** Precio de lista por unidad, antes del descuento. */
+  precioUnitario?: string;
+  /** Precio de lista por unidad con contrato ANUAL (vacío = el mensual × 12). */
+  precioAnual?: string;
+  /** Descuento de ESTA línea: "15%" o "$200". Por línea porque los de HubSpot varían mucho
+   *  entre Hubs y uno global no describe ninguna negociación real. */
+  descuento?: string;
+  /** "mensual" = se cobra todos los meses · ausente = cobro único. */
+  recurrencia?: string;
+  /** "no" = apagada. En el editor persiste; en la propuesta publicada el check es efímero. */
+  activa?: string;
+}
 /**
  * La sección de INVERSIÓN, una sola para los dos templates (antes convivían dos shapes
  * distintos bajo la misma key). Las reglas de forma —qué es legacy, cuántos totales se
@@ -219,6 +243,8 @@ export interface WebInvestmentData {
   extras: WebInvestLine[];
   recurrentes: WebInvestLine[];
   nota: string; // exclusiones ("impuestos no contemplados") — badge arriba
+  /** "anual" = las líneas recurrentes se cotizan por año (switch de la tabla). */
+  contrato?: string;
   /** Ancho de la card de recurrente mensual — "ancho" ocupa 2 columnas del grid. */
   anchoRecurrente?: "normal" | "ancho";
   // ── Shape v1 de HubSpot: se LEE para la rama legacy y nunca se escribe (patrón

@@ -8,7 +8,7 @@
  * y la "Arquitectura de conexión" reusa TechArchitectureSection (sections-shared.tsx).
  * Acá viven las 6 restantes. Mismo contrato inline-editable que sections.tsx.
  */
-import { type CSSProperties, type FC, type ReactNode } from "react";
+import { useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { CtaButton, CtaEditor } from "./sections";
@@ -34,6 +34,11 @@ import {
   gruposDeInversion,
   lineasDeLicenciaPorHub,
   type GrupoInversion,
+  contratoDe,
+  esLineaActiva,
+  esRecurrente,
+  montoDeLinea,
+  type Contrato,
 } from "@/lib/landing/inversion";
 
 /* ── 2) Dos columnas: una lista a la izquierda + un panel oscuro de consecuencias ──────
@@ -314,11 +319,19 @@ const CURRENCIES = ["USD", "CRC", "MXN", "COP", "PEN", "CLP", "GTQ", "DOP", "EUR
 /** Una tabla de líneas con su cierre. La usan los DOS grupos — servicios y licencias. */
 function GrupoTabla({
   grupo, lang, moneda, editable, chip, rotuloTotal, destacado, pendientes, asistente, avisoLinea, onSet,
+  contrato, pdf, onToggle,
 }: {
   grupo: GrupoInversion;
   lang: LandingLang;
   moneda: string;
   editable?: boolean;
+  /** El plazo con el que se cotizan las líneas recurrentes. */
+  contrato: Contrato;
+  /** En el PDF no hay checks ni líneas apagadas: se imprime la oferta, no la exploración. */
+  pdf?: boolean;
+  /** Prender/apagar una línea. En edición PERSISTE (`activa`); en lectura es EFÍMERO — el
+   *  check existe para la reunión: se apagan productos y el total baja en vivo. */
+  onToggle?: (i: number, prender: boolean) => void;
   chip: string;
   rotuloTotal: string;
   /** true = este subtotal ES el total de la sección (un solo grupo) → píldora. */
@@ -355,7 +368,13 @@ function GrupoTabla({
         <SortableItems items={lineas} disabled={!editable} onReorder={(next) => set(next)}
           container={(nodes) => <>{nodes}</>}>
           {(l, i, handle) => {
-            const m = montoParaLectura(l.monto, moneda);
+            /* El importe de la línea. Con `precioUnitario` sale de cantidad × precio − descuento;
+               sin él, del `monto` de texto libre — que es el camino de TODO lo publicado. */
+            const calc = montoDeLinea(l, moneda, contrato);
+            const activa = esLineaActiva(l);
+            const m = calc.calculada
+              ? { texto: calc.rango ? formatRango(calc.rango, moneda) : "", libre: calc.sucio }
+              : montoParaLectura(l.monto, moneda);
             /* El eco de "cómo lo va a ver el cliente". ⚠ NUNCA se le pasa a `Editable`: ése
                comitea su propio textContent al blur Y al desmontarse (inline.tsx), así que un
                valor DERIVADO adentro se auto-persiste y le reescribe el monto a Ventas. Es
@@ -369,9 +388,23 @@ function GrupoTabla({
             const { icon } = hubVisual(l.hub ?? "");
             const aviso = editable ? avisoLinea?.(l) ?? "" : "";
             return (
-              <div className="stl-item stl-inv-row">
+              <div className={`stl-item stl-inv-row${activa ? "" : " stl-inv-row--off"}`}>
                 {handle}
                 {editable && <RemoveBtn onClick={() => set(removeAt(lineas, i))} />}
+
+                {/* El check. En el EDITOR persiste (`activa`): es la curaduría de Ventas. En la
+                    propuesta publicada es EFÍMERO — existe para la reunión, donde se apagan
+                    productos y el total baja en vivo; al recargar vuelve a la oferta. En el PDF
+                    no se pinta: un documento formal no lleva controles. */}
+                {!pdf && onToggle && (
+                  <input
+                    type="checkbox"
+                    className="stl-inv-check"
+                    checked={activa}
+                    onChange={(e) => onToggle(i, e.currentTarget.checked)}
+                    aria-label={`Incluir ${l.concepto || "esta línea"}`}
+                  />
+                )}
 
                 <div className={`stl-inv-row-main${icon ? " stl-inv-row-main--hub" : ""}`}>
                   {icon && (
@@ -391,13 +424,65 @@ function GrupoTabla({
                     placeholder="Concepto…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, concepto: v }))} />
                   <Editable as="span" className="stl-inv-detail" editable={editable} value={l.detalle}
                     placeholder="qué incluye…" onCommit={(v) => set(replaceAt(lineas, i, { ...l, detalle: v }))} />
+                  {/* La aritmética de la línea, a la vista: cantidad × precio de lista − descuento.
+                      En LECTURA es texto (el cliente tiene que poder rehacer la cuenta a mano); en
+                      EDICIÓN son campos. Va debajo del concepto y no en columnas propias porque una
+                      tabla de 5 columnas se rompe en celular y en el PDF, y acá el número que manda
+                      —el subtotal— ya tiene su columna. */}
+                  {editable ? (
+                    <span className="stl-inv-calc">
+                      <Editable as="span" className="stl-inv-num" editable value={l.cantidad ?? ""}
+                        placeholder="1" onCommit={(v) => set(replaceAt(lineas, i, { ...l, cantidad: v }))} />
+                      <span className="stl-inv-x">×</span>
+                      <Editable as="span" className="stl-inv-num" editable value={l.precioUnitario ?? ""}
+                        placeholder="precio de lista" onCommit={(v) => set(replaceAt(lineas, i, { ...l, precioUnitario: v }))} />
+                      <span className="stl-inv-x">−</span>
+                      <Editable as="span" className="stl-inv-num" editable value={l.descuento ?? ""}
+                        placeholder="dcto (15% o $200)" onCommit={(v) => set(replaceAt(lineas, i, { ...l, descuento: v }))} />
+                      <select
+                        className="stl-inv-recur"
+                        value={esRecurrente(l) ? "mensual" : "unica"}
+                        onChange={(e) => set(replaceAt(lineas, i, { ...l, recurrencia: e.target.value }))}
+                      >
+                        <option value="unica">cobro único</option>
+                        <option value="mensual">mensual</option>
+                      </select>
+                      {contrato === "anual" && esRecurrente(l) && (
+                        <Editable as="span" className="stl-inv-num" editable value={l.precioAnual ?? ""}
+                          placeholder="precio anual (opc.)" onCommit={(v) => set(replaceAt(lineas, i, { ...l, precioAnual: v }))} />
+                      )}
+                    </span>
+                  ) : (
+                    calc.calculada && calc.unitario && (
+                      <span className="stl-inv-calc">
+                        {`${calc.cantidad} × ${formatRango(calc.unitario, moneda)}`}
+                        {(l.descuento ?? "").trim() && ` · −${(l.descuento ?? "").trim()}`}
+                        {esRecurrente(l) && ` · ${contrato === "anual" ? "al año" : "al mes"}`}
+                      </span>
+                    )
+                  )}
                   {/* Solo-editor, igual que "⚠ no suma": el cliente ve la línea tal cual la
                       dejó Ventas, no nuestra opinión sobre ella. */}
                   {aviso && <span className="stl-inv-aviso">⚠ {aviso}</span>}
                 </div>
 
                 <div className="stl-inv-cell">
-                  {editable ? (
+                  {editable && calc.calculada ? (
+                    /* Con precio unitario el subtotal es DERIVADO: se muestra, no se edita. Un
+                       `Editable` con un valor calculado adentro se auto-persiste al blur y le
+                       reescribiría el monto a Ventas (el bug de la portada, documentado en
+                       inline.tsx). Para escribir a mano se vacía el precio unitario. */
+                    <>
+                      <span className={`stl-inv-amount${calc.sucio ? " stl-inv-amount--libre" : ""}`}>
+                        {m.texto || "—"}
+                      </span>
+                      {calc.sucio && (
+                        <span className="stl-inv-warn" title="Revisá el precio o el descuento: la línea no entra en el total.">
+                          ⚠ no suma
+                        </span>
+                      )}
+                    </>
+                  ) : editable ? (
                     <>
                       <Editable as="span" className="stl-inv-amount" editable value={l.monto}
                         placeholder="$0–0" onCommit={(v) => set(replaceAt(lineas, i, { ...l, monto: v }))} />
@@ -463,7 +548,36 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
     : data;
 
   const set = (next: Partial<WebInvestmentData>) => onChange?.({ ...d, ...next });
-  const g = gruposDeInversion(d);
+
+  /* Los apagados EFÍMEROS de la reunión. Solo existen en LECTURA: ahí el documento está
+     congelado y no hay a dónde escribir, así que el check sirve para explorar en vivo ("si
+     sacamos Sales Hub, ¿cuánto queda?") y al recargar vuelve a ser la oferta que se publicó.
+     En el editor no se usan: ahí el check ESCRIBE `activa`, que es la curaduría de Ventas. */
+  const [apagadas, setApagadas] = useState<Set<string>>(new Set());
+  const clave = (grupo: "lineas" | "licencias", i: number) => `${grupo}:${i}`;
+  const apagar = (grupo: "lineas" | "licencias", ls: WebInvestLine[] | undefined) =>
+    (ls ?? []).map((l, i) => (apagadas.has(clave(grupo, i)) ? { ...l, activa: "no" } : l));
+  const dVivo: WebInvestmentData = editable
+    ? d
+    : { ...d, lineas: apagar("lineas", d.lineas), licencias: apagar("licencias", d.licencias) };
+
+  /** El check de una fila. En edición persiste; en lectura vive en el estado local. */
+  const toggle = (grupo: "lineas" | "licencias", i: number, prender: boolean) => {
+    if (editable) {
+      const ls = (grupo === "lineas" ? d.lineas : d.licencias) ?? [];
+      set({ [grupo]: replaceAt(ls, i, { ...ls[i], activa: prender ? "" : "no" }) } as Partial<WebInvestmentData>);
+      return;
+    }
+    setApagadas((prev) => {
+      const next = new Set(prev);
+      if (prender) next.delete(clave(grupo, i));
+      else next.add(clave(grupo, i));
+      return next;
+    });
+  };
+
+  const contrato = contratoDe(d);
+  const g = gruposDeInversion(dVivo);
   const moneda = g.moneda; // la que se SUMÓ (ver gruposDeInversion)
   const extras = d.extras ?? [];
   const recurrentes = d.recurrentes ?? [];
@@ -538,12 +652,39 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
         </div>
       )}
 
+      {/* El plazo del contrato. Solo se pinta cuando hay algo recurrente que cotizar: un
+          switch que no mueve ningún número es un control roto. Mueve SOLO lo recurrente —
+          una implementación cuesta lo mismo en un contrato anual que en uno mensual. */}
+      {g.hayRecurrentes && (
+        <div className="stl-inv-plazo" role="group" aria-label="Plazo del contrato">
+          {(["mensual", "anual"] as const).map((op) => (
+            <button
+              key={op}
+              type="button"
+              className={`stl-inv-plazo-btn${contrato === op ? " is-on" : ""}`}
+              aria-pressed={contrato === op}
+              /* En LECTURA también se puede mover: es el otro control de la reunión ("¿y si
+                 lo tomamos a un año?"). En el editor persiste; en la propuesta publicada
+                 `onChange` no existe, así que el clic no escribe nada — y por eso el estado
+                 lo lleva el propio dato, no un `useState` que mentiría al recargar. */
+              onClick={() => set({ contrato: op })}
+              disabled={!onChange}
+            >
+              {op === "mensual" ? "Mensual" : "Anual"}
+            </button>
+          ))}
+        </div>
+      )}
+
       <GrupoTabla
         grupo={g.servicios} lang={lang} moneda={moneda} editable={editable}
         chip={rot("servicios", "inversionServicios")}
         rotuloTotal={rot("totalServicios", "totalServicios")}
         destacado={unSoloGrupo}
         pendientes={unSoloGrupo ? g.pendientesTotales : g.servicios.pendientes}
+        contrato={contrato}
+        pdf={ctx.pdfMode}
+        onToggle={(i, prender) => toggle("lineas", i, prender)}
         onSet={set}
       />
 
@@ -554,6 +695,9 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
           rotuloTotal={rot("totalLicencias", "totalLicencias")}
           destacado={unSoloGrupo}
           pendientes={unSoloGrupo ? g.pendientesTotales : g.licencias.pendientes}
+          contrato={contrato}
+          pdf={ctx.pdfMode}
+          onToggle={(i, prender) => toggle("licencias", i, prender)}
           asistente={asistenteLicencias}
           /* ⚠ Gateado por `vendidos.length`, con la MISMA condición que el asistente. Sin eso,
              un documento sin `activos` —la mayoría de los canvases vivos hoy— da
@@ -570,6 +714,36 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
           }
           onSet={set}
         />
+      )}
+
+      {/* Cierre con recurrencia: DOS números que sí se pueden firmar. Un cobro único y una
+          mensualidad no se suman —es plata de naturalezas distintas— así que el gran total se
+          apaga y en su lugar van los dos. Solo aparece cuando alguna línea se declara
+          recurrente, o sea nunca en lo ya publicado. */}
+      {g.hayRecurrentes && (g.unico || g.recurrente) && (
+        <div className="stl-inv-cierre">
+          {g.unico && (
+            <div className="stl-inv-sum stl-inv-sum--total">
+              <div className="stl-inv-sum-label">Pago único</div>
+              <div className="stl-inv-sum-amount">{formatRango(g.unico, moneda)}</div>
+            </div>
+          )}
+          {g.recurrente && (
+            <div className="stl-inv-sum stl-inv-sum--total">
+              <div className="stl-inv-sum-label">
+                {contrato === "anual" ? "Por año" : "Por mes"}
+                {g.pendientesTotales > 0 && (
+                  <span className="stl-inv-sum-note">
+                    {`+${g.pendientesTotales} ${t(lang, "montoPorDefinir")} · ${t(lang, "noSuman")}`}
+                  </span>
+                )}
+              </div>
+              <div className="stl-inv-sum-amount">
+                <span className="stl-inv-total-pill">{formatRango(g.recurrente, moneda)}</span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Gran total: SOLO con los dos grupos sumables. ⚠ El rótulo tiene que declarar qué

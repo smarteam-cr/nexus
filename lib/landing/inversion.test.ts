@@ -12,6 +12,9 @@ import {
   esInversionLegacy,
   gruposDeInversion,
   conciliarLicenciasHub,
+  contratoDe,
+  esLineaActiva,
+  montoDeLinea,
   INVERSION_LEGACY_KEYS,
   licenciasDeHubSinMonto,
   sembrarLicenciasIniciales,
@@ -307,5 +310,196 @@ describe("licenciasDeHubSinMonto: el freno de publicación", () => {
     expect(licenciasDeHubSinMonto({ licencias: [{ hub: "data_hub", concepto: "" }] })).toEqual(["Data Hub"]);
     expect(licenciasDeHubSinMonto(null)).toEqual([]);
     expect(licenciasDeHubSinMonto({ licencias: "x" })).toEqual([]);
+  });
+});
+
+describe("la línea como renglón de cotización: cantidad × precio − descuento", () => {
+  it("multiplica y descuenta", () => {
+    const m = montoDeLinea({ cantidad: "3", precioUnitario: "$1,500", descuento: "15%" }, "USD");
+    expect(m.rango).toEqual({ min: 3825, max: 3825 }); // 4500 − 15%
+    expect(m.calculada).toBe(true);
+    expect(m.unitario).toEqual({ min: 1500, max: 1500 });
+    expect(m.cantidad).toBe(3);
+  });
+
+  it("sin cantidad es 1, sin descuento es el bruto", () => {
+    expect(montoDeLinea({ precioUnitario: "$800" }, "USD").rango).toEqual({ min: 800, max: 800 });
+  });
+
+  it("el descuento fijo se resta después de multiplicar", () => {
+    expect(montoDeLinea({ cantidad: "2", precioUnitario: "500", descuento: "$150" }, "USD").rango)
+      .toEqual({ min: 850, max: 850 });
+  });
+
+  /* ⚠ EL camino de todo lo publicado: ninguna línea tiene `precioUnitario`, así que el importe
+     sigue saliendo de `monto` y el render no se mueve un pixel. */
+  it("sin precio unitario cae al `monto` de siempre", () => {
+    const m = montoDeLinea({ monto: "$10,000" }, "USD");
+    expect(m.rango).toEqual({ min: 10000, max: 10000 });
+    expect(m.calculada).toBe(false);
+    expect(m.unitario).toBeNull();
+  });
+
+  it("con los dos escritos manda el precio unitario", () => {
+    // El calculado es el que el cliente puede recalcular mirando la fila; el `monto` viejo
+    // quedaría contradiciendo a la aritmética que tiene delante.
+    expect(montoDeLinea({ precioUnitario: "100", cantidad: "2", monto: "$999" }, "USD").rango)
+      .toEqual({ min: 200, max: 200 });
+  });
+
+  it("un descuento ilegible ensucia la línea ENTERA", () => {
+    const m = montoDeLinea({ precioUnitario: "$1,000", descuento: "el negociado" }, "USD");
+    expect(m.sucio).toBe(true);
+    expect(m.rango).toBeNull(); // sumarla sin el descuento mostraría un precio que nadie acordó
+  });
+
+  it("un precio en otra moneda no suma", () => {
+    expect(montoDeLinea({ precioUnitario: "₡500.000" }, "USD").sucio).toBe(true);
+  });
+
+  it("el rango se propaga por la multiplicación y el descuento", () => {
+    expect(montoDeLinea({ cantidad: "2", precioUnitario: "$100–150", descuento: "10%" }, "USD").rango)
+      .toEqual({ min: 180, max: 270 });
+  });
+});
+
+describe("contrato mensual ↔ anual", () => {
+  /* Recurrente: el plazo SOLO mueve lo que se cobra todos los meses. */
+  const linea = { cantidad: "2", precioUnitario: "$50", precioAnual: "$500", recurrencia: "mensual" };
+
+  it("mensual usa el precio mensual", () => {
+    expect(montoDeLinea(linea, "USD", "mensual").rango).toEqual({ min: 100, max: 100 });
+  });
+
+  it("anual usa el precio anual ESCRITO, no el ×12", () => {
+    // Es el caso real: el anual viene con descuento de HubSpot, no es 12 × el mensual.
+    expect(montoDeLinea(linea, "USD", "anual").rango).toEqual({ min: 1000, max: 1000 });
+  });
+
+  it("sin precio anual escrito, deriva ×12 en vez de vaciarse", () => {
+    const m = montoDeLinea({ cantidad: "2", precioUnitario: "$50", recurrencia: "mensual" }, "USD", "anual");
+    expect(m.rango).toEqual({ min: 1200, max: 1200 });
+    expect(m.unitario).toEqual({ min: 600, max: 600 });
+  });
+
+  it("el descuento de la línea se aplica sobre el plazo elegido", () => {
+    expect(montoDeLinea({ precioUnitario: "$100", descuento: "10%", recurrencia: "mensual" }, "USD", "anual").rango)
+      .toEqual({ min: 1080, max: 1080 }); // 1200 − 10%
+  });
+
+  /* El error que este test cazó ANTES de que existiera la UI: el ×12 se le aplicaba también
+     al cobro único, así que una implementación de $12.000 salía a $144.000 en la propuesta de
+     un cliente con solo mover un switch. */
+  it("un cobro ÚNICO no se multiplica por el plazo", () => {
+    const impl = { precioUnitario: "$12,000" };
+    expect(montoDeLinea(impl, "USD", "anual").rango).toEqual(montoDeLinea(impl, "USD", "mensual").rango);
+  });
+
+  it("`contratoDe` cae a mensual salvo que diga anual", () => {
+    expect(contratoDe({ contrato: "anual" })).toBe("anual");
+    expect(contratoDe({ contrato: "" })).toBe("mensual");
+    expect(contratoDe({})).toBe("mensual");
+    expect(contratoDe(null)).toBe("mensual");
+  });
+});
+
+describe("el check por línea: prender y apagar en vivo", () => {
+  const base: InversionData = {
+    moneda: "USD",
+    lineas: [{ concepto: "Setup", precioUnitario: "$5,000" }],
+    licencias: [
+      { concepto: "Marketing Hub", precioUnitario: "$800", cantidad: "1" },
+      { concepto: "Sales Hub", precioUnitario: "$300", cantidad: "1" },
+    ],
+  };
+
+  it("una línea apagada no suma", () => {
+    const off = { ...base, licencias: [base.licencias![0], { ...base.licencias![1], activa: "no" }] };
+    expect(gruposDeInversion(base).licencias.total).toEqual({ min: 1100, max: 1100 });
+    expect(gruposDeInversion(off).licencias.total).toEqual({ min: 800, max: 800 });
+  });
+
+  it("apagar TODO el grupo lo deja sin total, no en cero", () => {
+    const off = { ...base, licencias: base.licencias!.map((l) => ({ ...l, activa: "no" })) };
+    // Un cero es una afirmación ("esto vale 0"); sin total es la verdad ("no hay nada activo").
+    expect(gruposDeInversion(off).licencias.total).toBeNull();
+    expect(gruposDeInversion(off).granTotal).toBeNull();
+  });
+
+  it("una línea apagada tampoco cuenta como pendiente", () => {
+    const off = { moneda: "USD", licencias: [{ concepto: "x", monto: "A definir", activa: "no" }] };
+    expect(gruposDeInversion(off).pendientesTotales).toBe(0);
+  });
+
+  it("`esLineaActiva`: solo el 'no' explícito apaga", () => {
+    expect(esLineaActiva({})).toBe(true);
+    expect(esLineaActiva({ activa: "" })).toBe(true);
+    expect(esLineaActiva({ activa: "si" })).toBe(true);
+    expect(esLineaActiva({ activa: "no" })).toBe(false);
+    expect(esLineaActiva({ activa: " NO " })).toBe(false);
+  });
+});
+
+describe("cobro único vs recurrente: dos números que sí se pueden firmar", () => {
+  const mixta: InversionData = {
+    moneda: "USD",
+    lineas: [{ concepto: "Implementación", precioUnitario: "$12,000" }],
+    licencias: [{ concepto: "Marketing Hub", precioUnitario: "$800", recurrencia: "mensual" }],
+  };
+
+  it("con una línea recurrente el gran total se APAGA", () => {
+    const g = gruposDeInversion(mixta);
+    // Sumar un CapEx con una mensualidad da un número que no existe en ningún contrato.
+    expect(g.granTotal).toBeNull();
+    expect(g.hayRecurrentes).toBe(true);
+    expect(g.unico).toEqual({ min: 12000, max: 12000 });
+    expect(g.recurrente).toEqual({ min: 800, max: 800 });
+  });
+
+  it("el eje atraviesa los DOS grupos", () => {
+    const g = gruposDeInversion({
+      moneda: "USD",
+      lineas: [
+        { concepto: "Setup", precioUnitario: "$5,000" },
+        { concepto: "Soporte", precioUnitario: "$400", recurrencia: "mensual" },
+      ],
+      licencias: [
+        { concepto: "Hub", precioUnitario: "$800", recurrencia: "mensual" },
+        { concepto: "Onboarding HubSpot", precioUnitario: "$1,500" },
+      ],
+    });
+    expect(g.unico).toEqual({ min: 6500, max: 6500 });
+    expect(g.recurrente).toEqual({ min: 1200, max: 1200 });
+  });
+
+  it("el contrato anual mueve SOLO lo recurrente", () => {
+    const g = gruposDeInversion({ ...mixta, contrato: "anual" });
+    expect(g.unico).toEqual({ min: 12000, max: 12000 }); // la implementación no se multiplica
+    expect(g.recurrente).toEqual({ min: 9600, max: 9600 }); // 800 × 12
+    expect(g.contrato).toBe("anual");
+  });
+
+  /* ⚠ EL test de compatibilidad: lo publicado NO declara recurrencia, así que sigue con el
+     gran total de siempre y los dos números nuevos ni se calculan. */
+  it("sin recurrencia declarada, el cierre es el de siempre", () => {
+    const g = gruposDeInversion({
+      moneda: "USD",
+      lineas: [{ monto: "$10,000" }],
+      licencias: [{ monto: "$3,600" }],
+    });
+    expect(g.hayRecurrentes).toBe(false);
+    expect(g.granTotal).toEqual({ min: 13600, max: 13600 });
+    expect(g.unico).toBeNull();
+    expect(g.recurrente).toBeNull();
+  });
+
+  it("apagar la única recurrente devuelve el cierre simple", () => {
+    const g = gruposDeInversion({
+      ...mixta,
+      licencias: [{ ...mixta.licencias![0], activa: "no" }],
+    });
+    expect(g.hayRecurrentes).toBe(false);
+    expect(g.granTotal).toBeNull(); // un solo grupo con monto → un solo total, la píldora
+    expect(g.servicios.total).toEqual({ min: 12000, max: 12000 });
   });
 });

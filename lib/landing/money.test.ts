@@ -13,6 +13,9 @@ import {
   formatRango,
   monedaDeTexto,
   montoParaLectura,
+  aplicarDescuento,
+  parseCantidad,
+  parseDescuento,
 } from "./money";
 
 const L = (...montos: string[]) => montos.map((monto) => ({ monto }));
@@ -195,5 +198,53 @@ describe("montoParaLectura: qué se normaliza y qué sale verbatim", () => {
   it("vacío es vacío (la celda pinta el guion, no un monto)", () => {
     expect(montoParaLectura("", "USD")).toEqual({ texto: "", libre: false });
     expect(montoParaLectura(null)).toEqual({ texto: "", libre: false });
+  });
+});
+
+describe("cantidad y descuento por línea", () => {
+  it.each([
+    ["3", 3],
+    ["1,5", 1.5],
+    ["12", 12],
+  ])("parseCantidad(%s) = %s", (txt, esperado) => {
+    expect(parseCantidad(txt)).toBe(esperado);
+  });
+
+  /* Todo lo que no sea un número limpio cae a null y el llamador usa 1: multiplicar por un
+     número adivinado de "12 usuarios" es peor que no multiplicar. */
+  it.each(["", "  ", "12 usuarios", "tres", "0", "-2", "abc"])("parseCantidad(%s) = null", (txt) => {
+    expect(parseCantidad(txt)).toBeNull();
+  });
+
+  it("lee el porcentaje y el monto fijo", () => {
+    expect(parseDescuento("15%")).toEqual({ tipo: "pct", valor: 15 });
+    expect(parseDescuento("7,5 %")).toEqual({ tipo: "pct", valor: 7.5 });
+    expect(parseDescuento("$200")).toEqual({ tipo: "monto", valor: 200 });
+    expect(parseDescuento("1,200")).toEqual({ tipo: "monto", valor: 1200 });
+  });
+
+  it("sin descuento no hay descuento", () => {
+    expect(parseDescuento("")).toBeNull();
+    expect(parseDescuento(null)).toBeNull();
+  });
+
+  /* Un descuento ilegible NO se ignora: ensucia la línea entera (ver `montoDeLinea`). Que
+     "120%" sea sucio no es purismo — un descuento que devuelve plata no existe, y sumar la
+     línea en negativo daría un total que nadie firmó. */
+  it.each(["120%", "el negociado", "a definir", "10-20%", "$1,000–2,000"])(
+    "descuento sucio: %s",
+    (txt) => {
+      expect(parseDescuento(txt)).toBe("sucio");
+    },
+  );
+
+  it("aplicar: porcentaje, monto y piso en cero", () => {
+    expect(aplicarDescuento(1000, { tipo: "pct", valor: 15 })).toBe(850);
+    expect(aplicarDescuento(1000, { tipo: "monto", valor: 250 })).toBe(750);
+    expect(aplicarDescuento(1000, null)).toBe(1000);
+    // Un descuento mayor que el importe no genera un saldo a favor.
+    expect(aplicarDescuento(100, { tipo: "monto", valor: 500 })).toBe(0);
+    // Dos decimales: sin esto, 33,33% de 100 arrastra la basura del float al total.
+    expect(aplicarDescuento(100, { tipo: "pct", valor: 33.33 })).toBe(66.67);
   });
 });

@@ -18,7 +18,15 @@
  * El gran total aparece recién cuando hay DOS grupos, o sea solo en lo que se llene de
  * ahora en adelante.
  */
-import { monedaDeTexto, sumaLineas, sumaRangos, type Rango } from "./money";
+import {
+  aplicarDescuento,
+  monedaDeTexto,
+  parseCantidad,
+  parseDescuento,
+  parseMonto,
+  sumaRangos,
+  type Rango,
+} from "./money";
 import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 
 /** Las keys del shape VIEJO de HubSpot. Se LEEN para decidir la rama legacy y nunca se
@@ -44,6 +52,35 @@ export interface LineaInversion {
    *  Ausente = licencia de un tercero o línea libre: sin ícono, fuera del alcance de la
    *  siembra y del aviso de desajuste. */
   hub?: string;
+
+  // ── La línea como renglón de cotización (2026-08-13) ──────────────────────
+  // Todo string: `coerceToSchema` aplana cualquier hoja que no lo sea. Todo OPCIONAL y
+  // ausente en lo ya publicado, así que una línea vieja recorre exactamente el mismo camino
+  // que antes: sin `precioUnitario` el importe sale de `monto`, como siempre.
+
+  /** Cuántas unidades ("3"). Vacío o ilegible = 1 — nunca 0: una línea que no se cobra se
+   *  apaga con `activa`, no se multiplica por cero. */
+  cantidad?: string;
+  /** Precio de LISTA por unidad, antes del descuento ("$1,500"). Es lo que convierte a la
+   *  línea en calculada: con esto, `monto` deja de leerse. */
+  precioUnitario?: string;
+  /** Precio de lista por unidad cuando el contrato es ANUAL. Vacío = el mensual × 12 (sin
+   *  descuento extra): así una tabla que solo llenó el mensual sigue dando un número honesto
+   *  al cambiar el switch, en vez de vaciarse. */
+  precioAnual?: string;
+  /** Descuento de ESTA línea: "15%" o "$200". Por línea y no global porque los de HubSpot
+   *  varían mucho entre Hubs — uno global no describe ninguna negociación real. */
+  descuento?: string;
+  /** "mensual" = se cobra todos los meses · ausente/"unica" = cobro único (setup,
+   *  implementación). Ausente es el default A PROPÓSITO: lo publicado no declara ninguna, y
+   *  con default "única" su cierre sigue siendo el gran total de siempre. PRESENTACIÓN
+   *  (`NO_CONTENIDO`): clasifica la línea, no dice nada que el cliente lea por sí solo. */
+  recurrencia?: string;
+  /** "no" = línea apagada. En el EDITOR persiste (es curaduría de Ventas); en la propuesta
+   *  publicada el check es EFÍMERO y arranca de acá. PRESENTACIÓN (`NO_CONTENIDO`): una
+   *  línea cuyo concepto y monto quedaron vacíos no puede mantener viva a la sección solo
+   *  porque alguien la apagó. */
+  activa?: string;
 }
 
 /** El shape unificado. `licencias` es la ÚNICA key nueva — por eso las propuestas de sitio
@@ -62,6 +99,10 @@ export interface InversionData {
   recurrentes?: LineaInversion[];
   nota?: string;
   anchoRecurrente?: string;
+  /** "anual" = las líneas recurrentes se cotizan por año. PRESENTACIÓN (`NO_CONTENIDO`): el
+   *  switch lo escribe apenas alguien lo toca, y una sección donde SOLO se eligió el plazo no
+   *  tiene nada que decirle a nadie. Ausente = "mensual". */
+  contrato?: string;
   // Shape viejo de HubSpot — solo lectura, para la rama legacy.
   licenciasHubspot?: { monto?: string; detalle?: string };
   implementacion?: { monto?: string; detalle?: string };
@@ -69,7 +110,108 @@ export interface InversionData {
 
 const conTexto = (s: unknown) => typeof s === "string" && s.trim() !== "";
 const conContenido = (ls: LineaInversion[] | undefined) =>
-  (ls ?? []).some((l) => conTexto(l?.concepto) || conTexto(l?.monto) || conTexto(l?.detalle));
+  (ls ?? []).some(
+    (l) =>
+      conTexto(l?.concepto) ||
+      conTexto(l?.monto) ||
+      conTexto(l?.detalle) ||
+      // Una línea calculada puede no tener `monto` NUNCA y aun así ser la cotización entera.
+      conTexto(l?.precioUnitario) ||
+      conTexto(l?.precioAnual),
+  );
+
+// ── La línea como renglón de cotización ──────────────────────────────────────
+
+/** Una línea apagada no suma, no cuenta como pendiente y no aparece en el PDF. */
+export function esLineaActiva(l: LineaInversion | null | undefined): boolean {
+  return (l?.activa ?? "").trim().toLowerCase() !== "no";
+}
+
+/** ¿Se cobra todos los períodos? Ausente = cobro ÚNICO, que es lo que asume todo lo ya
+ *  publicado (ninguna línea declara `recurrencia`). */
+export function esRecurrente(l: LineaInversion | null | undefined): boolean {
+  return (l?.recurrencia ?? "").trim().toLowerCase() === "mensual";
+}
+
+export type Contrato = "mensual" | "anual";
+export function contratoDe(data: InversionData | null | undefined): Contrato {
+  return (data?.contrato ?? "").trim().toLowerCase() === "anual" ? "anual" : "mensual";
+}
+
+/** Meses que cubre un período del contrato. Lo usa el ×12 del precio anual derivado. */
+export const MESES_POR_CONTRATO: Record<Contrato, number> = { mensual: 1, anual: 12 };
+
+export interface MontoLinea {
+  /** El importe de la línea, o null si no hay nada legible. */
+  rango: Rango | null;
+  /** Hay algo escrito que NO se pudo leer (monto libre, descuento ilegible, otra moneda). */
+  sucio: boolean;
+  /** true = salió de cantidad × precio − descuento; false = del `monto` de texto libre. */
+  calculada: boolean;
+  /** El precio unitario efectivo ya resuelto (con el ×12 del anual aplicado), para pintarlo. */
+  unitario: Rango | null;
+  /** Cuántas unidades se multiplicaron (1 si no se declaró). */
+  cantidad: number;
+}
+
+/**
+ * El importe de UNA línea, en el plazo pedido.
+ *
+ * Orden de resolución, y el orden importa:
+ *  1. Si hay precio unitario → CALCULADA: `cantidad × precio − descuento`. El `monto` de
+ *     texto libre deja de leerse (si conviven, el número manda: es el que el cliente puede
+ *     recalcular a mano mirando la fila).
+ *  2. Si no → el `monto` de siempre. Es el camino de TODO lo publicado, byte por byte.
+ *
+ * En contrato ANUAL el unitario es `precioAnual` si está escrito, y si no el mensual × 12. Se
+ * deriva en vez de vaciarse porque una tabla a medio llenar tiene que seguir dando un número
+ * honesto al mover el switch — y el ×12 sin descuento es el peor caso, no una promesa.
+ *
+ * Un descuento ilegible ensucia la línea ENTERA: se excluye del total y se cuenta como
+ * pendiente. Sumarla sin el descuento mostraría un precio que nadie acordó.
+ */
+export function montoDeLinea(
+  l: LineaInversion | null | undefined,
+  moneda?: string | null,
+  contrato: Contrato = "mensual",
+): MontoLinea {
+  const vacio: MontoLinea = { rango: null, sucio: false, calculada: false, unitario: null, cantidad: 1 };
+  if (!l) return vacio;
+
+  const cantidad = parseCantidad(l.cantidad) ?? 1;
+  /* ⚠ El plazo SOLO mueve lo RECURRENTE. Una implementación de $12.000 es la misma plata en
+     un contrato anual que en uno mensual: multiplicarla por 12 fue el primer error que cazó
+     el test de esta tanda, y habría puesto $144.000 en la propuesta de un cliente. */
+  const anual = contrato === "anual" && esRecurrente(l);
+  const textoPrecio = anual && conTexto(l.precioAnual) ? l.precioAnual : l.precioUnitario;
+  const precio = parseMonto(textoPrecio, moneda);
+
+  if (precio === null) {
+    // Sin precio unitario: el camino histórico, tal cual.
+    const m = parseMonto(l.monto, moneda);
+    if (m === null) return vacio;
+    if (m === "sucio") return { ...vacio, sucio: true };
+    return { ...vacio, rango: m };
+  }
+  if (precio === "sucio") return { ...vacio, sucio: true, calculada: true };
+
+  // El ×12 solo cuando el anual NO está escrito: si Ventas lo escribió, ése es el precio.
+  const factor = anual && !conTexto(l.precioAnual) ? MESES_POR_CONTRATO.anual : 1;
+  const unitario: Rango = { min: precio.min * factor, max: precio.max * factor };
+
+  const desc = parseDescuento(l.descuento);
+  if (desc === "sucio") {
+    return { ...vacio, sucio: true, calculada: true, unitario, cantidad };
+  }
+  const bruto: Rango = { min: unitario.min * cantidad, max: unitario.max * cantidad };
+  return {
+    rango: { min: aplicarDescuento(bruto.min, desc), max: aplicarDescuento(bruto.max, desc) },
+    sucio: false,
+    calculada: true,
+    unitario,
+    cantidad,
+  };
+}
 
 /**
  * ¿Esta sección todavía está en el shape viejo de HubSpot? Espejo exacto de
@@ -151,13 +293,54 @@ export interface InversionResuelta {
   /** La moneda con la que se SUMÓ — y por lo tanto la única con la que se puede FORMATEAR.
    *  La declara la sección; si no la declara, la deducen las líneas (ver abajo). */
   moneda: string;
+
+  // ── El eje RECURRENCIA (2026-08-13) ───────────────────────────────────────
+  // Un cobro único y una mensualidad no se suman: son plata de naturalezas distintas y
+  // meterlas en un solo número es la mentira más cara que puede cometer esta sección.
+
+  /** ¿Alguna línea ACTIVA se declara recurrente? Con `false` —o sea TODO lo publicado, que
+   *  no declara recurrencia— el cierre de la sección es exactamente el de siempre. */
+  hayRecurrentes: boolean;
+  /** Suma de las líneas activas de cobro ÚNICO (los dos grupos). Solo con `hayRecurrentes`. */
+  unico: Rango | null;
+  /** Suma de las líneas activas recurrentes, en el plazo del contrato. */
+  recurrente: Rango | null;
+  /** El plazo con el que se cotizaron las recurrentes. */
+  contrato: Contrato;
 }
 
 /** Un grupo que no se puede sumar: todo lo que tenga algo escrito queda pendiente. */
 const sinSuma = (ls: LineaInversion[] | undefined) => ({
   total: null as Rango | null,
-  pendientes: (ls ?? []).filter((l) => conTexto(l?.monto)).length,
+  pendientes: (ls ?? []).filter((l) => esLineaActiva(l) && (conTexto(l?.monto) || conTexto(l?.precioUnitario))).length,
 });
+
+/** Suma las líneas ACTIVAS de un grupo, con la aritmética de renglón de cotización. */
+function sumarGrupo(
+  ls: LineaInversion[] | undefined,
+  moneda: string,
+  contrato: Contrato,
+  filtro?: (l: LineaInversion) => boolean,
+): { total: Rango | null; pendientes: number } {
+  let min = 0;
+  let max = 0;
+  let alguno = false;
+  let pendientes = 0;
+  for (const l of ls ?? []) {
+    if (!esLineaActiva(l)) continue; // apagada: ni suma ni reclama
+    if (filtro && !filtro(l)) continue;
+    const m = montoDeLinea(l, moneda, contrato);
+    if (m.sucio) {
+      pendientes++;
+      continue;
+    }
+    if (!m.rango) continue;
+    alguno = true;
+    min += m.rango.min;
+    max += m.rango.max;
+  }
+  return { total: alguno ? { min, max } : null, pendientes };
+}
 
 export function gruposDeInversion(data: InversionData | null | undefined): InversionResuelta {
   const d = data ?? {};
@@ -175,16 +358,37 @@ export function gruposDeInversion(data: InversionData | null | undefined): Inver
   );
   const conflicto = !declarada && enTexto.size > 1;
   const moneda = declarada || (enTexto.size === 1 ? [...enTexto][0] : "");
+  const contrato = contratoDe(d);
 
-  const a = conflicto ? sinSuma(d.lineas) : sumaLineas(d.lineas, moneda);
-  const b = conflicto ? sinSuma(d.licencias) : sumaLineas(d.licencias, moneda);
+  const a = conflicto ? sinSuma(d.lineas) : sumarGrupo(d.lineas, moneda, contrato);
+  const b = conflicto ? sinSuma(d.licencias) : sumarGrupo(d.licencias, moneda, contrato);
   const gruposConMonto = (a.total ? 1 : 0) + (b.total ? 1 : 0);
+
+  /* El eje recurrencia atraviesa los DOS grupos: un setup de HubSpot es único aunque esté en
+     licencias, y un soporte mensual de Smarteam es recurrente aunque esté en servicios. */
+  const todas = [...(d.lineas ?? []), ...(d.licencias ?? [])];
+  const hayRecurrentes = todas.some((l) => esLineaActiva(l) && esRecurrente(l));
+  const unico = hayRecurrentes && !conflicto
+    ? sumarGrupo(todas, moneda, contrato, (l) => !esRecurrente(l)).total
+    : null;
+  const recurrente = hayRecurrentes && !conflicto
+    ? sumarGrupo(todas, moneda, contrato, esRecurrente).total
+    : null;
+
   return {
     servicios: { clave: "lineas", lineas: d.lineas ?? [], total: a.total, pendientes: a.pendientes },
     licencias: { clave: "licencias", lineas: d.licencias ?? [], total: b.total, pendientes: b.pendientes },
-    granTotal: gruposConMonto === 2 ? sumaRangos(a.total, b.total) : null,
+    /* ⚠ El gran total se APAGA en cuanto hay una línea recurrente: sumar un CapEx con una
+       mensualidad da un número que no existe en ningún contrato. Ahí el cierre pasa a ser
+       "pago único" + "recurrente", que son dos números que sí se pueden firmar. Como lo
+       publicado no declara recurrencia, su cierre no se mueve. */
+    granTotal: !hayRecurrentes && gruposConMonto === 2 ? sumaRangos(a.total, b.total) : null,
     gruposConMonto,
     pendientesTotales: a.pendientes + b.pendientes,
+    hayRecurrentes,
+    unico,
+    recurrente,
+    contrato,
     // ⚠ La moneda DEDUCIDA gobierna la aritmética y el formato, NUNCA el rótulo: la barra
     // "Montos en X" sigue mostrando solo lo que la sección DECLARA. Afirmarle al cliente una
     // moneda que nadie eligió sería fabricación.

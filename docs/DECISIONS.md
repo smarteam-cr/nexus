@@ -2006,3 +2006,44 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   contador en rojo); un alto vacío o inválido cae al default 520 y no al mínimo; `<header>` es
   seguro pese a contener "<head"; y Nexus ya le hace un fade-in de 800 ms a la sección completa
   en la propuesta publicada, así que una animación de entrada propia tiene que esperarlo.
+
+## La inversión pasa a ser una cotización dinámica (2026-08-13)
+
+> Pedido de Elías, con el criterio de Marco: por línea, cantidad · precio de lista · descuento
+> PROPIO · subtotal; un check para prender y apagar cada licencia EN VIVO durante la reunión;
+> separar servicios de licencias y el cobro único del recurrente; el precio unitario a la vista;
+> y un switch de contrato mensual ↔ anual.
+
+- **El descuento es POR LÍNEA porque los de HubSpot no se comportan igual entre Hubs** (bajan
+  mucho en unos y casi nada en otros). Un porcentaje global sobre el total no describe ninguna
+  negociación real: sería un número inventado que además se contradice con el desglose.
+- **Todo lo nuevo es OPCIONAL y ausente en lo publicado.** Sin `precioUnitario` el importe sigue
+  saliendo del `monto` de texto libre, que es el camino de las 5 propuestas de sitio web y las 3
+  de HubSpot que están en la calle. El renderer vive por KEY (`configForSnapshot`), así que esa
+  compatibilidad no es cortesía: es la única razón por la que nadie ve cambiar su documento.
+- **El plazo SOLO mueve lo recurrente.** El primer borrador multiplicaba ×12 toda línea con el
+  contrato anual, y una implementación de $12.000 salía a **$144.000** con solo mover el switch.
+  Lo cazó el test antes de que existiera la UI. `precioAnual` se escribe cuando HubSpot da su
+  descuento anual; sin él se deriva ×12 —el peor caso, no una promesa— en vez de vaciarse.
+- **Con una línea recurrente, el gran total se APAGA.** Sumar un CapEx con una mensualidad da un
+  número que no existe en ningún contrato. En su lugar van dos: "Pago único" y "Por mes/Por año",
+  que sí se pueden firmar. Como lo publicado no declara recurrencia, su cierre no se mueve.
+- **El check es EFÍMERO en lectura y PERSISTE en el editor.** Son dos preguntas distintas: en el
+  editor, `activa` es la curaduría de Ventas (qué entra en la oferta); en la propuesta publicada
+  el documento está congelado y no hay a dónde escribir, así que el check sirve para explorar en
+  la reunión ("si sacamos Sales Hub, ¿cuánto queda?") y al recargar vuelve a ser la oferta. Una
+  línea apagada se ve TACHADA, no desaparece: si desapareciera, el cliente perdería de vista lo
+  que acaba de sacar y no podría volver a prenderlo.
+- **Apagar todo un grupo lo deja SIN total, no en cero.** Un cero afirma "esto vale 0"; sin total
+  dice la verdad: no hay nada activo.
+- **El subtotal calculado NO es editable.** `Editable` comitea su `textContent` al blur, así que
+  un valor derivado adentro se auto-persistiría y le reescribiría el monto a Ventas — es
+  literalmente el bug de la portada documentado en `inline.tsx`. Para escribir a mano se vacía el
+  precio unitario y vuelve el campo de siempre.
+- **Un descuento ilegible ensucia la línea entera**: no suma y cuenta como pendiente. Sumarla sin
+  el descuento mostraría un precio que nadie acordó.
+- **`activa`, `recurrencia` y `contrato` entran a `NO_CONTENIDO`**: son presentación, y sin eso
+  una sección donde solo se tocó el switch quedaría no-blank y se publicaría vacía — la trampa de
+  `anchoRecurrente`, con la que "Limpiar" mentía.
+- **La aritmética de la línea va DEBAJO del concepto, no en columnas propias.** Una tabla de cinco
+  columnas se rompe en celular y en el PDF, y el número que manda —el subtotal— ya tiene la suya.
