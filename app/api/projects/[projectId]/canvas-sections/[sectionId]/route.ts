@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
+import { patchSectionEntry } from "@/lib/business-cases/section-briefs";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -13,9 +15,26 @@ type Params = Promise<{ projectId: string; sectionId: string }>;
  *   - { eyebrowOverride } → eyebrow / título pequeño (null/"" = default)
  *   - { undo: "title" | "eyebrow" } → deshacer de 1 nivel: intercambia el valor actual con
  *     `previous*` (toggle; permite deshacer y rehacer el último cambio).
+ *   - { hidden }          → la sección no se le muestra al cliente (2026-08-12).
  *
  * Al setear title/eyebrow se guarda el valor ACTUAL en `previous*` para habilitar el undo.
  * Guarded (interno/CSE).
+ *
+ * ── POR QUÉ `hidden` NO ES UNA COLUMNA ───────────────────────────────────────
+ * Vive en el Json `ProjectCanvas.sections`, igual que en el business case y con los MISMOS
+ * helpers (`lib/business-cases/section-briefs.ts` — el nombre del archivo engaña: son
+ * genéricos). Tres razones, y ninguna es preferencia:
+ *   1. `lib/print/load-doc.ts:205,227` ya lee `hiddenKeysFrom(canvas?.sections)` en la rama
+ *      GENÉRICA de piezas de proyecto — la que sirve a las 8. El PDF respeta lo oculto sin
+ *      escribir una línea. Una columna nueva sería una TERCERA fuente de "oculta", que es
+ *      justo lo que `lib/print/print-visibilidad.test.ts` existe para evitar.
+ *   2. Cero SQL. La columna ya existe con `@default("[]")`, y el setup de dos PCs sobre la
+ *      base de producción castiga las columnas nuevas (`section-briefs.ts:5-12`).
+ *   3. La clave es la `key` de la sección, no su id: sobrevive a un re-sembrado del canvas.
+ *
+ * ⚠ Hasta hoy este PATCH no tenía esta rama: un `{hidden:true}` caía al "nothing to update"
+ * y devolvía 400. O sea que ocultar una sección NO funcionaba en NINGÚN canvas de proyecto,
+ * aunque el motor (`LandingView`) y el hook (`useCanvasSections`) ya lo soportaban enteros.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
@@ -32,7 +51,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
       eyebrowOverride: true,
       previousTitleOverride: true,
       previousEyebrowOverride: true,
-      canvas: { select: { projectId: true, name: true } },
+      key: true,
+      canvasId: true,
+      canvas: { select: { projectId: true, name: true, sections: true } },
     },
   });
   if (!section || section.canvas.projectId !== projectId) {
@@ -41,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
   if (denied) return denied;
 
-  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; undo?: unknown };
+  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; hidden?: unknown; undo?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -51,6 +72,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const RESP_SELECT = { id: true, titleOverride: true, eyebrowOverride: true } as const;
   const norm = (raw: unknown): string | null =>
     typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+
+  /* ── Rama OCULTAR ───────────────────────────────────────────────────────────
+     `touchCanvasContent` NO es opcional acá: es lo que enciende "cambios sin subir"
+     (`contentUpdatedAt > publishedSnapshotAt`). Con publicación por snapshot, ocultar una
+     sección tiene que pedir re-publicar; sin esto el CSE tapa algo y el enlace del cliente
+     lo sigue mostrando hasta la próxima publicación por otro motivo. */
+  if ("hidden" in body) {
+    const hidden = body.hidden === true;
+    const entries = patchSectionEntry(section.canvas.sections, section.key, { hidden });
+    await prisma.projectCanvas.update({
+      where: { id: section.canvasId },
+      data: { sections: entries as unknown as Prisma.InputJsonValue },
+    });
+    await touchCanvasContent(sectionId);
+    return NextResponse.json({ id: section.id, hidden });
+  }
 
   // ── Deshacer (toggle actual↔previous) ───────────────────────────────────────
   if (body.undo === "title" || body.undo === "eyebrow") {

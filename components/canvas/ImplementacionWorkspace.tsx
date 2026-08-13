@@ -67,6 +67,7 @@ export default function ImplementacionWorkspace({
       data: built[i].data,
       titleOverride: s.titleOverride,
       eyebrowOverride: s.eyebrowOverride,
+      hidden: s.hidden === true,
     }));
   }, [cs.sections]);
 
@@ -217,6 +218,15 @@ export default function ImplementacionWorkspace({
             if (!target) return setAviso(SIN_SECCION);
             await cs.setEyebrow(target.id, eyebrow);
           })();
+        }}
+        /* Ocultar una sección. Hasta el 2026-08-12 esto no funcionaba en NINGÚN canvas de
+           proyecto: el motor y el hook ya lo soportaban, pero el PATCH no tenía la rama y
+           devolvía 400. Se persiste en el Json del canvas, así que el PDF lo respeta solo
+           (lib/print/load-doc.ts). Implementación es interna y no tiene vista externa, que
+           es lo que la vuelve el lugar seguro para estrenarlo. */
+        onToggleHidden={(key, hidden) => {
+          const id = idByKey.get(key);
+          if (id) void cs.setHidden(id, hidden);
         }}
         onReorder={(keys) => {
           const heroId = idByKey.get("implementacion");

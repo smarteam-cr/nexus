@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { parseSectionEntries } from "@/lib/business-cases/section-briefs";
 
 // GET: sections + blocks for a non-default canvas
 export async function GET(
@@ -19,14 +20,20 @@ export async function GET(
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
-    select: { projectId: true, isDefault: true },
+    select: { projectId: true, isDefault: true, sections: true },
   });
 
   if (!canvas || canvas.projectId !== projectId) {
     return NextResponse.json({ error: "canvas not found" }, { status: 404 });
   }
 
-  const sections = await prisma.canvasSection.findMany({
+  /* El flag `hidden` por sección vive en el Json del canvas, no en una columna (el porqué
+     está en el PATCH de [sectionId]) → se re-adjunta por key para mantener el contrato que
+     `useCanvasSections` ya espera. Sin esto el ojo del motor cambia en pantalla, se recarga,
+     y la sección vuelve a estar visible: el arreglo se apagaría en el último metro. */
+  const ocultaPorKey = new Map(parseSectionEntries(canvas.sections).map((e) => [e.key, e.hidden === true]));
+
+  const rows = await prisma.canvasSection.findMany({
     where: { canvasId },
     orderBy: { order: "asc" },
     include: {
@@ -51,6 +58,8 @@ export async function GET(
       },
     },
   });
+
+  const sections = rows.map((s) => ({ ...s, hidden: ocultaPorKey.get(s.key) ?? false }));
 
   return NextResponse.json({ sections });
 }
