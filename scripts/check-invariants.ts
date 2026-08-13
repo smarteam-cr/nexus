@@ -9,6 +9,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
+import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -917,6 +918,38 @@ async function main(): Promise<number> {
       `✓ INV16: enriquecimiento de Meet sano (0 antes de ocurrir, 0 transcripts basura, ` +
         `${reintentos.length} en cola de reintento, ninguno muerto).`,
     );
+  }
+
+  /* ── INV17 · Todo CTA «Generar» apunta a un agente que EXISTE y está ACTIVE ──────
+     El botón se dibuja desde un mapa ESTÁTICO (lib/agents/canvas-agents.ts): existe apenas
+     se deploya el código. La fila del agente, en cambio, la crea un seed que alguien tiene que
+     correr. Entre las dos cosas hay una ventana en la que el botón se ve, se aprieta y **no
+     hace nada** — y hasta hoy encima decía «Listo».
+     Pasó con Entrega el 2026-08-13. El mismo agujero se lo comieron antes los dos agentes de
+     handoff por tipo, que quedaron en DRAFT en producción hasta que alguien los activó a mano.
+     Este chequeo lo convierte en una línea roja del gate post-deploy, que es donde se mira. */
+  const idsDeCta = [...new Set(Object.values(CANVAS_PRIMARY_AGENT).map((d) => d.agentId))];
+  const filasDeCta = await prisma.agent.findMany({
+    where: { id: { in: idsDeCta } },
+    select: { id: true, status: true },
+  });
+  const estadoDelCta = new Map(filasDeCta.map((a) => [a.id, a.status as string]));
+  const rotos = idsDeCta
+    .map((id) => ({ id, status: estadoDelCta.get(id) }))
+    .filter((x) => x.status !== "ACTIVE");
+
+  if (rotos.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV17 VIOLADO: ${rotos.length} botón(es) «Generar» apuntan a un agente que no puede correr. ` +
+        `El CTA se ve igual y no hace nada.`,
+    );
+    for (const r of rotos) {
+      console.error(`    - ${r.id}: ${r.status ? `está en ${r.status}` : "NO EXISTE en la base"}`);
+      console.error(`      Corré su seed: npx tsx scripts/seed-${r.id.replace(/^agent-|-canvas$/g, "")}-agent.ts`);
+    }
+  } else {
+    console.log(`✓ INV17: los ${idsDeCta.length} botones «Generar» apuntan a agentes activos.`);
   }
 
   return violations;

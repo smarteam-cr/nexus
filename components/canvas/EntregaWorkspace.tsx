@@ -15,7 +15,7 @@
  * pantalla —el CSE puede matizar una redacción— pero se regeneran de la fuente, y por eso el
  * documento nunca puede afirmar un número que el cronograma no respalde.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
@@ -48,6 +48,18 @@ export default function EntregaWorkspace({
 }) {
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
   const [aviso, setAviso] = useState<string | null>(null);
+
+  /* Qué va a decir el documento ANTES de generarlo. Un documento honesto puede ser vergonzoso:
+     la primera corrida sobre un proyecto real salió con «1 de 10 fases cerradas» — cierto, y
+     terrible en un papel titulado «Entrega». El CSE lo ve acá y decide, en vez de enterarse
+     leyendo el resultado. Sin dato no se pinta nada: un error de red no puede alarmar. */
+  const [avisos, setAvisos] = useState<Array<{ key: string; efecto: string; texto: string }>>([]);
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/delivery/readiness`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setAvisos(d?.avisos ?? []))
+      .catch(() => setAvisos([]));
+  }, [projectId]);
 
   const hasGeneratedContent = useMemo(
     () => cs.sections.some((s) => s.key !== "cierre" && s.blocks.length > 0),
@@ -147,6 +159,22 @@ export default function EntregaWorkspace({
           Documento de cierre · se le comparte al cliente
         </span>
       </div>
+
+      {avisos.length > 0 && (
+        <div style={{ padding: "10px 16px", background: "rgba(245, 158, 11, 0.08)", borderBottom: "1px solid rgba(245, 158, 11, 0.3)", fontSize: 13, color: "#92400e" }}>
+          <strong style={{ display: "block", marginBottom: 4 }}>
+            Antes de generar, mirá esto:
+          </strong>
+          <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
+            {avisos.map((a) => (
+              <li key={a.key}>
+                {a.efecto === "FRENA_PUBLICAR" && <strong>No vas a poder publicarlo: </strong>}
+                {a.texto}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {!hasGeneratedContent && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>

@@ -288,9 +288,27 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
 
   if (!agent) {
+    /* ⚠ 409, no 200. Hasta el 2026-08-13 esto devolvía 200 con `cards: []`, y el resultado era
+       una MENTIRA en pantalla: `CanvasAgentButton` ve `res.ok`, no encuentra `runId`, y cae a
+       su rama de éxito → el CSE apretaba «Generar» y leía «Listo — sin resultados». El agente
+       nunca corrió. Pasó de verdad con el canvas de Entrega, y el modo de falla es de TODOS los
+       agentes: alcanza con que su fila no exista o quede en DRAFT (el default del API), que es
+       justo lo que produce un deploy sin correr el seed.
+       Los cuatro callers ya leen `data.message ?? data.error` en la rama de error, y
+       `ClientContextCards` mira `data.error` sin importar el status — así que el mensaje llega
+       a todos sin tocar ninguno. */
+    const pedido = bodyAgentId ? ` («${bodyAgentId}»)` : "";
     return NextResponse.json(
-      { agent: null, cards: [], run: null, error: "NO_AGENT_CONFIGURED" },
-      { status: 200 }
+      {
+        agent: null,
+        cards: [],
+        run: null,
+        error: "NO_AGENT_CONFIGURED",
+        message:
+          `Este agente${pedido} no está configurado en la base: no existe o no está activo, ` +
+          `así que no corrió nada. Si es un agente nuevo, falta correr su seed.`,
+      },
+      { status: 409 },
     );
   }
 

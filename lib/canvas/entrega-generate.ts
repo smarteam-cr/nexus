@@ -56,27 +56,38 @@ const KEYS_DERIVADAS = new Set(
 );
 
 /**
- * Las últimas reuniones del proyecto, con su minuta, para que el agente cuente lo que pasó
- * de verdad y no lo que se prometió.
+ * Las reuniones del proyecto, de la más nueva hacia atrás, para que el agente cuente lo que
+ * pasó de verdad y no lo que se prometió.
  *
- * ⚠ Presupuesto de caracteres, no cupo de reuniones: es la lección de la Tanda L, donde un
- * `slice(0, 10)` dejaba afuera el 64% del material de un proyecto con ritmo semanal denso.
+ * ⚠ EL PRESUPUESTO ES DE CARACTERES, Y EL RECORRIDO NO SE CORTA POR CANTIDAD DE REUNIONES.
+ * Medido en Wherex: de las 12 más recientes, **solo 4 tenían contenido** (las demás no tienen
+ * transcripción ni minuta guardada), así que un `slice(0, 12)` gastaba 6.196 de 18.000
+ * caracteres y dejaba 53 reuniones sin mirar. Se camina hacia atrás hasta LLENAR el
+ * presupuesto; el tope de lecturas acota el trabajo, no el material.
+ *
+ * Es la lección de la Tanda L aplicada bien: ahí un cupo fijo de 10 dejaba afuera el 64% del
+ * material de un proyecto con ritmo semanal denso.
  */
-async function ultimasSesiones(projectId: string, tope = 12, presupuesto = 18_000): Promise<string> {
+async function ultimasSesiones(
+  projectId: string,
+  presupuesto = 18_000,
+  topeDeLecturas = 40,
+): Promise<{ texto: string; usadas: number; total: number }> {
   const { sessions } = await getProjectMemberSessions(projectId);
-  const recientes = [...sessions].sort((a, b) => +new Date(b.date) - +new Date(a.date)).slice(0, tope);
+  const ordenadas = [...sessions].sort((a, b) => +new Date(b.date) - +new Date(a.date));
   const partes: string[] = [];
   let gastado = 0;
-  for (const s of recientes) {
-    if (gastado >= presupuesto) break;
+  let miradas = 0;
+  for (const s of ordenadas) {
+    if (gastado >= presupuesto || miradas >= topeDeLecturas) break;
+    miradas++;
     const cupo = Math.min(2000, presupuesto - gastado);
     const texto = await fetchTranscriptContent(s.id, s.title, { maxChars: cupo }).catch(() => "");
     if (!texto) continue;
-    const fecha = new Date(s.date).toISOString().slice(0, 10);
-    partes.push(`[${fecha}] ${s.title}\n${texto}`);
+    partes.push(`[${new Date(s.date).toISOString().slice(0, 10)}] ${s.title}\n${texto}`);
     gastado += texto.length;
   }
-  return partes.join("\n\n");
+  return { texto: partes.join("\n\n"), usadas: partes.length, total: ordenadas.length };
 }
 
 /** Genera (o regenera) el documento de entrega. */
@@ -120,10 +131,9 @@ export async function runEntregaGeneration(opts: {
     loadProjectSummary(projectId).catch(() => null),
   ]);
 
-  const [procesosCtx, sesionesCtx, membresia] = await Promise.all([
+  const [procesosCtx, reuniones] = await Promise.all([
     project?.clientId ? serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false }) : Promise.resolve(""),
     ultimasSesiones(projectId),
-    getProjectMemberSessions(projectId).catch(() => ({ sessions: [] as unknown[] })),
   ]);
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
@@ -140,8 +150,16 @@ export async function runEntregaGeneration(opts: {
     kickoffCtx ? `\n=== KICKOFF (lo que se le prometió al arrancar) ===\n${kickoffCtx}` : "",
     desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (lo que se construyó a medida) ===\n${desarrolloCtx}` : "",
     procesosCtx ? `\n=== PROCESOS DEL CLIENTE ===\n${procesosCtx}` : "",
-    sesionesCtx
-      ? `\n=== ÚLTIMAS REUNIONES DEL PROYECTO (lo que pasó de verdad) ===\n${sesionesCtx}`
+    /* La COBERTURA va explícita. Un agente que ve 4 reuniones sin saber que hay 61 más que no
+       se pudieron leer concluye con una confianza que el material no respalda — y en un cierre
+       eso se traduce en afirmar que algo «no pasó» cuando simplemente no quedó escrito.
+       En Wherex son 4 con contenido sobre 65. */
+    reuniones.texto
+      ? `\n=== REUNIONES DEL PROYECTO (lo que pasó de verdad) ===\n` +
+        `Cobertura: ${reuniones.usadas} reuniones con contenido, de ${reuniones.total} que tuvo el ` +
+        `proyecto. Las demás no tienen transcripción ni minuta guardada — eso NO significa que no ` +
+        `hayan ocurrido, así que no concluyas nada de su ausencia.\n\n` +
+        reuniones.texto
       : "\n=== SIN REUNIONES CON TRANSCRIPCIÓN ===\nNo hay material de sesiones: no inventes citas ni números del negocio del cliente — la sección de impacto va vacía.",
     "",
     /* El recordatorio va al FINAL además de estar en el prompt del sistema: es la instrucción
@@ -209,7 +227,7 @@ export async function runEntregaGeneration(opts: {
     anchorStartDate: project?.timeline?.anchorStartDate?.toISOString() ?? null,
     closeDateOverride: project?.timeline?.closeDateOverride?.toISOString() ?? null,
     closing: summary?.closing ?? { projectedISO: null, promisedISO: null, driftDays: null },
-    reuniones: (membresia.sessions as unknown[]).length,
+    reuniones: reuniones.total,
     // El corrimiento atribuido entra cuando se curen las particularidades visibles al cliente.
     corrimiento: null,
     hubs,
