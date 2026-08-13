@@ -48,7 +48,19 @@ import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff
 import { isSalesPresence } from "@/lib/handoff/sales-presence";
 import { getProjectHandoffSessions, getClientSessions } from "@/lib/sessions/project-sources";
 import { fetchCompanyTimeline, fetchCompanyTimelineSplit, serializeTimeline, projectEraSince } from "@/lib/hubspot/company-timeline";
-import { sanitizeTags, tagLabels, MODALITY_LABEL, SERVICE_TO_PRODUCT, RECURRENTE_TAG, hasTechnicalScope } from "@/lib/tags/catalog";
+import {
+  sanitizeTags,
+  tagLabels,
+  labelForTag,
+  normalizeTag,
+  ejeExcluyenteDe,
+  tipoDeImplementacion,
+  esReimplementacion,
+  EJE_TIPO_IMPLEMENTACION,
+  SERVICE_TO_PRODUCT,
+  RECURRENTE_TAG,
+  hasTechnicalScope,
+} from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
@@ -316,7 +328,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
      —no puede saber de qué tipo es el proyecto— y filtra `pipelineKey: null`, así que en la
      etapa 1 / paso 0 de un Desarrollo el ÚNICO handoff que lista es el genérico «Sales→CS».
      Un clic en «Analizar» corría el prompt de Customer Success sobre ese proyecto:
-     `persistTimelineFromAgentOutput` escribe `implementationType`, PISA `tags` (incluido el
+     `persistTimelineFromAgentOutput` PISA `tags` (la clasificación entera, incluido el
      bidireccional `recurrente`), sella `handoffGeneratedAt` y re-propone las fases — encima del
      handoff tipado. Sin error, sin log.
 
@@ -664,7 +676,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, implementationType: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true } })
         : Promise.resolve(null),
     ]);
 
@@ -1618,14 +1630,26 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Siempre incluir serviceType si está disponible (aunque no haya deal en HubSpot)
   const serviceTypeLabel = dealProject?.serviceType ?? null;
 
-  // Clasificación del proyecto (tira de tags): modalidad impl/re-impl + productos/alcance.
-  // Alimenta a TODOS los agentes que leen este bloque (handoff, kickoff, detalle del
-  // cronograma) para que razonen el #6 (tarea de BD) y el #7 (fase técnica).
+  /* Clasificación del proyecto (tira de tags): tipo de implementación + productos/alcance.
+     Alimenta a TODOS los agentes que leen este bloque (handoff, kickoff, detalle del cronograma)
+     para que razonen el #6 (tarea de BD) y el #7 (fase técnica).
+
+     ⚠ La FORMA se conserva byte a byte aunque el dato haya cambiado de lugar (2026-08-12: la
+     modalidad dejó de ser una columna y pasó a ser un tag). Se particiona la lista en vez de
+     dejar que el tag caiga entre los demás: "Implementación" enterrado en
+     `Productos/alcance: Sales Hub, Implementación, …` se lee como un producto, y sería un cambio
+     invisible en el prompt de 8 agentes que no tienen golden que lo note.
+
+     Sin definir ⇒ la línea NO se emite, igual que hacía el enum en null. A un agente al que se le
+     dice "Modalidad: sin definir" tiende a inventarla — y encima el de handoff es justamente el
+     que la DETERMINA, así que decírselo antes sería circular. El hueco se avisa en la pantalla. */
   const classificationLabel = (() => {
+    const slugs = sanitizeTags(dealProject?.tags ?? []);
     const parts: string[] = [];
-    if (dealProject?.implementationType) parts.push(`Modalidad: ${MODALITY_LABEL[dealProject.implementationType]}`);
-    const labels = tagLabels(sanitizeTags(dealProject?.tags ?? []));
-    if (labels.length) parts.push(`Productos/alcance: ${labels.join(", ")}`);
+    const tipo = tipoDeImplementacion(slugs);
+    if (tipo) parts.push(`Modalidad: ${labelForTag(tipo)}`);
+    const resto = tagLabels(slugs.filter((s) => ejeExcluyenteDe(s) !== EJE_TIPO_IMPLEMENTACION));
+    if (resto.length) parts.push(`Productos/alcance: ${resto.join(", ")}`);
     return parts.length ? parts.join(" · ") : null;
   })();
 
@@ -1894,10 +1918,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         serviceTypeLabel: serviceTypeLabel || null,
         classificationLabel: classificationLabel || null,
       },
-      clasificacion: clasificacionDeTags(
-        sanitizeTags(dealProject?.tags ?? []),
-        dealProject?.implementationType ?? null,
-      ),
+      clasificacion: clasificacionDeTags(sanitizeTags(dealProject?.tags ?? [])),
       regenerarFaseId: regeneratePhaseId ?? null,
     });
   }
@@ -2804,24 +2825,14 @@ async function persistTimelineFromAgentOutput(
   isHandoff: boolean,
 ): Promise<{ timelineSyncError: string | null }> {
   try {
-    // Implementación vs re-implementación: el agente lo infiere; el CSE puede corregir luego.
-    // Se persiste a nivel Project ANTES del early-return del timeline (vale aunque no haya fases).
-    if (bodyProjectId) {
-      const implType = (analysisJson as { implementationType?: unknown } | null)?.implementationType;
-      if (implType === "IMPLEMENTATION" || implType === "REIMPLEMENTATION") {
-        await prisma.project
-          .update({ where: { id: bodyProjectId }, data: { implementationType: implType } })
-          .catch((e) => console.warn("[analyze] implementationType no guardado:", e instanceof Error ? e.message : e));
-      }
-    }
+    /* Toda la clasificación en UN solo lugar y UN solo array (2026-08-12). Antes eran dos
+       escrituras a dos columnas distintas: `implementationType` (enum) acá arriba y `tags` abajo.
+       Corre en AMBOS paths (block format y cards) — el branch block-format del handoff retorna
+       ANTES de la auto-derivación de la sección 14.
 
-    // Tags de producto/alcance (mismo catálogo que la tira). Co-locado con la modalidad porque
-    // ambos son "la clasificación" y este helper corre en AMBOS paths (block format y cards) —
-    // el branch block-format del handoff retorna ANTES de la auto-derivación de la sección 14.
-    // ADITIVO + slug-based para producto/alcance: deriva del serviceType, une lo que el agente
-    // emita, normaliza legacy. EXCEPCIÓN — el tag `recurrente` (grupo modalidad) es del HANDOFF y
-    // BIDIRECCIONAL: `isRecurrent` decide add/remove (el aditivo no puede borrar; ver plan). Ciclo
-    // de vida: presencia de `recurrente` = ciclo corto. Solo el handoff clasifica esto.
+       ADITIVO por defecto: deriva del serviceType, une lo que el agente emita, normaliza legacy.
+       El aditivo no puede BORRAR, así que los tags que el handoff maneja en los dos sentidos son
+       la excepción y están escritos abajo uno por uno. */
     if (bodyProjectId) {
       try {
         const proj = await prisma.project.findUnique({
@@ -2834,6 +2845,23 @@ async function persistTimelineFromAgentOutput(
         if (proj?.serviceType) push(SERVICE_TO_PRODUCT[proj.serviceType]);
         sanitizeTags((analysisJson as { tags?: unknown } | null)?.tags).forEach(push);
 
+        /* 🌉 PUENTE: el agente todavía devuelve `implementationType` como campo top-level (así lo
+           piden los tres prompts vivos) y acá se traduce al tag. Es deliberado: cambiar los
+           prompts obligaría a re-sembrarlos en producción con ALLOW_PROD_WRITE —el paso manual
+           más riesgoso del repo, que pisa `systemPrompt` incondicionalmente— y meterlo en la misma
+           tanda que una migración de datos es acumular dos riesgos sin necesidad.
+
+           `TAG_ALIASES` ya mapea "IMPLEMENTATION"/"REIMPLEMENTATION" al slug, así que el día que
+           los prompts se unifiquen y lo emitan dentro de `tags`, entra por el `push` de arriba sin
+           tocar una línea de código y este bloque se puede borrar.
+
+           Va por `push` y no por `conTag`: es ADITIVO a propósito. El valor que el CSE ya curó le
+           gana al del agente (`sanitizeTags` resuelve primero-gana). Antes el agente PISABA la
+           modalidad en cada regeneración, contradiciendo su propio comentario de "el CSE puede
+           corregir luego"; ahora llena si falta, que es lo que ese comentario siempre prometió. */
+        const implType = (analysisJson as { implementationType?: unknown } | null)?.implementationType;
+        if (typeof implType === "string") push(normalizeTag(implType) ?? undefined);
+
         // Tag manejado `recurrente`: SOLO el handoff, y solo si trajo un booleano `isRecurrent`.
         const isRecurrent = (analysisJson as { isRecurrent?: unknown } | null)?.isRecurrent;
         if (isHandoff && typeof isRecurrent === "boolean") {
@@ -2842,8 +2870,15 @@ async function persistTimelineFromAgentOutput(
           if (!isRecurrent && i !== -1) next.splice(i, 1);
         }
 
-        if (JSON.stringify(next) !== JSON.stringify(proj?.tags ?? [])) {
-          await prisma.project.update({ where: { id: bodyProjectId }, data: { tags: next } });
+        /* Un último saneo ANTES de escribir, no solo al leer: el `push` es aditivo y no sabe de
+           ejes excluyentes, así que un agente que propone "re-implementación" sobre un proyecto
+           que el CSE marcó "implementación" dejaría las DOS en la fila. Leerla saldría bien
+           igual (primero-gana), pero la fila quedaría contradictoria en la base y cualquier
+           consumidor futuro que no pase por `sanitizeTags` vería las dos. Se resuelve donde se
+           escribe, que es donde se puede. */
+        const saneado = sanitizeTags(next);
+        if (JSON.stringify(saneado) !== JSON.stringify(proj?.tags ?? [])) {
+          await prisma.project.update({ where: { id: bodyProjectId }, data: { tags: saneado } });
         }
       } catch (e) {
         console.warn("[analyze] tags no guardados:", e instanceof Error ? e.message : e);
@@ -3321,9 +3356,9 @@ async function persistTimelineDetailFromAgentOutput(
     // C — tareas fijas que SIEMPRE arrancan el proyecto: sembradas en la "Semana 0" (kickoff +
     // levantamiento inicial) en la generación inicial (garantizado por la idempotencia de arriba;
     // data histórica intacta). Parties mixtas (entregas del cliente + acciones de Smarteam). La
-    // tarea de base de datos RAMIFICA por implementationType: si el cliente YA usa HubSpot
-    // (REIMPLEMENTATION) se revisa/limpia la base existente en vez de pedir que la entregue. Dedup
-    // por título normalizado contra lo que el agente ya creó para esa fase; el CSE puede editarlas.
+    // tarea de base de datos RAMIFICA por el TAG de tipo de implementación: si el cliente YA usa
+    // HubSpot (re-implementación) se revisa/limpia la base existente en vez de pedir que la entregue.
+    // Dedup por título normalizado contra lo que el agente ya creó para esa fase; el CSE las edita.
     const normName = (s: string) => s.trim().toLowerCase();
     const phasesArr = [...phaseById.values()];
     // La Semana 0 es la 1ra fase (order 0). Fallback por nombre cubre cronogramas viejos ("Kick-off").
@@ -3334,17 +3369,41 @@ async function persistTimelineDetailFromAgentOutput(
     // En regen POR FASE solo sembramos si la fase regenerada ES el kickoff — un regen de otra fase
     // (ej. "Desarrollo / Integración") no debe re-sembrar las tareas fijas de la Semana 0.
     if (kickoff && (!onlyPhaseId || onlyPhaseId === kickoff.id)) {
-      const isReimpl =
-        (await tx.project.findUnique({
-          where: { id: bodyProjectId },
-          select: { implementationType: true },
-        }))?.implementationType === "REIMPLEMENTATION";
-      const SEED_TASKS: { title: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" }[] = [
+      /* El tipo de implementación sale de los tags (2026-08-12), igual que el resto de la
+         clasificación. Se distinguen TRES estados, no dos: re-implementación, implementación, y
+         SIN DEFINIR — antes el enum en null caía en el mismo `false` que "implementación desde
+         cero" y la tarea se sembraba afirmando algo que nadie había respondido. */
+      const tagsDelProyecto = sanitizeTags(
+        (await tx.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } }))?.tags ?? [],
+      );
+      const tipo = tipoDeImplementacion(tagsDelProyecto);
+      const isReimpl = esReimplementacion(tagsDelProyecto);
+
+      /* Las DOS caras de la tarea de base de datos, declaradas juntas. Son el MISMO renglón del
+         plan con distinto texto según el punto de partida, y por eso la deduplicación de abajo
+         mira las dos: un proyecto sembrado como "implementación" y después reclasificado a
+         "re-implementación" recibía la segunda mientras conservaba la primera, y la Semana 0
+         terminaba pidiendo cargar la base Y limpiar la existente a la vez. */
+      const TAREA_BD_DESDE_CERO = { title: "Proporcionar bases de datos a importar", party: "CLIENTE" as const };
+      const TAREA_BD_EXISTENTE = { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" as const };
+
+      const SEED_TASKS: {
+        title: string;
+        party: "CLIENTE" | "SMARTEAM" | "AMBOS";
+        /** Solo la de base de datos: sin tipo definido, la tarea nace marcada "por validar". */
+        porValidar?: boolean;
+        /** El otro texto del mismo renglón, para no sembrar los dos. */
+        gemela?: string;
+      }[] = [
         { title: "Entregar documentación de procesos involucrados", party: "CLIENTE" },
-        // Regla 4 — rama de base de datos según implementación vs re-implementación.
-        isReimpl
-          ? { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" }
-          : { title: "Proporcionar bases de datos a importar", party: "CLIENTE" },
+        // Regla 4 — rama de base de datos según el tipo de implementación.
+        // Sin tipo definido se asume el camino de siempre (desde cero) PERO se marca por validar:
+        // el CSE ve el pendiente en vez de recibir una afirmación que nadie hizo.
+        {
+          ...(isReimpl ? TAREA_BD_EXISTENTE : TAREA_BD_DESDE_CERO),
+          porValidar: tipo === null,
+          gemela: (isReimpl ? TAREA_BD_DESDE_CERO : TAREA_BD_EXISTENTE).title,
+        },
         { title: "Entregar listado de usuarios a ingresar al CRM", party: "CLIENTE" },
         // Regla 2 — Smarteam asigna la ruta de HubSpot Academy al cliente.
         { title: "Asignar la lista de reproducción de HubSpot Academy al cliente", party: "SMARTEAM" },
@@ -3357,25 +3416,25 @@ async function persistTimelineDetailFromAgentOutput(
       });
       const existingNorm = new Set(existing.map((t) => normName(t.title)));
       const week0Count = existing.filter((t) => t.weekIndex === 0).length;
-      const seeds = SEED_TASKS.filter((t) => !existingNorm.has(normName(t.title))).map(
-        (t, i) => ({
-          phaseId: kickoff.id,
-          title: t.title,
-          weekIndex: 0,
-          order: week0Count + i,
-          notes: null,
-          needsValidation: false,
-          party: t.party,
-          type: "TASK" as const, // las tareas fijas son entregables/accesos, no reuniones
-          source: "AGENT" as const,
-          status: "PENDING" as const,
-        }),
-      );
+      const seeds = SEED_TASKS.filter(
+        (t) => !existingNorm.has(normName(t.title)) && !(t.gemela && existingNorm.has(normName(t.gemela))),
+      ).map((t, i) => ({
+        phaseId: kickoff.id,
+        title: t.title,
+        weekIndex: 0,
+        order: week0Count + i,
+        notes: null,
+        needsValidation: t.porValidar === true,
+        party: t.party,
+        type: "TASK" as const, // las tareas fijas son entregables/accesos, no reuniones
+        source: "AGENT" as const,
+        status: "PENDING" as const,
+      }));
       if (seeds.length > 0) {
         await tx.timelineTask.createMany({ data: seeds });
         tasksCreated += seeds.length;
         console.log(
-          `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, ${isReimpl ? "REIMPLEMENTATION" : "IMPLEMENTATION"})`,
+          `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, tipo: ${tipo ?? "SIN DEFINIR"})`,
         );
       }
     }

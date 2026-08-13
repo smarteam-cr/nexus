@@ -157,24 +157,18 @@ export async function POST(req: NextRequest) {
           select: { id: true },
         });
         // Propagación BC→Project: si existe un business case del mismo deal, su clasificación
-        // (tags + modalidad) nace en el proyecto. Aditivo — el CSE la refina luego. Habilita el
-        // flujo futuro "desde el BC genero el handoff → el proyecto nace con los tags".
+        // nace en el proyecto. Aditivo — el CSE la refina luego. Habilita el flujo futuro
+        // "desde el BC genero el handoff → el proyecto nace con los tags".
         if (dealId) {
           const bc = await tx.businessCase.findFirst({
             // Escopado por clientId: nunca mirar el BC de otro cliente aunque dos
             // compartieran dealId (hubspotDealId NO es @unique en BusinessCase).
             where: { hubspotDealId: dealId, clientId },
-            select: { tags: true, implementationType: true },
+            select: { tags: true },
             orderBy: { createdAt: "desc" },
           });
-          if (bc && (bc.tags.length > 0 || bc.implementationType)) {
-            await tx.project.update({
-              where: { id: project.id },
-              data: {
-                tags: sanitizeTags(bc.tags),
-                ...(bc.implementationType ? { implementationType: bc.implementationType } : {}),
-              },
-            });
+          if (bc && bc.tags.length > 0) {
+            await tx.project.update({ where: { id: project.id }, data: { tags: sanitizeTags(bc.tags) } });
           }
         }
         /* `null` por ahora: el asistente de handoff crea el record de HubSpot SIEMPRE en el

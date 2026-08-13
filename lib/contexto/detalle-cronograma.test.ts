@@ -132,19 +132,28 @@ describe("GOLDEN: el render del contexto nombrado es byte-idéntico al armado in
 });
 
 describe("las piezas puras", () => {
+  /* 2026-08-12: los TRES hechos salen ahora de la MISMA lista de tags. Antes el primero venía de
+     un segundo parámetro (la columna `implementationType`) y los otros dos de los tags. */
   it("clasificacionDeTags: la tabla", () => {
-    expect(clasificacionDeTags(["crm_migration"], "REIMPLEMENTATION")).toEqual({
+    expect(clasificacionDeTags(["crm_migration", "reimplementacion"])).toEqual({
       esReimplementacion: true,
       llevaMigracion: true,
       llevaDesarrollo: false,
     });
-    expect(clasificacionDeTags(["custom_dev"], null).llevaDesarrollo).toBe(true);
-    expect(clasificacionDeTags(["insider_one"], "NEW").llevaDesarrollo).toBe(true);
-    expect(clasificacionDeTags([], null)).toEqual({
+    expect(clasificacionDeTags(["custom_dev"]).llevaDesarrollo).toBe(true);
+    expect(clasificacionDeTags(["insider_one", "implementacion"]).llevaDesarrollo).toBe(true);
+    expect(clasificacionDeTags([])).toEqual({
       esReimplementacion: false,
       llevaMigracion: false,
       llevaDesarrollo: false,
     });
+    // SIN el tag del eje ⇒ se comporta igual que el enum en null: "desde cero".
+    expect(clasificacionDeTags(["crm_migration"]).esReimplementacion).toBe(false);
+    // El valor VIEJO del enum entra por `TAG_ALIASES` — una fila sin migrar sigue leyéndose bien.
+    expect(clasificacionDeTags(["REIMPLEMENTATION"]).esReimplementacion).toBe(true);
+    // El eje es EXCLUYENTE: con los dos puestos gana el primero (lo curado, no lo del agente).
+    expect(clasificacionDeTags(["implementacion", "reimplementacion"]).esReimplementacion).toBe(false);
+    expect(clasificacionDeTags(["reimplementacion", "implementacion"]).esReimplementacion).toBe(true);
   });
 
   it("reglasDeClasificacion: re-implementación SIN migración ⇒ revisar, no cargar", () => {

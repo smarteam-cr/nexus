@@ -18,6 +18,7 @@
  * FUERA del texto se pierde por descuido de un call site. Acá cada FuenteDeContexto nace con
  * su `=== RÓTULO ===` pegado al contenido — no existe el estado "texto sin etiqueta".
  */
+import { esReimplementacion } from "@/lib/tags/catalog";
 import type { FuenteDeContexto } from "./tipos";
 
 /* El fallback cuando no hay handoff confirmado — misma string que tenía la ruta. */
@@ -40,13 +41,17 @@ export interface ClasificacionDelDetalle {
   llevaDesarrollo: boolean;
 }
 
-/** Deriva la clasificación desde los tags YA sanitizados + la modalidad del proyecto. */
-export function clasificacionDeTags(
-  tagSlugs: readonly string[],
-  implementationType: string | null,
-): ClasificacionDelDetalle {
+/**
+ * Deriva la clasificación desde los tags YA sanitizados.
+ *
+ * ⚠ 2026-08-12: antes recibía un segundo parámetro `implementationType` que salía de una columna
+ * propia. Los tres hechos son de la misma naturaleza —cómo se clasifica el proyecto— y ahora los
+ * tres salen de la MISMA lista. El texto que esta clasificación produce (`reglasDeClasificacion`)
+ * no cambió ni un carácter: lo que cambió es de dónde sale el dato.
+ */
+export function clasificacionDeTags(tagSlugs: readonly string[]): ClasificacionDelDetalle {
   return {
-    esReimplementacion: implementationType === "REIMPLEMENTATION",
+    esReimplementacion: esReimplementacion([...tagSlugs]),
     llevaMigracion: tagSlugs.includes("crm_migration"),
     llevaDesarrollo: tagSlugs.includes("custom_dev") || tagSlugs.includes("insider_one"),
   };

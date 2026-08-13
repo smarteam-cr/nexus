@@ -64,7 +64,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
-      implementationType: true,
       // Para resolver QUÉ agente de handoff le toca a este tipo de proyecto.
       hubspotPipelineId: true,
       handoff: { select: { id: true, contextExclusions: true } },
@@ -177,7 +176,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
        la pinta en gris sobre el textarea del CSE: si no se mostrara, el encargado creería que
        este proyecto no tiene ninguna exclusión y escribiría de nuevo lo que la app ya dice. */
     exclusionAutomatica: await exclusionDelSistema(projectId),
-    implementationType: project.implementationType,
   });
 }
 

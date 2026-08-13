@@ -3,54 +3,60 @@
 /**
  * components/tags/TagsStrip.tsx
  *
- * Tira de clasificación compartida (proyecto Y business case). Pinta un chip de MODALIDAD
- * (implementación / re-implementación, selección única) + chips de PRODUCTO y ALCANCE del
- * catálogo (`lib/tags/catalog.ts`), multi-select. Agnóstico de entidad: recibe callbacks.
+ * Tira de clasificación compartida (proyecto Y business case). UN solo tipo de chip para TODA la
+ * clasificación —producto, alcance, tipo de implementación y modalidad—, todos del mismo catálogo
+ * (`lib/tags/catalog.ts`), todos con su ✕, todos editables por el mismo camino.
  * Solo lectura si `canEdit=false` (los chips se ven, sin editar).
+ *
+ * ── 2026-08-12: por qué ya no hay un chip especial ───────────────────────────
+ * Hasta hoy "Implementación" se pintaba con un `<button>` con desplegable propio, alimentado por
+ * una COLUMNA propia de la base y editado por un endpoint propio. El síntoma que lo destapó:
+ * era el único chip sin ✕ y no se podía quitar. La causa no era la ✕ — era que un dato de la
+ * misma naturaleza (cómo se clasifica el proyecto) viajaba por un sistema paralelo.
+ *
+ * Ahora es un tag más. Lo único que la tira agrega es el aviso de que FALTA responder un eje
+ * obligatorio, y ese aviso también sale del catálogo (`faltanEjesRequeridos` + `EJES_EXCLUYENTES`),
+ * no de un `if` con el nombre del eje escrito acá.
  */
 import { useEffect, useRef, useState } from "react";
-import type { ImplementationType } from "@prisma/client";
 import {
-  productTags,
-  scopeTags,
-  modalidadTags,
+  seccionesDelCatalogo,
   labelForTag,
   tagDef,
-  MODALITY_LABEL,
+  ordenDeTag,
   sanitizeTags,
+  conTag,
+  faltanEjesRequeridos,
+  EJES_EXCLUYENTES,
+  type TagGroup,
 } from "@/lib/tags/catalog";
 
-type Modality = ImplementationType | null;
-
 const CHIP = "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2.5 py-1 border";
-const PRODUCT_CLS = "text-sky-300 bg-sky-900/30 border-sky-700/40";
-const SCOPE_CLS = "text-violet-300 bg-violet-900/30 border-violet-700/40";
-const MODALIDAD_CLS = "text-teal-300 bg-teal-900/30 border-teal-700/40";
-const MODALITY_CLS: Record<"IMPLEMENTATION" | "REIMPLEMENTATION", string> = {
-  IMPLEMENTATION: "text-brand bg-brand/10 border-brand/30",
-  REIMPLEMENTATION: "text-amber-300 bg-amber-500/10 border-amber-500/30",
+
+/** Un color por grupo — la misma tabla que decide las secciones del selector. */
+const GROUP_CLS: Record<TagGroup, string> = {
+  product: "text-sky-300 bg-sky-900/30 border-sky-700/40",
+  scope: "text-violet-300 bg-violet-900/30 border-violet-700/40",
+  modalidad: "text-teal-300 bg-teal-900/30 border-teal-700/40",
+  tipo_implementacion: "text-brand bg-brand/10 border-brand/30",
 };
 
 export default function TagsStrip({
   tags,
-  implementationType,
   canEdit = false,
   onSetTags,
-  onSetModality,
 }: {
   tags: string[];
-  implementationType: Modality;
   canEdit?: boolean;
   onSetTags: (slugs: string[]) => void;
-  onSetModality: (type: Modality) => void;
 }) {
-  const [open, setOpen] = useState<"modality" | "add" | null>(null);
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -58,58 +64,27 @@ export default function TagsStrip({
 
   const selected = sanitizeTags(tags);
   const remove = (slug: string) => onSetTags(selected.filter((s) => s !== slug));
+  /* `conTag` y no un `[...selected, slug]`: elegir un tag de un eje excluyente SACA al hermano.
+     Sin eso, hacer clic en "Re-implementación" teniendo "Implementación" mandaría los dos,
+     `sanitizeTags` conservaría el primero, y el clic no haría nada visible ni daría error. */
   const add = (slug: string) => {
-    if (!selected.includes(slug)) onSetTags([...selected, slug]);
-    setOpen(null);
+    onSetTags(conTag(selected, slug));
+    setOpen(false);
   };
-  const available = [...productTags(), ...scopeTags(), ...modalidadTags()].filter((t) => !selected.includes(t.slug));
+
+  // Para pintar: por grupo del catálogo. El array guardado NO se reordena (su orden es semántico).
+  const enOrden = [...selected].sort((a, b) => ordenDeTag(a) - ordenDeTag(b));
+  const secciones = seccionesDelCatalogo()
+    .map((s) => ({ ...s, tags: s.tags.filter((t) => !selected.includes(t.slug)) }))
+    .filter((s) => s.tags.length > 0);
+  const faltan = faltanEjesRequeridos(selected);
 
   return (
     <div ref={ref} className="relative flex flex-wrap items-center gap-1.5">
-      {/* ── Modalidad (impl / re-impl) — chip de selección única ── */}
-      <div className="relative">
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => canEdit && setOpen((o) => (o === "modality" ? null : "modality"))}
-          className={`${CHIP} ${
-            implementationType ? MODALITY_CLS[implementationType] : "text-fg-muted bg-surface-muted border-line"
-          } ${canEdit ? "cursor-pointer hover:opacity-90" : "cursor-default"}`}
-          title="Tipo de implementación"
-        >
-          {implementationType ? MODALITY_LABEL[implementationType] : "Sin definir"}
-        </button>
-        {open === "modality" && (
-          <div className="absolute left-0 top-full mt-1 z-50 w-48 rounded-lg border border-line bg-surface shadow-xl py-1">
-            {(["IMPLEMENTATION", "REIMPLEMENTATION"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { onSetModality(m); setOpen(null); }}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-surface-hover ${
-                  implementationType === m ? "text-fg font-semibold" : "text-fg-secondary"
-                }`}
-              >
-                {MODALITY_LABEL[m]}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => { onSetModality(null); setOpen(null); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-hover border-t border-line"
-            >
-              Sin definir
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Tags de producto / alcance ── */}
-      {selected.map((slug) => {
+      {enOrden.map((slug) => {
         const def = tagDef(slug);
-        const cls = def?.group === "modalidad" ? MODALIDAD_CLS : def?.group === "scope" ? SCOPE_CLS : PRODUCT_CLS;
         return (
-          <span key={slug} className={`${CHIP} ${cls}`}>
+          <span key={slug} className={`${CHIP} ${def ? GROUP_CLS[def.group] : GROUP_CLS.product}`}>
             {labelForTag(slug)}
             {canEdit && (
               <button
@@ -125,35 +100,57 @@ export default function TagsStrip({
         );
       })}
 
-      {/* ── Agregar tag (picker del catálogo) ── */}
-      {canEdit && available.length > 0 && (
+      {/* ── Lo que falta responder ── No es un tag: es el hueco. Punteado y ámbar para que se lea
+             como pendiente y no como una clasificación más. Abre el mismo selector. */}
+      {faltan.map((eje) => (
+        <button
+          key={eje}
+          type="button"
+          disabled={!canEdit}
+          onClick={() => canEdit && setOpen((o) => !o)}
+          className={`${CHIP} border-dashed text-warn-ink bg-warn-surface border-warn-line ${
+            canEdit ? "cursor-pointer hover:opacity-90" : "cursor-default"
+          }`}
+          title="Decide contenido del cronograma — conviene responderlo"
+        >
+          {EJES_EXCLUYENTES[eje]?.avisoFalta ?? "Falta un dato"}
+        </button>
+      ))}
+
+      {/* ── Agregar tag (selector del catálogo) ── */}
+      {canEdit && secciones.length > 0 && (
         <div className="relative">
           <button
             type="button"
-            onClick={() => setOpen((o) => (o === "add" ? null : "add"))}
+            onClick={() => setOpen((o) => !o)}
             className={`${CHIP} text-fg-muted bg-surface-muted border-line border-dashed hover:text-fg-secondary hover:bg-surface-hover`}
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
             tag
           </button>
-          {open === "add" && (
+          {open && (
             <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-line bg-surface shadow-xl py-1 max-h-64 overflow-y-auto">
-              <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-fg-muted">Productos</p>
-              {productTags().filter((t) => !selected.includes(t.slug)).map((t) => (
-                <button key={t.slug} type="button" onClick={() => add(t.slug)} className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">{t.label}</button>
-              ))}
-              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-fg-muted border-t border-line mt-1">Alcance</p>
-              {scopeTags().filter((t) => !selected.includes(t.slug)).map((t) => (
-                <button key={t.slug} type="button" onClick={() => add(t.slug)} className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">{t.label}</button>
-              ))}
-              {modalidadTags().filter((t) => !selected.includes(t.slug)).length > 0 && (
-                <>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-fg-muted border-t border-line mt-1">Modalidad</p>
-                  {modalidadTags().filter((t) => !selected.includes(t.slug)).map((t) => (
-                    <button key={t.slug} type="button" onClick={() => add(t.slug)} className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">{t.label}</button>
+              {secciones.map((s, i) => (
+                <div key={s.group}>
+                  <p
+                    className={`px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-fg-muted ${
+                      i > 0 ? "border-t border-line mt-1" : "pt-1.5"
+                    }`}
+                  >
+                    {s.label}
+                  </p>
+                  {s.tags.map((t) => (
+                    <button
+                      key={t.slug}
+                      type="button"
+                      onClick={() => add(t.slug)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover"
+                    >
+                      {t.label}
+                    </button>
                   ))}
-                </>
-              )}
+                </div>
+              ))}
             </div>
           )}
         </div>

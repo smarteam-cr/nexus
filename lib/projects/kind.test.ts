@@ -101,14 +101,16 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
       },
     },
     {
-      caso: "Customer Success, INTERNO — SmartAgro: sin plata ni cartera, la etapa igual la manda HubSpot",
+      caso: "Customer Success, INTERNO — SmartAgro: sin plata ni cartera, pero SÍ publicable",
       hubspotPipelineId: CS,
       interno: true,
       tieneHermanoCs: false,
       espera: {
         cobranza: false,
         carteraCs: false,
-        publicable: false,
+        // 2026-08-12: un interno se comparte con stakeholders por el mismo enlace con
+        // contraseña que un cliente. Ver el `respeta` de OVERLAY_INTERNO.
+        publicable: true,
         cicloOchoEtapas: false,
         vigilante: false,
         pestana: true,
@@ -171,14 +173,14 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
       },
     },
     {
-      caso: "Development INTERNO — todo apagado menos la pestaña",
+      caso: "Development INTERNO — sin plata ni cartera; la pestaña y la publicación se respetan",
       hubspotPipelineId: DEV,
       interno: true,
       tieneHermanoCs: false,
       espera: {
         cobranza: false,
         carteraCs: false,
-        publicable: false,
+        publicable: true,
         cicloOchoEtapas: false,
         vigilante: false,
         pestana: true,
@@ -235,8 +237,8 @@ describe("LA TABLA — (pipeline × interno × hermano) → capacidades", () => 
 });
 
 describe("las tres invariantes que salen de la tabla", () => {
-  it("INTERNO apaga cobranza, cartera y publicación — SIEMPRE, incluso con pipeline desconocido", () => {
-    /* Es incondicional a propósito: una sola propiedad de HubSpot apaga tres subsistemas, y
+  it("INTERNO apaga cobranza y cartera — SIEMPRE, incluso con pipeline desconocido", () => {
+    /* Es incondicional a propósito: una sola propiedad de HubSpot apaga esos subsistemas, y
        condicionarla a conocer el pipeline sería justamente el agujero. */
     for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
       for (const hermano of [true, false]) {
@@ -248,7 +250,31 @@ describe("las tres invariantes que salen de la tabla", () => {
         });
         expect(caps.cobranza, `pipeline=${pid}`).toBe(false);
         expect(caps.carteraCs, `pipeline=${pid}`).toBe(false);
-        expect(caps.publicable, `pipeline=${pid}`).toBe(false);
+      }
+    }
+  });
+
+  it("INTERNO NO apaga la publicación — se comparte con stakeholders por enlace con contraseña", () => {
+    /* La inversa explícita del caso de arriba, y es la guarda de la tanda del 2026-08-12: hasta
+       ese día `OVERLAY_INTERNO` apagaba `publicable` sobre la premisa de que "no hay un cliente
+       del otro lado". La premisa era falsa —un interno tiene stakeholders— y la única salida era
+       exportar el PDF a mano. El enlace externo es el MISMO (token + contraseña), así que no se
+       abrió ninguna puerta nueva.
+
+       Sin esta assert, alguien vuelve a meter `publicable` en `apaga` y lo único que se rompería
+       es el test de "los overlays declaran qué NO tocan" — que dice QUE se contradice, no QUÉ
+       comportamiento se perdió. */
+    for (const pid of [CS, DEV, WEB, DESCONOCIDO, null]) {
+      for (const hermano of [true, false]) {
+        expect(
+          projectCapabilities({
+            hubspotPipelineId: pid,
+            interno: true,
+            tieneHermanoCs: hermano,
+            altaEnCurso: false,
+          }).publicable,
+          `pipeline=${pid} hermano=${hermano}`,
+        ).toBe(true);
       }
     }
   });

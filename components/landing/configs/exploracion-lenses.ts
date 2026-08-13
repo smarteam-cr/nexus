@@ -94,6 +94,23 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
     "En un servicio de continuidad el riesgo no es entregar mal: es volverse invisible. Buscá: cómo se ve un mes bueno vs. un mes malo PARA EL CLIENTE; " +
     "quién adentro tiene que justificar este gasto y ante quién; qué esperan recibir cada mes (y con qué frecuencia quieren verse); " +
     "qué haría que no renueven; y quién es el reemplazo si mañana cambia el contacto.",
+
+  // ── Tipo de implementación ──────────────────────────────────────────────────
+  // Son EXCLUYENTES entre sí, así que a la exploración le entra exactamente una de las dos.
+  // Es el par de lentes más opuesto del catálogo: una mira lo que todavía no existe, la otra
+  // lo que ya está y estorba.
+  implementacion:
+    "Arrancar de cero no es más simple: es más ambiguo. Nada existe todavía, así que todo es una decisión que alguien tiene que tomar y nadie sabe que le toca. Buscá: " +
+    "qué usan HOY para hacer el trabajo que HubSpot va a hacer (siempre hay algo — Excel, WhatsApp, la cabeza de alguien) y qué de eso quieren conservar; " +
+    "quién decide la estructura cuando no hay una previa (propiedades, etapas, permisos) y si esa persona está disponible de verdad; " +
+    "qué datos existen para cargar y en qué estado REAL están; cuánto sabe el equipo de HubSpot hoy —sin base previa la adopción ES el proyecto—; " +
+    "y qué tiene que pasar para que dejen de usar la herramienta vieja (si nadie lo declara, van a convivir para siempre).",
+  reimplementacion:
+    "Acá el enemigo es lo que YA ESTÁ, y el handoff casi nunca lo describe. Buscá: " +
+    "qué hay configurado hoy y quién lo hizo (¿queda alguien que sepa por qué?); qué se conserva, qué se corrige y qué se apaga —y quién tiene autoridad para decir «esto se borra»—; " +
+    "qué está roto y todos aprendieron a esquivar (el workaround es el síntoma); qué automatizaciones viejas siguen corriendo sin dueño; " +
+    "qué se intentó antes y por qué no funcionó —eso predice la resistencia mejor que cualquier otra pregunta—; " +
+    "y qué NO se puede tocar porque algo crítico depende de eso.",
 };
 
 /** Encabezado del bloque — nombra la mecánica para que el modelo sepa por qué está ahí. */
