@@ -33,6 +33,7 @@ import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
+import { MONEY_RULE_BRIEF } from "@/lib/business-cases/money-brief";
 import {
   INVERSION_SECTION_KEY,
   sembrarLicenciasIniciales,
@@ -235,14 +236,10 @@ export async function POST(
         .join("\n")}`,
     );
   }
-  /* Los precios NO son del agente. Desde que la sección de Inversión pasó a
-     `agentGenerated:false` (2026-08-12), el modelo ya no la escribe — y ése es justo el
-     riesgo: se queda sin el destino natural de los montos que vienen en el contexto y los
-     teje en la prosa del hero o de la solución, donde nadie los revisa antes de que la
-     propuesta salga. La prohibición explícita cierra eso. */
-  preamble.push(
-    "# Precios: NO los escribís vos\nLos montos y precios viven SOLO en las secciones de Casos de uso e Inversión, y ninguna de las dos la generás vos (las llena el vendedor a mano o el catálogo). NO pongas montos, precios, rangos de inversión ni condiciones comerciales en NINGÚN texto que generes — ni en el titular, ni en la solución, ni en el ROI, ni en el cierre.",
-  );
+  /* PRECIO (nuestro, prohibido) vs IMPACTO (del cliente, es el argumento). El texto y su
+     historia viven en lib/business-cases/money-brief.ts — un route.ts no puede exportarlo
+     y el arnés de validación necesita el MISMO string, no una copia. */
+  preamble.push(MONEY_RULE_BRIEF);
   const contextForAgent = preamble.length ? `${preamble.join("\n\n")}\n\n---\n\n${context}` : context;
 
   // Guard anti-doble-generación: si ya hay una corrida en curso para este BC (otra

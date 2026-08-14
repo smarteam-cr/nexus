@@ -419,3 +419,15 @@
 - **pendiente** (inversión): una línea con algo escrito en el monto que no se pudo sumar. Se
   excluye del total y se anuncia al lado ("· +2 a definir"), porque un total incompleto que se lee
   como completo es peor que no mostrarlo. El ⚠ por línea existe solo en el editor.
+- **impacto** (propuesta comercial, `lib/business-cases/money-brief.ts`): lo que la operación
+  actual le CUESTA al cliente, en su propia plata — distinto del **precio**, que es lo que cobra
+  Smarteam. El agente puede escribir el impacto y tiene prohibido escribir el precio (que vive
+  solo en Casos de uso e Inversión, y lo pone Ventas a mano). Sale de las fuentes —transcript,
+  notas internas, timeline de HubSpot— y puede DERIVARSE multiplicando factores que estén ahí,
+  siempre con la cuenta escrita y sus factores a la vista («15–20% de 2.000 leads mensuales a un
+  ticket de $2.000 son $360.000–480.000 al año, según Mariana»): un total sin factores no se
+  puede verificar antes de mandárselo a un prospecto. Si falta un factor no se estima, un rango
+  se reporta como rango (nunca su extremo alto) y una fecha relativa se copia tal cual («el año
+  pasado», nunca un año concreto). Aparece en dos lugares: dentro del `detail` de la tarjeta del
+  **dolor** que cuantifica —nunca en su título ni en una tarjeta propia— y como métrica del
+  **ROI**. Ver DECISIONS §El dolor se cuantifica.

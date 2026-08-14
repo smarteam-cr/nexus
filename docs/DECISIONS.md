@@ -2047,3 +2047,60 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   `anchoRecurrente`, con la que "Limpiar" mentía.
 - **La aritmética de la línea va DEBAJO del concepto, no en columnas propias.** Una tabla de cinco
   columnas se rompe en celular y en el PDF, y el número que manda —el subtotal— ya tiene la suya.
+
+## El dolor se cuantifica en plata cuando la fuente lo permite (2026-08-13)
+
+> Elías: *"quiero que tenga la capacidad de cuantificar el dolor económicamente cuando haya
+> data disponible … este dato no reemplaza el punto de dolor en sí, sino que se suma como
+> contexto. Si el rep no menciona esos números, Nexus no los debería poder inventar."*
+
+- **No funcionaba, y no era falta de contexto: era una CONTRADICCIÓN en el prompt.** El agente
+  ya recibe el transcript, las notas internas y el timeline de HubSpot (notas + llamadas), así
+  que los números estaban ahí. Lo que fallaba es que el preámbulo del generate decía *"NO
+  pongas montos, precios, rangos … en NINGÚN texto que generes — ni en el titular, ni en la
+  solución, ni en el ROI, ni en el cierre"* mientras el brief del ROI pedía *"'$[X]k' valor
+  estimado de [oportunidad/año]"*. Con dos instrucciones opuestas el modelo desempataba solo y
+  distinto en cada corrida. **Medido sobre las 9 propuestas de la base: 5 de 53 dolores traían
+  alguna cifra y UNO SOLO traía plata** — y en ése la cifra se había comido el TÍTULO
+  («USD 35.000–40.000 perdidos cada mes»), o sea reemplazó el dolor en vez de sumarle, que es
+  exactamente lo que el pedido excluía. En REMPRO el dato existía y el agente lo mandó al ROI.
+- **La regla nueva nombra las dos clases de plata y dice de quién es cada una**
+  (`lib/business-cases/money-brief.ts`): **PRECIO** es lo que cobra Smarteam —no lo escribe el
+  agente, vive en Casos de uso e Inversión— e **IMPACTO** es lo que la operación le cuesta HOY
+  al cliente, que es el argumento. Vive en un módulo propio y no inline en el preámbulo por dos
+  razones: un `route.ts` de App Router no puede exportar nada que no sea un handler, y el arnés
+  de validación necesita el MISMO string y no una copia que envejezca aparte.
+- **Lo que hace segura la cuantificación no es prohibir números: es exigir que la CUENTA esté
+  ESCRITA.** El agente puede multiplicar factores que estén en las fuentes («15–20% de 2.000
+  leads mensuales a un ticket de $2.000 son $360.000–480.000 al año»), pero con los factores a
+  la vista para que el vendedor lo verifique de un vistazo antes de mandarlo, y nombrando la
+  fuente. Si falta un factor, no se estima. Un total sin sus factores no se puede auditar antes
+  de que lo lea un prospecto.
+- **Tres defectos los cazó el arnés, no la lectura del prompt** (`generateCanvasSections` contra
+  un transcript sembrado con los cuatro casos: cifra dicha · dos factores sueltos · un dolor sin
+  números · NUESTRO precio dicho en la reunión). En orden de aparición: (1) el agente abría una
+  tarjeta NUEVA para alojar el número y quedaban dos dolores para el mismo problema, uno con el
+  síntoma y otro con su costo; (2) al comprimir, se quedaba con el extremo ALTO del rango
+  —$480.000 en vez de $360.000–480.000, un tercio de más—; y (3) convertía «el año pasado» en
+  **2024** estando en 2026. Los tres son fabricación con cara de precisión y ninguno se ve
+  leyendo el brief: hay que correrlo. De ahí salieron las tres reglas duras de `dolores`
+  (un problema = una tarjeta · el `title` NUNCA es un número · tope de 35 palabras) y las dos
+  de la regla compartida (un rango se reporta como rango · una fecha relativa se copia tal cual).
+- **El precio nuestro NO se filtra aunque esté dicho en la sesión**: el transcript del arnés
+  incluye «la implementación andaría por los 18.000 dólares» y no aparece en ninguna sección
+  generada, en ninguna de las corridas.
+- **El ROI se queda y se refuerza** (decisión de Elías): pide métricas OPERATIVAS y ECONÓMICAS,
+  al menos una económica cuando el contexto da para calcularla. Con el `label` capado en 20
+  palabras y sin una segunda frase que argumente — son tarjetas de un número grande, cuatro en
+  fila, y la primera versión sacó etiquetas de 40 palabras que comparaban el impacto contra lo
+  que cuesta el proyecto (que además roza el precio, que no es del agente).
+- **Sin campo nuevo y sin tocar el schema**: la cifra entra en el `detail` que ya existe. Se
+  evaluó un tercer renglón propio (`impacto`) y Elías lo descartó — *"lo que hay que hacer es
+  modificar el agente"*. Contrapartida aceptada: el número comparte espacio con la explicación,
+  así que el tope de palabras es lo único que evita que se coma la tarjeta.
+- ⚠ **Esto es calibración de prompt, no una garantía determinista.** Sobre 6 corridas del mismo
+  transcript, la duplicación de tarjetas apareció en 2 antes de las reglas duras y en 0 después,
+  pero la variación entre corridas es real y el CSE sigue siendo el que revisa antes de publicar.
+  Lo que SÍ está congelado es la doctrina: `lib/business-cases/money-brief.test.ts` falla si la
+  distinción precio/impacto se vuelve a fundir en una prohibición en bloque, si el preámbulo
+  deja de importar la constante, o si alguna de las dos secciones deja de pedir lo suyo.
