@@ -36,7 +36,9 @@ export interface EntregaViewData {
   clientLogoScale: number | null;
   smarteamLogoUrl: string | null;
   brandLogos: Record<string, string>;
-  /** Cuándo se congeló lo que el cliente está leyendo. Se pinta: un número sin fecha de corte envejece en secreto. */
+  /** Cuándo se congeló lo que el cliente está leyendo. HOY no la pinta nadie (decisión de
+   *  Elías, 2026-08-13: fuera de la vista del cliente; y el panel del equipo solo muestra el
+   *  booleano «publicado»). Viaja igual para que volver a mostrarla sea una línea de JSX. */
   publishedAt: string | null;
   rows: EntregaSectionRow[];
 }

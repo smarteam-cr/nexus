@@ -37,6 +37,13 @@ import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } fro
 import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
+import {
+  PROCESS_MAPPING_SCHEMA,
+  PROCESS_MAPPING_SCHEMA_CON_TITULAR,
+} from "@/components/landing/configs/shared-sections.defs";
+import { t } from "@/components/landing/i18n";
+import fs from "node:fs";
+import path from "node:path";
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -436,9 +443,13 @@ describe("Entrega: registry completo + keys congeladas", () => {
     const keys = ENTREGA_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
       "portada", "resumen", "alcance", "logros",
-      "cumplimiento", "impacto", "pendientes", "continuidad", "cierre",
+      "cumplimiento", "impacto", "pendientes", "continuidad", "recomendaciones", "cierre",
     ]);
     expect(keys.indexOf("pendientes")).toBeGreaterThan(keys.indexOf("logros"));
+    /* `recomendaciones` DESPUÉS de `continuidad` y no antes: la propuesta del próximo proyecto
+       va primero, y lo que el cliente puede hacer solo va después, como la salida para el que
+       no quiere contratar nada. Al revés, la propuesta se lee como el plan B. */
+    expect(keys.indexOf("recomendaciones")).toBeGreaterThan(keys.indexOf("continuidad"));
   });
 
   it("⚠ LOS NÚMEROS NO LOS ESCRIBE EL AGENTE", () => {
@@ -463,7 +474,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
       expect(ENTREGA_DEF_BY_KEY[k].noHide, `${k} no debería poder ocultarse`).toBe(true);
     }
     const ocultables = ENTREGA_SECTION_DEFS.filter((d) => !d.noHide).map((d) => d.key);
-    expect(ocultables).toHaveLength(7);
+    expect(ocultables).toHaveLength(8);
   });
 
   it("las keys 1:1 con las secciones del canvas", () => {
@@ -502,5 +513,87 @@ describe("Cronograma: registry completo + keys congeladas", () => {
        catálogo de agentes le ofrecería al CSE generar un texto que nadie va a leer —
        el motor las pinta desde ProjectTimeline igual. */
     expect(CRONOGRAMA_SECTION_DEFS.filter((d) => d.agentGenerated).map((d) => d.key)).toEqual([]);
+  });
+});
+
+describe("La comparación de procesos: rótulo por documento, subtítulo por caja", () => {
+  /* `process_mapping` la comparten CINCO documentos y en cuatro el proyecto todavía no ocurrió.
+     Estos asserts protegen las dos formas en que este cambio se rompe en silencio. */
+
+  const propsDe = (schema: unknown) =>
+    (
+      (schema as { properties: { procesos: { items: { properties: Record<string, unknown> } } } })
+        .properties.procesos
+    ).items.properties;
+
+  it("⚠ los subtítulos viven DENTRO del schema — fuera se borran en cada regeneración", () => {
+    /* `preserveNonSchemaKeys` (lib/ai/section-schema.ts) solo acarrea claves de PRIMER nivel.
+       `resumenHoy`/`resumenSera` están dentro de `procesos[]`, así que si alguien los saca del
+       schema pensando «esto es solo UI», `coerceToSchema` los borra en cada regeneración y
+       nada los rescata: el CSE escribe el titular, regenera, y desapareció sin error. */
+    const props = propsDe(PROCESS_MAPPING_SCHEMA_CON_TITULAR);
+    for (const k of ["resumenHoy", "resumenSera", "comoEsHoy", "comoSera"]) {
+      expect(props, `"${k}" fuera del schema = se borra al regenerar`).toHaveProperty(k);
+    }
+  });
+
+  it("⚠ y NO viven en el schema compartido: el schema es el prompt de los otros cuatro", () => {
+    /* `shapeOf` recursa dentro de `items`, así que el schema ES la forma que el modelo recibe.
+       Meter los titulares en el compartido pone a los agentes de Diagnóstico, Planificación,
+       Implementación y el Business Case a escribir dos campos que ningún brief de ellos
+       explica — y en `implementacion.pipelines`, donde el «antes» es una lista de etapas, un
+       titular de media línea no tiene contenido posible. La variante entra por el documento
+       que la pidió, igual que `CompararLabels`. */
+    const compartido = propsDe(PROCESS_MAPPING_SCHEMA);
+    expect(compartido).not.toHaveProperty("resumenHoy");
+    expect(compartido).not.toHaveProperty("resumenSera");
+  });
+
+  it("solo la Entrega cambia los rótulos; los otros cuatro miran hacia adelante", () => {
+    /* «Con la implementación» en un documento de cierre convierte un hecho en una promesa.
+       Y al revés: «Ahora» en un diagnóstico afirmaría algo que todavía no pasó. */
+    expect(ENTREGA_DEF_BY_KEY["resumen"].compara).toEqual({
+      izquierda: "antes",
+      derecha: "ahora",
+      // Los placeholders del EDITOR también, o el CSE lee «Cómo quedará…» bajo «AHORA».
+      phIzquierda: "comoFuncionabaAntes",
+      phDerecha: "comoFuncionaAhora",
+    });
+
+    /* Los BC_TEMPLATES entran por el barrido y no a mano: la quinta def de `process_mapping`
+       no vive en ningún `*_SECTION_DEFS` —la sintetiza `makeProcessMappingDef` dentro del
+       template— así que enumerar los tres arrays dejaba fuera justo la propuesta comercial,
+       donde rotular «Antes/Ahora» sobre un proyecto que todavía no se vendió es lo más caro. */
+    const otros = [
+      ...DIAGNOSTICO_SECTION_DEFS,
+      ...PLANIFICACION_SECTION_DEFS,
+      ...IMPLEMENTACION_SECTION_DEFS,
+      ...Object.values(BC_TEMPLATES).flatMap((t) => t.sections),
+    ].filter((d) => d.sectionType === "process_mapping");
+    expect(otros.length, "ningún otro documento usa process_mapping — ¿se movió?").toBeGreaterThan(0);
+    for (const d of otros) {
+      expect(d.compara, `"${d.key}" no debería redefinir los rótulos`).toBeUndefined();
+    }
+  });
+
+  it("el renderer LEE el rótulo de la def, no un literal", () => {
+    /* Sin esto la plomería queda a medias y falla del peor modo: el campo se declara, el tipo
+       compila, y el componente sigue pintando «Hoy». Verificado sobre el archivo real. */
+    const src = fs.readFileSync(
+      path.join(__dirname, "..", "..", "components", "landing", "sections-shared.tsx"),
+      "utf8",
+    );
+    expect(src).toContain('t(lang, sectionCompara?.izquierda ?? "hoy")');
+    expect(src).toContain('t(lang, sectionCompara?.derecha ?? "conImplementacion")');
+  });
+
+  it("los rótulos nuevos existen en los dos idiomas", () => {
+    /* Tipar contra `LandingStringKey` obliga a que la clave exista; esto fija que no quede a
+       medias. La Entrega se le comparte al CLIENTE y se traduce por `__lang`: un literal en
+       español saldría tal cual dentro de un documento en inglés. */
+    expect(t("es", "antes")).toBe("Antes");
+    expect(t("en", "antes")).toBe("Before");
+    expect(t("es", "ahora")).toBe("Ahora");
+    expect(t("en", "ahora")).toBe("Now");
   });
 });

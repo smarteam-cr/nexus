@@ -208,18 +208,23 @@ export function metricasDeCumplimiento(claims: DeliveryClaims): MetricaDeEntrega
  * acá le devolvería al cliente una lista de cosas que alguien ya decidió no hacer.
  */
 export function pendientesAbiertos(fases: FaseParaEntrega[], tope = 12): PendienteDeEntrega[] {
+  /* Quién lo tiene, en presente y sin ambigüedad. Antes decía «lo cerramos juntos», que en un
+     documento de CIERRE se lee como una promesa vaga: el lector no sabe si tiene que hacer algo
+     ni cuándo. Un pendiente sin dueño legible es un pendiente que nadie levanta. */
   const DUENIO: Record<string, string> = {
-    CLIENTE: "queda de tu lado",
-    SMARTEAM: "queda de nuestro lado",
-    DEV: "queda del lado de desarrollo",
-    AMBOS: "lo cerramos juntos",
+    CLIENTE: "Lo tienen ustedes",
+    SMARTEAM: "Lo tenemos nosotros",
+    DEV: "Lo tiene el equipo de desarrollo",
+    AMBOS: "Lo vemos en conjunto",
   };
   const out: PendienteDeEntrega[] = [];
   for (const f of fases) {
     for (const t of f.tasks) {
       if (t.status === "DONE" || t.status === "SUSPENDED") continue;
+      /* El DUEÑO primero —es lo accionable— y la fase después, como contexto. Al revés el
+         renglón arrancaba con jerga interna («Semana 0 —…») y el dato útil quedaba al final. */
       const duenio = t.party ? DUENIO[t.party] : null;
-      out.push({ title: t.title, detail: duenio ? `${f.name} — ${duenio}` : f.name });
+      out.push({ title: t.title, detail: duenio ? `${duenio} · ${f.name}` : f.name });
       if (out.length >= tope) return out;
     }
   }

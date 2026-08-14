@@ -22,12 +22,20 @@
  * ⚠ Se congela CRUDO; el filtro de secciones ocultas se aplica al LEER. Si filtráramos acá,
  * ocultar algo después de publicar no tendría efecto hasta re-publicar: el CSE tapa una
  * sección sensible y el cliente la sigue viendo.
+ *
+ * ⚠ Y se congela el ENCABEZADO, no solo el cuerpo. El título y el eyebrow salían de las defs
+ * VIVAS (`LandingView` cae a `def.label` cuando no hay override), así que renombrar una
+ * sección en el código le reescribía el encabezado a un documento ya entregado mientras el
+ * texto de abajo seguía siendo el viejo: el cliente reabre su enlace y lee un título que ya
+ * no describe lo que tiene debajo. Congelar el cuerpo y dejar vivo el título es congelar a
+ * medias. Pasó al renombrar «Qué sigue» → «El siguiente proyecto» (2026-08-14).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
+import { ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
 
 const SURFACE = publishSurface("entrega");
 
@@ -108,12 +116,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pr
     );
   }
 
+  /* El encabezado EFECTIVO —el que el cliente está viendo ahora mismo— se resuelve acá y se
+     guarda como si fuera un override. `LandingView` ya prefiere el override sobre `def.label`,
+     así que no hace falta tocar nada río abajo: el snapshot se vuelve autosuficiente. */
+  const congeladas = canvas.canvasSections.map((s) => {
+    const def = ENTREGA_DEF_BY_KEY[s.key];
+    return {
+      ...s,
+      titleOverride: (s.titleOverride ?? "").trim() || def?.label || null,
+      eyebrowOverride: s.eyebrowOverride ?? def?.eyebrow ?? null,
+    };
+  });
+
   const now = new Date();
   await prisma.$transaction([
     prisma.projectCanvas.update({
       where: { id: canvas.id },
       data: {
-        publishedSnapshot: { sections: canvas.canvasSections } as unknown as object,
+        publishedSnapshot: { sections: congeladas } as unknown as object,
         publishedSnapshotAt: now,
       },
     }),

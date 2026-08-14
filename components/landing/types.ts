@@ -121,7 +121,16 @@ export interface TechArchitectureData {
 }
 
 // Mapeo de procesos (opcional) — cómo cambia cada proceso del cliente.
-export interface ProcessMapItem { nombre: string; comoEsHoy: string; comoSera: string; sistemas: string }
+export interface ProcessMapItem {
+  nombre: string;
+  /** Titular de la caja izquierda: media línea que se lee sola. Opcional (data vieja no lo trae). */
+  resumenHoy?: string;
+  comoEsHoy: string;
+  /** Titular de la caja derecha. */
+  resumenSera?: string;
+  comoSera: string;
+  sistemas: string;
+}
 export interface ProcessMappingData { intro: string; procesos: ProcessMapItem[] }
 
 // Sección de DIAGRAMA (motor de diagramas interactivo — FlowchartViewer como sección
@@ -397,6 +406,31 @@ export interface SectionProps<T> {
   sectionChips?: { retos?: string; panel?: string };
   /** Rótulos de los bloques de la sección de INVERSIÓN, por documento. Ver `SectionDef.invest`. */
   sectionInvest?: InvestLabels;
+  /** Rótulos de las dos columnas de `process_mapping`, por documento. Ver `SectionDef.compara`. */
+  sectionCompara?: CompararLabels;
+}
+
+/**
+ * Rótulos de las dos columnas de la comparación de procesos, declarados POR DOCUMENTO.
+ *
+ * Mismo criterio que `InvestLabels`: claves de i18n, no literales, porque el documento se
+ * publica al cliente y se traduce por `__lang`.
+ *
+ * Existe porque `ProcessMappingSection` la comparten CINCO documentos y en cuatro de ellos el
+ * proyecto todavía no ocurrió ("Hoy" vs "Con la implementación" es correcto ahí). La Entrega
+ * es el único que mira hacia atrás: escribir "Con la implementación" en un documento de cierre
+ * convierte un hecho en una promesa.
+ */
+export interface CompararLabels {
+  /** Columna izquierda. Default: "Hoy". */
+  izquierda?: LandingStringKey;
+  /** Columna derecha. Default: "Con la implementación". */
+  derecha?: LandingStringKey;
+  /** Placeholder del párrafo izquierdo en EDICIÓN. Default: "Cómo funciona hoy…". */
+  phIzquierda?: LandingStringKey;
+  /** Placeholder del párrafo derecho. Default: "Cómo quedará…" — que bajo el rótulo «Ahora»
+   *  le pide al CSE que escriba en futuro sobre algo que ya pasó. */
+  phDerecha?: LandingStringKey;
 }
 
 /**
@@ -443,6 +477,8 @@ export interface SectionDef {
    *  `chips` —el rótulo entra por la DEFINICIÓN, nunca por un campo de `data`— con los
    *  valores tipados contra i18n para que un template nuevo no pueda quedar monolingüe. */
   invest?: InvestLabels;
+  /** Rótulos de las dos columnas de `process_mapping`, por documento. Ver `CompararLabels`. */
+  compara?: CompararLabels;
   empty: unknown;              // data inicial (template vacío)
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */

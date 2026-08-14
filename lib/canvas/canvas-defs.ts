@@ -498,7 +498,8 @@ export const ENTREGA_CANVAS: CanvasDefinition = {
     { key: "cumplimiento", label: "El plan, cumplido" },
     { key: "impacto",      label: "El impacto en el negocio" },
     { key: "pendientes",   label: "Qué queda abierto" },
-    { key: "continuidad",  label: "Qué sigue" },
+    { key: "continuidad",  label: "El siguiente proyecto" },
+    { key: "recomendaciones", label: "Cómo sacarle más provecho" },
     { key: "cierre",       label: "Cierre", defaultData: { ...ENTREGA_CIERRE_DEFAULT } },
   ],
 };

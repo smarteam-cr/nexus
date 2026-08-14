@@ -96,7 +96,14 @@ describe("…y SOBREVIVE al reload", () => {
 describe("el editor lo usa de verdad", () => {
   /* Una ruta que guarda y nadie llama es una promesa vacía. Implementación es el primer
      workspace de proyecto cableado; el día que se cableen los otros, entran acá. */
-  const CABLEADOS = ["components/canvas/ImplementacionWorkspace.tsx"];
+  const CABLEADOS = [
+    "components/canvas/ImplementacionWorkspace.tsx",
+    /* Entrega ya estaba cableada desde EN-0 y nadie lo guardaba: el ojo se podía desconectar
+       sin que ningún test lo notara, y es el ÚNICO documento donde ocultar tiene consecuencia
+       externa — `lib/external/entrega-view.ts` filtra lo oculto contra el Json vivo, así que
+       tapar una sección después de publicar la saca del enlace del cliente al instante. */
+    "components/canvas/EntregaWorkspace.tsx",
+  ];
 
   for (const rel of CABLEADOS) {
     it(`${rel} pasa onToggleHidden y refleja \`hidden\` en las secciones`, () => {

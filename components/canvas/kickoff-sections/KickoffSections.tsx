@@ -133,18 +133,23 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
           <div className="stl-item stl-card">
             {handle}
             {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} />}
+            {/* Titular corto arriba, explicación abajo. Las clases ya existían en
+                landing-engine.css y esta tarjeta era la única que no las usaba: sin ellas el
+                <h3> cae al reset y queda del mismo tamaño que el <p>. */}
             <Editable
               as="h3"
+              className="stl-card-title"
               editable={editable}
               value={it.title}
-              placeholder="Título…"
+              placeholder="Título corto…"
               onCommit={(v) => set({ items: replaceAt(items, i, { ...it, title: v }) })}
             />
             <Editable
               as="p"
+              className="stl-card-detail"
               editable={editable}
               value={it.detail ?? ""}
-              placeholder="Detalle (opcional)…"
+              placeholder="Una línea que lo explique…"
               onCommit={(v) => set({ items: replaceAt(items, i, { ...it, detail: v }) })}
             />
           </div>

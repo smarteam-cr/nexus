@@ -17,6 +17,7 @@ import { SKIP_KEYS, MD_KEYS, TITLE_KEYS, NO_LABEL_KEYS, KEY_LABELS, humanize, la
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
 import { DIAGNOSTICO_SECTION_DEFS } from "@/components/landing/configs/diagnostico.defs";
+import { ENTREGA_SECTION_DEFS } from "@/components/landing/configs/entrega.defs";
 
 /** Toda clave que aparece en un schema, a cualquier profundidad. */
 function clavesDe(schema: unknown, out = new Set<string>()): Set<string> {
@@ -35,6 +36,10 @@ const DOCS = [
   ["exploración", EXPLORACION_SECTION_DEFS],
   ["desarrollo", DESARROLLO_SECTION_DEFS],
   ["diagnóstico", DIAGNOSTICO_SECTION_DEFS],
+  /* La Entrega imprime por la rama GENÉRICA (no está en PRINT_DOC_TYPES), así que cada clave
+     de su schema pasa por `labelFor` y una que falte sale con `humanize()` — sin tildes. Es el
+     documento donde más duele: el PDF del cierre se lo manda el CSE al cliente. */
+  ["entrega", ENTREGA_SECTION_DEFS],
 ] as const;
 
 /** Una clave está "gobernada" si algún balde la nombra explícitamente. */

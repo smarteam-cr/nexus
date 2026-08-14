@@ -29,7 +29,12 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
-import { PROCESS_MAPPING_SCHEMA, PROCESS_MAPPING_EMPTY, ROI_SCHEMA, ROI_EMPTY } from "./shared-sections.defs";
+import {
+  PROCESS_MAPPING_SCHEMA_CON_TITULAR,
+  PROCESS_MAPPING_EMPTY,
+  ROI_SCHEMA,
+  ROI_EMPTY,
+} from "./shared-sections.defs";
 import { ENTREGA_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
 
@@ -88,14 +93,24 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     empty: PROCESS_MAPPING_EMPTY,
     agentHint: "Proceso por proceso: cómo trabajaban antes y cómo trabajan ahora.",
+    /* El único documento que mira hacia atrás. Ver `CompararLabels`. */
+    compara: {
+      izquierda: "antes",
+      derecha: "ahora",
+      phIzquierda: "comoFuncionabaAntes",
+      phDerecha: "comoFuncionaAhora",
+    },
     brief:
       "El cambio concreto, proceso por proceso — es la sección que el cliente reconoce como propia. " +
       "`procesos[]`: `nombre` = el proceso en su vocabulario ('Seguimiento de cotizaciones', 'Atención de reclamos'); " +
+      "`resumenHoy` = el ANTES en media línea, como titular ('Cada vendedor con su propia planilla'); " +
       "`comoEsHoy` = cómo lo hacían ANTES del proyecto (planillas, correos sueltos, la cabeza de alguien) — sacalo del handoff y de las primeras reuniones, no lo inventes; " +
+      "`resumenSera` = el AHORA en media línea, como titular ('Un solo pipeline que todos ven'); " +
       "`comoSera` = cómo funciona AHORA, en presente y con lo que de verdad quedó construido; " +
+      "⚠ Los dos `resumen*` son TITULARES, no resúmenes del párrafo: media línea que se lee sola y contrasta con la de enfrente. " +
       "`sistemas` = qué lo sostiene ('Sales Hub + workflow de recordatorios'). " +
       "Si el material no alcanza para describir el antes de un proceso, NO lo incluyas: media comparación es peor que ninguna.",
-    schema: asSchema(PROCESS_MAPPING_SCHEMA),
+    schema: asSchema(PROCESS_MAPPING_SCHEMA_CON_TITULAR),
   },
   {
     key: "alcance",
@@ -207,18 +222,44 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
   },
   {
     key: "continuidad",
-    label: "Qué sigue",
-    eyebrow: "El acompañamiento",
+    label: "El siguiente proyecto",
+    eyebrow: "Hasta dónde llegamos, y qué viene",
     theme: "light",
     sectionType: "kickoff_prose",
     agentGenerated: true,
     empty: proseEmpty,
-    agentHint: "Acompañamiento, adopción y lo que podría venir después.",
+    agentHint: "El próximo proyecto que tendría sentido, con el problema que resuelve.",
     brief:
-      "Cómo sigue la relación después de la entrega. `items[]`: `title` = el compromiso o la oportunidad; `detail` = UNA línea concreta. " +
-      "Cubrí, si el material lo respalda: el período de acompañamiento (cuánto tiempo y con qué frecuencia), qué mantener vivo para que la adopción no se caiga, " +
-      "y qué tendría sentido construir después — ordenado por lo que HOY les duele, no por lo que sería lindo vender. " +
-      "⚠ No inventes plazos de acompañamiento ni prometas nada que no esté en las reuniones o en el contrato. Sin respaldo, dejalo afuera.",
+      "⚠ ESTE PROYECTO YA TERMINÓ. Escribí en PASADO sobre lo entregado y en FUTURO solo sobre lo que vendría después; " +
+      "nada de «vamos a acompañarlos durante la implementación», que ya ocurrió. " +
+      "Esta sección es la PROPUESTA DEL PRÓXIMO PROYECTO: qué construir ahora que esto quedó en pie. " +
+      "`items[]`: 2 a 4, no más — una lista larga se lee como catálogo y no como recomendación. " +
+      "`title` = el proyecto en 4-6 palabras y en el idioma del cliente ('Automatizar la cotización', no 'Fase 2 de Sales Hub'). " +
+      "`detail` = UNA o DOS líneas: qué problema del cliente resuelve y por qué AHORA es el momento — anclado en algo que dijeron ellos en las reuniones. " +
+      "Ordenalos por lo que HOY les duele, no por lo que sería lindo vender: el primero tiene que ser el que ellos mismos nombraron más veces. " +
+      "⚠ Si el material no respalda ninguna oportunidad concreta, devolvé `items: []` — una propuesta inventada en un documento de cierre quema la confianza que el proyecto acaba de ganar.",
+    schema: asSchema(proseSchema),
+  },
+  {
+    key: "recomendaciones",
+    label: "Cómo sacarle más provecho",
+    eyebrow: "Sin contratar nada",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    /* La contracara de `continuidad`: existe para el cliente que NO quiere un proyecto nuevo.
+       Sin esta sección el documento termina en una venta, y un cierre que solo vende se lee
+       como una venta. Acá el consejo es gratis y no depende de que nos contraten. */
+    agentHint: "Qué puede hacer el equipo del cliente, por su cuenta, para exprimir lo implementado.",
+    brief:
+      "Recomendaciones que el equipo del cliente puede aplicar SOLO, sin contratarnos nada — es la contracara de la sección anterior. " +
+      "`items[]`: 3 a 5. `title` = la acción en imperativo y corta ('Revisar el pipeline una vez por semana'). " +
+      "`detail` = UNA o DOS líneas: por qué mueve la aguja y quién de su equipo debería hacerlo. " +
+      "Buenas fuentes: hábitos que se les caen cuando nadie mira, funcionalidad ya configurada que todavía no usan, " +
+      "datos que ya tienen y no están mirando, y lo que el propio equipo dijo que le costaba en las reuniones. " +
+      "⚠ Cero venta acá: si la recomendación necesita que hagamos algo nosotros, va en la sección anterior, no en ésta. " +
+      "⚠ Nada genérico tipo «capacitar al equipo»: si no podés decir sobre QUÉ y para resolver qué, dejalo afuera.",
     schema: asSchema(proseSchema),
   },
   {

@@ -154,7 +154,18 @@ describe("los pendientes", () => {
     });
     const p = pendientesAbiertos([f]);
     expect(p.map((x) => x.title)).toEqual(["Cargar la base", "Capacitar al equipo"]);
-    expect(p[0].detail).toBe("Puesta en marcha — queda de tu lado");
+    /* El DUEÑO primero, la fase después. En un documento de cierre el lector necesita saber en
+       tres palabras si le toca a él; arrancar por el nombre de la fase («Semana 0 — …») pone
+       jerga interna adelante y esconde lo accionable al final del renglón. */
+    expect(p[0].detail).toBe("Lo tienen ustedes · Puesta en marcha");
+    expect(p[1].detail).toBe("Lo tenemos nosotros · Puesta en marcha");
+
+    /* ⚠ «Lo cerramos juntos» quedó prohibido a propósito: en un cierre se lee como una promesa
+       vaga y nadie levanta el pendiente. AMBOS ahora dice quién mira, no un gesto. */
+    const conjunto = pendientesAbiertos([
+      fase({ name: "Integraciones", tasks: [{ title: "Validar Aircall", status: "PENDING", party: "AMBOS" }] }),
+    ]);
+    expect(conjunto[0].detail).toBe("Lo vemos en conjunto · Integraciones");
   });
 
   it("respeta el tope: una lista de 40 pendientes no es una lista", () => {

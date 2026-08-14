@@ -12,7 +12,7 @@
  * el registry es la fuente de composición; BC_SECTION_DEFS/BC_DEF_BY_KEY se mantienen
  * exportados por compatibilidad.
  */
-import type { InvestLabels, LandingContext } from "../types";
+import type { CompararLabels, InvestLabels, LandingContext } from "../types";
 
 export interface BCSectionDef {
   key: string;
@@ -43,6 +43,11 @@ export interface BCSectionDef {
    *  tipados contra i18n para que un template nuevo no pueda quedar monolingüe.
    *  Ver `SectionProps.sectionInvest`. */
   invest?: InvestLabels;
+  /** Rótulos de las DOS columnas de `process_mapping`, por documento. Hermano de `invest`
+   *  (claves de i18n, no literales). Ausente = "Hoy" / "Con la implementación", que es lo
+   *  correcto en los cuatro documentos que miran hacia adelante. La Entrega mira hacia
+   *  atrás y usa "Antes" / "Ahora". Ver `SectionProps.sectionCompara`. */
+  compara?: CompararLabels;
   /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
    *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
   defaultHidden?: boolean;

@@ -233,3 +233,33 @@ describe("candado 3 — toda capacidad la lee alguien", () => {
     ).toEqual([]);
   });
 });
+
+describe("un snapshot congelado se congela ENTERO", () => {
+  /**
+   * El cuerpo se congelaba y el ENCABEZADO no: el título y el eyebrow salían de las defs vivas
+   * (`LandingView` cae a `def.label` cuando no hay override), así que renombrar una sección en
+   * el código le reescribía el encabezado a un documento ya entregado mientras el texto de
+   * abajo seguía siendo el viejo — el cliente reabre su enlace y lee un título que ya no
+   * describe lo que tiene debajo. Pasó al renombrar «Qué sigue» → «El siguiente proyecto».
+   *
+   * Se prueba sobre la ENTREGA porque es la única superficie que congela contenido con
+   * intención de acta: el kickoff y el business case tienen su propio congelador y el
+   * requerimiento técnico sirve lo vivo a propósito.
+   */
+  it("publish-entrega resuelve el encabezado ANTES de guardar el snapshot", () => {
+    const src = sinComentarios(
+      fs.readFileSync(
+        path.join(RAIZ, "app", "api", "projects", "[projectId]", "publish-entrega", "route.ts"),
+        "utf8",
+      ),
+    );
+    expect(
+      src,
+      "el snapshot tiene que llevar el encabezado EFECTIVO, no depender de las defs vivas",
+    ).toMatch(/publishedSnapshot:\s*\{\s*sections:\s*congeladas\s*\}/);
+    expect(src, "sin leer las defs no hay título que congelar").toContain("ENTREGA_DEF_BY_KEY");
+    expect(src, "el override del CSE gana sobre el label de la def").toMatch(
+      /titleOverride:\s*\(s\.titleOverride/,
+    );
+  });
+});
