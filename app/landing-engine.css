@@ -402,6 +402,86 @@
 }
 .stl .stl-phase-name { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--text); margin: 4px 0 4px; }
 .stl .stl-phase-duration { font-size: 12px; font-weight: 600; color: var(--blue); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
+.stl .stl-phase-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Cronograma: el aviso de la PRIMERA fase ──────────────────────────────────
+   Dice que el diagnóstico puede mover las fechas de las etapas siguientes. Ámbar, que en
+   este motor ya significa "ojo con esto" (la nota al pie de la Inversión, `.stl-inv-nota`).
+   Va en DOS piezas porque un chip corto no dice la idea completa y en el PDF no hay hover:
+   el chip marca la fase y la línea explica. Las dos se imprimen. */
+.stl .stl-phase-flag {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #92400E; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.stl .stl-phase-aviso { margin: 6px 0 0; color: #92400E; font-size: 12.5px; line-height: 1.5; font-weight: 500; }
+/* Solo-editor: rescatar una fase que el Gantt no pudo ubicar (ej. "Mes 4"). */
+.stl .stl-phase-fix { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #B45309; }
+.stl .stl-phase-fix input {
+  width: 84px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 8px;
+  font: inherit; color: var(--text); background: #fff;
+}
+.stl .stl-phase-off { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; }
+
+/* ── Cronograma: el toggle de vista (lista / Gantt) ───────────────────────────
+   Se pinta como PRIMER hijo del cuerpo de la sección, o sea hermano del `<header>` que arma
+   el motor — y esta rejilla lo sube a la fila del título. Con `:has()` solo entra la sección
+   que trae la barra, así que ninguna otra cambia de layout y el motor no se toca.
+   El espejo de este control es `.stl-inv-plazo` (el plazo del contrato de la Inversión):
+   misma forma y mismos estados. Deuda anotada: cuando aparezca un tercero, converger los
+   tres en una sola primitiva del motor en vez de copiar la especificación. */
+.stl .stl-wrap:has(> .stl-vista-bar) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+.stl .stl-wrap:has(> .stl-vista-bar) > * { grid-column: 1 / -1; }
+.stl .stl-wrap:has(> .stl-vista-bar) > .stl-sec-head { grid-column: 1; grid-row: 1; }
+.stl .stl-wrap:has(> .stl-vista-bar) > .stl-vista-bar {
+  grid-column: 2; grid-row: 1; justify-self: end; align-self: end;
+  margin-bottom: clamp(20px, 2.6vw, 30px); /* el mismo del .stl-sec-head: alinea las bases */
+}
+.stl .stl-vista-bar { display: inline-flex; gap: 0; }
+.stl .stl-vista-btn {
+  padding: 5px 14px; border: 1px solid var(--border); background: #fff;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 12px; font-weight: 700; color: var(--text-2); cursor: pointer; white-space: nowrap;
+}
+.stl .stl-vista-btn:first-child { border-radius: 999px 0 0 999px; }
+.stl .stl-vista-btn:last-child { border-radius: 0 999px 999px 0; border-left: 0; }
+.stl .stl-vista-btn.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.stl .stl-vista-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Angosto: la rejilla se deshace y el toggle cae debajo del título, alineado a la derecha. */
+@media (max-width: 640px) {
+  .stl .stl-wrap:has(> .stl-vista-bar) { display: block; }
+  .stl .stl-wrap:has(> .stl-vista-bar) > .stl-vista-bar { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+}
+
+/* ── Cronograma: la vista Gantt ───────────────────────────────────────────────
+   Una celda por semana, como el Gantt del cronograma interno (components/canvas/
+   TimelineSection.tsx): grid + `<div>`s. Sin SVG, sin canvas y SIN scroller — con muchas
+   semanas las celdas se comprimen en vez de desbordar. */
+.stl .stl-gantt { margin-top: 4px; }
+.stl .stl-gantt-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 210px) repeat(var(--stl-gantt-cols), minmax(0, 1fr));
+  align-items: center; column-gap: 3px; padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+.stl .stl-gantt-head { border-top: 0; padding-bottom: 4px; }
+.stl .stl-gantt-wk { font-size: 10px; font-weight: 600; color: var(--text-muted); text-align: center; }
+.stl .stl-gantt-lbl { padding-right: 12px; min-width: 0; }
+.stl .stl-gantt-name {
+  display: block; font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 600; font-size: 14px; color: var(--text); line-height: 1.3;
+}
+.stl .stl-gantt-rango { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
+.stl .stl-gantt-cell { height: 12px; border-radius: 6px; background: var(--bg-soft); }
+.stl .stl-gantt-cell.is-on { background: var(--blue); }
+/* La fase del diagnóstico va en ámbar: es la misma señal que su chip en la lista. */
+.stl .stl-gantt-cell.is-on.is-flag { background: #F59E0B; }
+.stl .stl-gantt-aviso { margin-top: 12px; }
+@media (max-width: 640px) {
+  .stl .stl-gantt-row { grid-template-columns: minmax(84px, 40%) repeat(var(--stl-gantt-cols), minmax(0, 1fr)); }
+  .stl .stl-gantt-wk { font-size: 9px; }
+}
 
 /* Inversión */
 .stl .stl-invest { border: 1px solid var(--border); border-radius: 22px; overflow: hidden; margin-top: 28px; }

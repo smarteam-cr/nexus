@@ -84,9 +84,30 @@ export interface HubsClienteData {
 export interface Metric { value: string; label: string }
 export interface RoiData { metrics: Metric[] }
 
-// 6) Timeline — fases con semanas.
-export interface Phase { name: string; detail: string; duration: string }
-export interface PlanData { phases: Phase[] }
+// 6) Timeline — fases con semanas. Se lee como lista o como Gantt (toggle en la fila del
+//    título); el Gantt saca las barras de `duration` con `lib/landing/plan-weeks.ts`.
+export interface Phase {
+  name: string;
+  detail: string;
+  /** Texto libre que ve el cliente: "Semanas 6-10", "Semana 8". Es lo que se PARSEA. */
+  duration: string;
+  /**
+   * Corrección del vendedor cuando `duration` no se puede leer ("Mes 4"): formato estricto
+   * "6-10". Va DENTRO del schema del agente y no como key suelta porque
+   * `preserveNonSchemaKeys` es shallow y esto vive dentro de un ítem de array — fuera del
+   * schema no sobreviviría a regenerar la sección.
+   */
+  semanas?: string;
+}
+export interface PlanData {
+  phases: Phase[];
+  /**
+   * `"no"` apaga el aviso de la primera fase. Fuera del schema (el agente no lo decide) y en
+   * el PRIMER nivel, que es hasta donde llega `preserveNonSchemaKeys`: por eso sobrevive a
+   * regenerar. Es presentación ⇒ está en `NO_CONTENIDO` (lib/landing/is-blank.ts).
+   */
+  avisoFase1?: string;
+}
 
 // 7) Inversión — 2 líneas fijas (licencias HubSpot / implementación Smarteam).
 export interface InvestmentLine { monto: string; detalle: string }

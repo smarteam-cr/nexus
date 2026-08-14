@@ -431,3 +431,21 @@
   pasado», nunca un año concreto). Aparece en dos lugares: dentro del `detail` de la tarjeta del
   **dolor** que cuantifica —nunca en su título ni en una tarjeta propia— y como métrica del
   **ROI**. Ver DECISIONS §El dolor se cuantifica.
+- **vista del plan** (sección `cronograma` de la propuesta comercial): las DOS formas de leer
+  el mismo plan — **lista** (fase, semanas y detalle, la de siempre) y **Gantt** (una barra por
+  fase sobre un eje de semanas). Se cambia con un toggle a la derecha del título; abre en lista
+  y la elección **no se guarda**: sirve para explorar el plan en la reunión y al recargar
+  vuelve al default. En el PDF se imprime la lista, que es la que trae todo el contenido.
+- **semanas de una fase** (`Phase.duration` + `Phase.semanas`, `lib/landing/plan-weeks.ts`): el
+  rango escrito DOS veces — `duration` es lo que lee el cliente («Semanas 6-10») y `semanas` es
+  ese mismo rango en formato de máquina («6-10»), que es de donde sale la barra del Gantt.
+  Cuando falta `semanas` se PARSEA `duration`, que tolera guion y en dash, singular y plural.
+  Son semanas **absolutas de inicio y fin**, no duraciones, y dos fases pueden solaparse. Lo
+  que no se puede leer —«Mes 4», que existe en una propuesta publicada— **no se aproxima**: esa
+  fase sale marcada «sin semanas» y el editor ofrece el campo para corregirla.
+- **aviso de la primera etapa** (`PlanData.avisoFase1`): el chip ámbar «Puede ajustar el plan»
+  y la línea «Las semanas siguientes se confirman al cerrar esta etapa», sobre la primera fase
+  del cronograma. Existe para **no comprometer fechas exactas antes de diagnosticar**: el
+  diagnóstico puede cambiar prioridades. Sale por posición (la fase 1), no por una casilla que
+  haya que marcar; `avisoFase1: "no"` lo apaga para la propuesta que no arranque con un
+  diagnóstico. Se ve en las dos vistas y se imprime en el PDF.

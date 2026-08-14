@@ -57,6 +57,11 @@ export const NO_CONTENIDO = new Set([
   "activa",
   "recurrencia",
   "contrato",
+  // Apagador del aviso de la primera fase del cronograma ("puede ajustar el plan"). Una
+  // sección donde SOLO se apagó el aviso no tiene una palabra que mostrarle a nadie: sin
+  // esta entrada se publicaría el encabezado del plan sin una sola fase, y "Limpiar" volvería
+  // a mentir — la misma trampa de `anchoRecurrente`.
+  "avisoFase1",
 ]);
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. */

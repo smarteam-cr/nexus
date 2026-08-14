@@ -9,18 +9,20 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import { useEffect, useRef, useState, type FC } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
-import { landingLang, t } from "./i18n";
+import { rangoDeFase, spanDelPlan } from "@/lib/landing/plan-weeks";
+import { landingLang, t, type LandingLang } from "./i18n";
 import type {
   SectionProps,
   HeroData,
   PainData,
   BeforeAfterData,
   RoiData,
+  Phase,
   PlanData,
   PartnerData,
   CtaData,
@@ -210,30 +212,146 @@ export const RoiSection: FC<SectionProps<RoiData>> = ({ data, editable, onChange
 };
 
 // ── 6) Timeline — plan de implementación ─────────────────────────────────────
-export const PlanSection: FC<SectionProps<PlanData>> = ({ data, editable, onChange }) => {
+
+/**
+ * El aviso de la PRIMERA fase: esa etapa es el diagnóstico y puede mover las fechas de las
+ * que siguen. Va derivado de la posición (`i === 0`) y no de un campo que alguien tenga que
+ * acordarse de marcar — si dependiera de una casilla, la propuesta que se olvida de marcarla
+ * es justo la que sale comprometiendo fechas exactas antes de diagnosticar.
+ * `data.avisoFase1 === "no"` lo apaga para la propuesta que no arranque con diagnóstico.
+ */
+function avisoActivo(data: PlanData, i: number): boolean {
+  return i === 0 && (data.avisoFase1 ?? "") !== "no";
+}
+
+/**
+ * El Gantt: una celda por semana, como `TimelineSection` (components/canvas). Grid y `<div>`s
+ * — cero SVG, cero canvas, cero scroller: los tres patrones que `pdf-mode-coverage` marca.
+ * Solo LECTURA de las semanas; para cambiarlas está el campo de la lista.
+ */
+const PlanGantt: FC<{ phases: Phase[]; data: PlanData; lang: LandingLang }> = ({ phases, data, lang }) => {
+  const span = spanDelPlan(phases);
+  if (!span) return null;
+  const total = span.fin - span.inicio + 1;
+  const semanas = Array.from({ length: total }, (_, k) => span.inicio + k);
+  return (
+    <div className="stl-gantt" role="table" aria-label={t(lang, "vistaDelPlan")}>
+      <div className="stl-gantt-row stl-gantt-head" role="row" style={{ "--stl-gantt-cols": total } as CSSProperties}>
+        <div className="stl-gantt-lbl" role="columnheader" />
+        {semanas.map((w) => (
+          <div key={w} className="stl-gantt-wk" role="columnheader">
+            {t(lang, "semanaAbrev")}
+            {w}
+          </div>
+        ))}
+      </div>
+      {phases.map((p, i) => {
+        const r = rangoDeFase(p);
+        const flag = avisoActivo(data, i);
+        return (
+          <div key={i} className="stl-gantt-row" role="row" style={{ "--stl-gantt-cols": total } as CSSProperties}>
+            <div className="stl-gantt-lbl" role="rowheader">
+              <span className="stl-gantt-name">{p.name}</span>
+              {/* Sin rango no se inventa una barra: se dice que no hay semanas. */}
+              <span className="stl-gantt-rango">{r ? p.duration : t(lang, "sinSemanas")}</span>
+            </div>
+            {semanas.map((w) => {
+              const dentro = r != null && w >= r.inicio && w <= r.fin;
+              const cls = `stl-gantt-cell${dentro ? " is-on" : ""}${dentro && flag ? " is-flag" : ""}`;
+              return <div key={w} className={cls} role="cell" />;
+            })}
+          </div>
+        );
+      })}
+      {avisoActivo(data, 0) && phases.length > 0 && (
+        <p className="stl-phase-aviso stl-gantt-aviso">{t(lang, "avisoPlanLinea")}</p>
+      )}
+    </div>
+  );
+};
+
+export const PlanSection: FC<SectionProps<PlanData>> = ({ data, ctx, editable, onChange }) => {
+  const lang = landingLang(ctx.lang);
   const phases = data.phases ?? [];
   const set = (next: Partial<PlanData>) => onChange?.({ ...data, ...next });
+
+  /* La vista es EFÍMERA a propósito: en la propuesta publicada el documento está congelado y
+     no hay a dónde escribirla, y su valor es explorar el plan en la reunión. Al recargar
+     vuelve a "lista" — que es como se ve hoy, así que ninguna propuesta ya publicada cambia
+     de aspecto. Mismo criterio que el check por línea de la Inversión. */
+  const [vista, setVista] = useState<"lista" | "gantt">("lista");
+
+  /* En el PDF no hay quién apriete el toggle, así que se imprime la LISTA: es la vista con
+     todo el contenido (nombre + semanas + detalle) y el Gantt es una forma de mirar esos
+     mismos datos. Esconder una vista en papel solo sería perder contenido si dijera algo que
+     la otra no dice — que es lo que pasaba con las píldoras de Hubs. */
+  const hayGantt = !ctx.pdfMode && spanDelPlan(phases) != null;
+  const enGantt = hayGantt && vista === "gantt";
+
   return (
     <>
-      <SortableItems items={phases} disabled={!editable} onReorder={(next) => set({ phases: next })}
-        container={(nodes) => <div>{nodes}</div>}>
-        {(p, i, handle) => (
-          <div className="stl-item stl-phase">
-            {handle}
-            {editable && <RemoveBtn onClick={() => set({ phases: removeAt(phases, i) })} />}
-            <div className="stl-phase-num">{i + 1}</div>
-            <div style={{ flex: 1 }}>
-              <Editable as="div" className="stl-phase-name" editable={editable} value={p.name}
-                placeholder="Nombre de la fase…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, name: v }) })} />
-              <Editable as="div" className="stl-phase-duration" editable={editable} value={p.duration}
-                placeholder="Semanas 1-2…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, duration: v }) })} />
-              <Editable as="p" className="stl-body" editable={editable} value={p.detail}
-                placeholder="Qué pasa en esta fase…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, detail: v }) })} />
+      {hayGantt && (
+        <div className="stl-vista-bar" role="group" aria-label={t(lang, "vistaDelPlan")}>
+          <button type="button" className={`stl-vista-btn${!enGantt ? " is-on" : ""}`}
+            aria-pressed={!enGantt} onClick={() => setVista("lista")}>
+            {t(lang, "verEnLista")}
+          </button>
+          <button type="button" className={`stl-vista-btn${enGantt ? " is-on" : ""}`}
+            aria-pressed={enGantt} onClick={() => setVista("gantt")}>
+            {t(lang, "verEnGantt")}
+          </button>
+        </div>
+      )}
+
+      {enGantt ? (
+        <PlanGantt phases={phases} data={data} lang={lang} />
+      ) : (
+        <SortableItems items={phases} disabled={!editable} onReorder={(next) => set({ phases: next })}
+          container={(nodes) => <div>{nodes}</div>}>
+          {(p, i, handle) => (
+            <div className="stl-item stl-phase">
+              {handle}
+              {editable && <RemoveBtn onClick={() => set({ phases: removeAt(phases, i) })} />}
+              <div className="stl-phase-num">{i + 1}</div>
+              <div style={{ flex: 1 }}>
+                <div className="stl-phase-head">
+                  <Editable as="div" className="stl-phase-name" editable={editable} value={p.name}
+                    placeholder="Nombre de la fase…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, name: v }) })} />
+                  {avisoActivo(data, i) && <span className="stl-phase-flag">{t(lang, "avisoPlanChip")}</span>}
+                </div>
+                <Editable as="div" className="stl-phase-duration" editable={editable} value={p.duration}
+                  placeholder="Semanas 1-2…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, duration: v }) })} />
+                {avisoActivo(data, i) && <p className="stl-phase-aviso">{t(lang, "avisoPlanLinea")}</p>}
+                <Editable as="p" className="stl-body" editable={editable} value={p.detail}
+                  placeholder="Qué pasa en esta fase…" onCommit={(v) => set({ phases: replaceAt(phases, i, { ...p, detail: v }) })} />
+                {/* Solo-editor: el campo que rescata una fase que el Gantt no pudo ubicar
+                    ("Mes 4"). Aparece únicamente cuando hace falta, para no pedirle a Ventas
+                    que llene un dato que el texto libre ya resolvió. */}
+                {editable && !rangoDeFase(p) && (p.duration ?? "").trim() !== "" && (
+                  <label className="stl-phase-fix">
+                    <span>⚠ No se puede ubicar en la línea de tiempo. Semanas:</span>
+                    <input type="text" value={p.semanas ?? ""} placeholder="6-10"
+                      onChange={(e) => set({ phases: replaceAt(phases, i, { ...p, semanas: e.target.value }) })} />
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </SortableItems>
-      {editable && <AddBtn label="Agregar fase" onClick={() => set({ phases: appendItem(phases, { name: "", detail: "", duration: "" }) })} />}
+          )}
+        </SortableItems>
+      )}
+
+      {editable && !enGantt && (
+        <AddBtn label="Agregar fase" onClick={() => set({ phases: appendItem(phases, { name: "", detail: "", duration: "" }) })} />
+      )}
+      {/* El apagador del aviso vive con la sección, no con la fase: es una decisión sobre el
+          documento ("esta propuesta no arranca con un diagnóstico"), no sobre una fila. */}
+      {editable && phases.length > 0 && (
+        <label className="stl-phase-off">
+          <input type="checkbox" checked={(data.avisoFase1 ?? "") !== "no"}
+            onChange={(e) => set({ avisoFase1: e.target.checked ? "" : "no" })} />
+          <span>Avisar que la primera etapa puede mover las fechas siguientes</span>
+        </label>
+      )}
     </>
   );
 };

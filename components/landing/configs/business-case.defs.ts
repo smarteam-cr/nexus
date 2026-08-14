@@ -171,9 +171,13 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     theme: "light",
     empty: { phases: [] },
     agentHint: "3 a 5 fases con semanas según complejidad.",
+    /* `semanas` existe para que el Gantt no dependa de leer prosa: es el MISMO rango que
+       `duration`, en formato de máquina. Se pide explícito porque `duration` es texto libre y
+       ya hay una propuesta publicada que dice "Mes 4", que no se puede ubicar en un eje de
+       semanas — ver lib/landing/plan-weeks.ts. */
     brief:
-      "Plan de implementación en fases reales del proyecto, con semanas aproximadas según complejidad (campo `duration`, ej. 'Semanas 1-2'). Fases típicas: Kickoff y discovery, Implementación [hubs del caso], Piloto con usuarios clave, Go live y optimización. Fuente / regla: las semanas se infieren del número de hubs, integraciones y usuarios; integración ERP → sumar 4 semanas mínimo.",
-    schema: { type: "object", properties: { phases: arrayOf({ name: str, detail: str, duration: str }, ["name", "detail"]) }, required: ["phases"] },
+      "Plan de implementación en fases reales del proyecto, con semanas aproximadas según complejidad. Fases típicas: Kickoff y discovery, Implementación [hubs del caso], Piloto con usuarios clave, Go live y optimización. Fuente / regla: las semanas se infieren del número de hubs, integraciones y usuarios; integración ERP → sumar 4 semanas mínimo.\n\nCADA FASE LLEVA EL MISMO RANGO DOS VECES: `duration` es lo que LEE el cliente ('Semanas 1-2', 'Semana 8') y `semanas` es ese mismo rango para la máquina, en formato estricto '1-2' (o '8' para una sola semana) — con eso se dibuja la línea de tiempo. Los dos SIEMPRE coinciden. Las semanas son ABSOLUTAS de inicio y fin, no duraciones: 'Semanas 6-10' va de la 6 a la 10. Dos fases pueden solaparse si corren en paralelo. NUNCA uses meses ('Mes 4') — no se pueden ubicar en la línea de tiempo.\n\nLa PRIMERA fase es la de diagnóstico y el documento le pone solo un aviso de que puede mover las fechas siguientes: no lo escribas vos en el texto de la fase.",
+    schema: { type: "object", properties: { phases: arrayOf({ name: str, detail: str, duration: str, semanas: str }, ["name", "detail"]) }, required: ["phases"] },
   },
   {
     key: "inversion",

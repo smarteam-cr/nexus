@@ -2104,3 +2104,66 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   Lo que SÍ está congelado es la doctrina: `lib/business-cases/money-brief.test.ts` falla si la
   distinción precio/impacto se vuelve a fundir en una prohibición en bloque, si el preámbulo
   deja de importar la constante, o si alguna de las dos secciones deja de pedir lo suyo.
+
+## El cronograma de la propuesta se puede ver como Gantt, y la primera etapa avisa (2026-08-13)
+
+> Elías: un toggle «Ver en Gantt» / «Ver en lista» a la derecha del todo, alineado con el
+> título, y *"un label o badge visual sobre la etapa de diagnóstico indicando que esa etapa
+> puede modificar los tiempos de las etapas siguientes … para no comprometer fechas exactas
+> antes de diagnosticar, porque el diagnóstico puede cambiar prioridades"*.
+
+- **El toggle entra en la fila del título SIN tocar el motor.** `PlanSection` devuelve un
+  fragmento, así que sus hijos son hijos directos de `.stl-wrap` — hermanos del `<header>` que
+  arma `LandingView`. La barra se pinta como primer hijo del cuerpo y una rejilla con
+  `:has(> .stl-vista-bar)` la sube a la fila del título; solo entra la sección que trae la
+  barra. Las dos alternativas se descartaron con razón: una prop `headerSlot` en `LandingView`
+  obliga a sacar el estado de la vista fuera de la sección y cablearlo en los TRES montajes
+  (editor, externo, PDF), y `selfTitled` —el camino de `EstimacionSection`— haría que la
+  sección pinte su propio encabezado y **perdería el título editable** (`titleOverride`), que
+  hoy funciona. Se revierte borrando un bloque de CSS.
+- **La vista es EFÍMERA y abre en lista.** En la propuesta publicada el documento está
+  congelado y no hay a dónde escribirla; su valor es explorar el plan en la reunión. Al
+  recargar vuelve a lista, que es como se ve hoy ⇒ **ninguna propuesta ya publicada cambia de
+  aspecto**. Mismo criterio que el check por línea de la Inversión.
+- **Las semanas se LEEN del texto que ya existe** (`lib/landing/plan-weeks.ts`), y el diseño
+  salió de mirar los datos antes de escribir el parser: 28 secciones `cronograma`, 4 en
+  propuestas publicadas. Lo que hay escrito es `"Semanas 6-10"`, pero también **en dash**
+  (U+2013, 9 valores), **singular con rango** (`"Semana 1-2"` — el singular NO implica una
+  semana), y **`"Mes 4"` en una propuesta PUBLICADA**. Dos hechos mandan sobre el resto: los
+  números son **semanas ABSOLUTAS de inicio y fin**, no duraciones (otra unidad que
+  `TimelinePhase.durationWeeks` — leerlas como duración corre el plan entero), y **hay solapes
+  reales** (`"Semanas 5-7"` y `"Semanas 5-9"` en la misma propuesta).
+- **`"Mes 4"` NO se convierte a semanas.** Nadie escribió que un mes son cuatro, y convertirlo
+  sería inventar una fecha en un documento que el cliente firma. Esa fase sale marcada «sin
+  semanas» y el editor le ofrece el campo para corregirla. Es la regla del parser de montos
+  (`lib/landing/money.ts`): sin sustento, afuera. **Medido: 95 de 96 fases se ubican; la única
+  que falla es exactamente ésa.**
+- **La corrección (`semanas`) va DENTRO del schema del agente**, no como key suelta:
+  `preserveNonSchemaKeys` es shallow y esto vive dentro de un ítem de array, así que fuera del
+  schema no sobreviviría a regenerar la sección. De paso el brief puede pedirle al agente que
+  lo llene en formato de máquina, que es más confiable que parsear prosa.
+- **El aviso va a la PRIMERA fase, derivado de la posición** (`i === 0`), no de una casilla que
+  alguien tenga que acordarse de marcar: la propuesta que se olvida de marcarla es justo la que
+  sale comprometiendo fechas exactas antes de diagnosticar. Son dos piezas —chip ámbar junto al
+  nombre y una línea que explica— porque un chip corto no dice la idea completa y **en el PDF
+  no hay hover**. `avisoFase1: "no"` lo apaga; va en el PRIMER nivel y fuera del schema, así que
+  el agente no lo decide y sobrevive tanto a regenerar la sección como a una generación
+  completa (el carry-forward de keys no-schema de `generate/route.ts`). Es presentación ⇒ entra
+  a `NO_CONTENIDO`, o una sección donde SOLO se apagó el aviso quedaría no-blank y «Limpiar»
+  volvería a mentir.
+- **En el PDF se imprime la LISTA y no se pinta el toggle.** La lista tiene TODO el contenido
+  (nombre + semanas + detalle) y el Gantt es una forma de mirar esos mismos datos, así que no
+  se pierde nada — a diferencia de las píldoras de Hubs, donde esconder una columna en papel sí
+  perdía contenido. El chip y la línea de aviso sí se imprimen.
+- **El Gantt es propio y no reusa `TimelineSection`**: ese componente pide
+  `ExternalTimelinePhase` (id, order, `durationWeeks`, `startWeek`, tasks) y, sobre todo,
+  `lib/ui/pdf-mode-coverage.test.ts` **congela la lista de quién lo monta** — montarlo desde la
+  propuesta rompería ese guard. Lo que se copia es su técnica, que es barata y ya está probada:
+  CSS grid con una celda por semana, cero SVG y cero canvas. Y **sin scroller**: con muchas
+  semanas las celdas se comprimen, para no entrar al patrón que el mismo guard marca.
+- **Sin fechas en el eje, a propósito.** La propuesta no tiene fecha de arranque, y ponerle una
+  sería comprometer exactamente lo que el aviso de la primera fase viene a evitar.
+- Deuda anotada: `.stl-vista-btn` copia la especificación de `.stl-inv-plazo` (el plazo del
+  contrato de la Inversión). No se migró porque esa sección se tocó el día anterior y no vale
+  re-abrirla por una clase; cuando aparezca un tercer segmentado, converger los tres en una
+  primitiva del motor.

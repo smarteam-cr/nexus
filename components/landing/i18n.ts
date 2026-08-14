@@ -50,6 +50,19 @@ const STRINGS = {
   extrasOpcionales: { es: "Extras opcionales", en: "Optional add-ons" },
   opcional: { es: "Opcional", en: "Optional" },
   recurrenteMensual: { es: "Recurrente mensual", en: "Monthly recurring" },
+  // Cronograma: el toggle de vista y el aviso de la primera fase. Van acá y no como
+  // literales porque los lee el CLIENTE en la propuesta publicada, que se traduce por
+  // `__lang`: un literal en español saldría tal cual en una propuesta en inglés.
+  verEnGantt: { es: "Ver en Gantt", en: "Gantt view" },
+  verEnLista: { es: "Ver en lista", en: "List view" },
+  vistaDelPlan: { es: "Vista del plan", en: "Plan view" },
+  semanaAbrev: { es: "S", en: "W" },
+  sinSemanas: { es: "sin semanas", en: "no weeks set" },
+  avisoPlanChip: { es: "Puede ajustar el plan", en: "May adjust the plan" },
+  avisoPlanLinea: {
+    es: "Las semanas siguientes se confirman al cerrar esta etapa.",
+    en: "The following weeks are confirmed once this stage closes.",
+  },
   // Cards del template hubspot
   hubsIncluidos: { es: "Hubs incluidos", en: "Hubs included" },
   integracionesClave: { es: "Integraciones clave", en: "Key integrations" },
