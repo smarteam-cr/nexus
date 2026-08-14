@@ -235,11 +235,22 @@ export function montoDeLinea(
   const precio = parseMonto(textoPrecio, moneda);
 
   if (precio === null) {
-    // Sin precio unitario: el camino histórico, tal cual.
+    // Sin precio unitario: el camino histórico.
     const m = parseMonto(l.monto, moneda);
     if (m === null) return vacio;
     if (m === "sucio") return { ...vacio, sucio: true };
-    return { ...vacio, rango: m };
+    /* ⚠ El plazo TAMBIÉN mueve un monto de texto libre cuando la línea es recurrente
+       (2026-08-14). Sin esto el ×12 vivía solo en la rama calculada, y como casi todas las
+       líneas escritas a mano tienen `monto` y no `precioUnitario`, mover el switch a "Anual"
+       no cambiaba un solo número: el control se veía roto. Si Ventas escribió el precio anual,
+       ése manda; si no, ×12 — el peor caso, no una promesa de descuento. */
+    if (!anual) return { ...vacio, rango: m };
+    const escritoAnual = parseMonto(l.precioAnual, moneda);
+    if (escritoAnual && escritoAnual !== "sucio") return { ...vacio, rango: escritoAnual };
+    return {
+      ...vacio,
+      rango: { min: m.min * MESES_POR_CONTRATO.anual, max: m.max * MESES_POR_CONTRATO.anual },
+    };
   }
   if (precio === "sucio") return { ...vacio, sucio: true, calculada: true };
 
@@ -279,6 +290,37 @@ export function montoDeLinea(
  * no hay total. Es una garantía dependiente de los DATOS, no del código, así que se
  * re-verifica antes de cada deploy con `scripts/verificar-inversion-publicada.ts`.
  */
+/**
+ * El camino INVERSO de `montoDeLinea`: del importe final al precio de lista por unidad.
+ *
+ * Existe porque los dos campos de la fila —"1 × precio de lista" y el monto de la derecha—
+ * son DOS VISTAS DEL MISMO NÚMERO, no dos datos: escribir en cualquiera de los dos tiene que
+ * mover al otro. Sin esto, quien escribía el monto veía "1 × precio de lista" en gris para
+ * siempre, y quien escribía el precio no podía volver a corregir por el monto.
+ *
+ * Deshace la cuenta en el mismo orden: primero el descuento (porcentual o fijo), después la
+ * cantidad. Un descuento del 100% no se puede invertir —cualquier precio da el mismo neto— y
+ * devuelve null: no se adivina.
+ */
+export function precioDesdeMonto(
+  neto: Rango,
+  cantidad: number,
+  desc: Descuento | null,
+): Rango | null {
+  const unidades = cantidad > 0 ? cantidad : 1;
+  const invertir = (n: number): number | null => {
+    if (!desc) return n / unidades;
+    if (desc.tipo === "monto") return (n + desc.valor) / unidades;
+    if (desc.valor >= 100) return null;
+    return n / (1 - desc.valor / 100) / unidades;
+  };
+  const min = invertir(neto.min);
+  const max = invertir(neto.max);
+  if (min === null || max === null) return null;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return { min: r2(min), max: r2(max) };
+}
+
 /**
  * El tag del descuento, tal como se pinta al lado del monto: "−15%" o "−$200". Sale del
  * descuento YA LEÍDO (no del texto crudo) para que el tag no pueda decir una cosa y la resta

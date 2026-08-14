@@ -418,3 +418,37 @@ describe("Cronograma: registry completo + keys congeladas", () => {
     expect(CRONOGRAMA_SECTION_DEFS.filter((d) => d.agentGenerated).map((d) => d.key)).toEqual([]);
   });
 });
+
+/* ── El encabezado no puede decir dos veces lo mismo ───────────────────────────
+   `LandingView` pinta eyebrow ARRIBA del título; si los dos traen la misma palabra, el
+   documento abre la sección con «INVERSIÓN / Inversión», que se lee como un error de armado.
+   Pasó de verdad (Elías lo vio en la propuesta de HubSpot) y el eyebrow de esa sección pasó a
+   ser «Propuesta económica».
+
+   Las `selfTitled` quedan FUERA a propósito: ahí el motor NO pinta encabezado —lo hace la
+   propia sección— así que su `eyebrow` es solo el respaldo que viaja por props y repetir el
+   label no produce ninguna repetición en pantalla. Hoy son las cuatro secciones de cierre. */
+describe("eyebrow ≠ título en toda def con encabezado del motor", () => {
+  const GRUPOS: Record<string, readonly { key: string; label: string; eyebrow?: string; selfTitled?: boolean }[]> = {
+    ...Object.fromEntries(Object.entries(BC_TEMPLATES).map(([id, t]) => [id, t.sections])),
+    kickoff: KICKOFF_SECTION_DEFS,
+    desarrollo: DESARROLLO_SECTION_DEFS,
+    exploracion: EXPLORACION_SECTION_DEFS,
+    diagnostico: DIAGNOSTICO_SECTION_DEFS,
+    implementacion: IMPLEMENTACION_SECTION_DEFS,
+    planificacion: PLANIFICACION_SECTION_DEFS,
+    cronograma: CRONOGRAMA_SECTION_DEFS,
+  };
+
+  it("ninguna sección repite la misma palabra en el rótulo chico y en el grande", () => {
+    const norm = (s?: string) => (s ?? "").trim().toLowerCase();
+    const repetidos: string[] = [];
+    for (const [id, defs] of Object.entries(GRUPOS)) {
+      for (const d of defs) {
+        if (d.selfTitled) continue;
+        if (d.eyebrow && norm(d.eyebrow) === norm(d.label)) repetidos.push(`${id}:${d.key} → "${d.eyebrow}"`);
+      }
+    }
+    expect(repetidos).toEqual([]);
+  });
+});

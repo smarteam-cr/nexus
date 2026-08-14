@@ -2094,6 +2094,34 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   `border-top: 2px solid var(--text)` ganaba por orden — las dos tarjetas salían con una ceja
   negra arriba. Cazado midiendo el borde computado en Chrome, no leyendo el CSS.
 
+#### Tres correcciones del mismo día (Elías, mirando la sección en uso)
+
+- ⚠ **El switch Mensual/Anual no movía NINGÚN número en las líneas escritas a mano.** El ×12
+  vivía solo en la rama CALCULADA de `montoDeLinea` (la que exige `precioUnitario`), y casi
+  todo lo que Ventas escribe tiene `monto` de texto libre: el control se veía roto porque
+  literalmente no hacía nada. Ahora el plazo también multiplica el monto libre de una línea
+  recurrente, con la misma regla de la otra rama —si Ventas escribió el precio anual, ÉSE
+  manda; si no, ×12, que es el peor caso y no una promesa de descuento—. Solo mueve lo
+  RECURRENTE: una implementación cuesta lo mismo en un contrato anual (el error que el test
+  cazó cuando nació el switch).
+- **«1 × precio de lista» y el monto son DOS VISTAS DEL MISMO NÚMERO, no dos datos.** El
+  precio se DERIVA del monto cuando la línea no tiene uno propio (antes se quedaba en gris
+  para siempre) y el monto de una línea calculada volvió a ser editable: al soltarlo,
+  `precioDesdeMonto` deshace la cuenta —descuento primero, cantidad después— y el precio de
+  lista queda coherente. Un descuento del 100% no se invierte (cualquier precio da el mismo
+  neto) y ahí no se adivina.
+  ⚠ Lo que hacía peligroso editar un valor DERIVADO sigue siendo cierto —`Editable` comitea su
+  `textContent` al blur y al desmontarse, así que un foco bastaba para auto-persistirlo— y por
+  eso ambos campos llevan la misma guarda: **si el texto comiteado es idéntico al mostrado, no
+  se toca nada**. Es lo que permite abrir la puerta que el comentario de `inline.tsx` había
+  cerrado, sin reabrir el bug.
+- **El eyebrow es la CATEGORÍA, nunca el mismo título otra vez.** La sección abría con
+  «INVERSIÓN / Inversión» en las dos plantillas; el eyebrow pasó a «Propuesta económica».
+  `registry.test.ts` barre TODAS las defs de los 9 documentos y falla si alguna repite —
+  excluyendo las `selfTitled`, donde el motor no pinta encabezado y el `eyebrow` es solo el
+  respaldo que viaja por props (las cuatro secciones de cierre están así, y no repiten nada en
+  pantalla).
+
 ## El dolor se cuantifica en plata cuando la fuente lo permite (2026-08-13)
 
 > Elías: *"quiero que tenga la capacidad de cuantificar el dolor económicamente cuando haya

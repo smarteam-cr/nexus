@@ -183,7 +183,10 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     key: "inversion",
     canvasLabel: "Inversión",
     label: "Inversión",
-    eyebrow: "Inversión",
+    /* El eyebrow es la CATEGORÍA del argumento y el título es la sección: repetir la misma
+       palabra en los dos (era «INVERSIÓN» sobre «Inversión») se lee como un error de armado.
+       Lo congela `registry.test.ts`, que barre todas las defs no-`selfTitled`. */
+    eyebrow: "Propuesta económica",
     theme: "soft",
     // `agentGenerated:false`: los montos los escribe VENTAS a mano. El agente los saltea,
     // la píldora ✨IA no se ofrece, regenerar responde 400 y el assist la excluye. Y el

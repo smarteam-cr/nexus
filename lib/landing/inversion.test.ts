@@ -12,6 +12,7 @@ import {
   adoptarShapeNuevo,
   esInversionLegacy,
   textoDescuento,
+  precioDesdeMonto,
   gruposDeInversion,
   conciliarLicenciasHub,
   contratoDe,
@@ -603,5 +604,79 @@ describe("adoptarRecurrentes: el card mensual baja a la tabla", () => {
     expect(adoptarRecurrentes(base)).toBe(base);
     const una = adoptarRecurrentes<InversionData>({ recurrentes: [{ concepto: "X", monto: "$5" }] });
     expect(adoptarRecurrentes(una)).toEqual(una);
+  });
+});
+
+describe("el plazo mueve también los montos de TEXTO LIBRE", () => {
+  /* El bug que reportó Elías: casi todas las líneas escritas a mano tienen `monto` y no
+     `precioUnitario`, y el ×12 vivía SOLO en la rama calculada — mover el switch a "Anual"
+     no cambiaba un número y el control se veía roto. */
+  it("una línea mensual con `monto` se multiplica por 12 en contrato anual", () => {
+    const data: InversionData = {
+      moneda: "USD",
+      lineas: [{ concepto: "Saas", monto: "4000", recurrencia: "mensual" }],
+      contrato: "anual",
+    };
+    expect(gruposDeInversion(data).recurrente).toEqual({ min: 48000, max: 48000 });
+  });
+
+  it("una línea de cobro ÚNICO con `monto` NO se multiplica", () => {
+    const data: InversionData = {
+      moneda: "USD",
+      lineas: [
+        { concepto: "Implementación", monto: "12000" },
+        { concepto: "Saas", monto: "1000", recurrencia: "mensual" },
+      ],
+      contrato: "anual",
+    };
+    const g = gruposDeInversion(data);
+    expect(g.unico).toEqual({ min: 12000, max: 12000 });
+    expect(g.recurrente).toEqual({ min: 12000, max: 12000 });
+  });
+
+  it("si Ventas escribió el precio anual, ÉSE manda sobre el ×12", () => {
+    const data: InversionData = {
+      moneda: "USD",
+      lineas: [{ monto: "1000", precioAnual: "$10,000", recurrencia: "mensual" }],
+      contrato: "anual",
+    };
+    expect(gruposDeInversion(data).recurrente).toEqual({ min: 10000, max: 10000 });
+  });
+
+  it("en contrato mensual el monto libre no se toca", () => {
+    const data: InversionData = { moneda: "USD", lineas: [{ monto: "4000", recurrencia: "mensual" }] };
+    expect(gruposDeInversion(data).recurrente).toEqual({ min: 4000, max: 4000 });
+  });
+});
+
+describe("precioDesdeMonto: el camino inverso, para que los dos campos sean uno", () => {
+  it("sin descuento y una unidad, el precio ES el monto", () => {
+    expect(precioDesdeMonto({ min: 4000, max: 4000 }, 1, null)).toEqual({ min: 4000, max: 4000 });
+  });
+
+  it("reparte por cantidad", () => {
+    expect(precioDesdeMonto({ min: 900, max: 900 }, 3, null)).toEqual({ min: 300, max: 300 });
+  });
+
+  it("deshace el porcentaje: 85 con −15% vuelve a 100", () => {
+    expect(precioDesdeMonto({ min: 85, max: 85 }, 1, { tipo: "pct", valor: 15 })).toEqual({ min: 100, max: 100 });
+  });
+
+  it("deshace el descuento fijo ANTES de repartir por cantidad", () => {
+    expect(precioDesdeMonto({ min: 250, max: 250 }, 3, { tipo: "monto", valor: 50 })).toEqual({ min: 100, max: 100 });
+  });
+
+  it("un rango se invierte por los dos extremos", () => {
+    expect(precioDesdeMonto({ min: 170, max: 340 }, 2, { tipo: "pct", valor: 15 })).toEqual({ min: 100, max: 200 });
+  });
+
+  it("ida y vuelta: montoDeLinea → precioDesdeMonto devuelve el precio original", () => {
+    const l = { cantidad: "2", precioUnitario: "$400", descuento: "15%" };
+    const m = montoDeLinea(l, "USD");
+    expect(precioDesdeMonto(m.rango!, m.cantidad, m.descuento)).toEqual({ min: 400, max: 400 });
+  });
+
+  it("un descuento del 100% NO se invierte: cualquier precio da el mismo neto", () => {
+    expect(precioDesdeMonto({ min: 0, max: 0 }, 1, { tipo: "pct", valor: 100 })).toBeNull();
   });
 });

@@ -136,7 +136,9 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     key: "inversion",
     canvasLabel: "Inversión",
     label: "Inversión",
-    eyebrow: "Inversión",
+    // Igual que su gemela de HubSpot: el eyebrow es la CATEGORÍA, no una repetición del
+    // título («INVERSIÓN / Inversión»). Lo congela `registry.test.ts`.
+    eyebrow: "Propuesta económica",
     theme: "soft",
     sectionType: "web_investment",
     // Ver el gemelo de business-case.defs.ts: los montos los escribe Ventas a mano.

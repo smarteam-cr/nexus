@@ -24,7 +24,7 @@ import type {
   WebInvestLine,
   WhyUsData,
 } from "./types";
-import { formatRango, montoParaLectura } from "@/lib/landing/money";
+import { formatRango, montoParaLectura, parseMonto } from "@/lib/landing/money";
 import { hubVisual } from "@/lib/landing/hubs-solucion";
 import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 import {
@@ -34,6 +34,7 @@ import {
   esInversionLegacy,
   gruposDeInversion,
   lineasDeLicenciaPorHub,
+  precioDesdeMonto,
   textoDescuento,
   type GrupoInversion,
   contratoDe,
@@ -389,6 +390,32 @@ function GrupoTabla({
                EXACTAMENTE el mismo DOM que antes de este cambio. */
             const { icon } = hubVisual(l.hub ?? "");
             const aviso = editable ? avisoLinea?.(l) ?? "" : "";
+            /* Los DOS campos de la fila —"1 × precio de lista" y el monto de la derecha— son
+               dos vistas del MISMO número. Cuando la línea solo tiene `monto` (el caso de casi
+               todo lo escrito a mano), el precio de lista se DERIVA de él en vez de quedarse
+               en gris para siempre; y el monto de una línea calculada se puede editar y se
+               invierte a precio unitario. Sin eso, escribir por un lado dejaba el otro mudo. */
+            const unitarioTxt =
+              (l.precioUnitario ?? "").trim() ||
+              (!calc.calculada && calc.rango ? formatRango(calc.rango, moneda) : "");
+            /** Escribir en el monto de una línea CALCULADA: se deshace la cuenta y el precio de
+             *  lista queda coherente. Un texto que no es número (una condición, un rango
+             *  imposible de repartir) hace lo contrario: el monto libre manda y el precio se
+             *  retira — la precedencia que ya documenta `montoDeLinea`. */
+            const escribirMonto = (v: string) => {
+              // Sin edición real no se toca NADA: `Editable` comitea su textContent al blur y
+              // al desmontarse, así que sin esta guarda un simple foco reescribiría la línea.
+              if (v.trim() === (m.texto ?? "").trim()) return;
+              const parsed = parseMonto(v, moneda);
+              const unit =
+                parsed && parsed !== "sucio" ? precioDesdeMonto(parsed, calc.cantidad, calc.descuento) : null;
+              if (!unit) {
+                set(replaceAt(lineas, i, { ...l, monto: v, precioUnitario: "", precioAnual: "" }));
+                return;
+              }
+              const campo = contrato === "anual" && esRecurrente(l) ? "precioAnual" : "precioUnitario";
+              set(replaceAt(lineas, i, { ...l, [campo]: formatRango(unit, moneda) }));
+            };
             return (
               <div className={`stl-item stl-inv-row${activa ? "" : " stl-inv-row--off"}`}>
                 {handle}
@@ -444,8 +471,15 @@ function GrupoTabla({
                       <Editable as="span" className="stl-inv-num" editable value={l.cantidad ?? ""}
                         placeholder="1" onCommit={(v) => set(replaceAt(lineas, i, { ...l, cantidad: v }))} />
                       <span className="stl-inv-x">×</span>
-                      <Editable as="span" className="stl-inv-num" editable value={l.precioUnitario ?? ""}
-                        placeholder="precio de lista" onCommit={(v) => set(replaceAt(lineas, i, { ...l, precioUnitario: v }))} />
+                      {/* El valor MOSTRADO puede venir del monto (ver `unitarioTxt`). La guarda
+                          de "sin edición real" evita que un simple foco lo persista y convierta
+                          la línea en calculada sin que nadie haya escrito nada. */}
+                      <Editable as="span" className="stl-inv-num" editable value={unitarioTxt}
+                        placeholder="precio de lista"
+                        onCommit={(v) => {
+                          if (v.trim() === unitarioTxt.trim()) return;
+                          set(replaceAt(lineas, i, { ...l, precioUnitario: v }));
+                        }} />
                       <span className="stl-inv-x">−</span>
                       <Editable as="span" className="stl-inv-num" editable value={l.descuento ?? ""}
                         placeholder="dcto (15% o $200)" onCommit={(v) => set(replaceAt(lineas, i, { ...l, descuento: v }))} />
@@ -491,14 +525,14 @@ function GrupoTabla({
                     </span>
                   )}
                   {editable && calc.calculada ? (
-                    /* Con precio unitario el subtotal es DERIVADO: se muestra, no se edita. Un
-                       `Editable` con un valor calculado adentro se auto-persiste al blur y le
-                       reescribiría el monto a Ventas (el bug de la portada, documentado en
-                       inline.tsx). Para escribir a mano se vacía el precio unitario. */
+                    /* El subtotal de una línea calculada TAMBIÉN se edita: al soltarlo se
+                       invierte la cuenta y el precio de lista queda coherente (`escribirMonto`).
+                       ⚠ Lo que hacía peligroso esto —`Editable` comitea su textContent al blur
+                       y al desmontarse, así que un valor DERIVADO adentro se auto-persistía— lo
+                       cierra la guarda de "sin edición real, no se toca nada". */
                     <>
-                      <span className={`stl-inv-amount${calc.sucio ? " stl-inv-amount--libre" : ""}`}>
-                        {m.texto || "—"}
-                      </span>
+                      <Editable as="span" className={`stl-inv-amount${calc.sucio ? " stl-inv-amount--libre" : ""}`}
+                        editable value={m.texto} placeholder="$0" onCommit={escribirMonto} />
                       {calc.sucio && (
                         <span className="stl-inv-warn" title="Revisá el precio o el descuento: la línea no entra en el total.">
                           ⚠ no suma
