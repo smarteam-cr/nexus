@@ -43,6 +43,7 @@ export interface ActiveAccess {
     kickoffPublishedAt: Date | null;
     timelinePublishedAt: Date | null;
     desarrolloPublishedAt: Date | null;
+    entregaPublishedAt: Date | null;
     /** Empresa cliente (Client) — nombre para titulares + logo para el chrome client-facing. */
     // Los tres campos del logo viajan juntos: qué archivo, cuál variante y a qué tamaño
     // son una sola unidad visual (ver lib/ui/logo-scale.ts).
@@ -73,6 +74,7 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
           kickoffPublishedAt: true,
           timelinePublishedAt: true,
           desarrolloPublishedAt: true,
+          entregaPublishedAt: true,
           // De qué CLASE es el proyecto: decide si admite mirones de afuera.
           hubspotPipelineId: true,
           proyectoInterno: true,

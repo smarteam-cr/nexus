@@ -1,0 +1,13 @@
+-- Publicación del canvas "Entrega" (el documento de cierre) al cliente.
+--
+-- ADITIVA y nullable: los 163 proyectos existentes quedan con NULL = no compartido, que es
+-- exactamente lo que corresponde. Sin backfill.
+--
+-- ⚠ Por qué una columna y no un Json: el chokepoint de acceso externo
+-- (lib/external/access.ts) lee las banderas de las cuatro superficies en el MISMO `select`
+-- plano, en la capa de seguridad. Meter ésta en otro lado obligaría a un parseo o a un
+-- segundo round-trip justo ahí, y forkearía el patrón de las tres que ya existen.
+--
+-- Aplicar:  ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-13-entrega-published.sql --schema prisma/schema.prisma
+-- Después:  npx prisma generate  +  reiniciar el dev server (si no, las escrituras fallan EN SILENCIO).
+ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "entregaPublishedAt" TIMESTAMP(3);

@@ -35,6 +35,7 @@ const SURFACE_PATHS: Record<string, string> = {
   kickoff: "/external/kickoff",
   cronograma: "/external/cronograma",
   desarrollo: "/external/desarrollo",
+  entrega: "/external/entrega",
 };
 
 export function VerifyForm({ token, next }: { token: string; next?: string }) {

@@ -207,7 +207,14 @@ export async function GET(
       lastUsedAt: true,
       createdBy: { select: { name: true, email: true } },
       // Flags de publicación por superficie → el panel marca qué link ya sirve.
-      project: { select: { kickoffPublishedAt: true, timelinePublishedAt: true, desarrolloPublishedAt: true } },
+      project: {
+        select: {
+          kickoffPublishedAt: true,
+          timelinePublishedAt: true,
+          desarrolloPublishedAt: true,
+          entregaPublishedAt: true,
+        },
+      },
     },
   });
 
@@ -243,6 +250,8 @@ export async function GET(
     // El requerimiento técnico se compartía desde su propio canvas, con su propia barra de
     // link: era el mismo token y la misma contraseña por otro camino. Ahora vive acá.
     desarrolloPublished: !!access.project.desarrolloPublishedAt,
+    // El documento de cierre. Congela un snapshot al publicar (ver publish-entrega/route.ts).
+    entregaPublished: !!access.project.entregaPublishedAt,
   });
 }
 

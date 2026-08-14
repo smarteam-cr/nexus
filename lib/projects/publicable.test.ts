@@ -27,6 +27,7 @@
  *     SOLO-DECRECIENTE y un motivo escrito por cada una.
  */
 import { describe, expect, it } from "vitest";
+import { PUBLISH_SURFACES } from "./publish-surfaces";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -41,6 +42,20 @@ const RAIZ = process.cwd();
  */
 function sinImports(src: string): string {
   return src.replace(/^import[\s\S]*?from\s+["'][^"']+["'];?[ \t]*$/gm, "");
+}
+
+/**
+ * El código SIN comentarios, conservando los offsets (se blanquean, no se borran).
+ *
+ * ⚠ Sin esto, MENCIONAR un símbolo cuenta como USARLO — y el primero que se lo comió fue un
+ * comentario que explicaba, correctamente, por qué el DELETE NO llama a
+ * `guardPublicacionDeProyecto`. Una guarda que castiga la explicación enseña a no escribirla.
+ * Mismo criterio que `soloCodigo()` en lib/cobranza/costos-privacy.test.ts.
+ */
+function sinComentarios(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
 }
 
 function archivosDe(dir: string, ext = [".ts", ".tsx"]): string[] {
@@ -75,8 +90,20 @@ describe("candado 1 — todo endpoint de PUBLICACIÓN pide el gate", () => {
     return out;
   };
 
-  it("los descubre a todos (si esto baja de 3, alguien movió una ruta)", () => {
-    expect(rutasDePublicacion().length).toBeGreaterThanOrEqual(3);
+  it("los descubre a todos (uno por superficie declarada)", () => {
+    /* El número sale de `lib/projects/publish-surfaces.ts`, no de una constante escrita acá:
+       hasta el 2026-08-13 era un 3 a mano, y agregar la cuarta superficie obligaba a EDITAR
+       este test — el que existe justamente para que nadie se olvide de nada. */
+    expect(rutasDePublicacion().length).toBeGreaterThanOrEqual(PUBLISH_SURFACES.length);
+  });
+
+  it("cada superficie declarada TIENE su endpoint en disco", () => {
+    /* La mitad que faltaba: antes el candado cazaba un endpoint sin guard, pero no una
+       superficie declarada cuyo endpoint nunca se escribió — el panel dibujaría el link y el
+       botón daría 404. */
+    const enDisco = new Set(rutasDePublicacion().map((r) => path.basename(path.dirname(r))));
+    const sinEndpoint = PUBLISH_SURFACES.filter((s) => !enDisco.has(s.endpoint)).map((s) => s.endpoint);
+    expect(sinEndpoint, "superficies declaradas sin endpoint en disco").toEqual([]);
   });
 
   it("el que EXPORTA POST tiene que usar `guardPublicacionDeProyecto`", () => {
@@ -95,14 +122,18 @@ describe("candado 1 — todo endpoint de PUBLICACIÓN pide el gate", () => {
           `todavía no terminó de nacer.`,
       ).toBe(true);
     }
-    expect(conPost, "no encontré ningún endpoint de publicación con POST").toBe(3);
+    expect(
+      conPost,
+      "Cada superficie de `PUBLISH_SURFACES` publica con un POST gateado, y no hay endpoints " +
+        "de publicación que nadie declare.",
+    ).toBe(PUBLISH_SURFACES.length);
   });
 
   it("DESPUBLICAR no se gatea — el contenido no puede quedar atrapado", () => {
     /* Si un proyecto se marca interno DESPUÉS de haber publicado algo, el CSE tiene que
        poder bajarlo. Gatear el DELETE dejaría contenido de cliente publicado y sin salida. */
     for (const ruta of rutasDePublicacion()) {
-      const src = fs.readFileSync(ruta, "utf8");
+      const src = sinComentarios(fs.readFileSync(ruta, "utf8"));
       const posDelete = src.indexOf("export async function DELETE");
       if (posDelete === -1) continue;
       expect(
