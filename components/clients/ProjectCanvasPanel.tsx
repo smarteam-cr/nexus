@@ -15,7 +15,8 @@ import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
-import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
+import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
+import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -23,7 +24,7 @@ import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
-import { slugForCanvas, pieceBySlug, pieceLabel } from "@/lib/pieces/registry";
+import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
 import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
@@ -40,25 +41,24 @@ const FlowchartViewer = dynamic(
 );
 
 /**
- * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista
- * lineal). La grilla genérica `SectionBlockList` los excluye: si un canvas con renderer
- * propio no está en este set, se pinta DOS VECES — el suyo arriba y la grilla debajo.
- * Es exactamente lo que le pasó a Exploración, y por eso esto es un set y no una cadena
- * de `&&`: sumar un canvas nuevo con renderer propio obliga a mirar acá.
+ * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista lineal).
+ * La grilla genérica `SectionBlockList` los excluye: si un canvas con renderer propio no cae
+ * en este set, se pinta DOS VECES — el suyo arriba y la grilla vieja debajo.
  *
- * Va por SLUG de pieza (lib/pieces/registry), no por nombre visible: renombrar
- * "Desarrollo" a "Requerimientos técnicos" no puede dejar un canvas pintado dos veces.
+ * ── POR QUÉ SE DERIVA Y YA NO SE ESCRIBE A MANO (2026-08-12) ─────────────────
+ * Era una lista transcrita, con un comentario que decía «sumar un canvas nuevo obliga a mirar
+ * acá». Un comentario no obliga a nada: le pasó a Exploración, y le volvió a pasar a Entrega
+ * el día que nació. Y al ir a arreglarlo aparecieron TRES listas de lo mismo que ya no
+ * coincidían — ésta, el campo `ownRenderer` del registro (mal en cuatro piezas, porque nadie
+ * lo leía) y los `activeSlug === "…"` de este archivo.
+ *
+ * Ahora hay UNA: el registro. `ownRenderer` pasó de campo decorativo a la fuente, y una guarda
+ * (`lib/pieces/registry.test.ts`) cruza los `activeSlug === "…"` de este archivo contra él en
+ * los dos sentidos. Agregar un canvas con renderer propio y olvidarse ya no compila verde.
  */
-const CANVAS_CON_RENDERER_PROPIO = new Set([
-  "handoff",
-  "kickoff",
-  "tech-requirements",
-  "exploration",
-  "diagnosis",
-  "planning",
-  "implementation",
-  "timeline",
-]);
+const CANVAS_CON_RENDERER_PROPIO = new Set(
+  PIECES.filter((p) => p.scope === "project" && p.ownRenderer).map((p) => p.slug),
+);
 
 /** Cómo se lee de un vistazo el estado de una pieza en el desplegable. */
 const ESTADO_PIEZA: Record<RowState, { glifo: string; hint: string }> = {
@@ -851,6 +851,15 @@ export default function ProjectCanvasPanel({
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="la implementación">
             <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+          </CanvasBoundary>
+        </div>
+      )}
+
+      {/* Entrega: el documento de cierre (motor de landings, paleta de MARCA — lo ve el cliente). */}
+      {!isResumenCanvas && activeSlug === "delivery" && activeCanvasId && (
+        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+          <CanvasBoundary label="la entrega">
+            <EntregaWorkspace key={`entrega-${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>
       )}

@@ -294,6 +294,14 @@ model Project {
   // exige NO-null en cada lectura; despublicar corta el acceso al instante.
   desarrolloPublishedAt DateTime?
 
+  // Publish del canvas ENTREGA (el documento de cierre) al CLIENTE. Mismo patrón que las
+  // tres de arriba: null = no compartido; fecha = compartido, y el chokepoint
+  // (lib/external/entrega-view.ts) lo exige NO-null en CADA lectura, así que despublicar
+  // corta el acceso al instante. Al publicar se congela además el snapshot del canvas: un
+  // documento de cierre es un acto con fecha, y si el número se moviera solo, el PDF que el
+  // cliente guardó y el enlace que abre dirían cosas distintas.
+  entregaPublishedAt DateTime?
+
   // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
   // hiddenKickoffKeys = claves OCULTAS del kickoff. Una clave puede ser:
   //   · el id de una CanvasSection del kickoff → oculta esa sección de contenido,

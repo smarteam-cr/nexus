@@ -57,6 +57,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
     implementacion: ["generate", "regenerate"],
+    entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "generate"],
     marketing: ["read"],
@@ -75,6 +76,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
     implementacion: ["generate", "regenerate"],
+    entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
     // Dar de alta un proyecto (Tanda C). Ventas ya lo hacía: el único botón de alta
@@ -101,6 +103,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
     implementacion: ["generate", "regenerate"],
+    entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     // `suggest` es redundante para DEV mientras tenga `write` (quien puede escribir puede
     // sugerir), pero se declara igual: si mañana se le recorta el write —que es el recorte
@@ -129,6 +132,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
     implementacion: ["generate", "regenerate"],
+    entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate", "regenerate"],
     // `deleteCanvas`: único rol operativo (fuera de SUPER_ADMIN) que puede borrar un
@@ -161,6 +165,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     diagnostico: ["generate", "regenerate"],
     planificacion: ["generate", "regenerate"],
     implementacion: ["generate", "regenerate"],
+    entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
     marketing: ["read", "write"],

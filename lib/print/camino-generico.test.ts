@@ -25,11 +25,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { PIECES } from "@/lib/pieces/registry";
 import { printDocForPiece } from "./doc-types";
-import { DEFAULT_PROJECT_CANVASES, HANDOFF_CANVAS, BUSINESS_CASE_CANVAS } from "@/lib/canvas/canvas-defs";
+import { CANVAS_DEF_BY_SLUG, HANDOFF_CANVAS, BUSINESS_CASE_CANVAS } from "@/lib/canvas/canvas-defs";
 
-/** Todas las definiciones de canvas que existen, indexadas por slug. */
+/**
+ * Todas las definiciones de canvas que existen, indexadas por slug.
+ *
+ * ⚠ Sale de `CANVAS_DEF_BY_SLUG` —el índice canónico— y no de una lista armada a mano. Con la
+ * lista a mano faltaban las piezas ON-DEMAND (Desarrollo, Implementación, Entrega): el test no
+ * las encontraba, les leía «0 secciones» y las habría acusado de imprimir en blanco siendo
+ * mentira. Hoy no se notaba porque las dos primeras tienen documento propio y salían del
+ * filtro antes de llegar acá — o sea que el hueco esperaba a la primera pieza sin PDF.
+ * Handoff y Business Case se suman aparte: no se activan desde el desplegable y por eso el
+ * índice canónico los excluye a propósito.
+ */
 const DEFS_POR_SLUG = new Map(
-  [...DEFAULT_PROJECT_CANVASES, HANDOFF_CANVAS, BUSINESS_CASE_CANVAS].map((d) => [d.slug, d]),
+  [...Object.values(CANVAS_DEF_BY_SLUG), HANDOFF_CANVAS, BUSINESS_CASE_CANVAS].map((d) => [d.slug, d]),
 );
 
 /** Exentas, CON MOTIVO. */

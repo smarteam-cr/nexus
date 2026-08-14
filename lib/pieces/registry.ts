@@ -69,6 +69,14 @@ export interface PieceDefinition {
    */
   enabledByTags: string[];
   /** Tiene componente propio en vez del renderer genérico de secciones. */
+  /**
+   * Tiene su PROPIO componente de render en `ProjectCanvasPanel` (motor de landings, Gantt o
+   * vista lineal) en vez de la grilla genérica `SectionBlockList`.
+   *
+   * ⚠ NO es decorativo: el panel DERIVA de acá qué canvases excluir de la grilla. Declararlo
+   * mal pinta el canvas DOS VECES —el suyo arriba y la grilla vieja debajo— o lo deja sin
+   * ningún render. Le pasó a Exploración, y a Entrega el día que nació.
+   */
   ownRenderer: boolean;
   /** El cliente puede verla publicada (vista externa por token). */
   clientFacing: boolean;
@@ -92,7 +100,7 @@ export const PIECES: PieceDefinition[] = [
     isDefaultCanvas: false,
     optional: false, // es la base del proyecto: sin handoff el resto queda mudo
     enabledByTags: [],
-    ownRenderer: false,
+    ownRenderer: true, // ProjectHandoffSection (sección propia arriba del panel)
     clientFacing: false,
   },
   {
@@ -115,7 +123,7 @@ export const PIECES: PieceDefinition[] = [
     // superficies primero — no alcanza con dar vuelta este booleano.
     optional: false,
     enabledByTags: [],
-    ownRenderer: false,
+    ownRenderer: true, // KickoffWorkspace (motor de landings)
     clientFacing: true,
   },
   {
@@ -144,7 +152,7 @@ export const PIECES: PieceDefinition[] = [
     isDefaultCanvas: false,
     optional: true,
     enabledByTags: [],
-    ownRenderer: false,
+    ownRenderer: true, // ExploracionWorkspace (motor de landings)
     clientFacing: false, // documento INTERNO de descubrimiento
   },
   {
@@ -183,7 +191,7 @@ export const PIECES: PieceDefinition[] = [
     isDefaultCanvas: false,
     optional: true,
     enabledByTags: [],
-    ownRenderer: false,
+    ownRenderer: true, // PlanificacionWorkspace (motor de landings)
     clientFacing: false,
   },
   {
@@ -219,6 +227,26 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // ImplementacionWorkspace (motor de landings)
     clientFacing: false, // es la guía de trabajo del CSE, no un entregable
+  },
+  {
+    slug: "delivery",
+    label: "Entrega",
+    // Pieza NUEVA (2026-08-12): nunca vivió con otro nombre en ProjectCanvas.name, así que
+    // `canvasOf("delivery")` degrada a un lookup por slug puro. No agregar nombres acá.
+    legacyNames: [],
+    scope: "project",
+    agentGroup: "entrega",
+    permissionSection: "entrega",
+    /* ON-DEMAND, y es la línea que evita repetir un error caro: una pieza que nace con el
+       proyecto se crea en los 163 de una. El documento de cierre no tiene sentido en un
+       proyecto que arranca — lo activa el CSE cuando el proyecto llega a la entrega. */
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    optional: true,
+    // Ningún tag la implica: TODO proyecto se entrega, con o sin desarrollo a la medida.
+    enabledByTags: [],
+    ownRenderer: true, // EntregaWorkspace (motor de landings)
+    clientFacing: true, // se comparte al cliente, como el kickoff
   },
   {
     slug: "client-info",

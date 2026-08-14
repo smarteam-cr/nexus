@@ -70,7 +70,9 @@ export default function CsAlertNotifier({ role }: { role: string | null }) {
           // así la alerta nunca avanza el watermark sin haberse visto por ALGÚN canal.
           if (outcome !== "shown") {
             toastRef.current.info(`🚨 ${a.clientName}: ${a.title}`, {
-              duration: 0, // sticky: una alerta HIGH no se auto-descarta
+              // `0` = el MÁXIMO que damos (30s), no «para siempre»: una alerta HIGH insiste,
+              // pero su lugar de archivo es el panel de Customer Success, no la pantalla.
+              duration: 0,
               action: { label: "Ver panel", onClick: () => routerRef.current.push("/customer-success") },
             });
           }

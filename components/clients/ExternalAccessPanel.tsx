@@ -26,8 +26,18 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import {
+  PUBLISH_SURFACES,
+  publishSurface,
+  publishedDtoKey,
+  type PublishSurfaceKey,
+  type PublishedDtoKey,
+} from "@/lib/projects/publish-surfaces";
 
-interface AccessState {
+/** Un booleano por superficie declarada. Sumar una al registro tipa este campo sola. */
+type PublicadasDto = Partial<Record<PublishedDtoKey, boolean>>;
+
+interface AccessState extends PublicadasDto {
   exists: boolean;
   accessToken?: string;
   accessPassword?: string | null;
@@ -36,9 +46,6 @@ interface AccessState {
   revokedAt?: string | null;
   lastUsedAt?: string | null;
   createdBy?: { name: string; email: string } | null;
-  kickoffPublished?: boolean;
-  timelinePublished?: boolean;
-  desarrolloPublished?: boolean;
   /**
    * ¿A este proyecto se le puede publicar contenido a un cliente? Hoy solo lo apaga estar
    * marcado como INTERNO en HubSpot. Ausente = sí (respuesta vieja cacheada).
@@ -51,9 +58,15 @@ interface AccessState {
   motivoNoPublicable?: string | null;
 }
 
-/** Las superficies que este acceso destraba. Un solo lugar: la unión estaba repetida en
- *  cuatro sitios y agregar el requerimiento técnico obligaba a acertarle a los cuatro. */
-export type ExternalSurface = "kickoff" | "cronograma" | "desarrollo";
+/**
+ * Las superficies que este acceso destraba. El alias se conserva porque lo importan otros
+ * componentes; la LISTA ya no vive acá — sale de `lib/projects/publish-surfaces.ts`, que es
+ * también de donde salen el endpoint, el `?next=` y el candado que cuenta los endpoints.
+ * Cuando esto era una unión escrita a mano, sumar una superficie obligaba a acertarle a la
+ * unión, a un ternario de endpoints, a tres campos del DTO y a la lista de links — cinco
+ * lugares que no se conocían entre sí.
+ */
+export type ExternalSurface = PublishSurfaceKey;
 
 // Alphabet sin caracteres ambiguos (igual que el server) para las sugerencias
 // del lado del cliente. El server re-valida + hashea, esto es solo una propuesta.
@@ -146,14 +159,21 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   // El cronograma se muestra COMPLETO al publicar: confirmamos el detalle de paso
   // (best-effort; 404 si todavía no hay cronograma). Refresca para actualizar badges.
   const togglePublish = async (kind: ExternalSurface, publish: boolean) => {
-    const endpoint =
-      kind === "kickoff" ? "publish-kickoff" : kind === "cronograma" ? "publish-timeline" : "publish-desarrollo";
+    const endpoint = publishSurface(kind).endpoint;
     try {
       const res = await fetch(`/api/projects/${projectId}/${endpoint}`, {
         method: publish ? "POST" : "DELETE",
       });
       if (!res.ok) {
-        toast.error("No se pudo cambiar la publicación.");
+        /* El servidor SABE por qué no se puede —«todavía no tiene el documento de Entrega»,
+           «está vacío», «este proyecto no admite publicación»— y hasta acá ese motivo se
+           tiraba a la basura y se reemplazaba por una frase que no dice nada. El motivo
+           accionable gana; la frase genérica es solo el respaldo. */
+        const motivo = await res
+          .json()
+          .then((b: { message?: string; error?: string } | null) => b?.message || null)
+          .catch(() => null);
+        toast.error(motivo || "No se pudo cambiar la publicación.");
         return;
       }
       if (kind === "cronograma" && publish) {
@@ -312,17 +332,18 @@ function ManageView({
 }) {
   // D.1.5 — un link de ENTRADA por superficie (mismo token, mismo verify): el
   // ?next decide dónde aterriza el cliente tras verificar (whitelist).
+  /* Una fila por superficie DECLARADA, en el orden del registro. El requerimiento técnico y la
+     entrega tienen destinatarios distintos del kickoff —el dev externo, el sponsor que recibe el
+     cierre— pero el mecanismo es el MISMO, así que separarlos obligaba a saber que una superficie
+     se comparte por un lado y las otras por otro, y dejaba su estado invisible desde el panel que
+     dice justamente quién tiene acceso al proyecto. */
   const links = state.url
-    ? [
-        { kind: "kickoff" as const, label: "Link Kickoff", url: state.url, published: !!state.kickoffPublished },
-        { kind: "cronograma" as const, label: "Link Cronograma", url: `${state.url}?next=cronograma`, published: !!state.timelinePublished },
-        /* El requerimiento técnico. Su destinatario habitual es el desarrollador externo y no
-           el cliente, pero el mecanismo es el MISMO —mismo token, misma contraseña, mismo
-           verify— así que tenerlo en otro lado obligaba a saber que una superficie se comparte
-           por un lado y las otras dos por otro, y dejaba su estado invisible desde el panel que
-           dice justamente quién tiene acceso al proyecto. */
-        { kind: "desarrollo" as const, label: "Link Requerimiento técnico", url: `${state.url}?next=desarrollo`, published: !!state.desarrolloPublished },
-      ]
+    ? PUBLISH_SURFACES.map((s) => ({
+        kind: s.key,
+        label: s.label,
+        url: s.next ? `${state.url}?next=${s.next}` : state.url!,
+        published: !!state[publishedDtoKey(s)],
+      }))
     : [];
 
   return (

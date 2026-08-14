@@ -104,6 +104,7 @@ export function toSectionDef(
     brief: d.brief,
     chips: d.chips,
     invest: d.invest,
+    compara: d.compara,
     empty: d.empty,
     Component,
   };

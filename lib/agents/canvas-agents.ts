@@ -30,6 +30,10 @@ export const CANVAS_PRIMARY_AGENT: Record<string, CanvasAgentDef> = {
   // historial + canvases y escribe 6 secciones — no entra en una request corta).
   exploration: { agentId: "agent-exploracion-canvas", label: "Generar exploración", async: true },
   implementation: { agentId: "agent-implementacion-canvas", label: "Generar implementación", async: true },
+  /* Entrega: el documento de cierre. `async` como los demás — el runner lee handoff,
+     kickoff, requerimiento técnico, procesos y las últimas 12 reuniones con transcripción,
+     y escribe 9 secciones. No entra en una request corta. */
+  delivery: { agentId: "agent-entrega-canvas", label: "Generar entrega", async: true },
   /* Desarrollo (tech-requirements) NO está acá, y es a propósito: su botón necesita estado
      que solo el workspace tiene —si la auto-generación posterior al handoff sigue en curso,
      `busy` evita la doble corrida— así que se inyecta al header por PORTAL, igual que el

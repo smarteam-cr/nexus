@@ -138,7 +138,7 @@ export const UseCasesSection: FC<SectionProps<UseCasesData>> = ({ data, editable
 };
 
 // ── Mapeo de procesos (opcional) ─────────────────────────────────────────────
-export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ data, ctx, editable, onChange }) => {
+export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ data, ctx, editable, onChange, sectionCompara }) => {
   const lang = landingLang(ctx.lang);
   const procesos = data.procesos ?? [];
   const set = (next: Partial<ProcessMappingData>) => onChange?.({ ...data, ...next });
@@ -156,14 +156,24 @@ export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ da
             placeholder="Proceso (ventas, cobranza, onboarding…)…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, nombre: v }) })} />
           <div className="stl-cmp">
             <div className="stl-cmp-now">
-              <div className="stl-cmp-label">{t(lang, "hoy")}</div>
+              <div className="stl-cmp-label">{t(lang, sectionCompara?.izquierda ?? "hoy")}</div>
+              {(p.resumenHoy || editable) && (
+                <Editable as="h4" className="stl-cmp-sub" editable={editable} value={p.resumenHoy ?? ""}
+                  placeholder="En una línea…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, resumenHoy: v }) })} />
+              )}
               <Editable as="p" className="stl-cmp-text" editable={editable} value={p.comoEsHoy}
-                placeholder="Cómo funciona hoy…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoEsHoy: v }) })} />
+                placeholder={t(lang, sectionCompara?.phIzquierda ?? "comoFuncionaHoy")}
+                onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoEsHoy: v }) })} />
             </div>
             <div className="stl-cmp-future">
-              <div className="stl-cmp-label">{t(lang, "conImplementacion")}</div>
+              <div className="stl-cmp-label">{t(lang, sectionCompara?.derecha ?? "conImplementacion")}</div>
+              {(p.resumenSera || editable) && (
+                <Editable as="h4" className="stl-cmp-sub" editable={editable} value={p.resumenSera ?? ""}
+                  placeholder="En una línea…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, resumenSera: v }) })} />
+              )}
               <Editable as="p" className="stl-cmp-text" editable={editable} value={p.comoSera}
-                placeholder="Cómo quedará…" onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoSera: v }) })} />
+                placeholder={t(lang, sectionCompara?.phDerecha ?? "comoQuedara")}
+                onCommit={(v) => set({ procesos: replaceAt(procesos, i, { ...p, comoSera: v }) })} />
             </div>
           </div>
           {(p.sistemas || editable) && (
@@ -175,7 +185,7 @@ export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ da
         </div>
         )}
       </SortableItems>
-      {editable && <AddBtn label="Agregar proceso" onClick={() => set({ procesos: appendItem(procesos, { nombre: "", comoEsHoy: "", comoSera: "", sistemas: "" }) })} />}
+      {editable && <AddBtn label="Agregar proceso" onClick={() => set({ procesos: appendItem(procesos, { nombre: "", resumenHoy: "", comoEsHoy: "", resumenSera: "", comoSera: "", sistemas: "" }) })} />}
     </>
   );
 };

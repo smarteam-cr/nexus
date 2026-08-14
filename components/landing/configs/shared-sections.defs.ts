@@ -129,6 +129,34 @@ export const PROCESS_MAPPING_SCHEMA = {
   required: ["procesos"],
 } as const;
 
+/**
+ * El mismo mapeo de procesos, con un TITULAR por caja: media línea que se lee sola, con el
+ * párrafo debajo como explicación.
+ *
+ * ⚠ Es un schema APARTE y no dos campos más en el compartido. El schema viaja al modelo como
+ * la forma que tiene que devolver (`shapeOf` recursa dentro de `items`), así que sumarlos
+ * arriba haría que los agentes de Diagnóstico, Planificación, Implementación y el Business
+ * Case empiecen a escribir dos titulares que ningún brief de ellos explica — y en
+ * `implementacion.pipelines`, donde el «antes» es una lista de etapas, un titular de media
+ * línea no tiene contenido posible. Mismo criterio que `CompararLabels`: la variante entra
+ * por el documento que la pidió, no por el componente compartido.
+ *
+ * ⚠ Y los titulares van DENTRO del schema: `preserveNonSchemaKeys` solo acarrea claves de
+ * PRIMER nivel, así que un campo dentro de `procesos[]` que no esté declarado lo borra
+ * `coerceToSchema` en cada regeneración y nada lo rescata.
+ */
+export const PROCESS_MAPPING_SCHEMA_CON_TITULAR = {
+  type: "object",
+  properties: {
+    intro: str,
+    procesos: arrayOf(
+      { nombre: str, resumenHoy: str, comoEsHoy: str, resumenSera: str, comoSera: str, sistemas: str },
+      ["nombre"],
+    ),
+  },
+  required: ["procesos"],
+} as const;
+
 export const PROCESS_MAPPING_EMPTY = { intro: "", procesos: [] };
 
 // ── Schemas compartidos por sectionType (evitan que un nuevo template re-declare

@@ -206,6 +206,12 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
       "La guía de trabajo semanal: qué hay que dejar configurado en HubSpot según el cronograma, paso a paso.",
     cuando: "Durante la configuración técnica, semana a semana. Es tuya, no del cliente.",
   },
+  delivery: {
+    paraQue:
+      "El documento con el que se cierra el proyecto: qué se construyó, qué se logró, cómo se cumplió el plan y qué sigue. Se le presenta y se le comparte al cliente, como el kickoff.",
+    cuando:
+      "Cuando el proyecto llega a la entrega. Los números —tareas hechas, fases cerradas, cuánto se corrió el cierre— los calcula Nexus del cronograma, no los escribe la IA.",
+  },
   "client-info": {
     paraQue:
       "El contexto del cliente que se va acumulando reunión tras reunión, más los procesos que le mapeamos. No pertenece a un proyecto: es del cliente entero y sobrevive a los proyectos.",
@@ -264,6 +270,8 @@ export const DOC_AGENTES: Record<string, string> = {
     "Describe qué hay que construir a la medida —integraciones, automatizaciones, objetos— con su arquitectura y su estimación.",
   implementacion:
     "Arma la guía de configuración semana a semana: qué hay que dejar listo en HubSpot según el cronograma.",
+  entrega:
+    "Redacta el documento de cierre con lo que pasó en el proyecto. Los números no los escribe él: se los da Nexus ya calculados desde el cronograma.",
   businesscase:
     "Escribe la propuesta comercial para un prospecto a partir de lo que se habló con él: qué le duele, qué le proponemos y qué gana.",
 };

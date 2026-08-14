@@ -57,6 +57,19 @@ export const KICKOFF_CIERRE_DEFAULT = {
   buttonTarget: "_blank",
 } as const;
 
+/* Default del CIERRE del canvas Entrega. A diferencia del kickoff —que invita a arrancar—
+   éste cierra: agradece, deja el canal abierto y ofrece el paso siguiente. Fuente ÚNICA:
+   la usan el seed y el `empty` de entrega.defs. */
+export const ENTREGA_CIERRE_DEFAULT = {
+  eyebrow: "Gracias",
+  headline: "Hasta acá llega este proyecto — y acá empieza lo que sigue",
+  subhead:
+    "Tu equipo de Smarteam queda disponible para acompañar la operación. Cualquier duda sobre lo entregado, escribinos.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+} as const;
+
 // Default del CIERRE del canvas Desarrollo (notas de cierre + botón opcional, ej.
 // enlace al repo / doc técnica / agenda de arranque con el dev). Fuente ÚNICA — la
 // usan createDesarrolloCanvas, la reconciliación y el `empty` de desarrollo.defs.
@@ -298,6 +311,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
  *  proyecto, que ahora lo crea el flujo de handoff (createHandoffCanvas). */
 export const AGENT_GROUP_TO_CANVAS: Record<string, string> = {
   implementacion: "implementation",
+  entrega: "delivery",
   diagnostico: "diagnosis",
   planificacion: "planning",
   handoff: "handoff",
@@ -454,6 +468,46 @@ export function implementacionSectionSequence(existingKeys: string[]): string[] 
   return sectionSequence(IMPLEMENTACION_CANVAS.sections.map((s) => s.key), existingKeys);
 }
 
+/**
+ * ENTREGA — el documento con el que se cierra un proyecto (2026-08-12).
+ *
+ * Se le presenta y se le comparte al cliente, como el kickoff: cuenta qué se construyó, qué
+ * se logró, cómo se cumplió el plan y qué sigue. Canvas ON-DEMAND: lo activa el CSE cuando
+ * el proyecto llega a la entrega.
+ *
+ * ⚠ DOS SECCIONES NO LAS ESCRIBE EL AGENTE, y no es un detalle de implementación: es la
+ * única promesa de honestidad del documento. `cumplimiento` y `pendientes` son NÚMEROS sobre
+ * el proyecto del cliente —tareas hechas, fases cerradas, cuánto se corrió el cierre—, y las
+ * calcula el runner desde el cronograma. El agente ni las ve, así que un número inventado
+ * deja de ser posible por construcción y no por prompt. Ver components/landing/configs/entrega.defs.ts.
+ *
+ * ORDEN, y tampoco es arbitrario: primero QUÉ se construyó (alcance, logros), después CÓMO
+ * se cumplió (el plan, el impacto) y al final QUÉ FALTA (pendientes, continuidad). Al revés
+ * el documento arranca justificándose.
+ */
+export const ENTREGA_CANVAS: CanvasDefinition = {
+  slug: "delivery",
+  name: "Entrega",
+  isDefault: false,
+  order: 6,
+  sections: [
+    { key: "portada",      label: "Portada" },
+    { key: "resumen",      label: "El antes y el después" },
+    { key: "alcance",      label: "Qué quedó implementado" },
+    { key: "logros",       label: "Objetivos alcanzados" },
+    { key: "cumplimiento", label: "El plan, cumplido" },
+    { key: "impacto",      label: "El impacto en el negocio" },
+    { key: "pendientes",   label: "Qué queda abierto" },
+    { key: "continuidad",  label: "El siguiente proyecto" },
+    { key: "recomendaciones", label: "Cómo sacarle más provecho" },
+    { key: "cierre",       label: "Cierre", defaultData: { ...ENTREGA_CIERRE_DEFAULT } },
+  ],
+};
+
+export function entregaSectionSequence(existingKeys: string[]): string[] {
+  return sectionSequence(ENTREGA_CANVAS.sections.map((s) => s.key), existingKeys);
+}
+
 // ── Índice pieza → definición ────────────────────────────────────────────────
 /**
  * De la IDENTIDAD de una pieza a su estructura. Es lo que faltaba para poder crear una
@@ -464,7 +518,7 @@ export function implementacionSectionSequence(existingKeys: string[]): string[] 
  * flujo de handoffs, que además crea la entidad.
  */
 export const CANVAS_DEF_BY_SLUG: Record<string, CanvasDefinition> = Object.fromEntries(
-  [...DEFAULT_PROJECT_CANVASES, DESARROLLO_CANVAS, IMPLEMENTACION_CANVAS].map((d) => [d.slug, d]),
+  [...DEFAULT_PROJECT_CANVASES, DESARROLLO_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS].map((d) => [d.slug, d]),
 );
 
 /** La estructura de una pieza, o null si no es una pieza activable desde el desplegable. */

@@ -348,6 +348,7 @@ export default function LandingView({
         sectionEyebrow={effEyebrow}
         sectionChips={def.chips}
         sectionInvest={def.invest}
+        sectionCompara={def.compara}
         editable={editable}
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />
@@ -408,6 +409,7 @@ export default function LandingView({
           sectionEyebrow={effEyebrow}
           sectionChips={def.chips}
           sectionInvest={def.invest}
+          sectionCompara={def.compara}
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />

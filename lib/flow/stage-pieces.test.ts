@@ -112,9 +112,13 @@ describe("las piezas del flujo", () => {
 
 describe("los hitos", () => {
   it("las etapas finales son hitos: se marcan, no se abren", () => {
-    for (const stage of ["ADOPCION", "VALIDACION_USO", "ENTREGA", "FINALIZADO"] as const) {
+    for (const stage of ["ADOPCION", "VALIDACION_USO", "FINALIZADO"] as const) {
       expect(isMilestone(stage), `${stage} dejó de ser hito`).toBe(true);
     }
+    /* ⚠ ENTREGA salió de esta lista el 2026-08-12 y NO por descuido: estrenó la pieza
+       `delivery`, el documento de cierre que se le comparte al cliente. Volver a meterla acá
+       sin sacar la pieza deja el mapa mintiendo. El porqué está en el header del módulo. */
+    expect(isMilestone("ENTREGA"), "ENTREGA tiene documento desde 2026-08-12").toBe(false);
     expect(isMilestone("OPERACION_CONTINUA")).toBe(true);
   });
 
@@ -136,10 +140,12 @@ describe("el orden narrativo de la médula", () => {
       "planning",
       "tech-requirements",
       "implementation",
+      "delivery",
     ]);
   });
 
   it("el ciclo corto solo trabaja el arranque", () => {
-    expect(piecesInFlowOrder("short")).toEqual(["handoff", "kickoff"]);
+    // La entrega también existe en el ciclo corto: un servicio recurrente también se cierra.
+    expect(piecesInFlowOrder("short")).toEqual(["handoff", "kickoff", "delivery"]);
   });
 });

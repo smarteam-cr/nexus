@@ -7,6 +7,8 @@
  * filtró a la identidad y va a romper datos, ruteo o permisos en producción.
  */
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   PIECES,
   pieceBySlug,
@@ -167,5 +169,66 @@ describe("consultas del registro", () => {
     expect(pieceByAgentGroup("desarrollo")?.slug).toBe("tech-requirements");
     expect(pieceByAgentGroup("exploracion")?.slug).toBe("exploration");
     expect(pieceByAgentGroup("no-existe")).toBeNull();
+  });
+});
+
+
+/**
+ * ── `ownRenderer` ES LA FUENTE, NO UN ADORNO ─────────────────────────────────
+ * El panel del proyecto DERIVA de este campo qué canvases excluir de la grilla genérica
+ * `SectionBlockList`. Declararlo mal tiene dos modos de falla, los dos visibles y ninguno
+ * ruidoso:
+ *   · `false` con renderer propio ⇒ el canvas se pinta DOS VECES (el suyo arriba y la grilla
+ *     vieja debajo, con «Sin contenido — ejecuta agentes» repetido por sección).
+ *   · `true` sin renderer propio ⇒ el canvas queda EN BLANCO.
+ *
+ * Pasó dos veces. Primero con Exploración; después con Entrega, el día que nació. Y al ir a
+ * arreglarlo apareció el problema de fondo: había TRES listas de lo mismo —este campo, un
+ * `Set` transcrito en el panel y los `activeSlug === "…"` del propio panel— y ya no
+ * coincidían. El campo estaba mal en cuatro piezas justamente porque nadie lo leía.
+ *
+ * Esta guarda las cruza en LOS DOS SENTIDOS. Es lo que convierte «acordate de mirar el set»
+ * (un comentario, que no obliga a nada) en «no compila verde».
+ */
+describe("ownRenderer ↔ el panel del proyecto", () => {
+  const PANEL = "components/clients/ProjectCanvasPanel.tsx";
+  const src = fs.readFileSync(path.join(process.cwd(), PANEL), "utf8");
+
+  /** Los slugs que el panel trata de forma especial: `activeSlug === "x"`. */
+  const enElPanel = new Set([...src.matchAll(/activeSlug === "([a-z][a-z0-9-]*)"/g)].map((m) => m[1]));
+
+  const declarados = new Set(PIECES.filter((p) => p.scope === "project" && p.ownRenderer).map((p) => p.slug));
+
+  it("la guarda mira algo (si el panel cambia de forma, esto avisa)", () => {
+    expect(enElPanel.size, `no encontré ningún \`activeSlug === "…"\` en ${PANEL}`).toBeGreaterThan(5);
+  });
+
+  it("todo canvas con renderer propio en el panel lo DECLARA en el registro", () => {
+    const sinDeclarar = [...enElPanel].filter((s) => !declarados.has(s));
+    expect(
+      sinDeclarar,
+      "Estos canvases tienen su propio render en el panel pero el registro dice " +
+        "`ownRenderer: false`, así que la grilla genérica se pinta DEBAJO del suyo — el canvas " +
+        "sale duplicado, con «Sin contenido — ejecuta agentes» repetido por sección:\n" +
+        sinDeclarar.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("y todo el que lo declara TIENE su render en el panel", () => {
+    const sinRender = [...declarados].filter((s) => !enElPanel.has(s));
+    expect(
+      sinRender,
+      "Estos declaran `ownRenderer: true` pero el panel no los rutea a ningún componente: " +
+        "quedan EN BLANCO, porque además se los excluye de la grilla genérica:\n" + sinRender.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("el panel DERIVA el set en vez de transcribirlo", () => {
+    /* Sin esto la guarda se puede satisfacer manteniendo las dos listas a mano y sincronizadas
+       — que es exactamente el estado del que veníamos, y que se desincronizó dos veces. */
+    expect(
+      src,
+      "el panel volvió a escribir a mano la lista de canvases con renderer propio",
+    ).toMatch(/CANVAS_CON_RENDERER_PROPIO = new Set\(\s*PIECES\.filter/);
   });
 });

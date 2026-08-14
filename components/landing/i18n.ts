@@ -29,6 +29,15 @@ const STRINGS = {
   resultado: { es: "Resultado", en: "Outcome" },
   hoy: { es: "Hoy", en: "Today" },
   conImplementacion: { es: "Con la implementación", en: "With the implementation" },
+  /* Los mismos dos lados, en PASADO. Un documento de ENTREGA mira hacia atrás: el proyecto ya
+     ocurrió, así que "Hoy" sería el después y "Con la implementación" una promesa cumplida
+     escrita como futuro. Ver `SectionDef.compara`. */
+  antes: { es: "Antes", en: "Before" },
+  ahora: { es: "Ahora", en: "Now" },
+  comoFuncionaHoy: { es: "Cómo funciona hoy…", en: "How it works today…" },
+  comoQuedara: { es: "Cómo quedará…", en: "How it will work…" },
+  comoFuncionabaAntes: { es: "Cómo funcionaba antes…", en: "How it used to work…" },
+  comoFuncionaAhora: { es: "Cómo funciona ahora…", en: "How it works now…" },
   conHubspotSmarteam: { es: "Con HubSpot + Smarteam", en: "With HubSpot + Smarteam" },
   // Inversión
   montosEn: { es: "Montos en", en: "Amounts in" },
