@@ -396,9 +396,15 @@
   cada uno con encabezado, columna de monto alineada a la derecha y su subtotal, más el **gran
   total** (que aparece SOLO con los dos grupos sumables; con uno, ese subtotal ES el total y
   lleva la píldora). Los montos los escribe **Ventas a mano**: el agente no la genera
-  (`agentGenerated:false`) y tiene prohibido poner precios en cualquier otro texto. `extras`
-  (opcionales) y `recurrentes` (mensuales) se muestran pero NO suman. Un monto con texto adentro
-  ("A definir", "13%") queda fuera del total y se cuenta como **pendiente**. El shape viejo de
+  (`agentGenerated:false`) y tiene prohibido poner precios en cualquier otro texto. Cada línea
+  puede llevar **descuento propio**: cuando lo tiene, el monto muestra el tag («−15%»), el
+  precio de lista **tachado** y abajo el neto ya recalculado — el descuento nunca se aplica en
+  silencio. Una línea de **licencias es MENSUAL por defecto** (una suscripción de HubSpot lo es;
+  un servicio de Smarteam es cobro único) y con eso el cierre pasa a **«Pago único» + «Por
+  mes»**, los dos con la misma píldora naranja. `extras` (opcionales) se muestran pero NO suman;
+  el card «Recurrente mensual» **se retiró el 2026-08-14** y sus líneas bajaron a la tabla como
+  licencias mensuales (`adoptarRecurrentes`). Un monto con texto adentro ("A definir", "13%")
+  queda fuera del total y se cuenta como **pendiente**. El shape viejo de
   HubSpot (dos tarjetas) ya no existe como vista: se **proyecta** a la tabla al renderizar y se
   persiste con la primera edición. Ver DECISIONS §Secciones personalizadas.
 - **línea de licencia por Hub** (`LineaInversion.hub`): una línea del grupo **licencias** de la

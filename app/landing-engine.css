@@ -947,8 +947,22 @@
 .stl .stl-inv-plazo-btn.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
 .stl .stl-inv-plazo-btn:disabled { cursor: default; }
 .stl .stl-inv-plazo-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-/* El cierre de dos números (pago único + recurrente). */
-.stl .stl-inv-cierre { margin-top: 24px; display: grid; gap: 8px; }
+/* El cierre de dos números (pago único + recurrente). Van UNO AL LADO DEL OTRO y con el mismo
+   tratamiento: son los dos números que se firman y ninguno manda sobre el otro — apilados, el
+   de arriba se leía como el total y el de abajo como una nota al pie. En pantalla angosta se
+   apilan solos (`auto-fit`), que es la única forma en que uno arriba del otro es correcto. */
+.stl .stl-inv-cierre {
+  margin-top: 24px; display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+/* Cada mitad del par es su propia tarjeta: sin la regla superior de `--total`, que acá sería
+   una línea partida en dos. El selector COMPUESTO no es capricho — `.stl-inv-sum--total` se
+   declara más abajo en este archivo y, con la misma especificidad, su `border-top: 2px` ganaba
+   por orden: las tarjetas salían con una ceja negra arriba. */
+.stl .stl-inv-sum--total.stl-inv-sum--par {
+  margin-top: 0; padding: 16px 20px; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--bg-soft);
+}
 
 .stl .stl-inv-concept {
   display: block; overflow-wrap: anywhere;
@@ -987,6 +1001,25 @@
 }
 /* Línea sin monto: guion, no vacío — una celda que desaparece rompe la columna. */
 .stl .stl-inv-amount--vacio { color: var(--border-strong); font-weight: 500; }
+/* LA REBAJA: tag del descuento + precio de lista TACHADO, arriba del monto final. Va en la
+   MISMA celda y no bajo el concepto porque lo que tiene que poder verificarse de un vistazo es
+   la resta: lista − descuento = lo que se cobra. El tag lleva el naranja de marca —el color de
+   los totales de esta sección— y el tachado va en gris de nota: el número que manda es el de
+   abajo, no el que se cayó. */
+.stl .stl-inv-rebaja {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+}
+.stl .stl-inv-dcto {
+  display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px;
+  background: rgba(232, 72, 28, 0.12); color: #C2400F;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 11px; letter-spacing: 0.02em; white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.stl .stl-inv-bruto {
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums; text-decoration-thickness: 1px;
+}
 /* Solo-editor: "así lo va a ver el cliente" / "esta línea no suma". NUNCA en lectura. */
 .stl .stl-inv-eco {
   font-size: 11.5px; font-weight: 600; color: var(--blue);
@@ -1019,13 +1052,21 @@
   font-weight: 700; font-size: 17px; line-height: 1.3; color: var(--text);
   font-variant-numeric: tabular-nums lining-nums;
 }
-/* EL total de la sección: regla gruesa y la única mancha saturada del documento. La píldora
-   queda reservada para él — si los subtotales también la llevaran, el ojo no sabría cuál es el
-   número que importa. */
+/* EL total de la sección: regla gruesa y el número más grande.
+   ⚠ Corrige la regla anterior ("la píldora queda reservada para el total"): desde el
+   2026-08-14 TODO total lleva la píldora naranja y la jerarquía la hace el TAMAÑO. El motivo
+   es lo que se veía: el subtotal de licencias era texto pelado y el recurrente de abajo una
+   píldora, así que dos números del mismo rango de lectura parecían de dos naturalezas
+   distintas — y el que el cliente tiene que mirar (lo que paga por mes) competía con el que
+   ya había leído. */
 .stl .stl-inv-sum--total {
   padding-top: 16px; border-top: 2px solid var(--text); align-items: center;
 }
 .stl .stl-inv-sum--total .stl-inv-sum-label { font-size: 15px; }
+/* Subtotal de grupo: la MISMA píldora, un punto más chica. */
+.stl .stl-inv-sum:not(.stl-inv-sum--total) .stl-inv-total-pill {
+  font-size: 16px; padding: 7px 16px; box-shadow: 0 6px 18px -10px rgba(232, 72, 28, 0.5);
+}
 /* El gran total vive FUERA de una tabla: no hay hairline que comerse y sí aire que ganar. */
 .stl .stl-inv-sum--gran { margin-top: 24px; }
 .stl .stl-inv-total-pill {
@@ -1058,7 +1099,9 @@
 .stl .stl-inv-row .stl-drag-item { top: 50%; left: -2px; transform: translateY(-50%); }
 .stl .stl-inv-row .stl-remove { top: 50%; right: auto; left: 32px; transform: translateY(-50%); }
 
-/* ── Extras (cards claras) + recurrente mensual (card oscura) ────────────────── */
+/* ── Extras opcionales (cards claras) ────────────────────────────────────────
+   La card oscura de "Recurrente mensual" se retiró el 2026-08-14 con su CSS: lo recurrente
+   se declara por LÍNEA y suma en el cierre, que es lo que la card nunca hizo. */
 .stl .stl-inv-below { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 28px; align-items: stretch; }
 .stl .stl-inv-extra {
   background: var(--blue-soft); border: 1px solid rgba(11, 88, 211, 0.22);
@@ -1074,21 +1117,6 @@
 .stl .stl-inv-extra-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue); }
 .stl .stl-inv-extra-detail { font-size: 12px; color: var(--text-2); line-height: 1.5; margin: 8px 0 0; }
 .stl .stl-inv-extra-amount { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 15px; color: var(--blue); margin-top: 10px; font-variant-numeric: tabular-nums lining-nums; }
-.stl .stl-inv-monthly { background: var(--dark-bg); border-radius: 22px; padding: 18px 20px; color: var(--dark-text); }
-/* anchoRecurrente: "ancho" — la card ocupa 2 columnas del grid .stl-inv-below. */
-.stl .stl-inv-monthly--wide { grid-column: span 2; }
-.stl .stl-inv-monthly-title { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 14px; color: var(--teal); margin-bottom: 10px; }
-.stl .stl-inv-monthly-row { font-size: 13px; line-height: 1.6; color: var(--dark-text-2); }
-.stl .stl-inv-monthly-row strong { color: #fff; font-variant-numeric: tabular-nums lining-nums; }
-/* Panel OSCURO: .stl-remove/.stl-drag-item (fondo #fff fijo) chocarían — mismo tratamiento
-   translúcido que .stl-diag-panel. */
-.stl .stl-inv-monthly .stl-remove,
-.stl .stl-inv-monthly .stl-drag-item {
-  background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.22); color: var(--dark-text-2);
-}
-.stl .stl-inv-monthly .stl-remove:hover { color: #FCA5A5; border-color: #FCA5A5; }
-.stl .stl-inv-monthly .stl-drag-item:hover { color: var(--teal); border-color: var(--teal); }
-.stl .stl-inv-monthly-detail { font-size: 12px; opacity: 0.8; }
 
 /* ── Angosto: la columna se disuelve y el monto baja bajo su concepto ───────── */
 @media (max-width: 560px) {
@@ -1406,7 +1434,7 @@
    del 4.5 de AA. Se acepta y se vigila con umbral 3, no 4.5: el contenido del botón es un
    ícono SVG de 13px y WCAG 1.4.11 pide 3:1 para contenido no textual. Si algún día lleva
    texto, el caso de landing-brand-contrast.test.ts hay que subirlo a 4.5 — y va a fallar.
-   En OSCURO el canon del archivo es #FCA5A5 (ver .stl-diag-panel y .stl-inv-monthly):
+   En OSCURO el canon del archivo es #FCA5A5 (ver .stl-diag-panel):
    #DC2626 sobre carbón es ilegible. */
 .stl .stl-q-remove:hover { color: #DC2626; border-color: #FCA5A5; }
 .stl .stl-dark .stl-q-remove { border-color: var(--dark-border); color: var(--dark-text-2); }

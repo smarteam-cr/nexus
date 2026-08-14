@@ -20,11 +20,13 @@
  */
 import {
   aplicarDescuento,
+  formatRango,
   monedaDeTexto,
   parseCantidad,
   parseDescuento,
   parseMonto,
   sumaRangos,
+  type Descuento,
   type Rango,
 } from "./money";
 import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
@@ -127,10 +129,45 @@ export function esLineaActiva(l: LineaInversion | null | undefined): boolean {
   return (l?.activa ?? "").trim().toLowerCase() !== "no";
 }
 
-/** ¿Se cobra todos los períodos? Ausente = cobro ÚNICO, que es lo que asume todo lo ya
- *  publicado (ninguna línea declara `recurrencia`). */
+/** ¿Se cobra todos los períodos? Lo escrito manda; ausente cae al default de su GRUPO. */
 export function esRecurrente(l: LineaInversion | null | undefined): boolean {
   return (l?.recurrencia ?? "").trim().toLowerCase() === "mensual";
+}
+
+/**
+ * El default de recurrencia POR GRUPO (2026-08-14, pedido de Elías: "cada licencia debe ser
+ * mensual por defecto").
+ *
+ * Una licencia de HubSpot es una suscripción: cobrarla como pago único es la excepción, no la
+ * regla. Un servicio de Smarteam es al revés — una implementación se cobra una vez.
+ *
+ * ⚠ Es un DEFAULT, no una imposición: `recurrencia` escrita gana siempre, así que Ventas puede
+ * poner un setup de HubSpot como cobro único con un clic. Y como toca a lo ya publicado
+ * —`configForSnapshot` resuelve por KEY contra la config viva—, el efecto se midió antes de
+ * elegirlo: de las propuestas publicadas con líneas de licencia, sus montos son texto libre
+ * ("A definir en propuesta formal") ⇒ no suman ⇒ el cierre gana el rótulo "Pago único" pero
+ * ningún número nuevo.
+ */
+export const RECURRENCIA_POR_DEFECTO: Record<"lineas" | "licencias", "unica" | "mensual"> = {
+  lineas: "unica",
+  licencias: "mensual",
+};
+
+/**
+ * Rellena `recurrencia` con el default del grupo en las líneas que no la declaran. Se aplica
+ * en UN solo lugar (`gruposDeInversion`) y el componente consume las líneas YA normalizadas,
+ * así que el `<select>` de la fila, el subtotal y el cierre no pueden contar historias
+ * distintas. Al editar cualquier campo de esa fila, el default se persiste explícito —
+ * misma doctrina que `adoptarShapeNuevo`.
+ */
+export function conRecurrenciaPorDefecto(
+  clave: "lineas" | "licencias",
+  ls: LineaInversion[] | undefined,
+): LineaInversion[] {
+  const def = RECURRENCIA_POR_DEFECTO[clave];
+  return (ls ?? []).map((l) =>
+    (l?.recurrencia ?? "").trim() ? l : { ...l, recurrencia: def },
+  );
 }
 
 export type Contrato = "mensual" | "anual";
@@ -152,6 +189,14 @@ export interface MontoLinea {
   unitario: Rango | null;
   /** Cuántas unidades se multiplicaron (1 si no se declaró). */
   cantidad: number;
+  /** El importe ANTES del descuento (`cantidad × unitario`). Solo cuando hay descuento
+   *  aplicado: es el número que se muestra TACHADO al lado del neto, para que el cliente vea
+   *  qué se le rebajó. Sin descuento es null — tachar un precio que no cambió es teatro. */
+  bruto: Rango | null;
+  /** El descuento leído, para pintar su tag ("−15%" / "−$200"). null = no hay o es ilegible
+   *  (ilegible ⇒ `sucio`, y ahí la línea no muestra ni tag ni tachado: no se afirma una
+   *  rebaja que no se pudo leer). */
+  descuento: Descuento | null;
 }
 
 /**
@@ -175,7 +220,10 @@ export function montoDeLinea(
   moneda?: string | null,
   contrato: Contrato = "mensual",
 ): MontoLinea {
-  const vacio: MontoLinea = { rango: null, sucio: false, calculada: false, unitario: null, cantidad: 1 };
+  const vacio: MontoLinea = {
+    rango: null, sucio: false, calculada: false, unitario: null, cantidad: 1,
+    bruto: null, descuento: null,
+  };
   if (!l) return vacio;
 
   const cantidad = parseCantidad(l.cantidad) ?? 1;
@@ -210,6 +258,10 @@ export function montoDeLinea(
     calculada: true,
     unitario,
     cantidad,
+    // Solo con descuento REAL: sin él, `bruto` y `rango` son el mismo número y mostrarlo
+    // tachado al lado de sí mismo no dice nada.
+    bruto: desc ? bruto : null,
+    descuento: desc,
   };
 }
 
@@ -227,6 +279,17 @@ export function montoDeLinea(
  * no hay total. Es una garantía dependiente de los DATOS, no del código, así que se
  * re-verifica antes de cada deploy con `scripts/verificar-inversion-publicada.ts`.
  */
+/**
+ * El tag del descuento, tal como se pinta al lado del monto: "−15%" o "−$200". Sale del
+ * descuento YA LEÍDO (no del texto crudo) para que el tag no pueda decir una cosa y la resta
+ * otra: si el parser no lo entendió, no hay tag — hay ⚠ "no suma".
+ */
+export function textoDescuento(d: Descuento, moneda?: string | null): string {
+  return d.tipo === "pct"
+    ? `−${d.valor}%`
+    : `−${formatRango({ min: d.valor, max: d.valor }, moneda ?? "")}`;
+}
+
 export function esInversionLegacy(data: InversionData | null | undefined): boolean {
   const d = data ?? {};
   if (conContenido(d.lineas) || conContenido(d.licencias)) return false;
@@ -269,6 +332,34 @@ export function adoptarShapeNuevo<T extends InversionData>(
     licencias: [...(data.licencias ?? []), ...linea(data.licenciasHubspot, rotulos?.licencias ?? "Licencias HubSpot")],
     licenciasHubspot: undefined,
     implementacion: undefined,
+  };
+}
+
+/**
+ * El card «Recurrente mensual» se retiró (2026-08-14, pedido de Elías: abajo de la tabla solo
+ * quedan los extras opcionales). Lo que vivía ahí NO se pierde: cada fila baja a la tabla como
+ * una línea de LICENCIAS marcada `mensual`, que es exactamente lo que era — el placeholder del
+ * card decía "Licencia / mantenimiento…" y 4 de las 6 filas guardadas son licencias de
+ * plataforma.
+ *
+ * Se decidió con los datos a la vista: 9 secciones tenían contenido ahí y 4 son propuestas
+ * PUBLICADAS (Prodex, REMPRO, AVELEC). Borrar el card sin más les sacaba esas líneas de la
+ * vista del cliente; proyectarlas las conserva. La contrapartida, aceptada explícitamente por
+ * Elías: en Prodex la única fila con monto legible ("$450 USD") ahora SÍ entra en la
+ * aritmética, así que su cierre pasa a decir "Pago único" + "Por mes" en vez de un total solo.
+ *
+ * Corre en el RENDER (no persiste por su cuenta) y se fija con el primer guardado humano —
+ * misma mecánica que `adoptarShapeNuevo`. Idempotente: sin `recurrentes` devuelve lo mismo.
+ */
+export function adoptarRecurrentes<T extends InversionData>(data: T): T {
+  const viejas = (data.recurrentes ?? []).filter(
+    (l) => conTexto(l?.concepto) || conTexto(l?.monto) || conTexto(l?.detalle),
+  );
+  if (!viejas.length) return data.recurrentes?.length ? { ...data, recurrentes: undefined } : data;
+  return {
+    ...data,
+    licencias: [...(data.licencias ?? []), ...viejas.map((l) => ({ ...l, recurrencia: "mensual" }))],
+    recurrentes: undefined,
   };
 }
 
@@ -360,13 +451,18 @@ export function gruposDeInversion(data: InversionData | null | undefined): Inver
   const moneda = declarada || (enTexto.size === 1 ? [...enTexto][0] : "");
   const contrato = contratoDe(d);
 
-  const a = conflicto ? sinSuma(d.lineas) : sumarGrupo(d.lineas, moneda, contrato);
-  const b = conflicto ? sinSuma(d.licencias) : sumarGrupo(d.licencias, moneda, contrato);
+  /* El default de recurrencia se aplica ACÁ y una sola vez: los grupos que salen de esta
+     función ya lo traen resuelto, así que la fila, el subtotal y el cierre leen lo mismo. */
+  const servicios = conRecurrenciaPorDefecto("lineas", d.lineas);
+  const licencias = conRecurrenciaPorDefecto("licencias", d.licencias);
+
+  const a = conflicto ? sinSuma(servicios) : sumarGrupo(servicios, moneda, contrato);
+  const b = conflicto ? sinSuma(licencias) : sumarGrupo(licencias, moneda, contrato);
   const gruposConMonto = (a.total ? 1 : 0) + (b.total ? 1 : 0);
 
   /* El eje recurrencia atraviesa los DOS grupos: un setup de HubSpot es único aunque esté en
      licencias, y un soporte mensual de Smarteam es recurrente aunque esté en servicios. */
-  const todas = [...(d.lineas ?? []), ...(d.licencias ?? [])];
+  const todas = [...servicios, ...licencias];
   const hayRecurrentes = todas.some((l) => esLineaActiva(l) && esRecurrente(l));
   const unico = hayRecurrentes && !conflicto
     ? sumarGrupo(todas, moneda, contrato, (l) => !esRecurrente(l)).total
@@ -376,8 +472,8 @@ export function gruposDeInversion(data: InversionData | null | undefined): Inver
     : null;
 
   return {
-    servicios: { clave: "lineas", lineas: d.lineas ?? [], total: a.total, pendientes: a.pendientes },
-    licencias: { clave: "licencias", lineas: d.licencias ?? [], total: b.total, pendientes: b.pendientes },
+    servicios: { clave: "lineas", lineas: servicios, total: a.total, pendientes: a.pendientes },
+    licencias: { clave: "licencias", lineas: licencias, total: b.total, pendientes: b.pendientes },
     /* ⚠ El gran total se APAGA en cuanto hay una línea recurrente: sumar un CapEx con una
        mensualidad da un número que no existe en ningún contrato. Ahí el cierre pasa a ser
        "pago único" + "recurrente", que son dos números que sí se pueden firmar. Como lo

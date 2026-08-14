@@ -2048,6 +2048,52 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
 - **La aritmética de la línea va DEBAJO del concepto, no en columnas propias.** Una tabla de cinco
   columnas se rompe en celular y en el PDF, y el número que manda —el subtotal— ya tiene la suya.
 
+### La cotización se lee sola: descuento a la vista, licencias mensuales, un solo cierre (2026-08-14)
+
+> Elías sobre la sección ya en uso: las licencias deben ser **mensuales por defecto**, el total
+> de licencias **naranja como el otro**, el **pago único y el mensual representados igual**, el
+> card «Recurrente mensual» fuera —abajo solo extras— y, al poner un descuento, **un tag al lado
+> del valor, el precio de lista tachado y el nuevo valor recalculado**.
+
+- **El descuento se APLICABA en silencio.** `montoDeLinea` ya restaba, pero la celda mostraba
+  solo el resultado: el cliente veía un número más chico sin poder rehacer la resta, que es lo
+  único que una línea de cotización tiene que permitir. Ahora `MontoLinea` expone `bruto` (el
+  importe ANTES del descuento) y el `descuento` YA LEÍDO, y la celda pinta el tag + el lista
+  tachado arriba del neto. El tag sale del descuento parseado y NO del texto crudo: si el parser
+  no lo entendió, no hay tag — hay ⚠ "no suma". Sin descuento no hay `bruto`: tachar un precio
+  que no cambió es teatro.
+- **La recurrencia tiene un default POR GRUPO** (`RECURRENCIA_POR_DEFECTO`): una licencia de
+  HubSpot es una suscripción y un servicio de Smarteam se cobra una vez. Lo escrito gana
+  siempre, así que un onboarding de HubSpot se marca "cobro único" con un clic. El default se
+  resuelve en `gruposDeInversion` y los grupos SALEN con `recurrencia` puesta, así que la fila,
+  el subtotal y el cierre no pueden contar historias distintas.
+- ⚠ **Esto TOCA lo publicado y se midió antes de aplicarlo** (`configForSnapshot` resuelve por
+  key contra la config viva). De las 7 propuestas publicadas, 3 pasan del gran total al cierre
+  de dos números: REMPRO **$35,900 + $1,450/mes**, AVELEC **$13,100 + $3,130/mes** y Prodex
+  **$17,750 + $450/mes**; las otras 4 no mueven un número porque sus montos son texto libre.
+  Elías aprobó el cambio con esos números a la vista. **Queda un riesgo declarado**: si Ventas
+  escribió el precio ANUAL de una licencia en una línea que ahora se lee como mensual, la
+  propuesta lo dice ×12 — el editor tiene el selector por línea para corregirlo.
+- **El card «Recurrente mensual» se retiró, pero su contenido NO se pierde.** Tenía contenido en
+  9 secciones y 4 son propuestas publicadas, así que borrarlo les sacaba líneas de la vista del
+  cliente. `adoptarRecurrentes` las baja a la tabla como líneas de LICENCIAS marcadas
+  "mensual" — donde además SUMAN, que es lo que el card nunca hizo (se mostraba y no entraba a
+  ningún total). Corre en el render y se fija con el primer guardado humano, misma mecánica que
+  `adoptarShapeNuevo`. Abajo de la tabla quedan solo los **extras opcionales**.
+- **TODO total lleva la píldora naranja; la jerarquía la hace el TAMAÑO** (subtotal 16px, cierre
+  20px). ⚠ Corrige la regla anterior —"la píldora queda reservada para el total"—: con el
+  subtotal en texto pelado y el recurrente en píldora, dos números del mismo rango de lectura
+  parecían de naturalezas distintas. Los dos del cierre van **uno al lado del otro y con el
+  mismo tratamiento**: son los dos números que se firman y ninguno manda sobre el otro
+  (apilados, el de arriba se leía como el total y el de abajo como una nota al pie).
+- **«Pago único» / «Por mes» / «al mes» pasaron a i18n.** Eran literales en español dentro del
+  componente y esta sección se publica al cliente: una propuesta en inglés los sacaba en
+  español. Mismo motivo por el que `SectionDef.invest` está tipado contra `LandingStringKey`.
+- **La `--par` usa un selector COMPUESTO** (`.stl-inv-sum--total.stl-inv-sum--par`) y no es
+  capricho: `--total` se declara más abajo en el archivo y, con la misma especificidad, su
+  `border-top: 2px solid var(--text)` ganaba por orden — las dos tarjetas salían con una ceja
+  negra arriba. Cazado midiendo el borde computado en Chrome, no leyendo el CSS.
+
 ## El dolor se cuantifica en plata cuando la fuente lo permite (2026-08-13)
 
 > Elías: *"quiero que tenga la capacidad de cuantificar el dolor económicamente cuando haya

@@ -34,7 +34,8 @@
  */
 export const NO_CONTENIDO = new Set([
   "logoScale", // tamaño del logo del cliente (número)
-  "anchoRecurrente", // ancho del bloque recurrente en la propuesta web
+  "anchoRecurrente", // LEGACY: ancho del card recurrente, retirado el 2026-08-14. Se queda
+  // en la lista porque el dato sobrevive en secciones viejas y sigue sin ser contenido.
   "buttonTarget", // en qué pestaña abre el CTA
   "__lang", // idioma del documento
   // Moneda de la sección de inversión. El `<select>` la escribe apenas el CSE lo toca, así

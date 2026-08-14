@@ -8,8 +8,10 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  adoptarRecurrentes,
   adoptarShapeNuevo,
   esInversionLegacy,
+  textoDescuento,
   gruposDeInversion,
   conciliarLicenciasHub,
   contratoDe,
@@ -90,11 +92,15 @@ describe("gruposDeInversion: cuántos totales se pintan", () => {
     expect(g.granTotal).toBeNull();
   });
 
+  /* ⚠ Las licencias declaran `recurrencia:"unica"` a propósito: desde el 2026-08-14 una
+     licencia SIN declarar es MENSUAL (ver RECURRENCIA_POR_DEFECTO), y ahí el cierre deja de
+     ser un gran total y pasa a los dos números. Estos dos casos siguen probando la aritmética
+     del gran total, que es lo suyo — el default tiene sus propios tests más abajo. */
   it("dos grupos: subtotal por grupo + gran total", () => {
     const g = gruposDeInversion({
       moneda: "USD",
       lineas: [{ monto: "$10,000" }],
-      licencias: [{ monto: "$3,600" }],
+      licencias: [{ monto: "$3,600", recurrencia: "unica" }],
     });
     expect(g.gruposConMonto).toBe(2);
     expect(g.servicios.total).toEqual({ min: 10000, max: 10000 });
@@ -106,7 +112,7 @@ describe("gruposDeInversion: cuántos totales se pintan", () => {
     const g = gruposDeInversion({
       moneda: "USD",
       lineas: [{ monto: "$5,600–6,650" }],
-      licencias: [{ monto: "$1,000" }],
+      licencias: [{ monto: "$1,000", recurrencia: "unica" }],
     });
     expect(g.granTotal).toEqual({ min: 6600, max: 7650 });
   });
@@ -465,7 +471,9 @@ describe("cobro único vs recurrente: dos números que sí se pueden firmar", ()
       ],
       licencias: [
         { concepto: "Hub", precioUnitario: "$800", recurrencia: "mensual" },
-        { concepto: "Onboarding HubSpot", precioUnitario: "$1,500" },
+        // Un onboarding de HubSpot es cobro ÚNICO aunque viva en licencias: por eso se
+        // declara. Sin declararlo caería en el default del grupo, que es mensual.
+        { concepto: "Onboarding HubSpot", precioUnitario: "$1,500", recurrencia: "unica" },
       ],
     });
     expect(g.unico).toEqual({ min: 6500, max: 6500 });
@@ -479,18 +487,40 @@ describe("cobro único vs recurrente: dos números que sí se pueden firmar", ()
     expect(g.contrato).toBe("anual");
   });
 
-  /* ⚠ EL test de compatibilidad: lo publicado NO declara recurrencia, así que sigue con el
-     gran total de siempre y los dos números nuevos ni se calculan. */
-  it("sin recurrencia declarada, el cierre es el de siempre", () => {
+  /* ⚠ EL default por GRUPO (2026-08-14). Reemplaza al test de compatibilidad anterior —que
+     afirmaba que una licencia sin declarar era cobro único— porque esa regla CAMBIÓ por
+     pedido de Elías: una licencia de HubSpot es una suscripción. Se midió antes de aplicarlo:
+     de las 7 propuestas publicadas, 3 pasan del gran total a los dos números (REMPRO
+     $35,900 + $1,450/mes · AVELEC $13,100 + $3,130/mes · Prodex $17,750 + $450/mes) y las 4
+     restantes no mueven un número porque sus montos son texto libre. */
+  it("una licencia SIN declarar recurrencia es mensual; un servicio, único", () => {
     const g = gruposDeInversion({
       moneda: "USD",
       lineas: [{ monto: "$10,000" }],
       licencias: [{ monto: "$3,600" }],
     });
+    expect(g.hayRecurrentes).toBe(true);
+    expect(g.granTotal).toBeNull(); // un CapEx y una mensualidad no se suman
+    expect(g.unico).toEqual({ min: 10000, max: 10000 });
+    expect(g.recurrente).toEqual({ min: 3600, max: 3600 });
+  });
+
+  it("declarar `unica` en la licencia devuelve el cierre clásico", () => {
+    const g = gruposDeInversion({
+      moneda: "USD",
+      lineas: [{ monto: "$10,000" }],
+      licencias: [{ monto: "$3,600", recurrencia: "unica" }],
+    });
     expect(g.hayRecurrentes).toBe(false);
     expect(g.granTotal).toEqual({ min: 13600, max: 13600 });
     expect(g.unico).toBeNull();
     expect(g.recurrente).toBeNull();
+  });
+
+  it("el default se RESUELVE en los grupos que salen: la fila lee lo mismo que el total", () => {
+    const g = gruposDeInversion({ moneda: "USD", licencias: [{ monto: "$100" }], lineas: [{ monto: "$1" }] });
+    expect(g.licencias.lineas[0].recurrencia).toBe("mensual");
+    expect(g.servicios.lineas[0].recurrencia).toBe("unica");
   });
 
   it("apagar la única recurrente devuelve el cierre simple", () => {
@@ -501,5 +531,77 @@ describe("cobro único vs recurrente: dos números que sí se pueden firmar", ()
     expect(g.hayRecurrentes).toBe(false);
     expect(g.granTotal).toBeNull(); // un solo grupo con monto → un solo total, la píldora
     expect(g.servicios.total).toEqual({ min: 12000, max: 12000 });
+  });
+});
+
+describe("la rebaja: el descuento se VE, no se aplica en silencio", () => {
+  /* Antes el descuento bajaba el número y ahí terminaba la historia: el cliente veía un
+     importe más chico sin poder verificar la resta, que es lo único que una línea de
+     cotización tiene que permitir. `bruto` + `descuento` son lo que la celda pinta como
+     "tag + precio de lista tachado" arriba del monto final. */
+  it("con descuento en % expone el bruto y el descuento leído", () => {
+    const m = montoDeLinea({ cantidad: "2", precioUnitario: "$400", descuento: "15%" }, "USD");
+    expect(m.bruto).toEqual({ min: 800, max: 800 });
+    expect(m.rango).toEqual({ min: 680, max: 680 });
+    expect(m.descuento).toEqual({ tipo: "pct", valor: 15 });
+  });
+
+  it("con descuento en monto, la resta es sobre el TOTAL de la línea", () => {
+    const m = montoDeLinea({ cantidad: "3", precioUnitario: "$100", descuento: "$50" }, "USD");
+    expect(m.bruto).toEqual({ min: 300, max: 300 });
+    expect(m.rango).toEqual({ min: 250, max: 250 });
+  });
+
+  it("sin descuento NO hay bruto: tachar un precio que no cambió es teatro", () => {
+    const m = montoDeLinea({ precioUnitario: "$400" }, "USD");
+    expect(m.bruto).toBeNull();
+    expect(m.descuento).toBeNull();
+  });
+
+  it("un descuento ILEGIBLE no pinta rebaja — ensucia la línea", () => {
+    const m = montoDeLinea({ precioUnitario: "$400", descuento: "a negociar" }, "USD");
+    expect(m.sucio).toBe(true);
+    expect(m.bruto).toBeNull();
+    expect(m.descuento).toBeNull();
+  });
+
+  it("el tag sale del descuento LEÍDO, no del texto crudo", () => {
+    expect(textoDescuento({ tipo: "pct", valor: 15 })).toBe("−15%");
+    expect(textoDescuento({ tipo: "monto", valor: 200 }, "USD")).toBe("−$200");
+  });
+});
+
+describe("adoptarRecurrentes: el card mensual baja a la tabla", () => {
+  it("cada fila con contenido pasa a licencias marcada mensual", () => {
+    const d = adoptarRecurrentes<InversionData>({
+      lineas: [{ concepto: "Implementación", monto: "$12,000" }],
+      recurrentes: [{ concepto: "Licencia Content Hub", monto: "$450 USD", detalle: "mensual" }],
+    });
+    expect(d.recurrentes).toBeUndefined();
+    expect(d.licencias).toEqual([
+      { concepto: "Licencia Content Hub", monto: "$450 USD", detalle: "mensual", recurrencia: "mensual" },
+    ]);
+    expect(d.lineas).toHaveLength(1); // los servicios no se tocan
+  });
+
+  it("conserva las licencias que ya había y respeta el orden", () => {
+    const d = adoptarRecurrentes<InversionData>({
+      licencias: [{ concepto: "Sales Hub", monto: "$800" }],
+      recurrentes: [{ concepto: "Soporte", monto: "$300" }],
+    });
+    expect(d.licencias?.map((l) => l.concepto)).toEqual(["Sales Hub", "Soporte"]);
+  });
+
+  it("las filas VACÍAS se descartan sin dejar rastro", () => {
+    const d = adoptarRecurrentes<InversionData>({ recurrentes: [{ concepto: "", monto: "", detalle: "" }] });
+    expect(d.recurrentes).toBeUndefined();
+    expect(d.licencias ?? []).toEqual([]);
+  });
+
+  it("es idempotente y no toca lo que no tiene recurrentes", () => {
+    const base: InversionData = { lineas: [{ monto: "$1" }] };
+    expect(adoptarRecurrentes(base)).toBe(base);
+    const una = adoptarRecurrentes<InversionData>({ recurrentes: [{ concepto: "X", monto: "$5" }] });
+    expect(adoptarRecurrentes(una)).toEqual(una);
   });
 });

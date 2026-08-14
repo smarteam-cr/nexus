@@ -49,7 +49,15 @@ const STRINGS = {
   noSuman: { es: "no entran en el total", en: "not included in the total" },
   extrasOpcionales: { es: "Extras opcionales", en: "Optional add-ons" },
   opcional: { es: "Opcional", en: "Optional" },
-  recurrenteMensual: { es: "Recurrente mensual", en: "Monthly recurring" },
+  // El cierre de la Inversión cuando hay líneas recurrentes: dos números que se firman.
+  // Estaban como literales en español dentro del componente y se publican al cliente —
+  // una propuesta en inglés los sacaba en español (`__lang`).
+  pagoUnico: { es: "Pago único", en: "One-time payment" },
+  porMes: { es: "Por mes", en: "Per month" },
+  porAno: { es: "Por año", en: "Per year" },
+  // La pista de recurrencia bajo el concepto de la línea.
+  alMes: { es: "al mes", en: "per month" },
+  alAno: { es: "al año", en: "per year" },
   // Cronograma: el toggle de vista y el aviso de la primera fase. Van acá y no como
   // literales porque los lee el CLIENTE en la propuesta publicada, que se traduce por
   // `__lang`: un literal en español saldría tal cual en una propuesta en inglés.

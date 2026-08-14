@@ -28,11 +28,13 @@ import { formatRango, montoParaLectura } from "@/lib/landing/money";
 import { hubVisual } from "@/lib/landing/hubs-solucion";
 import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 import {
+  adoptarRecurrentes,
   adoptarShapeNuevo,
   conciliarLicenciasHub,
   esInversionLegacy,
   gruposDeInversion,
   lineasDeLicenciaPorHub,
+  textoDescuento,
   type GrupoInversion,
   contratoDe,
   esLineaActiva,
@@ -464,8 +466,9 @@ function GrupoTabla({
                     calc.calculada && calc.unitario && (
                       <span className="stl-inv-calc">
                         {`${calc.cantidad} × ${formatRango(calc.unitario, moneda)}`}
-                        {(l.descuento ?? "").trim() && ` · −${(l.descuento ?? "").trim()}`}
-                        {esRecurrente(l) && ` · ${contrato === "anual" ? "al año" : "al mes"}`}
+                        {/* El descuento ya NO se repite acá: vive en la celda del monto, al
+                            lado del precio tachado, que es donde se puede verificar la resta. */}
+                        {esRecurrente(l) && ` · ${t(lang, contrato === "anual" ? "alAno" : "alMes")}`}
                       </span>
                     )
                   )}
@@ -475,6 +478,18 @@ function GrupoTabla({
                 </div>
 
                 <div className="stl-inv-cell">
+                  {/* LA REBAJA, a la par del monto: tag del descuento + el precio de lista
+                      TACHADO. Sin esto el descuento se aplicaba en silencio y el cliente veía
+                      un número más chico sin saber por qué — no podía verificar la resta, que
+                      es lo único que una línea de cotización tiene que permitir. Solo con
+                      descuento LEGIBLE: uno ilegible ensucia la línea (⚠ no suma) y ahí no se
+                      afirma una rebaja que no se pudo leer. */}
+                  {calc.descuento && calc.bruto && (
+                    <span className="stl-inv-rebaja">
+                      <span className="stl-inv-dcto">{textoDescuento(calc.descuento, moneda)}</span>
+                      <s className="stl-inv-bruto">{formatRango(calc.bruto, moneda)}</s>
+                    </span>
+                  )}
                   {editable && calc.calculada ? (
                     /* Con precio unitario el subtotal es DERIVADO: se muestra, no se edita. Un
                        `Editable` con un valor calculado adentro se auto-persiste al blur y le
@@ -526,10 +541,12 @@ function GrupoTabla({
                 </span>
               )}
             </div>
+            {/* TODOS los totales llevan la píldora naranja (2026-08-14): antes el subtotal de un
+                grupo era texto pelado y el de abajo una píldora, así que dos números del mismo
+                rango de lectura se veían de dos jerarquías distintas. La diferencia entre
+                subtotal y cierre la hace el TAMAÑO (`--total` la agranda), no el color. */}
             <div className="stl-inv-sum-amount">
-              {destacado
-                ? <span className="stl-inv-total-pill">{formatRango(grupo.total, moneda)}</span>
-                : formatRango(grupo.total, moneda)}
+              <span className="stl-inv-total-pill">{formatRango(grupo.total, moneda)}</span>
             </div>
           </div>
         )}
@@ -548,12 +565,14 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
      parten de `d`, nunca de `data`: si `set` partiera de `data`, el guardado dejaría un
      HÍBRIDO (keys legacy + `lineas`) y borrar una fila sería imposible — `esInversionLegacy`
      volvería a dar true y la resucitaría en el render siguiente. */
-  const d: WebInvestmentData = esInversionLegacy(data)
-    ? adoptarShapeNuevo(data, {
-        servicios: t(lang, "implementacionSmarteam"),
-        licencias: t(lang, "licenciasHubspot"),
-      })
-    : data;
+  const d: WebInvestmentData = adoptarRecurrentes(
+    esInversionLegacy(data)
+      ? adoptarShapeNuevo(data, {
+          servicios: t(lang, "implementacionSmarteam"),
+          licencias: t(lang, "licenciasHubspot"),
+        })
+      : data,
+  );
 
   const set = (next: Partial<WebInvestmentData>) => onChange?.({ ...d, ...next });
 
@@ -588,7 +607,6 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
   const g = gruposDeInversion(dVivo);
   const moneda = g.moneda; // la que se SUMÓ (ver gruposDeInversion)
   const extras = d.extras ?? [];
-  const recurrentes = d.recurrentes ?? [];
   // Con un solo grupo, ese subtotal ES el total y lleva la píldora — valga para servicios o
   // para licencias. Los dos lo reciben; el que no tiene total no pinta nada.
   const unSoloGrupo = g.gruposConMonto <= 1;
@@ -730,16 +748,21 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
           recurrente, o sea nunca en lo ya publicado. */}
       {g.hayRecurrentes && (g.unico || g.recurrente) && (
         <div className="stl-inv-cierre">
+          {/* Los DOS con el mismo tratamiento (píldora naranja, mismo tamaño): son los dos
+              números que se firman y ninguno manda sobre el otro. Antes el pago único era
+              texto pelado al lado de una píldora, y eso lo leía como un dato secundario. */}
           {g.unico && (
-            <div className="stl-inv-sum stl-inv-sum--total">
-              <div className="stl-inv-sum-label">Pago único</div>
-              <div className="stl-inv-sum-amount">{formatRango(g.unico, moneda)}</div>
+            <div className="stl-inv-sum stl-inv-sum--total stl-inv-sum--par">
+              <div className="stl-inv-sum-label">{t(lang, "pagoUnico")}</div>
+              <div className="stl-inv-sum-amount">
+                <span className="stl-inv-total-pill">{formatRango(g.unico, moneda)}</span>
+              </div>
             </div>
           )}
           {g.recurrente && (
-            <div className="stl-inv-sum stl-inv-sum--total">
+            <div className="stl-inv-sum stl-inv-sum--total stl-inv-sum--par">
               <div className="stl-inv-sum-label">
-                {contrato === "anual" ? "Por año" : "Por mes"}
+                {t(lang, contrato === "anual" ? "porAno" : "porMes")}
                 {g.pendientesTotales > 0 && (
                   <span className="stl-inv-sum-note">
                     {`+${g.pendientesTotales} ${t(lang, "montoPorDefinir")} · ${t(lang, "noSuman")}`}
@@ -784,11 +807,15 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
         </p>
       )}
 
-      {/* Extras opcionales (cards claras) + recurrente mensual (card oscura). NINGUNO suma: un
-          opcional no está comprado y un mensual no es una inversión única. Tampoco se
-          normalizan: la normalización existe para que una COLUMNA se lea pareja, y una card no
-          tiene columna. */}
-      {(extras.length > 0 || recurrentes.length > 0 || editable) && (
+      {/* Extras OPCIONALES: costos asociados que se muestran y NO suman —un opcional no está
+          comprado—. Tampoco se normalizan: la normalización existe para que una COLUMNA se lea
+          pareja, y una card no tiene columna.
+          ⚠ El card «Recurrente mensual» que vivía acá al lado se RETIRÓ el 2026-08-14: lo
+          recurrente ya se declara por línea (`recurrencia`), donde además SUMA en el cierre —
+          en el card no sumaba nunca. Lo que había escrito ahí baja a la tabla con
+          `adoptarRecurrentes` (ver lib/landing/inversion.ts), así que ninguna propuesta
+          publicada pierde una línea. */}
+      {(extras.length > 0 || editable) && (
         <div className="stl-inv-below">
           <SortableItems items={extras} disabled={!editable} onReorder={(next) => set({ extras: next })}
             container={(nodes) => <>{nodes}</>}>
@@ -813,30 +840,6 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
               onClick={() => set({ extras: appendItem(extras, { concepto: "", monto: "", detalle: "" }) })}>
               + {t(lang, "extrasOpcionales")}
             </button>
-          )}
-
-          {(recurrentes.length > 0 || editable) && (
-            <div className={`stl-inv-monthly${d.anchoRecurrente === "ancho" ? " stl-inv-monthly--wide" : ""}`}>
-              <div className="stl-inv-monthly-title">{t(lang, "recurrenteMensual")}</div>
-              <SortableItems items={recurrentes} disabled={!editable} onReorder={(next) => set({ recurrentes: next })}
-                container={(nodes) => <>{nodes}</>}>
-                {(l, i, handle) => (
-                  <div className="stl-item stl-inv-monthly-row">
-                    {handle}
-                    {editable && <RemoveBtn onClick={() => set({ recurrentes: removeAt(recurrentes, i) })} />}
-                    <Editable as="span" editable={editable} value={l.concepto}
-                      placeholder="Licencia / mantenimiento…" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, concepto: v }) })} />{" "}
-                    <Editable as="strong" editable={editable} value={l.monto}
-                      placeholder="$0" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, monto: v }) })} />{" "}
-                    <Editable as="span" className="stl-inv-monthly-detail" editable={editable} value={l.detalle}
-                      placeholder="detalle…" onCommit={(v) => set({ recurrentes: replaceAt(recurrentes, i, { ...l, detalle: v }) })} />
-                  </div>
-                )}
-              </SortableItems>
-              {editable && (
-                <AddBtn label="Agregar recurrente" onClick={() => set({ recurrentes: appendItem(recurrentes, { concepto: "", monto: "", detalle: "" }) })} />
-              )}
-            </div>
           )}
         </div>
       )}
