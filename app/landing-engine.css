@@ -596,6 +596,87 @@
 /* Bullet naranja LITERAL (gráfico, 3.50 sobre crema ✓) — vía token daría azul 2.98 ✗. */
 .stl .stl-ba-future .stl-ba-li::before { background: #E8481C; }
 
+/* ── «Por qué Smarteam»: banda de credenciales ────────────────────────────────
+   Dejó de ser una grilla de tarjetas para leerse como una franja de landing. El degradado
+   va en diagonal del navy PROFUNDO al navy de marca: da profundidad sin inventar un color.
+   ⚠ El extremo CLARO no puede pasar de `--dark-bg`: con `--dark-card` —que se probó primero—
+   el acento de la credencial cae por debajo de AA y el guard frena el merge. El par manda
+   sobre el gusto, y `landing-brand-contrast.test.ts` lee ESTE degradado para que no vuelva
+   a aclararse sin querer.
+   El `:has()` evita tocar `LandingView`: el motor pinta la sección con su tema oscuro y esta
+   regla la sube a degradado solo cuando adentro está la banda. */
+.stl .stl-sec:has(.stl-partner) {
+  background: linear-gradient(135deg, var(--dark-bg-deep) 0%, var(--dark-bg) 70%, var(--dark-bg) 100%);
+}
+.stl .stl-partner {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(28px, 4vw, 56px); align-items: center; margin-top: 6px;
+}
+.stl .stl-partner-col { min-width: 0; }
+/* La credencial es el rótulo de arriba, en el acento sobre navy (4.5+ sobre el navy claro). */
+.stl .stl-partner-cred {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--teal); margin-bottom: 18px;
+}
+/* Solo-editor: el string de experiencia tal cual, para poder corregirlo. Las fichas de abajo
+   son su LECTURA, no un campo aparte — un segundo campo sería una segunda verdad. */
+.stl .stl-partner-exp-edit {
+  font-size: 12.5px; color: var(--dark-text-2); margin-bottom: 14px;
+  border-bottom: 1px dashed var(--dark-border); padding-bottom: 6px;
+}
+.stl .stl-partner-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.stl .stl-partner-stat {
+  flex: 1 1 140px; min-width: 0; padding: 16px 18px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--dark-border);
+}
+.stl .stl-partner-stat-num {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: clamp(26px, 3vw, 34px); font-weight: 700; line-height: 1.05; color: var(--teal);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.stl .stl-partner-stat-lbl {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dark-text-2); margin-top: 6px;
+}
+.stl .stl-partner-dato { margin-top: 18px; }
+.stl .stl-partner-dato-lbl {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--dark-text-2); margin-bottom: 5px;
+}
+.stl .stl-partner-dato-val { margin: 0; font-size: 15px; line-height: 1.6; color: var(--dark-text); }
+/* La tarjeta clara: es lo que despega las insignias del fondo y las deja legibles — los PNG
+   oficiales vienen sobre blanco y sobre el navy quedarían recortados en un rectángulo. */
+.stl .stl-partner-badges {
+  background: #fff; border-radius: 20px; padding: clamp(20px, 2.4vw, 30px);
+  box-shadow: 0 24px 60px -28px rgba(3, 16, 47, 0.75);
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+}
+.stl .stl-partner-elite { display: block; width: min(240px, 68%); height: auto; }
+/* Los dos escudos (casi cuadrados) se normalizan por ALTURA, que es lo que el ojo compara
+   en una fila de acreditaciones — por ancho, cualquier diferencia de proporción se traduce
+   en uno más chico que el otro. */
+.stl .stl-partner-acred {
+  display: flex; justify-content: center; gap: clamp(16px, 3vw, 34px); width: 100%;
+  padding-top: 18px; border-top: 1px solid var(--border);
+}
+.stl .stl-partner-acred-img { display: block; height: clamp(84px, 9vw, 104px); width: auto; max-width: 46%; object-fit: contain; }
+/* La firma apaisada. El chip navy NO es decoración: el PNG trae el texto en blanco sobre
+   transparente, así que sobre la tarjeta clara el rótulo desaparecía y quedaban dos íconos
+   sueltos — cazado mirando el render, no el archivo. */
+.stl .stl-partner-top {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--dark-bg); border-radius: 10px; padding: 10px 20px;
+}
+.stl .stl-partner-top img { display: block; height: 24px; width: auto; object-fit: contain; }
+@media (max-width: 860px) {
+  .stl .stl-partner { grid-template-columns: 1fr; gap: 30px; }
+  .stl .stl-partner-badges { order: 2; }
+}
+/* En el PDF la banda va entera en una página: partir un degradado por la mitad se ve como un
+   error de impresión, no como un diseño. */
+.stl-pdf-paged .stl-partner { break-inside: avoid; }
+
 /* Field-card rotulada (solución / partner / inversión) */
 .stl .stl-field-card {
   background: #fff; border: 1px solid var(--border); border-radius: 22px; padding: 20px 22px;

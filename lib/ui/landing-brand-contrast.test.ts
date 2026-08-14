@@ -257,3 +257,31 @@ describe("reglas duras de la marca", () => {
     }
   });
 });
+
+/**
+ * La banda «Por qué Smarteam» pinta su propio DEGRADADO sobre el tema oscuro, así que su
+ * legibilidad ya no depende de un token suelto sino del extremo más claro del degradado. El
+ * primer intento fue `--dark-card` y la credencial quedaba en 4.2 — por debajo de AA. En vez
+ * de anotar el resultado, el guard lee los stops REALES: cambiar el degradado vuelve a
+ * frenar el merge, que es lo único que impide que se aclare de a poco sin que nadie mire.
+ */
+describe("el degradado de «Por qué Smarteam» se mantiene legible", () => {
+  const bloque = ENGINE.match(/\.stl\s+\.stl-sec:has\(\.stl-partner\)\s*\{([^}]*)\}/);
+
+  it("existe y está declarado con tokens, no con hex sueltos", () => {
+    expect(bloque, "no se encontró la regla del degradado de la banda partner").toBeTruthy();
+    expect(bloque![1]).toContain("linear-gradient");
+    expect(bloque![1], "un hex suelto se escapa de esta verificación").not.toMatch(/#[0-9A-Fa-f]{6}/);
+  });
+
+  it("todos sus stops sostienen AA para el texto blanco Y para el acento de la credencial", () => {
+    const usados = [...bloque![1].matchAll(/var\((--[a-z-]+)\)/g)].map((m) => m[1]);
+    expect(usados.length, "el degradado no declara ningún stop").toBeGreaterThan(0);
+    for (const nombre of new Set(usados)) {
+      const fondo = token(ENGINE, nombre);
+      expect(ratio("#FFFFFF", fondo), `blanco sobre ${nombre} (${fondo})`).toBeGreaterThanOrEqual(4.5);
+      expect(ratio("#1E8FF6", fondo), `acento de la credencial sobre ${nombre} (${fondo})`).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(P.darkText2, fondo), `secundario-dark sobre ${nombre} (${fondo})`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

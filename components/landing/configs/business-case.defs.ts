@@ -205,7 +205,10 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     canvasLabel: "Sobre Smarteam",
     label: "Por qué Smarteam",
     eyebrow: "Partner",
-    theme: "light",
+    /* Banda oscura (2026-08-14): la sección pasó de cuatro tarjetas a una franja de landing
+       con degradado navy y las insignias oficiales. El tema es lo que le da el fondo al motor
+       — el degradado lo pinta el CSS de `.stl-partner`. */
+    theme: "dark",
     empty: { credencial: "HubSpot Partner Elite", experiencia: "+200 proyectos, +8 países LATAM", referenciaSectorial: "", equipo: "" },
     agentHint: "Credencial + experiencia (fijos) + referencia sectorial + equipo.",
     brief:

@@ -2208,3 +2208,40 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
 - **El chip y la línea de aviso se ven en las DOS vistas.** Son la única pieza de la sección que
   dice que las fechas pueden moverse; que dependieran de qué vista está abierta convertiría un
   resguardo comercial en un detalle de presentación.
+
+## «Por qué Smarteam» pasa de tarjetas a banda de credenciales (2026-08-14)
+
+> Elías: *"cambiar de cards a una sección tipo landing de sitio web, con fondo degradado azul
+> marca (oscuro a más claro), buscando sensación de profundidad y seriedad"*, con las insignias
+> oficiales de HubSpot copiadas del repo del sitio.
+
+- **El DATO no cambió y ésa es la restricción que ordenó el diseño.** Siguen siendo los mismos
+  cuatro campos (`credencial`, `experiencia`, `referenciaSectorial`, `equipo`), y como
+  `configForSnapshot` resuelve el renderer por KEY contra la config viva, **toda propuesta ya
+  publicada estrena esta banda**. Por eso nada nuevo depende de un campo nuevo: la credencial
+  es el eyebrow, la experiencia se LEE como fichas, y los dos textos largos se omiten cuando
+  están vacíos — que es como están hoy en varias de las publicadas.
+- **Las fichas de número se DERIVAN del string, y la derivación es conservadora**
+  (`lib/landing/partner-stats.ts`): cada fragmento se muestra completo y lo único que se decide
+  es si su PRIMER token es un número que va en grande. "Más de 200 proyectos" NO se convierte en
+  «200 · proyectos»: reordenar lo que alguien escribió es inventarle una frase que no dijo. Sin
+  número, la ficha va sin número.
+- **El degradado usa SOLO stops ya validados, y el guard lo verifica leyendo el CSS.** El primer
+  intento terminaba en `--dark-card` y la credencial quedaba por debajo de AA: el merge frenó en
+  `landing-brand-contrast.test.ts`. En vez de anotar el ratio, el guard ahora parsea los stops
+  REALES de la regla y exige que cada uno sostenga AA para el blanco, el acento y el secundario
+  — aclarar el degradado de a poco vuelve a frenar el merge.
+- **Las insignias van HARDCODEADAS, no como dato editable.** Son hechos de la empresa, iguales
+  en toda propuesta, y el brief ya declaraba la credencial como fija. Un campo editable ahí solo
+  habilitaría publicarle a un prospecto una acreditación que no tenemos.
+- **La composición de la tarjeta la dictaron las PROPORCIONES REALES de los PNG, no el gusto.**
+  Medidas: el Elite es 1.36:1, los dos escudos 0.93:1 y el logotipo de Top Partner **3.61:1**.
+  Los tres en una fila dejaban al apaisado a un tercio de la altura de los escudos, leyéndose
+  como un error de maquetación; los escudos van juntos y normalizados por ALTURA —que es lo que
+  el ojo compara— y el logotipo va abajo como firma.
+- ⚠ **El PNG de Top Partner trae el texto en BLANCO sobre transparente**: sobre la tarjeta clara
+  el rótulo desaparecía y quedaban dos íconos naranjas sueltos. Va sobre un chip navy, que
+  además es como se ve en la web de marca. Cazado mirando el render, no el archivo.
+- **`TextCard` se borró de `sections.tsx`**: era su último consumidor y su gemela sigue viva en
+  `sections-hubs.tsx`. Dos copias de la misma card invitan a que la próxima sección elija
+  cualquiera.

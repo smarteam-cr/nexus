@@ -14,6 +14,7 @@ import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./
 import { SortableItems } from "./sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
+import { statsDeExperiencia } from "@/lib/landing/partner-stats";
 import {
   acotarRango,
   rangoDeFase,
@@ -59,19 +60,10 @@ const IconLink = (
 );
 const PAIN_ICONS = [IconAlert, IconClock, IconChart, IconLink];
 
-// Sub-componentes reutilizables ───────────────────────────────────────────────
-
-/** Card rotulada con un solo texto editable (solución / partner). */
-function TextCard({
-  label, value, editable, onCommit, placeholder,
-}: { label: string; value: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
-  return (
-    <div className="stl-field-card">
-      <div className="stl-field-label">{label}</div>
-      <Editable as="div" className="stl-field-value" editable={editable} value={value ?? ""} placeholder={placeholder} onCommit={onCommit} />
-    </div>
-  );
-}
+/* `TextCard` vivía acá para «Por qué Smarteam» y la rama legacy de la solución. Con la banda
+   de credenciales, este archivo dejó de usarla y su gemela sigue viva —y en uso— en
+   `sections-hubs.tsx`, que es donde quedó el último consumidor. Se borra en vez de dejarla
+   muerta: dos copias de la misma card invitan a que la próxima sección elija cualquiera. */
 
 // ── 1) Hero ──────────────────────────────────────────────────────────────────
 // Compuesto con las primitivas COMPARTIDAS de `hero-parts.tsx` (las mismas que usa
@@ -514,15 +506,89 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, ctx, editable, o
    mismas tarjetas para que lo ya publicado se siga viendo igual. */
 
 // ── 8) Partner — por qué Smarteam (4 campos) ─────────────────────────────────
+/**
+ * Las acreditaciones REALES de Smarteam. Van hardcodeadas y no como dato editable a propósito:
+ * son hechos de la empresa, iguales en toda propuesta, y el `brief` de la sección ya declara
+ * la credencial como fija. Un campo editable acá solo habilitaría publicar una acreditación
+ * que no tenemos. Los archivos viven en `public/partner/`.
+ */
+const ACREDITACIONES = [
+  { src: "/partner/hubspot-onboarding.png", alt: "HubSpot Onboarding Accreditation" },
+  { src: "/partner/hubspot-implementacion.png", alt: "HubSpot Service Implementation Accreditation" },
+] as const;
+
+/**
+ * Banda de credenciales, en el lenguaje de una landing y no de un formulario: degradado navy
+ * con profundidad, la credencial como eyebrow, las cifras en fichas y las insignias oficiales
+ * en una tarjeta clara que las despega del fondo.
+ *
+ * ⚠ El DATO no cambió — siguen siendo los mismos cuatro campos, y `configForSnapshot` resuelve
+ * el renderer por KEY contra la config viva, así que TODA propuesta ya publicada estrena esta
+ * banda. Por eso nada acá depende de un campo nuevo: la cifra sale de partir `experiencia`
+ * (`lib/landing/partner-stats.ts`) y los dos textos largos se omiten cuando están vacíos, que
+ * es como están hoy en varias de las publicadas.
+ */
 export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, editable, onChange }) => {
   const lang = landingLang(ctx.lang);
   const set = (next: Partial<PartnerData>) => onChange?.({ ...data, ...next });
+  const stats = statsDeExperiencia(data.experiencia);
   return (
-    <div className="stl-grid stl-grid-2">
-      <TextCard label={t(lang, "credencial")} value={data.credencial} editable={editable} placeholder="HubSpot Partner Elite" onCommit={(v) => set({ credencial: v })} />
-      <TextCard label={t(lang, "experiencia")} value={data.experiencia} editable={editable} placeholder="+200 proyectos, +8 países LATAM" onCommit={(v) => set({ experiencia: v })} />
-      <TextCard label={t(lang, "referenciaSectorial")} value={data.referenciaSectorial} editable={editable} placeholder="Cliente de referencia en industria similar…" onCommit={(v) => set({ referenciaSectorial: v })} />
-      <TextCard label={t(lang, "equipoAsignado")} value={data.equipo} editable={editable} placeholder="Nombres del equipo si se mencionaron…" onCommit={(v) => set({ equipo: v })} />
+    <div className="stl-partner">
+      <div className="stl-partner-col">
+        <Editable as="div" className="stl-partner-cred" editable={editable} value={data.credencial}
+          placeholder="HubSpot Partner Elite" onCommit={(v) => set({ credencial: v })} />
+
+        {/* La experiencia se edita como el string que ES; las fichas son su lectura. */}
+        {editable ? (
+          <Editable as="div" className="stl-partner-exp-edit" editable value={data.experiencia}
+            placeholder="+200 proyectos, +8 países LATAM" onCommit={(v) => set({ experiencia: v })} />
+        ) : null}
+        {stats.length > 0 && (
+          <div className="stl-partner-stats">
+            {stats.map((s, i) => (
+              <div key={i} className="stl-partner-stat">
+                {s.valor && <div className="stl-partner-stat-num">{s.valor}</div>}
+                <div className="stl-partner-stat-lbl">{s.etiqueta}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(data.referenciaSectorial?.trim() || editable) && (
+          <div className="stl-partner-dato">
+            <span className="stl-partner-dato-lbl">{t(lang, "referenciaSectorial")}</span>
+            <Editable as="p" className="stl-partner-dato-val" editable={editable} value={data.referenciaSectorial}
+              placeholder="Cliente de referencia en industria similar…" onCommit={(v) => set({ referenciaSectorial: v })} />
+          </div>
+        )}
+        {(data.equipo?.trim() || editable) && (
+          <div className="stl-partner-dato">
+            <span className="stl-partner-dato-lbl">{t(lang, "equipoAsignado")}</span>
+            <Editable as="p" className="stl-partner-dato-val" editable={editable} value={data.equipo}
+              placeholder="Nombres del equipo si se mencionaron…" onCommit={(v) => set({ equipo: v })} />
+          </div>
+        )}
+      </div>
+
+      <div className="stl-partner-badges">
+        <img className="stl-partner-elite" src="/partner/hubspot-elite-partner.png"
+          alt="Smarteam — HubSpot Elite Solutions Partner" />
+        {/* Los dos ESCUDOS van juntos porque son casi cuadrados (0.93) y comparten peso. El
+            logotipo de Top Partner es apaisado 3.6:1: metido en la misma fila queda a un
+            tercio de la altura de los escudos y se lee como un error, así que va abajo, como
+            firma. Medido con las dimensiones reales de los PNG, no a ojo. */}
+        <div className="stl-partner-acred">
+          {ACREDITACIONES.map((b) => (
+            <img key={b.src} className="stl-partner-acred-img" src={b.src} alt={b.alt} />
+          ))}
+        </div>
+        {/* El logotipo de Top Partner tiene el texto en BLANCO sobre transparente: puesto
+            directo sobre la tarjeta clara desaparecía y solo se veían sus dos íconos. Va
+            sobre un chip navy — que además es como se ve en la web de marca. */}
+        <div className="stl-partner-top">
+          <img src="/partner/hubspot-top-partner.png" alt="Top HubSpot Partner" />
+        </div>
+      </div>
     </div>
   );
 };

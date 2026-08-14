@@ -449,3 +449,11 @@
   diagnóstico puede cambiar prioridades. Sale por posición (la fase 1), no por una casilla que
   haya que marcar; `avisoFase1: "no"` lo apaga para la propuesta que no arranque con un
   diagnóstico. Se ve en las dos vistas y se imprime en el PDF.
+- **banda de credenciales** (sección `partner` de la propuesta comercial, «Por qué Smarteam»):
+  la franja de cierre que respalda a Smarteam ante el prospecto — degradado navy, la credencial
+  como rótulo, las cifras de experiencia en fichas y las **insignias oficiales de HubSpot** en
+  una tarjeta clara (Elite Solutions Partner arriba, las dos acreditaciones abajo y el logotipo
+  de Top Partner como firma). Los archivos viven en `public/partner/` y van **fijos en el
+  componente**: son hechos de la empresa, no un campo que se edite por propuesta. Reemplazó a
+  las cuatro tarjetas de texto el 2026-08-14 **sin tocar el dato**, así que las propuestas ya
+  publicadas la estrenan solas. Ver DECISIONS §«Por qué Smarteam».
