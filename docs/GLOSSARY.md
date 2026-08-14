@@ -451,9 +451,15 @@
   diagnóstico. Se ve en las dos vistas y se imprime en el PDF.
 - **banda de credenciales** (sección `partner` de la propuesta comercial, «Por qué Smarteam»):
   la franja de cierre que respalda a Smarteam ante el prospecto — degradado navy, la credencial
-  como rótulo, las cifras de experiencia en fichas y las **insignias oficiales de HubSpot** en
-  una tarjeta clara (Elite Solutions Partner arriba, las dos acreditaciones abajo y el logotipo
-  de Top Partner como firma). Los archivos viven en `public/partner/` y van **fijos en el
-  componente**: son hechos de la empresa, no un campo que se edite por propuesta. Reemplazó a
-  las cuatro tarjetas de texto el 2026-08-14 **sin tocar el dato**, así que las propuestas ya
-  publicadas la estrenan solas. Ver DECISIONS §«Por qué Smarteam».
+  como rótulo, el **cierre** del argumento como titular, un párrafo que nombra al cliente y dice
+  cuál es la prioridad de ESE proyecto, las cifras de Smarteam en fichas y las **insignias
+  oficiales de HubSpot** en una tarjeta clara (Elite Solutions Partner arriba, y abajo una fila
+  con el logotipo de Top Partner sobre chip navy + las dos acreditaciones). Lo que escribe el
+  agente es lo que mira al cliente (`titular`, `resumen`, `referenciaSectorial`); los HECHOS de
+  la empresa —las tres cifras (`EXPERIENCIA_SMARTEAM`) y las insignias (`public/partner/`)— van
+  **fijos en el componente** (`lib/landing/partner-band.ts`): son iguales en toda propuesta y un
+  campo ahí solo habilitaría publicar una credencial que no tenemos o una cifra que nadie
+  aprobó. La sección es `selfTitled` (pinta su propio encabezado) y **el «Equipo asignado» se
+  retiró** el 2026-08-14. Reemplazó a las cuatro tarjetas de texto ese mismo día **sin agregar
+  ningún campo obligatorio**, así que las propuestas ya publicadas la estrenan solas: sin
+  `titular` cae al rótulo del documento. Ver DECISIONS §«Por qué Smarteam».

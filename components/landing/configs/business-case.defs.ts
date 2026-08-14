@@ -209,11 +209,22 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
        con degradado navy y las insignias oficiales. El tema es lo que le da el fondo al motor
        — el degradado lo pinta el CSS de `.stl-partner`. */
     theme: "dark",
-    empty: { credencial: "HubSpot Partner Elite", experiencia: "+200 proyectos, +8 países LATAM", referenciaSectorial: "", equipo: "" },
-    agentHint: "Credencial + experiencia (fijos) + referencia sectorial + equipo.",
+    /* `selfTitled`: la banda pinta su propio encabezado —la credencial como rótulo y el
+       `titular` como titular—, que es lo que la vuelve una franja de landing y no una sección
+       más con "Por qué Smarteam" arriba y un segundo titular abajo. Es seguro: de las 28
+       secciones `partner` guardadas, NINGUNA tiene el título o el eyebrow renombrado, y el
+       componente igual cae al rótulo del documento (`sectionTitle`) cuando no hay `titular`
+       — que es el caso de las 4 propuestas ya publicadas. */
+    selfTitled: true,
+    empty: { credencial: "HubSpot Partner Elite", titular: "", resumen: "", referenciaSectorial: "" },
+    agentHint: "Cierre: por qué Smarteam, mirando lo que este cliente necesita.",
     brief:
-      "Por qué Smarteam. `credencial`: 'HubSpot Partner Elite' (fijo en todos los casos). `experiencia`: '+200 proyectos, +8 países LATAM' (fijo). `referenciaSectorial`: cliente de referencia en una industria similar al prospecto, si existe. `equipo`: nombres del equipo asignado si se mencionaron en la llamada. Fuente: credencial y experiencia son fijas; referencia y equipo solo si hay evidencia.",
-    schema: { type: "object", properties: { credencial: str, experiencia: str, referenciaSectorial: str, equipo: str }, required: ["credencial", "experiencia"] },
+      "Por qué Smarteam — es el CIERRE del argumento, así que habla de la experiencia de Smarteam PUESTA AL SERVICIO de lo que este cliente pidió. `credencial`: exactamente «HubSpot Partner Elite» (fijo en todos los casos; no lo reformules). `titular`: UNA frase de cierre de 10 a 16 palabras y GRAMATICALMENTE COMPLETA — PROHIBIDO dejarla colgando en un verbo o una preposición para entrar en el tope («…en una operación que produce»); si la idea no entra, escribe una más corta. Conecta la experiencia acreditada de Smarteam con el resultado que este proyecto persigue — ej.: 'Experiencia acreditada para convertir arquitectura, integraciones y adopción en un plan gobernable'. Sin signos de admiración y sin superlativos vacíos ('los mejores', 'líderes'). `resumen`: 2 frases (máx. 45 palabras) que NOMBREN al cliente y digan con qué lo acompaña Smarteam y cuál es la prioridad de ESTE proyecto según su contexto — ej.: 'Smarteam acompaña a {cliente} con un equipo senior y credenciales oficiales de HubSpot. La prioridad es ejecutar con trazabilidad, transferencia de conocimiento y control del riesgo.'. `referenciaSectorial`: cliente de referencia en una industria similar al prospecto, si existe. Fuente: la credencial es fija; el titular y el resumen salen de lo que el cliente dijo que necesita (no inventes cifras, nombres de personas ni casos); la referencia, solo si hay evidencia.",
+    schema: {
+      type: "object",
+      properties: { credencial: str, titular: str, resumen: str, referenciaSectorial: str },
+      required: ["credencial", "titular", "resumen"],
+    },
   },
   {
     key: "cta",

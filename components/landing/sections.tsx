@@ -14,7 +14,13 @@ import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./
 import { SortableItems } from "./sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
-import { statsDeExperiencia } from "@/lib/landing/partner-stats";
+import {
+  ACREDITACIONES,
+  EXPERIENCIA_SMARTEAM,
+  INSIGNIAS_DETALLE,
+  INSIGNIA_ELITE,
+  INSIGNIA_TOP,
+} from "@/lib/landing/partner-band";
 import {
   acotarRango,
   rangoDeFase,
@@ -505,54 +511,56 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, ctx, editable, o
    `InvestmentSection` (sections-website.tsx), que lleva adentro la rama legacy con estas
    mismas tarjetas para que lo ya publicado se siga viendo igual. */
 
-// ── 8) Partner — por qué Smarteam (4 campos) ─────────────────────────────────
+// ── 8) Partner — la banda de credenciales que cierra la propuesta ────────────
 /**
- * Las acreditaciones REALES de Smarteam. Van hardcodeadas y no como dato editable a propósito:
- * son hechos de la empresa, iguales en toda propuesta, y el `brief` de la sección ya declara
- * la credencial como fija. Un campo editable acá solo habilitaría publicar una acreditación
- * que no tenemos. Los archivos viven en `public/partner/`.
- */
-const ACREDITACIONES = [
-  { src: "/partner/hubspot-onboarding.png", alt: "HubSpot Onboarding Accreditation" },
-  { src: "/partner/hubspot-implementacion.png", alt: "HubSpot Service Implementation Accreditation" },
-] as const;
-
-/**
- * Banda de credenciales, en el lenguaje de una landing y no de un formulario: degradado navy
- * con profundidad, la credencial como eyebrow, las cifras en fichas y las insignias oficiales
- * en una tarjeta clara que las despega del fondo.
+ * Franja de landing y no formulario: degradado navy con profundidad, la credencial como
+ * rótulo, un CIERRE escrito para este cliente, las cifras de Smarteam en fichas y las
+ * insignias oficiales en una tarjeta clara que las despega del fondo.
  *
- * ⚠ El DATO no cambió — siguen siendo los mismos cuatro campos, y `configForSnapshot` resuelve
- * el renderer por KEY contra la config viva, así que TODA propuesta ya publicada estrena esta
- * banda. Por eso nada acá depende de un campo nuevo: la cifra sale de partir `experiencia`
- * (`lib/landing/partner-stats.ts`) y los dos textos largos se omiten cuando están vacíos, que
- * es como están hoy en varias de las publicadas.
+ * ⚠ `configForSnapshot` resuelve el renderer por KEY contra la config viva, así que TODA
+ * propuesta ya publicada estrena esta banda. De ahí las dos reglas de acá adentro:
+ *   · lo que el agente todavía no escribió (`titular`, `resumen` — ninguna de las 4
+ *     publicadas los tiene) cae al rótulo del documento o se omite, nunca deja un hueco;
+ *   · los hechos de la empresa (cifras e insignias) son CONSTANTES
+ *     (`lib/landing/partner-band.ts`), que es lo único que hace que la tercera ficha
+ *     aparezca también en lo ya publicado, sin regenerar nada.
+ *
+ * `selfTitled` (ver la def): el encabezado lo pinta esta sección, no el motor.
  */
-export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, editable, onChange }) => {
+export const PartnerSection: FC<SectionProps<PartnerData>> = ({
+  data, ctx, editable, onChange, sectionTitle, sectionEyebrow,
+}) => {
   const lang = landingLang(ctx.lang);
   const set = (next: Partial<PartnerData>) => onChange?.({ ...data, ...next });
-  const stats = statsDeExperiencia(data.experiencia);
+  // Respaldos SOLO en lectura: en edición el campo tiene que mostrarse vacío con su
+  // placeholder, o el CSE creería que ya está escrito y nunca lo escribiría.
+  const rotulo = (sectionTitle ?? "").trim();
+  const titular = editable ? (data.titular ?? "") : (data.titular ?? "").trim() || rotulo;
+  const credencial = editable
+    ? (data.credencial ?? "")
+    : (data.credencial ?? "").trim() || (sectionEyebrow ?? "").trim();
   return (
     <div className="stl-partner">
       <div className="stl-partner-col">
-        <Editable as="div" className="stl-partner-cred" editable={editable} value={data.credencial}
+        <Editable as="div" className="stl-partner-cred" editable={editable} value={credencial}
           placeholder="HubSpot Partner Elite" onCommit={(v) => set({ credencial: v })} />
-
-        {/* La experiencia se edita como el string que ES; las fichas son su lectura. */}
-        {editable ? (
-          <Editable as="div" className="stl-partner-exp-edit" editable value={data.experiencia}
-            placeholder="+200 proyectos, +8 países LATAM" onCommit={(v) => set({ experiencia: v })} />
-        ) : null}
-        {stats.length > 0 && (
-          <div className="stl-partner-stats">
-            {stats.map((s, i) => (
-              <div key={i} className="stl-partner-stat">
-                {s.valor && <div className="stl-partner-stat-num">{s.valor}</div>}
-                <div className="stl-partner-stat-lbl">{s.etiqueta}</div>
-              </div>
-            ))}
-          </div>
+        <Editable as="h2" className="stl-partner-titular" editable={editable} value={titular}
+          placeholder={rotulo || "El cierre, en una frase…"} onCommit={(v) => set({ titular: v })} />
+        {(data.resumen?.trim() || editable) && (
+          <Editable as="p" className="stl-partner-resumen" editable={editable} value={data.resumen}
+            placeholder="Con qué acompaña Smarteam a este cliente y cuál es la prioridad…"
+            onCommit={(v) => set({ resumen: v })} />
         )}
+
+        {/* Las cifras son hechos de la empresa: no son un campo. Ver partner-band.ts. */}
+        <div className="stl-partner-stats">
+          {EXPERIENCIA_SMARTEAM.map((s) => (
+            <div key={s.etiqueta} className="stl-partner-stat">
+              <div className="stl-partner-stat-num">{s.valor}</div>
+              <div className="stl-partner-stat-lbl">{s.etiqueta}</div>
+            </div>
+          ))}
+        </div>
 
         {(data.referenciaSectorial?.trim() || editable) && (
           <div className="stl-partner-dato">
@@ -561,32 +569,30 @@ export const PartnerSection: FC<SectionProps<PartnerData>> = ({ data, ctx, edita
               placeholder="Cliente de referencia en industria similar…" onCommit={(v) => set({ referenciaSectorial: v })} />
           </div>
         )}
-        {(data.equipo?.trim() || editable) && (
-          <div className="stl-partner-dato">
-            <span className="stl-partner-dato-lbl">{t(lang, "equipoAsignado")}</span>
-            <Editable as="p" className="stl-partner-dato-val" editable={editable} value={data.equipo}
-              placeholder="Nombres del equipo si se mencionaron…" onCommit={(v) => set({ equipo: v })} />
-          </div>
-        )}
       </div>
 
       <div className="stl-partner-badges">
-        <img className="stl-partner-elite" src="/partner/hubspot-elite-partner.png"
-          alt="Smarteam — HubSpot Elite Solutions Partner" />
-        {/* Los dos ESCUDOS van juntos porque son casi cuadrados (0.93) y comparten peso. El
-            logotipo de Top Partner es apaisado 3.6:1: metido en la misma fila queda a un
-            tercio de la altura de los escudos y se lee como un error, así que va abajo, como
-            firma. Medido con las dimensiones reales de los PNG, no a ojo. */}
+        <img className="stl-partner-elite" src={INSIGNIA_ELITE.src} alt={INSIGNIA_ELITE.alt} />
+        {/* Las tres van en UNA fila y alineadas por la caja, no por la imagen: el logotipo de
+            Top Partner es apaisado 3.61:1 y los escudos casi cuadrados (0.93:1), así que
+            normalizar por altura de imagen dejaba al primero a un tercio del alto de los
+            otros. Cada celda mide lo mismo y adentro cada PNG se ajusta con `contain`. */}
         <div className="stl-partner-acred">
+          {/* El logotipo de Top Partner trae el texto en BLANCO sobre transparente: sobre la
+              tarjeta clara el rótulo desaparece y quedan sus dos íconos sueltos. Por eso su
+              celda es un chip navy — que además es como se ve en la web de marca. */}
+          <div className="stl-partner-acred-cell stl-partner-top">
+            <img src={INSIGNIA_TOP.src} alt={INSIGNIA_TOP.alt} />
+          </div>
           {ACREDITACIONES.map((b) => (
-            <img key={b.src} className="stl-partner-acred-img" src={b.src} alt={b.alt} />
+            <div key={b.src} className="stl-partner-acred-cell">
+              <img className="stl-partner-acred-img" src={b.src} alt={b.alt} />
+            </div>
           ))}
         </div>
-        {/* El logotipo de Top Partner tiene el texto en BLANCO sobre transparente: puesto
-            directo sobre la tarjeta clara desaparecía y solo se veían sus dos íconos. Va
-            sobre un chip navy — que además es como se ve en la web de marca. */}
-        <div className="stl-partner-top">
-          <img src="/partner/hubspot-top-partner.png" alt="Top HubSpot Partner" />
+        <div className="stl-partner-firma">
+          <strong>{t(lang, "insigniasFirma")}</strong>
+          <span>{INSIGNIAS_DETALLE}</span>
         </div>
       </div>
     </div>

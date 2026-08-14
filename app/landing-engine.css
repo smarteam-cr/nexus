@@ -619,11 +619,18 @@
   font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--teal); margin-bottom: 18px;
 }
-/* Solo-editor: el string de experiencia tal cual, para poder corregirlo. Las fichas de abajo
-   son su LECTURA, no un campo aparte — un segundo campo sería una segunda verdad. */
-.stl .stl-partner-exp-edit {
-  font-size: 12.5px; color: var(--dark-text-2); margin-bottom: 14px;
-  border-bottom: 1px dashed var(--dark-border); padding-bottom: 6px;
+/* El CIERRE del argumento: es lo último que se lee antes del CTA, así que pesa más que un
+   título de sección normal (`.stl-title`, 26-34px). La sección es `selfTitled` — este es SU
+   encabezado, no hay otro arriba. */
+.stl .stl-partner-titular {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: clamp(30px, 3.9vw, 44px); font-weight: 800; letter-spacing: -0.025em;
+  line-height: 1.08; color: var(--dark-text); margin: 0 0 18px; text-wrap: balance;
+}
+/* `--dark-text-2` sobre el degradado ya está en el guard de contraste. */
+.stl .stl-partner-resumen {
+  font-size: clamp(15px, 1.6vw, 17px); line-height: 1.65; color: var(--dark-text-2);
+  margin: 0 0 28px; max-width: 52ch;
 }
 .stl .stl-partner-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
 .stl .stl-partner-stat {
@@ -653,25 +660,48 @@
   display: flex; flex-direction: column; align-items: center; gap: 18px;
 }
 .stl .stl-partner-elite { display: block; width: min(240px, 68%); height: auto; }
-/* Los dos escudos (casi cuadrados) se normalizan por ALTURA, que es lo que el ojo compara
-   en una fila de acreditaciones — por ancho, cualquier diferencia de proporción se traduce
-   en uno más chico que el otro. */
+/* Las TRES en una fila, alineadas por la CAJA y no por la imagen: el logotipo de Top Partner
+   es apaisado (3.61:1) y los escudos casi cuadrados (0.93:1), así que igualar alturas de
+   imagen dejaba al primero a un tercio del alto de los otros. Celdas iguales + `contain`
+   adentro: cada PNG entra con su proporción y la fila se lee pareja. Proporciones medidas
+   sobre los archivos reales, no a ojo. */
 .stl .stl-partner-acred {
-  display: flex; justify-content: center; gap: clamp(16px, 3vw, 34px); width: 100%;
-  padding-top: 18px; border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 12px; align-items: stretch;
+  width: 100%; padding-top: 18px; border-top: 1px solid var(--border);
 }
-.stl .stl-partner-acred-img { display: block; height: clamp(84px, 9vw, 104px); width: auto; max-width: 46%; object-fit: contain; }
-/* La firma apaisada. El chip navy NO es decoración: el PNG trae el texto en blanco sobre
-   transparente, así que sobre la tarjeta clara el rótulo desaparecía y quedaban dos íconos
-   sueltos — cazado mirando el render, no el archivo. */
-.stl .stl-partner-top {
-  display: flex; align-items: center; justify-content: center;
-  background: var(--dark-bg); border-radius: 10px; padding: 10px 20px;
+.stl .stl-partner-acred-cell {
+  display: flex; align-items: center; justify-content: center; min-width: 0;
 }
-.stl .stl-partner-top img { display: block; height: 24px; width: auto; object-fit: contain; }
+.stl .stl-partner-acred-img {
+  display: block; height: clamp(64px, 6.6vw, 82px); width: auto; max-width: 100%; object-fit: contain;
+}
+/* El chip navy NO es decoración: el PNG de Top Partner trae el texto en BLANCO sobre
+   transparente, así que sobre la tarjeta clara el rótulo desaparecía y quedaban sus dos
+   íconos sueltos — cazado mirando el render, no el archivo. */
+.stl .stl-partner-top { background: var(--dark-bg); border-radius: 12px; padding: 10px 16px; }
+/* `width:auto` + los dos topes: la caja del <img> mide lo MISMO que el logotipo pintado.
+   Con `width:100%` la caja quedaba más ancha que la imagen (contain la centra adentro), así
+   que medirla no decía nada sobre lo que se ve — y el chip parecía descentrado al lado. */
+.stl .stl-partner-top img {
+  display: block; width: auto; height: auto; max-width: 100%; max-height: 40px; object-fit: contain;
+}
+/* El pie: dice QUÉ son esas insignias. Sin él, tres sellos sueltos obligan a leer los dibujos. */
+.stl .stl-partner-firma { text-align: center; }
+.stl .stl-partner-firma strong {
+  display: block; font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
+}
+.stl .stl-partner-firma span {
+  display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.5; color: var(--text-2);
+}
 @media (max-width: 860px) {
   .stl .stl-partner { grid-template-columns: 1fr; gap: 30px; }
   .stl .stl-partner-badges { order: 2; }
+}
+@media (max-width: 520px) {
+  /* En una columna angosta las tres celdas dejan al logotipo ilegible: el chip toma la fila. */
+  .stl .stl-partner-acred { grid-template-columns: 1fr 1fr; }
+  .stl .stl-partner-top { grid-column: 1 / -1; }
 }
 /* En el PDF la banda va entera en una página: partir un degradado por la mitad se ve como un
    error de impresión, no como un diseño. */

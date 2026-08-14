@@ -2245,3 +2245,58 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
 - **`TextCard` se borró de `sections.tsx`**: era su último consumidor y su gemela sigue viva en
   `sections-hubs.tsx`. Dos copias de la misma card invitan a que la próxima sección elija
   cualquiera.
+
+### Segunda pasada, el mismo día: la banda pasa a tener un CIERRE escrito para el cliente
+
+> Elías, con una referencia visual: un titular grande, un párrafo que nombre al cliente, las
+> tres cifras (faltaba «+3.000 usuarios capacitados»), el logotipo de Top Partner alineado con
+> las acreditaciones y fuera el «Equipo asignado».
+
+- **Los campos cambian de dueño, y esa es toda la decisión.** Lo que el agente escribe pasa a
+  ser lo que MIRA AL CLIENTE (`titular` = el cierre del argumento, `resumen` = con qué acompaña
+  Smarteam a ESTE cliente y cuál es su prioridad) y lo que es un HECHO de la empresa deja de
+  ser un campo. Medido antes de decidirlo: de las **28** secciones `partner` guardadas, las 28
+  traen la misma credencial y las 28 dicen lo mismo en `experiencia` con tres redacciones
+  distintas. Ese campo hacía que un dato fijo diera la vuelta por un LLM en cada generación —
+  cero información, riesgo real de deriva. Ahora las tres cifras son constantes
+  (`lib/landing/partner-band.ts`), que además es lo ÚNICO que hace aparecer la tercera ficha en
+  las **4 propuestas ya publicadas** que tienen esta sección, sin regenerar ninguna.
+- **`equipo` se retira de la sección** (pedido explícito). Estaba escrito en 15 de las 28 y en
+  las 4 publicadas, así que la banda deja de mostrar nombres propios del equipo: es contenido
+  que envejece mal —la persona asignada cambia y la propuesta publicada queda congelada— y no
+  es lo que respalda a Smarteam ante el prospecto. `experiencia` y `equipo` entran a
+  `LEGACY_CARRY_EXCLUDE`: sin eso, regenerar los arrastra como keys no-schema y mantienen viva
+  —y no-blank— una sección con datos que ya nadie pinta.
+- **La sección pasa a `selfTitled`.** Con el encabezado del motor arriba se leían DOS titulares
+  ("Por qué Smarteam" y el cierre). Ahora la banda pinta su propio encabezado: la credencial es
+  el rótulo y el `titular` es el titular. Es seguro porque se verificó el dato: **ninguna** de
+  las 28 tiene el título o el eyebrow renombrado, y el componente igual cae a `sectionTitle`
+  —el rótulo del documento, que ya incluye el override— cuando no hay `titular`, que es el caso
+  de todo lo publicado. En lectura los respaldos aplican; en EDICIÓN no, o el CSE vería el campo
+  "lleno" con un texto que no es suyo y nunca lo escribiría.
+- ⚠ **El agente nombraba a la empresa equivocada, y no era culpa del brief: el prompt nunca
+  decía para quién es la propuesta.** En REMPRO escribió *«Smarteam acompaña a O4Bi»* — el ERP
+  que se menciona en la sesión. En Color Solution esquivó el problema con «acompaña a este
+  proyecto». El arreglo va en el CONTEXTO (`generate/route.ts`), no en la sección: el nombre de
+  la ficha entra como primer bloque del preámbulo, declarando además que los otros nombres de
+  las fuentes (proveedores, ERPs, integradores) NO son el cliente. Verificado corriendo el
+  agente contra propuestas reales antes y después: 0/3 vs **3/3** con el cliente correcto.
+  Beneficia a TODAS las secciones, no solo a ésta.
+- **El tope de palabras del titular tuvo que decir «completa».** Con «máx. 15 palabras» el
+  modelo cortaba la frase para entrar (*«…en una operación que produce»*). La regla ahora
+  prohíbe dejarla colgando y cita ese mismo ejemplo — misma técnica que las reglas duras de
+  `dolores`: el contraejemplo textual es lo que funciona. Sigue siendo calibración, no garantía:
+  el CSE revisa antes de publicar.
+- **Las tres insignias van en UNA fila alineadas por la CAJA, no por la imagen.** El logotipo de
+  Top Partner es 3.61:1 y los escudos 0.93:1; igualar alturas de imagen dejaba al primero a un
+  tercio del alto de los otros (por eso en la primera pasada estaba abajo). Con celdas iguales y
+  `contain` adentro, la fila se lee pareja y el apaisado conserva su proporción. Su celda sigue
+  siendo el chip navy — el PNG trae el texto en blanco sobre transparente.
+- **El pie de la tarjeta nombra las credenciales.** Tres sellos sueltos obligan a leer dibujos.
+  El rótulo va por i18n; los nombres de los programas de HubSpot NO se traducen (traducirlos
+  inventaría credenciales que HubSpot no emite con ese nombre).
+- ⚠ **Las cifras las afirma dirección, no Nexus.** «+200 proyectos» venía del def anterior y
+  «+3.000 usuarios capacitados» lo agregó Elías desde su referencia. El sitio de marca publica
+  otros números («120+ implementaciones», «45+ clientes activos»): no es contradicción
+  necesariamente —cuentan cosas distintas— pero conviene que sean el mismo relato, y hoy
+  cambiarlas es un cambio de código (el mismo trato que las insignias).

@@ -84,8 +84,11 @@ export async function POST(
       // por Hub y se le dice al agente cuáles cubrir. Hasta ahora no llegaban al prompt.
       tags: true,
       // `industry` es lo que convierte el material genérico de cada Hub en una propuesta
-      // que habla del negocio del cliente y no de HubSpot en abstracto.
-      client: { select: { notes: true, industry: true } },
+      // que habla del negocio del cliente y no de HubSpot en abstracto. Y `name` es PARA
+      // QUIÉN es la propuesta: hasta el 2026-08-14 no entraba al prompt y el agente tenía
+      // que deducirlo del transcript — medido, se equivoca (en REMPRO escribió "Smarteam
+      // acompaña a O4Bi", que es el ERP que se nombra en la sesión, no el prospecto).
+      client: { select: { name: true, notes: true, industry: true } },
     },
   });
   if (!bc) {
@@ -181,6 +184,14 @@ export async function POST(
   const selectedUseCases = checklistOn ? await loadSelectedUseCases(id) : [];
 
   const preamble: string[] = [];
+  // PARA QUIÉN es la propuesta. Va PRIMERO y como hecho, no como pista: en las fuentes se
+  // nombran integradores, ERPs y empresas del grupo, y sin esta línea el agente elige mal
+  // (verificado). Que sea el nombre de la ficha, además, evita que escriba una variante.
+  preamble.push(
+    `# El cliente de esta propuesta\n${bc.client.name}\nEs LA empresa a la que se le presenta. ` +
+      `Los demás nombres que aparezcan en las fuentes (proveedores, ERPs, integradores, ` +
+      `empresas del grupo) NO son el cliente.`,
+  );
   if (resolved.caseType) {
     preamble.push(
       `# Tipo de caso: ${resolved.typeDef.label}${
@@ -346,9 +357,13 @@ export async function POST(
     // Las 4 últimas son los campos de la versión v1 de `solucion`. Sin excluirlas, una
     // regeneración las arrastra como keys no-schema y `esSolucionLegacy` prendería la
     // rama vieja sobre una generación NUEVA — texto de hace meses tapando las columnas.
+    // Las 2 últimas son el shape v1 de `partner`: las cifras pasaron a ser constantes
+    // (lib/landing/partner-band.ts) y el equipo asignado se retiró de la sección, así que
+    // arrastrarlas solo mantendría viva —y no-blank— una sección con datos que nadie pinta.
     const LEGACY_CARRY_EXCLUDE = new Set([
       "nodos", "flujos", "porQuePlataforma", "bloques",
       "hubs", "integraciones", "casosDeUso", "usuarios",
+      "experiencia", "equipo",
     ]);
     for (const gs of generated) {
       const prev = prevDataByKey.get(gs.key);

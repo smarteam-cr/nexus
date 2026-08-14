@@ -77,7 +77,10 @@ const STRINGS = {
   credencial: { es: "Credencial", en: "Credential" },
   experiencia: { es: "Experiencia", en: "Experience" },
   referenciaSectorial: { es: "Referencia sectorial", en: "Industry reference" },
-  equipoAsignado: { es: "Equipo asignado", en: "Assigned team" },
+  // Pie de la tarjeta de insignias. El DETALLE (los nombres de los programas de HubSpot) no
+  // pasa por acá: son nombres propios y traducirlos inventaría credenciales que no existen.
+  // Ver lib/landing/partner-band.ts.
+  insigniasFirma: { es: "Top Partner + acreditaciones", en: "Top Partner + accreditations" },
 } as const;
 
 export type LandingStringKey = keyof typeof STRINGS;

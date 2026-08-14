@@ -113,8 +113,22 @@ export interface PlanData {
 export interface InvestmentLine { monto: string; detalle: string }
 export interface InvestmentData { licenciasHubspot: InvestmentLine; implementacion: InvestmentLine; nota: string }
 
-// 8) Partner — 4 campos (2 con default fijo).
-export interface PartnerData { credencial: string; experiencia: string; referenciaSectorial: string; equipo: string }
+// 8) Partner — la banda de credenciales que cierra la propuesta.
+//    `titular` y `resumen` los escribe el agente MIRANDO AL CLIENTE (por eso están acá y no
+//    en `lib/landing/partner-band.ts`, que es donde viven los hechos fijos de Smarteam).
+//    `experiencia` y `equipo` son el shape v1 (2026-08-14): ya no se leen ni se escriben —
+//    las cifras pasaron a ser constantes y el equipo asignado se retiró de la sección— y
+//    están en `LEGACY_CARRY_EXCLUDE` para que regenerar no las arrastre.
+export interface PartnerData {
+  credencial: string;
+  titular: string;
+  resumen: string;
+  referenciaSectorial: string;
+  /** @deprecated v1 — las cifras viven en `EXPERIENCIA_SMARTEAM`. */
+  experiencia?: string;
+  /** @deprecated v1 — la sección ya no muestra el equipo asignado. */
+  equipo?: string;
+}
 
 // 9) CTA final. `buttonUrl`/`buttonTarget` (fuera del schema del agente — nunca
 //    inventa URLs; el CSE los configura y sobreviven regeneraciones vía carry-forward):
