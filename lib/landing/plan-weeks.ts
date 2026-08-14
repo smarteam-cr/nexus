@@ -37,7 +37,7 @@ export interface RangoSemanas {
 }
 
 /** Techo de cordura: un plan de propuesta comercial no llega a dos años. */
-const MAX_SEMANA = 104;
+export const MAX_SEMANA = 104;
 
 /** Los tres guiones que aparecen en la práctica: común, en dash y em dash. */
 const GUION = /[-–—]/;
@@ -78,13 +78,80 @@ export function parseSemanas(txt: string | null | undefined): RangoSemanas | nul
 export function parseDuracion(txt: string | null | undefined): RangoSemanas | null {
   const s = (txt ?? "").trim().toLowerCase();
   if (!s) return null;
-  // El acento importa: el agente escribe "Semanas", pero un humano puede tipear "semana".
-  // `\d+` con guion opcional; el segundo número solo cuenta si el guion está presente.
-  const m = s.match(/semanas?\s*(\d{1,3})\s*(?:[-–—]\s*(\d{1,3}))?/);
+  const m = s.match(FRAGMENTO_SEMANAS);
   if (!m) return null;
   const a = Number(m[1]);
   const b = m[2] != null ? Number(m[2]) : a;
   return rango(a, b);
+}
+
+/**
+ * El fragmento de semanas dentro del texto libre. Acepta INGLÉS porque el documento se traduce
+ * por `__lang` y una propuesta en inglés dice "Weeks 1-2": sin esto, esa propuesta se quedaba
+ * sin Gantt entero. `\d+` con guion opcional; el segundo número solo cuenta con el guion.
+ */
+const FRAGMENTO_SEMANAS = /(?:semanas?|weeks?)\s*(\d{1,3})\s*(?:[-–—]\s*(\d{1,3}))?/i;
+
+/** El formato ESTRICTO que lee `parseSemanas`: "1-3" o "8". */
+export function textoSemanas(r: RangoSemanas): string {
+  return r.inicio === r.fin ? `${r.inicio}` : `${r.inicio}-${r.fin}`;
+}
+
+/** Las palabras del idioma del documento, que las pone el llamador (i18n vive en el motor). */
+export interface PalabrasSemana {
+  singular: string;
+  plural: string;
+}
+
+/**
+ * Reescribe el texto que LEE EL CLIENTE para que diga el rango nuevo — lo que hace que
+ * arrastrar una barra en el Gantt también mueva las semanas de la lista.
+ *
+ * Si el texto ya traía un fragmento de semanas se reemplaza EN SU LUGAR, así "Semanas 1-2
+ * (kickoff)" conserva el paréntesis. Si no traía ninguno —"Mes 4"— se reemplaza ENTERO: la
+ * lista y el Gantt no pueden decir cosas distintas del mismo plan, que es justo el desacuerdo
+ * que un cliente detecta leyendo dos veces la misma propuesta.
+ */
+export function reescribirDuracion(
+  txt: string | null | undefined,
+  r: RangoSemanas,
+  palabras: PalabrasSemana,
+): string {
+  const nuevo = `${r.inicio === r.fin ? palabras.singular : palabras.plural} ${textoSemanas(r)}`;
+  const s = (txt ?? "").trim();
+  if (!s) return nuevo;
+  return FRAGMENTO_SEMANAS.test(s) ? s.replace(FRAGMENTO_SEMANAS, nuevo) : nuevo;
+}
+
+/**
+ * Qué semana hay bajo un punto de la pista del Gantt. Vive acá y no en el componente porque es
+ * la cuenta que decide DÓNDE cae la barra al soltarla: si se equivoca por una columna, el plan
+ * que firma el cliente dice otra cosa. Se evalúa con la geometría VIVA en cada movimiento (no
+ * con la del `pointerdown`), así estirar una fase —que alarga el eje y reescala todo— no deja
+ * la barra atrás del cursor.
+ *
+ * ⚠ Devuelve `null` con una geometría que no sirve, y el llamador IGNORA ese movimiento. La
+ * primera versión devolvía `desde` como si fuera un default razonable y eso produjo el peor
+ * bug posible en un arrastre: un elemento desconectado del DOM mide 0×0, así que cada
+ * movimiento leía la semana 1 y **la fase se iba sola al principio del plan**. Un dato que no
+ * se puede medir no tiene valor por defecto — no mover nada es la única respuesta honesta.
+ */
+export function semanaEnX(g: {
+  x: number;
+  left: number;
+  width: number;
+  cols: number;
+  desde: number;
+}): number | null {
+  if (!Number.isFinite(g.width) || g.width <= 0 || g.cols <= 0) return null;
+  return g.desde + Math.floor(((g.x - g.left) / g.width) * g.cols);
+}
+
+/** Encierra un rango en los límites del motor (semana ≥ 1, `fin ≥ inicio`, techo de cordura). */
+export function acotarRango(r: RangoSemanas): RangoSemanas {
+  const largo = Math.max(0, r.fin - r.inicio);
+  const inicio = Math.min(Math.max(1, r.inicio), MAX_SEMANA - largo);
+  return { inicio, fin: Math.min(inicio + largo, MAX_SEMANA) };
 }
 
 /** Lo mínimo que este módulo necesita saber de una fase (evita importar el tipo del motor). */

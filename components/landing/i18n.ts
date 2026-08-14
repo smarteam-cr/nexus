@@ -57,6 +57,10 @@ const STRINGS = {
   verEnLista: { es: "Ver en lista", en: "List view" },
   vistaDelPlan: { es: "Vista del plan", en: "Plan view" },
   semanaAbrev: { es: "S", en: "W" },
+  // Las palabras con las que se REESCRIBE `duration` al arrastrar una barra del Gantt, para
+  // que la lista diga lo mismo en el idioma del documento.
+  semanaSingular: { es: "Semana", en: "Week" },
+  semanaPlural: { es: "Semanas", en: "Weeks" },
   sinSemanas: { es: "sin semanas", en: "no weeks set" },
   avisoPlanChip: { es: "Puede ajustar el plan", en: "May adjust the plan" },
   avisoPlanLinea: {

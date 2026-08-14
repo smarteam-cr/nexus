@@ -7,7 +7,18 @@
  * acordó — por eso lo ilegible tiene que seguir devolviendo null, no un número plausible.
  */
 import { describe, expect, it } from "vitest";
-import { parseDuracion, parseSemanas, rangoDeFase, spanDelPlan } from "./plan-weeks";
+import {
+  acotarRango,
+  parseDuracion,
+  parseSemanas,
+  rangoDeFase,
+  reescribirDuracion,
+  semanaEnX,
+  spanDelPlan,
+  textoSemanas,
+} from "./plan-weeks";
+
+const ES = { singular: "Semana", plural: "Semanas" };
 
 describe("las formas que están escritas en la base", () => {
   it("plural con guion común — la mayoría de los valores", () => {
@@ -127,5 +138,96 @@ describe("spanDelPlan: el eje del Gantt", () => {
   it("sin una sola fase legible no hay Gantt que dibujar", () => {
     expect(spanDelPlan([{ duration: "Mes 4" }, { duration: "A convenir" }])).toBeNull();
     expect(spanDelPlan([])).toBeNull();
+  });
+});
+
+describe("una propuesta en INGLÉS también dibuja", () => {
+  it('lee "Weeks 1-3" y "Week 8"', () => {
+    // El documento se traduce por `__lang`: sin esto, una propuesta en inglés se quedaba sin
+    // Gantt entero porque ninguna fase parseaba.
+    expect(parseDuracion("Weeks 1-3")).toEqual({ inicio: 1, fin: 3 });
+    expect(parseDuracion("Week 8")).toEqual({ inicio: 8, fin: 8 });
+    expect(parseDuracion("Weeks 13–16")).toEqual({ inicio: 13, fin: 16 });
+  });
+});
+
+describe("arrastrar en el Gantt reescribe lo que lee el cliente", () => {
+  it("reemplaza el fragmento EN SU LUGAR y conserva el resto del texto", () => {
+    expect(reescribirDuracion("Semanas 1-2 (kickoff)", { inicio: 3, fin: 6 }, ES)).toBe("Semanas 3-6 (kickoff)");
+  });
+
+  it("una sola semana va en singular", () => {
+    expect(reescribirDuracion("Semanas 1-2", { inicio: 8, fin: 8 }, ES)).toBe("Semana 8");
+  });
+
+  it("un rango se escribe en plural aunque el texto viejo estuviera en singular", () => {
+    expect(reescribirDuracion("Semana 8", { inicio: 8, fin: 10 }, ES)).toBe("Semanas 8-10");
+  });
+
+  it('un texto sin semanas ("Mes 4") se reemplaza ENTERO: los dos lados no pueden discrepar', () => {
+    expect(reescribirDuracion("Mes 4", { inicio: 13, fin: 16 }, ES)).toBe("Semanas 13-16");
+    expect(reescribirDuracion("", { inicio: 1, fin: 2 }, ES)).toBe("Semanas 1-2");
+  });
+
+  it("respeta el idioma que le pasen", () => {
+    expect(reescribirDuracion("Weeks 1-2", { inicio: 4, fin: 5 }, { singular: "Week", plural: "Weeks" })).toBe("Weeks 4-5");
+  });
+
+  it("lo que escribe se puede volver a leer — ida y vuelta", () => {
+    const r = { inicio: 6, fin: 9 };
+    expect(parseDuracion(reescribirDuracion("Semanas 1-2", r, ES))).toEqual(r);
+    expect(parseSemanas(textoSemanas(r))).toEqual(r);
+    expect(textoSemanas({ inicio: 8, fin: 8 })).toBe("8");
+  });
+});
+
+describe("semanaEnX: qué semana hay bajo el cursor", () => {
+  // Pista de 800px con 8 semanas → 100px por columna, arrancando en la semana 1.
+  const pista = { left: 100, width: 800, cols: 8, desde: 1 };
+
+  it("el borde izquierdo es la primera semana", () => {
+    expect(semanaEnX({ ...pista, x: 100 })).toBe(1);
+    expect(semanaEnX({ ...pista, x: 199 })).toBe(1);
+  });
+
+  it("cada 100px avanza una semana", () => {
+    expect(semanaEnX({ ...pista, x: 200 })).toBe(2);
+    expect(semanaEnX({ ...pista, x: 450 })).toBe(4);
+    expect(semanaEnX({ ...pista, x: 899 })).toBe(8);
+  });
+
+  it("un eje que no arranca en 1 corre el resultado", () => {
+    expect(semanaEnX({ ...pista, desde: 5, x: 100 })).toBe(5);
+    expect(semanaEnX({ ...pista, desde: 5, x: 350 })).toBe(7);
+  });
+
+  it("fuera de la pista devuelve valores fuera de rango — los acota `acotarRango`", () => {
+    // A propósito: separar "qué semana señala el cursor" de "qué rango es legal" deja la
+    // cuenta simple y una sola puerta para los límites.
+    expect(semanaEnX({ ...pista, x: 40 })).toBe(0);
+    expect(semanaEnX({ ...pista, x: 1200 })).toBe(12);
+  });
+
+  it("una pista sin ancho devuelve null — NO un default plausible", () => {
+    // El bug que esto cierra: un elemento desconectado del DOM mide 0×0. Con `desde` como
+    // default, cada movimiento leía la semana 1 y la fase se iba SOLA al principio del plan.
+    // Cazado arrastrando de verdad en Chrome, no leyendo el código.
+    expect(semanaEnX({ ...pista, width: 0, x: 500 })).toBeNull();
+    expect(semanaEnX({ ...pista, cols: 0, x: 500 })).toBeNull();
+    expect(semanaEnX({ ...pista, width: Number.NaN, x: 500 })).toBeNull();
+  });
+});
+
+describe("acotarRango: el arrastre no puede salirse del mundo", () => {
+  it("no deja pasar de la semana 1 hacia atrás, conservando el largo", () => {
+    expect(acotarRango({ inicio: -2, fin: 1 })).toEqual({ inicio: 1, fin: 4 });
+  });
+
+  it("corta en el techo de cordura", () => {
+    expect(acotarRango({ inicio: 200, fin: 202 })).toEqual({ inicio: 102, fin: 104 });
+  });
+
+  it("un rango normal no se toca", () => {
+    expect(acotarRango({ inicio: 3, fin: 7 })).toEqual({ inicio: 3, fin: 7 });
   });
 });

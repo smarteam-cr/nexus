@@ -9,12 +9,20 @@
  * quitar. Branded Smarteam; estilos en app/landing-engine.css (scope .stl, hex
  * literal → theme-safe en el render externo).
  */
-import { useEffect, useRef, useState, type CSSProperties, type FC } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FC, type PointerEvent as ReactPointerEvent } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
-import { rangoDeFase, spanDelPlan } from "@/lib/landing/plan-weeks";
+import {
+  acotarRango,
+  rangoDeFase,
+  reescribirDuracion,
+  semanaEnX,
+  spanDelPlan,
+  textoSemanas,
+  type RangoSemanas,
+} from "@/lib/landing/plan-weeks";
 import { landingLang, t, type LandingLang } from "./i18n";
 import type {
   SectionProps,
@@ -225,41 +233,158 @@ function avisoActivo(data: PlanData, i: number): boolean {
 }
 
 /**
- * El Gantt: una celda por semana, como `TimelineSection` (components/canvas). Grid y `<div>`s
- * — cero SVG, cero canvas, cero scroller: los tres patrones que `pdf-mode-coverage` marca.
- * Solo LECTURA de las semanas; para cambiarlas está el campo de la lista.
+ * El Gantt: una barra por fase sobre un eje de semanas. Grid y `<div>`s — cero SVG, cero
+ * canvas, cero scroller: los tres patrones que `pdf-mode-coverage` marca.
+ *
+ * En EDICIÓN la barra se arrastra (mover) y se estira de los extremos (alargar), igual que en
+ * el Gantt del cronograma interno: pointer events nativos, sin dnd-kit —que ahí está cableado
+ * para reordenar filas— y midiendo el ancho de semana contra la pista. Al soltar reescribe las
+ * DOS caras del dato: `semanas` (la máquina) y `duration` (lo que lee el cliente en la lista),
+ * porque las dos vistas no pueden decir cosas distintas del mismo plan.
+ *
+ * En LECTURA no hay handlers ni tiradores: el prospecto mira el plan, no lo edita.
  */
-const PlanGantt: FC<{ phases: Phase[]; data: PlanData; lang: LandingLang }> = ({ phases, data, lang }) => {
-  const span = spanDelPlan(phases);
+const PlanGantt: FC<{
+  phases: Phase[];
+  data: PlanData;
+  lang: LandingLang;
+  editable?: boolean;
+  onRango?: (i: number, r: RangoSemanas) => void;
+}> = ({ phases, data, lang, editable, onRango }) => {
+  /* Preview local del arrastre: el commit va UNA vez al soltar. Escribir en cada `pointermove`
+     dispararía un PUT por semana cruzada — el `onChange` de una sección persiste de inmediato. */
+  const [preview, setPreview] = useState<{ i: number; r: RangoSemanas } | null>(null);
+  const ultimo = useRef<{ i: number; r: RangoSemanas } | null>(null);
+  const raiz = useRef<HTMLDivElement>(null);
+
+  const fases = preview
+    ? phases.map((p, k) => (k === preview.i ? { ...p, semanas: textoSemanas(preview.r) } : p))
+    : phases;
+  const span = spanDelPlan(fases);
+
+  /* La geometría se lee FRESCA en cada movimiento (rect + columnas del `dataset`) en vez de
+     congelarla al empezar: así, cuando estirar una fase alarga el eje, la barra sigue pegada
+     al cursor en lugar de quedarse atrás. */
+  const arrastrar = (e: ReactPointerEvent, i: number, r: RangoSemanas, modo: "mover" | "ini" | "fin") => {
+    if (!editable || !onRango) return;
+    e.preventDefault();
+    e.stopPropagation();
+    /* La pista se busca VIVA en cada movimiento por su posición, en vez de cerrar sobre el nodo
+       del `pointerdown`: si un re-render lo reemplaza, el nodo viejo queda desconectado, mide
+       0×0 y el arrastre se vuelve loco. Verificado arrastrando en Chrome — ver `semanaEnX`. */
+    const pistaViva = () =>
+      (raiz.current?.querySelectorAll(".stl-gantt-track")[i] as HTMLElement | undefined) ?? null;
+    const semanaEn = (clientX: number) => {
+      const pista = pistaViva();
+      if (!pista) return null;
+      const rect = pista.getBoundingClientRect();
+      return semanaEnX({
+        x: clientX,
+        left: rect.left,
+        width: rect.width,
+        cols: Number(pista.dataset.cols) || 0,
+        desde: Number(pista.dataset.desde) || 1,
+      });
+    };
+    const agarre = semanaEn(e.clientX);
+    if (agarre == null) return;
+    const offset = agarre - r.inicio; // dónde agarró la barra, en semanas
+    const largo = r.fin - r.inicio;
+    ultimo.current = null;
+
+    const mover = (ev: PointerEvent) => {
+      const w = semanaEn(ev.clientX);
+      if (w == null) return; // sin geometría no se mueve nada: mejor quieto que en la semana 1
+      const crudo: RangoSemanas =
+        modo === "mover"
+          ? { inicio: w - offset, fin: w - offset + largo }
+          : modo === "ini"
+            ? { inicio: Math.min(w, r.fin), fin: r.fin }
+            : { inicio: r.inicio, fin: Math.max(w, r.inicio) };
+      const next = acotarRango(crudo);
+      ultimo.current = { i, r: next };
+      setPreview({ i, r: next });
+    };
+    const soltar = () => {
+      const fin = ultimo.current;
+      ultimo.current = null;
+      setPreview(null);
+      if (fin) onRango(fin.i, fin.r);
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", soltar);
+    };
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", soltar);
+  };
+
   if (!span) return null;
   const total = span.fin - span.inicio + 1;
   const semanas = Array.from({ length: total }, (_, k) => span.inicio + k);
+  const pct = (n: number) => `${(n / total) * 100}%`;
+
   return (
-    <div className="stl-gantt" role="table" aria-label={t(lang, "vistaDelPlan")}>
-      <div className="stl-gantt-row stl-gantt-head" role="row" style={{ "--stl-gantt-cols": total } as CSSProperties}>
+    <div className="stl-gantt" ref={raiz} role="table" aria-label={t(lang, "vistaDelPlan")}>
+      <div className="stl-gantt-row stl-gantt-head" role="row">
         <div className="stl-gantt-lbl" role="columnheader" />
-        {semanas.map((w) => (
-          <div key={w} className="stl-gantt-wk" role="columnheader">
-            {t(lang, "semanaAbrev")}
-            {w}
-          </div>
-        ))}
+        <div className="stl-gantt-weeks" style={{ "--stl-gantt-cols": total } as CSSProperties}>
+          {semanas.map((w) => (
+            <span key={w} className="stl-gantt-wk" role="columnheader">
+              {t(lang, "semanaAbrev")}
+              {w}
+            </span>
+          ))}
+        </div>
       </div>
-      {phases.map((p, i) => {
+      {fases.map((p, i) => {
         const r = rangoDeFase(p);
         const flag = avisoActivo(data, i);
+        const detalle = (p.detail ?? "").trim();
         return (
-          <div key={i} className="stl-gantt-row" role="row" style={{ "--stl-gantt-cols": total } as CSSProperties}>
+          <div key={i} className="stl-gantt-row" role="row">
             <div className="stl-gantt-lbl" role="rowheader">
-              <span className="stl-gantt-name">{p.name}</span>
+              <span className="stl-gantt-titulo">
+                <span className="stl-gantt-name">{p.name}</span>
+                {/* El mismo ⓘ CSS-only del motor: el detalle de la fase, que en el Gantt no se
+                    repite para no duplicar la lista, sigue estando a un hover de distancia. */}
+                {detalle && (
+                  <span className="stl-tip" data-tip={detalle} tabIndex={0} role="note" aria-label={detalle}>
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+                      <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="M10 9v4.5M10 6.4v.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                )}
+              </span>
+              {flag && <span className="stl-phase-flag">{t(lang, "avisoPlanChip")}</span>}
               {/* Sin rango no se inventa una barra: se dice que no hay semanas. */}
               <span className="stl-gantt-rango">{r ? p.duration : t(lang, "sinSemanas")}</span>
             </div>
-            {semanas.map((w) => {
-              const dentro = r != null && w >= r.inicio && w <= r.fin;
-              const cls = `stl-gantt-cell${dentro ? " is-on" : ""}${dentro && flag ? " is-flag" : ""}`;
-              return <div key={w} className={cls} role="cell" />;
-            })}
+            <div className="stl-gantt-track" data-cols={total} data-desde={span.inicio}>
+              {r && (
+                <div
+                  className={`stl-gantt-bar${flag ? " is-flag" : ""}${editable && onRango ? " is-draggable" : ""}`}
+                  style={{ left: pct(r.inicio - span.inicio), width: pct(r.fin - r.inicio + 1) }}
+                  onPointerDown={editable && onRango ? (e) => arrastrar(e, i, r, "mover") : undefined}
+                  role="cell"
+                  aria-label={`${p.name} — ${p.duration}`}
+                >
+                  {editable && onRango && (
+                    <>
+                      <span
+                        className="stl-gantt-grip stl-gantt-grip--ini"
+                        onPointerDown={(e) => arrastrar(e, i, r, "ini")}
+                        aria-hidden
+                      />
+                      <span
+                        className="stl-gantt-grip stl-gantt-grip--fin"
+                        onPointerDown={(e) => arrastrar(e, i, r, "fin")}
+                        aria-hidden
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
       })}
@@ -304,7 +429,33 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, ctx, editable, o
       )}
 
       {enGantt ? (
-        <PlanGantt phases={phases} data={data} lang={lang} />
+        <PlanGantt
+          phases={phases}
+          data={data}
+          lang={lang}
+          editable={editable}
+          /* Arrastrar reescribe las DOS caras: `semanas` (de donde sale la barra) y `duration`
+             (lo que el cliente lee en la lista). Si solo se escribiera una, las dos vistas
+             contarían planes distintos y el prospecto lo detecta leyendo dos veces. */
+          onRango={
+            onChange
+              ? (i, r) => {
+                  const p = phases[i];
+                  if (!p) return;
+                  set({
+                    phases: replaceAt(phases, i, {
+                      ...p,
+                      semanas: textoSemanas(r),
+                      duration: reescribirDuracion(p.duration, r, {
+                        singular: t(lang, "semanaSingular"),
+                        plural: t(lang, "semanaPlural"),
+                      }),
+                    }),
+                  });
+                }
+              : undefined
+          }
+        />
       ) : (
         <SortableItems items={phases} disabled={!editable} onReorder={(next) => set({ phases: next })}
           container={(nodes) => <div>{nodes}</div>}>

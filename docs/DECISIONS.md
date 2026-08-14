@@ -2167,3 +2167,44 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   contrato de la Inversión). No se migró porque esa sección se tocó el día anterior y no vale
   re-abrirla por una clase; cuando aparezca un tercer segmentado, converger los tres en una
   primitiva del motor.
+
+## El Gantt de la propuesta se arrastra, y eso reescribe lo que lee el cliente (2026-08-13)
+
+> Elías, sobre el Gantt recién hecho: *"haz que en la vista de Gantt los tiempos se puedan
+> arrastrar y eso modifique también las semanas en la vista de lista … muy similar a como
+> funciona eso mismo en el canvas de cronograma"*, más un ⓘ por fase con su descripción, y que
+> el chip y el aviso de la primera etapa también se vean en Gantt.
+
+- **Arrastrar escribe las DOS caras del dato.** `semanas` es de dónde sale la barra y `duration`
+  es lo que el cliente LEE en la lista; si al soltar se escribiera solo una, las dos vistas
+  contarían planes distintos y el prospecto lo detecta leyendo dos veces la misma propuesta.
+  `reescribirDuracion` reemplaza el fragmento EN SU LUGAR —así "Semanas 1-2 (kickoff)" conserva
+  el paréntesis— y solo reemplaza el texto entero cuando no había ninguno que reemplazar
+  ("Mes 4"). Singular/plural y el idioma salen de i18n, no de lo que decía el texto viejo.
+- **La barra pasó a ser UNA sola, no una celda por semana.** Un conjunto de píldoras no se puede
+  agarrar ni tiene bordes que estirar. Con una barra posicionada en porcentaje sobre una pista,
+  el ancho de semana es una división exacta (sin gaps que descuadren la cuenta) y hay un
+  elemento con dos tiradores. El eje sigue siendo grid + `<div>`s: cero SVG, cero canvas.
+- **Se arrastra SOLO en edición.** En la propuesta publicada el prospecto mira el plan; sin
+  `editable` no hay handlers, ni tiradores, ni cursor de agarre.
+- **El commit va UNA vez al soltar, con preview local mientras tanto.** El `onChange` de una
+  sección persiste de inmediato (PUT optimista, sin debounce): escribir en cada `pointermove`
+  dispararía un PUT por semana cruzada.
+- **La geometría se lee VIVA en cada movimiento, no se congela al empezar.** Estirar una fase
+  alarga el eje y reescala todo; con el ancho de semana congelado la barra se queda atrás del
+  cursor. Leyendo el rect y las columnas en cada `pointermove`, la barra sigue pegada al cursor
+  aunque el plan crezca debajo.
+- ⚠ **El bug que casi se va: un rango sin geometría NO tiene default.** La primera versión de
+  `semanaEnX` devolvía `desde` cuando la pista medía 0 — que parece un default razonable y no lo
+  es: al repintar, el nodo capturado en el `pointerdown` queda DESCONECTADO del DOM y mide 0×0,
+  así que **cada movimiento leía la semana 1 y la fase se iba sola al principio del plan**.
+  Cazado arrastrando de verdad en Chrome (mover +2 semanas devolvía `1-2` en vez de `8-9`), no
+  leyendo el código. Se cerró por los dos lados: `semanaEnX` devuelve `null` y el llamador
+  ignora ese movimiento —quieto es mejor que en la semana equivocada—, y la pista se vuelve a
+  buscar VIVA por posición en cada movimiento en vez de cerrar sobre el nodo.
+- **El ⓘ por fase reusa el tooltip CSS-only del motor** (`[data-tip]`, el mismo de las secciones
+  y de los KPI de Roles), y existe porque el Gantt NO repite el detalle de la fase: sin él, pasar
+  a Gantt escondía información que la lista sí muestra.
+- **El chip y la línea de aviso se ven en las DOS vistas.** Son la única pieza de la sección que
+  dice que las fechas pueden moverse; que dependieran de qué vista está abierta convertiría un
+  resguardo comercial en un detalle de presentación.
