@@ -103,9 +103,13 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Qué cambia",
     theme: "soft",
     empty: { before: [], after: [] },
-    agentHint: "Contraste directo Hoy vs Con HubSpot + Smarteam (dos listas).",
+    agentHint: "Contraste directo Hoy vs Con HubSpot + Smarteam (dos listas, máx. 4 por lado).",
+    /* ESCUETO por el mismo motivo que `dolores` (pedido de Elías, 2026-08-13): la sección se
+       proyecta en la reunión y salía con 7-8 puntos de dos líneas por columna. El texto subió a
+       16px en el motor, así que el tope de bullets NO es cosmético — sin él la caja crece y las
+       dos columnas dejan de leerse en paralelo. */
     brief:
-      "Antes vs. después: contraste directo entre el estado actual (`before` = 'Hoy') y el estado objetivo (`after` = 'Con HubSpot + Smarteam'). Concreto, no aspiracional. Cada punto del 'después' responde directamente a uno del 'antes'. Fuente: del transcript; sin prometer lo que no se discutió.",
+      "Antes vs. después: contraste directo entre el estado actual (`before` = 'Hoy') y el estado objetivo (`after` = 'Con HubSpot + Smarteam').\n\nESCUETO, se presenta proyectado: **MÁXIMO 4 puntos por columna** (3 si el transcript no da para más) y **MÁXIMO 14 palabras cada uno**, de una sola línea y sin punto final. Las dos listas tienen la MISMA cantidad de puntos y el de 'después' responde al de 'antes' que está en su misma posición.\n\nPROHIBIDO: encadenar dos ideas con 'y' o con una coma para meter más contenido en un punto, repetir con otras palabras algo que ya dice otro punto, enumerar herramientas por enumerar. Si sobran temas, quedate con los que más duelen — de eso se trata elegir 4.\n\nConcreto, no aspiracional. Fuente: del transcript; sin prometer lo que no se discutió.",
     schema: { type: "object", properties: { before: strArray, after: strArray }, required: ["before", "after"] },
   },
   {

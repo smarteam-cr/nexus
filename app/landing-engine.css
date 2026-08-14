@@ -472,12 +472,18 @@
 .stl .stl-ba-now, .stl .stl-ba-future { border-radius: 14px; padding: 20px 22px; border: 1px solid var(--border); }
 .stl .stl-ba-now { background: rgba(220, 38, 38, 0.04); border-color: rgba(220, 38, 38, 0.20); }
 .stl .stl-ba-future { background: var(--teal-soft); border-color: var(--cream-line); }
-.stl .stl-ba-head { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 600; font-size: 14px; margin-bottom: 14px; }
+.stl .stl-ba-head { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 600; font-size: 15px; margin-bottom: 16px; }
 .stl .stl-ba-now .stl-ba-head { color: #DC2626; }
 .stl .stl-ba-future .stl-ba-head { color: var(--teal-dark); }
 .stl .stl-ba-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.stl .stl-ba-li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.5; }
-.stl .stl-ba-li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; }
+/* El aire entre puntos se sube SOLO acá: `.stl-ba-list` lo comparten el diagnóstico web y
+   los supuestos/riesgos de Exploración, que no cambiaron de tamaño. */
+.stl .stl-ba .stl-ba-list { gap: 13px; }
+/* Esta sección se presenta PROYECTADA en una reunión: 16px es el piso para que se lea de
+   lejos. Va de la mano del tope de 4 bullets por columna del brief — con más, la caja crece
+   sin control y las dos columnas se desalinean. */
+.stl .stl-ba-li { position: relative; padding-left: 20px; font-size: 16px; line-height: 1.55; }
+.stl .stl-ba-li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 7px; height: 7px; border-radius: 50%; }
 .stl .stl-ba-now .stl-ba-li { color: var(--text-2); }
 .stl .stl-ba-now .stl-ba-li::before { background: #DC2626; }
 .stl .stl-ba-future .stl-ba-li { color: var(--text); }
