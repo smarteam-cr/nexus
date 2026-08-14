@@ -109,7 +109,10 @@ export default function CsPanel({
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ createClients: true }) },
       );
       if (!r.supported) {
-        toast.error("El scope de Partner Clients no está autorizado en la app de HubSpot — hay que re-autorizarla.", { duration: 0 });
+        toast.error(
+          "El scope de Partner Clients no está autorizado en la app de HubSpot — hay que re-autorizarla.",
+          { duration: 0 }, // el máximo (30s): hay que verlo, pero tampoco se queda para siempre
+        );
       } else {
         toast.success(`Partner: ${r.total} cuentas sincronizadas${r.createdClients.length ? ` (${r.createdClients.length} clientes nuevos)` : ""}.`);
         router.refresh();
