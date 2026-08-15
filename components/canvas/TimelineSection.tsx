@@ -76,14 +76,67 @@ const ACTIVITY_META: Record<
 const NEUTRAL_SEG = "#b9cdf0"; // fase sin tipo (neutro de la familia navy de marca)
 const EMPTY_CELL = "#eef3fc"; // semana fuera del rango de la fase (paper-tint)
 
-// Estado + responsable por tarea (showProgress, solo el cronograma compartible) — paleta light
-// del landing, espejo de STATUS_META/PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
-const STATUS_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
-  PENDING:     { label: "pendiente", text: "#475569", bg: "#f1f5f9", border: "#e2e8f0" },
-  IN_PROGRESS: { label: "en curso",  text: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-  DONE:        { label: "hecho",     text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
-};
+// Responsable por tarea (showProgress, solo el cronograma compartible) — paleta light del
+// landing, espejo de PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
+// El ESTADO ya no es un chip: lo pinta `EstadoCirculo` a la izquierda del título.
 const OVERDUE_META_LIGHT = { label: "atrasada", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
+
+/**
+ * El estado de la tarea como CÍRCULO a la izquierda, no como etiqueta a la derecha.
+ *
+ * Antes era un chip «HECHO» pegado al título. En un cronograma donde casi todo está hecho, eso
+ * repite la misma palabra decenas de veces y obliga a leer cada renglón hasta el final para
+ * saber si falta algo. Un círculo en una columna fija se escanea de un vistazo: lo que no está
+ * cerrado salta porque es el único gris.
+ *
+ * Espejo de `StatusCircle` del Gantt interno (components/canvas/TimelineGantt.tsx), en la
+ * paleta clara de marca y con estilos inline — esta vista se le comparte al cliente y se
+ * imprime, así que no puede depender de las clases del tema de la app.
+ *
+ * ⚠ «Atrasada» NO entra acá: es ortogonal al estado (una tarea en curso puede estar atrasada)
+ * y sigue siendo su propio chip. Meterla en el círculo perdería una de las dos cosas.
+ */
+function EstadoCirculo({ status, size = 16 }: { status: string; size?: number }) {
+  if (status === "DONE") {
+    return (
+      <span
+        aria-hidden
+        style={{
+          width: size, height: size, borderRadius: "50%", background: "#059669",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}
+      >
+        <svg width={size * 0.62} height={size * 0.62} fill="none" viewBox="0 0 24 24">
+          <path stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
+    );
+  }
+  const enCurso = status === "IN_PROGRESS";
+  const suspendida = status === "SUSPENDED";
+  const color = enCurso ? "#1d4ed8" : suspendida ? "#b45309" : "#cbd5e1";
+  return (
+    <svg
+      aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} style={{ flexShrink: 0 }}
+    >
+      <circle cx="12" cy="12" r="9" strokeWidth={enCurso ? 2.5 : 2} />
+      {suspendida ? (
+        <path strokeLinecap="round" strokeWidth={2} d="M8.5 12h7" />
+      ) : (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={enCurso ? 2.5 : 2} d="M8.5 12.5l2.5 2.5 4.5-5" />
+      )}
+    </svg>
+  );
+}
+
+/** El texto accesible del estado — el círculo es `aria-hidden`, así que alguien lo tiene que decir. */
+const ESTADO_TEXTO: Record<string, string> = {
+  DONE: "Hecha",
+  IN_PROGRESS: "En curso",
+  SUSPENDED: "Aparcada",
+  PENDING: "Pendiente",
+};
 // Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
 // Navy de marca (la menta/teal quedó reservada para identidad Insider).
 const SESSION_META_LIGHT = { label: "Sesión", text: "#051849", bg: "#eef3fc", border: "#dbe4f3" };
@@ -106,6 +159,16 @@ const chipStyle = (m: { text: string; bg: string; border: string }): React.CSSPr
   flexShrink: 0,
   whiteSpace: "nowrap",
 });
+
+/** Visible solo para lectores de pantalla: el círculo de estado es `aria-hidden`. */
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+};
 
 const SUB_LABEL: React.CSSProperties = {
   fontSize: 10,
@@ -193,7 +256,9 @@ export default function TimelineSection({
 
   /* En papel la columna de fases se achica —el nombre sigue leyéndose— para dejarle todo el
      ancho posible a las semanas, que es lo que se pierde primero al encoger. */
-  const anchoFase = pdf ? "minmax(120px, 170px)" : "minmax(200px, 280px)";
+  /* El piso de la columna de fase. Bajarlo NO recorta nada desde que el nombre envuelve —
+     y le devuelve ancho a las semanas, que es lo que se apretaba en pantallas chicas. */
+  const anchoFase = pdf ? "minmax(120px, 170px)" : "minmax(150px, 260px)";
   const gridCols = { gridTemplateColumns: `${anchoFase} repeat(${total}, minmax(26px, 1fr))` };
   /* Ancho que la grilla NECESITA para no apretarse, y cuánto hay que encogerla para que
      entre. El disponible sale de la hoja: `TIMELINE_CONTAINER` ocupa el 100% del ancho en
@@ -320,7 +385,12 @@ export default function TimelineSection({
                           ) : (
                             <span style={{ width: 12, flexShrink: 0 }} />
                           )}
-                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                          {/* SIN truncar. Era `nowrap` + ellipsis, y en pantallas más angostas que
+                              la de quien lo diseñó salía «Audit…» / «Sem…» — que no le dice NADA al
+                              cliente sobre qué se hizo esa semana. Un nombre de fase es identidad:
+                              si no entra a lo ancho, entra a lo alto. Recortar por píxeles obliga a
+                              adivinar el ancho de la pantalla ajena; envolver funciona en todas. */}
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflowWrap: "anywhere", minWidth: 0 }}>{p.name}</span>
                           {meta && (
                             <span
                               style={{
@@ -389,13 +459,21 @@ export default function TimelineSection({
                               </div>
                               <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
                                 {weekTasks.map((t, ti) => {
-                                  const sMeta = showProgress && t.status ? STATUS_META_LIGHT[t.status] : null;
+                                  // Solo los estados que sabemos dibujar; uno desconocido no pinta círculo.
+                                  const conEstado = showProgress && !!t.status && t.status in ESTADO_TEXTO;
                                   const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), now, t.status);
                                   const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
                                   return (
-                                    <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                                      <span>{t.title}</span>
-                                      {sMeta && <span style={chipStyle(sMeta)}>{sMeta.label}</span>}
+                                    /* `flex-start` y no `center`: con el círculo a la izquierda, un
+                                       título de dos líneas dejaría el check flotando en el medio. */
+                                    <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}>
+                                      {conEstado && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", height: "1.5em", flexShrink: 0 }}>
+                                          <EstadoCirculo status={t.status!} />
+                                          <span style={SR_ONLY}>{ESTADO_TEXTO[t.status!] ?? ""}: </span>
+                                        </span>
+                                      )}
+                                      <span style={t.status === "DONE" ? { color: "var(--text-muted)" } : undefined}>{t.title}</span>
                                       {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
                                       {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
                                       {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}
