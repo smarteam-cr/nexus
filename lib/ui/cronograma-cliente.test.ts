@@ -13,17 +13,44 @@ import fs from "node:fs";
 import path from "node:path";
 
 const RAIZ = path.resolve(__dirname, "..", "..");
+/** Los archivos de este repo son CRLF; el `\r` sobrante no molesta a `includes`. */
+const EOL = "\n";
+/**
+ * El fuente SIN comentarios, conservando los saltos de línea (se blanquean, no se borran).
+ *
+ * ⚠ Sin esto, el comentario que EXPLICA por qué no hay `nowrap` hace fallar al test que
+ * prohíbe `nowrap`. Mencionar no es usar — y una guarda que castiga la explicación enseña a
+ * no escribirla. Es el tercer lugar del repo donde hace falta el mismo blanqueo.
+ */
+function sinComentarios(texto: string): string {
+  return texto
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+}
+
 const src = fs.readFileSync(
   path.join(RAIZ, "components", "canvas", "TimelineSection.tsx"),
   "utf8",
 );
 
-/** El nombre de la fase: el `<span>` que renderiza `{p.name}`. */
-const lineaDelNombre = src.split("\n").find((l) => l.includes("{p.name}")) ?? "";
+/**
+ * Cada lugar que pinta `{p.name}`, con dos líneas de contexto: el estilo puede vivir en la
+ * línea anterior cuando el nombre queda solo.
+ *
+ * ⚠ Son DOS desde que existe la vista de lista para pantallas angostas, y esto miraba solo el
+ * PRIMERO — o sea que la vista nueva podía nacer truncando sin que nada avisara. Lo cazó el
+ * propio test al ponerse rojo; por eso ahora los recorre todos.
+ */
+const lineasDelFuente = sinComentarios(src).split(EOL);
+const bloquesDelNombre = lineasDelFuente
+  .map((l, i) =>
+    l.includes("{p.name}") ? lineasDelFuente.slice(Math.max(0, i - 2), i + 1).join(EOL) : null,
+  )
+  .filter((b): b is string => b !== null);
 
 describe("el nombre de la fase no se recorta", () => {
-  it("existe la línea que lo pinta", () => {
-    expect(lineaDelNombre, "¿se movió el render de `p.name`?").not.toBe("");
+  it("las DOS vistas lo pintan: la grilla y la lista", () => {
+    expect(bloquesDelNombre.length, "¿se movió el render de `p.name`?").toBe(2);
   });
 
   it("⚠ nada de `nowrap` + ellipsis: si no entra a lo ancho, entra a lo alto", () => {
@@ -34,11 +61,13 @@ describe("el nombre de la fase no se recorta", () => {
 
        Recortar por píxeles obliga a adivinar el ancho de la pantalla ajena. Envolver funciona
        en todas, y en un documento que se comparte eso no es un detalle. */
-    expect(lineaDelNombre).not.toContain("nowrap");
-    expect(lineaDelNombre).not.toContain("textOverflow");
-    expect(lineaDelNombre, "sin `overflowWrap` un nombre largo desborda la columna").toContain(
-      "overflowWrap",
-    );
+    for (const bloque of bloquesDelNombre) {
+      expect(bloque).not.toContain("nowrap");
+      expect(bloque).not.toContain("textOverflow");
+      expect(bloque, "sin `overflowWrap` un nombre largo desborda la columna").toContain(
+        "overflowWrap",
+      );
+    }
   });
 });
 
@@ -70,5 +99,54 @@ describe("el estado es un círculo a la izquierda, no una etiqueta «hecho»", (
     // El SVG es `aria-hidden`; si nadie dice «Hecha», el estado desaparece para quien no ve.
     expect(src).toContain("ESTADO_TEXTO");
     expect(src).toContain("SR_ONLY");
+  });
+});
+
+describe("en un teléfono el cronograma es una LISTA, no una grilla apretada", () => {
+  const hook = fs.readFileSync(path.join(RAIZ, "lib", "hooks", "useAnchoAngosto.ts"), "utf8");
+
+  it("⚠ el PDF NUNCA cae en la lista", () => {
+    /* El riesgo grande de este cambio, y el más silencioso: el PDF se compone contra 920px de
+       papel y ya tiene su propio encogido por `zoom`. Si la lista se colara ahí, el cronograma
+       impreso cambiaría de forma sin que nadie lo pida — y nadie lo vería hasta abrir un PDF
+       viejo. El `!pdf` va PRIMERO en la condición, y esto lo hace cumplir. */
+    expect(src).toMatch(/const enLista = !pdf && anchoAngosto/);
+  });
+
+  it("el hook se llama SIEMPRE, no detrás de un `&&`", () => {
+    // Un hook condicional es un bug de React, no un detalle de estilo: cambia el orden de los
+    // hooks entre renders. Lo escribí mal la primera vez y por eso queda fijado.
+    expect(src).toMatch(/const anchoAngosto = useAnchoAngosto\(\);/);
+    expect(src, "el hook volvió a quedar detrás de una condición").not.toMatch(
+      /(\?|&&|\|\|)\s*useAnchoAngosto\(\)/,
+    );
+  });
+
+  it("en el servidor el hook responde «ancho»: es lo único que server y cliente comparten", () => {
+    // Si devolviera el valor real, el HTML del servidor y el primer render del cliente
+    // diferirían y React tiraría mismatch de hidratación.
+    expect(hook).toContain("const leerEnServidor = () => false");
+    expect(hook, "sin suscripción, rotar el teléfono deja el layout equivocado").toContain(
+      "addEventListener",
+    );
+  });
+
+  it("el ancho del cronograma dejó de ser un porcentaje", () => {
+    /* `width: "80%"` en un teléfono de 375px regalaba 65px de los 327 que hay, justo donde no
+       sobra ninguno — y nunca coincidía con el ancho del resto de las páginas del cliente. */
+    expect(src, "volvió un porcentaje al contenedor").not.toMatch(
+      /TIMELINE_CONTAINER = \{[^}]*width: "\d+%"/,
+    );
+    expect(src).toContain("--stl-w-pagina");
+  });
+
+  it("las dos vistas comparten el detalle de la fase", () => {
+    // Duplicarlo garantizaba que se separaran: el día que alguien agregue un dato por tarea,
+    // lo agregaría en una sola de las dos.
+    expect(src).toContain("function DetalleDeFase");
+    // ⚠ El corchete final NO es de adorno: sin él, `<DetalleDeFaseCopiaPegada` matcheaba
+    //    y la guarda daba verde con el detalle duplicado. Se cazó rompiéndola.
+    const usos = src.match(/<DetalleDeFase[\s/>]/g) ?? [];
+    expect(usos, "la grilla y la lista tienen que usar el MISMO detalle").toHaveLength(2);
   });
 });

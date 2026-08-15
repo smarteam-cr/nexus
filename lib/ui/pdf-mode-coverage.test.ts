@@ -57,6 +57,13 @@ const ARCHIVOS_SUELTOS = [path.join(RAIZ, "components", "canvas", "TimelineSecti
 const EXENTOS: Record<string, string> = {
   // Es el que YA resuelve el problema: define `DiagramStatic`, la variante de impresión.
   "components/landing/diagram-static.tsx": "es la variante estática de impresión en sí misma",
+  /* Su scroller es para TELÉFONOS, y en el PDF no se monta: los dos call sites eligen
+     `DiagramStatic` ANTES de llegar acá (`ctx.pdfMode ? <DiagramStatic/> : <DiagramaResponsive/>`,
+     en sections-diagram.tsx y KickoffSections.tsx). O sea que el `overflow: auto` que la guarda
+     ve es inalcanzable en impresión — y si algún día alguien lo monta sin esa rama, el que se
+     rompe es el PDF, así que la exención se revisa con el mismo criterio que las de arriba. */
+  "components/landing/diagram-responsive.tsx":
+    "el pdfMode se decide ANTES, en los call sites: en impresión se monta DiagramStatic",
   // Primitivas de edición: `mode='read'` no las renderiza, así que nunca llegan al PDF.
   "components/landing/inline.tsx": "chrome de edición — no se renderiza en mode=read",
   "components/landing/sortable.tsx": "chrome de edición — no se renderiza en mode=read",
