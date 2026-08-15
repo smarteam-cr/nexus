@@ -3034,6 +3034,11 @@ enum CobranzaFrecuenciaCosto {
 // (COSTOS_ROLES + guardCostosAccess, 3 capas server-side — RLS no cuenta: Prisma
 // bypassa) — los salarios son la información más sensible del sistema y por eso
 // viven en entidad APARTE, nunca como columna de TeamMember.
+// ⚠ ACOTADO 2026-08-14: todo lo de arriba sigue valiendo PARA ESTE MODELO y solo para
+// él. Lo que se pagó de verdad, quincena por quincena, vive en `PagoPlanilla` — otra
+// entidad, con estado de pago propio (ver DECISIONS §El libro de planilla). La
+// prohibición fiscal y la de FX NO se levantaron: el aguinaldo se DERIVA sumando lo
+// registrado en ese libro, y los montos se guardan en su moneda nativa.
 model CostoRecurrente {
   id         String                  @id @default(cuid())
   categoria  CobranzaCategoriaCosto

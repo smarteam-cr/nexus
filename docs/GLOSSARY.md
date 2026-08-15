@@ -261,6 +261,42 @@
 - **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
   (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
+- **libro de planilla** (`PagoPlanilla` → `/finanzas/costos/pagos-planilla`, SOLO SUPER_ADMIN):
+  lo que efectivamente se PAGÓ, una fila por persona y por quincena (1–15 / 16–fin), con estado
+  pendiente|pagado, fecha real y `confirmadoPor`. Es **otra cosa** que la hoja «Planillas»
+  (`/finanzas/costos/planillas`), que muestra el salario all-in ESTIMADO de `CostoRecurrente`
+  para el burn: una dice cuánto se calcula que cuesta el mes, la otra cuánto salió de verdad.
+  Su monto es **propio y congelado como snapshot** al crear la fila —no se deriva del costo— y
+  la materialización es CREATE-ONLY: una quincena PAGADA es intocable. **No entra a la caja
+  neta** (ahí el burn lo sigue produciendo `CostoRecurrente`; sumarlo sería doble conteo).
+  Ver DECISIONS §El libro de planilla.
+- **aguinaldo** (`lib/finanzas/aguinaldo.ts`): la provisión estimada por colaborador — **suma
+  de lo REGISTRADO en el libro de planilla de diciembre a noviembre, ÷ 12**, por moneda
+  separada. Es un **dato observado**, no una tasa: Nexus no tiene ni tendrá tablas de CCSS,
+  cargas ni renta. La fecha de ingreso sale del propio libro (`min` de sus pagos), no de un
+  campo en `TeamMember`; la fórmula ya maneja sola el año parcial. Declara **cobertura** ("N de
+  12 meses registrados") en vez de rellenar lo que falta.
+- **tarjeta de crédito** (`TarjetaCredito` → `/finanzas/costos/tarjetas`, SOLO SUPER_ADMIN):
+  una tarjeta de la empresa con su **límite** y su **saldo usado**, que escribe una persona con
+  la fecha de corte y queda auditado (`saldoAlDia`/`saldoPorEmail`). **Disponible = límite −
+  saldo.** Aparte, y solo como REFERENCIA, Nexus suma los costos que se le asignaron por la
+  tabla puente `TarjetaCreditoCosto`: un saldo es acumulado y un cargo es mensual, así que
+  nunca se restan entre sí. Lo único que sí se compara: si el disponible no alcanza para el
+  próximo mes de cargos. No tiene semáforo ni alertas.
+- **comisión de partner** (`ComisionPartner` → `/finanzas/comisiones-partner`, gate
+  `cobranza.read`): lo que Smarteam **gana** de un aliado comercial (HubSpot, Atom Chat, Cooby,
+  Nua talk). Es un INGRESO y por eso vive en la superficie de ADMIN, junto a los ingresos
+  variables. Se registra acá y **no** como `IngresoVariable` — mismo límite anti-doble-conteo
+  que ese modelo declara contra Cobranza.
+- **comisión de vendedor** (`ComisionVendedor` + `ReglaComisionVendedor` →
+  `/finanzas/costos/comisiones-vendedor`, SOLO SUPER_ADMIN): lo que Smarteam le **paga** a
+  quien vendió, como **% de lo COBRADO**. La comisión DEVENGADA es una **vista derivada** de
+  los cobros en estado COBRADO cruzados con la regla vigente (persona · cliente o todos ·
+  porcentaje · vigencia; la más específica gana) — no existe como fila hasta que se
+  **liquida**, y ahí se congela con snapshot autosuficiente y se engancha al pago de planilla
+  de esa quincena. Revertir un cobro cambia el derivado; si su comisión ya se liquidó, el
+  revert **frena con 409**. Es remuneración de una persona: nunca comparte ruta, endpoint ni
+  loader con las de partner.
 - **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
   /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
   puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);

@@ -734,6 +734,10 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   el usuario (sin defaults ni tasas sugeridas); el canónico SIEMPRE es `monto` all-in —
   base+factor son solo memoria de reedición (van juntos o ninguno). Del lado costos NO hay
   tracking de pagos: sin "pagado", sin semáforo, sin alertas — un costo no vence.
+  ⚠ **ACOTADO el 2026-08-14** (ver §"El libro de planilla"): todo este párrafo sigue vigente
+  **para `CostoRecurrente`** y solo para él. Lo que se pagó de verdad vive en `PagoPlanilla`,
+  que es otra entidad y sí lleva estado de pago. La prohibición fiscal y la de FX **no se
+  levantaron**.
 - **Caja neta REUSA el motor de proyección, no lo duplica**: `esqueletoBuckets` (privado del
   engine) arma los buckets (quincenas→meses, clamp adentro) y lo consumen `proyectarIngresos`
   Y `proyectarCostos` → keys idénticas POR CONSTRUCCIÓN y `computeCajaNeta` solo resta.
@@ -2374,3 +2378,101 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   otros números («120+ implementaciones», «45+ clientes activos»): no es contradicción
   necesariamente —cuentan cosas distintas— pero conviene que sean el mismo relato, y hoy
   cambiarlas es un cambio de código (el mismo trato que las insignias).
+
+## El libro de planilla, las tarjetas y las comisiones (2026-08-14)
+
+> Elías: *"Quiero optimizar la sección de finanzas para que mapee mucho mejor los gastos"* — un
+> submenú de tarjetas de crédito con su capacidad disponible; otro de comisiones (lo que Smarteam
+> gana con cada partner y lo que le paga a sus vendedores); la planilla con histórico por quincenas
+> «similar a las cuentas por cobrar»; y el aguinaldo por colaborador.
+
+- **La enmienda va primero, y ACOTA en vez de levantar.** El párrafo de §Cobranza que define
+  `CostoRecurrente` prohíbe literalmente tres cosas que este pedido necesita: la palabra
+  **aguinaldo** está en la lista de lógica fiscal prohibida, **FX** también, y *"un costo no vence:
+  sin pagado, sin semáforo, sin alertas"* choca con una planilla que se marca pagada.
+  `ARCHITECTURE §11` obliga a corregir el documento ANTES del código, así que: la regla sigue
+  **entera para `CostoRecurrente`** (referencia estimada, alimenta el burn y la caja neta, nadie le
+  agrega un «pagado») y `PagoPlanilla` es una **entidad nueva** con su propio ciclo de vida — mismo
+  precedente que «costo fijo vs. gasto puntual = entidades separadas», que ya resolvió esta misma
+  tensión una vez. El aguinaldo permitido es **suma de lo REGISTRADO en el libro, dic–nov, ÷ 12**:
+  un dato observado, no una tasa; siguen prohibidas CCSS, cargas, renta y timbrado, cero constantes
+  fiscales. **FX sigue prohibido**: todo se carga en su **moneda nativa** y el ₡500 hardcodeado del
+  Excel de Alex no entra al código — consecuencia declarada, la caja neta va a diferir de su hoja
+  apenas se mueva el tipo de cambio, y eso es correcto, no un bug. El cálculo del aguinaldo **no
+  vive en `engine.ts`**: el motor es puro y está congelado por golden.
+- **La comisión del vendedor es una VISTA DERIVADA, no una fila que se escribe al cobrar.** El
+  primer diseño colgaba la generación de `cambiarEstadoCobro` y se refutó con tres hechos: (a) esa
+  función **no tiene transacción** — es un `prisma.cobro.update` pelado y sus efectos colaterales
+  corren sueltos después; (b) **no es el único escritor de `COBRADO`** —
+  `import-facturaciones-xlsx.ts` escribe `estado` + `confirmadoPor` directo por `tx.cobro.upsert`, y
+  así entraron 202 cobros históricos que nunca pasaron por ahí; (c) el revert COBRADO→PROGRAMADO es
+  un **click optimista sin confirmación** en un `<select>` y **no deja bitácora** (el comentario del
+  código que afirma lo contrario es falso: el único `bitacoraCobro.create` está dentro del `if` de
+  `promesaPago`). Con eso, materializar al cobrar dejaba tres formas de tener un cobro sin su
+  comisión y ningún invariante que lo viera. Ahora: `ReglaComisionVendedor` (persona · `clientId?`
+  null = todos · porcentaje · vigencia; la más específica gana) + una query solo-lectura sobre los
+  COBRADO. **La fila solo se persiste al LIQUIDAR**, con snapshot autosuficiente, patrón
+  `CostoMovimiento`. Única concesión al chokepoint: **409** al revertir un cobro cuya comisión ya se
+  liquidó — un `count` server-side, sin montos en el body.
+- **Partner y vendedor no comparten ruta, ni endpoint, ni loader.** Una comisión de partner es un
+  INGRESO de Smarteam (superficie ADMIN, gate `cobranza.read`); una de vendedor es la **remuneración
+  de una persona**, tan sensible como un salario (SUPER_ADMIN). Un `loadComisiones()` que devolviera
+  las dos metería montos de remuneración en el payload RSC del ADMIN aunque la UI no los pintara.
+  ⚠ Y **todo lo SUPER_ADMIN cuelga de `app/api/cobranza/costos/`**: ahí entra gratis al escaneo
+  estructural que exige `guardCostosAccess` en cada handler. Verificado: **ningún escaneo cubre
+  `app/api/cobranza/` fuera de `costos`, `gastos` y `caja-neta`**, así que copiar el molde de
+  `IngresoVariable` y poner las rutas en `app/api/cobranza/tarjetas/` las dejaría sin ningún guard
+  obligatorio. El precio de esa comodidad es una fuga sin señal roja.
+- **El libro NO entra a la caja neta.** `loadCajaNeta` trae `costoRecurrente.findMany({activo:true})`
+  **sin filtrar categoría**, y hay 17 salarios activos que `proyectarCostos` ya reparte por quincena:
+  sumar `PagoPlanilla` sería doble conteo garantizado. El burn lo sigue produciendo
+  `CostoRecurrente`; el libro es EJECUCIÓN (pasado), como los `pasados` de `proyectarGastos`.
+  ⚠ Las comisiones tampoco entran en esta tanda —precedente vivo: `IngresoVariable` también está
+  afuera— y eso hay que decirlo con el número en la mano: las de partner son **$198.961/año** contra
+  $301k de cobranza. Meterlas obliga a tocar `esqueletoBuckets` (privado y compartido por los tres
+  proyectores), a mover G1/G2 y a reescribir el copy del panel («entra (cobros proyectados)» y el
+  banner de cobertura por cuentas, que no aplica a una comisión de HubSpot). Es una tanda propia, no
+  un renglón.
+- **El monto de una quincena es PROPIO, no derivado del costo.** `CostoRecurrente.monto` es el
+  all-in estimado (base × factor) y el schema declara que el motor jamás lee `montoBase`: no existe
+  un bruto quincenal que partir. `PagoPlanilla` lleva su monto canónico congelado como snapshot;
+  `montoQuincena` se exporta del engine (hoist puro — precedente exacto: `bucketAntiguedad`) y se usa
+  **solo como sugerencia de UI** al crear la fila. La materialización es **CREATE-ONLY**: nunca
+  update, nunca delete. Si alguien sube el salario a mitad de mes, un `toUpdate` reescribiría la Q2
+  pendiente al monto nuevo con la Q1 ya pagada al viejo, y Q1+Q2 no daría ningún salario.
+- **Cero DDL de ancla temporal.** `CostoRecurrente` tiene `finalizadoEl` pero no un `iniciadoEl`: no
+  hay con qué decidir qué quincenas existen hacia atrás. La generación arranca en la fecha de
+  activación, el histórico se carga a mano, y la antigüedad de una persona es `min(quincena)` de sus
+  pagos; el primer año declara **cobertura** («N de 24 quincenas registradas») en vez de fabricar lo
+  que falta. Por lo mismo, la fecha de ingreso del aguinaldo **sale del libro** y no de un campo
+  nuevo: `TeamMember.fechaIngreso` rompería `TEAM_MEMBER_SAFE_SELECT`, la allowlist congelada de 12
+  claves de un modelo que leen decenas de módulos. Y la fórmula CR ya maneja sola el año parcial —
+  quien entró en julio tiene ceros de diciembre a junio y su aguinaldo sale proporcional. Argumento
+  decisivo a favor del libro: el período dic–nov abarca a **4 personas que se fueron en julio**;
+  derivado de los costos ACTIVOS desaparecen, derivado del libro salen bien.
+- **La tarjeta: el saldo lo escribe una persona, lo asignado es referencia.** Disponible = límite −
+  saldo, con su fecha de corte y su autoría (patrón `confirmadoPor`/`confirmadoEn`). Lo que Nexus
+  suma —los costos asignados a esa tarjeta— se muestra al lado y **nunca calcula el saldo**: un
+  saldo es acumulado y un cargo es mensual, no son la misma unidad, y «avisar si difieren» sería
+  inventar una conciliación. Lo que sí se compara y es sólido: si `disponible < cargado mensual`, el
+  próximo mes de cargos no cabe. El vínculo es una **tabla puente**, no una columna en
+  `CostoRecurrente`: una tarjeta SÍ vence (corte, pago) y una columna arrastraría ese vencimiento al
+  costo, que por regla no vence. ⚠ Ese vencimiento no puede derramar semáforo ni entrar por
+  `AlertaCobro` — la prohibición transversal «sin alertas de costos» sigue en pie.
+- **Lo que el Excel de Alex enseñó al leerlo celda por celda** (además de los montos): la hoja
+  *Costos Fijos* tiene dos bloques y el izquierdo está **OCULTO**, con sus dos filas TOTAL en
+  `#REF!` y **moneda mezclada** (alquiler en ₡, Juan Tijerino en $) — el vivo es el derecho, y no
+  son dos años sino **un ciclo partido en abril**, que *Pretensión de Aguinaldos* confirma (Elías y
+  Breiner arrancan en abril). ⚠ **El año no consta en ninguna hoja ni en la metadata.** La fuente de
+  herramientas es la **grilla mensual**, no la lista de arriba: sus dos totales cortan el rango antes
+  de la fila 26 y **pierden Supabase**. Y en *Salarios Actuales* el total arranca en `D14` y **se
+  come a Jerson Escudero ($1.200)**. Es la tercera vez que un total del propio documento sub-suma
+  (ya había pasado con las facturaciones) ⇒ **regla que queda: lo leído celda por celda es la
+  verdad; el total del documento es un control informativo, jamás una validación.** *Patente* es
+  **incargable** (la hoja cobra ₡15.000 todos los meses **y además** lo triplica en jun/sep/dic, y el
+  enum solo tiene MENSUAL|ANUAL) y *Claude* no tiene importe en ninguna de las dos fuentes: ninguno
+  se aproxima, se reportan y se dejan afuera.
+- **«El Excel manda» con un matiz.** Lo que está en Nexus y no en el Excel (Claude, Odoo, Mercury,
+  Apollo, Factun, Quickbooks, Marketing Hub Starter, 5 personas) **no se borra: se da de baja**
+  (`finalizadoEl` + movimiento `BAJA`). Es reversible y deja huella; el hard delete perdería
+  justamente la historia que `CostoMovimiento` existe para guardar.
