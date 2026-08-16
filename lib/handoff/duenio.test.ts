@@ -706,7 +706,17 @@ describe("candado: el zoom también filtra datos, no solo pide", () => {
 describe("candado: nadie lee el handoff fuera del embudo", () => {
   it("solo `loadHandoffContext` llama al loader genérico con «handoff»", () => {
     /* Cada `loadCanvasContext(x, "handoff", …)` nuevo devuelve VACÍO para un desarrollo
-       hermano y manda su prompt a la rama degradada, sin error y sin log. */
+       hermano y manda su prompt a la rama degradada, sin error y sin log.
+       ⚠ MENCIONAR NO ES USAR (cazado el 2026-08-16 por `lib/projects/project-brief.ts`, que
+       nombraba el atajo en el comentario que explica por qué NO lo usa). Un comentario no llama
+       a nada, así que escanearlo solo logra que la guarda premie borrar la explicación — el
+       incentivo exactamente al revés. Es el mismo idiom que ya usan los otros escaneos de este
+       archivo. */
+    const codigoDe = (abs: string) =>
+      fs
+        .readFileSync(abs, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/^\s*\/\/.*$/gm, " ");
     const culpables: string[] = [];
     const rec = (d: string) => {
       for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -716,7 +726,7 @@ describe("candado: nadie lee el handoff fuera del embudo", () => {
           const rel = path.relative(RAIZ, p);
           // El único sancionado: adentro de `loadHandoffContext` vive la llamada real.
           if (rel.endsWith(path.join("lib", "canvas", "load-canvas-context.ts"))) continue;
-          if (/loadCanvasContext\(\s*[\w.]+\s*,\s*"handoff"/.test(fs.readFileSync(p, "utf8"))) {
+          if (/loadCanvasContext\(\s*[\w.]+\s*,\s*"handoff"/.test(codigoDe(p))) {
             culpables.push(rel);
           }
         }

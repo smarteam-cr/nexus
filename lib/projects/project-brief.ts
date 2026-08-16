@@ -26,6 +26,7 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
+import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { armarContextoDeBrief, type DatosDeBrief } from "./brief-fuentes";
 
 const AGENT_ID = "agent-project-brief";
@@ -65,7 +66,7 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
   });
   if (!p) return null;
 
-  const [sesiones, desviaciones, categorias] = await Promise.all([
+  const [sesiones, desviaciones, categorias, handoffTexto] = await Promise.all([
     prisma.firefliesSession.findMany({
       /* ⚠ SOLO LAS QUE YA OCURRIERON. Las más recientes incluían las AGENDADAS —hay 459 sesiones
          futuras en el corpus por la agenda recurrente de Google—, así que el resumen se armaba
@@ -91,6 +92,16 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
       select: { id: true, kind: true, title: true, detail: true, lastDetectedAt: true },
     }),
     getSessionCategories(),
+    /* ⚠ EL DOCUMENTO QUE DICE QUÉ SE PROMETIÓ. Sin él, «cómo va el proyecto» se contesta contra
+       nada: una desviación es una desviación RESPECTO DE ALGO, y ese algo vive acá.
+       `onlyConfirmed: true` a propósito —igual que el agente de avance y que `contexto/cargar`—:
+       un brief que cita el handoff tiene que citar lo que un humano validó, no un borrador del
+       agente esperando revisión.
+       ⛔ Y va por `loadHandoffContext`, nunca por `loadCanvasContext(x, "handoff")`: el embudo
+       resuelve de quién ES el handoff y mete la procedencia adentro del texto — hay una guarda
+       en `lib/handoff/duenio.test.ts` que lo hace cumplir.
+       El largo no hace falta acotarlo acá: `armarContextoDeBrief` capea cada bloque. */
+    loadHandoffContext(projectId, { onlyConfirmed: true }),
   ]);
 
   /* El contenido lo serializa el helper compartido: sabe leer los DOS shapes de resumen
@@ -116,8 +127,10 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
           at: p.hubspotStageSyncedAt,
         }
       : null,
-    // El handoff entra por su fecha; el TEXTO lo pone el llamador de más arriba si lo tiene.
-    handoff: null,
+    /* ⚠ La fecha es la del documento, el texto es el del embudo: si viene vacío NO se registra
+       la fuente (el armador omite los bloques vacíos de los dos lados), así que un proyecto sin
+       handoff generado no gana una fuente hueca que el modelo podría citar. */
+    handoff: handoffTexto.trim() ? { texto: handoffTexto, at: p.handoff?.updatedAt ?? null } : null,
     sesiones: sesiones.map((s, i) => ({
       id: s.id,
       title: s.title,

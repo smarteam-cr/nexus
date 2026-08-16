@@ -104,6 +104,48 @@ describe("⚠ una marca de vencido puesta DURANTE la generación sobrevive", () 
   });
 });
 
+describe("⛔ el handoff llega, y llega por el embudo", () => {
+  it("el runner lo pide", () => {
+    /* EL DEFECTO QUE ESTO CIERRA: `cargarDatos` devolvía `handoff: null` con un comentario que
+       decía que el texto «lo pone el llamador de más arriba». No había tal llamador. El armador
+       SÍ tenía su rama probada y `DatosDeBrief` SÍ declaraba el campo, así que las dos puntas
+       estaban cubiertas y el CABLE del medio no — el resumen salía sin el único documento que
+       dice qué se prometió. Una desviación es una desviación RESPECTO DE ALGO, y ese algo vive
+       en el handoff.
+       Es el modo de falla más difícil de ver: nada falla, el brief simplemente sabe menos. */
+    expect(sinComentarios(RUNNER), "el runner dejó de leer el handoff").toContain(
+      "loadHandoffContext(projectId",
+    );
+  });
+
+  it("⭐ y por el EMBUDO, nunca por el canvas crudo", () => {
+    /* `loadCanvasContext(x, "handoff")` fuera de `load-canvas-context.ts` se saltea la
+       resolución de de quién ES el handoff y la procedencia que ese módulo mete ADENTRO del
+       texto. Hay una guarda global en `lib/handoff/duenio.test.ts`; se repite acá porque este
+       archivo es el que tiene la tentación fresca. */
+    expect(sinComentarios(RUNNER)).not.toContain('loadCanvasContext(');
+  });
+
+  it("⚠ y el texto se ENCHUFA: pedirlo sin usarlo se ve igual de bien", () => {
+    /* La regresión plausible: alguien mueve el `await` al `Promise.all` y se olvida de cambiar
+       el `handoff: null`. Compila, no rompe ningún test y el brief sigue sin saber nada. */
+    const src = sinComentarios(RUNNER);
+    expect(src, "el texto del handoff se pide y se tira").toMatch(
+      /handoff:\s*handoffTexto\.trim\(\)\s*\?/,
+    );
+    expect(src, "un handoff vacío volvería a registrarse como fuente citable").not.toMatch(
+      /handoff:\s*\{\s*texto:\s*handoffTexto,\s*at/,
+    );
+  });
+
+  it("⚠ y es el CONFIRMADO, no un borrador esperando revisión", () => {
+    /* Citar contenido que el agente propuso y nadie validó convertiría una propuesta en un hecho
+       con fuente. Los dos hermanos del mismo pelaje —el agente de avance y `contexto/cargar`—
+       usan el mismo criterio. */
+    expect(sinComentarios(RUNNER)).toContain("onlyConfirmed: true");
+  });
+});
+
 describe("el agente sin sembrar no es un error", () => {
   it("devuelve `skipped`, no `error`", () => {
     /* Es un estado de configuración. Tratarlo como falla llenaría el feed de corridas rojas que
