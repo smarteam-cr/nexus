@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `2db22ca`. **30 commits sin push.**
+> Última actualización: **2026-08-16**, punta `1eae91d`. **33 commits sin push.**
 
 ---
 
@@ -36,7 +36,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | **II — Que el estado se vea y se corrija** | 4 · Estado y Etapa hacia HubSpot | Nexus propone el estado real de un proyecto (atrasado, bloqueado, en espera) y su etapa; el CSE confirma y se escribe en HubSpot de un clic. | ✅ Hecho *(la base determinística)* |
 | | 5 · Resumen del proyecto | Cada proyecto tiene un resumen automático de «cómo va», con cada afirmación citando de dónde salió. Sin fuente, la afirmación se descarta. | ✅ Hecho |
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
-| | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | 🔨 **En curso** — el dato ya está; falta el botón |
+| | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | 🔨 **Casi** — ya funciona; falta la vista del cliente |
 | | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⏳ Pendiente |
 | | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
@@ -56,7 +56,7 @@ lo construido está mal, es mucho más barato descubrirlo con un clic que con 11
 
 ### Fase 11 · Validar en pantalla *(requiere deploy — lo hace Elías)*
 
-Bloqueada por: los 30 commits sin push y las **cuatro migraciones SQL pendientes** (ver abajo). El
+Bloqueada por: los 33 commits sin push y las **cuatro migraciones SQL pendientes** (ver abajo). El
 recorrido está en `docs/CHECKLIST-PRUEBA-CLICKEADA-CONTEXTOS.md`, ordenado por pantalla.
 
 Lo que la validación tiene que responder, y ningún test puede:
@@ -117,8 +117,8 @@ o revienta la lectura.
 | | |
 |---|---|
 | El dato existe y todo lo que lee desviaciones sabe preguntarle | ✅ `2db22ca` |
-| El botón de cerrar y reabrir | ⏳ |
-| Que el agente no vuelva a proponer lo que ya se cerró | ⏳ |
+| El botón de cerrar y reabrir | ✅ `1eae91d` |
+| Que el agente no vuelva a proponer lo que ya se cerró | ✅ `1eae91d` |
 | Que el cliente vea «resuelta» y el aviso de re-subir se encienda | ⏳ |
 
 ### Fase 8 · Reuniones → tareas
@@ -162,7 +162,7 @@ responde «el agente no está sembrado» (correcto, no es una falla).
 
 ---
 
-## Los 30 commits
+## Los 33 commits
 
 | Commit | Fase | Qué |
 |---|---|---|
@@ -185,6 +185,7 @@ responde «el agente no está sembrado» (correcto, no es una falla).
 | `a276eb0` | 9 (prerrequisito) | ⛔ Dos caminos le podían mandar al cliente el handoff entero |
 | `f44c500` | 7 | El relevamiento de la fase 7, con los 12 problemas graves |
 | `2db22ca` | 7 | El dato ABIERTA/CERRADA — **SQL #4** |
+| `1eae91d` | 7 | El botón de dar por resuelta, y reabrir en vez de clonar |
 
 ---
 
