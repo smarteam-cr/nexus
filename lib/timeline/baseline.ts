@@ -19,6 +19,7 @@ import type {
 } from "@prisma/client";
 import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { resincronizarFotoDeFase } from "@/lib/timeline/foto-del-plan";
 
 // ── Shape del snapshot frozen ─────────────────────────────────────────────────
 
@@ -321,7 +322,26 @@ export async function patchBaselinePhaseTasks(
     select: { id: true, title: true, weekIndex: true, order: true, source: true, needsValidation: true, status: true },
   });
 
-  snapshot.phases[snapIdx].tasks = buildTaskSnapshotEntries(snapshot.anchorStartDate, phaseStart, liveTasks);
+  /* ⛔ SOLO se re-sincronizan las tareas que YA ESTABAN en la foto. Antes se reemplazaba por
+     TODAS las vivas —ids nuevos incluidos—, así que cada tarea agregada después de publicar
+     entraba a la promesa retroactivamente y `summary.ts` no podía volver a reportar alcance
+     excedido: cuenta las vivas cuyo id NO está en la foto, y la foto se las tragaba todas.
+
+     El motivo original del parche sigue en pie y se conserva: al regenerar una fase las tareas
+     cambian de id aunque el trabajo sea el mismo, y sin re-sincronizar cada regeneración se vería
+     como «agregaron 12 tareas». La distinción correcta es por ID, no «absorbé todo». */
+  const anchorIso = snapshot.anchorStartDate;
+  snapshot.phases[snapIdx].tasks = resincronizarFotoDeFase(
+    snapshot.phases[snapIdx].tasks,
+    liveTasks,
+    (viva) => {
+      const abs = phaseStart + viva.weekIndex;
+      return {
+        plannedStart: anchorIso ? addWeeks(anchorIso, abs).toISOString() : null,
+        plannedEnd: anchorIso ? addWeeks(anchorIso, abs + 1).toISOString() : null,
+      };
+    },
+  );
 
   await tx.timelineBaseline.update({
     where: { id: baseline.id },
