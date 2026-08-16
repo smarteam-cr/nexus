@@ -16,6 +16,7 @@ import { guardCapability } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { runAccountBrief, humanizeBriefError } from "@/lib/cs/account-brief";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 const inFlight = new Set<string>();
 
@@ -50,7 +51,9 @@ export async function POST(
   }
   inFlight.add(clientId);
   try {
-    const result = await runAccountBrief(clientId);
+    /* Quién apretó, para que el centro de corridas le avise a ESA persona cuando termine.
+       Es un botón de una pantalla: si no se estampa, nadie se entera de que salió. */
+    const result = await runAccountBrief(clientId, { triggeredByEmail: await triggeredByEmail() });
     if (result.status === "skipped") {
       return NextResponse.json(
         { error: result.reason === "agent_not_seeded" ? "El agente de resumen no está creado (correr el seed)." : "No se pudo armar el contexto." },

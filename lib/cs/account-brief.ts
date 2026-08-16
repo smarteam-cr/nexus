@@ -299,8 +299,23 @@ async function generateBriefText(systemPrompt: string, serialized: string): Prom
   return textOf(msg);
 }
 
-/** Genera (o regenera) el brief citado de la cuenta. El caller maneja concurrencia. */
-export async function runAccountBrief(clientId: string): Promise<AccountBriefResult> {
+/**
+ * Genera (o regenera) el brief citado de la cuenta. El caller maneja concurrencia.
+ *
+ * ── `triggeredByEmail`: QUIÉN APRETÓ EL BOTÓN ────────────────────────────────
+ * Sin esto la corrida nace con la columna en `null`, el feed de corridas la trata como de
+ * SISTEMA (`mine: false` en `/api/agent-runs`) y **nunca avisa al terminar** — sobre un agente
+ * que tarda ~30 s. O sea: alguien aprieta «Regenerar», se va a otra pantalla, y el resumen queda
+ * listo sin que nadie se entere. Es el mismo circuito que se rompe en el último paso que motiva
+ * toda esta tanda.
+ *
+ * `null` es legítimo y NO se adivina: cuando el disparo es del watchdog o de un script no hay
+ * humano detrás, y estampar un email inventado sería peor que no avisar.
+ */
+export async function runAccountBrief(
+  clientId: string,
+  opts?: { triggeredByEmail?: string | null },
+): Promise<AccountBriefResult> {
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
   if (!agent) return { status: "skipped", reason: "agent_not_seeded" };
 
@@ -313,7 +328,14 @@ export async function runAccountBrief(clientId: string): Promise<AccountBriefRes
   // Run creado PRIMERO: cualquier falla posterior (incluido armar el contexto o un error
   // de Prisma) queda con su causa en AgentRun.output — auditable, nunca un fallo mudo.
   const run = await prisma.agentRun.create({
-    data: { agentId: AGENT_ID, agentSlug: AGENT_SLUG, clientId, status: "RUNNING", stepLabel: "Resumen de cuenta (CS)" },
+    data: {
+      agentId: AGENT_ID,
+      agentSlug: AGENT_SLUG,
+      clientId,
+      status: "RUNNING",
+      stepLabel: "Resumen de cuenta (CS)",
+      triggeredByEmail: opts?.triggeredByEmail ?? null,
+    },
     select: { id: true },
   });
 
