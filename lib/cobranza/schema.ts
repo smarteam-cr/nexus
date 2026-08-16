@@ -350,7 +350,7 @@ const partnerBase = z.object({
     .number()
     .int("La frecuencia va en meses enteros")
     .min(FRECUENCIA_PARTNER_MIN, "Mínimo 1 mes")
-    .max(FRECUENCIA_PARTNER_MAX, "Máximo 24 meses"),
+    .max(FRECUENCIA_PARTNER_MAX, "Máximo 12 meses"),
   activo: z.boolean().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
 });

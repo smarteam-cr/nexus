@@ -1090,10 +1090,12 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
 /**
  * El historial por aliado, cada uno a SU cadencia.
  *
- * El agrupado se hace por la CLAVE NORMALIZADA y no por `partnerId`, para que
- * los 5 pagos ya cargados —que nacieron sin aliado— caigan bajo su aliado apenas
- * se lo dé de alta con el mismo nombre, sin tener que reasignar fila por fila.
- * El `partnerId` sigue siendo el vínculo duro cuando existe.
+ * ⚠ Agrupa por `partnerId` CUANDO EXISTE y cae a la clave normalizada solo si el
+ * pago todavía no está ligado. Al revés —agrupando siempre por el string, como
+ * estaba— renombrar un aliado le huerfanizaba TODO el historial: las filas
+ * seguían con el nombre viejo, la config no matcheaba, la cadencia se perdía y
+ * la pantalla ofrecía «configurar» con el nombre viejo, creando un duplicado.
+ * Lo cazó la revisión adversarial de G3.
  *
  * Un aliado SIN configurar cae a cadencia mensual para poder agrupar algo, y el
  * DTO lo dice (`frecuenciaMeses: null`) en vez de aparentar que alguien la eligió.
@@ -1103,13 +1105,16 @@ function armarHistorial(
   partners: Array<{ id: string; nombre: string; clave: string; frecuenciaMeses: number }>,
 ): HistorialPartnerDTO[] {
   const porClave = new Map(partners.map((p) => [p.clave, p]));
+  const porId = new Map(partners.map((p) => [p.id, p]));
 
   const grupos = new Map<string, { nombre: string; pagos: PagoDeAliado[] }>();
   for (const c of comisiones) {
-    const clave = normalizePartner(c.partner);
+    // El vínculo duro manda; el nombre es el fallback de lo no ligado.
+    const cfg = (c.partnerId ? porId.get(c.partnerId) : null) ?? porClave.get(normalizePartner(c.partner)) ?? null;
+    const clave = cfg?.clave ?? normalizePartner(c.partner);
     let g = grupos.get(clave);
     if (!g) {
-      g = { nombre: porClave.get(clave)?.nombre ?? c.partner, pagos: [] };
+      g = { nombre: cfg?.nombre ?? c.partner, pagos: [] };
       grupos.set(clave, g);
     }
     g.pagos.push({ fecha: c.fecha, monto: c.monto, moneda: c.moneda });
@@ -1766,6 +1771,16 @@ async function conQuincenaSugerida(
         ...d,
         quincenaSugerida: null,
         motivoSinQuincena: `Esa quincena está en ${fila.moneda} y la comisión en ${d.moneda}. Nexus no convierte monedas.`,
+      };
+    }
+    // ⚠ Una quincena PAGADA es plata que ya salió: colgarle una comisión después
+    // haría que el historial de planilla afirme que ese monto salió con ese pago
+    // y que el aguinaldo lo cuente. Ni se sugiere (y la mutación además lo frena).
+    if (fila.estado === "PAGADO") {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `La quincena de ${objetivo.periodo} (Q${objetivo.quincena}) ya se pagó: no se le puede colgar una comisión después.`,
       };
     }
     return {

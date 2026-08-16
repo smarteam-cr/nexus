@@ -880,6 +880,10 @@ export async function createComisionPartner(
   const c = await prisma.comisionPartner.create({
     data: {
       partner: data.partner,
+      // ⚠ Sin esta línea la columna NUNCA se escribía desde la UI: el Zod la
+      // aceptaba y el panel la mandaba, pero acá se caía en silencio y el único
+      // escritor era el seed. Lo cazó la revisión adversarial de G3.
+      partnerId: data.partnerId ?? null,
       concepto: data.concepto ?? null,
       monto: data.monto,
       moneda: data.moneda,
@@ -905,6 +909,7 @@ export async function updateComisionPartner(
     where: { id: comisionId },
     data: {
       ...(data.partner !== undefined ? { partner: data.partner } : {}),
+      ...(data.partnerId !== undefined ? { partnerId: data.partnerId ?? null } : {}),
       ...(data.concepto !== undefined ? { concepto: data.concepto } : {}),
       ...(data.monto !== undefined ? { monto: data.monto } : {}),
       ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
@@ -1387,7 +1392,7 @@ export async function liquidarComision(
   if (data.pagoPlanillaId) {
     const pago = await prisma.pagoPlanilla.findUnique({
       where: { id: data.pagoPlanillaId },
-      select: { sujetoTeamMemberId: true, moneda: true },
+      select: { sujetoTeamMemberId: true, moneda: true, estado: true },
     });
     if (!pago) throw new CobranzaError("La quincena no existe.", 404);
     if (pago.sujetoTeamMemberId !== data.teamMemberId) {
@@ -1399,26 +1404,54 @@ export async function liquidarComision(
         409,
       );
     }
+    // ⚠ Una quincena PAGADA es plata que YA salió del banco. Colgarle una
+    // comisión después haría que el historial de planilla muestre salario +
+    // comisión con fecha de pago de ese día —afirmando que esa plata salió— y
+    // que el aguinaldo la cuente. Se frena acá; la UI ni siquiera la sugiere.
+    if (pago.estado === "PAGADO") {
+      throw new CobranzaError(
+        "Esa quincena ya se pagó: no se le puede colgar una comisión después. Liquidala suelta o engancharla a una quincena pendiente.",
+        409,
+      );
+    }
   }
 
-  return prisma.comisionVendedor.create({
-    data: {
-      teamMemberId: data.teamMemberId,
-      vendedorNombre: d.vendedorNombre,
-      periodo: d.periodo,
-      base: d.base,
-      porcentaje: d.porcentaje,
-      monto: d.monto,
-      // `data.moneda` viene del Zod (el enum), no del derivado: son el mismo
-      // valor porque el `find` de arriba matchea por moneda.
-      moneda: data.moneda,
-      cobroIds: d.cobroIds,
-      detalle: d.detalle as unknown as Prisma.InputJsonValue,
-      pagoPlanillaId: data.pagoPlanillaId ?? null,
-      liquidadoPor: byEmail,
-      notas: data.notas ?? null,
-    },
-    select: { id: true },
+  // ⚠ IDEMPOTENCIA. `devengarComisiones` ya excluye lo liquidado, pero eso se
+  // leyó ANTES: dos clicks seguidos (o dos pestañas) leen ambos el mismo
+  // devengado y crean DOS comisiones por los mismos cobros. La regla que se
+  // hace cumplir acá no es "una por período" —un cobro que llega tarde puede
+  // liquidarse aparte, y eso es legítimo— sino la de verdad: **ningún cobro se
+  // paga dos veces**.
+  return prisma.$transaction(async (tx) => {
+    const yaPagados = await tx.comisionVendedor.findFirst({
+      where: { cobroIds: { hasSome: d.cobroIds } },
+      select: { id: true },
+    });
+    if (yaPagados) {
+      throw new CobranzaError(
+        "Alguno de esos cobros ya entró en una comisión liquidada. Refrescá la pantalla: puede que se haya liquidado en otra pestaña.",
+        409,
+      );
+    }
+    return tx.comisionVendedor.create({
+      data: {
+        teamMemberId: data.teamMemberId,
+        vendedorNombre: d.vendedorNombre,
+        periodo: d.periodo,
+        base: d.base,
+        porcentaje: d.porcentaje,
+        monto: d.monto,
+        // `data.moneda` viene del Zod (el enum), no del derivado: son el mismo
+        // valor porque el `find` de arriba matchea por moneda.
+        moneda: data.moneda,
+        cobroIds: d.cobroIds,
+        detalle: d.detalle as unknown as Prisma.InputJsonValue,
+        pagoPlanillaId: data.pagoPlanillaId ?? null,
+        liquidadoPor: byEmail,
+        notas: data.notas ?? null,
+      },
+      select: { id: true },
+    });
   });
 }
 
@@ -1473,22 +1506,28 @@ export async function updatePartner(
       throw new CobranzaError(`Ese nombre ya lo usa otro aliado: «${choca.nombre}».`, 409);
     }
   }
-  try {
-    return await prisma.partnerComercial.update({
-      where: { id: partnerId },
-      data: {
-        ...(data.nombre !== undefined
-          ? { nombre: data.nombre, clave: normalizePartner(data.nombre) }
-          : {}),
-        ...(data.frecuenciaMeses !== undefined ? { frecuenciaMeses: data.frecuenciaMeses } : {}),
-        ...(data.activo !== undefined ? { activo: data.activo } : {}),
-        ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
-      },
-      select: { id: true },
-    });
-  } catch {
-    throw new CobranzaError("El aliado no existe.", 404);
-  }
+  // El 404 se decide MIRANDO, no adivinando desde un catch: un catch pelado
+  // convertía cualquier fallo —una colisión de clave en una carrera, por
+  // ejemplo— en «El aliado no existe», que manda a buscar el problema al lugar
+  // equivocado. Lo marcó la revisión adversarial.
+  const existe = await prisma.partnerComercial.findUnique({
+    where: { id: partnerId },
+    select: { id: true },
+  });
+  if (!existe) throw new CobranzaError("El aliado no existe.", 404);
+
+  return prisma.partnerComercial.update({
+    where: { id: partnerId },
+    data: {
+      ...(data.nombre !== undefined
+        ? { nombre: data.nombre, clave: normalizePartner(data.nombre) }
+        : {}),
+      ...(data.frecuenciaMeses !== undefined ? { frecuenciaMeses: data.frecuenciaMeses } : {}),
+      ...(data.activo !== undefined ? { activo: data.activo } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+    },
+    select: { id: true },
+  });
 }
 
 /**

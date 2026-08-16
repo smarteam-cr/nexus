@@ -13,7 +13,7 @@
  * cuánto va a entrar — eso nadie lo sabe y ponerle un número sería fabricar.
  */
 
-/** Las cadencias con nombre. Cualquier entero 1..24 es válido igual. */
+/** Las cadencias con nombre. Cualquier entero dentro del rango vale igual. */
 export const FRECUENCIAS_PARTNER = [
   { meses: 1, label: "Mensual" },
   { meses: 2, label: "Cada 2 meses" },
@@ -24,7 +24,15 @@ export const FRECUENCIAS_PARTNER = [
 ] as const;
 
 export const FRECUENCIA_PARTNER_MIN = 1;
-export const FRECUENCIA_PARTNER_MAX = 24;
+/**
+ * Techo REAL de lo que el bucketing sabe representar. El CHECK de la base dice
+ * 24, pero una cadencia de mas de 12 meses abarcaria varios anios y los buckets
+ * estan anclados al anio calendario: con 24, `bucketSiguiente` saltaria UN anio
+ * en vez de dos y la etiqueta mentiria. Antes que medio-soportarlo, se deja
+ * inalcanzable — el catalogo llega a 12 y el Zod tambien. Si algun dia hace
+ * falta una cadencia plurianual, hay que rehacer el anclaje, no subir este numero.
+ */
+export const FRECUENCIA_PARTNER_MAX = 12;
 
 /** "Trimestral", o "Cada 5 meses" para las que no están en el catálogo. */
 export function labelDeFrecuencia(meses: number): string {
@@ -48,8 +56,18 @@ const MESES_CORTOS = [
   "dic",
 ];
 
+/**
+ * La clave del bucket. El índice va con DOS dígitos a propósito: se ordena como
+ * string y con cadencia mensual llega a 11, así que sin el cero "2026-B10" caía
+ * ANTES de "2026-B2" y el historial salía con octubre, noviembre y diciembre en
+ * el medio. Lo cazó la revisión adversarial; el test B8 lo congela.
+ */
+function claveDeBucket(anio: number, indice: number): string {
+  return `${anio}-B${String(indice).padStart(2, "0")}`;
+}
+
 export interface BucketCadencia {
-  /** Estable y ordenable: "2026-B0", "2026-B1"… */
+  /** Estable y ordenable como string: "2026-B00", "2026-B01"… */
   clave: string;
   /** Lo que se lee: "ene–mar 2026", "julio 2026", "2026". */
   etiqueta: string;
@@ -75,7 +93,7 @@ export function bucketDeCadencia(fechaISO: string, frecuenciaMeses: number): Buc
   const mes = Number(fechaISO.slice(5, 7));
   const n = normalizarFrecuencia(frecuenciaMeses);
   const indice = Math.floor((mes - 1) / n);
-  return { clave: `${anio}-B${indice}`, etiqueta: etiquetaDeBucket(anio, indice, n), anio, indice };
+  return { clave: claveDeBucket(anio, indice), etiqueta: etiquetaDeBucket(anio, indice, n), anio, indice };
 }
 
 /** El bucket que sigue. Es DÓNDE cae el próximo pago, no cuánto va a ser. */
@@ -85,7 +103,7 @@ export function bucketSiguiente(b: BucketCadencia, frecuenciaMeses: number): Buc
   const siguiente = b.indice + 1;
   const anio = siguiente >= porAnio ? b.anio + 1 : b.anio;
   const indice = siguiente >= porAnio ? 0 : siguiente;
-  return { clave: `${anio}-B${indice}`, etiqueta: etiquetaDeBucket(anio, indice, n), anio, indice };
+  return { clave: claveDeBucket(anio, indice), etiqueta: etiquetaDeBucket(anio, indice, n), anio, indice };
 }
 
 /**

@@ -20,8 +20,8 @@ describe("bucketDeCadencia — dónde cae un pago según la cadencia del aliado"
     // feb-15 y may-15: el ritmo se ve porque son buckets contiguos.
     const a = bucketDeCadencia("2026-02-15", 3);
     const b = bucketDeCadencia("2026-05-15", 3);
-    expect(a.clave).toBe("2026-B0");
-    expect(b.clave).toBe("2026-B1");
+    expect(a.clave).toBe("2026-B00");
+    expect(b.clave).toBe("2026-B01");
     expect(bucketSiguiente(a, 3).clave).toBe(b.clave);
   });
 
@@ -31,7 +31,7 @@ describe("bucketDeCadencia — dónde cae un pago según la cadencia del aliado"
 
   it("B4 · anual colapsa a un solo bucket por año", () => {
     expect(bucketDeCadencia("2026-01-01", 12).etiqueta).toBe("2026");
-    expect(bucketDeCadencia("2026-12-31", 12).clave).toBe("2026-B0");
+    expect(bucketDeCadencia("2026-12-31", 12).clave).toBe("2026-B00");
   });
 
   it("B5 · semestral parte el año en dos", () => {
@@ -49,7 +49,7 @@ describe("bucketDeCadencia — dónde cae un pago según la cadencia del aliado"
     const claves = ["2026-03-01", "2025-11-01", "2026-08-01"]
       .map((f) => bucketDeCadencia(f, 3).clave)
       .sort();
-    expect(claves).toEqual(["2025-B3", "2026-B0", "2026-B2"]);
+    expect(claves).toEqual(["2025-B03", "2026-B00", "2026-B02"]);
   });
 });
 
@@ -59,7 +59,7 @@ describe("bucketSiguiente — dónde cae el próximo, nunca cuánto", () => {
   });
 
   it("S2 · el último bucket del año salta al siguiente", () => {
-    expect(bucketSiguiente(bucketDeCadencia("2026-11-01", 3), 3).clave).toBe("2027-B0");
+    expect(bucketSiguiente(bucketDeCadencia("2026-11-01", 3), 3).clave).toBe("2027-B00");
   });
 
   it("S3 · anual siempre salta de año", () => {
@@ -135,5 +135,39 @@ describe("labelDeFrecuencia", () => {
       expect(f.meses).toBeGreaterThanOrEqual(1);
       expect(f.meses).toBeLessThanOrEqual(FRECUENCIA_PARTNER_MAX);
     }
+  });
+});
+
+describe("orden de los buckets — el bug que cazó la revisión adversarial", () => {
+  it("B8 · con cadencia MENSUAL el historial sale del más nuevo al más viejo", () => {
+    // La clave lleva el índice con 2 dígitos justamente por esto: con 1 dígito
+    // "2026-B10" caía antes que "2026-B2" al ordenar como string, y octubre,
+    // noviembre y diciembre aparecían en el medio de la lista.
+    const r = agruparPorCadencia(
+      [
+        { fecha: "2026-09-05", monto: 10, moneda: "USD" },
+        { fecha: "2026-10-05", monto: 20, moneda: "USD" },
+        { fecha: "2026-11-05", monto: 30, moneda: "USD" },
+        { fecha: "2026-12-05", monto: 40, moneda: "USD" },
+      ],
+      1,
+    );
+    expect(r.map((x) => x.etiqueta)).toEqual([
+      "diciembre 2026",
+      "noviembre 2026",
+      "octubre 2026",
+      "septiembre 2026",
+    ]);
+  });
+
+  it("B9 · mezclar un mes de dos dígitos con uno de un dígito tampoco lo rompe", () => {
+    const r = agruparPorCadencia(
+      [
+        { fecha: "2026-02-15", monto: 10, moneda: "USD" },
+        { fecha: "2026-12-15", monto: 20, moneda: "USD" },
+      ],
+      1,
+    );
+    expect(r.map((x) => x.etiqueta)).toEqual(["diciembre 2026", "febrero 2026"]);
   });
 });

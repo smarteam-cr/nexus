@@ -15,10 +15,22 @@
 
 import { useState } from "react";
 import type { ComisionesPartnerDTO } from "@/lib/cobranza";
-import { FRECUENCIAS_PARTNER } from "@/lib/cobranza";
+// ⚠ El VALOR se importa del modulo puro, NO del barrel: @/lib/cobranza reexporta
+// queries.ts, que arrastra Prisma. Un Client Component que lo importe como valor
+// mete el server en el bundle. Los TIPOS si pueden venir del barrel (se borran).
+import { FRECUENCIAS_PARTNER } from "@/lib/cobranza/partners";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { Button, PageHeader, EmptyState, Modal, Field, Input, Select } from "@/components/ui";
+import {
+  Button,
+  PageHeader,
+  EmptyState,
+  Modal,
+  ConfirmDialog,
+  Field,
+  Input,
+  Select,
+} from "@/components/ui";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
 import { COBRANZA_MONEDAS } from "@/lib/cobranza/schema";
 
@@ -56,6 +68,9 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [aliado, setAliado] = useState<AliadoForm | null>(null);
+  // Borrar un aliado le saca la cadencia a TODO su historial y no hay deshacer:
+  // pide confirmacion, como el resto de los borrados del modulo.
+  const [borrandoAliado, setBorrandoAliado] = useState<{ id: string; nombre: string } | null>(null);
 
   async function refrescar() {
     try {
@@ -391,7 +406,11 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                         >
                           Editar
                         </Button>
-                        <Button variant="secondary" size="sm" onClick={() => borrarAliado(p.id)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setBorrandoAliado({ id: p.id, nombre: p.nombre })}
+                        >
                           Borrar
                         </Button>
                       </div>
@@ -403,6 +422,21 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
           </div>
         )}
       </section>
+
+      {borrandoAliado && (
+        <ConfirmDialog
+          open
+          title={`¿Borrar ${borrandoAliado.nombre}?`}
+          description="Sus pagos NO se borran: quedan con el nombre escrito. Lo que se pierde es la frecuencia, y su historial vuelve a leerse mes a mes."
+          confirmLabel="Borrar aliado"
+          onCancel={() => setBorrandoAliado(null)}
+          onConfirm={async () => {
+            const id = borrandoAliado.id;
+            setBorrandoAliado(null);
+            await borrarAliado(id);
+          }}
+        />
+      )}
 
       {aliado && (
         <Modal

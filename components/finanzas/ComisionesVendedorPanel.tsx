@@ -61,6 +61,9 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  // ⚠ Clave de la fila que se esta liquidando. Sin esto, dos clicks seguidos
+  // mandan dos POST y —hasta el freno del server— pagaban la comision dos veces.
+  const [liquidando, setLiquidando] = useState<string | null>(null);
 
   async function refrescar() {
     try {
@@ -130,6 +133,9 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
    * escrito arriba del botón.
    */
   async function liquidar(d: DevengadaConQuincena) {
+    const clave = `${d.teamMemberId}::${d.periodo}::${d.moneda}`;
+    if (liquidando) return;
+    setLiquidando(clave);
     try {
       await fetchJson(`${BASE}/liquidar`, {
         method: "POST",
@@ -149,6 +155,8 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       );
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo liquidar.");
+    } finally {
+      setLiquidando(null);
     }
   }
 
@@ -232,6 +240,10 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       {/* ── Devengado ─────────────────────────────────────────────────────── */}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-fg">Por liquidar</h2>
+        <p className="text-[11px] text-fg-muted">
+          {data.politicaPago.label}. La comisión de un mes se paga cuando ese mes ya
+          cerró — antes el monto todavía puede cambiar.
+        </p>
         {data.devengadas.length === 0 ? (
           <EmptyState
             title="No hay nada devengado"
@@ -304,8 +316,12 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                           )}
                         </td>
                         <td className={`${TD} text-right`}>
-                          <Button size="sm" onClick={() => liquidar(d)}>
-                            Liquidar
+                          <Button
+                            size="sm"
+                            onClick={() => liquidar(d)}
+                            disabled={liquidando !== null}
+                          >
+                            {liquidando === clave ? "Liquidando…" : "Liquidar"}
                           </Button>
                         </td>
                       </tr>
