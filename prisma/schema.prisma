@@ -456,6 +456,8 @@ model Project {
   etapaPropuestaAt       DateTime?
   etapaPropuestaByRunId  String?
 
+  brief ProjectBrief?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2562,6 +2564,29 @@ model CsAccountBrief {
   agentRunId  String? // AgentRun que lo generó (trazabilidad)
   generatedAt DateTime  @default(now())
   staleAt     DateTime? // inputs cambiaron después de generar → banner "desactualizado"
+  updatedAt   DateTime  @updatedAt
+}
+
+// Resumen citado de UN PROYECTO. Espejo de CsAccountBrief, un nivel más abajo: aquél
+// responde «cómo va la CUENTA», éste «cómo va ESTE proyecto» — que es la pregunta que
+// se hace el CSE todos los días y que hoy solo se puede contestar leyendo cinco pestañas.
+//
+// Acá viven los BLOQUEOS y las DESALINEACIONES del eje 2 de «los cuatro contextos»: son
+// statements con su cita, propuestos por el agente. La cita NO es decorativa — la valida
+// `lib/cs/brief-citas.ts` y una afirmación cuya fuente no existe se descarta.
+//
+// ⚠ `staleAt` no es «viejo por tiempo» sino «los inputs cambiaron después de generar»:
+// una sesión nueva, un handoff regenerado, un cambio de etapa. Sin eso el resumen se ve
+// fresco contando algo de hace tres semanas, que es peor que no tenerlo.
+model ProjectBrief {
+  id          String    @id @default(cuid())
+  projectId   String    @unique
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  headline    String?   @db.Text
+  statements  Json // [{ text, source: { kind, id, label, date } }]
+  agentRunId  String? // AgentRun que lo generó (trazabilidad)
+  generatedAt DateTime  @default(now())
+  staleAt     DateTime?
   updatedAt   DateTime  @updatedAt
 }
 
