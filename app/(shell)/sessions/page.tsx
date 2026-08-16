@@ -10,6 +10,7 @@ import {
   type SessionGroup,
 } from "@/lib/sessions/categorize";
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
+import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { getTeamMembers } from "@/lib/cache/team";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
@@ -39,8 +40,11 @@ export default async function SessionsPage() {
     // filas era el peso dominante de la página (DB → server → payload RSC). La lista
     // solo necesita el booleano `hasSummary` (query aparte, abajo); el blob se carga
     // lazy al abrir el detalle (GET /api/sessions/[id], que ya lo devolvía).
+    // ⚠ SIN corte por fecha: las reuniones futuras SE MARCAN, no se esconden.
+    // Escondía 459 sin decirlo, y el modo de falla es el mismo que ya mordió en el modal de
+    // candidatas: alguien busca una reunión que sabe que existe, no la encuentra, y concluye que
+    // Nexus no la tiene. El precedente y su guarda están en session-candidates/route.ts.
     prisma.firefliesSession.findMany({
-      where: { date: { lt: now } },
       orderBy: { date: "desc" },
       select: {
         id: true,
@@ -51,10 +55,14 @@ export default async function SessionsPage() {
         source: true,
         enrichedAt: true,
         manualClientId: true,
+        // Lo pliega el criterio de "puertas adentro": en muchas reuniones el organizador
+        // no figura entre los participantes, y sin él una reunión que convocó alguien de
+        // afuera se leeria como si hubieramos estado solos.
+        organizerEmail: true,
       },
     }),
     prisma.firefliesSession.findMany({
-      where: { date: { lt: now }, transcript: { not: null } },
+      where: { transcript: { not: null } },
       select: { id: true },
     }),
     // ¿Qué sesiones tienen resumen CON CONTENIDO? Misma semántica que el check viejo
@@ -62,8 +70,7 @@ export default async function SessionsPage() {
     // en Postgres: solo cruzan los ids. jsonb_typeof guarda contra shapes raros.
     prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "FirefliesSession"
-      WHERE date < ${now}
-        AND summary IS NOT NULL
+      WHERE summary IS NOT NULL
         AND (
           COALESCE(summary->>'overview', '') <> ''
           OR (jsonb_typeof(summary->'keywords') = 'array' AND jsonb_array_length(summary->'keywords') > 0)
@@ -163,6 +170,9 @@ export default async function SessionsPage() {
       source: s.source,
       hasTranscript: withTranscriptSet.has(s.id),
       hasSummary: withSummarySet.has(s.id),
+      /* Todavía no ocurrió. La fila la marca en vez de esconderla: una agenda que se ve es
+         accionable (se puede pedir que la graben ANTES), una que se esconde no. */
+      esFutura: s.date > now,
       enrichedAt: s.enrichedAt?.toISOString() ?? null,
       manualClientId: s.manualClientId,
       group: s.group,
@@ -191,6 +201,43 @@ export default async function SessionsPage() {
   // de roles (Sales/CSE/PM/etc).
   const teamMembersLite = teamMembers.map((m) => ({ email: m.email, role: m.area }));
 
+  /* ── 9. Cobertura de transcripciones, últimos 3 meses ────────────────────────
+     El número que el equipo tiene que ver. Medido el 2026-08-15: 52,7% de las reuniones ya
+     ocurridas de los últimos 3 meses no dejó transcripción, y de ésas el 84% NUNCA se grabó —
+     o sea que la causa no es Nexus, es que nadie apretó grabar. Una directriz de Elías ya bajó
+     ese número de ~80% a ~55%; el cartel es el segundo empujón, y hace que no haga falta una
+     tercera directriz para saber cómo vamos.
+
+     Se parte en dos porque es el corte que empuja la conducta correcta: puertas adentro se graba
+     PEOR que de cara al cliente (61% vs 46%), que es lo contrario de lo que uno supondría.
+
+     ⚠ El split usa los dominios de los participantes, NO el grupo de la sidebar: una reunión
+     100% nuestra cuyo título nombra a un cliente cae en el bucket de ese cliente, y contarla como
+     "con el cliente" inflaría justo el lado que se ve bien. */
+  const haceTresMeses = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const cobertura = (() => {
+    let conCliente = 0;
+    let conClienteSinTr = 0;
+    let adentro = 0;
+    let adentroSinTr = 0;
+    for (const s of sessions) {
+      if (s.date >= now || s.date < haceTresMeses) continue;
+      const puertasAdentro = esReunionDePuertasAdentro(
+        { participants: s.participants, organizerEmail: s.organizerEmail },
+        internalDomains,
+      );
+      const sinTranscript = !withTranscriptSet.has(s.id);
+      if (puertasAdentro) {
+        adentro++;
+        if (sinTranscript) adentroSinTr++;
+      } else {
+        conCliente++;
+        if (sinTranscript) conClienteSinTr++;
+      }
+    }
+    return { conCliente, conClienteSinTr, adentro, adentroSinTr };
+  })();
+
   return (
     <SessionsClient
       sessions={sessionsWithMeta}
@@ -198,6 +245,7 @@ export default async function SessionsPage() {
       categories={categories}
       hubspotCompanies={hubspotCompanies}
       teamMembers={teamMembersLite}
+      cobertura={cobertura}
     />
   );
 }

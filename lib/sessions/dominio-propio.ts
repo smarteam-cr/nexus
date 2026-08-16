@@ -31,3 +31,46 @@ export const DOMINIO_PROPIO = "smarteamcr.com";
 export function esDeNuestroEquipo(email: string): boolean {
   return email.trim().toLowerCase().endsWith(`@${DOMINIO_PROPIO}`);
 }
+
+/**
+ * ── LOS CALENDARIOS Y LAS SALAS NO SON EMPRESAS ──────────────────────────────
+ *
+ * Google mete el calendario compartido o la sala en la lista de invitados como si fuera una
+ * persona más: `c_987cec9d…@group.calendar.google.com`. Para todo el que mira dominios, eso
+ * parece «alguien de afuera», así que una reunión nuestra deja de ser interna por culpa de un
+ * mueble. Medido el 2026-08-15: **158 reuniones de puertas adentro** quedaban huérfanas por eso,
+ * y son las que se repiten cada semana: «📚 Sesión de aprendizaje» (55), «[Interno] Daily Stand Up» (51),
+ * «Verificación de gastos» (30). Ninguna reunión DEJÓ de ser interna: el filtro solo suma.
+ *
+ * La lista vive acá, en el módulo sin dependencias, porque **los tres lugares que deciden «esto
+ * es de afuera» son independientes entre sí** y cada uno tiene su propio extractor de dominio:
+ * la cascada de atribución (`categorize.ts`), el criterio de puertas adentro
+ * (`candidatas-internas.ts`) y el resumen de la sala (`participantes.ts`). Una sola lista para
+ * los tres es lo único que impide que se separen.
+ *
+ * ⚠ NO alcanza con cargar estos dominios como «internos» en `/sessions/categories`: los pintaría
+ * como gente NUESTRA en el conteo de la sala, y una reunión con dos personas y una sala diría
+ * que fuimos tres. No son nuestros: no son personas.
+ */
+const DOMINIOS_DE_CALENDARIO = [
+  "group.calendar.google.com",
+  "resource.calendar.google.com",
+] as const;
+
+/** ¿Este DOMINIO es de un calendario o una sala de Google, y no de una empresa? */
+export function esDominioDeCalendario(dominio: string): boolean {
+  const d = dominio.trim().toLowerCase();
+  return DOMINIOS_DE_CALENDARIO.some((c) => d === c);
+}
+
+/**
+ * ¿Este CORREO es un recurso de Google Calendar (sala, calendario de grupo) y no una persona?
+ *
+ * Lo usan dos familias por motivos distintos: la impersonación —a un recurso no se lo puede
+ * impersonar aunque sea «del dominio», porque no es una cuenta de usuario— y la atribución de
+ * sesiones, que no lo puede contar ni como nuestro ni como de afuera.
+ */
+export function esRecursoDeCalendario(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  return DOMINIOS_DE_CALENDARIO.some((c) => e.endsWith(`@${c}`));
+}

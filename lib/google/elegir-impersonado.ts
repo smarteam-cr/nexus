@@ -18,16 +18,17 @@
  * reproducible. No hay ninguna razón de negocio para preferir a una persona sobre otra —
  * cualquier invitado ve el mismo doc compartido.
  */
-import { esDeNuestroEquipo } from "@/lib/sessions/dominio-propio";
+import { esDeNuestroEquipo, esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
 
 /**
  * ¿Es un RECURSO de Google Calendar (sala, calendario de grupo) y no una persona? A un
  * recurso no se lo puede impersonar aunque sea "del dominio": no es una cuenta de usuario.
+ *
+ * ⚠ La lista de dominios se MUDÓ a `lib/sessions/dominio-propio.ts` (2026-08-15): la atribución
+ * de sesiones necesita el mismo criterio, y dos listas que dicen lo mismo se separan solas. Se
+ * re-exporta desde acá porque este archivo era su casa y sus consumidores la importan por acá.
  */
-export function esRecursoDeCalendario(email: string): boolean {
-  const e = email.toLowerCase();
-  return e.endsWith("@group.calendar.google.com") || e.endsWith("@resource.calendar.google.com");
-}
+export { esRecursoDeCalendario };
 
 /**
  * PURA. TODOS los candidatos impersonables, en orden determinista: el organizador (si es
