@@ -16,6 +16,7 @@ import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
+import { esCerrada } from "@/lib/timeline/particularidad-state";
 
 interface BlockLite {
   blockType: string;
@@ -352,6 +353,8 @@ interface RegisteredParticularidad {
   occurredAt: Date;
   dedupeKey: string | null;
   visibleExternal: boolean;
+  estado: string;
+  resueltaEn: Date | null;
 }
 
 export async function loadTimelineContext(
@@ -391,11 +394,17 @@ export async function loadTimelineContext(
               // mismo hecho — y si el CSE después descarta la sugerencia, el hecho se
               // perdería sin que nadie lo note. Que el agente lo re-proponga es el
               // comportamiento correcto: el CSE ve las dos y resuelve.
+              /* ⛔ Y SIN filtro de estado: las CERRADAS tienen que seguir acá. Sacarlas (la
+                 lectura intuitiva de «ya son historia») hace que el agente deje de verlas, las
+                 re-derive del mismo transcript en la corrida siguiente y las proponga otra vez
+                 — semana tras semana, para siempre. Se quedan, ROTULADAS, y abajo se le explica
+                 al modelo qué hacer si el hecho volvió a pasar de verdad. */
               where: { needsValidation: false },
               orderBy: { occurredAt: "desc" as const },
               select: {
                 kind: true, party: true, title: true, weeksImpact: true,
                 occurredAt: true, dedupeKey: true, visibleExternal: true,
+                estado: true, resueltaEn: true,
               },
             },
           }
@@ -434,13 +443,20 @@ export async function loadTimelineContext(
     lines.push("");
     lines.push(
       "DESVIACIONES YA REGISTRADAS (NO las vuelvas a proponer). Si el MISMO hecho sigue vigente y querés" +
-        " corregirlo, devolvelo con su MISMA huella y se actualiza en lugar de duplicarse:",
+        " corregirlo, devolvelo con su MISMA huella y se actualiza en lugar de duplicarse.",
+    );
+    lines.push(
+      "Las marcadas CERRADA ya se resolvieron: tampoco las repitas. Si ese hecho VOLVIÓ A PASAR," +
+        " devolvelo con su MISMA huella y decilo en el detalle — se reabre, no se duplica:",
     );
     for (const pt of yaRegistradas) {
       const huella = extractFingerprint(pt.dedupeKey) ?? "(sin huella)";
       const sem = pt.weeksImpact ? ` +${pt.weeksImpact}sem` : "";
+      const cerrada = esCerrada(pt)
+        ? ` [CERRADA${pt.resueltaEn ? ` el ${pt.resueltaEn.toISOString().slice(0, 10)}` : ""}]`
+        : "";
       lines.push(
-        `- [huella: ${huella}] ${pt.kind}/${pt.party}${sem} (${pt.occurredAt.toISOString().slice(0, 10)}) ${pt.title}`,
+        `- [huella: ${huella}]${cerrada} ${pt.kind}/${pt.party}${sem} (${pt.occurredAt.toISOString().slice(0, 10)}) ${pt.title}`,
       );
     }
   }

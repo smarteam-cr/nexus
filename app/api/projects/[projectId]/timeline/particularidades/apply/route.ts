@@ -22,6 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma, type ParticularidadKind, type TaskParty } from "@prisma/client";
 import type { PendingParticularidad } from "../../route";
 import { buildDedupeKey, normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
+import { esCerrada } from "@/lib/timeline/particularidad-state";
 
 // SOLICITUD deprecado (eje DESTINO): un insumo del cliente es una tarea party=CLIENTE, no una
 // particularidad. El agente ya no lo propone; no se admite crear ninguno nuevo.
@@ -79,12 +80,14 @@ export async function POST(
   // fallback para las filas LEGACY (creadas antes de que existiera la huella, que tienen dedupeKey null).
   const existentes = await prisma.particularidad.findMany({
     where: { timelineId: tl.id },
-    select: { id: true, dedupeKey: true, title: true, phaseId: true, source: true },
+    select: { id: true, dedupeKey: true, title: true, phaseId: true, source: true, estado: true },
   });
   const porHuella = new Map(existentes.filter((e) => e.dedupeKey).map((e) => [e.dedupeKey as string, e]));
 
   const toCreate: Prisma.ParticularidadCreateManyInput[] = [];
   const toUpdate: Array<{ id: string; data: Prisma.ParticularidadUpdateInput }> = [];
+  /** Cuántas volvieron de estar cerradas. Se informa: es lo más raro que puede pasar acá. */
+  let reabiertas = 0;
 
   for (const [index, visibleExternal] of visByIndex) {
     const d = draft[index];
@@ -133,8 +136,20 @@ export async function POST(
     };
 
     if (match) {
-      // MISMO hecho re-detectado → se actualiza y se cuenta la repetición. Las semanas quedan en la
-      // última confirmada, NO se suman: sumar era exactamente el bug (13 semanas mostradas, 8 reales).
+      /* MISMO hecho re-detectado → se actualiza y se cuenta la repetición. Las semanas quedan en la
+         última confirmada, NO se suman: sumar era exactamente el bug (13 semanas mostradas, 8 reales).
+
+         ⛔ Y si estaba CERRADA, se REABRE — no se clona. Clonar era la salida intuitiva («la
+         cerrada es historia, esto es un hecho nuevo») y produce duplicación infinita: el agente
+         re-deriva las desviaciones desde los MISMOS transcripts en cada corrida, así que una
+         cerrada que quede fuera de su alcance vuelve semana tras semana, y cada vuelta crea otra
+         fila con la MISMA huella — N filas indistinguibles por identidad, todas del mismo hecho.
+         Reabrir además conserva `convertedTaskId`: un compromiso ya convertido en tarea no vuelve
+         a pedir que alguien lo persiga, ni deja que se le cree una segunda tarea.
+         ⚠ El registro del cierre anterior (`resueltaEn`/`resueltaPor`/`resueltaNota`) NO se borra:
+         pasa a significar «se había cerrado el …», que es lo que hace legible un hecho que volvió.
+         Y esto solo corre sobre lo que el CSE aceptó en el banner: reabrir pasa por un humano. */
+      if (esCerrada(match)) reabiertas++;
       toUpdate.push({
         id: match.id,
         data: {
@@ -143,6 +158,7 @@ export async function POST(
           occurrences: { increment: 1 },
           lastDetectedAt: new Date(),
           needsValidation: false,
+          estado: "ABIERTA",
         },
       });
       porHuella.set(dedupeKey, { ...match, dedupeKey });

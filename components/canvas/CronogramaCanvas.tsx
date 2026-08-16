@@ -1520,6 +1520,56 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   };
 
+  /**
+   * Dar por RESUELTA una desviación, o reabrirla.
+   *
+   * ⛔ Cerrar no resta semanas ni oculta nada: el plan ya se corrió y la bitácora sigue siendo la
+   * bitácora. Lo que se apaga es la acción — deja de pedir que alguien la persiga.
+   *
+   * ⚠ Igual marca `particularidadesDirty`. Lo que el cliente lee es un SNAPSHOT congelado, así que
+   * cerrar no cambia nada de su lado hasta que alguien vuelva a subir; sin esta marca, la barra no
+   * invitaría a re-publicar y el cliente seguiría leyendo el estado viejo por tiempo indefinido,
+   * sin que nada avise.
+   */
+  const cerrarParticularidad = async (id: string, accion: "cerrar" | "reabrir", nota: string) => {
+    const prev = particularidades;
+    const ahora = new Date().toISOString();
+    setParticularidades((ps) =>
+      ps.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              estado: accion === "cerrar" ? "CERRADA" : "ABIERTA",
+              ...(accion === "cerrar"
+                ? { resueltaEn: ahora, resueltaNota: nota || null }
+                : {}),
+            }
+          : p,
+      ),
+    );
+    setParticularidadesDirty(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/timeline/particularidades/${id}/cerrar`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion, nota }),
+        },
+      );
+      if (!res.ok) {
+        setParticularidades(prev); // revertir: pintar optimista solo es honesto si el fallo deshace
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.error ?? "No se pudo cambiar el estado de la desviación.");
+      } else {
+        toast.success(accion === "cerrar" ? "Desviación resuelta." : "Desviación reabierta.");
+      }
+    } catch {
+      setParticularidades(prev);
+      toast.error("Error de conexión al cambiar el estado.");
+    }
+  };
+
   // Editar el CONTENIDO de una particularidad (desde el modal). PATCH con todos los campos; update
   // local del estado. Marca particularidadesDirty si el cambio afecta al cliente (es o era visible).
   // Crear un AVISO a mano (el CSE le escribe al cliente). Espejo de saveParticularidad, pero POST:
@@ -2569,6 +2619,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             particularidades={particularidades}
             publicadas={publicadas}
             onToggleParticularidadVisible={canEdit ? toggleParticularidadVisible : undefined}
+            onCerrarParticularidad={canEdit ? cerrarParticularidad : undefined}
             onEditParticularidad={canEdit ? setEditingParticularidadId : undefined}
             onAddParticularidad={canEdit ? () => setCreatingParticularidad(true) : undefined}
             proposalDeltas={structureOnlyProposal && proposalDeltas.length > 0 ? proposalDeltas : undefined}
