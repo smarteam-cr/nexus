@@ -114,6 +114,9 @@ export async function GET(
          No se filtra acá —sacarla en silencio sería quitarle contenido a un documento sin
          decirlo, que es el pecado que esta tanda vino a matar— se MARCA, y quien la puso decide. */
       futura: r.session.date.getTime() > Date.now(),
+      /* Se completa abajo, cuando ya se sabe qué sesiones tienen algo adentro: el chequeo
+         necesita los ids, y los ids salen de esta misma lista. */
+      sinContenido: false,
     }));
   const feedingIds = new Set(feeding.map((f) => f.sessionId));
 
@@ -216,7 +219,15 @@ export async function GET(
 
      El criterio es "hay ALGO", no "está completa": transcript con texto, o resumen, o una minuta
      escrita a mano. Con cualquiera de los tres la reunión tiene sustancia. */
-  const idsVisibles = [...clientSessions, ...internas].map((s) => s.id);
+  /* ⚠ Las que YA ALIMENTAN entran al chequeo (2026-08-16). Antes solo se miraban las candidatas,
+     así que una reunión vacía se pintaba «Incluida» en verde —indistinguible de una llena de
+     material— y el CSE no tenía cómo saber que ese documento se está escribiendo sobre nada.
+     Es el mismo pecado que la lista de candidatas ya había dejado de cometer. */
+  const idsVisibles = [
+    ...clientSessions.map((s) => s.id),
+    ...internas.map((s) => s.id),
+    ...feeding.map((f) => f.sessionId),
+  ];
   const conContenido = new Set<string>(
     idsVisibles.length === 0
       ? []
@@ -224,7 +235,7 @@ export async function GET(
           await prisma.$queryRaw<{ id: string }[]>`
             SELECT s."id"
             FROM "FirefliesSession" s
-            WHERE s."id" IN (${Prisma.join(idsVisibles)})
+            WHERE s."id" IN (${Prisma.join([...new Set(idsVisibles)])})
               AND (
                 coalesce(length(s."transcript"), 0) > 0
                 OR s."summary" IS NOT NULL
@@ -284,6 +295,10 @@ export async function GET(
   const unreviewedCount = safeRows.filter(
     (r) => r.included && r.source === "agent" && r.reviewedAt === null,
   ).length;
+
+  /* Una que ya ocurrió y no dejó NADA. Las futuras quedan afuera del conteo: todavía no les
+     falta nada, y meterlas volvería el aviso ruido permanente en cualquier proyecto con agenda. */
+  for (const f of feeding) f.sinContenido = !f.futura && !conContenido.has(f.sessionId);
 
   return NextResponse.json({ feeding, excluded, candidates, unreviewedCount });
 }
