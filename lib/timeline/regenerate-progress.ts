@@ -25,6 +25,9 @@ import { resolvePipeline } from "@/lib/projects/kind";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
+import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -230,7 +233,7 @@ export async function regenerateTimelineProgress(
 
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado + las
     //    instrucciones del CSE (mismo canvas "timeline" que ya lee el detalle — Tanda N).
-    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma] = await Promise.all([
+    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma, categorias] = await Promise.all([
       getPastSessionsForProject(projectId),
       loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
@@ -238,12 +241,24 @@ export async function regenerateTimelineProgress(
         where: { projectId, ...canvasOf("timeline") },
         select: { sections: true },
       }),
+      /* Los dominios que cuentan como NUESTROS. Sale de las SessionCategory internas —la misma
+         fuente que usa la atribución— para que el rótulo no se separe de ella. Cacheado (TTL 10
+         min): cambian poco y se editan en /sessions/categories sin deploy. */
+      getSessionCategories(),
     ]);
+    const dominiosPropios = buildInternalDomainsSet(categorias);
     const instrucciones = bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     );
     const sessionsBlock = pastSessions
-      .map((s) => `[${s.date.toISOString().slice(0, 10)}] ${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`)
+      /* Cada reunión va rotulada con CON QUIÉN fue: el dato de los participantes llegaba hasta
+         acá y se descartaba justo al serializar, así que para el modelo «lo que le prometimos al
+         cliente en su cara» y «lo que dijimos entre nosotros» eran el mismo tipo de frase. */
+      .map(
+        (s) =>
+          `[${s.date.toISOString().slice(0, 10)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
+          `${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`,
+      )
       .join("\n\n---\n\n");
 
     // Info de la última sesión usada → para el toast del re-chequeo ("según las sesiones
