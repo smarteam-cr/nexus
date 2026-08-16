@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `1eae91d`. **33 commits sin push.**
+> Última actualización: **2026-08-16**, punta `ad3ec42`. **36 commits sin push.**
 
 ---
 
@@ -36,7 +36,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | **II — Que el estado se vea y se corrija** | 4 · Estado y Etapa hacia HubSpot | Nexus propone el estado real de un proyecto (atrasado, bloqueado, en espera) y su etapa; el CSE confirma y se escribe en HubSpot de un clic. | ✅ Hecho *(la base determinística)* |
 | | 5 · Resumen del proyecto | Cada proyecto tiene un resumen automático de «cómo va», con cada afirmación citando de dónde salió. Sin fuente, la afirmación se descarta. | ✅ Hecho |
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
-| | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | 🔨 **Casi** — ya funciona; falta la vista del cliente |
+| | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | ✅ Hecho |
 | | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⏳ Pendiente |
 | | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
@@ -56,7 +56,7 @@ lo construido está mal, es mucho más barato descubrirlo con un clic que con 11
 
 ### Fase 11 · Validar en pantalla *(requiere deploy — lo hace Elías)*
 
-Bloqueada por: los 33 commits sin push y las **cuatro migraciones SQL pendientes** (ver abajo). El
+Bloqueada por: los 36 commits sin push. Las **cuatro migraciones SQL ya están aplicadas**. El
 recorrido está en `docs/CHECKLIST-PRUEBA-CLICKEADA-CONTEXTOS.md`, ordenado por pantalla.
 
 Lo que la validación tiene que responder, y ningún test puede:
@@ -119,7 +119,7 @@ o revienta la lectura.
 | El dato existe y todo lo que lee desviaciones sabe preguntarle | ✅ `2db22ca` |
 | El botón de cerrar y reabrir | ✅ `1eae91d` |
 | Que el agente no vuelva a proponer lo que ya se cerró | ✅ `1eae91d` |
-| Que el cliente vea «resuelta» y el aviso de re-subir se encienda | ⏳ |
+| Que el cliente vea «resuelta» y el aviso de re-subir se encienda | ✅ `ad3ec42` |
 
 ### Fase 8 · Reuniones → tareas
 
@@ -144,25 +144,28 @@ enchufa al handoff del proyecto siguiente del mismo cliente. Es cañería: no ha
 
 ---
 
-## ⚠ Lo que espera a Elías
+## ✅ La preparación, ya hecha
 
-**Cuatro migraciones SQL, todas aditivas** (el código viejo las ignora, así que son seguras de correr
-antes del deploy). Después de cada una: `npx prisma generate` y **reiniciar el servidor de dev** —
-saltárselo hace que las escrituras fallen en silencio.
+✅ **Las cuatro migraciones SQL ya se aplicaron** (2026-08-16), verificadas con
+`check-invariants`: INV7 en verde — las columnas de los 87 modelos existen todas en la base. Más
+`prisma generate` y la siembra del agente del resumen. **No hace falta correr nada.**
 
-| # | Archivo | Qué agrega |
+⚠ Para la próxima: en Prisma 7 el comando **no lleva `--schema`** — el destino sale de
+`prisma.config.ts`. La forma correcta es `ALLOW_PROD_WRITE=1 npx prisma db execute --file <archivo>`.
+
+| # | Archivo | Qué agregó |
 |---|---|---|
-| 1 | `scripts/sql/2026-08-16-duenio-manual-procedencia.sql` | Quién y cuándo le puso dueño a una reunión |
-| 2 | `scripts/sql/2026-08-16-estado-y-etapa-propuestos.sql` | Dónde guardar la sugerencia de estado y etapa |
-| 3 | `scripts/sql/2026-08-16-project-brief.sql` | La tabla del resumen por proyecto |
-| 4 | `scripts/sql/2026-08-16-particularidad-estado.sql` | Que una desviación se pueda dar por resuelta |
+| 1 | `2026-08-16-duenio-manual-procedencia.sql` | Quién y cuándo le puso dueño a una reunión |
+| 2 | `2026-08-16-estado-y-etapa-propuestos.sql` | Dónde guardar la sugerencia de estado y etapa |
+| 3 | `2026-08-16-project-brief.sql` | La tabla del resumen por proyecto |
+| 4 | `2026-08-16-particularidad-estado.sql` | Que una desviación se pueda dar por resuelta |
 
-**Post-deploy**: `npx tsx scripts/create-project-brief-agent.ts` — sin eso, el resumen del proyecto
-responde «el agente no está sembrado» (correcto, no es una falla).
+⚠ Si el servidor del 3004 venía levantado, **reinicialo**: tiene el cliente de Prisma viejo en
+memoria y las escrituras fallan en silencio.
 
 ---
 
-## Los 33 commits
+## Los 36 commits
 
 | Commit | Fase | Qué |
 |---|---|---|
@@ -186,6 +189,8 @@ responde «el agente no está sembrado» (correcto, no es una falla).
 | `f44c500` | 7 | El relevamiento de la fase 7, con los 12 problemas graves |
 | `2db22ca` | 7 | El dato ABIERTA/CERRADA — **SQL #4** |
 | `1eae91d` | 7 | El botón de dar por resuelta, y reabrir en vez de clonar |
+| `1156666` | — | Las 4 migraciones aplicadas + el comando documentado que no corría |
+| `ad3ec42` | 7 | El cliente ve «Resuelta»; el aviso de subir deja de ser ciego |
 
 ---
 
