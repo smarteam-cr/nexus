@@ -128,6 +128,54 @@ CREATE POLICY deny_all_non_superuser ON "RoleProfileShare"
   TO PUBLIC
   USING (false);
 
+-- 7) Ídem para las CINCO tablas SUPER_ADMIN de la tanda de planilla, tarjetas y
+--    comisiones (2026-08-16). Qué llevan y por qué pesan lo mismo que un salario:
+--      TarjetaCredito         límite, saldo y últimos 4 de las tarjetas de la empresa
+--      TarjetaCreditoCosto    qué se paga con cuál (deduce el gasto por tarjeta)
+--      PagoPlanilla           lo que se le PAGÓ a cada persona, quincena por quincena
+--      ReglaComisionVendedor  el % que le toca a cada vendedor
+--      ComisionVendedor       la comisión liquidada, con su base y su monto
+--    ⚠ `ComisionPartner` NO va en esta lista A PROPÓSITO: es un INGRESO (lo que
+--    Smarteam gana de un aliado), su superficie es la de ADMIN igual que
+--    `IngresoVariable`, y ninguno de los dos lleva deny-all. Tiene RLS habilitado
+--    por el bloque dinámico de arriba, que es lo que tapa al `anon` de Supabase.
+--    Nacieron en scripts/sql/2026-08-16-planilla-tarjetas-comisiones.sql, que se
+--    corre UNA vez; viven acá para que `npm run db:policies` las RESTABLEZCA.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "TarjetaCredito";
+CREATE POLICY deny_all_non_superuser ON "TarjetaCredito"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "TarjetaCreditoCosto";
+CREATE POLICY deny_all_non_superuser ON "TarjetaCreditoCosto"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "PagoPlanilla";
+CREATE POLICY deny_all_non_superuser ON "PagoPlanilla"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "ReglaComisionVendedor";
+CREATE POLICY deny_all_non_superuser ON "ReglaComisionVendedor"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "ComisionVendedor";
+CREATE POLICY deny_all_non_superuser ON "ComisionVendedor"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables
