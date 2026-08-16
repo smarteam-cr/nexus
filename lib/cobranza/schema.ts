@@ -554,6 +554,68 @@ export const pagoPlanillaPatchSchema = z.object({
   notas: z.string().trim().max(2000).nullable().optional(),
 });
 
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ───────────────────
+// Lo que Smarteam le PAGA a quien vendió, como % de lo COBRADO. La comisión
+// devengada NO se escribe acá: es una vista derivada (lib/cobranza/comisiones.ts).
+// Lo único que se persiste es la REGLA y, al liquidar, la comisión congelada.
+// ⚠ Nunca comparte ruta, endpoint ni loader con las de PARTNER, que son ingreso.
+
+/**
+ * En PUNTOS PORCENTUALES: 13 = 13%, como lo dice la gente. > 0 porque una regla
+ * al 0% no es una regla, es no tener comisión — y eso se expresa borrándola.
+ * Techo 100: nadie cobra de comisión más de lo que entró.
+ */
+const porcentajeComision = z
+  .number()
+  .gt(0, "El porcentaje tiene que ser mayor a 0")
+  .max(100, "El porcentaje no puede pasar de 100")
+  .multipleOf(0.0001, "Máximo 4 decimales");
+
+const reglaComisionBase = z.object({
+  teamMemberId: z.string().cuid(),
+  // null / ausente = la regla GENERAL, para todos los clientes. La del cliente
+  // le gana (ver `reglaParaCobro`).
+  clientId: z.string().cuid().nullable().optional(),
+  porcentaje: porcentajeComision,
+  vigenteDesde: isoDateReal,
+  // null = vigente sin fecha de fin.
+  vigenteHasta: isoDateReal.nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+/**
+ * ⚠ El refine va acá y no en el `.partial()`: un rango invertido guardado en
+ * silencio deja una regla que nunca aplica y una comisión que nadie devenga —
+ * el fallo más caro de este modelo, porque no rompe nada, solo no paga.
+ */
+export const reglaComisionCreateSchema = reglaComisionBase.refine(
+  (r) => !r.vigenteHasta || r.vigenteHasta >= r.vigenteDesde,
+  { message: "La vigencia termina antes de empezar", path: ["vigenteHasta"] },
+);
+
+export const reglaComisionPatchSchema = reglaComisionBase
+  .partial()
+  .refine((r) => !r.vigenteDesde || !r.vigenteHasta || r.vigenteHasta >= r.vigenteDesde, {
+    message: "La vigencia termina antes de empezar",
+    path: ["vigenteHasta"],
+  });
+
+/**
+ * Liquidar lo devengado de una persona en un período y una moneda. NO recibe el
+ * monto ni los cobros: los recalcula el server con el mismo cálculo puro que
+ * pintó la pantalla. Si el cliente pudiera mandar el monto, la comisión sería lo
+ * que dijo el navegador y no lo que dicen los cobros.
+ */
+export const liquidarComisionSchema = z.object({
+  teamMemberId: z.string().cuid(),
+  periodo: periodoPlanilla,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  // Opcional: engancharla a la quincena con la que se paga. Se puede liquidar
+  // sin pago todavía (el schema lo permite y la FK es nullable).
+  pagoPlanillaId: z.string().cuid().nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 
 export const crearEmpresaSchema = z.object({

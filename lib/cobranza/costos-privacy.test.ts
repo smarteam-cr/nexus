@@ -74,6 +74,9 @@ import * as planillaRoute from "@/app/api/cobranza/costos/pagos-planilla/route";
 import * as planillaIdRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/route";
 import * as planillaPagarRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/pagar/route";
 import * as aguinaldoRoute from "@/app/api/cobranza/costos/aguinaldo/route";
+import * as comVendedorRoute from "@/app/api/cobranza/costos/comisiones-vendedor/route";
+import * as comVendedorIdRoute from "@/app/api/cobranza/costos/comisiones-vendedor/[reglaId]/route";
+import * as comVendedorLiquidarRoute from "@/app/api/cobranza/costos/comisiones-vendedor/liquidar/route";
 
 const MENSAJE_GUARD = "Los costos y la caja neta son solo para dirección (Super Admin).";
 
@@ -127,7 +130,7 @@ describe("P1 · guardCostosAccess — 403 para todo rol que no sea SUPER_ADMIN",
 });
 
 // ── P2 · Handlers reales cableados ──────────────────────────────────────────
-describe("P2 · los 22 handlers responden 403 como ADMIN sin tocar Prisma", () => {
+describe("P2 · los 28 handlers responden 403 como ADMIN sin tocar Prisma", () => {
   const req = (method: string) =>
     new Request("http://test.local/api/cobranza", {
       method,
@@ -138,6 +141,7 @@ describe("P2 · los 22 handlers responden 403 como ADMIN sin tocar Prisma", () =
   const gastoParams = { params: Promise.resolve({ gastoId: "clx-test-gasto-id" }) };
   const tarjetaParams = { params: Promise.resolve({ tarjetaId: "clx-test-tarjeta-id" }) };
   const pagoParams = { params: Promise.resolve({ pagoId: "clx-test-pago-id" }) };
+  const reglaParams = { params: Promise.resolve({ reglaId: "clx-test-regla-id" }) };
 
   const superficies: Array<[string, () => Promise<Response>]> = [
     ["GET /api/cobranza/costos", () => costosRoute.GET()],
@@ -192,6 +196,33 @@ describe("P2 · los 22 handlers responden 403 como ADMIN sin tocar Prisma", () =
       () =>
         aguinaldoRoute.GET(
           new Request("http://test.local/api/cobranza/costos/aguinaldo?anio=2026") as unknown as NextRequest,
+        ),
+    ],
+    // Comisiones de VENDEDOR: es remuneración, mismo peso que un salario. Las de
+    // PARTNER (un ingreso) viven fuera de `costos/` con `guardCobranzaAccess` y
+    // por eso NO están en esta lista.
+    ["GET /api/cobranza/costos/comisiones-vendedor", () => comVendedorRoute.GET()],
+    ["POST /api/cobranza/costos/comisiones-vendedor", () => comVendedorRoute.POST(req("POST"))],
+    [
+      "PATCH /api/cobranza/costos/comisiones-vendedor/[reglaId]",
+      () => comVendedorIdRoute.PATCH(req("PATCH"), reglaParams),
+    ],
+    [
+      "DELETE /api/cobranza/costos/comisiones-vendedor/[reglaId]",
+      () => comVendedorIdRoute.DELETE(req("DELETE"), reglaParams),
+    ],
+    [
+      "POST /api/cobranza/costos/comisiones-vendedor/liquidar",
+      () => comVendedorLiquidarRoute.POST(req("POST")),
+    ],
+    [
+      "DELETE /api/cobranza/costos/comisiones-vendedor/liquidar",
+      () =>
+        comVendedorLiquidarRoute.DELETE(
+          new Request(
+            "http://test.local/api/cobranza/costos/comisiones-vendedor/liquidar?comisionId=clx-x",
+            { method: "DELETE" },
+          ) as unknown as NextRequest,
         ),
     ],
   ];

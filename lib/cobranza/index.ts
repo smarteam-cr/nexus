@@ -21,8 +21,12 @@ export {
   loadLibroPlanilla,
   loadAguinaldo,
   loadComisionesPartner,
+  loadComisionesVendedor,
   type ComisionPartnerDTO,
   type ComisionesPartnerDTO,
+  type ComisionesVendedorDTO,
+  type ReglaComisionDTO,
+  type ComisionLiquidadaDTO,
   type TarjetaDTO,
   type TarjetaCostoDTO,
   type LibroPlanillaDTO,
@@ -43,6 +47,8 @@ export {
   type SnapshotSerieDTO,
 } from "./queries";
 export { runCobranzaDigest, type DigestResult } from "./digest";
+// El cálculo puro de la comisión de vendedor (la DEVENGADA no es una fila).
+export type { ComisionDevengada, DetalleComision } from "./comisiones";
 export {
   semaforoCobro,
   semaforoCuenta,

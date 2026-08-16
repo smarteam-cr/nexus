@@ -40,6 +40,7 @@ import {
 import { coberturaDe, periodosDeAguinaldo } from "./planilla";
 import { normalizePartner } from "./schema";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
+import { devengarComisiones, type ComisionDevengada, type ReglaComision } from "./comisiones";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -1453,5 +1454,142 @@ export async function loadAguinaldo(anio: number): Promise<AguinaldoResultado> {
         .reduce((a, c) => a + num(c.monto)!, 0),
     })),
     anio,
+  );
+}
+
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ────────────────────
+// ⚠ PRIVACIDAD: lo que se le paga a una persona por vender. MISMA superficie que
+// los salarios: solo `guardCostosAccess`. Es el otro lado de la línea que separa
+// esto de `loadComisionesPartner` — el ingreso lo ve ADMIN, la remuneración no.
+
+export interface ReglaComisionDTO {
+  id: string;
+  teamMemberId: string;
+  vendedorNombre: string;
+  clientId: string | null;
+  clienteNombre: string | null;
+  porcentaje: number;
+  vigenteDesde: string;
+  vigenteHasta: string | null;
+  notas: string | null;
+}
+
+export interface ComisionLiquidadaDTO {
+  id: string;
+  teamMemberId: string | null;
+  vendedorNombre: string;
+  periodo: string;
+  base: number;
+  porcentaje: number;
+  monto: number;
+  moneda: string;
+  cobroIds: string[];
+  pagoPlanillaId: string | null;
+  liquidadoPor: string;
+  liquidadoEn: string;
+  notas: string | null;
+}
+
+export interface ComisionesVendedorDTO {
+  reglas: ReglaComisionDTO[];
+  /** Lo DEVENGADO: derivado de los cobros COBRADO, se recalcula solo. */
+  devengadas: ComisionDevengada[];
+  /** Lo LIQUIDADO: filas congeladas, con su snapshot. */
+  liquidadas: ComisionLiquidadaDTO[];
+  /** Totales de lo devengado por moneda. CRC y USD nunca se suman. */
+  totalesDevengado: Record<string, number>;
+}
+
+/**
+ * Trae las reglas, devenga sobre los cobros COBRADO y lista lo ya liquidado.
+ *
+ * El universo de cobros es TODO lo COBRADO con `fechaCobro`: sin ese dato no se
+ * sabe en qué período cae ni qué regla estaba vigente, así que un cobro sin
+ * fecha de pago simplemente no devenga (no se aproxima con la programada).
+ */
+export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
+  const [reglasRaw, liquidadasRaw] = await Promise.all([
+    prisma.reglaComisionVendedor.findMany({
+      include: {
+        vendedor: { select: { name: true } },
+        client: { select: { name: true } },
+      },
+      orderBy: [{ vigenteDesde: "desc" }],
+    }),
+    prisma.comisionVendedor.findMany({ orderBy: [{ periodo: "desc" }, { liquidadoEn: "desc" }] }),
+  ]);
+
+  const reglas: ReglaComisionDTO[] = reglasRaw.map((r) => ({
+    id: r.id,
+    teamMemberId: r.teamMemberId,
+    vendedorNombre: r.vendedor.name,
+    clientId: r.clientId,
+    clienteNombre: r.client?.name ?? null,
+    porcentaje: num(r.porcentaje)!,
+    vigenteDesde: isoDay(r.vigenteDesde)!,
+    vigenteHasta: isoDay(r.vigenteHasta),
+    notas: r.notas,
+  }));
+
+  const liquidadas: ComisionLiquidadaDTO[] = liquidadasRaw.map((c) => ({
+    id: c.id,
+    teamMemberId: c.teamMemberId,
+    vendedorNombre: c.vendedorNombre,
+    periodo: c.periodo,
+    base: num(c.base)!,
+    porcentaje: num(c.porcentaje)!,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    cobroIds: c.cobroIds,
+    pagoPlanillaId: c.pagoPlanillaId,
+    liquidadoPor: c.liquidadoPor,
+    liquidadoEn: iso(c.liquidadoEn)!,
+    notas: c.notas,
+  }));
+
+  // Sin reglas no hay nada que devengar y no vale la pena traer los cobros.
+  if (reglas.length === 0) {
+    return { reglas, devengadas: [], liquidadas, totalesDevengado: {} };
+  }
+
+  const devengadas = await devengarDesdeCobros(reglas, liquidadas);
+
+  const totalesDevengado: Record<string, number> = {};
+  for (const d of devengadas) {
+    totalesDevengado[d.moneda] = Math.round(((totalesDevengado[d.moneda] ?? 0) + d.monto) * 100) / 100;
+  }
+
+  return { reglas, devengadas, liquidadas, totalesDevengado };
+}
+
+/** Los cobros COBRADO cruzados con las reglas, menos lo ya liquidado. */
+async function devengarDesdeCobros(
+  reglas: ReglaComision[],
+  liquidadas: ComisionLiquidadaDTO[],
+): Promise<ComisionDevengada[]> {
+  const cobros = await prisma.cobro.findMany({
+    where: { estado: "COBRADO", fechaCobro: { not: null } },
+    select: {
+      id: true,
+      fechaCobro: true,
+      monto: true,
+      moneda: true,
+      cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+    },
+  });
+
+  const yaLiquidados = new Set(liquidadas.flatMap((c) => c.cobroIds));
+
+  return devengarComisiones(
+    cobros.map((c) => ({
+      id: c.id,
+      clientId: c.cuenta.clientId,
+      clienteNombre: c.cuenta.client?.name ?? "(sin nombre)",
+      fechaCobro: isoDay(c.fechaCobro)!,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+    })),
+    reglas,
+    yaLiquidados,
   );
 }

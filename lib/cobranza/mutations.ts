@@ -47,9 +47,13 @@ import type {
   pagoPlanillaPatchSchema,
   comisionPartnerCreateSchema,
   comisionPartnerPatchSchema,
+  reglaComisionCreateSchema,
+  reglaComisionPatchSchema,
+  liquidarComisionSchema,
 } from "./schema";
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
+import { loadComisionesVendedor } from "./queries";
 
 export class CobranzaError extends Error {
   constructor(
@@ -430,6 +434,22 @@ export async function cambiarEstadoCobro(
     } else {
       data.estado = patch.estado;
       if (cobro.estado === "COBRADO") {
+        // ⚠ ÚNICA concesión al chokepoint por las comisiones de vendedor: si la
+        // comisión de este cobro YA se liquidó, revertirlo dejaría una comisión
+        // pagada sobre plata que Nexus dice que nunca entró. La comisión
+        // devengada es derivada y se recalcula sola; la LIQUIDADA está congelada
+        // y hay que deshacerla a mano primero.
+        // Es un count server-side y el mensaje NO lleva montos: quien revierte
+        // un cobro es ADMIN y las comisiones de vendedor son SUPER_ADMIN-only.
+        const liquidadas = await prisma.comisionVendedor.count({
+          where: { cobroIds: { has: cobroId } },
+        });
+        if (liquidadas > 0) {
+          throw new CobranzaError(
+            "Este cobro ya entró en una comisión liquidada. Hay que deshacer la liquidación antes de revertirlo.",
+            409,
+          );
+        }
         // Revertir un COBRADO limpia la confirmación (queda rastro en updatedAt/bitácora).
         data.confirmadoPor = null;
         data.confirmadoEn = null;
@@ -1270,5 +1290,144 @@ export async function deleteGasto(gastoId: string) {
     await prisma.gastoPuntual.delete({ where: { id: gastoId } });
   } catch {
     throw new CobranzaError("El gasto no existe.", 404);
+  }
+}
+
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ───────────────────
+// Se persisten DOS cosas y ninguna es la comisión devengada: la REGLA (el % que
+// le toca a alguien) y, al liquidar, la comisión CONGELADA. Lo devengado se
+// deriva de los cobros COBRADO en cada lectura — ver lib/cobranza/comisiones.ts.
+
+export async function createReglaComision(data: z.infer<typeof reglaComisionCreateSchema>) {
+  return prisma.reglaComisionVendedor.create({
+    data: {
+      teamMemberId: data.teamMemberId,
+      clientId: data.clientId ?? null,
+      porcentaje: data.porcentaje,
+      vigenteDesde: dayUTC(data.vigenteDesde),
+      vigenteHasta: data.vigenteHasta ? dayUTC(data.vigenteHasta) : null,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+export async function updateReglaComision(
+  reglaId: string,
+  data: z.infer<typeof reglaComisionPatchSchema>,
+) {
+  try {
+    return await prisma.reglaComisionVendedor.update({
+      where: { id: reglaId },
+      data: {
+        ...(data.teamMemberId !== undefined ? { teamMemberId: data.teamMemberId } : {}),
+        ...(data.clientId !== undefined ? { clientId: data.clientId ?? null } : {}),
+        ...(data.porcentaje !== undefined ? { porcentaje: data.porcentaje } : {}),
+        ...(data.vigenteDesde !== undefined ? { vigenteDesde: dayUTC(data.vigenteDesde) } : {}),
+        ...(data.vigenteHasta !== undefined
+          ? { vigenteHasta: data.vigenteHasta ? dayUTC(data.vigenteHasta) : null }
+          : {}),
+        ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+      },
+      select: { id: true },
+    });
+  } catch {
+    throw new CobranzaError("La regla no existe.", 404);
+  }
+}
+
+/**
+ * Borrar una regla NO toca lo ya liquidado: esas filas llevan su propio snapshot
+ * de porcentaje y monto justamente para sobrevivir a esto. Lo que sí cambia es
+ * lo DEVENGADO de acá en adelante, que es lo que se espera al borrarla.
+ */
+export async function deleteReglaComision(reglaId: string) {
+  try {
+    await prisma.reglaComisionVendedor.delete({ where: { id: reglaId } });
+  } catch {
+    throw new CobranzaError("La regla no existe.", 404);
+  }
+}
+
+/**
+ * Liquidar lo devengado de una persona en un período y una moneda.
+ *
+ * ⚠ El monto NO viene del cliente: se RECALCULA con el mismo cálculo puro que
+ * pintó la pantalla. Si el navegador pudiera mandarlo, la comisión sería lo que
+ * dijo el navegador y no lo que dicen los cobros.
+ *
+ * Congela un snapshot autosuficiente (patrón `CostoMovimiento`): la fila se lee
+ * sola aunque después cambien la regla, el cobro o la persona.
+ */
+export async function liquidarComision(
+  data: z.infer<typeof liquidarComisionSchema>,
+  byEmail: string,
+) {
+  if (!byEmail) throw new CobranzaError("Liquidar exige confirmación de un usuario.", 400);
+
+  const { devengadas } = await loadComisionesVendedor();
+  const d = devengadas.find(
+    (x) =>
+      x.teamMemberId === data.teamMemberId &&
+      x.periodo === data.periodo &&
+      x.moneda === data.moneda,
+  );
+  if (!d) {
+    throw new CobranzaError(
+      "No hay nada devengado para esa persona en ese período y esa moneda. Puede que ya se haya liquidado.",
+      409,
+    );
+  }
+
+  // La quincena a la que se engancha tiene que ser de la MISMA persona: pagarle
+  // la comisión de alguien junto al salario de otro sería un error mudo.
+  if (data.pagoPlanillaId) {
+    const pago = await prisma.pagoPlanilla.findUnique({
+      where: { id: data.pagoPlanillaId },
+      select: { sujetoTeamMemberId: true, moneda: true },
+    });
+    if (!pago) throw new CobranzaError("La quincena no existe.", 404);
+    if (pago.sujetoTeamMemberId !== data.teamMemberId) {
+      throw new CobranzaError("Esa quincena es de otra persona.", 409);
+    }
+    if (pago.moneda !== data.moneda) {
+      throw new CobranzaError(
+        "La quincena está en otra moneda. Nexus no convierte: la comisión se paga en la moneda en que entró.",
+        409,
+      );
+    }
+  }
+
+  return prisma.comisionVendedor.create({
+    data: {
+      teamMemberId: data.teamMemberId,
+      vendedorNombre: d.vendedorNombre,
+      periodo: d.periodo,
+      base: d.base,
+      porcentaje: d.porcentaje,
+      monto: d.monto,
+      // `data.moneda` viene del Zod (el enum), no del derivado: son el mismo
+      // valor porque el `find` de arriba matchea por moneda.
+      moneda: data.moneda,
+      cobroIds: d.cobroIds,
+      detalle: d.detalle as unknown as Prisma.InputJsonValue,
+      pagoPlanillaId: data.pagoPlanillaId ?? null,
+      liquidadoPor: byEmail,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Deshacer una liquidación. Los cobros vuelven a devengar solos (el derivado se
+ * recalcula) y, con eso, el freno 409 del revert se suelta — que es exactamente
+ * el camino que ese 409 le pide a quien quiere revertir un cobro.
+ */
+export async function deshacerLiquidacion(comisionId: string) {
+  try {
+    await prisma.comisionVendedor.delete({ where: { id: comisionId } });
+  } catch {
+    throw new CobranzaError("La liquidación no existe.", 404);
   }
 }

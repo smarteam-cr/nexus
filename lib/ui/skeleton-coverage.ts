@@ -54,6 +54,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // ninguna de las hojas de categoría.
   "finanzas/costos/pagos-planilla": { modo: "own" },
   "finanzas/costos/aguinaldo": { modo: "own" },
+  // Tres bloques (devengado + liquidado + reglas): no es la forma de ninguna
+  // hoja de categoría ni la del libro.
+  "finanzas/costos/comisiones-vendedor": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
   "finanzas/comisiones-partner": { modo: "own" },
