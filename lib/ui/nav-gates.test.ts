@@ -37,6 +37,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   it("SUPER_ADMIN ve los 13 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
+      customerSuccess: { read: true },
       ventas: { read: true },
       cobranza: { read: true },
       auditoria: { read: true },
@@ -68,6 +69,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   it("un rol con viewAll+ventas+auditoria+config+agentes (perfil CSL) ve lo suyo, sin Finanzas ni admin duro", () => {
     const c = ctx(false, {
       clientes: { viewAll: true },
+      customerSuccess: { read: true },
       ventas: { read: true },
       auditoria: { read: true },
       agentes: { read: true },
@@ -84,6 +86,24 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "documentacion",
       "agents",
       "config",
+    ]);
+  });
+
+  it("⭐ un CSE con `customerSuccess.read` ve SU pantalla — y sigue sin ver la cartera", () => {
+    /* El cambio del 2026-08-16: hasta entonces «Éxito del cliente» colgaba de `clientes.viewAll`,
+       así que el rol que HACE éxito del cliente era el único operativo que no entraba, mientras
+       Ventas, Desarrollo y Marketing sí — al revés de lo que hace falta.
+       ⚠ Lo que este caso congela no es solo que aparezca: es que aparezca SIN `clientes.viewAll`.
+       Si alguien "arreglara" esto volviendo a atar las dos cosas, el CSE pasaría a ver la cartera
+       entera de la empresa y acá se vería. */
+    const c = ctx(false, { customerSuccess: { read: true } });
+    expect(visibles(c)).toEqual([
+      "clients",
+      "marketing",
+      "customer-success",
+      "sessions",
+      "knowledge",
+      "documentacion",
     ]);
   });
 

@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
-import { requireCapability } from "@/lib/auth/roles";
+import { requirePermission } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { loadCsAccount } from "@/lib/cs/load-account";
 import AccountView from "@/components/cs/account/AccountView";
@@ -12,14 +12,14 @@ export const dynamic = "force-dynamic";
 
 // VISTA POR CUENTA de Customer Success: estado completo de UNA cuenta (proyectos,
 // alertas, cronograma, licencias, adopción, resumen citado). Mismo gate que el
-// panel (seeAllClients); si el cliente no pasa el where del usuario → 404.
+// panel (customerSuccess.read); si el cliente no pasa el where del usuario → 404.
 export default async function CustomerSuccessAccountPage({
   params,
 }: {
   params: Promise<{ clientId: string }>;
 }) {
   const { clientId } = await params;
-  const ctx = await requireCapability("seeAllClients").catch(() => null);
+  const ctx = await requirePermission("customerSuccess", "read").catch(() => null);
   if (!ctx) redirect("/clients");
 
   const where = await accessibleClientWhere(ctx.user);

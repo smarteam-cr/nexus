@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
-import { requireCapability } from "@/lib/auth/roles";
+import { requirePermission } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { loadCsPanel } from "@/lib/cs/load-panel";
@@ -17,15 +17,17 @@ export const dynamic = "force-dynamic";
 // CUSTOMER SUCCESS — centro de decisión de la CSL: dashboard visual (carga por
 // CSE, etapas, bloqueos, adopción/uso de Partner) + alertas triadas por el
 // watchdog + expansión/renovaciones + buckets de salud. Todo dato derivado
-// lleva su fuente (SourceChip). Solo seeAllClients (CSL / Ventas / Super Admin);
-// un CSE es redirigido a /clients (mismo gate que el dashboard viejo).
+// lleva su fuente (SourceChip). Desde 2026-08-16 el gate es la celda propia
+// `customerSuccess.read` y NO «ver todos los clientes»: el CSE entra a su propia
+// pantalla, acotado por `accessibleClientWhere` a SUS clientes.
 export default async function CustomerSuccessPage() {
-  const ctx = await requireCapability("seeAllClients").catch(() => null);
+  const ctx = await requirePermission("customerSuccess", "read").catch(() => null);
   if (!ctx) redirect("/clients");
 
   const where = await accessibleClientWhere(ctx.user);
   // CONFIDENCIALIDAD (términos de partner de HubSpot): uso/UUS/MRR solo CSL y
-  // SUPER_ADMIN — otros roles seeAllClients (Ventas/Marketing/Dev) no los ven.
+  // SUPER_ADMIN. ⚠ Este chequeo es por ROL y NO por la celda de acceso al área, así
+  // que abrirle el área al CSE no le destraba nada de partner.
   const role = ctx.user.teamMember?.roleEnum ?? null;
   const canSeePartnerData = role === "CSL" || role === "SUPER_ADMIN";
   // El portfolio (la query más pesada) se carga UNA vez y se comparte.

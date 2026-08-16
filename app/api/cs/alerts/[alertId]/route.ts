@@ -2,10 +2,10 @@
  * PATCH /api/cs/alerts/[alertId]   body: { status: "SEEN" | "RESOLVED" | "DISMISSED" | "OPEN" }
  *
  * Ciclo de vida de una alerta del watchdog desde el feed: marcar vista, resolver,
- * descartar (o reabrir). Registra quién y cuándo. Gateado con seeAllClients.
+ * descartar (o reabrir). Registra quién y cuándo. Gateado con `customerSuccess.read`.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
 import type { CsAlertStatus } from "@prisma/client";
@@ -17,7 +17,7 @@ export async function PATCH(
   { params }: { params: Promise<{ alertId: string }> },
 ) {
   const { alertId } = await params;
-  const guard = await guardCapability("seeAllClients");
+  const guard = await guardPermission("customerSuccess", "read");
   if (guard instanceof NextResponse) return guard;
 
   let body: { status?: unknown } = {};

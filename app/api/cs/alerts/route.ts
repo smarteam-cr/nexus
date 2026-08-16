@@ -4,10 +4,10 @@
  * Lista alertas del watchdog de Éxito del cliente. Lo usan el feed del panel
  * (refetch tras acciones), el drill por cliente (historial completo con
  * ?clientId= sin filtro de status) y el poller de notificaciones del CSL
- * (?status=OPEN&severity=HIGH&since=watermark). Gateado con seeAllClients.
+ * (?status=OPEN&severity=HIGH&since=watermark). Gateado con `customerSuccess.read`.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
 import type { CsAlertStatus, CsAlertSeverity, Prisma } from "@prisma/client";
@@ -16,7 +16,7 @@ const STATUSES = ["OPEN", "SEEN", "RESOLVED", "DISMISSED"] as const;
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 
 export async function GET(req: NextRequest) {
-  const guard = await guardCapability("seeAllClients");
+  const guard = await guardPermission("customerSuccess", "read");
   if (guard instanceof NextResponse) return guard;
 
   const sp = req.nextUrl.searchParams;

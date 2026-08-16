@@ -12,8 +12,8 @@
  *
  * Fuera a propósito:
  *   - Sesiones (universal para todo interno — no hay nada que gatear).
- *   - Customer Success: cabalga sobre `clientes.viewAll` vía compat — si algún
- *     día se separa, es 1 entrada nueva acá.
+ *   - Customer Success: SEPARADO el 2026-08-16 (era `clientes.viewAll` vía compat). Ver la
+ *     sección `customerSuccess` abajo, y su motivo.
  *   - El row-level (QUÉ clientes ve alguien) vive en lib/auth/access.ts.
  */
 import type { ActionDef, PermissionMap, SectionDef } from "./types";
@@ -159,6 +159,29 @@ export const PERMISSION_SECTIONS = [
         label: "Cambiar el estado y la etapa del proyecto en HubSpot",
         enforced: true,
       },
+    ],
+  },
+  {
+    /* ── ÉXITO DEL CLIENTE ─────────────────────────────────────────────────
+       Hasta 2026-08-16 esta área no tenía celda propia: cabalgaba sobre
+       `clientes.viewAll` vía el compat de `seeAllClients`, y la cabecera de este
+       archivo ya anticipaba que separarlas sería «1 entrada nueva acá».
+
+       POR QUÉ SE SEPARA AHORA. Ver todos los clientes y hacer éxito del cliente
+       son dos cosas distintas, y atarlas dejaba al CSE —que ES quien hace éxito
+       del cliente— fuera de su propia pantalla, mientras Ventas, Desarrollo y
+       Marketing entraban por ser roles «que ven todo». Al revés de lo que hace
+       falta.
+
+       ⚠ ESTO NO ES «VER TODOS LOS CLIENTES». El row-level sigue viviendo aparte
+       (`lib/auth/access.ts`): un CSE con esta celda ve el área acotada a SUS
+       clientes, porque `accessibleClientWhere` se aplica igual. Y los datos de
+       partner (uso, UUS, MRR) siguen siendo de CSL y SUPER_ADMIN por su propio
+       chequeo de rol en la página — esta celda no los destraba. */
+    key: "customerSuccess",
+    label: "Éxito del cliente",
+    actions: [
+      { key: "read", label: "Acceder al área de Éxito del cliente", enforced: true },
     ],
   },
   {
