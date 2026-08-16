@@ -87,8 +87,37 @@ describe("⭐ el estado de HubSpot llega a los redactores", () => {
   it("nadie más reimplementa el serializador", () => {
     /* Había DOS copias (el vigilante mandaba el crudo, el resumen de cuenta traducía) y por eso
        el modelo recibía `on_track` en una y «A tiempo» en la otra. Una tercera copia es cómo
-       vuelve esa divergencia. */
-    expect(ROTULO_OPERATIVA).toContain("ESTADO DEL PROYECTO EN HUBSPOT");
+       vuelve esa divergencia.
+
+       ⚠ Este test afirmaba `ROTULO_OPERATIVA.toContain(...)` — o sea, que una constante contiene
+       su propio texto. No escaneaba a NADIE y habría pasado con cinco copias del serializador.
+       Ahora busca de verdad: quien arme el rótulo sin importarlo de acá está copiando el bloque. */
+    const raiz = process.cwd();
+    const culpables: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === "node_modules" || e.name === ".next" || e.name.startsWith(".")) continue;
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) recorrer(p);
+        else if (/\.tsx?$/.test(e.name)) {
+          const rel = path.relative(raiz, p).split(path.sep).join("/");
+          if (rel.startsWith("lib/cs/hubspot-ops-block")) continue;
+          /* Los TESTS quedan afuera: un golden que afirma sobre el texto producido contiene
+             el rótulo por definición, y es justamente lo que queremos que exista. Lo que se
+             busca acá es código de PRODUCCIÓN armando el bloque por su cuenta. */
+          if (/\.test\.tsx?$/.test(e.name)) continue;
+          const src = fs.readFileSync(p, "utf8");
+          if (src.includes("ESTADO DEL PROYECTO EN HUBSPOT")) culpables.push(rel);
+        }
+      }
+    };
+    for (const d of ["lib", "app", "components", "scripts"]) recorrer(path.join(raiz, d));
+    expect(
+      culpables,
+      `Estos archivos arman el rótulo de operativa por su cuenta en vez de importar ` +
+        `bloqueDeOperativa. Ya pasó una vez: el modelo recibía \`on_track\` en un documento y ` +
+        `«A tiempo» en otro.\n${culpables.join("\n")}`,
+    ).toEqual([]);
   });
 });
 

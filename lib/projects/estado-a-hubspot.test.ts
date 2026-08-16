@@ -117,6 +117,32 @@ describe("⭐ no se pisa lo que alguien acaba de cambiar a mano", () => {
     expect(src).toMatch(/vivo\.hs_pipeline_stage\s*!==/);
   });
 
+  it("⚠ el 409 mira la PRESENCIA de `visto`, no que traiga un string", () => {
+    /* Lo cazó la auditoría adversarial: con `typeof … === "string" ? … : null`, un
+       `visto: { estado: null }` legítimo —lo que manda el chip sobre los 24 de 67 proyectos SIN
+       estado cargado, que son justo la población que esta función viene a arreglar— quedaba
+       indistinguible de «no mandó nada» y la guarda no podía dispararse NUNCA.
+       El fallo era invisible: ningún test lo miraba porque todos usaban un estado cargado. */
+    const src = leer(RUTA);
+    expect(src, "el 409 volvió a condicionarse al valor en vez de a la presencia").toMatch(
+      /estado && vioEstado &&/,
+    );
+    expect(src).toMatch(/const vioEstado = !!body\.visto && "estado" in body\.visto/);
+  });
+
+  it("⛔ y NO se acepta nada sobre un proyecto que HubSpot dice cerrado", () => {
+    /* El veto de `completed` se decidía con la copia espejada, que puede tener días. Si el CSE
+       cerró el proyecto allá y el espejo todavía dice null, la sugerencia se arma igual y
+       aceptarla REABRIRÍA un proyecto cerrado — lo que los dos módulos declaran imposible. */
+    const src = leer(RUTA);
+    expect(src, "el veto dejó de revalidarse contra el valor vivo").toContain(
+      "vivo.hs_status === ESTADO_VETADO",
+    );
+    expect(src, "una etapa terminal viva ya no frena la escritura").toContain(
+      "def.closedStageIds.includes(vivo.hs_pipeline_stage)",
+    );
+  });
+
   it("si divergió de lo que la pantalla mostraba, 409 con el valor nuevo", () => {
     /* No alcanza con negarse: hay que decir qué dice HubSpot ahora, o la persona no tiene con
        qué decidir de nuevo y va a apretar otra vez. */

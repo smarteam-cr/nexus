@@ -3,9 +3,15 @@
  *
  * Ciclo de vida de una alerta del watchdog desde el feed: marcar vista, resolver,
  * descartar (o reabrir). Registra quién y cuándo. Gateado con `customerSuccess.read`.
+ *
+ * ⚠ Y SE VERIFICA A QUÉ CLIENTE PERTENECE LA ALERTA. El gate viejo (`seeAllClients`) implicaba
+ * acceso a todos los clientes; la celda nueva no. Sin este chequeo, un CSE con el id de una
+ * alerta ajena podría resolverla o descartarla — y una alerta descartada deja de aparecerle a
+ * quien SÍ tenía que actuar, sin dejar rastro de que la apagó alguien de afuera.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardPermission } from "@/lib/auth/api-guards";
+import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
 import type { CsAlertStatus } from "@prisma/client";
@@ -31,7 +37,15 @@ export async function PATCH(
     return NextResponse.json({ error: `status debe ser uno de ${STATUSES.join("|")}` }, { status: 400 });
   }
 
-  const existing = await prisma.csAlert.findUnique({ where: { id: alertId }, select: { id: true } });
+  /* La alerta tiene que pasar el where del usuario. Se resuelve con `findFirst` y el filtro
+     adentro —no con un findUnique + comparación después— para que no exista una rama donde el id
+     se leyó y el chequeo se saltee. 404 y no 403: quien no tiene acceso tampoco tiene por qué
+     enterarse de que esa alerta existe. */
+  const clientWhere = await accessibleClientWhere(guard.user);
+  const existing = await prisma.csAlert.findFirst({
+    where: { id: alertId, ...(clientWhere ? { client: clientWhere } : {}) },
+    select: { id: true },
+  });
   if (!existing) return NextResponse.json({ error: "Alerta no encontrada" }, { status: 404 });
 
   const now = new Date();

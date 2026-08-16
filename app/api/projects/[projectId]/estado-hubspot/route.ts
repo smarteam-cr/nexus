@@ -8,7 +8,7 @@ import {
   leerEstadoYEtapa,
 } from "@/lib/hubspot/project-record";
 import { espejarProyectoRecienCreado } from "@/lib/hubspot/sync-projects";
-import { esProponible } from "@/lib/projects/estado-hubspot";
+import { ESTADO_VETADO, esProponible } from "@/lib/projects/estado-hubspot";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
 import { resolvePipeline } from "@/lib/projects/kind";
 
@@ -118,17 +118,54 @@ export async function PATCH(
   const hs = await getSystemHubspotClient();
   const vivo = await leerEstadoYEtapa(hs, proyecto.hubspotServiceId);
 
+  /* ⚠ «NO MANDÓ `visto`» Y «VIO VACÍO» SON COSAS DISTINTAS, y confundirlas apagaba la guarda
+     justo donde más hace falta. Antes esto era `typeof … === "string" ? … : null`, así que un
+     `visto: { estado: null }` legítimo —lo que manda el chip sobre los 24 de 67 proyectos SIN
+     estado cargado, que son la población que esta función viene a arreglar— quedaba
+     indistinguible de «no mandó nada» y el 409 no podía dispararse nunca.
+     Se mira la PRESENCIA de la clave, y el valor se normaliza a `null`. */
+  const vioEstado = !!body.visto && "estado" in body.visto;
+  const vioEtapa = !!body.visto && "etapaStageId" in body.visto;
   const vistoEstado = typeof body.visto?.estado === "string" ? body.visto.estado : null;
   const vistoEtapa = typeof body.visto?.etapaStageId === "string" ? body.visto.etapaStageId : null;
   if (
-    (estado && vistoEstado && vivo.hs_status !== vistoEstado) ||
-    (etapaStageId && vistoEtapa && vivo.hs_pipeline_stage !== vistoEtapa)
+    (estado && vioEstado && vivo.hs_status !== vistoEstado) ||
+    (etapaStageId && vioEtapa && vivo.hs_pipeline_stage !== vistoEtapa)
   ) {
     return NextResponse.json(
       {
         error:
           "Alguien cambió esto en HubSpot desde que se armó la sugerencia. " +
           "Revisá el valor nuevo antes de decidir: aceptar ahora pisaría esa decisión.",
+        enHubspot: { estado: vivo.hs_status, etapaStageId: vivo.hs_pipeline_stage },
+      },
+      { status: 409 },
+    );
+  }
+
+  /* ⛔ EL VETO SE REVALIDA CONTRA LO VIVO, no contra la copia espejada. `proponerEstadoDesdeMotivo`
+     ya se niega a proponer sobre un proyecto `completed`, pero decide con `Project.hubspotStatus`,
+     que puede tener días. Si el CSE cerró el proyecto en HubSpot y el espejo todavía dice `null`,
+     la sugerencia se arma igual y aceptarla REABRIRÍA un proyecto cerrado — exactamente lo que
+     los dos módulos declaran que nunca puede pasar («reactivarlo no está resuelto hoy»).
+     Lo mismo para la etapa: si YA está en una terminal, moverla de ahí es reabrir. */
+  if (vivo.hs_status === ESTADO_VETADO) {
+    return NextResponse.json(
+      {
+        error:
+          "En HubSpot este proyecto figura como CERRADO. Reabrirlo no sale de un botón: si de " +
+          "verdad sigue vivo, cambiale el estado allá y volvé a intentar.",
+        enHubspot: { estado: vivo.hs_status, etapaStageId: vivo.hs_pipeline_stage },
+      },
+      { status: 409 },
+    );
+  }
+  if (def && vivo.hs_pipeline_stage && def.closedStageIds.includes(vivo.hs_pipeline_stage)) {
+    return NextResponse.json(
+      {
+        error:
+          "En HubSpot este proyecto ya está en una etapa de cierre. Sacarlo de ahí lo reabre, y " +
+          "eso se decide en HubSpot, no acá.",
         enHubspot: { estado: vivo.hs_status, etapaStageId: vivo.hs_pipeline_stage },
       },
       { status: 409 },

@@ -368,6 +368,11 @@ export const GET = withProjectAccess(async (
     prisma.firefliesSession.findFirst({
       where: {
         projects: { some: { projectId } },
+        /* ⚠ SOLO LAS QUE YA OCURRIERON. Sin este corte, una reunión AGENDADA para la semana que
+           viene es siempre «posterior» al resumen y lo deja vencido para siempre — con el agravante
+           de que regenerarlo no lo arregla, porque la reunión futura sigue estando adelante. Hay
+           459 sesiones futuras en el corpus (agenda recurrente de Google), así que no es un borde. */
+        date: { lte: new Date() },
         OR: [{ summary: { not: Prisma.DbNull } }, { transcript: { not: null } }],
       },
       orderBy: { date: "desc" },
@@ -382,7 +387,14 @@ export const GET = withProjectAccess(async (
   const frescura = evaluarFrescura(briefRow?.generatedAt ?? null, {
     ultimaSesionConContenido: ultimaSesion?.date ?? null,
     handoffActualizadoEn: null,
-    etapaSincronizadaEn: project.hubspotStageSyncedAt ?? null,
+    /* ⛔ NO se usa `hubspotStageSyncedAt`: significa «la última vez que la REVALIDAMOS», no
+       «cuándo cambió». El espejo corre cada vez que alguien abre la ficha del cliente, así que
+       ese sello es casi siempre posterior al resumen y el cartel de vencido quedaría encendido
+       para siempre — y encima mintiendo, porque la etapa puede no haberse movido en meses. Un
+       aviso permanente se ignora, y con él se ignoran los que sí importan.
+       Hoy Nexus no guarda CUÁNDO cambió la etapa; hasta que exista esa columna, esta señal vale
+       `null` — preferimos no avisar de un cambio real antes que avisar de uno que no pasó. */
+    etapaSincronizadaEn: null,
     ultimaDesviacionEn: ultimaDesviacion?.lastDetectedAt ?? null,
     marcadoVencidoEn: briefRow?.staleAt ?? null,
   });

@@ -93,8 +93,16 @@ describe("aprobar tiene sus propias puertas", () => {
 describe("«ya estaba aprobado» no es un error", () => {
   it("el dedup por promesa devuelve created:false y la ruta lo pasa tal cual", () => {
     /* Aprobar dos veces el mismo plan no versiona — y está bien. Tratarlo como fallo enseñaría a
-       ignorar el aviso; celebrarlo como versión nueva mentiría sobre el historial. */
-    expect(leer(APPROVE)).toContain("created:false");
+       ignorar el aviso; celebrarlo como versión nueva mentiría sobre el historial.
+       ⚠ Este assert estaba anclado en el literal «created:false», que solo existe en un COMENTARIO
+       de la ruta: pasaba aunque el código descartara el campo. Ahora mira el CÓDIGO. */
+    const codigo = sinComentarios(APPROVE);
+    expect(codigo, "la ruta dejó de reenviar lo que devolvió el congelador").toMatch(
+      /\.\.\.r,?/,
+    );
+    expect(codigo, "la ruta empezó a normalizar `created` en vez de pasarlo").not.toMatch(
+      /created:\s*true/,
+    );
   });
 });
 
@@ -119,9 +127,15 @@ describe("el botón existe y no ofrece lo que va a fallar", () => {
   });
 
   it("un fallo del congelado se muestra, no se celebra", () => {
-    const src = leer(CANVAS);
+    /* ⚠ Antes esto buscaba `toast.error` en cualquier lado del handler — y ahí está igual, en el
+       catch de red, así que pasaba aunque la rama de respuesta celebrara un 502. Lo que hay que
+       afirmar es que la rama `!res.ok` CORTA: muestra el error y hace `return` antes de llegar al
+       toast de éxito. */
+    const src = sinComentarios(CANVAS);
     const i = src.indexOf("const approvePlan");
-    const cuerpo = src.slice(i, i + 1400);
-    expect(cuerpo, "aprobar no distingue el error").toContain("toast.error");
+    const cuerpo = src.slice(i, i + 1600);
+    expect(cuerpo, "aprobar no corta ante una respuesta de error").toMatch(
+      /if \(!res\.ok\)[\s\S]{0,260}toast\.error\([\s\S]{0,120}return;/,
+    );
   });
 });

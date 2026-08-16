@@ -67,7 +67,11 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
 
   const [sesiones, desviaciones, categorias] = await Promise.all([
     prisma.firefliesSession.findMany({
-      where: { projects: { some: { projectId } } },
+      /* ⚠ SOLO LAS QUE YA OCURRIERON. Las más recientes incluían las AGENDADAS —hay 459 sesiones
+         futuras en el corpus por la agenda recurrente de Google—, así que el resumen se armaba
+         gastando su cupo en reuniones que todavía no pasaron. Sin transcripción no aportaban nada
+         y encima desplazaban a las reales. */
+      where: { projects: { some: { projectId } }, date: { lte: new Date() } },
       orderBy: { date: "desc" },
       take: MAX_SESIONES,
       /* `participants` y `organizerEmail` son para la ETIQUETA DE SALA (Tanda 3): «lo dijo el
