@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import type { ComisionesPartnerDTO } from "@/lib/cobranza";
+import { FRECUENCIAS_PARTNER } from "@/lib/cobranza";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input, Select } from "@/components/ui";
@@ -37,6 +38,7 @@ const TD = "px-3 py-2 text-xs text-fg";
 
 type FormState = {
   partner: string;
+  partnerId: string;
   concepto: string;
   monto: string;
   moneda: string;
@@ -45,12 +47,15 @@ type FormState = {
   notas: string;
 };
 
+type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; notas: string };
+
 export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   const toast = useToast();
   const [data, setData] = useState(initial);
   const [form, setForm] = useState<FormState | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [aliado, setAliado] = useState<AliadoForm | null>(null);
 
   async function refrescar() {
     try {
@@ -70,6 +75,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
     }
     const body = {
       partner: form.partner.trim(),
+      partnerId: form.partnerId || null,
       concepto: form.concepto.trim() || null,
       monto,
       moneda: form.moneda,
@@ -110,6 +116,46 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
     }
   }
 
+  const ALIADOS = "/api/cobranza/comisiones-partner/aliados";
+
+  async function guardarAliado() {
+    if (!aliado) return;
+    const frecuenciaMeses = Number(aliado.frecuenciaMeses);
+    if (!Number.isInteger(frecuenciaMeses) || frecuenciaMeses < 1 || frecuenciaMeses > 24) {
+      toast.error("La frecuencia va entre 1 y 24 meses.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await fetchJson(aliado.id ? `${ALIADOS}/${aliado.id}` : ALIADOS, {
+        method: aliado.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: aliado.nombre.trim(),
+          frecuenciaMeses,
+          notas: aliado.notas.trim() || null,
+        }),
+      });
+      setAliado(null);
+      await refrescar();
+      toast.success(aliado.id ? "Aliado actualizado." : "Aliado creado.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar el aliado.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function borrarAliado(id: string) {
+    try {
+      await fetchJson(`${ALIADOS}/${id}`, { method: "DELETE" });
+      await refrescar();
+      toast.success("Aliado borrado. Sus pagos quedan; se pierde la frecuencia.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo borrar el aliado.");
+    }
+  }
+
   const hoy = new Date().toISOString().slice(0, 10);
 
   return (
@@ -123,6 +169,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
               setEditandoId(null);
               setForm({
                 partner: "",
+                partnerId: "",
                 concepto: "",
                 monto: "",
                 moneda: "USD",
@@ -158,7 +205,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
 
       <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
         <p className="text-[11px] text-fg-muted">
-          Total del período:{" "}
+          Total acumulado:{" "}
           {Object.keys(data.totales).length === 0 ? (
             <span className="text-fg-secondary">—</span>
           ) : (
@@ -171,6 +218,61 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
           · CRC y USD nunca se suman entre sí
         </p>
       </div>
+
+      {/* ── Historial por aliado, a SU cadencia ───────────────────────────── */}
+      {data.historial.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-fg">Historial</h2>
+          <p className="text-[11px] text-fg-muted">
+            Cada aliado agrupado a su propia frecuencia — estos pagos no son mensuales, así que
+            leerlos mes a mes solo mostraría meses vacíos.
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {data.historial.map((h) => (
+              <div key={h.nombre} className="rounded-xl border border-line bg-surface p-3">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <p className="text-xs font-medium text-fg">{h.nombre}</p>
+                  <span className="text-[11px] text-fg-muted">{h.frecuenciaLabel}</span>
+                  {h.frecuenciaMeses === null && (
+                    <button
+                      type="button"
+                      className="text-[11px] text-brand hover:underline"
+                      onClick={() =>
+                        setAliado({ id: null, nombre: h.nombre, frecuenciaMeses: "3", notas: "" })
+                      }
+                    >
+                      configurar
+                    </button>
+                  )}
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {h.periodos.map((b) => (
+                    <li
+                      key={`${b.clave}-${b.moneda}`}
+                      className="flex items-baseline justify-between gap-2 text-xs"
+                    >
+                      <span className="text-fg-secondary">{b.etiqueta}</span>
+                      <span className="tabular-nums text-fg">
+                        {fmtMonto(b.total, b.moneda as "CRC" | "USD")}
+                        {b.cuantos > 1 && (
+                          <span className="ml-1 text-fg-muted">({b.cuantos} pagos)</span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {h.proximo && (
+                  // Dónde cae, NO cuánto: nadie sabe el monto y ponerle uno
+                  // sería inventarlo.
+                  <p className="mt-2 text-[11px] text-fg-muted">
+                    El próximo caería en {h.proximo.etiqueta}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {data.comisiones.length === 0 ? (
         <EmptyState
@@ -212,6 +314,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                           setEditandoId(c.id);
                           setForm({
                             partner: c.partner,
+                            partnerId: c.partnerId ?? "",
                             concepto: c.concepto ?? "",
                             monto: String(c.monto),
                             moneda: c.moneda,
@@ -235,6 +338,117 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
         </div>
       )}
 
+      {/* ── Aliados: quién nos paga y cada cuánto ─────────────────────────── */}
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-fg">Aliados</h2>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setAliado({ id: null, nombre: "", frecuenciaMeses: "3", notas: "" })}
+          >
+            Nuevo aliado
+          </Button>
+        </div>
+        {data.partners.length === 0 ? (
+          <EmptyState
+            title="Sin aliados configurados"
+            description="Configurá cada cuánto te paga cada aliado y el historial se agrupa a esa frecuencia en vez de mes a mes."
+          />
+        ) : (
+          <div className="rounded-xl border border-line bg-surface overflow-x-auto">
+            <table className="w-full min-w-[560px]">
+              <thead className="bg-surface-muted border-b border-line">
+                <tr>
+                  <th className={TH}>Aliado</th>
+                  <th className={TH}>Frecuencia</th>
+                  <th className={TH}>Pagos ligados</th>
+                  <th className={TH}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.partners.map((p) => (
+                  <tr key={p.id} className="border-b border-line last:border-b-0">
+                    <td className={TD}>
+                      {p.nombre}
+                      {!p.activo && <span className="ml-1.5 text-fg-muted">· inactivo</span>}
+                    </td>
+                    <td className={`${TD} text-fg-secondary`}>{p.frecuenciaLabel}</td>
+                    <td className={`${TD} text-fg-muted tabular-nums`}>{p.cuantasComisiones}</td>
+                    <td className={`${TD} text-right whitespace-nowrap`}>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setAliado({
+                              id: p.id,
+                              nombre: p.nombre,
+                              frecuenciaMeses: String(p.frecuenciaMeses),
+                              notas: p.notas ?? "",
+                            })
+                          }
+                        >
+                          Editar
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => borrarAliado(p.id)}>
+                          Borrar
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {aliado && (
+        <Modal
+          open
+          onClose={() => setAliado(null)}
+          title={aliado.id ? "Editar aliado" : "Nuevo aliado"}
+          description="Cada cuánto te paga. Con eso el historial se agrupa a su ritmo y Nexus sabe cuándo esperar el próximo."
+        >
+          <div className="space-y-3">
+            <Field label="Nombre">
+              <Input
+                value={aliado.nombre}
+                onChange={(e) => setAliado({ ...aliado, nombre: e.target.value })}
+                placeholder="Ej. HubSpot"
+              />
+            </Field>
+            <Field label="Frecuencia">
+              <Select
+                value={aliado.frecuenciaMeses}
+                onChange={(e) => setAliado({ ...aliado, frecuenciaMeses: e.target.value })}
+              >
+                {FRECUENCIAS_PARTNER.map((f) => (
+                  <option key={f.meses} value={String(f.meses)}>
+                    {f.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Notas">
+              <Input
+                value={aliado.notas}
+                onChange={(e) => setAliado({ ...aliado, notas: e.target.value })}
+              />
+            </Field>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setAliado(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={guardarAliado} disabled={guardando || !aliado.nombre.trim()}>
+                {guardando ? "Guardando…" : "Guardar"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {form && (
         <Modal
           open
@@ -246,7 +460,32 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
           description="Lo que te pagó un aliado comercial. Si el aliado no está en la cartera, dejá el cliente vacío."
         >
           <div className="space-y-3">
-            <Field label="Partner">
+            <Field
+              label="Aliado"
+              hint="Si lo elegís de la lista, el pago hereda su frecuencia y entra al historial con esa cadencia."
+            >
+              <Select
+                value={form.partnerId}
+                onChange={(e) => {
+                  const p = data.partners.find((x) => x.id === e.target.value);
+                  // Elegir un aliado también completa el nombre: el string es el
+                  // snapshot de la fila y tiene que decir lo mismo que el vínculo.
+                  setForm({
+                    ...form,
+                    partnerId: e.target.value,
+                    partner: p ? p.nombre : form.partner,
+                  });
+                }}
+              >
+                <option value="">Sin aliado configurado — escribí el nombre abajo</option>
+                {data.partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} · {p.frecuenciaLabel}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Nombre del partner">
               <Input
                 value={form.partner}
                 onChange={(e) => setForm({ ...form, partner: e.target.value })}

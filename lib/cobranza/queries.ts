@@ -39,6 +39,14 @@ import {
 } from "./tarjetas";
 import { coberturaDe, periodosDeAguinaldo } from "./planilla";
 import { normalizePartner } from "./schema";
+import {
+  agruparPorCadencia,
+  bucketDeCadencia,
+  bucketSiguiente,
+  labelDeFrecuencia,
+  type PagoDeAliado,
+  type TotalDeBucket,
+} from "./partners";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import {
   devengarComisiones,
@@ -965,6 +973,8 @@ export async function loadIngresosVariables(todayISO: string): Promise<IngresoVa
 export interface ComisionPartnerDTO {
   id: string;
   partner: string;
+  /** El aliado configurado, si ya existe. null = pago sin aliado dado de alta. */
+  partnerId: string | null;
   concepto: string | null;
   monto: number;
   moneda: string;
@@ -976,23 +986,60 @@ export interface ComisionPartnerDTO {
   createdAt: string;
 }
 
+export interface PartnerComercialDTO {
+  id: string;
+  nombre: string;
+  clave: string;
+  frecuenciaMeses: number;
+  frecuenciaLabel: string;
+  activo: boolean;
+  notas: string | null;
+  cuantasComisiones: number;
+}
+
+/**
+ * El historial de UN aliado, agrupado a SU cadencia (no mes a mes: estos pagos
+ * llegan cada N meses y una grilla mensual sale llena de huecos).
+ */
+export interface HistorialPartnerDTO {
+  partnerId: string | null;
+  nombre: string;
+  /** null = el aliado no está configurado todavía; se cae a mensual para agrupar. */
+  frecuenciaMeses: number | null;
+  frecuenciaLabel: string;
+  periodos: TotalDeBucket[];
+  /**
+   * Dónde cae el próximo período según la cadencia. NO dice cuánto: eso nadie lo
+   * sabe y ponerle un número sería fabricar.
+   */
+  proximo: { clave: string; etiqueta: string } | null;
+}
+
 export interface ComisionesPartnerDTO {
   comisiones: ComisionPartnerDTO[];
   /** Totales por partner y moneda SEPARADA — "lo que ganamos con cada uno". */
   porPartner: Array<{ partner: string; moneda: string; total: number; cuantas: number }>;
   /** Totales generales, también por moneda. CRC y USD nunca se suman. */
   totales: Record<string, number>;
+  /** Los aliados configurados, para el bloque de administración. */
+  partners: PartnerComercialDTO[];
+  /** El historial por aliado, a la cadencia de cada uno. */
+  historial: HistorialPartnerDTO[];
 }
 
 export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
-  const filas = await prisma.comisionPartner.findMany({
-    include: { client: { select: { name: true } } },
-    orderBy: [{ fecha: "desc" }, { partner: "asc" }],
-  });
+  const [filas, partnersRaw] = await Promise.all([
+    prisma.comisionPartner.findMany({
+      include: { client: { select: { name: true } } },
+      orderBy: [{ fecha: "desc" }, { partner: "asc" }],
+    }),
+    prisma.partnerComercial.findMany({ orderBy: [{ nombre: "asc" }] }),
+  ]);
 
   const comisiones: ComisionPartnerDTO[] = filas.map((c) => ({
     id: c.id,
     partner: c.partner,
+    partnerId: c.partnerId,
     concepto: c.concepto,
     monto: num(c.monto)!,
     moneda: c.moneda,
@@ -1026,7 +1073,74 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
     totales[p.moneda] = Math.round(((totales[p.moneda] ?? 0) + p.total) * 100) / 100;
   }
 
-  return { comisiones, porPartner, totales };
+  const partners: PartnerComercialDTO[] = partnersRaw.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    clave: p.clave,
+    frecuenciaMeses: p.frecuenciaMeses,
+    frecuenciaLabel: labelDeFrecuencia(p.frecuenciaMeses),
+    activo: p.activo,
+    notas: p.notas,
+    cuantasComisiones: comisiones.filter((c) => c.partnerId === p.id).length,
+  }));
+
+  return { comisiones, porPartner, totales, partners, historial: armarHistorial(comisiones, partnersRaw) };
+}
+
+/**
+ * El historial por aliado, cada uno a SU cadencia.
+ *
+ * El agrupado se hace por la CLAVE NORMALIZADA y no por `partnerId`, para que
+ * los 5 pagos ya cargados —que nacieron sin aliado— caigan bajo su aliado apenas
+ * se lo dé de alta con el mismo nombre, sin tener que reasignar fila por fila.
+ * El `partnerId` sigue siendo el vínculo duro cuando existe.
+ *
+ * Un aliado SIN configurar cae a cadencia mensual para poder agrupar algo, y el
+ * DTO lo dice (`frecuenciaMeses: null`) en vez de aparentar que alguien la eligió.
+ */
+function armarHistorial(
+  comisiones: ComisionPartnerDTO[],
+  partners: Array<{ id: string; nombre: string; clave: string; frecuenciaMeses: number }>,
+): HistorialPartnerDTO[] {
+  const porClave = new Map(partners.map((p) => [p.clave, p]));
+
+  const grupos = new Map<string, { nombre: string; pagos: PagoDeAliado[] }>();
+  for (const c of comisiones) {
+    const clave = normalizePartner(c.partner);
+    let g = grupos.get(clave);
+    if (!g) {
+      g = { nombre: porClave.get(clave)?.nombre ?? c.partner, pagos: [] };
+      grupos.set(clave, g);
+    }
+    g.pagos.push({ fecha: c.fecha, monto: c.monto, moneda: c.moneda });
+  }
+
+  const out: HistorialPartnerDTO[] = [];
+  for (const [clave, g] of grupos) {
+    const cfg = porClave.get(clave) ?? null;
+    const frecuencia = cfg?.frecuenciaMeses ?? null;
+    const periodos = agruparPorCadencia(g.pagos, frecuencia ?? 1);
+    // El próximo se calcula desde el bucket MÁS NUEVO con pago. Sin cadencia
+    // configurada no se dice nada: adivinar el ritmo desde 1-2 pagos sería
+    // exactamente la fabricación que este módulo evita.
+    const ultimaFecha = g.pagos.map((p) => p.fecha).sort().at(-1);
+    const proximo =
+      frecuencia && ultimaFecha
+        ? (() => {
+            const sig = bucketSiguiente(bucketDeCadencia(ultimaFecha, frecuencia), frecuencia);
+            return { clave: sig.clave, etiqueta: sig.etiqueta };
+          })()
+        : null;
+    out.push({
+      partnerId: cfg?.id ?? null,
+      nombre: g.nombre,
+      frecuenciaMeses: frecuencia,
+      frecuenciaLabel: frecuencia ? labelDeFrecuencia(frecuencia) : "Sin frecuencia configurada",
+      periodos,
+      proximo,
+    });
+  }
+  return out.sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
 // ── Costos recurrentes + caja neta (fase 4 — SUPER_ADMIN-only) ──────────────────

@@ -6,6 +6,7 @@
  * Client Components (selects, badges) no importen @prisma/client.
  */
 import { z } from "zod";
+import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -326,6 +327,8 @@ export const ingresoVariablePatchSchema = ingresoVariableCreateSchema.partial();
  * el nombre que se GUARDA es el que escribió la persona (con sus mayúsculas):
  * lo que se compara es la clave, no lo que se muestra.
  */
+export { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
+
 export function normalizePartner(raw: string): string {
   return raw
     .normalize("NFD")
@@ -335,8 +338,32 @@ export function normalizePartner(raw: string): string {
     .trim();
 }
 
+/**
+ * El ALIADO con su cadencia. Su frecuencia es del aliado y no del pago (decisión
+ * de Elías): HubSpot paga cada 3 meses y eso no cambia pago a pago. El rango
+ * espeja el CHECK de la base — dos frenos para el mismo hecho, a propósito: uno
+ * atrapa la UI y el otro lo que entre por un script.
+ */
+const partnerBase = z.object({
+  nombre: z.string().trim().min(1, "El nombre es requerido").max(80),
+  frecuenciaMeses: z
+    .number()
+    .int("La frecuencia va en meses enteros")
+    .min(FRECUENCIA_PARTNER_MIN, "Mínimo 1 mes")
+    .max(FRECUENCIA_PARTNER_MAX, "Máximo 24 meses"),
+  activo: z.boolean().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const partnerCreateSchema = partnerBase;
+export const partnerPatchSchema = partnerBase.partial();
+
 const comisionPartnerBase = z.object({
   partner: z.string().trim().min(1, "El partner es requerido").max(80),
+  // El aliado configurado. null = todavía no está dado de alta; el pago se
+  // registra igual (`partner` como string es el snapshot) y se puede ligar
+  // después. Forzarlo obligaría a configurar antes de poder anotar la plata.
+  partnerId: z.string().cuid().nullable().optional(),
   concepto: z.string().trim().max(160).nullable().optional(),
   monto,
   moneda: z.enum(COBRANZA_MONEDAS),

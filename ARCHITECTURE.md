@@ -40,7 +40,7 @@ Monolito App Router, sin `src/`:
 | `lib/` | 42 módulos de dominio (forma ideal: vertical slice, §1) + infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
 | `components/` | React por módulo; `components/ui` = el vocabulario del §1-UI; `components/landing` = el motor de documentos del §1-WEB |
 | `scripts/` | ~158 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
-| `prisma/` | `schema.prisma` (86 modelos, 78 enums) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
+| `prisma/` | `schema.prisma` (93 modelos, 79 enums) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
 | `docs/` | `DECISIONS` (el porqué, no re-litigar) · `GLOSSARY` · `RUNBOOK` (operación de PROD) · `KNOWN-ERRORS` · `CHANGELOG` |
 | `hooks/` | 3 hooks React globales (hay 1 más en `lib/hooks/` — deuda de consolidación) |
 
@@ -207,7 +207,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**197**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**198**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`

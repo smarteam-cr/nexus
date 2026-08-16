@@ -24,6 +24,8 @@ export {
   loadComisionesVendedor,
   type ComisionPartnerDTO,
   type ComisionesPartnerDTO,
+  type PartnerComercialDTO,
+  type HistorialPartnerDTO,
   type ComisionesVendedorDTO,
   type DevengadaConQuincena,
   type ReglaComisionDTO,
@@ -50,6 +52,8 @@ export {
 export { runCobranzaDigest, type DigestResult } from "./digest";
 // El cálculo puro de la comisión de vendedor (la DEVENGADA no es una fila).
 export type { ComisionDevengada, DetalleComision } from "./comisiones";
+// La cadencia de un aliado comercial (client-safe: el select de frecuencia).
+export { FRECUENCIAS_PARTNER, labelDeFrecuencia, type TotalDeBucket } from "./partners";
 export {
   semaforoCobro,
   semaforoCuenta,

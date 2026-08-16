@@ -50,10 +50,13 @@ import type {
   reglaComisionCreateSchema,
   reglaComisionPatchSchema,
   liquidarComisionSchema,
+  partnerCreateSchema,
+  partnerPatchSchema,
 } from "./schema";
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
 import { loadComisionesVendedor } from "./queries";
+import { normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
   constructor(
@@ -1429,5 +1432,75 @@ export async function deshacerLiquidacion(comisionId: string) {
     await prisma.comisionVendedor.delete({ where: { id: comisionId } });
   } catch {
     throw new CobranzaError("La liquidación no existe.", 404);
+  }
+}
+
+// ── Aliados comerciales (configuración de un INGRESO — superficie ADMIN) ────────
+// El aliado con su CADENCIA. Va acá y no bajo `costos/` porque es lo que Smarteam
+// GANA: mismo guard que `ComisionPartner` (`guardCobranzaAccess`), no el de costos.
+
+export async function createPartner(data: z.infer<typeof partnerCreateSchema>) {
+  const clave = normalizePartner(data.nombre);
+  const existente = await prisma.partnerComercial.findUnique({ where: { clave } });
+  if (existente) {
+    throw new CobranzaError(`Ya existe un aliado con ese nombre: «${existente.nombre}».`, 409);
+  }
+  return prisma.partnerComercial.create({
+    data: {
+      nombre: data.nombre,
+      clave,
+      frecuenciaMeses: data.frecuenciaMeses,
+      activo: data.activo ?? true,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Editar un aliado. Renombrarlo RECALCULA la clave — es lo que hace que dos
+ * grafías del mismo aliado no convivan. Si la clave nueva ya es de otro, se
+ * frena con 409 en vez de reventar con el unique de la base.
+ */
+export async function updatePartner(
+  partnerId: string,
+  data: z.infer<typeof partnerPatchSchema>,
+) {
+  if (data.nombre !== undefined) {
+    const clave = normalizePartner(data.nombre);
+    const choca = await prisma.partnerComercial.findUnique({ where: { clave } });
+    if (choca && choca.id !== partnerId) {
+      throw new CobranzaError(`Ese nombre ya lo usa otro aliado: «${choca.nombre}».`, 409);
+    }
+  }
+  try {
+    return await prisma.partnerComercial.update({
+      where: { id: partnerId },
+      data: {
+        ...(data.nombre !== undefined
+          ? { nombre: data.nombre, clave: normalizePartner(data.nombre) }
+          : {}),
+        ...(data.frecuenciaMeses !== undefined ? { frecuenciaMeses: data.frecuenciaMeses } : {}),
+        ...(data.activo !== undefined ? { activo: data.activo } : {}),
+        ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+      },
+      select: { id: true },
+    });
+  } catch {
+    throw new CobranzaError("El aliado no existe.", 404);
+  }
+}
+
+/**
+ * Borrar un aliado NO borra sus pagos: la FK es SetNull y `ComisionPartner.partner`
+ * (el string) sigue siendo el snapshot de lo que se escribió. Se pierde la
+ * cadencia, no la plata — y el historial vuelve a leerse mes a mes, que es la
+ * degradación correcta.
+ */
+export async function deletePartner(partnerId: string) {
+  try {
+    await prisma.partnerComercial.delete({ where: { id: partnerId } });
+  } catch {
+    throw new CobranzaError("El aliado no existe.", 404);
   }
 }

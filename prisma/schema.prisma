@@ -3330,9 +3330,51 @@ enum PagoPlanillaEstado {
 // cuatro existe hoy como `Client`, e inventarlos para tener la FK sería fabricar
 // cartera. `clientId` se liga solo si el aliado ya existe con kind ALIADO.
 // ⚠ NO entra a la caja neta en esta tanda — mismo precedente que IngresoVariable.
+// ─── PartnerComercial ───────────────────────────────────────────────────────────
+// El aliado que le PAGA a Smarteam (HubSpot, Atom Chat, Cooby…), con su CADENCIA.
+// Nació porque `ComisionPartner.partner` era un string suelto por fila y no había
+// dónde guardar "HubSpot nos paga cada 3 meses" — sin eso, el historial se leía
+// mes a mes y salía lleno de meses vacíos, y no se podía saber cuándo cae el
+// próximo. Decisión de Elías: la frecuencia es del ALIADO, no del pago.
+// ⚠ Es configuración de un INGRESO: superficie ADMIN (`cobranza.read`), RLS
+// habilitado pero SIN deny-all — igual que `ComisionPartner` e `IngresoVariable`.
+model PartnerComercial {
+  id String @id @default(cuid())
+
+  /// El nombre que se muestra, con sus mayúsculas.
+  nombre String
+  /// La clave normalizada (`normalizePartner`): "HubSpot" y "hubspot " son el
+  /// MISMO aliado. Es lo que se compara; `nombre` es lo que se lee.
+  clave  String @unique
+
+  /// Cada cuántos MESES paga. 1 mensual · 3 trimestral · 6 semestral · 12 anual.
+  /// Int y no enum: agregar "cada 2 meses" no puede exigir un ALTER TYPE
+  /// coordinado entre las 2 PCs que comparten esta base. CHECK 1..24 en la DB.
+  frecuenciaMeses Int
+
+  activo Boolean @default(true)
+  notas  String? @db.Text
+
+  comisiones ComisionPartner[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model ComisionPartner {
-  id       String  @id @default(cuid())
-  partner  String
+  id String @id @default(cuid())
+
+  /// El nombre tal cual se escribió. NO se deriva de `partner` (la relación):
+  /// es el snapshot de la carga, igual que `sujetoNombre` en PagoPlanilla — la
+  /// fila se explica sola aunque el aliado se renombre o se borre.
+  partner String
+
+  // nullable porque las 5 filas históricas nacieron sin aliado dado de alta y
+  // porque un pago puede registrarse antes de configurarlo. SetNull: borrar el
+  // aliado NO borra el registro de que esa plata entró.
+  partnerId       String?
+  partnerRelacion PartnerComercial? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
   concepto String?
 
   monto  Decimal        @db.Decimal(12, 2)
@@ -3352,6 +3394,7 @@ model ComisionPartner {
 
   @@index([fecha])
   @@index([partner])
+  @@index([partnerId])
 }
 
 // ─── ReglaComisionVendedor ──────────────────────────────────────────────────────
