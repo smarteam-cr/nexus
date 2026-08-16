@@ -217,6 +217,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
+      // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
+      // exige que el ÚLTIMO bloque sea exactamente ["/finanzas/caja-neta"] sin section.
+      { href: "/finanzas/costos/tarjetas", label: "Tarjetas", section: "Costos y gastos", costosOnly: true },
       // Sin `section`: la caja neta es la SÍNTESIS de los dos bloques (entra − sale),
       // no pertenece a ninguno. El flyout le deriva un divisor por ser un run suelto.
       { href: "/finanzas/caja-neta", label: "Caja neta", costosOnly: true },

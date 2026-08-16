@@ -38,6 +38,10 @@ import type {
   gastoPatchSchema,
   ingresoVariableCreateSchema,
   ingresoVariablePatchSchema,
+  tarjetaCreateSchema,
+  tarjetaPatchSchema,
+  tarjetaSaldoSchema,
+  tarjetaCostoSchema,
 } from "./schema";
 
 export class CobranzaError extends Error {
@@ -825,6 +829,143 @@ export async function deleteCosto(costoId: string, usuarioEmail: string) {
     });
     await tx.costoRecurrente.delete({ where: { id: costoId } });
   });
+}
+
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ──────────────────────────────────────
+// ⚠ Llamadas SOLO desde routes con guardCostosAccess. Una tarjeta NO emite
+// `CostoMovimiento`: esa bitácora es la historia de un COSTO, y meter acá las
+// altas y bajas de tarjetas la ensuciaría con eventos de otra naturaleza. La
+// auditoría que sí lleva es la del saldo (`saldoPorEmail`/`saldoAlDia`), que es
+// el único dato que una persona AFIRMA.
+// ⚠ Y sin semáforo ni alertas: la prohibición transversal de costos sigue en pie
+// aunque una tarjeta sí tenga fecha de corte.
+
+export async function createTarjeta(data: z.infer<typeof tarjetaCreateSchema>) {
+  if (data.titularTeamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: data.titularTeamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona titular no existe.", 400);
+  }
+  const tarjeta = await prisma.tarjetaCredito.create({
+    data: {
+      alias: data.alias,
+      emisor: data.emisor ?? null,
+      ultimos4: data.ultimos4 ?? null,
+      moneda: data.moneda,
+      limite: data.limite ?? null,
+      titularTeamMemberId: data.titularTeamMemberId ?? null,
+      diaCorte: data.diaCorte ?? null,
+      diaPago: data.diaPago ?? null,
+      activa: data.activa ?? true,
+      notas: data.notas ?? null,
+    },
+  });
+  return { id: tarjeta.id };
+}
+
+export async function updateTarjeta(tarjetaId: string, data: z.infer<typeof tarjetaPatchSchema>) {
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+
+  if (data.titularTeamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: data.titularTeamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona titular no existe.", 400);
+  }
+
+  // ⚠ El saldo NO se toca desde acá: tiene su propia mutación porque exige
+  // fecha de corte y autoría. Un PATCH genérico podría moverlo sin ninguna de
+  // las dos y el disponible pasaría a ser un número sin respaldo.
+  await prisma.tarjetaCredito.update({
+    where: { id: tarjetaId },
+    data: {
+      ...(data.alias !== undefined ? { alias: data.alias } : {}),
+      ...(data.emisor !== undefined ? { emisor: data.emisor } : {}),
+      ...(data.ultimos4 !== undefined ? { ultimos4: data.ultimos4 } : {}),
+      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+      ...(data.limite !== undefined ? { limite: data.limite } : {}),
+      ...(data.titularTeamMemberId !== undefined
+        ? { titularTeamMemberId: data.titularTeamMemberId }
+        : {}),
+      ...(data.diaCorte !== undefined ? { diaCorte: data.diaCorte } : {}),
+      ...(data.diaPago !== undefined ? { diaPago: data.diaPago } : {}),
+      ...(data.activa !== undefined ? { activa: data.activa } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: tarjetaId };
+}
+
+export async function deleteTarjeta(tarjetaId: string) {
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+  // El puente cae por CASCADE: borrar la tarjeta no borra ningún costo, solo el
+  // vínculo. Los costos siguen vivos y contando en el burn, que es lo correcto.
+  await prisma.tarjetaCredito.delete({ where: { id: tarjetaId } });
+}
+
+/**
+ * Registrar el saldo usado, con su fecha de corte y quién lo afirma. Es la
+ * ÚNICA verdad del disponible: Nexus no lo deriva de los costos asignados.
+ */
+export async function registrarSaldoTarjeta(
+  tarjetaId: string,
+  data: z.infer<typeof tarjetaSaldoSchema>,
+  usuarioEmail: string,
+) {
+  if (!usuarioEmail) {
+    throw new CobranzaError("Registrar el saldo exige confirmación de un usuario.", 400);
+  }
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+
+  await prisma.tarjetaCredito.update({
+    where: { id: tarjetaId },
+    data: {
+      saldoUsado: data.saldoUsado,
+      saldoAlDia: dayUTC(data.saldoAlDia),
+      saldoPorEmail: usuarioEmail,
+    },
+  });
+  return { id: tarjetaId };
+}
+
+/** Asignar o quitar un costo recurrente de la tarjeta (la tabla puente). */
+export async function asignarCostoATarjeta(
+  tarjetaId: string,
+  data: z.infer<typeof tarjetaCostoSchema>,
+) {
+  const [tarjeta, costo] = await Promise.all([
+    prisma.tarjetaCredito.findUnique({ where: { id: tarjetaId }, select: { id: true } }),
+    prisma.costoRecurrente.findUnique({ where: { id: data.costoId }, select: { id: true } }),
+  ]);
+  if (!tarjeta) throw new CobranzaError("La tarjeta no existe.", 404);
+  if (!costo) throw new CobranzaError("El costo no existe.", 404);
+
+  if (data.asignar) {
+    // Idempotente: re-asignar lo ya asignado no es un error, es un no-op.
+    await prisma.tarjetaCreditoCosto.upsert({
+      where: { tarjetaId_costoId: { tarjetaId, costoId: data.costoId } },
+      create: { tarjetaId, costoId: data.costoId },
+      update: {},
+    });
+  } else {
+    await prisma.tarjetaCreditoCosto.deleteMany({ where: { tarjetaId, costoId: data.costoId } });
+  }
+  return { id: tarjetaId };
 }
 
 // ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ──────────────────────────────

@@ -421,6 +421,57 @@ const gastoBase = z.object({
 export const gastoCreateSchema = gastoBase;
 export const gastoPatchSchema = gastoBase.partial();
 
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ─────────────────────────────────────
+// Disponible = límite − saldo, y el saldo lo escribe una persona con su fecha de
+// corte. Lo que Nexus suma de los costos asignados es REFERENCIA y nunca calcula
+// el saldo (ver la doctrina completa en lib/cobranza/tarjetas.ts).
+
+const diaDelMes = z.number().int().min(1, "Día inválido").max(31, "Día inválido");
+
+const tarjetaBase = z.object({
+  alias: z.string().trim().min(1, "El alias es requerido").max(80),
+  emisor: z.string().trim().max(80).nullable().optional(),
+  // ⚠ EXACTAMENTE cuatro dígitos. Este regex es la frontera que impide que el
+  // número COMPLETO de una tarjeta entre a la base — no es una validación de
+  // formato, es la regla de cumplimiento escrita donde se puede hacer cumplir.
+  ultimos4: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Son exactamente los últimos 4 dígitos, nunca el número completo")
+    .nullable()
+    .optional(),
+  moneda: z.enum(COBRANZA_MONEDAS),
+  limite: monto.nullable().optional(),
+  titularTeamMemberId: z.string().cuid().nullable().optional(),
+  diaCorte: diaDelMes.nullable().optional(),
+  diaPago: diaDelMes.nullable().optional(),
+  activa: z.boolean().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const tarjetaCreateSchema = tarjetaBase;
+export const tarjetaPatchSchema = tarjetaBase.partial();
+
+/**
+ * Registrar el saldo usado. Los dos campos van JUNTOS y son obligatorios: un
+ * saldo sin fecha de corte no dice nada (¿de cuándo es?) y una fecha sin saldo
+ * tampoco. El `saldoPorEmail` lo pone el server desde el guard, nunca el body.
+ * Acepta 0 (una tarjeta al día tiene saldo cero, y eso es un dato).
+ */
+export const tarjetaSaldoSchema = z.object({
+  saldoUsado: z
+    .number()
+    .min(0, "El saldo no puede ser negativo")
+    .multipleOf(0.01, "Máximo 2 decimales"),
+  saldoAlDia: isoDateReal,
+});
+
+/** Asignar o quitar un costo recurrente de una tarjeta (la tabla puente). */
+export const tarjetaCostoSchema = z.object({
+  costoId: z.string().cuid(),
+  asignar: z.boolean(),
+});
+
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 
 export const crearEmpresaSchema = z.object({

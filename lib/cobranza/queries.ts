@@ -31,6 +31,12 @@ import {
 } from "./engine";
 import { Prisma } from "@prisma/client";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import {
+  calcularTarjeta,
+  cargadoMensualDe,
+  mensualizado,
+  type MonedaTarjeta,
+} from "./tarjetas";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -1111,4 +1117,129 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
     totalMensualCostos: sale.totalMensual,
     gastosPlanificados: { count: bucketizados, totales: saleGastos.totalFuturo },
   };
+}
+
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ──────────────────────────────────────
+// ⚠ PRIVACIDAD: el DTO trae los costos asignados a cada tarjeta, y un costo
+// asignado puede ser un SALARIO (con su nombre y su monto). Se consume SOLO
+// desde la ruta con `guardCostosAccess` y desde la página con `isCostosRole`.
+
+/** Un costo asignado a la tarjeta, en la forma mínima que pinta el panel. */
+export interface TarjetaCostoDTO {
+  id: string;
+  nombre: string;
+  categoria: string;
+  monto: number;
+  moneda: string;
+  frecuencia: string;
+  activo: boolean;
+  finalizadoEl: string | null;
+  /** Ya mensualizado (un ANUAL va /12) — lo que suma para el cargo del mes. */
+  montoMensual: number;
+}
+
+export interface TarjetaDTO {
+  id: string;
+  alias: string;
+  emisor: string | null;
+  /** SOLO los últimos 4. El número completo no existe en esta base. */
+  ultimos4: string | null;
+  moneda: string;
+  limite: number | null;
+  titularTeamMemberId: string | null;
+  titularNombre: string | null;
+  diaCorte: number | null;
+  diaPago: number | null;
+  saldoUsado: number | null;
+  saldoAlDia: string | null;
+  saldoPorEmail: string | null;
+  activa: boolean;
+  notas: string | null;
+
+  // ── Derivados. UNA sola definición, en lib/cobranza/tarjetas.ts ──
+  /** Suma mensualizada de los costos asignados EN LA MONEDA DE LA TARJETA. */
+  cargadoMensual: number;
+  /** Cuántos costos quedaron afuera de esa suma por estar en otra moneda. */
+  cargadoEnOtraMoneda: number;
+  /** límite − saldo. null = falta un dato; jamás se aproxima con los cargos. */
+  disponible: number | null;
+  usoPorcentaje: number | null;
+  noCabeElProximoMes: boolean;
+  faltaDato: "limite" | "saldo" | "ambos" | null;
+
+  costos: TarjetaCostoDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function loadTarjetas(): Promise<TarjetaDTO[]> {
+  const filas = await prisma.tarjetaCredito.findMany({
+    include: {
+      titular: { select: { name: true } },
+      costos: {
+        include: {
+          costo: {
+            select: {
+              id: true,
+              nombre: true,
+              categoria: true,
+              monto: true,
+              moneda: true,
+              frecuencia: true,
+              activo: true,
+              finalizadoEl: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ activa: "desc" }, { alias: "asc" }],
+  });
+
+  return filas.map((t) => {
+    const moneda = t.moneda as MonedaTarjeta;
+    const costos: TarjetaCostoDTO[] = t.costos.map((p) => ({
+      id: p.costo.id,
+      nombre: p.costo.nombre,
+      categoria: p.costo.categoria,
+      monto: num(p.costo.monto)!,
+      moneda: p.costo.moneda,
+      frecuencia: p.costo.frecuencia,
+      activo: p.costo.activo,
+      finalizadoEl: isoDay(p.costo.finalizadoEl),
+      montoMensual: mensualizado(num(p.costo.monto)!, p.costo.frecuencia),
+    }));
+
+    const cargado = cargadoMensualDe(costos, moneda);
+    const limite = num(t.limite);
+    const saldoUsado = num(t.saldoUsado);
+    const calc = calcularTarjeta({ limite, saldoUsado, cargadoMensual: cargado.total });
+
+    return {
+      id: t.id,
+      alias: t.alias,
+      emisor: t.emisor,
+      ultimos4: t.ultimos4,
+      moneda: t.moneda,
+      limite,
+      titularTeamMemberId: t.titularTeamMemberId,
+      titularNombre: t.titular?.name ?? null,
+      diaCorte: t.diaCorte,
+      diaPago: t.diaPago,
+      saldoUsado,
+      saldoAlDia: isoDay(t.saldoAlDia),
+      saldoPorEmail: t.saldoPorEmail,
+      activa: t.activa,
+      notas: t.notas,
+      cargadoMensual: cargado.total,
+      cargadoEnOtraMoneda: cargado.enOtraMoneda,
+      disponible: calc.disponible,
+      usoPorcentaje: calc.usoPorcentaje,
+      noCabeElProximoMes: calc.noCabeElProximoMes,
+      faltaDato: calc.faltaDato,
+      costos,
+      createdAt: iso(t.createdAt)!,
+      updatedAt: iso(t.updatedAt)!,
+    };
+  });
 }

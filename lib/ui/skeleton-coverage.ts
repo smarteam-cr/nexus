@@ -46,6 +46,10 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/costos/herramientas": { modo: "own" },
   "finanzas/costos/planillas": { modo: "own" },
   "finanzas/costos/fijos": { modo: "own" },
+  // La hoja de tarjetas tiene forma PROPIA (tarjetas apiladas con tres datos
+  // cada una, no una lista de costos): heredar el skeleton de categoría
+  // prometería una pantalla que no llega.
+  "finanzas/costos/tarjetas": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
 

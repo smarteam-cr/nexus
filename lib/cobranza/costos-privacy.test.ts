@@ -66,6 +66,10 @@ import * as cajaNetaRoute from "@/app/api/cobranza/caja-neta/route";
 import * as gastosRoute from "@/app/api/cobranza/gastos/route";
 import * as gastoIdRoute from "@/app/api/cobranza/gastos/[gastoId]/route";
 import * as movimientosRoute from "@/app/api/cobranza/costos/movimientos/route";
+import * as tarjetasRoute from "@/app/api/cobranza/costos/tarjetas/route";
+import * as tarjetaIdRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/route";
+import * as tarjetaSaldoRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/saldo/route";
+import * as tarjetaCostosRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/costos/route";
 
 const MENSAJE_GUARD = "Los costos y la caja neta son solo para dirección (Super Admin).";
 
@@ -119,7 +123,7 @@ describe("P1 · guardCostosAccess — 403 para todo rol que no sea SUPER_ADMIN",
 });
 
 // ── P2 · Handlers reales cableados ──────────────────────────────────────────
-describe("P2 · los 10 handlers responden 403 como ADMIN sin tocar Prisma", () => {
+describe("P2 · los 16 handlers responden 403 como ADMIN sin tocar Prisma", () => {
   const req = (method: string) =>
     new Request("http://test.local/api/cobranza", {
       method,
@@ -128,6 +132,7 @@ describe("P2 · los 10 handlers responden 403 como ADMIN sin tocar Prisma", () =
     }) as unknown as NextRequest;
   const params = { params: Promise.resolve({ costoId: "clx-test-costo-id" }) };
   const gastoParams = { params: Promise.resolve({ gastoId: "clx-test-gasto-id" }) };
+  const tarjetaParams = { params: Promise.resolve({ tarjetaId: "clx-test-tarjeta-id" }) };
 
   const superficies: Array<[string, () => Promise<Response>]> = [
     ["GET /api/cobranza/costos", () => costosRoute.GET()],
@@ -140,6 +145,26 @@ describe("P2 · los 10 handlers responden 403 como ADMIN sin tocar Prisma", () =
     ["PATCH /api/cobranza/gastos/[gastoId]", () => gastoIdRoute.PATCH(req("PATCH"), gastoParams)],
     ["DELETE /api/cobranza/gastos/[gastoId]", () => gastoIdRoute.DELETE(req("DELETE"), gastoParams)],
     ["GET /api/cobranza/costos/movimientos", () => movimientosRoute.GET()],
+    // Tarjetas de crédito: límite, saldo y con qué se paga cada costo. Cuelgan de
+    // `costos/` justamente para entrar al escaneo estructural de P3.
+    ["GET /api/cobranza/costos/tarjetas", () => tarjetasRoute.GET()],
+    ["POST /api/cobranza/costos/tarjetas", () => tarjetasRoute.POST(req("POST"))],
+    [
+      "PATCH /api/cobranza/costos/tarjetas/[tarjetaId]",
+      () => tarjetaIdRoute.PATCH(req("PATCH"), tarjetaParams),
+    ],
+    [
+      "DELETE /api/cobranza/costos/tarjetas/[tarjetaId]",
+      () => tarjetaIdRoute.DELETE(req("DELETE"), tarjetaParams),
+    ],
+    [
+      "PUT /api/cobranza/costos/tarjetas/[tarjetaId]/saldo",
+      () => tarjetaSaldoRoute.PUT(req("PUT"), tarjetaParams),
+    ],
+    [
+      "POST /api/cobranza/costos/tarjetas/[tarjetaId]/costos",
+      () => tarjetaCostosRoute.POST(req("POST"), tarjetaParams),
+    ],
   ];
 
   for (const [nombre, invocar] of superficies) {
@@ -243,7 +268,19 @@ describe("P3 · estructurales", () => {
     const sql = fs.readFileSync(path.join(raiz, "prisma/policies.sql"), "utf8");
     // Un merge que agregue una tabla de costos sin su policy RLS ROMPE esto
     // (RLS es la única capa ante el anon externo — Prisma bypassa para el interno).
-    for (const tabla of ["CostoRecurrente", "GastoPuntual", "CostoMovimiento"]) {
+    // ⚠ `ComisionPartner` NO va en esta lista a propósito: es un INGRESO y su
+    // superficie es la de ADMIN, igual que `IngresoVariable` — ninguno lleva
+    // deny-all. Agregarlo acá "por si acaso" rompería el gate de Alex.
+    for (const tabla of [
+      "CostoRecurrente",
+      "GastoPuntual",
+      "CostoMovimiento",
+      "TarjetaCredito",
+      "TarjetaCreditoCosto",
+      "PagoPlanilla",
+      "ReglaComisionVendedor",
+      "ComisionVendedor",
+    ]) {
       const re = new RegExp(
         `CREATE POLICY deny_all_non_superuser ON "${tabla}"[\\s\\S]*?AS RESTRICTIVE`,
       );
