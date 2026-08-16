@@ -24,6 +24,7 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
+import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -101,6 +102,14 @@ export interface ProgressMessageInputs {
   industry: string | null;
   serviceType: string | null;
   stageLabel: string | null;
+  /**
+   * El estado que el equipo carga en HubSpot (`bloqueDeOperativa`), o `""` si no hay nada.
+   *
+   * Va DESPUÉS de la etapa y ANTES de las sesiones a propósito: la etapa dice dónde está el
+   * proyecto, esto dice CÓMO está, y las dos juntas son lo que hace que «no hubo avance» se lea
+   * como «está trabado por X» en vez de como «el equipo no hizo nada».
+   */
+  operativaBlock: string;
   sessionsBlock: string;
   handoffCtx: string;
   timelineCtx: string;
@@ -122,6 +131,7 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     "=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===",
     i.stageLabel ? i.stageLabel : "(sin etapa de HubSpot disponible — inferí el avance solo desde las sesiones y el handoff)",
     "",
+    ...(i.operativaBlock ? [i.operativaBlock, ""] : []),
     "=== SESIONES PASADAS DEL PROYECTO (detallan qué se hizo) ===",
     i.sessionsBlock || "(sin sesiones pasadas registradas)",
     "",
@@ -159,6 +169,14 @@ export async function regenerateTimelineProgress(
         hubspotServiceId: true,
         hubspotPipelineStageLabel: true,
         hubspotPipelineId: true,
+        /* El estado que el equipo carga a mano en HubSpot. Hasta el 2026-08-16 este agente NO lo
+           veía: proponía avance sobre un proyecto bloqueado sin saber que estaba bloqueado, y la
+           lectura de «no se hizo nada» quedaba a cargo de quien leyera el borrador. */
+        hubspotStatus: true,
+        hubspotPriority: true,
+        hubspotBlockReason: true,
+        hubspotBlockDetail: true,
+        hubspotAdoptionState: true,
         client: { select: { name: true, industry: true } },
         timeline: {
           select: {
@@ -258,6 +276,7 @@ export async function regenerateTimelineProgress(
       industry: project.client.industry,
       serviceType: project.serviceType,
       stageLabel,
+      operativaBlock: bloqueDeOperativa(project),
       sessionsBlock,
       handoffCtx,
       timelineCtx,
