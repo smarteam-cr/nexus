@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
-import { requirePermission } from "@/lib/auth/permissions/engine";
+import { can, requirePermission } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { loadCsAccount } from "@/lib/cs/load-account";
 import AccountView from "@/components/cs/account/AccountView";
@@ -26,6 +26,10 @@ export default async function CustomerSuccessAccountPage({
   // Uso/UUS/MRR de partner: confidenciales — solo CSL y SUPER_ADMIN.
   const role = ctx.user.teamMember?.roleEnum ?? null;
   const canSeePartnerData = role === "CSL" || role === "SUPER_ADMIN";
+  // Resolver la propuesta de salud del watchdog (Confirmar / Descartar) sigue exigiendo
+  // `clientes.viewAll`: el CSE VE el chip rojo de su proyecto, pero no lo resuelve. Ver el
+  // comentario largo en la pantalla del panel.
+  const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
   const data = await loadCsAccount(clientId, where, canSeePartnerData);
   if (!data) notFound();
 
@@ -37,7 +41,7 @@ export default async function CustomerSuccessAccountPage({
         title={data.clientCompany || data.clientName}
         description={`${data.projects.length} proyecto${data.projects.length !== 1 ? "s" : ""} activo${data.projects.length !== 1 ? "s" : ""}${data.alerts.length > 0 ? ` · ${data.alerts.length} alerta${data.alerts.length !== 1 ? "s" : ""} vigente${data.alerts.length !== 1 ? "s" : ""}` : ""}`}
       />
-      <AccountView data={data} />
+      <AccountView data={data} puedeCurar={puedeCurar} />
     </div>
   );
 }

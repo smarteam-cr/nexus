@@ -140,8 +140,19 @@ function groupByClient(items: PortfolioRow[]): ClientGroup[] {
 export default function PortfolioGrid({
   rows: initialRows,
   renderClientChips,
+  puedeCurar = true,
 }: {
   rows: PortfolioRow[];
+  /**
+   * ⚠ Si quien mira puede FIJAR la salud a mano (`clientes.viewAll`). Con `false` el chip
+   * se sigue leyendo pero deja de ser un boton: el PATCH lo rechaza, y la fila pintaba el
+   * cambio igual (ver `setHealth`).
+   *
+   * Default `true` a proposito y solo por el /dashboard clasico, que ya vive detras del
+   * mismo gate; la pantalla de Exito del cliente —la unica que hoy puede abrirse SIN el
+   * permiso— lo pasa siempre y explicito.
+   */
+  puedeCurar?: boolean;
   /** Éxito del cliente: chips de señales HubSpot por cliente (🧊 frío, 🎫 tickets,
    *  🔄 renovación…) junto al nombre. Opcional — el /dashboard clásico no lo pasa. */
   renderClientChips?: (clientId: string) => ReactNode;
@@ -202,6 +213,15 @@ export default function PortfolioGrid({
   }, [healthy]);
 
   async function setHealth(projectId: string, status: Health | null, reason: string) {
+    /* ⚠ LA FOTO DE ANTES, para poder deshacer el pintado optimista. Sin esto, un rechazo
+       del servidor (403 de quien no cura, o la red caida) dejaba la fila mostrando "En
+       riesgo · manual" con un toast rojo de 4 segundos al lado: si la persona no lo ve,
+       cree que quedo registrado, y la mentira dura hasta que alguien recarga. Pintar
+       optimista solo es honesto si el fallo REVIERTE. */
+    const antes = rows.find((r) => r.projectId === projectId) ?? null;
+    const revertir = () => {
+      if (antes) setRows((rs) => rs.map((r) => (r.projectId === projectId ? antes : r)));
+    };
     setRows((rs) =>
       rs.map((r) => {
         if (r.projectId !== projectId) return r;
@@ -220,9 +240,16 @@ export default function PortfolioGrid({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(status ? { status, reason } : { status: null }),
       });
-      if (!res.ok) toast.error("No se pudo actualizar el estado.");
-      else toast.success(status ? "Estado actualizado." : "Volvió al estado automático.");
+      if (!res.ok) {
+        revertir();
+        toast.error(
+          res.status === 403
+            ? "Fijar el estado de un proyecto lo resuelve el liderazgo de CS."
+            : "No se pudo actualizar el estado.",
+        );
+      } else toast.success(status ? "Estado actualizado." : "Volvió al estado automático.");
     } catch {
+      revertir();
       toast.error("Error de conexión.");
     }
   }
@@ -271,7 +298,7 @@ export default function PortfolioGrid({
               <div key={g.clientId} className="space-y-2">
                 <ClientLabel g={g} chips={renderClientChips?.(g.clientId)} />
                 {g.items.map((r) => (
-                  <ActionCard key={r.projectId} r={r} editing={editing} setEditing={setEditing} onSetHealth={setHealth} />
+                  <ActionCard key={r.projectId} r={r} editing={editing} setEditing={setEditing} onSetHealth={setHealth} puedeCurar={puedeCurar} />
                 ))}
               </div>
             ))}
@@ -431,12 +458,13 @@ function ClientPortalLink({ clientId }: { clientId: string }) {
 
 // ── Sección 1: tarjeta rica ──
 function ActionCard({
-  r, editing, setEditing, onSetHealth,
+  r, editing, setEditing, onSetHealth, puedeCurar,
 }: {
   r: PortfolioRow;
   editing: string | null;
   setEditing: (id: string | null) => void;
   onSetHealth: (projectId: string, status: Health | null, reason: string) => void;
+  puedeCurar: boolean;
 }) {
   const s = r.summary;
   const pct = Math.round(s.progress.pct * 100);
@@ -460,7 +488,7 @@ function ActionCard({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <ClientPortalLink clientId={r.clientId} />
-          <HealthChip r={r} editing={editing} setEditing={setEditing} onSetHealth={onSetHealth} />
+          <HealthChip r={r} editing={editing} setEditing={setEditing} onSetHealth={onSetHealth} puedeCurar={puedeCurar} />
         </div>
       </div>
 
@@ -611,25 +639,45 @@ function HealthyRow({ r }: { r: PortfolioRow }) {
 
 // ── Chip de salud editable (override curado) ──
 function HealthChip({
-  r, editing, setEditing, onSetHealth,
+  r, editing, setEditing, onSetHealth, puedeCurar,
 }: {
   r: PortfolioRow;
   editing: string | null;
   setEditing: (id: string | null) => void;
   onSetHealth: (projectId: string, status: Health | null, reason: string) => void;
+  puedeCurar: boolean;
 }) {
   const s = r.summary;
   const badge = HEALTH_META[s.health.resolved as Health];
+  const manual = s.health.source === "override";
+  const cuerpo = (
+    <>
+      <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+      {badge.label}
+      <span className="text-[9px] opacity-70">{manual ? "· manual" : "· sugerido"}</span>
+    </>
+  );
+  const cls = `inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.chip}`;
+  const curado = manual ? `Manual${r.healthOverrideReason ? `: ${r.healthOverrideReason}` : ""}` : null;
+  /* ⚠ Sin permiso NO es un boton deshabilitado: es texto. Un chip que invita a hacer clic
+     ("clic para fijar") y despues rebota con 403 es peor que uno que no invita. */
+  if (!puedeCurar) {
+    return (
+      <div className="relative flex-shrink-0">
+        <span className={cls} title={curado ?? "Sugerido por el sistema — lo fija el liderazgo de CS"}>
+          {cuerpo}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="relative flex-shrink-0">
       <button
         onClick={() => setEditing(editing === r.projectId ? null : r.projectId)}
-        className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.chip}`}
-        title={s.health.source === "override" ? `Manual${r.healthOverrideReason ? `: ${r.healthOverrideReason}` : ""}` : "Sugerido por el sistema — clic para fijar"}
+        className={cls}
+        title={curado ?? "Sugerido por el sistema — clic para fijar"}
       >
-        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-        {badge.label}
-        <span className="text-[9px] opacity-70">{s.health.source === "override" ? "· manual" : "· sugerido"}</span>
+        {cuerpo}
       </button>
       {editing === r.projectId && (
         <HealthPopover r={r} onSet={(status, reason) => onSetHealth(r.projectId, status, reason)} onClose={() => setEditing(null)} />

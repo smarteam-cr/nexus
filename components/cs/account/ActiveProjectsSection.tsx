@@ -30,9 +30,18 @@ const HEALTH_META: Record<string, { label: string; cls: string }> = {
 export default function ActiveProjectsSection({
   projects,
   projectOps,
+  puedeCurar,
 }: {
   projects: PortfolioRow[];
   projectOps: Record<string, AccountProjectOps>;
+  /**
+   * ⚠ Si puede RESOLVER la propuesta de salud del watchdog (`clientes.viewAll`), que no es
+   * lo mismo que poder abrir esta ficha (`customerSuccess.read`, celda propia desde el
+   * 2026-08-16). Con `false` el chip rojo se sigue viendo —es informacion util sobre un
+   * proyecto propio— pero sin Confirmar/Descartar, que darian 403 y dejarian la propuesta
+   * pendiente para siempre salvo que la resuelva otro rol.
+   */
+  puedeCurar: boolean;
 }) {
   if (projects.length === 0) {
     return <p className="text-xs text-fg-muted">Sin proyectos activos en Nexus para esta cuenta.</p>;
@@ -85,6 +94,7 @@ export default function ActiveProjectsSection({
                   projectId={p.projectId}
                   reason={p.healthProposedReason}
                   proposedAt={p.healthProposedAt}
+                  puedeResolver={puedeCurar}
                 />
               )}
               {prio && (

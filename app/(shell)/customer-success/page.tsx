@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
-import { requirePermission } from "@/lib/auth/permissions/engine";
+import { can, requirePermission } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { loadPortfolio } from "@/lib/portfolio/load";
 import { loadCsPanel } from "@/lib/cs/load-panel";
@@ -30,6 +30,12 @@ export default async function CustomerSuccessPage() {
   // que abrirle el área al CSE no le destraba nada de partner.
   const role = ctx.user.teamMember?.roleEnum ?? null;
   const canSeePartnerData = role === "CSL" || role === "SUPER_ADMIN";
+  // ⚠ CURAR NO ES MIRAR. Abrirle el area al CSE (celda `customerSuccess.read`) no le abrio
+  // lo que esta pantalla ESCRIBE: refrescar senales, correr el watchdog y fijar la salud
+  // siguen exigiendo `clientes.viewAll`. Sin este dato los controles se pintarian igual y
+  // darian 403 al apretarlos, y un boton que solo sirve para dar error ensena a ignorar los
+  // botones: el proximo, el que si importaba, tambien se ignora.
+  const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
   // El portfolio (la query más pesada) se carga UNA vez y se comparte.
   const rows = await loadPortfolio(where);
   const [data, dashboard] = await Promise.all([
@@ -66,7 +72,7 @@ export default async function CustomerSuccessPage() {
           </section>
         }
       />
-      <CsPanel data={data} canSyncPartner={canSeePartnerData} />
+      <CsPanel data={data} canSyncPartner={canSeePartnerData} puedeCurar={puedeCurar} />
     </div>
   );
 }

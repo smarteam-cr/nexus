@@ -79,14 +79,42 @@ describe("el área tiene celda propia y la exige", () => {
   it("⭐ y NINGUNA volvió a pedir «ver todos los clientes»", () => {
     /* El atajo que este test existe para cazar: re-atar el área a `clientes.viewAll` porque algo
        «no carga». Le abre la cartera entera de la empresa a quien solo tenía que ver sus cuentas,
-       y no rompe nada visible. */
-    const reatadas = AREA.filter((r) =>
-      /seeAllClients|"clientes",\s*"viewAll"/.test(sinComentarios(r)),
-    );
+       y no rompe nada visible.
+       ⚠ Lo prohibido es el GATE, no la mención. Desde el 2026-08-16 las dos pantallas PREGUNTAN
+       por esa celda —`can(...)`— para decidir si pintan los controles que ESCRIBEN (refrescar
+       señales, correr el watchdog, fijar la salud), cuyos endpoints siguen en el gate viejo a
+       propósito. Esa pregunta es lo que mantiene la escritura cerrada: prohibirla obligaría a
+       ofrecer botones que rebotan con 403. Lo que no puede volver es exigirla para ENTRAR. */
+    const GATES = [
+      /(guardCapability|requireCapability|withCapability)\(\s*"seeAllClients"/,
+      /requirePermission\(\s*"clientes",\s*"viewAll"/,
+    ];
+    const reatadas = AREA.filter((r) => GATES.some((re) => re.test(sinComentarios(r))));
     expect(
       reatadas,
       "Estas puertas volvieron a colgar de «ver todos los clientes». Eso le abre la cartera " +
         `entera a roles acotados:\n${reatadas.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("⚠ y la única mención sobreviviente es la PREGUNTA, no un gate sin nombrar", () => {
+    /* La regla de arriba nombra los verbos de gate CONOCIDOS, así que un verbo nuevo se le
+       escaparía. Esto cierra por el otro lado: en el área, toda aparición de esa celda tiene que
+       ser exactamente la derivación de la bandera. Cualquier otra forma —conocida o inventada—
+       queda desconocida y se pone roja hasta que alguien venga a declararla acá. */
+    const DERIVACION = 'can(ctx.teamMember, "clientes", "viewAll")';
+    const raras: string[] = [];
+    for (const r of AREA) {
+      const src = sinComentarios(r);
+      const menciones = (src.match(/seeAllClients|"clientes",\s*"viewAll"/g) ?? []).length;
+      const derivaciones = src.split(DERIVACION).length - 1;
+      if (menciones !== derivaciones) {
+        raras.push(`${r} (${menciones} menciones, ${derivaciones} derivaciones)`);
+      }
+    }
+    expect(
+      raras,
+      `Estas puertas nombran «ver todos los clientes» de una forma que no es la pregunta:\n${raras.join("\n")}`,
     ).toEqual([]);
   });
 
