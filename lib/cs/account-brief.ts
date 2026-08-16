@@ -18,6 +18,7 @@ import { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { loadCsAccount, type CsAccountData, type AccountBriefStatement } from "./load-account";
+import { parsearBriefCitado, type BriefSource } from "./brief-citas";
 import { HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 
 const AGENT_ID = "agent-cs-account-brief";
@@ -43,12 +44,9 @@ export function humanizeBriefError(e: unknown): string {
   return humanizeAgentError(e);
 }
 
-export interface BriefSource {
-  kind: string;
-  id: string;
-  label: string;
-  date: string | null;
-}
+/* El tipo y la validación de citas viven en `brief-citas.ts` (puro y probado). Se re-exporta
+   para no romper a quien ya lo importaba de acá. */
+export type { BriefSource };
 
 export interface AccountBriefContext {
   serialized: string;
@@ -207,70 +205,6 @@ export interface AccountBriefResult {
   discarded?: number;
 }
 
-/** Extrae el primer objeto JSON BALANCEADO del texto (la regex greedy fallaba si
- *  el modelo escribía prosa con llaves alrededor del JSON). */
-function extractJson(raw: string): string | null {
-  const start = raw.indexOf("{");
-  if (start < 0) return null;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = start; i < raw.length; i++) {
-    const ch = raw[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') inString = true;
-    else if (ch === "{") depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) return raw.slice(start, i + 1);
-    }
-  }
-  return null;
-}
-
-/** Parsea la salida del agente. LANZA en malformado; DESCARTA statements con cita
- *  inválida (fuente inexistente en el contexto) — sin fuente no hay afirmación. */
-function parseBrief(
-  rawText: string,
-  sources: Map<string, BriefSource>,
-): { headline: string | null; statements: AccountBriefStatement[]; discarded: number } {
-  const jsonText = extractJson(rawText);
-  if (!jsonText) throw new Error("output del agente sin JSON");
-  let parsed: { headline?: unknown; statements?: unknown };
-  try {
-    parsed = JSON.parse(jsonText) as { headline?: unknown; statements?: unknown };
-  } catch {
-    throw new Error("output del agente con JSON inválido");
-  }
-  if (!Array.isArray(parsed.statements)) throw new Error("output del agente sin array `statements`");
-
-  const statements: AccountBriefStatement[] = [];
-  // El prompt pide máx 12; toleramos hasta 15 y el excedente CUENTA como descartado.
-  let discarded = Math.max(0, parsed.statements.length - 15);
-  for (const raw of parsed.statements.slice(0, 15)) {
-    const s = raw as Record<string, unknown>;
-    const text = typeof s.text === "string" ? s.text.trim() : "";
-    const key = typeof s.source === "string" ? s.source.trim().replace(/^\[|\]$/g, "") : "";
-    const src = sources.get(key);
-    if (!text || !src) {
-      discarded++;
-      continue;
-    }
-    statements.push({ text, source: { kind: src.kind, id: src.id, label: src.label, date: src.date } });
-  }
-  if (statements.length === 0) throw new Error("el agente no produjo ningún statement con fuente válida");
-  return {
-    headline: typeof parsed.headline === "string" && parsed.headline.trim() ? parsed.headline.trim().slice(0, 400) : null,
-    statements,
-    discarded,
-  };
-}
-
 /** Llama al agente; si el output se TRUNCA (max_tokens), reintenta UNA vez pidiendo
  *  ser más conciso antes de rendirse. Los errores transitorios de la API (429/5xx/529)
  *  ya los reintenta el SDK de Anthropic (maxRetries default). Devuelve el texto crudo. */
@@ -353,7 +287,7 @@ export async function runAccountBrief(
     }
 
     const rawText = await generateBriefText(agent.systemPrompt, ctx.serialized);
-    const { headline, statements, discarded } = parseBrief(rawText, ctx.sources);
+    const { headline, statements, discarded } = parsearBriefCitado(rawText, ctx.sources);
 
     await prisma.csAccountBrief.upsert({
       where: { clientId },
