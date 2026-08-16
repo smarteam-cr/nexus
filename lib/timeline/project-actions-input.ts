@@ -28,6 +28,7 @@ import { collectClientBlockers } from "./client-blockers";
 import { summarizeDuplicates } from "./particularidad-identity";
 import { esCompromisoPendiente } from "./particularidad-to-task";
 import { computePhaseRanges, overduePlannedEnd, isOverdueByDate } from "./weeks";
+import { esAbierta } from "./particularidad-state";
 
 /** Lo mínimo de una tarea para resolver atrasos y pendientes del cliente. */
 export interface ActionTask {
@@ -58,6 +59,8 @@ export interface ActionParticularidad {
   sourceQuote?: string | null;
   party?: string | null;
   occurredAt?: string | Date | null;
+  /** ABIERTA | CERRADA. Una cerrada ya no pide acción, pero sigue en la bitácora. */
+  estado?: string | null;
 }
 
 /** Lo que hay que saber de un cronograma para resolver sus acciones. */
@@ -114,7 +117,11 @@ export function buildActionsInput(
     detailConfirmedAt: s.detailConfirmedAt,
     hasTasks: s.hasTasks,
     // ATRASO sin semanas: no suma al corrimiento, así que el total que ve el CSE queda corto.
-    sinCuantificar: s.particularidades.filter((p) => p.kind === "ATRASO" && !p.weeksImpact).length,
+    // ⚠ Solo las ABIERTAS: pedirle las semanas a un atraso ya resuelto es pedir trabajo por algo
+    // que nadie va a volver a mirar, y esa fila se quedaría en la lista para siempre.
+    sinCuantificar: s.particularidades.filter(
+      (p) => p.kind === "ATRASO" && !p.weeksImpact && esAbierta(p),
+    ).length,
     duplicados: summarizeDuplicates(s.particularidades),
     // Trabajo anotado que nadie está persiguiendo. MISMO criterio que el grupo "Compromisos sin
     // dueño" al que lleva el botón: si acá se contaran también los atrasos sin cuantificar

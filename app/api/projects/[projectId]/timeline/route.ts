@@ -271,6 +271,11 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           occurredAt: true,
           // El link a la tarea que persigue el hecho: decide en qué grupo cae la fila.
           convertedTaskId: true,
+          // ¿Sigue vigente? Decide si la fila pide acción; sus semanas cuentan igual.
+          estado: true,
+          resueltaEn: true,
+          resueltaPor: true,
+          resueltaNota: true,
         },
       },
       phases: {

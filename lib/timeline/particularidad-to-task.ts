@@ -36,6 +36,8 @@ function capitalizar(s: string): string {
  * Título sugerido para la tarea. Si ningún patrón matchea devuelve el título **tal cual**: es mejor
  * que el CSE reescriba una frase entendible a que lea una mutilación automática.
  */
+import { esAbierta } from "./particularidad-state";
+
 export function taskTitleFromParticularidad(title: string): string {
   const limpio = (title ?? "").trim().replace(/\s+/g, " ").replace(/\.$/, "");
   if (!limpio) return "";
@@ -80,6 +82,14 @@ export function esConvertible(p: {
 export function esCompromisoPendiente(p: {
   kind: string;
   convertedTaskId?: string | null;
+  estado?: string | null;
 }): boolean {
-  return !p.convertedTaskId && (p.kind === "COMPROMISO" || p.kind === "SOLICITUD");
+  /* ⚠ El estado entra ACÁ y no en cada caller: el docblock de arriba exige que el contador del
+     panel y el grupo al que lleva su botón den el MISMO número, y filtrar afuera es la forma de
+     que uno se acuerde y el otro no.
+     Un compromiso que se cumplió sin haberse convertido en tarea seguía pidiendo, para siempre,
+     que alguien lo persiguiera: cerrarlo era un gesto que no apagaba nada. */
+  return (
+    !p.convertedTaskId && esAbierta(p) && (p.kind === "COMPROMISO" || p.kind === "SOLICITUD")
+  );
 }

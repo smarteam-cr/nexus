@@ -862,6 +862,18 @@ model Particularidad {
   convertedTaskId  String? // null = nadie está persiguiendo este hecho
   convertedAt      DateTime?
   convertedByEmail String?
+  // ── ¿SIGUE VIGENTE? ────────────────────────────────────────────────────────────
+  // ⛔ CERRADA no significa «no ocurrió»: las semanas que costó SIGUEN contando, porque el
+  // calendario ya se movió y cerrar no lo devuelve. Lo que se apaga es la ACCIÓN (dejar de
+  // perseguir el compromiso, dejar de pedir las semanas), no el registro. Confundir las dos
+  // cosas haría que una publicación al cliente diga que el plan se movió menos de lo que se
+  // movió — el Gantt corrido y la frase debajo contándose distinto.
+  // NOT NULL con default a propósito: nullable dejaría el 100% del corpus en NULL el día del
+  // deploy, y `estado = 'ABIERTA'` no matchea NULL en SQL. Ver el .sql para el detalle.
+  estado           ParticularidadEstado @default(ABIERTA)
+  resueltaEn       DateTime?
+  resueltaPor      String? // email del guard
+  resueltaNota     String? // por qué; sin esto, «cerrada» no se distingue de «alguien limpió»
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
@@ -876,6 +888,15 @@ enum ParticularidadKind {
   SOLICITUD // @deprecated — insumo del cliente = tarea party=CLIENTE, no particularidad. Ya no se propone/crea; se conserva por filas legacy (fallback de render). Ver docs/DECISIONS.md (eje DESTINO).
   COMPROMISO // un acuerdo/hito comprometido en una sesión que fija/mueve una fecha del plan
   AVISO // nota libre del CSE al cliente que NO mueve fechas (ej. "pausamos la próxima semana"). SOLO humana: el agente nunca la emite, y weeksImpact va null (no suma al corrimiento ni a la atribución).
+}
+
+// ¿La desviación sigue vigente? ⚠ Solo DOS valores, y es deliberado: «descartar» ya existe y
+// borra la fila (es una propuesta que no era cierta), así que un tercer estado para eso sería
+// dos formas de decir lo mismo. Y un `VISTA` como el de las alertas de cobranza inventaría un
+// paso de workflow que nadie pidió.
+enum ParticularidadEstado {
+  ABIERTA // el hecho sigue vigente y hay algo que atender
+  CERRADA // se resolvió. Sus semanas SIGUEN contando: cerrar no devuelve calendario
 }
 
 // Procedencia de la particularidad (distinto de `party`, que es la ATRIBUCIÓN de la causa).

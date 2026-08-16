@@ -22,6 +22,8 @@ const SEP = ":";
  * particularidades creadas a mano). Normaliza acentos/puntuación para que dos redacciones que solo
  * difieren en tildes o signos caigan en la misma huella.
  */
+import { esCerrada } from "./particularidad-state";
+
 export function fingerprintFromTitle(title: string): string {
   return title
     .toLowerCase()
@@ -86,6 +88,8 @@ export interface DuplicateCandidate {
   sourceQuote?: string | null;
   party?: string | null;
   occurredAt?: string | Date | null;
+  /** ABIERTA | CERRADA. Ausente en snapshots viejos = abierta (ver `particularidad-state.ts`). */
+  estado?: string | null;
 }
 
 /**
@@ -98,15 +102,26 @@ export interface DuplicateCandidate {
  * Devuelve solo los grupos de 2+; los únicos no son un grupo.
  */
 export function findDuplicateGroups<T extends DuplicateCandidate>(parts: T[]): T[][] {
-  const grupos: Array<{ kind: string; tokens: Set<string>; items: T[] }> = [];
+  const grupos: Array<{ kind: string; cerrada: boolean; tokens: Set<string>; items: T[] }> = [];
   for (const p of parts) {
     const t = titleTokens(p.title);
-    const g = grupos.find((gr) => gr.kind === p.kind && [...gr.tokens].filter((w) => t.has(w)).length >= 3);
+    /* ⛔ HISTORIA Y PRESENTE NO SE FUSIONAN. Un hecho que se cerró y volvió a pasar deja dos filas
+       con títulos casi idénticos, y eso NO es un error de carga: es la historia. Sin este corte,
+       la pantalla le pediría al CSE que las fusione, y el script de saneo —que elige ganadora por
+       «más semanas → tiene cita»— suele quedarse con la CERRADA y BORRAR la vigente: el hecho
+       actual desaparece y queda archivado, sin log y sin aviso. */
+    const cerrada = esCerrada(p);
+    const g = grupos.find(
+      (gr) =>
+        gr.kind === p.kind &&
+        gr.cerrada === cerrada &&
+        [...gr.tokens].filter((w) => t.has(w)).length >= 3,
+    );
     if (g) {
       for (const w of t) g.tokens.add(w);
       g.items.push(p);
     } else {
-      grupos.push({ kind: p.kind, tokens: t, items: [p] });
+      grupos.push({ kind: p.kind, cerrada, tokens: t, items: [p] });
     }
   }
   return grupos.filter((g) => g.items.length > 1).map((g) => g.items);
