@@ -212,6 +212,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // exista su page.tsx, el menú prometería un 404.
       { href: "/cobranza", label: "Cobranza", section: "Ingresos" },
       { href: "/finanzas/ingresos-variables", label: "Ingresos variables", section: "Ingresos" },
+      // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN.
+      // Las de VENDEDOR son remuneración y viven en "Costos y gastos" con otro gate.
+      { href: "/finanzas/comisiones-partner", label: "Comisiones de partner", section: "Ingresos" },
       // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
       { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
       { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },

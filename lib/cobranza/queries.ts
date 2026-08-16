@@ -38,6 +38,7 @@ import {
   type MonedaTarjeta,
 } from "./tarjetas";
 import { coberturaDe, periodosDeAguinaldo } from "./planilla";
+import { normalizePartner } from "./schema";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
@@ -945,6 +946,79 @@ export async function loadIngresosVariables(todayISO: string): Promise<IngresoVa
   // Orden único por fecha de entrada, mezclando ambos orígenes.
   filas.sort((a, b) => (a.fechaCobro < b.fechaCobro ? 1 : a.fechaCobro > b.fechaCobro ? -1 : 0));
   return filas;
+}
+
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN, gate cobranza.read) ──────
+// NO lleva los guards de costos: es plata que ENTRA, igual que IngresoVariable.
+// ⚠ Este loader JAMÁS devuelve comisiones de VENDEDOR. Un `loadComisiones()` que
+// trajera las dos metería montos de remuneración en el payload RSC del ADMIN
+// aunque la UI no los pintara.
+
+export interface ComisionPartnerDTO {
+  id: string;
+  partner: string;
+  concepto: string | null;
+  monto: number;
+  moneda: string;
+  fecha: string;
+  clientId: string | null;
+  clienteNombre: string | null;
+  notas: string | null;
+  registradoPor: string;
+  createdAt: string;
+}
+
+export interface ComisionesPartnerDTO {
+  comisiones: ComisionPartnerDTO[];
+  /** Totales por partner y moneda SEPARADA — "lo que ganamos con cada uno". */
+  porPartner: Array<{ partner: string; moneda: string; total: number; cuantas: number }>;
+  /** Totales generales, también por moneda. CRC y USD nunca se suman. */
+  totales: Record<string, number>;
+}
+
+export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
+  const filas = await prisma.comisionPartner.findMany({
+    include: { client: { select: { name: true } } },
+    orderBy: [{ fecha: "desc" }, { partner: "asc" }],
+  });
+
+  const comisiones: ComisionPartnerDTO[] = filas.map((c) => ({
+    id: c.id,
+    partner: c.partner,
+    concepto: c.concepto,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    fecha: isoDay(c.fecha)!,
+    clientId: c.clientId,
+    clienteNombre: c.client?.name ?? null,
+    notas: c.notas,
+    registradoPor: c.registradoPor,
+    createdAt: iso(c.createdAt)!,
+  }));
+
+  // Agrupa por (partner normalizado, moneda): "HubSpot" y "hubspot" son el mismo,
+  // pero USD y CRC del mismo partner son dos líneas, nunca una convertida.
+  const acc = new Map<string, { partner: string; moneda: string; total: number; cuantas: number }>();
+  for (const c of comisiones) {
+    const k = `${normalizePartner(c.partner)}::${c.moneda}`;
+    const prev = acc.get(k);
+    if (prev) {
+      prev.total = Math.round((prev.total + c.monto) * 100) / 100;
+      prev.cuantas += 1;
+    } else {
+      acc.set(k, { partner: c.partner, moneda: c.moneda, total: c.monto, cuantas: 1 });
+    }
+  }
+  const porPartner = [...acc.values()].sort(
+    (a, b) => b.total - a.total || a.partner.localeCompare(b.partner),
+  );
+
+  const totales: Record<string, number> = {};
+  for (const p of porPartner) {
+    totales[p.moneda] = Math.round(((totales[p.moneda] ?? 0) + p.total) * 100) / 100;
+  }
+
+  return { comisiones, porPartner, totales };
 }
 
 // ── Costos recurrentes + caja neta (fase 4 — SUPER_ADMIN-only) ──────────────────

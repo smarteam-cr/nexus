@@ -197,7 +197,7 @@ export default function IngresosVariablesPanel({
     <div>
       <PageHeader
         title="Ingresos variables"
-        description="Cuentas rescatadas, comisiones sueltas y pagos puntuales — lo que entró fuera del flujo constante de cobranza."
+        description="Cuentas rescatadas y pagos puntuales — lo que entró fuera del flujo constante de cobranza. Las comisiones de aliados van en Comisiones de partner."
         action={
           <button
             type="button"

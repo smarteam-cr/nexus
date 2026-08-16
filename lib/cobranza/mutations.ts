@@ -45,6 +45,8 @@ import type {
   planillaGenerarSchema,
   planillaPagarSchema,
   pagoPlanillaPatchSchema,
+  comisionPartnerCreateSchema,
+  comisionPartnerPatchSchema,
 } from "./schema";
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
@@ -834,6 +836,70 @@ export async function deleteCosto(costoId: string, usuarioEmail: string) {
     });
     await tx.costoRecurrente.delete({ where: { id: costoId } });
   });
+}
+
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN) ──────────────────────────
+// Lo que Smarteam GANA de un aliado. Llamadas desde routes con
+// `guardCobranzaAccess`, NO con el de costos: es plata que entra.
+// `registradoPor` sale del guard (trazabilidad, mismo espíritu que confirmadoPor).
+
+export async function createComisionPartner(
+  data: z.infer<typeof comisionPartnerCreateSchema>,
+  byEmail: string,
+) {
+  if (data.clientId) {
+    const cliente = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { id: true },
+    });
+    if (!cliente) throw new CobranzaError("El cliente vinculado no existe.", 400);
+  }
+  const c = await prisma.comisionPartner.create({
+    data: {
+      partner: data.partner,
+      concepto: data.concepto ?? null,
+      monto: data.monto,
+      moneda: data.moneda,
+      fecha: dayUTC(data.fecha),
+      clientId: data.clientId ?? null,
+      notas: data.notas ?? null,
+      registradoPor: byEmail,
+    },
+  });
+  return { id: c.id };
+}
+
+export async function updateComisionPartner(
+  comisionId: string,
+  data: z.infer<typeof comisionPartnerPatchSchema>,
+) {
+  const actual = await prisma.comisionPartner.findUnique({
+    where: { id: comisionId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  await prisma.comisionPartner.update({
+    where: { id: comisionId },
+    data: {
+      ...(data.partner !== undefined ? { partner: data.partner } : {}),
+      ...(data.concepto !== undefined ? { concepto: data.concepto } : {}),
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+      ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
+      ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: comisionId };
+}
+
+export async function deleteComisionPartner(comisionId: string) {
+  const actual = await prisma.comisionPartner.findUnique({
+    where: { id: comisionId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  await prisma.comisionPartner.delete({ where: { id: comisionId } });
 }
 
 // ── Tarjetas de crédito (SUPER_ADMIN-only) ──────────────────────────────────────

@@ -338,6 +338,8 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
   const NO_COSTOS: Record<string, string> = {
     "ingresos-variables":
       "son INGRESOS (cobros ya registrados), no costos: su gate es cobranza.read, la superficie de ADMIN",
+    "comisiones-partner":
+      "es lo que Smarteam GANA de un aliado: un INGRESO con gate cobranza.read. Ponerle el guard de costos dejaría afuera a Alex, que es quien las registra. Lo que Smarteam PAGA a sus vendedores es otra pantalla (costos/comisiones-vendedor) y sí lleva isCostosRole",
   };
 
   /**

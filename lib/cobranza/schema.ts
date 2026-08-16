@@ -316,6 +316,39 @@ export const ingresoVariableCreateSchema = z.object({
 
 export const ingresoVariablePatchSchema = ingresoVariableCreateSchema.partial();
 
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN, gate cobranza.read) ─────
+// Lo que Smarteam GANA de un aliado comercial (HubSpot, Atom Chat, Cooby…).
+// ⚠ NUNCA comparte ruta, endpoint ni loader con las de VENDEDOR, que son
+// remuneración de una persona y viven en la superficie SUPER_ADMIN.
+
+/**
+ * "HubSpot " y "hubspot" son el MISMO partner. Se normaliza para agrupar, pero
+ * el nombre que se GUARDA es el que escribió la persona (con sus mayúsculas):
+ * lo que se compara es la clave, no lo que se muestra.
+ */
+export function normalizePartner(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const comisionPartnerBase = z.object({
+  partner: z.string().trim().min(1, "El partner es requerido").max(80),
+  concepto: z.string().trim().max(160).nullable().optional(),
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fecha: isoDateReal,
+  // null / ausente = el aliado no está en la cartera como Client. No se inventa.
+  clientId: z.string().cuid().nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const comisionPartnerCreateSchema = comisionPartnerBase;
+export const comisionPartnerPatchSchema = comisionPartnerBase.partial();
+
 // ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ─────────────────────────────
 // Espejos client-safe de los enums Prisma (mantener en sync con schema.prisma).
 // La superficie completa de costos/caja-neta está gateada por COSTOS_ROLES

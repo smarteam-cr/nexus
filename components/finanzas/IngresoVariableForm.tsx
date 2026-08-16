@@ -145,7 +145,7 @@ export default function IngresoVariableForm({
           <input
             value={concepto}
             onChange={(e) => setConcepto(e.target.value)}
-            placeholder="Ej. Comisión de socio, reembolso, venta puntual…"
+            placeholder="Ej. Reembolso, venta puntual, cuenta rescatada…"
             maxLength={160}
             className={INPUT_CLS}
             autoFocus

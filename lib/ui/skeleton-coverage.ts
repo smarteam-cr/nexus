@@ -56,6 +56,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/costos/aguinaldo": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
+  "finanzas/comisiones-partner": { modo: "own" },
 
   // ── Customer Success ────────────────────────────────────────────────────────
   "customer-success": { modo: "own" },
