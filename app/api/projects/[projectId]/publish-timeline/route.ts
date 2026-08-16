@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { freezeBaselineOnPublish } from "@/lib/timeline/baseline";
+import { freezeBaseline } from "@/lib/timeline/baseline";
 import { readClientTimeline } from "@/lib/external/timeline-view";
 
 export async function GET(
@@ -103,11 +103,11 @@ export async function POST(
   let baseline: { created: boolean; version: number | null } = { created: false, version: null };
   let baselineError = false;
   try {
-    baseline = await freezeBaselineOnPublish(projectId, guard.user.email ?? null);
+    baseline = await freezeBaseline(projectId, guard.user.email ?? null);
   } catch (e) {
     baselineError = true;
     console.error(
-      "[publish-timeline] freezeBaselineOnPublish falló (se publica igual):",
+      "[publish-timeline] freezeBaseline falló (se publica igual):",
       e instanceof Error ? e.message : e,
     );
   }

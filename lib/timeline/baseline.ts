@@ -196,12 +196,26 @@ export function planFingerprint(s: BaselineSnapshot): string {
 }
 
 /**
- * Congela el baseline al publicar. Versionado con dedup por promesa.
+ * Congela la FOTO DEL PLAN: lo que se prometió, con sus fechas absolutas. Versionado con dedup
+ * por promesa — si el plan no cambió, no se crea versión nueva.
+ *
+ * ── DOS ACTOS, UNA CAPACIDAD (2026-08-16) ────────────────────────────────────
+ * Se llamaba `freezeBaselineOnPublish` pero **nunca tocó `timelinePublishedAt`**: estaba atada a
+ * publicar solo por el nombre. Ahora la comparten dos actos con destinatarios distintos:
+ *
+ *  · **Publicar** — el cliente ve el cronograma. Congelar es un efecto secundario, y es
+ *    FAIL-OPEN: el baseline es auditoría interna, así que si falla se publica igual y se
+ *    reintenta en la próxima. Bloquear la publicación por un fallo de auditoría sería peor.
+ *  · **Aprobar** — el CSE dice «este es el plan», sin mostrárselo a nadie. Acá congelar ES el
+ *    acto, así que falla RUIDOSO: si no pudo congelar, no aprobó, y decir que sí sería la clase
+ *    de mentira que después nadie puede detectar (el alcance se mediría contra una foto que no
+ *    existe).
+ *
  * Devuelve { created, version }. No hace nada si el timeline no existe o no tiene fases.
  */
-export async function freezeBaselineOnPublish(
+export async function freezeBaseline(
   projectId: string,
-  publishedByEmail: string | null,
+  congeladoPorEmail: string | null,
 ): Promise<{ created: boolean; version: number | null }> {
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
@@ -273,7 +287,7 @@ export async function freezeBaselineOnPublish(
         anchorStartDate: tl.anchorStartDate,
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
         firmness: fullFirmness as unknown as Prisma.InputJsonValue,
-        publishedByEmail,
+        publishedByEmail: congeladoPorEmail,
       },
     });
   });
