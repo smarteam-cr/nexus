@@ -15,6 +15,7 @@ import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
+import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 
 
 export interface PendingItem {
@@ -137,6 +138,12 @@ interface GPSData {
   /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
    *  cronograma sin revisar. Ausente en respuestas cacheadas viejas = no se pinta. */
   timelineProposalPending?: boolean;
+  /**
+   * El resumen citado del proyecto, con su veredicto de frescura YA resuelto en el servidor.
+   * `null` = todavía no se generó (se pinta el CTA); ausente = respuesta cacheada vieja, y el
+   * bloque no aparece en vez de romper.
+   */
+  brief?: BriefDeProyecto | null;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -572,6 +579,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             pending
           />
         </div>
+      )}
+
+      {/* El resumen del proyecto va ARRIBA de todo lo demás: es la respuesta a «cómo va esto»,
+          que es la pregunta con la que alguien abre este widget. Debajo está el detalle que la
+          sostiene. `undefined` (respuesta cacheada vieja) no pinta nada; `null` sí, porque «no
+          hay resumen» es información y trae su CTA. */}
+      {data.brief !== undefined && (
+        <ProjectBriefSection projectId={projectId} brief={data.brief} />
       )}
 
       {/* Info bar del proyecto (desde HubSpot) */}
