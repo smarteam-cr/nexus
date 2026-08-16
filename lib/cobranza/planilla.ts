@@ -126,6 +126,22 @@ export function coberturaDe(registradas: number, periodos: Periodo[]): Cobertura
 }
 
 /**
+ * Cuántas QUINCENAS distintas hay en un conjunto de pagos.
+ *
+ * Existe porque el numerador de `coberturaDe` es una cuenta de quincenas y el
+ * libro tiene una fila por persona × quincena: pasarle `pagos.length` con 12
+ * personas daba 172 contra 18 posibles, el clamp lo recortaba a 18 y la pantalla
+ * decía «18 de 18» siempre — el aviso no podía delatar un libro incompleto, que
+ * es lo único para lo que existe. En `lib/finanzas/aguinaldo.ts` la lista ya es
+ * de UNA persona y ahí filas y quincenas coinciden; acá hay que deduplicar.
+ */
+export function quincenasDistintas(
+  pagos: ReadonlyArray<{ periodo: string; quincena: number }>,
+): number {
+  return new Set(pagos.map((p) => `${p.periodo}::${p.quincena}`)).size;
+}
+
+/**
  * La antigüedad de una persona sale del LIBRO (`min` de sus quincenas), no de un
  * campo nuevo en `TeamMember`: agregarlo rompería `TEAM_MEMBER_SAFE_SELECT`, la
  * allowlist congelada de 12 claves que leen decenas de módulos.

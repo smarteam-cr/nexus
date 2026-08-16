@@ -16,6 +16,7 @@ import {
   primeraQuincenaDe,
   quincenaDe,
   quincenasDelPeriodo,
+  quincenasDistintas,
 } from "./planilla";
 
 describe("quincenasDelPeriodo", () => {
@@ -150,5 +151,50 @@ describe("montoQuincena (hoist del motor — sugerencia de UI, nunca derivación
     const m = 1_500_000;
     expect(montoQuincena(m, 1)).toBe(750_000);
     expect(montoQuincena(m, 1) + montoQuincena(m, 2)).toBe(m);
+  });
+});
+
+describe("quincenasDistintas — el numerador de la cobertura son QUINCENAS, no filas", () => {
+  // El libro tiene UNA FILA POR PERSONA Y POR QUINCENA. Pasarle el conteo de
+  // filas a coberturaDe hacía que el clamp lo recortara al máximo y la pantalla
+  // dijera "18 de 18" con el libro incompleto. Con más de una persona ese aviso
+  // no podía volverse a poner en falso NUNCA — que es su única razón de existir.
+  const persona = (nombre: string, pares: Array<[string, number]>) =>
+    pares.map(([periodo, quincena]) => ({ sujetoNombre: nombre, periodo, quincena }));
+
+  it("Q1 · doce personas en la misma quincena son UNA quincena", () => {
+    const pagos = Array.from({ length: 12 }, (_, i) => ({ periodo: "2026-08", quincena: 1, id: i }));
+    expect(quincenasDistintas(pagos)).toBe(1);
+  });
+
+  it("Q2 · el caso real: 2 personas × 9 meses con agosto a medias son 17, no 34", () => {
+    const meses = ["2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"];
+    const completos = meses.flatMap((m) => [[m, 1], [m, 2]] as Array<[string, number]>);
+    const pagos = [
+      ...persona("Ana", [...completos, ["2026-08", 1]]),
+      ...persona("Beto", [...completos, ["2026-08", 1]]),
+    ];
+    expect(pagos.length).toBe(34);
+    expect(quincenasDistintas(pagos)).toBe(17);
+  });
+
+  it("Q3 · y así la cobertura SÍ puede decir que el libro está incompleto", () => {
+    // Ésta es la regresión de verdad: con el conteo de filas el clamp devolvía
+    // 18 de 18 (libro completo) sobre exactamente los mismos datos.
+    const meses = ["2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"];
+    const completos = meses.flatMap((m) => [[m, 1], [m, 2]] as Array<[string, number]>);
+    const pagos = [
+      ...persona("Ana", [...completos, ["2026-08", 1]]),
+      ...persona("Beto", [...completos, ["2026-08", 1]]),
+    ];
+    const periodos = [...meses, "2026-08"];
+    expect(coberturaDe(quincenasDistintas(pagos), periodos).texto).toBe(
+      "17 de 18 quincenas registradas",
+    );
+    expect(coberturaDe(pagos.length, periodos).texto).toBe("18 de 18 quincenas registradas");
+  });
+
+  it("Q4 · sin pagos son cero quincenas", () => {
+    expect(quincenasDistintas([])).toBe(0);
   });
 });

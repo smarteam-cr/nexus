@@ -37,7 +37,7 @@ import {
   mensualizado,
   type MonedaTarjeta,
 } from "./tarjetas";
-import { coberturaDe, periodosDeAguinaldo } from "./planilla";
+import { coberturaDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
 import { normalizePartner } from "./schema";
 import {
   agruparPorCadencia,
@@ -1543,9 +1543,11 @@ export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
   });
 
   const periodos = [...new Set(pagos.map((p) => p.periodo))].sort();
+  // ⚠ El numerador son QUINCENAS DISTINTAS, no filas (una fila es persona ×
+  // quincena). El porqué y el bug que esto cierra están en `quincenasDistintas`.
   return {
     pagos,
-    cobertura: coberturaDe(pagos.length, periodos),
+    cobertura: coberturaDe(quincenasDistintas(pagos), periodos),
     periodos,
   };
 }
