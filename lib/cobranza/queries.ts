@@ -40,7 +40,14 @@ import {
 import { coberturaDe, periodosDeAguinaldo } from "./planilla";
 import { normalizePartner } from "./schema";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
-import { devengarComisiones, type ComisionDevengada, type ReglaComision } from "./comisiones";
+import {
+  devengarComisiones,
+  quincenaDePagoDeComision,
+  POLITICA_PAGO_COMISION,
+  POLITICA_PAGO_COMISION_LABEL,
+  type ComisionDevengada,
+  type ReglaComision,
+} from "./comisiones";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -1490,14 +1497,36 @@ export interface ComisionLiquidadaDTO {
   notas: string | null;
 }
 
+/**
+ * Una comisión devengada más la quincena en la que la POLÍTICA dice que se paga.
+ *
+ * La sugerencia se resuelve acá y no en el panel para que la pantalla, el body
+ * que manda y lo que se persiste sean el MISMO valor: si el panel la calculara
+ * por su cuenta, la comisión terminaría enganchada a la quincena que dijo el
+ * navegador. `quincenaSugerida` es null cuando esa quincena todavía no existe en
+ * el libro, y entonces `motivoSinQuincena` lo DICE en vez de callarlo.
+ */
+export interface DevengadaConQuincena extends ComisionDevengada {
+  quincenaSugerida: {
+    id: string;
+    periodo: string;
+    quincena: number;
+    fechaProgramada: string;
+    estado: string;
+  } | null;
+  motivoSinQuincena: string | null;
+}
+
 export interface ComisionesVendedorDTO {
   reglas: ReglaComisionDTO[];
   /** Lo DEVENGADO: derivado de los cobros COBRADO, se recalcula solo. */
-  devengadas: ComisionDevengada[];
+  devengadas: DevengadaConQuincena[];
   /** Lo LIQUIDADO: filas congeladas, con su snapshot. */
   liquidadas: ComisionLiquidadaDTO[];
   /** Totales de lo devengado por moneda. CRC y USD nunca se suman. */
   totalesDevengado: Record<string, number>;
+  /** Qué política resolvió las sugerencias, para poder decirlo en pantalla. */
+  politicaPago: { clave: string; label: string };
 }
 
 /**
@@ -1547,19 +1576,96 @@ export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
     notas: c.notas,
   }));
 
+  const politicaPago = {
+    clave: POLITICA_PAGO_COMISION,
+    label: POLITICA_PAGO_COMISION_LABEL[POLITICA_PAGO_COMISION],
+  };
+
   // Sin reglas no hay nada que devengar y no vale la pena traer los cobros.
   if (reglas.length === 0) {
-    return { reglas, devengadas: [], liquidadas, totalesDevengado: {} };
+    return { reglas, devengadas: [], liquidadas, totalesDevengado: {}, politicaPago };
   }
 
-  const devengadas = await devengarDesdeCobros(reglas, liquidadas);
+  const crudas = await devengarDesdeCobros(reglas, liquidadas);
+  const devengadas = await conQuincenaSugerida(crudas);
 
   const totalesDevengado: Record<string, number> = {};
   for (const d of devengadas) {
     totalesDevengado[d.moneda] = Math.round(((totalesDevengado[d.moneda] ?? 0) + d.monto) * 100) / 100;
   }
 
-  return { reglas, devengadas, liquidadas, totalesDevengado };
+  return { reglas, devengadas, liquidadas, totalesDevengado, politicaPago };
+}
+
+/**
+ * Cuelga de cada devengada la quincena en la que la política dice que se paga.
+ *
+ * Una sola query para todas: se resuelven los pares (período, quincena) que la
+ * política pide y se buscan juntos. La moneda tiene que coincidir — pagarle a
+ * alguien una comisión en USD junto a una quincena en colones sería convertir,
+ * y este módulo no convierte.
+ */
+async function conQuincenaSugerida(
+  devengadas: ComisionDevengada[],
+): Promise<DevengadaConQuincena[]> {
+  if (devengadas.length === 0) return [];
+
+  const objetivos = devengadas.map((d) => ({
+    d,
+    objetivo: quincenaDePagoDeComision(d.periodo),
+  }));
+
+  const candidatas = await prisma.pagoPlanilla.findMany({
+    where: {
+      OR: objetivos.map(({ d, objetivo }) => ({
+        sujetoTeamMemberId: d.teamMemberId,
+        periodo: objetivo.periodo,
+        quincena: objetivo.quincena,
+      })),
+    },
+    select: {
+      id: true,
+      sujetoTeamMemberId: true,
+      periodo: true,
+      quincena: true,
+      fechaProgramada: true,
+      moneda: true,
+      estado: true,
+    },
+  });
+
+  const porClave = new Map(
+    candidatas.map((q) => [`${q.sujetoTeamMemberId}::${q.periodo}::${q.quincena}`, q]),
+  );
+
+  return objetivos.map(({ d, objetivo }) => {
+    const fila = porClave.get(`${d.teamMemberId}::${objetivo.periodo}::${objetivo.quincena}`);
+    if (!fila) {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `La quincena de ${objetivo.periodo} (Q${objetivo.quincena}) todavía no está generada en el historial de planilla.`,
+      };
+    }
+    if (fila.moneda !== d.moneda) {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `Esa quincena está en ${fila.moneda} y la comisión en ${d.moneda}. Nexus no convierte monedas.`,
+      };
+    }
+    return {
+      ...d,
+      quincenaSugerida: {
+        id: fila.id,
+        periodo: fila.periodo,
+        quincena: fila.quincena,
+        fechaProgramada: isoDay(fila.fechaProgramada)!,
+        estado: fila.estado,
+      },
+      motivoSinQuincena: null,
+    };
+  });
 }
 
 /** Los cobros COBRADO cruzados con las reglas, menos lo ya liquidado. */

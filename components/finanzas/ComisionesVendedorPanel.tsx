@@ -10,15 +10,25 @@
  * ruta, con otro guard y otro loader).
  *
  * Tres bloques, en el orden en que se usan: lo DEVENGADO (lo que hay para pagar,
- * derivado de los cobros), lo LIQUIDADO (congelado) y las REGLAS (el %).
+ * derivado de los cobros), el HISTORIAL de lo liquidado (agrupado por mes, como
+ * el historial de planilla) y las REGLAS (el %).
+ *
+ * ⚠ La quincena en la que cae cada comisión la resuelve el SERVER con la política
+ * (`quincenaDePagoDeComision`) y llega en `quincenaSugerida`. Este panel la
+ * MUESTRA y la reenvía; no la calcula. Si la calculara, la comisión terminaría
+ * enganchada a la quincena que dijo el navegador.
  */
 
-import { Fragment, useState } from "react";
-import type { ComisionesVendedorDTO, ComisionDevengada } from "@/lib/cobranza";
+import { Fragment, useMemo, useState } from "react";
+import type {
+  ComisionesVendedorDTO,
+  ComisionLiquidadaDTO,
+  DevengadaConQuincena,
+} from "@/lib/cobranza";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input, Select } from "@/components/ui";
-import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
+import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
 
 interface Lite {
   id: string;
@@ -113,7 +123,13 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
     }
   }
 
-  async function liquidar(d: ComisionDevengada) {
+  /**
+   * Liquidar. `pagoPlanillaId` sale de la sugerencia del SERVER, no de una cuenta
+   * hecha acá: la comisión queda enganchada exactamente a la quincena que la
+   * persona vio en pantalla. Sin sugerencia se liquida suelta y el motivo ya está
+   * escrito arriba del botón.
+   */
+  async function liquidar(d: DevengadaConQuincena) {
     try {
       await fetchJson(`${BASE}/liquidar`, {
         method: "POST",
@@ -122,10 +138,15 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
           teamMemberId: d.teamMemberId,
           periodo: d.periodo,
           moneda: d.moneda,
+          pagoPlanillaId: d.quincenaSugerida?.id ?? null,
         }),
       });
       await refrescar();
-      toast.success("Comisión liquidada.");
+      toast.success(
+        d.quincenaSugerida
+          ? `Comisión liquidada y enganchada a la quincena del ${fmtFecha(d.quincenaSugerida.fechaProgramada)}.`
+          : "Comisión liquidada, sin quincena enganchada.",
+      );
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo liquidar.");
     }
@@ -140,6 +161,28 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       toast.error(e instanceof ApiError ? e.message : "No se pudo deshacer.");
     }
   }
+
+  /**
+   * El historial, agrupado por mes. `liquidadas` ya viene ordenada por período
+   * descendente desde el loader, así que agrupar en orden alcanza — re-ordenar
+   * acá sería una segunda opinión sobre el orden y podrían divergir.
+   */
+  const mesesLiquidados = useMemo(() => {
+    const porMes = new Map<
+      string,
+      { periodo: string; filas: ComisionLiquidadaDTO[]; totales: Record<string, number> }
+    >();
+    for (const c of data.liquidadas) {
+      let g = porMes.get(c.periodo);
+      if (!g) {
+        g = { periodo: c.periodo, filas: [], totales: {} };
+        porMes.set(c.periodo, g);
+      }
+      g.filas.push(c);
+      g.totales[c.moneda] = Math.round(((g.totales[c.moneda] ?? 0) + c.monto) * 100) / 100;
+    }
+    return [...porMes.values()];
+  }, [data.liquidadas]);
 
   const hoy = new Date().toISOString().slice(0, 10);
   const nuevaRegla = (): ReglaForm => ({
@@ -208,6 +251,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                   <th className={`${TH} text-right`}>Base cobrada</th>
                   <th className={`${TH} text-right`}>%</th>
                   <th className={`${TH} text-right`}>Comisión</th>
+                  <th className={TH}>Se paga</th>
                   <th className={TH}></th>
                 </tr>
               </thead>
@@ -246,6 +290,19 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                         <td className={`${TD} text-right tabular-nums font-medium`}>
                           {fmtMonto(d.monto, moneda)}
                         </td>
+                        <td className={`${TD} whitespace-nowrap`}>
+                          {d.quincenaSugerida ? (
+                            <span className="text-fg-secondary">
+                              {fmtFecha(d.quincenaSugerida.fechaProgramada)}
+                            </span>
+                          ) : (
+                            // El motivo se DICE. Un guion suelto obligaría a
+                            // adivinar por qué no se va a enganchar a nada.
+                            <span className="text-fg-muted" title={d.motivoSinQuincena ?? ""}>
+                              sin quincena ⓘ
+                            </span>
+                          )}
+                        </td>
                         <td className={`${TD} text-right`}>
                           <Button size="sm" onClick={() => liquidar(d)}>
                             Liquidar
@@ -261,7 +318,8 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                             <td className={`${TD} text-right tabular-nums text-fg-secondary`}>
                               {fmtMonto(det.monto, moneda)}
                             </td>
-                            <td className={`${TD} text-right text-fg-muted`} colSpan={3}>
+                            {/* 7 columnas en la cabecera: 2 + 1 + 4. */}
+                            <td className={`${TD} text-right text-fg-muted`} colSpan={4}>
                               cobrado el {fmtFecha(det.fechaCobro)}
                             </td>
                           </tr>
@@ -275,41 +333,68 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
         )}
       </section>
 
-      {/* ── Liquidado ─────────────────────────────────────────────────────── */}
+      {/* ── Historial ─────────────────────────────────────────────────────── */}
       {data.liquidadas.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-fg">Liquidadas</h2>
+          <h2 className="text-sm font-semibold text-fg">Historial</h2>
+          <p className="text-[11px] text-fg-muted">
+            Lo liquidado mes a mes. Cada mes suma por moneda: CRC y USD nunca se juntan.
+          </p>
           <div className="rounded-xl border border-line bg-surface overflow-x-auto">
             <table className="w-full min-w-[760px]">
               <thead className="bg-surface-muted border-b border-line">
                 <tr>
                   <th className={TH}>Vendedor</th>
-                  <th className={TH}>Período</th>
+                  <th className={`${TH} text-right`}>Base cobrada</th>
+                  <th className={`${TH} text-right`}>%</th>
                   <th className={`${TH} text-right`}>Comisión</th>
                   <th className={TH}>Liquidó</th>
                   <th className={TH}></th>
                 </tr>
               </thead>
               <tbody>
-                {data.liquidadas.map((c) => (
-                  <tr key={c.id} className="border-b border-line last:border-b-0">
-                    <td className={TD}>{c.vendedorNombre}</td>
-                    <td className={`${TD} text-fg-secondary`}>
-                      {c.periodo} · {c.moneda}
-                    </td>
-                    <td className={`${TD} text-right tabular-nums`}>
-                      {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
-                      <span className="ml-1 text-fg-muted">({c.porcentaje}%)</span>
-                    </td>
-                    <td className={`${TD} text-fg-muted`}>
-                      {c.liquidadoPor} · {fmtFecha(c.liquidadoEn.slice(0, 10))}
-                    </td>
-                    <td className={`${TD} text-right`}>
-                      <Button variant="secondary" size="sm" onClick={() => deshacer(c.id)}>
-                        Deshacer
-                      </Button>
-                    </td>
-                  </tr>
+                {mesesLiquidados.map((mes) => (
+                  <Fragment key={mes.periodo}>
+                    <tr className="border-b border-line bg-surface-muted">
+                      <td className={`${TD} font-medium`} colSpan={3}>
+                        {etiquetaMes(mes.periodo)}
+                      </td>
+                      <td className={`${TD} text-right tabular-nums font-medium`} colSpan={3}>
+                        {Object.entries(mes.totales)
+                          .map(([m, v]) => fmtMonto(v, m as "CRC" | "USD"))
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                    {mes.filas.map((c) => (
+                      <tr key={c.id} className="border-b border-line">
+                        <td className={TD}>{c.vendedorNombre}</td>
+                        <td className={`${TD} text-right tabular-nums text-fg-secondary`}>
+                          {fmtMonto(c.base, c.moneda as "CRC" | "USD")}
+                        </td>
+                        <td className={`${TD} text-right tabular-nums text-fg-secondary`}>
+                          {c.porcentaje}%
+                        </td>
+                        <td className={`${TD} text-right tabular-nums`}>
+                          {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
+                        </td>
+                        <td className={`${TD} text-fg-muted`}>
+                          {c.liquidadoPor} · {fmtFecha(c.liquidadoEn.slice(0, 10))}
+                          {/* Enganchada o suelta: es lo que decide si aparece en el
+                              historial de planilla y si el aguinaldo la cuenta. */}
+                          {c.pagoPlanillaId ? (
+                            <span className="ml-1.5 text-fg-secondary">· con la planilla</span>
+                          ) : (
+                            <span className="ml-1.5 text-fg-muted">· suelta</span>
+                          )}
+                        </td>
+                        <td className={`${TD} text-right`}>
+                          <Button variant="secondary" size="sm" onClick={() => deshacer(c.id)}>
+                            Deshacer
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

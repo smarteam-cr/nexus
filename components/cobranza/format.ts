@@ -9,6 +9,37 @@ import type { Semaforo } from "@/lib/cobranza/engine";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+const MESES_LARGOS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  // "septiembre" y no "setiembre": es lo que el historial de planilla ya muestra
+  // y este helper nació de sacarle la copia local. Cambiarlo acá sería un cambio
+  // de copy que nadie pidió, colado dentro de un refactor.
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+/**
+ * "2026-07" → "julio 2026". El encabezado de un grupo mensual.
+ *
+ * Vive acá y no en cada panel porque ya hay TRES pantallas que agrupan por mes
+ * (historial de planilla, historial de comisiones, y lo que venga con el
+ * gráfico): con una copia por panel, el día que alguien corrija "setiembre" lo
+ * corrige en una sola y las otras dos siguen diciendo otra cosa.
+ */
+export function etiquetaMes(periodo: string): string {
+  const m = Number(periodo.slice(5, 7));
+  return `${MESES_LARGOS[m - 1] ?? periodo} ${periodo.slice(0, 4)}`;
+}
+
 /** "2026-07-15" → "15 jul 2026" ("—" si null). */
 export function fmtFecha(iso: string | null | undefined): string {
   if (!iso) return "—";

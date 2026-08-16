@@ -3,6 +3,11 @@ import {
   reglaParaCobro,
   devengarComisiones,
   periodoDeFecha,
+  quincenaDePagoDeComision,
+  periodoSiguiente,
+  POLITICAS_PAGO_COMISION,
+  POLITICA_PAGO_COMISION,
+  POLITICA_PAGO_COMISION_LABEL,
   type ReglaComision,
   type CobroComisionable,
 } from "./comisiones";
@@ -241,5 +246,54 @@ describe("periodoDeFecha", () => {
   it("P1 · corta el ISO al mes", () => {
     expect(periodoDeFecha("2026-08-14")).toBe("2026-08");
     expect(periodoDeFecha("2026-12-31")).toBe("2026-12");
+  });
+});
+
+describe("quincenaDePagoDeComision — CUÁNDO se paga (política aislada)", () => {
+  it("Q1 · el default paga en la primera quincena del mes SIGUIENTE", () => {
+    // Por qué el siguiente: la comisión de marzo se calcula sobre todo marzo,
+    // incluido el día 31. Pagarla el 30 sería pagar un número que no se sabe.
+    expect(quincenaDePagoDeComision("2026-03")).toEqual({ periodo: "2026-04", quincena: 1 });
+  });
+
+  it("Q2 · diciembre salta de año", () => {
+    expect(quincenaDePagoDeComision("2026-12")).toEqual({ periodo: "2027-01", quincena: 1 });
+  });
+
+  it("Q3 · «fin del mismo mes» paga en la Q2 del período", () => {
+    expect(quincenaDePagoDeComision("2026-03", "Q2_MISMO_MES")).toEqual({
+      periodo: "2026-03",
+      quincena: 2,
+    });
+  });
+
+  it("Q4 · «el 15 del mismo mes» paga en la Q1 del período", () => {
+    expect(quincenaDePagoDeComision("2026-03", "Q1_MISMO_MES")).toEqual({
+      periodo: "2026-03",
+      quincena: 1,
+    });
+  });
+
+  it("Q5 · las 3 políticas están etiquetadas (una sin label sale vacía en pantalla)", () => {
+    for (const p of POLITICAS_PAGO_COMISION) {
+      expect(POLITICA_PAGO_COMISION_LABEL[p]?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it("Q6 · la política vigente es una de las declaradas", () => {
+    expect(POLITICAS_PAGO_COMISION).toContain(POLITICA_PAGO_COMISION);
+  });
+
+  it("Q7 · un período basura no revienta ni inventa un mes", () => {
+    expect(periodoSiguiente("no-es-un-periodo")).toBe("no-es-un-periodo");
+    expect(periodoSiguiente("2026-13")).toBe("2026-13");
+  });
+});
+
+describe("periodoSiguiente", () => {
+  it("P2 · avanza un mes y rellena el cero", () => {
+    expect(periodoSiguiente("2026-01")).toBe("2026-02");
+    expect(periodoSiguiente("2026-08")).toBe("2026-09");
+    expect(periodoSiguiente("2026-09")).toBe("2026-10");
   });
 });

@@ -193,3 +193,69 @@ export function devengarComisiones(
         a.moneda.localeCompare(b.moneda),
     );
 }
+
+// ── CUÁNDO se paga la comisión ─────────────────────────────────────────────────
+// Elías eligió «junto con el salario» y pidió explícitamente que quede armado
+// para cambiarlo después («por ejemplo ponerlo en la primera semana de cada mes,
+// o alguna configuración similar»). Por eso la regla NO está escrita adentro del
+// panel ni de la mutación: vive acá, es pura, y cambiarla es cambiar una
+// constante — con un test por política que dice qué hace cada una.
+
+/** Las políticas que el sistema sabe resolver. */
+export const POLITICAS_PAGO_COMISION = [
+  /** La comisión del mes M se paga en la Q1 del mes M+1 (el 15 del siguiente). */
+  "Q1_MES_SIGUIENTE",
+  /** En la Q2 del MISMO mes (fin de mes). */
+  "Q2_MISMO_MES",
+  /** En la Q1 del MISMO mes (el 15). */
+  "Q1_MISMO_MES",
+] as const;
+
+export type PoliticaPagoComision = (typeof POLITICAS_PAGO_COMISION)[number];
+
+export const POLITICA_PAGO_COMISION_LABEL: Record<PoliticaPagoComision, string> = {
+  Q1_MES_SIGUIENTE: "Con la quincena del 15 del mes siguiente",
+  Q2_MISMO_MES: "Con la quincena de fin del mismo mes",
+  Q1_MISMO_MES: "Con la quincena del 15 del mismo mes",
+};
+
+/**
+ * La política VIGENTE. Es una constante y no una fila de configuración a
+ * propósito: hoy hay una sola empresa y una sola forma de pagar, y una tabla de
+ * settings para un valor que nadie cambió todavía es una pantalla que mantener
+ * sin nadie que la use. El día que haga falta, esto pasa a leerse de la base y
+ * `quincenaDePagoDeComision` no se entera — ya recibe la política por parámetro.
+ *
+ * ⚠ Por qué el mes SIGUIENTE y no el mismo: la comisión de marzo se calcula
+ * sobre TODO lo cobrado en marzo, incluido el día 31. Pagarla el 30 de marzo
+ * sería pagar un número que todavía no se puede saber. La Q1 de abril es la
+ * primera planilla en la que el monto ya está cerrado.
+ */
+export const POLITICA_PAGO_COMISION: PoliticaPagoComision = "Q1_MES_SIGUIENTE";
+
+/**
+ * En qué quincena cae la comisión devengada en `periodo`.
+ *
+ * Devuelve solo el par (período, quincena) — NO busca la fila: si esa quincena
+ * no existe en el libro, quien llama decide qué hacer (hoy: la liquida suelta y
+ * lo dice). Mantenerla pura es lo que permite testear las tres políticas y el
+ * salto de diciembre sin una base de datos.
+ */
+export function quincenaDePagoDeComision(
+  periodo: string,
+  politica: PoliticaPagoComision = POLITICA_PAGO_COMISION,
+): { periodo: string; quincena: 1 | 2 } {
+  if (politica === "Q2_MISMO_MES") return { periodo, quincena: 2 };
+  if (politica === "Q1_MISMO_MES") return { periodo, quincena: 1 };
+  return { periodo: periodoSiguiente(periodo), quincena: 1 };
+}
+
+/** "2026-12" → "2027-01". Aritmética de calendario, sin `Date` (y sin husos). */
+export function periodoSiguiente(periodo: string): string {
+  const anio = Number(periodo.slice(0, 4));
+  const mes = Number(periodo.slice(5, 7));
+  if (!Number.isFinite(anio) || !Number.isFinite(mes) || mes < 1 || mes > 12) return periodo;
+  return mes === 12
+    ? `${anio + 1}-01`
+    : `${anio}-${String(mes + 1).padStart(2, "0")}`;
+}

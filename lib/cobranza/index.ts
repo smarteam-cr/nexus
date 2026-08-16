@@ -25,6 +25,7 @@ export {
   type ComisionPartnerDTO,
   type ComisionesPartnerDTO,
   type ComisionesVendedorDTO,
+  type DevengadaConQuincena,
   type ReglaComisionDTO,
   type ComisionLiquidadaDTO,
   type TarjetaDTO,

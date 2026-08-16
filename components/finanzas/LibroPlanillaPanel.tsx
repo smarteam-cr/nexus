@@ -21,33 +21,12 @@ import type { LibroPlanillaDTO, PagoPlanillaDTO } from "@/lib/cobranza";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input } from "@/components/ui";
-import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
+import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
 import { periodoDe, quincenaDe } from "@/lib/cobranza/planilla";
 
 interface Props {
   initialLibro: LibroPlanillaDTO;
   todayISO: string;
-}
-
-const MESES = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
-/** "2026-08" → "agosto 2026". Sin `new Date`: determinístico SSR y browser. */
-function etiquetaPeriodo(p: string): string {
-  const m = Number(p.slice(5, 7));
-  return `${MESES[m - 1] ?? p} ${p.slice(0, 4)}`;
 }
 
 /** Totales por moneda SEPARADOS — CRC y USD jamás se suman (regla del módulo). */
@@ -134,7 +113,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
         backHref="/finanzas/costos/planillas"
         action={
           <Button onClick={generar} disabled={generando}>
-            {generando ? "Generando…" : `Generar ${etiquetaPeriodo(periodoHoy)} · Q${quincenaHoy}`}
+            {generando ? "Generando…" : `Generar ${etiquetaMes(periodoHoy)} · Q${quincenaHoy}`}
           </Button>
         }
       />
@@ -158,7 +137,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
           {grupos.map(([periodo, pagos]) => (
             <div key={periodo} className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-fg-muted">
-                {etiquetaPeriodo(periodo)}
+                {etiquetaMes(periodo)}
               </p>
               {([1, 2] as const).map((q) => {
                 const delQ = pagos.filter((p) => p.quincena === q);
@@ -357,7 +336,7 @@ function PagarModal({
       <div className="space-y-3">
         <p className="text-xs text-fg-secondary">
           {fmtMonto(pago.monto, pago.moneda as "CRC" | "USD")} · Q{pago.quincena} de{" "}
-          {etiquetaPeriodo(pago.periodo)}
+          {etiquetaMes(pago.periodo)}
         </p>
         <Field label="Fecha del pago" hint="Se puede poner hacia atrás: la plata suele salir antes de registrarse.">
           <Input
