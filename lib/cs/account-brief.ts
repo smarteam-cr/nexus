@@ -15,18 +15,14 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { anthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { loadCsAccount, type CsAccountData, type AccountBriefStatement } from "./load-account";
 import { parsearBriefCitado, type BriefSource } from "./brief-citas";
+import { generarTextoDeBrief } from "./brief-llm";
 import { HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 
 const AGENT_ID = "agent-cs-account-brief";
 const AGENT_SLUG = "cs-account-brief";
-const BRIEF_MODEL = "claude-sonnet-4-6";
-// Holgura de tokens: 3000 truncaba en cuentas cargadas (varias minutas + partner +
-// señales) → el output quedaba a medias y el parse tiraba error genérico.
-const BRIEF_MAX_TOKENS = 5000;
 // Caps del contexto de entrada: menos truncación, menos costo, más señal.
 const MAX_MINUTAS = 6;
 const MAX_BLOCK_CHARS = 1800;
@@ -205,34 +201,6 @@ export interface AccountBriefResult {
   discarded?: number;
 }
 
-/** Llama al agente; si el output se TRUNCA (max_tokens), reintenta UNA vez pidiendo
- *  ser más conciso antes de rendirse. Los errores transitorios de la API (429/5xx/529)
- *  ya los reintenta el SDK de Anthropic (maxRetries default). Devuelve el texto crudo. */
-async function generateBriefText(systemPrompt: string, serialized: string): Promise<string> {
-  const ask = (extra: string) =>
-    anthropic.messages.create({
-      model: BRIEF_MODEL,
-      max_tokens: BRIEF_MAX_TOKENS,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: `${serialized}\n\nRedactá el resumen ejecutivo de esta cuenta según tus instrucciones. Devolvé SOLO el JSON.${extra}`,
-        },
-      ],
-    });
-  const textOf = (msg: Awaited<ReturnType<typeof ask>>) =>
-    msg.content.map((b) => (b.type === "text" ? (b as { text: string }).text : "")).join("").trim();
-
-  let msg = await ask("");
-  if (msg.stop_reason === "max_tokens") {
-    // Reintento conciso: menos afirmaciones para no volver a truncar.
-    msg = await ask("\n\nIMPORTANTE: sé conciso — máximo 8 afirmaciones, sin repetir.");
-    if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
-  }
-  return textOf(msg);
-}
-
 /**
  * Genera (o regenera) el brief citado de la cuenta. El caller maneja concurrencia.
  *
@@ -286,7 +254,11 @@ export async function runAccountBrief(
       return { status: "skipped", reason: "no_client", runId: run.id };
     }
 
-    const rawText = await generateBriefText(agent.systemPrompt, ctx.serialized);
+    const rawText = await generarTextoDeBrief(
+      agent.systemPrompt,
+      ctx.serialized,
+      "Redactá el resumen ejecutivo de esta cuenta según tus instrucciones.",
+    );
     const { headline, statements, discarded } = parsearBriefCitado(rawText, ctx.sources);
 
     await prisma.csAccountBrief.upsert({
