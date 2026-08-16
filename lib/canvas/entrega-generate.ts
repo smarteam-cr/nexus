@@ -26,7 +26,7 @@ import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/can
 import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
-import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
+import { ENTREGA_TEMPLATE, ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
@@ -100,7 +100,11 @@ export async function runEntregaGeneration(opts: {
 
   const [canvasId, handoffCtx, kickoffCtx, desarrolloCtx, project, summary] = await Promise.all([
     opts.canvasId ?? ensureEntregaCanvas(projectId),
-    loadHandoffContext(projectId, { onlyConfirmed: false }),
+    /* ⛔ CON ALLOWLIST: la Entrega la abre el cliente. Ver `ENTREGA_HANDOFF_KEYS` para qué
+       entra y qué no, con el daño de cada exclusion escrito. El kickoff y el requerimiento
+       tecnico que se leen abajo NO la necesitan: los dos son de cara al cliente, asi que su
+       contenido ya paso por este filtro cuando se genero. */
+    loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: ENTREGA_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "kickoff", { onlyConfirmed: false }),
     loadCanvasContext(projectId, "tech-requirements", { onlyConfirmed: false }),
     prisma.project.findUnique({

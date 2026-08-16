@@ -305,3 +305,35 @@ export const ENTREGA_TEMPLATE: BcTemplateDef = {
 export const ENTREGA_DEF_BY_KEY: Record<string, BCSectionDef> = Object.fromEntries(
   ENTREGA_SECTION_DEFS.map((d) => [d.key, d]),
 );
+
+/**
+ * ALLOWLIST de secciones del canvas Handoff que puede ver el agente de Entrega.
+ *
+ * La Entrega la lee el CLIENTE —se comparte con enlace y contraseña, igual que el Kickoff—, así
+ * que corre exactamente el mismo riesgo y lleva el mismo tipo de filtro. El handoff es un
+ * documento INTERNO: está escrito para que Smarteam se entienda a sí misma, no para mostrarlo.
+ *
+ * Lo que entra, y para qué:
+ *   · `alcance_contratado` + `desarrollo` → qué se prometió construir (la sección de alcance).
+ *   · `dolor_principal`                   → el «antes» del antes-y-después (la sección resumen).
+ *   · `expectativas`                      → contra qué se miden los logros.
+ *   · `stakeholders_handoff`              → quiénes estuvieron, para la continuidad.
+ *
+ * ⛔ Lo que NO entra, y por qué — cada uno con su daño concreto en un documento de CIERRE:
+ *   · `riesgos_banderas`     — banderas rojas SOBRE el cliente. Es lo más caro de todo.
+ *   · `motivacion_decision`  — «por qué nos eligieron»: es lectura comercial nuestra.
+ *   · `acuerdos_promesas`    — compromisos comerciales (descuentos, promesas especiales).
+ *     Repetirlos en el papel que el cliente archiva y cita es crearse una obligación nueva.
+ *   · `estado_en_flight`     — foto interna del momento del traspaso, vieja e interna.
+ *   · `fecha_inicio_kickoff` — la Entrega tiene su propia fecha de corte, en la portada.
+ *
+ * ⚠ Es un ALLOWLIST, no una lista de prohibidos: una sección nueva del handoff nace FUERA. Si
+ * alguna vez tiene que entrar, entra con una decisión escrita acá, no por omisión.
+ */
+export const ENTREGA_HANDOFF_KEYS = [
+  "alcance_contratado",
+  "desarrollo",
+  "dolor_principal",
+  "expectativas",
+  "stakeholders_handoff",
+] as const;

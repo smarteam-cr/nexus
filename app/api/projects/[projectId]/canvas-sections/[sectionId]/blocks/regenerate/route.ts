@@ -6,7 +6,7 @@ import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canva
 import { getSingleBlockOutputInstructions } from "@/lib/canvas/agent-output-schema";
 import { validateBlockPayload } from "@/lib/canvas/validate-block-payload";
 import { parseRegenBody, regenerateTypedSection } from "@/lib/canvas/regenerate-section";
-import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
+import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { slugForCanvas } from "@/lib/pieces/registry";
 
 /**
@@ -63,9 +63,18 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ blockType: "CARD", data: result.data });
   }
 
-  // Mismo contexto que usa el agente de kickoff.
+  /* Mismo contexto que usa el agente de kickoff — ⛔ INCLUIDA SU ALLOWLIST.
+     La generacion completa (`analyze/route.ts`) filtra las secciones INTERNAS del handoff antes
+     de que el modelo las vea: riesgos y banderas rojas, por que nos eligieron, los acuerdos
+     comerciales, el estado interno al momento del traspaso. Este camino —regenerar UN bloque
+     con una instruccion— leia el handoff ENTERO, asi que el mismo documento salia distinto
+     segun por donde se hubiera generado, y por aca podia entrar al texto que el cliente abre
+     algo que la puerta de al lado bloquea a proposito.
+     ⚠ El prompt tambien se lo prohibe; la FUENTE es el gate real. «Filtrar datos, no rogarle
+     al modelo.» Esta ruta ya rechaza cualquier canvas que no sea el kickoff (arriba), asi que
+     la allowlist del kickoff es exactamente la que corresponde. */
   const [handoffCtx, timelineCtx, agent, project] = await Promise.all([
-    loadHandoffContext(projectId, { onlyConfirmed: true }),
+    loadHandoffContext(projectId, { onlyConfirmed: true, includeKeys: KICKOFF_HANDOFF_KEYS }),
     loadTimelineContext(projectId),
     prisma.agent.findUnique({
       where: { id: KICKOFF_AGENT_ID },
