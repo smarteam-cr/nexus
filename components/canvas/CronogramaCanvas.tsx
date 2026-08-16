@@ -292,6 +292,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // ("Confirmar detalle") sin verse obligado a publicar (son dos decisiones distintas).
   const [detailConfirmedAt, setDetailConfirmedAt] = useState<string | null>(null);
   const [confirmingDetail, setConfirmingDetail] = useState(false);
+  const [approvingPlan, setApprovingPlan] = useState(false);
   // Particularidades (desviaciones curadas) — el CSE ve todas; se pasan al Gantt para el resumen.
   const [particularidades, setParticularidades] = useState<GanttParticularidad[]>([]);
   // Propuestas del equipo técnico (needsValidation=true). Llegan en una lista APARTE del GET
@@ -660,6 +661,40 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // las acciones por semana crucen a la vista del cliente (gate detailConfirmedAt), pero
   // NO publica — el CSE valida el detalle y decide publicar por separado. Feedback real
   // (toast en éxito/error), no el `.catch(()=>{})` mudo que tenía el fetch incrustado.
+  /**
+   * «Aprobar el plan»: congela la FOTO contra la que se mide el alcance, SIN mostrarle nada al
+   * cliente. Hasta que existió este botón la foto solo se tomaba al publicar, y por eso 14 de 132
+   * proyectos activos la tenían — el alcance excedido era inmedible en 9 de cada 10.
+   *
+   * ⚠ A diferencia de publicar, acá un fallo del congelado es un ERROR de verdad: si no congeló,
+   * no aprobó. El endpoint responde 502 y esto lo muestra tal cual en vez de celebrar.
+   */
+  const approvePlan = async () => {
+    setApprovingPlan(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/approve`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(d?.error ?? "No se pudo aprobar el plan.");
+        toast.error(d?.error ?? "No se pudo aprobar el plan.");
+        return;
+      }
+      /* `created:false` = el plan es idéntico al ya congelado. No es un error ni una versión
+         nueva: decirlo distinto evita que alguien crea que quedó una foto que no se tomó. */
+      toast.success(
+        d?.created
+          ? `Plan aprobado — quedó congelado como versión ${d.version}.`
+          : "Este plan ya estaba aprobado: no cambió nada desde la última foto.",
+      );
+    } catch {
+      setError("Error de conexión al aprobar el plan.");
+      toast.error("Error de conexión al aprobar el plan.");
+    } finally {
+      setApprovingPlan(false);
+    }
+  };
+
   const confirmDetail = async () => {
     setConfirmingDetail(true);
     setError(null);
@@ -2036,6 +2071,22 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               {confirmingDetail ? "Confirmando…" : "Confirmar detalle"}
+            </button>
+          )}
+          {/* «Aprobar el plan» — congela la foto contra la que se mide el alcance, sin publicar
+              nada. Va JUNTO a «Confirmar detalle» porque es el otro gesto explícito y terminal
+              del canvas, y tiene el mismo dueño (el CSE).
+              ⚠ Se pide ancla para mostrarlo: sin fecha de arranque el endpoint responde 400, y un
+              botón que solo sirve para dar error enseña a ignorar los botones. */}
+          {canEdit && phases.length > 0 && !proposal && anchor && (
+            <button
+              onClick={() => void approvePlan()}
+              disabled={approvingPlan}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-semibold text-fg-secondary hover:text-fg hover:border-fg-muted transition-colors disabled:opacity-60"
+              title="Congela este plan como la promesa contra la que se mide el alcance. No le muestra nada al cliente."
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              {approvingPlan ? "Aprobando…" : "Aprobar el plan"}
             </button>
           )}
         </>,

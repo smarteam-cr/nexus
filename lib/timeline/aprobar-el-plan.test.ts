@@ -33,6 +33,7 @@ const sinComentarios = (rel: string) =>
 const APPROVE = "app/api/projects/[projectId]/timeline/approve/route.ts";
 const PUBLISH = "app/api/projects/[projectId]/publish-timeline/route.ts";
 const BASELINE = "lib/timeline/baseline.ts";
+const CANVAS = "components/canvas/CronogramaCanvas.tsx";
 
 describe("⭐ un solo congelador para los dos actos", () => {
   it("el congelador ya no se llama «al publicar»", () => {
@@ -94,5 +95,33 @@ describe("«ya estaba aprobado» no es un error", () => {
     /* Aprobar dos veces el mismo plan no versiona — y está bien. Tratarlo como fallo enseñaría a
        ignorar el aviso; celebrarlo como versión nueva mentiría sobre el historial. */
     expect(leer(APPROVE)).toContain("created:false");
+  });
+});
+
+describe("el botón existe y no ofrece lo que va a fallar", () => {
+  it("el canvas llama al endpoint de aprobar", () => {
+    expect(leer(CANVAS)).toContain("/timeline/approve");
+  });
+
+  it("⚠ el CTA se pide ancla para mostrarse", () => {
+    /* Sin fecha de arranque el endpoint responde 400. Un botón que solo sirve para dar error
+       enseña a ignorar los botones — y el próximo, el que sí importaba, también se ignora. */
+    const src = leer(CANVAS);
+    const i = src.indexOf("approvePlan()");
+    const antes = src.slice(Math.max(0, i - 700), i);
+    expect(antes, "el CTA de aprobar dejó de exigir ancla para mostrarse").toContain("&& anchor &&");
+  });
+
+  it("«ya estaba aprobado» se dice distinto de «se aprobó»", () => {
+    /* `created:false` no es error ni versión nueva. Celebrar una versión que no se creó dejaría
+       a alguien creyendo que hay una foto tomada hoy. */
+    expect(leer(CANVAS)).toContain("ya estaba aprobado");
+  });
+
+  it("un fallo del congelado se muestra, no se celebra", () => {
+    const src = leer(CANVAS);
+    const i = src.indexOf("const approvePlan");
+    const cuerpo = src.slice(i, i + 1400);
+    expect(cuerpo, "aprobar no distingue el error").toContain("toast.error");
   });
 });
