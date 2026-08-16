@@ -147,11 +147,11 @@ enum BusinessCaseTranscriptSource {
 // ─── Client (nueva entidad raíz) ──────────────────────────────────────────────
 
 model Client {
-  id               String   @id @default(cuid())
+  id               String     @id @default(cuid())
   name             String
   company          String?
   industry         String?
-  notes            String?  @db.Text
+  notes            String?    @db.Text
   hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
   logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
@@ -175,12 +175,12 @@ model Client {
   // `isProspect: true` ≡ `kind: PROSPECTO`. Ya NO se lee ni se escribe en ningún lado; la
   // columna sobrevive solo para poder auditar el backfill. Si al llegar la fecha `kind`
   // no dio problemas, se dropea.
-  isProspect       Boolean  @default(false)
+  isProspect       Boolean    @default(false)
   // Mercado total direccionable de esta empresa, en USD — cuánto podría facturar Smarteam
   // si le vendiera todo lo que necesita. Lo estima VENTAS a mano (no se calcula ni se
   // sincroniza): es una apuesta comercial, no un dato derivable. Sumado sobre la cartera
   // da el "potencial estimado". Nullable = todavía no estimado, que NO es lo mismo que 0.
-  tamUsd           Decimal? @db.Decimal(12, 2)
+  tamUsd           Decimal?   @db.Decimal(12, 2)
   // Procedencia de fuente externa (regla Cobranza fuente + id_externo → upsert
   // idempotente: re-sincronizar NO duplica). null = creado por flujos previos.
   source           String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
@@ -197,27 +197,27 @@ model Client {
   canvas           Json? // Client Canvas — conocimiento a nivel empresa
   canvasConfidence Json? // { section: "confirmed" | "inferred" } per section
 
-  hubspotAccount    HubspotAccount?
-  audits            Audit[]
-  implementations   Implementation[]
-  knowledge         Knowledge[]
-  documents         ClientDocument[]
-  stageNotes        StageNote[]
-  agentRuns         AgentRun[]
-  contextCards      ClientContextCard[]
-  projects          Project[]
-  canvasSuggestions CanvasSuggestion[]
-  actionItems       ActionItem[]
-  appUsers          AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
-  assignments       ClientAssignment[] // F2: overrides manuales CSE↔Cliente
-  handoffs          Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
-  businessCases     BusinessCase[] // Ventas: casos de negocio (1:N por cliente)
-  csAlerts          CsAlert[] // Éxito del cliente: alertas del watchdog
-  csSignals         ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
-  partnerSnapshot   ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
-  accountBrief      CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
-  cuentaFinanciera  CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
-  ingresosVariables IngresoVariable[] @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
+  hubspotAccount       HubspotAccount?
+  audits               Audit[]
+  implementations      Implementation[]
+  knowledge            Knowledge[]
+  documents            ClientDocument[]
+  stageNotes           StageNote[]
+  agentRuns            AgentRun[]
+  contextCards         ClientContextCard[]
+  projects             Project[]
+  canvasSuggestions    CanvasSuggestion[]
+  actionItems          ActionItem[]
+  appUsers             AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
+  assignments          ClientAssignment[] // F2: overrides manuales CSE↔Cliente
+  handoffs             Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
+  businessCases        BusinessCase[] // Ventas: casos de negocio (1:N por cliente)
+  csAlerts             CsAlert[] // Éxito del cliente: alertas del watchdog
+  csSignals            ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
+  partnerSnapshot      ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
+  accountBrief         CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
+  cuentaFinanciera     CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
+  ingresosVariables    IngresoVariable[]      @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
   importFilasAplicadas ImportacionFila[] // Cobranza: trazabilidad del importador
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
@@ -335,12 +335,12 @@ model Project {
   // / ciclo de 8 etapas / vigilante). NO hay enum a propósito: los valores espejan
   // pipelines que se crean en HubSpot cualquier tarde, y un enum no puede guardar uno
   // desconocido. null = sin backfill o pipeline no declarado → comportamiento legacy.
-  hubspotPipelineId String? // hs_pipeline (826270797 = Customer Success CRM, 922785384 = Development, 922688687 = Sitios web)
+  hubspotPipelineId        String? // hs_pipeline (826270797 = Customer Success CRM, 922785384 = Development, 922688687 = Sitios web)
   // Propiedad `proyecto_interno` de HubSpot (booleancheckbox). Un proyecto de Smarteam
   // para Smarteam: no se factura, no es cartera de nadie y no se le publica al cliente.
   // NOT NULL DEFAULT false porque un checkbox sin marcar SIGNIFICA "no interno" — al
   // aplicar la migración los 70 proyectos del portal estaban vacíos (ver el .sql).
-  proyectoInterno Boolean @default(false)
+  proyectoInterno          Boolean  @default(false)
   // El HECHO de la asociación proyecto↔proyecto en HubSpot (typeId 1254), en ids de
   // HubSpot. Se guarda SIEMPRE, aunque el otro proyecto todavía no exista en Nexus:
   // así el orden de llegada deja de importar.
@@ -355,7 +355,7 @@ model Project {
   // null. Un desarrollo cuyo hermano se borró **deja de facturar en silencio** hasta que
   // `resolverHermanos()` vuelva a correr. Por eso el DELETE de proyecto ahora lo nulea dentro de su
   // transacción, e INV8 lo detecta si igual quedara alguno colgado.
-  hermanoCsProjectId String?
+  hermanoCsProjectId       String?
 
   // ── En qué punto quedó el ALTA de este proyecto (Tanda C — lib/projects/alta.ts) ──
   // Dar de alta un proyecto son DOS escrituras en dos sistemas (la fila acá y el record en
@@ -366,7 +366,7 @@ model Project {
   // NULL = no nació por el alta única: o es anterior a la Tanda C, o lo trajo el espejo desde
   // HubSpot (el camino del 99%). NULL responde IGUAL que 'listo' en todas las preguntas, y por
   // eso aplicar la migración no cambió una sola pantalla.
-  altaEstado String? // 'pendiente_crm' | 'pendiente_espejo' | 'listo' | null
+  altaEstado           String? // 'pendiente_crm' | 'pendiente_espejo' | 'listo' | null
   // ── El RECIBO de lo que pidió la persona. NO decide nada ─────────────────────
   // ⚠ La verdad del tipo y del hermano la escribe el ESPEJO leyéndolos de HubSpot. Estas
   // columnas guardan lo DECLARADO para poder exigir que el espejo lo haya confirmado antes de
@@ -379,16 +379,16 @@ model Project {
   altaHermanoHsId      String? // id de HubSpot de la implementación de la que dijo que cuelga
   altaSinTratoMotivo   String? // por qué se aceptó sin trato ganado
   // ── Telemetría del reintento (alimenta el cartel y el diagnóstico) ───────────
-  altaError           String?
-  altaIntentos        Int       @default(0)
-  altaUltimoIntentoAt DateTime?
+  altaError            String?
+  altaIntentos         Int       @default(0)
+  altaUltimoIntentoAt  DateTime?
   // Acota la adopción: solo se adopta un record de HubSpot creado DESPUÉS de este instante,
   // así el alta nunca se apropia de un proyecto viejo de la misma empresa.
-  altaIniciadaAt      DateTime?
-  altaActorEmail      String?
+  altaIniciadaAt       DateTime?
+  altaActorEmail       String?
   // El sello que hace que la reclasificación de sesiones (~US$1 por corrida) se pague UNA vez
   // aunque se reintente diez. Se escribe en la misma operación que la dispara.
-  altaReclasificadoAt DateTime?
+  altaReclasificadoAt  DateTime?
 
   // D.2 — etapa actual del pipeline de Customer Success (híbrido: materializada acá
   // por sync-projects y revalidada en vivo al disparar la regeneración del cronograma).
@@ -424,16 +424,16 @@ model Project {
   // Modalidad de adopción (etapa ADOPCION): el sistema SUGIERE por el tamaño de la
   // cuenta (snapshot Partner de HubSpot), el CSE confirma. null = sin confirmar.
   adoptionMode                 String? // "directa" | "por_pilotos" (confirmada)
-  adoptionModeConfirmedAt     DateTime?
-  adoptionModeConfirmedBy     String?
-  isSuccessCase                Boolean   @default(false) // flag "Caso de éxito" al FINALIZAR
+  adoptionModeConfirmedAt      DateTime?
+  adoptionModeConfirmedBy      String?
+  isSuccessCase                Boolean                @default(false) // flag "Caso de éxito" al FINALIZAR
   // Estado EN_RIESGO PROPUESTO (eje de Estado: el agente PROPONE, el CSE confirma).
   // Confirmar = escribir healthStatusOverride=EN_RIESGO y limpiar esto; descartar =
   // limpiar. Si la señal desaparece, el watchdog lo limpia solo (caduca).
-  healthProposed          ProjectHealth?
-  healthProposedReason    String?   @db.Text
-  healthProposedAt        DateTime?
-  healthProposedByRunId   String? // AgentRun del watchdog que lo propuso (trazabilidad)
+  healthProposed               ProjectHealth?
+  healthProposedReason         String?                @db.Text
+  healthProposedAt             DateTime?
+  healthProposedByRunId        String? // AgentRun del watchdog que lo propuso (trazabilidad)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -468,16 +468,16 @@ model Project {
 // parsear Json de todas las filas para eso no escala. La sección `estimacion` del canvas
 // la LEE por ctx — el dato no se duplica (ARCHITECTURE §2.1).
 model DevEstimate {
-  id            String    @id @default(cuid())
-  projectId     String
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  hours         Int? // nullable porque se puede estimar SOLO por fecha
-  estimatedDate DateTime? // nullable porque se puede estimar SOLO por horas
-  note          String?   @db.Text // por qué cambió respecto a la anterior
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hours          Int? // nullable porque se puede estimar SOLO por fecha
+  estimatedDate  DateTime? // nullable porque se puede estimar SOLO por horas
+  note           String?   @db.Text // por qué cambió respecto a la anterior
   // Quién estimó. Texto (no FK a TeamMember) para que el historial sobreviva a la baja
   // de una persona del equipo — el mismo criterio de `Particularidad.createdByEmail`.
   createdByEmail String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   @@index([projectId, createdAt])
 }
@@ -620,92 +620,92 @@ model HandoffSource {
 // no se aplica — para regenerar, el CSE borra explícitamente y vuelve a correr.
 
 model ProjectTimeline {
-  id                          String    @id @default(cuid())
-  projectId                   String    @unique
-  project                     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  anchorStartDate             DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
+  id                           String    @id @default(cuid())
+  projectId                    String    @unique
+  project                      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  anchorStartDate              DateTime? // null hasta que el CSE la fije; cuando exista, define la conversión semanas → fechas
   // Tanda K — cierre FIJADO A MANO por el CSE, mismo criterio que el arranque: null = usar el
   // proyectado (projectedEnd, derivado de anchor+fases). Con valor, GANA sobre el derivado — y
   // si el derivado se recalcula distinto (nueva propuesta, edición de duración), la UI pregunta
   // en vez de pisarlo en silencio (ver lib/timeline/weeks.ts: displayedEnd/closeDateDiverges).
-  closeDateOverride           DateTime?
-  lastEditedByHuman           DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
+  closeDateOverride            DateTime?
+  lastEditedByHuman            DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
   // D.3 staging — el cliente ve SOLO este SNAPSHOT (shape client-safe de readClientTimeline)
   // congelado al "Subir". La vista externa NUNCA lee en vivo: si está publicado y el snapshot
   // es null (timeline pre-D.3), readPublishedClientTimeline hace un backfill perezoso (congela
   // el vivo actual una vez); si no hay timeline, devuelve vacío (fail-closed).
-  publishedSnapshot           Json?
-  generatedByAgentRunId       String? // de qué AgentRun salió la propuesta inicial (trazabilidad)
-  generatedByAgentRun         AgentRun? @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
+  publishedSnapshot            Json?
+  generatedByAgentRunId        String? // de qué AgentRun salió la propuesta inicial (trazabilidad)
+  generatedByAgentRun          AgentRun? @relation(fields: [generatedByAgentRunId], references: [id], onDelete: SetNull)
   // D.1 — cronograma detallado:
-  detailConfirmedAt           DateTime? // gate de la vista cliente: las tareas solo cruzan al kickoff externo si != null
-  detailGeneratedByAgentRunId String? // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
-  detailGeneratedByAgentRun   AgentRun? @relation("TimelineDetailGenerator", fields: [detailGeneratedByAgentRunId], references: [id], onDelete: SetNull)
+  detailConfirmedAt            DateTime? // gate de la vista cliente: las tareas solo cruzan al kickoff externo si != null
+  detailGeneratedByAgentRunId  String? // de qué AgentRun salió el detalle (tareas/tipos) — trazabilidad
+  detailGeneratedByAgentRun    AgentRun? @relation("TimelineDetailGenerator", fields: [detailGeneratedByAgentRunId], references: [id], onDelete: SetNull)
   // Re-generación en proyectos en curso: cuando el agente re-deriva un cronograma y YA existe uno,
   // la propuesta NO se aplica (protege ediciones/progreso) — se guarda acá, reconciliada al shape del
   // PUT (fases con id existente cuando matchean, SIN `tasks` para preservar el detalle), y el canvas
   // la muestra como vista previa aplicable. null = sin propuesta pendiente. Se limpia al aplicar/descartar.
-  pendingProposal             Json?
-  pendingProposalRunId        String? // AgentRun del que salió la propuesta pendiente (trazabilidad)
+  pendingProposal              Json?
+  pendingProposalRunId         String? // AgentRun del que salió la propuesta pendiente (trazabilidad)
   // D.2 — BORRADOR DE AVANCE (hermano de pendingProposal; NO se mezcla). El agente de
   // avance detecta qué fases/tareas están hechas y dónde cae el "hoy", y lo guarda acá
   // SIN tocar status (eso lo confirma el CSE). Shape: { currentPhaseId, asOfSessionId,
   // reasoning, phases:[{id,done}], tasks:[{id,done}] }. Se reemplaza en cada corrida;
   // se limpia al aplicar (timeline/progress/apply) o descartar (DELETE timeline/progress).
-  pendingProgress             Json?
-  pendingProgressRunId        String? // AgentRun del que salió el borrador de avance (trazabilidad)
+  pendingProgress              Json?
+  pendingProgressRunId         String? // AgentRun del que salió el borrador de avance (trazabilidad)
   // Particularidades — BORRADOR (hermano de pendingProgress, NO se mezcla). El agente de avance
   // propone desviaciones curadas (atraso/solicitud/compromiso) del transcript; el CSE acepta ítem
   // por ítem en el banner y recién ahí se crean las filas Particularidad. Se limpia al aplicar
   // (timeline/particularidades/apply) o descartar. Shape: { reasoning, items:[{kind,party,title,detail,weeksImpact}] }.
-  pendingParticularidades     Json?
+  pendingParticularidades      Json?
   pendingParticularidadesRunId String? // AgentRun del que salió el borrador de particularidades
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
-  phases          TimelinePhase[]
-  changes         TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
-  baselines       TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
+  phases           TimelinePhase[]
+  changes          TimelineChange[] // #4 — historial de ediciones (razón + snapshot) para D.3
+  baselines        TimelineBaseline[] // D.3 — baselines "vendidos" congelados al publicar (versionados)
   particularidades Particularidad[] // desviaciones curadas (atribución cliente/Smarteam), cara al cliente
 
   @@index([projectId])
 }
 
 model TimelinePhase {
-  id              String                @id @default(cuid())
-  timelineId      String
-  timeline        ProjectTimeline       @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  name            String // "Kick-off", "Arquitectura", etc.
-  order           Int // 0-indexed, posición en la secuencia
-  durationWeeks   Int                   @default(1) // 1+
+  id                   String                @id @default(cuid())
+  timelineId           String
+  timeline             ProjectTimeline       @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  name                 String // "Kick-off", "Arquitectura", etc.
+  order                Int // 0-indexed, posición en la secuencia
+  durationWeeks        Int                   @default(1) // 1+
   // Inicio EXPLÍCITO (offset 0-based desde anchorStartDate). null = contigua tras la fase anterior
   // (comportamiento por defecto). Habilita fases EN PARALELO (dos con el mismo inicio se solapan):
   // típico, una integración/desarrollo que corre en paralelo a la implementación del hub.
-  startWeek       Int?
-  sessionCount    Int? // opcional — algunas fases no son por sesiones
-  notes           String?               @db.Text // texto libre opcional (contexto editable)
-  activityType    TimelineActivityType? // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
-  source          TimelinePhaseSource   @default(AGENT)
+  startWeek            Int?
+  sessionCount         Int? // opcional — algunas fases no son por sesiones
+  notes                String?               @db.Text // texto libre opcional (contexto editable)
+  activityType         TimelineActivityType? // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
+  source               TimelinePhaseSource   @default(AGENT)
   // El agente del handoff marca true cuando ESTIMÓ la fase/duración sin dato real en ventas
   // (badge "estimada" + banner). Se limpia cuando el CSE edita la fase (PUT). Interno — NO cruza al cliente.
-  needsValidation Boolean               @default(false)
+  needsValidation      Boolean               @default(false)
   // D.2 — avance a nivel fase (reusa el enum de tarea). DONE = fase completada;
   // IN_PROGRESS = la fase en curso (el "hoy"); PENDING = por delante. Lo escribe SOLO
   // el CSE (mismo invariante que TimelineTask.status); el agente lo PROPONE en pendingProgress.
-  status          TimelineTaskStatus    @default(PENDING)
+  status               TimelineTaskStatus    @default(PENDING)
   // Procedencia del ESTADO actual (ortogonal a `source`, que describe el CONTENIDO): HUMAN = lo
   // resolvió el CSE a mano; AI_CONFIRMED = el detector de avance lo detectó y el CSE lo confirmó en
   // el banner. Hace explícito el invariante que antes era implícito ("status != PENDING ⟹ humano").
-  statusSource        TimelineStatusSource @default(HUMAN)
+  statusSource         TimelineStatusSource  @default(HUMAN)
   statusChangedByEmail String?
   statusChangedAt      DateTime?
   // D.3 fundación — fechas REALES de ejecución, MONÓTONAS (no se auto-borran):
   // actualStart la 1ra vez que va a IN_PROGRESS/DONE; actualEnd al DONE. Volver a
   // PENDING/IN_PROGRESS NO las borra — el status manda para "¿hecho hoy?", las fechas son histórico.
-  actualStart     DateTime?
-  actualEnd       DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  actualStart          DateTime?
+  actualEnd            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   tasks            TimelineTask[]
   particularidades Particularidad[] // desviaciones ancladas a esta fase (opcional; SetNull al borrar la fase)
@@ -720,16 +720,16 @@ model TimelinePhase {
 // solo crea PENDING → todo status != PENDING es humano por definición. `statusSource`
 // hace ese invariante EXPLÍCITO y auditable por-tarea (ver TimelinePhase.statusSource).
 model TimelineTask {
-  id                String              @id @default(cuid())
-  phaseId           String
-  phase             TimelinePhase       @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  title             String
-  weekIndex         Int // 0-indexed, relativo a la fase
-  order             Int                 @default(0) // orden dentro de la semana
-  status            TimelineTaskStatus  @default(PENDING)
+  id                   String               @id @default(cuid())
+  phaseId              String
+  phase                TimelinePhase        @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  title                String
+  weekIndex            Int // 0-indexed, relativo a la fase
+  order                Int                  @default(0) // orden dentro de la semana
+  status               TimelineTaskStatus   @default(PENDING)
   // Procedencia del ESTADO (ver TimelinePhase.statusSource): HUMAN = check manual del CSE;
   // AI_CONFIRMED = avance detectado por IA y confirmado por el CSE en el banner.
-  statusSource        TimelineStatusSource @default(HUMAN)
+  statusSource         TimelineStatusSource @default(HUMAN)
   statusChangedByEmail String?
   statusChangedAt      DateTime?
   // #4 — override manual de fechas por tarea. INTENCIÓN: cuando estén seteadas deben
@@ -738,33 +738,33 @@ model TimelineTask {
   // drawer (chip "manual"). ESTADO: se PERSISTEN, pero el consumo en el render (Gantt
   // interno + vista externa) está PENDIENTE — hoy ningún render prefiere el override sobre
   // la fecha derivada. null = derivar (default).
-  startDateOverride DateTime?
-  dueDateOverride   DateTime?
+  startDateOverride    DateTime?
+  dueDateOverride      DateTime?
   // D.3 fundación — fechas REALES de ejecución (ver TimelinePhase).
-  actualStart       DateTime?
-  actualEnd         DateTime?
-  notes             String?             @db.Text
-  needsValidation   Boolean             @default(false) // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
+  actualStart          DateTime?
+  actualEnd            DateTime?
+  notes                String?              @db.Text
+  needsValidation      Boolean              @default(false) // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.
-  party             TaskParty?
+  party                TaskParty?
   // ¿la tarea es una SESIÓN (reunión con el cliente) o una TASK (acción/entregable)?
   // Nullable = sin tipar (efectivo = TASK). Cruza al cronograma compartible SOLO si es SESSION.
   // Mapeo a futuro (NO se sincroniza hoy): SESSION → HubSpot Meeting (0-47); TASK → HubSpot Task (0-27).
-  type              TimelineTaskType?
-  source            TimelinePhaseSource @default(AGENT) // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
+  type                 TimelineTaskType?
+  source               TimelinePhaseSource  @default(AGENT) // reuso consciente del enum (mismo ciclo AGENT→MODIFIED/HUMAN); renombrarlo = recrear tipo en PG por cero ganancia
   // ── Tarea nacida de un COMPROMISO detectado en sesión ──────────────────────────
   // Fecha que se ACORDÓ en la sesión. Es dato CRUDO, no un segundo criterio de atraso: el
   // vencimiento lo sigue calculando el predicado único (weekIndex + anchor → isOverdueByDate).
   // Sirve para el texto ("se comprometió para el 2 de junio") y para proponer las semanas cuando
   // vence. Distinta de dueDateOverride, que es un override MANUAL del CSE.
-  committedDueDate  DateTime?
+  committedDueDate     DateTime?
   // Huella del hecho que la originó (misma que Particularidad.dedupeKey). Es lo que evita que el
   // agente re-cree la misma tarea en cada corrida — corre por sesión, 26 veces en un proyecto real.
-  originFingerprint String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  originFingerprint    String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   @@index([phaseId, weekIndex, order])
   @@index([originFingerprint]) // NO único a propósito, igual que Particularidad.dedupeKey
@@ -805,30 +805,30 @@ enum TimelineTaskType {
 // Scoped al timeline (mismo cascade/lifecycle que TimelineChange/TimelineBaseline). El CSE la
 // crea a mano o acepta una propuesta del agente; solo cruza al cliente si visibleExternal=true.
 model Particularidad {
-  id              String               @id @default(cuid())
-  timelineId      String
-  timeline        ProjectTimeline      @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  phaseId         String? // ancla opcional a una fase; SetNull para no perder la particularidad al borrar la fase
-  phase           TimelinePhase?       @relation(fields: [phaseId], references: [id], onDelete: SetNull)
-  kind            ParticularidadKind
-  party           TaskParty // reusa el enum de tarea (CLIENTE/SMARTEAM/AMBOS/DEV) — misma atribución/chips
-  title           String // corto, en lenguaje cliente
-  detail          String?              @db.Text
-  sourceQuote     String?              @db.Text // cita interna que respalda el hecho ([fecha] «fragmento»); NUNCA cruza al cliente
-  weeksImpact     Int? // semanas de corrimiento que causó; null si no movió fechas
-  visibleExternal Boolean              @default(false) // gate por-registro; se respeta en el chokepoint (como SUSPENDED)
-  source          ParticularidadSource @default(HUMAN)
-  needsValidation Boolean              @default(false) // true mientras es propuesta del agente sin confirmar
-  createdByEmail  String? // quién la creó/confirmó (del guard)
-  occurredAt      DateTime             @default(now()) // cuándo ocurrió la desviación (editable; default = ahora)
+  id               String               @id @default(cuid())
+  timelineId       String
+  timeline         ProjectTimeline      @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  phaseId          String? // ancla opcional a una fase; SetNull para no perder la particularidad al borrar la fase
+  phase            TimelinePhase?       @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  kind             ParticularidadKind
+  party            TaskParty // reusa el enum de tarea (CLIENTE/SMARTEAM/AMBOS/DEV) — misma atribución/chips
+  title            String // corto, en lenguaje cliente
+  detail           String?              @db.Text
+  sourceQuote      String?              @db.Text // cita interna que respalda el hecho ([fecha] «fragmento»); NUNCA cruza al cliente
+  weeksImpact      Int? // semanas de corrimiento que causó; null si no movió fechas
+  visibleExternal  Boolean              @default(false) // gate por-registro; se respeta en el chokepoint (como SUSPENDED)
+  source           ParticularidadSource @default(HUMAN)
+  needsValidation  Boolean              @default(false) // true mientras es propuesta del agente sin confirmar
+  createdByEmail   String? // quién la creó/confirmó (del guard)
+  occurredAt       DateTime             @default(now()) // cuándo ocurrió la desviación (editable; default = ahora)
   // IDENTIDAD DEL HECHO (espeja CsAlert). El agente re-deriva las particularidades desde los MISMOS
   // transcripts en cada corrida, con redacción apenas distinta; sin identidad, aceptar dos borradores
   // creaba dos filas del mismo hecho y el corrimiento se contaba dos veces (Wherex: 13 semanas
   // mostradas, 8 reales). `dedupeKey` = timelineId:kind:huella — la huella la emite el agente y la
   // reusa entre corridas. Index NO único A PROPÓSITO: una fila que el CSE borró puede volver a nacer.
-  dedupeKey       String? // null = creada a mano por el CSE (sin identidad de agente)
-  occurrences     Int                  @default(1) // veces que el agente re-detectó el MISMO hecho
-  lastDetectedAt  DateTime             @default(now())
+  dedupeKey        String? // null = creada a mano por el CSE (sin identidad de agente)
+  occurrences      Int                  @default(1) // veces que el agente re-detectó el MISMO hecho
+  lastDetectedAt   DateTime             @default(now())
   // ── CONVERSIÓN EN TRABAJO ──────────────────────────────────────────────────────
   // Una particularidad es HISTORIA (qué pasó y cuánto movió el plan). Cuando el hecho detectado es
   // en realidad trabajo que alguien debe —un compromiso, un insumo del cliente— el CSE lo convierte
@@ -839,8 +839,8 @@ model Particularidad {
   convertedTaskId  String? // null = nadie está persiguiendo este hecho
   convertedAt      DateTime?
   convertedByEmail String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([timelineId, occurredAt])
   @@index([timelineId, visibleExternal])
@@ -989,9 +989,9 @@ model ProjectCanvas {
   disabledAt     DateTime?
   disabledBy     String? // correo, no FK: el rastro sobrevive a que la persona salga del equipo
   disabledReason String?
-  sections       Json          @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  sections       Json      @default("[]") // Array de { key, label, brief?, previousBrief? } — brief = guía del agente por sección (BC), acá y no en columna para sobrevivir db push entre las 2 PCs (ver lib/business-cases/section-briefs.ts)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // D.3 staging — el cliente ve el SNAPSHOT publicado; el contenido vivo es borrador hasta "Subir".
   // publishedSnapshot = foto client-safe al subir; contentUpdatedAt se toca al editar/confirmar bloques
@@ -1002,9 +1002,6 @@ model ProjectCanvas {
 
   cards          ClientContextCard[]
   canvasSections CanvasSection[]
-
-  @@index([projectId])
-  @@index([businessCaseId])
   // OJO — en la base hay además un índice ÚNICO PARCIAL que Prisma no sabe declarar:
   //   ProjectCanvas_projectId_slug_key ON ("projectId", slug)
   //   WHERE "projectId" IS NOT NULL AND slug IS NOT NULL
@@ -1012,6 +1009,9 @@ model ProjectCanvas {
   // la misma pieza en un proyecto sin bloquear los canvases custom (slug null) ni los
   // del Business Case (projectId null). No aparece acá: si alguien lee solo el schema
   // va a creer que ProjectCanvas no tiene unique, que es justo la conclusión peligrosa.
+
+  @@index([projectId])
+  @@index([businessCaseId])
 }
 
 // Sección de un canvas no-default (entidad de primer nivel)
@@ -1269,28 +1269,28 @@ model Agent {
 }
 
 model AgentRun {
-  id             String         @id @default(cuid())
-  agentId        String?
-  agent          Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  id               String         @id @default(cuid())
+  agentId          String?
+  agent            Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
   // nullable porque los reportes de cartera agregada (Cobranza fase 3) no
   // pertenecen a UN cliente — todos los demás writers siguen seteándolo.
-  clientId       String?
-  client         Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectId      String?
-  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  businessCaseId String?
-  businessCase   BusinessCase?  @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
-  stage          Int?
-  step           Int?
-  stepLabel      String? // nombre legible de la subetapa (ej. "Análisis inicial")
-  sectionLabel   String? // sección dentro de la subetapa (ej. "Contexto del cliente")
-  serviceType    String? // tipo de servicio al momento de la ejecución
-  status         AgentRunStatus @default(PENDING)
+  clientId         String?
+  client           Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  businessCaseId   String?
+  businessCase     BusinessCase?  @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  stage            Int?
+  step             Int?
+  stepLabel        String? // nombre legible de la subetapa (ej. "Análisis inicial")
+  sectionLabel     String? // sección dentro de la subetapa (ej. "Contexto del cliente")
+  serviceType      String? // tipo de servicio al momento de la ejecución
+  status           AgentRunStatus @default(PENDING)
   // Fase actual legible para el polling de UI en operaciones largas
   // ("Leyendo contexto…", "Generando secciones…"). Aditivo, opcional — los
   // flujos que no la escriben siguen igual (F5.2 del plan de mejoras).
-  currentPhase   String?
-  output         String?        @db.Text // JSON raw de Claude (backup)
+  currentPhase     String?
+  output           String?        @db.Text // JSON raw de Claude (backup)
   // Quién apretó el botón (email del TeamMember). Lo usa el centro de corridas para
   // avisarte SOLO de lo tuyo cuando termina mientras navegás por otra parte de Nexus.
   // nullable a propósito: las corridas de SISTEMA (watchdog CS, post-proceso de
@@ -1773,28 +1773,37 @@ model KnowledgeEmbedding {
 // ── FirefliesSession — caché local de sesiones de Fireflies y Google Meet ─────
 
 model FirefliesSession {
-  id               String    @id
-  title            String
-  date             DateTime
-  duration         Float     @default(0)
-  participants     String[]
-  summary          Json?
-  transcript       String?   @db.Text
-  enrichedAt       DateTime? // cuándo se trajo transcript/summary (null = pendiente)
+  id                 String    @id
+  title              String
+  date               DateTime
+  duration           Float     @default(0)
+  participants       String[]
+  summary            Json?
+  transcript         String?   @db.Text
+  enrichedAt         DateTime? // cuándo se trajo transcript/summary (null = pendiente)
   // Procedencia del enriquecimiento (2026-08-08). Un fallo de lectura YA NO sella la fila:
   // attempts cuenta los fallos (0 = sano; 1-4 = en cola del job de reintento; 5 = sellado con
   // procedencia) y error guarda el último {error,status,at} o el diagnóstico del parser
   // ({tabsVistos,motivo}) cuando la lectura fue exitosa sin transcript.
-  enrichAttempts   Int       @default(0)
-  enrichError      String?
-  syncedAt         DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  source           String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)
-  googleDocId      String? // ID del Google Doc de la reunión (Meet)
-  googleEventId    String? // ID del evento de Google Calendar (Meet)
-  organizerEmail   String? // Email del organizador (para impersonación en enriquecimiento)
-  manualClientId   String? // override manual del matching automático de cliente
-  resolvedClientId String? // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
+  enrichAttempts     Int       @default(0)
+  enrichError        String?
+  syncedAt           DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  source             String    @default("google_meet") // "google_meet" (Fireflies eliminado; "fireflies" solo en filas históricas)
+  googleDocId        String? // ID del Google Doc de la reunión (Meet)
+  googleEventId      String? // ID del evento de Google Calendar (Meet)
+  organizerEmail     String? // Email del organizador (para impersonación en enriquecimiento)
+  manualClientId     String? // override manual del matching automático de cliente
+  // ── QUIÉN puso ese override, y si fue una decisión o un efecto secundario ──────
+  // `manualClientId` lo escriben DOS gestos que se ven idénticos en la base: alguien eligiendo
+  // el cliente a mano, y la ADOPCIÓN automática al agregar una reunión huérfana a un proyecto.
+  // Sin distinguirlos no se puede deshacer lo segundo sin pisar lo primero — y en un demo una
+  // reunión desapareció para siempre por exactamente eso. NUNCA se backfillea: afirmar una
+  // procedencia que no se conoce es peor que no saberla, así que `null` = legacy = humano.
+  manualClientSource String? // 'humano' | 'adopcion' | null (legacy)
+  manualClientBy     String? // email de quien lo puso
+  manualClientAt     DateTime?
+  resolvedClientId   String? // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
 
   // F5: sub-topics detectados por IA (lead-scoring, workflow-builder, etc.).
   // Lista canónica viva en lib/sessions/topic-vocabulary.ts y se sesga por
@@ -2067,17 +2076,17 @@ enum MarketingRunStatus {
 
 // Config singleton del módulo (id="marketing"): voz de marca + lock del cron.
 model MarketingSettings {
-  id              String    @id @default("marketing")
-  brandVoice      String    @db.Text // voz/posicionamiento (markdown) — editable en /marketing/voz
+  id               String    @id @default("marketing")
+  brandVoice       String    @db.Text // voz/posicionamiento (markdown) — editable en /marketing/voz
   // Objetivo de piezas por tanda de generación (el mini-form de /marketing/generacion los
   // escribe; buildGenerationInput y el cron los leen — fuente única). Objetivo, no mínimo:
   // el prompt prioriza calidad. 9+6=15 ≈ el ~60/40 histórico.
-  genEmpresaTarget Int      @default(9) // piezas para la PÁGINA de empresa (postType=EMPRESA)
-  genPersonaTarget Int      @default(6) // piezas para PERFIL personal (postType=PERSONA)
-  lastCronRunAt   DateTime? // nullable porque nunca corrió — display en /contenido
-  lastCronDateKey String? // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  genEmpresaTarget Int       @default(9) // piezas para la PÁGINA de empresa (postType=EMPRESA)
+  genPersonaTarget Int       @default(6) // piezas para PERFIL personal (postType=PERSONA)
+  lastCronRunAt    DateTime? // nullable porque nunca corrió — display en /contenido
+  lastCronDateKey  String? // nullable ídem — "YYYY-MM-DD" (día CR) del último disparo; claim atómico anti-doble-fire
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 // Ítem del ICP (migrado del hardcode de app/icp/ICPSection.tsx). 1 fila = 1 bullet.
@@ -2195,15 +2204,15 @@ model MarketingRun {
 // Idea de contenido generada — salida NO-CRUD: se revisa y se PODA (DELETE).
 // Registro estructurado por campo para migrar a HubSpot copiando campo a campo.
 model ContentIdea {
-  id                  String         @id @default(cuid())
+  id                  String                 @id @default(cuid())
   runId               String? // nullable porque la idea sobrevive si se borra la corrida
-  run                 MarketingRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+  run                 MarketingRun?          @relation(fields: [runId], references: [id], onDelete: SetNull)
   pillarId            String? // nullable porque puede referir a un pilar SUGERIDO aún no aprobado
-  pillar              ContentPillar? @relation(fields: [pillarId], references: [id], onDelete: SetNull)
+  pillar              ContentPillar?         @relation(fields: [pillarId], references: [id], onDelete: SetNull)
   suggestedPillarName String? // nullable — nombre del pilar NUEVO propuesto; se linkea al aprobar
   title               String
-  copy                String         @db.Text // copy listo para red social
-  imageConcept        String         @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
+  copy                String                 @db.Text // copy listo para red social
+  imageConcept        String                 @db.Text // descripción TEXTUAL del concepto de imagen (no se genera)
   postType            MarketingPostType      @default(EMPRESA) // empresa (escueto) | persona (storytelling)
   journeyStage        MarketingJourneyStage? // nullable porque solo aplica a posts de EMPRESA (guía semanal); los de PERSONA no tienen etapa
   acceptedByEmail     String? // nullable porque solo se setea al aceptar — email del guard (patrón Cobro); un solo uso por publicación
@@ -2212,9 +2221,9 @@ model ContentIdea {
   usedAt              DateTime? // nullable; set = "aprobada" (lista para publicar). Estado derivado, ver lib/marketing/schema.ts ideaState()
   discardedAt         DateTime? // nullable; set = "descartada" (rechazada, reversible). Gana sobre selected/used → reabrir vuelve al estado previo
   hubspotDraftAt      DateTime? // nullable; set = ya se envió a HubSpot como borrador social (API broadcast). Ver lib/hubspot/social-broadcast.ts
-  hubspotDraftGuids   String[]       @default([]) // broadcastGuid(s) de los borradores creados en HubSpot (uno por canal)
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @default(now()) @updatedAt // rastrea la edición manual/IA del copy (default cubre filas existentes)
+  hubspotDraftGuids   String[]               @default([]) // broadcastGuid(s) de los borradores creados en HubSpot (uno por canal)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @default(now()) @updatedAt // rastrea la edición manual/IA del copy (default cubre filas existentes)
 
   sources ContentIdeaSource[]
 
@@ -2439,12 +2448,12 @@ model ClientCsSignals {
 // ⚠ El scope del objeto NO está autorizado hoy (403) — el sync degrada con supported:false
 // y todo arranca solo al re-autorizar la app OAuth (contrato ticketsSupported).
 model ClientPartnerSnapshot {
-  id                     String    @id @default(cuid())
-  hubspotPartnerClientId String    @unique // id del record partner_clients en HubSpot
-  clientId               String?   @unique // null = huérfano transitorio (pre-match)
-  client                 Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  fetchedAt              DateTime  @default(now())
-  fetchStatus            String    @default("ok") // ok | partial
+  id                     String   @id @default(cuid())
+  hubspotPartnerClientId String   @unique // id del record partner_clients en HubSpot
+  clientId               String?  @unique // null = huérfano transitorio (pre-match)
+  client                 Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  fetchedAt              DateTime @default(now())
+  fetchStatus            String   @default("ok") // ok | partial
   properties             Json // crudo completo del record
 
   domain                 String?
@@ -2496,11 +2505,11 @@ model ClientPartnerSnapshot {
 // campo de tendencia que reporta HubSpot. CONFIDENCIAL (términos de partner):
 // solo superficies internas CSL/SUPER_ADMIN, jamás vistas externas del cliente.
 model PartnerUsageSnapshot {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   hubspotPartnerClientId String // record de partner_clients (sin FK dura)
   clientId               String? // denormalizado al momento de la captura
   weekKey                String // "YYYY-Www" (semana ISO)
-  capturedAt             DateTime @default(now())
+  capturedAt             DateTime  @default(now())
   uusScore               Float?
   activationScore        Float?
   toolUsageScore         Float?
@@ -2538,13 +2547,13 @@ model CsAccountBrief {
 // Config singleton del módulo CS (id="cs"). watchdogEnabled = kill-switch en DB
 // (apagar el watchdog sin redeploy). El estado de cron vive en CronJobState.
 model CsSettings {
-  id              String   @id @default("cs")
-  watchdogEnabled Boolean  @default(true)
+  id                     String   @id @default("cs")
+  watchdogEnabled        Boolean  @default(true)
   // Ciclo de vida — umbral UUS (0-100) para dar por cumplida VALIDACION_USO (gate
   // USO_VALIDADO). Política global del módulo, como watchdogEnabled.
-  uusValidationThreshold Float @default(60)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  uusValidationThreshold Float    @default(60)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 // Estado genérico de jobs del scheduler (lib/jobs) — claim atómico anti-doble-fire
@@ -2699,45 +2708,45 @@ model CuentaFinanciera {
   clientId String @unique
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  tipo          CobranzaTipoCuenta   @default(NACIONAL)
-  viaCobro      CobranzaViaCobro     @default(ODOO)
-  moneda        CobranzaMoneda       @default(CRC)
+  tipo                     CobranzaTipoCuenta   @default(NACIONAL)
+  viaCobro                 CobranzaViaCobro     @default(ODOO)
+  moneda                   CobranzaMoneda       @default(CRC)
   // DEPRECATED — reemplazado por creditoDias (Tanda B, 2026-07). Nunca alimentó
   // ningún cálculo del motor (0 lectores en engine.ts). Se mantiene escribible
   // (importador, alta manual) para no romper esos caminos sin necesidad; sacado
   // de los 2 formularios de configuración de cuenta.
-  terminosPago  CobranzaTerminosPago @default(ANTICIPADO)
-  diaCobroAncla Int? // nullable porque el día del ciclo puede no estar definido aún (ej. 15, 16)
+  terminosPago             CobranzaTerminosPago @default(ANTICIPADO)
+  diaCobroAncla            Int? // nullable porque el día del ciclo puede no estar definido aún (ej. 15, 16)
   // nullable → cae a DEFAULT_CREDITO_DIAS (engine.ts) cuando la cuenta no trae el
   // suyo. Días de crédito otorgados al cliente desde que se emite la factura
   // (Reloj 2 del semáforo — Tanda B). Normal 15, Colby 90.
-  creditoDias   Int?
-  estadoCuenta  CobranzaEstadoCuenta @default(PENDIENTE_DATOS)
+  creditoDias              Int?
+  estadoCuenta             CobranzaEstadoCuenta @default(PENDIENTE_DATOS)
   // Caso Colby: cuenta fuera del estándar — oculta del panel y del cronograma automático.
-  excluidaOperacion        Boolean @default(false)
+  excluidaOperacion        Boolean              @default(false)
   // Licencias de terceros (ej. Hotspot): el cliente paga directo al tercero — esto
   // documenta qué explicarle. nullable porque solo aplica a esos casos.
   responsableCobroTerceros String?
-  notas                    String? @db.Text
+  notas                    String?              @db.Text
   // Curaduría manual del estado (idioma healthStatusOverride{By,At}): quién/cuándo
   // cambió estadoCuenta a mano por última vez (email del guard).
-  estadoActualizadoPor String?
-  estadoActualizadoEn  DateTime?
+  estadoActualizadoPor     String?
+  estadoActualizadoEn      DateTime?
   // Procedencia (regla fuente + id_externo — upsert idempotente del importador).
   // null = cuenta configurada a mano desde el panel antes de esta regla.
-  fuente          String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
-  fuenteIdExterno String?
+  fuente                   String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
+  fuenteIdExterno          String?
   // Correo al que se le cobra (destino del mailto del borrador de cobro).
   // nullable porque el import puede no traerlo — se completa a mano.
-  correoCobro     String?
+  correoCobro              String?
   // Identidad legal (razón social + cédula jurídica), distinta del nombre
   // comercial (Client.name). nullable porque no toda cuenta tiene esta
   // identidad legal capturada aún — se completa a mano o vía el importador
   // del histórico. Sin @unique en cedulaJuridica: un mismo holding puede
   // facturar bajo varios nombres comerciales con la misma cédula (ver
   // DECISIONS.md).
-  razonSocial     String?
-  cedulaJuridica  String?
+  razonSocial              String?
+  cedulaJuridica           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2759,13 +2768,13 @@ model ServicioContratado {
   cuentaId String
   cuenta   CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
 
-  tipoServicio CobranzaTipoServicio
-  modalidad    CobranzaModalidad
+  tipoServicio           CobranzaTipoServicio
+  modalidad              CobranzaModalidad
   // Dinero: primer uso de Decimal en el repo (a propósito — Float acumula error en
   // montos). Prisma.Decimal NO cruza a Client Components: se serializa a number en
   // lib/cobranza/queries.ts (único punto). Para SUSCRIPCION = monto MENSUAL.
-  montoTotal Decimal        @db.Decimal(12, 2)
-  moneda     CobranzaMoneda
+  montoTotal             Decimal                @db.Decimal(12, 2)
+  moneda                 CobranzaMoneda
   // COPIA EDITABLE del ancla: default = ProjectTimeline.anchorStartDate del proyecto
   // al configurar (se LEE una vez, no se sincroniza). Si el CSE cambia el arranque
   // después, la divergencia la detecta la alerta ARRANQUE_CAMBIADO — nunca se
@@ -2773,7 +2782,7 @@ model ServicioContratado {
   fechaInicioFacturacion DateTime?
   duracionMeses          Int? // nullable porque las suscripciones abiertas no tienen fin
   projectId              String? // nullable porque puede haber servicios sin proyecto en Nexus
-  project                Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project                Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
   estado                 CobranzaEstadoServicio @default(ACTIVO)
   descripcion            String?
 
@@ -2796,10 +2805,10 @@ model PlanDePago {
   servicio   ServicioContratado @relation(fields: [servicioId], references: [id], onDelete: Cascade)
 
   template  CobranzaPlanTemplate
-  origen    CobranzaPlanOrigen @default(MANUAL)
+  origen    CobranzaPlanOrigen   @default(MANUAL)
   numCuotas Int? // nullable porque SUSCRIPCION no tiene N fijo
-  activo    Boolean            @default(true)
-  notas     String?            @db.Text
+  activo    Boolean              @default(true)
+  notas     String?              @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2814,13 +2823,13 @@ model PlanDePago {
 // La definición de cada cuota del plan (para PERSONALIZADO; las plantillas simples
 // las expanden en el engine sin filas explícitas salvo la entrada de ENTRADA_Y_RESTO).
 model CuotaPlan {
-  id          String     @id @default(cuid())
+  id          String            @id @default(cuid())
   planId      String
-  plan        PlanDePago @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan        PlanDePago        @relation(fields: [planId], references: [id], onDelete: Cascade)
   orden       Int // 1-based
   base        CobranzaCuotaBase
-  valor       Decimal    @db.Decimal(12, 2) // 0-100 si PORCENTAJE; monto absoluto si MONTO_FIJO
-  offsetMeses Int        @default(0) // 0 = mes de arranque
+  valor       Decimal           @db.Decimal(12, 2) // 0-100 si PORCENTAJE; monto absoluto si MONTO_FIJO
+  offsetMeses Int               @default(0) // 0 = mes de arranque
   descripcion String?
 
   @@unique([planId, orden])
@@ -2843,30 +2852,30 @@ model Cobro {
   // colisionan en el unique compuesto → los manuales conviven sin límite y los del
   // engine quedan protegidos contra duplicación (idempotencia). NO "arreglar" con
   // un unique parcial.
-  numCuota        Int?
-  periodo         String // "YYYY-MM" (mes calendario UTC que cubre)
-  fechaProgramada DateTime // fecha de CALENDARIO como instante UTC (patrón anchorStartDate)
-  monto           Decimal  @db.Decimal(12, 2)
-  moneda          CobranzaMoneda
-  estado          CobranzaEstadoCobro @default(PROGRAMADO)
-  origen          CobranzaOrigenCobro @default(PLAN)
-  fechaEmision    DateTime? // cuándo se emitió la factura (en Odoo/Mercury)
+  numCuota          Int?
+  periodo           String // "YYYY-MM" (mes calendario UTC que cubre)
+  fechaProgramada   DateTime // fecha de CALENDARIO como instante UTC (patrón anchorStartDate)
+  monto             Decimal             @db.Decimal(12, 2)
+  moneda            CobranzaMoneda
+  estado            CobranzaEstadoCobro @default(PROGRAMADO)
+  origen            CobranzaOrigenCobro @default(PLAN)
+  fechaEmision      DateTime? // cuándo se emitió la factura (en Odoo/Mercury)
   // Auditoría de "Marcar facturado" (Tanda B) — mismo patrón que confirmadoPor/
   // confirmadoEn: se setea cuando fechaEmision pasa de null a no-null, se limpia
   // al revertir. nullable porque solo tiene valor mientras fechaEmision existe.
-  facturadoPor    String?
-  facturadoEn     DateTime?
-  fechaCobro      DateTime? // cuándo entró la plata
-  confirmadoPor   String? // email del guard que confirmó el estado con consecuencia monetaria
-  confirmadoEn    DateTime?
+  facturadoPor      String?
+  facturadoEn       DateTime?
+  fechaCobro        DateTime? // cuándo entró la plata
+  confirmadoPor     String? // email del guard que confirmó el estado con consecuencia monetaria
+  confirmadoEn      DateTime?
   // ReconciliationPort v1: referencia externa OPCIONAL al confirmar COBRADO (id de
   // transacción Mercury / factura Odoo). Solo metadata — la conciliación real vive allá.
   referenciaExterna String?
   // Promesa de pago: calla COBRO_VENCIDO y COBRO_PROXIMO de ESTE cobro hasta la
   // fecha (semáforos y métricas NO cambian — honestidad); pasada sin COBRADO →
   // alerta PROMESA_INCUMPLIDA. nullable porque la mayoría no tiene promesa.
-  promesaPago     DateTime?
-  notas           String? @db.Text
+  promesaPago       DateTime?
+  notas             String?             @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2887,7 +2896,7 @@ model AlertaCobro {
 
   tipo      CobranzaTipoAlerta
   urgencia  CobranzaUrgencia
-  mensaje   String @db.Text
+  mensaje   String             @db.Text
   evidencia Json? // { cobroIds?, servicioId?, fechas? } para drill desde la UI
 
   // Index no-unique a propósito: una alerta RESUELTA vieja puede reaparecer como fila nueva.
@@ -2896,11 +2905,11 @@ model AlertaCobro {
   firstDetectedAt DateTime @default(now())
   lastDetectedAt  DateTime @default(now())
 
-  estado      CobranzaAlertaEstado @default(ABIERTA)
-  vistaEn     DateTime?
-  vistaPor    String? // email del guard
-  resueltaEn  DateTime?
-  resueltaPor String? // email del guard
+  estado        CobranzaAlertaEstado @default(ABIERTA)
+  vistaEn       DateTime?
+  vistaPor      String? // email del guard
+  resueltaEn    DateTime?
+  resueltaPor   String? // email del guard
   // Snooze manual (o auto-snooze al registrar promesa de pago): loadAlertas la
   // excluye hasta esta fecha; el merge del upsert NO la resucita. No cambia estado.
   posponerHasta DateTime?
@@ -2937,14 +2946,14 @@ model SnapshotCartera {
 // Registro de gestión de la cuenta (llamadas, correos, notas de la persona +
 // actualizaciones automáticas del sistema como los resúmenes de materialización).
 model BitacoraCobro {
-  id           String           @id @default(cuid())
+  id           String            @id @default(cuid())
   cuentaId     String
-  cuenta       CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cuenta       CuentaFinanciera  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
   cobroId      String? // nullable porque hay entradas a nivel cuenta
   tipo         BitacoraCobroTipo
-  contenido    String  @db.Text
+  contenido    String            @db.Text
   usuarioEmail String? // nullable porque ACTUALIZACION_IA no tiene usuario
-  createdAt    DateTime @default(now())
+  createdAt    DateTime          @default(now())
 
   @@index([cuentaId, createdAt])
 }
@@ -3092,7 +3101,7 @@ enum CostoMovimientoTipo {
 // ⚠ PRIVACIDAD: lleva montos de SALARIOS — mismas 3 capas + RLS deny que
 // CostoRecurrente. JAMÁS se expone fuera de las superficies SUPER_ADMIN.
 model CostoMovimiento {
-  id String @id @default(cuid())
+  id      String           @id @default(cuid())
   // nullable porque la historia SOBREVIVE al hard delete del costo (SetNull).
   costoId String?
   costo   CostoRecurrente? @relation("MovimientosDeCosto", fields: [costoId], references: [id], onDelete: SetNull)
@@ -3100,17 +3109,17 @@ model CostoMovimiento {
   tipo CostoMovimientoTipo
 
   // Snapshot del costo al momento del movimiento (autosuficiente).
-  nombre     String
-  categoria  CobranzaCategoriaCosto
-  moneda     CobranzaMoneda
-  frecuencia CobranzaFrecuenciaCosto
-  monto      Decimal                 @db.Decimal(12, 2) // monto DESPUÉS del movimiento, en su frecuencia
+  nombre        String
+  categoria     CobranzaCategoriaCosto
+  moneda        CobranzaMoneda
+  frecuencia    CobranzaFrecuenciaCosto
+  monto         Decimal                 @db.Decimal(12, 2) // monto DESPUÉS del movimiento, en su frecuencia
   // nullable porque solo CAMBIO_MONTO lo lleva.
-  montoAnterior Decimal? @db.Decimal(12, 2)
+  montoAnterior Decimal?                @db.Decimal(12, 2)
 
   fechaEfectiva DateTime @db.Date // cuándo ocurrió de verdad (retroactiva permitida)
   usuarioEmail  String? // nullable por simetría con BitacoraCobro (hoy siempre viene del guard)
-  notas         String? @db.Text // motivo libre ("renuncia", "desvinculación", "contratación")
+  notas         String?  @db.Text // motivo libre ("renuncia", "desvinculación", "contratación")
 
   createdAt DateTime @default(now())
 
@@ -3206,7 +3215,7 @@ model RoleProfile {
   docType        RoleDocType @default(PERFIL)
   title          String // nombre del puesto (ej. "CSE", "Asistente de Finanzas")
   area           String? // área/equipo (ej. "Customer Success") — opcional
-  summary        String? @db.Text // resumen de 1 línea (subtítulo del hero)
+  summary        String?     @db.Text // resumen de 1 línea (subtítulo del hero)
   // Contenido estructurado por sección: mapa { [sectionKey]: data } que consume el
   // motor de landing (LandingView + config de roles). Reemplazó a las 7 columnas markdown;
   // hoy son 11 secciones (ROLE_SECTIONS), con el bloque 4DX en el medio (WIG, medidas de
@@ -3214,9 +3223,9 @@ model RoleProfile {
   // propio shape (prose {md}, cards {items}, medidas, marcador, niveles). Ver
   // components/landing/configs/roles.defs.ts. Reusa la PRESENTACIÓN/EDICIÓN del motor,
   // NO el motor de datos (ProjectCanvas/CanvasBlock) — decisión en docs/DECISIONS.md.
-  content        Json    @default("{}")
-  active         Boolean @default(true)
-  order          Int     @default(0)
+  content        Json        @default("{}")
+  active         Boolean     @default(true)
+  order          Int         @default(0)
   createdByEmail String? // quién lo creó (auditoría liviana)
 
   // Link PÚBLICO oculto: `publicToken` ES la capability (64 hex = 256 bits). null = no

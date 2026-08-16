@@ -82,8 +82,12 @@ describe("asignar cliente a mano no puede inventar un dueño", () => {
     const src = leer(RUTA);
     expect(src, "dejó de verificar que el cliente exista").toContain("prisma.client.findUnique");
     expect(src, "el 400 desapareció: vuelve a aceptar un id inventado").toContain("400");
+    /* El write se mudó al chokepoint `asignarDuenioManual` (2026-08-16) para que el sello y su
+       PROCEDENCIA se escriban siempre juntos. El invariante no cambió —verificar antes de
+       escribir— así que la guarda se re-ancla al nombre nuevo en vez de aflojarse. */
     const iCheck = src.indexOf("prisma.client.findUnique");
-    const iWrite = src.indexOf("firefliesSession.update");
+    const iWrite = src.indexOf("asignarDuenioManual(");
+    expect(iWrite, "el endpoint dejó de pasar por el chokepoint del dueño").toBeGreaterThan(-1);
     expect(iCheck, "la verificación quedó DESPUÉS de la escritura").toBeLessThan(iWrite);
   });
 
