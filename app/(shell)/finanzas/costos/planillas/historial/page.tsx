@@ -1,11 +1,19 @@
 /**
- * /finanzas/costos/pagos-planilla — el LIBRO: lo que efectivamente se pagó,
- * quincena por quincena. SOLO SUPER_ADMIN.
+ * /finanzas/costos/planillas/historial — lo que efectivamente se pagó, quincena
+ * por quincena. SOLO SUPER_ADMIN.
  * Gate AUTÓNOMO isCostosRole(role) — el redirect corta ANTES de cualquier query.
+ * Se replica acá porque una ruta hija NO hereda el gate de su madre: el gate lo
+ * pone la page, y el escaneo P4 de costos-privacy.test lo exige archivo por
+ * archivo justamente para que nadie asuma esa herencia.
  *
- * ⚠ Es OTRA COSA que la hoja «Planillas» (/finanzas/costos/planillas), que
- * muestra el salario all-in ESTIMADO de CostoRecurrente para el burn: una dice
- * cuánto se calcula que cuesta el mes, ésta cuánto salió de verdad.
+ * ⚠ Es OTRA COSA que su madre `/finanzas/costos/planillas`, que muestra el costo
+ * mensual por persona de `CostoRecurrente` y alimenta el burn: una dice cuánto
+ * cuesta el mes con la configuración de hoy, ésta cuánto salió de verdad.
+ *
+ * ⚠ La API sigue en `/api/cobranza/costos/pagos-planilla` a propósito: moverla
+ * rompería los imports estáticos de `lib/cobranza/costos-privacy.test.ts` y con
+ * eso el escaneo de privacidad entero. El nombre de la ruta de UI es copy; el de
+ * la API es identidad.
  */
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";

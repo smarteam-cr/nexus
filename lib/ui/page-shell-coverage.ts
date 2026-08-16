@@ -34,7 +34,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/costos/planillas": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/fijos": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/tarjetas": { shell: "SHELL_DEFAULT" },
-  "finanzas/costos/pagos-planilla": { shell: "SHELL_DEFAULT" },
+  "finanzas/costos/planillas/historial": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/aguinaldo": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/comisiones-vendedor": { shell: "SHELL_DEFAULT" },
   "finanzas/ingresos-variables": { shell: "SHELL_DEFAULT" },

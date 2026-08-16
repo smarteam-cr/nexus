@@ -50,9 +50,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // cada una, no una lista de costos): heredar el skeleton de categoría
   // prometería una pantalla que no llega.
   "finanzas/costos/tarjetas": { modo: "own" },
-  // El libro se agrupa por mes con dos bloques de quincena: su forma no es la de
-  // ninguna de las hojas de categoría.
-  "finanzas/costos/pagos-planilla": { modo: "own" },
+  // El historial se agrupa por mes con dos bloques de quincena: su forma no es la
+  // de ninguna de las hojas de categoría, ni la de su propia madre (Planillas).
+  "finanzas/costos/planillas/historial": { modo: "own" },
   "finanzas/costos/aguinaldo": { modo: "own" },
   // Tres bloques (devengado + liquidado + reglas): no es la forma de ninguna
   // hoja de categoría ni la del libro.

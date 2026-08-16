@@ -261,11 +261,16 @@
 - **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
   (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
-- **libro de planilla** (`PagoPlanilla` → `/finanzas/costos/pagos-planilla`, SOLO SUPER_ADMIN):
-  lo que efectivamente se PAGÓ, una fila por persona y por quincena (1–15 / 16–fin), con estado
-  pendiente|pagado, fecha real y `confirmadoPor`. Es **otra cosa** que la hoja «Planillas»
-  (`/finanzas/costos/planillas`), que muestra el salario all-in ESTIMADO de `CostoRecurrente`
-  para el burn: una dice cuánto se calcula que cuesta el mes, la otra cuánto salió de verdad.
+- **historial de planilla** (`PagoPlanilla` → `/finanzas/costos/planillas/historial`, SOLO
+  SUPER_ADMIN): lo que efectivamente se PAGÓ, una fila por persona y por quincena (1–15 /
+  16–fin), con estado pendiente|pagado, fecha real y `confirmadoPor`. Se llega por el botón
+  **«Historial»** del encabezado de Planillas — desde el 2026-08-16 hay **un solo ítem de
+  planilla en el menú**, porque dos con nombres parecidos obligaban al paréntesis «(estimado)»
+  para poder distinguirlos. Es **otra cosa** que su madre `/finanzas/costos/planillas`, que
+  muestra el costo mensual por persona de `CostoRecurrente` y alimenta el burn: una dice cuánto
+  cuesta el mes con la configuración de hoy, la otra cuánto salió de verdad. La API sigue en
+  `/api/cobranza/costos/pagos-planilla`: el nombre de la ruta de UI es copy, el de la API es
+  identidad (moverla rompería el escaneo de privacidad).
   Su monto es **propio y congelado como snapshot** al crear la fila —no se deriva del costo— y
   la materialización es CREATE-ONLY: una quincena PAGADA es intocable. **No entra a la caja
   neta** (ahí el burn lo sigue produciendo `CostoRecurrente`; sumarlo sería doble conteo).

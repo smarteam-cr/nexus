@@ -31,7 +31,7 @@ export default function AguinaldoPanel({ initial }: { initial: AguinaldoResultad
     <div className="space-y-6">
       <PageHeader
         title={`Aguinaldo ${anio}`}
-        description="Suma de lo REGISTRADO en el libro de planilla, de diciembre a noviembre, ÷ 12. Es un dato observado, no una tasa."
+        description="Suma de lo REGISTRADO en el historial de planilla, de diciembre a noviembre, ÷ 12. Es un dato observado, no una tasa."
       />
 
       <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-0.5">
@@ -56,7 +56,7 @@ export default function AguinaldoPanel({ initial }: { initial: AguinaldoResultad
       {personas.length === 0 ? (
         <EmptyState
           title="Todavía no hay nada que calcular"
-          description="El aguinaldo sale del libro de planilla. Registrá quincenas como pagadas y aparece solo."
+          description="El aguinaldo sale del historial de planilla. Registrá quincenas como pagadas y aparece solo."
         />
       ) : (
         <div className="rounded-xl border border-line bg-surface overflow-x-auto">

@@ -129,8 +129,9 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Libro de planilla"
-        description="Lo que efectivamente se pagó, quincena por quincena. No es el estimado del burn: eso vive en Planillas."
+        title="Historial de planilla"
+        description="Lo que se pagó de verdad, quincena por quincena. Lo que cuesta por mes con la configuración de hoy está en Planillas."
+        backHref="/finanzas/costos/planillas"
         action={
           <Button onClick={generar} disabled={generando}>
             {generando ? "Generando…" : `Generar ${etiquetaPeriodo(periodoHoy)} · Q${quincenaHoy}`}

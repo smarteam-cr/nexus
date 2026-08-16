@@ -1,5 +1,5 @@
 /**
- * Loading de /finanzas/costos/pagos-planilla — reserva la cáscara real:
+ * Loading de /finanzas/costos/planillas/historial — reserva la cáscara real:
  * encabezado, la barra de cobertura y dos grupos de mes con sus filas.
  */
 import { PageHeaderSkeleton, SkeletonPanel, Skeleton } from "@/components/ui";

@@ -218,11 +218,15 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
       { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
       { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
-      // ⚠ Dos hojas con nombres parecidos, a propósito y con copy que las separa:
-      // «Planillas» es el salario all-in ESTIMADO que alimenta el burn; «Libro de
-      // planilla» es lo que salió de verdad, quincena por quincena.
-      { href: "/finanzas/costos/planillas", label: "Planillas (estimado)", section: "Costos y gastos", costosOnly: true },
-      { href: "/finanzas/costos/pagos-planilla", label: "Libro de planilla", section: "Costos y gastos", costosOnly: true },
+      // ⚠ UNA sola entrada de planilla. Adentro conviven los dos números —lo que
+      // cuesta por mes (configuración, alimenta el burn) y lo que se pagó de verdad
+      // (`planillas/historial`, al que se llega por el botón «Historial»)— y esa
+      // hoja hija NO se declara acá a propósito: si estuviera, el prefijo de
+      // «Planillas» la marcaría activa y `nav-children.test` lo frena. Sin entrada
+      // propia, estar en el historial deja iluminada a su madre, que es lo correcto.
+      // Hasta 2026-08-16 esto decía «Planillas (estimado)» para distinguirla del
+      // ítem hermano «Libro de planilla»; sin el hermano, el paréntesis sobra.
+      { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
       // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
