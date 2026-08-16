@@ -2526,3 +2526,93 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   Apollo, Factun, Quickbooks, Marketing Hub Starter, 5 personas) **no se borra: se da de baja**
   (`finalizadoEl` + movimiento `BAJA`). Es reversible y deja huella; el hard delete perdería
   justamente la historia que `CostoMovimiento` existe para guardar.
+
+## Planillas, historial y la cadencia de cada aliado (2026-08-16)
+
+> Elías, mirando el módulo ya en uso: *"El historial de planillas, creo que mejor
+> meterlo dentro de la página de planillas (debería llamarse así, no planillas
+> (estimado). O realmente no entiendo por qué dice estimado). Y dentro de esa
+> página que haya un botón que diga Historial"*, *"Las comisiones también deben
+> tener un histórico (como los salarios)"* y, hacia adelante, *"quiero poder hacer
+> un gráfico histórico de este año… cada cosa debe estar sostenida en el tiempo
+> hasta hoy y proyectada con la configuración a futuro"*.
+
+- **«Estimado» era una muleta, no una distinción.** El eje real no es
+  estimado/real: es **CONFIGURACIÓN vs REGISTRO**. `CostoRecurrente` (SALARIO) es
+  configuración que proyecta el futuro —`loadCajaNeta` lo lee `activo:true` **sin
+  filtrar categoría**, así que esos salarios *son* el burn y la caja neta a 6
+  meses— y `PagoPlanilla` es el registro de lo que salió. El paréntesis del menú
+  existía solo para poder distinguir dos ítems con nombres parecidos («Planillas
+  (estimado)» y «Libro de planilla»); con el libro adentro, deja de tener razón de
+  ser. Lo que la palabra quería decir de verdad —*no es contabilidad fiscal*— ya
+  estaba escrito cinco veces en la misma pantalla.
+- **La fusión es de PANTALLA, no de datos**, y el estimado sigue haciendo falta
+  por tres hechos verificados: (1) el libro **no existe hacia adelante** —
+  `generarQuincena` es CREATE-ONLY y solo materializa la quincena de hoy; la
+  proyección la produce `proyectarCostos` sobre `CostoRecurrente`; (2) el libro se
+  **alimenta** del estimado (deriva las filas de `categoria:"SALARIO", activo:true`
+  con `teamMemberId`): sin él no puede materializar nada; (3) si ambos entraran al
+  neto sería doble conteo en el tramo solapado. `loadCajaNeta`, `proyectarCostos` y
+  los golden **no se tocaron**.
+- **El historial va a RUTA HIJA (`planillas/historial`), no a una pestaña.** Con
+  pestaña, el link sería siempre el mismo (no se puede compartir ni marcar), habría
+  dos `<h1>` en la pantalla —`LibroPlanillaPanel` monta su propio `PageHeader`— y
+  el `loading.tsx` de Planillas pasaría a prometer una forma que ya no es. Con ruta
+  hija cada pantalla mantiene su skeleton real y el gate se replica tal cual (una
+  hija **no hereda** el gate de su madre: lo pone la page, y el escaneo P4 lo exige
+  archivo por archivo justamente para que nadie asuma esa herencia).
+  ⚠ **La hija NO se declara en el sidebar**: si estuviera, el prefijo de «Planillas»
+  la marcaría activa y `nav-children.test` lo frena. Sin entrada propia, estar en el
+  historial ilumina a su madre, que es lo correcto.
+- **Las rutas de API NO se movieron.** `/api/cobranza/costos/pagos-planilla` sigue
+  igual: moverla rompería los imports estáticos de `lib/cobranza/costos-privacy.test.ts`
+  y con eso P1-P4 enteros. **El nombre de la pantalla es copy; el de la API es
+  identidad** — la misma regla que ya se aplicó al renombre de «Business Case».
+- **El histórico de comisiones es el de VENDEDOR, y el de partner va a otra
+  granularidad** (respuesta textual de Elías): las de vendedor *"son más variables y
+  dependen del número de ventas de la persona"* ⇒ mes a mes, como el historial de
+  planilla. Las de partner *"nos las pagan cada ciertos meses"* ⇒ a la **frecuencia
+  configurada del aliado**. Son dos lecturas distintas porque son dos ritmos
+  distintos, no por gusto de diseño.
+- **Se cerró un bug que dejó la tanda F3**: `liquidarComision` aceptaba y VALIDABA
+  `pagoPlanillaId` (misma persona, misma moneda) pero el panel **nunca lo mandaba**
+  ⇒ toda liquidación quedaba suelta, el desglose expandible del historial de
+  planilla salía siempre vacío y `loadAguinaldo` sumaba **cero** comisiones. La
+  plomería existía entera y no la usaba nadie.
+- **El CUÁNDO se paga la comisión es una POLÍTICA aislada**, porque Elías pidió
+  explícitamente poder cambiarla (*"por ejemplo ponerlo en la primera semana de cada
+  mes"*). `quincenaDePagoDeComision(periodo, politica)` es pura, con un test por
+  política, y la vigente es una constante. Default `Q1_MES_SIGUIENTE`: la comisión
+  de marzo se calcula sobre TODO marzo, incluido el 31 — pagarla el 30 sería pagar
+  un número que todavía no se puede saber. La quincena la **resuelve el server** y
+  el panel la muestra y la reenvía; si la calculara el navegador, la comisión
+  quedaría enganchada a lo que dijo el navegador.
+- **La frecuencia es del ALIADO, no del pago** (decisión de Elías entre tres
+  opciones). Tabla `PartnerComercial` con `frecuenciaMeses` Int (no enum: agregar
+  "cada 2 meses" no puede exigir un `ALTER TYPE` coordinado entre las 2 PCs) y FK
+  **nullable** en `ComisionPartner` — el string `partner` se queda como snapshot,
+  igual que `sujetoNombre` en `PagoPlanilla`, así que borrar el aliado pierde la
+  cadencia y **no la plata**.
+- **Los buckets van anclados al AÑO CALENDARIO.** Con 3 meses son los trimestres,
+  que es lo que todo el mundo ya entiende. Anclarlos al primer pago de cada aliado
+  dejaría a dos aliados con la misma cadencia en períodos corridos entre sí y
+  ninguna tabla los podría poner lado a lado. Una cadencia que no divide a 12 deja
+  el último bucket corto y la etiqueta lo dice.
+- **La tarjeta dice DÓNDE cae el próximo, nunca cuánto.** El monto no lo sabe
+  nadie. Y sin cadencia configurada no se dice nada: deducir el ritmo de uno o dos
+  pagos sería la fabricación que este módulo evita — por eso el seed marca a
+  **Cooby** como SUPUESTO en sus propias notas (un solo pago no permite deducir
+  nada) y **Nua talk** no se carga (columna en cero).
+- ⚠ **El gráfico histórico NO se construyó** (pedido explícito de Elías: todavía
+  no). Lo que sí quedó es el diagnóstico de qué se puede sostener en el tiempo hoy
+  y qué no: **tienen fecha por fila y se reconstruyen mes a mes** los cobros
+  (`fechaCobro`), los gastos (`fecha`), el libro de planilla (`periodo`+`quincena`)
+  y las comisiones de partner (`fecha`); la comisión de vendedor devengada **se
+  recalcula** en vez de guardarse; y **NO se pueden reconstruir hacia atrás**
+  `CostoRecurrente` (guarda el monto de HOY — `updateCosto` estampa
+  `fechaEfectiva = hoy` en cada cambio, así que un burn dibujado hacia marzo
+  mostraría el costo de hoy: una línea plana, creíble y falsa) ni `TarjetaCredito`
+  (un solo saldo, sin serie). La salida correcta cuando llegue el gráfico es
+  **declarar el arranque de la serie**, como ya hace `coberturaDe`, y no fabricarla:
+  los salarios pasados salen del libro —que sí trae la variación real del año— y
+  los futuros de `CostoRecurrente`, con corte duro en hoy.

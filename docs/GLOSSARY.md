@@ -312,6 +312,25 @@
   nunca una convertida) y el redondeo va **por cobro**, para que la suma del detalle sea
   exactamente lo que se paga. Al liquidar, el monto lo **recalcula el server** con el mismo
   cálculo puro que pintó la pantalla — el navegador no puede mandarlo.
+- **aliado comercial** (`PartnerComercial` → bloque «Aliados» de
+  `/finanzas/comisiones-partner`, gate `cobranza.read`): quién le PAGA a Smarteam y **cada
+  cuánto**. La frecuencia es del ALIADO y no del pago (HubSpot paga cada 3 meses y eso no cambia
+  pago a pago), y con ella el historial se agrupa a su ritmo en vez de mes a mes — estos pagos no
+  son mensuales y una grilla mensual sale llena de huecos. `frecuenciaMeses` es un Int (1 mensual ·
+  3 trimestral · 6 semestral · 12 anual, CHECK 1..24) y no un enum: agregar «cada 2 meses» no
+  puede exigir un `ALTER TYPE` coordinado entre las 2 PCs. Borrarlo NO borra sus pagos — el
+  nombre queda como snapshot en la fila, igual que `sujetoNombre` en `PagoPlanilla` — y el
+  historial vuelve a leerse mes a mes, que es la degradación correcta.
+- **período de un aliado** (`bucketDeCadencia`, `lib/cobranza/partners.ts`): el tramo de N meses
+  en el que cae un pago, **anclado al año calendario** — con 3 meses son los trimestres, que es lo
+  que todo el mundo ya entiende. Anclarlo al primer pago dejaría a dos aliados de la misma
+  cadencia en períodos corridos entre sí y ninguna tabla los podría poner lado a lado. La pantalla
+  dice **dónde** caería el próximo, nunca cuánto: el monto no lo sabe nadie.
+- **política de pago de comisión** (`POLITICA_PAGO_COMISION`, `lib/cobranza/comisiones.ts`): en
+  qué quincena se le paga a un vendedor la comisión que devengó en un mes. Hoy es **la Q1 del mes
+  siguiente** —la comisión de marzo se calcula sobre todo marzo, incluido el 31: pagarla el 30
+  sería pagar un número que todavía no se puede saber— y está aislada en una función pura con la
+  política como constante, para poder cambiarla sin tocar la pantalla ni la mutación.
 - **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
   /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
   puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);
