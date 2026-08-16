@@ -2279,9 +2279,12 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: #fff;
-  /* El iframe ya aísla el scroll de su documento; esto evita que un contenido más alto
-     que la caja se derrame sobre la sección siguiente. */
-  overflow: hidden;
+  /* ⚠ SIN `overflow: hidden`. Lo tenía «para que un contenido más alto que la caja no se
+     derrame sobre la sección siguiente» — pero un iframe NUNCA se derrama: es un elemento
+     reemplazado de alto fijo y su documento scrollea adentro. Lo único que hacía el `hidden`
+     era MATARLE ESE SCROLL: el alto lo escribe a mano quien pega el HTML, pensando en una
+     pantalla ancha, y en un teléfono el mismo contenido reflowea más alto y lo que sobraba
+     quedaba INALCANZABLE — sin barra, sin recorte visible, sin nada que avisara. */
 }
 
 /* Modo edición: los campos son un FORMULARIO, no WYSIWYG — pegar código en un

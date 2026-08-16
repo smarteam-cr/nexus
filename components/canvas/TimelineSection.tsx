@@ -24,6 +24,7 @@
  */
 import { useState } from "react";
 import { useHydrated } from "@/lib/hooks/useHydrated";
+import { useAnchoAngosto } from "@/lib/hooks/useAnchoAngosto";
 import {
   addWeeks,
   fmtDay,
@@ -54,10 +55,17 @@ import { PRINT_PAGE_WIDTH, fitZoom } from "@/lib/print/page-metrics";
  * declarado. Al referenciarlo desde acá la variable quedaba sin definir, el `max-width`
  * inválido, y el cronograma salía al 100% del ancho de la pantalla, pegado a los bordes.
  *
- * El porcentaje, y no un número fijo, es lo que deja "poco margen" en cualquier pantalla:
- * en un monitor grande usa casi todo, y en un portátil se comporta como el ancho de antes.
+ * ⚠ ERA `width: "80%"`, y el 80% de poco es menos: en un teléfono de 375px dejaba una ventana
+ * de 261px para una grilla que mide 640 como mínimo. Regalaba 65px justo donde no sobra ninguno.
+ *
+ * Y de paso arregla una divergencia vieja: el 80% NUNCA coincidía con `--stl-w-pagina` (el ancho
+ * del resto de las páginas del cliente). A 1440px el cronograma quedaba más angosto que su propia
+ * página; a 1920, más ancho. Solo empataban a ~1600. Ahora es el mismo ancho que todo lo demás.
  */
-export const TIMELINE_CONTAINER = { width: "80%", maxWidth: 1800, margin: "0 auto" } as const;
+export const TIMELINE_CONTAINER = {
+  width: "min(100%, var(--stl-w-pagina, 1280px))",
+  margin: "0 auto",
+} as const;
 const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 
 // Misma paleta de tipos que el Gantt interno, en sus variantes light (los
@@ -76,14 +84,67 @@ const ACTIVITY_META: Record<
 const NEUTRAL_SEG = "#b9cdf0"; // fase sin tipo (neutro de la familia navy de marca)
 const EMPTY_CELL = "#eef3fc"; // semana fuera del rango de la fase (paper-tint)
 
-// Estado + responsable por tarea (showProgress, solo el cronograma compartible) — paleta light
-// del landing, espejo de STATUS_META/PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
-const STATUS_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
-  PENDING:     { label: "pendiente", text: "#475569", bg: "#f1f5f9", border: "#e2e8f0" },
-  IN_PROGRESS: { label: "en curso",  text: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-  DONE:        { label: "hecho",     text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
-};
+// Responsable por tarea (showProgress, solo el cronograma compartible) — paleta light del
+// landing, espejo de PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
+// El ESTADO ya no es un chip: lo pinta `EstadoCirculo` a la izquierda del título.
 const OVERDUE_META_LIGHT = { label: "atrasada", text: "#b91c1c", bg: "#fef2f2", border: "#fecaca" };
+
+/**
+ * El estado de la tarea como CÍRCULO a la izquierda, no como etiqueta a la derecha.
+ *
+ * Antes era un chip «HECHO» pegado al título. En un cronograma donde casi todo está hecho, eso
+ * repite la misma palabra decenas de veces y obliga a leer cada renglón hasta el final para
+ * saber si falta algo. Un círculo en una columna fija se escanea de un vistazo: lo que no está
+ * cerrado salta porque es el único gris.
+ *
+ * Espejo de `StatusCircle` del Gantt interno (components/canvas/TimelineGantt.tsx), en la
+ * paleta clara de marca y con estilos inline — esta vista se le comparte al cliente y se
+ * imprime, así que no puede depender de las clases del tema de la app.
+ *
+ * ⚠ «Atrasada» NO entra acá: es ortogonal al estado (una tarea en curso puede estar atrasada)
+ * y sigue siendo su propio chip. Meterla en el círculo perdería una de las dos cosas.
+ */
+function EstadoCirculo({ status, size = 16 }: { status: string; size?: number }) {
+  if (status === "DONE") {
+    return (
+      <span
+        aria-hidden
+        style={{
+          width: size, height: size, borderRadius: "50%", background: "#059669",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}
+      >
+        <svg width={size * 0.62} height={size * 0.62} fill="none" viewBox="0 0 24 24">
+          <path stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
+    );
+  }
+  const enCurso = status === "IN_PROGRESS";
+  const suspendida = status === "SUSPENDED";
+  const color = enCurso ? "#1d4ed8" : suspendida ? "#b45309" : "#cbd5e1";
+  return (
+    <svg
+      aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} style={{ flexShrink: 0 }}
+    >
+      <circle cx="12" cy="12" r="9" strokeWidth={enCurso ? 2.5 : 2} />
+      {suspendida ? (
+        <path strokeLinecap="round" strokeWidth={2} d="M8.5 12h7" />
+      ) : (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={enCurso ? 2.5 : 2} d="M8.5 12.5l2.5 2.5 4.5-5" />
+      )}
+    </svg>
+  );
+}
+
+/** El texto accesible del estado — el círculo es `aria-hidden`, así que alguien lo tiene que decir. */
+const ESTADO_TEXTO: Record<string, string> = {
+  DONE: "Hecha",
+  IN_PROGRESS: "En curso",
+  SUSPENDED: "Aparcada",
+  PENDING: "Pendiente",
+};
 // Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
 // Navy de marca (la menta/teal quedó reservada para identidad Insider).
 const SESSION_META_LIGHT = { label: "Sesión", text: "#051849", bg: "#eef3fc", border: "#dbe4f3" };
@@ -107,6 +168,16 @@ const chipStyle = (m: { text: string; bg: string; border: string }): React.CSSPr
   whiteSpace: "nowrap",
 });
 
+/** Visible solo para lectores de pantalla: el círculo de estado es `aria-hidden`. */
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+};
+
 const SUB_LABEL: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
@@ -123,6 +194,83 @@ const KIND_META_LIGHT: Record<string, { label: string; text: string; bg: string;
   COMPROMISO: { label: "Acordado",  text: "#047857", bg: "#ecfdf5", border: "#a7f3d0" }, // verde (mismo que "hecho"; la familia menta quedó Insider-only)
   AVISO:      { label: "Aviso",     text: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" }, // azul informativo: no es atraso ni acuerdo, no mueve fechas
 };
+
+
+/** Las tareas de una fase, agrupadas por semana. Tipo derivado para no re-declararlo. */
+type TareasDeFase = NonNullable<ExternalTimelinePhase["tasks"]>;
+
+/**
+ * Lo que se ve al desplegar una fase: sus notas y sus acciones semana por semana.
+ *
+ * Vive fuera del render principal porque lo usan las DOS vistas —la grilla de escritorio y la
+ * lista de pantallas angostas— y duplicarlo garantizaba que se separaran: el día que alguien
+ * agregue un dato por tarea, lo agregaría en una sola.
+ */
+function DetalleDeFase({
+  notas,
+  durationWeeks,
+  tasksByWeek,
+  rangeStart,
+  anchor,
+  showProgress,
+  now,
+}: {
+  notas: string | null | undefined;
+  durationWeeks: number;
+  tasksByWeek: Map<number, TareasDeFase>;
+  rangeStart: number;
+  anchor: string | null;
+  showProgress: boolean;
+  now: Date | null;
+}) {
+  return (
+    <>
+      {notas?.trim() && (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.55 }}>{notas}</p>
+      )}
+      {Array.from({ length: durationWeeks }).map((_, relWeek) => {
+        const weekTasks = tasksByWeek.get(relWeek) ?? [];
+        if (weekTasks.length === 0) return null;
+        const absW = absoluteWeek(rangeStart, relWeek);
+        return (
+          <div key={relWeek}>
+            <div style={{ ...SUB_LABEL, borderBottom: "1px dashed var(--border)", paddingBottom: 3, marginBottom: 5 }}>
+              Semana {relWeek + 1}
+              <span style={{ fontWeight: 600, marginLeft: 6, opacity: 0.8 }}>
+                S{absW}
+                {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
+              </span>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
+              {weekTasks.map((t, ti) => {
+                // Solo los estados que sabemos dibujar; uno desconocido no pinta círculo.
+                const conEstado = showProgress && !!t.status && t.status in ESTADO_TEXTO;
+                const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, rangeStart, relWeek), now, t.status);
+                const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
+                return (
+                  /* `flex-start` y no `center`: con el círculo a la izquierda, un título de dos
+                     líneas dejaría el check flotando en el medio. */
+                  <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}>
+                    {conEstado && (
+                      <span style={{ display: "inline-flex", alignItems: "center", height: "1.5em", flexShrink: 0 }}>
+                        <EstadoCirculo status={t.status!} />
+                        <span style={SR_ONLY}>{ESTADO_TEXTO[t.status!] ?? ""}: </span>
+                      </span>
+                    )}
+                    <span style={t.status === "DONE" ? { color: "var(--text-muted)" } : undefined}>{t.title}</span>
+                    {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
+                    {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
+                    {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 export default function TimelineSection({
   phases,
@@ -155,6 +303,11 @@ export default function TimelineSection({
   // la variante neutra (sin chip "Hoy" ni resaltado de la semana actual).
   const hydrated = useHydrated();
   const now = hydrated ? new Date() : null;
+  /* ⚠ `!pdf` PRIMERO, y no es cosmético: el PDF se compone contra 920px de papel, no contra una
+     pantalla, y ya tiene su propio encogido por `zoom`. Si la lista se colara ahí, el cronograma
+     impreso cambiaría de forma sin que nadie lo pida — y nadie lo vería hasta abrir un PDF. */
+  const anchoAngosto = useAnchoAngosto(); // SIEMPRE se llama: un hook detrás de un `&&` es un bug.
+  const enLista = !pdf && anchoAngosto;
 
   if (!phases.length) return null;
   const sorted = [...phases].sort((a, b) => a.order - b.order);
@@ -193,7 +346,9 @@ export default function TimelineSection({
 
   /* En papel la columna de fases se achica —el nombre sigue leyéndose— para dejarle todo el
      ancho posible a las semanas, que es lo que se pierde primero al encoger. */
-  const anchoFase = pdf ? "minmax(120px, 170px)" : "minmax(200px, 280px)";
+  /* El piso de la columna de fase. Bajarlo NO recorta nada desde que el nombre envuelve —
+     y le devuelve ancho a las semanas, que es lo que se apretaba en pantallas chicas. */
+  const anchoFase = pdf ? "minmax(120px, 170px)" : "minmax(150px, 260px)";
   const gridCols = { gridTemplateColumns: `${anchoFase} repeat(${total}, minmax(26px, 1fr))` };
   /* Ancho que la grilla NECESITA para no apretarse, y cuánto hay que encogerla para que
      entre. El disponible sale de la hoja: `TIMELINE_CONTAINER` ocupa el 100% del ancho en
@@ -256,7 +411,97 @@ export default function TimelineSection({
           </span>
         </div>
 
-        {/* La grilla */}
+        {/* ── Pantallas angostas: LISTA, no grilla ──────────────────────────────────────
+            Una grilla de «fase + N semanas» necesita ancho, y en un teléfono no hay: con la
+            columna de fase y 20 semanas, el cliente abría el enlace y veía nombres y CASI
+            NINGUNA barra, con scroll horizontal y sin nada que se lo indicara. Achicarla no
+            era opción: 26px por semana ya es el piso. Así que en angosto se muestra OTRA COSA
+            — la misma información, apilada. Sin scroll de lado en ningún lado. */}
+        {enLista ? (
+          <div className="reveal" data-stagger="3" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {sorted.map((p, i) => {
+              const range = ranges[i];
+              const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
+              const tasks = p.tasks ?? [];
+              const hasDetail = tasks.length > 0 || !!p.notes?.trim();
+              const isOpen = expanded.has(p.id);
+              const hechas = tasks.filter((t) => t.status === "DONE").length;
+
+              const tasksByWeek = new Map<number, typeof tasks>();
+              for (const t of tasks) {
+                const arr = tasksByWeek.get(t.weekIndex) ?? [];
+                arr.push(t);
+                tasksByWeek.set(t.weekIndex, arr);
+              }
+
+              /* La barra de avance reemplaza a las celdas de semana: en la grilla el progreso se
+                 lee en el eje del tiempo, y acá ese eje no existe. Solo con `showProgress` — sin
+                 estado por tarea, una barra al 0% acusaría al equipo de no haber hecho nada. */
+              const pct = showProgress && tasks.length > 0 ? Math.round((hechas / tasks.length) * 100) : null;
+
+              return (
+                <div
+                  key={p.id}
+                  style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--bg)", padding: "12px 14px" }}
+                >
+                  <div
+                    onClick={() => hasDetail && toggleExpand(p.id)}
+                    style={{ cursor: hasDetail ? "pointer" : "default", display: "flex", alignItems: "flex-start", gap: 8 }}
+                  >
+                    {hasDetail ? (
+                      <svg
+                        style={{ width: 12, height: 12, marginTop: 4, color: "var(--text-muted)", flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "none" }}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    ) : (
+                      <span style={{ width: 12, flexShrink: 0 }} />
+                    )}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflowWrap: "anywhere" }}>
+                        {p.name}
+                      </div>
+                      <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {meta && (
+                          <span title={meta.label} aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: meta.seg, flexShrink: 0 }} />
+                        )}
+                        <span>
+                          {meta && <span style={SR_ONLY}>{meta.label}. </span>}
+                          {fmtPhaseRange(anchor, range)}
+                          {tasks.length > 0 && ` · ${showProgress ? `${hechas} de ${tasks.length}` : plural(tasks.length, "tarea", "tareas")}`}
+                        </span>
+                      </div>
+                      {pct !== null && (
+                        <div
+                          role="img"
+                          aria-label={`${pct}% de las tareas completadas`}
+                          style={{ marginTop: 8, height: 6, borderRadius: 3, background: EMPTY_CELL, overflow: "hidden" }}
+                        >
+                          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: meta?.seg ?? NEUTRAL_SEG }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isOpen && hasDetail && (
+                    <div style={{ marginTop: 10, borderLeft: "2px solid var(--border)", paddingLeft: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                      <DetalleDeFase
+                        notas={p.notes}
+                        durationWeeks={p.durationWeeks}
+                        tasksByWeek={tasksByWeek}
+                        rangeStart={range.start}
+                        anchor={anchor}
+                        showProgress={showProgress}
+                        now={now}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <div className="reveal" data-stagger="3" style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--bg)", overflowX: pdf ? "visible" : "auto" }}>
           <div style={{ minWidth: anchoGrilla, ...(zoomImpresion < 1 ? { zoom: zoomImpresion } : {}) }}>
             {/* Cabecera de semanas */}
@@ -320,29 +565,38 @@ export default function TimelineSection({
                           ) : (
                             <span style={{ width: 12, flexShrink: 0 }} />
                           )}
-                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                          {/* El nombre tiene el renglón PARA ÉL. Antes lo compartía con el chip del
+                              tipo de actividad, y como el chip declaraba `flexShrink: 0` y el nombre
+                              no, flexbox le descargaba TODO el recorte al nombre: le quedaban ~131 de
+                              los 260px de la columna y «Migración Salesforces» se partía en dos,
+                              mientras «Capacitación y cierre Service» —8 caracteres más largo, pero
+                              sin chip— entraba en uno. No era el largo del nombre: era el chip.
+
+                              `overflowWrap` SE QUEDA y no es redundante: es la red para un nombre
+                              genuinamente largo, que ahora envuelve en vez de desbordar la columna.
+                              Antes esto era `nowrap` + ellipsis y el cliente leía «Audit…» / «Sem…»,
+                              que no le dice NADA sobre qué se hizo esa semana. */}
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflowWrap: "anywhere", minWidth: 0 }}>{p.name}</span>
+                        </div>
+                        {/* El tipo de actividad vive ACÁ, como cuadrado de color — la palabra ya está
+                            en la leyenda de arriba. Es la misma decisión que tomó el Gantt interno
+                            (TimelineGantt.tsx, «el cuadrado lleva el color de su barra porque la
+                            palabra ya vive en la leyenda»); la vista del cliente había heredado los
+                            colores pero no el layout. Y esta línea es un `div` block, no un flex:
+                            lo que se agrega acá no le comprime el ancho a nadie. */}
+                        <div style={{ marginLeft: 19, marginTop: 2, fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           {meta && (
                             <span
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                padding: "2px 7px",
-                                borderRadius: 6,
-                                color: meta.chipText,
-                                background: meta.chipBg,
-                                border: `1px solid ${meta.chipBorder}`,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {meta.label}
-                            </span>
+                              title={meta.label}
+                              aria-hidden
+                              style={{ width: 8, height: 8, borderRadius: 2, background: meta.seg, flexShrink: 0 }}
+                            />
                           )}
-                        </div>
-                        <div style={{ marginLeft: 19, marginTop: 2, fontSize: 11, color: "var(--text-muted)" }}>
-                          {fmtPhaseRange(anchor, range)}
-                          {tasks.length > 0 && ` · ${plural(tasks.length, "tarea", "tareas")}`}
+                          <span>
+                            {meta && <span style={SR_ONLY}>{meta.label}. </span>}
+                            {fmtPhaseRange(anchor, range)}
+                            {tasks.length > 0 && ` · ${plural(tasks.length, "tarea", "tareas")}`}
+                          </span>
                         </div>
                       </div>
 
@@ -371,41 +625,15 @@ export default function TimelineSection({
                     {/* Expandido: notas de fase + acciones por semana (read-only) */}
                     {isOpen && hasDetail && (
                       <div style={{ marginLeft: 26, marginRight: 8, marginTop: 2, marginBottom: 12, borderLeft: "2px solid var(--border)", paddingLeft: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                        {p.notes?.trim() && (
-                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.55 }}>{p.notes}</p>
-                        )}
-                        {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
-                          const weekTasks = tasksByWeek.get(relWeek) ?? [];
-                          if (weekTasks.length === 0) return null;
-                          const absW = absoluteWeek(range.start, relWeek);
-                          return (
-                            <div key={relWeek}>
-                              <div style={{ ...SUB_LABEL, borderBottom: "1px dashed var(--border)", paddingBottom: 3, marginBottom: 5 }}>
-                                Semana {relWeek + 1}
-                                <span style={{ fontWeight: 600, marginLeft: 6, opacity: 0.8 }}>
-                                  S{absW}
-                                  {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
-                                </span>
-                              </div>
-                              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
-                                {weekTasks.map((t, ti) => {
-                                  const sMeta = showProgress && t.status ? STATUS_META_LIGHT[t.status] : null;
-                                  const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), now, t.status);
-                                  const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
-                                  return (
-                                    <li key={ti} style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                                      <span>{t.title}</span>
-                                      {sMeta && <span style={chipStyle(sMeta)}>{sMeta.label}</span>}
-                                      {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
-                                      {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
-                                      {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          );
-                        })}
+                        <DetalleDeFase
+                          notas={p.notes}
+                          durationWeeks={p.durationWeeks}
+                          tasksByWeek={tasksByWeek}
+                          rangeStart={range.start}
+                          anchor={anchor}
+                          showProgress={showProgress}
+                          now={now}
+                        />
                       </div>
                     )}
                   </div>
@@ -414,6 +642,7 @@ export default function TimelineSection({
             </div>
           </div>
         </div>
+        )}
 
         {/* Pendiente de tu parte — tareas del CLIENTE atrasadas. Solo con showProgress (cronograma
             vivo, no el kickoff) y tras hidratar (necesita el "hoy" del cliente). Sin atrasos → no se

@@ -32,6 +32,7 @@ import type { SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
 import { IconCheck } from "@/components/ui/AcceptReject";
 import { DiagramStatic } from "@/components/landing/diagram-static";
+import { DiagramaResponsive } from "@/components/landing/diagram-responsive";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
@@ -361,9 +362,9 @@ export const KickoffProcesosSection: FC<SectionProps<unknown>> = ({ ctx, editabl
                   <DiagramStatic diagram={toFlowchartData(p)} />
                 </div>
               ) : (
-                <div style={{ height: "min(72vh, 780px)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--bg, #fff)" }}>
+                <DiagramaResponsive diagram={toFlowchartData(p)} alto="min(72vh, 780px)">
                   <FlowchartViewer data={toFlowchartData(p)} />
-                </div>
+                </DiagramaResponsive>
               )}
             </div>
           ))}

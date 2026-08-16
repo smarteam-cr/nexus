@@ -30,6 +30,7 @@ import { SortableItems } from "./sortable";
 import type { SectionProps, DiagramSectionData } from "./types";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 import { DiagramStatic } from "./diagram-static";
+import { DiagramaResponsive } from "./diagram-responsive";
 import {
   specToDiagram,
   relacionToDiagram,
@@ -80,19 +81,15 @@ export const DiagramSection: FC<SectionProps<DiagramSectionData>> = ({ data, ctx
             <DiagramStatic diagram={diagram as FlowchartData} />
           </div>
         ) : (
-          <div
-            style={{
-              height: "clamp(380px, 58vh, 640px)", marginTop: 18,
-              border: "1px solid var(--border)", borderRadius: 22, overflow: "hidden",
-              background: "var(--bg, #fff)",
-            }}
-          >
+          <div style={{ marginTop: 18 }}>
+          <DiagramaResponsive diagram={diagram as FlowchartData} alto="clamp(380px, 58vh, 640px)" radio={22}>
             <FlowchartViewer
               data={diagram as FlowchartData}
               // El primer Guardar de un legacy convertido PERSISTE la conversión.
               onSave={editable && onChange ? async (updated) => onChange({ ...data, diagram: updated }) : undefined}
               readOnly={!editable}
             />
+          </DiagramaResponsive>
           </div>
         )
       )}
