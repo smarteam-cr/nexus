@@ -75,6 +75,20 @@ describe("⭐ el rótulo llega al prompt del agente de avance", () => {
     );
   });
 
+  it("⚠ las reuniones VACÍAS no compiten por el espacio del bloque", () => {
+    /* Entraban como entradas completas que solo decían «(sin transcript disponible)»: en un
+       proyecto real, 8 de las 12 más recientes eran eso, así que el agente leía mayormente
+       relleno. Van a UNA línea al final — que ocurrieron NO se pierde (es señal: hubo reunión y
+       no quedó nada), pero deja de ocupar el lugar de lo que sí tiene contenido. */
+    expect(src).toContain("const conContenido = pastSessions.filter((s) => s.content)");
+    expect(src).toContain("const sinContenido = pastSessions.filter((s) => !s.content)");
+    expect(src, "el hecho de que ocurrieron se perdió del prompt").toContain("colaSinContenido");
+    expect(
+      src,
+      "las vacías volvieron al bloque principal: el agente vuelve a leer relleno",
+    ).not.toMatch(/bloqueConContenido = pastSessions/);
+  });
+
   it("los dominios propios salen de las categorías, no de una constante", () => {
     /* La lista se edita en /sessions/categories sin deploy. Hardcodearla acá haría que el rótulo
        se separe de la atribución el día que entre un dominio nuevo. */

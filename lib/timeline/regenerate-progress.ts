@@ -250,15 +250,31 @@ export async function regenerateTimelineProgress(
     const instrucciones = bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     );
-    const sessionsBlock = pastSessions
-      /* Cada reunión va rotulada con CON QUIÉN fue: el dato de los participantes llegaba hasta
-         acá y se descartaba justo al serializar, así que para el modelo «lo que le prometimos al
-         cliente en su cara» y «lo que dijimos entre nosotros» eran el mismo tipo de frase. */
+    /* Cada reunión va rotulada con CON QUIÉN fue: el dato de los participantes llegaba hasta
+       acá y se descartaba justo al serializar, así que para el modelo «lo que le prometimos al
+       cliente en su cara» y «lo que dijimos entre nosotros» eran el mismo tipo de frase.
+
+       ⚠ Y las VACÍAS dejan de competir por el espacio. Entraban como entradas completas que
+       solo decían «(sin transcript disponible)»: en un proyecto real, 8 de las 12 más recientes
+       eran eso, así que el agente leía mayormente relleno. Ahora van a UNA línea al final — que
+       ocurrieron NO se pierde (es señal: hubo reunión y no quedó nada), pero deja de ocupar el
+       lugar de lo que sí tiene contenido. */
+    const conContenido = pastSessions.filter((s) => s.content);
+    const sinContenido = pastSessions.filter((s) => !s.content);
+    const bloqueConContenido = conContenido
       .map(
         (s) =>
           `[${s.date.toISOString().slice(0, 10)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
-          `${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`,
+          `${s.content}`,
       )
+      .join("\n\n---\n\n");
+    const colaSinContenido = sinContenido.length
+      ? `Además hubo ${sinContenido.length} reunión(es) del proyecto SIN transcripción ni ` +
+        `resumen — ocurrieron, pero no hay material para leer: ` +
+        sinContenido.map((s) => `"${s.title}" (${s.date.toISOString().slice(0, 10)})`).join(", ")
+      : "";
+    const sessionsBlock = [bloqueConContenido, colaSinContenido]
+      .filter(Boolean)
       .join("\n\n---\n\n");
 
     // Info de la última sesión usada → para el toast del re-chequeo ("según las sesiones
