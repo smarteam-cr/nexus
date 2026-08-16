@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `25a8870`. **26 commits sin push.**
+> Última actualización: **2026-08-16**, punta `a276eb0`. **28 commits sin push.**
 
 ---
 
@@ -38,9 +38,10 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
 | | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto, y deje de contar. | 🔨 **En curso** |
 | | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⏳ Pendiente |
-| | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente |
+| | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
+| | ⛔ La fuga del handoff | Dos caminos podían mandarle al cliente el handoff entero —que es un documento interno con riesgos y acuerdos comerciales—. Era el prerrequisito de la fase 9 y se tapó aparte, porque vale aunque esa fase no se haga. | ✅ Hecho |
 | | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Lo siguiente para Elías** |
 | | 12 · Aplicarlo retroactivamente | Sellar el plan de los 118 proyectos que nunca tuvieron foto, avisando en el propio documento que la foto es de hoy. | ⏳ Después de la 11 |
 | | 1.7 · Minuta de reunión interna | Un botón que destile la minuta de una reunión puntual de puertas adentro. | ⏳ Diferido |
@@ -55,7 +56,7 @@ lo construido está mal, es mucho más barato descubrirlo con un clic que con 11
 
 ### Fase 11 · Validar en pantalla *(requiere deploy — lo hace Elías)*
 
-Bloqueada por: los 26 commits sin push y las **tres migraciones SQL pendientes** (ver abajo). El
+Bloqueada por: los 28 commits sin push y las **tres migraciones SQL pendientes** (ver abajo). El
 recorrido está en `docs/CHECKLIST-PRUEBA-CLICKEADA-CONTEXTOS.md`, ordenado por pantalla.
 
 Lo que la validación tiene que responder, y ningún test puede:
@@ -79,17 +80,33 @@ explícito de escritura sobre producción.
 
 ### Fase 7 · Desviaciones abierto/cerrado *(en curso, no depende del deploy)*
 
-Hoy una desviación detectada en el cronograma **no se puede cerrar**: queda para siempre. Gana dos
-estados y un cierre con fecha y autor. Tres decisiones ya tomadas:
+Hoy una desviación detectada en el cronograma **no se puede cerrar**: queda para siempre, y
+«descartarla» la borra físicamente. Gana dos estados y un cierre con fecha y autor.
 
-- Si el mismo problema se vuelve a detectar sobre una fila ya cerrada, **se crea una nueva** y la
-  cerrada queda como historia. Reabrir en silencio algo que alguien dio por resuelto es peor.
-- Una desviación sin estado (todas las de hoy) **cuenta como abierta**. Ningún dato viejo cambia de
-  significado.
-- El cliente deja de ver las cerradas — pero **una publicación ya hecha no se actualiza sola**: hay
-  que volver a subirla, y la pantalla lo avisa.
+⚠ **El relevamiento (2026-08-16) encontró que el diseño original no cerraba.** 12 problemas
+graves, y tres cambian el diseño:
 
-Trae **migración SQL (#4)**.
+1. **El agente vuelve a proponer lo cerrado, para siempre.** Cada corrida re-lee los mismos
+   transcripts; lo único que evita que repita una desviación es un bloque del prompt que lista
+   «las ya registradas». Si una cerrada sale de esa lista, vuelve a proponerse en cada corrida —
+   duplicación infinita. Si se queda, la decisión de «crear una nueva» no hace nada.
+   **Se resuelve así:** la cerrada **sigue en la lista, rotulada** («esto se cerró el <fecha>; si
+   volvió a pasar, devolvé la misma huella y decí qué cambió»).
+2. **Cerrar no baja el número de semanas.** El contador de corrimiento suma semana por fila y no
+   sabe nada de estado, en las tres pantallas que lo muestran. Sin tocar eso, cerrar una
+   desviación de 3 semanas no cambia ningún número — y vuelve el defecto de Wherex («13 semanas
+   mostradas, 8 reales»). **Entra en el alcance de la fase.**
+3. **El cliente sigue leyendo la foto vieja.** Lo que el cliente abre es un snapshot congelado:
+   cerrar algo no lo saca de ahí y el aviso interno de «falta re-subir» no se mueve. **Ese aviso
+   se cablea al cierre**, o la fase no cambia nada para ningún cliente ya publicado.
+
+Las dos decisiones que sí sobreviven del diseño original: una desviación sin estado (todas las de
+hoy) **cuenta como abierta**, y el estado se define **en un solo lugar** — es lo que evita que la
+columna se escriba y ninguna pantalla la mire, que es literalmente lo que ya pasó con otro campo
+de esta misma tabla.
+
+Trae **migración SQL (#4)**, y ⚠ con default y backfill: sin eso, los cronogramas históricos
+pierden su bitácora o revientan la lectura.
 
 ### Fase 8 · Reuniones → tareas
 
@@ -131,7 +148,7 @@ responde «el agente no está sembrado» (correcto, no es una falla).
 
 ---
 
-## Los 26 commits
+## Los 28 commits
 
 | Commit | Fase | Qué |
 |---|---|---|
@@ -150,6 +167,8 @@ responde «el agente no está sembrado» (correcto, no es una falla).
 | `db7e115` | — | Auditoría: los 6 defectos graves que ni los tests ni el build ven |
 | `2eb91eb` | — | Los cuatro controles que el CSE veía y no podía apretar |
 | `25a8870` | — | El resumen del proyecto no leía el handoff |
+| `60bf6d5` | — | Este roadmap y el recorrido de validación |
+| `a276eb0` | 9 (prerrequisito) | ⛔ Dos caminos le podían mandar al cliente el handoff entero |
 
 ---
 
