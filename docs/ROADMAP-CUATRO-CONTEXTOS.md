@@ -92,10 +92,14 @@ graves, y tres cambian el diseño:
    duplicación infinita. Si se queda, la decisión de «crear una nueva» no hace nada.
    **Se resuelve así:** la cerrada **sigue en la lista, rotulada** («esto se cerró el <fecha>; si
    volvió a pasar, devolvé la misma huella y decí qué cambió»).
-2. **Cerrar no baja el número de semanas.** El contador de corrimiento suma semana por fila y no
-   sabe nada de estado, en las tres pantallas que lo muestran. Sin tocar eso, cerrar una
-   desviación de 3 semanas no cambia ningún número — y vuelve el defecto de Wherex («13 semanas
-   mostradas, 8 reales»). **Entra en el alcance de la fase.**
+2. **¿Cerrar tiene que bajar el número de semanas?** El relevamiento lo planteó como un
+   problema; mirándolo de cerca, la respuesta es que **no**, y eso corrige al plan. Un atraso de
+   3 semanas que se resolvió movió el plan 3 semanas igual: el cronograma ya se corrió y cerrarlo
+   no lo devuelve. Restarlo haría que la frase «el plan se movió N semanas» contradiga al Gantt
+   que está justo arriba, y si se cierran todas, el cliente perdería la única línea donde ve la
+   fecha de cierre nueva — el número mentiría hacia abajo, que es la peor dirección para un papel
+   que el cliente archiva. **Lo que se apaga al cerrar es el trabajo pendiente**: deja de figurar
+   como algo que alguien tiene que perseguir.
 3. **El cliente sigue leyendo la foto vieja.** Lo que el cliente abre es un snapshot congelado:
    cerrar algo no lo saca de ahí y el aviso interno de «falta re-subir» no se mueve. **Ese aviso
    se cablea al cierre**, o la fase no cambia nada para ningún cliente ya publicado.
@@ -104,13 +108,6 @@ Las dos decisiones que sí sobreviven del diseño original: una desviación sin 
 hoy) **cuenta como abierta**, y el estado se define **en un solo lugar** — es lo que evita que la
 columna se escriba y ninguna pantalla la mire, que es literalmente lo que ya pasó con otro campo
 de esta misma tabla.
-
-⚠ **Y una decisión que corrige al plan: cerrar NO baja el número de semanas.** Un atraso de 3
-semanas que se resolvió movió el plan 3 semanas igual — el calendario ya se corrió y cerrarlo no
-lo devuelve. Restarlo haría que la frase «el plan se movió N semanas» contradiga al cronograma
-que está justo arriba, y si se cierran todas, el cliente perdería la única línea donde ve la
-fecha de cierre nueva. Lo que se apaga al cerrar es el **trabajo pendiente**: deja de figurar
-como algo que alguien tiene que perseguir.
 
 Trae **migración SQL (#4)**, con default: sin eso, los cronogramas históricos pierden su bitácora
 o revienta la lectura.
@@ -149,7 +146,7 @@ enchufa al handoff del proyecto siguiente del mismo cliente. Es cañería: no ha
 
 ## ⚠ Lo que espera a Elías
 
-**Tres migraciones SQL, todas aditivas** (el código viejo las ignora, así que son seguras de correr
+**Cuatro migraciones SQL, todas aditivas** (el código viejo las ignora, así que son seguras de correr
 antes del deploy). Después de cada una: `npx prisma generate` y **reiniciar el servidor de dev** —
 saltárselo hace que las escrituras fallen en silencio.
 
