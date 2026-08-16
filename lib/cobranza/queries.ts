@@ -37,7 +37,8 @@ import {
   mensualizado,
   type MonedaTarjeta,
 } from "./tarjetas";
-import { coberturaDe } from "./planilla";
+import { coberturaDe, periodosDeAguinaldo } from "./planilla";
+import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -1347,4 +1348,36 @@ export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
     cobertura: coberturaDe(pagos.length, periodos),
     periodos,
   };
+}
+
+/**
+ * El aguinaldo de cada persona para `anio`, DERIVADO del libro. No hay tabla de
+ * aguinaldos: es una vista, y se recalcula sola cuando el libro cambia.
+ *
+ * ⚠ PRIVACIDAD: son remuneraciones. Misma superficie SUPER_ADMIN que el libro.
+ */
+export async function loadAguinaldo(anio: number): Promise<AguinaldoResultado> {
+  const periodos = periodosDeAguinaldo(anio);
+  const filas = await prisma.pagoPlanilla.findMany({
+    where: { estado: "PAGADO", periodo: { in: periodos } },
+    include: { comisiones: { select: { monto: true, moneda: true } } },
+  });
+
+  return calcularAguinaldo(
+    filas.map((p) => ({
+      sujetoTeamMemberId: p.sujetoTeamMemberId,
+      sujetoNombre: p.sujetoNombre,
+      periodo: p.periodo,
+      fechaProgramada: isoDay(p.fechaProgramada)!,
+      estado: p.estado,
+      monto: num(p.monto)!,
+      moneda: p.moneda,
+      // Solo las comisiones de la MISMA moneda que la quincena: convertirlas
+      // exigiría un tipo de cambio que este sistema no tiene.
+      comisiones: p.comisiones
+        .filter((c) => c.moneda === p.moneda)
+        .reduce((a, c) => a + num(c.monto)!, 0),
+    })),
+    anio,
+  );
 }

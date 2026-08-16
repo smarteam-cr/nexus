@@ -19,6 +19,7 @@ export {
   loadMovimientosCostos,
   loadTarjetas,
   loadLibroPlanilla,
+  loadAguinaldo,
   type TarjetaDTO,
   type TarjetaCostoDTO,
   type LibroPlanillaDTO,

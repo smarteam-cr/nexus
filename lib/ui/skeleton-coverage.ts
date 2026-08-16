@@ -53,6 +53,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // El libro se agrupa por mes con dos bloques de quincena: su forma no es la de
   // ninguna de las hojas de categoría.
   "finanzas/costos/pagos-planilla": { modo: "own" },
+  "finanzas/costos/aguinaldo": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
 

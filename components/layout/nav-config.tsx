@@ -220,6 +220,7 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // planilla» es lo que salió de verdad, quincena por quincena.
       { href: "/finanzas/costos/planillas", label: "Planillas (estimado)", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/pagos-planilla", label: "Libro de planilla", section: "Costos y gastos", costosOnly: true },
+      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
       // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
       // exige que el ÚLTIMO bloque sea exactamente ["/finanzas/caja-neta"] sin section.
