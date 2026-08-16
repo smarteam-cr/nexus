@@ -88,3 +88,32 @@ describe("⭐ el rótulo llega al prompt del agente de avance", () => {
     expect(ps, "organizerEmail no llega al DTO").toContain("organizerEmail: s.organizerEmail");
   });
 });
+
+describe("⭐ el rótulo llega también al handoff", () => {
+  const src = fs.readFileSync(
+    path.join(RAIZ, "app", "api", "clients", "[id]", "analyze", "route.ts"),
+    "utf8",
+  );
+
+  it("cada reunión de ventas entra rotulada", () => {
+    /* El handoff es el documento donde más caro sale confundirlas: es el que un CSE lee para
+       saber qué se prometió. Un comentario interno leído como promesa se ejecuta. */
+    expect(src, "el prefijo desapareció del bloque de sesiones del handoff").toContain(
+      "prefijoDeSala(etq)",
+    );
+    expect(src).toContain("etiquetaDeSala({ participants: ses.participants }, dominiosPropios)");
+  });
+
+  it("usa la MISMA fuente de dominios propios que el resto del sistema", () => {
+    expect(src).toContain("buildInternalDomainsSet(await getSessionCategories())");
+  });
+
+  it("no hace falta traer organizerEmail: ya viene plegado en participants", () => {
+    /* `foldOrganizer` (project-sources.ts) lo mete adentro de la lista en los DOS cargadores del
+       handoff. Si alguien lo sacara de ahí, el rótulo de este documento empezaría a mentir sin
+       que este archivo cambie — por eso la guarda vive acá y no allá. */
+    const ps = fs.readFileSync(path.join(RAIZ, "lib", "sessions", "project-sources.ts"), "utf8");
+    const usos = ps.match(/foldOrganizer\(s\.participants, s\.organizerEmail\)/g) ?? [];
+    expect(usos, "los dos cargadores del handoff tienen que plegar al organizador").toHaveLength(2);
+  });
+});

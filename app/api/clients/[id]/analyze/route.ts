@@ -36,6 +36,9 @@ import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } fro
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
+import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -1308,6 +1311,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let topSales: RawTranscript[];
     if (isHandoffAgent) {
       const byId = new Map(salesSessions.map((s) => [s.id, s]));
+      /* CON QUIEN fue cada reunion. El organizador YA viene plegado dentro de `participants` por
+         los dos cargadores (foldOrganizer, project-sources.ts), asi que alcanza con esa lista.
+         Sin el rotulo, el handoff no distingue una promesa hecha al cliente en su cara de un
+         comentario nuestro de pasillo, y las escribe con el mismo peso. */
+      const dominiosPropios = buildInternalDomainsSet(await getSessionCategories());
       const plan = planHandoffSessionBudget(
         salesSessions.map((s) => ({ id: s.id, title: s.title, date: s.date })),
         dealProjectCloseDate,
@@ -1316,7 +1324,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       const renderBlock = async (block: HandoffSessionBlock) => {
         const items = plan.filter((p) => p.block === block);
         const contents = await Promise.all(
-          items.map((p) => fetchOrFallback(byId.get(p.id)!, { maxChars: p.maxChars })),
+          items.map(async (p) => {
+            const ses = byId.get(p.id)!;
+            const txt = await fetchOrFallback(ses, { maxChars: p.maxChars });
+            if (!txt) return txt;
+            const etq = etiquetaDeSala({ participants: ses.participants }, dominiosPropios);
+            return `${prefijoDeSala(etq)}${txt}`;
+          }),
         );
         return contents.filter(Boolean).join("\n\n---\n\n");
       };
