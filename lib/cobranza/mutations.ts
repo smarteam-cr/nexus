@@ -1378,6 +1378,7 @@ export async function liquidarComision(
     (x) =>
       x.teamMemberId === data.teamMemberId &&
       x.periodo === data.periodo &&
+      x.quincena === data.quincena &&
       x.moneda === data.moneda,
   );
   if (!d) {

@@ -50,7 +50,6 @@ import {
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import {
   devengarComisiones,
-  quincenaDePagoDeComision,
   POLITICA_PAGO_COMISION,
   POLITICA_PAGO_COMISION_LABEL,
   type ComisionDevengada,
@@ -1729,9 +1728,13 @@ async function conQuincenaSugerida(
 ): Promise<DevengadaConQuincena[]> {
   if (devengadas.length === 0) return [];
 
+  // El objetivo YA lo decidió `devengarComisiones`: el grupo ES el pago (persona
+  // × quincena × moneda), así que acá no se vuelve a aplicar la política — si se
+  // aplicara dos veces, un cambio de política dejaría al grupo y a su quincena
+  // apuntando a meses distintos.
   const objetivos = devengadas.map((d) => ({
     d,
-    objetivo: quincenaDePagoDeComision(d.periodo),
+    objetivo: { periodo: d.periodo, quincena: d.quincena },
   }));
 
   const candidatas = await prisma.pagoPlanilla.findMany({

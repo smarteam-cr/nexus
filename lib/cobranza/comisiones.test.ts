@@ -5,6 +5,7 @@ import {
   periodoDeFecha,
   quincenaDePagoDeComision,
   periodoSiguiente,
+  finDeMesISO,
   POLITICAS_PAGO_COMISION,
   POLITICA_PAGO_COMISION,
   POLITICA_PAGO_COMISION_LABEL,
@@ -236,9 +237,35 @@ describe("devengarComisiones — lo devengado sale de los cobros, no de una fila
   });
 
   it("D14 · el reloj es fechaCobro (cuándo entró la plata), no la fecha programada", () => {
-    // Un cobro programado en febrero que entró en marzo devenga en MARZO.
+    // Un cobro programado en febrero que entró en marzo se paga con la planilla
+    // de marzo, no con la de febrero.
     const res = devengarComisiones([cobro({ id: "c1", fechaCobro: "2026-03-01" })], [regla({ id: "r" })]);
-    expect(res[0].periodo).toBe("2026-03");
+    expect(res[0]).toMatchObject({ periodo: "2026-03", quincena: 2, fechaPago: "2026-03-31" });
+  });
+
+  it("D15 · dos cobros del MISMO mes en planillas distintas son DOS grupos", () => {
+    // La corrección de Alexander en una línea: el 31 de marzo ya no alcanza la
+    // planilla de marzo, así que su comisión NO puede ir en la misma línea que
+    // la del 10. Agrupar por mes de devengo las juntaba y prometía un pago que
+    // la planilla no podía hacer.
+    const res = devengarComisiones(
+      [
+        cobro({ id: "c1", fechaCobro: "2026-03-10" }),
+        cobro({ id: "c2", fechaCobro: "2026-03-31" }),
+      ],
+      [regla({ id: "r" })],
+    );
+    expect(res).toHaveLength(2);
+    expect(res.map((d) => d.fechaPago).sort()).toEqual(["2026-03-31", "2026-04-30"]);
+    expect(res.find((d) => d.fechaPago === "2026-03-31")!.cobroIds).toEqual(["c1"]);
+    expect(res.find((d) => d.fechaPago === "2026-04-30")!.cobroIds).toEqual(["c2"]);
+  });
+
+  it("D16 · el último día del mes NO se paga ese mismo día (es el SIGUIENTE 30)", () => {
+    // 17 de los 101 cobros reales caen el último día de su mes: con «mismo mes»
+    // la comisión se programaría el día en que entró la plata.
+    const res = devengarComisiones([cobro({ id: "c1", fechaCobro: "2026-04-30" })], [regla({ id: "r" })]);
+    expect(res[0].fechaPago).toBe("2026-05-31");
   });
 });
 
@@ -250,43 +277,81 @@ describe("periodoDeFecha", () => {
 });
 
 describe("quincenaDePagoDeComision — CUÁNDO se paga (política aislada)", () => {
-  it("Q1 · el default paga en la primera quincena del mes SIGUIENTE", () => {
-    // Por qué el siguiente: la comisión de marzo se calcula sobre todo marzo,
-    // incluido el día 31. Pagarla el 30 sería pagar un número que no se sabe.
-    expect(quincenaDePagoDeComision("2026-03")).toEqual({ periodo: "2026-04", quincena: 1 });
-  });
-
-  it("Q2 · diciembre salta de año", () => {
-    expect(quincenaDePagoDeComision("2026-12")).toEqual({ periodo: "2027-01", quincena: 1 });
-  });
-
-  it("Q3 · «fin del mismo mes» paga en la Q2 del período", () => {
-    expect(quincenaDePagoDeComision("2026-03", "Q2_MISMO_MES")).toEqual({
+  it("Q1 · el default es el SIGUIENTE fin de mes después de que el cliente pague", () => {
+    // La regla de Alexander: «los pagos de comisiones se hacen los 30 de acuerdo
+    // al pago de los clientes». Elías: «el siguiente 30 después de que pague».
+    expect(quincenaDePagoDeComision("2026-03-10")).toEqual({
       periodo: "2026-03",
       quincena: 2,
+      fechaProgramada: "2026-03-31",
     });
   });
 
-  it("Q4 · «el 15 del mismo mes» paga en la Q1 del período", () => {
-    expect(quincenaDePagoDeComision("2026-03", "Q1_MISMO_MES")).toEqual({
+  it("Q2 · ESTRICTAMENTE posterior: el último día del mes salta al siguiente", () => {
+    // El caso que hace que esto NO sea la vieja «Q2_MISMO_MES»: pagar la
+    // comisión el mismo día en que entró la plata no es «el SIGUIENTE 30».
+    expect(quincenaDePagoDeComision("2026-04-30").fechaProgramada).toBe("2026-05-31");
+    expect(quincenaDePagoDeComision("2026-03-31").fechaProgramada).toBe("2026-04-30");
+  });
+
+  it("Q3 · un cobro del 30 en un mes de 31 días SÍ alcanza ese mes", () => {
+    // No es una excepción: el 31 todavía es «el siguiente 30» respecto del 30.
+    expect(quincenaDePagoDeComision("2026-03-30").fechaProgramada).toBe("2026-03-31");
+  });
+
+  it("Q4 · diciembre salta de año", () => {
+    expect(quincenaDePagoDeComision("2026-12-31")).toEqual({
+      periodo: "2027-01",
+      quincena: 2,
+      fechaProgramada: "2027-01-31",
+    });
+  });
+
+  it("Q5 · «siguiente quincena» usa el 15 cuando el cobro entra antes", () => {
+    expect(quincenaDePagoDeComision("2026-03-05", "SIGUIENTE_QUINCENA")).toEqual({
       periodo: "2026-03",
       quincena: 1,
+      fechaProgramada: "2026-03-15",
+    });
+    expect(quincenaDePagoDeComision("2026-03-15", "SIGUIENTE_QUINCENA").quincena).toBe(2);
+    expect(quincenaDePagoDeComision("2026-03-31", "SIGUIENTE_QUINCENA")).toEqual({
+      periodo: "2026-04",
+      quincena: 1,
+      fechaProgramada: "2026-04-15",
     });
   });
 
-  it("Q5 · las 3 políticas están etiquetadas (una sin label sale vacía en pantalla)", () => {
+  it("Q6 · «fin del mes siguiente» siempre deja un mes de colchón", () => {
+    expect(quincenaDePagoDeComision("2026-03-01", "FIN_DE_MES_SIGUIENTE").fechaProgramada).toBe(
+      "2026-04-30",
+    );
+  });
+
+  it("Q7 · las 3 políticas están etiquetadas (una sin label sale vacía en pantalla)", () => {
     for (const p of POLITICAS_PAGO_COMISION) {
       expect(POLITICA_PAGO_COMISION_LABEL[p]?.length ?? 0).toBeGreaterThan(0);
     }
   });
 
-  it("Q6 · la política vigente es una de las declaradas", () => {
+  it("Q8 · la política vigente es una de las declaradas", () => {
     expect(POLITICAS_PAGO_COMISION).toContain(POLITICA_PAGO_COMISION);
   });
 
-  it("Q7 · un período basura no revienta ni inventa un mes", () => {
+  it("Q9 · un período basura no revienta ni inventa un mes", () => {
     expect(periodoSiguiente("no-es-un-periodo")).toBe("no-es-un-periodo");
     expect(periodoSiguiente("2026-13")).toBe("2026-13");
+  });
+});
+
+describe("finDeMesISO — el «30» de cada mes, sin Date", () => {
+  it("F1 · los meses de 30 y 31, y febrero bisiesto y común", () => {
+    expect(finDeMesISO("2026-01")).toBe("2026-01-31");
+    expect(finDeMesISO("2026-04")).toBe("2026-04-30");
+    expect(finDeMesISO("2026-02")).toBe("2026-02-28");
+    expect(finDeMesISO("2028-02")).toBe("2028-02-29");
+    // El siglo que NO es bisiesto y el que sí — la regla completa, no la mitad.
+    expect(finDeMesISO("2100-02")).toBe("2100-02-28");
+    expect(finDeMesISO("2000-02")).toBe("2000-02-29");
   });
 });
 

@@ -635,7 +635,14 @@ export const reglaComisionPatchSchema = reglaComisionBase
  */
 export const liquidarComisionSchema = z.object({
   teamMemberId: z.string().cuid(),
+  /**
+   * ⚠ El período de PAGO, no el de devengo (cambió el 2026-08-16 con la regla de
+   * Alexander). Junto con `quincena` identifica al grupo: una política que pague
+   * dos veces al mes produce dos grupos en el mismo período y sin la quincena se
+   * liquidaría el equivocado.
+   */
   periodo: periodoPlanilla,
+  quincena: z.union([z.literal(1), z.literal(2)]),
   moneda: z.enum(COBRANZA_MONEDAS),
   // Opcional: engancharla a la quincena con la que se paga. Se puede liquidar
   // sin pago todavía (el schema lo permite y la FK es nullable).

@@ -2527,6 +2527,60 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   (`finalizadoEl` + movimiento `BAJA`). Es reversible y deja huella; el hard delete perdería
   justamente la historia que `CostoMovimiento` existe para guardar.
 
+## La comisión se paga el siguiente 30 después de que el cliente pague (2026-08-16)
+
+> Corrección de **Alexander Arrieta** por WhatsApp, sobre la tanda del mismo día:
+> *"No, los pagos de comisiones se hacen los 30 de acuerdo al pago de los
+> clientes… por las fechas de pagos de los clientes, que no son exactas"*. Elías
+> lo cerró: *"O sea, se hacen el siguiente 30 después de que el cliente pague"*, y
+> pidió validar que esa configuración fuera apta y que quedara de default.
+
+- **Es apta y pasa a ser el default, pero NO era la opción que ya existía.** El
+  enum traía `Q2_MISMO_MES` («fin del mismo mes») y parecía que la corrección se
+  resolvía cambiando una constante. **No:** de los 101 cobros COBRADO con fecha
+  que hay hoy, **17 caen el último día de su mes** (los días más frecuentes son el
+  15 con 59 y el 30 con 23). Con «mismo mes», esos 17 tendrían la comisión
+  programada **el mismo día en que entró la plata** — pagada antes de estar
+  confirmada, y lo contrario de «el SIGUIENTE 30». Por eso la política nueva se
+  llama `SIGUIENTE_FIN_DE_MES` y compara **estrictamente**.
+- **El disparador es la fecha de CADA cobro, no el mes al que pertenece**, y eso
+  es lo que obligó a un cambio estructural y no a un swap de constante:
+  `devengarComisiones` agrupaba por mes de devengo, así que un cobro del 15 de
+  julio y uno del 31 de julio caían en la MISMA línea — y se pagan en planillas
+  distintas. Ahora el grupo ES el pago: persona × quincena de pago × moneda. Es
+  literalmente lo que dijo Alexander (*"de acuerdo al pago de los clientes… las
+  fechas no son exactas"*): la comisión sigue al dinero, no al calendario.
+- **Se pudo cambiar el significado de `periodo` sin migrar nada** porque se
+  verificó antes: `ComisionVendedor` y `ReglaComisionVendedor` tienen **0 filas**.
+  Nada liquidado, nada que reinterpretar. Con filas, el mismo cambio habría
+  exigido una columna nueva y un backfill.
+- **Disuelve la objeción del default anterior en vez de ignorarla.** `Q1_MES_SIGUIENTE`
+  se había justificado así: *"la comisión de marzo se calcula sobre TODO marzo,
+  incluido el 31; pagarla el 30 sería pagar un número que todavía no se puede
+  saber"*. Con el grupo redefinido, cada línea es «todo lo que entró estrictamente
+  antes del 30» — que SÍ es un número que se puede saber el 30. El argumento era
+  correcto para el agrupamiento viejo y deja de aplicar con el nuevo.
+- **Un cobro del 30 en un mes de 31 días se paga al día siguiente, y está bien.**
+  No es una excepción: el 31 todavía es «el siguiente 30» respecto del 30. Lo
+  congela el test Q3 para que nadie lo «arregle» sin decidirlo.
+- **`quincena` entra a la identidad del grupo y al payload de liquidar.** Con la
+  política vigente siempre da 2, pero `SIGUIENTE_QUINCENA` produce dos grupos en
+  el mismo mes y sin ese campo se liquidaría el equivocado — el tipo de error que
+  no avisa. **No** se agregó columna a `ComisionVendedor`: sería DDL coordinado
+  entre las 2 PCs por una política que hoy nadie usa, y la fila liquidada ya queda
+  identificada por sus `cobroIds` y su `pagoPlanillaId`.
+- **La fecha de pago se muestra SIEMPRE, aunque la quincena no exista.** Antes,
+  sin fila de planilla a la que engancharse, la columna «Se paga» quedaba muda: la
+  fecha se sabe igual (la calcula la política) y lo que falta es dónde colgarla,
+  que se dice aparte con «(suelta)».
+- **`finDeMesISO` hace la aritmética a mano, sin `Date`.** Un `new Date("2026-07-31")`
+  en UTC-6 se lee como el 30 y correría **todas** las comisiones un día. El módulo
+  entero ya evitaba `Date` por esto; la regla nueva no lo iba a estrenar.
+- ⚠ **La política sigue siendo una constante, no una fila de configuración.** Que
+  se haya corregido a los pocos días refuerza el diseño (cambiarla fue tocar un
+  archivo puro con su test), no lo contradice: mientras haya UNA forma de pagar,
+  una pantalla de settings sería una pantalla que mantener sin nadie que la use.
+
 ## Planillas, historial y la cadencia de cada aliado (2026-08-16)
 
 > Elías, mirando el módulo ya en uso: *"El historial de planillas, creo que mejor
@@ -2581,12 +2635,12 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   plomería existía entera y no la usaba nadie.
 - **El CUÁNDO se paga la comisión es una POLÍTICA aislada**, porque Elías pidió
   explícitamente poder cambiarla (*"por ejemplo ponerlo en la primera semana de cada
-  mes"*). `quincenaDePagoDeComision(periodo, politica)` es pura, con un test por
-  política, y la vigente es una constante. Default `Q1_MES_SIGUIENTE`: la comisión
-  de marzo se calcula sobre TODO marzo, incluido el 31 — pagarla el 30 sería pagar
-  un número que todavía no se puede saber. La quincena la **resuelve el server** y
+  mes"*). `quincenaDePagoDeComision(fechaCobro, politica)` es pura, con un test por
+  política, y la vigente es una constante. La quincena la **resuelve el server** y
   el panel la muestra y la reenvía; si la calculara el navegador, la comisión
   quedaría enganchada a lo que dijo el navegador.
+  ⚠ **El default `Q1_MES_SIGUIENTE` era INCORRECTO y se corrigió el mismo día** —
+  ver la sección siguiente.
 - **La frecuencia es del ALIADO, no del pago** (decisión de Elías entre tres
   opciones). Tabla `PartnerComercial` con `frecuenciaMeses` Int (no enum: agregar
   "cada 2 meses" no puede exigir un `ALTER TYPE` coordinado entre las 2 PCs) y FK

@@ -50,7 +50,20 @@ export interface DetalleComision {
 export interface ComisionDevengada {
   teamMemberId: string;
   vendedorNombre: string;
-  periodo: string; // "YYYY-MM"
+  /**
+   * "YYYY-MM" de la planilla que PAGA, no del mes en que se cobró.
+   *
+   * ⚠ Cambió de significado el 2026-08-16 con la corrección de Alexander: antes
+   * era el mes de devengo. Un cobro del 15 de julio y uno del 31 de julio son del
+   * mismo mes y caen en planillas distintas, así que agrupar por mes de devengo
+   * mezclaba dos pagos en una sola línea. Se pudo cambiar sin migrar nada porque
+   * no había ninguna comisión liquidada todavía.
+   */
+  periodo: string;
+  /** 1 = la del 15 · 2 = la de fin de mes. Parte de la identidad del grupo. */
+  quincena: 1 | 2;
+  /** El día exacto en que se paga, ISO. Es el que se muestra. */
+  fechaPago: string;
   moneda: string;
   /** Suma de los cobros que la produjeron. */
   base: number;
@@ -104,7 +117,17 @@ export function reglaParaCobro(
 }
 
 /**
- * Lo devengado, agrupado por persona × período × moneda.
+ * Lo devengado, agrupado por persona × QUINCENA DE PAGO × moneda.
+ *
+ * ⚠ El grupo es el PAGO, no el mes de devengo. La regla la corrigió Alexander:
+ * la comisión se paga en el primer fin de mes posterior a que el cliente pagó,
+ * así que dos cobros del mismo mes pueden caer en planillas distintas y hay que
+ * separarlos desde acá — si se agruparan por mes de devengo, la pantalla
+ * prometería un pago que la planilla no puede hacer.
+ *
+ * Efecto secundario deseable: cada grupo es "todo lo que entró estrictamente
+ * antes del 30", que ES un número que se puede saber el 30. Agrupar por mes de
+ * devengo obligaba a esperar al mes siguiente para cerrarlo.
  *
  * `yaLiquidados` son los cobros que ya se pagaron en una liquidación anterior:
  * se excluyen para no pagar dos veces lo mismo. Es un Set de ids, no una fecha
@@ -115,11 +138,14 @@ export function devengarComisiones(
   cobros: CobroComisionable[],
   reglas: ReglaComision[],
   yaLiquidados: ReadonlySet<string> = new Set(),
+  politica: PoliticaPagoComision = POLITICA_PAGO_COMISION,
 ): ComisionDevengada[] {
   interface Acc {
     teamMemberId: string;
     vendedorNombre: string;
     periodo: string;
+    quincena: 1 | 2;
+    fechaPago: string;
     moneda: string;
     base: number;
     monto: number;
@@ -135,14 +161,16 @@ export function devengarComisiones(
     const regla = reglaParaCobro(reglas, c.clientId, c.fechaCobro);
     if (!regla) continue;
 
-    const periodo = periodoDeFecha(c.fechaCobro);
-    const clave = `${regla.teamMemberId}::${periodo}::${c.moneda}`;
+    const pago = quincenaDePagoDeComision(c.fechaCobro, politica);
+    const clave = `${regla.teamMemberId}::${pago.periodo}::${pago.quincena}::${c.moneda}`;
     let g = porGrupo.get(clave);
     if (!g) {
       g = {
         teamMemberId: regla.teamMemberId,
         vendedorNombre: regla.vendedorNombre,
-        periodo,
+        periodo: pago.periodo,
+        quincena: pago.quincena,
+        fechaPago: pago.fechaProgramada,
         moneda: c.moneda,
         base: 0,
         monto: 0,
@@ -174,6 +202,8 @@ export function devengarComisiones(
         teamMemberId: g.teamMemberId,
         vendedorNombre: g.vendedorNombre,
         periodo: g.periodo,
+        quincena: g.quincena,
+        fechaPago: g.fechaPago,
         moneda: g.moneda,
         base,
         // Con un solo porcentaje es EL porcentaje; con varios es el efectivo
@@ -188,35 +218,45 @@ export function devengarComisiones(
     })
     .sort(
       (a, b) =>
-        b.periodo.localeCompare(a.periodo) ||
+        b.fechaPago.localeCompare(a.fechaPago) ||
         a.vendedorNombre.localeCompare(b.vendedorNombre) ||
         a.moneda.localeCompare(b.moneda),
     );
 }
 
 // ── CUÁNDO se paga la comisión ─────────────────────────────────────────────────
-// Elías eligió «junto con el salario» y pidió explícitamente que quede armado
-// para cambiarlo después («por ejemplo ponerlo en la primera semana de cada mes,
-// o alguna configuración similar»). Por eso la regla NO está escrita adentro del
-// panel ni de la mutación: vive acá, es pura, y cambiarla es cambiar una
-// constante — con un test por política que dice qué hace cada una.
+// La regla la corrigió Alexander Arrieta (2026-08-16): «los pagos de comisiones
+// se hacen los 30 de acuerdo al pago de los clientes… por las fechas de pagos de
+// los clientes que no son exactas». Elías lo cerró así: «se hacen el SIGUIENTE 30
+// después de que el cliente pague».
+//
+// ⚠ Eso NO es «la comisión del mes M se paga tal día»: el disparador es la fecha
+// en que entró la plata de CADA cobro, no el mes al que pertenece. Un cobro del
+// 15 de julio y uno del 31 de julio son del mismo mes y se pagan en planillas
+// distintas. Por eso la política recibe una FECHA y no un período, y por eso
+// `devengarComisiones` agrupa por la quincena de pago y no por el mes de devengo.
+//
+// Elías pidió explícitamente que quede armado para cambiarlo después («por
+// ejemplo ponerlo en la primera semana de cada mes»). Por eso la regla NO está
+// escrita adentro del panel ni de la mutación: vive acá, es pura, y cambiarla es
+// cambiar una constante — con un test por política que dice qué hace cada una.
 
 /** Las políticas que el sistema sabe resolver. */
 export const POLITICAS_PAGO_COMISION = [
-  /** La comisión del mes M se paga en la Q1 del mes M+1 (el 15 del siguiente). */
-  "Q1_MES_SIGUIENTE",
-  /** En la Q2 del MISMO mes (fin de mes). */
-  "Q2_MISMO_MES",
-  /** En la Q1 del MISMO mes (el 15). */
-  "Q1_MISMO_MES",
+  /** La vigente: el primer fin de mes ESTRICTAMENTE posterior al cobro. */
+  "SIGUIENTE_FIN_DE_MES",
+  /** La primera quincena (15 o fin de mes) estrictamente posterior al cobro. */
+  "SIGUIENTE_QUINCENA",
+  /** El fin del mes SIGUIENTE al del cobro: un mes entero de colchón. */
+  "FIN_DE_MES_SIGUIENTE",
 ] as const;
 
 export type PoliticaPagoComision = (typeof POLITICAS_PAGO_COMISION)[number];
 
 export const POLITICA_PAGO_COMISION_LABEL: Record<PoliticaPagoComision, string> = {
-  Q1_MES_SIGUIENTE: "Con la quincena del 15 del mes siguiente",
-  Q2_MISMO_MES: "Con la quincena de fin del mismo mes",
-  Q1_MISMO_MES: "Con la quincena del 15 del mismo mes",
+  SIGUIENTE_FIN_DE_MES: "El siguiente fin de mes después de que el cliente pague",
+  SIGUIENTE_QUINCENA: "La siguiente quincena (15 o fin de mes) después del pago",
+  FIN_DE_MES_SIGUIENTE: "El fin del mes siguiente al del pago del cliente",
 };
 
 /**
@@ -226,28 +266,71 @@ export const POLITICA_PAGO_COMISION_LABEL: Record<PoliticaPagoComision, string> 
  * sin nadie que la use. El día que haga falta, esto pasa a leerse de la base y
  * `quincenaDePagoDeComision` no se entera — ya recibe la política por parámetro.
  *
- * ⚠ Por qué el mes SIGUIENTE y no el mismo: la comisión de marzo se calcula
- * sobre TODO lo cobrado en marzo, incluido el día 31. Pagarla el 30 de marzo
- * sería pagar un número que todavía no se puede saber. La Q1 de abril es la
- * primera planilla en la que el monto ya está cerrado.
+ * ⚠ Por qué ESTRICTAMENTE posterior y no «el 30 del mes del cobro»: de los 101
+ * cobros COBRADO que hay hoy, 17 caen el último día de su mes. Con un «mismo
+ * mes» esos 17 tendrían la comisión programada el mismo día en que entró la
+ * plata — o sea pagada antes de estar confirmada. «El SIGUIENTE 30» los manda a
+ * la planilla de después, que es exactamente lo que dijo Alexander.
  */
-export const POLITICA_PAGO_COMISION: PoliticaPagoComision = "Q1_MES_SIGUIENTE";
+export const POLITICA_PAGO_COMISION: PoliticaPagoComision = "SIGUIENTE_FIN_DE_MES";
+
+export interface QuincenaDePago {
+  /** "YYYY-MM" de la planilla que paga. */
+  periodo: string;
+  /** 1 = la del 15 · 2 = la de fin de mes. */
+  quincena: 1 | 2;
+  /** El día exacto en que se paga, ISO. Es el que se muestra. */
+  fechaProgramada: string;
+}
 
 /**
- * En qué quincena cae la comisión devengada en `periodo`.
+ * En qué quincena de planilla cae la comisión de un cobro pagado en `fechaCobro`.
  *
- * Devuelve solo el par (período, quincena) — NO busca la fila: si esa quincena
- * no existe en el libro, quien llama decide qué hacer (hoy: la liquida suelta y
- * lo dice). Mantenerla pura es lo que permite testear las tres políticas y el
- * salto de diciembre sin una base de datos.
+ * Devuelve solo el destino — NO busca la fila: si esa quincena no existe en el
+ * libro, quien llama decide qué hacer (hoy: la liquida suelta y lo dice).
+ * Mantenerla pura es lo que permite testear las tres políticas, el salto de
+ * diciembre y los meses de 28/30/31 días sin una base de datos.
  */
 export function quincenaDePagoDeComision(
-  periodo: string,
+  fechaCobro: string,
   politica: PoliticaPagoComision = POLITICA_PAGO_COMISION,
-): { periodo: string; quincena: 1 | 2 } {
-  if (politica === "Q2_MISMO_MES") return { periodo, quincena: 2 };
-  if (politica === "Q1_MISMO_MES") return { periodo, quincena: 1 };
-  return { periodo: periodoSiguiente(periodo), quincena: 1 };
+): QuincenaDePago {
+  const periodo = fechaCobro.slice(0, 7);
+  const finDeMes = finDeMesISO(periodo);
+
+  if (politica === "FIN_DE_MES_SIGUIENTE") return q2De(periodoSiguiente(periodo));
+
+  if (politica === "SIGUIENTE_QUINCENA") {
+    const quince = `${periodo}-15`;
+    if (fechaCobro < quince) return { periodo, quincena: 1, fechaProgramada: quince };
+    if (fechaCobro < finDeMes) return q2De(periodo);
+    return { periodo: periodoSiguiente(periodo), quincena: 1, fechaProgramada: `${periodoSiguiente(periodo)}-15` };
+  }
+
+  // SIGUIENTE_FIN_DE_MES — la vigente.
+  if (fechaCobro < finDeMes) return q2De(periodo);
+  return q2De(periodoSiguiente(periodo));
+}
+
+function q2De(periodo: string): QuincenaDePago {
+  return { periodo, quincena: 2, fechaProgramada: finDeMesISO(periodo) };
+}
+
+/**
+ * El último día de "YYYY-MM", ISO. Aritmética de calendario a mano, sin `Date`:
+ * el módulo entero evita husos horarios porque un `new Date("2026-07-31")` en
+ * UTC-6 se lee como el 30 y correría todas las comisiones un día.
+ */
+export function finDeMesISO(periodo: string): string {
+  const anio = Number(periodo.slice(0, 4));
+  const mes = Number(periodo.slice(5, 7));
+  const largos = [31, esBisiesto(anio) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const dia = largos[mes - 1] ?? 30;
+  return `${periodo}-${String(dia).padStart(2, "0")}`;
+}
+
+function esBisiesto(anio: number): boolean {
+  return (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
 }
 
 /** "2026-12" → "2027-01". Aritmética de calendario, sin `Date` (y sin husos). */

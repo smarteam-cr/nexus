@@ -307,11 +307,13 @@
   revert **frena con 409** (y se suelta deshaciendo la liquidación). Es remuneración de una
   persona: nunca comparte ruta, endpoint ni loader con las de partner.
   El reloj es **`fechaCobro`** —el día que entró la plata— y de ahí salen las dos cosas que
-  decide: qué regla estaba vigente y a qué período pertenece; un cobro COBRADO sin fecha de
-  pago no devenga. Se agrupa por **persona × período × moneda** (CRC y USD son dos comisiones,
-  nunca una convertida) y el redondeo va **por cobro**, para que la suma del detalle sea
-  exactamente lo que se paga. Al liquidar, el monto lo **recalcula el server** con el mismo
-  cálculo puro que pintó la pantalla — el navegador no puede mandarlo.
+  decide: qué regla estaba vigente y **en qué planilla se paga**; un cobro COBRADO sin fecha de
+  pago no devenga. Se agrupa por **persona × quincena de pago × moneda** (CRC y USD son dos
+  comisiones, nunca una convertida) y el redondeo va **por cobro**, para que la suma del detalle
+  sea exactamente lo que se paga. ⚠ El grupo es el PAGO, no el mes de devengo (cambió el
+  2026-08-16 — ver **política de pago de comisión**): dos cobros del mismo mes pueden caer en
+  planillas distintas y salen como dos líneas. Al liquidar, el monto lo **recalcula el server**
+  con el mismo cálculo puro que pintó la pantalla — el navegador no puede mandarlo.
 - **aliado comercial** (`PartnerComercial` → bloque «Aliados» de
   `/finanzas/comisiones-partner`, gate `cobranza.read`): quién le PAGA a Smarteam y **cada
   cuánto**. La frecuencia es del ALIADO y no del pago (HubSpot paga cada 3 meses y eso no cambia
@@ -326,11 +328,17 @@
   que todo el mundo ya entiende. Anclarlo al primer pago dejaría a dos aliados de la misma
   cadencia en períodos corridos entre sí y ninguna tabla los podría poner lado a lado. La pantalla
   dice **dónde** caería el próximo, nunca cuánto: el monto no lo sabe nadie.
-- **política de pago de comisión** (`POLITICA_PAGO_COMISION`, `lib/cobranza/comisiones.ts`): en
-  qué quincena se le paga a un vendedor la comisión que devengó en un mes. Hoy es **la Q1 del mes
-  siguiente** —la comisión de marzo se calcula sobre todo marzo, incluido el 31: pagarla el 30
-  sería pagar un número que todavía no se puede saber— y está aislada en una función pura con la
-  política como constante, para poder cambiarla sin tocar la pantalla ni la mutación.
+- **política de pago de comisión** (`POLITICA_PAGO_COMISION`, `lib/cobranza/comisiones.ts`):
+  cuándo se le paga a un vendedor la comisión de un cobro. Hoy es **el siguiente fin de mes
+  después de que el cliente pague** (`SIGUIENTE_FIN_DE_MES`) — la regla que corrigió Alexander
+  Arrieta el 2026-08-16: *«los pagos de comisiones se hacen los 30 de acuerdo al pago de los
+  clientes»*, o en palabras de Elías, *«el siguiente 30 después de que el cliente pague»*.
+  ⚠ El disparador es **la fecha de CADA cobro**, no el mes al que pertenece: un cobro del 15 de
+  julio y uno del 31 de julio se pagan en planillas distintas. Y es **estrictamente posterior**
+  —por eso no es la vieja opción «fin del mismo mes»—: 17 de los 101 cobros reales caen el último
+  día de su mes y ahí la comisión quedaría programada el día en que entró la plata. Está aislada
+  en una función pura con la política como constante, para poder cambiarla sin tocar la pantalla
+  ni la mutación.
 - **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
   /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
   puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);

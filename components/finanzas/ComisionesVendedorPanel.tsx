@@ -30,6 +30,16 @@ import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input, Select } from "@/components/ui";
 import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
 
+/**
+ * La identidad de un grupo devengado es persona × quincena de pago × moneda — la
+ * MISMA que usa `devengarComisiones` en el server. Con solo el período, dos pagos
+ * del mismo mes (los que produce una política de dos quincenas) compartirían la
+ * fila expandible y el candado de doble click.
+ */
+function claveDe(d: DevengadaConQuincena): string {
+  return `${d.teamMemberId}::${d.periodo}::${d.quincena}::${d.moneda}`;
+}
+
 interface Lite {
   id: string;
   name: string;
@@ -133,7 +143,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
    * escrito arriba del botón.
    */
   async function liquidar(d: DevengadaConQuincena) {
-    const clave = `${d.teamMemberId}::${d.periodo}::${d.moneda}`;
+    const clave = claveDe(d);
     if (liquidando) return;
     setLiquidando(clave);
     try {
@@ -143,6 +153,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
         body: JSON.stringify({
           teamMemberId: d.teamMemberId,
           periodo: d.periodo,
+          quincena: d.quincena,
           moneda: d.moneda,
           pagoPlanillaId: d.quincenaSugerida?.id ?? null,
         }),
@@ -241,8 +252,9 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-fg">Por liquidar</h2>
         <p className="text-[11px] text-fg-muted">
-          {data.politicaPago.label}. La comisión de un mes se paga cuando ese mes ya
-          cerró — antes el monto todavía puede cambiar.
+          {data.politicaPago.label}. Cada línea es UN pago: junta todo lo que ese
+          vendedor cobró antes de esa fecha, así que dos cobros del mismo mes
+          pueden caer en planillas distintas.
         </p>
         {data.devengadas.length === 0 ? (
           <EmptyState
@@ -269,7 +281,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
               </thead>
               <tbody>
                 {data.devengadas.map((d) => {
-                  const clave = `${d.teamMemberId}::${d.periodo}::${d.moneda}`;
+                  const clave = claveDe(d);
                   const abierta = abiertas.has(clave);
                   const moneda = d.moneda as "CRC" | "USD";
                   return (
@@ -285,7 +297,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                           </button>
                         </td>
                         <td className={`${TD} text-fg-secondary`}>
-                          {d.periodo} · {d.moneda}
+                          {etiquetaMes(d.periodo)} · {d.moneda}
                         </td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtMonto(d.base, moneda)}</td>
                         <td className={`${TD} text-right tabular-nums`}>
@@ -303,15 +315,19 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                           {fmtMonto(d.monto, moneda)}
                         </td>
                         <td className={`${TD} whitespace-nowrap`}>
-                          {d.quincenaSugerida ? (
-                            <span className="text-fg-secondary">
-                              {fmtFecha(d.quincenaSugerida.fechaProgramada)}
-                            </span>
-                          ) : (
-                            // El motivo se DICE. Un guion suelto obligaría a
-                            // adivinar por qué no se va a enganchar a nada.
-                            <span className="text-fg-muted" title={d.motivoSinQuincena ?? ""}>
-                              sin quincena ⓘ
+                          {/* La FECHA se sabe siempre: la calcula la política a
+                              partir de la fecha en que pagó el cliente. Lo que
+                              puede faltar es la fila de planilla a la que
+                              engancharla — y eso se dice aparte, sin borrar la
+                              fecha (antes, sin quincena la columna quedaba muda
+                              y no se veía cuándo se iba a pagar). */}
+                          <span className="text-fg-secondary">{fmtFecha(d.fechaPago)}</span>
+                          {!d.quincenaSugerida && (
+                            <span
+                              className="ml-1 text-fg-muted"
+                              title={d.motivoSinQuincena ?? ""}
+                            >
+                              (suelta) ⓘ
                             </span>
                           )}
                         </td>
