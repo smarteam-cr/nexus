@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `ad3ec42`. **36 commits sin push.**
+> Última actualización: **2026-08-16**, punta `ad3ec42`. **37 commits sin push.**
 
 ---
 
@@ -37,7 +37,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 5 · Resumen del proyecto | Cada proyecto tiene un resumen automático de «cómo va», con cada afirmación citando de dónde salió. Sin fuente, la afirmación se descarta. | ✅ Hecho |
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
 | | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | ✅ Hecho |
-| | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⏳ Pendiente |
+| | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⛔ **Frenada** — necesita una decisión tuya (ver abajo) |
 | | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
@@ -121,14 +121,39 @@ o revienta la lectura.
 | Que el agente no vuelva a proponer lo que ya se cerró | ✅ `1eae91d` |
 | Que el cliente vea «resuelta» y el aviso de re-subir se encienda | ✅ `ad3ec42` |
 
-### Fase 8 · Reuniones → tareas
+### Fase 8 · Reuniones → tareas *(⛔ frenada: necesita una decisión de Elías)*
 
-Que lo que se acuerda en una reunión se convierta en tareas del cronograma. **La primera generación
-pasa por revisión humana**, como todo el resto.
+El plan pedía mirar el circuito de pendientes antes de sumarle una segunda fuente. **Medido el
+2026-08-16** (detalle en `docs/notas-fase8-pendientes.md`):
 
-⚠ Antes de sumar tareas hay que mirar un número: de 3.185 pendientes vivos salidos de reuniones,
-solo el 0,8 % está marcado como hecho. Sin resolver ese circuito, esto crea un tercer cementerio.
-El mínimo: que una tarea creada desde una reunión **cierre** el pendiente que la originó.
+| | |
+|---|---|
+| Pendientes vivos | **3.211** · hechos **26 (0,8 %)** · descartados **1** |
+| De ellos, del agente post-reunión | **3.169 (98,7 %)**, con 0,8 % de cierre |
+| Los 3.185 sin hacer, ¿son viejos? | **No: TODOS son de los últimos 90 días** |
+| Escritos a mano | 2, de los cuales 1 hecho (**50 %**) |
+
+**Lo que muestra:** no es un cementerio viejo ni un problema de datos —tres de cada cuatro tienen
+dueño—, y tampoco es que no se vean. Es **volumen**: el agente emite ~35 por día extrayendo todo lo
+que suena a próximo paso, y una lista de 340 en un solo cliente no se recorre. Lo que una persona
+escribe a mano sí se cierra (50 %); lo que extrae el agente, no.
+
+**Por eso la fase se frena:** agregar una segunda fuente automática sobre un circuito con 0,8 % de
+cierre no suma capacidad, duplica el ruido — y encima se lo mete al cronograma, que hoy sí se usa.
+El «mínimo» que preveía el plan (que la tarea cierre el pendiente que la originó) arregla la
+contabilidad, no el volumen.
+
+**La pregunta, que es de negocio:** ¿qué es un pendiente que vale la pena registrar? Tres salidas,
+de menor a mayor esfuerzo: subir la vara del agente (solo compromisos con dueño y fecha dichos en
+la reunión) · que caduquen solos si nadie los toca · o aceptar que son notas y sacarlos de todo
+contador que prometa accionabilidad.
+
+⚠ **Ninguna limpieza masiva mientras tanto**: borrar 3.185 filas que el equipo nunca decidió
+descartar es tomar por ellos una decisión que es suya.
+
+**Lo que sí avanza sin esa decisión:** el tramo 8.1 — hoy la primera generación del detalle del
+cronograma escribe las tareas directo, sin pasar por la curación que sí tiene todo el resto. Vale
+por sí solo y no suma volumen.
 
 ### Fase 9 · Lo que se habló pero no se vendió
 
@@ -191,6 +216,7 @@ memoria y las escrituras fallan en silencio.
 | `1eae91d` | 7 | El botón de dar por resuelta, y reabrir en vez de clonar |
 | `1156666` | — | Las 4 migraciones aplicadas + el comando documentado que no corría |
 | `ad3ec42` | 7 | El cliente ve «Resuelta»; el aviso de subir deja de ser ciego |
+| *(medición)* | 8 | El circuito de pendientes, medido — y por qué frena la fase |
 
 ---
 
