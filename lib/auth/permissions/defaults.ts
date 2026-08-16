@@ -60,6 +60,11 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "generate"],
+    /* PRIMERA celda de `proyectos` que toca el CSE, y es deliberado: mantener al día el estado y
+       la etapa en HubSpot es su trabajo, no del liderazgo. Si exigiera CSL, el tablero seguiría
+       viejo — que es el problema que esto viene a resolver. No le abre `create`, `deleteCanvas`
+       ni `marcarInterno`: ésas siguen donde estaban. */
+    proyectos: ["cambiarEstadoHubspot"],
     marketing: ["read"],
   }),
   // VENTAS: ve todo + handoff completo + cronograma (sin regenerar IA) + área
@@ -146,7 +151,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     /* `marcarInterno` va SOLO acá, junto a `deleteCanvas`, y no con los que pueden crear:
        dar de alta es una decisión de arranque, pero sacar de cobranza un proyecto que ya está
        andando cambia la plata de algo en marcha. Mismo peso que borrarle un canvas. */
-    proyectos: ["create", "deleteCanvas", "marcarInterno"],
+    proyectos: ["create", "deleteCanvas", "marcarInterno", "cambiarEstadoHubspot"],
     ventas: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],

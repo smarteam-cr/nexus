@@ -247,3 +247,46 @@ export async function actualizarEtapaProyecto(
     );
   }
 }
+
+/** Lo que HubSpot dice AHORA sobre un proyecto, no lo que Nexus copió la última vez. */
+export interface EstadoVivo {
+  hs_status: string | null;
+  hs_pipeline_stage: string | null;
+}
+
+/**
+ * Lee estado y etapa DIRECTO del CRM, sin pasar por el espejo.
+ *
+ * ── POR QUÉ NO ALCANZA LA COPIA DE NEXUS ─────────────────────────────────────
+ * El espejo de un cliente corre cuando alguien abre su ficha, así que `Project.hubspotStatus`
+ * puede tener días. Si la propuesta se construyó sobre esa copia y mientras tanto el CSE cambió
+ * el valor a mano en HubSpot, aceptar la sugerencia PISARÍA su decisión — y del lado de quien
+ * aprieta el botón no habría ninguna señal de que acaba de deshacer algo.
+ *
+ * Se paga una llamada extra por cada aceptación. Es barato al lado de una decisión ajena
+ * revertida en silencio, y estas aceptaciones son de a una, disparadas por una persona.
+ */
+export async function leerEstadoYEtapa(hs: HsClient, recordId: string): Promise<EstadoVivo> {
+  const res = await hs.apiRequest({
+    method: "GET",
+    path:
+      `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}` +
+      `?properties=hs_status&properties=hs_pipeline_stage`,
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `leer el proyecto ${recordId} en HubSpot falló (${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+  const json = (await res.json()) as { properties?: Record<string, string | null> };
+  const props = json.properties ?? {};
+  /* El vacío de HubSpot llega como "" o como ausente según la propiedad; los dos significan
+     "sin cargar" y tienen que colapsar a `null`, o el no-op de más arriba compararía "" contra
+     null y escribiría de gusto. */
+  const limpiar = (v: string | null | undefined) => (v ? v : null);
+  return {
+    hs_status: limpiar(props.hs_status),
+    hs_pipeline_stage: limpiar(props.hs_pipeline_stage),
+  };
+}

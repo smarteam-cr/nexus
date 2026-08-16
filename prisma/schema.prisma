@@ -435,6 +435,27 @@ model Project {
   healthProposedAt             DateTime?
   healthProposedByRunId        String? // AgentRun del watchdog que lo propuso (trazabilidad)
 
+  // ── LO QUE NEXUS SUGIERE MANDAR A HUBSPOT (2026-08-16) ──────────────────────
+  // Mismo molde que `healthProposed*`, y por el mismo motivo: el agente PROPONE, el humano
+  // confirma. Aceptar NO escribe estas columnas en su destino — escribe en HUBSPOT
+  // (`estado-hubspot/route.ts`) y el valor real vuelve por el espejo a `hubspotStatus` /
+  // `hubspotPipelineStageId`. Acá vive solo la sugerencia pendiente; se limpia al aceptarla o
+  // al descartarla.
+  //
+  // ⚠ `estadoPropuesto` es TEXT y no un enum: la lista de `hs_status` la define HubSpot, no este
+  // schema, y un enum de Prisma haría que agregar un valor allá rompa acá. El vocabulario que
+  // Nexus SÍ se anima a proponer está congelado y probado en `lib/projects/estado-hubspot.ts`.
+  estadoPropuesto        String? // hs_status sugerido (nunca "completed": cierra el proyecto)
+  estadoPropuestoMotivo  String?   @db.Text
+  estadoPropuestoAt      DateTime?
+  estadoPropuestoByRunId String?
+  // ⚠ La etapa se guarda por ID, no por label: los tres pipelines tienen etapas homónimas con
+  // ids distintos, y un label no dice a qué tablero pertenece.
+  etapaPropuestaStageId  String?
+  etapaPropuestaMotivo   String?   @db.Text
+  etapaPropuestaAt       DateTime?
+  etapaPropuestaByRunId  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

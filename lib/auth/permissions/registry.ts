@@ -148,6 +148,17 @@ export const PERMISSION_SECTIONS = [
         label: "Marcar un proyecto como interno",
         enforced: true,
       },
+      {
+        /* Aceptar una sugerencia de Nexus sobre el ESTADO o la ETAPA del proyecto y mandarla a
+           HubSpot. Celda propia y no `marcarInterno` porque el peso es otro: interno saca de
+           cobranza (plata), esto mueve la tarjeta de columna y el semáforo que mira todo el
+           equipo. Y va al CSE —que `marcarInterno` no tiene— porque es quien sabe cómo va el
+           proyecto: si mantener el tablero al día exigiera al liderazgo, el tablero seguiría
+           viejo, que es exactamente el problema que esto viene a resolver. */
+        key: "cambiarEstadoHubspot",
+        label: "Cambiar el estado y la etapa del proyecto en HubSpot",
+        enforced: true,
+      },
     ],
   },
   {
