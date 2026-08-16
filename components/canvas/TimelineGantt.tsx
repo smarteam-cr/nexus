@@ -76,6 +76,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
 import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
+import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -160,7 +161,9 @@ interface Props {
   particularidades?: GanttParticularidad[];
   /** Las del `publishedSnapshot` congelado: lo que el cliente lee AHORA, distinto de lo que leerá
    *  al «Subir». Sin esto, `visibleExternal` en vivo se confunde con "ya comunicado". */
-  publicadas?: Array<{ kind: string; party: string; weeksImpact: number | null }>;
+  publicadas?: Array<{
+    kind: string; party: string; title: string; weeksImpact: number | null; estado?: string | null;
+  }>;
   // Togglear la visibilidad al cliente de una particularidad ya creada. Sin esto, el estado
   // se muestra estático (preview readOnly). La visibilidad recién llega al cliente al «Subir».
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
@@ -1480,7 +1483,15 @@ export default function TimelineGantt({
         const registrado = summary.totalWeeks;
         const listo = summarizeParticularidades(parts.filter((p) => p.visibleExternal)).totalWeeks;
         const comunicado = summarizeParticularidades(publicadas ?? []).totalWeeks;
-        const hayPendienteDeSubir = listo !== comunicado;
+        /* ⚠ La SEÑAL se decide por CONTENIDO, no por esta suma. `listo`/`comunicado` siguen
+           existiendo porque son los dos números que se PINTAN abajo; pero comparar sumas dejaba
+           ciega la pantalla ante todo lo que no mueve semanas: dar por resuelta una desviación
+           (que a propósito no las mueve), corregir un título, o dos cambios que se compensan.
+           En los tres casos decía «todo comunicado» con el cliente leyendo otra cosa. */
+        const pendienteDeSubir = hayPendienteDeSubir(
+          parts.filter((p) => p.visibleExternal),
+          publicadas ?? [],
+        );
         // El id de abajo es el destino de los CTA del panel "Qué hacer acá". Sin él, "Cuantificar"
         // scrolleaba al tope de un Gantt altísimo y el CSE tenía que cazar la fila.
         return (
@@ -1521,13 +1532,13 @@ export default function TimelineGantt({
             )}
             {/* Los tres números, nombrados. Solo aparece cuando difieren: si registrado == comunicado
                 no hay nada que aclarar. */}
-            {(registrado !== comunicado || hayPendienteDeSubir) && (
+            {(registrado !== comunicado || pendienteDeSubir) && (
               <p className="text-[11px] text-fg-muted mb-3 leading-relaxed flex flex-wrap gap-x-3 gap-y-0.5">
                 <span>
                   <span className="font-semibold text-fg-secondary">El cliente lee:</span>{" "}
                   {comunicado > 0 ? plural(comunicado, "semana", "semanas") : "ningún atraso"}
                 </span>
-                {hayPendienteDeSubir && (
+                {pendienteDeSubir && (
                   <span title="Marcado como visible, pero el cliente no lo ve hasta el «Subir al cliente»">
                     <span className="font-semibold text-fg-secondary">Listo para subir:</span>{" "}
                     {listo > 0 ? plural(listo, "semana", "semanas") : "nada"}

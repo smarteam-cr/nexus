@@ -62,6 +62,14 @@ export interface ExternalParticularidad {
   phaseId: string | null;
   /** Cuándo ocurrió (ISO). */
   occurredAt: string;
+  /**
+   * ABIERTA | CERRADA. ⚠ Una CERRADA **sigue cruzando**, marcada como resuelta — no se esconde.
+   * Esconderla haría que el Gantt siga corrido con una explicación menos, y si se cerraran todas,
+   * el cliente perdería la única frase donde ve la fecha de cierre nueva. Sus semanas cuentan
+   * igual: el plan ya se movió y cerrarla no lo devuelve.
+   * Ausente en los snapshots congelados antes de 2026-08-16 = abierta.
+   */
+  estado?: string | null;
 }
 
 export interface ExternalTimelineData {

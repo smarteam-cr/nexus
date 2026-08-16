@@ -111,7 +111,13 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
       // que prenda la visibilidad antes de la aprobación, el cliente igual no lo ve.
       where: { timelineId: tl.id, visibleExternal: true, needsValidation: false },
       orderBy: { occurredAt: "desc" },
-      select: { kind: true, party: true, title: true, detail: true, weeksImpact: true, phaseId: true, occurredAt: true },
+      select: {
+        kind: true, party: true, title: true, detail: true, weeksImpact: true, phaseId: true,
+        occurredAt: true,
+        /* ⚠ El `where` de arriba NO gana un filtro de estado, a propósito: una desviación resuelta
+           se sigue comunicando, marcada. Lo que cruza es el estado para poder marcarla. */
+        estado: true,
+      },
     });
     particularidades = parts.map((p) => ({
       kind: p.kind,
@@ -121,6 +127,7 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
       weeksImpact: p.weeksImpact,
       phaseId: p.phaseId,
       occurredAt: p.occurredAt.toISOString(),
+      estado: p.estado,
     }));
   }
 

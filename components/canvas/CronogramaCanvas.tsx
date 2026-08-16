@@ -301,7 +301,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // Señales del proyecto para el panel "Qué hacer acá" (vienen con el GET del cronograma).
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   // Lo que el cliente lee AHORA (del snapshot congelado), distinto de lo que leerá al «Subir».
-  const [publicadas, setPublicadas] = useState<Array<{ kind: string; party: string; weeksImpact: number | null }>>([]);
+  /* ⚠ El estado y el título viajan porque la señal de «falta subir» se compara por CONTENIDO y
+     no por suma de semanas: cerrar una desviación no mueve ni una semana, así que con la suma el
+     cambio más nuevo del sistema era justo el invisible. Ver `lib/timeline/pendiente-de-subir.ts`. */
+  const [publicadas, setPublicadas] = useState<
+    Array<{ kind: string; party: string; title: string; weeksImpact: number | null; estado?: string | null }>
+  >([]);
   // Cambió una particularidad VISIBLE (visibilidad/contenido/borrado) desde la última publicación
   // → la barra "Subir" avisa que hay algo para re-publicar (lo ve el cliente recién al «Subir»).
   const [particularidadesDirty, setParticularidadesDirty] = useState(false);
@@ -502,7 +507,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setSugerencias((data.sugerencias as SugerenciaItem[] | undefined) ?? []);
         setParticularidadesDirty(false);
         setSummary((data.summary as ProjectSummary | null) ?? null);
-        setPublicadas((data.publicadas as Array<{ kind: string; party: string; weeksImpact: number | null }>) ?? []);
+        setPublicadas(
+          (data.publicadas as Array<{
+            kind: string; party: string; title: string; weeksImpact: number | null; estado?: string | null;
+          }>) ?? [],
+        );
         setLastEditedAt(data.lastEditedByHuman ?? null);
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.

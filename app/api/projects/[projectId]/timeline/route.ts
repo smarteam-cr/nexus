@@ -162,6 +162,8 @@ interface TimelineResponse {
     party: string;
     phaseId: string | null;
     occurredAt: string;
+    /** Ausente en los snapshots viejos = abierta (ver `pendiente-de-subir.ts`). */
+    estado?: string | null;
   }>;
   /** Fecha de la sesión de kickoff del proyecto (ISO) o null. Solo informativo: la UI
    *  la ofrece como sugerencia del anchor cuando difiere del actual. */
@@ -232,6 +234,10 @@ function readPublishedParticularidades(snapshot: unknown): TimelineResponse["pub
       party: typeof o.party === "string" ? o.party : "SIN_ATRIBUIR",
       phaseId: typeof o.phaseId === "string" ? o.phaseId : null,
       occurredAt: typeof o.occurredAt === "string" ? o.occurredAt : "",
+      // Los snapshots anteriores al 2026-08-16 no lo traen; `undefined` se lee como ABIERTA en
+      // `pendiente-de-subir.ts`, que es lo que evita que TODO proyecto publicado amanezca
+      // diciendo «falta subir» el día del deploy.
+      estado: typeof o.estado === "string" ? o.estado : null,
     }];
   });
 }
