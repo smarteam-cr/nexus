@@ -2430,16 +2430,45 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   `app/api/cobranza/` fuera de `costos`, `gastos` y `caja-neta`**, así que copiar el molde de
   `IngresoVariable` y poner las rutas en `app/api/cobranza/tarjetas/` las dejaría sin ningún guard
   obligatorio. El precio de esa comodidad es una fuga sin señal roja.
+  ⚠ **Y por eso `IngresosVariablesPanel` dejó de decir «comisiones sueltas»** (2026-08-16): su copy
+  y el placeholder de su form mandaban la misma plata a dos lugares. O partner es EL lugar, o
+  quedaban dos maneras de registrar lo mismo y ningún total cerraría.
+- **Lo que la implementación agregó al diseño** (2026-08-16, todo en `lib/cobranza/comisiones.ts`,
+  25 tests): (1) **el reloj es `fechaCobro`**, el día que entró la plata — ese día decide qué regla
+  estaba vigente y a qué período pertenece; un cobro COBRADO sin fecha de pago simplemente no
+  devenga, no se aproxima con la programada. (2) **El redondeo es POR COBRO, no al final**: es lo
+  que muestra el detalle, así que la suma que la persona ve es exactamente la que se le paga
+  (3 × 33,33 al 13% da 12,99, no 13,00 — el test D8 lo congela). (3) Cuando la regla cambia dentro
+  del período, el porcentaje del grupo es el EFECTIVO (ponderado) y `porcentajesDistintos > 1` lo
+  declara: un solo número no permite rehacer esa cuenta y callarlo sería precisión falsa. (4) El
+  desempate entre reglas de la misma especificidad es ESTABLE (`vigenteDesde` más reciente, y el id
+  si empatan) — dos corridas sobre la misma data tienen que dar la misma comisión. (5) **Borrar una
+  regla no toca lo liquidado** (esas filas llevan su propio snapshot justamente para eso) y
+  **deshacer una liquidación** devuelve los cobros al derivado — que es el camino que el 409 del
+  revert le pide a quien quiere revertir un cobro. (6) Liquidar exige que la quincena a la que se
+  engancha sea de la MISMA persona y la MISMA moneda: pagarle la comisión de alguien junto al
+  salario de otro, o convertir de moneda, son los dos errores mudos de este flujo.
 - **El libro NO entra a la caja neta.** `loadCajaNeta` trae `costoRecurrente.findMany({activo:true})`
   **sin filtrar categoría**, y hay 17 salarios activos que `proyectarCostos` ya reparte por quincena:
   sumar `PagoPlanilla` sería doble conteo garantizado. El burn lo sigue produciendo
   `CostoRecurrente`; el libro es EJECUCIÓN (pasado), como los `pasados` de `proyectarGastos`.
   ⚠ Las comisiones tampoco entran en esta tanda —precedente vivo: `IngresoVariable` también está
-  afuera— y eso hay que decirlo con el número en la mano: las de partner son **$198.961/año** contra
+  afuera— y eso hay que decirlo con el número en la mano: las de partner son **$91.262,55** contra
   $301k de cobranza. Meterlas obliga a tocar `esqueletoBuckets` (privado y compartido por los tres
   proyectores), a mover G1/G2 y a reescribir el copy del panel («entra (cobros proyectados)» y el
   banner de cobertura por cuentas, que no aplica a una comisión de HubSpot). Es una tanda propia, no
   un renglón.
+  ⚠ **La cifra vieja de este párrafo decía $198.961/año y era el DOBLE de lo real** (corregido el
+  2026-08-16, releyendo el Excel celda por celda antes de cargarlo): la hoja trae una fila de
+  ACUMULADO (`=B11+C11`) que repite cada total en dos columnas, y sumarla contaba todo dos veces.
+  Lo que entró son **5 pagos**: HubSpot 38.756,61 (feb-15) + 45.921,72 (may-15) · Atom Chat
+  2.796,75 + 2.849,25 (mismas fechas) · Cooby 938,22 (jul-30). **Nua talk está en cero y no se
+  carga**: una fila de $0 no es una comisión, es una columna que quedó vacía. Es la CUARTA vez que
+  un total del propio documento miente (facturaciones, herramientas, salarios, y ahora ésta) — la
+  regla ya escrita arriba se confirma: lo leído celda por celda es la verdad. Por eso los 5 montos
+  van escritos a mano en `scripts/import-comisiones-partner.ts` y no salen de un parser que
+  volvería a caer en la misma fila. Las 3 hojas OCULTAS son de un año anterior (otro roster, otras
+  tarjetas, HubSpot a $300) y tampoco se cargan.
 - **El monto de una quincena es PROPIO, no derivado del costo.** `CostoRecurrente.monto` es el
   all-in estimado (base × factor) y el schema declara que el motor jamás lee `montoBase`: no existe
   un bruto quincenal que partir. `PagoPlanilla` lleva su monto canónico congelado como snapshot;

@@ -287,7 +287,11 @@
   `cobranza.read`): lo que Smarteam **gana** de un aliado comercial (HubSpot, Atom Chat, Cooby,
   Nua talk). Es un INGRESO y por eso vive en la superficie de ADMIN, junto a los ingresos
   variables. Se registra acá y **no** como `IngresoVariable` — mismo límite anti-doble-conteo
-  que ese modelo declara contra Cobranza.
+  que ese modelo declara contra Cobranza, y por eso el copy de Ingresos variables dejó de
+  ofrecer «comisiones sueltas». Cargadas del Excel *Comisiones 2026*: **5 pagos, USD
+  91.262,55** (HubSpot ×2, Atom Chat ×2, Cooby; Nua talk en cero no se carga). El partner vive
+  como string porque ninguno de los cuatro existe como `Client` — `clientId` es opcional a
+  propósito y se liga solo si el aliado ya está en la cartera.
 - **comisión de vendedor** (`ComisionVendedor` + `ReglaComisionVendedor` →
   `/finanzas/costos/comisiones-vendedor`, SOLO SUPER_ADMIN): lo que Smarteam le **paga** a
   quien vendió, como **% de lo COBRADO**. La comisión DEVENGADA es una **vista derivada** de
@@ -295,8 +299,14 @@
   porcentaje · vigencia; la más específica gana) — no existe como fila hasta que se
   **liquida**, y ahí se congela con snapshot autosuficiente y se engancha al pago de planilla
   de esa quincena. Revertir un cobro cambia el derivado; si su comisión ya se liquidó, el
-  revert **frena con 409**. Es remuneración de una persona: nunca comparte ruta, endpoint ni
-  loader con las de partner.
+  revert **frena con 409** (y se suelta deshaciendo la liquidación). Es remuneración de una
+  persona: nunca comparte ruta, endpoint ni loader con las de partner.
+  El reloj es **`fechaCobro`** —el día que entró la plata— y de ahí salen las dos cosas que
+  decide: qué regla estaba vigente y a qué período pertenece; un cobro COBRADO sin fecha de
+  pago no devenga. Se agrupa por **persona × período × moneda** (CRC y USD son dos comisiones,
+  nunca una convertida) y el redondeo va **por cobro**, para que la suma del detalle sea
+  exactamente lo que se paga. Al liquidar, el monto lo **recalcula el server** con el mismo
+  cálculo puro que pintó la pantalla — el navegador no puede mandarlo.
 - **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
   /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
   puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);
