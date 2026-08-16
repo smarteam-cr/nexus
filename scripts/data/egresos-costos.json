@@ -1,0 +1,14 @@
+{
+  "HERRAMIENTA:freepik i magnific": {
+    "accion": "renombrar",
+    "costoId": "cmrhe8ge7000gm4iisxxeu166",
+    "nombreFinal": "Freepik I Magnific",
+    "nota": "Es la MISMA suscripcion: el Excel usa el separador \" I \" para nombrar el paquete (Freepik + Magnific), igual que en la carga de facturaciones. Se conserva el nombre del Excel porque describe mejor lo que se paga. Resuelto por Elias 2026-08-16."
+  },
+  "HERRAMIENTA:hostiger": {
+    "accion": "renombrar",
+    "costoId": "cmrhe8j2a0010m4iihyo9i6da",
+    "nombreFinal": "Hostinger",
+    "nota": "Typo del Excel (falta la N). Gana el nombre de Nexus, que esta bien escrito: el rename actualiza el monto y la frecuencia, no el nombre. Resuelto por Elias 2026-08-16."
+  }
+}

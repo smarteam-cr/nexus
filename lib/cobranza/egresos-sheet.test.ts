@@ -42,26 +42,25 @@ function filaFija(fila: number, nombre: string, meses: CeldaCruda[]): FilaCruda 
   return { fila, celdas };
 }
 
-describe("montoFijoDeCelda — la moneda sale de la fórmula, nunca del formato", () => {
-  it("una división por el tipo de cambio devuelve los COLONES del numerador", () => {
-    // Alquiler de Oficina, fila 8: el resultado cacheado es 200 (dólares) pero lo que
-    // se guarda es 100000 CRC — la prohibición de FX manda moneda nativa.
+describe("montoFijoDeCelda — el bloque vivo está en DÓLARES, confirmado por Elías", () => {
+  it("una división por el tipo de cambio devuelve el RESULTADO, no el numerador", () => {
+    // Alquiler de Oficina, fila 8: el numerador (100000) es cómo Alex arma la cuenta
+    // en su cabeza, pero lo que paga de verdad es el resultado cacheado: $200.
     expect(montoFijoDeCelda(fx("100000/$U$2", 200))).toEqual({
-      monto: 100000,
-      moneda: "CRC",
+      monto: 200,
+      moneda: "USD",
       monedaInferida: false,
     });
   });
 
-  it("el multiplicador del mes se lee del TEXTO, no del resultado", () => {
-    // Patente, junio: `(15000/$U$2)*3`. Derivarlo del resultado (90) exigiría saber
-    // el tipo de cambio, que es justo lo que no queremos tocar.
+  it("un multiplicador dentro de la fórmula ya viene resuelto en el resultado", () => {
+    // Patente, junio: `(15000/$U$2)*3` → Excel ya hizo la cuenta: $90.
     expect(montoFijoDeCelda(fx("(15000/$U$2)*3", 90))).toEqual({
-      monto: 45000,
-      moneda: "CRC",
+      monto: 90,
+      moneda: "USD",
       monedaInferida: false,
     });
-    expect(montoFijoDeCelda(fx("(15000/$U$2)", 30))?.monto).toBe(15000);
+    expect(montoFijoDeCelda(fx("(15000/$U$2)", 30))?.monto).toBe(30);
   });
 
   it("aritmética sobre literales es un monto escrito con calculadora", () => {
@@ -127,19 +126,19 @@ describe("leerCostosFijos — los 4 comportamientos reales de la hoja", () => {
   const leidos = leerCostosFijos([alquiler, patente, tijerino, poliza], VIVAS);
   const [a, p, t, po] = leidos;
 
-  it("un concepto parejo sale con su monto en colones y se puede cargar", () => {
-    expect(a!.estable).toEqual({ monto: 100000, moneda: "CRC", monedaInferida: false });
+  it("un concepto parejo sale con su monto en dólares y se puede cargar", () => {
+    expect(a!.estable).toEqual({ monto: 200, moneda: "USD", monedaInferida: false });
     expect(a!.mesesEstables).toBe(9);
     expect(a!.variantes).toEqual([]);
     expect(motivoParaNoCargar(a!)).toBeNull();
   });
 
   it("el estable es la MODA, y lo que se sale queda listado — no promediado", () => {
-    // Promediar 15000 y 45000 daría 25000: un monto que no existe en ningún mes.
-    expect(p!.estable?.monto).toBe(15000);
+    // Promediar $30 y $90 daría $50: un monto que no existe en ningún mes.
+    expect(p!.estable?.monto).toBe(30);
     expect(p!.mesesEstables).toBe(6);
     expect(p!.variantes).toHaveLength(3);
-    expect(p!.variantes.every((v) => v.monto === 45000)).toBe(true);
+    expect(p!.variantes.every((v) => v.monto === 90)).toBe(true);
     expect(motivoParaNoCargar(p!)).toBe("el monto no es el mismo todos los meses");
   });
 
@@ -164,13 +163,6 @@ describe("leerCostosFijos — los 4 comportamientos reales de la hoja", () => {
     expect(motivoParaNoCargar(r!)).toBe("el lector no resolvió las fórmulas compartidas");
   });
 
-  it("mezclar monedas dentro de un concepto lo saca de la carga", () => {
-    const mezclado = filaFija(99, "Concepto mezclado", [
-      fx("100000/$U$2", 200), n(200), n(200), n(200), n(200), n(200), n(200), n(200), n(200),
-    ]);
-    const [m] = leerCostosFijos([mezclado], VIVAS);
-    expect(motivoParaNoCargar(m!)).toBe("mezcla monedas");
-  });
 });
 
 describe("filasDelBloque — los límites son marcadores, no números de fila", () => {

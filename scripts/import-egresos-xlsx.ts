@@ -56,7 +56,18 @@ const POR = "import:egresos-2026";
  * persona decide → commit del JSON → `--apply`.
  */
 const MAPA_PATH = "scripts/data/egresos-costos.json";
-type Resolucion = { accion: "crear" | "renombrar"; costoId?: string; nota?: string };
+type Resolucion = {
+  accion: "crear" | "renombrar";
+  costoId?: string;
+  /**
+   * Con qué nombre queda la fila tras el rename. Sin esto el rename escribe
+   * SIEMPRE el nombre del Excel — y a veces el Excel es el que tiene el typo
+   * ("Hostiger" contra el "Hostinger" correcto que ya está en Nexus). Quién
+   * gana lo decide la persona que resuelve el dudoso, no el archivo.
+   */
+  nombreFinal?: string;
+  nota?: string;
+};
 const mapa: Record<string, Resolucion> = existsSync(MAPA_PATH)
   ? (JSON.parse(readFileSync(MAPA_PATH, "utf8")) as Record<string, Resolucion>)
   : {};
@@ -66,14 +77,19 @@ const HOJA_TOOLS = "Costo de Herramientas";
 const HOJA_SALARIOS = "Salarios Actuales";
 const HOJA_HISTORIAL = "Pretensión de Aguinaldos";
 
-/** Las preguntas que el archivo NO contesta. Se imprimen SIEMPRE, aplique o no. */
+/**
+ * Las preguntas que el archivo NO contesta. Se imprimen SIEMPRE, aplique o no.
+ *
+ * Resueltas por Elías el 2026-08-15 (por eso ya NO están acá): la hoja completa
+ * de Costos Fijos está en dólares (incluida la Póliza de 51); Patente es un
+ * mensual con recargo trimestral de bienes inmuebles (no un trimestral mal
+ * modelado); las comisiones de Randall se dejaron de pagar en febrero (por eso
+ * se excluyen de la carga, no importa qué signifique el 13%).
+ */
 const PREGUNTAS_ABIERTAS = [
   "¿De qué AÑO es este archivo? No consta en ninguna hoja ni en la metadata (por eso --anio es obligatorio).",
-  "Contabilidad SV: ¿qué es el componente 969,73? En el bloque de ene-mar el mismo concepto valía 344,65.",
-  "Patente CR Smarteam S.A: ¿es un trimestral mal modelado o un mensual con recargo en jun/sep/dic?",
-  "Póliza CR Smarteam S.A (51): es un número pelado sin fórmula — ¿son dólares?",
+  "Contabilidad SV: ¿qué es el componente 969,73 del bloque vivo? En marzo (bloque oculto) el mismo concepto valía 344,65.",
   "Claude: no tiene importe en ninguna de las dos fuentes de la hoja de herramientas.",
-  "Comisiones Randall Fernandez = (50*13%)+50: ¿qué es ese 13% sobre una base de 50?",
 ];
 
 // ── Lectura (la única parte que conoce exceljs) ─────────────────────────────────
@@ -128,6 +144,25 @@ const norm = (s: string) =>
 
 /** Los salarios en Nexus se llaman "Nombre · Puesto"; el Excel trae solo el nombre. */
 const clavePersona = (nombre: string) => norm(nombre.split("·")[0] ?? nombre);
+
+/**
+ * ¿Dos claves normalizadas son plausiblemente LA MISMA COSA? Deliberadamente
+ * laxa, porque los dos usos que tiene fallan del lado seguro: marcar un DUDOSO
+ * de más obliga a que una persona decida (nunca duplica solo), y proteger de más
+ * deja una fila viva (nunca la da de baja por error). El Excel escribe
+ * "Hostiger" donde Nexus tiene "Hostinger", y "Claude" donde tiene
+ * "Claude (licencia Elías)". Una sola definición para los dos usos: si divergen,
+ * una fila puede ser dudosa para un lado y no para el otro.
+ */
+const seParecen = (a0: string, b0: string): boolean => {
+  const a = a0.replace(/[^a-z0-9]/g, "");
+  const b = b0.replace(/[^a-z0-9]/g, "");
+  if (a === b) return true;
+  const corto = a.length <= b.length ? a : b;
+  const largo = a.length <= b.length ? b : a;
+  if (corto.length < 5) return false;
+  return largo.startsWith(corto) || largo.includes(corto) || corto.slice(0, 5) === largo.slice(0, 5);
+};
 
 const fmt = (m: number, moneda: Moneda) =>
   `${moneda === "CRC" ? "₡" : "$"}${m.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`;
@@ -198,14 +233,71 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
 
     const fijosCargables: Deseado[] = [];
     const fijosDescartados: Array<{ nombre: string; motivo: string }> = [];
+    /**
+     * Claves que el Excel NOMBRA pero cuyo monto no se pudo leer. NO son bajas:
+     * una celda vacía dice "no sé cuánto", no "ya no se paga" — y darle de baja
+     * a la licencia de Claude porque Alex no llenó su importe sería inventar un
+     * hecho que el archivo nunca afirmó. Lo que SÍ justifica una baja es que el
+     * concepto no aparezca en la hoja, o que la hoja lo muestre terminado (cae
+     * en ceros), que es una afirmación de verdad.
+     */
+    const clavesProtegidas = new Set<string>();
     for (const c of conceptos) {
+      const clave = norm(c.nombre);
+
+      // Comisión de vendedor disfrazada de costo fijo: la fórmula sigue viva en
+      // la hoja pero Elías confirmó que se dejó de pagar en febrero — antes de
+      // que arranque el bloque vivo (abril en adelante). Por diseño va a F3
+      // (comisiones de vendedor), nunca a costos fijos.
+      if (clave.includes("randall")) {
+        fijosDescartados.push({
+          nombre: c.nombre,
+          motivo: "comisión de vendedor, dejó de pagarse en febrero (confirmado) — va a F3, no a costos fijos",
+        });
+        continue;
+      }
+
+      // Patente: la hoja cobra un mensual estable y lo TRIPLICA cada trimestre.
+      // Elías confirmó que son dos conceptos fiscales distintos (bienes
+      // inmuebles trimestral, encima de la patente mensual) — el enum solo
+      // tiene MENSUAL|ANUAL, así que se parte en dos costos en vez de
+      // descartar el renglón entero.
+      if (clave.includes("patente") && c.estable && c.variantes.length > 0) {
+        const base = c.estable.monto;
+        const recargo = c.variantes[0]!.monto - base;
+        fijosCargables.push({
+          clave,
+          nombre: c.nombre,
+          categoria: "FIJO_OPERACION",
+          monto: base,
+          moneda: c.estable.moneda,
+          frecuencia: "MENSUAL",
+          notas: `Del Excel de egresos, hoja "${HOJA_FIJOS}" fila ${c.fila}. Base mensual, sin el recargo trimestral de bienes inmuebles (va aparte).`,
+        });
+        // ⚠ La clave SIEMPRE se deriva del nombre. Derivarla aparte hizo que en la
+        // segunda corrida el concepto no se reconociera a sí mismo: aparecía como
+        // alta Y como baja a la vez, o sea que se habría duplicado.
+        const nombreBienesInmuebles = "Impuesto de Bienes Inmuebles CR Smarteam S.A";
+        fijosCargables.push({
+          clave: norm(nombreBienesInmuebles),
+          nombre: nombreBienesInmuebles,
+          categoria: "FIJO_OPERACION",
+          monto: recargo * 4,
+          moneda: c.estable.moneda,
+          frecuencia: "ANUAL",
+          notas: `Del Excel de egresos, hoja "${HOJA_FIJOS}" fila ${c.fila}: recargo trimestral de ${fmt(recargo, c.estable.moneda)} sobre la Patente (observado en algunos meses del bloque vivo; el 4º trimestre se extrapola — marzo cae en el bloque oculto y no tiene dato). Confirmado: "cada 3 meses se cobran los bienes inmuebles con cargo extra".`,
+        });
+        continue;
+      }
+
       const motivo = motivoParaNoCargar(c);
       if (motivo || !c.estable) {
         fijosDescartados.push({ nombre: c.nombre, motivo: motivo ?? "sin monto" });
+        if (!c.terminado) clavesProtegidas.add(`FIJO_OPERACION:${clave}`);
         continue;
       }
       fijosCargables.push({
-        clave: norm(c.nombre),
+        clave,
         nombre: c.nombre,
         categoria: "FIJO_OPERACION",
         monto: c.estable.monto,
@@ -217,19 +309,61 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
       });
     }
     console.log(`\n  A cargar (${fijosCargables.length}):`);
-    for (const d of fijosCargables) console.log(`    · ${d.nombre.padEnd(36)} ${fmt(d.monto, d.moneda)}`);
+    for (const d of fijosCargables) {
+      console.log(`    · ${d.nombre.padEnd(44)} ${fmt(d.monto, d.moneda)} ${d.frecuencia}`);
+    }
     reportarDescartes(`Fuera (${fijosDescartados.length}):`, fijosDescartados);
 
-    const sumaFijos = fijosCargables.reduce((a, d) => a + (d.moneda === "CRC" ? d.monto / 500 : d.monto), 0);
+    const mensuales = fijosCargables.filter((d) => d.frecuencia === "MENSUAL");
+    const anuales = fijosCargables.filter((d) => d.frecuencia === "ANUAL");
+    const sumaFijos = mensuales.reduce((a, d) => a + (d.moneda === "CRC" ? d.monto / 500 : d.monto), 0);
     console.log(
-      `\n  Control informativo (NO validación): los ${fijosCargables.length} cargables suman ≈ $${sumaFijos.toFixed(2)}`,
+      `\n  Control informativo (NO validación): los ${mensuales.length} MENSUALES cargables suman ≈ $${sumaFijos.toFixed(2)}` +
+        (anuales.length > 0
+          ? ` (+ ${anuales.length} ANUAL: ${anuales.map((d) => `${d.nombre} ${fmt(d.monto, d.moneda)}/año`).join(", ")})`
+          : ""),
     );
-    console.log(`  El documento cierra sus meses planos en $2.147,83 (incluye Randall $56,50 y Patente $30).`);
+    console.log(
+      `  El documento cierra sus meses planos en $2.147,83 (10 fijos $2.061,33 + Randall $56,50 + Patente $30)` +
+        ` — YA NO es el control de esta carga: Randall se excluye (F3) y el recargo de Patente se separó en un concepto ANUAL aparte.`,
+    );
 
     console.log(`\n  Tarjetas de crédito detectadas (${tarjetas.length}) — NO se cargan acá, alimentan F1:`);
     for (const t of tarjetas) {
       const cargado = t.estable ? `${fmt(t.estable.monto, t.estable.moneda)}/mes` : "sin monto legible";
       console.log(`    · ${t.nombre.padEnd(36)} ${cargado}`);
+    }
+
+    // ── Informativo: el bloque OCULTO (ene-sep), NUNCA se aplica ───────────────
+    // Elías: "Todo lo oculto debe usarse, si el campo está vacío quiere decir
+    // que es el mismo [monto]". Pero acá la MONEDA no se puede leer del
+    // archivo: el numFmt está aplicado en bloque a TODA la hoja (ni siquiera
+    // distingue texto de números — no es señal acá) y el propio bloque MEZCLA
+    // colones (Alquiler, CCSS) con dólares (Juan Tijerino, Contabilidad SV)
+    // sin ninguna marca legible. Confirmado a mano, celda por celda. Y aunque
+    // se supiera: comparar esto contra el bloque vivo (confirmado en dólares)
+    // sería registrar un CAMBIO DE MONEDA como si fuera un cambio de precio —
+    // CostoMovimiento no está diseñado para decir eso con honestidad. Por eso
+    // esto se IMPRIME nada más; nunca se aplica ni se backfillea.
+    const colsOcultas = Array.from({ length: 18 }, (_, i) => i + 2).filter((c) => !colsFijos.includes(c));
+    const MONEDA_OCULTA: Record<string, Moneda> = {
+      alquiler: "CRC",
+      ccss: "CRC",
+      tijerino: "USD",
+      contabil: "USD", // el nombre real en la hoja trae un typo ("Contabillidad")
+    };
+    const ocultos = leerCostosFijos(bloqueFijos, colsOcultas).filter((c) => c.estable !== null);
+    if (ocultos.length > 0) {
+      seccion(`1b. INFORMATIVO — bloque OCULTO de "${HOJA_FIJOS}" (ene-sep) — NO SE CARGA`);
+      for (const c of ocultos) {
+        const claveMoneda = Object.keys(MONEDA_OCULTA).find((k) => norm(c.nombre).includes(k));
+        const moneda = claveMoneda ? MONEDA_OCULTA[claveMoneda]! : c.estable!.moneda;
+        console.log(
+          `    · ${c.nombre.padEnd(28)} ${fmt(c.estable!.monto, moneda)} × ${c.mesesEstables} meses` +
+            (claveMoneda ? "" : "  ⚠ moneda sin confirmar a mano"),
+        );
+      }
+      console.log(`    No se backfillea: sería comparar un cambio de moneda contra el bloque vivo en dólares.`);
     }
 
     // ── 2. Herramientas ────────────────────────────────────────────────────────
@@ -245,7 +379,9 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     const toolsDescartadas: Array<{ nombre: string; motivo: string }> = [];
     for (const t of tools) {
       if (t.monto <= 0) {
-        toolsDescartadas.push({ nombre: t.nombre, motivo: "sin importe en ningún mes" });
+        toolsDescartadas.push({ nombre: t.nombre, motivo: "sin importe en ningún mes — se conserva lo que ya está en Nexus" });
+        // La grilla la LISTA: existe, solo que sin precio legible. No es una baja.
+        clavesProtegidas.add(`HERRAMIENTA:${norm(t.nombre)}`);
         continue;
       }
       toolsCargables.push({
@@ -347,16 +483,13 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     // contándola una vez de más. Igual que en la carga de facturaciones, un dudoso
     // JAMÁS se resuelve solo — lo resuelve una persona en el mapa versionado.
     const parecidos = (d: Deseado): Existente[] =>
-      existentes.filter((e) => {
-        if (e.categoria !== d.categoria || e.finalizadoEl !== null) return false;
-        const a = d.clave.replace(/[^a-z0-9]/g, "");
-        const b = e.clave.replace(/[^a-z0-9]/g, "");
-        if (a === b) return false;
-        const corto = a.length <= b.length ? a : b;
-        const largo = a.length <= b.length ? b : a;
-        if (corto.length < 5) return false;
-        return largo.startsWith(corto) || largo.includes(corto) || corto.slice(0, 5) === largo.slice(0, 5);
-      });
+      existentes.filter(
+        (e) =>
+          e.categoria === d.categoria &&
+          e.finalizadoEl === null &&
+          e.clave !== d.clave && // un match exacto no es un dudoso: es un acierto
+          seParecen(d.clave, e.clave),
+      );
 
     const dudosos = nuevos
       .map((d) => ({ d, candidatos: parecidos(d) }))
@@ -366,23 +499,51 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     // Lo que el mapa resolvió como "es el mismo, se renombró" deja de ser alta y
     // pasa a ser cambio: se actualiza la fila que ya existe y NO se da de baja.
     const renombres: Array<{ d: Deseado; e: Existente }> = [];
+    const clavesRenombradas = new Set<string>();
     for (const d of nuevos) {
       const r = mapa[`${d.categoria}:${d.clave}`];
       if (!r || r.accion !== "renombrar" || !r.costoId) continue;
       const e = existentes.find((x) => x.id === r.costoId);
-      if (e) renombres.push({ d, e });
+      if (!e) continue;
+      clavesRenombradas.add(`${d.categoria}:${d.clave}`);
+      renombres.push({ d: r.nombreFinal ? { ...d, nombre: r.nombreFinal } : d, e });
     }
     const idsRenombrados = new Set(renombres.map((r) => r.e.id));
     const altasReales = nuevos.filter(
-      (d) => !clavesDudosas.has(`${d.categoria}:${d.clave}`) && !renombres.some((r) => r.d === d),
+      (d) =>
+        !clavesDudosas.has(`${d.categoria}:${d.clave}`) &&
+        !clavesRenombradas.has(`${d.categoria}:${d.clave}`),
     );
 
+    // ── Una BAJA de salario NO se aplica sola ──────────────────────────────────
+    // Decisión de Elías (2026-08-15) al ver que el Excel bajaba un salario que
+    // "no debería haber bajado": una SUBIDA es un aumento y se carga sin más; una
+    // BAJA es casi siempre un error de la hoja, y aplicarla en silencio le recorta
+    // el sueldo a alguien en el sistema que la dirección mira todos los días.
+    // Es regla, no un `if` con un nombre adentro — hoy toca a una sola fila.
+    const esBajaDeSalario = (d: Deseado, e: Existente) =>
+      d.categoria === "SALARIO" && d.moneda === e.moneda && d.monto < e.monto;
+    const retenidos = cambios.filter(({ d, e }) => esBajaDeSalario(d, e));
+    const cambiosAplicables = cambios.filter(({ d, e }) => !esBajaDeSalario(d, e));
+
     const clavesDeseadas = new Set(deseados.map((d) => `${d.categoria}:${d.clave}`));
+    // La protección matchea con el MISMO criterio laxo que los dudosos: el Excel
+    // dice "Claude" y Nexus "Claude (licencia Elías)" — es la misma licencia.
+    const estaProtegida = (e: Existente) =>
+      [...clavesProtegidas].some((p) => {
+        const [cat, clave] = [p.slice(0, p.indexOf(":")), p.slice(p.indexOf(":") + 1)];
+        return cat === e.categoria && seParecen(clave, e.clave);
+      });
     const sobran = existentes.filter(
       (e) =>
         !clavesDeseadas.has(`${e.categoria}:${e.clave}`) &&
+        !estaProtegida(e) &&
         e.finalizadoEl === null &&
         !idsRenombrados.has(e.id),
+    );
+    const protegidas = existentes.filter(
+      (e) =>
+        !clavesDeseadas.has(`${e.categoria}:${e.clave}`) && estaProtegida(e) && e.finalizadoEl === null,
     );
 
     console.log(`\n  ALTAS (${altasReales.length}) — están en el Excel y no en Nexus:`);
@@ -406,8 +567,8 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
       console.log(`    Corré con --escribir-mapa para dejar el esqueleto con los candidatos y sus ids.`);
     }
 
-    console.log(`\n  CAMBIOS DE MONTO (${cambios.length}):`);
-    for (const { d, e } of cambios) {
+    console.log(`\n  CAMBIOS DE MONTO (${cambiosAplicables.length}):`);
+    for (const { d, e } of cambiosAplicables) {
       console.log(
         `    ~ ${d.nombre.padEnd(44)} ${fmt(e.monto, e.moneda as Moneda)} → ${fmt(d.monto, d.moneda)}${
           e.frecuencia !== d.frecuencia ? `  (${e.frecuencia} → ${d.frecuencia})` : ""
@@ -415,10 +576,26 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
       );
     }
 
+    if (retenidos.length > 0) {
+      console.log(`\n  ⚠ RETENIDOS (${retenidos.length}) — el Excel BAJA un salario y eso NO se aplica solo:`);
+      for (const { d, e } of retenidos) {
+        console.log(`    ‖ ${d.nombre.padEnd(44)} ${fmt(e.monto, e.moneda as Moneda)} → ${fmt(d.monto, d.moneda)}`);
+      }
+      console.log(`    Si la baja es real, corregila a mano en la hoja de Planillas.`);
+    }
+
     console.log(`\n  BAJAS (${sobran.length}) — están en Nexus y NO en el Excel:`);
     console.log(`    (no se borran: se marcan finalizadas con movimiento BAJA, que es reversible)`);
     for (const e of sobran) {
       console.log(`    − ${e.nombre.padEnd(44)} ${fmt(e.monto, e.moneda as Moneda)} [${e.categoria}]`);
+    }
+
+    if (protegidas.length > 0) {
+      console.log(`\n  INTACTAS (${protegidas.length}) — el Excel las NOMBRA pero sin monto legible:`);
+      console.log(`    (una celda vacía dice "no sé cuánto", no "ya no se paga" — no son bajas)`);
+      for (const e of protegidas) {
+        console.log(`    = ${e.nombre.padEnd(44)} ${fmt(e.monto, e.moneda as Moneda)} [${e.categoria}]`);
+      }
     }
 
     console.log(`\n  SIN CAMBIO: ${iguales.length}`);
@@ -501,7 +678,7 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     // Los renombres resueltos a mano se aplican por el MISMO camino que un cambio de
     // monto: se actualiza la fila que ya existe (y de paso su nombre), en vez de
     // crear una nueva y jubilar la vieja — que es como se parte un costo en dos.
-    for (const { d, e } of [...cambios, ...renombres]) {
+    for (const { d, e } of [...cambiosAplicables, ...renombres]) {
       await prisma.$transaction(async (tx) => {
         const costo = await tx.costoRecurrente.update({
           where: { id: e.id },

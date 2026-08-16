@@ -2396,9 +2396,16 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   precedente que «costo fijo vs. gasto puntual = entidades separadas», que ya resolvió esta misma
   tensión una vez. El aguinaldo permitido es **suma de lo REGISTRADO en el libro, dic–nov, ÷ 12**:
   un dato observado, no una tasa; siguen prohibidas CCSS, cargas, renta y timbrado, cero constantes
-  fiscales. **FX sigue prohibido**: todo se carga en su **moneda nativa** y el ₡500 hardcodeado del
-  Excel de Alex no entra al código — consecuencia declarada, la caja neta va a diferir de su hoja
-  apenas se mueva el tipo de cambio, y eso es correcto, no un bug. El cálculo del aguinaldo **no
+  fiscales. **FX sigue prohibido**: todo se carga en su **moneda nativa**, y el motor nunca hace esa
+  cuenta. ⚠ **Corrección tras cargar el archivo (2026-08-15):** el bloque VIVO de *Costos Fijos* NO
+  es colones convertidos — Elías confirmó que **toda la hoja opera en dólares**. El `/$U$2` de cada
+  fórmula es solo cómo Alex arma el número; lo que se carga es el RESULTADO cacheado (dólares), nunca
+  el numerador en colones ni el ₡500 de `U2` (ver `lib/cobranza/egresos-sheet.ts`). No hay entonces
+  ninguna conversión que pueda divergir: Nexus y la hoja de Alex muestran el mismo monto en dólares
+  pase lo que pase con el tipo de cambio real. La advertencia "diverge apenas se mueva el TC" sigue
+  siendo cierta, pero para costos que SÍ están en colones de verdad (salarios, herramientas locales):
+  ahí Nexus guarda ₡ nativos sin convertir, y compararlo contra un total en dólares de otra fuente va
+  a mostrar una diferencia en cuanto el tipo de cambio real se mueva. El cálculo del aguinaldo **no
   vive en `engine.ts`**: el motor es puro y está congelado por golden.
 - **La comisión del vendedor es una VISTA DERIVADA, no una fila que se escribe al cobrar.** El
   primer diseño colgaba la generación de `cambiarEstadoCobro` y se refutó con tres hechos: (a) esa
@@ -2468,10 +2475,24 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   de la fila 26 y **pierden Supabase**. Y en *Salarios Actuales* el total arranca en `D14` y **se
   come a Jerson Escudero ($1.200)**. Es la tercera vez que un total del propio documento sub-suma
   (ya había pasado con las facturaciones) ⇒ **regla que queda: lo leído celda por celda es la
-  verdad; el total del documento es un control informativo, jamás una validación.** *Patente* es
-  **incargable** (la hoja cobra ₡15.000 todos los meses **y además** lo triplica en jun/sep/dic, y el
-  enum solo tiene MENSUAL|ANUAL) y *Claude* no tiene importe en ninguna de las dos fuentes: ninguno
-  se aproxima, se reportan y se dejan afuera.
+  verdad; el total del documento es un control informativo, jamás una validación.** *Claude* no
+  tiene importe en ninguna de las dos fuentes: no se aproxima, se reporta y se deja afuera.
+- **Tres correcciones tras la respuesta de Elías (2026-08-15), ya en el loader.** (1) *Patente*
+  dejó de ser incargable: son **dos conceptos fiscales**, confirmado — "cada 3 meses se cobran los
+  bienes inmuebles con cargo extra". Se carga como Patente MENSUAL (el monto base, moda de la
+  fila) + un concepto nuevo *Impuesto de Bienes Inmuebles CR Smarteam S.A* ANUAL (el recargo
+  trimestral × 4; el trimestre de marzo cae en el bloque oculto y no tiene dato, así que se
+  extrapola de la cadencia confirmada). (2) *Comisiones Randall Fernandez* se EXCLUYE de costos
+  fijos aunque la fórmula sigue viva y estable en la hoja: Elías confirmó que se dejó de pagar en
+  febrero — es una comisión de vendedor muerta, no un costo recurrente, y por diseño va a F3 (o ni
+  eso, si terminó antes de que arranque la ventana observable). (3) El bloque OCULTO (ene-sep) SÍ
+  se lee —"todo lo oculto debe usarse, si el campo está vacío quiere decir que es el mismo"— pero
+  solo 4 filas tienen dato ahí (Alquiler, CCSS CR Smarteam, Juan Tijerino, Contabilidad SV) y están
+  en **moneda mezclada sin ninguna marca legible** (colones los dos primeros, dólares los otros
+  dos — confirmado a mano, celda por celda), mientras el bloque vivo confirmado es dólares. Eso es
+  un cambio de MONEDA, no de precio: `CostoMovimiento` no está diseñado para representar eso con
+  honestidad, así que el loader lo IMPRIME como sección informativa y nunca lo aplica ni lo
+  backfillea.
 - **«El Excel manda» con un matiz.** Lo que está en Nexus y no en el Excel (Claude, Odoo, Mercury,
   Apollo, Factun, Quickbooks, Marketing Hub Starter, 5 personas) **no se borra: se da de baja**
   (`finalizadoEl` + movimiento `BAJA`). Es reversible y deja huella; el hard delete perdería

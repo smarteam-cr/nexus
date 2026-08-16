@@ -17,11 +17,13 @@
  *     SOLO las columnas visibles y acá no se adivina cuál bloque es cuál.
  *  2. El año NO consta en ninguna hoja ni en la metadata del archivo. Este módulo
  *     nunca lo infiere: lo recibe.
- *  3. La ÚNICA señal de moneda en "Costos Fijos" es la fórmula `/$U$2` (el tipo de
- *     cambio que teclearon en U2). El formato de número está aplicado en bloque a
- *     toda la hoja —hasta a celdas de texto— así que NO sirve. En "Salarios
- *     Actuales" y "Pretensión de Aguinaldos" es al revés: ahí el formato SÍ varía
- *     por fila y es la señal buena.
+ *  3. ⚠ CONFIRMADO por Elías: el bloque VIVO de "Costos Fijos" (K..S) opera ENTERO
+ *     en DÓLARES — las filas con fórmula `/$U$2` (el tipo de cambio en U2) también.
+ *     Esa fórmula NO significa "el monto real es el numerador en colones": significa
+ *     "acá hay un monto real, leé el resultado cacheado". El formato de número está
+ *     aplicado en bloque a toda la hoja —hasta a celdas de texto— así que NUNCA es
+ *     señal de moneda ahí. En "Salarios Actuales" y "Pretensión de Aguinaldos" es al
+ *     revés: el formato SÍ varía por fila y ES la señal buena.
  *  4. Los totales del propio documento SUB-SUMAN (otra vez, como en las
  *     facturaciones): "Salarios Actuales" arranca en D14 y se come a un
  *     colaborador; la lista de herramientas corta el rango antes de la última fila
@@ -83,13 +85,19 @@ const resultadoDe = (valor: unknown): number | null => {
 };
 
 /**
- * ¿La fórmula convierte colones a dólares dividiendo por el tipo de cambio de U2?
- * Formas reales en la hoja: `100000/$U$2`, `(15000/$U$2)*3`, `27000/$U$2`.
- * El numerador es el monto EN COLONES, que es lo que queremos guardar: la
- * prohibición de FX (DECISIONS §Cobranza) manda cargar en moneda nativa y NO
- * arrastrar el ₡500 que alguien tecleó en una celda.
+ * ¿La fórmula referencia el tipo de cambio de U2? Formas reales en la hoja:
+ * `100000/$U$2`, `(15000/$U$2)*3`, `27000/$U$2`.
+ *
+ * ⚠ CONFIRMADO por Elías (2026-08-15): el bloque VIVO de "Costos Fijos" (K..S,
+ * abril en adelante) opera ENTERO en dólares — no solo las dos filas con número
+ * pelado. El numerador en colones es un rastro de cómo Alex armó la cuenta, pero
+ * lo que paga de verdad es el RESULTADO cacheado de la fórmula (en dólares). Leer
+ * el numerador —como hacía la primera versión de este archivo— era un bug: convertía
+ * "$200 de alquiler" en "₡100.000", inventando una moneda que nadie declaró.
+ * No es una conversión de FX (eso seguiría prohibido): es simplemente leer el
+ * número que ya está calculado en la celda, igual que con cualquier otra fórmula.
  */
-const RE_DIVIDE_POR_TC = /(\d[\d.]*)\s*\/\s*\$?U\$?2\s*\)?\s*(?:\*\s*(\d+(?:\.\d+)?))?/i;
+const RE_REFERENCIA_TC = /\$?U\$?2\b/i;
 
 export type MontoLeido = {
   monto: number;
@@ -103,12 +111,14 @@ export type MontoLeido = {
 };
 
 /**
- * Monto de una celda del bloque de costos fijos, en su MONEDA NATIVA.
+ * Monto de una celda del BLOQUE VIVO de costos fijos (K..S), en dólares.
  *
- *  - `=100000/$U$2`  → 100000 CRC   (el numerador; jamás el resultado en dólares)
- *  - `=(50*13%)+50`  → 56.5 USD     (aritmética sobre literales = monto con calculadora)
- *  - `=SUM(K8:K19)`  → null         (derivado; misma regla que `montoDeCelda`)
- *  - `400` / `51`    → USD inferido (la hoja opera en dólares desde abril)
+ *  - `=100000/$U$2`  → 200 USD    (el RESULTADO cacheado — confirmado: la hoja
+ *                                  entera opera en dólares, el numerador en
+ *                                  colones es solo cómo Alex arma la cuenta)
+ *  - `=(50*13%)+50`  → 56.5 USD   (aritmética sobre literales = monto con calculadora)
+ *  - `=SUM(K8:K19)`  → null       (derivado; misma regla que `montoDeCelda`)
+ *  - `400` / `51`    → USD        (número pelado, sin fórmula)
  */
 export function montoFijoDeCelda(celda: CeldaCruda | undefined): MontoLeido | null {
   if (!celda) return null;
@@ -121,16 +131,9 @@ export function montoFijoDeCelda(celda: CeldaCruda | undefined): MontoLeido | nu
   const expr = expresionDe(valor);
   if (expr === null) return null;
 
-  const tc = RE_DIVIDE_POR_TC.exec(expr);
-  if (tc) {
-    const colones = Number(tc[1]);
-    if (!Number.isFinite(colones)) return null;
-    // `(15000/$U$2)*3` → ese mes lleva TRES veces el cargo. El multiplicador se lee
-    // del TEXTO de la fórmula y NO del resultado cacheado: derivarlo del resultado
-    // obligaría a saber el tipo de cambio, que es justo lo que no queremos tocar.
-    const veces = tc[2] === undefined ? 1 : Number(tc[2]);
-    if (!Number.isFinite(veces) || veces <= 0) return null;
-    return { monto: colones * veces, moneda: "CRC", monedaInferida: false };
+  if (RE_REFERENCIA_TC.test(expr)) {
+    const r = resultadoDe(valor);
+    return r === null ? null : { monto: r, moneda: "USD", monedaInferida: false };
   }
 
   // Cualquier LETRA restante = referencia a otra celda o función ⇒ derivado, no es
@@ -236,13 +239,6 @@ export function leerCostosFijos(filas: FilaCruda[], columnas: number[]): Concept
       );
     }
 
-    const monedas = new Set(conMonto.map((m) => m.monto.moneda));
-    if (monedas.size > 1) {
-      advertencias.push(
-        `mezcla monedas dentro del mismo concepto (${[...monedas].join(" y ")}) — no se puede cargar como una sola línea`,
-      );
-    }
-
     // Moda por monto+moneda, sobre los meses CON CARGO. Un cero no es un monto: es
     // la ausencia de uno. Contarlo hacía que un proveedor que dejó de cobrar a mitad
     // de año tuviera "monto estable = 0" y el motivo real (terminó) no se imprimiera.
@@ -317,7 +313,6 @@ export function leerCostosFijos(filas: FilaCruda[], columnas: number[]): Concept
 export function motivoParaNoCargar(c: ConceptoFijo): string | null {
   if (!c.estable) return "ningún mes trae un monto legible";
   if (c.estable.monto === 0) return "el monto estable es cero";
-  if (c.advertencias.some((a) => a.startsWith("mezcla monedas"))) return "mezcla monedas";
   if (c.advertencias.some((a) => a.includes("fórmula compartida sin resolver"))) {
     return "el lector no resolvió las fórmulas compartidas";
   }
