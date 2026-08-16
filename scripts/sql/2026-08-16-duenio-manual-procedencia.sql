@@ -13,7 +13,7 @@
 --
 -- ADITIVO y seguro de correr ANTES del deploy: el código viejo ignora las columnas nuevas.
 --
---   npx prisma db execute --file scripts/sql/2026-08-16-duenio-manual-procedencia.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-08-16-duenio-manual-procedencia.sql
 --   npx prisma generate
 --   ⚠ y REINICIAR el dev server: si no, el cliente de Prisma en memoria sigue sin las columnas y
 --     las escrituras fallan con PrismaClientValidationError al navegar (ya pasó, 2026-07-30).

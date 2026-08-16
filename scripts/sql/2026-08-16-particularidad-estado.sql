@@ -5,7 +5,7 @@
 -- que significan hoy (no existía forma de cerrarlas).
 --
 -- Cómo aplicarlo (revisá antes de correr):
---   ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-16-particularidad-estado.sql --schema prisma/schema.prisma
+--   ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-16-particularidad-estado.sql
 -- Después:
 --   npx prisma generate      (NO `db push` — droppearía columnas de la otra PC)
 --   reiniciar el dev server  (el Prisma client viejo no conoce las columnas; INV7 lo caza)

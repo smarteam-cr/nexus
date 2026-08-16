@@ -1,33 +1,30 @@
 # Checklist de prueba clickeada — «Los cuatro contextos» (2026-08-16)
 
-26 commits sin subir. El gate automático ya pasó (tsc · 2.930 tests · build · lint en la línea
-base) y la auditoría adversarial encontró y arregló **8 defectos reales** que ni los tests ni el
-build ven. Lo que sigue es lo único que ninguna máquina puede hacer: **mirarlo con los ojos**.
+33 commits sin subir. El gate automático ya pasó (tsc · 2.979 tests · lint en la línea base) y la
+auditoría adversarial encontró y arregló **8 defectos reales** que ni los tests ni el build ven. Lo
+que sigue es lo único que ninguna máquina puede hacer: **mirarlo con los ojos**.
 
-> ### ⛔ Antes de empezar — el orden importa
+> ### ✅ La preparación YA ESTÁ HECHA (2026-08-16)
 >
-> **1.** Aplicar las **tres migraciones SQL** (son aditivas: el código viejo las ignora, así que se
-> pueden correr antes del deploy). Después de cada una: `npx prisma generate` y **reiniciar el
-> servidor de dev**. Saltarse el reinicio hace que las escrituras fallen **en silencio**.
+> Aplicado contra producción y verificado con `check-invariants` (INV7 en verde: las columnas de
+> los 87 modelos existen todas en la base):
 >
-> ```bash
-> npx prisma db execute --file scripts/sql/2026-08-16-duenio-manual-procedencia.sql --schema prisma/schema.prisma
-> ```
-> ```bash
-> npx prisma db execute --file scripts/sql/2026-08-16-estado-y-etapa-propuestos.sql --schema prisma/schema.prisma
-> ```
-> ```bash
-> npx prisma db execute --file scripts/sql/2026-08-16-project-brief.sql --schema prisma/schema.prisma
-> ```
+> | # | Migración | |
+> |---|---|---|
+> | 1 | `2026-08-16-duenio-manual-procedencia.sql` | ✅ |
+> | 2 | `2026-08-16-estado-y-etapa-propuestos.sql` | ✅ |
+> | 3 | `2026-08-16-project-brief.sql` | ✅ |
+> | 4 | `2026-08-16-particularidad-estado.sql` | ✅ |
 >
-> **2.** Sembrar el agente del resumen por proyecto (si no, el botón responde «el agente no está
-> sembrado», que es correcto pero no prueba nada):
-> ```bash
-> npx tsx scripts/create-project-brief-agent.ts
-> ```
+> Más `npx prisma generate` y la siembra del agente `agent-project-brief`. **No hace falta volver
+> a correr nada.**
 >
-> **3.** Levantar contra la base real: `npm run dev:prod` (puerto **3004**). Es el mismo dato que
-> vas a ver después del deploy.
+> ⚠ Si el servidor del **3004** venía levantado de antes, **reinicialo**: tiene el cliente de
+> Prisma viejo en memoria y las escrituras fallan **en silencio**.
+>
+> ⚠ Y para la próxima: en Prisma 7 el comando **no lleva `--schema`** — el destino sale de
+> `prisma.config.ts`. La forma correcta es
+> `ALLOW_PROD_WRITE=1 npx prisma db execute --file <archivo>`.
 
 > ⚠ Todo lo de abajo es seguro salvo donde diga **ESCRIBE**. Los dos que escriben afuera están
 > marcados y van al final a propósito.
@@ -168,6 +165,21 @@ Sobre el proyecto que acabás de aprobar:
 4. **Borrá** una tarea que estaba en el plan aprobado.
    - ✅ La promesa **sigue registrada**. Borrar la evidencia sería la forma más silenciosa de que
      el alcance cierre siempre.
+
+### 4.3 Dar por resuelta una desviación **ESCRIBE (en Nexus)** *(lo último que se construyó)*
+1. En el cronograma, bajá a las desviaciones y elegí una.
+2. Apretá **«Dar por resuelta»** → aparece un campo para el motivo, en la misma fila.
+   - ✅ Escribí algo y confirmá. La fila queda **atenuada**, con chip **«Resuelta · <fecha>»**, y el
+     tooltip cuenta quién la cerró y por qué.
+   - ✅ Deja de ofrecer **«Convertir en tarea»**: no hay nada que perseguir.
+3. ⭐ **Mirá el total de semanas de corrimiento arriba: NO tiene que bajar.**
+   > Es la decisión de fondo de esta fase. Un atraso de 3 semanas que se resolvió movió el plan 3
+   > semanas igual — el Gantt ya está corrido y cerrarlo no lo devuelve. Si el número bajara, la
+   > frase «el plan se movió N semanas» contradiría al cronograma que está justo arriba.
+4. ✅ La barra de arriba tiene que invitar a **«Subir al cliente»**: lo que el cliente lee es una
+   foto congelada, así que cerrar no lo alcanza hasta re-publicar.
+5. Apretá **«Reabrir»** → vuelve a estado vigente, y el registro del cierre anterior **se conserva**
+   (queda como «se había cerrado el …»).
 
 ---
 

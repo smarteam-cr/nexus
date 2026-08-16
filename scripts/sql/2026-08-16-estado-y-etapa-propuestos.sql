@@ -12,7 +12,7 @@
 -- Después: `npx prisma generate` y REINICIAR el dev server. Saltarse el reinicio hace que las
 -- escrituras fallen en silencio con un cliente de Prisma viejo en memoria.
 --
---   npx prisma db execute --file scripts/sql/2026-08-16-estado-y-etapa-propuestos.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-08-16-estado-y-etapa-propuestos.sql
 
 ALTER TABLE "Project"
   ADD COLUMN IF NOT EXISTS "estadoPropuesto"        TEXT,

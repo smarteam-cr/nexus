@@ -11,7 +11,7 @@
 -- ⚠ POR SQL DIRECTO, NUNCA `prisma db push`. Después: `npx prisma generate` y REINICIAR el dev
 -- server — saltarse el reinicio hace que las escrituras fallen en silencio.
 --
---   npx prisma db execute --file scripts/sql/2026-08-16-project-brief.sql --schema prisma/schema.prisma
+--   npx prisma db execute --file scripts/sql/2026-08-16-project-brief.sql
 
 CREATE TABLE IF NOT EXISTS "ProjectBrief" (
   "id"          TEXT         NOT NULL,
