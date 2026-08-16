@@ -42,7 +42,12 @@ import type {
   tarjetaPatchSchema,
   tarjetaSaldoSchema,
   tarjetaCostoSchema,
+  planillaGenerarSchema,
+  planillaPagarSchema,
+  pagoPlanillaPatchSchema,
 } from "./schema";
+import { montoQuincena } from "./engine";
+import { quincenasDelPeriodo } from "./planilla";
 
 export class CobranzaError extends Error {
   constructor(
@@ -966,6 +971,142 @@ export async function asignarCostoATarjeta(
     await prisma.tarjetaCreditoCosto.deleteMany({ where: { tarjetaId, costoId: data.costoId } });
   }
   return { id: tarjetaId };
+}
+
+// ── Libro de planilla (SUPER_ADMIN-only) ────────────────────────────────────────
+// ⚠ Llamadas SOLO desde routes con guardCostosAccess.
+
+/**
+ * Materializa las dos filas de una quincena para TODOS los salarios activos.
+ *
+ * ⚠ CREATE-ONLY: nunca update, nunca delete. Si alguien sube un salario a mitad
+ * de mes, un `toUpdate` reescribiría la Q2 pendiente al monto nuevo con la Q1 ya
+ * pagada al viejo — y Q1+Q2 no daría ningún salario. Re-generar una quincena ya
+ * generada es un NO-OP (`skipDuplicates` sobre el @@unique), no un error.
+ *
+ * La lista de personas se deriva ACÁ y no viene del cliente: así nadie puede
+ * pedir que se materialice a alguien que ya no está en planilla.
+ *
+ * El monto sale de `montoQuincena` UNA vez y queda congelado como snapshot —
+ * desde ese momento la fila es la verdad, no el costo.
+ */
+export async function generarQuincena(
+  data: z.infer<typeof planillaGenerarSchema>,
+): Promise<{ creadas: number; yaExistian: number; sinPersona: number }> {
+  const quincenas = quincenasDelPeriodo(data.periodo);
+  const dia = quincenas.find((q) => q.quincena === data.quincena);
+  if (!dia) throw new CobranzaError("Período o quincena inválidos.", 400);
+
+  const salarios = await prisma.costoRecurrente.findMany({
+    where: { categoria: "SALARIO", activo: true, finalizadoEl: null },
+    select: {
+      nombre: true,
+      monto: true,
+      moneda: true,
+      teamMemberId: true,
+      teamMember: { select: { name: true } },
+    },
+  });
+
+  // Un salario sin persona ligada no puede entrar: el @@unique del libro es
+  // (persona, período, quincena), y con NULL los duplicados no colisionan — se
+  // crearían filas repetidas en cada corrida. Se reportan para que alguien ate
+  // ese costo a su TeamMember, en vez de meterlos a medias.
+  const conPersona = salarios.filter((s) => s.teamMemberId !== null);
+  const sinPersona = salarios.length - conPersona.length;
+
+  const filas = conPersona.map((s) => ({
+    sujetoTeamMemberId: s.teamMemberId!,
+    sujetoNombre: s.teamMember?.name ?? s.nombre,
+    periodo: data.periodo,
+    quincena: data.quincena,
+    fechaProgramada: dayUTC(dia.fechaProgramada),
+    monto: montoQuincena(Number(s.monto), data.quincena),
+    moneda: s.moneda,
+  }));
+
+  const res = await prisma.pagoPlanilla.createMany({ data: filas, skipDuplicates: true });
+  return { creadas: res.count, yaExistian: filas.length - res.count, sinPersona };
+}
+
+/**
+ * CHOKEPOINT del libro (INV18, espejo de INV3): marcar una quincena PAGADA exige
+ * `byEmail` y deja `confirmadoPor`/`confirmadoEn`. Ninguna otra ruta escribe
+ * `estado = PAGADO`.
+ *
+ * `fechaPago` default hoy: la plata suele salir días antes de que alguien la
+ * registre, así que la fecha real se puede escribir hacia atrás.
+ *
+ * ⚠ Acá va a engancharse la liquidación de comisiones de esa persona (F3),
+ * DENTRO de esta misma transacción — por eso ya es una `$transaction` aunque hoy
+ * tenga un solo write: agregar el segundo no debe cambiar la forma.
+ */
+export async function pagarQuincena(
+  pagoId: string,
+  data: z.infer<typeof planillaPagarSchema>,
+  byEmail: string,
+) {
+  if (!byEmail) {
+    throw new CobranzaError("Marcar pagada una quincena exige confirmación de un usuario.", 400);
+  }
+  const actual = await prisma.pagoPlanilla.findUnique({ where: { id: pagoId } });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Esa quincena ya está pagada.", 409);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.pagoPlanilla.update({
+      where: { id: pagoId },
+      data: {
+        estado: "PAGADO",
+        fechaPago: data.fechaPago ? dayUTC(data.fechaPago) : dayUTC(hoyCR()),
+        confirmadoPor: byEmail,
+        confirmadoEn: new Date(),
+        ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      },
+    });
+    return { id: pagoId };
+  });
+}
+
+/**
+ * Editar una quincena PENDIENTE (corregir el monto sugerido antes de pagarla).
+ * Un PAGADO es intocable: frena con 409 en vez de reescribir historia.
+ */
+export async function updatePagoPlanilla(
+  pagoId: string,
+  data: z.infer<typeof pagoPlanillaPatchSchema>,
+) {
+  const actual = await prisma.pagoPlanilla.findUnique({
+    where: { id: pagoId },
+    select: { estado: true },
+  });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Una quincena PAGADA no se edita.", 409);
+  }
+  await prisma.pagoPlanilla.update({
+    where: { id: pagoId },
+    data: {
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: pagoId };
+}
+
+/** Borrar una quincena PENDIENTE (se generó de más). Un PAGADO no se borra. */
+export async function deletePagoPlanilla(pagoId: string) {
+  const actual = await prisma.pagoPlanilla.findUnique({
+    where: { id: pagoId },
+    select: { estado: true },
+  });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Una quincena PAGADA no se borra.", 409);
+  }
+  await prisma.pagoPlanilla.delete({ where: { id: pagoId } });
 }
 
 // ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ──────────────────────────────

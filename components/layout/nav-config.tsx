@@ -215,7 +215,11 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
       { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
       { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
-      { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
+      // ⚠ Dos hojas con nombres parecidos, a propósito y con copy que las separa:
+      // «Planillas» es el salario all-in ESTIMADO que alimenta el burn; «Libro de
+      // planilla» es lo que salió de verdad, quincena por quincena.
+      { href: "/finanzas/costos/planillas", label: "Planillas (estimado)", section: "Costos y gastos", costosOnly: true },
+      { href: "/finanzas/costos/pagos-planilla", label: "Libro de planilla", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
       // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
       // exige que el ÚLTIMO bloque sea exactamente ["/finanzas/caja-neta"] sin section.

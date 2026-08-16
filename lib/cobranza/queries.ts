@@ -37,6 +37,7 @@ import {
   mensualizado,
   type MonedaTarjeta,
 } from "./tarjetas";
+import { coberturaDe } from "./planilla";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -1242,4 +1243,108 @@ export async function loadTarjetas(): Promise<TarjetaDTO[]> {
       updatedAt: iso(t.updatedAt)!,
     };
   });
+}
+
+// ── Libro de planilla (SUPER_ADMIN-only) ────────────────────────────────────────
+// ⚠ PRIVACIDAD: esto es lo que se le PAGÓ a cada persona. Pesa lo mismo que un
+// salario de CostoRecurrente — se consume SOLO desde la ruta con
+// `guardCostosAccess` y desde la página con `isCostosRole`.
+
+/** Una comisión liquidada JUNTO a esta quincena (la escribe F3 al liquidar). */
+export interface PagoComisionDTO {
+  id: string;
+  monto: number;
+  moneda: string;
+  base: number;
+  porcentaje: number;
+  /** Snapshot por cobro: de qué cliente y de qué cobro salió cada colón. */
+  detalle: unknown;
+}
+
+export interface PagoPlanillaDTO {
+  id: string;
+  sujetoTeamMemberId: string | null;
+  /** Snapshot: la fila se lee sola aunque la persona se dé de baja. */
+  sujetoNombre: string;
+  periodo: string;
+  quincena: number;
+  fechaProgramada: string;
+  /** Congelado al crear la fila. NO se deriva del costo (ver el modelo). */
+  monto: number;
+  moneda: string;
+  estado: string;
+  fechaPago: string | null;
+  confirmadoPor: string | null;
+  confirmadoEn: string | null;
+  notas: string | null;
+  comisiones: PagoComisionDTO[];
+  /** base + comisiones: lo que efectivamente recibió esa quincena. */
+  totalConComisiones: number;
+  createdAt: string;
+}
+
+export interface LibroPlanillaDTO {
+  pagos: PagoPlanillaDTO[];
+  /** "N de M quincenas registradas" — se declara, no se rellena. */
+  cobertura: { registradas: number; posibles: number; texto: string };
+  /** Los períodos que abarca el libro hoy, del más viejo al más nuevo. */
+  periodos: string[];
+}
+
+/**
+ * El libro completo. Sin paginar a propósito: son ~17 personas × 24 quincenas al
+ * año, y agrupar por mes en el cliente es más simple que un cursor que después
+ * hay que mantener sincronizado con la vista agrupada.
+ */
+export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
+  const filas = await prisma.pagoPlanilla.findMany({
+    include: {
+      comisiones: {
+        select: { id: true, monto: true, moneda: true, base: true, porcentaje: true, detalle: true },
+      },
+    },
+    orderBy: [{ periodo: "desc" }, { quincena: "asc" }, { sujetoNombre: "asc" }],
+  });
+
+  const pagos: PagoPlanillaDTO[] = filas.map((p) => {
+    const comisiones: PagoComisionDTO[] = p.comisiones.map((c) => ({
+      id: c.id,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      base: num(c.base)!,
+      porcentaje: num(c.porcentaje)!,
+      detalle: c.detalle,
+    }));
+    const monto = num(p.monto)!;
+    // Solo suman las comisiones de la MISMA moneda que el pago: CRC y USD no se
+    // mezclan ni acá ni en ningún lado (regla transversal del módulo).
+    const extra = comisiones
+      .filter((c) => c.moneda === p.moneda)
+      .reduce((a, c) => a + c.monto, 0);
+    return {
+      id: p.id,
+      sujetoTeamMemberId: p.sujetoTeamMemberId,
+      sujetoNombre: p.sujetoNombre,
+      periodo: p.periodo,
+      quincena: p.quincena,
+      fechaProgramada: isoDay(p.fechaProgramada)!,
+      monto,
+      moneda: p.moneda,
+      estado: p.estado,
+      fechaPago: isoDay(p.fechaPago),
+      confirmadoPor: p.confirmadoPor,
+      confirmadoEn: iso(p.confirmadoEn),
+      notas: p.notas,
+      comisiones,
+      totalConComisiones: Math.round((monto + extra) * 100) / 100,
+      createdAt: iso(p.createdAt)!,
+    };
+  });
+
+  const periodos = [...new Set(pagos.map((p) => p.periodo))].sort();
+  return {
+    pagos,
+    cobertura: coberturaDe(pagos.length, periodos),
+    periodos,
+  };
 }

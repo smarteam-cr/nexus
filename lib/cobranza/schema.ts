@@ -472,6 +472,55 @@ export const tarjetaCostoSchema = z.object({
   asignar: z.boolean(),
 });
 
+// ── Libro de planilla (SUPER_ADMIN-only) ───────────────────────────────────────
+// Lo que se PAGÓ de verdad, quincena por quincena. Es otra cosa que la hoja
+// «Planillas», que muestra el all-in ESTIMADO de CostoRecurrente para el burn.
+
+export const PLANILLA_ESTADOS = ["PENDIENTE", "PAGADO"] as const;
+
+export const ESTADO_PLANILLA_LABEL: Record<string, string> = {
+  PENDIENTE: "Pendiente",
+  PAGADO: "Pagado",
+};
+
+const periodoPlanilla = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El período va en formato YYYY-MM");
+
+const quincenaPlanilla = z.union([z.literal(1), z.literal(2)], {
+  message: "La quincena es 1 (1–15) o 2 (16–fin)",
+});
+
+/**
+ * Generar las quincenas de un período. NO recibe la lista de personas: se deriva
+ * server-side de los salarios ACTIVOS, para que el cliente no pueda pedir que se
+ * materialice a alguien que ya no está.
+ * La materialización es CREATE-ONLY (ver `generarQuincena`).
+ */
+export const planillaGenerarSchema = z.object({
+  periodo: periodoPlanilla,
+  quincena: quincenaPlanilla,
+});
+
+/**
+ * Marcar una quincena como PAGADA. `fechaPago` opcional (default hoy, capada a
+ * hoy en la UI): la plata suele salir días antes de que alguien la registre.
+ */
+export const planillaPagarSchema = z.object({
+  fechaPago: isoDateReal.optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+/**
+ * Editar una quincena. Solo mientras está PENDIENTE — un PAGADO es intocable
+ * (la mutación lo frena con 409). Sin `estado` a propósito: pagar tiene su
+ * propia ruta, que es el chokepoint de INV18.
+ */
+export const pagoPlanillaPatchSchema = z.object({
+  monto: monto.optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 
 export const crearEmpresaSchema = z.object({

@@ -70,6 +70,9 @@ import * as tarjetasRoute from "@/app/api/cobranza/costos/tarjetas/route";
 import * as tarjetaIdRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/route";
 import * as tarjetaSaldoRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/saldo/route";
 import * as tarjetaCostosRoute from "@/app/api/cobranza/costos/tarjetas/[tarjetaId]/costos/route";
+import * as planillaRoute from "@/app/api/cobranza/costos/pagos-planilla/route";
+import * as planillaIdRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/route";
+import * as planillaPagarRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/pagar/route";
 
 const MENSAJE_GUARD = "Los costos y la caja neta son solo para dirección (Super Admin).";
 
@@ -123,7 +126,7 @@ describe("P1 · guardCostosAccess — 403 para todo rol que no sea SUPER_ADMIN",
 });
 
 // ── P2 · Handlers reales cableados ──────────────────────────────────────────
-describe("P2 · los 16 handlers responden 403 como ADMIN sin tocar Prisma", () => {
+describe("P2 · los 21 handlers responden 403 como ADMIN sin tocar Prisma", () => {
   const req = (method: string) =>
     new Request("http://test.local/api/cobranza", {
       method,
@@ -133,6 +136,7 @@ describe("P2 · los 16 handlers responden 403 como ADMIN sin tocar Prisma", () =
   const params = { params: Promise.resolve({ costoId: "clx-test-costo-id" }) };
   const gastoParams = { params: Promise.resolve({ gastoId: "clx-test-gasto-id" }) };
   const tarjetaParams = { params: Promise.resolve({ tarjetaId: "clx-test-tarjeta-id" }) };
+  const pagoParams = { params: Promise.resolve({ pagoId: "clx-test-pago-id" }) };
 
   const superficies: Array<[string, () => Promise<Response>]> = [
     ["GET /api/cobranza/costos", () => costosRoute.GET()],
@@ -164,6 +168,22 @@ describe("P2 · los 16 handlers responden 403 como ADMIN sin tocar Prisma", () =
     [
       "POST /api/cobranza/costos/tarjetas/[tarjetaId]/costos",
       () => tarjetaCostosRoute.POST(req("POST"), tarjetaParams),
+    ],
+    // Libro de planilla: lo que se le PAGÓ a cada persona. Pesa lo mismo que un
+    // salario, así que cuelga de `costos/` con el mismo guard.
+    ["GET /api/cobranza/costos/pagos-planilla", () => planillaRoute.GET()],
+    ["POST /api/cobranza/costos/pagos-planilla", () => planillaRoute.POST(req("POST"))],
+    [
+      "PATCH /api/cobranza/costos/pagos-planilla/[pagoId]",
+      () => planillaIdRoute.PATCH(req("PATCH"), pagoParams),
+    ],
+    [
+      "DELETE /api/cobranza/costos/pagos-planilla/[pagoId]",
+      () => planillaIdRoute.DELETE(req("DELETE"), pagoParams),
+    ],
+    [
+      "PUT /api/cobranza/costos/pagos-planilla/[pagoId]/pagar",
+      () => planillaPagarRoute.PUT(req("PUT"), pagoParams),
     ],
   ];
 

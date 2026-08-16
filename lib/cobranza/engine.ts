@@ -1337,8 +1337,15 @@ export interface ProyeccionCostos {
  * quincenal). Q2 absorbe el centavo de residuo: Q1 + Q2 === montoMensual
  * exacto (idioma "la última cuota absorbe el residuo"). Cambiar SOLO acá si
  * algún día se decide otra regla de reparto.
+ *
+ * EXPORTADA desde 2026-08-16 — hoist PURO, cero cambios de comportamiento
+ * (mismo precedente que `bucketAntiguedad` y `STAGE_EXIT_STEPS`). La usa el
+ * libro de planilla SOLO como SUGERENCIA de UI al crear una quincena: el monto
+ * de un `PagoPlanilla` es propio y congelado, nunca derivado del costo. Si en
+ * vez de sugerir se derivara, subir un salario a mitad de mes reescribiría la
+ * Q2 pendiente y Q1+Q2 no daría ningún salario.
  */
-function montoQuincena(montoMensual: number, q: 1 | 2): number {
+export function montoQuincena(montoMensual: number, q: 1 | 2): number {
   const mitadQ1 = round2(montoMensual / 2);
   return q === 1 ? mitadQ1 : round2(montoMensual - mitadQ1);
 }
