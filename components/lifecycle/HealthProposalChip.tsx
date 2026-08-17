@@ -16,10 +16,21 @@ export default function HealthProposalChip({
   projectId,
   reason,
   proposedAt,
+  puedeResolver,
 }: {
   projectId: string;
   reason: string | null;
   proposedAt: string | null;
+  /**
+   * ⚠ El PATCH exige `clientes.viewAll`. Desde que Exito del cliente tiene celda propia
+   * (`customerSuccess.read`, 2026-08-16) hay gente que VE este chip sobre un proyecto suyo
+   * y no lo puede resolver: con `false` el chip informa (que es lo valioso) y no ofrece los
+   * dos botones que darian 403.
+   *
+   * REQUERIDO y sin default: si el default fuera `true`, un call site nuevo heredaria los
+   * botones muertos en silencio, que es exactamente el defecto que este prop vino a matar.
+   */
+  puedeResolver: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -51,6 +62,9 @@ export default function HealthProposalChip({
       title={`${reason ?? "Señales duras del cronograma"}${proposedAt ? ` · propuesto el ${new Date(proposedAt).toLocaleDateString("es-CR", { day: "numeric", month: "short" })}` : ""}`}
     >
       En riesgo (propuesto por el agente)
+      {!puedeResolver && <span className="text-fg-muted">· lo confirma el liderazgo de CS</span>}
+      {puedeResolver && (
+        <>
       <button
         onClick={() => act("confirm")}
         disabled={busy !== null}
@@ -65,6 +79,8 @@ export default function HealthProposalChip({
       >
         {busy === "dismiss" ? "…" : "Descartar"}
       </button>
+        </>
+      )}
     </span>
   );
 }

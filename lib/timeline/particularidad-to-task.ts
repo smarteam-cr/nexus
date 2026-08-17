@@ -36,6 +36,8 @@ function capitalizar(s: string): string {
  * Título sugerido para la tarea. Si ningún patrón matchea devuelve el título **tal cual**: es mejor
  * que el CSE reescriba una frase entendible a que lea una mutilación automática.
  */
+import { esAbierta } from "./particularidad-state";
+
 export function taskTitleFromParticularidad(title: string): string {
   const limpio = (title ?? "").trim().replace(/\s+/g, " ").replace(/\.$/, "");
   if (!limpio) return "";
@@ -80,6 +82,44 @@ export function esConvertible(p: {
 export function esCompromisoPendiente(p: {
   kind: string;
   convertedTaskId?: string | null;
+  estado?: string | null;
 }): boolean {
-  return !p.convertedTaskId && (p.kind === "COMPROMISO" || p.kind === "SOLICITUD");
+  /* ⚠ El estado entra ACÁ y no en cada caller: el docblock de arriba exige que el contador del
+     panel y el grupo al que lleva su botón den el MISMO número, y filtrar afuera es la forma de
+     que uno se acuerde y el otro no.
+     Un compromiso que se cumplió sin haberse convertido en tarea seguía pidiendo, para siempre,
+     que alguien lo persiguiera: cerrarlo era un gesto que no apagaba nada. */
+  return (
+    !p.convertedTaskId && esAbierta(p) && (p.kind === "COMPROMISO" || p.kind === "SOLICITUD")
+  );
+}
+
+export type GrupoParticularidad = "compromisos" | "arreglar" | "historia";
+
+/**
+ * ¿A qué grupo del panel de particularidades pertenece esta fila? Un solo criterio para los tres
+ * bloques del canvas (`TimelineGantt.tsx`) y para el destino que abre `focusGroup` al cerrar o
+ * reabrir una desviación (`CronogramaCanvas.tsx`) — antes eran dos copias del mismo cálculo, y una
+ * copia que no chequeaba `estado` fue justo el bug que dejó una desviación resuelta "atascada" en
+ * el grupo "para arreglar" para siempre.
+ *
+ * `dupIds` es el set de ids marcadas como gemelas por `findDuplicateGroups` sobre la fase entera;
+ * se recibe desde afuera porque calcularlo exige la lista completa, que este módulo no tiene por
+ * qué conocer. Pasar un set vacío es válido (equivale a "no mirar duplicados").
+ */
+export function grupoDeParticularidad(
+  p: {
+    id: string;
+    kind: string;
+    convertedTaskId?: string | null;
+    estado?: string | null;
+    weeksImpact?: number | null;
+  },
+  dupIds: ReadonlySet<string>,
+): GrupoParticularidad {
+  if (esCompromisoPendiente(p)) return "compromisos";
+  const paraArreglar =
+    esAbierta(p) &&
+    (dupIds.has(p.id) || (!p.weeksImpact && (p.kind === "ATRASO" || !!p.convertedTaskId)));
+  return paraArreglar ? "arreglar" : "historia";
 }

@@ -57,10 +57,23 @@ function SignalChips({ s }: { s: ClientSignalsRow | undefined }) {
 export default function CsPanel({
   data,
   canSyncPartner = false,
+  puedeCurar,
 }: {
   data: CsPanelData;
   /** El sync de partner (datos confidenciales) solo lo disparan CSL/SUPER_ADMIN. */
   canSyncPartner?: boolean;
+  /**
+   * ⚠ Quien puede ESCRIBIR desde esta pantalla (`clientes.viewAll`), que desde el
+   * 2026-08-16 ya no es lo mismo que quien puede ABRIRLA (`customerSuccess.read`).
+   * Refrescar senales y correr el watchdog son de cartera: recorren TODOS los clientes
+   * accesibles y su endpoint quedo a proposito en el gate viejo. Sin este prop, el CSE
+   * veia los dos botones, apretaba, comia el toast azul de "puede tardar un par de
+   * minutos" y recien despues el 403.
+   *
+   * REQUERIDO y sin default: sacarlo del call site es error de compilacion, no una
+   * pantalla que se abre de mas en silencio.
+   */
+  puedeCurar: boolean;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -146,6 +159,7 @@ export default function CsPanel({
     <div className="space-y-7">
       {/* Acciones del panel */}
       <div className="flex flex-wrap items-center gap-2 -mt-2">
+        {puedeCurar && (
         <button
           onClick={refreshSignals}
           disabled={refreshing}
@@ -153,6 +167,7 @@ export default function CsPanel({
         >
           {refreshing ? "Actualizando…" : "↻ Actualizar señales de HubSpot"}
         </button>
+        )}
         {canSyncPartner && (
           <button
             onClick={refreshPartner}
@@ -162,13 +177,15 @@ export default function CsPanel({
             {syncingPartner ? "Sincronizando…" : "🤝 Actualizar partner"}
           </button>
         )}
-        <button
-          onClick={runWatchdog}
-          disabled={running}
-          className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-50 transition-colors"
-        >
-          {running ? "Corriendo…" : "🐕 Correr watchdog"}
-        </button>
+        {puedeCurar && (
+          <button
+            onClick={runWatchdog}
+            disabled={running}
+            className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-50 transition-colors"
+          >
+            {running ? "Corriendo…" : "🐕 Correr watchdog"}
+          </button>
+        )}
         {oldestFetch && (
           <span className="text-[11px] text-fg-muted">
             {/* hour12: false — mismo motivo que SourceChip: sin esto, el marcador
@@ -188,6 +205,7 @@ export default function CsPanel({
 
       {/* 3. Cartera (motor existente, con chips de señales) */}
       <PortfolioGrid
+        puedeCurar={puedeCurar}
         rows={data.rows}
         renderClientChips={(clientId) => <SignalChips s={data.signalsByClient[clientId]} />}
       />

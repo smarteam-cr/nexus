@@ -10,12 +10,36 @@
  * También expone loadTimelineContext: serializa ProjectTimeline + TimelinePhase a
  * texto de solo-lectura (el agente NO regenera el cronograma; la plantilla lo pinta
  * directo desde ProjectTimeline).
+ *
+ * Y loadPriorRelationshipContext, que desde la Fase 10 (2026-08-17) también lee la
+ * Entrega PUBLICADA del proyecto anterior del mismo cliente — «qué logramos antes».
  */
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
+import { esCerrada } from "@/lib/timeline/particularidad-state";
+
+/**
+ * Las secciones de la Entrega que sirven de REFERENCIA para el próximo proyecto del mismo
+ * cliente. Deliberadamente NO están: `portada` (logos, nada que decir), `cumplimiento` e
+ * `impacto` (números — de otro proyecto, sin vetar para este contexto), `pendientes` (abierto
+ * de ADENTRO, no historia para afuera) ni `cierre` (CTA). Quedan las cuatro que son prosa sobre
+ * qué se hizo y qué sigue — la munición de cross-selling que el plan pidió, ya escrita.
+ */
+export const ENTREGA_PREVIA_KEYS = ["resumen", "alcance", "logros", "continuidad", "recomendaciones"] as const;
+
+/** El bloque «qué se entregó antes», con la procedencia ADENTRO del texto — mismo criterio que
+ *  `loadHandoffDelHermanoMayorContext` más abajo: un caller que interpolara solo el contenido y
+ *  dejara caer el nombre del proyecto perdería la referencia sin que nada falle. */
+export function formatEntregaPreviaBlock(nombreProyecto: string, texto: string): string {
+  return (
+    `=== QUÉ SE ENTREGÓ ANTES: «${nombreProyecto}» (Entrega publicada al cliente) ===\n` +
+    `No lo repitas literal: usalo para no proponer de nuevo algo ya hecho ni contradecirlo.\n` +
+    texto
+  );
+}
 
 interface BlockLite {
   blockType: string;
@@ -33,21 +57,28 @@ interface BlockLite {
  * agentes: el de Handoff (que lo tenía inline en analyze/route.ts) y el de Exploración.
  * Budget chico (~2.5k chars) y aditivo: da conciencia de la historia sin diluir las
  * fuentes principales.
+ *
+ * ── ⭐ Fase 10, «qué logramos antes» ─────────────────────────────────────────
+ * El canvas de Entrega se escribe, se publica, y hasta acá ningún otro documento lo volvía a
+ * leer. Es cañería, sin dato nuevo: se suma acá el más reciente PUBLICADO del cliente (nunca un
+ * borrador — un número o una promesa sin confirmar de OTRO proyecto es la misma clase de error
+ * que el resto del repo ya evita con «el agente propone, el humano confirma»), filtrado a las
+ * secciones de `ENTREGA_PREVIA_KEYS`. Presupuesto propio (~2k chars), separado del de arriba.
  */
 export async function loadPriorRelationshipContext(
   clientId: string,
   excludeProjectId?: string | null,
 ): Promise<string> {
-  const [priorProjects, priorHandoffs] = await Promise.all([
+  const excluirActual = excludeProjectId ? { id: { not: excludeProjectId } } : {};
+  /* OJO: acá NO va `status: "active"` — el contexto del agente incluye a propósito los
+     proyectos ya terminados del cliente. Por eso se compone a mano con el átomo del sentinel
+     en vez de usar `proyectoClasificableWhere`, que sí exige activo (deuda declarada y
+     contada en scope-coverage.test.ts — tope 1: se define UNA vez y las dos queries de abajo
+     la REUSAN, nunca la vuelven a escribir). */
+  const noEsSentinel = { OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }] };
+  const [priorProjects, priorHandoffs, entregaPrevia] = await Promise.all([
     prisma.project.findMany({
-      /* OJO: acá NO va `status: "active"` — el contexto del agente incluye a propósito los
-         proyectos ya terminados del cliente. Por eso se compone a mano con el átomo del
-         sentinel en vez de usar `proyectoClasificableWhere`, que sí exige activo. */
-      where: {
-        clientId,
-        OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }],
-        ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}),
-      },
+      where: { clientId, ...noEsSentinel, ...excluirActual },
       orderBy: { createdAt: "desc" },
       take: 10,
       select: { name: true, status: true, serviceType: true, createdAt: true },
@@ -58,6 +89,17 @@ export async function loadPriorRelationshipContext(
       take: 10,
       select: { createdAt: true, hubspotDealId: true, project: { select: { name: true } } },
     }),
+    // La Entrega PUBLICADA más reciente del cliente. `publishedSnapshotAt: { not: null }` es el
+    // gate: sin él, un borrador con números sin vetar de OTRO proyecto podría filtrarse acá.
+    prisma.projectCanvas.findFirst({
+      where: {
+        ...canvasOf("delivery"),
+        publishedSnapshotAt: { not: null },
+        project: { clientId, ...noEsSentinel, ...excluirActual },
+      },
+      orderBy: { publishedSnapshotAt: "desc" },
+      select: { projectId: true, project: { select: { name: true } } },
+    }),
   ]);
   if (priorProjects.length === 0 && priorHandoffs.length === 0) return "";
 
@@ -67,7 +109,7 @@ export async function loadPriorRelationshipContext(
   const hoLines = priorHandoffs.map(
     (h) => `- ${h.project.name} · ${h.createdAt.toISOString().slice(0, 10)}${h.hubspotDealId ? ` · deal ${h.hubspotDealId}` : ""}`,
   );
-  return [
+  const cabecera = [
     "=== RELACIÓN PREVIA DEL CLIENTE CON SMARTEAM (contexto — no lo repitas literal) ===",
     "Este puede NO ser el primer proyecto del cliente. Usalo solo para no contradecir la historia previa ni duplicar lo ya entregado; el foco de tu análisis sigue siendo el deal ancla y las sesiones de ventas.",
     priorProjects.length ? `Proyectos previos (${priorProjects.length}):\n${projLines.join("\n")}` : "",
@@ -76,6 +118,21 @@ export async function loadPriorRelationshipContext(
     .filter(Boolean)
     .join("\n")
     .slice(0, 2500);
+
+  // onlyConfirmed:true — igual criterio que TODO el resto de este archivo: un borrador sin
+  // revisar no cruza a otro proyecto solo porque el snapshot que lo habilitó ya se publicó.
+  const entregaTexto = entregaPrevia?.projectId
+    ? await loadCanvasContext(entregaPrevia.projectId, "delivery", {
+        onlyConfirmed: true,
+        includeKeys: ENTREGA_PREVIA_KEYS,
+      })
+    : "";
+  const bloqueEntrega =
+    entregaTexto && entregaPrevia?.project
+      ? formatEntregaPreviaBlock(entregaPrevia.project.name, entregaTexto.slice(0, 2000))
+      : "";
+
+  return [cabecera, bloqueEntrega].filter(Boolean).join("\n\n");
 }
 
 function blockToText(b: BlockLite): string {
@@ -352,6 +409,8 @@ interface RegisteredParticularidad {
   occurredAt: Date;
   dedupeKey: string | null;
   visibleExternal: boolean;
+  estado: string;
+  resueltaEn: Date | null;
 }
 
 export async function loadTimelineContext(
@@ -391,11 +450,17 @@ export async function loadTimelineContext(
               // mismo hecho — y si el CSE después descarta la sugerencia, el hecho se
               // perdería sin que nadie lo note. Que el agente lo re-proponga es el
               // comportamiento correcto: el CSE ve las dos y resuelve.
+              /* ⛔ Y SIN filtro de estado: las CERRADAS tienen que seguir acá. Sacarlas (la
+                 lectura intuitiva de «ya son historia») hace que el agente deje de verlas, las
+                 re-derive del mismo transcript en la corrida siguiente y las proponga otra vez
+                 — semana tras semana, para siempre. Se quedan, ROTULADAS, y abajo se le explica
+                 al modelo qué hacer si el hecho volvió a pasar de verdad. */
               where: { needsValidation: false },
               orderBy: { occurredAt: "desc" as const },
               select: {
                 kind: true, party: true, title: true, weeksImpact: true,
                 occurredAt: true, dedupeKey: true, visibleExternal: true,
+                estado: true, resueltaEn: true,
               },
             },
           }
@@ -434,13 +499,20 @@ export async function loadTimelineContext(
     lines.push("");
     lines.push(
       "DESVIACIONES YA REGISTRADAS (NO las vuelvas a proponer). Si el MISMO hecho sigue vigente y querés" +
-        " corregirlo, devolvelo con su MISMA huella y se actualiza en lugar de duplicarse:",
+        " corregirlo, devolvelo con su MISMA huella y se actualiza en lugar de duplicarse.",
+    );
+    lines.push(
+      "Las marcadas CERRADA ya se resolvieron: tampoco las repitas. Si ese hecho VOLVIÓ A PASAR," +
+        " devolvelo con su MISMA huella y decilo en el detalle — se reabre, no se duplica:",
     );
     for (const pt of yaRegistradas) {
       const huella = extractFingerprint(pt.dedupeKey) ?? "(sin huella)";
       const sem = pt.weeksImpact ? ` +${pt.weeksImpact}sem` : "";
+      const cerrada = esCerrada(pt)
+        ? ` [CERRADA${pt.resueltaEn ? ` el ${pt.resueltaEn.toISOString().slice(0, 10)}` : ""}]`
+        : "";
       lines.push(
-        `- [huella: ${huella}] ${pt.kind}/${pt.party}${sem} (${pt.occurredAt.toISOString().slice(0, 10)}) ${pt.title}`,
+        `- [huella: ${huella}]${cerrada} ${pt.kind}/${pt.party}${sem} (${pt.occurredAt.toISOString().slice(0, 10)}) ${pt.title}`,
       );
     }
   }

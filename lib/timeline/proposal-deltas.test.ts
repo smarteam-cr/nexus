@@ -416,14 +416,17 @@ test("las instrucciones tipeadas viajan al generar: el flush del paso 0 (auditor
   /* El CSE tipea y aprieta «Regenerar detalle» (por fase o TODO el cronograma, Tanda N) sin
      Guardar: sin el flush, la corrida salía SIN la regla y en silencio — el mismo bug «visto
      en RC» de las exclusiones del handoff. La edición que la pone en rojo: sacar el
-     await flushDocBrief() de cualquiera de las tres (generateDetail, startRegenPreview,
-     startAllRegenPreview). */
+     await flushDocBrief() de cualquiera de las DOS que quedan.
+     ⚠ Eran tres. Desde 2026-08-16 la primera generación y «Regenerar todo el cronograma» son la
+     MISMA función (pedirPropuestaDeDetalle): las dos piden una propuesta que el CSE cura, así que
+     comparten un solo flush. La otra es startRegenPreview (el regen por fase). Bajar este número
+     sin ese motivo escrito sería tapar que una corrida perdió las instrucciones del CSE. */
   const src = fs.readFileSync(
     path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
     "utf8",
   );
   expect(src, "desapareció el flush del brief").toContain("flushDocBrief");
-  expect(src.match(/await flushDocBrief\(\);/g)?.length, "una de las tres corridas del detalle perdió el flush").toBe(3);
+  expect(src.match(/await flushDocBrief\(\);/g)?.length, "una de las dos corridas del detalle perdió el flush").toBe(2);
 });
 
 test("la caja de instrucciones se pinta y solo guarda lo que una persona tipeó", () => {

@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardRolesAdmin } from "@/lib/auth/api-guards";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { prisma } from "@/lib/db/prisma";
 import { getRole } from "@/lib/roles/queries";
 import { SYSTEM_SUBJECT } from "@/lib/roles/access";
@@ -75,7 +76,13 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   // AgentRun RUNNING upfront (patrón analyze): si el LLM falla, el rastro queda.
   const run = await prisma.agentRun.create({
-    data: { agentId: AGENT_ID, status: "RUNNING", stepLabel: role.title },
+    data: {
+      agentId: AGENT_ID,
+      status: "RUNNING",
+      stepLabel: role.title,
+      // Quién apretó, para que el centro de corridas le avise a ESA persona al terminar.
+      triggeredByEmail: await triggeredByEmail(),
+    },
     select: { id: true },
   });
 

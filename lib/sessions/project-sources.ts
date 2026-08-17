@@ -17,6 +17,7 @@
  * cruzados; este chokepoint es la red de runtime aunque alguno se cuele.
  */
 import { prisma } from "@/lib/db/prisma";
+import { asignarDuenioManual } from "./duenio-manual";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -100,6 +101,7 @@ export function whereBelongsToClient(clientId: string) {
 export async function adoptarSesionSinDuenio(
   sessionId: string,
   clientId: string,
+  actorEmail: string | null = null,
 ): Promise<boolean> {
   const s = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
@@ -107,7 +109,10 @@ export async function adoptarSesionSinDuenio(
   });
   if (!s || s.resolvedClientId !== null || s.manualClientId !== null) return false;
 
-  await prisma.firefliesSession.update({ where: { id: sessionId }, data: { manualClientId: clientId } });
+  /* Con procedencia "adopcion": es un EFECTO de agregar la reunión al proyecto, no una
+     decisión de a quién pertenece. Es lo único que un "devolver a internas" puede deshacer
+     solo, sin arriesgarse a pisar una elección humana. */
+  await asignarDuenioManual(sessionId, clientId, { origen: "adopcion", actorEmail });
   const { reResolveSession } = await import("./resolve-client");
   await reResolveSession(sessionId, undefined, { reclassify: false });
   return true;

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { guardInternalUser } from "@/lib/auth/api-guards";
+import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
 import { withAuth, apiError } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { reResolveSession } from "@/lib/sessions/resolve-client";
@@ -27,6 +29,12 @@ export const GET = withAuth(async (_req, ctx) => {
  */
 export const PATCH = withAuth(async (req, ctx) => {
   const { id } = await ctx.params;
+  /* ⚠ `withAuth` verifica que haya sesión pero DESCARTA al usuario, así que el handler no sabe
+     quién es. Se lo vuelve a pedir inline —mismo patrón que handoff-sources— porque sin autor la
+     procedencia del sello es la mitad del dato: sirve para saber que fue humano, no para saber a
+     quién preguntarle cuando una reunión aparece en el cliente equivocado. */
+  const usuario = await guardInternalUser();
+  if (usuario instanceof NextResponse) return usuario;
   let body: { manualClientId?: unknown };
   try {
     body = (await req.json()) as { manualClientId?: unknown };
@@ -47,11 +55,8 @@ export const PATCH = withAuth(async (req, ctx) => {
     }
   }
 
-  const session = await prisma.firefliesSession.update({
-    where: { id },
-    data: { manualClientId: destino },
-    select: { id: true, manualClientId: true },
-  });
+  await asignarDuenioManual(id, destino, { origen: "humano", actorEmail: usuario.teamMember.email ?? null });
+  const session = { id, manualClientId: destino };
 
   // PERF #1: el override de cliente cambia la resolución → re-resolver esta sesión.
   await reResolveSession(id);

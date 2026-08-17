@@ -17,7 +17,7 @@
  *
  * ── EL CONTRATO QUE NO SE PUEDE ROMPER ──────────────────────────────────────
  * Los tres prompts producen EL MISMO JSON:
- *   · `sections` con las MISMAS 10 keys (se derivan de HANDOFF_CANVAS, no se transcriben:
+ *   · `sections` con las MISMAS 11 keys (se derivan de HANDOFF_CANVAS, no se transcriben:
  *     `reconcileHandoffCanvasSections` corre ANTES DE CADA generación y renormaliza el canvas
  *     contra esa plantilla única, así que una key propia se perdería en la primera regeneración).
  *   · `timeline.phases` con `durationWeeks`.
@@ -49,8 +49,39 @@ function lineaDeEntrega(key: ProjectPipelineKey): string {
     .join(" → ");
 }
 
-/** El bloque de secciones del JSON schema, igual para los tres agentes. */
-function bloqueDeSecciones(guias: Record<string, string>): string {
+/**
+ * El bloque de secciones del JSON schema, igual para los tres agentes.
+ *
+ * ⛔ SE NIEGA A EMITIR UNA SECCIÓN SIN GUÍA, y ése es todo el punto.
+ * Antes interpolaba `guias[k]` sin mirar: una key del canvas sin entrada en el mapa salía al
+ * prompt como la palabra literal **"undefined"**, y el agente llegaba a producción pidiéndole al
+ * modelo escribir una sección cuya instrucción es «undefined». No fallaba nada: ni tsc (indexar un
+ * Record devuelve string), ni el seed, ni el test — que buscaba `"key": "<k>"`, o sea el literal
+ * que ESTE MISMO generador emite, así que se aprobaba solo.
+ *
+ * No es hipotético: sumar una sección al canvas es un cambio de UNA línea en otro archivo, y es
+ * exactamente lo que hace la fase 9. Por eso el error tiene que ser RUIDOSO y temprano: como los
+ * prompts son constantes de módulo, esto revienta al importar — en el build y en los tests, nunca
+ * en una corrida contra un cliente.
+ */
+export function bloqueDeSecciones(guias: Record<string, string>): string {
+  const sinGuia = KEYS.filter((k) => !guias[k] || !guias[k].trim());
+  if (sinGuia.length > 0) {
+    throw new Error(
+      `handoff-por-tipo: ${sinGuia.length} sección(es) del canvas sin guía: ${sinGuia.join(", ")}. ` +
+        "Cada key de HANDOFF_CANVAS necesita su instrucción en GUIAS_DEV y en GUIAS_WEB — sin eso " +
+        "el prompt le pediría al modelo escribir una sección cuya instrucción es «undefined».",
+    );
+  }
+  /* Las guías se interpolan DENTRO de un string JSON de ejemplo: una comilla doble suelta lo
+     rompe y el modelo recibe un schema inválido — otra falla, igual de muda. */
+  const conComillas = KEYS.filter((k) => guias[k].includes('"'));
+  if (conComillas.length > 0) {
+    throw new Error(
+      `handoff-por-tipo: guía con comillas dobles en ${conComillas.join(", ")} — rompe el JSON de ` +
+        "ejemplo del prompt. Usá comillas simples o «».",
+    );
+  }
   const filas = KEYS.map(
     (k) => `    { "key": "${k}", "blocks": [ { "type": "text", "content": "${guias[k]}" } ] }`,
   ).join(",\n");
@@ -93,6 +124,8 @@ const GUIAS_DEV: Record<string, string> = {
     "Compromisos explícitos que el equipo técnico DEBE honrar: qué se prometió que iba a funcionar, con qué sistemas, en qué plazo, y qué quedó EXPLÍCITAMENTE afuera. Citá sesión/fecha. Es la sección más crítica: un alcance técnico mal entendido se paga en re-trabajo.",
   alcance_contratado:
     "Qué se contrató, en términos de entregable técnico: cantidad de integraciones, objetos involucrados, volumen de datos a migrar, horas o bolsa comprometida. Si hay deal en HubSpot, listá los line items concretos.",
+  fuera_de_alcance:
+    "Lo que el cliente PIDIÓ o mencionó en la venta y NO entró al alcance técnico: integraciones que quedaron para después, sistemas que se nombraron sin cotizar, volúmenes o funcionalidades que se recortaron para poder cerrar. Por cada uno: qué pidió, quién lo dijo y cuándo, y si quedó afuera por precio, por plazo o por decisión técnica. Citá sesión/fecha. Si no hay nada, decilo — que no haya pedidos sueltos también es información.",
   desarrollo:
     "LA SECCIÓN CENTRAL DE ESTE DOCUMENTO — acá va el detalle técnico completo, no un resumen. Por CADA integración o migración: qué sistemas conecta (ej. HubSpot ↔ SAP, ERP, e-commerce, telefonía), si es del MARKETPLACE de HubSpot o CUSTOM (API/webhook), DIRECCIÓN del flujo (unidireccional/bidireccional), QUÉ OBJETOS y campos se mueven, con qué FRECUENCIA (tiempo real, batch, manual), cómo se evita duplicar, y qué pasa cuando falla. Para migraciones: desde qué plataforma, qué se migra (contactos, empresas, deals, histórico, automatizaciones) y volumen. Y lo que NO entra, explícito.",
   motivacion_decision:
@@ -158,6 +191,8 @@ const GUIAS_WEB: Record<string, string> = {
     "Compromisos explícitos: cantidad de páginas o plantillas, rondas de revisión incluidas, si el contenido lo escribe el cliente o Smarteam, idiomas, y qué quedó afuera. Citá sesión/fecha. Las rondas de revisión sin techo son la principal fuente de desborde en un proyecto web.",
   alcance_contratado:
     "Qué se contrató: cantidad y tipo de páginas, plantillas, blog, formularios, idiomas, dónde vive el sitio (CMS de HubSpot, WordPress, otro). Si hay deal, listá los line items.",
+  fuera_de_alcance:
+    "Lo que el cliente PIDIÓ o mencionó en la venta y NO entró al alcance del sitio: páginas o secciones que se recortaron, funcionalidades que quedaron para una fase 2, integraciones o contenidos que se nombraron sin cotizar. Por cada uno: qué pidió, quién lo dijo y cuándo, y si quedó afuera por precio, por plazo o por decisión de diseño. Citá sesión/fecha. Si no hay nada, decilo — que no haya pedidos sueltos también es información.",
   desarrollo:
     "Lo TÉCNICO del sitio: integraciones y conexiones (formularios a HubSpot, tracking y analítica, e-commerce, chat, reservas), migración de contenido o de un sitio existente, dominio y DNS, redirecciones desde las URLs viejas (si se rehace un sitio, es obligatorio y se olvida siempre), y requisitos de performance o accesibilidad si se conversaron. Si no hay nada técnico más allá del sitio, decilo explícito.",
   motivacion_decision:

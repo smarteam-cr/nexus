@@ -35,7 +35,10 @@ import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/d
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
-import { patchBaselinePhaseTasks } from "@/lib/timeline/baseline";
+import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
+import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
@@ -56,7 +59,6 @@ import {
   normalizeTag,
   ejeExcluyenteDe,
   tipoDeImplementacion,
-  esReimplementacion,
   EJE_TIPO_IMPLEMENTACION,
   SERVICE_TO_PRODUCT,
   RECURRENTE_TAG,
@@ -65,6 +67,7 @@ import {
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
+import { tareasFijasDeSemanaCero, elegirFaseDeSemanaCero } from "@/lib/timeline/semana-cero-tareas";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -201,8 +204,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     projectId?: string;
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
     regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
-    regenerateMode?: "replace" | "keep"; // regen por fase: reemplazar pendientes IA (default) o conservarlas y solo sumar lo nuevo
-    preview?: boolean; // regen por fase: computa la propuesta y la devuelve SIN persistir (modal de curación)
+    /** Vestigial: el agente de detalle SIEMPRE devuelve propuesta, con o sin esta bandera.
+     *  Se acepta para no romper un cliente viejo que la siga mandando. */
+    preview?: boolean;
     /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
     forzar?: boolean;
   };
@@ -214,8 +218,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let bodyProjectId: string | null = body?.projectId ?? null;
   const regeneratePhaseId: string | null =
     typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
-  const regenerateMode: "replace" | "keep" = body?.regenerateMode === "keep" ? "keep" : "replace";
-  const previewOnly: boolean = body?.preview === true;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -708,7 +710,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       }),
       // Buscar el deal asociado al proyecto (si hay projectId)
       bodyProjectId
-        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true } })
+        ? prisma.project.findUnique({ where: { id: bodyProjectId }, select: { hubspotDealId: true, serviceType: true, tags: true, createdAt: true, hubspotCreatedAt: true, hermanoCsProjectId: true, hubspotStatus: true, hubspotPriority: true, hubspotBlockReason: true, hubspotBlockDetail: true, hubspotAdoptionState: true } })
         : Promise.resolve(null),
     ]);
 
@@ -1307,6 +1309,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     let topSales: RawTranscript[];
     if (isHandoffAgent) {
       const byId = new Map(salesSessions.map((s) => [s.id, s]));
+      /* CON QUIEN fue cada reunion. El organizador YA viene plegado dentro de `participants` por
+         los dos cargadores (foldOrganizer, project-sources.ts), asi que alcanza con esa lista.
+         Sin el rotulo, el handoff no distingue una promesa hecha al cliente en su cara de un
+         comentario nuestro de pasillo, y las escribe con el mismo peso. */
+      const dominiosPropios = buildInternalDomainsSet(await getSessionCategories());
       const plan = planHandoffSessionBudget(
         salesSessions.map((s) => ({ id: s.id, title: s.title, date: s.date })),
         dealProjectCloseDate,
@@ -1315,7 +1322,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       const renderBlock = async (block: HandoffSessionBlock) => {
         const items = plan.filter((p) => p.block === block);
         const contents = await Promise.all(
-          items.map((p) => fetchOrFallback(byId.get(p.id)!, { maxChars: p.maxChars })),
+          items.map(async (p) => {
+            const ses = byId.get(p.id)!;
+            const txt = await fetchOrFallback(ses, { maxChars: p.maxChars });
+            if (!txt) return txt;
+            const etq = etiquetaDeSala({ participants: ses.participants }, dominiosPropios);
+            return `${prefijoDeSala(etq)}${txt}`;
+          }),
         );
         return contents.filter(Boolean).join("\n\n---\n\n");
       };
@@ -1817,6 +1830,14 @@ ${excl}
     }
   }
 
+  /* El ESTADO del proyecto en HubSpot: retrasado, bloqueado, en pausa, en riesgo — con su motivo,
+     su detalle escrito a mano y el estado de adopción. Las cinco señales están espejadas desde
+     hace meses y hasta el 2026-08-16 NO las veía ningún redactor de documentos: el handoff
+     describía un proyecto trabado sin decir que estaba trabado.
+     `""` cuando no hay nada cargado (24 de los 67 proyectos espejados), así el prompt de esos
+     queda byte-idéntico al de siempre. */
+  const operativaBlock = dealProject ? bloqueDeOperativa(dealProject) : "";
+
   const baseUserMessage = `${cseExclusionsBlock}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
@@ -1864,7 +1885,9 @@ ${[
     return `${tag} **${c.title}:**\n${c.content}`;
   }),
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
-].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${operativaBlock ? `${operativaBlock}
+
+` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
@@ -2265,11 +2288,17 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
   // updateCanvasAsync ni por el path de cards.
   if (isTimelineDetailAgent) {
-    // Modal de curación (regen con preview): computamos la propuesta y la devolvemos SIN escribir.
-    // Con regeneratePhaseId → preview de UNA fase (/timeline/phases/[phaseId]/apply). Sin él (Tanda N,
-    // "Regenerar todo el cronograma") → preview de TODAS las fases (/timeline/detail/apply-all). El
-    // prompt ya pide "todas las fases" por default cuando no hay regeneratePhaseId — no cambia.
-    if (previewOnly && bodyProjectId) {
+    /* ⛔ EL AGENTE DE DETALLE NUNCA ESCRIBE TAREAS. Devuelve una PROPUESTA y se resuelve por el
+       circuito de curación, que es el que preserva el progreso humano (lib/timeline/apply-curated-phase).
+       Hasta el 2026-08-16 la PRIMERA generación era la excepción: escribía directo con createMany, sin
+       revisión — la única de todo el cronograma que entraba sin que nadie la mirara, y encima la que
+       más filas crea. Ahora las dos puertas son la misma.
+       No depende de que el cliente mande `preview: true`: la rama que persistía se BORRÓ, así que un
+       POST armado a mano tampoco puede saltearse la curación.
+       Con regeneratePhaseId → propuesta de UNA fase (/timeline/phases/[phaseId]/apply). Sin él →
+       propuesta de TODAS (/timeline/detail/apply-all), que es el camino de la primera generación y el
+       de "Regenerar todo el cronograma". El prompt ya pide todas las fases por default. */
+    if (bodyProjectId) {
       if (regeneratePhaseId) {
         const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
         return NextResponse.json({
@@ -2283,9 +2312,11 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
       });
     }
-    const detail = await persistTimelineDetailFromAgentOutput(bodyProjectId, analysisJson, run.id, regeneratePhaseId, regenerateMode);
+    /* Sin proyecto no hay cronograma que detallar: el agente corrió, su output queda en AgentRun
+       y no hay nada que proponer. Antes acá caía la escritura directa. */
     return NextResponse.json({
-      timelineDetail: detail,
+      previewPhases: [],
+      reason: "no_project",
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
     });
   }
@@ -3158,10 +3189,62 @@ const DETAIL_ACTIVITY_TYPES = [
   "SEGUIMIENTO",
 ] as const;
 
+/** Lo que el agente propone para UNA fase, calculado SIN escribir: sus tareas y —solo cuando la
+ *  fase todavía no tiene tipo— el tipo de actividad. Las dos cosas viajan al modal de curación y
+ *  vuelven por el apply. El preview NO escribe nada: ésa es toda la gracia. */
+export interface DetailPreviewPhase {
+  phaseId: string;
+  tasks: ComputedDetailTask[];
+  /** activityType propuesto, o null si la fase ya tiene uno (nunca se pisa lo elegido a mano). */
+  activityType: string | null;
+}
+
+/** El tipo de actividad que propone el agente, validado contra el vocabulario cerrado. */
+function activityTypePropuesto(raw: Record<string, unknown> | undefined): string | null {
+  return typeof raw?.activityType === "string" &&
+    (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw.activityType as string)
+    ? (raw.activityType as string)
+    : null;
+}
+
 /**
- * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que la
- * persistencia) SIN escribir nada. Lo usa el modal de curación (regen con preview:true). Devuelve []
- * si la fase no existe o el agente no propuso tareas para ella.
+ * Las cinco tareas fijas de la «Semana 0», calculadas SIN escribir para que entren a la CURACIÓN.
+ *
+ * ⚠ Se sembraban dentro del camino que PERSISTE. Cuando la primera generación pasó a resolverse
+ * por curación (2026-08-16) ese camino dejó de correr, y sin esto las cinco desaparecían sin que
+ * nada avisara: no falla un test ni el build — simplemente el proyecto arranca sin pedirle al
+ * cliente los accesos ni la base de datos, y eso se descubre en la reunión de kickoff.
+ *
+ * Deduplica contra lo que la fase YA tiene (y contra la gemela de la de base de datos), así que
+ * sobre un cronograma que ya las llevaba devuelve [] en vez de repetirlas.
+ */
+async function fijasDeSemanaCeroParaPreview(
+  projectId: string,
+  kickoffPhaseId: string,
+  propuestasEnSemana0: number,
+): Promise<ComputedDetailTask[]> {
+  const [proj, existentes] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } }),
+    prisma.timelineTask.findMany({
+      where: { phaseId: kickoffPhaseId },
+      select: { title: true, weekIndex: true },
+    }),
+  ]);
+  const yaEnSemana0 = existentes.filter((t) => t.weekIndex === 0).length;
+  return tareasFijasDeSemanaCero(
+    sanitizeTags(proj?.tags ?? []),
+    existentes.map((t) => t.title),
+    yaEnSemana0 + propuestasEnSemana0,
+  );
+}
+
+/**
+ * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que
+ * el apply) SIN escribir nada. Lo usa el modal de curación del regen por fase. Devuelve [] si la
+ * fase no existe o el agente no propuso tareas para ella.
+ *
+ * Si la fase regenerada ES la «Semana 0», se le suman las tareas fijas — con el mismo dedup que
+ * el camino de todas las fases, así que sobre una Semana 0 que ya las tiene no agrega nada.
  */
 async function computeTimelineDetailPreview(
   projectId: string,
@@ -3170,33 +3253,45 @@ async function computeTimelineDetailPreview(
 ): Promise<ComputedDetailTask[]> {
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
   if (!Array.isArray(detailRaw)) return [];
-  const phase = await prisma.timelinePhase.findFirst({
-    where: { id: phaseId, timeline: { projectId } },
-    select: { name: true, durationWeeks: true, activityType: true },
+  const phases = await prisma.timelinePhase.findMany({
+    where: { timeline: { projectId } },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true, order: true, durationWeeks: true, activityType: true },
   });
+  const phase = phases.find((p) => p.id === phaseId);
   if (!phase) return [];
   const raw = detailRaw.find(
     (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === phaseId,
   ) as Record<string, unknown> | undefined;
   const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
-  const atFromModel =
-    typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
-      ? (raw!.activityType as string)
-      : null;
-  return computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw);
+  const tasks = computeDetailTasksForPhase(
+    phase.name,
+    phase.durationWeeks,
+    phase.activityType ?? activityTypePropuesto(raw),
+    tasksRaw,
+  );
+  const kickoff = elegirFaseDeSemanaCero(phases);
+  if (kickoff && kickoff.id === phaseId) {
+    tasks.push(
+      ...(await fijasDeSemanaCeroParaPreview(projectId, phaseId, tasks.filter((t) => t.weekIndex === 0).length)),
+    );
+  }
+  return tasks;
 }
 
 /**
- * PREVIEW del detalle para TODAS las fases del timeline (Tanda N — "Regenerar todo el
- * cronograma"): una entrada por fase EXISTENTE (orden real del timeline, no el del JSON del
- * agente) — las fases sin propuesta del agente vuelven con tasks:[] para que el CSE también
- * las vea en el acordeón ("sin cambios"). SIN escribir nada. Mismo criterio que
- * computeTimelineDetailPreview, generalizado a todas las fases en vez de una sola.
+ * PREVIEW del detalle para TODAS las fases: una entrada por fase EXISTENTE (orden real del
+ * timeline, no el del JSON del agente) — las fases sin propuesta vuelven con tasks:[] para que el
+ * CSE también las vea en el acordeón («sin cambios»). SIN escribir nada.
+ *
+ * Es el camino de la PRIMERA generación (desde 2026-08-16) y el de «Regenerar todo el
+ * cronograma». Por eso acarrea dos cosas que antes solo sabía hacer el camino que escribía: las
+ * tareas fijas de la Semana 0 y el tipo de actividad propuesto por fase.
  */
 async function computeTimelineDetailPreviewAllPhases(
   projectId: string,
   analysisJson: unknown,
-): Promise<Array<{ phaseId: string; tasks: ComputedDetailTask[] }>> {
+): Promise<DetailPreviewPhase[]> {
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
   const detailArr = Array.isArray(detailRaw) ? detailRaw : [];
   const byId = new Map(
@@ -3207,291 +3302,32 @@ async function computeTimelineDetailPreviewAllPhases(
   const phases = await prisma.timelinePhase.findMany({
     where: { timeline: { projectId } },
     orderBy: { order: "asc" },
-    select: { id: true, name: true, durationWeeks: true, activityType: true },
+    select: { id: true, name: true, order: true, durationWeeks: true, activityType: true },
   });
-  return phases.map((phase) => {
+  const kickoff = elegirFaseDeSemanaCero(phases);
+  const out: DetailPreviewPhase[] = [];
+  for (const phase of phases) {
     const raw = byId.get(phase.id);
     const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
-    const atFromModel =
-      typeof raw?.activityType === "string" && (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw!.activityType as string)
-        ? (raw!.activityType as string)
-        : null;
-    return {
-      phaseId: phase.id,
-      tasks: computeDetailTasksForPhase(phase.name, phase.durationWeeks, phase.activityType ?? atFromModel, tasksRaw),
-    };
-  });
-}
-
-interface TimelineDetailResult {
-  skipped: boolean;
-  reason?: string;
-  phasesTyped: number;
-  tasksCreated: number;
-  discardedPhaseIds: number;
-}
-
-/**
- * Persiste el detalle del cronograma (activityType + tareas por semana) emitido
- * por el agente "agent-timeline-detail". Espejo de persistTimelineFromAgentOutput
- * pero con tres diferencias deliberadas:
- *
- *  - ENRIQUECE in-place el timeline existente: no toca name/duración/orden/anchor
- *    (las fechas no son suyas — el esqueleto es del handoff/CSE).
- *  - Corre DENTRO de una transacción: el check de idempotencia y los writes son
- *    atómicos (un doble click no duplica tareas).
- *  - Idempotencia espejo de la del esqueleto: si el timeline YA tiene alguna
- *    tarea → skip total; la propuesta queda en AgentRun.output. Regenerar va por
- *    el modal de curación (regen por fase o "Regenerar todo el cronograma"), que
- *    preserva lo hecho — no por un borrado previo.
- *
- * Reglas: ids de fase validados contra el set real (alucinados se descartan y
- * loguean); activityType solo se setea si la fase lo tiene en null (no pisa lo
- * seteado a mano); weekIndex clampeado a [0, durationWeeks); tasks nacen
- * AGENT/PENDING con needsValidation desde `porValidar`. NO toca
- * lastEditedByHuman (señal de edición humana — heurística limpia para D.2).
- */
-async function persistTimelineDetailFromAgentOutput(
-  bodyProjectId: string | null,
-  analysisJson: unknown,
-  agentRunId: string,
-  onlyPhaseId: string | null = null,
-  regenerateMode: "replace" | "keep" = "replace",
-): Promise<TimelineDetailResult> {
-  const empty: TimelineDetailResult = { skipped: true, phasesTyped: 0, tasksCreated: 0, discardedPhaseIds: 0 };
-  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)
-    ?.timelineDetail?.phases;
-  if (!bodyProjectId || !Array.isArray(detailRaw) || detailRaw.length === 0) {
-    return { ...empty, reason: "empty_output" };
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const tl = await tx.projectTimeline.findUnique({
-      where: { projectId: bodyProjectId },
-      select: {
-        id: true,
-        phases: {
-          select: {
-            id: true,
-            name: true,
-            order: true,
-            durationWeeks: true,
-            activityType: true,
-            _count: { select: { tasks: true } },
-          },
-        },
-      },
-    });
-    if (!tl || tl.phases.length === 0) return { ...empty, reason: "no_timeline" };
-
-    // Idempotencia: saltamos si YA existe detalle generado por IA. La señal es source ∈ {AGENT,
-    // MODIFIED}: MODIFIED es una tarea AGENT que el CSE editó (el PUT del timeline voltea AGENT→MODIFIED
-    // al editar contenido) — sigue siendo "detalle generado", solo retocado. Contar SOLO "AGENT" reabría
-    // duplicación: si el CSE edita TODAS las tareas antes de publicar, el count caía a 0, el CTA "Generar"
-    // reaparecía y un re-run creaba un set AGENT nuevo ALADO de las MODIFIED (sin dedup). Las tareas
-    // MANUALES (source=HUMAN, que el CSE agregó a la base) NO cuentan → no bloquean la generación inicial,
-    // el detalle se suma sin pisarlas. Mismo predicado en el UI (hasAiDetail) para que CTA y server coincidan.
-    // Regen "keep" (conservar pendientes): títulos existentes de la fase para deduplicar en el loop de creación.
-    let keepTitles: Set<string> | null = null;
-    if (!onlyPhaseId) {
-      const existingAgentCount = await tx.timelineTask.count({
-        where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
-      });
-      if (existingAgentCount > 0) {
-        console.log(
-          `[analyze] Skipping timeline detail: ya hay ${existingAgentCount} tareas IA (AGENT/MODIFIED) para project ${bodyProjectId}. Propuesta queda en AgentRun.output (${agentRunId}).`,
-        );
-        return { ...empty, reason: "detail_exists" };
-      }
-    } else {
-      // Regen POR FASE: NO aplica la idempotencia global. Antes de borrar, exigimos que el modelo haya
-      // devuelto tareas para la fase target — si vino vacía (falla del modelo), NO vaciamos la fase.
-      const targetRaw = detailRaw.find(
-        (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === onlyPhaseId,
-      ) as Record<string, unknown> | undefined;
-      const targetTaskCount = Array.isArray(targetRaw?.tasks) ? (targetRaw!.tasks as unknown[]).length : 0;
-      if (targetTaskCount === 0) {
-        return { ...empty, reason: "empty_phase_output" };
-      }
-      if (regenerateMode === "replace") {
-        // Reemplazar pendientes: borra las pendientes IA SIN INICIAR (AGENT + MODIFIED, status PENDING,
-        // sin actualStart). Preserva SIEMPRE las tareas DONE/iniciadas (mismo id) y HUMAN (manual). El
-        // usuario eligió el reemplazo; el diálogo mostró cuántas se reemplazan. Todo dentro de la misma
-        // $transaction que crea las nuevas → atómico.
-        const del = await tx.timelineTask.deleteMany({
-          where: { phaseId: onlyPhaseId, source: { in: ["AGENT", "MODIFIED"] }, status: "PENDING", actualStart: null },
-        });
-        console.log(
-          `[analyze] Regen por fase ${onlyPhaseId} (replace): borradas ${del.count} pendientes IA sin iniciar (project ${bodyProjectId}, run ${agentRunId}).`,
-        );
-      } else {
-        // Conservar pendientes: no se borra NADA; el loop de creación deduplica por título normalizado
-        // contra lo existente → solo agrega las tareas por objeto cuyo título no exista ya en la fase.
-        keepTitles = new Set(
-          (await tx.timelineTask.findMany({ where: { phaseId: onlyPhaseId }, select: { title: true } })).map(
-            (t) => t.title.trim().toLowerCase(),
-          ),
-        );
-        console.log(
-          `[analyze] Regen por fase ${onlyPhaseId} (keep): sin borrado; dedup por título (${keepTitles.size} existentes).`,
-        );
-      }
-    }
-
-    const phaseById = new Map(tl.phases.map((p) => [p.id, p]));
-    let phasesTyped = 0;
-    let tasksCreated = 0;
-    let discardedPhaseIds = 0;
-
-    for (const raw of detailRaw) {
-      if (!raw || typeof raw !== "object") continue;
-      const ph = raw as Record<string, unknown>;
-      const phaseId = typeof ph.id === "string" ? ph.id : null;
-      // Regen por fase: ignorá las demás fases (el agente las emite con tasks:[] por el scope del prompt).
-      if (onlyPhaseId && phaseId !== onlyPhaseId) continue;
-      const phase = phaseId ? phaseById.get(phaseId) : undefined;
-      if (!phase) {
-        discardedPhaseIds++;
-        console.warn(`[analyze] timeline detail: fase desconocida "${phaseId}" — descartada (anti-alucinación)`);
-        continue;
-      }
-
-      // activityType — UPDATE solo-si-null (no pisa lo seteado a mano por el CSE)
-      const at =
-        typeof ph.activityType === "string" &&
-        (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(ph.activityType)
-          ? (ph.activityType as (typeof DETAIL_ACTIVITY_TYPES)[number])
-          : null;
-      if (at && phase.activityType === null) {
-        await tx.timelinePhase.update({ where: { id: phase.id }, data: { activityType: at } });
-        phasesTyped++;
-      }
-      // B — base para el fallback de party cuando el agente no lo manda (tipo efectivo de la fase).
-      const effectiveActivity = phase.activityType ?? at;
-
-      // tasks — computadas por el helper (clamp de weekIndex, order por semana, party con gate DEV,
-      // type); dedup por título contra lo existente en modo "keep". Mismo criterio que el preview.
-      const tasksRaw = Array.isArray(ph.tasks) ? ph.tasks : [];
-      const toCreate = computeDetailTasksForPhase(
-        phase.name,
-        phase.durationWeeks,
-        effectiveActivity,
-        tasksRaw,
-        keepTitles,
-      ).map((c) => ({ ...c, phaseId: phase.id, source: "AGENT" as const, status: "PENDING" as const }));
-      if (toCreate.length > 0) {
-        await tx.timelineTask.createMany({ data: toCreate });
-        tasksCreated += toCreate.length;
-      }
-    }
-
-    // C — tareas fijas que SIEMPRE arrancan el proyecto: sembradas en la "Semana 0" (kickoff +
-    // levantamiento inicial) en la generación inicial (garantizado por la idempotencia de arriba;
-    // data histórica intacta). Parties mixtas (entregas del cliente + acciones de Smarteam). La
-    // tarea de base de datos RAMIFICA por el TAG de tipo de implementación: si el cliente YA usa
-    // HubSpot (re-implementación) se revisa/limpia la base existente en vez de pedir que la entregue.
-    // Dedup por título normalizado contra lo que el agente ya creó para esa fase; el CSE las edita.
-    const normName = (s: string) => s.trim().toLowerCase();
-    const phasesArr = [...phaseById.values()];
-    // La Semana 0 es la 1ra fase (order 0). Fallback por nombre cubre cronogramas viejos ("Kick-off").
-    const kickoff =
-      phasesArr.find((p) => p.order === 0) ??
-      phasesArr.find((p) => normName(p.name).includes("semana 0") || normName(p.name).includes("kick")) ??
-      null;
-    // En regen POR FASE solo sembramos si la fase regenerada ES el kickoff — un regen de otra fase
-    // (ej. "Desarrollo / Integración") no debe re-sembrar las tareas fijas de la Semana 0.
-    if (kickoff && (!onlyPhaseId || onlyPhaseId === kickoff.id)) {
-      /* El tipo de implementación sale de los tags (2026-08-12), igual que el resto de la
-         clasificación. Se distinguen TRES estados, no dos: re-implementación, implementación, y
-         SIN DEFINIR — antes el enum en null caía en el mismo `false` que "implementación desde
-         cero" y la tarea se sembraba afirmando algo que nadie había respondido. */
-      const tagsDelProyecto = sanitizeTags(
-        (await tx.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } }))?.tags ?? [],
-      );
-      const tipo = tipoDeImplementacion(tagsDelProyecto);
-      const isReimpl = esReimplementacion(tagsDelProyecto);
-
-      /* Las DOS caras de la tarea de base de datos, declaradas juntas. Son el MISMO renglón del
-         plan con distinto texto según el punto de partida, y por eso la deduplicación de abajo
-         mira las dos: un proyecto sembrado como "implementación" y después reclasificado a
-         "re-implementación" recibía la segunda mientras conservaba la primera, y la Semana 0
-         terminaba pidiendo cargar la base Y limpiar la existente a la vez. */
-      const TAREA_BD_DESDE_CERO = { title: "Proporcionar bases de datos a importar", party: "CLIENTE" as const };
-      const TAREA_BD_EXISTENTE = { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" as const };
-
-      const SEED_TASKS: {
-        title: string;
-        party: "CLIENTE" | "SMARTEAM" | "AMBOS";
-        /** Solo la de base de datos: sin tipo definido, la tarea nace marcada "por validar". */
-        porValidar?: boolean;
-        /** El otro texto del mismo renglón, para no sembrar los dos. */
-        gemela?: string;
-      }[] = [
-        { title: "Entregar documentación de procesos involucrados", party: "CLIENTE" },
-        // Regla 4 — rama de base de datos según el tipo de implementación.
-        // Sin tipo definido se asume el camino de siempre (desde cero) PERO se marca por validar:
-        // el CSE ve el pendiente en vez de recibir una afirmación que nadie hizo.
-        {
-          ...(isReimpl ? TAREA_BD_EXISTENTE : TAREA_BD_DESDE_CERO),
-          porValidar: tipo === null,
-          gemela: (isReimpl ? TAREA_BD_DESDE_CERO : TAREA_BD_EXISTENTE).title,
-        },
-        { title: "Entregar listado de usuarios a ingresar al CRM", party: "CLIENTE" },
-        // Regla 2 — Smarteam asigna la ruta de HubSpot Academy al cliente.
-        { title: "Asignar la lista de reproducción de HubSpot Academy al cliente", party: "SMARTEAM" },
-        // Regla 3 — el cliente nos da acceso a su portal de HubSpot.
-        { title: "Proporcionar acceso al portal de HubSpot a Smarteam", party: "CLIENTE" },
-      ];
-      const existing = await tx.timelineTask.findMany({
-        where: { phaseId: kickoff.id },
-        select: { title: true, weekIndex: true },
-      });
-      const existingNorm = new Set(existing.map((t) => normName(t.title)));
-      const week0Count = existing.filter((t) => t.weekIndex === 0).length;
-      const seeds = SEED_TASKS.filter(
-        (t) => !existingNorm.has(normName(t.title)) && !(t.gemela && existingNorm.has(normName(t.gemela))),
-      ).map((t, i) => ({
-        phaseId: kickoff.id,
-        title: t.title,
-        weekIndex: 0,
-        order: week0Count + i,
-        notes: null,
-        needsValidation: t.porValidar === true,
-        party: t.party,
-        type: "TASK" as const, // las tareas fijas son entregables/accesos, no reuniones
-        source: "AGENT" as const,
-        status: "PENDING" as const,
-      }));
-      if (seeds.length > 0) {
-        await tx.timelineTask.createMany({ data: seeds });
-        tasksCreated += seeds.length;
-        console.log(
-          `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, tipo: ${tipo ?? "SIN DEFINIR"})`,
-        );
-      }
-    }
-
-    // Regen POR FASE sobre un proyecto PUBLICADO: parcheamos el baseline activo de esa fase (ids
-    // nuevos + fechas planeadas) para que el portafolio D.3 no reporte falso scope-creep ni pierda
-    // atrasos. No-op si no hay baseline (sin publicar). Dentro de la misma tx → atómico con el regen.
-    if (onlyPhaseId) {
-      await patchBaselinePhaseTasks(tx, tl.id, onlyPhaseId);
-    }
-
-    // Trazabilidad del run que detalló. NO se toca lastEditedByHuman. En regen POR FASE además
-    // invalidamos el borrador de avance: las tareas de la fase tienen ids nuevos → el pendingProgress
-    // viejo podría apuntar a ids muertos; se recalcula limpio con "Chequear avance".
-    await tx.projectTimeline.update({
-      where: { id: tl.id },
-      data: {
-        detailGeneratedByAgentRunId: agentRunId,
-        ...(onlyPhaseId ? { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } : {}),
-      },
-    });
-
-    console.log(
-      `[analyze] ✓ Detalle de cronograma: ${tasksCreated} tareas, ${phasesTyped} fases tipadas, ${discardedPhaseIds} ids descartados (AgentRun ${agentRunId})`,
+    const propuesto = activityTypePropuesto(raw);
+    const tasks = computeDetailTasksForPhase(
+      phase.name,
+      phase.durationWeeks,
+      phase.activityType ?? propuesto,
+      tasksRaw,
     );
-    return { skipped: false, phasesTyped, tasksCreated, discardedPhaseIds };
-  });
+    if (kickoff && kickoff.id === phase.id) {
+      tasks.push(
+        ...(await fijasDeSemanaCeroParaPreview(projectId, phase.id, tasks.filter((t) => t.weekIndex === 0).length)),
+      );
+    }
+    out.push({
+      phaseId: phase.id,
+      tasks,
+      // Solo-si-null: el tipo elegido a mano por el CSE manda sobre el que propone el modelo.
+      activityType: phase.activityType === null ? propuesto : null,
+    });
+  }
+  return out;
 }
+

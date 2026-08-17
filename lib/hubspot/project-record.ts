@@ -1,6 +1,8 @@
 import type { Client as HsClient } from "@hubspot/api-client";
 import { getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
 import type { PipelineDef } from "@/lib/projects/kind";
+import { ESTADOS_PROPONIBLES, esProponible } from "@/lib/projects/estado-hubspot";
+import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
 import {
   OBJETO_PROYECTOS,
   bloqueDeAsociaciones,
@@ -163,4 +165,128 @@ export async function actualizarProyectoInterno(
         `(${res.status}): ${cuerpo.slice(0, 300)}`,
     );
   }
+}
+
+/**
+ * Cambia el ESTADO (`hs_status`) de un proyecto que ya existe en HubSpot.
+ *
+ * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────
+ * Mismo motivo que `actualizarProyectoInterno`: las cinco columnas CS360 de `Project` las escribe
+ * SOLO el espejo. Si Nexus escribiera `hubspotStatus`, el sync la revertiría en diez minutos y el
+ * síntoma sería un botón que "no guarda" sin ningún error. La escritura va HACIA HubSpot y el
+ * valor vuelve por el espejo — la fuente de verdad no se mueve de lugar.
+ *
+ * ⛔ **`completed` no se puede escribir por acá, ni a mano.** Ese valor CIERRA el proyecto: el
+ * espejo lo lee como cierre, lo pasa a inactivo, y reactivarlo no está resuelto hoy. El veto vive
+ * también en `lib/projects/estado-hubspot.ts`, pero repetirlo acá no es redundante: aquél decide
+ * qué se PROPONE y éste es el único lugar por donde el valor sale del sistema. Un body armado a
+ * mano no puede saltarse el de abajo.
+ */
+export async function actualizarEstadoProyecto(
+  hs: HsClient,
+  recordId: string,
+  estado: string,
+): Promise<void> {
+  if (!esProponible(estado)) {
+    throw new Error(
+      `Nexus no escribe el estado "${estado}" en HubSpot: ` +
+        `los únicos válidos son ${ESTADOS_PROPONIBLES.join(", ")}.`,
+    );
+  }
+  const res = await hs.apiRequest({
+    method: "PATCH",
+    path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
+    body: { properties: { hs_status: estado } },
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `cambiar el estado del proyecto a "${estado}" en HubSpot falló ` +
+        `(${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+}
+
+/**
+ * Mueve un proyecto de ETAPA (`hs_pipeline_stage`) en su tablero de HubSpot.
+ *
+ * ⛔ **El id de etapa NO se acepta a ciegas: tiene que estar en la tabla de ESE pipeline.** Los
+ * tres pipelines tienen ids distintos para etapas que se llaman igual, y un id del tablero vecino
+ * manda el registro a una columna que en el suyo no existe — sin error de HubSpot y sin forma de
+ * verlo salvo abriendo el tablero.
+ *
+ * ⛔ **Tampoco una etapa TERMINAL**: mover un proyecto a "Finalizado" lo cierra, lo saca de la
+ * cartera y toca cobranza. `etapasProponibles` ya las excluye; acá se vuelve a exigir porque éste
+ * es el único lugar por donde el id sale hacia el CRM.
+ *
+ * ⚠ Esto NO contradice «HubSpot manda la etapa» (O1…O6): manda para LEER. El cambio se escribe
+ * hacia allá y vuelve por el espejo.
+ */
+export async function actualizarEtapaProyecto(
+  hs: HsClient,
+  recordId: string,
+  def: PipelineDef,
+  stageId: string,
+): Promise<void> {
+  if (!etapasProponibles(def).some((e) => e.id === stageId)) {
+    throw new Error(
+      `Nexus no escribe la etapa "${stageId}" en HubSpot: ` +
+        `no es una etapa movible del pipeline "${def.key}".`,
+    );
+  }
+  const res = await hs.apiRequest({
+    method: "PATCH",
+    path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
+    body: { properties: { hs_pipeline_stage: stageId } },
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `mover el proyecto a la etapa "${stageId}" en HubSpot falló ` +
+        `(${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+}
+
+/** Lo que HubSpot dice AHORA sobre un proyecto, no lo que Nexus copió la última vez. */
+export interface EstadoVivo {
+  hs_status: string | null;
+  hs_pipeline_stage: string | null;
+}
+
+/**
+ * Lee estado y etapa DIRECTO del CRM, sin pasar por el espejo.
+ *
+ * ── POR QUÉ NO ALCANZA LA COPIA DE NEXUS ─────────────────────────────────────
+ * El espejo de un cliente corre cuando alguien abre su ficha, así que `Project.hubspotStatus`
+ * puede tener días. Si la propuesta se construyó sobre esa copia y mientras tanto el CSE cambió
+ * el valor a mano en HubSpot, aceptar la sugerencia PISARÍA su decisión — y del lado de quien
+ * aprieta el botón no habría ninguna señal de que acaba de deshacer algo.
+ *
+ * Se paga una llamada extra por cada aceptación. Es barato al lado de una decisión ajena
+ * revertida en silencio, y estas aceptaciones son de a una, disparadas por una persona.
+ */
+export async function leerEstadoYEtapa(hs: HsClient, recordId: string): Promise<EstadoVivo> {
+  const res = await hs.apiRequest({
+    method: "GET",
+    path:
+      `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}` +
+      `?properties=hs_status&properties=hs_pipeline_stage`,
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `leer el proyecto ${recordId} en HubSpot falló (${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+  const json = (await res.json()) as { properties?: Record<string, string | null> };
+  const props = json.properties ?? {};
+  /* El vacío de HubSpot llega como "" o como ausente según la propiedad; los dos significan
+     "sin cargar" y tienen que colapsar a `null`, o el no-op de más arriba compararía "" contra
+     null y escribiría de gusto. */
+  const limpiar = (v: string | null | undefined) => (v ? v : null);
+  return {
+    hs_status: limpiar(props.hs_status),
+    hs_pipeline_stage: limpiar(props.hs_pipeline_stage),
+  };
 }

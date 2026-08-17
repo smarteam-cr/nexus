@@ -36,6 +36,13 @@ interface FeedingSession {
   origin: string;
   /** Todavía no ocurrió. Las CANDIDATAS ya excluyen las futuras; ésta se vinculó de antes. */
   futura?: boolean;
+  /**
+   * Ya ocurrió y NO dejó nada: ni transcripción, ni resumen, ni minuta.
+   *
+   * Es la fila más engañosa del panel: alimenta el handoff, se pintaba «Incluida» en verde igual
+   * que una llena de material, y el documento se escribe sobre un hueco sin que nadie lo sepa.
+   */
+  sinContenido?: boolean;
 }
 interface ExcludedSession {
   sessionId: string;
@@ -270,8 +277,21 @@ export default function SessionSelectionReview({
 
   // Modo columna (Contexto): incluidas + excluidas con toggle, "buscar más" + el modal.
   if (columnMode) {
+    /* Cuántas de las que ALIMENTAN el handoff ocurrieron y no dejaron nada. Se deriva de la
+       lista en vez de pedirle un contador al servidor: un número que viaja aparte de las filas
+       que lo justifican se desincroniza el día que una de las dos cambie. */
+    const alimentanVacias = feeding.filter((s) => s.sinContenido).length;
     return (
       <>
+        {alimentanVacias > 0 && (
+          <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
+            <strong>
+              {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
+            </strong>{" "}
+            este handoff sin transcripción ni resumen. El documento se va a escribir sobre ese
+            hueco — si tenés las notas, pegalas en <em>Fuentes manuales</em>.
+          </p>
+        )}
         <ContextColumnList
           loading={loading}
           empty="Ninguna sesión alimenta este handoff. Agregala con “Buscar más sesiones”."
@@ -282,7 +302,13 @@ export default function SessionSelectionReview({
               icon={CTX_ICONS.meet}
               meta={meetMeta(s.date, s.alsoIn, s.futura)}
               title={s.title || "Sin título"}
-              badge={s.futura ? { label: "Aún no ocurrió", tone: "amber" } : { label: "Incluida", tone: "green" }}
+              badge={
+                s.futura
+                  ? { label: "Aún no ocurrió", tone: "amber" }
+                  : s.sinContenido
+                    ? { label: "Sin transcripción", tone: "amber" }
+                    : { label: "Incluida", tone: "green" }
+              }
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
               removeTitle="Excluir del handoff (no la desvincula del proyecto)"
             />

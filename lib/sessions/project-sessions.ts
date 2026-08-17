@@ -19,6 +19,12 @@ export interface PastSessionContext {
   date: Date;
   /** Emails de los participantes — para clasificar el área (Ventas/CSE) de la sesión. */
   participants: string[];
+  /**
+   * Quién convocó. Va porque en muchas reuniones NO figura entre los participantes, y sin él una
+   * reunión que convocó alguien de afuera se lee como si hubiéramos estado solos — que es la
+   * conclusión contraria a la verdadera cuando hay que decidir si fue con el cliente.
+   */
+  organizerEmail: string | null;
   /** Transcript/summary serializado a markdown, o null si no hay contenido. */
   content: string | null;
 }
@@ -47,7 +53,7 @@ export async function getPastSessionsForProject(
     select: {
       session: {
         select: {
-          id: true, title: true, date: true, participants: true,
+          id: true, title: true, date: true, participants: true, organizerEmail: true,
           resolvedClientId: true, manualClientId: true,
         },
       },
@@ -64,7 +70,14 @@ export async function getPastSessionsForProject(
   const out: PastSessionContext[] = [];
   for (const s of sessions) {
     const content = await fetchTranscriptContent(s.id, s.title ?? "(sin título)");
-    out.push({ id: s.id, title: s.title ?? "(sin título)", date: s.date, participants: s.participants, content });
+    out.push({
+      id: s.id,
+      title: s.title ?? "(sin título)",
+      date: s.date,
+      participants: s.participants,
+      organizerEmail: s.organizerEmail,
+      content,
+    });
   }
   return out;
 }

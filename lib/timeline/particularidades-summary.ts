@@ -18,10 +18,13 @@
  */
 
 /** Lo mínimo que el resumen necesita de una particularidad. */
+import { esAbierta } from "./particularidad-state";
+
 export interface ParticularidadLike {
   party: string; // CLIENTE | SMARTEAM | AMBOS | DEV
   weeksImpact?: number | null;
   kind?: string; // ATRASO | COMPROMISO (SOLICITUD = legacy)
+  estado?: string | null; // ABIERTA | CERRADA (ausente en snapshots viejos = abierta)
 }
 
 export interface SummarizeOptions {
@@ -52,10 +55,23 @@ export type AttributionBucket = (typeof ATTRIBUTION_BUCKETS)[number];
 export interface ParticularidadesSummary {
   /** ¿Hay al menos una particularidad? (para decidir si renderizar el bloque). */
   count: number;
-  /** Suma total de weeksImpact (semanas de corrimiento acumulado). */
+  /**
+   * Suma total de weeksImpact (semanas de corrimiento acumulado).
+   *
+   * ⛔ INCLUYE LAS CERRADAS, y es deliberado. Un atraso de 3 semanas que se resolvió movió el
+   * calendario 3 semanas igual: el Gantt ya está corrido y cerrarlo no lo devuelve. Restarlo
+   * haría que la frase «el plan se movió N semanas» contradiga al Gantt que está justo arriba,
+   * y del lado del cliente sería una publicación que miente hacia abajo.
+   */
   totalWeeks: number;
   /** Corrimiento atribuido por responsable. Suma exactamente `totalWeeks`. */
   byParty: Record<AttributionBucket, number>;
+  /**
+   * Cuántas siguen VIGENTES. Es lo único que el cierre mueve: `count` es la bitácora completa y
+   * `totalWeeks` es calendario ya gastado. Sirve para «5 desviaciones · 2 sin resolver» sin que
+   * ningún número existente cambie de significado.
+   */
+  abiertas: number;
 }
 
 /**
@@ -75,7 +91,9 @@ export function summarizeParticularidades(
   // es el total de semanas, que es lo que se traduce a "el plan se movió N semanas".
   const kinds = opts.kinds ?? KINDS_DE_ATRASO;
   let totalWeeks = 0;
+  let abiertas = 0;
   for (const p of parts) {
+    if (esAbierta(p)) abiertas++;
     const cuenta = kinds.length === 0 || p.kind === undefined || kinds.includes(p.kind);
     const w = cuenta && typeof p.weeksImpact === "number" && p.weeksImpact > 0 ? p.weeksImpact : 0;
     totalWeeks += w;
@@ -84,7 +102,7 @@ export function summarizeParticularidades(
       : "SIN_ATRIBUIR";
     byParty[bucket] += w;
   }
-  return { count: parts.length, totalWeeks, byParty };
+  return { count: parts.length, totalWeeks, byParty, abiertas };
 }
 
 /** Pluraliza "semana(s)". */

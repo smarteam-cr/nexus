@@ -5,7 +5,9 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import AnalysisPanel from "./AnalysisPanel";
-import { IconCheck } from "@/components/ui";
+import { IconCheck, Alert } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
+import { fetchJson } from "@/lib/api/fetch-json";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,8 @@ interface Session {
   /** PERF: la lista solo trae el booleano; el blob `summary` se carga lazy en el
    *  detalle vía GET /api/sessions/[id] (con ~16k filas era el peso dominante). */
   hasSummary: boolean;
+  /** Todavía no ocurrió. Se MARCA, no se esconde — ver el comentario en page.tsx. */
+  esFutura: boolean;
   enrichedAt: string | null;
   /** @deprecated mantenido por compatibilidad; usar group.kind === 'client' */
   clientId: string | null;
@@ -80,6 +84,23 @@ interface Props {
   categories: CategoryLite[];
   hubspotCompanies: HubspotCompanyLite[];
   teamMembers: TeamMemberLite[];
+  /** Cobertura de transcripciones de los últimos 3 meses, ya partida y contada server-side. */
+  cobertura: Cobertura;
+}
+
+/**
+ * Cuántas reuniones de los últimos 3 meses dejaron transcripción, partido entre las que fueron
+ * CON el cliente y las de puertas adentro.
+ *
+ * ⚠ El split se calcula en el servidor con los dominios de los participantes (ver `page.tsx`), no
+ * con el grupo de la sidebar: una reunión 100% nuestra cuyo título nombra a un cliente cae en el
+ * bucket de ese cliente, y contarla como «con el cliente» inflaría justo el lado que se ve bien.
+ */
+export interface Cobertura {
+  conCliente: number;
+  conClienteSinTr: number;
+  adentro: number;
+  adentroSinTr: number;
 }
 
 // Identificador compuesto del grupo seleccionado en la sidebar
@@ -167,16 +188,62 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-// ── Indicador de estado de transcript ────────────────────────────────────────
+/* `TranscriptDot` vivió acá sin renderizarse nunca: implementaba los tres estados como puntitos
+   de color mientras la fila mostraba dos de ellos como etiquetas con texto. Al agregar el tercer
+   estado (2026-08-15) se resolvió el empate a favor de la etiqueta —que es el idioma que la fila
+   ya hablaba— y se borró el componente muerto: dejarlo ahí es la trampa de que el próximo lo
+   encuentre, crea que está en uso, y termine con dos indicadores de la misma cosa. */
 
-function TranscriptDot({ hasTranscript, hasSummary }: { hasTranscript: boolean; hasSummary: boolean }) {
-  if (hasTranscript) {
-    return <span title="Transcript disponible" className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />;
-  }
-  if (hasSummary) {
-    return <span title="Solo resumen disponible" className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />;
-  }
-  return <span title="Sin contenido" className="w-1.5 h-1.5 rounded-full bg-gray-700 flex-shrink-0" />;
+// ── Aviso de cobertura de transcripciones ─────────────────────────────────────
+
+/**
+ * Cuánto del material de los últimos 3 meses NO existe.
+ *
+ * ── POR QUÉ ESTE CARTEL, Y POR QUÉ ACÁ ───────────────────────────────────────
+ * Medido el 2026-08-15: el 52,7% de las reuniones ya ocurridas de los últimos 3 meses no dejó
+ * transcripción, y de ésas el **84% nunca se grabó** — o sea que la causa no es que Nexus falle
+ * al leerlas, es que nadie apretó grabar. Todo lo que este sistema hace con reuniones (resúmenes,
+ * avance del cronograma, contexto de los agentes) está construido sobre la mitad del material, y
+ * en pantalla eso se ve IDÉNTICO a estar completo.
+ *
+ * Una directriz de Elías ya llevó ese número de ~80% a ~55% y ahí se estancó. El cartel es el
+ * segundo empujón: convierte un dato que había que salir a medir en algo que se ve solo.
+ *
+ * ── POR QUÉ PARTIDO, Y NO UN SOLO PORCENTAJE ─────────────────────────────────
+ * Porque el total esconde el hallazgo que empuja la conducta correcta: **puertas adentro se graba
+ * peor que de cara al cliente** (61% vs 46%), que es lo contrario de lo que uno supondría. Un
+ * número solo diría "estamos mal"; los dos dicen dónde.
+ *
+ * ⚠ Nunca sobre las futuras: una reunión que todavía no ocurrió no "carece" de transcripción, y
+ * meterla al denominador haría que el número empeore solo por agendar.
+ */
+function AvisoDeCobertura({ cobertura }: { cobertura: Cobertura }) {
+  const { conCliente, conClienteSinTr, adentro, adentroSinTr } = cobertura;
+  const total = conCliente + adentro;
+  if (total === 0) return null;
+
+  const sinTr = conClienteSinTr + adentroSinTr;
+  const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 100));
+  const pctTotal = pct(sinTr, total);
+
+  // Debajo de un quinto ya no es una alarma, es ruido: se informa sin gritar.
+  const variant = pctTotal >= 40 ? "warning" : "info";
+
+  return (
+    <div className="flex-shrink-0 px-5 pt-4">
+      <Alert
+        variant={variant}
+        title={`${pctTotal}% de las reuniones de los últimos 3 meses no dejó transcripción`}
+      >
+        <span>
+          Con el cliente: <strong>{pct(conClienteSinTr, conCliente)}%</strong> ({conClienteSinTr} de{" "}
+          {conCliente}). Puertas adentro: <strong>{pct(adentroSinTr, adentro)}%</strong> (
+          {adentroSinTr} de {adentro}). Lo que no se graba no alimenta ningún documento — y
+          pedirlo después de la reunión ya no sirve.
+        </span>
+      </Alert>
+    </div>
+  );
 }
 
 // ── Badge de fuente ───────────────────────────────────────────────────────────
@@ -214,7 +281,10 @@ function ClientSelector({
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   // Cerrar al click externo
   useEffect(() => {
@@ -225,18 +295,41 @@ function ClientSelector({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  /* Al abrir: foco en la búsqueda y lista limpia. Sin esto hay que scrollear 169 clientes con el
+     mouse — que es por qué esta acción se usó 20 veces en toda la historia de la app sobre 6.600
+     reuniones. La lista larga no era el problema: era que no se podía tipear. */
+  useEffect(() => {
+    if (open) {
+      setQ("");
+      inputRef.current?.focus();
+    }
+  }, [open]);
+
   const currentClient = clients.find((c) => c.id === currentClientId);
+
+  const visibles = useMemo(() => {
+    const term = normalize(q);
+    if (!term) return clients;
+    return clients.filter(
+      (c) => normalize(c.name).includes(term) || normalize(c.company ?? "").includes(term),
+    );
+  }, [clients, q]);
 
   async function assign(clientId: string | null) {
     setSaving(true);
     setOpen(false);
     try {
-      await fetch(`/api/sessions/${sessionId}`, {
+      await fetchJson(`/api/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manualClientId: clientId }),
       });
       onChanged(clientId);
+    } catch (e) {
+      /* Antes esto se tragaba el fallo: la pantalla decía que había cambiado el dueño aunque el
+         servidor lo hubiera rechazado (p. ej. un cliente borrado). Con la acción escondida casi no
+         pasaba; ahora que es el camino principal para 2.036 reuniones, mentir sale caro. */
+      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el cliente de la reunión.");
     } finally {
       setSaving(false);
     }
@@ -261,7 +354,22 @@ function ClientSelector({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-xl border border-gray-700 bg-gray-900 shadow-xl overflow-hidden">
+        <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-gray-700 bg-gray-900 shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-line">
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setOpen(false);
+                // Enter con un solo resultado = asignarlo. Es el gesto de ponerse al día rápido.
+                if (e.key === "Enter" && visibles.length === 1) assign(visibles[0].id);
+              }}
+              placeholder="Buscar cliente…"
+              aria-label="Buscar cliente"
+              className="w-full text-xs px-2 py-1.5 rounded-lg bg-surface border border-line text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand"
+            />
+          </div>
           <div className="max-h-56 overflow-y-auto">
             <button
               onClick={() => assign(null)}
@@ -271,7 +379,12 @@ function ClientSelector({
             >
               Sin cliente
             </button>
-            {clients.map((c) => (
+            {visibles.length === 0 && (
+              <p className="px-3 py-3 text-xs text-fg-muted">
+                Ningún cliente coincide con «{q}».
+              </p>
+            )}
+            {visibles.map((c) => (
               <button
                 key={c.id}
                 onClick={() => assign(c.id)}
@@ -1408,7 +1521,28 @@ function SidebarSessionItem({ session, isActive, onClick }: {
             </svg>
             Resumen
           </span>
-        ) : null}
+        ) : session.esFutura ? (
+          <span
+            title="Todavía no ocurrió — pedir que la graben ANTES es la única vez que sirve"
+            className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/20"
+          >
+            Agendada
+          </span>
+        ) : (
+          /* EL tercer estado, que antes era `null` y por lo tanto invisible: una reunión que ya
+             pasó y no dejó NADA es justo la que hay que ver.
+
+             En gris y no en ámbar a propósito. Son el 53% de las filas (medido 2026-08-15): un
+             color de alarma repetido en una de cada dos se vuelve papel tapiz y se deja de leer.
+             La alarma la lleva el cartel agregado de arriba, que dice el porcentaje; acá abajo la
+             fila solo constata el hecho. */
+          <span
+            title="Ya ocurrió y no quedó ni transcripción ni resumen"
+            className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-surface-hover text-fg-muted border border-line"
+          >
+            Sin transcripción
+          </span>
+        )}
       </div>
       {(session.teamRoles.length > 0 || minuteBadge || noProjectBadge) && (
         <div className="flex flex-wrap items-center gap-1 mt-1.5">
@@ -1445,6 +1579,7 @@ export default function SessionsClient({
   categories,
   hubspotCompanies,
   teamMembers,
+  cobertura,
 }: Props) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
 
@@ -1739,8 +1874,41 @@ export default function SessionsClient({
                   );
                 }
 
+                /* La categoría interna, DESTACADA arriba de todo. Es el bucket más grande de la
+                   pantalla (~2.000 reuniones nuestras que ningún cliente reclamó) y vivía tercero,
+                   después de los 169 clientes: había que scrollear para llegar al montón más
+                   grande. Se saca de "Categorías" para no listarlo dos veces. */
+                const internaDestacada =
+                  !hasQuery
+                    ? categoriesList.find(({ cat }) => cat.kind === "internal") ?? null
+                    : null;
+                const categoriasRestantes = internaDestacada
+                  ? categoriesList.filter(({ cat }) => cat.id !== internaDestacada.cat.id)
+                  : categoriesList;
+
                 return (
                   <>
+                    {internaDestacada && (
+                      <>
+                        <p className="px-4 pb-2 text-xs font-semibold text-fg-muted uppercase tracking-widest">
+                          Del equipo, sin dueño
+                        </p>
+                        <CategoryListItem
+                          label={internaDestacada.cat.name}
+                          kind={internaDestacada.cat.kind}
+                          color={internaDestacada.cat.color ?? undefined}
+                          total={internaDestacada.counts.total}
+                          withTranscript={internaDestacada.counts.withTranscript}
+                          onClick={() => handleGroupClick("category", internaDestacada.cat.id)}
+                        />
+                        <p className="px-4 pb-2 pt-1.5 text-[11px] leading-snug text-fg-muted">
+                          Reuniones nuestras que ningún cliente reclamó. Asignarles uno hace que
+                          alimenten sus documentos.
+                        </p>
+                        <div className="mx-4 my-2 border-t border-line" />
+                      </>
+                    )}
+
                     {/* Clientes Nexus */}
                     {clientsList.length > 0 && (
                       <>
@@ -1798,12 +1966,12 @@ export default function SessionsClient({
                             Administrar
                           </a>
                         </div>
-                        {categoriesList.length === 0 ? (
+                        {categoriasRestantes.length === 0 ? (
                           <p className="px-4 py-2 text-xs text-gray-700 italic">
                             Sin categorías activas
                           </p>
                         ) : (
-                          categoriesList.map(({ cat, counts }) => (
+                          categoriasRestantes.map(({ cat, counts }) => (
                             <CategoryListItem
                               key={cat.id}
                               label={cat.name}
@@ -1861,12 +2029,20 @@ export default function SessionsClient({
               </p>
               <p className="text-xs text-gray-600">
                 {(() => {
+                  /* Las futuras entran a la lista (se marcan, no se esconden) pero NO al ratio de
+                     cobertura: una reunión que todavía no ocurrió no "le falta" transcripción, y
+                     meterla al denominador haría que el número empeore solo por agendar. */
                   const total = sidebarSessions.length;
-                  const withTr = sidebarSessions.filter((s) => s.hasTranscript).length;
+                  const futuras = sidebarSessions.filter((s) => s.esFutura).length;
+                  const pasadas = total - futuras;
+                  const withTr = sidebarSessions.filter(
+                    (s) => !s.esFutura && s.hasTranscript,
+                  ).length;
                   const noun = total === 1 ? "sesión" : "sesiones";
-                  return withTr === total
-                    ? `${total} ${noun}`
-                    : `${total} ${noun} · ${withTr} con transcript`;
+                  const partes = [`${total} ${noun}`];
+                  if (withTr < pasadas) partes.push(`${withTr} de ${pasadas} con transcript`);
+                  if (futuras > 0) partes.push(`${futuras} sin ocurrir`);
+                  return partes.join(" · ");
                 })()}
                 {selectedGroup?.kind === "hubspotCompany" && (
                   <span className="text-gray-700 ml-1">· HubSpot Company</span>
@@ -1898,6 +2074,8 @@ export default function SessionsClient({
 
       {/* ── Área principal ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
+
+        <AvisoDeCobertura cobertura={cobertura} />
 
         {/* ── Tabs Sesiones / Análisis (visibles cuando hay grupo seleccionado) ── */}
         {selectedGroup !== null && (

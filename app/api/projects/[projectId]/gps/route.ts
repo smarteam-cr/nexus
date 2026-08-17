@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
 import { withProjectAccess } from "@/lib/api";
 import { withDbRetry } from "@/lib/db/retry";
@@ -14,6 +15,7 @@ import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
 import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { evaluarFrescura } from "@/lib/projects/brief-vencido";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -105,6 +107,7 @@ export const GET = withProjectAccess(async (
       serviceType: true,
       hubspotServiceId: true,
       hubspotPipelineStageLabel: true,
+      hubspotStageSyncedAt: true,
       hubspotOwnerName: true,
       hubspotOwnerEmail: true,
       hubspotCreatedAt: true,
@@ -353,6 +356,58 @@ export const GET = withProjectAccess(async (
       }
     : null;
 
+  /* ── EL RESUMEN DEL PROYECTO Y SI QUEDÓ VIEJO ──────────────────────────────
+     La frescura se DERIVA acá, en el servidor, y NO viajan cuatro fechas para que el navegador
+     saque la conclusión: dos consumidores calculándola por su cuenta terminarían diciendo cosas
+     distintas sobre el mismo resumen. Viaja el veredicto y su motivo. */
+  const [briefRow, ultimaSesion, ultimaDesviacion] = await Promise.all([
+    prisma.projectBrief.findUnique({
+      where: { projectId },
+      select: { headline: true, statements: true, generatedAt: true, staleAt: true },
+    }),
+    prisma.firefliesSession.findFirst({
+      where: {
+        projects: { some: { projectId } },
+        /* ⚠ SOLO LAS QUE YA OCURRIERON. Sin este corte, una reunión AGENDADA para la semana que
+           viene es siempre «posterior» al resumen y lo deja vencido para siempre — con el agravante
+           de que regenerarlo no lo arregla, porque la reunión futura sigue estando adelante. Hay
+           459 sesiones futuras en el corpus (agenda recurrente de Google), así que no es un borde. */
+        date: { lte: new Date() },
+        OR: [{ summary: { not: Prisma.DbNull } }, { transcript: { not: null } }],
+      },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }),
+    prisma.particularidad.findFirst({
+      where: { timeline: { projectId } },
+      orderBy: { lastDetectedAt: "desc" },
+      select: { lastDetectedAt: true },
+    }),
+  ]);
+  const frescura = evaluarFrescura(briefRow?.generatedAt ?? null, {
+    ultimaSesionConContenido: ultimaSesion?.date ?? null,
+    handoffActualizadoEn: null,
+    /* ⛔ NO se usa `hubspotStageSyncedAt`: significa «la última vez que la REVALIDAMOS», no
+       «cuándo cambió». El espejo corre cada vez que alguien abre la ficha del cliente, así que
+       ese sello es casi siempre posterior al resumen y el cartel de vencido quedaría encendido
+       para siempre — y encima mintiendo, porque la etapa puede no haberse movido en meses. Un
+       aviso permanente se ignora, y con él se ignoran los que sí importan.
+       Hoy Nexus no guarda CUÁNDO cambió la etapa; hasta que exista esa columna, esta señal vale
+       `null` — preferimos no avisar de un cambio real antes que avisar de uno que no pasó. */
+    etapaSincronizadaEn: null,
+    ultimaDesviacionEn: ultimaDesviacion?.lastDetectedAt ?? null,
+    marcadoVencidoEn: briefRow?.staleAt ?? null,
+  });
+  const brief = briefRow
+    ? {
+        headline: briefRow.headline,
+        statements: briefRow.statements,
+        generatedAt: briefRow.generatedAt.toISOString(),
+        vencido: frescura.vencido,
+        motivoDeVencimiento: frescura.motivo,
+      }
+    : null;
+
   const canvasChips = buildCanvasChips({
     canvases: canvases.map((c) => ({ ...c, hasContent: conContenido.has(c.id) })),
     tags: project.tags,
@@ -388,6 +443,9 @@ export const GET = withProjectAccess(async (
     /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.
        El servidor manda la lista ya filtrada por `piezaAplica`; el widget solo pinta. */
     canvasChips,
+    /* El resumen citado del proyecto, con su veredicto de frescura ya resuelto. `null` = todavía
+       no se generó, que el widget pinta distinto de «se generó y no dice nada». */
+    brief,
     /* El alta a medio hacer. Va siempre —también cuando terminó— porque el widget no puede
        distinguir "no hay bloque" de "todavía no cargó": el componente decide no pintar nada
        leyendo el estado, no la ausencia del campo. */

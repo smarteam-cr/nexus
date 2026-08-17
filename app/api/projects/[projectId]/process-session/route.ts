@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
@@ -123,6 +124,8 @@ Procesa las sesiones y genera los cards correspondientes. Solo incluye cards que
       status: "RUNNING",
       stepLabel: `Sesión: ${sessionsToProcess[0].title}`,
       serviceType: project.serviceType,
+      // Quién apretó, para que el centro de corridas le avise a ESA persona al terminar.
+      triggeredByEmail: await triggeredByEmail(),
     },
   });
 

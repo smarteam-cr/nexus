@@ -8,6 +8,6 @@
 -- plano, en la capa de seguridad. Meter ésta en otro lado obligaría a un parseo o a un
 -- segundo round-trip justo ahí, y forkearía el patrón de las tres que ya existen.
 --
--- Aplicar:  ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-13-entrega-published.sql --schema prisma/schema.prisma
+-- Aplicar:  ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-13-entrega-published.sql
 -- Después:  npx prisma generate  +  reiniciar el dev server (si no, las escrituras fallan EN SILENCIO).
 ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "entregaPublishedAt" TIMESTAMP(3);

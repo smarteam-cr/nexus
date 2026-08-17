@@ -19,7 +19,12 @@
  * ⚠ Deliberadamente NO se toca `categorize.ts`. Esa función materializa el dueño de las 12.519
  * sesiones y hoy está en verde (INV2, drift 0); enseñarle algo nuevo re-atribuye todo el corpus
  * de una. Acá se lee, no se escribe.
+ *
+ * ⚠ 2026-08-15: `categorize.ts` SÍ se tocó, pero para lo contrario de lo que este párrafo teme —
+ * se le sacó de la vista a los calendarios de Google, que no son personas. No aprendió a atribuir
+ * nada nuevo: dejó de contar muebles como empresas de afuera. INV2 se recorre después.
  */
+import { esDominioDeCalendario } from "./dominio-propio";
 
 /**
  * Desde cuándo cuentan las reuniones internas.
@@ -58,7 +63,13 @@ export function esReunionDePuertasAdentro(
   dominiosPropios: ReadonlySet<string>,
 ): boolean {
   const gente = s.organizerEmail ? [...s.participants, s.organizerEmail] : s.participants;
-  const dominios = gente.map(dominioDe).filter((d): d is string => d !== null);
+  /* Los calendarios y las salas de Google se descartan ANTES de decidir: no son gente de afuera,
+     son muebles que Google invita como si fueran personas. Con uno solo en la lista, una reunión
+     nuestra dejaba de ser interna. Si NO queda nadie más, sigue devolviendo false: una sesión que
+     solo tiene un calendario adentro no es una reunión, es un dato incompleto. */
+  const dominios = gente
+    .map(dominioDe)
+    .filter((d): d is string => d !== null && !esDominioDeCalendario(d));
   if (dominios.length === 0) return false;
   return dominios.every((d) => dominiosPropios.has(d));
 }

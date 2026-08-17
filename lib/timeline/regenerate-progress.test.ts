@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildProgressUserMessage } from "./regenerate-progress";
 import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
+import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 
 /**
  * lib/timeline/regenerate-progress.test.ts
@@ -20,6 +21,10 @@ const base = {
   industry: null as string | null,
   serviceType: null as string | null,
   stageLabel: null as string | null,
+  /* Vacío en el fixture base A PROPÓSITO: el golden de abajo es byte-a-byte, y que siga pasando
+     sin tocarlo es la prueba de que un proyecto SIN estado cargado en HubSpot recibe exactamente
+     el mismo prompt que antes de que existiera este bloque. Lo nuevo suma; no reescribe. */
+  operativaBlock: "",
   sessionsBlock: "",
   handoffCtx: "",
   timelineCtx: "CRONOGRAMA",
@@ -66,5 +71,78 @@ describe("buildProgressUserMessage", () => {
       serviceType: "Implementación",
     });
     expect(msg).toContain("Empresa: Acme\nIndustria: Retail\nServicio: Implementación\n");
+  });
+});
+
+describe("el agente de avance ve el estado que el equipo carga en HubSpot", () => {
+  /* Hasta el 2026-08-16 NO lo veía: proponía avance sobre un proyecto bloqueado sin saber que
+     estaba bloqueado, y "no se hizo nada" quedaba indistinguible de "está trabado esperando al
+     cliente". Las cinco señales estaban espejadas hace meses y solo las leían los vigilantes. */
+
+  it("el bloque entra DESPUÉS de la etapa y ANTES de las sesiones", () => {
+    /* El orden es la mitad del sentido: la etapa dice DÓNDE está el proyecto, el estado dice
+       CÓMO está. Si el bloque cayera después de las sesiones, el modelo ya habría sacado su
+       conclusión sobre el avance antes de enterarse de que hay un bloqueo. */
+    const msg = buildProgressUserMessage({
+      ...base,
+      instrucciones: "",
+      operativaBlock: bloqueDeOperativa({
+        hubspotStatus: "blocked",
+        hubspotPriority: "high",
+        hubspotBlockReason: "Cliente no responde",
+        hubspotBlockDetail: "Esperando los accesos al portal desde el 3 de julio",
+        hubspotAdoptionState: "Bajo",
+      }),
+    });
+    const posEtapa = msg.indexOf("=== ETAPA ACTUAL EN HUBSPOT");
+    const posEstado = msg.indexOf("=== ESTADO DEL PROYECTO EN HUBSPOT");
+    const posSesiones = msg.indexOf("=== SESIONES PASADAS DEL PROYECTO");
+    expect(posEstado, "el bloque de estado no llegó al prompt").toBeGreaterThan(-1);
+    expect(posEtapa).toBeLessThan(posEstado);
+    expect(posEstado).toBeLessThan(posSesiones);
+  });
+
+  it("traduce el crudo de HubSpot a castellano", () => {
+    /* `blocked` / `at_risk` / `on_hold` son los valores que guarda HubSpot. Mandárselos crudos al
+       modelo tiene dos costos: puede escribirle "at_risk" al CSE en el documento, y pierde el
+       matiz entre "en riesgo" (todavía no se corrió) y "retrasado" (ya se corrió), que en esta
+       tabla son dos cosas distintas y el equipo las usa distinto. */
+    const bloque = bloqueDeOperativa({
+      hubspotStatus: "at_risk",
+      hubspotPriority: "high",
+      hubspotBlockReason: null,
+      hubspotBlockDetail: null,
+      hubspotAdoptionState: null,
+    });
+    expect(bloque).toContain("En riesgo");
+    expect(bloque).toContain("Alta");
+    expect(bloque, "se coló el valor crudo de HubSpot").not.toContain("at_risk");
+  });
+
+  it("sin nada cargado no ensucia el prompt con «sin valor» repetido", () => {
+    /* Solo 43 de los 67 proyectos espejados tienen estado. Un bloque de puros huecos le enseña al
+       modelo que esta sección no dice nada, y esa lección se la lleva también a los que sí. */
+    const vacio = bloqueDeOperativa({
+      hubspotStatus: null,
+      hubspotPriority: null,
+      hubspotBlockReason: null,
+      hubspotBlockDetail: null,
+      hubspotAdoptionState: null,
+    });
+    expect(vacio).toBe("");
+    const msg = buildProgressUserMessage({ ...base, instrucciones: "", operativaBlock: vacio });
+    expect(msg).not.toContain("=== ESTADO DEL PROYECTO EN HUBSPOT");
+  });
+
+  it("el detalle escrito a mano se corta: es texto libre sin límite", () => {
+    const largo = "x".repeat(900);
+    const bloque = bloqueDeOperativa({
+      hubspotStatus: "blocked",
+      hubspotPriority: null,
+      hubspotBlockReason: "Atraso por cliente",
+      hubspotBlockDetail: largo,
+      hubspotAdoptionState: null,
+    });
+    expect(bloque.length).toBeLessThan(600);
   });
 });

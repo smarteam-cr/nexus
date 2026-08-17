@@ -23,6 +23,7 @@
 
 import type { Client, SessionCategory } from "@prisma/client";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
+import { esDominioDeCalendario } from "./dominio-propio";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -73,12 +74,18 @@ export function normalize(s: string): string {
 /**
  * Extrae los dominios de los emails de participantes.
  * Devuelve un Set para lookup O(1).
+ *
+ * ⚠ Los CALENDARIOS y las SALAS de Google quedan afuera (`esDominioDeCalendario`): Google los
+ * mete en la lista de invitados como si fueran personas, y acá abajo cualquier dominio que no sea
+ * propio se lee como "una empresa de afuera". Sin este filtro, "[Interno] Daily Stand Up" deja de
+ * ser interna porque la organizó un calendario compartido — 158 reuniones nuestras medidas así el
+ * 2026-08-15.
  */
 export function extractParticipantDomains(participants: string[]): Set<string> {
   return new Set(
     participants
       .map((email) => email?.split("@")[1]?.toLowerCase())
-      .filter((d): d is string => !!d)
+      .filter((d): d is string => !!d && !esDominioDeCalendario(d))
   );
 }
 

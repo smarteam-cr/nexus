@@ -8,14 +8,15 @@
  * Concurrencia: mutex en-proceso por cliente (doble click = 409) + chequeo en DB
  * de un AgentRun RUNNING reciente (cubre la otra máquina de la DB compartida —
  * peor caso residual: costo duplicado de UNA llamada; el upsert es consistente).
- * Gateado con seeAllClients.
+ * Gateado con `customerSuccess.read`.
  */
 import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardPermission } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { runAccountBrief, humanizeBriefError } from "@/lib/cs/account-brief";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 const inFlight = new Set<string>();
 
@@ -24,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ clientId: string }> },
 ) {
   const { clientId } = await params;
-  const guard = await guardCapability("seeAllClients");
+  const guard = await guardPermission("customerSuccess", "read");
   if (guard instanceof NextResponse) return guard;
 
   // El cliente debe pasar el where del usuario (mismo criterio que la página).
@@ -50,7 +51,9 @@ export async function POST(
   }
   inFlight.add(clientId);
   try {
-    const result = await runAccountBrief(clientId);
+    /* Quién apretó, para que el centro de corridas le avise a ESA persona cuando termine.
+       Es un botón de una pantalla: si no se estampa, nadie se entera de que salió. */
+    const result = await runAccountBrief(clientId, { triggeredByEmail: await triggeredByEmail() });
     if (result.status === "skipped") {
       return NextResponse.json(
         { error: result.reason === "agent_not_seeded" ? "El agente de resumen no está creado (correr el seed)." : "No se pudo armar el contexto." },

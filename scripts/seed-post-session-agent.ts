@@ -89,10 +89,23 @@ REGLAS DURAS:
    - ❌ "Revisar la propuesta"
    - ✅ "Enviar propuesta económica revisada con descuento Q1 antes del viernes"
 3. SI NO HUBO acuerdos/decisiones/riesgos/etc., devuelve array vacío. NO inventes.
-4. ownerEmail solo si el responsable está claro. Si no, null. Lista de emails internos válidos en el contexto.
-5. dueDate solo si hay un plazo MENCIONADO o claramente inferible (ej. "para el viernes" + fecha de hoy). Si no, null.
+4. ownerEmail: OBLIGATORIO en todo actionItem (ver la regla 7). Sale de la lista de emails internos
+   del contexto. Si no podés identificar al responsable, el ítem no se emite.
+5. dueDate: OBLIGATORIO en todo actionItem (ver la regla 7). Solo si hay un plazo MENCIONADO o
+   claramente inferible (ej. "para el viernes" + la fecha de hoy). Si no lo hay, el ítem no se emite.
 6. AGREEMENTS son lo que se acordó verbalmente; DECISIONS son resoluciones más formales con rationale.
-7. Máximo 8 actionItems. Prioriza calidad sobre cantidad. Solo lo verdaderamente accionable.
+7. ⛔ UN ACTION ITEM ES UN COMPROMISO EXPLÍCITO, NO UN TEMA PENDIENTE. Emitilo SOLO si en el
+   transcript alguien se comprometió con las tres cosas juntas: QUÉ va a hacer, QUIÉN lo va a
+   hacer, y PARA CUÁNDO. Si falta cualquiera de las tres, NO lo emitas — ni con owner null ni con
+   dueDate null. Lo que se conversó sin dueño ni plazo ya vive en "summary" y en "agreements"; no
+   necesita además una fila que alguien tenga que cerrar.
+   Tope: 5. Y la lista VACÍA es un resultado correcto y frecuente: la mayoría de las reuniones no
+   producen ningún compromiso con esas tres cosas, y forzar uno para llenar la lista es
+   exactamente lo que hay que evitar.
+   ⚠ Contexto medido (2026-08-16): con la regla anterior —«máximo 8, prioriza calidad»— el sistema
+   acumuló 3.211 pendientes con 26 cerrados (0,8 %). Los escritos a mano por una persona se cierran
+   al 50 %. O sea que la lista no falla por calidad de redacción: falla porque es tan larga que
+   nadie la recorre. Menos y más duros vale más que muchos y blandos.
 8. El JSON debe ser parseable directamente (sin \`\`\` ni comentarios).
 
 EJEMPLO MÍNIMO de actionItem bien formado:
@@ -104,8 +117,36 @@ EJEMPLO MÍNIMO de actionItem bien formado:
 
 Si el transcript es muy breve o no tiene contenido sustancial, devuelve summary explicando eso y arrays vacíos. Mejor honesto que inventar.`;
 
+/**
+ * ⛔ ESTE SEED YA NO PISA EL PROMPT VIVO SIN AVISAR.
+ *
+ * El prompt vive en la base para poder calibrarlo desde `/agents` sin deploy. Un seed que lo
+ * sobreescribe borra esa calibración sin dejar rastro: la corrida siguiente sale peor y nadie
+ * relaciona una cosa con la otra.
+ *
+ * Y no es hipotético: el 2026-08-16 el prompt VIVO (3.789 chars, tocado el 24-may) ya difería del
+ * de este archivo (3.868). Correr el seed tal como estaba habría pisado 79 caracteres que nadie
+ * había mirado.
+ *
+ * Molde: `scripts/create-cs-watchdog-agent.ts` — leer, comparar, y AVISAR en vez de escribir.
+ * Con `--force` se escribe igual, que es la forma de decir «sí, quiero reemplazarlo».
+ */
 async function main() {
   console.log("🌱 Seeding agente Post-sesión...\n");
+
+  const force = process.argv.includes("--force");
+  const vivo = await prisma.agent.findUnique({
+    where: { id: AGENT_ID_POST_SESSION },
+    select: { systemPrompt: true, updatedAt: true },
+  });
+  if (vivo && vivo.systemPrompt !== POST_SESSION_SYSTEM_PROMPT && !force) {
+    console.log("⚠  El prompt VIVO difiere del de este archivo.");
+    console.log(`   vivo:    ${vivo.systemPrompt.length} chars · última edición ${vivo.updatedAt.toISOString().slice(0, 10)}`);
+    console.log(`   archivo: ${POST_SESSION_SYSTEM_PROMPT.length} chars`);
+    console.log("\n   Puede ser calibración hecha a mano desde /agents. NO se pisa.");
+    console.log("   Miralo en /agents y, si querés reemplazarlo igual, corré con --force.\n");
+    return;
+  }
 
   const result = await prisma.agent.upsert({
     where: { id: AGENT_ID_POST_SESSION },

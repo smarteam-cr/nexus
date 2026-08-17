@@ -68,7 +68,7 @@ import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/p
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
-import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
+import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { filasDeDetalle, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { clientStatusLine } from "@/lib/timeline/client-status";
@@ -76,6 +76,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
 import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
+import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -160,7 +161,9 @@ interface Props {
   particularidades?: GanttParticularidad[];
   /** Las del `publishedSnapshot` congelado: lo que el cliente lee AHORA, distinto de lo que leerá
    *  al «Subir». Sin esto, `visibleExternal` en vivo se confunde con "ya comunicado". */
-  publicadas?: Array<{ kind: string; party: string; weeksImpact: number | null }>;
+  publicadas?: Array<{
+    kind: string; party: string; title: string; weeksImpact: number | null; estado?: string | null;
+  }>;
   // Togglear la visibilidad al cliente de una particularidad ya creada. Sin esto, el estado
   // se muestra estático (preview readOnly). La visibilidad recién llega al cliente al «Subir».
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
@@ -180,6 +183,8 @@ interface Props {
   onResolveProposalDelta?: (key: string, accept: boolean) => void;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
+  /** Dar por resuelta / reabrir. La nota es el motivo del cierre (opcional). */
+  onCerrarParticularidad?: (id: string, accion: "cerrar" | "reabrir", nota: string) => void;
   // Abrir el drawer de la tarea que ya persigue este hecho (chip "→ tarea").
   onOpenConvertedTask?: (taskId: string) => void;
   /** Pedido del panel "Qué hacer acá" de ABRIR un grupo colapsado. El `nonce` existe para que
@@ -213,6 +218,11 @@ export interface GanttParticularidad {
   /** Si ya se convirtió en tarea, el id de esa tarea. El hecho queda como registro de POR QUÉ pasó;
    *  la tarea es quién lo hace y para cuándo. null = nadie lo está persiguiendo. */
   convertedTaskId?: string | null;
+  /** ABIERTA | CERRADA. Cerrar NO resta semanas: apaga la acción, no el registro. */
+  estado?: string | null;
+  resueltaEn?: string | null;
+  resueltaPor?: string | null;
+  resueltaNota?: string | null;
 }
 
 // ── Metadata de tipos de actividad (color de barra + chip) ────────────────────
@@ -422,6 +432,7 @@ export default function TimelineGantt({
   sugerenciasSlot,
   proposalGlobalSlot,
   onConvertParticularidad,
+  onCerrarParticularidad,
   onOpenConvertedTask,
   focusGroup,
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
@@ -1472,7 +1483,15 @@ export default function TimelineGantt({
         const registrado = summary.totalWeeks;
         const listo = summarizeParticularidades(parts.filter((p) => p.visibleExternal)).totalWeeks;
         const comunicado = summarizeParticularidades(publicadas ?? []).totalWeeks;
-        const hayPendienteDeSubir = listo !== comunicado;
+        /* ⚠ La SEÑAL se decide por CONTENIDO, no por esta suma. `listo`/`comunicado` siguen
+           existiendo porque son los dos números que se PINTAN abajo; pero comparar sumas dejaba
+           ciega la pantalla ante todo lo que no mueve semanas: dar por resuelta una desviación
+           (que a propósito no las mueve), corregir un título, o dos cambios que se compensan.
+           En los tres casos decía «todo comunicado» con el cliente leyendo otra cosa. */
+        const pendienteDeSubir = hayPendienteDeSubir(
+          parts.filter((p) => p.visibleExternal),
+          publicadas ?? [],
+        );
         // El id de abajo es el destino de los CTA del panel "Qué hacer acá". Sin él, "Cuantificar"
         // scrolleaba al tope de un Gantt altísimo y el CSE tenía que cazar la fila.
         return (
@@ -1513,13 +1532,13 @@ export default function TimelineGantt({
             )}
             {/* Los tres números, nombrados. Solo aparece cuando difieren: si registrado == comunicado
                 no hay nada que aclarar. */}
-            {(registrado !== comunicado || hayPendienteDeSubir) && (
+            {(registrado !== comunicado || pendienteDeSubir) && (
               <p className="text-[11px] text-fg-muted mb-3 leading-relaxed flex flex-wrap gap-x-3 gap-y-0.5">
                 <span>
                   <span className="font-semibold text-fg-secondary">El cliente lee:</span>{" "}
                   {comunicado > 0 ? plural(comunicado, "semana", "semanas") : "ningún atraso"}
                 </span>
-                {hayPendienteDeSubir && (
+                {pendienteDeSubir && (
                   <span title="Marcado como visible, pero el cliente no lo ve hasta el «Subir al cliente»">
                     <span className="font-semibold text-fg-secondary">Listo para subir:</span>{" "}
                     {listo > 0 ? plural(listo, "semana", "semanas") : "nada"}
@@ -1539,15 +1558,12 @@ export default function TimelineGantt({
             <div className="flex flex-col gap-1">
               {(() => {
                 const dupIds = new Set(findDuplicateGroups(parts).flat().map((p) => p.id));
-                // Mismo predicado que el contador del panel — importado, no reescrito: el botón
-                // "6 compromisos sin tarea" tiene que traerte a un grupo que diga 6.
-                const esCompromiso = esCompromisoPendiente;
-                const paraArreglar = (p: GanttParticularidad) =>
-                  dupIds.has(p.id) || (!p.weeksImpact && (p.kind === "ATRASO" || !!p.convertedTaskId));
-
-                const compromisos = parts.filter(esCompromiso);
-                const arreglar = parts.filter((p) => !esCompromiso(p) && paraArreglar(p));
-                const historia = parts.filter((p) => !esCompromiso(p) && !paraArreglar(p));
+                // Un solo criterio, compartido con CronogramaCanvas.tsx (`grupoDeParticularidad`):
+                // el botón "6 compromisos sin tarea" tiene que traerte a un grupo que diga 6, y
+                // cerrar una desviación tiene que abrir el MISMO grupo donde el CSE la va a ver.
+                const compromisos = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "compromisos");
+                const arreglar = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "arreglar");
+                const historia = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "historia");
 
                 return [
                   {
@@ -1588,6 +1604,7 @@ export default function TimelineGantt({
                       onToggleParticularidadVisible={onToggleParticularidadVisible}
                       onEditParticularidad={onEditParticularidad}
                       onConvertParticularidad={onConvertParticularidad}
+                      onCerrarParticularidad={onCerrarParticularidad}
                       onOpenConvertedTask={onOpenConvertedTask}
                     />
                   ));
@@ -1625,6 +1642,7 @@ function ParticularidadGroup({
   onToggleParticularidadVisible,
   onEditParticularidad,
   onConvertParticularidad,
+  onCerrarParticularidad,
   onOpenConvertedTask,
 }: {
   groupKey: string;
@@ -1636,6 +1654,8 @@ function ParticularidadGroup({
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
   onEditParticularidad?: (id: string) => void;
   onConvertParticularidad?: (id: string) => void;
+  /** Dar por resuelta / reabrir. La nota es el motivo del cierre (opcional). */
+  onCerrarParticularidad?: (id: string, accion: "cerrar" | "reabrir", nota: string) => void;
   onOpenConvertedTask?: (taskId: string) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1686,6 +1706,7 @@ function ParticularidadGroup({
                 onToggleParticularidadVisible={onToggleParticularidadVisible}
                 onEditParticularidad={onEditParticularidad}
                 onConvertParticularidad={onConvertParticularidad}
+                onCerrarParticularidad={onCerrarParticularidad}
                 onOpenConvertedTask={onOpenConvertedTask}
               />
             ))}
@@ -1711,23 +1732,38 @@ function ParticularidadRow({
   onToggleParticularidadVisible,
   onEditParticularidad,
   onConvertParticularidad,
+  onCerrarParticularidad,
   onOpenConvertedTask,
 }: {
   pt: GanttParticularidad;
   onToggleParticularidadVisible?: (id: string, next: boolean) => void;
   onEditParticularidad?: (id: string) => void;
   onConvertParticularidad?: (id: string) => void;
+  /** Dar por resuelta / reabrir. La nota es el motivo del cierre (opcional). */
+  onCerrarParticularidad?: (id: string, accion: "cerrar" | "reabrir", nota: string) => void;
   onOpenConvertedTask?: (taskId: string) => void;
 }) {
   const kMeta = PARTICULARIDAD_KIND_META[pt.kind] ?? { label: pt.kind, cls: "text-fg-muted bg-surface-hover/60 border-line/50" };
   const pMeta = PARTY_META[pt.party] ?? PARTY_META.SMARTEAM;
   // Convertible = todavía nadie lo persigue Y hay algo que perseguir: un compromiso/solicitud, o un
   // atraso sin cuantificar (que muchas veces no es un atraso sino algo que alguien tiene que averiguar).
+  const cerrada = pt.estado === "CERRADA";
+  const [cerrando, setCerrando] = useState(false);
+  const [nota, setNota] = useState("");
+  /* Una desviación RESUELTA ya no se convierte en tarea: no hay nada que perseguir. Es el mismo
+     criterio que apaga su contador en el panel — si acá siguiera ofreciéndose, el botón crearía
+     trabajo por algo que alguien ya dio por terminado. */
   const convertible =
+    !cerrada &&
     !pt.convertedTaskId &&
     (pt.kind === "COMPROMISO" || pt.kind === "SOLICITUD" || (pt.kind === "ATRASO" && !pt.weeksImpact));
+  const cuandoSeCerro = pt.resueltaEn
+    ? new Date(pt.resueltaEn).toLocaleDateString("es-CR", { day: "numeric", month: "short" })
+    : null;
   return (
-    <li className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg">
+    /* ⚠ La cerrada se ATENÚA, no se tacha ni se esconde: el tachado se lee como «esto no pasó», y
+       lo que pasó movió el calendario igual. Sigue siendo bitácora. */
+    <li className={`flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg ${cerrada ? "opacity-60" : ""}`}>
       <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${kMeta.cls}`}>
         {kMeta.label}
       </span>
@@ -1784,6 +1820,70 @@ function ParticularidadRow({
         >
           → tarea
         </button>
+      )}
+      {cerrada && (
+        <span
+          className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border border-emerald-700/50 bg-emerald-900/30 text-emerald-300"
+          title={
+            `Se dio por resuelta${cuandoSeCerro ? ` el ${cuandoSeCerro}` : ""}` +
+            `${pt.resueltaPor ? ` por ${pt.resueltaPor}` : ""}` +
+            `${pt.resueltaNota ? `: ${pt.resueltaNota}` : ""}` +
+            ". Sus semanas siguen contando: el plan ya se corrió."
+          }
+        >
+          Resuelta{cuandoSeCerro ? ` · ${cuandoSeCerro}` : ""}
+        </span>
+      )}
+      {onCerrarParticularidad && !cerrando && (
+        <button
+          type="button"
+          onClick={() => (cerrada ? onCerrarParticularidad(pt.id, "reabrir", "") : setCerrando(true))}
+          title={
+            cerrada
+              ? "Volver a marcarla como vigente"
+              : "Darla por resuelta: deja de pedir trabajo. Las semanas que costó siguen contando — el plan ya se corrió."
+          }
+          className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border border-line bg-surface-hover text-fg-secondary hover:bg-surface-active transition-colors"
+        >
+          {cerrada ? "Reabrir" : "Dar por resuelta"}
+        </button>
+      )}
+      {onCerrarParticularidad && cerrando && (
+        /* El motivo se pide ACÁ y no en un modal: es una línea, y sacarla a un diálogo hace que la
+           gente escriba «ok» para poder seguir. Es opcional — exigirla produce lo mismo. */
+        <span className="flex w-full items-center gap-1.5 pl-0.5">
+          <input
+            autoFocus
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onCerrarParticularidad(pt.id, "cerrar", nota);
+                setCerrando(false);
+              }
+              if (e.key === "Escape") setCerrando(false);
+            }}
+            placeholder="¿Por qué se resolvió? (opcional — es lo que la hace legible en seis meses)"
+            className="flex-1 min-w-0 text-[11px] bg-surface border border-line rounded px-2 py-1 text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              onCerrarParticularidad(pt.id, "cerrar", nota);
+              setCerrando(false);
+            }}
+            className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider rounded px-1.5 py-1 border border-emerald-700/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+          >
+            Resolver
+          </button>
+          <button
+            type="button"
+            onClick={() => setCerrando(false)}
+            className="flex-shrink-0 text-[10px] uppercase tracking-wider rounded px-1.5 py-1 text-fg-muted hover:text-fg transition-colors"
+          >
+            Cancelar
+          </button>
+        </span>
       )}
       {onEditParticularidad && (
         <button

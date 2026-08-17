@@ -90,6 +90,10 @@ export async function loadProjectActions(
             sourceQuote: true,
             party: true,
             occurredAt: true,
+            // ⚠ Sin ESTO los filtros de `esCompromisoPendiente` y `sinCuantificar` quedan
+            // decorativos: `estado` llega `undefined`, se lee como abierta, y cerrar una
+            // desviación no apaga nada en la bandeja de cartera.
+            estado: true,
           },
         },
         phases: {

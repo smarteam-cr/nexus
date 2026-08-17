@@ -731,6 +731,26 @@ export default function TimelineSection({
                             +{pt.weeksImpact} {pt.weeksImpact === 1 ? "semana" : "semanas"}
                           </span>
                         )}
+                        {/* ⚠ Una desviación RESUELTA se sigue mostrando, marcada — no se esconde.
+                            Esconderla dejaría el cronograma corrido con una explicación menos, y
+                            si se cerraran todas, el bloque entero desaparecería y con él la única
+                            frase donde el cliente ve la fecha de cierre nueva. Las semanas que
+                            costó siguen contadas arriba: el plan ya se movió. */}
+                        {pt.estado === "CERRADA" && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "var(--ok, #15803d)",
+                              border: "1px solid var(--ok, #15803d)",
+                              borderRadius: 4,
+                              padding: "1px 6px",
+                              opacity: 0.9,
+                            }}
+                          >
+                            Resuelta
+                          </span>
+                        )}
                       </div>
                       {pt.detail && (
                         <p style={{ margin: 0, paddingLeft: 2, fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>{pt.detail}</p>

@@ -11,6 +11,7 @@ import Link from "next/link";
 import SourceChip from "@/components/cs/SourceChip";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import HealthProposalChip from "@/components/lifecycle/HealthProposalChip";
+import EstadoSugeridoChip from "./EstadoSugeridoChip";
 import RecurrenteBadge from "@/components/lifecycle/RecurrenteBadge";
 import { PRIORITY_META, HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 import type { PortfolioRow } from "@/lib/portfolio/load";
@@ -29,9 +30,18 @@ const HEALTH_META: Record<string, { label: string; cls: string }> = {
 export default function ActiveProjectsSection({
   projects,
   projectOps,
+  puedeCurar,
 }: {
   projects: PortfolioRow[];
   projectOps: Record<string, AccountProjectOps>;
+  /**
+   * ⚠ Si puede RESOLVER la propuesta de salud del watchdog (`clientes.viewAll`), que no es
+   * lo mismo que poder abrir esta ficha (`customerSuccess.read`, celda propia desde el
+   * 2026-08-16). Con `false` el chip rojo se sigue viendo —es informacion util sobre un
+   * proyecto propio— pero sin Confirmar/Descartar, que darian 403 y dejarian la propuesta
+   * pendiente para siempre salvo que la resuelva otro rol.
+   */
+  puedeCurar: boolean;
 }) {
   if (projects.length === 0) {
     return <p className="text-xs text-fg-muted">Sin proyectos activos en Nexus para esta cuenta.</p>;
@@ -84,6 +94,7 @@ export default function ActiveProjectsSection({
                   projectId={p.projectId}
                   reason={p.healthProposedReason}
                   proposedAt={p.healthProposedAt}
+                  puedeResolver={puedeCurar}
                 />
               )}
               {prio && (
@@ -96,6 +107,14 @@ export default function ActiveProjectsSection({
                   {HS_STATUS_LABEL[ops.hubspotStatus] ?? ops.hubspotStatus}
                 </span>
               )}
+              {/* Va JUNTO al estado y no en un cartel aparte: lo que el chip dice es que ese
+                  rótulo de al lado contradice el motivo cargado en el mismo registro. Separarlos
+                  obligaría a la persona a acordarse de qué decía el otro. */}
+              <EstadoSugeridoChip
+                projectId={p.projectId}
+                estadoActual={ops?.hubspotStatus ?? null}
+                motivo={ops?.hubspotBlockReason ?? null}
+              />
               <span className="ml-auto flex items-center gap-1.5">
                 {p.stageLabel && <SourceChip label={`HubSpot · ${p.stageLabel}`} />}
                 {p.cseName && <span className="text-[11px] text-fg-muted">CSE: {p.cseName}</span>}

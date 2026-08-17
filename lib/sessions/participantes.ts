@@ -1,4 +1,4 @@
-import { esDeNuestroEquipo } from "./dominio-propio";
+import { esDeNuestroEquipo, esRecursoDeCalendario } from "./dominio-propio";
 
 /**
  * lib/sessions/participantes.ts — QUIÉN ESTUVO EN LA SALA, en una línea.
@@ -45,13 +45,17 @@ export function resumirSala(
   participants: readonly string[] | null | undefined,
   organizerEmail?: string | null,
 ): ResumenDeSala {
+  /* Los calendarios y las salas de Google no entran a la sala: no son personas. Contarlos como
+     "de afuera" decía que había un invitado del cliente donde solo había un mueble; contarlos
+     como nuestros diría que fuimos uno más de los que fuimos. Se descartan antes de repartir, así
+     el conteo de externos (que se deriva del tamaño del set) sigue cerrando solo. */
   const vistos = new Set<string>();
   for (const p of participants ?? []) {
     const e = p?.trim().toLowerCase();
-    if (e) vistos.add(e);
+    if (e && !esRecursoDeCalendario(e)) vistos.add(e);
   }
   const org = organizerEmail?.trim().toLowerCase();
-  if (org) vistos.add(org);
+  if (org && !esRecursoDeCalendario(org)) vistos.add(org);
 
   let nuestros = 0;
   const dominios = new Set<string>();

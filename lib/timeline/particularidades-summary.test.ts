@@ -48,6 +48,10 @@ test("lista vacía → todo en 0", () => {
     count: 0,
     totalWeeks: 0,
     byParty: { AMBOS: 0, CLIENTE: 0, SMARTEAM: 0, DEV: 0, SIN_ATRIBUIR: 0 },
+    // Desde 2026-08-16 el resumen dice además cuántas siguen VIGENTES. Es lo único que el cierre
+    // mueve: `count` es la bitácora y `totalWeeks` es calendario ya gastado. Ver
+    // `desviacion-cerrada.test.ts`.
+    abiertas: 0,
   });
 });
 

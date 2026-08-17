@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { prisma } from "@/lib/db/prisma";
 import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { DEFAULT_AGENT_INTRO } from "@/lib/business-cases/canvas-agent";
@@ -104,6 +105,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       clientId: canvas.businessCase.clientId,
       status: "RUNNING",
       stepLabel: "Assist · Propuesta comercial",
+      // Quién apretó, para que el centro de corridas le avise a ESA persona al terminar.
+      triggeredByEmail: await triggeredByEmail(),
     },
     select: { id: true },
   });

@@ -24,6 +24,10 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
+import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
+import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -101,6 +105,14 @@ export interface ProgressMessageInputs {
   industry: string | null;
   serviceType: string | null;
   stageLabel: string | null;
+  /**
+   * El estado que el equipo carga en HubSpot (`bloqueDeOperativa`), o `""` si no hay nada.
+   *
+   * Va DESPUÉS de la etapa y ANTES de las sesiones a propósito: la etapa dice dónde está el
+   * proyecto, esto dice CÓMO está, y las dos juntas son lo que hace que «no hubo avance» se lea
+   * como «está trabado por X» en vez de como «el equipo no hizo nada».
+   */
+  operativaBlock: string;
   sessionsBlock: string;
   handoffCtx: string;
   timelineCtx: string;
@@ -122,6 +134,7 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     "=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===",
     i.stageLabel ? i.stageLabel : "(sin etapa de HubSpot disponible — inferí el avance solo desde las sesiones y el handoff)",
     "",
+    ...(i.operativaBlock ? [i.operativaBlock, ""] : []),
     "=== SESIONES PASADAS DEL PROYECTO (detallan qué se hizo) ===",
     i.sessionsBlock || "(sin sesiones pasadas registradas)",
     "",
@@ -159,6 +172,14 @@ export async function regenerateTimelineProgress(
         hubspotServiceId: true,
         hubspotPipelineStageLabel: true,
         hubspotPipelineId: true,
+        /* El estado que el equipo carga a mano en HubSpot. Hasta el 2026-08-16 este agente NO lo
+           veía: proponía avance sobre un proyecto bloqueado sin saber que estaba bloqueado, y la
+           lectura de «no se hizo nada» quedaba a cargo de quien leyera el borrador. */
+        hubspotStatus: true,
+        hubspotPriority: true,
+        hubspotBlockReason: true,
+        hubspotBlockDetail: true,
+        hubspotAdoptionState: true,
         client: { select: { name: true, industry: true } },
         timeline: {
           select: {
@@ -212,7 +233,7 @@ export async function regenerateTimelineProgress(
 
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado + las
     //    instrucciones del CSE (mismo canvas "timeline" que ya lee el detalle — Tanda N).
-    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma] = await Promise.all([
+    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma, categorias] = await Promise.all([
       getPastSessionsForProject(projectId),
       loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
@@ -220,12 +241,40 @@ export async function regenerateTimelineProgress(
         where: { projectId, ...canvasOf("timeline") },
         select: { sections: true },
       }),
+      /* Los dominios que cuentan como NUESTROS. Sale de las SessionCategory internas —la misma
+         fuente que usa la atribución— para que el rótulo no se separe de ella. Cacheado (TTL 10
+         min): cambian poco y se editan en /sessions/categories sin deploy. */
+      getSessionCategories(),
     ]);
+    const dominiosPropios = buildInternalDomainsSet(categorias);
     const instrucciones = bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     );
-    const sessionsBlock = pastSessions
-      .map((s) => `[${s.date.toISOString().slice(0, 10)}] ${s.content ?? `Sesión "${s.title}" (sin transcript disponible)`}`)
+    /* Cada reunión va rotulada con CON QUIÉN fue: el dato de los participantes llegaba hasta
+       acá y se descartaba justo al serializar, así que para el modelo «lo que le prometimos al
+       cliente en su cara» y «lo que dijimos entre nosotros» eran el mismo tipo de frase.
+
+       ⚠ Y las VACÍAS dejan de competir por el espacio. Entraban como entradas completas que
+       solo decían «(sin transcript disponible)»: en un proyecto real, 8 de las 12 más recientes
+       eran eso, así que el agente leía mayormente relleno. Ahora van a UNA línea al final — que
+       ocurrieron NO se pierde (es señal: hubo reunión y no quedó nada), pero deja de ocupar el
+       lugar de lo que sí tiene contenido. */
+    const conContenido = pastSessions.filter((s) => s.content);
+    const sinContenido = pastSessions.filter((s) => !s.content);
+    const bloqueConContenido = conContenido
+      .map(
+        (s) =>
+          `[${s.date.toISOString().slice(0, 10)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
+          `${s.content}`,
+      )
+      .join("\n\n---\n\n");
+    const colaSinContenido = sinContenido.length
+      ? `Además hubo ${sinContenido.length} reunión(es) del proyecto SIN transcripción ni ` +
+        `resumen — ocurrieron, pero no hay material para leer: ` +
+        sinContenido.map((s) => `"${s.title}" (${s.date.toISOString().slice(0, 10)})`).join(", ")
+      : "";
+    const sessionsBlock = [bloqueConContenido, colaSinContenido]
+      .filter(Boolean)
       .join("\n\n---\n\n");
 
     // Info de la última sesión usada → para el toast del re-chequeo ("según las sesiones
@@ -258,6 +307,7 @@ export async function regenerateTimelineProgress(
       industry: project.client.industry,
       serviceType: project.serviceType,
       stageLabel,
+      operativaBlock: bloqueDeOperativa(project),
       sessionsBlock,
       handoffCtx,
       timelineCtx,

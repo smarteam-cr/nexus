@@ -21,8 +21,18 @@
  * ciclo corto con la etapa curada a una que solo existe en el ciclo completo también sale
  * neutro (antes salía azul, sin posición). Es más honesto —está fuera de SU línea— y hoy no
  * afecta a nadie: cero proyectos tienen la etapa curada a mano (medido 2026-07-30).
+ *
+ * ── ⛔ EL STEPPER VA POR PORTAL A `body` (2026-08-17) ─────────────────────────
+ * Vivía `position: absolute` adentro del propio chip. Andaba en cualquier pantalla suelta,
+ * pero este chip también se usa DENTRO de un widget de proyecto —una tarjeta con
+ * `overflow: hidden` para redondear sus esquinas— y ahí el stepper se recortaba a la mitad:
+ * seguía bien posicionado, solo que la mitad de abajo caía fuera del rectángulo visible del
+ * padre. `absolute` esquiva el z-index; no esquiva el overflow de un ancestro. Regla ya
+ * escrita para este mismo repo (memoria `nexus-corridas-agentes`): capas flotantes SIEMPRE
+ * en portal a `body`, con posición calculada desde `getBoundingClientRect()`.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FULL_CYCLE_ORDER,
   SHORT_CYCLE_ORDER,
@@ -57,6 +67,29 @@ export default function StageBadge({
   stepperTitle?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+
+  // Se recalcula al abrir y mientras está abierto (scroll/resize) — el widget puede vivir
+  // dentro de un panel que scrollea sin que el mouse se mueva del chip.
+  useEffect(() => {
+    if (!open) return;
+    const ANCHO_STEPPER = 256; // w-64
+    const reposicionar = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const left = Math.min(r.left, window.innerWidth - ANCHO_STEPPER - 8);
+      setPos({ top: r.bottom + 6, left: Math.max(8, left) });
+    };
+    reposicionar();
+    window.addEventListener("scroll", reposicionar, true);
+    window.addEventListener("resize", reposicionar);
+    return () => {
+      window.removeEventListener("scroll", reposicionar, true);
+      window.removeEventListener("resize", reposicionar);
+    };
+  }, [open]);
+
   const linea =
     order ??
     (cycle === "short" ? SHORT_CYCLE_ORDER : FULL_CYCLE_ORDER).map((s) => ({
@@ -75,6 +108,7 @@ export default function StageBadge({
 
   return (
     <span
+      ref={anchorRef}
       className="relative inline-flex items-center gap-1"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
@@ -96,32 +130,39 @@ export default function StageBadge({
           curada
         </span>
       )}
-      {open && (
-        <span className="absolute left-0 top-full z-30 mt-1.5 w-64 rounded-lg border border-line bg-surface p-2.5 shadow-lg">
-          <span className="block text-[10px] font-semibold text-fg mb-1.5">{titulo}</span>
-          {linea.map((e, i) => (
-            <span
-              key={e.id}
-              className={`flex items-center gap-1.5 text-[11px] py-0.5 ${
-                i < idx ? "text-fg-muted" : i === idx ? "text-fg font-semibold" : "text-fg-muted/60"
-              }`}
-            >
-              <span className="w-3.5 text-center">{i < idx ? "✓" : i === idx ? "●" : "○"}</span>
-              {e.label}
-            </span>
-          ))}
-          {!enLinea && (
-            <span className="mt-1.5 block border-t border-line pt-1.5 text-[10px] text-fg-secondary">
-              «{label}» está fuera de la línea de avance.
-            </span>
-          )}
-          {reasons && reasons.length > 0 && (
-            <span className="mt-1.5 block border-t border-line pt-1.5 text-[10px] text-fg-secondary">
-              {reasons[reasons.length - 1]}
-            </span>
-          )}
-        </span>
-      )}
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <span
+            className="fixed z-50 w-64 rounded-lg border border-line bg-surface p-2.5 shadow-lg"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <span className="block text-[10px] font-semibold text-fg mb-1.5">{titulo}</span>
+            {linea.map((e, i) => (
+              <span
+                key={e.id}
+                className={`flex items-center gap-1.5 text-[11px] py-0.5 ${
+                  i < idx ? "text-fg-muted" : i === idx ? "text-fg font-semibold" : "text-fg-muted/60"
+                }`}
+              >
+                <span className="w-3.5 text-center">{i < idx ? "✓" : i === idx ? "●" : "○"}</span>
+                {e.label}
+              </span>
+            ))}
+            {!enLinea && (
+              <span className="mt-1.5 block border-t border-line pt-1.5 text-[10px] text-fg-secondary">
+                «{label}» está fuera de la línea de avance.
+              </span>
+            )}
+            {reasons && reasons.length > 0 && (
+              <span className="mt-1.5 block border-t border-line pt-1.5 text-[10px] text-fg-secondary">
+                {reasons[reasons.length - 1]}
+              </span>
+            )}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }

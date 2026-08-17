@@ -126,6 +126,12 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
       ]
     },
     {
+      "key": "fuera_de_alcance",
+      "blocks": [
+        { "type": "text", "content": "Lo que el cliente PIDIÓ o mencionó en la venta y NO entró al alcance vendido: hubs o módulos que se nombraron sin cotizar, automatizaciones o reportes que se recortaron para poder cerrar, integraciones que quedaron para una fase 2, cantidades de usuarios o de datos que se bajaron. Por CADA uno: qué pidió, quién lo dijo y cuándo (citá sesión/fecha), y si quedó afuera por precio, por plazo o por decisión de alcance. Sirve para DOS cosas: defender el alcance cuando reaparezca como 'esto ya lo habíamos hablado', y saber qué ofrecerle más adelante. Si no hay nada, decilo explícito — que no haya pedidos sueltos también es información." }
+      ]
+    },
+    {
       "key": "desarrollo",
       "blocks": [
         { "type": "text", "content": "¿Hay trabajo TÉCNICO en este proyecto — integraciones, MIGRACIONES de datos o desarrollo a medida? (o el proyecto EN SÍ es una integración o una migración). Arrancá con un VEREDICTO en negrita ('Sí, lleva integraciones / migración / desarrollo', 'No lleva trabajo técnico de integración, migración ni desarrollo a medida', o '⚠️ Por validar con Ventas/cliente'). Si SÍ, separá claramente: INTEGRACIONES — qué sistemas conecta (ej. HubSpot ↔ SAP, ERP, e-commerce, telefonía) y si es del MARKETPLACE de HubSpot (app ya existente) o CUSTOM (a medida vía API/webhook); objetivo y alcance (qué entra y qué NO). MIGRACIONES — desde qué plataforma hacia HubSpot (ej. Salesforce, Pipedrive, Zoho, Excel), qué se migra (contactos, empresas, deals, histórico de actividades, automatizaciones) y volumen si se mencionó. Para CADA ítem: el TIPO, fechas y tiempos comprometidos, dependencias técnicas (accesos, credenciales de terceros, ambientes) y todo lo conversado (citá sesión/fecha). Si en las fuentes no hay nada técnico, decilo explícito. Fuentes: transcripciones de ventas, deal+line items, notas y docs." }
@@ -180,10 +186,33 @@ IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección 
 async function main() {
   console.log("Sembrando agente Handoff Sales→CS...\n");
 
+  const force = process.argv.includes("--force");
   const existing = await prisma.agent.findUnique({
     where: { id: AGENT_ID },
-    select: { id: true, name: true, agentGroup: true, defaultCanvasSection: true },
+    select: {
+      id: true, name: true, agentGroup: true, defaultCanvasSection: true,
+      systemPrompt: true, updatedAt: true,
+    },
   });
+
+  /* ⛔ COMPARA ANTES DE ESCRIBIR — molde de create-cs-watchdog-agent.ts.
+     Este seed era EL peor modo de falla del repo, y está escrito así en tres archivos: hacía
+     `upsert` con `systemPrompt` INCONDICIONAL, sobre el prompt del agente que arranca todos los
+     proyectos y que además escribe las FASES del cronograma. El prompt vive en la base para poder
+     calibrarlo desde /agents sin deploy; una corrida por reflejo borraba esa calibración sin
+     aviso y sin vuelta atrás — y hay 15 versiones de este archivo en git, así que «volver a la
+     anterior» tampoco es obvio.
+     Ahora avisa y se sale. `--force` es la única forma de reemplazarlo, y el aviso da los dos
+     tamaños y la fecha de la edición viva para poder decidir sin adivinar. */
+  if (existing && existing.systemPrompt !== HANDOFF_SYSTEM_PROMPT && !force) {
+    console.log("⚠ El prompt VIVO difiere del que trae este archivo.");
+    console.log(`  vivo:    ${existing.systemPrompt?.length ?? 0} chars · editado ${existing.updatedAt.toISOString().slice(0, 10)}`);
+    console.log(`  archivo: ${HANDOFF_SYSTEM_PROMPT.length} chars`);
+    console.log("");
+    console.log("NO se escribió nada. Si el vivo tiene calibración hecha a mano, copiala al archivo primero.");
+    console.log("Para reemplazarlo igual: npx tsx scripts/seed-handoff-agent.ts --force");
+    return;
+  }
 
   if (existing) {
     console.log("Estado actual:");
@@ -205,7 +234,7 @@ async function main() {
       id: AGENT_ID,
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 10 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 11 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       status: AgentStatus.ACTIVE,
       agentType: AgentType.SECTION,
       outputType: AgentOutputType.CARDS,
@@ -222,7 +251,7 @@ async function main() {
     update: {
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 10 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 11 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       agentGroup: "handoff",
       defaultCanvasSection: "acuerdos_promesas",
       systemPrompt: HANDOFF_SYSTEM_PROMPT,

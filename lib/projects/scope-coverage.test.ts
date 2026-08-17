@@ -275,7 +275,7 @@ describe("ratchet — el filtro no vuelve a escribirse a mano", () => {
 // ── 3 · ESCRITOR ÚNICO ───────────────────────────────────────────────────────
 
 /**
- * Las cuatro columnas que declaran de qué clase es un proyecto. Las escribe HubSpot y las
+ * Las columnas que declaran de qué clase es un proyecto Y CÓMO VA. Las escribe HubSpot y las
  * espeja el sync: NADIE MÁS.
  *
  * ── LA FALLA QUE ATACA ───────────────────────────────────────────────────────
@@ -283,12 +283,26 @@ describe("ratchet — el filtro no vuelve a escribirse a mano", () => {
  * CSE lo prende, y diez minutos después el sync lo revierte porque en HubSpot el checkbox
  * sigue en blanco. Sobre un campo que decide si el proyecto se factura. El interruptor tiene
  * que escribir en HUBSPOT, no en Nexus.
+ *
+ * ── LAS CINCO DE CS360 ENTRARON DESPUÉS (2026-08-16), Y ES EL MISMO AGUJERO ──
+ * Elías pidió que Nexus proponga el estado y la etapa de cada proyecto y los mande con un clic.
+ * El camino correcto es PATCH a HubSpot y esperar el espejo (`actualizarEstadoProyecto` /
+ * `actualizarEtapaProyecto` en `lib/hubspot/project-record.ts`). El atajo tentador —y silencioso—
+ * es escribir `hubspotStatus` en Nexus para que la pantalla "responda rápido": se ve funcionando
+ * hasta que el sync lo revierte, y entonces parece un bug de guardado. Cerrarlo acá sale más
+ * barato que un test por cada interruptor que se agregue.
  */
 const COLUMNAS_DE_CLASE = [
   "hubspotPipelineId",
   "proyectoInterno",
   "hubspotRelatedProjectIds",
   "hermanoCsProjectId",
+  // CS360: cómo va el proyecto según lo carga el equipo A MANO en HubSpot.
+  "hubspotStatus",
+  "hubspotPriority",
+  "hubspotBlockReason",
+  "hubspotBlockDetail",
+  "hubspotAdoptionState",
 ];
 
 /** Los únicos autorizados, cada uno con su motivo. */
@@ -378,7 +392,7 @@ describe("escritor único — solo el espejo de HubSpot declara la clase de un p
     }
   });
 
-  it("nadie más asigna hubspotPipelineId / proyectoInterno / los del hermano", () => {
+  it("nadie más asigna la clase del proyecto ni sus cinco columnas de CS360", () => {
     const intrusos: string[] = [];
     for (const rel of FUENTES) {
       if (autorizados.has(rel)) continue;

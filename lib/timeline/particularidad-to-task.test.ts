@@ -6,7 +6,12 @@
  * frase larga: el CSE la puede editar, pero primero tiene que entenderla.
  */
 import { test, expect } from "vitest";
-import { taskTitleFromParticularidad, esConvertible, esCompromisoPendiente } from "./particularidad-to-task";
+import {
+  taskTitleFromParticularidad,
+  esConvertible,
+  esCompromisoPendiente,
+  grupoDeParticularidad,
+} from "./particularidad-to-task";
 
 test("compromiso → encargo, sin el nombre de quien lo dijo", () => {
   expect(taskTitleFromParticularidad("Wherex se comprometió a enviar una base de datos de prueba para validar la migración"))
@@ -77,4 +82,35 @@ test("convertible: compromisos, solicitudes legacy y atrasos sin cuantificar", (
 test("un AVISO no es convertible ni compromiso pendiente", () => {
   expect(esConvertible({ kind: "AVISO", weeksImpact: null })).toBe(false);
   expect(esCompromisoPendiente({ kind: "AVISO" })).toBe(false);
+});
+
+/**
+ * El bug que fija este test: dar por resuelta una desviación ATRASO sin semanas la dejaba
+ * "atascada" en el grupo "Filas para arreglar" para siempre — el predicado de ese grupo miraba
+ * `kind`/`weeksImpact` pero nunca `estado`, así que cerrarla no la sacaba de ahí. La fila no
+ * pedía nada, pero el CSE la seguía viendo en el grupo que dice "esto pide algo".
+ */
+test("una desviación ATRASO sin semanas se va a «historia» al cerrarla, no se queda en «arreglar»", () => {
+  const abierta = { id: "p1", kind: "ATRASO", weeksImpact: null, estado: "ABIERTA" };
+  expect(grupoDeParticularidad(abierta, new Set())).toBe("arreglar");
+
+  const cerrada = { ...abierta, estado: "CERRADA" };
+  expect(grupoDeParticularidad(cerrada, new Set())).toBe("historia");
+});
+
+test("grupoDeParticularidad: compromiso pendiente gana sobre cualquier otro criterio", () => {
+  const p = { id: "p2", kind: "COMPROMISO", weeksImpact: null, estado: "ABIERTA" };
+  expect(grupoDeParticularidad(p, new Set())).toBe("compromisos");
+  // Cerrado, deja de ser un compromiso pendiente — cae a historia.
+  expect(grupoDeParticularidad({ ...p, estado: "CERRADA" }, new Set())).toBe("historia");
+});
+
+test("grupoDeParticularidad: una gemela (dupIds) va a «arreglar» aunque no sea ATRASO ni tenga tarea convertida", () => {
+  // AVISO no dispara ni la rama de compromiso ni la de ATRASO/convertedTaskId: sin ser gemela,
+  // el único camino a "arreglar" que le queda es `dupIds`.
+  const p = { id: "p3", kind: "AVISO", convertedTaskId: null, weeksImpact: null, estado: "ABIERTA" };
+  expect(grupoDeParticularidad(p, new Set())).toBe("historia");
+  expect(grupoDeParticularidad(p, new Set(["p3"]))).toBe("arreglar");
+  // Cerrada, ni siquiera una gemela se ofrece para arreglar: CERRADA es siempre historia.
+  expect(grupoDeParticularidad({ ...p, estado: "CERRADA" }, new Set(["p3"]))).toBe("historia");
 });

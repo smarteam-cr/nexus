@@ -353,6 +353,36 @@ export async function guardTimelineDelete(
  * tiene `regenerateTimeline`; un endpoint nuevo que aplica TODO no debe depender de que la UI
  * nunca se equivoque).
  */
+/**
+ * Gate del apply del detalle COMPLETO (/timeline/detail/apply-all). La vara depende de qué hay
+ * para destruir, no del nombre del endpoint:
+ *
+ *  - cronograma CON tareas → `regenerateTimeline`. Es el regen completo: reescribe N fases de un
+ *    saque sobre trabajo que ya existe, y por eso pide más que el apply por fase.
+ *  - cronograma VACÍO → alcanza `editTimeline`, la MISMA vara que el apply por fase. Es la
+ *    primera generación, que desde 2026-08-16 también pasa por curación en vez de escribirse
+ *    directo. Sin este escalón el CSE —que genera pero NO regenera (permissions/defaults.ts)—
+ *    vería la propuesta y no podría aplicarla: le habríamos sacado la capacidad de crear el
+ *    cronograma sin decirlo en ningún lado.
+ *
+ * ⛔ El escalón cuelga de que no haya NI UNA tarea. Con una sola, vuelve la vara alta: ahí ya hay
+ * trabajo humano posible encima y el radio de explosión deja de ser cero.
+ */
+export async function guardTimelineDetailApply(
+  projectId: string,
+): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string; cronogramaVacio: boolean }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const conTareas = await prisma.timelineTask.count({
+    where: { phase: { timeline: { projectId } } },
+    take: 1,
+  });
+  const cronogramaVacio = conTareas === 0;
+  const guard = await guardCapability(cronogramaVacio ? "editTimeline" : "regenerateTimeline");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId, cronogramaVacio };
+}
+
 export async function guardTimelineFullRegen(
   projectId: string,
 ): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {

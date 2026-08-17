@@ -30,7 +30,14 @@ function Section({ title, children, source }: { title: string; children: ReactNo
   );
 }
 
-export default function AccountView({ data }: { data: CsAccountData }) {
+export default function AccountView({
+  data,
+  puedeCurar,
+}: {
+  data: CsAccountData;
+  /** ⚠ Resolver la propuesta de salud exige `clientes.viewAll`; abrir esta ficha, no. */
+  puedeCurar: boolean;
+}) {
   const p = data.partner;
   return (
     <div className="space-y-7">
@@ -85,7 +92,7 @@ export default function AccountView({ data }: { data: CsAccountData }) {
 
       {/* Proyectos activos */}
       <Section title="📁 Proyectos activos">
-        <ActiveProjectsSection projects={data.projects} projectOps={data.projectOps} />
+        <ActiveProjectsSection projects={data.projects} projectOps={data.projectOps} puedeCurar={puedeCurar} />
       </Section>
 
       {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN.

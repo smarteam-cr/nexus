@@ -11,7 +11,10 @@
  * 13.750 a 16.492 caracteres al arreglarlo, con la sección del plan de 1.584 a 4.326.
  */
 import { describe, it, expect } from "vitest";
-import { flattenCardData } from "./load-canvas-context";
+import fs from "node:fs";
+import path from "node:path";
+import { flattenCardData, ENTREGA_PREVIA_KEYS, formatEntregaPreviaBlock } from "./load-canvas-context";
+import { ENTREGA_SECTION_DEFS } from "@/components/landing/configs/entrega.defs";
 
 /** El shape real de la sección `sesiones` de Exploración (formato nuevo). */
 const PLAN = {
@@ -87,5 +90,91 @@ describe("flattenCardData: lo que ya andaba sigue andando", () => {
     expect(out).toContain("n1");
     expect(out).toContain("n2");
     expect(out).not.toContain("n4");
+  });
+});
+
+describe("Fase 10 — «qué logramos antes»: la Entrega previa entra al contexto", () => {
+  /**
+   * El canvas de Entrega se escribe, se publica, y hasta el 2026-08-17 ningún otro documento
+   * lo volvía a leer. `loadPriorRelationshipContext` (DB-coupled, sin test directo posible sin
+   * base) pasa a sumar la Entrega PUBLICADA más reciente del cliente. Como el circuito real no
+   * se puede ejercitar acá, este archivo prueba las DOS partes puras —el allowlist y el
+   * formateador— y un escaneo del código fuente confirma que la función las usa de verdad, con
+   * los tres gates que la vuelven segura: solo PUBLICADA, solo confirmada, y nunca el proyecto
+   * que se está generando ahora mismo.
+   */
+
+  const KEYS_REALES = new Set(ENTREGA_SECTION_DEFS.map((d) => d.key));
+
+  it("⭐ cada key de ENTREGA_PREVIA_KEYS existe de verdad en el canvas de Entrega", () => {
+    // Sin esto, un typo o un renombre de sección deja la Entrega previa vacía para siempre,
+    // sin que nada avise — el mismo agujero que ya se cerró del lado de handoff-por-tipo.
+    for (const k of ENTREGA_PREVIA_KEYS) {
+      expect(KEYS_REALES.has(k), `"${k}" no es una sección real del canvas de Entrega`).toBe(true);
+    }
+  });
+
+  it("⛔ y NO incluye las que llevan números sin vetar, lo interno o el CTA", () => {
+    // Números (impacto/cumplimiento) de OTRO proyecto sin que el CSE los revise para ESTE
+    // contexto; lo interno (pendientes) no es historia para afuera; portada/cierre no aportan.
+    for (const excluida of ["portada", "cumplimiento", "impacto", "pendientes", "cierre"]) {
+      expect(
+        ENTREGA_PREVIA_KEYS as readonly string[],
+        `"${excluida}" se coló en la allowlist de la Entrega previa`,
+      ).not.toContain(excluida);
+    }
+  });
+
+  it("formatEntregaPreviaBlock lleva el nombre del proyecto ADENTRO del texto", () => {
+    // Mismo criterio que loadHandoffDelHermanoMayorContext: con `{texto, origen}` un caller
+    // puede interpolar el texto y dejar caer el origen sin que nada falle.
+    const out = formatEntregaPreviaBlock("Wherex", "Se implementaron los tres hubs.");
+    expect(out).toContain("«Wherex»");
+    expect(out).toContain("Entrega publicada al cliente");
+    expect(out).toContain("Se implementaron los tres hubs.");
+    expect(out.indexOf("Wherex")).toBeLessThan(out.indexOf("Se implementaron"));
+  });
+
+  describe("⛔ el escaneo del código: los tres gates están en la función real", () => {
+    /* soloCodigo: los propios docblocks de arriba MENCIONAN publishedSnapshotAt, onlyConfirmed
+       y ENTREGA_PREVIA_KEYS en prosa — sin blanquear comentarios, esta guarda pasaría en verde
+       aunque el código real los perdiera. «Mencionar no es usar» (lección de duenio.test.ts). */
+    const soloCodigo = (rel: string): string =>
+      fs
+        .readFileSync(path.join(process.cwd(), rel), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/^\s*\/\/.*$/gm, " ");
+
+    const src = soloCodigo("lib/canvas/load-canvas-context.ts");
+    const i = src.indexOf("export async function loadPriorRelationshipContext");
+    const fin = src.indexOf("\nexport ", i + 10);
+    const cuerpo = src.slice(i, fin > 0 ? fin : undefined);
+
+    it("el ancla sigue viva y el tramo no salió vacío", () => {
+      expect(i, "se movió o se borró loadPriorRelationshipContext: revisar esta guarda").toBeGreaterThan(0);
+      expect(cuerpo.length, "el tramo salió vacío — la guarda no está mirando nada").toBeGreaterThan(500);
+    });
+
+    it("gate 1 — solo la Entrega PUBLICADA, nunca un borrador", () => {
+      expect(cuerpo, "se perdió el filtro de publicado").toContain("publishedSnapshotAt");
+      expect(cuerpo, 'el filtro dejó de exigir "not: null"').toMatch(/publishedSnapshotAt:\s*\{\s*not:\s*null\s*\}/);
+    });
+
+    it("gate 2 — solo lo CONFIRMADO por un humano, nunca contenido a medio revisar", () => {
+      expect(cuerpo, "onlyConfirmed dejó de pedirse en true").toMatch(/onlyConfirmed:\s*true/);
+    });
+
+    it("gate 3 — filtrado por el allowlist, nunca el canvas completo", () => {
+      expect(cuerpo, "el llamador dejó de usar ENTREGA_PREVIA_KEYS").toContain("ENTREGA_PREVIA_KEYS");
+    });
+
+    it("⚠ y el proyecto que se está generando ahora mismo queda afuera de la búsqueda", () => {
+      // Sin esto, regenerar el handoff DESPUÉS de publicar la propia Entrega la citaría a
+      // sí misma como "lo que se entregó antes" — un proyecto hablando de su propio futuro.
+      const iEntrega = cuerpo.indexOf("projectCanvas.findFirst");
+      expect(iEntrega, "no se encontró la query de la Entrega previa").toBeGreaterThan(0);
+      const bloqueQuery = cuerpo.slice(iEntrega, cuerpo.indexOf("]);", iEntrega));
+      expect(bloqueQuery, "la query de la Entrega no excluye el proyecto actual").toContain("excluirActual");
+    });
   });
 });
