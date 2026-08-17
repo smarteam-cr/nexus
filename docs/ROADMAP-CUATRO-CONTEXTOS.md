@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `ad3ec42`. **37 commits sin push.**
+> Última actualización: **2026-08-16**, punta `aae8e5d`. **39 commits sin push.**
 
 ---
 
@@ -37,7 +37,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 5 · Resumen del proyecto | Cada proyecto tiene un resumen automático de «cómo va», con cada afirmación citando de dónde salió. Sin fuente, la afirmación se descarta. | ✅ Hecho |
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
 | | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | ✅ Hecho |
-| | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⛔ **Frenada** — necesita una decisión tuya (ver abajo) |
+| | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⛔ **Frenada** — necesita una decisión tuya (ver abajo). ✅ Su tramo independiente (8.1) ya está hecho |
 | | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
@@ -151,9 +151,23 @@ contador que prometa accionabilidad.
 ⚠ **Ninguna limpieza masiva mientras tanto**: borrar 3.185 filas que el equipo nunca decidió
 descartar es tomar por ellos una decisión que es suya.
 
-**Lo que sí avanza sin esa decisión:** el tramo 8.1 — hoy la primera generación del detalle del
-cronograma escribe las tareas directo, sin pasar por la curación que sí tiene todo el resto. Vale
-por sí solo y no suma volumen.
+#### ✅ Tramo 8.1 — la primera generación del cronograma ahora se revisa *(hecho, `aae8e5d`)*
+
+Era la única puerta del cronograma que escribía sin que nadie mirara — y justo la que más tareas
+crea de un saque. Ahora la primera generación y «Regenerar todo el cronograma» son el mismo botón
+con otro nombre: las dos abren el acordeón donde se arrastra, se edita y se saca lo que no va, y
+nada se guarda hasta confirmar.
+
+Tres cosas se habrían perdido mudas al mudar el camino, y las tres están cubiertas:
+
+| Lo que se perdía | Cómo se nota si falla | Estado |
+|---|---|---|
+| Las 5 tareas fijas de la Semana 0 (accesos, base de datos, usuarios, Academy) | El proyecto arranca sin pedirle nada al cliente; se descubre en el kickoff | ✅ Entran a la revisión como una propuesta más |
+| El tipo de actividad de cada fase | Las barras del Gantt pierden su color y la leyenda que ve el cliente queda sin sentido | ✅ Viaja en la propuesta; nunca pisa lo elegido a mano |
+| ⚠ El permiso | El CSE veía la propuesta y no podía aplicarla | ✅ La vara ahora mide qué hay para romper: cronograma vacío = crear, no rehacer |
+
+⚠ **Lo que vas a ver distinto al probarlo:** «Genera las tareas» ya no las crea de una — abre la
+ventana de revisión. El botón de adentro dice **«Crear las tareas»**.
 
 ### Fase 9 · Lo que se habló pero no se vendió
 
@@ -217,6 +231,7 @@ memoria y las escrituras fallan en silencio.
 | `1156666` | — | Las 4 migraciones aplicadas + el comando documentado que no corría |
 | `ad3ec42` | 7 | El cliente ve «Resuelta»; el aviso de subir deja de ser ciego |
 | *(medición)* | 8 | El circuito de pendientes, medido — y por qué frena la fase |
+| `6e8eb17` `aae8e5d` | 8.1 | La primera generación del cronograma también se revisa antes de escribirse |
 
 ---
 
