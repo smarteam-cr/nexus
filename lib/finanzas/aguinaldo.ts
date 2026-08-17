@@ -68,6 +68,28 @@ export interface AguinaldoPersona {
   cobertura: Cobertura;
 }
 
+/**
+ * Un salario ACTIVO de la configuración de costos. Entra solo para poder decir
+ * QUIÉN NO APARECE — nunca para estimar su aguinaldo: sin quincenas en el libro
+ * no hay nada observado que dividir, y usar el monto del costo sería fabricar.
+ */
+export interface SalarioActivo {
+  teamMemberId: string | null;
+  nombre: string;
+  moneda: string;
+}
+
+export interface FaltanteAguinaldo {
+  nombre: string;
+  moneda: string;
+  /**
+   * SIN_PERSONA_LIGADA es peor que SIN_QUINCENAS y por eso se distinguen: sin
+   * persona ligada, generar la quincena NUNCA lo va a incluir, así que el
+   * problema no se arregla solo el mes que viene.
+   */
+  motivo: "SIN_QUINCENAS" | "SIN_PERSONA_LIGADA";
+}
+
 export interface AguinaldoResultado {
   anio: number;
   /** "2025-12" … "2026-11" — la ventana que se sumó. */
@@ -75,6 +97,17 @@ export interface AguinaldoResultado {
   personas: AguinaldoPersona[];
   /** Totales por moneda SEPARADA. Nunca un total único. */
   totales: Record<string, number>;
+  /**
+   * ⚠ La ventana TODAVÍA NO CERRÓ: lo que se muestra es lo devengado HASTA HOY,
+   * no lo que se va a pagar en diciembre. Sin este dato la pantalla afirmaba un
+   * aguinaldo final cuando le faltaban meses de sumar — el número no estaba mal,
+   * estaba mal rotulado, que en una pantalla de plata es lo mismo.
+   */
+  periodoAbierto: boolean;
+  /** El último mes de la ventana ("2026-11"): hasta cuándo va a seguir subiendo. */
+  cierraEn: string;
+  /** Salarios activos que NO tienen ni una quincena en el libro. */
+  faltantes: FaltanteAguinaldo[];
 }
 
 /**
@@ -87,6 +120,14 @@ export interface AguinaldoResultado {
 export function calcularAguinaldo(
   quincenas: QuincenaPagada[],
   anio: number,
+  /**
+   * "YYYY-MM-DD". Entra por PARÁMETRO y no se consulta adentro: este archivo es
+   * puro y `new Date()` acá haría el resultado dependiente del huso y del reloj,
+   * o sea intesteable. El llamador ya resuelve la fecha de Costa Rica.
+   */
+  hoyISO: string,
+  /** Los salarios activos, solo para declarar quién no aparece. Opcional. */
+  salariosActivos: SalarioActivo[] = [],
 ): AguinaldoResultado {
   const periodos = periodosDeAguinaldo(anio);
   const enVentana = new Set(periodos);
@@ -131,5 +172,25 @@ export function calcularAguinaldo(
     totales[p.moneda] = round2((totales[p.moneda] ?? 0) + p.aguinaldoSalario);
   }
 
-  return { anio, periodos, personas, totales };
+  // La ventana sigue abierta mientras el mes de hoy no pase el último de la
+  // ventana. Comparación de strings "YYYY-MM": el formato ISO ordena solo.
+  const cierraEn = periodos[periodos.length - 1] ?? `${anio}-11`;
+  const periodoAbierto = hoyISO.slice(0, 7) <= cierraEn;
+
+  // Quién NO aparece. La clave es la misma que agrupa a las personas, así que un
+  // salario cuya persona sí tiene quincenas nunca se reporta como faltante.
+  const conQuincenas = new Set(personas.map((p) => p.clave));
+  const faltantes: FaltanteAguinaldo[] = [];
+  for (const s of salariosActivos) {
+    const clave = `${s.teamMemberId ?? s.nombre}::${s.moneda}`;
+    if (conQuincenas.has(clave)) continue;
+    faltantes.push({
+      nombre: s.nombre,
+      moneda: s.moneda,
+      motivo: s.teamMemberId === null ? "SIN_PERSONA_LIGADA" : "SIN_QUINCENAS",
+    });
+  }
+  faltantes.sort((a, b) => a.nombre.localeCompare(b.nombre) || a.moneda.localeCompare(b.moneda));
+
+  return { anio, periodos, personas, totales, periodoAbierto, cierraEn, faltantes };
 }

@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("anio");
   // Sin año explícito se usa el corriente. No se adivina uno distinto: cambiar
   // de año cambia qué 12 meses se suman, y eso lo elige una persona.
-  const anio = raw && /^\d{4}$/.test(raw) ? Number(raw) : Number(crDateParts(new Date()).dateKey.slice(0, 4));
+  const hoyISO = crDateParts(new Date()).dateKey;
+  const anio = raw && /^\d{4}$/.test(raw) ? Number(raw) : Number(hoyISO.slice(0, 4));
 
-  return NextResponse.json({ aguinaldo: await loadAguinaldo(anio) });
+  // `hoyISO` va por parámetro porque `calcularAguinaldo` es puro: decide si el
+  // período ya cerró y no puede resolver la fecha de Costa Rica por su cuenta.
+  return NextResponse.json({ aguinaldo: await loadAguinaldo(anio, hoyISO) });
 }

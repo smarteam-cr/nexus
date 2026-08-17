@@ -15,16 +15,29 @@ import AguinaldoPanel from "@/components/finanzas/AguinaldoPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinanzasAguinaldoPage() {
+export default async function FinanzasAguinaldoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ anio?: string }>;
+}) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
 
-  const anio = Number(crDateParts(new Date()).dateKey.slice(0, 4));
-  const aguinaldo = await loadAguinaldo(anio);
+  const hoyISO = crDateParts(new Date()).dateKey;
+  const anioActual = Number(hoyISO.slice(0, 4));
+  // ⚠ El año viene por la URL. Sin esto, en enero de 2027 el aguinaldo de 2026
+  // —con su pago recién registrado— quedaba inalcanzable desde la interfaz a los
+  // quince días de escribirlo. Se acota al rango razonable para que un ?anio=99
+  // no dispare una ventana absurda.
+  const pedido = Number(String((await searchParams).anio ?? ""));
+  const anio =
+    Number.isInteger(pedido) && pedido >= 2020 && pedido <= anioActual + 1 ? pedido : anioActual;
+
+  const aguinaldo = await loadAguinaldo(anio, hoyISO);
 
   return (
     <div className={SHELL_DEFAULT}>
-      <AguinaldoPanel initial={aguinaldo} />
+      <AguinaldoPanel initial={aguinaldo} anioActual={anioActual} />
     </div>
   );
 }

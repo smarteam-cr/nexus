@@ -1558,12 +1558,23 @@ export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
  *
  * ⚠ PRIVACIDAD: son remuneraciones. Misma superficie SUPER_ADMIN que el libro.
  */
-export async function loadAguinaldo(anio: number): Promise<AguinaldoResultado> {
+export async function loadAguinaldo(anio: number, hoyISO: string): Promise<AguinaldoResultado> {
   const periodos = periodosDeAguinaldo(anio);
-  const filas = await prisma.pagoPlanilla.findMany({
-    where: { estado: "PAGADO", periodo: { in: periodos } },
-    include: { comisiones: { select: { monto: true, moneda: true } } },
-  });
+  const [filas, salarios] = await Promise.all([
+    prisma.pagoPlanilla.findMany({
+      where: { estado: "PAGADO", periodo: { in: periodos } },
+      include: { comisiones: { select: { monto: true, moneda: true } } },
+    }),
+    // ⚠ Solo para DECIR quién no aparece. Hoy una persona con salario activo y
+    // sin ninguna quincena en el libro simplemente no se pinta — no sale en cero
+    // ni con aviso: desaparece, y el total se lee como si estuviera completo.
+    // El monto del costo NO se usa para estimarle un aguinaldo: sin libro no hay
+    // nada observado que dividir, y ponerle un número sería fabricarlo.
+    prisma.costoRecurrente.findMany({
+      where: { categoria: "SALARIO", activo: true, finalizadoEl: null },
+      select: { teamMemberId: true, nombre: true, moneda: true },
+    }),
+  ]);
 
   return calcularAguinaldo(
     filas.map((p) => ({
@@ -1581,6 +1592,12 @@ export async function loadAguinaldo(anio: number): Promise<AguinaldoResultado> {
         .reduce((a, c) => a + num(c.monto)!, 0),
     })),
     anio,
+    hoyISO,
+    salarios.map((s) => ({
+      teamMemberId: s.teamMemberId,
+      nombre: s.nombre,
+      moneda: s.moneda,
+    })),
   );
 }
 
