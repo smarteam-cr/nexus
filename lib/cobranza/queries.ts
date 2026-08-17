@@ -55,6 +55,8 @@ import {
   POLITICA_PAGO_COMISION,
   POLITICA_PAGO_COMISION_LABEL,
   type ComisionDevengada,
+  type DevengoResultado,
+  type VentaSinComisionar,
   type ReglaComision,
 } from "./comisiones";
 
@@ -1623,6 +1625,9 @@ export interface ReglaComisionDTO {
   vendedorNombre: string;
   clientId: string | null;
   clienteNombre: string | null;
+  /** El eje MÁS específico: esta regla es de ESE deal. null = no lo es. */
+  servicioId: string | null;
+  servicioNombre: string | null;
   porcentaje: number;
   vigenteDesde: string;
   vigenteHasta: string | null;
@@ -1675,6 +1680,13 @@ export interface ComisionesVendedorDTO {
   totalesDevengado: Record<string, number>;
   /** Qué política resolvió las sugerencias, para poder decirlo en pantalla. */
   politicaPago: { clave: string; label: string };
+  /**
+   * Las ventas COBRADAS que no están produciendo comisión, con su motivo.
+   * ⚠ Obligatorio en pantalla, no decorativo: con la atribución vacía el
+   * devengado da cero, y un cero mudo se lee como «no se le debe nada a nadie»
+   * cuando la verdad es «falta decir quién vendió».
+   */
+  sinComisionar: VentaSinComisionar[];
 }
 
 /**
@@ -1690,6 +1702,7 @@ export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
       include: {
         vendedor: { select: { name: true } },
         client: { select: { name: true } },
+        servicio: { select: { tipoServicio: true, descripcion: true } },
       },
       orderBy: [{ vigenteDesde: "desc" }],
     }),
@@ -1701,6 +1714,8 @@ export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
     teamMemberId: r.teamMemberId,
     vendedorNombre: r.vendedor.name,
     clientId: r.clientId,
+    servicioId: r.servicioId,
+    servicioNombre: r.servicio ? (r.servicio.descripcion?.trim() || r.servicio.tipoServicio) : null,
     clienteNombre: r.client?.name ?? null,
     porcentaje: num(r.porcentaje)!,
     vigenteDesde: isoDay(r.vigenteDesde)!,
@@ -1729,12 +1744,11 @@ export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
     label: POLITICA_PAGO_COMISION_LABEL[POLITICA_PAGO_COMISION],
   };
 
-  // Sin reglas no hay nada que devengar y no vale la pena traer los cobros.
-  if (reglas.length === 0) {
-    return { reglas, devengadas: [], liquidadas, totalesDevengado: {}, politicaPago };
-  }
-
-  const crudas = await devengarDesdeCobros(reglas, liquidadas);
+  // ⚠ Sin reglas ya NO se corta acá. Antes se devolvía vacío y listo; con la
+  // atribución por venta, «hay cobros y no hay nada configurado» es EL estado
+  // inicial, y ese cero mudo es justo lo que hay que explicar. Se traen igual los
+  // cobros para poder decir cuántas ventas quedan sin atribuir y por cuánta plata.
+  const { devengadas: crudas, sinComisionar } = await devengarDesdeCobros(reglas, liquidadas);
   const devengadas = await conQuincenaSugerida(crudas);
 
   const totalesDevengado: Record<string, number> = {};
@@ -1742,7 +1756,7 @@ export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
     totalesDevengado[d.moneda] = Math.round(((totalesDevengado[d.moneda] ?? 0) + d.monto) * 100) / 100;
   }
 
-  return { reglas, devengadas, liquidadas, totalesDevengado, politicaPago };
+  return { reglas, devengadas, liquidadas, totalesDevengado, politicaPago, sinComisionar };
 }
 
 /**
@@ -1834,7 +1848,7 @@ async function conQuincenaSugerida(
 async function devengarDesdeCobros(
   reglas: ReglaComision[],
   liquidadas: ComisionLiquidadaDTO[],
-): Promise<ComisionDevengada[]> {
+): Promise<DevengoResultado> {
   const cobros = await prisma.cobro.findMany({
     where: { estado: "COBRADO", fechaCobro: { not: null } },
     select: {
@@ -1843,6 +1857,23 @@ async function devengarDesdeCobros(
       monto: true,
       moneda: true,
       cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+      // ⚠ El puente al DEAL ya existía y estaba desperdiciado: `servicioId` es FK
+      // OBLIGATORIA de Cobro, o sea que cada peso que entra YA sabe de qué venta
+      // viene. Lo único que faltaba era saber quién ganó esa venta.
+      servicioId: true,
+      servicio: {
+        select: {
+          tipoServicio: true,
+          descripcion: true,
+          atribucion: {
+            select: {
+              comisiona: true,
+              teamMemberId: true,
+              vendedor: { select: { name: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -1856,6 +1887,13 @@ async function devengarDesdeCobros(
       fechaCobro: isoDay(c.fechaCobro)!,
       monto: num(c.monto)!,
       moneda: c.moneda,
+      servicioId: c.servicioId,
+      servicioNombre: c.servicio.descripcion?.trim() || c.servicio.tipoServicio,
+      vendedorTeamMemberId: c.servicio.atribucion?.teamMemberId ?? null,
+      vendedorNombre: c.servicio.atribucion?.vendedor?.name ?? null,
+      // Sin fila de atribución `comisiona` da true, pero eso NO habilita nada por
+      // accidente: el motor exige además un vendedor, y ahí no hay ninguno.
+      comisiona: c.servicio.atribucion?.comisiona ?? true,
     })),
     reglas,
     yaLiquidados,

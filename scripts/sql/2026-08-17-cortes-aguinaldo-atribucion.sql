@@ -235,6 +235,17 @@ CREATE TABLE IF NOT EXISTS "AtribucionVenta" (
     "id"           TEXT NOT NULL,
     "servicioId"   TEXT NOT NULL,
     "teamMemberId" TEXT NOT NULL,
+    -- ⚠ TRES estados, no dos. Elías: «el CEO es el director de ventas también, y
+    -- a veces él no comisiona, por eso debe validarse por el usuario el histórico
+    -- de deals». O sea que "nadie la revisó todavía" (no hay fila) y "la revisé y
+    -- acá no se paga comisión" (fila con comisiona=false) son cosas DISTINTAS.
+    -- Si fueran la misma, un deal decidido a conciencia se leería para siempre
+    -- como trabajo pendiente de atribuir, y el aviso de "N sin asignar" nunca
+    -- llegaría a cero.
+    --
+    -- El vendedor se guarda IGUAL cuando no comisiona: quién ganó la venta es un
+    -- hecho, y que no cobre por ella es una decisión aparte.
+    "comisiona"    BOOLEAN NOT NULL DEFAULT true,
     "asignadoPor"  TEXT NOT NULL,
     "asignadoEn"   TIMESTAMP(3) NOT NULL,
     "notas"        TEXT,
@@ -246,6 +257,12 @@ CREATE TABLE IF NOT EXISTS "AtribucionVenta" (
 -- UN vendedor por venta. El día que una venta se reparta entre dos, se borra este
 -- unique y se suma una columna de reparto — con una columna en ServicioContratado
 -- eso habría sido rearquitecturar.
+-- Idempotente y separado del CREATE porque la tabla se creó minutos antes en
+-- este mismo evento de coordinación (nada pusheado todavía): re-correr el
+-- archivo entero es seguro y sigue siendo UN solo evento para la otra PC.
+ALTER TABLE "AtribucionVenta"
+  ADD COLUMN IF NOT EXISTS "comisiona" BOOLEAN NOT NULL DEFAULT true;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "AtribucionVenta_servicioId_key"
   ON "AtribucionVenta" ("servicioId");
 CREATE INDEX IF NOT EXISTS "AtribucionVenta_teamMemberId_idx"
@@ -301,5 +318,19 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS "ReglaComisionVendedor_servicioId_idx"
   ON "ReglaComisionVendedor" ("servicioId");
+
+-- ── Normalización contra lo que Prisma espera ──────────────────────────────────
+-- `updatedAt` lo maneja Prisma en la aplicación (@updatedAt), no la base. El
+-- DEFAULT se puso arriba para que la tabla sea usable desde SQL crudo, pero hay
+-- que sacarlo o `migrate diff` va a reportar drift para siempre — que es
+-- exactamente el ruido que hace que un drift REAL pase desapercibido. Mismo paso
+-- que la tanda de PartnerComercial.
+ALTER TABLE "CorteTarjeta"    ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "AguinaldoPago"   ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "AtribucionVenta" ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- Y el nombre que Prisma le da al unique compuesto, para que tampoco aparezca.
+ALTER INDEX IF EXISTS "AguinaldoPago_anio_sujeto_moneda_key"
+  RENAME TO "AguinaldoPago_anio_sujetoTeamMemberId_moneda_key";
 
 COMMIT;

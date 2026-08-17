@@ -25,6 +25,11 @@ export interface ReglaComision {
   vendedorNombre: string;
   /** null = la regla general, vale para todos los clientes. */
   clientId: string | null;
+  /**
+   * El eje MÁS específico: esta regla es de ESTE deal. null = no es de un deal
+   * puntual. Especificidad: servicio > cliente > general.
+   */
+  servicioId: string | null;
   /** Puntos porcentuales: 10 = 10%. */
   porcentaje: number;
   vigenteDesde: string; // ISO YYYY-MM-DD
@@ -38,6 +43,27 @@ export interface CobroComisionable {
   fechaCobro: string; // ISO YYYY-MM-DD — el día que entró la plata
   monto: number;
   moneda: string;
+  /** El DEAL del que salió esta plata. Es FK obligatoria de Cobro. */
+  servicioId: string;
+  /** Cómo se llama la venta, para poder decir cuál quedó sin atribuir. */
+  servicioNombre: string;
+  /**
+   * QUIÉN GANÓ ESA VENTA. null = nadie la revisó todavía.
+   *
+   * ⚠ Es el cambio de fondo del 2026-08-17 (Elías: «las comisiones para
+   * vendedores es un % de cada DEAL GANADO»): antes, quién cobraba lo decidía la
+   * REGLA —que es por cliente—, así que un vendedor con regla para un cliente
+   * comisionaba todo lo que ese cliente pagara, para siempre, aunque la segunda
+   * venta la hubiera ganado otro. Ya hay 9 clientes con más de un servicio.
+   */
+  vendedorTeamMemberId: string | null;
+  vendedorNombre: string | null;
+  /**
+   * false = alguien REVISÓ esta venta y decidió que acá no se paga comisión.
+   * Distinto de `vendedorTeamMemberId === null`, que es "nadie la revisó".
+   * Elías: «el CEO es el director de ventas también, y a veces él no comisiona».
+   */
+  comisiona: boolean;
 }
 
 export interface DetalleComision {
@@ -79,6 +105,37 @@ export interface ComisionDevengada {
   porcentajesDistintos: number;
 }
 
+/**
+ * Por qué un cobro COBRADO no produjo comisión. Los tres son estados legítimos y
+ * se distinguen porque se arreglan de forma distinta:
+ *  · SIN_VENDEDOR  — nadie dijo quién ganó la venta ⇒ hay trabajo pendiente.
+ *  · NO_COMISIONA  — alguien lo revisó y decidió que acá no se paga ⇒ está listo.
+ *  · SIN_REGLA     — se sabe quién vendió, pero esa persona no tiene % vigente.
+ * Juntarlos haría que el aviso de "falta atribuir" nunca llegue a cero.
+ */
+export type MotivoSinComision = "SIN_VENDEDOR" | "NO_COMISIONA" | "SIN_REGLA";
+
+export interface VentaSinComisionar {
+  servicioId: string;
+  servicioNombre: string;
+  clienteNombre: string;
+  moneda: string;
+  /** Lo COBRADO de esa venta que no está produciendo comisión. */
+  monto: number;
+  cobros: number;
+  motivo: MotivoSinComision;
+}
+
+export interface DevengoResultado {
+  devengadas: ComisionDevengada[];
+  /**
+   * ⚠ NO es cosmético. Con la atribución vacía —que es el estado inicial— el
+   * devengado da cero, y un cero mudo se lee como "no se le debe nada a nadie".
+   * Esta lista es lo que convierte ese cero en "faltan N ventas por atribuir".
+   */
+  sinComisionar: VentaSinComisionar[];
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** "2026-08-14" → "2026-08". */
@@ -97,14 +154,28 @@ export function periodoDeFecha(fechaISO: string): string {
  */
 export function reglaParaCobro(
   reglas: ReglaComision[],
-  clientId: string,
+  cobro: CobroComisionable,
   fechaISO: string,
 ): ReglaComision | null {
+  // ⚠ PRIMERO la persona, y sin fallback. Quién cobra lo decide QUIÉN GANÓ LA
+  // VENTA, no la regla. Sin venta atribuida no hay comisión: caer a la regla del
+  // cliente es exactamente el bug que este cambio cierra, y sería el "arreglo"
+  // tentador el día que alguien vea la pantalla vacía.
+  if (!cobro.vendedorTeamMemberId || !cobro.comisiona) return null;
+
   const vigentes = reglas.filter(
-    (r) => r.vigenteDesde <= fechaISO && (r.vigenteHasta === null || r.vigenteHasta >= fechaISO),
+    (r) =>
+      r.teamMemberId === cobro.vendedorTeamMemberId &&
+      r.vigenteDesde <= fechaISO &&
+      (r.vigenteHasta === null || r.vigenteHasta >= fechaISO),
   );
-  const delCliente = vigentes.filter((r) => r.clientId === clientId);
-  const candidatas = delCliente.length > 0 ? delCliente : vigentes.filter((r) => r.clientId === null);
+  // Tres ejes, del más específico al más general: este deal > este cliente >
+  // todos. Una regla para el deal le gana a la del cliente aunque sea más vieja.
+  const delServicio = vigentes.filter((r) => r.servicioId === cobro.servicioId);
+  const delCliente = vigentes.filter((r) => r.servicioId === null && r.clientId === cobro.clientId);
+  const generales = vigentes.filter((r) => r.servicioId === null && r.clientId === null);
+  const candidatas =
+    delServicio.length > 0 ? delServicio : delCliente.length > 0 ? delCliente : generales;
   if (candidatas.length === 0) return null;
 
   // Desempate estable: `vigenteDesde` más reciente y, si empatan, el id — dos
@@ -139,7 +210,7 @@ export function devengarComisiones(
   reglas: ReglaComision[],
   yaLiquidados: ReadonlySet<string> = new Set(),
   politica: PoliticaPagoComision = POLITICA_PAGO_COMISION,
-): ComisionDevengada[] {
+): DevengoResultado {
   interface Acc {
     teamMemberId: string;
     vendedorNombre: string;
@@ -154,12 +225,39 @@ export function devengarComisiones(
     porcentajes: Set<number>;
   }
   const porGrupo = new Map<string, Acc>();
+  const sinComisionar = new Map<string, VentaSinComisionar>();
 
   for (const c of cobros) {
     if (yaLiquidados.has(c.id)) continue;
     if (c.monto <= 0) continue;
-    const regla = reglaParaCobro(reglas, c.clientId, c.fechaCobro);
-    if (!regla) continue;
+    const regla = reglaParaCobro(reglas, c, c.fechaCobro);
+    if (!regla) {
+      // No se pierde en silencio: lo que no devenga se DECLARA con su motivo.
+      // Una pantalla en cero se lee como "no hay nada que pagar", y acá el cero
+      // casi siempre significa "falta decir quién vendió".
+      const motivo: MotivoSinComision = !c.vendedorTeamMemberId
+        ? "SIN_VENDEDOR"
+        : !c.comisiona
+          ? "NO_COMISIONA"
+          : "SIN_REGLA";
+      const k = `${c.servicioId}::${c.moneda}::${motivo}`;
+      const prev = sinComisionar.get(k);
+      if (prev) {
+        prev.monto = round2(prev.monto + c.monto);
+        prev.cobros += 1;
+      } else {
+        sinComisionar.set(k, {
+          servicioId: c.servicioId,
+          servicioNombre: c.servicioNombre,
+          clienteNombre: c.clienteNombre,
+          moneda: c.moneda,
+          monto: round2(c.monto),
+          cobros: 1,
+          motivo,
+        });
+      }
+      continue;
+    }
 
     const pago = quincenaDePagoDeComision(c.fechaCobro, politica);
     const clave = `${regla.teamMemberId}::${pago.periodo}::${pago.quincena}::${c.moneda}`;
@@ -194,7 +292,7 @@ export function devengarComisiones(
     g.porcentajes.add(regla.porcentaje);
   }
 
-  return [...porGrupo.values()]
+  const devengadas = [...porGrupo.values()]
     .map((g) => {
       const base = round2(g.base);
       const monto = round2(g.monto);
@@ -222,6 +320,13 @@ export function devengarComisiones(
         a.vendedorNombre.localeCompare(b.vendedorNombre) ||
         a.moneda.localeCompare(b.moneda),
     );
+
+  return {
+    devengadas,
+    sinComisionar: [...sinComisionar.values()].sort(
+      (a, b) => b.monto - a.monto || a.servicioNombre.localeCompare(b.servicioNombre),
+    ),
+  };
 }
 
 // ── CUÁNDO se paga la comisión ─────────────────────────────────────────────────
