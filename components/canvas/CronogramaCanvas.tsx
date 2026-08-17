@@ -323,7 +323,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenApplying, setRegenApplying] = useState(false);
   // Regenerar TODO el cronograma (Tanda N) — mismo patrón que el regen por fase, generalizado.
-  const [allRegenPreview, setAllRegenPreview] = useState<Array<{ phaseId: string; tasks: RegenProposedTask[] }> | null>(null);
+  const [allRegenPreview, setAllRegenPreview] = useState<
+    Array<{ phaseId: string; tasks: RegenProposedTask[]; activityType?: string | null }> | null
+  >(null);
+  /* Las DOS puertas terminan en el mismo acordeón; lo único que cambia es el copy —y lo que
+     el CSE cree que está haciendo, que no es poco: «crear» y «rehacer» no se leen igual. */
+  const [allRegenModo, setAllRegenModo] = useState<"primera" | "regen">("regen");
+  /* De qué corrida salió la propuesta: viaja al apply para que la trazabilidad del detalle
+     no se pierda ahora que el que escribe es el endpoint de curación y no el agente. */
+  const [allRegenRunId, setAllRegenRunId] = useState<string | null>(null);
   const [allRegenLoading, setAllRegenLoading] = useState(false);
   const [allRegenApplying, setAllRegenApplying] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
@@ -1047,78 +1055,58 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
 
-  // ── Generar el detalle del cronograma con IA (tareas por semana) ───────────────
-  // Se dispara AUTOMÁTICAMENTE al abrir si hay fases sin tareas (auto=true →
-  // silencioso si ya existe). También lo invoca "Regenerar detalle".
-  const generateDetail = async (opts?: { auto?: boolean }) => {
+  /* ── Proponer el detalle del cronograma (tareas por semana) ─────────────────────
+     ⛔ Las DOS puertas —la primera generación y «Regenerar todo el cronograma»— piden lo mismo:
+     una PROPUESTA que el CSE cura antes de que se escriba una sola fila. Hasta el 2026-08-16 la
+     primera escribía DIRECTO: era la única del cronograma que entraba sin que nadie la mirara, y
+     justo la que más tareas crea. Ahora las dos terminan en el mismo acordeón, y el servidor ya
+     no tiene una rama que persista sin curar. */
+  const pedirPropuestaDeDetalle = async (modo: "primera" | "regen") => {
     await flushDocBrief();
-    const auto = opts?.auto ?? false;
-    if (!auto) maybeRequestPermission(); // solo en la generación que el usuario disparó
-    setGenerating(true);
+    if (modo === "primera") maybeRequestPermission();
+    setAllRegenModo(modo);
+    setAllRegenPreview(null);
+    setAllRegenRunId(null);
     setError(null);
+    if (modo === "primera") setGenerating(true);
+    else setAllRegenLoading(true);
     try {
+      const label = modo === "primera" ? "Detalle de cronograma" : "Regenerar cronograma completo";
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          stage: 1,
-          step: 0,
-          stepLabel: "Detalle de cronograma",
-          sectionLabel: "Detalle de cronograma",
-          agentId: "agent-timeline-detail",
-          projectId,
+          stage: 1, step: 0, stepLabel: label, sectionLabel: label,
+          agentId: "agent-timeline-detail", projectId,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // En auto (al montar sin detalle) no bloqueamos con banner, pero ya no es
-        // mudo: un toast suave avisa que se puede reintentar a mano.
-        if (!auto) {
-          setError(data?.message ?? data?.error ?? "Error al generar el detalle.");
+        const msg = data?.message ?? data?.error ?? "No se pudo armar la propuesta de tareas.";
+        if (modo === "primera") {
+          setError(msg);
           void notifyAgentDone({ group: "cronograma", ok: false, url: cronogramaUrl });
-        } else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
-      } else if (data?.timelineDetail?.skipped) {
-        const reason = data.timelineDetail.reason;
-        // En auto no molestamos si ya existe (caso esperado al reabrir) — solo recargamos.
-        if (!auto) {
-          setError(
-            reason === "detail_exists"
-              ? "Ya existe un detalle — usá 'Regenerar detalle' para rehacerlo."
-              : `No se generó el detalle (${reason ?? "salida vacía"}).`,
-          );
-        } else if (reason === "detail_exists") {
-          await load();
-        }
+        } else toast.error(msg);
       } else {
-        await load();
-        clearScope(undoScope); // el detalle nuevo reemplaza el estado: el historial de undo previo ya no aplica
-        // F — encadenado: recién creadas las tareas, evaluá el avance en la misma pasada.
-        // Best-effort: si el progress falla, las tareas YA quedaron (no hay rollback) y el CSE
-        // usa "Chequear avance". Si el agente detecta avance → recarga y aparece el banner.
-        if (!auto) {
-          setChainingProgress(true);
-          try {
-            const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
-            const pdata = await pres.json().catch(() => ({}));
-            if (pres.ok && pdata?.status === "ok") {
-              await load(); // trae el pendingProgress → el banner de confirmación aparece
-              toast.success("Tareas generadas y avance detectado — confirmá abajo.");
-            } else {
-              // skipped (sin sesiones, etapa temprana, sin avance) o error best-effort.
-              toast.success("Tareas generadas. Sin avance que confirmar por ahora.");
-            }
-          } catch {
-            toast.info("Tareas generadas. Podés revisar el avance con «Chequear avance».");
-          }
-          setChainingProgress(false);
-          void notifyAgentDone({ group: "cronograma", ok: true, url: cronogramaUrl });
+        const fases = Array.isArray(data?.previewPhases) ? data.previewPhases : [];
+        setAllRegenRunId(typeof data?.run?.id === "string" ? data.run.id : null);
+        /* Una propuesta vacía NO abre el acordeón: un modal con cero tareas se lee como «el
+           sistema no hizo nada» y deja al CSE sin saber si reintentar. */
+        if (fases.length === 0 || fases.every((f: { tasks?: unknown[] }) => (f.tasks ?? []).length === 0)) {
+          const vacio = "El agente no propuso tareas. Revisá que el cronograma tenga fases y volvé a intentar.";
+          if (modo === "primera") setError(vacio);
+          else toast.info(vacio);
+        } else {
+          setAllRegenPreview(fases);
         }
       }
     } catch {
-      if (!auto) setError("Error de conexión al generar el detalle.");
-      else toast.info("No se pudo generar el detalle automáticamente. Usá «Regenerar detalle» para reintentar.");
+      const msg = "Error de conexión al armar la propuesta de tareas.";
+      if (modo === "primera") setError(msg);
+      else toast.error(msg);
     }
-    setGenerating(false);
+    if (modo === "primera") setGenerating(false);
+    else setAllRegenLoading(false);
   };
 
   // Regen POR FASE → modal de curación (D.1). Paso 1 PREVIEW: el agente de detalle genera la propuesta
@@ -1180,32 +1168,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setRegenApplying(false);
   };
 
-  // Regenerar TODO el cronograma (Tanda N) — misma mecánica que el regen por fase, sin
-  // regeneratePhaseId: el prompt ya pide "todas las fases" por default. Paso 1 PREVIEW.
-  const startAllRegenPreview = async () => {
-    await flushDocBrief();
-    setAllRegenPreview(null);
-    setAllRegenLoading(true);
-    try {
-      const res = await fetch(`/api/clients/${clientId}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stage: 1, step: 0, stepLabel: "Regenerar cronograma completo", sectionLabel: "Regenerar cronograma completo",
-          agentId: "agent-timeline-detail", projectId, preview: true,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.message ?? data?.error ?? "No se pudo generar la propuesta.");
-      } else {
-        setAllRegenPreview(Array.isArray(data?.previewPhases) ? data.previewPhases : []);
-      }
-    } catch {
-      toast.error("Error de conexión al generar la propuesta.");
-    }
-    setAllRegenLoading(false);
-  };
 
   // Paso 2 APLICAR: una entrada por fase, TODAS en una sola transacción del server
   // (/timeline/detail/apply-all). Al terminar, encadena "Re-chequear avance" (best-effort,
@@ -1217,7 +1179,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const res = await fetch(`/api/projects/${projectId}/timeline/detail/apply-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phases: payload, reason: "Regeneración completa del cronograma (curada)" }),
+        body: JSON.stringify({
+          /* El activityType propuesto no pasa por el acordeón (el CSE cura TAREAS, no tipos):
+             se recupera de la propuesta por phaseId y viaja al apply, que lo escribe solo-si-null. */
+          phases: payload.map((p) => ({
+            ...p,
+            activityType: allRegenPreview?.find((x) => x.phaseId === p.phaseId)?.activityType ?? null,
+          })),
+          agentRunId: allRegenRunId,
+          reason:
+            allRegenModo === "primera"
+              ? "Primera generación del detalle del cronograma (curada)"
+              : "Regeneración completa del cronograma (curada)",
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1226,7 +1200,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         await load();
         clearScope(undoScope);
         setAllRegenPreview(null);
-        toast.success(`Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`);
+        toast.success(
+          allRegenModo === "primera"
+            ? `Tareas creadas — ${data?.phasesApplied ?? payload.length} fases.`
+            : `Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`,
+        );
+        if (allRegenModo === "primera") void notifyAgentDone({ group: "cronograma", ok: true, url: cronogramaUrl });
         /* El servidor conservó tareas con progreso que el payload no traía. En el camino feliz
            esto nunca aparece; si aparece, algo llegó incompleto y el CSE tiene que saber que
            el cronograma no quedó exactamente como lo curó (no se perdió nada — se rescató). */
@@ -2040,7 +2019,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           {generating && (
             <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
               <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
-              {chainingProgress ? "Evaluando avance…" : "Creando tareas…"}
+              {chainingProgress ? "Evaluando avance…" : "Armando la propuesta…"}
             </span>
           )}
           {/* La propuesta de estructura, en la MISMA fila que las demás acciones.
@@ -2080,7 +2059,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               // sobre un esqueleto sin tareas y el usuario no puede generarlas).
               canGenerateTimeline ? (
                 <button
-                  onClick={() => void generateDetail({ auto: false })}
+                  onClick={() => void pedirPropuestaDeDetalle("primera")}
                   disabled={generating}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
                   title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff"
@@ -2108,7 +2087,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               fase por fase en acordeón → aplicar todo en una transacción. */}
           {canEdit && phases.length > 0 && !proposal && hasAiDetail && canRegenerateTimeline && (
             <button
-              onClick={() => void startAllRegenPreview()}
+              onClick={() => void pedirPropuestaDeDetalle("regen")}
               disabled={allRegenLoading || allRegenApplying}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
               title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisás y aceptás/descartás antes de aplicar, fase por fase"
@@ -2585,11 +2564,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 Este cronograma inicial fue creado con la información del <span className="font-semibold">Handoff</span>.{" "}
                 <button
                   type="button"
-                  onClick={() => void generateDetail({ auto: false })}
+                  onClick={() => void pedirPropuestaDeDetalle("primera")}
                   disabled={generating}
                   className="font-semibold underline underline-offset-2 hover:opacity-80 disabled:opacity-70 disabled:no-underline"
                 >
-                  {generating ? (chainingProgress ? "Evaluando avance…" : "Creando tareas…") : "Genera las tareas"}
+                  {generating ? (chainingProgress ? "Evaluando avance…" : "Armando la propuesta…") : "Genera las tareas"}
                 </button>{" "}
                 para detallarlo y consensuar el avance con el cliente.
               </p>
@@ -2802,6 +2781,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           <AllPhasesRegenModal
             open
             phases={merged}
+            modo={allRegenModo}
             applying={allRegenApplying}
             onCancel={() => setAllRegenPreview(null)}
             onApply={applyAllRegen}

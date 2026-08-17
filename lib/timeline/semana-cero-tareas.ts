@@ -95,3 +95,24 @@ export function tareasFijasDeSemanaCero(
       type: "TASK" as const,
     }));
 }
+
+/**
+ * Cuál de las fases hace de «Semana 0»: la primera por orden, con fallback por nombre para los
+ * cronogramas viejos («Kick-off», «Semana 0 – Arranque»). `null` si no hay fases.
+ *
+ * ⚠ Vive acá y no suelta adentro de una ruta porque ahora la preguntan DOS caminos —el preview de
+ * todas las fases y el de una sola— y si divergen, las cinco tareas se siembran en la fase
+ * equivocada (o en ninguna) sin que nada falle.
+ */
+export function elegirFaseDeSemanaCero<T extends { order: number; name: string }>(
+  phases: readonly T[],
+): T | null {
+  return (
+    phases.find((p) => p.order === 0) ??
+    phases.find((p) => {
+      const n = p.name.trim().toLowerCase();
+      return n.includes("semana 0") || n.includes("kick");
+    }) ??
+    null
+  );
+}

@@ -30,12 +30,16 @@ export interface AllPhasesRegenPhase {
 export interface AllPhasesRegenModalProps {
   open: boolean;
   phases: AllPhasesRegenPhase[];
+  /** «primera» = el cronograma todavía no tiene tareas (la primera generación, que desde
+   *  2026-08-16 también se cura). Cambia SOLO el copy: el mecanismo es el mismo. */
+  modo?: "primera" | "regen";
   applying: boolean;
   onCancel: () => void;
   onApply: (payload: Array<{ phaseId: string; tasks: FinalTask[] }>) => void;
 }
 
-export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply }: AllPhasesRegenModalProps) {
+export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, onCancel, onApply }: AllPhasesRegenModalProps) {
+  const primera = modo === "primera";
   const [openIds, setOpenIds] = useState<Set<string>>(
     () => new Set(phases.filter((p) => phaseHasChanges(p.proposed.length)).map((p) => p.phaseId)),
   );
@@ -60,10 +64,21 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
   return (
     <Modal open={open} onClose={() => { if (!applying) onCancel(); }} size="xxl" closeOnBackdrop={!applying} closeOnEscape={!applying}>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-fg">Regenerar todo el cronograma</p>
+        <p className="text-sm font-medium text-fg">
+          {primera ? "Revisá las tareas antes de crearlas" : "Regenerar todo el cronograma"}
+        </p>
         <p className="text-xs text-fg-muted mt-1">
-          {totalConCambios} de {phases.length} fases tienen cambios propuestos. Revisá fase por fase — arrastrá,
-          editá o marcá hechas antes de aplicar; lo que no toques queda como está.
+          {primera ? (
+            <>
+              El agente propuso tareas para {totalConCambios} de {phases.length} fases. Revisá fase por fase —
+              arrastrá, editá o sacá lo que no va; nada se guarda hasta que confirmes.
+            </>
+          ) : (
+            <>
+              {totalConCambios} de {phases.length} fases tienen cambios propuestos. Revisá fase por fase — arrastrá,
+              editá o marcá hechas antes de aplicar; lo que no toques queda como está.
+            </>
+          )}
         </p>
         {/* La frontera que confundía: este agente arma la LISTA de tareas, no dice qué ya se
             hizo. El status lo escribe el humano (invariante D.1/D.2) o lo propone el agente de
@@ -119,7 +134,7 @@ export function AllPhasesRegenModal({ open, phases, applying, onCancel, onApply 
           loading={applying}
           onClick={() => onApply(phases.map((p) => ({ phaseId: p.phaseId, tasks: finalsByPhase.current[p.phaseId] ?? [] })))}
         >
-          Aplicar todo el cronograma
+          {primera ? "Crear las tareas" : "Aplicar todo el cronograma"}
         </Button>
         <Button variant="secondary" size="md" className="flex-1" disabled={applying} onClick={onCancel}>
           Cancelar

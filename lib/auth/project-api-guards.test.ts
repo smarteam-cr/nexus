@@ -106,6 +106,9 @@ const GUARDAS = [
   "guardTimelineEdit(",
   "guardTimelineDelete(",
   "guardTimelineFullRegen(",
+  // Hace guardAccessToProject + una vara de capacidad que depende de si el cronograma tiene
+  // tareas (vacío → la del apply por fase; con tareas → la del regen completo). Acota igual.
+  "guardTimelineDetailApply(",
   "withProjectAccess",
   'guardCapability("seeAllClients")',
 ];
