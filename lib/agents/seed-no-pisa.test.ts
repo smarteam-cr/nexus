@@ -32,7 +32,9 @@ const SCRIPTS = path.join(RAIZ, "scripts");
  *
  * ⚠ SOLO PUEDE BAJAR. Si arreglás uno, bajá este número. Si sube, algo nuevo nació pisando.
  */
-const TOPE_QUE_PISAN = 22; // 23 → 22 el 2026-08-16: `seed-post-session-agent` pasó a comparar.
+const TOPE_QUE_PISAN = 21; // 23 → 22 → 21 el 2026-08-16: primero `seed-post-session-agent` y
+// después `seed-handoff-agent` pasaron a comparar. El segundo era EL peor de la lista: el
+// prompt del agente que arranca todos los proyectos y escribe las fases del cronograma.
 
 /** Scripts que escriben un prompt de agente vía `agent.upsert` / `agent.update`. */
 function seedsDePrompt(): string[] {

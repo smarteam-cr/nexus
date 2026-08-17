@@ -135,7 +135,7 @@ export const IMPLEMENTACION_CIERRE_DEFAULT = {
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
 // creación de handoffs (createHandoffCanvas, Fase 4). Se mantiene la definición
-// acá como fuente ÚNICA de las 10 secciones — el agente "Handoff Sales→CS" escribe
+// acá como fuente ÚNICA de las 11 secciones — el agente "Handoff Sales→CS" escribe
 // en ellas vía AGENT_GROUP_TO_CANVAS. Cada sección 1:1 con una card del agente.
 export const HANDOFF_CANVAS: CanvasDefinition = {
   slug: "handoff",
@@ -146,6 +146,11 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
     { key: "fecha_inicio_kickoff", label: "Fecha de inicio / Kickoff" },
     { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
     { key: "alcance_contratado",   label: "¿Qué vendimos?" },
+    /* Se conversó y NO se vendió: lo que el cliente pidió en la venta y quedó afuera.
+       Sirve a dos cosas a la vez —defender el alcance cuando reaparece como «esto ya lo
+       habíamos hablado», y saber qué ofrecerle después— y por eso es INTERNA: ninguna
+       allowlist de documento del cliente la incluye. Ver lib/canvas/fuera-de-alcance.test.ts. */
+    { key: "fuera_de_alcance",     label: "Se conversó y no se vendió" },
     { key: "desarrollo",           label: "Integraciones, migraciones y desarrollo" },
     { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
     { key: "dolor_principal",      label: "Dolor principal" },

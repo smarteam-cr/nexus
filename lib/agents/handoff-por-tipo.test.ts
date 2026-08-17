@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { AGENTES_HANDOFF_POR_TIPO, KEYS, PROMPT_DEV, PROMPT_WEB } from "./handoff-por-tipo";
+import { AGENTES_HANDOFF_POR_TIPO, KEYS, PROMPT_DEV, PROMPT_WEB, bloqueDeSecciones } from "./handoff-por-tipo";
 import { HANDOFF_CANVAS } from "@/lib/canvas/canvas-defs";
 import { lineaDeAvance, pipelineByKey } from "@/lib/projects/kind";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "./resolver";
@@ -55,6 +55,51 @@ describe("el contrato de salida — los dos prompts piden lo mismo que el de sie
         );
       }
     }
+  });
+
+  it("⭐ y CADA una trae una instrucción de verdad, no la palabra «undefined»", () => {
+    /* ⛔ ESTA GUARDA SE APROBABA SOLA. El assert de arriba busca `"key": "<k>"` — el literal que
+       el propio generador emite en el mismo `map` que recorre las keys del canvas. O sea que
+       siempre está, haya guía o no. El modo de falla real: alguien suma una sección al canvas
+       (un cambio de UNA línea en canvas-defs.ts, que es justo lo que hace la fase 9), el mapa de
+       guías queda corto, y el prompt sale a producción diciéndole al modelo que escriba una
+       sección cuya instrucción es «undefined». Verde en todo: tsc, seed, build y este archivo.
+
+       Lo que se mira ahora es el CONTENIDO emitido por key. El piso de 40 caracteres no es
+       cosmético: una guía de dos palabras es indistinguible de un placeholder olvidado. */
+    for (const [tipo, p] of PROMPTS) {
+      expect(p, `${tipo}: una sección salió con la instrucción «undefined»`).not.toContain(
+        '"content": "undefined"',
+      );
+      for (const k of KEYS) {
+        const i = p.indexOf(`"key": "${k}"`);
+        const contenido = p.slice(i, p.indexOf("\n", i));
+        const m = contenido.match(/"content": "(.*)" \} \] \}/);
+        expect(m, `${tipo}/${k}: no se pudo leer la instrucción — cambió el formato del bloque`).toBeTruthy();
+        expect(
+          (m?.[1] ?? "").trim().length,
+          `${tipo}: la sección "${k}" no tiene instrucción real — el modelo la escribiría a ciegas`,
+        ).toBeGreaterThan(40);
+      }
+    }
+  });
+
+  it("⚠ y el generador SE NIEGA a emitir una sección sin guía", () => {
+    /* La red de arriba mira el resultado; ésta mira la causa. Como los prompts son constantes de
+       módulo, el throw revienta al IMPORTAR: en el build y en los tests, nunca en una corrida
+       contra un cliente. Es la diferencia entre enterarse hoy y enterarse por un documento. */
+    const completas = Object.fromEntries(KEYS.map((k) => [k, "x".repeat(50)]));
+    expect(() => bloqueDeSecciones(completas)).not.toThrow();
+
+    const { [KEYS[0]]: _falta, ...incompletas } = completas;
+    expect(() => bloqueDeSecciones(incompletas)).toThrow(/sin guía/);
+    expect(() => bloqueDeSecciones({ ...completas, [KEYS[1]]: "   " })).toThrow(/sin guía/);
+
+    /* Y una comilla doble en una guía rompe el JSON de ejemplo del prompt: el modelo recibe un
+       schema inválido y responde cualquier cosa. Falla distinta, igual de muda. */
+    expect(() => bloqueDeSecciones({ ...completas, [KEYS[2]]: 'dijo "esto" el cliente' })).toThrow(
+      /comillas dobles/,
+    );
   });
 
   it("los dos devuelven los tres campos de clasificación", () => {
