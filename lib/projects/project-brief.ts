@@ -66,13 +66,23 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
   });
   if (!p) return null;
 
-  const [sesiones, desviaciones, categorias, handoffTexto] = await Promise.all([
+  /* ⚠ La cobertura se mide sobre TODO el proyecto, no sobre `MAX_SESIONES`. El conteo viejo salía
+     de la ventana de 12 y el texto decía «de este proyecto»: en Wherex daba 8 cuando eran 25 sobre
+     65. Son dos counts indexados (`projects` + `date`), no traen filas: mucho más barato que
+     `fetchTranscriptContent` sobre el historial entero.
+     «Sin registro» = ni transcripción ni minuta, que es EXACTAMENTE lo que hace que
+     `fetchTranscriptContent` devuelva null — el mismo criterio con el que una reunión se queda
+     afuera de las fuentes citables, medido en la base en vez de fila por fila. */
+  const ocurridas = { projects: { some: { projectId } }, date: { lte: new Date() } } as const;
+
+  const [sesiones, desviaciones, categorias, handoffTexto, totalOcurridas, sinRegistro] =
+    await Promise.all([
     prisma.firefliesSession.findMany({
       /* ⚠ SOLO LAS QUE YA OCURRIERON. Las más recientes incluían las AGENDADAS —hay 459 sesiones
          futuras en el corpus por la agenda recurrente de Google—, así que el resumen se armaba
          gastando su cupo en reuniones que todavía no pasaron. Sin transcripción no aportaban nada
          y encima desplazaban a las reales. */
-      where: { projects: { some: { projectId } }, date: { lte: new Date() } },
+      where: ocurridas,
       orderBy: { date: "desc" },
       take: MAX_SESIONES,
       /* `participants` y `organizerEmail` son para la ETIQUETA DE SALA (Tanda 3): «lo dijo el
@@ -102,7 +112,11 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
        en `lib/handoff/duenio.test.ts` que lo hace cumplir.
        El largo no hace falta acotarlo acá: `armarContextoDeBrief` capea cada bloque. */
     loadHandoffContext(projectId, { onlyConfirmed: true }),
-  ]);
+    prisma.firefliesSession.count({ where: ocurridas }),
+    prisma.firefliesSession.count({
+      where: { ...ocurridas, transcript: null, summary: { equals: Prisma.DbNull } },
+    }),
+    ]);
 
   /* El contenido lo serializa el helper compartido: sabe leer los DOS shapes de resumen
      (Fireflies y Gemini Notes) y prioriza el resumen sobre el transcript crudo. Re-implementarlo
@@ -147,6 +161,7 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
       detail: d.detail,
       lastDetectedAt: d.lastDetectedAt,
     })),
+    cobertura: { ocurridas: totalOcurridas, sinRegistro },
   };
 }
 

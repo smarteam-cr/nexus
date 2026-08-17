@@ -23,18 +23,11 @@
  * `onRefresh` es el mismo `fetchGPS` que el padre ya usa para cualquier otro cambio.
  */
 import { useState } from "react";
+import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
-
-/** Rótulo por tipo de fuente, para cuando la fuente no trajo uno propio. */
-const ETIQUETA_POR_TIPO: Record<string, string> = {
-  sesion: "Reunión",
-  handoff: "Handoff",
-  hubspot_ops: "Estado en HubSpot",
-  etapa: "Etapa",
-  desviacion: "Desviación del cronograma",
-};
+import { fmtChipDate } from "@/components/cs/SourceChip";
+import { describirCita } from "@/lib/projects/brief-cita";
 
 /** Acento por tipo de fuente — para poder escanear la lista sin leer cada línea entera.
  *  Deliberadamente discreto (un borde de 2px, no un fondo de color): la afirmación es el
@@ -42,10 +35,61 @@ const ETIQUETA_POR_TIPO: Record<string, string> = {
 const ACENTO_POR_TIPO: Record<string, string> = {
   desviacion: "border-warn-line",
   hubspot_ops: "border-sky-500/40",
+  cobertura: "border-warn-line",
   sesion: "border-line",
   handoff: "border-line",
   etapa: "border-line",
 };
+
+/** El ícono de «abre en otra pestaña». Sin texto: el nombre de la reunión ya está al lado. */
+function IconoEnlace() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+      />
+    </svg>
+  );
+}
+
+/**
+ * LA CITA, A LA VISTA.
+ *
+ * ⚠ Se escribe ACÁ y no dentro de `SourceChip` a propósito. Ese chip es compartido por 8
+ * pantallas de Customer Success con 16 puntos de render y CERO tests propios: meterle hora, sala
+ * y enlace «por default» le cambiaría la cara al dashboard, a las KPI cards y al resumen de
+ * cuenta sin que nadie lo haya pedido. La cita rica es una decisión de ESTA sección.
+ *
+ * ⚠ Y no lleva `whitespace-nowrap` (el chip sí): los títulos de Meet son largos por norma
+ * («Smarteam <> Cliente — seguimiento semanal») y esta columna es angosta. Que envuelva.
+ */
+function Cita({ source }: { source: { kind: string; id: string; label: string; date: string | null } }) {
+  const c = describirCita(source);
+  const cuando = c.cuando && (c.cuandoPrefijo ? `${c.cuandoPrefijo} ${c.cuando}` : c.cuando);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] text-fg-muted">
+      {c.sala && (
+        <span className="font-semibold uppercase tracking-wide text-fg-secondary">{c.sala}</span>
+      )}
+      <span className="font-medium text-fg-secondary">{c.nombre}</span>
+      {cuando && <span>· {cuando}</span>}
+      {c.href && (
+        <Link
+          href={c.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center text-fg-muted hover:text-brand transition-colors"
+          title={`Abrir «${c.nombre}» en otra pestaña`}
+        >
+          <IconoEnlace />
+        </Link>
+      )}
+    </div>
+  );
+}
 
 export interface BriefDeProyecto {
   headline: string | null;
@@ -151,12 +195,7 @@ export default function ProjectBriefSection({
             className={`border-l-2 pl-2.5 ${ACENTO_POR_TIPO[s.source.kind] ?? "border-line"}`}
           >
             <p className="text-xs text-fg-secondary leading-relaxed">{s.text}</p>
-            <div className="mt-1">
-              <SourceChip
-                label={s.source.label || ETIQUETA_POR_TIPO[s.source.kind] || s.source.kind}
-                date={s.source.date}
-              />
-            </div>
+            <Cita source={s.source} />
           </li>
         ))}
       </ul>

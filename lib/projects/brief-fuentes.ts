@@ -49,6 +49,17 @@ export interface DesviacionParaBrief {
   lastDetectedAt: Date;
 }
 
+/**
+ * Cuánto material dejó el proyecto, medido sobre TODAS sus reuniones ya ocurridas — no sobre la
+ * ventana que el brief alcanza a leer. Ver el bloque de `cobertura` más abajo para el porqué.
+ */
+export interface CoberturaDeMaterial {
+  /** Reuniones del proyecto que ya ocurrieron. */
+  ocurridas: number;
+  /** De ésas, cuántas no dejaron NI transcripción NI minuta. */
+  sinRegistro: number;
+}
+
 export interface DatosDeBrief {
   projectName: string;
   clientName: string;
@@ -59,6 +70,7 @@ export interface DatosDeBrief {
   handoff: { texto: string; at: Date | null } | null;
   sesiones: SesionParaBrief[];
   desviaciones: DesviacionParaBrief[];
+  cobertura: CoberturaDeMaterial;
 }
 
 const fmtCorto = (d: Date | null) =>
@@ -139,14 +151,29 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
     );
   }
 
-  const vacias = d.sesiones.filter((s) => !s.content).length;
-  if (vacias > 0) {
-    /* Va como NOTA, no como fuente: es un hecho sobre lo que falta, y el modelo tiene que poder
-       decir «no sé» en vez de rellenar el hueco. */
-    bloques.push(
-      `### NOTA (no es una fuente citable)\n` +
-        `Además hubo ${vacias} reunión(es) de este proyecto que no dejaron transcripción ni ` +
-        `minuta. No sabemos qué se habló ahí: no supongas su contenido.`,
+  /* ── EL HUECO DE MATERIAL ES UNA FUENTE, NO UNA NOTA (2026-08-17) ────────────
+     Antes iba como «### NOTA (no es una fuente citable)», con el argumento —correcto— de que no
+     se puede citar el CONTENIDO de una reunión que no dejó nada. Pero el modelo igual tenía que
+     decir que faltaba material, y sin clave propia lo colgaba de la fuente que tuviera a mano:
+     en producción, «Hay 8 reuniones sin transcripción» salió firmado «Estado en HubSpot», que
+     solo contiene estado, prioridad, adopción y motivo de bloqueo. Una procedencia falsa que
+     nadie iba a leer mientras el chip fuera minúsculo; con la cita a la vista y clicable, pasa a
+     ser una prueba equivocada a un clic.
+     El hecho SÍ tiene una fuente legítima, y no es una reunión: es la MEDICIÓN de Nexus. Dársela
+     como clave propia es lo que vuelve honesta la cita, y de paso deja que el validador la trate
+     como a cualquier otra.
+
+     ⚠ Y el número es de TODO el proyecto, no de la ventana que el brief lee. El conteo viejo
+     salía de `d.sesiones` —las 12 más recientes— pero el texto decía «de este proyecto»: sobre
+     Wherex eso daba 8 cuando eran 25 sobre 65. La escala equivocada es la parte que más engaña,
+     porque un proyecto con 40 reuniones mudas decía «8» igual que uno con 9. */
+  if (d.cobertura.sinRegistro > 0) {
+    agregar(
+      { kind: "cobertura", id: "material", label: "Cobertura de registro", date: null },
+      `De las ${d.cobertura.ocurridas} reunión(es) de este proyecto que ya ocurrieron, ` +
+        `${d.cobertura.sinRegistro} no dejaron transcripción ni minuta. No sabemos qué se habló ` +
+        `ahí: no supongas su contenido. Este conteo lo mide Nexus sobre el proyecto completo, no ` +
+        `sobre las reuniones que citás arriba.`,
     );
   }
 

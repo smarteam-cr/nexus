@@ -32,11 +32,13 @@ QUÉ MIRAR, EN ESTE ORDEN:
 
 CÓMO PESAR LAS REUNIONES:
 - Las reuniones vienen etiquetadas [CON EL CLIENTE] o [PUERTAS ADENTRO]. NO pesan igual: lo que el cliente dijo en su cara es un hecho sobre su expectativa; lo que dijimos entre nosotros es nuestra lectura, y puede estar equivocada. Cuando la fuente sea interna y la afirmación sea fuerte, decilo ("según la lectura del equipo…").
-- Puede haber una NOTA (no citable) diciendo que hubo reuniones sin transcripción. Eso NO es una fuente y NO se puede citar: significa que hay un hueco. Si el hueco es grande, vale un statement que lo diga... pero solo si podés citarlo desde otra fuente.
+- Puede venir una fuente [cobertura:material] que dice cuántas reuniones del proyecto no dejaron transcripción ni minuta. Si el hueco es grande, decilo en un statement citando ESA fuente. ⛔ NUNCA cuelgues ese hecho de otra fuente: "Estado en HubSpot" y "Etapa" no saben nada de reuniones, y firmarlo con ellas es una procedencia falsa.
 
 QUÉ ESCRIBIR:
 - "headline": UNA frase con el estado neto del proyecto. Si está trabado, la frase lo dice y por qué.
 - "statements": 4 a 10 afirmaciones, las más accionables primero. Con fechas y números concretos siempre que la fuente los tenga.
+- UNA IDEA POR STATEMENT, y CORTO: apuntá a 25 palabras, máximo 40. Si tenés dos ideas, son dos statements (o la segunda no vale la pena).
+- NO metas la evidencia ni la fecha DENTRO de la frase ("según la reunión del 28 de julio…", "el 24 de julio se admitió…"). La pantalla ya muestra de qué reunión salió, con su fecha y su hora, al lado del statement. Repetirlo adentro es ruido que empuja la frase a tres renglones.
 - NADA de generalidades tipo "hay que dar seguimiento": cada statement dice QUÉ pasa y con qué evidencia.
 - Si el material es pobre, escribí MENOS statements. Rellenar con obviedades le quita valor a los que sí importan.
 

@@ -43,6 +43,7 @@ const datos = (over: Partial<DatosDeBrief> = {}): DatosDeBrief => ({
       lastDetectedAt: AYER,
     },
   ],
+  cobertura: { ocurridas: 0, sinRegistro: 0 },
   ...over,
 });
 
@@ -102,11 +103,49 @@ describe("⚠ una reunión sin transcripción NO es una fuente citable", () => {
           { id: "s1", title: "Semanal", date: AYER, content: null, etiquetaDeSala: null },
           { id: "s2", title: "Otra", date: AYER, content: null, etiquetaDeSala: null },
         ],
+        cobertura: { ocurridas: 65, sinRegistro: 25 },
       }),
     );
-    expect(serialized).toContain("2 reunión(es)");
+    expect(serialized).toContain("25 no dejaron transcripción");
     expect(serialized).toContain("no supongas su contenido");
-    expect(serialized, "la nota se coló como fuente citable").not.toContain("FUENTE [sesion:s1]");
+    expect(serialized, "la reunión muda se coló como fuente citable").not.toContain(
+      "FUENTE [sesion:s1]",
+    );
+  });
+});
+
+/**
+ * ⭐ EL HUECO DE MATERIAL TIENE FUENTE PROPIA — y es la guarda de esta tanda.
+ *
+ * En producción salió «Hay 8 reuniones del proyecto sin transcripción» firmado «Estado en
+ * HubSpot», que solo contiene estado/prioridad/adopción/motivo. El modelo no improvisó: no tenía
+ * ninguna clave para ese hecho, así que lo colgó de la que tenía. Sin clave propia el problema
+ * vuelve, y el validador no lo puede cazar (solo comprueba que la clave EXISTA, nunca que el
+ * texto salga de ahí).
+ *
+ * Y el número tiene que ser el del PROYECTO, no el de la ventana de 12 que el brief lee: Wherex
+ * decía 8 cuando eran 25 sobre 65. La escala equivocada es lo que más engaña — un proyecto con 40
+ * reuniones mudas decía «8» igual que uno con 9.
+ */
+describe("⭐ el hueco de material se cita a SÍ MISMO, no a HubSpot", () => {
+  it("es una fuente citable propia, con el número del proyecto entero", () => {
+    const { serialized, sources } = armarContextoDeBrief(
+      datos({ cobertura: { ocurridas: 65, sinRegistro: 25 } }),
+    );
+    expect(sources.has("cobertura:material"), "el hueco no tiene clave propia").toBe(true);
+    expect(serialized).toContain("FUENTE [cobertura:material]");
+    // El número es el del proyecto (65/25), NO el de la ventana de sesiones del fixture (1).
+    expect(serialized).toContain("De las 65 reunión(es)");
+    expect(serialized).toContain("25 no dejaron transcripción");
+  });
+
+  it("sin hueco no inventa la fuente", () => {
+    /* Un proyecto que grabó todo no gana un bloque que diga «faltan 0»: sería una fuente citable
+       sobre un no-hecho, justo lo que el resto de este archivo existe para impedir. */
+    const { sources } = armarContextoDeBrief(
+      datos({ cobertura: { ocurridas: 12, sinRegistro: 0 } }),
+    );
+    expect(sources.has("cobertura:material")).toBe(false);
   });
 });
 
@@ -135,6 +174,7 @@ describe("nada vacío se vuelve citable", () => {
       handoff: null,
       sesiones: [],
       desviaciones: [],
+      cobertura: { ocurridas: 0, sinRegistro: 0 },
     });
     expect(sources.size).toBe(0);
   });
