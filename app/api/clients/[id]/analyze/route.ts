@@ -69,6 +69,7 @@ import {
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
+import { tareasFijasDeSemanaCero } from "@/lib/timeline/semana-cero-tareas";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -3434,64 +3435,31 @@ async function persistTimelineDetailFromAgentOutput(
         (await tx.project.findUnique({ where: { id: bodyProjectId }, select: { tags: true } }))?.tags ?? [],
       );
       const tipo = tipoDeImplementacion(tagsDelProyecto);
-      const isReimpl = esReimplementacion(tagsDelProyecto);
 
-      /* Las DOS caras de la tarea de base de datos, declaradas juntas. Son el MISMO renglón del
-         plan con distinto texto según el punto de partida, y por eso la deduplicación de abajo
-         mira las dos: un proyecto sembrado como "implementación" y después reclasificado a
-         "re-implementación" recibía la segunda mientras conservaba la primera, y la Semana 0
-         terminaba pidiendo cargar la base Y limpiar la existente a la vez. */
-      const TAREA_BD_DESDE_CERO = { title: "Proporcionar bases de datos a importar", party: "CLIENTE" as const };
-      const TAREA_BD_EXISTENTE = { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" as const };
-
-      const SEED_TASKS: {
-        title: string;
-        party: "CLIENTE" | "SMARTEAM" | "AMBOS";
-        /** Solo la de base de datos: sin tipo definido, la tarea nace marcada "por validar". */
-        porValidar?: boolean;
-        /** El otro texto del mismo renglón, para no sembrar los dos. */
-        gemela?: string;
-      }[] = [
-        { title: "Entregar documentación de procesos involucrados", party: "CLIENTE" },
-        // Regla 4 — rama de base de datos según el tipo de implementación.
-        // Sin tipo definido se asume el camino de siempre (desde cero) PERO se marca por validar:
-        // el CSE ve el pendiente en vez de recibir una afirmación que nadie hizo.
-        {
-          ...(isReimpl ? TAREA_BD_EXISTENTE : TAREA_BD_DESDE_CERO),
-          porValidar: tipo === null,
-          gemela: (isReimpl ? TAREA_BD_DESDE_CERO : TAREA_BD_EXISTENTE).title,
-        },
-        { title: "Entregar listado de usuarios a ingresar al CRM", party: "CLIENTE" },
-        // Regla 2 — Smarteam asigna la ruta de HubSpot Academy al cliente.
-        { title: "Asignar la lista de reproducción de HubSpot Academy al cliente", party: "SMARTEAM" },
-        // Regla 3 — el cliente nos da acceso a su portal de HubSpot.
-        { title: "Proporcionar acceso al portal de HubSpot a Smarteam", party: "CLIENTE" },
-      ];
+      /* ⛔ Las cinco tareas fijas viven en `lib/timeline/semana-cero-tareas.ts`, PURAS y con sus
+         tests. Estaban acá adentro, en una ruta de 3.500 líneas y sin cobertura, a pesar de que
+         una de ellas ramifica por el tipo de implementación y le cambia el texto y el responsable
+         a una fila que el cliente lee.
+         Salieron porque la primera generación del detalle tiene que poder pasar por la CURACIÓN
+         como todo el resto: si el cálculo se queda pegado al camino que escribe, mandarla por
+         revisión haría desaparecer estas cinco. */
       const existing = await tx.timelineTask.findMany({
         where: { phaseId: kickoff.id },
         select: { title: true, weekIndex: true },
       });
-      const existingNorm = new Set(existing.map((t) => normName(t.title)));
       const week0Count = existing.filter((t) => t.weekIndex === 0).length;
-      const seeds = SEED_TASKS.filter(
-        (t) => !existingNorm.has(normName(t.title)) && !(t.gemela && existingNorm.has(normName(t.gemela))),
-      ).map((t, i) => ({
-        phaseId: kickoff.id,
-        title: t.title,
-        weekIndex: 0,
-        order: week0Count + i,
-        notes: null,
-        needsValidation: t.porValidar === true,
-        party: t.party,
-        type: "TASK" as const, // las tareas fijas son entregables/accesos, no reuniones
-        source: "AGENT" as const,
-        status: "PENDING" as const,
-      }));
-      if (seeds.length > 0) {
-        await tx.timelineTask.createMany({ data: seeds });
-        tasksCreated += seeds.length;
+      const fijas = tareasFijasDeSemanaCero(
+        tagsDelProyecto,
+        existing.map((t) => t.title),
+        week0Count,
+      );
+      if (fijas.length > 0) {
+        await tx.timelineTask.createMany({
+          data: fijas.map((t) => ({ ...t, phaseId: kickoff.id, source: "AGENT" as const, status: "PENDING" as const })),
+        });
+        tasksCreated += fijas.length;
         console.log(
-          `[analyze] ✓ C: ${seeds.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, tipo: ${tipo ?? "SIN DEFINIR"})`,
+          `[analyze] ✓ C: ${fijas.length} tareas fijas sembradas en "${kickoff.name}" (project ${bodyProjectId}, tipo: ${tipo ?? "SIN DEFINIR"})`,
         );
       }
     }
