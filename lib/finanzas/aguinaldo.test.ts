@@ -244,3 +244,94 @@ describe("calcularAguinaldo · quién NO aparece", () => {
     expect(calcularAguinaldo(anioCompleto(600_000), 2026, "2026-08-16").faltantes).toEqual([]);
   });
 });
+
+describe("calcularAguinaldo · el total estimado a diciembre", () => {
+  const q6 = (p: Partial<QuincenaPagada> = {}): QuincenaPagada[] =>
+    // Tres meses completos (dic, ene, feb) = 6 quincenas de ₡500.000.
+    ["2025-12", "2026-01", "2026-02"].flatMap((periodo) => [
+      q({ ...p, periodo, fechaProgramada: `${periodo}-15`, monto: 500_000 }),
+      q({ ...p, periodo, fechaProgramada: `${periodo}-28`, monto: 500_000 }),
+    ]);
+
+  const ACTIVO = [{ teamMemberId: "tm-1", nombre: "Marco Salas", moneda: "CRC" }];
+
+  it("P1 · proyecta las quincenas que faltan al salario de hoy", () => {
+    // Al 1 de marzo faltan 18 de las 24 quincenas del período.
+    const r = calcularAguinaldo(q6(), 2026, "2026-03-01", ACTIVO);
+    const p = r.personas[0]!;
+    expect(r.quincenasPorVenir).toBe(18);
+    expect(p.sumaSalario).toBe(3_000_000);
+    expect(p.aguinaldoSalario).toBe(250_000); // 3.000.000 ÷ 12
+    // 3.000.000 + 18 × 500.000 = 12.000.000 ⇒ ÷ 12 = 1.000.000
+    expect(p.aguinaldoProyectado).toBe(1_000_000);
+    expect(p.quincenasProyectadas).toBe(18);
+  });
+
+  it("P2 · el AUMENTO se refleja solo: proyecta con la ÚLTIMA quincena, no el promedio", () => {
+    // Es el pedido textual de Elías: «a Elías se le hizo un aumento en julio, eso
+    // debería hacer que el aguinaldo se le suba un poco». Con el promedio, un
+    // aumento reciente quedaría diluido por todos los meses viejos.
+    const conAumento = [
+      ...q6(),
+      q({ periodo: "2026-03", fechaProgramada: "2026-03-15", monto: 750_000 }),
+    ];
+    const p = calcularAguinaldo(conAumento, 2026, "2026-03-20", ACTIVO).personas[0]!;
+    // Faltan 17; se proyectan a 750.000 (lo que gana HOY), no a los 500.000 viejos.
+    expect(p.montoQuincenaActual).toBe(750_000);
+    expect(p.aguinaldoProyectado).toBe(Math.round(((3_750_000 + 17 * 750_000) / 12) * 100) / 100);
+  });
+
+  it("P3 · quien YA NO está en planilla no se proyecta: su total es lo acumulado", () => {
+    // Sin esto, las 4 personas que salieron en julio se proyectarían hasta
+    // noviembre e inflarían el total justo donde más se nota.
+    const p = calcularAguinaldo(q6(), 2026, "2026-03-01", []).personas[0]!;
+    expect(p.sigueEnPlanilla).toBe(false);
+    expect(p.quincenasProyectadas).toBe(0);
+    expect(p.aguinaldoProyectado).toBe(p.aguinaldoSalario);
+  });
+
+  it("P4 · quien ENTRÓ a mitad de año proyecta menos, sin ninguna regla aparte", () => {
+    // La fórmula CR ya maneja el año parcial: quien tiene menos quincenas
+    // registradas llega a diciembre con menos, y eso es correcto.
+    const desdeMarzo = [
+      q({ periodo: "2026-03", fechaProgramada: "2026-03-15", monto: 500_000 }),
+      q({ periodo: "2026-03", fechaProgramada: "2026-03-31", monto: 500_000 }),
+    ];
+    const nuevo = calcularAguinaldo(desdeMarzo, 2026, "2026-04-01", ACTIVO).personas[0]!;
+    const viejo = calcularAguinaldo(
+      [...q6(), ...desdeMarzo],
+      2026,
+      "2026-04-01",
+      ACTIVO,
+    ).personas[0]!;
+    expect(nuevo.aguinaldoProyectado).toBeLessThan(viejo.aguinaldoProyectado);
+  });
+
+  it("P5 · con el período CERRADO no hay nada que proyectar", () => {
+    const r = calcularAguinaldo(q6(), 2026, "2026-12-01", ACTIVO);
+    expect(r.quincenasPorVenir).toBe(0);
+    expect(r.personas[0]!.aguinaldoProyectado).toBe(r.personas[0]!.aguinaldoSalario);
+  });
+
+  it("P6 · una quincena PASADA sin registrar no se cuenta como plata futura", () => {
+    // Si se contaran por lo registrado en vez de por fecha, un hueco del libro
+    // sumaría dos veces: una en la proyección y otra al registrarlo.
+    const r = calcularAguinaldo(q6(), 2026, "2026-03-01", ACTIVO);
+    // 24 posibles − 6 ya transcurridas (dic, ene, feb) = 18, aunque hubiera
+    // huecos sin cargar en ese tramo.
+    expect(r.quincenasPorVenir).toBe(18);
+  });
+
+  it("P7 · el total proyectado suma por moneda separada", () => {
+    const r = calcularAguinaldo(
+      [
+        ...q6(),
+        q({ sujetoTeamMemberId: "tm-2", sujetoNombre: "Ana", moneda: "USD", monto: 1000, periodo: "2026-01", fechaProgramada: "2026-01-15" }),
+      ],
+      2026,
+      "2026-03-01",
+      [...ACTIVO, { teamMemberId: "tm-2", nombre: "Ana", moneda: "USD" }],
+    );
+    expect(Object.keys(r.totalesProyectado).sort()).toEqual(["CRC", "USD"]);
+  });
+});

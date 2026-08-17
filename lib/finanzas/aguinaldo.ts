@@ -27,7 +27,13 @@
  *     julio simplemente no tiene quincenas de diciembre a junio y su ÷12 sale
  *     proporcional.
  */
-import { coberturaDe, periodosDeAguinaldo, primeraQuincenaDe, type Cobertura } from "@/lib/cobranza/planilla";
+import {
+  coberturaDe,
+  periodosDeAguinaldo,
+  primeraQuincenaDe,
+  quincenasDelPeriodo,
+  type Cobertura,
+} from "@/lib/cobranza/planilla";
 
 /** Los MESES del período de aguinaldo. La división es siempre entre esto. */
 export const MESES_DEL_AGUINALDO = 12;
@@ -61,6 +67,25 @@ export interface AguinaldoPersona {
   sumaConComisiones: number;
   /** sumaSalario ÷ 12. Lo que calcula la hoja de Alex. */
   aguinaldoSalario: number;
+  /**
+   * Lo que va a ser el aguinaldo cuando el período cierre, SI todo sigue igual:
+   * lo ya pagado más las quincenas que faltan al monto de la última.
+   *
+   * ⚠ Es una PROYECCIÓN, no un dato observado — la única de este archivo, y por
+   * eso va rotulada como tal en pantalla. Se apoya en algo que sí se sabe (lo
+   * que se le está pagando hoy) y nunca en una tasa.
+   *
+   * Quien ya no está en planilla NO se proyecta: su total es lo acumulado, que
+   * es la verdad. Proyectar a las 4 personas que salieron en julio hasta
+   * noviembre inflaría el número justo donde más se nota.
+   */
+  aguinaldoProyectado: number;
+  /** Cuántas quincenas se le sumaron a la proyección. 0 = ya no se proyecta. */
+  quincenasProyectadas: number;
+  /** El monto por quincena con el que se proyectó (el de la última pagada). */
+  montoQuincenaActual: number;
+  /** false = ya no está en planilla, así que su aguinaldo no va a crecer más. */
+  sigueEnPlanilla: boolean;
   /** sumaConComisiones ÷ 12. No se elige por Nexus: se muestran los dos. */
   aguinaldoConComisiones: number;
   /** La quincena MÁS VIEJA de esta persona en el libro (su ingreso observado). */
@@ -97,6 +122,10 @@ export interface AguinaldoResultado {
   personas: AguinaldoPersona[];
   /** Totales por moneda SEPARADA. Nunca un total único. */
   totales: Record<string, number>;
+  /** Lo mismo pero de la PROYECCIÓN: lo que va a haber que pagar en diciembre. */
+  totalesProyectado: Record<string, number>;
+  /** Cuántas quincenas del período faltan por ocurrir. 0 = la ventana cerró. */
+  quincenasPorVenir: number;
   /**
    * ⚠ La ventana TODAVÍA NO CERRÓ: lo que se muestra es lo devengado HASTA HOY,
    * no lo que se va a pagar en diciembre. Sin este dato la pantalla afirmaba un
@@ -144,12 +173,41 @@ export function calcularAguinaldo(
     else porClave.set(clave, [q]);
   }
 
+  // Cuántas quincenas del período TODAVÍA NO OCURRIERON. Es global, no por
+  // persona: de hoy en adelante, a quien siga en planilla le tocan todas.
+  // Se cuenta por fecha programada y no por lo registrado, porque una quincena
+  // que ya pasó y nadie cargó es un hueco del libro, no plata futura — meterla
+  // en la proyección la contaría dos veces cuando alguien la registre.
+  const todasLasQuincenas = periodos.flatMap((p) => quincenasDelPeriodo(p));
+  const quincenasPorVenir = todasLasQuincenas.filter((q) => q.fechaProgramada > hoyISO).length;
+
+  // Quién sigue en planilla. La proyección solo se aplica a ellos: proyectar
+  // hasta noviembre a las personas que ya salieron inflaría el total justo donde
+  // más se nota (hay 4 bajas en julio).
+  const activos = new Set(salariosActivos.map((s) => `${s.teamMemberId ?? s.nombre}::${s.moneda}`));
+
   const personas: AguinaldoPersona[] = [];
   for (const [clave, lista] of porClave) {
     const sumaSalario = round2(lista.reduce((a, q) => a + q.monto, 0));
     const sumaComisiones = round2(lista.reduce((a, q) => a + q.comisiones, 0));
     const sumaConComisiones = round2(sumaSalario + sumaComisiones);
     const primera = lista[0]!;
+
+    // El monto de la ÚLTIMA quincena pagada = "la configuración de hoy". Es lo
+    // que hace que un aumento a mitad de año se refleje solo en la proyección,
+    // sin ninguna tasa ni ningún campo que alguien tenga que mantener.
+    const ultima = [...lista].sort((a, b) =>
+      a.fechaProgramada.localeCompare(b.fechaProgramada),
+    )[lista.length - 1]!;
+    const montoQuincenaActual = ultima.monto;
+
+    // ⚠ Sin lista de activos NADIE se proyecta, en vez de asumir que todos
+    // siguen. Es la degradación honesta del módulo: si no se sabe quién está en
+    // planilla, la única verdad es lo acumulado.
+    const sigueEnPlanilla = activos.has(clave);
+    const quincenasProyectadas = sigueEnPlanilla ? quincenasPorVenir : 0;
+    const proyectadoBase = round2(sumaSalario + quincenasProyectadas * montoQuincenaActual);
+
     personas.push({
       clave,
       teamMemberId: primera.sujetoTeamMemberId,
@@ -159,6 +217,10 @@ export function calcularAguinaldo(
       sumaSalario,
       sumaConComisiones,
       aguinaldoSalario: round2(sumaSalario / MESES_DEL_AGUINALDO),
+      aguinaldoProyectado: round2(proyectadoBase / MESES_DEL_AGUINALDO),
+      quincenasProyectadas,
+      montoQuincenaActual,
+      sigueEnPlanilla,
       aguinaldoConComisiones: round2(sumaConComisiones / MESES_DEL_AGUINALDO),
       desde: primeraQuincenaDe(lista.map((q) => q.fechaProgramada)),
       cobertura: coberturaDe(lista.length, periodos),
@@ -168,8 +230,12 @@ export function calcularAguinaldo(
   personas.sort((a, b) => a.nombre.localeCompare(b.nombre) || a.moneda.localeCompare(b.moneda));
 
   const totales: Record<string, number> = {};
+  const totalesProyectado: Record<string, number> = {};
   for (const p of personas) {
     totales[p.moneda] = round2((totales[p.moneda] ?? 0) + p.aguinaldoSalario);
+    totalesProyectado[p.moneda] = round2(
+      (totalesProyectado[p.moneda] ?? 0) + p.aguinaldoProyectado,
+    );
   }
 
   // La ventana sigue abierta mientras el mes de hoy no pase el último de la
@@ -192,5 +258,15 @@ export function calcularAguinaldo(
   }
   faltantes.sort((a, b) => a.nombre.localeCompare(b.nombre) || a.moneda.localeCompare(b.moneda));
 
-  return { anio, periodos, personas, totales, periodoAbierto, cierraEn, faltantes };
+  return {
+    anio,
+    periodos,
+    personas,
+    totales,
+    totalesProyectado,
+    quincenasPorVenir,
+    periodoAbierto,
+    cierraEn,
+    faltantes,
+  };
 }

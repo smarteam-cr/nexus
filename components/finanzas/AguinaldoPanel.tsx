@@ -37,7 +37,17 @@ export default function AguinaldoPanel({
   initial: AguinaldoResultado;
   anioActual: number;
 }) {
-  const { anio, periodos, personas, totales, periodoAbierto, cierraEn, faltantes } = initial;
+  const {
+    anio,
+    periodos,
+    personas,
+    totales,
+    totalesProyectado,
+    quincenasPorVenir,
+    periodoAbierto,
+    cierraEn,
+    faltantes,
+  } = initial;
   const hayComisiones = personas.some((p) => p.sumaConComisiones !== p.sumaSalario);
 
   // El rango en palabras: «diciembre 2025 → noviembre 2026». El rótulo de la
@@ -81,9 +91,11 @@ export default function AguinaldoPanel({
       {periodoAbierto && (
         <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2">
           <p className="text-xs text-warn-ink">
-            <span className="font-medium">Estos montos todavía no son el aguinaldo final.</span> El
-            período cierra en {etiquetaMes(cierraEn)}: lo que ves es lo acumulado hasta hoy y va a
-            seguir subiendo con cada quincena que se registre.
+            <span className="font-medium">El período todavía no cierra.</span> «Acumulado» es lo que
+            se devengó hasta hoy; «total estimado» es a cuánto llega en {etiquetaMes(cierraEn)} si
+            cada quien sigue con el salario que tiene hoy — faltan {quincenasPorVenir} quincena
+            {quincenasPorVenir === 1 ? "" : "s"} por pagar. Es una estimación, no una promesa: si hay
+            un aumento o una salida, el número se mueve solo.
           </p>
         </div>
       )}
@@ -94,7 +106,7 @@ export default function AguinaldoPanel({
           <span className="text-fg-secondary">{hasta}</span> · solo las quincenas ya pagadas
         </p>
         <p className="text-[11px] text-fg-muted">
-          Total a provisionar:{" "}
+          Provisionado hasta hoy:{" "}
           {Object.keys(totales).length === 0 ? (
             <span className="text-fg-secondary">—</span>
           ) : (
@@ -106,6 +118,18 @@ export default function AguinaldoPanel({
           )}{" "}
           (línea de solo salario; CRC y USD nunca se suman entre sí)
         </p>
+        {/* El número que sirve para planear diciembre: lo de hoy no alcanza para
+            saber cuánta plata hay que tener. */}
+        {periodoAbierto && (
+          <p className="text-[11px] text-fg-muted">
+            Estimado a pagar en {etiquetaMes(cierraEn)}:{" "}
+            <span className="text-fg tabular-nums font-medium">
+              {Object.entries(totalesProyectado)
+                .map(([m, v]) => fmtMonto(v, m as "CRC" | "USD"))
+                .join(" · ") || "—"}
+            </span>
+          </p>
+        )}
       </div>
 
       {personas.length === 0 ? (
@@ -125,6 +149,9 @@ export default function AguinaldoPanel({
                 <th className={`${TH} text-right`}>
                   {periodoAbierto ? "Aguinaldo acumulado" : "Aguinaldo del año"}
                 </th>
+                {periodoAbierto && (
+                  <th className={`${TH} text-right`}>Total estimado en diciembre</th>
+                )}
                 {hayComisiones && <th className={`${TH} text-right`}>Con comisiones</th>}
               </tr>
             </thead>
@@ -161,6 +188,26 @@ export default function AguinaldoPanel({
                         = {fmtMonto(p.sumaSalario, moneda)} ÷ 12
                       </div>
                     </td>
+                    {periodoAbierto && (
+                      <td className={`${TD} text-right whitespace-nowrap`}>
+                        <div className="tabular-nums font-medium">
+                          {fmtMonto(p.aguinaldoProyectado, moneda)}
+                        </div>
+                        {/* De dónde sale el número: sin esto es un pronóstico
+                            que hay que creer. Con esto se puede discutir. */}
+                        <div className="text-[10px] text-fg-muted">
+                          {p.sigueEnPlanilla ? (
+                            <>
+                              + {p.quincenasProyectadas} quincena
+                              {p.quincenasProyectadas === 1 ? "" : "s"} a{" "}
+                              {fmtMonto(p.montoQuincenaActual, moneda)}
+                            </>
+                          ) : (
+                            "ya no está en planilla"
+                          )}
+                        </div>
+                      </td>
+                    )}
                     {hayComisiones && (
                       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
                         {p.aguinaldoConComisiones !== p.aguinaldoSalario ? (
