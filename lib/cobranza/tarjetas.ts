@@ -20,7 +20,15 @@
  * ⚠ Y una tercera, por la prohibición de FX: un costo en OTRA moneda que la
  * tarjeta NO se suma — se cuenta aparte y se declara. Convertirlo exigiría un
  * tipo de cambio que este sistema no tiene ni va a tener.
+ *
+ * ⚠ CERO `new Date()` acá adentro: la fecha de hoy ENTRA POR PARÁMETRO
+ * (`hoyISO`, "YYYY-MM-DD"). Es la misma regla que ya sostiene `comisiones.ts`:
+ * un `new Date("2026-07-31")` en UTC-6 se lee como el 30 y correría el ciclo
+ * entero un día. La aritmética de calendario se hace sobre strings ISO.
  */
+
+import { diffDays } from "./engine";
+import { finDeMesISO, periodoSiguiente } from "./comisiones";
 
 /** Moneda tal como la modela Cobranza (sin importar el enum de Prisma: esto es puro). */
 export type MonedaTarjeta = "CRC" | "USD";
@@ -126,4 +134,88 @@ export function calcularTarjeta(input: TarjetaCalculoInput): TarjetaCalculo {
     noCabeElProximoMes: cargadoMensual > 0 && disponible < cargadoMensual,
     faltaDato: null,
   };
+}
+
+// ── El ciclo de la tarjeta: cuándo corta y cuándo vence el pago ─────────────────
+
+export interface CicloTarjeta {
+  /** Próximo día de corte, ISO. Si hoy ES el corte, es hoy (`diasAlCorte: 0`). */
+  proximoCorte: string;
+  /** Cuándo vence el pago de ESE corte, ISO. Es una ESTIMACIÓN — ver `estimado`. */
+  fechaLimitePago: string;
+  /** Días de `hoyISO` al corte. 0 = hoy. */
+  diasAlCorte: number;
+  /** Días de `hoyISO` al vencimiento del pago. */
+  diasAlPago: number;
+  /**
+   * Siempre `true`, y vive en el TIPO para que la pantalla no pueda olvidarse de
+   * rotularlo: la fecha de pago se deduce de DOS ENTEROS (día de corte y día de
+   * pago) y hay bancos que no se pueden expresar así — uno que corta el 5 y cobra
+   * el 25 del mes SIGUIENTE cae fuera de la heurística. El dato duro es el día
+   * que el usuario cargó; la fecha es una estimación y se muestra como tal.
+   */
+  estimado: true;
+}
+
+/**
+ * El ciclo vivo de una tarjeta a partir de sus dos días configurados.
+ *
+ * `null` cuando falta cualquiera de los dos — la pantalla lo DICE (mismo criterio
+ * que `faltaDato` en `calcularTarjeta`): asumir "el 30" pondría en pantalla una
+ * fecha de vencimiento inventada, que es exactamente el dato por el que alguien
+ * podría pagar tarde.
+ *
+ * Reglas:
+ *  - El día se CLAMPEA al largo real del mes (un corte el 31 cae el 28 en febrero,
+ *    el 29 en bisiesto) reusando `finDeMesISO`, que ya hace esa cuenta.
+ *  - `diaPago > diaCorte` ⇒ el pago cae en el MISMO mes del corte;
+ *    `diaPago <= diaCorte` ⇒ cae en el mes SIGUIENTE. Se compara con los días
+ *    CONFIGURADOS (no los clampeados): el 31 y el 15 siguen siendo el 31 y el 15
+ *    aunque en febrero los dos aterricen cerca del 28.
+ */
+export function cicloDeTarjeta(
+  hoyISO: string,
+  diaCorte: number | null,
+  diaPago: number | null,
+): CicloTarjeta | null {
+  if (!esDiaDelMes(diaCorte) || !esDiaDelMes(diaPago)) return null;
+
+  const hoy = hoyISO.slice(0, 10);
+  const periodoHoy = hoy.slice(0, 7);
+
+  // El corte de ESTE mes si todavía no pasó (hoy incluido); si ya pasó, el del
+  // mes que viene. Comparación de strings ISO: mismo largo, orden lexicográfico
+  // === orden cronológico.
+  const corteDeEsteMes = diaClampeado(periodoHoy, diaCorte);
+  const proximoCorte =
+    corteDeEsteMes >= hoy ? corteDeEsteMes : diaClampeado(periodoSiguiente(periodoHoy), diaCorte);
+
+  const periodoDelCorte = proximoCorte.slice(0, 7);
+  const periodoDelPago =
+    diaPago > diaCorte ? periodoDelCorte : periodoSiguiente(periodoDelCorte);
+  const fechaLimitePago = diaClampeado(periodoDelPago, diaPago);
+
+  return {
+    proximoCorte,
+    fechaLimitePago,
+    diasAlCorte: diffDays(hoy, proximoCorte),
+    diasAlPago: diffDays(hoy, fechaLimitePago),
+    estimado: true,
+  };
+}
+
+/** El día `dia` de `periodo` ("YYYY-MM"), CLAMPEADO al último día real del mes. */
+function diaClampeado(periodo: string, dia: number): string {
+  const largoDelMes = Number(finDeMesISO(periodo).slice(8, 10));
+  const d = Math.min(dia, largoDelMes);
+  return `${periodo}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * Un día del mes utilizable. Lo que NO lo es (null, 0, 32, un decimal) se trata
+ * como dato FALTANTE en vez de clamparse: clampear un 32 diría "fin de mes" sin
+ * que nadie lo haya escrito. El Zod de la frontera ya acota 1-31.
+ */
+function esDiaDelMes(n: number | null): n is number {
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= 31;
 }

@@ -34,7 +34,9 @@ import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import {
   calcularTarjeta,
   cargadoMensualDe,
+  cicloDeTarjeta,
   mensualizado,
+  type CicloTarjeta,
   type MonedaTarjeta,
 } from "./tarjetas";
 import { coberturaDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
@@ -1368,13 +1370,21 @@ export interface TarjetaDTO {
   usoPorcentaje: number | null;
   noCabeElProximoMes: boolean;
   faltaDato: "limite" | "saldo" | "ambos" | null;
+  /**
+   * Cuándo corta, cuándo vence el pago y cuántos días faltan. null = falta
+   * `diaCorte` o `diaPago`, y la pantalla lo DICE — jamás se asume un día.
+   * La fecha de pago va rotulada como ESTIMACIÓN (ver `CicloTarjeta.estimado`).
+   */
+  ciclo: CicloTarjeta | null;
 
   costos: TarjetaCostoDTO[];
   createdAt: string;
   updatedAt: string;
 }
 
-export async function loadTarjetas(): Promise<TarjetaDTO[]> {
+/** `hoyISO` entra por parámetro (fecha de Costa Rica, la resuelve el llamador):
+ *  el motor de tarjetas no puede leer el reloj — ver lib/cobranza/tarjetas.ts. */
+export async function loadTarjetas(hoyISO: string): Promise<TarjetaDTO[]> {
   const filas = await prisma.tarjetaCredito.findMany({
     include: {
       titular: { select: { name: true } },
@@ -1439,6 +1449,7 @@ export async function loadTarjetas(): Promise<TarjetaDTO[]> {
       usoPorcentaje: calc.usoPorcentaje,
       noCabeElProximoMes: calc.noCabeElProximoMes,
       faltaDato: calc.faltaDato,
+      ciclo: cicloDeTarjeta(hoyISO, t.diaCorte, t.diaPago),
       costos,
       createdAt: iso(t.createdAt)!,
       updatedAt: iso(t.updatedAt)!,

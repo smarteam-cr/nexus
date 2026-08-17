@@ -48,6 +48,20 @@ export function fmtFecha(iso: string | null | undefined): string {
   return `${d} ${MESES[m - 1]} ${y}`;
 }
 
+/**
+ * "2026-09-15" → "15 sep", sin año ("—" si null).
+ *
+ * Para fechas que están a semanas de distancia y se leen en una línea con otros
+ * dos datos (el ciclo de una tarjeta: corte, días que faltan y vencimiento): ahí
+ * el año es siempre el mismo y solo alarga el renglón.
+ */
+export function fmtDiaMes(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const [, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!m || !d) return iso;
+  return `${d} ${MESES[m - 1]}`;
+}
+
 /** Monto con símbolo por moneda (USD → $, resto → ₡) en formato es-CR. */
 export function fmtMonto(monto: number | null | undefined, moneda: string | null | undefined): string {
   if (monto == null) return "—";

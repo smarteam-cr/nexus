@@ -16,11 +16,15 @@ import { guardCostosAccess } from "@/lib/auth/api-guards";
 import { loadTarjetas } from "@/lib/cobranza";
 import { createTarjeta, CobranzaError } from "@/lib/cobranza/mutations";
 import { tarjetaCreateSchema } from "@/lib/cobranza/schema";
+import { crDateParts } from "@/lib/jobs/time";
 
 export async function GET() {
   const guard = await guardCostosAccess();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json({ tarjetas: await loadTarjetas() });
+  // La fecha de Costa Rica se resuelve acá (misma que la page): el motor del
+  // ciclo no lee el reloj — ver lib/cobranza/tarjetas.ts.
+  const hoyISO = crDateParts(new Date()).dateKey;
+  return NextResponse.json({ tarjetas: await loadTarjetas(hoyISO) });
 }
 
 export async function POST(req: NextRequest) {

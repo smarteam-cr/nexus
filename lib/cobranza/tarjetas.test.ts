@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   calcularTarjeta,
   cargadoMensualDe,
+  cicloDeTarjeta,
   mensualizado,
   type CostoDeTarjeta,
 } from "./tarjetas";
@@ -130,5 +131,94 @@ describe("calcularTarjeta", () => {
     const r = calcularTarjeta({ limite: 0, saldoUsado: 0, cargadoMensual: 0 });
     expect(r.disponible).toBe(0);
     expect(r.usoPorcentaje).toBeNull();
+  });
+});
+
+/**
+ * El ciclo es la única parte de esta pantalla que produce FECHAS, y una fecha
+ * inventada es la que hace pagar tarde. Cada caso protege una forma concreta de
+ * inventarla: rellenar un día que nadie cargó, poner el 31 en febrero, o correr
+ * el pago un mes para el lado equivocado.
+ */
+describe("cicloDeTarjeta", () => {
+  it("sin los dos días NO inventa un ciclo: devuelve null", () => {
+    // Asumir "el 30" pondría un vencimiento que nadie escribió. La pantalla dice
+    // qué falta, igual que `faltaDato` en calcularTarjeta.
+    expect(cicloDeTarjeta("2026-09-01", null, null)).toBeNull();
+    expect(cicloDeTarjeta("2026-09-01", 15, null)).toBeNull();
+    expect(cicloDeTarjeta("2026-09-01", null, 30)).toBeNull();
+  });
+
+  it("un día imposible (0, 32, decimal) cuenta como FALTANTE, no se clampea", () => {
+    // Clampear un 32 diría "fin de mes" sin que nadie lo haya escrito.
+    expect(cicloDeTarjeta("2026-09-01", 32, 15)).toBeNull();
+    expect(cicloDeTarjeta("2026-09-01", 15, 0)).toBeNull();
+    expect(cicloDeTarjeta("2026-09-01", 15.5, 20)).toBeNull();
+  });
+
+  it("con diaPago > diaCorte el pago cae en el MISMO mes del corte", () => {
+    const c = cicloDeTarjeta("2026-09-01", 15, 30)!;
+    expect(c.proximoCorte).toBe("2026-09-15");
+    expect(c.fechaLimitePago).toBe("2026-09-30");
+    expect(c.diasAlCorte).toBe(14);
+    expect(c.diasAlPago).toBe(29);
+    expect(c.estimado).toBe(true);
+  });
+
+  it("con diaPago < diaCorte el pago cae en el mes SIGUIENTE", () => {
+    const c = cicloDeTarjeta("2026-09-01", 20, 5)!;
+    expect(c.proximoCorte).toBe("2026-09-20");
+    expect(c.fechaLimitePago).toBe("2026-10-05");
+    expect(c.diasAlPago).toBe(34);
+  });
+
+  it("con diaPago == diaCorte también cae en el mes SIGUIENTE (nunca el mismo día)", () => {
+    // Pagar el mismo día del corte sería un vencimiento imposible: el estado de
+    // cuenta se emite ESE día.
+    const c = cicloDeTarjeta("2026-09-01", 15, 15)!;
+    expect(c.proximoCorte).toBe("2026-09-15");
+    expect(c.fechaLimitePago).toBe("2026-10-15");
+  });
+
+  it("un corte el 31 en febrero cae el 28 (clamp al largo real del mes)", () => {
+    const c = cicloDeTarjeta("2026-02-01", 31, 15)!;
+    expect(c.proximoCorte).toBe("2026-02-28");
+    expect(c.diasAlCorte).toBe(27);
+    // 15 <= 31 ⇒ mes siguiente. La comparación usa los días CONFIGURADOS.
+    expect(c.fechaLimitePago).toBe("2026-03-15");
+  });
+
+  it("el mismo corte del 31 en un año BISIESTO cae el 29", () => {
+    const c = cicloDeTarjeta("2024-02-01", 31, 15)!;
+    expect(c.proximoCorte).toBe("2024-02-29");
+    expect(c.diasAlCorte).toBe(28);
+  });
+
+  it("el día de PAGO también se clampea al mes en que aterriza", () => {
+    // Corte 5, pago 31: el de enero ya pasó ⇒ corte 5-feb y pago 28-feb.
+    const c = cicloDeTarjeta("2026-01-20", 5, 31)!;
+    expect(c.proximoCorte).toBe("2026-02-05");
+    expect(c.fechaLimitePago).toBe("2026-02-28");
+  });
+
+  it("cruza de diciembre a enero sin saltarse el año", () => {
+    const c = cicloDeTarjeta("2026-12-20", 15, 5)!;
+    expect(c.proximoCorte).toBe("2027-01-15");
+    expect(c.fechaLimitePago).toBe("2027-02-05");
+    expect(c.diasAlCorte).toBe(26);
+    expect(c.diasAlPago).toBe(47);
+  });
+
+  it("si HOY es el día del corte, el próximo corte es hoy (0 días), no el mes que viene", () => {
+    const c = cicloDeTarjeta("2026-09-15", 15, 30)!;
+    expect(c.proximoCorte).toBe("2026-09-15");
+    expect(c.diasAlCorte).toBe(0);
+    expect(c.diasAlPago).toBe(15);
+  });
+
+  it("un día después del corte ya apunta al ciclo siguiente", () => {
+    const c = cicloDeTarjeta("2026-09-16", 15, 30)!;
+    expect(c.proximoCorte).toBe("2026-10-15");
+    expect(c.fechaLimitePago).toBe("2026-10-30");
   });
 });

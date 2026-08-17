@@ -22,7 +22,7 @@ export default async function FinanzasTarjetasPage() {
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey;
-  const [tarjetas, costos] = await Promise.all([loadTarjetas(), loadCostos()]);
+  const [tarjetas, costos] = await Promise.all([loadTarjetas(todayISO), loadCostos()]);
 
   return (
     <div className={SHELL_DEFAULT}>
