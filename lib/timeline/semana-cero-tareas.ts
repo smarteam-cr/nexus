@@ -1,4 +1,4 @@
-import { esReimplementacion, tipoDeImplementacion } from "@/lib/tags/catalog";
+import { esReimplementacion, tipoDeImplementacion, HUBSPOT_HUB_SLUGS, IMPLEMENTACION_TAG, REIMPLEMENTACION_TAG } from "@/lib/tags/catalog";
 
 /**
  * lib/timeline/semana-cero-tareas.ts — LAS TAREAS QUE SIEMPRE ARRANCAN UN PROYECTO.
@@ -14,6 +14,19 @@ import { esReimplementacion, tipoDeImplementacion } from "@/lib/tags/catalog";
  * que poder calcularse SIN escribir: si se quedan en el camino que persiste, pasar por revisión
  * las haría desaparecer. Extraerlas es el prerrequisito, y de paso les da la cobertura que nunca
  * tuvieron.
+ *
+ * ── ⛔ Y NO APLICAN SIEMPRE (decisión de negocio, 2026-08-17) ───────────────
+ * Las cinco son de una implementación de HubSpot: pedir el portal, los usuarios del CRM, la lista
+ * de HubSpot Academy. Se sembraban en TODO cronograma nuevo, así que un proyecto que no toca
+ * HubSpot arrancaba pidiéndole al cliente accesos a un producto que no compró — y eso lo lee el
+ * cliente. Medido el 2026-08-17 sobre producción: de 132 proyectos activos, **85 no tienen
+ * ninguna señal de HubSpot** en sus tags.
+ *
+ * La señal es el catálogo de tags, que es donde el negocio ya declara de qué se trata el proyecto:
+ * algún hub de HubSpot, o el punto de partida (implementación / re-implementación).
+ * ⚠ «Licencia de HubSpot» NO existe como dato del proyecto. Lo más cercano —los seats de
+ * `PartnerUsageSnapshot`— es de CUENTA, no de proyecto, y está declarado confidencial por términos
+ * de partner: usarlo acá metería ese dato en un documento que el cliente abre.
  *
  * ── ⛔ LA RAMA QUE IMPORTA: TRES ESTADOS, NO DOS ────────────────────────────
  * La tarea de base de datos tiene dos caras — «entregá la base a importar» (desde cero) y «revisá
@@ -40,6 +53,27 @@ export interface TareaFija {
   type: "TASK";
 }
 
+/**
+ * ¿Este proyecto involucra HubSpot? Es el gate de las cinco tareas fijas.
+ *
+ * Se contesta con el catálogo de tags —la declaración de negocio de qué es el proyecto— y no con
+ * el pipeline: un desarrollo puede ser una integración CON HubSpot (SAP ↔ HubSpot) y ahí pedir el
+ * acceso al portal es exactamente lo correcto. El pipeline dice quién lo ejecuta; los tags dicen
+ * qué producto toca, que es la pregunta de esta decisión.
+ *
+ * ⚠ Sin tags NO aplica. Es deliberado y es el lado seguro: sembrar de más le pide al cliente cosas
+ * que no compró (y las lee), sembrar de menos deja una Semana 0 corta que el CSE completa en un
+ * minuto. El costo de los dos errores no es simétrico.
+ */
+export function proyectoInvolucraHubSpot(tags: readonly string[]): boolean {
+  return tags.some(
+    (t) =>
+      (HUBSPOT_HUB_SLUGS as readonly string[]).includes(t) ||
+      t === IMPLEMENTACION_TAG ||
+      t === REIMPLEMENTACION_TAG,
+  );
+}
+
 /** Las dos caras del MISMO renglón del plan. */
 const TAREA_BD_DESDE_CERO = { title: "Proporcionar bases de datos a importar", party: "CLIENTE" as const };
 const TAREA_BD_EXISTENTE = { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" as const };
@@ -49,7 +83,8 @@ const normalizar = (s: string) => s.trim().toLowerCase();
 /**
  * Qué tareas fijas hay que sembrar en la Semana 0.
  *
- * @param tags              tags YA saneados del proyecto (deciden la rama de base de datos).
+ * @param tags              tags YA saneados del proyecto. Deciden DOS cosas: si las tareas
+ *                          aplican (¿toca HubSpot?) y, si aplican, la rama de base de datos.
  * @param titulosExistentes títulos que ya están en esa fase — se deduplica contra ellos, y contra
  *                          la gemela de la de base de datos.
  * @param ordenDesde        desde qué `order` numerar (normalmente, cuántas tareas hay ya en la
@@ -60,6 +95,11 @@ export function tareasFijasDeSemanaCero(
   titulosExistentes: readonly string[],
   ordenDesde = 0,
 ): TareaFija[] {
+  /* ⛔ El gate va PRIMERO y adentro de la función, no en el llamador: son dos caminos los que la
+     invocan (el preview de una fase y el de todas) y un gate por fuera se olvida en uno de los dos
+     — que es exactamente cómo estas tareas terminaron en proyectos que no tocan HubSpot. */
+  if (!proyectoInvolucraHubSpot(tags)) return [];
+
   const tipo = tipoDeImplementacion([...tags]);
   const esReimpl = esReimplementacion([...tags]);
 

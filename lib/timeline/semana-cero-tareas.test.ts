@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { tareasFijasDeSemanaCero } from "./semana-cero-tareas";
+import { tareasFijasDeSemanaCero, proyectoInvolucraHubSpot } from "./semana-cero-tareas";
 
 /**
  * lib/timeline/semana-cero-tareas.test.ts — LAS CINCO QUE SIEMPRE ARRANCAN, Y LA QUE RAMIFICA.
@@ -14,28 +14,33 @@ import { tareasFijasDeSemanaCero } from "./semana-cero-tareas";
  * Salieron de ahí porque la primera generación del detalle tiene que poder pasar por la CURACIÓN
  * como todo el resto del cronograma. Si el cálculo se quedaba pegado al camino que escribe,
  * mandarla por revisión habría hecho desaparecer estas cinco sin que nadie lo notara.
+ *
+ * ⚠ Desde 2026-08-17 NO aplican siempre: son de una implementación de HubSpot, y se sembraban en
+ * todo cronograma nuevo. Por eso casi todos los casos de acá pasan `HUB` en vez de `[]` — sin
+ * señal de HubSpot el resultado correcto es CERO tareas, y eso tiene su propio bloque abajo.
  */
 
+const HUB = ["sales_hub"]; // señal de HubSpot SIN punto de partida definido
 const DESDE_CERO = "Proporcionar bases de datos a importar";
 const EXISTENTE = "Revisar y limpiar la base de datos existente";
 
 describe("las cinco de siempre", () => {
   it("sin nada cargado, se siembran las cinco", () => {
-    const r = tareasFijasDeSemanaCero([], []);
+    const r = tareasFijasDeSemanaCero(HUB, []);
     expect(r).toHaveLength(5);
     expect(r.every((t) => t.weekIndex === 0)).toBe(true);
     expect(r.every((t) => t.type === "TASK")).toBe(true);
   });
 
   it("el orden arranca donde se le diga, para no pisar lo que propuso el agente", () => {
-    const r = tareasFijasDeSemanaCero([], [], 7);
+    const r = tareasFijasDeSemanaCero(HUB, [], 7);
     expect(r.map((t) => t.order)).toEqual([7, 8, 9, 10, 11]);
   });
 
   it("y los responsables no son todos del cliente", () => {
     /* La de HubSpot Academy la hace Smarteam. Si todas salieran party=CLIENTE, la Semana 0 se
        leería como una lista de deberes del cliente, que es exactamente lo que no es. */
-    const r = tareasFijasDeSemanaCero([], []);
+    const r = tareasFijasDeSemanaCero(HUB, []);
     expect(r.some((t) => t.party === "SMARTEAM")).toBe(true);
     expect(r.some((t) => t.party === "CLIENTE")).toBe(true);
   });
@@ -63,7 +68,7 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
        sin tipo, el enum en null caía en el mismo `false` que «desde cero» y la tarea se sembraba
        afirmando algo que nadie había respondido. Ahora se siembra igual —para no dejar la Semana 0
        coja— pero el CSE ve un pendiente en vez de un hecho. */
-    const r = tareasFijasDeSemanaCero([], []);
+    const r = tareasFijasDeSemanaCero(HUB, []);
     const bd = r.find((t) => t.title === DESDE_CERO);
     expect(bd, "sin tipo definido dejó de sembrarse la tarea de base de datos").toBeDefined();
     expect(bd?.needsValidation, "se sembró como hecho, sin marcar que nadie lo respondió").toBe(true);
@@ -75,7 +80,7 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
   });
 
   it("las demás nunca nacen por validar", () => {
-    const r = tareasFijasDeSemanaCero([], []);
+    const r = tareasFijasDeSemanaCero(HUB, []);
     expect(r.filter((t) => t.needsValidation)).toHaveLength(1);
   });
 });
@@ -96,14 +101,14 @@ describe("⛔ el dedup mira la GEMELA, no solo el título propio", () => {
   });
 
   it("no repite lo que ya está, ignorando mayúsculas y espacios", () => {
-    const r = tareasFijasDeSemanaCero([], ["  ENTREGAR DOCUMENTACIÓN DE PROCESOS INVOLUCRADOS  "]);
+    const r = tareasFijasDeSemanaCero(HUB, ["  ENTREGAR DOCUMENTACIÓN DE PROCESOS INVOLUCRADOS  "]);
     expect(r.map((t) => t.title)).not.toContain("Entregar documentación de procesos involucrados");
     expect(r).toHaveLength(4);
   });
 
   it("con las cinco ya cargadas no siembra nada", () => {
-    const todas = tareasFijasDeSemanaCero([], []).map((t) => t.title);
-    expect(tareasFijasDeSemanaCero([], todas)).toEqual([]);
+    const todas = tareasFijasDeSemanaCero(HUB, []).map((t) => t.title);
+    expect(tareasFijasDeSemanaCero(HUB, todas)).toEqual([]);
   });
 });
 
@@ -125,5 +130,48 @@ describe("⭐ y la ruta USA el helper — si no, el refactor es decorativo", () 
       "Proporcionar bases de datos a importar",
     );
     expect(src, "volvió la rama de tipo adentro de la ruta").not.toContain("esReimplementacion(tagsDelProyecto)");
+  });
+});
+
+describe("⛔ y NO aplican a cualquier proyecto (decisión de negocio, 2026-08-17)", () => {
+  /* Las cinco son de una implementación de HubSpot: el portal, los usuarios del CRM, la lista de
+     HubSpot Academy. Se sembraban en TODO cronograma nuevo, así que un proyecto que no toca
+     HubSpot arrancaba pidiéndole al cliente accesos a un producto que no compró — y la Semana 0 la
+     lee el cliente. Medido contra producción el 2026-08-17: de 132 proyectos activos, **85 no
+     tienen ninguna señal de HubSpot** en sus tags. */
+
+  it("⭐ sin ninguna señal de HubSpot en los tags, no se siembra nada", () => {
+    expect(tareasFijasDeSemanaCero([], [])).toEqual([]);
+    expect(tareasFijasDeSemanaCero(["custom_dev"], [])).toEqual([]);
+    expect(tareasFijasDeSemanaCero(["sitio_web", "recurrente"], [])).toEqual([]);
+  });
+
+  it("alcanza con un hub…", () => {
+    for (const hub of ["marketing_hub", "sales_hub", "service_hub", "content_hub", "data_hub", "revenue_hub"]) {
+      expect(tareasFijasDeSemanaCero([hub], []).length, `${hub} no alcanzó como señal`).toBe(5);
+    }
+  });
+
+  it("…o con el punto de partida, aunque no haya hub", () => {
+    /* Un proyecto puede estar clasificado como implementación antes de que se sepa qué hubs entran.
+       Ahí las tareas aplican igual: el trabajo ES sobre HubSpot. */
+    expect(tareasFijasDeSemanaCero(["implementacion"], []).length).toBe(5);
+    expect(tareasFijasDeSemanaCero(["reimplementacion"], []).length).toBe(5);
+  });
+
+  it("⚠ y una integración CON HubSpot las recibe, aunque la ejecute Desarrollo", () => {
+    /* El caso real medido: SAP ↔ HubSpot, Odoo ↔ HubSpot, EnKontrol ↔ HubSpot. La decisión NO se
+       toma por pipeline: el pipeline dice QUIÉN lo ejecuta, los tags dicen QUÉ producto toca. Para
+       una integración con HubSpot, pedir el acceso al portal es exactamente lo correcto. */
+    expect(tareasFijasDeSemanaCero(["custom_dev", "data_hub", "implementacion"], []).length).toBe(5);
+  });
+
+  it("el helper del gate se puede preguntar solo", () => {
+    expect(proyectoInvolucraHubSpot(["sales_hub"])).toBe(true);
+    expect(proyectoInvolucraHubSpot(["implementacion"])).toBe(true);
+    expect(proyectoInvolucraHubSpot(["reimplementacion"])).toBe(true);
+    expect(proyectoInvolucraHubSpot([])).toBe(false);
+    expect(proyectoInvolucraHubSpot(["custom_dev", "sitio_web", "recurrente"])).toBe(false);
+    expect(proyectoInvolucraHubSpot(["insider_one"]), "Insider One es app propia, no es HubSpot").toBe(false);
   });
 });

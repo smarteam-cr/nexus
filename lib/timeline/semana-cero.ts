@@ -31,12 +31,16 @@ export const PRIMERA_FASE_ES_ARRANQUE = /semana\s*0|semana\s*cero|kick.?off|arra
  * PURA. `true` = anteponer la fase "Semana 0" (conducta histórica de Customer Success y del
  * pipeline desconocido/legacy). `false` = respetar las fases tal como las propuso el agente.
  */
+export function tieneVozDeHandoffPropia(hubspotPipelineId: string | null): boolean {
+  const key = resolvePipeline(hubspotPipelineId)?.key ?? null;
+  return !!key && AGENTES_HANDOFF_POR_TIPO.some((a) => a.pipelineKey === key);
+}
+
 export function debeAnteponerSemanaCero(
   hubspotPipelineId: string | null,
   primeraFase: string | null | undefined,
 ): boolean {
-  const key = resolvePipeline(hubspotPipelineId)?.key ?? null;
   // Pipeline con agente de handoff PROPIO → su prompt decide las fases; nunca se le antepone.
-  if (key && AGENTES_HANDOFF_POR_TIPO.some((a) => a.pipelineKey === key)) return false;
+  if (tieneVozDeHandoffPropia(hubspotPipelineId)) return false;
   return !PRIMERA_FASE_ES_ARRANQUE.test(primeraFase ?? "");
 }
