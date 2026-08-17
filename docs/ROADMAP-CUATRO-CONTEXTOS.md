@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `71a6749`. **42 commits sin push.**
+> Última actualización: **2026-08-17**, punta `d149e2a`. **44 commits sin push.**
 
 ---
 
@@ -39,7 +39,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | ✅ Hecho |
 | | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⛔ **Frenada** — necesita una decisión tuya (ver abajo). ✅ Su tramo independiente (8.1) ya está hecho |
 | | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ✅ Hecho — ⚠ la sección sale vacía hasta re-sembrar el prompt post-deploy |
-| | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
+| | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ✅ Hecho — el próximo handoff del cliente ya cita la Entrega anterior |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
 | | ⛔ La fuga del handoff | Dos caminos podían mandarle al cliente el handoff entero —que es un documento interno con riesgos y acuerdos comerciales—. Era el prerrequisito de la fase 9 y se tapó aparte, porque vale aunque esa fase no se haga. | ✅ Hecho |
 | | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Lo siguiente para Elías** |
@@ -196,10 +196,23 @@ proyectos —y que además escribe las fases del cronograma— vive en la base p
 deploy. El script lo sobreescribía sin preguntar: una corrida por reflejo borraba esa calibración
 sin dejar rastro. Ahora compara, avisa, y hay que forzarlo a propósito.
 
-### Fase 10 · Qué logramos antes
+### ✅ Fase 10 · Qué logramos antes *(hecha, `d149e2a`)*
 
-El documento de Entrega se escribe, se publica, y ningún otro documento lo vuelve a leer. Se
-enchufa al handoff del proyecto siguiente del mismo cliente. Es cañería: no hay dato nuevo.
+El documento de Entrega se escribía, se publicaba, y ningún otro documento lo volvía a leer.
+Ahora el handoff del **próximo proyecto del mismo cliente** cita la Entrega publicada más
+reciente — cañería, sin dato nuevo, con munición de cross-selling ya escrita (la sección «El
+siguiente proyecto» de la Entrega, pensada exactamente para esto).
+
+**Solo cuatro secciones entran**, nunca el documento entero: el antes/después, qué quedó
+implementado, los objetivos alcanzados, y esa sección de continuidad. Afuera a propósito: los
+números de negocio (de OTRO proyecto, sin que el CSE los vetee para éste), lo que quedó abierto
+(interno, no es historia para afuera) y el cierre (es un CTA, no contenido).
+
+**Tres candados, para que no se cuele nada indebido:**
+1. Solo la Entrega que el CSE efectivamente **publicó** al cliente — nunca un borrador.
+2. Solo lo que el CSE **confirmó** dentro de esa Entrega.
+3. Nunca el proyecto que se está generando ahora mismo (para que una Entrega no termine
+   citándose a sí misma).
 
 ---
 
