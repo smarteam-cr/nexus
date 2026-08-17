@@ -135,6 +135,22 @@ Con ese mismo usuario CSE, en `/customer-success`:
 
 ---
 
+## 3b · El handoff registra lo que NO se vendió
+
+⚠ **Esto se prueba DESPUÉS de re-sembrar el prompt** (ver la preparación). Antes del re-seed la
+sección existe pero sale vacía, y eso es lo esperado — no es un error.
+
+1. Generá (o regenerá) el handoff de un proyecto con reuniones de venta.
+   - ✅ Después de **«¿Qué vendimos?»** aparece **«Se conversó y no se vendió»**.
+   - ✅ Si hubo pedidos que quedaron afuera, los lista con quién lo dijo y cuándo. Si no hubo, lo
+     dice explícito — no se inventa contenido.
+2. ⭐ **La prueba que decide, y es de mirar:** abrí el **enlace del cliente** del kickoff de ese
+   mismo proyecto (o su PDF).
+   - ✅ Esa sección **NO está**. Es la única del handoff que, si cruza, no es un bug técnico sino
+     un problema comercial en un papel que el cliente archiva.
+3. Lo mismo en la **Entrega** publicada, si el proyecto la tiene.
+   - ✅ Tampoco está.
+
 ## 4 · El cronograma — aprobar el plan y medir si creció
 
 Es la parte con **más consecuencia**: de 132 proyectos activos, solo 14 tenían la foto del plan

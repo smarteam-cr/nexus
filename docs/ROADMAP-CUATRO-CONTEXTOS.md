@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-16**, punta `aae8e5d`. **39 commits sin push.**
+> Última actualización: **2026-08-16**, punta `71a6749`. **42 commits sin push.**
 
 ---
 
@@ -38,7 +38,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | **III — Medir si el trabajo creció** | 6 · Aprobar el cronograma | Se puede sellar el plan prometido al cliente, y desde ahí el sistema detecta el trabajo que se agregó después y no estaba prometido. | ✅ Hecho *(falta aplicarlo a los proyectos viejos — fase 12)* |
 | | 7 · Desviaciones abierto/cerrado | Que un problema detectado en el cronograma se pueda dar por resuelto y deje de pedir trabajo. | ✅ Hecho |
 | | 8 · Reuniones → tareas | Que lo que se acuerda en una reunión se convierta en tareas del cronograma, pasando por revisión humana. | ⛔ **Frenada** — necesita una decisión tuya (ver abajo). ✅ Su tramo independiente (8.1) ya está hecho |
-| | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ⏳ Pendiente *(su prerrequisito ⛔ ya está hecho)* |
+| | 9 · Lo que se habló pero no se vendió | Detectar en las reuniones lo que el cliente pidió y no está en el contrato: protege el alcance y marca oportunidades de venta. | ✅ Hecho — ⚠ la sección sale vacía hasta re-sembrar el prompt post-deploy |
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ⏳ Pendiente |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
 | | ⛔ La fuga del handoff | Dos caminos podían mandarle al cliente el handoff entero —que es un documento interno con riesgos y acuerdos comerciales—. Era el prerrequisito de la fase 9 y se tapó aparte, porque vale aunque esa fase no se haga. | ✅ Hecho |
@@ -169,12 +169,32 @@ Tres cosas se habrían perdido mudas al mudar el camino, y las tres están cubie
 ⚠ **Lo que vas a ver distinto al probarlo:** «Genera las tareas» ya no las crea de una — abre la
 ventana de revisión. El botón de adentro dice **«Crear las tareas»**.
 
-### Fase 9 · Lo que se habló pero no se vendió
+### ✅ Fase 9 · Lo que se habló pero no se vendió *(hecha, `71a6749`)*
 
-⛔ **Primero se tapa una fuga que ya existe hoy**: hay un camino de regeneración parcial que lee el
-handoff sin el filtro que sí aplica la generación completa. Un apartado que liste «pedidos que NO se
-vendieron» entraría por ahí a un documento que ve el cliente. Se tapa aunque el resto de la fase no
-se haga.
+El handoff gana una sección: **«Se conversó y no se vendió»**, justo después de «¿Qué vendimos?».
+Lista lo que el cliente pidió en la venta y quedó afuera, con quién lo dijo, cuándo, y si fue por
+precio, por plazo o por decisión de alcance.
+
+Sirve a **dos cosas a la vez**: defender el alcance cuando un pedido reaparece como *«esto ya lo
+habíamos hablado»*, y saber qué ofrecerle al cliente más adelante.
+
+⛔ **Es interna, y es lo más caro de filtrar del documento.** Mandarle al cliente un apartado
+titulado «lo que pediste y no te vendimos» no es una fuga de datos: es un problema comercial en un
+papel que él archiva. La fuga que lo hacía posible se tapó antes (`a276eb0`), y ahora hay una guarda
+que **descubre** las listas de los documentos del cliente en vez de transcribirlas — así que una
+séptima lista queda cubierta el día que exista.
+
+**Dos agujeros que se taparon de paso, y los dos fallaban en verde:**
+
+| Agujero | Qué pasaba | Cómo se veía |
+|---|---|---|
+| El test que se aprobaba solo | Verificaba que cada sección estuviera en el prompt buscando el texto que el propio generador escribe. Estaba siempre, hubiera instrucción o no | Una sección nueva salía a producción con la instrucción literal «undefined» |
+| El prompt del agente de CS | Está escrito a mano y nada lo ataba a la plantilla | Una sección nueva quedaba vacía **para siempre**, sin error en ningún lado |
+
+⚠ **Y el seed más peligroso del repo dejó de pisar.** El prompt del agente que arranca todos los
+proyectos —y que además escribe las fases del cronograma— vive en la base para poder calibrarlo sin
+deploy. El script lo sobreescribía sin preguntar: una corrida por reflejo borraba esa calibración
+sin dejar rastro. Ahora compara, avisa, y hay que forzarlo a propósito.
 
 ### Fase 10 · Qué logramos antes
 
@@ -231,6 +251,7 @@ memoria y las escrituras fallan en silencio.
 | `1156666` | — | Las 4 migraciones aplicadas + el comando documentado que no corría |
 | `ad3ec42` | 7 | El cliente ve «Resuelta»; el aviso de subir deja de ser ciego |
 | *(medición)* | 8 | El circuito de pendientes, medido — y por qué frena la fase |
+| `71a6749` | 9 | «Se conversó y no se vendió» + las dos guardas que se aprobaban solas |
 | `6e8eb17` `aae8e5d` | 8.1 | La primera generación del cronograma también se revisa antes de escribirse |
 
 ---
