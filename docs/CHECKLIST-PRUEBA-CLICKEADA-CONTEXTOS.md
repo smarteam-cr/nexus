@@ -151,6 +151,28 @@ congelada, así que en 9 de cada 10 el trabajo excedido era **inmedible**.
    - ✅ El botón **no aparece**. Un botón que solo sirve para dar error enseña a ignorar los
      botones.
 
+### 4.1b ⭐ Crear las tareas ahora abre una ventana de revisión **ESCRIBE (en Nexus)**
+Sobre un proyecto con fases **pero sin tareas** todavía:
+1. Apretá **«Genera las tareas»**.
+   - ✅ **No las crea de una**: se abre la misma ventana de revisión que usa «Regenerar todo el
+     cronograma», con las fases en acordeón y las tareas propuestas a la derecha.
+   - ✅ Arrastrá una tarea afuera y editá el título de otra → apretá **«Crear las tareas»**.
+   - ✅ Solo se creó lo que quedó en la ventana. Lo que sacaste **no está**.
+   > Era la única puerta del cronograma que escribía sin que nadie mirara, y justo la que más
+   > tareas crea de un saque.
+2. Mirá la **Semana 0** del cronograma recién creado.
+   - ✅ Están las tareas de siempre (documentación de procesos, base de datos, usuarios al CRM,
+     HubSpot Academy, acceso al portal).
+   - ✅ Si el proyecto está marcado **re-implementación**, la de base de datos dice **«Revisar y
+     limpiar la base de datos existente»**, no «Proporcionar bases de datos a importar».
+   - ✅ Si el proyecto **no tiene definido** el punto de partida, esa tarea aparece marcada **por
+     validar** — antes se sembraba afirmando algo que nadie había respondido.
+3. Mirá los **colores de las barras** del Gantt.
+   - ✅ Cada fase tiene su color de tipo de actividad, y coincide con la leyenda de arriba.
+4. ⚠ **Probalo con un CSE, no con super admin.** El super admin pasa todos los permisos y no
+   prueba nada. Un CSE tiene que poder **crear** el cronograma (aunque no pueda regenerarlo
+   entero después).
+
 ### 4.2 ⭐ La foto deja de tragarse lo nuevo **← el punto crítico de todo el bloque**
 Sobre el proyecto que acabás de aprobar:
 1. **Agregá una tarea a mano** a cualquier fase.
