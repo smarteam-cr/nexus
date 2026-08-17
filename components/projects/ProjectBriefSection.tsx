@@ -15,9 +15,14 @@
  *    una fuente que no existía, y es el único indicador de calidad que este circuito produce: un
  *    número alto significa que el prompt está flojo, no que el proyecto esté tranquilo.
  *    Esconderlo dejaría un resumen corto pareciendo un proyecto sin novedades.
+ *
+ * ⚠ `onRefresh`, no `router.refresh()` (2026-08-17). `brief` no llega por RSC: el padre
+ * (`ProjectGPS`) lo trae con un `fetch` de cliente hacia un solo estado (`data`). `router.refresh()`
+ * re-corre componentes de SERVIDOR — acá no hay ninguno en el medio, así que generaba el resumen
+ * de verdad y la pantalla se quedaba mostrando el estado vacío hasta que alguien recargaba a mano.
+ * `onRefresh` es el mismo `fetchGPS` que el padre ya usa para cualquier otro cambio.
  */
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
@@ -29,6 +34,17 @@ const ETIQUETA_POR_TIPO: Record<string, string> = {
   hubspot_ops: "Estado en HubSpot",
   etapa: "Etapa",
   desviacion: "Desviación del cronograma",
+};
+
+/** Acento por tipo de fuente — para poder escanear la lista sin leer cada línea entera.
+ *  Deliberadamente discreto (un borde de 2px, no un fondo de color): la afirmación es el
+ *  contenido, el acento es solo una guía para el ojo. */
+const ACENTO_POR_TIPO: Record<string, string> = {
+  desviacion: "border-warn-line",
+  hubspot_ops: "border-sky-500/40",
+  sesion: "border-line",
+  handoff: "border-line",
+  etapa: "border-line",
 };
 
 export interface BriefDeProyecto {
@@ -46,12 +62,14 @@ export interface BriefDeProyecto {
 export default function ProjectBriefSection({
   projectId,
   brief,
+  onRefresh,
 }: {
   projectId: string;
   brief: BriefDeProyecto | null;
+  /** Recarga los datos del padre — NO `router.refresh()`: acá no hay servidor en el medio. */
+  onRefresh: () => void;
 }) {
   const toast = useToast();
-  const router = useRouter();
   const [generando, setGenerando] = useState(false);
 
   async function generar() {
@@ -73,7 +91,7 @@ export default function ProjectBriefSection({
       } else {
         toast.success(`Resumen generado con ${r.statements} afirmaciones.`);
       }
-      router.refresh();
+      onRefresh();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo generar el resumen.");
     } finally {
@@ -120,14 +138,25 @@ export default function ProjectBriefSection({
       {brief.headline && (
         <p className="text-sm font-semibold text-fg leading-snug">{brief.headline}</p>
       )}
-      <ul className="space-y-2">
+      {/* Cada afirmación es un BLOQUE, no una línea corrida: la cita va DEBAJO del texto, no
+          pegada al final. Antes competían en el mismo renglón —el texto se cortaba justo donde
+          empezaba la cita, o la cita se iba sola a la línea siguiente sin avisar por qué— y con
+          6-8 afirmaciones la sección se leía como un párrafo único, sin dónde apoyar la vista.
+          El borde izquierdo por tipo (`ACENTO_POR_TIPO`) deja escanear "cuáles son atrasos" de
+          un vistazo, sin tener que leer cada cita. */}
+      <ul className="space-y-2.5">
         {brief.statements.map((s, i) => (
-          <li key={i} className="text-xs text-fg-secondary leading-relaxed">
-            <span>{s.text} </span>
-            <SourceChip
-              label={s.source.label || ETIQUETA_POR_TIPO[s.source.kind] || s.source.kind}
-              date={s.source.date}
-            />
+          <li
+            key={i}
+            className={`border-l-2 pl-2.5 ${ACENTO_POR_TIPO[s.source.kind] ?? "border-line"}`}
+          >
+            <p className="text-xs text-fg-secondary leading-relaxed">{s.text}</p>
+            <div className="mt-1">
+              <SourceChip
+                label={s.source.label || ETIQUETA_POR_TIPO[s.source.kind] || s.source.kind}
+                date={s.source.date}
+              />
+            </div>
           </li>
         ))}
       </ul>

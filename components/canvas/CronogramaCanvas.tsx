@@ -37,6 +37,7 @@ import {
   endShiftFragment,
 } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
+import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
@@ -1536,6 +1537,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       ),
     );
     setParticularidadesDirty(true);
+    /* ⛔ Sin esto, resolver una desviación la hacía DESAPARECER a los ojos del CSE: la fila se
+       mueve al grupo "Lo que ya pasó", que arranca SIEMPRE colapsado (es la bitácora, nunca pide
+       nada) — y si era la primera fila resuelta del cronograma, ese grupo ni siquiera existía en
+       pantalla todavía (0 ítems = 0 render). El CSE clickeaba "Dar por resuelta" y la fila se
+       esfumaba de la sección donde la venía mirando, reapareciendo colapsada en otra parte de la
+       página. Reusa el mismo mecanismo que ya abre grupos desde el panel "Qué hacer acá", y el
+       MISMO criterio de clasificación que usa esa pantalla (`grupoDeParticularidad`) — sin
+       duplicados propios: "cerrar" da CERRADA, que la función ya resuelve siempre a "historia";
+       "reabrir" da ABIERTA sin chequeo de gemelas —caso raro, y equivocarse ahí solo abre un
+       grupo de más, no de menos—. */
+    const item = prev.find((p) => p.id === id);
+    const grupoDestino = item
+      ? grupoDeParticularidad({ ...item, estado: accion === "cerrar" ? "CERRADA" : "ABIERTA" }, new Set())
+      : "historia";
+    setFocusGroup((f) => ({ key: grupoDestino, nonce: (f?.nonce ?? 0) + 1 }));
     try {
       const res = await fetch(
         `/api/projects/${projectId}/timeline/particularidades/${id}/cerrar`,

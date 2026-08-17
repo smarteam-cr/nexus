@@ -93,3 +93,33 @@ export function esCompromisoPendiente(p: {
     !p.convertedTaskId && esAbierta(p) && (p.kind === "COMPROMISO" || p.kind === "SOLICITUD")
   );
 }
+
+export type GrupoParticularidad = "compromisos" | "arreglar" | "historia";
+
+/**
+ * ¿A qué grupo del panel de particularidades pertenece esta fila? Un solo criterio para los tres
+ * bloques del canvas (`TimelineGantt.tsx`) y para el destino que abre `focusGroup` al cerrar o
+ * reabrir una desviación (`CronogramaCanvas.tsx`) — antes eran dos copias del mismo cálculo, y una
+ * copia que no chequeaba `estado` fue justo el bug que dejó una desviación resuelta "atascada" en
+ * el grupo "para arreglar" para siempre.
+ *
+ * `dupIds` es el set de ids marcadas como gemelas por `findDuplicateGroups` sobre la fase entera;
+ * se recibe desde afuera porque calcularlo exige la lista completa, que este módulo no tiene por
+ * qué conocer. Pasar un set vacío es válido (equivale a "no mirar duplicados").
+ */
+export function grupoDeParticularidad(
+  p: {
+    id: string;
+    kind: string;
+    convertedTaskId?: string | null;
+    estado?: string | null;
+    weeksImpact?: number | null;
+  },
+  dupIds: ReadonlySet<string>,
+): GrupoParticularidad {
+  if (esCompromisoPendiente(p)) return "compromisos";
+  const paraArreglar =
+    esAbierta(p) &&
+    (dupIds.has(p.id) || (!p.weeksImpact && (p.kind === "ATRASO" || !!p.convertedTaskId)));
+  return paraArreglar ? "arreglar" : "historia";
+}

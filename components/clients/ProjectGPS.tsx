@@ -586,7 +586,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           sostiene. `undefined` (respuesta cacheada vieja) no pinta nada; `null` sí, porque «no
           hay resumen» es información y trae su CTA. */}
       {data.brief !== undefined && (
-        <ProjectBriefSection projectId={projectId} brief={data.brief} />
+        <ProjectBriefSection projectId={projectId} brief={data.brief} onRefresh={fetchGPS} />
       )}
 
       {/* Info bar del proyecto (desde HubSpot) */}

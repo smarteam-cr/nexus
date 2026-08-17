@@ -68,7 +68,7 @@ import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/p
 import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
-import { esCompromisoPendiente } from "@/lib/timeline/particularidad-to-task";
+import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
 import { filasDeDetalle, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { clientStatusLine } from "@/lib/timeline/client-status";
@@ -1558,15 +1558,12 @@ export default function TimelineGantt({
             <div className="flex flex-col gap-1">
               {(() => {
                 const dupIds = new Set(findDuplicateGroups(parts).flat().map((p) => p.id));
-                // Mismo predicado que el contador del panel — importado, no reescrito: el botón
-                // "6 compromisos sin tarea" tiene que traerte a un grupo que diga 6.
-                const esCompromiso = esCompromisoPendiente;
-                const paraArreglar = (p: GanttParticularidad) =>
-                  dupIds.has(p.id) || (!p.weeksImpact && (p.kind === "ATRASO" || !!p.convertedTaskId));
-
-                const compromisos = parts.filter(esCompromiso);
-                const arreglar = parts.filter((p) => !esCompromiso(p) && paraArreglar(p));
-                const historia = parts.filter((p) => !esCompromiso(p) && !paraArreglar(p));
+                // Un solo criterio, compartido con CronogramaCanvas.tsx (`grupoDeParticularidad`):
+                // el botón "6 compromisos sin tarea" tiene que traerte a un grupo que diga 6, y
+                // cerrar una desviación tiene que abrir el MISMO grupo donde el CSE la va a ver.
+                const compromisos = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "compromisos");
+                const arreglar = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "arreglar");
+                const historia = parts.filter((p) => grupoDeParticularidad(p, dupIds) === "historia");
 
                 return [
                   {
