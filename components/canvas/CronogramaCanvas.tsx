@@ -63,6 +63,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
 import { indexarTareasPorTitulo, avisoDeRepetida } from "@/lib/timeline/tarea-repetida";
+import {
+  decidirRefrescoTrasHandoff,
+  debeReemplazarPropuesta,
+} from "@/lib/timeline/refresco-tras-handoff";
 import { AllPhasesRegenModal, type AllPhasesRegenPhase } from "./AllPhasesRegenModal";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { CronogramaSkeleton } from "@/components/clients/skeletons";
@@ -525,9 +529,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         // Propuesta de re-generación del agente (re-run con cronograma ya existente):
         // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
         // No pisa una propuesta de assist en curso (prev tiene prioridad).
-        setProposal((prev) =>
-          prev ?? (data.pendingProposal ? (data.pendingProposal as Proposal) : null),
-        );
+        setProposal((prev) => {
+          if (prev) return prev;
+          proposalMeta.current = { deAssist: false, runId: data.pendingProposalRunId ?? null };
+          return data.pendingProposal ? (data.pendingProposal as Proposal) : null;
+        });
         // D.2 — borrador de avance: lo expone el GET. Pre-tildá las fases propuestas y, de las
         // tareas, SOLO las que el agente infirió hechas (done:true). El resto arranca Pendiente
         // y nada Suspendido — el CSE resuelve cada tarea (hecha/suspendida) antes de cerrar la fase.
@@ -579,6 +585,49 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     load();
   }, [load]);
 
+  /* De DÓNDE salió la propuesta que está en pantalla. Viaja en un ref y no en estado porque solo
+     se lee dentro de callbacks async: no pinta nada, y como estado obligaría a meterlo en las deps
+     de `load` —que tiene `[projectId]`— para no leerlo viejo.
+     Hace falta porque `proposal` es UN estado compartido por dos orígenes muy distintos: la del
+     assist vive solo en memoria (pisarla la destruye) y la del handoff está persistida. */
+  const proposalMeta = useRef<{ deAssist: boolean; runId: string | null }>({
+    deAssist: false,
+    runId: null,
+  });
+
+  /**
+   * Trae SOLO la propuesta del servidor, sin tocar nada más del cronograma.
+   *
+   * ⛔ Deliberadamente NO es `load()`. Cuando el handoff deja una propuesta sobre un cronograma que
+   * ya tiene fases, el servidor no tocó las fases: recargar entero pisaría `phases`, apagaría
+   * `dirty` (y con él el autosave pendiente), resetearía `particularidadesDirty` y las selecciones
+   * del banner de avance — sobre un cronograma que el CSE puede estar editando en ese momento.
+   * Es un refresco OPORTUNISTA: si falla, se calla. El CSE no lo pidió y el cartel del widget
+   * sigue avisando que hay algo para revisar.
+   */
+  const refrescarPropuesta = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
+      const runIdNuevo = (data.pendingProposalRunId as string | null) ?? null;
+      setProposal((prev) => {
+        const reemplaza = debeReemplazarPropuesta({
+          hayPropuesta: !!prev,
+          esDeAssist: proposalMeta.current.deAssist,
+          runIdEnPantalla: proposalMeta.current.runId,
+          runIdNuevo,
+        });
+        if (!reemplaza) return prev;
+        proposalMeta.current = { deAssist: false, runId: runIdNuevo };
+        return nueva;
+      });
+    } catch {
+      /* refresco oportunista: el cartel del widget ya avisa que hay algo sin revisar */
+    }
+  }, [projectId]);
+
   // "Hoy" recién después de hidratar: en SSR no existe, y calcularlo en el primer render
   // desincroniza servidor y cliente (mismo patrón que TimelineGantt).
   const hydrated = useHydrated();
@@ -593,16 +642,31 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
      que es lo que necesita la bandeja del CSE. El endpoint sigue existiendo y se llama cuando
      corresponde: al ABRIR el modal de publicar, para sugerir el motivo del cambio. */
 
-  // Generar el handoff crea las fases del cronograma como efecto. El handoff bumpea
-  // timelineRefreshSignal → si el cronograma está VACÍO, recargamos para que aparezcan (no
-  // pisamos uno con datos/ediciones). Solo reacciona al CAMBIO de la señal, no al montaje.
+  /* Generar el handoff toca el cronograma, y el handoff bumpea `timelineRefreshSignal`.
+     ⛔ Este efecto SOLO decide; el criterio vive en `decidirRefrescoTrasHandoff` porque los tests
+     de este repo corren sin DOM y adentro del componente no se puede probar.
+
+     La versión anterior era `if (phases.length === 0 && !loading) void load();` — pensada para el
+     caso «el handoff CREA las fases», y correcta en no pisar un cronograma con ediciones. Pero
+     dejaba mudo justo el caso opuesto: cuando ya hay fases, el servidor NO las toca, solo escribe
+     `pendingProposal`. O sea que el caso que produce una propuesta era el caso que no hacía nada,
+     y el CSE veía el cartel «hay una propuesta sin revisar» con el canvas vacío de sugerencias
+     hasta recargar a mano.
+     Con fases, ahora se trae SOLO la propuesta: las fases en pantalla siguen siendo correctas y
+     ese camino no escribe nada editable (ver el docblock del módulo). */
   const lastTimelineSignal = useRef(timelineRefreshSignal);
   useEffect(() => {
     if (timelineRefreshSignal === lastTimelineSignal.current) return;
+    const decision = decidirRefrescoTrasHandoff({ hayFases: phases.length > 0, cargando: loading });
+    /* ⚠ La señal se consume solo si se actuó. Antes el ref avanzaba ANTES de evaluar la condición,
+       así que una señal descartada se perdía para siempre; con `loading` en las deps, el caso
+       «esperar» se reintenta solo cuando la carga en vuelo termina. */
+    if (decision === "esperar") return;
     lastTimelineSignal.current = timelineRefreshSignal;
-    if (phases.length === 0 && !loading) void load();
+    if (decision === "recargar-todo") void load();
+    else void refrescarPropuesta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timelineRefreshSignal]);
+  }, [timelineRefreshSignal, phases.length, loading]);
 
   // Logo del cliente — mismo branding que ve el cliente, también del lado de Nexus.
   useEffect(() => {
@@ -1258,6 +1322,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               : data?.error ?? "Error al pedir la actualización."),
         );
       } else {
+        // Vive SOLO en memoria: `debeReemplazarPropuesta` nunca la pisa con una del servidor.
+        proposalMeta.current = { deAssist: true, runId: null };
         setProposal(data.proposal as Proposal);
         setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
         setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
@@ -1290,10 +1356,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         const d = await res.json().catch(() => ({}));
         setError(d?.details?.[0] ?? d?.error ?? "No se pudo aplicar la propuesta.");
       } else {
+        proposalMeta.current = { deAssist: false, runId: null };
         setProposal(null);
         setAssistWarnings([]);
         setAssistInstruction("");
         await load();
+        // El cartel del widget se apaga solo: si no, queda ámbar sobre algo ya resuelto.
+        bumpGpsRefresh();
         clearScope(undoScope); // la propuesta aplicada reemplaza el estado: limpiamos el historial de undo
       }
     } catch {
@@ -1316,8 +1385,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     } catch {
       /* limpiar local igual */
     }
+    proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
     setAssistWarnings([]);
+    /* ⚠ Sin esto el cartel ámbar del widget queda encendido sobre una propuesta que ya no existe.
+       Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
+       aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
+    bumpGpsRefresh();
   };
 
   // ── Resolver POR ÍTEM la propuesta de ESTRUCTURA (la del handoff) ──
@@ -1343,8 +1417,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       else if (d.discarded > 0) toast.success(d.discarded === 1 ? "Sugerencia descartada." : "Sugerencias descartadas.");
       // Recargar todo (fases nuevas/cambiadas + propuesta reescrita). El load setea proposal
       // con `prev ?? …`, así que hay que vaciarla ANTES para que tome la fresca del server.
+      proposalMeta.current = { deAssist: false, runId: null };
       setProposal(null);
       await load();
+      bumpGpsRefresh();
     } catch {
       toast.error("Error de conexión al resolver la sugerencia.");
     } finally {
