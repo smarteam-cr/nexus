@@ -32,7 +32,7 @@ const SCRIPTS = path.join(RAIZ, "scripts");
  *
  * ⚠ SOLO PUEDE BAJAR. Si arreglás uno, bajá este número. Si sube, algo nuevo nació pisando.
  */
-const TOPE_QUE_PISAN = 23;
+const TOPE_QUE_PISAN = 22; // 23 → 22 el 2026-08-16: `seed-post-session-agent` pasó a comparar.
 
 /** Scripts que escriben un prompt de agente vía `agent.upsert` / `agent.update`. */
 function seedsDePrompt(): string[] {
