@@ -48,7 +48,6 @@ const DEUDA = {
     "app/(shell)/marketing/generacion/EngineClient.tsx",
     "app/portal/page.tsx",
     "components/business-cases/BusinessCaseWorkspace.tsx",
-    "components/chat/PlanningChat.tsx",
     "components/clients/ClientContextCards.tsx",
   ],
   // El aside de /sessions es excelente, pero su panel derecho usa un spinner centrado.

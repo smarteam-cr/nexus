@@ -38,7 +38,6 @@ type Census = {
   canvasSuggestions: number;
   actionItems: number;
   audits: number;
-  implementations: number;
   knowledge: number;
   documents: number;
   stageNotes: number;
@@ -56,7 +55,7 @@ function canonicalScore(c: Census): number {
 function totalDependents(c: Census): number {
   return (
     c.sessionsResolved + c.sessionsManual + c.projects + c.agentRuns + c.contextCards +
-    c.canvasSuggestions + c.actionItems + c.audits + c.implementations + c.knowledge +
+    c.canvasSuggestions + c.actionItems + c.audits + c.knowledge +
     c.documents + c.stageNotes + c.assignments + c.appUsers + c.handoffs +
     (c.hubspotAccount ? 1 : 0)
   );
@@ -74,7 +73,7 @@ async function censusFor(clientId: string): Promise<Omit<Census, "id" | "name" |
         _count: {
           select: {
             projects: true, agentRuns: true, contextCards: true, canvasSuggestions: true,
-            actionItems: true, audits: true, implementations: true, knowledge: true,
+            actionItems: true, audits: true, knowledge: true,
             documents: true, stageNotes: true, assignments: true, appUsers: true, handoffs: true,
           },
         },
@@ -90,7 +89,7 @@ async function censusFor(clientId: string): Promise<Omit<Census, "id" | "name" |
     sessionsResolved, sessionsManual,
     projects: k.projects, agentRuns: k.agentRuns, contextCards: k.contextCards,
     canvasSuggestions: k.canvasSuggestions, actionItems: k.actionItems, audits: k.audits,
-    implementations: k.implementations, knowledge: k.knowledge, documents: k.documents,
+    knowledge: k.knowledge, documents: k.documents,
     stageNotes: k.stageNotes, assignments: k.assignments, appUsers: k.appUsers, handoffs: k.handoffs,
     hubspotAccount,
   };
@@ -161,7 +160,7 @@ async function main() {
       console.log(`        hubspotCompanyId=${JSON.stringify(c.hubspotCompanyId)}  emailDomains=${JSON.stringify(c.emailDomains)}  logo=${c.logoUrl ? "sí" : "no"}  canvas=${c.hasCanvas ? "sí" : "no"}`);
       console.log(`        sesiones: resolved=${c.sessionsResolved}  manual=${c.sessionsManual}   ·   proyectos=${c.projects}   (score canónico=${canonicalScore(c)})`);
       console.log(`        agentRuns=${c.agentRuns}  contextCards=${c.contextCards}  canvasSugg=${c.canvasSuggestions}  actionItems=${c.actionItems}  handoffs=${c.handoffs}`);
-      console.log(`        audits=${c.audits}  implementations=${c.implementations}  knowledge=${c.knowledge}  documents=${c.documents}  stageNotes=${c.stageNotes}  assignments=${c.assignments}  appUsers=${c.appUsers}`);
+      console.log(`        audits=${c.audits}  knowledge=${c.knowledge}  documents=${c.documents}  stageNotes=${c.stageNotes}  assignments=${c.assignments}  appUsers=${c.appUsers}`);
       console.log(`        hubspotAccount=${c.hubspotAccount ? `id=${c.hubspotAccount.id} portal=${c.hubspotAccount.hubspotPortalId} system=${c.hubspotAccount.isSystem}` : "no"}`);
     });
 

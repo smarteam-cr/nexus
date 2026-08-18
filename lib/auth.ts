@@ -63,19 +63,6 @@ export async function requireClientHubspotAccount(
   return account;
 }
 
-// ─── Legacy stubs (eliminar cuando se borren las páginas /implementation/*) ───
-
-/**
- * @deprecated Páginas /implementation/* son legacy. Estos stubs evitan errores
- * de import mientras se eliminan esas rutas. NO usar en código nuevo.
- */
-export async function getSession(): Promise<HubspotAccount | null> {
-  return null;
-}
-
-/**
- * @deprecated Igual que getSession — lanza siempre.
- */
-export async function requireSession(): Promise<HubspotAccount> {
-  throw new Error("Legacy auth flow eliminado — esta página debería borrarse");
-}
+// Los stubs `getSession` / `requireSession` vivían acá para que las páginas
+// /implementation/* compilaran mientras se retiraban. Esas rutas se borraron el
+// 2026-08-17 (Tanda T) junto con el chat viejo, así que los stubs se fueron con ellas.

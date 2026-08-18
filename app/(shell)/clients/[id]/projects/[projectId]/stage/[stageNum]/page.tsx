@@ -9,12 +9,10 @@ import {
   Pencil,
   FileText,
   BarChart2,
-  Zap,
 } from "lucide-react";
 // StageNoteEditor y ClientDocuments removidos — anotaciones van en cards (tag CSE), docs en sidebar
 import StepSections from "@/components/clients/StepSections";
 import NewAuditButtonClient from "@/app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient";
-import NewImplementationButton from "@/app/(shell)/clients/[id]/stage/[stageNum]/NewImplementationButton";
 import AuditReAnalyzeButton from "@/components/agents/AuditReAnalyzeButton";
 import AuditDetailClient from "@/app/(shell)/audits/[id]/AuditDetailClient";
 import TrackCurrentStep from "@/components/clients/TrackCurrentStep";
@@ -72,7 +70,7 @@ export default async function ProjectStagePage({
   const currentStep = steps[stepIndex];
 
   // ── Fetch de completitud y frescura ────────────────────────────────────────
-  const [stageNotes, contextCardsCount, latestAudit, stageDocuments, implementationCount, lastAgentRun] =
+  const [stageNotes, contextCardsCount, latestAudit, stageDocuments, lastAgentRun] =
     await Promise.all([
       prisma.stageNote.findMany({
         where: { clientId: id, stage },
@@ -88,7 +86,6 @@ export default async function ProjectStagePage({
         where: { clientId: id, stage, projectId },
         select: { step: true },
       }),
-      prisma.implementation.count({ where: { clientId: id, archived: false } }),
       prisma.agentRun.findFirst({
         where: { clientId: id, stage, status: "DONE" },
         orderBy: { updatedAt: "desc" },
@@ -144,7 +141,6 @@ function StepTypeIcon({ kind, isActive }: { kind: StepKind; isActive: boolean })
     note:           <Pencil    className={cls} strokeWidth={1.75} />,
     documents:      <FileText  className={cls} strokeWidth={1.75} />,
     portal:         <BarChart2 className={cls} strokeWidth={1.75} />,
-    implementation: <Zap       className={cls} strokeWidth={1.75} />,
   };
 
   return <>{icons[kind] ?? null}</>;
@@ -186,10 +182,6 @@ async function StepContent({
 
   if (type.kind === "portal") {
     return <PortalStep hasHubspot={hasHubspot} />;
-  }
-
-  if (type.kind === "implementation") {
-    return <ImplementationStep clientId={clientId} hasHubspot={hasHubspot} />;
   }
 
   return null;
@@ -295,76 +287,6 @@ function PortalStep({ hasHubspot }: { hasHubspot: boolean }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
         </svg>
       </Link>
-    </div>
-  );
-}
-
-// ── Paso: Implementación CRM ──────────────────────────────────────────────────
-
-async function ImplementationStep({ clientId, hasHubspot }: { clientId: string; hasHubspot: boolean }) {
-  const implementations = await prisma.implementation.findMany({
-    where: { clientId, archived: false },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, status: true, createdAt: true },
-  });
-
-  const statusColors: Record<string, string> = {
-    PLANNING: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
-    READY: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-    EXECUTING: "text-brand-light bg-brand/10 border-brand/20",
-    DONE: "text-green-400 bg-green-500/10 border-green-500/20",
-    PAUSED: "text-gray-400 bg-gray-500/10 border-gray-500/20",
-  };
-
-  const statusLabels: Record<string, string> = {
-    PLANNING: "Planificando",
-    READY: "Listo",
-    EXECUTING: "Ejecutando",
-    DONE: "Completado",
-    PAUSED: "Pausado",
-  };
-
-  return (
-    <div className="space-y-4 max-w-2xl">
-      <p className="text-sm text-gray-400">
-        Planifica y ejecuta la configuración del CRM usando el asistente de IA. Crea las propiedades, pipelines, listas y workflows necesarios.
-      </p>
-
-      {!hasHubspot && (
-        <WarningBanner text="Conecta HubSpot en Configuración para crear implementaciones" />
-      )}
-
-      {implementations.length > 0 && (
-        <div className="space-y-2">
-          {implementations.map((impl) => (
-            <Link
-              key={impl.id}
-              href={`/implementation/${impl.id}/plan`}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 hover:bg-gray-800/70 transition-all group"
-            >
-              <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{impl.name}</p>
-                <p className="text-xs text-gray-500">
-                  {new Date(impl.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
-                </p>
-              </div>
-              <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border ${statusColors[impl.status] ?? ""}`}>
-                {statusLabels[impl.status] ?? impl.status}
-              </span>
-              <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {hasHubspot && <NewImplementationButton clientId={clientId} />}
     </div>
   );
 }

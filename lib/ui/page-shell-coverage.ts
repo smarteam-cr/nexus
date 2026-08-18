@@ -57,8 +57,6 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "sessions/[id]": { custom: "lectura larga con max-w-5xl propio (candidato a SHELL_WIDE)" },
   "agents/[id]": { custom: "formulario del agente con contenedor propio (candidato a SHELL_NARROW)" },
   "audits/[id]": { custom: "detalle de auditoría con contenedor propio" },
-  "implementation/[id]/execute": { custom: "vista de ejecución full-viewport" },
-  "implementation/[id]/plan": { custom: "vista de plan full-viewport" },
 
   // ── El layout del área pone el contenedor ───────────────────────────────────
   "marketing/contenido": { custom: "el layout de marketing pone header + tabs + contenedor" },
@@ -76,7 +74,6 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "marketing/ideas": { custom: "redirect (nombre viejo)" },
   "marketing/campanas": { custom: "redirect (nombre viejo)" },
   "marketing/pilares": { custom: "redirect (nombre viejo)" },
-  archived: { custom: "vista legacy de archivados (candidata a SHELL_DEFAULT)" },
   sales: { custom: "delega el shell entero a SalesClient (candidata a SHELL_DEFAULT)" },
   "sales/use-cases": { custom: "admin de casos de uso con contenedor propio" },
   sessions: { custom: "layout propio de dos paneles (aside + detalle)" },

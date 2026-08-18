@@ -8,21 +8,6 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-enum ImplementationStatus {
-  PLANNING
-  READY
-  EXECUTING
-  DONE
-  PAUSED
-}
-
-enum ExecutionStatus {
-  SUCCESS
-  FAILED
-  MANUAL_REQUIRED
-  SKIPPED
-}
-
 enum DocumentType {
   CALL_TRANSCRIPT
   BRIEF
@@ -200,7 +185,6 @@ model Client {
 
   hubspotAccount       HubspotAccount?
   audits               Audit[]
-  implementations      Implementation[]
   knowledge            Knowledge[]
   documents            ClientDocument[]
   stageNotes           StageNote[]
@@ -1214,7 +1198,6 @@ model HubspotAccount {
   updatedAt        DateTime  @updatedAt
 
   // Relaciones legacy (se eliminan en Fase 5 una vez migrada toda la data)
-  implementations Implementation[]
   audits          Audit[]
   knowledge       Knowledge[]
 }
@@ -1248,35 +1231,10 @@ model Audit {
   updatedAt DateTime        @updatedAt
 }
 
-// ─── Implementation ───────────────────────────────────────────────────────────
-
-model Implementation {
-  id        String               @id @default(cuid())
-  accountId String? // nullable en transición (Fase 4 lo migra a clientId)
-  account   HubspotAccount?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  clientId  String? // nuevo FK a Client (se poblará en Fase 4)
-  client    Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  name      String
-  status    ImplementationStatus @default(PLANNING)
-  archived  Boolean              @default(false)
-  plan      Json?
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-
-  messages   Message[]
-  executions ExecutionLog[]
-}
-
-// ─── Message ──────────────────────────────────────────────────────────────────
-
-model Message {
-  id               String         @id @default(cuid())
-  implementationId String
-  implementation   Implementation @relation(fields: [implementationId], references: [id], onDelete: Cascade)
-  role             String
-  content          String         @db.Text
-  createdAt        DateTime       @default(now())
-}
+// Los modelos `Implementation`, `Message` y `ExecutionLog` vivían acá: eran el chat viejo
+// "HubSpot AI Implementer". Se retiraron el 2026-08-17 (Tanda T) junto con sus endpoints, que
+// escribían en el portal de HubSpot con solo estar logueado. Las tablas se droppean por SQL
+// DESPUÉS del deploy — ver scripts/sql/2026-08-17-retirar-chat-viejo.sql.
 
 // ─── Agent ────────────────────────────────────────────────────────────────────
 
@@ -1726,18 +1684,6 @@ enum AssignmentKind {
   REVOKE
 }
 
-// ─── ExecutionLog ─────────────────────────────────────────────────────────────
-
-model ExecutionLog {
-  id               String          @id @default(cuid())
-  implementationId String
-  implementation   Implementation  @relation(fields: [implementationId], references: [id], onDelete: Cascade)
-  action           String
-  resource         String
-  status           ExecutionStatus
-  details          Json
-  createdAt        DateTime        @default(now())
-}
 
 // ============================================
 // KNOWLEDGE BASE — Documentos de conocimiento

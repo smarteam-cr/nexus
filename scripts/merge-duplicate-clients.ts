@@ -13,7 +13,7 @@ import type { Prisma } from "@prisma/client";
  * Reasigna (dup → canónico), en una transacción por par:
  *   · Soft-FKs de FirefliesSession: `resolvedClientId` y `manualClientId` (updateMany).
  *   · Hard-FKs simples (updateMany clientId): Project, AgentRun, ClientContextCard,
- *     CanvasSuggestion, ActionItem, Audit, Implementation, Knowledge, ClientDocument,
+ *     CanvasSuggestion, ActionItem, Audit, Knowledge, ClientDocument,
  *     AppUser, Handoff.
  *   · Hard-FKs con `unique` compartida (collision-aware): StageNote (clientId+stage+step),
  *     ClientAssignment (clientId+teamMemberId+targetRole) → se reasigna lo que NO colisiona;
@@ -126,7 +126,7 @@ async function dupCensus(dupId: string) {
         _count: {
           select: {
             projects: true, agentRuns: true, contextCards: true, canvasSuggestions: true,
-            actionItems: true, audits: true, implementations: true, knowledge: true,
+            actionItems: true, audits: true, knowledge: true,
             documents: true, stageNotes: true, assignments: true, appUsers: true, handoffs: true,
             /* ⚠ ESTAS NO SE REASIGNAN: cascadean con el `delete` del duplicado. Se cuentan para
                poder ABORTAR, no para reportar. Ver `LO_QUE_CASCADEA`. */
@@ -230,7 +230,7 @@ async function processPair(p: (typeof PAIRS)[number]) {
   if (census.sampleTitles.length)
     console.log(`      ej. sesiones: ${census.sampleTitles.map((t) => `"${t}"`).join(", ")}${census.resolvedSessions > census.sampleTitles.length ? " …" : ""}`);
   console.log(`    Project: ${k.projects}   AgentRun: ${k.agentRuns}   ClientContextCard: ${k.contextCards}   CanvasSuggestion: ${k.canvasSuggestions}`);
-  console.log(`    ActionItem: ${k.actionItems}   Audit: ${k.audits}   Implementation: ${k.implementations}   Knowledge: ${k.knowledge}`);
+  console.log(`    ActionItem: ${k.actionItems}   Audit: ${k.audits}   Knowledge: ${k.knowledge}`);
   console.log(`    ClientDocument: ${k.documents}   AppUser: ${k.appUsers}   Handoff: ${k.handoffs}   StageNote: ${k.stageNotes}   ClientAssignment: ${k.assignments}`);
   console.log(`    HubspotAccount(dup): ${census.hubspotAccount ? "sí → reasignar" : "no"}`);
   console.log(`\n  Fold de señales en el canónico:`);
@@ -266,7 +266,6 @@ async function processPair(p: (typeof PAIRS)[number]) {
       await tx.canvasSuggestion.updateMany({ where: { clientId: dup.id }, data: reassign });
       await tx.actionItem.updateMany({ where: { clientId: dup.id }, data: reassign });
       await tx.audit.updateMany({ where: { clientId: dup.id }, data: reassign });
-      await tx.implementation.updateMany({ where: { clientId: dup.id }, data: reassign });
       await tx.knowledge.updateMany({ where: { clientId: dup.id }, data: reassign });
       await tx.clientDocument.updateMany({ where: { clientId: dup.id }, data: reassign });
       await tx.appUser.updateMany({ where: { clientId: dup.id }, data: reassign });

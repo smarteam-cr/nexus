@@ -1,14 +1,13 @@
 // ─── Definición de pasos por etapa (compartida entre page y ServiceMap) ──────
 
-export type StepKind = "note" | "context-only" | "audit" | "documents" | "portal" | "implementation";
+export type StepKind = "note" | "context-only" | "audit" | "documents" | "portal";
 
 export type StepType =
   | { kind: "note"; placeholder?: string }
   | { kind: "context-only" }
   | { kind: "audit" }
   | { kind: "documents" }
-  | { kind: "portal" }
-  | { kind: "implementation" };
+  | { kind: "portal" };
 
 export interface StepDef {
   label: string;
@@ -91,7 +90,6 @@ export const STEPS_PROYECTO_TEMPORAL: ServiceStageSteps = {
   ],
   2: [
     { label: "Diseño de la solución",  shortLabel: "Diseño",         type: { kind: "note", placeholder: "Diseño técnico y funcional de lo que se va a construir o configurar en HubSpot..." }, keywords: ["diseño", "solución"] },
-    { label: "Habilitación en CRM",    shortLabel: "CRM",            type: { kind: "implementation" }, keywords: ["crm", "habilitación"] },
     { label: "Documentación",          shortLabel: "Documentación",  type: { kind: "documents" },     keywords: ["documentación"] },
   ],
   3: [

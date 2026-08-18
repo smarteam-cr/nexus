@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
-import { Sparkles, Search, Pencil, FileText, BarChart2, Zap, ChevronDown, Map } from "lucide-react";
+import { Sparkles, Search, Pencil, FileText, BarChart2, ChevronDown, Map } from "lucide-react";
 import type { StepKind } from "@/lib/steps";
 
 interface Props {
@@ -22,7 +22,6 @@ const STEP_ICONS: Record<StepKind, typeof Sparkles> = {
   note: Pencil,
   documents: FileText,
   portal: BarChart2,
-  implementation: Zap,
 };
 
 export default function ServiceMap({

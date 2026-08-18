@@ -16,7 +16,7 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: {
       hubspotAccount: { select: { id: true, hubName: true, hubspotPortalId: true } },
-      _count: { select: { audits: true, implementations: true, documents: true } },
+      _count: { select: { audits: true, documents: true } },
     },
   });
 

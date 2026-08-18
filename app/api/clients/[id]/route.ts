@@ -22,7 +22,7 @@ export async function GET(
         orderBy: { createdAt: "asc" },
         select: { id: true, name: true, status: true, projectType: true, serviceType: true, tags: true, currentStage: true, currentStep: true },
       },
-      _count: { select: { audits: true, implementations: true, documents: true } },
+      _count: { select: { audits: true, documents: true } },
     },
   });
 
