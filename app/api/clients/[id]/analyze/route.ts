@@ -9,6 +9,7 @@ import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHand
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
@@ -2816,9 +2817,25 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // trackea por polling al GET [runId]. Funciona desde CUALQUIER disparador (pop-up de
   // agentes, tarjeta, sub-paso) — NO depende del flag async del cliente.
   const runDetached = body?.async === true || agent.outputType === "CARDS_AND_FLOWCHARTS";
+
+  /**
+   * A quién cargarle el gasto de IA de esta corrida. Se envuelve acá —en los llamadores de
+   * `runAnalysisWork`, no en cada `messages.create`— para que quede atribuido TODO lo que se
+   * gaste adentro, incluidos los helpers anidados (`generateSectionsForTemplate` y compañía),
+   * sin tener que acordarse en cada uno. Ver `lib/ai/contexto-de-corrida.ts`.
+   */
+  const ctxDeGasto = {
+    agentSlug: agent.id,
+    agentRunId: pre.id,
+    clientId,
+    projectId: bodyProjectId,
+    triggeredByEmail: pre.triggeredByEmail,
+    origen: "clients/analyze",
+  };
+
   if (runDetached) {
     void (async () => {
-      try { await markDone(await runAnalysisWork(pre.id)); }
+      try { await markDone(await conContextoDeIA(ctxDeGasto, () => runAnalysisWork(pre.id))); }
       catch (e) { await markError(e); }
     })();
     return NextResponse.json({ runId: pre.id, status: "RUNNING", async: true });
@@ -2826,7 +2843,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
 
   // Síncrono (agentes livianos): se espera el resultado y se devuelve tal cual.
   try {
-    const res = await runAnalysisWork(pre.id);
+    const res = await conContextoDeIA(ctxDeGasto, () => runAnalysisWork(pre.id));
     await markDone(res);
     return res;
   } catch (e) {

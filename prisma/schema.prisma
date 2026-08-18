@@ -1320,6 +1320,53 @@ model AgentRun {
   @@index([clientId, agentSlug, createdAt])
 }
 
+/**
+ * Una fila por llamada a la API de Claude. El libro de gasto de IA.
+ *
+ * ── POR QUÉ TABLA PROPIA Y NO COLUMNAS EN AgentRun ───────────────────────────
+ * Hay 26 llamadas a Claude en producción y solo 16 sitios que crean un `AgentRun`. Medir dentro
+ * de esa tabla perdería ~40% del gasto — entre otros el assist del cronograma, el refresh de
+ * canvas, las dos pasadas del motor de secciones y todo marketing (que lleva su propio registro
+ * de corridas). `agentRunId` queda opcional para poder cruzarlas cuando la corrida existe.
+ *
+ * ⛔ Punteros BLANDOS a propósito: ni `@relation` ni FK contra Client / Project / AgentRun. Un
+ * libro de gasto no puede desaparecer porque alguien borró el cliente — con `onDelete: Cascade`
+ * (que es lo que usan esas tres relaciones) el registro de lo que YA se gastó se iría con él, y
+ * el total del mes cambiaría hacia atrás.
+ *
+ * ⚠ `costUsd` es una ESTIMACIÓN calculada con `lib/ai/precios.ts`, no lo facturado. La verdad la
+ * tiene la consola de Anthropic; esto sirve para ver la forma del gasto y frenarlo a tiempo.
+ * `null` = modelo sin tarifa conocida (se midieron los tokens igual).
+ */
+model LlmCall {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  model      String
+  ok         Boolean  @default(true)
+  errorType  String?
+  durationMs Int?
+
+  inputTokens         Int    @default(0)
+  outputTokens        Int    @default(0)
+  cacheReadTokens     Int    @default(0)
+  cacheCreationTokens Int    @default(0)
+  costUsd             Float?
+
+  // Atribución — TODA opcional: se mide el 100% desde el día uno y se atribuye de a poco.
+  // `triggeredByEmail` vacío significa "lo disparó el sistema", que es la distinción que decide
+  // contra qué presupuesto se cobra (ver lib/ai/contexto-de-corrida.ts).
+  agentSlug        String?
+  agentRunId       String?
+  clientId         String?
+  projectId        String?
+  triggeredByEmail String?
+  origen           String?
+
+  @@index([at])
+  @@index([agentSlug, at])
+  @@index([triggeredByEmail, at])
+}
+
 // ─── Business Cases (Ventas) — generador de casos de negocio ─────────────────
 // Entidad 1:N bajo Client (NO bajo Project). Flujo: generar (agente) →
 // editar/confirmar (vendedor) → publicar (snapshot congelado + acceso
