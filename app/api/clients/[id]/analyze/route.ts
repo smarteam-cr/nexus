@@ -8,7 +8,6 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
-import { getDataLake } from "@/lib/data-lake/client";
 import { anthropic } from "@/lib/anthropic";
 import { extractTitleTerms } from "@/lib/utils/matching";
 import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
@@ -1419,26 +1418,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     console.error("[analyze] Sessions error:", e);
   }
 
-  // ── 5. Fetch notas del Data Lake ──────────────────────────────────────────────
-  let dataLakeContent = "";
-  try {
-    const searchTerm = titleTerms[0] ?? companyName;
-    const { data: rows } = await getDataLake()
-      .from("hs_notes")
-      .select("content")
-      .ilike("content", `%${searchTerm}%`)
-      .order("id", { ascending: false })
-      .limit(20);
-
-    if (rows && rows.length > 0) {
-      dataLakeContent = rows
-        .map((r: { content: string }, i: number) => `[Nota ${i + 1}]\n${r.content}`)
-        .join("\n\n");
-    }
-  } catch (e) {
-    console.error("[analyze] Data Lake error:", e);
-  }
-
   // ── Knowledge base (PUBLISHED + pineados al agente) ──────────────────────
   let knowledgeBaseContent = "";
   try {
@@ -1887,7 +1866,7 @@ ${[
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
 ].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${operativaBlock ? `${operativaBlock}
 
-` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${dataLakeContent ? `=== NOTAS DE HUBSPOT (Data Lake) ===\n${dataLakeContent.slice(0, 4000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────

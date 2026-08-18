@@ -116,7 +116,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/CanvasToggleButtons.tsx": 5,
   "components/clients/ClientCanvasPanel.tsx": 66,
   "components/clients/ClientContextCards.tsx": 108,
-  "components/clients/ClientDataLakeFindings.tsx": 8,
   "components/clients/ClientDocuments.tsx": 31,
   "components/clients/ClientInfoPanel.tsx": 12,
   "components/clients/ClientSharing.tsx": 28,
