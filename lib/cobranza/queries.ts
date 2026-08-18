@@ -42,6 +42,7 @@ import {
 import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
 import {
   calcularEquilibrio,
+  type CostoVigente,
   type EgresoDeMes,
   type IngresoDeMes,
   type MonedaEq,
@@ -1961,7 +1962,8 @@ export async function loadReporteAnual(
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
 
-  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo] = await Promise.all([
+  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos] =
+    await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
       select: { periodo: true, categoria: true, concepto: true, conceptoClave: true, monto: true, moneda: true, monedaInferida: true },
@@ -1990,6 +1992,13 @@ export async function loadReporteAnual(
       select: { periodo: true, crcPorUsd: true, fuente: true },
     }),
     loadAguinaldo(anio, hoyISO),
+    // Los costos VIGENTES hoy: la fuente del piso vigente, que es el titular del
+    // reporte. Es el catálogo que una persona mantiene al día — a diferencia del libro
+    // de pagos, que va detrás de la realidad (ver DECISIONS §El piso de hoy).
+    prisma.costoRecurrente.findMany({
+      where: { activo: true, finalizadoEl: null },
+      select: { nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
+    }),
   ]);
 
   const periodoHoy = periodoDe(hoyISO);
@@ -2098,6 +2107,35 @@ export async function loadReporteAnual(
     return quincenas.size === 1;
   });
 
+  // ── Los costos vigentes: la fuente del piso de HOY ──────────────────────────
+  const RUBRO_DE_CATEGORIA = {
+    SALARIO: "PLANILLA",
+    HERRAMIENTA: "HERRAMIENTA",
+    FIJO_OPERACION: "FIJO_OPERACION",
+  } as const;
+  const costosVigentes: CostoVigente[] = costosActivos.map((c) => ({
+    rubro: RUBRO_DE_CATEGORIA[c.categoria],
+    concepto: c.nombre,
+    // Un ANUAL entra dividido: el piso es un costo MENSUAL.
+    monto: mensualizado(num(c.monto)!, c.frecuencia),
+    moneda: c.moneda as MonedaEq,
+  }));
+  // La tarjeta no es un CostoRecurrente (no hay tarjetas cargadas): su cargo vive en el
+  // libro de egresos. Se toma el ÚLTIMO mes que lo tenga, que es el vigente.
+  const ultimoTarjeta = filasEgreso
+    .filter((f) => f.categoria === "TARJETA" && f.periodo <= periodoDe(hoyISO))
+    .sort((a, b) => b.periodo.localeCompare(a.periodo))[0]?.periodo;
+  if (ultimoTarjeta) {
+    for (const f of filasEgreso.filter((x) => x.categoria === "TARJETA" && x.periodo === ultimoTarjeta)) {
+      costosVigentes.push({
+        rubro: "TARJETA",
+        concepto: f.concepto,
+        monto: num(f.monto)!,
+        moneda: f.moneda as MonedaEq,
+      });
+    }
+  }
+
   const reporte = calcularEquilibrio(egresos, ingresos, {
     anio,
     hoyISO,
@@ -2105,6 +2143,7 @@ export async function loadReporteAnual(
     ventana: opciones?.ventana ?? "SOLO_MEDIDOS",
     tasas,
     divisorAguinaldo: divisor,
+    costosVigentes,
   });
 
   return {

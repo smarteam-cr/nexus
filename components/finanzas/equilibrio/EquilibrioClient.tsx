@@ -34,6 +34,8 @@ import TablaMeses from "./TablaMeses";
 import EstructuraCostos from "./EstructuraCostos";
 import ConfiabilidadDato from "./ConfiabilidadDato";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export default function EquilibrioClient({ initialReporte }: { initialReporte: ReporteAnualDTO }) {
   const r = initialReporte;
   const [escenario, setEscenario] = useState<OverrideEscenario>({});
@@ -63,7 +65,22 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   // construcción. Se dice arriba de todo, no en una nota al pie.
   const faltanTasas = r.fx.periodosSinTasa.length > 0;
 
+  // El piso que manda es el VIGENTE (lo que cuesta la operación hoy). El promedio
+  // histórico queda como segunda lectura: contesta otra pregunta.
+  const piso = r.pisoVigente?.base ?? r.equilibrio.base;
+  // La caja del año: lo que de verdad entró al banco. Casi un tercio del margen
+  // facturado todavía no está, y sin este par de números eso no se ve.
+  const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal);
+  const margenCaja = round2(cajaTotal - ind.egresosTotales);
+
   const TILES: Array<{ key: string; label: string; valor: string; nota: string; serie: SerieKey | null; simulado?: boolean }> = [
+    {
+      key: "equilibrio",
+      label: "Piso mensual",
+      valor: fmtMonto(piso, moneda),
+      nota: r.pisoVigente ? `${r.pisoVigente.cuantos} costos vigentes` : `${r.equilibrio.mesesUsados.length} mes(es) medidos`,
+      serie: "equilibrio",
+    },
     {
       key: "facturado",
       label: "Facturado del año",
@@ -87,17 +104,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       serie: null,
     },
     {
-      key: "equilibrio",
-      label: "Punto de equilibrio",
-      valor: fmtMonto(r.equilibrio.base, moneda),
-      nota: `${r.equilibrio.mesesUsados.length} mes(es) medidos`,
-      serie: "equilibrio",
-    },
-    {
       key: "margen",
       label: "Margen anual",
       valor: fmtMonto(ind.margenAnual, moneda),
-      nota: `sobre ${ind.mesesEgresoCompleto} de 12 meses completos`,
+      nota: `en caja: ${fmtMonto(margenCaja, moneda)}`,
       serie: "ingresosTotales",
       simulado: hayEscenario,
     },
@@ -105,7 +115,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       key: "cubren",
       label: "Meses sobre egresos",
       valor: `${ind.mesesQueCubren} de 12`,
-      nota: "Los ingresos cubren el gasto",
+      nota: `${ind.mesesEgresoCompleto} meses con egreso completo`,
       serie: null,
       simulado: hayEscenario,
     },
@@ -113,7 +123,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       key: "partnership",
       label: "Partnership",
       valor: fmtMonto(ind.partnershipTotal, moneda),
-      nota: "Comisiones de aliados",
+      nota:
+        r.indicadores.partnershipCobradoTotal < ind.partnershipTotal
+          ? `${fmtMonto(r.indicadores.partnershipCobradoTotal, moneda)} cobrado`
+          : "Comisiones de aliados",
       serie: "partnership",
     },
   ];
@@ -228,19 +241,30 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             </div>
             <CurvaEquilibrio
               meses={meses}
-              equilibrio={r.equilibrio.base}
+              equilibrio={piso}
               moneda={moneda}
               enfoque={enfoque}
               haySimulacion={hayEscenario}
             />
             <p className="px-4 py-2 text-[11px] text-fg-muted border-t border-line">
-              Piso mensual {fmtMonto(r.equilibrio.base, moneda)} ·{" "}
-              {VENTANA_EQUILIBRIO_LABEL[r.equilibrio.ventana]?.toLowerCase()} ({r.equilibrio.mesesUsados.length}{" "}
-              mes/es). Con los meses de plan incluidos daría {fmtMonto(r.equilibrio.baseOtraVentana, moneda)}.
-              {r.equilibrio.metas.length > 0 && (
+              {r.pisoVigente ? (
+                <>
+                  Piso mensual {fmtMonto(r.pisoVigente.base, moneda)}: lo que cuesta sostener la operación hoy,
+                  sobre {r.pisoVigente.cuantos} costos vigentes. El promedio de los meses ya medidos daría{" "}
+                  {fmtMonto(r.equilibrio.base, moneda)} ({r.equilibrio.mesesUsados.length} mes/es).
+                </>
+              ) : (
+                <>
+                  Piso mensual {fmtMonto(r.equilibrio.base, moneda)} ·{" "}
+                  {VENTANA_EQUILIBRIO_LABEL[r.equilibrio.ventana]?.toLowerCase()} (
+                  {r.equilibrio.mesesUsados.length} mes/es).
+                </>
+              )}
+              {(r.pisoVigente?.metas ?? r.equilibrio.metas).length > 0 && (
                 <>
                   {" "}
-                  Meta sana: {r.equilibrio.metas.map((m) => fmtMonto(m.monto, moneda)).join(" a ")}.
+                  Meta sana:{" "}
+                  {(r.pisoVigente?.metas ?? r.equilibrio.metas).map((m) => fmtMonto(m.monto, moneda)).join(" a ")}.
                 </>
               )}
               {r.fx.tasas.length > 0 && <> Todo en {moneda}, convertido con la tasa de cada mes.</>}
@@ -255,7 +279,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             hayEscenario={hayEscenario}
             onEditar={editar}
             onReset={() => setEscenario({})}
-            onIgualar={() => setEscenario(igualarAlEquilibrio(r.meses, r.equilibrio.base))}
+            onIgualar={() => setEscenario(igualarAlEquilibrio(r.meses, piso))}
             onLimpiar={() => setEscenario(limpiarFacturado(r.meses))}
           />
 

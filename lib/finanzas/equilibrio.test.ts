@@ -15,8 +15,10 @@
  *   F. metasDe — el colchón es editable, no una tasa
  *   G. brechaDe — el signo importa
  *   H. reservaAguinaldoMensual — dos criterios que conviven
+ *   H2. pisoVigente — lo que cuesta la operación HOY (el titular del reporte)
  *   I. calcularEquilibrio — composición e invariantes
  *   J. estructura y desglose por servicio
+ *   K. el FX no se escapa del módulo (candado estructural)
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -28,6 +30,7 @@ import {
   convertir,
   metasDe,
   periodosDelAnio,
+  pisoVigente,
   promedioMensual,
   reservaAguinaldoMensual,
   type EgresoDeMes,
@@ -402,6 +405,86 @@ describe("H · reservaAguinaldoMensual", () => {
 
   it("H3 un divisor inválido devuelve 0 en vez de Infinity", () => {
     expect(reservaAguinaldoMensual(1000, 0)).toBe(0);
+  });
+});
+
+// ── H2 · pisoVigente ────────────────────────────────────────────────────────────
+
+describe("H2 · pisoVigente — lo que cuesta la operación HOY", () => {
+  const cv = (rubro: RubroEgreso, concepto: string, monto: number, moneda: "CRC" | "USD" = "USD") => ({
+    rubro,
+    concepto,
+    monto,
+    moneda,
+  });
+  const TASA = { periodo: "2026-08", crcPorUsd: 500, fuente: "Excel" };
+
+  it("suma los costos vigentes por rubro, sin promediar nada", () => {
+    const r = pisoVigente(
+      [cv("PLANILLA", "Marco", 2400), cv("PLANILLA", "Elías", 3000), cv("HERRAMIENTA", "HubSpot", 535)],
+      { monedaPresentacion: "USD", tasa: TASA },
+    );
+    expect(r.porRubro.PLANILLA).toBe(5400);
+    expect(r.porRubro.HERRAMIENTA).toBe(535);
+    expect(r.base).toBe(5935);
+    expect(r.cuantos).toBe(3);
+  });
+
+  it("convierte los colones con la tasa del mes en curso", () => {
+    const r = pisoVigente([cv("PLANILLA", "Marco", 1_200_000, "CRC")], {
+      monedaPresentacion: "USD",
+      tasa: TASA,
+    });
+    expect(r.base).toBe(2400);
+  });
+
+  it("SIN tasa, lo que está en colones queda fuera del piso y se lista", () => {
+    // Un piso inflado por una conversión inventada es peor que uno que declara lo que
+    // le falta: con el primero alguien decide, con el segundo alguien pregunta.
+    const r = pisoVigente([cv("PLANILLA", "Marco", 1_200_000, "CRC"), cv("PLANILLA", "Andrés", 2500)], {
+      monedaPresentacion: "USD",
+      tasa: null,
+    });
+    expect(r.base).toBe(2500);
+    expect(r.noConvertidos).toEqual([{ concepto: "Marco", moneda: "CRC", monto: 1_200_000 }]);
+    expect(r.cuantos).toBe(1);
+  });
+
+  it("la reserva de aguinaldo entra aparte: es un devengo, no un costo dado de alta", () => {
+    const r = pisoVigente([cv("PLANILLA", "Marco", 2400)], {
+      monedaPresentacion: "USD",
+      tasa: TASA,
+      reservaAguinaldoMensual: 1261.85,
+    });
+    expect(r.porRubro.RESERVA_AGUINALDO).toBe(1261.85);
+    expect(r.base).toBe(3661.85);
+    // No cuenta como "costo vigente": nadie la dio de alta.
+    expect(r.cuantos).toBe(1);
+  });
+
+  it("sin costos el piso es 0 y lo dice, en vez de fingir un número", () => {
+    const r = pisoVigente([], { monedaPresentacion: "USD", tasa: TASA });
+    expect(r.base).toBe(0);
+    expect(r.cuantos).toBe(0);
+  });
+
+  it("EL CASO REAL de agosto 2026: 13 salarios dan un piso distinto al promedio histórico", () => {
+    // El promedio de los meses medidos daba $22.967 porque el libro de pagos tenía 12
+    // personas; la nómina real son 13 y cuesta $22.668 solo de planilla. Medir el piso
+    // sobre el pasado dejaba $11.000/mes afuera antes de corregir la nómina.
+    const r = pisoVigente(
+      [
+        cv("PLANILLA", "planilla completa", 12_500),
+        cv("PLANILLA", "planilla en colones", 5_084_000, "CRC"),
+        cv("FIJO_OPERACION", "fijos", 2111.33),
+        cv("HERRAMIENTA", "herramientas", 1708.6),
+        cv("TARJETA", "tarjeta", 130.6),
+      ],
+      { monedaPresentacion: "USD", tasa: TASA, reservaAguinaldoMensual: 1261.85 },
+    );
+    expect(r.porRubro.PLANILLA).toBe(22_668);
+    expect(r.base).toBe(27_880.38);
+    expect(r.metas.map((m) => m.monto)).toEqual([30_668.42, 32_062.44]);
   });
 });
 

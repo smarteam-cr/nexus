@@ -79,21 +79,45 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
       cobrado: SERIES_PALETTE[3]!,
       ingresosTotales: SERIES_PALETTE[1]!,
       equilibrio: SERIES_PALETTE[2]!,
-      partnership: SERIES_PALETTE[3]!,
+      // ⚠ NO el mismo verde que `cobrado`: compartían índice de paleta y las barras del
+      // aliado se confundían con la línea de la caja cobrada, que es justo la que uno
+      // busca de un vistazo. El verde queda reservado a la plata que entró.
+      partnership: SERIES_PALETTE[6]!,
     };
     const atenuada = (k: SerieKey) => enfoque !== null && enfoque !== k;
-    const linea = (name: string, k: SerieKey, data: number[], extra: Record<string, unknown> = {}) => ({
+    /**
+     * ⚠ `opts` es un objeto CERRADO de dos banderas y no un `extra` libre, a propósito.
+     * La versión anterior recibía un objeto que se esparcía al final, así que un
+     * `{ lineStyle: { type: "dashed" } }` REEMPLAZABA el lineStyle entero y se llevaba
+     * puestas la opacidad del enfoque y el grosor. Efecto: las dos series punteadas no
+     * se apagaban nunca al enfocar otra, y al enfocarlas ellas no se engrosaban —
+     * mientras sus círculos, que sí conservaban la opacidad, se apagaban solos. Se veía
+     * exactamente como se sentía: roto. Con dos banderas no hay forma de que vuelva.
+     */
+    const linea = (
+      name: string,
+      k: SerieKey,
+      data: number[],
+      opts: { punteada?: boolean; sinSimbolo?: boolean } = {},
+    ) => ({
       name,
       type: "line" as const,
       data,
-      smooth: true,
+      // Recta, NO suavizada: entre febrero y marzo no hay nada, y una curva suave
+      // dibujaba ahí un pico más alto que febrero que nunca ocurrió.
+      smooth: false,
       symbolSize: 6,
       // Un mes sin dato es un HUECO, nunca un cero (misma regla que ReportesPanel).
       connectNulls: false,
       itemStyle: { color: COLOR[k], opacity: atenuada(k) ? 0.15 : 1 },
-      lineStyle: { color: COLOR[k], width: enfoque === k ? 3 : 2, opacity: atenuada(k) ? 0.15 : 1 },
+      lineStyle: {
+        color: COLOR[k],
+        width: enfoque === k ? 3 : 2,
+        opacity: atenuada(k) ? 0.15 : 1,
+        ...(opts.punteada ? { type: "dashed" as const } : {}),
+      },
+      ...(opts.sinSimbolo ? { symbol: "none" as const } : {}),
       z: enfoque === k ? 5 : 2,
-      ...extra,
     });
 
     const parciales = tramos(meses, (m) => m.estado === "PARCIAL");
@@ -194,20 +218,15 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
           },
         },
         linea("Egresos", "egresos", meses.map((m) => m.egresos)),
-        linea(
-          "Facturado",
-          "facturado",
-          meses.map((m) => m.facturadoEfectivo),
-          // Punteada mientras haya escenario: el conjunto ya no es el real.
-          haySimulacion ? { lineStyle: { color: COLOR.facturado, width: 2, type: "dashed" } } : {},
-        ),
+        // Punteada mientras haya escenario: el conjunto ya no es el real.
+        linea("Facturado", "facturado", meses.map((m) => m.facturadoEfectivo), { punteada: haySimulacion }),
         linea("Cobrado", "cobrado", meses.map((m) => m.cobrado)),
-        linea("Ingresos totales", "ingresosTotales", meses.map((m) => m.ingresosTotales), {
-          lineStyle: { color: COLOR.ingresosTotales, width: 2, type: "dashed" },
-        }),
+        linea("Ingresos totales", "ingresosTotales", meses.map((m) => m.ingresosTotales), { punteada: true }),
+        // El piso es una línea de REFERENCIA: sin símbolos, porque no hay un "dato de
+        // marzo" que marcar — es el mismo número los doce meses.
         linea("Punto de equilibrio", "equilibrio", meses.map(() => equilibrio), {
-          symbol: "none",
-          lineStyle: { color: COLOR.equilibrio, width: 2, type: "dashed" },
+          punteada: true,
+          sinSimbolo: true,
         }),
       ],
     };

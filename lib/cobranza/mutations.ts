@@ -826,6 +826,13 @@ export async function updateCosto(
       },
     });
     const hoy = hoyCR();
+    // CUÁNDO OCURRIÓ DE VERDAD. `createCosto` ya aceptaba `fechaEfectiva` y esta
+    // mutación la ignoraba: el Zod la recibía, el PATCH la mandaba y acá se caía en
+    // silencio, así que TODO cambio de monto quedaba fechado el día en que alguien lo
+    // tecleó. Un aumento que arranca el 31 de agosto anotado con fecha de hoy le suma
+    // el mes entero al costo de agosto — y ese número es el que sostiene el punto de
+    // equilibrio. Sin fecha declarada se sigue usando hoy, que es el caso común.
+    const cuando = data.fechaEfectiva ?? hoy;
     const emit = (tipo: MovimientoTipo, fechaEfectivaISO: string, extra?: { montoAnterior?: number; notas?: string | null }) =>
       registrarMovimiento(tx, {
         costoId: costo.id,
@@ -837,10 +844,10 @@ export async function updateCosto(
         montoAnterior: extra?.montoAnterior ?? null,
       });
     // Un PATCH puede disparar varios movimientos (cambió monto Y pausó).
-    if (montoCambia) await emit("CAMBIO_MONTO", hoy, { montoAnterior });
-    if (activoCambia) await emit(data.activo ? "REACTIVACION" : "PAUSA", hoy);
+    if (montoCambia) await emit("CAMBIO_MONTO", cuando, { montoAnterior });
+    if (activoCambia) await emit(data.activo ? "REACTIVACION" : "PAUSA", cuando);
     if (bajaSet) await emit("BAJA", finalizadoNuevoISO!, { notas: data.motivoMovimiento ?? null });
-    if (bajaLimpia) await emit("REACTIVACION", hoy, { notas: data.motivoMovimiento ?? null });
+    if (bajaLimpia) await emit("REACTIVACION", cuando, { notas: data.motivoMovimiento ?? null });
     return { id: costo.id };
   });
 }

@@ -110,6 +110,11 @@ export interface OpcionesEquilibrio {
   colchones?: number[]; // default [10, 15]
   /** Divisor de la reserva de aguinaldo. 12 = la regla de Nexus; el Excel usa 10. */
   divisorAguinaldo?: number;
+  /**
+   * Los costos que están vigentes HOY, ya mensualizados. Con esto se calcula el piso
+   * vigente, que es el titular del reporte. Sin esto, solo queda el promedio histórico.
+   */
+  costosVigentes?: CostoVigente[];
 }
 
 // ── Tipos de salida ─────────────────────────────────────────────────────────────
@@ -177,6 +182,11 @@ export interface ReporteEquilibrio {
     mesesConDato: number;
     mesesEgresoCompleto: number;
   };
+  /**
+   * El piso de HOY, calculado sobre los costos vigentes. Es el titular del reporte.
+   * null = no se le pasaron costos vigentes y solo hay lectura histórica.
+   */
+  pisoVigente: PisoVigente | null;
   equilibrio: {
     base: number;
     metodo: "PROMEDIO_MENSUAL_TOTAL";
@@ -317,6 +327,80 @@ export function brechaDe(
 export function reservaAguinaldoMensual(totalAnual: number, divisor = DIVISOR_AGUINALDO_NEXUS): number {
   if (!Number.isFinite(divisor) || divisor <= 0) return 0;
   return round2(totalAnual / divisor);
+}
+
+/** Un costo que está vigente HOY, ya mensualizado (un ANUAL entra dividido /12). */
+export interface CostoVigente {
+  rubro: RubroEgreso;
+  concepto: string;
+  monto: number;
+  moneda: MonedaEq;
+}
+
+export interface PisoVigente {
+  base: number;
+  porRubro: Record<RubroEgreso, number>;
+  /** Cuántos costos entraron a la cuenta. */
+  cuantos: number;
+  /** Lo que no se pudo convertir y por lo tanto NO está sumado. */
+  noConvertidos: Array<{ concepto: string; moneda: MonedaEq; monto: number }>;
+  metas: Array<{ colchonPct: number; monto: number; etiqueta: string }>;
+}
+
+/**
+ * EL PISO DE HOY: cuánto cuesta sostener la operación este mes, con los costos que
+ * están vigentes ahora. Sin promediar nada.
+ *
+ * ── POR QUÉ EXISTE, AL LADO DEL PROMEDIO ─────────────────────────────────────
+ * `promedioMensual` contesta "cuánto costó en promedio" y sirve para leer el pasado.
+ * Pero la pregunta que alguien se hace mirando este reporte es otra: "¿cuánto tengo
+ * que facturar ESTE mes?", y para eso el pasado es la fuente equivocada — sobre todo
+ * cuando el libro de pagos va atrasado. El cruce contra el Excel lo midió: el promedio
+ * salía $11.000/mes por debajo del costo real porque la planilla registrada tenía
+ * menos gente que la que efectivamente cobra.
+ *
+ * Acá la fuente es el CATÁLOGO de costos activos, que es el que una persona mantiene
+ * al día. Decisión de Elías, 2026-08-18.
+ *
+ * La reserva de aguinaldo entra por parámetro y no como un costo más: no es un costo
+ * vigente que alguien dio de alta, es un devengo que se deriva de la planilla.
+ */
+export function pisoVigente(
+  costos: readonly CostoVigente[],
+  opciones: {
+    monedaPresentacion: MonedaEq;
+    tasa: TasaDeMes | null;
+    reservaAguinaldoMensual?: number;
+    colchones?: readonly number[];
+  },
+): PisoVigente {
+  const porRubro = rubrosEnCero();
+  const noConvertidos: PisoVigente["noConvertidos"] = [];
+  let cuantos = 0;
+
+  for (const c of costos) {
+    const r = convertir(c.monto, c.moneda, opciones.monedaPresentacion, opciones.tasa);
+    if (r === null) {
+      // Sin tasa no se aproxima. Queda listado y FUERA del piso: un piso inflado por
+      // una conversión inventada es peor que uno que declara lo que le falta.
+      noConvertidos.push({ concepto: c.concepto, moneda: c.moneda, monto: c.monto });
+      continue;
+    }
+    porRubro[c.rubro] = round2(porRubro[c.rubro] + r.monto);
+    cuantos++;
+  }
+
+  const reserva = opciones.reservaAguinaldoMensual ?? 0;
+  if (reserva > 0) porRubro.RESERVA_AGUINALDO = round2(porRubro.RESERVA_AGUINALDO + reserva);
+
+  const base = round2(RUBROS.reduce((n, r) => n + porRubro[r], 0));
+  return {
+    base,
+    porRubro,
+    cuantos,
+    noConvertidos,
+    metas: metasDe(base, opciones.colchones ?? COLCHONES_DEFECTO),
+  };
 }
 
 /**
@@ -686,11 +770,27 @@ export function calcularEquilibrio(
     });
   }
 
+  // El piso de hoy se calcula con la tasa del mes EN CURSO: es un costo de este mes,
+  // no del promedio del año. Si ese mes no tiene tasa, se cae a la última cargada.
+  const tasaHoy =
+    tasaPorPeriodo.get(periodoHoy) ?? [...tasas].sort((a, b) => b.periodo.localeCompare(a.periodo))[0] ?? null;
+
   return {
     anio: opciones.anio,
     hoyISO: opciones.hoyISO,
     monedaPresentacion: moneda,
     meses,
+    pisoVigente: opciones.costosVigentes
+      ? pisoVigente(opciones.costosVigentes, {
+          monedaPresentacion: moneda,
+          tasa: tasaHoy,
+          reservaAguinaldoMensual: reservaAguinaldoMensual(
+            totalAguinaldoAnual,
+            opciones.divisorAguinaldo ?? DIVISOR_AGUINALDO_NEXUS,
+          ),
+          colchones: opciones.colchones ?? COLCHONES_DEFECTO,
+        })
+      : null,
     indicadores: {
       egresosTotales,
       facturadoTotal,
