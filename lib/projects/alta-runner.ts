@@ -362,14 +362,57 @@ async function terminarElAlta(
      sello de arriba lo garantiza aunque se reintente diez— y va fuera de la transacción porque
      es larga y no puede hacer fallar el alta que ya terminó. */
   if (!ctx.yaReclasificado) {
-    void import("@/lib/sessions/reclassify")
-      .then((m) => m.reclassifyClientSessions(ctx.clientId))
-      .catch(() => {});
+    void vincularLasReunionesDelCliente(ctx.clientId).catch(() => {});
   }
+}
+
+/**
+ * Las reuniones del cliente terminan colgadas del proyecto que acaba de nacer.
+ *
+ * ── PRIMERO ATRIBUIR, DESPUÉS CLASIFICAR — y ese orden ES el arreglo (2026-08-18) ──────────
+ * Antes acá solo estaba la segunda mitad, y por eso un proyecto podía nacer sin ninguna reunión:
+ *
+ *   1. El alta crea el Client (`app/api/projects/route.ts`). A diferencia de la otra puerta que
+ *      crea clientes (`POST /api/clients`), no corría la atribución.
+ *   2. Un segundo y medio después, esto reclasificaba. La reclasificación consulta las sesiones
+ *      DEL CLIENTE — y no había ninguna, porque nadie se las había atribuido todavía.
+ *   3. El sello `altaReclasificadoAt` ya estaba puesto (va en la misma escritura que marca
+ *      «listo», a propósito), así que no volvía a correr NUNCA.
+ *
+ * Resultado medido en producción: «Discover Puerto Rico», cliente creado 2 segundos antes,
+ * 2 reuniones suyas atribuibles por título, 0 vínculos, y el CSE reportando que el proyecto no
+ * tiene nada. Ver INV21 y `scripts/sanar-vinculos-de-alta.ts`.
+ *
+ * Va en el fondo (el llamador hace `void`) y en secuencia: la atribución es una pasada sobre el
+ * corpus, así que awaitarla en la request le costaría segundos al alta — pero encadenarla acá no
+ * le cuesta a nadie, y es lo único que garantiza el orden.
+ *
+ * ⚠ VENTANA ABIERTA en la reclasificación, y SOLO acá. El default de 90 días es correcto para el
+ * disparo repetido (el sync, el resolver): acota el gasto sobre un cliente que ya tiene su
+ * historial vinculado. Pero éste es el PRIMER disparo del proyecto y el único que va a haber
+ * —el sello lo garantiza—, así que 90 días deja afuera a todo cliente con historia más vieja.
+ * Medido: «kamalio», 3 reuniones de 2025 y un alta de agosto 2026, proyecto sin ninguna. El tope
+ * de 60 sesiones sigue acotando el gasto, y con un solo proyecto activo ni llama al modelo.
+ */
+async function vincularLasReunionesDelCliente(clientId: string): Promise<void> {
+  try {
+    const { resolveAllSessions } = await import("@/lib/sessions/resolve-client");
+    // `reclassify: false`: la reclasificación la dispara la línea de abajo, con la ventana
+    // abierta. Dejarla acá la correría con el default de 90 días y volvería a perder a kamalio.
+    await resolveAllSessions({ reclassify: false });
+  } catch (e) {
+    // Si la atribución falla, se reclasifica igual con lo que haya: peor es no intentarlo.
+    console.error(`[alta] la atribución de sesiones del cliente ${clientId} falló`, e);
+  }
+  const { reclassifyClientSessions } = await import("@/lib/sessions/reclassify");
+  await reclassifyClientSessions(clientId, { sinceDays: VENTANA_DEL_ALTA_DIAS, max: 60 });
 }
 
 /** El objeto "projects" tal como lo nombran las rutas de lectura del portal. */
 const SLUG_PROYECTOS = "projects";
+
+/** Diez años: en la práctica, «todo el historial del cliente». Ver el docblock de arriba. */
+const VENTANA_DEL_ALTA_DIAS = 3650;
 
 /**
  * ¿Un intento anterior de ESTA alta ya dejó un record en HubSpot?

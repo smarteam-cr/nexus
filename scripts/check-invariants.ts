@@ -983,6 +983,46 @@ async function main(): Promise<number> {
     console.log("✓ INV20: toda comisión de aliado COBRADA tiene confirmadoPor.");
   }
 
+  /* ── Inv 21: ningún proyecto activo se quedó SIN NINGUNA reunión vinculada mientras su
+     cliente sí tiene sesiones (2026-08-18) ─────────────────────────────────────────────
+     El alta sella `Project.altaReclasificadoAt` para pagar la reclasificación una sola vez.
+     El sello es correcto; lo que faltaba es que la corrida tuviera algo que mirar. Dos formas
+     de que no lo tenga, las dos vistas en producción el mismo día:
+       (a) el cliente acaba de nacer en el alta y todavía ninguna sesión le fue atribuida
+           («Discover Puerto Rico»: cliente creado 2 segundos antes de reclasificar);
+       (b) el historial del cliente es más viejo que la ventana de la reclasificación
+           («kamalio»: 3 sesiones de 2025, alta de agosto 2026).
+     En los dos casos el CSE ve lo mismo —el proyecto no tiene ninguna reunión— y como el
+     sello ya está puesto, no se arregla solo nunca. Este invariante lo hace visible.
+     Remedio: `scripts/sanar-vinculos-de-alta.ts` (dry-run primero). ⚠ Si se cambia el
+     criterio de acá, cambiarlo también allá: el invariante y su remedio tienen que mirar lo
+     mismo, o el gate reporta algo que el script no cubre. */
+  const conSello = await prisma.project.findMany({
+    where: { status: "active", altaReclasificadoAt: { not: null } },
+    select: { id: true, name: true, clientId: true, _count: { select: { sessions: true } } },
+  });
+  const huerfanos: string[] = [];
+  for (const p of conSello) {
+    if (p._count.sessions > 0) continue;
+    const sesionesDelCliente = await prisma.firefliesSession.count({
+      where: {
+        OR: [{ manualClientId: p.clientId }, { manualClientId: null, resolvedClientId: p.clientId }],
+        date: { lte: new Date() },
+      },
+    });
+    if (sesionesDelCliente > 0) huerfanos.push(`${p.name} (${sesionesDelCliente} sesión/es del cliente)`);
+  }
+  if (huerfanos.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV21 VIOLADO: ${huerfanos.length} proyecto(s) sin NINGUNA reunión vinculada aunque su cliente sí tiene:\n` +
+        huerfanos.map((h) => `    · ${h}`).join("\n") +
+        `\n    Remedio: npx tsx --env-file=.env scripts/sanar-vinculos-de-alta.ts (dry-run primero).`,
+    );
+  } else {
+    console.log(`✓ INV21: ningún proyecto quedó sin reuniones teniendo el cliente sesiones (${conSello.length} con sello).`);
+  }
+
   return violations;
 }
 

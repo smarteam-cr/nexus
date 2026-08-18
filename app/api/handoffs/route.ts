@@ -66,6 +66,13 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
       clientId = created.id;
+      /* ⚠ Un cliente NUEVO puede matchear reuniones que ya están, y hay que atribuírselas ANTES
+         de que se reclasifiquen a sus proyectos — si no, el proyecto nace sin ninguna. Es el
+         defecto de «Discover Puerto Rico» (2026-08-18); el censo vive en
+         lib/sessions/puertas-que-crean-cliente.test.ts y el estado lo caza INV21. */
+      await (await import("@/lib/sessions/resolve-client"))
+        .resolveAllSessions({ reclassify: false })
+        .catch((e) => console.error("[handoff] la atribución del cliente nuevo falló", e));
     }
   } else {
     return NextResponse.json(

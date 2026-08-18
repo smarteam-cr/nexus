@@ -92,6 +92,14 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       })
     ).id;
+    /* ⚠ Un cliente NUEVO puede matchear reuniones que ya están. Acá no hay proyecto todavía, así
+       que no existe la carrera con la reclasificación que rompió a «Discover Puerto Rico»
+       (2026-08-18) — pero el feeding del business case SÍ va a buscar las sesiones del cliente,
+       y sin esto las encuentra vacías. `void` a propósito: nada de acá depende del orden.
+       El censo de puertas vive en lib/sessions/puertas-que-crean-cliente.test.ts. */
+    void import("@/lib/sessions/resolve-client")
+      .then((m) => m.resolveAllSessions())
+      .catch((e) => console.error("[business-case] la atribución del cliente nuevo falló", e));
   } else {
     clientId = resolucion.clientId;
     /* ⚠ Reusar NO cambia el `kind`. Si el cliente ya era CLIENTE, degradarlo a PROSPECTO por

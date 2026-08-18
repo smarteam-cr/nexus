@@ -144,6 +144,11 @@ export async function POST(req: NextRequest) {
           select: { id: true },
         })
       ).id;
+      /* ⚠ Este cliente NUEVO puede matchear sesiones que ya existen, y hay que atribuírselas
+         ANTES de reclasificar. NO se hace acá sino en `alta-runner.ts`, en el bloque de fondo
+         que ya corre después de marcar el alta «listo»: acá bloquearía la respuesta con una
+         pasada sobre el corpus entero, y allá el ORDEN respecto de la reclasificación —que es
+         lo único que importa— se puede garantizar sin costarle latencia a nadie. */
     } else {
       clientId = resolucion.clientId;
       reusado = { nombre: resolucion.nombre, reapuntado: resolucion.estado === "encontrado-fusionado" };

@@ -164,15 +164,26 @@ vi.mock("@/lib/canvas/default-canvases", () => ({
   createHandoffCanvas: async (projectId: string) => { canvasesCreados.push(projectId); return "canvas-1"; },
 }));
 
+/* El ORDEN de estas dos es el arreglo de «Discover Puerto Rico» (2026-08-18): la atribución de
+   sesiones al cliente tiene que correr ANTES de la reclasificación, o ésta consulta las sesiones
+   del cliente y no encuentra ninguna. Por eso las dos escriben en la MISMA lista. */
+const pasos: string[] = [];
 const reclasificaciones: string[] = [];
+vi.mock("@/lib/sessions/resolve-client", () => ({
+  resolveAllSessions: async () => {
+    pasos.push("atribuir");
+    return { total: 0, changed: 0, nullCount: 0, byClient: {}, deltas: [] };
+  },
+}));
 vi.mock("@/lib/sessions/reclassify", () => ({
-  reclassifyClientSessions: async (clientId: string) => { reclasificaciones.push(clientId); },
+  reclassifyClientSessions: async (clientId: string) => { pasos.push("reclasificar"); reclasificaciones.push(clientId); },
 }));
 
 const { avanzarAlta } = await import("./alta-runner");
 
 /** Cede el turno para que corran los `void … .then()` que el motor dispara sin esperar. */
-const flush = () => new Promise((r) => setTimeout(r, 0));
+/* Varios turnos: el bloque de fondo encadena importar → atribuir → importar → reclasificar. */
+const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
 
 // ── Fixture ──────────────────────────────────────────────────────────────────
 
@@ -206,12 +217,19 @@ function sembrar(over: Partial<FilaProyecto> = {}): FilaProyecto {
   return fila;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  /* ⚠ DRENAR ANTES DE RESETEAR. El alta dispara su trabajo de fondo con `void`, así que al
+     terminar un test puede quedar una cadena a medio andar. Si no se la deja aterrizar acá,
+     cae DENTRO del test siguiente y le ensucia los contadores — pasó de verdad: el test del
+     sello leía un «reclasificar» que era del test anterior y acusaba a la corrida de pagarse
+     dos veces. El bug era del test, no del motor. */
+  await flush();
   db.proyectos.clear();
   db.handoffs.length = 0;
   crearLlamadas.length = 0;
   canvasesCreados.length = 0;
   reclasificaciones.length = 0;
+  pasos.length = 0;
   busquedaDevuelve = [];
   busquedaFalla = false;
   proximoIdCreado = "hs-nuevo";
@@ -424,6 +442,12 @@ describe("al terminar", () => {
     await avanzarAlta("p1");
     await flush();
     expect(reclasificaciones).toHaveLength(1);
+    expect(
+      pasos,
+      "atribuir va ANTES de reclasificar — al revés la reclasificación consulta las sesiones del " +
+        "cliente recién creado, no encuentra ninguna, y el sello la deja impaga para siempre " +
+        "(el caso «Discover Puerto Rico», 2026-08-18)",
+    ).toEqual(["atribuir", "reclasificar"]);
 
     // Volver a llamar sobre un alta ya terminada no hace nada.
     await avanzarAlta("p1");
