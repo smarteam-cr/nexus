@@ -47,6 +47,14 @@ import SugerenciasParticularidad, { type SugerenciaItem } from "./SugerenciasPar
 import ParticularidadToTaskModal, { type ConvertPayload } from "./ParticularidadToTaskModal";
 import TaskDetailDrawer from "./TaskDetailDrawer";
 import TimelineAssistDialog from "./TimelineAssistDialog";
+import {
+  diffAssist,
+  proyectarAceptados,
+  type FaseActual as FaseDelAssist,
+  type ItemDeAssist,
+} from "@/lib/timeline/assist-items";
+import { AcceptButton, RejectButton } from "@/components/ui/AcceptReject";
+import { cn } from "@/lib/cn";
 import PublishBar from "./PublishBar";
 import { useMe } from "@/hooks/useMe";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
@@ -125,6 +133,11 @@ interface ProposalTask {
   weekIndex: number;
   order: number;
   notes?: string | null;
+  /* Desde que el prompt del modificador vive en la tabla `Agent` (2026-08-18) emite los dos:
+     antes toda tarea que creaba nacía sin dueño y sin tipo. Sin declararlos acá, el diff por
+     ítem no los vería y el CSE los seguiría poniendo a mano. */
+  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
+  type?: "SESSION" | "TASK" | null;
 }
 interface ProposalPhase {
   id?: string;
@@ -385,6 +398,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // #4 — razón del cambio (TimelineChange/audit). Con el auto-guardado ya NO se pide
   // tipeada: las ediciones manuales usan una razón automática y la IA usa su instrucción.
   const [assistInstruction, setAssistInstruction] = useState("");
+  /* ── RESOLUCIÓN POR ÍTEM DE LA PROPUESTA DEL MODIFICADOR ────────────────────────────────
+     Se guarda lo DESCARTADO, no lo aceptado: con el conjunto vacío «Aplicar» hace exactamente
+     lo que hacía antes de esta tanda —el reemplazo completo— y el CSE tiene que sacar algo a
+     propósito para que cambie. Guardar lo aceptado invertiría ese default sin que nadie lo pida
+     y convertiría cada propuesta en un formulario obligatorio. */
+  const [assistDescartados, setAssistDescartados] = useState<Set<string>>(new Set());
+  const [assistRevision, setAssistRevision] = useState(false);
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
@@ -1051,6 +1071,47 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         })),
     [phases],
   );
+  /* Las fases actuales CON sus tareas — el diff del modificador es a nivel tarea, así que no le
+     alcanza `fasesActualesParaDeltas` (que es phase-level, para la propuesta de estructura). */
+  const fasesActualesDelAssist: FaseDelAssist[] = useMemo(
+    () =>
+      phases
+        .filter((p): p is Phase & { id: string } => !!p.id)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          durationWeeks: p.durationWeeks,
+          startWeek: p.startWeek ?? null,
+          sessionCount: p.sessionCount ?? null,
+          notes: p.notes ?? null,
+          activityType: p.activityType ?? null,
+          tasks: p.tasks
+            .filter((t): t is TaskDraft & { id: string } => !!t.id)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              weekIndex: t.weekIndex,
+              notes: t.notes ?? null,
+              party: t.party ?? null,
+              type: t.type ?? null,
+              status: t.status,
+              source: t.source,
+            })),
+        })),
+    [phases],
+  );
+  const assistItems: ItemDeAssist[] = useMemo(
+    () =>
+      proposal && !structureOnlyProposal
+        ? diffAssist(fasesActualesDelAssist, proposal, anchor || null)
+        : [],
+    [proposal, structureOnlyProposal, fasesActualesDelAssist, anchor],
+  );
+  const assistDescartadosVivos = useMemo(
+    () => assistItems.filter((i) => assistDescartados.has(i.key)).length,
+    [assistItems, assistDescartados],
+  );
+
   const proposalDeltas: ProposalDelta[] = useMemo(
     () =>
       structureOnlyProposal && proposal
@@ -1326,6 +1387,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         // El `runId` viaja hasta el "Aplicar" para que el PUT pueda cerrarle el desenlace: sin
         // eso solo se sabe cuántas propuestas se generaron, no cuántas se usaron.
         proposalMeta.current = { deAssist: true, runId: data.assistRunId ?? null };
+        // Propuesta nueva = revisión limpia: los descartes de la anterior no aplican a ésta.
+        setAssistDescartados(new Set());
+        setAssistRevision(false);
         setProposal(data.proposal as Proposal);
         setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
         setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
@@ -1344,12 +1408,29 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     setApplying(true);
     setError(null);
     try {
+      /* ⚠ Sin ningún descarte se manda la propuesta TAL CUAL, no la proyección. Las dos dan lo
+         mismo (hay test de que aceptar todo == el reemplazo entero), pero el camino de siempre
+         no puede depender de que ese test siga siendo cierto: si la proyección tuviera un bug,
+         se lo comería el 100% de los usos en vez del que de verdad descartó algo. */
+      const cuerpo =
+        assistDescartadosVivos > 0
+          ? proyectarAceptados(
+              fasesActualesDelAssist,
+              proposal,
+              new Set(assistItems.map((i) => i.key).filter((k) => !assistDescartados.has(k))),
+              anchor || null,
+            )
+          : proposal;
       const res = await fetch(`/api/projects/${projectId}/timeline`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...proposal,
-          reason: assistInstruction.trim() || "Actualización del cronograma (IA)",
+          ...cuerpo,
+          reason:
+            (assistInstruction.trim() || "Actualización del cronograma (IA)") +
+            (assistDescartadosVivos > 0
+              ? ` — se aplicaron ${assistItems.length - assistDescartadosVivos} de ${assistItems.length} cambios propuestos`
+              : ""),
           kind: "AI_ASSIST",
           instruction: assistInstruction.trim() || null,
           // Cierra el desenlace de la corrida que produjo esta propuesta (ver el PUT).
@@ -1364,6 +1445,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setProposal(null);
         setAssistWarnings([]);
         setAssistInstruction("");
+        setAssistDescartados(new Set());
+        setAssistRevision(false);
         await load();
         // El cartel del widget se apaga solo: si no, queda ámbar sobre algo ya resuelto.
         bumpGpsRefresh();
@@ -1392,6 +1475,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
     setAssistWarnings([]);
+    setAssistDescartados(new Set());
+    setAssistRevision(false);
     /* ⚠ Sin esto el cartel ámbar del widget queda encendido sobre una propuesta que ya no existe.
        Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
        aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
@@ -2296,7 +2381,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 disabled={applying}
                 className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
               >
-                {applying ? "Aplicando…" : "Aplicar cambios"}
+                {applying
+                  ? "Aplicando…"
+                  : assistDescartadosVivos > 0
+                    ? `Aplicar ${assistItems.length - assistDescartadosVivos} de ${assistItems.length}`
+                    : "Aplicar cambios"}
               </button>
               <button
                 onClick={() => void discardProposal()}
@@ -2313,6 +2402,99 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 <li key={i}>⚠ {w}</li>
               ))}
             </ul>
+          )}
+          {/* ── LA REVISIÓN POR ÍTEM ──────────────────────────────────────────────────
+                 Antes de esta tanda la propuesta era todo-o-nada: el CSE pedía «atrasá Setup una
+                 semana», el modelo de paso reescribía tres títulos, y la única salida era
+                 tragarse las cuatro cosas o descartar las cuatro. Acá cada cambio se saca solo,
+                 y «Aplicar» escribe únicamente lo que quedó. El default sigue siendo TODO. */}
+          {assistItems.length > 0 && (
+            <div className="pt-1 border-t border-violet-800/40">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setAssistRevision((v) => !v)}
+                  className="text-[11px] font-semibold text-violet-300 hover:text-fg underline underline-offset-2"
+                >
+                  {assistRevision
+                    ? "Ocultar el detalle"
+                    : `Revisar uno por uno (${assistItems.length})`}
+                </button>
+                {assistDescartadosVivos > 0 && (
+                  <span className="text-[11px] text-amber-300">
+                    {assistDescartadosVivos === 1
+                      ? "1 cambio descartado — no se va a escribir"
+                      : `${assistDescartadosVivos} cambios descartados — no se van a escribir`}
+                  </span>
+                )}
+                {assistDescartadosVivos > 0 && (
+                  <button
+                    onClick={() => setAssistDescartados(new Set())}
+                    className="text-[11px] text-fg-muted hover:text-fg underline underline-offset-2"
+                  >
+                    Volver a incluir todo
+                  </button>
+                )}
+              </div>
+              {assistRevision && (
+                <ul className="mt-2 space-y-1 max-h-72 overflow-y-auto pr-1">
+                  {assistItems.map((it) => {
+                    const fuera = assistDescartados.has(it.key);
+                    return (
+                      <li
+                        key={it.key}
+                        className={cn(
+                          "flex items-start gap-2 rounded-lg border px-2 py-1.5",
+                          fuera
+                            ? "border-line bg-surface opacity-60"
+                            : "border-violet-800/50 bg-violet-950/30",
+                        )}
+                      >
+                        <div className="flex items-center gap-1 pt-0.5">
+                          <AcceptButton
+                            size="xs"
+                            aria-label={`Incluir: ${it.titulo}`}
+                            title="Incluir este cambio al aplicar"
+                            disabled={!fuera || applying}
+                            onClick={() =>
+                              setAssistDescartados((prev) => {
+                                const n = new Set(prev);
+                                n.delete(it.key);
+                                return n;
+                              })
+                            }
+                          />
+                          <RejectButton
+                            size="xs"
+                            aria-label={`Descartar: ${it.titulo}`}
+                            title="Dejar este cambio afuera"
+                            disabled={fuera || applying}
+                            onClick={() =>
+                              setAssistDescartados((prev) => new Set(prev).add(it.key))
+                            }
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={cn(
+                              "text-[11px] font-medium break-words",
+                              fuera ? "text-fg-muted line-through" : "text-fg-secondary",
+                            )}
+                          >
+                            {it.pesado && <span className="text-amber-400 mr-1">⚠</span>}
+                            {it.titulo}
+                          </p>
+                          {it.detalle && (
+                            <p className="text-[10px] text-fg-muted break-words">
+                              {it.fase} · {it.detalle}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           )}
           <p className="text-[11px] text-gray-500">
             Los estados de las tareas existentes se conservan al aplicar. Revisá el Gantt de abajo: es la propuesta.
