@@ -46,10 +46,15 @@ export async function analyzeProjectParticipants(
   });
   if (!project) return { status: "error", reason: "Project not found" };
 
-  // Cargar últimas sesiones vinculadas al proyecto (solo miembros: included=true;
-  // las excluidas por humano no alimentan el análisis)
+  /* Cargar últimas sesiones vinculadas al proyecto (solo miembros: included=true;
+     las excluidas por humano no alimentan el análisis).
+     ⚠ Y solo las que YA OCURRIERON: este análisis mira "quiénes vienen a las reuniones"
+     y lo manda a Claude. Sin el corte, las 8 más recientes podían ser AGENDADAS — se le
+     atribuían asistencias a gente que todavía no se sentó, y desplazaban a las reales.
+     Ver `lib/sessions/ocurridas.ts`. */
+  const ahora = new Date();
   let links = await prisma.sessionProject.findMany({
-    where: { projectId, included: true },
+    where: { projectId, included: true, session: { date: { lte: ahora } } },
     orderBy: { session: { date: "desc" } },
     take: MAX_SESSIONS_TO_ANALYZE,
     select: {
@@ -72,7 +77,7 @@ export async function analyzeProjectParticipants(
     if (autoClassified > 0) {
       // Releer links después de la auto-clasificación
       links = await prisma.sessionProject.findMany({
-        where: { projectId, included: true },
+        where: { projectId, included: true, session: { date: { lte: ahora } } },
         orderBy: { session: { date: "desc" } },
         take: MAX_SESSIONS_TO_ANALYZE,
         select: {

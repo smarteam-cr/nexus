@@ -64,10 +64,14 @@ export async function POST(
       take: 10,
     }),
 
-    // Sesiones (Fireflies + Meet) recientes enriquecidas
+    /* Sesiones (Fireflies + Meet) recientes enriquecidas.
+       ⚠ La ventana tiene PISO y TECHO. El techo es nuevo (2026-08-18): `enrichedAt` no
+       alcanza para saber que la reunión pasó — el sellado incondicional que arregló la
+       Tanda R dejó filas marcadas como enriquecidas ANTES de ocurrir, así que sin el
+       `lte` una reunión agendada entraba al prompt como «reciente». */
     prisma.firefliesSession.findMany({
       where: {
-        date: { gte: thirtyDaysAgo },
+        date: { gte: thirtyDaysAgo, lte: new Date() },
         enrichedAt: { not: null },
       },
       select: { title: true, summary: true, date: true },

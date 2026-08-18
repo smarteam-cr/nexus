@@ -203,16 +203,25 @@ export async function getProjectHandoffSessions(projectId: string): Promise<Proj
  * Todas las sesiones de un CLIENTE (client-wide), por la misma regla de pertenencia.
  * Para los caminos que arman contexto a nivel cliente (no proyecto), ej. análisis y
  * el handoff legacy sin proyecto. Reemplaza los queries por título/dominio sin filtro.
+ *
+ * ⚠ SOLO SESIONES QUE YA OCURRIERON (2026-08-18). Esta función ordena por `date: desc`
+ * y recorta a `take`, así que sin el techo las reuniones AGENDADAS iban primeras y se
+ * comían la ventana: medido en producción, el 42 % del contexto de Multiquímica, el
+ * 35 % del de SmartAgro y el 24 % del de Smarteam eran reuniones que no habían pasado
+ * (18 clientes afectados). El modelo las recibía como `[fecha] Título`, sin forma de
+ * saber que no ocurrieron. Ver `lib/sessions/ocurridas.ts`.
  */
 export async function getClientSessions(
   clientId: string,
   opts: { before?: Date; take?: number } = {},
 ): Promise<ProjectSourceSession[]> {
+  // `before` (cuando viene) acota MÁS, nunca menos: un `before` futuro no puede
+  // destapar lo que todavía no ocurrió. De ahí el mínimo entre los dos techos.
+  const ahora = new Date();
+  const techo = opts.before && opts.before < ahora ? opts.before : ahora;
+
   const rows = await prisma.firefliesSession.findMany({
-    where: {
-      ...whereBelongsToClient(clientId),
-      ...(opts.before ? { date: { lte: opts.before } } : {}),
-    },
+    where: { ...whereBelongsToClient(clientId), date: { lte: techo } },
     orderBy: { date: "desc" },
     take: opts.take ?? 200,
     select: { id: true, title: true, date: true, participants: true, organizerEmail: true },

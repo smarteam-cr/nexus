@@ -18,6 +18,7 @@
  * `linkFeedsHandoff` en session-relevance.ts) — este archivo solo ordena y recorta LO QUE YA
  * pasó esa relevancia.
  */
+import { soloOcurridas } from "@/lib/sessions/ocurridas";
 
 export type HandoffSessionBlock = "antes_cierre" | "despues_cierre" | "sin_ancla";
 
@@ -82,12 +83,24 @@ function fillBlock(
  * ancha). Con `closeDateMs`, split en dos: `antes_cierre` = `date < closeDateMs` (más cercana
  * al cierre primero); `despues_cierre` = `date >= closeDateMs` (más reciente primero — el día
  * del cierre mismo cuenta como "ya cerrado", no como "antes").
+ *
+ * ⚠ LAS REUNIONES QUE NO OCURRIERON SE DESCARTAN ANTES DE REPARTIR (2026-08-18). Los dos
+ * bloques ordenan por fecha, así que una reunión AGENDADA quedaba primera en
+ * `despues_cierre` y se llevaba el tier más caro (4.000 caracteres) para traer NADA:
+ * todavía no tiene transcripción ni resumen. No es solo desperdicio de presupuesto —
+ * desplaza a una reunión real que sí lo tenía. Ver `lib/sessions/ocurridas.ts`.
+ *
+ * `ahoraMs` es un PARÁMETRO y no un `Date.now()` adentro a propósito: este archivo promete
+ * pureza (arriba), y un reloj implícito la rompería. Que sea obligatorio hace que sacar la
+ * regla sea un error de tsc, no una omisión muda.
  */
 export function planHandoffSessionBudget(
-  candidates: HandoffSessionCandidate[],
+  candidatesCrudos: HandoffSessionCandidate[],
   closeDateMs: number | null,
+  ahoraMs: number,
   cfg: HandoffSessionBudgetConfig = DEFAULT_HANDOFF_SESSION_BUDGET,
 ): HandoffSessionPlanItem[] {
+  const candidates = soloOcurridas(candidatesCrudos, ahoraMs);
   if (closeDateMs === null) {
     return fillBlock(candidates, "sin_ancla", cfg.beforeBudgetChars + cfg.afterBudgetChars, cfg.perSessionCharTiers);
   }

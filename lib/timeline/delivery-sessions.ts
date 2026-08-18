@@ -36,6 +36,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { getProjectHandoffSessions } from "@/lib/sessions/project-sources";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
+import { soloOcurridas } from "@/lib/sessions/ocurridas";
 import { addWeeks, computePhaseRanges, currentWeekIndex } from "@/lib/timeline/weeks";
 
 interface PhaseLite {
@@ -102,8 +103,13 @@ export async function countDeliverySessionsByPhase(args: {
   ]);
   const { deliveryEmails, internalEmails } = classifyTeamEmailsByArea(team);
 
-  // Pre-clasificar cada sesión: ¿es de entrega (CSE/dev + cliente)? + su fecha (epoch).
-  const deliverySessions = sessions
+  /* Pre-clasificar cada sesión: ¿es de entrega (CSE/dev + cliente)? + su fecha (epoch).
+     ⚠ `soloOcurridas` va PRIMERO y no es cosmético: este número se llama "el real
+     ejecutado" y de acá sale al Gantt y al documento de Entrega que firma el cliente.
+     La fase EN CURSO tiene su ventana abierta hacia adelante (arranca antes de hoy y
+     termina después), así que sin este corte una reunión AGENDADA para el jueves caía
+     adentro y se contaba como sostenida. Ver `lib/sessions/ocurridas.ts`. */
+  const deliverySessions = soloOcurridas(sessions)
     .filter((s) => {
       const emails = s.participants.map((p) => p.toLowerCase());
       const hasDelivery = emails.some((e) => deliveryEmails.has(e));

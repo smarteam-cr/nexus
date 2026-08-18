@@ -1317,6 +1317,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       const plan = planHandoffSessionBudget(
         salesSessions.map((s) => ({ id: s.id, title: s.title, date: s.date })),
         dealProjectCloseDate,
+        Date.now(),
       );
       topSales = plan.flatMap((p) => (byId.has(p.id) ? [byId.get(p.id)!] : []));
       const renderBlock = async (block: HandoffSessionBlock) => {

@@ -54,9 +54,14 @@ export async function POST(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Get recent Fireflies sessions and match to client
+  /* Sesiones recientes sin procesar, matcheadas al cliente.
+     ⚠ El techo `lte: ahora` no es cosmético: esto ordena por fecha desc y corta en 50, y
+     después se queda con las 5 primeras que matchean para mandárselas a Claude. Sin el
+     techo, las reuniones AGENDADAS iban primeras y se llevaban las 5 plazas trayendo nada
+     (no tienen transcripción todavía). Ver `lib/sessions/ocurridas.ts`. */
+  const ahora = new Date();
   const recentSessions = await prisma.firefliesSession.findMany({
-    where: lastRun ? { date: { gt: lastRun.createdAt } } : {},
+    where: lastRun ? { date: { gt: lastRun.createdAt, lte: ahora } } : { date: { lte: ahora } },
     orderBy: { date: "desc" },
     take: 50,
   });
@@ -241,9 +246,13 @@ export async function GET(
     select: { createdAt: true },
   }) : null;
 
-  // Get recent sessions and match to client
+  // El contador de "sin procesar" mira EXACTAMENTE lo mismo que el procesador de arriba
+  // (incluido el techo de fecha), o promete trabajo que el botón no va a hacer.
+  const ahoraContador = new Date();
   const recentSessions = await prisma.firefliesSession.findMany({
-    where: lastRun ? { date: { gt: lastRun.createdAt } } : {},
+    where: lastRun
+      ? { date: { gt: lastRun.createdAt, lte: ahoraContador } }
+      : { date: { lte: ahoraContador } },
     orderBy: { date: "desc" },
     take: 50,
     select: { title: true, participants: true },

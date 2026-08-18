@@ -4,7 +4,9 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-18**, punta `d8f1d82`. **Pusheado y deployado — nada pendiente de subir.**
+> Última actualización: **2026-08-18**, punta `537097d`. Lo de este plan está **pusheado y
+> deployado** hasta `d8f1d82`; lo que hay encima es de otras tandas (el medidor de IA y el
+> incidente REMPRO) y **está commiteado sin subir**.
 
 ---
 

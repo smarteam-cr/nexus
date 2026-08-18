@@ -207,10 +207,17 @@ async function loadLifecycleBatchUncached(
       select: { projectId: true, gate: true, markedAt: true, markedBy: true, source: true, note: true },
     }),
     prisma.csSettings.findUnique({ where: { id: "cs" }, select: { uusValidationThreshold: true } }),
-    // Sesiones tituladas kickoff (señal alternativa de salida de HAND_OFF para
-    // proyectos previos al botón "Publicar kickoff").
+    /* Sesiones tituladas kickoff (señal alternativa de salida de HAND_OFF para
+       proyectos previos al botón "Publicar kickoff").
+       ⚠ Solo las que YA OCURRIERON: un kickoff AGENDADO para la semana que viene sacaba
+       al proyecto de HAND_OFF hoy — la etapa del ciclo de vida decía que ya pasó algo que
+       todavía no pasó. Ver `lib/sessions/ocurridas.ts`. */
     prisma.sessionProject.findMany({
-      where: { projectId: { in: projectIds }, included: true, session: { OR: KICKOFF_TITLE_FILTERS } },
+      where: {
+        projectId: { in: projectIds },
+        included: true,
+        session: { AND: [{ OR: KICKOFF_TITLE_FILTERS }, { date: { lte: new Date() } }] },
+      },
       select: { projectId: true, session: { select: { date: true } } },
     }),
   ]);
