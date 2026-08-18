@@ -236,6 +236,27 @@ export async function POST(req: NextRequest) {
       console.warn(anotarReapunte(reapunte, reusado?.nombre ?? "", businessCases));
     }
 
+    /* ⭐ VENDER ASCIENDE A LA EMPRESA. Toda empresa que entra por un caso de negocio nace
+       PROSPECTO (`business-cases/create-from-company/route.ts`), y hasta el 2026-08-18 NADA la
+       subía al venderle: si le abrimos un proyecto, ya no es un prospecto.
+
+       El síntoma no era académico. REMPRO quedó PROSPECTO con proyecto activo, y como el índice
+       de clientes abre en la pestaña «Clientes» y su buscador solo mira la pestaña abierta,
+       buscarla daba CERO. El CSE concluyó —razonablemente— que el proyecto no se había asociado
+       y lo creó de nuevo: dos proyectos sobre el mismo trato y un record huérfano en HubSpot.
+
+       ⛔ SOLO SUBE, NUNCA BAJA, y la regla vive en el WHERE y no en un `if`: con `updateMany` el
+       cambio es un no-op silencioso para CLIENTE, ALIADO e INTERNO. Es la mitad que faltaba de la
+       simetría que ya está escrita en `create-from-company/route.ts` («reusar NO cambia el kind:
+       degradarlo lo sacaría de cartera y cobranza»).
+
+       Va DESPUÉS del reapunte y DENTRO de la transacción: sobre el cliente sobreviviente, y solo
+       si el proyecto nace de verdad. */
+    await tx.client.updateMany({
+      where: { id: clientId, kind: "PROSPECTO" },
+      data: { kind: "CLIENTE" },
+    });
+
     const proyecto = await tx.project.create({
       data: {
         clientId,

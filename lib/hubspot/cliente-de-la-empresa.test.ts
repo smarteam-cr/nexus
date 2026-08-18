@@ -201,6 +201,39 @@ describe("está cableado donde se crea un cliente, y NO en los buscadores", () =
     ).toBeGreaterThan(tx);
   });
 
+  it("⭐ dar de alta un proyecto ASCIENDE al prospecto — y solo en esa dirección", () => {
+    /* ── EL MODO DE FALLA QUE ESTO CAZA (incidente REMPRO, 2026-08-18) ─────────────────
+       Toda empresa que entra por un caso de negocio nace PROSPECTO, y hasta hoy nada la subía al
+       venderle. El síntoma no se parecía a esto: el índice de clientes abre en la pestaña
+       «Clientes» y su buscador solo mira la pestaña abierta, así que buscar la empresa daba CERO.
+       El CSE concluyó que el proyecto no se había asociado, lo creó de nuevo, y quedaron dos
+       proyectos sobre el mismo trato más un record huérfano en HubSpot.
+
+       ⛔ Las DOS asserts son igual de importantes, y la segunda más: si alguien "simplifica" esto
+       a `data: { kind: "CLIENTE" }` sin el kind en el WHERE, un ALIADO o un proyecto INTERNO se
+       convertirían en cliente al abrirles un proyecto — y entrarían a cartera y a cobranza. La
+       regla «solo sube» tiene que vivir en el WHERE, no en un `if` que alguien puede mover. */
+    const src = leer("app/api/projects/route.ts");
+    const tx = src.indexOf("prisma.$transaction");
+    expect(tx, "no se encontró la transacción del alta").toBeGreaterThan(0);
+
+    const i = src.indexOf("client.updateMany", tx);
+    expect(i, "el alta dejó de ascender al prospecto (o el ascenso se salió de la transacción)").toBeGreaterThan(tx);
+
+    const bloque = src.slice(i, i + 220);
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(60);
+    expect(bloque, "el ascenso apunta a otro cliente que el del alta").toContain("id: clientId");
+    expect(
+      bloque,
+      'el filtro `kind: "PROSPECTO"` salió del WHERE: ahora un ALIADO o un INTERNO se vuelven CLIENTE al abrirles un proyecto',
+    ).toContain('kind: "PROSPECTO"');
+    expect(bloque, "el ascenso dejó de escribir CLIENTE").toContain('kind: "CLIENTE"');
+
+    // Y va DESPUÉS del reapunte: sobre el cliente sobreviviente, no sobre la lápida.
+    const reapunte = src.indexOf("reapuntarEnTx(tx", tx);
+    expect(i, "el ascenso quedó ANTES del reapunte: ascendería la ficha muerta").toBeGreaterThan(reapunte);
+  });
+
   it("el barrido de business cases va acotado por cliente Y por los ids absorbidos", () => {
     /* Sin `clientId` un alta le tocaría los casos a otro cliente que arrastre el mismo id; sin
        `in: absorbidos` movería una sola lápida de las varias que una empresa puede haberse
