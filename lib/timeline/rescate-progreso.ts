@@ -70,6 +70,69 @@ function reponer(t: TareaRealParaRescate, durationWeeks: number) {
 }
 
 /**
+ * Las huellas de título que llegan SIN id en TODO el body — o sea, las tareas que se están
+ * MOVIENDO de fase (el saneador les quita el id porque el PUT no sabe mover: hace delete+create).
+ *
+ * Se calcula sobre el body entero y no fase por fase: la tarea sale de una fase y entra en otra,
+ * así que mirar solo la fase de origen no la encontraría. Es la trampa 1 del docblock de arriba,
+ * vista desde el lado del que borra.
+ */
+export function huellasEnMovimiento(phases: readonly PhaseInput[]): Set<string> {
+  const huellas = new Set<string>();
+  for (const p of phases) {
+    for (const t of p.tasks ?? []) {
+      if (t.id) continue;
+      const h = fingerprintFromTitle(t.title);
+      if (h) huellas.add(h);
+    }
+  }
+  return huellas;
+}
+
+/**
+ * ⭐ QUÉ SE PUEDE BORRAR POR OMISIÓN. La regla que hace que la protección sea propiedad del
+ * CAMINO DE ESCRITURA y no de un llamador.
+ *
+ * ── POR QUÉ ESTA FUNCIÓN EXISTE (2026-08-18) ─────────────────────────────────
+ * `rescatarProgreso` (abajo) protegía de verdad, pero tenía UN solo call site: la ruta del assist.
+ * El `PUT /timeline` —que es quien realmente escribe— borraba por omisión sin mirar `status` ni
+ * `source`, así que la promesa "no se pierde trabajo hecho" era cierta para UN camino, no para el
+ * dato. Cualquier llamador nuevo del PUT (el asistente que viene, un script, un payload viejo de
+ * una pestaña que quedó abierta) la reabría entera. Es el mismo defecto que ya se corrigió una vez
+ * en `apply-curated-phase.ts`, donde la protección vivía solo en el cliente.
+ *
+ * ── LA EXCEPCIÓN, Y POR QUÉ NO ES OPCIONAL ───────────────────────────────────
+ * ⚠ Una tarea protegida SÍ se borra si su título viaja sin id en el body: eso no es un olvido, es
+ * un MOVIMIENTO, y el PUT lo implementa como borrar-en-origen + crear-en-destino. Sin esta
+ * excepción, mover una tarea DONE dejaría la vieja en origen MÁS el clon nuevo en destino, y el
+ * avance la contaría como logro y como deuda a la vez.
+ *
+ * ⚠ ALCANCE: esto cubre el borrado de TAREAS por omisión. Que la propuesta saque una FASE entera
+ * (y se lleve sus tareas por cascade) lo sigue cubriendo solo `rescatarProgreso`, en el camino del
+ * assist — la UI no le ofrece borrar fases al CSE y el nuke completo es otro endpoint con su
+ * propio permiso.
+ */
+/** Lo MÍNIMO para decidir si una tarea se puede borrar. Menos que `TareaRealParaRescate` a
+ *  propósito: el PUT no tiene por qué cargar `weekIndex`/`order`/`notes` para poder proteger. */
+export interface TareaProtegible {
+  id: string;
+  title: string;
+  status: string;
+  source?: string | null;
+}
+
+export function idsBorrablesPorOmision(
+  existentes: readonly TareaProtegible[],
+  idsQueLlegan: ReadonlySet<string>,
+  enMovimiento: ReadonlySet<string>,
+): string[] {
+  return existentes
+    .filter((t) => !idsQueLlegan.has(t.id))
+    .filter((t) => !isKept(t) || enMovimiento.has(fingerprintFromTitle(t.title)))
+    .map((t) => t.id);
+}
+
+/**
  * Devuelve las fases de la propuesta con lo protegido repuesto, y los avisos para la pantalla.
  * Se avisa SIEMPRE: la propuesta que el CSE ve tiene que coincidir con lo que se va a aplicar.
  *

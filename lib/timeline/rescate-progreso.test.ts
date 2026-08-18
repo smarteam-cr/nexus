@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { rescatarProgreso, type FaseRealParaRescate } from "./rescate-progreso";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  rescatarProgreso,
+  huellasEnMovimiento,
+  idsBorrablesPorOmision,
+  type FaseRealParaRescate,
+} from "./rescate-progreso";
+import { fingerprintFromTitle } from "./particularidad-identity";
 import type { PhaseInput } from "./validate";
 
 const tarea = (
@@ -197,5 +205,130 @@ describe("rescatarProgreso", () => {
     const entrada = [prop("f1", "Setup", 0, [])];
     rescatarProgreso(reales, entrada);
     expect(entrada[0].tasks).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La protección en el CAMINO DE ESCRITURA (2026-08-18)
+//
+// ── EL MODO DE FALLA QUE ESTO CAZA ───────────────────────────────────────────
+// Hasta hoy `rescatarProgreso` tenía UN call site: la ruta del assist. El `PUT /timeline` —que es
+// quien realmente escribe— borraba por omisión sin mirar `status` ni `source`; su `select` ni
+// siquiera CARGABA `status`. O sea: la promesa "no se pierde trabajo hecho" era cierta para un
+// camino, no para el dato. Cualquier llamador nuevo del PUT (el asistente que viene, un script, una
+// pestaña vieja con un payload stale) la reabría entera, y el borrado es silencioso: sin error, sin
+// aviso, sin forma de recuperar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("⭐ huellasEnMovimiento", () => {
+  it("junta las tareas SIN id de TODAS las fases, no de una", () => {
+    /* Una tarea que se mueve sale de una fase y entra en otra: mirar solo el origen no la
+       encontraría, y ésa es la trampa 1 vista desde el lado del que borra. */
+    const h = huellasEnMovimiento([
+      prop("f1", "Origen", 0, [{ id: "t1", title: "Se queda", weekIndex: 0, order: 0, notes: null }]),
+      prop("f2", "Destino", 1, [{ title: "Configurar pipeline", weekIndex: 0, order: 0, notes: null }]),
+    ]);
+    expect(h.has(fingerprintFromTitle("Configurar pipeline"))).toBe(true);
+    expect(h.has(fingerprintFromTitle("Se queda")), "una tarea CON id no se está moviendo").toBe(false);
+  });
+
+  it("una fase sin `tasks` no aporta nada (undefined = «no tocar»)", () => {
+    expect(huellasEnMovimiento([{ id: "f1", name: "X", order: 0, durationWeeks: 2 }]).size).toBe(0);
+  });
+});
+
+describe("⭐ idsBorrablesPorOmision — lo que el PUT puede borrar", () => {
+  const sinMovimiento = new Set<string>();
+
+  it("⛔ una tarea DONE omitida NO se borra", () => {
+    const borrables = idsBorrablesPorOmision(
+      [tarea("t1", "Configurar pipeline", { status: "DONE" })],
+      new Set(),
+      sinMovimiento,
+    );
+    expect(
+      borrables,
+      "el PUT borró una tarea hecha porque el body no la traía — el agujero que este arreglo cierra",
+    ).toEqual([]);
+  });
+
+  it("⛔ una tarea cargada a mano (source HUMAN) omitida tampoco", () => {
+    const borrables = idsBorrablesPorOmision(
+      [tarea("t1", "La puso el CSE", { status: "PENDING", source: "HUMAN" })],
+      new Set(),
+      sinMovimiento,
+    );
+    expect(borrables).toEqual([]);
+  });
+
+  it("una PENDING de la IA sí se borra — si no, nada se podría sacar nunca", () => {
+    const borrables = idsBorrablesPorOmision(
+      [tarea("t1", "Propuesta que no va", { status: "PENDING", source: "AGENT" })],
+      new Set(),
+      sinMovimiento,
+    );
+    expect(borrables).toEqual(["t1"]);
+  });
+
+  it("lo que SÍ viene en el body no se toca, protegido o no", () => {
+    const existentes = [
+      tarea("t1", "Hecha", { status: "DONE" }),
+      tarea("t2", "Pendiente", { status: "PENDING" }),
+    ];
+    expect(idsBorrablesPorOmision(existentes, new Set(["t1", "t2"]), sinMovimiento)).toEqual([]);
+  });
+
+  it("⚠ una DONE que se está MOVIENDO sí se borra — mover es borrar-en-origen + crear-en-destino", () => {
+    /* Sin esta excepción quedarían las dos: la vieja DONE en origen y el clon PENDING en destino,
+       y el avance la contaría como logro Y como deuda a la vez. */
+    const enMovimiento = new Set([fingerprintFromTitle("Configurar pipeline")]);
+    const borrables = idsBorrablesPorOmision(
+      [tarea("t1", "Configurar pipeline", { status: "DONE" })],
+      new Set(),
+      enMovimiento,
+    );
+    expect(borrables, "una tarea movida quedó duplicada en origen y destino").toEqual(["t1"]);
+  });
+
+  it("el movimiento no indulta a una homónima que NO se mueve", () => {
+    /* La huella coincide, así que ésta es la contracara del caso anterior: la excepción es por
+       título, y ése es su precio. Se documenta acá para que el día que muerda se vea el porqué. */
+    const enMovimiento = new Set([fingerprintFromTitle("Configurar pipeline")]);
+    expect(
+      idsBorrablesPorOmision([tarea("t9", "Configurar pipeline", { status: "DONE" })], new Set(), enMovimiento),
+    ).toEqual(["t9"]);
+  });
+});
+
+describe("⭐ el PUT usa la protección — y carga el dato que necesita", () => {
+  /* Sin este bloque los tests de arriba son verdes y decorativos: prueban un helper que nadie
+     llama. Es exactamente la trampa que este repo ya se comió tres veces. */
+  const RUTA = "app/api/projects/[projectId]/timeline/route.ts";
+  const src = fs.readFileSync(path.join(process.cwd(), RUTA), "utf8");
+
+  it("el borrado de tareas pasa por `idsBorrablesPorOmision`", () => {
+    expect(src, `${RUTA} volvió a borrar por omisión sin filtrar`).toContain("idsBorrablesPorOmision(");
+    expect(src).toContain("huellasEnMovimiento(");
+  });
+
+  it("⛔ no quedó el filtro crudo que borraba todo lo omitido", () => {
+    /* La forma exacta que había antes. Si vuelve, la protección quedó de adorno al lado. */
+    expect(src).not.toMatch(/existingTasks\s*\n?\s*\.filter\(\(t\) => !incomingTaskIds\.has\(t\.id\)\)\s*\n?\s*\.map/);
+  });
+
+  it("⚠ el `select` de tareas DEL PUT trae `status`", () => {
+    /* No es cosmético: sin `status` en el select, `isKept` ve `undefined`, toda tarea parece
+       PENDING y la protección deja pasar TODO sin fallar ni avisar. Era literalmente el estado del
+       código antes de este arreglo.
+
+       ⚠ El ancla es `tx.timelinePhase.findMany` y no `tasks: {`: hay DOS selects de tareas en este
+       archivo (el del GET y el del PUT) y el del GET ya traía `status`. Anclado al primero, este
+       test salía VERDE con el select del PUT roto — se cazó rompiéndolo a propósito. */
+    const i = src.indexOf("const existingPhases = await tx.timelinePhase.findMany(");
+    expect(i, "cambió el ancla: no se encontró la carga de fases del PUT").toBeGreaterThan(-1);
+    const bloque = src.slice(i, src.indexOf("const existingById", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(bloque, "no es el select correcto").toContain("dueDateOverride: true");
+    expect(bloque, "el select de tareas del PUT dejó de traer `status`").toContain("status: true");
   });
 });

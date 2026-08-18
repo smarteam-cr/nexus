@@ -1323,7 +1323,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         );
       } else {
         // Vive SOLO en memoria: `debeReemplazarPropuesta` nunca la pisa con una del servidor.
-        proposalMeta.current = { deAssist: true, runId: null };
+        // El `runId` viaja hasta el "Aplicar" para que el PUT pueda cerrarle el desenlace: sin
+        // eso solo se sabe cuántas propuestas se generaron, no cuántas se usaron.
+        proposalMeta.current = { deAssist: true, runId: data.assistRunId ?? null };
         setProposal(data.proposal as Proposal);
         setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
         setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
@@ -1350,6 +1352,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           reason: assistInstruction.trim() || "Actualización del cronograma (IA)",
           kind: "AI_ASSIST",
           instruction: assistInstruction.trim() || null,
+          // Cierra el desenlace de la corrida que produjo esta propuesta (ver el PUT).
+          assistRunId: proposalMeta.current.runId,
         }),
       });
       if (!res.ok) {

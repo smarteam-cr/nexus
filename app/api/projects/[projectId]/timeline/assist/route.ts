@@ -26,6 +26,27 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
+
+/**
+ * El slug con el que este agente aparece en el libro de gasto (`LlmCall.agentSlug`) y en el feed
+ * de corridas. No hay fila en la tabla `Agent` —el prompt de acá abajo todavía es inline— así que
+ * el `AgentRun` nace con `agentId: null`, que la columna admite.
+ *
+ * ⚠ Hasta el 2026-08-18 este camino no creaba corrida NI envolvía el contexto de gasto: sus
+ * llamadas a Claude quedaban en `LlmCall` con `agentSlug`, `clientId` y `triggeredByEmail` en
+ * null. Era imposible responder «¿cuántas veces se usa el modificador?» y «¿qué proporción se
+ * aplica?» — que son las dos preguntas que deciden si vale la pena construirle un chat encima.
+ */
+export const SLUG_ASSIST_CRONOGRAMA = "agent-timeline-assist";
+
+/** Cierra la corrida en ERROR sin poder romper la respuesta que el CSE está esperando. */
+async function marcarError(runId: string, motivo: string): Promise<void> {
+  await prisma.agentRun
+    .update({ where: { id: runId }, data: { status: "ERROR", output: JSON.stringify({ error: motivo }) } })
+    .catch(() => {});
+}
 
 const SYSTEM_PROMPT = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
 
@@ -162,23 +183,53 @@ export async function POST(
 
   const userMessage = `=== CRONOGRAMA ACTUAL ===\n${currentJson}${scopeClause}\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
 
+  /* La corrida se crea ANTES de llamar al modelo: si Claude falla, queda el registro de que se
+     intentó (mismo criterio que `runAccountBrief`). `agentId: null` porque el prompt de este
+     agente todavía vive inline en este archivo, no en la tabla `Agent`. */
+  const run = await prisma.agentRun.create({
+    data: {
+      agentId: null,
+      clientId: guard.clientId,
+      projectId,
+      status: "RUNNING",
+      stepLabel: "Cambio con IA en el cronograma",
+      triggeredByEmail: await triggeredByEmail(),
+    },
+    select: { id: true },
+  });
+
+  const ctxDeGasto = {
+    agentSlug: SLUG_ASSIST_CRONOGRAMA,
+    agentRunId: run.id,
+    clientId: guard.clientId,
+    projectId,
+    triggeredByEmail: await triggeredByEmail(),
+    origen: "timeline/assist",
+  };
+
   let parsedRaw: unknown;
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 16000,
-      temperature: 0,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    });
+    // ⚠ El wrap va sobre la llamada, no sobre el handler: es lo que hace que la fila de `LlmCall`
+    // salga con agente, cliente y quién apretó el botón en vez de con tres nulls.
+    const msg = await conContextoDeIA(ctxDeGasto, () =>
+      anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 16000,
+        temperature: 0,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    );
     const raw = (msg.content[0] as { type: string; text: string }).text.trim();
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      await marcarError(run.id, "respuesta ilegible del modelo");
       return NextResponse.json({ error: "No se pudo interpretar la respuesta de la IA. Probá reformulando el pedido." }, { status: 500 });
     }
     parsedRaw = JSON.parse(jsonMatch[0]);
   } catch (e) {
     console.error("[timeline/assist] Claude error:", e instanceof Error ? e.message : e);
+    await marcarError(run.id, e instanceof Error ? e.message : "error desconocido");
     return NextResponse.json({ error: "La IA no pudo procesar el pedido. Probá de nuevo en un momento." }, { status: 500 });
   }
 
@@ -234,5 +285,26 @@ export async function POST(
   proposal.phases = rescate.phases;
   warnings.push(...rescate.warnings);
 
-  return NextResponse.json({ proposal, warnings });
+  /* El desenlace se cierra del otro lado: el PUT marca esta corrida como aplicada cuando el CSE
+     aprieta "Aplicar" (le llega `assistRunId`). Una corrida que se queda en `propuesta` es una
+     propuesta que NO se aplicó — es el denominador de la única métrica que importa acá:
+     ¿cuántas de las que la IA propone terminan usándose? */
+  await prisma.agentRun
+    .update({
+      where: { id: run.id },
+      data: {
+        status: "DONE",
+        output: JSON.stringify({
+          desenlace: "propuesta",
+          instruction,
+          scopePhaseId,
+          fases: proposal.phases.length,
+          tareas: proposal.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0),
+          warnings,
+        }),
+      },
+    })
+    .catch(() => {}); // la trazabilidad no puede tumbar una propuesta ya calculada
+
+  return NextResponse.json({ proposal, warnings, assistRunId: run.id });
 }

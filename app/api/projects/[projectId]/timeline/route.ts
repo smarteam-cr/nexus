@@ -50,6 +50,7 @@ import type {
 // Validador + tipos del body compartidos con POST /timeline/assist (la IA
 // emite exactamente este shape para que aplicar su propuesta sea un PUT normal).
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+import { huellasEnMovimiento, idsBorrablesPorOmision } from "@/lib/timeline/rescate-progreso";
 import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // Eventos crudos para el watchdog de Éxito del cliente. El PUT los acumula
 // mientras camina su propio diff y los emite DESPUÉS de la tx (best-effort):
@@ -442,6 +443,13 @@ export async function PUT(
     typeof rawObj.instruction === "string" && rawObj.instruction.trim()
       ? rawObj.instruction.trim()
       : null;
+  /* La corrida del modificador que produjo esta propuesta, si vino de ahí. Cerrarle el desenlace
+     es lo único que convierte «cuántas propuestas se generaron» en «cuántas se usaron» — la
+     pregunta que decide si al modificador le hace falta un chat encima o solo más contexto. */
+  const assistRunId =
+    typeof rawObj.assistRunId === "string" && rawObj.assistRunId.trim()
+      ? rawObj.assistRunId.trim()
+      : null;
   if (!reason && !skipAudit) {
     return NextResponse.json(
       { error: "Falta la razón del cambio (obligatoria)." },
@@ -534,6 +542,10 @@ export async function PUT(
               order: true,
               notes: true,
               source: true,
+              // ⚠ `status` NO estaba en este select hasta el 2026-08-18, y por eso el PUT no podía
+              // proteger aunque hubiera querido: borraba por omisión sin poder saber qué estaba
+              // hecho. Lo lee `idsBorrablesPorOmision`.
+              status: true,
               party: true,
               type: true,
               startDateOverride: true,
@@ -546,6 +558,9 @@ export async function PUT(
       const incomingIds = new Set(
         incomingPhases.filter((p) => p.id).map((p) => p.id as string),
       );
+      // Se calcula UNA vez sobre el body entero, no por fase: una tarea que se mueve sale de una
+      // fase y entra en otra, así que mirar solo la fase de origen no la encontraría.
+      const huellasDeTareasEnMovimiento = huellasEnMovimiento(incomingPhases);
 
       // 3. DELETE: phases en DB que no aparecen en el body (cascade borra tasks).
       // NB: el "no borrar" del CSE se aplica en la UI (sin botones de borrar fase/tarea);
@@ -690,10 +705,15 @@ export async function PUT(
           p.tasks.filter((t) => t.id).map((t) => t.id as string),
         );
 
-        // DELETE: tasks de la fase que no aparecen en el body
-        const taskIdsToDelete = existingTasks
-          .filter((t) => !incomingTaskIds.has(t.id))
-          .map((t) => t.id);
+        // DELETE: tasks de la fase que no aparecen en el body — SALVO las que tienen trabajo
+        // encima (DONE/en curso/cargadas a mano). Ver `idsBorrablesPorOmision`: la protección es
+        // del CAMINO DE ESCRITURA, no de un llamador. Una protegida sí se borra cuando su título
+        // viaja sin id (se está MOVIENDO de fase, y mover es borrar-en-origen + crear-en-destino).
+        const taskIdsToDelete = idsBorrablesPorOmision(
+          existingTasks,
+          incomingTaskIds,
+          huellasDeTareasEnMovimiento,
+        );
         if (taskIdsToDelete.length > 0) {
           await tx.timelineTask.deleteMany({ where: { id: { in: taskIdsToDelete } } });
           for (const tid of taskIdsToDelete) {
@@ -932,6 +952,27 @@ export async function PUT(
         } as Prisma.InputJsonValue,
       },
     });
+  }
+
+  /* 7. El desenlace de la propuesta del modificador: aplicada. Se marca acá y no en el front
+     porque acá es donde la escritura REALMENTE ocurrió. Una corrida que se queda en `propuesta`
+     es una que nadie usó — y esa resta es la medición entera.
+     Best-effort a propósito: el cronograma ya se guardó; no puede fallar por la telemetría. */
+  if (assistRunId) {
+    await prisma.agentRun
+      .update({
+        where: { id: assistRunId },
+        data: {
+          output: JSON.stringify({
+            desenlace: "aplicada",
+            aplicadaEn: new Date().toISOString(),
+            aplicadaPor: guard.user.email ?? null,
+          }),
+        },
+      })
+      .catch((e) => {
+        console.error("[timeline] no se pudo cerrar el desenlace del assist:", e instanceof Error ? e.message : e);
+      });
   }
 
   return NextResponse.json(updated);
