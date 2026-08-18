@@ -24,6 +24,7 @@ import {
   brechaDe,
   calcularEquilibrio,
   calidadDelMes,
+  conceptosRecurrentes,
   convertir,
   metasDe,
   periodosDelAnio,
@@ -173,36 +174,49 @@ describe("C · armado — sumar sin mentir", () => {
 // ── D ───────────────────────────────────────────────────────────────────────────
 
 describe("D · calidadDelMes", () => {
-  const roster = new Map<RubroEgreso, Set<string>>([
-    ["FIJO_OPERACION", new Set(["alquiler", "ccss"])],
-    ["PLANILLA", new Set(["planilla"])],
+  // clave → primer mes en que se espera (la ventana se abre, no se cierra).
+  const esperados = new Map<RubroEgreso, Map<string, string>>([
+    ["FIJO_OPERACION", new Map([["alquiler", "2026-01"], ["ccss", "2026-01"]])],
+    ["PLANILLA", new Map([["planilla", "2026-01"]])],
   ]);
+  const RUBROS_ANIO = new Set<RubroEgreso>(["FIJO_OPERACION", "PLANILLA"]);
 
-  it("D1 con todos los conceptos del año presentes, el mes está COMPLETO", () => {
+  it("D1 con todos los conceptos recurrentes presentes, el mes está COMPLETO", () => {
     const presentes = new Map<RubroEgreso, Set<string>>([
       ["FIJO_OPERACION", new Set(["alquiler", "ccss"])],
       ["PLANILLA", new Set(["planilla"])],
     ]);
-    expect(calidadDelMes(presentes, roster, true)).toEqual({ estado: "COMPLETO", faltantes: [] });
+    expect(calidadDelMes("2026-06", presentes, esperados, RUBROS_ANIO, true)).toEqual({ estado: "COMPLETO", faltantes: [] });
   });
 
-  it("D2 si falta un concepto, es PARCIAL y lo NOMBRA (un conteo no sirve para actuar)", () => {
+  it("D1b un concepto EXTRA que no se esperaba no rompe nada: el pago anual cae donde cae", () => {
+    const presentes = new Map<RubroEgreso, Set<string>>([
+      ["FIJO_OPERACION", new Set(["alquiler", "ccss", "hosting-anual"])],
+      ["PLANILLA", new Set(["planilla"])],
+    ]);
+    expect(calidadDelMes("2026-06", presentes, esperados, RUBROS_ANIO, true).estado).toBe("COMPLETO");
+  });
+
+  it("D2 si falta un concepto recurrente, es PARCIAL y lo NOMBRA (un conteo no sirve para actuar)", () => {
     const presentes = new Map<RubroEgreso, Set<string>>([
       ["FIJO_OPERACION", new Set(["alquiler"])],
       ["PLANILLA", new Set(["planilla"])],
     ]);
-    const r = calidadDelMes(presentes, roster, true);
+    const r = calidadDelMes("2026-06", presentes, esperados, RUBROS_ANIO, true);
     expect(r.estado).toBe("PARCIAL");
     expect(r.faltantes).toEqual(["ccss"]);
   });
 
   it("D3 un rubro entero ausente se nombra por el rubro", () => {
     const presentes = new Map<RubroEgreso, Set<string>>([["FIJO_OPERACION", new Set(["alquiler", "ccss"])]]);
-    expect(calidadDelMes(presentes, roster, true).faltantes).toEqual(["planilla"]);
+    expect(calidadDelMes("2026-06", presentes, esperados, RUBROS_ANIO, true).faltantes).toEqual(["planilla"]);
   });
 
   it("D4 un mes SIN egresos es PARCIAL, jamás COMPLETO por omisión: no es un mes barato", () => {
-    expect(calidadDelMes(new Map(), roster, false)).toEqual({ estado: "PARCIAL", faltantes: ["todo el mes"] });
+    expect(calidadDelMes("2026-06", new Map(), esperados, RUBROS_ANIO, false)).toEqual({
+      estado: "PARCIAL",
+      faltantes: ["todo el mes"],
+    });
   });
 
   it("D5 enero-marzo sin costos fijos (el bloque oculto del Excel) quedan PARCIALES", () => {
@@ -220,6 +234,81 @@ describe("D · calidadDelMes", () => {
     const r = calcularEquilibrio(anioParejo(1000), [], { anio: 2026, hoyISO: HOY });
     expect(r.meses[7]!.futuro).toBe(false); // agosto: hoy es 2026-08-17
     expect(r.meses[8]!.futuro).toBe(true); // septiembre
+  });
+
+  it("D7 EL BUG QUE ENCONTRARON LOS DATOS REALES: un pago anual no vuelve parciales a los otros once", () => {
+    // Hostinger se paga una vez, en abril. La primera versión exigía todos los
+    // conceptos del año en todos los meses: los doce salían PARCIAL, ninguno entraba
+    // al promedio y el punto de equilibrio daba CERO. Coherente e inútil.
+    const egresos = [
+      ...periodosDelAnio(2026).map((p) => eg(p, "HERRAMIENTA", "HubSpot", 535)),
+      eg("2026-04", "HERRAMIENTA", "Hostinger", 371.88),
+    ];
+    const r = calcularEquilibrio(egresos, [], { anio: 2026, hoyISO: HOY });
+    expect(r.meses.every((m) => m.estado === "COMPLETO")).toBe(true);
+    expect(r.equilibrio.base).toBeGreaterThan(0);
+  });
+
+  it("D8 pero una QUINCENA de planilla que falta sí se ve: aparece en casi todos los meses", () => {
+    const egresos = periodosDelAnio(2026).flatMap((p) => [
+      eg(p, "PLANILLA", "Planilla 1ª quincena", 5000, { conceptoClave: "planilla-q1" }),
+      // Agosto se quedó sin segunda quincena — es el caso real del libro.
+      ...(p === "2026-08" ? [] : [eg(p, "PLANILLA", "Planilla 2ª quincena", 5000, { conceptoClave: "planilla-q2" })]),
+    ]);
+    const r = calcularEquilibrio(egresos, [], { anio: 2026, hoyISO: HOY });
+    expect(r.meses[7]!.estado).toBe("PARCIAL");
+    expect(r.meses[7]!.faltantes).toEqual(["planilla-q2"]);
+    expect(r.meses[0]!.estado).toBe("COMPLETO");
+  });
+});
+
+describe("D · conceptosRecurrentes", () => {
+  it("un concepto de un solo mes NO es recurrente; uno de todos los meses sí", () => {
+    const egresos = [
+      ...periodosDelAnio(2026).map((p) => eg(p, "HERRAMIENTA", "HubSpot", 535)),
+      eg("2026-04", "HERRAMIENTA", "Hostinger", 371.88),
+    ];
+    const r = conceptosRecurrentes(egresos);
+    expect([...r.get("HERRAMIENTA")!.keys()]).toEqual(["hubspot"]);
+  });
+
+  it("EL SEGUNDO CASO REAL: una herramienta que arranca en junio se espera DESDE junio", () => {
+    // Supabase empezó a cobrarse en junio. Medido contra el año entero da 7/12 y
+    // "faltaría" en abril y mayo — meses en que la herramienta no existía, y por eso
+    // abril y mayo quedaban fuera del promedio del equilibrio. Medido contra su propia
+    // ventana da 7/7 y solo se exige desde junio.
+    const egresos = [
+      ...periodosDelAnio(2026).map((p) => eg(p, "HERRAMIENTA", "HubSpot", 535)),
+      ...periodosDelAnio(2026).slice(5).map((p) => eg(p, "HERRAMIENTA", "Supabase", 25)),
+    ];
+    const r = conceptosRecurrentes(egresos).get("HERRAMIENTA")!;
+    expect(r.get("hubspot")).toBe("2026-01");
+    expect(r.get("supabase")).toBe("2026-06");
+
+    // Y el efecto que importa: los doce meses quedan COMPLETOS.
+    const rep = calcularEquilibrio(egresos, [], { anio: 2026, hoyISO: HOY });
+    expect(rep.meses.every((m) => m.estado === "COMPLETO")).toBe(true);
+  });
+
+  it("cada rubro se mide contra SUS propios meses, no contra el año", () => {
+    // Los costos fijos solo existen abr-dic (el bloque oculto del Excel). El alquiler
+    // está en los 9 y es recurrente, aunque sean 9 de 12 meses del año.
+    const egresos = [
+      ...periodosDelAnio(2026).map((p) => eg(p, "HERRAMIENTA", "HubSpot", 535)),
+      ...periodosDelAnio(2026).slice(3).map((p) => eg(p, "FIJO_OPERACION", "Alquiler", 200)),
+    ];
+    expect([...conceptosRecurrentes(egresos).get("FIJO_OPERACION")!.keys()]).toEqual(["alquiler"]);
+  });
+
+  it("un concepto esporádico dentro de su ventana tampoco se exige", () => {
+    // Aparece 2 de 9 meses desde su primer cargo: no hay ninguna regularidad que
+    // permita afirmar que "falta" en los otros siete.
+    const egresos = [
+      ...periodosDelAnio(2026).map((p) => eg(p, "HERRAMIENTA", "HubSpot", 535)),
+      eg("2026-04", "HERRAMIENTA", "Extra", 50),
+      eg("2026-09", "HERRAMIENTA", "Extra", 50),
+    ];
+    expect([...conceptosRecurrentes(egresos).get("HERRAMIENTA")!.keys()]).toEqual(["hubspot"]);
   });
 });
 

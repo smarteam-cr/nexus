@@ -357,27 +357,84 @@ export function promedioMensual(
 }
 
 /**
- * COMPLETO o PARCIAL, derivado del ROSTER del año: los conceptos que ese año tuvo.
+ * Qué conceptos de cada rubro son RECURRENTES, o sea los que deberían estar todos los
+ * meses. Un concepto cuenta como recurrente si aparece en al menos la mitad de los
+ * meses en que su rubro tuvo datos.
  *
- * No se guarda en la base a propósito — el mismo mes cambia de calidad cuando llega el
+ * ⚠ ESTE FILTRO ES LA DIFERENCIA ENTRE UN REPORTE QUE FUNCIONA Y UNO QUE NO, y lo
+ * descubrieron los datos reales: la primera versión exigía TODOS los conceptos del año
+ * en todos los meses, y con eso el hosting que se paga una vez en abril y el DIVI que
+ * se paga una vez en julio dejaban a los otros once meses "incompletos". Los doce meses
+ * salían PARCIAL, ninguno entraba al promedio y el punto de equilibrio daba CERO —
+ * técnicamente coherente y completamente inútil. Un pago anual no FALTA en los meses en
+ * que no toca: simplemente no toca.
+ */
+export function conceptosRecurrentes(
+  egresos: readonly EgresoDeMes[],
+  umbral = 0.5,
+): Map<RubroEgreso, Map<string, string>> {
+  const mesesPorRubro = new Map<RubroEgreso, Set<string>>();
+  const mesesPorConcepto = new Map<string, Set<string>>();
+  for (const e of egresos) {
+    if (!mesesPorRubro.has(e.rubro)) mesesPorRubro.set(e.rubro, new Set());
+    mesesPorRubro.get(e.rubro)!.add(e.periodo);
+    const k = `${e.rubro}::${e.conceptoClave}`;
+    if (!mesesPorConcepto.has(k)) mesesPorConcepto.set(k, new Set());
+    mesesPorConcepto.get(k)!.add(e.periodo);
+  }
+  const out = new Map<RubroEgreso, Map<string, string>>();
+  for (const [k, meses] of mesesPorConcepto) {
+    const [rubro, clave] = k.split("::") as [RubroEgreso, string];
+    // ⚠ EL DENOMINADOR ARRANCA EN EL PRIMER MES DEL CONCEPTO, no en enero. Supabase
+    // empezó a cobrarse en junio: contra el año entero da 7/12 y "faltaría" en abril
+    // y mayo, meses en que la herramienta todavía no existía. Contra su propia
+    // ventana da 7/7 y solo se espera desde junio. La fecha de INICIO es un dato
+    // firme; la de fin no —"ya no aparece" puede ser "terminó" o "falta el dato"—,
+    // así que la ventana se abre pero no se cierra.
+    const desde = [...meses].sort()[0]!;
+    const delRubroDesde = [...(mesesPorRubro.get(rubro) ?? [])].filter((m) => m >= desde).length;
+    if (delRubroDesde === 0 || meses.size / delRubroDesde < umbral) continue;
+    if (!out.has(rubro)) out.set(rubro, new Map());
+    out.get(rubro)!.set(clave, desde);
+  }
+  return out;
+}
+
+/**
+ * COMPLETO o PARCIAL. Dos preguntas, no una:
+ *   (a) ¿está presente cada RUBRO que el año tuvo? — ene-mar no tienen costos fijos
+ *       porque ese bloque del Excel está oculto, y eso sí es un hueco real.
+ *   (b) ¿están los conceptos RECURRENTES de cada rubro? — así una quincena de planilla
+ *       que falta se ve, sin que un pago anual ensucie los otros once meses.
+ *
+ * No se guarda en la base a propósito: el mismo mes cambia de calidad cuando llega el
  * dato que le faltaba, y una etiqueta persistida se quedaría vieja sin que nadie mire.
- * `faltantes` NOMBRA lo que falta: "8 de 11 conceptos" no le sirve a nadie para actuar.
+ * `faltantes` NOMBRA lo que falta — "8 de 11 conceptos" no le sirve a nadie para actuar.
  */
 export function calidadDelMes(
+  periodo: string,
   presentesPorRubro: Map<RubroEgreso, Set<string>>,
-  rosterPorRubro: Map<RubroEgreso, Set<string>>,
+  esperadosPorRubro: Map<RubroEgreso, Map<string, string>>,
+  rubrosDelAnio: ReadonlySet<RubroEgreso>,
   hayEgresos: boolean,
 ): { estado: EstadoMes; faltantes: string[] } {
   if (!hayEgresos) return { estado: "PARCIAL", faltantes: ["todo el mes"] };
   const faltantes: string[] = [];
-  for (const [rubro, roster] of rosterPorRubro) {
+  for (const rubro of rubrosDelAnio) {
     const presentes = presentesPorRubro.get(rubro) ?? new Set<string>();
-    const ausentes = [...roster].filter((c) => !presentes.has(c));
-    if (ausentes.length === 0) continue;
-    // Un rubro entero ausente se nombra por el rubro; si falta parte, por concepto.
-    faltantes.push(
-      presentes.size === 0 ? etiquetaRubro(rubro) : ausentes.slice(0, 3).join(", ") + (ausentes.length > 3 ? ` y ${ausentes.length - 3} más` : ""),
-    );
+    if (presentes.size === 0) {
+      faltantes.push(etiquetaRubro(rubro));
+      continue;
+    }
+    const ausentes = [...(esperadosPorRubro.get(rubro) ?? new Map<string, string>())]
+      // Solo se exige desde que el concepto existe: antes de su primer mes no falta.
+      .filter(([clave, desde]) => periodo >= desde && !presentes.has(clave))
+      .map(([clave]) => clave);
+    if (ausentes.length > 0) {
+      faltantes.push(
+        ausentes.slice(0, 3).join(", ") + (ausentes.length > 3 ? ` y ${ausentes.length - 3} más` : ""),
+      );
+    }
   }
   return { estado: faltantes.length === 0 ? "COMPLETO" : "PARCIAL", faltantes };
 }
@@ -441,9 +498,11 @@ export function calcularEquilibrio(
   for (const p of periodos) {
     porMes.set(p, { rubros: rubrosEnCero(), presentes: new Map(), calidades: new Set() });
   }
-  const roster = new Map<RubroEgreso, Set<string>>();
+  const rubrosDelAnio = new Set<RubroEgreso>();
   const calidadPorRubro = new Map<RubroEgreso, Set<CalidadDato>>();
   const conceptosInferidos = new Set<string>();
+  // Qué se ESPERA cada mes: solo lo recurrente. Un pago anual no falta once veces.
+  const esperados = conceptosRecurrentes(egresos.filter((e) => porMes.has(e.periodo)));
 
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
@@ -456,8 +515,7 @@ export function calcularEquilibrio(
     mes.presentes.get(e.rubro)!.add(e.conceptoClave);
     mes.calidades.add(e.calidad);
 
-    if (!roster.has(e.rubro)) roster.set(e.rubro, new Set());
-    roster.get(e.rubro)!.add(e.conceptoClave);
+    rubrosDelAnio.add(e.rubro);
     if (!calidadPorRubro.has(e.rubro)) calidadPorRubro.set(e.rubro, new Set());
     calidadPorRubro.get(e.rubro)!.add(e.calidad);
     if (e.monedaInferida) conceptosInferidos.add(e.concepto);
@@ -514,7 +572,7 @@ export function calcularEquilibrio(
     const facturado = round2(ing.cobrado + ing.porCobrar);
     const ingresosTotales = round2(facturado + ing.partnership);
     const futuro = periodo > periodoHoy;
-    const { estado, faltantes } = calidadDelMes(eg.presentes, roster, egresosMes > 0);
+    const { estado, faltantes } = calidadDelMes(periodo, eg.presentes, esperados, rubrosDelAnio, egresosMes > 0);
     const { brecha, cubre } = brechaDe(ingresosTotales, egresosMes);
 
     return {
