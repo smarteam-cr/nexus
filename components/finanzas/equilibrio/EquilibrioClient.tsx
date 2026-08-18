@@ -186,17 +186,28 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               peor que uno que no lo parece. */}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
             {TILES.map((t) => {
+              // El indicador enfocado se marca de verdad: número más pesado, borde de
+              // acento y una barra de color arriba con el trazo de SU serie. Un ring
+              // de 1px no se distinguía a un metro de la pantalla.
+              const activo = t.serie !== null && enfoque === t.serie;
+              const fijado = t.serie !== null && pin === t.serie;
               const contenido = (
                 <>
                   <p className="text-[10px] uppercase tracking-wide text-fg-muted">{t.label}</p>
-                  <p className="text-lg font-semibold text-fg tabular-nums mt-0.5">{t.valor}</p>
+                  <p
+                    className={`tabular-nums mt-0.5 text-fg ${
+                      activo ? "text-xl font-bold" : "text-lg font-semibold"
+                    }`}
+                  >
+                    {t.valor}
+                  </p>
                   <p className="text-[10px] text-fg-muted mt-0.5">
                     {t.nota}
                     {t.simulado && <span className="text-warn-ink"> · simulado</span>}
                   </p>
                 </>
               );
-              const base = "text-left rounded-xl border bg-surface px-3 py-2.5 min-h-[76px]";
+              const base = "text-left rounded-xl border bg-surface px-3 py-2.5 min-h-[76px] transition-all";
               return t.serie === null ? (
                 <div key={t.key} className={`${base} border-line`}>
                   {contenido}
@@ -209,10 +220,14 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
                   onMouseLeave={() => setHover(null)}
                   onFocus={() => setHover(t.serie)}
                   onBlur={() => setHover(null)}
-                  onClick={() => setPin(pin === t.serie ? null : t.serie)}
-                  aria-pressed={pin === t.serie}
+                  onClick={() => setPin(fijado ? null : t.serie)}
+                  aria-pressed={fijado}
                   className={`${base} ${
-                    pin === t.serie ? "border-brand ring-1 ring-brand/30" : "border-line hover:bg-surface-hover"
+                    fijado
+                      ? "border-brand ring-2 ring-brand/40"
+                      : activo
+                        ? "border-brand/60 bg-surface-hover"
+                        : "border-line hover:bg-surface-hover"
                   }`}
                 >
                   {contenido}
@@ -244,7 +259,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               equilibrio={piso}
               moneda={moneda}
               enfoque={enfoque}
+              pin={pin}
               haySimulacion={hayEscenario}
+              onHover={setHover}
+              onPin={setPin}
             />
             <p className="px-4 py-2 text-[11px] text-fg-muted border-t border-line">
               {r.pisoVigente ? (

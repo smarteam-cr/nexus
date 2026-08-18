@@ -59,21 +59,55 @@ function tramos(meses: readonly MesEfectivo[], pred: (m: MesEfectivo) => boolean
   return out;
 }
 
+/** Cómo se dibuja cada serie. Lo usan el chart, el tooltip y la leyenda. */
+export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
+  egresos: "linea",
+  facturado: "linea",
+  cobrado: "linea",
+  ingresosTotales: "punteada",
+  equilibrio: "punteada",
+  partnership: "barra",
+};
+
+/** El orden en que se leen, que es el de la leyenda. */
+const SERIES: Array<{ key: SerieKey; label: string }> = [
+  { key: "egresos", label: "Egresos" },
+  { key: "facturado", label: "Facturado" },
+  { key: "cobrado", label: "Cobrado" },
+  { key: "partnership", label: "Partnership" },
+  { key: "ingresosTotales", label: "Ingresos totales" },
+  { key: "equilibrio", label: "Punto de equilibrio" },
+];
+
 interface Props {
   meses: MesEfectivo[];
   equilibrio: number;
   moneda: string;
   enfoque: SerieKey | null;
+  pin: SerieKey | null;
   haySimulacion: boolean;
+  onHover: (s: SerieKey | null) => void;
+  onPin: (s: SerieKey | null) => void;
 }
 
-export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, haySimulacion }: Props) {
+export default function CurvaEquilibrio({
+  meses,
+  equilibrio,
+  moneda,
+  enfoque,
+  pin,
+  haySimulacion,
+  onHover,
+  onPin,
+}: Props) {
   const colors = useChartColors();
 
-  const option = useMemo(() => {
-    // El "negro" del reporte original se traduce al neutro fuerte del tema: un negro
-    // literal desaparece en modo oscuro.
-    const COLOR: Record<SerieKey, string> = {
+  // Fuera del useMemo del chart porque la leyenda de abajo pinta los mismos colores:
+  // duplicarlos era garantizar que un día dejaran de coincidir.
+  const COLOR = useMemo<Record<SerieKey, string>>(
+    () => ({
+      // El "negro" del reporte original se traduce al neutro fuerte del tema: un negro
+      // literal desaparece en modo oscuro.
       egresos: colors.axisLabelStrong,
       facturado: SERIES_PALETTE[0]!,
       cobrado: SERIES_PALETTE[3]!,
@@ -83,7 +117,11 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
       // aliado se confundían con la línea de la caja cobrada, que es justo la que uno
       // busca de un vistazo. El verde queda reservado a la plata que entró.
       partnership: SERIES_PALETTE[6]!,
-    };
+    }),
+    [colors],
+  );
+
+  const option = useMemo(() => {
     const atenuada = (k: SerieKey) => enfoque !== null && enfoque !== k;
     /**
      * ⚠ `opts` es un objeto CERRADO de dos banderas y no un `extra` libre, a propósito.
@@ -106,13 +144,15 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
       // Recta, NO suavizada: entre febrero y marzo no hay nada, y una curva suave
       // dibujaba ahí un pico más alto que febrero que nunca ocurrió.
       smooth: false,
-      symbolSize: 6,
       // Un mes sin dato es un HUECO, nunca un cero (misma regla que ReportesPanel).
       connectNulls: false,
+      // La enfocada crece de 2 a 5 y sus puntos también: el enfoque tiene que
+      // notarse de reojo, sin buscar cuál cambió.
+      symbolSize: enfoque === k ? 9 : 6,
       itemStyle: { color: COLOR[k], opacity: atenuada(k) ? 0.15 : 1 },
       lineStyle: {
         color: COLOR[k],
-        width: enfoque === k ? 3 : 2,
+        width: enfoque === k ? 5 : 2,
         opacity: atenuada(k) ? 0.15 : 1,
         ...(opts.punteada ? { type: "dashed" as const } : {}),
       },
@@ -135,13 +175,30 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
           // HTML fuera de React: los colores van INLINE con hex del tema. Una clase de
           // Tailwind acá ni siquiera se generaría.
           const tenue = `color:${colors.axisLabel};font-size:11px`;
-          const fila = (etq: string, val: number | null, color?: string) =>
+          /**
+           * El marcador dice QUÉ FORMA tiene esa serie en el gráfico: un punto para las
+           * líneas llenas, una raya punteada para las punteadas y un bloque para las
+           * barras. Con un círculo para todas —como estaba— el tooltip no dejaba
+           * emparejar la fila con la línea que uno está mirando.
+           */
+          const marca = (color: string, forma: "punto" | "punteada" | "barra") => {
+            const base = "display:inline-block;margin-right:6px;vertical-align:middle";
+            if (forma === "punteada") {
+              return `<span style="${base};width:14px;height:0;border-top:2px dashed ${color}"></span>`;
+            }
+            if (forma === "barra") {
+              return `<span style="${base};width:10px;height:10px;border-radius:2px;background:${color};opacity:.55"></span>`;
+            }
+            return `<span style="${base};width:8px;height:8px;border-radius:50%;background:${color}"></span>`;
+          };
+          const fila = (
+            etq: string,
+            val: number | null,
+            color?: string,
+            forma: "punto" | "punteada" | "barra" = "punto",
+          ) =>
             `<div style="display:flex;gap:16px;justify-content:space-between">` +
-            `<span>${
-              color
-                ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>`
-                : ""
-            }${etq}</span>` +
+            `<span>${color ? marca(color, forma) : ""}${etq}</span>` +
             `<b>${val === null ? "sin dato" : fmtMonto(val, moneda)}</b></div>`;
 
           const servicios = Object.entries(m.facturadoPorServicio)
@@ -162,8 +219,12 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
             fila("Egresos", m.egresos, COLOR.egresos),
             fila("Facturado", m.facturadoEfectivo, COLOR.facturado),
             fila("Cobrado", m.cobrado, COLOR.cobrado),
-            m.partnership > 0 ? fila("Partnership", m.partnership, COLOR.partnership) : "",
-            fila("Ingresos totales", m.ingresosTotales, COLOR.ingresosTotales),
+            m.partnership > 0 ? fila("Partnership", m.partnership, COLOR.partnership, "barra") : "",
+            fila("Ingresos totales", m.ingresosTotales, COLOR.ingresosTotales, "punteada"),
+            // El piso va en el tooltip aunque sea el mismo número los doce meses: es
+            // contra esta línea que se lee si el mes se sostiene, y tenerla que buscar
+            // en el eje mientras el tooltip tapa el gráfico no ayuda a nadie.
+            fila("Punto de equilibrio", equilibrio, COLOR.equilibrio, "punteada"),
             m.pendienteFacturar > 0 ? `${sep}${fila("Pendiente de facturar", m.pendienteFacturar)}` : "",
             servicios ? `<div style="margin-top:4px">${servicios}</div>` : "",
             sep,
@@ -171,8 +232,11 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
           ].join("");
         },
       },
-      legend: { top: 0, textStyle: { color: colors.legendText, fontSize: 11 }, icon: "roundRect" },
-      grid: { left: 8, right: 8, top: 34, bottom: 8, containLabel: true },
+      // Sin leyenda de ECharts: la de abajo es propia, con tags seleccionables que
+      // comparten el enfoque con los indicadores de arriba. Dos leyendas que hacen
+      // cosas distintas sobre el mismo gráfico confunden más de lo que ayudan.
+      legend: { show: false },
+      grid: { left: 8, right: 8, top: 12, bottom: 8, containLabel: true },
       xAxis: {
         type: "category",
         data: MES_CORTO,
@@ -230,7 +294,58 @@ export default function CurvaEquilibrio({ meses, equilibrio, moneda, enfoque, ha
         }),
       ],
     };
-  }, [meses, equilibrio, moneda, enfoque, haySimulacion, colors]);
+  }, [meses, equilibrio, moneda, enfoque, haySimulacion, colors, COLOR]);
 
-  return <EChartRenderer option={option} height={320} className="bg-surface" />;
+  return (
+    <>
+      <EChartRenderer option={option} height={320} className="bg-surface" />
+
+      {/* La leyenda: tags que ENFOCAN, no que ocultan. Cada uno lleva el mismo trazo
+          que dibuja su serie —línea llena, punteada o bloque— para que se pueda
+          emparejar con el gráfico sin adivinar. Comparten el enfoque con los
+          indicadores de arriba: tocar cualquiera de los dos hace lo mismo. */}
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3 pt-1">
+        {SERIES.map((s) => {
+          const forma = FORMA_SERIE[s.key];
+          const fijado = pin === s.key;
+          const apagada = enfoque !== null && enfoque !== s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onMouseEnter={() => onHover(s.key)}
+              onMouseLeave={() => onHover(null)}
+              onFocus={() => onHover(s.key)}
+              onBlur={() => onHover(null)}
+              onClick={() => onPin(fijado ? null : s.key)}
+              aria-pressed={fijado}
+              title={fijado ? `Soltar ${s.label}` : `Enfocar ${s.label}`}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+                fijado
+                  ? "border-brand bg-brand/10 text-fg font-medium"
+                  : "border-line text-fg-secondary hover:bg-surface-hover"
+              } ${apagada ? "opacity-45" : ""}`}
+            >
+              <span
+                aria-hidden
+                className="inline-block flex-shrink-0"
+                style={
+                  forma === "barra"
+                    ? { width: 12, height: 12, borderRadius: 3, background: COLOR[s.key], opacity: 0.55 }
+                    : {
+                        width: 16,
+                        height: 0,
+                        borderTopWidth: enfoque === s.key ? 4 : 2,
+                        borderTopStyle: forma === "punteada" ? "dashed" : "solid",
+                        borderTopColor: COLOR[s.key],
+                      }
+                }
+              />
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
 }
