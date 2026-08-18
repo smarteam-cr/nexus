@@ -6,6 +6,7 @@
  * Client Components (selects, badges) no importen @prisma/client.
  */
 import { z } from "zod";
+import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -316,6 +317,65 @@ export const ingresoVariableCreateSchema = z.object({
 
 export const ingresoVariablePatchSchema = ingresoVariableCreateSchema.partial();
 
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN, gate cobranza.read) ─────
+// Lo que Smarteam GANA de un aliado comercial (HubSpot, Atom Chat, Cooby…).
+// ⚠ NUNCA comparte ruta, endpoint ni loader con las de VENDEDOR, que son
+// remuneración de una persona y viven en la superficie SUPER_ADMIN.
+
+/**
+ * "HubSpot " y "hubspot" son el MISMO partner. Se normaliza para agrupar, pero
+ * el nombre que se GUARDA es el que escribió la persona (con sus mayúsculas):
+ * lo que se compara es la clave, no lo que se muestra.
+ */
+export { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
+
+export function normalizePartner(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * El ALIADO con su cadencia. Su frecuencia es del aliado y no del pago (decisión
+ * de Elías): HubSpot paga cada 3 meses y eso no cambia pago a pago. El rango
+ * espeja el CHECK de la base — dos frenos para el mismo hecho, a propósito: uno
+ * atrapa la UI y el otro lo que entre por un script.
+ */
+const partnerBase = z.object({
+  nombre: z.string().trim().min(1, "El nombre es requerido").max(80),
+  frecuenciaMeses: z
+    .number()
+    .int("La frecuencia va en meses enteros")
+    .min(FRECUENCIA_PARTNER_MIN, "Mínimo 1 mes")
+    .max(FRECUENCIA_PARTNER_MAX, "Máximo 12 meses"),
+  activo: z.boolean().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const partnerCreateSchema = partnerBase;
+export const partnerPatchSchema = partnerBase.partial();
+
+const comisionPartnerBase = z.object({
+  partner: z.string().trim().min(1, "El partner es requerido").max(80),
+  // El aliado configurado. null = todavía no está dado de alta; el pago se
+  // registra igual (`partner` como string es el snapshot) y se puede ligar
+  // después. Forzarlo obligaría a configurar antes de poder anotar la plata.
+  partnerId: z.string().cuid().nullable().optional(),
+  concepto: z.string().trim().max(160).nullable().optional(),
+  monto,
+  moneda: z.enum(COBRANZA_MONEDAS),
+  fecha: isoDateReal,
+  // null / ausente = el aliado no está en la cartera como Client. No se inventa.
+  clientId: z.string().cuid().nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const comisionPartnerCreateSchema = comisionPartnerBase;
+export const comisionPartnerPatchSchema = comisionPartnerBase.partial();
+
 // ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ─────────────────────────────
 // Espejos client-safe de los enums Prisma (mantener en sync con schema.prisma).
 // La superficie completa de costos/caja-neta está gateada por COSTOS_ROLES
@@ -420,6 +480,175 @@ const gastoBase = z.object({
 
 export const gastoCreateSchema = gastoBase;
 export const gastoPatchSchema = gastoBase.partial();
+
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ─────────────────────────────────────
+// Disponible = límite − saldo, y el saldo lo escribe una persona con su fecha de
+// corte. Lo que Nexus suma de los costos asignados es REFERENCIA y nunca calcula
+// el saldo (ver la doctrina completa en lib/cobranza/tarjetas.ts).
+
+const diaDelMes = z.number().int().min(1, "Día inválido").max(31, "Día inválido");
+
+const tarjetaBase = z.object({
+  alias: z.string().trim().min(1, "El alias es requerido").max(80),
+  emisor: z.string().trim().max(80).nullable().optional(),
+  // ⚠ EXACTAMENTE cuatro dígitos. Este regex es la frontera que impide que el
+  // número COMPLETO de una tarjeta entre a la base — no es una validación de
+  // formato, es la regla de cumplimiento escrita donde se puede hacer cumplir.
+  ultimos4: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Son exactamente los últimos 4 dígitos, nunca el número completo")
+    .nullable()
+    .optional(),
+  moneda: z.enum(COBRANZA_MONEDAS),
+  limite: monto.nullable().optional(),
+  titularTeamMemberId: z.string().cuid().nullable().optional(),
+  diaCorte: diaDelMes.nullable().optional(),
+  diaPago: diaDelMes.nullable().optional(),
+  activa: z.boolean().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const tarjetaCreateSchema = tarjetaBase;
+export const tarjetaPatchSchema = tarjetaBase.partial();
+
+/**
+ * Registrar el saldo usado. Los dos campos van JUNTOS y son obligatorios: un
+ * saldo sin fecha de corte no dice nada (¿de cuándo es?) y una fecha sin saldo
+ * tampoco. El `saldoPorEmail` lo pone el server desde el guard, nunca el body.
+ * Acepta 0 (una tarjeta al día tiene saldo cero, y eso es un dato).
+ */
+export const tarjetaSaldoSchema = z.object({
+  saldoUsado: z
+    .number()
+    .min(0, "El saldo no puede ser negativo")
+    .multipleOf(0.01, "Máximo 2 decimales"),
+  saldoAlDia: isoDateReal,
+});
+
+/** Asignar o quitar un costo recurrente de una tarjeta (la tabla puente). */
+export const tarjetaCostoSchema = z.object({
+  costoId: z.string().cuid(),
+  asignar: z.boolean(),
+});
+
+// ── Libro de planilla (SUPER_ADMIN-only) ───────────────────────────────────────
+// Lo que se PAGÓ de verdad, quincena por quincena. Es otra cosa que la hoja
+// «Planillas», que muestra el all-in ESTIMADO de CostoRecurrente para el burn.
+
+export const PLANILLA_ESTADOS = ["PENDIENTE", "PAGADO"] as const;
+
+export const ESTADO_PLANILLA_LABEL: Record<string, string> = {
+  PENDIENTE: "Pendiente",
+  PAGADO: "Pagado",
+};
+
+const periodoPlanilla = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El período va en formato YYYY-MM");
+
+const quincenaPlanilla = z.union([z.literal(1), z.literal(2)], {
+  message: "La quincena es 1 (1–15) o 2 (16–fin)",
+});
+
+/**
+ * Generar las quincenas de un período. NO recibe la lista de personas: se deriva
+ * server-side de los salarios ACTIVOS, para que el cliente no pueda pedir que se
+ * materialice a alguien que ya no está.
+ * La materialización es CREATE-ONLY (ver `generarQuincena`).
+ */
+export const planillaGenerarSchema = z.object({
+  periodo: periodoPlanilla,
+  quincena: quincenaPlanilla,
+});
+
+/**
+ * Marcar una quincena como PAGADA. `fechaPago` opcional (default hoy, capada a
+ * hoy en la UI): la plata suele salir días antes de que alguien la registre.
+ */
+export const planillaPagarSchema = z.object({
+  fechaPago: isoDateReal.optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+/**
+ * Editar una quincena. Solo mientras está PENDIENTE — un PAGADO es intocable
+ * (la mutación lo frena con 409). Sin `estado` a propósito: pagar tiene su
+ * propia ruta, que es el chokepoint de INV18.
+ */
+export const pagoPlanillaPatchSchema = z.object({
+  monto: monto.optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ───────────────────
+// Lo que Smarteam le PAGA a quien vendió, como % de lo COBRADO. La comisión
+// devengada NO se escribe acá: es una vista derivada (lib/cobranza/comisiones.ts).
+// Lo único que se persiste es la REGLA y, al liquidar, la comisión congelada.
+// ⚠ Nunca comparte ruta, endpoint ni loader con las de PARTNER, que son ingreso.
+
+/**
+ * En PUNTOS PORCENTUALES: 13 = 13%, como lo dice la gente. > 0 porque una regla
+ * al 0% no es una regla, es no tener comisión — y eso se expresa borrándola.
+ * Techo 100: nadie cobra de comisión más de lo que entró.
+ */
+const porcentajeComision = z
+  .number()
+  .gt(0, "El porcentaje tiene que ser mayor a 0")
+  .max(100, "El porcentaje no puede pasar de 100")
+  .multipleOf(0.0001, "Máximo 4 decimales");
+
+const reglaComisionBase = z.object({
+  teamMemberId: z.string().cuid(),
+  // null / ausente = la regla GENERAL, para todos los clientes. La del cliente
+  // le gana (ver `reglaParaCobro`).
+  clientId: z.string().cuid().nullable().optional(),
+  porcentaje: porcentajeComision,
+  vigenteDesde: isoDateReal,
+  // null = vigente sin fecha de fin.
+  vigenteHasta: isoDateReal.nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
+
+/**
+ * ⚠ El refine va acá y no en el `.partial()`: un rango invertido guardado en
+ * silencio deja una regla que nunca aplica y una comisión que nadie devenga —
+ * el fallo más caro de este modelo, porque no rompe nada, solo no paga.
+ */
+export const reglaComisionCreateSchema = reglaComisionBase.refine(
+  (r) => !r.vigenteHasta || r.vigenteHasta >= r.vigenteDesde,
+  { message: "La vigencia termina antes de empezar", path: ["vigenteHasta"] },
+);
+
+export const reglaComisionPatchSchema = reglaComisionBase
+  .partial()
+  .refine((r) => !r.vigenteDesde || !r.vigenteHasta || r.vigenteHasta >= r.vigenteDesde, {
+    message: "La vigencia termina antes de empezar",
+    path: ["vigenteHasta"],
+  });
+
+/**
+ * Liquidar lo devengado de una persona en un período y una moneda. NO recibe el
+ * monto ni los cobros: los recalcula el server con el mismo cálculo puro que
+ * pintó la pantalla. Si el cliente pudiera mandar el monto, la comisión sería lo
+ * que dijo el navegador y no lo que dicen los cobros.
+ */
+export const liquidarComisionSchema = z.object({
+  teamMemberId: z.string().cuid(),
+  /**
+   * ⚠ El período de PAGO, no el de devengo (cambió el 2026-08-16 con la regla de
+   * Alexander). Junto con `quincena` identifica al grupo: una política que pague
+   * dos veces al mes produce dos grupos en el mismo período y sin la quincena se
+   * liquidaría el equivocado.
+   */
+  periodo: periodoPlanilla,
+  quincena: z.union([z.literal(1), z.literal(2)]),
+  moneda: z.enum(COBRANZA_MONEDAS),
+  // Opcional: engancharla a la quincena con la que se paga. Se puede liquidar
+  // sin pago todavía (el schema lo permite y la FK es nullable).
+  pagoPlanillaId: z.string().cuid().nullable().optional(),
+  notas: z.string().trim().max(2000).nullable().optional(),
+});
 
 // ── Crear empresa (AccountSource "manual" — puerto 1) ───────────────────────────
 

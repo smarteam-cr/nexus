@@ -38,7 +38,25 @@ import type {
   gastoPatchSchema,
   ingresoVariableCreateSchema,
   ingresoVariablePatchSchema,
+  tarjetaCreateSchema,
+  tarjetaPatchSchema,
+  tarjetaSaldoSchema,
+  tarjetaCostoSchema,
+  planillaGenerarSchema,
+  planillaPagarSchema,
+  pagoPlanillaPatchSchema,
+  comisionPartnerCreateSchema,
+  comisionPartnerPatchSchema,
+  reglaComisionCreateSchema,
+  reglaComisionPatchSchema,
+  liquidarComisionSchema,
+  partnerCreateSchema,
+  partnerPatchSchema,
 } from "./schema";
+import { montoQuincena } from "./engine";
+import { quincenasDelPeriodo } from "./planilla";
+import { loadComisionesVendedor } from "./queries";
+import { normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
   constructor(
@@ -419,6 +437,22 @@ export async function cambiarEstadoCobro(
     } else {
       data.estado = patch.estado;
       if (cobro.estado === "COBRADO") {
+        // ⚠ ÚNICA concesión al chokepoint por las comisiones de vendedor: si la
+        // comisión de este cobro YA se liquidó, revertirlo dejaría una comisión
+        // pagada sobre plata que Nexus dice que nunca entró. La comisión
+        // devengada es derivada y se recalcula sola; la LIQUIDADA está congelada
+        // y hay que deshacerla a mano primero.
+        // Es un count server-side y el mensaje NO lleva montos: quien revierte
+        // un cobro es ADMIN y las comisiones de vendedor son SUPER_ADMIN-only.
+        const liquidadas = await prisma.comisionVendedor.count({
+          where: { cobroIds: { has: cobroId } },
+        });
+        if (liquidadas > 0) {
+          throw new CobranzaError(
+            "Este cobro ya entró en una comisión liquidada. Hay que deshacer la liquidación antes de revertirlo.",
+            409,
+          );
+        }
         // Revertir un COBRADO limpia la confirmación (queda rastro en updatedAt/bitácora).
         data.confirmadoPor = null;
         data.confirmadoEn = null;
@@ -827,6 +861,348 @@ export async function deleteCosto(costoId: string, usuarioEmail: string) {
   });
 }
 
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN) ──────────────────────────
+// Lo que Smarteam GANA de un aliado. Llamadas desde routes con
+// `guardCobranzaAccess`, NO con el de costos: es plata que entra.
+// `registradoPor` sale del guard (trazabilidad, mismo espíritu que confirmadoPor).
+
+export async function createComisionPartner(
+  data: z.infer<typeof comisionPartnerCreateSchema>,
+  byEmail: string,
+) {
+  if (data.clientId) {
+    const cliente = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { id: true },
+    });
+    if (!cliente) throw new CobranzaError("El cliente vinculado no existe.", 400);
+  }
+  const c = await prisma.comisionPartner.create({
+    data: {
+      partner: data.partner,
+      // ⚠ Sin esta línea la columna NUNCA se escribía desde la UI: el Zod la
+      // aceptaba y el panel la mandaba, pero acá se caía en silencio y el único
+      // escritor era el seed. Lo cazó la revisión adversarial de G3.
+      partnerId: data.partnerId ?? null,
+      concepto: data.concepto ?? null,
+      monto: data.monto,
+      moneda: data.moneda,
+      fecha: dayUTC(data.fecha),
+      clientId: data.clientId ?? null,
+      notas: data.notas ?? null,
+      registradoPor: byEmail,
+    },
+  });
+  return { id: c.id };
+}
+
+export async function updateComisionPartner(
+  comisionId: string,
+  data: z.infer<typeof comisionPartnerPatchSchema>,
+) {
+  const actual = await prisma.comisionPartner.findUnique({
+    where: { id: comisionId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  await prisma.comisionPartner.update({
+    where: { id: comisionId },
+    data: {
+      ...(data.partner !== undefined ? { partner: data.partner } : {}),
+      ...(data.partnerId !== undefined ? { partnerId: data.partnerId ?? null } : {}),
+      ...(data.concepto !== undefined ? { concepto: data.concepto } : {}),
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+      ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
+      ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: comisionId };
+}
+
+export async function deleteComisionPartner(comisionId: string) {
+  const actual = await prisma.comisionPartner.findUnique({
+    where: { id: comisionId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  await prisma.comisionPartner.delete({ where: { id: comisionId } });
+}
+
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ──────────────────────────────────────
+// ⚠ Llamadas SOLO desde routes con guardCostosAccess. Una tarjeta NO emite
+// `CostoMovimiento`: esa bitácora es la historia de un COSTO, y meter acá las
+// altas y bajas de tarjetas la ensuciaría con eventos de otra naturaleza. La
+// auditoría que sí lleva es la del saldo (`saldoPorEmail`/`saldoAlDia`), que es
+// el único dato que una persona AFIRMA.
+// ⚠ Y sin semáforo ni alertas: la prohibición transversal de costos sigue en pie
+// aunque una tarjeta sí tenga fecha de corte.
+
+export async function createTarjeta(data: z.infer<typeof tarjetaCreateSchema>) {
+  if (data.titularTeamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: data.titularTeamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona titular no existe.", 400);
+  }
+  const tarjeta = await prisma.tarjetaCredito.create({
+    data: {
+      alias: data.alias,
+      emisor: data.emisor ?? null,
+      ultimos4: data.ultimos4 ?? null,
+      moneda: data.moneda,
+      limite: data.limite ?? null,
+      titularTeamMemberId: data.titularTeamMemberId ?? null,
+      diaCorte: data.diaCorte ?? null,
+      diaPago: data.diaPago ?? null,
+      activa: data.activa ?? true,
+      notas: data.notas ?? null,
+    },
+  });
+  return { id: tarjeta.id };
+}
+
+export async function updateTarjeta(tarjetaId: string, data: z.infer<typeof tarjetaPatchSchema>) {
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+
+  if (data.titularTeamMemberId) {
+    const persona = await prisma.teamMember.findUnique({
+      where: { id: data.titularTeamMemberId },
+      select: { id: true },
+    });
+    if (!persona) throw new CobranzaError("La persona titular no existe.", 400);
+  }
+
+  // ⚠ El saldo NO se toca desde acá: tiene su propia mutación porque exige
+  // fecha de corte y autoría. Un PATCH genérico podría moverlo sin ninguna de
+  // las dos y el disponible pasaría a ser un número sin respaldo.
+  await prisma.tarjetaCredito.update({
+    where: { id: tarjetaId },
+    data: {
+      ...(data.alias !== undefined ? { alias: data.alias } : {}),
+      ...(data.emisor !== undefined ? { emisor: data.emisor } : {}),
+      ...(data.ultimos4 !== undefined ? { ultimos4: data.ultimos4 } : {}),
+      ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+      ...(data.limite !== undefined ? { limite: data.limite } : {}),
+      ...(data.titularTeamMemberId !== undefined
+        ? { titularTeamMemberId: data.titularTeamMemberId }
+        : {}),
+      ...(data.diaCorte !== undefined ? { diaCorte: data.diaCorte } : {}),
+      ...(data.diaPago !== undefined ? { diaPago: data.diaPago } : {}),
+      ...(data.activa !== undefined ? { activa: data.activa } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: tarjetaId };
+}
+
+export async function deleteTarjeta(tarjetaId: string) {
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+  // El puente cae por CASCADE: borrar la tarjeta no borra ningún costo, solo el
+  // vínculo. Los costos siguen vivos y contando en el burn, que es lo correcto.
+  await prisma.tarjetaCredito.delete({ where: { id: tarjetaId } });
+}
+
+/**
+ * Registrar el saldo usado, con su fecha de corte y quién lo afirma. Es la
+ * ÚNICA verdad del disponible: Nexus no lo deriva de los costos asignados.
+ */
+export async function registrarSaldoTarjeta(
+  tarjetaId: string,
+  data: z.infer<typeof tarjetaSaldoSchema>,
+  usuarioEmail: string,
+) {
+  if (!usuarioEmail) {
+    throw new CobranzaError("Registrar el saldo exige confirmación de un usuario.", 400);
+  }
+  const actual = await prisma.tarjetaCredito.findUnique({
+    where: { id: tarjetaId },
+    select: { id: true },
+  });
+  if (!actual) throw new CobranzaError("La tarjeta no existe.", 404);
+
+  await prisma.tarjetaCredito.update({
+    where: { id: tarjetaId },
+    data: {
+      saldoUsado: data.saldoUsado,
+      saldoAlDia: dayUTC(data.saldoAlDia),
+      saldoPorEmail: usuarioEmail,
+    },
+  });
+  return { id: tarjetaId };
+}
+
+/** Asignar o quitar un costo recurrente de la tarjeta (la tabla puente). */
+export async function asignarCostoATarjeta(
+  tarjetaId: string,
+  data: z.infer<typeof tarjetaCostoSchema>,
+) {
+  const [tarjeta, costo] = await Promise.all([
+    prisma.tarjetaCredito.findUnique({ where: { id: tarjetaId }, select: { id: true } }),
+    prisma.costoRecurrente.findUnique({ where: { id: data.costoId }, select: { id: true } }),
+  ]);
+  if (!tarjeta) throw new CobranzaError("La tarjeta no existe.", 404);
+  if (!costo) throw new CobranzaError("El costo no existe.", 404);
+
+  if (data.asignar) {
+    // Idempotente: re-asignar lo ya asignado no es un error, es un no-op.
+    await prisma.tarjetaCreditoCosto.upsert({
+      where: { tarjetaId_costoId: { tarjetaId, costoId: data.costoId } },
+      create: { tarjetaId, costoId: data.costoId },
+      update: {},
+    });
+  } else {
+    await prisma.tarjetaCreditoCosto.deleteMany({ where: { tarjetaId, costoId: data.costoId } });
+  }
+  return { id: tarjetaId };
+}
+
+// ── Libro de planilla (SUPER_ADMIN-only) ────────────────────────────────────────
+// ⚠ Llamadas SOLO desde routes con guardCostosAccess.
+
+/**
+ * Materializa las dos filas de una quincena para TODOS los salarios activos.
+ *
+ * ⚠ CREATE-ONLY: nunca update, nunca delete. Si alguien sube un salario a mitad
+ * de mes, un `toUpdate` reescribiría la Q2 pendiente al monto nuevo con la Q1 ya
+ * pagada al viejo — y Q1+Q2 no daría ningún salario. Re-generar una quincena ya
+ * generada es un NO-OP (`skipDuplicates` sobre el @@unique), no un error.
+ *
+ * La lista de personas se deriva ACÁ y no viene del cliente: así nadie puede
+ * pedir que se materialice a alguien que ya no está en planilla.
+ *
+ * El monto sale de `montoQuincena` UNA vez y queda congelado como snapshot —
+ * desde ese momento la fila es la verdad, no el costo.
+ */
+export async function generarQuincena(
+  data: z.infer<typeof planillaGenerarSchema>,
+): Promise<{ creadas: number; yaExistian: number; sinPersona: number }> {
+  const quincenas = quincenasDelPeriodo(data.periodo);
+  const dia = quincenas.find((q) => q.quincena === data.quincena);
+  if (!dia) throw new CobranzaError("Período o quincena inválidos.", 400);
+
+  const salarios = await prisma.costoRecurrente.findMany({
+    where: { categoria: "SALARIO", activo: true, finalizadoEl: null },
+    select: {
+      nombre: true,
+      monto: true,
+      moneda: true,
+      teamMemberId: true,
+      teamMember: { select: { name: true } },
+    },
+  });
+
+  // Un salario sin persona ligada no puede entrar: el @@unique del libro es
+  // (persona, período, quincena), y con NULL los duplicados no colisionan — se
+  // crearían filas repetidas en cada corrida. Se reportan para que alguien ate
+  // ese costo a su TeamMember, en vez de meterlos a medias.
+  const conPersona = salarios.filter((s) => s.teamMemberId !== null);
+  const sinPersona = salarios.length - conPersona.length;
+
+  const filas = conPersona.map((s) => ({
+    sujetoTeamMemberId: s.teamMemberId!,
+    sujetoNombre: s.teamMember?.name ?? s.nombre,
+    periodo: data.periodo,
+    quincena: data.quincena,
+    fechaProgramada: dayUTC(dia.fechaProgramada),
+    monto: montoQuincena(Number(s.monto), data.quincena),
+    moneda: s.moneda,
+  }));
+
+  const res = await prisma.pagoPlanilla.createMany({ data: filas, skipDuplicates: true });
+  return { creadas: res.count, yaExistian: filas.length - res.count, sinPersona };
+}
+
+/**
+ * CHOKEPOINT del libro (INV18, espejo de INV3): marcar una quincena PAGADA exige
+ * `byEmail` y deja `confirmadoPor`/`confirmadoEn`. Ninguna otra ruta escribe
+ * `estado = PAGADO`.
+ *
+ * `fechaPago` default hoy: la plata suele salir días antes de que alguien la
+ * registre, así que la fecha real se puede escribir hacia atrás.
+ *
+ * ⚠ Acá va a engancharse la liquidación de comisiones de esa persona (F3),
+ * DENTRO de esta misma transacción — por eso ya es una `$transaction` aunque hoy
+ * tenga un solo write: agregar el segundo no debe cambiar la forma.
+ */
+export async function pagarQuincena(
+  pagoId: string,
+  data: z.infer<typeof planillaPagarSchema>,
+  byEmail: string,
+) {
+  if (!byEmail) {
+    throw new CobranzaError("Marcar pagada una quincena exige confirmación de un usuario.", 400);
+  }
+  const actual = await prisma.pagoPlanilla.findUnique({ where: { id: pagoId } });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Esa quincena ya está pagada.", 409);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.pagoPlanilla.update({
+      where: { id: pagoId },
+      data: {
+        estado: "PAGADO",
+        fechaPago: data.fechaPago ? dayUTC(data.fechaPago) : dayUTC(hoyCR()),
+        confirmadoPor: byEmail,
+        confirmadoEn: new Date(),
+        ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      },
+    });
+    return { id: pagoId };
+  });
+}
+
+/**
+ * Editar una quincena PENDIENTE (corregir el monto sugerido antes de pagarla).
+ * Un PAGADO es intocable: frena con 409 en vez de reescribir historia.
+ */
+export async function updatePagoPlanilla(
+  pagoId: string,
+  data: z.infer<typeof pagoPlanillaPatchSchema>,
+) {
+  const actual = await prisma.pagoPlanilla.findUnique({
+    where: { id: pagoId },
+    select: { estado: true },
+  });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Una quincena PAGADA no se edita.", 409);
+  }
+  await prisma.pagoPlanilla.update({
+    where: { id: pagoId },
+    data: {
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: pagoId };
+}
+
+/** Borrar una quincena PENDIENTE (se generó de más). Un PAGADO no se borra. */
+export async function deletePagoPlanilla(pagoId: string) {
+  const actual = await prisma.pagoPlanilla.findUnique({
+    where: { id: pagoId },
+    select: { estado: true },
+  });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado === "PAGADO") {
+    throw new CobranzaError("Una quincena PAGADA no se borra.", 409);
+  }
+  await prisma.pagoPlanilla.delete({ where: { id: pagoId } });
+}
+
 // ── Gastos puntuales (fase 4.5 — SUPER_ADMIN-only) ──────────────────────────────
 // Misma línea dura que los costos: sin tracking de pago, sin fuga de montos.
 
@@ -922,5 +1298,249 @@ export async function deleteGasto(gastoId: string) {
     await prisma.gastoPuntual.delete({ where: { id: gastoId } });
   } catch {
     throw new CobranzaError("El gasto no existe.", 404);
+  }
+}
+
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ───────────────────
+// Se persisten DOS cosas y ninguna es la comisión devengada: la REGLA (el % que
+// le toca a alguien) y, al liquidar, la comisión CONGELADA. Lo devengado se
+// deriva de los cobros COBRADO en cada lectura — ver lib/cobranza/comisiones.ts.
+
+export async function createReglaComision(data: z.infer<typeof reglaComisionCreateSchema>) {
+  return prisma.reglaComisionVendedor.create({
+    data: {
+      teamMemberId: data.teamMemberId,
+      clientId: data.clientId ?? null,
+      porcentaje: data.porcentaje,
+      vigenteDesde: dayUTC(data.vigenteDesde),
+      vigenteHasta: data.vigenteHasta ? dayUTC(data.vigenteHasta) : null,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+export async function updateReglaComision(
+  reglaId: string,
+  data: z.infer<typeof reglaComisionPatchSchema>,
+) {
+  try {
+    return await prisma.reglaComisionVendedor.update({
+      where: { id: reglaId },
+      data: {
+        ...(data.teamMemberId !== undefined ? { teamMemberId: data.teamMemberId } : {}),
+        ...(data.clientId !== undefined ? { clientId: data.clientId ?? null } : {}),
+        ...(data.porcentaje !== undefined ? { porcentaje: data.porcentaje } : {}),
+        ...(data.vigenteDesde !== undefined ? { vigenteDesde: dayUTC(data.vigenteDesde) } : {}),
+        ...(data.vigenteHasta !== undefined
+          ? { vigenteHasta: data.vigenteHasta ? dayUTC(data.vigenteHasta) : null }
+          : {}),
+        ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+      },
+      select: { id: true },
+    });
+  } catch {
+    throw new CobranzaError("La regla no existe.", 404);
+  }
+}
+
+/**
+ * Borrar una regla NO toca lo ya liquidado: esas filas llevan su propio snapshot
+ * de porcentaje y monto justamente para sobrevivir a esto. Lo que sí cambia es
+ * lo DEVENGADO de acá en adelante, que es lo que se espera al borrarla.
+ */
+export async function deleteReglaComision(reglaId: string) {
+  try {
+    await prisma.reglaComisionVendedor.delete({ where: { id: reglaId } });
+  } catch {
+    throw new CobranzaError("La regla no existe.", 404);
+  }
+}
+
+/**
+ * Liquidar lo devengado de una persona en un período y una moneda.
+ *
+ * ⚠ El monto NO viene del cliente: se RECALCULA con el mismo cálculo puro que
+ * pintó la pantalla. Si el navegador pudiera mandarlo, la comisión sería lo que
+ * dijo el navegador y no lo que dicen los cobros.
+ *
+ * Congela un snapshot autosuficiente (patrón `CostoMovimiento`): la fila se lee
+ * sola aunque después cambien la regla, el cobro o la persona.
+ */
+export async function liquidarComision(
+  data: z.infer<typeof liquidarComisionSchema>,
+  byEmail: string,
+) {
+  if (!byEmail) throw new CobranzaError("Liquidar exige confirmación de un usuario.", 400);
+
+  const { devengadas } = await loadComisionesVendedor();
+  const d = devengadas.find(
+    (x) =>
+      x.teamMemberId === data.teamMemberId &&
+      x.periodo === data.periodo &&
+      x.quincena === data.quincena &&
+      x.moneda === data.moneda,
+  );
+  if (!d) {
+    throw new CobranzaError(
+      "No hay nada devengado para esa persona en ese período y esa moneda. Puede que ya se haya liquidado.",
+      409,
+    );
+  }
+
+  // La quincena a la que se engancha tiene que ser de la MISMA persona: pagarle
+  // la comisión de alguien junto al salario de otro sería un error mudo.
+  if (data.pagoPlanillaId) {
+    const pago = await prisma.pagoPlanilla.findUnique({
+      where: { id: data.pagoPlanillaId },
+      select: { sujetoTeamMemberId: true, moneda: true, estado: true },
+    });
+    if (!pago) throw new CobranzaError("La quincena no existe.", 404);
+    if (pago.sujetoTeamMemberId !== data.teamMemberId) {
+      throw new CobranzaError("Esa quincena es de otra persona.", 409);
+    }
+    if (pago.moneda !== data.moneda) {
+      throw new CobranzaError(
+        "La quincena está en otra moneda. Nexus no convierte: la comisión se paga en la moneda en que entró.",
+        409,
+      );
+    }
+    // ⚠ Una quincena PAGADA es plata que YA salió del banco. Colgarle una
+    // comisión después haría que el historial de planilla muestre salario +
+    // comisión con fecha de pago de ese día —afirmando que esa plata salió— y
+    // que el aguinaldo la cuente. Se frena acá; la UI ni siquiera la sugiere.
+    if (pago.estado === "PAGADO") {
+      throw new CobranzaError(
+        "Esa quincena ya se pagó: no se le puede colgar una comisión después. Liquidala suelta o engancharla a una quincena pendiente.",
+        409,
+      );
+    }
+  }
+
+  // ⚠ IDEMPOTENCIA. `devengarComisiones` ya excluye lo liquidado, pero eso se
+  // leyó ANTES: dos clicks seguidos (o dos pestañas) leen ambos el mismo
+  // devengado y crean DOS comisiones por los mismos cobros. La regla que se
+  // hace cumplir acá no es "una por período" —un cobro que llega tarde puede
+  // liquidarse aparte, y eso es legítimo— sino la de verdad: **ningún cobro se
+  // paga dos veces**.
+  return prisma.$transaction(async (tx) => {
+    const yaPagados = await tx.comisionVendedor.findFirst({
+      where: { cobroIds: { hasSome: d.cobroIds } },
+      select: { id: true },
+    });
+    if (yaPagados) {
+      throw new CobranzaError(
+        "Alguno de esos cobros ya entró en una comisión liquidada. Refrescá la pantalla: puede que se haya liquidado en otra pestaña.",
+        409,
+      );
+    }
+    return tx.comisionVendedor.create({
+      data: {
+        teamMemberId: data.teamMemberId,
+        vendedorNombre: d.vendedorNombre,
+        periodo: d.periodo,
+        base: d.base,
+        porcentaje: d.porcentaje,
+        monto: d.monto,
+        // `data.moneda` viene del Zod (el enum), no del derivado: son el mismo
+        // valor porque el `find` de arriba matchea por moneda.
+        moneda: data.moneda,
+        cobroIds: d.cobroIds,
+        detalle: d.detalle as unknown as Prisma.InputJsonValue,
+        pagoPlanillaId: data.pagoPlanillaId ?? null,
+        liquidadoPor: byEmail,
+        notas: data.notas ?? null,
+      },
+      select: { id: true },
+    });
+  });
+}
+
+/**
+ * Deshacer una liquidación. Los cobros vuelven a devengar solos (el derivado se
+ * recalcula) y, con eso, el freno 409 del revert se suelta — que es exactamente
+ * el camino que ese 409 le pide a quien quiere revertir un cobro.
+ */
+export async function deshacerLiquidacion(comisionId: string) {
+  try {
+    await prisma.comisionVendedor.delete({ where: { id: comisionId } });
+  } catch {
+    throw new CobranzaError("La liquidación no existe.", 404);
+  }
+}
+
+// ── Aliados comerciales (configuración de un INGRESO — superficie ADMIN) ────────
+// El aliado con su CADENCIA. Va acá y no bajo `costos/` porque es lo que Smarteam
+// GANA: mismo guard que `ComisionPartner` (`guardCobranzaAccess`), no el de costos.
+
+export async function createPartner(data: z.infer<typeof partnerCreateSchema>) {
+  const clave = normalizePartner(data.nombre);
+  const existente = await prisma.partnerComercial.findUnique({ where: { clave } });
+  if (existente) {
+    throw new CobranzaError(`Ya existe un aliado con ese nombre: «${existente.nombre}».`, 409);
+  }
+  return prisma.partnerComercial.create({
+    data: {
+      nombre: data.nombre,
+      clave,
+      frecuenciaMeses: data.frecuenciaMeses,
+      activo: data.activo ?? true,
+      notas: data.notas ?? null,
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Editar un aliado. Renombrarlo RECALCULA la clave — es lo que hace que dos
+ * grafías del mismo aliado no convivan. Si la clave nueva ya es de otro, se
+ * frena con 409 en vez de reventar con el unique de la base.
+ */
+export async function updatePartner(
+  partnerId: string,
+  data: z.infer<typeof partnerPatchSchema>,
+) {
+  if (data.nombre !== undefined) {
+    const clave = normalizePartner(data.nombre);
+    const choca = await prisma.partnerComercial.findUnique({ where: { clave } });
+    if (choca && choca.id !== partnerId) {
+      throw new CobranzaError(`Ese nombre ya lo usa otro aliado: «${choca.nombre}».`, 409);
+    }
+  }
+  // El 404 se decide MIRANDO, no adivinando desde un catch: un catch pelado
+  // convertía cualquier fallo —una colisión de clave en una carrera, por
+  // ejemplo— en «El aliado no existe», que manda a buscar el problema al lugar
+  // equivocado. Lo marcó la revisión adversarial.
+  const existe = await prisma.partnerComercial.findUnique({
+    where: { id: partnerId },
+    select: { id: true },
+  });
+  if (!existe) throw new CobranzaError("El aliado no existe.", 404);
+
+  return prisma.partnerComercial.update({
+    where: { id: partnerId },
+    data: {
+      ...(data.nombre !== undefined
+        ? { nombre: data.nombre, clave: normalizePartner(data.nombre) }
+        : {}),
+      ...(data.frecuenciaMeses !== undefined ? { frecuenciaMeses: data.frecuenciaMeses } : {}),
+      ...(data.activo !== undefined ? { activo: data.activo } : {}),
+      ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Borrar un aliado NO borra sus pagos: la FK es SetNull y `ComisionPartner.partner`
+ * (el string) sigue siendo el snapshot de lo que se escribió. Se pierde la
+ * cadencia, no la plata — y el historial vuelve a leerse mes a mes, que es la
+ * degradación correcta.
+ */
+export async function deletePartner(partnerId: string) {
+  try {
+    await prisma.partnerComercial.delete({ where: { id: partnerId } });
+  } catch {
+    throw new CobranzaError("El aliado no existe.", 404);
   }
 }

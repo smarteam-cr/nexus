@@ -27,7 +27,15 @@ import path from "node:path";
 const RAIZ = path.resolve(__dirname, "..", "..");
 const RUTA = "app/api/projects/[projectId]/session-candidates/route.ts";
 const PANEL = "components/clients/SessionSelectionReview.tsx";
-const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+/**
+ * ⚠ Normaliza CRLF→LF. Las dos PCs que comparten este repo hacen checkout con
+ * finales de línea distintos, y las aserciones de abajo son literales de código
+ * con `\n` adentro: sin esto, el escaneo sale ROJO en una de las dos máquinas y
+ * VERDE en la otra sobre exactamente el mismo código. Un guard estructural tiene
+ * que hablar del código, no de cómo lo escribió el checkout.
+ */
+const leer = (rel: string) =>
+  fs.readFileSync(path.join(RAIZ, rel), "utf8").replace(/\r\n/g, "\n");
 
 describe("⭐ el chequeo de contenido alcanza a las que YA alimentan", () => {
   it("las feeding entran al universo del chequeo, no solo las candidatas", () => {

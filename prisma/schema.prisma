@@ -197,6 +197,7 @@ model Client {
   canvas           Json? // Client Canvas — conocimiento a nivel empresa
   canvasConfidence Json? // { section: "confirmed" | "inferred" } per section
 
+
   hubspotAccount       HubspotAccount?
   audits               Audit[]
   implementations      Implementation[]
@@ -218,6 +219,8 @@ model Client {
   accountBrief         CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
   cuentaFinanciera     CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
   ingresosVariables    IngresoVariable[]      @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
+  comisionesPartner    ComisionPartner[]      @relation("ComisionesDePartner") // lo que Smarteam GANA de este aliado
+  reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas ImportacionFila[] // Cobranza: trazabilidad del importador
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
@@ -1613,6 +1616,16 @@ model TeamMember {
   costosRecurrentes       CostoRecurrente[]       @relation("CostosDePersona")
   // Documentos de /roles compartidos con esta persona (solo lectura).
   roleShares              RoleProfileShare[]
+  // ⚠ SUPER_ADMIN-only, MISMA regla que costosRecurrentes: estas cuatro llevan
+  // lo que se le PAGA a la persona (quincenas, comisiones) o de qué tarjeta de
+  // la empresa es titular. Ninguna entra a TEAM_MEMBER_SAFE_SELECT — hay un
+  // test que lo afirma por nombre.
+  tarjetas                TarjetaCredito[]        @relation("TarjetasDePersona")
+  pagosPlanilla           PagoPlanilla[]          @relation("PagosDePlanilla")
+  reglasComision          ReglaComisionVendedor[] @relation("ReglasDeComision")
+  comisionesVendedor      ComisionVendedor[]      @relation("ComisionesDeVendedor")
+  ventasAtribuidas        AtribucionVenta[]       @relation("VentasAtribuidas")
+  aguinaldosPagados       AguinaldoPago[]         @relation("AguinaldosDePersona")
 }
 
 enum TeamRole {
@@ -2858,6 +2871,11 @@ model ServicioContratado {
 
   planes PlanDePago[]
   cobros Cobro[]
+  // ⚠ El DEAL GANADO de Nexus es esta fila: es lo único que tiene monto vendido,
+  // una fila por venta, y es el padre OBLIGATORIO de cada Cobro — o sea que la
+  // plata que entra ya sabe de qué venta viene.
+  atribucion     AtribucionVenta?
+  reglasComision ReglaComisionVendedor[] @relation("ReglasDeComisionServicio")
 
   @@index([cuentaId, estado])
   @@index([projectId])
@@ -3110,6 +3128,11 @@ enum CobranzaFrecuenciaCosto {
 // (COSTOS_ROLES + guardCostosAccess, 3 capas server-side — RLS no cuenta: Prisma
 // bypassa) — los salarios son la información más sensible del sistema y por eso
 // viven en entidad APARTE, nunca como columna de TeamMember.
+// ⚠ ACOTADO 2026-08-14: todo lo de arriba sigue valiendo PARA ESTE MODELO y solo para
+// él. Lo que se pagó de verdad, quincena por quincena, vive en `PagoPlanilla` — otra
+// entidad, con estado de pago propio (ver DECISIONS §El libro de planilla). La
+// prohibición fiscal y la de FX NO se levantaron: el aguinaldo se DERIVA sumando lo
+// registrado en ese libro, y los montos se guardan en su moneda nativa.
 model CostoRecurrente {
   id         String                  @id @default(cuid())
   categoria  CobranzaCategoriaCosto
@@ -3143,6 +3166,11 @@ model CostoRecurrente {
   finalizadoEl DateTime? @db.Date
 
   movimientos CostoMovimiento[] @relation("MovimientosDeCosto")
+
+  // Con qué tarjeta(s) de la empresa se paga este costo. Va por tabla PUENTE y
+  // no por una columna acá: una tarjeta SÍ vence (corte, pago) y una columna
+  // arrastraría ese vencimiento al costo, que por regla no vence.
+  tarjetas TarjetaCreditoCosto[] @relation("CostosDeTarjeta")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3257,6 +3285,427 @@ model IngresoVariable {
 
   @@index([fecha])
   @@index([clientId])
+}
+
+// ─── TarjetaCredito ─────────────────────────────────────────────────────────────
+// Una tarjeta de crédito de la empresa con su LÍMITE y su SALDO USADO.
+// Disponible = límite − saldo. El saldo lo ESCRIBE una persona con su fecha de
+// corte y queda auditado (`saldoAlDia`/`saldoPorEmail`, patrón confirmadoPor):
+// es la única verdad. Lo que Nexus suma de los costos asignados por la tabla
+// puente se muestra al lado como REFERENCIA y jamás calcula el saldo — un saldo
+// es acumulado y un cargo es mensual, no son la misma unidad. Lo único que sí se
+// compara: si el disponible no alcanza para el próximo mes de cargos.
+// Sin semáforo y sin alertas (la prohibición transversal de costos sigue en pie).
+// ⚠ PRIVACIDAD: superficie SOLO SUPER_ADMIN + RLS deny. Y `ultimos4` es
+// literalmente eso — el número COMPLETO de una tarjeta no entra a esta base.
+model TarjetaCredito {
+  id       String         @id @default(cuid())
+  alias    String // cómo la llama el equipo ("VISA de Alexander")
+  emisor   String? // banco emisor
+  ultimos4 String? // SOLO los últimos 4 dígitos. NUNCA el número completo.
+  moneda   CobranzaMoneda
+  // nullable porque una tarjeta puede cargarse antes de saber su límite.
+  limite   Decimal?       @db.Decimal(12, 2)
+
+  // nullable porque una tarjeta de la empresa puede no tener titular persona.
+  // SetNull: dar de baja a alguien no borra la tarjeta.
+  titularTeamMemberId String?
+  titular             TeamMember? @relation("TarjetasDePersona", fields: [titularTeamMemberId], references: [id], onDelete: SetNull)
+
+  diaCorte Int? // día del mes en que corta
+  diaPago  Int? // día del mes en que se paga
+
+  // El saldo y su fecha van JUNTOS: un saldo sin fecha de corte no dice nada.
+  saldoUsado    Decimal?  @db.Decimal(12, 2)
+  saldoAlDia    DateTime? @db.Date
+  saldoPorEmail String?
+
+  activa Boolean @default(true)
+  notas  String? @db.Text
+
+  costos TarjetaCreditoCosto[]
+  cortes CorteTarjeta[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([activa])
+}
+
+// ─── CorteTarjeta ───────────────────────────────────────────────────────────────
+// El estado de cuenta del mes, transcrito por una persona: cuatro números que ya
+// llegan por correo del banco. Es un DATO OBSERVADO, no un cálculo — `pagoMinimo`
+// y `saldoAnterior` se COPIAN, jamás se derivan (misma doctrina que el aguinaldo).
+//
+// Por qué esto y no un registro transacción por transacción: `TarjetaCredito`
+// tenía 0 filas cuando se diseñó, o sea que la sección que ya pedía UN número al
+// mes tenía adopción cero. Una pantalla que exige 40 líneas mensuales tipeadas se
+// abandona en tres semanas y queda mintiendo por vacío.
+//
+// ⚠ NO entra a computeCajaNeta ni al burn (mismo precedente que PagoPlanilla):
+// `loadCajaNeta` ya proyecta los costos recurrentes, y sumar además el corte
+// cobraría HubSpot dos veces. Tampoco tiene semáforo ni alertas.
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny.
+model CorteTarjeta {
+  id String @id @default(cuid())
+
+  tarjetaId String
+  tarjeta   TarjetaCredito @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+
+  fechaCorte      DateTime @db.Date
+  // La REAL que imprime el banco. La derivada de diaCorte/diaPago es solo el
+  // default del formulario y se rotula como estimación mientras esta fila falte.
+  fechaLimitePago DateTime @db.Date
+
+  // Nada lo LEE todavía: se captura porque es lo único que haría honesta una
+  // conciliación futura, y volver a buscarlo después significa releer estados de
+  // cuenta que nadie guarda.
+  saldoAnterior Decimal? @db.Decimal(12, 2)
+  deudaAlCorte  Decimal  @db.Decimal(12, 2)
+  pagoMinimo    Decimal? @db.Decimal(12, 2)
+
+  // Van JUNTOS o ninguno (CHECK en la DB): media verdad sobre plata que salió es
+  // peor que no tener el dato.
+  pagadoEl    DateTime? @db.Date
+  montoPagado Decimal?  @db.Decimal(12, 2)
+
+  registradoPor String
+  registradoEn  DateTime
+  notas         String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ⚠ Sin `moneda`: la tarjeta ya la declara y duplicarla violaría §2.1.
+  @@unique([tarjetaId, fechaCorte])
+  @@index([tarjetaId, fechaCorte(sort: Desc)])
+  @@index([pagadoEl, fechaLimitePago])
+}
+
+// ─── AguinaldoPago ─────────────────────────────────────────────────────────────
+// Que el aguinaldo se pueda marcar PAGADO, con su fecha real y quién lo confirmó.
+//
+// ⚠ TABLA PROPIA Y NO UNA FILA DEL LIBRO DE PLANILLA, y el riesgo es real:
+// `calcularAguinaldo` suma TODA fila PAGADO cuyo `periodo` caiga en la ventana,
+// sin mirar concepto. Una fila con periodo "2026-12" caería dentro de la ventana
+// del aguinaldo 2027 y lo inflaría en silencio; además colisionaría con el
+// @@unique del libro contra la quincena del 15 de diciembre.
+//
+// ⚠ SIN columna de estado: la fila EXISTE = está pagado. Un PENDIENTE sería
+// indistinguible de la ausencia de fila.
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny — es remuneración.
+model AguinaldoPago {
+  id String @id @default(cuid())
+
+  // El año del aguinaldo; la ventana es dic del anterior → nov de éste.
+  anio Int
+
+  // nullable + SetNull: que alguien salga del equipo no borra el registro de que
+  // se le pagó. `sujetoNombre` es el snapshot que sobrevive.
+  sujetoTeamMemberId String?
+  sujeto             TeamMember? @relation("AguinaldosDePersona", fields: [sujetoTeamMemberId], references: [id], onDelete: SetNull)
+  sujetoNombre       String
+
+  moneda String
+  // Congelado como SNAPSHOT (precedente: PagoPlanilla.monto y ComisionVendedor):
+  // corregir una quincena vieja no puede moverle el monto a plata que ya salió.
+  monto  Decimal @db.Decimal(12, 2)
+
+  baseSumada        Decimal @db.Decimal(12, 2)
+  quincenasContadas Int
+  // Nexus no elige entre la línea de solo salario y la que incluye comisiones,
+  // pero sí registra cuál eligió la persona.
+  incluyeComisiones Boolean @default(false)
+
+  pagadoEl      DateTime @db.Date
+  confirmadoPor String
+  confirmadoEn  DateTime
+  notas         String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([anio, sujetoTeamMemberId, moneda])
+  @@index([anio])
+}
+
+// ─── TarjetaCreditoCosto ────────────────────────────────────────────────────────
+// Puente tarjeta ↔ costo recurrente. Tabla y no columna: ver el comentario de
+// `CostoRecurrente.tarjetas`. Cascade en las dos puntas — el vínculo no tiene
+// vida propia, si muere cualquiera de los dos extremos el vínculo sobra.
+model TarjetaCreditoCosto {
+  id        String          @id @default(cuid())
+  tarjetaId String
+  tarjeta   TarjetaCredito  @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+  costoId   String
+  costo     CostoRecurrente @relation("CostosDeTarjeta", fields: [costoId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+
+  @@unique([tarjetaId, costoId])
+  @@index([costoId])
+}
+
+// ─── PagoPlanilla ───────────────────────────────────────────────────────────────
+// EL LIBRO: lo que efectivamente se PAGÓ, una fila por persona y por quincena
+// (1–15 / 16–fin). Es OTRA COSA que la hoja «Planillas», que muestra el salario
+// all-in ESTIMADO de `CostoRecurrente` para el burn: una dice cuánto se calcula
+// que cuesta el mes, ésta cuánto salió de verdad.
+// ⚠ El monto es PROPIO y congelado como snapshot, NO derivado del costo:
+// `CostoRecurrente.monto` es el all-in estimado y el motor jamás lee
+// `montoBase`, así que no existe un bruto quincenal que partir.
+// ⚠ Materialización CREATE-ONLY: nunca update, nunca delete. Si alguien sube el
+// salario a mitad de mes, reescribir la Q2 pendiente al monto nuevo con la Q1 ya
+// pagada al viejo haría que Q1+Q2 no diera ningún salario. PAGADO es intocable.
+// ⚠ NO entra a `computeCajaNeta`: ahí el burn lo produce `CostoRecurrente` y
+// `loadCajaNeta` no filtra categoría — sumarlo sería doble conteo garantizado.
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny, igual que CostoRecurrente.
+model PagoPlanilla {
+  id String @id @default(cuid())
+
+  // nullable + SetNull: dar de baja a la persona NO borra la historia de pagos
+  // (que es justo de donde salen su antigüedad y su aguinaldo).
+  sujetoTeamMemberId String?
+  sujeto             TeamMember? @relation("PagosDePlanilla", fields: [sujetoTeamMemberId], references: [id], onDelete: SetNull)
+  // Snapshot del nombre para que la fila se lea sola aunque el vínculo muera.
+  sujetoNombre       String
+
+  periodo         String // "YYYY-MM"
+  quincena        Int // 1 (1–15) | 2 (16–fin) — CHECK en la DB
+  fechaProgramada DateTime @db.Date
+
+  monto  Decimal        @db.Decimal(12, 2)
+  moneda CobranzaMoneda
+
+  estado    PagoPlanillaEstado @default(PENDIENTE)
+  fechaPago DateTime?          @db.Date
+  // INV18, espejo de INV3: ningún PAGADO sin confirmadoPor.
+  confirmadoPor String?
+  confirmadoEn  DateTime?
+
+  notas String? @db.Text
+
+  // Las comisiones que se liquidaron JUNTO a esta quincena.
+  comisiones ComisionVendedor[] @relation("ComisionesDelPago")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sujetoTeamMemberId, periodo, quincena])
+  @@index([periodo, quincena])
+  @@index([estado])
+}
+
+/// Estado de una quincena del libro de planilla. Un pago SÍ tiene estado — es la
+/// diferencia con `CostoRecurrente`, que es referencia estimada y no vence.
+enum PagoPlanillaEstado {
+  PENDIENTE
+  PAGADO
+}
+
+// ─── ComisionPartner ────────────────────────────────────────────────────────────
+// Lo que Smarteam GANA de un aliado comercial (HubSpot, Atom Chat, Cooby, Nua
+// talk). Es un INGRESO, así que su superficie es la de ADMIN (gate
+// `cobranza.read`) y NO lleva la policy deny-all — al revés que todo lo de
+// costos. Nunca comparte ruta, endpoint ni loader con `ComisionVendedor`, que es
+// remuneración de una persona.
+// `partner` es un string normalizado y no una FK obligatoria: ninguno de los
+// cuatro existe hoy como `Client`, e inventarlos para tener la FK sería fabricar
+// cartera. `clientId` se liga solo si el aliado ya existe con kind ALIADO.
+// ⚠ NO entra a la caja neta en esta tanda — mismo precedente que IngresoVariable.
+// ─── PartnerComercial ───────────────────────────────────────────────────────────
+// El aliado que le PAGA a Smarteam (HubSpot, Atom Chat, Cooby…), con su CADENCIA.
+// Nació porque `ComisionPartner.partner` era un string suelto por fila y no había
+// dónde guardar "HubSpot nos paga cada 3 meses" — sin eso, el historial se leía
+// mes a mes y salía lleno de meses vacíos, y no se podía saber cuándo cae el
+// próximo. Decisión de Elías: la frecuencia es del ALIADO, no del pago.
+// ⚠ Es configuración de un INGRESO: superficie ADMIN (`cobranza.read`), RLS
+// habilitado pero SIN deny-all — igual que `ComisionPartner` e `IngresoVariable`.
+model PartnerComercial {
+  id String @id @default(cuid())
+
+  /// El nombre que se muestra, con sus mayúsculas.
+  nombre String
+  /// La clave normalizada (`normalizePartner`): "HubSpot" y "hubspot " son el
+  /// MISMO aliado. Es lo que se compara; `nombre` es lo que se lee.
+  clave  String @unique
+
+  /// Cada cuántos MESES paga. 1 mensual · 3 trimestral · 6 semestral · 12 anual.
+  /// Int y no enum: agregar "cada 2 meses" no puede exigir un ALTER TYPE
+  /// coordinado entre las 2 PCs que comparten esta base. CHECK 1..24 en la DB.
+  frecuenciaMeses Int
+
+  activo Boolean @default(true)
+  notas  String? @db.Text
+
+  comisiones ComisionPartner[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ComisionPartner {
+  id String @id @default(cuid())
+
+  /// El nombre tal cual se escribió. NO se deriva de `partner` (la relación):
+  /// es el snapshot de la carga, igual que `sujetoNombre` en PagoPlanilla — la
+  /// fila se explica sola aunque el aliado se renombre o se borre.
+  partner String
+
+  // nullable porque las 5 filas históricas nacieron sin aliado dado de alta y
+  // porque un pago puede registrarse antes de configurarlo. SetNull: borrar el
+  // aliado NO borra el registro de que esa plata entró.
+  partnerId       String?
+  partnerRelacion PartnerComercial? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  concepto String?
+
+  monto  Decimal        @db.Decimal(12, 2)
+  moneda CobranzaMoneda
+  fecha  DateTime       @db.Date
+
+  // nullable porque el partner puede no estar en la cartera. SetNull: borrar el
+  // cliente no borra el registro de que esa plata entró.
+  clientId String?
+  client   Client? @relation("ComisionesDePartner", fields: [clientId], references: [id], onDelete: SetNull)
+
+  notas         String? @db.Text
+  registradoPor String // email del guard (trazabilidad, como en IngresoVariable)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fecha])
+  @@index([partner])
+  @@index([partnerId])
+}
+
+// ─── ReglaComisionVendedor ──────────────────────────────────────────────────────
+// El % que le toca a una persona sobre lo COBRADO (decisión de Elías: la base es
+// lo cobrado, no lo facturado). `clientId` null = aplica a TODOS los clientes; la
+// regla MÁS ESPECÍFICA gana. La comisión devengada NO se materializa desde acá:
+// es una vista derivada (ver `ComisionVendedor`).
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny — es remuneración.
+model ReglaComisionVendedor {
+  id           String     @id @default(cuid())
+  teamMemberId String
+  vendedor     TeamMember @relation("ReglasDeComision", fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // nullable A PROPÓSITO: null = todos los clientes (la regla general).
+  clientId String?
+  client   Client? @relation("ReglasDeComisionVendedor", fields: [clientId], references: [id], onDelete: Cascade)
+
+  // En PUNTOS PORCENTUALES: 10.0000 = 10%. No en fracción — así la fila se lee
+  // como la gente dice el número. CHECK en la DB: > 0 y <= 100.
+  porcentaje Decimal @db.Decimal(6, 4)
+
+  vigenteDesde DateTime  @db.Date
+  // nullable: una regla vigente no tiene fecha de fin.
+  vigenteHasta DateTime? @db.Date
+
+  // Tercer eje de especificidad, el MÁS específico: servicio > cliente > general.
+  // nullable A PROPÓSITO: null = la regla no es de un deal puntual.
+  // Con esto, "¿el % es de la persona o de este deal?" se contesta en la
+  // interfaz y no en el DDL.
+  servicioId String?
+  servicio   ServicioContratado? @relation("ReglasDeComisionServicio", fields: [servicioId], references: [id], onDelete: Cascade)
+
+  notas String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamMemberId, clientId])
+  @@index([servicioId])
+}
+
+// ─── AtribucionVenta ───────────────────────────────────────────────────────────
+// QUIÉN GANÓ CADA VENTA. Es el dato que decide a quién se le paga la comisión, y
+// hasta el 2026-08-17 no existía en ninguna parte de Nexus: la regla era por
+// CLIENTE, así que un vendedor con regla para un cliente comisionaba todo lo que
+// ese cliente pagara, para siempre, aunque la segunda venta la ganara otro.
+//
+// ⚠ NO se puede derivar, y se midió: `Project.hubspotOwnerEmail` es el CSE que
+// ENTREGA (sync-projects prioriza `csl_encargado` sobre el owner estándar) y los
+// 70 valores reales son CSE/CSL/DEV, cero vendedores. Se elige a mano, que es lo
+// correcto: a quién se le paga es una decisión, no una inferencia.
+//
+// ⚠ Es TABLA y no una columna en ServicioContratado por el mismo motivo por el
+// que el salario vive en `CostoRecurrente` y no en `TeamMember`: es el dato que
+// decide una remuneración y no se cuelga de la entidad que leen los loaders
+// ADMIN de cobranza.
+//
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny — decide remuneración.
+model AtribucionVenta {
+  id String @id @default(cuid())
+
+  servicioId String             @unique
+  servicio   ServicioContratado @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+
+  teamMemberId String
+  vendedor     TeamMember @relation("VentasAtribuidas", fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // TRES estados, no dos: sin fila = nadie la revisó · fila con true = comisiona
+  // · fila con false = se revisó y acá no se paga. El vendedor se guarda igual
+  // cuando no comisiona (quién ganó la venta es un hecho; que no cobre por ella
+  // es otra decisión). Sin este campo, un deal decidido a conciencia se leería
+  // para siempre como trabajo pendiente y el aviso de "N sin asignar" nunca
+  // llegaría a cero.
+  comisiona Boolean @default(true)
+
+  asignadoPor String
+  asignadoEn  DateTime
+  notas       String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamMemberId])
+}
+
+// ─── ComisionVendedor ───────────────────────────────────────────────────────────
+// La comisión LIQUIDADA. La DEVENGADA no vive acá: es una vista derivada de los
+// cobros COBRADO cruzados con la regla vigente, y se recalcula sola.
+// Por qué derivada y no una fila escrita al cobrar (se refutó ese diseño):
+// `cambiarEstadoCobro` NO tiene transacción, NO es el único escritor de COBRADO
+// (el importador escribió 87 cobros directo) y el revert no deja bitácora — con
+// eso había tres formas de tener un cobro sin su comisión y ningún invariante
+// que lo viera.
+// El snapshot es autosuficiente (patrón CostoMovimiento): se lee solo aunque
+// después cambien la regla, el cobro o la persona.
+// ⚠ PRIVACIDAD: SOLO SUPER_ADMIN + RLS deny — es remuneración.
+model ComisionVendedor {
+  id String @id @default(cuid())
+
+  // nullable + SetNull: la historia sobrevive a la baja de la persona.
+  teamMemberId   String?
+  vendedor       TeamMember? @relation("ComisionesDeVendedor", fields: [teamMemberId], references: [id], onDelete: SetNull)
+  vendedorNombre String
+
+  periodo    String // "YYYY-MM"
+  base       Decimal        @db.Decimal(12, 2) // lo cobrado sobre lo que se calculó
+  porcentaje Decimal        @db.Decimal(6, 4) // puntos porcentuales, como en la regla
+  monto      Decimal        @db.Decimal(12, 2)
+  moneda     CobranzaMoneda
+
+  // Qué cobros la produjeron. Es lo que consulta el freno 409 del revert.
+  cobroIds String[] @default([])
+  // Snapshot por cobro (cliente, fecha, monto) para que la fila se explique sola.
+  detalle  Json?
+
+  // La quincena en la que se pagó junto al salario. nullable: se puede liquidar
+  // sin engancharla todavía a un pago. SetNull para no perder la comisión.
+  pagoPlanillaId String?
+  pagoPlanilla   PagoPlanilla? @relation("ComisionesDelPago", fields: [pagoPlanillaId], references: [id], onDelete: SetNull)
+
+  liquidadoPor String
+  liquidadoEn  DateTime @default(now())
+
+  notas String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([teamMemberId, periodo])
+  @@index([pagoPlanillaId])
 }
 
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────

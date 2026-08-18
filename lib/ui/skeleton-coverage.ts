@@ -46,8 +46,20 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/costos/herramientas": { modo: "own" },
   "finanzas/costos/planillas": { modo: "own" },
   "finanzas/costos/fijos": { modo: "own" },
+  // La hoja de tarjetas tiene forma PROPIA (tarjetas apiladas con tres datos
+  // cada una, no una lista de costos): heredar el skeleton de categoría
+  // prometería una pantalla que no llega.
+  "finanzas/costos/tarjetas": { modo: "own" },
+  // El historial se agrupa por mes con dos bloques de quincena: su forma no es la
+  // de ninguna de las hojas de categoría, ni la de su propia madre (Planillas).
+  "finanzas/costos/planillas/historial": { modo: "own" },
+  "finanzas/costos/aguinaldo": { modo: "own" },
+  // Tres bloques (devengado + liquidado + reglas): no es la forma de ninguna
+  // hoja de categoría ni la del libro.
+  "finanzas/costos/comisiones-vendedor": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
+  "finanzas/comisiones-partner": { modo: "own" },
 
   // ── Customer Success ────────────────────────────────────────────────────────
   "customer-success": { modo: "own" },

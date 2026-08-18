@@ -734,6 +734,10 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   el usuario (sin defaults ni tasas sugeridas); el canónico SIEMPRE es `monto` all-in —
   base+factor son solo memoria de reedición (van juntos o ninguno). Del lado costos NO hay
   tracking de pagos: sin "pagado", sin semáforo, sin alertas — un costo no vence.
+  ⚠ **ACOTADO el 2026-08-14** (ver §"El libro de planilla"): todo este párrafo sigue vigente
+  **para `CostoRecurrente`** y solo para él. Lo que se pagó de verdad vive en `PagoPlanilla`,
+  que es otra entidad y sí lleva estado de pago. La prohibición fiscal y la de FX **no se
+  levantaron**.
 - **Caja neta REUSA el motor de proyección, no lo duplica**: `esqueletoBuckets` (privado del
   engine) arma los buckets (quincenas→meses, clamp adentro) y lo consumen `proyectarIngresos`
   Y `proyectarCostos` → keys idénticas POR CONSTRUCCIÓN y `computeCajaNeta` solo resta.
@@ -2374,3 +2378,295 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   otros números («120+ implementaciones», «45+ clientes activos»): no es contradicción
   necesariamente —cuentan cosas distintas— pero conviene que sean el mismo relato, y hoy
   cambiarlas es un cambio de código (el mismo trato que las insignias).
+
+## El libro de planilla, las tarjetas y las comisiones (2026-08-14)
+
+> Elías: *"Quiero optimizar la sección de finanzas para que mapee mucho mejor los gastos"* — un
+> submenú de tarjetas de crédito con su capacidad disponible; otro de comisiones (lo que Smarteam
+> gana con cada partner y lo que le paga a sus vendedores); la planilla con histórico por quincenas
+> «similar a las cuentas por cobrar»; y el aguinaldo por colaborador.
+
+- **La enmienda va primero, y ACOTA en vez de levantar.** El párrafo de §Cobranza que define
+  `CostoRecurrente` prohíbe literalmente tres cosas que este pedido necesita: la palabra
+  **aguinaldo** está en la lista de lógica fiscal prohibida, **FX** también, y *"un costo no vence:
+  sin pagado, sin semáforo, sin alertas"* choca con una planilla que se marca pagada.
+  `ARCHITECTURE §11` obliga a corregir el documento ANTES del código, así que: la regla sigue
+  **entera para `CostoRecurrente`** (referencia estimada, alimenta el burn y la caja neta, nadie le
+  agrega un «pagado») y `PagoPlanilla` es una **entidad nueva** con su propio ciclo de vida — mismo
+  precedente que «costo fijo vs. gasto puntual = entidades separadas», que ya resolvió esta misma
+  tensión una vez. El aguinaldo permitido es **suma de lo REGISTRADO en el libro, dic–nov, ÷ 12**:
+  un dato observado, no una tasa; siguen prohibidas CCSS, cargas, renta y timbrado, cero constantes
+  fiscales. **FX sigue prohibido**: todo se carga en su **moneda nativa**, y el motor nunca hace esa
+  cuenta. ⚠ **Corrección tras cargar el archivo (2026-08-15):** el bloque VIVO de *Costos Fijos* NO
+  es colones convertidos — Elías confirmó que **toda la hoja opera en dólares**. El `/$U$2` de cada
+  fórmula es solo cómo Alex arma el número; lo que se carga es el RESULTADO cacheado (dólares), nunca
+  el numerador en colones ni el ₡500 de `U2` (ver `lib/cobranza/egresos-sheet.ts`). No hay entonces
+  ninguna conversión que pueda divergir: Nexus y la hoja de Alex muestran el mismo monto en dólares
+  pase lo que pase con el tipo de cambio real. La advertencia "diverge apenas se mueva el TC" sigue
+  siendo cierta, pero para costos que SÍ están en colones de verdad (salarios, herramientas locales):
+  ahí Nexus guarda ₡ nativos sin convertir, y compararlo contra un total en dólares de otra fuente va
+  a mostrar una diferencia en cuanto el tipo de cambio real se mueva. El cálculo del aguinaldo **no
+  vive en `engine.ts`**: el motor es puro y está congelado por golden.
+- **La comisión del vendedor es una VISTA DERIVADA, no una fila que se escribe al cobrar.** El
+  primer diseño colgaba la generación de `cambiarEstadoCobro` y se refutó con tres hechos: (a) esa
+  función **no tiene transacción** — es un `prisma.cobro.update` pelado y sus efectos colaterales
+  corren sueltos después; (b) **no es el único escritor de `COBRADO`** —
+  `import-facturaciones-xlsx.ts` escribe `estado` + `confirmadoPor` directo por `tx.cobro.upsert`, y
+  así entraron 202 cobros históricos que nunca pasaron por ahí; (c) el revert COBRADO→PROGRAMADO es
+  un **click optimista sin confirmación** en un `<select>` y **no deja bitácora** (el comentario del
+  código que afirma lo contrario es falso: el único `bitacoraCobro.create` está dentro del `if` de
+  `promesaPago`). Con eso, materializar al cobrar dejaba tres formas de tener un cobro sin su
+  comisión y ningún invariante que lo viera. Ahora: `ReglaComisionVendedor` (persona · `clientId?`
+  null = todos · porcentaje · vigencia; la más específica gana) + una query solo-lectura sobre los
+  COBRADO. **La fila solo se persiste al LIQUIDAR**, con snapshot autosuficiente, patrón
+  `CostoMovimiento`. Única concesión al chokepoint: **409** al revertir un cobro cuya comisión ya se
+  liquidó — un `count` server-side, sin montos en el body.
+- **Partner y vendedor no comparten ruta, ni endpoint, ni loader.** Una comisión de partner es un
+  INGRESO de Smarteam (superficie ADMIN, gate `cobranza.read`); una de vendedor es la **remuneración
+  de una persona**, tan sensible como un salario (SUPER_ADMIN). Un `loadComisiones()` que devolviera
+  las dos metería montos de remuneración en el payload RSC del ADMIN aunque la UI no los pintara.
+  ⚠ Y **todo lo SUPER_ADMIN cuelga de `app/api/cobranza/costos/`**: ahí entra gratis al escaneo
+  estructural que exige `guardCostosAccess` en cada handler. Verificado: **ningún escaneo cubre
+  `app/api/cobranza/` fuera de `costos`, `gastos` y `caja-neta`**, así que copiar el molde de
+  `IngresoVariable` y poner las rutas en `app/api/cobranza/tarjetas/` las dejaría sin ningún guard
+  obligatorio. El precio de esa comodidad es una fuga sin señal roja.
+  ⚠ **Y por eso `IngresosVariablesPanel` dejó de decir «comisiones sueltas»** (2026-08-16): su copy
+  y el placeholder de su form mandaban la misma plata a dos lugares. O partner es EL lugar, o
+  quedaban dos maneras de registrar lo mismo y ningún total cerraría.
+- **Lo que la implementación agregó al diseño** (2026-08-16, todo en `lib/cobranza/comisiones.ts`,
+  25 tests): (1) **el reloj es `fechaCobro`**, el día que entró la plata — ese día decide qué regla
+  estaba vigente y a qué período pertenece; un cobro COBRADO sin fecha de pago simplemente no
+  devenga, no se aproxima con la programada. (2) **El redondeo es POR COBRO, no al final**: es lo
+  que muestra el detalle, así que la suma que la persona ve es exactamente la que se le paga
+  (3 × 33,33 al 13% da 12,99, no 13,00 — el test D8 lo congela). (3) Cuando la regla cambia dentro
+  del período, el porcentaje del grupo es el EFECTIVO (ponderado) y `porcentajesDistintos > 1` lo
+  declara: un solo número no permite rehacer esa cuenta y callarlo sería precisión falsa. (4) El
+  desempate entre reglas de la misma especificidad es ESTABLE (`vigenteDesde` más reciente, y el id
+  si empatan) — dos corridas sobre la misma data tienen que dar la misma comisión. (5) **Borrar una
+  regla no toca lo liquidado** (esas filas llevan su propio snapshot justamente para eso) y
+  **deshacer una liquidación** devuelve los cobros al derivado — que es el camino que el 409 del
+  revert le pide a quien quiere revertir un cobro. (6) Liquidar exige que la quincena a la que se
+  engancha sea de la MISMA persona y la MISMA moneda: pagarle la comisión de alguien junto al
+  salario de otro, o convertir de moneda, son los dos errores mudos de este flujo.
+- **El libro NO entra a la caja neta.** `loadCajaNeta` trae `costoRecurrente.findMany({activo:true})`
+  **sin filtrar categoría**, y hay 17 salarios activos que `proyectarCostos` ya reparte por quincena:
+  sumar `PagoPlanilla` sería doble conteo garantizado. El burn lo sigue produciendo
+  `CostoRecurrente`; el libro es EJECUCIÓN (pasado), como los `pasados` de `proyectarGastos`.
+  ⚠ Las comisiones tampoco entran en esta tanda —precedente vivo: `IngresoVariable` también está
+  afuera— y eso hay que decirlo con el número en la mano: las de partner son **$91.262,55** contra
+  $301k de cobranza. Meterlas obliga a tocar `esqueletoBuckets` (privado y compartido por los tres
+  proyectores), a mover G1/G2 y a reescribir el copy del panel («entra (cobros proyectados)» y el
+  banner de cobertura por cuentas, que no aplica a una comisión de HubSpot). Es una tanda propia, no
+  un renglón.
+  ⚠ **La cifra vieja de este párrafo decía $198.961/año y era el DOBLE de lo real** (corregido el
+  2026-08-16, releyendo el Excel celda por celda antes de cargarlo): la hoja trae una fila de
+  ACUMULADO (`=B11+C11`) que repite cada total en dos columnas, y sumarla contaba todo dos veces.
+  Lo que entró son **5 pagos**: HubSpot 38.756,61 (feb-15) + 45.921,72 (may-15) · Atom Chat
+  2.796,75 + 2.849,25 (mismas fechas) · Cooby 938,22 (jul-30). **Nua talk está en cero y no se
+  carga**: una fila de $0 no es una comisión, es una columna que quedó vacía. Es la CUARTA vez que
+  un total del propio documento miente (facturaciones, herramientas, salarios, y ahora ésta) — la
+  regla ya escrita arriba se confirma: lo leído celda por celda es la verdad. Por eso los 5 montos
+  van escritos a mano en `scripts/import-comisiones-partner.ts` y no salen de un parser que
+  volvería a caer en la misma fila. Las 3 hojas OCULTAS son de un año anterior (otro roster, otras
+  tarjetas, HubSpot a $300) y tampoco se cargan.
+- **El monto de una quincena es PROPIO, no derivado del costo.** `CostoRecurrente.monto` es el
+  all-in estimado (base × factor) y el schema declara que el motor jamás lee `montoBase`: no existe
+  un bruto quincenal que partir. `PagoPlanilla` lleva su monto canónico congelado como snapshot;
+  `montoQuincena` se exporta del engine (hoist puro — precedente exacto: `bucketAntiguedad`) y se usa
+  **solo como sugerencia de UI** al crear la fila. La materialización es **CREATE-ONLY**: nunca
+  update, nunca delete. Si alguien sube el salario a mitad de mes, un `toUpdate` reescribiría la Q2
+  pendiente al monto nuevo con la Q1 ya pagada al viejo, y Q1+Q2 no daría ningún salario.
+- **Cero DDL de ancla temporal.** `CostoRecurrente` tiene `finalizadoEl` pero no un `iniciadoEl`: no
+  hay con qué decidir qué quincenas existen hacia atrás. La generación arranca en la fecha de
+  activación, el histórico se carga a mano, y la antigüedad de una persona es `min(quincena)` de sus
+  pagos; el primer año declara **cobertura** («N de 24 quincenas registradas») en vez de fabricar lo
+  que falta. Por lo mismo, la fecha de ingreso del aguinaldo **sale del libro** y no de un campo
+  nuevo: `TeamMember.fechaIngreso` rompería `TEAM_MEMBER_SAFE_SELECT`, la allowlist congelada de 12
+  claves de un modelo que leen decenas de módulos. Y la fórmula CR ya maneja sola el año parcial —
+  quien entró en julio tiene ceros de diciembre a junio y su aguinaldo sale proporcional. Argumento
+  decisivo a favor del libro: el período dic–nov abarca a **4 personas que se fueron en julio**;
+  derivado de los costos ACTIVOS desaparecen, derivado del libro salen bien.
+- **La tarjeta: el saldo lo escribe una persona, lo asignado es referencia.** Disponible = límite −
+  saldo, con su fecha de corte y su autoría (patrón `confirmadoPor`/`confirmadoEn`). Lo que Nexus
+  suma —los costos asignados a esa tarjeta— se muestra al lado y **nunca calcula el saldo**: un
+  saldo es acumulado y un cargo es mensual, no son la misma unidad, y «avisar si difieren» sería
+  inventar una conciliación. Lo que sí se compara y es sólido: si `disponible < cargado mensual`, el
+  próximo mes de cargos no cabe. El vínculo es una **tabla puente**, no una columna en
+  `CostoRecurrente`: una tarjeta SÍ vence (corte, pago) y una columna arrastraría ese vencimiento al
+  costo, que por regla no vence. ⚠ Ese vencimiento no puede derramar semáforo ni entrar por
+  `AlertaCobro` — la prohibición transversal «sin alertas de costos» sigue en pie.
+- **Lo que el Excel de Alex enseñó al leerlo celda por celda** (además de los montos): la hoja
+  *Costos Fijos* tiene dos bloques y el izquierdo está **OCULTO**, con sus dos filas TOTAL en
+  `#REF!` y **moneda mezclada** (alquiler en ₡, Juan Tijerino en $) — el vivo es el derecho, y no
+  son dos años sino **un ciclo partido en abril**, que *Pretensión de Aguinaldos* confirma (Elías y
+  Breiner arrancan en abril). ⚠ **El año no consta en ninguna hoja ni en la metadata.** La fuente de
+  herramientas es la **grilla mensual**, no la lista de arriba: sus dos totales cortan el rango antes
+  de la fila 26 y **pierden Supabase**. Y en *Salarios Actuales* el total arranca en `D14` y **se
+  come a Jerson Escudero ($1.200)**. Es la tercera vez que un total del propio documento sub-suma
+  (ya había pasado con las facturaciones) ⇒ **regla que queda: lo leído celda por celda es la
+  verdad; el total del documento es un control informativo, jamás una validación.** *Claude* no
+  tiene importe en ninguna de las dos fuentes: no se aproxima, se reporta y se deja afuera.
+- **Tres correcciones tras la respuesta de Elías (2026-08-15), ya en el loader.** (1) *Patente*
+  dejó de ser incargable: son **dos conceptos fiscales**, confirmado — "cada 3 meses se cobran los
+  bienes inmuebles con cargo extra". Se carga como Patente MENSUAL (el monto base, moda de la
+  fila) + un concepto nuevo *Impuesto de Bienes Inmuebles CR Smarteam S.A* ANUAL (el recargo
+  trimestral × 4; el trimestre de marzo cae en el bloque oculto y no tiene dato, así que se
+  extrapola de la cadencia confirmada). (2) *Comisiones Randall Fernandez* se EXCLUYE de costos
+  fijos aunque la fórmula sigue viva y estable en la hoja: Elías confirmó que se dejó de pagar en
+  febrero — es una comisión de vendedor muerta, no un costo recurrente, y por diseño va a F3 (o ni
+  eso, si terminó antes de que arranque la ventana observable). (3) El bloque OCULTO (ene-sep) SÍ
+  se lee —"todo lo oculto debe usarse, si el campo está vacío quiere decir que es el mismo"— pero
+  solo 4 filas tienen dato ahí (Alquiler, CCSS CR Smarteam, Juan Tijerino, Contabilidad SV) y están
+  en **moneda mezclada sin ninguna marca legible** (colones los dos primeros, dólares los otros
+  dos — confirmado a mano, celda por celda), mientras el bloque vivo confirmado es dólares. Eso es
+  un cambio de MONEDA, no de precio: `CostoMovimiento` no está diseñado para representar eso con
+  honestidad, así que el loader lo IMPRIME como sección informativa y nunca lo aplica ni lo
+  backfillea.
+- **«El Excel manda» con un matiz.** Lo que está en Nexus y no en el Excel (Claude, Odoo, Mercury,
+  Apollo, Factun, Quickbooks, Marketing Hub Starter, 5 personas) **no se borra: se da de baja**
+  (`finalizadoEl` + movimiento `BAJA`). Es reversible y deja huella; el hard delete perdería
+  justamente la historia que `CostoMovimiento` existe para guardar.
+
+## La comisión se paga el siguiente 30 después de que el cliente pague (2026-08-16)
+
+> Corrección de **Alexander Arrieta** por WhatsApp, sobre la tanda del mismo día:
+> *"No, los pagos de comisiones se hacen los 30 de acuerdo al pago de los
+> clientes… por las fechas de pagos de los clientes, que no son exactas"*. Elías
+> lo cerró: *"O sea, se hacen el siguiente 30 después de que el cliente pague"*, y
+> pidió validar que esa configuración fuera apta y que quedara de default.
+
+- **Es apta y pasa a ser el default, pero NO era la opción que ya existía.** El
+  enum traía `Q2_MISMO_MES` («fin del mismo mes») y parecía que la corrección se
+  resolvía cambiando una constante. **No:** de los 101 cobros COBRADO con fecha
+  que hay hoy, **17 caen el último día de su mes** (los días más frecuentes son el
+  15 con 59 y el 30 con 23). Con «mismo mes», esos 17 tendrían la comisión
+  programada **el mismo día en que entró la plata** — pagada antes de estar
+  confirmada, y lo contrario de «el SIGUIENTE 30». Por eso la política nueva se
+  llama `SIGUIENTE_FIN_DE_MES` y compara **estrictamente**.
+- **El disparador es la fecha de CADA cobro, no el mes al que pertenece**, y eso
+  es lo que obligó a un cambio estructural y no a un swap de constante:
+  `devengarComisiones` agrupaba por mes de devengo, así que un cobro del 15 de
+  julio y uno del 31 de julio caían en la MISMA línea — y se pagan en planillas
+  distintas. Ahora el grupo ES el pago: persona × quincena de pago × moneda. Es
+  literalmente lo que dijo Alexander (*"de acuerdo al pago de los clientes… las
+  fechas no son exactas"*): la comisión sigue al dinero, no al calendario.
+- **Se pudo cambiar el significado de `periodo` sin migrar nada** porque se
+  verificó antes: `ComisionVendedor` y `ReglaComisionVendedor` tienen **0 filas**.
+  Nada liquidado, nada que reinterpretar. Con filas, el mismo cambio habría
+  exigido una columna nueva y un backfill.
+- **Disuelve la objeción del default anterior en vez de ignorarla.** `Q1_MES_SIGUIENTE`
+  se había justificado así: *"la comisión de marzo se calcula sobre TODO marzo,
+  incluido el 31; pagarla el 30 sería pagar un número que todavía no se puede
+  saber"*. Con el grupo redefinido, cada línea es «todo lo que entró estrictamente
+  antes del 30» — que SÍ es un número que se puede saber el 30. El argumento era
+  correcto para el agrupamiento viejo y deja de aplicar con el nuevo.
+- **Un cobro del 30 en un mes de 31 días se paga al día siguiente, y está bien.**
+  No es una excepción: el 31 todavía es «el siguiente 30» respecto del 30. Lo
+  congela el test Q3 para que nadie lo «arregle» sin decidirlo.
+- **`quincena` entra a la identidad del grupo y al payload de liquidar.** Con la
+  política vigente siempre da 2, pero `SIGUIENTE_QUINCENA` produce dos grupos en
+  el mismo mes y sin ese campo se liquidaría el equivocado — el tipo de error que
+  no avisa. **No** se agregó columna a `ComisionVendedor`: sería DDL coordinado
+  entre las 2 PCs por una política que hoy nadie usa, y la fila liquidada ya queda
+  identificada por sus `cobroIds` y su `pagoPlanillaId`.
+- **La fecha de pago se muestra SIEMPRE, aunque la quincena no exista.** Antes,
+  sin fila de planilla a la que engancharse, la columna «Se paga» quedaba muda: la
+  fecha se sabe igual (la calcula la política) y lo que falta es dónde colgarla,
+  que se dice aparte con «(suelta)».
+- **`finDeMesISO` hace la aritmética a mano, sin `Date`.** Un `new Date("2026-07-31")`
+  en UTC-6 se lee como el 30 y correría **todas** las comisiones un día. El módulo
+  entero ya evitaba `Date` por esto; la regla nueva no lo iba a estrenar.
+- ⚠ **La política sigue siendo una constante, no una fila de configuración.** Que
+  se haya corregido a los pocos días refuerza el diseño (cambiarla fue tocar un
+  archivo puro con su test), no lo contradice: mientras haya UNA forma de pagar,
+  una pantalla de settings sería una pantalla que mantener sin nadie que la use.
+
+## Planillas, historial y la cadencia de cada aliado (2026-08-16)
+
+> Elías, mirando el módulo ya en uso: *"El historial de planillas, creo que mejor
+> meterlo dentro de la página de planillas (debería llamarse así, no planillas
+> (estimado). O realmente no entiendo por qué dice estimado). Y dentro de esa
+> página que haya un botón que diga Historial"*, *"Las comisiones también deben
+> tener un histórico (como los salarios)"* y, hacia adelante, *"quiero poder hacer
+> un gráfico histórico de este año… cada cosa debe estar sostenida en el tiempo
+> hasta hoy y proyectada con la configuración a futuro"*.
+
+- **«Estimado» era una muleta, no una distinción.** El eje real no es
+  estimado/real: es **CONFIGURACIÓN vs REGISTRO**. `CostoRecurrente` (SALARIO) es
+  configuración que proyecta el futuro —`loadCajaNeta` lo lee `activo:true` **sin
+  filtrar categoría**, así que esos salarios *son* el burn y la caja neta a 6
+  meses— y `PagoPlanilla` es el registro de lo que salió. El paréntesis del menú
+  existía solo para poder distinguir dos ítems con nombres parecidos («Planillas
+  (estimado)» y «Libro de planilla»); con el libro adentro, deja de tener razón de
+  ser. Lo que la palabra quería decir de verdad —*no es contabilidad fiscal*— ya
+  estaba escrito cinco veces en la misma pantalla.
+- **La fusión es de PANTALLA, no de datos**, y el estimado sigue haciendo falta
+  por tres hechos verificados: (1) el libro **no existe hacia adelante** —
+  `generarQuincena` es CREATE-ONLY y solo materializa la quincena de hoy; la
+  proyección la produce `proyectarCostos` sobre `CostoRecurrente`; (2) el libro se
+  **alimenta** del estimado (deriva las filas de `categoria:"SALARIO", activo:true`
+  con `teamMemberId`): sin él no puede materializar nada; (3) si ambos entraran al
+  neto sería doble conteo en el tramo solapado. `loadCajaNeta`, `proyectarCostos` y
+  los golden **no se tocaron**.
+- **El historial va a RUTA HIJA (`planillas/historial`), no a una pestaña.** Con
+  pestaña, el link sería siempre el mismo (no se puede compartir ni marcar), habría
+  dos `<h1>` en la pantalla —`LibroPlanillaPanel` monta su propio `PageHeader`— y
+  el `loading.tsx` de Planillas pasaría a prometer una forma que ya no es. Con ruta
+  hija cada pantalla mantiene su skeleton real y el gate se replica tal cual (una
+  hija **no hereda** el gate de su madre: lo pone la page, y el escaneo P4 lo exige
+  archivo por archivo justamente para que nadie asuma esa herencia).
+  ⚠ **La hija NO se declara en el sidebar**: si estuviera, el prefijo de «Planillas»
+  la marcaría activa y `nav-children.test` lo frena. Sin entrada propia, estar en el
+  historial ilumina a su madre, que es lo correcto.
+- **Las rutas de API NO se movieron.** `/api/cobranza/costos/pagos-planilla` sigue
+  igual: moverla rompería los imports estáticos de `lib/cobranza/costos-privacy.test.ts`
+  y con eso P1-P4 enteros. **El nombre de la pantalla es copy; el de la API es
+  identidad** — la misma regla que ya se aplicó al renombre de «Business Case».
+- **El histórico de comisiones es el de VENDEDOR, y el de partner va a otra
+  granularidad** (respuesta textual de Elías): las de vendedor *"son más variables y
+  dependen del número de ventas de la persona"* ⇒ mes a mes, como el historial de
+  planilla. Las de partner *"nos las pagan cada ciertos meses"* ⇒ a la **frecuencia
+  configurada del aliado**. Son dos lecturas distintas porque son dos ritmos
+  distintos, no por gusto de diseño.
+- **Se cerró un bug que dejó la tanda F3**: `liquidarComision` aceptaba y VALIDABA
+  `pagoPlanillaId` (misma persona, misma moneda) pero el panel **nunca lo mandaba**
+  ⇒ toda liquidación quedaba suelta, el desglose expandible del historial de
+  planilla salía siempre vacío y `loadAguinaldo` sumaba **cero** comisiones. La
+  plomería existía entera y no la usaba nadie.
+- **El CUÁNDO se paga la comisión es una POLÍTICA aislada**, porque Elías pidió
+  explícitamente poder cambiarla (*"por ejemplo ponerlo en la primera semana de cada
+  mes"*). `quincenaDePagoDeComision(fechaCobro, politica)` es pura, con un test por
+  política, y la vigente es una constante. La quincena la **resuelve el server** y
+  el panel la muestra y la reenvía; si la calculara el navegador, la comisión
+  quedaría enganchada a lo que dijo el navegador.
+  ⚠ **El default `Q1_MES_SIGUIENTE` era INCORRECTO y se corrigió el mismo día** —
+  ver la sección siguiente.
+- **La frecuencia es del ALIADO, no del pago** (decisión de Elías entre tres
+  opciones). Tabla `PartnerComercial` con `frecuenciaMeses` Int (no enum: agregar
+  "cada 2 meses" no puede exigir un `ALTER TYPE` coordinado entre las 2 PCs) y FK
+  **nullable** en `ComisionPartner` — el string `partner` se queda como snapshot,
+  igual que `sujetoNombre` en `PagoPlanilla`, así que borrar el aliado pierde la
+  cadencia y **no la plata**.
+- **Los buckets van anclados al AÑO CALENDARIO.** Con 3 meses son los trimestres,
+  que es lo que todo el mundo ya entiende. Anclarlos al primer pago de cada aliado
+  dejaría a dos aliados con la misma cadencia en períodos corridos entre sí y
+  ninguna tabla los podría poner lado a lado. Una cadencia que no divide a 12 deja
+  el último bucket corto y la etiqueta lo dice.
+- **La tarjeta dice DÓNDE cae el próximo, nunca cuánto.** El monto no lo sabe
+  nadie. Y sin cadencia configurada no se dice nada: deducir el ritmo de uno o dos
+  pagos sería la fabricación que este módulo evita — por eso el seed marca a
+  **Cooby** como SUPUESTO en sus propias notas (un solo pago no permite deducir
+  nada) y **Nua talk** no se carga (columna en cero).
+- ⚠ **El gráfico histórico NO se construyó** (pedido explícito de Elías: todavía
+  no). Lo que sí quedó es el diagnóstico de qué se puede sostener en el tiempo hoy
+  y qué no: **tienen fecha por fila y se reconstruyen mes a mes** los cobros
+  (`fechaCobro`), los gastos (`fecha`), el libro de planilla (`periodo`+`quincena`)
+  y las comisiones de partner (`fecha`); la comisión de vendedor devengada **se
+  recalcula** en vez de guardarse; y **NO se pueden reconstruir hacia atrás**
+  `CostoRecurrente` (guarda el monto de HOY — `updateCosto` estampa
+  `fechaEfectiva = hoy` en cada cambio, así que un burn dibujado hacia marzo
+  mostraría el costo de hoy: una línea plana, creíble y falsa) ni `TarjetaCredito`
+  (un solo saldo, sin serie). La salida correcta cuando llegue el gráfico es
+  **declarar el arranque de la serie**, como ya hace `coberturaDe`, y no fabricarla:
+  los salarios pasados salen del libro —que sí trae la variación real del año— y
+  los futuros de `CostoRecurrente`, con corte duro en hoy.

@@ -24,6 +24,7 @@ export default function FinanzasCostosCategoriaClient({
   titulo,
   descripcion,
   leyenda,
+  accion,
   initialCostos,
   todayISO,
 }: {
@@ -31,6 +32,14 @@ export default function FinanzasCostosCategoriaClient({
   titulo: string;
   descripcion: string;
   leyenda: string;
+  /**
+   * CTA del encabezado. Nace para el botón «Historial» de Planillas: la hoja
+   * dice qué se paga por mes y el botón lleva a lo que se pagó de verdad.
+   * Es un ReactNode y no un `{href,label}` porque una hoja futura puede
+   * necesitar otra cosa (un menú, dos botones) y el contenedor no tiene por
+   * qué enterarse.
+   */
+  accion?: React.ReactNode;
   initialCostos: CostoRecurrenteDTO[];
   todayISO: string;
 }) {
@@ -49,7 +58,7 @@ export default function FinanzasCostosCategoriaClient({
 
   return (
     <div>
-      <PageHeader title={titulo} description={descripcion} />
+      <PageHeader title={titulo} description={descripcion} action={accion} />
       <CostosPanel
         costos={propios}
         gastos={[]}

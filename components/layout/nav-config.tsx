@@ -214,11 +214,34 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // exista su page.tsx, el menú prometería un 404.
       { href: "/cobranza", label: "Cobranza", section: "Ingresos" },
       { href: "/finanzas/ingresos-variables", label: "Ingresos variables", section: "Ingresos" },
+      // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN.
+      // Las de VENDEDOR son remuneración y viven en "Costos y gastos" con otro gate.
+      { href: "/finanzas/comisiones-partner", label: "Comisiones de partner", section: "Ingresos" },
       // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
       { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
       { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
+      // ⚠ UNA sola entrada de planilla. Adentro conviven los dos números —lo que
+      // cuesta por mes (configuración, alimenta el burn) y lo que se pagó de verdad
+      // (`planillas/historial`, al que se llega por el botón «Historial»)— y esa
+      // hoja hija NO se declara acá a propósito: si estuviera, el prefijo de
+      // «Planillas» la marcaría activa y `nav-children.test` lo frena. Sin entrada
+      // propia, estar en el historial deja iluminada a su madre, que es lo correcto.
+      // Hasta 2026-08-16 esto decía «Planillas (estimado)» para distinguirla del
+      // ítem hermano «Libro de planilla»; sin el hermano, el paréntesis sobra.
       { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
+      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true },
       { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
+      // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
+      // exige que el ÚLTIMO bloque sea exactamente ["/finanzas/caja-neta"] sin section.
+      { href: "/finanzas/costos/tarjetas", label: "Tarjetas", section: "Costos y gastos", costosOnly: true },
+      // La remuneración por vender. Su gemela de PARTNER (que es un ingreso) está
+      // arriba, en "Ingresos", con otro gate: nunca se juntan.
+      {
+        href: "/finanzas/costos/comisiones-vendedor",
+        label: "Comisiones de vendedor",
+        section: "Costos y gastos",
+        costosOnly: true,
+      },
       // Sin `section`: la caja neta es la SÍNTESIS de los dos bloques (entra − sale),
       // no pertenece a ninguno. El flyout le deriva un divisor por ser un run suelto.
       { href: "/finanzas/caja-neta", label: "Caja neta", costosOnly: true },

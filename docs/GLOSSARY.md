@@ -261,6 +261,84 @@
 - **finalizado / baja** (`CostoRecurrente.finalizadoEl`): baja DEFINITIVA de un costo
   (renuncia, desvinculación, cancelación) — distinta de la pausa (`activo=false`, temporal).
   Sale del burn pasada la fecha, va al Histórico, y genera un movimiento BAJA.
+- **historial de planilla** (`PagoPlanilla` → `/finanzas/costos/planillas/historial`, SOLO
+  SUPER_ADMIN): lo que efectivamente se PAGÓ, una fila por persona y por quincena (1–15 /
+  16–fin), con estado pendiente|pagado, fecha real y `confirmadoPor`. Se llega por el botón
+  **«Historial»** del encabezado de Planillas — desde el 2026-08-16 hay **un solo ítem de
+  planilla en el menú**, porque dos con nombres parecidos obligaban al paréntesis «(estimado)»
+  para poder distinguirlos. Es **otra cosa** que su madre `/finanzas/costos/planillas`, que
+  muestra el costo mensual por persona de `CostoRecurrente` y alimenta el burn: una dice cuánto
+  cuesta el mes con la configuración de hoy, la otra cuánto salió de verdad. La API sigue en
+  `/api/cobranza/costos/pagos-planilla`: el nombre de la ruta de UI es copy, el de la API es
+  identidad (moverla rompería el escaneo de privacidad).
+  Su monto es **propio y congelado como snapshot** al crear la fila —no se deriva del costo— y
+  la materialización es CREATE-ONLY: una quincena PAGADA es intocable. **No entra a la caja
+  neta** (ahí el burn lo sigue produciendo `CostoRecurrente`; sumarlo sería doble conteo).
+  Ver DECISIONS §El libro de planilla.
+- **aguinaldo** (`lib/finanzas/aguinaldo.ts`): la provisión estimada por colaborador — **suma
+  de lo REGISTRADO en el libro de planilla de diciembre a noviembre, ÷ 12**, por moneda
+  separada. Es un **dato observado**, no una tasa: Nexus no tiene ni tendrá tablas de CCSS,
+  cargas ni renta. La fecha de ingreso sale del propio libro (`min` de sus pagos), no de un
+  campo en `TeamMember`; la fórmula ya maneja sola el año parcial. Declara **cobertura** ("N de
+  12 meses registrados") en vez de rellenar lo que falta.
+- **tarjeta de crédito** (`TarjetaCredito` → `/finanzas/costos/tarjetas`, SOLO SUPER_ADMIN):
+  una tarjeta de la empresa con su **límite** y su **saldo usado**, que escribe una persona con
+  la fecha de corte y queda auditado (`saldoAlDia`/`saldoPorEmail`). **Disponible = límite −
+  saldo.** Aparte, y solo como REFERENCIA, Nexus suma los costos que se le asignaron por la
+  tabla puente `TarjetaCreditoCosto`: un saldo es acumulado y un cargo es mensual, así que
+  nunca se restan entre sí. Lo único que sí se compara: si el disponible no alcanza para el
+  próximo mes de cargos. No tiene semáforo ni alertas.
+- **comisión de partner** (`ComisionPartner` → `/finanzas/comisiones-partner`, gate
+  `cobranza.read`): lo que Smarteam **gana** de un aliado comercial (HubSpot, Atom Chat, Cooby,
+  Nua talk). Es un INGRESO y por eso vive en la superficie de ADMIN, junto a los ingresos
+  variables. Se registra acá y **no** como `IngresoVariable` — mismo límite anti-doble-conteo
+  que ese modelo declara contra Cobranza, y por eso el copy de Ingresos variables dejó de
+  ofrecer «comisiones sueltas». Cargadas del Excel *Comisiones 2026*: **5 pagos, USD
+  91.262,55** (HubSpot ×2, Atom Chat ×2, Cooby; Nua talk en cero no se carga). El partner vive
+  como string porque ninguno de los cuatro existe como `Client` — `clientId` es opcional a
+  propósito y se liga solo si el aliado ya está en la cartera.
+- **comisión de vendedor** (`ComisionVendedor` + `ReglaComisionVendedor` →
+  `/finanzas/costos/comisiones-vendedor`, SOLO SUPER_ADMIN): lo que Smarteam le **paga** a
+  quien vendió, como **% de lo COBRADO**. La comisión DEVENGADA es una **vista derivada** de
+  los cobros en estado COBRADO cruzados con la regla vigente (persona · cliente o todos ·
+  porcentaje · vigencia; la más específica gana) — no existe como fila hasta que se
+  **liquida**, y ahí se congela con snapshot autosuficiente y se engancha al pago de planilla
+  de esa quincena. Revertir un cobro cambia el derivado; si su comisión ya se liquidó, el
+  revert **frena con 409** (y se suelta deshaciendo la liquidación). Es remuneración de una
+  persona: nunca comparte ruta, endpoint ni loader con las de partner.
+  El reloj es **`fechaCobro`** —el día que entró la plata— y de ahí salen las dos cosas que
+  decide: qué regla estaba vigente y **en qué planilla se paga**; un cobro COBRADO sin fecha de
+  pago no devenga. Se agrupa por **persona × quincena de pago × moneda** (CRC y USD son dos
+  comisiones, nunca una convertida) y el redondeo va **por cobro**, para que la suma del detalle
+  sea exactamente lo que se paga. ⚠ El grupo es el PAGO, no el mes de devengo (cambió el
+  2026-08-16 — ver **política de pago de comisión**): dos cobros del mismo mes pueden caer en
+  planillas distintas y salen como dos líneas. Al liquidar, el monto lo **recalcula el server**
+  con el mismo cálculo puro que pintó la pantalla — el navegador no puede mandarlo.
+- **aliado comercial** (`PartnerComercial` → bloque «Aliados» de
+  `/finanzas/comisiones-partner`, gate `cobranza.read`): quién le PAGA a Smarteam y **cada
+  cuánto**. La frecuencia es del ALIADO y no del pago (HubSpot paga cada 3 meses y eso no cambia
+  pago a pago), y con ella el historial se agrupa a su ritmo en vez de mes a mes — estos pagos no
+  son mensuales y una grilla mensual sale llena de huecos. `frecuenciaMeses` es un Int (1 mensual ·
+  3 trimestral · 6 semestral · 12 anual, CHECK 1..24) y no un enum: agregar «cada 2 meses» no
+  puede exigir un `ALTER TYPE` coordinado entre las 2 PCs. Borrarlo NO borra sus pagos — el
+  nombre queda como snapshot en la fila, igual que `sujetoNombre` en `PagoPlanilla` — y el
+  historial vuelve a leerse mes a mes, que es la degradación correcta.
+- **período de un aliado** (`bucketDeCadencia`, `lib/cobranza/partners.ts`): el tramo de N meses
+  en el que cae un pago, **anclado al año calendario** — con 3 meses son los trimestres, que es lo
+  que todo el mundo ya entiende. Anclarlo al primer pago dejaría a dos aliados de la misma
+  cadencia en períodos corridos entre sí y ninguna tabla los podría poner lado a lado. La pantalla
+  dice **dónde** caería el próximo, nunca cuánto: el monto no lo sabe nadie.
+- **política de pago de comisión** (`POLITICA_PAGO_COMISION`, `lib/cobranza/comisiones.ts`):
+  cuándo se le paga a un vendedor la comisión de un cobro. Hoy es **el siguiente fin de mes
+  después de que el cliente pague** (`SIGUIENTE_FIN_DE_MES`) — la regla que corrigió Alexander
+  Arrieta el 2026-08-16: *«los pagos de comisiones se hacen los 30 de acuerdo al pago de los
+  clientes»*, o en palabras de Elías, *«el siguiente 30 después de que el cliente pague»*.
+  ⚠ El disparador es **la fecha de CADA cobro**, no el mes al que pertenece: un cobro del 15 de
+  julio y uno del 31 de julio se pagan en planillas distintas. Y es **estrictamente posterior**
+  —por eso no es la vieja opción «fin del mismo mes»—: 17 de los 101 cobros reales caen el último
+  día de su mes y ahí la comisión quedaría programada el día en que entró la plata. Está aislada
+  en una función pura con la política como constante, para poder cambiarla sin tocar la pantalla
+  ni la mutación.
 - **tipo de documento** (`RoleProfile.docType`): qué CLASE de documento es una fila de
   /roles y, por lo tanto, con qué PLANTILLA del motor se renderiza. **PERFIL** = perfil de
   puesto (11 secciones, el bloque 4DX, se le muestra a quien YA está en el equipo);

@@ -952,6 +952,20 @@ async function main(): Promise<number> {
     console.log(`✓ INV17: los ${idsDeCta.length} botones «Generar» apuntan a agentes activos.`);
   }
 
+  // ── Inv 18: ningún PagoPlanilla PAGADO sin confirmadoPor (libro de planilla —
+  //    espejo EXACTO de INV3; chokepoint: lib/cobranza/mutations.ts#pagarQuincena) ──
+  const quincenasSinConfirmar = await prisma.pagoPlanilla.count({
+    where: { estado: "PAGADO", confirmadoPor: null },
+  });
+  if (quincenasSinConfirmar > 0) {
+    violations++;
+    console.error(
+      `✗ INV18 VIOLADO: ${quincenasSinConfirmar} quincena(s) del libro en estado PAGADO sin confirmadoPor (¿alguien escribió el estado sin pasar por el chokepoint?).`,
+    );
+  } else {
+    console.log("✓ INV18: toda quincena PAGADA del libro tiene confirmadoPor.");
+  }
+
   return violations;
 }
 

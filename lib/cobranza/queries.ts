@@ -31,6 +31,34 @@ import {
 } from "./engine";
 import { Prisma } from "@prisma/client";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import {
+  calcularTarjeta,
+  cargadoMensualDe,
+  cicloDeTarjeta,
+  mensualizado,
+  type CicloTarjeta,
+  type MonedaTarjeta,
+} from "./tarjetas";
+import { coberturaDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
+import { normalizePartner } from "./schema";
+import {
+  agruparPorCadencia,
+  bucketDeCadencia,
+  bucketSiguiente,
+  labelDeFrecuencia,
+  type PagoDeAliado,
+  type TotalDeBucket,
+} from "./partners";
+import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
+import {
+  devengarComisiones,
+  POLITICA_PAGO_COMISION,
+  POLITICA_PAGO_COMISION_LABEL,
+  type ComisionDevengada,
+  type DevengoResultado,
+  type VentaSinComisionar,
+  type ReglaComision,
+} from "./comisiones";
 
 // ── DTOs serializables (lo ÚNICO que sale de este módulo hacia la UI) ───────────
 
@@ -939,6 +967,190 @@ export async function loadIngresosVariables(todayISO: string): Promise<IngresoVa
   return filas;
 }
 
+// ── Comisiones de PARTNER (ingreso — superficie ADMIN, gate cobranza.read) ──────
+// NO lleva los guards de costos: es plata que ENTRA, igual que IngresoVariable.
+// ⚠ Este loader JAMÁS devuelve comisiones de VENDEDOR. Un `loadComisiones()` que
+// trajera las dos metería montos de remuneración en el payload RSC del ADMIN
+// aunque la UI no los pintara.
+
+export interface ComisionPartnerDTO {
+  id: string;
+  partner: string;
+  /** El aliado configurado, si ya existe. null = pago sin aliado dado de alta. */
+  partnerId: string | null;
+  concepto: string | null;
+  monto: number;
+  moneda: string;
+  fecha: string;
+  clientId: string | null;
+  clienteNombre: string | null;
+  notas: string | null;
+  registradoPor: string;
+  createdAt: string;
+}
+
+export interface PartnerComercialDTO {
+  id: string;
+  nombre: string;
+  clave: string;
+  frecuenciaMeses: number;
+  frecuenciaLabel: string;
+  activo: boolean;
+  notas: string | null;
+  cuantasComisiones: number;
+}
+
+/**
+ * El historial de UN aliado, agrupado a SU cadencia (no mes a mes: estos pagos
+ * llegan cada N meses y una grilla mensual sale llena de huecos).
+ */
+export interface HistorialPartnerDTO {
+  partnerId: string | null;
+  nombre: string;
+  /** null = el aliado no está configurado todavía; se cae a mensual para agrupar. */
+  frecuenciaMeses: number | null;
+  frecuenciaLabel: string;
+  periodos: TotalDeBucket[];
+  /**
+   * Dónde cae el próximo período según la cadencia. NO dice cuánto: eso nadie lo
+   * sabe y ponerle un número sería fabricar.
+   */
+  proximo: { clave: string; etiqueta: string } | null;
+}
+
+export interface ComisionesPartnerDTO {
+  comisiones: ComisionPartnerDTO[];
+  /** Totales por partner y moneda SEPARADA — "lo que ganamos con cada uno". */
+  porPartner: Array<{ partner: string; moneda: string; total: number; cuantas: number }>;
+  /** Totales generales, también por moneda. CRC y USD nunca se suman. */
+  totales: Record<string, number>;
+  /** Los aliados configurados, para el bloque de administración. */
+  partners: PartnerComercialDTO[];
+  /** El historial por aliado, a la cadencia de cada uno. */
+  historial: HistorialPartnerDTO[];
+}
+
+export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
+  const [filas, partnersRaw] = await Promise.all([
+    prisma.comisionPartner.findMany({
+      include: { client: { select: { name: true } } },
+      orderBy: [{ fecha: "desc" }, { partner: "asc" }],
+    }),
+    prisma.partnerComercial.findMany({ orderBy: [{ nombre: "asc" }] }),
+  ]);
+
+  const comisiones: ComisionPartnerDTO[] = filas.map((c) => ({
+    id: c.id,
+    partner: c.partner,
+    partnerId: c.partnerId,
+    concepto: c.concepto,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    fecha: isoDay(c.fecha)!,
+    clientId: c.clientId,
+    clienteNombre: c.client?.name ?? null,
+    notas: c.notas,
+    registradoPor: c.registradoPor,
+    createdAt: iso(c.createdAt)!,
+  }));
+
+  // Agrupa por (partner normalizado, moneda): "HubSpot" y "hubspot" son el mismo,
+  // pero USD y CRC del mismo partner son dos líneas, nunca una convertida.
+  const acc = new Map<string, { partner: string; moneda: string; total: number; cuantas: number }>();
+  for (const c of comisiones) {
+    const k = `${normalizePartner(c.partner)}::${c.moneda}`;
+    const prev = acc.get(k);
+    if (prev) {
+      prev.total = Math.round((prev.total + c.monto) * 100) / 100;
+      prev.cuantas += 1;
+    } else {
+      acc.set(k, { partner: c.partner, moneda: c.moneda, total: c.monto, cuantas: 1 });
+    }
+  }
+  const porPartner = [...acc.values()].sort(
+    (a, b) => b.total - a.total || a.partner.localeCompare(b.partner),
+  );
+
+  const totales: Record<string, number> = {};
+  for (const p of porPartner) {
+    totales[p.moneda] = Math.round(((totales[p.moneda] ?? 0) + p.total) * 100) / 100;
+  }
+
+  const partners: PartnerComercialDTO[] = partnersRaw.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    clave: p.clave,
+    frecuenciaMeses: p.frecuenciaMeses,
+    frecuenciaLabel: labelDeFrecuencia(p.frecuenciaMeses),
+    activo: p.activo,
+    notas: p.notas,
+    cuantasComisiones: comisiones.filter((c) => c.partnerId === p.id).length,
+  }));
+
+  return { comisiones, porPartner, totales, partners, historial: armarHistorial(comisiones, partnersRaw) };
+}
+
+/**
+ * El historial por aliado, cada uno a SU cadencia.
+ *
+ * ⚠ Agrupa por `partnerId` CUANDO EXISTE y cae a la clave normalizada solo si el
+ * pago todavía no está ligado. Al revés —agrupando siempre por el string, como
+ * estaba— renombrar un aliado le huerfanizaba TODO el historial: las filas
+ * seguían con el nombre viejo, la config no matcheaba, la cadencia se perdía y
+ * la pantalla ofrecía «configurar» con el nombre viejo, creando un duplicado.
+ * Lo cazó la revisión adversarial de G3.
+ *
+ * Un aliado SIN configurar cae a cadencia mensual para poder agrupar algo, y el
+ * DTO lo dice (`frecuenciaMeses: null`) en vez de aparentar que alguien la eligió.
+ */
+function armarHistorial(
+  comisiones: ComisionPartnerDTO[],
+  partners: Array<{ id: string; nombre: string; clave: string; frecuenciaMeses: number }>,
+): HistorialPartnerDTO[] {
+  const porClave = new Map(partners.map((p) => [p.clave, p]));
+  const porId = new Map(partners.map((p) => [p.id, p]));
+
+  const grupos = new Map<string, { nombre: string; pagos: PagoDeAliado[] }>();
+  for (const c of comisiones) {
+    // El vínculo duro manda; el nombre es el fallback de lo no ligado.
+    const cfg = (c.partnerId ? porId.get(c.partnerId) : null) ?? porClave.get(normalizePartner(c.partner)) ?? null;
+    const clave = cfg?.clave ?? normalizePartner(c.partner);
+    let g = grupos.get(clave);
+    if (!g) {
+      g = { nombre: cfg?.nombre ?? c.partner, pagos: [] };
+      grupos.set(clave, g);
+    }
+    g.pagos.push({ fecha: c.fecha, monto: c.monto, moneda: c.moneda });
+  }
+
+  const out: HistorialPartnerDTO[] = [];
+  for (const [clave, g] of grupos) {
+    const cfg = porClave.get(clave) ?? null;
+    const frecuencia = cfg?.frecuenciaMeses ?? null;
+    const periodos = agruparPorCadencia(g.pagos, frecuencia ?? 1);
+    // El próximo se calcula desde el bucket MÁS NUEVO con pago. Sin cadencia
+    // configurada no se dice nada: adivinar el ritmo desde 1-2 pagos sería
+    // exactamente la fabricación que este módulo evita.
+    const ultimaFecha = g.pagos.map((p) => p.fecha).sort().at(-1);
+    const proximo =
+      frecuencia && ultimaFecha
+        ? (() => {
+            const sig = bucketSiguiente(bucketDeCadencia(ultimaFecha, frecuencia), frecuencia);
+            return { clave: sig.clave, etiqueta: sig.etiqueta };
+          })()
+        : null;
+    out.push({
+      partnerId: cfg?.id ?? null,
+      nombre: g.nombre,
+      frecuenciaMeses: frecuencia,
+      frecuenciaLabel: frecuencia ? labelDeFrecuencia(frecuencia) : "Sin frecuencia configurada",
+      periodos,
+      proximo,
+    });
+  }
+  return out.sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
 // ── Costos recurrentes + caja neta (fase 4 — SUPER_ADMIN-only) ──────────────────
 // ⚠ PRIVACIDAD: estos DTOs llevan salarios estimados. Consumidos SOLO por routes
 // con `guardCostosAccess` y por el branch condicional de app/cobranza/page.tsx
@@ -1111,4 +1323,579 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
     totalMensualCostos: sale.totalMensual,
     gastosPlanificados: { count: bucketizados, totales: saleGastos.totalFuturo },
   };
+}
+
+// ── Tarjetas de crédito (SUPER_ADMIN-only) ──────────────────────────────────────
+// ⚠ PRIVACIDAD: el DTO trae los costos asignados a cada tarjeta, y un costo
+// asignado puede ser un SALARIO (con su nombre y su monto). Se consume SOLO
+// desde la ruta con `guardCostosAccess` y desde la página con `isCostosRole`.
+
+/** Un costo asignado a la tarjeta, en la forma mínima que pinta el panel. */
+export interface TarjetaCostoDTO {
+  id: string;
+  nombre: string;
+  categoria: string;
+  monto: number;
+  moneda: string;
+  frecuencia: string;
+  activo: boolean;
+  finalizadoEl: string | null;
+  /** Ya mensualizado (un ANUAL va /12) — lo que suma para el cargo del mes. */
+  montoMensual: number;
+}
+
+export interface TarjetaDTO {
+  id: string;
+  alias: string;
+  emisor: string | null;
+  /** SOLO los últimos 4. El número completo no existe en esta base. */
+  ultimos4: string | null;
+  moneda: string;
+  limite: number | null;
+  titularTeamMemberId: string | null;
+  titularNombre: string | null;
+  diaCorte: number | null;
+  diaPago: number | null;
+  saldoUsado: number | null;
+  saldoAlDia: string | null;
+  saldoPorEmail: string | null;
+  activa: boolean;
+  notas: string | null;
+
+  // ── Derivados. UNA sola definición, en lib/cobranza/tarjetas.ts ──
+  /** Suma mensualizada de los costos asignados EN LA MONEDA DE LA TARJETA. */
+  cargadoMensual: number;
+  /** Cuántos costos quedaron afuera de esa suma por estar en otra moneda. */
+  cargadoEnOtraMoneda: number;
+  /** límite − saldo. null = falta un dato; jamás se aproxima con los cargos. */
+  disponible: number | null;
+  usoPorcentaje: number | null;
+  noCabeElProximoMes: boolean;
+  faltaDato: "limite" | "saldo" | "ambos" | null;
+  /**
+   * Cuándo corta, cuándo vence el pago y cuántos días faltan. null = falta
+   * `diaCorte` o `diaPago`, y la pantalla lo DICE — jamás se asume un día.
+   * La fecha de pago va rotulada como ESTIMACIÓN (ver `CicloTarjeta.estimado`).
+   */
+  ciclo: CicloTarjeta | null;
+
+  costos: TarjetaCostoDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `hoyISO` entra por parámetro (fecha de Costa Rica, la resuelve el llamador):
+ *  el motor de tarjetas no puede leer el reloj — ver lib/cobranza/tarjetas.ts. */
+export async function loadTarjetas(hoyISO: string): Promise<TarjetaDTO[]> {
+  const filas = await prisma.tarjetaCredito.findMany({
+    include: {
+      titular: { select: { name: true } },
+      costos: {
+        include: {
+          costo: {
+            select: {
+              id: true,
+              nombre: true,
+              categoria: true,
+              monto: true,
+              moneda: true,
+              frecuencia: true,
+              activo: true,
+              finalizadoEl: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ activa: "desc" }, { alias: "asc" }],
+  });
+
+  return filas.map((t) => {
+    const moneda = t.moneda as MonedaTarjeta;
+    const costos: TarjetaCostoDTO[] = t.costos.map((p) => ({
+      id: p.costo.id,
+      nombre: p.costo.nombre,
+      categoria: p.costo.categoria,
+      monto: num(p.costo.monto)!,
+      moneda: p.costo.moneda,
+      frecuencia: p.costo.frecuencia,
+      activo: p.costo.activo,
+      finalizadoEl: isoDay(p.costo.finalizadoEl),
+      montoMensual: mensualizado(num(p.costo.monto)!, p.costo.frecuencia),
+    }));
+
+    const cargado = cargadoMensualDe(costos, moneda);
+    const limite = num(t.limite);
+    const saldoUsado = num(t.saldoUsado);
+    const calc = calcularTarjeta({ limite, saldoUsado, cargadoMensual: cargado.total });
+
+    return {
+      id: t.id,
+      alias: t.alias,
+      emisor: t.emisor,
+      ultimos4: t.ultimos4,
+      moneda: t.moneda,
+      limite,
+      titularTeamMemberId: t.titularTeamMemberId,
+      titularNombre: t.titular?.name ?? null,
+      diaCorte: t.diaCorte,
+      diaPago: t.diaPago,
+      saldoUsado,
+      saldoAlDia: isoDay(t.saldoAlDia),
+      saldoPorEmail: t.saldoPorEmail,
+      activa: t.activa,
+      notas: t.notas,
+      cargadoMensual: cargado.total,
+      cargadoEnOtraMoneda: cargado.enOtraMoneda,
+      disponible: calc.disponible,
+      usoPorcentaje: calc.usoPorcentaje,
+      noCabeElProximoMes: calc.noCabeElProximoMes,
+      faltaDato: calc.faltaDato,
+      ciclo: cicloDeTarjeta(hoyISO, t.diaCorte, t.diaPago),
+      costos,
+      createdAt: iso(t.createdAt)!,
+      updatedAt: iso(t.updatedAt)!,
+    };
+  });
+}
+
+// ── Libro de planilla (SUPER_ADMIN-only) ────────────────────────────────────────
+// ⚠ PRIVACIDAD: esto es lo que se le PAGÓ a cada persona. Pesa lo mismo que un
+// salario de CostoRecurrente — se consume SOLO desde la ruta con
+// `guardCostosAccess` y desde la página con `isCostosRole`.
+
+/** Una comisión liquidada JUNTO a esta quincena (la escribe F3 al liquidar). */
+export interface PagoComisionDTO {
+  id: string;
+  monto: number;
+  moneda: string;
+  base: number;
+  porcentaje: number;
+  /** Snapshot por cobro: de qué cliente y de qué cobro salió cada colón. */
+  detalle: unknown;
+}
+
+export interface PagoPlanillaDTO {
+  id: string;
+  sujetoTeamMemberId: string | null;
+  /** Snapshot: la fila se lee sola aunque la persona se dé de baja. */
+  sujetoNombre: string;
+  periodo: string;
+  quincena: number;
+  fechaProgramada: string;
+  /** Congelado al crear la fila. NO se deriva del costo (ver el modelo). */
+  monto: number;
+  moneda: string;
+  estado: string;
+  fechaPago: string | null;
+  confirmadoPor: string | null;
+  confirmadoEn: string | null;
+  notas: string | null;
+  comisiones: PagoComisionDTO[];
+  /** base + comisiones: lo que efectivamente recibió esa quincena. */
+  totalConComisiones: number;
+  createdAt: string;
+}
+
+export interface LibroPlanillaDTO {
+  pagos: PagoPlanillaDTO[];
+  /** "N de M quincenas registradas" — se declara, no se rellena. */
+  cobertura: { registradas: number; posibles: number; texto: string };
+  /** Los períodos que abarca el libro hoy, del más viejo al más nuevo. */
+  periodos: string[];
+}
+
+/**
+ * El libro completo. Sin paginar a propósito: son ~17 personas × 24 quincenas al
+ * año, y agrupar por mes en el cliente es más simple que un cursor que después
+ * hay que mantener sincronizado con la vista agrupada.
+ */
+export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
+  const filas = await prisma.pagoPlanilla.findMany({
+    include: {
+      comisiones: {
+        select: { id: true, monto: true, moneda: true, base: true, porcentaje: true, detalle: true },
+      },
+    },
+    orderBy: [{ periodo: "desc" }, { quincena: "asc" }, { sujetoNombre: "asc" }],
+  });
+
+  const pagos: PagoPlanillaDTO[] = filas.map((p) => {
+    const comisiones: PagoComisionDTO[] = p.comisiones.map((c) => ({
+      id: c.id,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      base: num(c.base)!,
+      porcentaje: num(c.porcentaje)!,
+      detalle: c.detalle,
+    }));
+    const monto = num(p.monto)!;
+    // Solo suman las comisiones de la MISMA moneda que el pago: CRC y USD no se
+    // mezclan ni acá ni en ningún lado (regla transversal del módulo).
+    const extra = comisiones
+      .filter((c) => c.moneda === p.moneda)
+      .reduce((a, c) => a + c.monto, 0);
+    return {
+      id: p.id,
+      sujetoTeamMemberId: p.sujetoTeamMemberId,
+      sujetoNombre: p.sujetoNombre,
+      periodo: p.periodo,
+      quincena: p.quincena,
+      fechaProgramada: isoDay(p.fechaProgramada)!,
+      monto,
+      moneda: p.moneda,
+      estado: p.estado,
+      fechaPago: isoDay(p.fechaPago),
+      confirmadoPor: p.confirmadoPor,
+      confirmadoEn: iso(p.confirmadoEn),
+      notas: p.notas,
+      comisiones,
+      totalConComisiones: Math.round((monto + extra) * 100) / 100,
+      createdAt: iso(p.createdAt)!,
+    };
+  });
+
+  const periodos = [...new Set(pagos.map((p) => p.periodo))].sort();
+  // ⚠ El numerador son QUINCENAS DISTINTAS, no filas (una fila es persona ×
+  // quincena). El porqué y el bug que esto cierra están en `quincenasDistintas`.
+  return {
+    pagos,
+    cobertura: coberturaDe(quincenasDistintas(pagos), periodos),
+    periodos,
+  };
+}
+
+/**
+ * El aguinaldo de cada persona para `anio`, DERIVADO del libro. No hay tabla de
+ * aguinaldos: es una vista, y se recalcula sola cuando el libro cambia.
+ *
+ * ⚠ PRIVACIDAD: son remuneraciones. Misma superficie SUPER_ADMIN que el libro.
+ */
+export async function loadAguinaldo(anio: number, hoyISO: string): Promise<AguinaldoResultado> {
+  const periodos = periodosDeAguinaldo(anio);
+  const [filas, salarios] = await Promise.all([
+    prisma.pagoPlanilla.findMany({
+      where: { estado: "PAGADO", periodo: { in: periodos } },
+      include: { comisiones: { select: { monto: true, moneda: true } } },
+    }),
+    // ⚠ Solo para DECIR quién no aparece. Hoy una persona con salario activo y
+    // sin ninguna quincena en el libro simplemente no se pinta — no sale en cero
+    // ni con aviso: desaparece, y el total se lee como si estuviera completo.
+    // El monto del costo NO se usa para estimarle un aguinaldo: sin libro no hay
+    // nada observado que dividir, y ponerle un número sería fabricarlo.
+    prisma.costoRecurrente.findMany({
+      where: { categoria: "SALARIO", activo: true, finalizadoEl: null },
+      select: { teamMemberId: true, nombre: true, moneda: true },
+    }),
+  ]);
+
+  return calcularAguinaldo(
+    filas.map((p) => ({
+      sujetoTeamMemberId: p.sujetoTeamMemberId,
+      sujetoNombre: p.sujetoNombre,
+      periodo: p.periodo,
+      fechaProgramada: isoDay(p.fechaProgramada)!,
+      estado: p.estado,
+      monto: num(p.monto)!,
+      moneda: p.moneda,
+      // Solo las comisiones de la MISMA moneda que la quincena: convertirlas
+      // exigiría un tipo de cambio que este sistema no tiene.
+      comisiones: p.comisiones
+        .filter((c) => c.moneda === p.moneda)
+        .reduce((a, c) => a + num(c.monto)!, 0),
+    })),
+    anio,
+    hoyISO,
+    salarios.map((s) => ({
+      teamMemberId: s.teamMemberId,
+      nombre: s.nombre,
+      moneda: s.moneda,
+    })),
+  );
+}
+
+// ── Comisiones de VENDEDOR (remuneración — SUPER_ADMIN-only) ────────────────────
+// ⚠ PRIVACIDAD: lo que se le paga a una persona por vender. MISMA superficie que
+// los salarios: solo `guardCostosAccess`. Es el otro lado de la línea que separa
+// esto de `loadComisionesPartner` — el ingreso lo ve ADMIN, la remuneración no.
+
+export interface ReglaComisionDTO {
+  id: string;
+  teamMemberId: string;
+  vendedorNombre: string;
+  clientId: string | null;
+  clienteNombre: string | null;
+  /** El eje MÁS específico: esta regla es de ESE deal. null = no lo es. */
+  servicioId: string | null;
+  servicioNombre: string | null;
+  porcentaje: number;
+  vigenteDesde: string;
+  vigenteHasta: string | null;
+  notas: string | null;
+}
+
+export interface ComisionLiquidadaDTO {
+  id: string;
+  teamMemberId: string | null;
+  vendedorNombre: string;
+  periodo: string;
+  base: number;
+  porcentaje: number;
+  monto: number;
+  moneda: string;
+  cobroIds: string[];
+  pagoPlanillaId: string | null;
+  liquidadoPor: string;
+  liquidadoEn: string;
+  notas: string | null;
+}
+
+/**
+ * Una comisión devengada más la quincena en la que la POLÍTICA dice que se paga.
+ *
+ * La sugerencia se resuelve acá y no en el panel para que la pantalla, el body
+ * que manda y lo que se persiste sean el MISMO valor: si el panel la calculara
+ * por su cuenta, la comisión terminaría enganchada a la quincena que dijo el
+ * navegador. `quincenaSugerida` es null cuando esa quincena todavía no existe en
+ * el libro, y entonces `motivoSinQuincena` lo DICE en vez de callarlo.
+ */
+export interface DevengadaConQuincena extends ComisionDevengada {
+  quincenaSugerida: {
+    id: string;
+    periodo: string;
+    quincena: number;
+    fechaProgramada: string;
+    estado: string;
+  } | null;
+  motivoSinQuincena: string | null;
+}
+
+export interface ComisionesVendedorDTO {
+  reglas: ReglaComisionDTO[];
+  /** Lo DEVENGADO: derivado de los cobros COBRADO, se recalcula solo. */
+  devengadas: DevengadaConQuincena[];
+  /** Lo LIQUIDADO: filas congeladas, con su snapshot. */
+  liquidadas: ComisionLiquidadaDTO[];
+  /** Totales de lo devengado por moneda. CRC y USD nunca se suman. */
+  totalesDevengado: Record<string, number>;
+  /** Qué política resolvió las sugerencias, para poder decirlo en pantalla. */
+  politicaPago: { clave: string; label: string };
+  /**
+   * Las ventas COBRADAS que no están produciendo comisión, con su motivo.
+   * ⚠ Obligatorio en pantalla, no decorativo: con la atribución vacía el
+   * devengado da cero, y un cero mudo se lee como «no se le debe nada a nadie»
+   * cuando la verdad es «falta decir quién vendió».
+   */
+  sinComisionar: VentaSinComisionar[];
+}
+
+/**
+ * Trae las reglas, devenga sobre los cobros COBRADO y lista lo ya liquidado.
+ *
+ * El universo de cobros es TODO lo COBRADO con `fechaCobro`: sin ese dato no se
+ * sabe en qué período cae ni qué regla estaba vigente, así que un cobro sin
+ * fecha de pago simplemente no devenga (no se aproxima con la programada).
+ */
+export async function loadComisionesVendedor(): Promise<ComisionesVendedorDTO> {
+  const [reglasRaw, liquidadasRaw] = await Promise.all([
+    prisma.reglaComisionVendedor.findMany({
+      include: {
+        vendedor: { select: { name: true } },
+        client: { select: { name: true } },
+        servicio: { select: { tipoServicio: true, descripcion: true } },
+      },
+      orderBy: [{ vigenteDesde: "desc" }],
+    }),
+    prisma.comisionVendedor.findMany({ orderBy: [{ periodo: "desc" }, { liquidadoEn: "desc" }] }),
+  ]);
+
+  const reglas: ReglaComisionDTO[] = reglasRaw.map((r) => ({
+    id: r.id,
+    teamMemberId: r.teamMemberId,
+    vendedorNombre: r.vendedor.name,
+    clientId: r.clientId,
+    servicioId: r.servicioId,
+    servicioNombre: r.servicio ? (r.servicio.descripcion?.trim() || r.servicio.tipoServicio) : null,
+    clienteNombre: r.client?.name ?? null,
+    porcentaje: num(r.porcentaje)!,
+    vigenteDesde: isoDay(r.vigenteDesde)!,
+    vigenteHasta: isoDay(r.vigenteHasta),
+    notas: r.notas,
+  }));
+
+  const liquidadas: ComisionLiquidadaDTO[] = liquidadasRaw.map((c) => ({
+    id: c.id,
+    teamMemberId: c.teamMemberId,
+    vendedorNombre: c.vendedorNombre,
+    periodo: c.periodo,
+    base: num(c.base)!,
+    porcentaje: num(c.porcentaje)!,
+    monto: num(c.monto)!,
+    moneda: c.moneda,
+    cobroIds: c.cobroIds,
+    pagoPlanillaId: c.pagoPlanillaId,
+    liquidadoPor: c.liquidadoPor,
+    liquidadoEn: iso(c.liquidadoEn)!,
+    notas: c.notas,
+  }));
+
+  const politicaPago = {
+    clave: POLITICA_PAGO_COMISION,
+    label: POLITICA_PAGO_COMISION_LABEL[POLITICA_PAGO_COMISION],
+  };
+
+  // ⚠ Sin reglas ya NO se corta acá. Antes se devolvía vacío y listo; con la
+  // atribución por venta, «hay cobros y no hay nada configurado» es EL estado
+  // inicial, y ese cero mudo es justo lo que hay que explicar. Se traen igual los
+  // cobros para poder decir cuántas ventas quedan sin atribuir y por cuánta plata.
+  const { devengadas: crudas, sinComisionar } = await devengarDesdeCobros(reglas, liquidadas);
+  const devengadas = await conQuincenaSugerida(crudas);
+
+  const totalesDevengado: Record<string, number> = {};
+  for (const d of devengadas) {
+    totalesDevengado[d.moneda] = Math.round(((totalesDevengado[d.moneda] ?? 0) + d.monto) * 100) / 100;
+  }
+
+  return { reglas, devengadas, liquidadas, totalesDevengado, politicaPago, sinComisionar };
+}
+
+/**
+ * Cuelga de cada devengada la quincena en la que la política dice que se paga.
+ *
+ * Una sola query para todas: se resuelven los pares (período, quincena) que la
+ * política pide y se buscan juntos. La moneda tiene que coincidir — pagarle a
+ * alguien una comisión en USD junto a una quincena en colones sería convertir,
+ * y este módulo no convierte.
+ */
+async function conQuincenaSugerida(
+  devengadas: ComisionDevengada[],
+): Promise<DevengadaConQuincena[]> {
+  if (devengadas.length === 0) return [];
+
+  // El objetivo YA lo decidió `devengarComisiones`: el grupo ES el pago (persona
+  // × quincena × moneda), así que acá no se vuelve a aplicar la política — si se
+  // aplicara dos veces, un cambio de política dejaría al grupo y a su quincena
+  // apuntando a meses distintos.
+  const objetivos = devengadas.map((d) => ({
+    d,
+    objetivo: { periodo: d.periodo, quincena: d.quincena },
+  }));
+
+  const candidatas = await prisma.pagoPlanilla.findMany({
+    where: {
+      OR: objetivos.map(({ d, objetivo }) => ({
+        sujetoTeamMemberId: d.teamMemberId,
+        periodo: objetivo.periodo,
+        quincena: objetivo.quincena,
+      })),
+    },
+    select: {
+      id: true,
+      sujetoTeamMemberId: true,
+      periodo: true,
+      quincena: true,
+      fechaProgramada: true,
+      moneda: true,
+      estado: true,
+    },
+  });
+
+  const porClave = new Map(
+    candidatas.map((q) => [`${q.sujetoTeamMemberId}::${q.periodo}::${q.quincena}`, q]),
+  );
+
+  return objetivos.map(({ d, objetivo }) => {
+    const fila = porClave.get(`${d.teamMemberId}::${objetivo.periodo}::${objetivo.quincena}`);
+    if (!fila) {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `La quincena de ${objetivo.periodo} (Q${objetivo.quincena}) todavía no está generada en el historial de planilla.`,
+      };
+    }
+    if (fila.moneda !== d.moneda) {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `Esa quincena está en ${fila.moneda} y la comisión en ${d.moneda}. Nexus no convierte monedas.`,
+      };
+    }
+    // ⚠ Una quincena PAGADA es plata que ya salió: colgarle una comisión después
+    // haría que el historial de planilla afirme que ese monto salió con ese pago
+    // y que el aguinaldo lo cuente. Ni se sugiere (y la mutación además lo frena).
+    if (fila.estado === "PAGADO") {
+      return {
+        ...d,
+        quincenaSugerida: null,
+        motivoSinQuincena: `La quincena de ${objetivo.periodo} (Q${objetivo.quincena}) ya se pagó: no se le puede colgar una comisión después.`,
+      };
+    }
+    return {
+      ...d,
+      quincenaSugerida: {
+        id: fila.id,
+        periodo: fila.periodo,
+        quincena: fila.quincena,
+        fechaProgramada: isoDay(fila.fechaProgramada)!,
+        estado: fila.estado,
+      },
+      motivoSinQuincena: null,
+    };
+  });
+}
+
+/** Los cobros COBRADO cruzados con las reglas, menos lo ya liquidado. */
+async function devengarDesdeCobros(
+  reglas: ReglaComision[],
+  liquidadas: ComisionLiquidadaDTO[],
+): Promise<DevengoResultado> {
+  const cobros = await prisma.cobro.findMany({
+    where: { estado: "COBRADO", fechaCobro: { not: null } },
+    select: {
+      id: true,
+      fechaCobro: true,
+      monto: true,
+      moneda: true,
+      cuenta: { select: { clientId: true, client: { select: { name: true } } } },
+      // ⚠ El puente al DEAL ya existía y estaba desperdiciado: `servicioId` es FK
+      // OBLIGATORIA de Cobro, o sea que cada peso que entra YA sabe de qué venta
+      // viene. Lo único que faltaba era saber quién ganó esa venta.
+      servicioId: true,
+      servicio: {
+        select: {
+          tipoServicio: true,
+          descripcion: true,
+          atribucion: {
+            select: {
+              comisiona: true,
+              teamMemberId: true,
+              vendedor: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const yaLiquidados = new Set(liquidadas.flatMap((c) => c.cobroIds));
+
+  return devengarComisiones(
+    cobros.map((c) => ({
+      id: c.id,
+      clientId: c.cuenta.clientId,
+      clienteNombre: c.cuenta.client?.name ?? "(sin nombre)",
+      fechaCobro: isoDay(c.fechaCobro)!,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      servicioId: c.servicioId,
+      servicioNombre: c.servicio.descripcion?.trim() || c.servicio.tipoServicio,
+      vendedorTeamMemberId: c.servicio.atribucion?.teamMemberId ?? null,
+      vendedorNombre: c.servicio.atribucion?.vendedor?.name ?? null,
+      // Sin fila de atribución `comisiona` da true, pero eso NO habilita nada por
+      // accidente: el motor exige además un vendedor, y ahí no hay ninguno.
+      comisiona: c.servicio.atribucion?.comisiona ?? true,
+    })),
+    reglas,
+    yaLiquidados,
+  );
 }

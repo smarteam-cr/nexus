@@ -17,6 +17,24 @@ export {
   loadCajaNeta,
   loadGastos,
   loadMovimientosCostos,
+  loadTarjetas,
+  loadLibroPlanilla,
+  loadAguinaldo,
+  loadComisionesPartner,
+  loadComisionesVendedor,
+  type ComisionPartnerDTO,
+  type ComisionesPartnerDTO,
+  type PartnerComercialDTO,
+  type HistorialPartnerDTO,
+  type ComisionesVendedorDTO,
+  type DevengadaConQuincena,
+  type ReglaComisionDTO,
+  type ComisionLiquidadaDTO,
+  type TarjetaDTO,
+  type TarjetaCostoDTO,
+  type LibroPlanillaDTO,
+  type PagoPlanillaDTO,
+  type PagoComisionDTO,
   type CostoRecurrenteDTO,
   type CajaNetaDTO,
   type GastoPuntualDTO,
@@ -32,6 +50,12 @@ export {
   type SnapshotSerieDTO,
 } from "./queries";
 export { runCobranzaDigest, type DigestResult } from "./digest";
+// El cálculo puro de la comisión de vendedor (la DEVENGADA no es una fila).
+export type { ComisionDevengada, DetalleComision } from "./comisiones";
+// El ciclo vivo de una tarjeta (viaja dentro de TarjetaDTO; la UI lo tipa).
+export type { CicloTarjeta } from "./tarjetas";
+// La cadencia de un aliado comercial (client-safe: el select de frecuencia).
+export { FRECUENCIAS_PARTNER, labelDeFrecuencia, type TotalDeBucket } from "./partners";
 export {
   semaforoCobro,
   semaforoCuenta,
