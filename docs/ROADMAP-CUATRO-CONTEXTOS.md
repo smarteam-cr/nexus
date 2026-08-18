@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-18**, punta `537097d`. Lo de este plan está **pusheado y
+> Última actualización: **2026-08-18**, punta `ff1bbd7`. ⚠ **12 commits sin pushear** (ver «Al lado del plan»). Lo de este plan está **pusheado y
 > deployado** hasta `d8f1d82`; lo que hay encima es de otras tandas (el medidor de IA y el
 > incidente REMPRO) y **está commiteado sin subir**.
 
@@ -216,6 +216,35 @@ números de negocio (de OTRO proyecto, sin que el CSE los vetee para éste), lo 
 2. Solo lo que el CSE **confirmó** dentro de esa Entrega.
 3. Nunca el proyecto que se está generando ahora mismo (para que una Entrega no termine
    citándose a sí misma).
+
+---
+
+## Al lado del plan — lo que se construyó el 2026-08-18
+
+No son fases del plan: son tandas propias que salieron de problemas reales del día. Se listan acá
+porque comparten el push pendiente y porque **dos piden un paso de Elías después del deploy**.
+
+| Commit | Qué resuelve | ¿Pide algo? |
+|---|---|---|
+| `4ad0c8b` `537097d` | Venderle a un prospecto lo convierte en cliente, y el buscador deja de mentir (REMPRO) | — |
+| `0767361` | Una reunión que todavía no ocurrió deja de contar como evidencia. Eran 468 de 7.161, y como los lectores ordenan por fecha, iban PRIMERO: 42 % del contexto de Multiquímica, 35 % de SmartAgro | — |
+| `ae83455` | Un proyecto deja de nacer sin ninguna reunión vinculada. Aplicado a producción: Discover Puerto Rico recuperó 2 vínculos, Kamalio 3 | — |
+| `457619d` | El modificador del cronograma deja de estar a ciegas: ve el handoff, el requerimiento técnico y la operativa de HubSpot, con la regla de frontera que impide que eso cruce al texto que lee el cliente | — |
+| `39d0b07` | Su prompt sale del código y entra a la tabla `Agent` — calibrable sin deploy — y el formato de salida gana dueño y tipo de tarea | ⚠ **Post-deploy**: `npx tsx scripts/seed-timeline-assist-agent.ts` |
+| `ff1bbd7` | La propuesta del modificador deja de ser todo-o-nada: cada cambio se descarta de a uno y «Aplicar» escribe solo lo que quedó | 🖱 Probar con las manos (abajo) |
+
+**La prueba clickeada de las dos últimas**, sobre un proyecto con cronograma generado:
+
+1. «Pedir cambio con IA» → un pedido acotado («atrasá Setup una semana»). En la vista previa
+   violeta aparece **«Revisar uno por uno (N)»**.
+2. Abrirlo: cada cambio con su ✓/✗. Descartar uno → el botón pasa a decir **«Aplicar 3 de 4»** y
+   arriba avisa cuántos quedaron afuera.
+3. Aplicar → en el Gantt está lo aceptado y **no** está lo descartado.
+4. ⚠ **La regresión que importa**: una fase que la propuesta NO tocaba tiene que quedar con TODAS
+   sus tareas, incluidas las marcadas como hechas. Es el modo de falla que el módulo cuida.
+5. Sin descartar nada, «Aplicar cambios» tiene que comportarse **exactamente** como antes.
+6. Una tarea nueva creada por el modificador ahora nace **con dueño** (Cliente / Smarteam / Ambos /
+   Desarrollo) y con su tipo — antes había que ponérselo a mano.
 
 ---
 
