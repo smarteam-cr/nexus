@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-17**, punta `d149e2a`. **44 commits sin push.**
+> Última actualización: **2026-08-18**, punta `d8f1d82`. **Pusheado y deployado — nada pendiente de subir.**
 
 ---
 
@@ -42,7 +42,7 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ✅ Hecho — el próximo handoff del cliente ya cita la Entrega anterior |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
 | | ⛔ La fuga del handoff | Dos caminos podían mandarle al cliente el handoff entero —que es un documento interno con riesgos y acuerdos comerciales—. Era el prerrequisito de la fase 9 y se tapó aparte, porque vale aunque esa fase no se haga. | ✅ Hecho |
-| | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Lo siguiente para Elías** |
+| | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Ya deployado — lo siguiente es que Elías lo pruebe** |
 | | 12 · Aplicarlo retroactivamente | Sellar el plan de los 118 proyectos que nunca tuvieron foto, avisando en el propio documento que la foto es de hoy. | ⏳ Después de la 11 |
 | | 1.7 · Minuta de reunión interna | Un botón que destile la minuta de una reunión puntual de puertas adentro. | ⏳ Diferido |
 
@@ -54,10 +54,11 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 Tiene una razón fuerte: lo retroactivo escribe sobre 118 proyectos y no se deshace solo. Si algo de
 lo construido está mal, es mucho más barato descubrirlo con un clic que con 118 filas escritas.
 
-### Fase 11 · Validar en pantalla *(requiere deploy — lo hace Elías)*
+### Fase 11 · Validar en pantalla *(ya se puede hacer — deploy hecho el 2026-08-18)*
 
-Bloqueada por: los 36 commits sin push. Las **cuatro migraciones SQL ya están aplicadas**. El
-recorrido está en `docs/CHECKLIST-PRUEBA-CLICKEADA-CONTEXTOS.md`, ordenado por pantalla.
+Ya no hay nada bloqueando: el push y el deploy se hicieron el 2026-08-18 (junto con la tanda del
+medidor de IA). Las **cuatro migraciones SQL ya están aplicadas**. El recorrido está en
+`docs/CHECKLIST-PRUEBA-CLICKEADA-CONTEXTOS.md`, ordenado por pantalla.
 
 Lo que la validación tiene que responder, y ningún test puede:
 
