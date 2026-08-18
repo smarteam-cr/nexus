@@ -91,8 +91,19 @@ describe("⭐ excederse y bloquear son dos cosas distintas", () => {
 });
 
 describe("⭐ la configuración del entorno no puede romper el tope", () => {
+  /* Se parte del entorno REAL y se borran las tres variables: si la máquina que corre los tests
+     tuviera alguna seteada, un objeto armado de cero no lo notaría y el test pasaría por la
+     razón equivocada. */
+  const env = (extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv => ({
+    ...process.env,
+    PRESUPUESTO_IA_AUTOMATICO_USD_DIA: undefined,
+    PRESUPUESTO_IA_HUMANO_USD_DIA: undefined,
+    PRESUPUESTO_IA_BLOQUEA: undefined,
+    ...extra,
+  });
+
   it("sin variables, los defaults y el modo aviso", () => {
-    const l = limitesDelEntorno({} as NodeJS.ProcessEnv);
+    const l = limitesDelEntorno(env());
     expect(l.automatico).toBe(PRESUPUESTO_DIARIO_USD.automatico);
     expect(l.humano).toBe(PRESUPUESTO_DIARIO_USD.humano);
     expect(l.bloquea, "el bloqueo se prendió sin que nadie lo pidiera").toBe(false);
@@ -102,20 +113,19 @@ describe("⭐ la configuración del entorno no puede romper el tope", () => {
     /* Con `Number("")` === 0, un `.env` con la variable vacía habría puesto el tope en $0 y —con el
        bloqueo encendido— cortado TODAS las llamadas. */
     for (const basura of ["", "  ", "gratis", "-5", "0", "NaN"]) {
-      const l = limitesDelEntorno({ PRESUPUESTO_IA_AUTOMATICO_USD_DIA: basura } as NodeJS.ProcessEnv);
+      const l = limitesDelEntorno(env({ PRESUPUESTO_IA_AUTOMATICO_USD_DIA: basura }));
       expect(l.automatico, `"${basura}" no cayó al default`).toBe(PRESUPUESTO_DIARIO_USD.automatico);
     }
   });
 
   it("un valor válido manda, y solo `1` enciende el bloqueo", () => {
-    const l = limitesDelEntorno({
-      PRESUPUESTO_IA_AUTOMATICO_USD_DIA: "42.5",
-      PRESUPUESTO_IA_BLOQUEA: "1",
-    } as NodeJS.ProcessEnv);
+    const l = limitesDelEntorno(
+      env({ PRESUPUESTO_IA_AUTOMATICO_USD_DIA: "42.5", PRESUPUESTO_IA_BLOQUEA: "1" }),
+    );
     expect(l.automatico).toBe(42.5);
     expect(l.bloquea).toBe(true);
-    expect(limitesDelEntorno({ PRESUPUESTO_IA_BLOQUEA: "true" } as NodeJS.ProcessEnv).bloquea).toBe(false);
-    expect(limitesDelEntorno({ PRESUPUESTO_IA_BLOQUEA: "0" } as NodeJS.ProcessEnv).bloquea).toBe(false);
+    expect(limitesDelEntorno(env({ PRESUPUESTO_IA_BLOQUEA: "true" })).bloquea).toBe(false);
+    expect(limitesDelEntorno(env({ PRESUPUESTO_IA_BLOQUEA: "0" })).bloquea).toBe(false);
   });
 });
 
