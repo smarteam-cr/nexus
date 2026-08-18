@@ -104,6 +104,25 @@ describe("⭐ el dueño mide de verdad — no solo centraliza", () => {
     expect(src).toContain('"error"');
   });
 
+  it("⛔ el presupuesto se consulta ANTES de los dos verbos", () => {
+    /* Sin esto, T4 entera es código muerto: el tope existiría, tendría sus tests puros en verde y
+       jamás lo consultaría nadie. El caso que importa es el streaming —las dos llamadas más caras
+       del sistema— así que se afirma verbo por verbo y no una sola vez en el archivo. */
+    for (const verbo of ["create", "stream"] as const) {
+      const i = src.indexOf(`prop === "${verbo}"`);
+      expect(i, `no se encontró la rama de ${verbo}`).toBeGreaterThan(-1);
+      // Hasta el arranque de la rama siguiente (o el final): la llamada tiene que estar ADENTRO.
+      const finales = [src.indexOf('prop === "stream"', i + 1), src.indexOf("return (valor as", i)]
+        .filter((n) => n > i);
+      const rama = src.slice(i, Math.min(...finales, src.length));
+      expect(rama.length, "la guarda no está mirando nada").toBeGreaterThan(120);
+      expect(
+        rama,
+        `messages.${verbo} sale sin consultar el presupuesto: el tope no lo cubre`,
+      ).toContain("revisarPresupuestoAntesDeLlamar(");
+    }
+  });
+
   it("`getAnthropic` devuelve el cliente INSTRUMENTADO, no el crudo", () => {
     /* Es la puerta que `summarize-session.ts` usaba para esquivar el proxy. Si volviera a devolver
        el cliente sin envolver, ese camino y cualquier otro que la use dejarían de medirse. */

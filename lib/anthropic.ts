@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { registrarLlamada, tipoDeError } from "./ai/medidor";
+import { revisarPresupuestoAntesDeLlamar } from "./ai/guardia-de-presupuesto";
 
 /**
  * lib/anthropic.ts — EL ÚNICO CLIENTE DE CLAUDE, Y EL ÚNICO LUGAR QUE MIDE.
@@ -16,6 +17,12 @@ import { registrarLlamada, tipoDeError } from "./ai/medidor";
  * Se engancha por el evento `message` del `MessageStream`, que dispara aunque nadie llame a
  * `finalMessage()`. Lo que SÍ se pierde es un stream que nadie consume nunca: no termina, así que
  * no hay qué anotar. Hoy los dos sitios de streaming lo consumen (`analyze` y marketing).
+ *
+ * ── EL TOPE, QUE VIVE EN EL MISMO LUGAR ──────────────────────────────────────
+ * Antes de cada llamada se consulta el presupuesto del día (`ai/guardia-de-presupuesto.ts`). Va acá
+ * y no en cada agente por la misma razón que el medidor: es una capa, no 26 parches — y así una
+ * llamada nueva nace medida Y topeada. ⛔ El default es AVISAR, no bloquear: no se puede fijar un
+ * tope sensato antes de saber cuánto es lo normal. Se enciende con `PRESUPUESTO_IA_BLOQUEA=1`.
  *
  * ── LAZY, Y POR QUÉ ──────────────────────────────────────────────────────────
  * El cliente se crea en el PRIMER USO, no al importar. Antes esto hacía `createClient` a nivel
@@ -53,6 +60,7 @@ function medirMessages(messages: Anthropic["messages"]): Anthropic["messages"] {
       if (prop === "create") {
         return async (...args: unknown[]) => {
           const model = modeloPedido(args[0]);
+          revisarPresupuestoAntesDeLlamar();
           const t0 = Date.now();
           try {
             const res = (await (valor as (...a: unknown[]) => Promise<unknown>).apply(target, args)) as ConUsage;
@@ -73,6 +81,7 @@ function medirMessages(messages: Anthropic["messages"]): Anthropic["messages"] {
       if (prop === "stream") {
         return (...args: unknown[]) => {
           const model = modeloPedido(args[0]);
+          revisarPresupuestoAntesDeLlamar();
           const t0 = Date.now();
           const stream = (valor as (...a: unknown[]) => unknown).apply(target, args) as {
             on?: (evento: string, cb: (arg: unknown) => void) => unknown;

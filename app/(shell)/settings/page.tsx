@@ -1,4 +1,7 @@
 ﻿import { requireConsultantSession } from "@/lib/auth";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -11,6 +14,11 @@ export default async function SettingsPage() {
   }
 
   const initialTheme = (await cookies()).get("nexus-theme")?.value === "dark" ? "dark" : "light";
+
+  // El gasto en IA es plata: mismo gate que costos (SOLO SUPER_ADMIN). Se resuelve acá para no
+  // pintarle a nadie un enlace que le va a rebotar en un redirect.
+  const ctx = await requireInternalUser().catch(() => null);
+  const veGastoDeIa = isCostosRole(ctx?.role);
 
   return (
     <div className="flex-1 px-8 py-8 space-y-6 overflow-y-auto">
@@ -67,6 +75,29 @@ export default async function SettingsPage() {
           <ThemeToggle initialTheme={initialTheme} />
         </div>
       </div>
+
+      {/* Gasto en IA — solo dirección */}
+      {veGastoDeIa && (
+        <Link
+          href="/settings/gasto-ia"
+          className="block p-5 rounded-xl bg-surface border border-line hover:bg-surface-hover transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-fg font-medium">Gasto en IA</p>
+              <p className="text-fg-muted text-sm">Lo que cuesta cada llamada a Claude, por agente y por corrida</p>
+            </div>
+            <svg className="w-4 h-4 text-fg-muted ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </Link>
+      )}
 
       {/* About */}
       <div className="p-5 rounded-xl bg-gray-900 border border-gray-800 space-y-3">

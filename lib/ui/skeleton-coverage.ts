@@ -92,6 +92,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },
   settings: { modo: "own" },
+  // La pantalla de gasto son tres números en grilla + dos tablas; heredar el de
+  // /settings (tres paneles apilados) prometería otra forma.
+  "settings/gasto-ia": { modo: "own" },
   integrations: { modo: "own" },
   knowledge: { modo: "own" },
   agents: { modo: "own" },
