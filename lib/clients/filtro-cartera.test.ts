@@ -384,3 +384,115 @@ describe("el potencial estimado nunca dice $0", () => {
     expect(resumirPotencial([0])).toEqual({ total: 0, sinEstimar: 0 });
   });
 });
+
+describe("⭐ E3.5 — la empresa existe, pero en otra pestaña", () => {
+  /**
+   * ── EL INCIDENTE QUE ESTA ETAPA EVITA (REMPRO, 2026-08-18) ────────────────────────────
+   * El índice abre SIEMPRE en «Clientes» y la búsqueda solo mira la categoría abierta. Un CSE
+   * buscó una empresa que estaba en «Prospectos», recibió cero, y concluyó lo único razonable:
+   * que el proyecto que acababa de crear no se había asociado al cliente. Lo creó de nuevo.
+   * Quedaron dos proyectos sobre el mismo trato y un record huérfano en HubSpot.
+   *
+   * ⚠ El vacío NO era mudo: E4 ya decía «ninguno DE ESTA PESTAÑA». Pero decir dónde NO está no
+   * es lo mismo que decir dónde SÍ está, y esa diferencia costó un duplicado en producción.
+   */
+  const base = {
+    kind: "CLIENTE" as const,
+    enCategoria: 60,
+    enPertenencia: 60,
+    enVista: 60,
+    pertenencia: null,
+    vista: "todos" as const,
+  };
+
+  it("dice DÓNDE está y ofrece el salto", () => {
+    const v = explicarListaVacia({
+      ...base,
+      busqueda: "REMPRO",
+      coincidenEnOtraCategoria: { PROSPECTO: 1 },
+    });
+    expect(v.detalle, "no dice dónde SÍ está — el vacío sigue siendo media respuesta").toContain(
+      CLIENT_KIND_META.PROSPECTO.plural.toLowerCase(),
+    );
+    expect(v.acciones).toHaveLength(1);
+    expect(v.acciones[0].tipo).toBe("ir-a-categoria");
+    expect((v.acciones[0] as { kind: string }).kind).toBe("PROSPECTO");
+  });
+
+  it("con coincidencias en VARIAS categorías las lista todas, la mayor primero", () => {
+    const v = explicarListaVacia({
+      ...base,
+      busqueda: "grupo",
+      coincidenEnOtraCategoria: { PROSPECTO: 2, ALIADO: 5 },
+    });
+    expect(v.acciones).toHaveLength(2);
+    expect((v.acciones[0] as { kind: string }).kind, "no priorizó la categoría con más coincidencias").toBe("ALIADO");
+  });
+
+  it("⛔ NO cuenta la categoría abierta como «otra»", () => {
+    /* Si se contara a sí misma, la etapa se dispararía sobre un vacío causado por la VISTA o la
+       pertenencia y mandaría a la persona a la pestaña en la que ya está. */
+    const v = explicarListaVacia({ ...base, busqueda: "algo", coincidenEnOtraCategoria: { CLIENTE: 3 } });
+    expect(v.titulo, "se disparó E3.5 contando la propia pestaña").toContain("Sin resultados");
+    expect(v.acciones.some((a) => a.tipo === "ir-a-categoria")).toBe(false);
+  });
+
+  it("sin coincidencias en ningún lado cae a E4, como siempre", () => {
+    const v = explicarListaVacia({ ...base, busqueda: "noexiste", coincidenEnOtraCategoria: { PROSPECTO: 0 } });
+    expect(v.acciones.some((a) => a.tipo === "ir-a-categoria")).toBe(false);
+    expect(v.detalle).toContain("de esta pestaña");
+  });
+
+  it("⚠ la VISTA gana: si el filtro dejó la lista en cero, el problema es el filtro", () => {
+    /* La cascada la gana la PRIMERA causa real. Si E3.5 se adelantara a E3, mandaría a la persona
+       a otra pestaña cuando lo que la vació fue un filtro que sigue puesto — y allá también
+       vería cero. */
+    const v = explicarListaVacia({
+      ...base,
+      enVista: 0,
+      vista: VISTAS_DE_CARTERA[1].key,
+      busqueda: "REMPRO",
+      coincidenEnOtraCategoria: { PROSPECTO: 1 },
+    });
+    expect(v.acciones[0].tipo, "E3.5 se adelantó a la vista").toBe("quitar-filtro");
+  });
+
+  it("sin término de búsqueda no se dispara", () => {
+    const v = explicarListaVacia({ ...base, enCategoria: 0, busqueda: "", coincidenEnOtraCategoria: { PROSPECTO: 9 } });
+    expect(v.acciones.some((a) => a.tipo === "ir-a-categoria")).toBe(false);
+  });
+});
+
+describe("⭐ vender asciende al prospecto — LAS DOS PUERTAS", () => {
+  /**
+   * ── EL MODO DE FALLA ─────────────────────────────────────────────────────────────────
+   * Toda empresa que entra por un caso de negocio nace PROSPECTO. Un proyecto puede llegarle por
+   * DOS caminos: el botón «Nuevo proyecto» y el sync de HubSpot, que corre solo cada 10 minutos.
+   * Arreglar uno solo deja la falla viva por el otro — y por el sync es peor, porque llega sin
+   * que nadie apriete nada.
+   *
+   * ⛔ La segunda assert de cada puerta es la que importa: si alguien «simplifica» esto a
+   * `data: { kind: "CLIENTE" }` sin el filtro en el WHERE, un ALIADO o un proyecto INTERNO se
+   * volverían CLIENTE al abrirles un proyecto, y entrarían a cartera y a cobranza sin que nadie
+   * lo decida. La regla «solo sube» vive en el WHERE, no en un `if` que se puede mover.
+   */
+  const PUERTAS = [
+    { archivo: "app/api/projects/route.ts", cual: "el botón «Nuevo proyecto»" },
+    { archivo: "lib/hubspot/sync-projects.ts", cual: "el sync de HubSpot" },
+  ];
+
+  for (const p of PUERTAS) {
+    it(`${p.cual} asciende, y SOLO hacia arriba`, () => {
+      const src = fs.readFileSync(path.join(process.cwd(), p.archivo), "utf8");
+      const i = src.indexOf("client.updateMany");
+      expect(i, `${p.archivo}: dejó de ascender al prospecto`).toBeGreaterThan(-1);
+      const bloque = src.slice(i, i + 220);
+      expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(60);
+      expect(
+        bloque,
+        `${p.archivo}: el filtro kind salió del WHERE — un ALIADO o un INTERNO se vuelven CLIENTE`,
+      ).toContain('kind: "PROSPECTO"');
+      expect(bloque, `${p.archivo}: dejó de escribir CLIENTE`).toContain('kind: "CLIENTE"');
+    });
+  }
+});

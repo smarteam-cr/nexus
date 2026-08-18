@@ -226,7 +226,9 @@ export type AccionDeVacio =
   | { tipo: "ver-todos"; label: string }
   | { tipo: "quitar-filtro"; label: string }
   | { tipo: "buscar-sin-filtro"; label: string }
-  | { tipo: "limpiar-todo"; label: string };
+  | { tipo: "limpiar-todo"; label: string }
+  /** Saltar a la categoría donde el término SÍ aparece. Ver E3.5. */
+  | { tipo: "ir-a-categoria"; label: string; kind: ClientKind };
 
 export interface ListaVacia {
   titulo: string;
@@ -256,6 +258,11 @@ export function explicarListaVacia(a: {
   pertenencia: Pertenencia | null;
   vista: VistaDeCartera;
   busqueda: string;
+  /**
+   * Cuántas empresas de CADA OTRA categoría coinciden con el término. Sin esto la búsqueda no
+   * puede decir «existe, pero está en otra pestaña» — ver E3.5.
+   */
+  coincidenEnOtraCategoria?: Partial<Record<ClientKind, number>>;
 }): ListaVacia {
   const meta = CLIENT_KIND_META[a.kind];
   const q = a.busqueda.trim();
@@ -301,6 +308,46 @@ export function explicarListaVacia(a: {
       titulo: `Ningún cliente pasa el filtro «${def.label}»`,
       detalle: `Hay ${contarConPlural(a.enPertenencia, meta.contable)} en esta vista.`,
       acciones: [{ tipo: "quitar-filtro", label: "Quitar filtro" }],
+    };
+  }
+
+  /* E3.5 — ⭐ EXISTE, PERO ESTÁ EN OTRA PESTAÑA.
+   *
+   * ── EL INCIDENTE QUE ESTO EVITA (REMPRO, 2026-08-18) ─────────────────────────────────
+   * Esta pantalla abre SIEMPRE en «Clientes» y la búsqueda solo mira la categoría abierta. Un
+   * CSE buscó una empresa que estaba en «Prospectos», recibió cero, y concluyó lo único
+   * razonable: que el proyecto que acababa de crear no se había asociado. Lo creó de nuevo.
+   * Quedaron dos proyectos sobre el mismo trato y un record huérfano en HubSpot.
+   *
+   * El vacío no era mudo —E4 ya decía «ninguno DE ESTA PESTAÑA»— pero decir dónde NO está no
+   * es lo mismo que decir dónde SÍ está. Eso es lo que agrega esta etapa.
+   *
+   * ⚠ Va ANTES de E4 y no después: E4 hace `return`, así que si esto fuera después nunca se
+   * alcanzaría. Y va DESPUÉS de E3 porque la cascada la gana la primera causa real: si la
+   * vista dejó la lista en cero, el problema es el filtro, no la categoría.
+   *
+   * ⚠ Arregla la CLASE, no el caso: el ascenso automático de prospecto→cliente cierra el
+   * camino de REMPRO, pero un ALIADO o un INTERNO mal marcado siguen siendo inencontrables.
+   * Por eso este arreglo vale por sí solo. */
+  const enOtras = Object.entries(a.coincidenEnOtraCategoria ?? {})
+    .filter(([k, n]) => k !== a.kind && (n ?? 0) > 0)
+    .sort((x, y) => (y[1] ?? 0) - (x[1] ?? 0));
+  if (q && enOtras.length > 0) {
+    const [kindOtro, cuantos] = enOtras[0] as [ClientKind, number];
+    const metaOtro = CLIENT_KIND_META[kindOtro];
+    return {
+      titulo: `Sin resultados para «${q}» en ${meta.plural.toLowerCase()}`,
+      detalle:
+        enOtras.length === 1
+          ? `Pero ${cuantos === 1 ? "hay 1 que coincide" : `hay ${cuantos} que coinciden`} en ${metaOtro.plural.toLowerCase()}.`
+          : `Pero hay coincidencias en otras categorías: ${enOtras
+              .map(([k, n]) => `${n} en ${CLIENT_KIND_META[k as ClientKind].plural.toLowerCase()}`)
+              .join(" · ")}.`,
+      acciones: enOtras.map(([k, n]) => ({
+        tipo: "ir-a-categoria" as const,
+        kind: k as ClientKind,
+        label: `Ver ${n === 1 ? "el" : `los ${n}`} de ${CLIENT_KIND_META[k as ClientKind].plural.toLowerCase()}`,
+      })),
     };
   }
 

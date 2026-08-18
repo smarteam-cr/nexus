@@ -287,6 +287,12 @@ export default function ClientsGrid({
       case "limpiar-todo":
         limpiarTodo();
         break;
+      case "ir-a-categoria":
+        /* Salta a la categoría donde el término SÍ aparece, CONSERVANDO la búsqueda: la persona
+           venía buscando eso. Borrarla la dejaría en una lista de 20 filas sin su empresa a la
+           vista, que es media respuesta. */
+        setPestana(a.kind);
+        break;
     }
   }
 
@@ -299,6 +305,19 @@ export default function ClientsGrid({
     busqueda,
   });
 
+  /* Cuántas coinciden con el término en CADA categoría. Se mide sobre `clients` —el censo
+     accesible entero, sin pestaña ni vista— porque la pregunta que responde es «¿existe en algún
+     lado?», y cualquier filtro intermedio la volvería a responder que no. Es lo que le faltaba
+     al vacío para poder decir dónde SÍ está. */
+  const coincidenPorCategoria = useMemo(() => {
+    if (!busqueda.trim()) return undefined;
+    const acc: Partial<Record<ClientKind, number>> = {};
+    for (const c of filtrarPorBusqueda(clients, (x) => `${x.name} ${x.company ?? ""}`, busqueda)) {
+      acc[c.kind] = (acc[c.kind] ?? 0) + 1;
+    }
+    return acc;
+  }, [clients, busqueda]);
+
   const vacio = explicarListaVacia({
     kind: kindTab,
     enCategoria: kindClients.length,
@@ -307,6 +326,7 @@ export default function ClientsGrid({
     pertenencia: canFilter ? tab : null,
     vista,
     busqueda,
+    coincidenEnOtraCategoria: coincidenPorCategoria,
   });
 
   // ── La pestaña de PROYECTOS internos ─────────────────────────────────────────

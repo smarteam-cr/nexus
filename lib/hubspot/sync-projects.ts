@@ -1320,6 +1320,20 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
           });
           // El pipeline decide QUÉ piezas nacen. Ya está en la mano dentro de la transacción.
           await createDefaultCanvases(created.id, pipelineId, tx);
+          /* ⭐ VENDER ASCIENDE A LA EMPRESA — la segunda puerta.
+             El botón «Nuevo proyecto» ya lo hace (app/api/projects/route.ts). Pero un proyecto
+             también puede LLEGAR SOLO desde HubSpot, y por acá la empresa quedaba prospecto: el
+             mismo estado que produjo el incidente REMPRO —invisible en el índice, que abre en la
+             pestaña «Clientes»— pero sin que nadie apriete nada, así que menos explicable todavía.
+             Descubrir un proyecto y abrirlo son el mismo hecho de negocio: si tiene proyecto, ya
+             no es un prospecto.
+             ⛔ Mismo contrato que la otra puerta: SOLO SUBE. El `kind` en el WHERE hace que sea
+             un no-op para CLIENTE, ALIADO e INTERNO — un aliado con proyecto sigue siendo aliado,
+             y no entra a cartera ni a cobranza por un sync que corre solo cada 10 minutos. */
+          await tx.client.updateMany({
+            where: { id: clientId, kind: "PROSPECTO" },
+            data: { kind: "CLIENTE" },
+          });
           return created;
         });
         result.created++;
