@@ -31,18 +31,41 @@ import { cargarContextoDelAssist } from "@/lib/contexto/cargar";
 import { renderFuentes } from "@/lib/contexto/tipos";
 import { REGLA_DE_FRONTERA_DEL_ASSIST } from "@/lib/contexto/asistente-cronograma";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { ID_ASSIST_CRONOGRAMA, PROMPT_ASSIST_CRONOGRAMA } from "@/lib/agents/timeline-assist";
 
 /**
  * El slug con el que este agente aparece en el libro de gasto (`LlmCall.agentSlug`) y en el feed
- * de corridas. No hay fila en la tabla `Agent` —el prompt de acá abajo todavía es inline— así que
- * el `AgentRun` nace con `agentId: null`, que la columna admite.
+ * de corridas — y, desde el 2026-08-18, también el id de su fila en la tabla `Agent`.
  *
  * ⚠ Hasta el 2026-08-18 este camino no creaba corrida NI envolvía el contexto de gasto: sus
  * llamadas a Claude quedaban en `LlmCall` con `agentSlug`, `clientId` y `triggeredByEmail` en
  * null. Era imposible responder «¿cuántas veces se usa el modificador?» y «¿qué proporción se
  * aplica?» — que son las dos preguntas que deciden si vale la pena construirle un chat encima.
  */
-export const SLUG_ASSIST_CRONOGRAMA = "agent-timeline-assist";
+export const SLUG_ASSIST_CRONOGRAMA = ID_ASSIST_CRONOGRAMA;
+
+/**
+ * El prompt CANÓNICO vive en la tabla `Agent` — así se calibra sin deploy, igual que el que crea
+ * las fases (handoff) y el que las detalla. Esta función lo lee y solo cae al texto de
+ * `lib/agents/timeline-assist.ts` si la fila todavía no existe o está en DRAFT: el deploy llega
+ * antes que el seed, y un modificador que responde 500 durante esa ventana sería una regresión
+ * de la que nadie tiene la culpa.
+ *
+ * ⚠ El respaldo NO es una segunda copia del texto: es el MISMO módulo que el seed escribe en la
+ * tabla. Dos copias divergen calladas y después nadie sabe cuál corrió.
+ */
+async function resolverAgenteDelAssist(): Promise<{ agentId: string | null; systemPrompt: string }> {
+  const fila = await prisma.agent
+    .findUnique({
+      where: { id: ID_ASSIST_CRONOGRAMA },
+      select: { id: true, systemPrompt: true, status: true },
+    })
+    .catch(() => null);
+  if (fila && fila.status === "ACTIVE" && fila.systemPrompt.trim().length > 0) {
+    return { agentId: fila.id, systemPrompt: fila.systemPrompt };
+  }
+  return { agentId: null, systemPrompt: PROMPT_ASSIST_CRONOGRAMA };
+}
 
 /** Cierra la corrida en ERROR sin poder romper la respuesta que el CSE está esperando. */
 async function marcarError(runId: string, motivo: string): Promise<void> {
@@ -50,36 +73,6 @@ async function marcarError(runId: string, motivo: string): Promise<void> {
     .update({ where: { id: runId }, data: { status: "ERROR", output: JSON.stringify({ error: motivo }) } })
     .catch(() => {});
 }
-
-const SYSTEM_PROMPT = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
-
-REGLAS DURAS:
-- Conserva los ids EXACTOS de las fases y tareas que siguen existiendo (las edites o no). Elementos NUEVOS van sin id. Para BORRAR algo, simplemente omítelo del resultado.
-- Si mueves una tarea a OTRA fase: en la fase destino va SIN id (es nueva ahí) y en la fase origen desaparece.
-- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Si la instrucción pide explícitamente quitar una de ellas, quítala igual — el servidor avisa.
-- weekIndex es 0-indexed y RELATIVO a su fase; siempre < durationWeeks de esa fase. order: reasigna secuencial (0,1,2…) dentro de cada semana.
-- Puedes cambiar duraciones, nombres, orden de fases, tipos y la fecha de arranque SOLO si la instrucción lo pide o es consecuencia necesaria (p.ej. agregar una semana de tareas a una fase de 1 semana → durationWeeks 2).
-- activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
-- anchorStartDate: inclúyelo SOLO si la instrucción pide cambiar la fecha de arranque (ISO). Si no, omítelo.
-- TODO el texto (títulos y notas de tareas, nombres y notas de fases) es DE CARA AL CLIENTE: claro, profesional, sin nombres del equipo interno de Smarteam, sin instrucciones operativas internas, sin jerga. Los textos existentes que no toques se conservan tal cual.
-- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".
-- Si la instrucción es ambigua, interpreta lo más razonable y conservador.
-
-FORMATO DE RESPUESTA — JSON EXACTO, sin markdown:
-{
-  "anchorStartDate": "2026-07-01T00:00:00.000Z",   // SOLO si la instrucción lo pidió; si no, omitir
-  "phases": [
-    {
-      "id": "<id existente o ausente si es nueva>",
-      "name": "Setup", "order": 0, "durationWeeks": 2, "sessionCount": 4, "notes": null,
-      "activityType": "CONFIGURACION",
-      "tasks": [
-        { "id": "<id existente o ausente>", "title": "Configurar pipeline de ventas", "weekIndex": 0, "order": 0, "notes": null }
-      ]
-    }
-  ]
-}
-Incluye TODAS las fases y TODAS las tareas resultantes — es un reemplazo completo del cronograma.`;
 
 export async function POST(
   req: NextRequest,
@@ -204,12 +197,16 @@ export async function POST(
     `${contexto.instrucciones}${bloqueDeContexto}\n\n${REGLA_DE_FRONTERA_DEL_ASSIST}${scopeClause}` +
     `\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
 
+  /* El prompt sale de la tabla (calibrable sin deploy) y cae al módulo compartido mientras el
+     seed no corrió. `agentId` queda en null en esa ventana — la columna lo admite y es la
+     verdad: no hay fila a la cual atribuir la corrida. */
+  const agente = await resolverAgenteDelAssist();
+
   /* La corrida se crea ANTES de llamar al modelo: si Claude falla, queda el registro de que se
-     intentó (mismo criterio que `runAccountBrief`). `agentId: null` porque el prompt de este
-     agente todavía vive inline en este archivo, no en la tabla `Agent`. */
+     intentó (mismo criterio que `runAccountBrief`). */
   const run = await prisma.agentRun.create({
     data: {
-      agentId: null,
+      agentId: agente.agentId,
       clientId: guard.clientId,
       projectId,
       status: "RUNNING",
@@ -237,7 +234,7 @@ export async function POST(
         model: "claude-sonnet-4-6",
         max_tokens: 16000,
         temperature: 0,
-        system: SYSTEM_PROMPT,
+        system: agente.systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
     );
