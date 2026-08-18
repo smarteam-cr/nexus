@@ -27,6 +27,9 @@ import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { cargarContextoDelAssist } from "@/lib/contexto/cargar";
+import { renderFuentes } from "@/lib/contexto/tipos";
+import { REGLA_DE_FRONTERA_DEL_ASSIST } from "@/lib/contexto/asistente-cronograma";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 /**
@@ -181,7 +184,25 @@ export async function POST(
     ? `\n\n=== ALCANCE ===\nEl consultor está editando SOLO la fase id="${scopePhase.id}" ("${scopePhase.name}"). Modificá ÚNICAMENTE esa fase (y solo lo que pida la instrucción). TODAS las demás fases y sus tareas devolvelas IDÉNTICAS: mismos ids, nombres, duraciones, orden, tipos y tareas — no las reordenes ni las toques.`
     : "";
 
-  const userMessage = `=== CRONOGRAMA ACTUAL ===\n${currentJson}${scopeClause}\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
+  /* ── EL CONTEXTO DE NEGOCIO (Tramo 1, 2026-08-18) ──────────────────────────────────────
+     Hasta hoy este agente veía SOLO el cronograma crudo: era el huérfano de los tres que
+     tocan el cronograma (el handoff lo crea, `agent-timeline-detail` lo detalla y éste lo
+     modifica — y los dos primeros sí ven el negocio). Por eso no podía atender bien un
+     «agregá las tareas de migración»: no sabía qué se había vendido.
+
+     Entra por `lib/contexto/` y no armando bloques acá: es el mismo embudo que ya usa el
+     detalle, con la procedencia adentro del texto y bajo el trinquete de
+     `PIEZAS_CON_CONTEXTO_NOMBRADO`. El cronograma se le PASA (no lo recarga): la lectura que
+     el modelo ve y la que el servidor protege en el rescate de progreso tienen que ser la
+     misma.
+     ⛔ `REGLA_DE_FRONTERA_DEL_ASSIST` va SIEMPRE con el contexto: lo de arriba es interno y el
+     cronograma lo lee el cliente. Su guarda es el centinela de `asistente-cronograma.test.ts`. */
+  const contexto = await cargarContextoDelAssist(projectId, currentJson);
+  const bloqueDeContexto = renderFuentes(contexto.fuentes);
+
+  const userMessage =
+    `${contexto.instrucciones}${bloqueDeContexto}\n\n${REGLA_DE_FRONTERA_DEL_ASSIST}${scopeClause}` +
+    `\n\n=== INSTRUCCIÓN DEL CONSULTOR ===\n${instruction}\n\nDevuelve el cronograma completo actualizado en el formato indicado.`;
 
   /* La corrida se crea ANTES de llamar al modelo: si Claude falla, queda el registro de que se
      intentó (mismo criterio que `runAccountBrief`). `agentId: null` porque el prompt de este

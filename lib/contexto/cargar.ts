@@ -13,9 +13,11 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
-import type { ProjectPipelineKey } from "@/lib/projects/kind";
+import { resolvePipeline, type ProjectPipelineKey } from "@/lib/projects/kind";
 import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
+import { fuentesDelAssist } from "./asistente-cronograma";
+import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 
 /**
  * El contexto del Detalle de Cronograma (pieza "timeline"):
@@ -43,6 +45,65 @@ export async function cargarContextoDelDetalle(
     projectId,
     pipelineKey,
     fuentes: fuentesDelDetalle({ timelineCtx, handoffCtx, desarrolloCtx }),
+    instrucciones: bloqueDeInstruccionesDeDoc(
+      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
+    ),
+  };
+}
+
+/**
+ * El contexto del MODIFICADOR de cronograma (pieza "assist"): el agente que atiende
+ * «atrasá Setup una semana» / «agregá tareas de migración en configuración».
+ *
+ *   · cronograma-vivo        — el cronograma CON ids y CON el estado de cada tarea
+ *   · handoff-curado         — SOLO bloques confirmados por el CSE
+ *   · requerimiento-tecnico  — el canvas Desarrollo si existe ("" si no)
+ *   · operativa-hubspot      — estado / prioridad / motivo de bloqueo, si el equipo los cargó
+ *   · instrucciones          — la misma entry `__doc` del canvas del cronograma que lee el detalle
+ *
+ * ⚠ EL CRONOGRAMA LO PASA EL LLAMADOR, no se carga acá. La ruta ya lo trae con su select
+ * propio —necesita `status` y `source` para el rescate de progreso del final— y volver a
+ * leerlo abriría la puerta a que las dos lecturas se separen: la que el modelo ve y la que el
+ * servidor protege tienen que ser LA MISMA.
+ *
+ * ⚠ Las instrucciones salen del canvas "timeline", no de uno propio: el brief `__doc` es
+ * «instrucciones para esta PIEZA», y el modificador edita la misma pieza que el detalle.
+ * Si tuvieran cajas separadas, el CSE escribiría una regla y solo la mitad de los agentes
+ * la leería.
+ */
+export async function cargarContextoDelAssist(
+  projectId: string,
+  cronogramaCtx: string,
+): Promise<ContextoDeProyecto> {
+  const [handoffCtx, desarrolloCtx, canvasCronograma, proyecto] = await Promise.all([
+    loadHandoffContext(projectId, { onlyConfirmed: true }),
+    loadDesarrolloContext(projectId),
+    prisma.projectCanvas.findFirst({
+      where: { projectId, ...canvasOf("timeline") },
+      select: { sections: true },
+    }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        // El tipo sale del pipeline, nunca se guarda (regla del multipipeline).
+        hubspotPipelineId: true,
+        hubspotStatus: true,
+        hubspotPriority: true,
+        hubspotBlockReason: true,
+        hubspotBlockDetail: true,
+        hubspotAdoptionState: true,
+      },
+    }),
+  ]);
+  return {
+    projectId,
+    pipelineKey: resolvePipeline(proyecto?.hubspotPipelineId ?? null)?.key ?? null,
+    fuentes: fuentesDelAssist({
+      cronogramaCtx,
+      handoffCtx,
+      desarrolloCtx,
+      operativaCtx: proyecto ? bloqueDeOperativa(proyecto, { incluirRotulo: false }) : "",
+    }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     ),

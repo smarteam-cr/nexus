@@ -52,8 +52,15 @@ export interface ContextoDeProyecto {
   instrucciones: string;
 }
 
-/** Las piezas cuya generación ya consume el contexto NOMBRADO. Solo crece (trinquete). */
-export const PIEZAS_CON_CONTEXTO_NOMBRADO: readonly string[] = ["timeline"];
+/**
+ * Las piezas cuya generación ya consume el contexto NOMBRADO. Solo crece (trinquete).
+ *
+ * `"assist"` no es una pieza del registro de canvases: es el MODIFICADOR del cronograma, que
+ * edita la pieza `"timeline"`. Entra igual porque lo que este registro gobierna es «qué
+ * generaciones arman su contexto con nombre en vez de a mano en la ruta», y el modificador es
+ * una generación más — la que hasta el 2026-08-18 no veía nada del negocio.
+ */
+export const PIEZAS_CON_CONTEXTO_NOMBRADO: readonly string[] = ["timeline", "assist"];
 
 /** Serializa las fuentes al prompt, en orden, salteando las vacías. */
 export function renderFuentes(fuentes: readonly FuenteDeContexto[]): string {

@@ -141,12 +141,26 @@ const LECTORES: Lector[] = [
   },
   {
     archivo: "lib/contexto/cargar.ts",
+    ancla: "cargarContextoDelDetalle",
     pieza: "timeline",
     exposicion: "por_curacion",
     porque:
       "el agente de detalle emite TÍTULOS DE TAREA, no prosa, y el CSE los cura antes de que " +
       "el cronograma se publique. ⚠ Revisar en la Tanda 8: hoy la PRIMERA generación todavía " +
       "escribe sin pasar por curación, y ahí esta declaración deja de ser cierta",
+  },
+  {
+    archivo: "lib/contexto/cargar.ts",
+    ancla: "cargarContextoDelAssist",
+    pieza: "timeline",
+    exposicion: "por_curacion",
+    porque:
+      "el MODIFICADOR del cronograma (Tramo 1, 2026-08-18): hasta hoy no veía el handoff y por " +
+      "eso no podía atender «agregá las tareas de migración». Emite títulos de tarea, no prosa, " +
+      "y NO persiste: devuelve una propuesta que el CSE mira en el Gantt antes de aplicar. " +
+      "⚠ Es la MISMA pieza que el detalle, así que son dos entradas del mismo archivo y por eso " +
+      "las dos llevan ancla: el censo cuenta LLAMADAS, no archivos — sin ancla, la segunda " +
+      "entraba emparejada por la primera y nadie la miraba.",
   },
   {
     archivo: "lib/timeline/regenerate-progress.ts",
