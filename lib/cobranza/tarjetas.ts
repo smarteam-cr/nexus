@@ -18,8 +18,11 @@
  *     de la misma unidad (plata disponible contra plata que van a cobrar).
  *
  * ⚠ Y una tercera, por la prohibición de FX: un costo en OTRA moneda que la
- * tarjeta NO se suma — se cuenta aparte y se declara. Convertirlo exigiría un
- * tipo de cambio que este sistema no tiene ni va a tener.
+ * tarjeta NO se suma — se cuenta aparte y se declara. Desde 2026-08-17 el sistema
+ * SÍ tiene tipo de cambio (`TipoCambioMes`), pero eso no cambia nada acá: la
+ * licencia para convertir es de la capa de PRESENTACIÓN del reporte anual de
+ * equilibrio y de nadie más (ver DECISIONS §El reporte anual de equilibrio). Este
+ * motor sigue sin convertir jamás, y hay un test estructural que lo verifica.
  *
  * ⚠ CERO `new Date()` acá adentro: la fecha de hoy ENTRA POR PARÁMETRO
  * (`hoyISO`, "YYYY-MM-DD"). Es la misma regla que ya sostiene `comisiones.ts`:

@@ -3165,6 +3165,11 @@ model CostoRecurrente {
   // arrastraría ese vencimiento al costo, que por regla no vence.
   tarjetas TarjetaCreditoCosto[] @relation("CostosDeTarjeta")
 
+  // Lo que este costo valió MES A MES (el libro de egresos). Va por relación y no por
+  // columna porque son dos preguntas distintas: `monto` es cuánto cuesta hoy, y esto es
+  // cuánto costó en marzo. La segunda no se puede derivar de la primera.
+  egresosMensuales EgresoMensual[] @relation("EgresosDelCosto")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3561,6 +3566,22 @@ model ComisionPartner {
   clientId String?
   client   Client? @relation("ComisionesDePartner", fields: [clientId], references: [id], onDelete: SetNull)
 
+  // ── Estado de cobro (2026-08-17) ─────────────────────────────────────────────
+  // Hasta hoy esta tabla solo registraba plata que YA había entrado, así que las
+  // comisiones prometidas (HubSpot paga trimestral: agosto y noviembre, ~$54k cada
+  // una) vivían fuera del sistema y no aparecían en ninguna proyección.
+  // ⚠ `fecha` NO cambia de significado: sigue siendo la fecha de la comisión y es lo
+  // que agrupa los buckets de cadencia en armarHistorial. `fechaCobro` es otra cosa.
+  // ⚠ DEFAULT POR_COBRAR a propósito: con default COBRADO, cualquier INSERT que se
+  // olvide de `confirmadoPor` violaría INV20. Un POR_COBRAR nunca puede violarlo.
+  estado        ComisionPartnerEstado @default(POR_COBRAR)
+  // nullable porque un POR_COBRAR todavía no tiene el día en que entró la plata.
+  fechaCobro    DateTime?             @db.Date
+  // INV20, espejo exacto de INV3: ningún COBRADO sin quien lo confirmó. Lo escribe
+  // SOLO el chokepoint cambiarEstadoComisionPartner, nunca el body de un request.
+  confirmadoPor String?
+  confirmadoEn  DateTime?
+
   notas         String? @db.Text
   registradoPor String // email del guard (trazabilidad, como en IngresoVariable)
 
@@ -3570,6 +3591,14 @@ model ComisionPartner {
   @@index([fecha])
   @@index([partner])
   @@index([partnerId])
+  @@index([estado, fecha])
+}
+
+/// Si la comisión de un aliado ya entró o todavía se espera. Dos estados y no tres:
+/// "facturada" no aplica — al aliado no se le emite factura, él liquida y paga.
+enum ComisionPartnerEstado {
+  POR_COBRAR // devengada o prometida — todavía NO es caja
+  COBRADO // entró. EXIGE confirmadoPor (INV20)
 }
 
 // ─── ReglaComisionVendedor ──────────────────────────────────────────────────────
@@ -3699,6 +3728,131 @@ model ComisionVendedor {
 
   @@index([teamMemberId, periodo])
   @@index([pagoPlanillaId])
+}
+
+/// En qué rubro cae un egreso del mes. Espeja `CobranzaCategoriaCosto` y le suma los dos
+/// que el burn de hoy no modela como costo recurrente: TARJETA (el cargo propio de la
+/// tarjeta, no lo que se paga CON ella) y RESERVA_AGUINALDO (una provisión, no un pago).
+/// Los cinco valores nacen juntos aunque hoy solo se escriban tres: un `ALTER TYPE ADD
+/// VALUE` posterior no corre en transacción y obliga a coordinar las 2 PCs de esta base.
+enum EgresoCategoria {
+  PLANILLA // ⛔ prohibido por CHECK — vive en PagoPlanilla (ver el modelo)
+  HERRAMIENTA
+  FIJO_OPERACION
+  TARJETA
+  RESERVA_AGUINALDO // ⛔ prohibido por CHECK — se deriva del libro de planilla
+}
+
+/// De dónde salió la fila. El sembrado del Excel solo pisa lo que él mismo escribió:
+/// una corrección hecha a mano NO se borra en la próxima corrida del importador.
+enum EgresoOrigen {
+  EXCEL_EGRESOS
+  MANUAL
+}
+
+// ─── EgresoMensual ──────────────────────────────────────────────────────────────
+// EL LIBRO DE EGRESOS: cuánto costó CADA MES, concepto por concepto. Hermano de
+// `PagoPlanilla` ("lo que efectivamente se pagó"), no de `CostoRecurrente` ("lo que
+// cuesta hoy"). Existe porque el reporte anual de equilibrio necesita la serie del año
+// y `CostoRecurrente` no puede darla: guarda el monto de HOY, y `updateCosto` estampa
+// `fechaEfectiva = hoy` en cada cambio, así que un burn dibujado hacia marzo mostraría
+// el costo de agosto — una línea plana, creíble y falsa (DECISIONS §Planillas, historial
+// y la cadencia de cada aliado).
+//
+// El dato NO es nuevo: el Excel de egresos ya traía la variación mes a mes y el
+// importador la leía y la tiraba (`leerCostosFijos` devuelve `meses[]` y se colapsaba a
+// la moda; un concepto con monto variable ni se cargaba). Esto lo persiste.
+//
+// ⛔ PLANILLA y RESERVA_AGUINALDO tienen prohibido entrar acá, con un CHECK en la base:
+// la planilla ya vive en `PagoPlanilla` (periodo × quincena × persona) y la reserva se
+// deriva de ahí. Escribirlas también acá las contaría DOS VECES en el equilibrio.
+//
+// ⚠ PRIVACIDAD: lleva la estructura de costos de la empresa y el cargo de las tarjetas.
+// Mismo peso que `TarjetaCredito` y `CostoMovimiento`: deny-all RESTRICTIVE en
+// prisma/policies.sql + `guardCostosAccess` (SUPER_ADMIN) en toda superficie.
+//
+// ⚠ NO lleva un flag `completo`/`parcial`: la calidad del mes se DERIVA de qué filas hay
+// (lib/finanzas/equilibrio.ts#calidadDelMes). Guardarla la congelaría — el mismo mes
+// cambia de calidad cuando llega el dato que le faltaba.
+model EgresoMensual {
+  id String @id @default(cuid())
+
+  // "YYYY-MM" — mismo vocabulario que Cobro.periodo y PagoPlanilla.periodo, así el
+  // reporte filtra los 12 meses con un solo `in` y reusa periodosEntre()/periodoDe().
+  periodo   String
+  categoria EgresoCategoria
+
+  // El nombre tal como se lee ("Alquiler de Oficina"); `conceptoClave` es la versión
+  // normalizada que se compara. Mismo par que PartnerComercial.nombre/clave: sin él,
+  // una tilde distinta parte la serie del mismo concepto en dos.
+  concepto      String
+  conceptoClave String
+
+  monto  Decimal        @db.Decimal(12, 2)
+  moneda CobranzaMoneda
+  // El decodificador ya lo calcula y hasta hoy se descartaba: la hoja no siempre dice la
+  // moneda y a veces se infiere del formato. Alimenta el aviso de calidad del reporte.
+  monedaInferida Boolean @default(false)
+
+  origen EgresoOrigen @default(EXCEL_EGRESOS)
+
+  // nullable porque el Excel nombra conceptos que ya se dieron de baja o que nunca se
+  // cargaron como costo vigente. SetNull: borrar el costo no borra lo que ya se gastó.
+  costoId String?
+  costo   CostoRecurrente? @relation("EgresosDelCosto", fields: [costoId], references: [id], onDelete: SetNull)
+
+  // De qué celda salió: "Egresos y Costos 2026 · Costos Fijos · fila 15 · col K".
+  // nullable porque una fila MANUAL no viene de ninguna hoja. Hace que la fila se audite
+  // sola sin volver a abrir el archivo.
+  fuente String?
+  // Por qué el importador NO lo carga como costo recurrente (monto variable mes a mes,
+  // por ejemplo). La fila es un HECHO; que sume o no lo decide el módulo puro.
+  notas  String? @db.Text
+
+  registradoPor String // "import:egresos-2026" o el email del guard
+  registradoEn  DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Idempotencia del sembrado: re-correr el importador actualiza, nunca duplica.
+  @@unique([periodo, categoria, conceptoClave])
+  @@index([periodo])
+  @@index([costoId])
+}
+
+// ─── TipoCambioMes ──────────────────────────────────────────────────────────────
+// UN tipo de cambio por mes, tecleado por una persona, con su fuente escrita.
+//
+// ⚠ Esto NO levanta la prohibición de FX del módulo: la ACOTA. La base sigue guardando
+// todo en moneda nativa y NINGÚN motor convierte —engine, tarjetas, comisiones, partners,
+// planilla, aguinaldo—. La única licencia para convertir es la capa de PRESENTACIÓN del
+// reporte anual de equilibrio, en una sola función (lib/finanzas/equilibrio.ts#convertir),
+// declarando siempre con qué tasa. Ver DECISIONS §El reporte anual de equilibrio.
+//
+// Sin tasa para un mes NO se aproxima con la de otro: el monto queda sin convertir, fuera
+// del total, y el reporte lo lista.
+//
+// ⚠ SIN deny-all RESTRICTIVE, a propósito: una tasa de cambio publicada no es información
+// sensible. Mismo criterio que `PartnerComercial`. RLS habilitado igual.
+model TipoCambioMes {
+  id      String @id @default(cuid())
+  periodo String @unique // "YYYY-MM"
+
+  // Colones por UN dólar. Decimal(12,4) y NO (12,2) como el dinero: una tasa no es un
+  // monto, y truncarla a centavos mete error sistemático en cada conversión del año.
+  crcPorUsd Decimal @db.Decimal(12, 4)
+
+  // Obligatoria y en texto libre: "BCCR venta, promedio del mes", "el 500 con que se arma
+  // la hoja". Un número sin procedencia no se puede auditar ni discutir.
+  fuente String
+
+  registradoPor String
+  registradoEn  DateTime
+  notas         String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────

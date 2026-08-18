@@ -33,7 +33,9 @@ import {
   leerHerramientas,
   leerHistorialSalarios,
   leerSalarios,
+  mesesDeEncabezado,
   motivoParaNoCargar,
+  serieMensualDe,
   type CeldaCruda,
   type FilaCruda,
   type Herramienta,
@@ -227,6 +229,19 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     const bloqueTarjetas = filasDelBloque(filasFijos, /^Mes$/i, /^TOTAL/i);
     const tarjetas = leerCostosFijos(bloqueTarjetas, colsFijos);
 
+    // A qué MES corresponde cada columna visible, leído del encabezado y no calculado
+    // con `col - 6`: la hoja se edita a mano y una columna insertada correría la serie
+    // entera un mes sin un solo error (ver egresos-sheet#mesesDeEncabezado). Los dos
+    // bloques comparten encabezado y columnas, así que basta la primera fila "Mes" que
+    // realmente nombre meses.
+    const filaMesFijos =
+      filasFijos.find(
+        (f) =>
+          /^Mes$/i.test(String(f.celdas[0]?.valor ?? "").trim()) &&
+          mesesDeEncabezado(f, colsFijos).size > 0,
+      ) ?? null;
+    const mesPorColumnaFijos = filaMesFijos ? mesesDeEncabezado(filaMesFijos, colsFijos) : new Map<number, number>();
+
     seccion(`1. COSTOS FIJOS — hoja "${HOJA_FIJOS}"`);
     console.log(`  Columnas visibles del bloque vivo: ${colsFijos.length}`);
     console.log(`  Columnas OCULTAS descartadas: ${18 - colsFijos.length} (bloque viejo, totales en #REF!)`);
@@ -371,7 +386,18 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
     if (!wsTools) throw new Error(`No encuentro la pestaña "${HOJA_TOOLS}"`);
     const filasTools = filasDe(wsTools, 13);
     const bloqueTools = filasDelBloque(filasTools, /^Mes$/i, /^TOTAL/i).filter((f) => f.fila > 29);
-    const tools: Herramienta[] = leerHerramientas(bloqueTools, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    const COLS_TOOLS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+    // Mismo criterio que en la hoja de fijos: el mes lo dice el encabezado. Si esta
+    // grilla no lo trae legible, se cae al orden posicional (que es el contrato viejo
+    // de `mesesConCargo`) — `leerHerramientas` lo resuelve con el parámetro opcional.
+    const filaMesTools =
+      filasTools.find(
+        (f) =>
+          /^Mes$/i.test(String(f.celdas[0]?.valor ?? "").trim()) &&
+          mesesDeEncabezado(f, COLS_TOOLS).size >= 12,
+      ) ?? null;
+    const mesPorColumnaTools = filaMesTools ? mesesDeEncabezado(filaMesTools, COLS_TOOLS) : undefined;
+    const tools: Herramienta[] = leerHerramientas(bloqueTools, COLS_TOOLS, mesPorColumnaTools);
 
     seccion(`2. HERRAMIENTAS — hoja "${HOJA_TOOLS}" (fuente: la GRILLA mensual)`);
     console.log(`  ⚠ La lista de arriba NO se usa: sus dos totales cortan el rango y pierden una herramienta.`);
@@ -600,6 +626,123 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
 
     console.log(`\n  SIN CAMBIO: ${iguales.length}`);
 
+    // ── 5b. LIBRO DE EGRESOS — la serie mensual que el burn no puede guardar ───
+    //
+    // Todo lo de arriba contesta "cuánto cuesta esto HOY" y va a `CostoRecurrente`.
+    // Esta sección contesta "cuánto costó en marzo" y va a `EgresoMensual`. Son dos
+    // preguntas distintas sobre las MISMAS celdas: la de arriba colapsa cada concepto
+    // a su moda, y acá se guarda mes por mes.
+    //
+    // ⚠ Se siembra TAMBIÉN lo que la sección 1 descarta. Un concepto cuyo monto varía
+    // entre meses no puede ser un costo recurrente honesto —con razón queda afuera del
+    // burn— pero su serie es un HECHO, y encima es la que más se nota en la curva del
+    // año (la patente que se triplica tres veces). El motivo del descarte viaja en
+    // `notas`: que la fila exista no significa que sume, eso lo decide el módulo puro.
+    //
+    // ⚠ El bloque OCULTO (ene-sep) NO entra: moneda mezclada y totales en #REF!.
+    // Sigue siendo informativo (sección 1b), como lo decidió DECISIONS.
+    type FilaEgreso = {
+      mes: number;
+      categoria: "HERRAMIENTA" | "FIJO_OPERACION" | "TARJETA";
+      concepto: string;
+      conceptoClave: string;
+      monto: number;
+      moneda: Moneda;
+      monedaInferida: boolean;
+      fuente: string;
+      notas: string | null;
+    };
+    const libro: FilaEgreso[] = [];
+
+    for (const c of conceptos) {
+      const motivo = motivoParaNoCargar(c);
+      for (const m of serieMensualDe(c.meses, mesPorColumnaFijos)) {
+        libro.push({
+          mes: m.mes,
+          categoria: "FIJO_OPERACION",
+          concepto: c.nombre,
+          conceptoClave: norm(c.nombre),
+          monto: m.monto,
+          moneda: m.moneda,
+          monedaInferida: m.monedaInferida,
+          fuente: `${HOJA_FIJOS} · fila ${c.fila}`,
+          notas: motivo ? `No entra al burn: ${motivo}.` : null,
+        });
+      }
+    }
+
+    for (const t of tarjetas) {
+      for (const m of serieMensualDe(t.meses, mesPorColumnaFijos)) {
+        libro.push({
+          mes: m.mes,
+          categoria: "TARJETA",
+          concepto: t.nombre,
+          conceptoClave: norm(t.nombre),
+          monto: m.monto,
+          moneda: m.moneda,
+          monedaInferida: m.monedaInferida,
+          fuente: `${HOJA_FIJOS} · bloque de tarjetas · fila ${t.fila}`,
+          notas: "Cargo propio de la tarjeta. No es lo que se paga CON ella: el solape con herramientas no se puede medir desde este archivo.",
+        });
+      }
+    }
+
+    for (const t of tools) {
+      for (const m of t.meses) {
+        libro.push({
+          mes: m.mes,
+          categoria: "HERRAMIENTA",
+          concepto: t.nombre,
+          conceptoClave: norm(t.nombre),
+          monto: m.monto,
+          moneda: m.moneda,
+          monedaInferida: m.monedaInferida,
+          fuente: `${HOJA_TOOLS} · grilla · fila ${t.fila}`,
+          notas: t.frecuencia === "ANUAL" ? "Pago anual: acá cae en SU mes, no mensualizado /12." : null,
+        });
+      }
+    }
+
+    seccion("5b. LIBRO DE EGRESOS — la serie MENSUAL (EgresoMensual)");
+    if (mesPorColumnaFijos.size === 0) {
+      console.log(`  ⚠ No se pudo leer el encabezado de meses de "${HOJA_FIJOS}": los costos fijos y las`);
+      console.log(`    tarjetas quedan FUERA de la serie. No se adivina el mes por posición de columna.`);
+    } else {
+      console.log(`  Encabezado de "${HOJA_FIJOS}": ${mesPorColumnaFijos.size} columnas mapeadas a su mes.`);
+    }
+    console.log(
+      `  Encabezado de "${HOJA_TOOLS}": ${mesPorColumnaTools ? `${mesPorColumnaTools.size} columnas mapeadas` : "no legible — se usa el orden de la grilla (contrato viejo)"}.`,
+    );
+
+    // La matriz. Es LO QUE HAY QUE MIRAR antes de aplicar: cada fila es un concepto y
+    // cada columna un mes, así se ve de una si un monto aterrizó donde no va.
+    const conceptosLibro = [...new Set(libro.map((f) => `${f.categoria} ${f.concepto}`))].sort();
+    const totalPorMes = new Map<number, number>();
+    const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    console.log(`\n  ${"CONCEPTO".padEnd(30)}${MES_CORTO.map((m) => m.padStart(9)).join("")}`);
+    for (const k of conceptosLibro) {
+      const [cat, nombre] = k.split(" ") as [string, string];
+      const filas = libro.filter((f) => f.categoria === cat && f.concepto === nombre);
+      const celdas = MES_CORTO.map((_, i) => {
+        const f = filas.find((x) => x.mes === i + 1);
+        if (!f) return "—".padStart(9);
+        totalPorMes.set(f.mes, (totalPorMes.get(f.mes) ?? 0) + f.monto);
+        return f.monto.toFixed(2).padStart(9);
+      });
+      console.log(`  ${`${nombre} [${cat.slice(0, 4)}]`.slice(0, 29).padEnd(30)}${celdas.join("")}`);
+    }
+    console.log(`  ${"─".repeat(30 + 12 * 9)}`);
+    console.log(
+      `  ${"TOTAL DEL MES".padEnd(30)}${MES_CORTO.map((_, i) => (totalPorMes.get(i + 1) ?? 0).toFixed(2).padStart(9)).join("")}`,
+    );
+    console.log(`\n  ${libro.length} filas de egreso mensual (${conceptosLibro.length} conceptos).`);
+    console.log(`  ⚠ Estos totales NO incluyen planilla ni reserva de aguinaldo: esas salen del libro de`);
+    console.log(`    planilla (PagoPlanilla) y tienen prohibido entrar acá — un CHECK de la base lo impide.`);
+    const inferidas = libro.filter((f) => f.monedaInferida).length;
+    if (inferidas > 0) {
+      console.log(`  ⚠ ${inferidas} de ${libro.length} filas traen la moneda INFERIDA (número sin fórmula ni símbolo).`);
+    }
+
     // ── 6. Preguntas ───────────────────────────────────────────────────────────
     seccion("6. PREGUNTAS QUE EL ARCHIVO NO CONTESTA (no se adivinan)");
     for (const p of PREGUNTAS_ABIERTAS) console.log(`  ? ${p}`);
@@ -733,7 +876,67 @@ function reportarDescartes(titulo: string, filas: Array<{ nombre: string; motivo
       bajas++;
     }
 
+    // ── El libro de egresos (EgresoMensual) ───────────────────────────────────
+    // Idempotente por (periodo, categoria, conceptoClave): re-correr ACTUALIZA, nunca
+    // duplica. Y respeta lo escrito a mano: una fila con origen MANUAL es una
+    // corrección de una persona y este script no la pisa — si la pisara, el arreglo
+    // duraría hasta la próxima corrida y nadie entendería por qué volvió el número
+    // viejo.
+    let egresosAltas = 0;
+    let egresosUpdates = 0;
+    let egresosRespetados = 0;
+    for (const f of libro) {
+      const periodo = `${ANIO}-${String(f.mes).padStart(2, "0")}`;
+      const clave = {
+        periodo_categoria_conceptoClave: {
+          periodo,
+          categoria: f.categoria,
+          conceptoClave: f.conceptoClave,
+        },
+      };
+      const existente = await prisma.egresoMensual.findUnique({
+        where: clave,
+        select: { id: true, origen: true },
+      });
+      if (existente && existente.origen !== "EXCEL_EGRESOS") {
+        egresosRespetados++;
+        continue;
+      }
+      const datos = {
+        concepto: f.concepto,
+        monto: new Prisma.Decimal(f.monto),
+        moneda: f.moneda,
+        monedaInferida: f.monedaInferida,
+        // El vínculo al costo vigente, cuando existe. TARJETA nunca lo tiene: no hay
+        // categoría equivalente en CostoRecurrente, y eso es correcto.
+        costoId: porClave.get(`${f.categoria}:${f.conceptoClave}`)?.id ?? null,
+        fuente: `Egresos y Costos ${ANIO} · ${f.fuente}`,
+        notas: f.notas,
+        registradoPor: POR,
+        registradoEn: hoy,
+      };
+      if (existente) {
+        await prisma.egresoMensual.update({ where: clave, data: datos });
+        egresosUpdates++;
+      } else {
+        await prisma.egresoMensual.create({
+          data: {
+            ...datos,
+            periodo,
+            categoria: f.categoria,
+            conceptoClave: f.conceptoClave,
+            origen: "EXCEL_EGRESOS",
+          },
+        });
+        egresosAltas++;
+      }
+    }
+
     console.log(`  ✓ ${altas} altas · ${updates} cambios de monto · ${bajas} bajas.`);
+    console.log(
+      `  ✓ Libro de egresos: ${egresosAltas} filas nuevas · ${egresosUpdates} actualizadas` +
+        (egresosRespetados > 0 ? ` · ${egresosRespetados} respetadas (origen MANUAL)` : ""),
+    );
     console.log(`  Recordá: reiniciar el dev server no hace falta (no cambió el schema), pero sí recargar la hoja.`);
   } finally {
     await close();

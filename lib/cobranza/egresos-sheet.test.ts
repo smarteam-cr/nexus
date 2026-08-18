@@ -17,9 +17,12 @@ import {
   leerHerramientas,
   leerHistorialSalarios,
   leerSalarios,
+  mesDeEncabezado,
+  mesesDeEncabezado,
   monedaPorFormato,
   montoFijoDeCelda,
   motivoParaNoCargar,
+  serieMensualDe,
   type CeldaCruda,
   type FilaCruda,
 } from "./egresos-sheet";
@@ -331,5 +334,163 @@ describe("leerHistorialSalarios — la historia, que es lo que el aguinaldo nece
 
   it("la moneda se toma del primer mes CON monto, no de un cero sin formato", () => {
     expect(hist[1]!.moneda).toBe("CRC");
+  });
+});
+
+/**
+ * La serie mensual — el detalle que el decodificador leía y tiraba.
+ *
+ * Lo que se prueba acá no es aritmética: es que el mes al que aterriza cada monto salga
+ * del ENCABEZADO y no de una cuenta sobre el número de columna. Ese bug no se ve — la
+ * serie se corre un mes, el total del año sigue cuadrando y nada chilla.
+ */
+describe("mesDeEncabezado — de qué mes habla una columna", () => {
+  it("el nombre completo, con o sin mayúscula", () => {
+    expect(mesDeEncabezado("Abril")).toBe(4);
+    expect(mesDeEncabezado("diciembre")).toBe(12);
+  });
+
+  it("«Setiembre» sin p es septiembre: así se escribe en Costa Rica la mitad de las veces", () => {
+    expect(mesDeEncabezado("Setiembre")).toBe(9);
+    expect(mesDeEncabezado("SET")).toBe(9);
+  });
+
+  it("una FECHA real se lee por su mes y el año basura de la plantilla se ignora", () => {
+    // Los encabezados de estas hojas traen 2022/2025 por herencia de la plantilla.
+    expect(mesDeEncabezado(new Date(Date.UTC(2022, 3, 15)))).toBe(4);
+    expect(mesDeEncabezado(new Date(Date.UTC(2025, 10, 30)))).toBe(11);
+  });
+
+  it("una abreviatura AMBIGUA devuelve null en vez de elegir la primera", () => {
+    // "ma" es marzo y mayo. Elegir marzo movería medio año de costos sin avisar.
+    expect(mesDeEncabezado("ma")).toBeNull();
+    expect(mesDeEncabezado("m")).toBeNull();
+  });
+
+  it("lo que no es un mes no se fuerza a serlo", () => {
+    expect(mesDeEncabezado("Total")).toBeNull();
+    expect(mesDeEncabezado("")).toBeNull();
+    expect(mesDeEncabezado(null)).toBeNull();
+    expect(mesDeEncabezado(42)).toBeNull();
+  });
+});
+
+describe("mesesDeEncabezado + serieMensualDe — el monto cae en SU mes", () => {
+  /** Fila de encabezado del bloque vivo: K..S = abril..diciembre. */
+  const encabezado: FilaCruda = (() => {
+    const celdas: CeldaCruda[] = new Array(19).fill(vacia);
+    celdas[0] = txt("Mes");
+    ["Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"].forEach(
+      (m, i) => {
+        celdas[10 + i] = txt(m);
+      },
+    );
+    return { fila: 7, celdas };
+  })();
+
+  it("mapea cada columna visible a su mes de calendario", () => {
+    const mapa = mesesDeEncabezado(encabezado, VIVAS);
+    expect(mapa.size).toBe(9);
+    expect(mapa.get(11)).toBe(4); // K = abril
+    expect(mapa.get(19)).toBe(12); // S = diciembre
+  });
+
+  it("una columna con encabezado ilegible NO entra al mapa: se declara, no se adivina", () => {
+    const roto: FilaCruda = {
+      ...encabezado,
+      celdas: encabezado.celdas.map((c, i) => (i === 12 ? txt("???") : c)),
+    };
+    const mapa = mesesDeEncabezado(roto, VIVAS);
+    expect(mapa.size).toBe(8);
+    expect(mapa.has(13)).toBe(false);
+  });
+
+  it("el CERO explícito sobrevive: «no se cobró» no es lo mismo que «no se pudo leer»", () => {
+    const fila = filaFija(15, "Patente", [n(0), n(90), n(30), n(30), n(30), n(30), n(30), n(90), n(30)]);
+    const [c] = leerCostosFijos([fila], VIVAS);
+    const serie = serieMensualDe(c!.meses, mesesDeEncabezado(encabezado, VIVAS));
+    expect(serie).toHaveLength(9);
+    expect(serie[0]).toMatchObject({ mes: 4, monto: 0 });
+  });
+
+  it("una celda ilegible no produce un mes en cero — produce un hueco", () => {
+    const fila = filaFija(15, "Patente", [vacia, n(90), n(30), n(30), n(30), n(30), n(30), n(90), n(30)]);
+    const [c] = leerCostosFijos([fila], VIVAS);
+    const serie = serieMensualDe(c!.meses, mesesDeEncabezado(encabezado, VIVAS));
+    expect(serie).toHaveLength(8);
+    expect(serie.some((s) => s.mes === 4)).toBe(false);
+  });
+
+  it("EL CASO QUE MOTIVA TODO: el concepto que no se puede cargar como costo SÍ tiene serie", () => {
+    // La patente se triplica tres veces al año, así que `motivoParaNoCargar` la deja
+    // afuera del burn — con razón, porque no hay un monto mensual honesto. Pero su
+    // serie mes a mes existe y es justo la que más se nota en la curva del año.
+    const fila = filaFija(15, "Patente", [n(30), n(90), n(30), n(30), n(90), n(30), n(30), n(90), n(30)]);
+    const [c] = leerCostosFijos([fila], VIVAS);
+    expect(motivoParaNoCargar(c!)).toBe("el monto no es el mismo todos los meses");
+
+    const serie = serieMensualDe(c!.meses, mesesDeEncabezado(encabezado, VIVAS));
+    expect(serie).toHaveLength(9);
+    expect(serie.filter((s) => s.monto === 90).map((s) => s.mes)).toEqual([5, 8, 11]);
+    expect(serie.reduce((acc, s) => acc + s.monto, 0)).toBe(450);
+  });
+
+  it("la serie sale ordenada por mes aunque las columnas vengan desordenadas", () => {
+    const mapa = new Map([
+      [11, 12],
+      [12, 4],
+    ]);
+    const serie = serieMensualDe(
+      [
+        { col: 11, monto: { monto: 100, moneda: "USD", monedaInferida: false } },
+        { col: 12, monto: { monto: 200, moneda: "USD", monedaInferida: false } },
+      ],
+      mapa,
+    );
+    expect(serie.map((s) => s.mes)).toEqual([4, 12]);
+  });
+});
+
+describe("Herramienta.meses — el pago anual cae en su mes real", () => {
+  const MESES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]; // B..M = ene..dic
+
+  function filaTool(fila: number, nombre: string, montos: Array<number | null>): FilaCruda {
+    const celdas: CeldaCruda[] = new Array(13).fill(vacia);
+    celdas[0] = txt(nombre);
+    montos.forEach((m, i) => {
+      celdas[1 + i] = m === null ? vacia : n(m);
+    });
+    return { fila, celdas };
+  }
+
+  it("un cargo de un solo mes queda en JULIO, no repartido en doce", () => {
+    // DIVI: el burn lo mensualiza /12 (89/12 = 7.42 por mes, que no ocurrió nunca).
+    // El libro de egresos lo pone donde pasó de verdad.
+    const [divi] = leerHerramientas(
+      [filaTool(43, "DIVI", [null, null, null, null, null, null, 89, null, null, null, null, null])],
+      MESES,
+    );
+    expect(divi!.frecuencia).toBe("ANUAL");
+    expect(divi!.meses).toEqual([{ mes: 7, monto: 89, moneda: "USD", monedaInferida: true }]);
+  });
+
+  it("una herramienta que sube de precio se ve subiendo, no aplanada en la moda", () => {
+    const [h] = leerHerramientas([filaTool(32, "HubSpot", [535, 535, 535, 535, 535, 600, 600, 600, 600, 600, 600, 600])], MESES);
+    expect(h!.monto).toBe(600); // la moda, que es lo que usa el burn
+    expect(h!.meses.filter((m) => m.monto === 535).map((m) => m.mes)).toEqual([1, 2, 3, 4, 5]);
+    expect(h!.meses).toHaveLength(12);
+  });
+
+  it("sin cargos la serie es vacía, no un mes en cero", () => {
+    const [c] = leerHerramientas([filaTool(48, "Claude", new Array(12).fill(null))], MESES);
+    expect(c!.meses).toEqual([]);
+  });
+
+  it("con mapa de encabezado manda el encabezado, no la posición de la columna", () => {
+    // La defensa contra la columna insertada a mano: si la grilla se corre, el
+    // encabezado sigue diciendo la verdad y la serie no se desplaza en silencio.
+    const mapa = new Map(MESES.map((col, i) => [col, ((i + 6) % 12) + 1])); // corrida 6 meses
+    const [h] = leerHerramientas([filaTool(49, "SUPA BASE", [25, null, null, null, null, null, null, null, null, null, null, null])], MESES, mapa);
+    expect(h!.meses).toEqual([{ mes: 7, monto: 25, moneda: "USD", monedaInferida: true }]);
   });
 });

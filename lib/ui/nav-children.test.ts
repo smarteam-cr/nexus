@@ -107,11 +107,15 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(bloques.map((b) => b.section)).not.toContain("Costos y gastos");
   });
 
-  it("con rol de Costos aparecen los dos encabezados y la hoja suelta al final", () => {
+  it("con rol de Costos aparecen los dos encabezados y las hojas sueltas al final", () => {
     const bloques = groupNavChildren(visibleNavChildren(finanzas, { isCostos: true }));
     expect(bloques.map((b) => b.section)).toEqual(["Ingresos", "Costos y gastos", undefined]);
-    // La hoja suelta es la Caja neta: la síntesis de los dos bloques.
-    expect(bloques[bloques.length - 1].items.map((i) => i.href)).toEqual(["/finanzas/caja-neta"]);
+    // El run suelto son las dos SÍNTESIS de los bloques de arriba: la caja neta
+    // (entra − sale de acá en adelante) y el punto de equilibrio (el año cerrado).
+    expect(bloques[bloques.length - 1].items.map((i) => i.href)).toEqual([
+      "/finanzas/caja-neta",
+      "/finanzas/equilibrio",
+    ]);
   });
 
   it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 2", () => {

@@ -2670,3 +2670,86 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   **declarar el arranque de la serie**, como ya hace `coberturaDe`, y no fabricarla:
   los salarios pasados salen del libro —que sí trae la variación real del año— y
   los futuros de `CostoRecurrente`, con corte duro en hoy.
+
+## El reporte anual de equilibrio, y el tipo de cambio que sí existe (2026-08-17)
+
+> Elías, mostrando un reporte que había armado por fuera (`dev.smarteamcr.com/finanzas/`,
+> HTML estático con los números incrustados a mano): *"Quiero que el módulo de finanzas
+> sea capaz de poblar automáticamente un reporte como ese."* Y sobre el pasado:
+> *"Justo eso es lo que hay que hacer, reconstruir el pasado en modo histórico."*
+
+Es la sección anterior cobrada: el gráfico histórico que se había pospuesto, ahora pedido,
+con la salida que esa misma sección anticipó — declarar el arranque de la serie en vez de
+fabricarla.
+
+- **La prohibición de FX se ACOTA, no se levanta.** Las cuatro escrituras de la regla
+  (§Cobranza acá arriba, §El libro de planilla…, `lib/cobranza/tarjetas.ts` y
+  `lib/cobranza/comisiones.ts`) siguen enteras **para la base y para los motores**:
+  `engine.ts`, `tarjetas.ts`, `comisiones.ts`, `partners.ts`, `planilla.ts`,
+  `aguinaldo.ts` y todo lo que cuelga de `computeCajaNeta` **nunca** convierten, y la
+  plata se sigue guardando en su moneda nativa. Lo único nuevo es que **la capa de
+  presentación de UN reporte** puede convertir, con la tasa del mes, y **todo número
+  convertido lo declara**. La conversión vive en una sola función —`convertir()` de
+  `lib/finanzas/equilibrio.ts`— y un test estructural verifica que ningún motor la
+  importe: la doctrina la sostiene el test, no el comentario.
+- **Por eso `TipoCambioMes` es una tabla y no una constante.** Una tasa tecleada por una
+  persona, con su `fuente` en texto obligatoria, un mes por fila. `Decimal(12,4)` y no
+  `(12,2)`: una tasa no es dinero, y truncarla a centavos mete error sistemático en cada
+  conversión del año. **Sin tasa para un mes no se aproxima con la de otro**: el monto no
+  entra al total y aparece listado. Y sin ninguna tasa el reporte no se muestra — mostrar
+  los números "igual" es exactamente el caso que la regla existe para prevenir.
+  La frase de `tarjetas.ts` —*"un tipo de cambio que este sistema no tiene ni va a
+  tener"*— quedó falsa y se corrigió ahí mismo, no se dejó mintiendo.
+- **El equilibrio es el PROMEDIO de los gastos mensuales totales, no la fórmula de
+  contabilidad.** Decisión de Elías, con su razón: *"la fórmula clásica (costos fijos ÷
+  margen de contribución) funciona cuando vendés unidades con un costo variable claro por
+  unidad — no es tan directa para un negocio de servicios"*. Así que en vez de separar
+  fijo de variable se promedian los meses **confiables**, y lo interesante es qué cuenta
+  como confiable: el módulo devuelve **dos cifras** —solo meses medidos, y meses medidos
+  más planificados— con `mesesUsados[]` y `mesesExcluidos[{periodo, motivo}]`. Cero
+  exclusiones mudas. La segunda existe porque es la que dio el reporte original ($26.968,71
+  promediando abr–dic con dic todavía sin ocurrir) y hay que poder reencontrarla, rotulada.
+- **`EgresoMensual` es el libro de egresos, hermano de `PagoPlanilla`.** Una fila por
+  período × categoría × concepto, con la clave normalizada aparte del nombre legible
+  (mismo patrón que `PartnerComercial.clave`). Nace porque **el Excel de egresos ya trae
+  la variación mes a mes de herramientas y costos fijos, y el importador la leía y la
+  tiraba**: `leerCostosFijos` devolvía `meses[]` y se colapsaba a la moda; un concepto que
+  variaba entre meses ni se cargaba. Lo que se persiste ahora es ese detalle, no una
+  fuente nueva. Bonus: un pago ANUAL cae **en su mes real** en vez de mensualizarse /12.
+- **Extender `CostoMovimiento` estaba descartado antes de evaluarlo, y esa sección de acá
+  arriba dice por qué**: `updateCosto` estampa `fechaEfectiva = hoy` en cada cambio de
+  monto. Un fold "as-of" sobre esas filas da la línea plana, creíble y falsa. (Aparte y sin
+  relación con el reporte: `costoBase` acepta `fechaEfectiva` en el schema Zod y
+  `updateCosto` **nunca la lee** — hoy es imposible registrar un aumento con su fecha real.
+  Es un agujero hacia adelante que conviene cerrar, pero no fabrica el pasado.)
+- **PLANILLA y RESERVA_AGUINALDO tienen prohibido entrar a `EgresoMensual`, con un CHECK en
+  la base.** La planilla ya vive en `PagoPlanilla` —que es la única serie mensual REAL que
+  el sistema tenía— y la reserva se deriva de ahí. Escribirlas también acá las contaría dos
+  veces: el mismo error que `CorteTarjeta` evita al no sumarse con la comisión.
+- **La calidad del mes se DERIVA, no se guarda.** Ninguna columna `completo`/`parcial`: un
+  mes es completo si tiene sus dos quincenas de planilla y todos los conceptos que ese año
+  tuvo, y el módulo puro lo calcula nombrando **qué falta**. Guardar la etiqueta la
+  congelaría: el mismo mes cambia de calidad cuando llega el dato que le faltaba.
+- **Enero–marzo de costos fijos quedan PARCIALES para siempre**, y está bien. El bloque
+  izquierdo del Excel está oculto, con `#REF!` y moneda mezclada, y §…la carga de egresos ya
+  decidió no backfillearlo. Un mes vacío no es un mes barato: se declara, no se rellena.
+- **Dos números que conviven en vez de elegirse en silencio.** La reserva de aguinaldo: el
+  Excel divide entre 10 ($1.602,77/mes), Nexus entre 12 (`lib/finanzas/aguinaldo.ts`).
+  Ninguno es "el bug" — se muestra el de Nexus y se expone el del Excel con su aviso. Y el
+  solape entre TARJETA y HERRAMIENTA: el importador ya advertía que cargar tarjetas como
+  costo fijo *"duplicaría lo que ya cobran las herramientas"*, pero **el solape no se puede
+  medir** (`TarjetaCreditoCosto` está vacía y el Excel no dice qué herramienta se paga con
+  qué tarjeta). Se suman y se declara con severidad alta, en vez de decidirlo callado.
+- **El escenario editable NO persiste, y eso es la feature.** Mover el facturado de un mes
+  para ver la brecha es una pregunta, no un dato: vive en un `useState`, sin fetch, sin
+  `localStorage`, sin query param, y se muere al recargar. El componente **no recibe ningún
+  callback hacia el servidor** justamente para que nadie le enchufe un "guardar" de paso.
+  Que quede escrito acá: completarlo con persistencia no es terminar la feature, es otra.
+- **El reporte es SUPER_ADMIN, no ADMIN.** Mezcla ingresos con la estructura de costos y la
+  planilla, y la unión toma la sensibilidad máxima: `guardCostosAccess`, ruta bajo
+  `/finanzas/`, `EgresoMensual` con deny-all. Consecuencia asumida por Elías: **Alex, que
+  es quien registra facturaciones y comisiones, no lo ve**. `TipoCambioMes` en cambio NO
+  lleva deny-all —una tasa publicada no es sensible, mismo criterio que `PartnerComercial`.
+- **`CorteTarjeta` y `AguinaldoPago` siguen sin uso** (cero filas, cero referencias) y este
+  reporte **no los toca**. Se deja anotado para que la próxima búsqueda no los confunda con
+  una fuente disponible.

@@ -321,6 +321,121 @@ export function motivoParaNoCargar(c: ConceptoFijo): string | null {
   return null;
 }
 
+// ── Serie mensual (el detalle que hasta hoy se descartaba) ──────────────────────
+//
+// Todo lo de acá abajo es ADITIVO y no cambia una sola firma de arriba: el importador
+// de `CostoRecurrente` sigue leyendo `estable`, `variantes` y `frecuencia` igual que
+// siempre. Lo que se agrega es la OTRA pregunta.
+//
+// `estable` (la moda) contesta "cuánto cuesta esto normalmente" y alimenta el burn. El
+// reporte anual de equilibrio pregunta algo distinto —"cuánto costó en marzo"— y esa
+// respuesta ya estaba en `ConceptoFijo.meses` y en los cargos de cada herramienta: se
+// colapsaba antes de salir de este archivo. Peor, un concepto que varía mes a mes (la
+// patente que se triplica tres veces al año) ni siquiera se cargaba, y es justo el que
+// más se nota en una curva mensual.
+
+/** Un mes ya resuelto a número de CALENDARIO, listo para el libro de egresos. */
+export type SerieMensual = {
+  /** 1-12. El mes real, no el índice de la columna. */
+  mes: number;
+  monto: number;
+  moneda: Moneda;
+  monedaInferida: boolean;
+};
+
+/** Nombres de mes en español, en orden: el índice + 1 es el número de mes. */
+const MESES_ES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+/** Minúsculas y sin tildes, para que "Setiembre" y "septiembre" sean el mismo mes. */
+const sinTildes = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
+/**
+ * El número de mes (1-12) que declara un encabezado, o null si no se entiende.
+ *
+ * Acepta las tres formas en que esta hoja escribe un mes: el nombre completo
+ * ("Abril"), una abreviatura ("abr", "sept") y una FECHA real — las plantillas traen
+ * años basura (2022/2025) que acá no importan porque solo se lee el mes.
+ * "Setiembre" sin p entra: así se escribe en Costa Rica la mitad de las veces.
+ */
+export function mesDeEncabezado(valor: unknown): number | null {
+  if (valor instanceof Date) {
+    const m = valor.getUTCMonth() + 1;
+    return m >= 1 && m <= 12 ? m : null;
+  }
+  const texto = sinTildes(typeof valor === "string" ? valor : textoDe({ valor }));
+  if (!texto) return null;
+  if (texto.startsWith("setiembre") || texto.startsWith("set")) return 9;
+  const exacto = MESES_ES.findIndex((m) => texto.startsWith(m));
+  if (exacto >= 0) return exacto + 1;
+  // Abreviatura: solo vale si identifica a UN mes. "ma" es marzo y mayo a la vez, así
+  // que se devuelve null en vez de elegir el primero — un mes mal asignado no se ve.
+  const corto = texto.slice(0, 4).replace(/[^a-z]/g, "");
+  if (corto.length < 3) return null;
+  const candidatos = MESES_ES.map((m, k) => (m.startsWith(corto) ? k + 1 : 0)).filter((k) => k > 0);
+  return candidatos.length === 1 ? candidatos[0]! : null;
+}
+
+/**
+ * Lee la fila de encabezado de un bloque y devuelve `columna → mes (1-12)`.
+ *
+ * ⚠ POR QUÉ NO SE DERIVA CON ARITMÉTICA. Tentador: el bloque vivo arranca en la
+ * columna K, así que `mes = col - 6`. Funciona hasta que alguien inserta una columna a
+ * mano —cosa que a esta hoja le pasa seguido— y ahí la serie entera se corre un mes SIN
+ * UN SOLO ERROR: cada monto aterriza en el mes vecino, el total del año sigue cuadrando
+ * y nada avisa. Es la misma razón por la que `filasDelBloque` delimita por marcadores.
+ *
+ * Una columna cuyo encabezado no se entiende NO entra al mapa: el llamador la deja
+ * afuera y lo dice. Acá no se adivina.
+ */
+export function mesesDeEncabezado(fila: FilaCruda, columnas: number[]): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const col of columnas) {
+    const mes = mesDeEncabezado(fila.celdas[col - 1]?.valor);
+    if (mes !== null) out.set(col, mes);
+  }
+  return out;
+}
+
+/**
+ * Los `MesLeido[]` de un concepto, mapeados a meses de calendario.
+ *
+ * El CERO se conserva a propósito: en esta hoja un cero es un dato ("ese mes no se
+ * cobró") y una celda ilegible es otra cosa ("no se pudo leer"). Aplanar las dos a "no
+ * hay fila" haría que un mes sin lectura se viera igual que un mes gratis.
+ */
+export function serieMensualDe(
+  meses: MesLeido[],
+  mesPorColumna: Map<number, number>,
+): SerieMensual[] {
+  const out: SerieMensual[] = [];
+  for (const m of meses) {
+    if (m.monto === null) continue;
+    const mes = mesPorColumna.get(m.col);
+    if (mes === undefined) continue; // columna sin encabezado entendible
+    out.push({
+      mes,
+      monto: m.monto.monto,
+      moneda: m.monto.moneda,
+      monedaInferida: m.monto.monedaInferida,
+    });
+  }
+  return out.sort((a, b) => a.mes - b.mes);
+}
+
 // ── Herramientas ────────────────────────────────────────────────────────────────
 
 export type Herramienta = {
@@ -332,6 +447,14 @@ export type Herramienta = {
   frecuencia: "MENSUAL" | "ANUAL";
   /** Meses (índice 0-11) en los que la grilla trae ese monto. */
   mesesConCargo: number[];
+  /**
+   * El monto leído en CADA mes con cargo, con su mes de calendario (1-12).
+   *
+   * Es lo que `monto` (la moda) tapa: acá el pago ANUAL cae en SU mes en vez de
+   * mensualizarse /12, y una herramienta que subió de precio a mitad de año se ve
+   * subiendo. Lo consume el libro de egresos; el burn sigue usando `monto`.
+   */
+  meses: SerieMensual[];
   advertencias: string[];
 };
 
@@ -345,17 +468,31 @@ export type Herramienta = {
  * Un cargo en UN SOLO mes es un pago ANUAL (así están el hosting, el dominio y el
  * tema del sitio). El enum solo tiene MENSUAL|ANUAL, así que un anual se va a
  * mensualizar /12 en la proyección: el burn queda bien y el mes puntual no. Se
- * anota como advertencia en vez de inventar una frecuencia nueva.
+ * anota como advertencia en vez de inventar una frecuencia nueva. (El libro de
+ * egresos NO tiene ese problema: `Herramienta.meses` lo pone en su mes real.)
+ *
+ * `mesPorColumna` es OPCIONAL y solo afecta a `meses`: cuando el lector lo arma con
+ * `mesesDeEncabezado`, el mes sale del encabezado; cuando no, se cae al criterio
+ * posicional de siempre (la grilla son los 12 meses en orden), que es el mismo que
+ * `mesesConCargo` usa desde el día uno.
  */
-export function leerHerramientas(filas: FilaCruda[], columnas: number[]): Herramienta[] {
+export function leerHerramientas(
+  filas: FilaCruda[],
+  columnas: number[],
+  mesPorColumna?: Map<number, number>,
+): Herramienta[] {
   const out: Herramienta[] = [];
   for (const f of filas) {
     const nombre = textoDe(f.celdas[0]);
     if (!nombre || /^total/i.test(nombre)) continue;
 
     const cargos = columnas
-      .map((col, mes0) => ({ mes0, monto: montoFijoDeCelda(f.celdas[col - 1]) }))
-      .filter((m) => m.monto !== null && m.monto.monto > 0) as Array<{ mes0: number; monto: MontoLeido }>;
+      .map((col, mes0) => ({ col, mes0, monto: montoFijoDeCelda(f.celdas[col - 1]) }))
+      .filter((m) => m.monto !== null && m.monto.monto > 0) as Array<{
+      col: number;
+      mes0: number;
+      monto: MontoLeido;
+    }>;
 
     const advertencias: string[] = [];
     if (cargos.length === 0) {
@@ -366,6 +503,7 @@ export function leerHerramientas(filas: FilaCruda[], columnas: number[]): Herram
         moneda: "USD",
         frecuencia: "MENSUAL",
         mesesConCargo: [],
+        meses: [],
         advertencias: ["sin importe en ningún mes — no se carga"],
       });
       continue;
@@ -392,6 +530,22 @@ export function leerHerramientas(filas: FilaCruda[], columnas: number[]): Herram
       advertencias.push("cargo de un solo mes ⇒ ANUAL: la proyección lo mensualiza /12 y no cae en su mes real");
     }
 
+    // El mes sale del encabezado cuando el lector lo mapeó; si no, del orden de la
+    // grilla (los 12 meses del año), que es el criterio que `mesesConCargo` ya usa.
+    // Un cargo cuya columna no está en el mapa se DESCARTA de la serie en vez de
+    // caer en un mes inventado — pero sigue contando para `monto` y `frecuencia`.
+    const meses: SerieMensual[] = [];
+    for (const c of cargos) {
+      const mes = mesPorColumna ? mesPorColumna.get(c.col) : c.mes0 + 1;
+      if (mes === undefined || mes < 1 || mes > 12) continue;
+      meses.push({
+        mes,
+        monto: c.monto.monto,
+        moneda: c.monto.moneda,
+        monedaInferida: c.monto.monedaInferida,
+      });
+    }
+
     out.push({
       fila: f.fila,
       nombre,
@@ -399,6 +553,7 @@ export function leerHerramientas(filas: FilaCruda[], columnas: number[]): Herram
       moneda: cargos[0]!.monto.moneda,
       frecuencia,
       mesesConCargo: cargos.map((c) => c.mes0),
+      meses: meses.sort((a, b) => a.mes - b.mes),
       advertencias,
     });
   }

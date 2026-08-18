@@ -46,6 +46,7 @@ import type {
   planillaPagarSchema,
   pagoPlanillaPatchSchema,
   comisionPartnerCreateSchema,
+  comisionPartnerEstadoSchema,
   comisionPartnerPatchSchema,
   reglaComisionCreateSchema,
   reglaComisionPatchSchema,
@@ -891,9 +892,71 @@ export async function createComisionPartner(
       clientId: data.clientId ?? null,
       notas: data.notas ?? null,
       registradoPor: byEmail,
+      // El estado se puede declarar al anotar: una comisión que ya entró nace COBRADO
+      // (con su confirmación, INV20) y una que se espera nace POR_COBRAR.
+      // `confirmadoPor` sale del guard, NUNCA del body.
+      ...(data.estado === "COBRADO"
+        ? {
+            estado: "COBRADO" as const,
+            fechaCobro: dayUTC(data.fechaCobro ?? data.fecha),
+            confirmadoPor: byEmail,
+            confirmadoEn: new Date(),
+          }
+        : { estado: "POR_COBRAR" as const }),
     },
   });
   return { id: c.id };
+}
+
+/**
+ * EL ÚNICO ESCRITOR del estado de cobro de una comisión de aliado.
+ *
+ * Molde: `pagarQuincena`. Por qué es un chokepoint y no un campo más del PATCH:
+ * `estado = COBRADO` es una afirmación con consecuencia monetaria —significa "esta
+ * plata entró"— y INV20 exige que alguien la firme. Cuando un estado así tiene dos
+ * escritores, el invariante se rompe por el que nadie está mirando; ya pasó con los
+ * cobros que entraron por script.
+ *
+ * Volver a POR_COBRAR limpia fecha y confirmación: si no, quedaría una comisión que
+ * dice "todavía no entró" con la firma de quien confirmó que sí.
+ */
+export async function cambiarEstadoComisionPartner(
+  comisionId: string,
+  data: z.infer<typeof comisionPartnerEstadoSchema>,
+  byEmail: string,
+) {
+  if (!byEmail) {
+    throw new CobranzaError("Mover el estado de una comisión exige confirmación de un usuario.", 400);
+  }
+  const actual = await prisma.comisionPartner.findUnique({
+    where: { id: comisionId },
+    select: { id: true, estado: true },
+  });
+  if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  if (actual.estado === data.estado) {
+    throw new CobranzaError(
+      data.estado === "COBRADO" ? "Esa comisión ya está cobrada." : "Esa comisión ya está por cobrar.",
+      409,
+    );
+  }
+
+  await prisma.comisionPartner.update({
+    where: { id: comisionId },
+    data: {
+      estado: data.estado,
+      ...(data.estado === "COBRADO"
+        ? {
+            // El refine del schema garantiza que la fecha viene: marcarla cobrada sin
+            // ella la metería en la caja de un mes que nadie eligió.
+            fechaCobro: dayUTC(data.fechaCobro!),
+            confirmadoPor: byEmail,
+            confirmadoEn: new Date(),
+          }
+        : { fechaCobro: null, confirmadoPor: null, confirmadoEn: null }),
+      ...(data.notas !== undefined ? { notas: data.notas } : {}),
+    },
+  });
+  return { id: comisionId };
 }
 
 export async function updateComisionPartner(

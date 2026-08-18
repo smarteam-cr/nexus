@@ -39,7 +39,16 @@ import {
   type CicloTarjeta,
   type MonedaTarjeta,
 } from "./tarjetas";
-import { coberturaDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
+import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
+import {
+  calcularEquilibrio,
+  type EgresoDeMes,
+  type IngresoDeMes,
+  type MonedaEq,
+  type ReporteEquilibrio,
+  type TasaDeMes,
+  type VentanaEquilibrio,
+} from "@/lib/finanzas/equilibrio";
 import { normalizePartner } from "./schema";
 import {
   agruparPorCadencia,
@@ -1898,4 +1907,212 @@ async function devengarDesdeCobros(
     reglas,
     yaLiquidados,
   );
+}
+
+// ── Reporte anual de equilibrio (SUPER_ADMIN) ───────────────────────────────────
+// ⚠ PRIVACIDAD: mezcla ingresos con planilla y estructura de costos, así que toma la
+// sensibilidad MÁXIMA de lo que junta: se consume SOLO desde rutas con
+// `guardCostosAccess` y desde la página con `isCostosRole`. Consecuencia asumida y
+// escrita en DECISIONS: un ADMIN no lo ve, aunque sea quien registra las facturaciones.
+
+/** Cómo se imputó cada plata a su mes. Viaja con el reporte para poder rotularlo. */
+export interface ImputacionReporte {
+  /**
+   * Cobros COBRADO sin `fechaCobro`, imputados por su período de facturación.
+   * Si este número es alto, la curva de "cobrado" NO es una curva de caja y la
+   * pantalla tiene que decirlo — por eso viaja, en vez de resolverse en silencio.
+   */
+  cobradosSinFechaDeCobro: number;
+  /** Cuántos cobros COBRADO hay en el año (el denominador del anterior). */
+  cobradosTotales: number;
+  /** Meses del libro de planilla con una sola quincena registrada. */
+  mesesPlanillaIncompleta: string[];
+}
+
+export interface ReporteAnualDTO extends ReporteEquilibrio {
+  imputacion: ImputacionReporte;
+}
+
+/**
+ * El reporte anual de equilibrio, armado desde la base.
+ *
+ * Este loader NO calcula: lee, serializa a los tipos del módulo puro y delega en
+ * `calcularEquilibrio`. Toda la aritmética —incluida la única conversión de moneda del
+ * sistema— vive en `lib/finanzas/equilibrio.ts`, que se puede testear sin base.
+ *
+ * De dónde sale cada rubro del egreso:
+ *  · PLANILLA          `PagoPlanilla`, la ÚNICA serie mensual real que ya existía.
+ *                      Va por QUINCENA (dos "conceptos" por mes) para que un mes con
+ *                      una sola quincena salga PARCIAL en vez de parecer barato.
+ *  · RESERVA_AGUINALDO derivada del aguinaldo proyectado ÷ 12, repartida en los doce
+ *                      meses. Siempre ESTIMADO: es un devengo, no plata que se movió.
+ *  · el resto          `EgresoMensual`, el libro que siembra el Excel.
+ */
+export async function loadReporteAnual(
+  anio: number,
+  hoyISO: string,
+  opciones?: {
+    monedaPresentacion?: MonedaEq;
+    ventana?: VentanaEquilibrio;
+    divisorAguinaldo?: number;
+  },
+): Promise<ReporteAnualDTO> {
+  const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
+  const desde = dayUTC(`${anio}-01-01`);
+  const hasta = dayUTC(`${anio}-12-31`);
+
+  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo] = await Promise.all([
+    prisma.egresoMensual.findMany({
+      where: { periodo: { in: periodos } },
+      select: { periodo: true, categoria: true, concepto: true, conceptoClave: true, monto: true, moneda: true, monedaInferida: true },
+    }),
+    prisma.pagoPlanilla.findMany({
+      where: { periodo: { in: periodos } },
+      select: { periodo: true, quincena: true, monto: true, moneda: true },
+    }),
+    prisma.cobro.findMany({
+      where: { periodo: { in: periodos } },
+      select: {
+        periodo: true,
+        monto: true,
+        moneda: true,
+        estado: true,
+        fechaCobro: true,
+        servicio: { select: { tipoServicio: true } },
+      },
+    }),
+    prisma.comisionPartner.findMany({
+      where: { fecha: { gte: desde, lte: hasta } },
+      select: { fecha: true, monto: true, moneda: true, estado: true },
+    }),
+    prisma.tipoCambioMes.findMany({
+      where: { periodo: { in: periodos } },
+      select: { periodo: true, crcPorUsd: true, fuente: true },
+    }),
+    loadAguinaldo(anio, hoyISO),
+  ]);
+
+  const periodoHoy = periodoDe(hoyISO);
+  /** Un mes que todavía no ocurrió trae dato de PLAN, no medido. */
+  const calidadDe = (periodo: string) => (periodo > periodoHoy ? ("PLANIFICADO" as const) : ("MEDIDO" as const));
+
+  const egresos: EgresoDeMes[] = filasEgreso.map((f) => ({
+    periodo: f.periodo,
+    rubro: f.categoria as EgresoDeMes["rubro"],
+    concepto: f.concepto,
+    conceptoClave: f.conceptoClave,
+    monto: num(f.monto)!,
+    moneda: f.moneda as MonedaEq,
+    calidad: calidadDe(f.periodo),
+    monedaInferida: f.monedaInferida,
+  }));
+
+  // Planilla: una línea por (mes, quincena, moneda). La quincena es parte de la clave
+  // del concepto justamente para que falte visiblemente cuando falta.
+  const planillaAcc = new Map<string, { periodo: string; quincena: number; moneda: string; monto: number }>();
+  for (const p of filasPlanilla) {
+    const k = `${p.periodo}|${p.quincena}|${p.moneda}`;
+    const prev = planillaAcc.get(k);
+    if (prev) prev.monto = Math.round((prev.monto + num(p.monto)!) * 100) / 100;
+    else planillaAcc.set(k, { periodo: p.periodo, quincena: p.quincena, moneda: p.moneda, monto: num(p.monto)! });
+  }
+  for (const p of planillaAcc.values()) {
+    egresos.push({
+      periodo: p.periodo,
+      rubro: "PLANILLA",
+      concepto: `Planilla ${p.quincena}ª quincena`,
+      conceptoClave: `planilla-q${p.quincena}`,
+      monto: p.monto,
+      moneda: p.moneda as MonedaEq,
+      calidad: calidadDe(p.periodo),
+    });
+  }
+
+  // Reserva de aguinaldo: el proyectado del año ÷ 12, en cada mes. Por moneda separada
+  // (el aguinaldo nunca se convierte en su propio módulo; acá la conversión, si hace
+  // falta, la hace el reporte con la tasa del mes).
+  const divisor = opciones?.divisorAguinaldo ?? 12;
+  for (const [moneda, total] of Object.entries(aguinaldo.totalesProyectado)) {
+    if (!total) continue;
+    const mensual = Math.round((total / divisor) * 100) / 100;
+    for (const periodo of periodos) {
+      egresos.push({
+        periodo,
+        rubro: "RESERVA_AGUINALDO",
+        concepto: "Reserva de aguinaldo",
+        conceptoClave: "reserva-aguinaldo",
+        monto: mensual,
+        moneda: moneda as MonedaEq,
+        calidad: "ESTIMADO",
+      });
+    }
+  }
+
+  // ── Ingresos ────────────────────────────────────────────────────────────────
+  const ingresos: IngresoDeMes[] = [];
+  let cobradosSinFecha = 0;
+  let cobradosTotales = 0;
+  for (const c of filasCobro) {
+    const monto = num(c.monto)!;
+    const base = { monto, moneda: c.moneda as MonedaEq, tipoServicio: c.servicio.tipoServicio };
+    if (c.estado === "COBRADO") {
+      cobradosTotales++;
+      // El reloj del dinero es `fechaCobro`. Cuando falta se imputa por el período de
+      // facturación —que es lo único que hay— y se CUENTA, para poder rotularlo.
+      const iso = isoDay(c.fechaCobro);
+      if (!iso) cobradosSinFecha++;
+      ingresos.push({ ...base, periodo: iso ? periodoDe(iso) : c.periodo, tipo: "COBRADO" });
+      continue;
+    }
+    if (c.estado === "POR_COBRAR") {
+      ingresos.push({ ...base, periodo: c.periodo, tipo: "POR_COBRAR" });
+      continue;
+    }
+    // PROGRAMADO y SIN_DATO: ni siquiera se facturó. No es ingreso, es backlog.
+    ingresos.push({ ...base, periodo: c.periodo, tipo: "PROGRAMADO" });
+  }
+
+  for (const c of filasComision) {
+    const iso = isoDay(c.fecha)!;
+    ingresos.push({
+      periodo: periodoDe(iso),
+      tipo: "COMISION_PARTNER",
+      monto: num(c.monto)!,
+      moneda: c.moneda as MonedaEq,
+      tipoServicio: null,
+      // Una comisión prometida SUMA a los ingresos del mes (es plata devengada, igual
+      // que una factura sin cobrar), pero solo la COBRADA cuenta como caja. Las dos
+      // cifras viajan separadas para que nadie lea una promesa como plata en el banco.
+      cobrada: c.estado === "COBRADO",
+    });
+  }
+
+  const tasas: TasaDeMes[] = filasTasa.map((t) => ({
+    periodo: t.periodo,
+    crcPorUsd: num(t.crcPorUsd)!,
+    fuente: t.fuente,
+  }));
+
+  const mesesPlanillaIncompleta = periodos.filter((p) => {
+    const quincenas = new Set([...planillaAcc.values()].filter((x) => x.periodo === p).map((x) => x.quincena));
+    return quincenas.size === 1;
+  });
+
+  const reporte = calcularEquilibrio(egresos, ingresos, {
+    anio,
+    hoyISO,
+    monedaPresentacion: opciones?.monedaPresentacion ?? "USD",
+    ventana: opciones?.ventana ?? "SOLO_MEDIDOS",
+    tasas,
+    divisorAguinaldo: divisor,
+  });
+
+  return {
+    ...reporte,
+    imputacion: {
+      cobradosSinFechaDeCobro: cobradosSinFecha,
+      cobradosTotales,
+      mesesPlanillaIncompleta,
+    },
+  };
 }

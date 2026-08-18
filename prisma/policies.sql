@@ -176,6 +176,23 @@ CREATE POLICY deny_all_non_superuser ON "ComisionVendedor"
   TO PUBLIC
   USING (false);
 
+-- 8) `EgresoMensual` — el libro de egresos mes a mes (2026-08-17, reporte anual de
+--    equilibrio). Lleva la estructura de costos de la empresa concepto por concepto y
+--    el cargo de las tarjetas: pesa lo mismo que `CostoRecurrente` y `TarjetaCredito`,
+--    aunque el CHECK de la tabla impida que entren filas de PLANILLA (esas viven en
+--    `PagoPlanilla`, que ya está en la lista de arriba).
+--    ⚠ Su hermana `TipoCambioMes` NO va acá, a propósito: una tasa de cambio publicada
+--    no es información sensible — mismo criterio que `PartnerComercial`. Tiene RLS por
+--    el bloque dinámico del principio, que es lo que tapa al `anon` de Supabase.
+--    Nació en scripts/sql/2026-08-17-reporte-equilibrio.sql, que se corre UNA vez; vive
+--    acá para que `npm run db:policies` la RESTABLEZCA.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EgresoMensual";
+CREATE POLICY deny_all_non_superuser ON "EgresoMensual"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables

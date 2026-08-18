@@ -60,6 +60,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
   "finanzas/comisiones-partner": { modo: "own" },
+  // Siete indicadores + dos charts + una tabla de 12×10: no se parece a ninguna
+  // otra hoja de finanzas.
+  "finanzas/equilibrio": { modo: "own" },
 
   // ── Customer Success ────────────────────────────────────────────────────────
   "customer-success": { modo: "own" },

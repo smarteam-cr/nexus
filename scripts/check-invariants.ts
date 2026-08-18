@@ -966,6 +966,23 @@ async function main(): Promise<number> {
     console.log("✓ INV18: toda quincena PAGADA del libro tiene confirmadoPor.");
   }
 
+  // ── Inv 20: ninguna ComisionPartner COBRADA sin confirmadoPor (espejo de INV3 y
+  //    INV18; chokepoint: lib/cobranza/mutations.ts#cambiarEstadoComisionPartner).
+  //    Hace falta por lo mismo que en los cobros: `scripts/import-comisiones-partner.ts`
+  //    escribe filas POR FUERA de las mutations, y "esta plata entró" es una
+  //    afirmación que tiene que quedar firmada por alguien. ──
+  const comisionesSinConfirmar = await prisma.comisionPartner.count({
+    where: { estado: "COBRADO", confirmadoPor: null },
+  });
+  if (comisionesSinConfirmar > 0) {
+    violations++;
+    console.error(
+      `✗ INV20 VIOLADO: ${comisionesSinConfirmar} comisión(es) de aliado en estado COBRADO sin confirmadoPor (¿alguien escribió el estado sin pasar por el chokepoint?).`,
+    );
+  } else {
+    console.log("✓ INV20: toda comisión de aliado COBRADA tiene confirmadoPor.");
+  }
+
   return violations;
 }
 

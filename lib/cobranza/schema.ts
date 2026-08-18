@@ -373,8 +373,48 @@ const comisionPartnerBase = z.object({
   notas: z.string().trim().max(2000).nullable().optional(),
 });
 
-export const comisionPartnerCreateSchema = comisionPartnerBase;
+/** Espejo client-safe de ComisionPartnerEstado (sync con prisma/schema.prisma). */
+export const COMISION_PARTNER_ESTADOS = ["POR_COBRAR", "COBRADO"] as const;
+
+export const COMISION_PARTNER_ESTADO_LABEL: Record<string, string> = {
+  POR_COBRAR: "Por cobrar",
+  COBRADO: "Cobrada",
+};
+
+/**
+ * Al CREAR se puede declarar el estado: se anota una comisión que ya entró (COBRADO)
+ * o una que se espera (POR_COBRAR, el default). `confirmadoPor` JAMÁS entra por Zod —
+ * sale del guard, en la mutación.
+ */
+export const comisionPartnerCreateSchema = comisionPartnerBase.extend({
+  estado: z.enum(COMISION_PARTNER_ESTADOS).optional(),
+  fechaCobro: isoDateReal.nullable().optional(),
+});
+
+/**
+ * ⚠ El PATCH excluye `estado`, `fechaCobro` y los campos de confirmación: el estado
+ * solo se mueve por `cambiarEstadoComisionPartner`. Es la lección de la comisión de
+ * vendedor — cuando un estado con consecuencia monetaria tiene DOS escritores, el
+ * invariante se viola por el que nadie está mirando.
+ */
 export const comisionPartnerPatchSchema = comisionPartnerBase.partial();
+
+/**
+ * El cambio de estado de una comisión de aliado. Marcarla COBRADA exige la fecha en
+ * que entró la plata: sin ella, la comisión aparecería en la caja de un mes que nadie
+ * eligió. Volver a POR_COBRAR limpia fecha y confirmación (mismo revert que un Cobro).
+ */
+export const comisionPartnerEstadoSchema = z
+  .object({
+    estado: z.enum(COMISION_PARTNER_ESTADOS),
+    fechaCobro: isoDateReal.nullable().optional(),
+    notas: z.string().trim().max(2000).nullable().optional(),
+  })
+  .refine((d) => d.estado !== "COBRADO" || !!d.fechaCobro, {
+    message: "Para marcarla cobrada hace falta la fecha en que entró la plata.",
+    path: ["fechaCobro"],
+  });
+export type ComisionPartnerEstadoInput = z.infer<typeof comisionPartnerEstadoSchema>;
 
 // ── Costos recurrentes (fase 4 — SUPER_ADMIN-only) ─────────────────────────────
 // Espejos client-safe de los enums Prisma (mantener en sync con schema.prisma).
@@ -749,3 +789,43 @@ export const importFilaCanonicaSchema = z.object({
   notas: z.string().max(4000).nullish(),
 });
 export type ImportFilaCanonica = z.infer<typeof importFilaCanonicaSchema>;
+
+// ── Reporte anual de equilibrio ─────────────────────────────────────────────────
+
+/** Las dos ventanas del promedio (espejo de VentanaEquilibrio, client-safe). */
+export const VENTANAS_EQUILIBRIO = ["SOLO_MEDIDOS", "INCLUIR_PLANIFICADOS"] as const;
+
+export const VENTANA_EQUILIBRIO_LABEL: Record<string, string> = {
+  SOLO_MEDIDOS: "Solo meses medidos",
+  INCLUIR_PLANIFICADOS: "Incluyendo meses planificados",
+};
+
+/**
+ * Query del reporte anual. Todo opcional con default: la pantalla se abre sin
+ * parámetros y muestra el año en curso con la ventana conservadora.
+ * `anio` llega como string desde la URL — de ahí el coerce.
+ */
+export const reporteEquilibrioQuerySchema = z.object({
+  anio: z.coerce.number().int().min(2000, "Año fuera de rango").max(2100, "Año fuera de rango").optional(),
+  ventana: z.enum(VENTANAS_EQUILIBRIO).optional(),
+  moneda: z.enum(COBRANZA_MONEDAS).optional(),
+});
+export type ReporteEquilibrioQuery = z.infer<typeof reporteEquilibrioQuerySchema>;
+
+/**
+ * El tipo de cambio de un mes. `fuente` es OBLIGATORIA y no un `.optional()` de
+ * cortesía: un número de conversión sin procedencia no se puede auditar ni discutir,
+ * y este es el único dato del módulo que autoriza a mezclar dos monedas.
+ */
+export const tipoCambioUpsertSchema = z.object({
+  periodo: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El período va como YYYY-MM"),
+  // El rango espeja el CHECK de la base a propósito: uno atrapa la UI y el otro lo
+  // que entre por un script. Un 5.13 en vez de 513 pasa desapercibido de otro modo.
+  crcPorUsd: z.number().gt(50, "Tasa fuera de rango").lt(5000, "Tasa fuera de rango"),
+  fuente: z.string().trim().min(3, "Decí de dónde sale la tasa").max(200),
+  notas: z.string().max(2000).nullish(),
+});
+export type TipoCambioUpsert = z.infer<typeof tipoCambioUpsertSchema>;

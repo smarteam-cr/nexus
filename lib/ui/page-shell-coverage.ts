@@ -29,6 +29,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   documentacion: { shell: "SHELL_DEFAULT" },
   "customer-success/[clientId]": { shell: "SHELL_DEFAULT" },
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },
+  "finanzas/equilibrio": { shell: "SHELL_DEFAULT" },
   "finanzas/costos": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/herramientas": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/planillas": { shell: "SHELL_DEFAULT" },
