@@ -12,9 +12,14 @@
 -- una FK real, borrar un cliente se llevaría el registro de lo que YA se gastó en él y el total
 -- del mes cambiaría hacia atrás. Un libro de gasto no se reescribe.
 --
+-- ── APLICADA A PRODUCCIÓN el 2026-08-17 ──────────────────────────────────────
+-- Verificado: 17 columnas + 4 índices (el pkey y los 3 declarados), y Prisma la lee.
+--
 -- ── CÓMO SE CORRE ────────────────────────────────────────────────────────────
---   npx prisma db execute --file scripts/sql/2026-08-17-llm-call.sql --schema prisma/schema.prisma
+--   ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-08-17-llm-call.sql
 --   npx prisma generate
+-- ⚠ Prisma 7 RECHAZA `--schema` en `db execute` (la URL sale de prisma.config.ts). Los .sql
+--   viejos del repo documentan la forma de Prisma 6, que hoy falla con "unknown option".
 --   ⚠ y REINICIAR el dev server: sin eso el cliente en memoria queda viejo y las escrituras
 --     fallan en silencio (el error apunta a la consulta, no al proceso).
 --
