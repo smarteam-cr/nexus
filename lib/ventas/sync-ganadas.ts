@@ -201,9 +201,21 @@ export async function syncVentasGanadas(opciones: {
         continue;
       }
       const data = (await r.json()) as {
-        results?: Array<{ from: { id: string }; to: Array<{ toObjectId: string }> }>;
+        results?: Array<{
+          from: { id: string };
+          to: Array<{ toObjectId: string; associationTypes?: Array<{ label?: string | null; typeId?: number }> }>;
+        }>;
       };
-      for (const x of data.results ?? []) if (x.to?.[0]) companyDe.set(x.from.id, String(x.to[0].toObjectId));
+      for (const x of data.results ?? []) {
+        // ⚠ La empresa que manda es la que HubSpot marca PRIMARY, no la primera del
+        // arreglo. Un trato asociado a dos empresas (grupo y filial) quedaba atribuido a
+        // la que el API devolviera primero — orden que nadie garantiza.
+        const primaria = x.to?.find((t) =>
+          t.associationTypes?.some((a) => a.typeId === 5 || /primary/i.test(a.label ?? "")),
+        );
+        const elegida = primaria ?? x.to?.[0];
+        if (elegida) companyDe.set(x.from.id, String(elegida.toObjectId));
+      }
     }
 
     // ── 3. Los clientes de Nexus, para resolver ───────────────────────────────
@@ -213,20 +225,33 @@ export async function syncVentasGanadas(opciones: {
     const porCompany = new Map(clientes.filter((c) => c.hubspotCompanyId).map((c) => [c.hubspotCompanyId!, c]));
     const porNombre = new Map<string, typeof clientes>();
     for (const c of clientes) {
+      // ⚠ La CASA no entra al mapa. Los tratos suelen llevar "SMARTEAM" en el nombre
+      // ("ACCCSA + SMARTEAM | CONTRATO 2026", $25.200): si alguna vez se rompiera la
+      // asociación a la empresa, esa venta se atribuiría a Smarteam misma en vez de
+      // quedar sin resolver — y una venta mal atribuida es peor que una sin atribuir,
+      // porque nadie la busca.
+      if (/smarteam/i.test(c.name)) continue;
       const k = norm(c.name);
       if (k.length >= 6) porNombre.set(k, [...(porNombre.get(k) ?? []), c]);
     }
+    // ⚠ De más específico a más genérico. Recorriendo el Map en su orden de inserción
+    // ganaba el PRIMERO que calzara, y ese orden lo decide la consulta: entre "INVE" e
+    // "INVE Analisalab" resolvía cualquiera de los dos según el día.
+    const nombresPorLargo = [...porNombre.entries()].sort((a, b) => b[0].length - a[0].length);
     const resolverCliente = (dealId: string, dealName: string) => {
       const comp = companyDe.get(dealId);
       const directo = comp ? porCompany.get(comp) : undefined;
       if (directo) return { id: directo.id, via: "company", comp: comp ?? null };
       // El cliente nombrado dentro del trato: la venta de la madre que factura la hija.
       const completo = norm(dealName);
-      for (const [k, arr] of porNombre) {
+      for (const [k, arr] of nombresPorLargo) {
         if (completo.includes(k)) return { id: arr[0]!.id, via: "nombre", comp: comp ?? null };
       }
       return { id: null, via: null, comp: comp ?? null };
     };
+
+    /** Ids ya dados de alta en esta corrida — vale también en seco. */
+    const dadasDeAlta = new Set<string>();
 
     // ── 4. Guarda de sanidad ──────────────────────────────────────────────────
     // Las CONOCIDAS del rango: solo para la guarda y para saber cuáles dejaron de venir.
@@ -288,6 +313,11 @@ export async function syncVentasGanadas(opciones: {
 
       const previa = previas.get(d.id);
       if (!previa) {
+        // ⚠ En seco no hay fila que meter en `previas`, así que sin este set un trato
+        // repetido en la paginación se contaba dos veces como alta. El dry-run es
+        // justamente lo que alguien lee para decidir si aplicar: no puede exagerar.
+        if (dadasDeAlta.has(d.id)) continue;
+        dadasDeAlta.add(d.id);
         res.altas++;
         if (!opciones.dryRun) {
           const creada = await prisma.ventaGanada.create({ data: { hubspotDealId: d.id, ...datos } });
