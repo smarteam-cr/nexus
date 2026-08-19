@@ -34,7 +34,7 @@ CONTEXTO QUE RECIBIRÁS:
 - Título de la reunión
 - Participantes (emails + roles inferidos)
 - Transcript completo (puede estar truncado a 30K chars)
-- Lista de proyectos activos del cliente con: id, name, serviceType (loop_marketing | loop_sales | loop_service | proyecto_temporal), currentStage, fecha de creación del proyecto y fecha de cierre del deal ancla (cuando existe)
+- Lista de proyectos activos del cliente con: id, name, serviceType (loop_marketing | loop_sales | loop_service | proyecto_temporal), fecha de creación del proyecto y fecha de cierre del deal ancla (cuando existe)
 
 DEVUELVE SOLO UN JSON VÁLIDO con esta estructura exacta:
 

@@ -38,7 +38,6 @@ const DEUDA = {
     "app/(shell)/sessions/AnalysisPanel.tsx:469",
     "components/canvas/BlockRenderer.tsx:9",
     "components/charts/EChartRenderer.tsx:10",
-    "components/clients/ClientCanvasPanel.tsx:141",
     "components/clients/MinuteDialog.tsx:212",
     "components/clients/ProjectSessionsReview.tsx:152",
     "components/clients/SectionDiscoveryModal.tsx:9",

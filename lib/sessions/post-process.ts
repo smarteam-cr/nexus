@@ -163,7 +163,7 @@ export async function postProcessSession(
   const project = primaryProjectId
     ? await prisma.project.findUnique({
         where: { id: primaryProjectId },
-        select: { id: true, name: true, serviceType: true, currentStage: true, currentStep: true },
+        select: { id: true, name: true, serviceType: true },
       })
     : null;
 
@@ -198,7 +198,7 @@ export async function postProcessSession(
     `Nombre: ${client.name}`,
     client.company ? `Empresa: ${client.company}` : null,
     client.industry ? `Industria: ${client.industry}` : null,
-    project ? `\nProyecto activo: ${project.name} (etapa ${project.currentStage}, paso ${project.currentStep})` : "",
+    project ? `\nProyecto activo: ${project.name}` : "",
     "",
     `=== EQUIPO INTERNO (emails válidos para ownerEmail) ===`,
     teamRoster,

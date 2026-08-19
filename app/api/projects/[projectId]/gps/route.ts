@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { getStageSteps, STAGE_LABELS } from "@/lib/steps";
 import { withProjectAccess } from "@/lib/api";
 import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
@@ -102,8 +101,6 @@ export const GET = withProjectAccess(async (
       csNextSessionDate: true,
       csNextSessionNote: true,
       pendingItems: true,
-      currentStage: true,
-      currentStep: true,
       serviceType: true,
       hubspotServiceId: true,
       hubspotPipelineStageLabel: true,
@@ -138,8 +135,14 @@ export const GET = withProjectAccess(async (
      segundo lugar donde leer la etapa y pasó a ser el único. */
   const etapa = etapaParaLaUI(await getProjectLifecycle(projectId));
 
-  // Estado actual (HubSpot first, fallback a stage/step internos)
-  let currentState: string;
+  /* El rótulo PLANO de la etapa, y solo para los proyectos que vienen de HubSpot.
+     ⚠ Hasta el 2026-08-18 la rama de abajo INVENTABA uno para los que no: lo armaba con
+     `Project.currentStage`/`currentStep` y la tabla de `lib/steps.ts`, o sea con dos columnas
+     cuyo único escritor era una pantalla que este retiro borra. Resultado medido: 68 de 138
+     proyectos activos (el 49 %) mostraban «Etapa 1 → Análisis inicial» para siempre, sin que
+     nadie hubiera puesto nunca esa etapa. Ahora, sin dato, no se afirma nada: el widget pinta
+     el ciclo de vida real o no pinta el bloque. */
+  let currentState: string | null;
   if (project.hubspotServiceId) {
     /* ⚠ YA NO se pinta: lo reemplazó el bloque "Etapa", que sale de la etapa materializada.
        El campo se conserva para no romper una respuesta cacheada vieja, pero SIN la llamada
@@ -148,11 +151,7 @@ export const GET = withProjectAccess(async (
        vencimiento de los caches del sync (O2), el materializado está a lo sumo 10 min viejo. */
     currentState = project.hubspotPipelineStageLabel ?? "Sin etapa";
   } else {
-    const stageSteps = getStageSteps(project.serviceType);
-    const stageLabel = STAGE_LABELS[project.currentStage] ?? `Etapa ${project.currentStage}`;
-    const steps = stageSteps[project.currentStage] ?? [];
-    const stepLabel = steps[project.currentStep]?.label ?? `Paso ${project.currentStep + 1}`;
-    currentState = `${stageLabel} → ${stepLabel}`;
+    currentState = null;
   }
 
   /* QUÉ frentes se pintan, con qué rótulo y A QUIÉN mira cada uno lo decide el servidor

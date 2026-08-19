@@ -20,7 +20,7 @@ export async function GET(
       hubspotAccount: { select: { id: true, hubName: true, hubspotPortalId: true } },
       projects: {
         orderBy: { createdAt: "asc" },
-        select: { id: true, name: true, status: true, projectType: true, serviceType: true, tags: true, currentStage: true, currentStep: true },
+        select: { id: true, name: true, status: true, projectType: true, serviceType: true, tags: true },
       },
       _count: { select: { audits: true, documents: true } },
     },

@@ -88,7 +88,7 @@ interface GPSData {
   nextSessionNote: string | null;
   lastSessionSummary: string | null;
   pendingItems: PendingItem[];
-  currentState: string;
+  currentState: string | null;
 
   // Enriquecidos (nueva API)
   nextSession?: NextSessionInfo;
@@ -677,8 +677,12 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 overrideReason={etapa.curadaPorque}
                 size="md"
               />
-            ) : (
+            ) : data.currentState ? (
               <p className="text-sm font-medium text-fg">{data.currentState}</p>
+            ) : (
+              /* Sin etapa y sin rótulo: no se afirma nada. Un «Etapa 1 → Análisis inicial»
+                 inventado se lee como un dato del proyecto y no lo es. */
+              <p className="text-sm text-fg-muted">Sin etapa registrada</p>
             )}
           </div>
 

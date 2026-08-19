@@ -75,7 +75,7 @@ export async function classifySessionToProjects(
   const projects = await prisma.project.findMany({
     where: proyectoClasificableWhere({ clientId }),
     select: {
-      id: true, name: true, serviceType: true, currentStage: true,
+      id: true, name: true, serviceType: true,
       createdAt: true, hubspotCreatedAt: true, hubspotDealId: true,
     },
     orderBy: { createdAt: "desc" },
@@ -212,7 +212,7 @@ export async function classifySessionToProjects(
           ? day(closeDateByDeal.get(p.hubspotDealId)!)
           : "(deal sin fecha de cierre)"
         : "(sin deal — usá la fecha de creación como ancla temporal de la venta)";
-      return `- id: ${p.id} | name: "${p.name}" | serviceType: ${p.serviceType ?? "(none)"} | stage: ${p.currentStage} | creado: ${creado} | cierre del deal: ${cierre}`;
+      return `- id: ${p.id} | name: "${p.name}" | serviceType: ${p.serviceType ?? "(none)"} | creado: ${creado} | cierre del deal: ${cierre}`;
     })
     .join("\n");
 
