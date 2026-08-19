@@ -22,6 +22,13 @@ import { createScriptDb } from "./lib/db";
 
 const ANIO = process.argv.find((a) => a.startsWith("--anio="))?.split("=")[1] ?? "2026";
 const GANADAS = ["1373937254", "closedwon", "deal_registration_closed_won"];
+
+/**
+ * Deals de PRUEBA, que no son ventas. Se excluyen del total y se listan aparte para
+ * que la exclusión sea visible: un filtro silencioso es la forma más facil de perder
+ * una venta real que por casualidad se llamaba "test".
+ */
+const ES_PRUEBA = /(prueba|pruebas|test|testing|demo interno)/i;
 const PIPE: Record<string, string> = {
   default: "Ventas",
   "907198211": "Insider One",
@@ -110,6 +117,8 @@ const { prisma, close } = createScriptDb();
   const sinCobros: Caso[] = [];        // tiene cuenta, pero cero cobros
   const duplicado: Caso[] = [];        // el deal apunta a otra company: dato sucio en HubSpot
   const conCobranza: Caso[] = [];
+  const pruebas: Caso[] = [];        // deals de test: fuera del total, pero a la vista
+  const nombreDeal = (d: { id: string; p: Record<string, string | null> }) => d.p.dealname ?? d.id;
 
   for (const d of deals) {
     const pl = PIPE[d.p.pipeline ?? ""] ?? d.p.pipeline ?? "?";
@@ -118,6 +127,7 @@ const { prisma, close } = createScriptDb();
     g.n++; g.monto += monto; if (!monto) g.sinMonto++;
     totPipe.set(pl, g);
     if (pl !== "Ventas") continue;
+    if (ES_PRUEBA.test(nombreDeal(d))) { pruebas.push({ deal: nombreDeal(d), monto, cliente: null }); continue; }
     totMes.set((d.p.closedate ?? "").slice(0, 7), (totMes.get((d.p.closedate ?? "").slice(0, 7)) ?? 0) + monto);
 
     const nombre = d.p.dealname ?? d.id;
@@ -161,7 +171,10 @@ const { prisma, close } = createScriptDb();
   lista("⚠ HUECO — el cliente ni existe en Nexus", sinCliente);
   lista("ⓘ DATO SUCIO — el deal apunta a otra empresa de HubSpot (el cliente SÍ cobra)", duplicado);
   const huecos = suma(sinCuenta) + suma(sinCobros) + suma(sinCliente);
+  lista("ⓘ EXCLUIDOS — deals de prueba, no son ventas", pruebas);
+  const vendido = (totPipe.get("Ventas")?.monto ?? 0) - suma(pruebas);
   console.log(`
-  TOTAL EN HUECOS REALES: ${m(huecos)} de ${m(totPipe.get("Ventas")?.monto ?? 0)} vendidos`);
+  VENDIDO REAL (sin pruebas): ${m(vendido)}`);
+  console.log(`  TOTAL EN HUECOS: ${m(huecos)}  ·  ${Math.round((huecos / (vendido || 1)) * 100)}% de lo vendido`);
   await close();
 })().catch(async (e) => { console.error("ERR", e.message); await close(); process.exitCode = 1; });
