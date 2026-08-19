@@ -41,6 +41,13 @@ import {
 } from "./tarjetas";
 import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
 import {
+  detectarInconsistencias,
+  type EstadoParaAuditar,
+  type Inconsistencia,
+} from "@/lib/finanzas/inconsistencias";
+import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
+import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/sync-ganadas";
+import {
   calcularEquilibrio,
   type CostoVigente,
   type EgresoDeMes,
@@ -1932,6 +1939,8 @@ export interface ImputacionReporte {
 
 export interface ReporteAnualDTO extends ReporteEquilibrio {
   imputacion: ImputacionReporte;
+  /** Todo lo que no cuadra, en una sola lista y ordenado por la plata que mueve. */
+  inconsistencias: Inconsistencia[];
 }
 
 /**
@@ -2146,6 +2155,14 @@ export async function loadReporteAnual(
     costosVigentes,
   });
 
+  // ── La lista para sentarse con el CFO ───────────────────────────────────────
+  // Se arma acá y no en el motor puro porque mira cosas que el reporte no toca: ventas,
+  // vínculos con HubSpot, servicios sin plan de cobro. El motor sigue contestando "cuánto
+  // cuesta y cuánto entra"; esto contesta "qué falta arreglar".
+  const inconsistencias = detectarInconsistencias(
+    await armarEstadoParaAuditar(anio, hoyISO, reporte, cobradosSinFecha, cobradosTotales, divisor),
+  );
+
   return {
     ...reporte,
     imputacion: {
@@ -2153,5 +2170,144 @@ export async function loadReporteAnual(
       cobradosTotales,
       mesesPlanillaIncompleta,
     },
+    inconsistencias,
+  };
+}
+
+/**
+ * Junta de la base todo lo que hace falta para auditar. Es una función aparte porque son
+ * seis lecturas que no tienen nada que ver con el equilibrio: mezclarlas en el loader
+ * haría creer que el reporte depende de ellas, y no — si esto fallara, el reporte sigue.
+ */
+async function armarEstadoParaAuditar(
+  anio: number,
+  hoyISO: string,
+  reporte: ReporteEquilibrio,
+  cobradosSinFecha: number,
+  cobradosTotales: number,
+  divisorAguinaldo: number,
+): Promise<EstadoParaAuditar> {
+  const desde = dayUTC(`${anio}-01-01`);
+  const hasta = dayUTC(`${anio}-12-31`);
+
+  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas] = await Promise.all([
+    prisma.ventaGanada.findMany({
+      where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
+      select: {
+        nombre: true, monto: true, moneda: true, montoConvertidoHubspot: true,
+        pipelineId: true, clientId: true, clienteVia: true, excluida: true,
+      },
+    }),
+    prisma.comisionPartner.findMany({
+      where: { estado: "POR_COBRAR", fecha: { gte: desde, lte: hasta } },
+      select: { partner: true, monto: true, fecha: true },
+    }),
+    prisma.servicioContratado.findMany({
+      where: { cobros: { none: {} }, estado: "ACTIVO" },
+      select: { montoTotal: true, moneda: true, cuenta: { select: { client: { select: { name: true } } } } },
+    }),
+    prisma.client.findMany({
+      where: { cuentaFinanciera: { isNot: null }, hubspotCompanyId: null },
+      select: { name: true },
+    }),
+    prisma.cobro.groupBy({
+      by: ["cuentaId"],
+      where: { periodo: { startsWith: String(anio) }, estado: { in: ["COBRADO", "POR_COBRAR"] } },
+      _sum: { monto: true },
+    }),
+    prisma.cuentaFinanciera.findMany({ select: { id: true, clientId: true } }),
+  ]);
+
+  // Lo facturado por cliente, para poder medir el hueco por MONTO y no por un sí/no.
+  const clienteDeCuenta = new Map(cuentas.map((c) => [c.id, c.clientId]));
+  const facturadoPorCliente = new Map<string, number>();
+  for (const c of cobrosPorCuenta) {
+    const cli = clienteDeCuenta.get(c.cuentaId);
+    if (!cli) continue;
+    facturadoPorCliente.set(cli, (facturadoPorCliente.get(cli) ?? 0) + Number(c._sum.monto ?? 0));
+  }
+
+  const resumen = clasificarVentas(
+    ventas.map((v) => ({
+      hubspotDealId: "",
+      nombre: v.nombre,
+      fechaCierre: `${anio}-01-01`, // la fecha exacta no importa para el hueco
+      monto: v.montoConvertidoHubspot !== null ? num(v.montoConvertidoHubspot) : num(v.monto),
+      pipelineId: v.pipelineId,
+      clientId: v.clientId,
+      excluida: v.excluida,
+      sospechaPrueba: false,
+    })),
+    [...facturadoPorCliente.entries()].map(([clientId, facturado]) => ({ clientId, facturado })),
+    { anio, pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA] },
+  );
+
+  const descubiertas = resumen.ventas
+    .filter((v) => v.descubierto > 0)
+    .sort((a, b) => b.descubierto - a.descubierto)
+    .slice(0, 8)
+    .map((v) => `${v.nombre} · ${v.descubierto.toLocaleString("es-CR", { style: "currency", currency: "USD" })}`);
+
+  // El desvío de cambio solo se puede medir donde HubSpot ya convirtió y la moneda no es
+  // la de presentación: ahí conviven dos tasas y conviene que se vea.
+  const tasaDelAnio = reporte.fx.tasas[0]?.crcPorUsd ?? null;
+  const desvios = ventas
+    .filter((v) => v.moneda !== reporte.monedaPresentacion && v.monto !== null && v.montoConvertidoHubspot !== null)
+    .map((v) => ({
+      concepto: v.nombre,
+      segunNexus: tasaDelAnio ? Math.round((num(v.monto)! / tasaDelAnio) * 100) / 100 : 0,
+      segunHubspot: num(v.montoConvertidoHubspot)!,
+    }))
+    .filter((d) => d.segunNexus > 0 && Math.abs(d.segunHubspot - d.segunNexus) > 1);
+
+  const avisoTarjeta = reporte.calidad.avisos.find((a) => a.codigo === "TARJETA_SOLAPA_HERRAMIENTAS");
+  const avisoMoneda = reporte.calidad.avisos.find((a) => a.codigo === "MONEDA_INFERIDA");
+  const reservaNexus = reporte.equilibrio.reservaAguinaldoMensual;
+
+  return {
+    anio,
+    hoyISO,
+    facturadoTotal: reporte.indicadores.facturadoTotal,
+    mesesParciales: reporte.meses
+      .filter((m) => m.estado === "PARCIAL" && m.faltantes.length > 0)
+      .map((m) => ({ periodo: m.periodo, faltantes: m.faltantes })),
+    ventas: {
+      vendido: resumen.vendido,
+      sinCobranza: { cuantas: resumen.porClase.SIN_COBRANZA.cuantas, monto: resumen.porClase.SIN_COBRANZA.descubierto },
+      parcial: { cuantas: resumen.porClase.PARCIAL.cuantas, monto: resumen.porClase.PARCIAL.descubierto },
+      sinCliente: { cuantas: resumen.porClase.SIN_CLIENTE.cuantas, monto: resumen.porClase.SIN_CLIENTE.descubierto },
+      sinMonto: {
+        cuantas: ventas.filter((v) => v.monto === null).length,
+        items: ventas.filter((v) => v.monto === null).map((v) => v.nombre).slice(0, 15),
+      },
+      resueltasPorNombre: {
+        cuantas: ventas.filter((v) => v.clienteVia === "nombre").length,
+        items: ventas.filter((v) => v.clienteVia === "nombre").map((v) => v.nombre),
+      },
+      fueraDePipeline: resumen.fueraDePipeline,
+      peoresDescubiertas: descubiertas,
+    },
+    comisionesVencidas: comisiones.map((c) => ({
+      partner: c.partner,
+      monto: num(c.monto)!,
+      fecha: isoDay(c.fecha)!,
+    })),
+    serviciosSinCobros: {
+      cuantas: serviciosSinCobros.length,
+      monto: serviciosSinCobros.reduce((n, s) => n + num(s.montoTotal)!, 0),
+      items: serviciosSinCobros.map((s) => `${s.cuenta.client?.name ?? "(sin cliente)"} · ${num(s.montoTotal)}`),
+    },
+    cuentasSinEmpresa: { cuantas: cuentasSinEmpresa.length, items: cuentasSinEmpresa.map((c) => c.name) },
+    cobradosSinFecha: { cuantas: cobradosSinFecha, total: cobradosTotales },
+    periodosSinTasa: reporte.fx.periodosSinTasa,
+    monedaInferida: avisoMoneda?.conceptos ?? [],
+    desviosDeCambio: desvios,
+    tarjetaYHerramientas: { hay: !!avisoTarjeta, periodos: avisoTarjeta?.periodos ?? [] },
+    // El criterio del Excel es dividir entre 10 en vez de 12: se reconstruye desde el de
+    // Nexus para poder mostrar los dos sin volver a leer la hoja.
+    aguinaldo:
+      reservaNexus > 0
+        ? { segunNexus: reservaNexus, segunExcel: Math.round(((reservaNexus * divisorAguinaldo) / 10) * 100) / 100 }
+        : null,
   };
 }

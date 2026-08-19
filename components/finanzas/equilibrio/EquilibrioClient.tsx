@@ -33,6 +33,7 @@ import DesgloseIngresos from "./DesgloseIngresos";
 import TablaMeses from "./TablaMeses";
 import EstructuraCostos from "./EstructuraCostos";
 import ConfiabilidadDato from "./ConfiabilidadDato";
+import InconsistenciasPanel from "./InconsistenciasPanel";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -305,6 +306,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             <EstructuraCostos estructura={r.estructura} moneda={moneda} />
             <ConfiabilidadDato calidad={r.calidad} imputacion={r.imputacion} />
           </div>
+
+          {/* El cierre del reporte: la agenda para sentarse con el CFO. Va al final a
+              propósito — primero se ve el año, después qué falta para creérselo. */}
+          <InconsistenciasPanel inconsistencias={r.inconsistencias} moneda={moneda} />
 
           {r.equilibrio.mesesExcluidos.length > 0 && (
             <p className="text-[11px] text-fg-muted">

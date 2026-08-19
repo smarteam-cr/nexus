@@ -14,11 +14,15 @@
  *   - cs-watchdog-daily → sweep del watchdog (L–V ≥ 7:00 CR, tras las señales),
  *     con pre-filtro determinístico. Gated por env + CsSettings.watchdogEnabled.
  *   - cs-watchdog-debounce → triage de eventos "quiesced" (>15 min), cada tick.
+ *   - ventas-ganadas-daily → espejo de los tratos ganados de HubSpot (lo VENDIDO del
+ *     año, con su fecha de cierre). Diario ≥ 6:00 CR, incluidos fines de semana: un
+ *     trato se gana cualquier día, y el reporte anual lo lee de la base.
  */
 import { tickMarketingCron } from "@/lib/marketing/cron";
 import { prisma } from "@/lib/db/prisma";
 import { refreshAllCsSignals } from "@/lib/hubspot/cs-signals";
 import { syncPartnerClients } from "@/lib/cs/partner-sync";
+import { syncVentasGanadas } from "@/lib/ventas/sync-ganadas";
 import { watchdogJobs } from "@/lib/cs/watchdog";
 import { claimDateKey, type JobDef } from "./registry";
 import { WEEKDAYS_MON_FRI } from "./time";
@@ -165,7 +169,41 @@ const googleEnrichRetry: JobDef = {
   },
 };
 
+/**
+ * El espejo de lo VENDIDO. Se sincroniza el AÑO EN CURSO, no todo el histórico: los años
+ * cerrados se cargan una vez con scripts/backfill-ventas-ganadas.ts y no hace falta
+ * volver a pedirlos todos los días.
+ *
+ * ⚠ Corre TODOS los días, no solo de lunes a viernes como los de Éxito del cliente: los
+ * tratos se cierran cuando se cierran, y el lunes a la mañana el reporte tiene que estar
+ * al día. El sync tiene su propio lock cross-máquina, así que el claim del día es solo
+ * para no repetir trabajo dentro de la misma jornada.
+ */
+const ventasGanadasDaily: JobDef = {
+  key: "ventas-ganadas-daily",
+  shouldRun: (_now, parts) => parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("ventas-ganadas-daily", dateKey, now))) return;
+    const anio = dateKey.slice(0, 4);
+    const r = await syncVentasGanadas({ desde: `${anio}-01-01`, hasta: `${anio}-12-31` });
+    // Lock ajeno o corrida parcial: los dos son transitorios. Se libera el claim del día
+    // para que el próximo tick reintente, mismo criterio que cs-partner-daily.
+    if (r.locked || r.parcial) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "ventas-ganadas-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.log(`[jobs/ventas-ganadas] ${dateKey} — ${r.locked ? "lock ajeno" : "corrida PARCIAL"}; claim liberado para reintentar`);
+      return;
+    }
+    console.log(
+      `[jobs/ventas-ganadas] ${dateKey} — ${r.traidas} tratos: ${r.altas} nuevos, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.reclasificadas} reclasificados${r.sinMonto ? `, ${r.sinMonto} sin monto` : ""}${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+    );
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily];
 }
