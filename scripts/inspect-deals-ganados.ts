@@ -93,18 +93,41 @@ const { prisma, close } = createScriptDb();
     const k = norm(c.name);
     porNombre.set(k, [...(porNombre.get(k) ?? []), c]);
   }
-  /** Busca por company y, si falla, por el nombre del deal contra el del cliente. */
+  /**
+   * De qué cliente es un trato. TRES vías, de la más firme a la más blanda:
+   *
+   *   1. company  — la empresa que HubSpot tiene asociada al trato. Es la buena.
+   *   2. cabeza   — el nombre del trato ARRANCA con el cliente ("AMVAC | CRECIMIENTO WEB").
+   *   3. mención  — el cliente aparece EN MEDIO del nombre del trato.
+   *
+   * ⚠ La tercera existe porque las ventas se registran en la empresa MADRE y la
+   * facturación cuelga de la hija, y esa relación no está en ningún sistema — ni en
+   * HubSpot (no hay asociación madre/hija en este portal) ni en Nexus. Solo vive en el
+   * nombre del trato. Casos medidos: "Grupo Inve - AnalisaLab - Proyecto de
+   * implementación" ($9.500) es la venta del servicio que cuelga del cliente
+   * "Analisalab"; Corrugando factura contra una venta vieja de ACCCSA.
+   * Sin esta vía, 24 servicios ($96.577, el 42% del año facturado) parecían no tener
+   * NINGUNA venta detrás — y era el cruce el que no la encontraba, no la venta la que
+   * faltaba.
+   *
+   * Umbral de 6 caracteres: por debajo, un nombre corto pega en cualquier lado.
+   */
   const resolver = (compId: string | undefined, dealName: string) => {
     const directo = compId ? porCompany.get(compId) : undefined;
     if (directo) return { cli: directo, via: "company" as const };
-    // El nombre del deal arranca con el cliente ("AMVAC | CRECIMIENTO WEB").
+    const elMejor = (arr: typeof todos) =>
+      arr.find((c) => c.cuentaFinanciera?.servicios.some((s) => s.cobros.length > 0)) ?? arr[0];
+
     const cabeza = norm(dealName.split(/[|\-–]/)[0] ?? "");
-    if (cabeza.length < 4) return { cli: undefined, via: "nada" as const };
-    for (const [k, arr] of porNombre) {
-      if (k.startsWith(cabeza) || cabeza.startsWith(k)) {
-        const conCobros = arr.find((c) => c.cuentaFinanciera?.servicios.some((s) => s.cobros.length > 0));
-        return { cli: conCobros ?? arr[0], via: "nombre" as const };
+    if (cabeza.length >= 4) {
+      for (const [k, arr] of porNombre) {
+        if (k.startsWith(cabeza) || cabeza.startsWith(k)) return { cli: elMejor(arr), via: "cabeza" as const };
       }
+    }
+    // El cliente nombrado en medio del trato: la venta de la madre que factura la hija.
+    const completo = norm(dealName);
+    for (const [k, arr] of porNombre) {
+      if (k.length >= 6 && completo.includes(k)) return { cli: elMejor(arr), via: "mencion" as const };
     }
     return { cli: undefined, via: "nada" as const };
   };
@@ -135,7 +158,10 @@ const { prisma, close } = createScriptDb();
     const caso: Caso = { deal: nombre, monto, cliente: cli?.name ?? null };
     if (!cli) { sinCliente.push(caso); continue; }
     const tieneCobros = cli.cuentaFinanciera?.servicios.some((s) => s.cobros.length > 0) ?? false;
-    if (tieneCobros) { (via === "nombre" ? duplicado : conCobranza).push(caso); continue; }
+    // Que el trato se haya resuelto por NOMBRE y no por empresa es en sí un hallazgo:
+    // significa que HubSpot tiene la venta colgada de otra empresa que la que Nexus
+    // factura (empresa duplicada, o la madre del grupo).
+    if (tieneCobros) { (via === "company" ? conCobranza : duplicado).push(caso); continue; }
     (cli.cuentaFinanciera ? sinCobros : sinCuenta).push(caso);
   }
 
