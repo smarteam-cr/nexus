@@ -54,7 +54,12 @@ export interface ResumenVentas {
   vendido: number;
   cuantas: number;
   /** Ventas que el filtro de pipeline dejó afuera, para poder declararlas. */
-  fueraDePipeline: { cuantas: number; monto: number };
+  /**
+   * Los que quedaron fuera del alcance por su pipeline. `sinMonto` es cuántos de ellos
+   * no traen monto en HubSpot: sin él, `monto` es un PISO y no el total, y decir "31
+   * tratos por $211.020" sonaría a que están los 31 adentro.
+   */
+  fueraDePipeline: { cuantas: number; monto: number; sinMonto: number };
   excluidas: { cuantas: number; monto: number };
   sinConvertir: { cuantas: number; monto: number };
   /** El hueco, medido por MONTO. */
@@ -96,7 +101,7 @@ export function clasificarVentas(
 
   const cuentan = new Set(opciones.pipelinesQueCuentan);
   const clasificadas: VentaClasificada[] = [];
-  const fuera = { cuantas: 0, monto: 0 };
+  const fuera = { cuantas: 0, monto: 0, sinMonto: 0 };
   const excluidas = { cuantas: 0, monto: 0 };
   const sinConvertir = { cuantas: 0, monto: 0 };
   const porMes = new Map<string, { vendido: number; cuantas: number }>();
@@ -118,6 +123,7 @@ export function clasificarVentas(
     }
     if (!cuentan.has(v.pipelineId)) {
       fuera.cuantas++;
+      if (v.monto === null) fuera.sinMonto++;
       fuera.monto = round2(fuera.monto + (v.monto ?? 0));
       continue; // fuera del alcance: no entra a ninguna clase ni al vendido
     }

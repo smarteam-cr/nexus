@@ -128,13 +128,23 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
 }
 
 /**
- * El escenario "igualar al equilibrio": cada mes aterriza exactamente sobre la línea
- * del piso. El partnership ya cuenta como ingreso, así que lo que hay que facturar es
- * el piso MENOS lo que deja el aliado ese mes (nunca menos de cero).
+ * El escenario "igualar al equilibrio": que NINGÚN mes quede por debajo de la línea.
+ *
+ * El partnership ya cuenta como ingreso, así que lo que hay que facturar es el piso
+ * MENOS lo que deja el aliado ese mes, y nunca menos de cero.
+ *
+ * ⚠ SUBE, NO EMPAREJA. La primera versión le ponía a todos los meses exactamente el
+ * piso, y con eso BAJABA los que ya facturaban por encima: el escenario terminaba
+ * mostrando un año PEOR que el real, debajo de un botón que se lee como una aspiración.
+ * Nadie se pregunta "¿y si hubiera facturado menos?". La pregunta es qué falta, así que
+ * un mes que ya cubre se queda como está.
  */
 export function igualarAlEquilibrio(meses: readonly FilaMes[], piso: number): OverrideEscenario {
   const out: OverrideEscenario = {};
-  for (const m of meses) out[m.periodo] = round2(Math.max(0, piso - m.partnership));
+  for (const m of meses) {
+    const necesario = Math.max(0, piso - m.partnership);
+    out[m.periodo] = round2(Math.max(necesario, m.facturado));
+  }
   return out;
 }
 

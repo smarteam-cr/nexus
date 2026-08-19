@@ -57,8 +57,15 @@ export interface Inconsistencia {
 /** El estado medido que hace falta para armar la lista. */
 export interface EstadoParaAuditar {
   anio: number;
-  /** Meses del año con el egreso incompleto, y qué les falta. */
-  mesesParciales: Array<{ periodo: string; faltantes: string[] }>;
+  /**
+   * Meses del año con el egreso incompleto, y qué les falta.
+   *
+   * `futuro` separa dos cosas que NO son el mismo problema: un mes que todavía no
+   * ocurrió está incompleto porque no pasó, y no hay nada que cargar; uno que ya pasó
+   * está incompleto porque falta el dato. Juntarlos hacía que el aviso dijera "8 meses"
+   * cuando lo accionable eran 3, y un aviso que exagera se deja de leer.
+   */
+  mesesParciales: Array<{ periodo: string; faltantes: string[]; futuro: boolean }>;
   /** Lo facturado del año, para poder dar proporciones. */
   facturadoTotal: number;
   /** Ventas ganadas sin respaldo completo en cobranza, por clase. */
@@ -69,7 +76,7 @@ export interface EstadoParaAuditar {
     sinCliente: { cuantas: number; monto: number };
     sinMonto: { cuantas: number; items: string[] };
     resueltasPorNombre: { cuantas: number; items: string[] };
-    fueraDePipeline: { cuantas: number; monto: number };
+    fueraDePipeline: { cuantas: number; monto: number; sinMonto: number };
     /** Nombres de las ventas descubiertas más caras, para poder empezar por ahí. */
     peoresDescubiertas: string[];
   };
@@ -144,19 +151,26 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
   }
 
   // ── Egresos incompletos ─────────────────────────────────────────────────────
-  if (e.mesesParciales.length > 0) {
+  // Solo los meses que YA PASARON: en uno que todavía no ocurrió no hay nada que cargar,
+  // y contarlo acá convertía un aviso de 3 meses accionables en uno de 8.
+  const parcialesPasados = e.mesesParciales.filter((m) => !m.futuro);
+  const parcialesFuturos = e.mesesParciales.length - parcialesPasados.length;
+  if (parcialesPasados.length > 0) {
     out.push({
       codigo: "EGRESO_INCOMPLETO",
       severidad: "ALTA",
-      titulo: `${e.mesesParciales.length} de 12 meses con el gasto incompleto`,
+      titulo: `${parcialesPasados.length} de 12 meses con el gasto incompleto`,
       detalle:
         "Esos meses quedan fuera del promedio que define el piso mensual, y su brecha se ve mejor de lo que es " +
-        "porque falta parte del costo. El piso se calcula solo con los meses completos.",
+        "porque falta parte del costo. El piso se calcula solo con los meses completos." +
+        (parcialesFuturos > 0
+          ? ` (Otros ${parcialesFuturos} meses figuran incompletos porque todavía no ocurrieron: eso es lo esperable, no hay nada que cargar ahí.)`
+          : ""),
       montoEnJuego: null,
       queHacer:
         "Cargar lo que falta en cada mes. Lo de enero a marzo no es recuperable del Excel (ese bloque tiene las fórmulas rotas y mezcla monedas): si hace falta, hay que reconstruirlo de otra fuente.",
       resuelve: "COBRANZA",
-      items: e.mesesParciales.map((m) => `${m.periodo}: falta ${m.faltantes.join(", ")}`),
+      items: parcialesPasados.map((m) => `${m.periodo}: falta ${m.faltantes.join(", ")}`),
     });
   }
 
@@ -269,7 +283,10 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       detalle:
         `Hay ${e.ventas.fueraDePipeline.cuantas} tratos ganados por ${money(e.ventas.fueraDePipeline.monto)} en el ` +
         "circuito de venta compartida. Hoy NO se cuentan como venta propia, porque son registro de oportunidad y no " +
-        "facturación de la casa. El dato está guardado: si se decide que cuentan, es prender un filtro.",
+        "facturación de la casa. El dato está guardado: si se decide que cuentan, es prender un filtro." +
+        (e.ventas.fueraDePipeline.sinMonto > 0
+          ? ` ⚠ Ese monto es un PISO, no el total: ${e.ventas.fueraDePipeline.sinMonto} de los ${e.ventas.fueraDePipeline.cuantas} tratos no traen monto en HubSpot y cuentan como cero.`
+          : ""),
       montoEnJuego: e.ventas.fueraDePipeline.monto,
       queHacer: "Decidir si esos tratos son venta propia. Si lo son, el vendido del año cambia de golpe.",
       resuelve: "DIRECCION",
@@ -355,8 +372,13 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         `El reporte reserva ${money(e.aguinaldo.segunNexus)} al mes: el total del año repartido en doce. La hoja de ` +
         `egresos lo reparte en diez, que sobre ese mismo total serían ${money(e.aguinaldo.segunExcel)}. Ninguno de ` +
         `los dos es un error: son dos criterios. (El número que muestra la hoja además parte de un total distinto, ` +
-        `porque le proyecta a una persona un aguinaldo que el libro de planilla no respalda.)`,
-      montoEnJuego: round2(Math.abs(e.aguinaldo.segunNexus - e.aguinaldo.segunExcel) * 12),
+        `porque le proyecta a una persona un aguinaldo que el libro de planilla no respalda.)` +
+        ` El AÑO cuesta lo mismo con cualquiera de los dos —es el mismo total repartido— así que lo único que ` +
+        `cambia es el piso mensual, y cambia en ${money(round2(Math.abs(e.aguinaldo.segunNexus - e.aguinaldo.segunExcel)))}.`,
+      // ⚠ NO es la diferencia mensual por doce. Los dos criterios reparten EL MISMO total
+      // anual (12 × T/12 = T = 10 × T/10), así que multiplicar por doce fabricaba $3.028
+      // "en juego" que no existen en ningún lado. Lo que de verdad cambia es el piso.
+      montoEnJuego: round2(Math.abs(e.aguinaldo.segunNexus - e.aguinaldo.segunExcel)),
       queHacer: "Elegir uno. El de doce refleja el costo mensual real; el de diez llega a diciembre con colchón.",
       resuelve: "DIRECCION",
       items: [],

@@ -127,21 +127,39 @@ describe("igualarAlEquilibrio y limpiarFacturado", () => {
     for (const m of efectivos) expect(m.ingresosTotales).toBeGreaterThanOrEqual(piso);
   });
 
-  it("un mes cuyo ALIADO ya supera el piso queda por encima: no se puede desfacturar", () => {
-    // Febrero trae $41.553 de comisión contra un piso de $26.968. Igualar le pone 0 de
-    // facturado y el mes igual queda arriba — bajarlo exigiría un facturado NEGATIVO,
-    // que no es un escenario, es un error de aritmética con cara de escenario.
+  it("EL QUE MOTIVA EL CAMBIO: igualar NUNCA baja un mes que ya facturó de más", () => {
+    // La primera versión le ponía a todos exactamente el piso, y con eso el escenario
+    // mostraba un año PEOR que el real debajo de un botón que se lee como aspiración.
+    // Nadie se pregunta "¿y si hubiera facturado menos?".
+    const r = reporteBase();
+    const ov = igualarAlEquilibrio(r.meses, 26_968.71);
+    for (const m of r.meses) expect(ov[m.periodo]!).toBeGreaterThanOrEqual(m.facturado);
+  });
+
+  it("el año simulado nunca factura menos que el real", () => {
+    const r = reporteBase();
+    const efectivos = aplicarEscenario(r.meses, igualarAlEquilibrio(r.meses, 26_968.71));
+    const real = r.meses.reduce((n, m) => n + m.facturado, 0);
+    const simulado = efectivos.reduce((n, m) => n + m.facturadoEfectivo, 0);
+    expect(simulado).toBeGreaterThanOrEqual(real);
+  });
+
+  it("un mes cuyo ALIADO ya supera el piso no necesita facturar nada NUEVO", () => {
+    // Febrero trae $41.553 de comisión contra un piso de $26.968: no hace falta vender
+    // un peso más. Pero lo que YA facturó tampoco se borra — se queda como está.
     const r = reporteBase();
     const feb = aplicarEscenario(r.meses, igualarAlEquilibrio(r.meses, 26_968.71))[1]!;
-    expect(feb.facturadoEfectivo).toBe(0);
-    expect(feb.ingresosTotales).toBe(41_553.36);
+    expect(feb.facturadoEfectivo).toBe(r.meses[1]!.facturado);
+    expect(feb.ingresosTotales).toBeGreaterThanOrEqual(41_553.36);
   });
 
   it("igualar descuenta el partnership: no hay que vender lo que el aliado ya trajo", () => {
+    // Enero no tiene comisión, así que le toca el piso entero (o lo que ya facturó, si
+    // fuera más). Lo que se prueba es que el aliado DESCUENTA, no que se ignora.
     const r = reporteBase();
     const ov = igualarAlEquilibrio(r.meses, 26_968.71);
-    expect(ov["2026-02"]).toBe(0); // el aliado dejó 41.553 > el piso
-    expect(ov["2026-01"]).toBe(26_968.71);
+    expect(ov["2026-01"]).toBe(Math.max(26_968.71, r.meses[0]!.facturado));
+    expect(ov["2026-02"]).toBeLessThan(ov["2026-01"]! + 41_553.36);
   });
 
   it("limpiar deja los doce meses en cero y TODOS marcados como simulados", () => {

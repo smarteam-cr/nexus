@@ -21,7 +21,7 @@ const limpio = (): EstadoParaAuditar => ({
     sinCliente: { cuantas: 0, monto: 0 },
     sinMonto: { cuantas: 0, items: [] },
     resueltasPorNombre: { cuantas: 0, items: [] },
-    fueraDePipeline: { cuantas: 0, monto: 0 },
+    fueraDePipeline: { cuantas: 0, monto: 0, sinMonto: 0 },
     peoresDescubiertas: [],
   },
   comisionesVencidas: [],
@@ -121,6 +121,35 @@ describe("el total no cuenta la misma plata dos veces", () => {
   });
 });
 
+describe("los meses incompletos", () => {
+  it("un mes que TODAVÍA NO OCURRIÓ no es un dato faltante", () => {
+    // El aviso decía "8 de 12 meses" cuando 5 eran septiembre a diciembre. Un aviso que
+    // exagera se deja de leer, y con él se van los 3 que sí había que cargar.
+    const e: EstadoParaAuditar = {
+      ...limpio(),
+      mesesParciales: [
+        { periodo: "2026-01", faltantes: ["costos fijos"], futuro: false },
+        { periodo: "2026-11", faltantes: ["planilla"], futuro: true },
+        { periodo: "2026-12", faltantes: ["planilla"], futuro: true },
+      ],
+    };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "EGRESO_INCOMPLETO")!;
+    expect(x.titulo).toContain("1 de 12");
+    expect(x.items).toEqual(["2026-01: falta costos fijos"]);
+    // Pero los otros se DECLARAN, no se esconden: si desaparecieran, la siguiente
+    // pregunta sería "¿y por qué el piso solo mira 4 meses?".
+    expect(x.detalle).toContain("2 meses figuran incompletos porque todavía no ocurrieron");
+  });
+
+  it("si TODOS los parciales son futuros, el punto no aparece", () => {
+    const e: EstadoParaAuditar = {
+      ...limpio(),
+      mesesParciales: [{ periodo: "2026-12", faltantes: ["planilla"], futuro: true }],
+    };
+    expect(detectarInconsistencias(e).some((i) => i.codigo === "EGRESO_INCOMPLETO")).toBe(false);
+  });
+});
+
 describe("las comisiones vencidas", () => {
   it("solo entran las que YA vencieron: una futura no es una inconsistencia", () => {
     const e: EstadoParaAuditar = {
@@ -184,7 +213,7 @@ describe("cada punto dice quién lo resuelve", () => {
       ...limpio(),
       aguinaldo: { segunNexus: 1306.47, segunExcel: 1602.77 },
       tarjetaYHerramientas: { hay: true, periodos: ["2026-05"] },
-      ventas: { ...limpio().ventas, fueraDePipeline: { cuantas: 31, monto: 211_020 } },
+      ventas: { ...limpio().ventas, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 } },
     };
     const r = detectarInconsistencias(e);
     for (const c of ["AGUINALDO_CRITERIO", "TARJETA_SOLAPA_HERRAMIENTAS", "PIPELINE_SIN_DECIDIR"]) {
@@ -233,8 +262,8 @@ describe("cada punto dice quién lo resuelve", () => {
       ...limpio(),
       facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: ["d"] },
       facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: ["e"] },
-      mesesParciales: [{ periodo: "2026-01", faltantes: ["costos fijos"] }],
-      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: ["x"] }, resueltasPorNombre: { cuantas: 3, items: ["y"] }, fueraDePipeline: { cuantas: 31, monto: 211_020 }, sinCliente: { cuantas: 7, monto: 28_880 } },
+      mesesParciales: [{ periodo: "2026-01", faltantes: ["costos fijos"], futuro: false }],
+      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: ["x"] }, resueltasPorNombre: { cuantas: 3, items: ["y"] }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 }, sinCliente: { cuantas: 7, monto: 28_880 } },
       comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],
       serviciosSinCobros: { cuantas: 2, monto: 6840, items: ["a"] },
       cuentasSinEmpresa: { cuantas: 6, items: ["b"] },
@@ -260,7 +289,7 @@ describe("resumirInconsistencias", () => {
   it("cuenta lo que mueve plata y lo que decide dirección", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
-      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 16, monto: 61_805 }, fueraDePipeline: { cuantas: 31, monto: 211_020 } },
+      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 16, monto: 61_805 }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 } },
       aguinaldo: { segunNexus: 1306.47, segunExcel: 1602.77 },
     };
     const r = resumirInconsistencias(detectarInconsistencias(e));

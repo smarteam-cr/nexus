@@ -2770,3 +2770,28 @@ fabricarla.
   bandera vive en un solo lugar (`esVentaPropia` en `lib/ventas/pipelines.ts`). Mientras
   esté en `false`, el reporte declara cuánto factura y cuánto cobra la gente que llegó por
   ahí —hoy $55.820 facturados— para que la decisión se tome mirando plata y no opiniones.
+
+- **El titular del margen corta en el mes de hoy.** Comparar doce meses de costo contra
+  ocho de ingreso no es un margen: la comisión de aliado de noviembre ya está fechada y
+  entra, pero la planilla de septiembre a diciembre vale cero porque el libro de pagos
+  solo tiene lo pagado. El tile es **«Margen a la fecha»** (`margenAlDia`) y lo que viene
+  se declara al lado (`comprometidoPorVenir`), nunca sumado. `margenAnual` sigue en el DTO
+  rotulado como proyección.
+- **La caja se mide contra egreso de caja, no contra el egreso entero** (`egresosDeCajaTotal`).
+  Sin eso, el «margen en caja» descontaba la reserva de aguinaldo —un devengo, nadie apartó
+  esa plata— y los egresos de meses que no ocurrieron: medía los ingresos con criterio de
+  caja y los egresos con criterio de devengo.
+- **El total de inconsistencias cuenta cada peso UNA vez** (`yaContadoEn`). Las líneas que
+  miran la misma plata desde otro ángulo conservan su monto —sirve para dimensionarlas— y
+  quedan fuera del total, marcadas «ya contado arriba» en pantalla. Sin esa marca, sumar la
+  columna a mano da más que el titular y parece que el titular está mal.
+- **Un mes que todavía no ocurrió NO es un dato faltante.** El aviso de gasto incompleto
+  cuenta solo meses pasados y menciona los futuros aparte. Decía «8 de 12» cuando lo
+  accionable eran 3, y un aviso que exagera se deja de leer entero.
+- **«Igualar al equilibrio» SUBE, no empareja.** Ponerle el piso a todos los meses bajaba
+  los que ya facturaban de más, y el escenario mostraba un año peor que el real debajo de
+  un botón que se lee como aspiración. Nadie se pregunta «¿y si hubiera facturado menos?».
+- **Lo vendido es una serie propia y punteada, y no suma a los ingresos.** Es el origen de
+  la plata, no la plata: mezclarlo con lo facturado contaría dos veces el mismo negocio. La
+  serie tiene picos a propósito —un trato grande cierra en un mes y se factura en doce— y
+  ese desfase es justamente lo que se quiere ver.

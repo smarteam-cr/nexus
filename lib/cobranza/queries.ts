@@ -2001,6 +2001,9 @@ export async function loadReporteAnual(
     prisma.tipoCambioMes.findMany({
       where: { periodo: { in: periodos } },
       select: { periodo: true, crcPorUsd: true, fuente: true },
+      // Sin orden explícito, "la primera tasa" la decide el plan de Postgres. Hoy las 12
+      // de 2026 valen 500 y da igual; el día que una difiera, el número cambiaría solo.
+      orderBy: { periodo: "asc" },
     }),
     loadAguinaldo(anio, hoyISO),
     // Los costos VIGENTES hoy: la fuente del piso vigente, que es el titular del
@@ -2310,14 +2313,23 @@ async function armarEstadoParaAuditar(
 
   // El desvío de cambio solo se puede medir donde HubSpot ya convirtió y la moneda no es
   // la de presentación: ahí conviven dos tasas y conviene que se vea.
-  const tasaDelAnio = reporte.fx.tasas[0]?.crcPorUsd ?? null;
+  //
+  // ⚠ Cada venta se valúa con la tasa de SU mes, no con una del año. Antes se usaba
+  // `tasas[0]`, que además de ser "la primera que devolvió Postgres" aplicaba una sola
+  // tasa a tratos de cualquier mes: con tasas distintas por mes, eso inventa desvíos
+  // donde no los hay y esconde los reales.
+  const tasaPorPeriodo = new Map(reporte.fx.tasas.map((t) => [t.periodo, t.crcPorUsd]));
+  const ultimaTasa = reporte.fx.tasas[reporte.fx.tasas.length - 1]?.crcPorUsd ?? null;
   const desvios = ventas
     .filter((v) => v.moneda !== reporte.monedaPresentacion && v.monto !== null && v.montoConvertidoHubspot !== null)
-    .map((v) => ({
-      concepto: v.nombre,
-      segunNexus: tasaDelAnio ? Math.round((num(v.monto)! / tasaDelAnio) * 100) / 100 : 0,
-      segunHubspot: num(v.montoConvertidoHubspot)!,
-    }))
+    .map((v) => {
+      const tasa = tasaPorPeriodo.get(isoDay(v.fechaCierre)!.slice(0, 7)) ?? ultimaTasa;
+      return {
+        concepto: v.nombre,
+        segunNexus: tasa ? Math.round((num(v.monto)! / tasa) * 100) / 100 : 0,
+        segunHubspot: num(v.montoConvertidoHubspot)!,
+      };
+    })
     .filter((d) => d.segunNexus > 0 && Math.abs(d.segunHubspot - d.segunNexus) > 1);
 
   const avisoTarjeta = reporte.calidad.avisos.find((a) => a.codigo === "TARJETA_SOLAPA_HERRAMIENTAS");
@@ -2330,7 +2342,7 @@ async function armarEstadoParaAuditar(
     facturadoTotal: reporte.indicadores.facturadoTotal,
     mesesParciales: reporte.meses
       .filter((m) => m.estado === "PARCIAL" && m.faltantes.length > 0)
-      .map((m) => ({ periodo: m.periodo, faltantes: m.faltantes })),
+      .map((m) => ({ periodo: m.periodo, faltantes: m.faltantes, futuro: m.futuro })),
     ventas: {
       vendido: resumen.vendido,
       sinCobranza: { cuantas: resumen.porClase.SIN_COBRANZA.cuantas, monto: resumen.porClase.SIN_COBRANZA.descubierto },

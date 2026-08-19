@@ -54,7 +54,18 @@ describe("A · lo vendido", () => {
     expect(r.vendido).toBe(1000);
     expect(r.cuantas).toBe(1);
     // Lo de afuera no desaparece: queda contado para poder decirlo en pantalla.
-    expect(r.fueraDePipeline).toEqual({ cuantas: 1, monto: 5000 });
+    expect(r.fueraDePipeline).toEqual({ cuantas: 1, monto: 5000, sinMonto: 0 });
+  });
+
+  it("A1b el monto de lo dejado afuera es un PISO: los tratos sin monto cuentan como cero", () => {
+    // Decir "31 tratos por $211.020" cuando 12 no traen monto suena a que están los 31
+    // adentro. El contador deja ver que la cifra es el piso y no el total.
+    const r = clasificarVentas(
+      [v("con monto", 5000, { pipelineId: OTRO }), v("sin monto", null, { pipelineId: OTRO })],
+      [],
+      OPTS,
+    ).fueraDePipeline;
+    expect(r).toEqual({ cuantas: 2, monto: 5000, sinMonto: 1 });
   });
 
   it("A2 el desglose por mes usa la fecha de CIERRE de la venta", () => {
