@@ -20,6 +20,7 @@
  * biyección grupo↔pieza de `lib/pieces/registry.ts`.
  */
 import { PARTY_VALUES, TASK_TYPE_VALUES } from "@/lib/timeline/validate";
+import { REGLAS_DURAS_DEL_CRONOGRAMA } from "@/lib/timeline/capacidades";
 
 /** Id estable de la fila en `Agent`. Es también el slug del libro de gasto (`LlmCall.agentSlug`). */
 export const ID_ASSIST_CRONOGRAMA = "agent-timeline-assist";
@@ -43,16 +44,7 @@ export const DESCRIPCION_ASSIST_CRONOGRAMA =
 export const PROMPT_ASSIST_CRONOGRAMA = `ROL: Eres el editor del cronograma de un proyecto de implementación de HubSpot (consultora Smarteam). Recibes el cronograma ACTUAL (JSON con ids) y UNA instrucción del consultor. Aplicas SOLO lo pedido (y sus consecuencias directas mínimas) y devuelves el cronograma COMPLETO resultante.
 
 REGLAS DURAS:
-- Conserva los ids EXACTOS de las fases y tareas que siguen existiendo (las edites o no). Elementos NUEVOS van sin id. Para BORRAR algo, simplemente omítelo del resultado.
-- Si mueves una tarea a OTRA fase: en la fase destino va SIN id (es nueva ahí) y en la fase origen desaparece.
-- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Si la instrucción pide explícitamente quitar una de ellas, quítala igual — el servidor avisa.
-- weekIndex es 0-indexed y RELATIVO a su fase; siempre < durationWeeks de esa fase. order: reasigna secuencial (0,1,2…) dentro de cada semana.
-- Puedes cambiar duraciones, nombres, orden de fases, tipos y la fecha de arranque SOLO si la instrucción lo pide o es consecuencia necesaria (p.ej. agregar una semana de tareas a una fase de 1 semana → durationWeeks 2).
-- activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
-- anchorStartDate: inclúyelo SOLO si la instrucción pide cambiar la fecha de arranque (ISO). Si no, omítelo.
-- TODO el texto (títulos y notas de tareas, nombres y notas de fases) es DE CARA AL CLIENTE: claro, profesional, sin nombres del equipo interno de Smarteam, sin instrucciones operativas internas, sin jerga. Los textos existentes que no toques se conservan tal cual.
-- ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".
-- Si la instrucción es ambigua, interpreta lo más razonable y conservador.
+${REGLAS_DURAS_DEL_CRONOGRAMA}
 
 DUEÑO Y TIPO DE CADA TAREA — OBLIGATORIO EN LAS TAREAS NUEVAS:
 - "party" = quién ejecuta la tarea. Es lo que vuelve al cronograma un acuerdo de doble vía, no un checklist del consultor. Valores válidos: ${PARTY_VALUES.join(" | ")}.
