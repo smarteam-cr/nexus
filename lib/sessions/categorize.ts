@@ -67,6 +67,8 @@ export interface CategorizableSession {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+import { clientePorTitulo } from "./match-por-titulo";
+
 export function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
@@ -248,42 +250,48 @@ export function computeAmbiguousNameTokens(
 }
 
 /**
- * Title-matching: busca un cliente cuyo nombre o company aparezca como token
- * (palabra >= 4 chars, sin stopwords genéricas) en el título de la sesión. Match
- * débil (último recurso del cascade); primero que matchee gana. Excluye clientes
- * de prueba. NOTA: es solo fallback — dominio (paso 3) y HubSpot→Client (paso 5)
- * mandan antes.
+ * Title-matching: de quién es una reunión cuando el título es lo único que hay.
+ *
+ * ── QUÉ CAMBIÓ EL 2026-08-19, Y CÓMO SE DECIDIÓ ─────────────────────────────
+ * Hasta hoy le alcanzaba UNA palabra del nombre del cliente y, ante varios candidatos, se
+ * quedaba con el primero del array en silencio. Producía adjudicaciones como
+ * «SmartAgro | Flyer + Sitio web» → ECOQUINTAS (por «sitio»), o «Demo Interna Spectrum &
+ * Smarteam» → Smarteam. De acá sale QUÉ reuniones alimentan los documentos de cada cliente, así
+ * que una mal puesta es contenido de un cliente entrando al papel de otro.
+ *
+ * La regla ahora vive en `lib/sessions/match-por-titulo.ts` (puro y testeado): gana quien nombró
+ * la mayor FRACCIÓN de su propio nombre, la casa no le gana a un cliente, y ante un empate real
+ * no elige ninguno — la reunión cae al grupo de internas, donde se ve y se asigna a mano.
+ *
+ * ⚠ NO se subió la vara a «dos palabras»: se midió y costaba 316 atribuciones correctas para
+ * arreglar dos. El informe está en `docs/informe-match-por-titulo.txt` y se reproduce con
+ * `npx tsx scripts/medir-match-por-titulo.ts`.
+ *
+ * ⛔ ESTA FUNCIÓN DECIDE EL DUEÑO DE 12.500 REUNIONES. Tocarla re-atribuye el corpus entero: no
+ * se cambia sin medir antes y sin correr el re-resolve después (INV2).
  */
 function findClientByTitleMatch(
   title: string,
   clients: Pick<Client, "id" | "name" | "company">[],
   ambiguous: Set<string>,
+  internalDomains: Set<string>,
 ): Pick<Client, "id" | "name" | "company"> | null {
-  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w);
-  const titleWords = new Set(
-    normalize(title)
-      .split(/[\s|&,.()\[\]!?*\-_]+/)
-      .filter((w) => w.length >= 4 && !skip(w))
-  );
-  if (titleWords.size === 0) return null;
+  /* La CASA se deriva de los dominios internos (la SessionCategory kind="internal"), no de un
+     nombre hardcodeado: «Cliente & Smarteam» es el formato estándar de los títulos del equipo, y
+     Smarteam es un Client más en la base — nombraba su identidad entera y empataba con todos. */
+  const esLaCasa = (c: { name: string; company: string | null }) =>
+    effectiveDomainsForClient(c as Pick<Client, "name" | "company" | "emailDomains">).some((d) =>
+      internalDomains.has(d),
+    );
 
-  return (
-    clients.find((c) => {
-      if (isTestClient(c.name)) return false;
-      const nameParts = normalize(c.name)
-        .split(/\s+/)
-        .filter((p) => p.length >= 4 && !skip(p));
-      const compParts = c.company
-        ? normalize(c.company)
-            .split(/[\s.\-_]+/)
-            .filter((p) => p.length >= 4 && !skip(p))
-        : [];
-      return (
-        nameParts.some((p) => titleWords.has(p)) ||
-        compParts.some((p) => titleWords.has(p))
-      );
-    }) ?? null
-  );
+  const r = clientePorTitulo(title, clients, {
+    modo: "mejor-fraccion",
+    skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
+    normalize,
+    esClienteDePrueba: isTestClient,
+    esLaCasa,
+  });
+  return (r.cliente as Pick<Client, "id" | "name" | "company"> | null) ?? null;
 }
 
 // ── Función principal ────────────────────────────────────────────────────────
@@ -319,7 +327,7 @@ export function categorizeSession(
   // clientes: una sesión interna cuyo título contiene el nombre del cliente
   // (ej. "Hand Off | WHEREX") debe ir al bucket de ese cliente, no a Internal.
   if (participantDomains.size > 0 && externalDomains.size === 0) {
-    const titleMatchedClient = findClientByTitleMatch(session.title, clients, ambiguous);
+    const titleMatchedClient = findClientByTitleMatch(session.title, clients, ambiguous, internalDomains);
     if (titleMatchedClient) {
       return {
         kind: "client",
@@ -406,7 +414,7 @@ export function categorizeSession(
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────
-  const titleMatched = findClientByTitleMatch(session.title, clients, ambiguous);
+  const titleMatched = findClientByTitleMatch(session.title, clients, ambiguous, internalDomains);
   if (titleMatched) {
     return {
       kind: "client",

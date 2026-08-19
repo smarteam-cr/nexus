@@ -298,9 +298,15 @@ test("13 — token en 2+ empresas DISTINTAS ('grupo') se ignora; sin el set, cat
   const conSet = categorizeSession(s, ctx({ clients, ambiguousNameTokens: ambiguous }));
   expect(conSet).toEqual({ kind: "orphan", label: "printer-sa.com", domain: "printer-sa.com" });
 
-  // Sin el set (comportamiento previo documentado): "grupo" matchea al primer cliente.
+  /* Sin el set, "grupo" matchea a los DOS clientes. Hasta el 2026-08-19 ganaba el primero del
+     array —el catch-all histórico— y ese "primero gana" ERA el bug: adjudicaba adivinando y en
+     silencio. Ahora empata y no elige ninguno, así que la reunión cae al bucket sin dueño, donde
+     se ve y se puede asignar a mano. El set de ambiguos sigue siendo la primera línea; esto es la
+     red de abajo. */
   const sinSet = categorizeSession(s, ctx({ clients }));
-  expect(sinSet).toMatchObject({ kind: "client", id: "s" });
+  expect(sinSet.kind, "volvió el catch-all: con dos candidatos, elegir el primero es adivinar").toBe(
+    "orphan",
+  );
 
   // El token distintivo sigue resolviendo con el set activo.
   const porDistintivo = categorizeSession(
