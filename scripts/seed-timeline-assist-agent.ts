@@ -15,10 +15,10 @@
  * Uso:  npx tsx scripts/seed-timeline-assist-agent.ts [--force]
  */
 import { PrismaClient, AgentStatus, AgentType, AgentOutputType, AgentScope } from "@prisma/client";
-import { sslParaConexion } from "@/lib/db/ssl";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { assertProdWriteAllowed } from "./lib/guard";
+import { createScriptPool } from "./lib/db";
 import {
   ID_ASSIST_CRONOGRAMA,
   GRUPO_ASSIST_CRONOGRAMA,
@@ -27,10 +27,10 @@ import {
   PROMPT_ASSIST_CRONOGRAMA,
 } from "@/lib/agents/timeline-assist";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: sslParaConexion(process.env.DATABASE_URL),
-});
+// Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional, igual que
+// seed-handoff-agent.ts. Sin él, un `npx tsx` distraído reescribe el prompt vivo de producción.
+assertProdWriteAllowed("scripts/seed-timeline-assist-agent.ts");
+const { pool } = createScriptPool();
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
