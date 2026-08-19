@@ -1,0 +1,81 @@
+modo comparado contra el vivo: mejor-fraccion
+
+═══ MEDICIÓN DEL MATCH POR TÍTULO ═══
+
+reuniones totales:                       7168
+  las que el TÍTULO decide (100% equipo): 3520   <<< la población real
+
+  sin cambio:                            3466
+  PIERDEN dueño:                         34   ⚠ el costo
+     de ésas, por EMPATE (2 candidatos): 34   (correcto: antes adivinaba)
+     de ésas, alimentando un proyecto:   8   ⚠⚠ el costo REAL
+     de ésas, con dueño puesto A MANO:   0   (el manual manda: NO se pierden)
+  GANAN dueño:                           0
+  CAMBIAN de dueño:                      20   <<< las mal adjudicadas
+
+── LAS QUE CAMBIAN DE DUEÑO (todas) ──
+  [2026-07-13] "CASOS DE USO + DIAGNOSTICO | HONDA Y KOLBI"
+       Honda Costa Rica  →  kölbi   · alimenta 2
+  [2026-08-05] "**Tentativo**Reunión Interna de Seguimiento: Evento "Del caos a la conexión" - Selección de Venue | Smarteam & Saatchi"
+       Smarteam  →  4am Saatchi & Saatchi   · alimenta 1
+  [2026-08-11] "Demo Interna Spectrum & Smarteam"
+       Smarteam  →  Spectrum   · alimenta 1
+  [2025-12-04] "Tentativo Kickoff | Kamalio & Smarteam"
+       Smarteam  →  kamalio
+  [2025-11-21] "Demos internas - Honda, Hub Sales | Sfera Legal"
+       Honda Costa Rica  →  Sfera Legal
+  [2025-06-26] "REVISIÓN WEB INTERNA / KAIZEN KAPITAL & SMARTEAM"
+       Smarteam  →  KAIZEN KAPITAL
+  [2025-11-06] "Alineación | Nico y Ale 1:1  (cuentas Honda y Sfera Legal)"
+       Honda Costa Rica  →  Sfera Legal
+  [2026-06-02] "Iberorutas & Smarteam"
+       Smarteam  →  Iberorutas   · alimenta 1
+  [2026-05-26] "**Tentativo Kick off | Sfera legal & Smarteam"
+       Smarteam  →  Sfera Legal
+  [2025-06-17] "**Posible** Marketing: Definición de canales | Grupo Printer & Smarteam"
+       Smarteam  →  Grupo Printer
+  [2025-12-03] "Tentativo Kickoff | Kamalio & Smarteam"
+       Smarteam  →  kamalio
+  [2026-06-25] "**Por confirmar** Cierre de proyecto Fase 1 | Implementación de HubSpot | Ferrtería Noelito & Smarteam"
+       Ferreteria Noelito  →  Smarteam   · alimenta 2
+  [2026-06-24] "Demo interna de funcionalidad | Sfera legal & Smarteam"
+       Smarteam  →  Sfera Legal   · alimenta 2
+  [2025-07-23] "Smarteam | Forestales | INVE"
+       Forestales Latinoamericanos  →  Grupo Inve
+  [2025-09-13] "Artes Smarteam, Artes Forestales"
+       Forestales Latinoamericanos  →  Smarteam
+  [2025-06-18] "**Posible** Ventas: Definición de información clave (2 divisiones) | Grupo Printer & Smarteam"
+       Smarteam  →  Grupo Printer
+  [2026-04-15] "Alineación Iberorutas | Smarteam"
+       Smarteam  →  Iberorutas   · alimenta 1
+  [2025-08-12] "Tentativo Monific & Smarteam"
+       Smarteam  →  Monific
+  [2025-08-13] "Tentativo Monific & Smarteam"
+       Smarteam  →  Monific
+  [2026-02-11] "Hand Off | Intercert & Smarteam"
+       Smarteam  →  Intercert
+
+── LAS QUE PIERDEN DUEÑO Y HOY ALIMENTAN UN PROYECTO ──
+   (son las que hay que mirar: dejarían de estar en el material de ese cliente)
+  [2026-07-15] "Revisión Ecoquintas"  → era de Ecoquintas
+  [2026-05-18] "Revisión Proyectos Web - Ecoquintas / Amvac"  → era de Ecoquintas
+  [2026-05-26] "Demo interna Ecoquintas"  → era de Ecoquintas
+  [2026-07-11] "Revisión de workflows Ecoquintas"  → era de Ecoquintas
+  [2025-09-26] "Personalización de cotizaciones Distelsa y Syntepro"  → era de DISTELSA
+  [2026-07-14] "Heiver / Marco | ECOQUINTAS"  → era de Ecoquintas
+  [2026-05-21] "Revision Proyectos Ecoquintas"  → era de Ecoquintas
+  [2026-06-25] "Alejandro / Lidia Ajustes actualizaciones Ecoquintas"  → era de Ecoquintas
+
+── A QUIÉN LE SACA REUNIONES (top 15) ──
+     15  Ecoquintas
+      6  BLUESAT
+      4  ALFA+ (LISJ)
+      2  Ministerio de Economía
+      2  Neocasa CR
+      1  Iberorutas
+      1  Grupo Inve
+      1  Construtecho
+      1  DISTELSA
+      1  ACCCSA
+
+⛔ Esto NO escribió nada. La decisión de cambiar la regla es de Elías.

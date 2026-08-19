@@ -167,7 +167,7 @@ const EMPTY_CLIENT_MAP: Map<string, Pick<Client, "id" | "name" | "company">> = n
  * ese cliente sin resolución por título (medido: stopwordear "smarteam" tira 2342 a 0).
  * Tokens normalizados (sin acentos, lowercase) porque `normalize()` corre antes.
  */
-const TITLE_MATCH_STOPWORDS = new Set<string>([
+export const TITLE_MATCH_STOPWORDS = new Set<string>([
   "para", "prueba", "pruebas", "sesion", "sesiones", "reunion", "reuniones",
   "demo", "interna", "interno", "equipo", "proyecto", "proyectos", "cierre",
   "seguimiento", "revision", "contexto", "recursos", "requerimientos", "alineacion",
@@ -183,7 +183,7 @@ const TITLE_MATCH_STOPWORDS = new Set<string>([
  */
 const TEST_CLIENT_NAME_PATTERNS: RegExp[] = [/empresa para pruebas/i, /\btest\b/i];
 
-function isTestClient(name: string): boolean {
+export function isTestClient(name: string): boolean {
   return TEST_CLIENT_NAME_PATTERNS.some((re) => re.test(name));
 }
 
