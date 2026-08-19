@@ -186,6 +186,25 @@ CREATE POLICY deny_all_non_superuser ON "ComisionVendedor"
 --    el bloque dinámico del principio, que es lo que tapa al `anon` de Supabase.
 --    Nació en scripts/sql/2026-08-17-reporte-equilibrio.sql, que se corre UNA vez; vive
 --    acá para que `npm run db:policies` la RESTABLEZCA.
+-- 9) `VentaGanada` y `VentaGanadaCambio` — el espejo de lo VENDIDO (2026-08-19). Son
+--    montos de venta con nombre de cliente: mismo peso que el libro de egresos. La tabla
+--    de cambios lleva los montos anteriores, así que va igual de tapada que la principal.
+--    Nacieron en scripts/sql/2026-08-19-espejo-ventas-ganadas.sql; viven acá para que
+--    `npm run db:policies` las RESTABLEZCA.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "VentaGanada";
+CREATE POLICY deny_all_non_superuser ON "VentaGanada"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "VentaGanadaCambio";
+CREATE POLICY deny_all_non_superuser ON "VentaGanadaCambio"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 DROP POLICY IF EXISTS deny_all_non_superuser ON "EgresoMensual";
 CREATE POLICY deny_all_non_superuser ON "EgresoMensual"
   AS RESTRICTIVE

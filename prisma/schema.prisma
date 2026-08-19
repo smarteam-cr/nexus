@@ -204,6 +204,7 @@ model Client {
   cuentaFinanciera     CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
   ingresosVariables    IngresoVariable[]      @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
   comisionesPartner    ComisionPartner[]      @relation("ComisionesDePartner") // lo que Smarteam GANA de este aliado
+  ventasGanadas        VentaGanada[]          @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas ImportacionFila[] // Cobranza: trazabilidad del importador
 
@@ -235,8 +236,13 @@ model Project {
   serviceType        String? // loop_marketing | loop_sales | loop_service | proyecto_temporal
   hubspotDealId      String? // ID del deal de HubSpot asociado a este proyecto
   hubspotServiceId   String?             @unique // ID del objeto Service en HubSpot (para sync)
-  currentStage       Int                 @default(1) // Última etapa visitada/modificada (1-3)
-  currentStep        Int                 @default(0) // Último paso visitado/modificado dentro de la etapa (0-indexed)
+  // ⛔ RETIRADAS (2026-08-18). Eran del subsistema de ETAPAS (Diagnóstico/Planificación/Adopción
+  // × pasos), cuya ÚNICA pantalla escritora se borró. Nadie las escribe: el valor está congelado.
+  // NO se dropean —un DROP es irreversible y no hace falta— pero NO SE LEEN: mostrarlas afirma una
+  // etapa que nadie puso (medido: 68 de 138 proyectos activos mostraban «Etapa 1 → Análisis
+  // inicial» para siempre). La etapa real sale de lib/lifecycle. Guarda: lib/projects/etapa-retirada.test.ts.
+  currentStage       Int                 @default(1)
+  currentStep        Int                 @default(0)
   canvas             Json? // DEPRECATED — ya no se lee para renderizar el canvas
   tags               String[]            @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
   shareToken         String?             @unique // Token para vista pública del cliente
@@ -3853,6 +3859,132 @@ model TipoCambioMes {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// En qué estado está una venta ganada respecto de HubSpot. NO es la etapa del trato:
+/// es qué sabemos de él la última vez que miramos.
+enum VentaGanadaEstado {
+  GANADA // vigente y ganada, lo normal
+  REABIERTA // volvió a una etapa abierta: dejó de ser venta
+  PERDIDA // pasó a perdida después de estar ganada
+  DESAPARECIDA // ya no vuelve de HubSpot (borrada o fuera de alcance). NUNCA se borra la fila.
+}
+
+/// Qué cambió en una venta entre dos corridas del sync.
+enum VentaGanadaCambioTipo {
+  ALTA
+  MONTO // el caso REAL: 27 de 49 tratos ganados de 2026 tienen el monto editado
+  FECHA_CIERRE
+  ESTADO
+  CLIENTE // se resolvió (o cambió) a qué cliente de Nexus pertenece
+}
+
+// ─── VentaGanada ────────────────────────────────────────────────────────────────
+// EL ESPEJO DE LO VENDIDO: un trato ganado de HubSpot, copiado a Nexus con su fecha de
+// cierre. Es el dato que el sistema no tenía — `ServicioContratado` sabe cuánto se
+// factura pero no cuándo se vendió, y `fechaInicioFacturacion` no sirve para eso (es la
+// fecha del primer cobro importado, por eso los 55 servicios "arrancan" en 2026).
+//
+// ⚠ POR QUÉ SE COPIA Y NO SE CONSULTA EN VIVO: el reporte no puede depender de que
+// HubSpot conteste. Además el vendido del año es un número VIVO —27 de 49 tratos de 2026
+// tienen el monto editado después de ganarse, uno pasó por 7 versiones— así que hace
+// falta bitácora para saber cuándo se movió y por qué.
+//
+// ⚠ MONEDA: se guarda la NATIVA (un trato está en ₡3.060.416) más el convertido que trae
+// HubSpot, SOLO como control. El reporte convierte con `TipoCambioMes` como todo lo demás
+// del módulo — las dos cifras difieren (HubSpot usa ~455, Nexus 500) y el reporte lo
+// declara en vez de elegir en silencio.
+//
+// ⚠ PRIVACIDAD: son montos de venta. Deny-all RESTRICTIVE, mismo peso que EgresoMensual.
+model VentaGanada {
+  id String @id @default(cuid())
+
+  /// El trato en HubSpot. Es la identidad: re-sincronizar actualiza, nunca duplica.
+  hubspotDealId String @unique
+  nombre        String
+
+  /// LA FECHA QUE NO EXISTÍA EN NEXUS. Verificada contra el historial de etapas: en los
+  /// 49 tratos ganados de 2026 coincide exacto con la primera transición a ganado.
+  fechaCierre DateTime @db.Date
+  /// El momento en que el trato entró a una etapa ganada, leído del historial. Es la
+  /// única corroboración independiente de `fechaCierre`: si dejan de coincidir es porque
+  /// alguien editó la fecha a mano, y eso hay que poder verlo.
+  ganadaEn    DateTime?
+
+  /// Monto en la moneda del trato, tal como está en HubSpot.
+  /// nullable porque 13 de 80 tratos ganados de 2026 NO tienen monto cargado — todos del
+  /// pipeline de venta compartida. Guardarlos en cero diría que la venta vale cero, y
+  /// rechazarlos los haría invisibles: la venta existe, lo que falta es el número.
+  monto  Decimal? @db.Decimal(14, 2)
+  moneda String
+  /// Lo que HubSpot dice que vale en la moneda de la casa. NO se suma: es control. Cuando
+  /// difiere de lo que da TipoCambioMes, el reporte muestra las dos.
+  montoConvertidoHubspot Decimal? @db.Decimal(14, 2)
+
+  /// El pipeline crudo. Se guarda SIEMPRE, aunque hoy no se cuente: "HubSpot Shared
+  /// Selling" es registro de oportunidad con HubSpot y no facturación propia, pero si
+  /// mañana se decide contarlo, el dato ya está y no hay que volver a traer nada.
+  pipelineId    String
+  pipelineLabel String?
+  etapaId       String
+
+  estado VentaGanadaEstado @default(GANADA)
+
+  // nullable porque 42 de 222 tratos ganados no resuelven a ningún cliente de Nexus, y
+  // porque la venta existe aunque nadie la haya dado de alta en cobranza. SetNull:
+  // borrar el cliente no borra el registro de que esa venta ocurrió.
+  clientId String?
+  client   Client? @relation("VentasDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  /// Cómo se resolvió el cliente: por la empresa de HubSpot, o por el nombre del trato.
+  /// Resolver por NOMBRE es en sí un hallazgo — significa que la venta está colgada de
+  /// otra empresa que la que factura (empresa duplicada, o la madre de un grupo: la venta
+  /// de Analisalab vive en "Grupo Inve", la de Corrugando en ACCCSA).
+  clienteVia String?
+  /// La empresa de HubSpot asociada al trato, aunque no resuelva a ningún cliente.
+  hubspotCompanyId String?
+
+  /// El nombre huele a prueba ("Negocio para prueba (Nexus)"). La regex MARCA; una
+  /// persona decide. Son dos campos y no uno a propósito: sospechar no es excluir.
+  sospechaPrueba Boolean @default(false)
+  excluida       Boolean @default(false)
+  excluidaMotivo String?
+
+  sincronizadoEn DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cambios VentaGanadaCambio[] @relation("CambiosDeVenta")
+
+  @@index([fechaCierre])
+  @@index([clientId])
+  @@index([estado, fechaCierre])
+}
+
+// ─── VentaGanadaCambio ──────────────────────────────────────────────────────────
+// Historia APPEND-ONLY de lo que se movió en una venta (patrón CostoMovimiento).
+// ⚠ Existe por el riesgo MEDIDO, no por el imaginado: cero de 121 tratos con cierre en
+// 2026 fueron reabiertos, pero 27 de 49 tienen el monto editado —varios el mismo día del
+// cierre o después— y uno pasó por siete versiones. Sin esta tabla, el vendido del año
+// cambia solo y nadie sabe cuándo ni cuánto.
+model VentaGanadaCambio {
+  id String @id @default(cuid())
+
+  // nullable + SetNull: la historia sobrevive si algún día se borra la venta.
+  ventaId String?
+  venta   VentaGanada? @relation("CambiosDeVenta", fields: [ventaId], references: [id], onDelete: SetNull)
+
+  /// Snapshot autosuficiente: la fila se lee sola aunque la venta cambie o se borre.
+  hubspotDealId String
+  nombre        String
+
+  tipo     VentaGanadaCambioTipo
+  anterior String? // el valor de antes, como texto (sirve para monto, fecha y estado)
+  nuevo    String?
+
+  detectadoEn DateTime @default(now())
+
+  @@index([ventaId])
+  @@index([detectadoEn])
 }
 
 // ── Roles (roles y responsabilidades del equipo) ────────────────────────────────
