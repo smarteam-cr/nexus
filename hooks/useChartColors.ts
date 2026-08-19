@@ -25,7 +25,14 @@ export interface EChartsColors {
 
 // ─── Paletas ────────────────────────────────────────────────────────────────────
 
-const DARK: EChartsColors = {
+/**
+ * ⚠ Exportadas para que `lib/ui/chart-colors-token.test.ts` pueda verificar que
+ * `axisLabelStrong` sigue valiendo lo mismo que el token `--fg-muted` de globals.css.
+ * La leyenda de la curva de equilibrio pinta ese color con `var(--fg-muted)` —el tema en
+ * HTML lo resuelve CSS, nunca JS— y si los dos valores se separaran, el gráfico y su
+ * leyenda mostrarían grises distintos sin que nada avise.
+ */
+export const DARK: EChartsColors = {
   tooltipBg:       "#111827",
   tooltipBorder:   "#374151",
   tooltipText:     "#e5e7eb",
@@ -36,7 +43,7 @@ const DARK: EChartsColors = {
   legendText:      "#9ca3af",
 };
 
-const LIGHT: EChartsColors = {
+export const LIGHT: EChartsColors = {
   tooltipBg:       "#ffffff",
   tooltipBorder:   "#e5e7eb",
   tooltipText:     "#1f2937",

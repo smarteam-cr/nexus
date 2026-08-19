@@ -133,6 +133,27 @@ export default function CurvaEquilibrio({
     [colors],
   );
 
+  /**
+   * Los mismos colores, pero como VALOR CSS, para el único lugar donde un color aterriza
+   * en HTML: el swatch de la leyenda.
+   *
+   * ⚠ ESTO EXISTE POR UN ERROR DE HIDRATACIÓN REAL. `colors` sale de useChartColors, que
+   * mira `document` — o sea que en el servidor NO puede saber el tema y devuelve el
+   * oscuro, mientras el layout renderiza `<html class="light">` (el default del producto
+   * es claro). El servidor mandaba borderTopColor #9ca3af y el cliente hidrataba con
+   * #6b7280: React tiraba el árbol entero. Le pasaba a todos, no a una minoría.
+   *
+   * La regla que lo evita: en HTML, el tema lo resuelve CSS, nunca JS. Un hex resuelto en
+   * JS dentro de un style inline es mismatch garantizado en cualquier componente cliente.
+   *
+   * Solo `egresos` cambia: es la única entrada que depende del tema. Las otras seis son
+   * hex estáticos de SERIES_PALETTE y sirven igual de los dos lados. Va por spread sobre
+   * COLOR justamente para que agregar una serie no obligue a acordarse de este mapa.
+   *
+   * El `option` de ECharts sigue usando COLOR: el canvas no resuelve var().
+   */
+  const COLOR_CSS = useMemo<Record<SerieKey, string>>(() => ({ ...COLOR, egresos: "var(--fg-muted)" }), [COLOR]);
+
   const option = useMemo(() => {
     const atenuada = (k: SerieKey) => enfoque !== null && enfoque !== k;
     /**
@@ -346,13 +367,13 @@ export default function CurvaEquilibrio({
                 className="inline-block flex-shrink-0"
                 style={
                   forma === "barra"
-                    ? { width: 12, height: 12, borderRadius: 3, background: COLOR[s.key], opacity: 0.55 }
+                    ? { width: 12, height: 12, borderRadius: 3, background: COLOR_CSS[s.key], opacity: 0.55 }
                     : {
                         width: 16,
                         height: 0,
                         borderTopWidth: enfoque === s.key ? 4 : 2,
                         borderTopStyle: forma === "punteada" ? "dashed" : "solid",
-                        borderTopColor: COLOR[s.key],
+                        borderTopColor: COLOR_CSS[s.key],
                       }
                 }
               />
