@@ -46,9 +46,11 @@ import {
   type Inconsistencia,
 } from "@/lib/finanzas/inconsistencias";
 import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/sync-ganadas";
+import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
+  convertir,
   type CostoVigente,
   type EgresoDeMes,
   type IngresoDeMes,
@@ -2190,7 +2192,8 @@ async function armarEstadoParaAuditar(
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
 
-  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas] = await Promise.all([
+  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas, ventasTodas] =
+    await Promise.all([
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
       select: {
@@ -2211,21 +2214,56 @@ async function armarEstadoParaAuditar(
       select: { name: true },
     }),
     prisma.cobro.groupBy({
-      by: ["cuentaId"],
+      // ⚠ moneda va en el agrupado a propósito. Hoy los 125 cobros del año son USD y la
+      // suma cruda da bien, pero hay 3 cuentas en colones: el día que una genere un cobro,
+      // sumar ₡ con $ haría que ese cliente pareciera cubierto ~500 veces de más y el
+      // hueco encogería solo. Agrupar por moneda obliga a convertir antes de sumar.
+      by: ["cuentaId", "moneda", "estado"],
       where: { periodo: { startsWith: String(anio) }, estado: { in: ["COBRADO", "POR_COBRAR"] } },
       _sum: { monto: true },
     }),
-    prisma.cuentaFinanciera.findMany({ select: { id: true, clientId: true } }),
+    prisma.cuentaFinanciera.findMany({ select: { id: true, clientId: true, client: { select: { name: true } } } }),
+    // Todas las ventas ganadas, de TODOS los años: un cliente que compró en 2023 y sigue
+    // facturando en 2026 no es un hueco, y solo se puede saber mirando fuera del año.
+    prisma.ventaGanada.findMany({
+      where: { estado: "GANADA", excluida: false },
+      select: { nombre: true, clientId: true, pipelineId: true },
+    }),
   ]);
 
   // Lo facturado por cliente, para poder medir el hueco por MONTO y no por un sí/no.
   const clienteDeCuenta = new Map(cuentas.map((c) => [c.id, c.clientId]));
+  const nombreDeCliente = new Map(cuentas.map((c) => [c.clientId, c.client?.name ?? "(sin nombre)"]));
+  const tasaPresentacion = reporte.fx.tasas[0] ?? null;
   const facturadoPorCliente = new Map<string, number>();
+  const cobradoPorCliente = new Map<string, number>();
   for (const c of cobrosPorCuenta) {
     const cli = clienteDeCuenta.get(c.cuentaId);
     if (!cli) continue;
-    facturadoPorCliente.set(cli, (facturadoPorCliente.get(cli) ?? 0) + Number(c._sum.monto ?? 0));
+    const crudo = Number(c._sum.monto ?? 0);
+    // Sin tasa no se inventa una: el monto se deja como está y el reporte ya avisa por
+    // separado de los meses sin tipo de cambio cargado.
+    const conv = convertir(crudo, c.moneda, reporte.monedaPresentacion, tasaPresentacion);
+    const monto = conv?.monto ?? crudo;
+    facturadoPorCliente.set(cli, (facturadoPorCliente.get(cli) ?? 0) + monto);
+    if (c.estado === "COBRADO") cobradoPorCliente.set(cli, (cobradoPorCliente.get(cli) ?? 0) + monto);
   }
+
+  // Por qué un cliente que factura puede no tener venta: o compró por un pipeline que no
+  // cuenta, o la venta quedó a nombre de la empresa madre. Las dos se arreglan distinto.
+  const respaldo = auditarRespaldoDeFactura(
+    [...facturadoPorCliente.entries()].map(([clientId, facturado]) => ({
+      clientId,
+      nombre: nombreDeCliente.get(clientId) ?? "(sin nombre)",
+      facturado,
+      cobrado: cobradoPorCliente.get(clientId) ?? 0,
+    })),
+    ventasTodas.map((v) => ({
+      nombre: v.nombre,
+      clientId: v.clientId,
+      esVentaPropia: PIPELINES_VENTA_PROPIA.includes(v.pipelineId),
+    })),
+  );
 
   const resumen = clasificarVentas(
     ventas.map((v) => ({
@@ -2298,6 +2336,8 @@ async function armarEstadoParaAuditar(
       items: serviciosSinCobros.map((s) => `${s.cuenta.client?.name ?? "(sin cliente)"} · ${num(s.montoTotal)}`),
     },
     cuentasSinEmpresa: { cuantas: cuentasSinEmpresa.length, items: cuentasSinEmpresa.map((c) => c.name) },
+    facturaSoloFueraDePipeline: respaldo.soloFueraDePipeline,
+    facturaDeGrupo: respaldo.deGrupo,
     cobradosSinFecha: { cuantas: cobradosSinFecha, total: cobradosTotales },
     periodosSinTasa: reporte.fx.periodosSinTasa,
     monedaInferida: avisoMoneda?.conceptos ?? [],

@@ -68,6 +68,18 @@ export interface EstadoParaAuditar {
   serviciosSinCobros: { cuantas: number; monto: number; items: string[] };
   /** Clientes con cuenta de cobranza pero sin empresa de HubSpot ligada. */
   cuentasSinEmpresa: { cuantas: number; items: string[] };
+  /**
+   * Clientes que facturan en el año y cuya ÚNICA venta ganada está en un pipeline que
+   * no cuenta como venta propia (hoy: Shared Selling). No es un error de dato: es la
+   * evidencia de que ese pipeline sí produce facturación, y por eso lo decide dirección.
+   */
+  facturaSoloFueraDePipeline: { cuantas: number; facturado: number; cobrado: number; items: string[] };
+  /**
+   * Clientes que facturan y cuya venta está registrada a nombre de otra empresa del
+   * mismo grupo (la madre, o una hermana). La plata y la venta existen las dos; lo que
+   * falta es el vínculo, así que hoy se cuentan como hueco sin serlo.
+   */
+  facturaDeGrupo: { cuantas: number; facturado: number; items: string[] };
   /** Cobros marcados como cobrados sin la fecha en que entró la plata. */
   cobradosSinFecha: { cuantas: number; total: number };
   /** Meses del año sin tipo de cambio cargado. */
@@ -351,6 +363,46 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       queHacer: "Confirmar la moneda de esos conceptos en la hoja de egresos.",
       resuelve: "COBRANZA",
       items: e.monedaInferida,
+    });
+  }
+
+  // ── Factura, pero la venta está en un pipeline que no cuenta ────────────────
+  if (e.facturaSoloFueraDePipeline.cuantas > 0) {
+    const f = e.facturaSoloFueraDePipeline;
+    out.push({
+      codigo: "FACTURA_SOLO_FUERA_DE_PIPELINE",
+      severidad: "ALTA",
+      titulo: "Clientes que facturan y cuya única venta es de Shared Selling",
+      detalle:
+        `${f.cuantas} clientes llegaron por un trato de Shared Selling, no tienen ninguna venta propia, y aun así ` +
+        `Smarteam les facturó ${money(f.facturado)} este año, de los cuales ${money(f.cobrado)} ya entraron al banco. ` +
+        `Hoy el reporte no cuenta esos tratos como venta, así que esa facturación aparece como si hubiera salido de la nada ` +
+        `y engorda el hueco entre lo vendido y lo cobrado. La pregunta no es de dato sino de definición: si el trabajo se ` +
+        `factura y se cobra, ¿la venta cuenta como propia?`,
+      montoEnJuego: f.facturado,
+      queHacer:
+        "Decidir si Shared Selling cuenta como venta propia. Si la respuesta es sí, es un solo cambio de bandera " +
+        "(esVentaPropia en lib/ventas/pipelines.ts) y el vendido del año sube de golpe; si es no, esta facturación " +
+        "necesita otra explicación.",
+      resuelve: "DIRECCION",
+      items: f.items,
+    });
+  }
+
+  // ── Factura el hijo, vendió la madre ───────────────────────────────────────
+  if (e.facturaDeGrupo.cuantas > 0) {
+    out.push({
+      codigo: "FACTURA_DE_GRUPO",
+      severidad: "MEDIA",
+      titulo: "La empresa que factura y la que vendió son del mismo grupo",
+      detalle:
+        "La venta se registró a nombre de la empresa madre y la facturación cuelga de una hija (o al revés). Las dos " +
+        "cosas existen y son correctas por separado; lo que falta es el vínculo, y sin él el reporte cuenta la venta " +
+        "como no cobrada y la factura como sin venta — el mismo dinero contado mal dos veces.",
+      montoEnJuego: e.facturaDeGrupo.facturado,
+      queHacer: "Confirmar qué empresas son del mismo grupo y ligarlas, para que la venta y su facturación se encuentren.",
+      resuelve: "COBRANZA",
+      items: e.facturaDeGrupo.items,
     });
   }
 

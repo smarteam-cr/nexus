@@ -27,6 +27,8 @@ const limpio = (): EstadoParaAuditar => ({
   comisionesVencidas: [],
   serviciosSinCobros: { cuantas: 0, monto: 0, items: [] },
   cuentasSinEmpresa: { cuantas: 0, items: [] },
+  facturaSoloFueraDePipeline: { cuantas: 0, facturado: 0, cobrado: 0, items: [] },
+  facturaDeGrupo: { cuantas: 0, facturado: 0, items: [] },
   cobradosSinFecha: { cuantas: 0, total: 101 },
   periodosSinTasa: [],
   monedaInferida: [],
@@ -154,9 +156,42 @@ describe("cada punto dice quién lo resuelve", () => {
     expect(detectarInconsistencias(e).find((x) => x.codigo === "CUENTA_SIN_EMPRESA")!.resuelve).toBe("COBRANZA");
   });
 
+  it("facturar con la venta en un pipeline que no cuenta lo decide DIRECCIÓN, no cobranza", () => {
+    // Nadie cargó mal un dato: la venta está, la factura está, y aun así el reporte no las
+    // junta. Eso no se arregla escribiendo en Nexus, se arregla decidiendo si cuenta.
+    const e: EstadoParaAuditar = {
+      ...limpio(),
+      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: ["Iberorutas · ..."] },
+    };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "FACTURA_SOLO_FUERA_DE_PIPELINE")!;
+    expect(x.resuelve).toBe("DIRECCION");
+    expect(x.montoEnJuego).toBe(87_031);
+    // La caja tiene que estar en el texto: es la diferencia entre "una oportunidad
+    // anotada" y "plata que ya entró al banco", y es lo que hace decidible la pregunta.
+    expect(x.detalle).toMatch(/33.370,00/); // el separador de miles del locale es espacio duro
+  });
+
+  it("factura la hija y vendió la madre: eso sí lo cierra cobranza ligando las empresas", () => {
+    const e: EstadoParaAuditar = {
+      ...limpio(),
+      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: ["Analisalab · ..."] },
+    };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "FACTURA_DE_GRUPO")!;
+    expect(x.resuelve).toBe("COBRANZA");
+    expect(x.montoEnJuego).toBe(25_493);
+  });
+
+  it("sin casos, ninguna de las dos aparece — la lista solo muestra lo que está pasando", () => {
+    const r = detectarInconsistencias(limpio()).map((x) => x.codigo);
+    expect(r).not.toContain("FACTURA_SOLO_FUERA_DE_PIPELINE");
+    expect(r).not.toContain("FACTURA_DE_GRUPO");
+  });
+
   it("TODOS los puntos tienen título, qué hacer y dueño — ninguno queda mudo", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
+      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: ["d"] },
+      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: ["e"] },
       mesesParciales: [{ periodo: "2026-01", faltantes: ["costos fijos"] }],
       ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: ["x"] }, resueltasPorNombre: { cuantas: 3, items: ["y"] }, fueraDePipeline: { cuantas: 31, monto: 211_020 }, sinCliente: { cuantas: 7, monto: 28_880 } },
       comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],

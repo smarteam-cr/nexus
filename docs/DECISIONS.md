@@ -2753,3 +2753,20 @@ fabricarla.
 - **`CorteTarjeta` y `AguinaldoPago` siguen sin uso** (cero filas, cero referencias) y este
   reporte **no los toca**. Se deja anotado para que la próxima búsqueda no los confunda con
   una fuente disponible.
+
+- **Un cliente que factura sin venta no es un hueco: son tres problemas distintos.** El
+  panel decía "$131.064 facturados sin ninguna venta" y la mitad resultó ser gente que sí
+  compró. Se separan porque se arreglan en lugares distintos: (a) la venta está en un
+  pipeline que hoy no cuenta —Shared Selling— y eso lo decide **dirección**, no cobranza;
+  (b) la venta quedó a nombre de la empresa madre y lo cierra **cobranza** ligando las dos;
+  (c) no hay venta en ningún lado, y ese sí es el hueco. Juntar los tres en una cifra hacía
+  que la única acción posible fuera "revisar todo".
+- **El emparejado por nombre PROPONE, nunca concluye** (`lib/ventas/respaldo-de-factura.ts`).
+  Nada de lo que sale de ahí entra en una cifra del reporte: va a una lista para que una
+  persona confirme. La regla es que el nombre del cliente aparezca **entero** dentro del
+  nombre del trato, y es asimétrica a propósito. La versión anterior pedía una palabra en
+  común y llegó a proponer que «Amvac Latam» y «Forestales LATAM» eran el mismo grupo.
+- **Shared Selling se espeja pero no cuenta, y la evidencia en contra se muestra.** La
+  bandera vive en un solo lugar (`esVentaPropia` en `lib/ventas/pipelines.ts`). Mientras
+  esté en `false`, el reporte declara cuánto factura y cuánto cobra la gente que llegó por
+  ahí —hoy $55.820 facturados— para que la decisión se tome mirando plata y no opiniones.
