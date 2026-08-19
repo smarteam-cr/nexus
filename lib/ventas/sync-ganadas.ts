@@ -40,19 +40,13 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { huelaAPrueba } from "./clasificar-huecos";
+import { ETAPAS_GANADAS, ETAPAS_PERDIDAS, labelDePipeline } from "./pipelines";
+
+// Se re-exportan para no romper a quien ya las importaba de acá; viven en ./pipelines.
+export { ETAPAS_GANADAS, ETAPAS_PERDIDAS, PIPELINES_VENTA_PROPIA } from "./pipelines";
 
 const LOCK_KEY = "ventas-ganadas-sync-lock";
 const LOCK_TIMEOUT_MS = 15 * 60 * 1000;
-
-/** Las etapas que significan "ganado" en cada pipeline de tratos del portal. */
-export const ETAPAS_GANADAS = ["1373937254", "closedwon", "deal_registration_closed_won"] as const;
-
-/**
- * El pipeline de ventas propias. "HubSpot Shared Selling" NO está acá: es registro de
- * oportunidad con HubSpot, no facturación de la casa. Se espeja igual —para no tener que
- * volver a traerlo si mañana se decide contarlo— pero el reporte filtra por esta lista.
- */
-export const PIPELINES_VENTA_PROPIA = ["default", "907198211"] as const;
 
 const PROPIEDADES = [
   "dealname",
@@ -230,8 +224,18 @@ export async function syncVentasGanadas(opciones: {
     };
 
     // ── 4. Guarda de sanidad ──────────────────────────────────────────────────
+    // Las CONOCIDAS del rango: solo para la guarda y para saber cuáles dejaron de venir.
     const conocidas = await prisma.ventaGanada.findMany({
       where: { fechaCierre: { gte: new Date(`${opciones.desde}T00:00:00.000Z`), lte: new Date(`${opciones.hasta}T00:00:00.000Z`) } },
+      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true },
+    });
+    // ⚠ Y las que ya existen de los tratos que ACABAN de llegar, sin filtrar por fecha.
+    // Sin esto, un trato al que le editaron la fecha de cierre y cruzó de año no se
+    // encuentra entre las del rango, el sync intenta crearlo de nuevo y choca contra el
+    // índice único de `hubspotDealId` — la corrida entera se cae. No es hipotético: ya se
+    // midió que a cuatro tratos de 2026 les movieron el cierre mientras estaban abiertos.
+    const yaExistentes = await prisma.ventaGanada.findMany({
+      where: { hubspotDealId: { in: crudos.map((d) => d.id) } },
       select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true },
     });
     const parcial = conocidas.length > 0 && crudos.length < conocidas.length * 0.5;
@@ -242,7 +246,7 @@ export async function syncVentasGanadas(opciones: {
     }
 
     // ── 5. Upsert + bitácora ──────────────────────────────────────────────────
-    const previas = new Map(conocidas.map((v) => [v.hubspotDealId, v]));
+    const previas = new Map(yaExistentes.map((v) => [v.hubspotDealId, v]));
     for (const d of crudos) {
       const nombre = (d.p.dealname ?? "").trim() || `(trato ${d.id})`;
       const fecha = fechaOrNull(d.p.closedate);
@@ -267,6 +271,7 @@ export async function syncVentasGanadas(opciones: {
             ? new Prisma.Decimal(numOrNull(d.p.amount_in_home_currency)!)
             : null,
         pipelineId: d.p.pipeline ?? "",
+        pipelineLabel: labelDePipeline(d.p.pipeline ?? ""),
         etapaId: d.p.dealstage ?? "",
         estado: "GANADA" as const,
         clientId: cli.id,
@@ -281,6 +286,18 @@ export async function syncVentasGanadas(opciones: {
         res.altas++;
         if (!opciones.dryRun) {
           const creada = await prisma.ventaGanada.create({ data: { hubspotDealId: d.id, ...datos } });
+          // Entra al mapa apenas se crea: la búsqueda paginada de HubSpot puede devolver
+          // el mismo trato dos veces si algo cambia entre páginas, y sin esto el segundo
+          // pasaje intentaría crearlo de nuevo contra el índice único.
+          previas.set(d.id, {
+            id: creada.id,
+            hubspotDealId: d.id,
+            nombre,
+            monto: datos.monto,
+            fechaCierre: datos.fechaCierre,
+            estado: "GANADA",
+            clientId: cli.id,
+          });
           await prisma.ventaGanadaCambio.create({
             data: { ventaId: creada.id, hubspotDealId: d.id, nombre, tipo: "ALTA", nuevo: String(monto ?? "(sin monto)") },
           });
@@ -349,7 +366,7 @@ export async function syncVentasGanadas(opciones: {
           const etapa = p?.dealstage ?? null;
           const nuevoEstado = !p
             ? ("DESAPARECIDA" as const)
-            : etapa && /lost|perdid/i.test(etapa)
+            : etapa && ETAPAS_PERDIDAS.includes(etapa)
               ? ("PERDIDA" as const)
               : ("REABIERTA" as const);
           res.reclasificadas++;

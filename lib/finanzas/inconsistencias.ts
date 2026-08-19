@@ -327,8 +327,10 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       severidad: "BAJA",
       titulo: "Dos criterios para la reserva de aguinaldo",
       detalle:
-        `El reporte reserva ${money(e.aguinaldo.segunNexus)} al mes (el total repartido en doce). La hoja de egresos ` +
-        `lo reparte en diez y da ${money(e.aguinaldo.segunExcel)}. Ninguno de los dos es un error: son dos criterios.`,
+        `El reporte reserva ${money(e.aguinaldo.segunNexus)} al mes: el total del año repartido en doce. La hoja de ` +
+        `egresos lo reparte en diez, que sobre ese mismo total serían ${money(e.aguinaldo.segunExcel)}. Ninguno de ` +
+        `los dos es un error: son dos criterios. (El número que muestra la hoja además parte de un total distinto, ` +
+        `porque le proyecta a una persona un aguinaldo que el libro de planilla no respalda.)`,
       montoEnJuego: round2(Math.abs(e.aguinaldo.segunNexus - e.aguinaldo.segunExcel) * 12),
       queHacer: "Elegir uno. El de doce refleja el costo mensual real; el de diez llega a diciembre con colchón.",
       resuelve: "DIRECCION",

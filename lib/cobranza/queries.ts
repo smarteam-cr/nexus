@@ -2195,7 +2195,7 @@ async function armarEstadoParaAuditar(
       where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
       select: {
         nombre: true, monto: true, moneda: true, montoConvertidoHubspot: true,
-        pipelineId: true, clientId: true, clienteVia: true, excluida: true,
+        pipelineId: true, clientId: true, clienteVia: true, excluida: true, fechaCierre: true,
       },
     }),
     prisma.comisionPartner.findMany({
@@ -2231,7 +2231,7 @@ async function armarEstadoParaAuditar(
     ventas.map((v) => ({
       hubspotDealId: "",
       nombre: v.nombre,
-      fechaCierre: `${anio}-01-01`, // la fecha exacta no importa para el hueco
+      fechaCierre: isoDay(v.fechaCierre)!,
       monto: v.montoConvertidoHubspot !== null ? num(v.montoConvertidoHubspot) : num(v.monto),
       pipelineId: v.pipelineId,
       clientId: v.clientId,
@@ -2303,11 +2303,18 @@ async function armarEstadoParaAuditar(
     monedaInferida: avisoMoneda?.conceptos ?? [],
     desviosDeCambio: desvios,
     tarjetaYHerramientas: { hay: !!avisoTarjeta, periodos: avisoTarjeta?.periodos ?? [] },
-    // El criterio del Excel es dividir entre 10 en vez de 12: se reconstruye desde el de
-    // Nexus para poder mostrar los dos sin volver a leer la hoja.
+    // Los dos criterios de reparto sobre EL MISMO total: en doce meses o en diez.
+    // ⚠ El segundo NO es "el número del Excel", aunque el Excel use ese criterio: la hoja
+    // parte de un total anual distinto al de Nexus (le proyecta a una persona un aguinaldo
+    // que el libro de planilla no respalda). Comparar los dos repartos del MISMO total es
+    // una comparación honesta; llamarlo "lo que dice el Excel" sería afirmar un número que
+    // no medimos.
     aguinaldo:
       reservaNexus > 0
-        ? { segunNexus: reservaNexus, segunExcel: Math.round(((reservaNexus * divisorAguinaldo) / 10) * 100) / 100 }
+        ? {
+            segunNexus: reservaNexus,
+            segunExcel: Math.round(((reservaNexus * divisorAguinaldo) / 10) * 100) / 100,
+          }
         : null,
   };
 }
