@@ -94,9 +94,15 @@ interface Props {
   moneda: string;
   enfoque: SerieKey | null;
   pin: SerieKey | null;
+  /**
+   * Las series que la persona sacó del reporte. El tag cicla en tres pasos —normal,
+   * marcada, fuera— y esto es el tercero: la serie deja de dibujarse y de aparecer en el
+   * tooltip. No cambia ningún número: es una decisión de qué mirar, no de qué contar.
+   */
+  ocultas: ReadonlySet<SerieKey>;
   haySimulacion: boolean;
   onHover: (s: SerieKey | null) => void;
-  onPin: (s: SerieKey | null) => void;
+  onCiclar: (s: SerieKey) => void;
 }
 
 export default function CurvaEquilibrio({
@@ -105,9 +111,10 @@ export default function CurvaEquilibrio({
   moneda,
   enfoque,
   pin,
+  ocultas,
   haySimulacion,
   onHover,
-  onPin,
+  onCiclar,
 }: Props) {
   const colors = useChartColors();
 
@@ -156,6 +163,8 @@ export default function CurvaEquilibrio({
 
   const option = useMemo(() => {
     const atenuada = (k: SerieKey) => enfoque !== null && enfoque !== k;
+    /** Sigue en el reporte. Una serie fuera no se dibuja ni entra al tooltip. */
+    const vive = (k: SerieKey) => !ocultas.has(k);
     /**
      * ⚠ `opts` es un objeto CERRADO de dos banderas y no un `extra` libre, a propósito.
      * La versión anterior recibía un objeto que se esparcía al final, así que un
@@ -249,16 +258,23 @@ export default function CurvaEquilibrio({
             m.estado === "PARCIAL" ? `<span style="${tenue}"> · egreso parcial</span>` : "",
             m.simulado ? `<span style="${tenue}"> · simulado</span>` : "",
             `</div>`,
-            fila("Egresos", m.egresos, COLOR.egresos),
-            m.vendido > 0 ? fila("Vendido", m.vendido, COLOR.vendido, "punteada") : "",
-            fila("Facturado", m.facturadoEfectivo, COLOR.facturado),
-            fila("Cobrado", m.cobrado, COLOR.cobrado),
-            m.partnership > 0 ? fila("Partnership", m.partnership, COLOR.partnership, "barra") : "",
-            fila("Ingresos totales", m.ingresosTotales, COLOR.ingresosTotales, "punteada"),
+            // ⚠ El tooltip respeta lo que se sacó del reporte. Si una serie desaparece
+            // del gráfico pero sigue en el tooltip, el tag no "quita" nada: solo esconde
+            // la línea y deja el número donde estaba.
+            vive("egresos") ? fila("Egresos", m.egresos, COLOR.egresos) : "",
+            vive("vendido") && m.vendido > 0 ? fila("Vendido", m.vendido, COLOR.vendido, "punteada") : "",
+            vive("facturado") ? fila("Facturado", m.facturadoEfectivo, COLOR.facturado) : "",
+            vive("cobrado") ? fila("Cobrado", m.cobrado, COLOR.cobrado) : "",
+            vive("partnership") && m.partnership > 0
+              ? fila("Partnership", m.partnership, COLOR.partnership, "barra")
+              : "",
+            vive("ingresosTotales")
+              ? fila("Ingresos totales", m.ingresosTotales, COLOR.ingresosTotales, "punteada")
+              : "",
             // El piso va en el tooltip aunque sea el mismo número los doce meses: es
             // contra esta línea que se lee si el mes se sostiene, y tenerla que buscar
             // en el eje mientras el tooltip tapa el gráfico no ayuda a nadie.
-            fila("Punto de equilibrio", equilibrio, COLOR.equilibrio, "punteada"),
+            vive("equilibrio") ? fila("Punto de equilibrio", equilibrio, COLOR.equilibrio, "punteada") : "",
             m.pendienteFacturar > 0 ? `${sep}${fila("Pendiente de facturar", m.pendienteFacturar)}` : "",
             servicios ? `<div style="margin-top:4px">${servicios}</div>` : "",
             sep,
@@ -284,19 +300,26 @@ export default function CurvaEquilibrio({
         splitLine: { lineStyle: { color: colors.gridLine, type: "dashed" } },
       },
       series: [
+        /**
+         * Las bandas de meses parciales viven en su PROPIA serie, invisible.
+         *
+         * ⚠ Antes colgaban de la de partnership, y al poder sacar series del reporte eso
+         * se volvió una trampa: quitar Partnership se llevaba puesto el aviso de "estos
+         * meses tienen el gasto incompleto", que es la advertencia que evita leer una
+         * brecha como si fuera buena. Doce nulls: ocupa el eje entero y no dibuja nada.
+         *
+         * Sigue habiendo UNA sola serie con markArea a propósito: repetido en cada una,
+         * el gris se pinta encima de sí mismo y queda seis veces más oscuro.
+         */
         {
-          name: "Partnership",
-          type: "bar",
-          data: meses.map((m) => m.partnership),
-          itemStyle: {
-            color: COLOR.partnership,
-            opacity: atenuada("partnership") ? 0.08 : 0.32,
-            borderRadius: [4, 4, 0, 0],
-          },
-          barMaxWidth: 26,
-          z: 1,
-          // Las bandas viven en UNA sola serie: repetidas en cada una se pintan seis
-          // veces y el gris queda seis veces más oscuro.
+          name: "Meses parciales",
+          type: "line",
+          data: meses.map(() => null),
+          silent: true,
+          showSymbol: false,
+          lineStyle: { opacity: 0 },
+          tooltip: { show: false },
+          z: 0,
           markArea: {
             silent: true,
             itemStyle: { color: colors.gridLine, opacity: 0.5 },
@@ -315,56 +338,94 @@ export default function CurvaEquilibrio({
             ]),
           },
         },
-        linea("Egresos", "egresos", meses.map((m) => m.egresos)),
-        // Punteada mientras haya escenario: el conjunto ya no es el real.
+        vive("partnership")
+          ? {
+              name: "Partnership",
+              type: "bar",
+              data: meses.map((m) => m.partnership),
+              itemStyle: {
+                color: COLOR.partnership,
+                opacity: atenuada("partnership") ? 0.08 : 0.32,
+                borderRadius: [4, 4, 0, 0],
+              },
+              barMaxWidth: 26,
+              z: 1,
+            }
+          : null,
+        vive("egresos") ? linea("Egresos", "egresos", meses.map((m) => m.egresos)) : null,
         // Punteada porque NO es plata movida: es el compromiso que después se factura.
-        linea("Vendido", "vendido", meses.map((m) => m.vendido), { punteada: true }),
-        linea("Facturado", "facturado", meses.map((m) => m.facturadoEfectivo), { punteada: haySimulacion }),
-        linea("Cobrado", "cobrado", meses.map((m) => m.cobrado)),
-        linea("Ingresos totales", "ingresosTotales", meses.map((m) => m.ingresosTotales), { punteada: true }),
+        vive("vendido") ? linea("Vendido", "vendido", meses.map((m) => m.vendido), { punteada: true }) : null,
+        // Punteada mientras haya escenario: el conjunto ya no es el real.
+        vive("facturado")
+          ? linea("Facturado", "facturado", meses.map((m) => m.facturadoEfectivo), { punteada: haySimulacion })
+          : null,
+        vive("cobrado") ? linea("Cobrado", "cobrado", meses.map((m) => m.cobrado)) : null,
+        vive("ingresosTotales")
+          ? linea("Ingresos totales", "ingresosTotales", meses.map((m) => m.ingresosTotales), { punteada: true })
+          : null,
         // El piso es una línea de REFERENCIA: sin símbolos, porque no hay un "dato de
         // marzo" que marcar — es el mismo número los doce meses.
-        linea("Punto de equilibrio", "equilibrio", meses.map(() => equilibrio), {
-          punteada: true,
-          sinSimbolo: true,
-        }),
-      ],
+        vive("equilibrio")
+          ? linea("Punto de equilibrio", "equilibrio", meses.map(() => equilibrio), {
+              punteada: true,
+              sinSimbolo: true,
+            })
+          : null,
+      ].filter(Boolean),
     };
-  }, [meses, equilibrio, moneda, enfoque, haySimulacion, colors, COLOR]);
+  }, [meses, equilibrio, moneda, enfoque, ocultas, haySimulacion, colors, COLOR]);
 
   return (
     <>
       <EChartRenderer option={option} height={320} className="bg-surface" />
 
-      {/* La leyenda: tags que ENFOCAN, no que ocultan. Cada uno lleva el mismo trazo
-          que dibuja su serie —línea llena, punteada o bloque— para que se pueda
-          emparejar con el gráfico sin adivinar. Comparten el enfoque con los
-          indicadores de arriba: tocar cualquiera de los dos hace lo mismo. */}
+      {/* La leyenda: cada tag CICLA en tres pasos con clics sucesivos —normal, marcada,
+          fuera del reporte, y vuelta a normal—. Cada uno lleva el mismo trazo que dibuja
+          su serie —línea llena, punteada o bloque— para poder emparejarlo con el gráfico
+          sin adivinar. Comparten estado con los indicadores de arriba: tocar cualquiera
+          de los dos hace lo mismo.
+
+          Marcar es EXCLUSIVO (una sola serie a la vez, si no "enfocar" no enfoca nada);
+          sacar del reporte es acumulativo, porque descartar de a una hasta quedarse con
+          las dos que se quieren comparar es justamente el uso. */}
       <div className="flex flex-wrap items-center gap-2 px-4 pb-3 pt-1">
         {SERIES.map((s) => {
           const forma = FORMA_SERIE[s.key];
           const fijado = pin === s.key;
-          const apagada = enfoque !== null && enfoque !== s.key;
+          const fuera = ocultas.has(s.key);
+          const apagada = !fuera && enfoque !== null && enfoque !== s.key;
           return (
             <button
               key={s.key}
               type="button"
-              onMouseEnter={() => onHover(s.key)}
+              // Una serie que no está en el gráfico no se puede enfocar: pasar el mouse
+              // por su tag no debe apagar a las que sí están.
+              onMouseEnter={() => onHover(fuera ? null : s.key)}
               onMouseLeave={() => onHover(null)}
-              onFocus={() => onHover(s.key)}
+              onFocus={() => onHover(fuera ? null : s.key)}
               onBlur={() => onHover(null)}
-              onClick={() => onPin(fijado ? null : s.key)}
+              onClick={() => onCiclar(s.key)}
               aria-pressed={fijado}
-              title={fijado ? `Soltar ${s.label}` : `Enfocar ${s.label}`}
+              // El título dice qué hace el PRÓXIMO clic. Un ciclo de tres pasos sin eso
+              // se descubre a los tropiezos.
+              title={
+                fuera
+                  ? `Devolver ${s.label} al reporte`
+                  : fijado
+                    ? `Sacar ${s.label} del reporte`
+                    : `Marcar ${s.label}`
+              }
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
-                fijado
-                  ? "border-brand bg-brand/10 text-fg font-medium"
-                  : "border-line text-fg-secondary hover:bg-surface-hover"
+                fuera
+                  ? "border-line border-dashed text-fg-muted line-through hover:bg-surface-hover"
+                  : fijado
+                    ? "border-brand bg-brand/10 text-fg font-medium"
+                    : "border-line text-fg-secondary hover:bg-surface-hover"
               } ${apagada ? "opacity-45" : ""}`}
             >
               <span
                 aria-hidden
-                className="inline-block flex-shrink-0"
+                className={`inline-block flex-shrink-0 ${fuera ? "opacity-30" : ""}`}
                 style={
                   forma === "barra"
                     ? { width: 12, height: 12, borderRadius: 3, background: COLOR_CSS[s.key], opacity: 0.55 }

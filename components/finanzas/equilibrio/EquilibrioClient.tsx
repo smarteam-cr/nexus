@@ -42,7 +42,43 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const [escenario, setEscenario] = useState<OverrideEscenario>({});
   const [pin, setPin] = useState<SerieKey | null>(null);
   const [hover, setHover] = useState<SerieKey | null>(null);
-  const enfoque = pin ?? hover;
+  /** Las series que se sacaron del reporte. Vacío = se ven todas. */
+  const [ocultas, setOcultas] = useState<ReadonlySet<SerieKey>>(() => new Set());
+  // Una serie que no está en el gráfico no puede quedar enfocada: si no, pasar el mouse
+  // por su tag apagaría a las que sí están y el gráfico se vaciaría sin motivo visible.
+  const enfoque = pin ?? (hover !== null && !ocultas.has(hover) ? hover : null);
+
+  /**
+   * El ciclo de tres pasos de un tag o un indicador: normal → marcada → fuera del
+   * reporte → normal.
+   *
+   * Marcar es EXCLUSIVO —una sola serie a la vez— porque enfocar dos no enfoca nada.
+   * Sacar del reporte es acumulativo: descartar de a una hasta quedarse con las dos que
+   * se quieren comparar es justamente para lo que sirve.
+   *
+   * ⚠ Sacar una serie NO cambia ningún número del reporte. Es una decisión de qué mirar,
+   * no de qué contar: el margen, el piso y la brecha siguen valiendo lo mismo con la
+   * serie adentro o afuera.
+   */
+  const ciclar = (k: SerieKey) => {
+    if (ocultas.has(k)) {
+      setOcultas((prev) => {
+        const next = new Set(prev);
+        next.delete(k);
+        return next;
+      });
+      return;
+    }
+    if (pin === k) {
+      setPin(null);
+      // Se suelta el hover a mano: el mouse queda encima del tag, así que sin esto la
+      // serie recién sacada seguiría "enfocada" hasta mover el puntero.
+      setHover(null);
+      setOcultas((prev) => new Set(prev).add(k));
+      return;
+    }
+    setPin(k);
+  };
 
   const meses = useMemo(() => aplicarEscenario(r.meses, escenario), [r.meses, escenario]);
   const ind = useMemo(() => indicadoresDe(meses), [meses]);
@@ -206,6 +242,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               // de 1px no se distinguía a un metro de la pantalla.
               const activo = t.serie !== null && enfoque === t.serie;
               const fijado = t.serie !== null && pin === t.serie;
+              // El indicador y el tag de la leyenda son dos vistas del MISMO estado: si
+              // uno mostrara la serie como fuera del reporte y el otro no, no habría
+              // manera de saber cuál manda.
+              const fuera = t.serie !== null && ocultas.has(t.serie);
               const contenido = (
                 <>
                   <p className="text-[10px] uppercase tracking-wide text-fg-muted">{t.label}</p>
@@ -231,18 +271,27 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
                 <button
                   key={t.key}
                   type="button"
-                  onMouseEnter={() => setHover(t.serie)}
+                  onMouseEnter={() => setHover(fuera ? null : t.serie)}
                   onMouseLeave={() => setHover(null)}
-                  onFocus={() => setHover(t.serie)}
+                  onFocus={() => setHover(fuera ? null : t.serie)}
                   onBlur={() => setHover(null)}
-                  onClick={() => setPin(fijado ? null : t.serie)}
+                  onClick={() => ciclar(t.serie!)}
                   aria-pressed={fijado}
+                  title={
+                    fuera
+                      ? `Devolver ${t.label} al reporte`
+                      : fijado
+                        ? `Sacar ${t.label} del reporte`
+                        : `Marcar ${t.label}`
+                  }
                   className={`${base} ${
-                    fijado
-                      ? "border-brand ring-2 ring-brand/40"
-                      : activo
-                        ? "border-brand/60 bg-surface-hover"
-                        : "border-line hover:bg-surface-hover"
+                    fuera
+                      ? "border-line border-dashed opacity-50 hover:bg-surface-hover"
+                      : fijado
+                        ? "border-brand ring-2 ring-brand/40"
+                        : activo
+                          ? "border-brand/60 bg-surface-hover"
+                          : "border-line hover:bg-surface-hover"
                   }`}
                 >
                   {contenido}
@@ -256,16 +305,23 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               <div>
                 <h3 className="text-sm font-medium text-fg">La curva mensual de la operación</h3>
                 <p className="text-[11px] text-fg-muted mt-0.5">
-                  Pasá el mouse por un indicador —o fijalo con clic— para enfocarlo en la curva.
+                  Pasá el mouse por un indicador para enfocarlo. Con clics sucesivos: lo marca, lo saca del
+                  reporte y lo devuelve. Sacar una serie no cambia ningún número — solo qué se mira.
                 </p>
               </div>
-              {pin && (
+              {(pin !== null || ocultas.size > 0) && (
                 <button
                   type="button"
-                  onClick={() => setPin(null)}
+                  // Devuelve TODO de una: con el ciclo de tres pasos, volver a cero a mano
+                  // puede costar dos clics por serie.
+                  onClick={() => {
+                    setPin(null);
+                    setHover(null);
+                    setOcultas(new Set());
+                  }}
                   className="ml-auto px-2.5 py-1 text-[11px] rounded-md border border-line text-fg-secondary hover:bg-surface-hover"
                 >
-                  Ver todas las series
+                  {ocultas.size > 0 ? `Ver todas las series (${ocultas.size} fuera)` : "Ver todas las series"}
                 </button>
               )}
             </div>
@@ -275,9 +331,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               moneda={moneda}
               enfoque={enfoque}
               pin={pin}
+              ocultas={ocultas}
               haySimulacion={hayEscenario}
               onHover={setHover}
-              onPin={setPin}
+              onCiclar={ciclar}
             />
             <p className="px-4 py-2 text-[11px] text-fg-muted border-t border-line">
               {r.pisoVigente ? (
