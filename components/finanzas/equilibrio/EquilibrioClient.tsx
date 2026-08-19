@@ -71,8 +71,14 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const piso = r.pisoVigente?.base ?? r.equilibrio.base;
   // La caja del año: lo que de verdad entró al banco. Casi un tercio del margen
   // facturado todavía no está, y sin este par de números eso no se ve.
+  //
+  // ⚠ Se resta `egresosDeCajaTotal`, NO `egresosTotales`. La versión anterior restaba el
+  // egreso entero y con eso le descontaba a la caja $31.687 que nunca salieron del banco:
+  // la reserva de aguinaldo (un devengo — nadie apartó esa plata) y los egresos de meses
+  // que todavía no ocurrieron. Medía los ingresos con criterio de caja y los egresos con
+  // criterio de devengo, así que el "margen en caja" no era ninguna de las dos cosas.
   const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal);
-  const margenCaja = round2(cajaTotal - ind.egresosTotales);
+  const margenCaja = round2(cajaTotal - ind.egresosDeCajaTotal);
 
   const TILES: Array<{ key: string; label: string; valor: string; nota: string; serie: SerieKey | null; simulado?: boolean }> = [
     {
@@ -106,9 +112,17 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
     },
     {
       key: "margen",
-      label: "Margen anual",
-      valor: fmtMonto(ind.margenAnual, moneda),
-      nota: `en caja: ${fmtMonto(margenCaja, moneda)}`,
+      // ⚠ "a la fecha" y no "anual": el margen de los doce meses cuenta como ingreso la
+      // comisión de aliado de noviembre —ya fechada— pero no la planilla de septiembre a
+      // diciembre, que el libro de pagos todavía no tiene. Son 8 meses de ingreso contra
+      // 12 de costo, y el año "ganaba" ~$32.000 de cobrar el futuro sin pagarlo. Lo que
+      // viene se declara en la nota, no se suma.
+      label: "Margen a la fecha",
+      valor: fmtMonto(ind.margenAlDia, moneda),
+      nota:
+        ind.comprometidoPorVenir > 0
+          ? `en caja ${fmtMonto(margenCaja, moneda)} · ${fmtMonto(ind.comprometidoPorVenir, moneda)} por venir`
+          : `en caja: ${fmtMonto(margenCaja, moneda)}`,
       serie: "ingresosTotales",
       simulado: hayEscenario,
     },

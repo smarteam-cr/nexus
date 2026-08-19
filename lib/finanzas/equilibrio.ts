@@ -115,6 +115,22 @@ export interface OpcionesEquilibrio {
    * vigente, que es el titular del reporte. Sin esto, solo queda el promedio histórico.
    */
   costosVigentes?: CostoVigente[];
+  /**
+   * Lo VENDIDO, por mes de cierre del trato. Es un eje distinto de los otros: no es plata
+   * que se movió, es el compromiso que después se factura y más tarde se cobra. Va a dar
+   * una serie con picos —un trato grande cierra en un mes y se factura en doce—, y eso es
+   * exactamente lo que se quiere ver: el desfase entre vender, facturar y cobrar.
+   *
+   * Sin esto, la serie sale en cero y el gráfico simplemente no la dibuja.
+   */
+  ventas?: readonly VentaDeMes[];
+}
+
+/** Una venta ganada, ubicada en el mes en que se cerró. */
+export interface VentaDeMes {
+  periodo: string;
+  monto: number;
+  moneda: MonedaEq;
 }
 
 // ── Tipos de salida ─────────────────────────────────────────────────────────────
@@ -134,6 +150,12 @@ export interface FilaMes {
   partnership: number;
   partnershipCobrado: number;
   ingresosTotales: number; // facturado + partnership
+  /**
+   * Lo vendido en el mes en que cerró el trato. NO suma a los ingresos ni entra en la
+   * brecha: es el origen de la plata, no la plata. Mezclarlo con lo facturado contaría
+   * dos veces el mismo negocio.
+   */
+  vendido: number;
   /** ingresosTotales − egresos del mes. Negativa se muestra tal cual. */
   brecha: number;
   /** null cuando el mes es PARCIAL: no se puede afirmar que cubre habiendo contado de menos. */
@@ -176,7 +198,14 @@ export interface ReporteEquilibrio {
     partnershipTotal: number;
     partnershipCobradoTotal: number;
     ingresosTotales: number;
+    /** Los doce meses. Es una PROYECCIÓN, no el titular: mezcla lo ocurrido con lo que viene. */
     margenAnual: number;
+    /** Solo los meses que ya ocurrieron. Este sí compara peras con peras. */
+    margenAlDia: number;
+    /** Ingreso ya fechado en meses que todavía no llegaron. Se declara, no se suma al margen. */
+    comprometidoPorVenir: number;
+    /** Egreso que de verdad salió del banco: sin meses futuros y sin la reserva de aguinaldo. */
+    egresosDeCajaTotal: number;
     tasaCobro: number | null;
     mesesQueCubren: number;
     mesesConDato: number;
@@ -648,6 +677,18 @@ export function calcularEquilibrio(
     porServicioAnual.set(k, g);
   }
 
+  // ── Lo vendido, por mes de cierre ─────────────────────────────────────────────
+  // Un trato de otro año no entra: `periodos` es el año del reporte y lo de afuera se
+  // ignora en silencio a propósito —el llamador ya filtra, y si algo se colara, meterlo
+  // en un mes que no le toca sería peor que perderlo.
+  const vendidoPorMes = new Map<string, number>(periodos.map((p) => [p, 0]));
+  for (const v of opciones.ventas ?? []) {
+    if (!vendidoPorMes.has(v.periodo)) continue;
+    const monto = aPresentacion(v.monto, v.moneda, v.periodo, "venta ganada");
+    if (monto === null) continue;
+    vendidoPorMes.set(v.periodo, round2(vendidoPorMes.get(v.periodo)! + monto));
+  }
+
   // ── Las 12 filas ──────────────────────────────────────────────────────────────
   const meses: FilaMes[] = periodos.map((periodo, idx) => {
     const eg = porMes.get(periodo)!;
@@ -671,6 +712,7 @@ export function calcularEquilibrio(
       partnership: ing.partnership,
       partnershipCobrado: ing.partnershipCobrado,
       ingresosTotales,
+      vendido: vendidoPorMes.get(periodo) ?? 0,
       brecha,
       // Afirmar que un mes "cubre egresos" habiendo contado la mitad de los costos es
       // la mentira más fácil de este reporte. Con el mes parcial, no se afirma.
@@ -708,6 +750,30 @@ export function calcularEquilibrio(
   const facturadoTotal = suma((m) => m.facturado);
   const ingresosTotalesAnio = suma((m) => m.ingresosTotales);
   const cobradoTotal = suma((m) => m.cobrado);
+
+  /**
+   * ⚠ El margen de los doce meses mezcla ocho meses de ingreso con doce de costo, y por
+   * eso NO puede ser el titular. Concretamente: la comisión de aliado de noviembre entra
+   * como ingreso —está fechada y registrada— pero la planilla de septiembre a diciembre
+   * vale cero, porque el libro de pagos solo tiene lo que ya se pagó. Resultado: el año
+   * "gana" ~$32.000 que salen de cobrar el futuro sin pagarlo.
+   *
+   * La partición honesta es por mes ocurrido: lo que ya pasó se compara consigo mismo, y
+   * lo que viene se declara aparte en vez de sumarse de contrabando.
+   */
+  const ocurridos = meses.filter((m) => !m.futuro);
+  const margenAlDia = round2(ocurridos.reduce((n, m) => n + m.ingresosTotales - m.egresos, 0));
+  const comprometidoPorVenir = round2(
+    meses.filter((m) => m.futuro).reduce((n, m) => n + m.ingresosTotales, 0),
+  );
+  /**
+   * El egreso que de verdad salió del banco: sin los meses que no ocurrieron y sin la
+   * reserva de aguinaldo, que es un devengo —nadie apartó esa plata en una cuenta—. Con
+   * `egresosTotales` a secas, el "margen en caja" restaba $31.687 que nunca se pagaron.
+   */
+  const egresosDeCajaTotal = round2(
+    ocurridos.reduce((n, m) => n + m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO, 0),
+  );
 
   // ── Avisos de calidad ─────────────────────────────────────────────────────────
   const avisos: AvisoCalidad[] = [];
@@ -800,7 +866,11 @@ export function calcularEquilibrio(
       partnershipTotal: suma((m) => m.partnership),
       partnershipCobradoTotal: suma((m) => m.partnershipCobrado),
       ingresosTotales: ingresosTotalesAnio,
+      /** Los doce meses. Proyección, NO titular: ver el comentario de `margenAlDia`. */
       margenAnual: round2(ingresosTotalesAnio - egresosTotales),
+      margenAlDia,
+      comprometidoPorVenir,
+      egresosDeCajaTotal,
       tasaCobro: facturadoTotal === 0 ? null : Math.round((cobradoTotal / facturadoTotal) * 1000) / 1000,
       mesesQueCubren: meses.filter((m) => m.cubreEgresos === true).length,
       mesesConDato: meses.filter((m) => m.facturado > 0 || m.egresos > 0).length,

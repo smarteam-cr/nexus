@@ -1973,7 +1973,7 @@ export async function loadReporteAnual(
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
 
-  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos] =
+  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos, filasVenta] =
     await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
@@ -2009,6 +2009,18 @@ export async function loadReporteAnual(
     prisma.costoRecurrente.findMany({
       where: { activo: true, finalizadoEl: null },
       select: { nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
+    }),
+    // Lo vendido, para poder ver el desfase entre vender, facturar y cobrar. Solo los
+    // pipelines que cuentan como venta propia: Shared Selling se declara aparte, en la
+    // lista de inconsistencias, y no se mezcla acá para no dar por decidido lo que no está.
+    prisma.ventaGanada.findMany({
+      where: {
+        estado: "GANADA",
+        excluida: false,
+        pipelineId: { in: [...PIPELINES_VENTA_PROPIA] },
+        fechaCierre: { gte: desde, lte: hasta },
+      },
+      select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true },
     }),
   ]);
 
@@ -2155,6 +2167,16 @@ export async function loadReporteAnual(
     tasas,
     divisorAguinaldo: divisor,
     costosVigentes,
+    // Cuando HubSpot ya convirtió, se usa SU número: es el que ve el vendedor en el
+    // portal, y una segunda conversión con otra tasa haría que la misma venta valiera
+    // distinto en dos pantallas. Sin monto, la venta no aporta —cero sería mentir.
+    ventas: filasVenta
+      .filter((v) => v.montoConvertidoHubspot !== null || v.monto !== null)
+      .map((v) => ({
+        periodo: isoDay(v.fechaCierre)!.slice(0, 7),
+        monto: v.montoConvertidoHubspot !== null ? num(v.montoConvertidoHubspot)! : num(v.monto)!,
+        moneda: (v.montoConvertidoHubspot !== null ? "USD" : (v.moneda as MonedaEq)) as MonedaEq,
+      })),
   });
 
   // ── La lista para sentarse con el CFO ───────────────────────────────────────

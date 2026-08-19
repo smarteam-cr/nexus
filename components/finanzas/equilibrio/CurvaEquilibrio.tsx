@@ -31,7 +31,14 @@ import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { fmtMonto } from "@/components/cobranza/format";
 import type { MesEfectivo } from "@/lib/cobranza/equilibrio-escenario";
 
-export type SerieKey = "egresos" | "facturado" | "cobrado" | "ingresosTotales" | "equilibrio" | "partnership";
+export type SerieKey =
+  | "egresos"
+  | "vendido"
+  | "facturado"
+  | "cobrado"
+  | "ingresosTotales"
+  | "equilibrio"
+  | "partnership";
 
 const MES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -62,6 +69,7 @@ function tramos(meses: readonly MesEfectivo[], pred: (m: MesEfectivo) => boolean
 /** Cómo se dibuja cada serie. Lo usan el chart, el tooltip y la leyenda. */
 export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
   egresos: "linea",
+  vendido: "punteada",
   facturado: "linea",
   cobrado: "linea",
   ingresosTotales: "punteada",
@@ -72,6 +80,7 @@ export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
 /** El orden en que se leen, que es el de la leyenda. */
 const SERIES: Array<{ key: SerieKey; label: string }> = [
   { key: "egresos", label: "Egresos" },
+  { key: "vendido", label: "Vendido" },
   { key: "facturado", label: "Facturado" },
   { key: "cobrado", label: "Cobrado" },
   { key: "partnership", label: "Partnership" },
@@ -117,6 +126,9 @@ export default function CurvaEquilibrio({
       // aliado se confundían con la línea de la caja cobrada, que es justo la que uno
       // busca de un vistazo. El verde queda reservado a la plata que entró.
       partnership: SERIES_PALETTE[6]!,
+      // Lo vendido es el eje de ORIGEN, no de plata movida: color propio para que no se
+      // lea como una variante de lo facturado.
+      vendido: SERIES_PALETTE[4]!,
     }),
     [colors],
   );
@@ -217,6 +229,7 @@ export default function CurvaEquilibrio({
             m.simulado ? `<span style="${tenue}"> · simulado</span>` : "",
             `</div>`,
             fila("Egresos", m.egresos, COLOR.egresos),
+            m.vendido > 0 ? fila("Vendido", m.vendido, COLOR.vendido, "punteada") : "",
             fila("Facturado", m.facturadoEfectivo, COLOR.facturado),
             fila("Cobrado", m.cobrado, COLOR.cobrado),
             m.partnership > 0 ? fila("Partnership", m.partnership, COLOR.partnership, "barra") : "",
@@ -283,6 +296,8 @@ export default function CurvaEquilibrio({
         },
         linea("Egresos", "egresos", meses.map((m) => m.egresos)),
         // Punteada mientras haya escenario: el conjunto ya no es el real.
+        // Punteada porque NO es plata movida: es el compromiso que después se factura.
+        linea("Vendido", "vendido", meses.map((m) => m.vendido), { punteada: true }),
         linea("Facturado", "facturado", meses.map((m) => m.facturadoEfectivo), { punteada: haySimulacion }),
         linea("Cobrado", "cobrado", meses.map((m) => m.cobrado)),
         linea("Ingresos totales", "ingresosTotales", meses.map((m) => m.ingresosTotales), { punteada: true }),

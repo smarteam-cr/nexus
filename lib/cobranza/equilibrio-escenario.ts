@@ -38,7 +38,14 @@ export interface IndicadoresAnio {
   porCobrarTotal: number;
   partnershipTotal: number;
   ingresosTotales: number;
+  /** Los doce meses. PROYECCIÓN: mezcla lo ocurrido con lo comprometido. */
   margenAnual: number;
+  /** Solo los meses ya ocurridos — el titular. */
+  margenAlDia: number;
+  /** Ingreso ya fechado en meses que no llegaron. Se declara aparte. */
+  comprometidoPorVenir: number;
+  /** Egreso que salió del banco: sin meses futuros, sin la reserva de aguinaldo. */
+  egresosDeCajaTotal: number;
   tasaCobro: number | null;
   mesesQueCubren: number;
   mesesEgresoCompleto: number;
@@ -95,6 +102,18 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
     partnershipTotal: suma((m) => m.partnership),
     ingresosTotales,
     margenAnual: round2(ingresosTotales - egresosTotales),
+    // Espejo EXACTO del criterio del servidor (lib/finanzas/equilibrio.ts): si estas tres
+    // se calcularan distinto acá, el encabezado cambiaría de significado al simular y
+    // nadie se daría cuenta. El test de paridad con escenario vacío lo sostiene.
+    margenAlDia: round2(
+      meses.filter((m) => !m.futuro).reduce((n, m) => n + m.ingresosTotales - m.egresos, 0),
+    ),
+    comprometidoPorVenir: round2(
+      meses.filter((m) => m.futuro).reduce((n, m) => n + m.ingresosTotales, 0),
+    ),
+    egresosDeCajaTotal: round2(
+      meses.filter((m) => !m.futuro).reduce((n, m) => n + m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO, 0),
+    ),
     // La tasa de cobro se mide contra el facturado REAL: dividir por uno simulado
     // produciría un porcentaje de cobro inventado, que es de las cifras que más se
     // citan sueltas fuera de la pantalla.

@@ -85,8 +85,9 @@ export default function InconsistenciasPanel({
             <h3 className="text-sm font-medium text-fg">Qué falta para cerrar el año</h3>
             <p className="text-[11px] text-fg-muted mt-0.5">
               {resumen.cuantas} puntos abiertos · {resumen.porSeveridad.ALTA} de prioridad alta ·{" "}
-              <span className="text-fg-secondary">{fmtMonto(resumen.montoTotal, moneda)} en juego</span>. Ordenados
-              por la plata que mueve. Cada uno desaparece de acá cuando el dato se corrige.
+              <span className="text-fg-secondary">{fmtMonto(resumen.montoTotal, moneda)} en juego</span>. El total
+              cuenta cada peso una sola vez: las líneas marcadas «ya contado arriba» miran la misma plata desde otro
+              ángulo. Ordenados por lo que mueven; cada uno desaparece de acá cuando el dato se corrige.
             </p>
           </div>
           <Tabs
@@ -121,6 +122,11 @@ export default function InconsistenciasPanel({
                   {x.montoEnJuego !== null && (
                     <span className="text-sm tabular-nums text-fg-secondary ml-auto whitespace-nowrap">
                       {fmtMonto(x.montoEnJuego, moneda)}
+                      {/* Sin esta marca, sumar la columna a mano da un número mayor que el
+                          titular y parece que el titular está mal. Es al revés. */}
+                      {x.yaContadoEn && (
+                        <span className="ml-1.5 text-[10px] text-fg-muted font-normal">ya contado arriba</span>
+                      )}
                     </span>
                   )}
                 </div>

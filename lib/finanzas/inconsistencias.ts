@@ -36,6 +36,17 @@ export interface Inconsistencia {
   detalle: string;
   /** Cuánta plata mueve. null = no se puede cuantificar. */
   montoEnJuego: number | null;
+  /**
+   * El código de la línea que YA cuenta esta misma plata desde otro ángulo.
+   *
+   * ⚠ EXISTE POR UN ERROR QUE NO SE CAÍA SOLO: el titular decía "$437.579,78 en juego" y
+   * sumaba $28.880 dos veces, porque «ventas de empresas que no existen en Nexus» es un
+   * TERCIO de «ventas sin respaldo en cobranza», no una categoría paralela. Como la
+   * columna visible sumaba exacto al titular, quien lo verificara a mano confirmaba el
+   * número inflado. La línea conserva su monto —sirve para dimensionarla— pero
+   * `resumirInconsistencias` la deja fuera del total.
+   */
+  yaContadoEn?: string;
   /** La acción concreta que la cierra. */
   queHacer: string;
   resuelve: QuienResuelve;
@@ -119,10 +130,11 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       titulo: "Ventas ganadas que no están en cobranza",
       detalle:
         `Se ganaron ${money(e.ventas.vendido)} este año y ${money(descubierto)} no tienen respaldo en cobranza. ` +
-        `Son tres situaciones distintas: ${e.ventas.sinCobranza.cuantas} clientes sin nada cargado ` +
-        `(${money(e.ventas.sinCobranza.monto)}), ${e.ventas.parcial.cuantas} que facturan menos de lo que ` +
-        `vendieron (${money(e.ventas.parcial.monto)}) y ${e.ventas.sinCliente.cuantas} ventas de empresas que ` +
-        `ni existen en Nexus (${money(e.ventas.sinCliente.monto)}).`,
+        `Son tres situaciones distintas: ${e.ventas.sinCobranza.cuantas} ventas de clientes sin nada cargado ` +
+        `(${money(e.ventas.sinCobranza.monto)}), ${e.ventas.parcial.cuantas} de clientes que facturan menos de lo ` +
+        `que vendieron (${money(e.ventas.parcial.monto)}) y ${e.ventas.sinCliente.cuantas} de empresas que ni ` +
+        `existen en Nexus (${money(e.ventas.sinCliente.monto)}). Las tres se listan abajo por separado; el monto ` +
+        `de acá ya las incluye a las tres.`,
       montoEnJuego: descubierto,
       queHacer:
         "Revisar una por una: cargar la cuenta y el plan de cobro donde falte, o marcar la venta como que no genera facturación (continuidad, add-on, renovación).",
@@ -176,6 +188,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         "La venta está ganada en HubSpot pero su empresa no tiene ficha en Nexus, así que no hay dónde colgarle " +
         "la facturación. Suelen ser clientes nuevos que nadie dio de alta todavía.",
       montoEnJuego: e.ventas.sinCliente.monto,
+      yaContadoEn: "VENTAS_SIN_COBRANZA",
       queHacer: "Crear el cliente en Nexus, o ligar la venta a la empresa que corresponda si es una sub-empresa de un grupo.",
       resuelve: "COBRANZA",
       items: [],
@@ -380,6 +393,9 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         `y engorda el hueco entre lo vendido y lo cobrado. La pregunta no es de dato sino de definición: si el trabajo se ` +
         `factura y se cobra, ¿la venta cuenta como propia?`,
       montoEnJuego: f.facturado,
+      // Es la MISMA relación comercial que ya cuenta la línea de los tratos sin decidir,
+      // mirada del lado de la factura en vez del lado de la venta.
+      yaContadoEn: "PIPELINE_SIN_DECIDIR",
       queHacer:
         "Decidir si Shared Selling cuenta como venta propia. Si la respuesta es sí, es un solo cambio de bandera " +
         "(esVentaPropia en lib/ventas/pipelines.ts) y el vendido del año sube de golpe; si es no, esta facturación " +
@@ -400,6 +416,9 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         "cosas existen y son correctas por separado; lo que falta es el vínculo, y sin él el reporte cuenta la venta " +
         "como no cobrada y la factura como sin venta — el mismo dinero contado mal dos veces.",
       montoEnJuego: e.facturaDeGrupo.facturado,
+      // La venta de la madre ya se cuenta como descubierta en la línea de arriba: es la
+      // misma plata vista desde la hija.
+      yaContadoEn: "VENTAS_SIN_COBRANZA",
       queHacer: "Confirmar qué empresas son del mismo grupo y ligarlas, para que la venta y su facturación se encuentren.",
       resuelve: "COBRANZA",
       items: e.facturaDeGrupo.items,
@@ -426,7 +445,9 @@ export function resumirInconsistencias(xs: readonly Inconsistencia[]): {
 } {
   return {
     cuantas: xs.length,
-    montoTotal: round2(xs.reduce((n, x) => n + (x.montoEnJuego ?? 0), 0)),
+    // Solo la plata DISTINTA: las líneas marcadas `yaContadoEn` miran el mismo dinero
+    // desde otro ángulo y sumarlas infla el titular sin que nada avise.
+    montoTotal: round2(xs.reduce((n, x) => n + (x.yaContadoEn ? 0 : (x.montoEnJuego ?? 0)), 0)),
     porSeveridad: {
       ALTA: xs.filter((x) => x.severidad === "ALTA").length,
       MEDIA: xs.filter((x) => x.severidad === "MEDIA").length,

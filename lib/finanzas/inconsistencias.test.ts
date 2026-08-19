@@ -52,18 +52,19 @@ describe("nada roto = lista vacía", () => {
   });
 });
 
-describe("las ventas sin cobranza", () => {
-  const conVentas = (): EstadoParaAuditar => ({
-    ...limpio(),
-    ventas: {
-      ...limpio().ventas,
-      sinCobranza: { cuantas: 16, monto: 61_805.67 },
-      parcial: { cuantas: 12, monto: 46_738.36 },
-      sinCliente: { cuantas: 7, monto: 28_880 },
-      peoresDescubiertas: ["RC Inmobiliaria", "JUDESUR"],
-    },
-  });
+/** Un año con las tres situaciones de venta descubierta encendidas a la vez. */
+const conVentas = (): EstadoParaAuditar => ({
+  ...limpio(),
+  ventas: {
+    ...limpio().ventas,
+    sinCobranza: { cuantas: 16, monto: 61_805.67 },
+    parcial: { cuantas: 12, monto: 46_738.36 },
+    sinCliente: { cuantas: 7, monto: 28_880 },
+    peoresDescubiertas: ["RC Inmobiliaria", "JUDESUR"],
+  },
+});
 
+describe("las ventas sin cobranza", () => {
   it("suma las tres situaciones en un solo monto", () => {
     const x = detectarInconsistencias(conVentas()).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
     expect(x.montoEnJuego).toBe(137_424.03);
@@ -74,9 +75,49 @@ describe("las ventas sin cobranza", () => {
     // "Sin nada cargado" se arregla dando de alta; "factura menos de lo que vendió" es
     // una conversación distinta. Fundirlas en un número esconde qué hay que hacer.
     const x = detectarInconsistencias(conVentas()).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
-    expect(x.detalle).toContain("16 clientes sin nada cargado");
-    expect(x.detalle).toContain("12 que facturan menos");
-    expect(x.detalle).toContain("7 ventas de empresas que ni existen");
+    // ⚠ Los tres contadores cuentan VENTAS, no clientes: `clasificarVentas` clasifica una venta a
+    // la vez. El texto decía "16 clientes" sobre 16 ventas que son de 10 clientes.
+    expect(x.detalle).toContain("16 ventas de clientes sin nada cargado");
+    expect(x.detalle).toContain("12 de clientes que facturan menos");
+    expect(x.detalle).toContain("7 de empresas que ni existen");
+  });
+
+  it("avisa en el propio texto que el monto ya incluye a las tres", () => {
+    // Sin eso, la línea de «empresas que no existen» se lee como plata adicional.
+    const x = detectarInconsistencias(conVentas()).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
+    expect(x.detalle).toContain("ya las incluye a las tres");
+  });
+});
+
+describe("el total no cuenta la misma plata dos veces", () => {
+  it("EL BUG QUE MOTIVA ESTO: sumar la columna daba $28.880 de más", () => {
+    // «Ventas de empresas que no existen en Nexus» es un TERCIO de «ventas sin respaldo»,
+    // no una categoría paralela. Y como la columna visible sumaba exacto al titular,
+    // verificarlo a mano confirmaba el número inflado en vez de delatarlo.
+    const xs = detectarInconsistencias(conVentas());
+    const sinCliente = xs.find((i) => i.codigo === "VENTA_SIN_CLIENTE")!;
+    expect(sinCliente.yaContadoEn).toBe("VENTAS_SIN_COBRANZA");
+
+    const sumaCruda = xs.reduce((n, x) => n + (x.montoEnJuego ?? 0), 0);
+    const total = resumirInconsistencias(xs).montoTotal;
+    expect(total).toBeLessThan(sumaCruda);
+    expect(Math.round((sumaCruda - total) * 100) / 100).toBe(sinCliente.montoEnJuego);
+  });
+
+  it("la línea marcada CONSERVA su monto: sirve para dimensionarla", () => {
+    // Ponerle null la haría imposible de priorizar. Cambia el total, no la fila.
+    const x = detectarInconsistencias(conVentas()).find((i) => i.codigo === "VENTA_SIN_CLIENTE")!;
+    expect(x.montoEnJuego).toBeGreaterThan(0);
+  });
+
+  it("sin líneas marcadas, el total es la suma llana", () => {
+    const xs = detectarInconsistencias({
+      ...limpio(),
+      comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],
+      serviciosSinCobros: { cuantas: 2, monto: 6840, items: ["a"] },
+    });
+    expect(xs.every((x) => !x.yaContadoEn)).toBe(true);
+    expect(resumirInconsistencias(xs).montoTotal).toBe(57_840);
   });
 });
 
