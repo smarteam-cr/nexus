@@ -4,7 +4,7 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-18**, punta `ff1bbd7`. ⚠ **12 commits sin pushear** (ver «Al lado del plan»). Lo de este plan está **pusheado y
+> Última actualización: **2026-08-19**, punta `b3b035b`. ⚠ **13 commits sin pushear** (ver «Al lado del plan»). Lo de este plan está **pusheado y
 > deployado** hasta `d8f1d82`; lo que hay encima es de otras tandas (el medidor de IA y el
 > incidente REMPRO) y **está commiteado sin subir**.
 
@@ -245,6 +245,44 @@ porque comparten el push pendiente y porque **dos piden un paso de Elías despu�
 5. Sin descartar nada, «Aplicar cambios» tiene que comportarse **exactamente** como antes.
 6. Una tarea nueva creada por el modificador ahora nace **con dueño** (Cliente / Smarteam / Ambos /
    Desarrollo) y con su tipo — antes había que ponérselo a mano.
+
+---
+
+## La noche del 2026-08-19 — el retiro de etapas y la medición de atribución
+
+Plan aprobado por Elías para correr desatendido, con una regla: **nada que escriba en producción,
+nada de push, nada que necesite una decisión suya.**
+
+| Commit | Qué |
+|---|---|
+| `2ce3f62` | Las 5 puertas que llevaban a pantallas huérfanas o inexistentes + la guarda de navegación viva |
+| `1896a85` | El widget deja de inventar la etapa en 68 de 138 proyectos activos |
+| `4206d24` | 50 scripts escribían en producción sin pedir permiso, e INV12 daba verde → trinquete |
+| `c8c30d7` | Las capacidades del cronograma salen del prompt y pasan a ser un módulo compartido |
+| `b578967` | La medición del match por título: la regla que propuse era mala, y el dato dijo cuál sirve |
+| `b3b035b` | El subsistema de etapas se retira: 24 archivos |
+
+### ⭐ Lo que la medición cambió, y es el resultado más valioso de la noche
+
+La regla que iba a aplicar —«si el nombre del cliente da para dos palabras, que hagan falta dos»—
+**costaba 316 atribuciones correctas para arreglar dos**. La medición lo mostró antes de escribir
+una fila. La que el dato respalda es otra: **gana quien nombró más de su propio nombre**, y **la
+casa no le gana a un cliente** (34 pérdidas, todas empates reales, y 20 correcciones).
+
+⛔ **No se aplicó nada.** El código está, la guarda está, el informe está en
+`docs/informe-match-por-titulo.txt`. La decisión de cambiar la regla de atribución de las 12.500
+reuniones es de Elías.
+
+### ⚠ Lo que quedó abierto
+
+- **INV2 oscila**: el backfill lo deja en cero y vuelve a 8, con las MISMAS 8 reuniones
+  (Smarteam −8 · Culebras +6 · Pico Blanco +1 · APRECAP +1). Algo las reescribe. No lo causó esta
+  noche — el matcher nuevo no está cableado.
+- **INV1**: 6 vínculos que cruzan cliente. Esperan la decisión del matcher: borrarlos ahora
+  escondería el defecto.
+- **INV16 (a) y (c)**: rojos esperados hasta drenar los transcripts de Meet.
+- `ClientContextCards.tsx` (~1.000 líneas) y `poll-agent-run.ts` quedaron huérfanos por cascada.
+  No rompen nada; es limpieza propia.
 
 ---
 
