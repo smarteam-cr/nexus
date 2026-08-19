@@ -503,8 +503,7 @@ Precio: $4,500 USD total (3 cuotas de $1,500)`,
 
    Navegación:
    → /clients (ver lista)
-   → /clients/${client.id}/stage/1 (Etapa 1)
-   → /clients/${client.id}/stage/2 (Etapa 2)
+   → /clients/${client.id} (la ficha del cliente, con sus pestañas)
 `);
 }
 

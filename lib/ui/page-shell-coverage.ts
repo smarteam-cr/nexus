@@ -46,12 +46,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
 
   // ── Contenedor propio legítimo ──────────────────────────────────────────────
   "clients/[id]": { custom: "workspace full-viewport con scroll interno y tab bar sticky" },
-  "clients/[id]/projects/[projectId]": { custom: "workspace del proyecto (mismo motor que clients/[id])" },
   "clients/[id]/settings": { custom: "client component con contenedor angosto propio (candidato a SHELL_NARROW)" },
-  "clients/[id]/documents": { custom: "vista de documentos con contenedor propio" },
-  "clients/[id]/stage/[stageNum]": { custom: "stage page con overlay propio" },
-  "clients/[id]/stage/[stageNum]/audit/[auditId]": { custom: "detalle de auditoría dentro del stage" },
-  "clients/[id]/projects/[projectId]/stage/[stageNum]": { custom: "stage page del proyecto" },
   "roles/[id]": { custom: "página web del rol renderizada por el motor de landing (.stl)" },
   "business-cases/[id]": { custom: "workspace del BC (header propio + canvas)" },
   "business-cases/new": { custom: "formulario de creación con contenedor propio (candidato a SHELL_NARROW)" },

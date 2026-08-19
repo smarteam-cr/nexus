@@ -38,17 +38,6 @@ const EXENTOS: { destino: string; porque: string }[] = [
   // (vacío a propósito — si hace falta la primera, escribí el porqué)
 ];
 
-/**
- * Las pantallas del subsistema de ETAPAS, que navegan entre ellas con la ruta profunda del
- * proyecto. No se repuntan: se BORRAN en el tramo del retiro. Mientras tanto quedan acá, y el
- * test de más abajo exige que sigan existiendo — así la excepción se muere sola.
- */
-const CONDENADOS = [
-  "app/(shell)/clients/[id]/projects/[projectId]/StageTabs.tsx",
-  "app/(shell)/clients/[id]/ProjectsClient.tsx",
-  "app/(shell)/clients/[id]/stage/[stageNum]/page.tsx",
-];
-
 /** Un destino de navegación encontrado en el fuente. */
 interface Destino {
   ruta: string;
@@ -159,24 +148,10 @@ describe("ningún enlace lleva a una pantalla que no existe", () => {
     const conRutaProfunda = [...listarTsx("app"), ...listarTsx("components")].filter((f) =>
       /[`"']\/clients\/\$\{[^}]*\}\/projects\//.test(fs.readFileSync(path.join(RAIZ, f), "utf8")),
     );
-    const pendientes = conRutaProfunda.filter((f) => !CONDENADOS.includes(f.split(path.sep).join("/")));
     expect(
-      pendientes,
+      conRutaProfunda,
       "volvió la ruta profunda del proyecto escrita a mano — usá urlDeProyecto() de lib/agents/run-url.ts",
     ).toEqual([]);
-  });
-
-  it("y los condenados siguen condenados (la lista solo puede encoger)", () => {
-    /* Mismo criterio que los demás trinquetes del repo: falla si el número SUBE y también si el
-       archivo DESAPARECE. Lo segundo es lo que importa acá — el día que el tramo del borrado se
-       lleve estas pantallas, este test se pone rojo y obliga a sacar la entrada, en vez de dejar
-       una excepción viva para siempre sobre archivos que ya no existen. */
-    for (const f of CONDENADOS) {
-      expect(
-        fs.existsSync(path.join(RAIZ, f)),
-        `"${f}" ya no existe: sacalo de CONDENADOS (y si la lista quedó vacía, borrala junto con su filtro).`,
-      ).toBe(true);
-    }
   });
 
   it("cada exento declara su motivo", () => {

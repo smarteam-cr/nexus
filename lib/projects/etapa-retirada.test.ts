@@ -27,23 +27,14 @@ import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
 
 /**
- * Lo que TODAVÍA las nombra, con su motivo. La lista solo puede encoger.
+ * ⭐ VACÍA desde el 2026-08-19, y ése era el objetivo: las dos pantallas que todavía nombraban
+ * estas columnas eran las del subsistema de etapas, y se borraron. Nadie las lee ya.
  *
- * ⚠ Igual que los demás trinquetes del repo: falla si aparece uno nuevo Y si un declarado
- * desaparece. Lo segundo es lo que importa acá — cuando el tramo del borrado se lleve estas
- * pantallas, el test se pone rojo y obliga a sacar la entrada, en vez de dejar una excepción
- * viva sobre archivos que ya no existen.
+ * Se conserva la lista (y no se borra el mecanismo) porque las COLUMNAS siguen en el schema a
+ * propósito: mientras existan, `select: { currentStage: true }` compila, y el próximo que quiera
+ * mostrar «en qué etapa va» las va a encontrar antes que al ciclo de vida real.
  */
-const TODAVIA_LAS_NOMBRAN: { archivo: string; porque: string }[] = [
-  {
-    archivo: "app/(shell)/clients/[id]/projects/[projectId]/stage/[stageNum]/page.tsx",
-    porque: "La pantalla de etapas. Es la que se borra en el tramo del retiro; era su único escritor.",
-  },
-  {
-    archivo: "app/api/projects/[projectId]/current-step/route.ts",
-    porque: "El endpoint que escribe el paso desde esa pantalla. Se borra con ella.",
-  },
-];
+const TODAVIA_LAS_NOMBRAN: { archivo: string; porque: string }[] = [];
 
 const DIRECTORIOS = ["app", "components", "lib"];
 

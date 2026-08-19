@@ -99,95 +99,14 @@ type RawTranscript = RawSession;
 
 type Params = { params: Promise<{ id: string }> };
 
-// ── GET: secciones del agente para la subetapa actual ────────────────────────
-// Retorna { sections: SectionInfo[] } donde cada sección corresponde a un agente
-// activo configurado para ese stage+step. Si hay múltiples agentes con distinto
-// sectionLabel, cada uno forma su propio bloque visual independiente.
-export const GET = withClientAccess(async (_req: NextRequest, { params }: Params) => {
-  const { id: clientId } = await params;
+/* ⛔ ACÁ VIVÍA EL GET `?stage=&step=` (retirado el 2026-08-19).
+   Listaba los agentes de una subetapa y su historial de corridas, y su único consumidor era la
+   pantalla de etapas del proyecto, que se borró con el subsistema.
 
-  const stageParam = _req.nextUrl.searchParams.get("stage");
-  const stepParam  = _req.nextUrl.searchParams.get("step");
-  const stageNum   = stageParam !== null ? parseInt(stageParam) : NaN;
-  const stepNum    = stepParam  !== null ? parseInt(stepParam)  : NaN;
-
-  if (isNaN(stageNum) || isNaN(stepNum)) {
-    return NextResponse.json({ sections: [] });
-  }
-
-  try {
-    // 1. Buscar todos los agentes ACTIVE para este stage
-    const candidates = await prisma.agent.findMany({
-      where: {
-        status: "ACTIVE",
-        agentType: "SECTION", // Solo agentes de sección, no canvas transversales
-        /* Los agentes TIPADOS (pipelineKey) nunca entran al inventario de la pantalla de
-           etapa: se despachan por sus propios resolvers (GET /handoff, el carril del
-           detalle). Sin este filtro, la etapa 1 de una Implementación mostraba TRES bloques
-           de handoff y un clic corría el prompt de Desarrollo sobre ella (auditoría
-           2026-08-08 — ya estaba vivo en prod por los seeds). */
-        pipelineKey: null,
-        outputType: { in: ["CARDS", "FLOWCHART", "CARDS_AND_FLOWCHARTS"] },
-        OR: [
-          { associatedStages: { isEmpty: true } },
-          { associatedStages: { has: stageNum } },
-        ],
-      },
-      select: { id: true, name: true, outputType: true, associatedStep: true, sectionLabel: true },
-    });
-
-    // 2. Prioridad: específicos (associatedStep === stepNum) > wildcard (null)
-    //    Si hay específicos, solo ellos participan. Si no, el wildcard.
-    const specific = candidates.filter((a) => a.associatedStep === stepNum);
-    const wildcard = candidates.find((a) => a.associatedStep === null);
-    const participating = specific.length > 0 ? specific : (wildcard ? [wildcard] : []);
-
-    if (participating.length === 0) {
-      return NextResponse.json({ sections: [] });
-    }
-
-    // 3. Para cada agente, buscar su historial de runs filtrado por sección
-    const sections = await Promise.all(
-      participating.map(async (agent) => {
-        const runWhere = {
-          clientId,
-          stage: stageNum,
-          step:  stepNum,
-          status: { not: "ARCHIVED" as const },
-          // Backward compat: agente legacy (sectionLabel null) → capturar runs null + runs con su nombre
-          ...(agent.sectionLabel
-            ? { sectionLabel: agent.sectionLabel }
-            : { OR: [{ sectionLabel: null }, { sectionLabel: agent.name }] }
-          ),
-        };
-
-        const runs = await prisma.agentRun.findMany({
-          where: runWhere,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true, status: true, createdAt: true, step: true,
-            agent: { select: { name: true } },
-          },
-          take: 20,
-        });
-
-        return {
-          sectionLabel:    agent.sectionLabel ?? agent.name,
-          agentId:         agent.id,
-          agentName:       agent.name,
-          agentOutputType: agent.outputType,
-          lastRun:         runs[0] ?? null,
-          runs,
-        };
-      })
-    );
-
-    return NextResponse.json({ sections });
-  } catch (err) {
-    console.error("[analyze GET] Error:", err);
-    return NextResponse.json({ sections: [] });
-  }
-});
+   ⚠ NO CONFUNDIR CON EL POST DE ABAJO. El POST también resuelve el agente por `associatedStages`
+   y `associatedStep`, y de ahí salen el handoff, el kickoff, el mapeo de procesos y el detalle
+   del cronograma: 30 agentes activos, medidos. Ese carril NO se retira — el censo del 2026-08-18
+   lo descartó de la tanda justamente por eso. Lo que se fue es esta lectura, no la resolución. */
 
 // ── POST: ejecutar análisis ───────────────────────────────────────────────────
 export const POST = withClientAccess(async (_req: NextRequest, { params }: Params) => {

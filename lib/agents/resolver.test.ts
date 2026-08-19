@@ -319,13 +319,19 @@ describe("X2 — la variante del detalle del cronograma, por convención de id",
       "return apiError(",
     );
     expect(bloque, "el veto perdió el 400").toContain("400,");
-    // Y el inventario de la pantalla de etapa no lista agentes tipados.
-    const gets = src.indexOf('agentType: "SECTION"');
-    expect(gets, "cambió el GET de secciones; revisar esta guarda").toBeGreaterThan(-1);
+    /* ⚠ Acá había dos asserts más, sobre el INVENTARIO de la pantalla de etapa: el GET
+       `?stage=&step=` listaba los agentes de una subetapa y tenía que excluir a los tipados
+       (`pipelineKey: null`), o la etapa 1 de una Implementación mostraba tres bloques de handoff.
+
+       Esa pantalla y ese GET se retiraron el 2026-08-19 con el subsistema de etapas, así que el
+       agujero que vigilaban ya no tiene por dónde entrar. Lo que queda es impedir que vuelva: un
+       inventario nuevo que liste agentes por etapa sin filtrar los tipados reabre exactamente el
+       mismo problema. Por eso se afirma la AUSENCIA, no se borra la guarda. */
     expect(
-      src.slice(gets, gets + 300),
-      "los agentes tipados volvieron al inventario de la pantalla de etapa",
-    ).toContain("pipelineKey: null");
+      src.includes('agentType: "SECTION"'),
+      "volvió un inventario de agentes por etapa en analyze: si lista agentes tipados, un clic " +
+        "corre el prompt de Desarrollo sobre una Implementación (era el bug de la auditoría 2026-08-08)",
+    ).toBe(false);
   });
 
   it("el cinturón AL REVÉS: el agente genérico de handoff no corre sobre un proyecto tipado", () => {

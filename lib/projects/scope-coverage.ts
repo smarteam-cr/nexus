@@ -37,7 +37,6 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // ── Los que usan un criterio ───────────────────────────────────────────────
   "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },
   "app/(shell)/clients/[id]/page.tsx": { modo: "criterio", criterio: "navegable" },
-  "app/(shell)/clients/[id]/stage/[stageNum]/page.tsx": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },

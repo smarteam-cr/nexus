@@ -58,12 +58,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/audits/AuditsTable.tsx": 3,
   "app/(shell)/clients/[id]/error.tsx": 1,
   "app/(shell)/clients/[id]/layout.tsx": 19,
-  "app/(shell)/clients/[id]/projects/[projectId]/stage/[stageNum]/page.tsx": 11,
-  "app/(shell)/clients/[id]/projects/[projectId]/StageTabs.tsx": 7,
-  "app/(shell)/clients/[id]/ProjectsClient.tsx": 26,
   "app/(shell)/clients/[id]/settings/page.tsx": 42,
-  "app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient.tsx": 7,
-  "app/(shell)/clients/[id]/StageTabs.tsx": 7,
   // WorkspaceClient salió de la deuda: el rail de proyectos pintaba la pestaña ACTIVA con
   // `text-white`, o sea texto blanco sobre fondo blanco en modo claro. El síntoma no era
   // "se ve feo" sino "el cliente parece tener un solo proyecto" — se descubrió probando el
@@ -113,9 +108,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/charts/EChartRenderer.tsx": 4,
   "components/clients/ActionItemsDialog.tsx": 2,
   "components/clients/CanvasBoundary.tsx": 1,
-  "components/clients/CanvasToggleButtons.tsx": 5,
   "components/clients/ClientContextCards.tsx": 108,
-  "components/clients/ClientDocuments.tsx": 31,
   "components/clients/ClientInfoPanel.tsx": 12,
   "components/clients/ClientSharing.tsx": 28,
   "components/clients/CronogramaProgressButton.tsx": 1,
@@ -129,10 +122,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/SectionDiscoveryModal.tsx": 37,
   "components/clients/SendToCanvasMenu.tsx": 27,
   "components/clients/SessionHistoryDrawer.tsx": 17,
-  "components/clients/StageNoteEditor.tsx": 7,
-  "components/clients/StageOverlay.tsx": 7,
-  "components/clients/StepSections.tsx": 20,
-  "components/clients/SubstepAgentButton.tsx": 2,
   "components/cs/account/AccountBriefSection.tsx": 1,
   "components/dashboard/PortfolioGrid.tsx": 2,
   "components/flowchart/FlowchartViewer.tsx": 59,
@@ -161,7 +150,6 @@ const DEUDA_TOKENS: Record<string, number> = {
 const DEUDA_ALERTS: Record<string, number> = {
   "app/(shell)/audits/[id]/GenerateInsightsButton.tsx": 1,
   "app/(shell)/clients/[id]/settings/page.tsx": 2,
-  "app/(shell)/clients/[id]/stage/[stageNum]/NewAuditButtonClient.tsx": 1,
   "app/(shell)/clients/NewClientButton.tsx": 1,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 2,
   "app/(shell)/integrations/HubspotSystemCard.tsx": 1,
@@ -173,11 +161,9 @@ const DEUDA_ALERTS: Record<string, number> = {
   "components/canvas/CanvasLinearView.tsx": 1,
   "components/canvas/CronogramaCanvas.tsx": 2,
   "components/clients/ClientContextCards.tsx": 1,
-  "components/clients/ClientDocuments.tsx": 1,
   "components/clients/DocumentUpload.tsx": 1,
   "components/clients/ExternalAccessPanel.tsx": 1,
   "components/clients/ProjectHandoffSection.tsx": 1,
-  "components/clients/StageNoteEditor.tsx": 1,
   "components/handoffs/HandoffStepper.tsx": 2,
 };
 
@@ -227,9 +213,7 @@ describe("Ratchet de alerts: el error rojo ad-hoc solo ENCOGE", () => {
  * canvas se migran en pasada coordinada con la otra PC.
  */
 const DEUDA_TABBARS: Record<string, number> = {
-  "app/(shell)/clients/[id]/StageTabs.tsx": 1,
   "app/(shell)/clients/[id]/WorkspaceClient.tsx": 3,
-  "app/(shell)/clients/[id]/projects/[projectId]/StageTabs.tsx": 1,
   "app/(shell)/sessions/SessionsClient.tsx": 2,
   "app/(shell)/sessions/[id]/SessionView.tsx": 1,
   "components/clients/ActionItemsDialog.tsx": 1,
@@ -259,7 +243,6 @@ const DEUDA_OVERLAYS: Record<string, number> = {
   "components/clients/MinuteDialog.tsx": 2,
   "components/clients/SectionDiscoveryModal.tsx": 2,
   "components/clients/SessionHistoryDrawer.tsx": 1,
-  "components/clients/StageOverlay.tsx": 1,
   "components/dashboard/PortfolioGrid.tsx": 1,
   "components/flowchart/FlowchartViewer.tsx": 1,
 };

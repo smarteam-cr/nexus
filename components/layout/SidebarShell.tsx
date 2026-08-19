@@ -35,7 +35,7 @@ const writeCookie = (open: boolean) => {
 export default function SidebarShell({ user, initialOpen, children }: Props) {
   const pathname = usePathname();
   // Auto-colapsar sidebar en vista detalle de cliente
-  const isClientDetail = /^\/clients\/[^/]+\/(projects|stage|documents|settings)/.test(pathname);
+  const isClientDetail = /^\/clients\/[^/]+\/settings/.test(pathname);
 
   const [open, setOpen] = useState(initialOpen);
   // En vista de cliente, sidebar inicia colapsada pero el usuario puede expandir manualmente

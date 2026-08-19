@@ -24,12 +24,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // ── Clientes ────────────────────────────────────────────────────────────────
   clients: { modo: "own" },
   "clients/[id]": { modo: "own" },
-  "clients/[id]/projects/[projectId]": { modo: "inherits", de: "clients/[id]" },
   "clients/[id]/settings": { modo: "inherits", de: "clients/[id]" },
-  "clients/[id]/documents": { modo: "inherits", de: "clients/[id]" },
-  "clients/[id]/stage/[stageNum]": { modo: "inherits", de: "clients/[id]" },
-  "clients/[id]/stage/[stageNum]/audit/[auditId]": { modo: "inherits", de: "clients/[id]" },
-  "clients/[id]/projects/[projectId]/stage/[stageNum]": { modo: "inherits", de: "clients/[id]" },
 
   // ── Sesiones ────────────────────────────────────────────────────────────────
   sessions: { modo: "own" },

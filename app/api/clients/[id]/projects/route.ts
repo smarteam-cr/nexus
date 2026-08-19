@@ -32,39 +32,12 @@ export async function GET(
   return NextResponse.json({ projects });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const { id: clientId } = await params;
-  const guard = await guardAccessToClient(clientId);
-  if (guard instanceof NextResponse) return guard;
+/* ⛔ ACÁ VIVÍA UN POST que creaba un proyecto suelto (retirado el 2026-08-19).
+   Su único llamador era `ProjectsClient.tsx`, la pantalla del subsistema de etapas, que se
+   borró. El alta de proyectos tiene un solo camino desde la Tanda C: `POST /api/projects`, que
+   crea el registro en HubSpot Y en Nexus, con su permiso propio (`proyectos.create`) y su motor
+   reintentable. Este creaba solo la fila de Nexus, sin nada de eso.
 
-  const body = (await req.json()) as { name?: string };
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: "name requerido" }, { status: 400 });
-  }
-
-  const project = await prisma.project.create({
-    data: {
-      clientId,
-      name: body.name.trim(),
-      status: "active",
-    },
-  });
-
-  /* `null` = sin pipeline, y es literalmente cierto: este alta crea un proyecto suelto en
-     Nexus, sin record en HubSpot. Cae a la fila legacy (las piezas de Customer Success), que
-     es el comportamiento de siempre. La Tanda C —el alta única— es la que va a poder elegir
-     el pipeline acá. */
-  await createDefaultCanvases(project.id, null);
-
-  // Proyecto nuevo → cambió el panorama del cliente: re-clasificar sus sesiones
-  // recientes (huérfanas + links de IA sin revisar; los locks humanos se respetan).
-  // Fire-and-forget: no bloquea la respuesta.
-  void import("@/lib/sessions/reclassify")
-    .then((m) => m.reclassifyClientSessions(clientId))
-    .catch(() => {});
-
-  return NextResponse.json({ project }, { status: 201 });
-}
+   ⚠ EL GET DE ARRIBA SIGUE VIVO: lo usan la pantalla de configuración del cliente y el menú
+   «Enviar al canvas». Por eso se va el handler y no el archivo — que además `scope-coverage.ts`
+   exige que exista. */
