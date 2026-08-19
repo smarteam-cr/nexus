@@ -11,15 +11,17 @@
  *   npx tsx scripts/seed-post-session-agent.ts
  */
 import { PrismaClient } from "@prisma/client";
-import { sslParaConexion } from "@/lib/db/ssl";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
+import { assertProdWriteAllowed } from "./lib/guard";
+import { createScriptPool } from "./lib/db";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: sslParaConexion(process.env.DATABASE_URL),
-});
+/* Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional, igual que
+   seed-handoff-agent.ts. Sin el, un `npx tsx` distraido reescribe el prompt vivo de
+   produccion sin pedir nada — y INV12 da VERDE igual, porque mira los scripts con --apply
+   y una lista de seeds, no "todo lo que escribe". */
+assertProdWriteAllowed("scripts/seed-post-session-agent.ts");
+const { pool } = createScriptPool();
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 // ID estable para upsert idempotente
