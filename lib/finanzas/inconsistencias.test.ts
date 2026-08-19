@@ -18,11 +18,11 @@ const limpio = (): EstadoParaAuditar => ({
     vendido: 194_365.67,
     sinCobranza: { cuantas: 0, monto: 0 },
     parcial: { cuantas: 0, monto: 0 },
-    sinCliente: { cuantas: 0, monto: 0 },
+    sinCliente: { cuantas: 0, monto: 0, items: [] },
     sinMonto: { cuantas: 0, items: [] },
     resueltasPorNombre: { cuantas: 0, items: [] },
     fueraDePipeline: { cuantas: 0, monto: 0, sinMonto: 0 },
-    peoresDescubiertas: [],
+    descubiertas: [],
   },
   comisionesVencidas: [],
   serviciosSinCobros: { cuantas: 0, monto: 0, items: [] },
@@ -45,7 +45,7 @@ describe("nada roto = lista vacía", () => {
   it("EL CASO QUE IMPORTA: lo que se arregla DESAPARECE de la lista", () => {
     // Es la propiedad que hace que alguien vuelva a mirarla. Con una lista escrita a
     // mano, lo resuelto sigue ahí y a la tercera vez nadie la abre.
-    const con = { ...limpio(), serviciosSinCobros: { cuantas: 2, monto: 6840, items: ["ALFA+", "Alliance RH"] } };
+    const con = { ...limpio(), serviciosSinCobros: { cuantas: 2, monto: 6840, items: [{ texto: "ALFA+" }, { texto: "Alliance RH" }] } };
     expect(detectarInconsistencias(con).some((x) => x.codigo === "SERVICIO_SIN_COBROS")).toBe(true);
     const arreglado = { ...con, serviciosSinCobros: { cuantas: 0, monto: 0, items: [] } };
     expect(detectarInconsistencias(arreglado).some((x) => x.codigo === "SERVICIO_SIN_COBROS")).toBe(false);
@@ -59,8 +59,8 @@ const conVentas = (): EstadoParaAuditar => ({
     ...limpio().ventas,
     sinCobranza: { cuantas: 16, monto: 61_805.67 },
     parcial: { cuantas: 12, monto: 46_738.36 },
-    sinCliente: { cuantas: 7, monto: 28_880 },
-    peoresDescubiertas: ["RC Inmobiliaria", "JUDESUR"],
+    sinCliente: { cuantas: 7, monto: 28_880, items: [] },
+    descubiertas: [{ texto: "RC Inmobiliaria", monto: 26_200 }, { texto: "JUDESUR", monto: 6_120 }],
   },
 });
 
@@ -114,7 +114,7 @@ describe("el total no cuenta la misma plata dos veces", () => {
     const xs = detectarInconsistencias({
       ...limpio(),
       comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],
-      serviciosSinCobros: { cuantas: 2, monto: 6840, items: ["a"] },
+      serviciosSinCobros: { cuantas: 2, monto: 6840, items: [{ texto: "a" }] },
     });
     expect(xs.every((x) => !x.yaContadoEn)).toBe(true);
     expect(resumirInconsistencias(xs).montoTotal).toBe(57_840);
@@ -135,7 +135,7 @@ describe("los meses incompletos", () => {
     };
     const x = detectarInconsistencias(e).find((i) => i.codigo === "EGRESO_INCOMPLETO")!;
     expect(x.titulo).toContain("1 de 12");
-    expect(x.items).toEqual(["2026-01: falta costos fijos"]);
+    expect(x.items).toEqual([{ texto: "2026-01", nota: "falta costos fijos" }]);
     // Pero los otros se DECLARAN, no se esconden: si desaparecieran, la siguiente
     // pregunta sería "¿y por qué el piso solo mira 4 meses?".
     expect(x.detalle).toContain("2 meses figuran incompletos porque todavía no ocurrieron");
@@ -222,7 +222,7 @@ describe("cada punto dice quién lo resuelve", () => {
   });
 
   it("lo que se arregla cargando un dato queda para COBRANZA", () => {
-    const e = { ...limpio(), cuentasSinEmpresa: { cuantas: 6, items: ["IIA", "Corrugando"] } };
+    const e = { ...limpio(), cuentasSinEmpresa: { cuantas: 6, items: [{ texto: "IIA" }, { texto: "Corrugando" }] } };
     expect(detectarInconsistencias(e).find((x) => x.codigo === "CUENTA_SIN_EMPRESA")!.resuelve).toBe("COBRANZA");
   });
 
@@ -231,7 +231,7 @@ describe("cada punto dice quién lo resuelve", () => {
     // junta. Eso no se arregla escribiendo en Nexus, se arregla decidiendo si cuenta.
     const e: EstadoParaAuditar = {
       ...limpio(),
-      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: ["Iberorutas · ..."] },
+      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: [{ texto: "Iberorutas" }] },
     };
     const x = detectarInconsistencias(e).find((i) => i.codigo === "FACTURA_SOLO_FUERA_DE_PIPELINE")!;
     expect(x.resuelve).toBe("DIRECCION");
@@ -244,7 +244,7 @@ describe("cada punto dice quién lo resuelve", () => {
   it("factura la hija y vendió la madre: eso sí lo cierra cobranza ligando las empresas", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
-      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: ["Analisalab · ..."] },
+      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: [{ texto: "Analisalab" }] },
     };
     const x = detectarInconsistencias(e).find((i) => i.codigo === "FACTURA_DE_GRUPO")!;
     expect(x.resuelve).toBe("COBRANZA");
@@ -260,13 +260,13 @@ describe("cada punto dice quién lo resuelve", () => {
   it("TODOS los puntos tienen título, qué hacer y dueño — ninguno queda mudo", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
-      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: ["d"] },
-      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: ["e"] },
+      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: [{ texto: "d" }] },
+      facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: [{ texto: "e" }] },
       mesesParciales: [{ periodo: "2026-01", faltantes: ["costos fijos"], futuro: false }],
-      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: ["x"] }, resueltasPorNombre: { cuantas: 3, items: ["y"] }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 }, sinCliente: { cuantas: 7, monto: 28_880 } },
+      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: [{ texto: "x" }] }, resueltasPorNombre: { cuantas: 3, items: [{ texto: "y" }] }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 }, sinCliente: { cuantas: 7, monto: 28_880, items: [] } },
       comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],
-      serviciosSinCobros: { cuantas: 2, monto: 6840, items: ["a"] },
-      cuentasSinEmpresa: { cuantas: 6, items: ["b"] },
+      serviciosSinCobros: { cuantas: 2, monto: 6840, items: [{ texto: "a" }] },
+      cuentasSinEmpresa: { cuantas: 6, items: [{ texto: "b" }] },
       cobradosSinFecha: { cuantas: 3, total: 101 },
       periodosSinTasa: ["2026-09"],
       monedaInferida: ["c"],
@@ -282,6 +282,40 @@ describe("cada punto dice quién lo resuelve", () => {
       expect(["SISTEMA", "COBRANZA", "DIRECCION"]).toContain(x.resuelve);
       expect(x.codigo).toMatch(/^[A-Z_]+$/);
     }
+  });
+});
+
+describe("la lista fina nunca se trunca", () => {
+  it("EL CASO QUE MOTIVA LA REGLA: 40 ventas descubiertas salen las 40", () => {
+    // Antes el motor mandaba las 8 peores y la pantalla cortaba en 6. Con "y 34 más"
+    // nadie puede ir cerrando de a una, que es lo único que cierra el punto.
+    const muchas = Array.from({ length: 40 }, (_, i) => ({ texto: `Venta ${i}`, monto: 1000 - i }));
+    const e: EstadoParaAuditar = {
+      ...conVentas(),
+      ventas: { ...conVentas().ventas, descubiertas: muchas },
+    };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
+    expect(x.items).toHaveLength(40);
+  });
+
+  it("cada ítem puede traer su monto y dónde comprobarlo", () => {
+    const e: EstadoParaAuditar = {
+      ...conVentas(),
+      ventas: {
+        ...conVentas().ventas,
+        descubiertas: [
+          {
+            texto: "RC Inmobiliaria",
+            monto: 26_200,
+            nota: "cerrada el 2026-03-15",
+            enlaces: [{ etiqueta: "Trato en HubSpot", url: "https://app.hubspot.com/contacts/1/deal/2" }],
+          },
+        ],
+      },
+    };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
+    expect(x.items[0]!.monto).toBe(26_200);
+    expect(x.items[0]!.enlaces![0]!.url).toContain("/deal/2");
   });
 });
 

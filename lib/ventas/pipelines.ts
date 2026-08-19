@@ -16,9 +16,13 @@ export interface PipelineDeVentas {
   etapaPerdida: string;
   /**
    * true = lo que se gana acá es facturación de Smarteam.
-   * "HubSpot Shared Selling" va en false: es registro de oportunidad con HubSpot, no
-   * venta propia. Se espeja igual (para no tener que volver a traerlo el día que se
-   * decida contarlo) pero no suma al vendido.
+   *
+   * ⚠ "HubSpot Shared Selling" arrancó en false —se lo trataba como registro de
+   * oportunidad— y pasó a true el 2026-08-19 por decisión de Elías: ahí van los tratos
+   * cerrados que HubSpot nos envía, y son venta de la casa. La evidencia que lo cerró:
+   * 12 clientes cuya ÚNICA venta venía de ese pipeline ya habían facturado $55.820 en
+   * 2026, de los cuales $33.370 estaban cobrados. Se estaba facturando y cobrando
+   * trabajo que el reporte no contaba como vendido.
    */
   esVentaPropia: boolean;
 }
@@ -31,7 +35,7 @@ export const PIPELINES: readonly PipelineDeVentas[] = [
     label: "HubSpot Shared Selling",
     etapaGanada: "deal_registration_closed_won",
     etapaPerdida: "deal_registration_closed_lost",
-    esVentaPropia: false,
+    esVentaPropia: true,
   },
 ] as const;
 

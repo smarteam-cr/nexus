@@ -16,6 +16,7 @@
  * CRM Implementation" es evidente; otros van a ser casualidades. Por eso lo que sale de
  * acá va a una lista para que una persona confirme, y nunca a una cifra del reporte.
  */
+import type { EnlaceItem, ItemInconsistencia } from "@/lib/finanzas/inconsistencias";
 
 /** Un cliente que facturó en el año. */
 export interface ClienteQueFactura {
@@ -39,13 +40,13 @@ export interface RespaldoDeFactura {
     cuantas: number;
     facturado: number;
     cobrado: number;
-    items: string[];
+    items: ItemInconsistencia[];
   };
   /** Facturan, no tienen venta propia, y hay una venta de otra empresa que les calza. */
   deGrupo: {
     cuantas: number;
     facturado: number;
-    items: string[];
+    items: ItemInconsistencia[];
   };
 }
 
@@ -104,6 +105,12 @@ const money = (n: number) => "$" + n.toLocaleString("es-CR", { minimumFractionDi
 export function auditarRespaldoDeFactura(
   clientes: readonly ClienteQueFactura[],
   ventas: readonly VentaConDuenio[],
+  /**
+   * De dónde salen los enlaces de cada línea. Entra por parámetro para que este módulo
+   * siga sin saber nada de rutas de la app ni de portales de HubSpot: acá se decide QUÉ
+   * está mal, no dónde se mira.
+   */
+  enlacesDe: (clientId: string) => EnlaceItem[] = () => [],
 ): RespaldoDeFactura {
   const conVentaPropia = new Set<string>();
   const conVentaAjena = new Set<string>(); // tiene venta, pero de un pipeline que no cuenta
@@ -138,14 +145,22 @@ export function auditarRespaldoDeFactura(
       cuantas: solo.length,
       facturado: round2(solo.reduce((n, c) => n + c.facturado, 0)),
       cobrado: round2(solo.reduce((n, c) => n + c.cobrado, 0)),
-      items: porPlata(solo).map((c) => `${c.nombre} · facturó ${money(c.facturado)} · cobrado ${money(c.cobrado)}`),
+      items: porPlata(solo).map((c) => ({
+        texto: c.nombre,
+        monto: c.facturado,
+        nota: `de eso, ${money(c.cobrado)} ya entraron al banco`,
+        enlaces: enlacesDe(c.clientId),
+      })),
     },
     deGrupo: {
       cuantas: grupo.length,
       facturado: round2(grupo.reduce((n, g) => n + g.cliente.facturado, 0)),
-      items: porPlata(grupo.map((g) => ({ ...g, facturado: g.cliente.facturado }))).map(
-        (g) => `${g.cliente.nombre} · factura ${money(g.cliente.facturado)} · la venta dice «${g.calza}»`,
-      ),
+      items: porPlata(grupo.map((g) => ({ ...g, facturado: g.cliente.facturado }))).map((g) => ({
+        texto: g.cliente.nombre,
+        monto: g.cliente.facturado,
+        nota: `la venta está a nombre de otra empresa: «${g.calza}»`,
+        enlaces: enlacesDe(g.cliente.clientId),
+      })),
     },
   };
 }

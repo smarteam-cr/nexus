@@ -8,7 +8,7 @@
  * decidir NO pintarlo.
  */
 import { describe, expect, it } from "vitest";
-import { hubspotCompanyListUrl, hubspotCompanyUrl } from "./urls";
+import { hubspotCompanyListUrl, hubspotCompanyUrl, hubspotDealUrl } from "./urls";
 
 describe("URLs de HubSpot", () => {
   it("la ficha de empresa apunta al portal correcto, en singular", () => {
@@ -32,5 +32,20 @@ describe("URLs de HubSpot", () => {
       expect(hubspotCompanyUrl(portal, company), `portal=${portal} company=${company}`).toBeNull();
     }
     expect(hubspotCompanyListUrl(null)).toBeNull();
+  });
+});
+
+describe("hubspotDealUrl", () => {
+  it("arma la ficha del trato con el portal explícito", () => {
+    expect(hubspotDealUrl("6553628", "39218114285")).toBe(
+      "https://app.hubspot.com/contacts/6553628/deal/39218114285",
+    );
+  });
+
+  it("sin portal o sin trato NO inventa una URL", () => {
+    // Media URL lleva a un 404 dentro de HubSpot que parece un problema de permisos.
+    expect(hubspotDealUrl(null, "39218114285")).toBeNull();
+    expect(hubspotDealUrl("6553628", null)).toBeNull();
+    expect(hubspotDealUrl("6553628", "")).toBeNull();
   });
 });

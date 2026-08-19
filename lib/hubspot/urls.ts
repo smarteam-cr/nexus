@@ -24,6 +24,22 @@ export function hubspotCompanyUrl(
   return `${APP}/contacts/${portalId}/company/${companyId}`;
 }
 
+/**
+ * Ficha de un TRATO. Mismo patrón que la empresa: `/contacts/<portal>/deal/<id>`, en
+ * singular. `null` si falta cualquiera de las dos piezas.
+ *
+ * Existe para que el panel de inconsistencias del reporte anual sea comprobable: una
+ * lista que dice "esta venta no tiene cobranza" y no deja abrir la venta obliga a
+ * buscarla a mano en HubSpot, y a la tercera nadie la revisa.
+ */
+export function hubspotDealUrl(
+  portalId: string | null | undefined,
+  dealId: string | null | undefined,
+): string | null {
+  if (!portalId || !dealId) return null;
+  return `${APP}/contacts/${portalId}/deal/${dealId}`;
+}
+
 /** Listado de empresas del portal — el fallback cuando se sabe el portal pero no la empresa. */
 export function hubspotCompanyListUrl(portalId: string | null | undefined): string | null {
   if (!portalId) return null;

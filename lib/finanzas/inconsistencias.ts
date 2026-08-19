@@ -27,6 +27,35 @@ export type QuienResuelve =
 
 export type Severidad = "ALTA" | "MEDIA" | "BAJA";
 
+/** A dónde ir a comprobar un ítem. Puede haber más de un lugar. */
+export interface EnlaceItem {
+  etiqueta: string;
+  url: string;
+}
+
+/**
+ * Una línea del detalle fino.
+ *
+ * ⚠ ES UN OBJETO Y NO UN STRING PORQUE LA LISTA TIENE QUE SER COMPROBABLE. Una línea que
+ * dice "RC Inmobiliaria · $26.200" obliga a ir a buscar el trato a mano en HubSpot, y a
+ * la tercera vez nadie la revisa: la sección deja de servir para lo único que existe,
+ * que es sentarse con el CFO y cerrar los vacíos uno por uno.
+ *
+ * `monto` va aparte del texto para poder ORDENAR por plata y para que la suma de la lista
+ * se pueda comparar de un vistazo contra el total de la línea.
+ */
+export interface ItemInconsistencia {
+  texto: string;
+  /** El monto de ESTE ítem. undefined = el ítem no mueve plata. */
+  monto?: number;
+  /** Contexto secundario: fecha, estado, tipo de servicio. */
+  nota?: string;
+  enlaces?: EnlaceItem[];
+}
+
+/** Envuelve textos pelados. Para lo que de verdad no tiene a dónde enlazar (meses, conceptos). */
+export const soloTexto = (xs: readonly string[]): ItemInconsistencia[] => xs.map((texto) => ({ texto }));
+
 export interface Inconsistencia {
   codigo: string;
   severidad: Severidad;
@@ -50,8 +79,12 @@ export interface Inconsistencia {
   /** La acción concreta que la cierra. */
   queHacer: string;
   resuelve: QuienResuelve;
-  /** El detalle fino: nombres, meses, clientes. Para poder actuar sin buscar. */
-  items: string[];
+  /**
+   * El detalle fino, COMPLETO. Nunca truncado: la lista es la agenda de la reunión, y
+   * "y 12 más" convierte una lista accionable en un titular. Si es larga, la pantalla la
+   * hace scrollear — pero el dato está.
+   */
+  items: ItemInconsistencia[];
 }
 
 /** El estado medido que hace falta para armar la lista. */
@@ -73,31 +106,36 @@ export interface EstadoParaAuditar {
     vendido: number;
     sinCobranza: { cuantas: number; monto: number };
     parcial: { cuantas: number; monto: number };
-    sinCliente: { cuantas: number; monto: number };
-    sinMonto: { cuantas: number; items: string[] };
-    resueltasPorNombre: { cuantas: number; items: string[] };
+    /** Las ventas cuya empresa no existe en Nexus, CON nombre y enlace al trato. */
+    sinCliente: { cuantas: number; monto: number; items: ItemInconsistencia[] };
+    sinMonto: { cuantas: number; items: ItemInconsistencia[] };
+    resueltasPorNombre: { cuantas: number; items: ItemInconsistencia[] };
     fueraDePipeline: { cuantas: number; monto: number; sinMonto: number };
-    /** Nombres de las ventas descubiertas más caras, para poder empezar por ahí. */
-    peoresDescubiertas: string[];
+    /**
+     * TODAS las ventas sin respaldo en cobranza, no las peores ocho: cada una con su
+     * fecha, su monto, cuánto queda descubierto y el enlace al trato en HubSpot. Sin eso
+     * la línea es un titular y no una lista de trabajo.
+     */
+    descubiertas: ItemInconsistencia[];
   };
   /** Comisiones de aliado que ya deberían haber entrado y no están confirmadas. */
   comisionesVencidas: Array<{ partner: string; monto: number; fecha: string }>;
   /** Servicios activos que nunca generaron un cobro. */
-  serviciosSinCobros: { cuantas: number; monto: number; items: string[] };
+  serviciosSinCobros: { cuantas: number; monto: number; items: ItemInconsistencia[] };
   /** Clientes con cuenta de cobranza pero sin empresa de HubSpot ligada. */
-  cuentasSinEmpresa: { cuantas: number; items: string[] };
+  cuentasSinEmpresa: { cuantas: number; items: ItemInconsistencia[] };
   /**
    * Clientes que facturan en el año y cuya ÚNICA venta ganada está en un pipeline que
    * no cuenta como venta propia (hoy: Shared Selling). No es un error de dato: es la
    * evidencia de que ese pipeline sí produce facturación, y por eso lo decide dirección.
    */
-  facturaSoloFueraDePipeline: { cuantas: number; facturado: number; cobrado: number; items: string[] };
+  facturaSoloFueraDePipeline: { cuantas: number; facturado: number; cobrado: number; items: ItemInconsistencia[] };
   /**
    * Clientes que facturan y cuya venta está registrada a nombre de otra empresa del
    * mismo grupo (la madre, o una hermana). La plata y la venta existen las dos; lo que
    * falta es el vínculo, así que hoy se cuentan como hueco sin serlo.
    */
-  facturaDeGrupo: { cuantas: number; facturado: number; items: string[] };
+  facturaDeGrupo: { cuantas: number; facturado: number; items: ItemInconsistencia[] };
   /** Cobros marcados como cobrados sin la fecha en que entró la plata. */
   cobradosSinFecha: { cuantas: number; total: number };
   /** Meses del año sin tipo de cambio cargado. */
@@ -116,9 +154,6 @@ export interface EstadoParaAuditar {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => "$" + n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const listar = (xs: readonly string[], max = 8) =>
-  xs.length <= max ? xs.join(" · ") : `${xs.slice(0, max).join(" · ")} y ${xs.length - max} más`;
-
 /**
  * Arma la lista completa, ordenada por la plata que mueve.
  *
@@ -146,7 +181,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       queHacer:
         "Revisar una por una: cargar la cuenta y el plan de cobro donde falte, o marcar la venta como que no genera facturación (continuidad, add-on, renovación).",
       resuelve: "COBRANZA",
-      items: e.ventas.peoresDescubiertas,
+      items: e.ventas.descubiertas,
     });
   }
 
@@ -170,7 +205,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       queHacer:
         "Cargar lo que falta en cada mes. Lo de enero a marzo no es recuperable del Excel (ese bloque tiene las fórmulas rotas y mezcla monedas): si hace falta, hay que reconstruirlo de otra fuente.",
       resuelve: "COBRANZA",
-      items: parcialesPasados.map((m) => `${m.periodo}: falta ${m.faltantes.join(", ")}`),
+      items: parcialesPasados.map((m) => ({ texto: m.periodo, nota: `falta ${m.faltantes.join(", ")}` })),
     });
   }
 
@@ -188,7 +223,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: monto,
       queHacer: "Mirar el banco y marcarlas cobradas (o corregir la fecha esperada si se movieron).",
       resuelve: "DIRECCION",
-      items: vencidas.map((c) => `${c.partner} · ${money(c.monto)} · esperada el ${c.fecha}`),
+      items: vencidas.map((c) => ({ texto: c.partner, monto: c.monto, nota: `esperada el ${c.fecha}` })),
     });
   }
 
@@ -205,7 +240,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       yaContadoEn: "VENTAS_SIN_COBRANZA",
       queHacer: "Crear el cliente en Nexus, o ligar la venta a la empresa que corresponda si es una sub-empresa de un grupo.",
       resuelve: "COBRANZA",
-      items: [],
+      items: e.ventas.sinCliente.items,
     });
   }
 
@@ -324,7 +359,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: null,
       queHacer: "Cargar la tasa de esos meses.",
       resuelve: "COBRANZA",
-      items: e.periodosSinTasa,
+      items: soloTexto(e.periodosSinTasa),
     });
   }
 
@@ -340,9 +375,11 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: dif,
       queHacer: "Elegir cuál manda y dejarlo escrito: la tasa del banco central del mes, o la que ya usa el CRM.",
       resuelve: "DIRECCION",
-      items: e.desviosDeCambio.map(
-        (d) => `${d.concepto}: ${money(d.segunNexus)} según Nexus · ${money(d.segunHubspot)} según HubSpot`,
-      ),
+      items: e.desviosDeCambio.map((d) => ({
+        texto: d.concepto,
+        monto: round2(Math.abs(d.segunHubspot - d.segunNexus)),
+        nota: `${money(d.segunNexus)} según Nexus · ${money(d.segunHubspot)} según HubSpot`,
+      })),
     });
   }
 
@@ -358,7 +395,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: null,
       queHacer: "Confirmar si el cargo de tarjeta es propio (comisiones, intereses) o incluye las herramientas.",
       resuelve: "DIRECCION",
-      items: e.tarjetaYHerramientas.periodos,
+      items: soloTexto(e.tarjetaYHerramientas.periodos),
     });
   }
 
@@ -397,7 +434,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: null,
       queHacer: "Confirmar la moneda de esos conceptos en la hoja de egresos.",
       resuelve: "COBRANZA",
-      items: e.monedaInferida,
+      items: soloTexto(e.monedaInferida),
     });
   }
 
@@ -479,4 +516,3 @@ export function resumirInconsistencias(xs: readonly Inconsistencia[]): {
   };
 }
 
-export { listar as listarItems };

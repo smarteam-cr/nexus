@@ -44,7 +44,10 @@ import {
   detectarInconsistencias,
   type EstadoParaAuditar,
   type Inconsistencia,
+  type EnlaceItem,
+  type ItemInconsistencia,
 } from "@/lib/finanzas/inconsistencias";
+import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
 import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
@@ -2217,13 +2220,17 @@ async function armarEstadoParaAuditar(
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
 
-  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas, ventasTodas] =
+  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas, ventasTodas, portal] =
     await Promise.all([
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
       select: {
+        // hubspotDealId y hubspotCompanyId son lo que hace COMPROBABLE la lista: sin
+        // ellos cada línea obliga a ir a buscar el trato a mano en el portal.
+        hubspotDealId: true, hubspotCompanyId: true,
         nombre: true, monto: true, moneda: true, montoConvertidoHubspot: true,
         pipelineId: true, clientId: true, clienteVia: true, excluida: true, fechaCierre: true,
+        client: { select: { name: true } },
       },
     }),
     prisma.comisionPartner.findMany({
@@ -2232,11 +2239,15 @@ async function armarEstadoParaAuditar(
     }),
     prisma.servicioContratado.findMany({
       where: { cobros: { none: {} }, estado: "ACTIVO" },
-      select: { montoTotal: true, moneda: true, cuenta: { select: { client: { select: { name: true } } } } },
+      select: {
+        montoTotal: true, moneda: true, tipoServicio: true, modalidad: true,
+        fechaInicioFacturacion: true, descripcion: true,
+        cuenta: { select: { client: { select: { id: true, name: true, hubspotCompanyId: true } } } },
+      },
     }),
     prisma.client.findMany({
       where: { cuentaFinanciera: { isNot: null }, hubspotCompanyId: null },
-      select: { name: true },
+      select: { id: true, name: true },
     }),
     prisma.cobro.groupBy({
       // ⚠ moneda va en el agrupado a propósito. Hoy los 125 cobros del año son USD y la
@@ -2247,18 +2258,30 @@ async function armarEstadoParaAuditar(
       where: { periodo: { startsWith: String(anio) }, estado: { in: ["COBRADO", "POR_COBRAR"] } },
       _sum: { monto: true },
     }),
-    prisma.cuentaFinanciera.findMany({ select: { id: true, clientId: true, client: { select: { name: true } } } }),
+    prisma.cuentaFinanciera.findMany({
+      select: { id: true, clientId: true, client: { select: { name: true, hubspotCompanyId: true } } },
+    }),
     // Todas las ventas ganadas, de TODOS los años: un cliente que compró en 2023 y sigue
     // facturando en 2026 no es un hueco, y solo se puede saber mirando fuera del año.
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", excluida: false },
       select: { nombre: true, clientId: true, pipelineId: true },
     }),
+    // El portal del SISTEMA (el CRM de Smarteam). Un hubspotCompanyId/dealId solo tiene
+    // sentido dentro de su portal: sin esto no se puede armar un link que no dé 404.
+    prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } }),
   ]);
 
   // Lo facturado por cliente, para poder medir el hueco por MONTO y no por un sí/no.
   const clienteDeCuenta = new Map(cuentas.map((c) => [c.id, c.clientId]));
   const nombreDeCliente = new Map(cuentas.map((c) => [c.clientId, c.client?.name ?? "(sin nombre)"]));
+  const clientesPorId = new Map(cuentas.map((c) => [c.clientId, c.client]));
+  // ⚠ Acá arriba y no junto a su primer uso aparente: el callback de enlaces que recibe
+  // `auditarRespaldoDeFactura` se EJECUTA durante esa llamada, así que declararlo más
+  // abajo daba un ReferenceError de zona muerta que tsc no ve (es una closure que "podría"
+  // llamarse después). Lo cazó la primera corrida contra la base.
+  const portalId = portal?.hubspotPortalId ?? null;
+  const money = (n: number) => "$" + n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const tasaPresentacion = reporte.fx.tasas[0] ?? null;
   const facturadoPorCliente = new Map<string, number>();
   const cobradoPorCliente = new Map<string, number>();
@@ -2288,11 +2311,19 @@ async function armarEstadoParaAuditar(
       clientId: v.clientId,
       esVentaPropia: PIPELINES_VENTA_PROPIA.includes(v.pipelineId),
     })),
+    (clientId) => {
+      const cli = clientesPorId.get(clientId);
+      const empresa = hubspotCompanyUrl(portalId, cli?.hubspotCompanyId);
+      return [
+        { etiqueta: "Cliente en Nexus", url: `/clients/${clientId}` },
+        ...(empresa ? [{ etiqueta: "Empresa", url: empresa }] : []),
+      ];
+    },
   );
 
   const resumen = clasificarVentas(
     ventas.map((v) => ({
-      hubspotDealId: "",
+      hubspotDealId: v.hubspotDealId,
       nombre: v.nombre,
       fechaCierre: isoDay(v.fechaCierre)!,
       monto: v.montoConvertidoHubspot !== null ? num(v.montoConvertidoHubspot) : num(v.monto),
@@ -2305,11 +2336,35 @@ async function armarEstadoParaAuditar(
     { anio, pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA] },
   );
 
+  // TODAS las descubiertas, no las peores ocho. La lista es la agenda de trabajo: con
+  // "y 12 más" nadie puede ir cerrando de a una, que es lo único que la cierra.
+  const porDealId = new Map(ventas.map((v) => [v.hubspotDealId, v]));
+  const enlacesDeVenta = (dealId: string, companyId: string | null | undefined): EnlaceItem[] => {
+    const out: EnlaceItem[] = [];
+    const trato = hubspotDealUrl(portalId, dealId);
+    if (trato) out.push({ etiqueta: "Trato en HubSpot", url: trato });
+    const empresa = hubspotCompanyUrl(portalId, companyId);
+    if (empresa) out.push({ etiqueta: "Empresa", url: empresa });
+    return out;
+  };
+  const itemDeVenta = (v: (typeof resumen.ventas)[number]): ItemInconsistencia => {
+    const cruda = porDealId.get(v.hubspotDealId);
+    const cliente = cruda?.client?.name;
+    return {
+      texto: v.nombre,
+      monto: v.descubierto > 0 ? v.descubierto : undefined,
+      nota: [
+        `cerrada el ${v.fechaCierre}`,
+        v.monto !== null ? `vendida por ${money(v.monto)}` : "sin monto en HubSpot",
+        cliente ? `cliente: ${cliente}` : "sin cliente en Nexus",
+      ].join(" · "),
+      enlaces: enlacesDeVenta(v.hubspotDealId, cruda?.hubspotCompanyId),
+    };
+  };
   const descubiertas = resumen.ventas
     .filter((v) => v.descubierto > 0)
     .sort((a, b) => b.descubierto - a.descubierto)
-    .slice(0, 8)
-    .map((v) => `${v.nombre} · ${v.descubierto.toLocaleString("es-CR", { style: "currency", currency: "USD" })}`);
+    .map(itemDeVenta);
 
   // El desvío de cambio solo se puede medir donde HubSpot ya convirtió y la moneda no es
   // la de presentación: ahí conviven dos tasas y conviene que se vea.
@@ -2347,17 +2402,36 @@ async function armarEstadoParaAuditar(
       vendido: resumen.vendido,
       sinCobranza: { cuantas: resumen.porClase.SIN_COBRANZA.cuantas, monto: resumen.porClase.SIN_COBRANZA.descubierto },
       parcial: { cuantas: resumen.porClase.PARCIAL.cuantas, monto: resumen.porClase.PARCIAL.descubierto },
-      sinCliente: { cuantas: resumen.porClase.SIN_CLIENTE.cuantas, monto: resumen.porClase.SIN_CLIENTE.descubierto },
+      sinCliente: {
+        cuantas: resumen.porClase.SIN_CLIENTE.cuantas,
+        monto: resumen.porClase.SIN_CLIENTE.descubierto,
+        // QUÉ empresas son. El nombre del trato lleva el de la empresa, y el enlace a la
+        // ficha de HubSpot es lo que permite darla de alta sin adivinar cuál era.
+        items: resumen.ventas.filter((v) => v.clase === "SIN_CLIENTE").map(itemDeVenta),
+      },
       sinMonto: {
         cuantas: ventas.filter((v) => v.monto === null).length,
-        items: ventas.filter((v) => v.monto === null).map((v) => v.nombre).slice(0, 15),
+        // Sin `.slice(15)`: son las ventas que cuentan como CERO en el vendido del año.
+        items: ventas
+          .filter((v) => v.monto === null)
+          .map((v) => ({
+            texto: v.nombre,
+            nota: `cerrada el ${isoDay(v.fechaCierre)} · ${v.client?.name ?? "sin cliente en Nexus"}`,
+            enlaces: enlacesDeVenta(v.hubspotDealId, v.hubspotCompanyId),
+          })),
       },
       resueltasPorNombre: {
         cuantas: ventas.filter((v) => v.clienteVia === "nombre").length,
-        items: ventas.filter((v) => v.clienteVia === "nombre").map((v) => v.nombre),
+        items: ventas
+          .filter((v) => v.clienteVia === "nombre")
+          .map((v) => ({
+            texto: v.nombre,
+            nota: `atribuida a ${v.client?.name ?? "(?)"} por el NOMBRE del trato, no por la empresa`,
+            enlaces: enlacesDeVenta(v.hubspotDealId, v.hubspotCompanyId),
+          })),
       },
       fueraDePipeline: resumen.fueraDePipeline,
-      peoresDescubiertas: descubiertas,
+      descubiertas,
     },
     comisionesVencidas: comisiones.map((c) => ({
       partner: c.partner,
@@ -2367,9 +2441,40 @@ async function armarEstadoParaAuditar(
     serviciosSinCobros: {
       cuantas: serviciosSinCobros.length,
       monto: serviciosSinCobros.reduce((n, s) => n + num(s.montoTotal)!, 0),
-      items: serviciosSinCobros.map((s) => `${s.cuenta.client?.name ?? "(sin cliente)"} · ${num(s.montoTotal)}`),
+      // ⚠ Estos NO salen de HubSpot: un ServicioContratado no tiene trato. Salen de la
+      // cartera de cobranza —lo que alguien configuró como vendido— y lo que les falta es
+      // el plan de cobro. Por eso el enlace va al cliente en Nexus, que es donde se
+      // arregla, y a su empresa en HubSpot solo como contexto.
+      items: serviciosSinCobros.map((sv) => ({
+        texto: sv.cuenta.client?.name ?? "(servicio sin cliente)",
+        monto: num(sv.montoTotal)!,
+        nota: [
+          `${sv.tipoServicio} · ${sv.modalidad}`,
+          sv.moneda,
+          sv.fechaInicioFacturacion
+            ? `arranca ${isoDay(sv.fechaInicioFacturacion)}`
+            : "SIN fecha de arranque — por eso no generó cobros",
+          sv.descripcion ?? "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        enlaces: [
+          ...(sv.cuenta.client?.id
+            ? [{ etiqueta: "Cliente en Nexus", url: `/clients/${sv.cuenta.client.id}` }]
+            : []),
+          ...(hubspotCompanyUrl(portalId, sv.cuenta.client?.hubspotCompanyId)
+            ? [{ etiqueta: "Empresa", url: hubspotCompanyUrl(portalId, sv.cuenta.client?.hubspotCompanyId)! }]
+            : []),
+        ],
+      })),
     },
-    cuentasSinEmpresa: { cuantas: cuentasSinEmpresa.length, items: cuentasSinEmpresa.map((c) => c.name) },
+    cuentasSinEmpresa: {
+      cuantas: cuentasSinEmpresa.length,
+      items: cuentasSinEmpresa.map((c) => ({
+        texto: c.name,
+        enlaces: [{ etiqueta: "Cliente en Nexus", url: `/clients/${c.id}` }],
+      })),
+    },
     facturaSoloFueraDePipeline: respaldo.soloFueraDePipeline,
     facturaDeGrupo: respaldo.deGrupo,
     cobradosSinFecha: { cuantas: cobradosSinFecha, total: cobradosTotales },

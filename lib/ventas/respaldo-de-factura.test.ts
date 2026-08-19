@@ -103,8 +103,8 @@ describe("auditarRespaldoDeFactura", () => {
     );
     expect(r.deGrupo.cuantas).toBe(1);
     expect(r.deGrupo.facturado).toBe(12500);
-    expect(r.deGrupo.items[0]).toContain("Analisalab");
-    expect(r.deGrupo.items[0]).toContain("Grupo Inve");
+    expect(r.deGrupo.items[0]!.texto).toBe("Analisalab");
+    expect(r.deGrupo.items[0]!.nota).toContain("Grupo Inve");
   });
 
   it("una venta huérfana NO se reporta como caso de grupo", () => {
@@ -129,7 +129,27 @@ describe("auditarRespaldoDeFactura", () => {
       [cliente("Chico", 100), cliente("Grande", 90000), cliente("Medio", 5000)],
       ["Chico", "Grande", "Medio"].map((n) => ({ nombre: `${n} deal`, clientId: n, esVentaPropia: false })),
     );
-    expect(r.soloFueraDePipeline.items.map((i) => i.split(" ·")[0])).toEqual(["Grande", "Medio", "Chico"]);
+    expect(r.soloFueraDePipeline.items.map((i) => i.texto)).toEqual(["Grande", "Medio", "Chico"]);
+  });
+
+  it("los enlaces entran por parámetro: el módulo no sabe de rutas ni de portales", () => {
+    // Es lo que hace comprobable la lista sin que este módulo tenga que conocer la app.
+    const r = auditarRespaldoDeFactura(
+      [cliente("Iberorutas", 15100, 5000, "cli-1")],
+      [{ nombre: "Iberorutas deal", clientId: "cli-1", esVentaPropia: false }],
+      (id) => [{ etiqueta: "Cliente en Nexus", url: `/clients/${id}` }],
+    );
+    expect(r.soloFueraDePipeline.items[0]!.enlaces).toEqual([
+      { etiqueta: "Cliente en Nexus", url: "/clients/cli-1" },
+    ]);
+  });
+
+  it("sin constructor de enlaces, la lista sigue saliendo — solo que sin dónde comprobar", () => {
+    const r = auditarRespaldoDeFactura(
+      [cliente("Iberorutas", 15100)],
+      [{ nombre: "Iberorutas deal", clientId: "Iberorutas", esVentaPropia: false }],
+    );
+    expect(r.soloFueraDePipeline.items[0]!.enlaces).toEqual([]);
   });
 
   it("no inventa centavos al sumar", () => {

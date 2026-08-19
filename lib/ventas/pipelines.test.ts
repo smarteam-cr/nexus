@@ -55,13 +55,24 @@ describe("los pipelines declarados", () => {
 });
 
 describe("qué cuenta como venta propia", () => {
-  it("la venta compartida con HubSpot NO cuenta", () => {
-    // Es registro de oportunidad, no facturación de la casa. Si algún día se decide que
-    // cuenta, es cambiar este flag — y este caso se va a poner rojo para avisar que el
-    // vendido del año cambió de definición.
+  it("la venta compartida con HubSpot SÍ cuenta (decisión del 2026-08-19)", () => {
+    // Arrancó en false: se la trataba como registro de oportunidad y no como facturación
+    // de la casa. Cambió porque el dato dijo lo contrario — 12 clientes cuya ÚNICA venta
+    // venía de ese pipeline ya habían facturado $55.820 y cobrado $33.370 en 2026.
+    //
+    // Este caso existe para que la definición del vendido del año no se pueda mover en
+    // silencio: cualquiera que toque la bandera lo pone rojo y tiene que venir a
+    // declarar por qué. Ya funcionó una vez, cuando se invirtió.
     const compartida = PIPELINES.find((p) => p.label.includes("Shared Selling"))!;
-    expect(compartida.esVentaPropia).toBe(false);
-    expect(PIPELINES_VENTA_PROPIA).not.toContain(compartida.id);
+    expect(compartida.esVentaPropia).toBe(true);
+    expect(PIPELINES_VENTA_PROPIA).toContain(compartida.id);
+  });
+
+  it("hoy TODOS los pipelines declarados cuentan como venta propia", () => {
+    // Si mañana entra uno que no cuenta, este caso se pone rojo y obliga a mirar si el
+    // reporte lo está declarando en algún lado — que es lo que se perdió de vista la
+    // primera vez, cuando $211.020 quedaban fuera del vendido sin decirlo en pantalla.
+    expect(PIPELINES_VENTA_PROPIA.length).toBe(PIPELINES.length);
   });
 
   it("hay al menos un pipeline que sí cuenta: si no, el vendido siempre daría cero", () => {

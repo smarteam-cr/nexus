@@ -14,6 +14,11 @@
  *     termina con doce puntos y ningún dueño.
  *  3. **Se puede filtrar por dueño.** El CFO abre "lo que decide dirección" y ve sus
  *     siete, no las trece.
+ *  4. **La lista fina NUNCA se trunca.** Antes cortaba en seis y decía "y 12 más", que
+ *     convierte una lista de trabajo en un titular: no se puede ir cerrando de a una lo
+ *     que no se ve. Cada línea trae además su monto y el enlace para comprobarla en su
+ *     fuente —el trato en HubSpot, el cliente en Nexus—, porque una lista que obliga a
+ *     buscar cada cosa a mano se deja de revisar a la tercera vez.
  *
  * Lo que NO hace: guardar estado. Un punto se cierra arreglando el dato, y entonces
  * desaparece solo de la lista en la próxima carga. Un check manual acá sería una segunda
@@ -26,6 +31,7 @@ import { fmtMonto } from "@/components/cobranza/format";
 import {
   resumirInconsistencias,
   type Inconsistencia,
+  type ItemInconsistencia,
   type QuienResuelve,
 } from "@/lib/finanzas/inconsistencias";
 
@@ -46,6 +52,68 @@ const RESUELVE_LABEL: Record<QuienResuelve, string> = {
 };
 
 type Filtro = "todas" | QuienResuelve;
+
+/**
+ * El detalle fino de un punto: TODAS sus líneas, con su monto y sus enlaces.
+ *
+ * ⚠ NO se trunca. La versión anterior cortaba en seis y ponía "y 12 más", y con eso la
+ * sección dejaba de servir para lo único que existe: sentarse a cerrar los vacíos de a
+ * uno. Lo que sí se hace es acotar el ALTO —a partir de ocho líneas la lista scrollea
+ * dentro de su caja— para que un punto con cuarenta ventas no empuje los demás fuera de
+ * la pantalla. El dato está siempre; lo que se administra es el espacio.
+ */
+function ListaDeItems({ items, moneda }: { items: ItemInconsistencia[]; moneda: string }) {
+  const largo = items.length > 8;
+  return (
+    <div className="mt-2 rounded-lg border border-line bg-surface-muted/60">
+      <ul
+        className={`divide-y divide-line/60 ${largo ? "max-h-72 overflow-y-auto" : ""}`}
+        aria-label={`Detalle: ${items.length} ${items.length === 1 ? "caso" : "casos"}`}
+      >
+        {items.map((it, k) => (
+          <li key={k} className="px-2.5 py-1.5 flex items-start gap-2">
+            <span className="text-[10px] text-fg-muted tabular-nums pt-0.5 w-6 flex-shrink-0 text-right">
+              {k + 1}.
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px] text-fg-secondary break-words min-w-0">{it.texto}</span>
+                {it.monto !== undefined && (
+                  <span className="text-[11px] tabular-nums text-fg ml-auto whitespace-nowrap">
+                    {fmtMonto(it.monto, moneda)}
+                  </span>
+                )}
+              </div>
+              {it.nota && <p className="text-[10px] text-fg-muted mt-0.5 break-words">{it.nota}</p>}
+              {it.enlaces && it.enlaces.length > 0 && (
+                <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-0.5">
+                  {it.enlaces.map((e) => (
+                    <a
+                      key={e.url}
+                      href={e.url}
+                      // Los enlaces a HubSpot salen de la app; los de Nexus también abren
+                      // aparte, para no perder la lista a medio revisar.
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-brand hover:underline"
+                    >
+                      {e.etiqueta} ↗
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {largo && (
+        <p className="px-2.5 py-1 text-[10px] text-fg-muted border-t border-line">
+          {items.length} casos — la lista scrollea, no se corta.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function InconsistenciasPanel({
   inconsistencias,
@@ -133,18 +201,7 @@ export default function InconsistenciasPanel({
 
                 <p className="text-xs text-fg-secondary leading-relaxed mt-1.5">{x.detalle}</p>
 
-                {x.items.length > 0 && (
-                  <ul className="mt-1.5 space-y-0.5">
-                    {x.items.slice(0, 6).map((it, k) => (
-                      <li key={k} className="text-[11px] text-fg-muted">
-                        · {it}
-                      </li>
-                    ))}
-                    {x.items.length > 6 && (
-                      <li className="text-[11px] text-fg-muted">y {x.items.length - 6} más</li>
-                    )}
-                  </ul>
-                )}
+                {x.items.length > 0 && <ListaDeItems items={x.items} moneda={moneda} />}
 
                 <div className="flex flex-wrap items-baseline gap-2 mt-2">
                   <span

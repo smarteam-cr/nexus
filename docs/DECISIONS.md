@@ -2795,3 +2795,27 @@ fabricarla.
   la plata, no la plata: mezclarlo con lo facturado contaría dos veces el mismo negocio. La
   serie tiene picos a propósito —un trato grande cierra en un mes y se factura en doce— y
   ese desfase es justamente lo que se quiere ver.
+
+- **HubSpot Shared Selling SÍ cuenta como venta propia** (Elías, 2026-08-19). Ahí van los
+  tratos cerrados que HubSpot nos envía, y son venta de la casa. La evidencia que lo cerró:
+  12 clientes cuya ÚNICA venta venía de ese pipeline ya habían facturado $55.820 en 2026,
+  de los cuales $33.370 estaban cobrados — se estaba facturando y cobrando trabajo que el
+  reporte no contaba como vendido. Consecuencias, todas asumidas: el vendido del año pasa
+  de $194.365,67 a **$405.386**; agosto deja de ser un mes con cero ventas; y el hueco
+  contra cobranza sube de $132.424 a **$315.175**, porque esas ventas ahora se le exigen a
+  cobranza. La bandera vive en un solo lugar (`esVentaPropia` en `lib/ventas/pipelines.ts`)
+  y hay un caso que se pone rojo si alguien la mueve sin declarar por qué.
+- **La lista fina de las inconsistencias no se trunca NUNCA.** Antes el motor mandaba las 8
+  peores y la pantalla cortaba en 6: "y 34 más" convierte una lista de trabajo en un
+  titular, y nadie puede ir cerrando de a uno lo que no ve. Hoy salen los 111 ítems, y la
+  suma de una lista cuadra al centavo con el total de su línea — que es la comprobación que
+  se puede hacer a ojo, sin abrir nada. Lo que se administra es el ALTO: a partir de ocho
+  líneas la lista scrollea dentro de su caja.
+- **Cada ítem dice DÓNDE comprobarse** (`ItemInconsistencia.enlaces`). El trato en HubSpot,
+  la empresa, el cliente en Nexus. Una línea que dice "RC Inmobiliaria · $26.200" y no deja
+  abrir el trato obliga a buscarlo a mano, y a la tercera vez la sección se deja de revisar.
+  ⚠ El portal va SIEMPRE explícito (`lib/hubspot/urls.ts`): un id solo tiene sentido dentro
+  de su portal, y cruzarlos abre una empresa ajena o da un 404 que parece falta de permisos.
+- **Los enlaces entran por parámetro a los módulos puros.** `auditarRespaldoDeFactura`
+  recibe un `enlacesDe(clientId)`: ahí se decide QUÉ está mal, no dónde se mira. Sin eso, un
+  módulo de dominio tendría que conocer rutas de la app y el portal de HubSpot.
