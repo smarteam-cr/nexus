@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CsAlertRow } from "@/lib/cs/load-panel";
 import { SEV_META, CATEGORY_LABEL, relTime } from "@/lib/cs/alert-labels";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 
 
 export default function AlertsFeed({ initialAlerts }: { initialAlerts: CsAlertRow[] }) {
@@ -114,7 +115,7 @@ export default function AlertsFeed({ initialAlerts }: { initialAlerts: CsAlertRo
                   <p className="text-xs text-fg-secondary mt-0.5">
                     <Link href={`/clients/${a.clientId}`} className="font-medium hover:text-brand">{a.clientName}</Link>
                     {a.projectName && a.projectId && (
-                      <> · <Link href={`/projects/${a.projectId}`} className="hover:text-brand">{a.projectName}</Link></>
+                      <> · <Link href={urlDeProyecto(a.clientId, a.projectId)} className="hover:text-brand">{a.projectName}</Link></>
                     )}
                   </p>
                   <p className="text-xs text-fg-secondary mt-1.5">{a.reason}</p>

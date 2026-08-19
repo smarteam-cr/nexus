@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
 import { filtrarPorBusqueda } from "@/lib/ui/text-search";
@@ -689,7 +690,7 @@ export default function ClientsGrid({
           columns={columnasInternos}
           rows={internosBuscados}
           rowKey={(p) => p.id}
-          onRowClick={(p) => router.push(`/clients/${p.clienteId}/projects/${p.id}`)}
+          onRowClick={(p) => router.push(urlDeProyecto(p.clienteId, p.id))}
           initialSort={{ key: "empresa", dir: "asc" }}
           empty={
             <EmptyState

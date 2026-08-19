@@ -129,8 +129,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,
   "components/clients/SendToCanvasMenu.tsx": 27,
-  "components/clients/ServiceMap.tsx": 25,
-  "components/clients/ServiceMapHeader.tsx": 1,
   "components/clients/SessionHistoryDrawer.tsx": 17,
   "components/clients/StageNoteEditor.tsx": 7,
   "components/clients/StageOverlay.tsx": 7,

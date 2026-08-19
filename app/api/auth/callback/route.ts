@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
 
     // (Cookie account_id eliminada en cutover a Supabase Auth — junio 2026)
     if (isNewClient && clientId) {
-      return NextResponse.redirect(`${process.env.APP_URL}/clients/${clientId}/stage/1`);
+      return NextResponse.redirect(`${process.env.APP_URL}/clients/${clientId}`);
     }
     if (clientId) {
       return NextResponse.redirect(`${process.env.APP_URL}/clients/${clientId}/settings?connected=1`);

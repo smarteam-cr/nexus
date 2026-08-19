@@ -184,9 +184,20 @@ describe("la pantalla monta la pestaña y su tabla", () => {
   it("y la fila lleva al PROYECTO, no a la empresa", () => {
     /* Llevar a la empresa deja a la persona adivinando cuál de sus proyectos era el interno —
        Smarteam tiene tres y solo dos lo son. Es exactamente el trabajo que esta pestaña
-       existe para ahorrar. */
+       existe para ahorrar.
+
+       ⚠ El DESTINO cambió el 2026-08-18, la intención no. Antes era la ruta profunda
+       `/clients/{c}/projects/{p}`, que renderizaba el canvas suelto —sin pestañas y sin
+       contexto— y se leía como que el proyecto había perdido todo. Ahora se abre la ficha del
+       cliente CON la pestaña del proyecto puesta. Se afirma contra el constructor único
+       (`urlDeProyecto`) y no contra el string: escribir la dirección a mano en esta fila es
+       justamente cómo volvería la ruta huérfana. */
     const src = sinComentarios(PANTALLA);
-    expect(src).toContain("/projects/${p.id}");
+    expect(src, "la fila dejó de llevar al proyecto").toContain("urlDeProyecto(p.clienteId, p.id)");
+    expect(
+      src.includes("/projects/${p.id}"),
+      "volvió la ruta profunda escrita a mano",
+    ).toBe(false);
   });
 
   it("y la categoría «Nuestras empresas» no se pinta si está en cero", () => {

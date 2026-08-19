@@ -21,6 +21,7 @@ import { Modal, Button, Input } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import { UnreviewedSessionsChip } from "@/components/clients/ProjectSessionsReview";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 
 interface AvailableDeal {
   id: string;
@@ -294,7 +295,7 @@ export default function HandoffStepper() {
             onClick={() => {
               const c = created;
               reset();
-              router.push(`/clients/${c.clientId}/projects/${c.projectId}`);
+              router.push(urlDeProyecto(c.clientId, c.projectId));
             }}
           >
             Ir al proyecto y generar

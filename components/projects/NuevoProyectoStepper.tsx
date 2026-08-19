@@ -38,6 +38,7 @@ import {
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { etiquetarAmbiguos, nombreYaUsado, rotuloDeHubspot } from "@/lib/projects/lista-de-empresa";
 import { armarCuerpoDelAlta } from "@/lib/projects/alta";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 
 /** Las rutas que este botón consume. Importadas por la guarda de paridad, no repetidas. */
@@ -328,7 +329,7 @@ export default function NuevoProyectoStepper() {
       };
       if (res.status === 409 && data.projectId && data.clientId) {
         // Ya existe: no es un error, es "andá a verlo".
-        router.push(`/clients/${data.clientId}/projects/${data.projectId}`);
+        router.push(urlDeProyecto(data.clientId, data.projectId));
         limpiar();
         return;
       }
@@ -419,7 +420,7 @@ export default function NuevoProyectoStepper() {
             onClick={() => {
               const c = creado;
               limpiar();
-              router.push(`/clients/${c.clientId}/projects/${c.projectId}`);
+              router.push(urlDeProyecto(c.clientId, c.projectId));
             }}
           >
             Ir al proyecto

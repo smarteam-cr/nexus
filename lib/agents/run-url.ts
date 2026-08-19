@@ -32,14 +32,30 @@ export interface RunUrlInput {
  * (`isDefault`), pero pasarlo igual es inocuo — el panel lo resuelve y lo
  * reescribe. Preferimos ser explícitos: es el destino que el agente escribió.
  */
+/**
+ * LA ÚNICA FORMA DE ARMAR LA DIRECCIÓN DE UN PROYECTO. Un proyecto no tiene pantalla propia:
+ * vive como pestaña dentro de la ficha de su cliente.
+ *
+ * ⚠ Existió una ruta profunda `/clients/{c}/projects/{p}` que renderizaba el canvas SUELTO, sin
+ * pestañas y sin contexto. No estaba rota —era otra pantalla— pero llegar ahí desde un clic en
+ * una fila se leía como que el proyecto había perdido todo. Costó veinte minutos de diagnóstico
+ * para descubrir que no había nada que diagnosticar. Se retiró; esta función es lo que impide
+ * que alguien la reconstruya a mano en la próxima fila clickeable.
+ *
+ * ⚠ `?canvas=` SIN `?tab=` solo resuelve cuando el cliente tiene exactamente un proyecto
+ * navegable. Con dos o más, la pestaña por defecto es «Información del cliente» y el canvas se
+ * ignora. Por eso el tab siempre viaja.
+ */
+export function urlDeProyecto(clientId: string, projectId: string, canvasId?: string | null): string {
+  const qs = new URLSearchParams({ tab: projectId });
+  if (canvasId) qs.set("canvas", canvasId);
+  return `/clients/${encodeURIComponent(clientId)}?${qs.toString()}`;
+}
+
 export function resolveRunResultUrl(run: RunUrlInput): string {
   if (run.businessCaseId) return `/business-cases/${run.businessCaseId}`;
 
-  if (run.clientId && run.projectId) {
-    const qs = new URLSearchParams({ tab: run.projectId });
-    if (run.canvasId) qs.set("canvas", run.canvasId);
-    return `/clients/${run.clientId}?${qs.toString()}`;
-  }
+  if (run.clientId && run.projectId) return urlDeProyecto(run.clientId, run.projectId, run.canvasId);
 
   if (run.clientId) return `/clients/${run.clientId}`;
 
