@@ -77,16 +77,45 @@ export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
   partnership: "barra",
 };
 
-/** El orden en que se leen, que es el de la leyenda. */
-const SERIES: Array<{ key: SerieKey; label: string }> = [
-  { key: "egresos", label: "Egresos" },
-  { key: "vendido", label: "Vendido" },
-  { key: "facturado", label: "Facturado" },
-  { key: "cobrado", label: "Cobrado" },
-  { key: "partnership", label: "Partnership" },
-  { key: "ingresosTotales", label: "Ingresos totales" },
-  { key: "equilibrio", label: "Punto de equilibrio" },
+/**
+ * Cómo se LLAMA cada serie. Fuente única: de acá sale la leyenda de abajo y también
+ * cualquiera que tenga que nombrar una serie fuera de este archivo.
+ *
+ * ⚠ Dos indicadores del reporte NO se llaman como su serie: «Piso mensual» mueve la línea
+ * «Punto de equilibrio» y «Margen a la fecha» mueve «Ingresos totales». Cuando el tile
+ * anunciaba su propio título, prometía sacar del reporte una cosa y sacaba otra, con el
+ * número del tile intacto al lado. El nombre de la serie sale de acá, siempre.
+ *
+ * Es un Record y no un arreglo de pares justamente para que agregar una `SerieKey` sin
+ * bautizarla NO COMPILE: derivado con `Object.fromEntries` habría dado `undefined` y el
+ * botón habría dicho "Sacar undefined del reporte". Verificado agregando una clave: son
+ * tres errores de tsc, uno de ellos acá.
+ */
+export const LABEL_SERIE: Record<SerieKey, string> = {
+  egresos: "Egresos",
+  vendido: "Vendido",
+  facturado: "Facturado",
+  cobrado: "Cobrado",
+  partnership: "Partnership",
+  ingresosTotales: "Ingresos totales",
+  equilibrio: "Punto de equilibrio",
+};
+
+/** El orden en que se leen, que es el de la leyenda: se vende, se factura, se cobra. */
+const ORDEN_LEYENDA: readonly SerieKey[] = [
+  "egresos",
+  "vendido",
+  "facturado",
+  "cobrado",
+  "partnership",
+  "ingresosTotales",
+  "equilibrio",
 ];
+
+const SERIES: Array<{ key: SerieKey; label: string }> = ORDEN_LEYENDA.map((key) => ({
+  key,
+  label: LABEL_SERIE[key],
+}));
 
 interface Props {
   meses: MesEfectivo[];
@@ -276,7 +305,11 @@ export default function CurvaEquilibrio({
             // en el eje mientras el tooltip tapa el gráfico no ayuda a nadie.
             vive("equilibrio") ? fila("Punto de equilibrio", equilibrio, COLOR.equilibrio, "punteada") : "",
             m.pendienteFacturar > 0 ? `${sep}${fila("Pendiente de facturar", m.pendienteFacturar)}` : "",
-            servicios ? `<div style="margin-top:4px">${servicios}</div>` : "",
+            // ⚠ El desglose por servicio es el FACTURADO desarmado en sus partes. Con
+            // Facturado fuera del reporte desaparecía la fila del total pero quedaban
+            // las partes, y la suma de lo que seguía a la vista era exactamente el
+            // número que la persona acababa de sacar.
+            servicios && vive("facturado") ? `<div style="margin-top:4px">${servicios}</div>` : "",
             sep,
             fila(m.brecha >= 0 ? "Sobre los egresos" : "Brecha", m.brecha),
           ].join("");
@@ -408,13 +441,23 @@ export default function CurvaEquilibrio({
               aria-pressed={fijado}
               // El título dice qué hace el PRÓXIMO clic. Un ciclo de tres pasos sin eso
               // se descubre a los tropiezos.
+              //
+              // ⚠ "Enfocar" y no "Marcar": bajo el mismo ítem de menú vive el botón
+              // «Marcar facturado» de la cola de cobros, que EMITE LA FACTURA. Con la
+              // serie «Facturado» en la leyenda, este tag habría dicho literalmente
+              // "Marcar Facturado" al lado de una acción que escribe en producción.
               title={
                 fuera
                   ? `Devolver ${s.label} al reporte`
                   : fijado
                     ? `Sacar ${s.label} del reporte`
-                    : `Marcar ${s.label}`
+                    : `Enfocar ${s.label}`
               }
+              // ⚠ aria-pressed solo tiene dos valores y este control tiene tres: "fuera"
+              // se anunciaba igual que "normal", que es justo lo contrario de lo que pasa.
+              // El estado va en el nombre accesible, que es lo único que un lector lee —
+              // el tachado y el borde punteado no los expone ninguna tecnología de apoyo.
+              aria-label={fuera ? `${s.label} — fuera del reporte` : s.label}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
                 fuera
                   ? "border-line border-dashed text-fg-muted line-through hover:bg-surface-hover"

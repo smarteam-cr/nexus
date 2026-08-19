@@ -3,13 +3,15 @@
 /**
  * components/finanzas/equilibrio/EquilibrioClient.tsx
  *
- * El contenedor del reporte anual. Dueño de dos estados y de nada más:
+ * El contenedor del reporte anual. Dueño de estos estados y de nada más:
  *   · `escenario` — los meses que alguien movió a mano. NO SE GUARDA en ningún lado:
  *     ni fetch, ni localStorage, ni query param. Este componente **no recibe ningún
  *     callback hacia el servidor**, justamente para que no haya dónde enchufarle un
  *     "guardar" de paso. Mover el facturado de marzo es una pregunta, no un dato.
  *   · `pin` / `hover` — qué serie está enfocada. Nace acá porque los indicadores son
  *     React y el chart no expone eventos; el gráfico la recibe como prop.
+ *   · `ocultas` — las series que se sacaron del reporte. Tampoco se guarda, por la misma
+ *     razón que el escenario: qué se está mirando ahora no es un dato del negocio.
  *
  * Los indicadores se renderizan SIEMPRE recalculados sobre los meses efectivos, nunca
  * los del DTO: al simular, mostrar los del servidor haría que el encabezado dijera un
@@ -28,7 +30,7 @@ import {
 } from "@/lib/cobranza/equilibrio-escenario";
 import { VENTANA_EQUILIBRIO_LABEL } from "@/lib/cobranza/schema";
 import type { ReporteAnualDTO } from "@/lib/cobranza";
-import CurvaEquilibrio, { type SerieKey } from "./CurvaEquilibrio";
+import CurvaEquilibrio, { LABEL_SERIE, type SerieKey } from "./CurvaEquilibrio";
 import DesgloseIngresos from "./DesgloseIngresos";
 import TablaMeses from "./TablaMeses";
 import EstructuraCostos from "./EstructuraCostos";
@@ -232,9 +234,10 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             </Alert>
           )}
 
-          {/* Indicadores. Los que mapean a una serie son botones (enfocan la curva);
-              los que no, son texto — un tile que parece clickeable y no hace nada es
-              peor que uno que no lo parece. */}
+          {/* Indicadores. Los que mapean a una serie son botones y ciclan igual que los
+              tags de la leyenda —enfocan, sacan del reporte, devuelven—; los que no, son
+              texto: un tile que parece clickeable y no hace nada es peor que uno que no
+              lo parece. */}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
             {TILES.map((t) => {
               // El indicador enfocado se marca de verdad: número más pesado, borde de
@@ -248,7 +251,18 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               const fuera = t.serie !== null && ocultas.has(t.serie);
               const contenido = (
                 <>
-                  <p className="text-[10px] uppercase tracking-wide text-fg-muted">{t.label}</p>
+                  {/* ⚠ El estado "fuera" se marca en el RÓTULO, nunca bajando la opacidad
+                      del tile entero: a opacity-50 el número quedaba en 3,39:1 sobre fondo
+                      claro —por debajo del mínimo de 4,5— y además atenuarlo contradecía lo
+                      que la propia pantalla promete, que sacar una serie no cambia ningún
+                      número. El número se queda en color pleno porque sigue valiendo. */}
+                  <p
+                    className={`text-[10px] uppercase tracking-wide text-fg-muted ${
+                      fuera ? "line-through" : ""
+                    }`}
+                  >
+                    {t.label}
+                  </p>
                   <p
                     className={`tabular-nums mt-0.5 text-fg ${
                       activo ? "text-xl font-bold" : "text-lg font-semibold"
@@ -277,16 +291,22 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
                   onBlur={() => setHover(null)}
                   onClick={() => ciclar(t.serie!)}
                   aria-pressed={fijado}
+                  // ⚠ El nombre de la SERIE, no el del tile. «Margen a la fecha» mueve
+                  // la línea «Ingresos totales» y «Piso mensual» mueve «Punto de
+                  // equilibrio»: anunciar el título del tile prometía sacar del reporte
+                  // una cosa y sacaba otra, con el número del tile intacto al lado.
                   title={
                     fuera
-                      ? `Devolver ${t.label} al reporte`
+                      ? `Devolver ${LABEL_SERIE[t.serie]} al reporte`
                       : fijado
-                        ? `Sacar ${t.label} del reporte`
-                        : `Marcar ${t.label}`
+                        ? `Sacar ${LABEL_SERIE[t.serie]} del reporte`
+                        : `Enfocar ${LABEL_SERIE[t.serie]}`
                   }
+                  // M3: tres estados no caben en aria-pressed; el estado va en el nombre.
+                  aria-label={fuera ? `${t.label} — ${LABEL_SERIE[t.serie]} fuera del reporte` : t.label}
                   className={`${base} ${
                     fuera
-                      ? "border-line border-dashed opacity-50 hover:bg-surface-hover"
+                      ? "border-line border-dashed hover:bg-surface-hover"
                       : fijado
                         ? "border-brand ring-2 ring-brand/40"
                         : activo
