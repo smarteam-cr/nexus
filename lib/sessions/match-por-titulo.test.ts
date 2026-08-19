@@ -167,3 +167,41 @@ describe("la regla que la medicion eligio: gana quien nombro MAS de si mismo", (
     expect(r.motivo).toBe("empate");
   });
 });
+
+describe("la casa se retira ANTES de comparar, no desempata", () => {
+  /* ⚠ ESTE DESCRIBE EXISTE PORQUE LA SUITE TENIA UN AGUJERO EXACTAMENTE ACA. El filtro de la casa
+     corria DESPUES de elegir la mejor fraccion, asi que solo actuaba ante un empate — y la casa
+     casi nunca empata: «Smarteam» es UNA palabra, o sea 100 % de su nombre, mientras «Honda Costa
+     Rica» con el titulo «Honda & Smarteam» llega al 33 %. Los 16 tests de arriba pasaban igual.
+     Lo cazo LEER las 114 sesiones que se movian, no un test. */
+  const esLaCasa = (c: ClienteParaMatch) => c.id === "smarteam";
+  const CON_CASA = [
+    ...CLIENTES,
+    C("smarteam", "Smarteam", "smarteamcr.com"),
+    C("realst", "Real Shipping & Trade", null),
+  ];
+  const mf = (titulo: string) =>
+    clientePorTitulo(titulo, CON_CASA, {
+      modo: "mejor-fraccion",
+      skip,
+      normalize,
+      esClienteDePrueba,
+      esLaCasa,
+    });
+
+  it("un cliente de nombre LARGO le gana a la casa aunque nombre menos de si mismo", () => {
+    // Honda Costa Rica: 1 de 3 tokens. Smarteam: 1 de 1. Sin el arreglo, ganaba Smarteam.
+    expect(mf("Revision de gestion de segmentacion | Honda & Smarteam").cliente?.id).toBe("honda");
+    expect(mf("HONDA FACO | SMARTEAM").cliente?.id).toBe("honda");
+  });
+
+  it("y con el nombre abreviado tambien: «Real ST & Smarteam» es de Real Shipping", () => {
+    // «Real ST» solo aporta «real» → 1 de 3. La casa igual no compite.
+    expect(mf("Reanudacion proyecto en HubSpot | Real ST & Smarteam").cliente?.id).toBe("realst");
+  });
+
+  it("la casa sigue ganando cuando esta sola", () => {
+    expect(mf("Operacion Smarteam").cliente?.id).toBe("smarteam");
+    expect(mf("Comisiones Smarteam").cliente?.id).toBe("smarteam");
+  });
+});

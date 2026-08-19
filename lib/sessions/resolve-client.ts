@@ -63,7 +63,7 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
  * Usa la versión NO cacheada (corre también desde scripts `tsx`, fuera del runtime
  * Next donde `unstable_cache` no aplica). Si HubSpot falla, devuelve vacío (degrada).
  */
-async function buildHubspotDomainMap(
+export async function buildHubspotDomainMap(
   sessions: { participants: string[] }[],
   internalDomains: Set<string>,
 ): Promise<Map<string, HubspotCompanyLite>> {

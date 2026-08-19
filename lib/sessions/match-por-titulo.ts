@@ -156,19 +156,24 @@ export function clientePorTitulo(
      Así que no se sube la vara: se COMPARA. Y solo se abstiene ante un empate de verdad, que
      es cuando adivinar sería adivinar. */
   if (opts.modo === "mejor-fraccion") {
-    const mejor = Math.max(...candidatos.map((c) => fraccion.get(c.id) ?? 0));
-    let punteros = candidatos.filter((c) => (fraccion.get(c.id) ?? 0) === mejor);
-    /* ── EL DESEMPATE DE LA CASA ────────────────────────────────────────────────────────
-       «Kickoff WHEREX & Smarteam» es el formato estándar de los títulos del equipo, y
-       Smarteam es un Client más en la base: nombra su identidad entera, saca 100 %, y empata
-       con TODOS. Medido: la mayoría de los 65 empates son de esta forma.
-       Pero la consultora no compite con sus clientes por una reunión: si en el título hay un
-       cliente de verdad, la reunión es de ese cliente. La casa solo gana cuando está sola —
-       que es el caso legítimo de las internas de Smarteam sobre sí misma. */
-    if (opts.esLaCasa && punteros.length > 1) {
-      const ajenos = punteros.filter((c) => !opts.esLaCasa!(c));
-      if (ajenos.length > 0) punteros = ajenos;
+    /* ── LA CASA SALE DE LA COMPETENCIA, NO DESEMPATA ────────────────────────────────────────
+       ⚠ Esto estuvo MAL una vez y lo cazó leer el dato, no un test: el filtro de la casa corría
+       DESPUÉS de elegir la mejor fracción, así que solo actuaba ante un empate. Y la casa casi
+       nunca empata: «Smarteam» es una sola palabra, así que nombra el 100 % de su nombre,
+       mientras «Honda Costa Rica» con el título «Honda & Smarteam» nombra el 33 %. Resultado
+       medido: 5 reuniones de clientes reales se iban A Smarteam —el efecto contrario al que se
+       busca— incluidas tres que alimentan proyectos.
+
+       La consultora no compite con sus clientes por una reunión: si en el título hay UN cliente
+       de verdad, la casa se retira antes de comparar. Solo gana cuando está sola, que es el caso
+       legítimo de las internas de Smarteam sobre sí misma. */
+    let enJuego = candidatos;
+    if (opts.esLaCasa) {
+      const ajenos = candidatos.filter((c) => !opts.esLaCasa!(c));
+      if (ajenos.length > 0) enJuego = ajenos;
     }
+    const mejor = Math.max(...enJuego.map((c) => fraccion.get(c.id) ?? 0));
+    const punteros = enJuego.filter((c) => (fraccion.get(c.id) ?? 0) === mejor);
     if (punteros.length === 1) return { cliente: punteros[0], candidatos, motivo: "elegido" };
     return { cliente: null, candidatos: punteros, motivo: "empate" };
   }
