@@ -161,8 +161,13 @@ export async function syncVentasGanadas(opciones: {
                 {
                   propertyName: "closedate",
                   operator: "BETWEEN",
-                  value: opciones.desde,
-                  highValue: opciones.hasta,
+                  // ⚠ EN MILIS, NO EN "YYYY-MM-DD". `closedate` es un instante, y con la
+                  // fecha pelada HubSpot lee la medianoche: "2026-12-31" dejaba fuera TODO
+                  // el 31 de diciembre. No es teórico — así se perdió un trato real de 2023
+                  // (Seléctrica, cerrado el 31-dic a las 20:17), que al no volver en la
+                  // búsqueda se marcaba REABIERTA y salía del vendido del año.
+                  value: String(Date.parse(`${opciones.desde}T00:00:00.000Z`)),
+                  highValue: String(Date.parse(`${opciones.hasta}T23:59:59.999Z`)),
                 },
               ],
             },
@@ -347,6 +352,7 @@ export async function syncVentasGanadas(opciones: {
     // Segunda pasada: preguntar por los que conocíamos y no vinieron. Un trato puede
     // haberse reabierto, perdido, o desaparecido — y en los tres casos la fila se
     // MARCA, nunca se borra.
+    let huboFalloAlReclasificar = false;
     if (!parcial) {
       const vistos = new Set(crudos.map((d) => d.id));
       const ausentes = conocidas.filter((v) => !vistos.has(v.hubspotDealId) && v.estado === "GANADA");
@@ -357,13 +363,28 @@ export async function syncVentasGanadas(opciones: {
           path: "/crm/v3/objects/deals/batch/read",
           body: { properties: ["dealstage", "dealname"], inputs: lote.map((v) => ({ id: v.hubspotDealId })) },
         });
-        const data = r.ok
-          ? ((await r.json()) as { results?: Array<{ id: string; properties: Record<string, string | null> }> })
-          : { results: [] };
+        // ⚠ Un lote que falla NO significa "esos tratos ya no existen". Antes el catch
+        // era `{ results: [] }`, así que un 429 o un 502 marcaba las 100 ventas del lote
+        // como DESAPARECIDA —borrándolas del vendido del año— sin registrar un error.
+        // Ahora el lote se saltea, se anota y la corrida queda parcial.
+        if (!r.ok) {
+          res.errores.push(`reclasificación lote ${i / 100 + 1}: HTTP ${r.status} — ${lote.length} venta(s) sin revisar`);
+          huboFalloAlReclasificar = true;
+          continue;
+        }
+        const data = (await r.json()) as {
+          results?: Array<{ id: string; properties: Record<string, string | null> }>;
+        };
         const vivos = new Map((data.results ?? []).map((x) => [x.id, x.properties]));
         for (const v of lote) {
           const p = vivos.get(v.hubspotDealId);
           const etapa = p?.dealstage ?? null;
+          // ⚠ "No vino en la búsqueda" NO es "cambió de estado". El trato puede seguir
+          // ganado y haberse caído del rango por su fecha, o por la consistencia eventual
+          // del índice de búsqueda de HubSpot. Preguntarle a HubSpot en qué etapa está y
+          // creerle a ESO es la única lectura honesta: si sigue en una etapa ganada, la
+          // fila se queda como está. Marcarla REABIERTA decía lo contrario de la verdad.
+          if (etapa && ETAPAS_GANADAS.includes(etapa)) continue;
           const nuevoEstado = !p
             ? ("DESAPARECIDA" as const)
             : etapa && ETAPAS_PERDIDAS.includes(etapa)
@@ -387,7 +408,7 @@ export async function syncVentasGanadas(opciones: {
       }
     }
 
-    return { ...res, parcial: parcial || undefined };
+    return { ...res, parcial: parcial || huboFalloAlReclasificar || undefined };
   } finally {
     if (!opciones.dryRun) await soltarLock();
   }
