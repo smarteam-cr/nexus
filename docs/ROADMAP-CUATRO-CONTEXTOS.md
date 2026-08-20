@@ -60,13 +60,22 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 
 | # | Etapa | Qué resuelve | Estado |
 |---|---|---|---|
-| 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega). Ya tienen todo; falta enchufarlos | ⬜ Siguiente |
-| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica. Y algo que hoy es imposible: decirle QUÉ tareas querés al regenerar una fase | ⬜ |
+| 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega) | ✅ Hecho · probado en pantalla |
+| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica. Y algo que hoy es imposible: decirle QUÉ tareas querés al regenerar una fase | 🟡 En curso — ver el detalle abajo |
 | 3 | **El chat de documentos** | Lo mismo sobre los ocho documentos del motor de landings | ⬜ |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | Medirlo con uso real encima | ⬜ Necesita 2 semanas de uso |
+
+### Etapa 2, tramo por tramo
+
+| | Tramo | Qué deja andando | Estado |
+|---|---|---|---|
+| 2a | **El hilo persiste** | La conversación sobrevive a cambiar de pestaña. ⚠ Trae migración SQL | ✅ Commiteado · **falta que Elías corra el SQL** |
+| 2b | **El chat responde** | El turno, con el contexto chico | 🟡 El contexto ya está; falta la llamada al modelo |
+| 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ⬜ |
+| 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ⬜ |
 
 ### Las decisiones que ya se tomaron
 
@@ -349,6 +358,7 @@ reuniones es de Elías.
 | 2 | `2026-08-16-estado-y-etapa-propuestos.sql` | Dónde guardar la sugerencia de estado y etapa |
 | 3 | `2026-08-16-project-brief.sql` | La tabla del resumen por proyecto |
 | 4 | `2026-08-16-particularidad-estado.sql` | Que una desviación se pueda dar por resuelta |
+| **5** | **`2026-08-19-hilos-de-chat.sql`** | **⚠ PENDIENTE — las dos tablas de la conversación del asistente. Aditiva (2 tablas + 1 enum, todo con `IF NOT EXISTS`). Va ANTES del próximo deploy** |
 
 ⚠ Si el servidor del 3004 venía levantado, **reinicialo**: tiene el cliente de Prisma viejo en
 memoria y las escrituras fallan en silencio.
