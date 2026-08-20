@@ -101,6 +101,10 @@ const eslintConfig = defineConfig([
     // correr una segunda instancia envenenaba el lint con ~650 errores de chunks generados
     // (mordido el 2026-08-01 durante F1).
     ".next-alt/**",
+    // Y el dist de VERIFICACIÓN (NEXT_DIST_DIR=.next-verify): es como se buildea sin bajar
+    // el dev server, que comparte `.next`. Sin esto el lint del repo entero se come el heap
+    // de V8 y muere con un stack trace de C++ que no dice nada (mordido el 2026-08-19).
+    ".next-verify/**",
     ".local-db/**",
   ]),
 ]);
