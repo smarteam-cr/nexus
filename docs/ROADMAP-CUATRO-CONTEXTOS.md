@@ -4,9 +4,9 @@
 > **Este archivo se mantiene al día en cada tanda** — es el resumen para Elías, en castellano de
 > negocio. El detalle técnico vive en los mensajes de commit y en `docs/DECISIONS.md`.
 >
-> Última actualización: **2026-08-19**, punta `b3b035b`. ⚠ **13 commits sin pushear** (ver «Al lado del plan»). Lo de este plan está **pusheado y
-> deployado** hasta `d8f1d82`; lo que hay encima es de otras tandas (el medidor de IA y el
-> incidente REMPRO) y **está commiteado sin subir**.
+> Última actualización: **2026-08-19**, punta `3638d13`. **Todo pusheado y deployado**, incluido
+> lo de las otras tandas (medidor de IA, incidente REMPRO, retiro de etapas, atribución por
+> título y el espejo de ventas ganadas).
 
 ---
 
@@ -47,6 +47,54 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Ya deployado — lo siguiente es que Elías lo pruebe** |
 | | 12 · Aplicarlo retroactivamente | Sellar el plan de los 118 proyectos que nunca tuvieron foto, avisando en el propio documento que la foto es de hoy. | ⏳ Después de la 11 |
 | | 1.7 · Minuta de reunión interna | Un botón que destile la minuta de una reunión puntual de puertas adentro. | ⏳ Diferido |
+
+---
+
+## El asistente que conversa — el roadmap del chat
+
+Diseñado con Elías el 2026-08-19 sobre el mapa real del código. El plan completo, con las decisiones
+y el porqué de cada una, está en `~/.claude/plans/deep-spinning-lagoon.md` (arriba de todo).
+
+**La idea en una línea:** hoy le pedís un cambio a la IA y se genera; si no era lo que querías, te
+enterás después. El chat lo conversa antes — y sabe qué se puede y qué cuesta cada cosa.
+
+| # | Etapa | Qué resuelve | Estado |
+|---|---|---|---|
+| 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega). Ya tienen todo; falta enchufarlos | ⬜ Siguiente |
+| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica. Y algo que hoy es imposible: decirle QUÉ tareas querés al regenerar una fase | ⬜ |
+| 3 | **El chat de documentos** | Lo mismo sobre los ocho documentos del motor de landings | ⬜ |
+| 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
+| 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
+| 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
+| 7 | **¿Alcanza un modelo más barato?** | Medirlo con uso real encima | ⬜ Necesita 2 semanas de uso |
+
+### Las decisiones que ya se tomaron
+
+- ⭐ **El chat entiende la INTENCIÓN; el editor tiene el CONTEXTO.** El chat no carga el handoff ni
+  las minutas — eso ya lo tiene el editor. Así el chat es chico, rápido y barato.
+- **Hablar → proponer → consensuar → aplicar**, como el modo plan.
+- ⛔ **El chat NO escribe.** Emite una instrucción; aplicar pasa por el editor de siempre, con su
+  vista previa y su aceptación ítem por ítem. El permiso vive en el botón, no en la conversación.
+- **Toda propuesta que mueva una fecha lo DICE.** Y si no la mueve, también.
+- **Los botones de IA del cronograma se los come el chat** — pero ⛔ **solo cuando pueda todo lo que
+  ellos pueden.** Si se van antes, se pierde capacidad en silencio.
+- **El chat se come el PEDIDO, no la curación**: arrastrar 40 tareas entre columnas no se conversa.
+
+### ⛔ El techo, para no re-discutirlo
+
+**El chat llena formas que existen; no puede inventarlas.** Hay 22 tipos de sección programados; uno
+que nadie programó no sale de una conversación. Cuando alguien lo pida, la respuesta correcta es
+decirlo, no intentarlo.
+
+### ⚠ Lo que el mapeo encontró y NO depende del chat
+
+- **`ProjectActionsPanel` no lo importa nadie** — código muerto, se borra.
+- **`ProjectActionsLine` ya emite un cartel falso** cuando hay una propuesta del assist: dice que los
+  cambios «salieron del último handoff» cuando los pidió el consultor hace diez segundos, y su botón
+  lleva a un ancla que no existe. Con un chat que propone por turno, ese cartel aparecería siempre.
+  **Se arregla antes, no después.**
+- **Exploración no se puede sumar todavía**: una propuesta que toque su plan de sesiones borra las
+  marcas de «ya la pregunté», sin aviso. Es un arreglo propio.
 
 ---
 
