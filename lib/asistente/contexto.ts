@@ -65,7 +65,11 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
           durationWeeks: true,
           startWeek: true,
           activityType: true,
-          _count: { select: { tasks: true } },
+          /* ⚠ SOLO CONTADORES: `weekIndex` y `status`, jamás el título ni la nota. Es la línea
+             entre la FORMA del cronograma y su CONTENIDO — dos enteros por tarea son ~250
+             caracteres para todo Wherex; los títulos son ~8.000 que el modificador ya lee.
+             Ver el porqué de este agregado en el bloque `REPARTO POR SEMANA`, abajo. */
+          tasks: { select: { weekIndex: true, status: true } },
         },
       },
     },
@@ -82,20 +86,53 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     ? fmtFecha(timeline.closeDateOverride)
     : fin.label;
 
+  /**
+   * ⭐ EL REPARTO POR SEMANA, Y POR QUÉ ES IMPRESCINDIBLE (2026-08-20).
+   *
+   * La primera versión daba solo el TOTAL de tareas por fase, y Elías pidió esto:
+   * *«en la fase Integraciones hay semanas sin tareas, quítalas»*. El asistente tuvo que
+   * contestar que no podía verlo — y era cierto: con «16 tareas» no hay forma de saber que las
+   * semanas 3 a 6 están vacías.
+   *
+   * Eso NO contradice «el chat entiende la intención, el editor tiene el contexto»: era yo
+   * quedándome corto de mi propia regla. La FORMA del cronograma incluye cómo se reparte el
+   * trabajo; lo que se sigue excluyendo es el CONTENIDO (títulos y notas). El histograma son
+   * ~250 caracteres para el cronograma más grande de la cartera; los títulos, ~8.000.
+   *
+   * Y de paso resuelve una familia entera de pedidos que hoy el chat no podía atender: «esta
+   * fase está vacía», «acortá esto», «hay una semana con 12 tareas y otra con ninguna».
+   */
+  const repartoDe = (f: (typeof timeline.phases)[number]): string => {
+    const porSemana = Array.from({ length: Math.max(f.durationWeeks, 1) }, () => 0);
+    let hechas = 0;
+    for (const t of f.tasks) {
+      if (t.weekIndex >= 0 && t.weekIndex < porSemana.length) porSemana[t.weekIndex]++;
+      if (t.status === "DONE") hechas++;
+    }
+    const vacias = porSemana.filter((n) => n === 0).length;
+    return (
+      `semanas [${porSemana.join(" · ")}]` +
+      (vacias > 0 ? ` — ${vacias} ${vacias === 1 ? "semana VACÍA" : "semanas VACÍAS"}` : "") +
+      (hechas > 0 ? ` · ${hechas} hecha${hechas === 1 ? "" : "s"}` : "")
+    );
+  };
+
   const fases = timeline.phases
     .map(
       (f, i) =>
         `${i + 1}. ${f.name} — ${f.durationWeeks} sem` +
         `${f.activityType ? ` · ${f.activityType.toLowerCase()}` : ""}` +
-        ` · ${f._count.tasks} tarea${f._count.tasks === 1 ? "" : "s"}`,
+        ` · ${f.tasks.length} tarea${f.tasks.length === 1 ? "" : "s"}` +
+        `\n   ${repartoDe(f)}`,
     )
     .join("\n");
 
   const texto = [
     `PROYECTO: ${timeline.project.name} — cliente ${timeline.project.client.name}`,
     "",
-    "FORMA DEL CRONOGRAMA HOY (nombres y tamaños; los títulos de las tareas NO están acá a",
-    "propósito — el modificador los lee cuando le toque ejecutar la instrucción):",
+    "FORMA DEL CRONOGRAMA HOY. `semanas [a · b · c]` = cuántas tareas caen en cada semana de esa",
+    "fase, en orden. Los TÍTULOS de las tareas no están acá a propósito: los lee el modificador",
+    "cuando le toque ejecutar la instrucción.",
     fases || "(sin fases)",
     "",
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,

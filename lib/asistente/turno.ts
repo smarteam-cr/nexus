@@ -39,7 +39,26 @@ export const SLUG_DEL_ASISTENTE = "asistente-chat";
  */
 export const MODELO_DEL_ASISTENTE = "claude-sonnet-5";
 
-const MAX_TOKENS_DE_RESPUESTA = 1_500;
+/**
+ * ⚠ NO ES EL LARGO DE LA RESPUESTA: es el presupuesto de salida ENTERO, y el razonamiento del
+ * modelo sale de ahí.
+ *
+ * ⛔ ESTE NÚMERO ESTUVO EN 1.500 Y ROMPÍA EL CHAT EN SILENCIO. Medido el 2026-08-20 con el pedido
+ * real de Elías («en Integraciones hay semanas sin tareas, quítalas; y Reportería y Data pasa de
+ * 4 a 2 semanas»): el modelo gastó los 1.500 tokens PENSANDO —`thinking_tokens: 1500`,
+ * `stop_reason: "max_tokens"`— y no le quedó nada para escribir. El único bloque que devolvió fue
+ * `thinking`: cero texto, cero herramienta.
+ *
+ * La falla es peor que un error: un pedido difícil se veía igual que uno que el asistente no supo
+ * contestar. Los pedidos simples andaban —pensaban poco— así que el chat parecía funcionar y
+ * fallaba justo cuando más se lo necesitaba.
+ *
+ * En los modelos nuevos el pensamiento viene ENCENDIDO por defecto y no se topea aparte: hay que
+ * dejarle lugar. Lo que el CSE lee sigue siendo corto (lo pide el prompt); esto es el techo del
+ * turno completo. Y `stop_reason: "max_tokens"` ahora se reporta en vez de degradar a un mensaje
+ * mudo.
+ */
+const MAX_TOKENS_DE_RESPUESTA = 8_000;
 
 /**
  * ── EL PROMPT, Y POR QUÉ VIVE EN CÓDIGO Y NO EN LA TABLA `Agent` ─────────────────────────────
@@ -79,6 +98,10 @@ CÓMO CONVERSAS
 Toda propuesta que mueva el cierre del proyecto lo dice con las dos fechas: la de hoy y la nueva.
 Y si NO lo mueve, también lo dices ("el cierre no se corre"). El silencio se lee como "no cambió
 nada", y así es como alguien se entera tres semanas después.
+
+⚠ Si no puedes calcular la fecha nueva con certeza (las fases pueden solaparse), NO la estimes:
+di cuántas semanas se corre y que la vista previa muestra la fecha exacta. Un rango inventado es
+peor que un número menos — el CSE lo repite en una llamada y queda comprometido.
 
 QUÉ SE PUEDE Y QUÉ NO
 El contexto te dice las reglas duras del editor y las consecuencias conocidas. Úsalas ANTES de
@@ -213,6 +236,16 @@ export async function correrTurno(
 
   /* Si el modelo cerró con la tool y sin texto, el panel igual tiene qué mostrar. */
   if (!respuesta.trim() && acuerdo) respuesta = acuerdo.resumen;
+
+  /* ⛔ UNA RESPUESTA CORTADA NO PUEDE VERSE COMO UNA RESPUESTA VACÍA. Con el presupuesto viejo
+     esto pasaba en todo pedido difícil, y el CSE leía «el asistente no devolvió texto» — que se
+     lee como «no supo», cuando en realidad se quedó sin lugar a mitad de pensar. Decirlo permite
+     la única acción útil: partir el pedido en dos. */
+  if (msg.stop_reason === "max_tokens" && !respuesta.trim()) {
+    respuesta =
+      "Me quedé sin espacio antes de poder contestar: el pedido tiene muchas partes. " +
+      "Probemos de a una — ¿por cuál empezamos?";
+  }
   if (!respuesta.trim()) respuesta = "(el asistente no devolvió texto)";
 
   await agregarTurno(hilo.id, { rol: "CSE", contenido: mensajeDelCse, shaDeContexto: sha });

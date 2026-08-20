@@ -161,14 +161,32 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     ).toBe(false);
   });
 
-  it("y NO trae los títulos de las tareas — solo cuántas hay", () => {
-    /* Es la línea entre «la forma» y «el contenido». La edición que la pone en rojo: cambiar
-       `_count: { select: { tasks: true } }` por `tasks: { select: { title: true } }`. */
-    expect(src).toContain("_count: { select: { tasks: true } }");
-    expect(
-      /tasks:\s*\{\s*(orderBy|select|where)/.test(src),
-      "el contexto del chat pasó a traer las tareas: son ~8.000 caracteres por turno que el " +
-        "modificador ya lee cuando le toca ejecutar",
-    ).toBe(false);
+  it("⛔ NUNCA el contenido de las tareas — solo contadores", () => {
+    /* ⚠ ESTA GUARDA SE CORRIGIÓ EL 2026-08-20, y el porqué importa más que el assert.
+       La primera versión decía «no toques `tasks`», y por eso el contexto daba solo el TOTAL por
+       fase. Elías pidió «en Integraciones hay semanas sin tareas, quítalas» y el asistente tuvo
+       que contestar que no podía verlo: con «16 tareas» no hay forma de saber que las semanas 3
+       a 6 están vacías. La guarda estaba defendiendo la línea equivocada.
+
+       La línea de verdad es CONTENIDO vs FORMA. `weekIndex` y `status` son dos enteros —~250
+       caracteres para todo Wherex— y son justo lo que hace falta para conversar. `title` y
+       `notes` son ~8.000 y los lee el modificador cuando ejecuta.
+
+       La edición que la pone en rojo: sumar `title: true` al select de tareas. */
+    expect(src).toContain("tasks: { select: { weekIndex: true, status: true } }");
+    for (const contenido of ["title: true", "notes: true"]) {
+      expect(
+        src.includes(contenido),
+        `el contexto del chat pasó a traer "${contenido}": eso es contenido, no forma — son ` +
+          "~8.000 caracteres por turno que el modificador ya lee cuando le toca ejecutar",
+      ).toBe(false);
+    }
+  });
+
+  it("⭐ y sí trae el reparto por semana, que es lo que deja pedir «sacá las vacías»", () => {
+    /* Sin esto vuelve el caso exacto del 2026-08-20: el CSE ve cuatro semanas vacías en pantalla
+       y el asistente no. La edición que la pone en rojo: volver al total por fase. */
+    expect(src).toContain("semanas VACÍAS");
+    expect(src).toContain("porSemana");
   });
 });

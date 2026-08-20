@@ -135,6 +135,14 @@ describe("la regla de las fechas está en el prompt", () => {
     ).toBe(true);
   });
 
+  it("⚠ y prohíbe ESTIMAR la fecha nueva cuando no la puede calcular", () => {
+    /* Medido el 2026-08-20: ante un recorte de dos fases el modelo contestó «mediados/fines de
+       julio». Estaba bien, pero es una adivinanza — las fases se solapan y el span no se calcula
+       de cabeza. El CSE repite ese rango en una llamada y queda comprometido. La regla: decir
+       cuántas semanas se corre, y que la fecha exacta la da la vista previa. */
+    expect(PROMPT).toContain("NO la estimes");
+  });
+
   it("⚠ y le avisa al editor cuando las tareas caen en una fase más corta", () => {
     /* El error real del 2026-08-20: fusionar dos fases metió 12 tareas en una de 4 semanas y el
        modelo dejó una en la semana 5. El editor rechazó el cambio ENTERO por ese entero. */
