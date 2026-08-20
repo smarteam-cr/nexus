@@ -1,4 +1,9 @@
-export { Button, buttonVariants } from "./Button";
+export { Button } from "./Button";
+// ⚠ Desde el módulo neutral y NO desde "./Button": re-exportar a través de un módulo
+// "use client" marca la función como de cliente y llamarla desde un Server Component
+// revienta la página. Lo sostiene components/ui/button-variants.test.ts.
+export { buttonVariants } from "./button-variants";
+export type { ButtonVariantProps } from "./button-variants";
 export type { ButtonProps } from "./Button";
 
 export { Badge }     from "./Badge";
