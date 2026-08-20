@@ -20,10 +20,8 @@ import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
-import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
-import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
-import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
-import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
+import { pieceForCanvas } from "@/lib/pieces/registry";
+import { DOC } from "@/lib/canvas/assist-de-documento";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 
 const bodySchema = z.object({
@@ -32,42 +30,6 @@ const bodySchema = z.object({
 });
 
 type Params = Promise<{ projectId: string }>;
-
-const DOC: Record<
-  string,
-  {
-    section: "kickoff" | "desarrollo";
-    agentId: string;
-    docLabel: string;
-    defs: Record<string, BCSectionDef>;
-    /** El template del CÓDIGO — de acá sale la VOZ (agentIntro + gate brandVoice).
-     *  El `systemPrompt` del Agent en DB es una NOTA-PUNTERO (ver
-     *  scripts/seed-kickoff-agent.ts), no sirve como prompt. */
-    tpl: BcTemplateDef;
-  }
-> = {
-  Kickoff: {
-    section: "kickoff",
-    agentId: "agent-kickoff-canvas",
-    docLabel: "kickoff (landing de arranque de cara al cliente)",
-    defs: KICKOFF_DEF_BY_KEY,
-    tpl: KICKOFF_TEMPLATE,
-  },
-  Desarrollo: {
-    section: "desarrollo",
-    agentId: "agent-desarrollo-canvas",
-    docLabel: "requerimiento técnico de integración",
-    defs: DESARROLLO_DEF_BY_KEY,
-    tpl: DESARROLLO_TEMPLATE,
-  },
-  /* ⚠ ANTES DE SUMAR EXPLORACIÓN ACÁ: aplicar una propuesta del assist pasa por
-     `preserveNonSchemaKeys` (lib/ai/assist.ts), que es SHALLOW — solo conserva keys de
-     PRIMER NIVEL fuera del schema. Las marcas "ya la pregunté" del plan de sesiones viven
-     anidadas en `sesiones[].preguntas[].hecha`, así que una propuesta que toque `sesiones`
-     las borraría TODAS sin ningún aviso: el cartel que sí existe en la sección habla de
-     "Regenerar", y el apply del assist va por otro camino. Ver
-     lib/canvas/exploracion-preguntas.ts. */
-};
 
 export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { projectId } = await params;
@@ -84,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     where: { id: canvasId, projectId },
     select: {
       name: true,
+      slug: true,
       canvasSections: {
         orderBy: { order: "asc" },
         select: { key: true, blocks: { orderBy: { order: "asc" }, select: { blockType: true, data: true } } },
@@ -92,11 +55,23 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   });
   if (!canvas) return NextResponse.json({ error: "Canvas no encontrado" }, { status: 404 });
 
-  const doc = DOC[canvas.name];
-  if (!doc) {
-    return NextResponse.json({ error: "El assist de documento solo aplica a Kickoff y Desarrollo." }, { status: 400 });
+  /* La identidad del documento es su SLUG, no su rótulo. `pieceForCanvas` ya resuelve el slug
+     con el respaldo por nombre histórico para las filas que un script viejo haya creado sin él
+     (misma lectura doble que documenta lib/pieces/canvas-query.ts). */
+  const pieza = pieceForCanvas(canvas);
+  const doc = pieza ? DOC[pieza.slug] : undefined;
+  if (!pieza || !doc) {
+    return NextResponse.json(
+      { error: `Este documento todavía no se puede modificar con IA (${canvas.name}).` },
+      { status: 400 },
+    );
   }
-  const perm = await guardPermission(doc.section, "regenerate");
+  /* La celda sale del REGISTRO, no se repite acá: una pieza que cambie de sección de permiso lo
+     hace en un solo lugar. */
+  const perm = await guardPermission(
+    pieza.permissionSection as Parameters<typeof guardPermission>[0],
+    "regenerate" as never,
+  );
   if (perm instanceof NextResponse) return perm;
 
   // Contrato: secciones del canvas cuya def es GENERABLE (mismo filtro que la
@@ -132,9 +107,12 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     // de afuera y las secciones INTERNAS del handoff no deben entrar al prompt.
     loadHandoffContext(projectId, {
       onlyConfirmed: false,
-      includeKeys: doc.section === "kickoff" ? KICKOFF_HANDOFF_KEYS : DESARROLLO_HANDOFF_KEYS,
+      /* `null` = el handoff entero, y SOLO para documentos internos. Los que el cliente lee
+         llevan allowlist: sus secciones internas (riesgos, banderas, acuerdos de la venta) no
+         pueden entrar al prompt de algo que se proyecta en pantalla frente a él. */
+      ...(doc.handoffKeys ? { includeKeys: doc.handoffKeys as string[] } : {}),
     }),
-    doc.section === "kickoff" ? loadTimelineContext(projectId) : Promise.resolve(""),
+    doc.conCronograma ? loadTimelineContext(projectId) : Promise.resolve(""),
   ]);
 
   // La VOZ sale del template del CÓDIGO — misma fuente que usa la generación y que

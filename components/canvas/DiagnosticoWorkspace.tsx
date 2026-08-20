@@ -18,6 +18,7 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDiagnosticoConfig, buildDiagnosticoSections } from "./diagnostico-landing-adapter";
+import DocumentAssist from "@/components/ai/DocumentAssist";
 
 const MAXW = 860;
 
@@ -165,6 +166,25 @@ export default function DiagnosticoWorkspace({
         </div>
       )}
 
+      {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
+          upsertCardData (a diferencia de Regenerar, que reescribe TODO). */}
+      {hasGeneratedContent && (
+        <DocumentAssist
+          url={`/api/projects/${projectId}/canvas-assist`}
+          extraBody={{ canvasId }}
+          dialogTitle="Mejorar el diagnóstico con IA"
+          chips={["Hazlo más directo y menos técnico", "Ancla los hallazgos a los procesos mapeados", "Resume las secciones largas"]}
+          placeholder='Ej: "sé más concreto en la causa raíz de cada dolor"'
+          labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
+          onApplySection={(key, data) => {
+            const s = cs.sections.find((x) => x.key === key);
+            if (!s) return;
+            const card = s.blocks.find((b) => b.blockType === "CARD");
+            return cs.upsertCardData(s.id, card?.id ?? null, data);
+          }}
+          className="px-4 pt-3"
+        />
+      )}
       <LandingView
         config={config}
         ctx={ctx}
