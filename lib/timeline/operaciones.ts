@@ -1,0 +1,375 @@
+/**
+ * lib/timeline/operaciones.ts — EL CRONOGRAMA SE EDITA CON OPERACIONES, NO REESCRIBIÉNDOLO.
+ *
+ * PURO. Sin Prisma, sin red, sin React.
+ *
+ * ── POR QUÉ EXISTE, MEDIDO ───────────────────────────────────────────────────────────────────
+ * Hasta hoy, cambiar el cronograma con IA significaba pedirle al modelo que devolviera el
+ * cronograma ENTERO. Medido contra Wherex el 2026-08-20, para acortar UNA fase:
+ *
+ *   · devolver el documento completo   → **217 s** · 12.800 tokens de salida · $0,23
+ *   · devolver solo las fases tocadas  →   19,5 s ·  1.145 tokens
+ *   · devolver OPERACIONES             →    **1,9 s** ·     81 tokens · $0,003
+ *
+ * **114× más rápido y 75× más barato.** Y no hay razonamiento que optimizar: `thinking: 0`. Son
+ * 12.800 tokens de JSON transcritos a ~59 tok/s para cambiar un número.
+ *
+ * ── ⛔ PERO LA RAZÓN DE FONDO NO ES LA VELOCIDAD: ES QUE EL CONTRATO ROMPE COSAS ──────────────
+ * El mismo día, Elías pidió BORRAR UNA FASE. La propuesta volvió con «6 fases modificadas · se
+ * corrió la fecha de cierre 70 días»: al re-emitir todo, el modelo soltó el `startWeek` de seis
+ * fases que corrían en PARALELO, y el proyecto pasó de 17 a 27 semanas. Nadie pidió eso.
+ *
+ * Es inherente al contrato: si el modelo tiene que re-emitir cada campo de cada fase en cada
+ * edición, **cada campo de cada fase está en riesgo en cada edición**. Una operación toca lo que
+ * nombra. Lo que no se nombra no se puede romper.
+ *
+ * ── ⭐ Y LO QUE HABILITA, QUE HOY ES IMPOSIBLE ───────────────────────────────────────────────
+ * Con el contrato viejo, «el modelo se olvidó de incluir la tarea» y «el humano pidió borrarla»
+ * llegan IGUAL: la tarea no está en el payload. Por eso `rescatarProgreso` tiene que asumir
+ * accidente y reponerla — asumir intención le haría perder trabajo real a alguien.
+ *
+ * Con operaciones son dos cosas distintas por construcción: una OMISIÓN se rescata, y un
+ * `tarea.borrar` con nombre y apellido se ejecuta. Eso es lo que deja que el chat pueda borrar lo
+ * que escribió un humano, previa doble confirmación — que es lo que pidió Elías.
+ *
+ * ── ⛔ ESTO NO ESCRIBE ───────────────────────────────────────────────────────────────────────
+ * Produce el MISMO payload que ya acepta el PUT del cronograma. Escribir sigue siendo del PUT,
+ * con su rescate de progreso, su reparación de semanas, su validación y su auditoría. Abrir un
+ * segundo camino de escritura sería repetir el error del que salieron las 34 tareas rotas que se
+ * encontraron el 2026-08-20 (dos puertas, a las dos les faltaba el mismo guardia).
+ */
+import type { FaseActual, PayloadProyectado, Party, TipoDeTarea } from "./assist-items";
+
+/**
+ * El vocabulario. ⛔ Es una lista CERRADA a propósito: lo que no está acá no se puede pedir, y el
+ * chat tiene que DECIRLO en vez de elegir la operación más parecida. Una operación que no coincide
+ * con la intención es rápida, silenciosa y equivocada — el peor modo de falla posible.
+ */
+export type Operacion =
+  | { op: "fase.duracion"; phaseId: string; semanas: number }
+  | { op: "fase.renombrar"; phaseId: string; nombre: string }
+  | { op: "fase.borrar"; phaseId: string }
+  | { op: "fase.redistribuir"; phaseId: string }
+  | { op: "fase.mover"; phaseId: string; posicion: number }
+  | { op: "fase.arranque-relativo"; phaseId: string; semana: number | null }
+  | { op: "tarea.mover-semana"; taskId: string; semana: number }
+  | { op: "tarea.mover-fase"; taskId: string; phaseId: string }
+  | { op: "tarea.borrar"; taskId: string }
+  | { op: "arranque"; fecha: string };
+
+export const OPERACIONES_VALIDAS = [
+  "fase.duracion",
+  "fase.renombrar",
+  "fase.borrar",
+  "fase.redistribuir",
+  "fase.mover",
+  "fase.arranque-relativo",
+  "tarea.mover-semana",
+  "tarea.mover-fase",
+  "tarea.borrar",
+  "arranque",
+] as const;
+
+export interface OperacionRechazada {
+  operacion: Operacion;
+  motivo: string;
+}
+
+export interface ResultadoDeOperaciones {
+  /** El cuerpo que acepta el PUT del cronograma, tal cual. */
+  payload: PayloadProyectado;
+  /** Lo que el sistema hizo además de lo pedido (semanas acomodadas, tareas recreadas). */
+  avisos: string[];
+  /** ⛔ Lo que NO se pudo hacer, y por qué. Nunca se ignora en silencio. */
+  rechazadas: OperacionRechazada[];
+}
+
+/** Copia de trabajo: mutable, con la marca de si su fase fue TOCADA. */
+interface FaseEnCurso {
+  id?: string;
+  name: string;
+  durationWeeks: number;
+  startWeek: number | null;
+  sessionCount: number | null;
+  notes: string | null;
+  activityType: string | null;
+  tasks: {
+    id?: string;
+    title: string;
+    weekIndex: number;
+    order: number;
+    notes: string | null;
+    party?: Party | null;
+    type?: TipoDeTarea | null;
+  }[];
+  /**
+   * ⭐ LA MARCA QUE SOSTIENE TODO. Una fase intocada sale del payload SIN `tasks`, que en el
+   * contrato del PUT significa «no tocar». Emitir el array siempre convertiría cada operación en
+   * un diff completo de esa fase — y el PUT borra por omisión. Es la misma regla que ya sostiene
+   * `assist-items.ts`, y por el mismo motivo.
+   */
+  tocada: boolean;
+}
+
+export function aplicarOperaciones(
+  actuales: readonly FaseActual[],
+  anclaActual: string | null,
+  operaciones: readonly Operacion[],
+): ResultadoDeOperaciones {
+  const avisos: string[] = [];
+  const rechazadas: OperacionRechazada[] = [];
+
+  const fases: FaseEnCurso[] = actuales.map((f) => ({
+    id: f.id,
+    name: f.name,
+    durationWeeks: f.durationWeeks,
+    startWeek: f.startWeek ?? null,
+    sessionCount: f.sessionCount ?? null,
+    notes: f.notes ?? null,
+    activityType: f.activityType ?? null,
+    tasks: f.tasks.map((t, i) => ({
+      id: t.id,
+      title: t.title,
+      weekIndex: t.weekIndex,
+      order: t.order ?? i,
+      notes: t.notes ?? null,
+      party: t.party ?? null,
+      type: t.type ?? null,
+    })),
+    tocada: false,
+  }));
+
+  let ancla = anclaActual;
+
+  const buscarFase = (phaseId: string) => fases.find((f) => f.id === phaseId);
+  const buscarTarea = (taskId: string) => {
+    for (const f of fases) {
+      const t = f.tasks.find((x) => x.id === taskId);
+      if (t) return { fase: f, tarea: t };
+    }
+    return null;
+  };
+  const rechazar = (operacion: Operacion, motivo: string) => rechazadas.push({ operacion, motivo });
+
+  /** Acomoda las tareas que quedaron fuera de rango y reasigna `order` dentro de cada semana. */
+  const normalizar = (f: FaseEnCurso) => {
+    const ultima = Math.max(f.durationWeeks - 1, 0);
+    let corridas = 0;
+    for (const t of f.tasks) {
+      const acotado = Math.min(Math.max(Math.floor(t.weekIndex), 0), ultima);
+      if (acotado !== t.weekIndex) {
+        t.weekIndex = acotado;
+        corridas++;
+      }
+    }
+    if (corridas > 0) {
+      avisos.push(
+        `En «${f.name}» ${corridas === 1 ? "1 tarea quedaba" : `${corridas} tareas quedaban`} ` +
+          `fuera de las ${f.durationWeeks} ${f.durationWeeks === 1 ? "semana" : "semanas"}: ` +
+          `${corridas === 1 ? "se movió" : "se movieron"} a la última.`,
+      );
+    }
+    /* `order` secuencial POR SEMANA — es lo que exige el validador del PUT. */
+    const porSemana = new Map<number, number>();
+    for (const t of f.tasks.slice().sort((a, b) => a.weekIndex - b.weekIndex || a.order - b.order)) {
+      const n = porSemana.get(t.weekIndex) ?? 0;
+      t.order = n;
+      porSemana.set(t.weekIndex, n + 1);
+    }
+  };
+
+  for (const operacion of operaciones) {
+    switch (operacion.op) {
+      case "fase.duracion": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        if (!Number.isInteger(operacion.semanas) || operacion.semanas < 1) {
+          rechazar(operacion, "una fase tiene que durar al menos 1 semana");
+          break;
+        }
+        f.durationWeeks = operacion.semanas;
+        f.tocada = true;
+        normalizar(f);
+        break;
+      }
+
+      case "fase.renombrar": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        if (!operacion.nombre.trim()) {
+          rechazar(operacion, "el nombre no puede quedar vacío");
+          break;
+        }
+        f.name = operacion.nombre.trim();
+        break;
+      }
+
+      case "fase.borrar": {
+        const i = fases.findIndex((f) => f.id === operacion.phaseId);
+        if (i === -1) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        /* ⭐ Se borra de verdad. Es la diferencia entre una OMISIÓN del modelo (que el rescate del
+           PUT repone, y está bien) y una intención que una persona pidió, leyó y confirmó. */
+        const [fuera] = fases.splice(i, 1);
+        if (fuera.tasks.length > 0) {
+          avisos.push(
+            `Se borró «${fuera.name}» con sus ${fuera.tasks.length} ` +
+              `${fuera.tasks.length === 1 ? "tarea" : "tareas"}.`,
+          );
+        }
+        break;
+      }
+
+      case "fase.redistribuir": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        /* Reparto parejo conservando el orden actual: el bloque i-ésimo va a la semana i·n/total.
+           No reordena nada — mover trabajo de semana ya es bastante. */
+        const total = f.tasks.length;
+        const semanas = Math.max(f.durationWeeks, 1);
+        const enOrden = f.tasks
+          .slice()
+          .sort((a, b) => a.weekIndex - b.weekIndex || a.order - b.order);
+        enOrden.forEach((t, i) => {
+          t.weekIndex = total === 0 ? 0 : Math.min(Math.floor((i * semanas) / total), semanas - 1);
+        });
+        f.tocada = true;
+        normalizar(f);
+        break;
+      }
+
+      case "fase.mover": {
+        const i = fases.findIndex((f) => f.id === operacion.phaseId);
+        if (i === -1) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        const destino = Math.min(Math.max(Math.floor(operacion.posicion), 0), fases.length - 1);
+        const [f] = fases.splice(i, 1);
+        fases.splice(destino, 0, f);
+        break;
+      }
+
+      case "fase.arranque-relativo": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        /* ⚠ `null` = «auto» (arranca cuando termina la anterior). Es EXACTAMENTE el campo que el
+           contrato viejo perdía solo y corría el cierre 70 días. Acá solo cambia si se lo nombra. */
+        f.startWeek =
+          operacion.semana === null ? null : Math.max(Math.floor(operacion.semana), 0);
+        break;
+      }
+
+      case "tarea.mover-semana": {
+        const hit = buscarTarea(operacion.taskId);
+        if (!hit) {
+          rechazar(operacion, "esa tarea no existe en el cronograma");
+          break;
+        }
+        hit.tarea.weekIndex = Math.max(Math.floor(operacion.semana), 0);
+        hit.fase.tocada = true;
+        normalizar(hit.fase);
+        break;
+      }
+
+      case "tarea.mover-fase": {
+        const hit = buscarTarea(operacion.taskId);
+        if (!hit) {
+          rechazar(operacion, "esa tarea no existe en el cronograma");
+          break;
+        }
+        const destino = buscarFase(operacion.phaseId);
+        if (!destino) {
+          rechazar(operacion, "la fase de destino no existe");
+          break;
+        }
+        if (destino === hit.fase) break; // ya está ahí
+        hit.fase.tasks = hit.fase.tasks.filter((t) => t !== hit.tarea);
+        hit.fase.tocada = true;
+        /* ⚠ SIN id en el destino: el cronograma no sabe mudar una tarea — la borra de un lado y la
+           crea del otro, y con eso pierde su estado. Es la regla dura de siempre, y se avisa. */
+        destino.tasks.push({ ...hit.tarea, id: undefined, weekIndex: 0 });
+        destino.tocada = true;
+        normalizar(hit.fase);
+        normalizar(destino);
+        avisos.push(
+          `«${hit.tarea.title}» se recrea en «${destino.name}»: pierde su estado y sus fechas propias.`,
+        );
+        break;
+      }
+
+      case "tarea.borrar": {
+        const hit = buscarTarea(operacion.taskId);
+        if (!hit) {
+          rechazar(operacion, "esa tarea no existe en el cronograma");
+          break;
+        }
+        hit.fase.tasks = hit.fase.tasks.filter((t) => t !== hit.tarea);
+        hit.fase.tocada = true;
+        normalizar(hit.fase);
+        break;
+      }
+
+      case "arranque": {
+        if (!/^\d{4}-\d{2}-\d{2}/.test(operacion.fecha)) {
+          rechazar(operacion, "la fecha de arranque tiene que ser AAAA-MM-DD");
+          break;
+        }
+        ancla = operacion.fecha.slice(0, 10);
+        break;
+      }
+
+      default: {
+        /* Un `op` que no está en el vocabulario. Se rechaza con nombre — nunca se aproxima. */
+        rechazar(operacion, `«${(operacion as { op: string }).op}» no es una operación válida`);
+      }
+    }
+  }
+
+  return {
+    payload: {
+      anchorStartDate: ancla,
+      phases: fases.map((f, i) => ({
+        ...(f.id ? { id: f.id } : {}),
+        name: f.name,
+        order: i,
+        durationWeeks: f.durationWeeks,
+        startWeek: f.startWeek,
+        sessionCount: f.sessionCount,
+        notes: f.notes,
+        activityType: f.activityType,
+        /* ⛔ Ver `tocada`: sin tareas = «no tocar». Emitirlas siempre convertiría cada operación
+           en un diff completo, y el PUT borra por omisión. */
+        ...(f.tocada
+          ? {
+              tasks: f.tasks.map((t) => ({
+                ...(t.id ? { id: t.id } : {}),
+                title: t.title,
+                weekIndex: t.weekIndex,
+                order: t.order,
+                notes: t.notes,
+                party: t.party ?? null,
+                type: t.type ?? null,
+              })),
+            }
+          : {}),
+      })),
+    },
+    avisos,
+    rechazadas,
+  };
+}
