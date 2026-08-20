@@ -66,16 +66,37 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
-| 7 | **¿Alcanza un modelo más barato?** | Medirlo con uso real encima | ⬜ Necesita 2 semanas de uso |
+| 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
 
 ### Etapa 2, tramo por tramo
 
 | | Tramo | Qué deja andando | Estado |
 |---|---|---|---|
-| 2a | **El hilo persiste** | La conversación sobrevive a cambiar de pestaña. ⚠ Trae migración SQL | ✅ Commiteado · **falta que Elías corra el SQL** |
+| 2a | **El hilo persiste** | La conversación sobrevive a cambiar de pestaña | ✅ **Verificado contra producción** (`scripts/probar-asistente.ts`) |
 | 2b | **El chat responde** | El turno, con el contexto chico | 🟡 El contexto ya está; falta la llamada al modelo |
 | 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ⬜ |
 | 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ⬜ |
+
+### ⭐ Lo que la medición contra producción cambió (2026-08-19)
+
+El contexto del chat se midió con datos reales, no estimado. El peor cronograma de la cartera
+(Wherex, 10 fases) son **3.481 caracteres — un 58 % del techo**. En tokens:
+
+| Modelo | Tokens del turno | Mínimo para que la caché funcione | ¿Cachea? |
+|---|---:|---:|---|
+| Sonnet 5 | 1.662 | 1.024 | ✅ sí |
+| Haiku 4.5 | 1.199 | 4.096 | ❌ **no, y en silencio** |
+
+**Dos consecuencias que dan vuelta el plan:**
+
+1. El plan proyectaba un prefijo de ~20.000 tokens y $7,4–10,5 por día *con* caché. El contexto
+   liviano lo dejó en ~1.700 → el chat cuesta **un orden de magnitud menos** de lo presupuestado.
+2. ⚠ **Haiku 4.5 no cachea un prompt de este tamaño** (su mínimo es 4.096 tokens, el más alto de
+   toda la familia). O sea que paga el prefijo entero en CADA turno, mientras Sonnet 5 lo lee
+   cacheado a 0,1×. El modelo «barato» puede terminar saliendo **más caro** en una conversación
+   larga — es exactamente la pregunta de la etapa 7, y la respuesta se dio vuelta antes de
+   llegar. ⚠ Falta el otro lado: la salida de Haiku sigue siendo 3× más barata, y en un chat
+   las respuestas son cortas. Se decide con las dos mitades medidas, no con esta sola.
 
 ### Las decisiones que ya se tomaron
 
@@ -358,7 +379,7 @@ reuniones es de Elías.
 | 2 | `2026-08-16-estado-y-etapa-propuestos.sql` | Dónde guardar la sugerencia de estado y etapa |
 | 3 | `2026-08-16-project-brief.sql` | La tabla del resumen por proyecto |
 | 4 | `2026-08-16-particularidad-estado.sql` | Que una desviación se pueda dar por resuelta |
-| **5** | **`2026-08-19-hilos-de-chat.sql`** | **⚠ PENDIENTE — las dos tablas de la conversación del asistente. Aditiva (2 tablas + 1 enum, todo con `IF NOT EXISTS`). Va ANTES del próximo deploy** |
+| 5 | `2026-08-19-hilos-de-chat.sql` | ✅ Aplicada el 2026-08-19 — las dos tablas de la conversación del asistente. INV7 verde con 101 modelos |
 
 ⚠ Si el servidor del 3004 venía levantado, **reinicialo**: tiene el cliente de Prisma viejo en
 memoria y las escrituras fallan en silencio.
