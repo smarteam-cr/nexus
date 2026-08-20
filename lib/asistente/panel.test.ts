@@ -118,15 +118,28 @@ describe("un aplicar que falla NO se lee como uno que anduvo", () => {
     ).toBe(false);
   });
 
-  it("⛔ y solo se cierra cuando NO falló", () => {
-    /* El `onClose()` tiene que estar en la rama del éxito, nunca después del await pelado. */
-    const i = PANEL.indexOf("const fallo = await onAplicar(");
+  it("⛔ y solo se cierra cuando NO falló Y NO hubo avisos", () => {
+    /* El `onClose()` tiene que estar en la rama del éxito, nunca después del await pelado.
+
+       ⚠ Y desde el 2026-08-20 tampoco alcanza con «no falló»: si el editor hizo algo DISTINTO de
+       lo pedido —rescató una fase, acomodó semanas— el panel se queda abierto para que se lea.
+       Elías pidió borrar una fase, el chat dijo ✅ y se cerró, y la fase seguía ahí. */
+    const i = PANEL.indexOf("await onAplicar(");
     expect(i, "se perdió el resultado de aplicar").toBeGreaterThan(-1);
     const bloque = PANEL.slice(i, PANEL.indexOf("} finally {", i));
     const posFallo = bloque.indexOf("if (fallo)");
     const posClose = bloque.indexOf("onClose()");
     expect(posFallo, "dejó de mirar si falló").toBeGreaterThan(-1);
     expect(posClose, "el cierre quedó fuera de la rama de éxito").toBeGreaterThan(posFallo);
+    expect(bloque, "el panel se cierra aunque el editor haya hecho otra cosa").toContain(
+      "avisos.length === 0",
+    );
+  });
+
+  it("⚠ y el desenlace LLEVA los avisos, no un ✅ pelado", () => {
+    /* «Se aplicó» sobre algo que no se aplicó es peor que un error: el CSE cierra el panel
+       convencido y se entera días después. */
+    expect(PANEL).toContain("anotarDesenlace(true, avisos");
   });
 
   it("⚠ y el desenlace queda ESCRITO en el hilo", () => {

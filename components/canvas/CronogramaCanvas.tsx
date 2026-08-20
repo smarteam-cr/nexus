@@ -1379,9 +1379,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   /* Devuelve el MOTIVO del fallo, o null si anduvo. ⚠ Antes no devolvía nada, así que el
      chat cerraba su panel aunque el aplicar hubiera fallado y el error aparecía suelto al pie
      del documento — reportado por Elías en la primera prueba real. */
-  const submitAssist = async (instruction: string, scopePhaseId: string | null): Promise<string | null> => {
-    if (instruction.trim().length < 4 || assisting) return "El pedido es muy corto o ya hay uno en curso.";
+  const submitAssist = async (
+    instruction: string,
+    scopePhaseId: string | null,
+  ): Promise<{ fallo: string | null; avisos: string[] }> => {
+    if (instruction.trim().length < 4 || assisting)
+      return { fallo: "El pedido es muy corto o ya hay uno en curso.", avisos: [] };
     setAssisting(true);
+    let avisosDelAssist: string[] = [];
     setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/assist`, {
@@ -1399,7 +1404,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               : data?.error ?? "Error al pedir la actualización.");
         setError(motivo);
         setAssisting(false);
-        return motivo;
+        return { fallo: motivo, avisos: [] };
       } else {
         // Vive SOLO en memoria: `debeReemplazarPropuesta` nunca la pisa con una del servidor.
         // El `runId` viaja hasta el "Aplicar" para que el PUT pueda cerrarle el desenlace: sin
@@ -1410,17 +1415,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setAssistRevision(false);
         setProposal(data.proposal as Proposal);
         setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
-        setAssistWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+        avisosDelAssist = Array.isArray(data.warnings) ? data.warnings : [];
+        setAssistWarnings(avisosDelAssist);
         setAssistOpen(false); // cerrar el dialog; la propuesta se ve en el Gantt (preview)
       }
     } catch {
       const motivo = "Error de conexión con el asistente.";
       setError(motivo);
       setAssisting(false);
-      return motivo;
+      return { fallo: motivo, avisos: [] };
     }
     setAssisting(false);
-    return null;
+    /* ⚠ Los avisos del editor (rescates, semanas acomodadas) suben al chat: son la diferencia
+       entre «se aplicó» y «se aplicó, pero con una parte hizo otra cosa». */
+    return { fallo: null, avisos: avisosDelAssist };
   };
 
   // Aplicar la propuesta de la IA: PUT directo (sin modal). La razón del audit es la

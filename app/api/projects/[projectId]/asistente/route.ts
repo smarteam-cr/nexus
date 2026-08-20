@@ -117,9 +117,20 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     await agregarTurno(hilo.id, {
       rol: "ASISTENTE",
       /* ⚠ En TUTEO neutro: estos turnos son la VOZ DEL ASISTENTE, aunque los escriba la app.
-         Mezclarlos con el voseo de la interfaz haría que el asistente cambie de registro solo. */
+         Mezclarlos con el voseo de la interfaz haría que el asistente cambie de registro solo.
+
+         ⛔ Y el «se aplicó» a secas MENTÍA. El 2026-08-20: Elías pidió borrar una fase, el chat
+         dijo ✅, y la fase seguía ahí — el editor la había RESCATADO porque tenía 2 tareas con
+         progreso, que es lo que debe hacer. El desenlace sabía que la llamada anduvo, no que el
+         cambio hubiera pasado. Ahora los avisos del editor van en el mismo turno. */
       contenido: ok
-        ? "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
+        ? detalle
+          ? `⚠ Se aplicó, pero el editor hizo algo distinto con una parte:
+
+${detalle}
+
+Revisa la vista previa antes de aceptar.`
+          : "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
         : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. La instrucción quedó arriba por si quieres ajustarla, o dime qué probamos.`,
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));

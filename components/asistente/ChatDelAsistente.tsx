@@ -48,8 +48,23 @@ interface TurnoVista {
   acuerdo: AcuerdoDelChat | null;
 }
 
-/** Lo que `onAplicar` tiene que contestar. `null` = anduvo; un string = el motivo del fallo. */
-export type ResultadoDeAplicar = string | null;
+/**
+ * Lo que `onAplicar` tiene que contestar.
+ *
+ * ⛔ `avisos` NO es decoración. El 2026-08-20 Elías pidió borrar una fase con el nombre corrupto,
+ * el chat contestó «✅ Se aplicó» — y la fase seguía ahí. No mintió el modelo: el editor la
+ * RESCATÓ porque tenía 2 tareas con progreso, que es exactamente lo que debe hacer. Lo que falló
+ * fue el desenlace: sabía que la llamada HTTP anduvo, no que el cambio hubiera pasado.
+ *
+ * Un «se aplicó» sobre algo que no se aplicó es peor que un error: el CSE cierra el panel
+ * convencido y se entera días después.
+ */
+export interface ResultadoDeAplicar {
+  /** El motivo del fallo, o null si el editor aceptó el cambio. */
+  fallo: string | null;
+  /** Lo que el editor hizo DISTINTO de lo pedido (rescates, semanas acomodadas). */
+  avisos: string[];
+}
 
 interface Props {
   projectId: string;
@@ -194,15 +209,18 @@ export default function ChatDelAsistente({
     setAplicando(true);
     setError(null);
     try {
-      const fallo = await onAplicar(instruccion);
+      const { fallo, avisos } = await onAplicar(instruccion);
       if (fallo) {
         /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
            aparecía suelto al pie del documento, con el cajón ya cerrado. */
         setError(fallo);
         await anotarDesenlace(false, fallo);
       } else {
-        await anotarDesenlace(true, "");
-        onClose();
+        /* ⚠ Los avisos viajan al hilo: son la diferencia entre «se aplicó» y «se aplicó, pero
+           el editor hizo otra cosa con una parte». Y como el modelo LEE el hilo, en el próximo
+           turno sabe qué no entró y puede proponer otro camino. */
+        await anotarDesenlace(true, avisos.join(" · "));
+        if (avisos.length === 0) onClose();
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "no se pudo aplicar";
