@@ -297,8 +297,15 @@ export async function ensureAccess(
     // caducada, que es lo que el CSE espera al volver a tocar "Subir al cliente".
     const venceYa = !existing.expiresAt || existing.expiresAt.getTime() <= Date.now();
     if (!venceYa) {
-      const { revokedAt: _revokedAt, ...row } = existing;
-      return row;
+      // Explícito y no un rest-spread: `revokedAt` entró al select solo para decidir acá y
+      // no es parte de BcAccessRow. Nombrar los cinco campos deja el shape visible.
+      return {
+        id: existing.id,
+        accessToken: existing.accessToken,
+        accessPassword: existing.accessPassword,
+        requiresPassword: existing.requiresPassword,
+        expiresAt: existing.expiresAt,
+      };
     }
     return prisma.businessCaseExternalAccess.update({
       where: { businessCaseId },
