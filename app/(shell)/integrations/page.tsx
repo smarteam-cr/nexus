@@ -6,6 +6,10 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
+import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
+import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -84,6 +88,18 @@ export default async function IntegrationsPage({
   }
 
   const { hs_connected } = await searchParams;
+
+  /* ⛔ EL GASTO ES PLATA. `/settings/gasto-ia` está gateada a los roles de costos y esta página
+     la ve cualquier consultor interno, así que el número se CONSULTA solo si el rol lo permite:
+     quien no lo tiene recibe `null`, no un dato escondido con CSS. Mismo criterio que la
+     pantalla original («ni un byte de gasto entra al payload de un no autorizado»). */
+  const ctx = await requireInternalUser().catch(() => null);
+  const puedeVerGasto = isCostosRole(ctx?.role);
+  const resumen = puedeVerGasto ? await gastoResumidoDeClaude() : null;
+  const gastoDeClaude: GastoDeClaude | null = resumen;
+  /* El medidor puede no existir todavía (su migración es aditiva y puede llegar después del
+     deploy). Solo se puede afirmar que falta cuando SÍ se lo fue a buscar. */
+  const medidorListo = !puedeVerGasto || resumen !== null;
   const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
@@ -118,6 +134,11 @@ export default async function IntegrationsPage({
           adminEmail={google.adminEmail}
           sessionCount={googleMeetCount}
         />
+
+        {/* Claude — el motor de IA. Es la integración MÁS usada del producto (~30 caminos) y
+            era la única que no aparecía acá; su gasto vivía en una pantalla que hay que saber
+            que existe. */}
+        <ClaudeCard gasto={gastoDeClaude} medidorListo={medidorListo} />
 
         {/* Logo de Smarteam — config global de marca (páginas externas) */}
         <section className="rounded-xl bg-surface border border-line p-5">
