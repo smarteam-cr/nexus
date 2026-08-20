@@ -25,6 +25,7 @@ import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
+import { repararPropuesta } from "@/lib/timeline/reparar-propuesta";
 import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { cargarContextoDelAssist } from "@/lib/contexto/cargar";
@@ -251,10 +252,21 @@ export async function POST(
     return NextResponse.json({ error: "La IA no pudo procesar el pedido. Probá de nuevo en un momento." }, { status: 500 });
   }
 
+  /* ── REPARAR ANTES DE JUZGAR (2026-08-20) ──────────────────────────────────────────────────
+     Un `weekIndex` fuera de rango tiene UNA sola corrección sensata, y hasta hoy tiraba la
+     propuesta entera: fusionar dos fases de Wherex costó 231 s y $0,29 de modelo, y se perdió
+     porque el modelo dejó una tarea de OTRA fase —que la instrucción ni mencionaba— en una
+     semana que no existía. `rescate-progreso.ts` ya hacía este recorte, pero corre después de
+     la validación, así que acá no llegaba nunca. Lo aritmético se acomoda y SE REPORTA. */
+  const reparacion = repararPropuesta(parsedRaw);
+
   // Validación con el MISMO validador del PUT — la propuesta debe ser aplicable tal cual.
-  const validation = validateTimelinePayload(parsedRaw);
+  const validation = validateTimelinePayload(reparacion.propuesta);
   if (!validation.valid || !validation.parsed) {
     console.warn("[timeline/assist] Propuesta inválida:", validation.errors);
+    /* ⚠ La corrida se cerraba SOLA en RUNNING por este camino (medido: una fila del 2026-08-20
+       colgada). Sin esto, `/settings/gasto-ia` cuenta un intento que nunca termina. */
+    await marcarError(run.id, `propuesta inválida: ${(validation.errors ?? []).slice(0, 3).join(" · ")}`);
     return NextResponse.json(
       { error: "assist_invalid_proposal", details: validation.errors },
       { status: 422 },
@@ -262,7 +274,7 @@ export async function POST(
   }
 
   // ── Saneo anti-alucinación ────────────────────────────────────────────────────
-  const warnings: string[] = [];
+  const warnings: string[] = [...reparacion.arreglos];
   const knownPhaseIds = new Set(tl.phases.map((p) => p.id));
   const taskPhaseById = new Map<string, string>(); // taskId → phaseId real
   for (const p of tl.phases) for (const t of p.tasks) taskPhaseById.set(t.id, p.id);

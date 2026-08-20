@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
-import { abrirHilo, empezarDeCero, hiloVivo, type HiloConTurnos } from "@/lib/asistente/hilo";
+import { abrirHilo, agregarTurno, empezarDeCero, hiloVivo, type HiloConTurnos } from "@/lib/asistente/hilo";
 import { correrTurno, MODELO_DEL_ASISTENTE, leerAcuerdo } from "@/lib/asistente/turno";
 
 type Params = Promise<{ projectId: string }>;
@@ -29,6 +29,12 @@ const piezaSchema = z.string().trim().min(1).max(60);
 const bodySchema = z.union([
   z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4000) }),
   z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),
+  /* El DESENLACE de un acuerdo: qué pasó cuando el CSE apretó «Aplicar». Ver el porqué en
+     `anotarDesenlace`, abajo. */
+  z.object({
+    pieza: piezaSchema,
+    desenlace: z.object({ ok: z.boolean(), detalle: z.string().max(2000) }),
+  }),
 ]);
 
 /** El hilo tal como lo pinta el panel: el acuerdo sale del texto, no de una columna aparte. */
@@ -93,6 +99,30 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   if ("empezarDeCero" in parsed.data) {
     return NextResponse.json(aVista(await empezarDeCero(pedido)));
+  }
+
+  /* ── EL DESENLACE, Y ARREGLA UN BUG QUE ELÍAS VIO EN LA PRIMERA PRUEBA ─────────────────────
+     Antes, un acuerdo quedaba en el hilo con su botón «Aplicar» para siempre: reabrir el panel
+     mostraba el mismo CTA, indistinguible de «nunca se intentó». Peor cuando el apply había
+     FALLADO — el CSE lo veía otra vez sin saber que ya había fallado una vez.
+
+     Se escribe como UN TURNO MÁS del asistente, no como una columna de estado, por dos razones:
+     el botón vive solo en el último turno (así que anotar el desenlace lo apaga solo), y el
+     modelo LEE el hilo — o sea que en el próximo turno sabe que su instrucción no entró y puede
+     proponer otra. Una columna de estado no le enseñaría nada. */
+  if ("desenlace" in parsed.data) {
+    const hilo = await hiloVivo(pedido);
+    if (!hilo) return NextResponse.json({ hilo: null });
+    const { ok, detalle } = parsed.data.desenlace;
+    await agregarTurno(hilo.id, {
+      rol: "ASISTENTE",
+      /* ⚠ En TUTEO neutro: estos turnos son la VOZ DEL ASISTENTE, aunque los escriba la app.
+         Mezclarlos con el voseo de la interfaz haría que el asistente cambie de registro solo. */
+      contenido: ok
+        ? "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
+        : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. La instrucción quedó arriba por si quieres ajustarla, o dime qué probamos.`,
+    });
+    return NextResponse.json(aVista(await hiloVivo(pedido)));
   }
 
   const hilo = await abrirHilo(pedido);

@@ -1369,8 +1369,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // "Generar cronograma" (#2). Ver el portal de acciones más abajo.
 
   // ── Asistente IA: instrucción → propuesta → aplicar/descartar ─────────────────
-  const submitAssist = async (instruction: string, scopePhaseId: string | null) => {
-    if (instruction.trim().length < 4 || assisting) return;
+  /* Devuelve el MOTIVO del fallo, o null si anduvo. ⚠ Antes no devolvía nada, así que el
+     chat cerraba su panel aunque el aplicar hubiera fallado y el error aparecía suelto al pie
+     del documento — reportado por Elías en la primera prueba real. */
+  const submitAssist = async (instruction: string, scopePhaseId: string | null): Promise<string | null> => {
+    if (instruction.trim().length < 4 || assisting) return "El pedido es muy corto o ya hay uno en curso.";
     setAssisting(true);
     setError(null);
     try {
@@ -1381,13 +1384,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(
+        const motivo =
           data?.details?.[0] ??
             data?.message ??
             (data?.error === "assist_invalid_proposal"
               ? "La IA devolvió una propuesta inválida — probá reformular la instrucción."
-              : data?.error ?? "Error al pedir la actualización."),
-        );
+              : data?.error ?? "Error al pedir la actualización.");
+        setError(motivo);
+        setAssisting(false);
+        return motivo;
       } else {
         // Vive SOLO en memoria: `debeReemplazarPropuesta` nunca la pisa con una del servidor.
         // El `runId` viaja hasta el "Aplicar" para que el PUT pueda cerrarle el desenlace: sin
@@ -1402,9 +1407,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setAssistOpen(false); // cerrar el dialog; la propuesta se ve en el Gantt (preview)
       }
     } catch {
-      setError("Error de conexión con el asistente.");
+      const motivo = "Error de conexión con el asistente.";
+      setError(motivo);
+      setAssisting(false);
+      return motivo;
     }
     setAssisting(false);
+    return null;
   };
 
   // Aplicar la propuesta de la IA: PUT directo (sin modal). La razón del audit es la
@@ -3177,10 +3186,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         piezaLabel="Cronograma"
         abierto={chatAbierto}
         onClose={() => setChatAbierto(false)}
-        onAplicar={async (instruccion) => {
-          await submitAssist(instruccion, null);
-          setChatAbierto(false);
-        }}
+        /* ⚠ Devuelve el motivo del fallo: el panel lo necesita para NO cerrarse y para dejar el
+           desenlace escrito en el hilo. Cerrarlo acá a ciegas fue el bug de la primera prueba. */
+        onAplicar={(instruccion) => submitAssist(instruccion, null)}
       />
     </div>
   );

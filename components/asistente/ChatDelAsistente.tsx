@@ -21,9 +21,19 @@
  * ⛔ ESTE COMPONENTE NO ESCRIBE EL DOCUMENTO. Cuando hay acuerdo, pinta la instrucción —EDITABLE—
  * y el botón de aplicar la manda al editor de siempre, con su vista previa y su aceptación por
  * ítem. El permiso vive en ese botón.
+ *
+ * ── LO QUE APRENDIÓ DE LA PRIMERA PRUEBA REAL (2026-08-20) ───────────────────────────────────
+ * 1. El texto se pintaba como texto plano, así que el `- **Sumar…**` del modelo se veía crudo.
+ *    Ahora se renderiza Markdown, y el prompt pide listas NUMERADAS (se leen mejor en 400 px).
+ * 2. La instrucción ocupaba media pantalla. Va PLEGADA: el CSE la abre si quiere auditarla.
+ * 3. ⛔ El cajón se cerraba aunque el «Aplicar» hubiera FALLADO, y el error aparecía suelto al
+ *    pie del documento. El panel se queda abierto y muestra el error donde ocurrió.
+ * 4. ⛔ Y el acuerdo quedaba con su botón para siempre, indistinguible de «nunca se intentó».
+ *    Ahora el desenlace se ESCRIBE en el hilo y el botón vive solo en el último turno.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 export interface AcuerdoDelChat {
@@ -38,6 +48,9 @@ interface TurnoVista {
   acuerdo: AcuerdoDelChat | null;
 }
 
+/** Lo que `onAplicar` tiene que contestar. `null` = anduvo; un string = el motivo del fallo. */
+export type ResultadoDeAplicar = string | null;
+
 interface Props {
   projectId: string;
   /** El slug de la pieza sobre la que se conversa. */
@@ -48,9 +61,10 @@ interface Props {
   onClose: () => void;
   /**
    * Aplicar lo acordado. Lo resuelve el CANVAS, no el chat: cada pieza tiene su editor y su
-   * permiso. Sin esto, el acuerdo se muestra igual (se puede copiar) pero sin botón.
+   * permiso. ⚠ Devuelve el MOTIVO del fallo o `null` si anduvo — sin eso el panel no puede
+   * distinguir «se aplicó» de «falló», que es justo el bug que se arregló.
    */
-  onAplicar?: (instruccion: string) => Promise<void> | void;
+  onAplicar?: (instruccion: string) => Promise<ResultadoDeAplicar>;
 }
 
 export default function ChatDelAsistente({
@@ -72,6 +86,17 @@ export default function ChatDelAsistente({
   const [instruccionEditada, setInstruccionEditada] = useState<Record<string, string>>({});
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * ⭐ EL BOTÓN DE APLICAR VIVE SOLO EN EL ÚLTIMO TURNO, y esa regla resuelve el bug entero.
+   * Un acuerdo viejo sigue en el hilo (es historia), pero en cuanto se escribe su desenlace deja
+   * de ser el último y el botón desaparece solo. Sin columna nueva y sin una tabla de estados
+   * que pueda quedar desincronizada del texto que la explica.
+   */
+  const idDelAcuerdoVivo = useMemo(() => {
+    const ultimo = turnos[turnos.length - 1];
+    return ultimo?.acuerdo ? ultimo.id : null;
+  }, [turnos]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -153,17 +178,38 @@ export default function ChatDelAsistente({
     }
   }
 
-  async function aplicar(turnoId: string, instruccion: string) {
+  /** Deja escrito en el hilo qué pasó al aplicar. Ver el porqué en `idDelAcuerdoVivo`. */
+  async function anotarDesenlace(ok: boolean, detalle: string) {
+    const r = await fetch(`/api/projects/${projectId}/asistente`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pieza, desenlace: { ok, detalle } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j.hilo?.turnos) setTurnos(j.hilo.turnos);
+  }
+
+  async function aplicar(instruccion: string) {
     if (!onAplicar || aplicando) return;
     setAplicando(true);
     setError(null);
     try {
-      await onAplicar(instruccion);
+      const fallo = await onAplicar(instruccion);
+      if (fallo) {
+        /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
+           aparecía suelto al pie del documento, con el cajón ya cerrado. */
+        setError(fallo);
+        await anotarDesenlace(false, fallo);
+      } else {
+        await anotarDesenlace(true, "");
+        onClose();
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "no se pudo aplicar");
+      const msg = e instanceof Error ? e.message : "no se pudo aplicar";
+      setError(msg);
+      await anotarDesenlace(false, msg).catch(() => {});
     } finally {
       setAplicando(false);
-      void turnoId;
     }
   }
 
@@ -206,11 +252,11 @@ export default function ChatDelAsistente({
         {!cargando && turnos.length === 0 && (
           <div className="text-sm text-fg-secondary space-y-2">
             <p>Preguntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
-            <ul className="text-xs text-fg-muted space-y-1 list-disc pl-4">
+            <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
               <li>«¿Qué pasa si alargo una fase dos semanas?»</li>
               <li>«Hay fases duplicadas, ¿se pueden unir?»</li>
               <li>«Quiero mover una tarea de fase — ¿pierdo algo?»</li>
-            </ul>
+            </ol>
             <p className="text-xs text-fg-muted">
               Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar.
             </p>
@@ -223,36 +269,47 @@ export default function ChatDelAsistente({
               className={
                 t.rol === "CSE"
                   ? "ml-8 rounded-xl px-3 py-2 bg-surface-active text-sm text-fg whitespace-pre-wrap"
-                  : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary whitespace-pre-wrap"
+                  : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary"
               }
             >
-              {t.texto}
+              {t.rol === "CSE" ? t.texto : <Markdown>{t.texto}</Markdown>}
             </div>
 
             {t.acuerdo && (
               <div className="mt-2 mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2">
                 <p className="text-xs font-semibold text-info-ink">Lo que se acordó</p>
                 <p className="text-sm text-fg mt-1">{t.acuerdo.resumen}</p>
-                <label className="block mt-2 text-xs text-fg-muted">
-                  La instrucción que se va a ejecutar (podés editarla):
-                </label>
-                <textarea
-                  value={instruccionEditada[t.id] ?? t.acuerdo.instruccion}
-                  onChange={(e) =>
-                    setInstruccionEditada((m) => ({ ...m, [t.id]: e.target.value }))
-                  }
-                  rows={3}
-                  className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg resize-y"
-                />
-                {onAplicar ? (
+
+                {/* La instrucción es auditable, no protagonista: plegada por defecto. */}
+                <details className="mt-2 group">
+                  <summary className="cursor-pointer text-xs text-brand-light hover:text-brand list-none select-none">
+                    <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
+                    Ver instrucción
+                  </summary>
+                  <textarea
+                    value={instruccionEditada[t.id] ?? t.acuerdo.instruccion}
+                    onChange={(e) =>
+                      setInstruccionEditada((m) => ({ ...m, [t.id]: e.target.value }))
+                    }
+                    rows={5}
+                    className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg resize-y"
+                  />
+                  <p className="mt-1 text-[11px] text-fg-muted">
+                    Podés editarla: es lo que se va a ejecutar tal cual.
+                  </p>
+                </details>
+
+                {t.id !== idDelAcuerdoVivo ? null : onAplicar ? (
                   <button
                     onClick={() =>
-                      void aplicar(t.id, instruccionEditada[t.id] ?? t.acuerdo!.instruccion)
+                      void aplicar(instruccionEditada[t.id] ?? t.acuerdo!.instruccion)
                     }
                     disabled={aplicando}
                     className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
                   >
-                    {aplicando ? "Aplicando…" : "Aplicar — vas a poder revisarlo antes de guardar"}
+                    {aplicando
+                      ? "Aplicando… puede tardar unos minutos"
+                      : "Aplicar — vas a poder revisarlo antes de guardar"}
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
@@ -265,6 +322,12 @@ export default function ChatDelAsistente({
         ))}
 
         {pensando && <p className="text-xs text-fg-muted">Pensando…</p>}
+        {aplicando && (
+          <p className="text-xs text-fg-muted">
+            El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro
+            minutos. Podés seguir mirando el documento mientras tanto.
+          </p>
+        )}
         {error && (
           <div className="rounded-lg border border-danger-line bg-danger-surface px-3 py-2 text-xs text-danger-ink">
             {error}
@@ -298,5 +361,42 @@ export default function ChatDelAsistente({
       </div>
     </aside>,
     document.body,
+  );
+}
+
+/**
+ * El texto del asistente se renderiza como Markdown: viene con listas numeradas y negritas, y
+ * pintado como texto plano se veía el `- **Sumar…**` crudo (reportado el 2026-08-20).
+ *
+ * ⚠ Las clases van por elemento y no por `prose`: el panel mide 400 px y los tamaños de `prose`
+ * lo desbordan. Sin `rehype-raw` a propósito — el HTML crudo del modelo no se ejecuta.
+ */
+function Markdown({ children }: { children: string }) {
+  return (
+    <div className="text-sm text-fg-secondary [&>*+*]:mt-2">
+      <ReactMarkdown
+        components={{
+          p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+          ol: ({ children }) => (
+            <ol className="list-decimal pl-5 space-y-1 marker:text-fg-muted">{children}</ol>
+          ),
+          ul: ({ children }) => (
+            <ul className="list-disc pl-5 space-y-1 marker:text-fg-muted">{children}</ul>
+          ),
+          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold text-fg">{children}</strong>,
+          code: ({ children }) => (
+            <code className="rounded bg-surface-active px-1 py-0.5 text-xs">{children}</code>
+          ),
+          a: ({ children, href }) => (
+            <a href={href} className="text-brand-light underline" target="_blank" rel="noreferrer">
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
   );
 }

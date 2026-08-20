@@ -47,7 +47,7 @@ export const REGLAS_DURAS_DEL_CRONOGRAMA = `- Conserva los ids EXACTOS de las fa
 export interface AdvertenciaDeCapacidad {
   /** Palabra clave por la que se reconoce el pedido. Minúsculas, sin tildes. */
   gatillo: readonly string[];
-  /** Qué le pasa a su cronograma si lo pide igual. Redactado para una persona, en voseo. */
+  /** Qué le pasa a su cronograma si lo pide igual. Redactado para una persona, en TUTEO neutro. */
   aviso: string;
 }
 
@@ -63,15 +63,15 @@ export const ADVERTENCIAS_DEL_CRONOGRAMA: readonly AdvertenciaDeCapacidad[] = [
     gatillo: ["mover", "mové", "mueve", "pasar", "pasá", "cambiar de fase", "a otra fase"],
     aviso:
       "Mover una tarea a otra fase la RECREA: pierde su estado (si estaba hecha o en curso) y " +
-      "cualquier fecha propia que le hayas puesto. El cronograma no sabe mudar una tarea, la " +
+      "cualquier fecha propia que le hayas puesto. El cronograma no sabe mudar una tarea: la " +
       "borra de un lado y la crea del otro.",
   },
   {
     gatillo: ["borrar", "borrá", "eliminar", "eliminá", "sacar", "sacá", "quitar", "quitá"],
     aviso:
-      "Si la tarea tiene trabajo encima (hecha, en curso, suspendida, o la escribiste vos), el " +
+      "Si la tarea tiene trabajo encima (hecha, en curso, suspendida, o la escribiste tú), el " +
       "servidor la RESCATA y la deja igual, aunque la IA la haya sacado. Para borrarla de verdad, " +
-      "pedilo explícitamente — y aun así te va a avisar.",
+      "pídelo explícitamente — y aun así te va a avisar.",
   },
   {
     gatillo: ["fecha", "arranque", "arranca", "empieza", "inicio"],
@@ -83,7 +83,7 @@ export const ADVERTENCIAS_DEL_CRONOGRAMA: readonly AdvertenciaDeCapacidad[] = [
     gatillo: ["semana", "semanas", "alargar", "alargá", "acortar", "acortá", "duracion", "duración"],
     aviso:
       "Alargar o acortar una fase corre la fecha de cierre del proyecto. Si el cronograma ya está " +
-      "publicado, el cliente lo va a ver recién cuando lo vuelvas a subir.",
+      "publicado, el cliente lo verá recién cuando lo vuelvas a subir.",
   },
 ];
 

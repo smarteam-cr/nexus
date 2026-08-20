@@ -21,6 +21,11 @@ import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO } f
 
 const FUENTE = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
 
+const PROMPT = (() => {
+  const i = FUENTE.indexOf("function promptDelAsistente");
+  return FUENTE.slice(i, FUENTE.indexOf("const TOOL_ACUERDO", i));
+})();
+
 describe("el asistente tiene UNA herramienta y no escribe", () => {
   it("⛔ el pedido declara exactamente una tool", () => {
     /* La edición que la pone en rojo: `tools: [TOOL_ACUERDO, TOOL_APLICAR]`. */
@@ -54,7 +59,68 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
   it("y el prompt le prohíbe decir que aplicó algo", () => {
     /* El daño de que lo diga no es cosmético: el CSE cierra la pantalla creyendo que el cambio
        está hecho. La edición que la pone en rojo: sacar esa línea del prompt. */
-    expect(FUENTE).toContain("VOS NO APLICÁS NADA");
+    expect(FUENTE).toContain("TÚ NO APLICAS NADA");
+  });
+});
+
+describe("el asistente habla español neutro, no rioplatense", () => {
+  /* ⚠ ESTA GUARDA NACIÓ DE UN ERROR PROPIO. Al reescribir el prompt para PROHIBIR el voseo se me
+     coló un «proponé» dentro del párrafo que lo prohíbe. Ése es exactamente el modo de falla: el
+     prompt es largo, se edita seguido, y una forma rioplatense pasa desapercibida — y el modelo
+     copia el registro de su propio prompt, así que una sola le contagia la respuesta entera.
+
+     El síntoma que reportó Elías fue el asistente arrancando con «Che». */
+
+  /** Las líneas que PROHIBEN el voseo tienen que poder nombrarlo. */
+  const lineasDeUso = PROMPT.split(/\r?\n/).filter((l) => !/PROHIBIDO|NUNCA|Mal:/.test(l));
+
+  const VOSEO = [
+    "proponé",
+    "decilo",
+    "usalo",
+    "mirá",
+    "fijate",
+    "tenés",
+    "podés",
+    "querés",
+    "hacé",
+    "dale",
+    "che",
+    "vos",
+  ];
+
+  it("⛔ ni una forma de voseo en el texto que el modelo copia", () => {
+    /* La edición que la pone en rojo: cambiar cualquier «propón» por «proponé». */
+    const encontradas: string[] = [];
+    for (const linea of lineasDeUso) {
+      for (const v of VOSEO) {
+        if (new RegExp(`\\b${v}\\b`, "i").test(linea)) {
+          encontradas.push(`${v} — ${linea.trim().slice(0, 70)}`);
+        }
+      }
+    }
+    expect(
+      encontradas,
+      "El prompt del asistente usa voseo. El modelo copia el registro de su prompt, así que una " +
+        "sola forma rioplatense le contagia la respuesta entera — y el CSE lee «che».",
+    ).toEqual([]);
+  });
+
+  it("y las advertencias que interpola también están en tuteo", () => {
+    /* Van DENTRO del contexto, así que el modelo también las lee y las parafrasea: si quedan en
+       voseo, el prompt dice una cosa y los ejemplos muestran otra. */
+    const cap = fs.readFileSync(path.join(RAIZ, "lib/timeline/capacidades.ts"), "utf8");
+    const i = cap.indexOf("ADVERTENCIAS_DEL_CRONOGRAMA");
+    const bloque = cap.slice(i, cap.indexOf("export function", i));
+    for (const v of ["pedilo", "escribiste vos"]) {
+      expect(bloque.includes(v), `la advertencia sigue en voseo: "${v}"`).toBe(false);
+    }
+  });
+
+  it("⭐ y pide las listas NUMERADAS, que es como se leen bien", () => {
+    /* Elías: «las listas deben ser numeradas siempre». Una viñeta se lee peor que un número en un
+       panel de 400 px, y con guiones el modelo tiende a anidar. */
+    expect(PROMPT).toContain("NUMERADAS");
   });
 });
 
@@ -67,6 +133,12 @@ describe("la regla de las fechas está en el prompt", () => {
       FUENTE.includes("el cierre no se corre"),
       "se perdió la mitad de la regla: avisar también cuando la fecha NO se mueve",
     ).toBe(true);
+  });
+
+  it("⚠ y le avisa al editor cuando las tareas caen en una fase más corta", () => {
+    /* El error real del 2026-08-20: fusionar dos fases metió 12 tareas en una de 4 semanas y el
+       modelo dejó una en la semana 5. El editor rechazó el cambio ENTERO por ese entero. */
+    expect(PROMPT).toContain("MÁS CORTA");
   });
 });
 
@@ -116,8 +188,8 @@ describe("el acuerdo sobrevive a recargar la pantalla", () => {
   });
 
   it("un turno sin acuerdo se lee tal cual", () => {
-    expect(leerAcuerdo("¿Querés que alargue Setup o que mueva la tarea?")).toEqual({
-      texto: "¿Querés que alargue Setup o que mueva la tarea?",
+    expect(leerAcuerdo("¿Quieres que alargue Setup o que mueva la tarea?")).toEqual({
+      texto: "¿Quieres que alargue Setup o que mueva la tarea?",
       acuerdo: null,
     });
   });
