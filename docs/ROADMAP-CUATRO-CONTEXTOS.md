@@ -61,8 +61,8 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | # | Etapa | Qué resuelve | Estado |
 |---|---|---|---|
 | 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega) | ✅ Hecho · probado en pantalla |
-| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica. Y algo que hoy es imposible: decirle QUÉ tareas querés al regenerar una fase | 🟡 En curso — ver el detalle abajo |
-| 3 | **El chat de documentos** | Lo mismo sobre los ocho documentos del motor de landings | ⬜ |
+| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ **Listo para probar en pantalla** |
+| 3 | **El chat de documentos** | El botón YA aparece; falta cablear el «Aplicar» de cada editor | 🟡 Siguiente |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
@@ -73,9 +73,9 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | | Tramo | Qué deja andando | Estado |
 |---|---|---|---|
 | 2a | **El hilo persiste** | La conversación sobrevive a cambiar de pestaña | ✅ **Verificado contra producción** (`scripts/probar-asistente.ts`) |
-| 2b | **El chat responde** | El turno, con el contexto chico | 🟡 El contexto ya está; falta la llamada al modelo |
-| 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ⬜ |
-| 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ⬜ |
+| 2b | **El chat responde** | El turno, con el contexto chico | ✅ Probado contra el modelo (`--conversar`) |
+| 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ✅ No modal, por portal, z-45 |
+| 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ✅ En el cronograma. En documentos: copiar y pegar (etapa 3) |
 
 ### ⭐ Lo que la medición contra producción cambió (2026-08-19)
 
