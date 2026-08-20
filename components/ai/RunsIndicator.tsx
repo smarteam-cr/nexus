@@ -51,6 +51,15 @@ function haceCuanto(iso: string): string {
   return `hace ${Math.round(h / 24)} d`;
 }
 
+/**
+ * La hora del reloj a la que arrancó, en la zona del navegador. `haceCuanto` sola no alcanza:
+ * «hace 4 min» no deja cotejar contra «yo le di clic a las 14:07», que es cómo alguien decide si
+ * lo que ve es su corrida o la de otro.
+ */
+function horaDeInicio(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" });
+}
+
 function leerLS(k: string): string | null {
   try {
     return localStorage.getItem(k);
@@ -261,6 +270,14 @@ export default function RunsIndicator({ isOpen }: { isOpen: boolean }) {
                     </p>
                     <p className="text-[11px] text-fg-muted truncate">
                       {r.currentPhase ?? "Corriendo…"}
+                    </p>
+                    {/* ⭐ CUÁNDO ARRANCÓ Y CUÁNTO LLEVA. Con «Corriendo…» a secas no hay forma de
+                        distinguir una corrida de treinta segundos de una colgada hace veinte
+                        minutos — y el modificador del cronograma tarda ~4 min, así que la
+                        pregunta «¿se colgó?» es la normal, no la excepcional. Pedido por Elías
+                        el 2026-08-20 mirando una corrida que no sabía si seguía viva. */}
+                    <p className="text-[10px] text-fg-muted tabular-nums">
+                      {horaDeInicio(r.createdAt)} · {haceCuanto(r.createdAt)}
                     </p>
                   </div>
                 </div>
