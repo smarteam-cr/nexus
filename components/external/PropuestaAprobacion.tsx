@@ -13,6 +13,12 @@
  *
  * Solo React + estilos inline (mismo criterio que el resto de /external: cero recursos de
  * otros orígenes en una página cuya URL lleva el token).
+ *
+ * ⚠ Los campos son NO CONTROLADOS (sin `value`/`onChange`): se leen del `FormData` al
+ * enviar. Un campo controlado pelea contra el autocompletado del navegador —que en un
+ * formulario de UN correo es justo lo que baja la fricción que esta barra existe para
+ * bajar— y agrega superficie de hidratación a cambio de nada: acá no hay validación en
+ * vivo ni nada que dependa de cada tecla.
  */
 import { useState, type FormEvent } from "react";
 import { landingLang, t } from "@/components/landing/i18n";
@@ -26,6 +32,30 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const AZUL = "#0B58D3";
 const NARANJA = "#E8481C";
 
+const MESES = {
+  es: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+} as const;
+
+/**
+ * Fecha larga SIN `toLocaleDateString`, a propósito.
+ *
+ * Cuando la propuesta ya está aprobada, este texto lo renderiza TAMBIÉN el servidor: es
+ * parte del HTML que llega. Y `toLocaleDateString` depende del ICU de quien lo corra —
+ * Node y el navegador pueden diferir en una coma o en la mayúscula del mes, que es
+ * literalmente el tercer motivo que React lista para un error de hidratación
+ * ("date formatting in a user's locale which doesn't match the server").
+ *
+ * Una tabla de doce nombres no falla nunca y es todo lo que hacía falta.
+ */
+function fechaLarga(iso: string, lang: "es" | "en"): string {
+  const d = new Date(iso);
+  const dia = d.getDate();
+  const mes = MESES[lang][d.getMonth()];
+  const anio = d.getFullYear();
+  return lang === "en" ? `${mes} ${dia}, ${anio}` : `${dia} de ${mes} de ${anio}`;
+}
+
 export default function PropuestaAprobacion({
   token,
   approval,
@@ -36,16 +66,18 @@ export default function PropuestaAprobacion({
   lang?: string | null;
 }) {
   const lang = landingLang(rawLang);
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hecha, setHecha] = useState<BusinessCaseApproval | null>(approval);
 
-  const submit = async (e: FormEvent) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (sending) return;
-    if (!EMAIL_RE.test(email.trim())) {
+    // Los campos son NO CONTROLADOS y se leen del form al enviar (ver el ⚠ del encabezado).
+    const datos = new FormData(e.currentTarget);
+    const email = String(datos.get("email") ?? "").trim();
+    const name = String(datos.get("nombre") ?? "").trim();
+    if (!EMAIL_RE.test(email)) {
       setError(t(lang, "aprobarCorreoInvalido"));
       return;
     }
@@ -55,14 +87,14 @@ export default function PropuestaAprobacion({
       const res = await fetch("/api/external/business-case/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email: email.trim(), name: name.trim() || undefined }),
+        body: JSON.stringify({ token, email, name: name || undefined }),
       });
       const body = await res.json().catch(() => ({}));
       // 409 = ya estaba aprobada (otra persona se adelantó, o doble click). No es un
       // error para el cliente: se le muestra la aprobación que ya existe.
       if (res.ok || res.status === 409) {
         if (body?.approval) setHecha(body.approval as BusinessCaseApproval);
-        else setHecha({ approvedAt: new Date().toISOString(), approvedByEmail: email.trim(), approvedByName: name.trim() || null });
+        else setHecha({ approvedAt: new Date().toISOString(), approvedByEmail: email, approvedByName: name || null });
         return;
       }
       setError(t(lang, "aprobarFallo"));
@@ -74,11 +106,7 @@ export default function PropuestaAprobacion({
   };
 
   if (hecha) {
-    const fecha = new Date(hecha.approvedAt).toLocaleDateString(lang === "en" ? "en-US" : "es-CR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    const fecha = fechaLarga(hecha.approvedAt, lang);
     const quien = hecha.approvedByName || hecha.approvedByEmail;
     return (
       <section style={wrap}>
@@ -101,26 +129,27 @@ export default function PropuestaAprobacion({
         <p style={bajada}>{t(lang, "aprobarBajada")}</p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
-          <label style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <label htmlFor="aprob-email" style={{ flex: "1 1 220px", minWidth: 0 }}>
             <span style={rotulo}>{t(lang, "aprobarCorreo")}</span>
             <input
+              id="aprob-email"
+              name="email"
               type="email"
               inputMode="email"
               autoComplete="email"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              defaultValue=""
               disabled={sending}
               style={input}
             />
           </label>
-          <label style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <label htmlFor="aprob-nombre" style={{ flex: "1 1 220px", minWidth: 0 }}>
             <span style={rotulo}>{t(lang, "aprobarNombre")}</span>
             <input
+              id="aprob-nombre"
+              name="nombre"
               type="text"
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              defaultValue=""
               disabled={sending}
               style={input}
             />

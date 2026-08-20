@@ -25,6 +25,30 @@ const nextConfig: NextConfig = {
   // cada build y un error de tipos.)
   // echarts-for-react y echarts son paquetes ESM que necesitan transpilación en Next.js
   transpilePackages: ["echarts", "echarts-for-react", "zrender"],
+  /**
+   * `Referrer-Policy: no-referrer` en TODA la superficie externa.
+   *
+   * Esas URLs llevan el token en el path (/external/propuesta/{token}, /external/doc/{token},
+   * los verify…) y las páginas pintan imágenes de otro origen — el logo del cliente vive en
+   * Supabase Storage. Sin esto, el header `Referer` de esa imagen le entrega el token entero
+   * a un tercero. Cubre las cuatro superficies de una, incluidas las que mañana se agreguen
+   * abajo de /external.
+   *
+   * ⚠ Va como HEADER y NO como `metadata.referrer` de la página, que fue el primer intento:
+   * el `<meta name="referrer">` que emite Next lo HOISTEA React 19 al <head> durante la
+   * hidratación, y en una página que además monta un formulario eso desincroniza el
+   * recorrido — "Hydration failed… this tree will be regenerated", reportado sobre el
+   * <main> del shell, a mil kilómetros de la causa. El header no depende de ningún timing
+   * de render y encima aplica desde el primer byte.
+   */
+  async headers() {
+    return [
+      {
+        source: "/external/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+    ];
+  },
   // Los DOS bundlers conviven a propósito: `next build` corre con TURBOPACK (la vía
   // probada de prod — usa serverExternalPackages + turbopack:{}), mientras `next dev`
   // corre con webpack (--webpack en el wrapper, por el bug de junction points de

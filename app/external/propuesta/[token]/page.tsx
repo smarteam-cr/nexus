@@ -9,10 +9,14 @@
  * token, revocación, publicación y caducidad en CADA render. `force-dynamic` no es
  * decoración: sin él Next cachea el segmento dinámico y **revocar el link no surtiría efecto**.
  *
- * ⚠ `referrer: "no-referrer"` es OBLIGATORIO acá y no lo es en la página de verify. El verify
- * se defiende quedándose sin recursos externos; esta página, en cambio, pinta el landing
- * completo, y el logo del cliente sale de Supabase Storage (otro origen) — sin la meta, el
- * header `Referer` de esa imagen se llevaría el token puesto a un tercero.
+ * ⚠ El `Referrer-Policy: no-referrer` de esta superficie NO vive acá: es un header declarado
+ * en `next.config.ts` para todo `/external/:path*`. Importa acá más que en ninguna otra
+ * página del módulo, porque esta pinta el landing completo y el logo del cliente sale de
+ * Supabase Storage (otro origen) — sin la política, el `Referer` de esa imagen se llevaría el
+ * token puesto a un tercero. Se probó primero con `metadata.referrer` y hubo que sacarlo: el
+ * `<meta>` que emite Next lo hoistea React 19 en la hidratación y rompe el recorrido de una
+ * página con formulario ("Hydration failed", reportado sobre el <main> del shell). El header
+ * no depende de ningún timing y aplica desde el primer byte.
  *
  * `noindex` porque la URL circula por correo y no tiene otra puerta que la proteja.
  */
@@ -32,7 +36,6 @@ export const metadata: Metadata = {
   // que no diga de qué empresa es la propuesta ni cuánto sale.
   title: "Smarteam",
   robots: { index: false, follow: false },
-  referrer: "no-referrer",
 };
 
 export default async function PropuestaPublicaPage({

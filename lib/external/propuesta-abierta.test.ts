@@ -14,9 +14,14 @@
  *      segmento y **revocar el link no surte efecto**.
  *   3. Que la puerta abierta declare `noindex`. La URL circula por correo y no tiene otra
  *      puerta detrás.
- *   4. Que la puerta abierta declare `referrer: "no-referrer"`. Esta página —a diferencia
- *      del verify— pinta el landing entero, y el logo del cliente sale de Supabase Storage
- *      (otro origen): sin la meta, el `Referer` de esa imagen se lleva el token puesto.
+ *   4. Que TODA la superficie externa salga con `Referrer-Policy: no-referrer`. Estas URLs
+ *      llevan el token en el path y las páginas pintan imágenes de otro origen (el logo del
+ *      cliente vive en Supabase Storage): sin la política, el `Referer` de esa imagen se
+ *      lleva el token puesto a un tercero.
+ *      ⚠ Se exige como HEADER de `next.config.ts` y NO como `metadata.referrer` de la
+ *      página: el `<meta name="referrer">` que emite Next lo hoistea React 19 durante la
+ *      hidratación y desincroniza el recorrido de una página con formulario (se pagó:
+ *      "Hydration failed", reportado sobre el <main> del shell, lejísimos de la causa).
  *
  * Ninguna de las cuatro se rompe con un error visible: se rompen en silencio y la propuesta
  * de un cliente queda indexable, cacheada o filtrada. Por eso son test y no comentario.
@@ -120,11 +125,30 @@ describe("candado 3 — la puerta ABIERTA no se indexa ni filtra el token", () =
     ).toBe(true);
   });
 
-  it('declara referrer: "no-referrer"', () => {
+  it("NO usa metadata.referrer (rompe la hidratación; va por header)", () => {
     expect(
-      /referrer:\s*"no-referrer"/.test(sinComentarios(src())),
-      "El landing pinta el logo del cliente desde otro origen; sin esta meta, el header " +
-        "Referer de esa imagen se lleva el token puesto a un tercero.",
+      /referrer:\s*["']no-referrer["']/.test(sinComentarios(src())),
+      "El <meta name=referrer> que emite Next lo hoistea React 19 en la hidratación y " +
+        "rompe el recorrido de esta página (tiene formulario). La política va como header " +
+        "en next.config.ts — ver el candado 4.",
+    ).toBe(false);
+  });
+});
+
+describe("candado 4 — /external sale con Referrer-Policy: no-referrer", () => {
+  const config = () => sinComentarios(fs.readFileSync(path.join(RAIZ, "next.config.ts"), "utf8"));
+
+  it("next.config.ts declara el header para toda la superficie externa", () => {
+    const src = config();
+    expect(
+      /source:\s*["']\/external\/:path\*["']/.test(src),
+      "El header tiene que cubrir TODO /external, no una ruta suelta: las cuatro " +
+        "superficies llevan el token en la URL y la quinta que se agregue también.",
+    ).toBe(true);
+    expect(
+      /Referrer-Policy[\s\S]{0,60}no-referrer/.test(src),
+      "Sin no-referrer, el logo del cliente (Supabase Storage, otro origen) le entrega el " +
+        "token entero a un tercero por el header Referer.",
     ).toBe(true);
   });
 });
