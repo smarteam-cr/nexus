@@ -1,0 +1,111 @@
+/**
+ * /api/projects/[projectId]/asistente — LA CONVERSACIÓN SOBRE UN DOCUMENTO.
+ *
+ *   GET  ?pieza=timeline          → el hilo vivo de esta persona sobre esa pieza (o vacío)
+ *   POST { pieza, mensaje }       → un turno: el CSE dice algo, el asistente contesta
+ *   POST { pieza, empezarDeCero } → abre un hilo nuevo (el viejo queda como historia)
+ *
+ * ⛔ ESTA RUTA NO ESCRIBE EL DOCUMENTO, y es la decisión de fondo del chat. Cuando hay acuerdo,
+ * el modelo emite una instrucción y esta ruta la devuelve — aplicarla es OTRO acto, por el
+ * endpoint del editor de siempre (`/timeline/assist`, `/canvas-assist`), con su propia celda de
+ * permiso, su vista previa y su aceptación por ítem. El permiso vive en el botón, no en la
+ * conversación: un catálogo de herramientas que escriben sería el modo de falla de
+ * `artifact-gate` multiplicado.
+ *
+ * RBAC: acceso al proyecto + la celda `asistente.read`. ⚠ NO alcanza con el acceso al proyecto:
+ * conversar consume modelo, así que es una capacidad y no un permiso implícito de lectura.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { abrirHilo, empezarDeCero, hiloVivo, type HiloConTurnos } from "@/lib/asistente/hilo";
+import { correrTurno, MODELO_DEL_ASISTENTE, leerAcuerdo } from "@/lib/asistente/turno";
+
+type Params = Promise<{ projectId: string }>;
+
+const piezaSchema = z.string().trim().min(1).max(60);
+
+const bodySchema = z.union([
+  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4000) }),
+  z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),
+]);
+
+/** El hilo tal como lo pinta el panel: el acuerdo sale del texto, no de una columna aparte. */
+function aVista(hilo: HiloConTurnos | null) {
+  if (!hilo) return { hilo: null };
+  return {
+    hilo: {
+      id: hilo.id,
+      pieza: hilo.pieza,
+      modelo: hilo.modelo,
+      turnos: hilo.turnos.map((t) => {
+        const { texto, acuerdo } = leerAcuerdo(t.contenido);
+        return { id: t.id, rol: t.rol, texto, acuerdo, createdAt: t.createdAt };
+      }),
+    },
+  };
+}
+
+export async function GET(req: NextRequest, { params }: { params: Params }) {
+  const { projectId } = await params;
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const perm = await guardPermission("asistente", "read");
+  if (perm instanceof NextResponse) return perm;
+
+  const pieza = piezaSchema.safeParse(req.nextUrl.searchParams.get("pieza") ?? "");
+  if (!pieza.success) return NextResponse.json({ error: "pieza requerida" }, { status: 400 });
+
+  const usuarioEmail = await triggeredByEmail();
+  if (!usuarioEmail) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
+
+  const hilo = await hiloVivo({ projectId, pieza: pieza.data, usuarioEmail });
+  return NextResponse.json(aVista(hilo));
+}
+
+export async function POST(req: NextRequest, { params }: { params: Params }) {
+  const { projectId } = await params;
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const perm = await guardPermission("asistente", "read");
+  if (perm instanceof NextResponse) return perm;
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "pieza + mensaje (1 a 4000 caracteres), o pieza + empezarDeCero" },
+      { status: 400 },
+    );
+  }
+
+  /* ⚠ El correo sale de la SESIÓN, nunca del body: es la clave del hilo, así que aceptarlo del
+     cliente dejaría leer y continuar la conversación de otra persona. */
+  const usuarioEmail = await triggeredByEmail();
+  if (!usuarioEmail) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
+
+  const pedido = {
+    projectId,
+    pieza: parsed.data.pieza,
+    usuarioEmail,
+    modelo: MODELO_DEL_ASISTENTE,
+  };
+
+  if ("empezarDeCero" in parsed.data) {
+    return NextResponse.json(aVista(await empezarDeCero(pedido)));
+  }
+
+  const hilo = await abrirHilo(pedido);
+  try {
+    const { acuerdo } = await correrTurno(hilo, parsed.data.mensaje);
+    /* Se relee el hilo entero en vez de devolver solo la respuesta: así el panel pinta lo que
+       quedó GUARDADO, no lo que creemos que se guardó. Si el turno se persistió a medias, se ve. */
+    const fresco = await hiloVivo(pedido);
+    return NextResponse.json({ ...aVista(fresco), acuerdo });
+  } catch (e) {
+    /* El turno del CSE se pierde si el modelo falló — a propósito: guardar una pregunta que nadie
+       contestó deja el hilo con un turno colgado que el próximo pedido reenvía como contexto. */
+    const msg = e instanceof Error ? e.message : "el asistente no pudo contestar";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
+}
