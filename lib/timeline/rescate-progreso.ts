@@ -33,6 +33,26 @@
  * una sola definición, en lib/timeline/regen-columnas.ts.
  */
 import { isKept } from "./regen-columnas";
+
+/**
+ * POR QUÉ se rescató, en castellano y sin mentir.
+ *
+ * ⛔ El mensaje decía siempre «tarea(s) con progreso», y era FALSO la mitad de las veces: `isKept`
+ * conserva por DOS motivos distintos —tener progreso (status ≠ PENDING) o estar escrita a mano
+ * (source HUMAN)— y una tarea pendiente que el CSE tipeó él mismo cae por el segundo.
+ *
+ * Elías lo cazó el 2026-08-20: pidió borrar una fase, el sistema le dijo que tenía «2 tareas con
+ * progreso», y las dos estaban pendientes. Con el motivo equivocado no se puede decidir: «tiene
+ * progreso» suena a «no lo toques» y «la escribiste vos» suena a «vos sabrás».
+ */
+function porQueSeRescataron(tareas: readonly TareaRealParaRescate[]): string {
+  const conProgreso = tareas.filter((t) => (t.status ?? "PENDING") !== "PENDING").length;
+  const aMano = tareas.length - conProgreso;
+  const partes: string[] = [];
+  if (conProgreso > 0) partes.push(`${conProgreso} con progreso`);
+  if (aMano > 0) partes.push(`${aMano} escrita${aMano === 1 ? "" : "s"} a mano`);
+  return partes.join(" y ");
+}
 import { fingerprintFromTitle } from "./particularidad-identity";
 import type { PutBody, PhaseInput } from "./validate";
 
@@ -188,7 +208,7 @@ export function rescatarProgreso(
         tasks: rescatadas.map((t) => reponer(t, real.durationWeeks)),
       });
       warnings.push(
-        `La fase "${real.name}" tiene ${rescatadas.length} tarea(s) con progreso: se conserva en vez de borrarse.`,
+        `La fase "${real.name}" no se borró: tiene ${rescatadas.length} tarea(s) (${porQueSeRescataron(rescatadas)}). Para borrarla, primero movelas o borralas a mano.`,
       );
       continue;
     }
@@ -196,7 +216,7 @@ export function rescatarProgreso(
     const dur = propuesta.durationWeeks ?? real.durationWeeks;
     propuesta.tasks = [...(propuesta.tasks ?? []), ...rescatadas.map((t) => reponer(t, dur))];
     warnings.push(
-      `En "${real.name}" se conservaron ${rescatadas.length} tarea(s) con progreso que la propuesta no incluía.`,
+      `En "${real.name}" se conservaron ${rescatadas.length} tarea(s) que la propuesta no incluía (${porQueSeRescataron(rescatadas)}).`,
     );
   }
 

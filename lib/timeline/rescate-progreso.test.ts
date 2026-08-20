@@ -157,7 +157,26 @@ describe("rescatarProgreso", () => {
     ]);
     expect(phases.map((p) => p.name)).toEqual(["Primera", "Del medio", "Última"]);
     expect(phases.map((p) => p.order)).toEqual([0, 1, 2]);
-    expect(warnings[0]).toContain("se conserva en vez de borrarse");
+    expect(warnings[0]).toContain("no se borró");
+    /* ⭐ Y dice POR QUÉ, que es lo que deja decidir. El mensaje decía siempre «con progreso» y era
+       falso la mitad de las veces: `isKept` conserva por DOS motivos —progreso o escrita a mano— y
+       Elías pidió borrar una fase cuyas 2 tareas estaban PENDIENTES, escritas por él.
+       «Tiene progreso» suena a «no lo toques»; «la escribiste vos» suena a «vos sabrás». */
+    expect(warnings[0]).toContain("1 con progreso");
+    expect(warnings[0], "el aviso no dice qué hacer al respecto").toContain("a mano");
+  });
+
+  it("⛔ y una tarea PENDIENTE escrita a mano no se reporta como «con progreso»", () => {
+    /* El caso exacto del 2026-08-20. La edición que la pone en rojo: volver a un mensaje único. */
+    const reales = [
+      fase("f1", "Con tipeadas", 0, [tarea("t1", "fdsfsf", { source: "HUMAN" })]),
+    ];
+    const { warnings } = rescatarProgreso(reales, []);
+    expect(warnings[0]).toContain("escrita a mano");
+    expect(
+      warnings[0].includes("con progreso"),
+      "una tarea pendiente se sigue reportando como si tuviera progreso",
+    ).toBe(false);
   });
 
   it("una fase NUEVA del modelo se queda donde el modelo la puso", () => {
