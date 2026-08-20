@@ -467,6 +467,9 @@ export async function PUT(
   const closeOverrideDate = closeDateOverride ? new Date(closeDateOverride) : null;
   let timelineId = ""; // #4 — capturado dentro de la tx para registrar el cambio después
   const draftEvents: DraftEvent[] = []; // eventos crudos del watchdog (se emiten post-tx)
+  /* Tareas que hubo que correr porque su fase se acortó. Viajan en la respuesta: el silencio
+     acá es cómo se juntaron 34 tareas fuera de rango sin que nadie se enterara. */
+  const avisosDeReubicacion: string[] = [];
   /* La fecha de arranque es el ÚNICO campo que un auto-guardado audita (ver el bloque #6). */
   let anchorRealmenteCambio = false;
   let anchorPrevioISO: string | null = null;
@@ -694,6 +697,38 @@ export async function PUT(
             action: "CREATED",
             after: { order: p.order, durationWeeks: p.durationWeeks, startWeek: p.startWeek ?? null },
           });
+        }
+
+        /* ── ACORTAR UNA FASE NO PUEDE DEJAR SUS TAREAS EN UNA SEMANA QUE NO EXISTE ────────────
+           ⭐ LA CAUSA RAÍZ, medida el 2026-08-20: **34 tareas en 7 fases de 5 proyectos** están
+           guardadas en una semana ≥ durationWeeks. Multiquimica tiene 10 tareas en una fase de
+           UNA semana.
+
+           El mecanismo es este `continue` de abajo: `tasks` es opcional en el contrato del PUT
+           («undefined = no tocar»), y el VALIDADOR solo mira las tareas que vienen EN el payload.
+           Así que un cuerpo que solo acorta `durationWeeks` pasa limpio y deja las tareas
+           existentes fuera de rango, sin error y sin aviso.
+
+           El daño no es cosmético: el modificador de IA devuelve el cronograma COMPLETO, así que
+           copia fielmente esas semanas inválidas y su propuesta se rechaza entera. O sea que esos
+           5 proyectos **no podían usar «Pedir cambio con IA» en absoluto** — 231 s y $0,29 de
+           modelo quemados por intento, con un mensaje que nadie puede accionar.
+
+           Se acomodan a la última semana que existe, que es el mismo criterio de
+           `repararPropuesta` y de `rescate-progreso`. ⚠ Y se REPORTA: si una fase de 2 semanas
+           tuvo que absorber tareas de la 4, capaz lo que hace falta es más fase, no menos tarea. */
+        if (p.tasks === undefined && p.id && existing && p.durationWeeks < existing.durationWeeks) {
+          const reubicadas = await tx.timelineTask.updateMany({
+            where: { phaseId, weekIndex: { gte: p.durationWeeks } },
+            data: { weekIndex: p.durationWeeks - 1 },
+          });
+          if (reubicadas.count > 0) {
+            avisosDeReubicacion.push(
+              `«${p.name}» pasó a ${p.durationWeeks} ${p.durationWeeks === 1 ? "semana" : "semanas"} y ` +
+                `${reubicadas.count === 1 ? "1 tarea quedaba" : `${reubicadas.count} tareas quedaban`} ` +
+                `más allá: ${reubicadas.count === 1 ? "se movió" : "se movieron"} a la última semana.`,
+            );
+          }
         }
 
         // ── Diff de tasks (solo si el body trae el array; undefined = no tocar) ──
@@ -975,7 +1010,12 @@ export async function PUT(
       });
   }
 
-  return NextResponse.json(updated);
+  /* ⚠ Los avisos van EN LA RESPUESTA, no en un log: acortar una fase mueve tareas de semana, y
+     eso cambia fechas que el cliente puede estar mirando. Un `console.warn` es exactamente cómo
+     esto pasó desapercibido hasta juntar 34 tareas fuera de rango. */
+  return NextResponse.json(
+    avisosDeReubicacion.length > 0 ? { ...updated, avisos: avisosDeReubicacion } : updated,
+  );
 }
 
 // ── DELETE (cascade borra todas las phases y tasks) ──────────────────────────

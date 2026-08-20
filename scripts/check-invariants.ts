@@ -1023,6 +1023,52 @@ async function main(): Promise<number> {
     console.log(`✓ INV21: ningún proyecto quedó sin reuniones teniendo el cliente sesiones (${conSello.length} con sello).`);
   }
 
+  /* ── INV22 · ninguna tarea vive en una semana que su fase no tiene ────────────────────────
+     Medido el 2026-08-20: **34 tareas en 7 fases de 5 proyectos** con `weekIndex >= durationWeeks`.
+     Multiquimica tiene 10 tareas en una fase de UNA semana.
+
+     Cómo llegaron ahí: `tasks` es opcional en el PUT («undefined = no tocar») y el validador solo
+     mira las tareas que vienen EN el payload. Un cuerpo que solo acorta `durationWeeks` pasa
+     limpio y deja las existentes fuera de rango, sin error y sin aviso.
+
+     ⭐ Por qué es un invariante y no una curiosidad: el modificador de IA devuelve el cronograma
+     COMPLETO, así que copia esas semanas inválidas y su propuesta se rechaza ENTERA. Esos
+     proyectos no podían usar «Pedir cambio con IA» en absoluto — 231 s y $0,29 de modelo por
+     intento, con un mensaje que nadie puede accionar. El PUT ya no las genera; esto vigila que no
+     vuelvan, y cuenta las que quedaron.
+     Remedio: `scripts/sanar-semanas-fuera-de-fase.ts` (dry-run primero). */
+  const fasesConTareas = await prisma.timelinePhase.findMany({
+    select: {
+      name: true,
+      durationWeeks: true,
+      timeline: { select: { project: { select: { name: true } } } },
+      tasks: { select: { weekIndex: true } },
+    },
+  });
+  const desbordadas: string[] = [];
+  let tareasDesbordadas = 0;
+  for (const f of fasesConTareas) {
+    const malas = f.tasks.filter((t) => t.weekIndex >= f.durationWeeks || t.weekIndex < 0).length;
+    if (malas === 0) continue;
+    tareasDesbordadas += malas;
+    desbordadas.push(
+      `${f.timeline.project.name} · «${f.name}» (${f.durationWeeks} sem): ${malas} tarea(s)`,
+    );
+  }
+  if (desbordadas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV22 VIOLADO: ${tareasDesbordadas} tarea(s) en ${desbordadas.length} fase(s) viven en una semana que su fase no tiene.\n` +
+        desbordadas.map((d) => `    · ${d}`).join("\n") +
+        `\n    Efecto: esos cronogramas NO pueden usar «Pedir cambio con IA» — la propuesta se rechaza entera.` +
+        `\n    Remedio: npx tsx --env-file=.env scripts/sanar-semanas-fuera-de-fase.ts (dry-run primero).`,
+    );
+  } else {
+    console.log(
+      `✓ INV22: ninguna tarea fuera del rango de semanas de su fase (${fasesConTareas.length} fases).`,
+    );
+  }
+
   return violations;
 }
 

@@ -112,6 +112,13 @@ export interface ItemDeAssist {
    * No lo bloquea —el rescate del PUT es quien decide— pero la lista lo tiene que gritar.
    */
   pesado: boolean;
+  /**
+   * ⭐ El único cambio es en qué SEMANA cae la tarea. No es una decisión: es la aritmética de
+   * una decisión que se tomó más arriba (la fase se acortó, absorbió otra, se corrió el
+   * arranque). Separarlas es lo que deja leer una propuesta de veinte renglones — reportado por
+   * Elías el 2026-08-20 mirando una fusión de dos fases que produjo dieciocho de éstas.
+   */
+  soloSemana: boolean;
 }
 
 /** Salida: exactamente el shape que acepta el PUT del cronograma (`PutBody`). */
@@ -283,6 +290,7 @@ export function diffAssist(
       detalle: `${dia(anclaActual) || "sin fecha"} → ${dia(anclaPropuesta)}`,
       fase: "Todo el cronograma",
       pesado: true, // redefine TODAS las fechas del cronograma
+      soloSemana: false,
     });
   }
 
@@ -303,6 +311,7 @@ export function diffAssist(
       detalle: ordenPropuesto.map((id) => m.faseActualPorId.get(id)?.name ?? "?").join(" → "),
       fase: "Todo el cronograma",
       pesado: false,
+      soloSemana: false,
     });
   }
 
@@ -318,6 +327,7 @@ export function diffAssist(
         }`,
         fase: p.name,
         pesado: false,
+        soloSemana: false,
       });
       return;
     }
@@ -332,6 +342,7 @@ export function diffAssist(
         detalle: cambios.join(" · "),
         fase: actual.name,
         pesado: false,
+        soloSemana: false,
       });
     }
   });
@@ -350,6 +361,7 @@ export function diffAssist(
             (conTrabajo > 0 ? ` · ${conTrabajo} con trabajo encima` : ""),
       fase: a.name,
       pesado: conTrabajo > 0,
+      soloSemana: false,
     });
   }
 
@@ -367,6 +379,7 @@ export function diffAssist(
           detalle: `semana ${t.weekIndex + 1}${t.party ? ` · ${t.party}` : ""}`,
           fase: nombreFase,
           pesado: false,
+          soloSemana: false,
         });
         return;
       }
@@ -381,6 +394,10 @@ export function diffAssist(
           detalle: cambios.join(" · "),
           fase: nombreFase,
           pesado: tieneTrabajoEncima(actual),
+          /* El ÚNICO cambio es la semana ⇒ es consecuencia, no decisión. Se mide acá, donde el
+             diff real está a la vista: adivinarlo después parseando `detalle` sería frágil, y el
+             día que cambie el texto la lista se desagrupa sin que nadie lo note. */
+          soloSemana: cambios.length === 1 && actual.weekIndex !== t.weekIndex,
         });
       }
     });
@@ -405,6 +422,7 @@ export function diffAssist(
           (tieneTrabajoEncima(actual) ? " · ⚠ pierde su estado (cambiar de fase la recrea)" : ""),
         fase: nombreFase,
         pesado: tieneTrabajoEncima(actual),
+        soloSemana: false,
       });
       continue;
     }
@@ -417,6 +435,7 @@ export function diffAssist(
       detalle: tieneTrabajoEncima(actual) ? "⚠ tiene trabajo encima" : `semana ${actual.weekIndex + 1}`,
       fase: nombreFase,
       pesado: tieneTrabajoEncima(actual),
+      soloSemana: false,
     });
   }
 

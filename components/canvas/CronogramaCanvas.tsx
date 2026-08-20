@@ -54,6 +54,7 @@ import {
   type FaseActual as FaseDelAssist,
   type ItemDeAssist,
 } from "@/lib/timeline/assist-items";
+import { agruparItems, resumenDeConsecuencias } from "@/lib/timeline/agrupar-items";
 import { AcceptButton, RejectButton } from "@/components/ui/AcceptReject";
 import { cn } from "@/lib/cn";
 import PublishBar from "./PublishBar";
@@ -1113,6 +1114,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         : [],
     [proposal, structureOnlyProposal, fasesActualesDelAssist, anchor],
   );
+  /* ⭐ Agrupada por FASE y partida en decisiones/consecuencias. La lista plana de veinte barras
+     iguales enterraba lo que hay que revisar (una fase que se va con sus 7 tareas) debajo de
+     dieciocho corrimientos de semana, que son la aritmética de esa decisión y no una elección.
+     Reportado por Elías el 2026-08-20 mirando la fusión de dos fases de Wherex. */
+  const gruposDeAssist = useMemo(() => agruparItems(assistItems), [assistItems]);
+
   const assistDescartadosVivos = useMemo(
     () => assistItems.filter((i) => assistDescartados.has(i.key)).length,
     [assistItems, assistDescartados],
@@ -2466,63 +2473,118 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 )}
               </div>
               {assistRevision && (
-                <ul className="mt-2 space-y-1 max-h-72 overflow-y-auto pr-1">
-                  {assistItems.map((it) => {
-                    const fuera = assistDescartados.has(it.key);
+                <div className="mt-2 space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {gruposDeAssist.map((g) => {
+                    const todasFuera = g.claves.every((k) => assistDescartados.has(k));
+                    const resumen = resumenDeConsecuencias(g);
                     return (
-                      <li
-                        key={it.key}
+                      <div
+                        key={g.fase}
                         className={cn(
-                          "flex items-start gap-2 rounded-lg border px-2 py-1.5",
-                          fuera
-                            ? "border-line bg-surface opacity-60"
-                            : "border-violet-800/50 bg-violet-950/30",
+                          "rounded-xl border px-3 py-2",
+                          todasFuera ? "border-line bg-surface opacity-60" : "border-violet-800/50 bg-violet-950/30",
                         )}
                       >
-                        <div className="flex items-center gap-1 pt-0.5">
-                          <AcceptButton
-                            size="xs"
-                            aria-label={`Incluir: ${it.titulo}`}
-                            title="Incluir este cambio al aplicar"
-                            disabled={!fuera || applying}
-                            onClick={() =>
-                              setAssistDescartados((prev) => {
-                                const n = new Set(prev);
-                                n.delete(it.key);
-                                return n;
-                              })
-                            }
-                          />
-                          <RejectButton
-                            size="xs"
-                            aria-label={`Descartar: ${it.titulo}`}
-                            title="Dejar este cambio afuera"
-                            disabled={fuera || applying}
-                            onClick={() =>
-                              setAssistDescartados((prev) => new Set(prev).add(it.key))
-                            }
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p
-                            className={cn(
-                              "text-[11px] font-medium break-words",
-                              fuera ? "text-fg-muted line-through" : "text-fg-secondary",
-                            )}
-                          >
-                            {it.pesado && <span className="text-amber-400 mr-1">⚠</span>}
-                            {it.titulo}
-                          </p>
-                          {it.detalle && (
-                            <p className="text-[10px] text-fg-muted break-words">
-                              {it.fase} · {it.detalle}
+                        <div className="flex items-start gap-2">
+                          <div className="flex items-center gap-1 pt-0.5">
+                            <AcceptButton
+                              size="xs"
+                              aria-label={`Incluir todo en ${g.fase}`}
+                              title="Incluir todos los cambios de esta fase"
+                              disabled={!todasFuera || applying}
+                              onClick={() =>
+                                setAssistDescartados((prev) => {
+                                  const n = new Set(prev);
+                                  g.claves.forEach((k) => n.delete(k));
+                                  return n;
+                                })
+                              }
+                            />
+                            <RejectButton
+                              size="xs"
+                              aria-label={`Descartar todo en ${g.fase}`}
+                              title="Dejar afuera todos los cambios de esta fase"
+                              disabled={todasFuera || applying}
+                              onClick={() =>
+                                setAssistDescartados((prev) => {
+                                  const n = new Set(prev);
+                                  g.claves.forEach((k) => n.add(k));
+                                  return n;
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-fg">
+                              {g.pesado && <span className="text-amber-400 mr-1">⚠</span>}
+                              {g.fase}
                             </p>
-                          )}
+                            {/* Las DECISIONES, abiertas: es lo que hay que leer. */}
+                            <ul className="mt-1 space-y-0.5">
+                              {g.decisiones.map((it) => {
+                                const fuera = assistDescartados.has(it.key);
+                                return (
+                                  <li key={it.key} className="flex items-start gap-1.5">
+                                    <button
+                                      onClick={() =>
+                                        setAssistDescartados((prev) => {
+                                          const n = new Set(prev);
+                                          if (fuera) n.delete(it.key);
+                                          else n.add(it.key);
+                                          return n;
+                                        })
+                                      }
+                                      disabled={applying}
+                                      title={fuera ? "Volver a incluir" : "Dejar este cambio afuera"}
+                                      className="mt-[3px] text-[10px] text-fg-muted hover:text-fg shrink-0"
+                                    >
+                                      {fuera ? "☐" : "☑"}
+                                    </button>
+                                    <p
+                                      className={cn(
+                                        "text-[11px] break-words",
+                                        fuera ? "text-fg-muted line-through" : "text-fg-secondary",
+                                      )}
+                                    >
+                                      {it.titulo}
+                                      {it.detalle && (
+                                        <span className="text-fg-muted"> · {it.detalle}</span>
+                                      )}
+                                    </p>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            {/* Las CONSECUENCIAS, plegadas: aritmética de lo de arriba, no decisiones. */}
+                            {resumen && (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-fg select-none">
+                                  {resumen}
+                                </summary>
+                                <ul className="mt-1 space-y-0.5 pl-3 border-l border-violet-800/40">
+                                  {g.consecuencias.map((it) => (
+                                    <li
+                                      key={it.key}
+                                      className={cn(
+                                        "text-[10px] break-words",
+                                        assistDescartados.has(it.key)
+                                          ? "text-fg-muted line-through"
+                                          : "text-fg-muted",
+                                      )}
+                                    >
+                                      {it.pesado && <span className="text-amber-400 mr-1">⚠</span>}
+                                      {it.titulo} · {it.detalle}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
                         </div>
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </div>
           )}
