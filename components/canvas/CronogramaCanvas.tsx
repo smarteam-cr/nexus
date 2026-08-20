@@ -2081,6 +2081,22 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     if (next) setSelectedTask(next);
   };
 
+  /* ── EL PREVIEW MOSTRABA TODO COMO PENDIENTE, Y ERA MENTIRA ─────────────────────────────────
+     ⛔ Hasta el 2026-08-20 esta proyección ponía `status: "PENDING"` en TODAS las tareas. En un
+     cronograma con 13 tareas hechas, la vista previa las pintaba atrasadas — mientras el cartel
+     de arriba promete, con todas las letras, que «los estados de las tareas existentes se
+     conservan al aplicar».
+
+     El texto decía una cosa y la imagen la contraria, que es la peor forma de este defecto: el
+     CSE mira el preview y cree que aplicar le borra el progreso. Reportado por Elías así:
+     «el congelado no representa la realidad».
+
+     El estado NO viaja en la propuesta y está bien que no viaje —el PUT no toca `status`, por eso
+     se conservan— así que se repone desde lo que HAY, por id. Las tareas nuevas (sin id) sí nacen
+     pendientes, que es la verdad. */
+  const estadoActualPorTaskId = new Map<string, TaskDraft["status"]>();
+  for (const p of phases) for (const t of p.tasks) if (t.id) estadoActualPorTaskId.set(t.id, t.status);
+
   // Propuesta → preview del Gantt (read-only) + resumen del diff
   const proposalGantt: GanttPhase[] | null = proposal
     ? proposal.phases.map((p, i) => ({
@@ -2096,7 +2112,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           id: t.id,
           title: t.title,
           weekIndex: t.weekIndex,
-          status: "PENDING" as const,
+          /* Ver el bloque de arriba: sin esto el preview borra visualmente el progreso. */
+          status: (t.id ? (estadoActualPorTaskId.get(t.id) ?? "PENDING") : "PENDING") as TaskDraft["status"],
           notes: t.notes ?? null,
           needsValidation: false,
         })),
@@ -2392,12 +2409,25 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         // Ancla PROPIA: antes el CTA "Ver la propuesta" apuntaba a #cronograma-borradores, que solo
         // existe si hay banners de avance o particularidades. Con solo una propuesta pendiente, el
         // botón no hacía nada.
-        <div id="cronograma-propuesta" className="scroll-mt-24 rounded-2xl border border-violet-700/40 bg-violet-900/30 px-4 py-3 space-y-2">
+        <div id="cronograma-propuesta" className="scroll-mt-24 rounded-2xl border border-brand/40 bg-surface shadow-sm overflow-hidden">
+          {/* ⚠ EL AVISO DE CONGELADO, Y VA PRIMERO. Mientras hay propuesta el Gantt es de solo
+              lectura: nadie puede tocar una tarea hasta resolverla. Eso está bien —lo pidió
+              Elías— pero hasta hoy no se decía en ningún lado, así que el CSE probaba editar y
+              no entendía por qué no respondía. Un estado modal que no se anuncia se lee como una
+              pantalla rota. */}
+          <div className="flex items-start gap-2 px-4 py-2.5 bg-warn-surface border-b border-warn-line">
+            <span className="text-sm leading-none mt-0.5" aria-hidden>⚠</span>
+            <p className="text-xs font-semibold text-warn-ink">
+              El cronograma está congelado mientras revisás esta propuesta.
+              <span className="font-normal"> Aceptá o descartá los cambios para volver a editarlo.</span>
+            </p>
+          </div>
+          <div className="px-4 py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-violet-300">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand">
               Propuesta de la IA — vista previa, sin guardar
             </span>
-            <span className="text-[11px] text-gray-400">
+            <span className="text-[11px] text-fg-muted">
               {[
                 diffSummary.added > 0 && `+${plural(diffSummary.added, "tarea nueva", "tareas nuevas")}`,
                 diffSummary.removed > 0 && `−${plural(diffSummary.removed, "tarea", "tareas")}`,
@@ -2446,11 +2476,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                  tragarse las cuatro cosas o descartar las cuatro. Acá cada cambio se saca solo,
                  y «Aplicar» escribe únicamente lo que quedó. El default sigue siendo TODO. */}
           {assistItems.length > 0 && (
-            <div className="pt-1 border-t border-violet-800/40">
+            <div className="pt-2 border-t border-line">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setAssistRevision((v) => !v)}
-                  className="text-[11px] font-semibold text-violet-300 hover:text-fg underline underline-offset-2"
+                  className="text-[11px] font-semibold text-brand hover:text-brand-dark underline underline-offset-2"
                 >
                   {assistRevision
                     ? "Ocultar el detalle"
@@ -2482,7 +2512,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                         key={g.fase}
                         className={cn(
                           "rounded-xl border px-3 py-2",
-                          todasFuera ? "border-line bg-surface opacity-60" : "border-violet-800/50 bg-violet-950/30",
+                          todasFuera ? "border-line bg-surface-muted opacity-60" : "border-brand/25 bg-surface-muted",
                         )}
                       >
                         <div className="flex items-start gap-2">
@@ -2558,10 +2588,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                             {/* Las CONSECUENCIAS, plegadas: aritmética de lo de arriba, no decisiones. */}
                             {resumen && (
                               <details className="mt-1">
-                                <summary className="cursor-pointer text-[11px] text-violet-300 hover:text-fg select-none">
+                                <summary className="cursor-pointer text-[11px] text-brand hover:text-brand-dark select-none">
                                   {resumen}
                                 </summary>
-                                <ul className="mt-1 space-y-0.5 pl-3 border-l border-violet-800/40">
+                                <ul className="mt-1 space-y-0.5 pl-3 border-l border-line">
                                   {g.consecuencias.map((it) => (
                                     <li
                                       key={it.key}
@@ -2588,9 +2618,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               )}
             </div>
           )}
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-fg-muted">
             Los estados de las tareas existentes se conservan al aplicar. Revisá el Gantt de abajo: es la propuesta.
           </p>
+          </div>
         </div>
       )}
 

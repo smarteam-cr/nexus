@@ -99,7 +99,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/canvas/AnchorDatePicker.tsx": 10,
   "components/canvas/BlockRenderer.tsx": 77,
   "components/canvas/CanvasLinearView.tsx": 11,
-  "components/canvas/CronogramaCanvas.tsx": 32,
+  "components/canvas/CronogramaCanvas.tsx": 30,
   "components/canvas/ParticularidadEditModal.tsx": 12,
   "components/canvas/ParticularidadToTaskModal.tsx": 7,
   "components/canvas/SectionBlockList.tsx": 13,
