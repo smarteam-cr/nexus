@@ -11,16 +11,12 @@ import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { ensureAccess } from "@/lib/business-cases";
+import { buildBcAccessUrl } from "@/lib/business-cases/access-url";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { isBlank } from "@/lib/landing/is-blank";
 import { INVERSION_SECTION_KEY, licenciasDeHubSinMonto } from "@/lib/landing/inversion";
-
-function buildVerifyUrl(req: NextRequest, token: string): string {
-  const base = process.env.APP_URL || new URL(req.url).origin;
-  return `${base}/external/business-case/verify/${token}`;
-}
 
 /* El predicado de "sección en blanco" es `lib/landing/is-blank.ts`, el MISMO que usa el
    render. Acá vivía una copia sin `NO_CONTENIDO`, y esa divergencia hacía que una sección
@@ -179,10 +175,14 @@ export async function POST(
   });
 
   const access = await ensureAccess(id, guard.user.email ?? null);
+  const base = process.env.APP_URL || new URL(req.url).origin;
   return NextResponse.json({
     published: true,
     accessToken: access.accessToken,
-    password: access.accessPassword,
-    url: buildVerifyUrl(req, access.accessToken),
+    requiresPassword: access.requiresPassword,
+    // Sin contraseña vigente no se devuelve una: ver la misma decisión en external-access.
+    password: access.requiresPassword ? access.accessPassword : null,
+    url: buildBcAccessUrl(base, access.accessToken, access.requiresPassword),
+    expiresAt: access.expiresAt,
   });
 }

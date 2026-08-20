@@ -38,6 +38,9 @@ export default async function BusinessCasesHubPage() {
         name: true,
         status: true,
         caseType: true,
+        // El cliente aprobó desde la propia propuesta (sin login). Es el dato que Ventas
+        // busca al abrir esta lista, así que gana la celda de estado.
+        approvedAt: true,
         // La empresa del CASO manda sobre la del cliente: es la que se eligió al crearlo.
         hubspotCompanyId: true,
         client: { select: { name: true, kind: true, hubspotCompanyId: true } },
@@ -123,9 +126,17 @@ export default async function BusinessCasesHubPage() {
               )}
             </span>
             <span className="flex-shrink-0 w-24">
-              <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
-                {STATUS_LABEL[c.status] ?? c.status}
-              </span>
+              {/* "Aprobada" pisa a "Publicado": una vez que el cliente dijo que sí, saber que
+                  además está publicada no le cambia el próximo paso a nadie. */}
+              {c.approvedAt ? (
+                <span className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ✓ Aprobada
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
+                  {STATUS_LABEL[c.status] ?? c.status}
+                </span>
+              )}
             </span>
             <DeleteBusinessCaseButton
               bcId={c.id}

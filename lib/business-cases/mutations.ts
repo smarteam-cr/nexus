@@ -246,17 +246,67 @@ export async function deleteBlock(blockId: string) {
 
 // ── Acceso externo + publicación ─────────────────────────────────────────────
 
-/** Crea, reusa o ROTA el acceso token+password del business case. */
-export async function ensureAccess(businessCaseId: string, createdByEmail?: string | null) {
+/** Días de vida del link del prospecto cuando se publica. Editable por propuesta desde
+ *  el panel "Acceso del cliente" (PATCH .../external-access) — esto es solo el arranque. */
+export const DIAS_DE_CADUCIDAD_POR_DEFECTO = 30;
+
+/** Forma del acceso que devuelven ensureAccess / setAccessMode / setAccessExpiry. */
+export interface BcAccessRow {
+  id: string;
+  accessToken: string;
+  accessPassword: string | null;
+  requiresPassword: boolean;
+  expiresAt: Date | null;
+}
+
+const ACCESS_SELECT = {
+  id: true,
+  accessToken: true,
+  accessPassword: true,
+  requiresPassword: true,
+  expiresAt: true,
+} as const;
+
+function vencimientoPorDefecto(): Date {
+  return new Date(Date.now() + DIAS_DE_CADUCIDAD_POR_DEFECTO * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Crea o REUSA el acceso del business case. Es idempotente a propósito.
+ *
+ * ⚠ Ya NO rota el token de un acceso vivo, y NO decide el modo: el modo lo cambia solo
+ * `setAccessMode`. Publicar de nuevo tiene que dejar el link EXACTAMENTE como estaba —
+ * antes rotaba cuando faltaba `accessPassword`, y con eso una republicación podía
+ * invalidar en silencio el link que el vendedor ya había mandado por correo.
+ *
+ * La única rotación que queda es la de un acceso REVOCADO que vuelve a publicarse: ahí
+ * rotar es el punto (el CSE revocó justamente para matar un link filtrado).
+ */
+export async function ensureAccess(
+  businessCaseId: string,
+  createdByEmail?: string | null,
+): Promise<BcAccessRow> {
   const existing = await prisma.businessCaseExternalAccess.findUnique({
     where: { businessCaseId },
-    select: { id: true, accessToken: true, accessPassword: true, revokedAt: true },
+    select: { ...ACCESS_SELECT, revokedAt: true },
   });
-  // Reusar las credenciales SOLO si no estaba revocado. Si el CSE revocó (mató un link
-  // filtrado) y vuelve a publicar, rotamos token+password nuevos para invalidar lo viejo.
-  if (existing && existing.accessPassword && !existing.revokedAt) {
-    return { id: existing.id, accessToken: existing.accessToken, accessPassword: existing.accessPassword };
+
+  if (existing && !existing.revokedAt) {
+    // Vivo: se respeta token, contraseña y modo. Solo se (re)arma la ventana de
+    // caducidad si nunca se fijó o si ya venció — republicar revive una propuesta
+    // caducada, que es lo que el CSE espera al volver a tocar "Subir al cliente".
+    const venceYa = !existing.expiresAt || existing.expiresAt.getTime() <= Date.now();
+    if (!venceYa) {
+      const { revokedAt: _revokedAt, ...row } = existing;
+      return row;
+    }
+    return prisma.businessCaseExternalAccess.update({
+      where: { businessCaseId },
+      data: { expiresAt: vencimientoPorDefecto() },
+      select: ACCESS_SELECT,
+    });
   }
+
   const accessToken = randomBytes(32).toString("hex");
   const password = generatePassword();
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -267,18 +317,158 @@ export async function ensureAccess(businessCaseId: string, createdByEmail?: stri
       accessToken,
       passwordHash,
       accessPassword: password,
+      expiresAt: vencimientoPorDefecto(),
       createdByEmail: createdByEmail ?? null,
     },
     update: {
       accessToken,
       passwordHash,
       accessPassword: password,
+      // Un acceso revocado que revive vuelve al modo por defecto (abierto): la decisión
+      // de pedir contraseña se toma sobre el link NUEVO, no se hereda del que se mató.
+      requiresPassword: false,
+      expiresAt: vencimientoPorDefecto(),
       revokedAt: null,
       lastUsedAt: null,
       enabledAt: new Date(),
       createdByEmail: createdByEmail ?? null,
     },
-    select: { id: true, accessToken: true, accessPassword: true },
+    select: ACCESS_SELECT,
+  });
+}
+
+/**
+ * Acceso VIVO sobre el que ajustar modo/caducidad; lo crea si no existe.
+ *
+ * Devuelve `null` cuando la fila existe pero está REVOCADA. Es el punto entero de que
+ * esta función exista: `ensureAccess` resucita un acceso revocado (para eso está, la
+ * republicación lo necesita), así que enchufarle el toggle del panel haría que marcar un
+ * check reviviera en silencio un link que alguien mató a propósito porque se había
+ * filtrado. Revivir un acceso es una sola cosa y tiene un solo botón: "Subir al cliente".
+ */
+async function accesoVivoOCreado(
+  businessCaseId: string,
+  createdByEmail?: string | null,
+): Promise<BcAccessRow | null> {
+  const existing = await prisma.businessCaseExternalAccess.findUnique({
+    where: { businessCaseId },
+    select: { ...ACCESS_SELECT, revokedAt: true },
+  });
+  if (existing?.revokedAt) return null;
+  return ensureAccess(businessCaseId, createdByEmail);
+}
+
+/**
+ * Cambia el MODO de acceso (con / sin contraseña). No rota el token: la puerta que deja
+ * de servir redirige a la que sirve (ver lib/business-cases/access-url.ts), así ningún
+ * link ya enviado queda muerto.
+ *
+ * Al ENCENDER la contraseña se regenera: la anterior pudo haber circulado en claro por el
+ * panel mientras la propuesta estaba abierta, y una contraseña "nueva" que en realidad es
+ * la vieja es peor que no tenerla, porque el vendedor cree que rotó.
+ *
+ * `null` = el acceso está revocado y no se toca (ver accesoVivoOCreado).
+ */
+export async function setAccessMode(
+  businessCaseId: string,
+  requiresPassword: boolean,
+  createdByEmail?: string | null,
+): Promise<BcAccessRow | null> {
+  const access = await accesoVivoOCreado(businessCaseId, createdByEmail);
+  if (!access) return null;
+  if (access.requiresPassword === requiresPassword) return access;
+
+  if (!requiresPassword) {
+    return prisma.businessCaseExternalAccess.update({
+      where: { businessCaseId },
+      data: { requiresPassword: false },
+      select: ACCESS_SELECT,
+    });
+  }
+
+  const password = generatePassword();
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  return prisma.businessCaseExternalAccess.update({
+    where: { businessCaseId },
+    data: { requiresPassword: true, passwordHash, accessPassword: password },
+    select: ACCESS_SELECT,
+  });
+}
+
+/** Fija (o quita, con null) la caducidad del link. `null` = acceso revocado, no se toca. */
+export async function setAccessExpiry(
+  businessCaseId: string,
+  expiresAt: Date | null,
+  createdByEmail?: string | null,
+): Promise<BcAccessRow | null> {
+  const access = await accesoVivoOCreado(businessCaseId, createdByEmail);
+  if (!access) return null;
+  return prisma.businessCaseExternalAccess.update({
+    where: { businessCaseId },
+    data: { expiresAt },
+    select: ACCESS_SELECT,
+  });
+}
+
+// ── Aprobación del cliente ───────────────────────────────────────────────────
+
+export interface BcApproval {
+  approvedAt: Date;
+  approvedByEmail: string | null;
+  approvedByName: string | null;
+  approvedSnapshotAt: Date | null;
+}
+
+/**
+ * El prospecto aprueba la propuesta desde la propia landing (sin login, solo su correo).
+ *
+ * IDEMPOTENTE por diseño: si ya estaba aprobada devuelve la aprobación EXISTENTE sin
+ * pisarla. Quién aprobó primero es el dato que le importa a Ventas; permitir que un
+ * segundo click lo reescriba convertiría el registro en "el último que pasó por acá".
+ *
+ * `approvedSnapshotAt` congela el `publishedAt` del momento → si el CSE republica
+ * después, la UI puede avisar que se aprobó otra versión.
+ */
+export async function approveBusinessCase(
+  businessCaseId: string,
+  input: { email: string; name?: string | null },
+): Promise<{ approval: BcApproval; yaEstaba: boolean }> {
+  const bc = await prisma.businessCase.findUnique({
+    where: { id: businessCaseId },
+    select: { publishedAt: true, approvedAt: true, approvedByEmail: true, approvedByName: true, approvedSnapshotAt: true },
+  });
+  if (!bc) throw new Error("business case inexistente");
+
+  if (bc.approvedAt) {
+    return {
+      yaEstaba: true,
+      approval: {
+        approvedAt: bc.approvedAt,
+        approvedByEmail: bc.approvedByEmail,
+        approvedByName: bc.approvedByName,
+        approvedSnapshotAt: bc.approvedSnapshotAt,
+      },
+    };
+  }
+
+  const updated = await prisma.businessCase.update({
+    where: { id: businessCaseId },
+    data: {
+      approvedAt: new Date(),
+      approvedByEmail: input.email,
+      approvedByName: input.name?.trim() || null,
+      approvedSnapshotAt: bc.publishedAt,
+    },
+    select: { approvedAt: true, approvedByEmail: true, approvedByName: true, approvedSnapshotAt: true },
+  });
+  return { yaEstaba: false, approval: updated as BcApproval };
+}
+
+/** Borra la aprobación (aprobaciones de prueba, correo equivocado). Solo interno. */
+export async function clearApproval(businessCaseId: string) {
+  return prisma.businessCase.update({
+    where: { id: businessCaseId },
+    data: { approvedAt: null, approvedByEmail: null, approvedByName: null, approvedSnapshotAt: null },
   });
 }
 

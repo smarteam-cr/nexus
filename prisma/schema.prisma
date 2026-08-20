@@ -1416,6 +1416,20 @@ model BusinessCase {
   publishedAt       DateTime?
   publishedSnapshot Json?
 
+  // ── Aprobación DEL CLIENTE (2026-08-20) ─────────────────────────────────────
+  // El prospecto aprueba desde la propia propuesta dejando solo su correo (sin login):
+  // POST /api/external/business-case/approve. Vive en el BusinessCase y NO en el acceso
+  // externo porque es un hecho del NEGOCIO ("el cliente dijo que sí"), no del link:
+  // revocar o regenerar el acceso no debe borrar que aprobó.
+  approvedAt      DateTime?
+  approvedByEmail String?
+  approvedByName  String?
+  // `publishedAt` vigente en el instante de aprobar. Si el CSE republica después,
+  // `publishedAt > approvedSnapshotAt` ⇒ el cliente aprobó OTRA versión, y la UI lo avisa.
+  // Sin esta columna, republicar convertiría en silencio una aprobación vieja en el
+  // respaldo de un contenido que nadie aprobó.
+  approvedSnapshotAt DateTime?
+
   createdByEmail String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1529,12 +1543,32 @@ model BusinessCaseExternalAccess {
   accessToken    String       @unique // 64 hex (crypto.randomBytes(32))
   passwordHash   String // bcrypt(12)
   accessPassword String? // texto plano para que el vendedor lo comparta
-  enabledAt      DateTime     @default(now())
+
+  // ── Modo de acceso (2026-08-20) ─────────────────────────────────────────────
+  // false (default) = la URL ES el secreto: /external/propuesta/{token} renderiza directo,
+  // sin contraseña ni cookie. true = el flujo histórico (verify + contraseña + cookie).
+  // Ventas pidió el default abierto para bajar la fricción; el check es la excepción.
+  //
+  // `passwordHash` sigue siendo NOT NULL a propósito: la contraseña se genera SIEMPRE,
+  // el bit que gobierna es este. Así encender el check es instantáneo y no hay una
+  // columna nullable que cada lector tenga que acordarse de chequear.
+  //
+  // El token NO rota al cambiar de modo: cada URL redirige a la del modo vigente
+  // (ver lib/business-cases/access-url.ts), así ningún link ya enviado queda muerto.
+  requiresPassword Boolean @default(false)
+
+  // Caducidad del link (null = no caduca). Vencido ⇒ el prospecto ve un mensaje de
+  // "caducada, contactá a tu asesor", NO un 404: es el único fallo del módulo que se
+  // distingue, y solo con un token válido en la mano. Una propuesta ya APROBADA no
+  // caduca (el cliente tiene derecho a releer lo que aprobó).
+  expiresAt DateTime?
+
+  enabledAt      DateTime  @default(now())
   revokedAt      DateTime?
   lastUsedAt     DateTime?
   createdByEmail String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([accessToken])
   @@index([businessCaseId])

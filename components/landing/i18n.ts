@@ -98,6 +98,31 @@ const STRINGS = {
   // pasa por acá: son nombres propios y traducirlos inventaría credenciales que no existen.
   // Ver lib/landing/partner-band.ts.
   insigniasFirma: { es: "Top Partner + acreditaciones", en: "Top Partner + accreditations" },
+  // ── Barra de aprobación (components/external/PropuestaAprobacion.tsx) ────────
+  // El cliente aprueba desde la propia propuesta, así que estos rótulos son de las
+  // pocas cadenas del documento con las que INTERACTÚA: si salen en el idioma
+  // equivocado se lee como un formulario ajeno pegado al final.
+  aprobarTitulo: { es: "¿Avanzamos con esta propuesta?", en: "Ready to move forward?" },
+  aprobarBajada: {
+    es: "Dejanos tu correo y queda registrada tu aprobación. No hace falta crear ninguna cuenta.",
+    en: "Leave your email and your approval is recorded. No account needed.",
+  },
+  aprobarCorreo: { es: "Tu correo", en: "Your email" },
+  aprobarNombre: { es: "Tu nombre (opcional)", en: "Your name (optional)" },
+  aprobarBoton: { es: "Aprobar propuesta", en: "Approve proposal" },
+  aprobarEnviando: { es: "Registrando…", en: "Recording…" },
+  aprobarListoTitulo: { es: "Propuesta aprobada", en: "Proposal approved" },
+  aprobarListoDetalle: { es: "Aprobada el", en: "Approved on" },
+  aprobarListoPor: { es: "por", en: "by" },
+  aprobarListoPie: {
+    es: "Tu equipo de Smarteam ya lo ve. Se pondrán en contacto para los próximos pasos.",
+    en: "Your Smarteam contact can already see it and will reach out with next steps.",
+  },
+  aprobarCorreoInvalido: { es: "Revisá el correo, no parece válido.", en: "That email doesn't look valid." },
+  aprobarFallo: {
+    es: "No se pudo registrar la aprobación. Probá de nuevo en unos segundos.",
+    en: "We couldn't record the approval. Please try again in a few seconds.",
+  },
 } as const;
 
 export type LandingStringKey = keyof typeof STRINGS;

@@ -5,4 +5,5 @@
 export * from "./schema";
 export * from "./queries";
 export * from "./mutations";
+export * from "./access-url";
 export { generateBlocks } from "./agent";

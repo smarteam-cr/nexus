@@ -2,9 +2,17 @@
 
 /**
  * Form de verificación del prospecto (Business Case). POST a
- * /api/external/business-case/verify-access con { token, password }; en el éxito
- * navega full a /external/business-case (para que el server component lea la
- * cookie httpOnly recién seteada). Solo React + Tailwind (cero recursos externos).
+ * /api/external/business-case/verify-access con { token, password }; en el éxito navega
+ * FULL (no router.push) al `redirectTo` que devuelve la ruta.
+ *
+ * El destino lo decide el server y no este form: si la propuesta pide contraseña va a
+ * /external/business-case (para que el server component lea la cookie httpOnly recién
+ * seteada), y si ya está abierta va a /external/propuesta/{token} — el puente para los
+ * links viejos que siguen circulando por correo. Hardcodear el destino acá era lo que
+ * hacía antes, y con el modo abierto habría mandado al cliente a una página que ya no
+ * tiene cookie que leer. Fallback al destino histórico por si la respuesta viene vieja.
+ *
+ * Solo React + Tailwind (cero recursos externos).
  */
 import { useState, FormEvent } from "react";
 import { IconCheck } from "@/components/ui/AcceptReject";
@@ -37,7 +45,13 @@ export function BusinessCaseVerifyForm({ token }: { token: string }) {
       if (res.status === 200 && data?.ok) {
         setPassword("");
         setState({ kind: "success", name: data.name ?? "" });
-        window.location.assign("/external/business-case");
+        // Solo paths internos: un `redirectTo` absoluto sería un open redirect servido
+        // desde una URL que el prospecto recibió por correo.
+        const destino =
+          typeof data.redirectTo === "string" && data.redirectTo.startsWith("/external/")
+            ? data.redirectTo
+            : "/external/business-case";
+        window.location.assign(destino);
         return;
       }
       if (res.status === 429) {
