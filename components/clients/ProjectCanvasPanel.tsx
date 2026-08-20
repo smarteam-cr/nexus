@@ -1099,7 +1099,11 @@ export default function ProjectCanvasPanel({
       {/* El asistente de los DOCUMENTOS. Sin `onAplicar` todavía: muestra la instrucción
           acordada para copiarla al «Pedir cambio con IA» del documento. Cablearla es la
           etapa 3 — y va a entrar por el editor de la pieza, nunca por una escritura propia. */}
-      {activeSlug && activeSlug !== PIEZA_CRONOGRAMA && (
+      {/* Mismo gate que el botón: si el canvas activo no tiene chat, el cajón se va con él.
+         Si no, quedaría abierto sobre una pieza que no puede conversar. */}
+      {activeSlug &&
+        activeSlug !== PIEZA_CRONOGRAMA &&
+        puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? "")) && (
         <ChatDelAsistente
           projectId={projectId}
           pieza={activeSlug}
