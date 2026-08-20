@@ -140,6 +140,10 @@ export async function POST(
   const fasesAntes = tl.phases.map((p) => ({ durationWeeks: p.durationWeeks, startWeek: p.startWeek }));
   const anchorAceptado = accepted.some((d) => d.kind === "SET_ANCHOR");
 
+  /* Tareas que hubo que correr porque su fase se acortó. Viajan en la respuesta: el silencio
+     acá es cómo se juntaron 34 tareas fuera de rango sin que nadie se enterara. */
+  const avisosDeReubicacion: string[] = [];
+
   await prisma.$transaction(async (tx) => {
     // 1) Aplicar los ACEPTADOS (solo esos; nada se aplica solo).
     //    Cambios de contenido y anchor primero; el ORDEN se resuelve al final de una sola vez,
@@ -158,6 +162,34 @@ export async function POST(
           else if (c.field === "activityType") data.activityType = parseActivityType(c.to) ?? null;
         }
         await tx.timelinePhase.update({ where: { id: d.phaseId }, data });
+
+        /* ── ACORTAR LA FASE NO PUEDE DEJAR SUS TAREAS EN UNA SEMANA QUE NO EXISTE ───────────
+           ⚠ MISMO AGUJERO QUE TENÍA EL PUT, EN OTRA PUERTA. Acá se escribe `durationWeeks` sin
+           mirar las tareas —este camino resuelve deltas de FASE, las tareas nunca producen uno—
+           así que aceptar «esta fase pasa de 4 a 2 semanas» dejaba lo que estaba en la 3 y la 4
+           fuera de rango, sin error y sin aviso.
+
+           Así se juntaron las 34 tareas que el barrido del 2026-08-20 encontró en 5 proyectos, y
+           el costo no era cosmético: el modificador con IA devuelve el cronograma COMPLETO, así
+           que copia esas semanas inválidas y su propuesta se rechaza entera — esos proyectos no
+           podían usar «Pedir cambio con IA» en absoluto.
+
+           Última semana que existe, igual que el PUT y que `repararPropuesta`. Una sola regla. */
+        const antes = tl.phases.find((p) => p.id === d.phaseId);
+        const nuevaDuracion = data.durationWeeks;
+        if (typeof nuevaDuracion === "number" && antes && nuevaDuracion < antes.durationWeeks) {
+          const reubicadas = await tx.timelineTask.updateMany({
+            where: { phaseId: d.phaseId, weekIndex: { gte: nuevaDuracion } },
+            data: { weekIndex: nuevaDuracion - 1 },
+          });
+          if (reubicadas.count > 0) {
+            avisosDeReubicacion.push(
+              `«${antes.name}» pasó a ${nuevaDuracion} ${nuevaDuracion === 1 ? "semana" : "semanas"} y ` +
+                `${reubicadas.count === 1 ? "1 tarea quedaba" : `${reubicadas.count} tareas quedaban`} ` +
+                `más allá: ${reubicadas.count === 1 ? "se movió" : "se movieron"} a la última semana.`,
+            );
+          }
+        }
       } else if (d.kind === "SET_ANCHOR") {
         await tx.projectTimeline.update({
           where: { id: tl.id },
@@ -352,5 +384,8 @@ export async function POST(
     applied: accepted.length,
     discarded: [...discardKeys].filter((k) => byKey.has(k)).length,
     stale: staleKeys,
+    /* ⚠ Solo cuando hubo algo que correr: una clave siempre presente y casi siempre vacía es
+       una que la pantalla aprende a ignorar. */
+    ...(avisosDeReubicacion.length > 0 ? { avisos: avisosDeReubicacion } : {}),
   });
 }
