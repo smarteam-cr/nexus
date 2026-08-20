@@ -61,6 +61,12 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
       phases: {
         orderBy: { order: "asc" },
         select: {
+          /* ⭐ EL ID VIAJA, y es lo que deja que el asistente emita OPERACIONES en vez de una
+             instrucción de texto. Son ~25 caracteres por fase (~275 en el cronograma más grande
+             de la cartera) y compran que el destinatario de un cambio sea inequívoco: Wherex
+             tiene fases con nombres casi iguales («Marketing Hub» y «Configuración Marketing
+             Hub»), así que resolver por nombre sería adivinar. */
+          id: true,
           name: true,
           durationWeeks: true,
           startWeek: true,
@@ -120,7 +126,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   const fases = timeline.phases
     .map(
       (f, i) =>
-        `${i + 1}. ${f.name} — ${f.durationWeeks} sem` +
+        `${i + 1}. ${f.name} [${f.id}] — ${f.durationWeeks} sem` +
         `${f.activityType ? ` · ${f.activityType.toLowerCase()}` : ""}` +
         ` · ${f.tasks.length} tarea${f.tasks.length === 1 ? "" : "s"}` +
         `\n   ${repartoDe(f)}`,
@@ -130,7 +136,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   const texto = [
     `PROYECTO: ${timeline.project.name} — cliente ${timeline.project.client.name}`,
     "",
-    "FORMA DEL CRONOGRAMA HOY. `semanas [a · b · c]` = cuántas tareas caen en cada semana de esa",
+    "FORMA DEL CRONOGRAMA HOY. Entre corchetes va el ID de la fase — úsalo para referirte a ella.",
+    "`semanas [a · b · c]` = cuántas tareas caen en cada semana de esa",
     "fase, en orden. Los TÍTULOS de las tareas no están acá a propósito: los lee el modificador",
     "cuando le toque ejecutar la instrucción.",
     fases || "(sin fases)",

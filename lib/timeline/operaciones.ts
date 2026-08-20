@@ -373,3 +373,89 @@ export function aplicarOperaciones(
     rechazadas,
   };
 }
+
+/**
+ * ⭐ LAS OPERACIONES, EN CASTELLANO — Y ES LO QUE VUELVE HERMÉTICA A LA CAJITA AZUL.
+ *
+ * Idea de Elías (2026-08-20): *«el usuario habla y consensúa cuáles son los cambios
+ * específicamente; eso es lo que se pone en la cajita azul, y una vez que lo pudo leer ahí,
+ * debería aplicarse muy rápido»*.
+ *
+ * ⛔ El vocabulario es una lista CERRADA, así que existe el riesgo de que un pedido que no entra
+ * caiga en la operación más parecida. Lo que disuelve ese riesgo es que la persona LEA lo que se
+ * va a ejecutar — pero solo si lo que lee sale de las OPERACIONES y no de la prosa del modelo.
+ *
+ * Hasta hoy la cajita mostraba un `resumen` que el modelo escribía APARTE de la instrucción: dos
+ * textos que pueden divergir. Con esta traducción, **lo que se lee ES lo que se ejecuta**, porque
+ * sale del mismo objeto. Y es determinista: no es otra oportunidad de que el modelo se equivoque.
+ *
+ * Ejemplo del caso que destapó el riesgo («sacá la semana vacía del MEDIO», que no tiene
+ * operación propia y sale como un acortamiento):
+ *
+ *   1. «Marketing Hub» pasa de 4 a 3 semanas
+ *
+ * Y ahí el CSE ve que no es lo que pidió, antes de que pase nada.
+ */
+export function describirOperaciones(
+  actuales: readonly FaseActual[],
+  operaciones: readonly Operacion[],
+): string[] {
+  const fase = (id: string) => actuales.find((f) => f.id === id);
+  const nombre = (id: string) => fase(id)?.name ?? "(una fase que ya no está)";
+  const tarea = (id: string) => {
+    for (const f of actuales) {
+      const t = f.tasks.find((x) => x.id === id);
+      if (t) return { titulo: t.title, fase: f.name };
+    }
+    return null;
+  };
+  const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
+
+  return operaciones.map((o) => {
+    switch (o.op) {
+      case "fase.duracion": {
+        const antes = fase(o.phaseId)?.durationWeeks;
+        return antes === undefined
+          ? `«${nombre(o.phaseId)}» pasa a ${sem(o.semanas)}`
+          : `«${nombre(o.phaseId)}» pasa de ${antes} a ${sem(o.semanas)}`;
+      }
+      case "fase.renombrar":
+        return `«${nombre(o.phaseId)}» pasa a llamarse «${o.nombre}»`;
+      case "fase.borrar": {
+        const f = fase(o.phaseId);
+        const n = f?.tasks.length ?? 0;
+        return n > 0
+          ? `Se elimina «${nombre(o.phaseId)}», con sus ${n} ${n === 1 ? "tarea" : "tareas"}`
+          : `Se elimina «${nombre(o.phaseId)}»`;
+      }
+      case "fase.redistribuir":
+        return `Las tareas de «${nombre(o.phaseId)}» se reparten parejo entre sus semanas`;
+      case "fase.mover":
+        return `«${nombre(o.phaseId)}» se mueve al lugar ${o.posicion + 1}`;
+      case "fase.arranque-relativo":
+        return o.semana === null
+          ? `«${nombre(o.phaseId)}» arranca cuando termina la anterior`
+          : `«${nombre(o.phaseId)}» arranca en la semana ${o.semana + 1} del proyecto`;
+      case "tarea.mover-semana": {
+        const t = tarea(o.taskId);
+        return `«${t?.titulo ?? o.taskId}» se mueve a la semana ${o.semana + 1} de su fase`;
+      }
+      case "tarea.mover-fase": {
+        const t = tarea(o.taskId);
+        /* ⚠ Se dice la consecuencia, no solo el acto: mudar una tarea la RECREA. */
+        return (
+          `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}» ` +
+          `— se recrea ahí, así que pierde su estado`
+        );
+      }
+      case "tarea.borrar": {
+        const t = tarea(o.taskId);
+        return `Se elimina «${t?.titulo ?? o.taskId}» de «${t?.fase ?? "?"}»`;
+      }
+      case "arranque":
+        return `El proyecto pasa a arrancar el ${o.fecha}`;
+      default:
+        return `Operación desconocida: ${(o as { op: string }).op}`;
+    }
+  });
+}

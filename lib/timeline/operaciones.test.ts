@@ -12,7 +12,7 @@
  * literalmente ese caso.
  */
 import { describe, it, expect } from "vitest";
-import { aplicarOperaciones, type Operacion } from "./operaciones";
+import { aplicarOperaciones, describirOperaciones, type Operacion } from "./operaciones";
 import { validateTimelinePayload } from "./validate";
 import type { FaseActual } from "./assist-items";
 
@@ -199,5 +199,56 @@ describe("el resultado es aplicable tal cual por el PUT", () => {
     expect(rechazadas).toEqual([]);
     expect(payload.phases.every((p) => p.tasks === undefined)).toBe(true);
     expect(payload.phases.map((p) => p.startWeek)).toEqual([null, null, 2, 9]);
+  });
+});
+
+describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
+  /* La cajita azul se renderiza desde las OPERACIONES, no desde la prosa del modelo. Es lo que
+     disuelve el riesgo del vocabulario cerrado: si la operación no es la que el CSE quería, lo ve
+     ANTES de que pase nada. Idea de Elías el 2026-08-20. */
+
+  it("acortar se lee con las dos duraciones, no solo la nueva", () => {
+    /* «pasa a 3 semanas» no deja evaluar nada; «pasa de 4 a 3» sí. */
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "fase.duracion", phaseId: "f2", semanas: 3 },
+    ]);
+    expect(linea).toBe("«Sales Hub» pasa de 4 a 3 semanas");
+  });
+
+  it("⛔ borrar dice CUÁNTAS tareas se lleva puestas", () => {
+    /* Sin ese número, «se elimina la fase» se lee como si estuviera vacía. */
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "fase.borrar", phaseId: "f2" },
+    ]);
+    expect(linea).toContain("2 tareas");
+  });
+
+  it("⚠ mudar una tarea dice la CONSECUENCIA, no solo el acto", () => {
+    /* El cronograma no sabe mudar: la recrea, y con eso pierde su estado. Callarlo sería
+       prometer algo que el sistema no hace. */
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "tarea.mover-fase", taskId: "t3", phaseId: "f4" },
+    ]);
+    expect(linea).toContain("pierde su estado");
+  });
+
+  it("y las semanas se cuentan desde 1, como en la pantalla", () => {
+    /* `weekIndex` es 0-indexed adentro; nadie habla así. */
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "tarea.mover-semana", taskId: "t3", semana: 0 },
+    ]);
+    expect(linea).toContain("semana 1");
+  });
+
+  it("⛔ hay una línea por operación: ninguna se aplica sin decirse", () => {
+    /* La edición que la pone en rojo: filtrar las «obvias» para que la cajita se vea más corta.
+       Una operación que se ejecuta sin figurar es exactamente lo que la cajita existe para
+       impedir. */
+    const ops: Operacion[] = [
+      { op: "fase.duracion", phaseId: "f2", semanas: 2 },
+      { op: "fase.redistribuir", phaseId: "f2" },
+      { op: "fase.borrar", phaseId: "f4" },
+    ];
+    expect(describirOperaciones(cronograma(), ops)).toHaveLength(ops.length);
   });
 });
