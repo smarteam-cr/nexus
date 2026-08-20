@@ -24,6 +24,7 @@ import { prisma } from "@/lib/db/prisma";
 import { resolverApply } from "./lib/guard";
 import { contextoDeCronograma, contextoDeDocumento, TECHO_DEL_PREFIJO_CHARS } from "@/lib/asistente/contexto";
 import { abrirHilo, agregarTurno, leerHilo, huellaDeContexto, hiloVivo } from "@/lib/asistente/hilo";
+import { correrTurno } from "@/lib/asistente/turno";
 
 const CORREO_DE_PRUEBA = "probar-asistente@smarteamcr.com";
 
@@ -170,6 +171,33 @@ async function main() {
       ? "  ✅ Pedirlo con otro modelo abrió un hilo NUEVO (la caché de prefijo no se invalida)"
       : "  ❌ Reusó el hilo con otro modelo: la caché de prompt se invalida en silencio",
   );
+
+  /* ── 5 · LA CONVERSACIÓN DE VERDAD ────────────────────────────────────────────────────────
+     Lo único que prueba que el turno FUNCIONA: una llamada real al modelo, con el contexto real,
+     mirando si la herramienta del acuerdo dispara cuando corresponde. Cuesta ~1 centavo y es la
+     diferencia entre «compila» y «anda». Va detrás de su propio flag porque gasta modelo. */
+  if (process.argv.includes("--conversar")) {
+    console.log("\n=== 5 · UNA CONVERSACIÓN DE VERDAD (gasta modelo) ===");
+    const h = await abrirHilo(pedido);
+
+    const preguntas = [
+      "¿Qué pasa si alargo la fase de Integraciones dos semanas?",
+      "Dale, hacelo.",
+    ];
+    let vivo = h;
+    for (const q of preguntas) {
+      console.log(`\n  CSE ▸ ${q}`);
+      const r = await correrTurno(vivo, q);
+      console.log(r.respuesta.split("\n").map((l) => "  IA  │ " + l).join("\n"));
+      if (r.acuerdo) {
+        console.log("\n  ⭐ LA HERRAMIENTA DISPARÓ — hay acuerdo:");
+        console.log(`     resumen:     ${r.acuerdo.resumen}`);
+        console.log(`     instrucción: ${r.acuerdo.instruccion}`);
+      }
+      vivo = (await leerHilo(h.id, projectId))!;
+    }
+    console.log(`\n  El hilo quedó con ${vivo.turnos.length} turnos guardados.`);
+  }
 
   console.log("\n  Limpiando los hilos de prueba…");
   const borrados = await prisma.hiloDeChat.deleteMany({

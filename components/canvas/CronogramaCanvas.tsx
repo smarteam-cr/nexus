@@ -37,6 +37,7 @@ import {
   endShiftFragment,
 } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
+import ChatDelAsistente from "@/components/asistente/ChatDelAsistente";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -381,6 +382,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [suggestingReason, setSuggestingReason] = useState(false); // fetch de la razón sugerida
   const [publishReasonText, setPublishReasonText] = useState("");
   // ── Asistente IA ──
+  /* El asistente que CONVERSA antes de generar. Vive acá y no en el panel del proyecto porque
+     el «Aplicar» del acuerdo tiene que entrar por `submitAssist` — el mismo camino que «Pedir
+     cambio con IA», con su vista previa y su aceptación por ítem. Un segundo camino de escritura
+     no sería interfaz duplicada: sería lógica de pérdida de datos duplicada. */
+  const [chatAbierto, setChatAbierto] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
@@ -2197,6 +2203,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           El estado "Publicado" / Ocultar / Publicar vive SOLO en el pop-up de acceso. */}
       {headerSlot && createPortal(
         <>
+          {/* Conversar el cambio ANTES de generarlo. Solo con cronograma armado: un asistente
+              sobre un documento vacío no tiene qué modificar. */}
+          {canEdit && phases.length > 0 && (
+            <button
+              onClick={() => setChatAbierto((v) => !v)}
+              className={
+                chatAbierto
+                  ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
+                  : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
+              }
+              title="Conversá el cambio con el asistente: te dice qué se puede y qué fecha mueve antes de generarlo"
+            >
+              💬 Asistente
+            </button>
+          )}
           {generating && (
             <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
               <span className="w-3 h-3 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
@@ -3147,9 +3168,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
+      {/* ⭐ El acuerdo entra por `submitAssist` — el MISMO camino que «Pedir cambio con IA»,
+          con su vista previa en el Gantt y su aceptación por ítem. El chat acuerda; escribir
+          sigue siendo del editor, con su permiso. */}
+      <ChatDelAsistente
+        projectId={projectId}
+        pieza="timeline"
+        piezaLabel="Cronograma"
+        abierto={chatAbierto}
+        onClose={() => setChatAbierto(false)}
+        onAplicar={async (instruccion) => {
+          await submitAssist(instruccion, null);
+          setChatAbierto(false);
+        }}
+      />
     </div>
   );
 }
+
 
 
 /**

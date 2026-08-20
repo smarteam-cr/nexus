@@ -25,6 +25,8 @@ import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
+import ChatDelAsistente from "@/components/asistente/ChatDelAsistente";
+import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
 import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
@@ -193,6 +195,12 @@ export default function ProjectCanvasPanel({
      disparar dos veces. Era exclusivo del Cronograma; dejarlo así obligó a Desarrollo a
      armarse una segunda barra debajo del nombre, que es el defecto que esto corrige. */
   const [canvasHeaderSlot, setCanvasHeaderSlot] = useState<HTMLDivElement | null>(null);
+
+  /* El asistente que conversa, para los DOCUMENTOS. ⚠ El cronograma monta el suyo adentro de
+     CronogramaCanvas, porque su «Aplicar» tiene que entrar por `submitAssist` — el mismo camino
+     que «Pedir cambio con IA», con su vista previa. Acá todavía no hay `onAplicar`: el panel
+     muestra la instrucción para copiarla, y enchufarla es la etapa 3 del roadmap. */
+  const [chatAbierto, setChatAbierto] = useState(false);
 
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? canvases[0] ?? null;
   // El render se ramifica por NOMBRE, no por isDefault (Handoff es el "home" pero
@@ -718,6 +726,23 @@ export default function ProjectCanvasPanel({
                 desde el 2026-08-02 y su única entrada era acordarse del ítem del sidebar — para
                 un equipo que la abre pocas veces al mes, eso es no tenerla. Va acá porque es
                 donde alguien se pregunta "¿y esto para qué era?", con el slug ya resuelto. */}
+            {/* Conversar el cambio antes de generarlo. El cronograma tiene el suyo propio (con
+                «Aplicar» cableado), así que acá se ofrece para el resto de los documentos. */}
+            {!isResumenCanvas &&
+              activeSlug !== PIEZA_CRONOGRAMA &&
+              puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? "")) && (
+                <button
+                  onClick={() => setChatAbierto((v) => !v)}
+                  className={
+                    chatAbierto
+                      ? "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
+                      : "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
+                  }
+                  title="Conversá el cambio con el asistente antes de generarlo"
+                >
+                  💬 Asistente
+                </button>
+              )}
             {!isResumenCanvas && activeSlug && pieceBySlug(activeSlug) && (
               <a
                 href={`/documentacion#doc-${activeSlug}`}
@@ -1070,9 +1095,23 @@ export default function ProjectCanvasPanel({
         />
       )}
       </>)}
+
+      {/* El asistente de los DOCUMENTOS. Sin `onAplicar` todavía: muestra la instrucción
+          acordada para copiarla al «Pedir cambio con IA» del documento. Cablearla es la
+          etapa 3 — y va a entrar por el editor de la pieza, nunca por una escritura propia. */}
+      {activeSlug && activeSlug !== PIEZA_CRONOGRAMA && (
+        <ChatDelAsistente
+          projectId={projectId}
+          pieza={activeSlug}
+          piezaLabel={pieceLabel(activeSlug)}
+          abierto={chatAbierto}
+          onClose={() => setChatAbierto(false)}
+        />
+      )}
     </div>
     </PrintStagingProvider>
   );
+
 }
 
 // ── Card item ────────────────────────────────────────────────────────────────
