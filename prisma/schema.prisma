@@ -464,6 +464,7 @@ model Project {
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
   timeline            ProjectTimeline?
+  hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
   handoffSources      HandoffSource[]
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
@@ -4054,4 +4055,80 @@ model RoleProfileShare {
   // El @@unique lidera por roleId: NO sirve para el filtro por PERSONA (la lista visible y
   // el "¿tengo algo compartido?" del sidebar), que es el camino caliente.
   @@index([teamMemberId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL ASISTENTE QUE CONVERSA — un hilo por proyecto y documento.
+//
+// El CSE habla con el asistente ANTES de pedir un cambio: pregunta qué se puede, el
+// asistente le dice qué cuesta cada cosa, y recién con el acuerdo se emite la instrucción
+// que va al modificador de siempre. ⛔ EL CHAT NO ESCRIBE EL DOCUMENTO: aplicar pasa por el
+// editor, con su vista previa y su aceptación por ítem. El permiso vive en el botón.
+//
+// ⚠ EL CONTEXTO NO SE GUARDA. Se re-arma en cada turno a propósito: guardarlo son cientos de
+// KB por día que nadie lee, y miente en cuanto el CSE confirma un bloque del handoff o toca
+// una fase. Lo que sí se guarda es la HUELLA del prefijo (`shaDeContexto`), para saber si
+// cambió entre dos turnos sin tener que conservarlo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Quién habló en un turno. Sin variante de sistema: los avisos de la interfaz no son mensajes.
+enum RolDeMensaje {
+  CSE
+  ASISTENTE
+}
+
+model HiloDeChat {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Sobre QUÉ documento se conversa — el slug de la pieza (`lib/pieces/registry.ts`).
+  /// Un hilo por proyecto y documento: hablar del cronograma y del kickoff son dos
+  /// conversaciones, y mezclarlas haría que el asistente arrastre contexto ajeno.
+  pieza String
+
+  /// ⚠ NOT NULL a propósito: el chat NO tiene variante de sistema. Nullable inventaría un
+  /// estado que no existe y obligaría a todos los lectores a manejar un caso imposible.
+  usuarioEmail String
+
+  /// ⛔ FIJO POR HILO. El modelo es parte de la clave de la caché de prompt: cambiarlo a
+  /// mitad de una conversación invalida la caché entera y se paga el prefijo de nuevo, sin
+  /// error y sin log. Un hilo nuevo es la forma de cambiar de modelo.
+  modelo String
+
+  /// El último `AgentRun` que este hilo produjo, cuando el CSE aceptó una propuesta. Nullable
+  /// porque la mayoría de los hilos conversan y no aplican nada — y ese es el denominador de
+  /// la única métrica que importa acá: cuántas conversaciones terminan en un cambio.
+  ultimoRunId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mensajes MensajeDeChat[]
+
+  /// El camino caliente es «el hilo abierto de ESTE documento para ESTA persona».
+  @@index([projectId, pieza, usuarioEmail])
+}
+
+model MensajeDeChat {
+  id     String     @id @default(cuid())
+  hiloId String
+  hilo   HiloDeChat @relation(fields: [hiloId], references: [id], onDelete: Cascade)
+
+  rol       RolDeMensaje
+  contenido String       @db.Text
+
+  /// Huella del prefijo de contexto con el que se produjo este turno. Si cambia entre dos
+  /// turnos, el asistente estuvo mirando cosas distintas — y eso explica una respuesta que
+  /// de otro modo se lee como incoherente. Solo en los turnos del asistente.
+  shaDeContexto String?
+
+  /// La llamada al modelo que produjo este turno, para cruzar con el medidor de gasto
+  /// (`LlmCall`). Nullable: los turnos del CSE no cuestan nada.
+  llmCallId String?
+
+  createdAt DateTime @default(now())
+
+  /// El orden de los turnos es estricto y se lee siempre completo, del más viejo al más nuevo.
+  @@index([hiloId, createdAt])
 }

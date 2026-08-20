@@ -116,6 +116,22 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    // EL ASISTENTE QUE CONVERSA (2026-08-19). Es una superficie NUEVA: el CSE le pide un
+    // cambio hablando y el asistente responde qué se puede, qué cuesta y qué fecha mueve.
+    //
+    // ⛔ `aplicar` nace declarada y NO enforced a propósito, para no hacer DOS migraciones de
+    // permisos: hoy el chat no aplica nada (emite una instrucción que el editor de siempre
+    // ejecuta con su propia celda). Cuando el botón de aplicar exista, esta celda se flipea y
+    // ⛔ se chequea JUNTO con la del documento (`cronograma.write` / la de la pieza): el chat
+    // nunca puede otorgar más de lo que la persona ya tenía parada en el canvas.
+    key: "asistente",
+    label: "Asistente (chat sobre un documento)",
+    actions: [
+      { key: "read", label: "Conversar con el asistente", enforced: true },
+      { key: "aplicar", label: "Aplicar lo acordado en el chat", enforced: false },
+    ],
+  },
+  {
     // El PROYECTO como contenedor, no su contenido. Las celdas por pieza (kickoff,
     // desarrollo, exploración…) gobiernan generar y regenerar con IA; ninguna cubría
     // borrar el canvas entero, que hasta 2026-07-24 solo pedía acceso al cliente.

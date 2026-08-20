@@ -60,6 +60,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "generate"],
+    asistente: ["read"],
     /* PRIMERA celda de `proyectos` que toca el CSE, y es deliberado: mantener al día el estado y
        la etapa en HubSpot es su trabajo, no del liderazgo. Si exigiera CSL, el tablero seguiría
        viejo — que es el problema que esto viene a resolver. No le abre `create`, `deleteCanvas`
@@ -91,6 +92,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
+    asistente: ["read"],
     // Dar de alta un proyecto (Tanda C). Ventas ya lo hacía: el único botón de alta
     // vivía adentro del asistente de handoff, que exige `handoff.create`. La celda
     // propia no le amplía nada — le pone nombre a lo que ya podía.
@@ -124,6 +126,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // que ya se pidió y vive en la semilla, no en el default— el canal de sugerencias
     // tiene que sobrevivir. Es la razón de ser de la celda.
     cronograma: ["write", "delete", "generate", "suggest"],
+    asistente: ["read"],
     // Igual que Ventas: DEV ya daba de alta por el asistente de handoff. Además es
     // el rol que arranca los proyectos de Desarrollo y de Sitios web, que con la
     // arquitectura multi-pipeline son altas de pleno derecho, no anexos de una
@@ -151,6 +154,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate", "regenerate"],
+    asistente: ["read"],
     // `deleteCanvas`: único rol operativo (fuera de SUPER_ADMIN) que puede borrar un
     // canvas entero. Misma doctrina que `cronograma.delete`: el CSE suspende, el líder borra.
     //
@@ -186,6 +190,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
     cronograma: ["write", "delete", "generate"],
+    asistente: ["read"],
     marketing: ["read", "write"],
     conocimientos: ["write"],
     agentes: ["read"],
