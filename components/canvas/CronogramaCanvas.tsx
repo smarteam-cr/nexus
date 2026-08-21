@@ -55,6 +55,7 @@ import {
   type ItemDeAssist,
 } from "@/lib/timeline/assist-items";
 import { agruparItems, resumenDeConsecuencias } from "@/lib/timeline/agrupar-items";
+import { aplicarOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 import { AcceptButton, RejectButton } from "@/components/ui/AcceptReject";
 import { cn } from "@/lib/cn";
 import PublishBar from "./PublishBar";
@@ -1433,6 +1434,67 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
   // Aplicar la propuesta de la IA: PUT directo (sin modal). La razón del audit es la
   // instrucción que el CSE le dio a la IA (o un genérico). El cliente NO la ve hasta "Subir".
+  /**
+   * ⭐ EL CAMINO RÁPIDO: las operaciones acordadas en el chat se ejecutan acá, sin volver a
+   * llamar a ningún modelo.
+   *
+   * Medido el 2026-08-20: pedirle al modelo que reescribiera el cronograma entero tardaba
+   * **217 segundos**; el ejecutor tarda **1 ms**. Y no es solo velocidad — reescribir todo para
+   * cambiar una duración soltó el `startWeek` de seis fases y corrió el cierre 70 días. Una
+   * operación toca lo que nombra.
+   *
+   * ⛔ NO ES UN SEGUNDO CAMINO DE ESCRITURA: produce el payload y lo manda al MISMO PUT, con su
+   * rescate de progreso, su reparación de semanas y su auditoría.
+   */
+  const aplicarOperacionesAcordadas = async (
+    ops: Operacion[],
+    resumen: string,
+  ): Promise<{ fallo: string | null; avisos: string[] }> => {
+    const { payload, avisos, rechazadas } = aplicarOperaciones(
+      fasesActualesDelAssist,
+      anchor || null,
+      ops,
+    );
+    /* ⛔ Una operación rechazada NO se ignora: el CSE ya leyó y aprobó esa línea, así que
+       aplicar el resto en silencio sería aplicar algo distinto de lo que confirmó. */
+    if (rechazadas.length > 0) {
+      const motivo = rechazadas.map((r) => r.motivo).join(" · ");
+      setError(`No se pudo aplicar: ${motivo}`);
+      return { fallo: motivo, avisos };
+    }
+    setApplying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          reason: resumen || "Cambio acordado en el asistente",
+          kind: "AI_ASSIST",
+          instruction: resumen || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const motivo = data?.details?.[0] ?? data?.error ?? "el cronograma rechazó el cambio";
+        setError(motivo);
+        return { fallo: motivo, avisos };
+      }
+      /* Los avisos del PUT (tareas reubicadas) se suman a los del ejecutor: los dos son «el
+         sistema hizo algo además de lo pedido». */
+      const delPut: string[] = Array.isArray(data?.avisos) ? data.avisos : [];
+      await load();
+      return { fallo: null, avisos: [...avisos, ...delPut] };
+    } catch {
+      const motivo = "Error de conexión al aplicar el cambio.";
+      setError(motivo);
+      return { fallo: motivo, avisos };
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const applyProposal = async () => {
     if (!proposal) return;
     setApplying(true);
@@ -3287,9 +3349,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         piezaLabel="Cronograma"
         abierto={chatAbierto}
         onClose={() => setChatAbierto(false)}
-        /* ⚠ Devuelve el motivo del fallo: el panel lo necesita para NO cerrarse y para dejar el
-           desenlace escrito en el hilo. Cerrarlo acá a ciegas fue el bug de la primera prueba. */
-        onAplicar={(instruccion) => submitAssist(instruccion, null)}
+        /* ⭐ DOS CARRILES. Con operaciones se ejecuta acá mismo, en milisegundos. Sin ellas —un
+           acuerdo viejo, guardado como instrucción de texto— cae al modificador de siempre, que
+           tarda minutos. El carril lento no se retira: hace falta cuando hay que ESCRIBIR texto
+           nuevo, que ninguna operación puede hacer. */
+        onAplicar={(acuerdo) =>
+          Array.isArray(acuerdo.operaciones) && acuerdo.operaciones.length > 0
+            ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)
+            : submitAssist(acuerdo.instruccion ?? "", null)
+        }
       />
     </div>
   );

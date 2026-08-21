@@ -38,7 +38,15 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 
 export interface AcuerdoDelChat {
   resumen: string;
-  instruccion: string;
+  /** Las operaciones a ejecutar. El camino rápido: milisegundos, sin volver a llamar al modelo. */
+  operaciones?: unknown[];
+  /**
+   * ⭐ Las operaciones traducidas a castellano, calculadas EN EL SERVIDOR. Es lo que la persona
+   * lee antes de aplicar — y sale del MISMO objeto que se ejecuta, así que no puede divergir.
+   */
+  lineas?: string[];
+  /** ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto. */
+  instruccion?: string;
 }
 
 interface TurnoVista {
@@ -79,7 +87,7 @@ interface Props {
    * permiso. ⚠ Devuelve el MOTIVO del fallo o `null` si anduvo — sin eso el panel no puede
    * distinguir «se aplicó» de «falló», que es justo el bug que se arregló.
    */
-  onAplicar?: (instruccion: string) => Promise<ResultadoDeAplicar>;
+  onAplicar?: (acuerdo: AcuerdoDelChat) => Promise<ResultadoDeAplicar>;
 }
 
 export default function ChatDelAsistente({
@@ -204,12 +212,12 @@ export default function ChatDelAsistente({
     if (j.hilo?.turnos) setTurnos(j.hilo.turnos);
   }
 
-  async function aplicar(instruccion: string) {
+  async function aplicar(acuerdo: AcuerdoDelChat) {
     if (!onAplicar || aplicando) return;
     setAplicando(true);
     setError(null);
     try {
-      const { fallo, avisos } = await onAplicar(instruccion);
+      const { fallo, avisos } = await onAplicar(acuerdo);
       if (fallo) {
         /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
            aparecía suelto al pie del documento, con el cajón ya cerrado. */
@@ -298,36 +306,58 @@ export default function ChatDelAsistente({
                 <p className="text-xs font-semibold text-info-ink">Lo que se acordó</p>
                 <p className="text-sm text-fg mt-1">{t.acuerdo.resumen}</p>
 
-                {/* La instrucción es auditable, no protagonista: plegada por defecto. */}
-                <details className="mt-2 group">
-                  <summary className="cursor-pointer text-xs text-brand-light hover:text-brand list-none select-none">
-                    <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
-                    Ver instrucción
-                  </summary>
-                  <textarea
-                    value={instruccionEditada[t.id] ?? t.acuerdo.instruccion}
-                    onChange={(e) =>
-                      setInstruccionEditada((m) => ({ ...m, [t.id]: e.target.value }))
-                    }
-                    rows={5}
-                    className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg resize-y"
-                  />
-                  <p className="mt-1 text-[11px] text-fg-muted">
-                    Podés editarla: es lo que se va a ejecutar tal cual.
-                  </p>
-                </details>
+                {/* ⭐ LO QUE SE LEE ES LO QUE SE EJECUTA. Cada renglón es UNA operación, traducida
+                    en el servidor desde el mismo objeto que se va a aplicar. Antes acá había una
+                    instrucción en prosa que el modelo escribía APARTE, y podía decir una cosa
+                    mientras la instrucción hacía otra. */}
+                {t.acuerdo.lineas && t.acuerdo.lineas.length > 0 ? (
+                  <ol className="mt-2 space-y-1 list-decimal pl-4 text-sm text-fg marker:text-fg-muted">
+                    {t.acuerdo.lineas.map((linea, i) => (
+                      <li key={i} className="leading-relaxed">
+                        {linea}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  /* ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto,
+                     que un segundo modelo releía. Se siguen pintando para no perder su historia. */
+                  <details className="mt-2 group">
+                    <summary className="cursor-pointer text-xs text-brand-light hover:text-brand list-none select-none">
+                      <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
+                      Ver instrucción
+                    </summary>
+                    <textarea
+                      value={instruccionEditada[t.id] ?? t.acuerdo.instruccion ?? ""}
+                      onChange={(e) =>
+                        setInstruccionEditada((m) => ({ ...m, [t.id]: e.target.value }))
+                      }
+                      rows={5}
+                      className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg resize-y"
+                    />
+                    <p className="mt-1 text-[11px] text-fg-muted">
+                      Podés editarla: es lo que se va a ejecutar tal cual.
+                    </p>
+                  </details>
+                )}
 
                 {t.id !== idDelAcuerdoVivo ? null : onAplicar ? (
                   <button
                     onClick={() =>
-                      void aplicar(instruccionEditada[t.id] ?? t.acuerdo!.instruccion)
+                      void aplicar({
+                        ...t.acuerdo!,
+                        ...(instruccionEditada[t.id] !== undefined
+                          ? { instruccion: instruccionEditada[t.id] }
+                          : {}),
+                      })
                     }
                     disabled={aplicando}
                     className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
                   >
                     {aplicando
-                      ? "Aplicando… puede tardar unos minutos"
-                      : "Aplicar — vas a poder revisarlo antes de guardar"}
+                      ? "Aplicando…"
+                      : t.acuerdo.operaciones
+                        ? "Aplicar al cronograma"
+                        : "Aplicar — vas a poder revisarlo antes de guardar"}
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">

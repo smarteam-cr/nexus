@@ -29,6 +29,7 @@ import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
 import { contextoDeCronograma, contextoDeDocumento } from "./contexto";
+import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 
 /** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
 export const SLUG_DEL_ASISTENTE = "asistente-chat";
@@ -125,26 +126,53 @@ entonces la pregunta ofrece las lecturas como opciones — no como un "¿seguimo
 Si la persona pide otra cosa después, propones de nuevo: cada propuesta reemplaza a la anterior.
 
 CÓMO SE EMITE LA PROPUESTA
-Llamas a la herramienta \`registrar_cambio_acordado\` UNA vez, con:
-1. \`resumen\`: qué se acordó, en una o dos frases, para que la persona lo lea y confirme.
-2. \`instruccion\`: el pedido para el editor, en imperativo y autocontenido (el editor NO ve esta
-   conversación). Nombra las fases y tareas como se llaman hoy.
+Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y las
+OPERACIONES a ejecutar. Se aplican en milisegundos, así que no describas el cambio: nómbralo.
 
-⚠ La \`instruccion\` la ejecuta un agente que escribe DE CARA AL CLIENTE: no le metas jerga interna
-ni nombres del equipo de Smarteam.
+Las fases se referencian por su ID, el que va entre corchetes en el contexto. ⛔ Nunca por nombre:
+hay proyectos con fases casi homónimas y elegir la parecida sería adivinar.
 
-⚠ Si la instrucción mueve tareas a una fase MÁS CORTA, dile explícitamente al editor que reparta
-las tareas dentro de las semanas disponibles de esa fase — es el error más común al fusionar.
+⛔ EL VOCABULARIO ES UNA LISTA CERRADA, Y ES LA REGLA QUE MÁS CUIDADO PIDE.
+Si lo que te piden NO se puede expresar con esas operaciones, **no llames la herramienta**: dilo
+y ofrece lo más cercano que sí se pueda, para que la persona elija.
 
-Solo NO llamas la herramienta cuando de verdad hiciste una pregunta de desambiguación.`;
+Ejemplo real: «saca la semana vacía DEL MEDIO de Marketing Hub». No existe «borrar la semana 3».
+Lo más cercano es acortar la fase, que saca la ÚLTIMA y corre las tareas. Suena igual y hace otra
+cosa. Lo correcto es decir: «no puedo sacar una del medio; puedo acortarla a 3 semanas y las 2
+tareas de la semana 4 pasan a la 3 — ¿lo hago así?».
+
+⭐ DOBLE CONFIRMACIÓN CUANDO SE BORRA TRABAJO DE ALGUIEN
+Antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas HECHAS, dilo con el
+número y pide confirmación explícita — «esa fase tiene 4 tareas hechas, ¿la borro igual?». Solo
+con el sí emites la operación.
+
+⚠ Es la ÚNICA excepción a «propón en el primer turno», y por eso se aguanta: no se pregunta por
+rutina, se pregunta cuando está en juego trabajo que alguien hizo.
+
+Solo NO llamas la herramienta cuando hiciste una pregunta de desambiguación, cuando el pedido no
+entra en el vocabulario, o cuando estás pidiendo esa confirmación.`;
 }
 
+/**
+ * ── LA HERRAMIENTA EMITE OPERACIONES, NO UN TEXTO ────────────────────────────────────────────
+ * Medido el 2026-08-20: el camino viejo —una instrucción en castellano que un SEGUNDO modelo
+ * releía para reescribir el cronograma entero— tardaba **217 segundos**. Las operaciones se
+ * ejecutan en **1 ms**, porque no hay segunda llamada: el chat ya entendió la intención, y
+ * expresarla como parámetros en vez de como prosa es todo lo que hacía falta.
+ *
+ * ⛔ Y no es solo velocidad. Reescribir el documento entero para cambiar una duración soltó el
+ * `startWeek` de seis fases y corrió el cierre 70 días. Una operación toca lo que nombra.
+ *
+ * ⚠ ESTE TRAMO SOLO TRAE LAS OPERACIONES DE FASE. Las de tarea individual necesitan que el chat
+ * conozca los títulos y sus ids, y eso es un salto de contexto con su propio tramo. Con las de
+ * fase ya se cubren los tres pedidos reales que Elías probó: fusionar, acortar y sacar semanas
+ * vacías.
+ */
 const TOOL_ACUERDO: Anthropic.Messages.Tool = {
   name: "registrar_cambio_acordado",
   description:
-    "Registra el cambio que se acordó con el CSE. NO lo aplica: deja la instrucción lista para " +
-    "que una persona la revise, la edite si quiere, y la aplique con un botón. Llamala UNA sola " +
-    "vez, y solo cuando haya acuerdo explícito.",
+    "Registra el cambio acordado como OPERACIONES sobre el cronograma. NO lo aplica: la persona " +
+    "las lee traducidas a castellano y las aplica con un botón. Llámala UNA sola vez.",
   input_schema: {
     type: "object",
     properties: {
@@ -152,20 +180,75 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
         type: "string",
         description: "Qué se acordó, en una o dos frases, para que el CSE lo confirme de un vistazo.",
       },
-      instruccion: {
-        type: "string",
+      operaciones: {
+        type: "array",
         description:
-          "El pedido para el editor, en imperativo y AUTOCONTENIDO: el editor no ve la " +
-          "conversación. Nombrá fases y tareas como se llaman hoy.",
+          "Las operaciones a ejecutar, en orden. ⛔ Es un vocabulario CERRADO: si lo que te " +
+          "piden no se puede expresar con estas operaciones, NO llames esta herramienta — decilo " +
+          "y ofrecé lo más cercano que sí se pueda.",
+        items: {
+          type: "object",
+          properties: {
+            op: {
+              type: "string",
+              enum: [
+                "fase.duracion",
+                "fase.renombrar",
+                "fase.borrar",
+                "fase.redistribuir",
+                "fase.mover",
+                "fase.arranque-relativo",
+                "arranque",
+              ],
+              description:
+                "fase.duracion: cambia cuántas semanas dura (semanas). " +
+                "fase.renombrar: le cambia el nombre (nombre). " +
+                "fase.borrar: la elimina con sus tareas. " +
+                "fase.redistribuir: reparte sus tareas parejo entre sus semanas. " +
+                "fase.mover: la cambia de lugar en el orden (posicion, base 0). " +
+                "fase.arranque-relativo: en qué semana del proyecto arranca (semana, o null = " +
+                "cuando termina la anterior). " +
+                "arranque: cambia la fecha de inicio del proyecto (fecha AAAA-MM-DD).",
+            },
+            phaseId: {
+              type: "string",
+              description: "El ID de la fase, tal como aparece entre corchetes en el contexto.",
+            },
+            semanas: { type: "integer", description: "Para fase.duracion. Mínimo 1." },
+            nombre: { type: "string", description: "Para fase.renombrar." },
+            posicion: { type: "integer", description: "Para fase.mover. Base 0." },
+            semana: {
+              type: ["integer", "null"],
+              description: "Para fase.arranque-relativo. Base 0, o null para automático.",
+            },
+            fecha: { type: "string", description: "Para arranque. AAAA-MM-DD." },
+          },
+          required: ["op"],
+        },
       },
     },
-    required: ["resumen", "instruccion"],
+    required: ["resumen", "operaciones"],
   },
 };
 
 export interface CambioAcordado {
   resumen: string;
-  instruccion: string;
+  /** El camino rápido: se ejecutan en milisegundos, sin volver a llamar a un modelo. */
+  operaciones?: unknown[];
+  /**
+   * Las operaciones ya traducidas a castellano, calculadas EN EL SERVIDOR contra el cronograma
+   * tal como estaba al acordar.
+   *
+   * ⭐ Es lo que vuelve hermética la cajita: lo que la persona LEE sale del mismo objeto que se
+   * va a ejecutar, no de una prosa que el modelo escribe aparte y puede divergir.
+   */
+  lineas?: string[];
+  /**
+   * ⚠ LEGACY. Los hilos anteriores al 2026-08-20 guardaron una instrucción en castellano que un
+   * segundo modelo releía. Se conserva para que esas conversaciones sigan pintándose — no para
+   * emitirla de nuevo.
+   */
+  instruccion?: string;
 }
 
 export interface ResultadoDelTurno {
@@ -237,10 +320,24 @@ export async function correrTurno(
     if (b.type === "text") respuesta += b.text;
     if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
       const input = b.input as Partial<CambioAcordado>;
-      /* ⚠ Se acepta solo si trae las DOS cosas con contenido. Un acuerdo con la instrucción vacía
-         pintaría un botón «Aplicar» que no puede hacer nada. */
-      if (input?.resumen?.trim() && input?.instruccion?.trim()) {
-        acuerdo = { resumen: input.resumen.trim(), instruccion: input.instruccion.trim() };
+      /* ⚠ Se acepta solo si trae resumen Y al menos una operación. Un acuerdo vacío pintaría un
+         botón «Aplicar» que no puede hacer nada — peor que no ofrecerlo. */
+      const ops = Array.isArray(input?.operaciones) ? input.operaciones : [];
+      if (input?.resumen?.trim() && ops.length > 0) {
+        /* ⭐ LAS LÍNEAS SE CALCULAN ACÁ, EN EL SERVIDOR, contra el cronograma tal como está al
+           acordar. Es lo que vuelve hermética la cajita: lo que la persona lee sale del MISMO
+           objeto que se va a ejecutar, no de una prosa que el modelo escribe aparte. */
+        const paraTraducir = (ctx.fases ?? []).map((f) => ({
+          id: f.id,
+          name: f.name,
+          durationWeeks: f.durationWeeks,
+          tasks: Array.from({ length: f.tareas }, () => ({ id: "", title: "", weekIndex: 0 })),
+        }));
+        acuerdo = {
+          resumen: input.resumen.trim(),
+          operaciones: ops,
+          lineas: describirOperaciones(paraTraducir, ops as Operacion[]),
+        };
       }
     }
   }

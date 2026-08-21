@@ -42,6 +42,16 @@ export interface ContextoDelAsistente {
   texto: string;
   /** Para el aviso de fechas: qué cierre proyecta HOY el cronograma. null si no hay ancla. */
   cierreActual: string | null;
+  /**
+   * Las fases tal como estaban al armar el contexto — SOLO para traducir las operaciones
+   * acordadas a castellano (`describirOperaciones`).
+   *
+   * ⚠ NO es contexto del modelo: no entra al prefijo. Se devuelve acá porque la consulta que lo
+   * arma ya las trajo, y pedirlas de nuevo sería una segunda lectura de lo mismo.
+   */
+  fases?: { id: string; name: string; durationWeeks: number; tareas: number }[];
+  /** El arranque del proyecto, para el mismo uso. */
+  ancla?: string | null;
 }
 
 /**
@@ -153,7 +163,17 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     ADVERTENCIAS_DEL_CRONOGRAMA.map((a) => `- ${a.aviso}`).join("\n"),
   ].join("\n");
 
-  return { texto, cierreActual: cierre };
+  return {
+    texto,
+    cierreActual: cierre,
+    fases: timeline.phases.map((f) => ({
+      id: f.id,
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      tareas: f.tasks.length,
+    })),
+    ancla: timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : null,
+  };
 }
 
 /**

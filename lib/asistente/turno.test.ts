@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
 import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO } from "./turno";
+import { OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
 
 const FUENTE = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
 
@@ -43,17 +44,31 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
     ).toEqual(["TOOL_ACUERDO"]);
   });
 
-  it("⛔ y esa tool solo pide texto: nada que parezca un id para escribir", () => {
-    /* Una tool que recibiera `taskId`/`phaseId` ya no sería «registrar lo acordado»: sería la
-       primera mitad de un escritor. La edición que la pone en rojo: sumarle `phaseId` al schema. */
+  it("⛔ el `op` de la tool NO puede salirse del vocabulario del ejecutor", () => {
+    /* ⚠ ESTA GUARDA REEMPLAZA A OTRA QUE QUEDÓ OBSOLETA, y el cambio vale la pena explicarlo.
+
+       Antes decía «la tool no pide ids», usando «no hay ids» como PROXY de «la tool no escribe».
+       Con las operaciones ese proxy dejó de valer: la tool lleva `phaseId` justamente porque
+       nombrar la fase por id es lo que impide adivinar entre dos casi homónimas.
+
+       El invariante REAL no cambió —la tool no escribe, produce datos que un ejecutor
+       determinista valida— y ahora se puede afirmar mejor: cada `op` que el modelo puede emitir
+       tiene que EXISTIR en `OPERACIONES_VALIDAS`. Si el prompt inventa una que el ejecutor no
+       conoce, el chat acordaría algo que después se rechaza en silencio.
+
+       La edición que la pone en rojo: sumar un `op` al enum de la tool sin sumarlo al ejecutor. */
     const i = FUENTE.indexOf("const TOOL_ACUERDO");
-    const bloque = FUENTE.slice(i, FUENTE.indexOf("};", i));
-    for (const sospechoso of ["Id:", "ids:", "phaseId", "taskId", "canvasId", "sectionId"]) {
-      expect(
-        bloque.includes(sospechoso),
-        `la tool del acuerdo pide "${sospechoso}": eso ya no es registrar, es apuntar a qué escribir`,
-      ).toBe(false);
-    }
+    const bloque = FUENTE.slice(i, FUENTE.indexOf("required: [\"resumen\"", i));
+    const enumDeLaTool = [...bloque.matchAll(/"(fase\.[a-z-]+|tarea\.[a-z-]+|arranque)"/g)].map((m) => m[1]);
+    expect(enumDeLaTool.length, "el enum de operaciones desapareció de la tool").toBeGreaterThan(3);
+    const desconocidas = [...new Set(enumDeLaTool)].filter(
+      (o) => !(OPERACIONES_VALIDAS as readonly string[]).includes(o),
+    );
+    expect(
+      desconocidas,
+      "La tool ofrece operaciones que el ejecutor no conoce. El chat acordaría algo que después " +
+        "se rechaza — y el CSE ya lo habría leído y aprobado.",
+    ).toEqual([]);
   });
 
   it("y el prompt le prohíbe decir que aplicó algo", () => {
@@ -143,10 +158,25 @@ describe("la regla de las fechas está en el prompt", () => {
     expect(PROMPT).toContain("NO la estimes");
   });
 
-  it("⚠ y le avisa al editor cuando las tareas caen en una fase más corta", () => {
-    /* El error real del 2026-08-20: fusionar dos fases metió 12 tareas en una de 4 semanas y el
-       modelo dejó una en la semana 5. El editor rechazó el cambio ENTERO por ese entero. */
-    expect(PROMPT).toContain("MÁS CORTA");
+  it("⛔ y el prompt lleva la regla del VOCABULARIO CERRADO", () => {
+    /* ⚠ REEMPLAZA a una guarda que pedía avisarle al editor sobre las semanas: eso ahora lo
+       resuelve `normalizar()` en el ejecutor, determinista y sin depender de que el modelo se
+       acuerde.
+
+       Lo que SÍ depende del prompt es el riesgo nuevo: que un pedido fuera del vocabulario caiga
+       en la operación más parecida. Rápido, silencioso y equivocado. El ejemplo del prompt es el
+       real («sacar la semana del MEDIO», que no tiene operación y se parece a acortar).
+
+       La edición que la pone en rojo: borrar ese bloque del prompt. */
+    expect(PROMPT).toContain("VOCABULARIO ES UNA LISTA CERRADA");
+    expect(PROMPT, "se perdió el ejemplo que enseña a NO aproximar").toContain("DEL MEDIO");
+  });
+
+  it("⭐ y la doble confirmación antes de borrar trabajo hecho", () => {
+    /* Pedido de Elías: «el chat debería avisar, esa fase fue creada por un humano, ¿seguro que
+       querés borrarla?, con una confirmación doble. Pero no es que no debería poder borrarlas». */
+    expect(PROMPT).toContain("DOBLE CONFIRMACIÓN");
+    expect(PROMPT).toContain("fase.borrar");
   });
 });
 
