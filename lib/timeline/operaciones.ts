@@ -54,7 +54,7 @@ export type Operacion =
   | { op: "fase.redistribuir"; phaseId: string }
   | { op: "fase.mover"; phaseId: string; posicion: number }
   | { op: "fase.arranque-relativo"; phaseId: string; semana: number | null }
-  | { op: "fase.crear"; nombre: string; semanas: number; posicion?: number }
+  | { op: "fase.crear"; nombre: string; semanas: number; posicion?: number; ref?: string }
   | { op: "fase.quitar-semana"; phaseId: string; semana: number }
   | { op: "fase.insertar-semana"; phaseId: string; semana: number }
   | { op: "fase.tipo"; phaseId: string; tipo: TipoDeActividad }
@@ -487,10 +487,20 @@ export function aplicarOperaciones(
         }
         /* ⚠ SIN id: el PUT crea la fila (`timeline/route.ts:678`, rama else del diff). Se le pone
            un id interno que NUNCA sale al payload, para que `buscarFase` no pueda engancharla por
-           accidente — una fase sin identidad es un imán para operaciones que apuntaban a otra. */
+           accidente — una fase sin identidad es un imán para operaciones que apuntaban a otra.
+
+           ⭐ Y si el chat mandó un `ref`, ESE es el id interno: así puede crear la fase y meterle
+           tareas EN EL MISMO ACUERDO. Sin esto, el chat tenía que contestar «no puedo agregarle
+           las 3 tareas en el mismo paso, hagámoslo en dos movimientos» — que fue exactamente lo
+           que Elías vio y pidió arreglar (2026-08-21). Dos viajes para un pedido que es uno. */
+        const ref = operacion.ref?.trim();
+        if (ref && (buscarFase(ref) || fases.some((f) => f.idInterno === ref))) {
+          rechazar(operacion, `ya hay una fase con la referencia «${ref}» en este cambio`);
+          break;
+        }
         const nueva: FaseEnCurso = {
           id: undefined,
-          idInterno: `nueva:${fases.length}`,
+          idInterno: ref || `nueva:${fases.length}`,
           name: nombre,
           durationWeeks: operacion.semanas,
           startWeek: null,
@@ -748,7 +758,18 @@ export function describirOperaciones(
   operaciones: readonly Operacion[],
 ): string[] {
   const fase = (id: string) => actuales.find((f) => f.id === id);
-  const nombre = (id: string) => fase(id)?.name ?? "(una fase que ya no está)";
+  /**
+   * ⚠ Las fases que se CREAN en este mismo acuerdo no están en `actuales` —todavía no existen— así
+   * que hay que resolverlas contra las propias operaciones. Sin esto, la línea de una tarea creada
+   * en una fase nueva diría «Se agrega «Revisión conjunta» a «(una fase que ya no está)»», que es
+   * incomprensible justo en el caso que más explicación necesita.
+   */
+  const nombresNuevos = new Map<string, string>();
+  for (const o of operaciones) {
+    if (o.op === "fase.crear" && o.ref?.trim()) nombresNuevos.set(o.ref.trim(), o.nombre);
+  }
+  const nombre = (id: string) =>
+    fase(id)?.name ?? nombresNuevos.get(id) ?? "(una fase que ya no está)";
   /**
    * ⚠ Resuelve igual que el ejecutor — por HANDLE o por id entero — y por el mismo motivo: si acá
    * se buscara solo por id exacto, la cajita azul imprimiría «ywlga» donde tiene que decir el
@@ -869,12 +890,20 @@ export function describirOperaciones(
         const t = tarea(o.taskId);
         return `Se elimina «${t?.titulo ?? o.taskId}» de «${t?.fase ?? "?"}»`;
       }
-      case "fase.crear":
+      case "fase.crear": {
+        /* ⚠ «nace vacía» solo si nadie le mete tareas en el mismo acuerdo. Decirlo cuando abajo
+           hay tres `tarea.crear` apuntándole sería la cajita contradiciéndose a sí misma. */
+        const conTareas = operaciones.filter(
+          (x) => x.op === "tarea.crear" && o.ref && x.phaseId === o.ref,
+        ).length;
         return (
           `Se crea la fase «${o.nombre}» de ${sem(o.semanas)}` +
           (typeof o.posicion === "number" ? `, en la posición ${o.posicion + 1}` : ", al final") +
-          " — nace vacía"
+          (conTareas > 0
+            ? ` — con ${conTareas} ${conTareas === 1 ? "tarea" : "tareas"} nuevas`
+            : " — nace vacía")
         );
+      }
       case "fase.quitar-semana": {
         const f = fase(o.phaseId);
         /* ⭐ El conteo NO es adorno: es la diferencia entre «sacá la semana vacía» y «sacá la

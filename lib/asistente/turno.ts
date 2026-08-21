@@ -133,6 +133,16 @@ Las fases y las tareas se referencian por su ID, el que va entre corchetes en el
 ⛔ Nunca por nombre: hay proyectos con fases casi homónimas y tareas repetidas entre fases, y
 elegir la parecida sería adivinar.
 
+⭐ CREAR UNA FASE Y SUS TAREAS ES UN SOLO ACUERDO, NO DOS.
+En "fase.crear" pon un "ref" (una palabra corta que inventes) y usa ese mismo valor como
+"phaseId" en los "tarea.crear" que siguen. Nunca contestes «primero creo la fase y después le
+agrego las tareas»: es un viaje de más para un pedido que es uno solo.
+
+⚠ Y si no te dijeron cuántas semanas dura, NO preguntes solo por eso: propón la duración más
+chica que aguante las tareas (una semana entra cómoda con hasta 4 o 5) y dilo como supuesto —
+«la dejo en 1 semana; si necesitas más, avísame». Cambiar un número después es un clic; esperar
+una respuesta para recién ahí proponer es una conversación entera.
+
 ⭐ SÍ SE PUEDE SACAR O AGREGAR UNA SEMANA DEL MEDIO.
 "fase.quitar-semana" y "fase.insertar-semana" existen. ⚠ No las confundas con "fase.duracion":
 acortar saca las ÚLTIMAS semanas, quitar saca LA QUE DIGAS y sube las de abajo. Si la persona
@@ -245,8 +255,10 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.mover: la cambia de lugar en el orden (posicion, base 0). " +
                 "fase.arranque-relativo: en qué semana del proyecto arranca (semana, o null = " +
                 "cuando termina la anterior). " +
-                "fase.crear: agrega una fase NUEVA y vacía (nombre, semanas, posicion opcional " +
-                "base 0). ⚠ no podés referirte a ella en el mismo acuerdo: no tiene id todavía. " +
+                "fase.crear: agrega una fase NUEVA (nombre, semanas, posicion opcional base 0). " +
+                "⭐ Si le pones un `ref` —una palabra corta que inventes, por ejemplo nueva1— puedes " +
+                "usar ese mismo valor como phaseId en las operaciones siguientes del MISMO " +
+                "acuerdo: así creas la fase y le pones sus tareas de una sola vez. " +
                 "fase.quitar-semana: saca UNA semana del medio (phaseId, semana base 0) y acorta " +
                 "la fase; las tareas de esa semana pasan a la anterior. ⚠ NO confundir con " +
                 "fase.duracion, que saca las ÚLTIMAS. " +
@@ -282,6 +294,12 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
               description:
                 "El identificador de la TAREA, tal como aparece entre corchetes junto a su " +
                 "título en el contexto. Para tarea.mover-semana, tarea.mover-fase y tarea.borrar.",
+            },
+            ref: {
+              type: "string",
+              description:
+                "Solo para fase.crear: una etiqueta corta que inventes para poder referirte a esa " +
+                "fase nueva en las operaciones siguientes del mismo acuerdo (como phaseId).",
             },
             titulo: {
               type: "string",

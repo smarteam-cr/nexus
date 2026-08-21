@@ -163,23 +163,60 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
   );
 
   it("⚠ el velo tapa el cronograma y se anuncia como ocupado", () => {
-    /* La edición que la pone en rojo: borrar el bloque `{applying && (…)}` del canvas. Sin él
-       aplicar es invisible: el cronograma sigue mostrando lo viejo, acepta clicks, y como con
-       las operaciones tarda ~1 ms, el cambio aparece de golpe sin que nada lo haya anunciado. */
-    const i = CANVAS.indexOf("{applying && (");
-    expect(i, "se fue el velo de aplicar: el cronograma acepta clicks a mitad de la escritura").toBeGreaterThan(-1);
-    const velo = CANVAS.slice(i, i + 1600);
+    /* La edición que la pone en rojo: borrar el bloque `{ocupado.activo && (…)}` del canvas. Sin
+       él la espera es invisible: el cronograma sigue mostrando lo viejo, acepta clicks, y el
+       cambio aparece de golpe sin que nada lo haya anunciado. */
+    const i = CANVAS.indexOf("{ocupado.activo && (");
+    expect(i, "se fue el velo: el cronograma acepta clicks a mitad de la escritura").toBeGreaterThan(
+      -1,
+    );
+    const velo = CANVAS.slice(i, i + 1800);
     expect(velo, "la guarda dejó de mirar el velo").toContain("aria-busy");
     expect(velo).toContain("skeleton-shimmer");
   });
 
+  it("⭐ y cubre la GENERACIÓN, no solo el aplicar — que era el agujero reportado", () => {
+    /* Elías, 2026-08-21: *«di clic en el cronograma mientras cargaba y como que se desbloqueó»*.
+       No se desbloqueó: el velo solo miraba `applying`, y él estaba generando tareas — la espera
+       LARGA, la que de verdad necesita el bloqueo. La edición que la pone en rojo: sacar
+       `generating` del estado `ocupado` y dejar solo los aplicares. */
+    const i = CANVAS.indexOf("const ocupado");
+    expect(i, "se fue el estado único de ocupado").toBeGreaterThan(-1);
+    const bloque = CANVAS.slice(i, i + 1800);
+    for (const estado of ["generating", "allRegenLoading", "chainingProgress", "applying"]) {
+      expect(bloque, `«${estado}» dejó de bloquear el cronograma`).toContain(estado);
+    }
+  });
+
+  it("⛔ y el HEADER también — la fuga que hacía parecer que no bloqueaba", () => {
+    /* Los botones del cronograma se inyectan en el header POR PORTAL, así que viven en otro nodo
+       del DOM: ni el velo los tapa ni el `inert` del contenido los alcanza. Durante la generación
+       seguían clickeables, y eso es lo que Elías vio.
+
+       Se marca el SLOT entero y no botón por botón a propósito: el que se agregue mañana queda
+       cubierto sin que nadie se acuerde. La edición que la pone en rojo: borrar el efecto. */
+    expect(CANVAS, "el header del cronograma dejó de bloquearse").toContain(
+      "headerSlot.inert = ocupado.activo",
+    );
+  });
+
+  it("⛔ y BLOQUEA de verdad: el contenido queda `inert`, no solo tapado", () => {
+    /* Un velo tapa y captura el mouse — pero lo de abajo sigue siendo enfocable con Tab, editable
+       desde el teclado, y clickeable por cualquier hijo con un z mayor. `inert` saca el subárbol
+       del foco y de los eventos, y es lo único que no depende de adivinar z-index uno por uno.
+       La edición que la pone en rojo: borrar el atributo `inert` del contenedor del contenido. */
+    expect(CANVAS, "el contenido del cronograma dejó de volverse inerte").toContain(
+      "inert={ocupado.activo}",
+    );
+  });
+
   it("⛔ y queda POR DEBAJO del cajón, o el chat se vuelve inusable justo cuando importa", () => {
     /* ESTA es la que protege lo invisible. Subir el z del velo no rompe nada que se vea en un
-       test: simplemente tapa el panel durante el aplicar, que es EL momento en que el CSE quiere
-       leer el desenlace y encadenar el ajuste siguiente.
-       La edición que la pone en rojo: cambiar `z-30` por `z-50` en el velo. */
-    const i = CANVAS.indexOf("{applying && (");
-    const z = CANVAS.slice(i, i + 400).match(/\bz-(\d+)\b/);
+       test: simplemente tapa el panel durante la espera, que es EL momento en que el CSE quiere
+       leer qué está pasando y encadenar el ajuste siguiente.
+       La edición que la pone en rojo: cambiar `z-[44]` por `z-50` en el velo. */
+    const i = CANVAS.indexOf("{ocupado.activo && (");
+    const z = CANVAS.slice(i, i + 400).match(/\bz-\[?(\d+)\]?\b/);
     expect(z, "el velo perdió su z declarado").not.toBeNull();
     const zPanel = PANEL.match(/z-\[(\d+)\]/);
     expect(Number(z![1])).toBeLessThan(Number(zPanel![1]));

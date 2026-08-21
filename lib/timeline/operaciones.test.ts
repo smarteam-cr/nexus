@@ -605,6 +605,70 @@ describe("crear: fases y tareas nuevas nacen SIN id, que es como el PUT las crea
   });
 });
 
+describe("⭐ una fase nueva CON sus tareas, en un solo acuerdo", () => {
+  /* Elías, 2026-08-21: pidió «agrega una fase nueva, cierre con junta, y agrega 3 tareas…» y el
+     chat contestó *«tengo una limitación técnica: cuando creo una fase nueva, todavía no tiene un
+     ID hasta que se aplique el cambio. Vamos a hacerlo en dos movimientos»*. Dos viajes para un
+     pedido que es uno.
+
+     El mecanismo ya existía —`idInterno`, que nunca sale al payload— solo faltaba que el chat
+     pudiera ponerle nombre. Ahora `fase.crear` acepta un `ref` que el modelo inventa y usa como
+     `phaseId` en las operaciones siguientes del mismo lote. */
+
+  const pedidoDeElias = (): Operacion[] => [
+    { op: "fase.crear", nombre: "Cierre con junta", semanas: 1, ref: "nueva1" },
+    { op: "tarea.crear", phaseId: "nueva1", titulo: "Revisión conjunta", semana: 0, duenio: "CLIENTE" },
+    { op: "tarea.crear", phaseId: "nueva1", titulo: "Revisión de integración", semana: 0, duenio: "DEV" },
+    { op: "tarea.crear", phaseId: "nueva1", titulo: "Presentación y entrega", semana: 0, duenio: "SMARTEAM" },
+  ];
+
+  it("las tres tareas aterrizan en la fase recién creada", () => {
+    /* La edición que la pone en rojo: que `fase.crear` ignore el `ref` y use siempre
+       `nueva:${fases.length}` — las tres tareas caerían en «esa fase no existe». */
+    const { payload, rechazadas } = aplicarOperaciones(cronograma(), null, pedidoDeElias());
+    expect(rechazadas).toHaveLength(0);
+    const nueva = payload.phases.find((p) => p.name === "Cierre con junta")!;
+    expect(nueva.id, "una fase nueva no puede llevar id: el PUT la buscaría").toBeUndefined();
+    expect(nueva.tasks!.map((t) => t.title)).toEqual([
+      "Revisión conjunta",
+      "Revisión de integración",
+      "Presentación y entrega",
+    ]);
+    expect(nueva.tasks!.map((t) => t.party)).toEqual(["CLIENTE", "DEV", "SMARTEAM"]);
+    expect(nueva.tasks!.every((t) => t.id === undefined), "las tareas nuevas no llevan id").toBe(true);
+  });
+
+  it("⚠ y la cajita azul las nombra a las cuatro, con la fase por su nombre", () => {
+    /* Sin resolver el `ref`, las tres líneas de tarea dirían «a «(una fase que ya no está)»» —
+       incomprensible justo en el caso que más explicación necesita. */
+    const lineas = describirOperaciones(cronograma(), pedidoDeElias());
+    expect(lineas).toHaveLength(4);
+    expect(lineas[0]).toContain("con 3 tareas nuevas");
+    for (const l of lineas.slice(1)) {
+      expect(l).toContain("Cierre con junta");
+      expect(l, "quedó el rótulo de fase inexistente").not.toContain("ya no está");
+    }
+    expect(lineas[1]).toContain("la hace cliente");
+  });
+
+  it("⛔ dos fases con el mismo ref se rechazan: no se adivina cuál es cuál", () => {
+    const { rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.crear", nombre: "Una", semanas: 1, ref: "x" },
+      { op: "fase.crear", nombre: "Otra", semanas: 1, ref: "x" },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("referencia");
+  });
+
+  it("y sin `ref` sigue funcionando: la fase nace igual, solo que no se la puede nombrar", () => {
+    const { payload, rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.crear", nombre: "Suelta", semanas: 2 },
+    ]);
+    expect(rechazadas).toHaveLength(0);
+    expect(payload.phases.some((p) => p.name === "Suelta")).toBe(true);
+  });
+});
+
 describe("⛔ los dos vocabularios de «tipo» no se mezclan", () => {
   /* El riesgo que trajo crecer: la tool tiene UN campo `tipo` que sirve a dos operaciones con
      valores distintos (SESSION|TASK para tareas, los cinco de actividad para fases). Si el

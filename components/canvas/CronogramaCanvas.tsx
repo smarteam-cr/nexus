@@ -428,6 +428,72 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [clientLogoScale, setClientLogoScale] = useState<number | null>(null);
   // Lo que se arrastra AHORA (solo pinta). El guardado va al soltar, una vez.
   const [previewScale, setPreviewScale] = useState<number | null>(null);
+  /**
+   * ⭐ CUÁNDO EL CRONOGRAMA ESTÁ OCUPADO — UNA SOLA FUENTE, Y ES LO QUE FALTABA.
+   *
+   * La primera versión del velo solo miraba `applying`, así que durante la GENERACIÓN de tareas
+   * —que es la espera larga, la de verdad— la pantalla quedaba viva y editable. Elías lo probó y
+   * lo dijo así: *«di clic en el cronograma mientras cargaba y como que se desbloqueó»*. No se
+   * desbloqueó: nunca había estado bloqueado.
+   *
+   * Cada estado trae su rótulo porque las esperas no duran lo mismo: aplicar son ~1 ms más el
+   * viaje; generar las tareas es un agente y tarda. Un cartel genérico haría que las dos se lean
+   * igual, y enseña a ignorar el que sí avisa una espera real.
+   */
+  const ocupado: { activo: boolean; rotulo: string; detalle: string } = generating
+    ? {
+        activo: true,
+        rotulo: "Generando las tareas del cronograma",
+        detalle: "El agente está armando la propuesta — puede tardar un momento.",
+      }
+    : allRegenLoading
+      ? {
+          activo: true,
+          rotulo: "Armando la propuesta del cronograma",
+          detalle: "El agente está revisando todas las fases.",
+        }
+      : chainingProgress
+        ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
+        : applying
+          ? {
+              activo: true,
+              rotulo: "Aplicando el cambio",
+              detalle: "El cronograma se está actualizando.",
+            }
+          : applyingProgress
+            ? {
+                activo: true,
+                rotulo: "Aplicando el avance",
+                detalle: "Marcando lo que se confirmó.",
+              }
+            : applyingPartic
+              ? {
+                  activo: true,
+                  rotulo: "Aplicando las desviaciones",
+                  detalle: "Un momento.",
+                }
+              : { activo: false, rotulo: "", detalle: "" };
+
+  /**
+   * ⛔ EL HEADER TAMBIÉN, y es LA fuga que hacía parecer que no bloqueaba.
+   *
+   * Los botones del cronograma («Generar cronograma», «Pedir cambio con IA», «Regenerar todo»…)
+   * se inyectan en el header del panel POR PORTAL, así que viven en otro nodo del DOM: ni el velo
+   * los tapa ni el `inert` del contenido los alcanza. Durante la generación seguían clickeables —
+   * que es exactamente lo que Elías vio cuando dijo que «como que se desbloqueó».
+   *
+   * Se marca inerte el SLOT entero y no botón por botón a propósito: el que se agregue mañana
+   * queda cubierto sin que nadie se acuerde. El chat sigue usable igual — su panel se portaliza a
+   * `body`, no acá.
+   */
+  useEffect(() => {
+    if (!headerSlot) return;
+    headerSlot.inert = ocupado.activo;
+    return () => {
+      headerSlot.inert = false;
+    };
+  }, [headerSlot, ocupado.activo]);
+
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
   // Auto-guardado: cuenta de ediciones locales. Si cambia DURANTE un PUT, no pisamos
@@ -2288,7 +2354,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const validationMsg = phases.length > 0 ? validateLocal() : null;
 
   return (
-    <div className="space-y-4 relative">
+    <div className="relative">
       {/* ⭐ EL CRONOGRAMA SE BLOQUEA MIENTRAS SE APLICA UN CAMBIO.
 
           Con las operaciones aplicar tarda ~1 ms más el viaje al servidor, así que la ventana es
@@ -2299,34 +2365,40 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           ⚠ Va por ENCIMA del contenido (z-30) pero por DEBAJO del cajón del asistente (z-45): el
           chat tiene que seguir visible y usable mientras el cronograma se acomoda — es donde está
           el aviso de qué pasó. */}
-      {applying && (
+      {ocupado.activo && (
         <div
-          className="absolute inset-0 z-30 flex items-start justify-center pt-24 cursor-wait"
+          className="absolute inset-0 z-[44] flex items-start justify-center cursor-wait"
           aria-busy="true"
+          aria-live="polite"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* El velo cubre TODO el cronograma: hace legible que la pantalla entera está en
-              tránsito, no solo el renglón que se toca. Va quieto a propósito — lo que se mueve
-              es la barra de abajo. Un velo que late más un cartel que late es ruido.
-
-              ⚠ La animación usa `skeleton-shimmer`, la ÚNICA técnica de carga del repo (y hay un
-              trinquete que lo hace cumplir: `animate-pulse` sale en rojo). Dos animaciones de
-              carga distintas en la misma app se leen como dos estados distintos. */}
-          <div className="absolute inset-0 rounded-2xl bg-surface/75 backdrop-blur-[1px]" />
+          {/* ⛔ TINTA BLANCA SOBRE TODO (pedido de Elías, 2026-08-21). `bg-surface/85` es el
+              blanco DEL TEMA —nunca un gris crudo, que rompe el modo oscuro— y el blur remata
+              que lo de abajo no se puede leer ni tocar. */}
+          <div className="absolute inset-0 rounded-2xl bg-surface/85 backdrop-blur-[2px]" />
           <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl overflow-hidden">
             {/* El padre fija la altura en `h-1`: es una barra de 4 px que recorre el ancho,
                 no un rectángulo relleno esperando contenido. */}
             <div className="skeleton-shimmer h-full w-full" /> {/* slab-ok */}
           </div>
-          <div className="relative flex items-center gap-3 rounded-xl border border-brand/30 bg-surface px-4 py-2.5 shadow-lg">
-            <span className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg">Aplicando el cambio…</p>
-              <p className="text-xs text-fg-muted">El cronograma se está actualizando.</p>
+          {/* ⚠ El loader va `sticky` y no centrado a secas: el cronograma mide varias pantallas,
+              así que un centro absoluto queda fuera de la vista en cuanto la persona scrollea —
+              y un bloqueo cuyo cartel no se ve se lee como la pantalla colgada. */}
+          <div className="sticky top-[38vh] flex flex-col items-center gap-4 px-6 text-center">
+            <span className="w-16 h-16 border-[5px] border-brand/25 border-t-brand rounded-full animate-spin" />
+            <div>
+              <p className="text-base font-semibold text-fg">{ocupado.rotulo}…</p>
+              <p className="text-sm text-fg-muted mt-1">{ocupado.detalle}</p>
             </div>
           </div>
         </div>
       )}
+      {/* ⛔ `inert` ES LO QUE BLOQUEA DE VERDAD, y el velo solo lo hace parecer. Sin esto el
+          contenido de abajo sigue siendo enfocable con Tab, editable desde el teclado, y
+          clickeable por cualquier hijo con un z mayor que el del velo. `inert` saca el subárbol
+          entero del foco y de los eventos: es el único «bloqueado» que no depende de adivinar
+          z-index uno por uno. (React 19 lo pasa como atributo booleano.) */}
+      <div className="space-y-4" inert={ocupado.activo}>
       {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). Clickeable
           para ajustar el tamaño: acá se edita la BASE del cliente y no un ajuste local,
           porque el cronograma NO es un canvas con bloques donde guardar uno. Por eso el
@@ -3416,6 +3488,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             : submitAssist(acuerdo.instruccion ?? "", null)
         }
       />
+      </div>
     </div>
   );
 }
