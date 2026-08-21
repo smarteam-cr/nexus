@@ -850,7 +850,25 @@ export async function PUT(
               type: t.type ?? null,
               startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
               dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
-              source: "HUMAN",
+              /**
+               * ⛔ QUIÉN LA CREÓ, y hasta hoy siempre decía «una persona».
+               *
+               * Elías, 2026-08-21: *«me dijo que Revisión conjunta está cargada a mano, pero esa
+               * tarea la creó el chat»*. Tenía razón y el daño es doble:
+               *
+               * 1. El chat le AFIRMA al CSE algo falso sobre la procedencia.
+               * 2. `isKept` protege lo `HUMAN`, así que el chat no podía borrar ni mover lo que
+               *    él mismo acababa de crear — y al intentarlo avisaba que «pierde ese estado».
+               *
+               * `MODIFIED` es el valor honesto para este camino: el contenido lo escribió la IA,
+               * pero lo dictó una persona en una conversación. No es `AGENT` —que es lo que el
+               * agente infiere solo— ni `HUMAN` —que es alguien tecleando en el Gantt—.
+               *
+               * ⚠ Y no queda desprotegida por accidente: `isKept` cubre igual todo lo que tenga
+               * estado distinto de PENDING. Lo que se recupera es que el chat pueda deshacer lo
+               * que hizo, que es lo que se le pide todo el tiempo.
+               */
+              source: changeKind === "AI_ASSIST" ? "MODIFIED" : "HUMAN",
               status: "PENDING",
               needsValidation: false,
             });

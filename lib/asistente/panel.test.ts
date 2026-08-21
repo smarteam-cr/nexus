@@ -438,6 +438,38 @@ describe("⛔ lo que la revisión de calidad encontró, y son pérdidas de dato"
   });
 });
 
+describe("⛔ lo que Elías vio el 2026-08-21", () => {
+  it("una tarea creada por el CHAT no nace «cargada a mano»", () => {
+    /* «Me dijo que Revisión conjunta está cargada a mano, pero esa tarea la creó el chat».
+       El daño era doble: le afirmaba al CSE algo falso sobre la procedencia, y como `isKept`
+       protege lo HUMAN, el chat no podía borrar ni mover lo que él mismo acababa de crear.
+       La edición que la pone en rojo: volver a `source: "HUMAN"` fijo. */
+    const put = fs.readFileSync(
+      path.join(RAIZ, "app/api/projects/[projectId]/timeline/route.ts"),
+      "utf8",
+    );
+    expect(put, "el PUT volvió a marcar como HUMAN todo lo que crea").toContain(
+      'changeKind === "AI_ASSIST" ? "MODIFIED" : "HUMAN"',
+    );
+  });
+
+  it("⛔ un acuerdo con operaciones y SIN líneas no ofrece aplicar", () => {
+    /* La cajita mostró la prosa y el botón «Aplicar al cronograma», sin ninguna lista: ofrecía
+       aprobar cambios que la persona NO PODÍA LEER. Toda la garantía del diseño es «lo que se lee
+       es lo que se ejecuta» — sin lista no queda nada que leer.
+       La edición que la pone en rojo: sacar esa condición del `disabled`. */
+    expect(PANEL).toContain("!t.acuerdo!.lineas?.length");
+    expect(PANEL, "el caso sin líneas volvió a caer al camino legacy").toContain(
+      ") : t.acuerdo.operaciones?.length ? (",
+    );
+  });
+
+  it("⚠ y el mensaje del acuerdo va NUMERADO, para poder decir «la 2»", () => {
+    const turno = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+    expect(turno).toContain("TAMBIÉN cuando emites la propuesta");
+  });
+});
+
 describe("el texto del asistente se renderiza", () => {
   it("⛔ como Markdown, no como texto plano", () => {
     /* Reportado el 2026-08-20: se veía el `- **Sumar…**` crudo. La edición que la pone en rojo:

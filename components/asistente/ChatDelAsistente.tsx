@@ -536,6 +536,25 @@ export default function ChatDelAsistente({
                       })}
                     </ol>
                   </>
+                ) : t.acuerdo.operaciones?.length ? (
+                  /**
+                   * ⛔ OPERACIONES SIN LÍNEAS: no puede pasar, y si pasa hay que DECIRLO.
+                   *
+                   * Elías lo vio el 2026-08-21: la cajita mostró la prosa del modelo y el botón
+                   * «Aplicar al cronograma», sin ninguna lista. Medido contra los turnos reales,
+                   * el acuerdo guardado traía `operaciones` y ninguna `lineas` — o sea que el
+                   * servidor que contestó no las estaba calculando (build viejo).
+                   *
+                   * El punto no es ese servidor: es que la cajita ofreció aplicar cambios que la
+                   * persona NO PODÍA LEER. Toda la garantía de este diseño es «lo que se lee es lo
+                   * que se ejecuta»; sin la lista no queda nada que leer, y el botón se vuelve un
+                   * salto de fe. Antes esto caía al camino legacy y pintaba un textarea vacío.
+                   */
+                  <p className="mt-2 rounded-lg border border-warn-line bg-warn-surface px-2 py-1.5 text-xs text-warn-ink">
+                    ⚠ No se pudo armar el detalle de los {t.acuerdo.operaciones.length} cambios, así
+                    que no hay qué revisar antes de aplicar. Pedíselo de nuevo al asistente — y si
+                    se repite, avisá: es un problema del servidor, no de lo que pediste.
+                  </p>
                 ) : t.acuerdo.instruccion ? (
                   /* ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto,
                      que un segundo modelo releía; y los DOCUMENTOS todavía la usan para copiar y
@@ -579,7 +598,13 @@ export default function ChatDelAsistente({
                           : {}),
                       }, desmarcadas[t.id]?.size ?? 0)
                     }
-                    disabled={aplicando || sinNadaQueAplicar(t.id, t.acuerdo!)}
+                    /* ⛔ Sin líneas no se aplica: aprobar lo que no se puede leer es
+                       exactamente lo que la cajita existe para impedir. */
+                    disabled={
+                      aplicando ||
+                      sinNadaQueAplicar(t.id, t.acuerdo!) ||
+                      (!!t.acuerdo!.operaciones?.length && !t.acuerdo!.lineas?.length)
+                    }
                     className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
                   >
                     {aplicando
