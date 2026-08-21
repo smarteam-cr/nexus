@@ -15,6 +15,7 @@ import {
   loadSnapshotSeries,
   loadRiesgo,
   loadColaCobros,
+  loadComisionesPartner,
 } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -27,7 +28,7 @@ export default async function CobranzaPage() {
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo] = await Promise.all([
+  const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo, comisiones] = await Promise.all([
     loadColaCobros(todayISO),
     loadCartera(todayISO),
     loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
@@ -35,6 +36,9 @@ export default async function CobranzaPage() {
     loadProyeccion(todayISO),
     loadSnapshotSeries(),
     loadRiesgo(todayISO),
+    // Las comisiones de aliado: se COBRAN en la pestaña «Aliados» y se dan de alta
+    // en Finanzas. Mismo gate (`cobranza.read`), así que no hay superficie nueva.
+    loadComisionesPartner(),
   ]);
 
   // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
@@ -42,6 +46,7 @@ export default async function CobranzaPage() {
   return (
     <div className={SHELL_DEFAULT}>
       <CobranzaClient
+        initialComisiones={comisiones.comisiones}
         initialCola={cola}
         initialCartera={cartera}
         initialAlertas={alertas}

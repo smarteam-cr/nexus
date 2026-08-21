@@ -17,6 +17,7 @@ import { loadComisionesPartner } from "@/lib/cobranza";
 import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import { crDateParts } from "@/lib/jobs/time";
 import ComisionesPartnerPanel from "@/components/finanzas/ComisionesPartnerPanel";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function ComisionesPartnerPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
-      <ComisionesPartnerPanel initial={data} clientes={aliados} />
+      <ComisionesPartnerPanel initial={data} clientes={aliados} todayISO={crDateParts(new Date()).dateKey} />
     </div>
   );
 }

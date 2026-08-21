@@ -160,3 +160,33 @@ export function sugerenciaParaLaProxima(
   return { monto: ultima.monto, moneda: ultima.moneda, desde: ultima.fecha };
 }
 
+/** Una comisión con lo justo para saber si toca cobrarla. */
+export interface ComisionParaAlertar {
+  id: string;
+  partner: string;
+  monto: number;
+  moneda: string;
+  fecha: string;
+  estado: string;
+}
+
+/**
+ * Las comisiones que YA deberían haber entrado y nadie confirmó.
+ *
+ * ⚠ `hoyISO` ENTRA POR PARÁMETRO. Este módulo no lee el reloj: si lo leyera, la misma
+ * lista daría distinto según cuándo se corre el test y el caso que la cubre no probaría
+ * nada.
+ *
+ * El criterio es la fecha ESPERADA, no la de cobro: mientras esté POR_COBRAR no hay
+ * fecha de cobro — es justamente lo que falta. Una comisión de hoy todavía no está
+ * vencida; se avisa desde el día siguiente.
+ */
+export function comisionesPorCobrar(
+  comisiones: readonly ComisionParaAlertar[],
+  hoyISO: string,
+): ComisionParaAlertar[] {
+  return comisiones
+    .filter((c) => c.estado !== "COBRADO" && c.fecha < hoyISO)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+

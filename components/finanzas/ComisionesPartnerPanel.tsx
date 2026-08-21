@@ -32,6 +32,8 @@ import {
   Select,
 } from "@/components/ui";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
+import ComisionesDeAliado from "@/components/cobranza/ComisionesDeAliado";
+import type { ComisionPartnerDTO } from "@/lib/cobranza";
 import type { CorteDeMoneda } from "@/lib/cobranza/comisiones-partner";
 
 /**
@@ -54,6 +56,8 @@ interface ClienteLite {
 interface Props {
   initial: ComisionesPartnerDTO;
   clientes: ClienteLite[];
+  /** Hoy, por parámetro: la alerta de vencidas no lee el reloj. */
+  todayISO: string;
 }
 
 const TH = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-fg-muted";
@@ -72,27 +76,8 @@ type FormState = {
 
 type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; notas: string };
 
-/**
- * El formulario de «Registrar cobro»: fecha real y MONTO real, juntos.
- *
- * ⚠ El monto va acá y no en el «Editar» de siempre porque son dos actos distintos: lo
- * que se registra antes de que la plata llegue es una proyección (los $51.000 redondos
- * de agosto eran eso) y lo que entra nunca es ese número —fueron ~$50.847 menos la
- * retención del procesador—. Confirmar sin poder corregir obliga a firmar una cifra
- * que se sabe falsa, y esa firma es la que sostiene INV20.
- */
-type CobroForm = {
-  id: string;
-  partner: string;
-  moneda: string;
-  fechaCobro: string;
-  /** El NETO que entró al banco. Obligatorio: es la plata. */
-  monto: string;
-  /** El BRUTO que reportó el aliado. Opcional — con él, la retención se deriva. */
-  montoBruto: string;
-};
 
-export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
+export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: Props) {
   const toast = useToast();
   const [data, setData] = useState(initial);
   const [form, setForm] = useState<FormState | null>(null);
@@ -102,7 +87,6 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   // Borrar un aliado le saca la cadencia a TODO su historial y no hay deshacer:
   // pide confirmacion, como el resto de los borrados del modulo.
   const [borrandoAliado, setBorrandoAliado] = useState<{ id: string; nombre: string } | null>(null);
-  const [cobro, setCobro] = useState<CobroForm | null>(null);
 
   async function refrescar() {
     try {
@@ -150,60 +134,6 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar la comisión.");
     } finally {
       setGuardando(false);
-    }
-  }
-
-  /**
-   * Confirma que la plata entró. Pasa por el chokepoint `/estado`, que es el ÚNICO
-   * escritor del estado — INV20 exige que una comisión COBRADA lleve la firma de quien
-   * lo confirmó, y con dos escritores el invariante se rompe por el que nadie mira.
-   *
-   * Este endpoint existía desde el 2026-08-17 y NO TENÍA UN SOLO LLAMADOR: por eso toda
-   * comisión cargada desde la pantalla nacía «por cobrar» y se quedaba ahí para siempre,
-   * y la caja del reporte anual la contaba como cero.
-   */
-  async function confirmarCobro() {
-    if (!cobro) return;
-    const monto = Number(cobro.monto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      toast.error("El monto que entró tiene que ser un número positivo.");
-      return;
-    }
-    setGuardando(true);
-    try {
-      await fetchJson(`/api/cobranza/comisiones-partner/${cobro.id}/estado`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          estado: "COBRADO",
-          fechaCobro: cobro.fechaCobro,
-          monto,
-          // Vacío = no se sabe. Va null y no cero: cero afirmaría que no hubo retención.
-          montoBruto: cobro.montoBruto.trim() === "" ? null : Number(cobro.montoBruto),
-        }),
-      });
-      setCobro(null);
-      await refrescar();
-      toast.success("Cobro confirmado.");
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo confirmar el cobro.");
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  /** Deshace la confirmación: limpia fecha y firma, como el revert de un cobro. */
-  async function revertirCobro(id: string) {
-    try {
-      await fetchJson(`/api/cobranza/comisiones-partner/${id}/estado`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: "POR_COBRAR" }),
-      });
-      await refrescar();
-      toast.success("La comisión volvió a «por cobrar».");
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo revertir.");
     }
   }
 
@@ -438,111 +368,37 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
           description="Registrá lo que cada aliado te paga y aparece acá, agrupado por partner."
         />
       ) : (
-        <div className="rounded-xl border border-line bg-surface overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-            <thead className="bg-surface-muted border-b border-line">
-              <tr>
-                <th className={TH}>Partner</th>
-                <th className={TH}>Concepto</th>
-                <th className={TH}>Fecha</th>
-                <th className={`${TH} text-right`}>Monto</th>
-                <th className={TH}>Estado</th>
-                <th className={TH}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.comisiones.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-b-0">
-                  <td className={TD}>
-                    {c.partner}
-                    {c.clienteNombre && (
-                      <span className="ml-1.5 text-[11px] text-fg-muted">· {c.clienteNombre}</span>
-                    )}
-                  </td>
-                  <td className={`${TD} text-fg-secondary`}>{c.concepto ?? "—"}</td>
-                  <td className={`${TD} text-fg-secondary whitespace-nowrap`}>{fmtFecha(c.fecha)}</td>
-                  <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
-                    <span className={c.montoEsProyeccion ? "text-fg-muted" : ""}>
-                      {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
-                    </span>
-                    {/* Un monto proyectado se ve distinto de uno medido: los $51.000
-                        redondos de agosto y noviembre eran una estimación tecleada, y
-                        hasta acá se mostraban igual que los $45.921,72 que sí se contaron. */}
-                    {c.montoEsProyeccion && (
-                      <span className="ml-1.5 text-[10px] text-fg-muted font-normal">estimado</span>
-                    )}
-                    {c.retencion && (
-                      <p className="text-[10px] text-fg-muted font-normal">
-                        bruto {fmtMonto(c.montoBruto!, c.moneda as "CRC" | "USD")} · retención{" "}
-                        {fmtMonto(c.retencion.monto, c.moneda as "CRC" | "USD")} ({c.retencion.pct}%)
-                      </p>
-                    )}
-                  </td>
-                  <td className={`${TD} whitespace-nowrap`}>
-                    {c.estado === "COBRADO" ? (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded border border-line bg-surface-muted text-fg-secondary">
-                        Cobrada{c.fechaCobro ? ` · ${fmtFecha(c.fechaCobro)}` : ""}
-                      </span>
-                    ) : (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded border border-warn-line bg-warn-surface text-warn-ink">
-                        Por cobrar
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${TD} text-right whitespace-nowrap`}>
-                    <div className="flex justify-end gap-1.5">
-                      {c.estado === "COBRADO" ? (
-                        <Button variant="secondary" size="sm" onClick={() => revertirCobro(c.id)}>
-                          Revertir
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            setCobro({
-                              id: c.id,
-                              partner: c.partner,
-                              moneda: c.moneda,
-                              // Arranca en la fecha esperada y con el monto registrado —
-                              // los dos se corrigen antes de firmar, que es el punto.
-                              fechaCobro: c.fecha,
-                              monto: String(c.monto),
-                              montoBruto: c.montoBruto !== null ? String(c.montoBruto) : "",
-                            })
-                          }
-                        >
-                          Registrar cobro
-                        </Button>
-                      )}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setEditandoId(c.id);
-                          setForm({
-                            partner: c.partner,
-                            partnerId: c.partnerId ?? "",
-                            concepto: c.concepto ?? "",
-                            monto: String(c.monto),
-                            moneda: c.moneda,
-                            fecha: c.fecha,
-                            clientId: c.clientId ?? "",
-                            notas: c.notas ?? "",
-                          });
-                        }}
-                      >
-                        Editar
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => borrar(c.id)}>
-                        Eliminar
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ComisionesDeAliado
+          comisiones={data.comisiones}
+          todayISO={todayISO}
+          onCambio={refrescar}
+          extraAcciones={(c: ComisionPartnerDTO) => (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setEditandoId(c.id);
+                  setForm({
+                    partner: c.partner,
+                    partnerId: c.partnerId ?? "",
+                    concepto: c.concepto ?? "",
+                    monto: String(c.monto),
+                    moneda: c.moneda,
+                    fecha: c.fecha,
+                    clientId: c.clientId ?? "",
+                    notas: c.notas ?? "",
+                  });
+                }}
+              >
+                Editar
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => borrar(c.id)}>
+                Eliminar
+              </Button>
+            </>
+          )}
+        />
       )}
 
       {/* ── Aliados: quién nos paga y cada cuánto ─────────────────────────── */}
@@ -628,54 +484,6 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
             await borrarAliado(id);
           }}
         />
-      )}
-
-      {cobro && (
-        <Modal
-          open
-          onClose={() => setCobro(null)}
-          title={`Registrar cobro · ${cobro.partner}`}
-          description="La fecha en que entró la plata y el monto NETO que llegó al banco. Lo registrado antes era una proyección: casi nunca coincide con lo que entra."
-        >
-          <div className="space-y-3">
-            <Field label="Fecha en que entró">
-              <Input
-                type="date"
-                value={cobro.fechaCobro}
-                onChange={(e) => setCobro({ ...cobro, fechaCobro: e.target.value })}
-              />
-            </Field>
-            <Field label={`Monto neto que entró (${cobro.moneda})`}>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={cobro.monto}
-                onChange={(e) => setCobro({ ...cobro, monto: e.target.value })}
-              />
-            </Field>
-            <Field label={`Monto bruto que reportó el aliado (${cobro.moneda}) — opcional`}>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={cobro.montoBruto}
-                onChange={(e) => setCobro({ ...cobro, montoBruto: e.target.value })}
-                placeholder="Si lo sabés, la retención sale sola"
-              />
-            </Field>
-            <p className="text-[11px] text-fg-muted">
-              Confirmar deja tu nombre firmando que esta plata entró. Con la fecha, la comisión pasa a
-              la caja del mes que corresponde.
-            </p>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="secondary" onClick={() => setCobro(null)}>
-                Cancelar
-              </Button>
-              <Button onClick={confirmarCobro} disabled={guardando || !cobro.fechaCobro}>
-                Confirmar cobro
-              </Button>
-            </div>
-          </div>
-        </Modal>
       )}
 
       {aliado && (

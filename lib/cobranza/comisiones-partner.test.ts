@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  comisionesPorCobrar,
   retencionDe,
   sugerenciaParaLaProxima,
   totalesPorMoneda,
@@ -175,6 +176,35 @@ describe("qué sugerir para la próxima comisión", () => {
       h("2026-02-15", 38_756.61, "COBRADO"),
     ])!;
     expect(r.monto).toBe(45_921.72);
+  });
+});
+
+describe("la alerta: qué comisiones ya deberían haber entrado", () => {
+  const a = (id: string, fecha: string, estado: string) => ({
+    id, partner: "HubSpot", monto: 1000, moneda: "USD", fecha, estado,
+  });
+
+  it("avisa de las vencidas sin confirmar, de la más vieja a la más nueva", () => {
+    const r = comisionesPorCobrar(
+      [a("nov", "2026-11-15", "POR_COBRAR"), a("ago", "2026-08-15", "POR_COBRAR"), a("jul", "2026-07-30", "POR_COBRAR")],
+      "2026-08-20",
+    );
+    expect(r.map((x) => x.id)).toEqual(["jul", "ago"]);
+  });
+
+  it("una ya confirmada no avisa, por vieja que sea", () => {
+    expect(comisionesPorCobrar([a("feb", "2026-02-15", "COBRADO")], "2026-08-20")).toEqual([]);
+  });
+
+  it("la de HOY todavía no está vencida: se avisa desde el día siguiente", () => {
+    expect(comisionesPorCobrar([a("hoy", "2026-08-20", "POR_COBRAR")], "2026-08-20")).toEqual([]);
+    expect(comisionesPorCobrar([a("ayer", "2026-08-19", "POR_COBRAR")], "2026-08-20")).toHaveLength(1);
+  });
+
+  it("⚠ el reloj ENTRA: la misma lista da distinto en dos fechas, y eso se puede probar", () => {
+    const cs = [a("ago", "2026-08-15", "POR_COBRAR")];
+    expect(comisionesPorCobrar(cs, "2026-08-01")).toEqual([]);
+    expect(comisionesPorCobrar(cs, "2026-12-01")).toHaveLength(1);
   });
 });
 

@@ -36,16 +36,24 @@ import DigestPanel from "./DigestPanel";
 import ProyeccionPanel from "./ProyeccionPanel";
 import ReportesPanel from "./ReportesPanel";
 import CuentaDrawer from "./CuentaDrawer";
+import Link from "next/link";
 import BuscarPagoModal from "./BuscarPagoModal";
+import type { ComisionPartnerDTO } from "@/lib/cobranza";
+import ComisionesDeAliado from "./ComisionesDeAliado";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 
-type Tab = "cobros" | "clientes" | "proyeccion" | "alertas" | "reportes" | "corte";
+type Tab = "cobros" | "clientes" | "proyeccion" | "aliados" | "alertas" | "reportes" | "corte";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "cobros", label: "Cobros" },
   { key: "clientes", label: "Clientes" },
   { key: "proyeccion", label: "Proyección" },
+  // Las comisiones de aliado se COBRAN acá, junto al resto de la cobranza, y se dan de
+  // alta en Finanzas. Pestaña propia y no filas en la cola: no se facturan por Odoo ni
+  // por Mercury, así que mezclarlas con el trabajo de facturación diario sería meterle
+  // a esa lista cosas que no se hacen ahí.
+  { key: "aliados", label: "Aliados" },
   { key: "alertas", label: "Alertas" },
   { key: "reportes", label: "Reportes" },
   { key: "corte", label: "Corte quincenal" },
@@ -62,6 +70,7 @@ export default function CobranzaClient({
   initialProyeccion,
   initialSeries,
   initialRiesgo,
+  initialComisiones,
   role,
   todayISO,
 }: {
@@ -72,11 +81,26 @@ export default function CobranzaClient({
   initialProyeccion: ProyeccionIngresos;
   initialSeries: SnapshotSerieDTO[];
   initialRiesgo: RiesgoPagoItem[];
+  /** Las comisiones de aliado, para la pestaña donde se cobran. */
+  initialComisiones: ComisionPartnerDTO[];
   role: string;
   todayISO: string;
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("cobros");
+  const [comisiones, setComisiones] = useState(initialComisiones);
+
+  /** Después de confirmar un cobro de aliado, la lista se vuelve a pedir. */
+  async function refrescarComisiones() {
+    try {
+      const r = await fetchJson<{ data: { comisiones: ComisionPartnerDTO[] } }>(
+        "/api/cobranza/comisiones-partner",
+      );
+      setComisiones(r.data.comisiones);
+    } catch {
+      toast.error("No se pudo refrescar las comisiones. Recargá la página.");
+    }
+  }
   const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
@@ -240,6 +264,23 @@ export default function CobranzaClient({
       {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
       {tab === "alertas" && (
         <AlertasCobranza alertas={alertas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
+      )}
+      {tab === "aliados" && (
+        <div className="space-y-3">
+          <p className="text-[11px] text-fg-muted">
+            Lo que nos pagan los aliados. Se dan de alta en{" "}
+            <Link href="/finanzas/comisiones-partner" className="text-brand hover:underline">
+              Finanzas · Comisiones de partner
+            </Link>{" "}
+            y se cobran acá. ⚠ Son un INGRESO, pero NO entran al total de facturación: esa
+            cifra es solo servicios.
+          </p>
+          <ComisionesDeAliado
+            comisiones={comisiones}
+            todayISO={todayISO}
+            onCambio={refrescarComisiones}
+          />
+        </div>
       )}
       {tab === "reportes" && (
         <ReportesPanel series={series} riesgo={riesgo} role={role} cola={cola} todayISO={todayISO} />
