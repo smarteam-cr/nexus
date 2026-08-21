@@ -386,11 +386,45 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                   ))}
                 </ul>
                 {h.proximo && (
-                  // Dónde cae, NO cuánto: nadie sabe el monto y ponerle uno
-                  // sería inventarlo.
-                  <p className="mt-2 text-[11px] text-fg-muted">
-                    El próximo caería en {h.proximo.etiqueta}
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="text-[11px] text-fg-muted">
+                      El próximo caería en {h.proximo.etiqueta}
+                      {/* El monto SUGERIDO sale de la última confirmada — un hecho, no un
+                          promedio: la comisión sube con cuentas nuevas y baja con churn, y
+                          promediar suaviza justo la señal que importa. Sin ninguna
+                          confirmada no se sugiere nada, porque no habría de dónde. */}
+                      {h.proximo.montoSugerido !== null && (
+                        <>
+                          {" · "}
+                          <span className="text-fg-secondary tabular-nums">
+                            ~{fmtMonto(h.proximo.montoSugerido, h.proximo.moneda as "CRC" | "USD")}
+                          </span>{" "}
+                          según la última confirmada ({fmtFecha(h.proximo.segun!)})
+                        </>
+                      )}
+                    </p>
+                    {h.proximo.montoSugerido !== null && (
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => {
+                          setEditandoId(null);
+                          setForm({
+                            partner: h.nombre,
+                            partnerId: h.partnerId ?? "",
+                            concepto: `Comisión ${h.proximo!.etiqueta}`,
+                            monto: String(h.proximo!.montoSugerido),
+                            moneda: h.proximo!.moneda ?? "USD",
+                            fecha: "",
+                            clientId: "",
+                            notas: `Estimada a partir de la comisión confirmada del ${h.proximo!.segun}.`,
+                          });
+                        }}
+                      >
+                        Anotar la próxima
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

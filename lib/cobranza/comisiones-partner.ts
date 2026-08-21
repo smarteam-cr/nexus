@@ -124,3 +124,39 @@ export function retencionDe(
   return { monto, pct: Math.round((monto / bruto) * 10000) / 100 };
 }
 
+/** Una comisión, con lo justo para poder sugerir la próxima. */
+export interface ComisionParaProyectar {
+  fecha: string;
+  monto: number;
+  moneda: string;
+  estado: string;
+}
+
+/**
+ * Cuánto sugerir para la PRÓXIMA comisión de un aliado: lo que entró la última vez que
+ * alguien lo confirmó.
+ *
+ * ── POR QUÉ LA ÚLTIMA CONFIRMADA Y NO UN PROMEDIO ───────────────────────────────
+ * La comisión no es estática: en un trimestre entran cuentas y sube, o hay churn y
+ * baja. Nadie sabe de antemano cuánto van a pagar. Un promedio de tres trimestres
+ * suaviza justo la señal que importa —hacia dónde se está moviendo— y da un número que
+ * no ocurrió nunca. El último medido, en cambio, es un hecho: pasó.
+ *
+ * ⚠ SOLO CUENTA LO CONFIRMADO. Sugerir a partir de otra proyección sería copiar una
+ * estimación y presentarla como si tuviera respaldo — que es exactamente cómo aparecieron
+ * los "$51.000 exactos, dos veces" que este módulo viene a desarmar.
+ *
+ * null = todavía no hay ninguna confirmada, y entonces no se sugiere nada. Un cero o un
+ * "usá el registrado" harían pasar por dato lo que no lo es.
+ */
+export function sugerenciaParaLaProxima(
+  comisiones: readonly ComisionParaProyectar[],
+): { monto: number; moneda: string; desde: string } | null {
+  const confirmadas = comisiones
+    .filter((c) => c.estado === "COBRADO")
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const ultima = confirmadas.at(-1);
+  if (!ultima) return null;
+  return { monto: ultima.monto, moneda: ultima.moneda, desde: ultima.fecha };
+}
+

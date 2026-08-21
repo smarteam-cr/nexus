@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   retencionDe,
+  sugerenciaParaLaProxima,
   totalesPorMoneda,
   totalesPorPartner,
   type ComisionParaSumar,
@@ -128,6 +129,52 @@ describe("la retención del procesador", () => {
   it("el rango que reporta el procesador (0,5%–5%) sale con dos decimales", () => {
     expect(retencionDe(9500, 10_000)!.pct).toBe(5);
     expect(retencionDe(9950, 10_000)!.pct).toBe(0.5);
+  });
+});
+
+describe("qué sugerir para la próxima comisión", () => {
+  const h = (fecha: string, monto: number, estado: string) => ({ fecha, monto, moneda: "USD", estado });
+
+  it("sale de la ÚLTIMA CONFIRMADA, que es un hecho", () => {
+    const r = sugerenciaParaLaProxima([
+      h("2026-02-15", 38_756.61, "COBRADO"),
+      h("2026-05-15", 45_921.72, "COBRADO"),
+    ])!;
+    expect(r.monto).toBe(45_921.72);
+    expect(r.desde).toBe("2026-05-15");
+  });
+
+  it("EL PUNTO DEL MÓDULO: una proyección NO sirve de base para otra", () => {
+    // Copiar una estimación y presentarla como respaldada es exactamente cómo
+    // aparecieron los "$51.000 exactos, dos veces".
+    const r = sugerenciaParaLaProxima([
+      h("2026-05-15", 45_921.72, "COBRADO"),
+      h("2026-08-15", 51_000, "POR_COBRAR"),
+    ])!;
+    expect(r.monto).toBe(45_921.72);
+  });
+
+  it("sin ninguna confirmada no sugiere nada — ni cero, ni el registrado", () => {
+    expect(sugerenciaParaLaProxima([h("2026-08-15", 51_000, "POR_COBRAR")])).toBeNull();
+    expect(sugerenciaParaLaProxima([])).toBeNull();
+  });
+
+  it("no promedia: un promedio suaviza justo la señal que importa", () => {
+    // La comisión sube con cuentas nuevas y baja con churn. El promedio da un número
+    // que no ocurrió nunca y esconde hacia dónde se está moviendo.
+    const r = sugerenciaParaLaProxima([
+      h("2026-02-15", 10_000, "COBRADO"),
+      h("2026-05-15", 50_000, "COBRADO"),
+    ])!;
+    expect(r.monto).toBe(50_000);
+  });
+
+  it("el orden de entrada no manda: manda la fecha", () => {
+    const r = sugerenciaParaLaProxima([
+      h("2026-05-15", 45_921.72, "COBRADO"),
+      h("2026-02-15", 38_756.61, "COBRADO"),
+    ])!;
+    expect(r.monto).toBe(45_921.72);
   });
 });
 

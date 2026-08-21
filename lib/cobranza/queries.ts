@@ -50,8 +50,10 @@ import {
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import {
   retencionDe,
+  sugerenciaParaLaProxima,
   totalesPorMoneda,
   totalesPorPartner,
+  type ComisionParaProyectar,
   type CorteDeMoneda,
   type TotalPorPartner,
 } from "./comisiones-partner";
@@ -1062,10 +1064,21 @@ export interface HistorialPartnerDTO {
   frecuenciaLabel: string;
   periodos: TotalDeBucket[];
   /**
-   * Dónde cae el próximo período según la cadencia. NO dice cuánto: eso nadie lo
-   * sabe y ponerle un número sería fabricar.
+   * Dónde cae el próximo período según la cadencia, y CUÁNTO sugerir.
+   *
+   * El monto sale de la última comisión CONFIRMADA de ese aliado — un hecho, no un
+   * promedio: la comisión sube con cuentas nuevas y baja con churn, y promediar suaviza
+   * justo la señal que importa. `montoSugerido: null` = todavía no hay ninguna
+   * confirmada, y entonces no se sugiere nada.
    */
-  proximo: { clave: string; etiqueta: string } | null;
+  proximo: {
+    clave: string;
+    etiqueta: string;
+    montoSugerido: number | null;
+    moneda: string | null;
+    /** La fecha de la comisión de la que sale la sugerencia, para poder discutirla. */
+    segun: string | null;
+  } | null;
 }
 
 export interface ComisionesPartnerDTO {
@@ -1153,17 +1166,24 @@ function armarHistorial(
   const porClave = new Map(partners.map((p) => [p.clave, p]));
   const porId = new Map(partners.map((p) => [p.id, p]));
 
-  const grupos = new Map<string, { nombre: string; pagos: PagoDeAliado[] }>();
+  // `pagos` es lo que agrupa por cadencia; `paraProyectar` lleva ADEMÁS el estado, que
+  // la sugerencia necesita para no basarse en una proyección. Van por separado para no
+  // meterle un campo a `PagoDeAliado`, que es el tipo compartido de partners.ts.
+  const grupos = new Map<
+    string,
+    { nombre: string; pagos: PagoDeAliado[]; paraProyectar: ComisionParaProyectar[] }
+  >();
   for (const c of comisiones) {
     // El vínculo duro manda; el nombre es el fallback de lo no ligado.
     const cfg = (c.partnerId ? porId.get(c.partnerId) : null) ?? porClave.get(normalizePartner(c.partner)) ?? null;
     const clave = cfg?.clave ?? normalizePartner(c.partner);
     let g = grupos.get(clave);
     if (!g) {
-      g = { nombre: cfg?.nombre ?? c.partner, pagos: [] };
+      g = { nombre: cfg?.nombre ?? c.partner, pagos: [], paraProyectar: [] };
       grupos.set(clave, g);
     }
     g.pagos.push({ fecha: c.fecha, monto: c.monto, moneda: c.moneda });
+    g.paraProyectar.push({ fecha: c.fecha, monto: c.monto, moneda: c.moneda, estado: c.estado });
   }
 
   const out: HistorialPartnerDTO[] = [];
@@ -1175,11 +1195,18 @@ function armarHistorial(
     // configurada no se dice nada: adivinar el ritmo desde 1-2 pagos sería
     // exactamente la fabricación que este módulo evita.
     const ultimaFecha = g.pagos.map((p) => p.fecha).sort().at(-1);
+    const sugerencia = sugerenciaParaLaProxima(g.paraProyectar);
     const proximo =
       frecuencia && ultimaFecha
         ? (() => {
             const sig = bucketSiguiente(bucketDeCadencia(ultimaFecha, frecuencia), frecuencia);
-            return { clave: sig.clave, etiqueta: sig.etiqueta };
+            return {
+              clave: sig.clave,
+              etiqueta: sig.etiqueta,
+              montoSugerido: sugerencia?.monto ?? null,
+              moneda: sugerencia?.moneda ?? null,
+              segun: sugerencia?.desde ?? null,
+            };
           })()
         : null;
     out.push({
