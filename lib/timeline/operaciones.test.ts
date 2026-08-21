@@ -109,6 +109,100 @@ describe("borrar es una INTENCIÓN, no una omisión", () => {
   });
 });
 
+describe("⛔ el borrado que se PROMETÍA y no ocurría", () => {
+  /* Encontrado el 2026-08-21 auditando por qué el chat no podía hacer casi nada.
+     `tarea.borrar` sacaba la tarea del array y daba el trabajo por hecho — pero el PUT protege
+     lo que `isKept` marca (`rescate-progreso.ts:149-153`) y la fila sobrevivía, sin un solo
+     aviso. La cajita azul ya había dicho «Se elimina «X»». Elías pidió literalmente
+     *«borra la última base que tiene un nombre raro»*: una base cargada a mano o ya hecha
+     habría quedado ahí, y él leyendo que se borró. */
+
+  it("⛔ una tarea HECHA no se borra: se rechaza diciendo por qué", () => {
+    const base = cronograma();
+    base[1].tasks[1] = tarea("t3", 3, { status: "DONE" });
+    const { payload, rechazadas } = aplicarOperaciones(base, null, [
+      { op: "tarea.borrar", taskId: "t3" },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("hecha");
+    expect(rechazadas[0].motivo).toContain("tarea t3");
+    const f2 = payload.phases.find((p) => p.id === "f2")!;
+    expect(f2.tasks, "la fase no debería quedar marcada por una operación rechazada").toBeUndefined();
+  });
+
+  it("⛔ y una cargada a MANO tampoco, aunque esté pendiente", () => {
+    const base = cronograma();
+    base[1].tasks[1] = tarea("t3", 3, { status: "PENDING", source: "HUMAN" });
+    const { rechazadas } = aplicarOperaciones(base, null, [{ op: "tarea.borrar", taskId: "t3" }]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("la cargó una persona");
+  });
+
+  it("una PENDIENTE escrita por la IA sí se borra — lo de siempre no cambió", () => {
+    const { payload, rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "tarea.borrar", taskId: "t3" },
+    ]);
+    expect(rechazadas).toHaveLength(0);
+    expect(payload.phases.find((p) => p.id === "f2")!.tasks!.map((t) => t.id)).toEqual(["t2"]);
+  });
+});
+
+describe("⭐ el chat nombra una tarea por su HANDLE, o no la nombra", () => {
+  /* El vocabulario tenía las tres operaciones de tarea desde el día uno y el chat no podía emitir
+     ninguna: el contexto no le mandaba ni un id. Mandar el cuid entero no entraba en el techo del
+     prefijo (medido: 7 de 51 cronogramas se pasaban), así que se nombra por los últimos
+     caracteres. Ver `handle-de-tarea.ts` para la tabla de colisiones. */
+
+  const conCuids = (): FaseActual[] => [
+    {
+      id: "f1",
+      name: "Integraciones",
+      durationWeeks: 3,
+      startWeek: null,
+      tasks: [
+        tarea("cms6949pw00sj06rwrb4ttmef", 0, { title: "Sesión de cierre de auditoría" }),
+        tarea("cms6949pw00sh06rw19je7u19", 0, { title: "Mapeo de brechas por módulo" }),
+      ],
+    },
+  ];
+
+  it("mover por handle mueve la tarea correcta", () => {
+    const { payload, rechazadas } = aplicarOperaciones(conCuids(), null, [
+      { op: "tarea.mover-semana", taskId: "ttmef", semana: 2 },
+    ]);
+    expect(rechazadas).toHaveLength(0);
+    const t = payload.phases[0].tasks!.find((x) => x.id === "cms6949pw00sj06rwrb4ttmef")!;
+    expect(t.weekIndex).toBe(2);
+    expect(
+      payload.phases[0].tasks!.find((x) => x.id === "cms6949pw00sh06rw19je7u19")!.weekIndex,
+      "se movió la hermana: el handle apuntó mal",
+    ).toBe(0);
+  });
+
+  it("⛔ un handle ambiguo NO se desempata: se rechaza con el conteo", () => {
+    const base = conCuids();
+    base[0].tasks = [tarea("aaaaaXXXXX", 0), tarea("bbbbbXXXXX", 0)];
+    const { payload, rechazadas } = aplicarOperaciones(base, null, [
+      { op: "tarea.borrar", taskId: "XXXXX" },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("2 tareas");
+    expect(payload.phases[0].tasks, "tocó la fase por una operación rechazada").toBeUndefined();
+  });
+
+  it("⚠ y la cajita azul dice el TÍTULO, nunca el handle", () => {
+    /* Sin esto, el CSE aprueba una línea que dice «ttmef» — ilegible, y peor que la prosa que se
+       retiró. La edición que la pone en rojo: que `tarea()` busque solo por id exacto. */
+    const [linea] = describirOperaciones(conCuids(), [
+      { op: "tarea.mover-semana", taskId: "ttmef", semana: 2 },
+    ]);
+    expect(linea).toContain("Sesión de cierre de auditoría");
+    expect(linea, "imprimió el handle crudo: el CSE aprueba algo que no puede leer").not.toContain(
+      "ttmef",
+    );
+  });
+});
+
 describe("⛔ lo que no existe se RECHAZA con motivo, nunca en silencio", () => {
   it("una fase inventada no se aproxima a la más parecida", () => {
     /* El modo de falla que este módulo existe para impedir: rápido, silencioso y equivocado. */

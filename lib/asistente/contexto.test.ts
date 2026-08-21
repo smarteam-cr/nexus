@@ -91,9 +91,13 @@ describe("el contexto del chat se mantiene liviano", () => {
   });
 
   it("el techo del prefijo sigue siendo una decisión chica, no un número que creció solo", () => {
-    /* Si alguien lo sube, que sea un diff que se lee. 6.000 caracteres ≈ 1.500 tokens: alcanza
-       para la forma del cronograma más grande de la cartera y las reglas duras. */
-    expect(TECHO_DEL_PREFIJO_CHARS).toBeLessThanOrEqual(8_000);
+    /* Si alguien lo sube, que sea un diff que se lee — que es exactamente lo que pasó el
+       2026-08-21: subió de 6.000 a 13.000 porque entraron las TAREAS, sin las cuales el chat
+       tenía tres operaciones que no podía emitir. Medido sobre los 51 cronogramas reales, con el
+       handle de 5 caracteres el más grande queda en ~11.000 y ninguno se pasa.
+
+       El límite de acá arriba es el que impide que el próximo agregado entre sin medirlo. */
+    expect(TECHO_DEL_PREFIJO_CHARS).toBeLessThanOrEqual(15_000);
   });
 });
 
@@ -161,26 +165,42 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     ).toBe(false);
   });
 
-  it("⛔ NUNCA el contenido de las tareas — solo contadores", () => {
-    /* ⚠ ESTA GUARDA SE CORRIGIÓ EL 2026-08-20, y el porqué importa más que el assert.
-       La primera versión decía «no toques `tasks`», y por eso el contexto daba solo el TOTAL por
-       fase. Elías pidió «en Integraciones hay semanas sin tareas, quítalas» y el asistente tuvo
-       que contestar que no podía verlo: con «16 tareas» no hay forma de saber que las semanas 3
-       a 6 están vacías. La guarda estaba defendiendo la línea equivocada.
+  it("⛔ las NOTAS de las tareas nunca cruzan — el título sí, y es la tercera línea", () => {
+    /* ⚠ ESTA GUARDA SE MOVIÓ DOS VECES, Y EL RECORRIDO ES LA LECCIÓN.
 
-       La línea de verdad es CONTENIDO vs FORMA. `weekIndex` y `status` son dos enteros —~250
-       caracteres para todo Wherex— y son justo lo que hace falta para conversar. `title` y
-       `notes` son ~8.000 y los lee el modificador cuando ejecuta.
+       v1 (2026-08-19): «no toques `tasks`». El contexto daba solo el total por fase. Elías pidió
+       «en Integraciones hay semanas sin tareas, quítalas» y el chat no podía verlo.
+       v2 (2026-08-20): «solo contadores» — entraron `weekIndex` y `status`. Elías pidió «pasá la
+       sesión de cierre al final» y «borrá la última base»: el chat no tenía con qué nombrarlas.
+       v3 (2026-08-21, esta): entran `id` y `title`. Medido: de nueve pedidos distintos que hizo
+       de verdad, seis morían acá.
 
-       La edición que la pone en rojo: sumar `title: true` al select de tareas. */
-    expect(src).toContain("tasks: { select: { weekIndex: true, status: true } }");
-    for (const contenido of ["title: true", "notes: true"]) {
-      expect(
-        src.includes(contenido),
-        `el contexto del chat pasó a traer "${contenido}": eso es contenido, no forma — son ` +
-          "~8.000 caracteres por turno que el modificador ya lee cuando le toca ejecutar",
-      ).toBe(false);
-    }
+       Las dos veces la guarda defendió una línea que el uso corrió. Lo que NO se movió nunca es
+       lo que separa la FORMA del cronograma de su CONTENIDO de negocio, y ahí siguen las notas:
+       son texto libre del CSE, no hacen falta para conversar sobre estructura, y el modificador
+       ya las lee cuando ejecuta.
+
+       La edición que la pone en rojo: sumar `notes: true` al select de tareas. */
+    expect(src).toContain("select: { id: true, title: true, weekIndex: true, status: true }");
+    expect(
+      src.includes("notes: true"),
+      "el contexto del chat pasó a traer las NOTAS de las tareas: eso es contenido de negocio, " +
+        "no la forma del cronograma — y el modificador ya las lee cuando le toca ejecutar",
+    ).toBe(false);
+  });
+
+  it("⛔ y las tareas se nombran por HANDLE, no por el cuid entero", () => {
+    /* Es lo único que hace que el cronograma más grande entre en el techo: el id completo son 25
+       caracteres × 98 tareas. Medido, con cuids enteros 7 de los 51 cronogramas se pasaban.
+       Y el handle NO puede salir del principio del id: las tareas de un cronograma nacen en el
+       mismo `createMany` y comparten prefijo — 1.063 colisiones medidas con 8 caracteres.
+
+       La edición que la pone en rojo: interpolar `t.id` en vez de `handleDeTarea(t.id)`. */
+    expect(src).toContain("handleDeTarea(t.id)");
+    expect(
+      /\$\{t\.id\}/.test(src),
+      "el contexto interpola el id crudo de una tarea: son 20 caracteres de más por tarea",
+    ).toBe(false);
   });
 
   it("⭐ y sí trae el reparto por semana, que es lo que deja pedir «sacá las vacías»", () => {

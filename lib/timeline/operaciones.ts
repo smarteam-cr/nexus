@@ -39,6 +39,8 @@
  * encontraron el 2026-08-20 (dos puertas, a las dos les faltaba el mismo guardia).
  */
 import type { FaseActual, PayloadProyectado, Party, TipoDeTarea } from "./assist-items";
+import { resolverHandle } from "./handle-de-tarea";
+import { isKept } from "./regen-columnas";
 
 /**
  * El vocabulario. ⛔ Es una lista CERRADA a propósito: lo que no está acá no se puede pedir, y el
@@ -101,6 +103,11 @@ interface FaseEnCurso {
     notes: string | null;
     party?: Party | null;
     type?: TipoDeTarea | null;
+    /* ⚠ `status` y `source` NO viajan al payload (el PUT no acepta status: route.ts:27). Se
+       conservan acá porque son lo que decide si una tarea se puede borrar — ver `tarea.borrar`.
+       Tirarlos, que es lo que hacía la primera versión, volvía el borrado mudo. */
+    status?: string;
+    source?: string;
   }[];
   /**
    * ⭐ LA MARCA QUE SOSTIENE TODO. Una fase intocada sale del payload SIN `tasks`, que en el
@@ -109,6 +116,14 @@ interface FaseEnCurso {
    * `assist-items.ts`, y por el mismo motivo.
    */
   tocada: boolean;
+}
+
+/** Los estados tal como los nombra la pantalla, para que el rechazo se lea igual que el Gantt. */
+function estadoLegible(status: string | undefined): string {
+  if (status === "DONE") return "hecha";
+  if (status === "IN_PROGRESS") return "en curso";
+  if (status === "SUSPENDED") return "suspendida";
+  return "marcada";
 }
 
 export function aplicarOperaciones(
@@ -135,6 +150,8 @@ export function aplicarOperaciones(
       notes: t.notes ?? null,
       party: t.party ?? null,
       type: t.type ?? null,
+      status: t.status,
+      source: t.source,
     })),
     tocada: false,
   }));
@@ -142,13 +159,36 @@ export function aplicarOperaciones(
   let ancla = anclaActual;
 
   const buscarFase = (phaseId: string) => fases.find((f) => f.id === phaseId);
-  const buscarTarea = (taskId: string) => {
-    for (const f of fases) {
-      const t = f.tasks.find((x) => x.id === taskId);
-      if (t) return { fase: f, tarea: t };
-    }
-    return null;
+  /**
+   * ⭐ El chat nombra una tarea por su HANDLE (los últimos caracteres del id), porque el id
+   * entero son 25 caracteres y el prefijo del chat tiene techo. Acepta también el id completo.
+   *
+   * ⛔ Ante dos candidatas NO elige: devuelve `ambigua` y quien llama rechaza. Elegir la primera
+   * sería exactamente el modo de falla que este módulo existe para impedir (docblock de arriba):
+   * rápido, silencioso y equivocado.
+   */
+  const buscarTarea = (
+    referencia: string,
+  ):
+    | { fase: FaseEnCurso; tarea: FaseEnCurso["tasks"][number] }
+    | { ambigua: number }
+    | null => {
+    const conId = fases.flatMap((f) => f.tasks.filter((t) => t.id).map((t) => ({ f, t })));
+    const r = resolverHandle(referencia, conId.map((x) => x.t.id!));
+    if (r.tipo === "ambigua") return { ambigua: r.cuantas };
+    if (r.tipo === "ninguna") return null;
+    const hit = conId.find((x) => x.t.id === r.id)!;
+    return { fase: hit.f, tarea: hit.t };
   };
+
+  /** Traduce el resultado de `buscarTarea` en el motivo del rechazo, con su número. */
+  const motivoDeBusqueda = (hit: { ambigua: number } | null) =>
+    hit
+      ? `hay ${hit.ambigua} tareas que coinciden con ese identificador: hace falta el nombre exacto`
+      : "esa tarea no existe en el cronograma";
+  const noEncontrada = (
+    hit: ReturnType<typeof buscarTarea>,
+  ): hit is { ambigua: number } | null => hit === null || "ambigua" in hit;
   const rechazar = (operacion: Operacion, motivo: string) => rechazadas.push({ operacion, motivo });
 
   /** Acomoda las tareas que quedaron fuera de rango y reasigna `order` dentro de cada semana. */
@@ -276,8 +316,8 @@ export function aplicarOperaciones(
 
       case "tarea.mover-semana": {
         const hit = buscarTarea(operacion.taskId);
-        if (!hit) {
-          rechazar(operacion, "esa tarea no existe en el cronograma");
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
           break;
         }
         hit.tarea.weekIndex = Math.max(Math.floor(operacion.semana), 0);
@@ -288,8 +328,8 @@ export function aplicarOperaciones(
 
       case "tarea.mover-fase": {
         const hit = buscarTarea(operacion.taskId);
-        if (!hit) {
-          rechazar(operacion, "esa tarea no existe en el cronograma");
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
           break;
         }
         const destino = buscarFase(operacion.phaseId);
@@ -314,8 +354,31 @@ export function aplicarOperaciones(
 
       case "tarea.borrar": {
         const hit = buscarTarea(operacion.taskId);
-        if (!hit) {
-          rechazar(operacion, "esa tarea no existe en el cronograma");
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
+          break;
+        }
+        /**
+         * ⛔ EL BORRADO QUE SE PROMETÍA Y NO OCURRÍA (encontrado el 2026-08-21).
+         *
+         * Sacar la tarea del array NO la borra: el PUT decide qué borrar con
+         * `idsBorrablesPorOmision` (`rescate-progreso.ts:149-153`), que **protege** todo lo que
+         * `isKept` marca — hecha, en curso, suspendida, o cargada a mano. La fila sobrevivía, la
+         * respuesta solo trae avisos de reubicación (`timeline/route.ts:1013`), y la cajita azul
+         * ya había dicho «Se elimina «X»». El CSE leía un borrado que nunca pasó.
+         *
+         * Y no se arregla forzando: darle al PUT un canal para borrar lo protegido es abrir la
+         * segunda puerta de escritura que este módulo existe para no abrir. Se arregla diciéndolo
+         * ANTES, que además es lo que pidió Elías: que el chat avise que eso lo escribió un
+         * humano en vez de borrarlo sin más.
+         */
+        if (isKept({ status: hit.tarea.status ?? "PENDING", source: hit.tarea.source })) {
+          rechazar(
+            operacion,
+            `«${hit.tarea.title}» tiene trabajo humano encima ` +
+              `(${hit.tarea.source === "HUMAN" ? "la cargó una persona" : "está " + estadoLegible(hit.tarea.status)})` +
+              `: el cronograma no la borra. Hay que hacerlo desde el Gantt, a mano.`,
+          );
           break;
         }
         hit.fase.tasks = hit.fase.tasks.filter((t) => t !== hit.tarea);
@@ -402,12 +465,21 @@ export function describirOperaciones(
 ): string[] {
   const fase = (id: string) => actuales.find((f) => f.id === id);
   const nombre = (id: string) => fase(id)?.name ?? "(una fase que ya no está)";
-  const tarea = (id: string) => {
-    for (const f of actuales) {
-      const t = f.tasks.find((x) => x.id === id);
-      if (t) return { titulo: t.title, fase: f.name };
-    }
-    return null;
+  /**
+   * ⚠ Resuelve igual que el ejecutor — por HANDLE o por id entero — y por el mismo motivo: si acá
+   * se buscara solo por id exacto, la cajita azul imprimiría «ywlga» donde tiene que decir el
+   * título, y la promesa de este módulo («lo que se LEE es lo que se EJECUTA») se rompería justo
+   * en las operaciones de tarea, que son las que el CSE no puede verificar de memoria.
+   */
+  const tarea = (referencia: string) => {
+    const conId = actuales.flatMap((f) => f.tasks.filter((t) => t.id).map((t) => ({ f, t })));
+    const r = resolverHandle(
+      referencia,
+      conId.map((x) => x.t.id),
+    );
+    if (r.tipo !== "una") return null;
+    const hit = conId.find((x) => x.t.id === r.id)!;
+    return { titulo: hit.t.title, fase: hit.f.name };
   };
   const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
 

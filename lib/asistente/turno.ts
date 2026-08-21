@@ -129,8 +129,15 @@ CÓMO SE EMITE LA PROPUESTA
 Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y las
 OPERACIONES a ejecutar. Se aplican en milisegundos, así que no describas el cambio: nómbralo.
 
-Las fases se referencian por su ID, el que va entre corchetes en el contexto. ⛔ Nunca por nombre:
-hay proyectos con fases casi homónimas y elegir la parecida sería adivinar.
+Las fases y las tareas se referencian por su ID, el que va entre corchetes en el contexto.
+⛔ Nunca por nombre: hay proyectos con fases casi homónimas y tareas repetidas entre fases, y
+elegir la parecida sería adivinar.
+
+⭐ PARA MOVER O BORRAR TAREAS, EMITE UNA OPERACIÓN POR TAREA, ENUMERADAS.
+Si te piden «pasa las atrasadas a la última semana», mira el contexto, decide cuáles son y emite
+un "tarea.mover-semana" por cada una. Es a propósito: así la persona lee EXACTAMENTE qué tareas
+se mueven antes de apretar, en vez de aprobar un criterio y descubrir el alcance después.
+Si son muchas, dilo en el resumen con el número.
 
 ⛔ EL VOCABULARIO ES UNA LISTA CERRADA, Y ES LA REGLA QUE MÁS CUIDADO PIDE.
 Si lo que te piden NO se puede expresar con esas operaciones, **no llames la herramienta**: dilo
@@ -145,6 +152,11 @@ tareas de la semana 4 pasan a la 3 — ¿lo hago así?».
 Antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas HECHAS, dilo con el
 número y pide confirmación explícita — «esa fase tiene 4 tareas hechas, ¿la borro igual?». Solo
 con el sí emites la operación.
+
+⛔ Y CON UNA TAREA SUELTA NO ALCANZA CON CONFIRMAR: NO SE PUEDE.
+Una tarea hecha, en curso o cargada a mano NO se borra desde el chat — la operación se rechaza
+sola. Si te piden borrar una así, dilo antes de intentarlo: «esa la marcó alguien como hecha, hay
+que borrarla desde el Gantt». Una fase entera sí se puede; una tarea protegida, no.
 
 ⚠ Es la ÚNICA excepción a «propón en el primer turno», y por eso se aguanta: no se pregunta por
 rutina, se pregunta cuando está en juego trabajo que alguien hizo.
@@ -163,10 +175,15 @@ entra en el vocabulario, o cuando estás pidiendo esa confirmación.`;
  * ⛔ Y no es solo velocidad. Reescribir el documento entero para cambiar una duración soltó el
  * `startWeek` de seis fases y corrió el cierre 70 días. Una operación toca lo que nombra.
  *
- * ⚠ ESTE TRAMO SOLO TRAE LAS OPERACIONES DE FASE. Las de tarea individual necesitan que el chat
- * conozca los títulos y sus ids, y eso es un salto de contexto con su propio tramo. Con las de
- * fase ya se cubren los tres pedidos reales que Elías probó: fusionar, acortar y sacar semanas
- * vacías.
+ * ── LAS DE TAREA ENTRARON EL 2026-08-21, Y ERAN LA MITAD DE LO QUE SE PEDÍA ──────────────────
+ * Estaban en el vocabulario desde el día uno y el chat no podía emitir ninguna: no estaban en
+ * este enum, y el contexto no le mandaba ni un id. Leídos los 16 turnos reales del CSE, de nueve
+ * pedidos distintos el chat solo podía ejecutar tres — «pasá la sesión de cierre al final»,
+ * «borrá la última base», «las atrasadas a la última semana» caían todos del mismo lado.
+ *
+ * ⚠ Las tareas se nombran por HANDLE (los últimos caracteres del id, ver `handle-de-tarea.ts`),
+ * no por el cuid entero: con el id completo, 7 de los 51 cronogramas no entraban en el techo del
+ * prefijo.
  */
 const TOOL_ACUERDO: Anthropic.Messages.Tool = {
   name: "registrar_cambio_acordado",
@@ -198,6 +215,9 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.redistribuir",
                 "fase.mover",
                 "fase.arranque-relativo",
+                "tarea.mover-semana",
+                "tarea.mover-fase",
+                "tarea.borrar",
                 "arranque",
               ],
               description:
@@ -208,6 +228,12 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.mover: la cambia de lugar en el orden (posicion, base 0). " +
                 "fase.arranque-relativo: en qué semana del proyecto arranca (semana, o null = " +
                 "cuando termina la anterior). " +
+                "tarea.mover-semana: pasa UNA tarea a otra semana de su misma fase (taskId, " +
+                "semana base 0). " +
+                "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). ⚠ la recrea: " +
+                "pierde su estado y sus fechas propias, avisalo antes. " +
+                "tarea.borrar: elimina UNA tarea (taskId). ⚠ si tiene trabajo humano encima " +
+                "—hecha, en curso, o cargada a mano— se rechaza sola: no se puede borrar desde acá. " +
                 "arranque: cambia la fecha de inicio del proyecto (fecha AAAA-MM-DD).",
             },
             phaseId: {
@@ -220,6 +246,12 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
             semana: {
               type: ["integer", "null"],
               description: "Para fase.arranque-relativo. Base 0, o null para automático.",
+            },
+            taskId: {
+              type: "string",
+              description:
+                "El identificador de la TAREA, tal como aparece entre corchetes junto a su " +
+                "título en el contexto. Para tarea.mover-semana, tarea.mover-fase y tarea.borrar.",
             },
             fecha: { type: "string", description: "Para arranque. AAAA-MM-DD." },
           },
@@ -327,11 +359,16 @@ export async function correrTurno(
         /* ⭐ LAS LÍNEAS SE CALCULAN ACÁ, EN EL SERVIDOR, contra el cronograma tal como está al
            acordar. Es lo que vuelve hermética la cajita: lo que la persona lee sale del MISMO
            objeto que se va a ejecutar, no de una prosa que el modelo escribe aparte. */
+        /* ⛔ ACÁ SE FABRICABAN TAREAS FALSAS —`{id:"", title:"", weekIndex:0}`— porque el
+           contexto solo mandaba el CONTEO. Funcionaba mientras el vocabulario del chat era solo
+           de fases; en cuanto entraron las de tarea, la cajita azul habría dicho «Se elimina
+           «cms6949pw00sj»» en vez del título. La persona aprobaría algo que no puede leer, que es
+           peor que la prosa que este mecanismo vino a retirar. */
         const paraTraducir = (ctx.fases ?? []).map((f) => ({
           id: f.id,
           name: f.name,
           durationWeeks: f.durationWeeks,
-          tasks: Array.from({ length: f.tareas }, () => ({ id: "", title: "", weekIndex: 0 })),
+          tasks: f.items.map((t) => ({ id: t.id, title: t.title, weekIndex: t.weekIndex })),
         }));
         acuerdo = {
           resumen: input.resumen.trim(),

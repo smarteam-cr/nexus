@@ -29,13 +29,34 @@ import {
 } from "@/lib/timeline/capacidades";
 import { projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
 
 /**
  * ⚠ EL TECHO, Y ES UNA DECISIÓN, NO UNA CONSTANTE SUELTA. Si el prefijo crece más que esto, algo
  * pesado se coló — el modo de falla es mudo (nadie ve un prompt largo; se ve la factura tres
  * semanas después). La guarda lo hace cumplir sobre contexto armado de verdad.
+ *
+ * ── POR QUÉ SUBIÓ DE 6.000 A 13.000 EL 2026-08-21 ────────────────────────────────────────────
+ * Porque entraron las TAREAS, y sin ellas el chat no podía hacer casi nada: tenía tres
+ * operaciones de tarea en el vocabulario y ni un id para nombrarlas. Medido sobre los 51
+ * cronogramas reales, con el handle de 5 caracteres en vez del cuid entero, el más grande
+ * (Wherex, 98 tareas) queda en ~11.000 y **ninguno se pasa de 13.000**.
+ *
+ * ⛔ Esto NO reabre «cargar el handoff entero en el chat». Lo que entró es la lista de tareas del
+ * cronograma del que se está hablando —la FORMA del documento— no el material de negocio. Un
+ * kickoff generado son ~20.000 caracteres él solo, y sigue afuera.
+ *
+ * El costo real es despreciable: ~3.000 tokens que se cachean desde el segundo turno.
  */
-export const TECHO_DEL_PREFIJO_CHARS = 6_000;
+/** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
+function estadoCorto(status: string): string {
+  if (status === "DONE") return "hecha";
+  if (status === "IN_PROGRESS") return "en curso";
+  if (status === "SUSPENDED") return "suspendida";
+  return status.toLowerCase();
+}
+
+export const TECHO_DEL_PREFIJO_CHARS = 13_000;
 
 export interface ContextoDelAsistente {
   /** El texto que va como prefijo cacheado del turno. */
@@ -49,7 +70,16 @@ export interface ContextoDelAsistente {
    * ⚠ NO es contexto del modelo: no entra al prefijo. Se devuelve acá porque la consulta que lo
    * arma ya las trajo, y pedirlas de nuevo sería una segunda lectura de lo mismo.
    */
-  fases?: { id: string; name: string; durationWeeks: number; tareas: number }[];
+  fases?: {
+    id: string;
+    name: string;
+    durationWeeks: number;
+    tareas: number;
+    /* ⚠ Las tareas de verdad, con id y título. Antes acá viajaba solo el CONTEO, y `turno.ts`
+       fabricaba tareas vacías (`{id:"", title:"", weekIndex:0}`) para traducir el acuerdo: la
+       cajita azul imprimía el id crudo en cualquier operación de tarea. */
+    items: { id: string; title: string; weekIndex: number; status: string }[];
+  }[];
   /** El arranque del proyecto, para el mismo uso. */
   ancla?: string | null;
 }
@@ -81,11 +111,15 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
           durationWeeks: true,
           startWeek: true,
           activityType: true,
-          /* ⚠ SOLO CONTADORES: `weekIndex` y `status`, jamás el título ni la nota. Es la línea
-             entre la FORMA del cronograma y su CONTENIDO — dos enteros por tarea son ~250
-             caracteres para todo Wherex; los títulos son ~8.000 que el modificador ya lee.
-             Ver el porqué de este agregado en el bloque `REPARTO POR SEMANA`, abajo. */
-          tasks: { select: { weekIndex: true, status: true } },
+          /* ⚠ CON TÍTULO E ID desde el 2026-08-21. La primera versión mandaba solo contadores
+             y era la línea entre la FORMA y el CONTENIDO — pero se llevaba puesto el caso de
+             uso principal: el CSE pide «pasá la sesión de cierre al final» o «borrá la última
+             base» y el chat no tenía con qué nombrarlas. Las NOTAS siguen afuera (son el
+             contenido de verdad, y las lee el modificador). Ver el techo, arriba. */
+          tasks: {
+            orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
+            select: { id: true, title: true, weekIndex: true, status: true },
+          },
         },
       },
     },
@@ -126,11 +160,55 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
       if (t.status === "DONE") hechas++;
     }
     const vacias = porSemana.filter((n) => n === 0).length;
+    /* ⚠ El histograma en sí se retiró: abajo va la lista de tareas POR SEMANA, que dice lo mismo
+       y además las nombra. Lo que queda es el resumen — es lo que el modelo lee de un vistazo
+       para contestar «esta fase está medio vacía» sin recorrer veinte renglones. */
     return (
-      `semanas [${porSemana.join(" · ")}]` +
       (vacias > 0 ? ` — ${vacias} ${vacias === 1 ? "semana VACÍA" : "semanas VACÍAS"}` : "") +
       (hechas > 0 ? ` · ${hechas} hecha${hechas === 1 ? "" : "s"}` : "")
     );
+  };
+
+  /**
+   * ⭐ LAS TAREAS, AGRUPADAS POR SEMANA (2026-08-21).
+   *
+   * Agrupar no es cosmética: es lo que deja que el histograma se retire sin perder nada. Una
+   * semana sin tareas se ve porque su renglón dice «(vacía)», así que el CSE que pide «quitá las
+   * semanas sin tareas» —314 semanas así en la cartera— sigue teniendo respuesta.
+   *
+   * El estado va en una palabra y SOLO cuando no es pendiente: repetir «pendiente» sesenta veces
+   * es pagar caracteres por nada.
+   */
+  const tareasDe = (f: (typeof timeline.phases)[number]): string => {
+    const semanas = Math.max(f.durationWeeks, 1);
+    const renglones: string[] = [];
+    for (let w = 0; w < semanas; w++) {
+      const suyas = f.tasks.filter((t) => t.weekIndex === w);
+      if (suyas.length === 0) {
+        renglones.push(`   S${w + 1}: (vacía)`);
+        continue;
+      }
+      renglones.push(
+        `   S${w + 1}: ` +
+          suyas
+            .map(
+              (t) =>
+                `${t.title} [${handleDeTarea(t.id)}]` +
+                (t.status && t.status !== "PENDING" ? ` (${estadoCorto(t.status)})` : ""),
+            )
+            .join(" · "),
+      );
+    }
+    /* Las que quedaron fuera de rango existen de verdad —se midieron 30 en producción antes de
+       sanearlas— y hay que poder nombrarlas para arreglarlas, no esconderlas. */
+    const fuera = f.tasks.filter((t) => t.weekIndex < 0 || t.weekIndex >= semanas);
+    if (fuera.length > 0) {
+      renglones.push(
+        `   ⚠ fuera de rango: ` +
+          fuera.map((t) => `${t.title} [${handleDeTarea(t.id)}] (S${t.weekIndex + 1})`).join(" · "),
+      );
+    }
+    return renglones.join("\n");
   };
 
   const fases = timeline.phases
@@ -139,17 +217,17 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
         `${i + 1}. ${f.name} [${f.id}] — ${f.durationWeeks} sem` +
         `${f.activityType ? ` · ${f.activityType.toLowerCase()}` : ""}` +
         ` · ${f.tasks.length} tarea${f.tasks.length === 1 ? "" : "s"}` +
-        `\n   ${repartoDe(f)}`,
+        `${repartoDe(f)}` +
+        `\n${tareasDe(f)}`,
     )
     .join("\n");
 
   const texto = [
     `PROYECTO: ${timeline.project.name} — cliente ${timeline.project.client.name}`,
     "",
-    "FORMA DEL CRONOGRAMA HOY. Entre corchetes va el ID de la fase — úsalo para referirte a ella.",
-    "`semanas [a · b · c]` = cuántas tareas caen en cada semana de esa",
-    "fase, en orden. Los TÍTULOS de las tareas no están acá a propósito: los lee el modificador",
-    "cuando le toque ejecutar la instrucción.",
+    "EL CRONOGRAMA HOY. Cada fase trae su ID entre corchetes y, debajo, sus tareas agrupadas por",
+    "semana (S1, S2…). Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
+    "para moverla o borrarla. Una tarea sin estado entre paréntesis está pendiente.",
     fases || "(sin fases)",
     "",
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,
@@ -171,6 +249,12 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
       name: f.name,
       durationWeeks: f.durationWeeks,
       tareas: f.tasks.length,
+      items: f.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        weekIndex: t.weekIndex,
+        status: t.status,
+      })),
     })),
     ancla: timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : null,
   };
