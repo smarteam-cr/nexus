@@ -551,9 +551,13 @@ export default function ChatDelAsistente({
                    * salto de fe. Antes esto caía al camino legacy y pintaba un textarea vacío.
                    */
                   <p className="mt-2 rounded-lg border border-warn-line bg-warn-surface px-2 py-1.5 text-xs text-warn-ink">
-                    ⚠ No se pudo armar el detalle de los {t.acuerdo.operaciones.length} cambios, así
-                    que no hay qué revisar antes de aplicar. Pedíselo de nuevo al asistente — y si
-                    se repite, avisá: es un problema del servidor, no de lo que pediste.
+                    ⚠ No se pudo armar el detalle de{" "}
+                    {t.acuerdo.operaciones.length === 1
+                      ? " el cambio"
+                      : ` los ${t.acuerdo.operaciones.length} cambios`}
+                    , así que no hay qué revisar antes de aplicar. Casi siempre es el servidor
+                    sirviendo una versión vieja: recargá la página, y si sigue, hay que reiniciarlo.
+                    No es nada de lo que pediste.
                   </p>
                 ) : t.acuerdo.instruccion ? (
                   /* ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto,

@@ -464,9 +464,19 @@ describe("⛔ lo que Elías vio el 2026-08-21", () => {
     );
   });
 
-  it("⚠ y el mensaje del acuerdo va NUMERADO, para poder decir «la 2»", () => {
+  it("⚠ se numeran los ASUNTOS, no las opciones — para que «la 2» no sea ambiguo", () => {
+    /* Elías, 2026-08-21: *«la numeración no debe ser de los posibles valores, sino de los
+       posibles cambios»*. El chat le numeró las tres fases candidatas y dejó el otro cambio en
+       prosa suelta, así que «la 2» podía ser el segundo cambio o la segunda fase.
+       ⚠ Y había una contradicción adentro del propio prompt: el ejemplo de «opciones que son
+       respuestas» las numeraba. Los dos se corrigieron juntos.
+       La edición que la pone en rojo: volver a numerar las opciones en cualquiera de los dos. */
     const turno = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
-    expect(turno).toContain("TAMBIÉN cuando emites la propuesta");
+    expect(turno).toContain("SE NUMERAN LOS ASUNTOS, NO LAS OPCIONES");
+    expect(
+      turno.includes('"1. Alargar Setup'),
+      "el ejemplo de opciones volvió a numerarlas, contradiciendo la regla de arriba",
+    ).toBe(false);
   });
 });
 
