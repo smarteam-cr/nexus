@@ -9,6 +9,7 @@ import {
   type ProyectoInternoRow,
 } from "@/lib/clients/proyectos-internos";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
+import { esProyectoDePipelineCS } from "@/lib/projects/scope";
 import TraerDeHubspot from "./TraerDeHubspot";
 import { Suspense } from "react";
 import type { requireUser } from "@/lib/auth/supabase";
@@ -99,16 +100,27 @@ export async function ClientsTable({
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
     const activity = activityMap.get(c.id);
+    /**
+     * ⭐ SOLO los proyectos del pipeline de Customer Success — nunca los "development"/
+     * "sitios-web" que cuelgan como hijos de una implementación (`hermanoCsProjectId`).
+     *
+     * Elías, 2026-08-21: *"Los customer success del pipeline de implementación de hubspot
+     * son los customer success de la cuenta... las cuentas tienen que estar en el
+     * ownership de las personas del pipeline de hubspot."* Antes esta columna mezclaba el
+     * owner de CUALQUIER proyecto: kölbi mostraba "Breiner Salas Salas +1" — el
+     * desarrollador de su integración de Desarrollo, antepuesto al CSE real de la cuenta.
+     */
+    const proyectosDeCS = c.projects.filter(esProyectoDePipelineCS);
     const cseNames = [
       ...new Set(
-        c.projects
+        proyectosDeCS
           .map((p) => p.hubspotOwnerName)
           .filter((n): n is string => !!n && n.trim().length > 0)
       ),
     ];
     const cseEmails = [
       ...new Set(
-        c.projects
+        proyectosDeCS
           .map((p) => p.hubspotOwnerEmail)
           .filter((e): e is string => !!e && e.trim().length > 0)
           .map((e) => e.toLowerCase())

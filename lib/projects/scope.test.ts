@@ -25,10 +25,12 @@ import {
   ATOMOS_POR_CRITERIO,
   PROYECTO_CLASIFICABLE_WHERE,
   PROYECTO_DE_CARTERA_WHERE,
+  PROYECTO_DE_PIPELINE_CS_WHERE,
   PROYECTO_FACTURABLE_WHERE,
   PROYECTO_NAVEGABLE_WHERE,
   esProyectoClasificable,
   esProyectoDeCartera,
+  esProyectoDePipelineCS,
   esProyectoFacturable,
   esProyectoNavegable,
   proyectoNavegableWhere,
@@ -203,6 +205,11 @@ const CRITERIOS = [
     where: PROYECTO_CLASIFICABLE_WHERE,
     predicado: (p: ProyectoParaFiltro) => esProyectoClasificable(p),
   },
+  {
+    nombre: "pipeline-cs",
+    where: PROYECTO_DE_PIPELINE_CS_WHERE,
+    predicado: (p: ProyectoParaFiltro) => esProyectoDePipelineCS(p),
+  },
 ] as const;
 
 describe("el fragmento SQL y el predicado en memoria coinciden en TODAS las combinaciones", () => {
@@ -302,6 +309,7 @@ const fact = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
   esProyectoFacturable({ ...PROYECTO_BASE, ...p }, c);
 const cart = (p: Partial<ProyectoParaFiltro>, c = CLIENTE_CON_PORTAL) =>
   esProyectoDeCartera({ ...PROYECTO_BASE, ...p }, c);
+const pipCs = (p: Partial<ProyectoParaFiltro>) => esProyectoDePipelineCS({ ...PROYECTO_BASE, ...p });
 
 describe("casos con nombre y apellido", () => {
   it("el proyecto con serviceType NULO es navegable (no es el centinela)", () => {
@@ -318,6 +326,30 @@ describe("casos con nombre y apellido", () => {
   it("un desarrollo tiene pestaña pero NO es cartera de CS", () => {
     expect(nav({ hubspotPipelineId: DEV })).toBe(true);
     expect(cart({ hubspotPipelineId: DEV })).toBe(false);
+  });
+
+  it("⭐ el CSE de la cuenta sale del pipeline de HubSpot, NUNCA de development/web", () => {
+    /* Elías, 2026-08-21: "las cuentas tienen que estar en el ownership de las personas del
+       pipeline de hubspot". Un desarrollador dueño del hijo/hermano de development NO es
+       dueño de la cuenta — ni para la columna CSE de /clients ni para lib/auth/access.ts. */
+    expect(pipCs({ hubspotPipelineId: CS })).toBe(true);
+    expect(pipCs({ hubspotPipelineId: DEV })).toBe(false);
+    expect(pipCs({ hubspotPipelineId: WEB })).toBe(false);
+  });
+
+  it("un pipeline desconocido cuenta como CS (degrada a legacy, como el resto)", () => {
+    expect(pipCs({ hubspotPipelineId: DESCONOCIDO })).toBe(true);
+    expect(pipCs({ hubspotPipelineId: null })).toBe(true);
+  });
+
+  it("pipeline-cs es CIEGO a status/interno/alta — un dueño no deja de serlo por eso", () => {
+    /* A diferencia de cartera/facturable, este criterio decide UNA cosa sola: de qué
+       pipeline es el proyecto. Un proyecto pausado o con el alta en curso sigue marcando a
+       su dueño como el CSE de la cuenta — lo contrario sería una cuenta sin CSE mientras el
+       alta termina. */
+    expect(pipCs({ status: "paused" })).toBe(true);
+    expect(pipCs({ proyectoInterno: true })).toBe(true);
+    expect(pipCs({ altaEstado: "pendiente_crm" })).toBe(true);
   });
 
   it("un desarrollo APARTE se factura (Judesur); HERMANO no", () => {

@@ -38,6 +38,7 @@ import type { Prisma } from "@prisma/client";
 import { requireInternalUser, ForbiddenError, type AppUserWithTeamMember } from "./supabase";
 import { can } from "./permissions/engine";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 
 /** Por qué se concedió el acceso. Todas las razones son de gente INTERNA: no hay —ni
  *  debe volver a haber— una razón "porque es el cliente dueño". */
@@ -82,8 +83,13 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   if (assignments.some((a) => a.kind === "GRANT")) return { user, reason: "granted" };
 
   // 6. Owner en HubSpot (algún Project del cliente con su email como owner)
+  //
+  // ⭐ SOLO en el pipeline de Customer Success. "Owner" en un proyecto "development" o
+  // "sitios-web" no es dueño de la cuenta — es, a veces, un desarrollador con acceso a SU
+  // pipeline técnico. Sin este filtro, ese desarrollador obtenía acceso de OWNER al
+  // cliente entero (Elías, 2026-08-21, viendo la columna CSE de /clients mezclar nombres).
   const ownerProjectCount = await prisma.project.count({
-    where: { clientId, hubspotOwnerEmail: tm.email },
+    where: { clientId, hubspotOwnerEmail: tm.email, ...PROYECTO_DE_PIPELINE_CS_WHERE },
   });
   if (ownerProjectCount > 0) return { user, reason: "hubspot-owner" };
 
@@ -160,8 +166,11 @@ export async function accessibleClientWhere(
   const grantedIds = grants.map((g) => g.clientId);
   const revokedIds = revokes.map((r) => r.clientId);
 
+  // ⭐ Mismo filtro de pipeline que en requireAccessToClient, arriba: ser owner de un
+  // proyecto "development"/"sitios-web" (hijo de una implementación) no da acceso al
+  // cliente entero.
   const visibility: Prisma.ClientWhereInput[] = [
-    { projects: { some: { hubspotOwnerEmail: tm.email } } },
+    { projects: { some: { hubspotOwnerEmail: tm.email, ...PROYECTO_DE_PIPELINE_CS_WHERE } } },
   ];
   if (grantedIds.length) visibility.push({ id: { in: grantedIds } });
 
@@ -196,9 +205,15 @@ export async function sharedClientIdsFor(user: AppUserWithTeamMember): Promise<S
   return ids;
 }
 
-/** ¿El usuario (por email) es OWNER de este cliente — owner HubSpot de algún proyecto? */
+/**
+ * ¿El usuario (por email) es OWNER de este cliente — owner HubSpot de algún proyecto DEL
+ * PIPELINE DE CUSTOMER SUCCESS? Igual criterio que `requireAccessToClient`: un desarrollador
+ * dueño de un proyecto "development"/"sitios-web" no es owner de la cuenta.
+ */
 export async function ownsClient(email: string, clientId: string): Promise<boolean> {
-  const n = await prisma.project.count({ where: { clientId, hubspotOwnerEmail: email } });
+  const n = await prisma.project.count({
+    where: { clientId, hubspotOwnerEmail: email, ...PROYECTO_DE_PIPELINE_CS_WHERE },
+  });
   return n > 0;
 }
 

@@ -13,6 +13,7 @@ import { PrismaClient, type TeamRole } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
+import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -23,7 +24,14 @@ async function accessibleIds(email: string, role: TeamRole): Promise<Set<string>
   if (SEE_ALL.includes(role)) return "ALL";
   // CSE (scoped)
   const [owned, grants, revokes] = await Promise.all([
-    prisma.project.findMany({ where: { hubspotOwnerEmail: email }, select: { clientId: true } }),
+    // ⭐ Solo el pipeline de Customer Success — mismo criterio que access.ts (2026-08-21):
+    // un desarrollador dueño de un proyecto "development"/"sitios-web" (hijo de una
+    // implementación) no es dueño de la cuenta. Sin este filtro, este script REPLICABA el
+    // bug de access.ts en vez de detectarlo.
+    prisma.project.findMany({
+      where: { hubspotOwnerEmail: email, ...PROYECTO_DE_PIPELINE_CS_WHERE },
+      select: { clientId: true },
+    }),
     prisma.clientAssignment.findMany({
       where: { kind: "GRANT", OR: [{ teamMember: { email } }, { targetRole: role }] },
       select: { clientId: true },

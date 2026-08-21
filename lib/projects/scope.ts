@@ -208,6 +208,32 @@ const NO_ES_INTERNO: CriterioDeProyecto = {
   cumple: (p) => p.proyectoInterno === false,
 };
 
+const PIPELINES_QUE_NO_SON_CS = PROJECT_PIPELINES.filter((p) => p.key !== "customer-success").map(
+  (p) => p.hubspotPipelineId,
+);
+
+/**
+ * ⭐ ES DEL PIPELINE DE CUSTOMER SUCCESS — "Implementación de HubSpot" en el portal.
+ *
+ * Elías, 2026-08-21, sobre el bug que esto arregla: *"Los customer success del pipeline de
+ * implementación de hubspot son los customer success de la cuenta. Todo lo que está en
+ * proyecto de desarrollo se podría decir que son proyectos hermanos o proyectos hijos del
+ * proyecto que están customer success... las cuentas tienen que estar en el ownership de
+ * las personas del pipeline de hubspot."*
+ *
+ * O sea: un proyecto "development" o "sitios-web" que cuelga de una implementación (ver
+ * `hermanoCsProjectId`) tiene su propio `csl_encargado` en HubSpot SOLO para que ese
+ * pipeline tenga su propio cronograma técnico — a veces un desarrollador, nunca alguien
+ * que "es dueño de la cuenta". Antes de este átomo, `lib/auth/access.ts` y la columna CSE
+ * de `/clients` miraban el owner de CUALQUIER proyecto del cliente sin distinguir esto: un
+ * desarrollador con un proyecto hijo obtenía acceso de OWNER al cliente entero.
+ */
+const ES_PIPELINE_CS: CriterioDeProyecto = {
+  nombre: "es-pipeline-cs",
+  where: pipelineFueraDe(PIPELINES_QUE_NO_SON_CS),
+  cumple: (p) => pipelineNoEstaEn(p, PIPELINES_QUE_NO_SON_CS),
+};
+
 /**
  * No es HERMANO de una implementación de Customer Success. Un desarrollo o un sitio que
  * cuelga de una implementación no se factura aparte: cobra el hermano.
@@ -301,10 +327,21 @@ const FACTURABLE: readonly CriterioDeCliente[] = [
  */
 const CLASIFICABLE: readonly CriterioDeProyecto[] = [ACTIVO, NO_ES_SENTINEL];
 
+/**
+ * DE PIPELINE CS — no es una de las cuatro pantallas: es EL CRITERIO QUE DECIDE quién es
+ * el CSE dueño de la cuenta. Lo usan `lib/auth/access.ts` (para no dar acceso de "owner"
+ * a un desarrollador con un proyecto hijo) y la columna CSE de `/clients` (para no mezclar
+ * su nombre con el del CSE real). Sin `ACTIVO`/`NO_ES_SENTINEL` a propósito: el dueño de la
+ * cuenta no deja de serlo porque el proyecto se pausó, y el contenedor "Información del
+ * cliente" no tiene owner de todas formas.
+ */
+const PIPELINE_CS: readonly CriterioDeProyecto[] = [ES_PIPELINE_CS];
+
 export const PROYECTO_NAVEGABLE_WHERE = componer(NAVEGABLE);
 export const PROYECTO_DE_CARTERA_WHERE = componer(DE_CARTERA);
 export const PROYECTO_FACTURABLE_WHERE = componer(FACTURABLE);
 export const PROYECTO_CLASIFICABLE_WHERE = componer(CLASIFICABLE);
+export const PROYECTO_DE_PIPELINE_CS_WHERE = componer(PIPELINE_CS);
 
 export const proyectoNavegableWhere = (extra?: Prisma.ProjectWhereInput) =>
   componerCon(NAVEGABLE, extra);
@@ -330,6 +367,13 @@ export const esProyectoFacturable = (p: ProyectoParaFiltro, c: ClienteParaFiltro
 
 export const esProyectoClasificable = (p: ProyectoParaFiltro): boolean =>
   CLASIFICABLE.every((k) => k.cumple(p));
+
+/**
+ * ⭐ El CSE dueño de la CUENTA se resuelve mirando solo estos proyectos — nunca los
+ * "development"/"sitios-web" que cuelgan como hijos. Ver `PIPELINE_CS`, arriba.
+ */
+export const esProyectoDePipelineCS = (p: ProyectoParaFiltro): boolean =>
+  PIPELINE_CS.every((k) => k.cumple(p));
 
 /** Los nombres de los átomos de cada criterio — lo consume la guarda de cobertura. */
 export const ATOMOS_POR_CRITERIO = {
