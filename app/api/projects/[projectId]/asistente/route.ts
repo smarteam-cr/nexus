@@ -20,7 +20,9 @@ import { z } from "zod";
 import { guardAccessToProject, guardPermission } from "@/lib/auth/api-guards";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { abrirHilo, agregarTurno, empezarDeCero, hiloVivo, type HiloConTurnos } from "@/lib/asistente/hilo";
-import { correrTurno, MODELO_DEL_ASISTENTE, leerAcuerdo } from "@/lib/asistente/turno";
+import { correrTurno, MODELO_DEL_ASISTENTE } from "@/lib/asistente/turno";
+import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "@/lib/asistente/acuerdo";
+import { estadosDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 
 type Params = Promise<{ projectId: string }>;
 
@@ -51,10 +53,24 @@ function aVista(hilo: HiloConTurnos | null) {
       id: hilo.id,
       pieza: hilo.pieza,
       modelo: hilo.modelo,
-      turnos: hilo.turnos.map((t) => {
-        const { texto, acuerdo } = leerAcuerdo(t.contenido);
-        return { id: t.id, rol: t.rol, texto, acuerdo, createdAt: t.createdAt };
-      }),
+      /**
+       * ⭐ EL ESTADO DE CADA ACUERDO SE DERIVA ACÁ, con la misma función pura que decide qué
+       * sigue pendiente. Así la pantalla no tiene que reimplementar la regla —y no puede
+       * discrepar con el servidor sobre cuál acuerdo lleva el botón.
+       */
+      turnos: (() => {
+        const estados = estadosDeAcuerdo(hilo.turnos);
+        return hilo.turnos.map((t, i) => ({
+          id: t.id,
+          rol: t.rol,
+          /* ⚠ Se limpian LOS DOS marcadores. Antes solo se sacaba el del acuerdo, así que el JSON
+             del desenlace se pintaba crudo al pie del mensaje. No rompe nada y se ve pésimo. */
+          texto: textoVisible(t.contenido),
+          acuerdo: leerAcuerdo(t.contenido).acuerdo,
+          estado: estados[i],
+          createdAt: t.createdAt,
+        }));
+      })(),
     },
   };
 }
@@ -129,7 +145,12 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
          dijo ✅, y la fase seguía ahí — el editor la había RESCATADO porque tenía 2 tareas con
          progreso, que es lo que debe hacer. El desenlace sabía que la llamada anduvo, no que el
          cambio hubiera pasado. Ahora los avisos del editor van en el mismo turno. */
-      contenido: ok
+      /* ⭐ EL MARCADOR DEL DESENLACE, y lo único que dice es si el apply ANDUVO.
+         Que un turno SEA un desenlace ya se sabe por `shaDeContexto === null` —ver
+         `acuerdo-vivo.ts`—, que es retroactivo. Lo que la huella no puede decir es si entró: sin
+         eso, un apply fallido vaciaría el libro de pendientes y la persona perdería lo que
+         justamente NO se escribió. */
+      contenido: marcaDeDesenlace({ ok }) + "\n\n" + (ok
         ? detalle
           ? `⚠ Se aplicó, pero el editor hizo algo distinto con una parte:
 
@@ -142,7 +163,7 @@ ${vistaPrevia ? "Revisa la vista previa antes de aceptar." : "Ya quedó guardado
                  a la persona a «aceptar los cambios» la deja buscando un banner que no existe —y
                  peor, sugiere que lo que ya está guardado todavía se puede descartar. */
               "✅ Listo, el cronograma ya quedó actualizado. Si algo no está como esperabas, decímelo y lo ajustamos."
-        : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. La instrucción quedó arriba por si quieres ajustarla, o dime qué probamos.`,
+        : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.`),
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));
   }

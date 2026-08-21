@@ -600,3 +600,98 @@ describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
     expect(tieneChat("handoff")).toBe(false);
   });
 });
+
+describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
+  const RUTA_CRUDA = soloCodigo(
+    fs.readFileSync(
+      path.join(RAIZ, "app/api/projects/[projectId]/asistente/route.ts"),
+      "utf8",
+    ),
+  );
+  /**
+   * ⚠ SIN LAS LÍNEAS DE `import`, y esto no es prolijidad: es lo que separa una guarda de una
+   * decoración.
+   *
+   * `marcaDeDesenlace` y `textoVisible` aparecen en el import aunque nadie los llame. Las tres
+   * guardas de abajo nacieron buscándolos en el archivo entero, así que daban VERDE con el
+   * arreglo apagado — se cazó rompiéndolas a propósito, que es exactamente para lo que sirve el
+   * ritual.
+   */
+  const RUTA = RUTA_CRUDA.split("\n")
+    .filter((l) => !l.trimStart().startsWith("import "))
+    .join("\n");
+
+  it("⛔ el botón sigue al ESTADO, no a la posición en el array", () => {
+    /* ⭐ EL ARREGLO DEL 2026-08-21, afirmado sobre el código.
+
+       `idDelAcuerdoVivo` decía «el último turno del array, si trae acuerdo». Elías pidió dos
+       cosas, el asistente preguntó una y propuso la otra (acuerdo de 2 operaciones), Elías
+       contestó la pregunta — y ese acuerdo dejó de ser el último. Perdió su botón sin que nadie
+       hubiera aplicado nada, y las 2 operaciones se perdieron en silencio.
+
+       La edición que la pone en rojo: volver a `turnos[turnos.length - 1]` como criterio único. */
+    const i = PANEL.indexOf("const idDelAcuerdoVivo");
+    expect(i, "desapareció el cálculo del acuerdo vivo").toBeGreaterThan(-1);
+    const bloque = PANEL.slice(i, PANEL.indexOf("}, [turnos]);", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(60);
+    expect(
+      bloque.includes('t.estado === "vivo"'),
+      "el botón volvió a decidirse por posición: contestar una pregunta apaga un acuerdo que " +
+        "nadie aplicó",
+    ).toBe(true);
+  });
+
+  it("⛔ y el estado lo DERIVA el servidor con la misma función que el libro", () => {
+    /* Si la pantalla reimplementara la regla, podría ofrecer aplicar un conjunto mientras el
+       turno siguiente arrastra otro. Las dos serían coherentes por dentro y contradictorias entre
+       sí — la falla más difícil de diagnosticar. */
+    expect(RUTA, "la ruta dejó de derivar el estado de cada acuerdo").toContain("estadosDeAcuerdo");
+  });
+
+  it("⛔ el desenlace deja escrito si el apply ANDUVO", () => {
+    /* Sin ese bit, un apply FALLIDO vaciaría el libro de pendientes y la persona perdería
+       justamente lo que NO se escribió.
+       ⚠ Y el discriminador de «esto es un desenlace» NO es este marcador: es `shaDeContexto ===
+       null`, que ya está en cada fila de producción. El marcador solo agrega el `ok`. */
+    expect(
+      RUTA,
+      "el desenlace dejó de decir si el cambio entró: un apply FALLIDO vaciaría el libro y la " +
+        "persona perdería justo lo que no se escribió",
+    ).toContain("marcaDeDesenlace({ ok })");
+  });
+
+  it("⛔ la vista limpia LOS DOS marcadores", () => {
+    /* Antes se sacaba solo el del acuerdo; el JSON del desenlace se pintaba crudo al pie del
+       mensaje. No rompe nada y se ve pésimo. */
+    expect(
+      RUTA,
+      "la vista dejó de limpiar el marcador del desenlace: se pinta el JSON crudo al pie del mensaje",
+    ).toContain("textoVisible(t.contenido)");
+  });
+
+  it("⭐ la caja DICE cuántos cambios venían de antes", () => {
+    /* El acuerdo acumula, así que una caja mezcla lo que la persona acaba de pedir con lo que
+       pidió hace tres turnos. Sin esta línea el arrastre es invisible.
+       La edición que la pone en rojo: borrar el renglón que lee `arrastradas`. */
+    /* ⚠ Se afirma sobre el TEXTO QUE SE PINTA, no sobre el nombre del campo: el campo aparece
+       en el tipo y en el import aunque nadie lo renderice. */
+    expect(
+      PANEL.includes("ya los habías acordado y no se aplicaron"),
+      "la caja dejó de decir qué cambios venían de antes: el arrastre se vuelve invisible y la " +
+        "persona cree que los tres salieron de su último mensaje",
+    ).toBe(true);
+    expect(PANEL, "la condición dejó de leer `arrastradas`").toContain("t.acuerdo.arrastradas");
+  });
+
+  it("⛔ y DICE lo que se soltó, en vez de soltarlo callado", () => {
+    /* Un descarte tiene que ser tan legible como una operación: si el modelo se equivoca al
+       soltar algo, o si el cronograma cambió debajo y un pendiente dejó de poder aplicarse, la
+       persona lo ve y lo puede volver a pedir. */
+    expect(
+      PANEL.includes("Ya no va:"),
+      "los cambios soltados dejaron de mostrarse: se pierden en silencio, que es el defecto que " +
+        "esta tanda vino a matar",
+    ).toBe(true);
+    expect(PANEL, "la lista dejó de leer `descartadas`").toContain("t.acuerdo.descartadas");
+  });
+});

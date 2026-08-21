@@ -274,6 +274,32 @@ describe("el breakpoint de caché está donde cachea", () => {
     ).toBe(1);
   });
 
+  it("⛔ y el bloque de PENDIENTES no entra al prefijo cacheado", () => {
+    /* ⛔ LA FALLA MÁS CALLADA DE TODO EL DISEÑO, y solo se ve en la factura.
+
+       Lo pendiente cambia en cada turno. Metido adentro de `system` —que es lo que el
+       `cache_control` marca como prefijo estable— invalidaría la caché ENTERA en cada turno: sin
+       error, sin log, sin nada raro en pantalla. Solo el gasto, multiplicado.
+
+       Va en `messages`, que no está cacheado, así que tocarlo es neutro.
+       La edición que la pone en rojo: mover `bloqueDePendientes(...)` al array de `system`. */
+    const i = FUENTE.indexOf("system: [");
+    const bloqueSystem = FUENTE.slice(i, FUENTE.indexOf("tools:", i));
+    expect(bloqueSystem.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    expect(
+      bloqueSystem.includes("bloqueDePendientes"),
+      "el bloque de pendientes entró al prefijo cacheado: invalida la caché en cada turno, y eso " +
+        "no falla — solo se paga",
+    ).toBe(false);
+
+    const j = FUENTE.indexOf("const messages:");
+    const bloqueMessages = FUENTE.slice(j, FUENTE.indexOf("];", j));
+    expect(
+      bloqueMessages.includes("bloqueDePendientes"),
+      "lo pendiente dejó de llegarle al modelo: vuelve a proponer sin saber qué quedó sin aplicar",
+    ).toBe(true);
+  });
+
   it("⚠ el modelo es el que se midió, no el que suena barato", () => {
     /* Haiku 4.5 exige 4.096 tokens para cachear —el mínimo más alto de la familia— así que a este
        tamaño de prompt NO cachea nunca y paga el prefijo entero en cada turno. Cambiar esta
@@ -332,6 +358,34 @@ ${marcaDeAcuerdo(viejo)}`);
 ${marcaDeAcuerdo(vacio)}`).acuerdo).toBeNull();
   });
 
+  it("⛔ y un marcador FALSO dentro del texto no borra la cajita", () => {
+    /* ⛔ EL MODELO PUEDE IMITAR EL MARCADOR, y hasta hoy eso borraba el acuerdo entero.
+
+       `correrTurno` le manda su propio historial CRUDO, marcador incluido, y el prompt nunca se
+       lo explica. Si lo escribe en su texto —citando lo que ve, o «explicando» cómo funciona— el
+       `indexOf` cortaba en el FALSO, el `JSON.parse` tiraba, y el lector devolvía `acuerdo: null`:
+       la cajita azul desaparecía y la persona veía «contesta pero no pasa nada».
+
+       La edición que la pone en rojo: volver `lastIndexOf` a `indexOf` en `leerAcuerdo`. */
+    const real = {
+      resumen: "Sales Hub pasa de 4 a 2 semanas.",
+      operaciones: [{ op: "fase.duracion", phaseId: "abc123", semanas: 2 }],
+      lineas: ["«Sales Hub» pasa de 4 a 2 semanas"],
+    };
+    const conFalso = `Te dejo el cambio. (Internamente esto viaja como ${MARCA_DE_ACUERDO}{"algo":1}.)
+
+${marcaDeAcuerdo(real)}`;
+    const leido = leerAcuerdo(conFalso);
+    expect(
+      leido.acuerdo,
+      "un marcador citado en el texto borró el acuerdo: la cajita azul no aparece",
+    ).not.toBeNull();
+    expect(leido.acuerdo!.operaciones).toEqual(real.operaciones);
+    expect(leido.texto, "el texto visible tiene que conservar lo que el modelo escribió").toContain(
+      "Te dejo el cambio",
+    );
+  });
+
   it("⛔ y el productor SOLO emite acuerdos que el lector va a aceptar", () => {
     /* El invariante de fondo, afirmado sobre el código: `correrTurno` acepta la tool call cuando
        hay resumen + operaciones, así que `leerAcuerdo` no puede pedir MÁS que eso. La edición
@@ -378,5 +432,136 @@ describe("el acuerdo sobrevive a recargar la pantalla", () => {
     /* Un «Aplicar» que no puede hacer nada es peor que no ofrecerlo. */
     const contenido = `ok\n\n${MARCA_DE_ACUERDO}${JSON.stringify({ resumen: "algo" })}`;
     expect(leerAcuerdo(contenido).acuerdo).toBeNull();
+  });
+});
+
+describe("⭐ el traductor recibe lo que necesita para AVISAR", () => {
+  it("⛔ las tareas que se le pasan llevan `status` y `source`", () => {
+    /* ⛔ UNA GUARDA QUE NO EXISTÍA PORQUE EL DATO NO LLEGABA, y nadie se enteró.
+
+       `describirOperaciones` pinta «⚠ N tienen trabajo hecho encima y se pierden» en `fase.borrar`,
+       y lo decide con `isKept({ status, source })`. `turno.ts` armaba las tareas con solo
+       `{id, title, weekIndex}`, así que `status` caía al default "PENDING" y `source` a `undefined`:
+       `isKept` daba false para TODAS y **el aviso no se pintó nunca**. Es exactamente la red que su
+       propio comentario dice estar tendiendo para cuando el modelo se olvida de la doble
+       confirmación — una guarda decorativa por falta de datos, no por falta de código.
+
+       La edición que la pone en rojo: sacar `status: t.status` del `map` de `paraTraducir`. */
+    const i = FUENTE.indexOf("const paraTraducir");
+    expect(i, "desapareció `paraTraducir`: el acuerdo ya no se traduce en el servidor").toBeGreaterThan(-1);
+    const bloque = FUENTE.slice(i, FUENTE.indexOf("}));", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    for (const campo of ["status: t.status", "source: t.source"]) {
+      expect(
+        bloque.includes(campo),
+        `\`paraTraducir\` dejó de pasar \`${campo}\`: el aviso de «se pierde trabajo hecho» ` +
+          "vuelve a ser imposible de disparar, en silencio",
+      ).toBe(true);
+    }
+  });
+
+  it("⚠ y el contexto los TRAE de la base, o el punto anterior es imposible", () => {
+    /* El otro extremo del mismo cable: si el contexto deja de seleccionarlos, `paraTraducir` los
+       pasa como `undefined` y la guarda de arriba sigue verde sobre datos vacíos. */
+    const ctx = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
+    const j = ctx.indexOf("items: f.tasks.map");
+    expect(j, "el contexto dejó de mapear las tareas").toBeGreaterThan(-1);
+    const mapeo = ctx.slice(j, ctx.indexOf("})),", j));
+    expect(mapeo.includes("status: t.status"), "el contexto dejó de traer `status`").toBe(true);
+    expect(mapeo.includes("source: t.source"), "el contexto dejó de traer `source`").toBe(true);
+  });
+});
+
+describe("⭐ lo acordado y no aplicado no se pierde", () => {
+  it("⛔ el prompt YA NO manda reemplazar la propuesta anterior", () => {
+    /* ⭐ LA CAUSA RAÍZ DEL BUG DEL 2026-08-21, y era una línea de prompt.
+
+       Decía, textual: «Si la persona pide otra cosa después, propones de nuevo: cada propuesta
+       reemplaza a la anterior.» El CSE pidió dos cosas, el asistente preguntó una y propuso la
+       otra (acuerdo de 2 operaciones), el CSE contestó la pregunta, y el asistente propuso de
+       nuevo — reemplazando. Las 2 primeras se perdieron en silencio.
+
+       No fue un bug de software: fue una regla cumplida al pie de la letra. Por eso la línea se
+       BORRA, no se matiza.
+       La edición que la pone en rojo: volver a escribirla. */
+    expect(
+      PROMPT.includes("cada propuesta reemplaza a la anterior"),
+      "volvió la regla que causó la pérdida: contestar una pregunta cuesta la otra mitad del pedido",
+    ).toBe(false);
+    expect(PROMPT, "el prompt no explica el arrastre").toContain("LO QUE SIGUE PENDIENTE");
+    expect(PROMPT, "el prompt no dice que NO se repita lo pendiente").toContain("SOLO lo nuevo");
+  });
+
+  it("⛔ y preguntar dejó de eximir de proponer", () => {
+    /* La regla vieja («Solo NO llamas la herramienta cuando hiciste una pregunta de
+       desambiguación») CONTRADECÍA al ejemplo ✅ del propio prompt, que es el turno correcto que
+       produjo la pérdida. El turno del bug cayó en la grieta entre las dos. */
+    expect(
+      PROMPT.includes("Solo NO llamas la herramienta cuando hiciste una pregunta"),
+      "volvió la regla que contradice al ejemplo ✅ del propio prompt",
+    ).toBe(false);
+    expect(PROMPT).toContain("PREGUNTAR Y PROPONER EN EL MISMO TURNO");
+  });
+
+  it("⛔ la herramienta tiene por dónde soltar lo que ya no corresponde", () => {
+    /* Sin `descartar`, la única forma de que el modelo suelte algo pendiente sería NO emitirlo —
+       o sea, en silencio: exactamente el modo de falla que el libro vino a matar. */
+    const i = FUENTE.indexOf("const TOOL_ACUERDO:");
+    const tool = FUENTE.slice(i, FUENTE.indexOf("};", i));
+    expect(tool, "la tool del cronograma perdió el campo `descartar`").toContain("descartar:");
+  });
+
+  it("⭐ las líneas se DESCARTAN si no hay una por operación", () => {
+    /* ⭐ LA RED DE SEGURIDAD DEL INVARIANTE «lo que se LEE es lo que se EJECUTA».
+
+       Si un día alguien calcula las líneas sobre un conjunto distinto del que se va a ejecutar
+       —por ejemplo sobre las operaciones que emitió el modelo en vez de sobre las fusionadas— la
+       cajita mostraría MENOS de lo que escribe, y la persona aprobaría cambios que no leyó.
+
+       Descartarlas hace que el panel caiga a su aviso de «no se pudo armar el detalle» y
+       DESHABILITE el botón: una superficie de falla que ya existe y ya es ruidosa.
+       La edición que la pone en rojo: sacar la comparación de largos de `leerAcuerdo`. */
+    const desparejo = {
+      resumen: "tres cambios",
+      operaciones: [
+        { op: "fase.duracion", phaseId: "a", semanas: 2 },
+        { op: "fase.duracion", phaseId: "b", semanas: 3 },
+        { op: "fase.duracion", phaseId: "c", semanas: 4 },
+      ],
+      lineas: ["solo una linea"],
+    };
+    const leido = leerAcuerdo(`ok\n\n${marcaDeAcuerdo(desparejo)}`);
+    expect(leido.acuerdo, "el acuerdo se perdió entero: solo había que soltar las líneas").not.toBeNull();
+    expect(
+      leido.acuerdo!.lineas,
+      "se pintarían 1 línea para 3 operaciones: la persona aprueba lo que no leyó",
+    ).toBeUndefined();
+  });
+
+  it("⚠ pero una por operación pasa intacta", () => {
+    const parejo = {
+      resumen: "dos cambios",
+      operaciones: [
+        { op: "fase.duracion", phaseId: "a", semanas: 2 },
+        { op: "fase.duracion", phaseId: "b", semanas: 3 },
+      ],
+      lineas: ["una", "dos"],
+    };
+    expect(leerAcuerdo(`ok\n\n${marcaDeAcuerdo(parejo)}`).acuerdo!.lineas).toEqual(["una", "dos"]);
+  });
+
+  it("⚠ y el arrastre viaja en el acuerdo, o la cajita no puede decirlo", () => {
+    /* `arrastradas` es lo que permite el renglón «2 de estos 3 ya los habías acordado». Sin él,
+       el arrastre es invisible y la persona cree que los tres salieron de su último mensaje. */
+    const conArrastre = {
+      resumen: "x",
+      operaciones: [{ op: "fase.duracion", phaseId: "a", semanas: 2 }],
+      lineas: ["una"],
+      arrastradas: [0],
+      descartadas: ["algo que ya no aplica"],
+    };
+    const leido = leerAcuerdo(`ok\n\n${marcaDeAcuerdo(conArrastre)}`).acuerdo!;
+    expect(leido.arrastradas).toEqual([0]);
+    expect(leido.descartadas).toEqual(["algo que ya no aplica"]);
   });
 });

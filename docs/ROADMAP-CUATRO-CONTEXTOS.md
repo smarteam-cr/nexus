@@ -77,6 +77,7 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ✅ No modal, por portal, z-45 |
 | 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ✅ En el cronograma. En documentos: copiar y pegar (etapa 3) |
 | 2e | **El vocabulario completo** | De 10 a 18 operaciones, y el chat VE las tareas | ✅ 2026-08-21 · auditado y probado contra el modelo |
+| 2f | **No se olvida de lo acordado** | Contestar una pregunta dejó de costar la otra mitad del pedido | ✅ 2026-08-21 · ver abajo |
 
 ### ⭐ Etapa 2e — «que se puedan hacer muchas cosas» *(2026-08-21, 5 commits)*
 
@@ -118,6 +119,61 @@ perdiendo la procedencia). Todos arreglados con su guarda rota a propósito.
 ⚠ **La lección de método**: el traductor de la cajita y el ejecutor son dos simulaciones del mismo
 lote y **divergen**. Un arreglo mío hizo que la cajita dijera «semana 2» mientras el ejecutor ponía
 la tarea en la 3. Ningún test lo vio. Lo cazó correr el pedido real contra el modelo.
+
+### ⭐ Tramo 2f — el chat deja de olvidarse de lo que ya acordaron *(2026-08-21)*
+
+**Lo que pasó, en el hilo real de producción:**
+
+| Hora | |
+|---|---|
+| 18:20:59 | Elías pide **dos** cosas |
+| 18:21:00 | El asistente pregunta una y propone la otra. **Acuerdo: 2 operaciones** |
+| 18:22:30 | Elías **contesta la pregunta** |
+| 18:22:31 | El asistente propone. **Acuerdo: 1 operación** — reemplazó al anterior |
+| 18:24:29 | Se aplicó esa 1. **Las 2 primeras se perdieron en silencio** |
+
+**Contestar una pregunta le costó la otra mitad de su pedido.** Y no fue un bug: el prompt decía,
+textual, *«cada propuesta reemplaza a la anterior»*. El modelo obedeció.
+
+⭐ **El hallazgo que decidió el diseño**: el dato que distingue «esto ya se aplicó» de «esto sigue
+pendiente» **ya estaba escrito en cada fila desde el día uno**. El desenlace es el único turno del
+asistente que se guarda con `shaDeContexto = null`, porque `agregarTurno` es el único escritor de
+mensajes y esa rama nunca le pasa la huella. O sea que el arreglo funciona también sobre los hilos
+que ya existían — un marcador nuevo no habría podido.
+
+**Lo que cambió:**
+
+1. **El acuerdo ACUMULA.** El último acuerdo del hilo contiene siempre todo lo acordado y no
+   aplicado. Con eso, «el botón vive en el último turno» deja de ser una coincidencia frágil y pasa
+   a ser correcto por construcción.
+2. **Compone la app, no el modelo.** El modelo emite SOLO lo nuevo y declara lo que suelta
+   (`descartar`). Si el modelo se olvidara de algo, sería invisible; si la app arrastra algo
+   cancelado, es un renglón más con su casilla. El error cae sobre la superficie de revisión que ya
+   existe.
+3. **El botón sigue al ESTADO, no a la posición.** Un desenlace fallido ya no apaga nada (no entró
+   nada) y un acuerdo retomado se apaga aunque no haya desenlace. ⛔ Como mucho uno está vivo, y hay
+   una guarda que lo hace cumplir sobre cuatro formas de hilo distintas.
+4. **Lo que se arrastra se REVALIDA.** Si alguien borró a mano la fase que un pendiente nombra, ese
+   cambio se cae **con su motivo escrito**. Sin eso, un pendiente inválido dejaría fallando todos
+   los applies siguientes: un rechazo tumba el lote entero.
+5. **La caja lo dice**: *«2 de estos 3 cambios ya los habías acordado y no se aplicaron»*, y lista
+   aparte lo que ya no va.
+
+**Tres pérdidas sueltas que aparecieron en el mismo análisis, ninguna del bug:**
+
+- ⛔ `leerAcuerdo` cortaba con `indexOf`. El modelo VE el marcador crudo en su historial y puede
+  imitarlo; si lo escribía en su texto, **la cajita azul desaparecía entera** — el mismo síntoma que
+  Elías reportó como «contesta pero no pasa nada». Una palabra.
+- ⛔ El aviso *«⚠ N tareas tienen trabajo hecho encima y se pierden»* de `fase.borrar` **no se pintó
+  nunca**: el traductor recibía tareas sin `status` ni `source`, así que `isKept` daba false para
+  todas. Era exactamente la red que su propio comentario decía estar tendiendo.
+- El desenlace parcial decía un número (*«3 de 5»*); ahora **nombra** lo que quedó afuera. Sin eso,
+  el modelo lee «faltan dos» y no sabe cuáles.
+
+⚠ **Y una lección de método**: tres de las guardas nuevas nacieron **decorativas** —anclaban en un
+símbolo que también aparece en la línea de `import`, así que daban verde con el arreglo apagado— y
+solo se cazaron rompiéndolas a propósito. Ahora afirman sobre el texto que se pinta y sobre el
+fuente sin sus imports.
 
 ### ⭐ Etapa 3 — el chat de documentos *(2026-08-21)*
 

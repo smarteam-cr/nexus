@@ -129,7 +129,9 @@ export interface ContextoDelAsistente {
     /* ⚠ Las tareas de verdad, con id y título. Antes acá viajaba solo el CONTEO, y `turno.ts`
        fabricaba tareas vacías (`{id:"", title:"", weekIndex:0}`) para traducir el acuerdo: la
        cajita azul imprimía el id crudo en cualquier operación de tarea. */
-    items: { id: string; title: string; weekIndex: number; status: string }[];
+    /* ⚠ `source` viaja aunque no se RENDERICE en el texto del contexto: lo usa `turno.ts` para
+       traducir el acuerdo, donde `isKept` decide si una tarea tiene trabajo humano encima. */
+    items: { id: string; title: string; weekIndex: number; status: string; source: string | null }[];
   }[];
   /** El arranque del proyecto, para el mismo uso. */
   ancla?: string | null;
@@ -307,6 +309,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
         title: t.title,
         weekIndex: t.weekIndex,
         status: t.status,
+        source: t.source,
       })),
     })),
     ancla: timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : null,

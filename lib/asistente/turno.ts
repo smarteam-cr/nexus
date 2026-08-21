@@ -31,6 +31,29 @@ import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
 import { contextoDeCronograma, contextoDeDocumento } from "./contexto";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
+import { leerAcuerdo, marcaDeAcuerdo, type CambioAcordado } from "./acuerdo";
+import {
+  bloqueDePendientes,
+  fusionarPendientes,
+  pendientesDelHilo,
+  podarIrresolubles,
+} from "./acuerdo-vivo";
+
+/**
+ * ⚠ RE-EXPORTADO POR COMPATIBILIDAD. Los marcadores se mudaron a `acuerdo.ts` para cortar un
+ * ciclo de imports: el libro de pendientes necesita LEERLOS y este archivo necesita al libro.
+ * Los consumidores siguen importando desde acá, que es donde vivían.
+ */
+export {
+  leerAcuerdo,
+  marcaDeAcuerdo,
+  MARCA_DE_ACUERDO,
+  leerDesenlace,
+  marcaDeDesenlace,
+  MARCA_DE_DESENLACE,
+  textoVisible,
+} from "./acuerdo";
+export type { CambioAcordado, Desenlace } from "./acuerdo";
 
 /** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
 export const SLUG_DEL_ASISTENTE = "asistente-chat";
@@ -132,6 +155,9 @@ Toda propuesta que mueva el cierre del proyecto lo dice con las dos fechas: la d
 Y si NO lo mueve, también lo dices ("el cierre no se corre"). El silencio se lee como "no cambió
 nada", y así es como alguien se entera tres semanas después.
 
+⚠ Y si hay cambios pendientes arrastrados, la fecha que digas tiene que contemplarlos: son parte
+del mismo lote. Si no puedes, no des un número — di cuántos cambios tiene la lista en total.
+
 ⚠ Si no puedes calcular la fecha nueva con certeza (las fases pueden solaparse), NO la estimes:
 di cuántas semanas se corre y que la fecha exacta se ve en el cronograma al aplicar. Un rango
 inventado es peor que un número menos — el CSE lo repite en una llamada y queda comprometido.
@@ -160,7 +186,16 @@ que sí dos veces para el mismo cambio.
 Preguntas SOLO si el pedido admite dos lecturas distintas que producen cronogramas distintos, y
 entonces la pregunta ofrece las lecturas como opciones — no como un "¿seguimos?".
 
-Si la persona pide otra cosa después, propones de nuevo: cada propuesta reemplaza a la anterior.
+⭐ LO QUE YA SE ACORDÓ Y NO SE APLICÓ SE ARRASTRA SOLO, Y ES LA REGLA QUE MÁS CUIDADO PIDE.
+Cuando quede algo pendiente lo vas a ver en un bloque [LO QUE SIGUE PENDIENTE] que escribe la app,
+numerado P1, P2… La app lo suma sola al acuerdo que emitas.
+
+1. En "operaciones" pones SOLO lo nuevo de este turno. ⛔ Repetir lo pendiente duplica tareas: el
+   vocabulario no deshace nada, así que dos "tarea.crear" iguales son dos tareas.
+2. Si algo pendiente ya no corresponde —la persona lo canceló, o tu propuesta nueva lo reemplaza—
+   lo pones en "descartar" y lo DICES en tu mensaje. Soltar algo en silencio es exactamente lo que
+   este mecanismo vino a impedir.
+3. Si la persona te pide otra cosa distinta, eso NO cancela lo anterior: se suma.
 
 ${esCronograma ? COLA_DEL_CRONOGRAMA : COLA_DE_DOCUMENTO}`;
 }
@@ -242,8 +277,12 @@ que borrarla desde el Gantt». Una fase entera sí se puede; una tarea protegida
 ⚠ Es la ÚNICA excepción a «propón en el primer turno», y por eso se aguanta: no se pregunta por
 rutina, se pregunta cuando está en juego trabajo que alguien hizo.
 
-Solo NO llamas la herramienta cuando hiciste una pregunta de desambiguación, cuando el pedido no
-entra en el vocabulario, o cuando estás pidiendo esa confirmación.`;
+⭐ PREGUNTAR Y PROPONER EN EL MISMO TURNO ES LO ESPERADO, no la excepción.
+Cuando el pedido trae dos asuntos y solo uno es ambiguo, preguntas por ese y propones el otro —es
+el ejemplo ✅ de FORMATO, arriba—. Preguntar nunca cuesta perder la parte que ya estaba clara.
+
+Solo NO llamas la herramienta cuando el pedido no entra en el vocabulario, cuando estás pidiendo la
+confirmación de un borrado, o cuando no hay nada nuevo que agregar y tampoco nada pendiente.`;
 
 /**
  * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento
@@ -279,8 +318,14 @@ Al aplicar, el editor propone los cambios SECCIÓN POR SECCIÓN y la persona ace
 una. Así que una instrucción que toca tres secciones no es un riesgo: es tres decisiones. Cuando
 el pedido sea grande, dilo — «esto toca cuatro secciones, las vas a poder revisar de a una».
 
-Solo NO llamas la herramienta cuando hiciste una pregunta de desambiguación, cuando el pedido no
-se puede hacer, o cuando estás pidiendo una confirmación.`;
+⭐ PREGUNTAR Y PROPONER EN EL MISMO TURNO ES LO ESPERADO, no la excepción.
+Cuando el pedido trae dos asuntos y solo uno es ambiguo, preguntas por ese y dejas la instrucción
+del otro. Preguntar nunca cuesta perder la parte que ya estaba clara — y acá cuesta más que en el
+cronograma, porque la instrucción se reescribe entera en cada turno: lo que no vuelvas a nombrar,
+no se hace.
+
+Solo NO llamas la herramienta cuando el pedido no se puede hacer, o cuando estás pidiendo una
+confirmación.`;
 
 /**
  * ── LA HERRAMIENTA EMITE OPERACIONES, NO UN TEXTO ────────────────────────────────────────────
@@ -348,10 +393,20 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
         type: "string",
         description: "Qué se acordó, en una o dos frases, para que el CSE lo confirme de un vistazo.",
       },
+      descartar: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "SOLO si el bloque PENDIENTE trae cosas que ya no corresponden: sus etiquetas (P1, P2…). " +
+          "Se usa cuando la persona canceló ese cambio, o cuando tu propuesta nueva lo reemplaza. " +
+          "Lo que no pongas acá sigue pendiente y la app lo incluye sola: no lo repitas en " +
+          "\"operaciones\".",
+      },
       operaciones: {
         type: "array",
         description:
-          "Las operaciones a ejecutar, en orden. ⛔ Es un vocabulario CERRADO: si lo que te " +
+          "SOLO lo que se acaba de acordar. ⛔ NO repitas lo que ya está en el bloque PENDIENTE: " +
+          "la app lo suma sola, y repetirlo duplicaría tareas. ⛔ Es un vocabulario CERRADO: si lo que te " +
           "piden no se puede expresar con estas operaciones, NO llames esta herramienta — dilo " +
           "y ofrece lo más cercano que sí se pueda.",
         items: {
@@ -468,26 +523,6 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
   },
 };
 
-export interface CambioAcordado {
-  resumen: string;
-  /** El camino rápido: se ejecutan en milisegundos, sin volver a llamar a un modelo. */
-  operaciones?: unknown[];
-  /**
-   * Las operaciones ya traducidas a castellano, calculadas EN EL SERVIDOR contra el cronograma
-   * tal como estaba al acordar.
-   *
-   * ⭐ Es lo que vuelve hermética la cajita: lo que la persona LEE sale del mismo objeto que se
-   * va a ejecutar, no de una prosa que el modelo escribe aparte y puede divergir.
-   */
-  lineas?: string[];
-  /**
-   * ⚠ LEGACY. Los hilos anteriores al 2026-08-20 guardaron una instrucción en castellano que un
-   * segundo modelo releía. Se conserva para que esas conversaciones sigan pintándose — no para
-   * emitirla de nuevo.
-   */
-  instruccion?: string;
-}
-
 export interface ResultadoDelTurno {
   respuesta: string;
   /** Presente solo cuando el modelo dio el cambio por acordado. */
@@ -509,6 +544,14 @@ async function contextoDeLaPieza(projectId: string, pieza: string) {
  * ⚠ Los dos turnos se persisten SIEMPRE que el modelo haya contestado — aunque el navegador se
  * cierre en el medio. El hilo es del servidor, no de la pantalla.
  */
+/**
+ * El resumen que pone la app cuando el modelo solo preguntó y hay cambios pendientes.
+ *
+ * ⚠ En TUTEO NEUTRO: es la VOZ DEL ASISTENTE aunque lo escriba la app, igual que los desenlaces.
+ * Mezclarlo con el voseo de la interfaz haría que el asistente cambie de registro solo.
+ */
+const RESUMEN_DE_ARRASTRE = "Esto sigue acordado y sin aplicar.";
+
 export async function correrTurno(
   hilo: HiloConTurnos,
   mensajeDelCse: string,
@@ -517,13 +560,68 @@ export async function correrTurno(
   const ctx = await contextoDeLaPieza(hilo.projectId, hilo.pieza);
   const sha = huellaDeContexto(ctx.texto);
 
-  /* El historial tal cual quedó guardado, más lo que el CSE acaba de escribir. */
+  /**
+   * ⭐ EL CRONOGRAMA DE HOY, traducible, y arriba de todo.
+   *
+   * Antes se armaba adentro del `if` que atendía la tool. Ahora hace falta ANTES de llamar al
+   * modelo, porque lo que quedó pendiente de turnos anteriores se revalida y se le cuenta contra
+   * el cronograma tal como está AHORA, no como estaba cuando se acordó.
+   *
+   * ⛔ ACÁ SE FABRICABAN TAREAS FALSAS —`{id:"", title:"", weekIndex:0}`— porque el contexto solo
+   * mandaba el CONTEO. Funcionaba mientras el vocabulario era solo de fases; en cuanto entraron
+   * las de tarea, la cajita azul habría dicho «Se elimina «cms6949pw00sj»» en vez del título.
+   */
+  const paraTraducir = (ctx.fases ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    durationWeeks: f.durationWeeks,
+    /**
+     * ⛔ `status` Y `source` VIAJAN, y sin ellos una guarda entera no existía.
+     *
+     * `describirOperaciones` usa los dos para la línea de `fase.borrar`: «⚠ N tienen trabajo hecho
+     * encima y se pierden». Como acá se armaban tareas sin esos campos, `isKept` daba false para
+     * TODAS y el aviso NUNCA se pintó — justo la red que su propio comentario dice estar tendiendo
+     * para cuando el modelo se olvida de la doble confirmación.
+     */
+    tasks: f.items.map((t) => ({
+      id: t.id,
+      title: t.title,
+      weekIndex: t.weekIndex,
+      status: t.status,
+      /* ⚠ `null` -> `undefined`: el contexto lo trae como `string | null` (así sale de la base) y
+         `TareaActual` lo declara opcional. `isKept` compara contra "HUMAN", así que los dos
+         valores vacíos se comportan igual — pero el tipo no los mezcla. */
+      source: t.source ?? undefined,
+    })),
+  }));
+
+  /**
+   * ⭐ EL LIBRO: lo que se acordó y NO se aplicó, revalidado contra el cronograma de hoy.
+   *
+   * Es lo que arregla el bug del 2026-08-21 — contestar una pregunta dejaba de ser el último turno
+   * y el acuerdo anterior perdía su botón para siempre. La app lo lleva; el modelo solo emite lo
+   * nuevo. Ver `acuerdo-vivo.ts` para el porqué de que componga la app y no el modelo.
+   *
+   * ⚠ `lineasCrudas` se calcula ANTES de podar: es la única forma de NOMBRAR lo que se cayó.
+   */
+  const pendientesCrudos = esCronograma ? pendientesDelHilo(hilo.turnos) : [];
+  const lineasCrudas =
+    pendientesCrudos.length > 0 ? describirOperaciones(paraTraducir, pendientesCrudos) : [];
+  const libro = podarIrresolubles(pendientesCrudos, paraTraducir);
+  const lineasVivas =
+    libro.vivas.length > 0 ? describirOperaciones(paraTraducir, libro.vivas) : [];
+
+  /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
+
+     ⛔ EL BLOQUE DE PENDIENTES VA ACÁ Y NUNCA EN `system`. El breakpoint de caché está al final
+     del bloque de contexto; meter en el prefijo algo que cambia en cada turno invalidaría la
+     caché entera SIN ERROR Y SIN LOG, y se vería solo en la factura. */
   const messages: Anthropic.Messages.MessageParam[] = [
     ...hilo.turnos.map((t) => ({
       role: (t.rol === "CSE" ? "user" : "assistant") as "user" | "assistant",
       content: t.contenido,
     })),
-    { role: "user" as const, content: mensajeDelCse },
+    { role: "user" as const, content: `${bloqueDePendientes(lineasVivas)}${mensajeDelCse}` },
   ];
 
   const msg = await conContextoDeIA(
@@ -553,44 +651,70 @@ export async function correrTurno(
   );
 
   let respuesta = "";
-  let acuerdo: CambioAcordado | null = null;
+  let resumenDelModelo = "";
+  let instruccionDelModelo = "";
+  let opsNuevas: Operacion[] = [];
+  let descartar: unknown[] = [];
+
   for (const b of msg.content) {
     if (b.type === "text") respuesta += b.text;
     if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
-      const input = b.input as Partial<CambioAcordado>;
-      /* ⚠ Se acepta solo si trae resumen Y algo que ejecutar. Un acuerdo vacío pintaría un botón
-         «Aplicar» que no puede hacer nada — peor que no ofrecerlo.
+      const input = b.input as {
+        resumen?: string;
+        operaciones?: unknown;
+        instruccion?: string;
+        descartar?: unknown;
+      };
+      resumenDelModelo = typeof input?.resumen === "string" ? input.resumen.trim() : "";
+      instruccionDelModelo = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
+      opsNuevas = Array.isArray(input?.operaciones) ? (input.operaciones as Operacion[]) : [];
+      descartar = Array.isArray(input?.descartar) ? input.descartar : [];
+    }
+  }
 
-         ⛔ Y «algo que ejecutar» son DOS cosas según la pieza, no una. Este `if` exigía
-         `ops.length > 0`, así que en un DOCUMENTO —donde la herramienta emite una instrucción y
-         ninguna operación— el modelo llamaba la herramienta, el turno la descartaba en silencio, y
-         el CSE leía «voy a dejar lista la instrucción» sin que apareciera ninguna cajita. El chat
-         de documentos conversaba y no terminaba en nada. Medido contra el modelo el 2026-08-21. */
-      const ops = Array.isArray(input?.operaciones) ? input.operaciones : [];
-      const instruccion = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
-      if (input?.resumen?.trim() && !esCronograma && instruccion) {
-        acuerdo = { resumen: input.resumen.trim(), instruccion };
-      } else if (input?.resumen?.trim() && ops.length > 0) {
-        /* ⭐ LAS LÍNEAS SE CALCULAN ACÁ, EN EL SERVIDOR, contra el cronograma tal como está al
-           acordar. Es lo que vuelve hermética la cajita: lo que la persona lee sale del MISMO
-           objeto que se va a ejecutar, no de una prosa que el modelo escribe aparte. */
-        /* ⛔ ACÁ SE FABRICABAN TAREAS FALSAS —`{id:"", title:"", weekIndex:0}`— porque el
-           contexto solo mandaba el CONTEO. Funcionaba mientras el vocabulario del chat era solo
-           de fases; en cuanto entraron las de tarea, la cajita azul habría dicho «Se elimina
-           «cms6949pw00sj»» en vez del título. La persona aprobaría algo que no puede leer, que es
-           peor que la prosa que este mecanismo vino a retirar. */
-        const paraTraducir = (ctx.fases ?? []).map((f) => ({
-          id: f.id,
-          name: f.name,
-          durationWeeks: f.durationWeeks,
-          tasks: f.items.map((t) => ({ id: t.id, title: t.title, weekIndex: t.weekIndex })),
-        }));
-        acuerdo = {
-          resumen: input.resumen.trim(),
-          operaciones: ops,
-          lineas: describirOperaciones(paraTraducir, ops as Operacion[]),
-        };
-      }
+  let acuerdo: CambioAcordado | null = null;
+
+  if (!esCronograma) {
+    /* ⚠ Un DOCUMENTO emite una INSTRUCCIÓN y ninguna operación. Este `if` exigía operaciones, así
+       que el modelo llamaba la herramienta, el turno la descartaba en silencio, y el CSE leía «voy
+       a dejar lista la instrucción» sin que apareciera ninguna cajita. El chat de documentos
+       conversaba y no terminaba en nada. Medido contra el modelo el 2026-08-21.
+
+       ⛔ Y el libro NO aplica acá: el vocabulario de operaciones es del cronograma; un documento
+       emite una instrucción entera que se reescribe cada vez. */
+    if (resumenDelModelo && instruccionDelModelo) {
+      acuerdo = { resumen: resumenDelModelo, instruccion: instruccionDelModelo };
+    }
+  } else {
+    /**
+     * ⭐ LA COMPOSICIÓN: lo pendiente que sigue en pie + lo que se acaba de acordar.
+     *
+     * ⛔ Y LAS LÍNEAS SE RECALCULAN SOBRE EL CONJUNTO FUSIONADO, que es el que se va a ejecutar.
+     * Calcularlas sobre `opsNuevas` mostraría MENOS de lo que se escribe: la persona aprobaría
+     * cambios que no leyó, y ahí se cae la única garantía de todo el diseño.
+     */
+    const fusion = fusionarPendientes(libro.vivas, opsNuevas, descartar);
+    if (fusion.operaciones.length > 0) {
+      /* Lo que se soltó, dicho. Un descarte tiene que ser tan legible como una operación: si el
+         modelo se equivoca al soltar algo, o si el cronograma cambió debajo, la persona lo ve. */
+      const soltadas = [
+        ...libro.caidas.map((c) => {
+          const i = pendientesCrudos.indexOf(c.operacion);
+          const linea = i >= 0 ? lineasCrudas[i] : null;
+          return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
+        }),
+        ...fusion.descartadas.map((i) => lineasVivas[i]).filter(Boolean),
+      ];
+      acuerdo = {
+        /* Si el modelo no llamó la herramienta —porque solo preguntó— la app sintetiza el acuerdo
+           con el libro tal cual. Sin esto, un turno de desambiguación deja lo pendiente sin botón:
+           es literalmente el turno que produjo el bug. */
+        resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
+        operaciones: fusion.operaciones,
+        lineas: describirOperaciones(paraTraducir, fusion.operaciones),
+        ...(fusion.arrastradas.length > 0 ? { arrastradas: fusion.arrastradas } : {}),
+        ...(soltadas.length > 0 ? { descartadas: soltadas } : {}),
+      };
     }
   }
 
@@ -616,48 +740,4 @@ export async function correrTurno(
   });
 
   return { respuesta, acuerdo, shaDeContexto: sha };
-}
-
-/**
- * El acuerdo se guarda DENTRO del turno del asistente, con una marca que se puede volver a leer.
- * Así el hilo releído desde la base sigue mostrando el botón de aplicar — sin columna nueva y sin
- * una segunda tabla que pueda quedar desincronizada del texto que la explica.
- */
-export const MARCA_DE_ACUERDO = "<<<ACUERDO>>>";
-
-export function marcaDeAcuerdo(a: CambioAcordado): string {
-  return `${MARCA_DE_ACUERDO}${JSON.stringify(a)}`;
-}
-
-/** Separa el texto visible del acuerdo embebido. PURO — es lo que lee el panel al recargar. */
-export function leerAcuerdo(contenido: string): { texto: string; acuerdo: CambioAcordado | null } {
-  const i = contenido.indexOf(MARCA_DE_ACUERDO);
-  if (i === -1) return { texto: contenido, acuerdo: null };
-  const texto = contenido.slice(0, i).trim();
-  try {
-    const crudo = JSON.parse(contenido.slice(i + MARCA_DE_ACUERDO.length)) as Partial<CambioAcordado>;
-    /* ⛔ EL LECTOR TIENE QUE ACEPTAR LO QUE EL PRODUCTOR EMITE, Y ESTO SE ROMPIÓ UNA VEZ.
-       Al pasar la herramienta a operaciones (2026-08-20) esta condición siguió exigiendo
-       `instruccion`, que ya no existe: el acuerdo se GUARDABA bien y se leía como `null`, así que
-       la cajita azul nunca aparecía. Elías lo vio como «el asistente contesta pero no pasa nada».
-
-       ⚠ Y los tests no lo cazaron porque su fixture era del shape VIEJO: probaban que la ida y
-       vuelta funcionaba para algo que el productor ya no emitía. Por eso ahora hay un test que
-       arranca del shape REAL. */
-    const ops = Array.isArray(crudo?.operaciones) ? crudo.operaciones : null;
-    if (crudo?.resumen && (ops?.length || crudo?.instruccion)) {
-      return {
-        texto,
-        acuerdo: {
-          resumen: crudo.resumen,
-          ...(ops?.length ? { operaciones: ops } : {}),
-          ...(crudo.lineas?.length ? { lineas: crudo.lineas } : {}),
-          ...(crudo.instruccion ? { instruccion: crudo.instruccion } : {}),
-        },
-      };
-    }
-  } catch {
-    /* Un turno viejo o truncado: se muestra el texto y se pierde el botón, nunca la conversación. */
-  }
-  return { texto, acuerdo: null };
 }

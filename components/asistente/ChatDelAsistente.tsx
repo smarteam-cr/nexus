@@ -35,6 +35,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import type { CambioAcordado } from "@/lib/asistente/turno";
+import { notaDeDescarte } from "@/lib/asistente/desenlace";
+import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
@@ -55,6 +57,14 @@ interface TurnoVista {
   rol: "CSE" | "ASISTENTE";
   texto: string;
   acuerdo: AcuerdoDelChat | null;
+  /**
+   * En qué quedó ese acuerdo. Lo DERIVA el servidor con la misma función pura que decide qué
+   * sigue pendiente, así que la pantalla no puede discrepar con él sobre cuál lleva el botón.
+   *
+   * ⚠ Opcional para tolerar una respuesta de un servidor viejo: sin el campo se cae a la regla
+   * posicional de siempre, que es lo que había antes.
+   */
+  estado?: EstadoDeAcuerdo | null;
 }
 
 /**
@@ -127,12 +137,27 @@ export default function ChatDelAsistente({
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   /**
-   * ⭐ EL BOTÓN DE APLICAR VIVE SOLO EN EL ÚLTIMO TURNO, y esa regla resuelve el bug entero.
-   * Un acuerdo viejo sigue en el hilo (es historia), pero en cuanto se escribe su desenlace deja
-   * de ser el último y el botón desaparece solo. Sin columna nueva y sin una tabla de estados
-   * que pueda quedar desincronizada del texto que la explica.
+   * ⭐ EL BOTÓN SIGUE AL ESTADO, NO A LA POSICIÓN — y ese cambio es todo el arreglo del
+   * 2026-08-21.
+   *
+   * Antes acá decía «el botón vive en el último turno», y el comentario lo justificaba diciendo
+   * que lo único que corre un acuerdo del último lugar es su propio desenlace. Era falso:
+   * `correrTurno` agrega DOS turnos por cada mensaje del CSE. Elías pidió dos cosas, el asistente
+   * preguntó una y propuso la otra, Elías contestó la pregunta — y el acuerdo de 2 operaciones
+   * perdió su botón sin que nadie hubiera aplicado nada.
+   *
+   * Ahora el servidor deriva el estado con `estadosDeAcuerdo`, la MISMA función pura que decide
+   * qué sigue pendiente. Un desenlace fallido ya no apaga nada (no entró nada), y un acuerdo
+   * retomado por otro más nuevo se apaga aunque no haya desenlace.
+   *
+   * ⛔ COMO MUCHO UNO ESTÁ VIVO. Dos botones vivos son dos lotes que se solapan aplicados en el
+   * orden en que la persona clickee, sobre un vocabulario que no es idempotente.
    */
   const idDelAcuerdoVivo = useMemo(() => {
+    const vivo = turnos.find((t) => t.acuerdo && t.estado === "vivo");
+    if (vivo) return vivo.id;
+    /* Servidor viejo: ningún turno trae `estado`. Se cae a la regla posicional de antes. */
+    if (turnos.some((t) => t.estado)) return null;
     const ultimo = turnos[turnos.length - 1];
     return ultimo?.acuerdo ? ultimo.id : null;
   }, [turnos]);
@@ -314,7 +339,11 @@ export default function ChatDelAsistente({
     return true;
   }
 
-  async function aplicar(acuerdo: AcuerdoDelChat, descartadas = 0) {
+  /**
+   * ⚠ `descartadas` es el CONJUNTO de índices, no su tamaño. Era un número, y el número no
+   * alcanzaba: ver `notaDeDescarte`. El llamador ya tiene el `Set` a mano.
+   */
+  async function aplicar(acuerdo: AcuerdoDelChat, descartadas?: ReadonlySet<number>) {
     if (!onAplicar || aplicando) return;
     setAplicando(true);
     setError(null);
@@ -339,12 +368,7 @@ export default function ChatDelAsistente({
            escribió describe el acuerdo COMPLETO, así que sin esta línea el hilo quedaría
            afirmando un cambio más grande del que entró — y el modelo lo lee en el turno
            siguiente. */
-        const nota =
-          descartadas > 0
-            ? `Se aplicaron ${(acuerdo.operaciones ?? []).length} de ${
-                (acuerdo.operaciones ?? []).length + descartadas
-              } cambios: el resto se descartó.`
-            : "";
+        const nota = notaDeDescarte(acuerdo.lineas ?? [], [...(descartadas ?? [])]);
         const quedoEscrito = await anotarDesenlace(
           true,
           [nota, avisos.join(" · ")].filter(Boolean).join(" "),
@@ -450,8 +474,25 @@ export default function ChatDelAsistente({
             )}
 
             {t.acuerdo && (
-              <div className="mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2">
-                <p className="text-xs font-semibold text-info-ink">Lo que se acordó</p>
+              /**
+               * ⚠ UNA CAJA QUE YA NO ESTÁ VIVA SE APAGA, y no es cosmética.
+               *
+               * Antes un acuerdo nunca aplicado se veía IDÉNTICO a uno aplicado: sin tachado, sin
+               * opacidad, sin leyenda. Y desde que el acuerdo acumula, la caja vieja repite líneas
+               * que también están en la nueva — leerlas dos veces numeradas distinto es peor que
+               * no verlas.
+               */
+              <div
+                className={
+                  "mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2" +
+                  (t.estado && t.estado !== "vivo" ? " opacity-60" : "")
+                }
+              >
+                <p className="text-xs font-semibold text-info-ink">
+                  Lo que se acordó
+                  {t.estado === "aplicado" ? " · ya aplicado" : null}
+                  {t.estado === "retomado" ? " · sigue abajo, en la propuesta vigente" : null}
+                </p>
                 {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
                     dos: son la misma frase escrita dos veces. */}
                 <div className="text-sm text-fg mt-1">
@@ -462,6 +503,34 @@ export default function ChatDelAsistente({
                     en el servidor desde el mismo objeto que se va a aplicar. Antes acá había una
                     instrucción en prosa que el modelo escribía APARTE, y podía decir una cosa
                     mientras la instrucción hacía otra. */}
+                {/**
+                 * ⭐ DE DÓNDE VIENEN ESTOS CAMBIOS.
+                 *
+                 * El acuerdo acumula lo que se acordó y no se aplicó, así que una caja puede
+                 * mezclar lo que la persona acaba de pedir con lo que pidió hace tres turnos. Sin
+                 * esta línea el arrastre es invisible y la persona cree que los tres salieron de
+                 * su último mensaje.
+                 */}
+                {t.estado === "vivo" && (t.acuerdo.arrastradas?.length ?? 0) > 0 && t.acuerdo.lineas ? (
+                  <p className="mt-2 text-xs text-info-ink">
+                    {t.acuerdo.arrastradas!.length === t.acuerdo.lineas.length
+                      ? "Estos cambios ya los habías acordado y no se aplicaron."
+                      : `${t.acuerdo.arrastradas!.length} de estos ${t.acuerdo.lineas.length} cambios ya los habías acordado y no se aplicaron.`}
+                  </p>
+                ) : null}
+
+                {/* ⚠ LO QUE SE SOLTÓ SE DICE. Un descarte tiene que ser tan legible como una
+                    operación: si el modelo se equivoca al soltar algo, o si el cronograma cambió
+                    debajo y un cambio pendiente dejó de poder aplicarse, la persona lo ve acá y
+                    puede volver a pedirlo. Callarlo es el mismo defecto, del otro lado. */}
+                {t.estado === "vivo" && t.acuerdo.descartadas?.length ? (
+                  <ul className="mt-2 space-y-0.5 rounded-lg border border-warn-line bg-warn-surface px-2 py-1.5 text-xs text-warn-ink">
+                    {t.acuerdo.descartadas.map((d, i) => (
+                      <li key={i}>⚠ Ya no va: {d}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
                 {t.acuerdo.lineas && t.acuerdo.lineas.length > 0 ? (
                   <>
                     {/* ⭐ EL CONTADOR, y no es adorno. Desde que el vocabulario creció a 18
@@ -600,7 +669,7 @@ export default function ChatDelAsistente({
                         ...(instruccionEditada[t.id] !== undefined
                           ? { instruccion: instruccionEditada[t.id] }
                           : {}),
-                      }, desmarcadas[t.id]?.size ?? 0)
+                      }, desmarcadas[t.id])
                     }
                     /* ⛔ Sin líneas no se aplica: aprobar lo que no se puede leer es
                        exactamente lo que la cajita existe para impedir. */
