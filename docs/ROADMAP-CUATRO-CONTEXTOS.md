@@ -61,7 +61,7 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | # | Etapa | Qué resuelve | Estado |
 |---|---|---|---|
 | 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega) | ✅ Hecho · probado en pantalla |
-| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ **Listo para probar en pantalla** |
+| 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ En uso · **18 operaciones** (2026-08-21) |
 | 3 | **El chat de documentos** | El botón YA aparece; falta cablear el «Aplicar» de cada editor | 🟡 Siguiente |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
@@ -76,6 +76,48 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 2b | **El chat responde** | El turno, con el contexto chico | ✅ Probado contra el modelo (`--conversar`) |
 | 2c | **El panel** | El cajón que convive con el documento, sin bloquearlo | ✅ No modal, por portal, z-45 |
 | 2d | **Propone y aplica** | La instrucción acordada va al modificador de siempre | ✅ En el cronograma. En documentos: copiar y pegar (etapa 3) |
+| 2e | **El vocabulario completo** | De 10 a 18 operaciones, y el chat VE las tareas | ✅ 2026-08-21 · auditado y probado contra el modelo |
+
+### ⭐ Etapa 2e — «que se puedan hacer muchas cosas» *(2026-08-21, 5 commits)*
+
+Pedido de Elías después de la primera semana de uso real. Leídos **los 16 turnos que escribió de
+verdad**, de **9 pedidos distintos el chat solo podía ejecutar 3**:
+
+| Lo que pidió | Antes | Ahora |
+|---|---|---|
+| «dejala en 4 semanas» · «pasa a 2 y redistribuye» | ✅ | ✅ |
+| «hay semanas sin tareas, **quítalas**» | 🟡 aproximaba acortando | ✅ `fase.quitar-semana` |
+| «pasa **al final** lo de sesión de cierre» | ❌ | ✅ |
+| «**agrega tareas** de HubSpot Academy en la 3ra semana» | ❌ | ✅ `tarea.crear` |
+| «**borra** la última base que tiene un nombre raro» | ❌ | ✅ (o dice por qué no puede) |
+| «**unifica** dos fases» | ❌ | 🟡 ofrece el equivalente y avisa la consecuencia |
+| «las **atrasadas** a la 3ra semana» | ❌ | ✅ una operación por tarea, nombrada |
+
+⭐ **La causa no era que faltara vocabulario.** Tres operaciones de tarea estaban escritas y
+testeadas, e **inalcanzables**: el contexto no mandaba ni un id, el enum de la tool tenía 7 de 10, y
+el traductor de la cajita azul corría contra tareas *fabricadas*. Ahora la guarda del enum compara
+**en los dos sentidos**, así que una operación construida que nadie puede pedir sale en rojo.
+
+**Lo medido, que decidió el diseño:**
+
+- **314 semanas vacías** en 29 de los 46 cronogramas activos → quitar una semana del medio no era
+  un capricho: era el pedido más común, y el ejemplo que el propio prompt usaba como «imposible».
+- **453 tareas atrasadas** en 22 de 46 → el pedido de las atrasadas toca la mitad de la cartera.
+- **0 colisiones** nombrando tareas por los últimos 5 caracteres del id, contra **1.063** por los
+  primeros 8 (los cuid de una misma carga comparten prefijo).
+- Prefijo real de los 51 cronogramas: mediana 4.906, **máximo 9.918**, techo 13.000, **0 se pasan**.
+
+⛔ **Y un defecto peor que la función que faltaba**: «borrá esa tarea» sobre una tarea hecha o
+cargada a mano **no borraba nada y nadie avisaba** — el cronograma la protege, y la cajita azul ya
+había dicho «Se elimina «X»». Ahora se rechaza antes, diciendo por qué y adónde ir.
+
+**La auditoría del rango**: 5 lentes en paralelo, 20 hallazgos, **16 confirmados** por un escéptico
+por hallazgo, 2 rompían datos (un NaN que atravesaba todas las guardas de rango, y `mergeServerIds`
+perdiendo la procedencia). Todos arreglados con su guarda rota a propósito.
+
+⚠ **La lección de método**: el traductor de la cajita y el ejecutor son dos simulaciones del mismo
+lote y **divergen**. Un arreglo mío hizo que la cajita dijera «semana 2» mientras el ejecutor ponía
+la tarea en la 3. Ningún test lo vio. Lo cazó correr el pedido real contra el modelo.
 
 ### ⭐ Lo que la medición contra producción cambió (2026-08-19)
 
