@@ -195,6 +195,29 @@ describe("el texto del asistente se renderiza", () => {
   });
 });
 
+describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
+  /* El vocabulario del cronograma pasó de 10 a 18 operaciones el 2026-08-21, y las de tarea se
+     emiten ENUMERADAS —una por tarea— para que la cajita las nombre por título en vez de aprobar
+     un criterio a ciegas. El efecto: un acuerdo normal pasó de 2 líneas a 12, en un cajón de
+     400 px. Sin recorte, la lista empuja el botón «Aplicar» fuera de pantalla. */
+
+  it("⚠ la lista tiene scroll propio cuando se hace larga", () => {
+    /* La edición que la pone en rojo: sacar el `max-h` del <ol>. Nada falla, nada se ve raro en
+       un acuerdo de dos líneas — y con doce el botón deja de estar donde la persona lo busca. */
+    const i = PANEL.indexOf("acuerdo.lineas.map");
+    expect(i, "se perdió el render de las líneas del acuerdo").toBeGreaterThan(-1);
+    const bloque = PANEL.slice(Math.max(0, i - 900), i);
+    expect(bloque, "la lista de operaciones perdió su recorte").toContain("max-h-");
+    expect(bloque).toContain("overflow-y-auto");
+  });
+
+  it("⭐ y dice CUÁNTOS cambios son, arriba", () => {
+    /* Es lo que la persona necesita ANTES de leer: doce o dos cambia si revisa uno por uno o si
+       lee y aprieta. La edición que la pone en rojo: borrar el contador. */
+    expect(PANEL).toContain("lineas.length} cambios");
+  });
+});
+
 describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
   it("⭐ el cronograma y todos los documentos del assist, sin lista paralela", () => {
     /* Si fuera una lista escrita a mano, divergiría el día que alguien sume un documento al

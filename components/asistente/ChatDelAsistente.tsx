@@ -315,13 +315,37 @@ export default function ChatDelAsistente({
                     instrucción en prosa que el modelo escribía APARTE, y podía decir una cosa
                     mientras la instrucción hacía otra. */}
                 {t.acuerdo.lineas && t.acuerdo.lineas.length > 0 ? (
-                  <ol className="mt-2 space-y-1 list-decimal pl-4 text-sm text-fg marker:text-fg-muted">
-                    {t.acuerdo.lineas.map((linea, i) => (
-                      <li key={i} className="leading-relaxed">
-                        {linea}
-                      </li>
-                    ))}
-                  </ol>
+                  <>
+                    {/* ⭐ EL CONTADOR, y no es adorno. Desde que el vocabulario creció a 18
+                        operaciones y las de tarea se emiten ENUMERADAS —una por tarea, para que
+                        se lean por nombre— un acuerdo normal pasó de 2 líneas a 12. Sin el
+                        número arriba, la persona no sabe cuánto está aprobando hasta scrollear
+                        hasta el final, y el botón «Aplicar» está justo abajo. */}
+                    {t.acuerdo.lineas.length > 3 && (
+                      <p className="mt-2 text-xs font-semibold text-info-ink">
+                        {t.acuerdo.lineas.length} cambios
+                      </p>
+                    )}
+                    {/* ⚠ El cajón mide 400 px. Doce renglones de ~120 caracteres son ~900 px: sin
+                        este scroll propio, la lista empuja el botón fuera de la pantalla y el
+                        auto-scroll deja la primera línea arriba de todo, invisible. El recorte es
+                        VISUAL — la lista sigue completa y alcanzable, que es lo que la vuelve
+                        auditable. */}
+                    <ol
+                      className={
+                        "mt-2 space-y-1 list-decimal pl-4 text-sm text-fg marker:text-fg-muted" +
+                        (t.acuerdo.lineas.length > 6
+                          ? " max-h-56 overflow-y-auto pr-1 overscroll-contain"
+                          : "")
+                      }
+                    >
+                      {t.acuerdo.lineas.map((linea, i) => (
+                        <li key={i} className="leading-relaxed">
+                          {linea}
+                        </li>
+                      ))}
+                    </ol>
+                  </>
                 ) : (
                   /* ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto,
                      que un segundo modelo releía. Se siguen pintando para no perder su historia. */
