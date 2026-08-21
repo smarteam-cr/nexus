@@ -62,7 +62,7 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 |---|---|---|---|
 | 1 | **Un solo molde** | Cuatro documentos más pasan a poder modificarse con IA (Diagnóstico, Planificación, Implementación, Entrega) | ✅ Hecho · probado en pantalla |
 | 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ En uso · **18 operaciones** (2026-08-21) |
-| 3 | **El chat de documentos** | El botón YA aparece; falta cablear el «Aplicar» de cada editor | 🟡 Siguiente |
+| 3 | **El chat de documentos** | Conversa, acuerda y aplica sobre los 6 documentos | ✅ 2026-08-21 |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
@@ -118,6 +118,33 @@ perdiendo la procedencia). Todos arreglados con su guarda rota a propósito.
 ⚠ **La lección de método**: el traductor de la cajita y el ejecutor son dos simulaciones del mismo
 lote y **divergen**. Un arreglo mío hizo que la cajita dijera «semana 2» mientras el ejecutor ponía
 la tarea en la 3. Ningún test lo vio. Lo cazó correr el pedido real contra el modelo.
+
+### ⭐ Etapa 3 — el chat de documentos *(2026-08-21)*
+
+El diagnóstico era «falta cablear el Aplicar». Al abrirlo, el problema era otro y más de fondo:
+**el chat de documentos no podía cerrar un acuerdo NUNCA**, por tres razones encadenadas.
+
+1. El prompt no recibía la pieza, así que sobre un kickoff el modelo leía el vocabulario de fases
+   y semanas del cronograma.
+2. La única herramienta pedía `operaciones` — no había ningún campo para una instrucción.
+3. Y el turno exigía `operaciones.length > 0`, así que descartaba el acuerdo **en silencio**: el
+   CSE leía «voy a dejar lista la instrucción» y no aparecía ninguna cajita.
+
+⚠ Los tres eslabones estaban bien por separado. Lo encontró correr un pedido real contra el
+modelo, no la suite.
+
+**El «Aplicar», sin abrir un segundo camino de escritura.** El cajón lo monta el panel del
+proyecto; el aplicador de documentos vive dentro de cada workspace. Se resolvió haciendo que el
+aplicador **se anuncie** y el chat lo llame — registrándose el propio `DocumentAssist`, no cada
+workspace, así que los seis quedaron cableados sin tocar ninguno.
+⛔ Lo que se descartó: que el chat llame a `canvas-assist` y escriba por su cuenta. Sería un
+segundo camino de escritura para lo mismo — no interfaz duplicada, lógica de pérdida de datos
+duplicada.
+
+**Y antes de la etapa 3, el hueco más caro del cronograma:** aplicar dejó de ser todo-o-nada. Cada
+línea tiene su casilla, con cascada — desmarcar la fase que se crea tacha sus tareas a la vista,
+porque dejarlas produce operaciones que apuntan a una fase inexistente y **un solo rechazo aborta
+el lote entero**.
 
 ### ⭐ Lo que la medición contra producción cambió (2026-08-19)
 
