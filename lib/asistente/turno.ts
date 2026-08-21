@@ -384,8 +384,25 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
   const texto = contenido.slice(0, i).trim();
   try {
     const crudo = JSON.parse(contenido.slice(i + MARCA_DE_ACUERDO.length)) as Partial<CambioAcordado>;
-    if (crudo?.resumen && crudo?.instruccion) {
-      return { texto, acuerdo: { resumen: crudo.resumen, instruccion: crudo.instruccion } };
+    /* ⛔ EL LECTOR TIENE QUE ACEPTAR LO QUE EL PRODUCTOR EMITE, Y ESTO SE ROMPIÓ UNA VEZ.
+       Al pasar la herramienta a operaciones (2026-08-20) esta condición siguió exigiendo
+       `instruccion`, que ya no existe: el acuerdo se GUARDABA bien y se leía como `null`, así que
+       la cajita azul nunca aparecía. Elías lo vio como «el asistente contesta pero no pasa nada».
+
+       ⚠ Y los tests no lo cazaron porque su fixture era del shape VIEJO: probaban que la ida y
+       vuelta funcionaba para algo que el productor ya no emitía. Por eso ahora hay un test que
+       arranca del shape REAL. */
+    const ops = Array.isArray(crudo?.operaciones) ? crudo.operaciones : null;
+    if (crudo?.resumen && (ops?.length || crudo?.instruccion)) {
+      return {
+        texto,
+        acuerdo: {
+          resumen: crudo.resumen,
+          ...(ops?.length ? { operaciones: ops } : {}),
+          ...(crudo.lineas?.length ? { lineas: crudo.lineas } : {}),
+          ...(crudo.instruccion ? { instruccion: crudo.instruccion } : {}),
+        },
+      };
     }
   } catch {
     /* Un turno viejo o truncado: se muestra el texto y se pierde el botón, nunca la conversación. */

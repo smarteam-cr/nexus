@@ -212,6 +212,68 @@ describe("el breakpoint de caché está donde cachea", () => {
   });
 });
 
+describe("⛔ el LECTOR acepta lo que el PRODUCTOR emite", () => {
+  /* ⚠ ESTA GUARDA NACIÓ DE UN BUG QUE LOS TESTS DEJARON PASAR, y el porqué importa.
+
+     Al pasar la herramienta a operaciones, `leerAcuerdo` siguió exigiendo `instruccion` —que ya
+     no se emite— así que el acuerdo se GUARDABA bien en el hilo y se leía como `null`: la cajita
+     azul nunca aparecía. Elías lo vio como «el asistente contesta y no pasa nada».
+
+     Los tests de ida y vuelta seguían verdes porque su fixture era del shape VIEJO: probaban que
+     el round-trip funcionaba para algo que el productor ya no producía. Un test que se prueba a
+     sí mismo en vez de al sistema.
+
+     La forma correcta es arrancar del shape REAL que arma `correrTurno`. */
+
+  it("un acuerdo con OPERACIONES va y vuelve entero", () => {
+    /* La edición que la pone en rojo: volver a exigir `instruccion` en `leerAcuerdo`. */
+    const real = {
+      resumen: "Sales Hub pasa de 4 a 2 semanas.",
+      operaciones: [{ op: "fase.duracion", phaseId: "abc123", semanas: 2 }],
+      lineas: ["«Sales Hub» pasa de 4 a 2 semanas"],
+    };
+    const leido = leerAcuerdo(`Listo.
+
+${marcaDeAcuerdo(real)}`);
+    expect(
+      leido.acuerdo,
+      "el acuerdo con operaciones se leyó como null: la cajita azul no va a aparecer",
+    ).not.toBeNull();
+    expect(leido.acuerdo!.operaciones).toEqual(real.operaciones);
+    expect(leido.acuerdo!.lineas).toEqual(real.lineas);
+  });
+
+  it("⚠ y un acuerdo VIEJO, con instrucción de texto, sigue leyéndose", () => {
+    /* Los hilos anteriores al 2026-08-20 tienen ese shape. Romperlos convertiría una
+       conversación guardada en un texto sin su acuerdo. */
+    const viejo = { resumen: "algo", instruccion: "Alarga la fase X" };
+    const leido = leerAcuerdo(`ok
+
+${marcaDeAcuerdo(viejo)}`);
+    expect(leido.acuerdo!.instruccion).toBe("Alarga la fase X");
+  });
+
+  it("⛔ pero un acuerdo SIN operaciones ni instrucción no pinta botón", () => {
+    /* Un «Aplicar» que no puede hacer nada es peor que no ofrecerlo. */
+    const vacio = { resumen: "dije algo pero no acordé nada" };
+    expect(leerAcuerdo(`x
+
+${marcaDeAcuerdo(vacio)}`).acuerdo).toBeNull();
+  });
+
+  it("⛔ y el productor SOLO emite acuerdos que el lector va a aceptar", () => {
+    /* El invariante de fondo, afirmado sobre el código: `correrTurno` acepta la tool call cuando
+       hay resumen + operaciones, así que `leerAcuerdo` no puede pedir MÁS que eso. La edición
+       que la pone en rojo: agregarle un requisito al lector que el productor no garantiza. */
+    const i = FUENTE.indexOf("export function leerAcuerdo");
+    const lector = FUENTE.slice(i, FUENTE.indexOf("return { texto, acuerdo: null };", i));
+    expect(
+      /crudo\?\.instruccion\s*\)/.test(lector) && !lector.includes("ops?.length"),
+      "el lector volvió a exigir `instruccion`: el acuerdo se guarda y se lee como null",
+    ).toBe(false);
+  });
+});
+
 describe("el acuerdo sobrevive a recargar la pantalla", () => {
   const acuerdo = {
     resumen: "Alargar Setup una semana; el cierre pasa del 8 sep al 15 sep.",
