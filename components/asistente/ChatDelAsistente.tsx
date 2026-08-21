@@ -159,7 +159,11 @@ export default function ChatDelAsistente({
 
   async function enviar() {
     const mensaje = texto.trim();
-    if (!mensaje || pensando) return;
+    /* ⛔ Y `aplicando` también: en el carril lento el apply tarda minutos, y un turno que se
+       cuela ahí deja el desenlace colgando del acuerdo equivocado — el botón «Aplicar» del
+       acuerdo NUEVO se apaga solo, porque vive únicamente en el último turno. El borrador no se
+       pierde: queda en el textarea. */
+    if (!mensaje || pensando || aplicando) return;
     setTexto("");
     setPensando(true);
     setError(null);
@@ -187,6 +191,7 @@ export default function ChatDelAsistente({
 
   async function empezarDeCero() {
     setPensando(true);
+    setError(null);
     try {
       const r = await fetch(`/api/projects/${projectId}/asistente`, {
         method: "POST",
@@ -194,14 +199,35 @@ export default function ChatDelAsistente({
         body: JSON.stringify({ pieza, empezarDeCero: true }),
       });
       const j = await r.json().catch(() => ({}));
-      setTurnos(j.hilo?.turnos ?? []);
+      if (!r.ok) throw new Error(j.error ?? "no se pudo empezar de cero");
+      /* ⛔ La pantalla se vacía SOLO si el servidor abrió el hilo nuevo. El `?? []` de antes la
+         vaciaba también con un body de error: la persona daba la conversación por archivada —sin
+         que se hubiera archivado nada— y reaparecía entera con el mensaje siguiente, porque
+         `abrirHilo` reusa el hilo vivo.
+         ⚠ Un hilo recién abierto trae `turnos: []`, así que VACÍO es una respuesta válida y
+         AUSENTE no: por eso `Array.isArray` y no un truthy sobre el largo. */
+      if (!Array.isArray(j.hilo?.turnos)) throw new Error("no se pudo empezar de cero");
+      setTurnos(j.hilo.turnos);
       setInstruccionEditada({});
+    } catch (e) {
+      /* La conversación anterior queda en pantalla a propósito: del lado del servidor sigue
+         siendo la viva, y el próximo mensaje va a caer ahí. */
+      setError(e instanceof Error ? e.message : "no se pudo empezar de cero");
     } finally {
       setPensando(false);
     }
   }
 
   /** Deja escrito en el hilo qué pasó al aplicar. Ver el porqué en `idDelAcuerdoVivo`. */
+  /**
+   * ⚠ DEVUELVE SI EL DESENLACE QUEDÓ ESCRITO, y no es un detalle de implementación.
+   *
+   * El botón «Aplicar» se apaga por UNA sola vía: dejar de ser el último turno del hilo. Y lo
+   * único que corre ese último turno es esta llamada. Si falla muda, el cambio YA entró al
+   * cronograma —el carril de operaciones escribe directo— y el botón sigue vivo: la persona lo
+   * aprieta de nuevo y aplica dos veces. Y las operaciones no son idempotentes: `tarea.crear`
+   * duplica la tarea, `fase.crear` duplica la fase.
+   */
   async function anotarDesenlace(ok: boolean, detalle: string, vistaPrevia = true) {
     const r = await fetch(`/api/projects/${projectId}/asistente`, {
       method: "POST",
@@ -209,7 +235,9 @@ export default function ChatDelAsistente({
       body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia } }),
     });
     const j = await r.json().catch(() => ({}));
-    if (j.hilo?.turnos) setTurnos(j.hilo.turnos);
+    if (!r.ok || !j.hilo?.turnos) return false;
+    setTurnos(j.hilo.turnos);
+    return true;
   }
 
   async function aplicar(acuerdo: AcuerdoDelChat) {
@@ -222,7 +250,10 @@ export default function ChatDelAsistente({
         /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
            aparecía suelto al pie del documento, con el cajón ya cerrado. */
         setError(fallo);
-        await anotarDesenlace(false, fallo);
+        /* ⚠ El fallo del fetch se traga acá a propósito: si subiera al catch de afuera,
+           `setError` pisaría el motivo REAL del rechazo con un «Failed to fetch» y la persona
+           perdería lo único útil que tenía. */
+        await anotarDesenlace(false, fallo).catch(() => false);
       } else {
         /* ⚠ Los avisos viajan al hilo: son la diferencia entre «se aplicó» y «se aplicó, pero
            el editor hizo otra cosa con una parte». Y como el modelo LEE el hilo, en el próximo
@@ -230,7 +261,20 @@ export default function ChatDelAsistente({
         /* El carril de operaciones escribe directo; el viejo deja una propuesta para revisar.
            El desenlace tiene que decir cuál de los dos pasó, o manda a buscar un banner que no
            existe. Lo sabe el acuerdo: si trae operaciones, no hay vista previa. */
-        await anotarDesenlace(true, avisos.join(" · "), !acuerdo.operaciones?.length);
+        const quedoEscrito = await anotarDesenlace(
+          true,
+          avisos.join(" · "),
+          !acuerdo.operaciones?.length,
+        ).catch(() => false);
+        /* ⛔ Si el desenlace NO se pudo escribir, hay que DECIRLO. El cambio ya entró, pero el
+           botón sigue vivo en el último turno y el silencio invita a apretarlo otra vez — sobre
+           operaciones que no son idempotentes. */
+        if (!quedoEscrito) {
+          setError(
+            "El cambio se aplicó al cronograma, pero no se pudo dejar constancia en la " +
+              "conversación. ⚠ No lo apliques de nuevo: se duplicaría. Recargá para ver el hilo.",
+          );
+        }
         /* ⛔ EL PANEL NO SE CIERRA AL APLICAR, y es una decisión de Elías (2026-08-20).
            Con las operaciones aplicar tarda ~1 ms, así que cerrar el cajón convierte un cambio
            instantáneo en «desapareció todo y no sé qué pasó». Además la conversación sigue: lo
@@ -262,7 +306,11 @@ export default function ChatDelAsistente({
           {turnos.length > 0 && (
             <button
               onClick={() => void empezarDeCero()}
-              disabled={pensando}
+              /* ⚠ `aplicando` también: abrir un hilo nuevo a mitad del apply hace que el
+                 desenlace se escriba sobre el hilo RECIÉN CREADO —`hiloVivo` devuelve el más
+                 reciente— y el «⛔ No se pudo aplicar» queda como primer turno de una
+                 conversación vacía, mientras el acuerdo real se pierde de vista. */
+              disabled={pensando || aplicando}
               className="px-2 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
               title="Empezar una conversación nueva (la anterior queda guardada)"
             >
@@ -457,7 +505,7 @@ export default function ChatDelAsistente({
         />
         <button
           onClick={() => void enviar()}
-          disabled={pensando || !texto.trim()}
+          disabled={pensando || aplicando || !texto.trim()}
           className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
         >
           Enviar

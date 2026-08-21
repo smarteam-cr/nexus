@@ -141,8 +141,18 @@ describe("un aplicar que falla NO se lee como uno que anduvo", () => {
 
   it("⚠ y el desenlace LLEVA los avisos, no un ✅ pelado", () => {
     /* «Se aplicó» sobre algo que no se aplicó es peor que un error: el CSE cierra el panel
-       convencido y se entera días después. */
-    expect(PANEL).toContain("anotarDesenlace(true, avisos");
+       convencido y se entera días después.
+
+       ⚠ Esta guarda anclaba en el literal `anotarDesenlace(true, avisos` y se puso roja el
+       2026-08-21 cuando el llamado pasó a varias líneas — sin que la promesa cambiara ni un
+       poco. Estaba midiendo la FORMA del llamado, no que los avisos viajen. Ahora mira el
+       bloque del desenlace de éxito y exige el dato, no la tipografía. */
+    const i = PANEL.indexOf("anotarDesenlace(");
+    const bloque = PANEL.slice(PANEL.indexOf("await onAplicar("), PANEL.indexOf("} catch", i));
+    expect(
+      bloque.includes("avisos.join"),
+      "el desenlace de éxito dejó de llevar los avisos del editor",
+    ).toBe(true);
   });
 
   it("⚠ y el desenlace queda ESCRITO en el hilo", () => {
@@ -183,7 +193,16 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
     const i = CANVAS.indexOf("const ocupado");
     expect(i, "se fue el estado único de ocupado").toBeGreaterThan(-1);
     const bloque = CANVAS.slice(i, i + 1800);
-    for (const estado of ["generating", "allRegenLoading", "chainingProgress", "applying"]) {
+    /* ⚠ `assisting` es LA espera larga —el modificador viejo, dos a cuatro minutos— y fue el
+       único que quedó afuera en la primera versión: el Gantt seguía editable durante toda la
+       corrida, y el autosave corre igual porque `proposal` todavía es null. */
+    for (const estado of [
+      "assisting",
+      "generating",
+      "allRegenLoading",
+      "chainingProgress",
+      "applying",
+    ]) {
       expect(bloque, `«${estado}» dejó de bloquear el cronograma`).toContain(estado);
     }
   });
@@ -287,6 +306,65 @@ describe("⛔ nunca un «Ver instrucción» que no lleva a ninguna instrucción"
       /\}\s*\)\s*:\s*\(\s*\n\s*\/\* ⚠ LEGACY/.test(PANEL),
       "el legacy volvió a ser el else de cualquier acuerdo sin líneas",
     ).toBe(false);
+  });
+});
+
+describe("⛔ lo que la revisión de calidad encontró, y son pérdidas de dato", () => {
+  const CANVAS_SRC = fs.readFileSync(path.join(RAIZ, "components/canvas/CronogramaCanvas.tsx"), "utf8");
+
+  it("⚠ el autosave se re-arma cuando cambia el cierre fijado a mano", () => {
+    /* El `setTimeout` congela la closure del render en que se armó. Si `dirty` YA era true y
+       dentro de 1,5 s se fija el cierre en el picker, sin esta dep el timer viejo dispara con
+       `closeDateOverride: null` — y como la respuesta entra por la rama de adopción, el picker se
+       VACÍA en pantalla y `dirty` queda en false: nada lo reintenta. `anchor` está listado desde
+       siempre por exactamente la misma razón.
+       La edición que la pone en rojo: sacar `closeOverride` de ese array. */
+    expect(CANVAS_SRC, "el autosave dejó de mirar el cierre fijado a mano").toContain(
+      "[dirty, phases, anchor, closeOverride, proposal, saving]",
+    );
+  });
+
+  it("⛔ el desenlace DICE si quedó escrito, y el aplicar lo mira", () => {
+    /* El botón «Aplicar» se apaga por una sola vía: dejar de ser el último turno. Y el único que
+       corre ese último turno es `anotarDesenlace`. Si falla mudo, el cambio ya entró y el botón
+       sigue vivo → se aplica dos veces, sobre operaciones que NO son idempotentes (`tarea.crear`
+       duplica la tarea, `fase.crear` duplica la fase).
+       La edición que la pone en rojo: que `anotarDesenlace` vuelva a no devolver nada. */
+    expect(PANEL).toContain("if (!r.ok || !j.hilo?.turnos) return false;");
+    expect(PANEL, "el aplicar dejó de mirar si el desenlace quedó escrito").toContain(
+      "if (!quedoEscrito)",
+    );
+  });
+
+  it("⚠ y no se puede escribir ni empezar de cero a mitad de un apply", () => {
+    /* En el carril lento el apply tarda minutos. Un turno que se cuela ahí deja el desenlace
+       colgando del acuerdo equivocado, y «Nueva» hace que se escriba sobre un hilo recién creado.
+       La edición que la pone en rojo: sacar `aplicando` de cualquiera de los tres. */
+    expect(PANEL).toContain("if (!mensaje || pensando || aplicando) return;");
+    expect(PANEL).toContain("disabled={pensando || aplicando || !texto.trim()}");
+    expect(PANEL).toContain("disabled={pensando || aplicando}");
+  });
+
+  it("⛔ «Nueva» no vacía la pantalla si el servidor rechazó", () => {
+    /* El `?? []` de antes vaciaba el hilo también con un body de error: la persona daba la
+       conversación por archivada —sin que se hubiera archivado nada— y reaparecía entera con el
+       mensaje siguiente, porque `abrirHilo` reusa el hilo vivo.
+       ⚠ Un hilo recién abierto trae `turnos: []`, así que VACÍO es válido y AUSENTE no: por eso
+       `Array.isArray` y no un truthy sobre el largo. */
+    expect(PANEL).toContain("if (!Array.isArray(j.hilo?.turnos))");
+  });
+
+  it("⚠ el cajón se REMONTA al cambiar de canvas", () => {
+    /* Cambiar de canvas es puro estado (`router.replace` sobre la misma ruta), así que sin `key`
+       el panel conserva el hilo del documento anterior mientras el encabezado ya dice el nombre
+       nuevo — y «Nueva» y el envío postean contra la pieza NUEVA. La conversación que se lee y la
+       que se toca dejan de ser la misma. */
+    const src = fs.readFileSync(path.join(RAIZ, "components/clients/ProjectCanvasPanel.tsx"), "utf8");
+    const i = src.indexOf("<ChatDelAsistente");
+    expect(i, "se fue el montaje del chat").toBeGreaterThan(-1);
+    expect(src.slice(i, i + 200), "el chat dejó de remontarse por pieza").toContain(
+      "key={activeSlug}",
+    );
   });
 });
 

@@ -1104,7 +1104,13 @@ export default function ProjectCanvasPanel({
       {activeSlug &&
         activeSlug !== PIEZA_CRONOGRAMA &&
         puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? "")) && (
+        /* ⚠ `key` POR PIEZA, igual que los workspaces de arriba. Cambiar de canvas es puro
+           estado —`switchCanvas` hace `router.replace` sobre la misma ruta— así que sin esto el
+           panel NO se remonta: se queda con el hilo del documento ANTERIOR mientras el
+           encabezado ya dice el nombre nuevo, y «Nueva» y el envío postean contra la pieza
+           NUEVA. La conversación que se lee y la que se toca dejan de ser la misma. */
         <ChatDelAsistente
+          key={activeSlug}
           projectId={projectId}
           pieza={activeSlug}
           piezaLabel={pieceLabel(activeSlug)}

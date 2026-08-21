@@ -440,38 +440,49 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
    * viaje; generar las tareas es un agente y tarda. Un cartel genérico haría que las dos se lean
    * igual, y enseña a ignorar el que sí avisa una espera real.
    */
-  const ocupado: { activo: boolean; rotulo: string; detalle: string } = generating
+  const ocupado: { activo: boolean; rotulo: string; detalle: string } = assisting
     ? {
+        /* ⛔ LA ESPERA MÁS LARGA ERA LA ÚNICA QUE NO BLOQUEABA, y va primera por eso.
+           `assisting` es el modificador viejo —el que reescribe el cronograma entero— y tarda
+           MINUTOS, no milisegundos. Sin él acá, el Gantt quedaba editable durante toda la corrida
+           y el autosave corre igual (`proposal` todavía es null), así que lo que el CSE tipeara
+           en el medio lo pisaba después una propuesta calculada contra la foto ANTERIOR. */
         activo: true,
-        rotulo: "Generando las tareas del cronograma",
-        detalle: "El agente está armando la propuesta — puede tardar un momento.",
+        rotulo: "Reescribiendo el cronograma con IA",
+        detalle: "Suele tardar entre dos y cuatro minutos.",
       }
-    : allRegenLoading
-      ? {
+    : generating
+        ? {
           activo: true,
-          rotulo: "Armando la propuesta del cronograma",
-          detalle: "El agente está revisando todas las fases.",
+          rotulo: "Generando las tareas del cronograma",
+          detalle: "El agente está armando la propuesta — puede tardar un momento.",
         }
-      : chainingProgress
-        ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
-        : applying
-          ? {
-              activo: true,
-              rotulo: "Aplicando el cambio",
-              detalle: "El cronograma se está actualizando.",
-            }
-          : applyingProgress
+      : allRegenLoading
+        ? {
+            activo: true,
+            rotulo: "Armando la propuesta del cronograma",
+            detalle: "El agente está revisando todas las fases.",
+          }
+        : chainingProgress
+          ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
+          : applying
             ? {
                 activo: true,
-                rotulo: "Aplicando el avance",
-                detalle: "Marcando lo que se confirmó.",
+                rotulo: "Aplicando el cambio",
+                detalle: "El cronograma se está actualizando.",
               }
-            : applyingPartic
+            : applyingProgress
               ? {
                   activo: true,
-                  rotulo: "Aplicando las desviaciones",
-                  detalle: "Un momento.",
+                  rotulo: "Aplicando el avance",
+                  detalle: "Marcando lo que se confirmó.",
                 }
+              : applyingPartic
+                ? {
+                    activo: true,
+                    rotulo: "Aplicando las desviaciones",
+                    detalle: "Un momento.",
+                  }
               : { activo: false, rotulo: "", detalle: "" };
 
   /**
@@ -1244,8 +1255,19 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     if (editSeq.current === lastFailedSeqRef.current) return;
     const t = setTimeout(() => { void autoSave(); }, 1500);
     return () => clearTimeout(t);
+    /* ⛔ `closeOverride` VA EN LAS DEPS, y su ausencia perdía el dato en silencio.
+       El `setTimeout` congela la closure del render en que se armó, y `autoSave` lee de ahí. Si
+       `dirty` YA era true (por ejemplo, se tecleó la duración de una fase) y dentro de los 1,5 s
+       se fija el cierre en el picker, el efecto no vuelve a correr: el timer viejo dispara con
+       `closeDateOverride: null`, y como la respuesta entra por la rama de adopción, el picker se
+       VACÍA en pantalla y `dirty` queda en false — nada lo reintenta.
+       `anchor` está listado desde siempre por exactamente la misma razón.
+
+       ⚠ Y la directiva de abajo va PEGADA a las deps: si se le mete un comentario en el medio
+       deja de proteger la línea siguiente, la regla vuelve a quejarse y la directiva queda
+       marcada como inútil. Pasó justo al escribir este comentario. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, phases, anchor, proposal, saving]);
+  }, [dirty, phases, anchor, closeOverride, proposal, saving]);
 
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
@@ -3411,7 +3433,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
 
       <TimelineAssistDialog
         open={assistOpen}
-        onClose={() => setAssistOpen(false)}
+        /* Mismo criterio que el modal de «Subir al cliente»: un clic afuera no cancela una
+           escritura que ya salió. Se cierra solo al terminar. */
+        onClose={() => {
+          if (!assisting) setAssistOpen(false);
+        }}
         phases={phases.map((p) => ({ id: p.id, name: p.name }))}
         initialScopePhaseId={assistScopePhaseId}
         onSubmit={submitAssist}
