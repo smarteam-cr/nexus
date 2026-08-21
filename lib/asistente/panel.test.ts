@@ -118,22 +118,25 @@ describe("un aplicar que falla NO se lee como uno que anduvo", () => {
     ).toBe(false);
   });
 
-  it("⛔ y solo se cierra cuando NO falló Y NO hubo avisos", () => {
-    /* El `onClose()` tiene que estar en la rama del éxito, nunca después del await pelado.
+  it("⛔ aplicar NUNCA cierra el panel", () => {
+    /* ⚠ Esta guarda cambió de forma dos veces, y las dos por lo mismo: el cierre automático
+       siempre estuvo mal, solo que al principio no se veía.
 
-       ⚠ Y desde el 2026-08-20 tampoco alcanza con «no falló»: si el editor hizo algo DISTINTO de
-       lo pedido —rescató una fase, acomodó semanas— el panel se queda abierto para que se lea.
-       Elías pidió borrar una fase, el chat dijo ✅ y se cerró, y la fase seguía ahí. */
+       Primero cerraba SIEMPRE, incluso cuando el aplicar había fallado — y como el editor no
+       lanza excepción, un rechazo se veía igual que un éxito. Después cerraba solo si no había
+       avisos. Ahora no cierra nunca (decisión de Elías, 2026-08-20): con las operaciones aplicar
+       tarda ~1 ms, así que cerrar el cajón convierte un cambio instantáneo en «desapareció todo
+       y no sé qué pasó». Y la conversación sigue: lo normal es encadenar dos o tres ajustes.
+
+       La edición que la pone en rojo: volver a meter un `onClose()` en el camino de aplicar. */
     const i = PANEL.indexOf("await onAplicar(");
     expect(i, "se perdió el resultado de aplicar").toBeGreaterThan(-1);
     const bloque = PANEL.slice(i, PANEL.indexOf("} finally {", i));
-    const posFallo = bloque.indexOf("if (fallo)");
-    const posClose = bloque.indexOf("onClose()");
-    expect(posFallo, "dejó de mirar si falló").toBeGreaterThan(-1);
-    expect(posClose, "el cierre quedó fuera de la rama de éxito").toBeGreaterThan(posFallo);
-    expect(bloque, "el panel se cierra aunque el editor haya hecho otra cosa").toContain(
-      "avisos.length === 0",
-    );
+    expect(bloque.indexOf("if (fallo)"), "dejó de mirar si falló").toBeGreaterThan(-1);
+    expect(
+      bloque.includes("onClose()"),
+      "aplicar volvió a cerrar el panel: el desenlace queda escrito en el hilo, ahí mismo",
+    ).toBe(false);
   });
 
   it("⚠ y el desenlace LLEVA los avisos, no un ✅ pelado", () => {

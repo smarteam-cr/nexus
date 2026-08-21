@@ -228,7 +228,11 @@ export default function ChatDelAsistente({
            el editor hizo otra cosa con una parte». Y como el modelo LEE el hilo, en el próximo
            turno sabe qué no entró y puede proponer otro camino. */
         await anotarDesenlace(true, avisos.join(" · "));
-        if (avisos.length === 0) onClose();
+        /* ⛔ EL PANEL NO SE CIERRA AL APLICAR, y es una decisión de Elías (2026-08-20).
+           Con las operaciones aplicar tarda ~1 ms, así que cerrar el cajón convierte un cambio
+           instantáneo en «desapareció todo y no sé qué pasó». Además la conversación sigue: lo
+           normal es encadenar dos o tres ajustes seguidos, y reabrir el panel entre cada uno
+           sería pelearle a la herramienta. El desenlace queda escrito en el hilo, ahí mismo. */
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "no se pudo aplicar";

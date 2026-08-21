@@ -2269,7 +2269,45 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const validationMsg = phases.length > 0 ? validateLocal() : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* ⭐ EL CRONOGRAMA SE BLOQUEA MIENTRAS SE APLICA UN CAMBIO.
+
+          Con las operaciones aplicar tarda ~1 ms más el viaje al servidor, así que la ventana es
+          corta — pero corta no es cero, y en esa ventana el Gantt sigue siendo editable y muestra
+          datos que están por cambiar. Alguien que arrastre una tarea justo ahí escribe sobre lo
+          que se está escribiendo.
+
+          ⚠ Va por ENCIMA del contenido (z-30) pero por DEBAJO del cajón del asistente (z-45): el
+          chat tiene que seguir visible y usable mientras el cronograma se acomoda — es donde está
+          el aviso de qué pasó. */}
+      {applying && (
+        <div
+          className="absolute inset-0 z-30 flex items-start justify-center pt-24 cursor-wait"
+          aria-busy="true"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* El velo cubre TODO el cronograma: hace legible que la pantalla entera está en
+              tránsito, no solo el renglón que se toca. Va quieto a propósito — lo que se mueve
+              es la barra de abajo. Un velo que late más un cartel que late es ruido.
+
+              ⚠ La animación usa `skeleton-shimmer`, la ÚNICA técnica de carga del repo (y hay un
+              trinquete que lo hace cumplir: `animate-pulse` sale en rojo). Dos animaciones de
+              carga distintas en la misma app se leen como dos estados distintos. */}
+          <div className="absolute inset-0 rounded-2xl bg-surface/75 backdrop-blur-[1px]" />
+          <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl overflow-hidden">
+            {/* El padre fija la altura en `h-1`: es una barra de 4 px que recorre el ancho,
+                no un rectángulo relleno esperando contenido. */}
+            <div className="skeleton-shimmer h-full w-full" /> {/* slab-ok */}
+          </div>
+          <div className="relative flex items-center gap-3 rounded-xl border border-brand/30 bg-surface px-4 py-2.5 shadow-lg">
+            <span className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg">Aplicando el cambio…</p>
+              <p className="text-xs text-fg-muted">El cronograma se está actualizando.</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). Clickeable
           para ajustar el tamaño: acá se edita la BASE del cliente y no un ajuste local,
           porque el cronograma NO es un canvas con bloques donde guardar uno. Por eso el
