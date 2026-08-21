@@ -51,8 +51,13 @@ export interface CambioAcordado {
    */
   enEspera?: boolean;
   /**
-   * Lo que se descartó al componer, ya traducido. Un descarte tiene que ser tan legible como una
-   * operación: si el modelo se equivoca al soltar algo, la persona tiene que poder verlo.
+   * ⭐ SOLO lo que se cayó porque el cronograma cambió DEBAJO de la conversación — nunca lo que el
+   * modelo descartó porque la persona pidió algo distinto.
+   *
+   * Esa segunda clase (`fusion.descartadas` en `turno.ts`) ya la explica el resumen que el modelo
+   * escribe: repetirla acá es la misma frase dos veces, y Elías lo vio en pantalla como ruido
+   * (2026-08-21). Lo que este campo protege es lo que el modelo NO PUEDE saber por sí solo: un
+   * pendiente que se invalidó porque alguien tocó el Gantt a mano mientras se conversaba.
    */
   descartadas?: string[];
   /**

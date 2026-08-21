@@ -135,6 +135,8 @@ export default function ChatDelAsistente({
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  /** Alto máximo del composer antes de scrollear adentro — ~10 líneas, para no comerse la caja de mensajes. */
+  const ALTO_MAXIMO_COMPOSER = 200;
 
   /**
    * ⭐ EL BOTÓN SIGUE AL ESTADO, NO A LA POSICIÓN — y ese cambio es todo el arreglo del
@@ -225,6 +227,21 @@ export default function ChatDelAsistente({
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turnos, pensando]);
+
+  /**
+   * ⭐ EL COMPOSER CRECE CON LO QUE SE ESCRIBE O SE PEGA (Elías, 2026-08-21).
+   *
+   * Con `rows={2}` fijo, pegar un párrafo largo dejaba casi todo el texto tapado detrás de un
+   * scroll interno de dos líneas de alto — la persona no podía ver lo que acababa de escribir sin
+   * scrollear a ciegas. Mismo patrón que `TaskDetailDrawer` (auto-grow por `scrollHeight`), con un
+   * techo: pasado `ALTO_MAXIMO_COMPOSER` scrollea adentro en vez de devorarse toda la conversación.
+   */
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, ALTO_MAXIMO_COMPOSER)}px`;
+  }, [texto]);
 
   async function enviar() {
     const mensaje = texto.trim();
@@ -498,6 +515,25 @@ export default function ChatDelAsistente({
                   {t.estado === "retomado" ? " · sigue abajo, en la propuesta vigente" : null}
                   {t.estado === "en-espera" ? " · falta tu respuesta" : null}
                 </p>
+                {/**
+                 * ⭐ UNA CAJA QUE YA NO ES ACCIONABLE NO REPITE TODO SU RAZONAMIENTO.
+                 *
+                 * Elías, 2026-08-21, viendo la primera prueba en pantalla: no hace falta ver de
+                 * nuevo «Descarto la propuesta anterior de… En su lugar creo la fase…» una vez que
+                 * ya se aplicó — eso ya cumplió su función cuando había que decidir. Lo pidió así:
+                 * *«no hace falta el cuadro… con toda la explicación larga… sino más como:
+                 * Aplicado, ¿Hay que cambiar algo más?»*.
+                 *
+                 * El detalle no se pierde: sigue en el cronograma, que es la fuente de verdad una
+                 * vez aplicado. Lo que se retira es la relectura de la prosa y la lista enteras
+                 * cada vez que se scrollea el hilo hacia arriba.
+                 */}
+                {t.estado === "aplicado" ? (
+                  <p className="text-sm text-fg-secondary mt-1">
+                    Aplicado. ¿Hay que cambiar algo más?
+                  </p>
+                ) : t.estado === "retomado" ? null : (
+                  <>
                 {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
                     dos: son la misma frase escrita dos veces. */}
                 <div className="text-sm text-fg mt-1">
@@ -673,6 +709,8 @@ export default function ChatDelAsistente({
                     </p>
                   </details>
                 ) : null}
+                  </>
+                )}
 
                 {/**
                  * ⭐ CON UNA PREGUNTA ABIERTA NO HAY BOTÓN, y es la corrección de Elías
@@ -786,7 +824,8 @@ export default function ChatDelAsistente({
           }}
           rows={2}
           placeholder="Escribí qué querés cambiar…"
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted resize-none"
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted resize-none overflow-y-auto"
+          style={{ maxHeight: ALTO_MAXIMO_COMPOSER }}
         />
         <button
           onClick={() => void enviar()}

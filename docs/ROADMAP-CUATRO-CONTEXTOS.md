@@ -186,6 +186,32 @@ numera las OPERACIONES, así que quedaban **dos listas numeradas pegadas** sin n
 Ahora el rótulo («2 cambios») aparece siempre que haya mensaje arriba, y el prompt le prohíbe
 repetir la lista cuando pregunta.
 
+### ⭐ Tercera vuelta — menos cuadro, más conversación *(2026-08-21, mismo día)*
+
+Elías probó el arreglo en pantalla otra vez y encontró tres cosas más:
+
+1. **El textarea no crecía.** Pegar un párrafo largo lo dejaba tapado detrás de dos líneas de
+   scroll. Ahora crece con lo que se escribe o se pega, con un techo de ~10 líneas antes de
+   scrollear adentro — mismo patrón que `TaskDetailDrawer`.
+2. **El cuadro amarillo de «Ya no va» sobraba en la conversación normal.** Textual: *«cuando se
+   consensúan otras cosas, no hace falta el cuadro amarillo… busco que la experiencia sea más como
+   hablar contigo, normal»*. Y tenía razón: cuando el CSE dice «no, mejor X», el modelo descarta lo
+   anterior y **su propio resumen ya lo explica** («Descarto la propuesta anterior de… En su
+   lugar…») — la caja amarilla repetía la misma información. Se sacó esa categoría del campo
+   `descartadas`. Lo que SÍ se conserva: un pendiente que se cae porque alguien tocó el Gantt a
+   mano mientras se conversaba — eso el modelo nunca lo puede narrar, así que es la única categoría
+   que de verdad se perdería en silencio.
+3. **La caja de un acuerdo ya aplicado no necesita repetir toda la explicación.** Textual: *«no
+   hace falta que se vea el cuadro… con toda la explicación larga… sino más como: Aplicado, ¿Hay
+   que cambiar algo más?»*. Ahora una caja `aplicado` colapsa a esa línea corta, y una `retomado`
+   no repite nada (el encabezado ya lo dice). El detalle no se pierde — sigue en el cronograma.
+
+⚠ **Dos guardas nacieron decorativas otra vez** — una cortaba su ventana de lectura en el primer
+`;` del archivo, que caía DENTRO de un callback anidado antes de llegar a lo que había que prohibir;
+la otra afirmaba sobre una clase CSS que aparece en otros tres lugares del componente. Las dos
+pasaban en verde con el arreglo roto. Se cazaron con el mismo ritual: romper, ver que no salta,
+corregir la ventana de la guarda, romper de nuevo.
+
 ⚠ **Y una lección de método**: tres de las guardas nuevas nacieron **decorativas** —anclaban en un
 símbolo que también aparece en la línea de `import`, así que daban verde con el arreglo apagado— y
 solo se cazaron rompiéndolas a propósito. Ahora afirman sobre el texto que se pinta y sobre el

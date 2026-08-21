@@ -115,6 +115,25 @@ describe("⚠ el cajón se puede usar sin mouse", () => {
   });
 });
 
+describe("⚠ el composer crece con lo que se escribe o se pega", () => {
+  it("⛔ el textarea tiene un techo — y scrollea adentro, no se come la pantalla", () => {
+    /* Elías, 2026-08-21: al pegar un párrafo largo, con `rows` fijo el texto quedaba tapado
+       detrás de un scroll interno de dos líneas — no se podía ver lo que se acababa de escribir.
+       Con techo: crece hasta un límite y a partir de ahí scrollea adentro, en vez de devorarse el
+       historial de mensajes arriba. */
+    const i = PANEL.indexOf("ALTO_MAXIMO_COMPOSER");
+    expect(i, "desapareció el techo del composer").toBeGreaterThan(-1);
+    expect(PANEL, "el efecto de auto-grow desapareció").toContain("el.scrollHeight");
+    /* ⚠ NO alcanza con `overflow-y-auto`: aparece en otros 3 lugares del archivo, así que
+       sacárselo al composer no tocaba esta assert. Se afirma sobre el `style` exacto, que es
+       único — es lo que de verdad limita el crecimiento. */
+    expect(
+      PANEL,
+      "el textarea perdió el techo de altura: puede volver a devorarse la conversación",
+    ).toContain("maxHeight: ALTO_MAXIMO_COMPOSER");
+  });
+});
+
 describe("el asistente no escribe desde el panel", () => {
   it("⛔ el cajón no llama a ningún endpoint que persista el documento", () => {
     /* El único fetch de escritura permitido es al propio asistente. Aplicar lo acordado lo
@@ -719,15 +738,82 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
     expect(PANEL, "la condición dejó de leer `arrastradas`").toContain("t.acuerdo.arrastradas");
   });
 
-  it("⛔ y DICE lo que se soltó, en vez de soltarlo callado", () => {
-    /* Un descarte tiene que ser tan legible como una operación: si el modelo se equivoca al
-       soltar algo, o si el cronograma cambió debajo y un pendiente dejó de poder aplicarse, la
-       persona lo ve y lo puede volver a pedir. */
+  it("⛔ y DICE lo que se cayó SOLO — nunca lo que el modelo descartó a pedido", () => {
+    /* ⚠ Este campo YA NO recibe lo que el modelo descartó porque el CSE pidió otra cosa (eso lo
+       explica el resumen que el modelo escribe, y repetirlo era ruido — Elías, 2026-08-21). Sigue
+       recibiendo lo que se invalidó SOLO, porque el cronograma cambió debajo de la conversación:
+       eso el modelo nunca lo menciona, así que es lo único que de verdad se perdería callado. */
     expect(
       PANEL.includes("Ya no va:"),
-      "los cambios soltados dejaron de mostrarse: se pierden en silencio, que es el defecto que " +
-        "esta tanda vino a matar",
+      "un cambio invalidado por el cronograma dejó de mostrarse: se pierde en silencio",
     ).toBe(true);
     expect(PANEL, "la lista dejó de leer `descartadas`").toContain("t.acuerdo.descartadas");
+  });
+
+  it("⭐ y ESE campo ya no lo alimenta lo que el modelo descartó por pedido del CSE", () => {
+    /* ⭐ LA CORRECCIÓN DE ELÍAS SOBRE LA PRIMERA PRUEBA (2026-08-21): *«cuando se consensúan
+       otras cosas, no hace falta el cuadro amarillo que diga 'ya no va'… busco que la experiencia
+       sea más como hablar contigo, normal»*. El resumen del modelo ya narra el cambio de rumbo
+       («Descarto la propuesta anterior de… En su lugar…»); la caja amarilla lo repetía.
+       La edición que la pone en rojo: volver a sumar `fusion.descartadas` a `soltadas`. */
+    const RUTA_ASISTENTE = soloCodigo(
+      fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8"),
+    );
+    const i = RUTA_ASISTENTE.indexOf("const soltadas = ");
+    expect(i, "desapareció el armado de `soltadas`").toBeGreaterThan(-1);
+    /* ⚠ NO se corta en el primer `;`: cae DENTRO del callback de `.map` (`const i = ...;`),
+       antes de llegar a `fusion.descartadas`. Cortar ahí medía lo mismo en la versión correcta y
+       en la rota — se cazó rompiendo la guarda y viéndola pasar igual. Se extiende hasta el
+       próximo `acuerdo = {`, que cierra el statement completo en los dos casos. */
+    const bloque = RUTA_ASISTENTE.slice(i, RUTA_ASISTENTE.indexOf("acuerdo = {", i));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    expect(
+      bloque.includes("fusion.descartadas"),
+      "volvió a mostrarse lo que el modelo descartó por pedido del CSE: es la misma información " +
+        "que el resumen ya dice, dos veces",
+    ).toBe(false);
+    expect(bloque, "`soltadas` dejó de venir de lo invalidado por el cronograma").toContain(
+      "libro.caidas",
+    );
+  });
+});
+
+describe("⭐ una caja que ya no es accionable no repite todo su razonamiento", () => {
+  it("⛔ APLICADO se colapsa a una línea corta, no a la prosa entera", () => {
+    /* ⭐ LA CORRECCIÓN DE ELÍAS SOBRE LA PRIMERA PRUEBA (2026-08-21): *«no hace falta que se vea
+       el cuadro… con toda la explicación larga… sino más como: Aplicado, ¿Hay que cambiar algo
+       más?»*. El detalle no se pierde —sigue en el cronograma— pero no hace falta releerlo en el
+       hilo cada vez que se scrollea hacia arriba.
+       La edición que la pone en rojo: sacar la rama `t.estado === "aplicado"` del render. */
+    expect(
+      PANEL.includes('t.estado === "aplicado" ? ('),
+      "volvió a mostrarse la prosa entera de un acuerdo ya aplicado",
+    ).toBe(true);
+    expect(PANEL, "el texto corto que pidió Elías desapareció").toContain(
+      "Aplicado. ¿Hay que cambiar algo más?",
+    );
+  });
+
+  it("⛔ y RETOMADO no repite nada: el encabezado ya lo dice todo", () => {
+    /* El encabezado ya dice «sigue abajo, en la propuesta vigente» — repetir la lista vieja debajo
+       de esa frase sería leer dos veces lo mismo, numerado distinto en cada caja. */
+    expect(
+      PANEL.includes('t.estado === "retomado" ? null'),
+      "un acuerdo retomado volvió a mostrar su cuerpo entero",
+    ).toBe(true);
+  });
+
+  it("⚠ pero VIVO y EN-ESPERA conservan el detalle completo", () => {
+    /* Son los dos estados donde todavía hay algo por decidir: ahí sí hace falta poder leer y
+       auditar cada línea antes de aprobar. */
+    const i = PANEL.indexOf('t.estado === "aplicado" ? (');
+    const bloqueColapso = PANEL.slice(i, PANEL.indexOf(') : (', i));
+    expect(
+      bloqueColapso.includes('t.estado === "retomado"'),
+      "el colapso empezó a alcanzar a vivo o en-espera",
+    ).toBe(true);
+    expect(PANEL, "el detalle completo dejó de existir para vivo/en-espera").toContain(
+      "t.acuerdo.lineas.map",
+    );
   });
 });

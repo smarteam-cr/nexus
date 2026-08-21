@@ -723,16 +723,28 @@ export async function correrTurno(
      */
     const fusion = fusionarPendientes(libro.vivas, opsNuevas, descartar);
     if (fusion.operaciones.length > 0) {
-      /* Lo que se soltó, dicho. Un descarte tiene que ser tan legible como una operación: si el
-         modelo se equivoca al soltar algo, o si el cronograma cambió debajo, la persona lo ve. */
-      const soltadas = [
-        ...libro.caidas.map((c) => {
-          const i = pendientesCrudos.indexOf(c.operacion);
-          const linea = i >= 0 ? lineasCrudas[i] : null;
-          return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
-        }),
-        ...fusion.descartadas.map((i) => lineasVivas[i]).filter(Boolean),
-      ];
+      /**
+       * ⭐ SOLO SE MUESTRA LO QUE SE CAYÓ SOLO, NO LO QUE EL MODELO DESCARTÓ A PEDIDO.
+       *
+       * Elías, 2026-08-21, viendo esto en pantalla: *«cuando se consensúan otras cosas, no hace
+       * falta el cuadro amarillo que diga "ya no va"… busco que la experiencia sea más como
+       * hablar contigo, normal»*.
+       *
+       * Y tiene razón: cuando el CSE dice «no, mejor X» y el modelo descarta lo anterior
+       * (`fusion.descartadas`), ESO YA LO EXPLICA el resumen que el modelo escribe —«Descarto la
+       * propuesta anterior de… En su lugar…»—. Repetirlo en una caja amarilla aparte es la misma
+       * información dos veces, y en una conversación normal nadie hace eso.
+       *
+       * ⛔ Lo que SÍ se muestra es `libro.caidas`: un pendiente que dejó de poder aplicarse porque
+       * el cronograma cambió DEBAJO de la conversación (alguien borró la fase a mano). Eso el
+       * modelo NUNCA lo menciona —lo calcula la app, después de que el modelo ya contestó—, así
+       * que es la única categoría que de verdad se perdería en silencio si no se dijera acá.
+       */
+      const soltadas = libro.caidas.map((c) => {
+        const i = pendientesCrudos.indexOf(c.operacion);
+        const linea = i >= 0 ? lineasCrudas[i] : null;
+        return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
+      });
       acuerdo = {
         /* Si el modelo no llamó la herramienta —porque solo preguntó— la app sintetiza el acuerdo
            con el libro tal cual. Sin esto, un turno de desambiguación deja lo pendiente sin botón:
