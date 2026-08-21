@@ -735,7 +735,14 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
       "la caja dejó de decir qué cambios venían de antes: el arrastre se vuelve invisible y la " +
         "persona cree que los tres salieron de su último mensaje",
     ).toBe(true);
-    expect(PANEL, "la condición dejó de leer `arrastradas`").toContain("t.acuerdo.arrastradas");
+    /* ⚠ NO alcanza con `toContain("t.acuerdo.arrastradas")`: el campo también se lee más abajo
+       para armar la frase (`t.acuerdo.arrastradas!.length`), así que la string sigue presente
+       aunque se rompa la CONDICIÓN que decide si la nota se pinta. Se afirma sobre el literal
+       exacto de la condición, que hoy es único en el archivo. */
+    expect(
+      PANEL,
+      "la condición que decide si se pinta la nota dejó de mirar `arrastradas`",
+    ).toContain('(t.acuerdo.arrastradas?.length ?? 0) > 0');
   });
 
   it("⛔ y DICE lo que se cayó SOLO — nunca lo que el modelo descartó a pedido", () => {
@@ -747,7 +754,13 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
       PANEL.includes("Ya no va:"),
       "un cambio invalidado por el cronograma dejó de mostrarse: se pierde en silencio",
     ).toBe(true);
-    expect(PANEL, "la lista dejó de leer `descartadas`").toContain("t.acuerdo.descartadas");
+    /* ⚠ Mismo defecto que ya se cazó en la nota de arrastradas: `toContain("t.acuerdo.descartadas")`
+       pasa igual con la condición rota, porque el `.map()` de abajo repite la misma string. Se
+       afirma sobre la condición completa, que es única. */
+    expect(
+      PANEL,
+      "la condición que decide si se pinta la lista dejó de mirar `descartadas`",
+    ).toContain('t.estado === "vivo" && t.acuerdo.descartadas?.length ?');
   });
 
   it("⭐ y ESE campo ya no lo alimenta lo que el modelo descartó por pedido del CSE", () => {
@@ -804,16 +817,29 @@ describe("⭐ una caja que ya no es accionable no repite todo su razonamiento", 
   });
 
   it("⚠ pero VIVO y EN-ESPERA conservan el detalle completo", () => {
-    /* Son los dos estados donde todavía hay algo por decidir: ahí sí hace falta poder leer y
-       auditar cada línea antes de aprobar. */
-    const i = PANEL.indexOf('t.estado === "aplicado" ? (');
-    const bloqueColapso = PANEL.slice(i, PANEL.indexOf(') : (', i));
+    /* ⚠ ESTA GUARDA ESTABA MAL HECHA, y no se notó hasta re-auditarla a pedido de Elías.
+       Cortaba en el PRIMER `) : (` literal después del ternario — pero ese patrón también
+       aparece DENTRO del render de "vivo" (el ternario del checkbox de cada línea), mucho más
+       abajo. La ventana terminaba devorando casi toda la rama "vivo" en vez de pararse en el
+       límite real, así que las dos assertions pasaban sin medir el límite del colapso.
+
+       El límite real es el LITERAL que separa la rama "retomado" (que devuelve `null`) de la
+       rama por defecto (donde vive el detalle): `t.estado === "retomado" ? null : (`. Es un
+       string que solo puede aparecer una vez, en esa unión exacta. */
+    const iAplicado = PANEL.indexOf('t.estado === "aplicado" ? (');
+    const iElse = PANEL.indexOf('t.estado === "retomado" ? null : (', iAplicado);
+    expect(iElse, "el ternario de tres ramas cambió de forma").toBeGreaterThan(iAplicado);
+
+    const bloqueColapsado = PANEL.slice(iAplicado, iElse);
     expect(
-      bloqueColapso.includes('t.estado === "retomado"'),
-      "el colapso empezó a alcanzar a vivo o en-espera",
-    ).toBe(true);
-    expect(PANEL, "el detalle completo dejó de existir para vivo/en-espera").toContain(
-      "t.acuerdo.lineas.map",
-    );
+      bloqueColapsado.includes("t.acuerdo.lineas.map"),
+      "las ramas aplicado/retomado volvieron a mostrar la lista de operaciones",
+    ).toBe(false);
+
+    const iDetalle = PANEL.indexOf("t.acuerdo.lineas.map", iElse);
+    expect(
+      iDetalle,
+      "el detalle completo (lista de operaciones) desapareció del branch de vivo/en-espera",
+    ).toBeGreaterThan(-1);
   });
 });
