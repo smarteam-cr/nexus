@@ -15,7 +15,7 @@ import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
-import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
+import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
 import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
