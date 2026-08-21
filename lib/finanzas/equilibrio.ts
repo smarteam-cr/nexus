@@ -124,6 +124,12 @@ export interface OpcionesEquilibrio {
    * Sin esto, la serie sale en cero y el gráfico simplemente no la dibuja.
    */
   ventas?: readonly VentaDeMes[];
+  /**
+   * Cuántas ventas ganadas quedaron fuera de `ventas` por no traer monto en HubSpot.
+   * Entra por separado porque el motor no las puede contar: nunca las recibe. Sin esto,
+   * el vendido del año se leería como un total y es un piso.
+   */
+  ventasSinMonto?: number;
 }
 
 /** Una venta ganada, ubicada en el mes en que se cerró. */
@@ -206,6 +212,21 @@ export interface ReporteEquilibrio {
     comprometidoPorVenir: number;
     /** Egreso que de verdad salió del banco: sin meses futuros y sin la reserva de aguinaldo. */
     egresosDeCajaTotal: number;
+    /**
+     * Lo vendido en el año: los tratos ganados, por su mes de cierre.
+     *
+     * ⚠ NO es plata que entró ni que se facturó — es el compromiso que después se
+     * factura y más tarde se cobra. Vive al lado de los otros totales pero no suma a
+     * ninguno: mezclarlo con lo facturado contaría dos veces el mismo negocio.
+     */
+    vendidoTotal: number;
+    /** Cuántos tratos ganados lo componen. */
+    ventasConMonto: number;
+    /**
+     * Cuántos tratos ganados NO traen monto en HubSpot y por lo tanto cuentan como cero.
+     * Sin este número, `vendidoTotal` se lee como un total cuando en realidad es un PISO.
+     */
+    ventasSinMonto: number;
     tasaCobro: number | null;
     mesesQueCubren: number;
     mesesConDato: number;
@@ -871,6 +892,9 @@ export function calcularEquilibrio(
       margenAlDia,
       comprometidoPorVenir,
       egresosDeCajaTotal,
+      vendidoTotal: round2([...vendidoPorMes.values()].reduce((n, v) => n + v, 0)),
+      ventasConMonto: (opciones.ventas ?? []).length,
+      ventasSinMonto: opciones.ventasSinMonto ?? 0,
       tasaCobro: facturadoTotal === 0 ? null : Math.round((cobradoTotal / facturadoTotal) * 1000) / 1000,
       mesesQueCubren: meses.filter((m) => m.cubreEgresos === true).length,
       mesesConDato: meses.filter((m) => m.facturado > 0 || m.egresos > 0).length,

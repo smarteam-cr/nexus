@@ -127,6 +127,21 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       serie: "equilibrio",
     },
     {
+      key: "vendido",
+      // Va JUSTO DESPUÉS del piso y antes de lo facturado porque ese es el orden en que
+      // ocurren las cosas: primero se vende, después se factura, al final entra la plata.
+      label: "Vendido del año",
+      valor: fmtMonto(ind.vendidoTotal, moneda),
+      // ⚠ El conteo de las que NO traen monto es parte del número, no una curiosidad:
+      // esas cuentan como cero, así que el total es un PISO. Sin decirlo, se lee como si
+      // estuvieran todas adentro.
+      nota:
+        r.indicadores.ventasSinMonto > 0
+          ? `${r.indicadores.ventasConMonto} tratos · ${r.indicadores.ventasSinMonto} sin monto cargado`
+          : `${r.indicadores.ventasConMonto} tratos ganados`,
+      serie: "vendido",
+    },
+    {
       key: "facturado",
       label: "Facturado del año",
       valor: fmtMonto(ind.facturadoTotal, moneda),
@@ -238,7 +253,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               tags de la leyenda —enfocan, sacan del reporte, devuelven—; los que no, son
               texto: un tile que parece clickeable y no hace nada es peor que uno que no
               lo parece. */}
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
             {TILES.map((t) => {
               // El indicador enfocado se marca de verdad: número más pesado, borde de
               // acento y una barra de color arriba con el trazo de SU serie. Un ring

@@ -2224,6 +2224,9 @@ export async function loadReporteAnual(
     // Cuando HubSpot ya convirtió, se usa SU número: es el que ve el vendedor en el
     // portal, y una segunda conversión con otra tasa haría que la misma venta valiera
     // distinto en dos pantallas. Sin monto, la venta no aporta —cero sería mentir.
+    // Los que NO traen monto se cuentan aparte: sin eso, el vendido del año se lee como
+    // un total cuando en realidad es un PISO. Hoy son 12 de los 31 de venta compartida.
+    ventasSinMonto: filasVenta.filter((v) => v.montoConvertidoHubspot === null && v.monto === null).length,
     ventas: filasVenta
       .filter((v) => v.montoConvertidoHubspot !== null || v.monto !== null)
       .map((v) => ({

@@ -68,6 +68,17 @@ describe("aplicarEscenario", () => {
     expect(ind.margenAnual).toBe(r.indicadores.margenAnual);
     expect(ind.mesesQueCubren).toBe(r.indicadores.mesesQueCubren);
     expect(ind.tasaCobro).toBe(r.indicadores.tasaCobro);
+    expect(ind.vendidoTotal).toBe(r.indicadores.vendidoTotal);
+  });
+
+  it("simular NO toca lo vendido: mover el facturado es otra pregunta", () => {
+    // El card de «Vendido del año» tiene que decir lo mismo con y sin escenario. Mover el
+    // facturado de enero es preguntarse qué pasaría si se facturara más, no reescribir
+    // lo que se vendió — que ya ocurrió.
+    const r = reporteBase();
+    const sin = indicadoresDe(aplicarEscenario(r.meses, {}));
+    const con = indicadoresDe(aplicarEscenario(r.meses, { "2026-01": 999_999 }));
+    expect(con.vendidoTotal).toBe(sin.vendidoTotal);
   });
 
   it("mover un mes recalcula SU brecha y no toca la de los demás", () => {

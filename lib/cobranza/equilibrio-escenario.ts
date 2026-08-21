@@ -46,6 +46,8 @@ export interface IndicadoresAnio {
   comprometidoPorVenir: number;
   /** Egreso que salió del banco: sin meses futuros, sin la reserva de aguinaldo. */
   egresosDeCajaTotal: number;
+  /** Lo vendido del año. NO cambia al simular: simular mueve el facturado, no la venta. */
+  vendidoTotal: number;
   tasaCobro: number | null;
   mesesQueCubren: number;
   mesesEgresoCompleto: number;
@@ -114,6 +116,9 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
     egresosDeCajaTotal: round2(
       meses.filter((m) => !m.futuro).reduce((n, m) => n + m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO, 0),
     ),
+    // Intocable al simular, igual que el partnership: mover el facturado de marzo es
+    // preguntarse qué pasaría si se facturara más, no reescribir lo que se vendió.
+    vendidoTotal: round2(meses.reduce((n, m) => n + m.vendido, 0)),
     // La tasa de cobro se mide contra el facturado REAL: dividir por uno simulado
     // produciría un porcentaje de cobro inventado, que es de las cifras que más se
     // citan sueltas fuera de la pantalla.
