@@ -680,3 +680,117 @@ describe("precioDesdeMonto: el camino inverso, para que los dos campos sean uno"
     expect(precioDesdeMonto({ min: 0, max: 0 }, 1, { tipo: "pct", valor: 100 })).toBeNull();
   });
 });
+
+/**
+ * ── EL DESCUENTO SOBRE UN MONTO DE TEXTO LIBRE (2026-08-21) ──────────────────
+ *
+ * El bug que esto cierra, reportado por Elías sobre una propuesta REAL y publicada: la
+ * casilla del descuento aceptaba "20%" en una línea con `monto` escrito a mano y NO HACÍA
+ * NADA. Sin ⚠, sin tag, sin mover el total — y así salió al cliente. Pasaba porque el
+ * descuento vivía solo en la rama calculada (`cantidad × precioUnitario`), y una línea nace
+ * de la otra forma: se tipea el importe y listo.
+ *
+ * La regla nueva: con descuento, el `monto` se lee como PRECIO DE LISTA de la línea. Es
+ * cálculo de LECTURA, no adopción — borrar el descuento devuelve el monto original en el
+ * acto, que fue el pedido explícito ("que sea real time").
+ */
+describe("el descuento también sobre un monto de texto libre", () => {
+  it("resta sobre el monto y deja el bruto para tachar", () => {
+    const m = montoDeLinea({ monto: "$1,500", descuento: "20%" }, "USD");
+    expect(m.rango).toEqual({ min: 1200, max: 1200 });
+    expect(m.bruto).toEqual({ min: 1500, max: 1500 });
+    expect(m.descuento).toEqual({ tipo: "pct", valor: 20 });
+    // NO es "calculada": no hay cantidad × precio. El importe salió del monto.
+    expect(m.calculada).toBe(false);
+  });
+
+  it("es REAL TIME: sin descuento vuelve el monto original, sin tag ni tachado", () => {
+    const sinDcto = montoDeLinea({ monto: "$1,500", descuento: "" }, "USD");
+    expect(sinDcto.rango).toEqual({ min: 1500, max: 1500 });
+    expect(sinDcto.bruto).toBeNull();
+    expect(sinDcto.descuento).toBeNull();
+  });
+
+  it("descuento fijo y piso en cero", () => {
+    expect(montoDeLinea({ monto: "$1,500", descuento: "$500" }, "USD").rango).toEqual({ min: 1000, max: 1000 });
+    expect(montoDeLinea({ monto: "$300", descuento: "$500" }, "USD").rango).toEqual({ min: 0, max: 0 });
+  });
+
+  it("un rango se descuenta por los dos extremos", () => {
+    expect(montoDeLinea({ monto: "$1,000–2,000", descuento: "10%" }, "USD").rango).toEqual({ min: 900, max: 1800 });
+  });
+
+  it("un descuento ilegible ensucia la línea entera (no suma y se ve el ⚠)", () => {
+    for (const d of ["120%", "a convenir", "₡5.000"]) {
+      const m = montoDeLinea({ monto: "$1,500", descuento: d }, "USD");
+      expect(m.sucio, `descuento "${d}"`).toBe(true);
+      expect(m.rango).toBeNull();
+    }
+  });
+
+  /* ⚠ LA GARANTÍA QUE NO SE PUEDE ROMPER. En esta rama el `monto` es el total de la LÍNEA,
+     no un precio por unidad: si la cantidad multiplicara, toda línea publicada con una
+     cantidad escrita estrenaría un número nuevo. */
+  it("la cantidad NO multiplica el monto de texto libre", () => {
+    expect(montoDeLinea({ cantidad: "3", monto: "$1,500", descuento: "20%" }, "USD").rango)
+      .toEqual({ min: 1200, max: 1200 });
+  });
+
+  it("el precio de lista sigue mandando sobre el monto", () => {
+    const m = montoDeLinea({ cantidad: "2", precioUnitario: "$400", monto: "$99", descuento: "15%" }, "USD");
+    expect(m.calculada).toBe(true);
+    expect(m.rango).toEqual({ min: 680, max: 680 });
+  });
+
+  it("contrato ANUAL: primero el ×12, después el descuento", () => {
+    const l = { monto: "$100", descuento: "10%", recurrencia: "mensual" };
+    expect(montoDeLinea(l, "USD", "mensual").rango).toEqual({ min: 90, max: 90 });
+    expect(montoDeLinea(l, "USD", "anual").rango).toEqual({ min: 1080, max: 1080 });
+    expect(montoDeLinea(l, "USD", "anual").bruto).toEqual({ min: 1200, max: 1200 });
+  });
+
+  it("contrato ANUAL con precio anual escrito: ése es la base del descuento", () => {
+    const l = { monto: "$100", precioAnual: "$1,000", descuento: "10%", recurrencia: "mensual" };
+    expect(montoDeLinea(l, "USD", "anual").rango).toEqual({ min: 900, max: 900 });
+  });
+
+  it("un cobro ÚNICO no se multiplica por 12 aunque el contrato sea anual", () => {
+    const l = { monto: "$1,500", descuento: "20%", recurrencia: "unica" };
+    expect(montoDeLinea(l, "USD", "anual").rango).toEqual({ min: 1200, max: 1200 });
+  });
+
+  it("el total del grupo ya viene descontado", () => {
+    const g = gruposDeInversion({
+      moneda: "USD",
+      lineas: [
+        { concepto: "Implementación", monto: "$3,000", recurrencia: "unica" },
+        { concepto: "Blog en HubSpot", monto: "$1,500", descuento: "20%", recurrencia: "unica" },
+      ],
+    });
+    expect(g.servicios.total).toEqual({ min: 4200, max: 4200 });
+    expect(g.servicios.pendientes).toBe(0);
+  });
+});
+
+/**
+ * La ida y vuelta del importe en una línea de MONTO LIBRE con descuento. Es el camino que
+ * recorre el editor cuando Ventas corrige el número de la derecha (`escribirMonto`), y el que
+ * devolvía basura mientras `montoDeLinea` reportaba `cantidad: 1` en esta rama: una línea con
+ * "3" escrito se convertía en 3 × el importe entero al primer retoque.
+ */
+describe("monto libre + descuento: la cantidad se reporta para poder invertir", () => {
+  it("reporta la cantidad escrita aunque no multiplique", () => {
+    const m = montoDeLinea({ cantidad: "3", monto: "$1,500", descuento: "20%" }, "USD");
+    expect(m.cantidad).toBe(3);
+    expect(m.rango).toEqual({ min: 1200, max: 1200 }); // sigue sin multiplicar
+  });
+
+  it("invertir el importe da un precio unitario coherente con la cantidad", () => {
+    const m = montoDeLinea({ cantidad: "3", monto: "$1,500", descuento: "20%" }, "USD");
+    const unit = precioDesdeMonto(m.rango!, m.cantidad, m.descuento);
+    expect(unit).toEqual({ min: 500, max: 500 });
+    // Y al volver por el camino normal, la línea calculada da el MISMO importe.
+    const yaCalculada = montoDeLinea({ cantidad: "3", precioUnitario: "$500", descuento: "20%" }, "USD");
+    expect(yaCalculada.rango).toEqual({ min: 1200, max: 1200 });
+  });
+});

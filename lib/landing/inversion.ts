@@ -244,12 +244,43 @@ export function montoDeLinea(
        líneas escritas a mano tienen `monto` y no `precioUnitario`, mover el switch a "Anual"
        no cambiaba un solo número: el control se veía roto. Si Ventas escribió el precio anual,
        ése manda; si no, ×12 — el peor caso, no una promesa de descuento. */
-    if (!anual) return { ...vacio, rango: m };
-    const escritoAnual = parseMonto(l.precioAnual, moneda);
-    if (escritoAnual && escritoAnual !== "sucio") return { ...vacio, rango: escritoAnual };
+    let base: Rango = m;
+    if (anual) {
+      const escritoAnual = parseMonto(l.precioAnual, moneda);
+      base =
+        escritoAnual && escritoAnual !== "sucio"
+          ? escritoAnual
+          : { min: m.min * MESES_POR_CONTRATO.anual, max: m.max * MESES_POR_CONTRATO.anual };
+    }
+    /* ── EL DESCUENTO TAMBIÉN AQUÍ (2026-08-21) ────────────────────────────────
+       Hasta hoy el descuento vivía SOLO en la rama calculada, así que en una línea con
+       `monto` de texto libre —que es como nace toda línea escrita a mano: se tipea el
+       importe y listo— la casilla del descuento aceptaba "20%" y no hacía absolutamente
+       nada. Sin ⚠, sin tag, sin cambiar el total: el vendedor creía haber dado un descuento
+       que no existía, y una propuesta publicada llegó al cliente así.
+
+       El `monto` pasa a leerse como PRECIO DE LISTA de la línea cuando hay descuento, y el
+       importe es lo que queda después de restarlo. Es un cálculo de LECTURA, no una
+       adopción: borrar el descuento devuelve la línea a su monto original en el acto.
+
+       ⚠ La `cantidad` sigue SIN multiplicar acá, igual que antes: en esta rama el `monto` es
+       el total de la línea, no un precio por unidad. Multiplicarlo le cambiaría el número a
+       toda línea publicada que tenga una cantidad escrita, que es exactamente lo que este
+       archivo existe para impedir. */
+    const descLibre = parseDescuento(l.descuento, moneda);
+    if (descLibre === "sucio") return { ...vacio, sucio: true, cantidad };
     return {
       ...vacio,
-      rango: { min: m.min * MESES_POR_CONTRATO.anual, max: m.max * MESES_POR_CONTRATO.anual },
+      // La cantidad se REPORTA aunque no multiplique: `precioDesdeMonto` la necesita para
+      // invertir bien cuando Ventas edita el importe. Devolver 1 acá —lo que hacía el `vacio`—
+      // convertía una línea con "3" escrito en 3 × el importe entero al primer retoque.
+      cantidad,
+      rango: {
+        min: aplicarDescuento(base.min, descLibre),
+        max: aplicarDescuento(base.max, descLibre),
+      },
+      bruto: descLibre ? base : null,
+      descuento: descLibre,
     };
   }
   if (precio === "sucio") return { ...vacio, sucio: true, calculada: true };

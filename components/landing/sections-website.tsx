@@ -375,7 +375,11 @@ function GrupoTabla({
                sin él, del `monto` de texto libre — que es el camino de TODO lo publicado. */
             const calc = montoDeLinea(l, moneda, contrato);
             const activa = esLineaActiva(l);
-            const m = calc.calculada
+            /* `|| calc.descuento`: desde el 2026-08-21 una línea de monto libre TAMBIÉN se
+               descuenta, así que su importe ya no es el `monto` tal cual — hay que pintar el
+               resultado. Sin esto la casilla mostraba el precio de lista y el descuento se
+               veía aplicado en el tag pero no en el número, que es peor que no aplicarlo. */
+            const m = calc.calculada || calc.descuento
               ? { texto: calc.rango ? formatRango(calc.rango, moneda) : "", libre: calc.sucio }
               : montoParaLectura(l.monto, moneda);
             /* El eco de "cómo lo va a ver el cliente". ⚠ NUNCA se le pasa a `Editable`: ése
@@ -395,9 +399,14 @@ function GrupoTabla({
                todo lo escrito a mano), el precio de lista se DERIVA de él en vez de quedarse
                en gris para siempre; y el monto de una línea calculada se puede editar y se
                invierte a precio unitario. Sin eso, escribir por un lado dejaba el otro mudo. */
+            /* ⚠ `calc.bruto ?? calc.rango`, no `calc.rango` a secas: con descuento el `rango`
+               ES EL NETO, así que derivar de él ponía el precio ya rebajado en la casilla del
+               PRECIO DE LISTA — y ahí el descuento se leería aplicado dos veces. El `bruto` es
+               justamente el de lista. */
+            const listaVisible = calc.bruto ?? calc.rango;
             const unitarioTxt =
               (l.precioUnitario ?? "").trim() ||
-              (!calc.calculada && calc.rango ? formatRango(calc.rango, moneda) : "");
+              (!calc.calculada && listaVisible ? formatRango(listaVisible, moneda) : "");
             /** Escribir en el monto de una línea CALCULADA: se deshace la cuenta y el precio de
              *  lista queda coherente. Un texto que no es número (una condición, un rango
              *  imposible de repartir) hace lo contrario: el monto libre manda y el precio se
@@ -524,9 +533,13 @@ function GrupoTabla({
                       <s className="stl-inv-bruto">{formatRango(calc.bruto, moneda)}</s>
                     </span>
                   )}
-                  {editable && calc.calculada ? (
+                  {editable && (calc.calculada || calc.descuento) ? (
                     /* El subtotal de una línea calculada TAMBIÉN se edita: al soltarlo se
                        invierte la cuenta y el precio de lista queda coherente (`escribirMonto`).
+                       `|| calc.descuento` suma acá a la línea de monto libre CON descuento: su
+                       importe ya no es lo tipeado, y dejarla en la rama de abajo mostraba el
+                       precio de lista en grande, tachado justo encima, y el neto solo en el eco
+                       chiquito. El número grande tiene que ser el que se cobra.
                        ⚠ Lo que hacía peligroso esto —`Editable` comitea su textContent al blur
                        y al desmontarse, así que un valor DERIVADO adentro se auto-persistía— lo
                        cierra la guarda de "sin edición real, no se toca nada". */
