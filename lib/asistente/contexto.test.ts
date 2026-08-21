@@ -72,12 +72,23 @@ describe("el contexto del chat se mantiene liviano", () => {
     ).toEqual([]);
   });
 
-  it("⛔ tampoco lee las tablas de contenido crudo (transcripts, bloques, tareas)", () => {
-    /* El otro camino al mismo lugar: en vez de importar el cargador, consultar la tabla. */
+  it("⛔ tampoco lee las tablas de material ajeno al documento", () => {
+    /* El otro camino al mismo lugar: en vez de importar el cargador, consultar la tabla.
+
+       ⚠ SE SACÓ `canvasBlock` DE ESTA LISTA EL 2026-08-21, y el porqué importa más que el assert.
+       El motivo escrito acá —«la forma del documento alcanza para conversar»— dejó de ser cierto:
+       Elías pidió «agregá un bullet más a cada lista, sacalo de lo que ya está» y el chat tuvo que
+       contestar que no ve el contenido, dejando una instrucción que le pedía al editor inventar
+       sobre algo que nadie leyó.
+
+       Lo que NO cambió es la línea de verdad: el chat lee el contenido del documento DEL QUE SE
+       ESTÁ HABLANDO, y de nada más. Las minutas y las fuentes del handoff siguen afuera — ése es
+       material de OTRO lado, y es lo que esta guarda protege ahora. La pertenencia la garantiza
+       `canvasOf(pieza)` en la consulta, y el test de abajo lo hace cumplir. */
     const infracciones: string[] = [];
     for (const archivo of archivosDelAsistente()) {
       const src = soloCodigo(fs.readFileSync(path.join(RAIZ, archivo), "utf8"));
-      for (const tabla of ["firefliesSession", "handoffSource", "canvasBlock"]) {
+      for (const tabla of ["firefliesSession", "handoffSource"]) {
         if (src.includes(`prisma.${tabla}.`)) {
           infracciones.push(`${archivo.split(path.sep).join("/")} → prisma.${tabla}`);
         }
@@ -85,9 +96,45 @@ describe("el contexto del chat se mantiene liviano", () => {
     }
     expect(
       infracciones,
-      "El chat fue a buscar contenido crudo directo a la base. Mismo problema que la guarda " +
-        "anterior con otra puerta: la forma del documento alcanza para conversar.",
+      "El chat fue a buscar material de otro lado directo a la base. Puede leer el documento del " +
+        "que se está hablando; las minutas y las fuentes del handoff las lee el editor cuando " +
+        "ejecuta, no la conversación.",
     ).toEqual([]);
+  });
+
+  it("⛔ y el contenido que lee es SOLO el de la pieza en cuestión", () => {
+    /* Sin `canvasOf(pieza)` la consulta traería el primer canvas del proyecto: el chat de un
+       kickoff terminaría razonando sobre el requerimiento técnico, y nada avisaría.
+       La edición que la pone en rojo: sacar `canvasOf(pieza)` del `where`. */
+    const src = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
+    const i = src.indexOf("export async function contextoDeDocumento");
+    expect(i, "se fue el contexto de documento").toBeGreaterThan(-1);
+    const bloque = src.slice(i, src.indexOf("const secciones", i));
+    expect(bloque, "la consulta dejó de acotar por pieza").toContain("canvasOf(pieza)");
+    expect(bloque).toContain("projectId");
+  });
+
+  it("⭐ el contenido entra RECORTADO POR SECCIÓN, no con un presupuesto global", () => {
+    /* ⚠ Con un tope global, las secciones del final de un documento largo quedarían INVISIBLES —
+       y eso no se nota: el modelo contestaría sobre un documento que cree completo. Recortando
+       cada una, todas están, y la que se recortó lo dice.
+       Medido: mediana 267 caracteres por sección, así que en la mayoría no se recorta nada; y el
+       prefijo real de los 172 documentos queda en mediana 1.582 y máximo 8.792, sin que ninguno
+       toque el techo. */
+    const src = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
+    expect(src).toContain("TOPE_POR_SECCION_CHARS");
+    expect(src, "el recorte dejó de avisar que recortó").toContain("(recortado");
+  });
+
+  it("⛔ y del bloque solo salen STRINGS, nunca el Json crudo", () => {
+    /* Un volcado del Json metería ids, flags y claves internas al prompt — ruido que el modelo
+       puede citarle al CSE como si fuera contenido del documento. */
+    const src = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
+    expect(src).toContain("function textoDeBloque");
+    expect(
+      /JSON\.stringify\(\s*(b\.)?data/.test(src),
+      "el contexto volcó el Json crudo del bloque en vez de extraer su texto",
+    ).toBe(false);
   });
 
   it("el techo del prefijo sigue siendo una decisión chica, no un número que creció solo", () => {

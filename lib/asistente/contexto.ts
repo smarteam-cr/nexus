@@ -71,6 +71,42 @@ function marcaDe(t: { status: string; source: string | null }): string {
   return t.source === "HUMAN" ? "cargada a mano" : "";
 }
 
+/**
+ * Cuánto contenido de UNA sección entra al contexto del chat de documentos.
+ *
+ * ⚠ Es por sección y no un tope global a propósito: con un presupuesto global, las secciones del
+ * final de un documento largo quedarían INVISIBLES para el modelo, y eso no se nota — contestaría
+ * sobre un documento que cree completo. Recortando cada una, todas están, y la que se recortó lo
+ * dice.
+ */
+export const TOPE_POR_SECCION_CHARS = 1_000;
+
+/**
+ * Lo que se puede leer de un bloque. Los bloques son Json con formas distintas por tipo de
+ * sección (texto, listas, tarjetas), así que se recorre y se junta lo que sea string.
+ *
+ * ⛔ Solo strings: un volcado del Json crudo metería ids, flags y claves internas al prompt —
+ * ruido que el modelo puede citarle al CSE como si fuera contenido del documento.
+ */
+function textoDeBloque(data: unknown, profundidad = 0): string {
+  if (profundidad > 4) return "";
+  if (typeof data === "string") return data.trim();
+  if (typeof data === "number") return String(data);
+  if (Array.isArray(data)) {
+    return data
+      .map((x) => textoDeBloque(x, profundidad + 1))
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (data && typeof data === "object") {
+    return Object.values(data as Record<string, unknown>)
+      .map((x) => textoDeBloque(x, profundidad + 1))
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return "";
+}
+
 export const TECHO_DEL_PREFIJO_CHARS = 13_000;
 
 export interface ContextoDelAsistente {
@@ -298,7 +334,12 @@ export async function contextoDeDocumento(
          error no es de tipos si alguien lo castea: es un contexto que miente. */
       canvasSections: {
         orderBy: { order: "asc" },
-        select: { key: true, label: true, _count: { select: { blocks: true } } },
+        select: {
+          key: true,
+          label: true,
+          _count: { select: { blocks: true } },
+          blocks: { orderBy: { order: "asc" }, select: { data: true } },
+        },
       },
     },
   });
@@ -306,11 +347,45 @@ export async function contextoDeDocumento(
     return { texto: "Este proyecto todavía no tiene ese documento.", cierreActual: null };
   }
 
+  /**
+   * ⭐ EL CONTENIDO ENTRA — y es la tercera vez que esta frontera se corre, siempre por el uso.
+   *
+   * Elías, 2026-08-21: *«en la sección Del hoy al nuevo sistema, agregá un bullet más a cada
+   * lista»* → *«hazlo tú, sácalo de lo que ya está»*. El chat tuvo que contestar que no tiene el
+   * contenido a la vista, y dejó una instrucción vaga: «completa cada lista con un punto adicional
+   * coherente con el estilo». El editor iba a inventar sobre algo que nadie leyó.
+   *
+   * ⚠ El supuesto que lo mantenía afuera —«un kickoff son ~20.000 caracteres»— nunca se había
+   * medido. Medido el 2026-08-21 sobre los 172 documentos reales:
+   *
+   *   kickoff             mediana    485 · p90    838 · max  7.671   (111 documentos)
+   *   tech-requirements   mediana 16.082 · p90 20.006 · max 37.579   (52)
+   *
+   * O sea: el documento de la queja entra ENTERO en medio kilobyte. Lo pesado son los técnicos.
+   *
+   * Por eso el corte es POR SECCIÓN y no global: así TODAS quedan representadas —el modelo nunca
+   * se encuentra con una sección invisible— y solo se recorta la que de verdad es larga. Con la
+   * mediana por sección en 267 caracteres, en la mayoría no se recorta nada.
+   */
+  const renderDeContenido = (bloques: { data: unknown }[]): string => {
+    const crudo = bloques
+      .map((b) => textoDeBloque(b.data))
+      .filter(Boolean)
+      .join(" · ");
+    if (!crudo) return "";
+    return crudo.length > TOPE_POR_SECCION_CHARS
+      ? `${crudo.slice(0, TOPE_POR_SECCION_CHARS)}… (recortado — el editor sí lo lee entero)`
+      : crudo;
+  };
+
   const secciones = canvas.canvasSections
-    .map(
-      (s: { key: string; label: string; _count: { blocks: number } }) =>
-        `- ${s.label} (${s.key}) — ${s._count.blocks > 0 ? "con contenido" : "VACÍA"}`,
-    )
+    .map((s: { key: string; label: string; _count: { blocks: number }; blocks: { data: unknown }[] }) => {
+      if (s._count.blocks === 0) return `- ${s.label} (${s.key}) — VACÍA`;
+      const contenido = renderDeContenido(s.blocks);
+      return contenido
+        ? `- ${s.label} (${s.key}):\n    ${contenido}`
+        : `- ${s.label} (${s.key}) — con contenido (no legible como texto)`;
+    })
     .join("\n");
 
   /* `project` es nullable en el schema porque un ProjectCanvas puede colgar de un BusinessCase.
@@ -324,8 +399,10 @@ export async function contextoDeDocumento(
     identidad,
     `DOCUMENTO: ${canvas.name}`,
     "",
-    "SECCIONES (rótulos y estado; el contenido NO está acá a propósito — el editor del documento",
-    "lo lee cuando le toque ejecutar la instrucción):",
+    "SECCIONES, con su contenido. Entre paréntesis va la KEY: nómbrala en la instrucción para que",
+    "el editor sepa cuál tocar. Lo que diga «(recortado)» está incompleto acá — el editor sí lo lee",
+    "entero al ejecutar, así que puedes pedir cambios sobre esa sección igual, pero no afirmes qué",
+    "dice el final.",
     secciones || "(sin secciones)",
     "",
     "QUÉ SE PUEDE PEDIR: reescribir el contenido de una sección que ya existe, con la instrucción",
