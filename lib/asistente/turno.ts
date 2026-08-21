@@ -191,7 +191,7 @@ se hace, no buscar la operación más parecida.
 Otro: «unifica estas dos fases en una». Tampoco existe como operación. Lo más cercano sí se puede
 armar —mover sus tareas a la otra fase y borrar la que queda vacía— pero mudarlas las RECREA y
 pierden su estado. Eso se dice ANTES: «puedo mover las 6 tareas de A a B y borrar A, pero las 6
-se recrean y pierden si estaban hechas — ¿lo hago igual, o preferís unificarlas a mano?».
+se recrean y pierden si estaban hechas — ¿lo hago igual, o prefieres unificarlas a mano?».
 
 ⭐ DOBLE CONFIRMACIÓN CUANDO SE BORRA TRABAJO DE ALGUIEN
 Antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas HECHAS, dilo con el
@@ -246,8 +246,8 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
         type: "array",
         description:
           "Las operaciones a ejecutar, en orden. ⛔ Es un vocabulario CERRADO: si lo que te " +
-          "piden no se puede expresar con estas operaciones, NO llames esta herramienta — decilo " +
-          "y ofrecé lo más cercano que sí se pueda.",
+          "piden no se puede expresar con estas operaciones, NO llames esta herramienta — dilo " +
+          "y ofrece lo más cercano que sí se pueda.",
         items: {
           type: "object",
           properties: {
@@ -294,7 +294,7 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "tarea.mover-semana: pasa UNA tarea a otra semana de su misma fase (taskId, " +
                 "semana base 0). " +
                 "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). ⚠ la recrea: " +
-                "pierde su estado y sus fechas propias, avisalo antes. " +
+                "pierde su estado y sus fechas propias, avísalo antes. " +
                 "tarea.borrar: elimina UNA tarea (taskId). ⚠ si tiene trabajo humano encima " +
                 "—hecha, en curso, o cargada a mano— se rechaza sola: no se puede borrar desde acá. " +
                 "tarea.crear: agrega una tarea NUEVA (phaseId, titulo, semana base 0, y opcional " +
@@ -348,7 +348,7 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "SEGUIMIENTO",
               ],
               description:
-                "Para tarea.tipo y tarea.crear usá SESSION o TASK. Para fase.tipo usá uno de los " +
+                "Para tarea.tipo y tarea.crear usa SESSION o TASK. Para fase.tipo usa uno de los " +
                 "cinco tipos de actividad. ⛔ No los mezcles: el ejecutor rechaza el que no " +
                 "corresponde a la operación.",
             },

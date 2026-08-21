@@ -244,7 +244,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     "semana (S1, S2…). Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
     "para moverla o borrarla. Una tarea sin nada entre paréntesis está pendiente y la escribió la",
     "IA. ⛔ Las que dicen «hecha», «en curso», «suspendida» o «cargada a mano» NO se pueden borrar",
-    "desde el chat: el cronograma las protege. Decilo antes de proponerlo.",
+    "desde el chat: el cronograma las protege. Dilo antes de proponerlo.",
     fases || "(sin fases)",
     "",
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,
@@ -330,7 +330,7 @@ export async function contextoDeDocumento(
     "",
     "QUÉ SE PUEDE PEDIR: reescribir el contenido de una sección que ya existe, con la instrucción",
     "que le des. ⛔ El asistente NO puede inventar tipos de sección que nadie programó: si te",
-    "piden algo que no existe como forma, decilo en vez de intentarlo.",
+    "piden algo que no existe como forma, dilo en vez de intentarlo.",
   ].join("\n");
 
   return { texto, cierreActual: null };

@@ -113,17 +113,48 @@ describe("el asistente habla español neutro, no rioplatense", () => {
 
      El síntoma que reportó Elías fue el asistente arrancando con «Che». */
 
+  /**
+   * ⛔ EL ALCANCE ERA MÁS CHICO QUE EL TEXTO QUE EL MODELO LEE, y ahí vivía el voseo.
+   *
+   * `PROMPT` corta en `const TOOL_ACUERDO`, así que las descripciones de la tool quedaban
+   * afuera — y viajan en CADA request igual que el prompt. `lib/asistente/contexto.ts` tampoco
+   * se miraba, y también es texto que el modelo lee.
+   *
+   * Auditado el 2026-08-21: había seis formas vivas ahí, incluida «decilo», que está en la lista
+   * de abajo desde el día uno. La guarda existía y no llegaba.
+   */
+  /* ⚠ Los COMENTARIOS se blanquean: el modelo no los lee, y contarlos produce falsos positivos
+     que enseñan a ignorar la guarda. El primer barrido marcó «pedí» dentro de un docblock que
+     decía «LO QUE SE PEDÍA». Lo que queda son las cadenas — el prompt y las descripciones de la
+     tool — que es exactamente el texto que viaja en el request. */
+  const sinComentarios = (src: string) =>
+    src
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+      .replace(/^\s*\/\/.*$/gm, "");
+
+  const TEXTO_QUE_EL_MODELO_LEE = [
+    sinComentarios(FUENTE),
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8")),
+  ].join("\n");
+
   /** Las líneas que PROHIBEN el voseo tienen que poder nombrarlo. */
-  const lineasDeUso = PROMPT.split(/\r?\n/).filter((l) => !/PROHIBIDO|NUNCA|Mal:/.test(l));
+  const lineasDeUso = TEXTO_QUE_EL_MODELO_LEE.split(/\r?\n/).filter(
+    (l) => !/PROHIBIDO|NUNCA|Mal:|⛔ No|no uses/.test(l),
+  );
 
   const VOSEO = [
     "proponé",
     "decilo",
     "usalo",
+    "usá",
     "mirá",
     "fijate",
     "tenés",
     "podés",
+    "preferís",
+    "ofrecé",
+    "avisalo",
+    "pedí",
     "querés",
     "hacé",
     "dale",
@@ -136,7 +167,10 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     const encontradas: string[] = [];
     for (const linea of lineasDeUso) {
       for (const v of VOSEO) {
-        if (new RegExp(`\\b${v}\\b`, "i").test(linea)) {
+        /* ⚠ `\b` de JavaScript NO entiende acentos: para el motor, «í» es un caracter de NO
+           palabra, así que `\bpedí\b` matchea dentro de «pedía». El borde se escribe a mano
+           incluyendo las vocales acentuadas y la ñ. */
+        if (new RegExp(`(?<![\\wáéíóúüñ])${v}(?![\\wáéíóúüñ])`, "i").test(linea)) {
           encontradas.push(`${v} — ${linea.trim().slice(0, 70)}`);
         }
       }

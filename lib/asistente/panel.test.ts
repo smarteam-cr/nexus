@@ -88,11 +88,24 @@ describe("el asistente no escribe desde el panel", () => {
     }
   });
 
-  it("la instrucción es EDITABLE antes de aplicar", () => {
-    /* Ese es el «dar el ok»: un humano leyendo la instrucción exacta que se va a ejecutar, no un
-       resumen de ella. La edición que la pone en rojo: pintarla como texto plano. */
-    expect(PANEL).toContain("instruccionEditada");
-    expect(PANEL).toContain("<textarea");
+  it("el acuerdo LEGACY conserva su instrucción editable", () => {
+    /* ⚠ ESTE TEST DECÍA OTRA COSA Y MEDÍA MAL. Se llamaba «la instrucción es EDITABLE antes de
+       aplicar» y afirmaba `PANEL.toContain("<textarea")` — pero en el panel hay DOS textareas, y
+       la otra es el compositor de mensajes, que no se va a ir nunca. Convertir la instrucción en
+       un `<p>` de solo lectura dejaba el test VERDE.
+
+       Y el nombre ya no describía el camino principal: desde que el chat emite operaciones, lo
+       que se aprueba es la lista de líneas, que es de solo lectura A PROPÓSITO. Lo que este test
+       protege de verdad es el camino LEGACY —documentos e hilos viejos— así que ahora se llama
+       así y ancla DENTRO de ese bloque (medido: el textarea del compositor queda a 3.627
+       caracteres, muy afuera de la ventana de 900).
+
+       La edición que la pone en rojo: pintar la instrucción legacy como texto plano. */
+    const i = PANEL.indexOf("Ver instrucción");
+    expect(i, "se fue el bloque legacy de la instrucción").toBeGreaterThan(-1);
+    const bloque = PANEL.slice(i, i + 900);
+    expect(bloque).toContain("<textarea");
+    expect(bloque).toContain("instruccionEditada");
   });
 
   it("⚠ pero va PLEGADA: es auditable, no protagonista", () => {
@@ -192,18 +205,32 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
        `generating` del estado `ocupado` y dejar solo los aplicares. */
     const i = CANVAS.indexOf("const ocupado");
     expect(i, "se fue el estado único de ocupado").toBeGreaterThan(-1);
-    const bloque = CANVAS.slice(i, i + 1800);
-    /* ⚠ `assisting` es LA espera larga —el modificador viejo, dos a cuatro minutos— y fue el
-       único que quedó afuera en la primera versión: el Gantt seguía editable durante toda la
-       corrida, y el autosave corre igual porque `proposal` todavía es null. */
+    /* ⚠ DOS DEFECTOS DE ESTA MISMA GUARDA, encontrados auditándola:
+
+       1. `toContain("applying")` NO puede detectar que se saque `applying`: es substring de
+          `applyingProgress` y `applyingPartic`, que están en el mismo ternario. Borrar su rama
+          dejaba el test verde — y `applying` es justo el estado del que habla la historia de
+          arriba. Ahora se busca el token seguido de su `?`, que es la forma de la rama.
+       2. La ventana era un largo fijo (1.800) que terminaba a ~200 caracteres del final del
+          ternario: sumar un séptimo estado empujaba el último afuera y ponía la guarda en rojo
+          con el código bien. Así es como una guarda termina borrada por molesta. Ahora se recorta
+          por el final REAL del ternario. */
+    const fin = CANVAS.indexOf("activo: false", i);
+    expect(fin, "el ternario de ocupado perdió su rama final").toBeGreaterThan(i);
+    const bloque = CANVAS.slice(i, fin);
     for (const estado of [
       "assisting",
       "generating",
       "allRegenLoading",
       "chainingProgress",
       "applying",
+      "applyingProgress",
+      "applyingPartic",
     ]) {
-      expect(bloque, `«${estado}» dejó de bloquear el cronograma`).toContain(estado);
+      expect(
+        new RegExp(`\\b${estado}\\s*\\?`).test(bloque),
+        `«${estado}» dejó de bloquear el cronograma`,
+      ).toBe(true);
     }
   });
 
@@ -302,10 +329,11 @@ describe("⛔ nunca un «Ver instrucción» que no lleva a ninguna instrucción"
   it("el camino legacy exige que HAYA instrucción", () => {
     /* La edición que la pone en rojo: volver a `) : (` — el else incondicional. */
     expect(PANEL).toContain(") : t.acuerdo.instruccion ? (");
-    expect(
-      /\}\s*\)\s*:\s*\(\s*\n\s*\/\* ⚠ LEGACY/.test(PANEL),
-      "el legacy volvió a ser el else de cualquier acuerdo sin líneas",
-    ).toBe(false);
+    /* ⚠ Acá había una segunda aserción que NO PODÍA PONERSE EN ROJO: buscaba el comentario
+       `LEGACY` sobre `PANEL`, que viene de `soloCodigo()` y los blanquea. Devolvía `false`
+       pasara lo que pasara, y `expect(false).toBe(false)` pasa siempre. Parecía cubrir «el
+       legacy volvió a ser el else incondicional» y no cubría nada — que es peor que no tenerla:
+       quien la lee en un review cree que ese caso está guardado. La línea de arriba ya lo cubre. */
   });
 });
 
