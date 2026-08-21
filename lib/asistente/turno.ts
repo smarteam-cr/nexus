@@ -281,6 +281,23 @@ rutina, se pregunta cuando está en juego trabajo que alguien hizo.
 Cuando el pedido trae dos asuntos y solo uno es ambiguo, preguntas por ese y propones el otro —es
 el ejemplo ✅ de FORMATO, arriba—. Preguntar nunca cuesta perder la parte que ya estaba clara.
 
+⛔ Y EN ESE TURNO PONES "preguntaAbierta": true. Es OBLIGATORIO cuando tu mensaje termina en una
+pregunta. Con eso los cambios quedan registrados pero NO se ofrece aplicarlos: se acumulan con lo
+que venga después y se aplican TODOS JUNTOS al final. Una sola aplicación por pedido.
+Sin ese campo, la persona aplica media cosa, te contesta, y aplica la otra media — dos escrituras
+sobre un cronograma que el cliente ve.
+
+⛔ Y CUANDO PREGUNTAS, TU MENSAJE ES LA PREGUNTA Y NADA MÁS. No describas los cambios que dejas
+listos: la lista de abajo ya los dice, uno por renglón. Si además los cuentas, quedan dos listas
+numeradas pegadas —la tuya y la de la lista— y «la 2» vuelve a ser ambiguo, que es justo lo que la
+numeración vino a evitar.
+
+  ✅ «¿A qué fase te refieres con «el fin del proyecto»? Las de cierre son: Cierre y entrega,
+     Capacitación y cierre Service, Cierre con junta directiva. Lo de Marketing Hub lo dejo
+     preparado acá abajo.»
+  ⛔ «1. ¿A qué fase te refieres…?  2. Mientras tanto, extiendo Configuración Marketing Hub de 2 a
+     3 semanas y agrego ahí «Revisar todo muy bien»…»  ← la lista de abajo dice exactamente eso
+
 Solo NO llamas la herramienta cuando el pedido no entra en el vocabulario, cuando estás pidiendo la
 confirmación de un borrado, o cuando no hay nada nuevo que agregar y tampoco nada pendiente.`;
 
@@ -392,6 +409,14 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
       resumen: {
         type: "string",
         description: "Qué se acordó, en una o dos frases, para que el CSE lo confirme de un vistazo.",
+      },
+      preguntaAbierta: {
+        type: "boolean",
+        description:
+          "true si tu mensaje termina con una pregunta que la persona todavía no contestó. " +
+          "Mientras sea true NO se ofrece aplicar: los cambios quedan registrados, se acumulan " +
+          "con lo que venga después, y se aplican TODOS JUNTOS cuando ya no quede nada por " +
+          "resolver. Omítelo (o false) cuando el pedido esté cerrado.",
       },
       descartar: {
         type: "array",
@@ -655,6 +680,7 @@ export async function correrTurno(
   let instruccionDelModelo = "";
   let opsNuevas: Operacion[] = [];
   let descartar: unknown[] = [];
+  let preguntaAbierta = false;
 
   for (const b of msg.content) {
     if (b.type === "text") respuesta += b.text;
@@ -664,8 +690,10 @@ export async function correrTurno(
         operaciones?: unknown;
         instruccion?: string;
         descartar?: unknown;
+        preguntaAbierta?: boolean;
       };
       resumenDelModelo = typeof input?.resumen === "string" ? input.resumen.trim() : "";
+      preguntaAbierta = input?.preguntaAbierta === true;
       instruccionDelModelo = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
       opsNuevas = Array.isArray(input?.operaciones) ? (input.operaciones as Operacion[]) : [];
       descartar = Array.isArray(input?.descartar) ? input.descartar : [];
@@ -712,6 +740,7 @@ export async function correrTurno(
         resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
         operaciones: fusion.operaciones,
         lineas: describirOperaciones(paraTraducir, fusion.operaciones),
+        ...(preguntaAbierta ? { enEspera: true } : {}),
         ...(fusion.arrastradas.length > 0 ? { arrastradas: fusion.arrastradas } : {}),
         ...(soltadas.length > 0 ? { descartadas: soltadas } : {}),
       };

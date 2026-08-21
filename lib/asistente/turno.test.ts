@@ -503,6 +503,25 @@ describe("⭐ lo acordado y no aplicado no se pierde", () => {
     expect(PROMPT).toContain("PREGUNTAR Y PROPONER EN EL MISMO TURNO");
   });
 
+  it("⭐ y por dónde decir que todavía falta una respuesta", () => {
+    /* ⭐ La corrección de Elías sobre la primera prueba en pantalla: mientras haya una pregunta
+       abierta no se ofrece aplicar, así el pedido termina en UNA sola escritura.
+       La edición que la pone en rojo: sacar el campo de la tool, o la regla del prompt. */
+    const i = FUENTE.indexOf("const TOOL_ACUERDO:");
+    const tool = FUENTE.slice(i, FUENTE.indexOf("};", i));
+    expect(tool, "la tool perdió `preguntaAbierta`").toContain("preguntaAbierta:");
+    expect(
+      PROMPT,
+      "el prompt no le exige marcar la pregunta abierta: el modelo va a ofrecer aplicar media cosa",
+    ).toContain('"preguntaAbierta": true');
+  });
+
+  it("⛔ y cuando pregunta, su mensaje NO repite la lista de cambios", () => {
+    /* Elías: *«hay como dos listas numeradas, no sé por qué se ve así»*. El mensaje numeraba los
+       asuntos y la lista numeraba las operaciones, pegadas y sin separación. */
+    expect(PROMPT).toContain("TU MENSAJE ES LA PREGUNTA Y NADA MÁS");
+  });
+
   it("⛔ la herramienta tiene por dónde soltar lo que ya no corresponde", () => {
     /* Sin `descartar`, la única forma de que el modelo suelte algo pendiente sería NO emitirlo —
        o sea, en silencio: exactamente el modo de falla que el libro vino a matar. */

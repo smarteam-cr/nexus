@@ -509,10 +509,26 @@ describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
     /* Es lo que la persona necesita ANTES de leer: doce o dos cambia si revisa uno por uno o si
        lee y aprieta. Desde que se pueden descartar, además dice cuántas quedan de cuántas.
        La edición que la pone en rojo: borrar el contador. */
-    expect(PANEL).toContain("${total} cambios");
+    /* ⚠ SE AFIRMA SOBRE LA CONDICIÓN, NO SOBRE EL LITERAL. Antes anclaba en el template
+       `${total} cambios` exacto, así que se puso roja el día que el contador aprendió el singular
+       («1 cambio») — un rojo correcto pero por el motivo equivocado. Lo que importa es que el
+       contador exista y sepa contar. */
+    expect(PANEL, "desapareció el contador de cambios").toContain("plural(total)");
     expect(PANEL, "el contador dejó de decir cuántas se descartaron").toContain(
-      "de ${total} cambios",
+      "de ${plural(total)}",
     );
+  });
+
+  it("⚠ y el rótulo aparece SIEMPRE que haya texto arriba, aunque sean dos cambios", () => {
+    /* Elías, primera prueba en pantalla: *«hay como dos listas numeradas, no sé por qué se ve
+       así»*. El mensaje del asistente numera los ASUNTOS (la pregunta y el cambio) y la lista de
+       abajo numera las OPERACIONES, así que quedaba un «1. 2.» pegado a otro «1. 2.» sin nada que
+       los separe. El rótulo dice de cuál es cuál.
+       La edición que la pone en rojo: volver a `if (total <= 3 && fuera === 0) return null;`. */
+    expect(
+      PANEL.includes("total <= 3 && fuera === 0 && !t.texto"),
+      "con dos cambios y un mensaje arriba, las dos listas numeradas vuelven a pisarse",
+    ).toBe(true);
   });
 
   it("⭐ se pueden aceptar 10 de 12, y desmarcar arrastra lo que ya no puede correr", () => {
@@ -667,6 +683,26 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
       RUTA,
       "la vista dejó de limpiar el marcador del desenlace: se pinta el JSON crudo al pie del mensaje",
     ).toContain("textoVisible(t.contenido)");
+  });
+
+  it("⭐ con una pregunta abierta NO hay botón, y se dice por qué", () => {
+    /* ⭐ LA CORRECCIÓN DE ELÍAS SOBRE LA PRIMERA PRUEBA EN PANTALLA (2026-08-21).
+
+       El chat ofrecía aplicar la parte clara mientras la pregunta seguía sin contestar. Él aplicó
+       esa mitad, contestó, y el pedido terminó en DOS escrituras sobre un cronograma que el
+       cliente ve. Textual: *«es mejor que no dé la oportunidad de aplicar hasta que no haya
+       resuelto las dudas… que solo haya una aplicación»*.
+
+       Los cambios se siguen registrando —el libro los arrastra, no se pierde nada— pero el botón
+       espera. La edición que la pone en rojo: sacar la rama de `en-espera` del render. */
+    expect(
+      PANEL.includes('t.estado === "en-espera"'),
+      "volvió el botón con la pregunta abierta: un pedido se parte en dos escrituras",
+    ).toBe(true);
+    expect(
+      PANEL.includes("Contestá la pregunta de arriba"),
+      "el botón desapareció sin decir por qué: se lee como que el chat no entendió",
+    ).toBe(true);
   });
 
   it("⭐ la caja DICE cuántos cambios venían de antes", () => {

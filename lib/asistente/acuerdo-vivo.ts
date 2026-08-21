@@ -106,7 +106,7 @@ export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): Operacion[]
  * texto: no puede quedar desincronizada porque se recalcula del mismo contenido. NO es la tabla de
  * estados que el diseño descarta — esa sería una segunda fuente de verdad.
  */
-export type EstadoDeAcuerdo = "vivo" | "aplicado" | "retomado";
+export type EstadoDeAcuerdo = "vivo" | "en-espera" | "aplicado" | "retomado";
 
 /**
  * ⭐ EL BOTÓN SIGUE AL ESTADO, NO A LA POSICIÓN.
@@ -128,7 +128,8 @@ export type EstadoDeAcuerdo = "vivo" | "aplicado" | "retomado";
 export function estadosDeAcuerdo(
   turnos: readonly TurnoDelLibro[],
 ): (EstadoDeAcuerdo | null)[] {
-  const tieneAcuerdo = turnos.map((t) => leerAcuerdo(t.contenido).acuerdo !== null);
+  const acuerdos = turnos.map((t) => leerAcuerdo(t.contenido).acuerdo);
+  const tieneAcuerdo = acuerdos.map((a) => a !== null);
 
   return turnos.map((t, i) => {
     if (!tieneAcuerdo[i]) return null;
@@ -142,6 +143,14 @@ export function estadosDeAcuerdo(
       }
       if (tieneAcuerdo[j]) return "retomado";
     }
+    /**
+     * ⭐ CON UNA PREGUNTA ABIERTA NO SE APLICA, y es la corrección de Elías (2026-08-21).
+     *
+     * Acumular Y dejar aplicar parte el pedido en dos escrituras: la persona aplica media cosa,
+     * contesta, y aplica la otra media. Los cambios siguen registrados y el libro los arrastra —
+     * no se pierde nada— pero el botón espera a que no quede nada por resolver.
+     */
+    if (acuerdos[i]?.enEspera) return "en-espera";
     return "vivo";
   });
 }

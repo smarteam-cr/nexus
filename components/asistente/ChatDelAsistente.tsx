@@ -485,13 +485,18 @@ export default function ChatDelAsistente({
               <div
                 className={
                   "mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2" +
-                  (t.estado && t.estado !== "vivo" ? " opacity-60" : "")
+                  /* ⚠ «en espera» NO se apaga: es la propuesta VIGENTE, solo que todavía no se
+                     puede aplicar. Apagarla la haría ver como historia. */
+                  (t.estado && t.estado !== "vivo" && t.estado !== "en-espera"
+                    ? " opacity-60"
+                    : "")
                 }
               >
                 <p className="text-xs font-semibold text-info-ink">
                   Lo que se acordó
                   {t.estado === "aplicado" ? " · ya aplicado" : null}
                   {t.estado === "retomado" ? " · sigue abajo, en la propuesta vigente" : null}
+                  {t.estado === "en-espera" ? " · falta tu respuesta" : null}
                 </p>
                 {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
                     dos: son la misma frase escrita dos veces. */}
@@ -538,15 +543,26 @@ export default function ChatDelAsistente({
                         se lean por nombre— un acuerdo normal pasó de 2 líneas a 12. Sin el
                         número arriba, la persona no sabe cuánto está aprobando hasta scrollear
                         hasta el final, y el botón «Aplicar» está justo abajo. */}
+                    {/**
+                     * ⚠ Y EL RÓTULO APARECE SIEMPRE QUE HAYA TEXTO ARRIBA, aunque sean dos
+                     * cambios.
+                     *
+                     * Elías lo vio en la primera prueba: *«hay como dos listas numeradas, no sé
+                     * por qué se ve así»*. Y tenía razón — el mensaje del asistente numera los
+                     * ASUNTOS (la pregunta y el cambio) y esta lista numera las OPERACIONES, así
+                     * que quedaban un «1. 2.» pegado a otro «1. 2.» sin nada que los separe. El
+                     * rótulo dice de cuál es cuál.
+                     */}
                     {(() => {
                       const total = t.acuerdo.lineas.length;
                       const fuera = (desmarcadas[t.id] ?? EMPTY).size;
-                      if (total <= 3 && fuera === 0) return null;
+                      if (total <= 3 && fuera === 0 && !t.texto) return null;
+                      const plural = (n: number) => `${n} cambio${n === 1 ? "" : "s"}`;
                       return (
-                        <p className="mt-2 text-xs font-semibold text-info-ink">
+                        <p className="mt-3 text-xs font-semibold text-info-ink">
                           {fuera === 0
-                            ? `${total} cambios`
-                            : `${total - fuera} de ${total} cambios — ${fuera} descartado${fuera === 1 ? "" : "s"}`}
+                            ? plural(total)
+                            : `${total - fuera} de ${plural(total)} — ${fuera} descartado${fuera === 1 ? "" : "s"}`}
                         </p>
                       );
                     })()}
@@ -656,6 +672,23 @@ export default function ChatDelAsistente({
                       Podés editarla: es lo que se va a ejecutar tal cual.
                     </p>
                   </details>
+                ) : null}
+
+                {/**
+                 * ⭐ CON UNA PREGUNTA ABIERTA NO HAY BOTÓN, y es la corrección de Elías
+                 * (2026-08-21) sobre la primera prueba en pantalla.
+                 *
+                 * Antes se ofrecía aplicar la parte clara mientras la pregunta seguía sin
+                 * contestar. La persona aplicaba media cosa, contestaba, y aplicaba la otra media:
+                 * DOS escrituras sobre un cronograma que el cliente ve, para UN pedido. Los
+                 * cambios se siguen registrando —el libro los arrastra, no se pierde nada— pero
+                 * el botón espera a que no quede nada por resolver.
+                 */}
+                {t.estado === "en-espera" ? (
+                  <p className="mt-2 rounded-lg border border-line bg-surface-muted px-2 py-1.5 text-xs text-fg-secondary">
+                    Contestá la pregunta de arriba y estos cambios se aplican junto con lo que
+                    salga de tu respuesta — todo de una vez.
+                  </p>
                 ) : null}
 
                 {t.id !== idDelAcuerdoVivo ? null : onAplicar ? (

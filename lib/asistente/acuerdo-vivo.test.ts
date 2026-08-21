@@ -41,6 +41,18 @@ const conAcuerdo = (ops: Operacion[], texto = "Listo."): TurnoDelLibro => ({
   shaDeContexto: SHA,
 });
 
+/** Un acuerdo emitido junto con una pregunta que la persona todavía no contestó. */
+const preguntando = (ops: Operacion[]): TurnoDelLibro => ({
+  rol: "ASISTENTE",
+  contenido: `¿A qué fase te refieres?\n\n${marcaDeAcuerdo({
+    resumen: "queda una duda",
+    operaciones: ops,
+    lineas: ops.map((_, i) => `linea ${i + 1}`),
+    enEspera: true,
+  })}`,
+  shaDeContexto: SHA,
+});
+
 const delCse = (texto: string): TurnoDelLibro => ({ rol: "CSE", contenido: texto, shaDeContexto: SHA });
 
 /** El desenlace: lo escribe la RUTA, y su marca es no pasar huella de contexto. */
@@ -308,8 +320,31 @@ describe("⭐ en qué quedó cada caja", () => {
     ];
     for (const hilo of hilos) {
       const vivos = estadosDeAcuerdo(hilo).filter((e) => e === "vivo").length;
+      /* Y un acuerdo en espera tampoco puede convivir con uno vivo: sería el mismo botón doble. */
       expect(vivos, "hay más de un acuerdo vivo: se puede aplicar dos veces lo mismo").toBeLessThanOrEqual(1);
     }
+  });
+
+  it("⭐ con una pregunta abierta queda EN ESPERA, no vivo", () => {
+    /* ⭐ La corrección de Elías sobre la primera prueba: acumular Y dejar aplicar parte el pedido
+       en dos escrituras. Los cambios se registran igual; lo que espera es el botón.
+       La edición que la pone en rojo: ignorar `enEspera` al derivar el estado. */
+    expect(estadosDeAcuerdo([preguntando([OP_A, OP_B])])).toEqual(["en-espera"]);
+  });
+
+  it("⛔ pero SIGUE PENDIENTE: se acumula con lo que venga después", () => {
+    /* Es la diferencia entre «no se puede aplicar todavía» y «se perdió». Si el libro lo soltara,
+       contestar la pregunta volvería a costar la otra mitad del pedido — el bug original. */
+    expect(
+      pendientesDelHilo([preguntando([OP_A, OP_B]), delCse("Cierre y entrega")]),
+      "un acuerdo en espera se soltó del libro: vuelve la pérdida silenciosa",
+    ).toEqual([OP_A, OP_B]);
+  });
+
+  it("⭐ y al contestar, TODO se aplica junto en una sola caja", () => {
+    /* El resultado que Elías pidió: una sola aplicación por pedido. */
+    const hilo = [preguntando([OP_A, OP_B]), delCse("Cierre y entrega"), conAcuerdo([OP_A, OP_B, OP_C])];
+    expect(estadosDeAcuerdo(hilo)).toEqual(["retomado", null, "vivo"]);
   });
 
   it("⭐ y el que está VIVO es el que tiene lo pendiente", () => {
@@ -323,13 +358,17 @@ describe("⭐ en qué quedó cada caja", () => {
       [conAcuerdo([OP_A]), desenlace(true)],
       [conAcuerdo([OP_A]), conAcuerdo([OP_C])],
     ];
-    for (const hilo of hilos) {
+    /* ⚠ «vivo» O «en-espera»: los dos significan que hay algo sin aplicar. Se separaron cuando
+       Elías pidió que con una pregunta abierta no se ofreciera aplicar — el acuerdo sigue
+       pendiente, lo que espera es el botón. La guarda mide lo mismo de antes: que el libro y la
+       pantalla no puedan discrepar sobre si queda algo. */
+    for (const hilo of [...hilos, [preguntando([OP_A])]]) {
       const estados = estadosDeAcuerdo(hilo);
-      const hayVivo = estados.includes("vivo");
+      const haySinAplicar = estados.includes("vivo") || estados.includes("en-espera");
       expect(
         pendientesDelHilo(hilo).length > 0,
-        "el botón y el libro no coinciden: uno ofrece aplicar y el otro no tiene qué",
-      ).toBe(hayVivo);
+        "el libro y la pantalla no coinciden sobre si queda algo sin aplicar",
+      ).toBe(haySinAplicar);
     }
   });
 });

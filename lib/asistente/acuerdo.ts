@@ -39,6 +39,18 @@ export interface CambioAcordado {
    */
   arrastradas?: number[];
   /**
+   * ⭐ HAY UNA PREGUNTA SIN CONTESTAR, así que estos cambios NO se pueden aplicar todavía.
+   *
+   * Elías, 2026-08-21, viendo la primera prueba: *«es mejor que no dé la oportunidad de aplicar
+   * hasta que no haya resuelto las dudas… que solo haya una aplicación»*. Tenía razón y corrige
+   * una decisión de diseño: acumular Y dejar aplicar parte el pedido en DOS escrituras, que es la
+   * mitad del problema que la acumulación vino a resolver.
+   *
+   * Los cambios se siguen registrando —no se pierde nada, el libro los arrastra— pero la caja se
+   * pinta sin casillas y sin botón hasta que no quede nada por resolver. Una sola aplicación.
+   */
+  enEspera?: boolean;
+  /**
    * Lo que se descartó al componer, ya traducido. Un descarte tiene que ser tan legible como una
    * operación: si el modelo se equivoca al soltar algo, la persona tiene que poder verlo.
    */
@@ -106,6 +118,7 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
           ...(crudo.lineas?.length && (!ops?.length || crudo.lineas.length === ops.length)
             ? { lineas: crudo.lineas }
             : {}),
+          ...(crudo.enEspera ? { enEspera: true } : {}),
           ...(crudo.arrastradas?.length ? { arrastradas: crudo.arrastradas } : {}),
           ...(crudo.descartadas?.length ? { descartadas: crudo.descartadas } : {}),
           ...(crudo.instruccion ? { instruccion: crudo.instruccion } : {}),

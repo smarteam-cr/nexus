@@ -170,6 +170,22 @@ que ya existían — un marcador nuevo no habría podido.
 - El desenlace parcial decía un número (*«3 de 5»*); ahora **nombra** lo que quedó afuera. Sin eso,
   el modelo lee «faltan dos» y no sabe cuáles.
 
+**⭐ Y lo que corrigió la primera prueba en pantalla** (Elías, el mismo día): el chat ofrecía
+aplicar la parte clara **mientras la pregunta seguía sin contestar**. Él aplicó esa mitad, contestó,
+y el pedido terminó en **dos escrituras** sobre un cronograma que el cliente ve. Textual: *«es mejor
+que no dé la oportunidad de aplicar hasta que no haya resuelto las dudas… que solo haya una
+aplicación»*. Tenía razón, y corrige una decisión de diseño: acumular **y** dejar aplicar resuelve
+media mitad del problema.
+
+Ahora el modelo marca `preguntaAbierta` y la caja queda **sin casillas y sin botón** hasta que no
+quede nada por resolver — los cambios se siguen registrando y el libro los arrastra, así que no se
+pierde nada. **Una sola aplicación por pedido.**
+
+Y de la misma prueba salió el arreglo visual: el mensaje del asistente numera los ASUNTOS y la lista
+numera las OPERACIONES, así que quedaban **dos listas numeradas pegadas** sin nada que las separe.
+Ahora el rótulo («2 cambios») aparece siempre que haya mensaje arriba, y el prompt le prohíbe
+repetir la lista cuando pregunta.
+
 ⚠ **Y una lección de método**: tres de las guardas nuevas nacieron **decorativas** —anclaban en un
 símbolo que también aparece en la línea de `import`, así que daban verde con el arreglo apagado— y
 solo se cazaron rompiéndolas a propósito. Ahora afirman sobre el texto que se pinta y sobre el
