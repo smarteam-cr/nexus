@@ -10,6 +10,8 @@ import {
 } from "@/lib/clients/proyectos-internos";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
+import { can } from "@/lib/auth/permissions/engine";
+import type { OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
 import TraerDeHubspot from "./TraerDeHubspot";
 import { Suspense } from "react";
 import type { requireUser } from "@/lib/auth/supabase";
@@ -40,8 +42,6 @@ export async function ClientsTable({
   clientWhere: NonNullable<Parameters<typeof prisma.client.findMany>[0]>["where"] | null;
   sharedIds: Set<string>;
 }) {
-  void user; // la identidad ya gateó en page.tsx; acá solo se consumen sus derivados
-
   const [clients, teamMembers] = await Promise.all([
     prisma.client.findMany({
       where: clientWhere ?? undefined,
@@ -86,6 +86,33 @@ export async function ClientsTable({
     }),
     getTeamMembers(),
   ]);
+
+  /**
+   * Quién puede reasignar el CSE de una cuenta, y a quién se puede elegir.
+   *
+   * ⚠ El permiso se resuelve en el SERVIDOR y viaja como booleano: la ruta
+   * `/api/clients/[id]/cse-encargado` lo vuelve a exigir igual, así que esto solo decide si se
+   * pinta el desplegable — no es el candado.
+   *
+   * ⭐ Las opciones son TODO el equipo activo, sin filtrar por rol (decisión de Elías,
+   * 2026-08-21). Acotarlo a `roleEnum === "CSE"` dejaría fuera a los CSL, que hoy llevan cuentas.
+   */
+  const puedeReasignar = user.teamMember
+    ? await can(user.teamMember, "proyectos", "reasignarEncargado")
+    : false;
+  /* ⚠ Consulta aparte y no `getTeamMembers()`: ese loader trae los DESACTIVADOS a propósito
+     (alimenta análisis histórico de sesiones) y su comentario dice, textual, que "los selectores
+     de personas filtran deactivatedAt por su cuenta". Ofrecer a alguien que ya no está sería
+     reasignarle una cuenta a quien se fue. Solo se pide cuando el desplegable se va a pintar. */
+  const opcionesDeEncargado: OpcionDeEncargado[] = puedeReasignar
+    ? (
+        await prisma.teamMember.findMany({
+          where: { deactivatedAt: null },
+          select: { email: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      ).map((m) => ({ email: m.email, name: m.name }))
+    : [];
 
   const clientIds = clients.map((c) => c.id);
 
@@ -184,6 +211,8 @@ export async function ClientsTable({
       clients={rows}
       activeCse={activeCse}
       proyectosInternos={proyectosInternos}
+      opcionesDeEncargado={opcionesDeEncargado}
+      puedeReasignarEncargado={puedeReasignar}
       /* En su PROPIO Suspense. Ver el comentario de SlotTraerDeHubspot: contar las empresas
          cuesta ~2,4 s de HubSpot, y la lista de clientes no puede esperar por un botón. */
       slotTraer={

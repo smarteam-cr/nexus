@@ -493,6 +493,75 @@ porque comparten el push pendiente y porque **dos piden un paso de Elías despu�
 
 ---
 
+## El 2026-08-21 — el CSE de la cuenta, y un agujero de acceso que nadie había visto
+
+Empezó como un detalle visual: Elías reasignó kölbi a Heiver y la columna «CSE encargado» del
+listado seguía mostrando **«Breiner Salas Salas +1»**. Tirando de ahí apareció una regla de negocio
+que el código no conocía, y debajo, un problema de permisos.
+
+### La regla, en palabras de Elías
+
+> *«Los customer success del pipeline de implementación de hubspot son los customer success de la
+> cuenta. Todo lo que está en proyecto de desarrollo se podría decir que son proyectos hermanos o
+> proyectos hijos del proyecto que están customer success. Eso se hizo para poder mapear los
+> proyectos de desarrollo de mejor forma y poder tener un cronograma específico. Entonces las
+> cuentas tienen que estar en el ownership de las personas del pipeline de hubspot.»*
+
+Un proyecto de **Desarrollo** o **Sitios web** cuelga como hijo de una implementación y tiene su
+propio `csl_encargado` —a veces un desarrollador— **solo** para que ese pipeline tenga su propio
+cronograma técnico. No representa una cuenta ni un CSE.
+
+### ⛔ Lo que eso destapó: no era cosmético
+
+`Project.hubspotOwnerEmail` se resuelve desde `csl_encargado` **igual para los tres pipelines**, y
+`lib/auth/access.ts` lo consultaba sin distinguir cuál. Un desarrollador dueño de un proyecto hijo
+obtenía razón `"hubspot-owner"` sobre el **cliente entero**: la cartera de CS, y —vía
+`requireHandoffAccess`, que llama a `ownsClient`— permiso para editar el handoff y el cronograma.
+
+Arreglado en `0f4846b` con un átomo nuevo en `lib/projects/scope.ts` (`esProyectoDePipelineCS`),
+usado en tres lugares:
+
+| Dónde | Qué pasaba |
+|---|---|
+| `lib/auth/access.ts` (3 funciones) | El agujero de acceso |
+| La columna CSE de `/clients` | El síntoma visible — y la pestaña «Mis clientes», que usaba los mismos arrays |
+| `scripts/verify-cse-scoping.ts` | El script que dice verificar ese gate **tenía la misma falta de filtro**: no lo detectaba, lo repetía |
+
+### ⭐ Y encima, la columna se volvió editable
+
+Pedido de Elías en la misma conversación. La celda «CSE encargado» pasa a ser un select: elegís a
+alguien del equipo y se escribe `csl_encargado` en **todos** los proyectos del cliente que están en
+el pipeline de Implementación de HubSpot — nunca en los hijos de Desarrollo.
+
+Es productizar lo que ese mismo día se hizo a mano con dos scripts (kölbi y Grupo Inve).
+
+**Las dos decisiones de negocio, tomadas por Elías:**
+
+| Pregunta | Elegido |
+|---|---|
+| ¿Quién puede reasignar? | **Solo liderazgo** (CSL + admin). Mover cartera no es operativo — y como `csl_encargado` gobierna la visibilidad, un CSE que pudiera reasignar podría quitarse el acceso a una cuenta solo |
+| ¿A quién se puede elegir? | **Todo el equipo activo**, sin filtrar por rol (acotarlo a `CSE` dejaría fuera a los CSL, que hoy llevan cuentas) |
+
+⚠ **Riesgos que el diseño acepta, escritos:** son N PATCH independientes contra HubSpot y **no hay
+rollback en ninguna parte de esta base**. Si el tercero de cinco falla, los dos primeros ya quedaron
+escritos — por eso el error dice **cuántos entraron**, en vez de un «falló» que mandaría a
+reintentar creyendo que no se escribió nada.
+
+### ⚠ La lección de método de la jornada
+
+**Siete guardas nuevas nacieron decorativas** a lo largo del día — pasaban en verde con el arreglo
+roto — y las siete se cazaron con el mismo ritual: romper de verdad, ver que NO salta, corregir la
+guarda, romper otra vez. Los tres modos de falla, todos reales:
+
+1. **Anclar en un símbolo que también aparece en la línea de `import`** (`marcaDeDesenlace`,
+   `textoVisible`): el `.includes()` sobre el archivo entero da verde aunque nadie lo llame.
+2. **Cortar la ventana de lectura en un separador que se repite** (el primer `;`, el primer
+   `) : (`): la ventana termina midiendo un tramo que no es el que se quería proteger.
+3. **Afirmar sobre una forma que nunca existió** (`DEFAULT_MATRIX.CSL.proyectos` como array,
+   cuando `grant()` devuelve un mapa sección→acción→bool): `.toContain()` sobre `[]` pasa siempre.
+
+---
+
 ## La noche del 2026-08-19 — el retiro de etapas y la medición de atribución
 
 Plan aprobado por Elías para correr desatendido, con una regla: **nada que escriba en producción,

@@ -242,13 +242,51 @@ describe("el cuerpo del POST, para los tres pipelines", () => {
     expect(asocs.map((a) => a.types[0].associationTypeId)).toEqual([1236, 1238, 1254]);
   });
 
-  it("`csl_encargado` NUNCA se escribe al crear", () => {
+  it("`csl_encargado` NUNCA se escribe al crear", async () => {
     /* El espejo lo prioriza sobre el owner para resolver QUÉ CSE ve el proyecto. Escribir ahí a
        quien apretó el botón le secuestraría el acceso al CSE que va a llevar el proyecto — y en
-       silencio, porque el creador sí lo vería. */
+       silencio, porque el creador sí lo vería.
+     *
+     * ── ESTA GUARDA SE REESCRIBIÓ EL 2026-08-21, Y EL PORQUÉ IMPORTA ─────────────
+     * Antes decía «la string `csl_encargado` no aparece en `project-record.ts`». Era un proxy
+     * válido mientras NADA en ese archivo escribiera la propiedad — pero el proxy no era la
+     * promesa. Al agregar `actualizarCslEncargado` (el select de "CSE encargado" del listado,
+     * que reasigna la cuenta a propósito) el proxy se puso rojo sin que la promesa se rompiera.
+     *
+     * Ahora mide lo que el título dice: el POST de creación no manda esa propiedad. Es
+     * estrictamente más fuerte — un `properties["csl_" + "encargado"]` armado a mano habría
+     * pasado el chequeo textual y no pasa éste. */
+    for (const key of ["customer-success", "development", "web"] as const) {
+      const { hs, llamadas } = hsFalso();
+      await crearProjectRecord(hs, {
+        nombre: "Sin encargado",
+        pipeline: pipelineByKey(key),
+        empresaId: "co1",
+        tratoId: "deal1",
+      });
+      expect(
+        llamadas[0].body.properties,
+        `crear un proyecto de ${key} escribió el encargado: le secuestra el acceso al CSE que ` +
+          `de verdad va a llevarlo, y en silencio`,
+      ).not.toHaveProperty("csl_encargado");
+    }
+  });
+
+  it("⚠ y el ÚNICO que la escribe es la reasignación explícita, nunca el alta", () => {
+    /* La contracara del test de arriba: `csl_encargado` sí se escribe en este módulo — pero
+       solo desde `actualizarCslEncargado`, que es la decisión deliberada de mover una cuenta
+       (ver `app/api/clients/[id]/cse-encargado/route.ts`). La edición que la pone en rojo:
+       meter la propiedad en el body de `crearProjectRecord`. */
     const codigo = fs.readFileSync(path.join(RAIZ, "lib/hubspot/project-record.ts"), "utf8");
-    const enCodigo = sinImports(codigo).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
-    expect(enCodigo).not.toContain("csl_encargado");
+    const limpio = sinImports(codigo).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    const i = limpio.indexOf("export async function crearProjectRecord");
+    expect(i, "desapareció el creador único").toBeGreaterThan(-1);
+    const cuerpoDelCreador = limpio.slice(i, limpio.indexOf("export ", i + 10));
+    expect(cuerpoDelCreador.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(
+      cuerpoDelCreador.includes("csl_encargado"),
+      "el creador volvió a tocar `csl_encargado`",
+    ).toBe(false);
   });
 
   it("un proyecto que NO es interno no manda la propiedad en blanco", async () => {

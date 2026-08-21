@@ -166,7 +166,17 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     /* `marcarInterno` va SOLO acá, junto a `deleteCanvas`, y no con los que pueden crear:
        dar de alta es una decisión de arranque, pero sacar de cobranza un proyecto que ya está
        andando cambia la plata de algo en marcha. Mismo peso que borrarle un canvas. */
-    proyectos: ["create", "deleteCanvas", "marcarInterno", "cambiarEstadoHubspot"],
+    /* `reasignarEncargado` va acá y NO con el CSE (decisión de Elías, 2026-08-21): mover una
+       cuenta de cartera es decisión de liderazgo, y encima `csl_encargado` decide quién VE el
+       cliente — un CSE que pudiera reasignar se podría quitar (o quitarle a otro) el acceso a
+       una cuenta entera sin que nadie lo apruebe. */
+    proyectos: [
+      "create",
+      "deleteCanvas",
+      "marcarInterno",
+      "cambiarEstadoHubspot",
+      "reasignarEncargado",
+    ],
     ventas: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],

@@ -175,6 +175,20 @@ export const PERMISSION_SECTIONS = [
         label: "Cambiar el estado y la etapa del proyecto en HubSpot",
         enforced: true,
       },
+      {
+        /* Reasignar el CSE encargado de una CUENTA desde el listado de clientes: escribe
+           `csl_encargado` en TODOS los proyectos del cliente que están en el pipeline de
+           Implementación de HubSpot.
+
+           Celda propia, y del lado del LIDERAZGO (decisión de Elías, 2026-08-21) — no del CSE
+           como `cambiarEstadoHubspot`. El peso es otro: aquello mantiene al día un tablero;
+           esto mueve CARTERA. Y `csl_encargado` es lo que decide QUIÉN VE EL CLIENTE
+           (`lib/auth/access.ts`), así que un CSE que pudiera reasignar podría sacarse de encima
+           —o quitarle a otro— el acceso a una cuenta entera sin que nadie lo apruebe. */
+        key: "reasignarEncargado",
+        label: "Reasignar el CSE encargado de un cliente",
+        enforced: true,
+      },
     ],
   },
   {

@@ -168,6 +168,72 @@ export async function actualizarProyectoInterno(
 }
 
 /**
+ * Cambia el CSE ENCARGADO (`csl_encargado`) de un proyecto que ya existe en HubSpot.
+ *
+ * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────
+ * Mismo motivo que sus dos vecinas: `Project.hubspotOwnerId/Name/Email` los escribe SOLO el
+ * espejo (`sync-projects.ts`), que los resuelve desde esta propiedad. Si Nexus escribiera esas
+ * columnas, el sync las revertiría en diez minutos — y sobre el campo que decide QUIÉN VE EL
+ * CLIENTE (`lib/auth/access.ts`), así que el síntoma sería alguien perdiendo acceso solo.
+ *
+ * ⚠ Es un campo OWNER: guarda un owner id de HubSpot, no un email. Ver
+ * `resolverOwnerIdPorEmail`, que es lo único que traduce el email de un `TeamMember` a ese id.
+ *
+ * ⭐ Y ES LA CONTRACARA DEL COMENTARIO DE `crearProjectRecord`: al CREAR se deja vacío a
+ * propósito («la asignación del encargado es una decisión de la persona, no un efecto secundario
+ * del alta»). Esta función es esa decisión, tomada explícitamente.
+ */
+export async function actualizarCslEncargado(
+  hs: HsClient,
+  recordId: string,
+  ownerId: string,
+): Promise<void> {
+  const id = ownerId.trim();
+  if (!id) throw new Error("Falta el owner de HubSpot al que reasignar el proyecto");
+  const res = await hs.apiRequest({
+    method: "PATCH",
+    path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
+    body: { properties: { csl_encargado: id } },
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(
+      `reasignar el encargado del proyecto en HubSpot falló (${res.status}): ${cuerpo.slice(0, 300)}`,
+    );
+  }
+}
+
+/**
+ * El owner id de HubSpot de una persona, por su email. `null` si HubSpot no la conoce.
+ *
+ * ── POR QUÉ HACE FALTA ───────────────────────────────────────────────────────
+ * `TeamMember` NO guarda el owner id de HubSpot, y `csl_encargado` no acepta un email. El único
+ * traductor que existía iba al revés (`resolveOwner`: id → nombre/email, en `sync-projects.ts`),
+ * y los scripts de reasignación resolvían esto **a mano**, con los ids hardcodeados en el
+ * archivo. Esto lo hace en caliente para que el select del listado ofrezca a cualquiera del
+ * equipo, incluida gente que todavía no lleva ningún proyecto.
+ *
+ * ⚠ Se pide la lista COMPLETA de owners y se busca ahí, en vez de `?email=`: ese filtro es
+ * sensible a mayúsculas y a alias, y un fallo silencioso acá se leería como «esa persona no
+ * existe en HubSpot» sobre alguien que sí está. Son pocos owners y la respuesta se cachea.
+ */
+export async function resolverOwnerIdPorEmail(
+  hs: HsClient,
+  email: string,
+): Promise<string | null> {
+  const buscado = email.trim().toLowerCase();
+  if (!buscado) return null;
+  const res = await hs.apiRequest({ method: "GET", path: `/crm/v3/owners?limit=500` });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new Error(`no se pudo leer la lista de owners de HubSpot (${res.status}): ${cuerpo.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { results?: Array<{ id?: string; email?: string }> };
+  const hit = (data.results ?? []).find((o) => (o.email ?? "").trim().toLowerCase() === buscado);
+  return hit?.id ?? null;
+}
+
+/**
  * Cambia el ESTADO (`hs_status`) de un proyecto que ya existe en HubSpot.
  *
  * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────

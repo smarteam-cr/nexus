@@ -142,12 +142,34 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "de handoff: necesita ver TODOS, incluidos los que el rail esconde, o se ofrecería crear " +
       "uno que ya existe.",
   },
+  /**
+   * ⚠ ESTA RAZÓN SE REESCRIBIÓ EL 2026-08-21, y la vieja decía lo contrario.
+   *
+   * Decía: «angostarlo le quitaría acceso a un CSE por una razón de negocio (que su proyecto no
+   * es cartera), que es exactamente lo que la tabla de decisiones promete NO hacer». Sigue
+   * siendo cierto para los criterios de PANTALLA (cartera/facturable/navegable) — un CSE no
+   * pierde su cliente porque el proyecto sea interno o esté pausado.
+   *
+   * Pero había un angostamiento que sí correspondía y que esa frase tapaba: el de PIPELINE. El
+   * encargado de la cuenta es quien tiene `csl_encargado` en el pipeline de Implementación de
+   * HubSpot; un proyecto "development"/"sitios-web" cuelga como hijo y su owner es, a veces, un
+   * desarrollador. Sin ese filtro, ese desarrollador tenía acceso de owner al CLIENTE ENTERO.
+   */
   "lib/auth/access.ts": {
     modo: "exento",
     razon:
-      "cuenta proyectos por `hubspotOwnerEmail` para decidir ACCESO. Angostarlo le quitaría " +
-      "acceso a un CSE por una razón de negocio (que su proyecto no es cartera), que es " +
-      "exactamente lo que la tabla de decisiones promete NO hacer.",
+      "cuenta proyectos por `hubspotOwnerEmail` para decidir ACCESO, y por eso NO usa los " +
+      "criterios de pantalla: un CSE no pierde su cliente porque el proyecto sea interno o esté " +
+      "pausado. Sí acota por PIPELINE (`PROYECTO_DE_PIPELINE_CS_WHERE`), que es otra pregunta: " +
+      "quién es el dueño de la CUENTA. Ver lib/auth/access.test.ts.",
+  },
+  "app/api/clients/[id]/cse-encargado/route.ts": {
+    modo: "exento",
+    razon:
+      "reasigna el CSE de una cuenta: escribe `csl_encargado` en los proyectos del pipeline de " +
+      "CS. No usa un criterio de PANTALLA a propósito —un proyecto pausado o interno sigue " +
+      "necesitando encargado— pero sí `PROYECTO_DE_PIPELINE_CS_WHERE`, por el mismo motivo que " +
+      "access.ts. Ver lib/clients/cse-encargado.test.ts.",
   },
   "lib/clients/last-interaction.ts": {
     modo: "exento",

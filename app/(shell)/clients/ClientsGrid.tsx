@@ -11,6 +11,7 @@ import {
   type TableColumn,
 } from "@/components/ui";
 import DeleteClientButton from "./DeleteClientButton";
+import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
@@ -169,11 +170,17 @@ export default function ClientsGrid({
   clients,
   activeCse,
   proyectosInternos,
+  opcionesDeEncargado,
+  puedeReasignarEncargado,
   slotTraer,
 }: {
   clients: ClientRow[];
   activeCse: ActiveCse | null;
   proyectosInternos: ProyectoInternoRow[];
+  /** El equipo activo, para el desplegable de la columna «CSE encargado». Vacío si no se puede editar. */
+  opcionesDeEncargado: OpcionDeEncargado[];
+  /** `proyectos.reasignarEncargado` EFECTIVO, resuelto en el servidor. No es el candado: la ruta lo re-exige. */
+  puedeReasignarEncargado: boolean;
   /**
    * El botón «Traer de HubSpot», ya envuelto en su propio `<Suspense>` por el server component.
    * Llega como nodo y no como número para que contar las empresas —5 llamadas a HubSpot— no
@@ -374,17 +381,18 @@ export default function ClientsGrid({
       sortValue: (c) => c.cseNames[0],
       width: "w-32",
       hideOnMobile: true,
-      render: (c) =>
-        c.cseNames.length === 0 ? (
-          <span className="text-fg-muted">—</span>
-        ) : (
-          <span className="text-fg-secondary truncate block">
-            {c.cseNames[0]}
-            {c.cseNames.length > 1 && (
-              <span className="text-fg-muted"> +{c.cseNames.length - 1}</span>
-            )}
-          </span>
-        ),
+      /* ⭐ Editable: elegir acá reasigna la CUENTA — escribe `csl_encargado` en todos los
+         proyectos del cliente que están en el pipeline de Implementación de HubSpot. Sin
+         permiso se pinta exactamente como antes (texto). Ver `CseEncargadoSelect`. */
+      render: (c) => (
+        <CseEncargadoSelect
+          clientId={c.id}
+          clientName={c.name}
+          nombres={c.cseNames}
+          opciones={opcionesDeEncargado}
+          puedeEditar={puedeReasignarEncargado}
+        />
+      ),
     },
     {
       key: "salesMeeting",
