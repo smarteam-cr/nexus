@@ -34,22 +34,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
+import type { CambioAcordado } from "@/lib/asistente/turno";
 import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-export interface AcuerdoDelChat {
-  resumen: string;
-  /** Las operaciones a ejecutar. El camino rápido: milisegundos, sin volver a llamar al modelo. */
-  operaciones?: unknown[];
-  /**
-   * ⭐ Las operaciones traducidas a castellano, calculadas EN EL SERVIDOR. Es lo que la persona
-   * lee antes de aplicar — y sale del MISMO objeto que se ejecuta, así que no puede divergir.
-   */
-  lineas?: string[];
-  /** ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto. */
-  instruccion?: string;
-}
+/**
+ * ⛔ ES EL MISMO TIPO QUE EMITE EL SERVIDOR, no una copia. Antes eran dos declaraciones a mano de
+ * la misma forma, y esta familia ya divergió una vez con daño: `leerAcuerdo` siguió exigiendo
+ * `instruccion` después de que el productor pasó a emitir `operaciones`, así que el acuerdo se
+ * guardaba bien y se leía como `null` — la cajita azul no aparecía nunca y se veía como «el
+ * asistente contesta pero no pasa nada».
+ *
+ * ⚠ `import type` se borra en compilación: no arrastra el SDK de Anthropic al bundle del cliente.
+ */
+export type AcuerdoDelChat = CambioAcordado;
 
 interface TurnoVista {
   id: string;

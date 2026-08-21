@@ -75,6 +75,13 @@ export type TipoDeActividad =
   | "ADOPCION"
   | "SEGUIMIENTO";
 
+/**
+ * ⛔ LA LISTA Y LA UNIÓN SON DOS DECLARACIONES DE LO MISMO, y las dos se mantienen a mano. La
+ * comprobación de abajo hace que divergir sea un error de COMPILACIÓN, no un descubrimiento en
+ * producción: una operación en la unión que falte en la lista se rechaza al llegar («no es una
+ * operación válida») aunque el ejecutor sepa hacerla; una en la lista que no esté en la unión
+ * pasa el vocabulario y revienta el switch.
+ */
 export const OPERACIONES_VALIDAS = [
   "fase.duracion",
   "fase.renombrar",
@@ -96,16 +103,33 @@ export const OPERACIONES_VALIDAS = [
   "arranque",
 ] as const;
 
-/** Los valores cerrados que puede tomar el dueño de una tarea. Espejo de `PARTY_VALUES`. */
-export const DUENIOS_VALIDOS = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
-export const TIPOS_DE_TAREA_VALIDOS = ["SESSION", "TASK"] as const;
-export const TIPOS_DE_ACTIVIDAD_VALIDOS = [
-  "EXPLORACION",
-  "PLANIFICACION",
-  "CONFIGURACION",
-  "ADOPCION",
-  "SEGUIMIENTO",
-] as const;
+/* Los dos sentidos. No corre en runtime: si divergen, no compila. */
+type OpDeLaUnion = Operacion["op"];
+type OpDeLaLista = (typeof OPERACIONES_VALIDAS)[number];
+const _laListaCubreLaUnion: Record<OpDeLaUnion, true> = Object.fromEntries(
+  OPERACIONES_VALIDAS.map((o) => [o, true]),
+) as Record<OpDeLaLista, true>;
+void _laListaCubreLaUnion;
+
+/**
+ * ⛔ SE IMPORTAN DEL VALIDADOR, no se copian. Eran tres listas escritas a mano «espejo de» las de
+ * `validate.ts`, y un espejo escrito a mano diverge callado: el día que el PUT acepte un valor
+ * más, el ejecutor lo rechazaría antes de llegar —y el motivo diría «no es un dueño válido» sobre
+ * algo que sí lo es—. Al revés es peor: un valor de más acá pasa el ejecutor y muere en el PUT con
+ * un 400 críptico, DESPUÉS de que el CSE aprobó.
+ *
+ * `validate.ts` solo importa un tipo de Prisma (erasable), así que sigue siendo importable desde
+ * este módulo puro.
+ */
+export {
+  PARTY_VALUES as DUENIOS_VALIDOS,
+  TASK_TYPE_VALUES as TIPOS_DE_TAREA_VALIDOS,
+  ACTIVITY_TYPES as TIPOS_DE_ACTIVIDAD_VALIDOS,
+} from "./validate";
+import { PARTY_VALUES, TASK_TYPE_VALUES, ACTIVITY_TYPES } from "./validate";
+const DUENIOS_VALIDOS = PARTY_VALUES;
+const TIPOS_DE_TAREA_VALIDOS = TASK_TYPE_VALUES;
+const TIPOS_DE_ACTIVIDAD_VALIDOS = ACTIVITY_TYPES;
 
 export interface OperacionRechazada {
   operacion: Operacion;
