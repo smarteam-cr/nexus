@@ -344,6 +344,44 @@ describe("⛔ NaN — lo que la auditoría del 2026-08-21 encontró y casi se ap
   });
 });
 
+describe("⛔ la cajita lee la duración VIVA del lote, no la inicial", () => {
+  /* Cazado probando contra el modelo de verdad el 2026-08-21 — ningún test lo veía, porque todos
+     describían operaciones de a una.
+
+     El pedido real: «que integraciones tenga 3 semanas, y las atrasadas en la 3ra». El modelo
+     emite `fase.duracion(3)` y después cuatro `tarea.mover-semana(semana: 2)`. El ejecutor las
+     aplica EN ORDEN, así que cuando corren los movimientos la fase ya dura 3 y las tareas caen
+     bien. Pero el recorte de la línea miraba la duración INICIAL (2) y escribía «se mueve a la
+     semana 2». La cajita decía una cosa y se ejecutaba otra — que es lo único que esta traducción
+     existe para impedir, y lo había roto un arreglo anterior. */
+
+  it("⭐ alargar y mover en el mismo lote: la línea dice la semana que de verdad va a quedar", () => {
+    /* La edición que la pone en rojo: que el recorte use `f.durationWeeks` en vez del mapa. */
+    const lineas = describirOperaciones(cronograma(), [
+      { op: "fase.duracion", phaseId: "f2", semanas: 6 },
+      { op: "tarea.mover-semana", taskId: "t3", semana: 5 },
+    ]);
+    expect(lineas[1]).toContain("semana 6");
+  });
+
+  it("y acortando, sigue recortando: no promete una semana que la fase ya no tiene", () => {
+    const lineas = describirOperaciones(cronograma(), [
+      { op: "fase.duracion", phaseId: "f2", semanas: 2 },
+      { op: "tarea.mover-semana", taskId: "t3", semana: 3 },
+    ]);
+    expect(lineas[1]).toContain("semana 2");
+  });
+
+  it("quitar dos semanas seguidas cuenta bien la segunda", () => {
+    const lineas = describirOperaciones(cronograma(), [
+      { op: "fase.quitar-semana", phaseId: "f2", semana: 0 },
+      { op: "fase.quitar-semana", phaseId: "f2", semana: 0 },
+    ]);
+    expect(lineas[0]).toContain("queda en 3 semanas");
+    expect(lineas[1], "la segunda repitió el conteo de la primera").toContain("queda en 2 semanas");
+  });
+});
+
 describe("⛔ tocar UNA tarea no puede producir un 400 sobre otra", () => {
   /* Encontrado por dos lentes distintas de la auditoría del 2026-08-21, y la asimetría era real:
      de las once operaciones que marcan la fase como `tocada`, ocho llamaban a `normalizar` y tres

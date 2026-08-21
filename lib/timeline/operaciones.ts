@@ -763,14 +763,44 @@ export function describirOperaciones(
     );
     if (r.tipo !== "una") return null;
     const hit = conId.find((x) => x.t.id === r.id)!;
-    return { titulo: hit.t.title, fase: hit.f.name, duracion: hit.f.durationWeeks };
+    return {
+      titulo: hit.t.title,
+      fase: hit.f.name,
+      duracion: hit.f.durationWeeks,
+      phaseId: hit.f.id,
+    };
   };
   const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
 
+  /**
+   * ⛔ LA DURACIÓN VIVA, y es una regresión que se cazó probando contra el modelo de verdad
+   * (2026-08-21), no con un test.
+   *
+   * Las operaciones se ejecutan EN ORDEN, así que un `fase.duracion` anterior en el mismo lote ya
+   * cambió la duración cuando corre el `tarea.mover-semana` siguiente. La primera versión de este
+   * recorte miraba la duración INICIAL: ante el pedido real *«que integraciones tenga 3 semanas,
+   * las atrasadas en la 3ra»*, el ejecutor ponía las tareas en la semana 3 —correcto— y la cajita
+   * decía «se mueve a la semana 2». Arreglar una mentira con otra al revés.
+   *
+   * Este mapa se actualiza a medida que se traduce, con las mismas reglas que aplica el ejecutor.
+   */
+  const duracionViva = new Map<string, number>();
+  for (const f of actuales) if (f.id) duracionViva.set(f.id, f.durationWeeks);
+  const duracionDe = (phaseId: string) => duracionViva.get(phaseId) ?? fase(phaseId)?.durationWeeks;
+  const anotarDuracion = (o: Operacion) => {
+    if (o.op === "fase.duracion") duracionViva.set(o.phaseId, o.semanas);
+    else if (o.op === "fase.quitar-semana")
+      duracionViva.set(o.phaseId, Math.max((duracionDe(o.phaseId) ?? 1) - 1, 1));
+    else if (o.op === "fase.insertar-semana")
+      duracionViva.set(o.phaseId, (duracionDe(o.phaseId) ?? 0) + 1);
+  };
+
   return operaciones.map((o) => {
+    anotarDuracion(o);
     switch (o.op) {
       case "fase.duracion": {
         const f = fase(o.phaseId);
+        /* `anotarDuracion` ya escribió el valor NUEVO, así que el «antes» sale del original. */
         const antes = f?.durationWeeks;
         /* ⚠ Acortar mueve tareas, y el prompt manda acá el pedido más común («dejala en 3»). Sin
            el número, «pasa de 6 a 3 semanas» se lee como una fase que se encoge sola. */
@@ -822,7 +852,7 @@ export function describirOperaciones(
            verdad — prometer la 5 y ejecutar la 3 es exactamente lo que esta traducción existe
            para impedir. (El recorte se conserva: rechazar volvería fatal el desliz más común del
            modelo, «a la última semana», y tumbaría el lote entero.) */
-        const ultima = (t?.duracion ?? 0) - 1;
+        const ultima = (t ? (duracionDe(t.phaseId) ?? t.duracion) : 0) - 1;
         const real = t && ultima >= 0 ? Math.min(Math.max(o.semana, 0), ultima) : o.semana;
         return `«${t?.titulo ?? o.taskId}» se mueve a la semana ${real + 1} de su fase`;
       }
@@ -851,7 +881,8 @@ export function describirOperaciones(
            semana 3, que tiene 4 tareas que se van a mover». Sin él, la persona aprueba un número
            que no vio. Es el mismo estándar que ya cumple `fase.borrar`. */
         const dentro = f?.tasks.filter((t) => t.weekIndex === o.semana).length ?? 0;
-        const queda = (f?.durationWeeks ?? 1) - 1;
+        /* `anotarDuracion` ya descontó esta operación, así que el mapa TIENE el valor final. */
+        const queda = duracionDe(o.phaseId) ?? Math.max((f?.durationWeeks ?? 1) - 1, 1);
         return (
           `Se quita la semana ${o.semana + 1} de «${nombre(o.phaseId)}» (queda en ${sem(queda)})` +
           (dentro === 0
@@ -865,7 +896,7 @@ export function describirOperaciones(
         const corren = f?.tasks.filter((t) => t.weekIndex >= o.semana).length ?? 0;
         return (
           `Se abre una semana vacía en la posición ${o.semana + 1} de «${nombre(o.phaseId)}» ` +
-          `(pasa a ${sem((f?.durationWeeks ?? 0) + 1)})` +
+          `(pasa a ${sem(duracionDe(o.phaseId) ?? (f?.durationWeeks ?? 0) + 1)})` +
           (corren > 0 ? ` — ${corren} ${corren === 1 ? "tarea corre" : "tareas corren"} una semana` : "")
         );
       }
@@ -878,7 +909,7 @@ export function describirOperaciones(
       case "tarea.crear": {
         /* Misma razón que arriba: el ejecutor acota, así que la línea dice dónde cae. */
         const f = fase(o.phaseId);
-        const tope = (f?.durationWeeks ?? 1) - 1;
+        const tope = (duracionDe(o.phaseId) ?? f?.durationWeeks ?? 1) - 1;
         const real = f ? Math.min(Math.max(o.semana, 0), tope) : o.semana;
         return (
           `Se agrega «${o.titulo}» a «${nombre(o.phaseId)}», en la semana ${real + 1}` +
