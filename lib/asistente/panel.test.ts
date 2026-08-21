@@ -186,6 +186,38 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
   });
 });
 
+describe("⛔ el desenlace no manda a una vista previa que no existe", () => {
+  /* Hallazgo de la auditoría del 2026-08-21. Al aplicar por el carril de operaciones —que escribe
+     directo, en ~1 ms— el hilo cerraba con «✅ Se aplicó. Revisa la vista previa en el documento y
+     acepta los cambios que quieras conservar». No hay vista previa: ya está guardado. La persona
+     queda buscando un banner que no existe, y de paso creyendo que todavía puede descartar. */
+
+  it("el cliente DECLARA por qué carril aplicó", () => {
+    /* La edición que la pone en rojo: volver a `anotarDesenlace(true, avisos.join(" · "))` sin el
+       tercer argumento. El default es `true` (vista previa) para no romper hilos viejos, así que
+       olvidarlo no falla: miente. */
+    expect(PANEL).toContain("vistaPrevia");
+    expect(PANEL).toContain("!acuerdo.operaciones?.length");
+  });
+});
+
+describe("⛔ el borrado silencioso no vuelve por la puerta de al lado", () => {
+  /* `tarea.borrar` rechaza lo protegido mirando `isKept(status, source)` sobre el ESTADO LOCAL
+     del canvas. Si ese estado local pierde `source`, una tarea que el servidor acaba de crear
+     como HUMAN se le ve borrable al chat — y vuelve exactamente el defecto que se cerró. */
+
+  it("⚠ al adoptar el id del servidor se adoptan también `source` y `status`", () => {
+    const src = soloCodigo(
+      fs.readFileSync(path.join(RAIZ, "components/canvas/CronogramaCanvas.tsx"), "utf8"),
+    );
+    const i = src.indexOf("mergeServerIds");
+    expect(i, "se fue mergeServerIds").toBeGreaterThan(-1);
+    const bloque = src.slice(i, i + 2200);
+    expect(bloque, "el merge adopta el id pero no la procedencia").toContain("source: st.source");
+    expect(bloque).toContain("status: st.status");
+  });
+});
+
 describe("el texto del asistente se renderiza", () => {
   it("⛔ como Markdown, no como texto plano", () => {
     /* Reportado el 2026-08-20: se veía el `- **Sumar…**` crudo. La edición que la pone en rojo:

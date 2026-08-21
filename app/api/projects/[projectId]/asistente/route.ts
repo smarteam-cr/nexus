@@ -33,7 +33,13 @@ const bodySchema = z.union([
      `anotarDesenlace`, abajo. */
   z.object({
     pieza: piezaSchema,
-    desenlace: z.object({ ok: z.boolean(), detalle: z.string().max(2000) }),
+    desenlace: z.object({
+      ok: z.boolean(),
+      detalle: z.string().max(2000),
+      /* ⚠ Qué carril aplicó. Por defecto `true` para no romper un cliente viejo: el carril lento
+         —la instrucción en prosa que un segundo modelo relee— era el único que existía. */
+      vistaPrevia: z.boolean().optional(),
+    }),
   }),
 ]);
 
@@ -113,7 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   if ("desenlace" in parsed.data) {
     const hilo = await hiloVivo(pedido);
     if (!hilo) return NextResponse.json({ hilo: null });
-    const { ok, detalle } = parsed.data.desenlace;
+    const { ok, detalle, vistaPrevia = true } = parsed.data.desenlace;
     await agregarTurno(hilo.id, {
       rol: "ASISTENTE",
       /* ⚠ En TUTEO neutro: estos turnos son la VOZ DEL ASISTENTE, aunque los escriba la app.
@@ -129,8 +135,13 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
 ${detalle}
 
-Revisa la vista previa antes de aceptar.`
-          : "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
+${vistaPrevia ? "Revisa la vista previa antes de aceptar." : "Ya quedó guardado en el cronograma: revísalo."}`
+          : vistaPrevia
+            ? "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
+            : /* ⛔ EL CARRIL DE OPERACIONES NO DEJA VISTA PREVIA: escribe directo, en ~1 ms. Mandar
+                 a la persona a «aceptar los cambios» la deja buscando un banner que no existe —y
+                 peor, sugiere que lo que ya está guardado todavía se puede descartar. */
+              "✅ Listo, el cronograma ya quedó actualizado. Si algo no está como esperabas, decímelo y lo ajustamos."
         : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. La instrucción quedó arriba por si quieres ajustarla, o dime qué probamos.`,
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));

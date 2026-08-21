@@ -478,7 +478,20 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               if (t.title.trim() === "") return t; // borrador local sin enviar → intacto
               const st = sp.tasks[si];
               si += 1;
-              return t.id ? t : { ...t, id: st.id, _key: st.id };
+              /* ⚠ `source` y `status` VIAJAN CON EL ID, y no es cosmético: el servidor acaba
+                 de crear esta fila —`source: HUMAN`— y sin adoptarlos el estado local se queda
+                 con los campos vacíos. El chat evalúa `isKept` sobre ese estado local, así que
+                 una tarea protegida se le vería borrable: vuelve el borrado silencioso que
+                 `tarea.borrar` acaba de cerrar, por la puerta de al lado. */
+              return t.id
+                ? t
+                : {
+                    ...t,
+                    id: st.id,
+                    _key: st.id,
+                    source: st.source ?? t.source,
+                    status: st.status ?? t.status,
+                  };
             })
           : p.tasks,
       };
@@ -1458,7 +1471,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     /* ⛔ Una operación rechazada NO se ignora: el CSE ya leyó y aprobó esa línea, así que
        aplicar el resto en silencio sería aplicar algo distinto de lo que confirmó. */
     if (rechazadas.length > 0) {
-      const motivo = rechazadas.map((r) => r.motivo).join(" · ");
+      /* ⚠ Con lotes de doce operaciones, «no se pudo aplicar: esa tarea no existe» no dice
+         CUÁL de las doce. El índice sale gratis: `rechazar` empuja la MISMA referencia que se
+         está iterando, así que `indexOf` da la posición exacta — y esa posición es el número de
+         la línea que la persona acaba de leer en la cajita azul. */
+      const motivo = rechazadas
+        .map((r) => `#${ops.indexOf(r.operacion) + 1}: ${r.motivo}`)
+        .join(" · ");
       setError(`No se pudo aplicar: ${motivo}`);
       return { fallo: motivo, avisos };
     }

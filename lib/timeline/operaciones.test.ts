@@ -274,6 +274,163 @@ describe("redistribuir reparte parejo sin reordenar", () => {
   });
 });
 
+describe("⛔ NaN — lo que la auditoría del 2026-08-21 encontró y casi se aplica", () => {
+  /* El `input_schema` de la tool solo exige `op`, y en el mismo bolsón plano conviven `semana` y
+     `semanas`: un cambio de UNA letra. `Math.floor(undefined)` es NaN, y NaN atraviesa cualquier
+     comparación — `NaN < 0` es false y `NaN >= duración` también. O sea que la guarda de rango,
+     escrita justamente para rechazar una semana que no existe, dejaba pasar la operación entera.
+
+     Lo medido antes del arreglo, sobre una fase de 4 semanas con 4 tareas en la última:
+       cajita azul: «Se quita la semana NaN de «Sales Hub» (queda en 3 semanas) — estaba vacía»
+       resultado:   la fase se acortaba, las 4 tareas quedaban APILADAS, y el validador decía OK.
+     Se aplicaba. Sin error, sin aviso, y con una línea que afirmaba lo contrario. */
+
+  const conCola = (): FaseActual[] => [
+    {
+      id: "f1",
+      name: "Sales Hub",
+      durationWeeks: 4,
+      startWeek: null,
+      tasks: [tarea("t1", 0), tarea("t2", 3), tarea("t3", 3), tarea("t4", 3)],
+    },
+  ];
+
+  it("⛔ un parámetro que llega con otro nombre se RECHAZA, no se ejecuta a medias", () => {
+    /* La edición que lo pone en rojo: sacar el chequeo de `entero(...)` en fase.quitar-semana. */
+    const { payload, rechazadas } = aplicarOperaciones(conCola(), null, [
+      { op: "fase.quitar-semana", phaseId: "f1", semanas: 1 } as unknown as Operacion,
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("qué semana");
+    expect(payload.phases[0].durationWeeks, "la fase se acortó igual").toBe(4);
+    expect(payload.phases[0].tasks, "tocó la fase por una operación rechazada").toBeUndefined();
+  });
+
+  it("y lo mismo insertando, moviendo, creando y mudando", () => {
+    const casos: Operacion[] = [
+      { op: "fase.insertar-semana", phaseId: "f1" } as unknown as Operacion,
+      { op: "fase.mover", phaseId: "f1" } as unknown as Operacion,
+      { op: "tarea.mover-semana", taskId: "t1" } as unknown as Operacion,
+      { op: "tarea.crear", phaseId: "f1", titulo: "QA" } as unknown as Operacion,
+    ];
+    for (const op of casos) {
+      const { rechazadas } = aplicarOperaciones(conCola(), null, [op]);
+      expect(rechazadas, `${op.op} dejó pasar un número ausente`).toHaveLength(1);
+    }
+  });
+
+  it("⚠ y `normalizar` nunca escribe NaN en una semana, pase lo que pase", () => {
+    /* El cinturón: un NaN que llegue por cualquier otra vía sale acotado, no al payload — donde
+       el PUT devolvería un 400 sobre una tarea que nadie tocó. */
+    const roto = conCola();
+    (roto[0].tasks[1] as { weekIndex: number }).weekIndex = NaN;
+    const { payload } = aplicarOperaciones(roto, null, [
+      { op: "fase.duracion", phaseId: "f1", semanas: 2 },
+    ]);
+    for (const t of payload.phases[0].tasks!) {
+      expect(Number.isFinite(t.weekIndex), `weekIndex NaN en «${t.title}»`).toBe(true);
+    }
+  });
+
+  it("⛔ una operación sin su parámetro no revienta la CAJITA con un TypeError", () => {
+    /* Un throw acá tumba el turno entero en el servidor: el CSE no ve ni el acuerdo ni el motivo.
+       La edición que lo pone en rojo: volver a `o.tipo.toLowerCase()`. */
+    const lineas = describirOperaciones(conCola(), [
+      { op: "fase.tipo", phaseId: "f1" } as unknown as Operacion,
+      { op: "tarea.duenio", taskId: "t1" } as unknown as Operacion,
+    ]);
+    expect(lineas).toHaveLength(2);
+    expect(lineas[0]).toContain("sin especificar");
+  });
+});
+
+describe("⛔ tocar UNA tarea no puede producir un 400 sobre otra", () => {
+  /* Encontrado por dos lentes distintas de la auditoría del 2026-08-21, y la asimetría era real:
+     de las once operaciones que marcan la fase como `tocada`, ocho llamaban a `normalizar` y tres
+     —renombrar, dueño y tipo— no. Y `tocada` hace que el payload emita el array COMPLETO de esa
+     fase, así que cualquier tarea que ya estuviera fuera de rango salía tal cual.
+
+     El caso llega desde el estado LOCAL del canvas, no desde la base: bajar la duración de una
+     fase no acota sus tareas en memoria. El CSE lee «tarea X pasa a llamarse Y», aprieta Aplicar,
+     y recibe «phases[0].tasks[1].weekIndex debe ser entero en [0, durationWeeks)» sobre una tarea
+     que no tocó. */
+
+  const desalineada = (): FaseActual[] => [
+    {
+      id: "f1",
+      name: "Multiquimica setup",
+      durationWeeks: 1,
+      startWeek: null,
+      tasks: [tarea("cmaaaaa11", 0), tarea("cmbbbbb22", 3)],
+    },
+  ];
+
+  it("renombrar, dueño y tipo dejan el payload APLICABLE, igual que las otras ocho", () => {
+    /* La edición que lo pone en rojo: sacar el `normalizar(hit.fase)` de cualquiera de las tres. */
+    const casos: Operacion[] = [
+      { op: "tarea.renombrar", taskId: "aaa11", titulo: "Kickoff con el cliente" },
+      { op: "tarea.duenio", taskId: "aaa11", duenio: "CLIENTE" },
+      { op: "tarea.tipo", taskId: "aaa11", tipo: "SESSION" },
+    ];
+    for (const op of casos) {
+      const { payload, avisos } = aplicarOperaciones(desalineada(), null, [op]);
+      const errores = validateTimelinePayload(payload as never);
+      expect(
+        Array.isArray(errores) ? errores : [],
+        `«${op.op}» produjo un payload que el PUT rechaza`,
+      ).toEqual([]);
+      expect(avisos.join(" "), "se corrió una tarea y no se avisó").toContain("fuera de");
+    }
+  });
+});
+
+describe("⛔ lo que se LEE tiene que coincidir con lo que se ejecuta, también en los bordes", () => {
+  it("⭐ borrar una fase dice cuántas tareas tienen trabajo hecho encima", () => {
+    /* `fase.borrar` es la ÚNICA operación que destruye trabajo protegido: el borrado de fases del
+       PUT no consulta `isKept`, a diferencia de `tarea.borrar`, que directamente rechaza. La
+       doble confirmación del prompt depende de que el modelo mire el contexto; esta línea lo dice
+       donde la persona lo lee igual, aunque el modelo se haya olvidado.
+       La edición que lo pone en rojo: sacar el conteo de protegidas. */
+    const conHechas: FaseActual[] = [
+      {
+        id: "f1",
+        name: "Service Hub",
+        durationWeeks: 2,
+        startWeek: null,
+        tasks: [
+          tarea("t1", 0, { status: "DONE" }),
+          tarea("t2", 0, { status: "DONE" }),
+          tarea("t3", 1),
+        ],
+      },
+    ];
+    const [linea] = describirOperaciones(conHechas, [{ op: "fase.borrar", phaseId: "f1" }]);
+    expect(linea).toContain("3 tareas");
+    expect(linea).toContain("2 tienen trabajo hecho encima y se pierden");
+  });
+
+  it("mover a una semana que no existe dice la semana REAL, no la pedida", () => {
+    /* El ejecutor acota a la última semana de la fase. Prometer la 9 y ejecutar la 3 es
+       exactamente lo que esta traducción existe para impedir. */
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "tarea.mover-semana", taskId: "t3", semana: 8 },
+    ]);
+    expect(linea).toContain("semana 4");
+    expect(linea).not.toContain("semana 9");
+  });
+
+  it("⛔ y una fase recién creada no se la come un fase.borrar sin destino", () => {
+    /* `fase.borrar` y `fase.mover` usaban un `findIndex` crudo: con el phaseId ausente enganchaban
+       la fase que `fase.crear` acababa de meter — la única del array sin id. */
+    const { payload, rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.crear", nombre: "QA", semanas: 1 },
+      { op: "fase.borrar", phaseId: undefined as unknown as string },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(payload.phases.some((p) => p.name === "QA"), "se comió la fase nueva").toBe(true);
+  });
+});
+
 describe("⭐ la semana del MEDIO — el pedido que el prompt usaba como ejemplo de lo imposible", () => {
   /* Medido el 2026-08-21: 314 semanas vacías repartidas en 29 de los 46 cronogramas activos.
      Elías lo pidió textual dos veces: «en la fase integraciones hay semanas sin tareas, quítalas».
@@ -492,12 +649,23 @@ describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
      disuelve el riesgo del vocabulario cerrado: si la operación no es la que el CSE quería, lo ve
      ANTES de que pase nada. Idea de Elías el 2026-08-20. */
 
-  it("acortar se lee con las dos duraciones, no solo la nueva", () => {
-    /* «pasa a 3 semanas» no deja evaluar nada; «pasa de 4 a 3» sí. */
+  it("acortar se lee con las dos duraciones Y con las tareas que arrastra", () => {
+    /* «pasa a 3 semanas» no deja evaluar nada; «pasa de 4 a 3» sí.
+       ⚠ Y desde el 2026-08-21 dice además cuántas tareas se corren: el prompt manda a esta
+       operación el pedido más común («dejala en 3»), y sin el número «pasa de 6 a 3» se lee como
+       una fase que se encoge sola, cuando en realidad está apilando tareas en la última semana.
+       En este cronograma, «Sales Hub» tiene una tarea en la semana 4 (índice 3). */
     const [linea] = describirOperaciones(cronograma(), [
       { op: "fase.duracion", phaseId: "f2", semanas: 3 },
     ]);
-    expect(linea).toBe("«Sales Hub» pasa de 4 a 3 semanas");
+    expect(linea).toBe("«Sales Hub» pasa de 4 a 3 semanas — 1 tarea se corre a la semana 3");
+  });
+
+  it("…y si no se cae ninguna, no inventa el aviso", () => {
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "fase.duracion", phaseId: "f2", semanas: 8 },
+    ]);
+    expect(linea).toBe("«Sales Hub» pasa de 4 a 8 semanas");
   });
 
   it("⛔ borrar dice CUÁNTAS tareas se lleva puestas", () => {

@@ -56,6 +56,21 @@ function estadoCorto(status: string): string {
   return status.toLowerCase();
 }
 
+/**
+ * ⭐ LO QUE EL MODELO NECESITA PARA NO PROMETER UN BORRADO QUE SE VA A RECHAZAR.
+ *
+ * El ejecutor rechaza `tarea.borrar` sobre lo que `isKept` protege: estado distinto de pendiente
+ * **o** `source === "HUMAN"`. El estado ya se mostraba; la procedencia no — así que una tarea
+ * pendiente cargada a mano se le veía idéntica a una pendiente escrita por la IA, y el chat
+ * proponía borrarla para que el ejecutor la rechazara después. Peor todavía: las tareas que crea
+ * el propio chat nacen `HUMAN`, o sea que el chat no podía deshacer lo que acababa de hacer, y no
+ * tenía cómo saberlo antes de intentarlo.
+ */
+function marcaDe(t: { status: string; source: string | null }): string {
+  if (t.status && t.status !== "PENDING") return estadoCorto(t.status);
+  return t.source === "HUMAN" ? "cargada a mano" : "";
+}
+
 export const TECHO_DEL_PREFIJO_CHARS = 13_000;
 
 export interface ContextoDelAsistente {
@@ -118,7 +133,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
              contenido de verdad, y las lee el modificador). Ver el techo, arriba. */
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            select: { id: true, title: true, weekIndex: true, status: true },
+            select: { id: true, title: true, weekIndex: true, status: true, source: true },
           },
         },
       },
@@ -194,7 +209,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
             .map(
               (t) =>
                 `${t.title} [${handleDeTarea(t.id)}]` +
-                (t.status && t.status !== "PENDING" ? ` (${estadoCorto(t.status)})` : ""),
+                (marcaDe(t) ? ` (${marcaDe(t)})` : ""),
             )
             .join(" · "),
       );
@@ -227,7 +242,9 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     "",
     "EL CRONOGRAMA HOY. Cada fase trae su ID entre corchetes y, debajo, sus tareas agrupadas por",
     "semana (S1, S2…). Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
-    "para moverla o borrarla. Una tarea sin estado entre paréntesis está pendiente.",
+    "para moverla o borrarla. Una tarea sin nada entre paréntesis está pendiente y la escribió la",
+    "IA. ⛔ Las que dicen «hecha», «en curso», «suspendida» o «cargada a mano» NO se pueden borrar",
+    "desde el chat: el cronograma las protege. Decilo antes de proponerlo.",
     fases || "(sin fases)",
     "",
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,

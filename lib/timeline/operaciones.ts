@@ -199,6 +199,12 @@ export function aplicarOperaciones(
      `buscarFase(undefined)` la engancharía y una operación destinada a otra fase caería ahí. */
   const buscarFase = (phaseId: string) =>
     phaseId ? fases.find((f) => f.id === phaseId || f.idInterno === phaseId) : undefined;
+  /* ⛔ MISMO filtro que `buscarFase`, y por el mismo motivo: un `findIndex` crudo con el phaseId
+     ausente engancha la fase que `fase.crear` acaba de meter — la única del array sin id. */
+  const indiceDeFase = (phaseId: string) => {
+    const f = buscarFase(phaseId);
+    return f ? fases.indexOf(f) : -1;
+  };
   /**
    * ⭐ El chat nombra una tarea por su HANDLE (los últimos caracteres del id), porque el id
    * entero son 25 caracteres y el prefijo del chat tiene techo. Acepta también el id completo.
@@ -231,12 +237,36 @@ export function aplicarOperaciones(
   ): hit is { ambigua: number } | null => hit === null || "ambigua" in hit;
   const rechazar = (operacion: Operacion, motivo: string) => rechazadas.push({ operacion, motivo });
 
+  /**
+   * ⛔ TODO NÚMERO QUE LLEGA DEL MODELO PASA POR ACÁ, y es la lección más cara de la auditoría
+   * del 2026-08-21.
+   *
+   * `Math.floor(undefined)` es `NaN`, y NaN atraviesa cualquier comparación: `NaN < 0` es false y
+   * `NaN >= duración` también. O sea que las guardas de rango —escritas justamente para rechazar
+   * una semana que no existe— dejaban pasar la operación entera. Medido sobre el caso real:
+   *
+   *   { op: "fase.quitar-semana", phaseId: "f1", semanas: 1 }   ← «semanas» en vez de «semana»
+   *   → cajita azul: «Se quita la semana NaN de «Sales Hub» — estaba vacía»
+   *   → la fase se acorta igual, las 4 tareas de la última semana quedan APILADAS, y el
+   *     validador del PUT dice que está todo bien.
+   *
+   * Y el input es alcanzable de verdad: el `input_schema` de la tool solo exige `op`, y en el
+   * mismo bolsón plano conviven `semana` y `semanas` — un cambio de una letra.
+   */
+  const entero = (valor: unknown): number | null => {
+    const n = typeof valor === "number" ? Math.floor(valor) : NaN;
+    return Number.isFinite(n) ? n : null;
+  };
+
   /** Acomoda las tareas que quedaron fuera de rango y reasigna `order` dentro de cada semana. */
   const normalizar = (f: FaseEnCurso) => {
     const ultima = Math.max(f.durationWeeks - 1, 0);
     let corridas = 0;
     for (const t of f.tasks) {
-      const acotado = Math.min(Math.max(Math.floor(t.weekIndex), 0), ultima);
+      /* ⚠ El `|| 0` no es defensivo por gusto: `Math.min(Math.max(NaN,0),n)` es NaN, y un NaN
+         acá sale al payload y el PUT devuelve un 400 sobre una tarea que nadie tocó. */
+      const crudo = Math.floor(t.weekIndex);
+      const acotado = Math.min(Math.max(Number.isFinite(crudo) ? crudo : 0, 0), ultima);
       if (acotado !== t.weekIndex) {
         t.weekIndex = acotado;
         corridas++;
@@ -291,7 +321,7 @@ export function aplicarOperaciones(
       }
 
       case "fase.borrar": {
-        const i = fases.findIndex((f) => f.id === operacion.phaseId);
+        const i = indiceDeFase(operacion.phaseId);
         if (i === -1) {
           rechazar(operacion, "esa fase no existe en el cronograma");
           break;
@@ -330,12 +360,17 @@ export function aplicarOperaciones(
       }
 
       case "fase.mover": {
-        const i = fases.findIndex((f) => f.id === operacion.phaseId);
+        const i = indiceDeFase(operacion.phaseId);
         if (i === -1) {
           rechazar(operacion, "esa fase no existe en el cronograma");
           break;
         }
-        const destino = Math.min(Math.max(Math.floor(operacion.posicion), 0), fases.length - 1);
+        const pedida = entero(operacion.posicion);
+        if (pedida === null) {
+          rechazar(operacion, "hace falta decir a qué posición se mueve la fase");
+          break;
+        }
+        const destino = Math.min(Math.max(pedida, 0), fases.length - 1);
         const [f] = fases.splice(i, 1);
         fases.splice(destino, 0, f);
         break;
@@ -350,7 +385,7 @@ export function aplicarOperaciones(
         /* ⚠ `null` = «auto» (arranca cuando termina la anterior). Es EXACTAMENTE el campo que el
            contrato viejo perdía solo y corría el cierre 70 días. Acá solo cambia si se lo nombra. */
         f.startWeek =
-          operacion.semana === null ? null : Math.max(Math.floor(operacion.semana), 0);
+          operacion.semana === null ? null : Math.max(entero(operacion.semana) ?? 0, 0);
         break;
       }
 
@@ -360,7 +395,12 @@ export function aplicarOperaciones(
           rechazar(operacion, motivoDeBusqueda(hit));
           break;
         }
-        hit.tarea.weekIndex = Math.max(Math.floor(operacion.semana), 0);
+        const aSemana = entero(operacion.semana);
+        if (aSemana === null) {
+          rechazar(operacion, "hace falta decir a qué semana se mueve");
+          break;
+        }
+        hit.tarea.weekIndex = Math.max(aSemana, 0);
         hit.fase.tocada = true;
         normalizar(hit.fase);
         break;
@@ -389,7 +429,7 @@ export function aplicarOperaciones(
         destino.tasks.push({
           ...hit.tarea,
           id: undefined,
-          weekIndex: Math.max(Math.floor(operacion.semana ?? 0), 0),
+          weekIndex: Math.max(entero(operacion.semana ?? 0) ?? 0, 0),
         });
         destino.tocada = true;
         normalizar(hit.fase);
@@ -460,10 +500,8 @@ export function aplicarOperaciones(
           tasks: [],
           tocada: true,
         };
-        const donde =
-          typeof operacion.posicion === "number"
-            ? Math.min(Math.max(Math.floor(operacion.posicion), 0), fases.length)
-            : fases.length;
+        const pos = entero(operacion.posicion);
+        const donde = pos === null ? fases.length : Math.min(Math.max(pos, 0), fases.length);
         fases.splice(donde, 0, nueva);
         break;
       }
@@ -474,7 +512,11 @@ export function aplicarOperaciones(
           rechazar(operacion, "esa fase no existe en el cronograma");
           break;
         }
-        const w = Math.floor(operacion.semana);
+        const w = entero(operacion.semana);
+        if (w === null) {
+          rechazar(operacion, "hace falta decir qué semana se quita");
+          break;
+        }
         if (w < 0 || w >= f.durationWeeks) {
           rechazar(operacion, `«${f.name}» no tiene una semana ${w + 1}`);
           break;
@@ -501,7 +543,11 @@ export function aplicarOperaciones(
           rechazar(operacion, "esa fase no existe en el cronograma");
           break;
         }
-        const w = Math.floor(operacion.semana);
+        const w = entero(operacion.semana);
+        if (w === null) {
+          rechazar(operacion, "hace falta decir en qué posición se abre la semana");
+          break;
+        }
         if (w < 0 || w > f.durationWeeks) {
           rechazar(operacion, `«${f.name}» no puede abrir una semana ${w + 1}`);
           break;
@@ -533,9 +579,14 @@ export function aplicarOperaciones(
           rechazar(operacion, "esa fase no existe en el cronograma");
           break;
         }
-        const titulo = operacion.titulo.trim();
+        const titulo = (operacion.titulo ?? "").trim();
         if (!titulo) {
           rechazar(operacion, "una tarea sin título no se puede crear");
+          break;
+        }
+        const enSemana = entero(operacion.semana);
+        if (enSemana === null) {
+          rechazar(operacion, `hace falta decir en qué semana va «${titulo}»`);
           break;
         }
         if (operacion.duenio && !(DUENIOS_VALIDOS as readonly string[]).includes(operacion.duenio)) {
@@ -556,7 +607,7 @@ export function aplicarOperaciones(
         f.tasks.push({
           id: undefined,
           title: titulo,
-          weekIndex: Math.max(Math.floor(operacion.semana), 0),
+          weekIndex: Math.max(enSemana, 0),
           order: f.tasks.length,
           notes: null,
           party: operacion.duenio ?? null,
@@ -580,6 +631,11 @@ export function aplicarOperaciones(
         }
         hit.tarea.title = titulo;
         hit.fase.tocada = true;
+        /* ⚠ `tocada` hace que el payload emita el array COMPLETO de esa fase, así que cualquier
+           tarea que ya estuviera fuera de rango sale tal cual y el PUT devuelve un 400 sobre algo
+           que el CSE no tocó. Las otras ocho operaciones ya normalizaban; estas tres no, y la
+           asimetría no se veía porque solo aparece con una fase recién acortada. */
+        normalizar(hit.fase);
         break;
       }
 
@@ -595,6 +651,7 @@ export function aplicarOperaciones(
         }
         hit.tarea.party = operacion.duenio;
         hit.fase.tocada = true;
+        normalizar(hit.fase);
         break;
       }
 
@@ -610,6 +667,7 @@ export function aplicarOperaciones(
         }
         hit.tarea.type = operacion.tipo;
         hit.fase.tocada = true;
+        normalizar(hit.fase);
         break;
       }
 
@@ -705,26 +763,49 @@ export function describirOperaciones(
     );
     if (r.tipo !== "una") return null;
     const hit = conId.find((x) => x.t.id === r.id)!;
-    return { titulo: hit.t.title, fase: hit.f.name };
+    return { titulo: hit.t.title, fase: hit.f.name, duracion: hit.f.durationWeeks };
   };
   const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
 
   return operaciones.map((o) => {
     switch (o.op) {
       case "fase.duracion": {
-        const antes = fase(o.phaseId)?.durationWeeks;
-        return antes === undefined
-          ? `«${nombre(o.phaseId)}» pasa a ${sem(o.semanas)}`
-          : `«${nombre(o.phaseId)}» pasa de ${antes} a ${sem(o.semanas)}`;
+        const f = fase(o.phaseId);
+        const antes = f?.durationWeeks;
+        /* ⚠ Acortar mueve tareas, y el prompt manda acá el pedido más común («dejala en 3»). Sin
+           el número, «pasa de 6 a 3 semanas» se lee como una fase que se encoge sola. */
+        const caen = f?.tasks.filter((t) => t.weekIndex >= o.semanas).length ?? 0;
+        return (
+          (antes === undefined
+            ? `«${nombre(o.phaseId)}» pasa a durar ${sem(o.semanas)}`
+            : `«${nombre(o.phaseId)}» pasa de ${antes} a ${sem(o.semanas)}`) +
+          (caen > 0
+            ? ` — ${caen} ${caen === 1 ? "tarea se corre" : "tareas se corren"} a la semana ${o.semanas}`
+            : "")
+        );
       }
       case "fase.renombrar":
         return `«${nombre(o.phaseId)}» pasa a llamarse «${o.nombre}»`;
       case "fase.borrar": {
         const f = fase(o.phaseId);
         const n = f?.tasks.length ?? 0;
-        return n > 0
-          ? `Se elimina «${nombre(o.phaseId)}», con sus ${n} ${n === 1 ? "tarea" : "tareas"}`
-          : `Se elimina «${nombre(o.phaseId)}»`;
+        /* ⭐ EL CONTEO DE PROGRESO NO ES ADORNO. `fase.borrar` sí destruye tareas protegidas —el
+           borrado de fases del PUT no consulta `isKept`— así que es la ÚNICA operación del
+           vocabulario que se lleva trabajo humano puesto. La doble confirmación del prompt
+           depende de que el modelo lo mire en el contexto; esta línea lo dice donde la persona
+           igual lo lee, aunque el modelo se haya olvidado. Es el mismo criterio de `tarea.borrar`,
+           que directamente rechaza. */
+        const conProgreso =
+          f?.tasks.filter((t) =>
+            isKept({ status: (t as { status?: string }).status ?? "PENDING", source: (t as { source?: string }).source }),
+          ).length ?? 0;
+        return (
+          `Se elimina la fase «${nombre(o.phaseId)}»` +
+          (n === 0 ? " (no tiene tareas)" : ` con sus ${n} tarea${n === 1 ? "" : "s"}`) +
+          (conProgreso > 0
+            ? ` — ⚠ ${conProgreso} ${conProgreso === 1 ? "tiene trabajo hecho encima y se pierde" : "tienen trabajo hecho encima y se pierden"}`
+            : "")
+        );
       }
       case "fase.redistribuir":
         return `Las tareas de «${nombre(o.phaseId)}» se reparten parejo entre sus semanas`;
@@ -736,7 +817,14 @@ export function describirOperaciones(
           : `«${nombre(o.phaseId)}» arranca en la semana ${o.semana + 1} del proyecto`;
       case "tarea.mover-semana": {
         const t = tarea(o.taskId);
-        return `«${t?.titulo ?? o.taskId}» se mueve a la semana ${o.semana + 1} de su fase`;
+        /* ⚠ El ejecutor ACOTA a la última semana de la fase, así que si el modelo pide la 5 en
+           una fase de 3, la tarea aterriza en la 3. La línea tiene que decir dónde va a caer de
+           verdad — prometer la 5 y ejecutar la 3 es exactamente lo que esta traducción existe
+           para impedir. (El recorte se conserva: rechazar volvería fatal el desliz más común del
+           modelo, «a la última semana», y tumbaría el lote entero.) */
+        const ultima = (t?.duracion ?? 0) - 1;
+        const real = t && ultima >= 0 ? Math.min(Math.max(o.semana, 0), ultima) : o.semana;
+        return `«${t?.titulo ?? o.taskId}» se mueve a la semana ${real + 1} de su fase`;
       }
       case "tarea.mover-fase": {
         const t = tarea(o.taskId);
@@ -782,12 +870,21 @@ export function describirOperaciones(
         );
       }
       case "fase.tipo":
-        return `«${nombre(o.phaseId)}» pasa a ser de tipo ${o.tipo.toLowerCase()}`;
-      case "tarea.crear":
+        /* ⚠ `o.tipo` puede llegar ausente: el `input_schema` solo exige `op`. Sin el `??`, esto
+           tira un TypeError que revienta el turno ENTERO en el servidor y el CSE no ve ni el
+           acuerdo ni el motivo — mucho peor que una línea que dice «(sin especificar)», que al
+           menos se lee y se rechaza en el ejecutor. */
+        return `«${nombre(o.phaseId)}» pasa a ser de tipo ${String(o.tipo ?? "(sin especificar)").toLowerCase()}`;
+      case "tarea.crear": {
+        /* Misma razón que arriba: el ejecutor acota, así que la línea dice dónde cae. */
+        const f = fase(o.phaseId);
+        const tope = (f?.durationWeeks ?? 1) - 1;
+        const real = f ? Math.min(Math.max(o.semana, 0), tope) : o.semana;
         return (
-          `Se agrega «${o.titulo}» a «${nombre(o.phaseId)}», en la semana ${o.semana + 1}` +
+          `Se agrega «${o.titulo}» a «${nombre(o.phaseId)}», en la semana ${real + 1}` +
           (o.duenio ? ` — la hace ${o.duenio.toLowerCase()}` : "")
         );
+      }
       case "tarea.renombrar": {
         const t = tarea(o.taskId);
         /* Con el nombre ANTERIOR: renombrar sin decir qué se renombra es irrevisable. */
@@ -795,7 +892,7 @@ export function describirOperaciones(
       }
       case "tarea.duenio": {
         const t = tarea(o.taskId);
-        return `«${t?.titulo ?? o.taskId}» pasa a hacerla ${o.duenio.toLowerCase()}`;
+        return `«${t?.titulo ?? o.taskId}» pasa a hacerla ${String(o.duenio ?? "(sin especificar)").toLowerCase()}`;
       }
       case "tarea.tipo": {
         const t = tarea(o.taskId);

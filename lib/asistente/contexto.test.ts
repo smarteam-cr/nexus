@@ -181,7 +181,13 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        ya las lee cuando ejecuta.
 
        La edición que la pone en rojo: sumar `notes: true` al select de tareas. */
-    expect(src).toContain("select: { id: true, title: true, weekIndex: true, status: true }");
+    /* ⚠ `source` entró el 2026-08-21 y NO es contenido: es la procedencia, un enum de tres
+       valores. Sin ella el chat no podía saber que una tarea pendiente la cargó una persona —y
+       por lo tanto está protegida— así que proponía borrarla para que el ejecutor la rechazara
+       después. Las que crea el propio chat nacen HUMAN: no podía deshacer lo que acababa de hacer. */
+    expect(src).toContain(
+      "select: { id: true, title: true, weekIndex: true, status: true, source: true }",
+    );
     expect(
       src.includes("notes: true"),
       "el contexto del chat pasó a traer las NOTAS de las tareas: eso es contenido de negocio, " +

@@ -202,11 +202,11 @@ export default function ChatDelAsistente({
   }
 
   /** Deja escrito en el hilo qué pasó al aplicar. Ver el porqué en `idDelAcuerdoVivo`. */
-  async function anotarDesenlace(ok: boolean, detalle: string) {
+  async function anotarDesenlace(ok: boolean, detalle: string, vistaPrevia = true) {
     const r = await fetch(`/api/projects/${projectId}/asistente`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pieza, desenlace: { ok, detalle } }),
+      body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia } }),
     });
     const j = await r.json().catch(() => ({}));
     if (j.hilo?.turnos) setTurnos(j.hilo.turnos);
@@ -227,7 +227,10 @@ export default function ChatDelAsistente({
         /* ⚠ Los avisos viajan al hilo: son la diferencia entre «se aplicó» y «se aplicó, pero
            el editor hizo otra cosa con una parte». Y como el modelo LEE el hilo, en el próximo
            turno sabe qué no entró y puede proponer otro camino. */
-        await anotarDesenlace(true, avisos.join(" · "));
+        /* El carril de operaciones escribe directo; el viejo deja una propuesta para revisar.
+           El desenlace tiene que decir cuál de los dos pasó, o manda a buscar un banner que no
+           existe. Lo sabe el acuerdo: si trae operaciones, no hay vista previa. */
+        await anotarDesenlace(true, avisos.join(" · "), !acuerdo.operaciones?.length);
         /* ⛔ EL PANEL NO SE CIERRA AL APLICAR, y es una decisión de Elías (2026-08-20).
            Con las operaciones aplicar tarda ~1 ms, así que cerrar el cajón convierte un cambio
            instantáneo en «desapareció todo y no sé qué pasó». Además la conversación sigue: lo
@@ -398,10 +401,15 @@ export default function ChatDelAsistente({
         ))}
 
         {pensando && <p className="text-xs text-fg-muted">Pensando…</p>}
+        {/* ⚠ DOS CARRILES, DOS ESPERAS. El de operaciones aplica en ~1 ms; el viejo —una
+            instrucción en prosa que un segundo modelo relee— tarda de dos a cuatro minutos.
+            Mostrar el cartel de los minutos sobre un cambio instantáneo no es solo impreciso:
+            enseña a desconfiar del único cartel que sí avisa una espera de verdad. */}
         {aplicando && (
           <p className="text-xs text-fg-muted">
-            El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro
-            minutos. Podés seguir mirando el documento mientras tanto.
+            {turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
+              ? "Aplicando los cambios al cronograma…"
+              : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Podés seguir mirando el documento mientras tanto."}
           </p>
         )}
         {error && (
