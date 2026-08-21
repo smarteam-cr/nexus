@@ -153,6 +153,39 @@ describe("un aplicar que falla NO se lee como uno que anduvo", () => {
   });
 });
 
+describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
+  /* Pedido de Elías el 2026-08-20, junto con «que el chat no se cierre»: son las dos mitades de
+     un mismo gesto. El cajón queda vivo para leer lo que pasó; el cronograma queda quieto para
+     que nadie lo edite a mitad de una escritura. */
+
+  const CANVAS = soloCodigo(
+    fs.readFileSync(path.join(RAIZ, "components/canvas/CronogramaCanvas.tsx"), "utf8"),
+  );
+
+  it("⚠ el velo tapa el cronograma y se anuncia como ocupado", () => {
+    /* La edición que la pone en rojo: borrar el bloque `{applying && (…)}` del canvas. Sin él
+       aplicar es invisible: el cronograma sigue mostrando lo viejo, acepta clicks, y como con
+       las operaciones tarda ~1 ms, el cambio aparece de golpe sin que nada lo haya anunciado. */
+    const i = CANVAS.indexOf("{applying && (");
+    expect(i, "se fue el velo de aplicar: el cronograma acepta clicks a mitad de la escritura").toBeGreaterThan(-1);
+    const velo = CANVAS.slice(i, i + 1600);
+    expect(velo, "la guarda dejó de mirar el velo").toContain("aria-busy");
+    expect(velo).toContain("skeleton-shimmer");
+  });
+
+  it("⛔ y queda POR DEBAJO del cajón, o el chat se vuelve inusable justo cuando importa", () => {
+    /* ESTA es la que protege lo invisible. Subir el z del velo no rompe nada que se vea en un
+       test: simplemente tapa el panel durante el aplicar, que es EL momento en que el CSE quiere
+       leer el desenlace y encadenar el ajuste siguiente.
+       La edición que la pone en rojo: cambiar `z-30` por `z-50` en el velo. */
+    const i = CANVAS.indexOf("{applying && (");
+    const z = CANVAS.slice(i, i + 400).match(/\bz-(\d+)\b/);
+    expect(z, "el velo perdió su z declarado").not.toBeNull();
+    const zPanel = PANEL.match(/z-\[(\d+)\]/);
+    expect(Number(z![1])).toBeLessThan(Number(zPanel![1]));
+  });
+});
+
 describe("el texto del asistente se renderiza", () => {
   it("⛔ como Markdown, no como texto plano", () => {
     /* Reportado el 2026-08-20: se veía el `- **Sumar…**` crudo. La edición que la pone en rojo:
