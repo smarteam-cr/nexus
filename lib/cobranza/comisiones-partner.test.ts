@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  retencionDe,
   totalesPorMoneda,
   totalesPorPartner,
   type ComisionParaSumar,
@@ -98,3 +99,35 @@ describe("aritmética", () => {
     expect(totalesPorPartner([])).toEqual([]);
   });
 });
+
+describe("la retención del procesador", () => {
+  it("sale de la resta, con su porcentaje", () => {
+    // El caso real: el aliado reporta ~$51.000 y al banco llegan ~$50.847.
+    const r = retencionDe(50_847, 51_000)!;
+    expect(r.monto).toBe(153);
+    expect(r.pct).toBe(0.3);
+  });
+
+  it("sin el bruto devuelve null — «no se sabe» no es «cero»", () => {
+    // Devolver 0 diría que NO hubo retención, que es una afirmación distinta y falsa.
+    expect(retencionDe(50_847, null)).toBeNull();
+    expect(retencionDe(50_847, undefined)).toBeNull();
+  });
+
+  it("un neto mayor que el bruto es un dato malo, no una retención negativa", () => {
+    // Mostrarlo como "-2%" haría creer que el procesador devolvió plata.
+    expect(retencionDe(51_000, 50_000)).toBeNull();
+  });
+
+  it("bruto igual al neto es retención cero, y eso SÍ se puede afirmar", () => {
+    const r = retencionDe(1000, 1000)!;
+    expect(r.monto).toBe(0);
+    expect(r.pct).toBe(0);
+  });
+
+  it("el rango que reporta el procesador (0,5%–5%) sale con dos decimales", () => {
+    expect(retencionDe(9500, 10_000)!.pct).toBe(5);
+    expect(retencionDe(9950, 10_000)!.pct).toBe(0.5);
+  });
+});
+

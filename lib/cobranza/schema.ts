@@ -420,6 +420,13 @@ export const comisionPartnerEstadoSchema = z
      * Ausente = el monto registrado ya era el bueno.
      */
     monto: monto.optional(),
+    /**
+     * Lo que el aliado reporta ANTES de la retención del procesador. Opcional: la
+     * decisión es que el neto es obligatorio —es la plata que entró— y el bruto se
+     * carga cuando se sabe. Con los dos, la retención se DERIVA; sin él, se declara
+     * que no se conoce en vez de asumir cero.
+     */
+    montoBruto: monto.nullable().optional(),
     notas: z.string().trim().max(2000).nullable().optional(),
   })
   .refine((d) => d.estado !== "COBRADO" || !!d.fechaCobro, {

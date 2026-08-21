@@ -81,7 +81,16 @@ type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; 
  * retención del procesador—. Confirmar sin poder corregir obliga a firmar una cifra
  * que se sabe falsa, y esa firma es la que sostiene INV20.
  */
-type CobroForm = { id: string; partner: string; moneda: string; fechaCobro: string; monto: string };
+type CobroForm = {
+  id: string;
+  partner: string;
+  moneda: string;
+  fechaCobro: string;
+  /** El NETO que entró al banco. Obligatorio: es la plata. */
+  monto: string;
+  /** El BRUTO que reportó el aliado. Opcional — con él, la retención se deriva. */
+  montoBruto: string;
+};
 
 export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   const toast = useToast();
@@ -165,7 +174,13 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
       await fetchJson(`/api/cobranza/comisiones-partner/${cobro.id}/estado`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: "COBRADO", fechaCobro: cobro.fechaCobro, monto }),
+        body: JSON.stringify({
+          estado: "COBRADO",
+          fechaCobro: cobro.fechaCobro,
+          monto,
+          // Vacío = no se sabe. Va null y no cero: cero afirmaría que no hubo retención.
+          montoBruto: cobro.montoBruto.trim() === "" ? null : Number(cobro.montoBruto),
+        }),
       });
       setCobro(null);
       await refrescar();
@@ -413,7 +428,21 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                   <td className={`${TD} text-fg-secondary`}>{c.concepto ?? "—"}</td>
                   <td className={`${TD} text-fg-secondary whitespace-nowrap`}>{fmtFecha(c.fecha)}</td>
                   <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
-                    {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
+                    <span className={c.montoEsProyeccion ? "text-fg-muted" : ""}>
+                      {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
+                    </span>
+                    {/* Un monto proyectado se ve distinto de uno medido: los $51.000
+                        redondos de agosto y noviembre eran una estimación tecleada, y
+                        hasta acá se mostraban igual que los $45.921,72 que sí se contaron. */}
+                    {c.montoEsProyeccion && (
+                      <span className="ml-1.5 text-[10px] text-fg-muted font-normal">estimado</span>
+                    )}
+                    {c.retencion && (
+                      <p className="text-[10px] text-fg-muted font-normal">
+                        bruto {fmtMonto(c.montoBruto!, c.moneda as "CRC" | "USD")} · retención{" "}
+                        {fmtMonto(c.retencion.monto, c.moneda as "CRC" | "USD")} ({c.retencion.pct}%)
+                      </p>
+                    )}
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
                     {c.estado === "COBRADO" ? (
@@ -444,6 +473,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                               // los dos se corrigen antes de firmar, que es el punto.
                               fechaCobro: c.fecha,
                               monto: String(c.monto),
+                              montoBruto: c.montoBruto !== null ? String(c.montoBruto) : "",
                             })
                           }
                         >
@@ -587,6 +617,15 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                 inputMode="decimal"
                 value={cobro.monto}
                 onChange={(e) => setCobro({ ...cobro, monto: e.target.value })}
+              />
+            </Field>
+            <Field label={`Monto bruto que reportó el aliado (${cobro.moneda}) — opcional`}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={cobro.montoBruto}
+                onChange={(e) => setCobro({ ...cobro, montoBruto: e.target.value })}
+                placeholder="Si lo sabés, la retención sale sola"
               />
             </Field>
             <p className="text-[11px] text-fg-muted">

@@ -955,6 +955,10 @@ export async function cambiarEstadoComisionPartner(
       // que la plata llegara era una proyección; firmarla sin poder corregirla sería
       // firmar un número que se sabe falso.
       ...(data.monto !== undefined ? { monto: data.monto } : {}),
+      ...(data.montoBruto !== undefined ? { montoBruto: data.montoBruto } : {}),
+      // Confirmar es, por definición, dejar de proyectar: alguien miró el banco. Y al
+      // revertir vuelve a serlo — el número que queda es el que nadie confirmó.
+      montoEsProyeccion: data.estado !== "COBRADO",
       ...(data.estado === "COBRADO"
         ? {
             // El refine del schema garantiza que la fecha viene: marcarla cobrada sin
@@ -970,15 +974,37 @@ export async function cambiarEstadoComisionPartner(
   return { id: comisionId };
 }
 
+/**
+ * Editar una comisión. Los datos descriptivos se cambian libremente; el MONTO y la
+ * FECHA de una comisión ya COBRADA, no.
+ *
+ * ⚠ POR QUÉ SE BLOQUEA EN VEZ DE AUDITARSE. `estado = COBRADO` significa "esta plata
+ * entró" y lleva la firma de quien lo afirmó (INV20). Dejar que este PATCH le cambie el
+ * monto por debajo deja la firma apuntando a una cifra que ya no existe: el invariante
+ * sigue verde y la afirmación es falsa. Corregir un monto confirmado tiene que pasar por
+ * donde se confirmó — revertir a POR_COBRAR (que limpia fecha y firma) y volver a
+ * confirmar con el número bueno. Es la misma disciplina de un cobro, y no hace falta
+ * ninguna tabla de auditoría nueva: el rastro ES el ciclo de confirmación.
+ */
 export async function updateComisionPartner(
   comisionId: string,
   data: z.infer<typeof comisionPartnerPatchSchema>,
 ) {
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true },
+    select: { id: true, estado: true, monto: true, fecha: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  if (actual.estado === "COBRADO") {
+    const cambiaMonto = data.monto !== undefined && Number(data.monto) !== Number(actual.monto);
+    const cambiaFecha = data.fecha !== undefined && data.fecha !== isoDay(actual.fecha);
+    if (cambiaMonto || cambiaFecha) {
+      throw new CobranzaError(
+        "Esta comisión ya está confirmada como cobrada. Para corregir el monto o la fecha, revertila a «por cobrar» y volvé a confirmarla con el número bueno — así queda claro quién firmó qué.",
+        409,
+      );
+    }
+  }
   await prisma.comisionPartner.update({
     where: { id: comisionId },
     data: {

@@ -191,11 +191,12 @@ async function main() {
     let altas = 0;
     let actualizadas = 0;
     let iguales = 0;
+    let respetadas = 0;
     for (const f of filas) {
       const fecha = new Date(`${f.fecha}T00:00:00Z`);
       const existente = await prisma.comisionPartner.findFirst({
         where: { partner: f.partner, fecha },
-        select: { id: true, monto: true, estado: true },
+        select: { id: true, monto: true, estado: true, confirmadoPor: true },
       });
       if (!existente) {
         altas++;
@@ -213,11 +214,33 @@ async function main() {
               ...(f.estado === "COBRADO"
                 ? { fechaCobro: fecha, confirmadoPor: REGISTRADO_POR, confirmadoEn: new Date() }
                 : {}),
+              // Del Excel solo se sabe lo que alguien tecleó. Una fila que todavía no se
+              // cobró es una ESTIMACIÓN, no una medición, y ahora se puede decir.
+              montoEsProyeccion: f.estado !== "COBRADO",
               registradoPor: REGISTRADO_POR,
               notas: `Del Excel de comisiones ${ANIO}, celda ${f.celda}. La fecha es la quincena del documento, no dato bancario.`,
             },
           });
         }
+        continue;
+      }
+      /**
+       * ⚠ EL EXCEL YA NO MANDA. Decisión de Elías (2026-08-20): de acá en adelante las
+       * comisiones se cargan y se confirman en Nexus, y este script queda como el
+       * sembrador del histórico.
+       *
+       * Antes pisaba `monto`, `estado`, `fechaCobro` y `confirmadoPor` desde el archivo.
+       * Con la edición del monto como MECANISMO CENTRAL —lo que entra nunca es el número
+       * redondo que se proyectó— eso borraba el trabajo: alguien corregía agosto a lo que
+       * de verdad entró y la próxima corrida lo devolvía a $51.000, sin dejar rastro y
+       * llevándose por delante la firma de quien lo había confirmado.
+       *
+       * La regla compara contra la firma PROPIA del importador: si quien confirmó fue
+       * otro —una persona mirando el banco— el Excel no opina. Comparar solo contra null
+       * haría que el script respetara sus propias escrituras y nunca actualizara nada.
+       */
+      if (existente.confirmadoPor !== null && existente.confirmadoPor !== REGISTRADO_POR) {
+        respetadas++;
         continue;
       }
       if (Number(existente.monto) === f.monto && existente.estado === f.estado) {
@@ -239,7 +262,10 @@ async function main() {
       }
     }
 
-    console.log(`\n  ${altas} nueva(s) · ${actualizadas} actualizada(s) · ${iguales} sin cambio`);
+    console.log(
+      `\n  ${altas} nueva(s) · ${actualizadas} actualizada(s) · ${iguales} sin cambio` +
+        (respetadas > 0 ? ` · ${respetadas} RESPETADA(S): ya las confirmó una persona` : ""),
+    );
     if (!apply) {
       console.log(`\n(dry-run — no se escribió nada. Agregá --apply para cargar.)`);
     } else {

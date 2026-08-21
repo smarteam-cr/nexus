@@ -3598,7 +3598,19 @@ model ComisionPartner {
 
   concepto String?
 
+  /// El monto NETO: la plata que entró al banco. Es el que manda y el único obligatorio.
   monto  Decimal        @db.Decimal(12, 2)
+  /// Lo que el aliado reporta ANTES de la retención del procesador. nullable porque no
+  /// siempre se sabe — el neto es obligatorio y el bruto opcional (Elías, 2026-08-20).
+  /// ⚠ La retención NO se guarda: se DERIVA (montoBruto − monto) y se declara cuando
+  /// falta el bruto. Un tercer número guardado puede contradecir a los otros dos.
+  montoBruto Decimal?    @db.Decimal(12, 2)
+  /// true = NADIE confirmó este número; es una estimación.
+  /// Existe porque el mismo campo `monto` cambiaba de significado sin decirlo: febrero y
+  /// mayo eran mediciones ($38.756,61 · $45.921,72) y agosto y noviembre decían "$51.000
+  /// exactos, dos veces" — una proyección tecleada. Sin esto el panel muestra las cuatro
+  /// con el mismo peso.
+  montoEsProyeccion Boolean @default(false)
   moneda CobranzaMoneda
   fecha  DateTime       @db.Date
 

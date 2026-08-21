@@ -49,6 +49,7 @@ import {
 } from "@/lib/finanzas/inconsistencias";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import {
+  retencionDe,
   totalesPorMoneda,
   totalesPorPartner,
   type CorteDeMoneda,
@@ -1023,6 +1024,15 @@ export interface ComisionPartnerDTO {
    * ni siquiera sabía en qué estado estaba.
    */
   estado: string;
+  /** Lo que el aliado reporta antes de la retención. null = no se sabe. */
+  montoBruto: number | null;
+  /** true = nadie confirmó este número; es una estimación, no una medición. */
+  montoEsProyeccion: boolean;
+  /**
+   * Lo que se llevó el procesador, DERIVADO del bruto y el neto. null = sin bruto
+   * cargado, o sea que no se sabe — que no es lo mismo que cero.
+   */
+  retencion: { monto: number; pct: number } | null;
   /** Cuándo entró la plata. null mientras esté POR_COBRAR. */
   fechaCobro: string | null;
   /** Quién firmó que entró (INV20). null mientras nadie la haya confirmado. */
@@ -1096,6 +1106,9 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
     registradoPor: c.registradoPor,
     createdAt: iso(c.createdAt)!,
     estado: c.estado,
+    montoBruto: num(c.montoBruto),
+    montoEsProyeccion: c.montoEsProyeccion,
+    retencion: retencionDe(num(c.monto)!, num(c.montoBruto)),
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
   }));

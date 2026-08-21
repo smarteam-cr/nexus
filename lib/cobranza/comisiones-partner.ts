@@ -101,3 +101,26 @@ export function totalesPorMoneda(comisiones: readonly ComisionParaSumar[]): Cort
   }
   return [...acc.values()].sort((a, b) => b.total - a.total || a.moneda.localeCompare(b.moneda));
 }
+
+/**
+ * La retención del procesador de una comisión: lo que se llevó Stripe entre lo que el
+ * aliado reportó y lo que llegó al banco.
+ *
+ * ⚠ SE DERIVA, NO SE GUARDA. Un tercer número guardado puede contradecir a los otros
+ * dos, y entonces hay que decidir a cuál creerle — que es justo el problema que este
+ * modelo viene a cerrar. Sin el bruto devuelve null: "no se sabe" es una respuesta, y
+ * asumir cero diría que no hubo retención, que es una afirmación distinta.
+ */
+export function retencionDe(
+  neto: number,
+  bruto: number | null | undefined,
+): { monto: number; pct: number } | null {
+  if (bruto === null || bruto === undefined) return null;
+  if (!Number.isFinite(bruto) || bruto <= 0) return null;
+  const monto = round2(bruto - neto);
+  // Un neto MAYOR que el bruto no es una retención negativa: es un dato mal cargado, y
+  // mostrarlo como "-2%" haría creer que el procesador devolvió plata.
+  if (monto < 0) return null;
+  return { monto, pct: Math.round((monto / bruto) * 10000) / 100 };
+}
+
