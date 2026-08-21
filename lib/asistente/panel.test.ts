@@ -395,8 +395,27 @@ describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
 
   it("⭐ y dice CUÁNTOS cambios son, arriba", () => {
     /* Es lo que la persona necesita ANTES de leer: doce o dos cambia si revisa uno por uno o si
-       lee y aprieta. La edición que la pone en rojo: borrar el contador. */
-    expect(PANEL).toContain("lineas.length} cambios");
+       lee y aprieta. Desde que se pueden descartar, además dice cuántas quedan de cuántas.
+       La edición que la pone en rojo: borrar el contador. */
+    expect(PANEL).toContain("${total} cambios");
+    expect(PANEL, "el contador dejó de decir cuántas se descartaron").toContain(
+      "de ${total} cambios",
+    );
+  });
+
+  it("⭐ se pueden aceptar 10 de 12, y desmarcar arrastra lo que ya no puede correr", () => {
+    /* La auditoría del 2026-08-21 marcó el todo-o-nada como el hueco más caro del carril rápido:
+       con lotes de doce, «Aplicar» era una apuesta.
+       ⛔ Y la cascada es obligatoria: desmarcar la fase que se crea y dejar sus tareas produce
+       operaciones que apuntan a una fase inexistente; el ejecutor las rechaza y un solo rechazo
+       aborta el lote ENTERO — peor que el todo-o-nada.
+       La edición que la pone en rojo: aplicar `acuerdo.operaciones` entero en vez del subconjunto,
+       o guardar lo desmarcado sin pasar por `arrastreAlDesmarcar`. */
+    expect(PANEL).toContain("arrastreAlDesmarcar(ops, pedido)");
+    expect(PANEL).toContain("operaciones: operacionesAceptadas(t.id, t.acuerdo!)");
+    expect(PANEL, "el botón deja aplicar con cero operaciones marcadas").toContain(
+      "sinNadaQueAplicar",
+    );
   });
 });
 

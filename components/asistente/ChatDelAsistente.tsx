@@ -33,6 +33,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
+import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -90,6 +92,9 @@ interface Props {
   onAplicar?: (acuerdo: AcuerdoDelChat) => Promise<ResultadoDeAplicar>;
 }
 
+/** Un solo `Set` vacío compartido: crear uno nuevo por render rompería cualquier memo. */
+const EMPTY: ReadonlySet<number> = new Set<number>();
+
 export default function ChatDelAsistente({
   projectId,
   pieza,
@@ -107,6 +112,14 @@ export default function ChatDelAsistente({
   /* La instrucción es EDITABLE antes de aplicar: ese es el «dar el ok» — un humano leyendo la
      instrucción exacta que se va a ejecutar, no un resumen de ella. */
   const [instruccionEditada, setInstruccionEditada] = useState<Record<string, string>>({});
+  /**
+   * ⭐ LO QUE LA PERSONA DESMARCÓ, por turno. Por AUSENCIA: un acuerdo nuevo arranca con todo
+   * aceptado, que es el caso normal — desmarcar es la excepción, no el trámite.
+   *
+   * Antes aplicar era todo-o-nada, y con lotes de doce operaciones eso se volvió una apuesta: la
+   * auditoría del 2026-08-21 lo marcó como el hueco más caro del carril rápido.
+   */
+  const [desmarcadas, setDesmarcadas] = useState<Record<string, Set<number>>>({});
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
 
@@ -228,6 +241,36 @@ export default function ChatDelAsistente({
    * aprieta de nuevo y aplica dos veces. Y las operaciones no son idempotentes: `tarea.crear`
    * duplica la tarea, `fase.crear` duplica la fase.
    */
+  /**
+   * Marcar y desmarcar una operación del acuerdo.
+   *
+   * ⛔ La CASCADA no es un adorno: desmarcar la fase que se crea y dejar sus tareas produce
+   * operaciones que apuntan a una fase inexistente. El ejecutor las rechaza —bien— y un solo
+   * rechazo aborta el lote ENTERO: la persona desmarcaría una cosa y no se aplicaría ninguna,
+   * que es peor que el todo-o-nada que esto vino a arreglar. Se tachan a la vista, nunca en
+   * silencio. La regla vive en `lib/timeline/dependencias-de-operaciones.ts`, con su test.
+   */
+  function alternarOperacion(turnoId: string, i: number, acuerdo: AcuerdoDelChat) {
+    const ops = (acuerdo.operaciones ?? []) as Operacion[];
+    setDesmarcadas((m) => {
+      const actual = m[turnoId] ?? EMPTY;
+      const pedido = new Set(actual);
+      if (pedido.has(i)) pedido.delete(i);
+      else pedido.add(i);
+      /* Al RE-marcar, la cascada se recalcula desde cero: si lo que la bloqueaba volvió, vuelve
+         ella también. Recalcular es más barato que llevar un historial de por qué salió. */
+      return { ...m, [turnoId]: arrastreAlDesmarcar(ops, pedido) };
+    });
+  }
+
+  const operacionesAceptadas = (turnoId: string, acuerdo: AcuerdoDelChat): Operacion[] => {
+    const fuera = desmarcadas[turnoId] ?? EMPTY;
+    return ((acuerdo.operaciones ?? []) as Operacion[]).filter((_, i) => !fuera.has(i));
+  };
+
+  const sinNadaQueAplicar = (turnoId: string, acuerdo: AcuerdoDelChat): boolean =>
+    !!acuerdo.operaciones && operacionesAceptadas(turnoId, acuerdo).length === 0;
+
   async function anotarDesenlace(ok: boolean, detalle: string, vistaPrevia = true) {
     const r = await fetch(`/api/projects/${projectId}/asistente`, {
       method: "POST",
@@ -240,7 +283,7 @@ export default function ChatDelAsistente({
     return true;
   }
 
-  async function aplicar(acuerdo: AcuerdoDelChat) {
+  async function aplicar(acuerdo: AcuerdoDelChat, descartadas = 0) {
     if (!onAplicar || aplicando) return;
     setAplicando(true);
     setError(null);
@@ -261,9 +304,19 @@ export default function ChatDelAsistente({
         /* El carril de operaciones escribe directo; el viejo deja una propuesta para revisar.
            El desenlace tiene que decir cuál de los dos pasó, o manda a buscar un banner que no
            existe. Lo sabe el acuerdo: si trae operaciones, no hay vista previa. */
+        /* ⚠ Si se descartaron operaciones, el desenlace lo DICE. El `resumen` que el modelo
+           escribió describe el acuerdo COMPLETO, así que sin esta línea el hilo quedaría
+           afirmando un cambio más grande del que entró — y el modelo lo lee en el turno
+           siguiente. */
+        const nota =
+          descartadas > 0
+            ? `Se aplicaron ${(acuerdo.operaciones ?? []).length} de ${
+                (acuerdo.operaciones ?? []).length + descartadas
+              } cambios: el resto se descartó.`
+            : "";
         const quedoEscrito = await anotarDesenlace(
           true,
-          avisos.join(" · "),
+          [nota, avisos.join(" · ")].filter(Boolean).join(" "),
           !acuerdo.operaciones?.length,
         ).catch(() => false);
         /* ⛔ Si el desenlace NO se pudo escribir, hay que DECIRLO. El cambio ya entró, pero el
@@ -384,11 +437,18 @@ export default function ChatDelAsistente({
                         se lean por nombre— un acuerdo normal pasó de 2 líneas a 12. Sin el
                         número arriba, la persona no sabe cuánto está aprobando hasta scrollear
                         hasta el final, y el botón «Aplicar» está justo abajo. */}
-                    {t.acuerdo.lineas.length > 3 && (
-                      <p className="mt-2 text-xs font-semibold text-info-ink">
-                        {t.acuerdo.lineas.length} cambios
-                      </p>
-                    )}
+                    {(() => {
+                      const total = t.acuerdo.lineas.length;
+                      const fuera = (desmarcadas[t.id] ?? EMPTY).size;
+                      if (total <= 3 && fuera === 0) return null;
+                      return (
+                        <p className="mt-2 text-xs font-semibold text-info-ink">
+                          {fuera === 0
+                            ? `${total} cambios`
+                            : `${total - fuera} de ${total} cambios — ${fuera} descartado${fuera === 1 ? "" : "s"}`}
+                        </p>
+                      );
+                    })()}
                     {/* ⚠ El cajón mide 400 px. Doce renglones de ~120 caracteres son ~900 px: sin
                         este scroll propio, la lista empuja el botón fuera de la pantalla y el
                         auto-scroll deja la primera línea arriba de todo, invisible. El recorte es
@@ -402,11 +462,33 @@ export default function ChatDelAsistente({
                           : "")
                       }
                     >
-                      {t.acuerdo.lineas.map((linea, i) => (
-                        <li key={i} className="leading-relaxed">
-                          {linea}
-                        </li>
-                      ))}
+                      {t.acuerdo.lineas.map((linea, i) => {
+                        const fuera = (desmarcadas[t.id] ?? EMPTY).has(i);
+                        const vivo = t.id === idDelAcuerdoVivo && !!onAplicar;
+                        return (
+                          <li key={i} className="leading-relaxed">
+                            {vivo ? (
+                              <label
+                                className={
+                                  "flex items-start gap-2 cursor-pointer" +
+                                  (fuera ? " line-through opacity-50" : "")
+                                }
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!fuera}
+                                  onChange={() => alternarOperacion(t.id, i, t.acuerdo!)}
+                                  disabled={aplicando}
+                                  className="mt-1 shrink-0 accent-primary"
+                                />
+                                <span>{linea}</span>
+                              </label>
+                            ) : (
+                              linea
+                            )}
+                          </li>
+                        );
+                      })}
                     </ol>
                   </>
                 ) : t.acuerdo.instruccion ? (
@@ -444,19 +526,28 @@ export default function ChatDelAsistente({
                     onClick={() =>
                       void aplicar({
                         ...t.acuerdo!,
+                        ...(t.acuerdo!.operaciones
+                          ? { operaciones: operacionesAceptadas(t.id, t.acuerdo!) }
+                          : {}),
                         ...(instruccionEditada[t.id] !== undefined
                           ? { instruccion: instruccionEditada[t.id] }
                           : {}),
-                      })
+                      }, desmarcadas[t.id]?.size ?? 0)
                     }
-                    disabled={aplicando}
+                    disabled={aplicando || sinNadaQueAplicar(t.id, t.acuerdo!)}
                     className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
                   >
                     {aplicando
                       ? "Aplicando…"
-                      : t.acuerdo.operaciones
-                        ? "Aplicar al cronograma"
-                        : "Aplicar — vas a poder revisarlo antes de guardar"}
+                      : sinNadaQueAplicar(t.id, t.acuerdo)
+                        ? "No queda nada marcado"
+                        : t.acuerdo.operaciones
+                          ? `Aplicar al cronograma${
+                              (desmarcadas[t.id]?.size ?? 0) > 0
+                                ? ` (${operacionesAceptadas(t.id, t.acuerdo).length})`
+                                : ""
+                            }`
+                          : "Aplicar — vas a poder revisarlo antes de guardar"}
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
