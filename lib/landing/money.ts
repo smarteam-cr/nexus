@@ -136,8 +136,17 @@ export type Descuento = { tipo: "pct"; valor: number } | { tipo: "monto"; valor:
  * `"sucio"` = hay algo escrito que no se pudo leer. Nunca se ignora en silencio: una línea con
  * un descuento ilegible se muestra SIN descuento, y quien la escribió tiene que verlo.
  * Un porcentaje > 100 es sucio (no existe un descuento que devuelva plata).
+ *
+ * ⚠ `moneda` NO es opcional por comodidad: es la guarda anti-mezcla. Sin pasarla, `parseMonto`
+ * no compara símbolos y un descuento escrito en OTRA moneda se leía como si fuera de la
+ * sección — "₡5.000" en una propuesta en USD restaba **cinco mil dólares**. Una línea de
+ * $1.000 quedaba en $0, con el tag "−$5,000" al lado y SIN el ⚠ "no suma", porque nada la
+ * había marcado sucia. Costa Rica factura en las dos monedas: no es un caso de laboratorio.
  */
-export function parseDescuento(txt: string | null | undefined): Descuento | "sucio" | null {
+export function parseDescuento(
+  txt: string | null | undefined,
+  moneda?: string | null,
+): Descuento | "sucio" | null {
   const raw = (txt ?? "").trim();
   if (!raw) return null;
   if (raw.endsWith("%")) {
@@ -145,7 +154,7 @@ export function parseDescuento(txt: string | null | undefined): Descuento | "suc
     if (n == null || n > 100) return "sucio";
     return { tipo: "pct", valor: n };
   }
-  const r = parseMonto(raw);
+  const r = parseMonto(raw, moneda);
   if (r === null || r === "sucio") return "sucio";
   // Un descuento en rango no tiene sentido: se toma el piso y se avisa por el camino sucio.
   if (r.min !== r.max) return "sucio";

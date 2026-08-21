@@ -258,7 +258,9 @@ export function montoDeLinea(
   const factor = anual && !conTexto(l.precioAnual) ? MESES_POR_CONTRATO.anual : 1;
   const unitario: Rango = { min: precio.min * factor, max: precio.max * factor };
 
-  const desc = parseDescuento(l.descuento);
+  // La moneda VIAJA: es lo único que hace que un descuento escrito en otra moneda ensucie la
+  // línea en vez de restarse como si fuera de esta (ver el ⚠ de `parseDescuento`).
+  const desc = parseDescuento(l.descuento, moneda);
   if (desc === "sucio") {
     return { ...vacio, sucio: true, calculada: true, unitario, cantidad };
   }

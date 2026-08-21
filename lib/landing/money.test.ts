@@ -238,6 +238,35 @@ describe("cantidad y descuento por línea", () => {
     },
   );
 
+  /* ⚠ EL DESCUENTO EN OTRA MONEDA (2026-08-21). El bug que esto cierra: `parseDescuento`
+     llamaba a `parseMonto` SIN la moneda de la sección, así que la guarda anti-mezcla nunca
+     corría para los descuentos. "₡5.000" en una propuesta en USD se leía como −$5,000: una
+     línea de $1.000 quedaba en CERO, con el tag "−$5,000" al lado y sin el ⚠ "no suma"
+     —nada la había marcado sucia—, y entraba al total valiendo 0. Smarteam factura en las dos
+     monedas, así que el caso es de todos los días, no de laboratorio. */
+  it("un descuento en OTRA moneda ensucia (no se resta como si fuera de la sección)", () => {
+    expect(parseDescuento("₡5.000", "USD")).toBe("sucio");
+    expect(parseDescuento("CRC 5000", "USD")).toBe("sucio");
+    expect(parseDescuento("€200", "USD")).toBe("sucio");
+    // En SU moneda sigue leyéndose igual que siempre.
+    expect(parseDescuento("₡5.000", "CRC")).toEqual({ tipo: "monto", valor: 5000 });
+    expect(parseDescuento("$200", "USD")).toEqual({ tipo: "monto", valor: 200 });
+    // Sin símbolo no hay mezcla que detectar: es de la sección, sea cual sea.
+    expect(parseDescuento("200", "CRC")).toEqual({ tipo: "monto", valor: 200 });
+    // El porcentaje no tiene moneda: nunca se ensucia por esto.
+    expect(parseDescuento("15%", "USD")).toEqual({ tipo: "pct", valor: 15 });
+  });
+
+  /* `$` NO delata contradicción, y eso es DELIBERADO: lo usan USD, MXN, COP, CLP y ARS (ver
+     MONEDA_POR_SIMBOLO). Un "$200" en una sección en colones se lee como 200 colones, igual
+     que se lee un MONTO escrito así. Se fija acá para que quede claro que es la regla y no un
+     hueco del arreglo de arriba: el descuento hereda exactamente el criterio del monto, ni
+     más estricto ni más laxo. */
+  it("`$` no ensucia en otra moneda: es ambiguo a propósito, igual que en un monto", () => {
+    expect(parseDescuento("$200", "CRC")).toEqual({ tipo: "monto", valor: 200 });
+    expect(parseMonto("$200", "CRC")).toEqual({ min: 200, max: 200 });
+  });
+
   it("aplicar: porcentaje, monto y piso en cero", () => {
     expect(aplicarDescuento(1000, { tipo: "pct", valor: 15 })).toBe(850);
     expect(aplicarDescuento(1000, { tipo: "monto", valor: 250 })).toBe(750);
