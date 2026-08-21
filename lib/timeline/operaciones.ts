@@ -54,10 +54,26 @@ export type Operacion =
   | { op: "fase.redistribuir"; phaseId: string }
   | { op: "fase.mover"; phaseId: string; posicion: number }
   | { op: "fase.arranque-relativo"; phaseId: string; semana: number | null }
+  | { op: "fase.crear"; nombre: string; semanas: number; posicion?: number }
+  | { op: "fase.quitar-semana"; phaseId: string; semana: number }
+  | { op: "fase.insertar-semana"; phaseId: string; semana: number }
+  | { op: "fase.tipo"; phaseId: string; tipo: TipoDeActividad }
   | { op: "tarea.mover-semana"; taskId: string; semana: number }
-  | { op: "tarea.mover-fase"; taskId: string; phaseId: string }
+  | { op: "tarea.mover-fase"; taskId: string; phaseId: string; semana?: number }
   | { op: "tarea.borrar"; taskId: string }
+  | { op: "tarea.crear"; phaseId: string; titulo: string; semana: number; duenio?: Party; tipo?: TipoDeTarea }
+  | { op: "tarea.renombrar"; taskId: string; titulo: string }
+  | { op: "tarea.duenio"; taskId: string; duenio: Party }
+  | { op: "tarea.tipo"; taskId: string; tipo: TipoDeTarea }
   | { op: "arranque"; fecha: string };
+
+/** Los cinco tipos de actividad de una fase. Espejo de `ACTIVITY_TYPES` en `validate.ts`. */
+export type TipoDeActividad =
+  | "EXPLORACION"
+  | "PLANIFICACION"
+  | "CONFIGURACION"
+  | "ADOPCION"
+  | "SEGUIMIENTO";
 
 export const OPERACIONES_VALIDAS = [
   "fase.duracion",
@@ -66,10 +82,29 @@ export const OPERACIONES_VALIDAS = [
   "fase.redistribuir",
   "fase.mover",
   "fase.arranque-relativo",
+  "fase.crear",
+  "fase.quitar-semana",
+  "fase.insertar-semana",
+  "fase.tipo",
   "tarea.mover-semana",
   "tarea.mover-fase",
   "tarea.borrar",
+  "tarea.crear",
+  "tarea.renombrar",
+  "tarea.duenio",
+  "tarea.tipo",
   "arranque",
+] as const;
+
+/** Los valores cerrados que puede tomar el dueño de una tarea. Espejo de `PARTY_VALUES`. */
+export const DUENIOS_VALIDOS = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
+export const TIPOS_DE_TAREA_VALIDOS = ["SESSION", "TASK"] as const;
+export const TIPOS_DE_ACTIVIDAD_VALIDOS = [
+  "EXPLORACION",
+  "PLANIFICACION",
+  "CONFIGURACION",
+  "ADOPCION",
+  "SEGUIMIENTO",
 ] as const;
 
 export interface OperacionRechazada {
@@ -89,6 +124,8 @@ export interface ResultadoDeOperaciones {
 /** Copia de trabajo: mutable, con la marca de si su fase fue TOCADA. */
 interface FaseEnCurso {
   id?: string;
+  /** Solo para las fases creadas en este lote: nunca sale al payload. Ver `fase.crear`. */
+  idInterno?: string;
   name: string;
   durationWeeks: number;
   startWeek: number | null;
@@ -158,7 +195,10 @@ export function aplicarOperaciones(
 
   let ancla = anclaActual;
 
-  const buscarFase = (phaseId: string) => fases.find((f) => f.id === phaseId);
+  /* ⛔ Nunca matchea contra `undefined`: una fase recién creada no tiene id, y sin este filtro
+     `buscarFase(undefined)` la engancharía y una operación destinada a otra fase caería ahí. */
+  const buscarFase = (phaseId: string) =>
+    phaseId ? fases.find((f) => f.id === phaseId || f.idInterno === phaseId) : undefined;
   /**
    * ⭐ El chat nombra una tarea por su HANDLE (los últimos caracteres del id), porque el id
    * entero son 25 caracteres y el prefijo del chat tiene techo. Acepta también el id completo.
@@ -342,7 +382,15 @@ export function aplicarOperaciones(
         hit.fase.tocada = true;
         /* ⚠ SIN id en el destino: el cronograma no sabe mudar una tarea — la borra de un lado y la
            crea del otro, y con eso pierde su estado. Es la regla dura de siempre, y se avisa. */
-        destino.tasks.push({ ...hit.tarea, id: undefined, weekIndex: 0 });
+        /* ⚠ La semana de destino es OPCIONAL, y por defecto la primera. Sin este parámetro una
+           tarea mudada aterrizaba siempre en la semana 1 y no había forma de corregirla después:
+           al recrearse pierde el id, así que un `tarea.mover-semana` posterior en el mismo lote
+           se rechaza y tumba el acuerdo entero. */
+        destino.tasks.push({
+          ...hit.tarea,
+          id: undefined,
+          weekIndex: Math.max(Math.floor(operacion.semana ?? 0), 0),
+        });
         destino.tocada = true;
         normalizar(hit.fase);
         normalizar(destino);
@@ -384,6 +432,184 @@ export function aplicarOperaciones(
         hit.fase.tasks = hit.fase.tasks.filter((t) => t !== hit.tarea);
         hit.fase.tocada = true;
         normalizar(hit.fase);
+        break;
+      }
+
+      case "fase.crear": {
+        const nombre = operacion.nombre.trim();
+        if (!nombre) {
+          rechazar(operacion, "una fase sin nombre no se puede crear");
+          break;
+        }
+        if (!Number.isInteger(operacion.semanas) || operacion.semanas < 1) {
+          rechazar(operacion, "una fase dura al menos 1 semana");
+          break;
+        }
+        /* ⚠ SIN id: el PUT crea la fila (`timeline/route.ts:678`, rama else del diff). Se le pone
+           un id interno que NUNCA sale al payload, para que `buscarFase` no pueda engancharla por
+           accidente — una fase sin identidad es un imán para operaciones que apuntaban a otra. */
+        const nueva: FaseEnCurso = {
+          id: undefined,
+          idInterno: `nueva:${fases.length}`,
+          name: nombre,
+          durationWeeks: operacion.semanas,
+          startWeek: null,
+          sessionCount: null,
+          notes: null,
+          activityType: null,
+          tasks: [],
+          tocada: true,
+        };
+        const donde =
+          typeof operacion.posicion === "number"
+            ? Math.min(Math.max(Math.floor(operacion.posicion), 0), fases.length)
+            : fases.length;
+        fases.splice(donde, 0, nueva);
+        break;
+      }
+
+      case "fase.quitar-semana": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        const w = Math.floor(operacion.semana);
+        if (w < 0 || w >= f.durationWeeks) {
+          rechazar(operacion, `«${f.name}» no tiene una semana ${w + 1}`);
+          break;
+        }
+        if (f.durationWeeks <= 1) {
+          rechazar(operacion, `«${f.name}» ya dura una sola semana: quitarla la dejaría en cero`);
+          break;
+        }
+        /* Las que vivían en la semana que se va caen a la anterior (o a la que quedó primera, si
+           se quitó la de arriba); las de más abajo suben una. La línea lo dice, con el número. */
+        for (const t of f.tasks) {
+          if (t.weekIndex === w) t.weekIndex = Math.max(w - 1, 0);
+          else if (t.weekIndex > w) t.weekIndex -= 1;
+        }
+        f.durationWeeks -= 1;
+        f.tocada = true;
+        normalizar(f);
+        break;
+      }
+
+      case "fase.insertar-semana": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        const w = Math.floor(operacion.semana);
+        if (w < 0 || w > f.durationWeeks) {
+          rechazar(operacion, `«${f.name}» no puede abrir una semana ${w + 1}`);
+          break;
+        }
+        for (const t of f.tasks) if (t.weekIndex >= w) t.weekIndex += 1;
+        f.durationWeeks += 1;
+        f.tocada = true;
+        normalizar(f);
+        break;
+      }
+
+      case "fase.tipo": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        if (!(TIPOS_DE_ACTIVIDAD_VALIDOS as readonly string[]).includes(operacion.tipo)) {
+          rechazar(operacion, `«${operacion.tipo}» no es un tipo de actividad`);
+          break;
+        }
+        f.activityType = operacion.tipo;
+        break;
+      }
+
+      case "tarea.crear": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        const titulo = operacion.titulo.trim();
+        if (!titulo) {
+          rechazar(operacion, "una tarea sin título no se puede crear");
+          break;
+        }
+        if (operacion.duenio && !(DUENIOS_VALIDOS as readonly string[]).includes(operacion.duenio)) {
+          rechazar(operacion, `«${operacion.duenio}» no es un dueño válido`);
+          break;
+        }
+        if (
+          operacion.tipo &&
+          !(TIPOS_DE_TAREA_VALIDOS as readonly string[]).includes(operacion.tipo)
+        ) {
+          rechazar(operacion, `«${operacion.tipo}» no es un tipo de tarea`);
+          break;
+        }
+        /* ⚠ SIN id, igual que el destino de `tarea.mover-fase`: la crea el PUT
+           (`timeline/route.ts:841-856`), y nace `source: HUMAN`. Es correcto: la pidió una
+           persona en una conversación, no la infirió un agente — y por eso queda protegida
+           contra un borrado posterior del propio chat. */
+        f.tasks.push({
+          id: undefined,
+          title: titulo,
+          weekIndex: Math.max(Math.floor(operacion.semana), 0),
+          order: f.tasks.length,
+          notes: null,
+          party: operacion.duenio ?? null,
+          type: operacion.tipo ?? null,
+        });
+        f.tocada = true;
+        normalizar(f);
+        break;
+      }
+
+      case "tarea.renombrar": {
+        const hit = buscarTarea(operacion.taskId);
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
+          break;
+        }
+        const titulo = operacion.titulo.trim();
+        if (!titulo) {
+          rechazar(operacion, "una tarea no puede quedarse sin título");
+          break;
+        }
+        hit.tarea.title = titulo;
+        hit.fase.tocada = true;
+        break;
+      }
+
+      case "tarea.duenio": {
+        const hit = buscarTarea(operacion.taskId);
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
+          break;
+        }
+        if (!(DUENIOS_VALIDOS as readonly string[]).includes(operacion.duenio)) {
+          rechazar(operacion, `«${operacion.duenio}» no es un dueño válido`);
+          break;
+        }
+        hit.tarea.party = operacion.duenio;
+        hit.fase.tocada = true;
+        break;
+      }
+
+      case "tarea.tipo": {
+        const hit = buscarTarea(operacion.taskId);
+        if (noEncontrada(hit)) {
+          rechazar(operacion, motivoDeBusqueda(hit));
+          break;
+        }
+        if (!(TIPOS_DE_TAREA_VALIDOS as readonly string[]).includes(operacion.tipo)) {
+          rechazar(operacion, `«${operacion.tipo}» no es un tipo de tarea`);
+          break;
+        }
+        hit.tarea.type = operacion.tipo;
+        hit.fase.tocada = true;
         break;
       }
 
@@ -516,13 +742,64 @@ export function describirOperaciones(
         const t = tarea(o.taskId);
         /* ⚠ Se dice la consecuencia, no solo el acto: mudar una tarea la RECREA. */
         return (
-          `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}» ` +
-          `— se recrea ahí, así que pierde su estado`
+          `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}»` +
+          (typeof o.semana === "number" ? `, semana ${o.semana + 1}` : "") +
+          ` — se recrea ahí, así que pierde su estado`
         );
       }
       case "tarea.borrar": {
         const t = tarea(o.taskId);
         return `Se elimina «${t?.titulo ?? o.taskId}» de «${t?.fase ?? "?"}»`;
+      }
+      case "fase.crear":
+        return (
+          `Se crea la fase «${o.nombre}» de ${sem(o.semanas)}` +
+          (typeof o.posicion === "number" ? `, en la posición ${o.posicion + 1}` : ", al final") +
+          " — nace vacía"
+        );
+      case "fase.quitar-semana": {
+        const f = fase(o.phaseId);
+        /* ⭐ El conteo NO es adorno: es la diferencia entre «sacá la semana vacía» y «sacá la
+           semana 3, que tiene 4 tareas que se van a mover». Sin él, la persona aprueba un número
+           que no vio. Es el mismo estándar que ya cumple `fase.borrar`. */
+        const dentro = f?.tasks.filter((t) => t.weekIndex === o.semana).length ?? 0;
+        const queda = (f?.durationWeeks ?? 1) - 1;
+        return (
+          `Se quita la semana ${o.semana + 1} de «${nombre(o.phaseId)}» (queda en ${sem(queda)})` +
+          (dentro === 0
+            ? " — estaba vacía"
+            : ` — sus ${dentro} ${dentro === 1 ? "tarea pasa" : "tareas pasan"} a la semana ` +
+              `${Math.max(o.semana, 1)}`)
+        );
+      }
+      case "fase.insertar-semana": {
+        const f = fase(o.phaseId);
+        const corren = f?.tasks.filter((t) => t.weekIndex >= o.semana).length ?? 0;
+        return (
+          `Se abre una semana vacía en la posición ${o.semana + 1} de «${nombre(o.phaseId)}» ` +
+          `(pasa a ${sem((f?.durationWeeks ?? 0) + 1)})` +
+          (corren > 0 ? ` — ${corren} ${corren === 1 ? "tarea corre" : "tareas corren"} una semana` : "")
+        );
+      }
+      case "fase.tipo":
+        return `«${nombre(o.phaseId)}» pasa a ser de tipo ${o.tipo.toLowerCase()}`;
+      case "tarea.crear":
+        return (
+          `Se agrega «${o.titulo}» a «${nombre(o.phaseId)}», en la semana ${o.semana + 1}` +
+          (o.duenio ? ` — la hace ${o.duenio.toLowerCase()}` : "")
+        );
+      case "tarea.renombrar": {
+        const t = tarea(o.taskId);
+        /* Con el nombre ANTERIOR: renombrar sin decir qué se renombra es irrevisable. */
+        return `«${t?.titulo ?? o.taskId}» pasa a llamarse «${o.titulo}»`;
+      }
+      case "tarea.duenio": {
+        const t = tarea(o.taskId);
+        return `«${t?.titulo ?? o.taskId}» pasa a hacerla ${o.duenio.toLowerCase()}`;
+      }
+      case "tarea.tipo": {
+        const t = tarea(o.taskId);
+        return `«${t?.titulo ?? o.taskId}» pasa a ser ${o.tipo === "SESSION" ? "una sesión" : "una tarea"}`;
       }
       case "arranque":
         return `El proyecto pasa a arrancar el ${o.fecha}`;

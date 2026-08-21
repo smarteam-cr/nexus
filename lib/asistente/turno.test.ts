@@ -57,17 +57,44 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
        conoce, el chat acordaría algo que después se rechaza en silencio.
 
        La edición que la pone en rojo: sumar un `op` al enum de la tool sin sumarlo al ejecutor. */
+    /* ⚠ ESTA GUARDA SE ENDURECIÓ EL 2026-08-21, y por un motivo medido. La versión anterior
+       barría con un regex TODO el bloque de la tool — que incluye la `description` del campo
+       `op`, donde cada operación se nombra otra vez en prosa. O sea que una operación citada solo
+       en el texto contaba como si estuviera en el enum, y una que se CAYERA del enum pero quedara
+       nombrada en la prosa no se notaba. Con 7 operaciones eso era tolerable; con el vocabulario
+       creciendo es una guarda que aprueba lo que no mira.
+
+       Ahora se parsea el array `enum` de verdad, y se compara en los DOS sentidos. */
     const i = FUENTE.indexOf("const TOOL_ACUERDO");
-    const bloque = FUENTE.slice(i, FUENTE.indexOf("required: [\"resumen\"", i));
-    const enumDeLaTool = [...bloque.matchAll(/"(fase\.[a-z-]+|tarea\.[a-z-]+|arranque)"/g)].map((m) => m[1]);
-    expect(enumDeLaTool.length, "el enum de operaciones desapareció de la tool").toBeGreaterThan(3);
-    const desconocidas = [...new Set(enumDeLaTool)].filter(
+    const bloque = FUENTE.slice(i, FUENTE.indexOf('required: ["resumen"', i));
+    const j = bloque.indexOf("enum: [");
+    expect(j, "el enum de operaciones desapareció de la tool").toBeGreaterThan(-1);
+    const crudo = bloque.slice(j + "enum: [".length, bloque.indexOf("]", j));
+    const enumDeLaTool = [...crudo.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+
+    const desconocidas = enumDeLaTool.filter(
       (o) => !(OPERACIONES_VALIDAS as readonly string[]).includes(o),
     );
     expect(
       desconocidas,
       "La tool ofrece operaciones que el ejecutor no conoce. El chat acordaría algo que después " +
         "se rechaza — y el CSE ya lo habría leído y aprobado.",
+    ).toEqual([]);
+
+    /* ⭐ Y EL SENTIDO INVERSO, que es el que faltaba: una operación construida y testeada que
+       nadie puede pedir. No es hipotético — `tarea.mover-semana`, `tarea.mover-fase` y
+       `tarea.borrar` vivieron así un día entero, y ese día el CSE se chocó con «no tengo forma de
+       identificar cuáles tareas están atrasadas» sobre un ejecutor que sabía hacerlo.
+
+       Si una operación se deja fuera a propósito, va acá con su motivo escrito. */
+    const MUDAS_A_PROPOSITO: { op: string; porQue: string }[] = [];
+    const inalcanzables = (OPERACIONES_VALIDAS as readonly string[]).filter(
+      (o) => !enumDeLaTool.includes(o) && !MUDAS_A_PROPOSITO.some((m) => m.op === o),
+    );
+    expect(
+      inalcanzables,
+      "El ejecutor sabe hacer operaciones que el chat NO puede pedir. O entran al enum, o entran " +
+        "a MUDAS_A_PROPOSITO con el motivo escrito — pero código muerto que parece vivo, no.",
     ).toEqual([]);
   });
 

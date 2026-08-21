@@ -12,7 +12,12 @@
  * literalmente ese caso.
  */
 import { describe, it, expect } from "vitest";
-import { aplicarOperaciones, describirOperaciones, type Operacion } from "./operaciones";
+import {
+  aplicarOperaciones,
+  describirOperaciones,
+  OPERACIONES_VALIDAS,
+  type Operacion,
+} from "./operaciones";
 import { validateTimelinePayload } from "./validate";
 import type { FaseActual } from "./assist-items";
 
@@ -269,6 +274,192 @@ describe("redistribuir reparte parejo sin reordenar", () => {
   });
 });
 
+describe("⭐ la semana del MEDIO — el pedido que el prompt usaba como ejemplo de lo imposible", () => {
+  /* Medido el 2026-08-21: 314 semanas vacías repartidas en 29 de los 46 cronogramas activos.
+     Elías lo pidió textual dos veces: «en la fase integraciones hay semanas sin tareas, quítalas».
+     Hasta hoy la respuesta correcta del chat era «no puedo: lo más cercano es acortar, que saca
+     la ÚLTIMA» — y estaba escrito así en el propio prompt, como el ejemplo canónico del
+     vocabulario cerrado. */
+
+  const conHueco = (): FaseActual[] => [
+    {
+      id: "f1",
+      name: "Marketing Hub",
+      durationWeeks: 4,
+      startWeek: null,
+      tasks: [tarea("t1", 0), tarea("t2", 2), tarea("t3", 3)],
+    },
+    { id: "f2", name: "Cierre", durationWeeks: 2, startWeek: null, tasks: [tarea("t4", 0)] },
+  ];
+
+  it("quitar la semana VACÍA acorta la fase y NO mueve a nadie de más", () => {
+    const { payload, rechazadas } = aplicarOperaciones(conHueco(), null, [
+      { op: "fase.quitar-semana", phaseId: "f1", semana: 1 },
+    ]);
+    expect(rechazadas).toHaveLength(0);
+    const f1 = payload.phases.find((p) => p.id === "f1")!;
+    expect(f1.durationWeeks).toBe(3);
+    const porId = new Map(f1.tasks!.map((t) => [t.id, t.weekIndex]));
+    expect(porId.get("t1"), "la de arriba del hueco no se movía").toBe(0);
+    expect(porId.get("t2"), "las de abajo suben una").toBe(1);
+    expect(porId.get("t3")).toBe(2);
+    expect(payload.phases.find((p) => p.id === "f2")!.tasks, "tocó una fase que nadie nombró")
+      .toBeUndefined();
+  });
+
+  it("⚠ quitar una semana CON tareas las baja a la anterior — y la línea lo DICE con el número", () => {
+    /* Sin el número, «quitá la semana 3» se lee como una operación inocua sobre algo vacío. */
+    const [linea] = describirOperaciones(conHueco(), [
+      { op: "fase.quitar-semana", phaseId: "f1", semana: 2 },
+    ]);
+    expect(linea).toContain("1 tarea pasa a la semana 2");
+    expect(linea).toContain("queda en 3 semanas");
+
+    const { payload } = aplicarOperaciones(conHueco(), null, [
+      { op: "fase.quitar-semana", phaseId: "f1", semana: 2 },
+    ]);
+    const f1 = payload.phases.find((p) => p.id === "f1")!;
+    expect(f1.tasks!.find((t) => t.id === "t2")!.weekIndex).toBe(1);
+  });
+
+  it("y la línea de la semana vacía lo dice también, para que no parezca que arrastró algo", () => {
+    const [linea] = describirOperaciones(conHueco(), [
+      { op: "fase.quitar-semana", phaseId: "f1", semana: 1 },
+    ]);
+    expect(linea).toContain("estaba vacía");
+  });
+
+  it("⛔ no se puede dejar una fase en cero semanas", () => {
+    /* Se prueba sobre una fase que YA dura una: si se encadenaran dos quitadas sobre una de dos,
+       la segunda se rechazaría por «esa semana no existe» — otro rechazo correcto, pero no éste,
+       y el test estaría midiendo el carril de al lado. */
+    const unaSola: FaseActual[] = [
+      { id: "f9", name: "Cierre", durationWeeks: 1, startWeek: null, tasks: [tarea("t9", 0)] },
+    ];
+    const { rechazadas } = aplicarOperaciones(unaSola, null, [
+      { op: "fase.quitar-semana", phaseId: "f9", semana: 0 },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("una sola semana");
+  });
+
+  it("insertar abre un hueco en el medio y corre lo de abajo", () => {
+    const { payload } = aplicarOperaciones(conHueco(), null, [
+      { op: "fase.insertar-semana", phaseId: "f1", semana: 1 },
+    ]);
+    const f1 = payload.phases.find((p) => p.id === "f1")!;
+    expect(f1.durationWeeks).toBe(5);
+    const porId = new Map(f1.tasks!.map((t) => [t.id, t.weekIndex]));
+    expect(porId.get("t1")).toBe(0);
+    expect(porId.get("t2")).toBe(3);
+  });
+});
+
+describe("crear: fases y tareas nuevas nacen SIN id, que es como el PUT las crea", () => {
+  it("una fase nueva entra en su posición y sale sin id", () => {
+    const { payload } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.crear", nombre: "QA y pruebas", semanas: 2, posicion: 1 },
+    ]);
+    expect(payload.phases.map((p) => p.name)[1]).toBe("QA y pruebas");
+    expect(payload.phases[1].id, "llegó con id: el PUT la buscaría y no existe").toBeUndefined();
+    expect(payload.phases[1].tasks, "una fase nueva nace vacía, no sin declarar").toEqual([]);
+    expect(payload.phases.map((p) => p.order)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("⛔ y una fase sin id NO se engancha con un phaseId AUSENTE", () => {
+    /* LA TRAMPA, y casi se me escapa: `find((f) => f.id === phaseId)` con los DOS en `undefined`
+       da verdadero, y una operación sin destino caería en la fase recién creada — que es la única
+       del array sin id. No es hipotético: el `input_schema` de la tool solo exige `op`
+       (`turno.ts`), así que un modelo que se olvida el `phaseId` produce exactamente este valor.
+
+       ⚠ La primera versión de este test usaba `""` y pasaba SIN la protección: `undefined === ""`
+       es falso, así que no reproducía nada. El valor que importa es el ausente. */
+    const { rechazadas, payload } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.crear", nombre: "Nueva", semanas: 1 },
+      { op: "fase.duracion", phaseId: undefined as unknown as string, semanas: 9 },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("no existe");
+    const nueva = payload.phases.find((p) => p.name === "Nueva")!;
+    expect(nueva.durationWeeks, "la operación huérfana aterrizó en la fase nueva").toBe(1);
+  });
+
+  it("una tarea nueva sale sin id, en su semana, y marca la fase", () => {
+    const { payload } = aplicarOperaciones(cronograma(), null, [
+      {
+        op: "tarea.crear",
+        phaseId: "f2",
+        titulo: "Revisión de HubSpot Academy",
+        semana: 2,
+        duenio: "CLIENTE",
+      },
+    ]);
+    const f2 = payload.phases.find((p) => p.id === "f2")!;
+    const nueva = f2.tasks!.find((t) => t.title === "Revisión de HubSpot Academy")!;
+    expect(nueva.id).toBeUndefined();
+    expect(nueva.weekIndex).toBe(2);
+    expect(nueva.party).toBe("CLIENTE");
+    expect(f2.tasks!.map((t) => t.id)).toContain("t2");
+  });
+
+  it("una tarea sin título se rechaza en vez de nacer anónima", () => {
+    const { rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "tarea.crear", phaseId: "f2", titulo: "   ", semana: 0 },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+  });
+});
+
+describe("⛔ los dos vocabularios de «tipo» no se mezclan", () => {
+  /* El riesgo que trajo crecer: la tool tiene UN campo `tipo` que sirve a dos operaciones con
+     valores distintos (SESSION|TASK para tareas, los cinco de actividad para fases). Si el
+     ejecutor no los separara, «hacé que esa fase sea una sesión» escribiría basura en una columna
+     con enum, y el PUT devolvería un 400 críptico DESPUÉS de que el CSE aprobó. */
+
+  it("una fase no puede ser SESSION", () => {
+    const { rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "fase.tipo", phaseId: "f2", tipo: "SESSION" as never },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("no es un tipo de actividad");
+  });
+
+  it("y una tarea no puede ser ADOPCION", () => {
+    const { rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "tarea.tipo", taskId: "t3", tipo: "ADOPCION" as never },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0].motivo).toContain("no es un tipo de tarea");
+  });
+
+  it("un dueño inventado tampoco pasa", () => {
+    const { rechazadas } = aplicarOperaciones(cronograma(), null, [
+      { op: "tarea.duenio", taskId: "t3", duenio: "PROVEEDOR" as never },
+    ]);
+    expect(rechazadas).toHaveLength(1);
+  });
+});
+
+describe("renombrar y mudar dicen el ANTES, no solo el después", () => {
+  it("renombrar una tarea nombra el título viejo", () => {
+    const [linea] = describirOperaciones(cronograma(), [
+      { op: "tarea.renombrar", taskId: "t3", titulo: "Cierre de auditoría" },
+    ]);
+    expect(linea).toContain("tarea t3");
+    expect(linea).toContain("Cierre de auditoría");
+  });
+
+  it("mudar de fase a una semana concreta aterriza ahí, no en la primera", () => {
+    /* Antes el clon caía siempre en la semana 1 y no había forma de corregirlo: al recrearse
+       pierde el id, así que un `tarea.mover-semana` posterior se rechaza y tumba el lote. */
+    const { payload } = aplicarOperaciones(cronograma(), null, [
+      { op: "tarea.mover-fase", taskId: "t3", phaseId: "f4", semana: 2 },
+    ]);
+    const f4 = payload.phases.find((p) => p.id === "f4")!;
+    expect(f4.tasks!.find((t) => t.title === "tarea t3")!.weekIndex).toBe(2);
+  });
+});
+
 describe("el resultado es aplicable tal cual por el PUT", () => {
   it("⭐ pasa el MISMO validador que usa el endpoint de escritura", () => {
     /* Es la prueba que cierra el círculo: si el payload no valida, las operaciones no sirven por
@@ -344,5 +535,43 @@ describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
       { op: "fase.borrar", phaseId: "f4" },
     ];
     expect(describirOperaciones(cronograma(), ops)).toHaveLength(ops.length);
+  });
+
+  it("⭐ CENSO: toda operación del vocabulario tiene su línea en castellano", () => {
+    /* ⚠ Esto es lo que sostiene la promesa cuando el vocabulario CRECE. El 2026-08-21 pasó de 10
+       a 18 operaciones; una que no tenga rama cae al `default` y la cajita azul imprime
+       «Operación desconocida: fase.tipo» — y el CSE aprueba eso, porque el botón sigue estando.
+       Un ejemplo por operación, y ninguno puede salir desconocido.
+
+       La edición que la pone en rojo: sumar una operación al vocabulario sin su línea. */
+    const EJEMPLOS: Record<(typeof OPERACIONES_VALIDAS)[number], Operacion> = {
+      "fase.duracion": { op: "fase.duracion", phaseId: "f2", semanas: 2 },
+      "fase.renombrar": { op: "fase.renombrar", phaseId: "f2", nombre: "Otra" },
+      "fase.borrar": { op: "fase.borrar", phaseId: "f4" },
+      "fase.redistribuir": { op: "fase.redistribuir", phaseId: "f2" },
+      "fase.mover": { op: "fase.mover", phaseId: "f2", posicion: 0 },
+      "fase.arranque-relativo": { op: "fase.arranque-relativo", phaseId: "f2", semana: 1 },
+      "fase.crear": { op: "fase.crear", nombre: "Nueva", semanas: 2 },
+      "fase.quitar-semana": { op: "fase.quitar-semana", phaseId: "f2", semana: 1 },
+      "fase.insertar-semana": { op: "fase.insertar-semana", phaseId: "f2", semana: 1 },
+      "fase.tipo": { op: "fase.tipo", phaseId: "f2", tipo: "ADOPCION" },
+      "tarea.mover-semana": { op: "tarea.mover-semana", taskId: "t3", semana: 1 },
+      "tarea.mover-fase": { op: "tarea.mover-fase", taskId: "t3", phaseId: "f4" },
+      "tarea.borrar": { op: "tarea.borrar", taskId: "t3" },
+      "tarea.crear": { op: "tarea.crear", phaseId: "f2", titulo: "QA", semana: 0 },
+      "tarea.renombrar": { op: "tarea.renombrar", taskId: "t3", titulo: "Otro" },
+      "tarea.duenio": { op: "tarea.duenio", taskId: "t3", duenio: "CLIENTE" },
+      "tarea.tipo": { op: "tarea.tipo", taskId: "t3", tipo: "SESSION" },
+      arranque: { op: "arranque", fecha: "2026-09-01" },
+    };
+    const todas = OPERACIONES_VALIDAS.map((k) => EJEMPLOS[k]);
+    const lineas = describirOperaciones(cronograma(), todas);
+    expect(lineas).toHaveLength(OPERACIONES_VALIDAS.length);
+    const mudas = lineas.filter((l) => l.includes("Operación desconocida"));
+    expect(mudas, "hay operaciones sin línea propia: la cajita azul las muestra como basura").toEqual(
+      [],
+    );
+    /* Y ninguna puede salir vacía o con un id crudo donde va un nombre. */
+    for (const l of lineas) expect(l.length).toBeGreaterThan(15);
   });
 });

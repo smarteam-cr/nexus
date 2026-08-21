@@ -133,6 +133,11 @@ Las fases y las tareas se referencian por su ID, el que va entre corchetes en el
 ⛔ Nunca por nombre: hay proyectos con fases casi homónimas y tareas repetidas entre fases, y
 elegir la parecida sería adivinar.
 
+⭐ SÍ SE PUEDE SACAR O AGREGAR UNA SEMANA DEL MEDIO.
+"fase.quitar-semana" y "fase.insertar-semana" existen. ⚠ No las confundas con "fase.duracion":
+acortar saca las ÚLTIMAS semanas, quitar saca LA QUE DIGAS y sube las de abajo. Si la persona
+señala una semana concreta —«la 3 está vacía»— es quitar-semana, no duración.
+
 ⭐ PARA MOVER O BORRAR TAREAS, EMITE UNA OPERACIÓN POR TAREA, ENUMERADAS.
 Si te piden «pasa las atrasadas a la última semana», mira el contexto, decide cuáles son y emite
 un "tarea.mover-semana" por cada una. Es a propósito: así la persona lee EXACTAMENTE qué tareas
@@ -143,10 +148,14 @@ Si son muchas, dilo en el resumen con el número.
 Si lo que te piden NO se puede expresar con esas operaciones, **no llames la herramienta**: dilo
 y ofrece lo más cercano que sí se pueda, para que la persona elija.
 
-Ejemplo real: «saca la semana vacía DEL MEDIO de Marketing Hub». No existe «borrar la semana 3».
-Lo más cercano es acortar la fase, que saca la ÚLTIMA y corre las tareas. Suena igual y hace otra
-cosa. Lo correcto es decir: «no puedo sacar una del medio; puedo acortarla a 3 semanas y las 2
-tareas de la semana 4 pasan a la 3 — ¿lo hago así?».
+Ejemplo real: «marca esa tarea como hecha». NO se puede, y no es un olvido: el estado de una
+tarea lo escribe una persona en el Gantt, nunca un agente. Lo correcto es decirlo y señalar dónde
+se hace, no buscar la operación más parecida.
+
+Otro: «unifica estas dos fases en una». Tampoco existe como operación. Lo más cercano sí se puede
+armar —mover sus tareas a la otra fase y borrar la que queda vacía— pero mudarlas las RECREA y
+pierden su estado. Eso se dice ANTES: «puedo mover las 6 tareas de A a B y borrar A, pero las 6
+se recrean y pierden si estaban hechas — ¿lo hago igual, o preferís unificarlas a mano?».
 
 ⭐ DOBLE CONFIRMACIÓN CUANDO SE BORRA TRABAJO DE ALGUIEN
 Antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas HECHAS, dilo con el
@@ -215,9 +224,17 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.redistribuir",
                 "fase.mover",
                 "fase.arranque-relativo",
+                "fase.crear",
+                "fase.quitar-semana",
+                "fase.insertar-semana",
+                "fase.tipo",
                 "tarea.mover-semana",
                 "tarea.mover-fase",
                 "tarea.borrar",
+                "tarea.crear",
+                "tarea.renombrar",
+                "tarea.duenio",
+                "tarea.tipo",
                 "arranque",
               ],
               description:
@@ -228,12 +245,25 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.mover: la cambia de lugar en el orden (posicion, base 0). " +
                 "fase.arranque-relativo: en qué semana del proyecto arranca (semana, o null = " +
                 "cuando termina la anterior). " +
+                "fase.crear: agrega una fase NUEVA y vacía (nombre, semanas, posicion opcional " +
+                "base 0). ⚠ no podés referirte a ella en el mismo acuerdo: no tiene id todavía. " +
+                "fase.quitar-semana: saca UNA semana del medio (phaseId, semana base 0) y acorta " +
+                "la fase; las tareas de esa semana pasan a la anterior. ⚠ NO confundir con " +
+                "fase.duracion, que saca las ÚLTIMAS. " +
+                "fase.insertar-semana: abre una semana vacía en esa posición y corre el resto. " +
+                "fase.tipo: cambia el tipo de actividad (EXPLORACION, PLANIFICACION, " +
+                "CONFIGURACION, ADOPCION o SEGUIMIENTO). " +
                 "tarea.mover-semana: pasa UNA tarea a otra semana de su misma fase (taskId, " +
                 "semana base 0). " +
                 "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). ⚠ la recrea: " +
                 "pierde su estado y sus fechas propias, avisalo antes. " +
                 "tarea.borrar: elimina UNA tarea (taskId). ⚠ si tiene trabajo humano encima " +
                 "—hecha, en curso, o cargada a mano— se rechaza sola: no se puede borrar desde acá. " +
+                "tarea.crear: agrega una tarea NUEVA (phaseId, titulo, semana base 0, y opcional " +
+                "duenio = CLIENTE|SMARTEAM|AMBOS|DEV y tipo = SESSION|TASK). " +
+                "tarea.renombrar: le cambia el título (taskId, titulo). " +
+                "tarea.duenio: cambia quién la hace (taskId, duenio). " +
+                "tarea.tipo: la vuelve sesión o tarea (taskId, tipo). " +
                 "arranque: cambia la fecha de inicio del proyecto (fecha AAAA-MM-DD).",
             },
             phaseId: {
@@ -252,6 +282,31 @@ const TOOL_ACUERDO: Anthropic.Messages.Tool = {
               description:
                 "El identificador de la TAREA, tal como aparece entre corchetes junto a su " +
                 "título en el contexto. Para tarea.mover-semana, tarea.mover-fase y tarea.borrar.",
+            },
+            titulo: {
+              type: "string",
+              description: "Para tarea.crear y tarea.renombrar. El título que ve el cliente.",
+            },
+            duenio: {
+              type: "string",
+              enum: ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"],
+              description: "Para tarea.duenio, y opcional en tarea.crear. Quién ejecuta la tarea.",
+            },
+            tipo: {
+              type: "string",
+              enum: [
+                "SESSION",
+                "TASK",
+                "EXPLORACION",
+                "PLANIFICACION",
+                "CONFIGURACION",
+                "ADOPCION",
+                "SEGUIMIENTO",
+              ],
+              description:
+                "Para tarea.tipo y tarea.crear usá SESSION o TASK. Para fase.tipo usá uno de los " +
+                "cinco tipos de actividad. ⛔ No los mezcles: el ejecutor rechaza el que no " +
+                "corresponde a la operación.",
             },
             fecha: { type: "string", description: "Para arranque. AAAA-MM-DD." },
           },
