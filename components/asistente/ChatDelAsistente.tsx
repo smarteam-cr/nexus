@@ -298,20 +298,32 @@ export default function ChatDelAsistente({
 
         {turnos.map((t) => (
           <div key={t.id}>
-            <div
-              className={
-                t.rol === "CSE"
-                  ? "ml-8 rounded-xl px-3 py-2 bg-surface-active text-sm text-fg whitespace-pre-wrap"
-                  : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary"
-              }
-            >
-              {t.rol === "CSE" ? t.texto : <Markdown>{t.texto}</Markdown>}
-            </div>
+            {/* ⭐ UN TURNO CON ACUERDO ES UNA SOLA CAJA (pedido de Elías, 2026-08-21).
+                Antes eran dos bloques que decían lo mismo: la burbuja del asistente enumeraba las
+                tres tareas y la cajita azul las volvía a enumerar debajo. Elías: *«lo siento
+                repetitivo; de una el mensaje debería ser el cuadro azul»*. Ahora el texto del
+                asistente ENTRA a la caja, y la enumeración vive en un solo lugar — el que sale de
+                las operaciones, que es el que no puede mentir. */}
+            {!t.acuerdo && (
+              <div
+                className={
+                  t.rol === "CSE"
+                    ? "ml-8 rounded-xl px-3 py-2 bg-surface-active text-sm text-fg whitespace-pre-wrap"
+                    : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary"
+                }
+              >
+                {t.rol === "CSE" ? t.texto : <Markdown>{t.texto}</Markdown>}
+              </div>
+            )}
 
             {t.acuerdo && (
-              <div className="mt-2 mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2">
+              <div className="mr-2 rounded-xl border border-info-line bg-info-surface px-3 py-2">
                 <p className="text-xs font-semibold text-info-ink">Lo que se acordó</p>
-                <p className="text-sm text-fg mt-1">{t.acuerdo.resumen}</p>
+                {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
+                    dos: son la misma frase escrita dos veces. */}
+                <div className="text-sm text-fg mt-1">
+                  {t.texto ? <Markdown>{t.texto}</Markdown> : <p>{t.acuerdo.resumen}</p>}
+                </div>
 
                 {/* ⭐ LO QUE SE LEE ES LO QUE SE EJECUTA. Cada renglón es UNA operación, traducida
                     en el servidor desde el mismo objeto que se va a aplicar. Antes acá había una
@@ -349,9 +361,17 @@ export default function ChatDelAsistente({
                       ))}
                     </ol>
                   </>
-                ) : (
+                ) : t.acuerdo.instruccion ? (
                   /* ⚠ LEGACY: hilos anteriores al 2026-08-20 guardaron una instrucción de texto,
-                     que un segundo modelo releía. Se siguen pintando para no perder su historia. */
+                     que un segundo modelo releía; y los DOCUMENTOS todavía la usan para copiar y
+                     pegar. Se siguen pintando para no perder su historia.
+
+                     ⛔ Pero solo SI HAY INSTRUCCIÓN. Antes esto era el `else` de «¿hay líneas?», así
+                     que un acuerdo con operaciones y sin líneas caía acá y pintaba un textarea
+                     VACÍO bajo un «Ver instrucción» que no abría nada — con el botón diciendo
+                     «Aplicar al cronograma». Elías lo vio así y tenía razón en que sobraba: no era
+                     de más, era una promesa falsa. Lo que se ejecuta son las operaciones; esa caja
+                     de texto no se lee en ese camino. */
                   <details className="mt-2 group">
                     <summary className="cursor-pointer text-xs text-brand-light hover:text-brand list-none select-none">
                       <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
@@ -369,7 +389,7 @@ export default function ChatDelAsistente({
                       Podés editarla: es lo que se va a ejecutar tal cual.
                     </p>
                   </details>
-                )}
+                ) : null}
 
                 {t.id !== idDelAcuerdoVivo ? null : onAplicar ? (
                   <button

@@ -255,6 +255,41 @@ describe("⛔ el borrado silencioso no vuelve por la puerta de al lado", () => {
   });
 });
 
+describe("⭐ un turno con acuerdo es UNA caja, no dos que dicen lo mismo", () => {
+  /* Elías, 2026-08-21, mirando la pantalla: *«lo siento repetitivo; de una el mensaje debería ser
+     el cuadro azul»*. Y tenía razón: la burbuja del asistente enumeraba las tres tareas y la
+     cajita azul las volvía a enumerar dos centímetros más abajo. */
+
+  it("⛔ la burbuja suelta NO se pinta cuando el turno trae acuerdo", () => {
+    /* La edición que la pone en rojo: volver a renderizar la burbuja siempre. Nada falla —
+       simplemente vuelve a haber dos bloques con el mismo contenido, y la persona deja de leer
+       los dos. */
+    expect(PANEL).toContain("{!t.acuerdo && (");
+  });
+
+  it("⛔ y dentro de la caja va el texto O el resumen, nunca los dos", () => {
+    /* Son la misma frase escrita dos veces: el modelo redacta el resumen para la caja y el texto
+       para el hilo, y sobre el mismo acuerdo dicen lo mismo. */
+    expect(PANEL).toContain("t.texto ? <Markdown>{t.texto}</Markdown> : <p>{t.acuerdo.resumen}</p>");
+  });
+});
+
+describe("⛔ nunca un «Ver instrucción» que no lleva a ninguna instrucción", () => {
+  /* Lo que Elías vio: un `<details>` que abría un textarea VACÍO, con el botón diciendo «Aplicar
+     al cronograma». Era el `else` de «¿hay líneas?», así que un acuerdo con operaciones y sin
+     líneas caía ahí. No sobraba por ruido: prometía que ese texto era «lo que se va a ejecutar
+     tal cual», y en el camino de operaciones ese texto no se lee nunca. */
+
+  it("el camino legacy exige que HAYA instrucción", () => {
+    /* La edición que la pone en rojo: volver a `) : (` — el else incondicional. */
+    expect(PANEL).toContain(") : t.acuerdo.instruccion ? (");
+    expect(
+      /\}\s*\)\s*:\s*\(\s*\n\s*\/\* ⚠ LEGACY/.test(PANEL),
+      "el legacy volvió a ser el else de cualquier acuerdo sin líneas",
+    ).toBe(false);
+  });
+});
+
 describe("el texto del asistente se renderiza", () => {
   it("⛔ como Markdown, no como texto plano", () => {
     /* Reportado el 2026-08-20: se veía el `- **Sumar…**` crudo. La edición que la pone en rojo:
