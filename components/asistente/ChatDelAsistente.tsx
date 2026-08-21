@@ -92,6 +92,9 @@ interface Props {
   onAplicar?: (acuerdo: AcuerdoDelChat) => Promise<ResultadoDeAplicar>;
 }
 
+/** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
+export const ID_DEL_CAJON = "cajon-del-asistente";
+
 /** Un solo `Set` vacío compartido: crear uno nuevo por render rompería cualquier memo. */
 const EMPTY: ReadonlySet<number> = new Set<number>();
 
@@ -122,6 +125,7 @@ export default function ChatDelAsistente({
   const [desmarcadas, setDesmarcadas] = useState<Record<string, Set<number>>>({});
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   /**
    * ⭐ EL BOTÓN DE APLICAR VIVE SOLO EN EL ÚLTIMO TURNO, y esa regla resuelve el bug entero.
@@ -160,11 +164,39 @@ export default function ChatDelAsistente({
   useEffect(() => {
     if (!abierto) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      /* ⛔ NO si hay un modal encima. `Modal` escucha en `document` y esto en `window`; el evento
+         burbujea a los dos y ninguno corta, así que UN Escape cerraba el modal Y el chat de una:
+         el CSE quería descartar una propuesta y encima perdía el hilo. Es el mismo criterio del
+         z-index —el cajón vive DEBAJO de los modales— llevado al teclado. */
+      if (document.querySelector('[aria-modal="true"]')) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [abierto, onClose]);
+
+  /**
+   * ⭐ EL FOCO ENTRA AL CAJÓN Y VUELVE DE DONDE VINO.
+   *
+   * El panel se portaliza al FINAL de `body`, y su disparador vive en el header del documento —
+   * arriba de todo. Sin esto, quien abre el chat con teclado tiene que tabular por TODO el
+   * cronograma (cada input de cada tarea de cada fase) para llegar al campo de escribir: en la
+   * práctica, el chat era inalcanzable sin mouse. Y al cerrar, el portal se desmonta y el foco
+   * cae a `body`, así que la persona vuelve al principio del documento.
+   *
+   * ⚠ NO es una trampa de foco: el cajón no es modal y tabular al documento tiene que seguir
+   * funcionando. Solo se pone el foco al abrir y se devuelve al cerrar.
+   */
+  useEffect(() => {
+    if (!abierto) return;
+    const previo = document.activeElement as HTMLElement | null;
+    const t = window.setTimeout(() => composerRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(t);
+      previo?.focus?.();
+    };
+  }, [abierto]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -347,6 +379,7 @@ export default function ChatDelAsistente({
 
   return createPortal(
     <aside
+      id={ID_DEL_CAJON}
       className="fixed right-0 top-0 h-full z-[45] w-[400px] max-w-[92vw] bg-surface border-l border-line shadow-2xl flex flex-col"
       aria-label={`Asistente sobre ${piezaLabel}`}
     >
@@ -454,11 +487,24 @@ export default function ChatDelAsistente({
                         auto-scroll deja la primera línea arriba de todo, invisible. El recorte es
                         VISUAL — la lista sigue completa y alcanzable, que es lo que la vuelve
                         auditable. */}
+                    {/* ⚠ Cuando la lista se recorta, tiene que poder ALCANZARSE con el teclado.
+                        Un contenedor con `overflow-y-auto` y nada enfocable adentro no entra en
+                        el orden de tabulación: Tab pasa de largo al botón «Aplicar», así que con
+                        12 operaciones se aprobaban las 6 que se ven. `tabIndex` + `role` lo
+                        vuelven una región navegable con las flechas. */}
                     <ol
+                      {...(t.acuerdo.lineas.length > 6
+                        ? {
+                            tabIndex: 0,
+                            role: "region" as const,
+                            "aria-label": `${t.acuerdo.lineas.length} cambios acordados`,
+                          }
+                        : {})}
                       className={
                         "mt-2 space-y-1 list-decimal pl-4 text-sm text-fg marker:text-fg-muted" +
                         (t.acuerdo.lineas.length > 6
-                          ? " max-h-56 overflow-y-auto pr-1 overscroll-contain"
+                          ? " max-h-56 overflow-y-auto pr-1 overscroll-contain" +
+                            " focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-info-line rounded"
                           : "")
                       }
                     >
@@ -559,6 +605,23 @@ export default function ChatDelAsistente({
           </div>
         ))}
 
+        {/* ⚠ REGIONES MONTADAS SIEMPRE, aunque estén vacías. Una `live region` tiene que estar
+            en el DOM ANTES del cambio para que el lector de pantalla la observe: insertarla ya
+            con el texto adentro no anuncia nada. Antes, apretar «Aplicar» con lector de pantalla
+            era silencio absoluto — y encima el botón se deshabilita, así que el foco cae a `body`
+            y no queda ni contexto donde escuchar. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {cargando
+            ? "Cargando la conversación"
+            : pensando
+              ? "El asistente está pensando"
+              : aplicando
+                ? "Aplicando los cambios"
+                : ""}
+        </p>
+        <p role="alert" className="sr-only">
+          {error ?? ""}
+        </p>
         {pensando && <p className="text-xs text-fg-muted">Pensando…</p>}
         {/* ⚠ DOS CARRILES, DOS ESPERAS. El de operaciones aplica en ~1 ms; el viejo —una
             instrucción en prosa que un segundo modelo relee— tarda de dos a cuatro minutos.
@@ -581,6 +644,7 @@ export default function ChatDelAsistente({
 
       <div className="px-3 py-3 border-t border-line shrink-0">
         <textarea
+          ref={composerRef}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {

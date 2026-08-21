@@ -37,7 +37,7 @@ import {
   endShiftFragment,
 } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
-import ChatDelAsistente from "@/components/asistente/ChatDelAsistente";
+import ChatDelAsistente, { ID_DEL_CAJON } from "@/components/asistente/ChatDelAsistente";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -504,6 +504,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       headerSlot.inert = false;
     };
   }, [headerSlot, ocupado.activo]);
+
+  /**
+   * El foco entra al cartel de bloqueo y vuelve de donde vino.
+   *
+   * Sin esto, apretar un botón que enciende el bloqueo lo vuelve inerte con el foco adentro: el
+   * navegador lo desenfoca y el foco cae a `body`. Quien navega con teclado termina al principio
+   * del documento, sin saber que algo está corriendo.
+   */
+  const carteldeBloqueoRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!ocupado.activo) return;
+    const previo = document.activeElement as HTMLElement | null;
+    const t = window.setTimeout(() => carteldeBloqueoRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(t);
+      previo?.focus?.();
+    };
+  }, [ocupado.activo]);
 
   const keyCounter = useRef(0);
   const nextKey = () => `new-${keyCounter.current++}`;
@@ -2390,8 +2408,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       {ocupado.activo && (
         <div
           className="absolute inset-0 z-[44] flex items-start justify-center cursor-wait"
+          /* ⛔ SIN `aria-live` ACÁ: `aria-busy` significa literalmente «no anuncies todavía, sigo
+             actualizando», así que suprimía la región viva que tenía al lado. Y como el nodo se
+             DESMONTA al terminar —nunca pasa a `aria-busy=false`— el anuncio retenido no se
+             disparaba nunca. El anuncio vive abajo, en una región montada siempre. */
           aria-busy="true"
-          aria-live="polite"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ⛔ TINTA BLANCA SOBRE TODO (pedido de Elías, 2026-08-21). `bg-surface/85` es el
@@ -2406,7 +2427,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           {/* ⚠ El loader va `sticky` y no centrado a secas: el cronograma mide varias pantallas,
               así que un centro absoluto queda fuera de la vista en cuanto la persona scrollea —
               y un bloqueo cuyo cartel no se ve se lee como la pantalla colgada. */}
-          <div className="sticky top-[38vh] flex flex-col items-center gap-4 px-6 text-center">
+          {/* ⚠ EL CARTEL TOMA EL FOCO, y no es un detalle: los botones que ENCIENDEN el bloqueo
+              viven dentro del subárbol que se vuelve inerte. Cuando el elemento enfocado pasa a
+              inerte, el navegador lo desenfoca y el foco cae a `body` — o sea que apretar
+              «Aplicar avance» con el teclado te devuelve al principio del documento. Poniéndolo
+              acá, el foco queda EN el aviso y se lee en contexto. */}
+          <div
+            ref={carteldeBloqueoRef}
+            tabIndex={-1}
+            className="sticky top-[38vh] flex flex-col items-center gap-4 px-6 text-center focus:outline-none"
+          >
             <span className="w-16 h-16 border-[5px] border-brand/25 border-t-brand rounded-full animate-spin" />
             <div>
               <p className="text-base font-semibold text-fg">{ocupado.rotulo}…</p>
@@ -2420,6 +2450,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           clickeable por cualquier hijo con un z mayor que el del velo. `inert` saca el subárbol
           entero del foco y de los eventos: es el único «bloqueado» que no depende de adivinar
           z-index uno por uno. (React 19 lo pasa como atributo booleano.) */}
+      {/* ⚠ MONTADA SIEMPRE, aunque esté vacía: una región viva tiene que estar en el DOM ANTES
+          del cambio para que el lector de pantalla la observe. Insertarla ya con el texto adentro
+          no anuncia nada. Va FUERA del subárbol inerte, o dejaría de leerse justo cuando importa. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {ocupado.activo ? `${ocupado.rotulo}. ${ocupado.detalle}` : ""}
+      </p>
       <div className="space-y-4" inert={ocupado.activo}>
       {/* Logo del cliente — paridad con el preview del kickoff (lado Nexus). Clickeable
           para ajustar el tamaño: acá se edita la BASE del cliente y no un ajuste local,
@@ -2462,6 +2498,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           {canEdit && phases.length > 0 && (
             <button
               onClick={() => setChatAbierto((v) => !v)}
+              /* Sin esto, un lector de pantalla anuncia «Asistente, botón» idéntico abierto y
+                 cerrado: la única señal del estado era el color. */
+              aria-expanded={chatAbierto}
+              aria-controls={ID_DEL_CAJON}
               className={
                 chatAbierto
                   ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"

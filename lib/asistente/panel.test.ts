@@ -51,8 +51,15 @@ describe("el panel del asistente NO es modal", () => {
       /inset-0[^"]*bg-black|bg-black[^"]*inset-0/.test(PANEL),
       "apareció un backdrop: el documento tiene que quedar visible y clickeable",
     ).toBe(false);
+    /* ⚠ Se mira el ELEMENTO RAÍZ del panel, no el archivo entero. Mencionar `aria-modal` no es
+       declararse modal: el chat consulta `[aria-modal="true"]` para NO cerrarse por debajo de un
+       modal abierto — que es lo contrario de volverse uno. La versión anterior no distinguía
+       «declara» de «nombra», así que castigaba justo al código que respeta la regla. */
+    const i = PANEL.indexOf("<aside");
+    expect(i, "se fue el elemento raíz del panel").toBeGreaterThan(-1);
+    const raiz = PANEL.slice(i, PANEL.indexOf(">", i));
     expect(
-      PANEL.includes("aria-modal"),
+      /aria-modal\s*=/.test(raiz),
       "el panel se declaró modal: deja de convivir con el documento",
     ).toBe(false);
   });
@@ -70,6 +77,41 @@ describe("el panel del asistente NO es modal", () => {
     const z = PANEL.match(/z-\[(\d+)\]/);
     expect(z, "el panel perdió su z declarado").not.toBeNull();
     expect(Number(z![1])).toBeLessThan(55);
+  });
+});
+
+describe("⚠ el cajón se puede usar sin mouse", () => {
+  /* El panel se portaliza al FINAL de `body` y su disparador vive en el header del documento.
+     Sin manejo de foco, llegar al campo de escribir con teclado exige tabular por TODO el
+     cronograma — cada input de cada tarea de cada fase. En la práctica era inalcanzable. */
+
+  it("⛔ el foco entra al abrir y VUELVE al cerrar", () => {
+    /* La edición que la pone en rojo: borrar el efecto. Nada falla a la vista; simplemente el
+       chat deja de existir para quien no usa mouse. */
+    expect(PANEL).toContain("composerRef.current?.focus()");
+    expect(PANEL, "el foco no vuelve de donde vino: se cae a body").toContain("previo?.focus?.()");
+  });
+
+  it("⛔ y Escape no cierra el cajón por debajo de un modal", () => {
+    /* `Modal` escucha en `document` y esto en `window`; el evento burbujea a los dos y ninguno
+       corta, así que UN Escape cerraba el modal Y el chat. Es el z-index llevado al teclado. */
+    expect(PANEL).toContain('[aria-modal="true"]');
+  });
+
+  it("⚠ la lista recortada es alcanzable con el teclado", () => {
+    /* Un contenedor con `overflow-y-auto` y nada enfocable adentro no entra en el orden de
+       tabulación: con 12 operaciones se aprobaban las 6 que se ven. */
+    const i = PANEL.indexOf("acuerdo.lineas.map");
+    const bloque = PANEL.slice(Math.max(0, i - 1200), i);
+    expect(bloque, "la lista con scroll dejó de ser navegable").toContain("tabIndex: 0");
+  });
+
+  it("⛔ el estado y el error se ANUNCIAN, y desde una región ya montada", () => {
+    /* Una región viva tiene que estar en el DOM ANTES del cambio para que la AT la observe:
+       insertarla ya con el texto adentro no anuncia nada. Por eso van montadas siempre, vacías.
+       La edición que la pone en rojo: envolverlas en `{error && (...)}`. */
+    expect(PANEL).toContain('role="status"');
+    expect(PANEL).toContain('role="alert"');
   });
 });
 
