@@ -937,7 +937,7 @@ export async function cambiarEstadoComisionPartner(
   }
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true, estado: true },
+    select: { id: true, estado: true, monto: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
   if (actual.estado === data.estado) {
@@ -951,6 +951,10 @@ export async function cambiarEstadoComisionPartner(
     where: { id: comisionId },
     data: {
       estado: data.estado,
+      // El monto real entra JUNTO con la confirmación. Lo que estaba registrado antes de
+      // que la plata llegara era una proyección; firmarla sin poder corregirla sería
+      // firmar un número que se sabe falso.
+      ...(data.monto !== undefined ? { monto: data.monto } : {}),
       ...(data.estado === "COBRADO"
         ? {
             // El refine del schema garantiza que la fecha viene: marcarla cobrada sin

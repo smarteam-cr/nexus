@@ -32,6 +32,17 @@ import {
   Select,
 } from "@/components/ui";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
+import type { CorteDeMoneda } from "@/lib/cobranza/comisiones-partner";
+
+/**
+ * Cuántas comisiones hay de un lado del corte, sumando todas las monedas.
+ *
+ * El CONTEO sí cruza monedas —son cuántas cosas, no cuánta plata— y por eso vive acá
+ * y no en el módulo de totales, donde la regla es que CRC y USD jamás se mezclan.
+ */
+function cuantas(totales: readonly CorteDeMoneda[], campo: "cuantasCobradas" | "cuantasEsperadas"): number {
+  return totales.reduce((n, t) => n + t[campo], 0);
+}
 import { COBRANZA_MONEDAS } from "@/lib/cobranza/schema";
 
 interface ClienteLite {
@@ -61,6 +72,17 @@ type FormState = {
 
 type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; notas: string };
 
+/**
+ * El formulario de «Registrar cobro»: fecha real y MONTO real, juntos.
+ *
+ * ⚠ El monto va acá y no en el «Editar» de siempre porque son dos actos distintos: lo
+ * que se registra antes de que la plata llegue es una proyección (los $51.000 redondos
+ * de agosto eran eso) y lo que entra nunca es ese número —fueron ~$50.847 menos la
+ * retención del procesador—. Confirmar sin poder corregir obliga a firmar una cifra
+ * que se sabe falsa, y esa firma es la que sostiene INV20.
+ */
+type CobroForm = { id: string; partner: string; moneda: string; fechaCobro: string; monto: string };
+
 export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   const toast = useToast();
   const [data, setData] = useState(initial);
@@ -71,6 +93,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
   // Borrar un aliado le saca la cadencia a TODO su historial y no hay deshacer:
   // pide confirmacion, como el resto de los borrados del modulo.
   const [borrandoAliado, setBorrandoAliado] = useState<{ id: string; nombre: string } | null>(null);
+  const [cobro, setCobro] = useState<CobroForm | null>(null);
 
   async function refrescar() {
     try {
@@ -118,6 +141,54 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar la comisión.");
     } finally {
       setGuardando(false);
+    }
+  }
+
+  /**
+   * Confirma que la plata entró. Pasa por el chokepoint `/estado`, que es el ÚNICO
+   * escritor del estado — INV20 exige que una comisión COBRADA lleve la firma de quien
+   * lo confirmó, y con dos escritores el invariante se rompe por el que nadie mira.
+   *
+   * Este endpoint existía desde el 2026-08-17 y NO TENÍA UN SOLO LLAMADOR: por eso toda
+   * comisión cargada desde la pantalla nacía «por cobrar» y se quedaba ahí para siempre,
+   * y la caja del reporte anual la contaba como cero.
+   */
+  async function confirmarCobro() {
+    if (!cobro) return;
+    const monto = Number(cobro.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      toast.error("El monto que entró tiene que ser un número positivo.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await fetchJson(`/api/cobranza/comisiones-partner/${cobro.id}/estado`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "COBRADO", fechaCobro: cobro.fechaCobro, monto }),
+      });
+      setCobro(null);
+      await refrescar();
+      toast.success("Cobro confirmado.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo confirmar el cobro.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /** Deshace la confirmación: limpia fecha y firma, como el revert de un cobro. */
+  async function revertirCobro(id: string) {
+    try {
+      await fetchJson(`/api/cobranza/comisiones-partner/${id}/estado`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "POR_COBRAR" }),
+      });
+      await refrescar();
+      toast.success("La comisión volvió a «por cobrar».");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo revertir.");
     }
   }
 
@@ -199,6 +270,36 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
         }
       />
 
+      {/* ── Lo que entró, y después lo que falta ──────────────────────────
+          El orden es la decisión: ARRIBA la plata que está en el banco, ABAJO la que
+          se espera. Antes había un solo «Total acumulado» que sumaba las dos cosas sin
+          decirlo — con la proyección de noviembre adentro— y ese número no se podía
+          llevar a ninguna reunión. */}
+      {data.totales.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-line bg-surface px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-fg-muted">Cobrado en el año</p>
+            <p className="mt-1 text-xl font-bold text-fg tabular-nums">
+              {data.totales.map((t) => fmtMonto(t.cobrado, t.moneda as "CRC" | "USD")).join(" · ")}
+            </p>
+            <p className="mt-0.5 text-[11px] text-fg-muted">
+              {cuantas(data.totales, "cuantasCobradas")} confirmada
+              {cuantas(data.totales, "cuantasCobradas") === 1 ? "" : "s"} · plata en el banco
+            </p>
+          </div>
+          <div className="rounded-xl border border-line border-dashed bg-surface px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-fg-muted">Por venir a fin de año</p>
+            <p className="mt-1 text-xl font-semibold text-fg-secondary tabular-nums">
+              {data.totales.map((t) => fmtMonto(t.esperado, t.moneda as "CRC" | "USD")).join(" · ")}
+            </p>
+            <p className="mt-0.5 text-[11px] text-fg-muted">
+              {cuantas(data.totales, "cuantasEsperadas")} esperada
+              {cuantas(data.totales, "cuantasEsperadas") === 1 ? "" : "s"} · el monto se confirma al entrar
+            </p>
+          </div>
+        </div>
+      )}
+
       {data.porPartner.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {data.porPartner.map((p) => (
@@ -208,10 +309,12 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
             >
               <p className="text-[11px] font-medium text-fg-secondary truncate">{p.partner}</p>
               <p className="mt-0.5 text-sm text-fg tabular-nums">
-                {fmtMonto(p.total, p.moneda as "CRC" | "USD")}
+                {fmtMonto(p.cobrado, p.moneda as "CRC" | "USD")}
               </p>
               <p className="text-[11px] text-fg-muted">
-                {p.cuantas} pago{p.cuantas === 1 ? "" : "s"} · {p.moneda}
+                {p.esperado > 0
+                  ? `+ ${fmtMonto(p.esperado, p.moneda as "CRC" | "USD")} por venir · ${p.moneda}`
+                  : `${p.cuantasCobradas} pago${p.cuantasCobradas === 1 ? "" : "s"} · ${p.moneda}`}
               </p>
             </div>
           ))}
@@ -220,17 +323,8 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
 
       <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
         <p className="text-[11px] text-fg-muted">
-          Total acumulado:{" "}
-          {Object.keys(data.totales).length === 0 ? (
-            <span className="text-fg-secondary">—</span>
-          ) : (
-            <span className="text-fg-secondary tabular-nums">
-              {Object.entries(data.totales)
-                .map(([m, v]) => fmtMonto(v, m as "CRC" | "USD"))
-                .join(" · ")}
-            </span>
-          )}{" "}
-          · CRC y USD nunca se suman entre sí
+          Las comisiones de aliados son un INGRESO, pero no entran al total de facturación: esa cifra
+          es solo servicios. · CRC y USD nunca se suman entre sí.
         </p>
       </div>
 
@@ -303,6 +397,7 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                 <th className={TH}>Concepto</th>
                 <th className={TH}>Fecha</th>
                 <th className={`${TH} text-right`}>Monto</th>
+                <th className={TH}>Estado</th>
                 <th className={TH}></th>
               </tr>
             </thead>
@@ -320,8 +415,41 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
                   <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
                     {fmtMonto(c.monto, c.moneda as "CRC" | "USD")}
                   </td>
+                  <td className={`${TD} whitespace-nowrap`}>
+                    {c.estado === "COBRADO" ? (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border border-line bg-surface-muted text-fg-secondary">
+                        Cobrada{c.fechaCobro ? ` · ${fmtFecha(c.fechaCobro)}` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border border-warn-line bg-warn-surface text-warn-ink">
+                        Por cobrar
+                      </span>
+                    )}
+                  </td>
                   <td className={`${TD} text-right whitespace-nowrap`}>
                     <div className="flex justify-end gap-1.5">
+                      {c.estado === "COBRADO" ? (
+                        <Button variant="secondary" size="sm" onClick={() => revertirCobro(c.id)}>
+                          Revertir
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setCobro({
+                              id: c.id,
+                              partner: c.partner,
+                              moneda: c.moneda,
+                              // Arranca en la fecha esperada y con el monto registrado —
+                              // los dos se corrigen antes de firmar, que es el punto.
+                              fechaCobro: c.fecha,
+                              monto: String(c.monto),
+                            })
+                          }
+                        >
+                          Registrar cobro
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         size="sm"
@@ -436,6 +564,45 @@ export default function ComisionesPartnerPanel({ initial, clientes }: Props) {
             await borrarAliado(id);
           }}
         />
+      )}
+
+      {cobro && (
+        <Modal
+          open
+          onClose={() => setCobro(null)}
+          title={`Registrar cobro · ${cobro.partner}`}
+          description="La fecha en que entró la plata y el monto NETO que llegó al banco. Lo registrado antes era una proyección: casi nunca coincide con lo que entra."
+        >
+          <div className="space-y-3">
+            <Field label="Fecha en que entró">
+              <Input
+                type="date"
+                value={cobro.fechaCobro}
+                onChange={(e) => setCobro({ ...cobro, fechaCobro: e.target.value })}
+              />
+            </Field>
+            <Field label={`Monto neto que entró (${cobro.moneda})`}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={cobro.monto}
+                onChange={(e) => setCobro({ ...cobro, monto: e.target.value })}
+              />
+            </Field>
+            <p className="text-[11px] text-fg-muted">
+              Confirmar deja tu nombre firmando que esta plata entró. Con la fecha, la comisión pasa a
+              la caja del mes que corresponde.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setCobro(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmarCobro} disabled={guardando || !cobro.fechaCobro}>
+                Confirmar cobro
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {aliado && (

@@ -1,0 +1,103 @@
+/**
+ * lib/cobranza/comisiones-partner.ts
+ *
+ * La aritmética del panel de comisiones de aliado. PURO: cero Prisma, cero red, cero
+ * `new Date()` — la fecha de hoy entra por parámetro cuando hace falta.
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────────
+ * Esta cuenta vivía dentro de `loadComisionesPartner` y no tenía UNA sola prueba, con
+ * dos consecuencias que llegaron juntas a la pantalla:
+ *
+ *   1. El «Total acumulado» sumaba TODAS las filas sin mirar el estado, así que mezclaba
+ *      plata que entró al banco con plata que todavía se espera — incluida la proyección
+ *      de noviembre, que no ocurrió. Un número así no se puede llevar a una reunión.
+ *   2. Nadie podía notar (1), porque el DTO ni siquiera transportaba el estado.
+ *
+ * ⚠ CRC Y USD NUNCA SE SUMAN. Es la regla dura de todo el módulo de cobranza: los
+ * totales son SIEMPRE por moneda, y una conversión acá escondería de qué moneda es la
+ * plata que alguien está mirando.
+ */
+
+/** Lo mínimo de una comisión para poder sumarla. */
+export interface ComisionParaSumar {
+  partner: string;
+  monto: number;
+  moneda: string;
+  /** "COBRADO" = la plata entró y alguien lo firmó. Cualquier otra cosa: todavía no. */
+  estado: string;
+}
+
+/** El corte de una moneda: lo que entró, lo que se espera, y la suma de los dos. */
+export interface CorteDeMoneda {
+  moneda: string;
+  cobrado: number;
+  esperado: number;
+  total: number;
+  cuantasCobradas: number;
+  cuantasEsperadas: number;
+}
+
+export interface TotalPorPartner extends CorteDeMoneda {
+  partner: string;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Normaliza el nombre del aliado para agrupar: "HubSpot" y "hubspot" son el mismo.
+ * Espejo local de `normalizePartner` de schema.ts, para que este módulo no dependa de
+ * nada — si algún día divergen, `comisiones-partner.test.ts` lo caza.
+ */
+function clave(partner: string): string {
+  return partner.trim().toLowerCase();
+}
+
+function vacio(moneda: string): CorteDeMoneda {
+  return { moneda, cobrado: 0, esperado: 0, total: 0, cuantasCobradas: 0, cuantasEsperadas: 0 };
+}
+
+function acumular(dst: CorteDeMoneda, c: ComisionParaSumar): void {
+  if (c.estado === "COBRADO") {
+    dst.cobrado = round2(dst.cobrado + c.monto);
+    dst.cuantasCobradas += 1;
+  } else {
+    dst.esperado = round2(dst.esperado + c.monto);
+    dst.cuantasEsperadas += 1;
+  }
+  dst.total = round2(dst.cobrado + dst.esperado);
+}
+
+/**
+ * Lo que se ganó con cada aliado, partido en lo que entró y lo que se espera.
+ *
+ * Una línea por (aliado, moneda): el mismo aliado que paga en dos monedas son DOS
+ * líneas, nunca una convertida.
+ */
+export function totalesPorPartner(comisiones: readonly ComisionParaSumar[]): TotalPorPartner[] {
+  const acc = new Map<string, TotalPorPartner>();
+  for (const c of comisiones) {
+    const k = `${clave(c.partner)}::${c.moneda}`;
+    let fila = acc.get(k);
+    if (!fila) {
+      fila = { partner: c.partner, ...vacio(c.moneda) };
+      acc.set(k, fila);
+    }
+    acumular(fila, c);
+  }
+  // Por plata, y el nombre desempata para que el orden no dependa del Map.
+  return [...acc.values()].sort((a, b) => b.total - a.total || a.partner.localeCompare(b.partner));
+}
+
+/** El corte general, también por moneda. */
+export function totalesPorMoneda(comisiones: readonly ComisionParaSumar[]): CorteDeMoneda[] {
+  const acc = new Map<string, CorteDeMoneda>();
+  for (const c of comisiones) {
+    let fila = acc.get(c.moneda);
+    if (!fila) {
+      fila = vacio(c.moneda);
+      acc.set(c.moneda, fila);
+    }
+    acumular(fila, c);
+  }
+  return [...acc.values()].sort((a, b) => b.total - a.total || a.moneda.localeCompare(b.moneda));
+}

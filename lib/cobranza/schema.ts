@@ -408,6 +408,18 @@ export const comisionPartnerEstadoSchema = z
   .object({
     estado: z.enum(COMISION_PARTNER_ESTADOS),
     fechaCobro: isoDateReal.nullable().optional(),
+    /**
+     * El monto NETO que de verdad entró, para corregirlo en el mismo acto de confirmar.
+     *
+     * ⚠ VIAJA ACÁ Y NO POR EL PATCH A PROPÓSITO. Lo que se registra antes de que la
+     * plata llegue es una PROYECCIÓN —los $51.000 redondos de agosto y noviembre eran
+     * eso—, y lo que entra nunca es ese número: fueron ~$50.847 menos la retención del
+     * procesador, que solo se sabe después. Confirmar el estado sin poder tocar el monto
+     * obliga a firmar una cifra que se sabe falsa, y esa firma es la de INV20.
+     *
+     * Ausente = el monto registrado ya era el bueno.
+     */
+    monto: monto.optional(),
     notas: z.string().trim().max(2000).nullable().optional(),
   })
   .refine((d) => d.estado !== "COBRADO" || !!d.fechaCobro, {

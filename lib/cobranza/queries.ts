@@ -48,6 +48,12 @@ import {
   type ItemInconsistencia,
 } from "@/lib/finanzas/inconsistencias";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
+import {
+  totalesPorMoneda,
+  totalesPorPartner,
+  type CorteDeMoneda,
+  type TotalPorPartner,
+} from "./comisiones-partner";
 import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
 import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
@@ -1009,6 +1015,18 @@ export interface ComisionPartnerDTO {
   notas: string | null;
   registradoPor: string;
   createdAt: string;
+  /**
+   * ⚠ SIN ESTO LA PANTALLA ERA CIEGA. El estado existe en la tabla desde el 2026-08-17,
+   * pero este DTO nunca lo empezó a llevar: el «Total acumulado» sumaba plata que entró
+   * junto con plata que todavía se espera —incluida la proyección de noviembre— sin
+   * decirlo, y no había forma de ofrecer un botón para confirmar un cobro porque la fila
+   * ni siquiera sabía en qué estado estaba.
+   */
+  estado: string;
+  /** Cuándo entró la plata. null mientras esté POR_COBRAR. */
+  fechaCobro: string | null;
+  /** Quién firmó que entró (INV20). null mientras nadie la haya confirmado. */
+  confirmadoPor: string | null;
 }
 
 export interface PartnerComercialDTO {
@@ -1042,10 +1060,13 @@ export interface HistorialPartnerDTO {
 
 export interface ComisionesPartnerDTO {
   comisiones: ComisionPartnerDTO[];
-  /** Totales por partner y moneda SEPARADA — "lo que ganamos con cada uno". */
-  porPartner: Array<{ partner: string; moneda: string; total: number; cuantas: number }>;
-  /** Totales generales, también por moneda. CRC y USD nunca se suman. */
-  totales: Record<string, number>;
+  /**
+   * Lo que se ganó con cada aliado, PARTIDO en lo que entró y lo que se espera, y por
+   * moneda separada. Antes era un total solo, que mezclaba las dos cosas.
+   */
+  porPartner: TotalPorPartner[];
+  /** El corte general, también por moneda. CRC y USD nunca se suman. */
+  totales: CorteDeMoneda[];
   /** Los aliados configurados, para el bloque de administración. */
   partners: PartnerComercialDTO[];
   /** El historial por aliado, a la cadencia de cada uno. */
@@ -1074,29 +1095,16 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
     notas: c.notas,
     registradoPor: c.registradoPor,
     createdAt: iso(c.createdAt)!,
+    estado: c.estado,
+    fechaCobro: isoDay(c.fechaCobro),
+    confirmadoPor: c.confirmadoPor,
   }));
 
-  // Agrupa por (partner normalizado, moneda): "HubSpot" y "hubspot" son el mismo,
-  // pero USD y CRC del mismo partner son dos líneas, nunca una convertida.
-  const acc = new Map<string, { partner: string; moneda: string; total: number; cuantas: number }>();
-  for (const c of comisiones) {
-    const k = `${normalizePartner(c.partner)}::${c.moneda}`;
-    const prev = acc.get(k);
-    if (prev) {
-      prev.total = Math.round((prev.total + c.monto) * 100) / 100;
-      prev.cuantas += 1;
-    } else {
-      acc.set(k, { partner: c.partner, moneda: c.moneda, total: c.monto, cuantas: 1 });
-    }
-  }
-  const porPartner = [...acc.values()].sort(
-    (a, b) => b.total - a.total || a.partner.localeCompare(b.partner),
-  );
-
-  const totales: Record<string, number> = {};
-  for (const p of porPartner) {
-    totales[p.moneda] = Math.round(((totales[p.moneda] ?? 0) + p.total) * 100) / 100;
-  }
+  // La agregación vive en lib/cobranza/comisiones-partner.ts, que es puro y SÍ tiene
+  // pruebas: acá estaba escrita a mano, sin un solo caso, y por eso nadie notó que
+  // sumaba lo cobrado junto con lo esperado.
+  const porPartner = totalesPorPartner(comisiones);
+  const totales = totalesPorMoneda(comisiones);
 
   const partners: PartnerComercialDTO[] = partnersRaw.map((p) => ({
     id: p.id,
