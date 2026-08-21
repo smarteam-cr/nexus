@@ -36,12 +36,19 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+    /* ⚠ Se cuenta lo que va en UN PEDIDO, no cuántas constantes hay en el archivo. Desde que el
+       prompt se bifurca por pieza hay DOS declaraciones —la del cronograma emite operaciones, la
+       de documentos emite una instrucción— y el pedido elige una con un ternario. Eso no es una
+       puerta de más: es la misma puerta con dos formas. Lo que la guarda protege es que el modelo
+       nunca reciba DOS herramientas a la vez, y eso se sigue midiendo igual. */
     expect(
       declaradas,
-      "El asistente declaró más de una herramienta. Cada tool extra es una puerta que saltea la " +
-        "vista previa y la aceptación por ítem, y que corre con el permiso del chat en vez del " +
-        "permiso del documento. La única tool emite TEXTO; aplicar es otro acto, con otro botón.",
-    ).toEqual(["TOOL_ACUERDO"]);
+      "El asistente declaró más de una herramienta EN EL MISMO PEDIDO. Cada tool extra es una " +
+        "puerta que saltea la vista previa y la aceptación por ítem, y que corre con el permiso " +
+        "del chat en vez del permiso del documento. La única tool emite TEXTO; aplicar es otro " +
+        "acto, con otro botón.",
+    ).toHaveLength(1);
+    expect(declaradas[0], "el pedido dejó de elegir la tool por pieza").toContain("TOOL_ACUERDO");
   });
 
   it("⛔ el `op` de la tool NO puede salirse del vocabulario del ejecutor", () => {
@@ -65,7 +72,10 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
        creciendo es una guarda que aprueba lo que no mira.
 
        Ahora se parsea el array `enum` de verdad, y se compara en los DOS sentidos. */
-    const i = FUENTE.indexOf("const TOOL_ACUERDO");
+    /* ⚠ Con los dos puntos: `indexOf("const TOOL_ACUERDO")` matchea también
+       `const TOOL_ACUERDO_DE_DOCUMENTO`, que se declara ANTES y no tiene enum — la guarda pasaba a
+       mirar la tool equivocada y reportaba que el enum había desaparecido. */
+    const i = FUENTE.indexOf("const TOOL_ACUERDO:");
     const bloque = FUENTE.slice(i, FUENTE.indexOf('required: ["resumen"', i));
     const j = bloque.indexOf("enum: [");
     expect(j, "el enum de operaciones desapareció de la tool").toBeGreaterThan(-1);
@@ -249,7 +259,7 @@ describe("el breakpoint de caché está donde cachea", () => {
        La edición que la pone en rojo: mover el `cache_control` al primer bloque del system. */
     const i = FUENTE.indexOf("system: [");
     const bloque = FUENTE.slice(i, FUENTE.indexOf("tools:", i));
-    const posPrompt = bloque.indexOf("promptDelAsistente()");
+    const posPrompt = bloque.indexOf("promptDelAsistente(");
     const posContexto = bloque.indexOf("ctx.texto");
     const posCache = bloque.indexOf("cache_control");
     expect(posPrompt, "el prompt salió del system").toBeGreaterThan(-1);

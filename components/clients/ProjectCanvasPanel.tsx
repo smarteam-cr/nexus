@@ -36,6 +36,10 @@ import { WorkspaceSkeleton } from "./skeletons";
 import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readCanvasCache, writeCanvasCache } from "@/lib/clients/canvas-cache";
+import {
+  AplicadorDeDocumentoProvider,
+  useAplicadorDeDocumento,
+} from "@/components/asistente/aplicador-de-documento";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -182,6 +186,9 @@ export default function ProjectCanvasPanel({
   const [agentNonce, setAgentNonce] = useState(0);
   // Para refrescar el widget del proyecto (ProjectGPS + pills de setup) al generar un canvas.
   const { bumpGpsRefresh, canvasRefreshSignal } = useWorkspace();
+  /* El chat vive en esta rama del árbol y el aplicador del documento en otra, más adentro. Ver
+     `components/asistente/aplicador-de-documento.tsx` para por qué se resolvió así. */
+  const obtenerAplicador = useAplicadorDeDocumento();
   const toast = useToast();
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
@@ -537,6 +544,9 @@ export default function ProjectCanvasPanel({
        lo que sale impreso (el ojo de "no visible" del kickoff es staged). Este proveedor es
        el canal por el que se lo cuenta al botón de exportar — ver PrintStaging.tsx. */
     <PrintStagingProvider>
+    {/* Envuelve los workspaces Y el cajón: el chat necesita alcanzar el aplicador de la pieza
+        activa, que se monta más adentro. */}
+    <AplicadorDeDocumentoProvider>
     <div className="px-6 py-8 space-y-6">
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
           del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}
@@ -1116,9 +1126,44 @@ export default function ProjectCanvasPanel({
           piezaLabel={pieceLabel(activeSlug)}
           abierto={chatAbierto}
           onClose={() => setChatAbierto(false)}
+          /**
+           * ⭐ ETAPA 3: el acuerdo del chat entra por el editor de siempre.
+           *
+           * Antes acá no había `onAplicar`, así que el cajón mostraba la instrucción para
+           * copiarla y pegarla en «Pedir cambio con IA» — dos pantallas para un solo gesto.
+           *
+           * ⛔ El chat sigue sin escribir: lo que hace es DISPARAR el aplicador del documento,
+           * que propone sección por sección y espera que la persona acepte cada una. Por eso el
+           * desenlace dice «revisa la vista previa» y no «listo».
+           */
+          onAplicar={async (acuerdo) => {
+            const aplicador = obtenerAplicador();
+            if (!aplicador) {
+              return {
+                fallo:
+                  "El editor de este documento no está montado. Abrí el documento y volvé a " +
+                  "intentar.",
+                avisos: [],
+              };
+            }
+            const instruccion = (acuerdo.instruccion ?? "").trim();
+            if (!instruccion) {
+              return { fallo: "El acuerdo no trae instrucción para ejecutar.", avisos: [] };
+            }
+            try {
+              await aplicador(instruccion);
+              return { fallo: null, avisos: [] };
+            } catch (e) {
+              return {
+                fallo: e instanceof Error ? e.message : "el editor rechazó la instrucción",
+                avisos: [],
+              };
+            }
+          }}
         />
       )}
     </div>
+    </AplicadorDeDocumentoProvider>
     </PrintStagingProvider>
   );
 

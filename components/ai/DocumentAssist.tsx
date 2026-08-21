@@ -18,6 +18,7 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
+import { useRegistrarAplicadorDeDocumento } from "@/components/asistente/aplicador-de-documento";
 
 /** Respuesta de los endpoints .../assist (espejo de DocumentAssistResult). */
 export interface DocAssistResult {
@@ -61,6 +62,12 @@ export default function DocumentAssist({
   const [result, setResult] = useState<DocAssistResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+
+  /* ⭐ El editor se ANUNCIA: el chat del asistente vive en otra rama del árbol (el panel del
+     proyecto) y necesita llegar al aplicador de la pieza activa. Se registra acá y no en cada
+     workspace, así que los seis documentos quedan cableados sin tocar ninguno.
+     ⚠ Sin provider no hace nada: este componente también se usa donde no hay chat. */
+  useRegistrarAplicadorDeDocumento((instruccion) => submit(instruccion));
 
   const submit = async (instruction: string) => {
     setLoading(true);

@@ -489,6 +489,54 @@ describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
   });
 });
 
+describe("⭐ etapa 3 — el chat de DOCUMENTOS también aplica", () => {
+  /* Hasta el 2026-08-21 el chat de documentos conversaba y no terminaba en nada: la única
+     herramienta pedía `operaciones` —fases y semanas, que en un kickoff no significan nada— y no
+     tenía ningún campo donde poner una instrucción. No podía cerrar un acuerdo NUNCA. */
+
+  const TURNO = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+
+  it("⛔ un documento recibe la herramienta de INSTRUCCIÓN, no la de operaciones", () => {
+    /* La edición que la pone en rojo: volver a `tools: [TOOL_ACUERDO]` fijo. Nada falla —
+       simplemente el chat de documentos vuelve a no poder acordar nada. */
+    expect(TURNO).toContain("TOOL_ACUERDO_DE_DOCUMENTO");
+    expect(TURNO).toContain("esCronograma ? TOOL_ACUERDO : TOOL_ACUERDO_DE_DOCUMENTO");
+  });
+
+  it("⛔ y el PROMPT también se bifurca: el vocabulario de fases no va a un kickoff", () => {
+    expect(TURNO).toContain("promptDelAsistente(esCronograma)");
+    expect(TURNO).toContain("COLA_DE_DOCUMENTO");
+  });
+
+  it("⚠ el chat NO escribe el documento: dispara el aplicador que ya existe", () => {
+    /* ⛔ La alternativa era que el chat llamara a `canvas-assist` y escribiera con
+       `upsertCardData`: un SEGUNDO camino de escritura para lo mismo. No sería interfaz
+       duplicada, sería lógica de pérdida de datos duplicada.
+       La edición que la pone en rojo: que `onAplicar` haga fetch por su cuenta. */
+    const panel = fs.readFileSync(
+      path.join(RAIZ, "components/clients/ProjectCanvasPanel.tsx"),
+      "utf8",
+    );
+    const i = panel.indexOf("onAplicar={async (acuerdo)");
+    expect(i, "el chat de documentos volvió a no poder aplicar").toBeGreaterThan(-1);
+    const bloque = panel.slice(i, i + 1400);
+    expect(bloque, "el chat aplica por su cuenta en vez de usar el editor").not.toContain("fetch(");
+    expect(bloque).toContain("obtenerAplicador()");
+  });
+
+  it("⭐ y el editor se registra SOLO, así que los seis documentos entran sin tocarlos", () => {
+    /* Registrarlo en cada workspace serían seis lugares que se olvidan de a uno. La edición que
+       la pone en rojo: mover el registro fuera de `DocumentAssist`. */
+    /* ⚠ Se busca la LLAMADA, no el símbolo: `toContain("useRegistrar…")` lo satisface el propio
+       import, así que borrar la llamada dejaba la guarda verde. Medir «menciona» donde se quiere
+       decir «llama» es la misma trampa que ya apareció tres veces en este archivo. */
+    const editor = fs.readFileSync(path.join(RAIZ, "components/ai/DocumentAssist.tsx"), "utf8");
+    expect(editor, "el editor de documentos dejó de anunciarse al chat").toContain(
+      "useRegistrarAplicadorDeDocumento((",
+    );
+  });
+});
+
 describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
   it("⭐ el cronograma y todos los documentos del assist, sin lista paralela", () => {
     /* Si fuera una lista escrita a mano, divergiría el día que alguien sume un documento al

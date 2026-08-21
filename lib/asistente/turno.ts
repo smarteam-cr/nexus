@@ -29,6 +29,7 @@ import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
 import { contextoDeCronograma, contextoDeDocumento } from "./contexto";
+import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 
 /** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
@@ -69,7 +70,18 @@ const MAX_TOKENS_DE_RESPUESTA = 8_000;
  * (`asistente.read`) en su endpoint, así que meterlo a ese carril agregaría el modo de falla sin
  * comprar nada. Cuando Elías lo esté ajustando a diario, la mudanza es barata y ahí sí conviene.
  */
-function promptDelAsistente(): string {
+/**
+ * ⛔ EL PROMPT SE BIFURCA POR PIEZA, y hasta hoy no lo hacía.
+ *
+ * El vocabulario de OPERACIONES es del cronograma: fases, semanas, tareas. Sobre un kickoff no
+ * significa nada — y peor, la herramienta solo sabía emitir operaciones, así que en un documento
+ * el chat podía conversar pero **no podía cerrar un acuerdo NUNCA**: no tenía dónde poner la
+ * instrucción. Conversaba y no terminaba en nada, que es exactamente la queja que lo originó.
+ *
+ * La cabeza —rol, idioma, formato, cómo conversa, la regla de avisar consecuencias— es común. Lo
+ * que cambia es CÓMO se emite la propuesta y qué se puede pedir.
+ */
+function promptDelAsistente(esCronograma: boolean): string {
   return `Eres el asistente de Nexus, la app interna de Smarteam (consultora de HubSpot). Hablas con
 un CSE (Customer Success Engineer) sobre UN documento de UN proyecto.
 
@@ -130,7 +142,11 @@ entonces la pregunta ofrece las lecturas como opciones — no como un "¿seguimo
 
 Si la persona pide otra cosa después, propones de nuevo: cada propuesta reemplaza a la anterior.
 
-CÓMO SE EMITE LA PROPUESTA
+${esCronograma ? COLA_DEL_CRONOGRAMA : COLA_DE_DOCUMENTO}`;
+}
+
+/** Lo que solo aplica al CRONOGRAMA: el vocabulario cerrado de operaciones. */
+const COLA_DEL_CRONOGRAMA = `CÓMO SE EMITE LA PROPUESTA
 Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y las
 OPERACIONES a ejecutar. Se aplican en milisegundos, así que no describas el cambio: nómbralo.
 
@@ -208,7 +224,43 @@ rutina, se pregunta cuando está en juego trabajo que alguien hizo.
 
 Solo NO llamas la herramienta cuando hiciste una pregunta de desambiguación, cuando el pedido no
 entra en el vocabulario, o cuando estás pidiendo esa confirmación.`;
-}
+
+/**
+ * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento
+ * técnico, implementación, entrega).
+ *
+ * ⚠ Acá NO hay operaciones: el modificador de documentos recibe una instrucción en castellano y
+ * devuelve una propuesta POR SECCIÓN, que la persona acepta o descarta una por una. Por eso la
+ * instrucción es el producto, y por eso tiene que ser precisa — es lo que se ejecuta tal cual.
+ */
+const COLA_DE_DOCUMENTO = `CÓMO SE EMITE LA PROPUESTA
+Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y la
+"instruccion" que va a ejecutar el editor del documento.
+
+⭐ LA INSTRUCCIÓN ES EL PRODUCTO, no un resumen de la charla. Se ejecuta TAL CUAL, sin que nadie
+la interprete de nuevo, así que:
+1. Nombra las SECCIONES exactamente como aparecen en el contexto. El editor trabaja por sección:
+   una instrucción que no dice cuál toca, toca las que el modelo decida.
+2. Di qué cambia y qué NO. «Reescribe el alcance en dos párrafos, sin tocar las fechas» ejecuta
+   mejor que «mejora el alcance».
+3. No repitas la conversación adentro. La instrucción se lee sola, semanas después.
+
+QUÉ PUEDE HACER EL EDITOR DEL DOCUMENTO, Y QUÉ NO
+Puede reescribir el contenido de las secciones que YA existen: acortar, ampliar, cambiar el tono,
+reordenar ideas, sumar un punto que falta.
+⛔ NO puede crear secciones nuevas ni cambiar la estructura del documento: los tipos de sección
+están programados, y uno que nadie programó no sale de una conversación. Si te lo piden, dilo —
+no lo intentes con la sección más parecida.
+⛔ NO toca lo que el CSE curó a mano en otra parte de la app (fechas del cronograma, tags,
+particularidades): si el pedido es de eso, decí dónde se hace.
+
+⭐ LO QUE PASA DESPUÉS, Y CONVIENE DECIRLO
+Al aplicar, el editor propone los cambios SECCIÓN POR SECCIÓN y la persona acepta o descarta cada
+una. Así que una instrucción que toca tres secciones no es un riesgo: es tres decisiones. Cuando
+el pedido sea grande, dilo — «esto toca cuatro secciones, las vas a poder revisar de a una».
+
+Solo NO llamas la herramienta cuando hiciste una pregunta de desambiguación, cuando el pedido no
+se puede hacer, o cuando estás pidiendo una confirmación.`;
 
 /**
  * ── LA HERRAMIENTA EMITE OPERACIONES, NO UN TEXTO ────────────────────────────────────────────
@@ -230,6 +282,40 @@ entra en el vocabulario, o cuando estás pidiendo esa confirmación.`;
  * no por el cuid entero: con el id completo, 7 de los 51 cronogramas no entraban en el techo del
  * prefijo.
  */
+/**
+ * La herramienta para los DOCUMENTOS: emite una INSTRUCCIÓN, no operaciones.
+ *
+ * ⛔ Sin esto el chat de documentos no podía cerrar un acuerdo: la única herramienta que existía
+ * pedía `operaciones` —un vocabulario de fases y semanas que en un kickoff no significa nada— y
+ * no tenía ningún campo donde poner la instrucción. Conversaba y no terminaba en nada.
+ *
+ * ⚠ El nombre es el MISMO (`registrar_cambio_acordado`) a propósito: `leerAcuerdo` no tiene que
+ * saber de qué pieza vino, y un hilo que cambia de pieza no puede pasar por dos formatos.
+ */
+const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
+  name: "registrar_cambio_acordado",
+  description:
+    "Registra el cambio acordado como una INSTRUCCIÓN para el editor del documento. NO lo " +
+    "aplica: la persona la lee, la puede editar, y la aplica con un botón. Llámala UNA sola vez.",
+  input_schema: {
+    type: "object",
+    properties: {
+      resumen: {
+        type: "string",
+        description: "Qué se acordó, en una o dos frases, para que el CSE lo confirme de un vistazo.",
+      },
+      instruccion: {
+        type: "string",
+        description:
+          "La instrucción que va a ejecutar el editor, TAL CUAL. Nombra las secciones exactamente " +
+          "como aparecen en el contexto, di qué cambia y qué no, y escríbela para que se lea sola " +
+          "—sin la conversación alrededor—. Es lo que se ejecuta, no un resumen de lo hablado.",
+      },
+    },
+    required: ["resumen", "instruccion"],
+  },
+};
+
 const TOOL_ACUERDO: Anthropic.Messages.Tool = {
   name: "registrar_cambio_acordado",
   description:
@@ -407,6 +493,7 @@ export async function correrTurno(
   hilo: HiloConTurnos,
   mensajeDelCse: string,
 ): Promise<ResultadoDelTurno> {
+  const esCronograma = hilo.pieza === PIEZA_CRONOGRAMA;
   const ctx = await contextoDeLaPieza(hilo.projectId, hilo.pieza);
   const sha = huellaDeContexto(ctx.texto);
 
@@ -433,14 +520,14 @@ export async function correrTurno(
            solo (~700 tok) cae bajo el mínimo cacheable: marcarlo ahí sería una escritura de caché
            pagada que nunca se lee, sin error y sin log. Juntos llegan a ~1.700 y sí cachean. */
         system: [
-          { type: "text", text: promptDelAsistente() },
+          { type: "text", text: promptDelAsistente(esCronograma) },
           {
             type: "text",
             text: `CONTEXTO DE ESTE DOCUMENTO\n\n${ctx.texto}`,
             cache_control: { type: "ephemeral" },
           },
         ],
-        tools: [TOOL_ACUERDO],
+        tools: [esCronograma ? TOOL_ACUERDO : TOOL_ACUERDO_DE_DOCUMENTO],
         messages,
       }),
   );
@@ -451,10 +538,19 @@ export async function correrTurno(
     if (b.type === "text") respuesta += b.text;
     if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
       const input = b.input as Partial<CambioAcordado>;
-      /* ⚠ Se acepta solo si trae resumen Y al menos una operación. Un acuerdo vacío pintaría un
-         botón «Aplicar» que no puede hacer nada — peor que no ofrecerlo. */
+      /* ⚠ Se acepta solo si trae resumen Y algo que ejecutar. Un acuerdo vacío pintaría un botón
+         «Aplicar» que no puede hacer nada — peor que no ofrecerlo.
+
+         ⛔ Y «algo que ejecutar» son DOS cosas según la pieza, no una. Este `if` exigía
+         `ops.length > 0`, así que en un DOCUMENTO —donde la herramienta emite una instrucción y
+         ninguna operación— el modelo llamaba la herramienta, el turno la descartaba en silencio, y
+         el CSE leía «voy a dejar lista la instrucción» sin que apareciera ninguna cajita. El chat
+         de documentos conversaba y no terminaba en nada. Medido contra el modelo el 2026-08-21. */
       const ops = Array.isArray(input?.operaciones) ? input.operaciones : [];
-      if (input?.resumen?.trim() && ops.length > 0) {
+      const instruccion = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
+      if (input?.resumen?.trim() && !esCronograma && instruccion) {
+        acuerdo = { resumen: input.resumen.trim(), instruccion };
+      } else if (input?.resumen?.trim() && ops.length > 0) {
         /* ⭐ LAS LÍNEAS SE CALCULAN ACÁ, EN EL SERVIDOR, contra el cronograma tal como está al
            acordar. Es lo que vuelve hermética la cajita: lo que la persona lee sale del MISMO
            objeto que se va a ejecutar, no de una prosa que el modelo escribe aparte. */
