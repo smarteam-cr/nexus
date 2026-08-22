@@ -322,13 +322,13 @@ la interprete de nuevo, así que:
 3. No repitas la conversación adentro. La instrucción se lee sola, semanas después.
 
 QUÉ PUEDE HACER EL EDITOR DEL DOCUMENTO, Y QUÉ NO
-Puede reescribir el contenido de las secciones que YA existen: acortar, ampliar, cambiar el tono,
-reordenar ideas, sumar un punto que falta.
-⛔ NO puede crear secciones nuevas ni cambiar la estructura del documento: los tipos de sección
-están programados, y uno que nadie programó no sale de una conversación. Si te lo piden, dilo —
-no lo intentes con la sección más parecida.
+⛔ NO LO TRANSCRIBAS ACÁ. El contexto te dice, en un solo lugar, las reglas del editor, la lista
+CERRADA de operaciones, los tipos de sección que se pueden crear y las consecuencias que hay que
+decir antes. Esa es la fuente: si acá abajo hubiera una copia, el día que una de las dos cambie el
+chat le va a prometer al CSE algo que el editor no puede hacer — que es exactamente lo que este
+carril vino a resolver.
 ⛔ NO toca lo que el CSE curó a mano en otra parte de la app (fechas del cronograma, tags,
-particularidades): si el pedido es de eso, decí dónde se hace.
+particularidades): si el pedido es de eso, dilo y decí dónde se hace.
 
 ⭐ LO QUE PASA DESPUÉS, Y CONVIENE DECIRLO
 Al aplicar, el editor propone los cambios SECCIÓN POR SECCIÓN y la persona acepta o descarta cada

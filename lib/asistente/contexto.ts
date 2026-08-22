@@ -22,6 +22,12 @@
  * privacidad: la prohibición se hace cumplir acá, con su propia guarda, antes de que exista un
  * campo donde meterlos.
  */
+import {
+  ADVERTENCIAS_DEL_DOCUMENTO,
+  REGLAS_DURAS_DEL_DOCUMENTO,
+  catalogoParaElChat,
+  operacionesParaElChat,
+} from "@/lib/canvas/capacidades-de-documento";
 import { prisma } from "@/lib/db/prisma";
 import {
   ADVERTENCIAS_DEL_CRONOGRAMA,
@@ -408,9 +414,23 @@ export async function contextoDeDocumento(
     "dice el final.",
     secciones || "(sin secciones)",
     "",
-    "QUÉ SE PUEDE PEDIR: reescribir el contenido de una sección que ya existe, con la instrucción",
-    "que le des. ⛔ El asistente NO puede inventar tipos de sección que nadie programó: si te",
-    "piden algo que no existe como forma, dilo en vez de intentarlo.",
+    /* ⛔ INTERPOLADAS, NO TRANSCRITAS. Hasta el 2026-08-22 acá había un párrafo escrito a mano que
+       decía lo mismo que el prompt del chat — dos copias de la misma regla, y una de las dos ya
+       estaba equivocada (afirmaba que no se pueden crear secciones nuevas, cuando la propuesta
+       comercial las creaba desde el 2026-08-12). Ahora las dos salen del mismo archivo, y hay una
+       guarda que impide volver a copiarlas. */
+    "REGLAS DEL EDITOR (lo que va a pasar cuando se ejecute cada operación):",
+    REGLAS_DURAS_DEL_DOCUMENTO,
+    "",
+    "OPERACIONES QUE EXISTEN — es una lista CERRADA:",
+    operacionesParaElChat(),
+    "",
+    "TIPOS DE SECCIÓN QUE SE PUEDEN CREAR — también cerrada. Si te piden una forma que no está",
+    "acá, dilo en vez de usar la más parecida:",
+    catalogoParaElChat(),
+    "",
+    "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",
+    ADVERTENCIAS_DEL_DOCUMENTO.map((a) => `- ${a.aviso}`).join("\n"),
   ].join("\n");
 
   return { texto, cierreActual: null };
