@@ -800,12 +800,37 @@ export async function correrTurno(
    *
    * ⚠ `lineasCrudas` se calcula ANTES de podar: es la única forma de NOMBRAR lo que se cayó.
    */
-  const pendientesCrudos = esCronograma ? pendientesDelHilo(hilo.turnos) : [];
-  const lineasCrudas =
-    pendientesCrudos.length > 0 ? describirOperaciones(paraTraducir, pendientesCrudos) : [];
-  const libro = podarIrresolubles(pendientesCrudos, paraTraducir);
-  const lineasVivas =
-    libro.vivas.length > 0 ? describirOperaciones(paraTraducir, libro.vivas) : [];
+  /* ⭐ TAMBIÉN EN DOCUMENTOS desde el 2026-08-22. Hasta hoy esto era `esCronograma ? … : []`, así
+     que en un kickoff lo acordado y no aplicado se perdía en el turno siguiente — mientras la
+     cajita vieja se rotulaba «sigue abajo, en la propuesta vigente», afirmando que sus cambios
+     viajaban en un acuerdo que no los contenía. La maquinaria era la misma; lo único propio de
+     cada carril es cómo se poda lo que ya no se puede aplicar. */
+  const pendientesCrudos = pendientesDelHilo(hilo.turnos);
+  const podar = (ops: readonly unknown[]) =>
+    esCronograma
+      ? (() => {
+          const r = podarIrresolubles(ops as Operacion[], paraTraducir);
+          return { vivas: r.vivas as unknown[], caidas: r.caidas };
+        })()
+      : (() => {
+          /* En documentos la poda ES el dry-run que ya corre al acordar: valida contra el
+             documento de HOY, así que un pendiente que nombra una sección que alguien borró a
+             mano se cae solo, con su motivo. */
+          const prep = prepararOperacionesDeDocumento(ctx.secciones ?? [], ops, capacidadesDeLaPieza(hilo.pieza));
+          return {
+            vivas: prep.aceptadas as unknown[],
+            caidas: prep.rechazadas.map((r) => ({ operacion: r.operacion as never, motivo: r.motivo })),
+          };
+        })();
+  const describir = (ops: readonly unknown[]) =>
+    ops.length === 0
+      ? []
+      : esCronograma
+        ? describirOperaciones(paraTraducir, ops as Operacion[])
+        : describirOperacionesDeDocumento(ctx.secciones ?? [], ops as OperacionDeDocumento[]);
+  const lineasCrudas = describir(pendientesCrudos);
+  const libro = podar(pendientesCrudos);
+  const lineasVivas = describir(libro.vivas);
 
   /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
 
@@ -983,7 +1008,17 @@ export async function correrTurno(
         "Pídemelo de otra forma si lo quieres igual.";
     }
 
-    const opsDeDoc = prep.aceptadas;
+    /* ⭐ LO PENDIENTE SE ARRASTRA, igual que en el cronograma. Hasta hoy la rama de documentos se
+       quedaba SOLO con lo de este turno, así que contestar una pregunta costaba perder lo que ya
+       se había acordado — y la cajita vieja decía «sigue abajo, en la propuesta vigente» sobre un
+       acuerdo que no lo contenía.
+       ⚠ Dedup exacto: si el modelo re-emite algo idéntico a un pendiente, se colapsa en vez de
+       aplicarse dos veces (estas operaciones NO son idempotentes: agregar un ítem dos veces son
+       dos ítems). El resto de la fusión del cronograma —re-etiquetar `ref`— no aplica acá: un
+       `ref` de documento solo vive dentro de su propio lote. */
+    const yaEstan = new Set(prep.aceptadas.map((o) => JSON.stringify(o)));
+    const arrastradas = libro.vivas.filter((o) => !yaEstan.has(JSON.stringify(o)));
+    const opsDeDoc = [...arrastradas, ...prep.aceptadas] as OperacionDeDocumento[];
     if (resumenDelModelo && opsDeDoc.length > 0) {
       acuerdo = {
         resumen: resumenDelModelo,
@@ -1005,7 +1040,7 @@ export async function correrTurno(
      * Calcularlas sobre `opsNuevas` mostraría MENOS de lo que se escribe: la persona aprobaría
      * cambios que no leyó, y ahí se cae la única garantía de todo el diseño.
      */
-    const fusion = fusionarPendientes(libro.vivas, opsNuevas, descartar);
+    const fusion = fusionarPendientes(libro.vivas as Operacion[], opsNuevas, descartar);
     if (fusion.operaciones.length > 0) {
       /**
        * ⭐ SOLO SE MUESTRA LO QUE SE CAYÓ SOLO, NO LO QUE EL MODELO DESCARTÓ A PEDIDO.

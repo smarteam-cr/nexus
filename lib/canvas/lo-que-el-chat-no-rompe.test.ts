@@ -12,6 +12,7 @@
 import { describe, it, expect } from "vitest";
 import {
   aplicarOperacionesDeDocumento,
+  describirOperacionesDeDocumento,
   type SeccionActual,
 } from "./operaciones-de-documento";
 import { firmaDeSeccion } from "./capacidades-de-documento";
@@ -250,5 +251,48 @@ describe("la tabla se puede llenar, y lo que no se puede se dice", () => {
     expect(firma, "las casillas se anuncian como si fueran un campo de texto").not.toContain("celdas(texto)");
     expect(firma).toContain("celdas");
     expect(firma, "la firma no dice que las casillas son varias").toMatch(/celdas\[/);
+  });
+});
+
+/**
+ * ⭐ LA CAJITA HABLA EN CASTELLANO, NO EN RUTAS.
+ *
+ * «En «Alcance», items.2.detail pasa a: …» no es una frase que alguien pueda aprobar: hay que
+ * contar desde cero en una lista para saber de qué tarjeta habla. Y el dato para decirlo bien ya
+ * estaba calculado —el ancla, que existe para proteger la operación de un reordenamiento— y no se
+ * usaba.
+ */
+describe("las líneas del acuerdo se leen", () => {
+  const CARDS: SeccionActual = {
+    id: "a1", key: "alcance", label: "Alcance",
+    data: { items: [{ title: "Sales Hub", detail: "viejo" }, { title: "Migración desde Excel", detail: "viejo" }] },
+    schema: {
+      type: "object",
+      properties: {
+        items: { type: "array", items: { type: "object", properties: { title: { type: "string" }, detail: { type: "string" } } } },
+      },
+    },
+    oculta: false, esCreada: false, movible: true,
+  };
+
+  it("⛔⭐ una ruta con índice NUNCA se le muestra a nadie", () => {
+    /* La edición que la pone en rojo: volver a interpolar `o.campo` crudo. */
+    const [linea] = describirOperacionesDeDocumento(
+      [CARDS],
+      [{ op: "seccion.campo", key: "alcance", campo: "items.1.detail", valor: "Base completa desde Salesforce" }],
+    );
+    expect(linea, "la línea nombra la tarjeta por su posición en la lista").not.toContain("items.1");
+    expect(linea, "no dice de qué tarjeta habla").toContain("Migración desde Excel");
+    expect(linea).toContain("Base completa desde Salesforce");
+  });
+
+  it("⭐ un campo de primer nivel se sigue nombrando directo", () => {
+    /* Sin ancla que interpolar, la línea no puede inventar una ubicación. */
+    const [linea] = describirOperacionesDeDocumento(
+      [CARDS],
+      [{ op: "seccion.campo", key: "alcance", campo: "intro", valor: "Esto es lo que incluye" }],
+    );
+    expect(linea).toContain("intro");
+    expect(linea).toContain("Esto es lo que incluye");
   });
 });

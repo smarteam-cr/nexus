@@ -82,7 +82,10 @@ export function esTurnoDeDesenlace(t: TurnoDelLibro): boolean {
  * ⚠ Un desenlace SIN marcador se lee como OK (ver `leerDesenlace`): vacía el libro en vez de
  * resucitar. Errar hacia «no ofrecer» es barato; errar hacia «ofrecer de nuevo» escribe dos veces.
  */
-export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): Operacion[] {
+/* ⚠ Devuelve las operaciones CRUDAS: esta función solo sabe leer turnos, y lo que hay adentro de
+   un acuerdo depende de la pieza (fases y tareas en el cronograma, secciones en un documento). El
+   tipo era el ÚNICO acople al cronograma — el cuerpo nunca miró qué operación era. */
+export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): unknown[] {
   for (let i = turnos.length - 1; i >= 0; i--) {
     const t = turnos[i];
     if (esTurnoDeDesenlace(t)) {
@@ -92,7 +95,7 @@ export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): Operacion[]
     }
     const { acuerdo } = leerAcuerdo(t.contenido);
     const ops = acuerdo?.operaciones;
-    if (Array.isArray(ops) && ops.length > 0) return ops as Operacion[];
+    if (Array.isArray(ops) && ops.length > 0) return ops;
   }
   return [];
 }

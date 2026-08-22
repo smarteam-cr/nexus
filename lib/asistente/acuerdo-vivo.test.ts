@@ -372,3 +372,51 @@ describe("⭐ en qué quedó cada caja", () => {
     }
   });
 });
+
+/**
+ * ⭐ EL LIBRO TAMBIÉN VALE PARA DOCUMENTOS — y hasta el 2026-08-22 no valía.
+ *
+ * La rama de documentos arrancaba el libro en `[]`, así que en un kickoff lo acordado y no
+ * aplicado se perdía en el turno siguiente: contestar una pregunta costaba la mitad del pedido,
+ * que es exactamente el bug que este archivo existe para impedir… en el otro carril.
+ *
+ * Peor: la cajita vieja se rotulaba «sigue abajo, en la propuesta vigente» — afirmando que sus
+ * cambios viajaban en un acuerdo que no los contenía.
+ */
+describe("⭐ el libro no sabe de qué pieza es", () => {
+  it("lee operaciones de DOCUMENTO igual que las del cronograma", () => {
+    /* El cuerpo nunca miró qué operación era: el único acople al cronograma estaba en el TIPO de
+       retorno. La edición que lo pone en rojo: volver a castear a `Operacion[]` — deja de
+       compilar en la rama de documentos, que es la forma correcta de fallar. */
+    const opsDeDoc = [
+      { op: "seccion.campo", key: "objetivos", campo: "intro", valor: "Nuevo texto" },
+      { op: "seccion.item.agregar", key: "objetivos", lista: "items", valores: { title: "Uno" } },
+    ];
+    const hilo = [
+      { rol: "CSE" as const, contenido: "cambiá el intro y sumá un punto", shaDeContexto: "abc" },
+      {
+        rol: "ASISTENTE" as const,
+        contenido: `Listo.${marcaDeAcuerdo({ resumen: "dos cambios", operaciones: opsDeDoc, lineas: ["a", "b"] })}`,
+        shaDeContexto: "abc",
+      },
+    ];
+    expect(
+      pendientesDelHilo(hilo),
+      "lo acordado en un documento no se arrastra: contestar una pregunta cuesta perderlo",
+    ).toEqual(opsDeDoc);
+  });
+
+  it("⛔ y un desenlace OK lo vacía, igual que en el cronograma", () => {
+    /* Sin esto, aplicar no limpiaría el libro y cada turno re-ofrecería lo ya aplicado — sobre un
+       vocabulario que NO es idempotente: agregar el mismo ítem dos veces son dos ítems. */
+    const hilo = [
+      {
+        rol: "ASISTENTE" as const,
+        contenido: `ok${marcaDeAcuerdo({ resumen: "x", operaciones: [{ op: "seccion.vaciar", key: "alcance" }], lineas: ["a"] })}`,
+        shaDeContexto: "abc",
+      },
+      { rol: "ASISTENTE" as const, contenido: `${marcaDeDesenlace({ ok: true })}Aplicado.`, shaDeContexto: null },
+    ];
+    expect(pendientesDelHilo(hilo)).toEqual([]);
+  });
+});

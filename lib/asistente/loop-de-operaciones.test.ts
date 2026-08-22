@@ -37,10 +37,27 @@ describe("lo que se acuerda ya pasó por el editor", () => {
     expect(RAMA, "el turno dejó de validar las operaciones antes de acordar").toContain(
       "prepararOperacionesDeDocumento(",
     );
+    /* ⚠ ACTUALIZADO 2026-08-22: el acuerdo ya no es SOLO lo de este turno — arrastra lo pendiente
+       (`libro.vivas`), igual que el cronograma. El invariante no cambia: nada entra al acuerdo sin
+       haber pasado por el dry-run, y lo arrastrado ya pasó por el suyo al podarse. Lo que se ancla
+       ahora es que las nuevas salgan de `prep.aceptadas`, no de `opsNuevas`. */
     expect(
       RAMA,
       "el acuerdo se arma con lo que emitió el modelo, no con lo que sobrevivió al editor",
-    ).toContain("const opsDeDoc = prep.aceptadas;");
+    ).toContain("...prep.aceptadas");
+    expect(
+      RAMA,
+      "la rama de documentos dejó de arrastrar lo acordado y no aplicado",
+    ).toContain("libro.vivas");
+
+    /* ⚠ Y el libro se llena para las DOS piezas. La assert de arriba mira la rama; ésta mira el
+       lugar donde se arma, que es el que estaba condicionado a `esCronograma` y dejaba el libro de
+       documentos permanentemente vacío — con la rama consumiéndolo igual, sin notarse. */
+    const FUENTE_TURNO = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+    expect(
+      FUENTE_TURNO,
+      "el libro de pendientes volvió a llenarse solo para el cronograma",
+    ).toContain("const pendientesCrudos = pendientesDelHilo(hilo.turnos);");
   });
 
   it("⛔ y las líneas salen de lo ACEPTADO, no de lo que el modelo pidió", () => {

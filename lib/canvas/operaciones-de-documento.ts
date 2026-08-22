@@ -223,6 +223,8 @@ export interface SeccionActual {
    * `conSistema` — nombres de programador para el cuadro que dice «HOY» y «CON EL SISTEMA».
    */
   rotulosDeListas?: Record<string, string>;
+  /** Ídem para los CAMPOS: «el detalle» en vez de «detail». */
+  rotulosDeCampos?: Record<string, string>;
   /**
    * `true` si el RÓTULO CHICO de arriba lo pinta el encabezado del motor — o sea, si escribir la
    * columna `eyebrowOverride` se va a ver.
@@ -880,6 +882,9 @@ export function describirOperacionesDeDocumento(
   /* ⛔ El ancla puede faltar: el modelo NO la emite (no está en su herramienta) y la calcula la
      app. Si por lo que sea llega vacía, la línea nombra la posición en vez de interpolar
      `undefined` — que es lo que se leyó en pantalla el 2026-08-22: «Se quita «undefined»…». */
+  /* El rótulo humano de un campo, si su def lo declara. Mismo criterio que el de las listas. */
+  const campoDicho = (key: string, campo: string) =>
+    porKey.get(key)?.rotulosDeCampos?.[campo] ?? campo;
   const itemDicho = (ancla: string | undefined, posicion: number | undefined) =>
     ancla?.trim() ? `«${ancla}»` : `el ítem ${(posicion ?? 0) + 1}`;
 
@@ -894,7 +899,17 @@ export function describirOperacionesDeDocumento(
           o.campo === "buttonLabel" &&
           !operaciones.some((x) => x.op === "seccion.campo" && x.key === o.key && x.campo === "buttonUrl" && x.valor?.trim()) &&
           !String((porKey.get(o.key)?.data as Record<string, unknown> | undefined)?.buttonUrl ?? "").trim();
-        return `En «${nombre(o.key)}», ${o.campo} pasa a: «${recortar(o.valor ?? "")}»${
+        /* ⭐ EL CAMPO SE NOMBRA COMO SE VE, NO COMO SE PROGRAMA. «items.2.detail pasa a…» no es
+           una frase que alguien pueda aprobar: hay que contar desde cero en una lista para saber
+           de qué tarjeta habla. El ancla —el texto que HOY tiene ese ítem— ya se calcula para
+           proteger la operación de un reordenamiento; usarla acá no cuesta nada y convierte la
+           línea en algo legible: «en la tarjeta «Migración desde Excel», el detalle pasa a…». */
+        const donde = anclaDeRuta(porKey.get(o.key)?.schema, porKey.get(o.key)?.data, o.campo);
+        const hoja = o.campo.split(".").pop() ?? o.campo;
+        const ubicacion = donde
+          ? `En «${nombre(o.key)}», en «${donde}», ${campoDicho(o.key, hoja)}`
+          : `En «${nombre(o.key)}», ${campoDicho(o.key, o.campo)}`;
+        return `${ubicacion} pasa a: «${recortar(o.valor ?? "")}»${
           sinEnlace ? " ⚠ sin enlace, el botón no se va a ver" : ""
         }`;
       }
