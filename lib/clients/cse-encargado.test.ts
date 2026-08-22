@@ -24,6 +24,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
+import { coincideBusqueda } from "@/lib/ui/text-search";
 import { PERMISSION_SECTIONS } from "@/lib/auth/permissions/registry";
 import { DEFAULT_MATRIX } from "@/lib/auth/permissions/defaults";
 
@@ -180,13 +181,45 @@ describe("⭐ el select de la columna", () => {
     ).toBe(true);
   });
 
+  it("⭐ el buscador encuentra «Elías» escribiendo «Elias», y al revés", () => {
+    /* Pedido de Elías (2026-08-21). No es un borde: media plantilla tiene tilde en el nombre y
+       nadie la escribe al buscar. Un buscador que exige la tilde exacta no encuentra a nadie.
+     *
+     * ⚠ Se prueba la FUNCIÓN que el componente usa, no el texto del componente: el
+     * comportamiento vive en `coincideBusqueda` (`lib/ui/text-search`), que ya es «el filtrado
+     * por texto de las listas, en un solo lugar». La otra mitad —que CeldaSelect la use de
+     * verdad y no un `toLowerCase()` propio, como estaba— es el `expect` de abajo. */
+    for (const [texto, consulta] of [
+      ["Elías González", "Elias"],
+      ["Elias Gonzalez", "Elías"],
+      ["Heiver Gómez", "gomez"],
+      ["Jerson Escudero", "ESCUDERO"],
+    ] as const) {
+      expect(coincideBusqueda(texto, consulta), `«${consulta}» no encontró «${texto}»`).toBe(true);
+    }
+    /* Y sigue discriminando: sin tildes no significa "matchea cualquier cosa". */
+    expect(coincideBusqueda("Elías González", "Lorena")).toBe(false);
+
+    /* La edición que la pone en rojo: volver al `o.label.toLowerCase().includes(q)` propio. */
+    expect(
+      CELDA.includes("coincideBusqueda(o.label, q)"),
+      "CeldaSelect volvió a comparar con su propio toLowerCase(): buscar «Elias» deja de " +
+        "encontrar a «Elías»",
+    ).toBe(true);
+    expect(
+      CELDA.includes('coincideBusqueda(o.hint ?? "", q)'),
+      "el filtro dejó de mirar el `hint` sin tildes",
+    ).toBe(true);
+  });
+
   it("⭐ y buscador cuando hay muchas opciones", () => {
     /* Pedido de Elías. Un equipo de 20 personas no entra de un vistazo — y el repo ya tiene
        anotada la deuda del selector de 169 clientes SIN buscador.
        La edición que la pone en rojo: borrar el `<input>` del panel. */
     expect(CELDA).toContain("minimoParaBuscar");
-    expect(CELDA, "el filtro dejó de mirar el `hint` (el email desempata dos nombres iguales)")
-      .toContain("(o.hint ?? \"\").toLowerCase().includes(q)");
+    /* ⚠ Lo del `hint` lo cubre el test de tildes, de arriba: ahí se afirma sobre la llamada
+       real (`coincideBusqueda(o.hint ?? "", q)`). Repetirlo acá con la implementación vieja
+       dejaría una guarda que se pone roja por un refactor correcto. */
     expect(
       CELDA.includes("Nadie coincide con"),
       "una búsqueda sin resultados quedó como lista vacía: se lee como «no hay opciones», " +

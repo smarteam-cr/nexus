@@ -29,6 +29,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { coincideBusqueda } from "@/lib/ui/text-search";
 import { usePanelFlotante } from "./usePanelFlotante";
 
 export interface OpcionDeCelda {
@@ -86,11 +87,23 @@ export function CeldaSelect({
     if (conBuscador) inputRef.current?.focus();
   }, [abierto, conBuscador]);
 
+  /**
+   * ⭐ BUSCA SIN TILDES, EN LOS DOS SENTIDOS: «Elias» encuentra a «Elías» y al revés.
+   *
+   * Pedido de Elías (2026-08-21) — y es el caso normal, no un borde: media plantilla tiene tilde
+   * en el nombre y nadie la escribe al buscar.
+   *
+   * ⚠ Usa `coincideBusqueda` de `lib/ui/text-search` en vez de un `toLowerCase()` propio, que es
+   * como estaba escrito. Ese módulo YA es «el filtrado por texto de las listas, en un solo
+   * lugar» y ya normaliza acentos; escribir la comparación de nuevo acá habría sido la copia
+   * número 21 del mismo `normalize("NFD")` — hay ~20 en el repo, y ésta al menos tenía dónde
+   * apoyarse.
+   */
   const filtradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    const q = busqueda.trim();
     if (!q) return opciones;
     return opciones.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.hint ?? "").toLowerCase().includes(q),
+      (o) => coincideBusqueda(o.label, q) || coincideBusqueda(o.hint ?? "", q),
     );
   }, [opciones, busqueda]);
 
