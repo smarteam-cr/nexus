@@ -44,8 +44,8 @@ El patrón: **cada circuito se rompe en el último paso, no en el primero.**
 | | 10 · Qué logramos antes | Que el cierre de un proyecto alimente el handoff del siguiente proyecto del mismo cliente. | ✅ Hecho — el próximo handoff del cliente ya cita la Entrega anterior |
 | **Extra** | Auditoría del rango | Revisión adversarial de todo lo construido, buscando lo que los tests y el build no ven. Encontró y arregló 8 fallas reales. | ✅ Hecho |
 | | ⛔ La fuga del handoff | Dos caminos podían mandarle al cliente el handoff entero —que es un documento interno con riesgos y acuerdos comerciales—. Era el prerrequisito de la fase 9 y se tapó aparte, porque vale aunque esa fase no se haga. | ✅ Hecho |
-| | 11 · **Validar en pantalla** | Probar con las manos lo construido, sobre datos reales, antes de tocar nada retroactivo. | 🔜 **Ya deployado — lo siguiente es que Elías lo pruebe** |
-| | 12 · Aplicarlo retroactivamente | Sellar el plan de los 118 proyectos que nunca tuvieron foto, avisando en el propio documento que la foto es de hoy. | ⏳ Después de la 11 |
+| | 11 · **Validar en pantalla** | Abrir Nexus y probar a mano, sobre un proyecto real, las cuatro cosas que ningún test puede responder: (1) ¿el resumen automático del proyecto dice algo que no sabías? (2) ¿la sugerencia de estado le pega, y al aceptarla cambia de verdad en HubSpot? (3) ¿un CSE que no es admin ve solo lo suyo? (4) ¿aprobar el cronograma congela el plan, de modo que una tarea agregada después salga marcada como trabajo agregado? | 🔜 **Ya deployado — lo siguiente es que Elías lo pruebe** |
+| | 12 · Aplicarlo retroactivamente | **La «foto del plan» es el cronograma tal como se le prometió al cliente**: sin ella no hay contra qué comparar, así que no se puede decir cuánto creció el trabajo respecto de lo vendido. Hoy 118 proyectos nunca la tuvieron. La fase les toma la foto AHORA, con el aviso escrito adentro del documento de que es de hoy y no del arranque. | ⏳ Después de la 11 |
 | | 1.7 · Minuta de reunión interna | Un botón que destile la minuta de una reunión puntual de puertas adentro. | ⏳ Diferido |
 
 ---
@@ -67,6 +67,25 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
+
+### ⭐ Dónde hay chat hoy, documento por documento *(2026-08-21)*
+
+Pregunta de Elías: *«falta el chat para los otros canvas, los de tipo sitio web, ¿o eso ya está
+hecho?»*. **Ya está hecho.** La lista NO se escribe a mano: se deriva de qué documentos tienen
+modificador (`lib/asistente/piezas.ts`), justo para que no pueda quedar desfasada.
+
+| Documento | ¿Chat? | Por qué |
+|---|---|---|
+| Cronograma | ✅ | El más usado — 18 operaciones |
+| Kickoff | ✅ | Es el documento de cara al cliente de un sitio web |
+| Diagnóstico · Planificación · Implementación · Entrega · Requerimientos técnicos | ✅ | Entraron en la etapa 1 |
+| **Exploración** | ⛔ | Y no es olvido: al aplicar una propuesta se conservan solo las claves de primer nivel, y las marcas «ya la pregunté» viven anidadas adentro del plan de sesiones. Una propuesta que tocara las sesiones **las borraría todas sin aviso**. Es un arreglo propio |
+| **Handoff** | ⬜ | Nunca tuvo modificador: se genera entero o se edita a mano. Sería una etapa nueva |
+| **Propuesta comercial** | ⬜ | Tiene su propio editor y su propio modificador, aparte del de proyectos |
+
+⇒ Un proyecto de **Sitios web** nace con handoff, kickoff, cronograma y exploración: de esos, los
+dos que se conversan (kickoff y cronograma) **ya tienen chat**. Y si se le activa Entrega,
+Diagnóstico o cualquier otro, también.
 
 ### Etapa 2, tramo por tramo
 
