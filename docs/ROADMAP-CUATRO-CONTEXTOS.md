@@ -75,7 +75,8 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 3.10 | **Las tarjetas del motor son una sola** | Un componente para las grillas de tarjetas + tipo creable «Tarjetas con ícono». El CSS ya era el mismo; lo duplicado era el JSX | ✅ 2026-08-22 |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 5.2 | **El chat actúa, no narra** | ⭐ Auditoría de 43 agentes contra los 10 pedidos: **38 huecos, los 38 confirmados**. Arreglados los 3 que rompían datos en silencio + el «dale» + el rótulo de arriba | ✅ 2026-08-22 · **falta el resto** |
-| 5.3 | **Lo que quedó de la auditoría** | Tabla anidada, capacidades por documento, avisos que mienten, métricas híbridas, URL del CTA en venta, firma en Roles, libro de pendientes en documentos | ⬜ |
+| 5.3 | **Lo que quedó de la auditoría** | Tabla anidada · capacidades por documento · los avisos que mentían en 17 de 19 secciones · métricas híbridas de la portada · URL del CTA en venta · firma en Roles · el libro de pendientes en documentos · la cajita que hablaba en rutas | ✅ 34 de 38 (2026-08-22) |
+| 5.4 | **Los 4 que faltan** | (a) el modelo no sabe la posición de cada card sin chip — el render aplana y descarta los vacíos; (b) persistir el ⚠ de lo no registrado (hoy lo pisa «Aplicado»); (c) portar 3 reglas de acción del cronograma; (d) los ejemplos del panel vacío son todos del cronograma | ⬜ |
 | 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
 
