@@ -64,28 +64,48 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ En uso · **18 operaciones** (2026-08-21) |
 | 3 | **El chat de documentos** | Conversa, acuerda y aplica sobre los 6 documentos | ✅ 2026-08-21 |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
-| 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen | ⬜ |
+| 3.5 | **El chat sobre la Propuesta comercial** | Hoy la propuesta (incluida la de sitio web) ya se modifica con IA por el mismo motor, pero sin conversarlo antes. Falta montarle el panel | ⬜ |
+| 3.6 | **Exploración entra al assist** | Arreglar el borrado silencioso de las marcas «ya la pregunté» — y de paso arregla el que YA ocurre al regenerar | ⬜ |
+| 3.7 | **El handoff se puede conversar** | El único con otro motor: hay que decidir si se le tipan las secciones o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
+| 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen. Hoy el motor solo MODIFICA lo que ya está | ⬜ |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
 
-### ⭐ Dónde hay chat hoy, documento por documento *(2026-08-21)*
+### ⭐ Qué motor tiene cada documento, y dónde hay chat *(2026-08-21)*
 
-Pregunta de Elías: *«falta el chat para los otros canvas, los de tipo sitio web, ¿o eso ya está
-hecho?»*. **Ya está hecho.** La lista NO se escribe a mano: se deriva de qué documentos tienen
-modificador (`lib/asistente/piezas.ts`), justo para que no pueda quedar desfasada.
+Pregunta de Elías: *«los canvas de sitio web… no entiendo por qué solo se generaron algunos y no
+el de exploración ni el de handoff ni el de propuestas, y en realidad deberían estar hechos con el
+mismo motor por debajo»*.
 
-| Documento | ¿Chat? | Por qué |
-|---|---|---|
-| Cronograma | ✅ | El más usado — 18 operaciones |
-| Kickoff | ✅ | Es el documento de cara al cliente de un sitio web |
-| Diagnóstico · Planificación · Implementación · Entrega · Requerimientos técnicos | ✅ | Entraron en la etapa 1 |
-| **Exploración** | ⛔ | Y no es olvido: al aplicar una propuesta se conservan solo las claves de primer nivel, y las marcas «ya la pregunté» viven anidadas adentro del plan de sesiones. Una propuesta que tocara las sesiones **las borraría todas sin aviso**. Es un arreglo propio |
-| **Handoff** | ⬜ | Nunca tuvo modificador: se genera entero o se edita a mano. Sería una etapa nueva |
-| **Propuesta comercial** | ⬜ | Tiene su propio editor y su propio modificador, aparte del de proyectos |
+⚠ **Primero, una precisión de vocabulario que cambia la respuesta**: «sitio web» es un **tipo de
+Propuesta comercial** (`website_v1`, 8 secciones — `lib/business-cases/case-types.ts:82`), no un
+canvas de proyecto. El pipeline «Sitios web» es otra cosa.
 
-⇒ Un proyecto de **Sitios web** nace con handoff, kickoff, cronograma y exploración: de esos, los
-dos que se conversan (kickoff y cronograma) **ya tienen chat**. Y si se le activa Entrega,
-Diagnóstico o cualquier otro, también.
+**Y la respuesta corta: el motor YA es el mismo en 7 de los 9.** `runDocumentAssist`
+(`lib/ai/assist.ts`) es el único núcleo, y la Propuesta comercial lo usa igual que el kickoff.
+
+| Documento | Motor | ¿«Pedir cambio con IA»? | ¿Chat? |
+|---|---|---|---|
+| Kickoff · Diagnóstico · Planificación · Implementación · Entrega · Requerimientos técnicos | `runDocumentAssist` | ✅ | ✅ |
+| **Propuesta comercial** (incluida la de sitio web) | `runDocumentAssist` — **el mismo**, por otra ruta: su documento cuelga del Business Case y no de un proyecto | ✅ | ⬜ **falta montar el panel** |
+| Cronograma | El suyo (`/timeline/assist`) — vocabulario de operaciones, no secciones | ✅ | ✅ |
+| **Exploración** | El mismo almacenamiento y el mismo editor que los demás | ⛔ **bloqueada** | ⛔ |
+| **Handoff** | ⚠ **El único que de verdad es otro**: sus secciones no tienen esquema — el contenido es texto libre en N bloques markdown, no una ficha con campos | ⬜ | ⬜ |
+
+**Por qué Exploración está bloqueada, y es un bug de una función de 12 líneas.** Al aplicar una
+propuesta solo sobreviven los campos del PRIMER nivel (`preserveNonSchemaKeys`,
+`lib/ai/section-schema.ts:50`); las marcas «ya la pregunté» viven anidadas dentro del plan de
+sesiones. ⚠ Y el borrado **ya pasa hoy al regenerar** — con aviso en pantalla. Lo que el assist
+agregaría es que pase **sin** aviso.
+
+**Por qué Handoff es el caso caro.** Los otros ocho declaran cada sección con su esquema de campos,
+y de ahí sale el contrato que se le da a la IA. El handoff no tiene ninguno: sus 11 secciones son
+`{key, label}` y su contenido es prosa. Sin esquema no hay contrato — habría que tipar las
+secciones, o darle un assist de texto libre, que es otro diseño.
+
+**Lo que el motor NO puede hacer en ningún documento: crear una sección nueva.** Modifica las que
+ya existen —de los 20 tipos registrados: fichas, tablas de inversión, texto, diagramas— pero el
+contrato se arma iterando lo que ya está en la base. Eso es la etapa 5.
 
 ### Etapa 2, tramo por tramo
 
