@@ -44,6 +44,8 @@ const INDICE = soloCodigo(
   fs.readFileSync(path.join(RAIZ, "app/(shell)/clients/ClientsGrid.tsx"), "utf8"),
 );
 const TABLA = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Table.tsx"), "utf8"));
+/** El (i) del encabezado, ya extraído de `Table.tsx` a la primitiva de tooltips. */
+const HINT = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Tooltip.tsx"), "utf8"));
 /**
  * ⚠ LA MECÁNICA SE MUDÓ A UNA PRIMITIVA (2026-08-21). Elías: *«estandariza este componente
  * porque me interesa que en el futuro los listing otros puedan ser selects igual»*. Todo lo que
@@ -288,7 +290,11 @@ describe("⭐ el select de la columna", () => {
        otras columnas y otro `headerHint` legítimo dejaría pasar un texto vacío o borrado acá. */
     const i = INDICE.indexOf('key: "cse",');
     expect(i, "desapareció la columna «CSE encargado» del índice de clientes").toBeGreaterThan(-1);
-    const columna = INDICE.slice(i, INDICE.indexOf('key: "salesMeeting"', i));
+    /* ⚠ El corte va hasta la columna SIGUIENTE, que dejó de ser "salesMeeting": «CSE
+       encargado» se movió a la SEGUNDA posición (Elías, 2026-08-22) y ahora la sigue
+       "lastActivity". Con el corte viejo el bloque abarcaba tres columnas y el `headerHint`
+       de cualquiera de ellas habría dado por buena a ésta. */
+    const columna = INDICE.slice(i, INDICE.indexOf('key: "lastActivity"', i));
     expect(columna.length, "la guarda no está mirando nada").toBeGreaterThan(200);
     expect(columna, "la columna se quedó sin la (i) explicativa").toContain("headerHint:");
     expect(
@@ -306,7 +312,13 @@ describe("⭐ el select de la columna", () => {
       (TABLA.match(/col\.headerHint/g) ?? []).length,
       "col.headerHint dejó de usarse en alguna de las dos formas de encabezado (con/sin orden)",
     ).toBeGreaterThanOrEqual(2);
-    expect(TABLA).toContain("title={text}");
+    /* El (i) se extrajo a `components/ui/Tooltip.tsx` cuando apareció el segundo lugar que
+       lo necesitaba, y el tooltip pasó a dibujarlo `TooltipLayer` con el tema en vez del
+       sistema operativo. Lo que esta guarda protege es lo mismo de siempre: que el texto
+       llegue a la pantalla. Por eso se afirma sobre las DOS mitades — que la tabla monta el
+       (i), y que el (i) sigue llevando el texto encima. */
+    expect(TABLA).toContain("<InfoHint");
+    expect(HINT).toContain("title={text}");
   });
 
   it("⚠ NO es optimista: repinta con lo que volvió del servidor", () => {

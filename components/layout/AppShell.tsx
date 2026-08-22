@@ -6,6 +6,7 @@ import { hasSharedRoleDocs } from "@/lib/roles/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
+import { TooltipLayer } from "@/components/ui/Tooltip";
 import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
 
 export default async function AppShell({
@@ -64,6 +65,10 @@ export default async function AppShell({
         {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
             (el componente se auto-apaga para otros roles; render null). */}
         <CsAlertNotifier role={userLite.role} />
+        {/* LA capa de ayuda. Va UNA vez y acá: adopta el `title` de cualquier elemento de
+            la app —incluidos los que todavía no existen— y lo pinta con el tema en vez de
+            dejar que lo pinte el sistema operativo. Ver components/ui/Tooltip.tsx. */}
+        <TooltipLayer />
         {children}
       </SidebarShell>
     </AgentRunsProvider>

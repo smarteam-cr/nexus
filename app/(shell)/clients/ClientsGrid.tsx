@@ -28,7 +28,6 @@ import {
   contarVistas,
   describirVista,
   explicarListaVacia,
-  resumirPotencial,
   vistasARenderizar,
   type AccionDeVacio,
   type Pertenencia,
@@ -265,15 +264,6 @@ export default function ClientsGrid({
   // los controles aparecerían y desaparecerían mientras se teclea.
   const vistas = useMemo(() => vistasARenderizar(kindClients, vista), [kindClients, vista]);
 
-  // Potencial estimado de lo que se está viendo: la suma de los TAM cargados. Los "sin
-  // estimar" se cuentan APARTE y nunca como 0 — si se sumaran como cero, el total diría
-  // que la cartera vale menos de lo que vale y nadie sabría cuánto falta por estimar.
-  // Y sin NINGÚN TAM cargado no dice "$0": dice que no hay dato. Hoy es el 100% de los casos.
-  const potencial = useMemo(
-    () => resumirPotencial(displayedClients.map((c) => c.tamUsd)),
-    [displayedClients],
-  );
-
   const limpiarTodo = () => {
     setVista(VISTA_POR_DEFECTO);
     setBusqueda("");
@@ -362,26 +352,14 @@ export default function ClientsGrid({
       ),
     },
     {
-      key: "lastActivity",
-      header: "Última actividad",
-      sortValue: (c) => (c.lastActivityAt ? new Date(c.lastActivityAt) : null),
-      width: "w-36",
-      render: (c) => <LastActivityCell row={c} />,
-    },
-    {
-      key: "nextMeeting",
-      header: "Próxima reunión",
-      sortValue: (c) => (c.nextMeetingAt ? new Date(c.nextMeetingAt) : null),
-      width: "w-36",
-      render: (c) => <NextMeetingCell row={c} />,
-    },
-    {
       key: "cse",
       header: "CSE encargado",
       sortValue: (c) => c.cseNames[0],
       width: "w-32",
-      hideOnMobile: true,
-      /* ⭐ Editable: elegir acá reasigna la CUENTA — escribe `csl_encargado` en todos los
+      /* ⭐ SEGUNDA COLUMNA (Elías, 2026-08-22). Después del nombre, lo que se pregunta de
+         una cuenta es de quién es; estaba cuarta, detrás de dos columnas de fechas, y en
+         pantallas angostas ni se pintaba (`hideOnMobile`). Ahora se ve siempre.
+         ⭐ Editable: elegir acá reasigna la CUENTA — escribe `csl_encargado` en todos los
          proyectos del cliente que están en el pipeline de Implementación de HubSpot. Sin
          permiso se pinta exactamente como antes (texto). Ver `CseEncargadoSelect`. */
       headerHint:
@@ -397,6 +375,20 @@ export default function ClientsGrid({
           puedeEditar={puedeReasignarEncargado}
         />
       ),
+    },
+    {
+      key: "lastActivity",
+      header: "Última actividad",
+      sortValue: (c) => (c.lastActivityAt ? new Date(c.lastActivityAt) : null),
+      width: "w-36",
+      render: (c) => <LastActivityCell row={c} />,
+    },
+    {
+      key: "nextMeeting",
+      header: "Próxima reunión",
+      sortValue: (c) => (c.nextMeetingAt ? new Date(c.nextMeetingAt) : null),
+      width: "w-36",
+      render: (c) => <NextMeetingCell row={c} />,
     },
     {
       key: "salesMeeting",
@@ -567,17 +559,10 @@ export default function ClientsGrid({
             },
           ]}
         />
-        {!enInternos && displayedClients.length > 0 && (
-          <span className="ml-auto text-xs text-fg-muted">
-            Potencial estimado{" "}
-            <span className="tabular-nums text-fg-secondary font-medium">
-              {potencial.total === null ? "sin datos" : formatTamUsd(potencial.total)}
-            </span>
-            {potencial.sinEstimar > 0 && (
-              <span className="text-fg-muted"> · {potencial.sinEstimar} sin estimar</span>
-            )}
-          </span>
-        )}
+        {/* El «Potencial estimado» vivía acá y se sacó (Elías, 2026-08-22): con cero TAM
+            cargados decía literalmente «sin datos» en todas las pestañas, o sea un rótulo
+            permanente anunciando que no hay nada que anunciar. El dato sigue por cuenta en
+            la columna TAM; cuando Ventas empiece a estimar, el total puede volver. */}
       </div>
 
       {/* Eje 2 — de quién es. Solo para un CSE: el Super Admin ve todo sin filtro. No aplica

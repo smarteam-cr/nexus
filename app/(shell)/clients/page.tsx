@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/ui";
 import {
@@ -40,8 +39,6 @@ export default async function ClientsPage() {
 
   // Shape compatible con el viejo ActiveCse para el ClientsGrid client component.
   const roleEnum = user.teamMember?.roleEnum;
-  // Acceso al área de Ventas (Business Cases) — mismo gate que /business-cases (ventas.read).
-  const canSeeSales = user.teamMember ? await can(user.teamMember, "ventas", "read") : false;
   const activeCse = {
     email: user.email,
     name: user.teamMember?.name ?? user.email,
@@ -84,19 +81,10 @@ export default async function ClientsPage() {
             : `${empresaCount} empresa${empresaCount !== 1 ? "s" : ""} · ` +
               `${clientCount} cliente${clientCount !== 1 ? "s" : ""}`
         }
-        action={
-          canSeeSales ? (
-            <Link
-              href="/business-cases"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 14l4-4 3 3 5-6" />
-              </svg>
-              Business cases
-            </Link>
-          ) : undefined
-        }
+        /* Sin acción. El CTA a «Business cases» vivía acá y se sacó (Elías, 2026-08-22):
+           esta pantalla es el índice de EMPRESAS, y el hub de propuestas ya tiene su celda
+           propia en el menú («Ventas»). Un botón primario que se lleva a otra sección es
+           el gesto más pesado de la pantalla apuntando a lo que nadie vino a hacer acá. */
       />
 
       <Suspense fallback={<ClientsTableZoneSkeleton showPills={!activeCse.isSuperAdmin} />}>

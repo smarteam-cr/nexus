@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { normalizarTexto } from "@/lib/ui/text-search";
 import { SearchFilterBar } from "./SearchFilterBar";
+import { InfoHint } from "./Tooltip";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -84,22 +85,10 @@ function compareValues(a: SortValue, b: SortValue, dir: "asc" | "desc"): number 
 
 /** `title` nativo — es el mismo mecanismo de tooltip que ya usa el resto del repo (no hay
     componente `Tooltip` dedicado); alcanza para una frase que se lee una vez y no vuelve. */
-function HeaderHint({ text }: { text: string }) {
-  return (
-    <span
-      tabIndex={0}
-      title={text}
-      aria-label={text}
-      className="inline-flex text-fg-muted hover:text-fg-secondary cursor-help"
-    >
-      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <circle cx="12" cy="12" r="9" strokeWidth={2} />
-        <path strokeLinecap="round" strokeWidth={2} d="M12 11v5" />
-        <circle cx="12" cy="8" r="0.75" fill="currentColor" stroke="none" />
-      </svg>
-    </span>
-  );
-}
+/* El (i) vive en `Tooltip.tsx` desde que apareció el segundo lugar que lo necesitaba: acá
+   era una copia con su propio ícono y sus propias clases, y el tooltip lo pintaba el sistema
+   operativo. Se re-exporta con el nombre viejo para no tocar los dos call sites de abajo. */
+const HeaderHint = ({ text }: { text: string }) => <InfoHint text={text} />;
 
 // ── Ícono de orden ─────────────────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ import WorkspaceShell from "@/components/clients/WorkspaceShell";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoNavegableWhere } from "@/lib/projects/scope";
+import { CLIENT_KIND_META, espacioDe } from "@/lib/clients/kind";
 
 // Obtiene el nombre de la empresa desde la cuenta del cliente o del sistema
 async function fetchHsCompanyName(
@@ -73,17 +74,27 @@ export default async function ClientLayout({
   // descarta los serviceType NULL) y allá en JavaScript (`!==`, que los conserva). Ahora
   // los dos importan `esProyectoNavegable` / `PROYECTO_NAVEGABLE_WHERE`, que son el mismo
   // criterio escrito una vez.
-  const activeProjects = await prisma.project.findMany({
-    where: proyectoNavegableWhere({ clientId: id }),
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
+  //
+  // ⚠ Solo cuando la empresa ABRE proyectos. Una empresa que no es cartera —un prospecto,
+  // un aliado, nosotros— no tiene rail de proyectos: preguntar por su pestaña inicial es
+  // una query por una respuesta que nadie va a leer. Qué abre cada categoría lo decide
+  // `ESPACIO_POR_CATEGORIA` (lib/clients/kind.ts), no este archivo.
+  const enProyectos = espacioDe(client.kind) === "proyectos";
+  const activeProjects = enProyectos
+    ? await prisma.project.findMany({
+        where: proyectoNavegableWhere({ clientId: id }),
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
   const initialProjectId =
     activeProjects.length === 1 ? activeProjects[0].id : SENTINEL_SERVICE_TYPE;
 
-  // Nombre de empresa live desde HubSpot
+  // Nombre de empresa live desde HubSpot. Es una llamada de RED en el camino crítico del
+  // header: solo se paga en el espacio de proyectos, donde el nombre de HubSpot es el que
+  // manda. En los otros dos alcanza con lo que Nexus ya tiene guardado.
   let hsCompanyName: string | null = null;
-  if (client.hubspotCompanyId) {
+  if (enProyectos && client.hubspotCompanyId) {
     hsCompanyName = await fetchHsCompanyName(
       client.hubspotCompanyId,
       client.hubspotAccount?.id
@@ -128,6 +139,17 @@ export default async function ClientLayout({
           <div className="w-px h-4 bg-gray-700 flex-shrink-0" />
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-semibold text-white truncate">{client.name}</span>
+            {/* La CATEGORÍA, cuando no es la de siempre. Un chip «Cliente» en las 155 fichas
+                de cartera sería ruido; en las otras es lo que explica por qué esta pantalla
+                no se parece a la de al lado — por qué no hay proyectos ni cronograma. */}
+            {!enProyectos && (
+              <span
+                title={CLIENT_KIND_META[client.kind].help}
+                className="flex-shrink-0 px-1.5 py-0.5 rounded text-2xs font-medium bg-surface-hover text-fg-secondary border border-line cursor-help"
+              >
+                {CLIENT_KIND_META[client.kind].label}
+              </span>
+            )}
             {displayCompany && displayCompany !== client.name && (
               <>
                 <span className="text-gray-300 text-xs">·</span>

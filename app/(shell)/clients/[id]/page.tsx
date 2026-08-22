@@ -1,5 +1,9 @@
 import { requireAccessToClient } from "@/lib/auth/access";
-import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
+import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
+import { espacioDe } from "@/lib/clients/kind";
+import EspacioPropuestas from "@/components/clients/EspacioPropuestas";
+import EspacioSesiones from "@/components/clients/EspacioSesiones";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
@@ -60,11 +64,40 @@ export default async function ClientPage({
     throw e;
   }
 
-  const [client, projects, hubspotAccount] = await Promise.all([
-    prisma.client.findUnique({
-      where: { id },
-      select: { id: true, name: true, hubspotCompanyId: true },
-    }),
+  /* ── QUÉ ES esta empresa. Se pregunta ANTES que nada, y no es un detalle de orden ──────
+     La CATEGORÍA decide qué espacio se abre (`ESPACIO_POR_CATEGORIA`, lib/clients/kind.ts).
+     Las que no son cartera —prospectos, aliados, nosotros— no tienen proyectos, así que todo
+     lo que sigue no solo sobraría: `ensureStrategyProject` **escribe**, y le estaba creando un
+     "proyecto de estrategia" a un prospecto que no compró nada. Salir temprano es lo que lo
+     evita; filtrar al final habría dejado el efecto igual. */
+  const empresa = await prisma.client.findUnique({
+    where: { id },
+    select: { id: true, name: true, kind: true, hubspotCompanyId: true },
+  });
+  if (!empresa) notFound();
+
+  const espacio = espacioDe(empresa.kind);
+
+  if (espacio === "propuestas") {
+    /* El gate es de VENTAS y no de esta pantalla: quien llegó hasta acá ya tiene acceso a la
+       empresa. Lo único que decide es si la propuesta se puede ABRIR — /business-cases/[id]
+       redirige sin `ventas.read`, y un link que rebota se lee como que la app está rota. */
+    const ctx = await requireInternalUser().catch(() => null);
+    const puedeVerVentas = ctx ? await can(ctx.teamMember, "ventas", "read") : false;
+    return (
+      <EspacioPropuestas
+        clientId={id}
+        clientName={empresa.name}
+        puedeVerVentas={puedeVerVentas}
+      />
+    );
+  }
+
+  if (espacio === "sesiones") {
+    return <EspacioSesiones clientId={id} clientName={empresa.name} kind={empresa.kind} />;
+  }
+
+  const [projects, hubspotAccount] = await Promise.all([
     prisma.project.findMany({
       where: { clientId: id },
       orderBy: { createdAt: "asc" },
@@ -101,15 +134,13 @@ export default async function ClientPage({
     }),
   ]);
 
-  if (!client) notFound();
-
   /* El rail de proyectos. MISMO criterio que la pestaña inicial del layout —importado, no
      copiado—: cuando estaban copiados, uno filtraba en SQL y el otro en JavaScript y
      trataban distinto a los proyectos con `serviceType` NULL, así que el layout podía
      elegir como pestaña inicial un proyecto que este rail no mostraba. */
-  const hasHubspot = !!hubspotAccount || !!client.hubspotCompanyId;
+  const hasHubspot = !!hubspotAccount || !!empresa.hubspotCompanyId;
   const paraFiltro = {
-    hubspotCompanyId: client.hubspotCompanyId,
+    hubspotCompanyId: empresa.hubspotCompanyId,
     tieneHubspotAccount: !!hubspotAccount,
   };
   const visibleProjects = projects

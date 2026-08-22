@@ -66,6 +66,41 @@ export const CLIENT_KIND_META: Record<
   },
 };
 
+// ── QUÉ SE ABRE al entrar a una empresa ────────────────────────────────────────
+//
+// La categoría dejó de ser solo una etiqueta de filtro: **decide qué espacio de trabajo
+// abre la empresa**. Antes las cuatro caían en el mismo lugar —el rail de proyectos con su
+// canvas y su cronograma—, y para un prospecto eso era una pantalla entera hablando de un
+// trabajo que todavía no se vendió: Nexus le creaba un "proyecto de estrategia" a alguien
+// que no compró nada, y el CSE tenía que adivinar que ahí no había nada que ver.
+//
+// Cada categoría abre lo único que de esa categoría se mira:
+//
+//   · CLIENTE   → sus proyectos (el workspace de siempre, sin cambios).
+//   · PROSPECTO → sus propuestas comerciales. Es lo único que existe de un prospecto.
+//   · ALIADO    → las reuniones que tuvimos con ellos. No son cartera ni tienen propuesta;
+//                 lo que hay es historia de conversación.
+//   · INTERNO   → ídem: somos nosotros, no nos vendemos ni nos gestionamos como cuenta.
+//
+// ⚠ Este mapa es el único lugar donde se decide. Un `kind === "PROSPECTO"` escrito a mano en
+// una pantalla nueva es exactamente la divergencia que `CS_CLIENT_WHERE` vino a cerrar arriba.
+// Cuando cada categoría tenga su propio juego de canvas, se declaran acá.
+
+/** El espacio de trabajo que abre una empresa. */
+export type EspacioDeEmpresa = "proyectos" | "propuestas" | "sesiones";
+
+export const ESPACIO_POR_CATEGORIA = {
+  CLIENTE: "proyectos",
+  PROSPECTO: "propuestas",
+  ALIADO: "sesiones",
+  INTERNO: "sesiones",
+} as const satisfies Record<ClientKind, EspacioDeEmpresa>;
+
+/** Qué espacio abre esta empresa. */
+export function espacioDe(kind: ClientKind): EspacioDeEmpresa {
+  return ESPACIO_POR_CATEGORIA[kind];
+}
+
 /**
  * EL filtro de la cartera de CS: solo los clientes de verdad.
  *

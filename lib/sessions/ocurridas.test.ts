@@ -148,6 +148,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "lib/clients/meeting-dates.ts": { clase: "agenda", motivo: "Primera/última reunión. Ya separa pasado de futuro por su cuenta." },
   "lib/clients/last-interaction.ts": { clase: "agenda", motivo: "Última interacción Y próxima: hace las DOS consultas, partidas a propósito." },
+  "components/clients/EspacioSesiones.tsx": {
+    clase: "agenda",
+    motivo:
+      "El espacio de un ALIADO: el mapa de reuniones que tuvimos con ellos. Es lo que la persona " +
+      "vino a mirar, agenda incluida — se separan en dos bloques, no se esconden (CTX1.2).",
+  },
 
   // ── plomería ─────────────────────────────────────────────────────────────────
   "lib/google/meet-sync.ts": { clase: "plomeria", motivo: "Ingest desde Google. Su propio techo (`timeMax`) es lo que acota qué entra." },
@@ -201,7 +207,11 @@ function archivosDeCodigo(dir: string, out: string[] = []): string[] {
 }
 
 describe("censo de lectores de sesiones", () => {
-  const lectores = [join(RAIZ, "lib"), join(RAIZ, "app")]
+  /* ⚠ `components` entró al escaneo cuando el primer server component fuera de `app` empezó a
+     consultar sesiones (el espacio de reuniones de un aliado). Sin él, un lector nuevo nacía
+     exento de la guarda solo por vivir en otra carpeta — que es exactamente el agujero por el
+     que este archivo existe. */
+  const lectores = [join(RAIZ, "lib"), join(RAIZ, "app"), join(RAIZ, "components")]
     .flatMap((d) => archivosDeCodigo(d))
     .filter((f) => LEE_SESIONES.test(readFileSync(f, "utf8")))
     .map((f) => relative(RAIZ, f).split(sep).join("/"))

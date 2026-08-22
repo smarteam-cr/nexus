@@ -69,7 +69,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   // guardas cazaba.
   "app/(shell)/clients/DeleteClientButton.tsx": 1,
   "app/(shell)/clients/NewClientButton.tsx": 3,
-  "app/(shell)/clients/page.tsx": 1,
   "app/(shell)/error.tsx": 1,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 29,
   "app/(shell)/integrations/HubspotSystemCard.tsx": 21,

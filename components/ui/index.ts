@@ -91,5 +91,9 @@ export type { SearchFilterBarProps } from "./SearchFilterBar";
 export { Table, TableSkeleton } from "./Table";
 export type { TableProps, TableColumn, TableSkeletonProps } from "./Table";
 
+/* LA capa de ayuda. `TooltipLayer` se monta UNA vez en el shell y adopta todos los
+   `title` de la app; `InfoHint` es el (i) que los encabezados de tabla ya usaban. */
+export { TooltipLayer, InfoHint } from "./Tooltip";
+
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastApi, ToastOptions, ToastAction, ToastType } from "./Toast";
