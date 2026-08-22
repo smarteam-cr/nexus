@@ -19,6 +19,9 @@
  * plan de puestos) — rollback de esa ola = git revert.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+/* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
+   dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { useCallback, useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -52,7 +55,7 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
    * cliente seguiría viendo la sección. La operación se rechaza con su motivo hasta que los dos
    * mecanismos se unifiquen, que es tanda propia.
    */
-  useEjecutarOperacionesDelChat(k, KICKOFF_DEF_BY_KEY, { puedeOcultar: false, puedeCrear: true });
+  useEjecutarOperacionesDelChat(k, KICKOFF_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["kickoff"]);
 
   const idByKey = useMemo(() => new Map(k.sections.map((s) => [s.key, s.id])), [k.sections]);
 

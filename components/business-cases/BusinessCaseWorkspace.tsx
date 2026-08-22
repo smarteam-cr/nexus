@@ -29,6 +29,7 @@ import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucio
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
 import { PIEZA_PROPUESTA_COMERCIAL, puedeConversar } from "@/lib/asistente/piezas";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
@@ -119,10 +120,11 @@ export default function BusinessCaseWorkspace({
      y su cola de guardado. No se abre un segundo camino de escritura.
      ⚠ Las defs salen por PLANTILLA, no de un mapa fijo: la propuesta tiene un juego de secciones
      por tipo de caso, y una def ausente hace que el ejecutor rechace campos que sí existen. */
-  useEjecutarOperacionesDelChat(hook, defsForCanvas(templateId, hook.sections), {
-    puedeOcultar: true,
-    puedeCrear: true,
-  });
+  useEjecutarOperacionesDelChat(
+    hook,
+    defsForCanvas(templateId, hook.sections),
+    CAPACIDADES_POR_PIEZA[PIEZA_PROPUESTA_COMERCIAL],
+  );
   const sectionByKey = new Map<string, SectionWithBlocks>(hook.sections.map((s) => [s.key, s]));
   const sectionsData: LandingSectionData[] = hook.sections.map((s) => ({
     key: s.key,

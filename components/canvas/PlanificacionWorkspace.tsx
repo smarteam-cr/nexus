@@ -11,6 +11,9 @@
  * cliente en sesión, pero no tiene superficie externa propia.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+/* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
+   dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
@@ -48,7 +51,7 @@ export default function PlanificacionWorkspace({
 
   /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
      su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
-  useEjecutarOperacionesDelChat(cs, PLANIFICACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
+  useEjecutarOperacionesDelChat(cs, PLANIFICACION_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["planning"]);
 
   // ¿Ya corrió la generación? El seed solo siembra el bloque del `cierre` (curado).
   const hasGeneratedContent = useMemo(

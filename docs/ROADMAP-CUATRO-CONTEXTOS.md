@@ -70,6 +70,7 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 3.7 | **El handoff se puede conversar** | El único que sigue afuera: sus secciones no tienen esquema. Hay que decidir si se le tipan o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — 7 tipos creables, incluida la tabla genérica que no existía | ✅ 2026-08-22 |
 | 5.1 | **La sección nace LLENA** | Hoy el chat crea la sección y queda VACÍA: llenarla exige un segundo pedido. Ver abajo | ⬜ ⚠ hueco conocido |
+| 3.8 | **El chat se corrige antes de prometer** | ⭐ Valida en seco contra el documento REAL antes de acordar y reintenta una vez con los rechazos. Los 4 fallos que Elías vio en pantalla | ✅ 2026-08-22 |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |

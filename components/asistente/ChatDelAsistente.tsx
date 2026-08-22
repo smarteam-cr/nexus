@@ -296,7 +296,15 @@ export default function ChatDelAsistente({
       const r = await fetch(`${base}/asistente`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pieza, mensaje: `${lineaDeAlcance(seccionReferida)}${mensaje}` }),
+        body: JSON.stringify({
+          pieza,
+          mensaje: `${lineaDeAlcance(seccionReferida)}${mensaje}`,
+          /* ⚠ La sección viaja DOS veces y no es redundante: la línea del texto es la MEMORIA del
+             alcance (el hilo se re-manda entero, así que lo que no está en el texto desaparece dos
+             turnos después), y este campo es el gatillo para que el servidor adjunte el contenido
+             completo de esa sección a ESTE turno. */
+          ...(seccionReferida ? { seccion: { key: seccionReferida.key } } : {}),
+        }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? "el asistente no pudo contestar");

@@ -14,6 +14,9 @@
  * inline (por campos) y el reorden se guardan al instante vía useCanvasSections.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+/* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
+   dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { DESARROLLO_DEF_BY_KEY } from "@/components/landing/configs/desarrollo.defs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -49,7 +52,7 @@ export default function DesarrolloWorkspace({
 
   /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
      su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
-  useEjecutarOperacionesDelChat(cs, DESARROLLO_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
+  useEjecutarOperacionesDelChat(cs, DESARROLLO_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["tech-requirements"]);
   const [nonce, setNonce] = useState(0); // fuerza refetch tras regenerar
 
   /* El estado de "compartir con el dev" ya no vive acá: se lee y se escribe desde el panel

@@ -29,10 +29,17 @@ import {
   OPERACIONES_DE_DOCUMENTO_VALIDAS,
   aplicarOperacionesDeDocumento,
   describirOperacionesDeDocumento,
+  prepararOperacionesDeDocumento,
   dependenciasDeOperacionesDeDocumento,
   esOperacionDeDocumento,
   type OperacionDeDocumento,
+  type SeccionActual,
 } from "@/lib/canvas/operaciones-de-documento";
+import {
+  capacidadesDeLaPieza,
+  reclamoDeOperaciones,
+  renderSeccionParaElChat,
+} from "@/lib/canvas/capacidades-de-documento";
 import { dependenciasDeOperaciones } from "@/lib/timeline/dependencias-de-operaciones";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
@@ -64,6 +71,34 @@ export {
   textoVisible,
 } from "./acuerdo";
 export type { CambioAcordado, Desenlace } from "./acuerdo";
+
+/**
+ * El contenido COMPLETO de la sección del chip, para adjuntar a ESTE turno.
+ *
+ * ⛔ VA EN `messages`, NUNCA EN `system`. El breakpoint de caché está al final del bloque de
+ * contexto: meter acá algo que cambia turno a turno invalidaría la caché entera sin error y sin
+ * log, y se vería solo en la factura.
+ *
+ * ⚠ Y NO SE PERSISTE: al hilo se guarda el mensaje del CSE pelado. Si se guardara, el turno
+ * siguiente le re-mandaría al modelo una foto vieja del documento, para siempre.
+ */
+function bloqueDeLaSeccion(
+  secciones: readonly SeccionActual[] | undefined,
+  referida: { key: string } | undefined,
+): string {
+  if (!referida) return "";
+  const s = secciones?.find((x) => x.key === referida.key);
+  /* Un chip viejo sobre una sección que ya no está: se ignora en silencio. La línea de alcance
+     del texto ya le dice al modelo de qué se hablaba. */
+  if (!s) return "";
+  return [
+    `[CONTENIDO COMPLETO DE «${s.label}» (${s.key}) — la sección desde la que se abrió el chat]`,
+    "Los ítems van numerados desde 0: ese número es el que va en `posicion`.",
+    renderSeccionParaElChat(s.schema, s.data),
+    "",
+    "",
+  ].join("\n");
+}
 
 /** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
 export const SLUG_DEL_ASISTENTE = "asistente-chat";
@@ -338,6 +373,21 @@ carril vino a resolver.
 ⛔ NO toca lo que el CSE curó a mano en otra parte de la app (fechas del cronograma, tags,
 particularidades): si el pedido es de eso, dilo y di dónde se hace.
 
+⭐ LOS NOMBRES DE LAS LISTAS Y DE LOS CAMPOS SALEN DEL CONTEXTO, NUNCA DE LA COSTUMBRE.
+Cada sección declara su forma entre corchetes: [campos: … · listas: …]. Lo que pongas en \`campo\`,
+en \`lista\` o en las claves de \`valores\` es EXACTAMENTE uno de esos nombres. Una lista marcada
+\`(texto)\` lleva textos sueltos; una marcada \`[a, b]\` lleva ítems con esos campos.
+
+  Contexto: - Contraste (contraste) [campos: bajada · listas: antes(texto), despues(texto)]
+  ✅ { "op": "seccion.item.agregar", "key": "contraste", "lista": "despues", "valor": "Todo en un lugar" }
+  ⛔ { "op": "seccion.item.agregar", "key": "contraste", "lista": "items", "valores": { "texto": "…" } }
+     ← esa sección no declara "items", y sus listas son de texto: se rechaza entera.
+  ⛔ { "op": "seccion.campo", "key": "contraste", "campo": "antes", "valor": "…" }
+     ← "antes" es una lista: se toca con operaciones de ítem, no como texto.
+
+  Contexto: - Objetivos (objetivos) [campos: intro · listas: items[title, detail]]
+  ✅ { "op": "seccion.item.agregar", "key": "objetivos", "lista": "items", "valores": { "title": "…", "detail": "…" } }
+
 ⭐ TÚ ESCRIBES EL TEXTO, ENTERO Y FINAL.
 El valor que pones en una operación se escribe TAL CUAL en el documento: no hay un segundo modelo
 que lo interprete. Escribe el texto terminado, en el idioma y el registro del documento — no una
@@ -436,14 +486,30 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
             campo: {
               type: "string",
               description:
-                "La RUTA del campo dentro de la sección: `intro`, `items.2.title`, " +
-                "`filas.0.celdas.1`. Los índices arrancan en 0.",
+                "La RUTA del campo dentro de la sección, con los nombres EXACTOS que el contexto " +
+                "declara entre corchetes para esa sección. Los índices arrancan en 0 y tienen que " +
+                "existir hoy. Ejemplo de forma: `intro`, `items.2.title`.",
             },
-            valor: { type: "string", description: "El texto nuevo, completo: lo escribes tú." },
-            lista: { type: "string", description: "El nombre de la lista (`items`, `filas`…)." },
+            valor: {
+              type: "string",
+              description:
+                "En `seccion.campo`: el texto nuevo, completo — lo escribes tú. En " +
+                "`seccion.item.agregar`: el texto del ítem, cuando la lista está marcada `(texto)`.",
+            },
+            /* ⛔ ACÁ SUGERÍA `items` Y `filas`, y el modelo les hacía caso: probó `items` sobre una
+               sección cuya lista se llama `metrics`. La descripción de un parámetro es una
+               instrucción, y ésta apuntaba a nombres que la mayoría de las secciones no usa. */
+            lista: {
+              type: "string",
+              description:
+                "El nombre EXACTO de la lista, tal como el contexto lo declara entre corchetes para " +
+                "ESA sección. ⛔ No lo inventes ni copies el de otra sección.",
+            },
             valores: {
               type: "object",
-              description: "Los campos del ítem nuevo, por nombre. Solo los que declara el esquema.",
+              description:
+                "Los campos del ítem nuevo, por nombre — los que la firma de la lista declara entre " +
+                "corchetes. Si la lista está marcada `(texto)`, no uses esto: el texto va en `valor`.",
               additionalProperties: { type: "string" },
             },
             posicion: { type: "number", description: "Posición, arrancando en 0." },
@@ -660,6 +726,8 @@ const RESUMEN_DE_ARRASTRE = "Esto sigue acordado y sin aplicar.";
 export async function correrTurno(
   hilo: HiloConTurnos,
   mensajeDelCse: string,
+  /** La sección del chip, si la hay: se le adjunta el contenido COMPLETO a este turno. */
+  seccionReferida?: { key: string },
 ): Promise<ResultadoDelTurno> {
   const esCronograma = hilo.pieza === PIEZA_CRONOGRAMA;
   /* El dueño del hilo, reconstruido de sus tres columnas. Exactamente una está seteada. */
@@ -732,34 +800,47 @@ export async function correrTurno(
       role: (t.rol === "CSE" ? "user" : "assistant") as "user" | "assistant",
       content: t.contenido,
     })),
-    { role: "user" as const, content: `${bloqueDePendientes(lineasVivas)}${mensajeDelCse}` },
+    {
+      role: "user" as const,
+      content: `${bloqueDePendientes(lineasVivas)}${bloqueDeLaSeccion(ctx.secciones, seccionReferida)}${mensajeDelCse}`,
+    },
   ];
 
-  const msg = await conContextoDeIA(
-    {
-      agentSlug: SLUG_DEL_ASISTENTE,
-      projectId: hilo.projectId,
-      triggeredByEmail: hilo.usuarioEmail,
-    },
-    () =>
-      anthropic.messages.create({
-        model: hilo.modelo,
-        max_tokens: MAX_TOKENS_DE_RESPUESTA,
-        /* ⭐ El breakpoint va al FINAL del bloque de contexto y en ningún otro lado. El prompt
-           solo (~700 tok) cae bajo el mínimo cacheable: marcarlo ahí sería una escritura de caché
-           pagada que nunca se lee, sin error y sin log. Juntos llegan a ~1.700 y sí cachean. */
-        system: [
-          { type: "text", text: promptDelAsistente(esCronograma) },
-          {
-            type: "text",
-            text: `CONTEXTO DE ESTE DOCUMENTO\n\n${ctx.texto}`,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        tools: [esCronograma ? TOOL_ACUERDO : TOOL_ACUERDO_DE_DOCUMENTO],
-        messages,
-      }),
-  );
+  /**
+   * Una llamada al modelo. Se arma UNA vez y se puede repetir con más mensajes, que es lo que hace
+   * posible el reintento de abajo sin duplicar la forma del pedido (ni la herramienta, ni el
+   * breakpoint de caché, ni la atribución del gasto).
+   */
+  const preguntarleAlModelo = (msgs: Anthropic.Messages.MessageParam[]) =>
+    conContextoDeIA(
+      {
+        agentSlug: SLUG_DEL_ASISTENTE,
+        projectId: hilo.projectId,
+        triggeredByEmail: hilo.usuarioEmail,
+      },
+      () =>
+        anthropic.messages.create({
+          model: hilo.modelo,
+          max_tokens: MAX_TOKENS_DE_RESPUESTA,
+          /* ⭐ El breakpoint va al FINAL del bloque de contexto y en ningún otro lado. El prompt
+             solo (~700 tok) cae bajo el mínimo cacheable: marcarlo ahí sería una escritura de
+             caché pagada que nunca se lee, sin error y sin log. Juntos llegan a ~1.700 y sí
+             cachean. ⚠ Y es idéntico entre el primer intento y el reintento: la segunda llamada
+             lee el prefijo de la caché a 0,1×, así que reintentar cuesta el delta, no el doble. */
+          system: [
+            { type: "text", text: promptDelAsistente(esCronograma) },
+            {
+              type: "text",
+              text: `CONTEXTO DE ESTE DOCUMENTO\n\n${ctx.texto}`,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          tools: [esCronograma ? TOOL_ACUERDO : TOOL_ACUERDO_DE_DOCUMENTO],
+          messages: msgs,
+        }),
+    );
+
+  let msg = await preguntarleAlModelo(messages);
 
   let respuesta = "";
   let resumenDelModelo = "";
@@ -767,24 +848,32 @@ export async function correrTurno(
   let opsNuevas: Operacion[] = [];
   let descartar: unknown[] = [];
   let preguntaAbierta = false;
+  /** El id del `tool_use` del intento vigente — lo necesita el `tool_result` del reintento. */
+  let idDeLaHerramienta = "";
 
-  for (const b of msg.content) {
-    if (b.type === "text") respuesta += b.text;
-    if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
-      const input = b.input as {
-        resumen?: string;
-        operaciones?: unknown;
-        instruccion?: string;
-        descartar?: unknown;
-        preguntaAbierta?: boolean;
-      };
-      resumenDelModelo = typeof input?.resumen === "string" ? input.resumen.trim() : "";
-      preguntaAbierta = input?.preguntaAbierta === true;
-      instruccionDelModelo = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
-      opsNuevas = Array.isArray(input?.operaciones) ? (input.operaciones as Operacion[]) : [];
-      descartar = Array.isArray(input?.descartar) ? input.descartar : [];
+  const leerElTurno = (m: Anthropic.Messages.Message) => {
+    respuesta = "";
+    idDeLaHerramienta = "";
+    for (const b of m.content) {
+      if (b.type === "text") respuesta += b.text;
+      if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
+        idDeLaHerramienta = b.id;
+        const input = b.input as {
+          resumen?: string;
+          operaciones?: unknown;
+          instruccion?: string;
+          descartar?: unknown;
+          preguntaAbierta?: boolean;
+        };
+        resumenDelModelo = typeof input?.resumen === "string" ? input.resumen.trim() : "";
+        preguntaAbierta = input?.preguntaAbierta === true;
+        instruccionDelModelo = typeof input?.instruccion === "string" ? input.instruccion.trim() : "";
+        opsNuevas = Array.isArray(input?.operaciones) ? (input.operaciones as Operacion[]) : [];
+        descartar = Array.isArray(input?.descartar) ? input.descartar : [];
+      }
     }
-  }
+  };
+  leerElTurno(msg);
 
   let acuerdo: CambioAcordado | null = null;
 
@@ -800,10 +889,61 @@ export async function correrTurno(
      * ⚠ Se conserva la rama de la instrucción SOLO para los hilos viejos: si un modelo con el
      * prompt anterior todavía la emitiera, el acuerdo se sigue pintando en vez de evaporarse.
      */
-    /* `opsNuevas` está tipado con el vocabulario del cronograma porque es UN solo campo de la
-       herramienta compartida: el filtro es lo que discrimina, y por eso pasa por `unknown`. */
-    const opsDeDoc = (opsNuevas as unknown[]).filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     const seccionesDelDoc = ctx.secciones ?? [];
+    const capacidades = capacidadesDeLaPieza(hilo.pieza);
+
+    /**
+     * ⭐⭐ EL LOOP: lo que se acuerda ya pasó por el editor.
+     *
+     * ── EL PROBLEMA QUE RESUELVE ────────────────────────────────────────────────────────────
+     * El modelo tiene que nombrar las listas y los campos de cada sección. Aunque ahora los VE
+     * (la firma entró al contexto el 2026-08-22), va a errar alguno: son decenas de secciones con
+     * esquemas distintos. Antes, ese error se descubría después de que la persona leyó cuatro
+     * renglones, marcó las casillas y apretó «Aplicar»: «no se pudieron aplicar 4 de 4».
+     *
+     * Acá el ejecutor —que es puro— corre EN SECO contra el documento real antes de acordar, y lo
+     * rechazado vuelve al modelo como resultado de su propia herramienta, en la misma llamada,
+     * para que lo corrija. Es el loop agéntico, sobre un vocabulario cerrado: el modelo tiene una
+     * segunda oportunidad con el error concreto delante, en vez de la persona.
+     *
+     * ⛔ UN SOLO REINTENTO. Sin techo, un modelo que insiste en un nombre inventado convierte cada
+     * turno en una escalera de llamadas que nadie ve — el costo se descubre en la factura. Y el
+     * segundo intento REEMPLAZA al primero entero (por eso el mensaje pide re-emitir todo): sin
+     * merge no hay forma de duplicar una operación que no es idempotente.
+     */
+    let prep = prepararOperacionesDeDocumento(seccionesDelDoc, opsNuevas as unknown[], capacidades);
+
+    if (prep.rechazadas.length > 0 && idDeLaHerramienta) {
+      messages.push(
+        { role: "assistant", content: msg.content },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result" as const,
+              tool_use_id: idDeLaHerramienta,
+              is_error: true,
+              content: reclamoDeOperaciones(prep.rechazadas),
+            },
+          ],
+        },
+      );
+      msg = await preguntarleAlModelo(messages);
+      leerElTurno(msg);
+      prep = prepararOperacionesDeDocumento(seccionesDelDoc, opsNuevas as unknown[], capacidades);
+    }
+
+    /* ⚠ Lo que sigue rechazado DESPUÉS del reintento se excluye del acuerdo y SE DICE. Callarlo
+       dejaría a la persona creyendo que se acordó todo lo que pidió. En tuteo neutro: es la voz
+       del asistente, se persiste en el hilo y el modelo la relee. */
+    if (prep.rechazadas.length > 0) {
+      const motivos = [...new Set(prep.rechazadas.map((r) => r.motivo))].join(" · ");
+      respuesta =
+        `${respuesta.trim()}\n\n⚠ No registré ${prep.rechazadas.length} de los cambios: ${motivos}. ` +
+        "Pídemelo de otra forma si lo quieres igual.";
+    }
+
+    const opsDeDoc = prep.aceptadas;
     if (resumenDelModelo && opsDeDoc.length > 0) {
       acuerdo = {
         resumen: resumenDelModelo,

@@ -17,7 +17,8 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
-import { PIEZAS_CON_CHAT, tieneChat, puedeConversar } from "./piezas";
+import { PIEZAS_CON_CHAT, PIEZA_CRONOGRAMA, tieneChat, puedeConversar } from "./piezas";
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 
 /**
  * ⚠ Se blanquean los COMENTARIOS antes de escanear, y hace falta de verdad: el docblock del
@@ -682,16 +683,38 @@ describe("⭐ etapa 3 — el chat de DOCUMENTOS también aplica", () => {
        Declararlo `true` haría que el chat escriba donde nadie lee: el hilo diría «aplicado» y el
        cliente seguiría viendo la sección. Es el modo de falla más caro de este carril, porque se
        usa justamente para SACAR algo que no se quería mostrar.
-       La edición que la pone en rojo: ponerle `puedeOcultar: true` al kickoff. */
+       La edición que la pone en rojo: ponerle `puedeOcultar: true` al kickoff en la tabla.
+
+       ⚠ ACTUALIZADA EL 2026-08-22, con el motivo. El literal vivía suelto en el workspace, y eso
+       alcanzaba mientras solo el navegador ejecutara. Desde que el SERVIDOR corre el ejecutor en
+       seco antes de acordar, las dos mitades tienen que leer la MISMA tabla — con dos literales,
+       el chat acordaría ocultar y el editor lo rechazaría al aplicar. Así que la guarda ya no mira
+       el texto del workspace: mira la tabla, que es la fuente, y que el workspace la cite. */
+    expect(
+      CAPACIDADES_POR_PIEZA.kickoff?.puedeOcultar,
+      "el kickoff dice que puede ocultar por chat, y escribiría en la columna que nadie lee",
+    ).toBe(false);
+
     const src = fs.readFileSync(path.join(RAIZ, "components/canvas/KickoffWorkspace.tsx"), "utf8");
     const i = src.indexOf("useEjecutarOperacionesDelChat(");
     expect(i, "el kickoff dejó de cablear el ejecutor").toBeGreaterThan(-1);
     const llamada = src.slice(i, src.indexOf(");", i));
     expect(llamada.length, "la guarda no está mirando nada").toBeGreaterThan(30);
     expect(
-      llamada.includes("puedeOcultar: false"),
-      "el kickoff dice que puede ocultar por chat, y escribiría en la columna que nadie lee",
+      llamada.includes("CAPACIDADES_POR_PIEZA"),
+      "el workspace volvió a declarar sus capacidades a mano: puede divergir del servidor",
     ).toBe(true);
+  });
+
+  it("⭐ toda pieza que conversa declara sus capacidades — ninguna cae al fallback mudo", () => {
+    /* El fallback es conservador (no oculta, no crea), así que una pieza sin declarar no rompe:
+       simplemente puede menos de lo que su editor sabe hacer, y nadie se entera. Este censo lo
+       convierte en un rojo. La edición que lo pone en rojo: sumar un documento al chat sin
+       agregarle su fila. */
+    for (const pieza of PIEZAS_CON_CHAT) {
+      if (pieza === PIEZA_CRONOGRAMA) continue; // su vocabulario es otro
+      expect(CAPACIDADES_POR_PIEZA[pieza], `«${pieza}» conversa pero no declara qué puede hacer`).toBeDefined();
+    }
   });
 });
 

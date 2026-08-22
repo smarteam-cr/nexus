@@ -82,19 +82,32 @@ describe("⛔ y NO se le pinta al cliente", () => {
 });
 
 describe("⭐ la sección referenciada sobrevive al turno siguiente", () => {
-  it("el alcance viaja en el TEXTO del mensaje, no en un campo aparte", () => {
-    /* ⚠ El hilo se re-manda entero al modelo en cada turno. Un alcance que viaje en un campo
-       suelto —o que solo viva en el estado de React— existe en el turno 1 y desaparece en el 2:
-       el modelo contestaría sobre otra sección sin que nadie entienda por qué.
-       La edición que la pone en rojo: mandar `seccion` como campo del body en vez de anteponer la
-       línea al mensaje. */
+  it("el alcance viaja en el TEXTO, y la sección ADEMÁS como campo — las dos cosas", () => {
+    /* ⚠ El hilo se re-manda entero al modelo en cada turno. Un alcance que viaje SOLO en un campo
+       suelto —o que solo viva en el estado de React— existe en el turno 1 y desaparece en el 2: el
+       modelo contestaría sobre otra sección sin que nadie entienda por qué. Por eso la línea en el
+       texto no se negocia.
+
+       ⚠ ACTUALIZADA EL 2026-08-22, con el motivo. Ahora el body TAMBIÉN lleva `seccion`, y no es
+       una regresión: son dos cosas distintas. La línea es la MEMORIA del alcance; el campo es el
+       GATILLO para que el servidor adjunte a ese turno el contenido COMPLETO de la sección. Hacía
+       falta porque el contexto recorta cada sección a 1.000 caracteres y el chat contestaba «me
+       llega recortado, no puedo confirmar cuál es el último ítem», sin ninguna forma de pedirlo.
+
+       La edición que la pone en rojo sigue siendo la misma: reemplazar la línea del texto por el
+       campo. */
     const src = leer(CHAT);
-    const i = src.indexOf("JSON.stringify({ pieza, mensaje");
+    const i = src.indexOf("JSON.stringify({");
     expect(i, "cambió la forma de enviar un turno").toBeGreaterThan(-1);
-    const envio = src.slice(i, src.indexOf("}", i) + 1);
+    const envio = src.slice(i, src.indexOf("});", i) + 3);
+    expect(envio.length, "la guarda no está mirando nada").toBeGreaterThan(60);
     expect(
       envio.includes("lineaDeAlcance("),
       "el alcance dejó de ir en el texto: se pierde a partir del segundo mensaje",
+    ).toBe(true);
+    expect(
+      envio.includes("seccion: { key:"),
+      "sin el campo, el modelo no puede pedir el contenido completo de la sección del chip",
     ).toBe(true);
   });
 

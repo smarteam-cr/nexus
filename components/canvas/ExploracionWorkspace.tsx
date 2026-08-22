@@ -23,6 +23,9 @@
  * blur y en desmontaje, drag & drop de ítems, reorden de secciones, undo global.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+/* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
+   dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
@@ -51,7 +54,7 @@ export default function ExploracionWorkspace({
    * marcas «ya la pregunté» son trabajo del CSE. Crear secciones sueltas acá no aporta nada y
    * suma superficie sobre el único documento cuyo estado curado vive anidado.
    */
-  useEjecutarOperacionesDelChat(cs, EXPLORACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: false });
+  useEjecutarOperacionesDelChat(cs, EXPLORACION_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["exploration"]);
 
   // ¿Ya hay contenido generado? La creación del canvas solo siembra el bloque del
   // `cierre` (curado), así que si alguna sección ≠ cierre tiene un CARD, la generación

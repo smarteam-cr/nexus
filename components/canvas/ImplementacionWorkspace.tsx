@@ -13,6 +13,9 @@
  * "sin verificar". Avisar, nunca bloquear.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+/* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
+   dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
+import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { IMPLEMENTACION_DEF_BY_KEY } from "@/components/landing/configs/implementacion.defs";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -49,7 +52,7 @@ export default function ImplementacionWorkspace({
 
   /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
      su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
-  useEjecutarOperacionesDelChat(cs, IMPLEMENTACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
+  useEjecutarOperacionesDelChat(cs, IMPLEMENTACION_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["implementation"]);
 
   // ¿Hay alcance de Breeze publicado en la base de conocimiento? null = consultando.
   const [breezeReady, setBreezeReady] = useState<boolean | null>(null);

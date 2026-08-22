@@ -83,6 +83,10 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Contraste directo. `subhead`: UNA frase de dónde partimos y a dónde llegamos. `hoy`: 2-4 bullets de cómo opera HOY (el dolor real, con sus palabras), una línea cada uno. `conSistema`: 2-4 bullets de cómo va a operar, y cada uno RESPONDE a un bullet de `hoy` en el mismo orden. Concreto, no aspiracional. Fuente: `dolor_principal` + `alcance_contratado`. Si el handoff no trae el estado actual, dejá ambas listas vacías.",
     schema: { type: "object", properties: { subhead: str, hoy: strArray, conSistema: strArray }, required: [] },
+    /* Los encabezados que el componente pinta sobre cada columna. Sin esto, el chat anunciaba
+       «se agrega X a hoy» y «se agrega X a conSistema» — dos renglones indistinguibles para quien
+       tiene que decidir en cuál de las dos columnas cae el bullet. */
+    rotulosDeListas: { hoy: "Hoy", conSistema: "Con el sistema" },
   },
   {
     key: "alcance",

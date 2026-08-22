@@ -34,7 +34,24 @@ import { estadosDeAcuerdo } from "./acuerdo-vivo";
 const piezaSchema = z.string().trim().min(1).max(60);
 
 const bodySchema = z.union([
-  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4000) }),
+  z.object({
+    pieza: piezaSchema,
+    mensaje: z.string().trim().min(1).max(4000),
+    /**
+     * ⭐ La sección del chip, para MANDARLE SU CONTENIDO COMPLETO al modelo.
+     *
+     * ⚠ NO reemplaza a la línea de alcance del texto: son dos cosas distintas. La línea es la
+     * MEMORIA del alcance —el hilo se re-manda entero en cada turno, así que lo que no está en el
+     * texto deja de existir dos mensajes después— y este campo es el GATILLO para adjuntar el
+     * contenido sin recortar de esa sección al turno.
+     *
+     * Hace falta porque el contexto recorta cada sección a 1.000 caracteres y el chat no tenía
+     * ninguna herramienta de lectura: sobre una sección larga contestaba «el contenido me llega
+     * recortado, no puedo confirmar cuál es el último ítem» y ahí se terminaba. Visto en pantalla
+     * el 2026-08-22, sobre los objetivos de una Entrega.
+     */
+    seccion: z.object({ key: z.string().trim().min(1).max(120) }).optional(),
+  }),
   z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),
   /* El DESENLACE de un acuerdo: qué pasó cuando el CSE apretó «Aplicar». Ver el porqué en
      `anotarDesenlace`, abajo. */
@@ -178,7 +195,7 @@ ${vistaPrevia ? "Revisa la vista previa antes de aceptar." : `Ya quedó guardado
 
   const hilo = await abrirHilo(pedido);
   try {
-    const { acuerdo } = await correrTurno(hilo, parsed.data.mensaje);
+    const { acuerdo } = await correrTurno(hilo, parsed.data.mensaje, parsed.data.seccion);
     /* Se relee el hilo entero en vez de devolver solo la respuesta: así el panel pinta lo que
        quedó GUARDADO, no lo que creemos que se guardó. Si el turno se persistió a medias, se ve. */
     const fresco = await hiloVivo(pedido);

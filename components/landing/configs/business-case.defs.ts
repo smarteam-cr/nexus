@@ -64,6 +64,35 @@ export interface BCSectionDef {
   pinned?: boolean;
   /** (kickoff) no se puede ocultar (sin toggle de ojo): hero y cierre. */
   noHide?: boolean;
+  /**
+   * Cómo se llama cada lista del schema EN PANTALLA, por su key. Solo para las líneas que el chat
+   * le muestra a una persona antes de aplicar.
+   *
+   * ⚠ Sin esto, las dos columnas del cuadro «Del hoy al nuevo sistema» se anunciaban como `hoy` y
+   * `conSistema`: dos renglones que se leen igual para quien tiene que decidir cuál acepta. Pedido
+   * de Elías el 2026-08-22, después de verlo en pantalla.
+   */
+  rotulosDeListas?: Record<string, string>;
+  /**
+   * ⭐ LO QUE EL CHAT PUEDE TOCAR, cuando no coincide con lo que el AGENTE puede escribir.
+   *
+   * ── POR QUÉ NO ALCANZABA CON `schema` ───────────────────────────────────────────────────────
+   * `schema` es el contrato del agente: lo que se le pide que devuelva y contra lo que se coacciona
+   * su respuesta. Las secciones curadas —equipo, horarios, canales— lo tienen VACÍO, y eso está
+   * bien: dice «el agente no escribe acá». Pero el ejecutor del chat resuelve las rutas contra ese
+   * mismo objeto, así que un esquema vacío las volvía **inalcanzables por chat** — Elías pidió
+   * agregar personas por nombre y crear franjas, y las dos cosas se rechazaban con «X no existe en
+   * esa sección».
+   *
+   * ⛔ Y llenarles el `schema` NO era la salida: el agente empezaría a escribir esas secciones en
+   * la próxima regeneración, y lo que una persona curó a mano se perdería. Son dos preguntas
+   * distintas —qué genera el agente, qué puede cambiar el chat— y por eso son dos campos.
+   *
+   * ⚠ Se declara solo lo que el chat puede escribir de verdad: los identificadores que resuelve la
+   * app (`teamMemberId`, los `id` de las franjas) quedan afuera a propósito, así que pedirlos se
+   * rechaza por construcción en vez de dejar que el modelo los invente.
+   */
+  schemaDelChat?: Record<string, unknown>;
 }
 
 const str = { type: "string" } as const;

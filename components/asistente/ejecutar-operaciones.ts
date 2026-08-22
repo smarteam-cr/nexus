@@ -33,7 +33,13 @@ import type { useCanvasSections } from "@/components/canvas/useCanvasSections";
 /** Lo mínimo de una def que el ejecutor necesita: el esquema y si tiene lugar fijo. */
 export type DefsParaEjecutar = Record<
   string,
-  { schema?: unknown; pinned?: boolean; empty?: unknown } | undefined
+  {
+    schema?: unknown;
+    pinned?: boolean;
+    empty?: unknown;
+    /** Cómo se llama cada lista en pantalla: hace legible la línea del acuerdo. */
+    rotulosDeListas?: Record<string, string>;
+  } | undefined
 >;
 
 /**
@@ -64,6 +70,7 @@ export function useEjecutarOperacionesDelChat(
           oculta: s.hidden === true,
           esCreada: esCustomKey(s.key),
           movible: !def?.pinned,
+          rotulosDeListas: def?.rotulosDeListas,
         };
       }),
     [cs.sections, defsByKey],

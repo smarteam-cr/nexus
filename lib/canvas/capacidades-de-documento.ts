@@ -27,7 +27,10 @@
  * que lo hace cumplir, y es la misma que ya existe del lado del cronograma.
  */
 import { CATALOGO_DE_SECCIONES } from "@/lib/landing/catalogo-de-secciones";
-import { OPERACIONES_DE_DOCUMENTO_VALIDAS } from "./operaciones-de-documento";
+import {
+  OPERACIONES_DE_DOCUMENTO_VALIDAS,
+  type CapacidadesDelDocumento,
+} from "./operaciones-de-documento";
 
 /**
  * Las reglas que el editor de documentos obedece. Van tal cual dentro del contexto del chat.
@@ -141,6 +144,221 @@ export function capacidadDeSeccion(
   if (esCreada) return "creada";
   if (def?.agentGenerated === false) return "curada";
   return "editable";
+}
+
+/**
+ * ⭐ LA FORMA DE UNA SECCIÓN, EN UNA LÍNEA — la pieza que faltaba y explica casi todos los fallos.
+ *
+ * ── EL AGUJERO QUE ESTO CIERRA ──────────────────────────────────────────────────────────────
+ * El contexto le mandaba al modelo el CONTENIDO de cada sección aplanado con `Object.values`, o
+ * sea **tirando las claves**. El modelo veía un chorizo de bullets separados por `·` y tenía que
+ * ADIVINAR cómo se llamaba cada lista y cada campo para poder nombrarlos en una operación. El
+ * ejecutor —que sí tiene el esquema— rechazaba. La persona se enteraba después de aprobar.
+ *
+ * Medido en producción el 2026-08-22: el modelo probó `items` sobre una sección cuya lista se
+ * llama `metrics`, y `sistema` sobre una que se llama `conSistema`. No eran alucinaciones
+ * caprichosas: `items` se lo sugería la propia descripción de la herramienta, y `sistema` es lo
+ * que dice el título del cuadro en pantalla.
+ *
+ * ⚠ Sale del MISMO esquema que ejecuta, así que no puede divergir. Y no emite tipos crudos ni
+ * `required`: solo los nombres, que es lo único que el modelo necesita para nombrar.
+ */
+export function firmaDeSeccion(schema: unknown): string {
+  const s = schema as NodoDeSchema | undefined;
+  const props = s?.type === "object" ? (s.properties ?? {}) : {};
+  const campos: string[] = [];
+  const listas: string[] = [];
+
+  for (const [k, sub] of Object.entries(props)) {
+    const n = sub as NodoDeSchema;
+    if (n?.type === "array") listas.push(`${k}${formaDeItems(n.items)}`);
+    else campos.push(k);
+  }
+  const partes = [
+    campos.length ? `campos: ${campos.join(", ")}` : "",
+    listas.length ? `listas: ${listas.join(", ")}` : "",
+  ].filter(Boolean);
+  return partes.length ? `[${partes.join(" · ")}]` : "[sin campos editables]";
+}
+
+/**
+ * Cómo es un ítem de una lista: `(texto)` si es un texto suelto, `[campo, campo]` si es un objeto.
+ *
+ * ⚠ La distinción no es cosmética: decide si el ítem nuevo va en `valor` o en `valores`, que es
+ * exactamente lo que el modelo no podía saber.
+ */
+function formaDeItems(items: unknown, nivel = 0): string {
+  const n = items as NodoDeSchema | undefined;
+  if (n?.type === "object") {
+    const claves = Object.entries(n.properties ?? {}).map(([k, sub]) => {
+      const c = sub as NodoDeSchema;
+      /* Un nivel de anidamiento alcanza para que se entienda; más abajo la ruta se nombra con
+         índices y el detalle solo engorda el prefijo. */
+      if (c?.type === "array") return nivel === 0 ? `${k}${formaDeItems(c.items, 1)}` : `${k}[…]`;
+      return k;
+    });
+    return `[${claves.join(", ")}]`;
+  }
+  return "(texto)";
+}
+
+type NodoDeSchema = {
+  type?: string;
+  properties?: Record<string, unknown>;
+  items?: unknown;
+};
+
+/**
+ * Lo que hay que decirle al MODELO sobre una sección que no es simplemente editable.
+ *
+ * ⚠ Es otro texto que `ROTULO_DE_CAPACIDAD`, que se le muestra a una persona en una píldora. Acá
+ * hace falta la CONSECUENCIA, no la etiqueta: el chat tiene que poder avisar antes de proponer.
+ *
+ * ⛔ Ninguno de estos avisos BLOQUEA. Decisión de Elías (2026-08-21) sobre las secciones curadas:
+ * «las puede editar como cualquier otra». Lo que cambia es que ahora lo dice.
+ */
+export const AVISO_DE_CAPACIDAD_PARA_EL_CHAT: Record<CapacidadDeSeccion, string> = {
+  editable: "",
+  curada:
+    "⚠ la escribe Nexus desde los datos del proyecto: se puede tocar como cualquier otra, pero la próxima corrida la pisa — dilo antes de proponer",
+  derivada: "⚠ se dibuja desde el proyecto: solo se pueden tocar los campos que declara arriba",
+  creada: "la creó una persona en este documento: es la única clase que se puede borrar",
+};
+
+/**
+ * ⭐ QUÉ SABE HACER CADA DOCUMENTO — la misma tabla para el servidor y para los workspaces.
+ *
+ * Vivía repartida en nueve literales, uno por workspace. Servía mientras solo el navegador
+ * ejecutaba; desde que el servidor corre el ejecutor EN SECO antes de acordar
+ * (`prepararOperacionesDeDocumento`), las dos mitades tienen que contestar lo mismo — si no, el
+ * chat acuerda ocultar una sección del kickoff y el editor la rechaza al aplicar.
+ *
+ * ⚠ El fallback de una pieza sin declarar es CONSERVADOR (no oculta, no crea): que un documento
+ * nuevo llegue sin poder hacer algo se ve enseguida; que pueda hacer algo que su editor no
+ * soporta, no.
+ */
+export const CAPACIDADES_POR_PIEZA: Record<string, CapacidadesDelDocumento> = {
+  /* ⛔ El ojo del kickoff NO escribe en el Json del canvas: escribe en `Project.hiddenKickoffKeys`,
+     por id de sección, y queda provisional hasta «Subir al cliente». Un `seccion.ocultar` que
+     llamara al Json sería mudo: el hilo diría «aplicado» y el cliente la seguiría viendo. */
+  kickoff: { puedeOcultar: false, puedeCrear: true },
+  /* ⛔ El plan de sesiones es el corazón de Exploración: una sección creada al lado compite con él. */
+  exploration: { puedeOcultar: true, puedeCrear: false },
+  /* ⛔ La lista de secciones de un rol es FIJA: el motor la arma siempre completa desde la
+     plantilla del tipo. Crear u ocultar acá escribiría donde nadie lee. */
+  role: { puedeOcultar: false, puedeCrear: false },
+  "business-case": { puedeOcultar: true, puedeCrear: true },
+  diagnosis: { puedeOcultar: true, puedeCrear: true },
+  planning: { puedeOcultar: true, puedeCrear: true },
+  implementation: { puedeOcultar: true, puedeCrear: true },
+  delivery: { puedeOcultar: true, puedeCrear: true },
+  "tech-requirements": { puedeOcultar: true, puedeCrear: true },
+};
+
+export function capacidadesDeLaPieza(pieza: string): CapacidadesDelDocumento {
+  return CAPACIDADES_POR_PIEZA[pieza] ?? { puedeOcultar: false, puedeCrear: false };
+}
+
+/**
+ * ⭐ EL ESQUEMA CONTRA EL QUE SE RESUELVEN LAS OPERACIONES DEL CHAT.
+ *
+ * Casi siempre es el mismo que el del agente. Las secciones CURADAS son la excepción: su `schema`
+ * está vacío a propósito —significa «el agente no escribe acá»— y eso las volvía inalcanzables
+ * también para el chat, que resuelve las rutas contra ese mismo objeto.
+ *
+ * ⛔ Los dos resolutores (el contexto en el servidor y el ejecutor en el navegador) tienen que
+ * llamar a ESTA función. Si uno leyera `def.schema` y el otro `schemaDelChat`, el chat acordaría
+ * un cambio que el editor rechaza — con una guarda al lado que lo hace cumplir.
+ */
+export function schemaParaElChat(
+  def: { schema?: unknown; schemaDelChat?: unknown } | undefined,
+): unknown {
+  return def?.schemaDelChat ?? def?.schema ?? { type: "object", properties: {} };
+}
+
+/** Cuánto de UNA sección se le manda al modelo cuando la pide entera. */
+export const TOPE_DE_SECCION_COMPLETA_CHARS = 6_000;
+
+/**
+ * ⭐ EL CONTENIDO DE UNA SECCIÓN, CON LOS NOMBRES PUESTOS Y LAS POSICIONES A LA VISTA.
+ *
+ * El contexto manda el contenido APLANADO y recortado a 1.000 caracteres — sirve para saber de qué
+ * habla el documento, no para operar sobre él. Cuando el pedido es de una sección concreta («quita
+ * el último card»), el modelo necesita otra cosa: los nombres de los campos y, sobre todo, EN QUÉ
+ * POSICIÓN está cada ítem. Sin eso contestaba «me llega recortado, no puedo confirmar cuál es el
+ * último» — y no tenía ninguna forma de averiguarlo.
+ *
+ * ⛔ Recorre SOLO lo que el esquema declara. Es la misma regla de privacidad del contexto: ids,
+ * banderas y el contenido que curó una persona fuera del esquema no cruzan al prompt.
+ *
+ * ⚠ Los ítems se numeran desde 0, que es el número que va en `posicion`. Numerarlos desde 1 —lo
+ * natural al leer— fabricaría un error de una posición en cada borrado.
+ */
+export function renderSeccionParaElChat(schema: unknown, data: unknown): string {
+  const s = schema as NodoDeSchema | undefined;
+  const props = s?.type === "object" ? (s.properties ?? {}) : {};
+  const d = (data ?? {}) as Record<string, unknown>;
+  const lineas: string[] = [];
+
+  for (const [k, sub] of Object.entries(props)) {
+    const n = sub as NodoDeSchema;
+    const v = d[k];
+    if (n?.type === "array") {
+      const arr = Array.isArray(v) ? v : [];
+      if (!arr.length) {
+        lineas.push(`${k}: (lista vacía)`);
+        continue;
+      }
+      lineas.push(`${k}:`);
+      arr.forEach((item, i) => lineas.push(`  ${i}. ${unItem(item, n.items)}`));
+    } else if (typeof v === "string" && v.trim()) {
+      lineas.push(`${k}: «${v.trim()}»`);
+    } else {
+      lineas.push(`${k}: (vacío)`);
+    }
+  }
+
+  const texto = lineas.join("\n");
+  return texto.length > TOPE_DE_SECCION_COMPLETA_CHARS
+    ? `${texto.slice(0, TOPE_DE_SECCION_COMPLETA_CHARS)}… (recortado: la sección es muy larga)`
+    : texto || "(esta sección no tiene contenido editable)";
+}
+
+function unItem(item: unknown, itemsSchema: unknown): string {
+  const n = itemsSchema as NodoDeSchema | undefined;
+  if (n?.type === "object" && item && typeof item === "object") {
+    const o = item as Record<string, unknown>;
+    return (
+      Object.keys(n.properties ?? {})
+        .map((k) => `${k}: «${typeof o[k] === "string" ? (o[k] as string) : ""}»`)
+        .join(" · ") || "(vacío)"
+    );
+  }
+  return typeof item === "string" ? `«${item}»` : "(vacío)";
+}
+
+/**
+ * Lo que se le devuelve al modelo cuando sus operaciones no pasaron el ejecutor en seco.
+ *
+ * ⚠ Dice que NINGUNA entró y le pide re-emitir TODAS. Es lo que hace imposible duplicar: si le
+ * pidiéramos «mandá solo las corregidas» tendríamos que fusionar dos intentos, y estas operaciones
+ * no son idempotentes — un `seccion.item.agregar` que entra dos veces agrega dos ítems.
+ */
+export function reclamoDeOperaciones(
+  rechazadas: readonly { operacion: unknown; motivo: string }[],
+): string {
+  const detalle = rechazadas
+    .map((r, i) => `${i + 1}. ${JSON.stringify(r.operacion)} → ${r.motivo}`)
+    .join("\n");
+  return [
+    `OPERACIONES RECHAZADAS (${rechazadas.length}). Este intento NO quedó registrado: no entró ninguna.`,
+    detalle,
+    "",
+    "Vuelve a llamar registrar_cambio_acordado UNA sola vez, con TODAS las operaciones del acuerdo:",
+    "las que ya estaban bien Y las corregidas. Los nombres válidos de campos y de listas son los que",
+    "el contexto declara entre corchetes para cada sección — no los inventes. Si algo no se puede",
+    "expresar con el vocabulario, no lo emitas: dilo en tu texto.",
+  ].join("\n");
 }
 
 /** Cómo se le dice a una persona —y al chat— qué puede hacer con cada sección. */

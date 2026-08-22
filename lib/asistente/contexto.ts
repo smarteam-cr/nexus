@@ -24,8 +24,11 @@
  */
 import {
   ADVERTENCIAS_DEL_DOCUMENTO,
+  AVISO_DE_CAPACIDAD_PARA_EL_CHAT,
   REGLAS_DURAS_DEL_DOCUMENTO,
+  capacidadDeSeccion,
   catalogoParaElChat,
+  firmaDeSeccion,
   operacionesParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
@@ -61,6 +64,16 @@ import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
  * kickoff generado son ~20.000 caracteres él solo, y sigue afuera.
  *
  * El costo real es despreciable: ~3.000 tokens que se cachean desde el segundo turno.
+ *
+ * ── MEDICIÓN DEL 2026-08-22, con la FIRMA de cada sección ya adentro ─────────────────────────
+ * Sobre los 40 documentos más grandes de producción: mediana **6.022**, máximo **11.937** (un
+ * kickoff de 13 secciones). Entra, pero el margen bajó a ~8 %.
+ *
+ * ⚠ Lo que entró es la forma —los nombres de las listas y los campos de cada sección— y no es
+ * negociable: sin eso el modelo tiene que adivinar cómo se llama cada cosa para poder nombrarla,
+ * que es exactamente lo que hacía fallar todos los cambios. Si el prefijo vuelve a crecer, lo que
+ * se recorta primero es el CONTENIDO (bajar `TOPE_POR_SECCION_CHARS`), no la forma: el contenido
+ * completo de la sección que importa ya se puede pedir aparte, por el chip.
  */
 /** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
 function estadoCorto(status: string): string {
@@ -386,7 +399,7 @@ export async function contextoDeDocumento(
           key: true,
           label: true,
           _count: { select: { blocks: true } },
-          blocks: { orderBy: { order: "asc" }, select: { data: true } },
+          blocks: { orderBy: { order: "asc" }, select: { data: true, blockType: true } },
         },
       },
     },
@@ -418,14 +431,39 @@ export async function contextoDeDocumento(
   const renderDeContenido = (bloques: { data: unknown }[]): string =>
     recortarContenido(bloques.map((b) => textoDeBloque(b.data)).filter(Boolean).join(" · "));
 
+  /* ⚠ Las defs se resuelven ACÁ ARRIBA, antes del render, porque de ellas sale la FIRMA de cada
+     sección — y son las MISMAS que después alimentan al ejecutor. Una sola fuente: si el modelo
+     leyera una forma y el ejecutor validara contra otra, volveríamos al fallo del 2026-08-22.
+     ⚠ NO sale solo de `DOC`: ése es el registro del ASSIST. Exploración conversa sin estar ahí
+     (ver `lib/asistente/piezas.ts`), y la propuesta comercial resuelve sus defs por PLANTILLA. */
+  const defs = canvas.businessCase
+    ? defsForCanvas(resolveCaseTypeFor(canvas.businessCase).templateId, canvas.canvasSections)
+    : (DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {}));
+
+  /* ⚠ El bloque CARD, no el primero: una sección puede arrastrar un TEXT legacy adelante, y ahí
+     el contenido —y las anclas que se calculan de él— saldrían del objeto equivocado. */
+  const cardDe = (bloques: { data: unknown; blockType: string }[]) =>
+    bloques.find((b) => b.blockType === "CARD") ?? bloques[0];
+
   const secciones = canvas.canvasSections
-    .map((s: { key: string; label: string; _count: { blocks: number }; blocks: { data: unknown }[] }) => {
-      if (s._count.blocks === 0) return `- ${s.label} (${s.key}) — VACÍA`;
-      const contenido = renderDeContenido(s.blocks);
-      return contenido
-        ? `- ${s.label} (${s.key}):\n    ${contenido}`
-        : `- ${s.label} (${s.key}) — con contenido (no legible como texto)`;
-    })
+    .map(
+      (s: {
+        key: string;
+        label: string;
+        _count: { blocks: number };
+        blocks: { data: unknown; blockType: string }[];
+      }) => {
+        const def = defs[s.key];
+        /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
+           las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
+        const firma = firmaDeSeccion(def?.schema ?? {});
+        const aviso = AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))];
+        const cabecera = `- ${s.label} (${s.key}) ${firma}${aviso ? ` — ${aviso}` : ""}`;
+        if (s._count.blocks === 0) return `${cabecera} — VACÍA`;
+        const contenido = recortarContenido(textoDeBloque(cardDe(s.blocks)?.data));
+        return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
+      },
+    )
     .join("\n");
 
   /* `project` es nullable en el schema porque un ProjectCanvas puede colgar de un BusinessCase.
@@ -477,16 +515,9 @@ export async function contextoDeDocumento(
      (ver `lib/asistente/piezas.ts`). Sin este respaldo sus secciones llegarían sin esquema, y una
      operación sobre ellas se rechazaría con «no es un campo de esa sección» — sobre campos que sí
      existen. */
-  /* ⚠ NO sale solo de `DOC`: ése es el registro del ASSIST. Exploración conversa sin estar ahí
-     (ver `lib/asistente/piezas.ts`), y la propuesta comercial resuelve sus defs por PLANTILLA.
-     Sin esto sus secciones llegarían sin esquema, y una operación se rechazaría con «no es un
-     campo de esa sección» sobre campos que sí existen. */
-  const defs = canvas.businessCase
-    ? defsForCanvas(resolveCaseTypeFor(canvas.businessCase).templateId, canvas.canvasSections)
-    : (DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {}));
   const seccionesParaEjecutar: SeccionActual[] = canvas.canvasSections.map((s) => {
     const def = defs[s.key];
-    const card = s.blocks[0];
+    const card = cardDe(s.blocks);
     return {
       id: s.id,
       key: s.key,
@@ -498,6 +529,8 @@ export async function contextoDeDocumento(
       oculta: false,
       esCreada: esCustomKey(s.key),
       movible: !def?.pinned,
+      /* Cómo se llama cada lista EN PANTALLA: es lo que hace legible la línea del acuerdo. */
+      rotulosDeListas: def?.rotulosDeListas,
     };
   });
 
