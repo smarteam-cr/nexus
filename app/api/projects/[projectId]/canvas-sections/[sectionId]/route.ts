@@ -3,7 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
-import { patchSectionEntry } from "@/lib/business-cases/section-briefs";
+import { patchSectionEntry, parseSectionEntries } from "@/lib/business-cases/section-briefs";
+import { esCustomKey } from "@/lib/landing/custom-sections";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -117,4 +118,62 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const updated = await prisma.canvasSection.update({ where: { id: sectionId }, data, select: RESP_SELECT });
   await touchCanvasContent(sectionId);
   return NextResponse.json(updated);
+}
+
+
+/**
+ * DELETE — borra una sección PROPIA con su bloque y su entry del Json.
+ *
+ * Por qué ocultar no alcanza: para las secciones de la plantilla el universo es cerrado y apagar
+ * el ojo es la operación correcta. Para las que crea una persona el universo lo crea ella, así que
+ * tres nombres equivocados dejarían tres fantasmas colapsados para siempre en el editor.
+ *
+ * ⛔ EL GUARD `esCustomKey` ES LO MÁS IMPORTANTE DEL HANDLER. Un DELETE genérico sobre
+ * `canvas-sections` dejaría borrar la portada o el cierre de un kickoff, y el documento quedaría
+ * mutilado sin más salida que regenerarlo entero. La misma regla que ya sostiene el del Business
+ * Case, y por el mismo motivo.
+ *
+ * ⚠ El `touch` va ANTES del delete: necesita leer la fila para dar con el canvas.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
+  const { projectId, sectionId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  const section = await prisma.canvasSection.findUnique({
+    where: { id: sectionId },
+    select: {
+      key: true,
+      canvasId: true,
+      canvas: { select: { projectId: true, name: true, sections: true } },
+    },
+  });
+  if (!section || section.canvas.projectId !== projectId) {
+    return NextResponse.json({ error: "section not found" }, { status: 404 });
+  }
+  const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
+  if (denied) return denied;
+
+  if (!esCustomKey(section.key)) {
+    return NextResponse.json(
+      { error: "Solo se pueden borrar las secciones propias. Las de la plantilla se ocultan." },
+      { status: 400 },
+    );
+  }
+
+  await touchCanvasContent(sectionId);
+  await prisma.$transaction([
+    // Los bloques caen por `onDelete: Cascade`.
+    prisma.canvasSection.delete({ where: { id: sectionId } }),
+    prisma.projectCanvas.update({
+      where: { id: section.canvasId },
+      data: {
+        sections: parseSectionEntries(section.canvas.sections).filter(
+          (e) => e.key !== section.key,
+        ) as unknown as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

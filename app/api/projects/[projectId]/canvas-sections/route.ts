@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { parseSectionEntries } from "@/lib/business-cases/section-briefs";
+import { parseSectionEntries, patchSectionEntry } from "@/lib/business-cases/section-briefs";
+import { CUSTOM_PREFIX, CUSTOM_SECTION_EMPTY, MAX_CUSTOM_SECTIONS, nuevaCustomKey } from "@/lib/landing/custom-sections";
+import { touchCanvasContent } from "@/lib/canvas/touch-content";
+import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 // GET: sections + blocks for a non-default canvas
 export async function GET(
@@ -188,4 +192,109 @@ export async function PUT(
   }
 
   return NextResponse.json({ ok: true });
+}
+
+
+const crearSchema = z.object({
+  canvasId: z.string().min(1),
+  label: z.string().trim().min(1).max(60),
+});
+
+/**
+ * POST — crea una sección PROPIA en un documento del proyecto.
+ *
+ * ── POR QUÉ EXISTE, SI YA ESTABA EN EL BUSINESS CASE ─────────────────────────
+ * Estaba en UNO de los ocho documentos del motor. Elías pidió que modificar el motor de páginas
+ * web «sea igual en todas las áreas»: mientras crear una sección exista solo en la propuesta
+ * comercial, cualquier cosa que se construya encima —el chat, el botón de la sección— significa
+ * algo distinto según dónde estés parado.
+ *
+ * Espejo del de `business-cases`, con dos diferencias de dominio:
+ *  · el guard es el del PROYECTO (`guardAccessToProject`), más el veto del handoff — que es el
+ *    único documento de proyecto donde editar exige una capacidad propia;
+ *  · no hay chequeo de `version`: los canvases de proyecto no se versionan.
+ *
+ * Las TRES escrituras van en una transacción y son obligatorias:
+ *  · la FILA, con `label` Y `titleOverride` — el segundo es el único canal que llega al PDF,
+ *    porque `PrintRow` no lleva `label`;
+ *  · el BLOQUE CARD sembrado: todo el motor asume UN bloque por sección, y sin él la sección se
+ *    ve y no guarda nada;
+ *  · la ENTRY en el Json del canvas, de donde salen `hidden` y el orden.
+ */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+
+  const parsed = crearSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "canvasId y un nombre (1-60 caracteres) requeridos" },
+      { status: 400 },
+    );
+  }
+  const { canvasId, label } = parsed.data;
+
+  const canvas = await prisma.projectCanvas.findUnique({
+    where: { id: canvasId },
+    select: { projectId: true, name: true, sections: true },
+  });
+  if (!canvas || canvas.projectId !== projectId) {
+    return NextResponse.json({ error: "canvas not found" }, { status: 404 });
+  }
+  const denied = await denyHandoffCanvasEditForCse(canvas.name);
+  if (denied) return denied;
+
+  const [usadas, ultima] = await Promise.all([
+    prisma.canvasSection.count({ where: { canvasId, key: { startsWith: CUSTOM_PREFIX } } }),
+    prisma.canvasSection.findFirst({
+      where: { canvasId },
+      orderBy: { order: "desc" },
+      select: { order: true },
+    }),
+  ]);
+  /* El tope no es estética: el GET devuelve TODOS los bloques con su `data` y el hook los
+     serializa enteros en cada refetch. Sin techo, unas pocas secciones grandes arrastran el
+     editor y engordan el snapshot que lee el cliente. */
+  if (usadas >= MAX_CUSTOM_SECTIONS) {
+    return NextResponse.json(
+      { error: `Máximo ${MAX_CUSTOM_SECTIONS} secciones propias por documento.` },
+      { status: 400 },
+    );
+  }
+
+  const key = nuevaCustomKey();
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.canvasSection.create({
+      data: { canvasId, key, label, titleOverride: label, order: (ultima?.order ?? -1) + 1 },
+    });
+    await tx.canvasBlock.create({
+      data: {
+        sectionId: created.id,
+        blockType: "CARD",
+        data: { ...CUSTOM_SECTION_EMPTY } as Prisma.InputJsonValue,
+        order: 0,
+        source: "HUMAN",
+        status: "CONFIRMED",
+      },
+    });
+    await tx.projectCanvas.update({
+      where: { id: canvasId },
+      data: {
+        sections: patchSectionEntry(canvas.sections, key, { label }) as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return created;
+  });
+
+  await touchCanvasContent(row.id);
+
+  const blocks = await prisma.canvasBlock.findMany({
+    where: { sectionId: row.id },
+    orderBy: { order: "asc" },
+  });
+  return NextResponse.json({ section: { ...row, blocks, hidden: false } }, { status: 201 });
 }
