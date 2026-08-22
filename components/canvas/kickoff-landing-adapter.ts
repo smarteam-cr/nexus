@@ -21,6 +21,7 @@ import {
   landingRowData,
   type LandingSectionRow,
 } from "@/components/landing/build-landing";
+import { sintetizarSeccionCreada } from "@/components/landing/configs/templates";
 import { landingConfigForKickoff } from "@/components/landing/configs/kickoff";
 import { normalizeCompara } from "@/components/canvas/kickoff-sections/types";
 
@@ -74,6 +75,9 @@ export function buildKickoffConfig(orderedKeys: string[]): LandingConfig {
       allDefs: landingConfigForKickoff().sections,
       heroKey: KICKOFF_HERO,
       pinnedTail: KICKOFF_PINNED_TAIL,
+      /* Las secciones CREADAS EN RUNTIME no están en la plantilla: se sintetizan desde su
+         key. Sin esto se caen del render, y se caen igual en el editor y en el PDF. */
+      sintetizar: sintetizarSeccionCreada,
     },
     effective,
   );

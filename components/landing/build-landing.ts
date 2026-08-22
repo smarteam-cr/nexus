@@ -16,6 +16,7 @@
  * (workspaces) y server components (páginas externas).
  */
 import type { LandingConfig, SectionDef } from "./types";
+import { esCustomKey } from "@/lib/landing/custom-sections";
 
 /** Fila de sección tal como llega del hook (vivo) o del snapshot (externo). */
 export interface LandingSectionRow {
@@ -35,6 +36,18 @@ export interface LandingShape {
   heroKey: string;
   /** Keys pinneadas al cierre, en este orden — fuera del orden arrastrable. */
   pinnedTail: readonly string[];
+  /**
+   * Cómo se fabrica la def de una sección CREADA EN RUNTIME (`custom:*`), que por definición no
+   * está en `allDefs` — la plantilla no la conoce.
+   *
+   * ⚠ Llega como función y no como un mapa de componentes para que este archivo siga sin importar
+   * un solo renderer: lo consumen páginas externas y de impresión, y arrastrar los componentes
+   * cliente hasta acá los metería en el bundle de todas ellas. El adaptador, que YA importa su
+   * mapa, pasa `(key) => toSectionDef(customDef(key), SUS_COMPONENTES)`.
+   *
+   * Ausente = las `custom:*` se ignoran, que es el comportamiento previo a 2026-08-21.
+   */
+  sintetizar?: (key: string) => SectionDef | null;
 }
 
 /**
@@ -42,16 +55,39 @@ export interface LandingShape {
  * CONTENIDO presentes en `orderedKeys`, en ese orden (el vivo o el del snapshot).
  * Una key de `orderedKeys` sin def se ignora (typo/sección retirada: mejor
  * omitirla que reventar el render del cliente).
+ *
+ * ── ⭐ POR QUÉ EL RECORRIDO ES SOBRE `orderedKeys` Y NO SOBRE `allDefs` ───────
+ * Antes filtraba las defs de la plantilla por «¿está en el orden?». Eso hace estructuralmente
+ * imposible pintar una sección que la plantilla NO conoce — y las creadas en runtime (`custom:*`)
+ * son exactamente eso. Recorriendo el orden, una key sin def tiene su chance de sintetizarse.
+ *
+ * ⛔ Y ES LA MISMA FUNCIÓN QUE USAN EL EDITOR Y EL PDF de los seis documentos de proyecto. Ese es
+ * el motivo de arreglarlo acá y no en cada adaptador: el modo de falla de un parche por consumidor
+ * está escrito en DECISIONS §Secciones personalizadas — «la sección que no matchea se cae del
+ * filter sin error, sin log y sin poner roja la suite», o sea **se ve en el editor y falta en el
+ * PDF que ya se mandó**.
+ *
+ * ⚠ Se dedupe: una key repetida en `orderedKeys` pintaba una vez sola cuando el recorrido era
+ * sobre las defs, y tiene que seguir pintando una sola vez.
  */
 export function buildLandingConfigFromOrder(shape: LandingShape, orderedKeys: string[]): LandingConfig {
-  const idx = new Map(orderedKeys.map((k, i) => [k, i]));
+  const porKey = new Map(shape.allDefs.map((d) => [d.key, d]));
   const hero = shape.allDefs.filter((d) => d.key === shape.heroKey);
   const tail = shape.pinnedTail
-    .map((k) => shape.allDefs.find((d) => d.key === k))
+    .map((k) => porKey.get(k))
     .filter((d): d is SectionDef => !!d);
-  const content = shape.allDefs
-    .filter((d) => d.key !== shape.heroKey && !shape.pinnedTail.includes(d.key) && idx.has(d.key))
-    .sort((a, b) => (idx.get(a.key) ?? 0) - (idx.get(b.key) ?? 0));
+
+  const vistas = new Set<string>();
+  const content: SectionDef[] = [];
+  for (const key of orderedKeys) {
+    if (key === shape.heroKey || shape.pinnedTail.includes(key) || vistas.has(key)) continue;
+    vistas.add(key);
+    /* La def de la plantilla; si no está y la sección se creó en runtime, la sintetizada. Una key
+       desconocida que NO es `custom:*` sigue ignorándose: es un typo o una sección retirada. */
+    const def = porKey.get(key) ?? (esCustomKey(key) ? shape.sintetizar?.(key) ?? null : null);
+    if (def) content.push(def);
+  }
+
   return { type: shape.type, sections: [...hero, ...content, ...tail] };
 }
 

@@ -14,6 +14,7 @@ import {
   landingRowData,
   type LandingSectionRow,
 } from "@/components/landing/build-landing";
+import { sintetizarSeccionCreada } from "@/components/landing/configs/templates";
 import { landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
 
 const DESARROLLO_HERO = "requerimiento";
@@ -30,6 +31,9 @@ export function buildDesarrolloConfig(orderedKeys: string[]): LandingConfig {
       allDefs: landingConfigForDesarrollo().sections,
       heroKey: DESARROLLO_HERO,
       pinnedTail: DESARROLLO_PINNED_TAIL,
+      /* Las secciones CREADAS EN RUNTIME no están en la plantilla: se sintetizan desde su
+         key. Sin esto se caen del render, y se caen igual en el editor y en el PDF. */
+      sintetizar: sintetizarSeccionCreada,
     },
     orderedKeys,
   );

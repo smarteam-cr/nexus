@@ -110,6 +110,34 @@ export function toSectionDef(
   };
 }
 
+/**
+ * ⭐ LOS RENDERERS DE LAS SECCIONES QUE SE PUEDEN CREAR EN RUNTIME, EN UN SOLO MAPA.
+ *
+ * Ninguna plantilla los declara —la sección no existe hasta que alguien la crea— así que no
+ * pueden salir del mapa de un documento. Y tienen que ser LOS MISMOS en los ocho: si el catálogo
+ * de creables dependiera del documento, «crear una tabla» significaría cosas distintas según dónde
+ * estés parado, que es justo lo contrario de lo que se pidió.
+ *
+ * ⚠ `registry.test.ts` los excluye del chequeo de huérfanos con `RUNTIME_SECTION_TYPES` — un
+ * renderer acá que ninguna def declare NO es un error, es la definición de "creable".
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const COMPONENTES_CREABLES: Record<string, FC<SectionProps<any>>> = {
+  [HTML_EMBED_TYPE]: HtmlEmbedSection,
+};
+
+/**
+ * La def de una sección CREADA EN RUNTIME, lista para el motor. Es lo que `LandingShape.sintetizar`
+ * espera, y lo que hace que una `custom:*` se pinte igual en los ocho documentos y en el PDF.
+ *
+ * `null` si la key no es de una sección creada, o si su tipo no tiene renderer — el mismo criterio
+ * de `toSectionDef`: antes omitir la sección que reventar el render del cliente.
+ */
+export function sintetizarSeccionCreada(key: string, label?: string | null): SectionDef | null {
+  if (!esCustomKey(key)) return null;
+  return toSectionDef(customDef(key, label), COMPONENTES_CREABLES);
+}
+
 function toLandingConfig(tpl: BcTemplateDef): LandingConfig {
   return {
     type: "business-case",
