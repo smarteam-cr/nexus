@@ -69,8 +69,67 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 3.6 | **Exploración conversa** | Con operaciones el borrado silencioso deja de ser posible: una operación escribe la hoja que nombra, no reconstruye la sección | ✅ 2026-08-22 |
 | 3.7 | **El handoff se puede conversar** | El único que sigue afuera: sus secciones no tienen esquema. Hay que decidir si se le tipan o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — 7 tipos creables, incluida la tabla genérica que no existía | ✅ 2026-08-22 |
+| 5.1 | **La sección nace LLENA** | Hoy el chat crea la sección y queda VACÍA: llenarla exige un segundo pedido. Ver abajo | ⬜ ⚠ hueco conocido |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
+| 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
+
+### ⚠ 5.1 · La sección nueva nace vacía *(hueco conocido, 2026-08-22)*
+
+Elías preguntó si el chat, desde el motor de sitios web, *«puede crear una nueva sección y agregar
+info»*. **Crea sí; llena todavía no, en el mismo pedido.**
+
+El motivo es mecánico y está escrito en el código: el id de la sección nueva lo genera el servidor,
+así que cuando se arma el plan —antes de escribir nada— una operación que la nombre por su key no la
+encuentra y se rechaza. Las creaciones corren primero y en orden; el contenido va en la pasada
+siguiente. En la práctica: *«agregá una tabla comparativa»* deja la tabla vacía, y hay que pedirle
+*«ahora llenala con…»*.
+
+⛔ **Y hoy el chat no lo dice.** El catálogo de capacidades afirma «puedes crear una sección» sin la
+letra chica, así que la persona pide una cosa y recibe media — que es exactamente la queja que
+originó todo el asistente: *«el modificador puede no ser capaz, pero el usuario no obtiene esa
+respuesta»*. Mientras el hueco exista, decirlo es obligatorio.
+
+**Las dos salidas**, en orden de costo: (a) que el ejecutor haga una segunda pasada —crear, releer
+el documento con las secciones nuevas ya adentro, y recién ahí planificar el contenido—; o (b) que
+`seccion.crear` acepte el contenido inicial junto con el tipo. La (a) es la que no agrega
+vocabulario y sirve igual a los 9 documentos.
+
+### ⭐ 6.1 · La memoria del chat — *pedido de Elías (2026-08-22)*
+
+> *«Cómo hacer que el chat eventualmente pueda acceder al contexto del cliente, el contexto del
+> proyecto, para que pueda generar ya sea parte del cronograma o parte del motor de sitio web
+> utilizando esa memoria.»*
+
+Hoy el chat **entiende la intención; el editor tiene el contexto** (decisión 1 del roadmap del
+asistente). Eso fue correcto para *modificar* lo que ya está: el chat no necesita leer el handoff
+para correr una fase dos semanas. Deja de alcanzar en cuanto se le pide **generar**: una sección
+nueva de una propuesta, o una fase que todavía no existe, salen de lo que se sabe del cliente —el
+handoff, las minutas, los proyectos anteriores, lo que se habló y no se vendió— y de eso el chat
+hoy no ve nada.
+
+⭐ **La buena noticia es que el contexto ya existe y ya está armado.** Los cuatro ejes de este mismo
+roadmap son justamente eso: el handoff, el estado del proyecto, lo conversado con el cliente y lo
+conversado puertas adentro. Los loaders viven en `lib/contexto/` y ya los consumen los agentes de
+handoff, kickoff y cronograma. Lo que falta no es construir la memoria: es **decidir cuánta le entra
+al chat y cuándo**.
+
+⚠ **Y ahí está el problema real, que es de plata y de caché.** El prefijo del chat se cachea entero;
+meterle el contexto pesado en cada turno multiplica el costo de *toda* la conversación, incluida la
+mitad que era «corré esto dos semanas». El diseño que hay que escribir es **contexto bajo demanda**:
+el chat pide el bloque que necesita cuando lo necesita, en vez de arrastrarlo siempre.
+
+**Lo que hay que decidir antes de construir** (son tres, y son de negocio):
+1. ¿El chat puede *proponer contenido nuevo* de una propuesta comercial, que es un documento que
+   firma un cliente — o eso se queda en «Generar con IA», que ya lee todo el contexto?
+2. Cuando el chat use el contexto, ¿la línea numerada tiene que decir **de dónde salió** cada cosa
+   («esto lo dijo el cliente el 12 de junio»)? En documentos que afirman, la respuesta suele ser sí.
+3. ¿Hasta dónde llega el contexto del CLIENTE en un proyecto? Un cliente con seis proyectos tiene
+   material de los otros cinco, y el handoff ya aprendió que eso se filtra o se etiqueta, nunca se
+   mezcla crudo.
+
+Depende de la etapa 6 («que sepa responder»): el mecanismo de traer un dato puntual es el mismo, y
+conviene construirlo una vez.
 
 ### ⭐ Qué motor tiene cada documento, y dónde hay chat *(al 2026-08-22)*
 
