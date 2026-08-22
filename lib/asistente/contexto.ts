@@ -25,7 +25,8 @@
 import {
   ADVERTENCIAS_DEL_DOCUMENTO,
   AVISO_DE_CAPACIDAD_PARA_EL_CHAT,
-  REGLAS_DURAS_DEL_DOCUMENTO,
+  reglasDelDocumento,
+  capacidadesDeLaPieza,
   capacidadDeSeccion,
   catalogoParaElChat,
   schemaParaElChat,
@@ -39,6 +40,7 @@ import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import type { Dueno } from "./hilo";
+import { PIEZA_ROL } from "@/lib/asistente/piezas";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { prisma } from "@/lib/db/prisma";
 import { sectionDefsForDocType } from "@/lib/roles/doc-type";
@@ -474,7 +476,12 @@ export async function contextoDeDocumento(
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
            las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
         const firma = firmaDeSeccion(schemaParaElChat(def));
-        const aviso = AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))];
+        /* El de su clase, más el propio de esta sección si lo declara. */
+        const avisos = [
+          AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))],
+          def?.avisoDelChat ?? "",
+        ].filter(Boolean);
+        const aviso = avisos.join(" · ");
         /* El MISMO nombre que el chip. Con dos, el modelo recibe dos rótulos para la sección de
            la que se está hablando y el pedido de la persona no coincide con nada. */
         const nombre = nombreParaElChat(def, s.label);
@@ -535,8 +542,19 @@ export async function contextoDeDocumento(
       ? [
           "",
           "EQUIPO DE SMARTEAM (para la sección «equipo»): nombra a la persona TAL CUAL aparece acá.",
-          "La identidad y la foto las pone la app; tú solo das el nombre y, si quieres, el rol.",
-          directorio.map((p) => p.name).join(" · "),
+          /* ⛔ «SI QUIERES» NO ALCANZABA. Decirle que el rol es opcional sin decirle qué pasa si lo
+             omite lo dejaba sin saber si omitirlo era seguro — así que preguntaba. Visto en
+             pantalla: «agregá a Elías» → «¿qué rol ocupa?», y al insistir, el modelo INVENTÓ que
+             los roles eran una lista cerrada con los que ya estaban en la sección.
+             Ahora el rol de cada uno viaja entre paréntesis y se dice qué pone la app sola. */
+          "La identidad, la foto y el ROL los pone la app desde este directorio: basta el nombre.",
+          "Solo mandas `role` si te piden uno DISTINTO del que tiene acá.",
+          directorio
+            .map((p) => {
+              const rol = (p.area || p.roleEnum || "").trim();
+              return rol ? `${p.name} (${rol})` : p.name;
+            })
+            .join(" · "),
         ]
       : []),
     "",
@@ -546,15 +564,24 @@ export async function contextoDeDocumento(
        comercial las creaba desde el 2026-08-12). Ahora las dos salen del mismo archivo, y hay una
        guarda que impide volver a copiarlas. */
     "REGLAS DEL EDITOR (lo que va a pasar cuando se ejecute cada operación):",
-    REGLAS_DURAS_DEL_DOCUMENTO,
+    /* ⭐ POR PIEZA, no las mismas para todos: crear y ocultar dependen del documento, y
+       prometerlos donde no existen hacía que el chat acordara algo que el ejecutor rechazaba —
+       gastando además un reintento que no podía arreglar nada. */
+    reglasDelDocumento(pieza),
     "",
     "OPERACIONES QUE EXISTEN — es una lista CERRADA:",
     operacionesParaElChat(),
     "",
-    "TIPOS DE SECCIÓN QUE SE PUEDEN CREAR — también cerrada. Si te piden una forma que no está",
-    "aquí, dilo en vez de usar la más parecida:",
-    catalogoParaElChat(),
-    "",
+    /* El catálogo solo tiene sentido donde se puede crear. Listarlo en un documento de lista fija
+       es enseñarle al modelo nueve formas que no va a poder usar. */
+    ...(capacidadesDeLaPieza(pieza).puedeCrear
+      ? [
+          "TIPOS DE SECCIÓN QUE SE PUEDEN CREAR — también cerrada. Si te piden una forma que no está",
+          "aquí, dilo en vez de usar la más parecida:",
+          catalogoParaElChat(),
+          "",
+        ]
+      : []),
     "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",
     ADVERTENCIAS_DEL_DOCUMENTO.map((a) => `- ${a.aviso}`).join("\n"),
   ].join("\n");
@@ -645,7 +672,10 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
       key: k,
       label: def.label ?? k,
       data: datosDe(k),
-      schema: def.schema ?? { type: "object", properties: {} },
+      /* ⚠ La MISMA función que el ejecutor. Mientras acá se leía el esquema del AGENTE y allá el
+         del CHAT, un `schemaDelChat` en Roles no habría hecho nada: el dry-run del servidor
+         seguiría rechazando lo que el editor sí sabe escribir. */
+      schema: schemaParaElChat(def),
       oculta: false,
       esCreada: false,
       /* ⛔ La lista de secciones de un rol es FIJA: no se crean, no se borran y no se reordenan.
@@ -654,10 +684,16 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
     };
   });
 
+  /* ⭐ LA FIRMA TAMBIÉN ACÁ. Sin ella el modelo tenía que adivinar los nombres de los campos de un
+     perfil de puesto, y no son adivinables: `condiciones[texto, nota]`, `levels[level, titulo,
+     alcance, impacto]`. Los inventaba y el ejecutor los rechazaba uno por uno.
+     ⚠ Va TAMBIÉN en la rama vacía: una sección sin contenido es justo donde más falta saber qué
+     campos tiene para poder llenarla. */
   const renglones = secciones.map((s) => {
+    const firma = firmaDeSeccion(s.schema);
     const texto = textoDeBloque(s.data, 0);
-    if (!texto.trim()) return `- ${s.label} (${s.key}) — VACÍA`;
-    return `- ${s.label} (${s.key}):\n    ${recortarContenido(texto)}`;
+    if (!texto.trim()) return `- ${s.label} (${s.key}) ${firma} — VACÍA`;
+    return `- ${s.label} (${s.key}) ${firma}:\n    ${recortarContenido(texto)}`;
   });
 
   const texto = [
@@ -669,7 +705,10 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
     renglones.join("\n") || "(sin secciones)",
     "",
     "REGLAS DEL EDITOR (lo que va a pasar cuando se ejecute cada operación):",
-    REGLAS_DURAS_DEL_DOCUMENTO,
+    /* ⚠ Por pieza también acá: la constante suelta prometía crear y ocultar, y dos renglones más
+       abajo este mismo bloque decía que las secciones de un rol son fijas. El contexto se
+       contradecía solo. */
+    reglasDelDocumento(PIEZA_ROL),
     "",
     "OPERACIONES QUE EXISTEN — es una lista CERRADA:",
     operacionesParaElChat(),

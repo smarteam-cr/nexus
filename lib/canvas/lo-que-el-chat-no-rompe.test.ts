@@ -14,6 +14,7 @@ import {
   aplicarOperacionesDeDocumento,
   type SeccionActual,
 } from "./operaciones-de-documento";
+import { firmaDeSeccion } from "./capacidades-de-documento";
 import { toSectionDef } from "@/components/landing/configs/templates";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import { KICKOFF_SECTION_COMPONENTS } from "@/components/landing/configs/kickoff";
@@ -183,5 +184,71 @@ describe("lo que el chat no puede romper en silencio", () => {
     );
     expect(mudo.plan, "escribió un rótulo que la sección no pinta").toHaveLength(0);
     expect(mudo.rechazadas[0]?.motivo).toContain("su propio encabezado");
+  });
+});
+
+/**
+ * ⭐ LA TABLA — el hueco que fallaba ACEPTANDO, que es el peor de todos.
+ *
+ * Elías pidió poder crear tablas por chat, y se construyeron. Pero llenarlas era imposible por un
+ * camino silencioso: la firma que ve el modelo colapsaba `celdas: string[]` a «celdas(texto)»,
+ * indistinguible de un campo de texto. El modelo mandaba el texto de la fila entera, la validación
+ * lo ACEPTABA, y la fila se pintaba VACÍA — con el chat diciendo «aplicado».
+ */
+describe("la tabla se puede llenar, y lo que no se puede se dice", () => {
+  const SCHEMA_TABLA = {
+    type: "object",
+    properties: {
+      columnas: { type: "array", items: { type: "object", properties: { titulo: { type: "string" } } } },
+      filas: {
+        type: "array",
+        items: { type: "object", properties: { celdas: { type: "array", items: { type: "string" } } } },
+      },
+    },
+  };
+
+  it("⛔⭐ un texto NO entra en un campo que es lista — se rechaza en vez de pintar la fila vacía", () => {
+    /* La edición que lo pone en rojo: sacar el chequeo de tipo del armado del ítem. */
+    const tabla: SeccionActual = {
+      id: "t1", key: "tabla", label: "Comparativa",
+      data: { columnas: [{ titulo: "Nosotros" }], filas: [] },
+      schema: SCHEMA_TABLA, oculta: false, esCreada: true, movible: true,
+    };
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [tabla],
+      [{ op: "seccion.item.agregar", key: "tabla", lista: "filas", valores: { celdas: "A · B · C" } }],
+      TODO,
+    );
+    expect(plan, "guardó un texto donde el render espera una lista: la fila sale vacía").toHaveLength(0);
+    expect(rechazadas[0]?.motivo).toContain("casilla por casilla");
+  });
+
+  it("⭐ y el camino que SÍ funciona sigue abierto: crear la fila y llenar cada casilla", () => {
+    const tabla: SeccionActual = {
+      id: "t1", key: "tabla", label: "Comparativa",
+      data: { columnas: [{ titulo: "Nosotros" }], filas: [] },
+      schema: SCHEMA_TABLA, oculta: false, esCreada: true, movible: true,
+    };
+    const creada = aplicarOperacionesDeDocumento(
+      [tabla],
+      [{ op: "seccion.item.agregar", key: "tabla", lista: "filas", valores: {} }],
+      TODO,
+    );
+    expect(creada.rechazadas).toHaveLength(0);
+    const data = (creada.plan.find((e) => e.tipo === "data") as { data: { filas: Array<{ celdas: unknown }> } }).data;
+    expect(
+      Array.isArray(data.filas[0].celdas),
+      "la fila nueva no nació con su lista de casillas",
+    ).toBe(true);
+  });
+
+  it("⭐ la firma le muestra al modelo que ahí hay una LISTA, no un texto", () => {
+    /* Es la mitad que evita el error de entrada. Sin ella el rechazo de arriba llega igual, pero
+       después de que la persona ya leyó una línea que prometía la fila completa.
+       La edición que lo pone en rojo: volver a colapsar la lista anidada a «(texto)». */
+    const firma = firmaDeSeccion(SCHEMA_TABLA);
+    expect(firma, "las casillas se anuncian como si fueran un campo de texto").not.toContain("celdas(texto)");
+    expect(firma).toContain("celdas");
+    expect(firma, "la firma no dice que las casillas son varias").toMatch(/celdas\[/);
   });
 });

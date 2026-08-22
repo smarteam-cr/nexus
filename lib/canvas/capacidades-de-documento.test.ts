@@ -19,9 +19,14 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
+import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
+import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import {
   ADVERTENCIAS_DEL_DOCUMENTO,
   REGLAS_DURAS_DEL_DOCUMENTO,
+  CAPACIDADES_POR_PIEZA,
+  capacidadesDeLaPieza,
+  reglasDelDocumento,
   advertenciasParaElPedido,
   capacidadDeSeccion,
   catalogoParaElChat,
@@ -40,9 +45,12 @@ describe("⛔ una sola copia de las reglas", () => {
   it("el contexto las INTERPOLA", () => {
     /* La edición que la pone en rojo: pegar el texto de las reglas adentro del template de
        `contextoDeDocumento` en vez de interpolar la constante. */
+    /* ⚠ Desde el 2026-08-22 el contexto no interpola la constante suelta sino `reglasDelDocumento`,
+       que le suma a ese mismo tronco lo que depende de la PIEZA (crear y ocultar). El invariante
+       —una sola copia, derivada— no cambia; cambia de qué símbolo sale. */
     const src = leer(CONTEXTO);
     expect(src, "el contexto dejó de interpolar las reglas del editor").toContain(
-      "REGLAS_DURAS_DEL_DOCUMENTO",
+      "reglasDelDocumento(",
     );
     expect(
       src.includes("Cada operación toca UN campo"),
@@ -60,8 +68,10 @@ describe("⛔ una sola copia de las reglas", () => {
     const bloque = src.slice(i, src.indexOf("].join(", i));
     expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
     for (const simbolo of [
-      "REGLAS_DURAS_DEL_DOCUMENTO",
+      "reglasDelDocumento(",
       "operacionesParaElChat()",
+      /* ⚠ El catálogo viaja CONDICIONADO: en un documento de lista fija listarlo sería enseñarle
+         nueve formas que no va a poder usar. Se exige que el símbolo esté, no que sea incondicional. */
       "catalogoParaElChat()",
       "ADVERTENCIAS_DEL_DOCUMENTO",
     ]) {
@@ -121,14 +131,45 @@ describe("⭐ el catálogo y las operaciones se DERIVAN", () => {
 });
 
 describe("⭐ qué se puede hacer con cada sección — una sola lectura", () => {
-  it("distingue las cuatro clases", () => {
+  it("distingue las cinco clases", () => {
     /* Hasta hoy esta misma pregunta estaba deletreada en CINCO archivos, cada uno con su copia de
        `agentGenerated === false || ctxDriven`. Que el chat, el editor y la píldora citen la misma
-       fuente ES la estandarización que se pidió. */
+       fuente ES la estandarización que se pidió.
+
+       ⚠ ACTUALIZADO 2026-08-22 con el motivo: esta guarda congelaba una clasificación EQUIVOCADA.
+       Metía en «curada» —cuyo aviso dice «la próxima corrida la pisa»— las 19 secciones que el
+       agente no escribe, cuando el runner solo reescribe DOS. A las otras 17 el chat les
+       desalentaba cambios que nada iba a pisar nunca, que es justo lo contrario de lo que se pidió
+       para el equipo y los horarios del kickoff. */
     expect(capacidadDeSeccion({})).toBe("editable");
-    expect(capacidadDeSeccion({ agentGenerated: false })).toBe("curada");
+    expect(capacidadDeSeccion({ agentGenerated: false })).toBe("manual");
+    expect(capacidadDeSeccion({ agentGenerated: false, reescritaPorNexus: true })).toBe("curada");
     expect(capacidadDeSeccion({ ctxDriven: true })).toBe("derivada");
     expect(capacidadDeSeccion({}, true)).toBe("creada");
+  });
+
+  it("⭐ solo las secciones que el RUNNER reescribe son «curada» — y son las que él mismo saltea", () => {
+    /* La edición que la pone en rojo: marcar una sección del kickoff con `reescritaPorNexus`, o
+       que la def y el runner dejen de coincidir sobre cuáles pisa. Sin esto, la clase vuelve a ser
+       una opinión escrita a mano en vez de un hecho derivado del código que escribe. */
+    const marcadas = ENTREGA_TEMPLATE.sections
+      .filter((d) => (d as { reescritaPorNexus?: boolean }).reescritaPorNexus)
+      .map((d) => d.key)
+      .sort();
+    const queElRunnerPisa = ENTREGA_TEMPLATE.sections
+      .filter((d) => d.agentGenerated === false && d.key !== "cierre")
+      .map((d) => d.key)
+      .sort();
+    expect(marcadas, "la def y el runner discrepan sobre qué reescribe Nexus").toEqual(queElRunnerPisa);
+    expect(marcadas.length, "la guarda no está mirando nada").toBeGreaterThan(0);
+
+    /* Y las curadas del kickoff NO son de esa clase: las llenó una persona. */
+    for (const key of ["equipo", "horarios", "canales"]) {
+      expect(
+        capacidadDeSeccion(KICKOFF_DEF_BY_KEY[key]),
+        `«${key}» le dice al chat que Nexus la va a pisar, y nada la pisa`,
+      ).toBe("manual");
+    }
   });
 
   it("⚠ `derivada` gana sobre todo lo demás", () => {
@@ -139,7 +180,7 @@ describe("⭐ qué se puede hacer con cada sección — una sola lectura", () =>
   });
 
   it("cada clase tiene cómo decírsela a una persona", () => {
-    for (const clase of ["editable", "curada", "derivada", "creada"] as const) {
+    for (const clase of ["editable", "curada", "manual", "derivada", "creada"] as const) {
       expect(ROTULO_DE_CAPACIDAD[clase]?.length ?? 0).toBeGreaterThan(10);
     }
   });
@@ -156,5 +197,52 @@ describe("las advertencias se disparan por el pedido", () => {
     const vaciar = advertenciasParaElPedido("vaciar la sección de alcance");
     expect(vaciar).toHaveLength(1);
     expect(vaciar[0].aviso).toContain("borra TODO");
+  });
+});
+
+/**
+ * ⭐ CADA DOCUMENTO RECIBE SUS PROPIAS REGLAS — el censo de las dos capacidades.
+ *
+ * Mientras crear y ocultar vivían en el tronco, al chat de un kickoff se le decía «puedes
+ * ocultarla» (su ojo escribe en OTRA columna y solo surte efecto al subirlo al cliente) y a
+ * Exploración se le listaban los nueve tipos creables (no puede crear ninguno). El CSE lo pedía,
+ * el chat lo prometía, el ejecutor lo rechazaba — y encima el reintento gastaba una llamada entera
+ * al modelo que no podía corregir nada, porque el problema no era un nombre mal escrito sino que
+ * la puerta no existe.
+ *
+ * ⚠ El converso importa tanto como el directo: sin él, alguien «arregla» el condicional al revés
+ * y los ocho documentos que SÍ pueden crear se quedan mudos, que es igual de malo y más difícil de
+ * ver (nadie reporta una capacidad que dejó de ofrecerse).
+ */
+describe("⭐ las reglas del editor no prometen lo que la pieza niega", () => {
+  it.each(Object.keys(CAPACIDADES_POR_PIEZA))("%s recibe exactamente sus capacidades", (pieza) => {
+    const cap = capacidadesDeLaPieza(pieza);
+    const reglas = reglasDelDocumento(pieza);
+
+    expect(reglas.length, "la guarda no está mirando nada").toBeGreaterThan(800);
+
+    if (cap.puedeCrear) {
+      expect(reglas, `${pieza} puede crear y no se lo dicen`).toContain("Puedes crear una sección");
+    } else {
+      expect(reglas, `${pieza} NO puede crear y se le promete igual`).toContain("NO SE CREAN SECCIONES");
+      expect(reglas).not.toContain("Puedes crear una sección");
+    }
+
+    if (cap.puedeOcultar) {
+      expect(reglas, `${pieza} puede ocultar y no se lo dicen`).toContain("Puedes ocultar");
+    } else {
+      /* ⛔ Y cuando la puerta no existe, hay que decir DÓNDE SÍ: un «no se puede» a secas manda a
+         la persona a buscar sola lo que la interfaz tiene al lado. */
+      expect(reglas, `${pieza} NO puede ocultar y se le promete igual`).toContain("NO SE OCULTAN");
+      expect(reglas, `${pieza} niega ocultar sin decir dónde se hace`).toContain("el ojo");
+      expect(reglas).not.toContain("Puedes ocultar");
+    }
+  });
+
+  it("⚠ el tronco compartido ya NO habla de crear ni de ocultar", () => {
+    /* La edición que la pone en rojo: devolver cualquiera de las dos al tronco «para que quede
+       más completo» — vuelve a ir a los diez documentos por igual. */
+    expect(REGLAS_DURAS_DEL_DOCUMENTO).not.toContain("Puedes crear");
+    expect(REGLAS_DURAS_DEL_DOCUMENTO).not.toContain("ocultarla");
   });
 });

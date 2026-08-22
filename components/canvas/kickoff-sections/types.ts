@@ -154,6 +154,19 @@ export interface KickoffHeroData {
    *  `Client.logoScale`; ausente = se usa la base. FUERA del schema del agente, como
    *  `brands` y `coverImageUrl`. Ver lib/ui/logo-scale.ts. */
   logoScale?: number | null;
+  /**
+   * ⭐ LAS TRES MÉTRICAS DE ABAJO, cuando alguien las pisa a mano o por chat.
+   *
+   * Salen del cronograma (duración, arranque, fases) y por eso no podían mentir. Elías las quiso
+   * HÍBRIDAS: si acá hay un valor escrito, gana; si está vacío, vuelve el número vivo del
+   * cronograma. Así el default sigue siendo el que no se desactualiza.
+   *
+   * ⚠ Cada una reemplaza el par ENTERO (valor + unidad), no solo el número: con «3 meses» sobre
+   * la unidad «semanas» la portada diría «3 meses semanas».
+   */
+  metricaDuracion?: string;
+  metricaArranque?: string;
+  metricaFases?: string;
   /** LEGADO: los kickoffs tipados hasta hoy guardan la bajada en `intro`. */
   intro?: string;
   __legacyMd?: string | null;
@@ -179,6 +192,11 @@ export function normalizeHero(data: unknown): KickoffHeroData {
     // resultado: una key nueva que no se agregue acá se borra al siguiente tipeo del
     // título, sin error. Es el pozo del que `coverImageUrl` ya salió.
     logoScale: typeof d.logoScale === "number" ? d.logoScale : undefined,
+    /* ⚠ ACÁ por el aviso de arriba: sin re-emitirlas, las métricas escritas a mano se borran al
+       siguiente tipeo del título, sin error. */
+    metricaDuracion: typeof d.metricaDuracion === "string" ? d.metricaDuracion : undefined,
+    metricaArranque: typeof d.metricaArranque === "string" ? d.metricaArranque : undefined,
+    metricaFases: typeof d.metricaFases === "string" ? d.metricaFases : undefined,
     __legacyMd: typeof d.__legacyMd === "string" ? d.__legacyMd : null,
   };
 }

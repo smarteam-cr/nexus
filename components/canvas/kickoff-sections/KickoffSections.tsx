@@ -167,6 +167,7 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
   // El respaldo sale del documento (rótulo declarado en su definición), no de un texto
   // escrito acá: es lo que impide que una portada le preste su identidad a otra.
   const eyebrow = d.eyebrow?.trim() || (sectionEyebrow ?? "").trim();
+  const conMetricaEscrita = !!(d.metricaDuracion?.trim() || d.metricaArranque?.trim() || d.metricaFases?.trim());
   const { titulo, bajada } = resolveHeroTitle({
     escrito: d.titulo, titular: d.headline, rotulo: sectionTitle,
   });
@@ -230,12 +231,29 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
             placeholder="Hub / integración / alcance…" />
         </div>
       )}
-      {/* Stats DERIVADOS del cronograma — no editables (evita los campos rotos del hero viejo). */}
-      {phases.length > 0 && (
+      {/* ⭐ Stats HÍBRIDOS: salen del cronograma, y lo escrito a mano (o por chat) los pisa.
+          Antes eran solo derivados —para que no pudieran mentir— pero eso también hacía que
+          «poné 14 semanas en la portada» no tuviera dónde aterrizar, y el chat terminaba
+          escribiendo en el campo más parecido que sí veía.
+          ⚠ El override reemplaza el par ENTERO: con «3 meses» sobre la unidad «semanas», la
+          portada diría «3 meses semanas». Vaciarlo devuelve el número vivo del cronograma.
+          ⚠ El gate acepta que HAYA una métrica escrita: un proyecto sin cronograma todavía puede
+          querer anunciar su duración. */}
+      {(phases.length > 0 || conMetricaEscrita) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
-          <HeroStat value={String(totalWeeks)} unit="semanas" label="Duración total" />
-          <HeroStat value={startLabel} label="Arranque" />
-          <HeroStat value={String(phases.length)} unit={phases.length === 1 ? "fase" : "fases"} label="Hoja de ruta" />
+          {d.metricaDuracion?.trim() ? (
+            <HeroStat value={d.metricaDuracion} label="Duración total" />
+          ) : (
+            phases.length > 0 && <HeroStat value={String(totalWeeks)} unit="semanas" label="Duración total" />
+          )}
+          <HeroStat value={d.metricaArranque?.trim() || startLabel} label="Arranque" />
+          {d.metricaFases?.trim() ? (
+            <HeroStat value={d.metricaFases} label="Hoja de ruta" />
+          ) : (
+            phases.length > 0 && (
+              <HeroStat value={String(phases.length)} unit={phases.length === 1 ? "fase" : "fases"} label="Hoja de ruta" />
+            )
+          )}
         </div>
       )}
     </div>

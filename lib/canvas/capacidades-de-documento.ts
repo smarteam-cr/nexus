@@ -43,12 +43,45 @@ export const REGLAS_DURAS_DEL_DOCUMENTO = `- Cada operación toca UN campo, UN �
 - Los campos se nombran por su RUTA dentro de la sección: \`intro\`, \`items.2.title\`, \`filas.0.celdas.1\`. Los índices arrancan en 0 y tienen que existir hoy.
 - Solo se pueden escribir campos que el esquema de la sección declara, y solo si son de TEXTO. Lo que no está en el esquema es contenido que curó una persona: es inalcanzable a propósito, no por olvido.
 - Una lista no se escribe como texto: se le agregan, quitan o mueven ÍTEMS.
+- Un campo marcado con \`?\` en la firma es OPCIONAL: omitirlo es seguro y la app lo completa sola. ⛔ No preguntes por un campo opcional: propón el cambio sin él y dilo en una línea.
 - Las secciones se nombran por su KEY, la que va entre paréntesis en el contexto. Nunca por su título: dos documentos pueden tener secciones con el mismo nombre.
-- Puedes crear una sección de los tipos del catálogo, ocultarla, mostrarla, moverla, renombrarla y vaciarla. BORRAR solo alcanza a las que creó una persona: las del documento se ocultan.
-- ⛔ No inventes tipos de sección. Los que existen son los del catálogo: si te piden una forma que no está, dilo — no uses el tipo más parecido.
+- Puedes moverla, renombrarla y vaciarla. BORRAR solo alcanza a las que creó una persona: las del documento se ocultan.
 - Vaciar una sección BORRA todo su contenido, y borrar una sección la saca del documento. Las dos se dicen antes, no después.
 - TODO el texto que escribas puede terminar frente al cliente: claro, profesional, sin jerga interna y sin nombres del equipo de Smarteam.
 - ESTILO (OBLIGATORIO): español con TUTEO neutro (segunda persona con "tú"). PROHIBIDO el voseo: NUNCA "cambiá", "tenés", "podés" ni "vos".`;
+
+/**
+ * ⭐ LO QUE DEPENDE DEL DOCUMENTO SE DICE POR DOCUMENTO, no en el tronco.
+ *
+ * Las reglas de arriba valen para los diez. Crear y ocultar NO: el ojo del kickoff escribe en otra
+ * columna (y solo se hace efectivo al subirlo al cliente), y Exploración no crea secciones porque
+ * su plan de sesiones es el corazón de la pieza.
+ *
+ * Mientras esto vivía en el tronco, al chat de un kickoff se le decía «puedes ocultarla» y a
+ * Exploración se le listaban los nueve tipos creables. El CSE lo pedía, el chat lo prometía, el
+ * ejecutor lo rechazaba — y el reintento gastaba una llamada entera al modelo que no podía
+ * corregir nada, porque el problema no era el nombre de un campo sino que la puerta no existe.
+ *
+ * ⛔ Y cuando la puerta no existe hay que decir DÓNDE SÍ: «no se puede desde acá» a secas manda a
+ * la persona a buscar sola lo que la interfaz sí tiene al lado.
+ */
+export function reglaDeCrear(puede: boolean): string {
+  return puede
+    ? "- Puedes crear una sección de los tipos del catálogo. ⛔ No inventes tipos: si te piden una forma que no está, dilo — no uses el tipo más parecido."
+    : "- ⛔ EN ESTE DOCUMENTO NO SE CREAN SECCIONES: su lista es fija. Si te piden una sección nueva, dilo en vez de intentarlo.";
+}
+
+export function reglaDeOcultar(puede: boolean): string {
+  return puede
+    ? "- Puedes ocultar y mostrar una sección: ocultarla la saca de lo que ve el cliente, sin borrar su contenido."
+    : "- ⛔ EN ESTE DOCUMENTO NO SE OCULTAN SECCIONES DESDE ACÁ: se hace con el ojo que está junto a cada sección, y se aplica al subirlo al cliente. Si te lo piden, dilo así — no lo intentes.";
+}
+
+/** Las reglas del editor para UNA pieza: el tronco más lo que depende de sus capacidades. */
+export function reglasDelDocumento(pieza: string): string {
+  const cap = capacidadesDeLaPieza(pieza);
+  return [REGLAS_DURAS_DEL_DOCUMENTO, reglaDeCrear(cap.puedeCrear), reglaDeOcultar(cap.puedeOcultar)].join("\n");
+}
 
 /** Una consecuencia que el CSE tiene que saber ANTES de pedir el cambio. */
 export interface AdvertenciaDeDocumento {
@@ -132,17 +165,23 @@ export function advertenciasParaElPedido(pedido: string): readonly AdvertenciaDe
  * fuente ES la estandarización que se pidió: no que el botón se vea igual, sino que las tres
  * superficies contesten lo mismo.
  */
-export type CapacidadDeSeccion = "editable" | "curada" | "derivada" | "creada";
+export type CapacidadDeSeccion = "editable" | "curada" | "manual" | "derivada" | "creada";
 
 export function capacidadDeSeccion(
-  def: { agentGenerated?: boolean; ctxDriven?: boolean } | undefined,
+  def: { agentGenerated?: boolean; ctxDriven?: boolean; reescritaPorNexus?: boolean } | undefined,
   esCreada = false,
 ): CapacidadDeSeccion {
   /* `ctxDriven` primero: su contenido no sale del bloque sino del proyecto, así que ni siquiera
      hay dónde escribir. Es una categoría, no un permiso. */
   if (def?.ctxDriven) return "derivada";
   if (esCreada) return "creada";
-  if (def?.agentGenerated === false) return "curada";
+  /* ⛔ «CURADA» Y «LA PISA NEXUS» NO SON LO MISMO, y confundirlas costaba el pedido entero.
+     `agentGenerated:false` significa «el agente no la escribe» — pero quién la escribe cambia el
+     consejo: en Entrega la reescribe el runner con los números del cronograma (tocarla dura hasta
+     la próxima corrida), y en el kickoff la llenó el CSE a mano y nadie la va a pisar nunca.
+     Hasta hoy las 19 recibían el aviso de las 2. */
+  if (def?.reescritaPorNexus) return "curada";
+  if (def?.agentGenerated === false) return "manual";
   return "editable";
 }
 
@@ -190,12 +229,27 @@ export function firmaDeSeccion(schema: unknown): string {
 function formaDeItems(items: unknown, nivel = 0): string {
   const n = items as NodoDeSchema | undefined;
   if (n?.type === "object") {
+    /* ⭐ Lo OPCIONAL se marca con `?`. Sin la marca, el modelo trata cada campo como obligatorio y
+       PREGUNTA por los que no le dieron: visto en pantalla, «agregá a Elías al equipo» terminaba en
+       «¿qué rol ocupa?» sobre un rol que la app saca sola del directorio. Un campo que se puede
+       omitir hay que decir que se puede omitir. */
+    const obligatorios = new Set((n as { required?: string[] }).required ?? []);
+    const marca = (k: string) => (obligatorios.size && !obligatorios.has(k) ? `${k}?` : k);
     const claves = Object.entries(n.properties ?? {}).map(([k, sub]) => {
       const c = sub as NodoDeSchema;
       /* Un nivel de anidamiento alcanza para que se entienda; más abajo la ruta se nombra con
          índices y el detalle solo engorda el prefijo. */
-      if (c?.type === "array") return nivel === 0 ? `${k}${formaDeItems(c.items, 1)}` : `${k}[…]`;
-      return k;
+      /* ⛔ UNA LISTA ADENTRO SE TIENE QUE VER COMO LISTA, aunque sea de textos. Con la forma
+         vieja, las celdas de una tabla (`celdas: string[]`) salían como «celdas(texto)» —
+         indistinguible de un campo de texto. El modelo mandaba el texto de la fila entera, la
+         validación lo ACEPTABA, y la fila se pintaba VACÍA: el peor desenlace posible, porque el
+         chat decía «aplicado». */
+      if (c?.type === "array") {
+        if (nivel > 0) return `${marca(k)}[…]`;
+        const forma = formaDeItems(c.items, 1);
+        return `${marca(k)}${forma === "(texto)" ? "[…textos]" : forma}`;
+      }
+      return marca(k);
     });
     return `[${claves.join(", ")}]`;
   }
@@ -221,6 +275,11 @@ export const AVISO_DE_CAPACIDAD_PARA_EL_CHAT: Record<CapacidadDeSeccion, string>
   editable: "",
   curada:
     "⚠ la escribe Nexus desde los datos del proyecto: se puede tocar como cualquier otra, pero la próxima corrida la pisa — dilo antes de proponer",
+  /* ⭐ La clase que faltaba, y su ausencia desalentaba justo lo que se pidió. De 19 secciones que
+     el agente no escribe, solo DOS las reescribe Nexus: las otras 17 —el equipo, los horarios, los
+     canales— las llenó una persona y NADA las pisa. Decirles «la próxima corrida la pisa» hacía
+     que el chat recomendara no tocar lo que Elías pidió poder tocar. */
+  manual: "la escribió una persona y nada la reescribe: se cambia como cualquier otra",
   derivada: "⚠ se dibuja desde el proyecto: solo se pueden tocar los campos que declara arriba",
   creada: "la creó una persona en este documento: es la única clase que se puede borrar",
 };
@@ -384,7 +443,8 @@ export function reclamoDeOperaciones(
 /** Cómo se le dice a una persona —y al chat— qué puede hacer con cada sección. */
 export const ROTULO_DE_CAPACIDAD: Record<CapacidadDeSeccion, string> = {
   editable: "se puede cambiar",
-  curada: "la escribe una persona a mano",
+  curada: "la reescribe Nexus con los datos del proyecto",
+  manual: "la escribe una persona a mano",
   derivada: "la calcula la app desde el proyecto",
   creada: "la creó una persona en este documento",
 };

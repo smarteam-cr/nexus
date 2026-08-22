@@ -10,6 +10,7 @@ import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { RAIZ } from "@/lib/ui/scan-source";
 import { completadorDeEquipo, completadorDeHorarios } from "./completadores";
+import { normalizeHero } from "@/components/canvas/kickoff-sections/types";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import {
   schemaParaElChat,
@@ -153,6 +154,82 @@ describe("el esquema del CHAT no es el del agente", () => {
     for (const archivo of ["lib/asistente/contexto.ts", "components/asistente/ejecutar-operaciones.ts"]) {
       const src = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
       expect(src, `${archivo} dejó de usar el esquema del chat`).toContain("schemaParaElChat(def)");
+    }
+  });
+});
+
+/**
+ * ⭐ LAS MÉTRICAS DE LA PORTADA, HÍBRIDAS — decisión de Elías (2026-08-22).
+ *
+ * Salían del cronograma y por eso no podían mentir, pero tampoco había dónde aterrizar un «poné
+ * 14 semanas en la portada»: el chat terminaba escribiendo en el campo más parecido que sí veía.
+ * Ahora el cronograma sigue siendo el default y lo escrito lo pisa.
+ */
+describe("las métricas de la portada sobreviven", () => {
+  it("⛔⭐ una métrica escrita NO se borra al tipear el título", () => {
+    /* ── EL POZO, que el propio archivo de tipos documenta ────────────────────
+       `normalizeHero` RECONSTRUYE el objeto campo por campo y el editor spreadea el resultado:
+       una clave que no se re-emita ahí desaparece al siguiente tipeo, sin error. Es exactamente
+       el pozo del que `coverImageUrl` ya salió una vez.
+
+       La edición que lo pone en rojo: agregar el campo al esquema y olvidarlo en `normalizeHero`. */
+    const conMetrica = normalizeHero({ titulo: "Kickoff", metricaDuracion: "14 semanas" });
+    expect(conMetrica.metricaDuracion).toBe("14 semanas");
+
+    /* Lo que hace el editor al comitear el título: normaliza y spreadea encima. */
+    const trasTipear = normalizeHero({ ...conMetrica, titulo: "Kickoff Wherex" });
+    expect(
+      trasTipear.metricaDuracion,
+      "la métrica escrita a mano se borró al tocar el título",
+    ).toBe("14 semanas");
+  });
+
+  it("⭐ el chat las alcanza, y la foto y los logos siguen fuera de su alcance", () => {
+    /* ⛔ `brands`/`coverImageUrl` afuera a propósito: el modelo no puede inventar una imagen, y
+       una operación que la ponga en blanco es un borrado disfrazado de cambio de texto.
+       La edición que lo pone en rojo: sumarlas al `schemaDelChat` «para que se puedan cambiar». */
+    const props = Object.keys(
+      (KICKOFF_DEF_BY_KEY.bienvenida.schemaDelChat as { properties: Record<string, unknown> }).properties,
+    );
+    for (const campo of ["metricaDuracion", "metricaArranque", "metricaFases", "eyebrow"]) {
+      expect(props, `el chat no alcanza «${campo}» de la portada`).toContain(campo);
+    }
+    expect(props, "el chat puede borrar la foto de portada").not.toContain("coverImageUrl");
+    expect(props, "el chat puede tocar los logos de marca").not.toContain("brands");
+  });
+});
+
+/**
+ * ⭐ LO OPCIONAL SE ANUNCIA COMO OPCIONAL — y esto se vio fallar en pantalla.
+ *
+ * Elías escribió «agrega a elias» sobre la sección de equipo del kickoff. El chat contestó
+ * «¿qué rol ocupa Elías?» — un rol que la app saca sola del directorio. Y al insistirle, INVENTÓ
+ * que los roles eran una lista cerrada: «los que ya existen son CSE, PM, Ventas, Admin,
+ * Marketing. ¿Con cuál lo agrego?».
+ *
+ * La causa era doble y las dos mitades están acá: la firma anunciaba `members[name, role]`, sin
+ * distinguir cuál se puede omitir; y el directorio le daba los nombres pero no el rol de cada uno.
+ */
+describe("agregar a alguien al equipo no necesita preguntar el rol", () => {
+  it("⛔⭐ la firma marca lo opcional con «?»", () => {
+    /* La edición que la pone en rojo: sacar la marca de `formaDeItems`. Sin ella el modelo trata
+       todo campo como obligatorio y pregunta por los que no le dieron. */
+    const firma = firmaDeSeccion(KICKOFF_DEF_BY_KEY.equipo.schemaDelChat);
+    expect(firma, "el rol se anuncia como obligatorio y el chat va a preguntarlo").toContain("role?");
+    expect(firma, "el nombre no puede ser opcional: sin él no hay a quién buscar").toContain("name,");
+  });
+
+  it("⭐ y omitir el rol funciona: lo pone la app desde el directorio", () => {
+    /* Es la otra mitad. Si preguntar fuera necesario, la marca de arriba sería una mentira.
+       La edición que la pone en rojo: sacar el respaldo de `rotuloDeRol` en el completador. */
+    const completar = completadorDeEquipo([
+      { id: "tm1", name: "Elías González", area: "Marketing", roleEnum: "ADMIN", photoUrl: null },
+    ]);
+    const r = completar("members", { name: "Elías González" }, { members: [] });
+    expect("ok" in r, "agregar a alguien sin decir el rol se rechazó").toBe(true);
+    if ("ok" in r) {
+      expect(r.ok.role, "el rol no salió del directorio").toBe("Marketing");
+      expect(r.ok.teamMemberId, "la identidad no la puso la app").toBe("tm1");
     }
   });
 });

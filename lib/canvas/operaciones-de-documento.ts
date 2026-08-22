@@ -637,9 +637,20 @@ export function aplicarOperacionesDeDocumento(
              documento ENTERO deja de pintarse: «"".map is not a function», con la data ya guardada,
              así que recargar no salva y el PDF tampoco. Un ítem incompleto tiene que nacer con la
              FORMA que su renderer espera. */
+          /* ⛔ Y UN TEXTO NO ENTRA EN UN CAMPO QUE ES LISTA. Sin este rechazo, «la fila dice A,
+             B, C» se guardaba como la string «A · B · C» en un campo que el render recorre como
+             lista: la fila salía VACÍA y el chat decía «aplicado». Se rechaza con el camino real,
+             que es crear el ítem y después llenar cada casilla por su ruta. */
           for (const k of permitidas) {
-            armado[k] = dados[k] ?? vacioDeSchema((items?.properties ?? {})[k]);
+            const tipo = (items?.properties ?? {})[k] as NodoDeSchema | undefined;
+            if (tipo?.type === "array" && typeof dados[k] === "string") {
+              rechazar(o, `«${k}» es una lista adentro del ítem: se llena después, casilla por casilla`);
+              nuevo = null;
+              break;
+            }
+            armado[k] = dados[k] ?? vacioDeSchema(tipo);
           }
+          if (nuevo === null) break;
           nuevo = armado;
         }
 
@@ -874,8 +885,19 @@ export function describirOperacionesDeDocumento(
 
   return operaciones.map((o) => {
     switch (o.op) {
-      case "seccion.campo":
-        return `En «${nombre(o.key)}», ${o.campo} pasa a: «${recortar(o.valor ?? "")}»`;
+      case "seccion.campo": {
+        /* ⚠ EL BOTÓN NO SE PINTA SIN ENLACE. El motor exige etiqueta Y url para mostrarlo, y la
+           url vacía es el default de los siete cierres — así que «cambiá el texto del botón» es
+           el camino NORMAL hacia un botón que no aparece. El editor lo avisa al lado del campo;
+           el chat no decía nada y la persona aprobaba un cambio invisible. */
+        const sinEnlace =
+          o.campo === "buttonLabel" &&
+          !operaciones.some((x) => x.op === "seccion.campo" && x.key === o.key && x.campo === "buttonUrl" && x.valor?.trim()) &&
+          !String((porKey.get(o.key)?.data as Record<string, unknown> | undefined)?.buttonUrl ?? "").trim();
+        return `En «${nombre(o.key)}», ${o.campo} pasa a: «${recortar(o.valor ?? "")}»${
+          sinEnlace ? " ⚠ sin enlace, el botón no se va a ver" : ""
+        }`;
+      }
       case "seccion.item.agregar": {
         const texto = o.valor ?? Object.values(o.valores ?? {}).find((v) => v?.trim()) ?? "";
         return `Se agrega «${recortar(texto)}» a la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;

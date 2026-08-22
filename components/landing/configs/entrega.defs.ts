@@ -170,6 +170,11 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
        Con `metrics: []` —sin ancla, sin baseline, sin nada que afirmar— `isBlank` la apaga
        sola en lectura y en PDF: preferimos no decir nada antes que decir «0%». */
     agentGenerated: false,
+    /* ⭐ Y ADEMÁS la REESCRIBE el runner en cada corrida, con los números del cronograma. Es lo
+       que separa esta sección de las curadas del kickoff: allá la llenó una persona y nadie la
+       pisa; acá tocarla a mano dura hasta la próxima generación, y el chat tiene que decirlo
+       ANTES de proponer el cambio. */
+    reescritaPorNexus: true,
     empty: ROI_EMPTY,
     agentHint: "",
     brief:
@@ -183,6 +188,16 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     theme: "soft",
     sectionType: "impacto_declarado",
     agentGenerated: true,
+    /* ⚠ Lo que se agrega acá NO lo ve el cliente todavía, y sin decirlo el CSE pide el indicador,
+       aprueba el cambio, y no aparece nada. La separación se CONSERVA a propósito: un número que
+       salió de una transcripción no cruza al documento del cliente sin que un humano lo mire. Lo
+       que faltaba no era el permiso: era decirlo antes. */
+    /* Para que la línea del acuerdo no diga «a la lista kpisPropuestos» — un nombre de
+       programador para lo que en pantalla es una tarjeta de propuesta. */
+    rotulosDeListas: { kpisPropuestos: "Propuestas por revisar (el cliente no las ve)" },
+    avisoDelChat:
+      "⚠ lo que agregues acá entra como PROPUESTA: el cliente no la ve hasta que alguien la acepta " +
+      "en la sección. Dilo cuando lo propongas.",
     /* DOS listas, y la separación ES el diseño:
        · `kpisPropuestos` — DENTRO del schema. El agente las extrae de lo que el cliente dijo
          en las reuniones. Regenerar las pisa, y está bien: es una propuesta.
@@ -218,6 +233,11 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
        cronograma, con su responsable. Decisión de Elías: un proyecto se entrega con
        pendientes y se listan — es lo que hace útil el documento en la reunión de cierre. */
     agentGenerated: false,
+    /* ⭐ Y ADEMÁS la REESCRIBE el runner en cada corrida, con los números del cronograma. Es lo
+       que separa esta sección de las curadas del kickoff: allá la llenó una persona y nadie la
+       pisa; acá tocarla a mano dura hasta la próxima generación, y el chat tiene que decirlo
+       ANTES de proponer el cambio. */
+    reescritaPorNexus: true,
     empty: proseEmpty,
     agentHint: "",
     brief: "Lo que quedó abierto, derivado del cronograma. Lo escribe Nexus, no la IA.",

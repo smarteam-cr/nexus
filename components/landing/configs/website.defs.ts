@@ -180,5 +180,19 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
       },
       required: ["cards"],
     },
+    /* ⭐ La URL y el destino del botón entran por el CHAT, no por el esquema del AGENTE.
+       ⛔ Moverlas arriba haría que el agente invente URLs y que la curada a mano se pierda en cada
+       regeneración. ⚠ Y hay que REPETIR `cards` con su forma completa: lo que el chat puede tocar
+       sale de acá, así que omitirlas las volvería inalcanzables. */
+    schemaDelChat: {
+      type: "object",
+      properties: {
+        cards: arrayOf({ title: str, detail: str }, ["title"]),
+        siguientePaso: str,
+        buttonLabel: str,
+        buttonUrl: str,
+        buttonTarget: str,
+      },
+    },
   },
 ];

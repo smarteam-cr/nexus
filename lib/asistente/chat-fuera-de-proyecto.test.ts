@@ -122,6 +122,19 @@ describe("el chat fuera de un proyecto", () => {
       "ROLE_SECTIONS",
     );
     expect(tramo).toContain("sectionDefsForDocType(rol.docType)");
+
+    /* ⭐ Y las DOS mitades leen el mismo esquema, y el modelo ve la FORMA.
+       Mientras acá se leía `def.schema` y el ejecutor `schemaParaElChat`, declarar un
+       `schemaDelChat` en Roles no habría hecho nada: el dry-run del servidor seguiría rechazando
+       lo que el editor sí sabe escribir. Y sin firma, los nombres de un perfil de puesto no son
+       adivinables — el modelo los inventaba y el ejecutor los rechazaba uno por uno.
+       La edición que lo pone en rojo: revertir cualquiera de las dos líneas. */
+    expect(tramo, "el contexto del rol lee el esquema del agente y el ejecutor el del chat").toContain(
+      "schemaParaElChat(def)",
+    );
+    expect(tramo, "el modelo volvió a adivinar los nombres de los campos de un rol").toContain(
+      "firmaDeSeccion(",
+    );
   });
 
   it("⛔ en un rol el chat no crea, no borra y no oculta secciones", () => {

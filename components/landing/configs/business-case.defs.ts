@@ -54,6 +54,24 @@ export interface BCSectionDef {
   /** false = el agente NO genera esta sección (se llena determinísticamente o a mano);
    *  generateCanvasSections la saltea y blocks/regenerate la rechaza. */
   agentGenerated?: boolean;
+  /**
+   * ⭐ La REESCRIBE Nexus en cada corrida (el runner, con datos del proyecto) — no solo «el agente
+   * no la escribe».
+   *
+   * ⛔ No es lo mismo que `agentGenerated: false`, y confundirlos costaba caro: de las 19 secciones
+   * que el agente no escribe, solo DOS las pisa el runner. A las otras 17 —el equipo, los horarios,
+   * los canales— el chat les decía «la próxima corrida la pisa», desalentando cambios que nada iba
+   * a pisar nunca.
+   */
+  reescritaPorNexus?: boolean;
+  /**
+   * Un aviso propio de ESTA sección, para el chat. Va en su renglón del contexto.
+   *
+   * ⚠ Existe para lo que es cierto en UNA sección y falso en las demás: ponerlo en las reglas
+   * generales lo mandaría al prefijo de los diez documentos, nueve de los cuales no tienen esa
+   * sección — ruido global para un caso local.
+   */
+  avisoDelChat?: string;
   /** (kickoff) la sección se alimenta de ctx, no de data → no se omite por isBlank en read. */
   ctxDriven?: boolean;
   /** (kickoff) solo `ctxDriven`: true si no hay NADA que renderizar (el Component daría null).
@@ -290,6 +308,15 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Llamado a la acción (dark, cierre narrativo corto). `headline`: UNA PREGUNTA sobre el dolor principal del prospecto, con sus palabras (ej.: '¿Cuántas horas pierde tu equipo moviendo datos a mano?') — nunca una afirmación genérica. `subhead`: aterriza la pregunta en la apuesta del proyecto, honesta y sin venderte de más (fórmula de marca: 'Cuéntanos cómo opera tu equipo hoy y te decimos cuál es tu punto de partida — sin venderte de más.' adaptada a este caso). `buttonLabel`: 'Agendar siguiente paso'.",
     schema: { type: "object", properties: { headline: str, subhead: str, buttonLabel: str }, required: ["headline", "subhead", "buttonLabel"] },
+    /* ⭐ La URL y el destino del botón entran por el CHAT, no por el esquema del AGENTE.
+       ⛔ Moverlas al `schema` de arriba rompe dos cosas a la vez: el agente empezaría a inventar
+       URLs, y la que curó una persona dejaría de preservarse entre regeneraciones — justamente
+       porque pasaría a ser una clave del esquema. `schemaDelChat` existe para esta diferencia.
+       ⚠ Y sin esto el botón queda VISIBLE Y MUERTO: el motor lo pinta con la etiqueta sola. */
+    schemaDelChat: {
+      type: "object",
+      properties: { headline: str, subhead: str, buttonLabel: str, buttonUrl: str, buttonTarget: str },
+    },
   },
 ];
 
