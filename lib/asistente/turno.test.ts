@@ -584,3 +584,73 @@ describe("⭐ lo acordado y no aplicado no se pierde", () => {
     expect(leido.descartadas).toEqual(["algo que ya no aplica"]);
   });
 });
+
+/**
+ * ⭐ EL «DALE» — la contradicción que hacía que el chat NARRARA en vez de ACTUAR.
+ *
+ * Elías, con captura: escribió «borra los tags de migración desde salesforce», el chat contestó
+ * «Elimino el tag "Migración desde Salesforce" de la portada» **sin emitir nada**, y recién con un
+ * «dale» apareció el cuadro para aplicar. Textual: *«tuve que decirle "dale" para que apareciera
+ * el cuadro de aplicar… tiene que estar orientado a la ACCIÓN, que salga el cuadrito azul cuando
+ * hay un cambio, DE UNA»*.
+ *
+ * No era el modelo: era el prompt, que decía las dos cosas. Arriba «PROPÓN EN EL PRIMER TURNO, NO
+ * PIDAS CONFIRMACIÓN»; abajo, «solo NO llamas la herramienta cuando… estás pidiendo una
+ * confirmación» — una excepción SIN REFERENTE, que se resuelve sola declarándose. Y en el tronco,
+ * «solo con el acuerdo emitir la instrucción»: literalmente esperá el visto bueno.
+ *
+ * Estas guardas afirman que las tres contradicciones no vuelven.
+ */
+describe("el chat actúa en el mismo turno, no pide permiso", () => {
+  const TRONCO = (() => {
+    const i = FUENTE.indexOf("function promptDelAsistente");
+    return FUENTE.slice(i, FUENTE.indexOf("const COLA_DEL_CRONOGRAMA", i));
+  })();
+  const COLA_DOC = (() => {
+    const i = FUENTE.indexOf("const COLA_DE_DOCUMENTO");
+    return FUENTE.slice(i, FUENTE.indexOf("const TOOL_ACUERDO", i));
+  })();
+
+  it("⛔ la excepción para no emitir está ANCLADA a vaciar, no suelta", () => {
+    /* Sin ancla, «estás pidiendo una confirmación» es un permiso que el modelo se da a sí mismo.
+       La edición que la pone en rojo: volver a la excepción sin referente. */
+    expect(COLA_DOC.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(
+      COLA_DOC,
+      "volvió la excepción sin referente: el modelo se declara «pidiendo confirmación» y no emite",
+    ).not.toContain("o cuando estás pidiendo una confirmación");
+    expect(COLA_DOC, "la excepción perdió su ancla").toContain("VACIAR");
+    expect(COLA_DOC).toContain("ÚNICA excepción");
+  });
+
+  it("⛔ el tronco no le pide esperar el acuerdo antes de emitir", () => {
+    /* «solo con el acuerdo emitir la INSTRUCCIÓN» le decía, en castellano, que esperara.
+       La edición que la pone en rojo: restaurar esa frase. */
+    expect(TRONCO.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(TRONCO, "volvió la frase que le pide esperar el visto bueno").not.toContain(
+      "solo con el acuerdo emitir",
+    );
+    expect(TRONCO, "se perdió la regla de emitir en el mismo turno").toContain(
+      "EN EL PRIMER TURNO",
+    );
+  });
+
+  it("⛔ la excepción para preguntar NO está escrita en vocabulario de cronograma", () => {
+    /* «dos lecturas que producen CRONOGRAMAS distintos» vive en el tronco, o sea que también la
+       lee el chat de un kickoff — donde nunca se cumple, así que el modelo se pone su propia vara.
+       Es el mismo defecto que el `items`/`filas` de la description de la tool.
+       La edición que la pone en rojo: volver a «cronogramas distintos». */
+    expect(TRONCO, "el tronco vuelve a gobernar documentos con vocabulario de cronograma").not.toContain(
+      "producen cronogramas distintos",
+    );
+  });
+
+  it("⭐ el chat tiene prohibido apuntar a otro campo cuando el pedido no está en la firma", () => {
+    /* El caso real: le pidieron cambiar el rótulo de arriba y reapuntó al texto introductorio, sin
+       decirlo. El dry-run no lo caza — la operación es VÁLIDA, solo apunta a otra cosa.
+       ⚠ Se afirma sobre la cola de DOCUMENTO, no sobre el prompt entero: `PROMPT` abarca las dos
+       colas y la regla podría estar en la del cronograma sin servir acá.
+       La edición que la pone en rojo: borrar la regla, o dejarla caer en la otra cola. */
+    expect(COLA_DOC, "se puede volver a reapuntar en silencio").toContain("NO LO APUNTES A OTRO CAMPO");
+  });
+});

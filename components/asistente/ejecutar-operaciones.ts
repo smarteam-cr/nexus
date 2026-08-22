@@ -40,6 +40,8 @@ export type DefsParaEjecutar = Record<
     /** La superficie que el CHAT puede tocar, cuando difiere de la del agente. */
     schemaDelChat?: unknown;
     pinned?: boolean;
+    /** El componente trae su propio encabezado: el rótulo de arriba no se pinta desde la columna. */
+    selfTitled?: boolean;
     empty?: unknown;
     /** Cómo se llama cada lista en pantalla: hace legible la línea del acuerdo. */
     rotulosDeListas?: Record<string, string>;
@@ -84,6 +86,10 @@ export function useEjecutarOperacionesDelChat(
           oculta: s.hidden === true,
           esCreada: esCustomKey(s.key),
           movible: !def?.pinned,
+          /* El rótulo lo pinta el ENCABEZADO del motor, que no se dibuja cuando la sección trae
+             el suyo (`selfTitled`: portadas y cierres). Ahí `setEyebrow` escribiría una columna
+             que nadie lee. */
+          rotulable: !def?.selfTitled,
           rotulosDeListas: def?.rotulosDeListas,
         };
       }),
@@ -127,6 +133,9 @@ export function useEjecutarOperacionesDelChat(
           break;
         case "titulo":
           await hook.renameSection(e.sectionId, e.titulo);
+          break;
+        case "rotulo":
+          await hook.setEyebrow(e.sectionId, e.rotulo);
           break;
         case "orden":
           await hook.reorderSections(e.sectionIds);

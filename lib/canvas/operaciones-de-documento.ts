@@ -48,6 +48,11 @@
  * el error que este repo ya pagó: dos puertas, a las dos les faltaba el mismo guardia.
  */
 
+/* ⚠ Puro: `section-schema` no importa nada. Es el MISMO merge que protege la portada de cada
+   regeneración del agente — vaciar por chat tiene que respetar exactamente lo que él respeta, o
+   el chat se convierte en la puerta de atrás por la que se pierde lo curado a mano. */
+import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
+
 // ── El vocabulario ────────────────────────────────────────────────────────────────────────────
 
 /** Los cinco valores de alineación no existen acá: el vocabulario no toca presentación. */
@@ -86,7 +91,18 @@ export type OperacionDeDocumento =
   | { op: "seccion.ocultar"; key: string }
   | { op: "seccion.mostrar"; key: string }
   | { op: "seccion.mover"; key: string; posicion: number }
-  | { op: "seccion.renombrar"; key: string; titulo: string };
+  | { op: "seccion.renombrar"; key: string; titulo: string }
+  /**
+   * ⭐ El RÓTULO CHICO de arriba de la sección («LO QUE BUSCAMOS», «QUÉ CAMBIA»).
+   *
+   * Se ve en cada sección de cada documento y no tenía operación: el motor sabía escribirlo
+   * (`setEyebrow`, con su deshacer) pero el chat no tenía cómo pedirlo. Cuando alguien decía
+   * «que la línea de arriba diga otra cosa», el modelo apuntaba al texto introductorio —lo más
+   * parecido que sí veía— y la persona aprobaba un cambio distinto del que pidió.
+   *
+   * ⚠ Un rótulo VACÍO es legítimo (saca la línea), así que no se valida «no vacío» como el título.
+   */
+  | { op: "seccion.rotular"; key: string; rotulo: string };
 
 /**
  * ⛔ LISTA CERRADA a propósito: lo que no está acá no se puede pedir, y el chat tiene que DECIRLO
@@ -105,6 +121,7 @@ export const OPERACIONES_DE_DOCUMENTO_VALIDAS = [
   "seccion.mostrar",
   "seccion.mover",
   "seccion.renombrar",
+  "seccion.rotular",
 ] as const;
 
 export type OpDeDocumento = (typeof OPERACIONES_DE_DOCUMENTO_VALIDAS)[number];
@@ -170,6 +187,8 @@ export function validarOperacionDeDocumento(
     : op === "seccion.crear" ? [texto("tipo"), texto("titulo")]
     : op === "seccion.mover" ? [texto("key"), entero("posicion")]
     : op === "seccion.renombrar" ? [texto("key"), texto("titulo")]
+    /* `rotulo` se pide PRESENTE, no con contenido: vaciarlo es la forma de sacar la línea. */
+    : op === "seccion.rotular" ? [texto("key"), presente("rotulo")]
     : /* vaciar · borrar · ocultar · mostrar */ [texto("key")];
 
   const faltantes = falta.filter((f): f is string => f !== null);
@@ -204,6 +223,16 @@ export interface SeccionActual {
    * `conSistema` — nombres de programador para el cuadro que dice «HOY» y «CON EL SISTEMA».
    */
   rotulosDeListas?: Record<string, string>;
+  /**
+   * `true` si el RÓTULO CHICO de arriba lo pinta el encabezado del motor — o sea, si escribir la
+   * columna `eyebrowOverride` se va a ver.
+   *
+   * ⛔ Las secciones que traen su propio encabezado (portadas, cierres) lo ignoran: ahí la
+   * operación se rechaza en vez de escribir donde nadie lee.
+   */
+  rotulable?: boolean;
+  /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
+  rotulo?: string;
 }
 
 /**
@@ -239,6 +268,7 @@ export type EscrituraDeDocumento =
   | { tipo: "data"; sectionId: string; data: unknown }
   | { tipo: "oculta"; sectionId: string; oculta: boolean }
   | { tipo: "titulo"; sectionId: string; titulo: string }
+  | { tipo: "rotulo"; sectionId: string; rotulo: string }
   | { tipo: "orden"; sectionIds: string[] }
   | { tipo: "crear"; tipoDeSeccion: string; titulo: string; ref?: string }
   | { tipo: "borrar"; sectionId: string };
@@ -601,7 +631,15 @@ export function aplicarOperacionesDeDocumento(
             break;
           }
           const armado: Record<string, unknown> = {};
-          for (const k of permitidas) armado[k] = dados[k] ?? "";
+          /* ⛔ EL VACÍO DE CADA CAMPO SALE DE SU PROPIO TIPO, no de la string vacía.
+             Un ítem puede tener adentro otra lista —una sesión de Exploración tiene `preguntas`—
+             y con `?? ""` esa lista nacía como texto. El render la recorre con `.map` y el
+             documento ENTERO deja de pintarse: «"".map is not a function», con la data ya guardada,
+             así que recargar no salva y el PDF tampoco. Un ítem incompleto tiene que nacer con la
+             FORMA que su renderer espera. */
+          for (const k of permitidas) {
+            armado[k] = dados[k] ?? vacioDeSchema((items?.properties ?? {})[k]);
+          }
           nuevo = armado;
         }
 
@@ -673,7 +711,16 @@ export function aplicarOperacionesDeDocumento(
           rechazar(o, "esa sección no tiene contenido editable desde acá: se dibuja desde el proyecto");
           break;
         }
-        s.data = molde as Record<string, unknown>;
+        /* ⛔ Y VACIAR NO ARRASA CON LO QUE NO ES TEXTO. La foto de portada, los logos de marca y
+           el rótulo chico viven FUERA del schema a propósito: son de la persona, y
+           `preserveNonSchemaKeys` los conserva en cada regeneración del agente. Pisar la data de
+           raíz con el molde se los llevaba puestos — sin decirlo, porque el aviso habla de
+           «textos». Vaciar limpia lo que el schema declara; lo demás se queda. */
+        s.data = preserveNonSchemaKeys(
+          s.schema,
+          s.data,
+          molde as Record<string, unknown>,
+        ) as Record<string, unknown>;
         tocadas.add(o.key);
         break;
       }
@@ -701,6 +748,22 @@ export function aplicarOperacionesDeDocumento(
         if (!titulo) { rechazar(o, "un título vacío dejaría la sección sin nombre"); break; }
         s.label = titulo;
         plan.push({ tipo: "titulo", sectionId: s.id, titulo });
+        break;
+      }
+
+      case "seccion.rotular": {
+        const s = buscar(o.key);
+        if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        /* ⛔ Solo donde el rótulo lo pinta el ENCABEZADO del motor. Las portadas y los cierres
+           traen su propio encabezado (`selfTitled`) y algunas leen su rótulo de la data: escribir
+           la columna ahí sería mudo — el hilo diría «aplicado» y en pantalla no cambiaría nada,
+           que es exactamente el modo de falla que este vocabulario existe para no tener. */
+        if (!s.rotulable) {
+          rechazar(o, "esa sección trae su propio encabezado: su rótulo se cambia en la sección");
+          break;
+        }
+        s.rotulo = o.rotulo.trim();
+        plan.push({ tipo: "rotulo", sectionId: s.id, rotulo: o.rotulo.trim() });
         break;
       }
 
@@ -833,8 +896,18 @@ export function describirOperacionesDeDocumento(
         return `«${nombre(o.key)}» vuelve a verse en el documento`;
       case "seccion.mover":
         return `«${nombre(o.key)}» pasa al lugar ${o.posicion + 1}`;
+      case "seccion.rotular":
+        return o.rotulo.trim()
+          ? `El rótulo de arriba de «${nombre(o.key)}» pasa a «${recortar(o.rotulo)}»`
+          : `Se saca el rótulo de arriba de «${nombre(o.key)}»`;
+
       case "seccion.renombrar":
         return `«${nombre(o.key)}» pasa a llamarse «${o.titulo}»`;
+
+      case "seccion.rotular":
+        return o.rotulo.trim()
+          ? `El rótulo de arriba de «${nombre(o.key)}» pasa a «${o.rotulo}»`
+          : `Se saca el rótulo de arriba de «${nombre(o.key)}»`;
     }
   });
 }

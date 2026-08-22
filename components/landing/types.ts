@@ -524,6 +524,15 @@ export interface SectionDef {
                                // (tooltip CSS-only, ver landing-engine.css [data-tip]). Roles lo usa.
   theme: "dark" | "light" | "soft";
   backdrop?: boolean;          // grid+glow del hero (dark)
+  /**
+   * ⭐ El nombre ESTABLE con el que el chat nombra esta sección, cuando el rótulo visible no
+   * sirve. Una portada se rotula con su titular («Kickoff de re-implementación…»), así que sin
+   * esto el chip decía el título del documento mientras el contexto la llamaba «Portada»: dos
+   * nombres para la misma sección en el mismo pedido.
+   * ⚠ Vive acá Y en `BCSectionDef`, y `toSectionDef` tiene que COPIARLO — un campo que se declara
+   * en la def y no se copia acá es `undefined` en runtime y la mejora no llega a la pantalla.
+   */
+  chatLabel?: string;
   selfTitled?: boolean;        // el componente trae su propio encabezado (hero/partner/cta);
                                // si no, el motor renderiza un eyebrow con `label`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -102,6 +102,9 @@ export function toSectionDef(
   return {
     key: d.key,
     label: d.label,
+    /* ⚠ Sin esta línea el chip cae al rótulo visible y el chat vuelve a tener dos nombres para la
+       misma sección. Su guarda prueba la def TRADUCIDA, no la cruda, justo por esto. */
+    chatLabel: d.chatLabel,
     eyebrow: d.eyebrow,
     tip: d.tip,
     theme: d.theme,

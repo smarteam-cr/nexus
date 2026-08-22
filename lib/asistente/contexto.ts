@@ -409,6 +409,11 @@ export async function contextoDeDocumento(
           id: true,
           key: true,
           label: true,
+          /* ⭐ EL RÓTULO CHICO DE ARRIBA («LO QUE BUSCAMOS», «QUÉ CAMBIA»). Se ve en pantalla y
+             no estaba en el contexto, así que para el modelo no existía: cuando le pedían
+             cambiarlo, apuntaba al texto introductorio —lo más parecido que sí veía— y la
+             persona aprobaba un cambio que no era el que había pedido. */
+          eyebrowOverride: true,
           _count: { select: { blocks: true } },
           blocks: { orderBy: { order: "asc" }, select: { data: true, blockType: true } },
         },
@@ -461,6 +466,7 @@ export async function contextoDeDocumento(
       (s: {
         key: string;
         label: string;
+        eyebrowOverride: string | null;
         _count: { blocks: number };
         blocks: { data: unknown; blockType: string }[];
       }) => {
@@ -473,7 +479,12 @@ export async function contextoDeDocumento(
            la que se está hablando y el pedido de la persona no coincide con nada. */
         const nombre = nombreParaElChat(def, s.label);
         const alias = s.label.trim() && s.label.trim() !== nombre ? ` — en pantalla: «${s.label}»` : "";
-        const cabecera = `- ${nombre} (${s.key}) ${firma}${alias}${aviso ? ` — ${aviso}` : ""}`;
+        /* El EFECTIVO, no el override: lo que se lee en pantalla es lo escrito a mano si lo hay,
+           y si no el de la plantilla. Mostrar solo el override dejaría mudas a las secciones que
+           nunca se renombraron, que son casi todas. */
+        const rotulo = (s.eyebrowOverride ?? def?.eyebrow ?? "").trim();
+        const lineaDeRotulo = rotulo ? ` · rótulo de arriba: «${rotulo}»` : "";
+        const cabecera = `- ${nombre} (${s.key}) ${firma}${lineaDeRotulo}${alias}${aviso ? ` — ${aviso}` : ""}`;
         if (s._count.blocks === 0) return `${cabecera} — VACÍA`;
         const contenido = recortarContenido(textoDeBloque(cardDe(s.blocks)?.data));
         return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
@@ -573,6 +584,11 @@ export async function contextoDeDocumento(
       oculta: false,
       esCreada: esCustomKey(s.key),
       movible: !def?.pinned,
+      /* El rótulo lo pinta el ENCABEZADO del motor, que no se dibuja cuando la sección trae
+         el suyo (`selfTitled`: portadas y cierres). Ahí `setEyebrow` escribiría una columna
+         que nadie lee. */
+      rotulable: !def?.selfTitled,
+      rotulo: (s.eyebrowOverride ?? def?.eyebrow ?? "").trim(),
       /* Cómo se llama cada lista EN PANTALLA: es lo que hace legible la línea del acuerdo. */
       rotulosDeListas: def?.rotulosDeListas,
     };

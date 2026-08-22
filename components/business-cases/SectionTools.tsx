@@ -1,5 +1,6 @@
 "use client";
 
+import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
 import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
@@ -9,7 +10,7 @@ import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/u
 /** Defs mínimas que necesita el overlay: el `empty` para "Limpiar" y `agentGenerated`
  *  para decidir si se ofrece ✨IA. El BC pasa `templateDefsByKey(templateId)`; el
  *  Kickoff pasa `KICKOFF_DEF_BY_KEY`. Así el mismo overlay sirve a los dos canvas. */
-export type SectionToolsDefs = Record<string, { empty?: unknown; agentGenerated?: boolean } | undefined>;
+export type SectionToolsDefs = Record<string, { empty?: unknown; agentGenerated?: boolean; schema?: unknown } | undefined>;
 
 /**
  * ── Controles por sección (overlay): limpiar y borrar. ─────────────────────
@@ -65,10 +66,15 @@ export default function SectionTools({
     if (ok) toast.success("Sección borrada.");
   };
 
-  // Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
+  /* Vaciar la sección → vuelve al placeholder (no se ve en el cliente). Undo vía previousData.
+     ⛔ Y NO SE LLEVA LO QUE NO ES TEXTO. La foto de portada, los logos de marca y el rótulo chico
+     viven FUERA del schema a propósito: son de la persona, y son justo lo que
+     `preserveNonSchemaKeys` conserva en cada regeneración del agente. Pisar la data con el `empty`
+     los borraba — con un aviso que habla de «vaciar la sección», que nadie lee como «y la foto». */
   const clear = async () => {
     const empty = (def?.empty ?? {}) as Record<string, unknown>;
-    const ok = await hook.saveBlock(section.id, block.id, { data: empty });
+    const data = preserveNonSchemaKeys(def?.schema, block.data, { ...empty });
+    const ok = await hook.saveBlock(section.id, block.id, { data });
     if (ok) toast.info("Sección vaciada (el cliente no la verá).");
   };
 
