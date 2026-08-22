@@ -18,7 +18,6 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
-import { useRegistrarAplicadorDeDocumento } from "@/components/asistente/aplicador-de-documento";
 
 /** Respuesta de los endpoints .../assist (espejo de DocumentAssistResult). */
 export interface DocAssistResult {
@@ -67,7 +66,11 @@ export default function DocumentAssist({
      proyecto) y necesita llegar al aplicador de la pieza activa. Se registra acá y no en cada
      workspace, así que los seis documentos quedan cableados sin tocar ninguno.
      ⚠ Sin provider no hace nada: este componente también se usa donde no hay chat. */
-  useRegistrarAplicadorDeDocumento((instruccion) => submit(instruccion));
+  /* ⚠ ACÁ ESTABA EL REGISTRO DEL APLICADOR, y se mudó el 2026-08-22.
+     Este componente tiene el ASSIST —instrucción → propuesta → revisar— pero no tiene los verbos
+     de escritura del documento. Desde que el chat emite operaciones, el que ejecuta es el
+     workspace, que sí los tiene (`useEjecutarOperacionesDelChat`). Dejarlo acá habría hecho que el
+     chat mandara operaciones a un segundo modelo que espera prosa. */
 
   const submit = async (instruction: string) => {
     setLoading(true);

@@ -12,6 +12,8 @@
  * /knowledge — y NO bloquea nada: el agente genera igual, marcando cada prompt como
  * "sin verificar". Avisar, nunca bloquear.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { IMPLEMENTACION_DEF_BY_KEY } from "@/components/landing/configs/implementacion.defs";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
@@ -44,6 +46,10 @@ export default function ImplementacionWorkspace({
   canvasId: string;
 }) {
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
+     su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
+  useEjecutarOperacionesDelChat(cs, IMPLEMENTACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
 
   // ¿Hay alcance de Breeze publicado en la base de conocimiento? null = consultando.
   const [breezeReady, setBreezeReady] = useState<boolean | null>(null);

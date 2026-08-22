@@ -28,6 +28,9 @@ import {
   catalogoParaElChat,
   operacionesParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
+import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
+import { DOC } from "@/lib/canvas/assist-de-documento";
+import { esCustomKey } from "@/lib/landing/custom-sections";
 import { prisma } from "@/lib/db/prisma";
 import {
   ADVERTENCIAS_DEL_CRONOGRAMA,
@@ -141,6 +144,13 @@ export interface ContextoDelAsistente {
   }[];
   /** El arranque del proyecto, para el mismo uso. */
   ancla?: string | null;
+  /**
+   * Las secciones del DOCUMENTO tal como estaban al armar el contexto — mismo papel que `fases`
+   * del otro lado: traducir las operaciones acordadas a castellano y ejecutarlas.
+   *
+   * ⚠ NO entra al prefijo. Se devuelve acá porque la consulta que arma el texto ya las trajo.
+   */
+  secciones?: SeccionActual[];
 }
 
 /**
@@ -344,6 +354,7 @@ export async function contextoDeDocumento(
       canvasSections: {
         orderBy: { order: "asc" },
         select: {
+          id: true,
           key: true,
           label: true,
           _count: { select: { blocks: true } },
@@ -426,14 +437,39 @@ export async function contextoDeDocumento(
     operacionesParaElChat(),
     "",
     "TIPOS DE SECCIÓN QUE SE PUEDEN CREAR — también cerrada. Si te piden una forma que no está",
-    "acá, dilo en vez de usar la más parecida:",
+    "aquí, dilo en vez de usar la más parecida:",
     catalogoParaElChat(),
     "",
     "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",
     ADVERTENCIAS_DEL_DOCUMENTO.map((a) => `- ${a.aviso}`).join("\n"),
   ].join("\n");
 
-  return { texto, cierreActual: null };
+  /**
+   * Las secciones para EJECUTAR y para TRADUCIR. No entran al prefijo: la consulta de arriba ya
+   * las trajo, así que pedirlas de nuevo sería leer lo mismo dos veces.
+   *
+   * ⚠ `movible` sale de `pinned` de la def: la portada y el cierre tienen lugar fijo, y un
+   * documento sin portada no es más libre — está roto.
+   */
+  const defs = DOC[pieza]?.defs ?? {};
+  const seccionesParaEjecutar: SeccionActual[] = canvas.canvasSections.map((s) => {
+    const def = defs[s.key];
+    const card = s.blocks[0];
+    return {
+      id: s.id,
+      key: s.key,
+      label: s.label,
+      data: card?.data ?? {},
+      schema: def?.schema ?? { type: "object", properties: {} },
+      /* El ojo no entra al contexto del modelo —no cambia lo que se puede pedir— pero el
+         ejecutor lo necesita para no proponer ocultar algo que ya está oculto. */
+      oculta: false,
+      esCreada: esCustomKey(s.key),
+      movible: !def?.pinned,
+    };
+  });
+
+  return { texto, cierreActual: null, secciones: seccionesParaEjecutar };
 }
 
 function fmtFecha(d: Date): string {

@@ -601,16 +601,56 @@ describe("⭐ etapa 3 — el chat de DOCUMENTOS también aplica", () => {
     expect(bloque).toContain("obtenerAplicador()");
   });
 
-  it("⭐ y el editor se registra SOLO, así que los seis documentos entran sin tocarlos", () => {
-    /* Registrarlo en cada workspace serían seis lugares que se olvidan de a uno. La edición que
-       la pone en rojo: mover el registro fuera de `DocumentAssist`. */
-    /* ⚠ Se busca la LLAMADA, no el símbolo: `toContain("useRegistrar…")` lo satisface el propio
-       import, así que borrar la llamada dejaba la guarda verde. Medir «menciona» donde se quiere
-       decir «llama» es la misma trampa que ya apareció tres veces en este archivo. */
-    const editor = fs.readFileSync(path.join(RAIZ, "components/ai/DocumentAssist.tsx"), "utf8");
-    expect(editor, "el editor de documentos dejó de anunciarse al chat").toContain(
-      "useRegistrarAplicadorDeDocumento((",
-    );
+  it("⭐ TODOS los documentos ejecutan lo acordado — ninguno se queda mudo", () => {
+    /* ── QUÉ CAMBIÓ EL 2026-08-22, Y POR QUÉ LA GUARDA SE MUDÓ ────────────────
+       Antes el registro vivía en `DocumentAssist`, que ya estaba montado en los seis: una sola
+       línea los cableaba a todos. Eso era correcto mientras el chat emitiera una INSTRUCCIÓN, que
+       es justo lo que ese componente sabe ejecutar.
+
+       Desde que emite OPERACIONES, el que puede ejecutarlas es el que tiene los verbos de
+       escritura del documento —el workspace, con su hook— y `DocumentAssist` no los tiene. Dejar
+       el registro allá habría hecho que el chat le mande operaciones a un segundo modelo que
+       espera prosa: el acuerdo se aplicaría a la nada, y el hilo diría que sí.
+
+       El precio es que ahora son seis lugares en vez de uno, y esta guarda es lo que hace que no
+       se olviden de a uno. La edición que la pone en rojo: sacarle la línea a cualquiera. */
+    const WORKSPACES = [
+      "components/canvas/KickoffWorkspace.tsx",
+      "components/canvas/DesarrolloWorkspace.tsx",
+      "components/canvas/DiagnosticoWorkspace.tsx",
+      "components/canvas/PlanificacionWorkspace.tsx",
+      "components/canvas/ImplementacionWorkspace.tsx",
+      "components/canvas/EntregaWorkspace.tsx",
+    ];
+    for (const rel of WORKSPACES) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      /* ⚠ La LLAMADA, no el símbolo: `toContain("useEjecutar…")` lo satisface el propio import,
+         así que borrar la llamada dejaría la guarda verde. Es la trampa que ya apareció tres
+         veces en este archivo. */
+      expect(
+        src,
+        `${rel} no ejecuta lo que el chat acuerda: conversa, dice «aplicado» y no pasa nada`,
+      ).toContain("useEjecutarOperacionesDelChat(");
+    }
+  });
+
+  it("⛔ y el kickoff declara que NO puede ocultar — su ojo escribe en otra columna", () => {
+    /* ⚠ Ocultar tiene TRES mecanismos en el motor. El del kickoff vive en `hiddenKickoffKeys`,
+       indexado por id de sección y provisional hasta «Subir al cliente»; el verbo genérico escribe
+       en el Json del canvas, que para el kickoff NO LO LEE NADIE.
+       Declararlo `true` haría que el chat escriba donde nadie lee: el hilo diría «aplicado» y el
+       cliente seguiría viendo la sección. Es el modo de falla más caro de este carril, porque se
+       usa justamente para SACAR algo que no se quería mostrar.
+       La edición que la pone en rojo: ponerle `puedeOcultar: true` al kickoff. */
+    const src = fs.readFileSync(path.join(RAIZ, "components/canvas/KickoffWorkspace.tsx"), "utf8");
+    const i = src.indexOf("useEjecutarOperacionesDelChat(");
+    expect(i, "el kickoff dejó de cablear el ejecutor").toBeGreaterThan(-1);
+    const llamada = src.slice(i, src.indexOf(");", i));
+    expect(llamada.length, "la guarda no está mirando nada").toBeGreaterThan(30);
+    expect(
+      llamada.includes("puedeOcultar: false"),
+      "el kickoff dice que puede ocultar por chat, y escribiría en la columna que nadie lee",
+    ).toBe(true);
   });
 });
 

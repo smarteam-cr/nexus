@@ -24,8 +24,29 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
-/** Lo que el editor de documentos sabe hacer con una instrucción: proponer, para que la revisen. */
-type Aplicador = (instruccion: string) => Promise<void> | void;
+/**
+ * Lo que el editor sabe hacer con un acuerdo del chat.
+ *
+ * ── QUÉ CAMBIÓ EL 2026-08-22 ─────────────────────────────────────────────────
+ * Antes recibía una INSTRUCCIÓN en castellano y devolvía `void`: el editor la mandaba a un segundo
+ * modelo y la persona revisaba la propuesta en OTRA pantalla. Dos problemas que se arreglan juntos:
+ *
+ *   · el desenlace se escribía cuando LLEGABA la propuesta, no cuando alguien la aceptaba, así que
+ *     el hilo decía «se aplicó» sobre algo que nadie había mirado;
+ *   · los avisos del editor no tenían por dónde volver — `avisos: []` estaba escrito a mano — así
+ *     que «se aplicó, pero mirá esto» se leía igual que «se aplicó».
+ *
+ * Ahora recibe OPERACIONES, las ejecuta de verdad, y devuelve lo que el sistema hizo además de lo
+ * pedido y lo que no pudo hacer.
+ */
+export interface ResultadoDelAplicador {
+  /** Lo que el sistema hizo además de lo pedido. Viaja al hilo. */
+  avisos: string[];
+  /** Lo que NO se pudo hacer, y por qué. Nunca se ignora en silencio. */
+  rechazadas: string[];
+}
+
+type Aplicador = (operaciones: unknown[]) => Promise<ResultadoDelAplicador>;
 
 interface Registro {
   registrar: (a: Aplicador | null) => void;

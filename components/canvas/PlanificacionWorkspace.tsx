@@ -10,6 +10,8 @@
  * Documento de TRABAJO interno (paleta `stl-internal`): se presenta y discute con el
  * cliente en sesión, pero no tiene superficie externa propia.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -43,6 +45,10 @@ export default function PlanificacionWorkspace({
   // poll:false — el runner persiste CONFIRMED; tras generar, el remonte lo fuerza el
   // padre (`key` con su `agentNonce` al terminar el agente del header).
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
+     su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
+  useEjecutarOperacionesDelChat(cs, PLANIFICACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
 
   // ¿Ya corrió la generación? El seed solo siembra el bloque del `cierre` (curado).
   const hasGeneratedContent = useMemo(

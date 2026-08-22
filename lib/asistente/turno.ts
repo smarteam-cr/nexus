@@ -24,6 +24,15 @@
  *
  * ⛔ Y el modelo es FIJO POR HILO (`lib/asistente/hilo.ts`): es parte de la clave de la caché.
  */
+import {
+  OPERACIONES_DE_DOCUMENTO_VALIDAS,
+  aplicarOperacionesDeDocumento,
+  describirOperacionesDeDocumento,
+  dependenciasDeOperacionesDeDocumento,
+  esOperacionDeDocumento,
+  type OperacionDeDocumento,
+} from "@/lib/canvas/operaciones-de-documento";
+import { dependenciasDeOperaciones } from "@/lib/timeline/dependencias-de-operaciones";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -310,16 +319,14 @@ confirmación de un borrado, o cuando no hay nada nuevo que agregar y tampoco na
  * instrucción es el producto, y por eso tiene que ser precisa — es lo que se ejecuta tal cual.
  */
 const COLA_DE_DOCUMENTO = `CÓMO SE EMITE LA PROPUESTA
-Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y la
-"instruccion" que va a ejecutar el editor del documento.
+Llamas a \`registrar_cambio_acordado\` UNA vez, con un "resumen" de una o dos frases y las
+OPERACIONES a ejecutar. Se aplican en milisegundos, así que no describas el cambio: nómbralo.
 
-⭐ LA INSTRUCCIÓN ES EL PRODUCTO, no un resumen de la charla. Se ejecuta TAL CUAL, sin que nadie
-la interprete de nuevo, así que:
-1. Nombra las SECCIONES exactamente como aparecen en el contexto. El editor trabaja por sección:
-   una instrucción que no dice cuál toca, toca las que el modelo decida.
-2. Di qué cambia y qué NO. «Reescribe el alcance en dos párrafos, sin tocar las fechas» ejecuta
-   mejor que «mejora el alcance».
-3. No repitas la conversación adentro. La instrucción se lee sola, semanas después.
+⛔ Y CUANDO EMITES LA HERRAMIENTA, TU MENSAJE NO REPITE LA LISTA.
+La pantalla ya muestra cada operación traducida y numerada, sacada de las operaciones mismas. Si
+además las enumeras en tu texto, la persona lee lo mismo dos veces seguidas y deja de leer las dos.
+Tu mensaje en ese turno es UNA O DOS FRASES, y contiene SOLO lo que la lista no puede decir: qué
+supuesto tomaste, qué ajustaste de lo que te pidieron, qué se pierde.
 
 QUÉ PUEDE HACER EL EDITOR DEL DOCUMENTO, Y QUÉ NO
 ⛔ NO LO TRANSCRIBAS ACÁ. El contexto te dice, en un solo lugar, las reglas del editor, la lista
@@ -328,21 +335,29 @@ decir antes. Esa es la fuente: si acá abajo hubiera una copia, el día que una 
 chat le va a prometer al CSE algo que el editor no puede hacer — que es exactamente lo que este
 carril vino a resolver.
 ⛔ NO toca lo que el CSE curó a mano en otra parte de la app (fechas del cronograma, tags,
-particularidades): si el pedido es de eso, dilo y decí dónde se hace.
+particularidades): si el pedido es de eso, dilo y di dónde se hace.
 
-⭐ LO QUE PASA DESPUÉS, Y CONVIENE DECIRLO
-Al aplicar, el editor propone los cambios SECCIÓN POR SECCIÓN y la persona acepta o descarta cada
-una. Así que una instrucción que toca tres secciones no es un riesgo: es tres decisiones. Cuando
-el pedido sea grande, dilo — «esto toca cuatro secciones, las vas a poder revisar de a una».
+⭐ TÚ ESCRIBES EL TEXTO, ENTERO Y FINAL.
+El valor que pones en una operación se escribe TAL CUAL en el documento: no hay un segundo modelo
+que lo interprete. Escribe el texto terminado, en el idioma y el registro del documento — no una
+indicación de qué escribir.
+
+⭐ CREAR UNA SECCIÓN Y LLENARLA ES UN SOLO ACUERDO.
+Emites \`seccion.crear\` con un \`ref\` corto y las operaciones siguientes la nombran ahí en \`key\`.
+Así la persona ve el conjunto y lo aprueba de una.
+
+⭐ SI TE PREGUNTAN QUÉ SE PUEDE HACER, CONTESTA — NO PROPONGAS.
+"¿Qué se puede cambiar aquí?" no es un pedido de cambio. Contesta con lo que dice el contexto —las
+secciones que tiene este documento, cuáles se pueden tocar y cuáles no, y qué tipos se pueden
+crear— y NO llames la herramienta. Nombra las secciones exactamente como aparecen, con su key.
 
 ⭐ PREGUNTAR Y PROPONER EN EL MISMO TURNO ES LO ESPERADO, no la excepción.
-Cuando el pedido trae dos asuntos y solo uno es ambiguo, preguntas por ese y dejas la instrucción
-del otro. Preguntar nunca cuesta perder la parte que ya estaba clara — y acá cuesta más que en el
-cronograma, porque la instrucción se reescribe entera en cada turno: lo que no vuelvas a nombrar,
-no se hace.
+Cuando el pedido trae dos asuntos y solo uno es ambiguo, preguntas por ese y dejas las operaciones
+del otro, con \`preguntaAbierta: true\`. Lo acordado se acumula y se aplica todo junto cuando ya no
+quede nada por resolver: preguntar nunca cuesta perder la parte que ya estaba clara.
 
-Solo NO llamas la herramienta cuando el pedido no se puede hacer, o cuando estás pidiendo una
-confirmación.`;
+Solo NO llamas la herramienta cuando el pedido no se puede hacer, cuando te preguntan qué se puede
+hacer, o cuando estás pidiendo una confirmación.`;
 
 /**
  * ── LA HERRAMIENTA EMITE OPERACIONES, NO UN TEXTO ────────────────────────────────────────────
@@ -377,8 +392,8 @@ confirmación.`;
 const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
   name: "registrar_cambio_acordado",
   description:
-    "Registra el cambio acordado como una INSTRUCCIÓN para el editor del documento. NO lo " +
-    "aplica: la persona la lee, la puede editar, y la aplica con un botón. Llámala UNA sola vez.",
+    "Registra el cambio acordado como OPERACIONES sobre el documento. NO lo aplica: la persona " +
+    "las lee traducidas a castellano y las aplica con un botón. Llámala UNA sola vez.",
   input_schema: {
     type: "object",
     properties: {
@@ -386,15 +401,66 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
         type: "string",
         description: "Qué se acordó, en una o dos frases, para que el CSE lo confirme de un vistazo.",
       },
-      instruccion: {
-        type: "string",
+      preguntaAbierta: {
+        type: "boolean",
         description:
-          "La instrucción que va a ejecutar el editor, TAL CUAL. Nombra las secciones exactamente " +
-          "como aparecen en el contexto, di qué cambia y qué no, y escríbela para que se lea sola " +
-          "—sin la conversación alrededor—. Es lo que se ejecuta, no un resumen de lo hablado.",
+          "true si tu mensaje termina con una pregunta que la persona todavía no contestó. " +
+          "Mientras sea true NO se ofrece aplicar: los cambios quedan registrados, se acumulan " +
+          "con lo que venga después, y se aplican TODOS JUNTOS cuando ya no quede nada por " +
+          "resolver. Omítelo (o false) cuando el pedido esté cerrado.",
+      },
+      descartar: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "SOLO si el bloque PENDIENTE trae cosas que ya no corresponden: sus etiquetas (P1, P2…).",
+      },
+      operaciones: {
+        type: "array",
+        description: "Las operaciones a ejecutar, en orden. Vocabulario CERRADO.",
+        items: {
+          type: "object",
+          properties: {
+            op: {
+              type: "string",
+              enum: [...OPERACIONES_DE_DOCUMENTO_VALIDAS],
+              description: "Qué hacer. Solo estos valores.",
+            },
+            key: {
+              type: "string",
+              description:
+                "La KEY de la sección, la que va entre paréntesis en el contexto. Para una " +
+                "sección que se crea en este mismo acuerdo, su `ref`.",
+            },
+            campo: {
+              type: "string",
+              description:
+                "La RUTA del campo dentro de la sección: `intro`, `items.2.title`, " +
+                "`filas.0.celdas.1`. Los índices arrancan en 0.",
+            },
+            valor: { type: "string", description: "El texto nuevo, completo: lo escribes tú." },
+            lista: { type: "string", description: "El nombre de la lista (`items`, `filas`…)." },
+            valores: {
+              type: "object",
+              description: "Los campos del ítem nuevo, por nombre. Solo los que declara el esquema.",
+              additionalProperties: { type: "string" },
+            },
+            posicion: { type: "number", description: "Posición, arrancando en 0." },
+            a: { type: "number", description: "Posición de destino al mover un ítem." },
+            tipo: { type: "string", description: "El tipo de sección a crear, del catálogo." },
+            titulo: { type: "string", description: "El título visible de la sección." },
+            ref: {
+              type: "string",
+              description:
+                "Etiqueta corta para la sección que se crea, para poder llenarla en el mismo " +
+                "acuerdo: las operaciones siguientes la nombran ahí en `key`.",
+            },
+          },
+          required: ["op"],
+        },
       },
     },
-    required: ["resumen", "instruccion"],
+    required: ["resumen", "operaciones"],
   },
 };
 
@@ -703,14 +769,32 @@ export async function correrTurno(
   let acuerdo: CambioAcordado | null = null;
 
   if (!esCronograma) {
-    /* ⚠ Un DOCUMENTO emite una INSTRUCCIÓN y ninguna operación. Este `if` exigía operaciones, así
-       que el modelo llamaba la herramienta, el turno la descartaba en silencio, y el CSE leía «voy
-       a dejar lista la instrucción» sin que apareciera ninguna cajita. El chat de documentos
-       conversaba y no terminaba en nada. Medido contra el modelo el 2026-08-21.
-
-       ⛔ Y el libro NO aplica acá: el vocabulario de operaciones es del cronograma; un documento
-       emite una instrucción entera que se reescribe cada vez. */
-    if (resumenDelModelo && instruccionDelModelo) {
+    /**
+     * ⭐ UN DOCUMENTO TAMBIÉN EMITE OPERACIONES desde el 2026-08-22.
+     *
+     * Antes emitía una INSTRUCCIÓN en castellano que un segundo modelo releía para reescribir las
+     * secciones enteras — el contrato que en el cronograma soltó el arranque de seis fases. Acá el
+     * daño era peor de ver: se perdían los campos que el agente nunca escribe (logos, enlaces, las
+     * marcas «ya la pregunté»), en silencio.
+     *
+     * ⚠ Se conserva la rama de la instrucción SOLO para los hilos viejos: si un modelo con el
+     * prompt anterior todavía la emitiera, el acuerdo se sigue pintando en vez de evaporarse.
+     */
+    /* `opsNuevas` está tipado con el vocabulario del cronograma porque es UN solo campo de la
+       herramienta compartida: el filtro es lo que discrimina, y por eso pasa por `unknown`. */
+    const opsDeDoc = (opsNuevas as unknown[]).filter(esOperacionDeDocumento) as OperacionDeDocumento[];
+    const seccionesDelDoc = ctx.secciones ?? [];
+    if (resumenDelModelo && opsDeDoc.length > 0) {
+      acuerdo = {
+        resumen: resumenDelModelo,
+        operaciones: opsDeDoc,
+        /* ⛔ Las líneas salen del MISMO objeto que se va a ejecutar. Es lo único que hace hermética
+           la cajita: lo que la persona lee no puede divergir de lo que pasa. */
+        lineas: describirOperacionesDeDocumento(seccionesDelDoc, opsDeDoc),
+        dependencias: dependenciasDeOperacionesDeDocumento(opsDeDoc),
+        ...(preguntaAbierta ? { enEspera: true } : {}),
+      };
+    } else if (resumenDelModelo && instruccionDelModelo) {
       acuerdo = { resumen: resumenDelModelo, instruccion: instruccionDelModelo };
     }
   } else {
@@ -752,6 +836,12 @@ export async function correrTurno(
         resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
         operaciones: fusion.operaciones,
         lineas: describirOperaciones(paraTraducir, fusion.operaciones),
+        /* La cascada viaja en el acuerdo desde el 2026-08-22: la pantalla dejó de importarla del
+           cronograma para poder servir a los dos carriles sin una rama por pieza. */
+        dependencias: (() => {
+          const mapa = dependenciasDeOperaciones(fusion.operaciones);
+          return fusion.operaciones.map((_, i) => mapa.get(i) ?? []);
+        })(),
         ...(preguntaAbierta ? { enEspera: true } : {}),
         ...(fusion.arrastradas.length > 0 ? { arrastradas: fusion.arrastradas } : {}),
         ...(soltadas.length > 0 ? { descartadas: soltadas } : {}),

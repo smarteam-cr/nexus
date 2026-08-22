@@ -587,7 +587,11 @@ export function describirOperacionesDeDocumento(
  * no existe — y la persona desmarcó UNA cosa y no se aplicó ninguna. Es el mismo mecanismo que el
  * cronograma ya tiene para una fase y sus tareas.
  *
- * Devuelve, por cada operación, los índices de las que dependen de ella.
+ * Devuelve, por cada operación, los índices de las que NECESITA para poder aplicarse.
+ *
+ * ⚠ Esa dirección —«qué requiere», no «quién depende de mí»— es la que ya consume el punto fijo
+ * del panel. Invertirla haría que la cascada corra al revés y desmarcar una operación suelta
+ * arrastre la creación de la que cuelga, que es exactamente lo contrario.
  */
 export function dependenciasDeOperacionesDeDocumento(
   operaciones: readonly OperacionDeDocumento[],
@@ -599,12 +603,10 @@ export function dependenciasDeOperacionesDeDocumento(
     }
   });
 
-  const dependientes: number[][] = operaciones.map(() => []);
-  operaciones.forEach((o, i) => {
+  return operaciones.map((o, i) => {
     const key = "key" in o ? o.key.trim() : null;
-    if (!key) return;
+    if (!key) return [];
     const origen = creaPorRef.get(key);
-    if (origen !== undefined && origen !== i) dependientes[origen].push(i);
+    return origen !== undefined && origen !== i ? [origen] : [];
   });
-  return dependientes;
 }

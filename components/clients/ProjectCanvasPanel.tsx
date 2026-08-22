@@ -1146,16 +1146,32 @@ export default function ProjectCanvasPanel({
                 avisos: [],
               };
             }
-            const instruccion = (acuerdo.instruccion ?? "").trim();
-            if (!instruccion) {
-              return { fallo: "El acuerdo no trae instrucción para ejecutar.", avisos: [] };
+            const operaciones = acuerdo.operaciones ?? [];
+            if (operaciones.length === 0) {
+              /* Un acuerdo viejo (los de antes del 2026-08-22 traían una instrucción en prosa) no
+                 se puede ejecutar por este carril: el editor espera operaciones. Se dice, en vez
+                 de fallar sin explicación sobre un hilo que la persona abrió de nuevo. */
+              return {
+                fallo: acuerdo.instruccion
+                  ? "Esta conversación es anterior al carril nuevo: pedile el cambio otra vez y se aplica solo."
+                  : "El acuerdo no trae cambios para ejecutar.",
+                avisos: [],
+              };
             }
             try {
-              await aplicador(instruccion);
-              return { fallo: null, avisos: [] };
+              const { avisos, rechazadas } = await aplicador(operaciones);
+              /* ⛔ Lo rechazado es un FALLO PARCIAL, no un aviso: si tres de cinco no entraron, el
+                 hilo no puede decir «se aplicó» a secas. El modelo lee el hilo, así que sin esto
+                 volvería a proponer lo que ya entró. */
+              return {
+                fallo: rechazadas.length
+                  ? `No se pudieron aplicar ${rechazadas.length} de ${operaciones.length}: ${rechazadas.join(" · ")}`
+                  : null,
+                avisos,
+              };
             } catch (e) {
               return {
-                fallo: e instanceof Error ? e.message : "el editor rechazó la instrucción",
+                fallo: e instanceof Error ? e.message : "el editor rechazó los cambios",
                 avisos: [],
               };
             }

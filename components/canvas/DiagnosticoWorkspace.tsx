@@ -13,6 +13,8 @@
  * que el cliente va a ver en la sesión o en el PDF. La publicación con link propio llega
  * en su propia tanda; hasta entonces la vía de entrega es la sesión en vivo y el export.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
 import { useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -46,6 +48,10 @@ export default function DiagnosticoWorkspace({
   // poll:false — el runner persiste CONFIRMED; tras generar, el remonte lo fuerza el
   // padre (`key` con su `agentNonce` al terminar el agente del header).
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
+     su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
+  useEjecutarOperacionesDelChat(cs, DIAGNOSTICO_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
 
   // ¿Ya corrió la generación? El seed solo siembra el bloque del `cierre` (curado).
   const hasGeneratedContent = useMemo(

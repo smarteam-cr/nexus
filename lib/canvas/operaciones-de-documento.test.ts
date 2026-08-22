@@ -349,7 +349,8 @@ describe("⛔ desmarcar una sección que se crea arrastra lo que la llena", () =
       { op: "seccion.campo", key: "tabla1", campo: "intro", valor: "Qué incluye cada opción" },
       { op: "seccion.campo", key: "otra", campo: "intro", valor: "sin relación" },
     ];
-    expect(dependenciasDeOperacionesDeDocumento(ops)).toEqual([[1], [], []]);
+    /* La dirección es «qué NECESITA cada una», que es la que consume el punto fijo del panel. */
+    expect(dependenciasDeOperacionesDeDocumento(ops)).toEqual([[], [0], []]);
   });
 });
 

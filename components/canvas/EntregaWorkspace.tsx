@@ -15,6 +15,8 @@
  * pantalla —el CSE puede matizar una redacción— pero se regeneran de la fuente, y por eso el
  * documento nunca puede afirmar un número que el cronograma no respalde.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
 import { useEffect, useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -48,6 +50,10 @@ export default function EntregaWorkspace({
   canvasId: string;
 }) {
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
+     su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
+  useEjecutarOperacionesDelChat(cs, ENTREGA_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
   const [aviso, setAviso] = useState<string | null>(null);
 
   /* Qué va a decir el documento ANTES de generarlo. Un documento honesto puede ser vergonzoso:

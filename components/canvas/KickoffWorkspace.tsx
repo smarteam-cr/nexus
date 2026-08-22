@@ -18,6 +18,7 @@
  * El renderer viejo (KickoffLanding) y su escape `?kve=old` se borraron (Ola 4 del
  * plan de puestos) — rollback de esa ola = git revert.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
 import { useCallback, useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -40,6 +41,18 @@ const MAXW = 760;
 
 export default function KickoffWorkspace({ projectId, canvasId }: { projectId: string; canvasId: string }) {
   const k = useKickoffData(projectId, canvasId);
+
+  /**
+   * El chat de este documento ejecuta acá.
+   *
+   * ⛔ `puedeOcultar: false`, y NO es una limitación provisional mal puesta: el ojo del kickoff
+   * escribe en `Project.hiddenKickoffKeys` —otra columna, indexada por id de sección y en estado
+   * provisional hasta «Subir al cliente»— mientras el verbo genérico escribe en el Json del canvas.
+   * Dejarlo en `true` haría que el chat escriba donde nadie lee: el hilo diría «aplicado» y el
+   * cliente seguiría viendo la sección. La operación se rechaza con su motivo hasta que los dos
+   * mecanismos se unifiquen, que es tanda propia.
+   */
+  useEjecutarOperacionesDelChat(k, KICKOFF_DEF_BY_KEY, { puedeOcultar: false, puedeCrear: true });
 
   const idByKey = useMemo(() => new Map(k.sections.map((s) => [s.key, s.id])), [k.sections]);
 

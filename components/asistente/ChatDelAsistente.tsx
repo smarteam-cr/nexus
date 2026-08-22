@@ -34,6 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
+import { arrastreDeDesmarcadas } from "@/lib/asistente/arrastre";
 import type { CambioAcordado } from "@/lib/asistente/turno";
 import { notaDeDescarte } from "@/lib/asistente/desenlace";
 import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
@@ -330,9 +331,23 @@ export default function ChatDelAsistente({
       const pedido = new Set(actual);
       if (pedido.has(i)) pedido.delete(i);
       else pedido.add(i);
-      /* Al RE-marcar, la cascada se recalcula desde cero: si lo que la bloqueaba volvió, vuelve
-         ella también. Recalcular es más barato que llevar un historial de por qué salió. */
-      return { ...m, [turnoId]: arrastreAlDesmarcar(ops, pedido) };
+      /**
+       * ⭐ LA CASCADA VIENE EN EL ACUERDO, calculada en el servidor contra las operaciones que se
+       * van a ejecutar. Antes salía de la del CRONOGRAMA, que busca `fase.crear` y `phaseId`: con
+       * operaciones de DOCUMENTO devolvía cero dependencias, así que desmarcar la sección que se
+       * crea dejaba vivas las que la llenan — y un solo rechazo puede tumbar el lote entero.
+       *
+       * ⚠ El respaldo NO es decoración: los acuerdos guardados antes del 2026-08-22 no traen
+       * `dependencias`, y son todos del cronograma. Sacarlo rompe la cascada en los hilos que ya
+       * existen, en silencio.
+       *
+       * Al RE-marcar se recalcula desde cero: si lo que la bloqueaba volvió, vuelve ella también.
+       */
+      const deps = acuerdo.dependencias;
+      return {
+        ...m,
+        [turnoId]: deps ? arrastreDeDesmarcadas(deps, pedido) : arrastreAlDesmarcar(ops, pedido),
+      };
     });
   }
 

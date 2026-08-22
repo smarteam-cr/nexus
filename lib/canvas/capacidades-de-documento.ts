@@ -85,7 +85,7 @@ export const ADVERTENCIAS_DEL_DOCUMENTO: readonly AdvertenciaDeDocumento[] = [
   {
     gatillo: ["publicar", "subir al cliente", "compartir"],
     aviso:
-      "Publicar no se hace desde el chat. Los cambios quedan en el documento y vos decidís cuándo subirlos.",
+      "Publicar no se hace desde el chat. Los cambios quedan en el documento y tú decides cuándo subirlos.",
   },
 ];
 

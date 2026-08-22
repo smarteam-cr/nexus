@@ -61,6 +61,22 @@ export interface CambioAcordado {
    */
   descartadas?: string[];
   /**
+   * ⭐ QUÉ ARRASTRA CADA OPERACIÓN AL DESMARCARSE — por índice dentro de `operaciones`.
+   *
+   * ⛔ POR QUÉ VIAJA EN EL ACUERDO Y NO SE CALCULA EN LA PANTALLA. El panel calculaba la cascada
+   * importando `arrastreAlDesmarcar` del CRONOGRAMA y casteando las operaciones a las de allá.
+   * Sobre operaciones de DOCUMENTO esa función devuelve cero dependencias, porque busca
+   * `fase.crear` y `phaseId`: desmarcar la sección que se crea dejaría vivas las operaciones que
+   * la llenan, el ejecutor las rechaza, y **un rechazo puede tumbar el lote entero** — la persona
+   * desmarca UNA cosa y no se aplica ninguna.
+   *
+   * Calculada en el servidor sale del mismo objeto que se va a ejecutar (igual que `lineas`, y por
+   * el mismo motivo), y el panel deja de saber de qué vocabulario vino el acuerdo: corre un punto
+   * fijo genérico sobre este array. Es lo que hace que la cajita sirva para los dos carriles sin
+   * una sola rama por pieza.
+   */
+  dependencias?: number[][];
+  /**
    * ⚠ LEGACY. Los hilos anteriores al 2026-08-20 guardaron una instrucción en castellano que un
    * segundo modelo releía. Se conserva para que esas conversaciones sigan pintándose — no para
    * emitirla de nuevo.

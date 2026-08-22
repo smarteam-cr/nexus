@@ -13,6 +13,8 @@
  * canvas) en la barra superior → corre el runner y remonta al terminar. La edición
  * inline (por campos) y el reorden se guardan al instante vía useCanvasSections.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { DESARROLLO_DEF_BY_KEY } from "@/components/landing/configs/desarrollo.defs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
@@ -44,6 +46,10 @@ export default function DesarrolloWorkspace({
   // acá y quedaría corriendo indefinidamente sin motivo. El poll acotado propio de abajo
   // (awaitingGen) ya cubre la ventana de "generación en curso".
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
+     su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
+  useEjecutarOperacionesDelChat(cs, DESARROLLO_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: true });
   const [nonce, setNonce] = useState(0); // fuerza refetch tras regenerar
 
   /* El estado de "compartir con el dev" ya no vive acá: se lee y se escribe desde el panel
