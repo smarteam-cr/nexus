@@ -21,6 +21,7 @@ import { resolveActiveAccess, touchAccess } from "./access";
 import { getBrandLogos } from "./smarteam-logo";
 import type { DesarrolloSectionRow } from "@/components/canvas/desarrollo-landing-adapter";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 
 export interface DesarrolloViewData {
   projectName: string;
@@ -45,9 +46,22 @@ export async function getDesarrolloForToken(token: string): Promise<DesarrolloVi
 
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf("tech-requirements") },
-    select: { id: true },
+    /* `sections` es el Json del canvas: de ahí sale qué secciones están OCULTAS. Se lee acá y no
+       en el workspace porque éste es el chokepoint — el dev ve exactamente lo que este archivo
+       devuelve, y una sección apagada que igual llegue no la filtra nadie después. */
+    select: { id: true, sections: true },
   });
   if (!canvas) return null;
+
+  /**
+   * ⛔ EL OJO DEL EDITOR TIENE QUE APAGAR LA SECCIÓN ACÁ TAMBIÉN.
+   *
+   * Hasta el 2026-08-21 este documento no tenía toggle de ocultar, así que leer todas las
+   * secciones era correcto. Al encenderlo, sin este filtro el CSE apaga una sección, la ve
+   * desaparecer de su pantalla, y **el dev la sigue viendo** — un control que miente en la
+   * dirección más cara: se usa para sacar algo que no se quería mostrar.
+   */
+  const ocultas = hiddenKeysFrom(canvas.sections);
 
   const sections = await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },
@@ -79,11 +93,13 @@ export async function getDesarrolloForToken(token: string): Promise<DesarrolloVi
     clientLogoScale: access.project.client.logoScale,
     smarteamLogoUrl: logos.smarteam ?? null,
     brandLogos,
-    rows: sections.map((s) => ({
-      key: s.key,
-      titleOverride: s.titleOverride,
-      eyebrowOverride: s.eyebrowOverride,
-      blocks: s.blocks,
-    })),
+    rows: sections
+      .filter((s) => !ocultas.has(s.key))
+      .map((s) => ({
+        key: s.key,
+        titleOverride: s.titleOverride,
+        eyebrowOverride: s.eyebrowOverride,
+        blocks: s.blocks,
+      })),
   };
 }

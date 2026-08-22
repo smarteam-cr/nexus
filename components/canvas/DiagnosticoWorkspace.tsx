@@ -62,6 +62,7 @@ export default function DiagnosticoWorkspace({
       data: built[i].data,
       titleOverride: s.titleOverride,
       eyebrowOverride: s.eyebrowOverride,
+      hidden: s.hidden === true,
     }));
   }, [cs.sections]);
 
@@ -213,6 +214,12 @@ export default function DiagnosticoWorkspace({
             if (!target) return setAviso(SIN_SECCION);
             await cs.setEyebrow(target.id, eyebrow);
           })();
+        }}
+        /* El ojo: apaga la sección para quien lee el documento, sin borrar nada. Se guarda en el
+           Json del canvas (`patchSectionEntry`) y NO en una columna — regla dual-PC. */
+        onToggleHidden={(key, hidden) => {
+          const id = idByKey.get(key);
+          if (id) void cs.setHidden(id, hidden);
         }}
         onReorder={(keys) => {
           const heroId = idByKey.get("diagnostico");

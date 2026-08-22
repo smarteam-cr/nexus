@@ -94,8 +94,10 @@ describe("…y SOBREVIVE al reload", () => {
 });
 
 describe("el editor lo usa de verdad", () => {
-  /* Una ruta que guarda y nadie llama es una promesa vacía. Implementación es el primer
-     workspace de proyecto cableado; el día que se cableen los otros, entran acá. */
+  /* Una ruta que guarda y nadie llama es una promesa vacía.
+     ⭐ Desde el 2026-08-21 están los SEIS documentos de proyecto que pasan por el motor. Elías
+     pidió que modificar el motor de páginas web «sea igual en todas las áreas», y ocultar estaba
+     en dos de seis: un chat uniforme sobre un motor desparejo no se puede construir. */
   const CABLEADOS = [
     "components/canvas/ImplementacionWorkspace.tsx",
     /* Entrega ya estaba cableada desde EN-0 y nadie lo guardaba: el ojo se podía desconectar
@@ -103,6 +105,16 @@ describe("el editor lo usa de verdad", () => {
        externa — `lib/external/entrega-view.ts` filtra lo oculto contra el Json vivo, así que
        tapar una sección después de publicar la saca del enlace del cliente al instante. */
     "components/canvas/EntregaWorkspace.tsx",
+    /* ⚠ Éste NO se podía cablear hasta tapar su vista externa, y este mismo archivo lo tenía
+       anotado como el motivo de la deuda. Ver el describe de abajo. */
+    "components/canvas/DesarrolloWorkspace.tsx",
+    /* Los tres internos: su única superficie además del editor es el PDF, y la rama genérica
+       de `lib/print/load-doc.ts` ya lee `hiddenKeysFrom` — su comentario dice, textual, que se
+       leen las dos fuentes «así el día que un tipo estrene visibilidad no hay que acordarse de
+       este archivo». Ese día es hoy y el archivo no se tocó. */
+    "components/canvas/DiagnosticoWorkspace.tsx",
+    "components/canvas/PlanificacionWorkspace.tsx",
+    "components/canvas/ExploracionWorkspace.tsx",
   ];
 
   for (const rel of CABLEADOS) {
@@ -116,25 +128,39 @@ describe("el editor lo usa de verdad", () => {
     });
   }
 
-  it("⚠ los workspaces SIN cablear están declarados con su motivo", () => {
-    /* Deuda con motivo, no omisión. `lib/external/desarrollo-view.ts` (89 líneas) no lee
-       NINGUNA fuente de oculta: encender el ojo ahí sin taparlo primero haría que el CSE
-       oculte una sección y el desarrollador la siga viendo en su enlace. Los otros tres son
-       documentos internos sin vista externa: entran cuando alguien los pida. */
-    const PENDIENTES: Record<string, string> = {
-      "components/canvas/DesarrolloWorkspace.tsx":
-        "lib/external/desarrollo-view.ts no filtra lo oculto — cablearlo abriría una fuga",
-      "components/canvas/DiagnosticoWorkspace.tsx": "interno, sin pedido",
-      "components/canvas/ExploracionWorkspace.tsx": "interno, sin pedido",
-      "components/canvas/PlanificacionWorkspace.tsx": "interno, sin pedido",
-    };
-    for (const [rel, motivo] of Object.entries(PENDIENTES)) {
-      expect(motivo.length, `${rel} está en la lista sin motivo escrito`).toBeGreaterThan(10);
-      // Ratchet: el día que uno se cablee, sale de acá y entra a CABLEADOS.
-      expect(
-        leer(rel).includes("onToggleHidden="),
-        `${rel} YA cablea onToggleHidden: sacalo de PENDIENTES y agregalo a CABLEADOS`,
-      ).toBe(false);
-    }
+  it("⛔ y la vista del DEV filtra lo oculto — el ojo no puede mentir hacia afuera", () => {
+    /* ⚠ ESTE ES EL MOTIVO POR EL QUE `DesarrolloWorkspace` estuvo sin cablear, y quedó escrito
+       acá cuando era deuda: `lib/external/desarrollo-view.ts` no leía NINGUNA fuente de oculta.
+       Encender el ojo sin taparlo primero hace que el CSE apague una sección, la vea desaparecer
+       de su pantalla, y **el desarrollador la siga viendo en su enlace** — un control que miente
+       justo en la dirección que importa: se usa para sacar algo que no se quería mostrar.
+
+       La edición que la pone en rojo: sacar el `.filter((s) => !ocultas.has(s.key))` del chokepoint. */
+    const src = leer("lib/external/desarrollo-view.ts");
+    expect(src, "el chokepoint del dev dejó de leer qué secciones están ocultas").toContain(
+      "hiddenKeysFrom(canvas.sections)",
+    );
+    const i = src.indexOf("rows: sections");
+    expect(i, "desapareció el armado de las filas que ve el dev").toBeGreaterThan(-1);
+    const filas = src.slice(i, src.indexOf("})),", i));
+    expect(filas.length, "la guarda no está mirando nada").toBeGreaterThan(40);
+    expect(
+      filas.includes("!ocultas.has(s.key)"),
+      "las filas volvieron a salir sin filtrar: el dev ve lo que el CSE ocultó",
+    ).toBe(true);
+  });
+
+  it("⚠ el kickoff queda aparte, y no es un olvido", () => {
+    /* Tiene su PROPIO mecanismo (`Project.hiddenKickoffKeys`), indexado por ID de sección y no
+       por key, y *staged*: vive en el navegador hasta «Subir al cliente». Meterlo en CABLEADOS
+       exigiría que este test afirmara sobre un helper que el kickoff no usa. Unificar los dos
+       mecanismos es tanda propia — lo que NO se puede es que un ejecutor de operaciones asuma que
+       hay una sola puerta: en el kickoff escribiría en la que nadie lee. */
+    const src = leer("components/canvas/KickoffWorkspace.tsx");
+    expect(src, "el kickoff dejó de tener su propio toggle").toContain("onToggleHidden");
+    expect(
+      leer("app/api/projects/[projectId]/kickoff-visibility/route.ts"),
+      "desapareció la columna propia del kickoff: revisar si ya se puede unificar",
+    ).toContain("hiddenKickoffKeys");
   });
 });

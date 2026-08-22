@@ -60,6 +60,7 @@ export default function ExploracionWorkspace({
       data: built[i].data,
       titleOverride: s.titleOverride,
       eyebrowOverride: s.eyebrowOverride,
+      hidden: s.hidden === true,
     }));
   }, [cs.sections]);
 
@@ -152,6 +153,12 @@ export default function ExploracionWorkspace({
         onEyebrowChange={(key, eyebrow) => {
           const id = idByKey.get(key);
           if (id) cs.setEyebrow(id, eyebrow);
+        }}
+        /* El ojo: apaga la sección para quien lee el documento, sin borrar nada. Se guarda en el
+           Json del canvas (`patchSectionEntry`) y NO en una columna — regla dual-PC. */
+        onToggleHidden={(key, hidden) => {
+          const id = idByKey.get(key);
+          if (id) void cs.setHidden(id, hidden);
         }}
         onReorder={(keys) => {
           // keys = las de CONTENIDO en el orden nuevo (el motor excluye hero y cierre).
