@@ -187,9 +187,37 @@ export function marcaDeDesenlace(d: Desenlace): string {
 export function leerDesenlace(contenido: string): { texto: string; desenlace: Desenlace | null } {
   const i = contenido.lastIndexOf(MARCA_DE_DESENLACE);
   if (i === -1) return { texto: contenido, desenlace: null };
-  const texto = contenido.slice(0, i).trim();
+
+  /**
+   * ⛔ EL JSON SE RECORTA HASTA SU LLAVE DE CIERRE, no hasta el final del turno.
+   *
+   * ── EL BUG QUE ESTO ARREGLA, Y ESTUVO VIVO ────────────────────────────────
+   * Los dos marcadores del hilo eligieron puntas distintas: el ACUERDO va al final del turno, el
+   * DESENLACE al principio (`<<<DESENLACE>>>{json}
+
+${prosa}`). Esta función copió la forma de
+   * leer del acuerdo —«parseá todo lo que sigue»— y con el marcador al principio eso incluye la
+   * prosa: `JSON.parse('{"ok":false}
+
+⛔ No se pudo…')` no parsea nunca.
+   *
+   * Y los dos síntomas eran mudos:
+   *   1. Sin marcador legible, `estadosDeAcuerdo` cae al `?? true` pensado para los turnos viejos
+   *      → un apply FALLIDO se leía como aplicado, la cajita se apagaba y el botón desaparecía.
+   *      La persona se quedaba sin forma de reintentar lo que nunca entró.
+   *   2. El texto salía de `slice(0, i)`, que con el marcador al principio es la cadena VACÍA →
+   *      ni «✅ Listo» ni «⛔ No se pudo aplicar» se llegaron a leer nunca.
+   *
+   * Leer hasta la llave de cierre sirve para las dos puntas, así que la próxima vez que alguien
+   * mueva un marcador esto no se rompe. El JSON es plano (`{ok}`) por diseño —ver el tipo— así que
+   * la primera `}` es su final.
+   */
+  const resto = contenido.slice(i + MARCA_DE_DESENLACE.length);
+  const fin = resto.indexOf("}");
+  const texto = (fin === -1 ? contenido.slice(0, i) : contenido.slice(0, i) + resto.slice(fin + 1)).trim();
+  if (fin === -1) return { texto, desenlace: null };
   try {
-    const crudo = JSON.parse(contenido.slice(i + MARCA_DE_DESENLACE.length)) as Partial<Desenlace>;
+    const crudo = JSON.parse(resto.slice(0, fin + 1)) as Partial<Desenlace>;
     if (typeof crudo?.ok === "boolean") return { texto, desenlace: { ok: crudo.ok } };
   } catch {
     /* Igual que arriba: se pierde el marcador, nunca el texto. */

@@ -96,16 +96,35 @@ export function useChatDeSeccion(): Registro {
 }
 
 /**
- * La línea que se antepone al mensaje cuando hay una sección fijada.
+ * El marcador de alcance que se antepone al mensaje del CSE.
  *
  * ⚠ Va en el CONTENIDO del turno y no en un campo aparte porque el hilo se re-manda entero al
- * modelo en cada turno: lo que no está en el texto no existe dos mensajes después. Mismo
- * mecanismo que el bloque de pendientes, y misma razón.
+ * modelo en cada turno: lo que no está en el texto no existe dos mensajes después. Mismo mecanismo
+ * que el bloque de pendientes, y misma razón.
+ *
+ * ⛔ Y por eso mismo hay que SACARLO al pintar: es una instrucción para el modelo, no algo que la
+ * persona escribió. Verlo entero arriba de su propia frase —repitiendo lo que el chip ya dice al
+ * lado— se lee como ruido del sistema metido en su mensaje. Visto en pantalla el 2026-08-22.
  */
+export const MARCA_DE_ALCANCE = "[SOBRE LA SECCIÓN";
+
 export function lineaDeAlcance(seccion: SeccionReferida | null): string {
   if (!seccion) return "";
   return (
-    `[SOBRE LA SECCIÓN «${seccion.label}» (${seccion.key})]\n` +
+    `${MARCA_DE_ALCANCE} «${seccion.label}» (${seccion.key})]\n` +
     "Es de dónde vino el pedido, no un límite: si lo que sigue habla de otra sección, atiéndelo igual.\n\n"
   );
+}
+
+/**
+ * El texto del CSE tal como lo escribió, sin el marcador de alcance.
+ *
+ * ⚠ Se corta por la línea en blanco que cierra el bloque, no por el largo del texto: el marcador
+ * tiene dos líneas y el mensaje puede empezar con lo que sea. Si el bloque no está, devuelve el
+ * mensaje intacto — un turno viejo, o uno mandado sin alcance.
+ */
+export function mensajeSinAlcance(texto: string): string {
+  if (!texto.startsWith(MARCA_DE_ALCANCE)) return texto;
+  const corte = texto.indexOf("\n\n");
+  return corte === -1 ? texto : texto.slice(corte + 2);
 }

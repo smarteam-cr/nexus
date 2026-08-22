@@ -31,7 +31,11 @@
  * 4. ⛔ Y el acuerdo quedaba con su botón para siempre, indistinguible de «nunca se intentó».
  *    Ahora el desenlace se ESCRIBE en el hilo y el botón vive solo en el último turno.
  */
-import { lineaDeAlcance, useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
+import {
+  lineaDeAlcance,
+  mensajeSinAlcance,
+  useChatDeSeccion,
+} from "@/components/asistente/chat-de-seccion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
@@ -101,6 +105,13 @@ interface Props {
    * distinguir «se aplicó» de «falló», que es justo el bug que se arregló.
    */
   onAplicar?: (acuerdo: AcuerdoDelChat) => Promise<ResultadoDeAplicar>;
+  /**
+   * Por qué NO se puede aplicar ahora mismo, si es que no se puede. Apaga el botón y se lee en él.
+   *
+   * ⚠ Es un motivo, no un booleano: «no se puede» sin decir por qué manda a adivinar, y el caso
+   * real —el editor del documento todavía no montó— se arregla solo en un segundo.
+   */
+  motivoParaNoAplicar?: string | null;
 }
 
 /** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
@@ -116,6 +127,7 @@ export default function ChatDelAsistente({
   abierto,
   onClose,
   onAplicar,
+  motivoParaNoAplicar,
 }: Props) {
   const hydrated = useHydrated();
   const [turnos, setTurnos] = useState<TurnoVista[]>([]);
@@ -258,6 +270,7 @@ export default function ChatDelAsistente({
     setError(null);
     /* El turno del CSE se pinta al toque (optimista) para que la pantalla no se sienta muerta
        los ~4 s que tarda el modelo. El servidor devuelve el hilo REAL y lo reemplaza. */
+    /* El optimista pinta el mensaje TAL CUAL lo escribió: el alcance se agrega recién al enviar. */
     setTurnos((t) => [...t, { id: `optimista-${t.length}`, rol: "CSE", texto: mensaje, acuerdo: null }]);
     try {
       /* ⭐ El alcance viaja EN EL TEXTO del turno, no en un campo aparte: el hilo se re-manda
@@ -506,7 +519,11 @@ export default function ChatDelAsistente({
                     : "mr-2 rounded-xl px-3 py-2 bg-surface-muted text-sm text-fg-secondary"
                 }
               >
-                {t.rol === "CSE" ? t.texto : <Markdown>{t.texto}</Markdown>}
+                {/* ⚠ El marcador de alcance se SACA al pintar: es una instrucción para el
+                    modelo, no algo que la persona escribió. Verlo entero arriba de su propia
+                    frase —repitiendo lo que el chip ya dice al lado— se lee como ruido del
+                    sistema metido en su mensaje. */}
+                {t.rol === "CSE" ? mensajeSinAlcance(t.texto) : <Markdown>{t.texto}</Markdown>}
               </div>
             )}
 
@@ -764,8 +781,14 @@ export default function ChatDelAsistente({
                     }
                     /* ⛔ Sin líneas no se aplica: aprobar lo que no se puede leer es
                        exactamente lo que la cajita existe para impedir. */
+                    /* ⛔ Y sin editor montado tampoco: antes se descubría DESPUÉS del clic —la
+                       persona aplicaba, el chat escribía un desenlace, y recién ahí aparecía un
+                       cartel diciendo que el editor no estaba, sobre un documento abierto delante
+                       suyo. Un botón apagado con el motivo al lado es mejor que un error que lo
+                       explica tarde. */
                     disabled={
                       aplicando ||
+                      !!motivoParaNoAplicar ||
                       sinNadaQueAplicar(t.id, t.acuerdo!) ||
                       (!!t.acuerdo!.operaciones?.length && !t.acuerdo!.lineas?.length)
                     }
@@ -773,6 +796,8 @@ export default function ChatDelAsistente({
                   >
                     {aplicando
                       ? "Aplicando…"
+                      : motivoParaNoAplicar
+                        ? motivoParaNoAplicar
                       : sinNadaQueAplicar(t.id, t.acuerdo)
                         ? "No queda nada marcado"
                         : t.acuerdo.operaciones

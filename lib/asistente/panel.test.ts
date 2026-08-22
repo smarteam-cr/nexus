@@ -449,7 +449,7 @@ describe("⛔ lo que la revisión de calidad encontró, y son pérdidas de dato"
        nuevo — y «Nueva» y el envío postean contra la pieza NUEVA. La conversación que se lee y la
        que se toca dejan de ser la misma. */
     const src = fs.readFileSync(path.join(RAIZ, "components/clients/ProjectCanvasPanel.tsx"), "utf8");
-    const i = src.indexOf("<ChatDelAsistente");
+    const i = src.indexOf("<ChatDelDocumento");
     expect(i, "se fue el montaje del chat").toBeGreaterThan(-1);
     expect(src.slice(i, i + 200), "el chat dejó de remontarse por pieza").toContain(
       "key={activeSlug}",
@@ -589,16 +589,54 @@ describe("⭐ etapa 3 — el chat de DOCUMENTOS también aplica", () => {
     /* ⛔ La alternativa era que el chat llamara a `canvas-assist` y escribiera con
        `upsertCardData`: un SEGUNDO camino de escritura para lo mismo. No sería interfaz
        duplicada, sería lógica de pérdida de datos duplicada.
-       La edición que la pone en rojo: que `onAplicar` haga fetch por su cuenta. */
+       La edición que la pone en rojo: que el envoltorio haga fetch por su cuenta. */
+    const envoltorio = fs.readFileSync(
+      path.join(RAIZ, "components/asistente/ChatDelDocumento.tsx"),
+      "utf8",
+    );
+    expect(envoltorio, "el chat aplica por su cuenta en vez de usar el editor").not.toContain(
+      "fetch(",
+    );
+    expect(envoltorio).toContain("obtenerAplicador()");
+  });
+
+  it("⛔⭐ EL QUE PROVEE EL APLICADOR NO LO CONSUME — y esto estuvo roto en producción", () => {
+    /* ── EL BUG QUE ESTA GUARDA EXISTE PARA IMPEDIR ───────────────────────────
+       `ProjectCanvasPanel` monta `<AplicadorDeDocumentoProvider>` y, en el MISMO componente,
+       llamaba a `useAplicadorDeDocumento()`. Un contexto solo fluye hacia ABAJO: el componente que
+       provee lee el valor de AFUERA de su propio proveedor, o sea `null`. Siempre.
+
+       Consecuencia, sin un solo error en consola: **el botón «Aplicar» del chat de documentos
+       nunca funcionó**. Cada clic devolvía «El editor de este documento no está montado. Abrí el
+       documento y volvé a intentar» — sobre un documento abierto delante de la persona.
+
+       ⚠ Y la guarda que había NO lo cazaba: verificaba que `onAplicar` LLAMARA a
+       `obtenerAplicador()`, que es exactamente lo que hacía. Medir «llama» donde hace falta
+       «obtiene algo» es la trampa que este archivo ya documentó tres veces.
+
+       La edición que la pone en rojo: volver a consumir el aplicador desde el panel. */
     const panel = fs.readFileSync(
       path.join(RAIZ, "components/clients/ProjectCanvasPanel.tsx"),
       "utf8",
     );
-    const i = panel.indexOf("onAplicar={async (acuerdo)");
-    expect(i, "el chat de documentos volvió a no poder aplicar").toBeGreaterThan(-1);
-    const bloque = panel.slice(i, i + 1400);
-    expect(bloque, "el chat aplica por su cuenta en vez de usar el editor").not.toContain("fetch(");
-    expect(bloque).toContain("obtenerAplicador()");
+    expect(
+      panel.includes("<AplicadorDeDocumentoProvider"),
+      "el panel dejó de montar el proveedor: nadie puede aplicar",
+    ).toBe(true);
+    expect(
+      panel.includes("useAplicadorDeDocumento(") || panel.includes("useHayAplicadorDeDocumento("),
+      "el panel volvió a consumir el contexto que él mismo provee: siempre va a leer null",
+    ).toBe(false);
+
+    /* Y el que sí consume vive ADENTRO — lo monta el panel, así que está bajo el proveedor. */
+    const envoltorio = fs.readFileSync(
+      path.join(RAIZ, "components/asistente/ChatDelDocumento.tsx"),
+      "utf8",
+    );
+    expect(envoltorio, "el envoltorio dejó de consumir el aplicador").toContain(
+      "useAplicadorDeDocumento()",
+    );
+    expect(panel, "el panel dejó de montar el envoltorio").toContain("<ChatDelDocumento");
   });
 
   it("⭐ TODOS los documentos ejecutan lo acordado — ninguno se queda mudo", () => {

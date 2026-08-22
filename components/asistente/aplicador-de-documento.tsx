@@ -22,7 +22,16 @@
  * `DocumentAssist` —no cada workspace— así que los seis documentos quedan cableados sin tocar
  * ninguno, y el séptimo que alguien agregue mañana entra solo.
  */
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 /**
  * Lo que el editor sabe hacer con un acuerdo del chat.
@@ -52,6 +61,19 @@ interface Registro {
   registrar: (a: Aplicador | null) => void;
   /** `null` cuando no hay ningún editor montado — p. ej. un documento sin contenido todavía. */
   obtener: () => Aplicador | null;
+  /**
+   * ⭐ SI HAY EDITOR, COMO ESTADO REACTIVO.
+   *
+   * ── POR QUÉ NO ALCANZA CON `obtener()` ──────────────────────────────────
+   * `obtener` se lee al APRETAR el botón, así que un editor ausente se descubría después del
+   * clic: la persona apretaba «Aplicar», el chat escribía un desenlace, y recién ahí aparecía un
+   * cartel diciendo que el editor no estaba montado — sobre un documento que estaba abierto
+   * delante suyo. Visto en pantalla el 2026-08-22.
+   *
+   * Con esto el botón se apaga ANTES, con el motivo al lado. Un estado imposible que no se puede
+   * apretar es mejor que un error que lo explica después.
+   */
+  hay: boolean;
 }
 
 const Ctx = createContext<Registro | null>(null);
@@ -66,15 +88,35 @@ export function AplicadorDeDocumentoProvider({ children }: { children: ReactNode
    * Guardarlo en una variable del cierre del inicializador de `useState` da lo mismo sin romper
    * ninguna regla: la identidad del objeto es estable y nadie lee nada durante el render.
    */
-  const [valor] = useState<Registro>(() => {
+  const [hay, setHay] = useState(false);
+  const [base] = useState(() => {
     let actual: Aplicador | null = null;
     return {
-      registrar: (a) => {
+      registrar: (a: Aplicador | null) => {
         actual = a;
       },
       obtener: () => actual,
     };
   });
+  /**
+   * ⛔ `registrar` TIENE QUE SER ESTABLE, y esto es la trampa entera de este archivo.
+   *
+   * El efecto que registra al editor depende de esta función. Si su identidad cambiara cuando
+   * cambia `hay` —que es justo lo que `registrar` provoca— el ciclo sería: registro → `hay` pasa a
+   * true → identidad nueva → el efecto se limpia (des-registra) → `hay` pasa a false → identidad
+   * nueva → registro… sin parar. El editor se desregistraría a sí mismo en loop.
+   */
+  const registrar = useCallback(
+    (a: Aplicador | null) => {
+      base.registrar(a);
+      setHay(a !== null);
+    },
+    [base],
+  );
+  const valor = useMemo<Registro>(
+    () => ({ registrar, obtener: base.obtener, hay }),
+    [registrar, base, hay],
+  );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 
@@ -91,15 +133,27 @@ export function useRegistrarAplicadorDeDocumento(aplicador: Aplicador) {
   useEffect(() => {
     vivo.current = aplicador;
   });
+  /* ⚠ Depende de `registrar`, NO de `ctx`: `ctx` se recrea cuando cambia `hay`, y `hay` lo cambia
+     este mismo efecto. Ver el porqué completo en el proveedor. */
+  const registrar = ctx?.registrar;
   useEffect(() => {
-    if (!ctx) return;
-    ctx.registrar((i) => vivo.current(i));
-    return () => ctx.registrar(null);
-  }, [ctx]);
+    if (!registrar) return;
+    registrar((i) => vivo.current(i));
+    return () => registrar(null);
+  }, [registrar]);
 }
 
 /** Lo llama el chat al aplicar. `null` si no hay editor montado para la pieza activa. */
 export function useAplicadorDeDocumento(): () => Aplicador | null {
   const ctx = useContext(Ctx);
   return () => ctx?.obtener() ?? null;
+}
+
+/**
+ * Si HAY un editor montado para la pieza activa. Reactivo: la pantalla se entera al toque.
+ *
+ * Fuera del proveedor devuelve `false` — es lo correcto: sin proveedor no hay a quién aplicarle.
+ */
+export function useHayAplicadorDeDocumento(): boolean {
+  return useContext(Ctx)?.hay ?? false;
 }

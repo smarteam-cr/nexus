@@ -26,7 +26,7 @@ import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
-import ChatDelAsistente from "@/components/asistente/ChatDelAsistente";
+import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
 import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
@@ -187,9 +187,9 @@ export default function ProjectCanvasPanel({
   const [agentNonce, setAgentNonce] = useState(0);
   // Para refrescar el widget del proyecto (ProjectGPS + pills de setup) al generar un canvas.
   const { bumpGpsRefresh, canvasRefreshSignal } = useWorkspace();
-  /* El chat vive en esta rama del árbol y el aplicador del documento en otra, más adentro. Ver
-     `components/asistente/aplicador-de-documento.tsx` para por qué se resolvió así. */
-  const obtenerAplicador = useAplicadorDeDocumento();
+  /* ⛔ ACÁ SE CONSUMÍA EL APLICADOR, y era el bug: este componente MONTA el proveedor, así que
+     leía el contexto de afuera de su propio proveedor — `null`, siempre. El botón «Aplicar» del
+     chat de documentos nunca funcionó. Ahora lo consume `ChatDelDocumento`, que vive adentro. */
   const toast = useToast();
   const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
   const [addingSectionName, setAddingSectionName] = useState<string | null>(null);
@@ -209,6 +209,9 @@ export default function ProjectCanvasPanel({
      que «Pedir cambio con IA», con su vista previa. Acá todavía no hay `onAplicar`: el panel
      muestra la instrucción para copiarla, y enchufarla es la etapa 3 del roadmap. */
   const [chatAbierto, setChatAbierto] = useState(false);
+  /* ⚠ Estable: `ChatDeSeccionProvider` lo mete en su `useMemo`, así que una flecha inline recrearía
+     el contexto en CADA render del panel y re-renderizaría el chrome de todas las secciones. */
+  const abrirChat = useCallback(() => setChatAbierto(true), []);
 
   const activeCanvas = canvases.find((c) => c.id === activeCanvasId) ?? canvases.find((c) => c.isDefault) ?? canvases[0] ?? null;
   // El render se ramifica por NOMBRE, no por isDefault (Handoff es el "home" pero
@@ -553,7 +556,7 @@ export default function ProjectCanvasPanel({
         el mismo motor, no lo pintan porque no tienen proveedor. */}
     <ChatDeSeccionProvider
       disponible={!!activeSlug && puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? ""))}
-      onAbrir={() => setChatAbierto(true)}
+      onAbrir={abrirChat}
     >
     <div className="px-6 py-8 space-y-6">
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
@@ -1127,63 +1130,18 @@ export default function ProjectCanvasPanel({
            panel NO se remonta: se queda con el hilo del documento ANTERIOR mientras el
            encabezado ya dice el nombre nuevo, y «Nueva» y el envío postean contra la pieza
            NUEVA. La conversación que se lee y la que se toca dejan de ser la misma. */
-        <ChatDelAsistente
+        /* ⚠ `key` POR PIEZA, igual que los workspaces de arriba. Cambiar de canvas es puro
+           estado —`switchCanvas` hace `router.replace` sobre la misma ruta— así que sin esto el
+           panel NO se remonta: se queda con el hilo del documento ANTERIOR mientras el
+           encabezado ya dice el nombre nuevo, y «Nueva» y el envío postean contra la pieza
+           NUEVA. La conversación que se lee y la que se toca dejan de ser la misma. */
+        <ChatDelDocumento
           key={activeSlug}
           projectId={projectId}
           pieza={activeSlug}
           piezaLabel={pieceLabel(activeSlug)}
           abierto={chatAbierto}
           onClose={() => setChatAbierto(false)}
-          /**
-           * ⭐ ETAPA 3: el acuerdo del chat entra por el editor de siempre.
-           *
-           * Antes acá no había `onAplicar`, así que el cajón mostraba la instrucción para
-           * copiarla y pegarla en «Pedir cambio con IA» — dos pantallas para un solo gesto.
-           *
-           * ⛔ El chat sigue sin escribir: lo que hace es DISPARAR el aplicador del documento,
-           * que propone sección por sección y espera que la persona acepte cada una. Por eso el
-           * desenlace dice «revisa la vista previa» y no «listo».
-           */
-          onAplicar={async (acuerdo) => {
-            const aplicador = obtenerAplicador();
-            if (!aplicador) {
-              return {
-                fallo:
-                  "El editor de este documento no está montado. Abrí el documento y volvé a " +
-                  "intentar.",
-                avisos: [],
-              };
-            }
-            const operaciones = acuerdo.operaciones ?? [];
-            if (operaciones.length === 0) {
-              /* Un acuerdo viejo (los de antes del 2026-08-22 traían una instrucción en prosa) no
-                 se puede ejecutar por este carril: el editor espera operaciones. Se dice, en vez
-                 de fallar sin explicación sobre un hilo que la persona abrió de nuevo. */
-              return {
-                fallo: acuerdo.instruccion
-                  ? "Esta conversación es anterior al carril nuevo: pedile el cambio otra vez y se aplica solo."
-                  : "El acuerdo no trae cambios para ejecutar.",
-                avisos: [],
-              };
-            }
-            try {
-              const { avisos, rechazadas } = await aplicador(operaciones);
-              /* ⛔ Lo rechazado es un FALLO PARCIAL, no un aviso: si tres de cinco no entraron, el
-                 hilo no puede decir «se aplicó» a secas. El modelo lee el hilo, así que sin esto
-                 volvería a proponer lo que ya entró. */
-              return {
-                fallo: rechazadas.length
-                  ? `No se pudieron aplicar ${rechazadas.length} de ${operaciones.length}: ${rechazadas.join(" · ")}`
-                  : null,
-                avisos,
-              };
-            } catch (e) {
-              return {
-                fallo: e instanceof Error ? e.message : "el editor rechazó los cambios",
-                avisos: [],
-              };
-            }
-          }}
         />
       )}
     </div>
