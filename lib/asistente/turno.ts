@@ -40,6 +40,7 @@ import {
   reclamoDeOperaciones,
   renderSeccionParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
+import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
 import { dependenciasDeOperaciones } from "@/lib/timeline/dependencias-de-operaciones";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
@@ -911,7 +912,25 @@ export async function correrTurno(
      * segundo intento REEMPLAZA al primero entero (por eso el mensaje pide re-emitir todo): sin
      * merge no hay forma de duplicar una operación que no es idempotente.
      */
-    let prep = prepararOperacionesDeDocumento(seccionesDelDoc, opsNuevas as unknown[], capacidades);
+    /* ⚠ LOS MISMOS completadores que el editor. Sin ellos, el dry-run aceptaría «agregá a Juan»
+       —el esquema solo pide un nombre— y el editor lo rechazaría al aplicar, que es justo la
+       divergencia que este carril vino a matar. Del lado del servidor no hay id que generar (las
+       franjas las numera el navegador al escribir), así que acá solo va el del equipo. */
+    const completadores = ctx.directorio?.length
+      ? {
+          equipo: completadorDeEquipo(ctx.directorio),
+          /* ⚠ El id real lo genera el navegador al escribir; acá alcanza con uno de mentira. Lo
+             que importa de correrlo en seco es su otra mitad: rechazar una franja sin horario,
+             que el esquema solo no atrapa. */
+          horarios: completadorDeHorarios(() => "id-del-dry-run"),
+        }
+      : undefined;
+    let prep = prepararOperacionesDeDocumento(
+      seccionesDelDoc,
+      opsNuevas as unknown[],
+      capacidades,
+      completadores,
+    );
 
     if (prep.rechazadas.length > 0 && idDeLaHerramienta) {
       messages.push(
@@ -930,7 +949,12 @@ export async function correrTurno(
       );
       msg = await preguntarleAlModelo(messages);
       leerElTurno(msg);
-      prep = prepararOperacionesDeDocumento(seccionesDelDoc, opsNuevas as unknown[], capacidades);
+      prep = prepararOperacionesDeDocumento(
+        seccionesDelDoc,
+        opsNuevas as unknown[],
+        capacidades,
+        completadores,
+      );
     }
 
     /* ⚠ Lo que sigue rechazado DESPUÉS del reintento se excluye del acuerdo y SE DICE. Callarlo

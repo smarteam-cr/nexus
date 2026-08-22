@@ -71,6 +71,8 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — 7 tipos creables, incluida la tabla genérica que no existía | ✅ 2026-08-22 |
 | 5.1 | **La sección nace LLENA** | Hoy el chat crea la sección y queda VACÍA: llenarla exige un segundo pedido. Ver abajo | ⬜ ⚠ hueco conocido |
 | 3.8 | **El chat se corrige antes de prometer** | ⭐ Valida en seco contra el documento REAL antes de acordar y reintenta una vez con los rechazos. Los 4 fallos que Elías vio en pantalla | ✅ 2026-08-22 |
+| 3.9 | **Las secciones curadas del kickoff, por chat** | Agregar personas por su nombre, crear franjas y sesiones. La app resuelve la identidad; el chat solo da el nombre | ✅ 2026-08-22 |
+| 3.10 | **Las tarjetas del motor son una sola** | Un componente para las grillas de tarjetas + tipo creable «Tarjetas con ícono». El CSS ya era el mismo; lo duplicado era el JSX | ✅ 2026-08-22 |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |

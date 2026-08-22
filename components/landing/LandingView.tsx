@@ -18,6 +18,7 @@
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
+import { nombreParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
 import {
@@ -387,7 +388,10 @@ export default function LandingView({
         sección oculta se colapsa, y «está apagada, ¿la reescribo y la muestro?» es una
         conversación legítima — la única del chrome para la que eso tiene sentido.
         ⛔ Sin proveedor no se pinta: la vista del cliente y el PDF montan este mismo motor. */}
-    <ChatDeSeccionBtn seccionKey={def.key} label={effTitle} />
+    {/* ⚠ El nombre del CHIP no es `effTitle`: una portada se rotula con su titular, así que el
+        chip decía «kickoff Wherex» mientras el contexto que lee el modelo la llamaba «Bienvenida y
+        contexto» — dos nombres para la misma sección en el mismo prompt. */}
+    <ChatDeSeccionBtn seccionKey={def.key} label={nombreParaElChat(def, effTitle)} />
     {!collapsed && renderOverlay?.(def.key)}
         {hidden && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
         {onToggleHidden && !def.noHide && (

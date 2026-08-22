@@ -107,6 +107,14 @@ export const TABLA_EMPTY = { intro: "", columnas: [], filas: [], nota: "" };
 /** El `sectionType` del renderer de la tabla. Ninguna plantilla lo declara: nace en runtime. */
 export const TABLA_TYPE = "tabla";
 
+/**
+ * El `sectionType` de la grilla de tarjetas CON ícono.
+ *
+ * ⚠ No reusa `kickoff_prose` porque el ícono es una decisión del RENDER, y el motor resuelve el
+ * render por `sectionType`. Comparten el esquema, que es lo que importa para el contenido.
+ */
+export const TARJETAS_TYPE = "cards_icono";
+
 /** Una sección que se puede crear. `tipo` es lo que viaja en la key (`custom:<tipo>:<uuid>`). */
 export interface TipoCreable {
   /** Identidad en la key. ⚠ Solo minúsculas y guión bajo: el `:` es el separador. */
@@ -128,6 +136,19 @@ export interface TipoCreable {
  * y equivocada.
  */
 export const CATALOGO_DE_SECCIONES: readonly TipoCreable[] = [
+  {
+    /* ⭐ El hermano con ícono de `prosa`, y comparte su MISMO esquema a propósito: migrar una
+       sección de con-ícono a sin-ícono (o al revés) no debería costar reescribir el contenido.
+       Lo único que cambia es cómo se pinta. */
+    tipo: "tarjetas",
+    nombre: "Tarjetas con ícono",
+    queEs: "Una grilla de tarjetas con ícono, título y una línea de detalle. Cuatro por fila.",
+    sectionType: TARJETAS_TYPE,
+    schema: PROSA_SCHEMA as unknown as Record<string, unknown>,
+    empty: PROSA_EMPTY,
+    brief:
+      "Grilla de tarjetas con ícono. `items`: de 3 a 6 tarjetas; `title` es la idea en pocas palabras y `detail` UNA línea que la explica. `intro` es opcional. Concreto, sin relleno.",
+  },
   {
     tipo: "prosa",
     nombre: "Texto con tarjetas",

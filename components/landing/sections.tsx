@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FC, type PointerEvent as ReactPointerEvent } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
+import { CardGrid } from "./card-grid";
 import { HeroUploadButtons, BrandRow, TagRow } from "./hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import {
@@ -126,24 +127,21 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
 export const PainSection: FC<SectionProps<PainData>> = ({ data, editable, onChange }) => {
   const items = data.items ?? [];
   const set = (next: Partial<PainData>) => onChange?.({ ...data, ...next });
+  /* El markup lo pone `CardGrid`, que es el mismo de las tarjetas del kickoff: lo único propio de
+     esta sección son las cuatro columnas, el ícono y su ámbar — que ahora se DECLARA acá en vez de
+     pisar el token del motor desde adentro del markup compartido. */
   return (
-    <>
-      <SortableItems items={items} disabled={!editable} onReorder={(next) => set({ items: next })}
-        container={(nodes) => <div className="stl-grid stl-grid-4">{nodes}</div>}>
-        {(it, i, handle) => (
-          <div className="stl-item stl-card">
-            {handle}
-            {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} />}
-            <div className="stl-card-icon" style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}>{PAIN_ICONS[i % PAIN_ICONS.length]}</div>
-            <Editable as="h3" className="stl-card-title" editable={editable} value={it.title}
-              placeholder="Nombre del dolor…" onCommit={(v) => set({ items: replaceAt(items, i, { ...it, title: v }) })} />
-            <Editable as="p" className="stl-card-detail" editable={editable} value={it.detail}
-              placeholder="Descripción en 1-2 líneas (impacto medible si se mencionó)…" onCommit={(v) => set({ items: replaceAt(items, i, { ...it, detail: v }) })} />
-          </div>
-        )}
-      </SortableItems>
-      {editable && <AddBtn label="Agregar dolor" onClick={() => set({ items: appendItem(items, { title: "", detail: "" }) })} />}
-    </>
+    <CardGrid
+      items={items}
+      editable={editable}
+      onItems={(next) => set({ items: next })}
+      columnas={4}
+      icono={(i) => PAIN_ICONS[i % PAIN_ICONS.length]}
+      acentoIcono={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}
+      addLabel="Agregar dolor"
+      placeholderTitulo="Nombre del dolor…"
+      placeholderDetalle="Descripción en 1-2 líneas (impacto medible si se mencionó)…"
+    />
   );
 };
 

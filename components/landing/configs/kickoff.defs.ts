@@ -48,6 +48,9 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     pinned: true,
     noHide: true,
     sectionType: "kickoff_hero",
+    /* Se rotula con su titular, que en pantalla es lo correcto y para conversar es pésimo:
+       el chip decía «kickoff Wherex». Ver `nombreParaElChat`. */
+    chatLabel: "Portada",
     agentGenerated: true,
     // `eyebrow`, `brands` y `coverImageUrl` quedan FUERA del schema: los cura el CSE y
     // los preserva `preserveNonSchemaKeys` en cada regeneración.
@@ -112,6 +115,15 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Curada por el CSE: selecciona los miembros que participan (con foto). El agente NO la genera.",
     schema: {},
+    /* ⭐ El chat SÍ puede agregar y sacar personas — pedido de Elías, 2026-08-22: «por el nombre,
+       poder agregar y quitar personas».
+       ⛔ `teamMemberId` y `photoUrl` NO se declaran: los resuelve la app contra el directorio
+       (`lib/kickoff/completadores.ts`). Declararlos dejaría al modelo inventando un id de persona,
+       que es exactamente el dato que no puede saber. */
+    schemaDelChat: {
+      type: "object",
+      properties: { members: arrayOf({ name: str, role: str }, ["name"]) },
+    },
   },
   {
     key: "tu_rol",
@@ -150,6 +162,20 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Curada por el CSE: franjas ofrecidas + sesiones (drag&drop para asignar). El agente NO la genera.",
     schema: {},
+    /* ⭐ Crear franjas y sesiones por chat — pedido de Elías, 2026-08-22.
+       ⛔ Sin `id` (lo genera la app: un ítem sin id lo filtra `normalizeHorarios` y el agregado se
+       evapora en silencio) y ⛔ sin `optionId`: LA ASIGNACIÓN NO VIVE ACÁ. Vive en
+       `Project.kickoffHorarioAssignments`, superpuesta al pintar; escribirla en el bloque sería
+       escribir donde nadie lee. Se asigna arrastrando, y el chat lo dice. */
+    schemaDelChat: {
+      type: "object",
+      properties: {
+        intro: str,
+        options: arrayOf({ label: str }, ["label"]),
+        sessions: arrayOf({ label: str }, ["label"]),
+      },
+    },
+    rotulosDeListas: { options: "Franjas que ofrecemos", sessions: "Sesiones" },
   },
   {
     key: "canales",
@@ -162,6 +188,10 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Curada por el CSE: horario, canales y correo de soporte. El agente NO la genera.",
     schema: {},
+    schemaDelChat: {
+      type: "object",
+      properties: { horario: str, canales: strArray, soporteEmail: str },
+    },
   },
   {
     key: "proximos_pasos",

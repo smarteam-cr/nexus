@@ -209,6 +209,9 @@ export const ROLE_SECTION_DEFS: BCSectionDef[] = [
     pinned: true,
     noHide: true,
     sectionType: "role_hero",
+    /* Se rotula con su titular, que en pantalla es lo correcto y para conversar es pésimo:
+       el chip decía «kickoff Wherex». Ver `nombreParaElChat`. */
+    chatLabel: "Portada",
     empty: { title: "", area: "", summary: "" },
     schema: HERO_SCHEMA,
     ...NO_AGENT,

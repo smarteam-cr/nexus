@@ -26,6 +26,7 @@ import {
   type OperacionDeDocumento,
   type SeccionActual,
 } from "@/lib/canvas/operaciones-de-documento";
+import { schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 
 /** Una sección de rol tal como el motor la pinta: su key y los datos que se le pasan. */
 export interface SeccionDeRol {
@@ -34,7 +35,10 @@ export interface SeccionDeRol {
 }
 
 /** Lo mínimo de una def: el esquema y cómo se llama. */
-export type DefsDeRol = Record<string, { schema?: unknown; label?: string } | undefined>;
+export type DefsDeRol = Record<
+  string,
+  { schema?: unknown; schemaDelChat?: unknown; label?: string } | undefined
+>;
 
 export function useEjecutarOperacionesDelChatDeRol(
   /**
@@ -59,7 +63,10 @@ export function useEjecutarOperacionesDelChatDeRol(
         key: s.key,
         label: defsByKey[s.key]?.label ?? s.key,
         data: s.data ?? {},
-        schema: defsByKey[s.key]?.schema ?? { type: "object", properties: {} },
+        /* La MISMA función que el contexto del servidor y el ejecutor de canvas: hoy ninguna
+           sección de Roles declara `schemaDelChat`, pero si algún día una lo necesita, este lado
+           no puede quedarse leyendo el esquema del agente mientras el otro lee el del chat. */
+        schema: schemaParaElChat(defsByKey[s.key]),
         oculta: false,
         esCreada: false,
         /* La lista es fija: nada se mueve ni se saca. */

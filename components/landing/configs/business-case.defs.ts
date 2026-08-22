@@ -91,8 +91,19 @@ export interface BCSectionDef {
    * ⚠ Se declara solo lo que el chat puede escribir de verdad: los identificadores que resuelve la
    * app (`teamMemberId`, los `id` de las franjas) quedan afuera a propósito, así que pedirlos se
    * rechaza por construcción en vez de dejar que el modelo los invente.
+   *
+   * ⚠ Tiene la MISMA forma que `schema` (un JSON Schema completo, con `type` y `properties`), no
+   * un atajo con las propiedades sueltas: los dos son intercambiables por `schemaParaElChat`, así
+   * que una forma distinta rompería a quien los lee sin saber cuál le tocó.
    */
   schemaDelChat?: Record<string, unknown>;
+  /**
+   * El nombre con el que se habla de esta sección en el chat, cuando su rótulo no sirve.
+   *
+   * ⚠ Las portadas se rotulan con su titular («¡Arranquemos juntos!»), que es lo correcto en
+   * pantalla y pésimo para conversar. Ver `nombreParaElChat`.
+   */
+  chatLabel?: string;
 }
 
 const str = { type: "string" } as const;

@@ -39,6 +39,9 @@ import {
   KICKOFF_CTX_SECTIONS,
 } from "./kickoff-landing-adapter";
 import { applyAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
+import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
+import { useDirectorioDelEquipo } from "@/components/canvas/kickoff-sections/useDirectorioDelEquipo";
+import { newId } from "./kickoff-sections/types";
 
 const MAXW = 760;
 
@@ -55,7 +58,28 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
    * cliente seguiría viendo la sección. La operación se rechaza con su motivo hasta que los dos
    * mecanismos se unifiquen, que es tanda propia.
    */
-  useEjecutarOperacionesDelChat(k, KICKOFF_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["kickoff"]);
+  /**
+   * ⭐ Y las secciones CURADAS también se pueden tocar por chat, desde el 2026-08-22.
+   *
+   * Equipo y horarios llevan identificadores que el modelo no puede saber —el id de la persona en
+   * el directorio, el id que el motor le exige a cada franja— así que su esquema de chat no los
+   * declara y los pone la app. Un nombre que no resuelve se rechaza con la lista de quiénes hay,
+   * nunca con «el más parecido».
+   */
+  const directorio = useDirectorioDelEquipo();
+  const completadores = useMemo(
+    () => ({
+      equipo: completadorDeEquipo(directorio),
+      horarios: completadorDeHorarios(newId),
+    }),
+    [directorio],
+  );
+  useEjecutarOperacionesDelChat(
+    k,
+    KICKOFF_DEF_BY_KEY,
+    CAPACIDADES_POR_PIEZA["kickoff"],
+    completadores,
+  );
 
   const idByKey = useMemo(() => new Map(k.sections.map((s) => [s.key, s.id])), [k.sections]);
 

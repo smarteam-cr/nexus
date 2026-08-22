@@ -69,6 +69,9 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     pinned: true,
     noHide: true,
     sectionType: "hero",
+    /* Se rotula con su titular, que en pantalla es lo correcto y para conversar es pésimo:
+       el chip decía «kickoff Wherex». Ver `nombreParaElChat`. */
+    chatLabel: "Portada",
     agentGenerated: true,
     /* `brands` FUERA del schema del agente (como en todo el motor): los tres logos del
        co-branding. Los tokens `@client`/`@smarteam` se resuelven contra el ctx VIVO, así que

@@ -28,6 +28,8 @@ import {
   REGLAS_DURAS_DEL_DOCUMENTO,
   capacidadDeSeccion,
   catalogoParaElChat,
+  schemaParaElChat,
+  nombreParaElChat,
   firmaDeSeccion,
   operacionesParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
@@ -177,6 +179,15 @@ export interface ContextoDelAsistente {
    * ⚠ NO entra al prefijo. Se devuelve acá porque la consulta que arma el texto ya las trajo.
    */
   secciones?: SeccionActual[];
+  /**
+   * El equipo de Smarteam, cuando el documento tiene una sección que nombra personas (hoy: el
+   * kickoff).
+   *
+   * ⚠ Viaja por DOS motivos y los dos importan: entra al texto para que el modelo proponga nombres
+   * que existen, y se devuelve crudo para que el servidor arme el mismo completador que el editor
+   * — sin eso, el dry-run aceptaría «Juan» y el editor lo rechazaría al aplicar.
+   */
+  directorio?: { id: string; name: string; area?: string | null; roleEnum?: string | null; photoUrl?: string | null }[];
 }
 
 /**
@@ -456,15 +467,40 @@ export async function contextoDeDocumento(
         const def = defs[s.key];
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
            las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
-        const firma = firmaDeSeccion(def?.schema ?? {});
+        const firma = firmaDeSeccion(schemaParaElChat(def));
         const aviso = AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))];
-        const cabecera = `- ${s.label} (${s.key}) ${firma}${aviso ? ` — ${aviso}` : ""}`;
+        /* El MISMO nombre que el chip. Con dos, el modelo recibe dos rótulos para la sección de
+           la que se está hablando y el pedido de la persona no coincide con nada. */
+        const nombre = nombreParaElChat(def, s.label);
+        const alias = s.label.trim() && s.label.trim() !== nombre ? ` — en pantalla: «${s.label}»` : "";
+        const cabecera = `- ${nombre} (${s.key}) ${firma}${alias}${aviso ? ` — ${aviso}` : ""}`;
         if (s._count.blocks === 0) return `${cabecera} — VACÍA`;
         const contenido = recortarContenido(textoDeBloque(cardDe(s.blocks)?.data));
         return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
       },
     )
     .join("\n");
+
+  /**
+   * ⭐ EL EQUIPO, solo cuando este documento nombra personas.
+   *
+   * Elías pidió agregar y quitar gente del kickoff por su nombre. Sin la lista, el modelo propone
+   * nombres inventados y el completador los rechaza uno por uno — una conversación de tres turnos
+   * para agregar a alguien que estaba ahí. Con la lista, propone bien la primera vez.
+   *
+   * ⚠ Se pide SOLO si la pieza tiene una sección de equipo: son ~20 filas, pero es una consulta
+   * más en el camino caliente de cada turno, y en los otros nueve documentos no significa nada.
+   */
+  const necesitaDirectorio = canvas.canvasSections.some((s) => s.key === "equipo");
+  const directorio = necesitaDirectorio
+    ? await prisma.teamMember.findMany({
+        /* El MISMO filtro que `/api/team`, que es de donde el editor saca su lista: la baja es
+           blanda, así que quien se fue no tiene que poder entrar a un kickoff nuevo. */
+        where: { deactivatedAt: null },
+        select: { id: true, name: true, area: true, roleEnum: true, photoUrl: true },
+        orderBy: { name: "asc" },
+      })
+    : undefined;
 
   /* `project` es nullable en el schema porque un ProjectCanvas puede colgar de un BusinessCase.
      Acá filtramos por projectId, así que en la práctica está — pero se maneja igual: un `!` acá
@@ -484,6 +520,14 @@ export async function contextoDeDocumento(
     "entero al ejecutar, así que puedes pedir cambios sobre esa sección igual, pero no afirmes qué",
     "dice el final.",
     secciones || "(sin secciones)",
+    ...(directorio?.length
+      ? [
+          "",
+          "EQUIPO DE SMARTEAM (para la sección «equipo»): nombra a la persona TAL CUAL aparece acá.",
+          "La identidad y la foto las pone la app; tú solo das el nombre y, si quieres, el rol.",
+          directorio.map((p) => p.name).join(" · "),
+        ]
+      : []),
     "",
     /* ⛔ INTERPOLADAS, NO TRANSCRITAS. Hasta el 2026-08-22 acá había un párrafo escrito a mano que
        decía lo mismo que el prompt del chat — dos copias de la misma regla, y una de las dos ya
@@ -523,7 +567,7 @@ export async function contextoDeDocumento(
       key: s.key,
       label: s.label,
       data: card?.data ?? {},
-      schema: def?.schema ?? { type: "object", properties: {} },
+      schema: schemaParaElChat(def),
       /* El ojo no entra al contexto del modelo —no cambia lo que se puede pedir— pero el
          ejecutor lo necesita para no proponer ocultar algo que ya está oculto. */
       oculta: false,
@@ -534,7 +578,7 @@ export async function contextoDeDocumento(
     };
   });
 
-  return { texto, cierreActual: null, secciones: seccionesParaEjecutar };
+  return { texto, cierreActual: null, secciones: seccionesParaEjecutar, directorio };
 }
 
 function fmtFecha(d: Date): string {

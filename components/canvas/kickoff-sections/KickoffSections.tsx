@@ -25,6 +25,7 @@ import { type FC } from "react";
 import dynamic from "next/dynamic";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
+import { CardGrid } from "@/components/landing/card-grid";
 import { HeroUploadButtons, BrandRow, TagRow, HeroStat } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
@@ -124,41 +125,17 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
           onCommit={(v) => set({ intro: v })}
         />
       )}
-      <SortableItems
+      {/* El markup lo pone `CardGrid`, el mismo de los dolores de una propuesta: lo propio de esta
+          grilla son las dos columnas y que no lleva ícono. */}
+      <CardGrid
         items={items}
-        disabled={!editable}
-        onReorder={(next) => set({ items: next })}
-        container={(nodes) => <div className="stl-grid stl-grid-2">{nodes}</div>}
-      >
-        {(it, i, handle) => (
-          <div className="stl-item stl-card">
-            {handle}
-            {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} />}
-            {/* Titular corto arriba, explicación abajo. Las clases ya existían en
-                landing-engine.css y esta tarjeta era la única que no las usaba: sin ellas el
-                <h3> cae al reset y queda del mismo tamaño que el <p>. */}
-            <Editable
-              as="h3"
-              className="stl-card-title"
-              editable={editable}
-              value={it.title}
-              placeholder="Título corto…"
-              onCommit={(v) => set({ items: replaceAt(items, i, { ...it, title: v }) })}
-            />
-            <Editable
-              as="p"
-              className="stl-card-detail"
-              editable={editable}
-              value={it.detail ?? ""}
-              placeholder="Una línea que lo explique…"
-              onCommit={(v) => set({ items: replaceAt(items, i, { ...it, detail: v }) })}
-            />
-          </div>
-        )}
-      </SortableItems>
-      {editable && (
-        <AddBtn onClick={() => set({ items: appendItem(items, { title: "", detail: "" }) })} label="Agregar punto" />
-      )}
+        editable={editable}
+        onItems={(next) => set({ items: next })}
+        columnas={2}
+        addLabel="Agregar punto"
+        placeholderTitulo="Título corto…"
+        placeholderDetalle="Una línea que lo explique…"
+      />
       {d.compara && <ComparaBlock c={d.compara} />}
       {!editable && proseIsEmpty(d) && <p className="stl-prose" style={{ color: "var(--text-muted)" }}>—</p>}
     </div>

@@ -25,9 +25,11 @@ import {
   type CapacidadesDelDocumento,
   type OperacionDeDocumento,
   type SeccionActual,
+  type CompletadorDeItem,
 } from "@/lib/canvas/operaciones-de-documento";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
+import { schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import type { useCanvasSections } from "@/components/canvas/useCanvasSections";
 
 /** Lo mínimo de una def que el ejecutor necesita: el esquema y si tiene lugar fijo. */
@@ -35,6 +37,8 @@ export type DefsParaEjecutar = Record<
   string,
   {
     schema?: unknown;
+    /** La superficie que el CHAT puede tocar, cuando difiere de la del agente. */
+    schemaDelChat?: unknown;
     pinned?: boolean;
     empty?: unknown;
     /** Cómo se llama cada lista en pantalla: hace legible la línea del acuerdo. */
@@ -53,6 +57,14 @@ export function useEjecutarOperacionesDelChat(
   cs: ReturnType<typeof useCanvasSections>,
   defsByKey: DefsParaEjecutar,
   capacidades: CapacidadesDelDocumento,
+  /**
+   * Quién termina el ítem nuevo, por KEY de sección. Lo trae el workspace porque puede necesitar
+   * datos que solo el navegador tiene (el directorio del equipo, un generador de ids).
+   *
+   * ⚠ Se lee por ref, como todo lo demás: el aplicador se registra una vez y tiene que ver el
+   * directorio de AHORA, no el de cuando se montó.
+   */
+  completadores?: Record<string, CompletadorDeItem>,
 ) {
   /** Las secciones como las ve el ejecutor. Se recalcula cuando el documento cambia. */
   const secciones: SeccionActual[] = useMemo(
@@ -66,7 +78,9 @@ export function useEjecutarOperacionesDelChat(
           key: s.key,
           label: s.titleOverride?.trim() || s.label,
           data: card?.data ?? {},
-          schema: def?.schema ?? { type: "object", properties: {} },
+          /* ⛔ La MISMA función que usa el contexto del servidor. Si uno leyera `def.schema` y el
+             otro `schemaDelChat`, el chat acordaría un cambio que este editor rechaza. */
+          schema: schemaParaElChat(def),
           oculta: s.hidden === true,
           esCreada: esCustomKey(s.key),
           movible: !def?.pinned,
@@ -79,19 +93,19 @@ export function useEjecutarOperacionesDelChat(
   /* Por ref: el aplicador se registra una vez y tiene que ver SIEMPRE el documento de ahora, no el
      de cuando se montó. Sin esto, aplicar después de editar a mano escribiría sobre una foto
      vieja — y el `data` que se manda es el objeto entero de la sección. */
-  const vivo = useRef({ secciones, cs, capacidades });
+  const vivo = useRef({ secciones, cs, capacidades, completadores });
   useEffect(() => {
-    vivo.current = { secciones, cs, capacidades };
+    vivo.current = { secciones, cs, capacidades, completadores };
   });
 
   useRegistrarAplicadorDeDocumento(async (crudas): Promise<ResultadoDelAplicador> => {
-    const { secciones: secs, cs: hook, capacidades: caps } = vivo.current;
+    const { secciones: secs, cs: hook, capacidades: caps, completadores: comps } = vivo.current;
     const ops = crudas.filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     if (ops.length === 0) {
       return { avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
     }
 
-    const { plan, avisos, rechazadas } = aplicarOperacionesDeDocumento(secs, ops, caps);
+    const { plan, avisos, rechazadas } = aplicarOperacionesDeDocumento(secs, ops, caps, comps);
 
     /* ⚠ Las creaciones van PRIMERO y en serie: la key la genera el servidor, así que hasta que no
        vuelve no hay a quién escribirle. Lo demás va en el orden del plan. */

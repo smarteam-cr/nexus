@@ -37,6 +37,7 @@ import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } fro
 import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
+import { TARJETAS_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import {
   CATALOGO_DE_SECCIONES,
   TABLA_TYPE,
@@ -75,7 +76,11 @@ const LEGACY_SNAPSHOT_TYPES = new Set(["tech_architecture"]);
  *  queda código que nadie puede alcanzar; si el catálogo lo ofrece y no está registrado,
  *  `toSectionDef` devuelve null y la sección desaparece sin error. El test de abajo cierra las
  *  dos direcciones. */
-const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE, TABLA_TYPE]);
+/* ⚠ `TARJETAS_TYPE` entró el 2026-08-22: es la grilla de tarjetas CON ícono, el hermano de
+   `kickoff_prose`. Ninguna plantilla la declara —solo se alcanza creándola desde el chat o desde
+   «Agregar sección»— así que es huérfana por diseño, igual que la tabla. Comparte el esquema de
+   prosa a propósito: migrar entre con-ícono y sin-ícono no cuesta reescribir el contenido. */
+const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE, TABLA_TYPE, TARJETAS_TYPE]);
 
 describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
   it("cada sectionType de cada template tiene componente registrado", () => {

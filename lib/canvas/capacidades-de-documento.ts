@@ -276,6 +276,26 @@ export function schemaParaElChat(
   return def?.schemaDelChat ?? def?.schema ?? { type: "object", properties: {} };
 }
 
+/**
+ * ⭐ CÓMO SE LLAMA ESTA SECCIÓN CUANDO SE HABLA DE ELLA.
+ *
+ * ── EL PROBLEMA ─────────────────────────────────────────────────────────────────────────────
+ * Una sección tiene TRES nombres, y ninguno es el mismo: el rótulo de su def, el `titleOverride`
+ * que alguien le puso, y el título que se lee en el documento (que en una portada sale del propio
+ * contenido). El chip del chat usaba el override, así que sobre el kickoff de un cliente decía
+ * literalmente **«kickoff Wherex»** — mientras el contexto que lee el modelo la llamaba
+ * «Bienvenida y contexto». Dos nombres para la misma sección, en el mismo prompt.
+ *
+ * `chatLabel` es el nombre estable con el que la nombran las dos superficies. Para las portadas es
+ * «Portada»: es lo que una persona dice, y no cambia porque alguien renombre el documento.
+ */
+export function nombreParaElChat(
+  def: { chatLabel?: string; label?: string } | undefined,
+  respaldo: string,
+): string {
+  return def?.chatLabel?.trim() || def?.label?.trim() || respaldo;
+}
+
 /** Cuánto de UNA sección se le manda al modelo cuando la pide entera. */
 export const TOPE_DE_SECCION_COMPLETA_CHARS = 6_000;
 

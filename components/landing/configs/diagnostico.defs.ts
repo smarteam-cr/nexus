@@ -65,6 +65,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     pinned: true,
     noHide: true,
     sectionType: "hero",
+    /* Se rotula con su titular, que en pantalla es lo correcto y para conversar es pésimo:
+       el chip decía «kickoff Wherex». Ver `nombreParaElChat`. */
+    chatLabel: "Portada",
     agentGenerated: true,
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
     agentHint: "Portada del informe: el hallazgo principal en una frase + los hubs diagnosticados como chips.",

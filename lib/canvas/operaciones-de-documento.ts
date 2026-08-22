@@ -206,6 +206,21 @@ export interface SeccionActual {
   rotulosDeListas?: Record<string, string>;
 }
 
+/**
+ * ⭐ Termina un ítem que el chat no puede escribir entero, o explica por qué no se puede.
+ *
+ * Algunas listas llevan identificadores que el modelo no puede saber: el `teamMemberId` de una
+ * persona del directorio, el `id` que el motor le exige a una franja. El esquema del chat no los
+ * declara —declararlos sería invitar al modelo a inventarlos— así que los pone la app, acá, con la
+ * operación ya validada. Un nombre que no resuelve se RECHAZA con la lista de opciones: elegir «el
+ * más parecido» produce un documento con la persona equivocada.
+ */
+export type CompletadorDeItem = (
+  lista: string,
+  item: Record<string, unknown>,
+  dataActual: unknown,
+) => { ok: Record<string, unknown> } | { error: string };
+
 /** Qué sabe hacer ESTE documento. Ver el porqué en `puedeOcultar`. */
 export interface CapacidadesDelDocumento {
   /**
@@ -426,6 +441,9 @@ export function prepararOperacionesDeDocumento(
   actuales: readonly SeccionActual[],
   crudas: readonly unknown[],
   capacidades: CapacidadesDelDocumento,
+  /** ⚠ Los MISMOS que va a usar el editor: si el dry-run corriera sin ellos, aceptaría un ítem
+     que después se rechaza al aplicar — y al revés, rechazaría uno que sí se puede completar. */
+  completadores?: Record<string, CompletadorDeItem>,
 ): PreparacionDeOperaciones {
   const rechazadas: { operacion: unknown; motivo: string }[] = [];
   const validas: OperacionDeDocumento[] = [];
@@ -473,7 +491,7 @@ export function prepararOperacionesDeDocumento(
   /* ⚠ El dry-run corre sobre TODO el lote y en orden, no operación por operación: una que depende
      de otra —crear y llenar, agregar y después mover— tiene que ver el resultado de la anterior,
      igual que al aplicar de verdad. El `plan` se descarta: acá no se escribe nada. */
-  const seco = aplicarOperacionesDeDocumento(actuales, aceptadas, capacidades);
+  const seco = aplicarOperacionesDeDocumento(actuales, aceptadas, capacidades, completadores);
   if (seco.rechazadas.length === 0) return { aceptadas, rechazadas, diferidas };
 
   const caidas = new Set(seco.rechazadas.map((r) => r.operacion));
@@ -505,6 +523,8 @@ export function aplicarOperacionesDeDocumento(
   actuales: readonly SeccionActual[],
   operaciones: readonly OperacionDeDocumento[],
   capacidades: CapacidadesDelDocumento,
+  /** Por KEY de sección: quién termina el ítem nuevo. Ver `CompletadorDeItem`. */
+  completadores?: Record<string, CompletadorDeItem>,
 ): ResultadoDeDocumento {
   const avisos: string[] = [];
   const rechazadas: OperacionRechazada[] = [];
@@ -583,6 +603,17 @@ export function aplicarOperacionesDeDocumento(
           const armado: Record<string, unknown> = {};
           for (const k of permitidas) armado[k] = dados[k] ?? "";
           nuevo = armado;
+        }
+
+        /* ⚠ El completador va DESPUÉS de validar contra el esquema y ANTES de insertar: recibe un
+           ítem ya limpio y le agrega lo que el modelo no podía saber. Su rechazo es el que la
+           persona lee («Ana puede ser Ana Pérez o Ana Gómez: dime cuál»), así que viaja por el
+           mismo canal que los demás. */
+        const completar = completadores?.[o.key];
+        if (completar) {
+          const r = completar(o.lista, nuevo as Record<string, unknown>, s.data);
+          if ("error" in r) { rechazar(o, r.error); break; }
+          nuevo = r.ok;
         }
         const pos = o.posicion === undefined ? arr.length : Math.max(0, Math.min(arr.length, o.posicion));
         const next = arr.slice();

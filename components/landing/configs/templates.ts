@@ -12,8 +12,9 @@ import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { BC_TEMPLATES, templateById } from "./templates.defs";
 import { esCustomKey, HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
-import { customDef, TABLA_TYPE } from "@/lib/landing/catalogo-de-secciones";
+import { customDef, TABLA_TYPE, TARJETAS_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { TablaSection } from "../sections-tabla";
+import { TarjetasSection } from "../sections-tarjetas";
 import {
   KickoffProseSection,
   KickoffComparaSection,
@@ -85,6 +86,7 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
      business case se resuelve contra ESTE mapa (`configForSnapshot`). Sin ellos, una tabla creada
      en una propuesta se vería en el editor y desaparecería en la que abre el prospecto. */
   [TABLA_TYPE]: TablaSection,
+  [TARJETAS_TYPE]: TarjetasSection,
 };
 
 /** Convierte una def server-safe a SectionDef (con Component) usando un registro de
@@ -138,6 +140,7 @@ export const COMPONENTES_CREABLES: Record<string, FC<SectionProps<any>>> = {
      construyó para esto. Los demás (prosa, métricas, comparación, procesos, diagrama) ya viven en
      los mapas de sus documentos y se resuelven por ahí. */
   [TABLA_TYPE]: TablaSection,
+  [TARJETAS_TYPE]: TarjetasSection,
   kickoff_prose: KickoffProseSection,
   kickoff_compara: KickoffComparaSection,
   roi: RoiSection,
