@@ -211,6 +211,18 @@
 }
 .stl .stl-drag-handle:active { cursor: grabbing; }
 
+/* Píldora «Cambiar con el asistente» — misma familia del chrome, en azul de marca porque es la
+   única acción del overlay que ABRE algo en vez de cambiarlo en el acto. Reemplazó al cuadrito
+   que reescribía la sección al instante: ahora todo pedido pasa por la lista con casillas. */
+.stl .stl-chat-seccion {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 999px; cursor: pointer;
+  font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
+  border: 1px solid rgba(0, 0, 0, 0.12); background: rgba(255, 255, 255, 0.92);
+  color: #0B58D3; backdrop-filter: blur(4px); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.stl .stl-chat-seccion:hover { background: #fff; border-color: rgba(11, 88, 211, 0.45); }
+
 /* Contenedor de las secciones `ctxDriven` en EDICIÓN (cronograma / procesos): solo aporta
    el ancla del overlay. El cliente las ve sin este wrapper (mismo DOM que antes). */
 .stl .stl-ctx-sec { position: relative; }
@@ -2042,6 +2054,7 @@
 .stl-pdf-mode .stl-sec.hero-backdrop { padding: 44px 0 !important; }
 .stl-pdf-mode .stl-overlay,
 .stl-pdf-mode .stl-drag-handle,
+.stl-pdf-mode .stl-chat-seccion { display: none !important; }
 .stl-pdf-mode .stl-hidden-badge {
   display: none !important; /* cinturón y tiradores: mode="read" ya no los renderiza */
 }

@@ -64,8 +64,8 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ En uso · **18 operaciones** (2026-08-21) |
 | 3 | **El chat de documentos** | Conversa, acuerda y aplica sobre los 6 documentos | ✅ 2026-08-21 |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
-| 3.4 | **Emparejar el motor** | Antes del chat: que ocultar, crear y borrar una sección existan en los OCHO documentos, no en dos. Un chat uniforme sobre un motor desparejo no se puede construir | 🟡 en curso — 3 de 4 piezas |
-| 3.5 | **El chat sobre la Propuesta comercial** | Hoy la propuesta (incluida la de sitio web) ya se modifica con IA por el mismo motor, pero sin conversarlo antes. Falta montarle el panel | ⬜ |
+| 3.4 | **El chat edita el motor de páginas web** | Crear, modificar, ocultar, mover y borrar secciones por chat — igual en los ocho documentos, con el mismo consenso del cronograma | ✅ 7 commits · falta la Propuesta comercial |
+| 3.5 | **El chat sobre la Propuesta comercial** | Es el documento que originó la conversación. ⚠ Su hilo no cuelga de un proyecto: necesita migración | ⬜ |
 | 3.6 | **Exploración entra al assist** | Arreglar el borrado silencioso de las marcas «ya la pregunté» — y de paso arregla el que YA ocurre al regenerar | ⬜ |
 | 3.7 | **El handoff se puede conversar** | El único con otro motor: hay que decidir si se le tipan las secciones o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen. Hoy el motor solo MODIFICA lo que ya está | ⬜ |
@@ -108,22 +108,29 @@ secciones, o darle un assist de texto libre, que es otro diseño.
 ya existen —de los 20 tipos registrados: fichas, tablas de inversión, texto, diagramas— pero el
 contrato se arma iterando lo que ya está en la base. Eso es la etapa 5.
 
-### 🟡 Etapa 3.4 — «que sea igual en todas las áreas» *(2026-08-21, en curso)*
+### ✅ Etapa 3.4 — «que sea igual en todas las áreas» *(2026-08-21/22)*
 
 Pedido de Elías, textual: *«que modificar el motor de páginas web o de sitios web de Nexus sea
 igual en todas las áreas utilizando el chat»*. Al medirlo apareció que **ningún documento tenía
 las cinco capacidades** — y un chat uniforme sobre un motor desparejo no se puede construir: la
 operación «ocultá esa sección» sería correcta en Entrega y muda en Diagnóstico.
 
-| Pieza | Qué destraba | Estado |
-|---|---|---|
-| Una sección creada a mano deja de caerse del render | Los 6 documentos de proyecto podían tener secciones propias y se caían **sin error** — se veían en el editor y faltaban en el PDF ya enviado | ✅ `1ea99d3` |
-| Ocultar pasa de 2 documentos a 6 | Y de paso tapó un agujero real: la vista del desarrollador no filtraba lo oculto, así que encender el ojo ahí habría hecho que el CSE apague una sección y el dev la siga viendo | ✅ `2a8e40d` |
-| Crear y borrar sección en documentos de proyecto | Existía solo en la Propuesta comercial | ✅ |
-| El botón ✨ de cada sección, en los 8 | Hoy está en 2 | ⬜ |
+| # | Pieza | Qué destraba | Estado |
+|---|---|---|---|
+| 0 | Una sección creada a mano deja de caerse del render | Los 6 documentos de proyecto podían tener secciones propias y se caían **sin error** — se veían en el editor y faltaban en el PDF ya enviado | ✅ |
+| 0 | Ocultar pasa de 2 documentos a 6 | Y tapó un agujero real: la vista del desarrollador no filtraba lo oculto, así que encender el ojo ahí habría hecho que el CSE apague una sección y el dev la siga viendo | ✅ |
+| 0 | Crear y borrar sección en documentos de proyecto | Existía solo en la Propuesta comercial | ✅ |
+| 1-2 | **El catálogo de tipos creables, y la tabla** | Se pueden crear textos, tarjetas, métricas, comparaciones, procesos, diagramas y **tablas**. La tabla hubo que construirla: las dos que había son de propósito único | ✅ |
+| 3 | **El vocabulario de operaciones** | Un documento se edita con operaciones, no reescribiéndolo. Y eso destraba Exploración por construcción | ✅ |
+| 4 | **De qué es capaz** | Y de paso se retiró una afirmación FALSA que el sistema le hacía al CSE por escrito | ✅ |
+| 5 | **El chat consensúa igual que el del cronograma** | Casillas, contador, botón único vivo y acumulación entre turnos — heredados, no construidos | ✅ |
+| 6 | **El botón de cada sección abre el chat** | Estaba en 2 de 8 y escribía al instante sin vista previa. Ahora está en los 8 y todo pasa por la lista con casillas | ✅ |
+| 7 | El chat en la Propuesta comercial | Es el documento que originó la conversación. ⚠ Necesita migración: su hilo no cuelga de un proyecto | ⬜ |
 
-⭐ **El hallazgo que abarató todo**: una sola función (`buildLandingConfigFromOrder`) sirve al
-editor, a la vista del cliente y al PDF de los seis documentos. Arreglarla ahí cubre 6 × 3.
+⭐ **Los dos hallazgos que abarataron todo**: una sola función (`buildLandingConfigFromOrder`) sirve
+al editor, a la vista del cliente y al PDF de los seis documentos —arreglarla ahí cubre 6 × 3—; y el
+panel del chat no tiene ni una rama por pieza, así que al emitir operaciones los documentos
+heredaron la maquinaria de consenso entera sin tocarlo.
 
 ### Etapa 2, tramo por tramo
 

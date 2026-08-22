@@ -31,6 +31,7 @@
  * 4. ⛔ Y el acuerdo quedaba con su botón para siempre, indistinguible de «nunca se intentó».
  *    Ahora el desenlace se ESCRIBE en el hilo y el botón vive solo en el último turno.
  */
+import { lineaDeAlcance, useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
@@ -135,6 +136,7 @@ export default function ChatDelAsistente({
   const [desmarcadas, setDesmarcadas] = useState<Record<string, Set<number>>>({});
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
+  const { seccion: seccionReferida, soltar: soltarSeccion } = useChatDeSeccion();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   /** Alto máximo del composer antes de scrollear adentro — ~10 líneas, para no comerse la caja de mensajes. */
   const ALTO_MAXIMO_COMPOSER = 200;
@@ -258,10 +260,13 @@ export default function ChatDelAsistente({
        los ~4 s que tarda el modelo. El servidor devuelve el hilo REAL y lo reemplaza. */
     setTurnos((t) => [...t, { id: `optimista-${t.length}`, rol: "CSE", texto: mensaje, acuerdo: null }]);
     try {
+      /* ⭐ El alcance viaja EN EL TEXTO del turno, no en un campo aparte: el hilo se re-manda
+         entero al modelo, así que lo que solo vive en React deja de existir en el turno 2. Es el
+         mismo mecanismo que el bloque de pendientes. */
       const r = await fetch(`/api/projects/${projectId}/asistente`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pieza, mensaje }),
+        body: JSON.stringify({ pieza, mensaje: `${lineaDeAlcance(seccionReferida)}${mensaje}` }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? "el asistente no pudo contestar");
@@ -826,6 +831,25 @@ export default function ChatDelAsistente({
       </div>
 
       <div className="px-3 py-3 border-t border-line shrink-0">
+        {/* ⭐ El alcance, visible y revocable. Se queda después de enviar —encadenar dos ajustes
+            sobre la misma sección es el caso normal— y otro botón «Cambiar» lo reemplaza en vez de
+            abrir otro hilo: el alcance es por MENSAJE, no por conversación. */}
+        {seccionReferida && (
+          <div className="mb-2 flex items-center gap-1.5 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
+              Sobre «{seccionReferida.label}»
+              <button
+                type="button"
+                onClick={soltarSeccion}
+                aria-label="Dejar de hablar solo de esta sección"
+                title="Dejar de hablar solo de esta sección"
+                className="text-info-ink/70 hover:text-info-ink"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+        )}
         <textarea
           ref={composerRef}
           value={texto}

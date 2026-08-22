@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
@@ -12,7 +11,21 @@ import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/u
  *  Kickoff pasa `KICKOFF_DEF_BY_KEY`. Así el mismo overlay sirve a los dos canvas. */
 export type SectionToolsDefs = Record<string, { empty?: unknown; agentGenerated?: boolean } | undefined>;
 
-// ── Controles por sección (overlay): IA + limpiar. (Ocultar y mover los pinta el motor.) ──
+/**
+ * ── Controles por sección (overlay): limpiar y borrar. ─────────────────────
+ *
+ * ⚠ ACÁ ESTABA LA PÍLDORA ✨IA, y se retiró el 2026-08-22 por pedido de Elías: *«que en cada
+ * sección el botón de modificar con IA lo que haga sea abrir el chat con la sección
+ * referenciada»*. Lo que hacía era abrir un cuadrito de 280px, pedir una instrucción y **escribir
+ * la sección al instante, sin vista previa**, con un motor distinto del que usa el resto.
+ *
+ * Su reemplazo vive en el chrome del propio motor (`stl-chat-seccion` en `LandingView`), así que
+ * está en los OCHO documentos y no en dos, y todo pedido de cambio pasa por la misma lista
+ * numerada con casillas antes de escribirse.
+ *
+ * Lo que se queda acá son los dos gestos DETERMINÍSTICOS: vaciar y borrar. Rutearlos por un modelo
+ * para terminar escribiendo un objeto vacío sería absurdo.
+ */
 export default function SectionTools({
   section,
   hook,
@@ -29,9 +42,6 @@ export default function SectionTools({
   defsByKey?: SectionToolsDefs;
 }) {
   const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const [instr, setInstr] = useState("");
-  const [busy, setBusy] = useState(false);
   const defs: SectionToolsDefs = defsByKey ?? templateDefsByKey(templateId);
   // El bloque TIPADO de la sección. El kickoff puede tener bloques TEXT legacy
   // delante del CARD → preferir siempre el CARD.
@@ -45,25 +55,6 @@ export default function SectionTools({
      una sección que el server rechaza), y "Limpiar" escribiría `{}` en vez del `empty`
      real — dejando la sección con un shape que el componente no espera. */
   const def = defs[section.key] ?? (esCustomKey(section.key) ? customDef(section.key, section.label) : undefined);
-  // Secciones determinísticas (agentGenerated:false, p.ej. casos_de_uso, equipo,
-  // personalizadas): sin ✨ IA (el server igual devuelve 400) — se editan a mano.
-  const aiAllowed = def?.agentGenerated !== false;
-
-  const regen = async () => {
-    if (!instr.trim() || busy) return;
-    setBusy(true);
-    try {
-      const r = await hook.regenerateBlock(section.id, block.id, instr.trim());
-      if (r) {
-        await hook.saveBlock(section.id, block.id, { data: r.data });
-        toast.success("Sección reescrita por IA.");
-        setInstr("");
-        setOpen(false);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
 
   // Borrar la sección personalizada. Sin undo (la fila desaparece, no hay `previousData`
   // que restaurar), así que la confirmación explícita ES el mecanismo de seguridad.
@@ -98,11 +89,6 @@ export default function SectionTools({
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "flex-end" }}>
       <div style={{ display: "flex", gap: 6 }}>
-        {aiAllowed && (
-          <button style={{ ...pill, color: "#0B58D3" }} onClick={() => setOpen((o) => !o)} title="Editar con IA" aria-label="Editar esta sección con IA" aria-expanded={open}>
-            ✨ IA
-          </button>
-        )}
         <button style={{ ...pill, color: "#b91c1c" }} onClick={clear} title="Vaciar el contenido de esta sección" aria-label="Vaciar el contenido de esta sección">
           🗑 Limpiar
         </button>
@@ -120,20 +106,6 @@ export default function SectionTools({
           </button>
         )}
       </div>
-      {open && (
-        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, display: "flex", gap: 6, background: "#fff", border: "1px solid rgba(15,23,42,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px -8px rgba(15,23,42,0.35)", width: 280, zIndex: 10 }}>
-          <input
-            value={instr}
-            onChange={(e) => setInstr(e.target.value)}
-            placeholder="Ej. más concreto y orientado a ventas"
-            onKeyDown={(e) => { if (e.key === "Enter") regen(); }}
-            style={{ flex: 1, fontSize: 12, padding: "6px 8px", border: "1px solid #E5E7EB", borderRadius: 7, color: "#0f172a", outline: "none" }}
-          />
-          <button onClick={regen} disabled={busy || !instr.trim()} style={{ ...pill, color: "#fff", background: "#0B58D3", borderColor: "#0B58D3", opacity: busy || !instr.trim() ? 0.5 : 1 }}>
-            {busy ? "…" : "Aplicar"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

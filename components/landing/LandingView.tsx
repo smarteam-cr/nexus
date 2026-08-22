@@ -17,6 +17,7 @@
  * Reusa los motion hooks del kickoff (useReveal / useHeroParallax) buscando
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
+import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
 import {
@@ -153,6 +154,29 @@ type DragHandleProps = Record<string, unknown> | null;
 
 /** Wrapper sortable de una sección (drag & drop). Hook incondicional adentro →
  *  solo se monta cuando el D&D está activo (modo edición con onReorder). */
+/**
+ * Píldora «Cambiar con el asistente» del chrome de una sección.
+ *
+ * Reemplaza al cuadrito que reescribía al instante: ese pedía una instrucción y la escribía sin
+ * vista previa, con otro motor y sin conversación. Ahora todo pedido de cambio pasa por la misma
+ * lista numerada con casillas, en los ocho documentos.
+ */
+function ChatDeSeccionBtn({ seccionKey, label }: { seccionKey: string; label: string }) {
+  const { disponible, abrirCon } = useChatDeSeccion();
+  if (!disponible) return null;
+  return (
+    <button
+      type="button"
+      className="stl-chat-seccion"
+      title={`Hablar con el asistente sobre «${label}»`}
+      aria-label={`Hablar con el asistente sobre la sección ${label}`}
+      onClick={() => abrirCon({ key: seccionKey, label })}
+    >
+      💬 Cambiar
+    </button>
+  );
+}
+
 function SortableSection({
   id,
   children,
@@ -359,7 +383,12 @@ export default function LandingView({
     const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
       <div className="stl-overlay" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {hidden && <span className="stl-hidden-badge">No visible para el cliente</span>}
-        {!collapsed && renderOverlay?.(def.key)}
+        {/* ⭐ El botón de conversar sobre ESTA sección. Va FUERA del `!collapsed` a propósito: una
+        sección oculta se colapsa, y «está apagada, ¿la reescribo y la muestro?» es una
+        conversación legítima — la única del chrome para la que eso tiene sentido.
+        ⛔ Sin proveedor no se pinta: la vista del cliente y el PDF montan este mismo motor. */}
+    <ChatDeSeccionBtn seccionKey={def.key} label={effTitle} />
+    {!collapsed && renderOverlay?.(def.key)}
         {hidden && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
         {onToggleHidden && !def.noHide && (
           <HideToggle hidden={hidden} label={effTitle} onToggle={() => setHidden(def.key, !hidden)} />

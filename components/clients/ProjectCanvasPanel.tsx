@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -547,6 +548,13 @@ export default function ProjectCanvasPanel({
     {/* Envuelve los workspaces Y el cajón: el chat necesita alcanzar el aplicador de la pieza
         activa, que se monta más adentro. */}
     <AplicadorDeDocumentoProvider>
+    {/* El botón «Cambiar» de cada sección vive adentro del motor y pide el chat por acá. Los
+        ocho documentos lo heredan sin tocar ninguno — y la vista del cliente y el PDF, que montan
+        el mismo motor, no lo pintan porque no tienen proveedor. */}
+    <ChatDeSeccionProvider
+      disponible={!!activeSlug && puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? ""))}
+      onAbrir={() => setChatAbierto(true)}
+    >
     <div className="px-6 py-8 space-y-6">
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
           del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}
@@ -1179,6 +1187,7 @@ export default function ProjectCanvasPanel({
         />
       )}
     </div>
+    </ChatDeSeccionProvider>
     </AplicadorDeDocumentoProvider>
     </PrintStagingProvider>
   );
