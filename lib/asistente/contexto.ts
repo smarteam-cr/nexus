@@ -31,8 +31,12 @@ import {
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
 import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
+import { defsForCanvas } from "@/components/landing/configs/templates.defs";
+import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
+import type { Dueno } from "./hilo";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { prisma } from "@/lib/db/prisma";
+import { sectionDefsForDocType } from "@/lib/roles/doc-type";
 import {
   ADVERTENCIAS_DEL_CRONOGRAMA,
   REGLAS_DURAS_DEL_CRONOGRAMA,
@@ -98,6 +102,14 @@ export const TOPE_POR_SECCION_CHARS = 1_000;
  * ⛔ Solo strings: un volcado del Json crudo metería ids, flags y claves internas al prompt —
  * ruido que el modelo puede citarle al CSE como si fuera contenido del documento.
  */
+/** El recorte POR SECCIÓN, compartido por los dos armadores de contexto de documento. */
+function recortarContenido(crudo: string): string {
+  if (!crudo) return "";
+  return crudo.length > TOPE_POR_SECCION_CHARS
+    ? `${crudo.slice(0, TOPE_POR_SECCION_CHARS)}… (recortado — el editor sí lo lee entero)`
+    : crudo;
+}
+
 function textoDeBloque(data: unknown, profundidad = 0): string {
   if (profundidad > 4) return "";
   if (typeof data === "string") return data.trim();
@@ -341,13 +353,28 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
  * en dos párrafos»: los necesita el assist del documento, que ya los carga.
  */
 export async function contextoDeDocumento(
-  projectId: string,
+  dueno: Dueno,
   pieza: string,
 ): Promise<ContextoDelAsistente> {
+  /**
+   * ⚠ El canvas se busca por el DUEÑO, no siempre por proyecto.
+   *
+   * La propuesta comercial cuelga de un `BusinessCase` y además está VERSIONADA: cada «Generar»
+   * crea un canvas nuevo y `isActive` marca el vivo. Buscar sin ese filtro traería una versión
+   * anterior — se conversaría sobre un documento que ya nadie edita, y las operaciones caerían
+   * sobre secciones que en la versión viva tienen otro id.
+   */
   const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, ...canvasOf(pieza) },
+    where:
+      "projectId" in dueno
+        ? { projectId: dueno.projectId, ...canvasOf(pieza) }
+        : { businessCaseId: (dueno as { businessCaseId: string }).businessCaseId, isActive: true },
     select: {
       name: true,
+      businessCaseId: true,
+      /* La plantilla resuelve las defs de la propuesta comercial: sus secciones no salen de un
+         registro fijo sino del TIPO DE CASO (HubSpot, sitio web…), que vive en el business case. */
+      businessCase: { select: { id: true, caseType: true, caseSubtype: true } },
       project: { select: { name: true, client: { select: { name: true } } } },
       /* ⚠ `canvasSections` es la RELACIÓN; `sections` es un Json con los briefs por sección
          (lib/business-cases/section-briefs.ts). Pedir el Json acá devuelve otra cosa, y el
@@ -388,16 +415,8 @@ export async function contextoDeDocumento(
    * se encuentra con una sección invisible— y solo se recorta la que de verdad es larga. Con la
    * mediana por sección en 267 caracteres, en la mayoría no se recorta nada.
    */
-  const renderDeContenido = (bloques: { data: unknown }[]): string => {
-    const crudo = bloques
-      .map((b) => textoDeBloque(b.data))
-      .filter(Boolean)
-      .join(" · ");
-    if (!crudo) return "";
-    return crudo.length > TOPE_POR_SECCION_CHARS
-      ? `${crudo.slice(0, TOPE_POR_SECCION_CHARS)}… (recortado — el editor sí lo lee entero)`
-      : crudo;
-  };
+  const renderDeContenido = (bloques: { data: unknown }[]): string =>
+    recortarContenido(bloques.map((b) => textoDeBloque(b.data)).filter(Boolean).join(" · "));
 
   const secciones = canvas.canvasSections
     .map((s: { key: string; label: string; _count: { blocks: number }; blocks: { data: unknown }[] }) => {
@@ -414,7 +433,9 @@ export async function contextoDeDocumento(
      sería una promesa sobre una consulta que alguien puede cambiar después. */
   const identidad = canvas.project
     ? `PROYECTO: ${canvas.project.name} — cliente ${canvas.project.client.name}`
-    : "PROYECTO: (sin identificar)";
+    : canvas.businessCaseId
+      ? "DOCUMENTO DE VENTAS: una propuesta comercial"
+      : "PROYECTO: (sin identificar)";
 
   const texto = [
     identidad,
@@ -456,7 +477,13 @@ export async function contextoDeDocumento(
      (ver `lib/asistente/piezas.ts`). Sin este respaldo sus secciones llegarían sin esquema, y una
      operación sobre ellas se rechazaría con «no es un campo de esa sección» — sobre campos que sí
      existen. */
-  const defs = DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {});
+  /* ⚠ NO sale solo de `DOC`: ése es el registro del ASSIST. Exploración conversa sin estar ahí
+     (ver `lib/asistente/piezas.ts`), y la propuesta comercial resuelve sus defs por PLANTILLA.
+     Sin esto sus secciones llegarían sin esquema, y una operación se rechazaría con «no es un
+     campo de esa sección» sobre campos que sí existen. */
+  const defs = canvas.businessCase
+    ? defsForCanvas(resolveCaseTypeFor(canvas.businessCase).templateId, canvas.canvasSections)
+    : (DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {}));
   const seccionesParaEjecutar: SeccionActual[] = canvas.canvasSections.map((s) => {
     const def = defs[s.key];
     const card = s.blocks[0];
@@ -479,4 +506,89 @@ export async function contextoDeDocumento(
 
 function fmtFecha(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * ⭐ EL CONTEXTO DE UN DOCUMENTO DE ROLES — perfil de puesto o propuesta laboral.
+ *
+ * ── POR QUÉ ES UNA FUNCIÓN APARTE ────────────────────────────────────────────
+ * Roles reusa el motor de PRESENTACIÓN del resto (LandingView, las mismas primitivas de edición)
+ * pero NO su motor de datos: su contenido vive en `RoleProfile.content`, un Json por sección, y no
+ * en filas de `CanvasSection` con bloques. Es una decisión escrita en `docs/DECISIONS.md`, no un
+ * accidente. Forzarlo por el mismo camino habría significado inventarle un canvas que no tiene.
+ *
+ * Lo que sí es idéntico es todo lo demás: las mismas operaciones, las mismas líneas en castellano,
+ * la misma cajita con casillas. La forma del contexto que devuelve es la misma — por eso el turno
+ * no se entera de cuál de las dos leyó.
+ *
+ * ⚠ La KEY de la sección hace de id: en Roles no hay `CanvasSection.id`. El ejecutor de este
+ * documento escribe por key contra `content`, así que es la identidad correcta acá.
+ */
+export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistente> {
+  const rol = await prisma.roleProfile.findUnique({
+    where: { id: roleId },
+    select: { title: true, area: true, summary: true, docType: true, content: true },
+  });
+  if (!rol) return { texto: "Ese documento ya no existe.", cierreActual: null };
+
+  const contenido = (rol.content ?? {}) as Record<string, unknown>;
+  /* ⚠ LA PORTADA NO VIVE EN `content`. Su título, área y resumen son COLUMNAS de la fila, y el
+     motor las junta al pintar. Leyéndola de `content` el chat la vería vacía y —peor— al cambiar
+     un campo escribiría `{title}` solo, borrando los otros dos: pérdida de datos silenciosa sobre
+     el encabezado del documento. */
+  const datosDe = (key: string): unknown =>
+    key === "hero"
+      ? { title: rol.title, area: rol.area ?? "", summary: rol.summary ?? "" }
+      : (contenido[key] ?? {});
+  /* ⛔ Las secciones salen de `sectionDefsForDocType`, NUNCA de `ROLE_SECTIONS`: ésas son las del
+     PERFIL, y una propuesta laboral tiene otras keys. Con la lista fija del perfil, el chat sobre
+     una propuesta habría visto siete secciones VACÍAS —las del otro documento— y habría rechazado
+     cada operación sobre las que sí existen con «no es una sección de este documento». El mapa es
+     `Record<RoleDocTypeValue, …>`, así que un tercer tipo de documento no compila hasta declararlo. */
+  const secciones: SeccionActual[] = sectionDefsForDocType(rol.docType).map((def) => {
+    const k = def.key;
+    return {
+      id: k,
+      key: k,
+      label: def.label ?? k,
+      data: datosDe(k),
+      schema: def.schema ?? { type: "object", properties: {} },
+      oculta: false,
+      esCreada: false,
+      /* ⛔ La lista de secciones de un rol es FIJA: no se crean, no se borran y no se reordenan.
+         El motor las arma siempre desde la plantilla del tipo, completa. */
+      movible: false,
+    };
+  });
+
+  const renglones = secciones.map((s) => {
+    const texto = textoDeBloque(s.data, 0);
+    if (!texto.trim()) return `- ${s.label} (${s.key}) — VACÍA`;
+    return `- ${s.label} (${s.key}):\n    ${recortarContenido(texto)}`;
+  });
+
+  const texto = [
+    `DOCUMENTO: ${rol.docType === "PROPUESTA" ? "propuesta laboral" : "perfil de puesto"} — ${rol.title}`,
+    rol.area ? `ÁREA: ${rol.area}` : "",
+    rol.summary ? `RESUMEN: ${rol.summary}` : "",
+    "",
+    "SECCIONES, con su contenido. Entre paréntesis va la KEY: nómbrala en las operaciones.",
+    renglones.join("\n") || "(sin secciones)",
+    "",
+    "REGLAS DEL EDITOR (lo que va a pasar cuando se ejecute cada operación):",
+    REGLAS_DURAS_DEL_DOCUMENTO,
+    "",
+    "OPERACIONES QUE EXISTEN — es una lista CERRADA:",
+    operacionesParaElChat(),
+    "",
+    "⛔ EN ESTE DOCUMENTO las secciones son FIJAS: no se crean, no se borran, no se ocultan y no",
+    "se mueven. Solo se cambia su contenido. Si te piden otra cosa, dilo.",
+    "",
+    "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",
+    ADVERTENCIAS_DEL_DOCUMENTO.map((a) => `- ${a.aviso}`).join("\n"),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { texto, cierreActual: null, secciones };
 }

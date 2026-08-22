@@ -92,7 +92,19 @@ export interface ResultadoDeAplicar {
 }
 
 interface Props {
-  projectId: string;
+  /**
+   * ⭐ La BASE de la API del dueño del documento, no un projectId.
+   *
+   * El chat nació sobre documentos de proyecto, así que recibía un `projectId` y armaba la ruta
+   * adentro. La propuesta comercial y los documentos de Roles usan el mismo motor de páginas y la
+   * misma maquinaria de consenso, pero no cuelgan de un proyecto: con la ruta cableada acá, la
+   * única salida habría sido un segundo componente igual apuntando a otro lado.
+   *
+   * Es el mismo idioma que `useCanvasSections` ya usa para servir a los dos mundos: la base la
+   * arma quien monta (`/api/projects/<id>` · `/api/business-cases/<id>` · `/api/roles/<id>`) y
+   * acá solo se le cuelga `/asistente`.
+   */
+  base: string;
   /** El slug de la pieza sobre la que se conversa. */
   pieza: string;
   /** Rótulo visible del documento, para el encabezado. */
@@ -121,7 +133,7 @@ export const ID_DEL_CAJON = "cajon-del-asistente";
 const EMPTY: ReadonlySet<number> = new Set<number>();
 
 export default function ChatDelAsistente({
-  projectId,
+  base,
   pieza,
   piezaLabel,
   abierto,
@@ -184,7 +196,7 @@ export default function ChatDelAsistente({
     setError(null);
     try {
       const r = await fetch(
-        `/api/projects/${projectId}/asistente?pieza=${encodeURIComponent(pieza)}`,
+        `${base}/asistente?pieza=${encodeURIComponent(pieza)}`,
       );
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "no se pudo cargar");
       const j = await r.json();
@@ -194,7 +206,7 @@ export default function ChatDelAsistente({
     } finally {
       setCargando(false);
     }
-  }, [projectId, pieza]);
+  }, [base, pieza]);
 
   useEffect(() => {
     if (abierto) void cargar();
@@ -276,7 +288,7 @@ export default function ChatDelAsistente({
       /* ⭐ El alcance viaja EN EL TEXTO del turno, no en un campo aparte: el hilo se re-manda
          entero al modelo, así que lo que solo vive en React deja de existir en el turno 2. Es el
          mismo mecanismo que el bloque de pendientes. */
-      const r = await fetch(`/api/projects/${projectId}/asistente`, {
+      const r = await fetch(`${base}/asistente`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pieza, mensaje: `${lineaDeAlcance(seccionReferida)}${mensaje}` }),
@@ -298,7 +310,7 @@ export default function ChatDelAsistente({
     setPensando(true);
     setError(null);
     try {
-      const r = await fetch(`/api/projects/${projectId}/asistente`, {
+      const r = await fetch(`${base}/asistente`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pieza, empezarDeCero: true }),
@@ -378,7 +390,7 @@ export default function ChatDelAsistente({
     !!acuerdo.operaciones && operacionesAceptadas(turnoId, acuerdo).length === 0;
 
   async function anotarDesenlace(ok: boolean, detalle: string, vistaPrevia = true) {
-    const r = await fetch(`/api/projects/${projectId}/asistente`, {
+    const r = await fetch(`${base}/asistente`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia } }),

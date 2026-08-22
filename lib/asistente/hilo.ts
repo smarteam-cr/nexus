@@ -35,8 +35,33 @@ import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import type { RolDeMensaje } from "@prisma/client";
 
+/**
+ * ⭐ DE QUÉ CUELGA EL HILO. Exactamente uno.
+ *
+ * El chat nació sobre documentos de PROYECTO. La propuesta comercial y los documentos de Roles
+ * usan el MISMO motor de páginas y la misma maquinaria de consenso, pero su documento no cuelga de
+ * un proyecto — así que o el hilo aprendía a colgar de otra cosa, o había que inventar una segunda
+ * tabla para exactamente lo mismo. Es el patrón que `ProjectCanvas` ya usa.
+ *
+ * ⚠ El tipo lo hace CERRADO: `Dueno` es una unión de tres formas con una sola clave cada una, así
+ * que «ninguno» y «dos a la vez» son errores de compilación, no algo que validar en runtime.
+ */
+export type Dueno =
+  | { projectId: string }
+  | { businessCaseId: string }
+  | { roleId: string };
+
+/** El `where` de Prisma para ese dueño, con los otros dos en null. */
+export function whereDelDueno(d: Dueno) {
+  return {
+    projectId: "projectId" in d ? d.projectId : null,
+    businessCaseId: "businessCaseId" in d ? d.businessCaseId : null,
+    roleId: "roleId" in d ? d.roleId : null,
+  };
+}
+
 export interface PedidoDeHilo {
-  projectId: string;
+  dueno: Dueno;
   /** El slug de la pieza (`lib/pieces/registry.ts`), nunca el nombre visible del canvas. */
   pieza: string;
   usuarioEmail: string;
@@ -53,7 +78,10 @@ export interface TurnoDelHilo {
 
 export interface HiloConTurnos {
   id: string;
-  projectId: string;
+  /** ⚠ Nullable: un hilo puede colgar de un business case o de un rol. Ver `Dueno`. */
+  projectId: string | null;
+  businessCaseId: string | null;
+  roleId: string | null;
   pieza: string;
   usuarioEmail: string;
   modelo: string;
@@ -105,7 +133,7 @@ export async function hiloVivo(
 ): Promise<HiloConTurnos | null> {
   const hilo = await prisma.hiloDeChat.findFirst({
     where: {
-      projectId: pedido.projectId,
+      ...whereDelDueno(pedido.dueno),
       pieza: pedido.pieza,
       usuarioEmail: pedido.usuarioEmail,
     },
@@ -133,7 +161,7 @@ export async function abrirHilo(pedido: PedidoDeHilo): Promise<HiloConTurnos> {
 export async function empezarDeCero(pedido: PedidoDeHilo): Promise<HiloConTurnos> {
   const hilo = await prisma.hiloDeChat.create({
     data: {
-      projectId: pedido.projectId,
+      ...whereDelDueno(pedido.dueno),
       pieza: pedido.pieza,
       usuarioEmail: pedido.usuarioEmail,
       modelo: pedido.modelo,
@@ -184,9 +212,9 @@ export async function agregarTurno(
  * Un hilo por id, ANCLADO al proyecto. ⛔ `findFirst` con `projectId`, nunca `findUnique({id})`:
  * el id de un hilo no puede ser la llave para leer la conversación de otro proyecto.
  */
-export async function leerHilo(hiloId: string, projectId: string): Promise<HiloConTurnos | null> {
+export async function leerHilo(hiloId: string, dueno: Dueno): Promise<HiloConTurnos | null> {
   const hilo = await prisma.hiloDeChat.findFirst({
-    where: { id: hiloId, projectId },
+    where: { id: hiloId, ...whereDelDueno(dueno) },
     include: { mensajes: TURNOS_EN_ORDEN },
   });
   return hilo ? aHiloConTurnos(hilo) : null;
@@ -194,7 +222,9 @@ export async function leerHilo(hiloId: string, projectId: string): Promise<HiloC
 
 type FilaConMensajes = {
   id: string;
-  projectId: string;
+  projectId: string | null;
+  businessCaseId: string | null;
+  roleId: string | null;
   pieza: string;
   usuarioEmail: string;
   modelo: string;
@@ -206,6 +236,8 @@ function aHiloConTurnos(hilo: FilaConMensajes): HiloConTurnos {
   return {
     id: hilo.id,
     projectId: hilo.projectId,
+    businessCaseId: hilo.businessCaseId,
+    roleId: hilo.roleId,
     pieza: hilo.pieza,
     usuarioEmail: hilo.usuarioEmail,
     modelo: hilo.modelo,

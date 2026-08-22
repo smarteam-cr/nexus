@@ -19,6 +19,16 @@ import { DOC } from "@/lib/canvas/assist-de-documento";
 /** El cronograma no está en `DOC`: su modificador es otro (`/timeline/assist`). */
 export const PIEZA_CRONOGRAMA = "timeline";
 
+/** La propuesta comercial. El slug es el de su pieza en el registro (`lib/pieces/registry.ts`). */
+export const PIEZA_PROPUESTA_COMERCIAL = "business-case";
+
+/**
+ * Los documentos de Roles. ⚠ UN SOLO slug para los dos tipos (perfil de puesto y propuesta
+ * laboral) a propósito: el tipo es una COLUMNA de la fila, no otro documento — un `RoleProfile`
+ * tiene exactamente uno. Dos slugs partirían el hilo de una misma conversación en dos.
+ */
+export const PIEZA_ROL = "role";
+
 /**
  * ⭐ EXPLORACIÓN CONVERSA, PERO NO ENTRA A `DOC`. Las dos compuertas se separaron el 2026-08-22.
  *
@@ -37,7 +47,15 @@ export const PIEZA_CRONOGRAMA = "timeline";
  * el assist sobre ella, y ahí el borrado vuelve por la otra puerta. Son dos capacidades distintas
  * y desde hoy se declaran por separado.
  */
-const CONVERSAN_SIN_ASSIST: readonly string[] = ["exploration"];
+const CONVERSAN_SIN_ASSIST: readonly string[] = [
+  "exploration",
+  /* La propuesta comercial y los documentos de Roles conversan por las MISMAS operaciones, pero
+     no entran a `DOC`: ése indexa por pieza de PROYECTO, y estos dos no cuelgan de un proyecto.
+     Sus defs se resuelven por plantilla (`defsForCanvas`) y por tipo de documento
+     (`sectionDefsForDocType`) — ver `lib/asistente/contexto.ts`. */
+  PIEZA_PROPUESTA_COMERCIAL,
+  PIEZA_ROL,
+];
 
 /** Los slugs sobre los que el asistente puede conversar. Derivado — ver el header. */
 export const PIEZAS_CON_CHAT: readonly string[] = [

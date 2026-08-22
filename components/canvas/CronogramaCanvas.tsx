@@ -3539,7 +3539,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           con su vista previa en el Gantt y su aceptación por ítem. El chat acuerda; escribir
           sigue siendo del editor, con su permiso. */}
       <ChatDelAsistente
-        projectId={projectId}
+        base={`/api/projects/${projectId}`}
         pieza="timeline"
         piezaLabel="Cronograma"
         abierto={chatAbierto}

@@ -1137,7 +1137,7 @@ export default function ProjectCanvasPanel({
            NUEVA. La conversación que se lee y la que se toca dejan de ser la misma. */
         <ChatDelDocumento
           key={activeSlug}
-          projectId={projectId}
+          base={`/api/projects/${projectId}`}
           pieza={activeSlug}
           piezaLabel={pieceLabel(activeSlug)}
           abierto={chatAbierto}

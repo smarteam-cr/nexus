@@ -27,7 +27,14 @@ import { catalogoLegible, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-sec
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
+import { defsForCanvas } from "@/components/landing/configs/templates.defs";
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
+import { PIEZA_PROPUESTA_COMERCIAL, puedeConversar } from "@/lib/asistente/piezas";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
+
+/** Estable, para no recrear el contexto del chat cuando no hay chat que abrir. */
+const NO_ABRE = () => {};
 
 export default function BusinessCaseWorkspace({
   bcId,
@@ -40,6 +47,7 @@ export default function BusinessCaseWorkspace({
   brandLogos,
   publishedAt,
   templateId,
+  onAbrirChat,
   language,
 }: {
   bcId: string;
@@ -59,6 +67,14 @@ export default function BusinessCaseWorkspace({
   publishedAt: string | null;
   /** Template del caso (por su tipo). Ausente/null = hubspot_v1 (legacy). */
   templateId?: string | null;
+  /**
+   * Abre el cajón del asistente. Lo pasa `PropuestaConChat`, que es quien lo monta.
+   *
+   * ⚠ Opcional a propósito: el workspace se sigue pudiendo montar sin chat (la Plantilla, o
+   * cualquier pantalla que no lo quiera) y ahí el botón «Cambiar» de cada sección no aparece,
+   * en vez de aparecer y no hacer nada.
+   */
+  onAbrirChat?: () => void;
   /** Idioma persistente del caso (BusinessCase.language). Fallback: __lang del hero. */
   language?: string | null;
 }) {
@@ -99,6 +115,14 @@ export default function BusinessCaseWorkspace({
   // poll:false → la generación del BC es síncrona; sin polling (evita parpadeo).
   // onContentChange → marca cambios sin subir (dirty) para la PublishBar.
   const hook = useCanvasSections(`/api/business-cases/${bcId}`, canvasId, () => setDirty(true), { poll: false });
+  /* ⭐ El chat aplica por los MISMOS verbos que la edición a mano — con su optimismo, su deshacer
+     y su cola de guardado. No se abre un segundo camino de escritura.
+     ⚠ Las defs salen por PLANTILLA, no de un mapa fijo: la propuesta tiene un juego de secciones
+     por tipo de caso, y una def ausente hace que el ejecutor rechace campos que sí existen. */
+  useEjecutarOperacionesDelChat(hook, defsForCanvas(templateId, hook.sections), {
+    puedeOcultar: true,
+    puedeCrear: true,
+  });
   const sectionByKey = new Map<string, SectionWithBlocks>(hook.sections.map((s) => [s.key, s]));
   const sectionsData: LandingSectionData[] = hook.sections.map((s) => ({
     key: s.key,
@@ -390,6 +414,13 @@ export default function BusinessCaseWorkspace({
             />
           </div>
         )}
+        {/* El botón «Cambiar» de cada sección vive adentro del motor y pide el chat por acá.
+            ⛔ En la Plantilla NO: ahí se editan las guías del agente, no el contenido — un chat
+            que «aplica» sobre una guía escribiría en el lugar equivocado. */}
+        <ChatDeSeccionProvider
+          disponible={!!onAbrirChat && !isTemplate && puedeConversar(PIEZA_PROPUESTA_COMERCIAL, hasContent)}
+          onAbrir={onAbrirChat ?? NO_ABRE}
+        >
         {!hasCanvas || hook.loading ? (
           <div className="px-6 pb-8">
             <div className="rounded-xl border border-dashed border-line bg-surface p-8 text-center text-sm text-fg-muted">
@@ -441,6 +472,7 @@ export default function BusinessCaseWorkspace({
             )}
           />
         )}
+        </ChatDeSeccionProvider>
         {/* Agregar una sección propia va DEBAJO del documento y fuera de `LandingView`
             (que se mantiene genérico para los seis tipos que lo montan). Al pie y no
             arriba porque la sección nace al final: aparece donde el vendedor está

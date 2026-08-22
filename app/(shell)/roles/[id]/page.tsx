@@ -16,7 +16,9 @@ import { redirect, notFound } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { getRole } from "@/lib/roles/queries";
 import { canEditRoleDocs } from "@/lib/roles/access";
-import RoleWorkspace from "@/components/roles/RoleWorkspace";
+/* El envoltorio y no el workspace: el proveedor del aplicador tiene que ser ANCESTRO del editor
+   —el que provee no consume— y esta página es de servidor. Ver `RolConChat`. */
+import RolConChat from "@/components/roles/RolConChat";
 import RoleDocView from "@/components/roles/RoleDocView";
 import RoleSharePanel from "@/components/roles/RoleSharePanel";
 import { PrintDownloadButton } from "@/components/print/PrintDocButton";
@@ -50,7 +52,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
       <div className="px-6 py-6 space-y-4">
         {canEdit && <RoleSharePanel roleId={role.id} />}
         {canEdit ? (
-          <RoleWorkspace
+          <RolConChat
             role={{
               id: role.id,
               docType: role.docType,

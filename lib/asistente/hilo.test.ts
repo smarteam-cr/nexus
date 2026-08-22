@@ -93,7 +93,12 @@ describe("el chat no escribe el documento", () => {
       src.includes("hiloDeChat.findUnique"),
       "leerHilo pasó a findUnique por id: el id de un hilo abriría la conversación de cualquier proyecto",
     ).toBe(false);
-    expect(src, "leerHilo dejó de anclar la lectura al proyecto").toContain("id: hiloId, projectId");
+    /* ⚠ Desde el 2026-08-22 el hilo puede colgar de un proyecto, de un business case o de un
+       rol, así que el ancla dejó de ser literalmente `projectId` — pero SIGUE siendo el dueño.
+       Lo que la guarda protege es lo mismo: que el id de un hilo no alcance para abrirlo. */
+    expect(src, "leerHilo dejó de anclar la lectura al dueño").toContain(
+      "id: hiloId, ...whereDelDueno(dueno)",
+    );
   });
 });
 

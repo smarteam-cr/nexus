@@ -84,7 +84,7 @@ async function main() {
     orderBy: { canvasSections: { _count: "desc" } },
   });
   if (canvasGordo?.projectId && canvasGordo.slug) {
-    const ctx = await contextoDeDocumento(canvasGordo.projectId, canvasGordo.slug);
+    const ctx = await contextoDeDocumento({ projectId: canvasGordo.projectId }, canvasGordo.slug);
     const n = ctx.texto.length;
     const señal = n > TECHO_DEL_PREFIJO_CHARS ? "❌" : "✅";
     console.log(
@@ -125,7 +125,7 @@ async function main() {
   }
 
   const pedido = {
-    projectId,
+    dueno: { projectId },
     pieza: "timeline",
     usuarioEmail: CORREO_DE_PRUEBA,
     modelo: "claude-sonnet-5",
@@ -147,7 +147,7 @@ async function main() {
   });
   console.log(`  ✅ Dos turnos escritos, con la huella del contexto: ${sha}`);
 
-  const releido = await leerHilo(hilo.id, projectId);
+  const releido = await leerHilo(hilo.id, { projectId });
   console.log(
     `  ✅ Releído desde la base: ${releido?.turnos.length} turnos, en orden: ` +
       `${releido?.turnos.map((t) => t.rol).join(" → ")}`,
@@ -156,7 +156,7 @@ async function main() {
   /* El anti-IDOR: el mismo id de hilo, anclado a OTRO proyecto, no devuelve nada. */
   const otro = gordos.find((g) => g.projectId !== projectId)?.projectId;
   if (otro) {
-    const fuga = await leerHilo(hilo.id, otro);
+    const fuga = await leerHilo(hilo.id, { projectId: otro });
     console.log(
       fuga === null
         ? "  ✅ El id de un hilo NO abre la conversación de otro proyecto (anti-IDOR)"
@@ -194,7 +194,7 @@ async function main() {
         console.log(`     resumen:     ${r.acuerdo.resumen}`);
         console.log(`     instrucción: ${r.acuerdo.instruccion}`);
       }
-      vivo = (await leerHilo(h.id, projectId))!;
+      vivo = (await leerHilo(h.id, { projectId }))!;
     }
     console.log(`\n  El hilo quedó con ${vivo.turnos.length} turnos guardados.`);
   }
@@ -205,7 +205,7 @@ async function main() {
   });
   console.log(`  ✅ ${borrados.count} hilos de prueba borrados (los mensajes caen por cascade).`);
 
-  const queda = await hiloVivo({ projectId, pieza: "timeline", usuarioEmail: CORREO_DE_PRUEBA });
+  const queda = await hiloVivo({ dueno: { projectId }, pieza: "timeline", usuarioEmail: CORREO_DE_PRUEBA });
   console.log(queda === null ? "  ✅ No quedó nada." : "  ❌ Quedó un hilo de prueba sin borrar.");
 
   await prisma.$disconnect();

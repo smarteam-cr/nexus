@@ -17,7 +17,7 @@
  * SOLO SUPER_ADMIN (la ruta ya gatea antes de montar esto) — no hay vista pública de un
  * rol, así que lectura y edición conviven en un solo componente con el toggle.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
@@ -25,6 +25,8 @@ import { useUndo } from "@/components/ui/UndoProvider";
 import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
+import { useEjecutarOperacionesDelChatDeRol } from "@/components/asistente/ejecutar-operaciones-de-rol";
+import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import { landingConfigForDocType } from "@/components/landing/configs/doc-type";
 import { contentKeysForDocType, escalaForDocType, sectionDefsForDocType } from "@/lib/roles/doc-type";
 import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
@@ -58,7 +60,22 @@ interface RoleInput {
 
 type SaveState = "idle" | "saving" | "saved";
 
-export default function RoleWorkspace({ role }: { role: RoleInput }) {
+/** Estable, para no recrear el contexto del chat cuando no hay chat que abrir. */
+const NO_ABRE = () => {};
+
+export default function RoleWorkspace({
+  role,
+  onAbrirChat,
+}: {
+  role: RoleInput;
+  /**
+   * Abre el cajón del asistente. Lo pasa `RolConChat`, que es quien lo monta.
+   *
+   * ⚠ Opcional: sin él el botón «Cambiar» de cada sección no aparece, en vez de aparecer y no
+   * hacer nada.
+   */
+  onAbrirChat?: () => void;
+}) {
   const docType = role.docType;
   // Label humano de una sección para el toast de undo ("Edición en Responsabilidades").
   // Sale de la plantilla del TIPO: las dos comparten keys con títulos distintos.
@@ -259,6 +276,16 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
     ...contentKeysForDocType(docType).map((k) => ({ key: k, data: content[k] ?? null })),
   ];
 
+  /* ⭐ El chat escribe por el MISMO camino que la edición a mano (`onSectionChange`): mismo
+     autoguardado, mismo deshacer. No se abre un segundo camino de escritura.
+     ⛔ `puedeOcultar`/`puedeCrear` en false los pone el ejecutor: la lista de secciones de un rol
+     es fija. Ver `ejecutar-operaciones-de-rol.ts`. */
+  const defsDelDoc = useMemo(
+    () => Object.fromEntries(sectionDefsForDocType(docType).map((d) => [d.key, d])),
+    [docType],
+  );
+  useEjecutarOperacionesDelChatDeRol(sections, defsDelDoc, onSectionChange);
+
   // El assist todavía NO corre en propuestas: 3 de sus secciones (Smarteam, partnerships y la
   // oferta) tienen el schema vacío, y `coerceToSchema` las VACIARÍA al aplicar. El endpoint
   // responde 409; acá directamente no se ofrece el botón.
@@ -375,6 +402,10 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
           .filter(Boolean)
           .join(" ")}
       >
+        {/* El botón «Cambiar» de cada sección lo pinta el motor y pide el chat por acá.
+            ⚠ Solo EDITANDO: en modo lectura no hay nada que cambiar, y el botón invitaría a
+            acordar algo que después no se aplica. */}
+        <ChatDeSeccionProvider disponible={!!onAbrirChat && editing} onAbrir={onAbrirChat ?? NO_ABRE}>
         <LandingView
           config={landingConfigForDocType(docType)}
           ctx={{ clientName: "" }}
@@ -383,6 +414,7 @@ export default function RoleWorkspace({ role }: { role: RoleInput }) {
           showBriefs={false}
           onSectionChange={onSectionChange}
         />
+        </ChatDeSeccionProvider>
       </div>
     </div>
   );

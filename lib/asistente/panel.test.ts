@@ -738,7 +738,10 @@ describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
 describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
   const RUTA_CRUDA = soloCodigo(
     fs.readFileSync(
-      path.join(RAIZ, "app/api/projects/[projectId]/asistente/route.ts"),
+      /* ⚠ El cuerpo se mudó al manejador COMPARTIDO el 2026-08-22: la ruta quedó con su guard y
+         nada más. Tres copias del mismo manejador divergirían, y la que se olvida no falla —
+         contesta distinto. */
+      path.join(RAIZ, "lib/asistente/handler.ts"),
       "utf8",
     ),
   );

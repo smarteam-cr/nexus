@@ -24,6 +24,7 @@
  *
  * ⛔ Y el modelo es FIJO POR HILO (`lib/asistente/hilo.ts`): es parte de la clave de la caché.
  */
+import type { Dueno } from "./hilo";
 import {
   OPERACIONES_DE_DOCUMENTO_VALIDAS,
   aplicarOperacionesDeDocumento,
@@ -37,7 +38,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
-import { contextoDeCronograma, contextoDeDocumento } from "./contexto";
+import { contextoDeCronograma, contextoDeDocumento, contextoDeRol } from "./contexto";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 import { leerAcuerdo, marcaDeAcuerdo, type CambioAcordado } from "./acuerdo";
@@ -622,11 +623,24 @@ export interface ResultadoDelTurno {
   shaDeContexto: string;
 }
 
-/** El contexto que corresponde a la pieza sobre la que se está conversando. */
-async function contextoDeLaPieza(projectId: string, pieza: string) {
-  return pieza === "timeline"
-    ? contextoDeCronograma(projectId)
-    : contextoDeDocumento(projectId, pieza);
+/**
+ * El contexto que corresponde a la pieza sobre la que se está conversando.
+ *
+ * ⚠ El cronograma es de PROYECTO por definición: no existe el cronograma de una propuesta
+ * comercial. Que el tipo lo exija evita que un hilo de otro dueño caiga ahí con un id vacío.
+ */
+async function contextoDeLaPieza(dueno: Dueno, pieza: string) {
+  if (pieza === PIEZA_CRONOGRAMA) {
+    if (!("projectId" in dueno)) {
+      return { texto: "Este documento no tiene cronograma.", cierreActual: null };
+    }
+    return contextoDeCronograma(dueno.projectId);
+  }
+  /* Roles reusa el motor de presentación pero no el de datos: su contenido vive en
+     `RoleProfile.content`, no en filas de canvas. Devuelve la MISMA forma, así que de acá para
+     abajo el turno no se entera de cuál leyó. */
+  if ("roleId" in dueno) return contextoDeRol(dueno.roleId);
+  return contextoDeDocumento(dueno, pieza);
 }
 
 /**
@@ -648,7 +662,13 @@ export async function correrTurno(
   mensajeDelCse: string,
 ): Promise<ResultadoDelTurno> {
   const esCronograma = hilo.pieza === PIEZA_CRONOGRAMA;
-  const ctx = await contextoDeLaPieza(hilo.projectId, hilo.pieza);
+  /* El dueño del hilo, reconstruido de sus tres columnas. Exactamente una está seteada. */
+  const dueno: Dueno = hilo.projectId
+    ? { projectId: hilo.projectId }
+    : hilo.businessCaseId
+      ? { businessCaseId: hilo.businessCaseId }
+      : { roleId: hilo.roleId ?? "" };
+  const ctx = await contextoDeLaPieza(dueno, hilo.pieza);
   const sha = huellaDeContexto(ctx.texto);
 
   /**

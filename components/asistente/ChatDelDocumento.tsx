@@ -28,13 +28,14 @@ import {
 } from "./aplicador-de-documento";
 
 export default function ChatDelDocumento({
-  projectId,
+  base,
   pieza,
   piezaLabel,
   abierto,
   onClose,
 }: {
-  projectId: string;
+  /** La base de la API del dueño del documento — ver `ChatDelAsistente`. */
+  base: string;
   pieza: string;
   piezaLabel: string;
   abierto: boolean;
@@ -81,7 +82,7 @@ export default function ChatDelDocumento({
 
   return (
     <ChatDelAsistente
-      projectId={projectId}
+      base={base}
       pieza={pieza}
       piezaLabel={piezaLabel}
       abierto={abierto}

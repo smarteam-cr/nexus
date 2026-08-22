@@ -8,7 +8,10 @@ import { BackLink } from "@/components/ui";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
-import BusinessCaseWorkspace from "@/components/business-cases/BusinessCaseWorkspace";
+/* El envoltorio y no el workspace: el proveedor del aplicador tiene que ser ANCESTRO del editor
+   —el que provee no consume— y esta página es de servidor, así que no puede pasarle la función
+   de abrir el cajón. Ver `PropuestaConChat`. */
+import PropuestaConChat from "@/components/business-cases/PropuestaConChat";
 import { can } from "@/lib/auth/permissions/engine";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
@@ -82,7 +85,7 @@ export default async function BusinessCasePage({
       </p>
 
       <div className="mt-8">
-        <BusinessCaseWorkspace
+        <PropuestaConChat
           bcId={bc.id}
           clientId={bc.client.id}
           clientName={bc.client.name}
