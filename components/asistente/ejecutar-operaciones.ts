@@ -108,7 +108,7 @@ export function useEjecutarOperacionesDelChat(
     const { secciones: secs, cs: hook, capacidades: caps, completadores: comps } = vivo.current;
     const ops = crudas.filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     if (ops.length === 0) {
-      return { avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
+      return { escribio: false, avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
     }
 
     const { plan, avisos, rechazadas } = aplicarOperacionesDeDocumento(secs, ops, caps, comps);
@@ -147,6 +147,8 @@ export function useEjecutarOperacionesDelChat(
     }
 
     return {
+      /* El plan es la lista de escrituras: si trae algo, el editor tocó el documento. */
+      escribio: plan.length > 0,
       avisos,
       /* ⛔ Lo rechazado VIAJA AL HILO. Sin esto, «se aplicaron 3 de 5» se lee igual que «se
          aplicaron 5» — y el modelo, que lee el hilo, propondría de nuevo lo que ya entró. */

@@ -53,6 +53,16 @@ export interface ResultadoDelAplicador {
   avisos: string[];
   /** Lo que NO se pudo hacer, y por qué. Nunca se ignora en silencio. */
   rechazadas: string[];
+  /**
+   * ⭐ SI EL EDITOR LLEGÓ A ESCRIBIR ALGO. Load-bearing, y no es cosmético.
+   *
+   * Un lote puede entrar A MEDIAS: se crea la sección y se rechaza el contenido, que es el caso
+   * NORMAL —el prompt pide crear y llenar en un solo acuerdo—. Si eso se anota como fallo, el
+   * libro de pendientes se queda con el lote ENTERO, incluida la creación que ya ocurrió, y el
+   * siguiente «Aplicar» crea una SEGUNDA sección. Con un `item.agregar` adentro, ítems duplicados.
+   * Estas operaciones no son idempotentes: «falló» y «entró a medias» tienen que ser distinguibles.
+   */
+  escribio: boolean;
 }
 
 type Aplicador = (operaciones: unknown[]) => Promise<ResultadoDelAplicador>;

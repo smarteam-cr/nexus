@@ -71,6 +71,10 @@ export function useEjecutarOperacionesDelChatDeRol(
         esCreada: false,
         /* La lista es fija: nada se mueve ni se saca. */
         movible: false,
+        /* ⛔ Y tampoco se renombran ni se rotulan: sus títulos salen de la plantilla del tipo,
+           así que escribirlos no se vería. Se rechaza con el motivo en vez de decir «aplicado». */
+        renombrable: false,
+        rotulable: false,
       })),
     [secciones0, defsByKey],
   );
@@ -84,7 +88,7 @@ export function useEjecutarOperacionesDelChatDeRol(
     const { secciones: secs, onSectionChange: escribir } = vivo.current;
     const ops = crudas.filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     if (ops.length === 0) {
-      return { avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
+      return { escribio: false, avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
     }
 
     /* ⛔ `puedeOcultar` y `puedeCrear` en false: ver el encabezado. Las de estructura se caen acá
@@ -94,10 +98,14 @@ export function useEjecutarOperacionesDelChatDeRol(
       puedeCrear: false,
     });
 
+    let escribio = false;
     for (const e of plan) {
-      if (e.tipo === "data") escribir(e.sectionId, e.data);
+      if (e.tipo === "data") {
+        escribir(e.sectionId, e.data);
+        escribio = true;
+      }
     }
 
-    return { avisos, rechazadas: rechazadas.map((r) => r.motivo) };
+    return { escribio, avisos, rechazadas: rechazadas.map((r) => r.motivo) };
   });
 }

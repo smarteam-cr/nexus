@@ -109,6 +109,11 @@ export const USE_CASES_DEF: BCSectionDef = {
   theme: "light",
   sectionType: "use_cases",
   agentGenerated: false,
+  /* ⭐ Y ADEMÁS LA REESCRIBE NEXUS, en cada «Generar» y cada vez que se toca el checklist de casos
+     de uso. Sin este flag cae en la clase `manual` —«la escribió una persona y NADA la reescribe»—
+     que es exactamente lo contrario de lo que pasa: el CSE tocaría el texto por chat y el próximo
+     clic en el checklist se lo lleva puesto, sin aviso. */
+  reescritaPorNexus: true,
   empty: { items: [] },
   schema: {
     type: "object",

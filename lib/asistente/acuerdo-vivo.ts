@@ -239,7 +239,7 @@ function huella(o: Operacion): string {
 }
 
 /** «P2» / «p2» / «2» → 1. Cualquier otra cosa, `null`. */
-function indiceDeEtiqueta(raw: unknown): number | null {
+export function indiceDeEtiqueta(raw: unknown): number | null {
   const m = /^\s*[pP]?\s*(\d+)\s*$/.exec(String(raw ?? ""));
   if (!m) return null;
   const i = Number(m[1]) - 1;

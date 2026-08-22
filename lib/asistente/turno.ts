@@ -54,6 +54,7 @@ import {
   bloqueDePendientes,
   fusionarPendientes,
   pendientesDelHilo,
+  indiceDeEtiqueta,
   podarIrresolubles,
 } from "./acuerdo-vivo";
 
@@ -1016,8 +1017,17 @@ export async function correrTurno(
        aplicarse dos veces (estas operaciones NO son idempotentes: agregar un ítem dos veces son
        dos ítems). El resto de la fusión del cronograma —re-etiquetar `ref`— no aplica acá: un
        `ref` de documento solo vive dentro de su propio lote. */
+    /* ⛔ Y SE HONRA EL `descartar`. El prompt se lo pide al modelo, el bloque de pendientes se lo
+       recuerda y su herramienta lo declara — pero la rama de documentos lo leía y lo tiraba. O sea
+       que el CSE decía «olvidate de eso», el asistente contestaba «descarto lo anterior», y el
+       cambio volvía a la cajita CON LA CASILLA MARCADA y se aplicaba. Prometer un botón de cancelar
+       que no cancela es peor que no tenerlo. */
+    const cancelados = new Set(
+      descartar.map((raw) => indiceDeEtiqueta(raw)).filter((i): i is number => i !== null),
+    );
+    const enPie = libro.vivas.filter((_, i) => !cancelados.has(i));
     const yaEstan = new Set(prep.aceptadas.map((o) => JSON.stringify(o)));
-    const arrastradas = libro.vivas.filter((o) => !yaEstan.has(JSON.stringify(o)));
+    const arrastradas = enPie.filter((o) => !yaEstan.has(JSON.stringify(o)));
     const opsDeDoc = [...arrastradas, ...prep.aceptadas] as OperacionDeDocumento[];
     if (resumenDelModelo && opsDeDoc.length > 0) {
       acuerdo = {

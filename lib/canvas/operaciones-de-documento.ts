@@ -233,6 +233,8 @@ export interface SeccionActual {
    * operación se rechaza en vez de escribir donde nadie lee.
    */
   rotulable?: boolean;
+  /** `false` donde el título de la sección NO se persiste (Roles: su lista es fija). */
+  renombrable?: boolean;
   /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
   rotulo?: string;
 }
@@ -724,6 +726,15 @@ export function aplicarOperacionesDeDocumento(
           rechazar(o, "esa sección no tiene contenido editable desde acá: se dibuja desde el proyecto");
           break;
         }
+        /* ⛔ Y UN ESQUEMA SIN CAMPOS TAMPOCO. La tabla de inversión y la estimación declaran
+           `properties: {}` A PROPÓSITO —ahí hay plata, y el agente no la escribe—. Vaciarlas es un
+           NO-OP: el merge repone todo lo que el esquema no declara, o sea todo. La línea del
+           acuerdo, mientras tanto, dice «⚠ Se borra TODO el contenido». Prometer un borrado que no
+           ocurre es peor que negarlo: la persona cree que limpió la sección y los montos siguen. */
+        if (Object.keys((s.schema as NodoDeSchema)?.properties ?? {}).length === 0) {
+          rechazar(o, "esa sección no se vacía desde acá: su contenido se edita en la propia sección");
+          break;
+        }
         /* ⛔ Y VACIAR NO ARRASA CON LO QUE NO ES TEXTO. La foto de portada, los logos de marca y
            el rótulo chico viven FUERA del schema a propósito: son de la persona, y
            `preserveNonSchemaKeys` los conserva en cada regeneración del agente. Pisar la data de
@@ -759,6 +770,15 @@ export function aplicarOperacionesDeDocumento(
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
         const titulo = o.titulo.trim();
         if (!titulo) { rechazar(o, "un título vacío dejaría la sección sin nombre"); break; }
+        /* ⛔ Y solo donde el rótulo se PERSISTE. En Roles la lista de secciones es fija y sus
+           títulos salen de la plantilla del tipo: el ejecutor de ese documento solo escribe
+           contenido, así que un renombrado se descartaba en silencio — el hilo decía «aplicado» y
+           el título quedaba igual. Es el mismo criterio que `rotulable`: si no se va a ver, se
+           rechaza con el motivo en vez de fingir. */
+        if (s.renombrable === false) {
+          rechazar(o, "en este documento los títulos de las secciones son fijos");
+          break;
+        }
         s.label = titulo;
         plan.push({ tipo: "titulo", sectionId: s.id, titulo });
         break;

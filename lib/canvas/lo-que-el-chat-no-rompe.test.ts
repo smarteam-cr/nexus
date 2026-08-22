@@ -9,16 +9,21 @@
  * Ninguno lo cazaba un test: el del ítem comparaba las CLAVES del objeto nuevo sin mirar de qué
  * TIPO nacía cada una, y vaciar y el chip no tenían test.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   aplicarOperacionesDeDocumento,
   describirOperacionesDeDocumento,
   type SeccionActual,
 } from "./operaciones-de-documento";
-import { firmaDeSeccion } from "./capacidades-de-documento";
+import { firmaDeSeccion, capacidadDeSeccion } from "./capacidades-de-documento";
+import { USE_CASES_DEF } from "@/components/landing/configs/shared-sections.defs";
 import { toSectionDef } from "@/components/landing/configs/templates";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import { KICKOFF_SECTION_COMPONENTS } from "@/components/landing/configs/kickoff";
+
+const leer = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 const TODO = { puedeOcultar: true, puedeCrear: true };
 
@@ -294,5 +299,139 @@ describe("las líneas del acuerdo se leen", () => {
     );
     expect(linea).toContain("intro");
     expect(linea).toContain("Esto es lo que incluye");
+  });
+});
+
+/**
+ * ⭐ LOS TRES BLOQUEANTES DEL PRE-PUSH (2026-08-22).
+ *
+ * Los tres los introdujo o los agravó la tanda que los precede — o sea que salieron de arreglar
+ * otra cosa. Es el motivo por el que la auditoría adversarial va ANTES del push y no después.
+ */
+describe("un lote que entró a medias no se vuelve a escribir", () => {
+  it("⛔⭐ el aplicador dice si ESCRIBIÓ, no solo si falló", () => {
+    /* ── EL DAÑO ────────────────────────────────────────────────────────────
+       Un lote puede entrar A MEDIAS, y es el caso NORMAL: el prompt pide crear una sección y
+       llenarla en un solo acuerdo, y ahí la sección nace pero su contenido se difiere. Si eso se
+       anota como fallo, el libro de pendientes conserva el lote ENTERO —incluida la creación que
+       ya ocurrió— y el siguiente «Aplicar» crea una SEGUNDA sección. Con un `item.agregar`
+       adentro, ítems duplicados. Estas operaciones no son idempotentes.
+
+       La edición que lo pone en rojo: sacar `escribio` del resultado del aplicador, o volver a
+       `fallo: rechazadas.length ? … : null` sin mirarlo. */
+    const src = leer("components/asistente/ChatDelDocumento.tsx");
+    expect(src, "el cajón dejó de distinguir «entró a medias» de «falló»").toContain(
+      "if (dicho && escribio)",
+    );
+    /* Y lo rechazado se sigue diciendo SIEMPRE: si se callara, el modelo re-propondría lo que ya
+       entró. Lo que cambia es por cuál canal viaja, no si viaja. */
+    expect(src, "lo rechazado dejó de contarse cuando el lote entró a medias").toContain(
+      "avisos: [...avisos, dicho]",
+    );
+
+    /* Los DOS ejecutores lo informan, o el de rol quedaría siempre en «falló». */
+    for (const f of [
+      "components/asistente/ejecutar-operaciones.ts",
+      "components/asistente/ejecutar-operaciones-de-rol.ts",
+    ]) {
+      expect(leer(f), `${f} no informa si escribió`).toContain("escribio");
+    }
+  });
+
+  it("⛔⭐ en documentos, «olvidate de eso» de verdad lo cancela", () => {
+    /* ── EL DAÑO ────────────────────────────────────────────────────────────
+       El prompt le pide al modelo que use `descartar`, el bloque de pendientes se lo recuerda y su
+       herramienta lo declara — pero la rama de DOCUMENTOS lo leía y lo tiraba. El CSE decía
+       «olvidate de eso», el asistente contestaba «descarto lo anterior», y el cambio volvía a la
+       cajita CON LA CASILLA MARCADA y se aplicaba igual.
+
+       Prometer un botón de cancelar que no cancela es peor que no tenerlo.
+
+       La edición que lo pone en rojo: componer `arrastradas` sobre `libro.vivas` en vez de sobre
+       lo que quedó en pie. */
+    const src = leer("lib/asistente/turno.ts");
+    const rama = src.slice(src.indexOf("if (!esCronograma)"));
+    expect(rama.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(rama, "la rama de documentos volvió a ignorar el descartar").toContain("indiceDeEtiqueta");
+    expect(rama, "lo arrastrado no filtra lo cancelado").toContain("cancelados.has");
+  });
+
+  it("⛔ una sección que Nexus reescribe no puede anunciarse como intocable", () => {
+    /* «Casos de uso» declara que el AGENTE no la escribe, y es cierto — pero la reescribe el
+       generate y la pisa el checklist. Sin el flag caía en la clase «la escribió una persona y
+       NADA la reescribe», así que el chat invitaba a editar algo que el próximo clic se lleva.
+       Fue una regresión de la tanda anterior: en `origin/main` el aviso era el correcto.
+
+       La edición que lo pone en rojo: sacarle `reescritaPorNexus`. */
+    expect(
+      capacidadDeSeccion(USE_CASES_DEF),
+      "«Casos de uso» le dice al chat que nada la reescribe, y el checklist la pisa entera",
+    ).toBe("curada");
+  });
+});
+
+/**
+ * ⭐ LO QUE EL CHAT NO PUEDE HACER, LO DICE — los tres «promete y no cumple» del pre-push.
+ *
+ * Los tres compartían la misma forma: la operación se ACEPTABA, la cajita anunciaba el cambio, el
+ * hilo decía «aplicado»… y en pantalla no pasaba nada. Es el modo de falla más caro de este
+ * vocabulario, porque la persona archiva un documento creyendo que lo editó.
+ */
+describe("lo que no se puede, se rechaza con su motivo", () => {
+  const base = (extra: Partial<SeccionActual>): SeccionActual => ({
+    id: "x1", key: "seccion", label: "Una sección",
+    data: { intro: "algo" },
+    schema: { type: "object", properties: { intro: { type: "string" } } },
+    oculta: false, esCreada: false, movible: true,
+    ...extra,
+  });
+
+  it("⛔⭐ vaciar una sección SIN CAMPOS no promete un borrado que no ocurre", () => {
+    /* La tabla de inversión y la estimación declaran `properties: {}` a propósito — ahí hay plata
+       y el agente no la escribe. Vaciarlas era un NO-OP: el merge repone todo lo que el esquema no
+       declara, o sea todo. Y la línea decía «⚠ Se borra TODO el contenido».
+       La edición que lo pone en rojo: sacar el chequeo de `properties` vacío. */
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [base({ key: "inversion", label: "Inversión", schema: { type: "object", properties: {} }, data: { lineas: [{ monto: "12.000" }] } })],
+      [{ op: "seccion.vaciar", key: "inversion" }],
+      TODO,
+    );
+    expect(plan, "escribió un vaciado que no vacía nada").toHaveLength(0);
+    expect(rechazadas[0]?.motivo).toContain("se edita en la propia sección");
+  });
+
+  it("⛔⭐ renombrar donde el título no se persiste se rechaza (Roles)", () => {
+    /* En Roles la lista de secciones es fija y sus títulos salen de la plantilla: el ejecutor de
+       ese documento solo escribe contenido, así que el renombrado se descartaba EN SILENCIO.
+       La edición que lo pone en rojo: sacar el chequeo de `renombrable`. */
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [base({ renombrable: false })],
+      [{ op: "seccion.renombrar", key: "seccion", titulo: "Qué vas a hacer" }],
+      TODO,
+    );
+    expect(plan, "el renombrado se descartó sin decirlo").toHaveLength(0);
+    expect(rechazadas[0]?.motivo).toContain("fijos");
+
+    /* Y donde SÍ se persiste sigue funcionando. */
+    const ok = aplicarOperacionesDeDocumento(
+      [base({})],
+      [{ op: "seccion.renombrar", key: "seccion", titulo: "Otro nombre" }],
+      TODO,
+    );
+    expect(ok.rechazadas, "renombrar dejó de funcionar donde sí se ve").toHaveLength(0);
+  });
+
+  it("⭐ una sección creada a mano NO queda congelada: su def se sintetiza también en el servidor", () => {
+    /* Las `custom:*` no están en la plantilla, así que `defs[key]` es undefined y su esquema salía
+       vacío: el modelo la veía «[sin campos editables]» y cualquier cambio moría con «X no es un
+       campo de esa sección». O sea que el chat podía CREAR una sección y no tocarla nunca más.
+       El navegador ya hacía el fallback; el servidor no — y que las dos mitades resuelvan distinto
+       es justo el modo de falla que `schemaParaElChat` existe para impedir.
+       La edición que lo pone en rojo: volver a `defs[s.key]` pelado en el contexto. */
+    const ctx = leer("lib/asistente/contexto.ts");
+    expect(ctx, "el servidor volvió a resolver las defs sin sintetizar las creadas a mano").toContain(
+      "defDeSeccion(defs,",
+    );
+    expect(ctx).toContain("customDef(key, label)");
   });
 });

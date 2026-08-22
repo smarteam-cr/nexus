@@ -62,16 +62,23 @@ export default function ChatDelDocumento({
       };
     }
     try {
-      const { avisos, rechazadas } = await aplicador(operaciones);
-      /* ⛔ Lo rechazado es un FALLO PARCIAL, no un aviso: si tres de cinco no entraron, el hilo no
-         puede decir «se aplicó» a secas. El modelo LEE el hilo, así que sin esto volvería a
-         proponer lo que ya entró — sobre un vocabulario que no es idempotente. */
-      return {
-        fallo: rechazadas.length
-          ? `No se pudieron aplicar ${rechazadas.length} de ${operaciones.length}: ${rechazadas.join(" · ")}`
-          : null,
-        avisos,
-      };
+      const { escribio, avisos, rechazadas } = await aplicador(operaciones);
+      /* ⛔ Lo rechazado se DICE siempre: el modelo lee el hilo, y callarlo lo haría re-proponer lo
+         que ya entró sobre un vocabulario que no es idempotente.
+
+         ⛔⭐ PERO «entró a medias» NO ES «falló», y confundirlos escribe dos veces. Un desenlace
+         `ok:false` deja el lote ENTERO en el libro de pendientes —incluida la sección que YA se
+         creó—, y el siguiente «Aplicar» la crea de nuevo. Con un `item.agregar` adentro, ítems
+         duplicados. Y no es un borde: el prompt pide crear y llenar en un solo acuerdo, y ese
+         patrón SIEMPRE entra a medias (la sección nace, su contenido se difiere).
+
+         Así que el fallo se reserva para cuando el editor no tocó NADA. Si tocó algo, lo
+         rechazado viaja como aviso: el hilo cuenta la verdad completa y el libro se vacía. */
+      const dicho = rechazadas.length
+        ? `No se pudieron aplicar ${rechazadas.length} de ${operaciones.length}: ${rechazadas.join(" · ")}`
+        : null;
+      if (dicho && escribio) return { fallo: null, avisos: [...avisos, dicho] };
+      return { fallo: dicho, avisos };
     } catch (e) {
       return {
         fallo: e instanceof Error ? e.message : "el editor rechazó los cambios",

@@ -41,6 +41,8 @@ import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import type { Dueno } from "./hilo";
 import { PIEZA_ROL } from "@/lib/asistente/piezas";
+import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
+import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { prisma } from "@/lib/db/prisma";
 import { sectionDefsForDocType } from "@/lib/roles/doc-type";
@@ -458,6 +460,23 @@ export async function contextoDeDocumento(
     ? defsForCanvas(resolveCaseTypeFor(canvas.businessCase).templateId, canvas.canvasSections)
     : (DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {}));
 
+  /**
+   * ⛔ LA DEF DE UNA SECCIÓN CREADA A MANO SE SINTETIZA, igual que en el navegador.
+   *
+   * Las `custom:*` no están en la plantilla —las creó una persona— así que `defs[key]` es
+   * `undefined` y su esquema salía vacío: el modelo la veía como «[sin campos editables]» y
+   * cualquier cambio moría con «X no es un campo de esa sección». O sea que el chat podía CREAR
+   * una sección y después no podía tocarla nunca más.
+   *
+   * ⚠ El ejecutor del navegador ya hacía este fallback. Que las dos mitades resuelvan distinto es
+   * el modo de falla que `schemaParaElChat` existe para impedir.
+   */
+  const defDeSeccion = (
+    porDef: Record<string, BCSectionDef | undefined>,
+    key: string,
+    label: string,
+  ) => porDef[key] ?? (esCustomKey(key) ? customDef(key, label) : undefined);
+
   /* ⚠ El bloque CARD, no el primero: una sección puede arrastrar un TEXT legacy adelante, y ahí
      el contenido —y las anclas que se calculan de él— saldrían del objeto equivocado. */
   const cardDe = (bloques: { data: unknown; blockType: string }[]) =>
@@ -472,7 +491,7 @@ export async function contextoDeDocumento(
         _count: { blocks: number };
         blocks: { data: unknown; blockType: string }[];
       }) => {
-        const def = defs[s.key];
+        const def = defDeSeccion(defs, s.key, s.label);
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
            las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
         const firma = firmaDeSeccion(schemaParaElChat(def));
@@ -598,7 +617,7 @@ export async function contextoDeDocumento(
      operación sobre ellas se rechazaría con «no es un campo de esa sección» — sobre campos que sí
      existen. */
   const seccionesParaEjecutar: SeccionActual[] = canvas.canvasSections.map((s) => {
-    const def = defs[s.key];
+    const def = defDeSeccion(defs, s.key, s.label);
     const card = cardDe(s.blocks);
     return {
       id: s.id,
@@ -681,6 +700,10 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
       /* ⛔ La lista de secciones de un rol es FIJA: no se crean, no se borran y no se reordenan.
          El motor las arma siempre desde la plantilla del tipo, completa. */
       movible: false,
+      /* ⛔ Y tampoco se renombran ni se rotulan: sus títulos salen de la plantilla del tipo,
+         así que escribirlos no se vería. Se rechaza con el motivo en vez de decir «aplicado». */
+      renombrable: false,
+      rotulable: false,
     };
   });
 
