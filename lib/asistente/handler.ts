@@ -27,6 +27,7 @@ import {
   type HiloConTurnos,
 } from "./hilo";
 import { correrTurno, MODELO_DEL_ASISTENTE } from "./turno";
+import { PIEZA_CRONOGRAMA } from "./piezas";
 import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "./acuerdo";
 import { estadosDeAcuerdo } from "./acuerdo-vivo";
 
@@ -138,6 +139,11 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
     const hilo = await hiloVivo(pedido);
     if (!hilo) return NextResponse.json({ hilo: null });
     const { ok, detalle, vistaPrevia = true } = parsed.data.desenlace;
+    /* ⚠ ESTO ES VOZ DEL ASISTENTE Y SE PERSISTE EN EL HILO: el modelo lo relee como contexto en
+       cada turno siguiente. Cableado a «el cronograma», el chat de un kickoff aprendía de su
+       propio historial que estaba editando un cronograma. Visto en pantalla el 2026-08-22.
+       Y por eso mismo va en TUTEO NEUTRO, no en el voseo de la interfaz. */
+    const elDocumento = parsed.data.pieza === PIEZA_CRONOGRAMA ? "el cronograma" : "el documento";
     await agregarTurno(hilo.id, {
       rol: "ASISTENTE",
       /* ⚠ En TUTEO neutro: estos turnos son la VOZ DEL ASISTENTE, aunque los escriba la app.
@@ -158,13 +164,13 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
 
 ${detalle}
 
-${vistaPrevia ? "Revisa la vista previa antes de aceptar." : "Ya quedó guardado en el cronograma: revísalo."}`
+${vistaPrevia ? "Revisa la vista previa antes de aceptar." : `Ya quedó guardado en ${elDocumento}: revísalo.`}`
           : vistaPrevia
             ? "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
             : /* ⛔ EL CARRIL DE OPERACIONES NO DEJA VISTA PREVIA: escribe directo, en ~1 ms. Mandar
                  a la persona a «aceptar los cambios» la deja buscando un banner que no existe —y
                  peor, sugiere que lo que ya está guardado todavía se puede descartar. */
-              "✅ Listo, el cronograma ya quedó actualizado. Si algo no está como esperabas, decímelo y lo ajustamos."
+              `✅ Listo, ${elDocumento} ya quedó actualizado. Si algo no está como esperabas, dímelo y lo ajustamos.`
         : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.`),
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));

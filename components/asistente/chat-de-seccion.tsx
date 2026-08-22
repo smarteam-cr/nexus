@@ -30,7 +30,15 @@
  * va a hacer— el modelo no puede negarse. La reja vive en las casillas del acuerdo, que es donde
  * se revisa.
  */
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export interface SeccionReferida {
   key: string;
@@ -50,17 +58,31 @@ interface Registro {
 
 const Ctx = createContext<Registro | null>(null);
 
+/**
+ * ⭐ Canal aparte para DECLARAR la disponibilidad, y existe por un bug que ya se pagó dos veces.
+ *
+ * `disponible` se calcula con estado que solo el workspace tiene (¿hay contenido?, ¿está en modo
+ * edición?). Mientras era una PROP del proveedor, el proveedor tenía que montarse adentro del
+ * workspace — y ahí el cajón del chat, que es hermano del workspace, quedaba FUERA y leía el
+ * contexto por defecto: el chip nunca se fijaba y el modelo nunca sabía de qué sección se hablaba.
+ * Visto en producción el 2026-08-22, en la Propuesta comercial.
+ *
+ * La forma correcta es la misma que ya usa el aplicador: **el que provee está arriba de todos, y
+ * el que tiene el estado se REGISTRA desde adentro**. Por eso el dato viaja hacia arriba por este
+ * contexto en vez de entrar por props hacia abajo.
+ */
+const CtxDeclarar = createContext<((v: boolean) => void) | null>(null);
+
 export function ChatDeSeccionProvider({
-  disponible,
   onAbrir,
   children,
 }: {
-  disponible: boolean;
   /** Lo que hace el panel al pedir el chat: abrir el cajón. */
   onAbrir: () => void;
   children: ReactNode;
 }) {
   const [seccion, setSeccion] = useState<SeccionReferida | null>(null);
+  const [disponible, setDisponible] = useState(false);
 
   const abrirCon = useCallback(
     (s: SeccionReferida) => {
@@ -75,7 +97,29 @@ export function ChatDeSeccionProvider({
     () => ({ seccion, abrirCon, soltar, disponible }),
     [seccion, abrirCon, soltar, disponible],
   );
-  return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={valor}>
+      <CtxDeclarar.Provider value={setDisponible}>{children}</CtxDeclarar.Provider>
+    </Ctx.Provider>
+  );
+}
+
+/**
+ * Declara si ESTE documento tiene chat. Se monta adentro del workspace, que es el único que sabe
+ * la respuesta; sin él, el botón «Cambiar» no se pinta en ninguna sección.
+ *
+ * ⚠ Se apaga al desmontarse: cambiar de canvas o salir del modo edición tiene que apagar el botón,
+ * y confiar en que el próximo montaje lo pise dejaría el botón vivo sobre un documento que ya no
+ * está en pantalla.
+ */
+export function ChatDeSeccionDisponible({ cuando }: { cuando: boolean }) {
+  const declarar = useContext(CtxDeclarar);
+  useEffect(() => {
+    if (!declarar) return;
+    declarar(cuando);
+    return () => declarar(false);
+  }, [declarar, cuando]);
+  return null;
 }
 
 /**

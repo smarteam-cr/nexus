@@ -58,11 +58,27 @@ export type OperacionDeDocumento =
       op: "seccion.item.agregar";
       key: string;
       lista: string;
-      valores: Record<string, string>;
+      /**
+       * Los campos del ítem, cuando la lista es de OBJETOS (`items[{title, detail}]`).
+       *
+       * ⚠ Excluyente con `valor`: una lista es de textos o de objetos, nunca de las dos cosas.
+       */
+      valores?: Record<string, string>;
+      /**
+       * ⭐ El texto, cuando la lista es de TEXTOS SUELTOS (`tags`, `hoy`, `conSistema`, `canales`).
+       *
+       * ⛔ ESTE CAMPO FALTABA Y HACÍA IMPOSIBLE AGREGAR A ESAS LISTAS. Los campos permitidos salían
+       * de `items.properties`, que en una lista de textos no existe: cualquier `valores` se
+       * rechazaba con «X no es un campo de esa lista», y un `valores` vacío insertaba un OBJETO
+       * VACÍO dentro del array de strings — que el normalizador del motor borra al pintar, así que
+       * el chat decía «aplicado» sobre algo que desapareció. Visto en producción el 2026-08-22,
+       * sobre la comparación del kickoff.
+       */
+      valor?: string;
       posicion?: number;
     }
-  | { op: "seccion.item.borrar"; key: string; lista: string; posicion: number; ancla: string }
-  | { op: "seccion.item.mover"; key: string; lista: string; posicion: number; a: number; ancla: string }
+  | { op: "seccion.item.borrar"; key: string; lista: string; posicion: number; ancla?: string }
+  | { op: "seccion.item.mover"; key: string; lista: string; posicion: number; a: number; ancla?: string }
   | { op: "seccion.vaciar"; key: string }
   // ESTRUCTURA
   | { op: "seccion.crear"; tipo: string; titulo: string; posicion?: number; ref?: string }
@@ -111,6 +127,58 @@ export function esOperacionDeDocumento(v: unknown): v is OperacionDeDocumento {
   return typeof op === "string" && (OPERACIONES_DE_DOCUMENTO_VALIDAS as readonly string[]).includes(op);
 }
 
+/**
+ * ⭐ ¿ESTA OPERACIÓN ESTÁ COMPLETA? — el chequeo que `esOperacionDeDocumento` no hace.
+ *
+ * Aquella función solo mira el NOMBRE (`op`), y así tiene que quedarse: es reconocimiento, y su
+ * test lo congela. Pero la herramienta del modelo declara `required: ["op"]`, así que un
+ * `{op:"seccion.item.borrar"}` pelado —sin sección, sin lista, sin posición— es una entrada
+ * válida para Anthropic. Con solo el reconocimiento, ese objeto entraba al acuerdo, SE PERSISTÍA
+ * en el hilo y se pintaba en la cajita como un cambio que la persona podía aprobar.
+ *
+ * ⛔ **NO exige `ancla`.** El ancla la calcula la app justo antes de acordar (ver
+ * `prepararOperacionesDeDocumento`); exigirla acá rechazaría todo lo que el modelo emite bien.
+ */
+export function validarOperacionDeDocumento(
+  v: unknown,
+): { ok: true; operacion: OperacionDeDocumento } | { ok: false; motivo: string } {
+  const o = v as Record<string, unknown> | null;
+  const op = o?.op;
+  if (typeof op !== "string") return { ok: false, motivo: "llegó un cambio sin nombre de operación" };
+  if (!(OPERACIONES_DE_DOCUMENTO_VALIDAS as readonly string[]).includes(op)) {
+    return { ok: false, motivo: `«${op}» no es una operación de documento` };
+  }
+
+  const texto = (k: string) => (typeof o?.[k] === "string" && (o[k] as string).trim() ? null : k);
+  /** ⚠ El texto de un campo SÍ puede ir vacío a propósito (borrar una bajada); solo tiene que estar. */
+  const presente = (k: string) => (typeof o?.[k] === "string" ? null : k);
+  const entero = (k: string) => (Number.isInteger(o?.[k]) ? null : k);
+
+  const falta: (string | null)[] =
+    op === "seccion.campo" ? [texto("key"), texto("campo"), presente("valor")]
+    : op === "seccion.item.agregar"
+      ? [
+          texto("key"),
+          texto("lista"),
+          /* Una de las dos formas, nunca ninguna: el ítem sería un objeto vacío. */
+          typeof o?.valor === "string" || (o?.valores && typeof o.valores === "object")
+            ? null
+            : "valor/valores",
+        ]
+    : op === "seccion.item.borrar" ? [texto("key"), texto("lista"), entero("posicion")]
+    : op === "seccion.item.mover" ? [texto("key"), texto("lista"), entero("posicion"), entero("a")]
+    : op === "seccion.crear" ? [texto("tipo"), texto("titulo")]
+    : op === "seccion.mover" ? [texto("key"), entero("posicion")]
+    : op === "seccion.renombrar" ? [texto("key"), texto("titulo")]
+    : /* vaciar · borrar · ocultar · mostrar */ [texto("key")];
+
+  const faltantes = falta.filter((f): f is string => f !== null);
+  if (faltantes.length) {
+    return { ok: false, motivo: `a «${op}» le falta ${faltantes.join(", ")}` };
+  }
+  return { ok: true, operacion: v as OperacionDeDocumento };
+}
+
 // ── Lo que el ejecutor necesita saber ─────────────────────────────────────────────────────────
 
 /** Una sección del documento, como la ve el ejecutor. */
@@ -129,6 +197,13 @@ export interface SeccionActual {
   esCreada: boolean;
   /** `false` en las secciones estructurales (portada, cierre): no se mueven ni se ocultan. */
   movible: boolean;
+  /**
+   * Cómo se llama cada lista EN PANTALLA, por su key. Solo para las líneas que lee la persona.
+   *
+   * ⚠ Sin esto, las dos columnas del cuadro «Del hoy al nuevo sistema» se anuncian como `hoy` y
+   * `conSistema` — nombres de programador para el cuadro que dice «HOY» y «CON EL SISTEMA».
+   */
+  rotulosDeListas?: Record<string, string>;
 }
 
 /** Qué sabe hacer ESTE documento. Ver el porqué en `puedeOcultar`. */
@@ -314,6 +389,112 @@ export function anclaDeItem(data: unknown, lista: string, posicion: number): str
 
 const clonar = <T,>(v: T): T => structuredClone(v);
 
+/** Lo que sale de preparar un lote de operaciones antes de acordarlo. */
+export interface PreparacionDeOperaciones {
+  /** Enriquecidas con su ancla y validadas contra el documento real. Son las que se acuerdan. */
+  aceptadas: OperacionDeDocumento[];
+  /** No pasaron. Van al reintento del modelo y, si insisten, se le dicen a la persona. */
+  rechazadas: { operacion: unknown; motivo: string }[];
+  /** Índices dentro de `aceptadas` que nombran una sección que este mismo lote va a crear. */
+  diferidas: number[];
+}
+
+/**
+ * ⭐⭐ LO QUE SE ACUERDA YA PASÓ POR EL EDITOR — la pieza que faltaba.
+ *
+ * ── LOS DOS AGUJEROS QUE ESTO CIERRA, los dos vistos en producción el 2026-08-22 ──────────────
+ *
+ * 1. ⛔ **EL ANCLA NO LA CALCULABA NADIE.** El encabezado de este archivo promete, desde que se
+ *    escribió, que «la calcula la app, nunca el modelo». No era cierto: la herramienta del modelo
+ *    ni siquiera declara el campo, y `anclaDeItem` solo se llamaba DENTRO del ejecutor, como
+ *    validador. Resultado: `seccion.item.borrar` y `seccion.item.mover` se rechazaban SIEMPRE
+ *    —«"undefined" ya no está en esa posición: alguien reordenó la lista», un mensaje que además
+ *    mandaba a investigar un reordenamiento que nunca pasó— y la línea de la cajita decía
+ *    literalmente «Se quita «undefined»». Borrar o mover un ítem por chat era imposible en los
+ *    diez documentos. El test no lo cazaba porque pasaba las anclas a mano.
+ *
+ * 2. ⛔ **EL ACUERDO PROMETÍA COSAS QUE EL EDITOR IBA A RECHAZAR.** La persona leía cuatro
+ *    renglones, marcaba las casillas, apretaba «Aplicar» y recién ahí aparecía «no se pudieron
+ *    aplicar 4 de 4». El dry-run mueve ese descubrimiento ANTES del acuerdo: se corre el ejecutor
+ *    —que es puro— sobre el documento real y se tira el plan. Lo que no pasa, no se ofrece.
+ *
+ * ⭐ Y eso es lo que habilita el reintento: los rechazos vuelven al modelo como resultado de su
+ * propia herramienta, en la misma llamada, para que corrija los nombres que inventó. Es el loop
+ * agéntico, sobre un vocabulario cerrado.
+ */
+export function prepararOperacionesDeDocumento(
+  actuales: readonly SeccionActual[],
+  crudas: readonly unknown[],
+  capacidades: CapacidadesDelDocumento,
+): PreparacionDeOperaciones {
+  const rechazadas: { operacion: unknown; motivo: string }[] = [];
+  const validas: OperacionDeDocumento[] = [];
+
+  for (const cruda of crudas) {
+    const v = validarOperacionDeDocumento(cruda);
+    if (v.ok) validas.push(v.operacion);
+    else rechazadas.push({ operacion: cruda, motivo: v.motivo });
+  }
+
+  /* Las secciones que este mismo lote crea todavía no existen: sus operaciones de contenido no se
+     pueden validar contra data que no está. Se dejan pasar sin dry-run —el ejecutor las resuelve
+     en orden— en vez de rechazarlas por un estado que aún no ocurrió. */
+  const refsCreadas = new Set(
+    validas.flatMap((o) => (o.op === "seccion.crear" && o.ref?.trim() ? [o.ref.trim()] : [])),
+  );
+  const nombraUnaCreada = (o: OperacionDeDocumento) =>
+    "key" in o && typeof o.key === "string" && refsCreadas.has(o.key);
+
+  const porKey = new Map(actuales.map((s) => [s.key, s]));
+  const aceptadas: OperacionDeDocumento[] = [];
+  const diferidas: number[] = [];
+
+  for (const o of validas) {
+    if (nombraUnaCreada(o)) {
+      diferidas.push(aceptadas.length);
+      aceptadas.push(o);
+      continue;
+    }
+    /* El enriquecimiento: la app pone el ancla leyendo el documento de AHORA. Si no puede
+       calcularla —la lista no existe, el ítem no tiene texto— la operación sigue sin ancla y el
+       dry-run de abajo la rechaza con el motivo REAL, en vez de con uno inventado. */
+    const s = porKey.get((o as { key?: string }).key ?? "");
+    if (s && (o.op === "seccion.item.borrar" || o.op === "seccion.item.mover")) {
+      const ancla = anclaDeItem(s.data, o.lista, o.posicion);
+      aceptadas.push(ancla === null ? o : { ...o, ancla });
+    } else if (s && o.op === "seccion.campo") {
+      const ancla = anclaDeRuta(s.schema, s.data, o.campo);
+      aceptadas.push(ancla === null ? o : { ...o, ancla });
+    } else {
+      aceptadas.push(o);
+    }
+  }
+
+  /* ⚠ El dry-run corre sobre TODO el lote y en orden, no operación por operación: una que depende
+     de otra —crear y llenar, agregar y después mover— tiene que ver el resultado de la anterior,
+     igual que al aplicar de verdad. El `plan` se descarta: acá no se escribe nada. */
+  const seco = aplicarOperacionesDeDocumento(actuales, aceptadas, capacidades);
+  if (seco.rechazadas.length === 0) return { aceptadas, rechazadas, diferidas };
+
+  const caidas = new Set(seco.rechazadas.map((r) => r.operacion));
+  const sobreviven: OperacionDeDocumento[] = [];
+  const diferidasFinales: number[] = [];
+  aceptadas.forEach((o, i) => {
+    /* Una diferida no se juzga por el dry-run: su sección no existía cuando corrió. */
+    if (diferidas.includes(i)) {
+      diferidasFinales.push(sobreviven.length);
+      sobreviven.push(o);
+      return;
+    }
+    if (caidas.has(o)) rechazadas.push({ operacion: o, motivo: motivoDe(seco.rechazadas, o) });
+    else sobreviven.push(o);
+  });
+  return { aceptadas: sobreviven, rechazadas, diferidas: diferidasFinales };
+}
+
+const motivoDe = (rs: readonly OperacionRechazada[], o: OperacionDeDocumento) =>
+  rs.find((r) => r.operacion === o)?.motivo ?? "el editor la rechazó";
+
 /**
  * Traduce las operaciones a un PLAN de escrituras. ⛔ No escribe: ver el encabezado.
  *
@@ -368,16 +549,41 @@ export function aplicarOperacionesDeDocumento(
         if (!nodo || nodo.type !== "array") { rechazar(o, `«${o.lista}» no es una lista de esa sección`); break; }
         const items = nodo.items as NodoDeSchema | undefined;
         const arr = (s.data[o.lista] as unknown[] | undefined) ?? [];
-        /* Solo entran las propiedades que el schema declara: una key de más se descartaría después
-           en silencio, y el CSE habría aprobado una línea que prometía algo que no pasó. */
-        const permitidas = new Set(Object.keys(items?.properties ?? {}));
-        const desconocidas = Object.keys(o.valores).filter((k) => !permitidas.has(k));
-        if (desconocidas.length) {
-          rechazar(o, `«${desconocidas[0]}» no es un campo de esa lista`);
-          break;
+
+        /* ⭐ DOS FORMAS DE LISTA, Y HAY QUE DISTINGUIRLAS.
+           Una lista de TEXTOS sueltos (`tags`, `hoy`, `conSistema`, `canales`) no tiene campos con
+           nombre: su ítem ES el texto. Mientras el ejecutor asumió que toda lista era de objetos,
+           `items.properties` venía vacío y AGREGAR ERA IMPOSIBLE — con `valores` rechazaba
+           siempre, y sin él insertaba un objeto vacío que el motor borra al pintar, en silencio.
+           Es el fallo que Elías vio el 2026-08-22 sobre la comparación del kickoff. */
+        let nuevo: unknown;
+        if (items?.type === "string") {
+          if (o.valores && Object.keys(o.valores).length) {
+            rechazar(o, `«${o.lista}» es una lista de textos: el texto va en \`valor\``);
+            break;
+          }
+          const texto = (o.valor ?? "").trim();
+          if (!texto) { rechazar(o, `«${o.lista}» lleva un texto, y llegó vacío`); break; }
+          nuevo = o.valor;
+        } else {
+          if (o.valor !== undefined && !o.valores) {
+            rechazar(o, `los ítems de «${o.lista}» llevan campos con nombre: van en \`valores\``);
+            break;
+          }
+          /* Solo entran las propiedades que el schema declara: una key de más se descartaría
+             después en silencio, y el CSE habría aprobado una línea que prometía algo que no
+             pasó. */
+          const permitidas = new Set(Object.keys(items?.properties ?? {}));
+          const dados = o.valores ?? {};
+          const desconocidas = Object.keys(dados).filter((k) => !permitidas.has(k));
+          if (desconocidas.length) {
+            rechazar(o, `«${desconocidas[0]}» no es un campo de esa lista`);
+            break;
+          }
+          const armado: Record<string, unknown> = {};
+          for (const k of permitidas) armado[k] = dados[k] ?? "";
+          nuevo = armado;
         }
-        const nuevo: Record<string, unknown> = {};
-        for (const k of permitidas) nuevo[k] = o.valores[k] ?? "";
         const pos = o.posicion === undefined ? arr.length : Math.max(0, Math.min(arr.length, o.posicion));
         const next = arr.slice();
         next.splice(pos, 0, nuevo);
@@ -392,7 +598,11 @@ export function aplicarOperacionesDeDocumento(
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
         const arr = s.data[o.lista] as unknown[] | undefined;
         if (!Array.isArray(arr)) { rechazar(o, `«${o.lista}» no es una lista de esa sección`); break; }
-        if (o.posicion < 0 || o.posicion >= arr.length) {
+        /* ⚠ `Number.isInteger` primero: sin él, un `posicion` ausente atravesaba las dos
+           comparaciones (`undefined < 0` y `undefined >= n` son ambas `false`) y llegaba al
+           `splice`, que borra el ítem 0. Hoy lo frenaba el ancla; el día que el ancla se calcule
+           bien, esto sería un borrado silencioso del primer ítem. */
+        if (!Number.isInteger(o.posicion) || o.posicion < 0 || o.posicion >= arr.length) {
           rechazar(o, `esa lista tiene ${arr.length} ítems y se pidió el ${o.posicion + 1}`);
           break;
         }
@@ -423,7 +633,16 @@ export function aplicarOperacionesDeDocumento(
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
         /* El `empty` sale del schema y no de una constante: vaciar tiene que dejar la sección con
            la forma que su renderer espera, no con un objeto vacío. */
-        s.data = vacioDeSchema(s.schema) as Record<string, unknown>;
+        const molde = vacioDeSchema(s.schema);
+        /* ⛔ Una sección sin schema declarado (el cronograma del kickoff, los procesos: se dibujan
+           desde el proyecto) caía al `return ""` del final y ESCRIBÍA LA STRING VACÍA como data de
+           la sección. Los normalizadores del motor lo absorben al pintar, así que no se veía —
+           pero quedaba data corrupta guardada en la base. */
+        if (typeof molde !== "object" || molde === null) {
+          rechazar(o, "esa sección no tiene contenido editable desde acá: se dibuja desde el proyecto");
+          break;
+        }
+        s.data = molde as Record<string, unknown>;
         tocadas.add(o.key);
         break;
       }
@@ -548,19 +767,29 @@ export function describirOperacionesDeDocumento(
 ): string[] {
   const porKey = new Map(actuales.map((s) => [s.key, s]));
   const nombre = (key: string) => porKey.get(key)?.label ?? "(una sección que ya no está)";
+  /* ⭐ El rótulo HUMANO de la lista, no su key. Pedido de Elías el 2026-08-22: sobre la
+     comparación del kickoff, «se agrega X a hoy» y «se agrega X a conSistema» son la misma frase
+     para quien lee — y son las dos columnas del cuadro. Sin el rótulo, aprobar no es decidir. */
+  const lista = (key: string, l: string | undefined) =>
+    `«${porKey.get(key)?.rotulosDeListas?.[l ?? ""] ?? l ?? "(sin nombre)"}»`;
+  /* ⛔ El ancla puede faltar: el modelo NO la emite (no está en su herramienta) y la calcula la
+     app. Si por lo que sea llega vacía, la línea nombra la posición en vez de interpolar
+     `undefined` — que es lo que se leyó en pantalla el 2026-08-22: «Se quita «undefined»…». */
+  const itemDicho = (ancla: string | undefined, posicion: number | undefined) =>
+    ancla?.trim() ? `«${ancla}»` : `el ítem ${(posicion ?? 0) + 1}`;
 
   return operaciones.map((o) => {
     switch (o.op) {
       case "seccion.campo":
-        return `En «${nombre(o.key)}», ${o.campo} pasa a: «${recortar(o.valor)}»`;
+        return `En «${nombre(o.key)}», ${o.campo} pasa a: «${recortar(o.valor ?? "")}»`;
       case "seccion.item.agregar": {
-        const primero = Object.values(o.valores).find((v) => v.trim()) ?? "";
-        return `Se agrega «${recortar(primero)}» a ${o.lista} de «${nombre(o.key)}»`;
+        const texto = o.valor ?? Object.values(o.valores ?? {}).find((v) => v?.trim()) ?? "";
+        return `Se agrega «${recortar(texto)}» a la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
       }
       case "seccion.item.borrar":
-        return `Se quita «${o.ancla}» de ${o.lista} de «${nombre(o.key)}»`;
+        return `Se quita ${itemDicho(o.ancla, o.posicion)} de la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
       case "seccion.item.mover":
-        return `«${o.ancla}» pasa al lugar ${o.a + 1} de ${o.lista} en «${nombre(o.key)}»`;
+        return `${itemDicho(o.ancla, o.posicion)} pasa al lugar ${(o.a ?? 0) + 1} de la lista ${lista(o.key, o.lista)} en «${nombre(o.key)}»`;
       case "seccion.vaciar":
         return `⚠ Se borra TODO el contenido de «${nombre(o.key)}»`;
       case "seccion.crear":

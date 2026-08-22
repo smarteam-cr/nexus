@@ -36,6 +36,7 @@ import {
   mensajeSinAlcance,
   useChatDeSeccion,
 } from "@/components/asistente/chat-de-seccion";
+import { PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
@@ -161,6 +162,10 @@ export default function ChatDelAsistente({
   const [aplicando, setAplicando] = useState(false);
   const finRef = useRef<HTMLDivElement | null>(null);
   const { seccion: seccionReferida, soltar: soltarSeccion } = useChatDeSeccion();
+  /* ⚠ El rótulo sale de la PIEZA, no está cableado. El chat nació sobre el cronograma y los tres
+     carteles decían «al cronograma»; desde que atiende diez documentos, un acuerdo sobre una
+     Entrega ofrecía «Aplicar al cronograma». Visto en pantalla el 2026-08-22. */
+  const nombreDeLaPieza = pieza === PIEZA_CRONOGRAMA ? "cronograma" : "documento";
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   /** Alto máximo del composer antes de scrollear adentro — ~10 líneas, para no comerse la caja de mensajes. */
   const ALTO_MAXIMO_COMPOSER = 200;
@@ -441,7 +446,7 @@ export default function ChatDelAsistente({
            operaciones que no son idempotentes. */
         if (!quedoEscrito) {
           setError(
-            "El cambio se aplicó al cronograma, pero no se pudo dejar constancia en la " +
+            `El cambio se aplicó al ${nombreDeLaPieza}, pero no se pudo dejar constancia en la ` +
               "conversación. ⚠ No lo apliques de nuevo: se duplicaría. Recargá para ver el hilo.",
           );
         }
@@ -813,7 +818,7 @@ export default function ChatDelAsistente({
                       : sinNadaQueAplicar(t.id, t.acuerdo)
                         ? "No queda nada marcado"
                         : t.acuerdo.operaciones
-                          ? `Aplicar al cronograma${
+                          ? `Aplicar al ${nombreDeLaPieza}${
                               (desmarcadas[t.id]?.size ?? 0) > 0
                                 ? ` (${operacionesAceptadas(t.id, t.acuerdo).length})`
                                 : ""
@@ -855,7 +860,7 @@ export default function ChatDelAsistente({
         {aplicando && (
           <p className="text-xs text-fg-muted">
             {turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
-              ? "Aplicando los cambios al cronograma…"
+              ? `Aplicando los cambios al ${nombreDeLaPieza}…`
               : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Podés seguir mirando el documento mientras tanto."}
           </p>
         )}

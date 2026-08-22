@@ -29,7 +29,7 @@ import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucio
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
-import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
+import { ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
 import { PIEZA_PROPUESTA_COMERCIAL, puedeConversar } from "@/lib/asistente/piezas";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 
@@ -414,13 +414,12 @@ export default function BusinessCaseWorkspace({
             />
           </div>
         )}
-        {/* El botón «Cambiar» de cada sección vive adentro del motor y pide el chat por acá.
+        {/* El botón «Cambiar» de cada sección vive adentro del motor y lo enciende esta línea.
             ⛔ En la Plantilla NO: ahí se editan las guías del agente, no el contenido — un chat
             que «aplica» sobre una guía escribiría en el lugar equivocado. */}
-        <ChatDeSeccionProvider
-          disponible={!!onAbrirChat && !isTemplate && puedeConversar(PIEZA_PROPUESTA_COMERCIAL, hasContent)}
-          onAbrir={onAbrirChat ?? NO_ABRE}
-        >
+        <ChatDeSeccionDisponible
+          cuando={!!onAbrirChat && !isTemplate && puedeConversar(PIEZA_PROPUESTA_COMERCIAL, hasContent)}
+        />
         {!hasCanvas || hook.loading ? (
           <div className="px-6 pb-8">
             <div className="rounded-xl border border-dashed border-line bg-surface p-8 text-center text-sm text-fg-muted">
@@ -472,7 +471,6 @@ export default function BusinessCaseWorkspace({
             )}
           />
         )}
-        </ChatDeSeccionProvider>
         {/* Agregar una sección propia va DEBAJO del documento y fuera de `LandingView`
             (que se mantiene genérico para los seis tipos que lo montan). Al pie y no
             arriba porque la sección nace al final: aparece donde el vendedor está

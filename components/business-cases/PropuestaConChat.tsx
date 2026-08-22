@@ -15,6 +15,7 @@
  */
 import { useCallback, useState } from "react";
 import { AplicadorDeDocumentoProvider } from "@/components/asistente/aplicador-de-documento";
+import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { PIEZA_PROPUESTA_COMERCIAL } from "@/lib/asistente/piezas";
 import BusinessCaseWorkspace from "./BusinessCaseWorkspace";
@@ -29,6 +30,11 @@ export default function PropuestaConChat(props: PropsDelWorkspace) {
 
   return (
     <AplicadorDeDocumentoProvider>
+      {/* ⛔ El proveedor envuelve el workspace Y el cajón, en ese orden. Mientras vivió ADENTRO del
+          workspace, el cajón era su HERMANO y leía el contexto por defecto: el chip nunca se fijaba
+          y el modelo no sabía de qué sección se hablaba. Visto en producción el 2026-08-22.
+          El workspace declara su disponibilidad desde adentro, con `ChatDeSeccionDisponible`. */}
+      <ChatDeSeccionProvider onAbrir={abrir}>
       <BusinessCaseWorkspace {...props} onAbrirChat={abrir} />
       <ChatDelDocumento
         base={`/api/business-cases/${props.bcId}`}
@@ -37,6 +43,7 @@ export default function PropuestaConChat(props: PropsDelWorkspace) {
         abierto={abierto}
         onClose={() => setAbierto(false)}
       />
+      </ChatDeSeccionProvider>
     </AplicadorDeDocumentoProvider>
   );
 }

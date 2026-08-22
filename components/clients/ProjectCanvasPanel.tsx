@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
+import { ChatDeSeccionProvider, ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -554,10 +554,14 @@ export default function ProjectCanvasPanel({
     {/* El botón «Cambiar» de cada sección vive adentro del motor y pide el chat por acá. Los
         ocho documentos lo heredan sin tocar ninguno — y la vista del cliente y el PDF, que montan
         el mismo motor, no lo pintan porque no tienen proveedor. */}
-    <ChatDeSeccionProvider
-      disponible={!!activeSlug && puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? ""))}
-      onAbrir={abrirChat}
-    >
+    <ChatDeSeccionProvider onAbrir={abrirChat}>
+    {/* ⚠ La disponibilidad se DECLARA desde adentro, nunca por prop del proveedor: mientras era
+        una prop, el proveedor tenía que bajar hasta donde vive ese estado y el cajón quedaba
+        afuera. Ver `chat-de-seccion.tsx`. Acá el panel ya tiene el dato, así que la línea va
+        pegada al proveedor — pero por el mismo canal que usan los otros dos documentos. */}
+    <ChatDeSeccionDisponible
+      cuando={!!activeSlug && puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? ""))}
+    />
     <div className="px-6 py-8 space-y-6">
       {/* Widget del proyecto — SIEMPRE visible en la cabecera (antes vivía dentro
           del canvas Resumen). Última/próxima sesión, estado actual, pendientes. */}

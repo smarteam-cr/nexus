@@ -26,7 +26,7 @@ import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { useEjecutarOperacionesDelChatDeRol } from "@/components/asistente/ejecutar-operaciones-de-rol";
-import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
+import { ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
 import { landingConfigForDocType } from "@/components/landing/configs/doc-type";
 import { contentKeysForDocType, escalaForDocType, sectionDefsForDocType } from "@/lib/roles/doc-type";
 import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
@@ -402,10 +402,10 @@ export default function RoleWorkspace({
           .filter(Boolean)
           .join(" ")}
       >
-        {/* El botón «Cambiar» de cada sección lo pinta el motor y pide el chat por acá.
+        {/* El botón «Cambiar» de cada sección lo pinta el motor y lo enciende esta línea.
             ⚠ Solo EDITANDO: en modo lectura no hay nada que cambiar, y el botón invitaría a
             acordar algo que después no se aplica. */}
-        <ChatDeSeccionProvider disponible={!!onAbrirChat && editing} onAbrir={onAbrirChat ?? NO_ABRE}>
+        <ChatDeSeccionDisponible cuando={!!onAbrirChat && editing} />
         <LandingView
           config={landingConfigForDocType(docType)}
           ctx={{ clientName: "" }}
@@ -414,7 +414,6 @@ export default function RoleWorkspace({
           showBriefs={false}
           onSectionChange={onSectionChange}
         />
-        </ChatDeSeccionProvider>
       </div>
     </div>
   );

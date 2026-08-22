@@ -12,6 +12,7 @@
  */
 import { useCallback, useState } from "react";
 import { AplicadorDeDocumentoProvider } from "@/components/asistente/aplicador-de-documento";
+import { ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { PIEZA_ROL } from "@/lib/asistente/piezas";
 import RoleWorkspace from "./RoleWorkspace";
@@ -24,6 +25,8 @@ export default function RolConChat(props: PropsDelWorkspace) {
 
   return (
     <AplicadorDeDocumentoProvider>
+      {/* El proveedor envuelve el workspace Y el cajón — ver el porqué en `PropuestaConChat`. */}
+      <ChatDeSeccionProvider onAbrir={abrir}>
       <RoleWorkspace {...props} onAbrirChat={abrir} />
       <ChatDelDocumento
         base={`/api/roles/${props.role.id}`}
@@ -32,6 +35,7 @@ export default function RolConChat(props: PropsDelWorkspace) {
         abierto={abierto}
         onClose={() => setAbierto(false)}
       />
+      </ChatDeSeccionProvider>
     </AplicadorDeDocumentoProvider>
   );
 }
