@@ -384,6 +384,10 @@ export default function ClientsGrid({
       /* ⭐ Editable: elegir acá reasigna la CUENTA — escribe `csl_encargado` en todos los
          proyectos del cliente que están en el pipeline de Implementación de HubSpot. Sin
          permiso se pinta exactamente como antes (texto). Ver `CseEncargadoSelect`. */
+      headerHint:
+        "Cambiar este valor actualiza la propiedad «CSE encargado» en HubSpot, en todos los " +
+        "proyectos del cliente que están en el pipeline de Implementación de HubSpot. Los " +
+        "proyectos de Desarrollo o Sitios web no se tocan: tienen su propio encargado técnico.",
       render: (c) => (
         <CseEncargadoSelect
           clientId={c.id}

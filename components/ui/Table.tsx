@@ -21,6 +21,11 @@ export interface TableColumn<T> {
    * (no el ReactNode). null/undefined ordenan siempre al final.
    */
   sortValue?: (row: T) => string | number | Date | null | undefined;
+  /**
+   * Texto de una (i) junto al título — para columnas cuyo nombre no alcanza a explicar lo
+   * que pasa al tocarlas (ej. una celda editable que escribe en un sistema externo).
+   */
+  headerHint?: string;
 }
 
 export interface TableProps<T> {
@@ -73,6 +78,27 @@ function compareValues(a: SortValue, b: SortValue, dir: "asc" | "desc"): number 
   else cmp = String(a).localeCompare(String(b), "es", { numeric: true, sensitivity: "base" });
 
   return dir === "asc" ? cmp : -cmp;
+}
+
+// ── (i) del encabezado ─────────────────────────────────────────────────────────
+
+/** `title` nativo — es el mismo mecanismo de tooltip que ya usa el resto del repo (no hay
+    componente `Tooltip` dedicado); alcanza para una frase que se lee una vez y no vuelve. */
+function HeaderHint({ text }: { text: string }) {
+  return (
+    <span
+      tabIndex={0}
+      title={text}
+      aria-label={text}
+      className="inline-flex text-fg-muted hover:text-fg-secondary cursor-help"
+    >
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <circle cx="12" cy="12" r="9" strokeWidth={2} />
+        <path strokeLinecap="round" strokeWidth={2} d="M12 11v5" />
+        <circle cx="12" cy="8" r="0.75" fill="currentColor" stroke="none" />
+      </svg>
+    </span>
+  );
 }
 
 // ── Ícono de orden ─────────────────────────────────────────────────────────────
@@ -178,7 +204,14 @@ export function Table<T>({
                     col.hideOnMobile && "hidden sm:table-cell"
                   );
                   if (!col.sortValue) {
-                    return <th key={col.key} className={thClass}>{col.header}</th>;
+                    return (
+                      <th key={col.key} className={thClass}>
+                        <span className="inline-flex items-center gap-1">
+                          {col.header}
+                          {col.headerHint && <HeaderHint text={col.headerHint} />}
+                        </span>
+                      </th>
+                    );
                   }
                   const active = sort?.key === col.key;
                   return (
@@ -189,19 +222,28 @@ export function Table<T>({
                         active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"
                       }
                     >
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(col.key)}
+                      {/* ⚠ El (i) va FUERA del botón de orden: si quedara adentro, tocarlo
+                          dispararía el sort en vez de solo mostrar el tooltip. */}
+                      <span
                         className={cn(
-                          "inline-flex items-center gap-1 hover:text-fg-secondary transition-colors",
-                          active && "text-fg-secondary",
+                          "inline-flex items-center gap-1",
                           col.align === "right" && "w-full justify-end",
                           col.align === "center" && "w-full justify-center"
                         )}
                       >
-                        {col.header}
-                        <SortIcon state={active ? sort!.dir : "inactive"} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(col.key)}
+                          className={cn(
+                            "inline-flex items-center gap-1 hover:text-fg-secondary transition-colors",
+                            active && "text-fg-secondary"
+                          )}
+                        >
+                          {col.header}
+                          <SortIcon state={active ? sort!.dir : "inactive"} />
+                        </button>
+                        {col.headerHint && <HeaderHint text={col.headerHint} />}
+                      </span>
                     </th>
                   );
                 })}

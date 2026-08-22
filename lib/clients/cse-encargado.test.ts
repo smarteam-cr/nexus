@@ -40,6 +40,10 @@ const RUTA = soloCodigo(
 const SELECT = soloCodigo(
   fs.readFileSync(path.join(RAIZ, "components/clients/CseEncargadoSelect.tsx"), "utf8"),
 );
+const INDICE = soloCodigo(
+  fs.readFileSync(path.join(RAIZ, "app/(shell)/clients/ClientsGrid.tsx"), "utf8"),
+);
+const TABLA = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Table.tsx"), "utf8"));
 /**
  * ⚠ LA MECÁNICA SE MUDÓ A UNA PRIMITIVA (2026-08-21). Elías: *«estandariza este componente
  * porque me interesa que en el futuro los listing otros puedan ser selects igual»*. Todo lo que
@@ -275,6 +279,34 @@ describe("⭐ el select de la columna", () => {
     expect(PANEL).toContain("HTMLInputElement");
     const i = PANEL.indexOf("const enTexto");
     expect(i, "desapareció la excepción de Home/End en campos de texto").toBeGreaterThan(-1);
+  });
+
+  it("⭐ el encabezado explica lo que pasa al cambiar el valor", () => {
+    /* Pedido de Elías (2026-08-21): "¿Puedo agregar una (i) explicando lo que pasa al cambiar
+       el CSE encargado?" — una celda editable que escribe en HubSpot no lo dice por su nombre.
+       Se afirma sobre el bloque de LA COLUMNA "cse", no sobre el archivo entero: el índice tiene
+       otras columnas y otro `headerHint` legítimo dejaría pasar un texto vacío o borrado acá. */
+    const i = INDICE.indexOf('key: "cse",');
+    expect(i, "desapareció la columna «CSE encargado» del índice de clientes").toBeGreaterThan(-1);
+    const columna = INDICE.slice(i, INDICE.indexOf('key: "salesMeeting"', i));
+    expect(columna.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(columna, "la columna se quedó sin la (i) explicativa").toContain("headerHint:");
+    expect(
+      columna.includes("HubSpot") && columna.includes("Desarrollo"),
+      "el texto de la (i) dejó de nombrar HubSpot o de aclarar que Desarrollo/Sitios web no se " +
+        "tocan — es justo la parte que evita que alguien la lea como \"cambia TODO lo del cliente\"",
+    ).toBe(true);
+  });
+
+  it("⭐ y `Table` de verdad la pinta — no es un campo que nadie lee", () => {
+    /* Un `headerHint` en el tipo de columna sin nada que lo renderice es letra muerta: el CSE
+       seguiría viendo un encabezado sin ninguna pista.
+       La edición que la pone en rojo: borrar el uso de `col.headerHint` en `Table.tsx`. */
+    expect(
+      (TABLA.match(/col\.headerHint/g) ?? []).length,
+      "col.headerHint dejó de usarse en alguna de las dos formas de encabezado (con/sin orden)",
+    ).toBeGreaterThanOrEqual(2);
+    expect(TABLA).toContain("title={text}");
   });
 
   it("⚠ NO es optimista: repinta con lo que volvió del servidor", () => {
