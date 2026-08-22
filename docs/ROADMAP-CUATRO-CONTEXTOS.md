@@ -64,15 +64,38 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 2 | **El chat del cronograma** | Habla, propone, consensúa, aplica | ✅ En uso · **18 operaciones** (2026-08-21) |
 | 3 | **El chat de documentos** | Conversa, acuerda y aplica sobre los 6 documentos | ✅ 2026-08-21 |
 | 4 | **El chat de procesos** | *«conectá el nodo Desarrollo con el de CRM»* | ⚠ Antes: decisión de alcance |
-| 3.4 | **El chat edita el motor de páginas web** | Crear, modificar, ocultar, mover y borrar secciones por chat — igual en los ocho documentos, con el mismo consenso del cronograma | ✅ 7 commits · falta la Propuesta comercial |
-| 3.5 | **El chat sobre la Propuesta comercial** | Es el documento que originó la conversación. ⚠ Su hilo no cuelga de un proyecto: necesita migración | ⬜ |
-| 3.6 | **Exploración entra al assist** | Arreglar el borrado silencioso de las marcas «ya la pregunté» — y de paso arregla el que YA ocurre al regenerar | ⬜ |
-| 3.7 | **El handoff se puede conversar** | El único con otro motor: hay que decidir si se le tipan las secciones o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
-| 5 | **Agregar secciones** | *«creame una tabla comparativa»* — de los tipos que ya existen. Hoy el motor solo MODIFICA lo que ya está | ⬜ |
+| 3.4 | **El chat edita el motor de páginas web** | Crear, modificar, ocultar, mover y borrar secciones por chat — igual en todos los documentos, con el mismo consenso del cronograma | ✅ 12 commits (2026-08-22) |
+| 3.5 | **El chat sobre la Propuesta comercial y los Roles** | Los documentos que no cuelgan de un proyecto. ⚠ **Trae SQL** | ✅ 2026-08-22 · falta correr la SQL |
+| 3.6 | **Exploración conversa** | Con operaciones el borrado silencioso deja de ser posible: una operación escribe la hoja que nombra, no reconstruye la sección | ✅ 2026-08-22 |
+| 3.7 | **El handoff se puede conversar** | El único que sigue afuera: sus secciones no tienen esquema. Hay que decidir si se le tipan o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
+| 5 | **Agregar secciones** | *«creame una tabla comparativa»* — 7 tipos creables, incluida la tabla genérica que no existía | ✅ 2026-08-22 |
 | 6 | **Que sepa responder** | El chat busca el dato puntual cuando la pregunta lo exige | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
 
-### ⭐ Qué motor tiene cada documento, y dónde hay chat *(2026-08-21)*
+### ⭐ Qué motor tiene cada documento, y dónde hay chat *(al 2026-08-22)*
+
+> **Actualizado.** La tabla de abajo es la foto del 21-ago, cuando Elías hizo la pregunta. Hoy
+> **10 de los 11 documentos conversan y aplican por el mismo vocabulario**; el único que sigue
+> afuera es el Handoff, y por el motivo que la tabla explica (sus secciones no tienen esquema).
+>
+> | Documento | ¿Chat? | ¿Crea secciones? | ¿Oculta? |
+> |---|---|---|---|
+> | Kickoff · Diagnóstico · Planificación · Implementación · Entrega · Requerimientos técnicos | ✅ | ✅ | ✅ |
+> | Exploración | ✅ | ✅ | ✅ |
+> | Propuesta comercial *(incluida la de sitio web)* | ✅ | ✅ | ✅ |
+> | Perfil de puesto · Propuesta laboral *(Roles)* | ✅ | ⛔ *a propósito* | ⛔ *a propósito* |
+> | Cronograma | ✅ | — *(otro vocabulario: fases y tareas)* | — |
+> | **Handoff** | ⬜ | ⬜ | ⬜ |
+>
+> ⛔ **Roles no crea ni oculta a propósito**: su lista de secciones es FIJA — el motor la arma
+> siempre completa desde la plantilla del tipo. Una sección creada ahí quedaría escrita donde nadie
+> la lee, y el hilo diría «aplicado». El chat lo rechaza con el motivo en vez de fingir.
+>
+> ⚠ **Pendiente de Elías antes de deployar**: correr
+> `scripts/sql/2026-08-22-hilo-de-chat-dueno-flexible.sql`. Sin esa migración, el chat de la
+> Propuesta comercial y el de Roles revientan en runtime — el resto sigue funcionando.
+
+
 
 Pregunta de Elías: *«los canvas de sitio web… no entiendo por qué solo se generaron algunos y no
 el de exploración ni el de handoff ni el de propuestas, y en realidad deberían estar hechos con el
