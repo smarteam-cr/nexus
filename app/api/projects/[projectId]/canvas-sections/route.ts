@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { parseSectionEntries, patchSectionEntry } from "@/lib/business-cases/section-briefs";
-import { CUSTOM_PREFIX, CUSTOM_SECTION_EMPTY, MAX_CUSTOM_SECTIONS, nuevaCustomKey } from "@/lib/landing/custom-sections";
+import { CUSTOM_PREFIX, MAX_CUSTOM_SECTIONS, nuevaCustomKey } from "@/lib/landing/custom-sections";
+import { tipoCreable, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -198,6 +199,9 @@ export async function PUT(
 const crearSchema = z.object({
   canvasId: z.string().min(1),
   label: z.string().trim().min(1).max(60),
+  /* QUÉ clase de sección se crea. Opcional: sin él sale un embebido de HTML, que es lo único que
+     se podía crear antes del 2026-08-21 y lo que sigue devolviendo el catálogo por defecto. */
+  tipo: z.string().trim().optional(),
 });
 
 /**
@@ -236,7 +240,7 @@ export async function POST(
       { status: 400 },
     );
   }
-  const { canvasId, label } = parsed.data;
+  const { canvasId, label, tipo } = parsed.data;
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
@@ -266,7 +270,17 @@ export async function POST(
     );
   }
 
-  const key = nuevaCustomKey();
+  /* ⛔ El tipo se valida contra el CATÁLOGO, no contra una expresión regular. Una key con un
+     tipo que nadie programó produce una def que no resuelve renderer, y entonces la sección
+     desaparece sin error — mejor rechazar el pedido que crear una sección invisible. */
+  const creable = tipo ? tipoCreable(tipo) : tipoCreable(TIPO_POR_DEFECTO);
+  if (!creable) {
+    return NextResponse.json(
+      { error: `No existe una sección de tipo «${tipo}».` },
+      { status: 400 },
+    );
+  }
+  const key = nuevaCustomKey(creable.tipo);
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.canvasSection.create({
       data: { canvasId, key, label, titleOverride: label, order: (ultima?.order ?? -1) + 1 },
@@ -275,7 +289,7 @@ export async function POST(
       data: {
         sectionId: created.id,
         blockType: "CARD",
-        data: { ...CUSTOM_SECTION_EMPTY } as Prisma.InputJsonValue,
+        data: structuredClone(creable.empty) as Prisma.InputJsonValue,
         order: 0,
         source: "HUMAN",
         status: "CONFIRMED",

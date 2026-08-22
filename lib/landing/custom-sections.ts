@@ -81,36 +81,51 @@ export function esCustomKey(key: string): boolean {
   return key.startsWith(CUSTOM_PREFIX) && key.length > CUSTOM_PREFIX.length;
 }
 
-/** Key nueva. El uuid se CONSERVA al regenerar (ver el carry-forward de
- *  `createBusinessCaseCanvas`): todo lo que se indexa por key —`hidden`, el orden, el
- *  brief— sigue matcheando en la versión nueva porque la key es la misma. */
-export function nuevaCustomKey(): string {
-  return `${CUSTOM_PREFIX}${crypto.randomUUID()}`;
+/**
+ * Key nueva, con el TIPO adentro: `custom:<tipo>:<uuid>`.
+ *
+ * El uuid se CONSERVA al regenerar (ver el carry-forward de `createBusinessCaseCanvas`): todo lo
+ * que se indexa por key —el ojo, el orden, el brief— sigue matcheando en la versión nueva porque
+ * la key es la misma.
+ *
+ * ── ⭐ POR QUÉ EL TIPO VA EN LA KEY Y NO EN OTRO LADO ─────────────────────────
+ * Es el mismo argumento que eligió el prefijo (ver el encabezado), y suma dos:
+ *
+ *   · **Una columna** costaría una migración COORDINADA entre las dos PCs que comparten esta
+ *     base, para guardar un dato que la key codifica sola.
+ *   · **Adentro del `data`** parece gratis y es la trampa: vaciar la sección escribe el `empty` y
+ *     **borraría el tipo**, dejando una sección cuya def no resuelve → `toSectionDef` devuelve
+ *     `null` → desaparece del editor, del PDF y de la propuesta del cliente, sin un solo error.
+ *   · **En la entry del Json** también es gratis, pero `parseSectionEntries` descarta filas
+ *     malformadas A PROPÓSITO: una entry perdida dejaría la sección sin tipo. Con la key, el tipo
+ *     no se puede separar de la sección.
+ */
+export function nuevaCustomKey(tipo?: string | null): string {
+  const t = (tipo ?? "").trim();
+  return t ? `${CUSTOM_PREFIX}${t}:${crypto.randomUUID()}` : `${CUSTOM_PREFIX}${crypto.randomUUID()}`;
 }
 
 /**
- * La def sintetizada de una sección personalizada. Mismo contrato que las de la plantilla,
- * pero fabricada desde la key en vez de leída de `BC_TEMPLATES`.
+ * El tipo declarado en la key, o `null` si no trae.
  *
- * `agentGenerated:false` + `schema.properties` VACÍO es cinturón y tiradores: el flag hace
- * que el agente la saltee, que la píldora ✨IA no se ofrezca y que regenerar responda 400;
- * el schema vacío hace que, si algún camino se filtrara, `coerceToSchema` no tenga ninguna
- * clave que escribir. ⚠ Ojo con la asimetría: `coerceToSchema` con `properties` vacío
- * devuelve `{}` — o sea que un gate que falte no degrada la sección, la VACÍA.
+ * ⚠ `null` NO es un error: las secciones creadas antes del 2026-08-21 son `custom:<uuid>` —dos
+ * segmentos, sin tipo— y son embebidos de HTML. Exigirles tres las dejaría sin def, o sea las
+ * borraría de propuestas que ya se enviaron. Un uuid lleva guiones pero nunca `:`, así que partir
+ * por `:` es inequívoco.
  */
-export function customDef(key: string, label?: string | null): BCSectionDef {
-  const nombre = (label ?? "").trim() || CUSTOM_SECTION_LABEL;
-  return {
-    key,
-    label: nombre,
-    canvasLabel: nombre,
-    theme: "light",
-    sectionType: HTML_EMBED_TYPE,
-    agentGenerated: false,
-    empty: { ...CUSTOM_SECTION_EMPTY },
-    schema: { type: "object", properties: {} },
-    agentHint: "(No la genera el agente: la escribe Ventas.)",
-    brief:
-      "Sección personalizada: el HTML lo pega Ventas a mano (una animación, unos tabs, una explicación interactiva). El agente NO la escribe. En el PDF no se imprime el contenido interactivo, sale el texto de reemplazo.",
-  };
+export function tipoDeCustomKey(key: string): string | null {
+  if (!esCustomKey(key)) return null;
+  const partes = key.split(":");
+  if (partes.length < 3) return null;
+  const tipo = partes[1].trim();
+  return tipo && /^[a-z_]+$/.test(tipo) ? tipo : null;
 }
+
+/**
+ * ⚠ `customDef` SE MUDÓ a `lib/landing/catalogo-de-secciones.ts` el 2026-08-21.
+ *
+ * Antes fabricaba siempre un embebido de HTML, que era el único tipo creable. Ahora la def sale
+ * del TIPO que declara la key, y ese catálogo vive allá — traerlo acá haría un ciclo de imports
+ * (el catálogo necesita las constantes de este archivo). La dirección correcta es: la gramática de
+ * la key vive acá; qué significa cada tipo, allá.
+ */

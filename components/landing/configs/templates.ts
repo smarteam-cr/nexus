@@ -11,7 +11,13 @@ import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { BC_TEMPLATES, templateById } from "./templates.defs";
-import { customDef, esCustomKey, HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
+import { esCustomKey, HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
+import { customDef, TABLA_TYPE } from "@/lib/landing/catalogo-de-secciones";
+import { TablaSection } from "../sections-tabla";
+import {
+  KickoffProseSection,
+  KickoffComparaSection,
+} from "@/components/canvas/kickoff-sections/KickoffSections";
 import { HtmlEmbedSection } from "../sections-custom";
 import {
   HeroSection,
@@ -75,6 +81,10 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   // el resolver la sintetiza desde la key (`custom:*`). Por eso `registry.test.ts` la
   // excluye del chequeo de huérfanos con un set aparte.
   [HTML_EMBED_TYPE]: HtmlEmbedSection,
+  /* ⚠ Los tipos CREABLES entran también acá, y no es redundante: el snapshot publicado del
+     business case se resuelve contra ESTE mapa (`configForSnapshot`). Sin ellos, una tabla creada
+     en una propuesta se vería en el editor y desaparecería en la que abre el prospecto. */
+  [TABLA_TYPE]: TablaSection,
 };
 
 /** Convierte una def server-safe a SectionDef (con Component) usando un registro de
@@ -122,8 +132,17 @@ export function toSectionDef(
  * renderer acá que ninguna def declare NO es un error, es la definición de "creable".
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const COMPONENTES_CREABLES: Record<string, FC<SectionProps<any>>> = {
+export const COMPONENTES_CREABLES: Record<string, FC<SectionProps<any>>> = {
   [HTML_EMBED_TYPE]: HtmlEmbedSection,
+  /* La tabla genérica: el único tipo del catálogo que ninguna plantilla declara, porque se
+     construyó para esto. Los demás (prosa, métricas, comparación, procesos, diagrama) ya viven en
+     los mapas de sus documentos y se resuelven por ahí. */
+  [TABLA_TYPE]: TablaSection,
+  kickoff_prose: KickoffProseSection,
+  kickoff_compara: KickoffComparaSection,
+  roi: RoiSection,
+  process_mapping: ProcessMappingSection,
+  diagram: DiagramSection,
 };
 
 /**

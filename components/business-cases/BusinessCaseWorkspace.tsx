@@ -23,6 +23,7 @@ import ContextCard from "@/components/business-cases/ContextCard";
 import type { VersionMeta } from "@/components/business-cases/bc-workspace-shared";
 import PublishBar from "@/components/canvas/PublishBar";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
+import { catalogoLegible, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
@@ -446,23 +447,34 @@ export default function BusinessCaseWorkspace({
             mirando, y de ahí la arrastra. En la Plantilla no se ofrece — ahí se editan
             las guías del agente, no el contenido. */}
         {hasCanvas && !hook.loading && !isTemplate && (
-          <AgregarSeccion onAdd={(label) => hook.addSection(label).then((ok) => { if (ok) setDirty(true); })} />
+          <AgregarSeccion onAdd={(label, tipo) => hook.addSection(label, tipo).then((ok) => { if (ok) setDirty(true); })} />
         )}
       </div>
     </div>
   );
 }
 
-/** Barra de "agregar sección personalizada": un botón que se abre a un campo de nombre. */
-function AgregarSeccion({ onAdd }: { onAdd: (label: string) => void }) {
+/**
+ * Barra de "agregar sección": un botón que se abre a un nombre y un TIPO.
+ *
+ * ⭐ El desplegable de tipos entró el 2026-08-21. Hasta entonces lo único que se podía crear era
+ * un embebido de HTML, así que no había nada que elegir. Los tipos salen del catálogo —no de una
+ * lista escrita acá— para que el día que entre uno nuevo aparezca solo, y para que sea el MISMO
+ * conjunto que puede crear el chat: si el menú y el chat ofrecieran cosas distintas, «creá una
+ * tabla» significaría dos cosas según por dónde lo pidas.
+ */
+function AgregarSeccion({ onAdd }: { onAdd: (label: string, tipo: string) => void }) {
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [tipo, setTipo] = useState(TIPO_POR_DEFECTO);
+  const tipos = catalogoLegible();
 
   const enviar = () => {
     const v = nombre.trim();
     if (!v) return;
-    onAdd(v);
+    onAdd(v, tipo);
     setNombre("");
+    setTipo(TIPO_POR_DEFECTO);
     setAbierto(false);
   };
 
@@ -482,6 +494,20 @@ function AgregarSeccion({ onAdd }: { onAdd: (label: string) => void }) {
             placeholder="Nombre de la sección (ej. Demo de la automatización)"
             className="min-w-64 flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-fg outline-none focus:border-brand"
           />
+          {/* El `title` del option lleva el «qué pinta»: elegir un tipo sin saber qué dibuja es
+              elegir a ciegas, y el catálogo ya trae esa frase escrita para una persona. */}
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            aria-label="Qué clase de sección"
+            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg outline-none focus:border-brand"
+          >
+            {tipos.map((t) => (
+              <option key={t.tipo} value={t.tipo} title={t.queEs}>
+                {t.nombre}
+              </option>
+            ))}
+          </select>
           <Button size="sm" onClick={enviar} disabled={!nombre.trim()}>Agregar</Button>
           <Button size="sm" variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
         </div>

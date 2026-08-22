@@ -24,10 +24,10 @@ import {
   EMBED_ALTO_DEFAULT,
   HTML_EMBED_TYPE,
   altoEmbedPx,
-  customDef,
   esCustomKey,
   nuevaCustomKey,
 } from "./custom-sections";
+import { customDef } from "./catalogo-de-secciones";
 import { withEmbedCsp, EMBED_CSP } from "./html-embed";
 import { isBlank } from "./is-blank";
 import { BC_TEMPLATES, defForCanvasSection, defsForCanvas } from "@/components/landing/configs/templates.defs";

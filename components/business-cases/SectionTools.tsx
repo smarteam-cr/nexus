@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
-import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
+import { esCustomKey } from "@/lib/landing/custom-sections";
+import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 
 /** Defs mínimas que necesita el overlay: el `empty` para "Limpiar" y `agentGenerated`

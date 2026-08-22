@@ -654,13 +654,14 @@ export function useCanvasSections(
      pintar antes de la respuesta, y la sección nueva llega con su bloque sembrado —
      inventarla acá sería adivinar el shape que el editor necesita para persistir. */
   const addSection = useCallback(
-    async (label: string): Promise<boolean> => {
+    /** `tipo` sale del catálogo (`lib/landing/catalogo-de-secciones`). Sin él, embebido de HTML. */
+    async (label: string, tipo?: string): Promise<boolean> => {
       pendingWrites.current++;
       try {
         const res = await fetch(`${basePath}/canvas-sections`, {
           method: "POST",
           headers: JSON_HEADERS,
-          body: JSON.stringify({ canvasId, label }),
+          body: JSON.stringify({ canvasId, label, tipo }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));

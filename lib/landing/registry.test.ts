@@ -38,6 +38,12 @@ import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/componen
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
 import {
+  CATALOGO_DE_SECCIONES,
+  TABLA_TYPE,
+  TIPO_POR_DEFECTO,
+} from "@/lib/landing/catalogo-de-secciones";
+import { COMPONENTES_CREABLES } from "@/components/landing/configs/templates";
+import {
   PROCESS_MAPPING_SCHEMA,
   PROCESS_MAPPING_SCHEMA_CON_TITULAR,
 } from "@/components/landing/configs/shared-sections.defs";
@@ -53,11 +59,23 @@ import path from "node:path";
 const LEGACY_SNAPSHOT_TYPES = new Set(["tech_architecture"]);
 
 /** Renderers que NINGÚN template declara porque la sección no existe hasta que alguien la
- *  CREA en runtime: el resolver la sintetiza desde la key (`custom:*` → `html_embed`, ver
- *  lib/landing/custom-sections.ts). No son legacy —están vivos y son la única forma de
- *  renderizar una sección personalizada—, así que van en su propio set: meterlos en
- *  LEGACY_SNAPSHOT_TYPES diría lo contrario de lo que pasa. */
-const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE]);
+ *  CREA en runtime: el resolver la sintetiza desde la key (`custom:<tipo>:<uuid>`, ver
+ *  lib/landing/catalogo-de-secciones.ts). No son legacy —están vivos y son la única forma de
+ *  renderizar una sección creada—, así que van en su propio set: meterlos en
+ *  LEGACY_SNAPSHOT_TYPES diría lo contrario de lo que pasa.
+ *
+ *  ⭐ `tabla` entró el 2026-08-21 y es el ÚNICO tipo del catálogo que hubo que construir: Elías
+ *  pidió que el chat pudiera crear tablas y el motor no tenía ninguna genérica (las dos que había
+ *  son de propósito único — líneas de factura con totales, y propiedades con columnas cerradas).
+ *  Los otros cinco tipos creables ya los declara alguna plantilla, así que resuelven por su mapa
+ *  y no son huérfanos en ninguno.
+ *
+ *  ⚠ Este set NO es una lista de excepciones cómoda: cada entrada es un renderer que solo se
+ *  alcanza sintetizando la def desde una key. Si un tipo entra acá y el catálogo NO lo ofrece,
+ *  queda código que nadie puede alcanzar; si el catálogo lo ofrece y no está registrado,
+ *  `toSectionDef` devuelve null y la sección desaparece sin error. El test de abajo cierra las
+ *  dos direcciones. */
+const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE, TABLA_TYPE]);
 
 describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
   it("cada sectionType de cada template tiene componente registrado", () => {
@@ -629,5 +647,62 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
     expect(t("en", "antes")).toBe("Before");
     expect(t("es", "ahora")).toBe("Ahora");
     expect(t("en", "ahora")).toBe("Now");
+  });
+});
+
+describe("⭐ el catálogo de secciones creables y sus renderers no pueden divergir", () => {
+  it("todo tipo del catálogo resuelve un renderer", () => {
+    /* ⛔ EL MODO DE FALLA: `toSectionDef` devuelve `null` para un `sectionType` que no está en el
+       mapa, el `.filter()` lo descarta, y **la sección desaparece del editor, del PDF y de la
+       propuesta del cliente sin un solo error**. Ofrecer en el catálogo un tipo que no se puede
+       dibujar es prometer una sección que se evapora al crearla.
+       La edición que la pone en rojo: sumar un tipo al catálogo sin registrar su componente. */
+    const sinRenderer = CATALOGO_DE_SECCIONES.filter(
+      (t) => !COMPONENTES_CREABLES[t.sectionType] && !SECTION_COMPONENTS[t.sectionType],
+    );
+    expect(
+      sinRenderer.map((t) => `${t.tipo}→${t.sectionType}`),
+      "hay tipos ofrecidos que no se pueden dibujar: crearlos haría desaparecer la sección",
+    ).toEqual([]);
+  });
+
+  it("y ningún renderer creable queda sin tipo que lo ofrezca", () => {
+    /* La otra dirección: un componente registrado como creable que el catálogo no ofrece es
+       código que nadie puede alcanzar. Se saca del mapa o se ofrece. */
+    const ofrecidos = new Set(CATALOGO_DE_SECCIONES.map((t) => t.sectionType));
+    const huerfanos = Object.keys(COMPONENTES_CREABLES).filter((k) => !ofrecidos.has(k));
+    expect(
+      huerfanos,
+      "hay renderers creables que el catálogo no ofrece: son inalcanzables",
+    ).toEqual([]);
+  });
+
+  it("⚠ toda hoja del schema de un tipo creable es un TEXTO", () => {
+    /* `coerceToSchema` aplana a vacío cualquier hoja que no sea string. Un `{type:"number"}` no
+       falla: devuelve `""`, y el campo queda mudo sin que nada avise. Es la regla que
+       `shared-sections.defs.ts` ya declara en su encabezado, acá hecha cumplir sobre el catálogo.
+       La edición que la pone en rojo: declarar un precio como número en el schema de la tabla. */
+    const malas: string[] = [];
+    const recorrer = (nodo: unknown, ruta: string) => {
+      const n = nodo as { type?: string; properties?: Record<string, unknown>; items?: unknown };
+      if (n?.type === "object") {
+        for (const [k, sub] of Object.entries(n.properties ?? {})) recorrer(sub, `${ruta}.${k}`);
+        return;
+      }
+      if (n?.type === "array") return recorrer(n.items, `${ruta}[]`);
+      if (n?.type !== "string") malas.push(`${ruta} es ${String(n?.type)}`);
+    };
+    for (const t of CATALOGO_DE_SECCIONES) recorrer(t.schema, t.tipo);
+    expect(malas, "una hoja que no es texto se guarda vacía, sin error").toEqual([]);
+  });
+
+  it("⚠ el tipo por defecto sigue siendo el embebido de HTML", () => {
+    /* Las secciones creadas antes del 2026-08-21 tienen keys de DOS segmentos, sin tipo, y son
+       embebidos. Cambiar el default les cambia el renderer a todas, retroactivamente, en
+       propuestas que ya se enviaron. */
+    const porDefecto = CATALOGO_DE_SECCIONES.find((t) => t.tipo === TIPO_POR_DEFECTO);
+    expect(porDefecto?.sectionType, "cambió el renderer de todas las secciones creadas viejas").toBe(
+      HTML_EMBED_TYPE,
+    );
   });
 });

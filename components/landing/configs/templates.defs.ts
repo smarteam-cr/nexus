@@ -19,7 +19,8 @@ import { BC_SECTION_DEFS } from "./business-case.defs";
 import { makeDiagramArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
 import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
-import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
+import { esCustomKey } from "@/lib/landing/custom-sections";
+import { customDef } from "@/lib/landing/catalogo-de-secciones";
 
 export interface BcTemplateDef {
   id: string;

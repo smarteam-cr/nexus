@@ -17,7 +17,8 @@ import {
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { buildTemplateMetaEntry } from "@/lib/business-cases/template-meta";
-import { customDef, esCustomKey } from "@/lib/landing/custom-sections";
+import { esCustomKey } from "@/lib/landing/custom-sections";
+import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { piecesCreatedWithProject } from "@/lib/pieces/registry";
 import { resolvePipeline } from "@/lib/projects/kind";
 
