@@ -32,6 +32,12 @@ export type { TabsProps, TabItem } from "./Tabs";
 export { Menu } from "./Menu";
 export type { MenuProps, MenuItemDef } from "./Menu";
 
+/* La celda de tabla EDITABLE (flechita + buscador). Comparte la mecánica del panel con `Menu`
+   vía `usePanelFlotante`, así que no pueden divergir. */
+export { CeldaSelect } from "./CeldaSelect";
+export type { CeldaSelectProps, OpcionDeCelda } from "./CeldaSelect";
+export { usePanelFlotante } from "./usePanelFlotante";
+
 export { Spinner }   from "./Spinner";
 
 export { Modal }     from "./Modal";

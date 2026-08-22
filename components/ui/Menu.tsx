@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { usePanelFlotante } from "./usePanelFlotante";
 
 // ── Menu ───────────────────────────────────────────────────────────────────────
 //
@@ -11,11 +11,14 @@ import { cn } from "@/lib/cn";
 // `fixed inset-0` + lista de <button> sin role="menu" ni teclado; este archivo
 // es la ÚNICA implementación de esa mecánica de ahora en más:
 //
-//   - position:fixed calculada desde el trigger → escapa de overflow-hidden
-//     (el bug del rail colapsado que recortaba el desplegable).
-//   - cierre por click-afuera, Escape, resize y scroll EXTERNO (el scroll de
-//     adentro del menú no lo cierra — fase de captura, conocimiento heredado).
-//   - role="menu"/"menuitem", flechas ↑/↓ + Home/End, aria-expanded en el trigger.
+//   - role="menu"/"menuitem" y aria-expanded en el trigger.
+//
+// ⚠ LA MECÁNICA DEL PANEL YA NO VIVE ACÁ: se extrajo a `usePanelFlotante` cuando
+// apareció el segundo desplegable de la app (CeldaSelect, el select editable de
+// una celda de tabla). Copiar esas 40 líneas sutiles —position:fixed desde el
+// trigger, el scroll externo que cierra pero el interno no, Escape que devuelve
+// el foco— habría creado la segunda implementación que este encabezado juraba
+// que no iba a existir. El hook las tiene, con el porqué de cada una.
 //
 // Tipos de ítem: `href` → Link · `onSelect` → button · `formAction` → POST
 // (ej. /auth/signout). `keepOpen` para toggles que no deben cerrar (tema).
@@ -67,71 +70,15 @@ export function Menu({
   panelWidth = "w-56",
   "aria-label": ariaLabel,
 }: MenuProps) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<React.CSSProperties | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  const computePos = () => {
-    const r = btnRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const style: React.CSSProperties = {};
-    if (side === "top") style.bottom = window.innerHeight - r.top + 6;
-    else style.top = r.bottom + 6;
-    if (align === "start") style.left = r.left;
-    else style.right = window.innerWidth - r.right;
-    setPos(style);
-  };
-
-  const toggle = () => {
-    if (!open) computePos();
-    setOpen((p) => !p);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onScroll(e: Event) {
-      // El menú es position:fixed (coords congeladas al abrir); un scroll externo lo
-      // desancla → cerrar. El scroll INTERNO (maxHeight) no cuenta: es descendiente.
-      if (rootRef.current && e.target instanceof Node && rootRef.current.contains(e.target)) return;
-      setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        btnRef.current?.focus();
-        return;
-      }
-      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
-      const els = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [],
-      );
-      if (els.length === 0) return;
-      e.preventDefault();
-      const i = els.indexOf(document.activeElement as HTMLElement);
-      const next =
-        e.key === "Home" ? 0
-        : e.key === "End" ? els.length - 1
-        : e.key === "ArrowDown" ? (i + 1) % els.length
-        : (i - 1 + els.length) % els.length;
-      els[next]?.focus();
-    }
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", computePos);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", computePos);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- computePos es estable por render
-  }, [open]);
+  const {
+    abierto: open,
+    setAbierto: setOpen,
+    alternar: toggle,
+    pos,
+    rootRef,
+    btnRef,
+    panelRef,
+  } = usePanelFlotante({ side, align, selectorDeItems: '[role="menuitem"]:not([disabled])' });
 
   const itemClass = (it: MenuItemDef) =>
     cn(

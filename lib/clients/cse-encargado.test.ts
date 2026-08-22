@@ -39,6 +39,19 @@ const RUTA = soloCodigo(
 const SELECT = soloCodigo(
   fs.readFileSync(path.join(RAIZ, "components/clients/CseEncargadoSelect.tsx"), "utf8"),
 );
+/**
+ * ⚠ LA MECÁNICA SE MUDÓ A UNA PRIMITIVA (2026-08-21). Elías: *«estandariza este componente
+ * porque me interesa que en el futuro los listing otros puedan ser selects igual»*. Todo lo que
+ * no es de ESTE dominio —la flechita, el buscador, el clic que no navega, el modo solo-lectura—
+ * vive ahora en `components/ui/CeldaSelect.tsx`, y `CseEncargadoSelect` quedó como envoltura.
+ *
+ * Por eso estas guardas escanean la PRIMITIVA: si siguieran mirando la envoltura, se pondrían
+ * verdes por vacío —el código que revisaban ya no está ahí— que es la peor forma de aprobar.
+ */
+const CELDA = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/CeldaSelect.tsx"), "utf8"));
+const PANEL = soloCodigo(
+  fs.readFileSync(path.join(RAIZ, "components/ui/usePanelFlotante.ts"), "utf8"),
+);
 
 describe("⭐ el endpoint que reasigna el CSE de una cuenta", () => {
   it("⛔ solo escribe proyectos del pipeline de CS — nunca los hijos de Desarrollo", () => {
@@ -148,24 +161,87 @@ describe("⭐ la celda de permiso vive del lado del liderazgo", () => {
 describe("⭐ el select de la columna", () => {
   it("⛔ no pinta desplegable sin permiso — ni uno deshabilitado", () => {
     /* Un desplegable que se abre para descubrir que no se puede es peor que texto plano.
-       La edición que la pone en rojo: sacar la rama de `!puedeEditar`. */
-    expect(SELECT).toContain("if (!puedeEditar || opciones.length === 0)");
+       La edición que la pone en rojo: sacar la rama de `!puedeEditar` de la primitiva. */
+    expect(CELDA).toContain("if (!puedeEditar || opciones.length === 0)");
+  });
+
+  it("⭐ tiene flechita — es lo único que delata que la celda se puede tocar", () => {
+    /* Pedido de Elías. Sin un indicador, una celda editable se ve idéntica a una de solo
+       lectura y nadie descubre que se puede cambiar.
+       La edición que la pone en rojo: borrar el `<svg>` del trigger. */
+    const i = CELDA.indexOf("aria-expanded={abierto}");
+    expect(i, "desapareció el trigger del desplegable").toBeGreaterThan(-1);
+    const trigger = CELDA.slice(i, CELDA.indexOf("</button>", i));
+    expect(trigger.length, "la guarda no está mirando nada").toBeGreaterThan(80);
+    expect(trigger.includes("<svg"), "la celda perdió la flechita").toBe(true);
+    expect(
+      trigger.includes("rotate-180"),
+      "la flechita dejó de girar al abrir: no dice si el panel está abierto o cerrado",
+    ).toBe(true);
+  });
+
+  it("⭐ y buscador cuando hay muchas opciones", () => {
+    /* Pedido de Elías. Un equipo de 20 personas no entra de un vistazo — y el repo ya tiene
+       anotada la deuda del selector de 169 clientes SIN buscador.
+       La edición que la pone en rojo: borrar el `<input>` del panel. */
+    expect(CELDA).toContain("minimoParaBuscar");
+    expect(CELDA, "el filtro dejó de mirar el `hint` (el email desempata dos nombres iguales)")
+      .toContain("(o.hint ?? \"\").toLowerCase().includes(q)");
+    expect(
+      CELDA.includes("Nadie coincide con"),
+      "una búsqueda sin resultados quedó como lista vacía: se lee como «no hay opciones», " +
+        "que es otra cosa",
+    ).toBe(true);
   });
 
   it("⛔ el clic no navega a la ficha del cliente", () => {
     /* La fila entera es un link: sin `stopPropagation`, elegir un encargado te saca de la
-       lista en el mismo clic y no llegás a ver si funcionó. */
-    /* ⚠ Hay DOS `stopPropagation` en el archivo (el del botón y el del panel abierto):
+       lista en el mismo clic y no llegás a ver si funcionó.
+       ⚠ Hay DOS `stopPropagation` en el archivo (el del botón y el del panel abierto):
        buscarlo suelto pasaba en verde con el del botón borrado. Se afirma sobre el handler
-       exacto del botón, que es el que evita que elegir un encargado te saque de la lista. */
-    const i = SELECT.indexOf("onClick={(e) => {");
+       exacto del botón. */
+    const i = CELDA.indexOf("onClick={(e) => {");
     expect(i, "desapareció el onClick del botón que abre el desplegable").toBeGreaterThan(-1);
-    const handler = SELECT.slice(i, SELECT.indexOf("}}", i));
+    const handler = CELDA.slice(i, CELDA.indexOf("}}", i));
     expect(handler.length, "la guarda no está mirando nada").toBeGreaterThan(20);
     expect(
       handler.includes("e.stopPropagation()"),
-      "el clic del desplegable volvió a burbujear: elegir un encargado te saca de la lista a la ficha",
+      "el clic del desplegable volvió a burbujear: elegir un valor te saca de la lista a la ficha",
     ).toBe(true);
+  });
+
+  it("⭐ la primitiva y `Menu` comparten la mecánica del panel — no hay dos copias", () => {
+    /* ⛔ EL MODO DE FALLA QUE ESTA GUARDA EXISTE PARA IMPEDIR.
+       `Menu.tsx` decía ser «la ÚNICA implementación de esa mecánica de ahora en más», y traía
+       detalles caros: position:fixed desde el trigger (para escapar de `overflow-hidden`), el
+       scroll externo que cierra pero el interno no, Escape que devuelve el foco. Al aparecer el
+       segundo desplegable, copiarlos habría creado la divergencia que ese encabezado juraba
+       evitar — y la copia se olvida justo del detalle que la original aprendió a los golpes.
+       La edición que la pone en rojo: volver a implementar los listeners en cualquiera de los dos. */
+    const menu = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Menu.tsx"), "utf8"));
+    for (const [nombre, src] of [
+      ["Menu", menu],
+      ["CeldaSelect", CELDA],
+    ] as const) {
+      expect(
+        src.includes("usePanelFlotante"),
+        `${nombre} dejó de usar el hook compartido: hay dos implementaciones de la misma mecánica`,
+      ).toBe(true);
+      expect(
+        src.includes('addEventListener("mousedown"'),
+        `${nombre} volvió a implementar el cierre por clic afuera por su cuenta`,
+      ).toBe(false);
+    }
+  });
+
+  it("⚠ y el buscador no pierde Home/End contra el panel", () => {
+    /* Dentro de un campo de texto, Home/End significan «principio/fin de la línea». Si el panel
+       se los queda para navegar opciones, se escribe mal un nombre y no se puede volver al
+       principio a corregirlo. Las flechas SÍ se interceptan: en un panel abierto «bajar» es
+       recorrer las opciones. */
+    expect(PANEL).toContain("HTMLInputElement");
+    const i = PANEL.indexOf("const enTexto");
+    expect(i, "desapareció la excepción de Home/End en campos de texto").toBeGreaterThan(-1);
   });
 
   it("⚠ NO es optimista: repinta con lo que volvió del servidor", () => {

@@ -1,23 +1,24 @@
 "use client";
 
 /**
- * components/clients/CseEncargadoSelect.tsx — la celda "CSE encargado" del listado, editable.
+ * components/clients/CseEncargadoSelect.tsx — la celda "CSE encargado" del listado de clientes.
+ *
+ * ── ES UNA ENVOLTURA FINA, A PROPÓSITO ───────────────────────────────────────
+ * Toda la mecánica (flechita, buscador, teclado, el clic que no navega, el error que se queda en
+ * la celda) vive en `CeldaSelect`, la primitiva de `components/ui`. Acá solo queda lo que es DE
+ * ESTE dominio: a qué endpoint le pega y qué significa el cambio.
+ *
+ * Elías lo pidió así: *«estandariza este componente porque me interesa que en el futuro los
+ * listing otros puedan ser selects igual»*.
  *
  * ── QUÉ CAMBIA AL ELEGIR ─────────────────────────────────────────────────────
  * Escribe `csl_encargado` en TODOS los proyectos del cliente que están en el pipeline de
- * Implementación de HubSpot — porque el encargado es de la CUENTA, no de un proyecto
- * (Elías, 2026-08-21). Los proyectos de Desarrollo/Sitios web NO se tocan: cuelgan como hijos
- * y tienen su propio encargado técnico. Todo eso lo decide el endpoint; acá solo se elige.
- *
- * ── POR QUÉ NO ES OPTIMISTA ──────────────────────────────────────────────────
- * La escritura va a HubSpot y vuelve por el espejo, así que puede tardar unos segundos y puede
- * fallar a la mitad (N proyectos, N PATCH independientes). Pintar el nombre nuevo antes de
- * tiempo mostraría como hecho algo que quizá quedó a medias — y esta columna es justamente la
- * que se mira para saber de quién es la cuenta. Se espera, y recién ahí `router.refresh()`.
+ * Implementación de HubSpot — porque el encargado es de la CUENTA, no de un proyecto. Los de
+ * Desarrollo/Sitios web NO se tocan: cuelgan como hijos y tienen su propio encargado técnico.
+ * Eso lo decide el endpoint; acá solo se elige.
  */
-import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
+import { CeldaSelect, type OpcionDeCelda } from "@/components/ui/CeldaSelect";
 
 export interface OpcionDeEncargado {
   email: string;
@@ -40,107 +41,46 @@ export default function CseEncargadoSelect({
   puedeEditar: boolean;
 }) {
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
-  const [guardando, setGuardando] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement | null>(null);
-  usePopoverDismiss(abierto, () => setAbierto(false), ref);
 
-  const etiqueta =
-    nombres.length === 0 ? null : (
-      <>
-        {nombres[0]}
-        {nombres.length > 1 && <span className="text-fg-muted"> +{nombres.length - 1}</span>}
-      </>
-    );
+  /* ⚠ El `value` es el EMAIL y no el nombre: es lo que el endpoint sabe resolver contra
+     `TeamMember`, y dos personas pueden llamarse igual. El nombre es solo lo que se lee. */
+  const items: OpcionDeCelda[] = opciones.map((o) => ({
+    value: o.email,
+    label: o.name,
+    hint: o.email,
+  }));
 
-  /* Sin permiso —o sin equipo que ofrecer— la celda es exactamente lo que era antes: texto.
-     Un desplegable deshabilitado invitaría a apretarlo para descubrir que no se puede. */
-  if (!puedeEditar || opciones.length === 0) {
-    return etiqueta ? (
-      <span className="text-fg-secondary truncate block">{etiqueta}</span>
-    ) : (
-      <span className="text-fg-muted">—</span>
-    );
-  }
-
-  async function asignar(email: string, name: string) {
-    setGuardando(email);
-    setError(null);
-    try {
-      const r = await fetch(`/api/clients/${clientId}/cse-encargado`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
-      if (!r.ok) throw new Error(j.error ?? "no se pudo reasignar");
-      setAbierto(false);
-      /* El valor nuevo lo trae el servidor: la celda se repinta con lo que quedó en HubSpot,
-         no con lo que pedimos. Si el espejo trajo otra cosa, se ve esa. */
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : `no se pudo reasignar a ${name}`);
-    } finally {
-      setGuardando(null);
-    }
-  }
+  /**
+   * La selección de hoy llega como NOMBRES (así los arma el servidor, resolviendo owners de
+   * HubSpot), y `CeldaSelect` trabaja con `value`. Se traduce nombre → email.
+   *
+   * ⚠ Lo que NO matchea se conserva TAL CUAL en vez de descartarse: un encargado que está en
+   * HubSpot pero no en el equipo de Nexus (alguien que se fue, o un owner que nunca se dio de
+   * alta acá) tiene que seguir viéndose. `CeldaSelect` cae al `value` crudo cuando no encuentra
+   * la opción, así que se lee el nombre; y el contador «+N» sigue contando bien, que es lo que
+   * se rompía al filtrarlos.
+   */
+  const seleccion = nombres.map((n) => opciones.find((o) => o.name === n)?.email ?? n);
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={(e) => {
-          /* ⛔ La fila entera navega al cliente: sin esto, elegir un encargado te saca de la
-             lista a la ficha en el mismo clic. */
-          e.stopPropagation();
-          setAbierto((v) => !v);
-        }}
-        disabled={guardando !== null}
-        aria-haspopup="listbox"
-        aria-expanded={abierto}
-        aria-label={`CSE encargado de ${clientName}${nombres.length ? `: ${nombres[0]}` : ""}`}
-        className="w-full text-left truncate rounded px-1 py-0.5 -mx-1 text-fg-secondary hover:bg-surface-active disabled:opacity-60 transition-colors"
-      >
-        {guardando ? <span className="text-fg-muted">Guardando…</span> : (etiqueta ?? <span className="text-fg-muted">—</span>)}
-      </button>
-
-      {abierto && (
-        <div
-          role="listbox"
-          onClick={(e) => e.stopPropagation()}
-          className="absolute z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg py-1"
-        >
-          {opciones.map((o) => {
-            const esActual = nombres.includes(o.name);
-            return (
-              <button
-                key={o.email}
-                type="button"
-                role="option"
-                aria-selected={esActual}
-                onClick={() => void asignar(o.email, o.name)}
-                className={
-                  "w-full text-left px-3 py-1.5 text-sm hover:bg-surface-active transition-colors " +
-                  (esActual ? "font-semibold text-fg" : "text-fg-secondary")
-                }
-              >
-                {o.name}
-                {esActual && <span className="text-fg-muted"> · actual</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ⚠ El error se pinta EN LA CELDA y no en un toast: el fallo puede ser parcial («se
-          reasignaron 2 de 5»), y esa frase tiene que quedar a la vista al lado del cliente que
-          la sufrió, no desaparecer en cuatro segundos. */}
-      {error && (
-        <p className="absolute z-20 mt-1 w-64 rounded-lg border border-danger-line bg-danger-surface px-2 py-1.5 text-xs text-danger-ink">
-          {error}
-        </p>
-      )}
-    </div>
+    <CeldaSelect
+      opciones={items}
+      seleccion={seleccion}
+      puedeEditar={puedeEditar}
+      etiqueta={`CSE encargado de ${clientName}${nombres.length ? `: ${nombres[0]}` : ""}`}
+      placeholderBusqueda="Buscar persona…"
+      onElegir={async (email) => {
+        const r = await fetch(`/api/clients/${clientId}/cse-encargado`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        if (!r.ok) throw new Error(j.error ?? "no se pudo reasignar");
+        /* El valor nuevo lo trae el servidor: la celda se repinta con lo que quedó en HubSpot,
+           no con lo que pedimos. Si el espejo trajo otra cosa, se ve esa. */
+        router.refresh();
+      }}
+    />
   );
 }
