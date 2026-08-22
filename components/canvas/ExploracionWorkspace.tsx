@@ -22,6 +22,8 @@
  * Todo lo demás lo hereda del motor vía `useCanvasSections`: edición inline con commit en
  * blur y en desmontaje, drag & drop de ítems, reorden de secciones, undo global.
  */
+import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -41,6 +43,15 @@ export default function ExploracionWorkspace({
   // cuenta de bloques DRAFT, y el runner persiste CONFIRMED. Tras generar, el remonte
   // lo fuerza el padre (`key` con su `agentNonce` al terminar el agente del header).
   const cs = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { poll: false });
+
+  /**
+   * El chat de este documento ejecuta acá.
+   *
+   * ⛔ `puedeCrear: false`, y no es pereza: el plan de sesiones es el corazón de esta pieza y sus
+   * marcas «ya la pregunté» son trabajo del CSE. Crear secciones sueltas acá no aporta nada y
+   * suma superficie sobre el único documento cuyo estado curado vive anidado.
+   */
+  useEjecutarOperacionesDelChat(cs, EXPLORACION_DEF_BY_KEY, { puedeOcultar: true, puedeCrear: false });
 
   // ¿Ya hay contenido generado? La creación del canvas solo siembra el bloque del
   // `cierre` (curado), así que si alguna sección ≠ cierre tiene un CARD, la generación

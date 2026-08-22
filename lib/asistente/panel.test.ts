@@ -12,6 +12,7 @@
  * Y no falla ruidoso. Un backdrop de más se ve prolijo; lo que se pierde es la razón de ser del
  * panel, y eso no lo reporta nadie: se reporta como «el chat no me sirve».
  */
+import { DOC } from "@/lib/canvas/assist-de-documento";
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -659,6 +660,8 @@ describe("⭐ etapa 3 — el chat de DOCUMENTOS también aplica", () => {
       "components/canvas/PlanificacionWorkspace.tsx",
       "components/canvas/ImplementacionWorkspace.tsx",
       "components/canvas/EntregaWorkspace.tsx",
+      /* Exploración entró el 2026-08-22, cuando el chat dejó de pasar por el assist. */
+      "components/canvas/ExploracionWorkspace.tsx",
     ];
     for (const rel of WORKSPACES) {
       const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
@@ -701,8 +704,26 @@ describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
     expect(PIEZAS_CON_CHAT).toContain("timeline");
     expect(PIEZAS_CON_CHAT).toContain("kickoff");
     expect(PIEZAS_CON_CHAT).toContain("delivery");
-    /* Exploración NO: su merge shallow borra el trabajo curado del CSE, en silencio. */
-    expect(PIEZAS_CON_CHAT).not.toContain("exploration");
+  });
+
+  it("⭐ Exploración CONVERSA pero NO entra al assist — son dos compuertas", () => {
+    /* ── QUÉ CAMBIÓ EL 2026-08-22 ─────────────────────────────────────────────
+       Exploración estaba fuera del chat porque estaba fuera de `DOC`, y estaba fuera de `DOC`
+       porque el ASSIST reconstruye la data de una sección desde su esquema: el merge que repone
+       lo curado solo alcanza el primer nivel, y sus marcas «ya la pregunté» viven anidadas dentro
+       del plan de sesiones. Una propuesta que tocara `sesiones` las borraba TODAS, sin aviso.
+
+       El chat ya no pasa por ahí: emite operaciones, que leen la data guardada y escriben la hoja
+       que nombran — y `hecha` ni siquiera es alcanzable, porque no está en el esquema.
+
+       ⛔ POR ESO LAS LISTAS SE SEPARARON. La edición que la pone en rojo: meter `exploration` en
+       `DOC` para darle chat. Eso prendería TAMBIÉN el assist sobre ella, y el borrado silencioso
+       vuelve por la otra puerta — que es exactamente de donde veníamos. */
+    expect(PIEZAS_CON_CHAT, "Exploración se quedó sin chat otra vez").toContain("exploration");
+    expect(
+      Object.keys(DOC),
+      "Exploración entró al assist de documentos: su merge borra las marcas «ya la pregunté»",
+    ).not.toContain("exploration");
   });
 
   it("⚠ sin contenido generado no hay chat", () => {

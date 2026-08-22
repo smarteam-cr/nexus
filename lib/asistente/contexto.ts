@@ -30,6 +30,7 @@ import {
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
+import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -451,7 +452,11 @@ export async function contextoDeDocumento(
    * ⚠ `movible` sale de `pinned` de la def: la portada y el cierre tienen lugar fijo, y un
    * documento sin portada no es más libre — está roto.
    */
-  const defs = DOC[pieza]?.defs ?? {};
+  /* ⚠ NO sale solo de `DOC`: ése es el registro del ASSIST, y Exploración conversa sin estar ahí
+     (ver `lib/asistente/piezas.ts`). Sin este respaldo sus secciones llegarían sin esquema, y una
+     operación sobre ellas se rechazaría con «no es un campo de esa sección» — sobre campos que sí
+     existen. */
+  const defs = DOC[pieza]?.defs ?? (pieza === "exploration" ? EXPLORACION_DEF_BY_KEY : {});
   const seccionesParaEjecutar: SeccionActual[] = canvas.canvasSections.map((s) => {
     const def = defs[s.key];
     const card = s.blocks[0];
