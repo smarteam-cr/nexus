@@ -20,9 +20,16 @@ import {
   landingConfigForCronograma,
 } from "@/components/landing/configs/cronograma";
 import { BC_TEMPLATES } from "@/components/landing/configs/templates.defs";
-import { SECTION_COMPONENTS, landingConfigFor } from "@/components/landing/configs/templates";
+import {
+  SECTION_COMPONENTS,
+  landingConfigFor,
+  configForCanvas,
+  configForSnapshot,
+} from "@/components/landing/configs/templates";
 import { KICKOFF_SECTION_DEFS } from "@/components/landing/configs/kickoff.defs";
 import { KICKOFF_SECTION_COMPONENTS, landingConfigForKickoff } from "@/components/landing/configs/kickoff";
+import { PROPUESTA_SECTION_COMPONENTS } from "@/components/landing/configs/propuesta";
+import { ROLES_SECTION_COMPONENTS } from "@/components/landing/configs/roles";
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
@@ -49,8 +56,428 @@ import { COMPONENTES_CREABLES } from "@/components/landing/configs/templates";
    mientras cuatro documentos pintaban campos que su propio schema no declaraba. */
 import { PROCESS_MAPPING_SCHEMA_CON_TITULAR } from "@/components/landing/configs/shared-sections.defs";
 import { t } from "@/components/landing/i18n";
+import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
+import {
+  ALIAS_DE_SECTION_TYPE,
+  claseDeSeccion,
+  tipoCanonico,
+  type ClaseDeSeccion,
+} from "@/lib/landing/clase-de-seccion";
 import fs from "node:fs";
 import path from "node:path";
+
+
+/**
+ * ⭐ TODAS LAS DEFS VIVAS DEL MOTOR, con el documento que las declara.
+ *
+ * ⛔ La razón de que sean TODAS y no una constante compartida: el 2026-08-23 un assert probaba dos
+ * constantes de esquema y daba verde mientras CUATRO documentos pintaban campos que su propio
+ * schema no declaraba. Probar la fuente compartida no prueba a los que la copiaron.
+ */
+const DEFS_DE_TODOS_LOS_DOCUMENTOS: readonly { doc: string; def: BCSectionDef }[] = [
+  ...Object.values(BC_TEMPLATES).flatMap((t) => t.sections.map((def) => ({ doc: t.id, def }))),
+  ...DIAGNOSTICO_SECTION_DEFS.map((def) => ({ doc: "diagnostico", def })),
+  ...PLANIFICACION_SECTION_DEFS.map((def) => ({ doc: "planificacion", def })),
+  ...IMPLEMENTACION_SECTION_DEFS.map((def) => ({ doc: "implementacion", def })),
+  ...ENTREGA_SECTION_DEFS.map((def) => ({ doc: "entrega", def })),
+  ...KICKOFF_SECTION_DEFS.map((def) => ({ doc: "kickoff", def })),
+  ...DESARROLLO_SECTION_DEFS.map((def) => ({ doc: "desarrollo", def })),
+  ...EXPLORACION_SECTION_DEFS.map((def) => ({ doc: "exploracion", def })),
+  ...CRONOGRAMA_SECTION_DEFS.map((def) => ({ doc: "cronograma", def })),
+];
+
+
+/**
+ * ⭐ EL MOTOR NO PINTA LO QUE NO DECLARA — el trinquete que cierra la clase entera del fallo #4.
+ *
+ * ── EL FALLO, Y POR QUÉ NINGUNA GUARDA LO VIO ────────────────────────────────────────────────
+ * `sections-shared.tsx` pinta `resumenHoy` y `resumenSera` dentro de cada proceso. Los declaraba
+ * UN documento —Entrega— y los otros CUATRO montaban el mismo renderer sin declararlos. Resultado:
+ * el CSE veía un campo editable vacío («En una línea…»), escribía, y `coerceToSchema` se lo
+ * borraba en la siguiente regeneración. UI muerta, sin un error en ningún lado.
+ *
+ * ⭐ LA FORMA DEL INVARIANTE, Y ES LA PARTE QUE IMPORTA. La tentación es parsear el renderer para
+ * ver qué claves lee: frágil, y con `p.resumenHoy` dentro de un `.map()` ni siquiera se sabe de qué
+ * lista sale. El hecho estructural es más simple y exacto: **un componente es UNO, así que su
+ * contrato de datos tiene que ser UNO**. Si dos defs montan el mismo `sectionType` y una declara
+ * una clave que la otra no, alguien copió un esquema y editó una sola copia — que es literalmente
+ * cómo nació el fallo, y cómo nacería otra vez con `subhead` sobre las CINCO copias inline de
+ * `PROSA_SCHEMA`.
+ *
+ * ⚠ Y es «TODAS, no la unión»: comparar contra la unión dejaría a Entrega tapando a los otros
+ * cuatro, que es exactamente el estado que este test viene a hacer imposible.
+ *
+ * ── LA PROFUNDIDAD CAMBIA LA GRAVEDAD, Y CONVIENE SABERLO ANTES DE REACCIONAR ────────────────
+ * `preserveNonSchemaKeys` (lib/ai/section-schema.ts:60-71) acarrea las claves de PRIMER NIVEL que
+ * el esquema no declara. O sea:
+ *   · una divergencia ANIDADA (`procesos[].resumenHoy`) es PÉRDIDA DE DATOS: `coerceToSchema` la
+ *     borra en cada regeneración y nada la rescata;
+ *   · una de primer nivel (`eyebrow` en las cuatro portadas) sobrevive, y a veces está afuera A
+ *     PROPÓSITO — el rótulo chico lo escribe una persona, no el agente, y por eso vive en
+ *     `schemaDelChat` y no en `schema`.
+ * Las dos se reportan igual: el esquema ES el prompt, así que una clave que un documento declara y
+ * otro no también significa que un agente la escribe y el otro no. Pero la de primer nivel se
+ * resuelve muchas veces declarándola en `schemaDelChat`, no en `schema`.
+ *
+ * ⛔ ROLES Y LA PROPUESTA LABORAL QUEDAN AFUERA, y se dice: su contenido no vive en `CanvasBlock`
+ * sino en `RoleProfile.content`, y tres de sus secciones tienen `schema: {properties:{}}` con el
+ * renderer leyendo diez campos. Es un hueco REAL —medido el 2026-08-23 por el censo de este mismo
+ * trabajo— y es su propia tanda: meterlo acá pondría el trinquete en rojo el día uno sobre algo
+ * que este cambio no arregla.
+ *
+ * ── MEDIDO AL ESCRIBIRLO (2026-08-23) ────────────────────────────────────────────────────────
+ * 45 `sectionType` vivos · 9 compartidos por dos o más documentos · **5 divergencias**, las cinco
+ * deliberadas y anotadas abajo. El trinquete SOLO BAJA: una entrada nueva se agrega con su motivo
+ * escrito, y sacarla es el trabajo de arreglar la divergencia.
+ */
+const DIVERGENCIAS_ACEPTADAS: readonly { tipo: string; campo: string; porQue: string }[] = [
+  {
+    tipo: "diagram",
+    campo: "sistemas",
+    porQue:
+      "`diagram` es un BUILDER con dos formas: el diagrama de sistemas (sistemas + conexiones) y " +
+      "el de objetos (objetos + asociaciones). Son dos grafos distintos con el mismo renderer, no " +
+      "una copia mal editada.",
+  },
+  {
+    tipo: "diagram",
+    campo: "conexiones",
+    porQue:
+      "La otra mitad del par «sistemas»: las flechas entre sistemas. Solo `desarrollo/arquitectura` " +
+      "y las tres arquitecturas de plataforma dibujan este grafo; la de objetos no tiene flechas " +
+      "entre sistemas porque sus nodos son objetos de HubSpot.",
+  },
+  {
+    tipo: "diagram",
+    campo: "objetos",
+    porQue:
+      "Los nodos del OTRO grafo: los objetos de HubSpot y sus propiedades. Solo lo declara " +
+      "`desarrollo/relacion_objetos`; en un diagrama de sistemas no existe el concepto, y " +
+      "declararlo pondría a cuatro agentes a inventar objetos que ese documento no describe.",
+  },
+  {
+    tipo: "diagram",
+    campo: "asociaciones",
+    porQue:
+      "Las aristas del grafo de objetos —cardinalidades entre objetos de HubSpot—, hermanas de " +
+      "`objetos`. Mismo motivo: en el grafo de sistemas no hay asociaciones que declarar, y el " +
+      "campo vacío empujaría al agente a rellenarlo.",
+  },
+  {
+    tipo: "hero",
+    campo: "titulo",
+    porQue:
+      "Las portadas de los dos documentos de VENTA (business case y sitio web) no llevan rótulo " +
+      "de sección: su encabezado es el titular. Los documentos de proyecto sí, y ahí `titulo` es " +
+      "el rótulo chico de arriba.",
+  },
+];
+
+describe("un renderer, un contrato de datos", () => {
+  /** Las claves de primer nivel que un schema declara. */
+  /**
+   * ⛔ TODAS las rutas que un schema declara, no las de primer nivel — y la diferencia NO es
+   * cosmética: `resumenHoy` y `resumenSera` viven DENTRO de `procesos[]`, así que un chequeo de
+   * primer nivel da verde sobre el fallo exacto que este test viene a cerrar. Lo descubrí
+   * rompiéndolo a propósito… y lo volví a descubrir cuando un `cp` de un respaldo viejo se llevó
+   * esta función y la suite siguió en verde con la guarda ciega.
+   */
+  const rutas = (schema: unknown, prefijo = ""): string[] => {
+    const s = schema as { type?: string; properties?: Record<string, unknown>; items?: unknown };
+    if (s?.type === "array") return rutas(s.items, `${prefijo}[]`);
+    const props = s?.properties;
+    if (!props) return prefijo ? [prefijo] : [];
+    return Object.entries(props).flatMap(([k, sub]) => rutas(sub, prefijo ? `${prefijo}.${k}` : k));
+  };
+  const claves = (schema: unknown): string[] => rutas(schema);
+
+  /**
+   * ⛔ CANÓNICO, no crudo. `desarrollo_hero` y `planificacion_hero` son la MISMA función React con
+   * dos nombres, y agrupando por el nombre crudo esta guarda no compara sus contratos. Fue esa
+   * canonización la que destapó `hubs_cliente`: el mismo componente montado con `{title, detail}`
+   * en la Entrega y `{titulo, detalle, canales}` en la propuesta.
+   * ⚠ `sectionType` ausente = la key, igual que hace `toSectionDef`.
+   */
+  const tipoDe = (def: BCSectionDef) => tipoCanonico(def.sectionType ?? def.key);
+
+  const porTipo = new Map<string, { doc: string; key: string; claves: string[] }[]>();
+  for (const { doc, def } of DEFS_DE_TODOS_LOS_DOCUMENTOS) {
+    const t = tipoDe(def);
+    if (!porTipo.has(t)) porTipo.set(t, []);
+    porTipo.get(t)!.push({ doc, key: def.key, claves: claves(def.schema) });
+  }
+  const compartidos = [...porTipo.entries()].filter(([, l]) => l.length > 1);
+
+  it("⛔ el chequeo entra DENTRO de las listas, no se queda en el primer nivel", () => {
+    /* Rompí la recursión a propósito y la suite quedó VERDE: hoy no hay ninguna divergencia
+       anidada viva, así que el chequeo de primer nivel no se distingue del bueno. Pero el fallo
+       que este trinquete existe para cerrar —`resumenHoy` dentro de `procesos[]`— ES anidado, y
+       volvería a pasar sin ruido. Por eso la recursión tiene su propio assert en vez de depender
+       de que exista un caso vivo que la delate. */
+    const rutasDe = claves({
+      type: "object",
+      properties: {
+        intro: { type: "string" },
+        procesos: {
+          type: "array",
+          items: { type: "object", properties: { nombre: { type: "string" }, resumenHoy: { type: "string" } } },
+        },
+      },
+    });
+    expect(rutasDe.sort()).toEqual(["intro", "procesos[].nombre", "procesos[].resumenHoy"]);
+  });
+
+  it("la guarda está mirando el motor entero, no un rincón", () => {
+    /* Sin este piso, borrar un import dejaría el test verde sobre tres defs. */
+    expect(DEFS_DE_TODOS_LOS_DOCUMENTOS.length).toBeGreaterThan(80);
+    /* 34 canónicos y 12 compartidos al escribirlo (45 tipos crudos, menos los 11 alias). */
+    expect(porTipo.size, "se cayeron sectionTypes del censo").toBeGreaterThan(30);
+    expect(compartidos.length, "ningún tipo compartido = el test no compara nada").toBeGreaterThan(9);
+  });
+
+  /**
+   * La excepción se declara por la RAÍZ del campo y cubre sus hojas: `diagram.objetos` tapa
+   * `diagram.objetos[].nombre`, `[].detalle` y `[].equivale`. Exigir una entrada por hoja daría
+   * una lista de 21 líneas para cinco decisiones, y una lista larga se lee salteada.
+   */
+  const cubierta = (tipo: string, ruta: string) =>
+    DIVERGENCIAS_ACEPTADAS.some(
+      (d) =>
+        d.tipo === tipo &&
+        (ruta === d.campo || ruta.startsWith(`${d.campo}[`) || ruta.startsWith(`${d.campo}.`)),
+    );
+
+  it("⭐ dos documentos que montan el MISMO renderer declaran las MISMAS claves", () => {
+    const divergencias: string[] = [];
+    for (const [tipo, lista] of compartidos) {
+      const union = [...new Set(lista.flatMap((x) => x.claves))].sort();
+      for (const campo of union) {
+        const sin = lista.filter((x) => !x.claves.includes(campo));
+        if (sin.length === 0 || sin.length === lista.length) continue;
+        if (cubierta(tipo, campo)) continue;
+        divergencias.push(
+          `${tipo}.${campo} — lo declaran ${lista.length - sin.length} de ${lista.length}; falta en ` +
+            sin.map((x) => `${x.doc}/${x.key}`).join(", "),
+        );
+      }
+    }
+    expect(
+      divergencias,
+      "Un renderer con dos contratos: alguien copió un esquema y editó una sola copia. El " +
+        "documento que NO declara la clave la pinta igual y `coerceToSchema` borra lo que el CSE " +
+        "escriba ahí. Agregala a las demás defs, o —si la divergencia es a propósito— sumala a " +
+        "DIVERGENCIAS_ACEPTADAS con el motivo escrito.",
+    ).toEqual([]);
+  });
+
+  it("⛔ el trinquete solo baja: ninguna excepción sobra ni se acepta sin motivo", () => {
+    /* Una entrada que ya no divergía y quedó en la lista es peor que ninguna lista: enseña que la
+       lista se puede llenar sin costo. Espejo de `token-vocab.test.ts`. */
+    const reales: { tipo: string; ruta: string }[] = [];
+    for (const [tipo, lista] of compartidos) {
+      for (const ruta of new Set(lista.flatMap((x) => x.claves))) {
+        const sin = lista.filter((x) => !x.claves.includes(ruta)).length;
+        if (sin > 0 && sin < lista.length) reales.push({ tipo, ruta });
+      }
+    }
+    const sobran = DIVERGENCIAS_ACEPTADAS.filter(
+      (d) =>
+        !reales.some(
+          (r) =>
+            r.tipo === d.tipo &&
+            (r.ruta === d.campo ||
+              r.ruta.startsWith(`${d.campo}[`) ||
+              r.ruta.startsWith(`${d.campo}.`)),
+        ),
+    ).map((d) => `${d.tipo}.${d.campo}`);
+    expect(sobran, "esa divergencia ya no existe: sacala de la lista").toEqual([]);
+    for (const d of DIVERGENCIAS_ACEPTADAS) {
+      expect(d.porQue.length, `${d.tipo}.${d.campo} entró sin motivo escrito`).toBeGreaterThan(60);
+    }
+  });
+
+
+  it("⭐ un alias resuelve al MISMO componente que su canónico", () => {
+    /* Es lo único que hace verdadera la palabra «alias». Si un día alguien apunta `dolores` a otro
+       renderer, las guardas que agrupan por canónico compararían dos contratos que ya no son el
+       mismo — y lo harían en silencio, dando por buena una divergencia real. */
+    /* ⚠ LOS DOCE, no diez. La primera versión de esta guarda se dejaba afuera PROPUESTA y ROLES —
+       que es justo donde vive la única colisión real del motor. Lo destapó un verificador del
+       censo del 2026-08-23. Un aplanado silencioso habría hecho que la guarda comparara contra el
+       componente equivocado y diera verde. */
+    const MAPAS: readonly [string, Record<string, unknown>][] = [
+      ["SECTION_COMPONENTS", SECTION_COMPONENTS],
+      ["COMPONENTES_CREABLES", COMPONENTES_CREABLES],
+      ["KICKOFF", KICKOFF_SECTION_COMPONENTS],
+      ["CRONOGRAMA", CRONOGRAMA_SECTION_COMPONENTS],
+      ["DESARROLLO", DESARROLLO_SECTION_COMPONENTS],
+      ["DIAGNOSTICO", DIAGNOSTICO_SECTION_COMPONENTS],
+      ["ENTREGA", ENTREGA_SECTION_COMPONENTS],
+      ["EXPLORACION", EXPLORACION_SECTION_COMPONENTS],
+      ["IMPLEMENTACION", IMPLEMENTACION_SECTION_COMPONENTS],
+      ["PLANIFICACION", PLANIFICACION_SECTION_COMPONENTS],
+      ["PROPUESTA", PROPUESTA_SECTION_COMPONENTS],
+      ["ROLES", ROLES_SECTION_COMPONENTS],
+    ];
+    const TODOS_LOS_MAPAS: Record<string, unknown> = Object.assign({}, ...MAPAS.map(([, m]) => m));
+    expect(MAPAS.length, "se cayó un mapa de la guarda").toBe(12);
+    expect(Object.keys(TODOS_LOS_MAPAS).length, "la guarda no está mirando nada").toBeGreaterThan(50);
+    const rotos: string[] = [];
+    for (const [alias, canonico] of Object.entries(ALIAS_DE_SECTION_TYPE)) {
+      const a = TODOS_LOS_MAPAS[alias];
+      const c = TODOS_LOS_MAPAS[canonico];
+      if (!a || !c) {
+        rotos.push(`${alias} → ${canonico}: uno de los dos no está registrado en ningún mapa`);
+      } else if (a !== c) {
+        rotos.push(`${alias} → ${canonico}: apuntan a componentes DISTINTOS`);
+      }
+    }
+    expect(rotos, "un «alias» que no es alias").toEqual([]);
+  });
+
+  /**
+   * ⭐ EL INVERSO DEL ALIAS: un mismo `sectionType` que significa DOS componentes distintos.
+   *
+   * Es el aplanado que la guarda de arriba tapaba y que el censo destapó: `role_cadence` es
+   * `RoleCadenceSection` en el perfil de puesto y `PropuestaSesionesSection` en la propuesta
+   * laboral. Está hecho a propósito y comentado (`configs/propuesta.ts:40-42`), pero es el ÚNICO
+   * de los 62 así — y mientras nadie lo declare, cualquier guarda que junte los mapas en un objeto
+   * plano elige uno de los dos en silencio, según el orden del spread.
+   */
+  const COLISIONES_DECLARADAS = new Set(["role_cadence"]);
+
+  it("⛔ ningún sectionType significa dos componentes distintos, salvo el declarado", () => {
+    const MAPAS: readonly Record<string, unknown>[] = [
+      SECTION_COMPONENTS,
+      COMPONENTES_CREABLES,
+      KICKOFF_SECTION_COMPONENTS,
+      CRONOGRAMA_SECTION_COMPONENTS,
+      DESARROLLO_SECTION_COMPONENTS,
+      DIAGNOSTICO_SECTION_COMPONENTS,
+      ENTREGA_SECTION_COMPONENTS,
+      EXPLORACION_SECTION_COMPONENTS,
+      IMPLEMENTACION_SECTION_COMPONENTS,
+      PLANIFICACION_SECTION_COMPONENTS,
+      PROPUESTA_SECTION_COMPONENTS,
+      ROLES_SECTION_COMPONENTS,
+    ];
+    const porTipoComp = new Map<string, Set<unknown>>();
+    for (const m of MAPAS) {
+      for (const [t, comp] of Object.entries(m)) {
+        if (!porTipoComp.has(t)) porTipoComp.set(t, new Set());
+        porTipoComp.get(t)!.add(comp);
+      }
+    }
+    const colisiones = [...porTipoComp.entries()]
+      .filter(([t, comps]) => comps.size > 1 && !COLISIONES_DECLARADAS.has(t))
+      .map(([t]) => t);
+    expect(
+      colisiones,
+      "ese sectionType resuelve a dos renderers distintos: o es deliberado y se declara, o alguien " +
+        "reusó un nombre y una de las dos superficies pinta lo que no es",
+    ).toEqual([]);
+    /* Y el trinquete al revés: una colisión declarada que ya no existe se saca. */
+    const sobran = [...COLISIONES_DECLARADAS].filter((t) => (porTipoComp.get(t)?.size ?? 0) < 2);
+    expect(sobran, "esa colisión ya no existe: sacala de la lista").toEqual([]);
+  });
+
+  /**
+   * ⭐ EL CENSO CONGELADO — la formalización que pidió Elías, y lo que impide que se pudra.
+   *
+   * La clase se DERIVA (ver `lib/landing/clase-de-seccion.ts`): estructural el que no se mueve,
+   * módulo el que vive en un solo documento, genérico el que comparten dos o más. Lo que se
+   * congela es el resultado, para que un tipo no cambie de clase sin que nadie lo decida.
+   *
+   * ⚠ El caso real: `props_table` nació como módulo de Desarrollo y hoy está también en
+   * Implementación. Se prestó, y nada dijo nada. Con esto, prestarlo pone el test en rojo y la
+   * decisión se toma a la vista.
+   */
+  const CENSO_CONGELADO: Readonly<Record<string, ClaseDeSeccion>> = {
+    // ── Estructurales: portadas y cierres. No se mueven ni se ocultan.
+    hero: "estructural",
+    kickoff_hero: "estructural",
+    desarrollo_hero: "estructural",
+    cronograma_hero: "estructural",
+    kickoff_cta: "estructural",
+    // ── Genéricos: el núcleo que Elías describió, compartido por dos o más documentos.
+    kickoff_prose: "generico",
+    process_mapping: "generico",
+    roi: "generico",
+    web_diagnosis: "generico",
+    diagram: "generico",
+    pain: "generico",
+    props_table: "generico",
+    hubs_cliente: "generico",
+    /* ⚠ `inversion` PARECE un módulo de la propuesta de HubSpot y no lo es: con su alias
+       `web_investment` lo montan las DOS propuestas comerciales. Su esquema tiene que servirle a
+       las dos — que es justo lo que el trinquete de arriba vigila. */
+    inversion: "generico",
+    // ── Módulos de canvas: propios de UNA pieza.
+    kickoff_equipo: "modulo",
+    kickoff_horarios: "modulo",
+    kickoff_canales: "modulo",
+    kickoff_procesos: "modulo",
+    kickoff_compara: "modulo",
+    kickoff_timeline: "modulo",
+    exploracion_sesiones: "modulo",
+    estimacion: "modulo",
+    impacto_declarado: "modulo",
+    prompts_breeze: "modulo",
+    cronograma_gantt: "modulo",
+    antes_despues: "modulo",
+    cronograma: "modulo",
+    cta: "modulo",
+    partner: "modulo",
+    use_cases: "modulo",
+    site_architecture: "modulo",
+    web_methodology: "modulo",
+    web_scope: "modulo",
+    why_us: "modulo",
+  };
+
+  it("⭐ nada queda sin clasificar, y nada cambia de clase en silencio", () => {
+    /* ⛔ Esta es la assert que mantiene vivo a `clase-de-seccion.ts`. Sin ella el archivo sería la
+       próxima `rotulosDeCampos`: declarado, consumido por nadie, y falso a los tres meses. */
+    const docsPorTipo = new Map<string, Set<string>>();
+    const estructural = new Set<string>();
+    for (const { doc, def } of DEFS_DE_TODOS_LOS_DOCUMENTOS) {
+      const t = tipoDe(def);
+      if (!docsPorTipo.has(t)) docsPorTipo.set(t, new Set());
+      docsPorTipo.get(t)!.add(doc);
+      if (def.backdrop || def.pinned || def.noHide) estructural.add(t);
+    }
+    const real: Record<string, ClaseDeSeccion> = {};
+    for (const [t, docs] of docsPorTipo) {
+      real[t] = claseDeSeccion({ estructural: estructural.has(t), documentos: docs.size });
+    }
+    /* ⚠ Los dos lados: un tipo nuevo sin clasificar, y una entrada congelada que ya no existe. */
+    const sinClasificar = Object.keys(real).filter((t) => !(t in CENSO_CONGELADO));
+    expect(
+      sinClasificar,
+      "sectionType nuevo: decidí si es estructural, un módulo de su canvas, o genérico — y sumalo al censo",
+    ).toEqual([]);
+    const fantasma = Object.keys(CENSO_CONGELADO).filter((t) => !(t in real));
+    expect(fantasma, "esos tipos ya no existen: sacalos del censo").toEqual([]);
+    const cambiados = Object.keys(real)
+      .filter((t) => real[t] !== CENSO_CONGELADO[t])
+      .map((t) => `${t}: era «${CENSO_CONGELADO[t]}» y ahora es «${real[t]}» (documentos: ${[...(docsPorTipo.get(t) ?? [])].join(", ")})`);
+    expect(
+      cambiados,
+      "Un tipo cambió de clase. Si se PRESTÓ a otro documento, decidilo a la vista: o es genérico " +
+        "de verdad y su esquema tiene que servir a los dos, o vuelve a ser de su canvas.",
+    ).toEqual([]);
+  });
+
+  it("⚠ y las CINCO copias inline de PROSA_SCHEMA siguen siendo una sola forma", () => {
+    /* `kickoff_prose` lo montan 20 secciones de 5 documentos, cada uno con su copia del esquema
+       escrita a mano. Es el candidato número uno a repetir el fallo #4 — y el que la próxima tanda
+       va a tocar para sumarle `subhead`. */
+    const prosa = porTipo.get("kickoff_prose") ?? [];
+    expect(prosa.length, "se movió el sectionType de las secciones de prosa").toBeGreaterThan(15);
+    const formas = new Set(prosa.map((p) => p.claves.slice().sort().join(",")));
+    expect([...formas], "las copias de PROSA_SCHEMA divergieron").toHaveLength(1);
+  });
+});
 
 /** Renderers que ningún def VIVO usa pero que se conservan a PROPÓSITO: los
  *  snapshots publicados congelan `sectionType` y `configForSnapshot` los
@@ -543,36 +970,6 @@ describe("Entrega: registry completo + keys congeladas", () => {
   });
 });
 
-describe("Cronograma: registry completo + keys congeladas", () => {
-  it("cada def resuelve componente y la config no dropea ninguna", () => {
-    const faltantes = CRONOGRAMA_SECTION_DEFS.filter(
-      (d) => !CRONOGRAMA_SECTION_COMPONENTS[d.sectionType ?? d.key],
-    );
-    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
-    expect(landingConfigForCronograma().sections.map((s) => s.key)).toEqual(
-      CRONOGRAMA_SECTION_DEFS.map((d) => d.key),
-    );
-  });
-
-  it("snapshot de keys: portada y Gantt, y nada más", () => {
-    /* Es el documento más chico de los nueve, y tiene que seguir siéndolo: todo lo demás del
-       cronograma (avisos, propuestas, publicación) es del EDITOR, no del documento. */
-    expect(CRONOGRAMA_SECTION_DEFS.map((d) => d.key)).toEqual(["portada", "cronograma"]);
-  });
-
-  it("sin componentes huérfanos en CRONOGRAMA_SECTION_COMPONENTS", () => {
-    const usados = new Set(CRONOGRAMA_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
-    expect(Object.keys(CRONOGRAMA_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
-  });
-
-  it("ninguna de sus secciones la escribe un agente", () => {
-    /* Las dos salen de `ctx` o del proyecto. Si alguna se marcara `agentGenerated`, el
-       catálogo de agentes le ofrecería al CSE generar un texto que nadie va a leer —
-       el motor las pinta desde ProjectTimeline igual. */
-    expect(CRONOGRAMA_SECTION_DEFS.filter((d) => d.agentGenerated).map((d) => d.key)).toEqual([]);
-  });
-});
-
 describe("La comparación de procesos: rótulo por documento, subtítulo por caja", () => {
   /* `process_mapping` la comparten CINCO documentos y en cuatro el proyecto todavía no ocurrió.
      Estos asserts protegen las dos formas en que este cambio se rompe en silencio. */
@@ -585,13 +982,7 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
 
   /** Toda def de `process_mapping` viva, con el documento que la declara — para no probar dos
    *  constantes y creer que se probaron los cinco documentos. */
-  const TODAS_LAS_DEFS = [
-    ...Object.values(BC_TEMPLATES).flatMap((t) => t.sections.map((def) => ({ doc: t.id, def }))),
-    ...DIAGNOSTICO_SECTION_DEFS.map((def) => ({ doc: "diagnostico", def })),
-    ...PLANIFICACION_SECTION_DEFS.map((def) => ({ doc: "planificacion", def })),
-    ...IMPLEMENTACION_SECTION_DEFS.map((def) => ({ doc: "implementacion", def })),
-    ...ENTREGA_SECTION_DEFS.map((def) => ({ doc: "entrega", def })),
-  ];
+  const TODAS_LAS_DEFS = DEFS_DE_TODOS_LOS_DOCUMENTOS;
 
   it("⚠ los subtítulos viven DENTRO del schema — fuera se borran en cada regeneración", () => {
     /* `preserveNonSchemaKeys` (lib/ai/section-schema.ts) solo acarrea claves de PRIMER nivel.
@@ -701,6 +1092,10 @@ describe("⭐ el catálogo de secciones creables y sus renderers no pueden diver
        propuesta del cliente sin un solo error**. Ofrecer en el catálogo un tipo que no se puede
        dibujar es prometer una sección que se evapora al crearla.
        La edición que la pone en rojo: sumar un tipo al catálogo sin registrar su componente. */
+    /* ⚠ EL `&&` ERA UN AGUJERO, y lo destapó un verificador del censo del 2026-08-23: alcanzaba
+       con estar en CUALQUIERA de los dos mapas. Pero el business case sintetiza sus `custom:*` por
+       un camino que resuelve contra UN mapa concreto, así que un tipo registrado solo en el otro
+       pasaba el assert y desaparecía en pantalla igual. La assert de abajo prueba el camino real. */
     const sinRenderer = CATALOGO_DE_SECCIONES.filter(
       (t) => !COMPONENTES_CREABLES[t.sectionType] && !SECTION_COMPONENTS[t.sectionType],
     );
@@ -708,6 +1103,39 @@ describe("⭐ el catálogo de secciones creables y sus renderers no pueden diver
       sinRenderer.map((t) => `${t.tipo}→${t.sectionType}`),
       "hay tipos ofrecidos que no se pueden dibujar: crearlos haría desaparecer la sección",
     ).toEqual([]);
+  });
+
+  it("⭐ y CADA tipo del catálogo sobrevive al camino REAL del business case", () => {
+    /* ⛔ La assert de arriba mira los mapas; ésta mira el CAMINO. `configForCanvas` es lo que usan
+       el editor del business case y su PDF, y sintetizaba las `custom:*` contra un mapa donde
+       `kickoff_prose` y `kickoff_compara` no están. El síntoma no era «falta una sección»: era que
+       `sections` quedaba vacío y el editor volvía a mostrar LA PLANTILLA ENTERA, sin el orden real
+       del canvas. Medido el 2026-08-23 sobre `custom:prosa:*` — 12 secciones de plantilla en vez
+       de la que se acababa de crear.
+       La edición que la pone en rojo: volver a sintetizar con `toSectionDef(customDef(...))`. */
+    const perdidos = CATALOGO_DE_SECCIONES.filter((t) => {
+      const key = `custom:${t.tipo}:00000000-0000-4000-8000-000000000000`;
+      const cfg = configForCanvas("hubspot_v1", [{ key, label: t.nombre }]);
+      return cfg.sections.length !== 1 || cfg.sections[0].key !== key;
+    });
+    expect(
+      perdidos.map((t) => `${t.tipo}→${t.sectionType}`),
+      "esa sección creada NO se pinta en el business case: el editor y el PDF vuelven a la plantilla",
+    ).toEqual([]);
+  });
+
+  it("⚠ y una `custom:*` YA PUBLICADA sigue resolviendo en el snapshot del prospecto", () => {
+    /* Misma puerta, del otro lado: `configForSnapshot` resuelve por el `sectionType` congelado.
+       Un tipo registrado solo entre los creables desaparecía de la propuesta que el prospecto ya
+       tiene abierta — y ahí no hay ningún editor donde notarlo. */
+    const perdidos = CATALOGO_DE_SECCIONES.filter((t) => {
+      const key = `custom:${t.tipo}:00000000-0000-4000-8000-000000000000`;
+      const cfg = configForSnapshot("hubspot_v1", [
+        { key, label: t.nombre, sectionType: t.sectionType },
+      ]);
+      return !cfg.sections.some((s) => s.key === key);
+    });
+    expect(perdidos.map((t) => t.tipo), "se evapora de la propuesta publicada").toEqual([]);
   });
 
   it("y ningún renderer creable queda sin tipo que lo ofrezca", () => {

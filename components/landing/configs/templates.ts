@@ -213,8 +213,16 @@ export function configForCanvas(
   const base = landingConfigFor(templateId);
   if (!rows.length) return base;
   const porKey = new Map(base.sections.map((d) => [d.key, d]));
+  /* ⛔ `sintetizarSeccionCreada`, NO `toSectionDef(customDef(...))` a mano. Eran dos síntesis de
+     la MISMA sección con dos mapas distintos: aquélla resuelve contra `COMPONENTES_CREABLES` y
+     ésta caía al default `SECTION_COMPONENTS`, donde `kickoff_prose` y `kickoff_compara` no están
+     (viven solo en el mapa de creables). Consecuencia medida el 2026-08-23: crear una sección de
+     tipo «prosa» o «comparación» en un business case devolvía `null`, `sections` quedaba VACÍO, y
+     el `sections.length ? … : base` de abajo hacía que el editor mostrara LA PLANTILLA ENTERA —
+     sin la sección nueva y sin el orden real del canvas. Sin un error, en el editor y en el PDF
+     que se le manda al prospecto. */
   const sections = rows
-    .map((r) => porKey.get(r.key) ?? (esCustomKey(r.key) ? toSectionDef(customDef(r.key, r.label)) : null))
+    .map((r) => porKey.get(r.key) ?? sintetizarSeccionCreada(r.key, r.label))
     .filter((d): d is SectionDef => d !== null);
   return sections.length ? { ...base, sections } : base;
 }
@@ -248,7 +256,10 @@ export function configForSnapshot(
     .map((s) => {
       const known = byKey.get(s.key);
       if (known) return known;
-      const Component = SECTION_COMPONENTS[s.sectionType ?? s.key];
+      /* ⚠ Los CREABLES también: una `custom:*` publicada tiene su `sectionType` congelado en el
+         snapshot, y si su renderer vive solo en el mapa de creables, la sección desaparecía de la
+         propuesta que el prospecto ya tiene abierta. Mismo defecto que arriba, otra puerta. */
+      const Component = SECTION_COMPONENTS[s.sectionType ?? s.key] ?? COMPONENTES_CREABLES[s.sectionType ?? s.key];
       if (!Component) return null;
       const def: SectionDef = {
         key: s.key,

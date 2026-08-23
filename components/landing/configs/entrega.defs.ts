@@ -129,13 +129,29 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Qué quedó implementado, agrupado por Hub de HubSpot. `columnas[]`: una por Hub del alcance — `hub` = el slug del catálogo " +
       "('sales_hub', 'service_hub', 'marketing_hub', 'content_hub', 'data_hub', 'revenue_hub') o un nombre libre para lo que no es un Hub " +
-      "(una integración, un desarrollo a medida); `titulo` = cómo lo llama el cliente; `items[]` = lo que quedó FUNCIONANDO, no lo que se planeó. " +
+      "(una integración, un desarrollo a medida); `titulo` = cómo lo llama el cliente; `items[]` = lo que quedó FUNCIONANDO, no lo que se planeó, " +
+      "cada uno con `titulo` (qué es), `detalle` (una línea) y `canales` (dónde aterriza, separado por comas — vacío si no aplica: un pipeline de " +
+      "ventas no tiene canal y forzarle uno sería inventarlo). " +
       "⚠ Solo lo que el cronograma o las reuniones confirmen como hecho. Si algo se planeó y no se construyó, va a «Qué queda abierto», no acá.",
+    /* ⛔ `titulo`/`detalle`/`canales`, NO `title`/`detail`. Este esquema decía los nombres en INGLÉS
+       mientras `HubsClienteSection` lee los tres en castellano (`it.titulo`, `it.detalle`,
+       `it.canales` — components/landing/sections-hubs.tsx:215-234, y el tipo `HubCard`).
+       Consecuencia: el agente de Entrega escribía `title`/`detail`, el renderer no los encontraba,
+       y «Qué quedó implementado» —del documento con el que se cierra el proyecto frente al
+       cliente— salía con TODAS sus tarjetas en blanco. Y el CSE no podía arreglarlo a mano: lo que
+       escribiera en el campo vacío lo borraba `coerceToSchema` en la siguiente regeneración,
+       porque el esquema no declaraba esa clave.
+       Lo encontró el trinquete «un renderer, un contrato de datos» (lib/landing/registry.test.ts),
+       al agrupar por componente en vez de por sectionType: `solucion` y `hubs_cliente` son
+       `HubsClienteSection` con dos nombres, y estaban montados con dos formas de dato distintas. */
     schema: {
       type: "object",
       properties: {
         intro: str,
-        columnas: arrayOf({ hub: str, titulo: str, items: arrayOf({ title: str, detail: str }, ["title"]) }, ["hub", "titulo"]),
+        columnas: arrayOf(
+          { hub: str, titulo: str, items: arrayOf({ titulo: str, detalle: str, canales: str }, ["titulo"]) },
+          ["hub", "titulo"],
+        ),
       },
       required: ["columnas"],
     },
