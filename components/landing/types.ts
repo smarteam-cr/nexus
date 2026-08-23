@@ -557,6 +557,8 @@ export interface SectionDef {
   schemaDelChat?: Record<string, unknown>;
   /** Cómo se llama cada lista EN PANTALLA, por su key. Para las líneas que lee la persona. */
   rotulosDeListas?: Record<string, string>;
+  /** Listas que el chat corrige pero no agranda. Ver `BCSectionDef.listasSoloEdicion`. */
+  listasSoloEdicion?: string[];
   /** El componente es `selfTitled` pero SÍ pinta `sectionTitle`/`sectionEyebrow`. Ver `BCSectionDef`. */
   leeElEncabezado?: boolean;
   selfTitled?: boolean;        // el componente trae su propio encabezado (hero/partner/cta);

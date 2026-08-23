@@ -494,7 +494,7 @@ export async function contextoDeDocumento(
         const def = defDeSeccion(defs, s.key, s.label);
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
            las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
-        const firma = firmaDeSeccion(schemaParaElChat(def));
+        const firma = firmaDeSeccion(schemaParaElChat(def), def?.listasSoloEdicion);
         /* El de su clase, más el propio de esta sección si lo declara. */
         const avisos = [
           AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))],
@@ -642,6 +642,8 @@ export async function contextoDeDocumento(
       rotulo: (s.eyebrowOverride ?? def?.eyebrow ?? "").trim(),
       /* Cómo se llama cada lista EN PANTALLA: es lo que hace legible la línea del acuerdo. */
       rotulosDeListas: def?.rotulosDeListas,
+      /* Corregir sí, agrandar no. Ver `SeccionActual.listasSoloEdicion`. */
+      listasSoloEdicion: def?.listasSoloEdicion,
     };
   });
 
@@ -721,7 +723,7 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
      ⚠ Va TAMBIÉN en la rama vacía: una sección sin contenido es justo donde más falta saber qué
      campos tiene para poder llenarla. */
   const renglones = secciones.map((s) => {
-    const firma = firmaDeSeccion(s.schema);
+    const firma = firmaDeSeccion(s.schema, s.listasSoloEdicion);
     const texto = textoDeBloque(s.data, 0);
     if (!texto.trim()) return `- ${s.label} (${s.key}) ${firma} — VACÍA`;
     return `- ${s.label} (${s.key}) ${firma}:\n    ${recortarContenido(texto)}`;

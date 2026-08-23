@@ -42,6 +42,8 @@ export type DefsParaEjecutar = Record<
     pinned?: boolean;
     /** El componente trae su propio encabezado: el rótulo de arriba no se pinta desde la columna. */
     selfTitled?: boolean;
+    /** Listas que el chat corrige pero no agranda. Ver `BCSectionDef.listasSoloEdicion`. */
+    listasSoloEdicion?: string[];
     /** …pero SÍ pinta lo que el motor le pasa. Ver `BCSectionDef.leeElEncabezado`. */
     leeElEncabezado?: boolean;
     empty?: unknown;
@@ -98,6 +100,8 @@ export function useEjecutarOperacionesDelChat(
              en vez de inferirlo. */
           rotulable: !def?.selfTitled || !!def?.leeElEncabezado,
           rotulosDeListas: def?.rotulosDeListas,
+          /* Corregir sí, agrandar no. Ver `SeccionActual.listasSoloEdicion`. */
+          listasSoloEdicion: def?.listasSoloEdicion,
         };
       }),
     [cs.sections, defsByKey],

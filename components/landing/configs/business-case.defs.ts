@@ -107,6 +107,15 @@ export interface BCSectionDef {
    */
   leeElEncabezado?: boolean;
   /**
+   * ⭐ Listas que el chat puede CORREGIR pero no AGRANDAR, por su key.
+   *
+   * Existe para el caso donde agregar un ítem sería INVENTAR: los indicadores confirmados de la
+   * Entrega son números que el cliente dijo, y su procedencia se acepta mirando la cita. Corregir
+   * un nombre mal transcripto es transcripción; fabricar uno es otra cosa. Borrar y mover quedan
+   * abiertos: no inventan nada.
+   */
+  listasSoloEdicion?: string[];
+  /**
    * ⭐ LO QUE EL CHAT PUEDE TOCAR, cuando no coincide con lo que el AGENTE puede escribir.
    *
    * ── POR QUÉ NO ALCANZABA CON `schema` ───────────────────────────────────────────────────────

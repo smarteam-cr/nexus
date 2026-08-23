@@ -202,7 +202,15 @@ export function capacidadDeSeccion(
  * ⚠ Sale del MISMO esquema que ejecuta, así que no puede divergir. Y no emite tipos crudos ni
  * `required`: solo los nombres, que es lo único que el modelo necesita para nombrar.
  */
-export function firmaDeSeccion(schema: unknown): string {
+export function firmaDeSeccion(
+  schema: unknown,
+  /**
+   * ⭐ Las listas que se corrigen pero no se agrandan. Se MARCAN acá y no solo se rechazan al
+   * aplicar: un rechazo que el modelo podía haber evitado le gasta el único reintento que tiene,
+   * y la persona ve «no se pudo registrar» sobre algo que nadie le dijo que no se podía.
+   */
+  soloEdicion?: readonly string[],
+): string {
   const s = schema as NodoDeSchema | undefined;
   const props = s?.type === "object" ? (s.properties ?? {}) : {};
   const campos: string[] = [];
@@ -210,8 +218,9 @@ export function firmaDeSeccion(schema: unknown): string {
 
   for (const [k, sub] of Object.entries(props)) {
     const n = sub as NodoDeSchema;
-    if (n?.type === "array") listas.push(`${k}${formaDeItems(n.items)}`);
-    else campos.push(k);
+    if (n?.type === "array") {
+      listas.push(`${k}${formaDeItems(n.items)}${soloEdicion?.includes(k) ? " ⚠solo corregir" : ""}`);
+    } else campos.push(k);
   }
   const partes = [
     campos.length ? `campos: ${campos.join(", ")}` : "",

@@ -302,6 +302,16 @@ export interface SeccionActual {
   rotulable?: boolean;
   /** `false` donde el título de la sección NO se persiste (Roles: su lista es fija). */
   renombrable?: boolean;
+  /**
+   * ⭐ Listas que se pueden CORREGIR pero no AGRANDAR desde el chat.
+   *
+   * El caso que la trae son los indicadores CONFIRMADOS de la Entrega: son números que el cliente
+   * dijo, y lo que los hace confiables es que alguien miró la cita antes de aceptarlos. Corregir un
+   * nombre mal transcripto es transcripción; fabricar una atribución que nadie dijo es exactamente
+   * lo que la doctrina «el agente propone, el CSE confirma» impide. Borrar y mover quedan abiertos:
+   * no inventan nada.
+   */
+  listasSoloEdicion?: readonly string[];
   /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
   rotulo?: string;
 }
@@ -751,6 +761,16 @@ export function aplicarOperacionesDeDocumento(
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
         const nodo = (s.schema as NodoDeSchema)?.properties?.[o.lista] as NodoDeSchema | undefined;
         if (!nodo || nodo.type !== "array") { rechazar(o, `«${o.lista}» no es una lista de esa sección`); break; }
+        /* ⛔ Corregir sí, agrandar no — y el motivo dice DÓNDE sí se hace, que es la diferencia
+           entre un rechazo útil y uno que deja a la persona sin salida. */
+        if (s.listasSoloEdicion?.includes(o.lista)) {
+          rechazar(
+            o,
+            `«${o.lista}» se corrige desde acá, pero no se le agregan ítems: los nuevos entran ` +
+              `aceptando una propuesta en la sección, con su cita delante`,
+          );
+          break;
+        }
         const items = nodo.items as NodoDeSchema | undefined;
         const arr = (s.data[o.lista] as unknown[] | undefined) ?? [];
 

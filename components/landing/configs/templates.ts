@@ -113,6 +113,7 @@ export function toSectionDef(
     /* ⚠ CUARTA vez con esta trampa (chatLabel, schemaDelChat, rotulosDeListas): declarar el campo
        en la def y no copiarlo acá lo deja muerto, con su guarda en verde sobre la def CRUDA. */
     leeElEncabezado: d.leeElEncabezado,
+    listasSoloEdicion: d.listasSoloEdicion,
     ctxDriven: d.ctxDriven,
     ctxEmpty: d.ctxEmpty,
     pinned: d.pinned,

@@ -194,10 +194,15 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
        que faltaba no era el permiso: era decirlo antes. */
     /* Para que la línea del acuerdo no diga «a la lista kpisPropuestos» — un nombre de
        programador para lo que en pantalla es una tarjeta de propuesta. */
-    rotulosDeListas: { kpisPropuestos: "Propuestas por revisar (el cliente no las ve)" },
+    rotulosDeListas: {
+      kpisPropuestos: "Propuestas por revisar (el cliente no las ve)",
+      kpisConfirmados: "Confirmados (lo único que el cliente ve)",
+    },
     avisoDelChat:
-      "⚠ lo que agregues acá entra como PROPUESTA: el cliente no la ve hasta que alguien la acepta " +
-      "en la sección. Dilo cuando lo propongas.",
+      "⚠ dos listas: `kpisConfirmados` es lo ÚNICO que el cliente ve, y ahí podés CORREGIR " +
+      "(un valor, un nombre mal transcripto) pero no agregar. Un indicador nuevo entra por " +
+      "`kpisPropuestos`, y el cliente no lo ve hasta que alguien lo acepta en la sección mirando " +
+      "su cita. Dilo cuando lo propongas.",
     /* DOS listas, y la separación ES el diseño:
        · `kpisPropuestos` — DENTRO del schema. El agente las extrae de lo que el cliente dijo
          en las reuniones. Regenerar las pisa, y está bien: es una propuesta.
@@ -222,6 +227,34 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       },
       required: ["kpisPropuestos"],
     },
+    /**
+     * ⭐ El chat alcanza TAMBIÉN lo confirmado — que es lo ÚNICO que el cliente ve.
+     *
+     * Hasta hoy el chat solo podía escribir `kpisPropuestos`, o sea la lista que en lectura no se
+     * pinta nunca: el CSE pedía un cambio, aprobaba, y el documento del cliente quedaba igual.
+     *
+     * ⛔ Sin `cita`. Ese campo es la EVIDENCIA —la frase textual de la reunión— y dejar que el chat
+     * la reescriba es lo que permitiría que un número inventado se vea respaldado. Corregir el
+     * número o el nombre de quien lo dijo es otra cosa: eso es transcripción, y se corrige.
+     */
+    schemaDelChat: {
+      type: "object",
+      properties: {
+        intro: str,
+        kpisPropuestos: arrayOf({ label: str, valor: str, cita: str, quien: str, cuando: str }, ["label", "valor", "cita"]),
+        kpisConfirmados: arrayOf({ label: str, valor: str, quien: str, cuando: str }, ["label", "valor"]),
+      },
+      required: [],
+    },
+    /**
+     * ⛔ Y se abre para CORREGIR, no para AGREGAR.
+     *
+     * Corregir un nombre mal transcripto es el pedido más previsible de esta sección. Fabricar una
+     * atribución que nadie dijo es exactamente lo que la doctrina «el agente propone, el CSE
+     * confirma» impide — y acá el CSE confirma aceptando una propuesta, con la cita delante.
+     * Borrar y mover sí: no inventan nada.
+     */
+    listasSoloEdicion: ["kpisConfirmados"],
   },
   {
     key: "pendientes",
