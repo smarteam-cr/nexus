@@ -105,7 +105,18 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
    */
   const i = contenido.lastIndexOf(MARCA_DE_ACUERDO);
   if (i === -1) return { texto: contenido, acuerdo: null };
-  const texto = contenido.slice(0, i).trim();
+  /**
+   * ⭐ DOS CORTES DISTINTOS, Y SON DOS DECISIONES DISTINTAS.
+   *
+   * Para PARSEAR manda el ÚLTIMO (el docblock de arriba explica por qué, y no se toca).
+   * Para MOSTRAR manda el PRIMERO: si el modelo imitó el marcador dentro de su texto, con el corte
+   * del último su JSON falso quedaba VISIBLE, crudo, arriba de una cajita que ofrecía otras
+   * operaciones. Elías lo leyó así en pantalla el 2026-08-23.
+   *
+   * Cortar por el primero es seguro: el productor anexa el suyo al FINAL, así que todo lo que
+   * quede antes de cualquier marcador es texto que escribió el modelo.
+   */
+  const texto = contenido.slice(0, contenido.indexOf(MARCA_DE_ACUERDO)).trim();
   try {
     const crudo = JSON.parse(contenido.slice(i + MARCA_DE_ACUERDO.length)) as Partial<CambioAcordado>;
     /* ⛔ EL LECTOR TIENE QUE ACEPTAR LO QUE EL PRODUCTOR EMITE, Y ESTO SE ROMPIÓ UNA VEZ.

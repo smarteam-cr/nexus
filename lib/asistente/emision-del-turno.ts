@@ -40,7 +40,7 @@
  */
 
 /** Qué hacer después de leer el turno del modelo. */
-export type QueHacerConElTurno = "no" | "por-rechazo" | "por-omision";
+export type QueHacerConElTurno = "no" | "por-rechazo" | "por-omision" | "por-imitacion";
 
 export interface EstadoDelTurno {
   /** Cuántas operaciones rechazó el dry-run. */
@@ -58,6 +58,14 @@ export interface EstadoDelTurno {
   opsUtilizables: number;
   /** El modelo dejó una pregunta abierta en este turno. */
   preguntaAbierta: boolean;
+  /**
+   * ⭐ El modelo escribió `<<<ACUERDO>>>` DENTRO de su propio texto en vez de llamar la herramienta.
+   *
+   * Es una señal DURA, no una lectura de la prosa: ese marcador lo pone la app y el modelo no
+   * tiene ningún motivo legítimo para escribirlo. Si aparece, quiso dejar un cambio registrado y
+   * usó el camino que no registra nada.
+   */
+  imitoElMarcador: boolean;
 }
 
 /**
@@ -77,6 +85,17 @@ export function decidirReintento(e: EstadoDelTurno): QueHacerConElTurno {
   /* El rechazo va primero: si hay operaciones rechazadas hubo herramienta, y corregir nombres es
      lo que más veces salva el turno. */
   if (e.rechazadas > 0 && e.huboTool) return "por-rechazo";
+  /**
+   * ⭐ LA IMITACIÓN VA ANTES DEL CHEQUEO DE `opsUtilizables`, Y ESO ES EL ARREGLO.
+   *
+   * En el caso que Elías vio, el libro de pendientes tenía 2 operaciones, así que `opsUtilizables`
+   * era 2 y el reintento por omisión NO disparaba. La premisa —«si hay pendientes el turno no está
+   * mudo»— es cierta y era irrelevante: **el turno no estaba mudo, estaba diciendo otra cosa.** La
+   * persona leyó «sumo dos objetivos» y la cajita le ofreció aplicar dos borrados que no pidió.
+   *
+   * El libro ENMASCARABA la omisión. La imitación no depende del libro, así que se pregunta antes.
+   */
+  if (e.imitoElMarcador && !e.preguntaAbierta) return "por-imitacion";
   if (e.opsUtilizables === 0 && !e.preguntaAbierta) return "por-omision";
   return "no";
 }
@@ -108,13 +127,43 @@ export function reclamoDeOmision(huboTool: boolean): string {
   );
 }
 
+/**
+ * Lo que se le dice al modelo cuando escribió el marcador dentro de su propio texto.
+ *
+ * ⚠ Nombra el marcador a propósito: el modelo lo VE en su historial —hasta el 2026-08-23 se le
+ * mandaba crudo— y sin decirle qué es no tiene forma de saber por qué está mal escribirlo.
+ */
+export function reclamoDeImitacion(): string {
+  return (
+    "Escribiste `<<<ACUERDO>>>` dentro de tu mensaje. Ese marcador lo pone la app, no tú: escrito " +
+    "en el texto no registra ningún cambio, y la persona lo lee como un bloque de JSON crudo en " +
+    "medio de tu respuesta.\n" +
+    "Si querías dejar cambios, llama `registrar_cambio_acordado` AHORA con las operaciones. Si no " +
+    "corresponde ninguno, contesta en texto SIN el marcador."
+  );
+}
+
 export interface CierreDelTurno {
   /** `true` si el turno terminó con un acuerdo que la pantalla va a pintar. */
   hayAcuerdo: boolean;
   /** `true` si el modelo llamó la herramienta en el intento vigente. */
   huboTool: boolean;
-  /** `true` si ya se gastó el reintento pidiéndole que emitiera. */
-  seReintentoPorOmision: boolean;
+  /**
+   * `true` si ya se gastó el reintento pidiéndole que emitiera —por omisión O por imitación—.
+   *
+   * ⚠ UNA sola bandera y no una por motivo: dos banderas para el mismo concepto se desincronizan,
+   * y lo que decide el aviso no es POR QUÉ se reclamó sino que se reclamó y siguió sin emitir.
+   */
+  seLeReclamo: boolean;
+  /**
+   * ⛔ El modelo dejó una pregunta abierta.
+   *
+   * Sin esto el ⚠ sonaba encima de una pregunta legítima: el chat preguntaba «¿a cuál de los tres
+   * te referís?» y abajo aparecía «no dejé registrado ningún cambio», que es obvio y suena a
+   * error. Visto en pantalla el 2026-08-23, en el diagnóstico. Un aviso que sobra enseña a
+   * ignorar los avisos.
+   */
+  preguntaAbierta: boolean;
 }
 
 /**
@@ -123,7 +172,10 @@ export interface CierreDelTurno {
  * Se dice en dos casos, y los dos son mecánicos —nunca se deduce del texto del modelo, que es
  * *copy* y ya cambió dos veces en este repo—:
  *  · **llamó la herramienta y no quedó nada** → su propia llamada dice que había un acuerdo;
- *  · **se le reclamó por omisión y siguió sin emitir** → le preguntamos y no contestó con nada.
+ *  · **se le reclamó y siguió sin emitir** → le preguntamos y no contestó con nada.
+ *
+ * ⛔ Y se calla también cuando el modelo dejó una PREGUNTA abierta: ahí la pregunta ya explica que
+ * no se registró nada, y el ⚠ encima se lee como un error.
  *
  * ⛔ Y se CALLA cuando no llamó la herramienta y no hubo reclamo: ahí lo más probable es una
  * respuesta legítima («eso no se toca desde acá», «esto es lo que puedo hacer»), y meterle un ⚠ a
@@ -133,7 +185,9 @@ export interface CierreDelTurno {
  */
 export function avisoDeTurnoSinAcuerdo(c: CierreDelTurno): string | null {
   if (c.hayAcuerdo) return null;
-  if (!c.huboTool && !c.seReintentoPorOmision) return null;
+  /* Una pregunta abierta ya explica por sí sola que no se registró nada. */
+  if (c.preguntaAbierta) return null;
+  if (!c.huboTool && !c.seLeReclamo) return null;
   return (
     "⚠ No dejé registrado ningún cambio en este turno, así que no hay nada para aplicar. " +
     "Pídemelo de nuevo diciendo qué sección y qué texto quieres, y lo dejo listo."

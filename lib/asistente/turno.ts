@@ -43,6 +43,7 @@ import {
 import {
   avisoDeTurnoSinAcuerdo,
   decidirReintento,
+  reclamoDeImitacion,
   reclamoDeOmision,
 } from "@/lib/asistente/emision-del-turno";
 import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
@@ -54,7 +55,7 @@ import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
 import { contextoDeCronograma, contextoDeDocumento, contextoDeRol } from "./contexto";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
-import { leerAcuerdo, marcaDeAcuerdo, type CambioAcordado } from "./acuerdo";
+import { leerAcuerdo, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
 import {
   bloqueDePendientes,
   fusionarPendientes,
@@ -885,9 +886,24 @@ export async function correrTurno(
      del bloque de contexto; meter en el prefijo algo que cambia en cada turno invalidaría la
      caché entera SIN ERROR Y SIN LOG, y se vería solo en la factura. */
   const messages: Anthropic.Messages.MessageParam[] = [
+    /**
+     * ⛔ SIN EL MARCADOR — y esto es lo que arregla el fallo del 2026-08-23.
+     *
+     * Se le mandaba `t.contenido` CRUDO, o sea con el `<<<ACUERDO>>>{json}` adentro y etiquetado
+     * como mensaje SUYO. Es un ejemplo involuntario: N turnos mostrándole un formato que «funciona»
+     * y que él nunca escribió. Y lo copió — Elías vio en pantalla la prosa del modelo seguida del
+     * JSON crudo, con la cajita ofreciendo operaciones de OTRO turno.
+     *
+     * `acuerdo.ts` ya lo tenía anotado como riesgo («puede imitarlo dentro de su texto») y por eso
+     * el parseo usa `lastIndexOf`; lo que faltaba era cerrar la otra mitad: no enseñárselo.
+     *
+     * ⚠ No se pierde nada de lo que el modelo necesita saber: lo acordado y sin aplicar se le
+     * re-inyecta cada turno por `bloqueDePendientes`, y el desenlace viaja como prosa. El JSON no
+     * le enseñaba nada — le enseñaba a escribirlo.
+     */
     ...hilo.turnos.map((t) => ({
       role: (t.rol === "CSE" ? "user" : "assistant") as "user" | "assistant",
-      content: t.contenido,
+      content: textoVisible(t.contenido) || t.contenido,
     })),
     {
       role: "user" as const,
@@ -1046,8 +1062,13 @@ export async function correrTurno(
       huboTool: !!idDeLaHerramienta,
       opsUtilizables: prep.aceptadas.length + libro.vivas.length,
       preguntaAbierta,
+      /* Señal DURA: ese marcador lo pone la app y el modelo no tiene ningún motivo legítimo para
+         escribirlo. Si aparece, quiso dejar un cambio y usó el camino que no registra nada. */
+      imitoElMarcador: respuesta.includes(MARCA_DE_ACUERDO),
     });
-    const seReintentoPorOmision = motivoDelReintento === "por-omision";
+    /* ⚠ UNA bandera para «se le reclamó», no una por motivo: lo que decide el aviso final no es
+       POR QUÉ se reclamó sino que se reclamó y siguió sin emitir. */
+    const seLeReclamo = motivoDelReintento === "por-omision" || motivoDelReintento === "por-imitacion";
 
     if (motivoDelReintento !== "no") {
       /* ⚠ Sin `tool_use` no hay `tool_use_id` al que contestar, así que el reclamo va como mensaje
@@ -1065,11 +1086,17 @@ export async function correrTurno(
                   content:
                     motivoDelReintento === "por-rechazo"
                       ? reclamoDeOperaciones(prep.rechazadas)
-                      : reclamoDeOmision(true),
+                      : motivoDelReintento === "por-imitacion"
+                        ? reclamoDeImitacion()
+                        : reclamoDeOmision(true),
                 },
               ],
             }
-          : { role: "user", content: reclamoDeOmision(false) };
+          : {
+              role: "user",
+              content:
+                motivoDelReintento === "por-imitacion" ? reclamoDeImitacion() : reclamoDeOmision(false),
+            };
 
       messages.push({ role: "assistant", content: msg.content }, reclamo);
       msg = await preguntarleAlModelo(messages);
@@ -1152,8 +1179,20 @@ export async function correrTurno(
     const aviso = avisoDeTurnoSinAcuerdo({
       hayAcuerdo: !!acuerdo,
       huboTool: !!idDeLaHerramienta,
-      seReintentoPorOmision,
+      seLeReclamo,
+      preguntaAbierta,
     });
+    /* ⭐ La imitación se registra SIEMPRE, aunque el turno haya terminado con acuerdo: es el caso
+       que hasta hoy era doblemente silencioso —sin ⚠ y sin log— y el único que hace falta para
+       saber si el arreglo de arriba está haciendo efecto en producción. */
+    if (respuesta.includes(MARCA_DE_ACUERDO) || motivoDelReintento === "por-imitacion") {
+      console.warn("[asistente] el modelo imitó el marcador del acuerdo", {
+        hiloId: hilo.id,
+        pieza: hilo.pieza,
+        seLeReclamo,
+        quedoAcuerdo: !!acuerdo,
+      });
+    }
     if (aviso) {
       respuesta = `${respuesta.trim()}\n\n${aviso}`;
       /* ⛔ Y queda RASTRO. No hay un solo log en este archivo, así que hasta hoy «el modelo no
@@ -1164,7 +1203,7 @@ export async function correrTurno(
         huboTool: !!idDeLaHerramienta,
         opsEmitidas: opsNuevas.length,
         rechazadas: prep.rechazadas.length,
-        seReintentoPorOmision,
+        seLeReclamo,
         stopReason: msg.stop_reason,
       });
     }

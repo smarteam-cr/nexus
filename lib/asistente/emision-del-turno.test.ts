@@ -11,9 +11,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { RAIZ } from "@/lib/ui/scan-source";
-import { decidirReintento, avisoDeTurnoSinAcuerdo, reclamoDeOmision } from "./emision-del-turno";
+import {
+  decidirReintento,
+  avisoDeTurnoSinAcuerdo,
+  reclamoDeOmision,
+  reclamoDeImitacion,
+} from "./emision-del-turno";
 
-const TURNO = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+const leer = (f: string) => fs.readFileSync(path.join(RAIZ, f), "utf8");
+const TURNO = leer("lib/asistente/turno.ts");
 const RAMA = TURNO.slice(
   TURNO.indexOf("if (!esCronograma) {"),
   TURNO.indexOf("} else {", TURNO.indexOf("if (!esCronograma) {")),
@@ -24,6 +30,9 @@ const turno = (o: Partial<Parameters<typeof decidirReintento>[0]> = {}) => ({
   huboTool: true,
   opsUtilizables: 0,
   preguntaAbierta: false,
+  /* ⚠ El default es «no imitó»: si fuera true, todos los casos de abajo cambiarían de significado
+     sin que nadie los relea. */
+  imitoElMarcador: false,
   ...o,
 });
 
@@ -78,29 +87,89 @@ describe("⭐ el reintento deja de ser ciego a la OMISIÓN", () => {
   });
 });
 
+describe("⭐ el modelo IMITA el marcador en vez de llamar la herramienta", () => {
+  it("⭐ EL CASO DE ELÍAS: imitó, y el libro de pendientes tenía operaciones", () => {
+    /* Con el libro cargado, `opsUtilizables` era 2 y el reintento por omisión no disparaba. La
+       premisa —«si hay pendientes el turno no está mudo»— era cierta y era IRRELEVANTE: el turno
+       no estaba mudo, estaba DICIENDO OTRA COSA. La persona leyó «sumo dos objetivos» y la cajita
+       le ofreció aplicar dos borrados que no pidió.
+       La edición que la pone en rojo: mover el chequeo de imitación DESPUÉS del de opsUtilizables. */
+    expect(decidirReintento(turno({ huboTool: false, imitoElMarcador: true, opsUtilizables: 2 }))).toBe(
+      "por-imitacion",
+    );
+  });
+
+  it("⭐ y el ORDEN importa: sin pendientes, gana el reclamo que NOMBRA el marcador", () => {
+    /* Los dos caminos reintentan, así que la diferencia no es «si» sino QUÉ se le dice. Con el
+       chequeo de imitación después del de omisión, el modelo recibe «no emitiste nada» —cierto y
+       poco útil— en vez de «escribiste el marcador, eso no registra nada», que es lo que le explica
+       QUÉ hizo mal. La edición que la pone en rojo: mover el chequeo de imitación una línea abajo. */
+    expect(decidirReintento(turno({ huboTool: false, imitoElMarcador: true, opsUtilizables: 0 }))).toBe(
+      "por-imitacion",
+    );
+  });
+
+  it("⛔ pero NO si dejó una pregunta abierta", () => {
+    /* Mismo criterio que veta `tool_choice`: empujarlo ahí sería empujarlo a inventar justo donde
+       tuvo razón en no hacerlo. */
+    expect(
+      decidirReintento(turno({ imitoElMarcador: true, preguntaAbierta: true, opsUtilizables: 0 })),
+    ).toBe("no");
+  });
+
+  it("corregir NOMBRES sigue teniendo prioridad sobre la imitación", () => {
+    /* Si hay rechazos, el modelo SÍ emitió: corregirle el nombre salva más turnos que retarlo. */
+    expect(decidirReintento(turno({ rechazadas: 2, imitoElMarcador: true }))).toBe("por-rechazo");
+  });
+
+  it("el reclamo NOMBRA el marcador y dice que lo pone la app", () => {
+    /* El modelo lo veía crudo en su historial: sin decirle qué es, no tiene forma de saber por qué
+       está mal escribirlo. */
+    const r = reclamoDeImitacion();
+    expect(r).toContain("<<<ACUERDO>>>");
+    expect(r).toContain("lo pone la app");
+    expect(r).toMatch(/contesta en texto/);
+  });
+});
+
 describe("⭐ un turno mudo deja de ser mudo", () => {
   it("llamó la herramienta y no quedó nada: se dice", () => {
-    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: true, seReintentoPorOmision: false });
+    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: true, seLeReclamo: false, preguntaAbierta: false });
     expect(a).toContain("No dejé registrado ningún cambio");
   });
 
   it("se le reclamó por omisión y siguió sin emitir: se dice", () => {
-    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: false, seReintentoPorOmision: true });
+    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: false, seLeReclamo: true, preguntaAbierta: false });
     expect(a).toBeTruthy();
   });
 
   it("⛔ pero se CALLA en un turno legítimo sin herramienta ni reclamo", () => {
     /* «eso no se toca desde acá», «esto es lo que puedo hacer». Meterle un ⚠ a cada uno enseñaría
        a ignorar el ⚠, que es exactamente cómo muere una alerta. */
-    expect(avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: false, seReintentoPorOmision: false })).toBeNull();
+    expect(avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: false, seLeReclamo: false, preguntaAbierta: false })).toBeNull();
+  });
+
+  it("⛔ y se calla cuando el modelo dejó una PREGUNTA abierta", () => {
+    /* Elías lo vio en el diagnóstico: el chat preguntaba «¿a cuál de los tres te referís?» y
+       debajo aparecía «no dejé registrado ningún cambio». Es obvio y suena a error — y un aviso que
+       sobra enseña a ignorar los avisos.
+       La edición que la pone en rojo: sacar el corte por `preguntaAbierta`. */
+    expect(
+      avisoDeTurnoSinAcuerdo({
+        hayAcuerdo: false,
+        huboTool: true,
+        seLeReclamo: false,
+        preguntaAbierta: true,
+      }),
+    ).toBeNull();
   });
 
   it("y se calla siempre que HAY acuerdo", () => {
-    expect(avisoDeTurnoSinAcuerdo({ hayAcuerdo: true, huboTool: true, seReintentoPorOmision: true })).toBeNull();
+    expect(avisoDeTurnoSinAcuerdo({ hayAcuerdo: true, huboTool: true, seLeReclamo: true, preguntaAbierta: false })).toBeNull();
   });
 
   it("⚠ el aviso está en tuteo neutro: se persiste en el hilo y el modelo lo relee", () => {
-    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: true, seReintentoPorOmision: false }) ?? "";
+    const a = avisoDeTurnoSinAcuerdo({ hayAcuerdo: false, huboTool: true, seLeReclamo: false, preguntaAbierta: false }) ?? "";
     expect(a).not.toMatch(/\b(pedime|decime|podés|tenés|querés|dale)\b/i);
   });
 });
@@ -125,6 +194,32 @@ describe("las dos decisiones están CABLEADAS, no solo escritas", () => {
       "if (resumenDelModelo && opsDeDoc.length > 0)",
     );
     expect(RAMA).toContain("resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE");
+  });
+
+  it("⛔ el modelo deja de VER el marcador en su propio historial", () => {
+    /* Era un ejemplo involuntario: N turnos mostrándole un formato que «funciona» y que él nunca
+       escribió. `acuerdo.ts` ya lo tenía anotado como riesgo y por eso el parseo usa
+       `lastIndexOf`; faltaba cerrar la otra mitad — no enseñárselo.
+       La edición que la pone en rojo: volver a `content: t.contenido`. */
+    const bloque = TURNO.slice(TURNO.indexOf("const messages:"), TURNO.indexOf("role: \"user\" as const"));
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(bloque, "el historial volvió a viajar crudo").toContain("textoVisible(t.contenido)");
+  });
+
+  it("⛔ y si igual lo imita, el JSON no se VE", () => {
+    /* Dos cortes distintos: el ÚLTIMO marcador para parsear (no se toca: cambiarlo hizo desaparecer
+       la cajita entera una vez) y el PRIMERO para mostrar. */
+    const acu = leer("lib/asistente/acuerdo.ts");
+    expect(acu, "el parseo dejó de tomar el último").toContain("contenido.lastIndexOf(MARCA_DE_ACUERDO)");
+    expect(acu, "el texto visible volvió a cortarse por el último").toContain(
+      "contenido.slice(0, contenido.indexOf(MARCA_DE_ACUERDO))",
+    );
+  });
+
+  it("⛔ la imitación queda registrada AUNQUE el turno termine con acuerdo", () => {
+    /* Es el caso que era doblemente silencioso —sin ⚠ y sin log— y el único dato que dice si esto
+       está haciendo efecto en producción. */
+    expect(RAMA).toContain("el modelo imitó el marcador");
   });
 
   it("⛔ el turno mudo deja RASTRO en el servidor", () => {
