@@ -78,7 +78,17 @@ describe("lo que se acuerda ya pasó por el editor", () => {
       (RAMA.match(/await preguntarleAlModelo\(/g) ?? []).length,
       "hay más de un reintento: el turno puede encadenar llamadas sin techo",
     ).toBe(1);
-    expect(RAMA, "el reintento dejó de ser condicional").toContain("prep.rechazadas.length > 0 && idDeLaHerramienta");
+    /* ⚠ ACTUALIZADO 2026-08-23, con el motivo escrito. El disparador era literalmente
+       `prep.rechazadas.length > 0 && idDeLaHerramienta`, o sea que el reintento solo miraba el
+       error de NOMBRES y era CIEGO al de OMISIÓN: el modelo narraba el cambio, no emitía nada, y
+       el turno cerraba mudo. Visto en pantalla sobre «Objetivos del proyecto».
+       El invariante NO cambia —el reintento sigue siendo condicional y sigue habiendo uno solo—;
+       lo que cambia es que la condición ahora la decide una función PURA que sí se puede probar
+       (`lib/asistente/emision-del-turno.test.ts`), en vez de un booleano escondido acá adentro. */
+    expect(RAMA, "el reintento dejó de ser condicional").toContain('motivoDelReintento !== "no"');
+    expect(RAMA, "la decisión del reintento dejó de salir de la función pura").toContain(
+      "decidirReintento({",
+    );
   });
 
   it("⛔ lo que sigue rechazado DESPUÉS del reintento se dice, no se calla", () => {

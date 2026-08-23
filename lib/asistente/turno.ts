@@ -40,6 +40,11 @@ import {
   reclamoDeOperaciones,
   renderSeccionParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
+import {
+  avisoDeTurnoSinAcuerdo,
+  decidirReintento,
+  reclamoDeOmision,
+} from "@/lib/asistente/emision-del-turno";
 import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
 import { dependenciasDeOperaciones } from "@/lib/timeline/dependencias-de-operaciones";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -434,7 +439,13 @@ Solo NO llamas la herramienta en tres casos: el pedido no entra en el vocabulari
 qué se puede hacer, o vas a VACIAR una sección (ahí sí preguntas antes, porque destruye trabajo
 que alguien escribió). ⚠ Es la ÚNICA excepción: en cualquier otro caso emites la operación en el
 mismo turno. «Elimino el tag X» sin llamar la herramienta no es una respuesta — es una promesa que
-la persona tiene que volver a pedir.`;
+la persona tiene que volver a pedir.
+
+⛔ Y CONTESTAR TU PREGUNTA CIERRA EL PEDIDO: emites AHÍ.
+Si tu turno anterior preguntó y la persona te contesta —incluso con un «hazlo tú», «invéntalas
+según el contexto», «lo que te parezca»— eso NO es un permiso para volver a describir lo que vas a
+hacer. Ya no falta nada: escribes el texto final y emites las operaciones en ESE turno. Enumerar en
+prosa lo que vas a agregar, sin llamar la herramienta, deja a la persona sin nada que aprobar.`;
 
 /**
  * ── LA HERRAMIENTA EMITE OPERACIONES, NO UN TEXTO ────────────────────────────────────────────
@@ -857,6 +868,15 @@ export async function correrTurno(
         : describirOperacionesDeDocumento(ctx.secciones ?? [], ops as OperacionDeDocumento[]);
   const lineasCrudas = describir(pendientesCrudos);
   const libro = podar(pendientesCrudos);
+  /* ⭐ Lo que se cayó SOLO —un pendiente que dejó de poder aplicarse porque alguien editó debajo de
+     la conversación—. Lo calcula la APP después de que el modelo contestó, así que es la única
+     categoría que se perdería en silencio si no viajara en el acuerdo. Vive acá arriba porque lo
+     usan las DOS ramas: la del documento lo calculaba y lo tiraba. */
+  const soltadas = libro.caidas.map((c) => {
+    const i = pendientesCrudos.indexOf(c.operacion);
+    const linea = i >= 0 ? lineasCrudas[i] : null;
+    return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
+  });
   const lineasVivas = describir(libro.vivas);
 
   /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
@@ -923,6 +943,16 @@ export async function correrTurno(
   const leerElTurno = (m: Anthropic.Messages.Message) => {
     respuesta = "";
     idDeLaHerramienta = "";
+    /* ⛔ Y TODO LO DEMÁS TAMBIÉN. Resetear solo dos campos dejaba que el intento 2 heredara el
+       resumen, las operaciones y el `preguntaAbierta` del intento 1: si el segundo contestaba en
+       texto, se armaba un acuerdo con las operaciones VIEJAS y se ofrecía como si fuera su
+       respuesta. Hoy eso ya era un modo raro; con el reintento por omisión pasaría a ser el
+       camino normal. */
+    resumenDelModelo = "";
+    instruccionDelModelo = "";
+    opsNuevas = [];
+    descartar = [];
+    preguntaAbierta = false;
     for (const b of m.content) {
       if (b.type === "text") respuesta += b.text;
       if (b.type === "tool_use" && b.name === TOOL_ACUERDO.name) {
@@ -1000,21 +1030,48 @@ export async function correrTurno(
       completadores,
     );
 
-    if (prep.rechazadas.length > 0 && idDeLaHerramienta) {
-      messages.push(
-        { role: "assistant", content: msg.content },
-        {
-          role: "user",
-          content: [
-            {
-              type: "tool_result" as const,
-              tool_use_id: idDeLaHerramienta,
-              is_error: true,
-              content: reclamoDeOperaciones(prep.rechazadas),
-            },
-          ],
-        },
-      );
+    /**
+     * ⭐ EL MISMO SLOT, CON EL DISPARADOR MÁS ANCHO — y es el arreglo del caso de Elías.
+     *
+     * El reintento estaba cableado al error de NOMBRES (operaciones emitidas que el dry-run
+     * rechaza) y era CIEGO al error de OMISIÓN: el modelo narraba el cambio, no emitía nada, y el
+     * turno cerraba sin acuerdo, sin aviso y sin rastro. Visto en pantalla el 2026-08-23 sobre
+     * «Objetivos del proyecto»: «Agrego dos objetivos nuevos…» y nada más.
+     *
+     * ⛔ Sigue siendo UN SOLO reintento por turno: lo que cambia es cuándo se usa el slot, no
+     * cuántos hay. Un loop sin corte no falla — encadena llamadas que nadie ve hasta la factura.
+     */
+    const motivoDelReintento = decidirReintento({
+      rechazadas: prep.rechazadas.length,
+      huboTool: !!idDeLaHerramienta,
+      opsUtilizables: prep.aceptadas.length + libro.vivas.length,
+      preguntaAbierta,
+    });
+    const seReintentoPorOmision = motivoDelReintento === "por-omision";
+
+    if (motivoDelReintento !== "no") {
+      /* ⚠ Sin `tool_use` no hay `tool_use_id` al que contestar, así que el reclamo va como mensaje
+         de usuario. Es el único caso: cuando hubo herramienta se responde por su canal, que es lo
+         que el modelo lee como error de SU llamada y no como un pedido nuevo. */
+      const reclamo: Anthropic.Messages.MessageParam =
+        idDeLaHerramienta
+          ? {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result" as const,
+                  tool_use_id: idDeLaHerramienta,
+                  is_error: true,
+                  content:
+                    motivoDelReintento === "por-rechazo"
+                      ? reclamoDeOperaciones(prep.rechazadas)
+                      : reclamoDeOmision(true),
+                },
+              ],
+            }
+          : { role: "user", content: reclamoDeOmision(false) };
+
+      messages.push({ role: "assistant", content: msg.content }, reclamo);
       msg = await preguntarleAlModelo(messages);
       leerElTurno(msg);
       prep = prepararOperacionesDeDocumento(
@@ -1055,18 +1112,61 @@ export async function correrTurno(
     const yaEstan = new Set(prep.aceptadas.map((o) => JSON.stringify(o)));
     const arrastradas = enPie.filter((o) => !yaEstan.has(JSON.stringify(o)));
     const opsDeDoc = [...arrastradas, ...prep.aceptadas] as OperacionDeDocumento[];
-    if (resumenDelModelo && opsDeDoc.length > 0) {
+    /* ⛔ El gate exigía `resumenDelModelo` ADEMÁS de las operaciones, así que un turno con
+       operaciones válidas y el resumen vacío las tiraba EN SILENCIO. El cronograma ya tenía el
+       paracaídas (`|| RESUMEN_DE_ARRASTRE`, abajo) con el comentario que lo explica; acá faltaba
+       portarlo. Lo que decide si hay acuerdo son las OPERACIONES, no el texto que las acompaña. */
+    if (opsDeDoc.length > 0) {
       acuerdo = {
-        resumen: resumenDelModelo,
+        resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
         operaciones: opsDeDoc,
         /* ⛔ Las líneas salen del MISMO objeto que se va a ejecutar. Es lo único que hace hermética
            la cajita: lo que la persona lee no puede divergir de lo que pasa. */
         lineas: describirOperacionesDeDocumento(seccionesDelDoc, opsDeDoc),
         dependencias: dependenciasDeOperacionesDeDocumento(opsDeDoc),
         ...(preguntaAbierta ? { enEspera: true } : {}),
+        /* ⚠ Un pendiente que se cayó porque alguien editó la sección a mano lo calcula la APP,
+           después de que el modelo contestó: es la única categoría que se perdería en silencio si
+           no viajara. El cronograma ya lo mandaba; la rama de documentos lo calculaba y lo tiraba,
+           y la cajita vieja seguía rotulada «sigue abajo, en la propuesta vigente» sobre cambios
+           que ya no viajaban. */
+        ...(soltadas.length > 0 ? { descartadas: soltadas } : {}),
+        /* Los ÍNDICES, no las operaciones: es lo que la pantalla usa para marcar «esto ya lo
+           habías acordado». Van primeras en `opsDeDoc`, así que son las N primeras posiciones. */
+        ...(arrastradas.length > 0
+          ? { arrastradas: arrastradas.map((_, i) => i) }
+          : {}),
       };
     } else if (resumenDelModelo && instruccionDelModelo) {
       acuerdo = { resumen: resumenDelModelo, instruccion: instruccionDelModelo };
+    }
+
+    /**
+     * ⭐ EL `else` QUE FALTABA: un turno mudo deja de ser mudo.
+     *
+     * Sin esto, `acuerdo` quedaba `null`, el turno se persistía como texto pelado y la pantalla
+     * pintaba una burbuja gris. Ninguna de las tres alertas del archivo cubría el caso: la del ⚠
+     * exige RECHAZOS —cero operaciones no es cero rechazos, es cero de todo— y las otras dos
+     * exigen que el texto esté VACÍO. Acá había texto y cero rechazos.
+     */
+    const aviso = avisoDeTurnoSinAcuerdo({
+      hayAcuerdo: !!acuerdo,
+      huboTool: !!idDeLaHerramienta,
+      seReintentoPorOmision,
+    });
+    if (aviso) {
+      respuesta = `${respuesta.trim()}\n\n${aviso}`;
+      /* ⛔ Y queda RASTRO. No hay un solo log en este archivo, así que hasta hoy «el modelo no
+         emitió» era infalsificable: se discutía con hipótesis en vez de con el dato. */
+      console.warn("[asistente] turno sin acuerdo", {
+        hiloId: hilo.id,
+        pieza: hilo.pieza,
+        huboTool: !!idDeLaHerramienta,
+        opsEmitidas: opsNuevas.length,
+        rechazadas: prep.rechazadas.length,
+        seReintentoPorOmision,
+        stopReason: msg.stop_reason,
+      });
     }
   } else {
     /**
@@ -1095,11 +1195,6 @@ export async function correrTurno(
        * modelo NUNCA lo menciona —lo calcula la app, después de que el modelo ya contestó—, así
        * que es la única categoría que de verdad se perdería en silencio si no se dijera acá.
        */
-      const soltadas = libro.caidas.map((c) => {
-        const i = pendientesCrudos.indexOf(c.operacion);
-        const linea = i >= 0 ? lineasCrudas[i] : null;
-        return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
-      });
       acuerdo = {
         /* Si el modelo no llamó la herramienta —porque solo preguntó— la app sintetiza el acuerdo
            con el libro tal cual. Sin esto, un turno de desambiguación deja lo pendiente sin botón:

@@ -145,6 +145,11 @@ describe("el asistente habla español neutro, no rioplatense", () => {
   const TEXTO_QUE_EL_MODELO_LEE = [
     sinComentarios(FUENTE),
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8")),
+    /* ⚠ SUMADO 2026-08-23: el reclamo por omisión viaja como `tool_result` o como mensaje de
+       usuario en el reintento — o sea, es texto que el modelo lee igual que el prompt, y el aviso
+       de turno mudo se PERSISTE en el hilo y se relee en cada turno siguiente. El alcance de esta
+       guarda tiene que seguir al texto, no al archivo donde arrancó. */
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/emision-del-turno.ts"), "utf8")),
   ].join("\n");
 
   /** Las líneas que PROHIBEN el voseo tienen que poder nombrarlo. */
