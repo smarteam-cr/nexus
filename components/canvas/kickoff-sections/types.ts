@@ -99,6 +99,15 @@ export interface ProseItem {
   detail?: string;
 }
 export interface ProseData {
+  /**
+   * ⭐ El subtítulo de la sección, debajo del título grande. Lo escribe una PERSONA (a mano o por
+   * chat) y NO el agente: vive en `PROSA_SCHEMA_DEL_CHAT` y no en `PROSA_SCHEMA`.
+   *
+   * ⚠ Por eso está fuera del esquema del agente, y por eso sobrevive: `preserveNonSchemaKeys`
+   * acarrea las claves de primer nivel que el esquema no declara, así que regenerar la sección no
+   * se lo lleva. Es el mismo patrón que `eyebrow` y las métricas de la portada.
+   */
+  subhead?: string;
   intro?: string;
   items: ProseItem[];
   /** Comparación "Hoy vs con el sistema" (opcional, en bienvenida/objetivos). */
@@ -123,6 +132,7 @@ export function normalizeProse(data: unknown): ProseData {
     .filter((i): i is ProseItem => !!i && typeof (i as ProseItem).title === "string")
     .map((i) => ({ title: i.title, detail: typeof i.detail === "string" ? i.detail : undefined }));
   return {
+    subhead: typeof d.subhead === "string" ? d.subhead : "",
     intro: typeof d.intro === "string" ? d.intro : "",
     items,
     compara: normalizeComparison(d.compara),
@@ -132,7 +142,9 @@ export function normalizeProse(data: unknown): ProseData {
 
 /** Una ProseData "está vacía" (para decidir el fallback a markdown legacy). */
 export function proseIsEmpty(d: ProseData): boolean {
-  return !d.items.length && !(d.intro ?? "").trim() && !d.compara;
+  /* ⚠ `subhead` CUENTA como contenido: una sección con solo el subtítulo escrito tiene algo que
+     mostrar, y omitirla en la vista del cliente sería borrar lo único que se escribió ahí. */
+  return !d.items.length && !(d.intro ?? "").trim() && !(d.subhead ?? "").trim() && !d.compara;
 }
 
 // ── Hero (bienvenida) ─────────────────────────────────────────────────────────

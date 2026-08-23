@@ -116,6 +116,20 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* ⭐ El SUBTÍTULO, debajo del título grande. Lo pide Elías entre las piezas que el chat
+          debería manejar. Va antes de la intro y con la clase del lead, que es la que el motor ya
+          usa para una bajada. ⛔ Se pinta ACÁ o el chat diría «aplicado» sobre algo invisible —
+          el defecto que `TarjetasData.intro` ya tiene documentado. */}
+      {(editable || d.subhead) && (
+        <Editable
+          as="p"
+          className="stl-lead"
+          editable={editable}
+          value={d.subhead ?? ""}
+          placeholder="Subtítulo (opcional)…"
+          onCommit={(v) => set({ subhead: v })}
+        />
+      )}
       {(editable || d.intro) && (
         <Editable
           as="p"

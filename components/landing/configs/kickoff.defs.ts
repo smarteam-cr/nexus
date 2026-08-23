@@ -22,6 +22,11 @@ import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { KICKOFF_CANALES_DEFAULT, KICKOFF_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
+import {
+  PROSA_SCHEMA,
+  PROSA_EMPTY,
+  PROSA_SCHEMA_DEL_CHAT,
+} from "./shared-sections.defs";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -30,12 +35,12 @@ function arrayOf(props: Record<string, unknown>, required: string[]) {
 }
 // Shape de PROSA (concisa, estilo presentación): intro opcional + items (title + detail
 // opcional = bullet). Un solo componente `kickoff_prose` lo renderiza.
-const proseSchema = {
-  type: "object",
-  properties: { intro: str, items: arrayOf({ title: str, detail: str }, ["title"]) },
-  required: ["items"],
-} as const;
-const proseEmpty = { intro: "", items: [] };
+/* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
+   2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
+   constante hace que no puedan volver a divergir. `schemaDelChat` le suma `subhead`, que el chat
+   escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
+const proseSchema = PROSA_SCHEMA;
+const proseEmpty = PROSA_EMPTY;
 
 export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -94,7 +99,11 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "3-5 objetivos acordados, en cards de una línea.",
     brief:
       "3-5 objetivos del proyecto en el lenguaje del cliente. `title` = el objetivo en 3-6 palabras; `detail` = UNA línea de contexto (opcional, máx. 20 palabras). `intro` opcional: una frase. SOLO lo respaldado por el handoff — no inflar. Fuente: `alcance_contratado` y `expectativas`. La comparación Hoy/Con-el-sistema NO va acá (tiene su propia sección).",
-    schema: { type: "object", properties: { intro: str, items: arrayOf({ title: str, detail: str }, ["title"]) }, required: ["items"] },
+    /* ⚠ Escribía su propia copia del esquema de prosa, idéntica a la constante. Sexta copia, y la
+       única que se quedó afuera al consolidar las cinco: por eso la guarda de abajo prueba que
+       TODA sección de prosa comparte la constante, en vez de contar archivos. */
+    schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   {
     key: "hoy_vs_sistema",
@@ -125,6 +134,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "4-7 cards de lo CONTRATADO (módulos, integraciones, migraciones, lo que se configura). `title` = el entregable en 3-6 palabras; `detail` = UNA línea de qué incluye (opcional). SOLO lo respaldado por `alcance_contratado` y `desarrollo` del handoff — no inflar ni agregar módulos no vendidos.",
     schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   {
     key: "equipo",
@@ -159,6 +169,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "3-5 cards accionables de lo que necesitás del equipo del cliente. `title` = el pedido en 3-6 palabras (disponibilidad, accesos, decisores, datos); `detail` = UNA línea con de quién o para cuándo. Fuente: `stakeholders_handoff` + `desarrollo` + el cronograma.",
     schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   {
     key: "metricas_exito",
@@ -172,6 +183,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "3-4 cards de métricas. `title` = la métrica en 3-6 palabras; `detail` = UNA línea de cómo se mide. Si el handoff no trae métricas, formulalas como PROPUESTA ('Proponemos medir…'), nunca como algo ya acordado. Fuente: `expectativas`. Nunca inventes cifras.",
     schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   {
     key: "horarios",
@@ -227,6 +239,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "3-5 cards con los primeros pasos tras el kickoff. `title` = el paso en 3-6 palabras; `detail` = UNA línea. Referenciá el arranque, pero NO reproduzcas la lista de fases del cronograma (ya se muestra en su propia sección). Fuente: `fecha_inicio_kickoff` + primeras fases del cronograma.",
     schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   // ── ctxDriven: se alimentan de ctx.kickoff, no de CanvasBlock ──────────────────
   // NO son `pinned`: tienen CanvasSection propia (sin bloque) solo para llevar un `order`

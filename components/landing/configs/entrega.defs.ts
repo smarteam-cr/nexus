@@ -34,6 +34,9 @@ import {
   PROCESS_MAPPING_EMPTY,
   ROI_SCHEMA,
   ROI_EMPTY,
+  PROSA_SCHEMA,
+  PROSA_EMPTY,
+  PROSA_SCHEMA_DEL_CHAT,
 } from "./shared-sections.defs";
 import { ENTREGA_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
@@ -45,15 +48,12 @@ function arrayOf(props: Record<string, unknown>, required: string[]) {
   return { type: "array", items: { type: "object", properties: props, required } } as const;
 }
 
-const proseSchema = {
-  type: "object",
-  properties: {
-    intro: str,
-    items: { type: "array", items: { type: "object", properties: { title: str, detail: str }, required: ["title"] } },
-  },
-  required: ["items"],
-} as const;
-const proseEmpty = { intro: "", items: [] };
+/* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
+   2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
+   constante hace que no puedan volver a divergir. `schemaDelChat` le suma `subhead`, que el chat
+   escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
+const proseSchema = PROSA_SCHEMA;
+const proseEmpty = PROSA_EMPTY;
 
 export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -172,6 +172,7 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       "⚠ Capacidades, no tareas: 'se configuraron 14 propiedades' es trabajo nuestro; 'el equipo ve el estado de cada negocio sin preguntar' es un logro del cliente. " +
       "Si un objetivo del handoff NO se alcanzó, no lo maquilles: omitilo acá y que aparezca en «Qué queda abierto».",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "cumplimiento",
@@ -291,6 +292,7 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Lo que quedó abierto, derivado del cronograma. Lo escribe Nexus, no la IA.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "continuidad",
@@ -311,6 +313,7 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       "Ordenalos por lo que HOY les duele, no por lo que sería lindo vender: el primero tiene que ser el que ellos mismos nombraron más veces. " +
       "⚠ Si el material no respalda ninguna oportunidad concreta, devolvé `items: []` — una propuesta inventada en un documento de cierre quema la confianza que el proyecto acaba de ganar.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "recomendaciones",
@@ -333,6 +336,7 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       "⚠ Cero venta acá: si la recomendación necesita que hagamos algo nosotros, va en la sección anterior, no en ésta. " +
       "⚠ Nada genérico tipo «capacitar al equipo»: si no podés decir sobre QUÉ y para resolver qué, dejalo afuera.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "cierre",

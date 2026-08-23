@@ -18,7 +18,13 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
-import { PROCESS_MAPPING_SCHEMA, PROCESS_MAPPING_EMPTY } from "./shared-sections.defs";
+import {
+  PROCESS_MAPPING_SCHEMA,
+  PROCESS_MAPPING_EMPTY,
+  PROSA_SCHEMA,
+  PROSA_EMPTY,
+  PROSA_SCHEMA_DEL_CHAT,
+} from "./shared-sections.defs";
 import { IMPLEMENTACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
 
@@ -29,15 +35,12 @@ function arrayOf(props: Record<string, unknown>, required: string[]) {
   return { type: "array", items: { type: "object", properties: props, required } } as const;
 }
 
-const proseSchema = {
-  type: "object",
-  properties: {
-    intro: str,
-    items: { type: "array", items: { type: "object", properties: { title: str, detail: str }, required: ["title"] } },
-  },
-  required: ["items"],
-} as const;
-const proseEmpty = { intro: "", items: [] };
+/* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
+   2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
+   constante hace que no puedan volver a divergir. `schemaDelChat` le suma `subhead`, que el chat
+   escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
+const proseSchema = PROSA_SCHEMA;
+const proseEmpty = PROSA_EMPTY;
 
 export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -120,6 +123,7 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
       "Los activos de MARKETING a montar en el portal — SOLO si el alcance del proyecto cubre marketing (si no, dejá `items` vacío). " +
       "`items`: uno por activo — `title` = el activo ('Formulario de contacto del sitio', 'Lista de MQLs', 'Scoring de leads', 'Nurturing de bienvenida'); `detail` = UNA línea con el trigger y el objetivo ('Se dispara al descargar la guía; alimenta el scoring y notifica a ventas').",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "prompts_breeze",
@@ -162,6 +166,7 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
       "La lista de trabajo del CSE: lo que Breeze NO puede crear (pipelines y sus etapas, objetos custom, permisos y equipos, integraciones) o no conviene delegarle (automatizaciones finas, vistas por rol). " +
       "`items`: `title` = qué ('Pipeline de ventas con sus 5 etapas'); `detail` = UNA línea con dónde se configura y con qué criterio ('Settings → Objetos → Negocios; las etapas y criterios están en la sección Pipelines').",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "cierre",

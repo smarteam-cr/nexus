@@ -23,6 +23,9 @@ import {
   ROI_SCHEMA,
   ROI_EMPTY,
   makeDiagramArchitectureDef,
+  PROSA_SCHEMA,
+  PROSA_EMPTY,
+  PROSA_SCHEMA_DEL_CHAT,
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
@@ -31,15 +34,12 @@ const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
 const asSchema = (s: unknown) => s as unknown as Record<string, unknown>;
 
-const proseSchema = {
-  type: "object",
-  properties: {
-    intro: str,
-    items: { type: "array", items: { type: "object", properties: { title: str, detail: str }, required: ["title"] } },
-  },
-  required: ["items"],
-} as const;
-const proseEmpty = { intro: "", items: [] };
+/* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
+   2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
+   constante hace que no puedan volver a divergir. `schemaDelChat` le suma `subhead`, que el chat
+   escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
+const proseSchema = PROSA_SCHEMA;
+const proseEmpty = PROSA_EMPTY;
 
 export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -81,6 +81,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "Las fases del trabajo, ordenadas por DEPENDENCIA — qué desbloquea qué. `items` (3-6): `title` = '1. Fundaciones de datos', '2. Pipeline y propiedades'…; `detail` = UNA línea con el entregable y de qué fase depende. " +
       "REGLA DURA: SIN fechas, semanas ni duraciones — el calendario vive en el Cronograma, que es otra pieza. Este roadmap dice el ORDEN y el porqué del orden.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "definicion_procesos",
@@ -111,6 +112,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "`items`: UNA por etapa — `title` = la etapa; `detail` = UNA línea con el criterio de entrada/salida y quién o qué workflow la mueve ('Pasa a MQL cuando descarga una guía; lo mueve el workflow de scoring'). " +
       "REGLA: partí de las etapas REALES que el portal usa hoy (vienen en el contexto si hay cuenta conectada) y proponé SOLO cambios justificados por el rediseño de procesos. No renombres por gusto.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "rutinas_adopcion",
@@ -126,6 +128,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "`items` (3-6): `title` = la rutina ('Revisión semanal de pipeline'); `detail` = UNA línea con QUIÉN la hace + CADENCIA + QUÉ mira ('Gerente comercial, lunes: negocios sin actividad hace 7 días y etapas estancadas'). " +
       "Rutinas para los roles que el proyecto involucra — no inventes cargos que la fuente no menciona.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "plan_despliegue",
@@ -140,6 +143,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "SOLO para adopción POR PILOTOS (equipos grandes). Si la modalidad es DIRECTA, dejá `items` VACÍO — una sección vacía no se muestra, y eso es lo correcto. " +
       "`intro`: el criterio de la ola inicial. `items`: una OLA por item — `title` = 'Ola 1 — Equipo comercial de CR'; `detail` = UNA línea con quiénes entran + qué módulos usan + el indicador de éxito para pasar a la siguiente ola ('5 vendedores, pipeline + tareas; pasan cuando el 80% registra su actividad sin recordatorios').",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "metricas_exito",

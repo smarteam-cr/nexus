@@ -172,6 +172,49 @@ export const PROCESS_MAPPING_SCHEMA_CON_TITULAR = PROCESS_MAPPING_SCHEMA;
 
 export const PROCESS_MAPPING_EMPTY = { intro: "", procesos: [] };
 
+/**
+ * ⭐ EL ESQUEMA DE PROSA — el tipo más reusado del motor: 20 secciones en CINCO documentos.
+ *
+ * Estaba escrito a mano CINCO veces, una por archivo de defs, con la misma forma. No es un
+ * refactor de gusto: el trinquete «un renderer, un contrato de datos» (lib/landing/registry.test.ts)
+ * existe justamente porque una copia editada sola es cómo nació el fallo de los titulares del
+ * diagnóstico. Cinco copias son cinco oportunidades de repetirlo; una constante es cero.
+ * ⚠ Y se consolidó DESPUÉS del trinquete, no antes: el trinquete es lo que probó que las cinco
+ * eran idénticas y que unificarlas no cambiaba nada.
+ */
+export const PROSA_SCHEMA = {
+  type: "object",
+  properties: { intro: str, items: arrayOf({ title: str, detail: str }, ["title"]) },
+  required: ["items"],
+} as const;
+
+export const PROSA_EMPTY = { intro: "", items: [] };
+
+/**
+ * ⭐ LO QUE EL CHAT PUEDE TOCAR EN UNA SECCIÓN DE PROSA — y `subhead` es la diferencia.
+ *
+ * Elías listó «subtítulos» entre las piezas que el chat debería manejar. El campo entra acá y
+ * **NO en el esquema del agente**, y esa asimetría es la decisión:
+ *
+ *  · en el esquema del AGENTE, el schema ES el prompt — sumarlo pondría a cinco agentes a escribir
+ *    un subtítulo en veinte secciones que hoy no lo tienen, cambiando documentos ya entregados sin
+ *    que nadie lo haya pedido;
+ *  · en el del CHAT, la capacidad existe el día uno y no se genera solo. Y sobrevive: `subhead` es
+ *    una clave de PRIMER NIVEL, así que `preserveNonSchemaKeys` la acarrea entre regeneraciones —
+ *    lo que el CSE escriba no se pierde.
+ *
+ * Es el mismo patrón que ya usan `eyebrow` y las métricas de la portada del kickoff.
+ */
+export const PROSA_SCHEMA_DEL_CHAT = {
+  type: "object",
+  properties: {
+    subhead: str,
+    intro: str,
+    items: arrayOf({ title: str, detail: str }, ["title"]),
+  },
+  required: ["items"],
+} as const;
+
 // ── Schemas compartidos por sectionType (evitan que un nuevo template re-declare
 // el mismo shape a mano) ─────────────────────────────────────────────────────
 // NOTA: business-case.defs.ts y website.defs.ts todavía inlinean sus propias copias

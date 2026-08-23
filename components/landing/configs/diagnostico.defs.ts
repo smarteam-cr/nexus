@@ -36,6 +36,9 @@ import {
   ROI_EMPTY,
   PROCESS_MAPPING_SCHEMA,
   PROCESS_MAPPING_EMPTY,
+  PROSA_SCHEMA,
+  PROSA_EMPTY,
+  PROSA_SCHEMA_DEL_CHAT,
 } from "./shared-sections.defs";
 import { DIAGNOSTICO_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
@@ -44,15 +47,12 @@ const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
 const asSchema = (s: unknown) => s as unknown as Record<string, unknown>;
 
-const proseSchema = {
-  type: "object",
-  properties: {
-    intro: str,
-    items: { type: "array", items: { type: "object", properties: { title: str, detail: str }, required: ["title"] } },
-  },
-  required: ["items"],
-} as const;
-const proseEmpty = { intro: "", items: [] };
+/* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
+   2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
+   constante hace que no puedan volver a divergir. `schemaDelChat` le suma `subhead`, que el chat
+   escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
+const proseSchema = PROSA_SCHEMA;
+const proseEmpty = PROSA_EMPTY;
 
 export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -90,6 +90,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "El encuadre, para que el informe sea auditable. `intro`: 1 frase con qué se diagnosticó. `items` (3-5): cada fuente usada — `title` = la fuente ('Sesiones de exploración', 'Su portal de HubSpot', 'Sus procesos mapeados'); `detail` = UNA línea con qué aportó. Solo fuentes que de verdad se usaron.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "estado_actual",
@@ -122,6 +123,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Sección legacy (los diagnósticos viejos la traen en prosa). El agente nuevo no la escribe: su contenido vive en el 'cómo vas a operar' de Estado actual.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "escala",
@@ -182,6 +184,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Sección legacy. El agente nuevo no la escribe: el impacto vive en el panel oscuro de 'Qué te separa del siguiente nivel'.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "recomendaciones",
@@ -196,6 +199,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "Las recomendaciones EN ORDEN de prioridad, cada una conectada a una causa de arriba (una recomendación que no ataca ninguna causa, sobra). `items` (3-6): `title` = la acción en 5-10 palabras — antepon 'Quick win: ' a las que dan resultado en semanas; `detail` = UNA línea con qué causa ataca y qué destraba. " +
       "Dentro del alcance del proyecto: no recomiendes lo que el proyecto no incluye (eso va como conversación de siguiente etapa, no acá).",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     // SOLO-LECTURA legacy: reemplazada por recomendaciones + cierre.
@@ -209,6 +213,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "",
     brief: "Sección legacy. El agente nuevo no la escribe: el siguiente paso vive en el cierre.",
     schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "cierre",
