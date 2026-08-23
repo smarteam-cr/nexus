@@ -53,6 +53,7 @@ import {
 } from "@/lib/timeline/capacidades";
 import { projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
 
 /**
@@ -407,7 +408,12 @@ export async function contextoDeDocumento(
              persona aprobaba un cambio que no era el que había pedido. */
           eyebrowOverride: true,
           _count: { select: { blocks: true } },
-          blocks: { orderBy: { order: "asc" }, select: { data: true, blockType: true } },
+          /* ⭐ `content` ES EL CUERPO DE LAS SECCIONES EN PROSA, y no estaba seleccionado: para el
+             modelo, un documento anterior al motor no tenía contenido. La firma decía «— sin
+             contenido legible» sobre una sección que en pantalla se lee entera, así que cuando le
+             pedían resumirla escribía campos —lo único que sí veía— y la convertía en tarjetas,
+             borrando el texto de la pantalla. Ver `formatoDeSeccion`. */
+          blocks: { orderBy: { order: "asc" }, select: { data: true, blockType: true, content: true } },
         },
       },
     },
@@ -492,7 +498,7 @@ export async function contextoDeDocumento(
         label: string;
         eyebrowOverride: string | null;
         _count: { blocks: number };
-        blocks: { data: unknown; blockType: string }[];
+        blocks: { data: unknown; blockType: string; content: string | null }[];
       }) => {
         const def = defDeSeccion(defs, s.key, s.label);
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
@@ -515,6 +521,22 @@ export async function contextoDeDocumento(
         const lineaDeRotulo = rotulo ? ` · rótulo de arriba: «${rotulo}»` : "";
         const cabecera = `- ${nombre} (${s.key}) ${firma}${lineaDeRotulo}${alias}${aviso ? ` — ${aviso}` : ""}`;
         if (s._count.blocks === 0) return `${cabecera} — VACÍA`;
+        /* ⭐ EL FORMATO EN EL QUE LA SECCIÓN SE VE, dicho antes que su contenido. La regla de
+           Elías —«cada sección se edita en el formato en el que está»— no la puede cumplir un
+           modelo que no sabe en qué formato está. Y el ejecutor rechaza escribir campos acá, así
+           que decirlo también ahorra el turno entero que se gasta en una operación que va a
+           rebotar. */
+        const prosa = markdownDeBloques(s.blocks);
+        if (
+          formatoDeSeccion({
+            esPortada: !!def?.backdrop,
+            markdown: prosa,
+            dataTipada: cardDe(s.blocks)?.data ?? {},
+          }) === "prosa"
+        ) {
+          const cuerpo = prosa.slice(0, TOPE_POR_SECCION_CHARS).replace(/\n/g, "\n    ");
+          return `${cabecera} — ⚠ FORMATO: TEXTO CORRIDO (esta sección no tiene campos escritos: se edita reescribiendo el texto, no con campos ni listas):\n    ${cuerpo}`;
+        }
         const contenido = renderDeContenido(schemaParaElChat(def), [{ data: cardDe(s.blocks)?.data }]);
         return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
       },
@@ -647,6 +669,14 @@ export async function contextoDeDocumento(
       rotulosDeListas: def?.rotulosDeListas,
       /* Corregir sí, agrandar no. Ver `SeccionActual.listasSoloEdicion`. */
       listasSoloEdicion: def?.listasSoloEdicion,
+      /* ⛔ El MISMO predicado que usa el motor para decidir qué pinta, y el mismo que corre en el
+         navegador. Ver `SeccionActual.formato`: si las dos mitades lo dedujeran por su cuenta, la
+         primera divergencia sería una pérdida de contenido silenciosa. */
+      formato: formatoDeSeccion({
+        esPortada: !!def?.backdrop,
+        markdown: markdownDeBloques(s.blocks),
+        dataTipada: card?.data ?? {},
+      }),
     };
   });
 

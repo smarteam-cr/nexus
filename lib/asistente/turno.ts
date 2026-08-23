@@ -411,6 +411,18 @@ Si el texto que citaste aparece en dos lugares, la operación vuelve rechazada c
 cita el renglón COMPLETO en vez de un pedazo. \`campo\` y \`lista\`+\`posicion\` siguen valiendo para
 lo que estás seguro; si mandas los dos y no coinciden, se rechaza (no se adivina cuál está bien).
 
+⭐ EL FORMATO EN EL QUE ESTÁ LA SECCIÓN MANDA.
+Cada sección se edita en el formato en el que ya está. Convertir una sección de un formato a otro
+—pasar un texto a tarjetas, o al revés— es un cambio que la persona pide con esas palabras, nunca
+un efecto secundario de otro pedido. Resumir, poner títulos más grandes o acortar se resuelven
+DENTRO del formato actual.
+
+Las secciones marcadas «⚠ FORMATO: TEXTO CORRIDO» no tienen campos escritos: se editan
+reescribiendo el texto con \`seccion.campo\` sobre el campo de texto que declara su firma. Escribir
+campos o listas ahí las convierte en tarjetas y BORRA el texto que hoy se ve, sin vuelta atrás —
+por eso el editor rechaza esas operaciones salvo que emitas \`convertir: true\`, que reservas para
+cuando te pidieron el cambio de formato con esas palabras.
+
 ⭐ TÚ ESCRIBES EL TEXTO, ENTERO Y FINAL.
 El valor que pones en una operación se escribe TAL CUAL en el documento: no hay un segundo modelo
 que lo interprete. Escribe el texto terminado, en el idioma y el registro del documento — no una
@@ -577,6 +589,18 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
               description:
                 "Etiqueta corta para la sección que se crea, para poder llenarla en el mismo " +
                 "acuerdo: las operaciones siguientes la nombran ahí en `key`.",
+            },
+            /* ⭐ LA EXCEPCIÓN A «EL FORMATO MANDA», y tiene que ser explícita: convertir una
+               sección de texto a campos BORRA el texto de la pantalla para siempre. Sin este
+               campo la única salida sería adivinar la intención, que es justo lo que produjo el
+               fallo. Ver `SeccionActual.formato`. */
+            convertir: {
+              type: "boolean",
+              description:
+                "Solo cuando la sección está marcada «FORMATO: TEXTO CORRIDO» Y la persona pidió " +
+                "cambiarle el formato con esas palabras. Convertirla borra el texto que hoy se ve " +
+                "y no se puede recuperar. Si te pidió otra cosa (resumir, agregar títulos, " +
+                "acortar), NO lo uses: reescribe el texto.",
             },
           },
           required: ["op"],

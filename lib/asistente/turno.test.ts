@@ -150,6 +150,13 @@ describe("el asistente habla español neutro, no rioplatense", () => {
        de turno mudo se PERSISTE en el hilo y se relee en cada turno siguiente. El alcance de esta
        guarda tiene que seguir al texto, no al archivo donde arrancó. */
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/emision-del-turno.ts"), "utf8")),
+    /* ⚠ SUMADO 2026-08-23, por el mismo argumento: los MOTIVOS de rechazo del ejecutor vuelven
+       al modelo como `tool_result` en el reintento, así que son texto que lee igual que el
+       prompt — y son el texto que más se edita del repo, porque cada regla nueva trae el suyo.
+       El alcance de esta guarda sigue al TEXTO, no al archivo donde arrancó. */
+    sinComentarios(
+      fs.readFileSync(path.join(RAIZ, "lib/canvas/operaciones-de-documento.ts"), "utf8"),
+    ),
   ].join("\n");
 
   /** Las líneas que PROHIBEN el voseo tienen que poder nombrarlo. */
@@ -175,6 +182,20 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     "dale",
     "che",
     "vos",
+    /* ⚠ SUMADAS 2026-08-23. Las de arriba son las que aparecieron en el PROMPT; el imperativo
+       rioplatense de los MOTIVOS DE RECHAZO es otro puñado —«redactá el cambio», «repetí la
+       operación», «citá el renglón»— y ninguna estaba en la lista. La rotura a propósito lo
+       destapó: cambiar «Redacta» por «Redactá» dejaba la guarda en verde. */
+    "redactá",
+    "repetí",
+    "reescribí",
+    "escribí",
+    "citá",
+    "poné",
+    "elegí",
+    "agregá",
+    "quitá",
+    "revisá",
   ];
 
   it("⛔ ni una forma de voseo en el texto que el modelo copia", () => {

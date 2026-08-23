@@ -21,6 +21,7 @@ import { useChatDeSeccion, SeccionEnPantallaProvider } from "@/components/asiste
 import { nombreParaElChat, schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
+import { formatoDeSeccion } from "@/lib/landing/formato-de-seccion";
 import {
   DndContext,
   closestCenter,
@@ -355,7 +356,12 @@ export default function LandingView({
     const legacyMd = typeof data.__legacyMd === "string" ? data.__legacyMd.trim() : "";
     const typedData = { ...data };
     delete typedData.__legacyMd;
-    const showLegacy = !!legacyMd && !isHero && isBlank(typedData);
+    /* ⭐ El predicado sale a `lib/landing/formato-de-seccion.ts` porque tiene un SEGUNDO
+       consumidor: el chat, que necesita saber en qué formato está una sección ANTES de acordar un
+       cambio. Acá no cambia nada —es la misma condición de siempre— y ese es el punto: una sola
+       definición para el que pinta y el que edita. */
+    const showLegacy =
+      formatoDeSeccion({ esPortada: isHero, markdown: legacyMd, dataTipada: typedData }) === "prosa";
     /* ⭐ Lo que el 💬 de cada ítem necesita y no puede deducir desde adentro: de qué sección es, y
        qué listas alcanza el chat. La lista se resuelve por IDENTIDAD DE REFERENCIA contra ESTE
        `data`, así que tiene que ser el MISMO objeto que recibe el componente — no una copia.

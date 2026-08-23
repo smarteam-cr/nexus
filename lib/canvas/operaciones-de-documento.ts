@@ -62,6 +62,7 @@ import { labelFor } from "@/lib/canvas/print-vocab";
 /* ⛔ La resolución por contenido vive AFUERA y es pura: la importan el que prepara el acuerdo, el
    que ejecuta y el índice del navegador. Una segunda normalización sería una que puede divergir. */
 import { hojasCitables, resolverCita } from "@/lib/canvas/citas-de-documento";
+import type { FormatoDeSeccion } from "@/lib/landing/formato-de-seccion";
 
 // ── El vocabulario ────────────────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,8 @@ export type OperacionDeDocumento =
       cita?: string;
       valor: string;
       ancla?: string;
+      /** ⭐ La persona pidió CAMBIAR DE FORMATO con esas palabras. Ver `SeccionActual.formato`. */
+      convertir?: boolean;
     }
   | {
       op: "seccion.item.agregar";
@@ -103,10 +106,20 @@ export type OperacionDeDocumento =
        */
       valor?: string;
       posicion?: number;
+      /** ⭐ La persona pidió CAMBIAR DE FORMATO con esas palabras. Ver `SeccionActual.formato`. */
+      convertir?: boolean;
     }
   /* ⚠ `lista` y `posicion` son opcionales SOLO porque `cita` las reemplaza. El ejecutor las
      exige: una operación que llegue sin coordenada se rechaza con su motivo, nunca se adivina. */
-  | { op: "seccion.item.borrar"; key: string; lista?: string; posicion?: number; cita?: string; ancla?: string }
+  | {
+      op: "seccion.item.borrar";
+      key: string;
+      lista?: string;
+      posicion?: number;
+      cita?: string;
+      ancla?: string;
+      convertir?: boolean;
+    }
   | {
       op: "seccion.item.mover";
       key: string;
@@ -115,6 +128,7 @@ export type OperacionDeDocumento =
       cita?: string;
       a: number;
       ancla?: string;
+      convertir?: boolean;
     }
   | { op: "seccion.vaciar"; key: string }
   // ESTRUCTURA
@@ -316,6 +330,21 @@ export interface SeccionActual {
    * no inventan nada.
    */
   listasSoloEdicion?: readonly string[];
+  /**
+   * ⭐ En qué FORMATO está escrita la sección hoy: `"estructurado"` (campos y listas) o `"prosa"`
+   * (el texto corrido de los documentos anteriores al motor). Lo calcula `formatoDeSeccion`, la
+   * MISMA función con la que el motor decide qué pintar.
+   *
+   * ⛔ Escribir un campo sobre una sección en prosa **crea el bloque CARD y el texto desaparece de
+   * la pantalla para siempre**: el motor deja de armar el markdown viejo en cuanto hay CARD. Elías
+   * lo vio el 2026-08-23 — pidió «títulos más grandes y resumí el texto» y el chat convirtió la
+   * sección en tarjetas. Su regla: *el formato en el que está la sección MANDA, salvo que la
+   * persona pida otro con esas palabras* — y esa excepción viaja en `convertir`.
+   *
+   * Ausente = `"estructurado"`: es el caso de las secciones sintéticas de los tests y el de Roles,
+   * cuyo contenido no vive en bloques.
+   */
+  formato?: FormatoDeSeccion;
   /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
   rotulo?: string;
 }
@@ -795,11 +824,41 @@ export function aplicarOperacionesDeDocumento(
   const rechazar = (operacion: OperacionDeDocumento, motivo: string) =>
     rechazadas.push({ operacion, motivo });
 
+  /**
+   * ⭐ EL FORMATO DE LA SECCIÓN MANDA — la regla que Elías pidió el 2026-08-23, textual: *«cada
+   * sección debe ser editada en el mismo formato en el que está inicialmente, a no ser que se
+   * indique algún otro formato»*.
+   *
+   * ⛔ Y acá no es una preferencia de estilo: es la ÚNICA operación del vocabulario cuya pérdida
+   * es irreversible desde la interfaz. Escribir un campo sobre una sección en prosa crea el bloque
+   * CARD, y desde ese momento el motor no vuelve a armar el markdown viejo NUNCA — el texto queda
+   * en la base, invisible, sin ningún botón que lo traiga de vuelta. El caso real: «resumí el
+   * texto y ponele títulos más grandes» y la sección salió convertida en tarjetas.
+   *
+   * La excepción viaja en `convertir`, y es del modelo declararla: convertir es un cambio que la
+   * persona pide con esas palabras, nunca un efecto secundario de otro pedido.
+   */
+  const formatoLoImpide = (
+    o: OperacionDeDocumento & { convertir?: boolean },
+    s: SeccionActual,
+  ): boolean => {
+    if (s.formato !== "prosa" || o.convertir) return false;
+    rechazar(
+      o,
+      `«${s.label}» está escrita en el formato anterior: un texto corrido, sin campos. Escribir ` +
+        `campos la convierte en tarjetas y el texto que hoy se ve deja de verse — y no hay forma ` +
+        `de recuperarlo desde el editor. Redacta el cambio como TEXTO; si la persona pidió ` +
+        `cambiarle el formato con esas palabras, repite la operación con \`convertir\`: true`,
+    );
+    return true;
+  };
+
   for (const o of operaciones) {
     switch (o.op) {
       case "seccion.campo": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        if (formatoLoImpide(o, s)) break;
         /* ⛔ Sin ruta no se escribe. La `cita` la resuelve `prepararOperacionesDeDocumento`; si
            una operación llega hasta acá sin `campo`, es que la cita no resolvió — y adivinar el
            campo «más parecido» es exactamente lo que este vocabulario existe para impedir. */
@@ -824,6 +883,7 @@ export function aplicarOperacionesDeDocumento(
       case "seccion.item.agregar": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        if (formatoLoImpide(o, s)) break;
         const nodo = (s.schema as NodoDeSchema)?.properties?.[o.lista] as NodoDeSchema | undefined;
         if (!nodo || nodo.type !== "array") { rechazar(o, `«${o.lista}» no es una lista de esa sección`); break; }
         /* ⛔ Corregir sí, agrandar no — y el motivo dice DÓNDE sí se hace, que es la diferencia
@@ -915,6 +975,7 @@ export function aplicarOperacionesDeDocumento(
       case "seccion.item.mover": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        if (formatoLoImpide(o, s)) break;
         /* ⛔ Ídem que en `seccion.campo`: sin lista no se toca nada. Sin esta línea, `data[undefined]`
            es `undefined`, el `Array.isArray` de abajo lo caza — pero el motivo diría «"undefined" no
            es una lista», que manda a buscar una lista que nadie nombró. */
@@ -1230,6 +1291,16 @@ export function describirOperacionesDeDocumento(
   const campoDicho = (key: string, campo: string) =>
     porKey.get(key)?.rotulosDeCampos?.[campo] ?? labelFor(campo);
   /**
+   * ⭐ CONVERTIR DE FORMATO SE DICE EN LA LÍNEA, o la persona aprueba un borrado sin saberlo.
+   *
+   * El ejecutor solo deja pasar esto con `convertir` puesto, así que la línea que la persona lee
+   * es el ÚLTIMO lugar donde el cambio todavía se puede parar — y es irreversible desde el editor.
+   */
+  const avisoDeConversion = (o: OperacionDeDocumento & { convertir?: boolean }): string =>
+    o.convertir && porKey.get((o as { key?: string }).key ?? "")?.formato === "prosa"
+      ? " ⚠ el texto que hoy se ve en esa sección DEJA DE VERSE y no se puede recuperar"
+      : "";
+  /**
    * ⭐ EL TEXTO VIVO, NO EL ANCLA — y la diferencia se leyó en pantalla el 2026-08-23:
    * «Se quita «Aircall no sincroniza co» de la lista «Hoy»». Cortado a mitad de palabra y sin
    * puntos suspensivos, porque el ancla mide 24 caracteres.
@@ -1291,11 +1362,11 @@ export function describirOperacionesDeDocumento(
           : `En «${nombre(o.key)}», ${campoDicho(o.key, ruta)}`;
         return `${ubicacion} pasa a: «${recortar(o.valor ?? "")}»${
           sinEnlace ? " ⚠ sin enlace, el botón no se va a ver" : ""
-        }`;
+        }${avisoDeConversion(o)}`;
       }
       case "seccion.item.agregar": {
         const texto = o.valor ?? Object.values(o.valores ?? {}).find((v) => v?.trim()) ?? "";
-        return `Se agrega «${recortar(texto)}» a la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
+        return `Se agrega «${recortar(texto)}» a la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»${avisoDeConversion(o)}`;
       }
       case "seccion.item.borrar":
         return `Se quita ${itemDicho(o.key, o.lista, o.ancla, o.posicion)} de la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
