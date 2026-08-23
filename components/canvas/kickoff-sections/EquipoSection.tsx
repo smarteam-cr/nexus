@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { SectionProps } from "@/components/landing/types";
 import { SortableItems } from "@/components/landing/sortable";
 import { normalizeEquipo, type EquipoData, type EquipoMember } from "./types";
+import { useBorrador } from "./useBorrador";
 
 interface ApiTeamMember {
   id: string;
@@ -109,7 +110,10 @@ const BIG_GRID: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 
 
 export default function EquipoSection({ data, editable = false, onChange }: SectionProps<EquipoData>) {
   const members = normalizeEquipo(editable ? undefined : data).members; // read: desde props
-  const [draft, setDraft] = useState<EquipoMember[]>(() => normalizeEquipo(data).members);
+  /* ⭐ Se re-siembra cuando el documento cambia por afuera. Sin esto, «agregá a Elías y quitá a
+     Lidia» no se veía Y la próxima tecla del CSE revertía el cambio en la base, porque el commit
+     manda el borrador ENTERO. Ver `lib/ui/borrador-sincronizado.ts`. */
+  const [draft, setDraft] = useBorrador<EquipoMember[]>(normalizeEquipo(data).members);
   const [team, setTeam] = useState<ApiTeamMember[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(() => normalizeEquipo(data).members.length === 0);
 

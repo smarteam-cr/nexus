@@ -6,9 +6,9 @@
  * Edit (CSE): campos inline (horario, correo) + lista add/remove de canales.
  * Persiste toda la `data` del bloque vía onChange (un solo CanvasBlock por sección).
  */
-import { useState } from "react";
 import type { SectionProps } from "@/components/landing/types";
 import { normalizeCanales, type CanalesData } from "./types";
+import { useBorrador } from "./useBorrador";
 
 const ICONS: Record<string, string> = {
   horario:
@@ -26,7 +26,9 @@ function Icon({ path }: { path: string }) {
 }
 
 export default function CanalesSection({ data, editable = false, onChange }: SectionProps<CanalesData>) {
-  const [draft, setDraft] = useState<CanalesData>(() => normalizeCanales(data));
+  /* ⭐ Se re-siembra cuando el documento cambia por afuera —el chat escribiendo—, y NO en cada
+     render: la clave es el CONTENIDO. Ver `lib/ui/borrador-sincronizado.ts`. */
+  const [draft, setDraft] = useBorrador<CanalesData>(normalizeCanales(data));
 
   // En modo lectura el fresco viene de props (snapshot); en edición mandamos el draft.
   const view = editable ? draft : normalizeCanales(data);

@@ -32,6 +32,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { SectionProps } from "@/components/landing/types";
 import { normalizeHorarios, newId, type HorariosData, type HorarioOption } from "./types";
+import { useBorrador } from "./useBorrador";
 
 /** Franjas todavía SIN asignar — las únicas que se ofrecen (en los 3 modos). */
 function freeOptions(view: HorariosData): HorarioOption[] {
@@ -227,9 +228,12 @@ function HorariosInteractive({
   onAssign?: (sessionId: string, optionId: string | null) => Promise<void>;
   onChange?: (data: HorariosData) => void;
 }) {
-  // Draft LOCAL: se siembra una vez. Re-sincronizarlo con `view` en cada render mataría
-  // el foco mientras el CSE escribe (cada tecla sube por onChange y vuelve como prop).
-  const [draft, setDraft] = useState<HorariosData>(() => view);
+  /* ⭐ Draft LOCAL que SE RE-SIEMBRA cuando `view` cambia por afuera.
+     ⚠ El miedo original —«re-sincronizar en cada render mataría el foco mientras el CSE escribe»—
+     era cierto para «en cada render» y falso para «solo cuando el contenido cambió»: cada tecla
+     hace `setDraft` SIN llamar `onChange` (el commit es en el blur), así que mientras se tipea la
+     prop no cambia y esto no dispara. Ver `lib/ui/borrador-sincronizado.ts`. */
+  const [draft, setDraft] = useBorrador<HorariosData>(view);
   const [error, setError] = useState<string | null>(null);
   // TouchSensor: el cliente entra desde el móvil. `delay` distingue el drag del scroll.
   const sensors = useSensors(
