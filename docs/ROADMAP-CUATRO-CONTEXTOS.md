@@ -79,12 +79,41 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 5.4 | **Los 4 que faltan** | (a) el modelo no sabe la posición de cada card sin chip — el render aplana y descarta los vacíos; (b) persistir el ⚠ de lo no registrado (hoy lo pisa «Aplicado»); (c) portar 3 reglas de acción del cronograma; (d) los ejemplos del panel vacío son todos del cronograma | ⬜ |
 | 8 | **Decir qué cambiar CITANDO el texto** | ⭐ El chat deja de contar índices: cita el texto que ve y la app resuelve la coordenada. Es la causa real de «no encuentra la caja que dice LO QUE CUESTA HOY». Ambigüedad ⇒ rechaza con las opciones, nunca elige el parecido | ✅ 2026-08-23 |
 | 8.1 | **Señalar en pantalla** | El 💬 de cada ítem abre el chat con ese punto ya citado. Cero ediciones en las 37 listas: se identifica por referencia. ⚠ Falta verla en pantalla | ✅ 2026-08-23 |
-| 8.2 | **Los rótulos que el motor ya pasa** | Tres renderers ignoran props que reciben («Hoy»/«Con el sistema», «Procesos», el Gantt) + los rótulos de las 3 métricas de portada | ⬜ |
-| 8.3 | **Los KPIs que el cliente sí ve** | `kpisConfirmados` es lo único que el cliente lee y vive fuera del esquema: se abre para EDITAR, no para agregar | ⬜ |
+| 8.2 | **Los rótulos que el motor ya pasa** | Tres renderers ignoraban props que reciben («Hoy»/«Con el sistema», «Procesos», el Gantt) + los rótulos de las 3 métricas de portada | ✅ 2026-08-23 |
+| 8.3 | **Los KPIs que el cliente sí ve** | `kpisConfirmados` es lo único que el cliente lee y vivía fuera del esquema: se abre para EDITAR, no para agregar | ✅ 2026-08-23 |
 | 8.4 | **La inversión, completa** | Los montos incluidos (decisión de Elías). La línea del acuerdo imprime la LECTURA, no el texto. Última a propósito: su falla es plausible y silenciosa | ⬜ |
 | 8.5 | **El resto del censo** | La sección HTML creable · 2 secciones mudas de la propuesta laboral · el `PDF_FALLBACK` en voseo · `TarjetasData.intro`, que está en el esquema y nadie pinta | ⬜ |
 | 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
+
+### El chat edita el motor sin sorpresas — los seis fallos de las capturas *(2026-08-23)*
+
+Elías probó el chat sobre cuatro documentos y reportó **seis fallos con capturas**, más una
+preocupación de fondo: *«me preocupa que luego de todo el arduo trabajo, el chat no sea capaz de
+editar el html de forma sencilla… no sé si nos quedó grande el proyecto»*.
+
+⭐ **No quedó grande, y está contado:** el motor tiene 52 componentes y **43 usan solo las
+primitivas comunes y no dieron un solo problema**. Los seis fallos salen de **3 componentes + 3
+grietas del carril del chat**. Y su lectura de arquitectura —«lo de equipo solo está en kickoff,
+eso deberían ser módulos personalizados por canvas»— tiene poder predictivo: los tres editores que
+fallaron son tres de los que viven en un solo canvas.
+
+| # | Etapa | Qué resuelve | Estado |
+|---|---|---|---|
+| T0 | **Los controles a la izquierda** | El chrome de cada sección deja de tapar el título de una sección oculta | ✅ |
+| T1 | **La pantalla se entera** | El chat escribía el equipo y los horarios y la pantalla no cambiaba — y la tecla siguiente lo revertía en la base | ✅ |
+| T2 | **El chat deja de imitar el marcador** | Salía JSON crudo en la burbuja y la lista ofrecía cambios que nadie pidió | ✅ |
+| T3 | **La identidad sale del esquema** | La cajita citaba UUIDs, y los ids venían viajando al prompt en cada turno | ✅ |
+| T4 | **El formato de la sección MANDA** | Pedir «resumí el texto» convertía la sección en tarjetas y el texto se perdía sin vuelta atrás | ✅ |
+| T5 | **Los resúmenes de una línea existen** | Los rótulos vacíos del diagnóstico se pintaban en 5 documentos y los declaraba 1 | ✅ |
+| T6 | **Los dos «activar» de Elías** | El modelo ve la sección entera cuando se equivoca, y el editor confirma releyendo la base | ✅ |
+| T7 | **Un renderer, un contrato de datos** | El trinquete que hace imposible la clase entera del fallo — y encontró 2 defectos vivos | ✅ |
+| T8 | **Los subtítulos** | `subhead` para el chat, no para el agente: la capacidad existe sin cambiar un documento entregado | ✅ |
+| — | **La revisión del rango** | 77 agentes, 6 lentes, cada hallazgo con dos refutadores. 13 defectos distintos, 9 arreglados | ✅ |
+| T9 | **La inversión, completa** | *(era 8.4)* Los montos incluidos. La línea imprime la LECTURA, no el texto. Última a propósito: su falla es plausible y silenciosa | ⬜ |
+| T10 | **El resto del censo** | *(era 8.5)* La sección HTML creable · 2 secciones mudas de la propuesta laboral · el `PDF_FALLBACK` en voseo · `TarjetasData.intro` | ⬜ |
+| T11 | **Los 4 menores de la revisión** | El recorte del texto largo no marca dónde cortó · el tope del prefijo no se mide · «Limpiar» puede mentir con el subtítulo nuevo | ⬜ |
+| T12 | **Roles y la propuesta laboral** | 3 secciones con el esquema vacío y el renderer leyendo diez campos: el chat no las alcanza y el CSE no las puede corregir | ⬜ |
 
 ### ✅ 5.1 · Crear una sección y llenarla es UN solo pedido *(cerrado el 2026-08-23)*
 
