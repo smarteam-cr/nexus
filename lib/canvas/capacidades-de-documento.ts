@@ -378,7 +378,7 @@ export function schemaParaElChat(
  * ⛔ Y NO toca `def.schema`: de ahí sale `seccion.vaciar`, y el `empty` compartido lo incluye.
  */
 export function camposMudosDe(
-  def: { chips?: { retos?: string; panel?: string } } | undefined,
+  def: { chips?: { retos?: string; panel?: string }; [k: string]: unknown } | undefined,
 ): readonly string[] {
   /* El rótulo del panel reemplaza al campo `plataforma` en el propio renderer. */
   return def?.chips?.panel ? ["plataforma"] : [];

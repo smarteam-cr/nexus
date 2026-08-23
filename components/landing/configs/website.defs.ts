@@ -29,6 +29,12 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Portada de la propuesta de sitio web. `headline`: 'Sitio web de [Nombre cliente]' o el nombre del proyecto si se mencionó. `subhead`: una frase que resume qué se propone construir y para qué. `tags`: 2 a 4 chips (p.ej. fecha de la propuesta, 'MVP en X semanas', vigencia, plataforma). Fuente: extraé del contexto el nombre del cliente y el alcance discutido.",
     schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline", "subhead"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   // 2) Diagnóstico y contexto — retos (izq) + panel oscuro "Por qué X" (der)
   {

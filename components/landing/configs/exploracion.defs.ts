@@ -23,7 +23,13 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
-import { WEB_DIAGNOSIS_SCHEMA, WEB_DIAGNOSIS_EMPTY, PAIN_SCHEMA, PAIN_EMPTY } from "./shared-sections.defs";
+import {
+  WEB_DIAGNOSIS_SCHEMA,
+  WEB_DIAGNOSIS_SCHEMA_DEL_CHAT,
+  WEB_DIAGNOSIS_EMPTY,
+  PAIN_SCHEMA,
+  PAIN_EMPTY,
+} from "./shared-sections.defs";
 // Fuente única del default del cierre (canvas-defs.ts, sin dependencias — seguro para
 // server y cliente): evita que este `empty` derive del literal sembrado y quede
 // desincronizado.
@@ -58,6 +64,12 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
       "`subhead`: 1-2 frases que declaran EXPLÍCITAMENTE la calibración que usaste y por qué, para que el CSE la corrija si te equivocaste. Ej.: 'Cliente con operación grande y equipo propio de datos: la guía apunta a los puntos ciegos, no a mapear lo que ya saben.' o 'Cliente chico, sin proceso formal: la guía sí mapea lo básico porque probablemente no esté escrito en ningún lado.' " +
       "`tags`: 2-5 chips cortos de los frentes a explorar (ej. 'Proceso comercial', 'Datos', 'Postventa', 'Facturación'). No inventes frentes que la fuente no mencione.",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
     key: "ya_sabemos",
@@ -104,6 +116,7 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
       "`porQueBullets`: LOS RIESGOS — 3 a 5, uno por riesgo DISTINTO. NO repitas el supuesto de enfrente con otras palabras: acá va lo que se rompe en la ENTREGA si ese supuesto resulta falso (tiempo, alcance, adopción, datos, plata). `title` = 2 a 5 palabras ('Cronograma se corre', 'Costo no cotizado'); `detail` = máximo 20 PALABRAS y UNA sola idea: 'Si hay dos procesos, el mapeo se duplica y la fase 2 no cierra'. " +
       "`objetivo`: UNA frase de máximo 25 palabras con QUÉ hay que confirmar primero y por qué ese primero ('Confirmar cuántos procesos de venta existen antes de diseñar el pipeline: todo lo demás depende de eso').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
+    schemaDelChat: asSchema(WEB_DIAGNOSIS_SCHEMA_DEL_CHAT),
   },
   {
     key: "sesiones",

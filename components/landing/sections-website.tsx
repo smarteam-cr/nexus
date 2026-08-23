@@ -74,7 +74,12 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
       <div className="stl-diag">
         {/* Izquierda: retos actuales (cards de una línea) */}
         <div>
-          <span className="stl-diag-chip">{sectionChips?.retos ?? t(lang, "retosActuales")}</span>
+          {/* Ídem que el chip del panel: el override de una persona manda. */}
+          <span className="stl-diag-chip">
+            <Editable as="span" editable={editable} value={data.rotuloRetos ?? ""}
+              placeholder={sectionChips?.retos ?? t(lang, "retosActuales")}
+              onCommit={(v) => set({ rotuloRetos: v })} />
+          </span>
           <SortableItems items={retos} disabled={!editable} onReorder={(next) => set({ retos: next })}
             container={(nodes) => <div className="stl-diag-retos">{nodes}</div>}>
             {(r, i, handle) => (
@@ -99,7 +104,17 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
                 Ese prefijo fijo es lo que producía "Por qué qué se rompe si el supuesto es
                 falso" en Exploración: el brief le pedía al agente meter una frase entera en
                 una ranura que ya venía prefijada. */}
-            {sectionChips?.panel ?? (
+            {/* ⭐ EDITABLE desde el 2026-08-23, a pedido de Elías: «debería poder cambiarse
+                todo». El orden es lo que hace que no se pierda nada: manda lo que escribió una
+                persona, después el rótulo que declara el documento, y al final el literal
+                traducido. Es el mismo patrón que `subhead`: el override vive en `data`, fuera
+                del esquema del AGENTE, así que `preserveNonSchemaKeys` lo acarrea y ninguna
+                regeneración lo pisa. */}
+            {sectionChips?.panel || data.rotuloPanel?.trim() ? (
+              <Editable as="span" editable={editable} value={data.rotuloPanel ?? ""}
+                placeholder={sectionChips?.panel ?? ""}
+                onCommit={(v) => set({ rotuloPanel: v })} />
+            ) : (
               <>
                 {`${t(lang, "porQue")} `}
                 <Editable as="span" editable={editable} value={data.plataforma ?? ""}

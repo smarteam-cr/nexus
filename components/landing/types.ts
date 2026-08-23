@@ -33,6 +33,19 @@ export interface HeroData {
    *  `Client.logoScale`; ausente = se usa la base. FUERA del schema del agente, como
    *  `brands` y `coverImageUrl`. Ver lib/ui/logo-scale.ts. */
   logoScale?: number | null;
+  /**
+   * ⭐ EL RÓTULO CHICO DE ARRIBA, escrito por una PERSONA. Vacío = el que declara el documento.
+   *
+   * Hasta el 2026-08-23 estas portadas no tenían NINGUNA forma de cambiarlo: son `selfTitled`, así
+   * que el motor no les pinta encabezado —y `seccion.rotular` se rechaza con razón, porque
+   * escribiría en una columna que nadie lee— y el componente lo dibujaba como un `<span>` pelado.
+   * Las dos puertas cerradas a la vez.
+   *
+   * ⚠ FUERA del esquema del agente, como `brands` y `coverImageUrl`: lo cura el CSE y
+   * `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Es el mismo patrón que ya usan las
+   * portadas del kickoff y de Desarrollo.
+   */
+  eyebrow?: string;
 }
 
 // 2) Diagnóstico — 3 a 6 dolores concretos.
@@ -218,6 +231,20 @@ export interface WebDiagnosisData {
   objetivo: string;
   /** Legacy (párrafo único): solo lectura de data vieja. */
   porQuePlataforma?: string;
+  /**
+   * ⭐ LOS RÓTULOS DE LAS DOS COLUMNAS, ESCRITOS POR UNA PERSONA.
+   *
+   * Elías pidió cambiar «QUÉ TE CUESTA HOY» y el chat contestó «Aplicado» sin cambiar nada: ese
+   * rótulo vivía SOLO en la definición del documento (`chips`) y ninguna operación lo alcanzaba.
+   * Su regla, textual: *«debería poder cambiarse todo»*.
+   *
+   * ⚠ Van FUERA del esquema del AGENTE, igual que `subhead`: el schema ES el prompt, y sumarlos
+   * ahí pondría a cuatro agentes a reescribir el rótulo de una columna en cada regeneración. Como
+   * son claves de primer nivel, `preserveNonSchemaKeys` las acarrea y lo que el CSE escriba
+   * sobrevive. Vacío = manda el rótulo del documento, y si tampoco hay, el literal traducido.
+   */
+  rotuloRetos?: string;
+  rotuloPanel?: string;
 }
 
 // 3) Arquitectura del sitio — DIAGRAMA: pill "Home" + fases con cards top-level

@@ -86,7 +86,14 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
   const { titulo, bajada } = resolveHeroTitle({
     escrito: data.titulo, titular: data.headline, rotulo: sectionTitle,
   });
-  const eyebrow = (sectionEyebrow ?? "").trim();
+  /* ⭐ EL RÓTULO DE ARRIBA, EDITABLE — y hasta el 2026-08-23 no lo era por ningún lado.
+     Estas portadas son `selfTitled`, así que el motor no les pinta encabezado (y con eso
+     `seccion.rotular` se rechaza, correctamente: escribiría en una columna que nadie lee). Y acá
+     el rótulo se pintaba como un `<span>` PELADO, ni siquiera con `editable`. Las dos puertas
+     cerradas a la vez: ni por chat ni a mano. Es el patrón que sus dos hermanas ya usan
+     —`DesarrolloHeroSection` y `KickoffHeroSection`—: el override vive en `data.eyebrow` y el
+     rótulo del documento queda de placeholder. */
+  const eyebrow = (data.eyebrow ?? "").trim() || (sectionEyebrow ?? "").trim();
   return (
     <div style={{ maxWidth: 900 }}>
       {editable && (
@@ -100,7 +107,13 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
         logoScale={data.logoScale}
         onLogoScale={(pct) => set({ logoScale: pct ?? undefined })}
       />
-      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+      {editable ? (
+        <Editable as="span" className="eyebrow" editable value={data.eyebrow ?? ""}
+          placeholder={sectionEyebrow ?? "Categoría de la sección…"}
+          onCommit={(v) => set({ eyebrow: v })} />
+      ) : (
+        eyebrow && <span className="eyebrow">{eyebrow}</span>
+      )}
       {/* El título es editable, pero el placeholder es el rótulo del propio documento:
           así lo que se ve mientras está vacío ya es el texto correcto, no una plantilla
           de otro documento. */}

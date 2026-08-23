@@ -61,6 +61,12 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "`subhead`: 1-2 frases con la decisión de arquitectura más importante Y la modalidad de adopción que este plan asume (directa o por pilotos) — declarada para que el CSE la corrija si no es la acordada. " +
       "`tags`: 2-5 chips de los frentes del plan ('Pipeline', 'Ciclo de vida', 'Adopción').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   makeDiagramArchitectureDef({
     key: "arquitectura_solucion",

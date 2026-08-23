@@ -234,6 +234,37 @@ export const WEB_DIAGNOSIS_SCHEMA = {
 } as const;
 export const WEB_DIAGNOSIS_EMPTY = { intro: "", retos: [], plataforma: "", porQueBullets: [], objetivo: "" };
 
+/**
+ * ⭐ LO QUE EL CHAT PUEDE TOCAR EN UN DIAGNÓSTICO A DOS COLUMNAS — y son los DOS RÓTULOS.
+ *
+ * Elías pidió cambiar «QUÉ TE CUESTA HOY», el chat contestó «Aplicado» y en pantalla no pasó nada:
+ * ese rótulo vivía SOLO en la definición del documento y ninguna operación lo alcanzaba. Su regla,
+ * textual: *«debería poder cambiarse todo»*.
+ *
+ * ⛔ Y `plataforma` NO está acá, a propósito: en los tres documentos que declaran `chips` el
+ * renderer no lo pinta —lo reemplazó el rótulo fijo—, así que anunciárselo al modelo es ofrecerle
+ * un campo fantasma. Es exactamente lo que el chat escribió cuando dijo «Aplicado». `camposMudosDe`
+ * lo saca del esquema del chat en esos tres; acá se deja para el cuarto (la propuesta de sitio
+ * web), donde el campo es real y se pinta.
+ *
+ * ⚠ Los rótulos van en el esquema del CHAT y no en el del AGENTE: el schema ES el prompt, y
+ * sumarlos allá pondría a cuatro agentes a reescribir el rótulo de una columna en cada
+ * regeneración. Mismo patrón que `subhead`.
+ */
+export const WEB_DIAGNOSIS_SCHEMA_DEL_CHAT = {
+  type: "object",
+  properties: {
+    intro: str,
+    rotuloRetos: str,
+    retos: arrayOf({ title: str, detail: str }, ["title"]),
+    rotuloPanel: str,
+    plataforma: str,
+    porQueBullets: arrayOf({ title: str, detail: str }, ["title"]),
+    objetivo: str,
+  },
+  required: ["retos", "porQueBullets", "objetivo"],
+} as const;
+
 export const ROI_SCHEMA = {
   type: "object",
   properties: { metrics: arrayOf({ value: str, label: str }, ["value", "label"]) },

@@ -24,6 +24,7 @@ import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import {
   WEB_DIAGNOSIS_SCHEMA,
+  WEB_DIAGNOSIS_SCHEMA_DEL_CHAT,
   WEB_DIAGNOSIS_EMPTY,
   ROI_SCHEMA,
   ROI_EMPTY,
@@ -86,6 +87,12 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
       heroTitleBrief("Requerimiento técnico") +
       "Portada del requerimiento técnico. `headline`: patrón `Requerimiento técnico: [integración de HubSpot con [sistema]] / [migración desde [plataforma]] / [desarrollo a medida]` — sacá el nombre propio del sistema destino de la sección `desarrollo` del handoff (SAP, ERP, Aircall, e-commerce, Salesforce…). `subhead`: UNA frase, en lenguaje llano (que la entienda alguien no técnico), de qué conecta con qué y para qué (ej. 'Sincroniza los negocios cerrados en HubSpot con el ERP para facturar sin recaptura'). `tags`: 2-5 chips cortos de los sistemas/APIs/tipo (ej. 'HubSpot', 'SAP', 'API REST', 'Webhook', 'Migración'). Fuente: sección `desarrollo` del handoff + tags del proyecto. No inventes sistemas.",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
     key: "estimacion",
@@ -121,6 +128,7 @@ export const DESARROLLO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Le da al desarrollador empatía con el negocio en un vistazo (lo entiende también alguien no técnico). Se rinde como cards de retos a la izquierda + un panel oscuro de consecuencias a la derecha + un objetivo abajo. `intro`: 1 frase de contexto (opcional). `retos`: el ESTADO ACTUAL (As-Is) — 4 a 6, cada uno `title` = el problema en 3-6 palabras (ej. 'Recaptura manual a facturación'), `detail` = cómo operan hoy en máximo 20 PALABRAS (ej. 'Ventas copia a mano los datos al ERP, cliente por cliente'). `porQueBullets`: las CONSECUENCIAS del dolor — 3 a 5, cada una `title` corto (ej. '~15 min por cliente') + `detail` de máximo 20 PALABRAS (tiempo perdido, errores de dedo, datos fiscales erróneos, retraso en el cobro). `objetivo`: 1 frase de qué debe lograr la integración (la meta). Fuente: sección `desarrollo` + `dolor_principal` del handoff; si el handoff no describe el As-Is, marcá `⚠️ Por validar con Ventas/cliente` en vez de inventar.",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
+    schemaDelChat: asSchema(WEB_DIAGNOSIS_SCHEMA_DEL_CHAT),
   },
   {
     key: "criterios_exito",

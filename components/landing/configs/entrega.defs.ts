@@ -86,6 +86,12 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       "`tags`: los Hubs y frentes que cubrió ('Sales Hub', 'Service Hub', 'Migración'). " +
       "⚠ NO pongas fechas, plazos ni porcentajes acá: los números del proyecto los escribe Nexus en su propia sección.",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
     key: "resumen",

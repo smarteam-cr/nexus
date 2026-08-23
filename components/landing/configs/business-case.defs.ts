@@ -167,6 +167,12 @@ export const BC_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Cabecera del business case (dark, con logos cliente × Smarteam × HubSpot). `headline`: '[Verbo de transformación] la [operación/experiencia/proceso] de [Nombre cliente]'. `subhead`: una frase que resume el dolor central y la apuesta. `tags`: 3 a 4 chips (hubs involucrados + integración clave + elemento diferenciador). Fuente: extraé del transcript el nombre del cliente, su industria, los hubs discutidos y la frase del dolor principal.",
     schema: { type: "object", properties: { headline: str, subhead: str, tags: strArray }, required: ["headline", "subhead"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
     key: "dolores",

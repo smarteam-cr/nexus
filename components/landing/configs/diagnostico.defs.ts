@@ -31,6 +31,7 @@ import {
   PAIN_SCHEMA,
   PAIN_EMPTY,
   WEB_DIAGNOSIS_SCHEMA,
+  WEB_DIAGNOSIS_SCHEMA_DEL_CHAT,
   WEB_DIAGNOSIS_EMPTY,
   ROI_SCHEMA,
   ROI_EMPTY,
@@ -77,6 +78,12 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "`subhead`: 1-2 frases con el resumen honesto: dónde está hoy (nivel de la escala con su nombre) y qué es lo primero que cambia con este proyecto. " +
       "`tags`: los hubs/áreas diagnosticadas ('Ventas', 'Marketing', 'Servicio').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
+    /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
+       cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
+       2026-08-23 esta portada no tenía NINGUNA forma de cambiarlo: es `selfTitled`, así que
+       `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
+       pintaba como texto pelado. Las dos puertas cerradas a la vez. */
+    schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
     key: "contexto_alcance",
@@ -171,6 +178,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "`porQueBullets`: el IMPACTO de la brecha en resultados — 3 a 5, tiempo perdido, ventas caídas, clientes sin respuesta — con números SOLO si alguna fuente los trae, `detail` de máximo 20 PALABRAS. " +
       "`objetivo`: cuál brecha se cierra primero y por qué esa ('Primero la captura del lead: todo lo demás depende de que el dato exista').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
+    schemaDelChat: asSchema(WEB_DIAGNOSIS_SCHEMA_DEL_CHAT),
   },
   {
     // SOLO-LECTURA legacy: absorbida por `porQueBullets` de gap_analysis.
