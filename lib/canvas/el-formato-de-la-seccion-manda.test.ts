@@ -26,6 +26,7 @@ import {
   cuerpoDeSeccionParaElChat,
   camposMudosDe,
   firmaDeSeccion,
+  FIRMA_DE_TEXTO_CORRIDO,
   schemaParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import {
@@ -208,15 +209,51 @@ describe("⭐ y una sección en prosa SÍ se puede editar: `seccion.texto`", () 
     expect(r.rechazadas[0].motivo).toContain("está escrita en CAMPOS");
   });
 
-  it("⛔ con DOS bloques de texto no se elige uno: se dice y se para", () => {
-    /* Escribir el primero y dejar el otro sería la misma pérdida por otra puerta. */
+  /**
+   * ⚠ ESTE TEST SE INVIRTIÓ EL 2026-08-23, Y EL RAZONAMIENTO VIEJO VA ACÁ PORQUE HAY QUE VERLO.
+   *
+   * Afirmaba lo contrario: que con más de un bloque la operación se RECHAZA, «porque escribir el
+   * primero y dejar el otro sería la misma pérdida por otra puerta». Sonaba prudente y era falso.
+   * El motor UNE todos los bloques de texto con una línea en blanco y los pinta como UN cuerpo
+   * (`landingRowData`): en pantalla hay un texto, no dos. La persona lee uno y aprueba uno.
+   *
+   * ⛔ El error de razonamiento fue confundir PERDER contenido que no se ve —grave— con REEMPLAZAR
+   * contenido que sí se ve, que es literalmente lo que la operación dice hacer y lo que la línea
+   * del acuerdo declara. Elías se topó con el rechazo sobre una sección de texto puro: «esta es
+   * una sección de texto, debería ser lo más sencillo». Tenía razón.
+   */
+  it("⭐ con VARIOS bloques de texto se reescribe el cuerpo entero, que es lo que se ve", () => {
     const r = aplicarOperacionesDeDocumento(
       [conTexto({ bloquesDeTexto: [{ id: "b1", contenido: "uno" }, { id: "b2", contenido: "dos" }] })],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "el resumen" }],
+      TODO,
+    );
+    expect(r.rechazadas).toEqual([]);
+    /* El cuerpo nuevo al primero; los demás en blanco —el motor descarta los vacíos al pintar—.
+       Se VACÍAN y no se borran: una fila vacía la recupera el deshacer del editor. */
+    expect(r.plan).toEqual([
+      { tipo: "texto", sectionId: "s1", blockId: "b1", contenido: "el resumen" },
+      { tipo: "texto", sectionId: "s1", blockId: "b2", contenido: "" },
+    ]);
+  });
+
+  it("⛔ y la línea dice que reemplaza TODO, no que agrega", () => {
+    /* Con varios bloques unidos en pantalla, «el texto pasa a» se puede leer como «se suma». */
+    const [linea] = describirOperacionesDeDocumento(
+      [conTexto()],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "el resumen" }],
+    );
+    expect(linea).toContain("TODO el texto");
+  });
+
+  it("⛔ pero sin ningún bloque de texto se para: no hay dónde escribir", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [conTexto({ bloquesDeTexto: [] })],
       [{ op: "seccion.texto", key: "recomendaciones", valor: "texto" }],
       TODO,
     );
     expect(r.plan).toEqual([]);
-    expect(r.rechazadas[0].motivo).toContain("2 bloques de texto");
+    expect(r.rechazadas[0].motivo).toContain("no tiene un bloque de texto");
   });
 
   it("⛔ y el rechazo por formato manda a `seccion.texto`, no a un callejón", () => {
@@ -429,6 +466,35 @@ describe("⛔ el chat no escribe campos que este documento NO PINTA", () => {
     );
     expect(r.plan).toEqual([]);
     expect(r.rechazadas[0].motivo).toContain("plataforma");
+  });
+});
+
+describe("⛔ la firma no le ofrece al modelo lo que el ejecutor rechaza", () => {
+  /**
+   * Una sección en prosa TIENE un esquema —el de prosa: `intro`, `items`…— pero escribir cualquiera
+   * de esos campos crea el bloque CARD y el texto desaparece. Anunciárselos al modelo es ofrecerle
+   * exactamente lo que el ejecutor va a rebotar: dos señales opuestas en el mismo renglón, y la que
+   * gana se decide por suerte. La firma tiene que describir lo que se PUEDE hacer.
+   */
+  it("⭐ una sección en prosa se firma como texto corrido, no con sus campos", () => {
+    expect(FIRMA_DE_TEXTO_CORRIDO).toContain("seccion.texto");
+    expect(FIRMA_DE_TEXTO_CORRIDO, "sigue anunciando campos").not.toContain("campos:");
+  });
+
+  it("⭐ y el contexto la elige POR FORMATO, no siempre la de campos", () => {
+    /* La edición que la pone en rojo: volver a `firmaDeSeccion(...)` incondicional. */
+    const src = leer("lib/asistente/contexto.ts");
+    expect(src).toContain('formatoDeEsta === "prosa"');
+    expect(src).toContain("? FIRMA_DE_TEXTO_CORRIDO");
+  });
+
+  it("⚠ y una sección de CAMPOS conserva su firma de siempre", () => {
+    const firma = firmaDeSeccion({
+      type: "object",
+      properties: { intro: { type: "string" }, items: { type: "array", items: { type: "object", properties: { title: { type: "string" } } } } },
+    });
+    expect(firma).toContain("campos:");
+    expect(firma).toContain("items");
   });
 });
 

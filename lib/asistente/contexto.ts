@@ -35,6 +35,7 @@ import {
   operacionesParaElChat,
   renderSeccionParaElChat,
   cuerpoDeSeccionParaElChat,
+  FIRMA_DE_TEXTO_CORRIDO,
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
@@ -504,7 +505,14 @@ export async function contextoDeDocumento(
         const def = defDeSeccion(defs, s.key, s.label);
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
            las listas y los campos para poder nombrarlos, y el ejecutor los rechazaba. */
-        const firma = firmaDeSeccion(schemaParaElChat(def), def?.listasSoloEdicion);
+        /* ⛔ La firma DEPENDE DEL FORMATO. Una sección en prosa tiene un esquema de campos, pero
+           escribir cualquiera de ellos borra el texto: anunciarlos es ofrecer justo lo que el
+           ejecutor rechaza. Ver `FIRMA_DE_TEXTO_CORRIDO`. */
+        const formatoDeEsta = formatoDeSeccion(datosDeSeccion(s.blocks));
+        const firma =
+          formatoDeEsta === "prosa"
+            ? FIRMA_DE_TEXTO_CORRIDO
+            : firmaDeSeccion(schemaParaElChat(def), def?.listasSoloEdicion);
         /* El de su clase, más el propio de esta sección si lo declara. */
         const avisos = [
           AVISO_DE_CAPACIDAD_PARA_EL_CHAT[capacidadDeSeccion(def, esCustomKey(s.key))],
@@ -536,7 +544,7 @@ export async function contextoDeDocumento(
                no hay CARD, así que sobre una sección legacy tomaba el bloque de TEXTO y su `data`
                entraba como contenido tipado. El servidor decía «estructurado» donde el motor
                pintaba prosa, y el chat afirmaba que la sección estaba vacía. */
-            formato: formatoDeSeccion(datosDeSeccion(s.blocks)),
+            formato: formatoDeEsta,
             schema: schemaParaElChat(def),
             data: cardDe(s.blocks)?.data,
             bloquesDeTexto: s.blocks

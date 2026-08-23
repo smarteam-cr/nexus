@@ -427,6 +427,19 @@ export const TOPE_DE_SECCION_COMPLETA_CHARS = 20_000;
  * natural al leer— fabricaría un error de una posición en cada borrado.
  */
 /** El aviso que encabeza una sección en PROSA. Uno solo: lo leen el prefijo y el chip. */
+/**
+ * ⭐ LA FIRMA DE UNA SECCIÓN EN PROSA — y no puede ser la de sus campos.
+ *
+ * Una sección en texto corrido TIENE un esquema (el de prosa: `intro`, `items`…), pero escribir
+ * cualquiera de esos campos crea el bloque CARD y el texto desaparece. O sea que anunciárselos al
+ * modelo es ofrecerle exactamente lo que el ejecutor rechaza — dos señales opuestas en el mismo
+ * renglón, y la que gana se decide por suerte.
+ *
+ * La firma tiene que describir lo que se PUEDE hacer, no la forma que la sección tendría si
+ * estuviera escrita de otra manera.
+ */
+export const FIRMA_DE_TEXTO_CORRIDO = "[texto corrido — se reescribe ENTERO con `seccion.texto`]";
+
 export const AVISO_DE_TEXTO_CORRIDO =
   "⚠ FORMATO: TEXTO CORRIDO (esta sección no tiene campos escritos: se edita reescribiendo el " +
   "texto con `seccion.texto`, no con campos ni listas)";

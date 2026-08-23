@@ -1147,18 +1147,31 @@ export function aplicarOperacionesDeDocumento(
           break;
         }
         const bloques = (s.bloquesDeTexto ?? []).filter((b) => b.contenido.trim());
-        /* ⛔ Con más de un bloque no se elige uno: unirlos para escribir el primero perdería los
-           demás, que es la misma pérdida por otra puerta. */
-        if (bloques.length !== 1) {
-          rechazar(
-            o,
-            bloques.length === 0
-              ? "esa sección no tiene un bloque de texto donde escribir"
-              : `esa sección tiene ${bloques.length} bloques de texto y no se puede saber en cuál va: se edita a mano`,
-          );
+        if (bloques.length === 0) {
+          rechazar(o, "esa sección no tiene un bloque de texto donde escribir");
           break;
         }
+        /**
+         * ⭐ VARIOS BLOQUES SON UN SOLO CUERPO, y rechazarlos estuvo mal.
+         *
+         * La primera versión de esta operación rechazaba con más de un bloque, «porque escribir el
+         * primero perdería los demás». Elías se topó con eso el 2026-08-23 sobre una sección de
+         * texto puro —«debería ser lo más sencillo»— y tenía razón: el motor UNE todos los bloques
+         * con una línea en blanco y los pinta como UN texto (`landingRowData`). En pantalla hay un
+         * cuerpo, no dos. La persona lee uno y aprueba uno.
+         *
+         * ⛔ Y el razonamiento viejo confundía dos cosas distintas: perder contenido que NO se ve
+         * (grave) con REEMPLAZAR contenido que sí se ve, que es exactamente lo que la operación
+         * dice hacer y lo que la línea del acuerdo declara.
+         *
+         * El cuerpo nuevo va al primer bloque y los demás quedan en blanco — el motor descarta los
+         * vacíos al pintar. Se vacían en vez de borrarse: una fila vacía es reversible con el
+         * deshacer del editor, una fila borrada no.
+         */
         plan.push({ tipo: "texto", sectionId: s.id, blockId: bloques[0].id, contenido: o.valor });
+        for (const b of bloques.slice(1)) {
+          plan.push({ tipo: "texto", sectionId: s.id, blockId: b.id, contenido: "" });
+        }
         break;
       }
 
@@ -1616,11 +1629,12 @@ export function describirOperacionesDeDocumento(
         return `${itemDicho(o.key, o.lista, o.ancla, o.posicion)} pasa al lugar ${(o.a ?? 0) + 1} de la lista ${lista(o.key, o.lista)} en «${nombre(o.key)}»`;
       case "seccion.texto": {
         /* ⭐ La línea lleva el TEXTO NUEVO, como todas las de contenido: «se reescribe el cuerpo»
-           no alcanza para aprobar nada. Y dice que reemplaza al anterior, porque eso es lo que
-           hace — el cuerpo de una sección en prosa es uno solo. */
+           no alcanza para aprobar nada. Y dice que reemplaza TODO el texto, porque eso es lo que
+           hace — el cuerpo de una sección en prosa es uno solo, aunque en la base viva en varios
+           bloques. Sin ese «TODO», alguien puede leerlo como «se agrega». */
         const nuevo = o.valor.trim();
         return nuevo
-          ? `En «${nombre(o.key)}», el texto pasa a: «${recortar(nuevo)}»`
+          ? `En «${nombre(o.key)}», TODO el texto pasa a: «${recortar(nuevo)}»`
           : `⚠ Se borra el texto de «${nombre(o.key)}»`;
       }
       case "seccion.vaciar":
