@@ -32,6 +32,7 @@ import {
 import {
   aplicarOperacionesDeDocumento,
   describirOperacionesDeDocumento,
+  verificarOperacionesDeDocumento,
   type SeccionActual,
 } from "./operaciones-de-documento";
 
@@ -495,6 +496,98 @@ describe("⛔ la firma no le ofrece al modelo lo que el ejecutor rechaza", () =>
     });
     expect(firma).toContain("campos:");
     expect(firma).toContain("items");
+  });
+});
+
+describe("⛔ vaciar una sección de texto la VACÍA, no la destruye", () => {
+  /**
+   * Era la última puerta abierta a la pérdida irreversible. `seccion.vaciar` escribía la data
+   * vacía del esquema, y eso CREA el bloque CARD: desde ahí el motor deja de armar el markdown
+   * viejo y el texto desaparece para siempre. O sea que «limpiá esta sección» la destruía en vez
+   * de vaciarla — el mismo fallo que `formatoLoImpide` cierra para `seccion.campo`, por la puerta
+   * que quedaba sin cerrar.
+   */
+  const conTextoV = (bloques: { id: string; contenido: string }[]): SeccionActual => ({
+    id: "s1",
+    key: "recomendaciones",
+    label: "Recomendaciones",
+    data: {},
+    schema: PROSA_SCHEMA,
+    schemaDelAgente: PROSA_SCHEMA,
+    oculta: false,
+    esCreada: false,
+    movible: true,
+    formato: "prosa",
+    bloquesDeTexto: bloques,
+  });
+
+  it("⭐ blanquea los bloques de texto en vez de escribir un `empty` que crea el CARD", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [conTextoV([{ id: "b1", contenido: "uno" }, { id: "b2", contenido: "dos" }])],
+      [{ op: "seccion.vaciar", key: "recomendaciones" }],
+      TODO,
+    );
+    expect(r.rechazadas).toEqual([]);
+    expect(r.plan, "volvió a escribir data: eso crea el CARD y el texto no vuelve").toEqual([
+      { tipo: "texto", sectionId: "s1", blockId: "b1", contenido: "" },
+      { tipo: "texto", sectionId: "s1", blockId: "b2", contenido: "" },
+    ]);
+  });
+
+  it("y una sección de texto ya vacía lo dice, en vez de escribir por escribir", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [conTextoV([{ id: "b1", contenido: "   " }])],
+      [{ op: "seccion.vaciar", key: "recomendaciones" }],
+      TODO,
+    );
+    expect(r.plan).toEqual([]);
+    expect(r.rechazadas[0].motivo).toContain("ya está vacía");
+  });
+});
+
+describe("⭐ y el texto reescrito se CONFIRMA releyendo", () => {
+  /* Era la operación que más se va a usar sobre una sección de texto y la única sin verificar. */
+  const fresca = (contenido: string): SeccionActual => ({
+    id: "s1",
+    key: "recomendaciones",
+    label: "Recomendaciones",
+    data: {},
+    schema: PROSA_SCHEMA,
+    oculta: false,
+    esCreada: false,
+    movible: true,
+    formato: "prosa",
+    bloquesDeTexto: [{ id: "b1", contenido }],
+  });
+
+  it("avisa cuando el cuerpo vivo no es el que se acordó", () => {
+    const avisos = verificarOperacionesDeDocumento(
+      [fresca("lo viejo")],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "el resumen" }],
+    );
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toContain("Recomendaciones");
+  });
+
+  it("…y se calla cuando sí quedó", () => {
+    expect(
+      verificarOperacionesDeDocumento(
+        [fresca("el resumen")],
+        [{ op: "seccion.texto", key: "recomendaciones", valor: "el resumen" }],
+      ),
+    ).toEqual([]);
+  });
+
+  it("⚠ y compara el cuerpo UNIDO, como lo pinta el motor", () => {
+    /* Con varios bloques, el cuerpo vivo es la unión: comparar solo el primero avisaría en falso
+       en la mitad de las secciones de texto del motor. */
+    const dos: SeccionActual = { ...fresca("uno"), bloquesDeTexto: [{ id: "b1", contenido: "uno" }, { id: "b2", contenido: "dos" }] };
+    expect(
+      verificarOperacionesDeDocumento(
+        [dos],
+        [{ op: "seccion.texto", key: "recomendaciones", valor: "uno\n\ndos" }],
+      ),
+    ).toEqual([]);
   });
 });
 

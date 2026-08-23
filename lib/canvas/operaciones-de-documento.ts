@@ -1178,6 +1178,28 @@ export function aplicarOperacionesDeDocumento(
       case "seccion.vaciar": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        /**
+         * ⛔ VACIAR UNA SECCIÓN EN PROSA NO ES ESCRIBIR UN `empty`: ES BORRAR SU TEXTO.
+         *
+         * El camino de abajo escribe la data vacía, y eso CREA el bloque CARD — con lo cual el
+         * motor deja de armar el markdown viejo y **el texto desaparece para siempre**. Es la misma
+         * pérdida irreversible que `formatoLoImpide` cierra para `seccion.campo`, por la puerta que
+         * quedaba abierta: «limpiá esta sección» la habría destruido en vez de vaciarla.
+         *
+         * Vaciar significa «dejala sin contenido», y en una sección de texto el contenido ES el
+         * texto. Se blanquean sus bloques, que es lo que la línea del acuerdo promete.
+         */
+        if (s.formato === "prosa") {
+          const bloques = (s.bloquesDeTexto ?? []).filter((b) => b.contenido.trim());
+          if (bloques.length === 0) {
+            rechazar(o, "esa sección ya está vacía");
+            break;
+          }
+          for (const b of bloques) {
+            plan.push({ tipo: "texto", sectionId: s.id, blockId: b.id, contenido: "" });
+          }
+          break;
+        }
         /* El `empty` sale del schema y no de una constante: vaciar tiene que dejar la sección con
            la forma que su renderer espera, no con un objeto vacío. */
         /* ⚠ El del AGENTE, no el del chat. Ver `schemaDelAgente`: con el del chat, vaciar una
@@ -1442,6 +1464,20 @@ export function verificarOperacionesDeDocumento(
         if (!arr.some((it) => identidadDeItem(it, false, esquemaDeItems) === buscado)) {
           noQuedo(`«${buscado}» no está en «${s.label}»`);
         }
+        break;
+      }
+      case "seccion.texto": {
+        /* ⭐ La operación que más se va a usar sobre una sección de texto, y era la única sin
+           releer. Se compara el cuerpo VIVO —los bloques unidos, como los pinta el motor— contra
+           lo que la operación dijo que iba a escribir. */
+        const s = porKey.get(o.key);
+        if (!s) break;
+        const vivo = (s.bloquesDeTexto ?? [])
+          .map((b) => b.contenido)
+          .filter((t) => t.trim())
+          .join("\n\n")
+          .trim();
+        if (vivo !== o.valor.trim()) noQuedo(`el texto de «${s.label}» no es el que se acordó`);
         break;
       }
       case "seccion.item.borrar": {
