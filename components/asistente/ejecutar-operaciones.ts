@@ -31,7 +31,7 @@ import {
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
-import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
+import { datosDeSeccion, formatoDeSeccion } from "@/lib/landing/formato-de-seccion";
 import type { SectionWithBlocks, useCanvasSections } from "@/components/canvas/useCanvasSections";
 
 /** Lo mínimo de una def que el ejecutor necesita: el esquema y si tiene lugar fijo. */
@@ -103,10 +103,8 @@ export function seccionesParaElEjecutor(
          el servidor al armar el contexto. Ver `SeccionActual.formato`: si el chat dedujera el
          formato por su cuenta, la primera divergencia sería una sección en prosa convertida en
          tarjetas — y su texto no vuelve. */
-      formato: formatoDeSeccion({
-        markdown: markdownDeBloques(s.blocks),
-        dataTipada: card?.data ?? {},
-      }),
+      /* ⛔ La MISMA lectura que el motor y que el servidor. Ver `datosDeSeccion`. */
+      formato: formatoDeSeccion(datosDeSeccion(s.blocks)),
       /* Solo lo usa `seccion.texto`: es el cuerpo de una sección escrita en prosa. */
       bloquesDeTexto: s.blocks
         .filter((b) => b.blockType !== "CARD")

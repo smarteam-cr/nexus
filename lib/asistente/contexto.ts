@@ -54,7 +54,7 @@ import {
 } from "@/lib/timeline/capacidades";
 import { projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
-import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
+import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
 
 /**
@@ -532,10 +532,11 @@ export async function contextoDeDocumento(
            modelo lee— decía lo contrario que éste sobre las secciones en prosa. */
         const cuerpo = cuerpoDeSeccionParaElChat(
           {
-            formato: formatoDeSeccion({
-              markdown: markdownDeBloques(s.blocks),
-              dataTipada: cardDe(s.blocks)?.data ?? {},
-            }),
+            /* ⛔ `datosDeSeccion`, no los argumentos a mano: `cardDe` cae al PRIMER bloque cuando
+               no hay CARD, así que sobre una sección legacy tomaba el bloque de TEXTO y su `data`
+               entraba como contenido tipado. El servidor decía «estructurado» donde el motor
+               pintaba prosa, y el chat afirmaba que la sección estaba vacía. */
+            formato: formatoDeSeccion(datosDeSeccion(s.blocks)),
             schema: schemaParaElChat(def),
             data: cardDe(s.blocks)?.data,
             bloquesDeTexto: s.blocks
@@ -681,10 +682,9 @@ export async function contextoDeDocumento(
       /* ⛔ El MISMO predicado que usa el motor para decidir qué pinta, y el mismo que corre en el
          navegador. Ver `SeccionActual.formato`: si las dos mitades lo dedujeran por su cuenta, la
          primera divergencia sería una pérdida de contenido silenciosa. */
-      formato: formatoDeSeccion({
-        markdown: markdownDeBloques(s.blocks),
-        dataTipada: card?.data ?? {},
-      }),
+      /* ⛔ La MISMA lectura que el motor. Ver `datosDeSeccion`: compartir el predicado no alcanza
+         si cada llamador arma los argumentos por su cuenta. */
+      formato: formatoDeSeccion(datosDeSeccion(s.blocks)),
       /* Solo lo usa `seccion.texto`: es el cuerpo de una sección escrita en prosa. */
       bloquesDeTexto: s.blocks
         .filter((b) => b.blockType !== "CARD")

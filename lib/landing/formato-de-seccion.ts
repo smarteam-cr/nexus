@@ -29,6 +29,36 @@ export type FormatoDeSeccion = "estructurado" | "prosa";
 export interface BloqueParaFormato {
   blockType: string;
   content?: string | null;
+  data?: unknown;
+}
+
+/**
+ * ⭐ LO QUE EL MOTOR VE DE UNA SECCIÓN — espejo de `landingRowData`, y la ÚNICA entrada de
+ * `formatoDeSeccion`.
+ *
+ * ── POR QUÉ EXISTE, Y ES UN FALLO QUE YA PASÓ DOS VECES ──────────────────────────────────────
+ * El predicado ya tenía un solo dueño. Lo que NO lo tenía eran sus ENTRADAS: cada mitad decidía
+ * por su cuenta cuál es «la data tipada» de la sección. El navegador y el motor usaban
+ * `find(CARD)`; el servidor usaba `find(CARD) ?? bloques[0]` —una tolerancia legacy para las
+ * secciones que arrastran un TEXT adelante— y sobre una sección SIN CARD eso devuelve el bloque de
+ * TEXTO. Su `data` entraba como si fuera contenido tipado, `isBlank` daba `false`, y el servidor
+ * concluía «estructurado» sobre lo que el motor estaba pintando como prosa.
+ *
+ * ⛔ Consecuencia, en pantalla: el chat afirmaba que «Impacto del gap» estaba vacía mientras la
+ * pantalla la mostraba entera. Elías lo vio dos veces — la segunda DESPUÉS de que arreglé el
+ * renderer, porque el renderer nunca fue el problema: lo era de dónde salían sus datos.
+ *
+ * ⭐ La lección: un predicado compartido no alcanza si cada llamador arma los argumentos a mano.
+ * Lo que se comparte tiene que ser la LECTURA, no solo la decisión.
+ */
+export function datosDeSeccion(bloques: readonly BloqueParaFormato[]): {
+  markdown: string;
+  dataTipada: unknown;
+} {
+  /* ⛔ `find`, sin respaldo al primer bloque: es lo que hace `landingRowData`, y esa función ES la
+     que decide qué se pinta. Cualquier tolerancia extra acá vuelve a abrir la divergencia. */
+  const card = bloques.find((b) => b.blockType === "CARD");
+  return { markdown: markdownDeBloques(bloques), dataTipada: card?.data ?? {} };
 }
 
 /**

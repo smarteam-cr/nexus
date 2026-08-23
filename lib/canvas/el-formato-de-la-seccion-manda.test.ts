@@ -21,7 +21,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
+import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import {
   cuerpoDeSeccionParaElChat,
   camposMudosDe,
@@ -289,6 +289,45 @@ describe("⛔ el chat VE el texto de una sección en prosa (no dice que está va
   });
 });
 
+describe("⛔ y las tres LEEN LO MISMO, no solo deciden con la misma función", () => {
+  /**
+   * ── EL FALLO QUE SE ESCAPÓ DE LA PRIMERA VERSIÓN DE ESTAS GUARDAS ─────────────────────────
+   * El predicado ya tenía un solo dueño y las guardas verificaban que los tres lo llamaran. Lo que
+   * NO verificaban era con QUÉ lo llamaban: cada mitad armaba «la data tipada» a mano. El motor y
+   * el navegador usaban `find(CARD)`; el servidor usaba `find(CARD) ?? bloques[0]` —una tolerancia
+   * legacy— y sobre una sección SIN CARD eso devuelve el bloque de TEXTO. Su `data` entraba como
+   * contenido tipado y el servidor concluía «estructurado» sobre lo que el motor pintaba en prosa.
+   *
+   * ⛔ Elías lo vio DOS VECES: la segunda después de que arreglé el renderer, porque el renderer
+   * nunca fue el problema. Compartir la decisión no alcanza si no se comparte la LECTURA.
+   */
+  const LEGACY_CON_DATA = [
+    /* El caso real: una sección anterior al motor, sin CARD, cuyo único bloque de texto arrastra
+       algo en `data`. Sin ese `data` el fixture no reproduce nada — y ésa fue la trampa. */
+    { id: "b1", blockType: "TEXT", content: "Gap 1 (Alcance indefinido) → Riesgo…", data: { titulo: "viejo" } },
+  ];
+
+  it("⭐ una sección legacy con `data` en su bloque de TEXTO sigue siendo PROSA", () => {
+    expect(formatoDeSeccion(datosDeSeccion(LEGACY_CON_DATA))).toBe("prosa");
+  });
+
+  it("⛔ y la lectura ignora el bloque que no es CARD, como hace el motor", () => {
+    /* La edición que la pone en rojo: devolverle el respaldo `?? bloques[0]`. */
+    expect(datosDeSeccion(LEGACY_CON_DATA).dataTipada).toEqual({});
+    expect(datosDeSeccion(LEGACY_CON_DATA).markdown).toContain("Gap 1");
+  });
+
+  it("⭐ y ninguna de las dos mitades vuelve a armar los argumentos a mano", () => {
+    for (const p of ["lib/asistente/contexto.ts", "components/asistente/ejecutar-operaciones.ts"]) {
+      const src = leer(p);
+      expect(src, `${p}: volvió a leer los bloques por su cuenta`).toContain(
+        "formatoDeSeccion(datosDeSeccion(s.blocks))",
+      );
+      expect(src, `${p}: quedó una lectura paralela de la data tipada`).not.toContain("dataTipada:");
+    }
+  });
+});
+
 describe("las CUATRO mitades leen el mismo predicado", () => {
   /* Si cada una lo dedujera por su cuenta, la primera divergencia sería una pérdida de contenido
      silenciosa: el chat acordaría escribir campos sobre algo que el motor está pintando como
@@ -312,14 +351,15 @@ describe("las CUATRO mitades leen el mismo predicado", () => {
     expect(src, "sin `content` el modelo no ve el cuerpo de una sección en prosa").toContain(
       "blockType: true, content: true",
     );
-    expect(src).toContain("formato: formatoDeSeccion({");
+    /* ⚠ Los argumentos salen de `datosDeSeccion`, no se arman acá — ver el describe de arriba. */
+    expect(src).toContain("formato: formatoDeSeccion(datosDeSeccion(s.blocks))");
     /* El aviso ya no está escrito acá: sale de `AVISO_DE_TEXTO_CORRIDO`, el renderer único. */
     expect(src).toContain("cuerpoDeSeccionParaElChat(");
   });
 
   it("el ejecutor del NAVEGADOR lo calcula igual", () => {
     expect(leer("components/asistente/ejecutar-operaciones.ts")).toContain(
-      "formato: formatoDeSeccion({",
+      "formato: formatoDeSeccion(datosDeSeccion(s.blocks))",
     );
   });
 

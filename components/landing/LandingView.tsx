@@ -364,6 +364,9 @@ export default function LandingView({
        componente rinde el markdown él mismo —y además compone marca, imagen y métricas, que este
        fallback perdería—. Meter esa excepción adentro de `formatoDeSeccion` le decía al chat que
        una portada nunca está en prosa, y con eso le abría la puerta a borrar su cuerpo legacy. */
+    /* ⚠ Acá los datos NO salen de `datosDeSeccion`: el motor ya recibió la data resuelta por
+       `landingRowData` —de la que esa función es el espejo— así que volver a leer bloques sería la
+       segunda lectura. Lo que importa es que las tres coincidan, y la guarda lo prueba. */
     const showLegacy =
       !isHero && formatoDeSeccion({ markdown: legacyMd, dataTipada: typedData }) === "prosa";
     /* ⭐ Lo que el 💬 de cada ítem necesita y no puede deducir desde adentro: de qué sección es, y
