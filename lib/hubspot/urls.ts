@@ -40,6 +40,22 @@ export function hubspotDealUrl(
   return `${APP}/contacts/${portalId}/deal/${dealId}`;
 }
 
+/**
+ * Ficha de un TICKET — mismo patrón que empresa y trato: `/contacts/<portal>/ticket/<id>`,
+ * en singular. `null` si falta cualquiera de las dos piezas.
+ *
+ * Lo pide el tablero de SICOP: las licitaciones públicas viven como tickets del pipeline
+ * "Gobiernos", y una lista que no deja abrir la licitación obliga a buscarla a mano en
+ * HubSpot — a la tercera vez, nadie la abre.
+ */
+export function hubspotTicketUrl(
+  portalId: string | null | undefined,
+  ticketId: string | null | undefined,
+): string | null {
+  if (!portalId || !ticketId) return null;
+  return `${APP}/contacts/${portalId}/ticket/${ticketId}`;
+}
+
 /** Listado de empresas del portal — el fallback cuando se sabe el portal pero no la empresa. */
 export function hubspotCompanyListUrl(portalId: string | null | undefined): string | null {
   if (!portalId) return null;

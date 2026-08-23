@@ -196,8 +196,18 @@ export const APP_NAV: readonly NavItemConfig[] = [
     key: "sales",
     label: "Ventas",
     href: "/business-cases",
+    // `match` extendido a /sales: el área tiene más de una pantalla desde que existe
+    // SICOP, y sin esto el rail se apagaría al entrar ahí (y el crumb de módulo, que
+    // sale de este mismo `match`, no diría "Ventas").
+    match: ["/business-cases", "/sales"],
     gate: { kind: "permission", section: "ventas", action: "read" },
     group: "operacion",
+    children: [
+      { href: "/business-cases", label: "Propuestas comerciales" },
+      // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
+      // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
+      { href: "/sales/sicop", label: "SICOP" },
+    ],
     icon: icon("M3 3v18h18M7 14l4-4 3 3 5-6"),
   },
   {

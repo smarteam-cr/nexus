@@ -41,6 +41,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/ingresos-variables": { shell: "SHELL_DEFAULT" },
   "finanzas/comisiones-partner": { shell: "SHELL_DEFAULT" },
   integrations: { shell: "SHELL_DEFAULT" },
+  "sales/sicop": { shell: "SHELL_DEFAULT" },
   knowledge: { shell: "SHELL_DEFAULT" },
   roles: { shell: "SHELL_DEFAULT" },
 
