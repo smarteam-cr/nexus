@@ -93,6 +93,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "Los procesos del cliente como van a operar, anclados a los diagramas reales (la fricción marcada ⚠ → el comoEsHoy).",
     brief:
       "El rediseño, proceso por proceso. `procesos`: por cada proceso del cliente que el proyecto toca — `nombre` en lenguaje del cliente; `comoEsHoy` = la operación REAL según sus diagramas mapeados (usá la fricción marcada ⚠ — no la suavices); `comoSera` = cómo opera con el CRM configurado, concreto y dentro del alcance; `sistemas` = herramientas de hoy → de mañana. " +
+      "`resumenHoy` y `resumenSera` = TITULARES de media línea, uno por columna, que se leen solos y contrastan entre sí ('Cada vendedor con su propia planilla' / 'Un solo pipeline que todos ven') — NO son un resumen del párrafo de abajo. " +
       "Partí de los procesos MAPEADOS del cliente: si un proceso no está mapeado ni mencionado, no lo inventes.",
     schema: asSchema(PROCESS_MAPPING_SCHEMA),
   },

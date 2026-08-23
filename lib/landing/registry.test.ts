@@ -44,10 +44,10 @@ import {
   TIPO_POR_DEFECTO,
 } from "@/lib/landing/catalogo-de-secciones";
 import { COMPONENTES_CREABLES } from "@/components/landing/configs/templates";
-import {
-  PROCESS_MAPPING_SCHEMA,
-  PROCESS_MAPPING_SCHEMA_CON_TITULAR,
-} from "@/components/landing/configs/shared-sections.defs";
+/* ⚠ `PROCESS_MAPPING_SCHEMA` ya no se importa acá: desde el 2026-08-23 los asserts recorren las
+   defs REALES de los cinco documentos en vez de dos constantes. Probar la constante daba verde
+   mientras cuatro documentos pintaban campos que su propio schema no declaraba. */
+import { PROCESS_MAPPING_SCHEMA_CON_TITULAR } from "@/components/landing/configs/shared-sections.defs";
 import { t } from "@/components/landing/i18n";
 import fs from "node:fs";
 import path from "node:path";
@@ -583,6 +583,16 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
         .properties.procesos
     ).items.properties;
 
+  /** Toda def de `process_mapping` viva, con el documento que la declara — para no probar dos
+   *  constantes y creer que se probaron los cinco documentos. */
+  const TODAS_LAS_DEFS = [
+    ...Object.values(BC_TEMPLATES).flatMap((t) => t.sections.map((def) => ({ doc: t.id, def }))),
+    ...DIAGNOSTICO_SECTION_DEFS.map((def) => ({ doc: "diagnostico", def })),
+    ...PLANIFICACION_SECTION_DEFS.map((def) => ({ doc: "planificacion", def })),
+    ...IMPLEMENTACION_SECTION_DEFS.map((def) => ({ doc: "implementacion", def })),
+    ...ENTREGA_SECTION_DEFS.map((def) => ({ doc: "entrega", def })),
+  ];
+
   it("⚠ los subtítulos viven DENTRO del schema — fuera se borran en cada regeneración", () => {
     /* `preserveNonSchemaKeys` (lib/ai/section-schema.ts) solo acarrea claves de PRIMER nivel.
        `resumenHoy`/`resumenSera` están dentro de `procesos[]`, así que si alguien los saca del
@@ -594,16 +604,45 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
     }
   });
 
-  it("⚠ y NO viven en el schema compartido: el schema es el prompt de los otros cuatro", () => {
-    /* `shapeOf` recursa dentro de `items`, así que el schema ES la forma que el modelo recibe.
-       Meter los titulares en el compartido pone a los agentes de Diagnóstico, Planificación,
-       Implementación y el Business Case a escribir dos campos que ningún brief de ellos
-       explica — y en `implementacion.pipelines`, donde el «antes» es una lista de etapas, un
-       titular de media línea no tiene contenido posible. La variante entra por el documento
-       que la pidió, igual que `CompararLabels`. */
-    const compartido = propsDe(PROCESS_MAPPING_SCHEMA);
-    expect(compartido).not.toHaveProperty("resumenHoy");
-    expect(compartido).not.toHaveProperty("resumenSera");
+  /**
+   * ⚠ ESTE TEST SE INVIRTIÓ EL 2026-08-23, Y EL RAZONAMIENTO VIEJO VA ACÁ PORQUE ERA BUENO.
+   *
+   * Afirmaba lo contrario: que los titulares NO debían vivir en el schema compartido, porque
+   * `shapeOf` recursa dentro de `items` y el schema ES la forma que el modelo recibe — así que
+   * meterlos arriba pondría a cuatro agentes a escribir dos campos que ningún brief de ellos
+   * explica, y en `implementacion.pipelines`, donde el «antes» es una lista de etapas, un titular
+   * de media línea no tiene contenido posible. La variante entraba por el documento que la pidió.
+   *
+   * ⛔ Le faltaba la otra mitad: **el componente los PINTA igual**. `ProcessMappingSection` los
+   * dibuja con `(p.resumenHoy || editable)`, sin consultar el esquema, en los CINCO documentos. O
+   * sea que en cuatro había dos cajas grises «En una línea…» que el CSE veía, podía escribir, y
+   * `coerceToSchema` le borraba al regenerar — y que el chat no veía y rechazaba si las adivinaba.
+   * Elías lo vio en el diagnóstico: pidió «agregale los títulos a cada card» y el chat contestó,
+   * correctamente, que esa sección solo tiene `nombre`, `comoEsHoy`, `comoSera` y `sistemas`.
+   *
+   * El riesgo que el assert viejo protegía se paga con UNA LÍNEA DE BRIEF POR DOCUMENTO, y en
+   * Implementación esa línea dice «déjalos vacíos» — la respuesta al caso que había identificado
+   * bien. **Si alguien vuelve a sacarlos del compartido, tiene que borrar también el render.**
+   */
+  it("⭐ los titulares existen en los CINCO documentos, no solo en la Entrega", () => {
+    const conProcesos = TODAS_LAS_DEFS.filter((d) => d.def.sectionType === "process_mapping");
+    expect(conProcesos.length, "la guarda no está mirando nada").toBeGreaterThan(3);
+    for (const { doc, def } of conProcesos) {
+      const props = propsDe(def.schema);
+      for (const k of ["resumenHoy", "resumenSera"]) {
+        expect(props, `${doc}/${def.key}: el motor pinta "${k}" y su schema no lo declara`).toHaveProperty(k);
+      }
+    }
+  });
+
+  it("⛔ y cada uno de esos documentos EXPLICA los titulares en su brief", () => {
+    /* El schema es el prompt: sumar dos campos sin explicarlos pone a cuatro agentes a escribir
+       algo que nadie les pidió. Es el riesgo real que el assert viejo protegía, y ésta es la
+       forma de pagarlo. La edición que la pone en rojo: sumar un sexto documento con la sección y
+       olvidarle el brief. */
+    for (const { doc, def } of TODAS_LAS_DEFS.filter((d) => d.def.sectionType === "process_mapping")) {
+      expect(def.brief ?? "", `${doc}/${def.key} no explica los titulares`).toContain("resumenHoy");
+    }
   });
 
   it("solo la Entrega cambia los rótulos; los otros cuatro miran hacia adelante", () => {

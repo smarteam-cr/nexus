@@ -103,7 +103,8 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
       "Los PIPELINES del portal, uno por objeto que el proyecto toca (Negocios, Tickets, Leads, objetos custom). Por pipeline: " +
       "`nombre` = el pipeline y su objeto ('Pipeline de ventas — Negocios'); `comoEsHoy` = las etapas que el portal tiene HOY (vienen en el contexto si hay cuenta conectada; si no existe el pipeline, decilo); " +
       "`comoSera` = las etapas propuestas EN ORDEN, cada una con su criterio de salida en pocas palabras ('Calificado → pasa cuando hay presupuesto confirmado'); `sistemas` = el objeto de HubSpot. " +
-      "Las etapas salen de la PLANIFICACIÓN (procesos rediseñados + ciclo de vida) — no inventes etapas que el plan no justifica.",
+      "Las etapas salen de la PLANIFICACIÓN (procesos rediseñados + ciclo de vida) — no inventes etapas que el plan no justifica. " +
+      "⛔ `resumenHoy` y `resumenSera` van VACÍOS en esta sección: un titular de media línea no tiene contenido posible sobre una lista de etapas de pipeline.",
     schema: asSchema(PROCESS_MAPPING_SCHEMA),
   },
   {

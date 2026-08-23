@@ -105,6 +105,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "El corazón del informe. `procesos`: UNO por hub del proyecto — 'Cómo vendés hoy' (sales), 'Cómo hacés marketing hoy' (marketing), 'Cómo entregás servicio hoy' (service). Por proceso: " +
       "`nombre` = en lenguaje del cliente; `comoEsHoy` = 2-4 frases con la operación REAL, incluyendo la fricción que aparece en sus procesos mapeados (los dolores marcados ⚠) — sin suavizar, pero sin burlarse; " +
       "`comoSera` = 2-3 frases de cómo opera con el sistema implementado, respaldado por el alcance contratado (nada que el proyecto no incluya); `sistemas` = las herramientas de hoy → las de mañana. " +
+      "`resumenHoy` y `resumenSera` = TITULARES de media línea, uno por columna, que se leen solos y contrastan entre sí ('Cada vendedor con su propia planilla' / 'Un solo pipeline que todos ven') — NO son un resumen del párrafo de abajo. " +
       "SOLO los hubs que el proyecto cubre: no diagnostiques servicio si el proyecto es de ventas.",
     schema: asSchema(PROCESS_MAPPING_SCHEMA),
   },

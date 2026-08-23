@@ -125,32 +125,32 @@ export const USE_CASES_DEF: BCSectionDef = {
     "Casos de uso del catálogo seleccionados por el vendedor. Esta sección NO la escribe el agente: se llena automáticamente con los casos marcados en el checklist (con sus precios exactos) y se puede retocar a mano.",
 };
 
-export const PROCESS_MAPPING_SCHEMA = {
-  type: "object",
-  properties: {
-    intro: str,
-    procesos: arrayOf({ nombre: str, comoEsHoy: str, comoSera: str, sistemas: str }, ["nombre"]),
-  },
-  required: ["procesos"],
-} as const;
-
 /**
- * El mismo mapeo de procesos, con un TITULAR por caja: media línea que se lee sola, con el
- * párrafo debajo como explicación.
+ * ⭐ LOS TITULARES DE MEDIA LÍNEA EXISTEN EN TODOS LOS DOCUMENTOS — decisión de Elías, 2026-08-23.
  *
- * ⚠ Es un schema APARTE y no dos campos más en el compartido. El schema viaja al modelo como
- * la forma que tiene que devolver (`shapeOf` recursa dentro de `items`), así que sumarlos
- * arriba haría que los agentes de Diagnóstico, Planificación, Implementación y el Business
- * Case empiecen a escribir dos titulares que ningún brief de ellos explica — y en
- * `implementacion.pipelines`, donde el «antes» es una lista de etapas, un titular de media
- * línea no tiene contenido posible. Mismo criterio que `CompararLabels`: la variante entra
- * por el documento que la pidió, no por el componente compartido.
+ * ── POR QUÉ CAMBIÓ, Y EL RAZONAMIENTO VIEJO, QUE ERA BUENO ───────────────────────────────────
+ * Hasta hoy `resumenHoy`/`resumenSera` vivían SOLO en el schema de la Entrega, con este argumento
+ * escrito: el schema viaja al modelo como la forma que tiene que devolver, así que sumarlos acá
+ * haría que cuatro agentes empiecen a escribir dos titulares que ningún brief de ellos explica —
+ * y en `implementacion.pipelines`, donde el «antes» es una lista de etapas, un titular de media
+ * línea no tiene contenido posible.
  *
- * ⚠ Y los titulares van DENTRO del schema: `preserveNonSchemaKeys` solo acarrea claves de
- * PRIMER nivel, así que un campo dentro de `procesos[]` que no esté declarado lo borra
- * `coerceToSchema` en cada regeneración y nada lo rescata.
+ * ⛔ El razonamiento era correcto y le faltaba la otra mitad: **el componente los PINTA igual**.
+ * `ProcessMappingSection` los dibuja con `(p.resumenHoy || editable)`, sin consultar el esquema, en
+ * los CINCO documentos. O sea que en cuatro había dos cajas grises «En una línea…» que:
+ *   · el CSE veía y podía escribir, y `coerceToSchema` le borraba en la próxima regeneración;
+ *   · el chat no veía —no están en la firma— y rechazaba si las adivinaba.
+ * Elías lo vio en el diagnóstico: pidió «agregale los títulos a cada card» y el chat contestó,
+ * correctamente, que esa sección solo tiene `nombre`, `comoEsHoy`, `comoSera` y `sistemas`.
+ *
+ * El costo de la decisión es UNA LÍNEA DE BRIEF POR DOCUMENTO, y en Implementación esa línea dice
+ * «déjalos vacíos» — que es la respuesta al caso que el argumento viejo había identificado bien.
+ *
+ * ⚠ Y siguen DENTRO del schema, no como claves sueltas: `preserveNonSchemaKeys` solo acarrea
+ * claves de PRIMER nivel, así que un campo dentro de `procesos[]` que no esté declarado lo borra
+ * `coerceToSchema` en cada regeneración y nada lo rescata. Es la mitad del defecto que esto cierra.
  */
-export const PROCESS_MAPPING_SCHEMA_CON_TITULAR = {
+export const PROCESS_MAPPING_SCHEMA = {
   type: "object",
   properties: {
     intro: str,
@@ -161,6 +161,14 @@ export const PROCESS_MAPPING_SCHEMA_CON_TITULAR = {
   },
   required: ["procesos"],
 } as const;
+
+/**
+ * @deprecated Alias del compartido desde el 2026-08-23 — los titulares ya viven en los cinco.
+ *
+ * No se borra: `entrega.defs.ts` lo importa por nombre, y el nombre sigue diciendo qué es. Borrarlo
+ * sería un cambio de import sin ningún beneficio.
+ */
+export const PROCESS_MAPPING_SCHEMA_CON_TITULAR = PROCESS_MAPPING_SCHEMA;
 
 export const PROCESS_MAPPING_EMPTY = { intro: "", procesos: [] };
 
@@ -208,7 +216,9 @@ export function makeProcessMappingDef(
     empty: PROCESS_MAPPING_EMPTY,
     agentHint: "Procesos del cliente que cambian: cómo son hoy vs cómo quedarán, y con qué sistemas.",
     brief:
-      "Mapeo de procesos (opcional): los procesos operativos del cliente que cambian con la implementación (ventas, seguimiento, cobranza, onboarding…). Por proceso: `comoEsHoy` (con la fricción real mencionada), `comoSera` (qué queda automatizado/conectado) y `sistemas` involucrados. Fuente: SOLO procesos descritos con sustancia en el contexto.",
+      "Mapeo de procesos (opcional): los procesos operativos del cliente que cambian con la implementación (ventas, seguimiento, cobranza, onboarding…). Por proceso: `comoEsHoy` (con la fricción real mencionada), `comoSera` (qué queda automatizado/conectado) y `sistemas` involucrados. " +
+      "`resumenHoy` y `resumenSera` = TITULARES de media línea, uno por columna, que se leen solos y contrastan entre sí ('Cada vendedor con su propia planilla' / 'Un solo pipeline que todos ven') — NO son un resumen del párrafo de abajo. " +
+      "Fuente: SOLO procesos descritos con sustancia en el contexto.",
     ...overrides,
   };
 }
