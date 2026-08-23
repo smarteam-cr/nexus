@@ -92,6 +92,21 @@ export interface BCSectionDef {
    */
   rotulosDeListas?: Record<string, string>;
   /**
+   * ⭐ La sección es `selfTitled` PERO pinta el título y el rótulo que le pasa el motor.
+   *
+   * ── POR QUÉ NO ALCANZA CON `selfTitled` ─────────────────────────────────────────────────────
+   * `selfTitled` dice «el motor no le pinta encabezado», y el chat lo venía usando como respuesta a
+   * otra pregunta: «¿escribir el rótulo se va a ver?». Falla en las DOS direcciones. El cronograma
+   * y los procesos del kickoff son `selfTitled` y rinden su propio encabezado con lo que el motor
+   * les pasa: ahí el chat rechazaba un rótulo que sí se habría visto. Y al revés, una portada que
+   * ignora los dos aceptaba el renombrado y no cambiaba nada.
+   *
+   * Con esta marca la pregunta se contesta con un hecho declarado en vez de con una inferencia.
+   * ⛔ Declararlo sin que el componente los pinte devuelve el modo de falla peor: «aplicado» sobre
+   * algo que no cambió.
+   */
+  leeElEncabezado?: boolean;
+  /**
    * ⭐ LO QUE EL CHAT PUEDE TOCAR, cuando no coincide con lo que el AGENTE puede escribir.
    *
    * ── POR QUÉ NO ALCANZABA CON `schema` ───────────────────────────────────────────────────────

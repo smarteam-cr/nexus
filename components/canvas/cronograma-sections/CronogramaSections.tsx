@@ -16,6 +16,7 @@
 import { type FC } from "react";
 import { BrandRow, HeroStat } from "@/components/landing/hero-parts";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
+import { landingLang, t } from "@/components/landing/i18n";
 import type { SectionProps } from "@/components/landing/types";
 import TimelineSection from "@/components/canvas/TimelineSection";
 import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
@@ -33,7 +34,8 @@ export const CronogramaHeroSection: FC<SectionProps<PortadaData>> = ({
   const phases = ctx.cronograma?.timeline?.phases ?? [];
   const totalWeeks = timelineSpan(phases);
   const anchor = ctx.cronograma?.timeline?.anchorStartDate;
-  const startLabel = anchor ? fmtFull(anchor) : "Por definir";
+  const lang = landingLang(ctx.lang);
+  const startLabel = anchor ? fmtFull(anchor) : t(lang, "porDefinir");
 
   // El título sale del RÓTULO declarado en la definición, no de un texto escrito acá: nadie
   // escribe esta portada, así que no hay `titulo` ni `headline` que puedan pisarlo.
@@ -54,9 +56,11 @@ export const CronogramaHeroSection: FC<SectionProps<PortadaData>> = ({
       {/* Los mismos tres números que abren el kickoff, derivados del cronograma. */}
       {phases.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
-          <HeroStat value={String(totalWeeks)} unit="semanas" label="Duración total" />
-          <HeroStat value={startLabel} label="Arranque" />
-          <HeroStat value={String(phases.length)} unit={phases.length === 1 ? "fase" : "fases"} label="Hoja de ruta" />
+          {/* Los mismos tres rótulos que el kickoff, desde la MISMA fuente: estaban escritos a
+              mano en los dos archivos, y dos copias del mismo rótulo pueden divergir. */}
+          <HeroStat value={String(totalWeeks)} unit={t(lang, "semanas")} label={t(lang, "duracionTotal")} />
+          <HeroStat value={startLabel} label={t(lang, "arranque")} />
+          <HeroStat value={String(phases.length)} unit={t(lang, phases.length === 1 ? "fase" : "fases")} label={t(lang, "hojaDeRuta")} />
         </div>
       )}
     </div>

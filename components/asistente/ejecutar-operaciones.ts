@@ -42,6 +42,8 @@ export type DefsParaEjecutar = Record<
     pinned?: boolean;
     /** El componente trae su propio encabezado: el rótulo de arriba no se pinta desde la columna. */
     selfTitled?: boolean;
+    /** …pero SÍ pinta lo que el motor le pasa. Ver `BCSectionDef.leeElEncabezado`. */
+    leeElEncabezado?: boolean;
     empty?: unknown;
     /** Cómo se llama cada lista en pantalla: hace legible la línea del acuerdo. */
     rotulosDeListas?: Record<string, string>;
@@ -89,10 +91,12 @@ export function useEjecutarOperacionesDelChat(
           oculta: s.hidden === true,
           esCreada: esCustomKey(s.key),
           movible: !def?.pinned,
-          /* El rótulo lo pinta el ENCABEZADO del motor, que no se dibuja cuando la sección trae
-             el suyo (`selfTitled`: portadas y cierres). Ahí `setEyebrow` escribiría una columna
-             que nadie lee. */
-          rotulable: !def?.selfTitled,
+          /* ⭐ La pregunta NO es «¿el motor le pinta encabezado?» sino «¿escribir el rótulo se va a
+             VER?», y `selfTitled` contesta la primera. Falla en las dos direcciones: el cronograma y
+             los procesos del kickoff son `selfTitled` y SÍ pintan lo que el motor les pasa, así que el
+             chat rechazaba un rótulo que se habría visto. `leeElEncabezado` lo declara como un hecho
+             en vez de inferirlo. */
+          rotulable: !def?.selfTitled || !!def?.leeElEncabezado,
           rotulosDeListas: def?.rotulosDeListas,
         };
       }),

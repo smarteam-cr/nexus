@@ -39,6 +39,16 @@ const STRINGS = {
   comoFuncionabaAntes: { es: "Cómo funcionaba antes…", en: "How it used to work…" },
   comoFuncionaAhora: { es: "Cómo funciona ahora…", en: "How it works now…" },
   conHubspotSmarteam: { es: "Con HubSpot + Smarteam", en: "With HubSpot + Smarteam" },
+  // Las 3 métricas de la portada del kickoff y del cronograma. Estaban escritas a mano en los
+  // DOS renderers: el mismo rótulo en dos lugares es uno que puede divergir, y además dejaba
+  // monolingüe una portada que el cliente puede recibir en inglés.
+  duracionTotal: { es: "Duración total", en: "Total duration" },
+  arranque: { es: "Arranque", en: "Start" },
+  hojaDeRuta: { es: "Hoja de ruta", en: "Roadmap" },
+  semanas: { es: "semanas", en: "weeks" },
+  fase: { es: "fase", en: "phase" },
+  fases: { es: "fases", en: "phases" },
+  porDefinir: { es: "Por definir", en: "To be defined" },
   // Inversión
   montosEn: { es: "Montos en", en: "Amounts in" },
   nota: { es: "Nota", en: "Note" },

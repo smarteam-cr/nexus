@@ -242,6 +242,8 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
       const t = ctx.kickoff?.timeline;
       return !t?.exists || (t.phases?.length ?? 0) === 0;
     },
+    /* Rinde su PROPIO encabezado con lo que le pasa el motor: el rótulo del chat sí se ve. */
+    leeElEncabezado: true,
     sectionType: "kickoff_timeline",
     agentGenerated: false,
     empty: {},
@@ -257,6 +259,8 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     selfTitled: true,
     ctxDriven: true,
     ctxEmpty: (ctx) => (ctx.kickoff?.procesos?.length ?? 0) === 0,
+    /* Rinde su PROPIO encabezado con lo que le pasa el motor: el rótulo del chat sí se ve. */
+    leeElEncabezado: true,
     sectionType: "kickoff_procesos",
     agentGenerated: false,
     empty: {},

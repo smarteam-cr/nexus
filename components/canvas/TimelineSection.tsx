@@ -278,12 +278,24 @@ export default function TimelineSection({
   showHeader = true,
   showProgress = false,
   particularidades,
+  titulo,
+  rotulo,
   pdf = false,
 }: {
   phases: ExternalTimelinePhase[];
   anchor: string | null;
   /** false = sin eyebrow/título propios (la página standalone pone el suyo). */
   showHeader?: boolean;
+  /**
+   * ⭐ El título y el rótulo chico que resolvió el MOTOR (lo que el CSE renombró y, si no, lo que
+   * declara la definición: «Cronograma del proyecto» / «Hoja de ruta»).
+   *
+   * Estaban escritos a mano acá mientras la definición ya los declaraba, así que renombrar la
+   * sección desde el chat o desde el editor no se veía. Ausentes → los textos históricos, que son
+   * los que la definición trae por defecto: la página del cliente no cambia.
+   */
+  titulo?: string;
+  rotulo?: string;
   /** true = muestra estado (hecho/en curso/pendiente + atrasada) y responsable por tarea. Solo el cronograma compartible. */
   showProgress?: boolean;
   /** Desviaciones curadas visibles al cliente (visibleExternal=true, ya filtradas en el chokepoint).
@@ -362,9 +374,21 @@ export default function TimelineSection({
       <div style={pdf ? { ...TIMELINE_CONTAINER, width: "100%" } : TIMELINE_CONTAINER}>
         {showHeader && (
           <>
-            <span className="eyebrow reveal">Hoja de ruta</span>
+            <span className="eyebrow reveal">{rotulo?.trim() || "Hoja de ruta"}</span>
             <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
-              Cronograma del <span className="display-italic" style={{ color: "var(--brand-blue)" }}>proyecto</span>
+              {(() => {
+                /* La última palabra va en itálica azul — es el lenguaje de los títulos del motor.
+                   Se calcula en vez de estar partida a mano para que un título renombrado conserve
+                   el mismo tratamiento en vez de perderlo. Con una sola palabra, va entera. */
+                const palabras = (titulo?.trim() || "Cronograma del proyecto").split(/\s+/);
+                const ultima = palabras.pop() ?? "";
+                return (
+                  <>
+                    {palabras.length > 0 && `${palabras.join(" ")} `}
+                    <span className="display-italic" style={{ color: "var(--brand-blue)" }}>{ultima}</span>
+                  </>
+                );
+              })()}
             </h2>
           </>
         )}

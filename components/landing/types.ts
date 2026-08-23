@@ -469,6 +469,15 @@ export interface SectionProps<T> {
   sectionInvest?: InvestLabels;
   /** Rótulos de las dos columnas de `process_mapping`, por documento. Ver `SectionDef.compara`. */
   sectionCompara?: CompararLabels;
+  /**
+   * ⭐ Cómo se llama cada LISTA de esta sección en pantalla, desde la definición.
+   *
+   * Ya existía para que la línea del acuerdo del chat dijera «se agrega X a la lista «Hoy»» en vez
+   * de «a `hoy`» — pero el renderer escribía las mismas dos palabras a mano. Dos copias del mismo
+   * rótulo son dos que pueden divergir, y ahí la cajita del chat prometería una columna y el
+   * documento mostraría otra. Ahora la definición es la única fuente y el renderer la lee.
+   */
+  sectionRotulosDeListas?: Record<string, string>;
 }
 
 /**
@@ -548,6 +557,8 @@ export interface SectionDef {
   schemaDelChat?: Record<string, unknown>;
   /** Cómo se llama cada lista EN PANTALLA, por su key. Para las líneas que lee la persona. */
   rotulosDeListas?: Record<string, string>;
+  /** El componente es `selfTitled` pero SÍ pinta `sectionTitle`/`sectionEyebrow`. Ver `BCSectionDef`. */
+  leeElEncabezado?: boolean;
   selfTitled?: boolean;        // el componente trae su propio encabezado (hero/partner/cta);
                                // si no, el motor renderiza un eyebrow con `label`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

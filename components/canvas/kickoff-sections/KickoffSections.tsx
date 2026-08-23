@@ -29,6 +29,7 @@ import { CardGrid } from "@/components/landing/card-grid";
 import { HeroUploadButtons, BrandRow, TagRow, HeroStat } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
+import { landingLang, t } from "@/components/landing/i18n";
 import type { SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
 import { IconCheck } from "@/components/ui/AcceptReject";
@@ -162,7 +163,8 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
 
   const phases = ctx.kickoff?.timeline?.phases ?? [];
   const totalWeeks = timelineSpan(phases);
-  const startLabel = ctx.kickoff?.timeline?.anchorStartDate ? fmtFull(ctx.kickoff.timeline.anchorStartDate) : "Por definir";
+  const lang = landingLang(ctx.lang);
+  const startLabel = ctx.kickoff?.timeline?.anchorStartDate ? fmtFull(ctx.kickoff.timeline.anchorStartDate) : t(lang, "porDefinir");
 
   // El respaldo sale del documento (rótulo declarado en su definición), no de un texto
   // escrito acá: es lo que impide que una portada le preste su identidad a otra.
@@ -242,16 +244,16 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
       {(phases.length > 0 || conMetricaEscrita) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
           {d.metricaDuracion?.trim() ? (
-            <HeroStat value={d.metricaDuracion} label="Duración total" />
+            <HeroStat value={d.metricaDuracion} label={t(lang, "duracionTotal")} />
           ) : (
-            phases.length > 0 && <HeroStat value={String(totalWeeks)} unit="semanas" label="Duración total" />
+            phases.length > 0 && <HeroStat value={String(totalWeeks)} unit={t(lang, "semanas")} label={t(lang, "duracionTotal")} />
           )}
-          <HeroStat value={d.metricaArranque?.trim() || startLabel} label="Arranque" />
+          <HeroStat value={d.metricaArranque?.trim() || startLabel} label={t(lang, "arranque")} />
           {d.metricaFases?.trim() ? (
-            <HeroStat value={d.metricaFases} label="Hoja de ruta" />
+            <HeroStat value={d.metricaFases} label={t(lang, "hojaDeRuta")} />
           ) : (
             phases.length > 0 && (
-              <HeroStat value={String(phases.length)} unit={phases.length === 1 ? "fase" : "fases"} label="Hoja de ruta" />
+              <HeroStat value={String(phases.length)} unit={t(lang, phases.length === 1 ? "fase" : "fases")} label={t(lang, "hojaDeRuta")} />
             )
           )}
         </div>
@@ -261,8 +263,18 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
 };
 
 // ── Hoy vs Con el sistema (sección propia, editable) ──────────────────────────
-export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({ data, editable, onChange }) => {
+export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({
+  data,
+  editable,
+  onChange,
+  sectionRotulosDeListas,
+}) => {
   const d = normalizeCompara(data);
+  /* ⭐ Los rótulos salen de la DEFINICIÓN, que ya los declaraba para la línea del acuerdo del chat
+     («se agrega X a la lista «Hoy»»). Estaban escritos a mano acá también: dos copias del mismo
+     rótulo, y el día que una cambie la cajita prometería una columna y la página mostraría otra. */
+  const rotulo = (k: "hoy" | "conSistema", porDefecto: string) =>
+    sectionRotulosDeListas?.[k]?.trim() || porDefecto;
   const set = (next: Partial<ComparaData>) => onChange?.({ ...d, ...next });
   const col = (
     which: "hoy" | "conSistema",
@@ -296,8 +308,8 @@ export const KickoffComparaSection: FC<SectionProps<ComparaData>> = ({ data, edi
           placeholder="Una frase: de dónde partimos y a dónde llegamos…" onCommit={(v) => set({ subhead: v })} />
       )}
       <div className="stl-pair">
-        {col("hoy", d.hoy, "stl-compare-now", "Hoy", "Cómo opera hoy (una línea)…")}
-        {col("conSistema", d.conSistema, "stl-compare-future", "Con el sistema", "Cómo va a operar (una línea)…")}
+        {col("hoy", d.hoy, "stl-compare-now", rotulo("hoy", "Hoy"), "Cómo opera hoy (una línea)…")}
+        {col("conSistema", d.conSistema, "stl-compare-future", rotulo("conSistema", "Con el sistema"), "Cómo va a operar (una línea)…")}
       </div>
     </div>
   );
@@ -313,7 +325,7 @@ const SECTION_PAD = "clamp(40px, 6vw, 72px) 24px";
 // ── Cronograma (ctxDriven: rinde su propia sección o null) ─────────────────────
 // El chrome de edición (ocultar / colapsar / arrastrar) lo pone el MOTOR (LandingView),
 // igual que en cualquier otra sección — antes cada una traía su propio `HideWrap`.
-export const KickoffTimelineSection: FC<SectionProps<unknown>> = ({ ctx }) => {
+export const KickoffTimelineSection: FC<SectionProps<unknown>> = ({ ctx, sectionTitle, sectionEyebrow }) => {
   const timeline = ctx.kickoff?.timeline;
   if (!timeline?.exists || (timeline.phases?.length ?? 0) === 0) return null;
   // Scope MÍNIMO del CSS legacy: TimelineSection (archivo caliente de la otra PC)
@@ -323,22 +335,38 @@ export const KickoffTimelineSection: FC<SectionProps<unknown>> = ({ ctx }) => {
   // coordinada que re-tokenice TimelineSection (anotada en DECISIONS).
   return (
     <div className="kickoff-landing">
-      <TimelineSection phases={timeline.phases} anchor={timeline.anchorStartDate ?? null} pdf={ctx.pdfMode} />
+      {/* El título y el rótulo bajan desde el motor: acá estaban escritos a mano DOS niveles más
+          adentro, así que renombrar la sección no se veía. */}
+      <TimelineSection
+        phases={timeline.phases}
+        anchor={timeline.anchorStartDate ?? null}
+        titulo={sectionTitle}
+        rotulo={sectionEyebrow}
+        pdf={ctx.pdfMode}
+      />
     </div>
   );
 };
 
 // ── Procesos (ctxDriven: rinde su propia sección o null) ───────────────────────
-export const KickoffProcesosSection: FC<SectionProps<unknown>> = ({ ctx, editable }) => {
+export const KickoffProcesosSection: FC<SectionProps<unknown>> = ({
+  ctx,
+  editable,
+  sectionTitle,
+  sectionEyebrow,
+}) => {
   const procesos = ctx.kickoff?.procesos ?? [];
   const onStatus = ctx.kickoff?.onProcesoStatusChange;
   if (!procesos.length) return null;
+  /* ⭐ El motor YA le pasaba estos dos a todas las secciones, y ésta los ignoraba escribiendo los
+     mismos textos a mano. Con eso, renombrar «Procesos» desde el chat decía «aplicado» y no
+     cambiaba nada en pantalla: el título viajaba hasta acá y se descartaba. */
   return (
     <section className="section-soft" style={{ padding: SECTION_PAD }}>
       <div style={{ maxWidth: PROCESOS_MAXW, margin: "0 auto" }}>
-        <span className="eyebrow reveal">Cómo trabajamos</span>
+        <span className="eyebrow reveal">{sectionEyebrow?.trim() || "Cómo trabajamos"}</span>
         <h2 className="font-display display-tight reveal" data-stagger="1" style={{ fontSize: "clamp(24px, 3.4vw, 34px)", color: "var(--text)", lineHeight: 1.15, marginTop: 8, marginBottom: 24 }}>
-          Nuestros procesos
+          {sectionTitle?.trim() || "Nuestros procesos"}
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
           {procesos.map((p) => (
