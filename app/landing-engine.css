@@ -1399,28 +1399,6 @@
 .stl .stl-drag-item:focus-visible { opacity: 1; }
 .stl .stl-drag-item:active { cursor: grabbing; }
 .stl .stl-drag-item:hover { color: var(--blue); border-color: var(--blue); }
-/* 💬 de SEÑALAR: abre el chat con este punto citado. Hermano del ⠿ y del ×, mismo
- * lenguaje solo-en-hover — pero se ancla al ENVOLTORIO de `SortableItems`, no a
- * `.stl-item`, porque lo monta el motor y no el markup de cada sección. Por eso
- * `:hover` va sobre el envoltorio (`:has`) además del propio botón.
- * ⛔ Nunca en lectura: `SortableItems` no lo renderiza con `disabled`. */
-.stl .stl-senalar {
-  position: absolute; top: 6px; width: 28px; height: 28px; z-index: 2;
-  border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-muted);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;
-  font-size: 13px; line-height: 1; padding: 0;
-  transition: opacity 150ms ease, border-color 150ms ease;
-}
-.stl *:has(> .stl-senalar):hover > .stl-senalar,
-.stl .stl-senalar:focus-visible { opacity: 1; }
-.stl .stl-senalar:hover { border-color: var(--blue); }
-/* ⛔ Sin 💬 en los chips compactos (tags, marcas, logos). El ⠿ ahí se vuelve INLINE porque un
- * botón absoluto de 28px se come el chip entero — y el 💬 se lo comería igual. No es una pérdida:
- * un tag es una palabra, y el chat la alcanza citándola. Regla espejo de la del handle de abajo;
- * si aparece un cuarto chip compacto, entra en las dos listas. */
-.stl *:has(> .stl-tag) > .stl-senalar,
-.stl *:has(> .stl-brand-badge) > .stl-senalar,
-.stl *:has(> .stl-brand-logo-wrap) > .stl-senalar { display: none; }
 /* (Sin reserva de espacio: el chrome es solo-en-hover y se superpone en las
  * esquinas — ver el comentario grande arriba. La banda `padding-top: 42px` de las
  * cards y la canaleta de las filas se quitaron a propósito: reservaban lugar para
@@ -2099,7 +2077,6 @@
 .stl-pdf-mode .stl-sec.hero-backdrop { padding: 44px 0 !important; }
 .stl-pdf-mode .stl-overlay,
 .stl-pdf-mode .stl-drag-handle,
-.stl-pdf-mode .stl-senalar,
 .stl-pdf-mode .stl-chat-seccion { display: none !important; }
 .stl-pdf-mode .stl-hidden-badge {
   display: none !important; /* cinturón y tiradores: mode="read" ya no los renderiza */

@@ -670,7 +670,27 @@ describe("el chat actúa en el mismo turno, no pide permiso", () => {
       "volvió la excepción sin referente: el modelo se declara «pidiendo confirmación» y no emite",
     ).not.toContain("o cuando estás pidiendo una confirmación");
     expect(COLA_DOC, "la excepción perdió su ancla").toContain("VACIAR");
-    expect(COLA_DOC).toContain("ÚNICA excepción");
+    /* ⚠ ACTUALIZADO 2026-08-23, con el motivo. Decía `toContain("ÚNICA excepción")` porque la
+       lista tenía TRES casos y la frase cerraba la puerta. Ahora son cuatro —entró «la persona
+       cancela lo que venía pidiendo»— y «ÚNICA» dejó de ser cierto. Lo que la guarda protege NO es
+       esa palabra: es que la lista sea CERRADA y ENUMERADA, para que el modelo no se dé permiso a
+       sí mismo. Por eso ahora se afirma el conteo, que es lo que se rompe si alguien agrega un
+       caso sin pensarlo. */
+    expect(COLA_DOC, "la lista de excepciones dejó de estar enumerada y cerrada").toContain(
+      "en cuatro casos",
+    );
+  });
+
+  it("⛔ y el modelo NO explica su propia mecánica cuando decide no emitir", () => {
+    /* Elías lo leyó en pantalla el 2026-08-23: canceló su pedido («mejor no, ignora esa última
+       petición») y el chat contestó CUATRO frases sobre la herramienta, el bloque de operaciones y
+       el botón de aplicar. Es la misma lección que el voseo: el modelo copia el registro de su
+       prompt, y este prompt le habla todo el tiempo de «emitir» y «las operaciones».
+       La edición que la pone en rojo: borrar el bloque de vocabulario interno. */
+    expect(COLA_DOC).toContain("vocabulario INTERNO");
+    expect(COLA_DOC, "sin el contraejemplo la regla es una intención").toContain(
+      "cuatro frases sobre tu propia mecánica",
+    );
   });
 
   it("⛔ el tronco no le pide esperar el acuerdo antes de emitir", () => {

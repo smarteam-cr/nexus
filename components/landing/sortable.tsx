@@ -36,7 +36,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS as DndCss } from "@dnd-kit/utilities";
-import { BotonDeSenalar } from "./senalar";
 
 function SortableItem({
   id,
@@ -132,28 +131,8 @@ export function SortableItems<T>({
 
   // Con 0-1 ítems no hay nada que reordenar: render plano SIN handle a propósito
   // (un ⠿ muerto es ruido, no affordance). El handle aparece al agregar el 2º ítem.
-  //
-  // ⚠ Pero el 💬 de señalar SÍ tiene sentido con un ítem solo, así que en edición el envoltorio se
-  // pinta igual (es el que ancla el botón). En LECTURA —vista del cliente, PDF— el render sigue
-  // siendo plano, byte por byte como antes: ahí no hay chat que abrir y un DOM distinto sería un
-  // riesgo visual a cambio de nada.
   if (disabled || items.length < 2) {
-    return (
-      <>
-        {container(
-          items.map((it, i) =>
-            disabled ? (
-              <Fragment key={i}>{children(it, i, null)}</Fragment>
-            ) : (
-              <div key={i} style={{ ...itemStyle, position: "relative", minWidth: itemStyle?.minWidth ?? 0 }}>
-                <BotonDeSenalar items={items} index={i} conHandle={false} />
-                {children(it, i, null)}
-              </div>
-            ),
-          ),
-        )}
-      </>
-    );
+    return <>{container(items.map((it, i) => <Fragment key={i}>{children(it, i, null)}</Fragment>))}</>;
   }
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -172,14 +151,7 @@ export function SortableItems<T>({
         {container(
           items.map((it, i) => (
             <SortableItem key={ids[i]} id={ids[i]} style={itemStyle}>
-              {(handle) => (
-                <>
-                  {/* El envoltorio de `SortableItem` ya es `position: relative`: el 💬 se ancla ahí,
-                      corrido para no montarse sobre el ⠿. */}
-                  <BotonDeSenalar items={items} index={i} conHandle />
-                  {children(it, i, handle)}
-                </>
-              )}
+              {(handle) => children(it, i, handle)}
             </SortableItem>
           )),
         )}

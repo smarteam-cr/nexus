@@ -339,9 +339,49 @@ export function capacidadesDeLaPieza(pieza: string): CapacidadesDelDocumento {
  * un cambio que el editor rechaza — con una guarda al lado que lo hace cumplir.
  */
 export function schemaParaElChat(
-  def: { schema?: unknown; schemaDelChat?: unknown } | undefined,
+  def:
+    | { schema?: unknown; schemaDelChat?: unknown; chips?: { retos?: string; panel?: string } }
+    | undefined,
 ): unknown {
-  return def?.schemaDelChat ?? def?.schema ?? { type: "object", properties: {} };
+  const base = def?.schemaDelChat ?? def?.schema ?? { type: "object", properties: {} };
+  const mudos = camposMudosDe(def);
+  if (mudos.length === 0) return base;
+  const b = base as { properties?: Record<string, unknown> };
+  if (!b?.properties) return base;
+  const properties = Object.fromEntries(
+    Object.entries(b.properties).filter(([k]) => !mudos.includes(k)),
+  );
+  return { ...b, properties };
+}
+
+/**
+ * ⭐ CAMPOS QUE ESTÁN EN EL ESQUEMA Y QUE ESTE DOCUMENTO NO PINTA.
+ *
+ * ── EL FALLO QUE LO TRAE ─────────────────────────────────────────────────────────────────────
+ * Elías le pidió al chat cambiar el título del panel oscuro del diagnóstico —«QUÉ TE CUESTA
+ * HOY»— y el chat contestó «Aplicado». En pantalla no cambió nada, y no iba a cambiar nunca: ese
+ * rótulo vive en la DEF (`chips.panel`) y ninguna operación del vocabulario lo alcanza.
+ *
+ * ⛔ Lo que el chat SÍ escribió es un campo FANTASMA. `WEB_DIAGNOSIS_SCHEMA` declara `plataforma`
+ * —el texto que ese rótulo REEMPLAZÓ— y el componente lo pinta solo en la rama SIN `chips.panel`.
+ * O sea: en los tres documentos que declaran chips, `plataforma` está en la firma que el modelo
+ * lee, `seccion.campo` lo escribe sin un solo rechazo, y nadie lo muestra jamás.
+ *
+ * ⭐ Y la asimetría es la parte interesante: `seccion.rotular` y `seccion.renombrar` YA tienen su
+ * guarda de «si no se va a ver, se rechaza» (`rotulable`, `renombrable`). `seccion.campo` era la
+ * única sin ella. Acá se cierra por la fuente, que es más barato que rechazar: **un campo que el
+ * modelo no ve es un campo que no propone** — y como el ejecutor resuelve las rutas contra este
+ * mismo esquema, escribirlo pasa a rechazarse solo.
+ *
+ * ⛔ Se llavea por `chips.panel` PRESENTE, nunca por `sectionType`: en la propuesta de sitio web
+ * —el único documento de éstos que se publica al cliente— `plataforma` es real y se pinta.
+ * ⛔ Y NO toca `def.schema`: de ahí sale `seccion.vaciar`, y el `empty` compartido lo incluye.
+ */
+export function camposMudosDe(
+  def: { chips?: { retos?: string; panel?: string } } | undefined,
+): readonly string[] {
+  /* El rótulo del panel reemplaza al campo `plataforma` en el propio renderer. */
+  return def?.chips?.panel ? ["plataforma"] : [];
 }
 
 /**
@@ -386,6 +426,50 @@ export const TOPE_DE_SECCION_COMPLETA_CHARS = 20_000;
  * ⚠ Los ítems se numeran desde 0, que es el número que va en `posicion`. Numerarlos desde 1 —lo
  * natural al leer— fabricaría un error de una posición en cada borrado.
  */
+/** El aviso que encabeza una sección en PROSA. Uno solo: lo leen el prefijo y el chip. */
+export const AVISO_DE_TEXTO_CORRIDO =
+  "⚠ FORMATO: TEXTO CORRIDO (esta sección no tiene campos escritos: se edita reescribiendo el " +
+  "texto con `seccion.texto`, no con campos ni listas)";
+
+/**
+ * ⭐ EL CUERPO DE UNA SECCIÓN, EN EL FORMATO EN EL QUE DE VERDAD ESTÁ — y es UN solo renderer.
+ *
+ * ── EL FALLO QUE LO TRAE ─────────────────────────────────────────────────────────────────────
+ * Elías puso el chip sobre «Impacto del gap» —una sección en prosa que la pantalla estaba
+ * pintando entera— y pidió «resumí más el texto». El chat contestó que la sección **estaba
+ * vacía**. El prefijo del contexto la traía bien; el bloque del CHIP la rendía SOLO por esquema,
+ * y ese bloque va pegado al mensaje del CSE, o sea que es lo último que el modelo lee: le ganaba
+ * al prefijo y lo contradecía.
+ *
+ * ⛔ Y el modo de falla es peor que «no dice nada»: `renderSeccionParaElChat` sobre `data = {}` no
+ * devuelve vacío — devuelve un renglón por campo, «intro: (vacío) · items: (lista vacía)». O sea
+ * que el modelo no dudaba: AFIRMABA que estaba vacía, con toda la seguridad del mundo.
+ *
+ * ⚠ Era el CUARTO consumidor del formato de sección, y la guarda que se escribió para esto se
+ * llama «las TRES mitades leen el mismo predicado». Contar mal los consumidores es cómo una
+ * guarda queda verde mientras el defecto sigue vivo.
+ */
+export function cuerpoDeSeccionParaElChat(
+  s: {
+    formato?: "estructurado" | "prosa";
+    schema?: unknown;
+    data?: unknown;
+    bloquesDeTexto?: readonly { contenido: string }[];
+  },
+  tope = TOPE_DE_SECCION_COMPLETA_CHARS,
+): string {
+  if (s.formato === "prosa") {
+    const cuerpo = (s.bloquesDeTexto ?? [])
+      .map((b) => b.contenido)
+      .filter((t) => t.trim())
+      .join("\n\n")
+      .trim()
+      .slice(0, tope);
+    return `${AVISO_DE_TEXTO_CORRIDO}:\n${cuerpo}`;
+  }
+  return renderSeccionParaElChat(s.schema, s.data, tope);
+}
+
 export function renderSeccionParaElChat(
   schema: unknown,
   data: unknown,

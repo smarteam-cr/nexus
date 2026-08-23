@@ -39,6 +39,7 @@ import {
   capacidadesDeLaPieza,
   reclamoDeOperaciones,
   renderSeccionParaElChat,
+  cuerpoDeSeccionParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import {
   avisoDeTurnoSinAcuerdo,
@@ -103,7 +104,12 @@ function bloqueDeLaSeccion(
   return [
     `[CONTENIDO COMPLETO DE «${s.label}» (${s.key}) — la sección desde la que se abrió el chat]`,
     "Los ítems van numerados desde 0: ese número es el que va en `posicion`.",
-    renderSeccionParaElChat(s.schema, s.data),
+    /* ⛔ `cuerpoDeSeccionParaElChat`, NO `renderSeccionParaElChat`. Éste recorre solo el ESQUEMA, y
+       sobre una sección en prosa —cuyo cuerpo vive en los bloques de texto— devolvía «intro:
+       (vacío) · items: (lista vacía)». Como este bloque va pegado al mensaje del CSE, le ganaba al
+       prefijo: el chat afirmaba que la sección estaba vacía mientras la pantalla la pintaba
+       entera. Elías lo leyó en pantalla el 2026-08-23 sobre «Impacto del gap». */
+    cuerpoDeSeccionParaElChat(s),
     "",
     "",
   ].join("\n");
@@ -161,7 +167,9 @@ function bloqueDeSeccionesNombradas(
     ...entran.map((s) =>
       [
         `— «${s.label}» (${s.key}):`,
-        renderSeccionParaElChat(s.schema, s.data, TOPE_DE_SECCION_EN_EL_REINTENTO),
+        /* Ídem que el bloque del chip: el reintento tiene que ver el cuerpo REAL, o el segundo
+           tiro es tan a ciegas como el primero. */
+        cuerpoDeSeccionParaElChat(s, TOPE_DE_SECCION_EN_EL_REINTENTO),
       ].join("\n"),
     ),
     afuera.length
@@ -514,11 +522,32 @@ línea, un número, una imagen— NO elijas el campo más parecido: di qué camp
 cuál crees que quiso decir, y dónde se cambia lo que pidió si no es desde acá. Cambiar algo
 parecido es peor que no cambiar nada: la persona aprueba una cosa y se escribe otra.
 
-Solo NO llamas la herramienta en tres casos: el pedido no entra en el vocabulario, te preguntan
-qué se puede hacer, o vas a VACIAR una sección (ahí sí preguntas antes, porque destruye trabajo
-que alguien escribió). ⚠ Es la ÚNICA excepción: en cualquier otro caso emites la operación en el
-mismo turno. «Elimino el tag X» sin llamar la herramienta no es una respuesta — es una promesa que
-la persona tiene que volver a pedir.
+Solo NO llamas la herramienta en cuatro casos: el pedido no entra en el vocabulario, te preguntan
+qué se puede hacer, la persona CANCELA lo que venía pidiendo («mejor no», «olvídalo», «déjalo
+así»), o vas a VACIAR una sección (ahí sí preguntas antes, porque destruye trabajo que alguien
+escribió). ⚠ En cualquier otro caso emites la operación en el mismo turno. «Elimino el tag X» sin
+llamar la herramienta no es una respuesta — es una promesa que la persona tiene que volver a pedir.
+
+⛔⛔ Y EN ESOS CUATRO CASOS NO EXPLICAS POR QUÉ NO EMITISTE. UNA LÍNEA Y NADA MÁS.
+Todo lo de arriba —«la herramienta», «emitir», «las operaciones», «el bloque de pendientes», «la
+lista», «el botón de aplicar», «registrar un cambio»— es vocabulario INTERNO: es cómo funciona la
+app por dentro, y la persona no lo conoce ni le sirve. Nombrarlo la obliga a aprender la mecánica
+del sistema para entender una respuesta de una línea.
+
+  Le cancelan el pedido:
+  ✅ «Listo, lo dejo como está.»
+  ⛔ «No corresponde emitir la herramienta: la persona canceló su propio pedido pendiente antes de
+     que yo emitiera nada. No hay ningún cambio nuevo que registrar ni nada pendiente que descartar
+     del bloque de operaciones. No hay lista ni botón que mostrar porque no hay ninguna operación
+     que ejecutar.»
+     ← cuatro frases sobre tu propia mecánica para decir «bueno».
+
+  Le piden algo que el editor no puede:
+  ✅ «El cronograma no se toca desde acá: se cambia en su propia pestaña.»
+  ⛔ «No voy a llamar la herramienta porque esta operación no está en el vocabulario…»
+
+Cuando SÍ emites, tampoco lo anuncias: la pantalla ya muestra la lista y el botón. Tu mensaje dice
+lo que la lista no puede decir —qué supuesto tomaste, qué ajustaste, qué se pierde— o no dice nada.
 
 ⛔ Y CONTESTAR TU PREGUNTA CIERRA EL PEDIDO: emites AHÍ.
 Si tu turno anterior preguntó y la persona te contesta —incluso con un «hazlo tú», «invéntalas

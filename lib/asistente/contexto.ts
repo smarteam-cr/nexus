@@ -34,6 +34,7 @@ import {
   firmaDeSeccion,
   operacionesParaElChat,
   renderSeccionParaElChat,
+  cuerpoDeSeccionParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
@@ -526,18 +527,27 @@ export async function contextoDeDocumento(
            modelo que no sabe en qué formato está. Y el ejecutor rechaza escribir campos acá, así
            que decirlo también ahorra el turno entero que se gasta en una operación que va a
            rebotar. */
-        const prosa = markdownDeBloques(s.blocks);
-        if (
-          formatoDeSeccion({
-            markdown: prosa,
-            dataTipada: cardDe(s.blocks)?.data ?? {},
-          }) === "prosa"
-        ) {
-          const cuerpo = prosa.slice(0, TOPE_POR_SECCION_CHARS).replace(/\n/g, "\n    ");
-          return `${cabecera} — ⚠ FORMATO: TEXTO CORRIDO (esta sección no tiene campos escritos: se edita reescribiendo el texto, no con campos ni listas):\n    ${cuerpo}`;
+        /* ⛔ EL MISMO renderer que el bloque del chip y el del reintento. Eran tres textos del
+           cuerpo de una sección escritos por separado, y el del chip —que es el último que el
+           modelo lee— decía lo contrario que éste sobre las secciones en prosa. */
+        const cuerpo = cuerpoDeSeccionParaElChat(
+          {
+            formato: formatoDeSeccion({
+              markdown: markdownDeBloques(s.blocks),
+              dataTipada: cardDe(s.blocks)?.data ?? {},
+            }),
+            schema: schemaParaElChat(def),
+            data: cardDe(s.blocks)?.data,
+            bloquesDeTexto: s.blocks
+              .filter((b) => b.blockType !== "CARD")
+              .map((b) => ({ contenido: b.content ?? "" })),
+          },
+          TOPE_POR_SECCION_CHARS,
+        );
+        if (!cuerpo.trim() || cuerpo.startsWith("(esta sección")) {
+          return `${cabecera} — sin contenido legible`;
         }
-        const contenido = renderDeContenido(schemaParaElChat(def), [{ data: cardDe(s.blocks)?.data }]);
-        return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
+        return `${cabecera}:\n    ${cuerpo.replace(/\n/g, "\n    ")}`;
       },
     )
     .join("\n");

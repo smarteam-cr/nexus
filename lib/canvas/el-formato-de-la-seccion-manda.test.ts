@@ -23,6 +23,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import {
+  cuerpoDeSeccionParaElChat,
+  camposMudosDe,
+  firmaDeSeccion,
+  schemaParaElChat,
+} from "@/lib/canvas/capacidades-de-documento";
+import {
   aplicarOperacionesDeDocumento,
   describirOperacionesDeDocumento,
   type SeccionActual,
@@ -238,10 +244,59 @@ describe("⭐ y una sección en prosa SÍ se puede editar: `seccion.texto`", () 
   });
 });
 
-describe("las TRES mitades leen el mismo predicado", () => {
+describe("⛔ el chat VE el texto de una sección en prosa (no dice que está vacía)", () => {
+  /**
+   * El fallo en pantalla, textual: con el chip sobre «Impacto del gap» —que la pantalla estaba
+   * pintando entera— el chat contestó *«No hay texto que resumir: está vacía hoy (sin bajada, sin
+   * introducción y sin tarjetas)»*.
+   *
+   * ⛔ Y la causa no era que faltara el contenido: era que `renderSeccionParaElChat` sobre
+   * `data = {}` NO devuelve vacío — devuelve un renglón por campo del esquema. Le daba al modelo
+   * una descripción CONFIADA de una sección vacía, no un silencio. Por eso afirmaba en vez de
+   * dudar. Este test es de comportamiento a propósito: los de fuente no habrían visto la
+   * diferencia entre «no dice nada» y «dice que no hay nada».
+   */
+  const enProsaConTexto = {
+    formato: "prosa" as const,
+    schema: PROSA_SCHEMA,
+    data: {},
+    bloquesDeTexto: [{ contenido: "Gap 1 (Alcance indefinido) → Riesgo de relación y reputación." }],
+  };
+
+  it("⭐ el cuerpo que recibe el modelo TRAE el texto", () => {
+    const cuerpo = cuerpoDeSeccionParaElChat(enProsaConTexto);
+    expect(cuerpo).toContain("Gap 1 (Alcance indefinido)");
+    expect(cuerpo).toContain("TEXTO CORRIDO");
+  });
+
+  it("⛔ y NO describe una sección vacía por los campos del esquema", () => {
+    /* Ésta es la assert que importa: lo que rompía no era la ausencia del texto, era la PRESENCIA
+       de «intro: (vacío) · items: (lista vacía)», que el modelo leyó como un hecho. */
+    const cuerpo = cuerpoDeSeccionParaElChat(enProsaConTexto);
+    expect(cuerpo, "volvió el render por esquema: el modelo va a afirmar que está vacía").not.toContain(
+      "(vacío)",
+    );
+  });
+
+  it("…y sobre una sección de CAMPOS sigue rindiendo por esquema, igual que siempre", () => {
+    const cuerpo = cuerpoDeSeccionParaElChat({
+      formato: "estructurado",
+      schema: PROSA_SCHEMA,
+      data: { intro: "Una intro", items: [] },
+    });
+    expect(cuerpo).toContain("Una intro");
+    expect(cuerpo).not.toContain("TEXTO CORRIDO");
+  });
+});
+
+describe("las CUATRO mitades leen el mismo predicado", () => {
   /* Si cada una lo dedujera por su cuenta, la primera divergencia sería una pérdida de contenido
      silenciosa: el chat acordaría escribir campos sobre algo que el motor está pintando como
-     texto. Por eso el predicado tiene tres consumidores y ninguna copia. */
+     texto. Por eso el predicado tiene un solo dueño y ninguna copia.
+     ⚠ ERAN CUATRO, NO TRES, y el que faltaba era el que rompió: el bloque del CHIP (`turno.ts`)
+     rendía la sección solo por esquema, y como va pegado al mensaje del CSE le GANABA al prefijo.
+     Contar mal los consumidores es cómo esta guarda quedó verde mientras el chat afirmaba que una
+     sección llena estaba vacía. */
   it("el motor que PINTA usa `formatoDeSeccion`, no una condición local", () => {
     const src = leer("components/landing/LandingView.tsx");
     expect(src).toContain("formatoDeSeccion({ markdown: legacyMd, dataTipada: typedData })");
@@ -258,7 +313,8 @@ describe("las TRES mitades leen el mismo predicado", () => {
       "blockType: true, content: true",
     );
     expect(src).toContain("formato: formatoDeSeccion({");
-    expect(src).toContain("FORMATO: TEXTO CORRIDO");
+    /* El aviso ya no está escrito acá: sale de `AVISO_DE_TEXTO_CORRIDO`, el renderer único. */
+    expect(src).toContain("cuerpoDeSeccionParaElChat(");
   });
 
   it("el ejecutor del NAVEGADOR lo calcula igual", () => {
@@ -267,9 +323,72 @@ describe("las TRES mitades leen el mismo predicado", () => {
     );
   });
 
+  it("⭐ el CUARTO: el bloque del chip y el del reintento rinden el cuerpo REAL", () => {
+    /* Elías puso el chip sobre «Impacto del gap» —una sección en prosa que la pantalla pintaba
+       entera— y el chat contestó que estaba VACÍA. `renderSeccionParaElChat` recorre solo el
+       esquema: sobre `data = {}` no devuelve vacío, devuelve «intro: (vacío) · items: (lista
+       vacía)», así que el modelo no dudaba — afirmaba.
+       La edición que la pone en rojo: volver a `renderSeccionParaElChat(s.schema, s.data)`. */
+    const src = leer("lib/asistente/turno.ts");
+    expect(src, "el bloque del chip volvió a rendir solo por esquema").not.toContain(
+      "renderSeccionParaElChat(s.schema, s.data)",
+    );
+    expect((src.match(/cuerpoDeSeccionParaElChat\(/g) ?? []).length, "falta el del chip o el del reintento").toBe(2);
+  });
+
   it("el modelo recibe la regla, y `convertir` está declarado en su herramienta", () => {
     const src = leer("lib/asistente/turno.ts");
     expect(src).toContain("EL FORMATO EN EL QUE ESTÁ LA SECCIÓN MANDA");
     expect(src).toContain("convertir: {");
   });
 });
+
+describe("⛔ el chat no escribe campos que este documento NO PINTA", () => {
+  /**
+   * Elías pidió cambiar el título del panel oscuro del diagnóstico —«QUÉ TE CUESTA HOY»— y el chat
+   * contestó «Aplicado». En pantalla no cambió nada, y no iba a cambiar nunca: ese rótulo vive en
+   * la DEF (`chips.panel`) y ninguna operación lo alcanza.
+   *
+   * ⛔ Lo que el chat SÍ escribió es un campo FANTASMA: `plataforma`, el texto que ese rótulo
+   * reemplazó. Estaba en la firma que el modelo lee, `seccion.campo` lo escribía sin rechazo, y el
+   * renderer no lo pinta cuando hay chips. Es la asimetría del vocabulario: `rotular` y
+   * `renombrar` ya tenían su guarda de «si no se va a ver, se rechaza»; `campo` era la única sin.
+   */
+  const conChips = { schema: { type: "object", properties: { intro: { type: "string" }, plataforma: { type: "string" } } }, chips: { panel: "Qué te cuesta hoy" } };
+  const sinChips = { schema: { type: "object", properties: { intro: { type: "string" }, plataforma: { type: "string" } } } };
+
+  it("⭐ con `chips.panel`, el modelo ya no ve `plataforma` en la firma", () => {
+    expect(firmaDeSeccion(schemaParaElChat(conChips))).not.toContain("plataforma");
+    expect(camposMudosDe(conChips)).toEqual(["plataforma"]);
+  });
+
+  it("⛔ y sin chips SIGUE viéndolo — ahí el campo es real y se pinta", () => {
+    /* Es la propuesta de SITIO WEB, el único de estos documentos que se publica al cliente. Si el
+       predicado se equivocara, esa propuesta perdería el nombre de la plataforma. */
+    expect(firmaDeSeccion(schemaParaElChat(sinChips))).toContain("plataforma");
+    expect(camposMudosDe(sinChips)).toEqual([]);
+  });
+
+  it("⭐ y el ejecutor lo rechaza solo, porque resuelve contra el MISMO esquema", () => {
+    /* No hace falta una guarda nueva en el ejecutor: las rutas se resuelven contra
+       `schemaParaElChat`, así que sacar el campo de ahí cierra las dos puertas de una. */
+    const seccion: SeccionActual = {
+      id: "s1",
+      key: "gap_analysis",
+      label: "Qué te separa del siguiente nivel",
+      data: { intro: "x", plataforma: "" },
+      schema: schemaParaElChat(conChips),
+      oculta: false,
+      esCreada: false,
+      movible: true,
+    };
+    const r = aplicarOperacionesDeDocumento(
+      [seccion],
+      [{ op: "seccion.campo", key: "gap_analysis", campo: "plataforma", valor: "Lo que estás perdiendo" }],
+      TODO,
+    );
+    expect(r.plan).toEqual([]);
+    expect(r.rechazadas[0].motivo).toContain("plataforma");
+  });
+});
+
