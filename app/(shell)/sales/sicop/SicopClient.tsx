@@ -334,17 +334,19 @@ export default function SicopClient({
   return (
     <div className="space-y-4">
       {esquemaAtrasado && (
-        <Alert variant="warning" title="La base está atrás del código">
-          Falta aplicar <code>scripts/sql/2026-08-23-sicop-adjuntos.sql</code> (agrega columnas
-          a <code>SicopLectura</code> y la tabla de archivos). Hasta entonces la lectura de IA
-          no se puede guardar ni mostrar; la lista de licitaciones sigue funcionando.
+        <Alert variant="warning" title="La lectura de IA no está disponible">
+          Falta aplicar <code>scripts/sql/2026-08-23-sicop-adjuntos.sql</code>, o el servidor
+          está corriendo con un cliente de Prisma anterior al modelo —después de aplicar la
+          migración hay que correr <code>npx prisma generate</code> y{" "}
+          <strong>reiniciar el server</strong>: el cliente de Prisma no entra por HMR—. La
+          lista de licitaciones sigue funcionando igual.
         </Alert>
       )}
       {esquemaDeArchivosAtrasado && !esquemaAtrasado && (
-        <Alert variant="warning" title="Falta la tabla de archivos">
-          <code>SicopAdjunto</code> todavía no existe, así que los archivos del cartel no se
-          pueden registrar ni leer. Corré{" "}
-          <code>scripts/sql/2026-08-23-sicop-adjuntos.sql</code>.
+        <Alert variant="warning" title="Los archivos no están disponibles">
+          No se pueden registrar ni leer los archivos del cartel: falta aplicar{" "}
+          <code>scripts/sql/2026-08-23-sicop-adjuntos.sql</code>, o el server quedó con un
+          cliente de Prisma viejo (<code>npx prisma generate</code> y reiniciar).
         </Alert>
       )}
 

@@ -14,7 +14,7 @@
  * error que sí lo es; el `code` no miente.
  */
 import { describe, expect, it } from "vitest";
-import { esquemaDesactualizado } from "./esquema";
+import { esquemaDesactualizado, modeloDisponible } from "./esquema";
 
 /** Como llega de verdad: un objeto con `code`, sin ser instancia de nada reconocible acá. */
 const conCodigo = (code: string) => Object.assign(new Error("boom"), { code });
@@ -55,5 +55,26 @@ describe("esquemaDesactualizado", () => {
       esquemaDesactualizado(new Error("The column `x` does not exist in the current database.")),
     ).toBe(true);
     expect(esquemaDesactualizado(new Error('no existe la relación "SicopAdjunto"'))).toBe(true);
+  });
+});
+
+describe("modeloDisponible — el OTRO lado: el cliente atrás del schema", () => {
+  it("⛔ un delegado `undefined` NO se usa: se degrada", () => {
+    /* El accidente del 2026-08-23: la migración aplicada, los invariantes verdes, y la
+       pantalla igual en 500 — el dev server corría con un client generado antes del modelo, y
+       `prisma.sicopAdjunto` era undefined. Eso no tira error de Prisma: tira un TypeError
+       pelado, así que `esquemaDesactualizado` no lo veía nunca. */
+    expect(modeloDisponible(undefined)).toBe(false);
+    expect(modeloDisponible(null)).toBe(false);
+    expect(modeloDisponible({})).toBe(false);
+  });
+
+  it("un delegado de verdad pasa", () => {
+    expect(modeloDisponible({ findMany: () => [], create: () => ({}) })).toBe(true);
+  });
+
+  it("⚠ no alcanza con que la propiedad exista: tiene que ser el delegado", () => {
+    // Un `{ findMany: true }` no es un modelo; llamarlo reventaría igual.
+    expect(modeloDisponible({ findMany: true })).toBe(false);
   });
 });

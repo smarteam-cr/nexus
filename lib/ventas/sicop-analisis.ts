@@ -18,7 +18,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import {
   leerNotasDeTickets,
@@ -129,6 +129,9 @@ export async function leerLecturasGuardadas(
 ): Promise<LecturasGuardadas> {
   const porTicket = new Map<string, { lectura: LecturaSicop; fuenteSha: string }>();
   if (ticketIds.length === 0) return { porTicket, esquemaAtrasado: false };
+  /* Igual que arriba: un client generado antes del modelo no da error de Prisma, da un
+     TypeError pelado. Ver `modeloDisponible`. */
+  if (!modeloDisponible(prisma.sicopLectura)) return { porTicket, esquemaAtrasado: true };
   try {
     const filas = await prisma.sicopLectura.findMany({
       where: { hubspotTicketId: { in: [...ticketIds] } },

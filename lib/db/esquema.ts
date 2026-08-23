@@ -20,6 +20,29 @@
  * y no miente. Es el mismo patrón que ya usa `lib/business-cases/use-cases.ts`.
  */
 
+/**
+ * ¿El CLIENTE de Prisma conoce este modelo?
+ *
+ * ⚠ Es el OTRO lado del mismo problema, y no lo cubre `esquemaDesactualizado`: si el `.sql` ya
+ * se aplicó pero el proceso corre con un client generado ANTES del modelo, `prisma.loQueSea`
+ * es `undefined` y sale un `TypeError: Cannot read properties of undefined (reading
+ * 'findMany')` — un 500 pelado, sin código de Prisma que atrapar. Pasó de verdad el
+ * 2026-08-23: la migración estaba aplicada, los invariantes verdes, y la pantalla reventaba
+ * igual porque el dev server seguía con el client viejo (el Prisma client NO entra por HMR).
+ *
+ * ⛔ Se chequea el DELEGADO en vez de atrapar el TypeError a propósito. Cazar el mensaje
+ * "Cannot read properties of undefined" se tragaría cualquier null-deref del módulo y
+ * convertiría un bug real en un cartel que manda a correr un script que no hace falta.
+ *
+ * Uso: `if (!modeloDisponible(prisma.sicopAdjunto)) return { …, esquemaAtrasado: true };`
+ */
+export function modeloDisponible(delegado: unknown): boolean {
+  return (
+    !!delegado &&
+    typeof (delegado as { findMany?: unknown }).findMany === "function"
+  );
+}
+
 /** Códigos de Prisma y de Postgres para «eso que pedís todavía no existe acá». */
 const CODIGOS = new Set([
   "P2021", // Prisma: la tabla no existe

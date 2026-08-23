@@ -59,8 +59,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "La base está atrás del código: falta aplicar scripts/sql/2026-08-23-sicop-adjuntos.sql. " +
-          "Hasta entonces no hay dónde guardar la lectura.",
+          "No hay dónde guardar la lectura: falta aplicar " +
+          "scripts/sql/2026-08-23-sicop-adjuntos.sql, o el server corre con un cliente de " +
+          "Prisma anterior al modelo (npx prisma generate + reiniciar el server).",
       },
       { status: 503 },
     );

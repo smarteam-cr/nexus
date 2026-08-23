@@ -27,7 +27,7 @@
 import type { Client as HsClient } from "@hubspot/api-client";
 import type { SicopAdjuntoEstado } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { extractText } from "@/lib/documents/extract-text";
 import { idsDeAdjuntos, type NotaCruda } from "./sicop";
 
@@ -90,6 +90,11 @@ export async function sincronizarAdjuntos(
     }
   }
   if (filas.length === 0) return { creados: 0, yaEstaban: 0, esquemaAtrasado: false };
+  /* El client puede no conocer el modelo todavía (proceso viejo, sin `prisma generate`): eso
+     NO tira un error de Prisma, tira un TypeError. Ver `modeloDisponible`. */
+  if (!modeloDisponible(prisma.sicopAdjunto)) {
+    return { creados: 0, yaEstaban: 0, esquemaAtrasado: true };
+  }
 
   try {
     /* `skipDuplicates` sobre el único (ticket, archivo): el que ya está conserva su texto y su
@@ -131,6 +136,7 @@ export async function leerAdjuntosGuardados(
 ): Promise<AdjuntosGuardados> {
   const porTicket = new Map<string, AdjuntoDeLicitacion[]>();
   if (ticketIds.length === 0) return { porTicket, esquemaAtrasado: false };
+  if (!modeloDisponible(prisma.sicopAdjunto)) return { porTicket, esquemaAtrasado: true };
   try {
     /* Sin `texto`: son hasta 50.000 caracteres por archivo y la pantalla no los muestra. Traer
        33 carteles enteros para pintar una lista de nombres es medio megabyte al pedo en cada
@@ -154,6 +160,7 @@ export async function leerAdjuntosGuardados(
 
 /** El texto ya extraído de un ticket, para armar el prompt. Solo lo que aportó algo. */
 export async function leerTextoDeAdjuntos(ticketId: string): Promise<AdjuntoConTexto[]> {
+  if (!modeloDisponible(prisma.sicopAdjunto)) return [];
   try {
     const filas = await prisma.sicopAdjunto.findMany({
       where: { hubspotTicketId: ticketId, estado: "EXTRAIDO", NOT: { texto: null } },
@@ -372,6 +379,7 @@ export async function adjuntosPorLeer(
   const estados: SicopAdjuntoEstado[] = reintentarFallidos
     ? ["PENDIENTE", "SIN_PERMISO", "ERROR"]
     : ["PENDIENTE", "SIN_PERMISO"];
+  if (!modeloDisponible(prisma.sicopAdjunto)) return [];
   try {
     return await prisma.sicopAdjunto.findMany({
       where: { hubspotTicketId: { in: [...ticketIds] }, estado: { in: estados } },
