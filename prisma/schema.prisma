@@ -4226,12 +4226,16 @@ model SicopLectura {
   /// nueva invalida el análisis y un cambio que no toca lo leído —mover de etapa, cambiar el
   /// responsable— NO lo invalida. Sin esa distinción, arrastrar una tarjeta en HubSpot
   /// re-analizaría el pipeline entero.
-  fuenteSha      String
+  fuenteSha       String
   /// 0 = se leyó solo el título. La pantalla lo dice: una conclusión sacada de un título no
   /// vale lo mismo que una sacada del cartel resumido en las notas.
-  notasLeidas    Int     @default(0)
-  /// La fuente se recortó por tamaño: hay cartel que el modelo NO vio.
-  fuenteTruncada Boolean @default(false)
+  notasLeidas     Int     @default(0)
+  /// ⚠ EL CARTEL SUELE SER UN PDF: 30 de las 61 notas del pipeline no tienen texto, son
+  /// archivos adjuntos. Guardar cuántos quedaron sin leer separa "no había información" de
+  /// "la información está ahí y nadie se la pasó al modelo" — en pantalla se ven igual.
+  adjuntosSinLeer Int     @default(0)
+  /// La fuente se recortó por tamaño: hay texto que el modelo NO vio.
+  fuenteTruncada  Boolean @default(false)
 
   // ── De qué es ─────────────────────────────────────────────────────────────────
   objeto      String?  @db.Text

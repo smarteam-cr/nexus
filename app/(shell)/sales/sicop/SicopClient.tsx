@@ -592,6 +592,15 @@ function FilaLicitacion({
                 100% precio
               </Badge>
             )}
+            {(l?.adjuntosSinLeer ?? 0) > 0 && (
+              <Badge
+                variant="info"
+                size="xs"
+                title="El cartel está subido a HubSpot como archivo. La IA no lo puede abrir: lo que leyó salió solo del texto."
+              >
+                {l!.adjuntosSinLeer} sin leer
+              </Badge>
+            )}
             {limite && (
               <span className="text-2xs text-fg-muted" title="El plazo futuro más cercano">
                 cierra {fecha(limite)}
@@ -704,6 +713,17 @@ function FichaDeLectura({
         </Alert>
       )}
 
+      {lectura && lectura.adjuntosSinLeer > 0 && (
+        <Alert variant="info" title="El cartel está adjunto y la IA no lo leyó">
+          Hay {lectura.adjuntosSinLeer} archivo(s) colgados de este ticket —casi seguro el
+          cartel— que la lectura no puede abrir.{" "}
+          {lectura.notasLeidas === 0
+            ? "Y no hay ninguna nota con texto: todo lo de abajo salió del título."
+            : "Lo de abajo salió solo del texto de las notas."}{" "}
+          Si hace falta el detalle, resumilo en una nota del ticket y volvé a leer.
+        </Alert>
+      )}
+
       {lectura && !lectura.error && (
         <>
           {lectura.encajeRazon && <Bloque titulo="Por qué encaja (o no)">{lectura.encajeRazon}</Bloque>}
@@ -769,6 +789,9 @@ function FichaDeLectura({
             <>
               Leído {fecha(lectura.analizadoEl)}
               {lectura.modelo ? ` con ${lectura.modelo}` : ""}
+              {` · ${lectura.notasLeidas} nota(s) con texto`}
+              {lectura.adjuntosSinLeer > 0 && ` · ${lectura.adjuntosSinLeer} archivo(s) sin leer`}
+              {lectura.fuenteTruncada && " · fuente recortada por tamaño"}
               {lectura.confianza != null && ` · información disponible ${lectura.confianza}/100`}
               {usd != null && ` · ~US$${numero.format(Math.round(usd))} para comparar`}
               {fila.movidoDespues && " · el ticket se movió después de leerlo"}

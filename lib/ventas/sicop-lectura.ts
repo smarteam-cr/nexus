@@ -53,6 +53,8 @@ export interface NotaDeTicket {
   /** ISO. Ordena la prosa como se escribió: la última nota suele ser la que manda. */
   creadaEl: string | null;
   cuerpo: string;
+  /** Archivos colgados de la nota. Ver `FuenteDeLicitacion.adjuntosSinLeer`. */
+  adjuntos?: number;
 }
 
 export interface TicketParaLeer {
@@ -71,8 +73,18 @@ export interface FuenteDeLicitacion {
   texto: string;
   /** Huella de lo leído. Si cambia, el análisis guardado quedó viejo. */
   sha: string;
-  /** Cuántas notas entraron — la pantalla lo muestra: 0 notas = poco que interpretar. */
+  /** Cuántas notas CON TEXTO entraron — la pantalla lo muestra: 0 = poco que interpretar. */
   notas: number;
+  /**
+   * Archivos que cuelgan del ticket y que NADIE leyó: son el cartel en PDF.
+   *
+   * ⚠ Medido el 2026-08-23: **30 de las 61 notas del pipeline no tienen una sola letra** —
+   * el equipo sube el cartel como adjunto y listo. Cinco licitaciones no tienen NINGUNA nota
+   * con texto: todo lo que hay de ellas es un PDF. El número entra al prompt para que el
+   * modelo baje la confianza en vez de concluir desde el título como si no faltara nada, y
+   * la pantalla lo muestra para que se vea POR QUÉ una ficha salió pobre.
+   */
+  adjuntosSinLeer: number;
   /** true = se recortó por tamaño; el prompt lo dice para que el modelo no invente el resto. */
   truncada: boolean;
 }
@@ -116,10 +128,16 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
   ].filter(Boolean) as string[];
   if (datos.length) partes.push(`DATOS DEL CRM:\n${datos.join("\n")}`);
 
-  const notas = [...t.notas]
-    .sort((a, b) => (a.creadaEl ?? "").localeCompare(b.creadaEl ?? ""))
-    .map((n) => aTextoPlano(n.cuerpo))
-    .filter((c) => c.length > 0);
+  const ordenadas = [...t.notas].sort((a, b) =>
+    (a.creadaEl ?? "").localeCompare(b.creadaEl ?? ""),
+  );
+  const notas = ordenadas.map((n) => aTextoPlano(n.cuerpo)).filter((c) => c.length > 0);
+  /* Una nota sin texto pero con archivo es el CARTEL EN PDF. No se puede leer, pero que
+     exista se declara: es la diferencia entre "no había información" y "la información
+     está ahí y nadie se la pasó al modelo". */
+  const adjuntosSinLeer = ordenadas
+    .filter((n) => aTextoPlano(n.cuerpo).length === 0)
+    .reduce((n, x) => n + (x.adjuntos ?? 0), 0);
 
   if (notas.length) {
     partes.push(
@@ -127,7 +145,16 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
         notas.map((c, i) => `--- nota ${i + 1} ---\n${c}`).join("\n\n"),
     );
   } else {
-    partes.push("NOTAS DEL TICKET: ninguna.");
+    partes.push("NOTAS DEL TICKET: ninguna con texto.");
+  }
+
+  if (adjuntosSinLeer > 0) {
+    partes.push(
+      `ARCHIVOS ADJUNTOS: hay ${adjuntosSinLeer} archivo(s) colgados de este ticket —` +
+        ` casi seguro el cartel— que NO se te pasaron y NO podés leer. Todo lo que digas` +
+        ` sale del texto de arriba. Bajá la confianza en consecuencia y, si el cartel es lo` +
+        ` que falta para juzgar algo, decilo en vez de suponerlo.`,
+    );
   }
 
   let texto = partes.join("\n\n");
@@ -142,6 +169,7 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
     texto,
     sha: createHash("sha256").update(texto).digest("hex").slice(0, 32),
     notas: notas.length,
+    adjuntosSinLeer,
     truncada,
   };
 }
@@ -380,10 +408,16 @@ export function normalizarPlazos(crudo: unknown): PlazoSicop[] {
  * `encaje` fuera de vocabulario cae a DUDOSO. La caída es a DUDOSO y no a FUERA porque el
  * default de un dato roto no puede ser el que esconde la fila.
  */
-export function normalizarLectura(
-  crudo: unknown,
-  meta: { modelo: string; analizadoEl: string },
-): LecturaSicop {
+export interface MetaDeLectura {
+  modelo: string;
+  analizadoEl: string;
+  /** Lo que trajo la fuente. Se guarda con la ficha para poder explicarla después. */
+  notasLeidas?: number;
+  adjuntosSinLeer?: number;
+  fuenteTruncada?: boolean;
+}
+
+export function normalizarLectura(crudo: unknown, meta: MetaDeLectura): LecturaSicop {
   const o = (crudo ?? {}) as Record<string, unknown>;
 
   const encajeCrudo = typeof o.encaje === "string" ? o.encaje.toUpperCase() : "";
@@ -420,6 +454,9 @@ export function normalizarLectura(
     monto,
     moneda: o.moneda === "CRC" || o.moneda === "USD" ? o.moneda : null,
     confianza: entero0a100(o.confianza),
+    notasLeidas: meta.notasLeidas ?? 0,
+    adjuntosSinLeer: meta.adjuntosSinLeer ?? 0,
+    fuenteTruncada: meta.fuenteTruncada ?? false,
     analizadoEl: meta.analizadoEl,
     modelo: meta.modelo,
     error: null,
@@ -427,7 +464,11 @@ export function normalizarLectura(
 }
 
 /** Una lectura que falló — se guarda igual, con el motivo a la vista. */
-export function lecturaConError(motivo: string, analizadoEl: string): LecturaSicop {
+export function lecturaConError(
+  motivo: string,
+  analizadoEl: string,
+  fuente?: Pick<FuenteDeLicitacion, "notas" | "adjuntosSinLeer" | "truncada">,
+): LecturaSicop {
   return {
     objeto: null,
     institucion: null,
@@ -445,6 +486,9 @@ export function lecturaConError(motivo: string, analizadoEl: string): LecturaSic
     monto: null,
     moneda: null,
     confianza: null,
+    notasLeidas: fuente?.notas ?? 0,
+    adjuntosSinLeer: fuente?.adjuntosSinLeer ?? 0,
+    fuenteTruncada: fuente?.truncada ?? false,
     analizadoEl,
     modelo: null,
     error: motivo,
@@ -481,11 +525,21 @@ export async function leerLicitacionConIA(fuente: FuenteDeLicitacion): Promise<L
 
     for (const bloque of respuesta.content) {
       if (bloque.type === "tool_use" && bloque.name === TOOL_LECTURA.name) {
-        return normalizarLectura(bloque.input, { modelo: MODELO_SICOP, analizadoEl });
+        return normalizarLectura(bloque.input, {
+          modelo: MODELO_SICOP,
+          analizadoEl,
+          notasLeidas: fuente.notas,
+          adjuntosSinLeer: fuente.adjuntosSinLeer,
+          fuenteTruncada: fuente.truncada,
+        });
       }
     }
-    return lecturaConError("El modelo no devolvió la ficha", analizadoEl);
+    return lecturaConError("El modelo no devolvió la ficha", analizadoEl, fuente);
   } catch (e) {
-    return lecturaConError(e instanceof Error ? e.message : "Falló la llamada a Claude", analizadoEl);
+    return lecturaConError(
+      e instanceof Error ? e.message : "Falló la llamada a Claude",
+      analizadoEl,
+      fuente,
+    );
   }
 }

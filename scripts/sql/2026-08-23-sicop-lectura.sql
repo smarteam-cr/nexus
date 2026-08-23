@@ -60,7 +60,13 @@ CREATE TABLE IF NOT EXISTS "SicopLectura" (
     -- Cuántas notas entraron. 0 = se leyó solo el título: la pantalla lo dice, porque una
     -- conclusión sacada de un título no vale lo mismo que una sacada del cartel resumido.
     "notasLeidas"       INTEGER       NOT NULL DEFAULT 0,
-    -- La fuente se recortó por tamaño: hay cartel que el modelo NO vio.
+    -- ⚠ EL CARTEL SUELE SER UN PDF. Medido el 2026-08-23: 30 de las 61 notas del pipeline no
+    -- tienen una sola letra de texto — son archivos adjuntos, casi siempre el cartel. Cinco
+    -- licitaciones no tienen NINGUNA nota con texto. Guardar cuántos archivos quedaron sin
+    -- leer es lo que separa "no había información" de "la información está ahí y nadie se la
+    -- pasó al modelo": en pantalla las dos fichas se ven igual de pobres.
+    "adjuntosSinLeer"   INTEGER       NOT NULL DEFAULT 0,
+    -- La fuente se recortó por tamaño: hay texto que el modelo NO vio.
     "fuenteTruncada"    BOOLEAN       NOT NULL DEFAULT false,
 
     -- ── De qué es ───────────────────────────────────────────────────────────────

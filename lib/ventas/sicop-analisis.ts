@@ -55,6 +55,7 @@ type FilaGuardada = {
   hubspotTicketId: string;
   fuenteSha: string;
   notasLeidas: number;
+  adjuntosSinLeer: number;
   fuenteTruncada: boolean;
   objeto: string | null;
   institucion: string | null;
@@ -99,6 +100,9 @@ function aLectura(f: FilaGuardada): LecturaSicop {
     monto: f.monto == null ? null : Number(f.monto),
     moneda: f.moneda === "CRC" || f.moneda === "USD" ? f.moneda : null,
     confianza: f.confianza,
+    notasLeidas: f.notasLeidas,
+    adjuntosSinLeer: f.adjuntosSinLeer,
+    fuenteTruncada: f.fuenteTruncada,
     analizadoEl: f.analizadoEl.toISOString(),
     modelo: f.modelo,
     error: f.error,
@@ -267,6 +271,7 @@ export async function correrAnalisisSicop(
     const datos = {
       fuenteSha: fuente.sha,
       notasLeidas: fuente.notas,
+      adjuntosSinLeer: fuente.adjuntosSinLeer,
       fuenteTruncada: fuente.truncada,
       objeto: lectura.objeto,
       institucion: lectura.institucion,

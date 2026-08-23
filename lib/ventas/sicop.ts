@@ -272,6 +272,14 @@ export interface NotaCruda {
   id: string;
   creadaEl: string | null;
   cuerpo: string;
+  /**
+   * Cuántos archivos cuelgan de la nota. Medido el 2026-08-23: **30 de las 61 notas del
+   * pipeline no tienen una sola letra de texto — son el cartel subido como PDF**. Esas notas
+   * se conservan igual, vacías, porque su EXISTENCIA es información: le dicen al modelo que
+   * hay un cartel que no está viendo, y eso es lo que le permite bajar la confianza en vez de
+   * concluir desde el título como si no faltara nada.
+   */
+  adjuntos: number;
 }
 
 /** Trocea una lista en lotes del tamaño que aguanta el endpoint batch de HubSpot. */
@@ -326,17 +334,33 @@ export async function leerNotasDeTickets(
       path: "/crm/v3/objects/notes/batch/read",
       body: {
         inputs: lote.map((id) => ({ id })),
-        properties: ["hs_note_body", "hs_createdate"],
+        properties: ["hs_note_body", "hs_createdate", "hs_attachment_ids"],
       },
     });
     if (res.status !== 200 && res.status !== 207) continue;
     const data = (await res.json()) as {
-      results?: { id: string; properties: { hs_note_body?: string | null; hs_createdate?: string | null } }[];
+      results?: {
+        id: string;
+        properties: {
+          hs_note_body?: string | null;
+          hs_createdate?: string | null;
+          hs_attachment_ids?: string | null;
+        };
+      }[];
     };
     for (const n of data.results ?? []) {
       const cuerpo = n.properties.hs_note_body ?? "";
-      if (!cuerpo.trim()) continue;
-      cuerpos.set(n.id, { id: n.id, creadaEl: n.properties.hs_createdate ?? null, cuerpo });
+      const adjuntos = (n.properties.hs_attachment_ids ?? "")
+        .split(";")
+        .filter((x) => x.trim()).length;
+      // Vacía Y sin adjunto no aporta nada. Vacía CON adjunto sí: es el cartel en PDF.
+      if (!cuerpo.trim() && adjuntos === 0) continue;
+      cuerpos.set(n.id, {
+        id: n.id,
+        creadaEl: n.properties.hs_createdate ?? null,
+        cuerpo,
+        adjuntos,
+      });
     }
   }
 

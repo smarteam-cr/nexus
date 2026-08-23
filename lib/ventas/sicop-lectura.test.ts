@@ -41,7 +41,12 @@ function ticket(p: Partial<TicketParaLeer> = {}): TicketParaLeer {
   };
 }
 
-const nota = (id: string, creadaEl: string, cuerpo: string) => ({ id, creadaEl, cuerpo });
+const nota = (id: string, creadaEl: string, cuerpo: string, adjuntos = 0) => ({
+  id,
+  creadaEl,
+  cuerpo,
+  adjuntos,
+});
 
 // ── HTML de HubSpot ────────────────────────────────────────────────────────────
 
@@ -117,6 +122,41 @@ describe("construirFuente — la huella decide a quién se le vuelve a pagar IA"
     const f = construirFuente(ticket());
     expect(f.texto).toContain("NOTAS DEL TICKET: ninguna");
     expect(f.notas).toBe(0);
+    expect(f.adjuntosSinLeer).toBe(0);
+  });
+
+  it("⭐ una nota SIN TEXTO pero CON ARCHIVO se declara: es el cartel en PDF", () => {
+    /* Medido el 2026-08-23: 30 de las 61 notas del pipeline no tienen una sola letra — el
+       equipo sube el cartel como adjunto. Si esas notas se descartaran en silencio, el modelo
+       concluiría desde el título creyendo que no faltaba nada, y la ficha pobre se leería
+       como "no había información" en vez de "el cartel está ahí y nadie se lo pasó". */
+    const f = construirFuente({
+      ...ticket(),
+      notas: [
+        nota("pdf", "2026-08-20T10:00:00Z", "", 2),
+        nota("txt", "2026-08-21T10:00:00Z", "<p>Ojo con la garantía</p>"),
+      ],
+    });
+    expect(f.notas).toBe(1);
+    expect(f.adjuntosSinLeer).toBe(2);
+    expect(f.texto).toContain("ARCHIVOS ADJUNTOS: hay 2 archivo(s)");
+    expect(f.texto).toContain("Ojo con la garantía");
+  });
+
+  it("una nota vacía SIN archivo no aporta ni cuenta", () => {
+    const f = construirFuente({
+      ...ticket(),
+      notas: [nota("vacia", "2026-08-20T10:00:00Z", "<p><br></p>")],
+    });
+    expect(f.notas).toBe(0);
+    expect(f.adjuntosSinLeer).toBe(0);
+    expect(f.texto).not.toContain("ARCHIVOS ADJUNTOS");
+  });
+
+  it("agregar un archivo a una nota vacía CAMBIA la huella (el ticket dice algo nuevo)", () => {
+    const sin = construirFuente({ ...ticket(), notas: [nota("n", "2026-08-20T10:00:00Z", "")] });
+    const con = construirFuente({ ...ticket(), notas: [nota("n", "2026-08-20T10:00:00Z", "", 1)] });
+    expect(con.sha).not.toBe(sin.sha);
   });
 
   it("una fuente enorme se recorta Y se avisa", () => {
@@ -167,11 +207,14 @@ describe("normalizarLectura — el default de un dato roto MUESTRA, no esconde",
     expect(normalizarLectura({ monto: 100, moneda: "CRC" }, META).moneda).toBe("CRC");
   });
 
-  it("guarda de quién y de cuándo salió la lectura", () => {
-    const l = normalizarLectura({}, META);
+  it("guarda de quién y de cuándo salió la lectura, y con qué contó", () => {
+    const l = normalizarLectura({}, { ...META, notasLeidas: 2, adjuntosSinLeer: 3 });
     expect(l.modelo).toBe("claude-sonnet-4-6");
     expect(l.analizadoEl).toBe("2026-08-23T00:00:00.000Z");
     expect(l.error).toBeNull();
+    expect(l.notasLeidas).toBe(2);
+    expect(l.adjuntosSinLeer).toBe(3);
+    expect(l.fuenteTruncada).toBe(false);
   });
 });
 
@@ -214,9 +257,15 @@ describe("normalizarBloqueantes / normalizarPlazos — también saneando lo que 
 
 describe("lecturaConError", () => {
   it("guarda el motivo y deja el encaje en DUDOSO (una falla no descarta nada)", () => {
-    const l = lecturaConError("timeout", META.analizadoEl);
+    const l = lecturaConError("timeout", META.analizadoEl, {
+      notas: 1,
+      adjuntosSinLeer: 4,
+      truncada: false,
+    });
     expect(l.error).toBe("timeout");
     expect(l.encaje).toBe("DUDOSO");
     expect(l.categorias).toEqual([]);
+    // Se conserva CON QUÉ contaba: sin esto, un fallo se vería igual que un ticket vacío.
+    expect(l.adjuntosSinLeer).toBe(4);
   });
 });

@@ -83,6 +83,16 @@ export interface LecturaSicop {
   moneda: "CRC" | "USD" | null;
   /** 0-100. Cuánta información REAL había para leer — no cuán segura suena la conclusión. */
   confianza: number | null;
+  /** Notas CON TEXTO que se leyeron. 0 = la ficha salió del título pelado. */
+  notasLeidas: number;
+  /**
+   * Archivos del ticket que nadie leyó: el cartel en PDF. Es la explicación honesta de por
+   * qué una ficha salió pobre — «no había información» y «la información está en un PDF que
+   * el modelo no vio» se ven igual en pantalla si no se dice cuál de las dos es.
+   */
+  adjuntosSinLeer: number;
+  /** La fuente se recortó por tamaño: hay texto que el modelo no vio. */
+  fuenteTruncada: boolean;
   analizadoEl: string | null;
   modelo: string | null;
   /** El análisis falló; se guarda el motivo para que la pantalla no mienta con "sin analizar". */
