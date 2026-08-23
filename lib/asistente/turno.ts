@@ -40,6 +40,7 @@ import {
   reclamoDeOperaciones,
   renderSeccionParaElChat,
   cuerpoDeSeccionParaElChat,
+  TOPE_DE_SECCION_COMPLETA_CHARS,
 } from "@/lib/canvas/capacidades-de-documento";
 import {
   avisoDeTurnoSinAcuerdo,
@@ -54,7 +55,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
-import { contextoDeCronograma, contextoDeDocumento, contextoDeRol } from "./contexto";
+import { contextoDeCronograma, contextoDeDocumento, contextoDeRol, TOPE_POR_SECCION_CHARS } from "./contexto";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 import { leerAcuerdo, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
@@ -1127,7 +1128,20 @@ export async function correrTurno(
      * ⚠ Se conserva la rama de la instrucción SOLO para los hilos viejos: si un modelo con el
      * prompt anterior todavía la emitiera, el acuerdo se sigue pintando en vez de evaporarse.
      */
-    const seccionesDelDoc = ctx.secciones ?? [];
+    /**
+     * ⭐ HASTA DÓNDE PUDO LEER EL MODELO, COMO DATO — no como suposición del ejecutor.
+     *
+     * El prefijo recorta el cuerpo de cada sección; el bloque del chip la manda ENTERA. O sea que
+     * «¿el modelo vio todo el texto?» depende de si esta persona tocó el 💬 de esa sección, y eso
+     * solo se sabe ACÁ. Sin este dato, el ejecutor tendría que suponer —y suponer de más bloquea
+     * la salida que el aviso del recorte le acaba de ofrecer al modelo, mientras suponer de menos
+     * es la pérdida silenciosa que el aviso vino a matar.
+     */
+    const seccionesDelDoc = (ctx.secciones ?? []).map((s) =>
+      s.key === seccionReferida?.key
+        ? { ...s, topeDeLecturaChars: TOPE_DE_SECCION_COMPLETA_CHARS }
+        : { ...s, topeDeLecturaChars: TOPE_POR_SECCION_CHARS },
+    );
     const capacidades = capacidadesDeLaPieza(hilo.pieza);
 
     /**

@@ -59,10 +59,11 @@ import { defDelTipo } from "@/lib/landing/catalogo-de-secciones";
    `detail` — nombres de programador en el renglón que una persona tiene que aprobar. Reusarlo (en
    vez de escribir un segundo) hace que el papel y la cajita del chat digan lo mismo. */
 import { labelFor } from "@/lib/canvas/print-vocab";
+import { cuerpoQuedaRecortado } from "@/lib/canvas/capacidades-de-documento";
 /* ⛔ La resolución por contenido vive AFUERA y es pura: la importan el que prepara el acuerdo, el
    que ejecuta y el índice del navegador. Una segunda normalización sería una que puede divergir. */
 import { hojasCitables, resolverCita } from "@/lib/canvas/citas-de-documento";
-import type { FormatoDeSeccion } from "@/lib/landing/formato-de-seccion";
+import { SEPARADOR_DE_BLOQUES, type FormatoDeSeccion } from "@/lib/landing/formato-de-seccion";
 
 // ── El vocabulario ────────────────────────────────────────────────────────────────────────────
 
@@ -372,6 +373,20 @@ export interface SeccionActual {
    * ⚠ Vacío o ausente en toda sección estructurada: su cuerpo vive en el bloque CARD.
    */
   bloquesDeTexto?: readonly { id: string; contenido: string }[];
+  /**
+   * ⛔ HASTA CUÁNTOS CARACTERES DEL CUERPO VIO EL MODELO EN ESTE TURNO.
+   *
+   * Lo pone el SERVIDOR, que es el único que sabe con qué tope renderizó cada sección: el prefijo
+   * recorta, y el bloque del 💬 la manda entera. `undefined` = sin límite conocido, y ahí no se
+   * rechaza nada — es el caso del navegador, que aplica un acuerdo que el servidor ya validó y que
+   * además tiene el texto completo en la mano.
+   *
+   * ⚠ La asimetría entre los dos armadores es deliberada, y es la única de esta clase: el resto de
+   * los campos se calculan igual de los dos lados A PROPÓSITO. Éste no describe el documento —
+   * describe lo que se le mostró a un modelo en un turno—, así que el navegador no puede saberlo
+   * y no debe inventarlo.
+   */
+  topeDeLecturaChars?: number;
   /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
   rotulo?: string;
 }
@@ -1152,6 +1167,26 @@ export function aplicarOperacionesDeDocumento(
           break;
         }
         /**
+         * ⛔ NO SE REESCRIBE ENTERO UN TEXTO QUE EL MODELO NO PUDO LEER ENTERO.
+         *
+         * El cuerpo se le muestra recortado al tope del prefijo. Reescribir «todo el texto» desde
+         * esa copia BORRA lo que venía después del corte, y falla de la peor manera: sin error,
+         * sin aviso, y con la verificación al releer en VERDE —compara el texto nuevo contra sí
+         * mismo—. El aviso del recorte se lo pide al modelo; esto lo hace cumplir.
+         *
+         * La salida no es un callejón: tocar el 💬 de la sección la manda entera, y ahí el tope
+         * sube y esta puerta se abre sola. El motivo la nombra.
+         */
+        const cuerpoVivo = bloques.map((b) => b.contenido).join(SEPARADOR_DE_BLOQUES).trim();
+        if (cuerpoQuedaRecortado(cuerpoVivo, s.topeDeLecturaChars ?? Infinity)) {
+          rechazar(
+            o,
+            `el texto de «${s.label}» es más largo de lo que se te mostró: reescribirlo entero ` +
+              `borraría lo que no viste. Pide esa sección completa tocando su 💬 y vuelve a intentarlo`,
+          );
+          break;
+        }
+        /**
          * ⭐ VARIOS BLOQUES SON UN SOLO CUERPO, y rechazarlos estuvo mal.
          *
          * La primera versión de esta operación rechazaba con más de un bloque, «porque escribir el
@@ -1475,7 +1510,7 @@ export function verificarOperacionesDeDocumento(
         const vivo = (s.bloquesDeTexto ?? [])
           .map((b) => b.contenido)
           .filter((t) => t.trim())
-          .join("\n\n")
+          .join(SEPARADOR_DE_BLOQUES)
           .trim();
         if (vivo !== o.valor.trim()) noQuedo(`el texto de «${s.label}» no es el que se acordó`);
         break;

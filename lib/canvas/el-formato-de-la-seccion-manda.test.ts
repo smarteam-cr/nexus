@@ -21,12 +21,18 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
+import {
+  datosDeSeccion,
+  formatoDeSeccion,
+  markdownDeBloques,
+  SEPARADOR_DE_BLOQUES,
+} from "@/lib/landing/formato-de-seccion";
 import {
   cuerpoDeSeccionParaElChat,
   camposMudosDe,
   firmaDeSeccion,
   FIRMA_DE_TEXTO_CORRIDO,
+  MARCA_DE_RECORTE,
   schemaParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import {
@@ -588,6 +594,127 @@ describe("⭐ y el texto reescrito se CONFIRMA releyendo", () => {
         [{ op: "seccion.texto", key: "recomendaciones", valor: "uno\n\ndos" }],
       ),
     ).toEqual([]);
+  });
+});
+
+describe("⛔ un texto que el modelo no vio entero no se reescribe entero", () => {
+  /**
+   * LA PÉRDIDA MÁS SILENCIOSA DE TODAS, y estaba en la operación recién estrenada.
+   *
+   * El cuerpo se le muestra al modelo recortado al tope del prefijo (6.000). La firma le dice
+   * «se reescribe ENTERO con `seccion.texto`». O sea que sobre un texto largo el modelo reescribía
+   * desde una copia CORTADA, y todo lo que venía después del corte se borraba: sin error, sin
+   * aviso, y con la verificación al releer en VERDE — porque comparaba el texto nuevo contra sí
+   * mismo. La salida no es un callejón: el 💬 de la sección la manda entera y el tope sube.
+   */
+  const largaCon = (chars: number, tope: number | undefined): SeccionActual => ({
+    id: "s1",
+    key: "recomendaciones",
+    label: "Recomendaciones",
+    data: {},
+    schema: PROSA_SCHEMA,
+    oculta: false,
+    esCreada: false,
+    movible: true,
+    formato: "prosa",
+    bloquesDeTexto: [{ id: "b1", contenido: "x".repeat(chars) }],
+    topeDeLecturaChars: tope,
+  });
+
+  it("⭐ se rechaza cuando el cuerpo vivo pasa el tope con el que se le mostró", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [largaCon(9_000, 6_000)],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "un resumen corto" }],
+      TODO,
+    );
+    expect(r.plan, "escribió el resumen: los 3.000 caracteres de más ya no vuelven").toEqual([]);
+    expect(r.rechazadas[0].motivo).toContain("más largo de lo que se te mostró");
+    expect(r.rechazadas[0].motivo, "el rechazo no nombra la salida: queda como callejón").toContain("💬");
+  });
+
+  it("…y se aplica cuando el 💬 la mandó entera — el tope sube y la puerta se abre sola", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [largaCon(9_000, 20_000)],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "un resumen corto" }],
+      TODO,
+    );
+    expect(r.rechazadas).toEqual([]);
+    expect(r.plan).toHaveLength(1);
+  });
+
+  it("⚠ y sin tope conocido NO se rechaza: es el navegador, que aplica lo ya validado", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [largaCon(9_000, undefined)],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "un resumen corto" }],
+      TODO,
+    );
+    expect(r.rechazadas).toEqual([]);
+    expect(r.plan).toHaveLength(1);
+  });
+
+  it("⭐ y el cuerpo que se le muestra DICE el corte, con el número y con la salida", () => {
+    /* El rechazo del ejecutor es la red; esto es lo que evita llegar a ella. Un `slice` mudo se
+       lee como «éste es todo el texto», que es exactamente la premisa falsa. */
+    const cuerpo = cuerpoDeSeccionParaElChat(
+      { formato: "prosa", bloquesDeTexto: [{ contenido: "y".repeat(500) }] },
+      200,
+    );
+    expect(cuerpo).toContain(MARCA_DE_RECORTE);
+    expect(cuerpo, "no dice CUÁNTO falta: «recortado» a secas invita a reescribir igual").toContain("300 caracteres");
+    expect(cuerpo).toContain("💬");
+  });
+
+  it("…y no lo dice cuando no hay corte", () => {
+    const cuerpo = cuerpoDeSeccionParaElChat(
+      { formato: "prosa", bloquesDeTexto: [{ contenido: "corto" }] },
+      200,
+    );
+    expect(cuerpo).not.toContain(MARCA_DE_RECORTE);
+    expect(cuerpo).toContain("corto");
+  });
+
+  it("⛔ y los CUATRO unen los bloques igual: el separador tiene un solo dueño", () => {
+    /* El motor pinta el cuerpo unido; si el contexto, el ejecutor o la verificación lo unieran
+       distinto, los tres hablarían de un texto que no es el que se ve. */
+    expect(SEPARADOR_DE_BLOQUES).toBe("\n\n");
+    const dos = [{ blockType: "TEXT", content: "uno" }, { blockType: "TEXT", content: "dos" }];
+    expect(markdownDeBloques(dos)).toBe(`uno${SEPARADOR_DE_BLOQUES}dos`);
+    expect(
+      cuerpoDeSeccionParaElChat({
+        formato: "prosa",
+        bloquesDeTexto: [{ contenido: "uno" }, { contenido: "dos" }],
+      }),
+    ).toContain(`uno${SEPARADOR_DE_BLOQUES}dos`);
+  });
+});
+
+describe("⛔ y el dato lo PONE el servidor — si no, todo lo de arriba es cableado muerto", () => {
+  /**
+   * La trampa que este repo ya se comió seis veces: declarar un campo y olvidarse de poblarlo. Las
+   * guardas de arriba pasarían igual —le pasan el tope a mano— mientras en producción llega
+   * `undefined`, la puerta queda abierta y el texto se borra igual que antes.
+   *
+   * ⭐ Y el reparto importa tanto como el dato: la sección del 💬 se manda ENTERA, así que su tope
+   * es el grande. Ponerle a todas el chico convertiría la salida que el aviso ofrece en un
+   * callejón; ponerle a todas el grande apagaría el rechazo sin que nada se ponga rojo.
+   */
+  it("⭐ `correrTurno` reparte el tope: la sección del chip entera, las demás recortadas", () => {
+    const src = leer("lib/asistente/turno.ts");
+    const i = src.indexOf("const seccionesDelDoc =");
+    expect(i, "se movió `seccionesDelDoc`: la guarda no mira nada").toBeGreaterThan(0);
+    const tramo = src.slice(i, i + 600);
+    expect(tramo).toContain("s.key === seccionReferida?.key");
+    expect(tramo).toContain("topeDeLecturaChars: TOPE_DE_SECCION_COMPLETA_CHARS");
+    expect(tramo).toContain("topeDeLecturaChars: TOPE_POR_SECCION_CHARS");
+  });
+
+  it("⚠ y el armador del NAVEGADOR no lo inventa", () => {
+    /* Es la única asimetría deliberada entre los dos armadores. El navegador no sabe qué vio el
+       modelo, y adivinarlo acá sería rechazar acuerdos que el servidor ya validó. */
+    expect(
+      leer("components/asistente/ejecutar-operaciones.ts"),
+      "el navegador se puso a adivinar lo que vio el modelo",
+    ).not.toContain("topeDeLecturaChars");
   });
 });
 

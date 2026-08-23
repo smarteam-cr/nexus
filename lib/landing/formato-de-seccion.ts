@@ -23,6 +23,14 @@
 import { isBlank } from "./is-blank";
 
 /** Los dos formatos en que una sección puede estar escrita HOY. */
+/**
+ * ⭐ CÓMO UNE EL MOTOR LOS BLOQUES DE TEXTO — una línea en blanco, y vive acá porque son CUATRO
+ * los que tienen que unirlos igual: el motor al pintar, el contexto al mostrárselo al modelo, el
+ * ejecutor al medir si el cuerpo entra, y la verificación al releer. Escrito cuatro veces, el día
+ * que uno cambie los otros tres empiezan a hablar de un texto que no es el que se ve.
+ */
+export const SEPARADOR_DE_BLOQUES = "\n\n";
+
 export type FormatoDeSeccion = "estructurado" | "prosa";
 
 /** Lo que el predicado necesita de un bloque. Menos que `BlockData`, a propósito. */
@@ -73,7 +81,7 @@ export function markdownDeBloques(bloques: readonly BloqueParaFormato[]): string
   return bloques
     .map((b) => b.content ?? "")
     .filter((t) => t.trim())
-    .join("\n\n")
+    .join(SEPARADOR_DE_BLOQUES)
     .trim();
 }
 

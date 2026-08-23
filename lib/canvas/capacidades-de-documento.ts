@@ -27,6 +27,7 @@
  * que lo hace cumplir, y es la misma que ya existe del lado del cronograma.
  */
 import { CATALOGO_DE_SECCIONES } from "@/lib/landing/catalogo-de-secciones";
+import { SEPARADOR_DE_BLOQUES } from "@/lib/landing/formato-de-seccion";
 import {
   OPERACIONES_DE_DOCUMENTO_VALIDAS,
   type CapacidadesDelDocumento,
@@ -440,6 +441,25 @@ export const TOPE_DE_SECCION_COMPLETA_CHARS = 20_000;
  */
 export const FIRMA_DE_TEXTO_CORRIDO = "[texto corrido — se reescribe ENTERO con `seccion.texto`]";
 
+/**
+ * ⛔ EL RECORTE QUE BORRABA TEXTO EN SILENCIO.
+ *
+ * El cuerpo se cortaba con un `slice` mudo. Sobre una sección de CAMPOS eso solo deja al modelo sin
+ * ver una parte; sobre una sección en PROSA es otra cosa, porque la firma le dice «se reescribe
+ * ENTERO con `seccion.texto`»: el modelo reescribía desde una copia cortada y todo lo que venía
+ * después del corte **desaparecía sin que nada avisara** — ni un rechazo, ni un aviso, y la
+ * verificación al releer daba VERDE, porque comparaba el texto nuevo contra sí mismo.
+ *
+ * ⭐ El predicado es UNO SOLO a propósito: lo lee quien RENDERIZA (para marcar el corte) y quien
+ * EJECUTA (para negarse a reescribir lo que el modelo no pudo leer). Si fueran dos reglas, la
+ * primera divergencia sería exactamente el silencio que esto viene a matar.
+ */
+export function cuerpoQuedaRecortado(cuerpo: string, tope: number): boolean {
+  return cuerpo.length > tope;
+}
+
+export const MARCA_DE_RECORTE = "[⚠ TEXTO RECORTADO";
+
 export const AVISO_DE_TEXTO_CORRIDO =
   "⚠ FORMATO: TEXTO CORRIDO (esta sección no tiene campos escritos: se edita reescribiendo el " +
   "texto con `seccion.texto`, no con campos ni listas)";
@@ -472,13 +492,21 @@ export function cuerpoDeSeccionParaElChat(
   tope = TOPE_DE_SECCION_COMPLETA_CHARS,
 ): string {
   if (s.formato === "prosa") {
-    const cuerpo = (s.bloquesDeTexto ?? [])
+    const entero = (s.bloquesDeTexto ?? [])
       .map((b) => b.contenido)
       .filter((t) => t.trim())
-      .join("\n\n")
-      .trim()
-      .slice(0, tope);
-    return `${AVISO_DE_TEXTO_CORRIDO}:\n${cuerpo}`;
+      .join(SEPARADOR_DE_BLOQUES)
+      .trim();
+    if (!cuerpoQuedaRecortado(entero, tope)) {
+      return `${AVISO_DE_TEXTO_CORRIDO}:\n${entero}`;
+    }
+    /* El corte SE DICE, y se dice con el número: «recortado» a secas invita a reescribir igual. */
+    const faltan = entero.length - tope;
+    return (
+      `${AVISO_DE_TEXTO_CORRIDO}:\n${entero.slice(0, tope)}\n` +
+      `${MARCA_DE_RECORTE}: faltan ${faltan} caracteres que NO estás viendo. NO reescribas esta ` +
+      `sección entera desde aquí — pídela completa tocando el 💬 de esa sección.]`
+    );
   }
   return renderSeccionParaElChat(s.schema, s.data, tope);
 }
