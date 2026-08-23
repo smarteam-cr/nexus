@@ -48,18 +48,23 @@ export function markdownDeBloques(bloques: readonly BloqueParaFormato[]): string
 }
 
 /**
- * El formato en el que la sección **se ve**, no en el que está guardada.
+ * ⭐ DÓNDE VIVE EL CUERPO DE ESTA SECCIÓN: en un markdown viejo, o en campos.
  *
- * ⚠ La portada queda siempre en `estructurado`: su componente ya sabe rendir el markdown viejo y
- * además compone marca, portada y métricas, así que el fallback genérico no aplica. Es la misma
- * excepción que `LandingView` hace desde antes de este archivo.
+ * ⛔ LA PORTADA NO ES UNA EXCEPCIÓN ACÁ, y meterla adentro era un error con consecuencia. Lo que
+ * la portada tiene distinto es QUIÉN pinta el markdown —su propio componente, no el fallback
+ * genérico del motor—, y eso es una regla de RENDER. Metida en este predicado, decía «una portada
+ * nunca está en prosa», y de ahí el ejecutor concluía que escribirle un campo era seguro: sobre un
+ * kickoff anterior al motor, «cambiá el titular» creaba el bloque CARD y **el cuerpo legacy del
+ * hero desaparecía para siempre**. La misma pérdida que este archivo existe para impedir, por la
+ * única puerta que se había dejado abierta.
+ *
+ * La excepción del render vive donde corresponde: en `LandingView`, junto a su `isHero`.
  */
 export function formatoDeSeccion(args: {
-  esPortada: boolean;
   markdown: string | null | undefined;
   dataTipada: unknown;
 }): FormatoDeSeccion {
   const md = (args.markdown ?? "").trim();
-  if (!md || args.esPortada) return "estructurado";
+  if (!md) return "estructurado";
   return isBlank(args.dataTipada) ? "prosa" : "estructurado";
 }

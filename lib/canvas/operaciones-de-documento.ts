@@ -1642,11 +1642,10 @@ export function describirOperacionesDeDocumento(
 
       case "seccion.renombrar":
         return `«${nombre(o.key)}» pasa a llamarse «${o.titulo}»`;
+      /* ⚠ Acá había un SEGUNDO `case "seccion.rotular"`, inalcanzable —el switch para en el
+         primero— y además sin recortar el rótulo: un rótulo largo se habría pintado entero en la
+         cajita. Código muerto que se leía como si hiciera algo. */
 
-      case "seccion.rotular":
-        return o.rotulo.trim()
-          ? `El rótulo de arriba de «${nombre(o.key)}» pasa a «${o.rotulo}»`
-          : `Se saca el rótulo de arriba de «${nombre(o.key)}»`;
     }
   });
 }

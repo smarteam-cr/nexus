@@ -360,8 +360,12 @@ export default function LandingView({
        consumidor: el chat, que necesita saber en qué formato está una sección ANTES de acordar un
        cambio. Acá no cambia nada —es la misma condición de siempre— y ese es el punto: una sola
        definición para el que pinta y el que edita. */
+    /* ⚠ El `!isHero` es de ACÁ, no del predicado: lo que la portada tiene distinto es que su
+       componente rinde el markdown él mismo —y además compone marca, imagen y métricas, que este
+       fallback perdería—. Meter esa excepción adentro de `formatoDeSeccion` le decía al chat que
+       una portada nunca está en prosa, y con eso le abría la puerta a borrar su cuerpo legacy. */
     const showLegacy =
-      formatoDeSeccion({ esPortada: isHero, markdown: legacyMd, dataTipada: typedData }) === "prosa";
+      !isHero && formatoDeSeccion({ markdown: legacyMd, dataTipada: typedData }) === "prosa";
     /* ⭐ Lo que el 💬 de cada ítem necesita y no puede deducir desde adentro: de qué sección es, y
        qué listas alcanza el chat. La lista se resuelve por IDENTIDAD DE REFERENCIA contra ESTE
        `data`, así que tiene que ser el MISMO objeto que recibe el componente — no una copia.

@@ -529,7 +529,6 @@ export async function contextoDeDocumento(
         const prosa = markdownDeBloques(s.blocks);
         if (
           formatoDeSeccion({
-            esPortada: !!def?.backdrop,
             markdown: prosa,
             dataTipada: cardDe(s.blocks)?.data ?? {},
           }) === "prosa"
@@ -673,7 +672,6 @@ export async function contextoDeDocumento(
          navegador. Ver `SeccionActual.formato`: si las dos mitades lo dedujeran por su cuenta, la
          primera divergencia sería una pérdida de contenido silenciosa. */
       formato: formatoDeSeccion({
-        esPortada: !!def?.backdrop,
         markdown: markdownDeBloques(s.blocks),
         dataTipada: card?.data ?? {},
       }),

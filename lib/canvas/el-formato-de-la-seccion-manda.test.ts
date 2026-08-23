@@ -63,7 +63,7 @@ describe("qué formato tiene una sección", () => {
     ];
     expect(markdownDeBloques(bloques)).toBe("");
     expect(
-      formatoDeSeccion({ esPortada: false, markdown: markdownDeBloques(bloques), dataTipada: {} }),
+      formatoDeSeccion({ markdown: markdownDeBloques(bloques), dataTipada: {} }),
     ).toBe("estructurado");
   });
 
@@ -74,22 +74,23 @@ describe("qué formato tiene una sección", () => {
     ];
     expect(markdownDeBloques(bloques)).toBe("## Recomendaciones\n\nMigrar el CRM.");
     expect(
-      formatoDeSeccion({ esPortada: false, markdown: markdownDeBloques(bloques), dataTipada: {} }),
+      formatoDeSeccion({ markdown: markdownDeBloques(bloques), dataTipada: {} }),
     ).toBe("prosa");
   });
 
   it("con data tipada escrita, manda la data: el markdown viejo ya no se ve", () => {
     expect(
-      formatoDeSeccion({ esPortada: false, markdown: "texto viejo", dataTipada: { intro: "hola" } }),
+      formatoDeSeccion({ markdown: "texto viejo", dataTipada: { intro: "hola" } }),
     ).toBe("estructurado");
   });
 
-  it("⚠ la PORTADA nunca es prosa: su componente rinde el markdown él mismo", () => {
-    /* Y además compone marca, imagen y métricas, que el fallback genérico perdería. Es la misma
-       excepción que `LandingView` hace desde antes de que este predicado existiera. */
-    expect(formatoDeSeccion({ esPortada: true, markdown: "texto viejo", dataTipada: {} })).toBe(
-      "estructurado",
-    );
+  it("⛔ una PORTADA con markdown viejo SÍ está en prosa — y eso es el arreglo", () => {
+    /* La excepción de la portada vivía ACÁ ADENTRO y le decía al chat «una portada nunca está en
+       prosa». Con eso el ejecutor concluía que escribirle un campo era seguro: sobre un kickoff
+       anterior al motor, «cambiá el titular» creaba el bloque CARD y el cuerpo legacy del hero
+       desaparecía para siempre. Lo que la portada tiene distinto es QUIÉN pinta el markdown —su
+       propio componente— y eso es una regla de render: vive en `LandingView`, con su `isHero`. */
+    expect(formatoDeSeccion({ markdown: "texto viejo", dataTipada: {} })).toBe("prosa");
   });
 });
 
@@ -243,7 +244,9 @@ describe("las TRES mitades leen el mismo predicado", () => {
      texto. Por eso el predicado tiene tres consumidores y ninguna copia. */
   it("el motor que PINTA usa `formatoDeSeccion`, no una condición local", () => {
     const src = leer("components/landing/LandingView.tsx");
-    expect(src).toContain("formatoDeSeccion({ esPortada: isHero");
+    expect(src).toContain("formatoDeSeccion({ markdown: legacyMd, dataTipada: typedData })");
+    /* Y la excepción de la portada sigue acá, del lado del render. */
+    expect(src, "el hero perdería su marca, su imagen y sus métricas").toContain("!isHero &&");
     expect(src, "volvió la condición inline: el motor y el chat ya pueden divergir").not.toContain(
       "!!legacyMd && !isHero && isBlank(typedData)",
     );
@@ -262,16 +265,6 @@ describe("las TRES mitades leen el mismo predicado", () => {
     expect(leer("components/asistente/ejecutar-operaciones.ts")).toContain(
       "formato: formatoDeSeccion({",
     );
-  });
-
-  it("⚠ y `backdrop` llega hasta el ejecutor — la trampa de `toSectionDef`, sexta vez", () => {
-    /* `chatLabel`, `schemaDelChat`, `rotulosDeListas`, `leeElEncabezado`, `listasSoloEdicion`: cada
-       vez, el campo declarado en la def y NO copiado en el tipo del ejecutor lo deja muerto. Acá
-       `backdrop` decide que la portada nunca es prosa: sin él, la portada de un documento viejo se
-       volvería ineditable desde el chat. */
-    const src = leer("components/asistente/ejecutar-operaciones.ts");
-    expect(src).toContain("backdrop?: boolean;");
-    expect(src).toContain("esPortada: !!def?.backdrop");
   });
 
   it("el modelo recibe la regla, y `convertir` está declarado en su herramienta", () => {

@@ -370,11 +370,15 @@ export const TOPE_DE_SECCION_COMPLETA_CHARS = 20_000;
 /**
  * ⭐ EL CONTENIDO DE UNA SECCIÓN, CON LOS NOMBRES PUESTOS Y LAS POSICIONES A LA VISTA.
  *
- * El contexto manda el contenido APLANADO y recortado a 1.000 caracteres — sirve para saber de qué
- * habla el documento, no para operar sobre él. Cuando el pedido es de una sección concreta («quita
- * el último card»), el modelo necesita otra cosa: los nombres de los campos y, sobre todo, EN QUÉ
- * POSICIÓN está cada ítem. Sin eso contestaba «me llega recortado, no puedo confirmar cuál es el
- * último» — y no tenía ninguna forma de averiguarlo.
+ * Nació porque el contexto mandaba el contenido APLANADO y recortado a 1.000 caracteres: servía
+ * para saber de qué habla el documento, no para operar sobre él. Cuando el pedido era de una
+ * sección concreta («quita el último card»), el modelo contestaba «me llega recortado, no puedo
+ * confirmar cuál es el último» — y no tenía ninguna forma de averiguarlo.
+ *
+ * ⚠ Desde el 2026-08-23 el contexto usa ESTA MISMA función para el preview de cada sección (hay un
+ * solo renderer) y su tope subió a 6.000, así que la frase de arriba describe cómo era, no cómo
+ * es. Se conserva porque explica de dónde salió la función; lo que cambia es que ya no hay dos
+ * formas de rendir contenido, y ésa era la mitad del problema.
  *
  * ⛔ Recorre SOLO lo que el esquema declara. Es la misma regla de privacidad del contexto: ids,
  * banderas y el contenido que curó una persona fuera del esquema no cruzan al prompt.

@@ -53,10 +53,6 @@ export type DefsParaEjecutar = Record<
     rotulosDeListas?: Record<string, string>;
     /** El rótulo chico de la plantilla, para cuando la sección no tiene override propio. */
     eyebrow?: string;
-    /** ⚠ La PORTADA queda siempre en «estructurado»: su componente ya sabe rendir el markdown
-     *  viejo y además compone marca, imagen y métricas, así que el fallback genérico del motor no
-     *  aplica ahí. Es la misma excepción que hace `LandingView`. Ver `formatoDeSeccion`. */
-    backdrop?: boolean;
   } | undefined
 >;
 
@@ -108,7 +104,6 @@ export function seccionesParaElEjecutor(
          formato por su cuenta, la primera divergencia sería una sección en prosa convertida en
          tarjetas — y su texto no vuelve. */
       formato: formatoDeSeccion({
-        esPortada: !!def?.backdrop,
         markdown: markdownDeBloques(s.blocks),
         dataTipada: card?.data ?? {},
       }),
