@@ -391,6 +391,20 @@ en \`lista\` o en las claves de \`valores\` es EXACTAMENTE uno de esos nombres. 
   Contexto: - Objetivos (objetivos) [campos: intro · listas: items[title, detail]]
   ✅ { "op": "seccion.item.agregar", "key": "objetivos", "lista": "items", "valores": { "title": "…", "detail": "…" } }
 
+⭐ PARA DECIR CUÁL, CITA EL TEXTO — NO CUENTES POSICIONES.
+Cuando toques algo que YA está escrito, pon en \`cita\` el texto que hoy está ahí, copiado tal cual
+del contenido de la sección. La app lo busca y resuelve la coordenada sola. Es más confiable que
+contar índices sobre un contenido que se lee de corrido, y funciona igual en las diez piezas.
+
+  ✅ { "op": "seccion.campo", "key": "objetivos", "cita": "Migración desde Excel", "valor": "Migración desde Excel y Sheets" }
+  ✅ { "op": "seccion.item.borrar", "key": "objetivos", "cita": "Capacitación al equipo" }
+  ⛔ { "op": "seccion.campo", "key": "objetivos", "cita": "el segundo objetivo", "valor": "…" }
+     ← eso no es texto del documento: la cita se copia, no se describe.
+
+Si el texto que citaste aparece en dos lugares, la operación vuelve rechazada con las opciones:
+cita el renglón COMPLETO en vez de un pedazo. \`campo\` y \`lista\`+\`posicion\` siguen valiendo para
+lo que estás seguro; si mandas los dos y no coinciden, se rechaza (no se adivina cuál está bien).
+
 ⭐ TÚ ESCRIBES EL TEXTO, ENTERO Y FINAL.
 El valor que pones en una operación se escribe TAL CUAL en el documento: no hay un segundo modelo
 que lo interprete. Escribe el texto terminado, en el idioma y el registro del documento — no una
@@ -500,7 +514,19 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
               description:
                 "La RUTA del campo dentro de la sección, con los nombres EXACTOS que el contexto " +
                 "declara entre corchetes para esa sección. Los índices arrancan en 0 y tienen que " +
-                "existir hoy. Ejemplo de forma: `intro`, `items.2.title`.",
+                "existir hoy. Ejemplo de forma: `intro`, `items.2.title`. " +
+                "Si no estás seguro del índice, usa `cita` en su lugar.",
+            },
+            /* ⭐ EL IDENTIFICADOR POR CONTENIDO. Contar índices sobre un render que se lee de
+               corrido es lo que el modelo hace mal —y es la debilidad conocida de JSON Patch, no
+               un defecto de este repo—. Citar el texto es lo que sí puede hacer bien. */
+            cita: {
+              type: "string",
+              description:
+                "El texto que HOY está en el lugar que quieres tocar, copiado TAL CUAL del " +
+                "contenido de esa sección. Reemplaza a `campo` y a `lista`+`posicion`: la app " +
+                "busca ese texto y resuelve la coordenada sola. Si el texto aparece en más de un " +
+                "lugar, la operación se rechaza y te lo dice: cita más para desambiguar.",
             },
             valor: {
               type: "string",

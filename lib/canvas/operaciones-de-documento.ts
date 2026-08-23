@@ -55,13 +55,28 @@ import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
 /* El catálogo de tipos creables: puro, sin React. De ahí salen el esquema y el molde vacío de una
    sección que nace en este mismo lote. */
 import { defDelTipo } from "@/lib/landing/catalogo-de-secciones";
+/* ⛔ La resolución por contenido vive AFUERA y es pura: la importan el que prepara el acuerdo, el
+   que ejecuta y el índice del navegador. Una segunda normalización sería una que puede divergir. */
+import { hojasCitables, resolverCita } from "@/lib/canvas/citas-de-documento";
 
 // ── El vocabulario ────────────────────────────────────────────────────────────────────────────
 
 /** Los cinco valores de alineación no existen acá: el vocabulario no toca presentación. */
 export type OperacionDeDocumento =
   // CONTENIDO
-  | { op: "seccion.campo"; key: string; campo: string; valor: string; ancla?: string }
+  | {
+      op: "seccion.campo";
+      key: string;
+      /**
+       * La RUTA del campo (`items.2.detail`). Opcional porque `cita` la reemplaza: la app la
+       * resuelve al preparar el acuerdo y desde ahí viaja siempre presente.
+       */
+      campo?: string;
+      /** ⭐ El texto que hoy está ahí, tal como el modelo lo lee. Ver `citas-de-documento.ts`. */
+      cita?: string;
+      valor: string;
+      ancla?: string;
+    }
   | {
       op: "seccion.item.agregar";
       key: string;
@@ -85,8 +100,18 @@ export type OperacionDeDocumento =
       valor?: string;
       posicion?: number;
     }
-  | { op: "seccion.item.borrar"; key: string; lista: string; posicion: number; ancla?: string }
-  | { op: "seccion.item.mover"; key: string; lista: string; posicion: number; a: number; ancla?: string }
+  /* ⚠ `lista` y `posicion` son opcionales SOLO porque `cita` las reemplaza. El ejecutor las
+     exige: una operación que llegue sin coordenada se rechaza con su motivo, nunca se adivina. */
+  | { op: "seccion.item.borrar"; key: string; lista?: string; posicion?: number; cita?: string; ancla?: string }
+  | {
+      op: "seccion.item.mover";
+      key: string;
+      lista?: string;
+      posicion?: number;
+      cita?: string;
+      a: number;
+      ancla?: string;
+    }
   | { op: "seccion.vaciar"; key: string }
   // ESTRUCTURA
   | { op: "seccion.crear"; tipo: string; titulo: string; posicion?: number; ref?: string }
@@ -174,8 +199,20 @@ export function validarOperacionDeDocumento(
   const presente = (k: string) => (typeof o?.[k] === "string" ? null : k);
   const entero = (k: string) => (Number.isInteger(o?.[k]) ? null : k);
 
+  /**
+   * ⭐ La coordenada o la cita, nunca ninguna de las dos.
+   *
+   * Una operación puede decir DÓNDE por índice (`campo`, `lista`+`posicion`) o por CONTENIDO
+   * (`cita`). Exigir la coordenada rechazaría todo lo que el modelo emite bien desde que existe
+   * la cita; no exigir nada dejaría entrar un `{op:"seccion.campo", valor:"…"}` pelado, que se
+   * persistiría en el hilo y se pintaría en la cajita como algo aprobable.
+   */
+  const coordenada = (etiqueta: string, hayCoordenada: boolean) =>
+    hayCoordenada || (typeof o?.cita === "string" && (o.cita as string).trim()) ? null : etiqueta;
+
   const falta: (string | null)[] =
-    op === "seccion.campo" ? [texto("key"), texto("campo"), presente("valor")]
+    op === "seccion.campo"
+      ? [texto("key"), coordenada("campo/cita", texto("campo") === null), presente("valor")]
     : op === "seccion.item.agregar"
       ? [
           texto("key"),
@@ -185,8 +222,14 @@ export function validarOperacionDeDocumento(
             ? null
             : "valor/valores",
         ]
-    : op === "seccion.item.borrar" ? [texto("key"), texto("lista"), entero("posicion")]
-    : op === "seccion.item.mover" ? [texto("key"), texto("lista"), entero("posicion"), entero("a")]
+    : op === "seccion.item.borrar"
+      ? [texto("key"), coordenada("lista/posicion/cita", texto("lista") === null && entero("posicion") === null)]
+    : op === "seccion.item.mover"
+      ? [
+          texto("key"),
+          coordenada("lista/posicion/cita", texto("lista") === null && entero("posicion") === null),
+          entero("a"),
+        ]
     : op === "seccion.crear" ? [texto("tipo"), texto("titulo")]
     : op === "seccion.mover" ? [texto("key"), entero("posicion")]
     : op === "seccion.renombrar" ? [texto("key"), texto("titulo")]
@@ -477,6 +520,69 @@ export interface PreparacionDeOperaciones {
 }
 
 /**
+ * Traduce la `cita` de una operación a la coordenada que el ejecutor entiende.
+ *
+ * Devuelve la operación con `campo` —o `lista`+`posicion`— puestos, la MISMA operación cuando no
+ * trae cita, o `null` cuando la cita no resuelve; en ese caso ya dejó el motivo en `rechazadas`,
+ * que es lo que vuelve al modelo como resultado de su herramienta para que corrija en la misma
+ * llamada.
+ *
+ * ⚠ **La coordenada manda, la cita verifica.** Si el modelo mandó las dos y no coinciden, se
+ * rechaza en vez de elegir una: que dos identificadores del mismo lugar se contradigan significa
+ * que uno está mal, y no hay forma de saber cuál. Juntas son más fuertes que cualquiera sola.
+ */
+function resolverCitaDeOperacion(
+  o: OperacionDeDocumento,
+  s: SeccionActual,
+  rechazadas: { operacion: unknown; motivo: string }[],
+): OperacionDeDocumento | null {
+  const cita = (o as { cita?: string }).cita?.trim();
+  if (!cita) return o;
+  if (o.op !== "seccion.campo" && o.op !== "seccion.item.borrar" && o.op !== "seccion.item.mover") {
+    return o;
+  }
+
+  const r = resolverCita(hojasCitables(s.schema, s.data), cita);
+  if (!r.ok) {
+    rechazadas.push({ operacion: o, motivo: r.motivo });
+    return null;
+  }
+  const h = r.hoja;
+
+  if (o.op === "seccion.campo") {
+    if (o.campo && o.campo !== h.ruta) {
+      rechazadas.push({
+        operacion: o,
+        motivo: `«${cita}» no está en «${o.campo}»: está en «${h.ruta}»`,
+      });
+      return null;
+    }
+    return { ...o, campo: h.ruta };
+  }
+
+  /* Una hoja de una lista ANIDADA no tiene coordenada de ítem (ver `HojaCitable.lista`). Se dice
+     dónde SÍ se toca, en vez de rechazar con «no existe» sobre un texto que sí está. */
+  if (h.lista === null) {
+    rechazadas.push({
+      operacion: o,
+      motivo: `«${cita}» no es un ítem de una lista de esa sección: se cambia con \`seccion.campo\``,
+    });
+    return null;
+  }
+  if (
+    (o.lista && o.lista !== h.lista) ||
+    (Number.isInteger(o.posicion) && o.posicion !== h.posicion)
+  ) {
+    rechazadas.push({
+      operacion: o,
+      motivo: `«${cita}» está en «${h.lista}», ítem ${(h.posicion ?? 0) + 1} — no donde dice la operación`,
+    });
+    return null;
+  }
+  return { ...o, lista: h.lista, posicion: h.posicion ?? 0 };
+}
+
+/**
  * ⭐⭐ LO QUE SE ACUERDA YA PASÓ POR EL EDITOR — la pieza que faltaba.
  *
  * ── LOS DOS AGUJEROS QUE ESTO CIERRA, los dos vistos en producción el 2026-08-22 ──────────────
@@ -539,14 +645,23 @@ export function prepararOperacionesDeDocumento(
        calcularla —la lista no existe, el ítem no tiene texto— la operación sigue sin ancla y el
        dry-run de abajo la rechaza con el motivo REAL, en vez de con uno inventado. */
     const s = porKey.get((o as { key?: string }).key ?? "");
-    if (s && (o.op === "seccion.item.borrar" || o.op === "seccion.item.mover")) {
-      const ancla = anclaDeItem(s.data, o.lista, o.posicion);
-      aceptadas.push(ancla === null ? o : { ...o, ancla });
-    } else if (s && o.op === "seccion.campo") {
-      const ancla = anclaDeRuta(s.schema, s.data, o.campo);
-      aceptadas.push(ancla === null ? o : { ...o, ancla });
+
+    /* ⭐ PRIMERO LA CITA, DESPUÉS EL ANCLA — y el orden ES el diseño. La cita resuelve CUÁL; el
+       ancla se calcula sobre la coordenada YA resuelta, para proteger que siga siendo ése entre
+       acordar y aplicar. Al revés, el ancla se calcularía sobre el índice que el modelo adivinó,
+       o sea que confirmaría su propia equivocación. */
+    const conCoordenada = s ? resolverCitaDeOperacion(o, s, rechazadas) : o;
+    if (conCoordenada === null) continue;
+    const c = conCoordenada;
+
+    if (s && (c.op === "seccion.item.borrar" || c.op === "seccion.item.mover") && c.lista) {
+      const ancla = anclaDeItem(s.data, c.lista, c.posicion ?? -1);
+      aceptadas.push(ancla === null ? c : { ...c, ancla });
+    } else if (s && c.op === "seccion.campo" && c.campo) {
+      const ancla = anclaDeRuta(s.schema, s.data, c.campo);
+      aceptadas.push(ancla === null ? c : { ...c, ancla });
     } else {
-      aceptadas.push(o);
+      aceptadas.push(c);
     }
   }
 
@@ -610,6 +725,13 @@ export function aplicarOperacionesDeDocumento(
       case "seccion.campo": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        /* ⛔ Sin ruta no se escribe. La `cita` la resuelve `prepararOperacionesDeDocumento`; si
+           una operación llega hasta acá sin `campo`, es que la cita no resolvió — y adivinar el
+           campo «más parecido» es exactamente lo que este vocabulario existe para impedir. */
+        if (!o.campo?.trim()) {
+          rechazar(o, "no se pudo resolver qué campo cambiar: falta `campo` o una `cita` que exista");
+          break;
+        }
         const res = resolverRuta(s.schema, s.data, o.campo);
         if (!res.ok) { rechazar(o, res.motivo); break; }
         if (o.ancla) {
@@ -708,31 +830,39 @@ export function aplicarOperacionesDeDocumento(
       case "seccion.item.mover": {
         const s = buscar(o.key);
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        /* ⛔ Ídem que en `seccion.campo`: sin lista no se toca nada. Sin esta línea, `data[undefined]`
+           es `undefined`, el `Array.isArray` de abajo lo caza — pero el motivo diría «"undefined" no
+           es una lista», que manda a buscar una lista que nadie nombró. */
+        if (!o.lista?.trim()) {
+          rechazar(o, "no se pudo resolver qué ítem tocar: falta `lista`+`posicion` o una `cita` que exista");
+          break;
+        }
         const arr = s.data[o.lista] as unknown[] | undefined;
         if (!Array.isArray(arr)) { rechazar(o, `«${o.lista}» no es una lista de esa sección`); break; }
         /* ⚠ `Number.isInteger` primero: sin él, un `posicion` ausente atravesaba las dos
            comparaciones (`undefined < 0` y `undefined >= n` son ambas `false`) y llegaba al
            `splice`, que borra el ítem 0. Hoy lo frenaba el ancla; el día que el ancla se calcule
            bien, esto sería un borrado silencioso del primer ítem. */
-        if (!Number.isInteger(o.posicion) || o.posicion < 0 || o.posicion >= arr.length) {
-          rechazar(o, `esa lista tiene ${arr.length} ítems y se pidió el ${o.posicion + 1}`);
+        const pos = o.posicion;
+        if (typeof pos !== "number" || !Number.isInteger(pos) || pos < 0 || pos >= arr.length) {
+          rechazar(o, `esa lista tiene ${arr.length} ítems y se pidió el ${(pos ?? 0) + 1}`);
           break;
         }
         /* ⛔ Acá el ancla es OBLIGATORIA y el chequeo NO es condicional: si no se puede
            determinar cómo se llama el ítem que está en esa posición, no se toca. Volverlo
            condicional —«si hay ancla y no coincide»— es la edición que parece natural y apaga la
            protección para toda operación que la app olvidó anclar. */
-        const actual = anclaDeItem(s.data, o.lista, o.posicion);
+        const actual = anclaDeItem(s.data, o.lista, pos);
         if (actual !== o.ancla) {
           rechazar(o, `«${o.ancla}» ya no está en esa posición: alguien reordenó la lista`);
           break;
         }
         const next = arr.slice();
         if (o.op === "seccion.item.borrar") {
-          next.splice(o.posicion, 1);
+          next.splice(pos, 1);
         } else {
           const destino = Math.max(0, Math.min(next.length - 1, o.a));
-          const [item] = next.splice(o.posicion, 1);
+          const [item] = next.splice(pos, 1);
           next.splice(destino, 0, item);
         }
         s.data[o.lista] = next;
@@ -999,11 +1129,20 @@ export function describirOperacionesDeDocumento(
            de qué tarjeta habla. El ancla —el texto que HOY tiene ese ítem— ya se calcula para
            proteger la operación de un reordenamiento; usarla acá no cuesta nada y convierte la
            línea en algo legible: «en la tarjeta «Migración desde Excel», el detalle pasa a…». */
-        const donde = anclaDeRuta(porKey.get(o.key)?.schema, porKey.get(o.key)?.data, o.campo);
-        const hoja = o.campo.split(".").pop() ?? o.campo;
+        /* ⚠ La ruta ya viene resuelta: `prepararOperacionesDeDocumento` traduce la `cita` ANTES
+           de describir, así que citar y nombrar la ruta producen la MISMA línea. Si igual llega
+           sin ruta —un acuerdo viejo del hilo—, la línea nombra el texto citado en vez de dejar
+           un hueco. */
+        const ruta = o.campo?.trim() ?? "";
+        if (!ruta) {
+          const q = o.cita?.trim();
+          return `En «${nombre(o.key)}», ${q ? `«${recortar(q)}»` : "un campo sin identificar"} pasa a: «${recortar(o.valor ?? "")}»`;
+        }
+        const donde = anclaDeRuta(porKey.get(o.key)?.schema, porKey.get(o.key)?.data, ruta);
+        const hoja = ruta.split(".").pop() ?? ruta;
         const ubicacion = donde
           ? `En «${nombre(o.key)}», en «${donde}», ${campoDicho(o.key, hoja)}`
-          : `En «${nombre(o.key)}», ${campoDicho(o.key, o.campo)}`;
+          : `En «${nombre(o.key)}», ${campoDicho(o.key, ruta)}`;
         return `${ubicacion} pasa a: «${recortar(o.valor ?? "")}»${
           sinEnlace ? " ⚠ sin enlace, el botón no se va a ver" : ""
         }`;
