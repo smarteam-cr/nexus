@@ -43,6 +43,16 @@ import {
 export interface SeccionReferida {
   key: string;
   label: string;
+  /**
+   * ⭐ El texto del ÍTEM que se señaló, cuando el pedido salió del 💬 de una tarjeta y no del
+   * botón de la sección entera.
+   *
+   * Es la misma cuerda que el campo `cita` de las operaciones (`lib/canvas/citas-de-documento.ts`):
+   * el modelo recibe el texto que la persona señaló y lo devuelve como identificador. Por eso
+   * señalar en pantalla y escribir «cambiá donde dice X» terminan en el MISMO mecanismo — no en
+   * dos caminos que pueden divergir.
+   */
+  cita?: string;
 }
 
 interface Registro {
@@ -140,6 +150,45 @@ export function useChatDeSeccion(): Registro {
 }
 
 /**
+ * ⭐ LA SECCIÓN QUE SE ESTÁ PINTANDO, para que un botón hondo sepa a qué pertenece.
+ *
+ * El 💬 de un ítem vive dentro de `SortableItems`, que está a tres o cuatro niveles del motor y
+ * solo conoce el array que le pasaron. Para poder señalar necesita dos cosas que solo `LandingView`
+ * tiene: de qué sección es, y qué listas puede tocar el chat.
+ *
+ * ⭐ **La lista se resuelve por IDENTIDAD DE REFERENCIA** contra ese `data`, no por un nombre que
+ * cada renderer escriba a mano. Un nombre escrito a mano es un nombre que puede quedar viejo: el
+ * día que alguien renombre la clave en el schema, el botón seguiría señalando la lista anterior y
+ * el chat escribiría en otro lado. La referencia no puede quedar vieja.
+ *
+ * ⛔ Sin proveedor —vista del cliente, PDF— no hay señalado, igual que el botón de la sección.
+ */
+export interface SeccionEnPantalla {
+  key: string;
+  label: string;
+  /** El MISMO objeto `data` que recibe el componente: la identidad de sus arrays es la llave. */
+  data: Record<string, unknown>;
+  /** El esquema que el CHAT alcanza. Lo que no está declarado ahí no se puede señalar. */
+  schema: unknown;
+}
+
+const CtxEnPantalla = createContext<SeccionEnPantalla | null>(null);
+
+export function SeccionEnPantallaProvider({
+  valor,
+  children,
+}: {
+  valor: SeccionEnPantalla;
+  children: ReactNode;
+}) {
+  return <CtxEnPantalla.Provider value={valor}>{children}</CtxEnPantalla.Provider>;
+}
+
+export function useSeccionEnPantalla(): SeccionEnPantalla | null {
+  return useContext(CtxEnPantalla);
+}
+
+/**
  * El marcador de alcance que se antepone al mensaje del CSE.
  *
  * ⚠ Va en el CONTENIDO del turno y no en un campo aparte porque el hilo se re-manda entero al
@@ -154,8 +203,15 @@ export const MARCA_DE_ALCANCE = "[SOBRE LA SECCIÓN";
 
 export function lineaDeAlcance(seccion: SeccionReferida | null): string {
   if (!seccion) return "";
+  /* ⚠ La línea de la cita va DENTRO del bloque, antes de la línea en blanco que lo cierra: si
+     quedara después, `mensajeSinAlcance` cortaría en el primer «\n\n» y el marcador se pintaría
+     crudo arriba del mensaje de la persona — el bug que ya se vio en pantalla el 2026-08-22. */
+  const cita = seccion.cita?.trim()
+    ? `Señaló el punto que dice: «${seccion.cita.trim()}». Úsalo como \`cita\` para identificarlo.\n`
+    : "";
   return (
     `${MARCA_DE_ALCANCE} «${seccion.label}» (${seccion.key})]\n` +
+    cita +
     "Es de dónde vino el pedido, no un límite: si lo que sigue habla de otra sección, atiéndelo igual.\n\n"
   );
 }

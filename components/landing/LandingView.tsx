@@ -17,8 +17,8 @@
  * Reusa los motion hooks del kickoff (useReveal / useHeroParallax) buscando
  * `.reveal` / `.hero-backdrop` dentro del contenedor.
  */
-import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
-import { nombreParaElChat } from "@/lib/canvas/capacidades-de-documento";
+import { useChatDeSeccion, SeccionEnPantallaProvider } from "@/components/asistente/chat-de-seccion";
+import { nombreParaElChat, schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
 import {
@@ -356,7 +356,17 @@ export default function LandingView({
     const typedData = { ...data };
     delete typedData.__legacyMd;
     const showLegacy = !!legacyMd && !isHero && isBlank(typedData);
-    const sectionBody = showLegacy ? (
+    /* ⭐ Lo que el 💬 de cada ítem necesita y no puede deducir desde adentro: de qué sección es, y
+       qué listas alcanza el chat. La lista se resuelve por IDENTIDAD DE REFERENCIA contra ESTE
+       `data`, así que tiene que ser el MISMO objeto que recibe el componente — no una copia.
+       ⛔ Sin proveedor de chat el botón no se pinta: la vista del cliente y el PDF montan esto. */
+    const enPantalla = {
+      key: def.key,
+      label: nombreParaElChat(def, effTitle),
+      data,
+      schema: schemaParaElChat(def),
+    };
+    const cuerpo = showLegacy ? (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {editable && <LegacyNotice />}
         <Prose content={legacyMd} />
@@ -378,6 +388,7 @@ export default function LandingView({
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />
     );
+    const sectionBody = <SeccionEnPantallaProvider valor={enPantalla}>{cuerpo}</SeccionEnPantallaProvider>;
 
     /* Chrome ESTANDARIZADO: badge de oculto + controles del workspace + caret de
        colapsar + toggle de ojo + handle de drag, arriba a la derecha. */
@@ -429,7 +440,11 @@ export default function LandingView({
     // En EDICIÓN, las que se pueden ocultar o arrastrar reciben el chrome del motor dentro de un
     // contenedor relativo; `ctxEmpty` evita dejar ese chrome flotando sobre la nada.
     if (def.ctxDriven) {
+      /* También acá el proveedor: estas secciones se alimentan de `ctx`, así que el 💬 casi nunca va a
+         resolver una lista — pero el CTA del cierre SÍ lee `data`, y dejar la rama afuera sería que
+         señalar funcione en nueve documentos y en el décimo no, sin motivo. */
       const body = (
+        <SeccionEnPantallaProvider valor={enPantalla}>
         <Comp
           data={data}
           ctx={ctx}
@@ -446,6 +461,7 @@ export default function LandingView({
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />
+        </SeccionEnPantallaProvider>
       );
       /* `ctxEmpty` PRIMERO. Estaba después del early-return de abajo, y ese return exige
          `editable`: en LECTURA se salía antes y `ctxEmpty` no se evaluaba nunca. O sea que
