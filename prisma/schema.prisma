@@ -4195,3 +4195,88 @@ model MensajeDeChat {
   /// El orden de los turnos es estricto y se lee siempre completo, del más viejo al más nuevo.
   @@index([hiloId, createdAt])
 }
+
+/// ¿Esta licitación es para nosotros?
+///
+/// ⛔ FUERA no es "malo": es DESTRUCTIVO. El tablero de SICOP esconde por default lo marcado
+/// FUERA, así que un falso positivo no se lee como un error sino como que la licitación nunca
+/// existió. El prompt empuja a DUDOSO ante cualquier duda, y el default de un dato roto
+/// (enum inválido devuelto por el modelo) también es DUDOSO — nunca el que esconde.
+enum SicopEncaje {
+  DENTRO
+  DUDOSO
+  FUERA
+}
+
+/// Lo que la IA entendió leyendo un ticket del pipeline «Gobiernos»: título, descripción y
+/// TODAS sus notas. Las notas son la fuente rica —ahí están los requisitos de admisibilidad,
+/// la forma de cotizar, las garantías y la tecnología obligatoria— y hasta hoy solo servían
+/// si alguien las leía enteras adentro de HubSpot.
+///
+/// ⚠ ES UN CACHÉ, NO UNA FUENTE. HubSpot sigue siendo el dueño del dato; acá vive solo la
+/// interpretación. Se puede borrar entera sin perder nada que no se pueda recalcular (cuesta
+/// una corrida de IA, no información). Por eso no hay FK: la identidad es el id del ticket.
+model SicopLectura {
+  id String @id @default(cuid())
+
+  /// El ticket en HubSpot. Es la identidad: re-analizar actualiza, nunca duplica.
+  hubspotTicketId String @unique
+
+  /// Huella del TEXTO QUE SE LEYÓ (título + descripción + notas), no del ticket. Así una nota
+  /// nueva invalida el análisis y un cambio que no toca lo leído —mover de etapa, cambiar el
+  /// responsable— NO lo invalida. Sin esa distinción, arrastrar una tarjeta en HubSpot
+  /// re-analizaría el pipeline entero.
+  fuenteSha      String
+  /// 0 = se leyó solo el título. La pantalla lo dice: una conclusión sacada de un título no
+  /// vale lo mismo que una sacada del cartel resumido en las notas.
+  notasLeidas    Int     @default(0)
+  /// La fuente se recortó por tamaño: hay cartel que el modelo NO vio.
+  fuenteTruncada Boolean @default(false)
+
+  // ── De qué es ─────────────────────────────────────────────────────────────────
+  objeto      String?  @db.Text
+  institucion String?
+  /// Vocabulario CERRADO (lib/ventas/sicop-orden.ts). Array porque una contratación de
+  /// "sitio web + hosting + capacitación" es las tres cosas.
+  categorias  String[] @default([])
+
+  // ── ¿Es para nosotros? ────────────────────────────────────────────────────────
+  encaje        SicopEncaje @default(DUDOSO)
+  encajeRazon   String?     @db.Text
+  puntajeEncaje Int?
+
+  // ── ¿Lo podemos ganar? ────────────────────────────────────────────────────────
+  /// Nullable a propósito: cuando el texto no alcanza, el modelo lo OMITE en vez de adivinar.
+  /// Un 50 inventado es peor que un hueco, porque ordena.
+  probabilidad      Int?
+  probabilidadRazon String? @db.Text
+  /// [{ titulo, detalle, severidad: BLOQUEA|RIESGO }]
+  bloqueantes       Json?
+
+  // ── Cómo se evalúa y qué hay que entregar ─────────────────────────────────────
+  evaluacion  String? @db.Text
+  /// % del puntaje que se lleva el precio. 100 = subasta pura. null = el cartel no lo dice.
+  pesoPrecio  Int?
+  entregables String? @db.Text
+  /// [{ etiqueta, fecha: "AAAA-MM-DD"|null, nota }]
+  plazos      Json?
+
+  // ── Plata ─────────────────────────────────────────────────────────────────────
+  /// ⚠ ESTIMACIÓN leída de prosa, no un monto contratado: no se suma ni se factura. Ordena.
+  monto  Decimal? @db.Decimal(16, 2)
+  moneda String?
+
+  // ── Trazabilidad ──────────────────────────────────────────────────────────────
+  /// Cuánta información REAL había para leer (0-100). No es cuán segura suena la conclusión.
+  confianza   Int?
+  modelo      String?
+  analizadoEl DateTime
+  /// El análisis falló. La fila se guarda igual: sin ella la pantalla diría "sin analizar"
+  /// para siempre y nadie sabría que se intentó.
+  error       String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([encaje])
+}

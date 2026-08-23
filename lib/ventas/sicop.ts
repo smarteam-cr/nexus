@@ -265,6 +265,88 @@ function aNumero(v: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// ── Las notas, que es donde está la información ────────────────────────────────
+
+/** Una nota cruda de HubSpot, tal como sale. El HTML lo limpia `sicop-lectura.ts`. */
+export interface NotaCruda {
+  id: string;
+  creadaEl: string | null;
+  cuerpo: string;
+}
+
+/** Trocea una lista en lotes del tamaño que aguanta el endpoint batch de HubSpot. */
+function enLotes<T>(xs: readonly T[], tam: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += tam) out.push(xs.slice(i, i + tam));
+  return out;
+}
+
+/**
+ * Las notas de un conjunto de tickets, en DOS llamadas por lote y no dos por ticket.
+ *
+ * ⚠ Va por los endpoints BATCH a propósito. La versión ingenua —una llamada de asociaciones
+ * más una de lectura por cada ticket— son 90 requests para las 45 licitaciones de hoy, y
+ * HubSpot tira 429 mucho antes de eso. Con lotes de 100 son 4.
+ *
+ * Devuelve un Map: un ticket sin notas simplemente no aparece.
+ */
+export async function leerNotasDeTickets(
+  hs: HsClient,
+  ticketIds: readonly string[],
+): Promise<Map<string, NotaCruda[]>> {
+  const porTicket = new Map<string, NotaCruda[]>();
+  if (ticketIds.length === 0) return porTicket;
+
+  // 1) ticket → ids de sus notas
+  const notasDelTicket = new Map<string, string[]>();
+  for (const lote of enLotes(ticketIds, 100)) {
+    const res = await hs.apiRequest({
+      method: "POST",
+      path: "/crm/v4/associations/tickets/notes/batch/read",
+      body: { inputs: lote.map((id) => ({ id })) },
+    });
+    if (res.status !== 200 && res.status !== 207) continue;
+    const data = (await res.json()) as {
+      results?: { from?: { id?: string }; to?: { toObjectId?: string | number }[] }[];
+    };
+    for (const r of data.results ?? []) {
+      const desde = r.from?.id;
+      if (!desde) continue;
+      const ids = (r.to ?? []).map((t) => String(t.toObjectId)).filter((s) => s && s !== "undefined");
+      if (ids.length) notasDelTicket.set(desde, ids);
+    }
+  }
+
+  // 2) cuerpo de cada nota
+  const todas = [...new Set([...notasDelTicket.values()].flat())];
+  const cuerpos = new Map<string, NotaCruda>();
+  for (const lote of enLotes(todas, 100)) {
+    const res = await hs.apiRequest({
+      method: "POST",
+      path: "/crm/v3/objects/notes/batch/read",
+      body: {
+        inputs: lote.map((id) => ({ id })),
+        properties: ["hs_note_body", "hs_createdate"],
+      },
+    });
+    if (res.status !== 200 && res.status !== 207) continue;
+    const data = (await res.json()) as {
+      results?: { id: string; properties: { hs_note_body?: string | null; hs_createdate?: string | null } }[];
+    };
+    for (const n of data.results ?? []) {
+      const cuerpo = n.properties.hs_note_body ?? "";
+      if (!cuerpo.trim()) continue;
+      cuerpos.set(n.id, { id: n.id, creadaEl: n.properties.hs_createdate ?? null, cuerpo });
+    }
+  }
+
+  for (const [ticketId, ids] of notasDelTicket) {
+    const notas = ids.map((id) => cuerpos.get(id)).filter((n): n is NotaCruda => !!n);
+    if (notas.length) porTicket.set(ticketId, notas);
+  }
+  return porTicket;
+}
+
 async function unaPasada(hs: HsClient): Promise<RespuestaCruda> {
   const { status: sEtapas, etapas } = await leerEtapas(hs);
   if (sEtapas !== 200) return { status: sEtapas, etapas: [], licitaciones: [] };
