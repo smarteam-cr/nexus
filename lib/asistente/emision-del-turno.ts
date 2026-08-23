@@ -56,8 +56,27 @@ export interface EstadoDelTurno {
    * mudo — y el caso que este módulo persigue es el MUDO.
    */
   opsUtilizables: number;
-  /** El modelo dejó una pregunta abierta en este turno. */
+  /**
+   * El modelo dejó una pregunta abierta en este turno, DECLARADA en su herramienta.
+   *
+   * ⛔ Solo existe si llamó la herramienta: es un campo de su input. Ver `preguntaEnElTexto`, que
+   * es la mitad que faltaba.
+   */
   preguntaAbierta: boolean;
+  /**
+   * ⭐ EL MODELO PREGUNTÓ SIN LLAMAR LA HERRAMIENTA, y sin esto ese turno se castigaba.
+   *
+   * El prompt le pide explícitamente NO llamarla en tres casos, y uno es preguntar. Pero
+   * `preguntaAbierta` viaja DENTRO de la herramienta, así que en ese caso llega siempre en
+   * `false`: un turno que pregunta con razón caía en `por-omision`, gastaba el único reintento —
+   * empujándolo a inventar justo donde tuvo razón en no hacerlo— y se llevaba encima un
+   * «⚠ no registré nada» que era falso. El docblock de abajo decía que no se reintentaba ahí; el
+   * estado era inalcanzable.
+   *
+   * La señal es mecánica y barata: el texto TERMINA en una pregunta. No se lee la prosa ni se
+   * interpreta la intención — se mira el último carácter.
+   */
+  preguntaEnElTexto?: boolean;
   /**
    * ⭐ El modelo escribió `<<<ACUERDO>>>` DENTRO de su propio texto en vez de llamar la herramienta.
    *
@@ -96,7 +115,7 @@ export function decidirReintento(e: EstadoDelTurno): QueHacerConElTurno {
    * El libro ENMASCARABA la omisión. La imitación no depende del libro, así que se pregunta antes.
    */
   if (e.imitoElMarcador && !e.preguntaAbierta) return "por-imitacion";
-  if (e.opsUtilizables === 0 && !e.preguntaAbierta) return "por-omision";
+  if (e.opsUtilizables === 0 && !e.preguntaAbierta && !e.preguntaEnElTexto) return "por-omision";
   return "no";
 }
 
@@ -109,6 +128,18 @@ export function decidirReintento(e: EstadoDelTurno): QueHacerConElTurno {
  *    la salida de contestar en texto. Sin esa salida, el reintento es una forma de forzar la
  *    herramienta con otro nombre.
  */
+/**
+ * ¿El turno termina en una pregunta? Mecánico: el último carácter con contenido es `?`.
+ *
+ * ⚠ Se mira el FINAL y no «hay un ? en el texto»: el modelo cita preguntas del CSE a mitad de una
+ * respuesta que sí cierra con un cambio, y esas no son preguntas suyas. Lo que define un turno de
+ * desambiguación es que TERMINA preguntando.
+ */
+export function terminaEnPregunta(texto: string): boolean {
+  const limpio = texto.replace(/[\s"'“”»)\]*_`]+$/u, "");
+  return limpio.endsWith("?");
+}
+
 export function reclamoDeOmision(huboTool: boolean): string {
   if (huboTool) {
     return (

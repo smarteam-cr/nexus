@@ -216,7 +216,7 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
       kpisConfirmados: "Confirmados (lo único que el cliente ve)",
     },
     avisoDelChat:
-      "⚠ dos listas: `kpisConfirmados` es lo ÚNICO que el cliente ve, y ahí podés CORREGIR " +
+      "⚠ dos listas: `kpisConfirmados` es lo ÚNICO que el cliente ve, y ahí puedes CORREGIR " +
       "(un valor, un nombre mal transcripto) pero no agregar. Un indicador nuevo entra por " +
       "`kpisPropuestos`, y el cliente no lo ve hasta que alguien lo acepta en la sección mirando " +
       "su cita. Dilo cuando lo propongas.",

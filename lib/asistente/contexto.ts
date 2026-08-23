@@ -413,7 +413,7 @@ export async function contextoDeDocumento(
              contenido legible» sobre una sección que en pantalla se lee entera, así que cuando le
              pedían resumirla escribía campos —lo único que sí veía— y la convertía en tarjetas,
              borrando el texto de la pantalla. Ver `formatoDeSeccion`. */
-          blocks: { orderBy: { order: "asc" }, select: { data: true, blockType: true, content: true } },
+          blocks: { orderBy: { order: "asc" }, select: { id: true, data: true, blockType: true, content: true } },
         },
       },
     },
@@ -498,7 +498,7 @@ export async function contextoDeDocumento(
         label: string;
         eyebrowOverride: string | null;
         _count: { blocks: number };
-        blocks: { data: unknown; blockType: string; content: string | null }[];
+        blocks: { id: string; data: unknown; blockType: string; content: string | null }[];
       }) => {
         const def = defDeSeccion(defs, s.key, s.label);
         /* ⭐ LA FIRMA ES LO QUE FALTABA. Sin ella el modelo tenía que adivinar cómo se llamaban
@@ -677,6 +677,10 @@ export async function contextoDeDocumento(
         markdown: markdownDeBloques(s.blocks),
         dataTipada: card?.data ?? {},
       }),
+      /* Solo lo usa `seccion.texto`: es el cuerpo de una sección escrita en prosa. */
+      bloquesDeTexto: s.blocks
+        .filter((b) => b.blockType !== "CARD")
+        .map((b) => ({ id: b.id, contenido: b.content ?? "" })),
     };
   });
 

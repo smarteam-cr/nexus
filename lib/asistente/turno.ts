@@ -45,6 +45,7 @@ import {
   decidirReintento,
   reclamoDeImitacion,
   reclamoDeOmision,
+  terminaEnPregunta,
 } from "@/lib/asistente/emision-del-turno";
 import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
 import { dependenciasDeOperaciones } from "@/lib/timeline/dependencias-de-operaciones";
@@ -298,7 +299,7 @@ que sí dos veces para el mismo cambio.
 
 Preguntas SOLO si el pedido admite dos lecturas distintas que producen RESULTADOS distintos, y
 entonces la pregunta ofrece las lecturas como opciones — no como un "¿seguimos?". Dos redacciones
-del mismo texto NO son dos lecturas: elegís la mejor, la escribís y la persona la lee en la lista.
+del mismo texto NO son dos lecturas: eliges la mejor, la escribes y la persona la lee en la lista.
 
 ⚠ Y el costo de equivocarte es asimétrico: proponer de más cuesta UNA línea que la persona
 desmarca; preguntar de más cuesta un viaje entero y la obliga a pedir lo mismo dos veces.
@@ -480,11 +481,13 @@ Cada sección se edita en el formato en el que ya está. Convertir una sección 
 un efecto secundario de otro pedido. Resumir, poner títulos más grandes o acortar se resuelven
 DENTRO del formato actual.
 
-Las secciones marcadas «⚠ FORMATO: TEXTO CORRIDO» no tienen campos escritos: se editan
-reescribiendo el texto con \`seccion.campo\` sobre el campo de texto que declara su firma. Escribir
-campos o listas ahí las convierte en tarjetas y BORRA el texto que hoy se ve, sin vuelta atrás —
-por eso el editor rechaza esas operaciones salvo que emitas \`convertir: true\`, que reservas para
-cuando te pidieron el cambio de formato con esas palabras.
+Las secciones marcadas «⚠ FORMATO: TEXTO CORRIDO» no tienen campos: su cuerpo ES un texto. Se
+editan con \`seccion.texto\`, que lleva el texto COMPLETO ya reescrito en \`valor\` — lo que pongas
+reemplaza a todo lo que hay. Resumir, acortar o meterle títulos se hace ahí, dentro del texto.
+⛔ \`seccion.campo\` y las de ítem NO se usan en esas secciones: escribir campos las convierte en
+tarjetas y BORRA el texto que hoy se ve, sin vuelta atrás. El editor las rechaza, salvo que emitas
+\`convertir: true\` — y eso lo reservas para cuando te pidieron el cambio de formato con esas
+palabras.
 
 ⭐ TÚ ESCRIBES EL TEXTO, ENTERO Y FINAL.
 El valor que pones en una operación se escribe TAL CUAL en el documento: no hay un segundo modelo
@@ -508,7 +511,7 @@ quede nada por resolver: preguntar nunca cuesta perder la parte que ya estaba cl
 ⛔ SI LO QUE TE PIDEN NO ESTÁ EN LA FIRMA DE ESA SECCIÓN, NO LO APUNTES A OTRO CAMPO.
 Cada sección declara entre corchetes lo que tiene. Si el pedido nombra algo que no está ahí —una
 línea, un número, una imagen— NO elijas el campo más parecido: di qué campos tiene esa sección,
-cuál creés que quiso decir, y dónde se cambia lo que pidió si no es desde acá. Cambiar algo
+cuál crees que quiso decir, y dónde se cambia lo que pidió si no es desde acá. Cambiar algo
 parecido es peor que no cambiar nada: la persona aprueba una cosa y se escribe otra.
 
 Solo NO llamas la herramienta en tres casos: el pedido no entra en el vocabulario, te preguntan
@@ -619,7 +622,9 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
               type: "string",
               description:
                 "En `seccion.campo`: el texto nuevo, completo — lo escribes tú. En " +
-                "`seccion.item.agregar`: el texto del ítem, cuando la lista está marcada `(texto)`.",
+                "`seccion.item.agregar`: el texto del ítem, cuando la lista está marcada `(texto)`. " +
+                "En `seccion.texto`: el CUERPO ENTERO de la sección ya reescrito, que reemplaza a " +
+                "todo lo que hay.",
             },
             /* ⛔ ACÁ SUGERÍA `items` Y `filas`, y el modelo les hacía caso: probó `items` sobre una
                sección cuya lista se llama `metrics`. La descripción de un parámetro es una
@@ -657,6 +662,8 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
                sección de texto a campos BORRA el texto de la pantalla para siempre. Sin este
                campo la única salida sería adivinar la intención, que es justo lo que produjo el
                fallo. Ver `SeccionActual.formato`. */
+            /* ⭐ La operación que hace editable una sección en prosa. Sin ella, la regla del
+               formato dejaba esas secciones sin ninguna salida y el modelo caía a `convertir`. */
             convertir: {
               type: "boolean",
               description:
@@ -1152,6 +1159,10 @@ export async function correrTurno(
       /* Señal DURA: ese marcador lo pone la app y el modelo no tiene ningún motivo legítimo para
          escribirlo. Si aparece, quiso dejar un cambio y usó el camino que no registra nada. */
       imitoElMarcador: respuesta.includes(MARCA_DE_ACUERDO),
+      /* ⭐ La mitad que faltaba: `preguntaAbierta` vive DENTRO de la herramienta, así que un turno
+         que pregunta SIN llamarla —que es lo que el prompt le pide en ese caso— llegaba con
+         `false` y se comía el reintento. Ver `terminaEnPregunta`. */
+      preguntaEnElTexto: !idDeLaHerramienta && terminaEnPregunta(respuesta),
     });
     /* ⚠ UNA bandera para «se le reclamó», no una por motivo: lo que decide el aviso final no es
        POR QUÉ se reclamó sino que se reclamó y siguió sin emitir. */

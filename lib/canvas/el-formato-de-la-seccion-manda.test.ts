@@ -151,6 +151,92 @@ describe("el ejecutor no convierte una sección sin que se lo pidan", () => {
   });
 });
 
+describe("⭐ y una sección en prosa SÍ se puede editar: `seccion.texto`", () => {
+  /**
+   * ⛔ LA REGLA DEL FORMATO CASI DEJA ESAS SECCIONES INEDITABLES, y eso habría sido peor que el
+   * fallo que vino a arreglar. El rechazo de arriba es correcto, pero el vocabulario no tenía
+   * NINGUNA operación que escribiera prosa: la única salida que le quedaba al modelo era
+   * `convertir` — o sea, la pérdida irreversible que el rechazo existe para impedir. Lo encontró
+   * la revisión adversarial del rango: el prompt mandaba usar `seccion.campo` ahí y el ejecutor la
+   * rebotaba siempre; dos frases que se contradecían en renglones consecutivos.
+   */
+  const conTexto = (over: Partial<SeccionActual> = {}): SeccionActual =>
+    enProsa({
+      bloquesDeTexto: [{ id: "b1", contenido: "## Recomendaciones\n\nMigrar el CRM." }],
+      ...over,
+    });
+
+  it("⭐ reescribe el cuerpo sobre el bloque de TEXTO, no sobre el CARD", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [conTexto()],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "## Resumen\n\nMigrar el CRM en dos fases." }],
+      TODO,
+    );
+    expect(r.rechazadas).toEqual([]);
+    expect(r.plan).toEqual([
+      {
+        tipo: "texto",
+        sectionId: "s1",
+        blockId: "b1",
+        contenido: "## Resumen\n\nMigrar el CRM en dos fases.",
+      },
+    ]);
+  });
+
+  it("la línea lleva el TEXTO NUEVO, no «se reescribe el cuerpo»", () => {
+    const [linea] = describirOperacionesDeDocumento(
+      [conTexto()],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "Migrar el CRM en dos fases." }],
+    );
+    expect(linea).toContain("Migrar el CRM en dos fases.");
+  });
+
+  it("⛔ sobre una sección de CAMPOS se rechaza: el markdown quedaría debajo, invisible", () => {
+    const r = aplicarOperacionesDeDocumento(
+      [conTexto({ formato: "estructurado", data: { intro: "hola" } })],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "texto" }],
+      TODO,
+    );
+    expect(r.plan).toEqual([]);
+    expect(r.rechazadas[0].motivo).toContain("está escrita en CAMPOS");
+  });
+
+  it("⛔ con DOS bloques de texto no se elige uno: se dice y se para", () => {
+    /* Escribir el primero y dejar el otro sería la misma pérdida por otra puerta. */
+    const r = aplicarOperacionesDeDocumento(
+      [conTexto({ bloquesDeTexto: [{ id: "b1", contenido: "uno" }, { id: "b2", contenido: "dos" }] })],
+      [{ op: "seccion.texto", key: "recomendaciones", valor: "texto" }],
+      TODO,
+    );
+    expect(r.plan).toEqual([]);
+    expect(r.rechazadas[0].motivo).toContain("2 bloques de texto");
+  });
+
+  it("⛔ y el rechazo por formato manda a `seccion.texto`, no a un callejón", () => {
+    /* El motivo decía «Redacta el cambio como TEXTO», que era una instrucción para hacer algo que
+       no existía. Ahora nombra la operación que sí. */
+    const r = aplicarOperacionesDeDocumento(
+      [conTexto()],
+      [{ op: "seccion.campo", key: "recomendaciones", campo: "intro", valor: "x" }],
+      TODO,
+    );
+    expect(r.rechazadas[0].motivo).toContain("seccion.texto");
+  });
+
+  it("⭐ y el prompt manda lo mismo que el ejecutor acepta", () => {
+    /* La contradicción vivía acá: el prompt decía `seccion.campo` para las secciones en prosa. */
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/asistente/turno.ts"), "utf8");
+    const i = src.indexOf("EL FORMATO EN EL QUE ESTÁ LA SECCIÓN MANDA");
+    const tramo = src.slice(i, src.indexOf("⭐ TÚ ESCRIBES EL TEXTO", i));
+    expect(tramo.length, "se movió la regla del formato: la guarda no mira nada").toBeGreaterThan(400);
+    expect(tramo).toContain("seccion.texto");
+    expect(
+      tramo,
+      "el prompt vuelve a mandar la operación que el ejecutor rechaza siempre en esas secciones",
+    ).not.toContain("se editan\nreescribiendo el texto con `seccion.campo`");
+  });
+});
+
 describe("las TRES mitades leen el mismo predicado", () => {
   /* Si cada una lo dedujera por su cuenta, la primera divergencia sería una pérdida de contenido
      silenciosa: el chat acordaría escribir campos sobre algo que el motor está pintando como

@@ -16,6 +16,7 @@ import {
   avisoDeTurnoSinAcuerdo,
   reclamoDeOmision,
   reclamoDeImitacion,
+  terminaEnPregunta,
 } from "./emision-del-turno";
 
 const leer = (f: string) => fs.readFileSync(path.join(RAIZ, f), "utf8");
@@ -248,3 +249,62 @@ describe("las dos decisiones están CABLEADAS, no solo escritas", () => {
     }
   });
 });
+
+describe("⛔ preguntar SIN llamar la herramienta no es un turno mudo", () => {
+  /**
+   * El docblock de `decidirReintento` decía «no se reintenta cuando el modelo dejó una pregunta
+   * abierta»… y ese estado era INALCANZABLE en el caso que importa: `preguntaAbierta` viaja DENTRO
+   * de la herramienta, y el prompt le pide explícitamente NO llamarla cuando pregunta.
+   *
+   * Consecuencia medida: un turno de desambiguación legítimo caía en `por-omision`, gastaba el
+   * único reintento —empujándolo a inventar justo donde tuvo razón en no hacerlo— y se llevaba
+   * encima un «⚠ no registré nada» falso. Lo encontró la revisión adversarial del rango.
+   */
+  it("⭐ el turno que TERMINA preguntando no dispara el reintento", () => {
+    expect(
+      decidirReintento({
+        rechazadas: 0,
+        huboTool: false,
+        opsUtilizables: 0,
+        preguntaAbierta: false,
+        imitoElMarcador: false,
+        preguntaEnElTexto: true,
+      }),
+    ).toBe("no");
+  });
+
+  it("…y sin la pregunta, el mismo turno SÍ lo dispara", () => {
+    expect(
+      decidirReintento({
+        rechazadas: 0,
+        huboTool: false,
+        opsUtilizables: 0,
+        preguntaAbierta: false,
+        imitoElMarcador: false,
+        preguntaEnElTexto: false,
+      }),
+    ).toBe("por-omision");
+  });
+
+  it("la señal es MECÁNICA: el texto termina en «?», no «hay un ? por ahí»", () => {
+    /* El modelo cita preguntas del CSE a mitad de una respuesta que sí cierra con un cambio. Lo
+       que define un turno de desambiguación es que TERMINA preguntando. */
+    expect(terminaEnPregunta("¿Querés que lo resuma o que lo acorte?")).toBe(true);
+    expect(terminaEnPregunta("¿Lo acorto?  "+String.fromCharCode(10))).toBe(true);
+    expect(terminaEnPregunta("**¿Cuál de las dos?**")).toBe(true);
+    expect(
+      terminaEnPregunta("Preguntaste «¿se puede ocultar?». Sí: lo dejo listo."),
+      "una pregunta CITADA a mitad de un turno que sí propone no es una pregunta suya",
+    ).toBe(false);
+    expect(terminaEnPregunta("Listo, lo apliqué.")).toBe(false);
+  });
+
+  it("⭐ y el turno lo CABLEA solo cuando no hubo herramienta", () => {
+    /* Con herramienta, el canal declarado es `preguntaAbierta`: mirar el texto además abriría una
+       segunda fuente para lo mismo, que es como divergen. */
+    expect(leer("lib/asistente/turno.ts")).toContain(
+      "preguntaEnElTexto: !idDeLaHerramienta && terminaEnPregunta(respuesta)",
+    );
+  });
+});
+

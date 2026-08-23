@@ -99,6 +99,63 @@ describe("releer la base y comparar", () => {
     expect(borrado[0]).toContain("sigue en");
   });
 
+  it("⛔ NO avisa en falso cuando el orden de las claves no es el del esquema", () => {
+    /* `identidadDeItem` recorre el esquema; `Object.values` recorría el orden en que el modelo
+       escribió las claves. Con `{role, name}` buscaba «CSE» mientras el ítem vivo se llama
+       «Ana Pérez», y avisaba de un fallo que no ocurrió. */
+    const conEquipo = seccion({
+      key: "equipo",
+      label: "El equipo del proyecto",
+      schema: {
+        type: "object",
+        properties: {
+          members: {
+            type: "array",
+            items: { type: "object", properties: { name: { type: "string" }, role: { type: "string" } } },
+          },
+        },
+      },
+      data: { members: [{ name: "Ana Pérez", role: "CSE" }] },
+    });
+    expect(
+      verificarOperacionesDeDocumento(
+        [conEquipo],
+        [
+          {
+            op: "seccion.item.agregar",
+            key: "equipo",
+            lista: "members",
+            valores: { role: "CSE", name: "Ana Pérez" },
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it("⛔ y NO verifica el ítem cuya identidad reescribe la app", () => {
+    /* «agregá a Elías» entra como `{name:"Elías"}` y sale como «Elías González», el nombre del
+       directorio. Buscar el que se escribió produce un fallo inventado sobre un cambio perfecto. */
+    const conEquipo = seccion({
+      key: "equipo",
+      label: "El equipo del proyecto",
+      schema: {
+        type: "object",
+        properties: {
+          members: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } },
+        },
+      },
+      data: { members: [{ name: "Elías González" }] },
+    });
+    const ops: OperacionDeDocumento[] = [
+      { op: "seccion.item.agregar", key: "equipo", lista: "members", valores: { name: "Elías" } },
+    ];
+    expect(verificarOperacionesDeDocumento([conEquipo], ops), "sin completador sí avisa").toHaveLength(1);
+    expect(
+      verificarOperacionesDeDocumento([conEquipo], ops, (k) => k === "equipo"),
+      "con completador NO puede afirmar nada, y callarse es lo honesto",
+    ).toEqual([]);
+  });
+
   it("el ojo, el título y el rótulo también se releen", () => {
     expect(
       verificarOperacionesDeDocumento([seccion()], [{ op: "seccion.ocultar", key: "objetivos" }])[0],
@@ -188,10 +245,36 @@ describe("las piezas siguen conectadas", () => {
     expect(j).toBeGreaterThan(i);
   });
 
+  it("⛔ y el aplicador le pasa CUÁLES tienen completador, no una constante", () => {
+    /* Con `() => false` la guarda de arriba sigue verde —prueba la función, no el cableado— y el
+       equipo del kickoff vuelve a avisar en falso en cada alta. */
+    expect(leer("components/asistente/ejecutar-operaciones.ts")).toContain("(key) => !!comps?.[key]");
+  });
+
   it("⛔ solo se verifica lo ACEPTADO: lo rechazado ya viaja con su motivo", () => {
     const src = leer("components/asistente/ejecutar-operaciones.ts");
     expect(src).toContain("const aplicadas = ops.filter(");
-    expect(src).toContain("verificarOperacionesDeDocumento(seccionesParaElEjecutor(frescas, defs)");
+    expect(src).toContain("verificarOperacionesDeDocumento(");
+    expect(src).toContain("seccionesParaElEjecutor(frescas, defs),");
+  });
+
+  it("⛔ `rechazadas` se declara UNA sola vez en el objeto de retorno", () => {
+    /* Estaban las dos: un spread condicional con los «no se pudo crear «X»» y, debajo, la
+       propiedad literal. La última clave gana, así que el spread era código muerto y una sección
+       que el servidor rechazó crear no llegaba al hilo — con el contenido que la persona había
+       aprobado perdido en silencio, porque las escrituras apuntaban a un `ref` que no nació.
+       ⚠ `tsc` no lo ve: con un spread en el medio, repetir una clave es LEGAL.
+       La edición que la pone en rojo: volver a partirlo en dos. */
+    const src = leer("components/asistente/ejecutar-operaciones.ts");
+    const desde = src.lastIndexOf("    return {");
+    const retorno = src.slice(desde, src.indexOf("\n    };", desde));
+    expect(retorno.length, "se movió el retorno del aplicador: la guarda no mira nada").toBeGreaterThan(300);
+    expect(
+      (retorno.match(/\brechazadas:/g) ?? []).length,
+      "hay más de un `rechazadas:` en el mismo objeto: el de abajo pisa al de arriba",
+    ).toBe(1);
+    /* Y que siga llevando las dos fuentes: lo que rechazó el ejecutor y lo que no se pudo crear. */
+    expect(retorno).toContain("sinNacer.map(");
   });
 
   it("⭐ el mapeo de secciones es UNO SOLO para el render y para la verificación", () => {

@@ -142,6 +142,23 @@ describe("el asistente habla español neutro, no rioplatense", () => {
       .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
       .replace(/^\s*\/\/.*$/gm, "");
 
+  /**
+   * ⚠ SOLO los `avisoDelChat` de las defs, no el archivo entero.
+   *
+   * `contexto.ts:510` los pega detrás de la firma de cada sección, así que son texto que el modelo
+   * lee igual que el prompt — y ahí se había colado un «podés». El `brief`, en cambio, es de los
+   * agentes que GENERAN: no cruza al chat, y meterlo en esta guarda la volvía roja con 19 formas
+   * viejas que este carril no toca. Una guarda que nace roja por algo ajeno se apaga con un
+   * `skip` a la semana.
+   */
+  const AVISOS_DE_LAS_DEFS = fs
+    .readdirSync(path.join(RAIZ, "components/landing/configs"))
+    .filter((f) => f.endsWith(".defs.ts"))
+    .flatMap((f) => {
+      const src = fs.readFileSync(path.join(RAIZ, "components/landing/configs", f), "utf8");
+      return [...src.matchAll(/avisoDelChat:\s*((?:"[^"]*"\s*\+?\s*)+)/g)].map((m) => m[1]);
+    });
+
   const TEXTO_QUE_EL_MODELO_LEE = [
     sinComentarios(FUENTE),
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8")),
@@ -157,6 +174,10 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     sinComentarios(
       fs.readFileSync(path.join(RAIZ, "lib/canvas/operaciones-de-documento.ts"), "utf8"),
     ),
+    /* ⚠ SUMADOS 2026-08-23: los `avisoDelChat` y los `brief` de las defs se interpolan al contexto
+       —`firmaDeSeccion` los pega detrás de cada sección— así que también son texto que el modelo
+       lee. Vivían fuera del alcance de esta guarda y ahí se había colado un «podés». */
+    ...AVISOS_DE_LAS_DEFS,
   ].join("\n");
 
   /** Las líneas que PROHIBEN el voseo tienen que poder nombrarlo. */
@@ -186,6 +207,9 @@ describe("el asistente habla español neutro, no rioplatense", () => {
        rioplatense de los MOTIVOS DE RECHAZO es otro puñado —«redactá el cambio», «repetí la
        operación», «citá el renglón»— y ninguna estaba en la lista. La rotura a propósito lo
        destapó: cambiar «Redacta» por «Redactá» dejaba la guarda en verde. */
+    "elegís",
+    "escribís",
+    "creés",
     "redactá",
     "repetí",
     "reescribí",

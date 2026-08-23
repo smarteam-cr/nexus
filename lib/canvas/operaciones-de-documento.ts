@@ -130,6 +130,22 @@ export type OperacionDeDocumento =
       ancla?: string;
       convertir?: boolean;
     }
+  /**
+   * ⭐ REESCRIBIR EL CUERPO DE UNA SECCIÓN EN PROSA — la operación que faltaba, y sin ella la
+   * regla del formato dejaba esas secciones INEDITABLES.
+   *
+   * El 2026-08-23 el ejecutor empezó a rechazar `seccion.campo` sobre una sección en prosa, con
+   * razón: escribir un campo crea el bloque CARD y el texto desaparece para siempre. Pero el
+   * vocabulario no tenía NINGUNA operación que escribiera prosa, así que la única salida que
+   * quedaba era `convertir` — o sea, exactamente la pérdida que el rechazo venía a impedir. El
+   * prompt mandaba usar `seccion.campo` ahí y el ejecutor la rebotaba siempre: dos frases que se
+   * contradecían en renglones consecutivos.
+   *
+   * Escribe el bloque TEXT, que es donde vive ese cuerpo. ⛔ Con más de un bloque de texto se
+   * RECHAZA: unirlos para escribir uno solo perdería los demás, y eso es la pérdida por otra
+   * puerta.
+   */
+  | { op: "seccion.texto"; key: string; valor: string }
   | { op: "seccion.vaciar"; key: string }
   // ESTRUCTURA
   | { op: "seccion.crear"; tipo: string; titulo: string; posicion?: number; ref?: string }
@@ -157,6 +173,7 @@ export type OperacionDeDocumento =
  */
 export const OPERACIONES_DE_DOCUMENTO_VALIDAS = [
   "seccion.campo",
+  "seccion.texto",
   "seccion.item.agregar",
   "seccion.item.borrar",
   "seccion.item.mover",
@@ -229,7 +246,10 @@ export function validarOperacionDeDocumento(
     hayCoordenada || (typeof o?.cita === "string" && (o.cita as string).trim()) ? null : etiqueta;
 
   const falta: (string | null)[] =
-    op === "seccion.campo"
+    op === "seccion.texto"
+      ? /* El cuerpo entero de la sección, y puede quedar vacío a propósito (borrar el texto). */
+        [texto("key"), presente("valor")]
+    : op === "seccion.campo"
       ? [texto("key"), coordenada("campo/cita", texto("campo") === null), presente("valor")]
     : op === "seccion.item.agregar"
       ? [
@@ -345,6 +365,13 @@ export interface SeccionActual {
    * cuyo contenido no vive en bloques.
    */
   formato?: FormatoDeSeccion;
+  /**
+   * Los bloques de TEXTO de la sección — su cuerpo cuando está escrita en prosa. Solo lo usa
+   * `seccion.texto`, que es la única operación que escribe ahí.
+   *
+   * ⚠ Vacío o ausente en toda sección estructurada: su cuerpo vive en el bloque CARD.
+   */
+  bloquesDeTexto?: readonly { id: string; contenido: string }[];
   /** El rótulo efectivo de hoy, para el ancla y para la línea que lee la persona. */
   rotulo?: string;
 }
@@ -384,6 +411,8 @@ export type EscrituraDeDocumento =
    * tiene id: viaja por su `ref` y el navegador lo resuelve al id real después de crearla.
    */
   | { tipo: "data"; sectionId?: string; ref?: string; data: unknown }
+  /** El cuerpo en PROSA de una sección: se escribe sobre su bloque TEXT, no sobre el CARD. */
+  | { tipo: "texto"; sectionId: string; blockId: string; contenido: string }
   | { tipo: "oculta"; sectionId: string; oculta: boolean }
   | { tipo: "titulo"; sectionId: string; titulo: string }
   | { tipo: "rotulo"; sectionId: string; rotulo: string }
@@ -817,6 +846,36 @@ export function aplicarOperacionesDeDocumento(
     actuales.map((s) => [s.key, { ...s, data: clonar(s.data) as Record<string, unknown> }]),
   );
   const tocadas = new Set<string>();
+
+  /**
+   * ⭐ DE QUÉ ÍNDICE ORIGINAL VIENE CADA ÍTEM QUE HOY ESTÁ EN LA LISTA.
+   *
+   * ── EL FALLO QUE LO TRAE, Y ES EL DE LA CAPTURA DE ELÍAS ──────────────────────────────────
+   * El ancla mide 24 caracteres. Con TRES ítems que empiezan igual —«Los tickets de Jira…»— la
+   * búsqueda por ancla devuelve tres coincidencias, no sabe cuál es, y caía a `o.posicion`… que
+   * está medida sobre la lista ANTES del lote. Si una operación anterior ya borró algo de esa
+   * misma lista, ese número apunta a otro ítem — y el chequeo de integridad lo deja pasar,
+   * porque el ítem equivocado tiene EL MISMO ancla.
+   *
+   * Medido: sobre `[A1, C, A2, A3]`, «quitá C y quitá A2» borraba C y **A3**. La línea que la
+   * persona aprobó decía A2. Sin rechazo y sin aviso — el modo de falla que este vocabulario
+   * existe para impedir, y el mismo síntoma que Elías reportó el 2026-08-23.
+   *
+   * ⛔ Y NO ALCANZA CON RECHAZAR CUANDO HAY AMBIGÜEDAD: «borrá estos dos» sobre dos ítems que
+   * empiezan igual es un pedido legítimo que hoy funciona. Lo que falta no es prudencia: es
+   * saber a qué ítem apuntaba el número. Eso se sabe exacto — el ejecutor es quien mueve la
+   * lista— llevando la cuenta de los índices originales. `-1` = nació en este mismo lote.
+   */
+  const origenes = new Map<string, number[]>();
+  const indicesDe = (key: string, lista: string, largo: number): number[] => {
+    const clave = `${key}::${lista}`;
+    let idx = origenes.get(clave);
+    if (!idx) {
+      idx = Array.from({ length: largo }, (_, i) => i);
+      origenes.set(clave, idx);
+    }
+    return idx;
+  };
   let orden = actuales.map((s) => s.key);
   let ordenTocado = false;
 
@@ -847,8 +906,9 @@ export function aplicarOperacionesDeDocumento(
       o,
       `«${s.label}» está escrita en el formato anterior: un texto corrido, sin campos. Escribir ` +
         `campos la convierte en tarjetas y el texto que hoy se ve deja de verse — y no hay forma ` +
-        `de recuperarlo desde el editor. Redacta el cambio como TEXTO; si la persona pidió ` +
-        `cambiarle el formato con esas palabras, repite la operación con \`convertir\`: true`,
+        `de recuperarlo desde el editor. Usa \`seccion.texto\` con el cuerpo entero ya reescrito ` +
+        `en \`valor\`; si la persona pidió cambiarle el formato con esas palabras, repite esta ` +
+        `operación con \`convertir\`: true`,
     );
     return true;
   };
@@ -966,6 +1026,9 @@ export function aplicarOperacionesDeDocumento(
         const pos = o.posicion === undefined ? arr.length : Math.max(0, Math.min(arr.length, o.posicion));
         const next = arr.slice();
         next.splice(pos, 0, nuevo);
+        /* `-1`: nació en este lote, así que ningún `posicion` de una operación posterior lo puede
+           nombrar por su índice original — y eso es correcto, porque no tenía. */
+        indicesDe(o.key, o.lista, arr.length).splice(pos, 0, -1);
         s.data[o.lista] = next;
         tocadas.add(o.key);
         break;
@@ -1023,7 +1086,22 @@ export function aplicarOperacionesDeDocumento(
         const coincidencias = o.ancla
           ? arr.reduce<number[]>((acc, it, i) => (esteItemEs(it) ? [...acc, i] : acc), [])
           : [];
-        const pos = coincidencias.length === 1 ? coincidencias[0] : o.posicion;
+        /* ⭐ La búsqueda manda cuando es INEQUÍVOCA; si no, el número se traduce por su índice de
+           origen. Sobre una lista que este lote no tocó, la traducción es la identidad — o sea que
+           el camino de siempre no cambia en nada. Ver `origenes`. */
+        const idxOrigen = indicesDe(o.key, o.lista, arr.length);
+        const pos =
+          coincidencias.length === 1
+            ? coincidencias[0]
+            : typeof o.posicion === "number"
+              ? idxOrigen.indexOf(o.posicion)
+              : undefined;
+        /* ⛔ El ítem que este número nombraba ya lo quitó otra operación del mismo lote. Decirlo es
+           lo único honesto: aplicarlo sobre el que ocupó su lugar es borrar lo que nadie aprobó. */
+        if (pos === -1) {
+          rechazar(o, `ese ítem ya lo quitó otro cambio de este mismo pedido`);
+          break;
+        }
         if (typeof pos !== "number" || !Number.isInteger(pos) || pos < 0 || pos >= arr.length) {
           rechazar(o, `esa lista tiene ${arr.length} ítems y se pidió el ${(pos ?? 0) + 1}`);
           break;
@@ -1040,13 +1118,47 @@ export function aplicarOperacionesDeDocumento(
         const next = arr.slice();
         if (o.op === "seccion.item.borrar") {
           next.splice(pos, 1);
+          idxOrigen.splice(pos, 1);
         } else {
           const destino = Math.max(0, Math.min(next.length - 1, o.a));
           const [item] = next.splice(pos, 1);
           next.splice(destino, 0, item);
+          /* La misma tijera sobre los orígenes: mover reordena, no crea ni borra. */
+          const [orig] = idxOrigen.splice(pos, 1);
+          idxOrigen.splice(destino, 0, orig);
         }
         s.data[o.lista] = next;
         tocadas.add(o.key);
+        break;
+      }
+
+      case "seccion.texto": {
+        const s = buscar(o.key);
+        if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
+        /* ⛔ Solo donde el cuerpo ES el texto. Sobre una sección de campos, escribir el bloque
+           TEXT no se vería: el motor pinta la data tipada y el markdown queda debajo, invisible —
+           el chat diría «aplicado» sobre algo que nadie va a leer. */
+        if (s.formato !== "prosa") {
+          rechazar(
+            o,
+            `«${s.label}» está escrita en CAMPOS, no en texto corrido: se edita con ` +
+              `\`seccion.campo\` sobre los campos que declara su firma`,
+          );
+          break;
+        }
+        const bloques = (s.bloquesDeTexto ?? []).filter((b) => b.contenido.trim());
+        /* ⛔ Con más de un bloque no se elige uno: unirlos para escribir el primero perdería los
+           demás, que es la misma pérdida por otra puerta. */
+        if (bloques.length !== 1) {
+          rechazar(
+            o,
+            bloques.length === 0
+              ? "esa sección no tiene un bloque de texto donde escribir"
+              : `esa sección tiene ${bloques.length} bloques de texto y no se puede saber en cuál va: se edita a mano`,
+          );
+          break;
+        }
+        plan.push({ tipo: "texto", sectionId: s.id, blockId: bloques[0].id, contenido: o.valor });
         break;
       }
 
@@ -1269,6 +1381,16 @@ export function aplicarOperacionesDeDocumento(
 export function verificarOperacionesDeDocumento(
   frescas: readonly SeccionActual[],
   operaciones: readonly OperacionDeDocumento[],
+  /**
+   * ⛔ QUÉ SECCIONES TIENEN COMPLETADOR, y sin esto la verificación AVISA EN FALSO.
+   *
+   * Un completador termina el ítem que el chat no puede escribir: «agregá a Elías» entra como
+   * `{name:"Elías"}` y sale como `{teamMemberId, name:"Elías González", role, photoUrl}` — el
+   * nombre del directorio, no el que se escribió. La identidad viva NO coincide con lo que la
+   * operación decía, así que buscarla produce «Elías no está en El equipo del proyecto» sobre un
+   * cambio que entró perfecto. Y un aviso falso enseña a ignorar los avisos justo donde importan.
+   */
+  tieneCompletador?: (key: string) => boolean,
 ): string[] {
   const porKey = new Map(frescas.map((s) => [s.key, s]));
   const avisos: string[] = [];
@@ -1293,9 +1415,15 @@ export function verificarOperacionesDeDocumento(
         if (!s || !o.lista) break;
         const arr = (s.data as Record<string, unknown> | undefined)?.[o.lista];
         if (!Array.isArray(arr)) break;
+        /* La app reescribe el ítem: no se puede afirmar nada sobre su identidad. Ver arriba. */
+        if (tieneCompletador?.(o.key)) break;
         const esquemaDeItems = schemaDeItemsDe(s.schema, o.lista);
+        /* ⛔ La identidad se calcula con la MISMA función y el MISMO esquema que la del ítem vivo.
+           Antes salía de `Object.values(o.valores)`, o sea del orden en que el modelo escribió las
+           claves: con `{role:"CSE", name:"Elías"}` buscaba «CSE» mientras la identidad viva era
+           «Elías», y avisaba de un fallo inventado. */
         const buscado = recortarAncla(
-          o.valor ?? Object.values(o.valores ?? {}).find((v) => v?.trim()) ?? "",
+          o.valor ?? identidadDeItem(o.valores ?? {}, false, esquemaDeItems) ?? "",
         );
         if (!buscado) break;
         if (!arr.some((it) => identidadDeItem(it, false, esquemaDeItems) === buscado)) {
@@ -1486,6 +1614,15 @@ export function describirOperacionesDeDocumento(
         return `Se quita ${itemDicho(o.key, o.lista, o.ancla, o.posicion)} de la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
       case "seccion.item.mover":
         return `${itemDicho(o.key, o.lista, o.ancla, o.posicion)} pasa al lugar ${(o.a ?? 0) + 1} de la lista ${lista(o.key, o.lista)} en «${nombre(o.key)}»`;
+      case "seccion.texto": {
+        /* ⭐ La línea lleva el TEXTO NUEVO, como todas las de contenido: «se reescribe el cuerpo»
+           no alcanza para aprobar nada. Y dice que reemplaza al anterior, porque eso es lo que
+           hace — el cuerpo de una sección en prosa es uno solo. */
+        const nuevo = o.valor.trim();
+        return nuevo
+          ? `En «${nombre(o.key)}», el texto pasa a: «${recortar(nuevo)}»`
+          : `⚠ Se borra el texto de «${nombre(o.key)}»`;
+      }
       case "seccion.vaciar":
         return `⚠ Se borra TODO el contenido de «${nombre(o.key)}»`;
       case "seccion.crear":

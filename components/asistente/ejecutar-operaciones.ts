@@ -112,6 +112,10 @@ export function seccionesParaElEjecutor(
         markdown: markdownDeBloques(s.blocks),
         dataTipada: card?.data ?? {},
       }),
+      /* Solo lo usa `seccion.texto`: es el cuerpo de una sección escrita en prosa. */
+      bloquesDeTexto: s.blocks
+        .filter((b) => b.blockType !== "CARD")
+        .map((b) => ({ id: b.id, contenido: b.content ?? "" })),
     };
   });
 }
@@ -197,6 +201,12 @@ export function useEjecutarOperacionesDelChat(
           await hook.upsertCardData(e.sectionId, card?.id ?? null, e.data);
           break;
         }
+        case "texto":
+          /* ⭐ El cuerpo de una sección en PROSA se escribe sobre su bloque TEXT, con el mismo
+             verbo que usa el editor a mano. No es un camino de escritura nuevo: es el que ya
+             existe, para el bloque que corresponde. */
+          await hook.saveBlock(e.sectionId, e.blockId, { content: e.contenido });
+          break;
         case "oculta":
           await hook.setHidden(e.sectionId, e.oculta);
           break;
@@ -236,7 +246,9 @@ export function useEjecutarOperacionesDelChat(
     const aplicadas = ops.filter(
       (o) =>
         !rechazadas.some((r) => r.operacion === o) &&
-        !(o.op === "seccion.crear" && sinNacer.includes(o.titulo)),
+        /* ⚠ `.trim()`: el plan guarda el título TRIMEADO y la operación cruda puede traerlo con
+           espacios. Sin esto, el mismo fallo se diría dos veces con dos redacciones distintas. */
+        !(o.op === "seccion.crear" && sinNacer.includes(o.titulo.trim())),
     );
     const avisosDeVerificacion: string[] = [];
     if (aplicadas.length > 0) {
@@ -246,7 +258,13 @@ export function useEjecutarOperacionesDelChat(
       const frescas = await hook.refetch();
       if (frescas) {
         avisosDeVerificacion.push(
-          ...verificarOperacionesDeDocumento(seccionesParaElEjecutor(frescas, defs), aplicadas),
+          ...verificarOperacionesDeDocumento(
+            seccionesParaElEjecutor(frescas, defs),
+            aplicadas,
+            /* Las secciones cuyo ítem termina de escribir la app: ahí la identidad viva no es la
+               que dijo la operación, y verificarla sería inventar un fallo. Ver el parámetro. */
+            (key) => !!comps?.[key],
+          ),
         );
       }
     }
@@ -255,14 +273,27 @@ export function useEjecutarOperacionesDelChat(
       /* El plan es la lista de escrituras: si trae algo, el editor tocó el documento. */
       escribio: plan.length > 0,
       avisos: [...avisos, ...avisosDeVerificacion],
-      /* ⚠ Una creación que el servidor rechazó (tope de secciones, red) se dice: sin esto el hilo
-         daba por hecho que entró. */
-      ...(sinNacer.length
-        ? { rechazadas: [...rechazadas.map((r) => r.motivo), ...sinNacer.map((t) => `no se pudo crear «${t}»`)] }
-        : {}),
-      /* ⛔ Lo rechazado VIAJA AL HILO. Sin esto, «se aplicaron 3 de 5» se lee igual que «se
-         aplicaron 5» — y el modelo, que lee el hilo, propondría de nuevo lo que ya entró. */
-      rechazadas: rechazadas.map((r) => r.motivo),
+      /**
+       * ⛔ Lo rechazado VIAJA AL HILO. Sin esto, «se aplicaron 3 de 5» se lee igual que «se
+       * aplicaron 5» — y el modelo, que lee el hilo, propondría de nuevo lo que ya entró.
+       *
+       * ⚠ UNA SOLA CLAVE `rechazadas`, Y ESO ES EL ARREGLO. Acá había DOS: primero un spread
+       * condicional que sumaba los «no se pudo crear «X»», y debajo esta propiedad literal. En un
+       * object literal la última clave GANA, así que el spread era código muerto y una sección que
+       * el servidor rechazó crear NUNCA llegaba al hilo.
+       * ⛔ Y el fallo era mudo por las tres vías: el hilo no decía nada (`rechazadas` vacío ⇒
+       * `ChatDelDocumento` no escribe la línea de fallo), «confirmar releyendo» tampoco —el
+       * `seccion.crear` fallido se excluye de `aplicadas` a propósito—, y las escrituras de
+       * contenido apuntaban al `ref` de una sección que no nació, así que hacían `break` calladas:
+       * el texto que la persona aprobó se perdía sin dejar rastro.
+       * ⚠ `tsc` no lo ve: con un spread en el medio, una clave repetida es LEGAL (TS2783 solo
+       * dispara en el orden inverso). Lo encontró la revisión adversarial del rango, por cinco
+       * lentes distintas a la vez.
+       */
+      rechazadas: [
+        ...rechazadas.map((r) => r.motivo),
+        ...sinNacer.map((t) => `no se pudo crear «${t}»`),
+      ],
     };
   });
 }

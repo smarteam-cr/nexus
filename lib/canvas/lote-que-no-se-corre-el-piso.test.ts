@@ -29,6 +29,7 @@ import {
   aplicarOperacionesDeDocumento,
   prepararOperacionesDeDocumento,
   describirOperacionesDeDocumento,
+  LARGO_DEL_ANCLA,
   type SeccionActual,
 } from "./operaciones-de-documento";
 
@@ -340,3 +341,100 @@ describe("⛔ la identidad de un ítem sale del ESQUEMA, no del primer string cr
     expect((prep.aceptadas[0] as { ancla?: string }).ancla).toBe("primero");
   });
 });
+
+describe("⛔ el ANCLA MIDE 24 CARACTERES, y tres ítems pueden empezar igual", () => {
+  /**
+   * ── EL FALLO, REPRODUCIDO ANTES DE ARREGLARLO ────────────────────────────────────────────
+   * Es la segunda mitad del mismo defecto que este archivo abrió: el lote se corría el piso a sí
+   * mismo. Aquella se arregló haciendo que el dry-run corriera sobre una copia que encoge. Ésta
+   * seguía viva por otra puerta: cuando la búsqueda por ancla encuentra VARIAS coincidencias
+   * —tres ítems que empiezan con «Los tickets de Jira y las…»— caía a `o.posicion`, que está
+   * medida sobre la lista de ANTES del lote. Con una operación previa que ya borró algo de esa
+   * misma lista, ese número apunta a otro ítem. Y el chequeo de integridad lo deja pasar, porque
+   * el ítem equivocado tiene EL MISMO ancla.
+   *
+   * Medido sobre `[A1, C, A2, A3]` con «quitá C y quitá A2»: borraba C y **A3**, mientras la
+   * línea que la persona aprobó decía A2. Sin rechazo y sin aviso.
+   *
+   * ⚠ Y mi primera reproducción NO reproducía: las tres cadenas se separaban antes del carácter
+   * 24, así que la búsqueda encontraba una sola coincidencia y todo funcionaba. El fixture de acá
+   * abajo comparte los 24 caracteres EXACTOS — por eso el primer `expect` los cuenta.
+   */
+  const T = (title: string) => ({ title });
+  const CON_ANCLA_IGUAL = [
+    "Los tickets de Jira y las conversaciones viven aparte",
+    "Los tickets de Jira y las minutas no se cruzan",
+    "Los tickets de Jira y las llamadas tampoco",
+  ];
+  const lista = (): SeccionActual => ({
+    id: "s1",
+    key: "k",
+    label: "Del hoy al nuevo sistema",
+    oculta: false,
+    esCreada: false,
+    movible: true,
+    schema: {
+      type: "object",
+      properties: {
+        items: { type: "array", items: { type: "object", properties: { title: { type: "string" } } } },
+      },
+    },
+    data: {
+      items: [
+        T(CON_ANCLA_IGUAL[0]),
+        T("Reporting unificado en un solo lugar"),
+        T(CON_ANCLA_IGUAL[1]),
+        T(CON_ANCLA_IGUAL[2]),
+      ],
+    },
+  });
+
+  it("el fixture de verdad es ambiguo: los tres comparten los 24 caracteres del ancla", () => {
+    /* Sin esto la guarda se apaga sola el día que alguien «mejore» los textos del fixture. */
+    const prefijos = new Set(CON_ANCLA_IGUAL.map((t) => t.slice(0, LARGO_DEL_ANCLA)));
+    expect([...prefijos], "el fixture dejó de ser ambiguo: la guarda no prueba nada").toHaveLength(1);
+  });
+
+  it("⭐ borrar dos ítems donde el segundo tiene el ancla repetida saca el que dice la línea", () => {
+    const prep = prepararOperacionesDeDocumento(
+      [lista()],
+      [
+        { op: "seccion.item.borrar", key: "k", lista: "items", posicion: 1 },
+        { op: "seccion.item.borrar", key: "k", lista: "items", posicion: 2 },
+      ] as unknown[],
+      TODO,
+    );
+    const lineas = describirOperacionesDeDocumento([lista()], prep.aceptadas);
+    expect(lineas[1], "la línea aprobada nombra otra cosa").toContain("las minutas no se cruzan");
+
+    const r = aplicarOperacionesDeDocumento([lista()], prep.aceptadas, TODO);
+    expect(r.rechazadas).toEqual([]);
+    const data = (r.plan.find((x) => x.tipo === "data") as { data: { items: { title: string }[] } }).data;
+    /* ⛔ Lo que la persona aprobó es lo que se va. Antes quedaba «las minutas» y se iba «las
+       llamadas»: el ítem que nadie nombró. */
+    expect(data.items.map((i) => i.title)).toEqual([CON_ANCLA_IGUAL[0], CON_ANCLA_IGUAL[2]]);
+  });
+
+  it("⛔ y si otra operación del lote ya se llevó ese ítem, se DICE en vez de tocar al vecino", () => {
+    const prep = prepararOperacionesDeDocumento(
+      [lista()],
+      [
+        { op: "seccion.item.borrar", key: "k", lista: "items", posicion: 2 },
+        { op: "seccion.item.borrar", key: "k", lista: "items", posicion: 2 },
+      ] as unknown[],
+      TODO,
+    );
+    /* ⭐ Y LO DICE ANTES DE ACORDAR, no al aplicar: el dry-run de `preparar` corre el mismo
+       ejecutor, así que el rechazo llega al modelo como resultado de su herramienta y lo corrige
+       en la misma llamada. La persona nunca ve la casilla de un cambio que no se puede hacer. */
+    expect(prep.rechazadas.map((x) => x.motivo)).toEqual([
+      "ese ítem ya lo quitó otro cambio de este mismo pedido",
+    ]);
+    expect(prep.aceptadas).toHaveLength(1);
+    const r = aplicarOperacionesDeDocumento([lista()], prep.aceptadas, TODO);
+    expect(r.rechazadas).toEqual([]);
+    const data = (r.plan.find((x) => x.tipo === "data") as { data: { items: { title: string }[] } }).data;
+    expect(data.items).toHaveLength(3);
+  });
+});
+
