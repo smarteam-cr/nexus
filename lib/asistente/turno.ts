@@ -1180,22 +1180,40 @@ export async function correrTurno(
         opsNuevas as unknown[],
         seccionReferida?.key,
       );
+      const textoDelReclamo =
+        motivoDelReintento === "por-rechazo"
+          ? reclamoDeOperaciones(prep.rechazadas)
+          : motivoDelReintento === "por-imitacion"
+            ? reclamoDeImitacion()
+            : reclamoDeOmision(true);
+      /**
+       * ⛔ UN `tool_result` POR CADA `tool_use`, NO UNO SOLO.
+       *
+       * La API exige que un mensaje de usuario que sigue a un turno con herramientas conteste a
+       * TODAS: si el modelo emitió dos llamadas —el prompt le pide una, pero eso es una
+       * instrucción, no una garantía— y se le contesta una, la llamada entera vuelve 400 y **el
+       * turno se pierde sin persistirse**: la persona escribe, espera, y no pasa nada.
+       * El reclamo va en la primera; a las demás se les contesta que se ignoraron.
+       */
+      const idsDeHerramienta = msg.content.flatMap((b) => (b.type === "tool_use" ? [b.id] : []));
       const reclamo: Anthropic.Messages.MessageParam =
         idDeLaHerramienta
           ? {
               role: "user",
               content: [
-                {
+                /* ⚠ El reclamo va en la llamada que SE LEYÓ —`leerElTurno` se queda con la
+                   última—, no en la primera: contestarle a otra sería responder sobre un input que
+                   nadie miró. */
+                ...idsDeHerramienta.map((id) => ({
                   type: "tool_result" as const,
-                  tool_use_id: idDeLaHerramienta,
+                  tool_use_id: id,
                   is_error: true,
                   content:
-                    motivoDelReintento === "por-rechazo"
-                      ? reclamoDeOperaciones(prep.rechazadas)
-                      : motivoDelReintento === "por-imitacion"
-                        ? reclamoDeImitacion()
-                        : reclamoDeOmision(true),
-                },
+                    id === idDeLaHerramienta
+                      ? textoDelReclamo
+                      : "Llamaste la herramienta más de una vez y solo se leyó una. Emite TODO " +
+                        "en una sola llamada.",
+                })),
                 /* ⚠ Bloque de texto DESPUÉS del `tool_result`, en el MISMO mensaje: dos mensajes
                    de usuario seguidos no son un turno válido. */
                 ...(secciones ? [{ type: "text" as const, text: secciones }] : []),

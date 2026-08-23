@@ -28,6 +28,27 @@ const TURNO = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8")
 /** El tramo de la rama de DOCUMENTOS, que es donde vive el loop. */
 const RAMA = TURNO.slice(TURNO.indexOf("if (!esCronograma) {"), TURNO.indexOf("} else {", TURNO.indexOf("if (!esCronograma) {")));
 
+describe("⛔ el reintento le contesta a TODAS las herramientas que llamó", () => {
+  /**
+   * La API exige que un mensaje de usuario que sigue a un turno con herramientas conteste a TODAS.
+   * El prompt le pide llamarla una sola vez, pero eso es una instrucción, no una garantía: con dos
+   * llamadas y un solo `tool_result` la llamada entera vuelve 400 y **el turno se pierde sin
+   * persistirse** — la persona escribe, espera, y no pasa nada.
+   * La edición que la pone en rojo: volver a armar un solo `tool_result` con `idDeLaHerramienta`.
+   */
+  it("arma un `tool_result` por cada `tool_use` del turno", () => {
+    expect(RAMA.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(RAMA).toContain('msg.content.flatMap((b) => (b.type === "tool_use" ? [b.id] : []))');
+    expect(RAMA).toContain("...idsDeHerramienta.map((id) => ({");
+  });
+
+  it("⭐ y el RECLAMO va en la llamada que se leyó, no en la primera", () => {
+    /* `leerElTurno` se queda con la última: contestarle a otra sería responder sobre un input que
+       nadie miró. */
+    expect(RAMA).toContain("id === idDeLaHerramienta");
+  });
+});
+
 describe("lo que se acuerda ya pasó por el editor", () => {
   it("⭐ el turno prepara las operaciones contra el documento REAL antes de armar el acuerdo", () => {
     /* Sin esto vuelve el fallo del 2026-08-22: la cajita ofrecía cambios que el editor iba a
