@@ -625,6 +625,9 @@ export async function contextoDeDocumento(
       label: s.label,
       data: card?.data ?? {},
       schema: schemaParaElChat(def),
+      /* ⚠ El del AGENTE va aparte: `seccion.vaciar` lo usa para no llevarse la curaduría.
+         Ver `schemaDelAgente` en el vocabulario. */
+      schemaDelAgente: def?.schema,
       /* El ojo no entra al contexto del modelo —no cambia lo que se puede pedir— pero el
          ejecutor lo necesita para no proponer ocultar algo que ya está oculto. */
       oculta: false,
@@ -695,6 +698,9 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
          del CHAT, un `schemaDelChat` en Roles no habría hecho nada: el dry-run del servidor
          seguiría rechazando lo que el editor sí sabe escribir. */
       schema: schemaParaElChat(def),
+      /* ⚠ El del AGENTE va aparte: `seccion.vaciar` lo usa para no llevarse la curaduría.
+         Ver `schemaDelAgente` en el vocabulario. */
+      schemaDelAgente: def?.schema,
       oculta: false,
       esCreada: false,
       /* ⛔ La lista de secciones de un rol es FIJA: no se crean, no se borran y no se reordenan.

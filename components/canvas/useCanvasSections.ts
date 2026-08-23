@@ -654,8 +654,18 @@ export function useCanvasSections(
      pintar antes de la respuesta, y la sección nueva llega con su bloque sembrado —
      inventarla acá sería adivinar el shape que el editor necesita para persistir. */
   const addSection = useCallback(
-    /** `tipo` sale del catálogo (`lib/landing/catalogo-de-secciones`). Sin él, embebido de HTML. */
-    async (label: string, tipo?: string): Promise<boolean> => {
+    /**
+     * `tipo` sale del catálogo (`lib/landing/catalogo-de-secciones`). Sin él, embebido de HTML.
+     *
+     * ⭐ Devuelve la SECCIÓN CREADA, no un booleano. El servidor ya la manda entera en el body
+     * —con su `key` y su bloque CARD ya sembrado— y hasta hoy el navegador la tiraba. Sin ella,
+     * «creá una sección y llenala» no tenía a quién escribirle: había que esperar el `refetch`,
+     * que es asíncrono y puede no haber llegado.
+     * ⚠ El `cardBlockId` sale del POST y no de buscar el bloque después: el servidor lo sembró en
+     * la misma transacción, así que pasarle `null` a `upsertCardData` crearía un SEGUNDO bloque
+     * CARD y el motor leería el equivocado.
+     */
+    async (label: string, tipo?: string): Promise<{ id: string; key: string; cardBlockId: string | null } | null> => {
       pendingWrites.current++;
       try {
         const res = await fetch(`${basePath}/canvas-sections`, {
@@ -666,15 +676,23 @@ export function useCanvasSections(
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           setError(body?.error ?? "No se pudo agregar la sección. Reintentá.");
-          return false;
+          return null;
         }
+        const body = (await res.json().catch(() => ({}))) as {
+          section?: { id: string; key: string; blocks?: { id: string; blockType: string }[] };
+        };
         setError(null);
         onContentChangeRef.current?.();
         refetch();
-        return true;
+        if (!body.section?.id) return null;
+        return {
+          id: body.section.id,
+          key: body.section.key,
+          cardBlockId: body.section.blocks?.find((b) => b.blockType === "CARD")?.id ?? null,
+        };
       } catch {
         setError("Error de conexión al agregar la sección.");
-        return false;
+        return null;
       } finally {
         pendingWrites.current--;
       }

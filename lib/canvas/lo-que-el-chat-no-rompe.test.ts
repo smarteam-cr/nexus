@@ -17,7 +17,7 @@ import {
   describirOperacionesDeDocumento,
   type SeccionActual,
 } from "./operaciones-de-documento";
-import { firmaDeSeccion, capacidadDeSeccion } from "./capacidades-de-documento";
+import { firmaDeSeccion, capacidadDeSeccion, schemaParaElChat } from "./capacidades-de-documento";
 import { USE_CASES_DEF } from "@/components/landing/configs/shared-sections.defs";
 import { toSectionDef } from "@/components/landing/configs/templates";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
@@ -433,5 +433,182 @@ describe("lo que no se puede, se rechaza con su motivo", () => {
       "defDeSeccion(defs,",
     );
     expect(ctx).toContain("customDef(key, label)");
+  });
+});
+
+/**
+ * ⭐ TRAMO 0 — LA PLOMERÍA, Y LOS DOS DEFECTOS QUE ESTABAN VIVOS.
+ *
+ * Los dos salieron de la exploración del 2026-08-22 y ninguno lo cazaba un test. El primero
+ * BORRA contenido que curó una persona; el segundo le muestra al cliente una nota interna sobre
+ * cómo funciona Nexus por dentro.
+ */
+describe("el esquema del chat es más grande que el del agente, y vaciar lo sabe", () => {
+  it("⛔⭐ vaciar una sección CURADA no borra lo que curó la persona", () => {
+    /* ── EL DAÑO, y estuvo vivo desde el 2026-08-22 ──────────────────────────
+       `equipo`, `horarios` y `canales` del kickoff declaran `schema: {}` —el agente no las
+       escribe— y ganaron `schemaDelChat` para que el chat sí pudiera. Pero vaciar leía el
+       esquema DEL CHAT: con él, la guarda de «esta sección no tiene campos» dejó de disparar y
+       `seccion.vaciar` sobre «El equipo del proyecto» **borraba al equipo entero**.
+
+       Vaciar significa «devolvé la sección a lo que el agente escribiría desde cero». Todo lo que
+       el chat alcanza por encima de eso es curaduría.
+
+       La edición que lo pone en rojo: volver `vaciar` a `s.schema`. */
+    const equipo: SeccionActual = {
+      id: "e1", key: "equipo", label: "El equipo del proyecto",
+      data: { members: [{ name: "Heiver Gómez", role: "CSE" }, { name: "Lidia Flores", role: "Marketing" }] },
+      /* Lo que el CHAT alcanza. */
+      schema: { type: "object", properties: { members: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } } } },
+      /* Lo que el AGENTE escribiría: nada. */
+      schemaDelAgente: { type: "object", properties: {} },
+      oculta: false, esCreada: false, movible: true,
+    };
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [equipo],
+      [{ op: "seccion.vaciar", key: "equipo" }],
+      TODO,
+    );
+    expect(plan, "vaciar borró al equipo que armó el CSE a mano").toHaveLength(0);
+    expect(rechazadas[0]?.motivo).toContain("se edita en la propia sección");
+  });
+
+  it("⭐ y donde el agente SÍ escribe, vaciar sigue vaciando", () => {
+    /* El converso: sin él, alguien «arregla» el chequeo al revés y vaciar deja de funcionar en
+       las 60 secciones normales — igual de malo y más difícil de ver. */
+    const prosa: SeccionActual = {
+      id: "p1", key: "objetivos", label: "Objetivos",
+      data: { intro: "Algo escrito" },
+      schema: { type: "object", properties: { intro: { type: "string" } } },
+      schemaDelAgente: { type: "object", properties: { intro: { type: "string" } } },
+      oculta: false, esCreada: false, movible: true,
+    };
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [prosa], [{ op: "seccion.vaciar", key: "objetivos" }], TODO,
+    );
+    expect(rechazadas, "vaciar dejó de funcionar donde sí corresponde").toHaveLength(0);
+    expect((plan[0] as { data: { intro: string } }).data.intro).toBe("");
+  });
+
+  it("⛔⭐ el esquema del chat SOBREVIVE la traducción de la def", () => {
+    /* La MISMA trampa que `chatLabel`, por tercera vez: declarado en la def, no copiado por el
+       traductor, `undefined` en runtime. Hoy no muerde porque el chat lee la def cruda — pero el
+       motor resolvería contra el esquema del AGENTE mientras el ejecutor resuelve contra el del
+       CHAT, que es la divergencia que `schemaParaElChat` existe para impedir.
+
+       La edición que lo pone en rojo: sacar `schemaDelChat: d.schemaDelChat` del traductor. */
+    const traducida = toSectionDef(KICKOFF_DEF_BY_KEY.equipo, KICKOFF_SECTION_COMPONENTS);
+    expect(traducida, "«equipo» dejó de tener renderer").not.toBeNull();
+    expect(
+      schemaParaElChat(traducida!),
+      "el esquema del chat se pierde al traducir: el motor y el ejecutor resuelven contra distinto",
+    ).toEqual(schemaParaElChat(KICKOFF_DEF_BY_KEY.equipo));
+    expect(
+      JSON.stringify(schemaParaElChat(traducida!)),
+      "la def traducida cayó al esquema del agente, que acá está vacío",
+    ).toContain("members");
+  });
+
+  it("⛔⭐ la nota interna de cada sección NO cruza al cliente", () => {
+    /* ── EL DAÑO ────────────────────────────────────────────────────────────
+       El ⓘ era lo ÚNICO del encabezado sin gatear por `editable`. Como el mismo motor sirve al
+       editor, al PDF y a la vista pública, un prospecto que pasaba el mouse sobre «Inversión» de
+       su propia propuesta leía: «La escribe Ventas: el agente no toca los montos». Y `TipIcon` lo
+       pone también en el `aria-label`, o sea que estaba en el DOM sin hover.
+
+       La edición que lo pone en rojo: desgatear `TipIcon`. */
+    const src = leer("components/landing/LandingView.tsx");
+    expect(src, "el ⓘ volvió a pintarse en la vista del cliente").toContain("{editable && def.tip");
+    /* Y el resto del encabezado sigue gateado, que es de donde salió el criterio. */
+    expect(src).toContain("{editable ? (");
+  });
+});
+
+/**
+ * ⭐ TRAMO 1 — CREAR Y LLENAR, EN UN SOLO PEDIDO.
+ *
+ * El caso exacto de Elías (2026-08-22): «creá una sección arriba de Definición de éxito, de tipo
+ * cards, que hable de los sistemas a integrar» → **«No se pudieron aplicar 5 de 6: esa sección ya
+ * no está en el documento»** ×5, y al refrescar la sección tampoco estaba.
+ *
+ * Y el diagnóstico sorprendió: las de llenado no fallaban al EJECUTAR — nunca llegaban al plan.
+ * `aplicarOperacionesDeDocumento` las rechazaba al construirlo, porque la sección nueva no entraba
+ * a la mesa de trabajo. El comentario que lo explicaba prometía «otra pasada» que no existía.
+ */
+describe("crear y llenar es un solo acuerdo", () => {
+  const CREABLE = { puedeOcultar: true, puedeCrear: true };
+
+  it("⛔⭐ las operaciones que nombran la sección nueva NO se rechazan", () => {
+    /* La edición que lo pone en rojo: dejar la sección nueva fuera de `trabajo`. */
+    const { plan, rechazadas } = aplicarOperacionesDeDocumento(
+      [],
+      [
+        { op: "seccion.crear", tipo: "tarjetas", titulo: "Sistemas a integrar", ref: "s1" },
+        { op: "seccion.campo", key: "s1", campo: "intro", valor: "Estos son los sistemas." },
+        { op: "seccion.item.agregar", key: "s1", lista: "items", valores: { title: "Aircall", detail: "Telefonía" } },
+      ],
+      CREABLE,
+    );
+    expect(
+      rechazadas.map((r) => r.motivo),
+      "las operaciones de llenado se siguen cayendo sobre la sección que está por nacer",
+    ).toEqual([]);
+
+    /* Y el plan trae la creación Y el contenido, apuntado por `ref` (todavía no hay id). */
+    expect(plan.some((e) => e.tipo === "crear")).toBe(true);
+    const escritura = plan.find((e) => e.tipo === "data") as
+      | { tipo: "data"; ref?: string; sectionId?: string; data: { intro: string; items: unknown[] } }
+      | undefined;
+    expect(escritura, "la sección nace vacía: el contenido no llegó al plan").toBeDefined();
+    expect(escritura!.ref, "la escritura no viaja por el ref, así que no hay a quién aplicarla").toBe("s1");
+    expect(escritura!.data.intro).toBe("Estos son los sistemas.");
+    expect(escritura!.data.items).toHaveLength(1);
+  });
+
+  it("⛔ el plan nunca sale ambiguo: o id, o ref, nunca los dos ni ninguno", () => {
+    /* La edición que lo pone en rojo: usar `""` como centinela de «todavía no tiene id» —
+       silencioso, y el navegador escribiría en una sección inexistente. */
+    const existente: SeccionActual = {
+      id: "x1", key: "objetivos", label: "Objetivos",
+      data: { intro: "" },
+      schema: { type: "object", properties: { intro: { type: "string" } } },
+      oculta: false, esCreada: false, movible: true,
+    };
+    const { plan } = aplicarOperacionesDeDocumento(
+      [existente],
+      [
+        { op: "seccion.campo", key: "objetivos", campo: "intro", valor: "Vieja" },
+        { op: "seccion.crear", tipo: "tarjetas", titulo: "Nueva", ref: "n1" },
+        { op: "seccion.campo", key: "n1", campo: "intro", valor: "Nueva" },
+      ],
+      CREABLE,
+    );
+    for (const e of plan) {
+      if (e.tipo !== "data") continue;
+      /* ⚠ `in`, no truthiness: el centinela que hay que cazar es `sectionId: ""`, que es falsy —
+         con `!!` la guarda pasaba en verde sobre la edición que dice prevenir. */
+      const tieneId = "sectionId" in e && e.sectionId !== undefined;
+      const tieneRef = !!e.ref;
+      expect(tieneId !== tieneRef, `una escritura ambigua: id=${e.sectionId} ref=${e.ref}`).toBe(true);
+    }
+  });
+
+  it("⭐ y una sección que nace se puede colocar: no se cae del orden en silencio", () => {
+    /* Antes el orden filtraba toda sección sin id — o sea, justo las que acaban de nacer: pedir
+       «creala y ponela primera» la dejaba al final sin decir nada.
+       La edición que lo pone en rojo: volver a `sectionIds` con un `filter` de ids. */
+    const { plan } = aplicarOperacionesDeDocumento(
+      [],
+      [
+        { op: "seccion.crear", tipo: "tarjetas", titulo: "Nueva", ref: "n1" },
+        { op: "seccion.mover", key: "n1", posicion: 0 },
+      ],
+      CREABLE,
+    );
+    const orden = plan.find((e) => e.tipo === "orden") as
+      | { tipo: "orden"; entradas: ({ ref: string } | { sectionId: string })[] }
+      | undefined;
+    expect(orden, "mover una sección recién creada no produjo ningún reordenamiento").toBeDefined();
+    expect(orden!.entradas).toContainEqual({ ref: "n1" });
   });
 });

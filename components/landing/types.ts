@@ -533,6 +533,21 @@ export interface SectionDef {
    * en la def y no se copia acá es `undefined` en runtime y la mejora no llega a la pantalla.
    */
   chatLabel?: string;
+  /**
+   * ⭐ Lo que el CHAT puede tocar, cuando es MÁS que lo que escribe el agente.
+   *
+   * La portada del kickoff es el caso claro: el agente escribe titular y bajada, y el chat además
+   * alcanza el rótulo chico y las tres métricas — que viven fuera del esquema del agente a
+   * propósito, para que una regeneración no los pise.
+   *
+   * ⛔ Vive acá Y en `BCSectionDef`, y `toSectionDef` tiene que COPIARLO. Un campo declarado en la
+   * def y no copiado acá es `undefined` en runtime: el motor resolvería contra el esquema del
+   * AGENTE mientras el ejecutor resuelve contra el del CHAT, que es la divergencia que
+   * `schemaParaElChat` existe para impedir.
+   */
+  schemaDelChat?: Record<string, unknown>;
+  /** Cómo se llama cada lista EN PANTALLA, por su key. Para las líneas que lee la persona. */
+  rotulosDeListas?: Record<string, string>;
   selfTitled?: boolean;        // el componente trae su propio encabezado (hero/partner/cta);
                                // si no, el motor renderiza un eyebrow con `label`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

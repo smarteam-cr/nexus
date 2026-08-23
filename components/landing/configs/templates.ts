@@ -115,6 +115,15 @@ export function toSectionDef(
     pinned: d.pinned,
     noHide: d.noHide,
     schema: d.schema,
+    /* ⛔ LOS DOS QUE FALTABAN, y es la MISMA trampa que `chatLabel` de arriba por tercera vez.
+       `schemaDelChat` es lo que el chat puede tocar (más que el esquema del agente: la portada
+       suma el rótulo chico y las métricas). `rotulosDeListas` es cómo se llama cada lista en
+       pantalla. Los dos estaban declarados en la def y morían acá, así que el motor solo veía el
+       esquema del AGENTE — y el día que el motor tenga que señalar contra el esquema, señalaría
+       contra el equivocado mientras el ejecutor resuelve contra el otro. Es exactamente la
+       divergencia que `schemaParaElChat` existe para impedir. */
+    schemaDelChat: d.schemaDelChat,
+    rotulosDeListas: d.rotulosDeListas,
     agentHint: d.agentHint,
     brief: d.brief,
     chips: d.chips,

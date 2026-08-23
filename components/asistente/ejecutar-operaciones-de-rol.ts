@@ -67,6 +67,10 @@ export function useEjecutarOperacionesDelChatDeRol(
            sección de Roles declara `schemaDelChat`, pero si algún día una lo necesita, este lado
            no puede quedarse leyendo el esquema del agente mientras el otro lee el del chat. */
         schema: schemaParaElChat(defsByKey[s.key]),
+        /* ⚠ Ídem: vaciar usa el del agente para no llevarse la curaduría. Hoy ninguna sección de
+           Roles declara `schemaDelChat`, así que son el mismo objeto — pero si algún día una lo
+           declara, este lado no puede quedarse leyendo el otro. */
+        schemaDelAgente: defsByKey[s.key]?.schema,
         oculta: false,
         esCreada: false,
         /* La lista es fija: nada se mueve ni se saca. */
@@ -100,7 +104,10 @@ export function useEjecutarOperacionesDelChatDeRol(
 
     let escribio = false;
     for (const e of plan) {
-      if (e.tipo === "data") {
+      /* ⚠ Sin `sectionId` es una sección que nace en el lote — y en Roles no se crean secciones
+         (`puedeCrear: false`), así que no puede pasar. Se descarta explícitamente en vez de
+         escribir en `undefined`. */
+      if (e.tipo === "data" && e.sectionId) {
         escribir(e.sectionId, e.data);
         escribio = true;
       }

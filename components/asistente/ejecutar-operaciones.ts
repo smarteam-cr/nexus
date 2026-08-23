@@ -83,6 +83,9 @@ export function useEjecutarOperacionesDelChat(
           /* ⛔ La MISMA función que usa el contexto del servidor. Si uno leyera `def.schema` y el
              otro `schemaDelChat`, el chat acordaría un cambio que este editor rechaza. */
           schema: schemaParaElChat(def),
+          /* ⚠ El del AGENTE va aparte: `seccion.vaciar` lo usa para no llevarse la curaduría.
+             Ver `schemaDelAgente` en el vocabulario. */
+          schemaDelAgente: def?.schema,
           oculta: s.hidden === true,
           esCreada: esCustomKey(s.key),
           movible: !def?.pinned,
@@ -113,16 +116,38 @@ export function useEjecutarOperacionesDelChat(
 
     const { plan, avisos, rechazadas } = aplicarOperacionesDeDocumento(secs, ops, caps, comps);
 
-    /* ⚠ Las creaciones van PRIMERO y en serie: la key la genera el servidor, así que hasta que no
-       vuelve no hay a quién escribirle. Lo demás va en el orden del plan. */
+    /**
+     * ⚠ Las creaciones van PRIMERO y en serie: el id lo genera el servidor, así que hasta que no
+     * vuelve no hay a quién escribirle. Lo demás va en el orden del plan.
+     *
+     * ⭐ Y ahora se GUARDA lo que devuelve, indexado por el `ref` que el plan ya traía. Sin esto,
+     * «creá una sección y llenala» —que es lo que el prompt le pide al modelo— creaba la sección
+     * y perdía su contenido: las escrituras no tenían id al que apuntar.
+     * ⛔ El id sale del POST, NUNCA de `hook.sections.find(...)`: el `refetch` es asíncrono y
+     * dentro de este mismo callback puede no haber llegado.
+     */
+    const nacidas = new Map<string, { id: string; cardBlockId: string | null }>();
+    const sinNacer: string[] = [];
     for (const e of plan) {
-      if (e.tipo === "crear") await hook.addSection(e.titulo, e.tipoDeSeccion);
+      if (e.tipo !== "crear") continue;
+      const creada = await hook.addSection(e.titulo, e.tipoDeSeccion);
+      if (creada && e.ref) nacidas.set(e.ref, { id: creada.id, cardBlockId: creada.cardBlockId });
+      else if (!creada) sinNacer.push(e.titulo);
     }
     for (const e of plan) {
       switch (e.tipo) {
         case "crear":
           break;
         case "data": {
+          /* Por `ref` si nació en este lote —y ahí el bloque CARD sale del POST, que ya lo
+             sembró—, por id si ya existía. */
+          if (e.ref) {
+            const nueva = nacidas.get(e.ref);
+            if (!nueva) break; /* la creación falló: ya se reporta abajo */
+            await hook.upsertCardData(nueva.id, nueva.cardBlockId, e.data);
+            break;
+          }
+          if (!e.sectionId) break;
           const s = hook.sections.find((x) => x.id === e.sectionId);
           const card = s?.blocks.find((b) => b.blockType === "CARD");
           await hook.upsertCardData(e.sectionId, card?.id ?? null, e.data);
@@ -137,9 +162,15 @@ export function useEjecutarOperacionesDelChat(
         case "rotulo":
           await hook.setEyebrow(e.sectionId, e.rotulo);
           break;
-        case "orden":
-          await hook.reorderSections(e.sectionIds);
+        case "orden": {
+          /* Las que nacieron en este lote entran por su `ref`; si alguna no nació, se cae de la
+             lista — pero su fallo ya viaja en `rechazadas`, no en silencio. */
+          const ids = e.entradas
+            .map((x) => ("ref" in x ? nacidas.get(x.ref)?.id : x.sectionId))
+            .filter((id): id is string => !!id);
+          if (ids.length) await hook.reorderSections(ids);
           break;
+        }
         case "borrar":
           await hook.removeSection(e.sectionId);
           break;
@@ -150,6 +181,11 @@ export function useEjecutarOperacionesDelChat(
       /* El plan es la lista de escrituras: si trae algo, el editor tocó el documento. */
       escribio: plan.length > 0,
       avisos,
+      /* ⚠ Una creación que el servidor rechazó (tope de secciones, red) se dice: sin esto el hilo
+         daba por hecho que entró. */
+      ...(sinNacer.length
+        ? { rechazadas: [...rechazadas.map((r) => r.motivo), ...sinNacer.map((t) => `no se pudo crear «${t}»`)] }
+        : {}),
       /* ⛔ Lo rechazado VIAJA AL HILO. Sin esto, «se aplicaron 3 de 5» se lee igual que «se
          aplicaron 5» — y el modelo, que lee el hilo, propondría de nuevo lo que ya entró. */
       rechazadas: rechazadas.map((r) => r.motivo),

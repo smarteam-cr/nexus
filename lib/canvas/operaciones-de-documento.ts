@@ -52,6 +52,9 @@
    regeneración del agente — vaciar por chat tiene que respetar exactamente lo que él respeta, o
    el chat se convierte en la puerta de atrás por la que se pierde lo curado a mano. */
 import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
+/* El catálogo de tipos creables: puro, sin React. De ahí salen el esquema y el molde vacío de una
+   sección que nace en este mismo lote. */
+import { defDelTipo } from "@/lib/landing/catalogo-de-secciones";
 
 // ── El vocabulario ────────────────────────────────────────────────────────────────────────────
 
@@ -209,13 +212,34 @@ export interface SeccionActual {
   label: string;
   /** El `data` del bloque CARD. */
   data: unknown;
-  /** El schema de la def. Es contra esto que se resuelven las rutas. */
+  /** El schema DEL CHAT (`schemaParaElChat`). Es contra esto que se resuelven las rutas. */
   schema: unknown;
+  /**
+   * ⭐ El schema DEL AGENTE — lo que él escribiría desde cero. Solo lo usa `seccion.vaciar`.
+   *
+   * ⛔ Y la distinción no es teórica: estuvo ROTA en producción. Vaciar usaba el schema del chat,
+   * que desde el 2026-08-22 es MÁS grande en las secciones curadas (equipo, horarios, canales del
+   * kickoff declaran `schemaDelChat` sobre un `schema: {}`). Con eso, la guarda que protegía a las
+   * secciones sin campos dejó de disparar y **vaciar «El equipo del proyecto» borraba al equipo
+   * que armó el CSE a mano**.
+   *
+   * Vaciar significa «devolvé la sección a lo que el agente escribiría desde cero». Todo lo que el
+   * chat alcanza POR ENCIMA de eso es curaduría, y la curaduría se preserva. Con esta separación,
+   * abrir `schemaDelChat` en cualquier sección deja de arrastrar un riesgo de borrado — que es lo
+   * que lo vuelve seguro de crecer.
+   */
+  schemaDelAgente?: unknown;
   oculta: boolean;
   /** `true` si la creó una persona (`custom:*`): son las únicas que se pueden borrar. */
   esCreada: boolean;
   /** `false` en las secciones estructurales (portada, cierre): no se mueven ni se ocultan. */
   movible: boolean;
+  /**
+   * ⭐ El `ref` con el que esta sección se está creando EN ESTE MISMO LOTE — o sea, todavía no
+   * tiene id en la base. Las escrituras que la nombren viajan con el `ref` y el navegador las
+   * resuelve al id real después de crearla.
+   */
+  nacePorRef?: string;
   /**
    * Cómo se llama cada lista EN PANTALLA, por su key. Solo para las líneas que lee la persona.
    *
@@ -269,11 +293,15 @@ export interface CapacidadesDelDocumento {
 
 /** Una escritura del plan. Cada una mapea 1:1 a un verbo que el editor YA tiene. */
 export type EscrituraDeDocumento =
-  | { tipo: "data"; sectionId: string; data: unknown }
+  /**
+   * ⚠ `sectionId` O `ref`, exactamente uno. Una sección que nace en este mismo lote todavía no
+   * tiene id: viaja por su `ref` y el navegador lo resuelve al id real después de crearla.
+   */
+  | { tipo: "data"; sectionId?: string; ref?: string; data: unknown }
   | { tipo: "oculta"; sectionId: string; oculta: boolean }
   | { tipo: "titulo"; sectionId: string; titulo: string }
   | { tipo: "rotulo"; sectionId: string; rotulo: string }
-  | { tipo: "orden"; sectionIds: string[] }
+  | { tipo: "orden"; entradas: ({ sectionId: string } | { ref: string })[] }
   | { tipo: "crear"; tipoDeSeccion: string; titulo: string; ref?: string }
   | { tipo: "borrar"; sectionId: string };
 
@@ -717,7 +745,11 @@ export function aplicarOperacionesDeDocumento(
         if (!s) { rechazar(o, "esa sección ya no está en el documento"); break; }
         /* El `empty` sale del schema y no de una constante: vaciar tiene que dejar la sección con
            la forma que su renderer espera, no con un objeto vacío. */
-        const molde = vacioDeSchema(s.schema);
+        /* ⚠ El del AGENTE, no el del chat. Ver `schemaDelAgente`: con el del chat, vaciar una
+           sección curada se lleva puesto lo que curó una persona. El respaldo a `s.schema` cubre
+           a los productores viejos y a los tests que arman la sección a mano. */
+        const schemaParaVaciar = s.schemaDelAgente ?? s.schema;
+        const molde = vacioDeSchema(schemaParaVaciar);
         /* ⛔ Una sección sin schema declarado (el cronograma del kickoff, los procesos: se dibujan
            desde el proyecto) caía al `return ""` del final y ESCRIBÍA LA STRING VACÍA como data de
            la sección. Los normalizadores del motor lo absorben al pintar, así que no se veía —
@@ -731,7 +763,7 @@ export function aplicarOperacionesDeDocumento(
            NO-OP: el merge repone todo lo que el esquema no declara, o sea todo. La línea del
            acuerdo, mientras tanto, dice «⚠ Se borra TODO el contenido». Prometer un borrado que no
            ocurre es peor que negarlo: la persona cree que limpió la sección y los montos siguen. */
-        if (Object.keys((s.schema as NodoDeSchema)?.properties ?? {}).length === 0) {
+        if (Object.keys((schemaParaVaciar as NodoDeSchema)?.properties ?? {}).length === 0) {
           rechazar(o, "esa sección no se vacía desde acá: su contenido se edita en la propia sección");
           break;
         }
@@ -741,7 +773,7 @@ export function aplicarOperacionesDeDocumento(
            raíz con el molde se los llevaba puestos — sin decirlo, porque el aviso habla de
            «textos». Vaciar limpia lo que el schema declara; lo demás se queda. */
         s.data = preserveNonSchemaKeys(
-          s.schema,
+          schemaParaVaciar,
           s.data,
           molde as Record<string, unknown>,
         ) as Record<string, unknown>;
@@ -822,9 +854,39 @@ export function aplicarOperacionesDeDocumento(
         const titulo = o.titulo.trim();
         if (!titulo) { rechazar(o, "una sección sin nombre no se puede encontrar después"); break; }
         plan.push({ tipo: "crear", tipoDeSeccion: o.tipo, titulo, ref: o.ref });
-        /* ⚠ La sección nueva NO entra a `trabajo`: su id lo genera el servidor, así que una
-           operación posterior que la nombre por key no la va a encontrar. Llenarla es del mismo
-           acuerdo pero de otra pasada — igual que el cronograma resuelve sus `ref`. */
+        /**
+         * ⭐ Y LA SECCIÓN NUEVA ENTRA A `trabajo`, con su `ref` de clave.
+         *
+         * ⛔ Antes no entraba, y el comentario que lo explicaba prometía «otra pasada» que NUNCA
+         * existió. El resultado, visto en pantalla el 2026-08-22: el prompt pide crear y llenar
+         * en un solo acuerdo, la persona lo pide, y las operaciones de llenado se rechazaban una
+         * por una con «esa sección ya no está en el documento» — sobre una sección que estaba a
+         * punto de nacer. No fallaban al ejecutar: **ni siquiera llegaban al plan**.
+         *
+         * Es el molde del cronograma (`lib/timeline/operaciones.ts`): si el chat mandó un `ref`,
+         * ESE es el identificador mientras dure el lote. Con la sección virtual en la mesa, toda
+         * operación posterior la encuentra, el dry-run del servidor la valida DE VERDAD, y la
+         * línea del acuerdo deja de decir «(una sección que ya no está)».
+         *
+         * ⚠ `id` queda vacío a propósito: lo genera el servidor al crear. El navegador lo resuelve
+         * por el `ref` que ya viaja en el plan.
+         */
+        if (o.ref?.trim()) {
+          const molde = defDelTipo(o.tipo);
+          trabajo.set(o.ref.trim(), {
+            id: "",
+            key: o.ref.trim(),
+            label: titulo,
+            data: clonar(molde.empty) as Record<string, unknown>,
+            schema: molde.schema,
+            schemaDelAgente: molde.schema,
+            oculta: false,
+            esCreada: true,
+            movible: true,
+            nacePorRef: o.ref.trim(),
+          });
+          orden = [...orden, o.ref.trim()];
+        }
         break;
       }
 
@@ -846,12 +908,25 @@ export function aplicarOperacionesDeDocumento(
   // Una sola escritura de contenido por sección, con todo lo que le pasó.
   for (const key of tocadas) {
     const s = trabajo.get(key);
-    if (s) plan.push({ tipo: "data", sectionId: s.id, data: s.data });
+    if (!s) continue;
+    /* Por `ref` si nace en este lote; por id si ya existía. Nunca los dos, nunca ninguno. */
+    plan.push(
+      s.nacePorRef
+        ? { tipo: "data", ref: s.nacePorRef, data: s.data }
+        : { tipo: "data", sectionId: s.id, data: s.data },
+    );
   }
   if (ordenTocado) {
+    /* ⚠ El `filter` de antes descartaba EN SILENCIO toda sección sin id — o sea, justo las que
+       acaban de nacer: pedir «creá esta sección y ponela primera» la dejaba al final sin decir
+       nada. Ahora cada entrada dice por qué la nombra. */
     plan.push({
       tipo: "orden",
-      sectionIds: orden.map((k) => trabajo.get(k)?.id).filter((id): id is string => !!id),
+      entradas: orden.flatMap((k) => {
+        const s = trabajo.get(k);
+        if (!s) return [];
+        return [s.nacePorRef ? { ref: s.nacePorRef } : { sectionId: s.id }];
+      }),
     });
   }
 

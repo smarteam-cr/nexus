@@ -490,7 +490,13 @@ export default function LandingView({
                 ) : (
                   <h2 className="stl-title">{effTitle}</h2>
                 )}
-                {def.tip && <TipIcon text={def.tip} />}
+                {/* ⛔ SOLO EN EL EDITOR. El ⓘ era lo ÚNICO del encabezado sin gatear —el rótulo,
+                    el título y la guía sí lo estaban— así que cruzaba al cliente: un prospecto que
+                    pasaba el mouse sobre «Inversión» de su propia propuesta leía «La escribe
+                    Ventas: el agente no toca los montos». Y `TipIcon` lo pone también en el
+                    `aria-label`, o sea que estaba en el DOM sin necesidad de hover.
+                    Es una nota para quien EDITA sobre cómo funciona Nexus por dentro. */}
+                {editable && def.tip && <TipIcon text={def.tip} />}
               </div>
             </header>
           )}
