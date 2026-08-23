@@ -33,6 +33,7 @@ import {
   nombreParaElChat,
   firmaDeSeccion,
   operacionesParaElChat,
+  renderSeccionParaElChat,
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
@@ -112,42 +113,29 @@ function marcaDe(t: { status: string; source: string | null }): string {
  * sobre un documento que cree completo. Recortando cada una, todas están, y la que se recortó lo
  * dice.
  */
-export const TOPE_POR_SECCION_CHARS = 1_000;
+/**
+ * ⭐ 6.000 desde el 2026-08-23 — decisión de Elías: «no importa si gasta más tokens, pero que
+ * funcione». Estaba en 1.000, y la medición del docblock de abajo dice que un kickoff entero
+ * tiene mediana 485 y máximo 7.671: con 6.000 casi nada se recorta, y lo que se recortaba era
+ * justo lo que hacía que el modelo no encontrara un ítem del final.
+ * ⚠ El prefijo sigue cacheado —el breakpoint está al final del bloque de contexto—, así que
+ * esto se paga UNA vez por hilo, no por turno.
+ */
+export const TOPE_POR_SECCION_CHARS = 6_000;
 
 /**
- * Lo que se puede leer de un bloque. Los bloques son Json con formas distintas por tipo de
- * sección (texto, listas, tarjetas), así que se recorre y se junta lo que sea string.
+ * ⛔ ACÁ VIVÍAN `textoDeBloque` Y `recortarContenido`, Y SE RETIRARON EL 2026-08-23.
  *
- * ⛔ Solo strings: un volcado del Json crudo metería ids, flags y claves internas al prompt —
- * ruido que el modelo puede citarle al CSE como si fuera contenido del documento.
+ * `textoDeBloque` recorría `Object.values` del dato CRUDO para juntar todo lo que fuera string.
+ * Su propio docblock declaraba la intención correcta —«un volcado del Json crudo metería ids,
+ * flags y claves internas al prompt»— y hacía exactamente eso: en las secciones curadas del
+ * kickoff la primera key es el identificador, así que **los UUID de las franjas y los cuid del
+ * equipo venían viajando al prompt en cada turno**.
+ *
+ * Había DOS renderers de contenido y solo uno consultaba el esquema. Ahora hay uno:
+ * `renderSeccionParaElChat` (lib/canvas/capacidades-de-documento.ts), que recorre SOLO lo que el
+ * esquema declara y numera los ítems desde 0 — el mismo número que va en `posicion`.
  */
-/** El recorte POR SECCIÓN, compartido por los dos armadores de contexto de documento. */
-function recortarContenido(crudo: string): string {
-  if (!crudo) return "";
-  return crudo.length > TOPE_POR_SECCION_CHARS
-    ? `${crudo.slice(0, TOPE_POR_SECCION_CHARS)}… (recortado — el editor sí lo lee entero)`
-    : crudo;
-}
-
-function textoDeBloque(data: unknown, profundidad = 0): string {
-  if (profundidad > 4) return "";
-  if (typeof data === "string") return data.trim();
-  if (typeof data === "number") return String(data);
-  if (Array.isArray(data)) {
-    return data
-      .map((x) => textoDeBloque(x, profundidad + 1))
-      .filter(Boolean)
-      .join(" · ");
-  }
-  if (data && typeof data === "object") {
-    return Object.values(data as Record<string, unknown>)
-      .map((x) => textoDeBloque(x, profundidad + 1))
-      .filter(Boolean)
-      .join(" · ");
-  }
-  return "";
-}
-
 export const TECHO_DEL_PREFIJO_CHARS = 13_000;
 
 export interface ContextoDelAsistente {
@@ -448,8 +436,23 @@ export async function contextoDeDocumento(
    * se encuentra con una sección invisible— y solo se recorta la que de verdad es larga. Con la
    * mediana por sección en 267 caracteres, en la mayoría no se recorta nada.
    */
-  const renderDeContenido = (bloques: { data: unknown }[]): string =>
-    recortarContenido(bloques.map((b) => textoDeBloque(b.data)).filter(Boolean).join(" · "));
+  /**
+   * ⭐ EL MISMO RENDERER QUE EL DE LA SECCIÓN COMPLETA, y eso cierra dos cosas a la vez.
+   *
+   * Había DOS renderers de contenido y solo uno respetaba el esquema. `textoDeBloque` recorría
+   * `Object.values` del dato CRUDO, así que **los UUID de equipo y horarios venían viajando al
+   * prompt en cada turno** — no solo en la línea del acuerdo, que es donde Elías los vio. El
+   * otro ya declaraba la regla correcta en su propio docblock: «ids, banderas y el contenido
+   * que curó una persona fuera del esquema no cruzan al prompt».
+   *
+   * Un solo dueño ⇒ esa regla pasa a ser verdad en todos lados. Y de paso el modelo ve las
+   * POSICIONES numeradas también en el prefijo, que antes solo tenía con el chip puesto.
+   */
+  const renderDeContenido = (schema: unknown, bloques: { data: unknown }[]): string =>
+    bloques
+      .map((b) => renderSeccionParaElChat(schema, b.data, TOPE_POR_SECCION_CHARS))
+      .filter((t) => t && !t.startsWith("(esta sección"))
+      .join("\n");
 
   /* ⚠ Las defs se resuelven ACÁ ARRIBA, antes del render, porque de ellas sale la FIRMA de cada
      sección — y son las MISMAS que después alimentan al ejecutor. Una sola fuente: si el modelo
@@ -512,7 +515,7 @@ export async function contextoDeDocumento(
         const lineaDeRotulo = rotulo ? ` · rótulo de arriba: «${rotulo}»` : "";
         const cabecera = `- ${nombre} (${s.key}) ${firma}${lineaDeRotulo}${alias}${aviso ? ` — ${aviso}` : ""}`;
         if (s._count.blocks === 0) return `${cabecera} — VACÍA`;
-        const contenido = recortarContenido(textoDeBloque(cardDe(s.blocks)?.data));
+        const contenido = renderDeContenido(schemaParaElChat(def), [{ data: cardDe(s.blocks)?.data }]);
         return contenido ? `${cabecera}:\n    ${contenido}` : `${cabecera} — sin contenido legible`;
       },
     )
@@ -724,9 +727,9 @@ export async function contextoDeRol(roleId: string): Promise<ContextoDelAsistent
      campos tiene para poder llenarla. */
   const renglones = secciones.map((s) => {
     const firma = firmaDeSeccion(s.schema, s.listasSoloEdicion);
-    const texto = textoDeBloque(s.data, 0);
-    if (!texto.trim()) return `- ${s.label} (${s.key}) ${firma} — VACÍA`;
-    return `- ${s.label} (${s.key}) ${firma}:\n    ${recortarContenido(texto)}`;
+    const texto = renderSeccionParaElChat(s.schema, s.data, TOPE_POR_SECCION_CHARS);
+    if (!texto.trim() || texto.startsWith("(esta sección")) return `- ${s.label} (${s.key}) ${firma} — VACÍA`;
+    return `- ${s.label} (${s.key}) ${firma}:\n    ${texto}`;
   });
 
   const texto = [

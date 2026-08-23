@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
 import { TECHO_DEL_PREFIJO_CHARS } from "./contexto";
+import { renderSeccionParaElChat } from "@/lib/canvas/capacidades-de-documento";
 
 /** Blanquea comentarios conservando offsets: NOMBRAR algo para prohibirlo no es usarlo. */
 function soloCodigo(src: string): string {
@@ -126,15 +127,39 @@ describe("el contexto del chat se mantiene liviano", () => {
     expect(src, "el recorte dejó de avisar que recortó").toContain("(recortado");
   });
 
-  it("⛔ y del bloque solo salen STRINGS, nunca el Json crudo", () => {
-    /* Un volcado del Json metería ids, flags y claves internas al prompt — ruido que el modelo
-       puede citarle al CSE como si fuera contenido del documento. */
+  /**
+   * ⚠ ACTUALIZADO 2026-08-23, y el cambio REFUERZA lo que este test protegía.
+   *
+   * Anclaba `function textoDeBloque`, que era el renderer que recorría `Object.values` del dato
+   * crudo. Su intención —«del bloque solo salen strings, nunca ids ni flags»— era la correcta y
+   * **la implementación la incumplía**: en las secciones curadas del kickoff la primera key es el
+   * identificador, así que los UUID de las franjas y los cuid del equipo venían viajando al prompt
+   * en cada turno. Elías los vio primero en la línea del acuerdo; estaban también acá.
+   *
+   * Ahora hay UN renderer, `renderSeccionParaElChat`, que recorre SOLO lo que el esquema declara.
+   * El test pasa a anclar eso: es la misma promesa, con una implementación que la cumple.
+   */
+  it("⛔ del bloque solo sale lo que el ESQUEMA declara, nunca el Json crudo", () => {
     const src = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
-    expect(src).toContain("function textoDeBloque");
+    expect(src, "volvió un segundo renderer ciego al esquema").not.toContain("function textoDeBloque");
+    expect(src, "el contexto dejó de rendir por esquema").toContain("renderSeccionParaElChat(");
     expect(
       /JSON\.stringify\(\s*(b\.)?data/.test(src),
       "el contexto volcó el Json crudo del bloque en vez de extraer su texto",
     ).toBe(false);
+  });
+
+  it("⭐ y un id fuera del esquema NO cruza al prompt", () => {
+    /* La prueba de verdad, no el escaneo: una franja es `{id, label}` y su esquema declara solo
+       `{label}`. La edición que la pone en rojo: volver a recorrer `Object.values` del dato. */
+    const schema = {
+      type: "object",
+      properties: { options: { type: "array", items: { type: "object", properties: { label: { type: "string" } } } } },
+    };
+    const data = { options: [{ id: "58dc6158-dfee-4ce8-a442-9f1c", label: "Martes 11:00 am" }] };
+    const render = renderSeccionParaElChat(schema, data);
+    expect(render).toContain("Martes 11:00 am");
+    expect(render, "el UUID cruzó al prompt").not.toContain("58dc6158");
   });
 
   it("el techo del prefijo sigue siendo una decisión chica, no un número que creció solo", () => {

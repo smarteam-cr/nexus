@@ -55,6 +55,10 @@ import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
 /* El catálogo de tipos creables: puro, sin React. De ahí salen el esquema y el molde vacío de una
    sección que nace en este mismo lote. */
 import { defDelTipo } from "@/lib/landing/catalogo-de-secciones";
+/* ⭐ El mismo diccionario que traduce las claves en el PDF. Sin él la línea decía `label`, `title`,
+   `detail` — nombres de programador en el renglón que una persona tiene que aprobar. Reusarlo (en
+   vez de escribir un segundo) hace que el papel y la cajita del chat digan lo mismo. */
+import { labelFor } from "@/lib/canvas/print-vocab";
 /* ⛔ La resolución por contenido vive AFUERA y es pura: la importan el que prepara el acuerdo, el
    que ejecuta y el índice del navegador. Una segunda normalización sería una que puede divergir. */
 import { hojasCitables, resolverCita } from "@/lib/canvas/citas-de-documento";
@@ -390,6 +394,8 @@ interface RutaResuelta {
   clave: string | number;
   /** El ítem indexado más profundo que atravesó la ruta, para el ancla. */
   itemMasProfundo: unknown;
+  /** El schema de ESE ítem — sin él, la identidad sale del primer string crudo (un UUID). */
+  schemaDelItemMasProfundo?: unknown;
 }
 
 /**
@@ -412,6 +418,7 @@ function resolverRuta(
   let nodoSchema = schema as NodoDeSchema;
   let contenedor: Record<string, unknown> | unknown[] = raiz;
   let itemMasProfundo: unknown = undefined;
+  let schemaDelItemMasProfundo: unknown = undefined;
 
   for (let i = 0; i < segmentos.length; i++) {
     const seg = segmentos[i];
@@ -430,7 +437,7 @@ function resolverRuta(
                 : `«${seg}» no es un texto`,
           };
         }
-        return { ok: true, r: { contenedor, clave: seg, itemMasProfundo } };
+        return { ok: true, r: { contenedor, clave: seg, itemMasProfundo, schemaDelItemMasProfundo } };
       }
       const actual = (contenedor as Record<string, unknown>)[seg];
       if (actual === undefined || actual === null) {
@@ -456,9 +463,10 @@ function resolverRuta(
       const sub = nodoSchema.items as NodoDeSchema | undefined;
       if (!sub) return { ok: false, motivo: "esa lista no declara qué contiene" };
       itemMasProfundo = arr[idx];
+      schemaDelItemMasProfundo = sub;
       if (ultimo) {
         if (sub.type !== "string") return { ok: false, motivo: `el ítem ${idx + 1} no es un texto` };
-        return { ok: true, r: { contenedor: arr, clave: idx, itemMasProfundo } };
+        return { ok: true, r: { contenedor: arr, clave: idx, itemMasProfundo, schemaDelItemMasProfundo } };
       }
       contenedor = arr[idx] as Record<string, unknown> | unknown[];
       nodoSchema = sub;
@@ -481,7 +489,7 @@ export function anclaDeRuta(schema: unknown, data: unknown, ruta: string): strin
   const raiz = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
   const res = resolverRuta(schema, raiz, ruta);
   if (!res.ok) return null;
-  return identidadDeItem(res.r.itemMasProfundo);
+  return identidadDeItem(res.r.itemMasProfundo, false, res.r.schemaDelItemMasProfundo);
 }
 
 /**
@@ -500,14 +508,38 @@ function identidadDeItem(
    * «Se quita «Aircall no sincroniza co»», cortado a mitad de palabra.
    */
   completo = false,
+  /**
+   * ⭐ El schema de los ÍTEMS de esa lista, cuando se lo puede resolver.
+   *
+   * ── POR QUÉ HACE FALTA ──────────────────────────────────────────────────────────────────────
+   * Sin él se recorre `Object.values` de la data CRUDA, y en las secciones curadas del kickoff la
+   * primera key es el IDENTIFICADOR: una franja es `{id, label}` y una persona del equipo es
+   * `{teamMemberId, name, role, photoUrl}`. Resultado en pantalla, el 2026-08-23:
+   *   «En «Sesiones y horarios», en «58dc6158-dfee-4ce8-a442-», label pasa a: «Martes 11:00 pm»»
+   * — 24 caracteres de un UUID, que es justo el largo del ancla.
+   *
+   * ⛔ Y la ironía es que el `schemaDelChat` de esas secciones ESCONDE el `id` a propósito (el
+   * modelo no puede inventarlo). O sea que una mitad decía «esta lista es `{label}`» y la otra
+   * leía el objeto entero. Consultar el schema hace que las dos digan lo mismo.
+   *
+   * ⚠ Sin schema —secciones `custom:*`, `ctxDriven`— cae al recorrido de siempre: ahí no hay forma
+   * declarada, y adivinar sería peor que el comportamiento conocido.
+   */
+  schemaDeItems?: unknown,
 ): string | null {
   const dar = (v: string) => (completo ? v.trim() : recortarAncla(v));
   if (item === undefined || item === null) return null;
   if (typeof item === "string") return item.trim() ? dar(item) : null;
-  if (typeof item === "object") {
-    for (const v of Object.values(item as Record<string, unknown>)) {
-      if (typeof v === "string" && v.trim()) return dar(v);
-    }
+  if (typeof item !== "object") return null;
+
+  const obj = item as Record<string, unknown>;
+  const props = (schemaDeItems as NodoDeSchema | undefined)?.properties;
+  /* Con schema: SUS keys, en SU orden — el orden del schema es el orden en que una persona lee la
+     tarjeta, y es donde `label`/`name` van adelante. */
+  const claves = props ? Object.keys(props) : Object.keys(obj);
+  for (const k of claves) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim()) return dar(v);
   }
   return null;
 }
@@ -520,10 +552,23 @@ function identidadDeItem(
  * apuntara a un objeto entero permitiría escribirlo de una, que es el contrato que este módulo
  * vino a romper.
  */
-export function anclaDeItem(data: unknown, lista: string, posicion: number): string | null {
+export function anclaDeItem(
+  data: unknown,
+  lista: string,
+  posicion: number,
+  /** El schema de la SECCIÓN. De acá sale el de los ítems, que es lo que ordena la identidad. */
+  schema?: unknown,
+): string | null {
   const arr = (data as Record<string, unknown> | null)?.[lista];
   if (!Array.isArray(arr) || posicion < 0 || posicion >= arr.length) return null;
-  return identidadDeItem(arr[posicion]);
+  return identidadDeItem(arr[posicion], false, schemaDeItemsDe(schema, lista));
+}
+
+/** El schema de los ítems de una lista de PRIMER nivel, si la sección lo declara. */
+export function schemaDeItemsDe(schema: unknown, lista: string | undefined): unknown {
+  if (!lista) return undefined;
+  const nodo = (schema as NodoDeSchema | undefined)?.properties?.[lista] as NodoDeSchema | undefined;
+  return nodo?.type === "array" ? nodo.items : undefined;
 }
 
 // ── El ejecutor ───────────────────────────────────────────────────────────────────────────────
@@ -685,7 +730,7 @@ export function prepararOperacionesDeDocumento(
     if (yaTieneAncla) {
       aceptadas.push(c);
     } else if (s && (c.op === "seccion.item.borrar" || c.op === "seccion.item.mover") && c.lista) {
-      const ancla = anclaDeItem(s.data, c.lista, c.posicion ?? -1);
+      const ancla = anclaDeItem(s.data, c.lista, c.posicion ?? -1, s.schema);
       aceptadas.push(ancla === null ? c : { ...c, ancla });
     } else if (s && c.op === "seccion.campo" && c.campo) {
       const ancla = anclaDeRuta(s.schema, s.data, c.campo);
@@ -906,8 +951,16 @@ export function aplicarOperacionesDeDocumento(
          * sería escribir en el equivocado en silencio — el mismo criterio que la cita, donde la
          * ambigüedad es rechazo y nunca «el más parecido».
          */
+        const itemsDeLaLista = schemaDeItemsDe(s.schema, o.lista);
+        /* ⛔ MIGRACIÓN, con fecha: el ancla viaja PERSISTIDA dentro de cada acuerdo del hilo.
+           Un pendiente acordado antes del 2026-08-23 lleva la identidad vieja —«58dc6158-…», el
+           primer string crudo— y la nueva devuelve «Martes 11:00». Sin aceptar las dos, todos los
+           hilos abiertos se caerían con «alguien reordenó la lista» sobre listas que nadie tocó.
+           Se puede quitar cuando no queden acuerdos vivos de antes de esa fecha. */
+        const esteItemEs = (it: unknown) =>
+          identidadDeItem(it, false, itemsDeLaLista) === o.ancla || identidadDeItem(it) === o.ancla;
         const coincidencias = o.ancla
-          ? arr.reduce<number[]>((acc, it, i) => (identidadDeItem(it) === o.ancla ? [...acc, i] : acc), [])
+          ? arr.reduce<number[]>((acc, it, i) => (esteItemEs(it) ? [...acc, i] : acc), [])
           : [];
         const pos = coincidencias.length === 1 ? coincidencias[0] : o.posicion;
         if (typeof pos !== "number" || !Number.isInteger(pos) || pos < 0 || pos >= arr.length) {
@@ -918,8 +971,8 @@ export function aplicarOperacionesDeDocumento(
            determinar cómo se llama el ítem que está en esa posición, no se toca. Volverlo
            condicional —«si hay ancla y no coincide»— es la edición que parece natural y apaga la
            protección para toda operación que la app olvidó anclar. */
-        const actual = anclaDeItem(s.data, o.lista, pos);
-        if (actual !== o.ancla) {
+        const actual = anclaDeItem(s.data, o.lista, pos, s.schema);
+        if (actual !== o.ancla && anclaDeItem(s.data, o.lista, pos) !== o.ancla) {
           rechazar(o, `«${o.ancla}» ya no está en esa posición: alguien reordenó la lista`);
           break;
         }
@@ -1175,7 +1228,7 @@ export function describirOperacionesDeDocumento(
      `undefined` — que es lo que se leyó en pantalla el 2026-08-22: «Se quita «undefined»…». */
   /* El rótulo humano de un campo, si su def lo declara. Mismo criterio que el de las listas. */
   const campoDicho = (key: string, campo: string) =>
-    porKey.get(key)?.rotulosDeCampos?.[campo] ?? campo;
+    porKey.get(key)?.rotulosDeCampos?.[campo] ?? labelFor(campo);
   /**
    * ⭐ EL TEXTO VIVO, NO EL ANCLA — y la diferencia se leyó en pantalla el 2026-08-23:
    * «Se quita «Aircall no sincroniza co» de la lista «Hoy»». Cortado a mitad de palabra y sin
@@ -1199,7 +1252,9 @@ export function describirOperacionesDeDocumento(
   ) => {
     const arr = (porKey.get(key)?.data as Record<string, unknown> | undefined)?.[lista ?? ""];
     const vivo =
-      Array.isArray(arr) && typeof posicion === "number" ? identidadDeItem(arr[posicion], true) : null;
+      Array.isArray(arr) && typeof posicion === "number"
+        ? identidadDeItem(arr[posicion], true, schemaDeItemsDe(porKey.get(key)?.schema, lista))
+        : null;
     if (vivo) return `«${recortar(vivo)}»`;
     return ancla?.trim() ? `«${ancla}»` : `el ítem ${(posicion ?? 0) + 1}`;
   };

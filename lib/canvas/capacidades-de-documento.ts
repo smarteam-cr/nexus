@@ -365,7 +365,7 @@ export function nombreParaElChat(
 }
 
 /** Cuánto de UNA sección se le manda al modelo cuando la pide entera. */
-export const TOPE_DE_SECCION_COMPLETA_CHARS = 6_000;
+export const TOPE_DE_SECCION_COMPLETA_CHARS = 20_000;
 
 /**
  * ⭐ EL CONTENIDO DE UNA SECCIÓN, CON LOS NOMBRES PUESTOS Y LAS POSICIONES A LA VISTA.
@@ -382,7 +382,12 @@ export const TOPE_DE_SECCION_COMPLETA_CHARS = 6_000;
  * ⚠ Los ítems se numeran desde 0, que es el número que va en `posicion`. Numerarlos desde 1 —lo
  * natural al leer— fabricaría un error de una posición en cada borrado.
  */
-export function renderSeccionParaElChat(schema: unknown, data: unknown): string {
+export function renderSeccionParaElChat(
+  schema: unknown,
+  data: unknown,
+  /** Tope propio. El prefijo cacheado usa uno más chico que el bloque bajo demanda. */
+  tope = TOPE_DE_SECCION_COMPLETA_CHARS,
+): string {
   const s = schema as NodoDeSchema | undefined;
   const props = s?.type === "object" ? (s.properties ?? {}) : {};
   const d = (data ?? {}) as Record<string, unknown>;
@@ -407,8 +412,8 @@ export function renderSeccionParaElChat(schema: unknown, data: unknown): string 
   }
 
   const texto = lineas.join("\n");
-  return texto.length > TOPE_DE_SECCION_COMPLETA_CHARS
-    ? `${texto.slice(0, TOPE_DE_SECCION_COMPLETA_CHARS)}… (recortado: la sección es muy larga)`
+  return texto.length > tope
+    ? `${texto.slice(0, tope)}… (recortado: la sección es muy larga)`
     : texto || "(esta sección no tiene contenido editable)";
 }
 

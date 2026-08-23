@@ -212,3 +212,131 @@ describe("⚠ la línea que aprueba una persona no corta palabras", () => {
     for (const l of lineas) expect(l, l).not.toContain("undefined");
   });
 });
+
+describe("⛔ la identidad de un ítem sale del ESQUEMA, no del primer string crudo", () => {
+  /**
+   * En pantalla se leyó, el 2026-08-23:
+   *   «En «Sesiones y horarios», en «58dc6158-dfee-4ce8-a442-», label pasa a: «Martes 11:00 pm»»
+   * — 24 caracteres de un UUID, que es justo el largo del ancla.
+   *
+   * ⭐ Y la ironía: el `schemaDelChat` de esas secciones ESCONDE el `id` a propósito, porque el
+   * modelo no puede inventarlo. Una mitad decía «esta lista es {label}» y la otra leía el objeto
+   * entero. Al equipo le pasaba igual: «quitá a Lidia» se leía «Se quita «cmk3f9…»».
+   */
+  const SCHEMA_HORARIOS = {
+    type: "object",
+    properties: {
+      options: { type: "array", items: { type: "object", properties: { label: { type: "string" } } } },
+    },
+  };
+  const horarios = (): SeccionActual[] => [
+    {
+      id: "h1",
+      key: "horarios",
+      label: "Sesiones y horarios",
+      data: {
+        options: [
+          { id: "58dc6158-dfee-4ce8-a442-9f1c", label: "Martes 11:00 am" },
+          { id: "a1d2ea3e-1b7e-486b-a638-77aa", label: "Jueves 11:00 am" },
+        ],
+      },
+      schema: SCHEMA_HORARIOS,
+      schemaDelAgente: {},
+      oculta: false,
+      esCreada: false,
+      movible: true,
+    },
+  ];
+
+  it("la línea del acuerdo dice la etiqueta, no el UUID", () => {
+    /* La edición que la pone en rojo: sacarle el schema a `identidadDeItem`. */
+    const secs = horarios();
+    const prep = prepararOperacionesDeDocumento(
+      secs,
+      [{ op: "seccion.campo", key: "horarios", campo: "options.0.label", valor: "Martes 11:00 pm" }],
+      TODO,
+    );
+    const [linea] = describirOperacionesDeDocumento(secs, prep.aceptadas);
+    expect(linea, "el UUID volvió a la línea que aprueba una persona").not.toContain("58dc6158");
+    expect(linea).toContain("Martes 11:00 am");
+  });
+
+  it("y el ANCLA también: es la llave de integridad, no puede ser un id", () => {
+    const secs = horarios();
+    const prep = prepararOperacionesDeDocumento(
+      secs,
+      [{ op: "seccion.item.borrar", key: "horarios", lista: "options", posicion: 1 }],
+      TODO,
+    );
+    expect((prep.aceptadas[0] as { ancla?: string }).ancla).toBe("Jueves 11:00 am");
+  });
+
+  it("⛔ MIGRACIÓN: un pendiente con el ancla VIEJA (el UUID) se sigue aceptando", () => {
+    /* El ancla viaja PERSISTIDA dentro de cada acuerdo del hilo. Sin esto, todos los hilos
+       abiertos se caerían con «alguien reordenó la lista» sobre listas que nadie tocó.
+       La edición que la pone en rojo: sacar el `||` de compatibilidad. */
+    const secs = horarios();
+    const prep = prepararOperacionesDeDocumento(
+      secs,
+      [
+        {
+          op: "seccion.item.borrar",
+          key: "horarios",
+          lista: "options",
+          posicion: 0,
+          ancla: "58dc6158-dfee-4ce8-a442-",
+        },
+      ],
+      TODO,
+    );
+    const r = aplicarOperacionesDeDocumento(secs, prep.aceptadas, TODO);
+    expect(r.rechazadas).toEqual([]);
+  });
+
+  it("⛔ MIGRACIÓN: y también cuando el ítem SE MOVIÓ desde que se acordó", () => {
+    /* Este caso ejercita la BÚSQUEDA por ancla, no el chequeo: el pendiente dice `posicion: 0` y
+       su ítem está en la 1. Sin el `||` en la búsqueda, no lo encuentra y borra el equivocado —
+       o se cae. Escribirlo aparte fue lo que descubrió que el caso de arriba probaba otra línea. */
+    const secs = horarios();
+    const prep = prepararOperacionesDeDocumento(
+      secs,
+      [
+        {
+          op: "seccion.item.borrar",
+          key: "horarios",
+          lista: "options",
+          posicion: 0,
+          /* El ancla LEGACY del SEGUNDO ítem: se acordó cuando estaba primero. */
+          ancla: "a1d2ea3e-1b7e-486b-a638-",
+        },
+      ],
+      TODO,
+    );
+    const r = aplicarOperacionesDeDocumento(secs, prep.aceptadas, TODO);
+    expect(r.rechazadas).toEqual([]);
+    const data = (r.plan.find((x) => x.tipo === "data") as { data: { options: { label: string }[] } }).data;
+    expect(data.options.map((o) => o.label), "siguió al ítem equivocado").toEqual(["Martes 11:00 am"]);
+  });
+
+  it("sin esquema declarado —una sección creada a mano— sigue como antes", () => {
+    /* Ahí no hay forma declarada, y adivinar sería peor que el comportamiento conocido. */
+    const secs: SeccionActual[] = [
+      {
+        id: "c1",
+        key: "custom:tabla:x",
+        label: "Creada",
+        data: { filas: [{ a: "primero", b: "segundo" }] },
+        schema: {},
+        oculta: false,
+        esCreada: true,
+        movible: true,
+      },
+    ];
+    const prep = prepararOperacionesDeDocumento(
+      secs,
+      [{ op: "seccion.item.borrar", key: "custom:tabla:x", lista: "filas", posicion: 0 }],
+      TODO,
+    );
+    expect((prep.aceptadas[0] as { ancla?: string }).ancla).toBe("primero");
+  });
+});

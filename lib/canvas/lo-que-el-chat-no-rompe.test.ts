@@ -18,6 +18,7 @@ import {
   type SeccionActual,
 } from "./operaciones-de-documento";
 import { firmaDeSeccion, capacidadDeSeccion, schemaParaElChat } from "./capacidades-de-documento";
+import { labelFor } from "./print-vocab";
 import { USE_CASES_DEF } from "@/components/landing/configs/shared-sections.defs";
 import { toSectionDef } from "@/components/landing/configs/templates";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
@@ -291,13 +292,18 @@ describe("las líneas del acuerdo se leen", () => {
     expect(linea).toContain("Base completa desde Salesforce");
   });
 
-  it("⭐ un campo de primer nivel se sigue nombrando directo", () => {
-    /* Sin ancla que interpolar, la línea no puede inventar una ubicación. */
+  it("⭐ un campo de primer nivel se nombra con su RÓTULO, no con su key", () => {
+    /* ⚠ ACTUALIZADO 2026-08-23: antes exigía el literal «intro». `rotulosDeCampos` estaba
+       declarado y no lo poblaba NADIE, así que la línea escribía la key de programador —
+       «label pasa a…», «detail pasa a…»— en el renglón que una persona tiene que aprobar.
+       Ahora cae al mismo diccionario que traduce las claves en el PDF, así que el papel y la
+       cajita dicen lo mismo. La edición que la pone en rojo: volver a interpolar `campo`. */
     const [linea] = describirOperacionesDeDocumento(
       [CARDS],
       [{ op: "seccion.campo", key: "alcance", campo: "intro", valor: "Esto es lo que incluye" }],
     );
-    expect(linea).toContain("intro");
+    expect(linea, "la línea volvió a escribir la key en vez del rótulo").toContain(labelFor("intro"));
+    expect(labelFor("intro")).not.toBe("intro");
     expect(linea).toContain("Esto es lo que incluye");
   });
 });
