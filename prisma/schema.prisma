@@ -4272,15 +4272,77 @@ model SicopLectura {
 
   // ── Trazabilidad ──────────────────────────────────────────────────────────────
   /// Cuánta información REAL había para leer (0-100). No es cuán segura suena la conclusión.
-  confianza   Int?
-  modelo      String?
-  analizadoEl DateTime
+  confianza      Int?
+  /// ¿La conclusión salió del CARTEL o solo del título y las notas? Sin esto, una ficha leída
+  /// a fondo y una leída del título pelado se ven idénticas en pantalla, y no valen lo mismo.
+  profundo       Boolean  @default(false)
+  adjuntosLeidos Int      @default(0)
+  modelo         String?
+  analizadoEl    DateTime
   /// El análisis falló. La fila se guarda igual: sin ella la pantalla diría "sin analizar"
   /// para siempre y nadie sabría que se intentó.
-  error       String?  @db.Text
+  error          String?  @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([encaje])
+}
+
+/// En qué estado está el intento de leer un archivo adjunto de una licitación.
+///
+/// ⚠ SIN_TEXTO y ERROR dicen cosas distintas. SIN_TEXTO es el caso NORMAL de los carteles del
+/// Estado: un PDF escaneado del que no hay nada que extraer sin OCR. ERROR es que algo se
+/// rompió. Juntarlos haría que «la mitad del pipeline necesita OCR» se leyera como «la
+/// integración está fallando».
+enum SicopAdjuntoEstado {
+  PENDIENTE
+  EXTRAIDO
+  SIN_TEXTO
+  SIN_PERMISO
+  DEMASIADO_GRANDE
+  ERROR
+}
+
+/// Un archivo colgado de una nota de licitación — casi siempre EL CARTEL.
+///
+/// Medido el 2026-08-23: de 58 notas del pipeline «Gobiernos», 33 llevan archivo y 30 no tienen
+/// una sola letra de texto. Esta tabla guarda el texto que se le extrae a cada uno.
+///
+/// ⛔ NO guarda el binario. El archivo vive en HubSpot; Nexus lo baja en memoria, le saca el
+/// texto con `lib/documents/extract-text.ts` y lo tira.
+model SicopAdjunto {
+  id String @id @default(cuid())
+
+  /// Se guarda el TICKET además de la nota porque la pantalla pregunta siempre por ticket, y
+  /// las notas no se persisten (HubSpot es su dueño), así que no hay por dónde hacer el join.
+  hubspotTicketId String
+  hubspotNoteId   String
+  hubspotFileId   String
+
+  nombre      String?
+  extension   String?
+  mimeType    String?
+  tamanoBytes Int?
+  /// ⚠ La que devuelve la API de HubSpot, nunca armada a mano. Sin el scope `files` queda null
+  /// y la pantalla enlaza al ticket, que siempre existe.
+  urlHubspot  String?
+
+  estado     SicopAdjuntoEstado @default(PENDIENTE)
+  /// Lo único que se guarda del archivo. El extractor corta en 50.000 caracteres.
+  texto      String?            @db.Text
+  caracteres Int                @default(0)
+  error      String?            @db.Text
+
+  intentadoEl DateTime?
+  extraidoEl  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// (ticket, archivo) y no el archivo solo: el mismo PDF puede colgar de dos licitaciones
+  /// —pasa con los carteles marco— y con la clave en el archivo, la segunda no lo vería.
+  @@unique([hubspotTicketId, hubspotFileId])
+  @@index([hubspotTicketId])
+  @@index([estado])
 }

@@ -12,6 +12,16 @@
  * (decisión de Elías, 2026-08-23). Acá vive el CÓMO ordena cada uno, no cuál gana.
  */
 
+/* ⚠ SOLO tipos. `import type` se borra en compilación, así que este módulo sigue sin una
+   dependencia de runtime y el navegador lo puede cargar entero. `sicop-notas` además es puro
+   a propósito; `@prisma/client` acá es un enum de strings y nada más. */
+import type { SicopAdjuntoEstado } from "@prisma/client";
+import type {
+  DatosDelProcedimiento,
+  FiltroDelScraper,
+  NotaClasificada,
+} from "./sicop-notas";
+
 // ── Vocabulario cerrado ────────────────────────────────────────────────────────
 
 /** ¿Esto es para nosotros? El veredicto de la lectura de IA. */
@@ -91,6 +101,14 @@ export interface LecturaSicop {
    * el modelo no vio» se ven igual en pantalla si no se dice cuál de las dos es.
    */
   adjuntosSinLeer: number;
+  /**
+   * ¿La conclusión salió del CARTEL o solo del título y las notas? En pantalla las dos fichas
+   * se ven iguales y no valen lo mismo: una leyó los requisitos de admisibilidad, la otra los
+   * dedujo de un asunto de HubSpot.
+   */
+  profundo: boolean;
+  /** Cuántos archivos aportaron su texto a la lectura. */
+  adjuntosLeidos: number;
   /** La fuente se recortó por tamaño: hay texto que el modelo no vio. */
   fuenteTruncada: boolean;
   analizadoEl: string | null;
@@ -100,6 +118,20 @@ export interface LecturaSicop {
 }
 
 // ── La fila del tablero ────────────────────────────────────────────────────────
+
+/** Un archivo del ticket, tal como lo muestra la pantalla. */
+export interface ArchivoDeLaFila {
+  id: string;
+  hubspotNoteId: string;
+  hubspotFileId: string;
+  nombre: string | null;
+  extension: string | null;
+  tamanoBytes: number | null;
+  urlHubspot: string | null;
+  estado: SicopAdjuntoEstado;
+  caracteres: number;
+  error: string | null;
+}
 
 export interface EtapaDeLaFila {
   id: string;
@@ -129,6 +161,25 @@ export interface FilaSicop {
   presupuestoCrm: number | null;
   etapa: EtapaDeLaFila;
   lectura: LecturaSicop | null;
+  /**
+   * Lo que dijo el SCRAPER en su nota «Análisis del filtro». Score y confianza son lo que
+   * ordena la tabla por default (decisión de Elías: «deberían priorizar siempre»).
+   *
+   * ⚠ Es la opinión de OTRO sistema, no la de Nexus: convive con `lectura` en vez de pisarla.
+   * El 2026-08-23 se encontró una de estas notas escrita en el ticket equivocado.
+   */
+  filtro: FiltroDelScraper | null;
+  /**
+   * Los datos duros de la nota «Detalles del procedimiento»: monto, tipo, fechas límite.
+   * ⚠ Se llama así y no `procedimiento` porque ese nombre YA es el NÚMERO de procedimiento
+   * del CRM (`nro_de_procedimiento__sicopp_`), que es otra cosa.
+   */
+  datosDelProcedimiento: DatosDelProcedimiento | null;
+  /** El hilo completo, clasificado. Se muestra en el detalle. */
+  notas: NotaClasificada[];
+  archivos: ArchivoDeLaFila[];
+  /** Notas que dicen ser de una clase conocida y les falta un campo — el drift a la vista. */
+  notasIncompletas: number;
   /**
    * El ticket se tocó DESPUÉS de leerlo. Es una señal barata y honesta, no un veredicto:
    * mover la tarjeta de etapa también la enciende, y eso no cambia una coma de lo que hay
@@ -163,7 +214,9 @@ export const COLONES_POR_DOLAR_APROX = 505;
 
 /** El monto en una sola unidad comparable (USD). `null` = la IA no pudo leer un monto. */
 export function montoComparable(fila: FilaSicop): number | null {
-  const m = fila.lectura?.monto ?? null;
+  /* Primero lo que leyó la IA (trae moneda); si no hay, el monto estimado que declara el
+     scraper. Ese viene sin moneda: se asume la de la casa, igual que abajo. */
+  const m = fila.lectura?.monto ?? fila.datosDelProcedimiento?.montoEstimado ?? null;
   if (m == null) return null;
   if (fila.lectura?.moneda === "CRC") return m / COLONES_POR_DOLAR_APROX;
   // Sin moneda declarada se asume dólares: es la unidad de la casa y no inventa magnitud.
@@ -182,6 +235,13 @@ export function fechaLimiteDe(fila: FilaSicop, hoy: Date): string | null {
   const corte = hoy.getTime();
   const candidatas: string[] = [];
   for (const p of fila.lectura?.plazos ?? []) if (p.fecha) candidatas.push(p.fecha);
+  /* Las que declara el SCRAPER en «Detalles del procedimiento». Son las más confiables de
+     todas —vienen del expediente, no de una lectura— y por eso entran aunque la IA ya haya
+     propuesto las suyas: gana la más cercana, no la de mejor procedencia. */
+  if (fila.datosDelProcedimiento?.fechaAclaraciones)
+    candidatas.push(fila.datosDelProcedimiento.fechaAclaraciones.slice(0, 10));
+  if (fila.datosDelProcedimiento?.fechaObjecion)
+    candidatas.push(fila.datosDelProcedimiento.fechaObjecion.slice(0, 10));
   if (fila.fechaAclaraciones) candidatas.push(fila.fechaAclaraciones.slice(0, 10));
 
   const futuras = candidatas

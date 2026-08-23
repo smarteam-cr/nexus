@@ -13,13 +13,26 @@
  *
  * ⚠ LA TABLA PUEDE NO EXISTIR TODAVÍA. El .sql lo aplica Elías después del deploy, así que
  * entre una cosa y la otra hay una ventana en la que `SicopLectura` no está. Se detecta y se
- * reporta como `tablaAusente` en vez de reventar la pantalla entera: una sección que devuelve
+ * reporta como `esquemaAtrasado` en vez de reventar la pantalla entera: una sección que devuelve
  * 500 durante media hora se lee como "el módulo está roto", no como "falta correr un script".
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import { leerNotasDeTickets, leerTableroSicop, type LicitacionSicop, type TableroSicop } from "./sicop";
+import {
+  leerNotasDeTickets,
+  leerTableroSicop,
+  type LicitacionSicop,
+  type NotaCruda,
+  type TableroSicop,
+} from "./sicop";
+import {
+  adjuntosPorLeer,
+  extraerAdjunto,
+  leerTextoDeAdjuntos,
+  sincronizarAdjuntos,
+} from "./sicop-archivos";
 import {
   construirFuente,
   leerLicitacionConIA,
@@ -36,19 +49,17 @@ const EN_PARALELO = 6;
 /** Tope por corrida. Existe para que un pipeline que crezca a 500 no se lea entero de un saque. */
 export const MAX_POR_CORRIDA = 50;
 
-/** El código de Postgres para "esa tabla no existe". */
-function esTablaAusente(e: unknown): boolean {
-  if (e instanceof Prisma.PrismaClientKnownRequestError) return e.code === "P2021";
-  return /does not exist|no existe la relación/i.test(e instanceof Error ? e.message : "");
-}
-
 // ── Lectura de lo ya guardado ──────────────────────────────────────────────────
 
 export interface LecturasGuardadas {
   /** ticketId → lo que se guardó la última vez. */
   porTicket: Map<string, { lectura: LecturaSicop; fuenteSha: string }>;
-  /** true = falta correr `scripts/sql/2026-08-23-sicop-lectura.sql`. */
-  tablaAusente: boolean;
+  /**
+   * true = la base está ATRÁS del código: falta aplicar un `.sql` de `scripts/sql/`. Cubre
+   * tanto la tabla ausente como una COLUMNA ausente — el 2026-08-23 la pantalla reventó por
+   * lo segundo mientras la guarda solo miraba lo primero.
+   */
+  esquemaAtrasado: boolean;
 }
 
 type FilaGuardada = {
@@ -56,6 +67,8 @@ type FilaGuardada = {
   fuenteSha: string;
   notasLeidas: number;
   adjuntosSinLeer: number;
+  adjuntosLeidos: number;
+  profundo: boolean;
   fuenteTruncada: boolean;
   objeto: string | null;
   institucion: string | null;
@@ -102,6 +115,8 @@ function aLectura(f: FilaGuardada): LecturaSicop {
     confianza: f.confianza,
     notasLeidas: f.notasLeidas,
     adjuntosSinLeer: f.adjuntosSinLeer,
+    profundo: f.profundo,
+    adjuntosLeidos: f.adjuntosLeidos,
     fuenteTruncada: f.fuenteTruncada,
     analizadoEl: f.analizadoEl.toISOString(),
     modelo: f.modelo,
@@ -113,7 +128,7 @@ export async function leerLecturasGuardadas(
   ticketIds: readonly string[],
 ): Promise<LecturasGuardadas> {
   const porTicket = new Map<string, { lectura: LecturaSicop; fuenteSha: string }>();
-  if (ticketIds.length === 0) return { porTicket, tablaAusente: false };
+  if (ticketIds.length === 0) return { porTicket, esquemaAtrasado: false };
   try {
     const filas = await prisma.sicopLectura.findMany({
       where: { hubspotTicketId: { in: [...ticketIds] } },
@@ -124,9 +139,9 @@ export async function leerLecturasGuardadas(
         fuenteSha: f.fuenteSha,
       });
     }
-    return { porTicket, tablaAusente: false };
+    return { porTicket, esquemaAtrasado: false };
   } catch (e) {
-    if (esTablaAusente(e)) return { porTicket, tablaAusente: true };
+    if (esquemaDesactualizado(e)) return { porTicket, esquemaAtrasado: true };
     throw e;
   }
 }
@@ -143,9 +158,23 @@ export interface ResultadoDeCorrida {
   /** Cuántas quedaron sin leer por el tope de la corrida. */
   pendientes: number;
   total: number;
-  tablaAusente: boolean;
+  esquemaAtrasado: boolean;
   /** Mensaje corto cuando ni siquiera se pudo llegar a HubSpot. */
   error: string | null;
+  /** Lo que pasó con los archivos. Los tres desenlaces tienen dueños distintos. */
+  archivos: {
+    /** Filas creadas: archivos que Nexus no conocía. */
+    nuevos: number;
+    /** Bajados y convertidos en texto. */
+    leidos: number;
+    /** Se bajaron y no dieron texto — cartel escaneado, haría falta OCR. */
+    sinTexto: number;
+    /** 403: falta el scope `files` en la app de HubSpot. */
+    sinPermiso: number;
+    fallidos: number;
+    /** true = falta correr `scripts/sql/2026-08-23-sicop-adjuntos.sql`. */
+    esquemaAtrasado: boolean;
+  };
 }
 
 /** Corre `tarea` sobre `items` con un tope de concurrencia, en orden de llegada. */
@@ -164,7 +193,11 @@ async function enParalelo<T>(
   await Promise.all(obreros);
 }
 
-function aTicketParaLeer(l: LicitacionSicop, notas: NotaDeTicket[]): TicketParaLeer {
+function aTicketParaLeer(
+  l: LicitacionSicop,
+  notas: NotaDeTicket[],
+  adjuntos: { nombre: string; texto: string }[] = [],
+): TicketParaLeer {
   return {
     id: l.id,
     asunto: l.asunto,
@@ -175,14 +208,22 @@ function aTicketParaLeer(l: LicitacionSicop, notas: NotaDeTicket[]): TicketParaL
     fechaAclaraciones: l.fechaAclaraciones,
     presupuestoCrm: l.presupuesto,
     notas,
+    adjuntos,
   };
 }
 
 export interface OpcionesDeCorrida {
-  /** Analiza SOLO este ticket (el botón «Volver a leer» de una fila). */
-  soloTicketId?: string;
+  /** Analiza SOLO estas licitaciones (lo que marcó el usuario en la tabla). Vacío = todas. */
+  ticketIds?: readonly string[];
   /** Re-lee aunque la huella no haya cambiado — para después de tocar el criterio. */
   forzar?: boolean;
+  /**
+   * A FONDO: baja los archivos, les saca el texto y se lo pasa al modelo.
+   *
+   * ⚠ Es lo que cuesta plata de verdad (~US$0,09 contra ~US$0,018) y por eso lo dispara una
+   * persona sobre lo que eligió, no una corrida automática sobre las 45.
+   */
+  profundo?: boolean;
 }
 
 /**
@@ -195,14 +236,23 @@ export interface OpcionesDeCorrida {
 export async function correrAnalisisSicop(
   opciones: OpcionesDeCorrida = {},
 ): Promise<ResultadoDeCorrida> {
+  const sinArchivos = {
+    nuevos: 0,
+    leidos: 0,
+    sinTexto: 0,
+    sinPermiso: 0,
+    fallidos: 0,
+    esquemaAtrasado: false,
+  };
   const vacio: ResultadoDeCorrida = {
     analizadas: 0,
     intactas: 0,
     fallidas: 0,
     pendientes: 0,
     total: 0,
-    tablaAusente: false,
+    esquemaAtrasado: false,
     error: null,
+    archivos: sinArchivos,
   };
 
   let tablero: TableroSicop;
@@ -217,22 +267,50 @@ export async function correrAnalisisSicop(
   const todas = tablero.etapas.flatMap((e) =>
     e.licitaciones.map((l) => ({ licitacion: l, cerrada: e.cerrada })),
   );
-  const candidatas = opciones.soloTicketId
-    ? todas.filter((x) => x.licitacion.id === opciones.soloTicketId)
-    : todas;
+  const elegidas = new Set(opciones.ticketIds ?? []);
+  const candidatas = elegidas.size > 0 ? todas.filter((x) => elegidas.has(x.licitacion.id)) : todas;
 
   if (candidatas.length === 0) return { ...vacio, total: todas.length };
 
-  const guardadas = await leerLecturasGuardadas(candidatas.map((x) => x.licitacion.id));
-  if (guardadas.tablaAusente) return { ...vacio, total: todas.length, tablaAusente: true };
 
-  let notasPorTicket: Map<string, { id: string; creadaEl: string | null; cuerpo: string }[]>;
+  const guardadas = await leerLecturasGuardadas(candidatas.map((x) => x.licitacion.id));
+  if (guardadas.esquemaAtrasado) return { ...vacio, total: todas.length, esquemaAtrasado: true };
+
+  const idsCandidatos = candidatas.map((x) => x.licitacion.id);
+  let notasPorTicket: Map<string, NotaCruda[]>;
+  const archivos = { ...sinArchivos };
+  const textoPorTicket = new Map<string, { nombre: string; texto: string }[]>();
+
   try {
     const hs = await getSystemHubspotClient();
-    notasPorTicket = await leerNotasDeTickets(
-      hs,
-      candidatas.map((x) => x.licitacion.id),
-    );
+    notasPorTicket = await leerNotasDeTickets(hs, idsCandidatos);
+
+    /* Las FILAS de los archivos se crean SIEMPRE, sea la corrida profunda o no, y funcionan
+       aunque falte el scope: es lo que le permite a la pantalla decir "hay 3 archivos" en vez
+       de "no hay nada". Bajar el contenido sí es privilegio del modo profundo. */
+    const sinc = await sincronizarAdjuntos(notasPorTicket);
+    archivos.nuevos = sinc.creados;
+    archivos.esquemaAtrasado = sinc.esquemaAtrasado;
+
+    if (opciones.profundo && !sinc.esquemaAtrasado) {
+      const porBajar = await adjuntosPorLeer(idsCandidatos, opciones.forzar === true);
+      await enParalelo(porBajar, EN_PARALELO, async (a) => {
+        const r = await extraerAdjunto(hs, a);
+        if (r.estado === "EXTRAIDO") archivos.leidos++;
+        else if (r.estado === "SIN_TEXTO") archivos.sinTexto++;
+        else if (r.estado === "SIN_PERMISO") archivos.sinPermiso++;
+        else archivos.fallidos++;
+      });
+      for (const id of idsCandidatos) {
+        const conTexto = await leerTextoDeAdjuntos(id);
+        if (conTexto.length) {
+          textoPorTicket.set(
+            id,
+            conTexto.map((a) => ({ nombre: a.nombre ?? `archivo ${a.hubspotFileId}`, texto: a.texto ?? "" })),
+          );
+        }
+      }
+    }
   } catch (e) {
     return {
       ...vacio,
@@ -250,7 +328,11 @@ export async function correrAnalisisSicop(
   const trabajo: { ticket: TicketParaLeer; fuente: ReturnType<typeof construirFuente> }[] = [];
   let intactas = 0;
   for (const { licitacion } of ordenadas) {
-    const ticket = aTicketParaLeer(licitacion, notasPorTicket.get(licitacion.id) ?? []);
+    const ticket = aTicketParaLeer(
+      licitacion,
+      notasPorTicket.get(licitacion.id) ?? [],
+      textoPorTicket.get(licitacion.id) ?? [],
+    );
     const fuente = construirFuente(ticket);
     const previa = guardadas.porTicket.get(licitacion.id);
     /* Una lectura con error NO cuenta como intacta: reintentarla es exactamente el punto. */
@@ -272,6 +354,8 @@ export async function correrAnalisisSicop(
       fuenteSha: fuente.sha,
       notasLeidas: fuente.notas,
       adjuntosSinLeer: fuente.adjuntosSinLeer,
+      adjuntosLeidos: fuente.adjuntosLeidos,
+      profundo: fuente.profunda,
       fuenteTruncada: fuente.truncada,
       objeto: lectura.objeto,
       institucion: lectura.institucion,
@@ -313,7 +397,8 @@ export async function correrAnalisisSicop(
     fallidas,
     pendientes,
     total: todas.length,
-    tablaAusente: false,
+    esquemaAtrasado: false,
     error: null,
+    archivos,
   };
 }

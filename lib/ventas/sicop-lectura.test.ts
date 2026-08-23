@@ -139,8 +139,59 @@ describe("construirFuente — la huella decide a quién se le vuelve a pagar IA"
     });
     expect(f.notas).toBe(1);
     expect(f.adjuntosSinLeer).toBe(2);
-    expect(f.texto).toContain("ARCHIVOS ADJUNTOS: hay 2 archivo(s)");
+    expect(f.profunda).toBe(false);
+    expect(f.texto).toContain("ARCHIVOS ADJUNTOS SIN LEER: hay 2 archivo(s)");
     expect(f.texto).toContain("Ojo con la garantía");
+  });
+
+  it("⭐ el CARTEL extraído entra al prompt y deja de contarse como pendiente", () => {
+    /* El salto que hace todo esto: con el texto del archivo adentro, la ficha deja de salir
+       del título pelado. Y el archivo que YA se leyó no puede seguir apareciendo como
+       "sin leer" — si no, el modelo baja la confianza por algo que sí tiene enfrente. */
+    const f = construirFuente({
+      ...ticket(),
+      notas: [nota("pdf", "2026-08-20T10:00:00Z", "", 1)],
+      adjuntos: [{ nombre: "cartel.pdf", texto: "Requisitos de admisibilidad: 5 años." }],
+    });
+    expect(f.profunda).toBe(true);
+    expect(f.adjuntosLeidos).toBe(1);
+    expect(f.adjuntosSinLeer).toBe(0);
+    expect(f.texto).toContain("--- archivo: cartel.pdf ---");
+    expect(f.texto).toContain("Requisitos de admisibilidad: 5 años.");
+    expect(f.texto).not.toContain("ARCHIVOS ADJUNTOS SIN LEER");
+  });
+
+  it("⚠ un ticket con DOS archivos y solo uno leído sigue avisando por el otro", () => {
+    const f = construirFuente({
+      ...ticket(),
+      notas: [nota("a", "2026-08-20T10:00:00Z", "", 1), nota("b", "2026-08-21T10:00:00Z", "", 1)],
+      adjuntos: [{ nombre: "cartel.pdf", texto: "algo legible" }],
+    });
+    expect(f.adjuntosLeidos).toBe(1);
+    expect(f.adjuntosSinLeer).toBe(1);
+    expect(f.texto).toContain("ARCHIVOS ADJUNTOS SIN LEER: hay 1 archivo(s)");
+  });
+
+  it("⛔ un archivo que NO entra por tamaño se DECLARA, no se omite", () => {
+    /* Omitirlo dejaría al modelo concluyendo sobre un cartel truncado sin saberlo. */
+    const f = construirFuente({
+      ...ticket(),
+      notas: [nota("a", "2026-08-20T10:00:00Z", "", 2)],
+      adjuntos: [
+        { nombre: "gordo.pdf", texto: "x".repeat(109_000) },
+        { nombre: "chico.pdf", texto: "y".repeat(5_000) },
+      ],
+    });
+    expect(f.adjuntosLeidos).toBe(1);
+    expect(f.texto).toContain("--- archivo: gordo.pdf ---");
+    expect(f.texto).toContain("ARCHIVOS QUE NO ENTRARON POR TAMAÑO: chico.pdf");
+  });
+
+  it("el texto del cartel CAMBIA la huella (por eso corresponde re-analizar)", () => {
+    const base = { ...ticket(), notas: [nota("a", "2026-08-20T10:00:00Z", "", 1)] };
+    const sin = construirFuente(base);
+    const con = construirFuente({ ...base, adjuntos: [{ nombre: "c.pdf", texto: "el cartel" }] });
+    expect(con.sha).not.toBe(sin.sha);
   });
 
   it("una nota vacía SIN archivo no aporta ni cuenta", () => {
@@ -260,6 +311,8 @@ describe("lecturaConError", () => {
     const l = lecturaConError("timeout", META.analizadoEl, {
       notas: 1,
       adjuntosSinLeer: 4,
+      adjuntosLeidos: 0,
+      profunda: false,
       truncada: false,
     });
     expect(l.error).toBe("timeout");

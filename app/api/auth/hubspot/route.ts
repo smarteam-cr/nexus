@@ -41,7 +41,7 @@ const HUBSPOT_SCOPES = [
 ].join(" ");
 
 // Scopes OPCIONALES (optional_scope): se piden pero NO rompen el OAuth si el
-// portal no los concede. Los dos tienen que estar marcados como "Opcional" en la
+// portal no los concede. Todos tienen que estar marcados como "Opcional" en la
 // config de la app pública: HubSpot rechaza la instalación si la URL manda un scope
 // que no está declarado con ese tipo.
 //
@@ -54,7 +54,17 @@ const HUBSPOT_SCOPES = [
 //   instalación. Lectura nada más: el sync hace GET properties + POST search +
 //   associations batch/read, nunca escribe. Sin él, `partner-clients.ts` degrada
 //   con `supported:false` y el panel de CS muestra el aviso de "sin permiso".
-const HUBSPOT_OPTIONAL_SCOPES = ["social", "crm.objects.partner-clients.read"].join(" ");
+// · `files` lo pide el módulo SICOP: el cartel de una licitación llega como un PDF
+//   colgado de una nota del ticket —medido el 2026-08-23, 33 de las 58 notas del
+//   pipeline «Gobiernos» llevan archivo y 30 no tienen una sola letra de texto— y sin
+//   este scope `/files/v3/*` devuelve 403 MISSING_SCOPES. Va como OPCIONAL por el
+//   MISMO motivo que partner-clients: esta lista arma también la instalación de los
+//   portales de los CLIENTES, y como obligatorio se la rompería a todos por algo que
+//   solo usa el portal de Smarteam. Sin él, `lib/ventas/sicop-archivos.ts` deja los
+//   archivos en SIN_PERMISO y la pantalla explica qué falta en vez de fingir que no
+//   hay nada. ⚠ Pedirlo acá NO alcanza: hay que declararlo "Opcional" en la config de
+//   la app pública y volver a autorizar la conexión del sistema.
+const HUBSPOT_OPTIONAL_SCOPES = ["social", "crm.objects.partner-clients.read", "files"].join(" ");
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

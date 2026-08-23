@@ -177,7 +177,7 @@ async function leerEtapas(hs: HsClient): Promise<{ status: number; etapas: Etapa
 }
 
 /** id de owner → nombre legible. Sin nombre, la tarjeta muestra "—" (nunca el id crudo). */
-async function leerResponsables(hs: HsClient): Promise<Map<string, string>> {
+export async function leerResponsables(hs: HsClient): Promise<Map<string, string>> {
   const nombres = new Map<string, string>();
   let after: string | undefined;
   for (let pagina = 0; pagina < 5; pagina++) {
@@ -280,6 +280,26 @@ export interface NotaCruda {
    * concluir desde el título como si no faltara nada.
    */
   adjuntos: number;
+  /**
+   * Los ids de esos archivos. Es lo que necesita `sicop-archivos.ts` para poder bajarlos; el
+   * conteo de arriba sale de acá y se deja aparte porque la pantalla lo usa mil veces.
+   */
+  idsDeArchivos: string[];
+  /** Owner de HubSpot que escribió la nota. El nombre lo resuelve quien la muestre. */
+  autor: string | null;
+}
+
+/**
+ * Los ids de archivo de una nota, de la propiedad `hs_attachment_ids`. PURO.
+ *
+ * HubSpot documenta la propiedad como una lista separada por `;`. Medido el 2026-08-23: las 33
+ * notas con archivo del pipeline traen UNO solo, así que el separador no se ejercita nunca hoy
+ * — se soporta igual, porque el día que aparezca una nota con dos archivos el modo de falla
+ * sería silencioso: se leería el primero y el segundo no existiría para nadie.
+ */
+export function idsDeAdjuntos(crudo: string | null | undefined): string[] {
+  if (!crudo) return [];
+  return [...new Set(crudo.split(/[;,]/).map((x) => x.trim()).filter(Boolean))];
 }
 
 /** Trocea una lista en lotes del tamaño que aguanta el endpoint batch de HubSpot. */
@@ -334,7 +354,7 @@ export async function leerNotasDeTickets(
       path: "/crm/v3/objects/notes/batch/read",
       body: {
         inputs: lote.map((id) => ({ id })),
-        properties: ["hs_note_body", "hs_createdate", "hs_attachment_ids"],
+        properties: ["hs_note_body", "hs_createdate", "hs_attachment_ids", "hubspot_owner_id"],
       },
     });
     if (res.status !== 200 && res.status !== 207) continue;
@@ -345,21 +365,22 @@ export async function leerNotasDeTickets(
           hs_note_body?: string | null;
           hs_createdate?: string | null;
           hs_attachment_ids?: string | null;
+          hubspot_owner_id?: string | null;
         };
       }[];
     };
     for (const n of data.results ?? []) {
       const cuerpo = n.properties.hs_note_body ?? "";
-      const adjuntos = (n.properties.hs_attachment_ids ?? "")
-        .split(";")
-        .filter((x) => x.trim()).length;
+      const idsDeArchivos = idsDeAdjuntos(n.properties.hs_attachment_ids);
       // Vacía Y sin adjunto no aporta nada. Vacía CON adjunto sí: es el cartel en PDF.
-      if (!cuerpo.trim() && adjuntos === 0) continue;
+      if (!cuerpo.trim() && idsDeArchivos.length === 0) continue;
       cuerpos.set(n.id, {
         id: n.id,
         creadaEl: n.properties.hs_createdate ?? null,
         cuerpo,
-        adjuntos,
+        adjuntos: idsDeArchivos.length,
+        idsDeArchivos,
+        autor: n.properties.hubspot_owner_id ?? null,
       });
     }
   }

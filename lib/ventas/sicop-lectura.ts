@@ -31,6 +31,7 @@
 import { createHash } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic } from "@/lib/anthropic";
+import { aTextoPlano } from "./sicop-notas";
 import {
   CATEGORIAS_SICOP,
   CATEGORIAS_VALIDAS,
@@ -40,11 +41,28 @@ import {
   type PlazoSicop,
 } from "./sicop-orden";
 
+/* `aTextoPlano` vive en `sicop-notas.ts` —es una operación sobre una NOTA— y se re-exporta
+   acá porque este módulo fue su primera casa y hay consumidores que lo piden por este
+   nombre. La mudanza es lo que deja a `sicop-notas` SIN una sola dependencia, y por eso el
+   navegador lo puede usar: si importara este archivo se llevaría el SDK de Anthropic al
+   bundle del cliente. */
+export { aTextoPlano };
+
 /** Tarifado en `lib/ai/precios.ts` — cambiarlo por uno que no lo esté deja el gasto en null. */
 export const MODELO_SICOP = "claude-sonnet-4-6";
 
-/** Tope de la fuente que entra al prompt. La nota más larga de hoy son ~2.400 caracteres. */
+/** Tope de la fuente SUPERFICIAL (título + notas). La nota más larga de hoy son ~2.400 chars. */
 const MAX_FUENTE = 24_000;
+
+/**
+ * Tope de la fuente PROFUNDA, con el cartel adentro.
+ *
+ * ⚠ El número sale de un cálculo, no de una corazonada: 110.000 caracteres son ~30.000 tokens,
+ * que con Sonnet 4.6 cuestan ~US$0,09 de entrada por licitación. Es ~5× una lectura superficial
+ * y sigue siendo centavos, pero multiplicado por un pipeline que crece hay que poder verlo. El
+ * extractor ya corta cada archivo en 50.000 caracteres, así que caben dos carteles completos.
+ */
+const MAX_FUENTE_PROFUNDA = 110_000;
 
 // ── La fuente: título + descripción + TODAS las notas ──────────────────────────
 
@@ -67,6 +85,11 @@ export interface TicketParaLeer {
   fechaAclaraciones: string | null;
   presupuestoCrm: number | null;
   notas: NotaDeTicket[];
+  /**
+   * El texto YA EXTRAÍDO de los archivos del ticket — el cartel. Vacío en una lectura
+   * superficial; lleno cuando alguien pidió analizar a fondo. Lo llena `sicop-archivos.ts`.
+   */
+  adjuntos?: { nombre: string; texto: string }[];
 }
 
 export interface FuenteDeLicitacion {
@@ -85,26 +108,14 @@ export interface FuenteDeLicitacion {
    * la pantalla lo muestra para que se vea POR QUÉ una ficha salió pobre.
    */
   adjuntosSinLeer: number;
+  /** Cuántos archivos SÍ entraron con su texto. 0 = la ficha salió del título y las notas. */
+  adjuntosLeidos: number;
+  /** true = la fuente incluye el contenido de al menos un archivo. */
+  profunda: boolean;
   /** true = se recortó por tamaño; el prompt lo dice para que el modelo no invente el resto. */
   truncada: boolean;
 }
 
-/** HTML de HubSpot → texto plano. Las notas vienen como `<div><p>…</p></div>`. */
-export function aTextoPlano(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>|<\/div>|<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&quot;/gi, '"')
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 /**
  * Arma el texto que lee el modelo y su huella. PURO — es lo que prueba el test.
@@ -132,12 +143,14 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
     (a.creadaEl ?? "").localeCompare(b.creadaEl ?? ""),
   );
   const notas = ordenadas.map((n) => aTextoPlano(n.cuerpo)).filter((c) => c.length > 0);
-  /* Una nota sin texto pero con archivo es el CARTEL EN PDF. No se puede leer, pero que
-     exista se declara: es la diferencia entre "no había información" y "la información
-     está ahí y nadie se la pasó al modelo". */
-  const adjuntosSinLeer = ordenadas
-    .filter((n) => aTextoPlano(n.cuerpo).length === 0)
-    .reduce((n, x) => n + (x.adjuntos ?? 0), 0);
+
+  /* Los archivos que cuelgan del ticket, hayan dado texto o no. */
+  const totalArchivos = ordenadas.reduce((n, x) => n + (x.adjuntos ?? 0), 0);
+  const conTexto = (t.adjuntos ?? []).filter((a) => a.texto.trim().length > 0);
+  /* ⚠ «Sin leer» es lo que FALTA, no lo que hay: total de archivos menos los que aportaron
+     texto. Antes se contaban solo los de notas VACÍAS, y eso dejaba fuera el caso real de una
+     nota con texto Y un PDF colgado — el cartel se perdía sin que nadie lo dijera. */
+  const adjuntosSinLeer = Math.max(0, totalArchivos - conTexto.length);
 
   if (notas.length) {
     partes.push(
@@ -150,18 +163,51 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
 
   if (adjuntosSinLeer > 0) {
     partes.push(
-      `ARCHIVOS ADJUNTOS: hay ${adjuntosSinLeer} archivo(s) colgados de este ticket —` +
-        ` casi seguro el cartel— que NO se te pasaron y NO podés leer. Todo lo que digas` +
-        ` sale del texto de arriba. Bajá la confianza en consecuencia y, si el cartel es lo` +
-        ` que falta para juzgar algo, decilo en vez de suponerlo.`,
+      `ARCHIVOS ADJUNTOS SIN LEER: hay ${adjuntosSinLeer} archivo(s) colgados de este ticket —` +
+        ` casi seguro el cartel— que NO se te pasaron y NO podés leer. Bajá la confianza en` +
+        ` consecuencia y, si eso es lo que falta para juzgar algo, decilo en vez de suponerlo.`,
     );
   }
 
+  /* El cartel entra AL FINAL y con presupuesto: es lo más largo con diferencia, y si entrara
+     antes se comería el recorte y dejaría afuera las notas del equipo, que son las que traen
+     lo que ya se sabe del proceso. */
+  let cabe = MAX_FUENTE_PROFUNDA - partes.join("\n\n").length;
+  const entraron: string[] = [];
+  const quedaronAfuera: string[] = [];
+  for (const a of conTexto) {
+    const bloque = `--- archivo: ${a.nombre} ---\n${a.texto.trim()}`;
+    if (bloque.length + 2 <= cabe) {
+      entraron.push(bloque);
+      cabe -= bloque.length + 2;
+    } else {
+      quedaronAfuera.push(a.nombre);
+    }
+  }
+  if (entraron.length) {
+    partes.push(
+      `CONTENIDO DE LOS ARCHIVOS (${entraron.length}) — esto ES el cartel, leelo entero antes` +
+        ` de concluir:\n\n${entraron.join("\n\n")}`,
+    );
+  }
+  if (quedaronAfuera.length) {
+    /* Declarar lo que NO entró es la misma doctrina que el recorte: el modelo no puede
+       distinguir "no existe" de "no te lo pasé" si nadie se lo dice. */
+    partes.push(
+      `ARCHIVOS QUE NO ENTRARON POR TAMAÑO: ${quedaronAfuera.join(", ")}. No concluyas sobre` +
+        ` su contenido.`,
+    );
+  }
+
+  /* El tope depende de si el cartel entró: una lectura superficial no tiene por qué poder
+     crecer a 110.000 caracteres, y dejarla con el tope grande escondería un ticket con 40
+     notas humanas que sí conviene recortar. */
+  const tope = entraron.length > 0 ? MAX_FUENTE_PROFUNDA : MAX_FUENTE;
   let texto = partes.join("\n\n");
-  const truncada = texto.length > MAX_FUENTE;
+  const truncada = texto.length > tope;
   if (truncada) {
     texto =
-      texto.slice(0, MAX_FUENTE) +
+      texto.slice(0, tope) +
       "\n\n[…RECORTADO POR LONGITUD. Lo que sigue no lo estás viendo: no concluyas sobre lo que falta.]";
   }
 
@@ -170,6 +216,8 @@ export function construirFuente(t: TicketParaLeer): FuenteDeLicitacion {
     sha: createHash("sha256").update(texto).digest("hex").slice(0, 32),
     notas: notas.length,
     adjuntosSinLeer,
+    adjuntosLeidos: entraron.length,
+    profunda: entraron.length > 0,
     truncada,
   };
 }
@@ -414,6 +462,8 @@ export interface MetaDeLectura {
   /** Lo que trajo la fuente. Se guarda con la ficha para poder explicarla después. */
   notasLeidas?: number;
   adjuntosSinLeer?: number;
+  adjuntosLeidos?: number;
+  profundo?: boolean;
   fuenteTruncada?: boolean;
 }
 
@@ -456,6 +506,8 @@ export function normalizarLectura(crudo: unknown, meta: MetaDeLectura): LecturaS
     confianza: entero0a100(o.confianza),
     notasLeidas: meta.notasLeidas ?? 0,
     adjuntosSinLeer: meta.adjuntosSinLeer ?? 0,
+    profundo: meta.profundo ?? false,
+    adjuntosLeidos: meta.adjuntosLeidos ?? 0,
     fuenteTruncada: meta.fuenteTruncada ?? false,
     analizadoEl: meta.analizadoEl,
     modelo: meta.modelo,
@@ -467,7 +519,10 @@ export function normalizarLectura(crudo: unknown, meta: MetaDeLectura): LecturaS
 export function lecturaConError(
   motivo: string,
   analizadoEl: string,
-  fuente?: Pick<FuenteDeLicitacion, "notas" | "adjuntosSinLeer" | "truncada">,
+  fuente?: Pick<
+    FuenteDeLicitacion,
+    "notas" | "adjuntosSinLeer" | "adjuntosLeidos" | "profunda" | "truncada"
+  >,
 ): LecturaSicop {
   return {
     objeto: null,
@@ -488,6 +543,8 @@ export function lecturaConError(
     confianza: null,
     notasLeidas: fuente?.notas ?? 0,
     adjuntosSinLeer: fuente?.adjuntosSinLeer ?? 0,
+    profundo: fuente?.profunda ?? false,
+    adjuntosLeidos: fuente?.adjuntosLeidos ?? 0,
     fuenteTruncada: fuente?.truncada ?? false,
     analizadoEl,
     modelo: null,
@@ -530,6 +587,8 @@ export async function leerLicitacionConIA(fuente: FuenteDeLicitacion): Promise<L
           analizadoEl,
           notasLeidas: fuente.notas,
           adjuntosSinLeer: fuente.adjuntosSinLeer,
+          adjuntosLeidos: fuente.adjuntosLeidos,
+          profundo: fuente.profunda,
           fuenteTruncada: fuente.truncada,
         });
       }
