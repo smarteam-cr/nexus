@@ -1243,6 +1243,120 @@ export function aplicarOperacionesDeDocumento(
   return { plan, avisos, rechazadas };
 }
 
+/**
+ * ⭐ CONFIRMAR RELEYENDO — la segunda decisión de Elías del 2026-08-23.
+ *
+ * ── POR QUÉ, Y NO ES PARANOIA ────────────────────────────────────────────────────────────────
+ * Tres veces seguidas el chat dijo «aplicado» y la pantalla no cambió: los tres editores curados
+ * del kickoff sembraban su borrador una vez y no volvían a mirar la prop, así que la escritura
+ * entraba en la base y el editor abierto seguía mostrando lo viejo — y la siguiente tecla del CSE
+ * la revertía. Se arregló en su raíz, pero el patrón «escribí y confié» sigue siendo el mismo en
+ * los otros diez documentos, y su modo de falla es el peor que hay: silencioso y con acuse de
+ * recibo.
+ *
+ * ⭐ Y NO CUESTA UN SOLO TOKEN: no hay modelo acá. Se relee la base y se compara contra lo que las
+ * operaciones dijeron que iban a hacer. Es aritmética.
+ *
+ * ── LO QUE SE VERIFICA, Y LO QUE NO ──────────────────────────────────────────────────────────
+ * Se verifica lo que la operación AFIRMA y se puede leer sin interpretar: el valor de un campo,
+ * que un ítem esté o ya no esté, el ojo, el título, el rótulo, que una sección exista o no.
+ * ⛔ Quedan afuera `seccion.item.mover` y `seccion.vaciar`, y se dice acá para que nadie crea que
+ * están cubiertos: mover exige comparar posiciones contra una lista que el normalizador del motor
+ * pudo compactar, y vaciar contra el `empty` del esquema, que `preserveNonSchemaKeys` re-puebla a
+ * propósito. Los dos producirían falsos «no se aplicó» — y un aviso falso enseña a ignorar los
+ * avisos justo donde importan.
+ */
+export function verificarOperacionesDeDocumento(
+  frescas: readonly SeccionActual[],
+  operaciones: readonly OperacionDeDocumento[],
+): string[] {
+  const porKey = new Map(frescas.map((s) => [s.key, s]));
+  const avisos: string[] = [];
+  const noQuedo = (que: string) =>
+    avisos.push(`Se escribió, pero al releer el documento ${que}. Revisa esa sección.`);
+
+  for (const o of operaciones) {
+    switch (o.op) {
+      case "seccion.campo": {
+        const s = porKey.get(o.key);
+        if (!s || !o.campo?.trim()) break;
+        const res = resolverRuta(s.schema, (s.data ?? {}) as Record<string, unknown>, o.campo);
+        if (!res.ok) break;
+        const vivo = (res.r.contenedor as Record<string | number, unknown>)[res.r.clave];
+        if (typeof vivo === "string" && vivo !== o.valor) {
+          noQuedo(`«${s.label}» no tiene ese texto`);
+        }
+        break;
+      }
+      case "seccion.item.agregar": {
+        const s = porKey.get(o.key);
+        if (!s || !o.lista) break;
+        const arr = (s.data as Record<string, unknown> | undefined)?.[o.lista];
+        if (!Array.isArray(arr)) break;
+        const esquemaDeItems = schemaDeItemsDe(s.schema, o.lista);
+        const buscado = recortarAncla(
+          o.valor ?? Object.values(o.valores ?? {}).find((v) => v?.trim()) ?? "",
+        );
+        if (!buscado) break;
+        if (!arr.some((it) => identidadDeItem(it, false, esquemaDeItems) === buscado)) {
+          noQuedo(`«${buscado}» no está en «${s.label}»`);
+        }
+        break;
+      }
+      case "seccion.item.borrar": {
+        const s = porKey.get(o.key);
+        if (!s || !o.lista || !o.ancla) break;
+        const arr = (s.data as Record<string, unknown> | undefined)?.[o.lista];
+        if (!Array.isArray(arr)) break;
+        const esquemaDeItems = schemaDeItemsDe(s.schema, o.lista);
+        if (arr.some((it) => identidadDeItem(it, false, esquemaDeItems) === o.ancla)) {
+          noQuedo(`«${o.ancla}» sigue en «${s.label}»`);
+        }
+        break;
+      }
+      case "seccion.ocultar":
+      case "seccion.mostrar": {
+        const s = porKey.get(o.key);
+        if (!s) break;
+        const esperada = o.op === "seccion.ocultar";
+        if (s.oculta !== esperada) {
+          noQuedo(`«${s.label}» ${esperada ? "se sigue viendo" : "sigue oculta"}`);
+        }
+        break;
+      }
+      case "seccion.renombrar": {
+        const s = porKey.get(o.key);
+        if (!s) break;
+        if (s.label.trim() !== o.titulo.trim()) noQuedo(`«${s.label}» conserva su nombre anterior`);
+        break;
+      }
+      case "seccion.rotular": {
+        const s = porKey.get(o.key);
+        if (!s) break;
+        if ((s.rotulo ?? "").trim() !== o.rotulo.trim()) {
+          noQuedo(`el rótulo de «${s.label}» quedó como estaba`);
+        }
+        break;
+      }
+      case "seccion.borrar": {
+        if (porKey.has(o.key)) noQuedo(`«${porKey.get(o.key)?.label}» sigue en el documento`);
+        break;
+      }
+      case "seccion.crear": {
+        /* ⚠ Por TÍTULO y no por key: la key la genera el servidor y el acuerdo no la conoce. */
+        if (!frescas.some((s) => s.label.trim() === o.titulo.trim())) {
+          noQuedo(`no aparece la sección «${o.titulo}»`);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  /* Un mismo síntoma repetido en cinco operaciones es una sola cosa que revisar. */
+  return [...new Set(avisos)];
+}
+
 /** El objeto vacío que corresponde a un schema: `""` en las hojas, `[]` en las listas. */
 export function vacioDeSchema(schema: unknown): unknown {
   const s = schema as NodoDeSchema;

@@ -137,7 +137,19 @@ export function useCanvasSections(
     }
   }, []);
 
-  const refetch = useCallback(async () => {
+  /**
+   * ⭐ DEVUELVE LO QUE TRAJO — y eso es lo que hace posible «confirmar releyendo».
+   *
+   * El aplicador del chat escribe y después necesita saber si el documento QUEDÓ como dijo el
+   * acuerdo. No le sirve `sections`: `setSections` es asíncrono, así que dentro del mismo callback
+   * sigue viendo la foto vieja. Con el valor de vuelta, la verificación corre sobre lo que la base
+   * acaba de decir.
+   *
+   * ⛔ `null` cuando NO se puede afirmar nada: el GET falló, o hubo escrituras más nuevas y este
+   * refetch quedó viejo. Callarse es honesto; afirmar «no se aplicó» sobre una lectura que ya no
+   * vale sería peor que no verificar.
+   */
+  const refetch = useCallback(async (): Promise<SectionWithBlocks[] | null> => {
     const seqAtStart = writeSeq.current;
     try {
       const res = await fetch(listUrl);
@@ -146,7 +158,7 @@ export function useCanvasSections(
       // un fallo se declara y el contenido previo (si lo hay) se mantiene.
       if (!res.ok) throw new Error(`GET ${res.status}`);
       const data = await res.json();
-      if (writeSeq.current !== seqAtStart) return; // hubo escrituras más nuevas: no pisarlas
+      if (writeSeq.current !== seqAtStart) return null; // hubo escrituras más nuevas: no pisarlas
       const next: SectionWithBlocks[] = data.sections ?? [];
       const serialized = JSON.stringify(next);
       // Guard de igualdad: solo actualizamos si el contenido cambió (los ids de
@@ -156,8 +168,10 @@ export function useCanvasSections(
         setSections(next);
       }
       setError(null);
+      return next;
     } catch {
       setError("No se pudo cargar el contenido.");
+      return null;
     } finally {
       // En `finally`: si el fetch lanza, el skeleton igual tiene que apagarse — si no,
       // la pantalla se queda cargando para siempre sin decir qué pasó.

@@ -108,6 +108,69 @@ function bloqueDeLaSeccion(
   ].join("\n");
 }
 
+/**
+ * Cuánto de una sección entra en el reintento. Menor que el tope de la sección del chip
+ * (20.000) a propósito: acá pueden venir varias de una, y el reintento se paga entero — el
+ * prefijo se lee de la caché, esto no.
+ */
+const TOPE_DE_SECCION_EN_EL_REINTENTO = 6_000;
+/** Cuántas secciones entran. Por encima, se DICE cuáles quedaron afuera. */
+const MAX_SECCIONES_EN_EL_REINTENTO = 4;
+
+/**
+ * ⭐ LA SECCIÓN ENTERA CUANDO EL MODELO SE EQUIVOCA — la decisión de Elías del 2026-08-23:
+ * «no importa si gasta más tokens, pero que funcione».
+ *
+ * El prefijo trae cada sección recortada. Cuando el dry-run rechaza —«ese campo no existe», «esa
+ * lista tiene 5 ítems y pediste el 6»— casi siempre es porque el modelo trabajó sobre un recorte.
+ * Mandarle la sección ENTERA en el reintento convierte el segundo intento en uno informado en vez
+ * de un segundo tiro a ciegas.
+ *
+ * ⭐ Y CUÁL MANDAR NO SE ADIVINA: el modelo ya lo dijo. Las keys salen de las operaciones que
+ * emitió, no de una heurística sobre la prosa del CSE. Cero interpretación.
+ *
+ * ⛔ Va en `messages`, JAMÁS en `system`: el breakpoint de caché está al final del bloque de
+ * contexto, y meter algo que cambia por turno adentro del prefijo lo invalida sin error y sin log.
+ * ⚠ Y no se persiste: es del reintento, no del hilo.
+ */
+function bloqueDeSeccionesNombradas(
+  secciones: readonly SeccionActual[] | undefined,
+  operaciones: readonly unknown[],
+  yaMandada: string | undefined,
+): string {
+  const keys = [
+    ...new Set(
+      operaciones
+        .map((o) => (o as { key?: unknown }).key)
+        .filter((k): k is string => typeof k === "string" && !!k.trim()),
+    ),
+  ].filter((k) => k !== yaMandada);
+  const secs = keys
+    .map((k) => secciones?.find((s) => s.key === k))
+    .filter((s): s is SeccionActual => !!s);
+  if (secs.length === 0) return "";
+  const entran = secs.slice(0, MAX_SECCIONES_EN_EL_REINTENTO);
+  /* ⛔ Sin esta línea, un tope silencioso se lee como «éstas son todas» y el modelo vuelve a
+     trabajar a ciegas sobre la que faltó, sin ninguna señal de que faltó. */
+  const afuera = secs.slice(MAX_SECCIONES_EN_EL_REINTENTO);
+  return [
+    "",
+    "[CONTENIDO COMPLETO DE LAS SECCIONES QUE NOMBRASTE — léelo antes de re-emitir]",
+    "Los ítems van numerados desde 0: ese número es el que va en `posicion`.",
+    ...entran.map((s) =>
+      [
+        `— «${s.label}» (${s.key}):`,
+        renderSeccionParaElChat(s.schema, s.data, TOPE_DE_SECCION_EN_EL_REINTENTO),
+      ].join("\n"),
+    ),
+    afuera.length
+      ? `(no entran acá: ${afuera.map((s) => s.key).join(", ")} — pídelas si las necesitas)`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
 export const SLUG_DEL_ASISTENTE = "asistente-chat";
 
@@ -1098,6 +1161,14 @@ export async function correrTurno(
       /* ⚠ Sin `tool_use` no hay `tool_use_id` al que contestar, así que el reclamo va como mensaje
          de usuario. Es el único caso: cuando hubo herramienta se responde por su canal, que es lo
          que el modelo lee como error de SU llamada y no como un pedido nuevo. */
+      /* ⭐ Y LE MANDAMOS LAS SECCIONES ENTERAS QUE ÉL MISMO NOMBRÓ. Ver `bloqueDeSeccionesNombradas`:
+         el rechazo típico —«esa lista tiene 5 ítems y pediste el 6»— es el modelo trabajando sobre
+         un recorte. Sin esto, el segundo intento es un segundo tiro a ciegas. */
+      const secciones = bloqueDeSeccionesNombradas(
+        ctx.secciones,
+        opsNuevas as unknown[],
+        seccionReferida?.key,
+      );
       const reclamo: Anthropic.Messages.MessageParam =
         idDeLaHerramienta
           ? {
@@ -1114,12 +1185,17 @@ export async function correrTurno(
                         ? reclamoDeImitacion()
                         : reclamoDeOmision(true),
                 },
+                /* ⚠ Bloque de texto DESPUÉS del `tool_result`, en el MISMO mensaje: dos mensajes
+                   de usuario seguidos no son un turno válido. */
+                ...(secciones ? [{ type: "text" as const, text: secciones }] : []),
               ],
             }
           : {
               role: "user",
               content:
-                motivoDelReintento === "por-imitacion" ? reclamoDeImitacion() : reclamoDeOmision(false),
+                (motivoDelReintento === "por-imitacion"
+                  ? reclamoDeImitacion()
+                  : reclamoDeOmision(false)) + secciones,
             };
 
       messages.push({ role: "assistant", content: msg.content }, reclamo);

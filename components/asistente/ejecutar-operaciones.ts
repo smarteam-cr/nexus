@@ -22,6 +22,7 @@ import { useRegistrarAplicadorDeDocumento, type ResultadoDelAplicador } from "./
 import {
   aplicarOperacionesDeDocumento,
   esOperacionDeDocumento,
+  verificarOperacionesDeDocumento,
   type CapacidadesDelDocumento,
   type OperacionDeDocumento,
   type SeccionActual,
@@ -31,7 +32,7 @@ import { esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
-import type { useCanvasSections } from "@/components/canvas/useCanvasSections";
+import type { SectionWithBlocks, useCanvasSections } from "@/components/canvas/useCanvasSections";
 
 /** Lo mínimo de una def que el ejecutor necesita: el esquema y si tiene lugar fijo. */
 export type DefsParaEjecutar = Record<
@@ -50,12 +51,70 @@ export type DefsParaEjecutar = Record<
     empty?: unknown;
     /** Cómo se llama cada lista en pantalla: hace legible la línea del acuerdo. */
     rotulosDeListas?: Record<string, string>;
+    /** El rótulo chico de la plantilla, para cuando la sección no tiene override propio. */
+    eyebrow?: string;
     /** ⚠ La PORTADA queda siempre en «estructurado»: su componente ya sabe rendir el markdown
      *  viejo y además compone marca, imagen y métricas, así que el fallback genérico del motor no
      *  aplica ahí. Es la misma excepción que hace `LandingView`. Ver `formatoDeSeccion`. */
     backdrop?: boolean;
   } | undefined
 >;
+
+/**
+ * ⭐ LAS SECCIONES COMO LAS VE EL EJECUTOR — pura, y a nivel de módulo por un motivo concreto.
+ *
+ * Vivía adentro del `useMemo`, y con el memo no alcanza: «confirmar releyendo» tiene que mapear la
+ * lectura FRESCA que devuelve `refetch`, y `cs.sections` todavía no la tiene — `setSections` es
+ * asíncrono, así que dentro del mismo callback se sigue viendo la foto vieja. Con la función
+ * afuera, las dos lecturas —la del render y la de la verificación— pasan por el MISMO mapeo. Si
+ * fueran dos, la verificación compararía contra una forma distinta de la que se acordó.
+ */
+export function seccionesParaElEjecutor(
+  filas: readonly SectionWithBlocks[],
+  defsByKey: DefsParaEjecutar,
+): SeccionActual[] {
+  return filas.map((s) => {
+    const def = defsByKey[s.key] ?? (esCustomKey(s.key) ? customDef(s.key, s.label) : undefined);
+    const card = s.blocks.find((b) => b.blockType === "CARD");
+    return {
+      id: s.id,
+      key: s.key,
+      label: s.titleOverride?.trim() || s.label,
+      data: card?.data ?? {},
+      /* ⛔ La MISMA función que usa el contexto del servidor. Si uno leyera `def.schema` y el
+         otro `schemaDelChat`, el chat acordaría un cambio que este editor rechaza. */
+      schema: schemaParaElChat(def),
+      /* ⚠ El del AGENTE va aparte: `seccion.vaciar` lo usa para no llevarse la curaduría.
+         Ver `schemaDelAgente` en el vocabulario. */
+      schemaDelAgente: def?.schema,
+      oculta: s.hidden === true,
+      esCreada: esCustomKey(s.key),
+      movible: !def?.pinned,
+      /* ⭐ La pregunta NO es «¿el motor le pinta encabezado?» sino «¿escribir el rótulo se va a
+         VER?», y `selfTitled` contesta la primera. Falla en las dos direcciones: el cronograma y
+         los procesos del kickoff son `selfTitled` y SÍ pintan lo que el motor les pasa, así que el
+         chat rechazaba un rótulo que se habría visto. `leeElEncabezado` lo declara como un hecho
+         en vez de inferirlo. */
+      rotulable: !def?.selfTitled || !!def?.leeElEncabezado,
+      rotulosDeListas: def?.rotulosDeListas,
+      /* Corregir sí, agrandar no. Ver `SeccionActual.listasSoloEdicion`. */
+      listasSoloEdicion: def?.listasSoloEdicion,
+      /* ⚠ FALTABA, y lo necesitan dos cosas: la línea que lee la persona y la verificación de
+         `seccion.rotular` al releer. El armador del SERVIDOR sí lo poblaba — otra vez el mismo dato
+         calculado en dos lados y solo uno completo. */
+      rotulo: (s.eyebrowOverride ?? def?.eyebrow ?? "").trim(),
+      /* ⛔ El MISMO predicado que usa `LandingView` para decidir qué pinta, y el mismo que corre en
+         el servidor al armar el contexto. Ver `SeccionActual.formato`: si el chat dedujera el
+         formato por su cuenta, la primera divergencia sería una sección en prosa convertida en
+         tarjetas — y su texto no vuelve. */
+      formato: formatoDeSeccion({
+        esPortada: !!def?.backdrop,
+        markdown: markdownDeBloques(s.blocks),
+        dataTipada: card?.data ?? {},
+      }),
+    };
+  });
+}
 
 /**
  * Cablea el chat con el editor de ESTE documento. Una línea por workspace.
@@ -79,58 +138,21 @@ export function useEjecutarOperacionesDelChat(
 ) {
   /** Las secciones como las ve el ejecutor. Se recalcula cuando el documento cambia. */
   const secciones: SeccionActual[] = useMemo(
-    () =>
-      cs.sections.map((s) => {
-        const def =
-          defsByKey[s.key] ?? (esCustomKey(s.key) ? customDef(s.key, s.label) : undefined);
-        const card = s.blocks.find((b) => b.blockType === "CARD");
-        return {
-          id: s.id,
-          key: s.key,
-          label: s.titleOverride?.trim() || s.label,
-          data: card?.data ?? {},
-          /* ⛔ La MISMA función que usa el contexto del servidor. Si uno leyera `def.schema` y el
-             otro `schemaDelChat`, el chat acordaría un cambio que este editor rechaza. */
-          schema: schemaParaElChat(def),
-          /* ⚠ El del AGENTE va aparte: `seccion.vaciar` lo usa para no llevarse la curaduría.
-             Ver `schemaDelAgente` en el vocabulario. */
-          schemaDelAgente: def?.schema,
-          oculta: s.hidden === true,
-          esCreada: esCustomKey(s.key),
-          movible: !def?.pinned,
-          /* ⭐ La pregunta NO es «¿el motor le pinta encabezado?» sino «¿escribir el rótulo se va a
-             VER?», y `selfTitled` contesta la primera. Falla en las dos direcciones: el cronograma y
-             los procesos del kickoff son `selfTitled` y SÍ pintan lo que el motor les pasa, así que el
-             chat rechazaba un rótulo que se habría visto. `leeElEncabezado` lo declara como un hecho
-             en vez de inferirlo. */
-          rotulable: !def?.selfTitled || !!def?.leeElEncabezado,
-          rotulosDeListas: def?.rotulosDeListas,
-          /* Corregir sí, agrandar no. Ver `SeccionActual.listasSoloEdicion`. */
-          listasSoloEdicion: def?.listasSoloEdicion,
-          /* ⛔ El MISMO predicado que usa `LandingView` para decidir qué pinta, y el mismo que
-             corre en el servidor al armar el contexto. Ver `SeccionActual.formato`: si el chat
-             dedujera el formato por su cuenta, la primera divergencia sería una sección en prosa
-             convertida en tarjetas — y su texto no vuelve. */
-          formato: formatoDeSeccion({
-            esPortada: !!def?.backdrop,
-            markdown: markdownDeBloques(s.blocks),
-            dataTipada: card?.data ?? {},
-          }),
-        };
-      }),
+    () => seccionesParaElEjecutor(cs.sections, defsByKey),
     [cs.sections, defsByKey],
   );
 
   /* Por ref: el aplicador se registra una vez y tiene que ver SIEMPRE el documento de ahora, no el
      de cuando se montó. Sin esto, aplicar después de editar a mano escribiría sobre una foto
      vieja — y el `data` que se manda es el objeto entero de la sección. */
-  const vivo = useRef({ secciones, cs, capacidades, completadores });
+  const vivo = useRef({ secciones, cs, capacidades, completadores, defsByKey });
   useEffect(() => {
-    vivo.current = { secciones, cs, capacidades, completadores };
+    vivo.current = { secciones, cs, capacidades, completadores, defsByKey };
   });
 
   useRegistrarAplicadorDeDocumento(async (crudas): Promise<ResultadoDelAplicador> => {
-    const { secciones: secs, cs: hook, capacidades: caps, completadores: comps } = vivo.current;
+    const { secciones: secs, cs: hook, capacidades: caps, completadores: comps, defsByKey: defs } =
+      vivo.current;
     const ops = crudas.filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     if (ops.length === 0) {
       return { escribio: false, avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };
@@ -199,10 +221,40 @@ export function useEjecutarOperacionesDelChat(
       }
     }
 
+    /**
+     * ⭐ CONFIRMAR RELEYENDO — la segunda decisión de Elías del 2026-08-23, y no cuesta un token.
+     *
+     * Tres veces seguidas el chat dijo «aplicado» y la pantalla no cambió. Se arregló la causa de
+     * esas tres, pero el patrón «escribí y confié» seguía intacto para los otros diez documentos,
+     * y su modo de falla es el peor que hay: silencioso Y con acuse de recibo.
+     *
+     * ⚠ `flushPending` PRIMERO: los verbos guardan optimista y sin esperar, así que releer sin
+     * esperarlos leería la base ANTES de la última escritura y avisaría de un fallo inventado.
+     * ⛔ Y se verifica solo lo ACEPTADO: lo rechazado ya viaja con su motivo, y volver a nombrarlo
+     * acá haría que un mismo problema se lea dos veces con dos redacciones distintas.
+     */
+    const aplicadas = ops.filter(
+      (o) =>
+        !rechazadas.some((r) => r.operacion === o) &&
+        !(o.op === "seccion.crear" && sinNacer.includes(o.titulo)),
+    );
+    const avisosDeVerificacion: string[] = [];
+    if (aplicadas.length > 0) {
+      await hook.flushPending();
+      /* `null` = no se puede afirmar nada (el GET falló, o hubo escrituras más nuevas). Callarse
+         es honesto; decir «no se aplicó» sobre una lectura que ya no vale sería mentir. */
+      const frescas = await hook.refetch();
+      if (frescas) {
+        avisosDeVerificacion.push(
+          ...verificarOperacionesDeDocumento(seccionesParaElEjecutor(frescas, defs), aplicadas),
+        );
+      }
+    }
+
     return {
       /* El plan es la lista de escrituras: si trae algo, el editor tocó el documento. */
       escribio: plan.length > 0,
-      avisos,
+      avisos: [...avisos, ...avisosDeVerificacion],
       /* ⚠ Una creación que el servidor rechazó (tope de secciones, red) se dice: sin esto el hilo
          daba por hecho que entró. */
       ...(sinNacer.length
