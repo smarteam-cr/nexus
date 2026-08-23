@@ -192,7 +192,11 @@ export default function SicopClient({
     {
       key: "marca",
       header: "",
-      width: "w-[1%]",
+      /* ⚠ NUNCA `w-[1%]`. La tabla es `table-fixed`, así que el ancho se toma LITERAL: 1% de
+         ~1.900px son 19px y el contenido se DESBORDA sobre la columna vecina. Con cuatro
+         columnas numéricas seguidas eso pintó los cuatro encabezados encima del otro. Todas
+         las tablas del repo declaran anchos concretos; esta también. */
+      width: "w-12",
       render: (f) => (
         <input
           type="checkbox"
@@ -250,7 +254,7 @@ export default function SicopClient({
       key: "score",
       header: "Score",
       align: "right",
-      width: "w-[1%]",
+      width: "w-24",
       headerHint: "Lo que puntuó el filtro automático de SICOP, de 0 a 100.",
       sortValue: (f) => f.filtro?.score ?? null,
       render: (f) => <Puntaje valor={f.filtro?.score} />,
@@ -259,7 +263,7 @@ export default function SicopClient({
       key: "confianza",
       header: "Confianza",
       align: "right",
-      width: "w-[1%]",
+      width: "w-28",
       headerHint: "Cuánta seguridad declaró el filtro sobre su propio puntaje.",
       sortValue: (f) => f.filtro?.confianza ?? null,
       render: (f) => <Puntaje valor={f.filtro?.confianza} />,
@@ -268,7 +272,7 @@ export default function SicopClient({
       key: "encaje",
       header: "Encaje",
       align: "right",
-      width: "w-[1%]",
+      width: "w-24",
       hideOnMobile: true,
       headerHint: "Lo que puntuó la IA de Nexus leyendo el ticket. Es otra opinión, no la misma.",
       sortValue: (f) => f.lectura?.puntajeEncaje ?? null,
@@ -278,7 +282,7 @@ export default function SicopClient({
       key: "ganable",
       header: "Ganable",
       align: "right",
-      width: "w-[1%]",
+      width: "w-24",
       hideOnMobile: true,
       headerHint: "Probabilidad de ganarla mirando requisitos y criterio de evaluación.",
       sortValue: (f) => f.lectura?.probabilidad ?? null,
@@ -288,6 +292,7 @@ export default function SicopClient({
       key: "monto",
       header: "Monto",
       align: "right",
+      width: "w-32",
       hideOnMobile: true,
       headerHint: "Estimado. Los colones se pasan a dólares SOLO para poder comparar.",
       sortValue: (f) => montoComparable(f),
@@ -304,6 +309,7 @@ export default function SicopClient({
     {
       key: "cierre",
       header: "Cierre",
+      width: "w-28",
       hideOnMobile: true,
       headerHint: "El plazo FUTURO más cercano. Lo ya vencido no cuenta.",
       sortValue: (f) => fechaLimiteDe(f, hoy),
@@ -319,6 +325,7 @@ export default function SicopClient({
     {
       key: "etapa",
       header: "Etapa",
+      width: "w-48",
       hideOnMobile: true,
       sortValue: (f) => f.etapa.orden,
       render: (f) => (

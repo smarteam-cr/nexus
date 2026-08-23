@@ -12,7 +12,16 @@ export interface TableColumn<T> {
   key: string;
   header: string;
   render: (row: T) => React.ReactNode;
-  /** Clase Tailwind de ancho, ej. "w-48" o "w-[1%]" (encoger al contenido). */
+  /**
+   * Clase Tailwind de ancho, ej. "w-48".
+   *
+   * ⚠ La tabla es `table-fixed`: el ancho se toma LITERAL, NO como una sugerencia. Un
+   * `w-[1%]` no "encoge al contenido" — reserva el 1% del ancho de la tabla y deja que el
+   * contenido (que va `whitespace-nowrap`) se desborde encima de la columna de al lado. Pasó
+   * el 2026-08-23 en el tablero de SICOP: cuatro columnas numéricas seguidas con `w-[1%]`
+   * pintaron sus cuatro encabezados uno sobre otro. Declará un ancho real, o ninguno para que
+   * la columna se reparta lo que sobra.
+   */
   width?: string;
   align?: "left" | "right" | "center";
   /** Oculta la columna en viewports angostos (hidden sm:table-cell). */
