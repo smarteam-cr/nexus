@@ -170,18 +170,68 @@ describe("⚠ el ancla — escribir en la fila equivocada es el peor error posib
     expect(anclaDeRuta(s.schema, s.data, "intro")).toBeNull();
   });
 
-  it("⛔ si el ítem se movió entre acordar y aplicar, la operación se CAE con su motivo", () => {
-    /* El escenario real: el chat acuerda «quitá la sesión de Cierre» (posición 1), el libro lo
-       arrastra, y mientras tanto alguien reordena a mano en el editor. Sin ancla se borraría la
-       sesión equivocada — plausible, silencioso, y revisado como correcto.
-       La edición que la pone en rojo: volver el chequeo condicional (`if (o.ancla && ...)`), que
-       es lo que parece natural y apaga la protección para toda operación sin ancla. */
+  /**
+   * ⚠ ACTUALIZADO 2026-08-23, y el cambio es de SEMÁNTICA — por eso va con el motivo escrito.
+   *
+   * Este test afirmaba que un ítem que se movió entre acordar y aplicar hace CAER la operación.
+   * Era lo correcto mientras la posición fuera la identidad: si se movió, no hay forma de saber
+   * cuál es. Pero el ancla ES el contenido, y con ella se puede saber — así que ahora la operación
+   * **sigue al ítem** en vez de caerse.
+   *
+   * ⭐ Y no es una preferencia: es lo mismo que ya hace la `cita` desde el 2026-08-23, y lo que
+   * arregla el fallo que Elías vio en pantalla («esa lista tiene 5 ítems y se pidió el 6» sobre una
+   * lista de seis). La persona aprobó «quitá «Descubrimiento»»; quitarlo esté donde esté es
+   * exactamente lo que aprobó. Rechazarlo era seguro y además inútil.
+   *
+   * ⛔ Lo que NO cambia, y es lo que este describe protege: si el ancla no aparece en ninguna
+   * posición, no se toca nada. Y si aparece en DOS, tampoco se elige — misma doctrina que la cita:
+   * la ambigüedad es rechazo, nunca «el más parecido».
+   */
+  it("⭐ si el ítem se movió entre acordar y aplicar, la operación lo SIGUE", () => {
+    /* El escenario real: el chat acuerda «quitá la sesión de Descubrimiento», el libro lo arrastra,
+       y mientras tanto alguien reordena a mano en el editor.
+       La edición que la pone en rojo: sacar la búsqueda por ancla y volver a `const pos = o.posicion`. */
     const { rechazadas, plan } = correr([
       { op: "seccion.item.borrar", key: "sesiones", lista: "sesiones", posicion: 1, ancla: "Descubrimiento" },
+    ]);
+    expect(rechazadas).toEqual([]);
+    const data = plan.find((p) => p.tipo === "data") as { data: { sesiones: { titulo: string }[] } };
+    expect(data.data.sesiones.map((x) => x.titulo)).toEqual(["Cierre"]);
+  });
+
+  it("⛔ pero si el ancla ya no está en NINGUNA posición, no se toca nada", () => {
+    /* Alguien borró ese ítem a mano, o le reescribió el texto. Ahí sí no hay forma de saber cuál
+       era, y la operación se cae con su motivo. */
+    const { rechazadas, plan } = correr([
+      { op: "seccion.item.borrar", key: "sesiones", lista: "sesiones", posicion: 1, ancla: "Una que no existe" },
     ]);
     expect(plan.filter((p) => p.tipo === "data")).toEqual([]);
     expect(rechazadas).toHaveLength(1);
     expect(rechazadas[0].motivo).toContain("reordenó");
+  });
+
+  it("⛔ y con DOS ítems que empiezan igual no elige: cae al índice y el ancla decide", () => {
+    /* El ancla son 24 caracteres, o sea un PREFIJO. Seguir «el primero que coincida» sería
+       escribir en la fila equivocada en silencio — exactamente lo que este describe existe para
+       impedir. Misma doctrina que la cita ambigua. */
+    const gemelas = seccion({
+      data: {
+        intro: "",
+        sesiones: [
+          { titulo: "Sesión de arranque con el equipo comercial", objetivo: "", preguntas: [] },
+          { titulo: "Sesión de arranque con el equipo de soporte", objetivo: "", preguntas: [] },
+        ],
+      },
+    });
+    /* Las dos comparten los primeros 24 caracteres, así que las dos dan la misma ancla. */
+    const { rechazadas, plan } = correr(
+      [{ op: "seccion.item.borrar", key: "sesiones", lista: "sesiones", posicion: 1, ancla: "Sesión de arranque con e" }],
+      [gemelas],
+    );
+    /* No sigue a ninguna: usa la posición 1, y ahí el ancla coincide, así que borra ÉSA. */
+    expect(rechazadas).toEqual([]);
+    const data = plan.find((p) => p.tipo === "data") as { data: { sesiones: { titulo: string }[] } };
+    expect(data.data.sesiones.map((x) => x.titulo)).toEqual(["Sesión de arranque con el equipo comercial"]);
   });
 
   it("⛔ y si el ancla NO SE PUEDE calcular, tampoco se toca", () => {

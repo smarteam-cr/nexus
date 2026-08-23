@@ -490,12 +490,23 @@ export function anclaDeRuta(schema: unknown, data: unknown, ruta: string): strin
  * ⚠ No «el primero del schema»: un ítem cuyo primer campo esté vacío daría un ancla vacía, o sea
  * ninguna protección justo donde parece haberla.
  */
-function identidadDeItem(item: unknown): string | null {
+function identidadDeItem(
+  item: unknown,
+  /**
+   * `true` = devuelve el texto ENTERO, sin recortar al largo del ancla.
+   *
+   * ⚠ Existe para la LÍNEA que lee una persona. Recortar a 24 es lo correcto para el ancla —es
+   * una llave de integridad— y es exactamente lo que no sirve para decidir: en pantalla se leyó
+   * «Se quita «Aircall no sincroniza co»», cortado a mitad de palabra.
+   */
+  completo = false,
+): string | null {
+  const dar = (v: string) => (completo ? v.trim() : recortarAncla(v));
   if (item === undefined || item === null) return null;
-  if (typeof item === "string") return item.trim() ? recortarAncla(item) : null;
+  if (typeof item === "string") return item.trim() ? dar(item) : null;
   if (typeof item === "object") {
     for (const v of Object.values(item as Record<string, unknown>)) {
-      if (typeof v === "string" && v.trim()) return recortarAncla(v);
+      if (typeof v === "string" && v.trim()) return dar(v);
     }
   }
   return null;
@@ -664,7 +675,16 @@ export function prepararOperacionesDeDocumento(
     if (conCoordenada === null) continue;
     const c = conCoordenada;
 
-    if (s && (c.op === "seccion.item.borrar" || c.op === "seccion.item.mover") && c.lista) {
+    /* ⛔ EL ANCLA QUE YA VIENE NO SE PISA, y era lo que mataba la protección entera.
+       Un pendiente arrastrado de un turno anterior trae el ancla de lo que la persona APROBÓ.
+       Recalcularla contra el documento de ahora la reemplaza por «lo que hoy está en ese índice»,
+       y entonces el chequeo del ejecutor compara el ancla contra sí misma: siempre pasa. Peor con
+       la búsqueda por ancla, que seguiría al ítem equivocado con total convicción.
+       La app la calcula cuando FALTA —el modelo no la emite—, no cuando ya está. */
+    const yaTieneAncla = typeof (c as { ancla?: string }).ancla === "string" && !!(c as { ancla?: string }).ancla?.trim();
+    if (yaTieneAncla) {
+      aceptadas.push(c);
+    } else if (s && (c.op === "seccion.item.borrar" || c.op === "seccion.item.mover") && c.lista) {
       const ancla = anclaDeItem(s.data, c.lista, c.posicion ?? -1);
       aceptadas.push(ancla === null ? c : { ...c, ancla });
     } else if (s && c.op === "seccion.campo" && c.campo) {
@@ -863,7 +883,33 @@ export function aplicarOperacionesDeDocumento(
            comparaciones (`undefined < 0` y `undefined >= n` son ambas `false`) y llegaba al
            `splice`, que borra el ítem 0. Hoy lo frenaba el ancla; el día que el ancla se calcule
            bien, esto sería un borrado silencioso del primer ítem. */
-        const pos = o.posicion;
+        /**
+         * ⭐⭐ EL LOTE SE CORRÍA EL PISO A SÍ MISMO, y es el fallo que Elías vio en pantalla.
+         *
+         * «Borra las últimas 2 opciones a cada card» sobre dos listas de seis: el modelo emite
+         * cuatro borrados con las posiciones 4 y 5 de cada lista, calculadas contra el documento
+         * ENTERO. Pero el dry-run corre el lote en orden sobre una copia que se va encogiendo: el
+         * borrado de la 4 deja la lista en cinco, y el de la 5 choca contra un rango que dejó de
+         * existir. Resultado: «No registré 2 de los cambios: esa lista tiene 5 ítems y se pidió el
+         * 6» — un mensaje que describe un documento que nunca existió, sobre uno que en pantalla
+         * tiene seis.
+         *
+         * ⚠ Y era INTERMITENTE por construcción: emitidas al revés (5 y después 4) las cuatro
+         * entran. Nada en la herramienta ni en el prompt obliga a un orden.
+         *
+         * ⛔ Y el camino que el prompt RECOMIENDA cae en el mismo pozo: `resolverCitaDeOperacion`
+         * traduce la cita a una posición absoluta ANTES del dry-run. No es que el modelo cuente
+         * mal — es que la coordenada se congela antes del lote y se juzga después.
+         *
+         * El arreglo: cuando la operación trae ancla, la posición se BUSCA en el array vigente.
+         * ⛔ Solo si el ancla aparece UNA vez. Con dos ítems que empiezan igual, elegir el primero
+         * sería escribir en el equivocado en silencio — el mismo criterio que la cita, donde la
+         * ambigüedad es rechazo y nunca «el más parecido».
+         */
+        const coincidencias = o.ancla
+          ? arr.reduce<number[]>((acc, it, i) => (identidadDeItem(it) === o.ancla ? [...acc, i] : acc), [])
+          : [];
+        const pos = coincidencias.length === 1 ? coincidencias[0] : o.posicion;
         if (typeof pos !== "number" || !Number.isInteger(pos) || pos < 0 || pos >= arr.length) {
           rechazar(o, `esa lista tiene ${arr.length} ítems y se pidió el ${(pos ?? 0) + 1}`);
           break;
@@ -1130,8 +1176,33 @@ export function describirOperacionesDeDocumento(
   /* El rótulo humano de un campo, si su def lo declara. Mismo criterio que el de las listas. */
   const campoDicho = (key: string, campo: string) =>
     porKey.get(key)?.rotulosDeCampos?.[campo] ?? campo;
-  const itemDicho = (ancla: string | undefined, posicion: number | undefined) =>
-    ancla?.trim() ? `«${ancla}»` : `el ítem ${(posicion ?? 0) + 1}`;
+  /**
+   * ⭐ EL TEXTO VIVO, NO EL ANCLA — y la diferencia se leyó en pantalla el 2026-08-23:
+   * «Se quita «Aircall no sincroniza co» de la lista «Hoy»». Cortado a mitad de palabra y sin
+   * puntos suspensivos, porque el ancla mide 24 caracteres.
+   *
+   * ⛔ El ancla es un mecanismo de PROTECCIÓN: 24 caracteres alcanzan de sobra para detectar que
+   * alguien reordenó la lista. El renglón del acuerdo es para DECIDIR, y en un borrado múltiple
+   * es lo ÚNICO que separa «quitá estos dos» de «quitá los otros dos». Son dos públicos con dos
+   * necesidades distintas, y compartir el recorte le daba al segundo el tamaño del primero.
+   *
+   * Por eso la línea vuelve a leer el ítem del documento y lo recorta como todo lo demás —90 con
+   * «…»—, y solo cae al ancla cuando la posición ya no resuelve.
+   * ⚠ `LARGO_DEL_ANCLA` NO se toca: viaja persistido dentro de cada acuerdo del hilo, así que
+   * cambiarlo invalidaría de golpe todo lo acordado y sin aplicar.
+   */
+  const itemDicho = (
+    key: string,
+    lista: string | undefined,
+    ancla: string | undefined,
+    posicion: number | undefined,
+  ) => {
+    const arr = (porKey.get(key)?.data as Record<string, unknown> | undefined)?.[lista ?? ""];
+    const vivo =
+      Array.isArray(arr) && typeof posicion === "number" ? identidadDeItem(arr[posicion], true) : null;
+    if (vivo) return `«${recortar(vivo)}»`;
+    return ancla?.trim() ? `«${ancla}»` : `el ítem ${(posicion ?? 0) + 1}`;
+  };
 
   return operaciones.map((o) => {
     switch (o.op) {
@@ -1172,9 +1243,9 @@ export function describirOperacionesDeDocumento(
         return `Se agrega «${recortar(texto)}» a la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
       }
       case "seccion.item.borrar":
-        return `Se quita ${itemDicho(o.ancla, o.posicion)} de la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
+        return `Se quita ${itemDicho(o.key, o.lista, o.ancla, o.posicion)} de la lista ${lista(o.key, o.lista)} de «${nombre(o.key)}»`;
       case "seccion.item.mover":
-        return `${itemDicho(o.ancla, o.posicion)} pasa al lugar ${(o.a ?? 0) + 1} de la lista ${lista(o.key, o.lista)} en «${nombre(o.key)}»`;
+        return `${itemDicho(o.key, o.lista, o.ancla, o.posicion)} pasa al lugar ${(o.a ?? 0) + 1} de la lista ${lista(o.key, o.lista)} en «${nombre(o.key)}»`;
       case "seccion.vaciar":
         return `⚠ Se borra TODO el contenido de «${nombre(o.key)}»`;
       case "seccion.crear":

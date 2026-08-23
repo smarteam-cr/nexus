@@ -148,7 +148,19 @@ describe("② «borrá lo de 1 de 10 fases» — «Se quita «undefined» de ite
       ],
     );
     for (const l of lineas) expect(l, l).not.toContain("undefined");
-    expect(lineas[0], "sin ancla, la línea nombra la posición").toContain("ítem 1");
+    /* ⚠ ACTUALIZADO 2026-08-23, con el motivo. Sin ancla, la línea ya no cae directo a «el ítem
+       N»: primero LEE el texto que hoy está en esa posición, que es lo que una persona necesita
+       para decidir. El respaldo por posición sigue existiendo y es lo que se prueba abajo — pero
+       solo cuando la posición no resuelve, que es cuando de verdad no hay nada que nombrar.
+       Lo que este test protege no cambió: ninguna línea puede decir «undefined». */
+    expect(lineas[0], "la línea nombra el ítem por su texto vivo").toContain("«1 de 10»");
+    expect(
+      describirOperacionesDeDocumento(
+        [CUMPLIMIENTO],
+        [{ op: "seccion.item.borrar", key: "cumplimiento", lista: "metrics", posicion: 99 }],
+      )[0],
+      "sin texto que leer, la línea cae a la posición en vez de a `undefined`",
+    ).toContain("ítem 100");
   });
 
   it("⭐ el nombre equivocado de una lista se descubre ANTES de acordar, no al aplicar", () => {
