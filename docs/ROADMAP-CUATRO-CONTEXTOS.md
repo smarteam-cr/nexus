@@ -69,7 +69,7 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 3.6 | **Exploración conversa** | Con operaciones el borrado silencioso deja de ser posible: una operación escribe la hoja que nombra, no reconstruye la sección | ✅ 2026-08-22 |
 | 3.7 | **El handoff se puede conversar** | El único que sigue afuera: sus secciones no tienen esquema. Hay que decidir si se le tipan o si lleva un assist de texto libre | ⬜ ⚠ decisión de diseño |
 | 5 | **Agregar secciones** | *«creame una tabla comparativa»* — 7 tipos creables, incluida la tabla genérica que no existía | ✅ 2026-08-22 |
-| 5.1 | **La sección nace LLENA** | Hoy el chat crea la sección y queda VACÍA: llenarla exige un segundo pedido. Ver abajo | ⬜ ⚠ hueco conocido |
+| 5.1 | **La sección nace LLENA** | Crear y llenar es UN solo acuerdo: la sección nueva entra a la mesa de trabajo con su `ref` y las operaciones que la nombran la encuentran | ✅ 2026-08-23 |
 | 3.8 | **El chat se corrige antes de prometer** | ⭐ Valida en seco contra el documento REAL antes de acordar y reintenta una vez con los rechazos. Los 4 fallos que Elías vio en pantalla | ✅ 2026-08-22 |
 | 3.9 | **Las secciones curadas del kickoff, por chat** | Agregar personas por su nombre, crear franjas y sesiones. La app resuelve la identidad; el chat solo da el nombre | ✅ 2026-08-22 |
 | 3.10 | **Las tarjetas del motor son una sola** | Un componente para las grillas de tarjetas + tipo creable «Tarjetas con ícono». El CSS ya era el mismo; lo duplicado era el JSX | ✅ 2026-08-22 |
@@ -77,29 +77,42 @@ enterás después. El chat lo conversa antes — y sabe qué se puede y qué cue
 | 5.2 | **El chat actúa, no narra** | ⭐ Auditoría de 43 agentes contra los 10 pedidos: **38 huecos, los 38 confirmados**. Arreglados los 3 que rompían datos en silencio + el «dale» + el rótulo de arriba | ✅ 2026-08-22 · **falta el resto** |
 | 5.3 | **Lo que quedó de la auditoría** | Tabla anidada · capacidades por documento · los avisos que mentían en 17 de 19 secciones · métricas híbridas de la portada · URL del CTA en venta · firma en Roles · el libro de pendientes en documentos · la cajita que hablaba en rutas | ✅ 34 de 38 (2026-08-22) |
 | 5.4 | **Los 4 que faltan** | (a) el modelo no sabe la posición de cada card sin chip — el render aplana y descarta los vacíos; (b) persistir el ⚠ de lo no registrado (hoy lo pisa «Aplicado»); (c) portar 3 reglas de acción del cronograma; (d) los ejemplos del panel vacío son todos del cronograma | ⬜ |
+| 8 | **Decir qué cambiar CITANDO el texto** | ⭐ El chat deja de contar índices: cita el texto que ve y la app resuelve la coordenada. Es la causa real de «no encuentra la caja que dice LO QUE CUESTA HOY». Ambigüedad ⇒ rechaza con las opciones, nunca elige el parecido | ✅ 2026-08-23 |
+| 8.1 | **Señalar en pantalla** | El 💬 de cada ítem abre el chat con ese punto ya citado. Cero ediciones en las 37 listas: se identifica por referencia. ⚠ Falta verla en pantalla | ✅ 2026-08-23 |
+| 8.2 | **Los rótulos que el motor ya pasa** | Tres renderers ignoran props que reciben («Hoy»/«Con el sistema», «Procesos», el Gantt) + los rótulos de las 3 métricas de portada | ⬜ |
+| 8.3 | **Los KPIs que el cliente sí ve** | `kpisConfirmados` es lo único que el cliente lee y vive fuera del esquema: se abre para EDITAR, no para agregar | ⬜ |
+| 8.4 | **La inversión, completa** | Los montos incluidos (decisión de Elías). La línea del acuerdo imprime la LECTURA, no el texto. Última a propósito: su falla es plausible y silenciosa | ⬜ |
+| 8.5 | **El resto del censo** | La sección HTML creable · 2 secciones mudas de la propuesta laboral · el `PDF_FALLBACK` en voseo · `TarjetasData.intro`, que está en el esquema y nadie pinta | ⬜ |
 | 6.1 | **La memoria del chat** | ⭐ Que el chat alcance el contexto del CLIENTE y del PROYECTO para *generar* con eso — no solo para contestar. Pedido de Elías (2026-08-22). Ver abajo | ⬜ |
 | 7 | **¿Alcanza un modelo más barato?** | ⚠ La medición del 2026-08-19 lo dio vuelta: ver abajo | 🟡 La premisa cambió |
 
-### ⚠ 5.1 · La sección nueva nace vacía *(hueco conocido, 2026-08-22)*
+### ✅ 5.1 · Crear una sección y llenarla es UN solo pedido *(cerrado el 2026-08-23)*
 
 Elías preguntó si el chat, desde el motor de sitios web, *«puede crear una nueva sección y agregar
-info»*. **Crea sí; llena todavía no, en el mismo pedido.**
+info»*. La respuesta era **crea sí, llena no** — y no fallaba al ejecutar: fallaba antes, al armar
+el plan. El id lo genera el servidor, así que una operación que nombrara la sección nueva no
+encontraba a quién escribirle y se caía con *«esa sección ya no está en el documento»*.
 
-El motivo es mecánico y está escrito en el código: el id de la sección nueva lo genera el servidor,
-así que cuando se arma el plan —antes de escribir nada— una operación que la nombre por su key no la
-encuentra y se rechaza. Las creaciones corren primero y en orden; el contenido va en la pasada
-siguiente. En la práctica: *«agregá una tabla comparativa»* deja la tabla vacía, y hay que pedirle
-*«ahora llenala con…»*.
+Ahora la sección nueva entra a la mesa de trabajo con su `ref` como identidad —el mismo molde que
+el cronograma ya usaba para las fases—, así que las operaciones que la nombran la encuentran, el
+dry-run la valida de verdad, y el orden («ponela primera») deja de descartarse en silencio.
 
-⛔ **Y hoy el chat no lo dice.** El catálogo de capacidades afirma «puedes crear una sección» sin la
-letra chica, así que la persona pide una cosa y recibe media — que es exactamente la queja que
-originó todo el asistente: *«el modificador puede no ser capaz, pero el usuario no obtiene esa
-respuesta»*. Mientras el hueco exista, decirlo es obligatorio.
+### ⭐ 8 · Decir qué cambiar CITANDO el texto *(cerrado el 2026-08-23)*
 
-**Las dos salidas**, en orden de costo: (a) que el ejecutor haga una segunda pasada —crear, releer
-el documento con las secciones nuevas ya adentro, y recién ahí planificar el contenido—; o (b) que
-`seccion.crear` acepte el contenido inicial junto con el tipo. La (a) es la que no agrega
-vocabulario y sirve igual a los 9 documentos.
+El fallo que lo originó: Elías quiso renombrar la caja que dice «LO QUE CUESTA HOY» y el chat nunca
+la encontró. La causa no era el motor: era que el chat identificaba por COORDENADAS
+(`campo: "items.2.detail"`) que el modelo tenía que calcular sobre un texto que se lee de corrido.
+Los calcula mal — es la debilidad documentada de JSON Patch, que es justo lo que este vocabulario
+hacía. Aider, Notion y Lovable identifican por CONTENIDO, y eso es lo que entró.
+
+Ahora la operación puede traer `cita`: el texto que HOY está ahí, copiado tal cual. La app lo busca
+y resuelve la coordenada sola. Y el 💬 de cada ítem es la otra puerta al MISMO mecanismo: señalar en
+pantalla manda el texto señalado como cita. **Ambigüedad ⇒ rechazo con las opciones, nunca «el más
+parecido»** — y ese rechazo vuelve al modelo en la misma llamada, así que corrige sin gastarle un
+turno a la persona.
+
+⚠ Lo que falta ver con los ojos: **cómo se ve el 💬 sobre las 37 listas**. No hay base local
+levantada para probarlo (Docker apagado); es lo primero de la prueba clickeada.
 
 ### ⭐ 6.1 · La memoria del chat — *pedido de Elías (2026-08-22)*
 
