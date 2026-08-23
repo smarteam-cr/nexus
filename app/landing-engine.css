@@ -189,8 +189,23 @@
 .stl .stl-sec { padding: clamp(48px, 7vw, 88px) 0; position: relative; }
 .stl .stl-sec.hero-backdrop { padding: clamp(80px, 12vh, 140px) 0; }
 
-/* Overlay de controles por sección (solo modo edición del workspace). */
-.stl .stl-overlay { position: absolute; top: 12px; right: 16px; z-index: 5; }
+/* Overlay de controles por sección (solo modo edición del workspace).
+ *
+ * ⭐ A la IZQUIERDA desde el 2026-08-23, a pedido de Elías.
+ *
+ * ⚠ El `row-reverse` NO es cosmético. El orden del DOM es
+ * `[badge «no visible», 💬 Cambiar, herramientas, ▸ caret, 👁 ojo, ⠿ handle]`, pensado para crecer
+ * hacia la izquierda desde el borde derecho. Anclado a la izquierda SIN invertir, el `⠿` —que es lo
+ * que más se agarra— queda pegado al contenido y el badge naranja, que es el elemento más ancho,
+ * empuja todo hacia el centro.
+ *
+ * ⛔ Y la inversión va ACÁ y no reordenando los hijos en `LandingView`: el orden del JSX está
+ * anclado por `lib/asistente/chat-de-seccion.test.ts`, que garantiza que el 💬 se pinte también
+ * sobre una sección oculta —«está apagada, ¿la reescribo?» es una conversación legítima—. */
+.stl .stl-overlay {
+  position: absolute; top: 12px; left: 16px; right: auto; z-index: 5;
+  display: flex; align-items: center; gap: 8px; flex-direction: row-reverse;
+}
 /* Sección OCULTA (no se publica al cliente) — chrome ESTANDARIZADO con el kickoff:
    outline punteado suave + SOLO el contenido atenuado (los controles quedan nítidos
    y los paneles oscuros no se "engrisan" completos). */
@@ -245,6 +260,14 @@
 .stl .stl-collapsed-title {
   font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
 }
+/* ⛔ LA EXCEPCIÓN: sobre una sección colapsada el chrome vuelve a la DERECHA.
+ * Con `padding: 14px` el overlay (top:12px, ~28px de alto) se superpone con la barra, que es
+ * `text-align:left` y arranca con «▸ Título». A la izquierda le taparía el caret y el título — o
+ * sea el único asidero para volver a mostrar una sección oculta, que es exactamente lo que la
+ * regla de abajo existe para proteger.
+ * `.stl-overlay` es hijo DIRECTO tanto de `.stl-sec` como de `.stl-ctx-sec`, así que un selector
+ * cubre los dos armadores del motor. */
+.stl .stl-collapsed > .stl-overlay { left: auto; right: 16px; }
 /* La barra colapsada nunca se atenúa (es el único asidero para volver a mostrarla). */
 .stl .stl-hidden.stl-collapsed > .stl-wrap,
 .stl .stl-ctx-sec.stl-hidden.stl-collapsed > :not(.stl-overlay) { opacity: 1; filter: none; }

@@ -119,3 +119,42 @@ describe("⭐ `leeElEncabezado` — declarar un hecho en vez de inferirlo", () =
     }
   });
 });
+
+describe("⭐ el chrome de cada sección va a la IZQUIERDA (Elías, 2026-08-23)", () => {
+  const css = leer("app/landing-engine.css");
+  const regla = (sel: string) => {
+    const i = css.indexOf(sel);
+    return i < 0 ? "" : css.slice(i, css.indexOf("}", i));
+  };
+
+  it("la regla base ancla a la izquierda, e invierte el orden", () => {
+    /* ⚠ El `row-reverse` no es cosmético: el orden del DOM crece hacia la izquierda desde el borde
+       derecho, así que sin invertir el ⠿ —lo que más se agarra— queda pegado al contenido y el
+       badge naranja empuja todo hacia el centro. */
+    const base = regla(".stl .stl-overlay {");
+    expect(base.length, "la guarda no está mirando nada").toBeGreaterThan(60);
+    expect(base).toContain("left: 16px");
+    expect(base).toContain("right: auto");
+    expect(base).toContain("row-reverse");
+  });
+
+  it("⛔ pero sobre una sección COLAPSADA vuelve a la derecha", () => {
+    /* Con `padding: 14px` el overlay se superpone con la barra, que arranca con «▸ Título». A la
+       izquierda taparía el caret y el título — el ÚNICO asidero para volver a mostrar una sección
+       oculta. La edición que la pone en rojo: borrar esta regla «porque es redundante». */
+    const exc = regla(".stl .stl-collapsed > .stl-overlay {");
+    expect(exc, "el chrome colapsado taparía el asidero para volver a mostrar la sección").toContain(
+      "right: 16px",
+    );
+    expect(exc).toContain("left: auto");
+  });
+
+  it("⛔ el layout tiene UN dueño: la hoja, no un estilo inline", () => {
+    /* Un `display:flex` inline le gana a la hoja, y ahí el `row-reverse` se queda sin con qué
+       componerse — el chrome volvería a la derecha sin que nada falle. */
+    const lv = leer("components/landing/LandingView.tsx");
+    const i = lv.indexOf('className="stl-overlay"');
+    expect(i).toBeGreaterThan(0);
+    expect(lv.slice(i, i + 120), "volvió un estilo inline al overlay").not.toContain("display:");
+  });
+});

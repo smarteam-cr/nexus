@@ -392,9 +392,12 @@ export default function LandingView({
     const sectionBody = <SeccionEnPantallaProvider valor={enPantalla}>{cuerpo}</SeccionEnPantallaProvider>;
 
     /* Chrome ESTANDARIZADO: badge de oculto + controles del workspace + caret de
-       colapsar + toggle de ojo + handle de drag, arriba a la derecha. */
+       colapsar + toggle de ojo + handle de drag. Va arriba a la IZQUIERDA desde el 2026-08-23.
+       ⚠ El `display:flex` y el `gap` viven en `.stl-overlay` (landing-engine.css), NO acá: un
+       estilo inline le gana a la hoja, y ahí el `flex-direction: row-reverse` que pone los
+       controles a la izquierda se quedaría sin con qué componerse. Un solo dueño del layout. */
     const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
-      <div className="stl-overlay" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="stl-overlay">
         {hidden && <span className="stl-hidden-badge">No visible para el cliente</span>}
         {/* ⭐ El botón de conversar sobre ESTA sección. Va FUERA del `!collapsed` a propósito: una
         sección oculta se colapsa, y «está apagada, ¿la reescribo y la muestro?» es una
