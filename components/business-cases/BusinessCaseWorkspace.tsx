@@ -195,52 +195,119 @@ export default function BusinessCaseWorkspace({
     }
   };
 
-  // F5.2 — fase REAL de la generación (el POST es síncrono y tarda 10-30s+):
-  // mientras está en vuelo, se pollea el status liviano y la fase se muestra
-  // junto al botón ("Leyendo el contexto…" → "Generando las secciones…" → …).
+  /**
+   * ── LA GENERACIÓN YA NO CUELGA DEL REQUEST (2026-08-21) ────────────────────
+   *
+   * El POST arranca la corrida y vuelve en el acto (202 + runId); el desenlace llega por el
+   * GET de status. Antes se hacía `await` del POST, que tardaba 61 s en la mediana y 81 s en
+   * el p90: más de la mitad de las generaciones cruzaban el `proxy_read_timeout` de 60 s, el
+   * navegador se quedaba con un fetch que no resolvía nunca, y Ventas veía "queda cargando y
+   * no la genera" — con la propuesta ya generada del otro lado.
+   *
+   * Consecuencia buena y gratis: como el estado vive en el `AgentRun` y no en esta pestaña,
+   * recargar a mitad de una generación la RETOMA en vez de perderla.
+   */
   const [genPhase, setGenPhase] = useState<string | null>(null);
-  const genIdRef = useRef(0); // identidad de la corrida actual: descarta ticks de una vieja
+  const genIdRef = useRef(0); // identidad de la corrida seguida: descarta ticks de una vieja
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  type GenStatus = {
+    status: string | null;
+    phase: string | null;
+    canvasId: string | null;
+    version: number | null;
+    error: string | null;
+  };
+
+  const detenerSeguimiento = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Sigue la corrida hasta su desenlace. Es el ÚNICO lugar que apaga el spinner: apagarlo al
+   * resolver el POST —como hacía el `finally` de antes— es exactamente lo que volvería a
+   * dejar la pantalla desincronizada del trabajo real.
+   */
+  const seguirGeneracion = useCallback(() => {
+    detenerSeguimiento();
+    const genId = ++genIdRef.current;
+    setGenerating(true);
+    const notifyUrl = `/business-cases/${bcId}`;
+    const tick = async () => {
+      try {
+        const s = await fetchJson<GenStatus>(`/api/business-cases/${bcId}/generate/status`);
+        if (genId !== genIdRef.current) return; // otra corrida tomó el mando
+        if (s.status === "RUNNING") {
+          if (s.phase) setGenPhase(s.phase);
+          return;
+        }
+        detenerSeguimiento();
+        setGenPhase(null);
+        setGenerating(false);
+        if (s.status === "DONE") {
+          toast.success(s.version ? `Caso de uso ${s.version} generado.` : "Propuesta generada.");
+          // El cambio de canvasId (vía loadMeta → setCanvasId) dispara el refetch del hook
+          // por efecto. NO llamar hook.refetch() acá: correría con el canvasId viejo del
+          // closure y traería el canvas anterior (era el bug de "no aparece nada").
+          await loadMeta(s.canvasId ?? undefined);
+          setDirty(true);
+          void notifyAgentDone({ group: "business-case", clientName, ok: true, url: notifyUrl });
+        } else if (s.status === "ERROR") {
+          toast.error(s.error ?? "La generación falló.");
+          void notifyAgentDone({ group: "business-case", clientName, ok: false, url: notifyUrl });
+        }
+      } catch {
+        /* el poll nunca rompe la generación: el trabajo corre en el server, no acá */
+      }
+    };
+    void tick(); // sin esperar los 2 s: una corrida que ya terminó se resuelve al instante
+    pollRef.current = setInterval(tick, 2000);
+  }, [bcId, clientName, detenerSeguimiento, loadMeta, toast]);
+
+  useEffect(() => detenerSeguimiento, [detenerSeguimiento]);
+
+  /* Al montar: si quedó una generación en curso (recarga, otra pestaña, o el vendedor volvió
+     desde otra pantalla), se retoma el spinner. Sin esto el arreglo del server no se notaría:
+     la propuesta terminaría igual, pero esta pantalla seguiría sin enterarse. */
+  useEffect(() => {
+    let vivo = true;
+    void (async () => {
+      try {
+        const s = await fetchJson<GenStatus>(`/api/business-cases/${bcId}/generate/status`);
+        if (vivo && s.status === "RUNNING") {
+          setGenPhase(s.phase ?? "Generando…");
+          seguirGeneracion();
+        }
+      } catch {
+        /* sin status legible, el botón queda normal */
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [bcId, seguirGeneracion]);
 
   const generate = async () => {
     if (generating) return;
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
-    const genId = ++genIdRef.current;
     setGenerating(true);
     setGenPhase("Preparando…");
-    const notifyUrl = `/business-cases/${bcId}`;
-    // Polling de la fase mientras el POST está en vuelo (2s; se corta en finally).
-    const phaseTimer = setInterval(async () => {
-      try {
-        const s = await fetchJson<{ status: string | null; phase: string | null }>(
-          `/api/business-cases/${bcId}/generate/status`,
-        );
-        // Un fetch lanzado por esta corrida puede resolver DESPUÉS del finally (o de
-        // otro clic): solo aplicar si sigue siendo la corrida vigente y está RUNNING.
-        if (genId === genIdRef.current && s.status === "RUNNING" && s.phase) setGenPhase(s.phase);
-      } catch {
-        /* el polling de fase nunca debe romper la generación */
-      }
-    }, 2000);
     try {
       // El carry-forward (portada, marcas, URL del CTA, orden/oculto) lo arma el
       // server leyendo el canvas actual de la DB — mismo riesgo de carrera que el
       // publish: esperar los writes en vuelo antes de disparar la generación.
       await hook.flushPending();
-      const r = await fetchJson<{ canvasId: string; version: number }>(`/api/business-cases/${bcId}/generate`, { method: "POST" });
-      toast.success(`Caso de uso ${r.version} generado.`);
-      // El cambio de canvasId (vía loadMeta → setCanvasId) dispara el refetch del hook
-      // por efecto. NO llamar hook.refetch() acá: correría con el canvasId viejo del
-      // closure y traería el canvas anterior (era el bug de "no aparece nada").
-      await loadMeta(r.canvasId);
-      setDirty(true);
-      void notifyAgentDone({ group: "business-case", clientName, ok: true, url: notifyUrl });
+      await fetchJson<{ runId: string }>(`/api/business-cases/${bcId}/generate`, { method: "POST" });
+      seguirGeneracion();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "La generación falló.");
-      void notifyAgentDone({ group: "business-case", clientName, ok: false, url: notifyUrl });
-    } finally {
-      clearInterval(phaseTimer);
-      setGenPhase(null);
+      // Un fallo ACÁ es del arranque (409 "ya hay una en curso", permisos, red): la corrida
+      // ni existe. El fallo de la generación en sí llega por el status, no por este catch.
       setGenerating(false);
+      setGenPhase(null);
+      toast.error(e instanceof ApiError ? e.message : "No se pudo arrancar la generación.");
     }
   };
 

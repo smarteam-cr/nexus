@@ -22,7 +22,7 @@ export async function GET(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { hubspotCompanyId: true },
+    select: { hubspotCompanyId: true, excludedEngagementIds: true },
   });
   if (!bc) {
     return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
@@ -34,12 +34,17 @@ export async function GET(
   try {
     const hs = await getSystemHubspotClient();
     const items = await fetchCompanyTimelineItems(hs, bc.hubspotCompanyId);
+    const excluidos = new Set(bc.excludedEngagementIds);
     return NextResponse.json({
       items: items.map((i) => ({
+        // ⚠ El `id` NO se devolvía hasta el 2026-08-21, y ésa es la razón por la que esta
+        // columna nació sin la "X": sin el id del engagement no hay nada que excluir.
+        id: i.id,
         type: i.type,
         title: i.title,
         date: i.date,
         snippet: i.body.length > 200 ? i.body.slice(0, 200).trimEnd() + "…" : i.body,
+        excluded: excluidos.has(i.id),
       })),
     });
   } catch {

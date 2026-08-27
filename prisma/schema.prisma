@@ -1407,6 +1407,15 @@ model BusinessCase {
   caseType    String?
   caseSubtype String? // sub-tipo (website: "ecommerce" | "informativo")
 
+  // Engagements de HubSpot (id de la API v1) EXCLUIDOS a mano del contexto de ESTA propuesta
+  // — la "X" de la columna HubSpot del Contexto, espejo de `Handoff.excludedEngagementIds`.
+  // Por defecto TODAS las notas/llamadas/reuniones de la company alimentan la generación;
+  // acá se sacan las que no son de esta venta.
+  //
+  // Por PROPUESTA y no por cliente a propósito: un prospecto puede tener varias propuestas
+  // vivas, y podar el contexto de una no puede podárselo a las otras.
+  excludedEngagementIds String[] @default([])
+
   // D.3 staging — el prospecto ve el SNAPSHOT publicado; el contenido vivo es
   // borrador hasta "Publicar". publishedSnapshot = foto client-safe de bloques.
   publishedAt       DateTime?

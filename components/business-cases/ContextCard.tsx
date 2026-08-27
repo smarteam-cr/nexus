@@ -33,7 +33,16 @@ type UseCaseRow = {
   selected: boolean;
   priceOverride: string | null;
 };
-type HsTimelineItem = { type: "NOTE" | "CALL" | "MEETING"; title: string; date: string | null; snippet: string };
+type HsTimelineItem = {
+  /** Id del engagement en HubSpot (v1). Es la clave con la que se excluye del contexto. */
+  id: string;
+  type: "NOTE" | "CALL" | "MEETING";
+  title: string;
+  date: string | null;
+  snippet: string;
+  /** true = sacado a mano con la "X": se muestra en gris y NO alimenta la generación. */
+  excluded?: boolean;
+};
 const HS_TYPE_LABEL: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión" };
 
 function fmtDate(d: string): string {
@@ -61,6 +70,8 @@ export default function ContextCard({
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Ítem de HubSpot con su X en vuelo (contador propio: no comparte con las sesiones). */
+  const [busyHsId, setBusyHsId] = useState<string | null>(null);
   // Fuentes manuales
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [loadingTranscripts, setLoadingTranscripts] = useState(true);
@@ -120,6 +131,29 @@ export default function ContextCard({
       setLoadingHs(false);
     }
   }, [bcId]);
+
+  /**
+   * La "X" del contexto de HubSpot: saca —o vuelve a meter— una nota/llamada/reunión del
+   * material con el que se genera la propuesta. Espejo de lo que ya existía del lado de
+   * proyectos. Optimista NO: se relee del server, porque lo que importa es qué quedó
+   * PERSISTIDO (es lo que va a leer la generación), no lo que se ve.
+   */
+  const toggleHsItem = async (engagementId: string, excluded: boolean) => {
+    setBusyHsId(engagementId);
+    try {
+      await fetchJson(`/api/business-cases/${bcId}/hubspot-timeline/exclude`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId, excluded }),
+      });
+      await loadHubspot();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar el contexto.");
+    } finally {
+      setBusyHsId(null);
+    }
+  };
+
   const loadTags = useCallback(async () => {
     try {
       const d = await fetchJson<{ tags: string[] }>(`/api/business-cases/${bcId}/tags`);
@@ -301,7 +335,11 @@ export default function ContextCard({
   const q = search.trim().toLowerCase();
   const filtered = q ? candidates.filter((c) => (c.title || "").toLowerCase().includes(q)) : candidates;
 
-  const totalCtx = hubspot.length + included.length + transcripts.length;
+  /* Los contadores del header cuentan lo que ALIMENTA. Una fuente excluida sigue en la lista
+     (para poder volver a meterla) pero no puede seguir contando como contexto: el número del
+     header es la respuesta a "¿con cuánto va a trabajar el agente?". */
+  const hubspotQueAlimenta = hubspot.filter((it) => !it.excluded).length;
+  const totalCtx = hubspotQueAlimenta + included.length + transcripts.length;
   const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
 
   return (
@@ -318,7 +356,7 @@ export default function ContextCard({
         <span className="text-sm font-bold text-fg">Contexto</span>
         <span className="text-[11px] text-fg-muted">{totalCtx} fuente{totalCtx === 1 ? "" : "s"}</span>
         <span className="hidden sm:flex items-center gap-3 ml-2 text-[11px] text-fg-secondary">
-          <span className="inline-flex items-center gap-1">{dot("#ff7a59")}{hubspot.length}</span>
+          <span className="inline-flex items-center gap-1">{dot("#ff7a59")}{hubspotQueAlimenta}</span>
           <span className="inline-flex items-center gap-1">{dot("#16a34a")}{included.length}</span>
           <span className="inline-flex items-center gap-1">{dot("#7c6df2")}{transcripts.length}</span>
         </span>
@@ -331,7 +369,10 @@ export default function ContextCard({
       </div>
 
       {/* Aviso proactivo: sin NINGUNA fuente con contenido no se puede generar con IA. */}
-      {!loadingSessions && !loadingHs && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && hubspot.length === 0 && (
+      {/* `hubspotQueAlimenta` y no `hubspot.length`: si Ventas sacó TODO el timeline con la X,
+          no queda contexto — y el aviso tiene que aparecer, no esconderse detrás de fuentes
+          que ya no se van a leer. */}
+      {!loadingSessions && !loadingHs && transcripts.length === 0 && !included.some((s) => s.hasTranscript) && hubspotQueAlimenta === 0 && (
         <div className="px-5 pb-2.5">
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
             Para <strong>generar con IA</strong> hace falta al menos una fuente con contenido (transcript o algo del timeline de HubSpot).{" "}
@@ -348,15 +389,39 @@ export default function ContextCard({
           Llamadas, reuniones, notas y transcripciones del prospecto. Se usan automáticamente como contexto al generar.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspot.length}>
+          {/* El contador dice cuántas ALIMENTAN, no cuántas hay: con una excluida, "7" sería
+              una promesa falsa sobre lo que el agente va a leer. */}
+          <ContextColumn
+            icon={CTX_ICONS.hubspot}
+            color="#ff7a59"
+            title="HubSpot"
+            count={hubspot.filter((it) => !it.excluded).length}
+          >
             <ContextColumnList loading={loadingHs} empty="Nada detectado en el registro de la empresa.">
-              {hubspot.map((it, i) => (
+              {hubspot.map((it) => (
                 <ContextRow
-                  key={i}
+                  key={it.id}
                   icon={CTX_ICONS.hubspot}
                   meta={`${HS_TYPE_LABEL[it.type] ?? it.type}${it.date ? ` · ${it.date}` : ""}`}
                   title={it.title || undefined}
                   snippet={it.snippet ?? undefined}
+                  /* Excluida: sigue A LA VISTA pero en gris y con "Incluir". Ocultarla haría
+                     que el vendedor no pueda deshacer sin acordarse de qué sacó. */
+                  dim={it.excluded}
+                  badge={it.excluded ? { label: "fuera", tone: "muted" } : undefined}
+                  action={
+                    it.excluded
+                      ? {
+                          label: "Incluir",
+                          onClick: () => toggleHsItem(it.id, false),
+                          disabled: busyHsId === it.id,
+                        }
+                      : undefined
+                  }
+                  onRemove={
+                    it.excluded || busyHsId === it.id ? undefined : () => toggleHsItem(it.id, true)
+                  }
+                  removeTitle="Sacar del contexto de esta propuesta"
                 />
               ))}
             </ContextColumnList>

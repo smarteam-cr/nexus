@@ -23,11 +23,14 @@ import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import {
   loadSelectedUseCases,
-  useCasesSectionData,
+  // Alias: se llama "useCases…" por CASOS DE USO, no por un hook de React — y desde que el
+  // trabajo pesado vive dentro de una función, `rules-of-hooks` lo confunde con uno y marca
+  // error. Renombrarlo acá es más barato que apagar la regla en un archivo de servidor.
+  useCasesSectionData as datosDeCasosDeUso,
   USE_CASES_SECTION_KEY,
 } from "@/lib/business-cases/use-cases";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import { fetchCompanyTimeline } from "@/lib/hubspot/company-timeline";
+import { fetchCompanyTimelineItems, serializeTimeline } from "@/lib/hubspot/company-timeline";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
@@ -78,6 +81,9 @@ export async function POST(
       id: true,
       clientId: true,
       hubspotCompanyId: true,
+      // Lo que Ventas sacó del contexto con la "X" del panel. Sin esto la exclusión sería
+      // decorativa: se vería tachado en pantalla y viajaría igual al prompt.
+      excludedEngagementIds: true,
       caseType: true,
       caseSubtype: true,
       // Los tags del caso dicen QUÉ HUBS se vendieron: con ellos se trae el conocimiento
@@ -143,7 +149,13 @@ export async function POST(
   if (bc.hubspotCompanyId) {
     try {
       const hs = await getSystemHubspotClient();
-      const timeline = await fetchCompanyTimeline(hs, bc.hubspotCompanyId);
+      /* ⚠ `fetchCompanyTimelineItems` + `serializeTimeline` y NO `fetchCompanyTimeline`: ese
+         último serializa la company ENTERA y no deja lugar donde filtrar. Éste es el único
+         punto en el que la "X" del contexto tiene que morder — si el ítem llega igual al
+         prompt, el vendedor sacó algo que igual se usó, que es peor que no poder sacarlo. */
+      const items = await fetchCompanyTimelineItems(hs, bc.hubspotCompanyId);
+      const excluidos = new Set(bc.excludedEngagementIds);
+      const timeline = serializeTimeline(items.filter((i) => !excluidos.has(i.id)));
       if (timeline.trim()) parts.push(`# Timeline de HubSpot (notas + llamadas/reuniones)\n${timeline}`);
     } catch {
       /* sin cuenta HubSpot del sistema / sin scope concedido → seguimos sin el timeline */
@@ -293,7 +305,24 @@ export async function POST(
   const setPhase = (phase: string) =>
     prisma.agentRun.update({ where: { id: run.id }, data: { currentPhase: phase } }).catch(() => {});
 
-  try {
+  /**
+   * ── EL TRABAJO PESADO, FUERA DEL REQUEST (2026-08-21) ──────────────────────
+   *
+   * Esto tardaba 61 s en la mediana y 81 s en el p90 —24 de 40 corridas cruzaban el minuto—
+   * colgado de un POST SÍNCRONO. Ninguna cadena navegador→proxy sostiene eso: 60 s es el
+   * `proxy_read_timeout` por defecto de nginx y 100 s el tope de origen de Cloudflare. El
+   * servidor terminaba siempre (cero corridas RUNNING colgadas en la base) pero la respuesta
+   * se perdía en el camino, y Ventas veía el spinner eterno del "queda cargando y no la
+   * genera" — con el caso de uso YA generado del otro lado.
+   *
+   * Mismo patrón que `app/api/clients/[id]/analyze/route.ts`, donde este error ya se pagó una
+   * vez: el `AgentRun` ES el estado, el POST solo lo arranca, y el cliente lo sigue por el GET
+   * de status. El contenedor es un server largo (no serverless), así que el trabajo detached
+   * sobrevive a que el navegador se vaya — que es justamente el punto.
+   *
+   * ⛔ No se arregla optimizando el prompt: 61 s es lo que tarda generar una propuesta.
+   */
+  const trabajo = async (): Promise<{ canvasId: string; version: number }> => {
     // Guía efectiva por sección: el override del CSE en la Plantilla gana; si no, el
     // agente cae al brief por defecto de la config (BC_DEF_BY_KEY.brief).
     const briefsByKey = briefsByKeyFrom(template?.sections);
@@ -521,7 +550,7 @@ export async function POST(
       // cualquier fuga del LLM: nunca queda contenido generado en esta sección.
       await writeSection(
         USE_CASES_SECTION_KEY,
-        useCasesSectionData(selectedUseCases) as unknown as Prisma.InputJsonValue,
+        datosDeCasosDeUso(selectedUseCases) as unknown as Prisma.InputJsonValue,
       );
       // Idioma ≠ español: el agente tradujo los títulos/eyebrows de sección →
       // se aplican como overrides de cara al cliente (editables después como siempre).
@@ -541,11 +570,30 @@ export async function POST(
       return cid;
     });
 
-    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE" } });
-    return NextResponse.json({ canvasId, version });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "error desconocido";
-    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: message } });
-    return NextResponse.json({ error: "La generación falló: " + message }, { status: 500 });
-  }
+    return { canvasId, version };
+  };
+
+  /* El resultado viaja por el `output` de la corrida y NO por la respuesta: el cliente ya no
+     está esperando cuando esto termina. Es la única pieza nueva del cambio — sin ella el
+     workspace no sabría qué caso de uso abrir. Lo lee el GET de status. */
+  void (async () => {
+    try {
+      const hecho = await trabajo();
+      await prisma.agentRun.update({
+        where: { id: run.id },
+        data: { status: "DONE", output: JSON.stringify(hecho) },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "error desconocido";
+      /* `.catch(() => {})`: si hasta el marcado del error falla (base caída), no hay a quién
+         tirarle la excepción — este bloque ya no cuelga de ningún request. Sin esto sería un
+         unhandled rejection capaz de voltear el proceso entero. */
+      await prisma.agentRun
+        .update({ where: { id: run.id }, data: { status: "ERROR", output: message } })
+        .catch(() => {});
+    }
+  })();
+
+  // 202: aceptado y en curso. El cliente sigue la corrida por el GET de status.
+  return NextResponse.json({ runId: run.id, status: "RUNNING" }, { status: 202 });
 }
