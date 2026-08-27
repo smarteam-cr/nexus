@@ -150,6 +150,18 @@ export function useCanvasSections(
    * vale sería peor que no verificar.
    */
   const refetch = useCallback(async (): Promise<SectionWithBlocks[] | null> => {
+    /* ── TODAVÍA NO HAY CANVAS QUE PEDIR NO ES UN ERROR (2026-08-21) ──────────
+       El workspace monta con `canvasId=""` y recién sabe cuál abrir cuando resuelve su
+       `canvas-meta`. Con la URL vacía el GET devuelve 400 "canvasId required" y esto pintaba
+       "No se pudo cargar el contenido." en rojo — en CADA recarga, un segundo antes de que
+       el contenido apareciera perfecto. Peor: como el fetch fallido podía resolver DESPUÉS
+       del bueno, el cartel se quedaba puesto sobre un canvas ya cargado.
+       Cortar acá y no en cada consumidor: son 8 pantallas con el mismo arranque. */
+    if (!canvasId) {
+      setError(null);
+      setLoading(false);
+      return null;
+    }
     const seqAtStart = writeSeq.current;
     try {
       const res = await fetch(listUrl);
@@ -177,15 +189,19 @@ export function useCanvasSections(
       // la pantalla se queda cargando para siempre sin decir qué pasó.
       setLoading(false);
     }
-  }, [listUrl]);
+  }, [listUrl, canvasId]);
 
   // `listUrl` cambia al cambiar de canvas o de sub-tab: hay que volver a `loading`
   // para que se vea el skeleton de la sección nueva en vez del contenido de la vieja.
   useEffect(() => {
-    setLoading(true);
-    lastSectionsJson.current = "";
+    // Sin canvas no se enciende el skeleton: `refetch` lo apagaría acto seguido y el único
+    // efecto sería un parpadeo. Quien monta sin id ya pinta su propio "Preparando…".
+    if (canvasId) {
+      setLoading(true);
+      lastSectionsJson.current = "";
+    }
     refetch();
-  }, [refetch]);
+  }, [refetch, canvasId]);
 
   // Polling: el agente escribe bloques DRAFT de forma asíncrona. Si cambia el
   // conteo de borradores, refrescamos (mismo patrón que SectionBlockList).
@@ -193,6 +209,7 @@ export function useCanvasSections(
   const refetchRef = useRef(refetch);
   useEffect(() => {
     if (!pollEnabled) return; // el business case no necesita polling (generación síncrona)
+    if (!canvasId) return; // sin canvas, el poll solo generaría 400s cada 5 s
     const id = setInterval(() => {
       fetch(listUrl)
         .then((r) => r.json())
@@ -206,7 +223,7 @@ export function useCanvasSections(
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [listUrl, pollEnabled]);
+  }, [listUrl, pollEnabled, canvasId]);
 
   const clearError = useCallback(() => setError(null), []);
 

@@ -43,7 +43,10 @@ export interface BcTemplateDef {
 export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
   [HUBSPOT_TEMPLATE_ID]: {
     id: HUBSPOT_TEMPLATE_ID,
-    caseLabel: "Caso de uso",
+    // "Propuesta N" y no "Caso de uso N" (2026-08-21, pedido de Elías): el selector nombraba
+    // las versiones igual que el CATÁLOGO DE CASOS DE USO del checklist, que es otra cosa
+    // completamente. Las dos plantillas de propuesta dicen lo mismo ahora.
+    caseLabel: "Propuesta",
     // Antes 8000 para 9 secciones; con las 2 nuevas (array-heavy) el tope quedaba
     // corto → riesgo de truncado (JSON inválido → caso vacío). Ver guard en canvas-agent.
     maxTokens: 12000,

@@ -1,7 +1,7 @@
 /**
  * DELETE /api/business-cases/[id]/canvases/[canvasId]
  *
- * Borra un CASO DE USO (versión generada, v≥1) del business case. La Plantilla (v0)
+ * Borra una PROPUESTA (versión generada, v≥1) del business case. La Plantilla (v0)
  * NO se puede borrar. Si el caso borrado era el activo, activa el más nuevo restante
  * (o la Plantilla si no quedan casos). Cascade → secciones + bloques.
  *
@@ -24,7 +24,7 @@ export async function DELETE(
     select: { id: true, version: true, isActive: true, businessCaseId: true },
   });
   if (!canvas || canvas.businessCaseId !== id) {
-    return NextResponse.json({ error: "Caso de uso no existe" }, { status: 404 });
+    return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
   if (canvas.version === 0) {
     return NextResponse.json({ error: "La plantilla no se puede borrar." }, { status: 400 });

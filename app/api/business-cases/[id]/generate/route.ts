@@ -4,7 +4,7 @@
  * Llena el canvas del business case con el agente (datos ESTRUCTURADOS por sección):
  *   1. Junta el contexto (transcripts pegados/subidos + transcripts de las
  *      sesiones incluidas).
- *   2. Crea SIEMPRE un caso de uso nuevo (v1, v2, …); el agente lee las guías de la
+ *   2. Crea SIEMPRE una propuesta nueva (v1, v2, …); el agente lee las guías de la
  *      Plantilla (v0), que nunca se llena.
  *   3. El agente produce `data` por sección → se escribe YA ACEPTADO (CONFIRMED) en el
  *      bloque de cada sección. El vendedor edita/borra (no hay paso de "confirmar").
@@ -313,7 +313,7 @@ export async function POST(
    * `proxy_read_timeout` por defecto de nginx y 100 s el tope de origen de Cloudflare. El
    * servidor terminaba siempre (cero corridas RUNNING colgadas en la base) pero la respuesta
    * se perdía en el camino, y Ventas veía el spinner eterno del "queda cargando y no la
-   * genera" — con el caso de uso YA generado del otro lado.
+   * genera" — con la propuesta YA generada del otro lado.
    *
    * Mismo patrón que `app/api/clients/[id]/analyze/route.ts`, donde este error ya se pagó una
    * vez: el `AgentRun` ES el estado, el POST solo lo arranca, y el cliente lo sigue por el GET

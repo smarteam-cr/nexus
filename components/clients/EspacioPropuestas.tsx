@@ -65,7 +65,7 @@ export default async function EspacioPropuestas({
     <div className="px-6 py-6 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-base font-semibold text-fg">Propuestas comerciales</h2>
+          <h2 className="text-base font-semibold text-fg">Propuestas</h2>
           <p className="text-xs text-fg-muted mt-0.5">
             {propuestas.length === 0
               ? "Todavía no hay ninguna."

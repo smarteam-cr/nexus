@@ -4,7 +4,7 @@
  * BusinessCaseWorkspace — mismo chrome que el canvas de kickoff (ProjectCanvasPanel):
  *   1. Card de CONTEXTO (estilo ProjectHandoffSection): sesiones del prospecto
  *      (estilo SessionSelectionReview) + "Fuentes manuales" colapsable.
- *   2. Header: dropdown del canvas ("Caso de uso N ▾") + "Generar con IA" a la
+ *   2. Header: dropdown del canvas ("Propuesta N ▾") + "Generar con IA" a la
  *      izquierda; "Acceso del cliente" + (export) a la derecha.
  *   3. Landing FULL-BLEED (margen negativo, rompe el padding del panel) con la
  *      PublishBar "Subir al cliente" arriba. Edición inline del motor de landing.
@@ -104,7 +104,7 @@ export default function BusinessCaseWorkspace({
           preferCanvasId ?? (prev && m.versions.some((v) => v.canvasId === prev) ? prev : m.activeCanvasId ?? ""),
         );
       } catch (e) {
-        toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el caso de uso.");
+        toast.error(e instanceof ApiError ? e.message : "No se pudo cargar la propuesta.");
       }
     },
     [bcId, toast],
@@ -248,7 +248,7 @@ export default function BusinessCaseWorkspace({
         setGenPhase(null);
         setGenerating(false);
         if (s.status === "DONE") {
-          toast.success(s.version ? `Caso de uso ${s.version} generado.` : "Propuesta generada.");
+          toast.success(s.version ? `Propuesta ${s.version} generada.` : "Propuesta generada.");
           // El cambio de canvasId (vía loadMeta → setCanvasId) dispara el refetch del hook
           // por efecto. NO llamar hook.refetch() acá: correría con el canvasId viejo del
           // closure y traería el canvas anterior (era el bug de "no aparece nada").
@@ -342,7 +342,7 @@ export default function BusinessCaseWorkspace({
       setPublished(true);
       setDirty(false);
       setAccessNonce((n) => n + 1);
-      toast.success("Subido. El cliente ya ve este caso de uso.");
+      toast.success("Subido. El cliente ya ve esta propuesta.");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo subir al cliente.");
     } finally {
@@ -356,17 +356,17 @@ export default function BusinessCaseWorkspace({
   const activeVersion = versions.find((v) => v.canvasId === canvasId)?.version;
   const isTemplate = activeVersion === 0;
 
-  // Borrar un caso de uso (versión generada) desde el dropdown.
+  // Borrar una propuesta (versión generada) desde el dropdown.
   const deleteCanvas = async (cid: string) => {
     try {
       const r = await fetchJson<{ activeCanvasId: string | null }>(
         `/api/business-cases/${bcId}/canvases/${cid}`,
         { method: "DELETE" },
       );
-      toast.success("Caso de uso eliminado.");
+      toast.success("Propuesta eliminada.");
       await loadMeta(r.activeCanvasId ?? undefined);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar el caso de uso.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar la propuesta.");
     }
   };
 

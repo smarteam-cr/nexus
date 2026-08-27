@@ -203,7 +203,7 @@ export const APP_NAV: readonly NavItemConfig[] = [
     gate: { kind: "permission", section: "ventas", action: "read" },
     group: "operacion",
     children: [
-      { href: "/business-cases", label: "Propuestas comerciales" },
+      { href: "/business-cases", label: "Propuestas" },
       // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
       // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
       { href: "/sales/sicop", label: "SICOP" },

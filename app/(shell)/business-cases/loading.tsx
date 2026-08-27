@@ -2,7 +2,7 @@
  * Loading skeleton de /business-cases.
  *
  * FORMA REAL (page.tsx): `px-6 py-8` (= SHELL_DEFAULT, escrito a mano en el page.tsx con ese
- * valor) · encabezado a mano (h1 "Ventas — Propuestas comerciales" + descripción, con el link al
+ * valor) · encabezado a mano (h1 "Ventas — Propuestas" + descripción, con el link al
  * catálogo y el botón "Nueva propuesta" a la derecha) · y la lista en `mt-6 space-y-2`:
  * filas delineadas `rounded-xl px-4 py-3` con nombre + cliente y, a la derecha, los chips de
  * tipo y estado.

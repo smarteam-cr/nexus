@@ -252,7 +252,7 @@ export async function createBusinessCaseCanvas(
       // es la versión ("Plantilla", "Propuesta 2"), no la identidad.
       slug: BUSINESS_CASE_CANVAS.slug,
       // Rótulo de cara al CSE: v0 = "Plantilla" (base con las guías del agente, NO se
-      // llena con contenido); v1+ = "Caso de uso N" (cada "Generar" crea una versión).
+      // llena con contenido); v1+ = "Propuesta N" (cada "Generar" crea una versión).
       name: version === 0 ? "Plantilla" : `${tpl.caseLabel} ${version}`,
       isDefault: true,
       order: 0,

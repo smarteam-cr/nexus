@@ -216,7 +216,7 @@ export const PERMISSION_SECTIONS = [
   },
   {
     key: "ventas",
-    label: "Ventas / Propuestas comerciales",
+    label: "Ventas / Propuestas",
     actions: [
       { key: "read", label: "Acceder al área", enforced: true },
       // enforced desde 2026-07-24: su primer guard real es el TAM del cliente

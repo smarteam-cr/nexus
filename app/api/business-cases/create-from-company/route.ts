@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Plantilla (v0): base con las guías editables del agente. NO se llena con
-  // contenido — cada "Generar con IA" crea un caso de uso nuevo (v1, v2, …).
+  // contenido — cada "Generar con IA" crea una propuesta nueva (v1, v2, …).
   // Se siembra con el template del tipo + __meta (respaldo dual-PC del tipo).
   await createBusinessCaseCanvas(bc.id, 0, prisma, typeDef.templateId, {
     caseType: typeDef.id,

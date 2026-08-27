@@ -1,7 +1,7 @@
 /**
  * POST /api/business-cases/[id]/publish   body: { canvasId? }
  *
- * Congela el snapshot client-safe del CASO DE USO que el CSE está viendo (el
+ * Congela el snapshot client-safe de la PROPUESTA que el CSE está viendo (el
  * `canvasId` del body; fallback al activo). Valida pertenencia al BC (IDOR) y que
  * NO sea la Plantilla (version 0). Setea publishedAt + asegura el acceso. Exige ≥1
  * sección con contenido real. Gateado con guardSalesAccess.
@@ -70,8 +70,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: bodyCanvasId
-          ? "Ese caso de uso no existe o es la Plantilla (la Plantilla no se publica)."
-          : "Generá un caso de uso antes de subir al cliente.",
+          ? "Esa propuesta no existe o es la Plantilla (la Plantilla no se publica)."
+          : "Generá una propuesta antes de subir al cliente.",
       },
       { status: 400 },
     );

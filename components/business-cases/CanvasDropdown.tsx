@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { ConfirmDialog } from "@/components/ui";
 import type { VersionMeta } from "@/components/business-cases/bc-workspace-shared";
 
-// ── Dropdown del canvas (Plantilla v0 + "Caso de uso N" con borrar) ────────────
+// ── Dropdown del canvas (Plantilla v0 + "Propuesta N" con borrar) ─────────────
 export default function CanvasDropdown({
   versions,
   canvasId,
@@ -34,7 +34,7 @@ export default function CanvasDropdown({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 text-xl font-bold text-fg hover:text-fg-secondary transition-colors"
       >
-        {active?.name ?? "Caso de uso"}
+        {active?.name ?? "Propuesta"}
         <svg className={`w-4 h-4 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -54,12 +54,12 @@ export default function CanvasDropdown({
               >
                 {v.name}{v.isActive ? " · activo" : ""}
               </button>
-              {/* La Plantilla (v0) no se borra; los casos de uso sí. */}
+              {/* La Plantilla (v0) no se borra; las propuestas sí. */}
               {v.version >= 1 && (
                 <button
                   onClick={() => setConfirmId(v.canvasId)}
-                  title="Borrar caso de uso"
-                  aria-label={`Borrar el caso de uso ${v.name}`}
+                  title="Borrar propuesta"
+                  aria-label={`Borrar la propuesta ${v.name}`}
                   className="flex-shrink-0 p-1.5 mr-1 rounded-md text-fg-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -79,10 +79,10 @@ export default function CanvasDropdown({
           setOpen(false);
         }}
         onCancel={() => setConfirmId(null)}
-        title="¿Borrar este caso de uso?"
+        title="¿Borrar esta propuesta?"
         description={
           confirmTarget
-            ? `Se eliminará "${confirmTarget.name}" con todo su contenido. No afecta la Plantilla ni los otros casos.`
+            ? `Se eliminará "${confirmTarget.name}" con todo su contenido. No afecta la Plantilla ni las otras propuestas.`
             : ""
         }
         confirmLabel="Borrar"

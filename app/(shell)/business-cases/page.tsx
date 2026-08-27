@@ -55,7 +55,7 @@ export default async function BusinessCasesHubPage() {
   return (
     <div className={SHELL_DEFAULT}>
       <PageHeader
-        title="Ventas — Propuestas comerciales"
+        title="Ventas — Propuestas"
         description="Casos de negocio para prospectos y clientes."
         action={
           <div className="flex items-center gap-3">

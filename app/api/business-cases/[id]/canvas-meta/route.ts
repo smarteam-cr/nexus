@@ -1,8 +1,8 @@
 /**
  * GET /api/business-cases/[id]/canvas-meta
  *
- * Metadatos de versiones del canvas del business case (para el selector de "Casos
- * de uso" del workspace): el canvas activo + la lista de versiones. El contenido
+ * Metadatos de versiones del canvas del business case (para el selector de
+ * "Propuesta N" del workspace): el canvas activo + la lista de versiones. El contenido
  * se lee aparte por /canvas-sections?canvasId=. Gateado con guardSalesAccess.
  */
 import { NextRequest, NextResponse } from "next/server";
