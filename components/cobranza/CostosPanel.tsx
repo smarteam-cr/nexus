@@ -614,6 +614,11 @@ export default function CostosPanel({
         <CostoForm
           costo={form.costo}
           categoriaInicial={categoria}
+          /* Hoy por PROP y no `new Date()` adentro: el default de "Rige desde" se pinta en el
+             server y se hidrata en el cliente, y dos relojes distintos son una diferencia de
+             hidratación (ver `lib/ui/prestamo-de-title.ts`). Además, el día que manda es el
+             de Costa Rica, no el del navegador. */
+          todayISO={todayISO}
           onClose={() => setForm({ abierto: false, costo: null })}
           onSaved={() => {
             setForm({ abierto: false, costo: null });

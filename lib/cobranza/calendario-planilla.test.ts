@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   calendarioDePersona,
   salarioVigenteEn,
+  vigenciaDe,
   type MovimientoDeSalario,
   type PagoRegistrado,
 } from "./calendario-planilla";
@@ -283,3 +284,76 @@ describe("«no estaba» y «no se sabe» son cosas distintas", () => {
   });
 });
 
+
+describe("desde cuándo rige un aumento (lo que anuncia el formulario)", () => {
+  it("clasifica la fecha efectiva contra hoy", () => {
+    expect(vigenciaDe("2026-09-01", "2026-08-28")).toBe("futuro");
+    expect(vigenciaDe("2026-08-28", "2026-08-28")).toBe("hoy");
+    expect(vigenciaDe("2026-08-01", "2026-08-28")).toBe("retroactivo");
+  });
+
+  it("compara por fecha, no por mes: el día siguiente ya es futuro", () => {
+    /* Un aumento que arranca mañana NO es "este mes, o sea ya". La quincena del 16 al 31
+       existe como unidad propia y el borde vive adentro del mes. */
+    expect(vigenciaDe("2026-08-29", "2026-08-28")).toBe("futuro");
+    expect(vigenciaDe("2026-08-27", "2026-08-28")).toBe("retroactivo");
+  });
+});
+
+describe("un aumento RETROACTIVO no reescribe lo que ya se pagó", () => {
+  /**
+   * Es lo que el formulario le promete a quien edita, así que se afirma contra el motor y no
+   * contra un comentario. Alejandra tiene 15 quincenas anotadas a $500; se le mete un aumento
+   * con fecha 1 de marzo, o sea antes de la mitad de ellas.
+   */
+  const RETRO: MovimientoDeSalario[] = [
+    mov("2026-07-12", "ALTA", 1000),
+    mov("2026-07-20", "CAMBIO_MONTO", 1200, 1000),
+  ];
+
+  it("las quincenas del libro conservan su monto congelado", () => {
+    const cal = calendarioDePersona(PAGOS_ALEJANDRA, RETRO, 2026, "2026-08-28");
+    const registradas = cal.quincenas.filter((q) => q.clase === "registrada");
+
+    expect(registradas.length).toBe(15);
+    expect(registradas.every((q) => q.monto === 500)).toBe(true);
+    expect(cal.totalRegistrado).toBe(7500);
+  });
+
+  it("no se puede aumentar a alguien ANTES de que entrara: el alta manda", () => {
+    /* El historial se lee ordenado por fecha efectiva, así que un aumento fechado antes del
+       ALTA queda pisado por el ALTA. No es una validación que haya que escribir: sale sola de
+       leer los movimientos en orden, y es la respuesta correcta. */
+    const imposible: MovimientoDeSalario[] = [
+      mov("2026-07-12", "ALTA", 1000),
+      mov("2026-03-01", "CAMBIO_MONTO", 1200, 1000),
+    ];
+    expect(salarioVigenteEn(imposible, "2026-09-15")?.monto).toBe(1000);
+  });
+
+  it("y sí mueve lo que falta pagar — que es todo lo que un retroactivo puede tocar", () => {
+    const cal = calendarioDePersona(PAGOS_ALEJANDRA, RETRO, 2026, "2026-08-28");
+    const proyectadas = cal.quincenas.filter((q) => q.clase === "proyectada");
+
+    expect(proyectadas.length).toBeGreaterThan(0);
+    expect(proyectadas.every((q) => q.monto === 600)).toBe(true);
+  });
+});
+
+describe("el aumento a futuro no se adelanta a su fecha", () => {
+  it("la quincena que cierra ANTES del aumento se proyecta con el monto viejo", () => {
+    /* El caso que motivó el campo: un aumento que arranca el 1 de setiembre, anotado en
+       agosto. La Q2 de agosto cierra el 31 y todavía es de $1.000/mes. */
+    const movs: MovimientoDeSalario[] = [
+      mov("2026-07-12", "ALTA", 1000),
+      mov("2026-09-01", "CAMBIO_MONTO", 1200, 1000),
+    ];
+    const cal = calendarioDePersona(PAGOS_ALEJANDRA, movs, 2026, "2026-08-28");
+    const q = (periodo: string, quincena: 1 | 2) =>
+      cal.quincenas.find((x) => x.periodo === periodo && x.quincena === quincena)!;
+
+    expect(q("2026-08", 2).clase).toBe("proyectada");
+    expect(q("2026-08", 2).monto).toBe(500);
+    expect(q("2026-09", 1).monto).toBe(600);
+  });
+});

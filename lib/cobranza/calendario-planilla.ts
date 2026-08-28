@@ -276,3 +276,18 @@ export function calendarioDePersona(
       })),
   };
 }
+
+/**
+ * Cuándo empieza a contar un cambio de salario, visto desde hoy.
+ *
+ * Vive acá y no en el formulario porque es la MISMA regla que arma el calendario, leída al
+ * revés: el formulario le anuncia a quien edita lo que estas funciones van a hacer después.
+ * Separarlas sería tener la regla escrita dos veces y que una envejezca.
+ */
+export type VigenciaDelCambio = "retroactivo" | "hoy" | "futuro";
+
+export function vigenciaDe(fechaEfectivaISO: string, hoyISO: string): VigenciaDelCambio {
+  if (fechaEfectivaISO < hoyISO) return "retroactivo";
+  if (fechaEfectivaISO > hoyISO) return "futuro";
+  return "hoy";
+}

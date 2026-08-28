@@ -20,7 +20,8 @@ import {
   CATEGORIA_COSTO_LABEL,
   FRECUENCIA_COSTO_LABEL,
 } from "@/lib/cobranza/schema";
-import { fmtMonto, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
+import { vigenciaDe } from "@/lib/cobranza/calendario-planilla";
+import { fmtFecha, fmtMonto, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
 
 interface TeamMemberOption {
   id: string;
@@ -36,6 +37,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export default function CostoForm({
   costo,
   categoriaInicial,
+  todayISO,
   onClose,
   onSaved,
 }: {
@@ -47,6 +49,8 @@ export default function CostoForm({
    * modelo — el costo puede cambiar de categoría y la hoja lo dice con un toast.
    */
   categoriaInicial?: string;
+  /** Hoy en Costa Rica, por prop. Default de «Rige desde» — ver el comentario en CostosPanel. */
+  todayISO: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -63,6 +67,16 @@ export default function CostoForm({
   // Al editar un costo que trae base+factor, se abre en ese modo con sus valores.
   const [modo, setModo] = useState<ModoMonto>(editaBaseFactor ? "BASE_FACTOR" : "ALL_IN");
   const [monto, setMonto] = useState(costo ? String(costo.monto) : "");
+  /**
+   * DESDE CUÁNDO cuenta el cambio — no el día en que alguien lo teclea.
+   *
+   * ⚠ Hasta que existió este campo, TODO cambio de monto quedaba fechado hoy: el motor ya
+   * aceptaba `fechaEfectiva` y la mutación ya la respetaba, pero el formulario nunca la
+   * mandaba. El único aumento del sistema con fecha declarada —el de Alejandra, 31-ago— hubo
+   * que meterlo con un script. Un aumento que arranca el 1 de setiembre anotado hoy le sube
+   * el costo a agosto entero, y ese número sostiene el punto de equilibrio.
+   */
+  const [rigeDesde, setRigeDesde] = useState(todayISO);
   const [base, setBase] = useState(costo?.montoBase != null ? String(costo.montoBase) : "");
   const [factor, setFactor] = useState(costo?.factorCargas != null ? String(costo.factorCargas) : "");
 
@@ -125,6 +139,11 @@ export default function CostoForm({
   const montoValido = esBaseFactor
     ? montoCalculado != null
     : Number.isFinite(montoNum) && montoNum > 0;
+
+  // El all-in que se va a guardar, para poder anunciar el cambio ANTES de guardarlo.
+  const montoAGuardar = esBaseFactor ? montoCalculado : montoValido ? round2(montoNum) : null;
+  const montoCambia = costo != null && montoAGuardar != null && montoAGuardar !== costo.monto;
+  const vigencia = vigenciaDe(rigeDesde, todayISO);
   const puedeGuardar = nombre.trim().length > 0 && montoValido && !saving;
 
   async function submit() {
@@ -143,6 +162,9 @@ export default function CostoForm({
       factorCargas: esBaseFactor ? factorNum : null,
       activo,
       notas: notas.trim() ? notas.trim() : null,
+      // Sin esto la mutación cae en `?? hoyCR()` y todo cambio queda fechado el día
+      // en que se tecleó. Es la línea entera del arreglo — el resto es la pantalla.
+      fechaEfectiva: rigeDesde,
     };
     try {
       if (costo) {
@@ -373,6 +395,54 @@ export default function CostoForm({
             />
           </div>
         )}
+
+        {/* DESDE CUÁNDO cuenta el cambio. El campo va pegado al monto porque es la mitad
+            que le faltaba: un monto sin fecha es un monto que empieza a contar hoy. */}
+        <div>
+          <label className={LABEL_CLS}>Rige desde</label>
+          <input
+            type="date"
+            value={rigeDesde}
+            onChange={(e) => setRigeDesde(e.target.value || todayISO)}
+            className={INPUT_CLS}
+          />
+          {costo === null ? (
+            <p className="text-[11px] text-fg-muted mt-1">
+              Desde cuándo cuenta este costo. Si la persona ya venía de antes, poné su fecha real.
+            </p>
+          ) : montoCambia ? (
+            <p className="text-[11px] mt-1 text-fg-secondary">
+              {vigencia === "futuro" ? (
+                <>
+                  El cambio de{" "}
+                  <strong className="font-medium">{fmtMonto(costo.monto, moneda)}</strong> a{" "}
+                  <strong className="font-medium">{fmtMonto(montoAGuardar, moneda)}</strong> no cuenta
+                  hasta el {fmtFecha(rigeDesde)}. Hasta esa fecha se sigue proyectando con{" "}
+                  {fmtMonto(costo.monto, moneda)}.
+                </>
+              ) : vigencia === "retroactivo" ? (
+                <>
+                  Rige hacia atrás, desde el {fmtFecha(rigeDesde)}.{" "}
+                  <span className="text-fg-muted">
+                    Las quincenas ya anotadas en el libro conservan su monto — esto mueve lo que
+                    falta pagar, no lo que ya se pagó.
+                  </span>
+                </>
+              ) : (
+                <>
+                  El cambio de{" "}
+                  <strong className="font-medium">{fmtMonto(costo.monto, moneda)}</strong> a{" "}
+                  <strong className="font-medium">{fmtMonto(montoAGuardar, moneda)}</strong> cuenta
+                  desde hoy.
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-[11px] text-fg-muted mt-1">
+              La fecha que queda anotada en el movimiento. No es el día en que lo estás cargando.
+            </p>
+          )}
+        </div>
 
         <label className="flex items-center gap-2 text-xs text-fg-secondary cursor-pointer">
           <input
