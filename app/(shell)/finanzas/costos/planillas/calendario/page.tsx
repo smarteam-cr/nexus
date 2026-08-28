@@ -20,7 +20,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
-import { loadCalendarioPlanilla } from "@/lib/cobranza";
+import { loadCalendarioPlanilla, loadCostos } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { buttonVariants } from "@/components/ui";
@@ -43,7 +43,15 @@ export default async function CalendarioPlanillaPage({
   const pedido = Number(crudo);
   const anio = Number.isInteger(pedido) && pedido >= 2020 && pedido <= 2100 ? pedido : Number(todayISO.slice(0, 4));
 
-  const personas = await loadCalendarioPlanilla(anio, todayISO);
+  /* Los costos van junto al calendario para poder EDITAR el salario desde acá: la pantalla
+     donde se ve el año entero es donde uno decide el aumento, y mandar a la persona a otra
+     hoja para teclearlo es perder de vista justo lo que estaba mirando. Es la misma fila de
+     `CostoRecurrente` que edita /planillas — no hay una segunda fuente. */
+  const [personas, costos] = await Promise.all([
+    loadCalendarioPlanilla(anio, todayISO),
+    loadCostos(),
+  ]);
+  const salarios = costos.filter((c) => c.categoria === "SALARIO");
 
   return (
     <div className={SHELL_DEFAULT}>
@@ -67,7 +75,12 @@ export default async function CalendarioPlanillaPage({
           {anio + 1}
         </Link>
       </div>
-      <CalendarioPlanillaPanel personas={personas} anio={anio} todayISO={todayISO} />
+      <CalendarioPlanillaPanel
+        personas={personas}
+        salarios={salarios}
+        anio={anio}
+        todayISO={todayISO}
+      />
     </div>
   );
 }

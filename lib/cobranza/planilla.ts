@@ -53,6 +53,18 @@ export function quincenasDelPeriodo(periodo: Periodo): QuincenaDelPeriodo[] {
   ];
 }
 
+/**
+ * El primer día de una quincena — el 1 o el 16.
+ *
+ * ⚠ NO es `fechaProgramada`, que es su CIERRE (el 15, o el último del mes). La distinción
+ * importa donde se declara desde cuándo rige un aumento: si se usara el cierre, un aumento
+ * «desde la Q2 de setiembre» empezaría el 30 y esa quincena se pagaría todavía con el monto
+ * viejo — justo al revés de lo que quiso quien lo pidió.
+ */
+export function inicioDeQuincena(periodo: Periodo, quincena: 1 | 2): string {
+  return `${periodo}-${quincena === 1 ? "01" : "16"}`;
+}
+
 /** El período al que pertenece una fecha ISO. */
 export function periodoDe(iso: string): Periodo {
   return iso.slice(0, 7);

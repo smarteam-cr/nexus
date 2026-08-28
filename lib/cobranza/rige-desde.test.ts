@@ -54,7 +54,31 @@ describe("de dónde sale «hoy»", () => {
        en el cliente: es una diferencia de hidratación, la misma familia que arregló
        `lib/ui/prestamo-de-title.ts`. Y encima el día que manda es el de Costa Rica. */
     expect(PANEL).toMatch(/<CostoForm[\s\S]{0,800}todayISO=\{todayISO\}/);
-    expect(FORM).toContain("useState(todayISO)");
+    // El default puede tener precedencia (el calendario abre con la fecha de una quincena),
+    // pero el piso SIEMPRE es el `todayISO` que vino del server.
+    expect(FORM).toMatch(/const \[rigeDesde, setRigeDesde\] = useState\([^)]*todayISO\)/);
     expect(FORM, "el form volvió a leer el reloj del navegador").not.toMatch(/new Date\(\)/);
+  });
+});
+
+describe("fijar un aumento desde el calendario", () => {
+  const CALENDARIO = leer("components/finanzas/CalendarioPlanillaPanel.tsx");
+
+  it("una quincena PROYECTADA abre el editor fechado en su primer día", () => {
+    /* El gesto natural es señalar en el calendario desde cuándo, no teclear la fecha después
+       de abrir un formulario. Solo las proyectadas: una quincena ya pagada no admite que se
+       le cambie el salario hacia atrás, y ofrecerlo mentiría. */
+    expect(CALENDARIO).toMatch(/cel\.clase === "proyectada"[\s\S]{0,120}inicioDeQuincena\(periodo, q\)/);
+  });
+
+  it("⚠ y usa el INICIO de la quincena, no su cierre", () => {
+    /* Con `fechaProgramada` un aumento «desde la Q2 de setiembre» arrancaría el 30 y esa
+       quincena se pagaría con el monto viejo. Ver `inicioDeQuincena` en planilla.ts. */
+    expect(CALENDARIO).toContain("inicioDeQuincena(periodo, q)");
+    expect(CALENDARIO).not.toMatch(/onFijarAumento[\s\S]{0,80}fechaProgramada/);
+  });
+
+  it("guardar vuelve a pedir el año: la proyección es derivada, no hay estado que sincronizar", () => {
+    expect(CALENDARIO).toContain("router.refresh()");
   });
 });

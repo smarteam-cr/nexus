@@ -38,6 +38,7 @@ export default function CostoForm({
   costo,
   categoriaInicial,
   todayISO,
+  fechaEfectivaInicial,
   onClose,
   onSaved,
 }: {
@@ -51,6 +52,14 @@ export default function CostoForm({
   categoriaInicial?: string;
   /** Hoy en Costa Rica, por prop. Default de «Rige desde» — ver el comentario en CostosPanel. */
   todayISO: string;
+  /**
+   * Con qué fecha abrir «Rige desde». Sin esto, hoy.
+   *
+   * Lo usa el calendario de planilla: hacer clic en la quincena de setiembre abre el editor
+   * con el aumento ya fechado el 1 de setiembre. El gesto natural es señalar en el calendario
+   * DESDE CUÁNDO, no teclear la fecha después de haber abierto un formulario.
+   */
+  fechaEfectivaInicial?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -76,7 +85,7 @@ export default function CostoForm({
    * que meterlo con un script. Un aumento que arranca el 1 de setiembre anotado hoy le sube
    * el costo a agosto entero, y ese número sostiene el punto de equilibrio.
    */
-  const [rigeDesde, setRigeDesde] = useState(todayISO);
+  const [rigeDesde, setRigeDesde] = useState(fechaEfectivaInicial ?? todayISO);
   const [base, setBase] = useState(costo?.montoBase != null ? String(costo.montoBase) : "");
   const [factor, setFactor] = useState(costo?.factorCargas != null ? String(costo.factorCargas) : "");
 

@@ -10,6 +10,7 @@ import { montoQuincena } from "./engine";
 import {
   coberturaDe,
   esPeriodo,
+  inicioDeQuincena,
   periodoDe,
   periodosDeAguinaldo,
   periodosEntre,
@@ -196,5 +197,28 @@ describe("quincenasDistintas — el numerador de la cobertura son QUINCENAS, no 
 
   it("Q4 · sin pagos son cero quincenas", () => {
     expect(quincenasDistintas([])).toBe(0);
+  });
+});
+
+describe("inicioDeQuincena", () => {
+  it("es el 1 y el 16 — el arranque, no el cierre", () => {
+    expect(inicioDeQuincena("2026-09", 1)).toBe("2026-09-01");
+    expect(inicioDeQuincena("2026-09", 2)).toBe("2026-09-16");
+  });
+
+  it("⚠ NO se confunde con `fechaProgramada`, que es el CIERRE", () => {
+    /* Es la razón de que exista. Un aumento declarado «desde la Q2 de setiembre» con el
+       cierre empezaría el 30, y esa quincena se pagaría todavía con el monto viejo — al revés
+       de lo que quiso quien lo pidió. */
+    const qs = quincenasDelPeriodo("2026-09");
+    expect(qs[0]!.fechaProgramada).toBe("2026-09-15");
+    expect(inicioDeQuincena("2026-09", 1)).not.toBe(qs[0]!.fechaProgramada);
+    expect(qs[1]!.fechaProgramada).toBe("2026-09-30");
+    expect(inicioDeQuincena("2026-09", 2)).not.toBe(qs[1]!.fechaProgramada);
+  });
+
+  it("febrero no lo altera: el arranque no depende del largo del mes", () => {
+    expect(inicioDeQuincena("2026-02", 2)).toBe("2026-02-16");
+    expect(quincenasDelPeriodo("2026-02")[1]!.fechaProgramada).toBe("2026-02-28");
   });
 });
