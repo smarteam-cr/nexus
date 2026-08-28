@@ -9,9 +9,14 @@
  * vuelve solo a la caja negra del sistema operativo, ningún test de tipos protesta y ninguna
  * pantalla se ve rota. Se ve *peor*, en 500 lugares, y nadie lo relaciona con el commit.
  *
- * Esta guarda afirma las tres piezas que tienen que estar para que el texto llegue con el
- * tema puesto: que el shell la monte, que la capa saque el `title` nativo (o el sistema
- * operativo pinta la suya ENCIMA de la nuestra) y que no deje mudo a un botón de solo ícono.
+ * Esta guarda afirma el ARMADO que tiene que estar para que el texto llegue con el tema
+ * puesto: que el shell la monte, que la capa saque el `title` nativo (o el sistema operativo
+ * pinta la suya ENCIMA de la nuestra), que lo DEVUELVA al salir —sin eso rompe la hidratación
+ * de la pantalla que toca— y que no deje mudo a un botón de solo ícono.
+ *
+ * El comportamiento del préstamo se prueba de verdad, contra un nodo, en
+ * `lib/ui/prestamo-de-title.test.ts`. Acá solo se sostiene el cableado, que ningún test de
+ * tipos protege: la capa puede dejar de usar el préstamo y todo seguiría compilando.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -21,6 +26,7 @@ const RAIZ = join(__dirname, "..", "..");
 const leer = (p: string) => readFileSync(join(RAIZ, p), "utf8");
 
 const CAPA = leer("components/ui/Tooltip.tsx");
+const PRESTAMO = leer("lib/ui/prestamo-de-title.ts");
 const SHELL = leer("components/layout/AppShell.tsx");
 
 describe("la capa de ayuda está montada", () => {
@@ -40,17 +46,45 @@ describe("la capa de ayuda está montada", () => {
 
 describe("la capa hace lo único que no puede dejar de hacer", () => {
   it("saca el `title` nativo — dejarlo pinta la caja negra ENCIMA de la nuestra", () => {
-    expect(CAPA).toContain('removeAttribute("title")');
+    expect(PRESTAMO).toContain('el.removeAttribute("title")');
     // Y lo guarda, o el texto se pierde para siempre en el primer hover.
-    expect(CAPA).toContain('el.setAttribute(ATTR, nativo)');
+    expect(PRESTAMO).toContain("prestados.set(el,");
+  });
+
+  it("y lo DEVUELVE — sin eso, la capa rompe la hidratación de la pantalla que toca", () => {
+    /* No es cosmético. La capa vive en el shell, que hidrata primero, y escucha el documento
+       entero: en una pantalla grande puede sacarle el `title` a un nodo que React todavía no
+       hidrató. Si no vuelve, React encuentra un DOM que no coincide con lo que renderiza.
+       El comportamiento se prueba de verdad en `prestamo-de-title.test.ts`; esto sostiene el
+       ARMADO, que ningún test de tipos protege. */
+    expect(PRESTAMO).toContain('el.setAttribute("title", p.texto)');
+    expect(CAPA, "la capa dejó de usar el préstamo").toMatch(
+      /import \{[^}]*crearPrestamoDeTitle[^}]*\} from "@\/lib\/ui\/prestamo-de-title"/,
+    );
+    expect(CAPA, "el préstamo tiene que saldarse al desmontar la capa").toContain(
+      "fijarPrestado(null)",
+    );
+    /* Y la otra mitad: mientras el documento sigue llegando la capa no toca nada. Sin esta
+       línea el error vuelve para quien deja el mouse quieto sobre una tabla que carga. */
+    expect(CAPA, "la capa dejó de abstenerse durante la carga").toContain(
+      "sePuedePrestar(document.readyState)",
+    );
+  });
+
+  it("no guarda el texto en el DOM: un atributo que React no renderiza ES la diferencia", () => {
+    /* La versión vieja lo guardaba en un `data-nexus-tip` sobre el mismo nodo, y ese atributo
+       —que ningún componente de la app escribe— era la mitad visible del error. El texto vive
+       ahora en un WeakMap. La capa no escribe atributos: TODO pasa por el préstamo. */
+    expect(CAPA).not.toMatch(/setAttribute\(/);
+    expect(CAPA).not.toMatch(/data-nexus-tip"/);
   });
 
   it("no deja mudo a un elemento cuyo único nombre accesible era el `title`", () => {
     /* Un botón que es solo un ícono se lee EXCLUSIVAMENTE por su `title`. Sacarlo sin dejar
        nada lo convierte en "botón" a secas para un lector de pantalla — un regalo silencioso
        al que borre estas cuatro líneas por parecer redundantes. */
-    expect(CAPA).toContain('el.setAttribute("aria-label", nativo)');
-    expect(CAPA).toMatch(/aria-labelledby/);
+    expect(PRESTAMO).toContain('el.setAttribute("aria-label", nativo)');
+    expect(PRESTAMO).toMatch(/aria-labelledby/);
   });
 
   it("vive en un portal a `body` y no roba el hover", () => {

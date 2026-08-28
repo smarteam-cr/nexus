@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { crearPrestamoDeTitle, disparadorEntre, sePuedePrestar } from "@/lib/ui/prestamo-de-title";
 
 /**
  * Tooltip — LA capa de ayuda de Nexus.
@@ -15,10 +16,10 @@ import { cn } from "@/lib/cn";
  *
  * Migrar 500 call sites a un `<Tooltip>` que envuelve habría sido 500 oportunidades de
  * olvidarse uno, y el que se olvida se ve peor que antes: una caja negra sola en medio de
- * una interfaz que ya no las tiene. Esta capa hace lo contrario — **adopta** el `title` que
- * ya está escrito: al pasar el mouse le saca el atributo al elemento (para que el sistema
- * operativo no lo pinte), lo guarda en `data-nexus-tip` y lo dibuja ella misma con los
- * tokens del tema. No hay nada que migrar y no hay forma de olvidarse uno.
+ * una interfaz que ya no las tiene. Esta capa hace lo contrario — le **presta** el `title`
+ * que ya está escrito: al pasar el mouse le saca el atributo al elemento (para que el
+ * sistema operativo no lo pinte), lo dibuja ella misma con los tokens del tema, y se lo
+ * devuelve al salir. No hay nada que migrar y no hay forma de olvidarse uno.
  *
  * Los detalles que valen la pena, y que por eso viven acá y no en cada consumidor:
  *
@@ -33,14 +34,17 @@ import { cn } from "@/lib/cn";
  *   · **Se cierra con Escape, con el scroll y con el click.** Las coordenadas se congelan al
  *     abrir; un scroll lo desancla, y un tooltip que sobrevive al click del botón que lo
  *     abrió queda flotando sobre la pantalla siguiente.
+ *   · **El `title` se DEVUELVE al salir, y el texto nunca se guarda en el DOM.** Esta capa
+ *     vive en el shell —que hidrata primero— y escucha el documento entero, así que puede
+ *     tocar un nodo que React todavía no hidrató; si el atributo no vuelve, React encuentra
+ *     un DOM que no coincide con lo que renderiza y lo reporta. El porqué completo, con el
+ *     diff real que lo delató, está en `lib/ui/prestamo-de-title.ts`.
  *
  * Opt-out: `data-sin-tip` en el elemento (o en cualquier ancestro) deja pasar el `title`
  * nativo. Se usa donde el `title` NO es ayuda sino metadato (un `<iframe>`, por ejemplo,
  * que ya está excluido por tipo).
  */
 
-/** Dónde se guarda el texto una vez que se le sacó el `title` al elemento. */
-const ATTR = "data-nexus-tip";
 /** Hover: espera. Recorrer una tabla no debería disparar veinte tooltips. */
 const RETRASO_HOVER_MS = 240;
 /** Separación entre el tooltip y el elemento que lo dispara. */
@@ -73,33 +77,25 @@ export function TooltipLayer() {
   useEffect(() => setMontado(true), []);
 
   useEffect(() => {
-    /**
-     * El texto del elemento, migrando el `title` la primera vez que se lo toca.
-     *
-     * ⚠ La migración es DEFINITIVA para ese nodo: React no vuelve a escribir un atributo
-     * cuyo prop no cambió, así que sacarlo una vez alcanza. Si el componente se re-monta,
-     * el `title` vuelve y este mismo camino lo vuelve a adoptar.
-     */
-    function textoDe(el: HTMLElement): string | null {
-      const guardado = el.getAttribute(ATTR);
-      if (guardado) return guardado;
-      const nativo = el.getAttribute("title");
-      if (!nativo || !nativo.trim()) return null;
-      el.setAttribute(ATTR, nativo);
-      el.removeAttribute("title");
-      /* El `title` puede haber sido el ÚNICO nombre accesible del elemento (un botón que
-         es solo un ícono). Sacarlo sin dejar nada lo deja mudo para un lector de pantalla. */
-      const tieneNombre =
-        !!el.getAttribute("aria-label") ||
-        !!el.getAttribute("aria-labelledby") ||
-        (el.textContent ?? "").trim().length > 0;
-      if (!tieneNombre) el.setAttribute("aria-label", nativo);
-      return nativo;
+    /* El texto vive acá, FUERA del DOM, y el `title` se devuelve al salir. Ver el porqué en
+       `lib/ui/prestamo-de-title.ts`: guardarlo en el nodo rompía la hidratación. */
+    const prestamo = crearPrestamoDeTitle();
+    /** El único elemento con el `title` prestado ahora mismo. Como máximo hay uno. */
+    let prestado: HTMLElement | null = null;
+
+    /** Cambia de deudor: le devuelve el `title` al anterior antes de tomarle el nuevo. */
+    function fijarPrestado(el: HTMLElement | null) {
+      if (prestado === el) return;
+      prestamo.devolver(prestado);
+      prestado = el;
     }
 
     function candidato(target: EventTarget | null): HTMLElement | null {
       if (!(target instanceof Element)) return null;
-      const el = target.closest<HTMLElement>(`[title], [${ATTR}]`);
+      /* Al elemento que tiene el `title` prestado ya no se lo ve con `[title]` —se lo llevó
+         esta capa—, y por eso el desempate no puede quedar en manos de `closest` solo. El
+         porqué y los cuatro casos están en `disparadorEntre`. */
+      const el = disparadorEntre(prestado, target.closest<HTMLElement>("[title]"), target);
       if (!el) return null;
       /* En un `<iframe>` el `title` no es ayuda: es su nombre accesible, y el navegador ni
          siquiera lo pinta. Lo mismo para cualquier subárbol que pidió quedarse afuera. */
@@ -121,9 +117,29 @@ export function TooltipLayer() {
       setAnclaje((p) => (p === null ? p : null));
     }
 
+    /**
+     * Cierra Y devuelve el `title`.
+     *
+     * ⚠ Está separado de `ocultar()` a propósito. El scroll y el click cierran con el cursor
+     * TODAVÍA encima del elemento: devolverle el atributo ahí haría que el sistema operativo
+     * pinte su caja negra justo después de que escondimos la nuestra. El préstamo se salda
+     * cuando el puntero se va, no cuando el globo se cierra.
+     */
+    function soltar() {
+      ocultar();
+      fijarPrestado(null);
+    }
+
     function mostrar(el: HTMLElement, inmediato: boolean) {
-      const texto = textoDe(el);
-      if (!texto) return;
+      /* Con el documento todavía llegando hay HTML que React no hidrató: tocarlo ahí es el
+         error de hidratación. Ver `sePuedePrestar` — durante ese rato gana la caja negra. */
+      if (!sePuedePrestar(document.readyState)) return;
+      fijarPrestado(el);
+      const texto = prestamo.adoptar(el);
+      if (!texto) {
+        fijarPrestado(null);
+        return;
+      }
       cancelarTimer();
       activoRef.current = el;
       const abrir = () => {
@@ -143,7 +159,8 @@ export function TooltipLayer() {
       const el = candidato(e.target);
       if (el === activoRef.current) return;
       if (!el) {
-        ocultar();
+        // El puntero se fue a otra parte: es el momento de saldar el préstamo.
+        soltar();
         return;
       }
       mostrar(el, false);
@@ -152,7 +169,7 @@ export function TooltipLayer() {
     function onFocusIn(e: FocusEvent) {
       const el = candidato(e.target);
       if (!el) {
-        ocultar();
+        soltar();
         return;
       }
       // Llegar por teclado es una intención explícita: sin retraso.
@@ -171,16 +188,21 @@ export function TooltipLayer() {
     document.addEventListener("pointerover", onPointerOver, true);
     document.addEventListener("pointerdown", ocultar, true);
     document.addEventListener("focusin", onFocusIn, true);
-    document.addEventListener("focusout", ocultar, true);
+    // Al irse el foco el elemento queda atrás: se salda. Con el scroll y el click NO, que
+    // cierran con el cursor todavía encima (ver `soltar`).
+    document.addEventListener("focusout", soltar, true);
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("blur", ocultar);
     return () => {
       cancelarTimer();
+      // Si la capa se desmonta con un `title` prestado, ese nodo queda distinto de lo que
+      // React renderiza para siempre. Se devuelve antes de soltar los listeners.
+      fijarPrestado(null);
       document.removeEventListener("pointerover", onPointerOver, true);
       document.removeEventListener("pointerdown", ocultar, true);
       document.removeEventListener("focusin", onFocusIn, true);
-      document.removeEventListener("focusout", ocultar, true);
+      document.removeEventListener("focusout", soltar, true);
       document.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("blur", ocultar);
