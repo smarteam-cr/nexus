@@ -41,12 +41,20 @@ export default async function FinanzasCostosPlanillasPage() {
         descripcion="Lo que la planilla cuesta por mes con la configuración de hoy, todo incluido. Lo que se pagó de verdad está en Historial."
         leyenda="Costo por persona con las cargas ya adentro. El número que manda es el monto, no la base por el factor."
         accion={
-          <Link
-            href="/finanzas/costos/planillas/historial"
-            className={buttonVariants({ variant: "secondary", size: "md" })}
-          >
-            Historial
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/finanzas/costos/planillas/calendario"
+              className={buttonVariants({ variant: "secondary", size: "md" })}
+            >
+              Calendario
+            </Link>
+            <Link
+              href="/finanzas/costos/planillas/historial"
+              className={buttonVariants({ variant: "secondary", size: "md" })}
+            >
+              Historial
+            </Link>
+          </div>
         }
         initialCostos={costos.filter((c) => c.categoria === "SALARIO")}
         todayISO={todayISO}

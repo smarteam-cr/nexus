@@ -48,6 +48,10 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // El historial se agrupa por mes con dos bloques de quincena: su forma no es la
   // de ninguna de las hojas de categoría, ni la de su propia madre (Planillas).
   "finanzas/costos/planillas/historial": { modo: "own" },
+  // El calendario es una grilla de 12 meses × 2 quincenas por persona: no se parece a
+  // ninguna lista del módulo, así que heredar cualquier otro skeleton prometería una
+  // pantalla que no llega.
+  "finanzas/costos/planillas/calendario": { modo: "own" },
   "finanzas/costos/aguinaldo": { modo: "own" },
   // Tres bloques (devengado + liquidado + reglas): no es la forma de ninguna
   // hoja de categoría ni la del libro.

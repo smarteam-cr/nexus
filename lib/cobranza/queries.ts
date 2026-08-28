@@ -49,6 +49,12 @@ import {
 } from "@/lib/finanzas/inconsistencias";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import {
+  calendarioDePersona,
+  type CalendarioDePersona,
+  type MovimientoDeSalario,
+  type PagoRegistrado,
+} from "./calendario-planilla";
+import {
   retencionDe,
   sugerenciaParaLaProxima,
   totalesPorMoneda,
@@ -1580,6 +1586,136 @@ export interface LibroPlanillaDTO {
  * año, y agrupar por mes en el cliente es más simple que un cursor que después
  * hay que mantener sincronizado con la vista agrupada.
  */
+/** El calendario anual de UNA persona, ya resuelto. */
+export interface CalendarioPersonaDTO extends CalendarioDePersona {
+  teamMemberId: string;
+  nombre: string;
+  /** El salario mensual vigente HOY. null = ya no está activa. */
+  salarioActual: number | null;
+  moneda: string;
+}
+
+/**
+ * El año de planilla, persona por persona: lo que se pagó y lo que falta pagar.
+ *
+ * ── DE DÓNDE SALE CADA MITAD ────────────────────────────────────────────────────
+ *  · El PASADO, del libro (`PagoPlanilla`). Cada fila tiene su monto congelado desde
+ *    que se creó, así que un aumento no reescribe lo que ya se pagó.
+ *  · El FUTURO, de los movimientos del catálogo (`CostoMovimiento`), que llevan la
+ *    fecha EFECTIVA de cada cambio. No se escribe nada: la proyección se recalcula.
+ *
+ * ⚠ Los movimientos se atan a la persona por `costoId → CostoRecurrente.teamMemberId`,
+ * NO por el nombre. El nombre del costo cambia cuando cambia el puesto —"Alexander
+ * Vanegas · Desarrollo" pasó a "· CSL" el mismo mes— y emparejar por ahí partiría el
+ * historial de esa persona en dos.
+ */
+export async function loadCalendarioPlanilla(
+  anio: number,
+  hoyISO: string,
+): Promise<CalendarioPersonaDTO[]> {
+  const desde = `${anio}-01`;
+  const hasta = `${anio}-12`;
+
+  const [pagos, salarios] = await Promise.all([
+    prisma.pagoPlanilla.findMany({
+      where: { periodo: { gte: desde, lte: hasta }, sujetoTeamMemberId: { not: null } },
+      orderBy: [{ periodo: "asc" }, { quincena: "asc" }],
+      select: {
+        sujetoTeamMemberId: true, sujetoNombre: true, periodo: true, quincena: true,
+        fechaProgramada: true, monto: true, moneda: true, estado: true, fechaPago: true,
+      },
+    }),
+    // Los costos de SALARIO con su bitácora. Se traen TODOS —también los dados de
+    // baja— porque una persona que se fue en agosto tiene medio año de calendario.
+    prisma.costoRecurrente.findMany({
+      where: { categoria: "SALARIO", teamMemberId: { not: null } },
+      select: {
+        teamMemberId: true, nombre: true, monto: true, moneda: true,
+        activo: true, finalizadoEl: true,
+        teamMember: { select: { name: true } },
+        movimientos: {
+          select: { tipo: true, fechaEfectiva: true, monto: true, montoAnterior: true, moneda: true },
+        },
+      },
+    }),
+  ]);
+
+  const movsPorPersona = new Map<string, MovimientoDeSalario[]>();
+  const metaPorPersona = new Map<string, { nombre: string; monto: number; moneda: string; vigente: boolean }>();
+  for (const sal of salarios) {
+    const id = sal.teamMemberId!;
+    const previos = movsPorPersona.get(id) ?? [];
+    movsPorPersona.set(id, [
+      ...previos,
+      ...sal.movimientos.map((m) => ({
+        tipo: m.tipo,
+        fechaEfectiva: isoDay(m.fechaEfectiva)!,
+        monto: num(m.monto)!,
+        montoAnterior: num(m.montoAnterior),
+        moneda: m.moneda as string,
+      })),
+    ]);
+    const vigente = sal.activo && sal.finalizadoEl === null;
+    const yaTenia = metaPorPersona.get(id);
+    // Si alguien tiene dos costos de salario (uno viejo dado de baja y el nuevo), manda
+    // el vigente para el titular; los movimientos de los dos se juntan igual.
+    if (!yaTenia || vigente) {
+      metaPorPersona.set(id, {
+        nombre: sal.teamMember?.name ?? sal.nombre,
+        monto: num(sal.monto)!,
+        moneda: sal.moneda as string,
+        vigente,
+      });
+    }
+  }
+
+  const pagosPorPersona = new Map<string, PagoRegistrado[]>();
+  const nombrePorPersona = new Map<string, string>();
+  for (const p of pagos) {
+    const id = p.sujetoTeamMemberId!;
+    nombrePorPersona.set(id, p.sujetoNombre);
+    const previos = pagosPorPersona.get(id) ?? [];
+    previos.push({
+      periodo: p.periodo,
+      quincena: p.quincena,
+      fechaProgramada: isoDay(p.fechaProgramada)!,
+      monto: num(p.monto)!,
+      moneda: p.moneda as string,
+      estado: p.estado,
+      fechaPago: isoDay(p.fechaPago),
+    });
+    pagosPorPersona.set(id, previos);
+  }
+
+  // La unión: quien tiene pagos del año, y quien tiene salario aunque todavía no se le
+  // haya generado ninguna quincena (una persona que entró este mes).
+  const ids = new Set([...pagosPorPersona.keys(), ...metaPorPersona.keys()]);
+
+  const out: CalendarioPersonaDTO[] = [...ids].map((id) => {
+    const meta = metaPorPersona.get(id);
+    const cal = calendarioDePersona(
+      pagosPorPersona.get(id) ?? [],
+      movsPorPersona.get(id) ?? [],
+      anio,
+      hoyISO,
+    );
+    return {
+      ...cal,
+      teamMemberId: id,
+      nombre: meta?.nombre ?? nombrePorPersona.get(id) ?? "(sin nombre)",
+      salarioActual: meta?.vigente ? meta.monto : null,
+      moneda: meta?.moneda ?? cal.quincenas.find((q) => q.monto !== null)?.moneda ?? "USD",
+    };
+  });
+
+  // Los activos primero, después los que se fueron; dentro de cada grupo, por nombre.
+  return out.sort(
+    (a, b) =>
+      Number(b.salarioActual !== null) - Number(a.salarioActual !== null) ||
+      a.nombre.localeCompare(b.nombre),
+  );
+}
+
 export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
   const filas = await prisma.pagoPlanilla.findMany({
     include: {
