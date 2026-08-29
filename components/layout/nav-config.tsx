@@ -204,6 +204,10 @@ export const APP_NAV: readonly NavItemConfig[] = [
     group: "operacion",
     children: [
       { href: "/business-cases", label: "Propuestas" },
+      // El CATÁLOGO de servicios pre-cotizados que el vendedor marca en el checklist de una
+      // propuesta. Hasta hoy solo se llegaba por un link chiquito del encabezado de
+      // /business-cases; es un área propia y va en el menú como tal.
+      { href: "/sales/use-cases", label: "Casos de uso" },
       // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
       // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
       { href: "/sales/sicop", label: "SICOP" },
