@@ -38,12 +38,23 @@ export interface CobroMaterializado {
   origen: string;
 }
 
-export interface MontoQueNoCoincide {
+/**
+ * Por qué el motor no va a tocar este cobro al regenerar. `null` = sí lo arregla.
+ *
+ * ⚠ `importado` existe porque `reconcileCobros` solo BORRA sobrantes de origen PLAN o
+ * CATCH_UP: un cobro importado que ya no está en el plan se queda igual aunque esté
+ * PROGRAMADO y sin factura. Es el caso del cobro #4 de Wherex, y sin esta distinción la
+ * pantalla prometería que regenerar lo quita.
+ */
+export type Bloqueo = "cobrado" | "facturado" | "manual" | "importado" | null;
+
+export interface Diferencia {
   numCuota: number;
-  enElPlan: number;
-  enElCobro: number;
-  /** Una regeneración NO puede corregirlo: el cobro está protegido. */
-  intocable: boolean;
+  /** `monto` = está en los dos y no coinciden · `sobra` = solo en cobros · `falta` = solo en el plan. */
+  tipo: "monto" | "sobra" | "falta";
+  enElPlan: number | null;
+  enElCobro: number | null;
+  bloqueo: Bloqueo;
 }
 
 export interface Desfase {
@@ -52,19 +63,12 @@ export interface Desfase {
   cobrosVivos: number;
   sumaDelPlan: number;
   sumaDeLosCobros: number;
-  /** Cobros cuya cuota el plan ya no tiene. */
-  sobran: number[];
-  /** Cuotas del plan que todavía no tienen cobro. */
-  faltan: number[];
-  montosQueNoCoinciden: MontoQueNoCoincide[];
-  /**
-   * Cobros que una regeneración NO va a tocar: ya cobrados, ya facturados, o creados a mano.
-   * Es la misma regla que `esIntocable` en `engine.ts` — si esa cambia, esta tiene que
-   * cambiar con ella, o la pantalla prometería algo que el motor no hace.
-   */
-  intocables: number[];
-  /** ¿Alcanza con apretar «Generar cobros», o hace falta intervenir a mano? */
-  regenerarAlcanza: boolean;
+  /** Una fila por diferencia, ordenada por cuota. Es lo que la pantalla pinta. */
+  diferencias: Diferencia[];
+  /** Cuántas de esas diferencias SÍ arregla el botón «Generar cobros». */
+  lasArreglaRegenerar: number;
+  /** Las que quedan a mano sí o sí. */
+  requierenManual: number;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -74,58 +78,71 @@ export function esIntocable(c: CobroMaterializado): boolean {
   return c.estado !== "PROGRAMADO" || c.fechaEmision !== null || c.origen === "MANUAL";
 }
 
+/**
+ * Por qué el motor no va a poder arreglar esta diferencia al regenerar.
+ *
+ * ⚠ Para un SOBRANTE hay un candado extra que no está en `esIntocable`: `reconcileCobros`
+ * solo manda a `toDelete` los de origen PLAN o CATCH_UP. Un cobro IMPORTACION que ya no está
+ * en el plan se queda, aunque esté PROGRAMADO y sin factura — es el cobro #4 de Wherex.
+ */
+function bloqueoDe(c: CobroMaterializado, tipo: "monto" | "sobra"): Bloqueo {
+  if (c.origen === "MANUAL") return "manual";
+  if (c.estado === "COBRADO") return "cobrado";
+  if (c.estado !== "PROGRAMADO" || c.fechaEmision !== null) return "facturado";
+  if (tipo === "sobra" && c.origen !== "PLAN" && c.origen !== "CATCH_UP") return "importado";
+  return null;
+}
+
 export function compararPlanConCobros(
   cuotas: readonly CuotaDelPlan[],
   cobros: readonly CobroMaterializado[],
 ): Desfase {
-  // Un cobro sin numCuota no pertenece a ninguna cuota del plan (suscripción, ajuste
-  // manual): no se lo compara contra el plan ni se lo cuenta como sobrante.
+  // Un cobro sin numCuota no cuelga de ninguna cuota del plan (suscripción, ajuste manual):
+  // no se lo compara ni se lo cuenta como sobrante.
   const conCuota = cobros.filter((c) => c.numCuota !== null) as (CobroMaterializado & { numCuota: number })[];
   const porCuota = new Map(conCuota.map((c) => [c.numCuota, c]));
   const ordenes = new Set(cuotas.map((q) => q.orden));
 
-  const sobran = conCuota.filter((c) => !ordenes.has(c.numCuota)).map((c) => c.numCuota).sort((a, b) => a - b);
-  const faltan = cuotas.filter((q) => !porCuota.has(q.orden)).map((q) => q.orden).sort((a, b) => a - b);
+  const diferencias: Diferencia[] = [];
 
-  const montosQueNoCoinciden: MontoQueNoCoincide[] = [];
   for (const q of cuotas) {
     const c = porCuota.get(q.orden);
-    if (!c) continue;
+    if (!c) {
+      diferencias.push({ numCuota: q.orden, tipo: "falta", enElPlan: round2(q.valor), enElCobro: null, bloqueo: null });
+      continue;
+    }
     // Un céntimo de diferencia es ruido de redondeo, no un cambio de plan.
     if (Math.abs(round2(q.valor) - round2(c.monto)) <= 0.01) continue;
-    montosQueNoCoinciden.push({
+    diferencias.push({
       numCuota: q.orden,
+      tipo: "monto",
       enElPlan: round2(q.valor),
       enElCobro: round2(c.monto),
-      intocable: esIntocable(c),
+      bloqueo: bloqueoDe(c, "monto"),
     });
   }
 
-  const intocables = conCuota.filter(esIntocable).map((c) => c.numCuota).sort((a, b) => a - b);
-  const setIntocables = new Set(intocables);
+  for (const c of conCuota) {
+    if (ordenes.has(c.numCuota)) continue;
+    diferencias.push({
+      numCuota: c.numCuota,
+      tipo: "sobra",
+      enElPlan: null,
+      enElCobro: round2(c.monto),
+      bloqueo: bloqueoDe(c, "sobra"),
+    });
+  }
 
-  const hay = sobran.length > 0 || faltan.length > 0 || montosQueNoCoinciden.length > 0;
-
-  /**
-   * Regenerar alcanza solo si NINGUNA de las diferencias cae sobre un cobro protegido.
-   * Un sobrante intocable no se borra y un monto intocable no se reescribe: en esos casos la
-   * pantalla tiene que mandar a resolverlo a mano, no al botón.
-   */
-  const regenerarAlcanza =
-    hay &&
-    !sobran.some((n) => setIntocables.has(n)) &&
-    !montosQueNoCoinciden.some((m) => m.intocable);
+  diferencias.sort((a, b) => a.numCuota - b.numCuota);
 
   return {
-    hay,
+    hay: diferencias.length > 0,
     cuotasEnElPlan: cuotas.length,
     cobrosVivos: conCuota.length,
     sumaDelPlan: round2(cuotas.reduce((n, q) => n + q.valor, 0)),
     sumaDeLosCobros: round2(conCuota.reduce((n, c) => n + c.monto, 0)),
-    sobran,
-    faltan,
-    montosQueNoCoinciden,
-    intocables,
-    regenerarAlcanza,
+    diferencias,
+    lasArreglaRegenerar: diferencias.filter((d) => d.bloqueo === null).length,
+    requierenManual: diferencias.filter((d) => d.bloqueo !== null).length,
   };
 }
