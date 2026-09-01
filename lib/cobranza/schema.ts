@@ -128,6 +128,27 @@ const isoDateReal = isoDate.refine((s) => {
   const d = new Date(`${s}T00:00:00.000Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }, "Fecha inexistente");
+/**
+ * El id de una fila de Nexus. **NO usar `idDeBase`.**
+ *
+ * ⚠ El schema de Prisma declara `@default(cuid())` en todas partes, pero eso solo rige para
+ * las filas que CREÓ la app. Las 14 personas más viejas de `TeamMember` entraron por siembra
+ * con UUID —el de Elías es `58d8027e-d4c9-4c55-bbf0-ffa70341085d`— y `.cuid()` las rechazaba
+ * con el mensaje en inglés **"Invalid cuid"**: literalmente el error que veía Alexander al
+ * intentar guardar un salario. Para las 6 personas con id cuid la misma pantalla funcionaba,
+ * y por eso el bug parecía intermitente y sin patrón.
+ *
+ * ⚠ Y el formato nunca fue una protección real: quien recibe el id lo BUSCA en la base
+ * (`if (!persona) throw …`), que es la única validación que decide algo. Validar la forma
+ * solo podía producir falsos negativos sobre datos legítimos — que es exactamente lo que hizo.
+ *
+ * Acepta cuid (`cmrhe8jxd0016m4ii354vkufa`) y uuid (con guiones). Ver `ids-de-base.test.ts`.
+ */
+export const idDeBase = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_-]{1,64}$/, "Id inválido");
+
 const monto = z.number().positive("El monto debe ser positivo").multipleOf(0.01, "Máximo 2 decimales");
 // Dominio ya NORMALIZADO (lowercase, sin @, sin protocolo — lo normaliza import-core).
 const dominio = z
@@ -135,7 +156,7 @@ const dominio = z
   .regex(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/, "Dominio inválido (esperado ej. empresa.com)");
 
 export const cuentaCreateSchema = z.object({
-  clientId: z.string().cuid(),
+  clientId: idDeBase,
   tipo: z.enum(COBRANZA_TIPOS_CUENTA).default("NACIONAL"),
   viaCobro: z.enum(COBRANZA_VIAS_COBRO).default("ODOO"),
   moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
@@ -173,7 +194,7 @@ export const servicioCreateSchema = z.object({
   moneda: z.enum(COBRANZA_MONEDAS),
   fechaInicioFacturacion: isoDate.nullish(), // sin valor + projectId → se lee del anchor
   duracionMeses: z.number().int().min(1).max(120).nullish(),
-  projectId: z.string().cuid().nullish(),
+  projectId: idDeBase.nullish(),
   descripcion: z.string().max(500).nullish(),
 });
 
@@ -185,7 +206,7 @@ export const servicioPatchSchema = z
     moneda: z.enum(COBRANZA_MONEDAS),
     fechaInicioFacturacion: isoDate.nullable(),
     duracionMeses: z.number().int().min(1).max(120).nullable(),
-    projectId: z.string().cuid().nullable(),
+    projectId: idDeBase.nullable(),
     estado: z.enum(COBRANZA_ESTADOS_SERVICIO),
     descripcion: z.string().max(500).nullable(),
   })
@@ -265,7 +286,7 @@ export const cobroPatchSchema = z
  * cambiarEstadoCobro — INV3). El schema exige servicioId: no hay pago flotante.
  */
 export const cobroManualSchema = z.object({
-  servicioId: z.string().cuid(),
+  servicioId: idDeBase,
   monto,
   moneda: z.enum(COBRANZA_MONEDAS),
   fechaCobro: isoDate, // cuándo entró la plata (la UI la capa a hoy)
@@ -297,7 +318,7 @@ export const reporteFinanzasSchema = z.object({
 export const bitacoraCreateSchema = z.object({
   tipo: z.enum(BITACORA_TIPOS),
   contenido: z.string().min(1).max(4000),
-  cobroId: z.string().cuid().nullish(),
+  cobroId: idDeBase.nullish(),
 });
 
 // ── Ingresos variables ─────────────────────────────────────────────────────────
@@ -311,7 +332,7 @@ export const ingresoVariableCreateSchema = z.object({
   moneda: z.enum(COBRANZA_MONEDAS),
   fecha: isoDateReal,
   // null / ausente = ingreso general, sin cliente.
-  clientId: z.string().cuid().nullable().optional(),
+  clientId: idDeBase.nullable().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
 });
 
@@ -363,13 +384,13 @@ const comisionPartnerBase = z.object({
   // El aliado configurado. null = todavía no está dado de alta; el pago se
   // registra igual (`partner` como string es el snapshot) y se puede ligar
   // después. Forzarlo obligaría a configurar antes de poder anotar la plata.
-  partnerId: z.string().cuid().nullable().optional(),
+  partnerId: idDeBase.nullable().optional(),
   concepto: z.string().trim().max(160).nullable().optional(),
   monto,
   moneda: z.enum(COBRANZA_MONEDAS),
   fecha: isoDateReal,
   // null / ausente = el aliado no está en la cartera como Client. No se inventa.
-  clientId: z.string().cuid().nullable().optional(),
+  clientId: idDeBase.nullable().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
 });
 
@@ -468,7 +489,7 @@ const costoBase = z.object({
   monto,
   moneda: z.enum(COBRANZA_MONEDAS),
   frecuencia: z.enum(COSTOS_FRECUENCIAS),
-  teamMemberId: z.string().cuid().nullable().optional(),
+  teamMemberId: idDeBase.nullable().optional(),
   montoBase: monto.nullable().optional(),
   factorCargas: factorCargas.nullable().optional(),
   activo: z.boolean().optional(),
@@ -561,7 +582,7 @@ const tarjetaBase = z.object({
     .optional(),
   moneda: z.enum(COBRANZA_MONEDAS),
   limite: monto.nullable().optional(),
-  titularTeamMemberId: z.string().cuid().nullable().optional(),
+  titularTeamMemberId: idDeBase.nullable().optional(),
   diaCorte: diaDelMes.nullable().optional(),
   diaPago: diaDelMes.nullable().optional(),
   activa: z.boolean().optional(),
@@ -587,7 +608,7 @@ export const tarjetaSaldoSchema = z.object({
 
 /** Asignar o quitar un costo recurrente de una tarjeta (la tabla puente). */
 export const tarjetaCostoSchema = z.object({
-  costoId: z.string().cuid(),
+  costoId: idDeBase,
   asignar: z.boolean(),
 });
 
@@ -658,10 +679,10 @@ const porcentajeComision = z
   .multipleOf(0.0001, "Máximo 4 decimales");
 
 const reglaComisionBase = z.object({
-  teamMemberId: z.string().cuid(),
+  teamMemberId: idDeBase,
   // null / ausente = la regla GENERAL, para todos los clientes. La del cliente
   // le gana (ver `reglaParaCobro`).
-  clientId: z.string().cuid().nullable().optional(),
+  clientId: idDeBase.nullable().optional(),
   porcentaje: porcentajeComision,
   vigenteDesde: isoDateReal,
   // null = vigente sin fecha de fin.
@@ -693,7 +714,7 @@ export const reglaComisionPatchSchema = reglaComisionBase
  * que dijo el navegador y no lo que dicen los cobros.
  */
 export const liquidarComisionSchema = z.object({
-  teamMemberId: z.string().cuid(),
+  teamMemberId: idDeBase,
   /**
    * ⚠ El período de PAGO, no el de devengo (cambió el 2026-08-16 con la regla de
    * Alexander). Junto con `quincena` identifica al grupo: una política que pague
@@ -705,7 +726,7 @@ export const liquidarComisionSchema = z.object({
   moneda: z.enum(COBRANZA_MONEDAS),
   // Opcional: engancharla a la quincena con la que se paga. Se puede liquidar
   // sin pago todavía (el schema lo permite y la FK es nullable).
-  pagoPlanillaId: z.string().cuid().nullable().optional(),
+  pagoPlanillaId: idDeBase.nullable().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
 });
 

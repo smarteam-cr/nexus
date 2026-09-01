@@ -36,6 +36,7 @@ import {
   LABEL_CLS,
 } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+import { compararPlanConCobros } from "@/lib/cobranza/plan-vs-cobros";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 
@@ -676,6 +677,23 @@ function ServicioCard({
                 )}
               </p>
 
+              {/* Las cuotas del plan, con su monto. Antes solo se veía "N cuotas definidas",
+                  asi que despues de editar un plan NO habia un solo numero en pantalla que
+                  cambiara: por eso Alexander guardo seis veces creyendo que no tomaba. */}
+              {plan && plan.cuotas.length > 0 && (
+                <p className="text-[11px] text-fg-muted tabular-nums">
+                  <span className="text-fg-muted">Cuotas del plan: </span>
+                  {plan.cuotas.map((q, i) => (
+                    <span key={q.orden}>
+                      {i > 0 ? " · " : ""}
+                      <span className="text-fg-secondary">#{q.orden}</span> {fmtMonto(q.valor, servicio.moneda)}
+                    </span>
+                  ))}
+                </p>
+              )}
+
+              <DesfaseDelCronograma plan={plan} servicio={servicio} />
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -705,6 +723,63 @@ function ServicioCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * El aviso de que el cronograma que se está mirando todavía es de un plan anterior.
+ *
+ * ⚠ Este es el arreglo del bug que reportó Alexander. Guardar el plan NO regenera los cobros
+ * —es deliberado: reescribir un cobro ya facturado no puede pasar solo— pero hasta ahora
+ * nadie lo decía. El plan de Wherex quedó en 2 cuotas por $5.100 y el cronograma siguió
+ * mostrando 4 por $8.500, con un toast verde de éxito. Guardó seis veces.
+ *
+ * ⚠⚠ Y avisar no alcanza: hay que decir si el botón «Generar cobros» SIRVE. En los dos
+ * clientes reportados NO sirve —sus cobros ya están facturados o cobrados, y el motor los
+ * deja intactos—, así que mandarlos ahí sería mandarlos a un botón que no puede arreglar su
+ * caso. Ver `lib/cobranza/plan-vs-cobros.ts`.
+ */
+function DesfaseDelCronograma({ plan, servicio }: { plan: ServicioDTO["planActivo"]; servicio: ServicioDTO }) {
+  if (!plan || plan.cuotas.length === 0) return null;
+  const d = compararPlanConCobros(plan.cuotas, servicio.cobros);
+  if (!d.hay) return null;
+
+  const m = (n: number) => fmtMonto(n, servicio.moneda);
+  return (
+    <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 space-y-1">
+      <p className="text-[11px] text-warn-ink">
+        <strong className="font-medium">El cronograma de abajo todavía es del plan anterior.</strong>{" "}
+        El plan dice{" "}
+        <span className="tabular-nums">
+          {d.cuotasEnElPlan} cuota{d.cuotasEnElPlan === 1 ? "" : "s"} por {m(d.sumaDelPlan)}
+        </span>{" "}
+        y hay{" "}
+        <span className="tabular-nums">
+          {d.cobrosVivos} cobro{d.cobrosVivos === 1 ? "" : "s"} por {m(d.sumaDeLosCobros)}
+        </span>
+        . Lo que editaste SÍ se guardó — lo que falta es llevarlo a los cobros.
+      </p>
+      <p className="text-[11px] text-warn-ink/80">
+        {d.sobran.length > 0 && `Sobran las cuotas ${d.sobran.join(", ")}. `}
+        {d.faltan.length > 0 && `Faltan las cuotas ${d.faltan.join(", ")}. `}
+        {d.montosQueNoCoinciden.map((x) => `La cuota ${x.numCuota} pasó a ${m(x.enElPlan)} y su cobro dice ${m(x.enElCobro)}.`).join(" ")}
+      </p>
+      <p className="text-[11px]">
+        {d.regenerarAlcanza ? (
+          <span className="text-warn-ink">
+            Con <strong className="font-medium">Generar cobros</strong> queda alineado.
+          </span>
+        ) : (
+          /* La frase que evita el peor resultado: apretar el botón, ver que casi nada cambia,
+             y concluir otra vez que el sistema no guarda. */
+          <span className="text-warn-ink">
+            ⚠ <strong className="font-medium">Generar cobros NO alcanza acá.</strong> Los cobros{" "}
+            {d.intocables.join(", ")} ya están facturados o cobrados y el sistema no los reescribe solo —
+            hay que ajustarlos uno por uno.
+          </span>
+        )}
+      </p>
     </div>
   );
 }
