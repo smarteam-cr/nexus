@@ -748,7 +748,6 @@ const BLOQUEO_LABEL: Record<string, string> = {
   cobrado: "ya cobrado",
   facturado: "ya facturado",
   manual: "creado a mano",
-  importado: "importado",
 };
 
 function DesfaseDelCronograma({ plan, servicio }: { plan: ServicioDTO["planActivo"]; servicio: ServicioDTO }) {

@@ -592,6 +592,73 @@ test("G6 — existente con numCuota null (manual sin orden) → untouched SIEMPR
   expect(r.toUpdate).toEqual([]);
 });
 
+/**
+ * G7-G9 — ACHICAR UN PLAN BORRA LOS SOBRANTES, sea cual sea su origen.
+ *
+ * ⚠ Hasta el 2026-09-02 el borrado pedía además `origen ∈ {PLAN, CATCH_UP}`, y eso lo volvía
+ * inerte: los 202 cobros de la base son IMPORTACION, así que achicar un plan nunca borró
+ * nada en producción. Salió del caso Wherex — contrato cortado, plan de 4 cuotas a 2, y el
+ * cobro #4 (PROGRAMADO, sin factura, que el plan ya no pide) se quedaba puesto.
+ *
+ * Esa rama no tenía NI UN test: sacarle la condición no rompió ninguno de los 4.535.
+ */
+test("G7 — sobrante PROGRAMADO sin factura → toDelete aunque venga de IMPORTACION", () => {
+  const existing = [
+    existente({ id: "e1", numCuota: 1, origen: "IMPORTACION" }),
+    existente({ id: "e4", numCuota: 4, origen: "IMPORTACION" }),
+  ];
+  const r = reconcileCobros([draft({ numCuota: 1 })], existing);
+  expect(r.toDelete).toEqual(["e4"]);
+  expect(r.untouched).toEqual(["e1"]);
+});
+
+test("G8 — ⛔ pero NADA cobrado, facturado o manual se borra al achicar el plan", () => {
+  /* Es el guardarraíl que queda, y es el único que hacía falta: `esIntocable`. Si esto se
+     rompe, achicar un plan puede borrar plata ya cobrada o una factura ya emitida. */
+  const existing = [
+    existente({ id: "cobrado", numCuota: 2, estado: "COBRADO", origen: "IMPORTACION" }),
+    existente({ id: "porCobrar", numCuota: 3, estado: "POR_COBRAR", origen: "IMPORTACION" }),
+    existente({ id: "facturado", numCuota: 4, fechaEmision: "2026-02-01", origen: "IMPORTACION" }),
+    existente({ id: "manual", numCuota: 5, origen: "MANUAL" }),
+  ];
+  const r = reconcileCobros([], existing);
+  expect(r.toDelete).toEqual([]);
+  expect(r.untouched.sort()).toEqual(["cobrado", "facturado", "manual", "porCobrar"]);
+});
+
+test("G9 — el caso Wherex completo: cortar el contrato deja el cronograma en el plan", () => {
+  /* Datos reales. El plan pasó a 2 cuotas por $5.100 y los cobros eran 4 por $8.500.
+     Primero solo se puede borrar el #4; después de «Revertir factura» en #2 y #3, una
+     segunda pasada deja exactamente las 2 cuotas del plan — y el #1 ya cobrado nunca se toca. */
+  const drafts = [
+    draft({ numCuota: 1, monto: 2125, fechaProgramadaISO: "2026-05-15", periodo: "2026-05" }),
+    draft({ numCuota: 2, monto: 2975, fechaProgramadaISO: "2026-06-15", periodo: "2026-06" }),
+  ];
+  const antes: CobroExistente[] = [
+    existente({ id: "c1", numCuota: 1, monto: 2125, estado: "COBRADO", fechaEmision: "2026-05-15", origen: "IMPORTACION", fechaProgramadaISO: "2026-05-15" }),
+    existente({ id: "c2", numCuota: 2, monto: 2125, estado: "POR_COBRAR", fechaEmision: "2026-06-15", origen: "IMPORTACION", fechaProgramadaISO: "2026-06-15" }),
+    existente({ id: "c3", numCuota: 3, monto: 2125, estado: "POR_COBRAR", fechaEmision: "2026-07-15", origen: "IMPORTACION", fechaProgramadaISO: "2026-07-15" }),
+    existente({ id: "c4", numCuota: 4, monto: 2125, estado: "PROGRAMADO", origen: "IMPORTACION", fechaProgramadaISO: "2026-08-15" }),
+  ];
+
+  const paso1 = reconcileCobros(drafts, antes);
+  expect(paso1.toDelete).toEqual(["c4"]);
+  expect(paso1.toUpdate).toEqual([]); // c2 esta facturado: no se le reescribe el monto
+  expect(paso1.untouched.sort()).toEqual(["c1", "c2", "c3"]);
+
+  // «Revertir factura» en #2 y #3 los devuelve a PROGRAMADO sin emision.
+  const revertido = antes
+    .filter((e) => e.id !== "c4")
+    .map((e) => (e.id === "c2" || e.id === "c3" ? { ...e, estado: "PROGRAMADO", fechaEmision: null } : e));
+
+  const paso2 = reconcileCobros(drafts, revertido);
+  expect(paso2.toUpdate).toEqual([
+    { id: "c2", fechaProgramadaISO: "2026-06-15", monto: 2975, periodo: "2026-06" },
+  ]);
+  expect(paso2.toDelete).toEqual(["c3"]);
+  expect(paso2.untouched).toEqual(["c1"]); // la plata ya cobrada, intacta
+});
+
 // ── H) splitCatchUp ──────────────────────────────────────────────────────────────
 
 test("H1 — estrictamente < hoy → catchUp; == hoy y > hoy → regulares", () => {

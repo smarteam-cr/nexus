@@ -41,12 +41,12 @@ export interface CobroMaterializado {
 /**
  * Por qué el motor no va a tocar este cobro al regenerar. `null` = sí lo arregla.
  *
- * ⚠ `importado` existe porque `reconcileCobros` solo BORRA sobrantes de origen PLAN o
- * CATCH_UP: un cobro importado que ya no está en el plan se queda igual aunque esté
- * PROGRAMADO y sin factura. Es el caso del cobro #4 de Wherex, y sin esta distinción la
- * pantalla prometería que regenerar lo quita.
+ * ⚠ Hubo un cuarto motivo, `importado`, porque `reconcileCobros` solo borraba sobrantes de
+ * origen PLAN o CATCH_UP y los 202 cobros de la base son IMPORTACION. Esa condición se sacó
+ * del motor —no protegía nada que `esIntocable` no proteja ya— así que el motivo desapareció
+ * con ella. Si vuelve al motor, tiene que volver acá: la pantalla promete lo que el motor hace.
  */
-export type Bloqueo = "cobrado" | "facturado" | "manual" | "importado" | null;
+export type Bloqueo = "cobrado" | "facturado" | "manual" | null;
 
 export interface Diferencia {
   numCuota: number;
@@ -79,17 +79,13 @@ export function esIntocable(c: CobroMaterializado): boolean {
 }
 
 /**
- * Por qué el motor no va a poder arreglar esta diferencia al regenerar.
- *
- * ⚠ Para un SOBRANTE hay un candado extra que no está en `esIntocable`: `reconcileCobros`
- * solo manda a `toDelete` los de origen PLAN o CATCH_UP. Un cobro IMPORTACION que ya no está
- * en el plan se queda, aunque esté PROGRAMADO y sin factura — es el cobro #4 de Wherex.
+ * Por qué el motor no va a poder arreglar esta diferencia al regenerar. Es `esIntocable`
+ * desglosado en su motivo, para poder decirlo en pantalla en vez de un "no se puede" pelado.
  */
-function bloqueoDe(c: CobroMaterializado, tipo: "monto" | "sobra"): Bloqueo {
+function bloqueoDe(c: CobroMaterializado): Bloqueo {
   if (c.origen === "MANUAL") return "manual";
   if (c.estado === "COBRADO") return "cobrado";
   if (c.estado !== "PROGRAMADO" || c.fechaEmision !== null) return "facturado";
-  if (tipo === "sobra" && c.origen !== "PLAN" && c.origen !== "CATCH_UP") return "importado";
   return null;
 }
 
@@ -118,7 +114,7 @@ export function compararPlanConCobros(
       tipo: "monto",
       enElPlan: round2(q.valor),
       enElCobro: round2(c.monto),
-      bloqueo: bloqueoDe(c, "monto"),
+      bloqueo: bloqueoDe(c),
     });
   }
 
@@ -129,7 +125,7 @@ export function compararPlanConCobros(
       tipo: "sobra",
       enElPlan: null,
       enElCobro: round2(c.monto),
-      bloqueo: bloqueoDe(c, "sobra"),
+      bloqueo: bloqueoDe(c),
     });
   }
 

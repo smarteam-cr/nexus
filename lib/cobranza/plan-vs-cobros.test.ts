@@ -47,22 +47,22 @@ describe("Wherex — el caso que se reportó", () => {
     expect(d.diferencias).toEqual([
       { numCuota: 2, tipo: "monto", enElPlan: 2975, enElCobro: 2125, bloqueo: "facturado" },
       { numCuota: 3, tipo: "sobra", enElPlan: null, enElCobro: 2125, bloqueo: "facturado" },
-      { numCuota: 4, tipo: "sobra", enElPlan: null, enElCobro: 2125, bloqueo: "importado" },
+      { numCuota: 4, tipo: "sobra", enElPlan: null, enElCobro: 2125, bloqueo: null },
     ]);
   });
 
-  it("⚠ el cobro #4 tampoco lo borra regenerar, aunque esté PROGRAMADO y sin factura", () => {
-    /* Es el punto que tenía mal la primera versión de este módulo. `reconcileCobros` solo manda
-       a `toDelete` los sobrantes de origen PLAN o CATCH_UP; los de IMPORTACION caen en
-       `untouched`. Decir "regenerar quita el 4" habría sido una promesa falsa en pantalla. */
+  it("el #4 SÍ lo borra regenerar: está PROGRAMADO y sin factura", () => {
+    /* Antes no: el motor pedía además `origen ∈ {PLAN, CATCH_UP}` y todos los cobros de la
+       base son IMPORTACION. Esa condición se sacó (ver engine.test.ts G7-G9), así que el
+       único candado es `esIntocable` — y este cobro no lo activa. */
     const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.diferencias.find((x) => x.numCuota === 4)?.bloqueo).toBe("importado");
+    expect(d.diferencias.find((x) => x.numCuota === 4)?.bloqueo).toBeNull();
   });
 
-  it("⛔ regenerar no arregla NI UNA de las tres", () => {
+  it("regenerar arregla 1 de las 3; las otras 2 piden revertir la factura primero", () => {
     const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.lasArreglaRegenerar).toBe(0);
-    expect(d.requierenManual).toBe(3);
+    expect(d.lasArreglaRegenerar).toBe(1);
+    expect(d.requierenManual).toBe(2);
   });
 });
 
@@ -86,10 +86,10 @@ describe("Real Shipping & Trade — el otro caso reportado", () => {
     ]);
   });
 
-  it("⚠ acá TAMPOCO alcanza con regenerar, y esto lo descubrió esta prueba", () => {
+  it("⚠ acá regenerar sigue sin arreglar nada, y esto lo descubrió esta prueba", () => {
     /* Yo esperaba que este caso sí se arreglara solo porque ningún cobro tiene factura
        emitida. Me equivoqué: `esIntocable` protege todo lo que no esté en PROGRAMADO, y los
-       tres están en POR_COBRAR. En los DOS clientes reportados el botón no arregla nada. */
+       tres están en POR_COBRAR. Hay que revertir la factura de cada uno primero. */
     const d = compararPlanConCobros(PLAN, COBROS);
     expect(d.lasArreglaRegenerar).toBe(0);
     expect(d.diferencias.every((x) => x.bloqueo === "facturado")).toBe(true);
@@ -157,16 +157,14 @@ describe("qué bloquea a un cobro, y por qué motivo", () => {
     expect(conUn(cobro(1, 100, "PROGRAMADO", "2026-01-01", "PLAN"))).toBe("facturado");
     expect(conUn(cobro(1, 100, "PROGRAMADO", null, "MANUAL"))).toBe("manual");
     expect(conUn(cobro(1, 100, "PROGRAMADO", null, "PLAN"))).toBeNull();
+    expect(conUn(cobro(1, 100, "PROGRAMADO", null, "IMPORTACION"))).toBeNull();
   });
 
-  it("⚠ `importado` solo aplica a un SOBRANTE, no a un monto distinto", () => {
-    /* Un cobro importado con el monto viejo SÍ se actualiza al regenerar (la rama de update
-       no mira el origen); lo que no se puede es BORRARLO cuando sale del plan. Confundir los
-       dos casos haría que la pantalla mandara a mano algo que el botón arregla. */
-    const soloMonto = compararPlanConCobros([{ orden: 1, valor: 999 }], [cobro(1, 100)]);
-    expect(soloMonto.diferencias[0]?.bloqueo).toBeNull();
-    const sobrante = compararPlanConCobros([], [cobro(1, 100)]);
-    expect(sobrante.diferencias[0]?.bloqueo).toBe("importado");
+  it("el origen IMPORTACION ya no bloquea nada — ni un monto viejo ni un sobrante", () => {
+    /* Los 202 cobros de la base son IMPORTACION. Mientras esa condición estuvo en el motor,
+       achicar un plan no borraba nada en producción. Si vuelve al motor, este caso avisa. */
+    expect(compararPlanConCobros([{ orden: 1, valor: 999 }], [cobro(1, 100)]).diferencias[0]?.bloqueo).toBeNull();
+    expect(compararPlanConCobros([], [cobro(1, 100)]).diferencias[0]?.bloqueo).toBeNull();
   });
 
   it("`esIntocable` sigue reflejando la regla del motor", () => {

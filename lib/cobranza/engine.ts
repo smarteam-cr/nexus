@@ -398,9 +398,20 @@ export function materializeCobros(
  * Diff drafts-vs-existentes por numCuota. INTOCABLES (van a untouched y su draft
  * colisionante se DESCARTA — jamás se pisa ni duplica): estado ≠ PROGRAMADO, o
  * fechaEmision seteada, u origen MANUAL. PROGRAMADO con fecha/monto distinto →
- * toUpdate. PROGRAMADO origen PLAN sin draft (el plan se achicó) → toDelete.
+ * toUpdate. PROGRAMADO sin draft (el plan se achicó) → toDelete.
  * Re-run sin cambios ⇒ cero mutaciones (idempotencia: el botón se aprieta 2 veces
  * sin efecto — y el @@unique([servicioId, numCuota]) es la red dura en DB).
+ *
+ * ⚠ El borrado pedía ADEMÁS `origen ∈ {PLAN, CATCH_UP}`, y esa condición hacía que
+ * achicar un plan no borrara nunca nada: los 202 cobros de la base son IMPORTACION,
+ * así que esa rama jamás se ejecutó en producción. Salió midiendo el caso Wherex —
+ * se cortó el contrato, el plan bajó de 4 cuotas a 2, y el cobro #4 (PROGRAMADO, sin
+ * factura, que el plan ya no quiere) se quedaba igual.
+ *
+ * Se sacó porque no protegía nada que `esIntocable` no proteja ya: lo COBRADO, lo
+ * FACTURADO y lo MANUAL siguen intactos. Lo que queda —un cobro futuro, sin factura,
+ * que el plan activo dejó de pedir— no es historia importada: es una proyección que
+ * el plan contradice, y dejarla es lo que hace que el cronograma mienta.
  */
 export function reconcileCobros(drafts: CobroDraft[], existing: CobroExistente[]): ReconcileResult {
   const result: ReconcileResult = { toCreate: [], toUpdate: [], toDelete: [], untouched: [] };
@@ -438,9 +449,9 @@ export function reconcileCobros(drafts: CobroDraft[], existing: CobroExistente[]
       continue;
     }
     if (!draftNums.has(e.numCuota)) {
+      // El único guardarraíl es `esIntocable`: cobrado, facturado o manual no se borran.
       if (esIntocable(e)) result.untouched.push(e.id);
-      else if (e.origen === "PLAN" || e.origen === "CATCH_UP") result.toDelete.push(e.id);
-      else result.untouched.push(e.id);
+      else result.toDelete.push(e.id);
     }
   }
 
