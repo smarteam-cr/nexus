@@ -7,7 +7,12 @@
  * proyecto con anchorStartDate, pre-llena fechaInicioFacturacion (copia
  * editable — no se re-sincroniza; la divergencia la detecta ARRANQUE_CAMBIADO).
  * El plan tiene campos dinámicos por template; guardar hace POST/PATCH del
- * servicio + PUT del plan. "Generar cobros" es explícito y aparte.
+ * servicio + PUT del plan. Materializar los cobros sigue siendo un acto APARTE.
+ *
+ * ⚠ El botón de al lado decía "Generar cobros" y generaba desde el ÚLTIMO PLAN GUARDADO —
+ * el aviso vivía en un `title`, que nadie lee. Editar las cuotas y apretarlo sin guardar
+ * antes materializaba el plan viejo, en silencio y con toast de éxito. Ahora guarda primero:
+ * se llama "Guardar y generar cobros" y hace las dos cosas en ese orden.
  */
 import { useMemo, useState } from "react";
 import { IconCheck } from "@/components/ui";
@@ -190,7 +195,7 @@ export default function ServicioForm({
     return { template, cuotas: parsed, notas };
   }
 
-  async function guardar() {
+  async function guardar(luegoGenerar = false) {
     if (saving) return;
     const monto = round2(Number(montoTotal));
     if (!monto || monto <= 0) {
@@ -240,6 +245,9 @@ export default function ServicioForm({
 
       toast.success(servicio ? "Servicio actualizado." : "Servicio creado con su plan.");
       await onSaved();
+      // El orden importa: generar ANTES de que el PUT del plan termine materializaría el
+      // plan anterior, que es exactamente el defecto que este encadenado cierra.
+      if (luegoGenerar) onGenerar?.();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar el servicio.");
     } finally {
@@ -512,7 +520,9 @@ export default function ServicioForm({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={guardar}
+          /* ⚠ `onClick={guardar}` le pasaba el MouseEvent como `luegoGenerar`, y un evento
+             es truthy: este botón habría generado los cobros también. Lo cazó tsc. */
+          onClick={() => guardar()}
           disabled={saving}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50"
         >
@@ -521,12 +531,12 @@ export default function ServicioForm({
         {servicio && onGenerar && (
           <button
             type="button"
-            onClick={onGenerar}
+            onClick={() => guardar(true)}
             disabled={saving || generando}
-            title="Genera desde el último plan guardado"
+            title="Guarda el plan y después materializa los cobros. Lo ya cobrado o facturado no se toca."
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors disabled:opacity-40"
           >
-            {generando ? "Generando…" : "Generar cobros"}
+            {generando ? "Generando…" : saving ? "Guardando…" : "Guardar y generar cobros"}
           </button>
         )}
         <button
