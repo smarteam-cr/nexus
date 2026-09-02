@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 const DIR = __dirname;
 
-/** Quita bloques `/* … *​/` y líneas `//` para que ninguna guarda matchee su propia prosa. */
+/** Quita bloques de comentario y líneas `//` para que ninguna guarda matchee su propia prosa. */
 function sinComentarios(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
@@ -24,8 +24,54 @@ function sinComentarios(src: string): string {
 const archivos = readdirSync(DIR).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
 const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"));
 
+/**
+ * Los DOS archivos que tienen permitido tocar el mundo: uno habla HTTP y el otro habla con la
+ * base. Todo lo demás decide, y por eso se puede probar.
+ *
+ * ⚠ La lista se afirma abajo, así que un archivo impuro nuevo no entra sin que alguien lo
+ * agregue a mano y explique por qué en el commit.
+ */
+const IMPUROS = ["servicio.ts", "transporte-xmlrpc.ts"];
+const puros = archivos.filter((f) => !IMPUROS.includes(f));
+
+describe("la frontera entre decidir y tocar el mundo", () => {
+  it("sigue habiendo exactamente dos archivos impuros", () => {
+    expect(archivos.filter((f) => IMPUROS.includes(f)).sort()).toEqual([...IMPUROS].sort());
+    expect(puros.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("⛔ solo transporte-xmlrpc.ts habla HTTP", () => {
+    /* El protocolo se eligió por un PERMISO del ERP —REST devuelve 403 en los nueve modelos—
+       y ese permiso puede cambiar sin avisarnos. Si el motor llama a Odoo por su cuenta,
+       cambiar de transporte deja de ser escribir otra implementación. */
+    for (const f of archivos) {
+      if (f === "transporte-xmlrpc.ts") continue;
+      expect(fuente(f), `${f} habla HTTP directo`).not.toMatch(/node:https|node:http\b|\bfetch\s*\(/);
+    }
+  });
+
+  it("⛔ solo servicio.ts toca la base", () => {
+    for (const f of archivos) {
+      if (f === "servicio.ts") continue;
+      expect(fuente(f), `${f} importa la base`).not.toMatch(/@prisma\/client|from\s+["']@\/lib\/db/);
+    }
+  });
+
+  it("el puerto no sabe de HTTP en absoluto", () => {
+    expect(fuente("transporte.ts")).not.toMatch(/https?:\/\/|xmlrpc|jsonrpc/i);
+  });
+
+  it("⛔ ningún módulo puro lee el reloj", () => {
+    /* Una decisión que consulta `new Date()` no se puede probar contra una fecha fija: el
+       test pasa hoy y falla el primero del mes. Las fechas entran como argumento. */
+    for (const f of puros) {
+      expect(fuente(f), `${f} lee el reloj`).not.toMatch(/new Date\(\s*\)|Date\.now\(/);
+    }
+  });
+});
+
 describe("el espejo no convierte moneda", () => {
-  it("⛔ ningún archivo del espejo importa el motor de equilibrio ni nombra el tipo de cambio", () => {
+  it("⛔ ningún archivo importa el motor de equilibrio ni nombra el tipo de cambio", () => {
     /* `convertir()` de lib/finanzas/equilibrio.ts es el ÚNICO punto de conversión del
        sistema, y el test §K de equilibrio.test.ts ya lo custodia para los otros motores.
        El espejo guarda el monto en la moneda nativa del documento: cuando el cobro y la
@@ -38,44 +84,24 @@ describe("el espejo no convierte moneda", () => {
   });
 });
 
-describe("el transporte queda detrás de su interfaz", () => {
-  it("⛔ solo transporte-xmlrpc.ts habla HTTP", () => {
-    /* El protocolo se eligió por un PERMISO del ERP, no por gusto, y ese permiso puede
-       cambiar sin avisarnos. Si el motor llama a Odoo por su cuenta, cambiar de transporte
-       deja de ser escribir otra implementación. */
-    for (const f of archivos) {
-      if (f === "transporte-xmlrpc.ts") continue;
-      expect(fuente(f), `${f} habla HTTP directo`).not.toMatch(/node:https|node:http\b|\bfetch\s*\(/);
-    }
-  });
-
-  it("el puerto no sabe de HTTP en absoluto", () => {
-    expect(fuente("transporte.ts")).not.toMatch(/https?:\/\/|xmlrpc|jsonrpc/i);
-  });
-});
-
-describe("el espejo es un módulo puro", () => {
-  it("⛔ no importa Prisma ni la base", () => {
-    /* El proyecto `unit` de vitest corre sin servicios. Un import de Prisma acá no rompe el
-       build: rompe la posibilidad de tener tests. */
-    for (const f of archivos) {
-      expect(fuente(f), `${f} importa la base`).not.toMatch(/@prisma\/client|from\s+["']@\/lib\/db/);
-    }
-  });
-
-  it("⛔ espejo.ts no lee el reloj", () => {
-    /* Una decisión que consulta `new Date()` no se puede probar contra una fecha fija: el
-       test pasa hoy y falla el primero del mes. Las fechas entran como argumento. */
-    expect(fuente("espejo.ts")).not.toMatch(/new Date\(\s*\)|Date\.now\(/);
-  });
-});
-
-describe("ningún cobro se marca cobrado por el sync (INV25)", () => {
-  it("⛔ el espejo no escribe confirmadoPor", () => {
+describe("ningún cobro se toca desde acá (INV25)", () => {
+  it("⛔ nada del módulo escribe en la tabla Cobro", () => {
     /* `COBRADO` exige `confirmadoPor` de una persona (INV3). El espejo PROPONE; confirmar la
-       plata sigue siendo de alguien con nombre. */
+       plata sigue siendo de alguien con nombre, por el chokepoint `cambiarEstadoCobro`.
+
+       ⚠ Se busca la ESCRITURA y no la palabra `confirmadoPor`: el vínculo de emparejado
+       tiene su propio `confirmadoPor` —quién dijo que este partner es esta cuenta—, que es
+       otra cosa y sí se escribe acá. Una guarda por la palabra suelta habría prohibido lo
+       que no era. */
     for (const f of archivos) {
-      expect(fuente(f), `${f} escribe confirmadoPor`).not.toMatch(/confirmadoPor\s*[:=]/);
+      expect(fuente(f), `${f} escribe en Cobro`).not.toMatch(/prisma\.cobro\.(update|create|upsert|delete)/);
+      expect(fuente(f), `${f} escribe en Cobro`).not.toMatch(/tx\.cobro\.(update|create|upsert|delete)/);
+    }
+  });
+
+  it("⛔ y no importa el chokepoint de estado por la puerta de atrás", () => {
+    for (const f of archivos) {
+      expect(fuente(f), `${f} importa cambiarEstadoCobro`).not.toMatch(/cambiarEstadoCobro/);
     }
   });
 });

@@ -179,3 +179,37 @@ monto exacto y la afirmación de que nadie más lo comparte— y confirma una pe
 **Qué la revertiría.** Que las 49 cuentas tengan cédula cargada. Ahí la señal de cédula pasa a
 ser la principal y el monto queda de respaldo. El botón de confirmar ya escribe la cédula
 justamente para llegar a eso.
+
+---
+
+## 2026-09-02 · La pantalla consulta el ERP en cada carga, y no se cachea
+
+**Qué se decidió.** `GET /api/cobranza/odoo/emparejado` lee los 82 clientes y las 347 facturas
+de Odoo cada vez. Tarda un par de segundos y no hay caché.
+
+**Por qué.** La señal de monto —la que resuelve 9 de las 15— **necesita los montos
+facturados**, y el espejo de facturas todavía no existe: la etapa 2 va después a propósito.
+Cachearlos sería inventar una capa de invalidación para una pantalla que se usa un puñado de
+veces en total.
+
+⚠ Lo que sí se guarda es el CATÁLOGO de partners (`OdooPartnerVinculo` con `cuentaId=null`).
+Eso es lo que permite que el buscador y los vínculos ya hechos sigan funcionando cuando el ERP
+no responde — la pantalla se degrada y **lo dice**, en vez de mostrar cero propuestas como si
+el emparejado estuviera completo.
+
+**Qué la revertiría.** Que la pantalla pase a usarse seguido, o que Odoo se ponga lento. Con el
+espejo de la etapa 2 andando, los montos salen de `FacturaOdoo` y la consulta al ERP
+desaparece sola.
+
+---
+
+## 2026-09-02 · Un partner ya decidido no vuelve a proponerse
+
+**Qué se decidió.** Los partners vinculados y los marcados «no es cliente nuestro» salen del
+universo de candidatos, y las cuentas ya vinculadas salen de la lista de pendientes.
+
+**Por qué.** Sin esto la lista no baja nunca: las ~28 cuentas sin candidato y los ~33 clientes
+de Odoo que no son nuestros vuelven en cada sesión, y **a la tercera vez nadie mira la lista**.
+Una pantalla de trabajo que no se vacía deja de ser una pantalla de trabajo.
+
+**Qué la revertiría.** Nada. Lo ignorado se puede devolver a la lista desde la misma pantalla.

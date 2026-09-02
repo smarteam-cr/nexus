@@ -58,6 +58,12 @@ export const COBRANZA_TIPOS_ALERTA = [
  * cobros de la base). Se crea al agregar ODOO para que el proximo valor no se pierda igual.
  */
 export const COBRANZA_ORIGENES_COBRO = ["PLAN", "CATCH_UP", "MANUAL", "IMPORTACION", "ODOO"] as const;
+/**
+ * Con qué señal se emparejó un cliente de Odoo con una cuenta. Se guarda para poder
+ * auditar DESPUÉS: si un día una factura aparece colgada de la cuenta equivocada, lo
+ * primero que hay que saber es si el vínculo lo propuso el monto o lo eligió alguien.
+ */
+export const COBRANZA_ODOO_VIAS = ["CEDULA", "MONTO", "NOMBRE", "MANUAL"] as const;
 
 export const COBRANZA_URGENCIAS = ["ALTA", "MEDIA", "BAJA"] as const;
 export const COBRANZA_ALERTA_ESTADOS = ["ABIERTA", "VISTA", "RESUELTA", "DESCARTADA"] as const;
@@ -878,3 +884,41 @@ export const tipoCambioUpsertSchema = z.object({
   notas: z.string().max(2000).nullish(),
 });
 export type TipoCambioUpsert = z.infer<typeof tipoCambioUpsertSchema>;
+
+/* ── Emparejado con Odoo ─────────────────────────────────────────────────────
+ *
+ * El id de partner es un ENTERO de Odoo, no un cuid: viene de `res.partner.id` y
+ * no lo genera Nexus. Se valida como entero positivo y nada más — inventarle un
+ * formato rechazaría ids legítimos el día que Odoo pase de 4 a 5 dígitos.
+ */
+export const odooPartnerIdSchema = z.number().int().positive("Id de partner de Odoo inválido");
+
+/**
+ * Confirmar que un cliente de Odoo es una cuenta de Nexus.
+ *
+ * `aprenderCedula` viene en true por defecto porque es lo que hace que el trabajo
+ * manual no haya que repetirlo: hoy solo 2 de 49 cuentas tienen cédula cargada.
+ * ⛔ Aun en true, la mutación NUNCA pisa una cédula que ya existe.
+ */
+export const odooVinculoConfirmarSchema = z.object({
+  odooPartnerId: odooPartnerIdSchema,
+  cuentaId: idDeBase,
+  via: z.enum(COBRANZA_ODOO_VIAS),
+  aprenderCedula: z.boolean().default(true),
+});
+export type OdooVinculoConfirmar = z.infer<typeof odooVinculoConfirmarSchema>;
+
+/**
+ * «Este partner de Odoo no es cliente nuestro». Odoo tiene 82 clientes y Nexus 49
+ * cuentas: la diferencia es historia, no un hueco que haya que llenar. Sin esta
+ * acción, esas ~33 filas vuelven en cada sesión y a la tercera nadie mira la lista.
+ */
+export const odooVinculoIgnorarSchema = z.object({
+  odooPartnerId: odooPartnerIdSchema,
+  ignorado: z.boolean().default(true),
+});
+export type OdooVinculoIgnorar = z.infer<typeof odooVinculoIgnorarSchema>;
+
+/** Deshacer un vínculo. La cédula aprendida NO se borra: el dato quedó bueno igual. */
+export const odooVinculoDesvincularSchema = z.object({ odooPartnerId: odooPartnerIdSchema });
+export type OdooVinculoDesvincular = z.infer<typeof odooVinculoDesvincularSchema>;
