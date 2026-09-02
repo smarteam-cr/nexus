@@ -1069,6 +1069,117 @@ async function main(): Promise<number> {
     );
   }
 
+
+  /* ── INV23 · el espejo de Odoo sigue siendo un espejo ─────────────────────────────────────
+     Toda `FacturaOdoo` guarda el monto en la MONEDA NATIVA del documento. `convertir()` de
+     lib/finanzas/equilibrio.ts es el único punto de conversión del sistema, y este invariante
+     vigila el lado de los datos: una moneda que no es la del ERP significa que alguien escribió
+     ahí sin pasar por el sync.
+
+     ⚠ Y el neto no puede superar al total. Es la forma en que se detecta el error caro: los
+     cobros de Nexus están cargados SIN IVA y se comparan contra `montoNeto`; si alguien
+     "arregla" el mapeo cruzando los campos, 304 facturas quedan descuadradas por 13 % y nada
+     avisa, porque los dos números siguen siendo montos plausibles.
+     Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync. */
+  const facturasOdoo = await prisma.facturaOdoo.findMany({
+    select: { numero: true, moneda: true, montoNeto: true, montoTotal: true, montoImpuesto: true },
+  });
+  const MONEDAS_CONOCIDAS = new Set(["USD", "CRC"]);
+  const espejoRoto: string[] = [];
+  for (const f of facturasOdoo) {
+    if (!MONEDAS_CONOCIDAS.has(f.moneda)) {
+      espejoRoto.push(`${f.numero}: moneda «${f.moneda}» que el espejo no conoce`);
+      continue;
+    }
+    const neto = Number(f.montoNeto);
+    const total = Number(f.montoTotal);
+    // Con un céntimo de tolerancia: Odoo hace la aritmética en float.
+    if (neto > total + 0.01) {
+      espejoRoto.push(`${f.numero}: neto ${neto.toFixed(2)} mayor que el total ${total.toFixed(2)}`);
+    }
+  }
+  if (espejoRoto.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV23 VIOLADO: ${espejoRoto.length} factura(s) espejadas con montos que el sync no pudo haber escrito:\n` +
+        espejoRoto.slice(0, 20).map((d) => `    · ${d}`).join("\n") +
+        `\n    Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync.`,
+    );
+  } else {
+    console.log(`✓ INV23: las ${facturasOdoo.length} facturas espejadas están en moneda nativa y con montos coherentes.`);
+  }
+
+  /* ── INV24 · ninguna corrida del sync quedó muda ──────────────────────────────────────────
+     Existe porque HOY, cuando un job se rompe, el error solo va al log del contenedor: nadie
+     puede saber que «viene fallando hace tres días». `CronJobState` no ayuda — guarda estado,
+     no historia, y no tiene campo de error.
+
+     Dos formas de quedar mudo, y las dos se vigilan:
+       · una corrida que falló y NO guardó el texto del error → no se puede diagnosticar;
+       · una corrida ABIERTA hace más de 6 horas → el proceso se murió a mitad y la fila quedó
+         indistinguible de «todavía corriendo». Ese es el fallo que no se ve.
+     Remedio: revisar el log del contenedor de esa fecha y correr el sync a mano. */
+  const HACE_7_DIAS = new Date(Date.now() - 7 * 86_400_000);
+  const HACE_6_HORAS = new Date(Date.now() - 6 * 3_600_000);
+  const corridas = await prisma.syncOdooCorrida.findMany({
+    where: { iniciadaEn: { gte: HACE_7_DIAS } },
+    select: { id: true, iniciadaEn: true, terminadaEn: true, ok: true, error: true, disparadaPor: true },
+    orderBy: { iniciadaEn: "desc" },
+  });
+  const mudas = corridas
+    .filter(
+      (c) =>
+        (c.terminadaEn === null && c.iniciadaEn < HACE_6_HORAS) || (c.terminadaEn !== null && !c.ok && !c.error?.trim()),
+    )
+    .map((c) =>
+      c.terminadaEn === null
+        ? `${c.iniciadaEn.toISOString()} (${c.disparadaPor}): abierta hace más de 6 h — el proceso se murió a mitad`
+        : `${c.iniciadaEn.toISOString()} (${c.disparadaPor}): falló y no guardó el error`,
+    );
+  if (mudas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV24 VIOLADO: ${mudas.length} corrida(s) del sync de Odoo no dejaron rastro de por qué:\n` +
+        mudas.map((d) => `    · ${d}`).join("\n") +
+        `\n    Remedio: revisar el log del contenedor de esa fecha; correr el sync a mano desde /cobranza.`,
+    );
+  } else {
+    console.log(`✓ INV24: las ${corridas.length} corridas del sync de los últimos 7 días dejaron su resultado escrito.`);
+  }
+
+  /* ── INV25 · Odoo nunca confirma plata ────────────────────────────────────────────────────
+     El espejo PROPONE que un cobro pasó a verde; confirmarlo sigue siendo de una persona con
+     nombre. Misma doctrina que INV3 y que el importador de comisiones.
+
+     ⚠ Se vigila el DATO y no el código —eso lo hace guardas.test.ts—: un script suelto o una
+     consulta a mano pueden escribir lo que el código no escribe. Y el modo en que esto se
+     rompería de verdad es alguien "destrabando" 176 cobros de un saque con un UPDATE.
+     Remedio: revertir esos cobros a POR_COBRAR y confirmarlos uno por uno desde la UI. */
+  const confirmadosPorMaquina = await prisma.cobro.findMany({
+    where: {
+      OR: [
+        { confirmadoPor: { startsWith: "odoo", mode: "insensitive" } },
+        { confirmadoPor: { startsWith: "sync", mode: "insensitive" } },
+        { confirmadoPor: { startsWith: "cron", mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, monto: true, moneda: true, confirmadoPor: true, cuenta: { select: { client: { select: { name: true } } } } },
+  });
+  if (confirmadosPorMaquina.length > 0) {
+    violations++;
+    const plata = confirmadosPorMaquina.reduce((a, c) => a + Number(c.monto), 0);
+    console.error(
+      `✗ INV25 VIOLADO: ${confirmadosPorMaquina.length} cobro(s) por ${plata.toFixed(2)} los confirmó una máquina, no una persona:\n` +
+        confirmadosPorMaquina
+          .slice(0, 20)
+          .map((c) => `    · ${c.cuenta.client.name}: ${c.moneda} ${Number(c.monto).toFixed(2)} — confirmadoPor="${c.confirmadoPor}"`)
+          .join("\n") +
+        `\n    Remedio: revertirlos a POR_COBRAR y confirmarlos uno por uno desde /cobranza.`,
+    );
+  } else {
+    console.log(`✓ INV25: ningún cobro fue confirmado por el sync — la plata la sigue confirmando una persona.`);
+  }
+
   return violations;
 }
 

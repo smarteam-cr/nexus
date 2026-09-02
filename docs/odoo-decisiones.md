@@ -213,3 +213,72 @@ de Odoo que no son nuestros vuelven en cada sesión, y **a la tercera vez nadie 
 Una pantalla de trabajo que no se vacía deja de ser una pantalla de trabajo.
 
 **Qué la revertiría.** Nada. Lo ignorado se puede devolver a la lista desde la misma pantalla.
+
+---
+
+## 2026-09-02 · El fallo del sync NO es una `AlertaCobro`
+
+**Qué se decidió.** El resultado de cada corrida vive en `SyncOdooCorrida`, no en el feed de
+alertas. INV24 vigila esa tabla.
+
+**Por qué.** `AlertaCobro.cuentaId` es **obligatorio**: toda alerta cuelga de una cuenta. El
+fallo del sync no pertenece a ninguna. Y el repo ya se topó con esto — `buildCarteraEngineInput`
+documenta que las alertas de clientes sin cuenta «NO se persisten como AlertaCobro (no hay FK
+destino)». Hacer `cuentaId` nullable en una tabla caliente por un solo tipo de alerta es peor
+que el problema.
+
+⚠ **INV24 quedó más fuerte que en el plan.** Iba a ser «toda corrida fallida tiene su alerta»;
+es «ninguna corrida quedó muda», y vigila dos formas de quedarlo:
+  · falló y no guardó el texto del error → no se puede diagnosticar;
+  · quedó ABIERTA hace más de 6 h → el proceso se murió a mitad, y la fila es indistinguible
+    de «todavía corriendo». **Ese es el fallo que de verdad no se ve.**
+
+⛔ Queda un cabo suelto: el valor `SYNC_ODOO_FALLIDO` del enum `CobranzaTipoAlerta` no se emite.
+Postgres no permite sacar un valor de enum, así que se queda; está documentado acá para que
+nadie lo busque en vano.
+
+**Qué la revertiría.** Que aparezca un segundo motivo para tener alertas sin cuenta. Ahí
+`cuentaId` nullable se paga solo.
+
+---
+
+## 2026-09-02 · El sync se enciende SIN esperar al emparejado
+
+**Qué se decidió.** `odoo-espejo-daily` corre desde ya, con el emparejado en 0 de 49.
+
+**Por qué.** El plan decía que espejar antes de emparejar produce un espejo mal atribuido. Al
+implementarlo resultó **menos rígido de lo supuesto**: el sync vuelve a resolver la cuenta de
+cada factura en CADA corrida y anota el cambio como `CUENTA` en la bitácora. O sea que una
+factura no puede quedar mal atribuida — como mucho queda **sin** atribuir, y se corrige sola la
+próxima vez que alguien vincula ese cliente.
+
+Esperar costaba días sin espejo y no compraba nada.
+
+⚠ El apagado existe: `ODOO_SYNC_ENABLED=0`. Y sin `ODOO_PASSWORD` ni se intenta — un intento en
+vano cuenta para el bloqueo por IP de Odoo.
+
+**Qué la revertiría.** Que la atribución dejara de recalcularse por corrida. Ahí el orden del
+plan vuelve a ser obligatorio.
+
+---
+
+## 2026-09-02 · Se lee TODO en cada corrida, y las escrituras van juntas
+
+**Qué se decidió.** Lectura completa (347 facturas) por corrida, no incremental. Y las altas y
+los «sin cambio» se escriben en llamadas agrupadas.
+
+**Por qué lo completo.** Una corrida incremental **no puede detectar lo que desapareció**: una
+factura borrada en Odoo no le mueve el `write_date` a ninguna otra. El modo incremental
+obligaría a convivir con un modo completo periódico y con la pregunta de cuál corrió última. A
+347 filas eso es complejidad sin beneficio. El filtro por `write_date` sí se usa, para CONTAR
+cuántas se movieron y anotarlo en la corrida.
+
+**⚠ Por qué agrupadas — medido.** La primera corrida tardó **63,6 s**: 347 `create` de factura
+más 347 de bitácora, de a una contra Supabase. Y la corrida en régimen es casi toda «sin
+cambios», o sea un minuto de ida y vuelta **solo para estampar una fecha**. Con `createMany` y
+un `updateMany` al final: **3,3 s**. Diecinueve veces más rápido, y la segunda corrida confirmó
+que es idempotente (0 nuevas, 0 actualizadas).
+
+**Qué la revertiría.** Que el volumen crezca al punto de que la lectura completa moleste. Ahí
+`dominioFacturasDesde` ya está escrito y probado —con el corte en `>=`, que es la parte fácil
+de equivocar.

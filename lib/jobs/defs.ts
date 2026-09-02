@@ -203,7 +203,51 @@ const ventasGanadasDaily: JobDef = {
   },
 };
 
+
+/**
+ * El espejo de lo FACTURADO. Trae las facturas de venta de Odoo y las deja al lado de los
+ * cobros, para que Nexus deje de depender de que alguien marque «facturado» a mano.
+ *
+ * ⛔ Solo lectura hacia Odoo. ⛔ No toca ningún `Cobro` (INV25).
+ *
+ * ── POR QUÉ CORRE AUNQUE EL EMPAREJADO NO ESTÉ COMPLETO ─────────────────────────
+ * El plan decía que espejar antes de emparejar produce un espejo mal atribuido. Al
+ * implementarlo resultó menos rígido: el sync **vuelve a resolver la cuenta de cada factura
+ * en cada corrida** y anota el cambio como `CUENTA` en la bitácora. O sea que una factura no
+ * puede quedar mal atribuida — como mucho queda SIN atribuir, y se corrige sola la próxima
+ * vez que alguien vincula ese cliente.
+ *
+ * Esperar al emparejado costaría no tener espejo por días, sin ganar nada.
+ *
+ * ⚠ Necesita `ODOO_PASSWORD`. Sin eso ni se intenta: un intento en vano cuenta para el
+ * bloqueo por IP de Odoo (5 fallos, 60 s). `ODOO_SYNC_ENABLED=0` lo apaga sin sacar el código.
+ */
+const odooEspejoDaily: JobDef = {
+  key: "odoo-espejo-daily",
+  shouldRun: (_now, parts) => !!process.env.ODOO_PASSWORD && process.env.ODOO_SYNC_ENABLED !== "0" && parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("odoo-espejo-daily", dateKey, now))) return;
+    const { sincronizarOdoo } = await import("@/lib/cobranza/odoo/sync");
+    const r = await sincronizarOdoo({ disparadaPor: "cron" });
+
+    // Fallo o corrida parcial: los dos son transitorios y el claim se libera para reintentar
+    // en el próximo tick. Mismo criterio que ventas-ganadas-daily.
+    if (!r.ok) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.error(`[jobs/odoo-espejo] ${dateKey} — ${r.parcial ? "corrida PARCIAL" : "FALLÓ"}: ${r.error}; claim liberado`);
+      return;
+    }
+    console.log(
+      `[jobs/odoo-espejo] ${dateKey} — ${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.desaparecidas} desaparecidas, ${r.sinCuenta} sin cuenta${r.rechazadas.length ? `, ${r.rechazadas.length} rechazadas` : ""} (${r.duracionMs} ms)`,
+    );
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily];
 }

@@ -25,17 +25,17 @@ const archivos = readdirSync(DIR).filter((f) => f.endsWith(".ts") && !f.endsWith
 const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"));
 
 /**
- * Los DOS archivos que tienen permitido tocar el mundo: uno habla HTTP y el otro habla con la
+ * Los TRES archivos que tienen permitido tocar el mundo: uno habla HTTP y dos hablan con la
  * base. Todo lo demás decide, y por eso se puede probar.
  *
  * ⚠ La lista se afirma abajo, así que un archivo impuro nuevo no entra sin que alguien lo
  * agregue a mano y explique por qué en el commit.
  */
-const IMPUROS = ["servicio.ts", "transporte-xmlrpc.ts"];
+const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts"];
 const puros = archivos.filter((f) => !IMPUROS.includes(f));
 
 describe("la frontera entre decidir y tocar el mundo", () => {
-  it("sigue habiendo exactamente dos archivos impuros", () => {
+  it("sigue habiendo exactamente tres archivos impuros", () => {
     expect(archivos.filter((f) => IMPUROS.includes(f)).sort()).toEqual([...IMPUROS].sort());
     expect(puros.length).toBeGreaterThanOrEqual(3);
   });
@@ -52,7 +52,7 @@ describe("la frontera entre decidir y tocar el mundo", () => {
 
   it("⛔ solo servicio.ts toca la base", () => {
     for (const f of archivos) {
-      if (f === "servicio.ts") continue;
+      if (f === "servicio.ts" || f === "sync.ts") continue;
       expect(fuente(f), `${f} importa la base`).not.toMatch(/@prisma\/client|from\s+["']@\/lib\/db/);
     }
   });
