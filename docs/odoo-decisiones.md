@@ -129,8 +129,53 @@ atribuir a ninguna cuenta. Sin `currency_id` no se sabe si 2.000 son dólares o 
 diferencia es 500 veces. **Un espejo con dos filas mentirosas es peor que un espejo con dos
 huecos declarados**, porque el hueco se ve.
 
-⚠ Medido: hoy no hay ninguna así en las 348 facturas de venta. La guarda existe para el día
-que la haya.
+⚠⚠ CORRECCIÓN — esto se escribió antes de correrlo. **Sí hay una**: la 991 (AMVAC, USD
+3.696) no tiene `invoice_date`. Resultó ser un documento con `name = "/"`, el marcador de
+Odoo para «todavía sin numerar»: se armó, nunca se publicó y se canceló. Nunca existió como
+factura, así que ahora la excluye el dominio y no llega ni al rechazo. Las otras 2 canceladas
+sí tienen número y fecha, y esas se espejan.
+
+⭐ La guarda encontró algo en la primera corrida contra el ERP real. Ese era el punto.
 
 **Qué la revertiría.** Que aparezcan tantos rechazos que la lista deje de ser accionable. En
 ese caso la respuesta sigue sin ser un default: es entender por qué el ERP los emite así.
+
+---
+
+## 2026-09-02 · Un partner con dueño no puede ser candidato de otra cuenta
+
+**Qué se decidió.** Un `res.partner` que ya emparejó por **cédula** o por **nombre exacto**
+con una cuenta queda excluido de las propuestas por monto de todas las demás.
+
+**Por qué.** El vínculo `res.partner → CuentaFinanciera` es único del lado del partner
+(`odooPartnerId @unique`): un partner que ya tiene dueño **no puede** ser el par de otra
+cuenta. No es una heurística de desempate, es la forma de la tabla.
+
+⭐ Y mata el falso positivo que el diagnóstico había medido y dado por inevitable:
+`BLUESAT → FORESTALES LATINOAMERICANOS` coincidía por un monto redondo, pero Forestales ya
+emparejaba con su propia cuenta por nombre exacto. **El acierto de la señal de monto sube de
+8/10 a 8/9 sin aflojar el matcher ni un punto.**
+
+**Qué la revertiría.** Que se decida que una cuenta de Nexus puede tener varios partners de
+Odoo — que es cierto al revés (N:1, un holding factura con varios nombres) pero no de este
+lado. Si el `@unique` se cayera, esta regla se cae con él.
+
+---
+
+## 2026-09-02 · La señal de monto entra al producto, no solo al diagnóstico
+
+**Qué se decidió.** `proponerEmparejados()` usa tres señales —cédula, monto, nombre— y no las
+dos del plan original.
+
+**Por qué.** Medido contra los datos reales: el nombre resuelve **6 de 49** y el monto suma
+**9 más**, o sea 15. Y resuelve justo los que el nombre no puede tocar, porque Nexus guarda el
+nombre comercial y Odoo la razón social: Iberorutas factura como «SERVICIOS SAN MATEO Y SANTA
+ELENA DEL SUR S.A.», Corrugando como «ACCCSA», TEC-AE como «FUNDACION TECNOLÓGICA».
+
+⚠ Sigue sin poder aplicarse sola: 8 de 9 aciertos deja uno mal, y ese uno colgaría las
+facturas de un cliente de la cuenta de otro. Es una propuesta **con su evidencia impresa** —el
+monto exacto y la afirmación de que nadie más lo comparte— y confirma una persona.
+
+**Qué la revertiría.** Que las 49 cuentas tengan cédula cargada. Ahí la señal de cédula pasa a
+ser la principal y el monto queda de respaldo. El botón de confirmar ya escribe la cédula
+justamente para llegar a eso.

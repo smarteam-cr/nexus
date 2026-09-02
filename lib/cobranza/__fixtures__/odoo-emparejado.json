@@ -1,0 +1,2422 @@
+{
+  "_generadoPor": "scripts/odoo-fixture-emparejado.ts",
+  "_nota": "Datos REALES de solo lectura, tomados de erp.smarteamcr.com y de la base de Nexus. Si cambian los conteos del test, es porque cambió el matcher o cambió el negocio: hay que decidir cuál de los dos.",
+  "partners": [
+    {
+      "odooPartnerId": 11,
+      "nombre": "ALEXANDER JOSUE ARRIETA MADRIGAL",
+      "vat": "206980803",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 32,
+      "nombre": "Municipalidad de San Carlos",
+      "vat": "3014042074",
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 33,
+      "nombre": "3-101-767810 SOCIEDAD ANONIMA",
+      "vat": "3101767810",
+      "customerRank": 10
+    },
+    {
+      "odooPartnerId": 34,
+      "nombre": "ASOCIACION DE CORRUGADORES DEL CARIBE CENTRO Y SUR AMERICA",
+      "vat": "3002171832",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 35,
+      "nombre": "ACCCSA REVISTA & PUBLICACIONES SOCIEDAD ANONIMA",
+      "vat": "3101497341",
+      "customerRank": 44
+    },
+    {
+      "odooPartnerId": 36,
+      "nombre": "ADITEC JCB SOCIEDAD ANONIMA",
+      "vat": "3101381775",
+      "customerRank": 12
+    },
+    {
+      "odooPartnerId": 37,
+      "nombre": "ALTA LAS PALOMAS A.L.P SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102123409",
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 38,
+      "nombre": "AMVAC DE COSTA RICA SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102518157",
+      "customerRank": 15
+    },
+    {
+      "odooPartnerId": 39,
+      "nombre": "ARQUITECTURA DE MUEBLES SOCIEDAD ANONIMA",
+      "vat": "3101746160",
+      "customerRank": 34
+    },
+    {
+      "odooPartnerId": 40,
+      "nombre": "B B CONSULTORES ARTAVIA SOCIEDAD ANONIMA",
+      "vat": "3101470076",
+      "customerRank": 8
+    },
+    {
+      "odooPartnerId": 41,
+      "nombre": "CONSORCIO INTERAMERICANO CARIBE DE EXPORTACION SOCIEDAD ANONIMA",
+      "vat": "3101053546",
+      "customerRank": 11
+    },
+    {
+      "odooPartnerId": 42,
+      "nombre": "CLUBES Y SERVICIOS ORO SOCIEDAD ANONIMA",
+      "vat": "3101682885",
+      "customerRank": 31
+    },
+    {
+      "odooPartnerId": 43,
+      "nombre": "TORRES COYOL SOCIEDAD ANONIMA",
+      "vat": "3101707750",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 44,
+      "nombre": "PUBLIMARK SOCIEDAD ANONIMA",
+      "vat": "3101028741",
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 45,
+      "nombre": "CULEBRAS GROUP SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102808644",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 46,
+      "nombre": "DANIEL FRANCISCO BRENES MORALES",
+      "vat": "304770543",
+      "customerRank": 13
+    },
+    {
+      "odooPartnerId": 47,
+      "nombre": "SAXUM AGUA SOCIEDAD ANONIMA",
+      "vat": "3101041458",
+      "customerRank": 50
+    },
+    {
+      "odooPartnerId": 48,
+      "nombre": "DESARROLLOS CULTURALES COSTARRICENSES D C C SOCIEDAD ANONIMA",
+      "vat": "3101167504",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 49,
+      "nombre": "DISTRIBUIDORA LARCE SOCIEDAD ANONIMA",
+      "vat": "3101047714",
+      "customerRank": 7
+    },
+    {
+      "odooPartnerId": 50,
+      "nombre": "ELECTRO BEYCO SOCIEDAD ANONIMA",
+      "vat": "3101038663",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 51,
+      "nombre": "ELECTROCARIBE S&C SOCIEDAD ANONIMA",
+      "vat": "3101690307",
+      "customerRank": 25
+    },
+    {
+      "odooPartnerId": 52,
+      "nombre": "EUROSTONE COSTA RICA SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102918662",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 53,
+      "nombre": "BLUE SATSERVICIOS ADMINISTRADOS DE TELECOMUNICACIONES SOCIEDAD ANONIMA",
+      "vat": "3101641911",
+      "customerRank": 10
+    },
+    {
+      "odooPartnerId": 54,
+      "nombre": "FORESTALES LATINOAMERICANOS SOCIEDAD ANONIMA",
+      "vat": "3101463014",
+      "customerRank": 10
+    },
+    {
+      "odooPartnerId": 55,
+      "nombre": "FRANZ AMRHEIN & CO. SOCIEDAD ANONIMA",
+      "vat": "3101004126",
+      "customerRank": 23
+    },
+    {
+      "odooPartnerId": 56,
+      "nombre": "FRUITPOINT DE COSTA RICA SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102694983",
+      "customerRank": 11
+    },
+    {
+      "odooPartnerId": 58,
+      "nombre": "FUNDACION TECNOLÓGICA DE COSTA RICA",
+      "vat": "3006087315",
+      "customerRank": 72
+    },
+    {
+      "odooPartnerId": 59,
+      "nombre": "GLOBAL SUPPLY SOCIEDAD ANONIMA",
+      "vat": "3101362598",
+      "customerRank": 12
+    },
+    {
+      "odooPartnerId": 60,
+      "nombre": "GRUPO ECOQUINTAS SOCIEDAD ANONIMA",
+      "vat": "3101539521",
+      "customerRank": 9
+    },
+    {
+      "odooPartnerId": 61,
+      "nombre": "GRUPO SERVICA COSTA RICA SOCIEDAD ANONIMA",
+      "vat": "3101031018",
+      "customerRank": 14
+    },
+    {
+      "odooPartnerId": 62,
+      "nombre": "GRUPO SYNTEPRO SOCIEDAD ANONIMA",
+      "vat": "3101607330",
+      "customerRank": 7
+    },
+    {
+      "odooPartnerId": 63,
+      "nombre": "HL CARGO SOLUTIONS SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102839665",
+      "customerRank": 10
+    },
+    {
+      "odooPartnerId": 64,
+      "nombre": "ILEANA AGUILAR INGENIERIA Y ADMINISTRACION SOCIEDAD ANONIMA",
+      "vat": "3101543051",
+      "customerRank": 39
+    },
+    {
+      "odooPartnerId": 65,
+      "nombre": "INGENIERIA VERDE SOCIEDAD ANONIMA",
+      "vat": "3101515802",
+      "customerRank": 8
+    },
+    {
+      "odooPartnerId": 66,
+      "nombre": "JUNTA DE DESARROLLO REGIONAL DE LA ZONA SUR DE LA PROVINCIA DE PUNTARENAS",
+      "vat": "3007219667",
+      "customerRank": 8
+    },
+    {
+      "odooPartnerId": 67,
+      "nombre": "KEYLOR RODRIGUEZ ARCE",
+      "vat": "206920875",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 68,
+      "nombre": "LA CASA DEL TANQUE SOCIEDAD ANONIMA",
+      "vat": "3101191210",
+      "customerRank": 19
+    },
+    {
+      "odooPartnerId": 69,
+      "nombre": "MAPPEN PRODUCCIONES SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102884239",
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 70,
+      "nombre": "MTS MULTISERVICIOS DE COSTA RICA SOCIEDAD ANONIMA",
+      "vat": "3101677860",
+      "customerRank": 12
+    },
+    {
+      "odooPartnerId": 71,
+      "nombre": "MUNICIPALIDAD DE CARRILLO GUANACASTE",
+      "vat": "3014042104",
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 72,
+      "nombre": "MUNICIPALIDAD DE CARRILLO GUANACASTE",
+      "vat": "3014042104",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 73,
+      "nombre": "NEOSERVICES OFFICE SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102849401",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 74,
+      "nombre": "PACUARE LUXURY REALTY CR SOCIEDAD ANONIMA",
+      "vat": "3101615275",
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 75,
+      "nombre": "PUBLIMARK SOCIEDAD ANONIMA",
+      "vat": "3101028741",
+      "customerRank": 32
+    },
+    {
+      "odooPartnerId": 76,
+      "nombre": "RELEVA CONSULTORES SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102797760",
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 77,
+      "nombre": "REPRESENTACIONES PETRINI SOCIEDAD ANONIMA",
+      "vat": "3101186419",
+      "customerRank": 19
+    },
+    {
+      "odooPartnerId": 78,
+      "nombre": "RSM COSTA RICA AUDIT TAX AND CONSULTING SERVICES SOCIEDAD ANONIMA",
+      "vat": "3101177137",
+      "customerRank": 10
+    },
+    {
+      "odooPartnerId": 79,
+      "nombre": "SECURE CORREDORA DE SEGUROS SOCIEDAD ANONIMA",
+      "vat": "3101918517",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 80,
+      "nombre": "SERVICIOS SAN MATEO Y SANTA ELENA DEL SUR SOCIEDAD ANONIMA",
+      "vat": "3101903870",
+      "customerRank": 8
+    },
+    {
+      "odooPartnerId": 81,
+      "nombre": "SFERA LEGAL SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102655157",
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 82,
+      "nombre": "SOLIS ELECTRICA SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102176592",
+      "customerRank": 17
+    },
+    {
+      "odooPartnerId": 83,
+      "nombre": "SOLUCIONES TECNOLOGICAS Y EMPRESARIALES FACTUN SOCIEDAD ANONIMA",
+      "vat": "3101372935",
+      "customerRank": 13
+    },
+    {
+      "odooPartnerId": 84,
+      "nombre": "STCR COSTA RICA TRUST AND ESCROW COMPANY LIMITED SOCIEDAD ANONIMA",
+      "vat": "3101328440",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 85,
+      "nombre": "THM SOCIEDAD ANONIMA",
+      "vat": "3101561485",
+      "customerRank": 28
+    },
+    {
+      "odooPartnerId": 86,
+      "nombre": "TRANS MERCURY M & J SOCIEDAD ANONIMA",
+      "vat": "3101651203",
+      "customerRank": 13
+    },
+    {
+      "odooPartnerId": 87,
+      "nombre": "TRANSPORTES JUANVA SOCIEDAD ANONIMA",
+      "vat": "3101481698",
+      "customerRank": 8
+    },
+    {
+      "odooPartnerId": 88,
+      "nombre": "TRANSPORTES REFRIGERADOS HL SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102456875",
+      "customerRank": 24
+    },
+    {
+      "odooPartnerId": 89,
+      "nombre": "TRANSPORTES REFRIGERANTES M Y J SOCIEDAD ANONIMA",
+      "vat": "3101470270",
+      "customerRank": 19
+    },
+    {
+      "odooPartnerId": 90,
+      "nombre": "RELEVA CONSULTORES SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102797760",
+      "customerRank": 7
+    },
+    {
+      "odooPartnerId": 91,
+      "nombre": "Kukan Cloud Latam Limitada (3102807219)",
+      "vat": "3102807219",
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 92,
+      "nombre": "Molinos de Guadalupe S.A (3101132640)",
+      "vat": "3101132640",
+      "customerRank": 6
+    },
+    {
+      "odooPartnerId": 93,
+      "nombre": "COMPAÑIA DE INVERSIONISTAS LAS BRISAS S.A (3101013086)",
+      "vat": "3101013086",
+      "customerRank": 12
+    },
+    {
+      "odooPartnerId": 94,
+      "nombre": "Álvaro Apestegui Gurdián (111610327)",
+      "vat": "111610327",
+      "customerRank": 9
+    },
+    {
+      "odooPartnerId": 95,
+      "nombre": "RELEVA CONSULTORES SOCIEDAD DE RESPONSABILIDAD LIMITADA (3102797770)",
+      "vat": "3102797770",
+      "customerRank": 6
+    },
+    {
+      "odooPartnerId": 96,
+      "nombre": "Residencias Vura SA (3102758382)",
+      "vat": "3102758382",
+      "customerRank": 6
+    },
+    {
+      "odooPartnerId": 97,
+      "nombre": "Kamalio Acabados S.A. (3101709814)",
+      "vat": "3101709814",
+      "customerRank": 6
+    },
+    {
+      "odooPartnerId": 98,
+      "nombre": "Saxum Consultora S.A (3101703080)",
+      "vat": "3101703080",
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 99,
+      "nombre": "Inversiones Monte Cuarzo Sociedad Anonima (3101668165)",
+      "vat": "3101668165",
+      "customerRank": 6
+    },
+    {
+      "odooPartnerId": 100,
+      "nombre": "Arquitectura de Muebles S.A. (31010746160)",
+      "vat": "31010746160",
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 101,
+      "nombre": "Border Freight S. de R.L. de C.V",
+      "vat": null,
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 102,
+      "nombre": "PRUEBA 1",
+      "vat": null,
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 137,
+      "nombre": "INVERSIONES TURISTICAS MONTEVERDE SOCIEDAD ANONIMA",
+      "vat": "3101098834",
+      "customerRank": 3
+    },
+    {
+      "odooPartnerId": 138,
+      "nombre": "conta17@corporacioncsb.com",
+      "vat": null,
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 139,
+      "nombre": "conta10@corporacioncsb.com",
+      "vat": null,
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 141,
+      "nombre": "mgonzalez@gruposervica.com",
+      "vat": null,
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 151,
+      "nombre": "3-101-721431 SOCIEDAD ANONIMA",
+      "vat": "3101721431",
+      "customerRank": 7
+    },
+    {
+      "odooPartnerId": 158,
+      "nombre": "DON JUAN ARENAL  SOCIEDAD DE RESPONSABILIDAD LIMITADA",
+      "vat": "3102860317",
+      "customerRank": 4
+    },
+    {
+      "odooPartnerId": 159,
+      "nombre": "ASOCIACION PRO PREVENCION Y LUCHA CONTRA EL CANCER DE PROSTATA",
+      "vat": "3002662018",
+      "customerRank": 5
+    },
+    {
+      "odooPartnerId": 168,
+      "nombre": "MCCANN ERICKSON CENTROAMERICANA COSTA RICA SOCIEDAD ANONIMA",
+      "vat": "3-101-008431",
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 179,
+      "nombre": "CORPORACION ALMOTEC SOCIEDAD ANONIMA",
+      "vat": "3-101-105018",
+      "customerRank": 2
+    },
+    {
+      "odooPartnerId": 180,
+      "nombre": "ingrid.granados@almoteccr.com",
+      "vat": null,
+      "customerRank": 1
+    },
+    {
+      "odooPartnerId": 182,
+      "nombre": "JUNTA DE DESARROLLO REGIONAL DE LA ZONA SUR DE LA PROVINCIA DE PUNTARENAS (copia)",
+      "vat": "3007219667",
+      "customerRank": 1
+    }
+  ],
+  "cuentas": [
+    {
+      "cuentaId": "cmrye3xhf003izoijhm20wpd0",
+      "nombre": "Iberorutas",
+      "cedulaJuridica": null,
+      "montos": [
+        150,
+        3550
+      ]
+    },
+    {
+      "cuentaId": "cmrjipk86001x07o11d0nohod",
+      "nombre": "DISTELSA",
+      "cedulaJuridica": null,
+      "montos": []
+    },
+    {
+      "cuentaId": "cmrydxyvi0001l4ijl6l76unf",
+      "nombre": "Corrugando",
+      "cedulaJuridica": null,
+      "montos": [
+        2100,
+        2493
+      ]
+    },
+    {
+      "cuentaId": "cmrye3e0s0006zoijerva1293",
+      "nombre": "ACCCSA",
+      "cedulaJuridica": null,
+      "montos": [
+        500,
+        712
+      ]
+    },
+    {
+      "cuentaId": "cmrye3fad000ezoij26of7m9b",
+      "nombre": "Transportes Juanva",
+      "cedulaJuridica": null,
+      "montos": [
+        500
+      ]
+    },
+    {
+      "cuentaId": "cmrye3g2l000izoijzv7zqork",
+      "nombre": "Forestales Latinoamericanos",
+      "cedulaJuridica": null,
+      "montos": [
+        1300
+      ]
+    },
+    {
+      "cuentaId": "cmrjiqtdz001y07o1w5esy672",
+      "nombre": "Ecoquintas",
+      "cedulaJuridica": null,
+      "montos": [
+        150,
+        1300,
+        1880
+      ]
+    },
+    {
+      "cuentaId": "cmrye3hko000rzoijh04fq1o2",
+      "nombre": "Amvac Latam",
+      "cedulaJuridica": null,
+      "montos": [
+        1848
+      ]
+    },
+    {
+      "cuentaId": "cmrye3ilc000yzoijgfu66td8",
+      "nombre": "KAIZEN KAPITAL",
+      "cedulaJuridica": null,
+      "montos": [
+        21501
+      ]
+    },
+    {
+      "cuentaId": "cmrye3jay0011zoijjd4ehcyz",
+      "nombre": "Seléctrica",
+      "cedulaJuridica": null,
+      "montos": [
+        45
+      ]
+    },
+    {
+      "cuentaId": "cmrye3kka001bzoij0yxi45np",
+      "nombre": "Electrocaribe",
+      "cedulaJuridica": null,
+      "montos": [
+        45
+      ]
+    },
+    {
+      "cuentaId": "cmrye3lz9001lzoijyqo609nu",
+      "nombre": "IIA",
+      "cedulaJuridica": null,
+      "montos": [
+        60
+      ]
+    },
+    {
+      "cuentaId": "cmrye3nsq0020zoijsqt18ttf",
+      "nombre": "Don Juan Tours",
+      "cedulaJuridica": null,
+      "montos": [
+        720
+      ]
+    },
+    {
+      "cuentaId": "cmrye3oi70023zoijqgufq3nl",
+      "nombre": "APRECAP",
+      "cedulaJuridica": null,
+      "montos": [
+        65
+      ]
+    },
+    {
+      "cuentaId": "cmrye3pos002czoij4p48pku3",
+      "nombre": "Honda Costa Rica",
+      "cedulaJuridica": null,
+      "montos": [
+        500
+      ]
+    },
+    {
+      "cuentaId": "cmrye3qvc002lzoij1sgkxglx",
+      "nombre": "MTS MULTISERVICIOS",
+      "cedulaJuridica": null,
+      "montos": [
+        420
+      ]
+    },
+    {
+      "cuentaId": "cmrr89zb6001407npyjcvvi0w",
+      "nombre": "Grupo Servica",
+      "cedulaJuridica": null,
+      "montos": [
+        90
+      ]
+    },
+    {
+      "cuentaId": "cmrye3t0n002vzoijmq8fpt6k",
+      "nombre": "Librería Internacional",
+      "cedulaJuridica": null,
+      "montos": [
+        900
+      ]
+    },
+    {
+      "cuentaId": "cmrye3tq6002yzoiji11wt089",
+      "nombre": "Global Supply S.A",
+      "cedulaJuridica": null,
+      "montos": [
+        1867
+      ]
+    },
+    {
+      "cuentaId": "cmrye3vv0003azoij5uzio82n",
+      "nombre": "Pacuare Luxury Realty CR S.A.",
+      "cedulaJuridica": null,
+      "montos": [
+        480
+      ]
+    },
+    {
+      "cuentaId": "cmrye3z2l003vzoijff0bh27h",
+      "nombre": "TEC- AE",
+      "cedulaJuridica": null,
+      "montos": [
+        1620,
+        3240
+      ]
+    },
+    {
+      "cuentaId": "cmrye408x0042zoijnl8tdh43",
+      "nombre": "Eurostone",
+      "cedulaJuridica": null,
+      "montos": [
+        320
+      ]
+    },
+    {
+      "cuentaId": "cmrye40yj0045zoij6d0wsjcf",
+      "nombre": "Hotel Alta Las Palomas",
+      "cedulaJuridica": null,
+      "montos": [
+        550
+      ]
+    },
+    {
+      "cuentaId": "cmrjhg8mp001p07o15ocj8c98",
+      "nombre": "Cicadex",
+      "cedulaJuridica": null,
+      "montos": [
+        1366.66
+      ]
+    },
+    {
+      "cuentaId": "cmrfijf9w009307mqmej7g1ac",
+      "nombre": "BLUESAT",
+      "cedulaJuridica": null,
+      "montos": [
+        250,
+        700
+      ]
+    },
+    {
+      "cuentaId": "cmrye45db0050zoij8546mq7a",
+      "nombre": "Secure Title Latin America",
+      "cedulaJuridica": null,
+      "montos": [
+        2000
+      ]
+    },
+    {
+      "cuentaId": "cmrjij56i001w07o1dvbubh3x",
+      "nombre": "Club de Amantes del Vino",
+      "cedulaJuridica": null,
+      "montos": [
+        3373
+      ]
+    },
+    {
+      "cuentaId": "cmrjhi96b001q07o1djyqwa2s",
+      "nombre": "Grupo Inve",
+      "cedulaJuridica": null,
+      "montos": [
+        12500
+      ]
+    },
+    {
+      "cuentaId": "cmrye48gf005jzoij3ppo7hbb",
+      "nombre": "Ferreteria Noelito",
+      "cedulaJuridica": null,
+      "montos": [
+        289,
+        2100
+      ]
+    },
+    {
+      "cuentaId": "cmrjhfivh001o07o1dvb9j9tt",
+      "nombre": "Construtecho",
+      "cedulaJuridica": null,
+      "montos": [
+        550,
+        2280,
+        4560
+      ]
+    },
+    {
+      "cuentaId": "cmrye3wm0003dzoijt18avqts",
+      "nombre": "Selvatura",
+      "cedulaJuridica": "3101098834",
+      "montos": [
+        2000
+      ]
+    },
+    {
+      "cuentaId": "cmrye47l8005ezoijhy31kirz",
+      "nombre": "Real Shipping & Trade",
+      "cedulaJuridica": null,
+      "montos": [
+        2000
+      ]
+    },
+    {
+      "cuentaId": "cmrf2b7gi00009oiigj0pfro5",
+      "nombre": "ALFA+ (LISJ)",
+      "cedulaJuridica": null,
+      "montos": [
+        900
+      ]
+    },
+    {
+      "cuentaId": "cmrye4brn0069zoijwhdjoweg",
+      "nombre": "Apptividad",
+      "cedulaJuridica": null,
+      "montos": [
+        1350,
+        3150
+      ]
+    },
+    {
+      "cuentaId": "cmrye4ck6006dzoijdn7hoknp",
+      "nombre": "Plant",
+      "cedulaJuridica": null,
+      "montos": [
+        180
+      ]
+    },
+    {
+      "cuentaId": "cmrye4d9n006gzoijflvyrly8",
+      "nombre": "PRIMO",
+      "cedulaJuridica": null,
+      "montos": [
+        1666.67
+      ]
+    },
+    {
+      "cuentaId": "cmrye4e4o006lzoijh787ahzo",
+      "nombre": "Analisalab",
+      "cedulaJuridica": null,
+      "montos": [
+        3000,
+        3166.67
+      ]
+    },
+    {
+      "cuentaId": "cmrye4f2p006rzoij74vnqluh",
+      "nombre": "Teamnet",
+      "cedulaJuridica": null,
+      "montos": [
+        1500,
+        2000
+      ]
+    },
+    {
+      "cuentaId": "cmrf3hu9j00029oiiixprdw3o",
+      "nombre": "AMC - Atlas Mining & Construction",
+      "cedulaJuridica": null,
+      "montos": [
+        250,
+        2450
+      ]
+    },
+    {
+      "cuentaId": "cmrye4k3y007pzoij7h2t7ubc",
+      "nombre": "MSC Payroll",
+      "cedulaJuridica": null,
+      "montos": [
+        1680
+      ]
+    },
+    {
+      "cuentaId": "cmrye4l55007wzoijb56od5u0",
+      "nombre": "Visual Branding",
+      "cedulaJuridica": null,
+      "montos": [
+        1780
+      ]
+    },
+    {
+      "cuentaId": "cmrye4n3w0089zoij302dt807",
+      "nombre": "Metzger Supplies",
+      "cedulaJuridica": null,
+      "montos": [
+        925
+      ]
+    },
+    {
+      "cuentaId": "cms3ihe6r000007qz7hh97qyl",
+      "nombre": "Clínica Oceanica",
+      "cedulaJuridica": null,
+      "montos": []
+    },
+    {
+      "cuentaId": "cms3ihwq3000107qznjfl5b0v",
+      "nombre": "JUDESUR",
+      "cedulaJuridica": null,
+      "montos": []
+    },
+    {
+      "cuentaId": "cmsjdxorv01oe07pl2qp2dxui",
+      "nombre": "Alliance RH",
+      "cedulaJuridica": "COAL780221HR9",
+      "montos": []
+    },
+    {
+      "cuentaId": "cmrf3hnww00019oii3es5lsq3",
+      "nombre": "ALMOTEC",
+      "cedulaJuridica": "3-101-105018",
+      "montos": [
+        2300
+      ]
+    },
+    {
+      "cuentaId": "cmrye4j8o007kzoijz16wxpgm",
+      "nombre": "Spectrum",
+      "cedulaJuridica": null,
+      "montos": [
+        2333
+      ]
+    },
+    {
+      "cuentaId": "cmrye4m5u0083zoijfotn428e",
+      "nombre": "Multiquimica",
+      "cedulaJuridica": null,
+      "montos": [
+        3400
+      ]
+    },
+    {
+      "cuentaId": "cmrye4gyn0072zoijvhbwesbr",
+      "nombre": "Wherex",
+      "cedulaJuridica": null,
+      "montos": [
+        2125
+      ]
+    }
+  ],
+  "montosOdoo": [
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 112,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 91,
+      "montoNeto": 110,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 92,
+      "montoNeto": 465,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 93,
+      "montoNeto": 2066.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 1332,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 83,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 94,
+      "montoNeto": 1400,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 50,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 95,
+      "montoNeto": 333333.33,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 95,
+      "montoNeto": 333333.33,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2916.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 50,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 53.1,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 96,
+      "montoNeto": 779.63,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 97,
+      "montoNeto": 750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 198.9,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 98,
+      "montoNeto": 90,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 99,
+      "montoNeto": 299.02,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 43,
+      "montoNeto": 600,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 33,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 68,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 33,
+      "montoNeto": 50,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 382,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 709,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 70,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 98,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 100,
+      "montoNeto": 98,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 92,
+      "montoNeto": 465,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 112,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 86,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 77,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 33,
+      "montoNeto": 250,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 46,
+      "montoNeto": 64,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 940,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 56,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 56,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 46,
+      "montoNeto": 64,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 95,
+      "montoNeto": 333333.33,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 83,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 2334.33,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 382.5,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 940,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 63,
+      "montoNeto": 375,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 940,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 46,
+      "montoNeto": 64,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 64,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 98,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 1332,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 94,
+      "montoNeto": 1400,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 49,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 86,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2325,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 70,
+      "montoNeto": 667,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 83,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 63,
+      "montoNeto": 375,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 150,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 150,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2325,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 832,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 2000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 86,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 97,
+      "montoNeto": 750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 46,
+      "montoNeto": 64,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 63,
+      "montoNeto": 50,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 89,
+      "montoNeto": 1750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 89,
+      "montoNeto": 1750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 89,
+      "montoNeto": 1750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 85,
+      "montoNeto": 340.2,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 135.8,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 83,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 45,
+      "montoNeto": 325,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 96,
+      "montoNeto": 779.63,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 93,
+      "montoNeto": 2066.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 70,
+      "montoNeto": 667,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 47,
+      "montoNeto": 1200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 112,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 42,
+      "montoNeto": 85.06,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 39,
+      "montoNeto": 750,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 86,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 53,
+      "montoNeto": 527,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 53,
+      "montoNeto": 527,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 53,
+      "montoNeto": 527,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 62,
+      "montoNeto": 829,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 62,
+      "montoNeto": 829,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 1867,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 6737.5,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 41,
+      "montoNeto": 1366.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 1867,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 37,
+      "montoNeto": 550,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 5263.46,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 1867,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 23082.5,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 78,
+      "montoNeto": 800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 90,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 495,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 65,
+      "montoNeto": 3588,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 60,
+      "montoNeto": 150,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 90,
+      "montoNeto": 60,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 6737.5,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 67,
+      "montoNeto": 100000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 2089,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2493,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 78,
+      "montoNeto": 800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 90,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 135,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 260,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 135,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 70,
+      "montoNeto": 1140,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 48,
+      "montoNeto": 900,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 1867,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 54,
+      "montoNeto": 1300,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 60,
+      "montoNeto": 3180,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 50,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 81,
+      "montoNeto": 1266.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 74,
+      "montoNeto": 200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 3118,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 49,
+      "montoNeto": 1033,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 54,
+      "montoNeto": 4200,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1620,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 48,
+      "montoNeto": 1800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 78,
+      "montoNeto": 800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 334,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 67,
+      "montoNeto": 100000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 1075,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 79,
+      "montoNeto": 1666.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 84,
+      "montoNeto": 1866.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 70,
+      "montoNeto": 440,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 54,
+      "montoNeto": 700,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 66,
+      "montoNeto": 704563,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 66,
+      "montoNeto": 3500000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 87,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 61,
+      "montoNeto": 90,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 11541250,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 11541250,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 80,
+      "montoNeto": 3550,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 334,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 65,
+      "montoNeto": 800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 2089,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 49,
+      "montoNeto": 2066,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 52,
+      "montoNeto": 2299.98,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 36,
+      "montoNeto": 13000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 36,
+      "montoNeto": 2600,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 73,
+      "montoNeto": 5800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 3240,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 34,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 60,
+      "montoNeto": 150,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 40,
+      "montoNeto": 1275,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 2089,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 48,
+      "montoNeto": 1800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 52,
+      "montoNeto": 320,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 170647.28,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 169845.68,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 334,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1300,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 588271,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1150,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1300,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 334,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 334,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 66,
+      "montoNeto": 17000000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1300,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1300,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 69,
+      "montoNeto": 214166,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 87,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 72,
+      "montoNeto": 915000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 87,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 87,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 1900,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 56,
+      "montoNeto": 1110,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 56,
+      "montoNeto": 1110,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 56,
+      "montoNeto": 1110,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 72,
+      "montoNeto": 915000,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 101,
+      "montoNeto": 1350,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 2334.33,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 102,
+      "montoNeto": 8.85,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 11,
+      "montoNeto": 1,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 61,
+      "montoNeto": 90,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 54,
+      "montoNeto": 350,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 41,
+      "montoNeto": 1366.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 120,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 60,
+      "montoNeto": 3180,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 3240,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 80,
+      "montoNeto": 3550,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 90,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 90,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 34,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 70,
+      "montoNeto": 440,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 137,
+      "montoNeto": 6000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 61,
+      "montoNeto": 255,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 61,
+      "montoNeto": 255,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 61,
+      "montoNeto": 510,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 41,
+      "montoNeto": 1366.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 1848,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 151,
+      "montoNeto": 580,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 151,
+      "montoNeto": 800,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 35,
+      "montoNeto": 2100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 60,
+      "montoNeto": 3180,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 1620,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 4860,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 64,
+      "montoNeto": 60,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 1848,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 56,
+      "montoNeto": 447,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 56,
+      "montoNeto": 447,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 58,
+      "montoNeto": 4860,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 158,
+      "montoNeto": 720,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 159,
+      "montoNeto": 65,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 88,
+      "montoNeto": 1960,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 41,
+      "montoNeto": 1366.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 3696,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 3696,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 1000,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 151,
+      "montoNeto": 580,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 1848,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 168,
+      "montoNeto": 11541249.95,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 159,
+      "montoNeto": 65,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 80,
+      "montoNeto": 3550,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 41,
+      "montoNeto": 1366.66,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 51,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 82,
+      "montoNeto": 45,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 11541250,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 59,
+      "montoNeto": 3396,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 151,
+      "montoNeto": 580,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 1848,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 55,
+      "montoNeto": 500,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 159,
+      "montoNeto": 65,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 80,
+      "montoNeto": 7100,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 179,
+      "montoNeto": 6900,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 66,
+      "montoNeto": 704563,
+      "moneda": "CRC"
+    },
+    {
+      "odooPartnerId": 38,
+      "montoNeto": 370,
+      "moneda": "USD"
+    },
+    {
+      "odooPartnerId": 75,
+      "montoNeto": 13475,
+      "moneda": "USD"
+    }
+  ],
+  "conteos": {
+    "partners": 82,
+    "cuentas": 49,
+    "facturasLeidas": 347,
+    "montosUsados": 303,
+    "rechazos": 0
+  }
+}

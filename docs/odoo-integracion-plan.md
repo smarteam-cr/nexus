@@ -153,6 +153,37 @@ unos 6 están mal —Bluesat→Forestales, Teamnet→Fundación Tecnológica, Co
 Palomas— porque dos clientes comparten un monto redondo ($250, $700, $2.000). El monto es una
 **señal fuerte, no una regla**.
 
+### ⭐ Lo que dio al implementarlo — mejor que la exploración
+
+Los números de arriba son de un tanteo a mano. El matcher que quedó en
+`lib/cobranza/odoo/emparejado.ts` exige la coincidencia **única en las dos direcciones** (un
+monto que identifique a una sola cuenta Y a un solo partner) y agrega una regla estructural:
+
+> Un partner que ya emparejó por **cédula** o por **nombre exacto** no puede ser candidato por
+> monto de ninguna otra cuenta. El vínculo `res.partner → CuentaFinanciera` es único del lado
+> del partner, así que un partner con dueño no puede ser el par de otra cuenta. **No es una
+> heurística de desempate: es la forma de la tabla.**
+
+Eso solo mata el falso positivo `BLUESAT → FORESTALES` —Forestales ya emparejaba con su propia
+cuenta—. Resultado medido contra las 49 cuentas y los 82 partners reales:
+
+| | Cuentas |
+|---|---|
+| por **cédula** | 2 |
+| por **nombre exacto** | 4 |
+| por **monto** | **9** |
+| dudosa (nombre parecido) | 5 |
+| inemparejable (`IIA`) | 1 |
+| **sin ningún candidato** | **28** |
+
+**15 de 49 con candidato de primera, contra 6 por nombre solo.** De los 9 por monto, **8 son
+verificables a ojo** por la razón social; el noveno (Apptividad → Border Freight, mexicana) es
+precisamente por qué esto no se aplica solo.
+
+⚠ Estos seis números están congelados en `emparejado.test.ts`. Si el matcher se afloja para
+«mejorar», el test se pone rojo y hay que declarar por qué: un cambio así se ve como una
+mejora en la pantalla y solo se descubre cuando una factura quedó colgada de otro cliente.
+
 ### Consecuencia: cómo tiene que ser la pantalla
 
 Deja de ser «confirmá 49 propuestas» y pasa a ser **un asistente de decisión** con tres

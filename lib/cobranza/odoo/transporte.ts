@@ -76,13 +76,21 @@ export type OdooDominio = unknown[];
  * Las facturas de venta PUBLICADAS. `state != draft` importa: un borrador todavía no le
  * cobra nada a nadie, y espejarlo pondría en la mesa del CFO facturas que no existen.
  *
- * ⚠ Los canceladas SÍ entran. Una factura que se anuló después de emitida es justamente el
+ * ⚠ Las canceladas SÍ entran. Una factura que se anuló después de emitida es justamente el
  * caso que hay que ver al lado del cobro: si Nexus la creía cobrada, ahí está la diferencia.
+ * Medido: 3 canceladas, y 2 de ellas son notas de crédito con número y fecha.
+ *
+ * ⚠⚠ Pero la tercera NO. `name = "/"` es el marcador de Odoo para «todavía sin numerar»: un
+ * documento que se armó, nunca se publicó, y se descartó. No tiene número ni `invoice_date`
+ * porque **nunca existió como factura**, y ponerlo en la mesa del CFO sería pedirle que
+ * concilie algo que no se emitió. Medido: excluye exactamente 1 de 348 (la 991, AMVAC,
+ * USD 3.696).
  */
 export function dominioFacturasVenta(): OdooDominio {
   return [
     ["move_type", "in", [...ODOO_MOVE_TYPES_VENTA]],
     ["state", "!=", "draft"],
+    ["name", "!=", "/"],
   ];
 }
 
