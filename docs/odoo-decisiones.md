@@ -81,3 +81,56 @@ automático: es una propuesta con su evidencia, y confirma una persona.
 
 **Qué la revertiría.** Nada razonable. Si algún día las cédulas están cargadas en las 49
 cuentas, la señal de cédula pasa a ser la principal y el monto queda de respaldo.
+
+---
+
+## 2026-09-02 · El semáforo devuelve una PROPUESTA, no un estado
+
+**Qué se decidió.** `proponerSemaforo()` no devuelve «el cobro ahora es COBRADO»: devuelve qué
+sugiere Odoo, con `requiereConfirmacion: true` siempre que sugiera verde. El sync no escribe
+estado.
+
+**Por qué.** El plan decía «Odoo puede promover a verde», y al implementarlo se chocó con que
+**es imposible**: `COBRADO` exige `confirmadoPor` de una persona (INV3), así que el sync
+literalmente no puede escribirlo sin violar un invariante que ya existe. La lectura honesta de
+«promover» es *proponer con un clic de distancia*, y así satisface INV3, INV25 y la regla de
+que la promoción nace apagada, sin que ninguna de las tres pelee con las otras.
+
+⚠ Y la regla «no degrada» quedó como un valor de retorno propio, `divergencia`, en vez de un
+silencio: Nexus cobrado contra Odoo impaga **no es que no pase nada**, es una línea para la
+mesa de trabajo con el CFO.
+
+**Qué la revertiría.** Que se decida que Odoo sí puede confirmar plata. Eso exigiría cambiar
+INV3 primero, y esa es una decisión de negocio, no técnica.
+
+---
+
+## 2026-09-02 · El corte incremental es `>=`, no `>`
+
+**Qué se decidió.** `dominioFacturasDesde()` filtra `write_date >= <última corrida>`.
+
+**Por qué.** `write_date` tiene resolución de **segundo**, y dos escrituras dentro del mismo
+segundo son normales cuando alguien concilia un lote. Con `>` la segunda se pierde para
+siempre y nada avisa: el espejo queda con un monto viejo y se ve perfectamente sano. El costo
+de `>=` es releer un puñado de filas por corrida, que el upsert absorbe sin efecto.
+
+**Qué la revertiría.** Nada. La asimetría es a propósito: releer es barato, perder es mudo.
+
+---
+
+## 2026-09-02 · Una factura sin fecha, sin partner o sin moneda se RECHAZA
+
+**Qué se decidió.** `mapearFactura()` devuelve un rechazo con motivo en vez de espejar con
+valores por defecto.
+
+**Por qué.** Una factura sin `invoice_date` no cae en ningún mes: espejarla con la fecha de
+hoy la escondería dentro de un total que se ve correcto. Sin `partner_id` no se puede
+atribuir a ninguna cuenta. Sin `currency_id` no se sabe si 2.000 son dólares o colones, y la
+diferencia es 500 veces. **Un espejo con dos filas mentirosas es peor que un espejo con dos
+huecos declarados**, porque el hueco se ve.
+
+⚠ Medido: hoy no hay ninguna así en las 348 facturas de venta. La guarda existe para el día
+que la haya.
+
+**Qué la revertiría.** Que aparezcan tantos rechazos que la lista deje de ser accionable. En
+ese caso la respuesta sigue sin ser un default: es entender por qué el ERP los emite así.
