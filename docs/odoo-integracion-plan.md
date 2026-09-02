@@ -217,6 +217,9 @@ camino elegido — pero sí aplicaría a la contingencia REST.
 `lib/cobranza/odoo/espejo.ts` — sin Prisma, sin red, sin reloj. Contiene:
 
 - `mapearFactura(cruda)` → el DTO del espejo, **en moneda nativa**.
+- `compararMontos(cobro, factura)` → ⚠ compara `Cobro.monto` contra **`montoNeto`**, nunca
+  contra `montoTotal`. Ver la advertencia del schema: sin esto, las 304 facturas salen
+  descuadradas por 13 % y la lista de cruce nace inservible.
 - `promoverSemaforo(estadoNexus, paymentState)` → la regla de «promueve, nunca degrada».
 - `vencimientoDe(invoiceDate, creditoDias)` → `invoice_date + creditoDias`. **No usa
   `invoice_date_due`** (es el máximo de los vencimientos, y los 90 días de Colby no están
@@ -272,9 +275,14 @@ model FacturaOdoo {
   invoiceDateDue DateTime? @db.Date
 
   // TODOS en moneda NATIVA del documento. Nada se convierte acá.
-  montoTotal       Decimal @db.Decimal(14, 2)
+  // ⚠ `montoNeto` (amount_untaxed) es el que se compara contra Cobro.monto. Los cobros de
+  // Nexus se importaron SIN IVA —medido: 12 de 13 clientes coinciden con la columna de
+  // quincena de la hoja y no con quincena × 1,13—. Comparar contra `montoTotal` marcaría
+  // las 304 facturas como descuadradas por exactamente 13 %.
+  montoNeto        Decimal @db.Decimal(14, 2)  // amount_untaxed
+  montoTotal       Decimal @db.Decimal(14, 2)  // amount_total (CON impuesto)
   montoResidual    Decimal @db.Decimal(14, 2)
-  montoImpuesto    Decimal @db.Decimal(14, 2)
+  montoImpuesto    Decimal @db.Decimal(14, 2)  // amount_tax
   // Con signo: amount_total es POSITIVO también en las notas de crédito.
   montoTotalSigned Decimal @db.Decimal(14, 2)
   moneda           String  // NO el enum CobranzaMoneda: Odoo puede traer otras
@@ -474,6 +482,7 @@ motiva el archivo, casos como oración que afirma la conducta, datos reales de p
 | ídem | **`vencimientoDe`**: usa `invoice_date + creditoDias`, **nunca** `invoice_date_due`. Caso que fija que con `creditoDias` null cae a `DEFAULT_CREDITO_DIAS`=15 — hoy 48 de 49 cuentas. |
 | ídem | **`esCorridaParcial`**: umbral `< 50 %` estricto y solo si ya hay filas conocidas. Un timeout de Odoo no puede vaciar el año. |
 | ídem | **Monedas dispares**: cobro en USD contra factura en CRC → `monedaDispar=true` y las dos cifras, nunca una suma. |
+| ídem | ⚠ **`compararMontos` usa el NETO**: un cobro de $2.000 contra una factura de $2.000 neto / $2.260 total **coincide**. Con los números reales de Selvatura, Global Supply y Cicadex. Si alguien compara contra `montoTotal`, 304 facturas se marcan mal y el caso se pone rojo. |
 | `lib/cobranza/odoo/emparejado.test.ts` | Los 49 nombres reales contra los 82 partners reales: afirma **2 por cédula, 4 por nombre exacto, 8 dudosas, 33 sin candidato, 2 inemparejables**. Si el matcher se afloja y sube el número, se pone rojo y hay que declarar por qué. Casos nominales para Corrugando/ACCCSA, Analisalab/Inve y TEC-AE. |
 | ídem | **8 vat duplicados** → el vínculo es N:1 y varios partners pueden apuntar a la misma cuenta. |
 | `lib/cobranza/odoo/guardas.test.ts` | Guarda de texto: el espejo **no importa** `lib/finanzas/equilibrio` ni menciona `crcPorUsd` (extiende la lista `MOTORES` del test §K de `equilibrio.test.ts`). Y el sync **no escribe** `confirmadoPor`. |
@@ -583,6 +592,22 @@ los dos al mismo lugar?
 **6. `amount_tax = 0` en 30 de 345 facturas.**
 ¿Son exentos legítimos —servicios al exterior, por ejemplo— o falta cargar el impuesto? Si es
 lo segundo, el espejo va a mostrar un IVA que no existe.
+
+**6.b ⚠ ¿El punto de equilibrio va con IVA o sin IVA?**
+Medido el 2026-09-02: la hoja «Facturaciones 2026» lleva **una columna de IVA por quincena, al
+13 %**, y a Nexus entró el **monto neto** — 12 de 13 clientes coinciden con la columna de
+quincena y no con quincena × 1,13 (Selvatura 2.000, Global Supply 1.867, Cicadex 1.366,66…).
+O sea que **el IVA existía en el origen y se descartó al importar**, y el reporte de equilibrio
+no modela impuestos: cero menciones en todo el archivo.
+
+Eso deja dos preguntas encadenadas:
+
+- **¿Los EGRESOS están cargados netos también?** Si los ingresos son netos y los costos vienen
+  con impuesto, el piso mensual está inflado y nadie lo sabe. Es lo primero que hay que
+  responder, y no depende de Odoo.
+- **¿Querés una línea de IVA en el equilibrio?** El espejo ya va a traer `amount_tax` por
+  factura, así que el dato está. Mostrarlo es una decisión: hoy el reporte dice un piso sin
+  declarar que es neto.
 
 **7. 29 de 44 notas de crédito no tienen factura de origen.**
 `reversed_entry_id` está vacío en el 66 %. ¿A qué cuenta se atribuye una nota de crédito
