@@ -282,3 +282,63 @@ que es idempotente (0 nuevas, 0 actualizadas).
 **Qué la revertiría.** Que el volumen crezca al punto de que la lectura completa moleste. Ahí
 `dominioFacturasDesde` ya está escrito y probado —con el corte en `>=`, que es la parte fácil
 de equivocar.
+
+---
+
+## 2026-09-02 · La lista de diferencias reusa el contrato de `inconsistencias.ts`
+
+**Qué se decidió.** `detectarDiferenciasOdoo()` devuelve `Inconsistencia[]` — el mismo tipo
+que el reporte de equilibrio— y la pantalla monta `InconsistenciasPanel` tal cual.
+
+**Por qué.** Ese contrato ya resolvió los problemas difíciles de una lista así: `montoEnJuego`
+para ordenar por plata, `resuelve` para que cada línea tenga dueño, `items[]` completos y
+nunca truncados —«y 12 más» convierte una agenda en un titular—, y `yaContadoEn` para el doble
+conteo. Escribir otro tipo habría sido reaprender todo eso.
+
+⭐ Y sus dos reglas se heredan enteras: **todo se detecta, nada se escribe a mano** —una lista
+hardcodeada de hallazgos envejece sola y sigue mostrando lo ya arreglado—, y **cada línea dice
+cuánta plata mueve y quién la resuelve**.
+
+**Qué la revertiría.** Que la lista necesite algo que el contrato no tiene. Hoy solo necesitó
+una cosa: poder aceptar una línea, y eso vive fuera del contrato en `DiferenciaOdooAceptada`.
+
+---
+
+## 2026-09-02 · La moneda equivocada se detecta por REGLA, no por lista
+
+**Qué se decidió.** «El mismo cliente con el mismo monto exacto en dos monedas distintas» es
+la regla. No hay ningún número de factura hardcodeado.
+
+**Por qué.** El caso que motivó esto —11.541.250 en dólares y en colones para PUBLIMARK— se
+podía haber puesto como un caso especial. Pero con un tipo de cambio de ~500 el importe
+idéntico en dos monedas **no puede ser casualidad**, y esa regla general encontró **6 casos**,
+no uno. Los otros cinco no los había visto nadie.
+
+⚠ Y el mayor tiene una historia legible en los datos: `FAC/2026/0232` (USD) fue **anulada** y
+`FAC/2026/0233` (CRC) del mismo día por el mismo importe quedó **pagada** — o sea que alguien
+ya detectó y corrigió el error de moneda. Pero existe además `FAC/2026/0243` (USD, **pagada**),
+una tercera por el mismo importe. Esa es la que distorsiona todo, y va a la mesa con número.
+
+**Qué la revertiría.** Que la empresa empiece a facturar legítimamente el mismo importe en dos
+monedas. No es un escenario real a un tipo de cambio de 500.
+
+---
+
+## 2026-09-02 · ⚠ Y el error de doble conteo que casi se repite
+
+**Qué se decidió.** Las líneas finas —moneda equivocada, exentas, `in_payment`— llevan
+`yaContadoEn: "ODOO-SIN-CUENTA"` **cuando todas sus facturas están sin emparejar**.
+
+**Por qué.** Al correrlo contra los datos reales, el titular de «facturas sin cuenta» decía
+**60.711.762** e incluía las facturas de moneda equivocada que otra línea ya reportaba: la
+misma plata contada dos y hasta tres veces. Es exactamente el error que el módulo original
+documenta haber cometido («decía $437.579,78 y sumaba $28.880 dos veces»), y se estaba
+repitiendo en la primera corrida.
+
+`yaContadoEn` deja la línea fuera del total sin quitarle el monto — sigue sirviendo para
+dimensionarla. Y el balde ahora **avisa en su propio detalle** de que su total está inflado.
+
+⚠ La condición es dinámica, no fija: cuando esas facturas ya tengan cuenta salen del balde y
+la línea fina vuelve a contar por sí sola. Hay un test para cada lado.
+
+**Qué la revertiría.** Nada. El doble conteo no tiene defensa.

@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
 import EmparejadoOdoo from "@/components/cobranza/EmparejadoOdoo";
+import DiferenciasOdoo from "@/components/cobranza/DiferenciasOdoo";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,17 @@ export default async function EmparejadoOdooPage() {
         description="Decile a Nexus qué cliente de Odoo corresponde a cada cuenta. Es trabajo de una sola vez: al confirmar se guarda la cédula, y la próxima el emparejado se sostiene solo."
       />
       <EmparejadoOdoo />
+
+      {/* La lista de diferencias vive junto al emparejado a propósito: el emparejado ES la
+          primera línea de esa lista, y separarlos obligaría a saltar entre dos pantallas para
+          entender por qué una factura no tiene dueño. */}
+      <div className="mt-10">
+        <h2 className="text-base font-semibold text-fg">Lo que no cuadra con Odoo</h2>
+        <p className="mb-3 mt-0.5 text-sm text-fg-muted">
+          Ordenado por la plata que mueve. Cada línea dice quién la puede cerrar.
+        </p>
+        <DiferenciasOdoo />
+      </div>
     </div>
   );
 }

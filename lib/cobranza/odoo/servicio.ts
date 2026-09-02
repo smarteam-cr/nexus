@@ -4,13 +4,15 @@
  * La orquestación del emparejado: Prisma de un lado, el transporte del otro, y en el medio
  * las funciones puras de `emparejado.ts`, que son las que deciden. Server-only.
  *
- * ── POR QUÉ ESTO NO ESCRIBE NI UNA FILA DE `FacturaOdoo` ────────────────────────
- * El orden del plan es a propósito: **emparejar ANTES de espejar**. Con 15 de 49 cuentas
- * resueltas por señal automática, encender el sync primero produciría un espejo mal
- * atribuido —facturas colgadas de la cuenta equivocada— que cuesta más limpiar que hacerlo
- * bien de entrada.
+ * ── QUÉ ESCRIBE Y QUÉ NO ─────────────────────────────────────────────────────────
+ * Escribe el catálogo de partners y los vínculos que una persona confirma. **No escribe ni
+ * una fila de `FacturaOdoo`**: eso es del sync (`sync.ts`). Los montos de Odoo se leen acá
+ * solo para PROPONER emparejamientos y se descartan.
  *
- * Los montos de Odoo se leen para PROPONER y se descartan. El espejo llega en la etapa 2.
+ * ⚠ El plan decía «emparejar ANTES de espejar o el espejo queda mal atribuido». Resultó menos
+ * rígido: el sync vuelve a resolver la cuenta de cada factura en CADA corrida, así que una
+ * factura no puede quedar MAL atribuida — como mucho queda sin atribuir, y se corrige sola
+ * cuando alguien vincula ese cliente acá. Los dos pueden avanzar en paralelo.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -34,6 +36,8 @@ import {
   type PartnerOdoo,
   type PropuestaEmparejado,
 } from "./emparejado";
+import { detectarDiferenciasOdoo, huellaDe } from "./diferencias";
+import type { Inconsistencia } from "@/lib/finanzas/inconsistencias";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
 
 export class EmparejadoError extends Error {
@@ -321,4 +325,106 @@ export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nom
   return cuentas
     .filter((c) => !tomadas.has(c.id))
     .map((c) => ({ cuentaId: c.id, nombre: c.client.name, cedula: soloDigitos(c.cedulaJuridica) || null }));
+}
+
+/* ── 4. La mesa de trabajo con el CFO ───────────────────────────────────────────── */
+
+/**
+ * Todo lo que no cuadra entre Nexus y Odoo, en una sola lista ordenada por plata.
+ *
+ * ⚠ Se leen TODOS los cobros y TODAS las facturas vigentes: la lista es la agenda de una
+ * reunión y «y 12 más» la convierte en un titular. A 202 cobros y 347 facturas eso es una
+ * consulta barata; el día que no lo sea, se pagina la PANTALLA, no la detección.
+ */
+export async function cargarDiferencias(): Promise<{
+  inconsistencias: Inconsistencia[];
+  aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
+  medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
+}> {
+  const [cobrosDb, facturasDb, cuentasTotales, vinculadas, aceptadasDb] = await Promise.all([
+    prisma.cobro.findMany({
+      select: {
+        id: true,
+        cuentaId: true,
+        periodo: true,
+        fechaProgramada: true,
+        monto: true,
+        moneda: true,
+        estado: true,
+        fechaEmision: true,
+        cuenta: { select: { client: { select: { name: true } } } },
+      },
+    }),
+    prisma.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE" } }),
+    prisma.cuentaFinanciera.count(),
+    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
+    prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
+  ]);
+
+  const inconsistencias = detectarDiferenciasOdoo({
+    cobros: cobrosDb.map((c) => ({
+      id: c.id,
+      cuentaId: c.cuentaId,
+      cuentaNombre: c.cuenta.client.name,
+      periodo: c.periodo,
+      fechaProgramada: c.fechaProgramada.toISOString().slice(0, 10),
+      monto: Number(c.monto),
+      moneda: c.moneda,
+      estado: c.estado,
+      facturado: c.fechaEmision !== null,
+    })),
+    facturas: facturasDb.map((f) => ({
+      id: f.id,
+      odooMoveId: f.odooMoveId,
+      numero: f.numero,
+      cuentaId: f.cuentaId,
+      odooPartnerId: f.odooPartnerId,
+      odooPartnerNombre: f.odooPartnerNombre,
+      invoiceDate: f.invoiceDate.toISOString().slice(0, 10),
+      montoNeto: Number(f.montoNeto),
+      montoTotal: Number(f.montoTotal),
+      montoImpuesto: Number(f.montoImpuesto),
+      moneda: f.moneda,
+      moveType: f.moveType,
+      paymentState: f.paymentState,
+      state: f.state,
+    })),
+    cuentasSinVinculo: cuentasTotales - vinculadas,
+    cuentasTotales,
+    aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
+  });
+
+  return {
+    inconsistencias,
+    aceptadas: aceptadasDb.map((a) => ({
+      clave: a.clave,
+      motivo: a.motivo,
+      aceptadaPor: a.aceptadaPor,
+      aceptadaEn: a.aceptadaEn.toISOString(),
+    })),
+    medido: { cobros: cobrosDb.length, facturas: facturasDb.length, cuentasSinVinculo: cuentasTotales - vinculadas, cuentasTotales },
+  };
+}
+
+/**
+ * «Está bien así». ⚠ Se guarda la HUELLA de los números aceptados, no solo la clave: si el
+ * monto cambia, la línea vuelve sola. Una aceptación no puede convertirse en el lugar donde
+ * se esconde un problema nuevo.
+ */
+export async function aceptarDiferencia(
+  input: { clave: string; motivo: string },
+  actor: string,
+): Promise<void> {
+  const { inconsistencias } = await cargarDiferencias();
+  const inc = inconsistencias.find((i) => i.codigo === input.clave);
+  if (!inc) throw new EmparejadoError("Esa diferencia ya no está en la lista.", 404);
+  await prisma.diferenciaOdooAceptada.upsert({
+    where: { clave: input.clave },
+    create: { clave: input.clave, motivo: input.motivo, huella: huellaDe(inc), aceptadaPor: actor },
+    update: { motivo: input.motivo, huella: huellaDe(inc), aceptadaPor: actor, aceptadaEn: new Date() },
+  });
+}
+
+export async function reabrirDiferencia(clave: string): Promise<void> {
+  await prisma.diferenciaOdooAceptada.deleteMany({ where: { clave } });
 }

@@ -922,3 +922,18 @@ export type OdooVinculoIgnorar = z.infer<typeof odooVinculoIgnorarSchema>;
 /** Deshacer un vínculo. La cédula aprendida NO se borra: el dato quedó bueno igual. */
 export const odooVinculoDesvincularSchema = z.object({ odooPartnerId: odooPartnerIdSchema });
 export type OdooVinculoDesvincular = z.infer<typeof odooVinculoDesvincularSchema>;
+
+/**
+ * «Está bien así» sobre una línea de la lista de diferencias con Odoo.
+ *
+ * ⚠ El motivo es OBLIGATORIO y de al menos 5 caracteres. Una aceptación sin razón escrita es
+ * indistinguible de un clic para sacarse la línea de encima, y a los tres meses nadie sabe si
+ * la diferencia estaba bien o si alguien la escondió.
+ */
+export const odooDiferenciaAceptarSchema = z.object({
+  clave: z.string().trim().min(3).max(64),
+  motivo: z.string().trim().min(5, "Escribí por qué esta diferencia está bien así").max(1000),
+});
+export type OdooDiferenciaAceptar = z.infer<typeof odooDiferenciaAceptarSchema>;
+
+export const odooDiferenciaReabrirSchema = z.object({ clave: z.string().trim().min(3).max(64) });
