@@ -100,7 +100,22 @@ export async function runBorradorCobro(
   const bloques = [
     `# COBRO A GESTIONAR`,
     `Cliente: ${cobro.cuenta.client.name}`,
-    `Monto: ${Number(cobro.monto).toLocaleString("es-CR")} ${cobro.moneda} · ${cobro.numCuota != null ? `cuota #${cobro.numCuota} · ` : ""}período ${cobro.periodo} · programado ${fechaISO} · ${estadoTexto}`,
+    `Monto del servicio: ${Number(cobro.monto).toLocaleString("es-CR")} ${cobro.moneda} · ${cobro.numCuota != null ? `cuota #${cobro.numCuota} · ` : ""}período ${cobro.periodo} · programado ${fechaISO} · ${estadoTexto}`,
+    /**
+     * ⚠ El monto de Nexus es NETO y el correo va al CLIENTE.
+     *
+     * La hoja de origen llevaba una columna de IVA al 13 % por quincena y el importador la
+     * descartó a propósito: a `Cobro.monto` entró el neto (medido — 12 de 13 clientes
+     * coinciden con la columna de quincena y no con quincena × 1,13). Pero la factura que
+     * el cliente recibe puede llevar el impuesto encima: de las 111 facturas de 2026 en
+     * Odoo, **100 lo llevan**. Un borrador que diga "el monto pendiente es de $2.000"
+     * contra una factura de $2.260 genera una llamada, y el modelo no tenía cómo saberlo:
+     * el prompt vivo son 1.704 caracteres sin una sola mención del impuesto.
+     *
+     * ⚠ Y NO se puede escribir "+13 %" acá: hay clientes exentos (11 de 111, todos ticos).
+     * Lo honesto es no presentar el número como el total y remitir a la factura.
+     */
+    `⚠ Ese monto es el del SERVICIO, sin impuestos. La factura del cliente puede llevar IVA encima. NO lo presentes como "el total a pagar" ni sumes ningún impuesto vos: nombralo como el monto del servicio y, si hace falta hablar del total, remitite a la factura.`,
     `Servicio: ${cobro.servicio.tipoServicio}${cobro.servicio.descripcion ? ` — ${cobro.servicio.descripcion}` : ""}`,
     `Crédito: ${cobro.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS} días · vía de cobro: ${cobro.cuenta.viaCobro}${cobro.cuenta.responsableCobroTerceros ? ` · cobro de terceros a cargo de: ${cobro.cuenta.responsableCobroTerceros}` : ""}`,
     ``,
