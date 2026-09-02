@@ -15,6 +15,7 @@
 import { describe, it, expect } from "vitest";
 import {
   calcularDeltas,
+  esBorradoMasivo,
   esCorridaParcial,
   fechaOdoo,
   many2one,
@@ -241,6 +242,30 @@ describe("la guarda del 50 %", () => {
   it("una corrida completa, o casi, sigue de largo", () => {
     expect(esCorridaParcial(348, 348)).toBe(false);
     expect(esCorridaParcial(174, 348)).toBe(false); // el umbral es estricto: 50 % NO es parcial
+  });
+
+  it("⚠⚠ y el hueco que la guarda del 50 % dejaba abierto", () => {
+    /* Una corrida que trae el 60 % PASA el filtro de parcial — y después marca el 40 % restante
+       como DESAPARECIDA. El umbral del 50 % protege contra la catástrofe y deja pasar el
+       desastre: cientos de facturas borradas del espejo por un fallo que no fue un borrado. */
+    expect(esCorridaParcial(210, 347), "el 60 % no se considera parcial").toBe(false);
+    expect(esBorradoMasivo(137, 347), "…y ahí 137 facturas se irían al tacho").toBe(true);
+  });
+
+  it("un borrado real y chico sí se marca", () => {
+    /* Nadie borra 20 facturas emitidas en un día. Una o dos sí — un asiento mal cargado que se
+       anula. El corte es por proporción con un piso absoluto. */
+    expect(esBorradoMasivo(0, 347)).toBe(false);
+    expect(esBorradoMasivo(1, 347)).toBe(false);
+    expect(esBorradoMasivo(5, 347)).toBe(false);
+    expect(esBorradoMasivo(18, 347)).toBe(true);
+  });
+
+  it("con un espejo chico manda el piso absoluto, no la proporción", () => {
+    /* Con 10 facturas conocidas, el 5 % es media factura: sin el piso, borrar una sola
+       dispararía la alarma y el espejo no podría corregirse nunca. */
+    expect(esBorradoMasivo(3, 10)).toBe(false);
+    expect(esBorradoMasivo(6, 10)).toBe(true);
   });
 
   it("⚠ la PRIMERA corrida nunca es parcial", () => {

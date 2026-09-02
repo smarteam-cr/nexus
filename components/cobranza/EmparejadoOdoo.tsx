@@ -110,16 +110,29 @@ export default function EmparejadoOdoo() {
   const [verVinculados, setVerVinculados] = useState(false);
   const [verSinUsar, setVerSinUsar] = useState(false);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    try {
-      setEstado(await fetchJson<Estado>("/api/cobranza/odoo/emparejado"));
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el emparejado.");
-    } finally {
-      setCargando(false);
-    }
-  }, [toast]);
+  /**
+   * ⚠ `refrescar` es lo ÚNICO que toca el ERP. La carga normal sale del espejo y del catálogo
+   * ya guardados en la base, así que abrir la pantalla no cuesta ninguna autenticación.
+   *
+   * ⛔ Esto no es una optimización: el 2026-09-02 Odoo empezó a rechazar el usuario por
+   * volumen de logins. Cada apertura de esta pantalla eran 2 autenticaciones — 4 con el doble
+   * render de React en desarrollo — y ninguna hacía falta.
+   */
+  const cargar = useCallback(
+    async (refrescar = false) => {
+      setCargando(true);
+      try {
+        setEstado(
+          await fetchJson<Estado>(`/api/cobranza/odoo/emparejado${refrescar ? "?refrescar=1" : ""}`),
+        );
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el emparejado.");
+      } finally {
+        setCargando(false);
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     void cargar();
@@ -167,7 +180,7 @@ export default function EmparejadoOdoo() {
   if (cargando && !estado) {
     return (
       <div className="flex items-center gap-3 py-16 text-sm text-fg-muted">
-        <Spinner /> Consultando Odoo…
+        <Spinner /> Cargando…
       </div>
     );
   }
@@ -183,7 +196,11 @@ export default function EmparejadoOdoo() {
         <Alert variant="danger" title="No se pudo consultar Odoo">
           {estado.errorOdoo}
           <span className="mt-1 block text-fg-secondary">
-            Lo de abajo es lo que ya estaba guardado. Las propuestas por monto necesitan el ERP.
+            {/* ⚠ Antes decía que las propuestas por monto necesitaban el ERP. Ya no: salen del
+                espejo de facturas, que sigue siendo válido con Odoo caído. Lo único que no se
+                puede es traer clientes NUEVOS de Odoo. */}
+            Todo lo de abajo sigue sirviendo — sale del espejo de facturas y del catálogo ya
+            guardados. Lo único que no se pudo es traer clientes nuevos del ERP.
           </span>
         </Alert>
       )}
@@ -197,10 +214,10 @@ export default function EmparejadoOdoo() {
           {conteos.partners} clientes en Odoo · {conteos.partnersIgnorados} marcados como ajenos
         </span>
         {conteos.facturasLeidas > 0 && (
-          <span className="text-fg-muted">{conteos.facturasLeidas} facturas leídas para proponer</span>
+          <span className="text-fg-muted">{conteos.facturasLeidas} facturas del espejo para proponer</span>
         )}
-        <Button variant="secondary" size="sm" className="ml-auto" onClick={() => void cargar()} disabled={cargando}>
-          {cargando ? "Consultando…" : "Actualizar desde Odoo"}
+        <Button variant="secondary" size="sm" className="ml-auto" onClick={() => void cargar(true)} disabled={cargando}>
+          {cargando ? "Consultando…" : "Actualizar lista desde Odoo"}
         </Button>
       </div>
 

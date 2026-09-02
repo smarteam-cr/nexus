@@ -157,7 +157,7 @@ export interface OdooTransport {
  * mensaje que ve quien cobra tiene que decirle a quién llamar:
  *
  * - `AUTENTICACION` — la contraseña de `direct` cambió, o el usuario tiene 2FA, o la IP
- *   está en el cooldown de 5 fallos / 60 s. ⚠ `authenticate()` devuelve `false` para los
+ *   está en el bloqueo por IP (`base.login_cooldown_after`, 10 por defecto en Odoo 17). ⚠ `authenticate()` devuelve `false` para los
  *   cuatro casos: desde acá NO se distinguen, y por eso el mensaje los nombra a todos.
  * - `PERMISO` — autenticó pero el modelo está cerrado (el fault 4 de Odoo). Es lo que le
  *   pasa a REST hoy en los nueve modelos.

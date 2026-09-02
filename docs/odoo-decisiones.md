@@ -385,3 +385,69 @@ mouse por encima de siete filas. Lo señaló el trinquete de errores rojos ad-ho
 razón — un error persistente va en `<Alert variant="danger">`.
 
 **Qué la revertiría.** Mover las banderas a la base. Ahí el interruptor sería honesto.
+
+---
+
+## 2026-09-02 · ⚠⚠ INCIDENTE: Odoo dejó de aceptar el usuario, y qué se aprendió
+
+**Qué pasó.** El sync corrió bien a las 07:17 UTC (347 facturas). Media hora después,
+`authenticate` empezó a devolver `false` con la misma contraseña. `.env` no se había tocado
+desde el día anterior; `version()` seguía respondiendo HTTP 200.
+
+**⭐ Lo que la medición descartó.** Una sonda cronometrada midió **8 ms de sobrecosto sobre la
+red** en el rechazo, contra una línea base de 103 ms. Odoo **ni evaluó la contraseña**: un
+chequeo real corre PBKDF2, que cuesta cientos de milisegundos. Fue un rechazo de cortocircuito.
+
+Eso **descarta que la contraseña esté mal**. Odoo busca el usuario y recién ahí compara el
+hash; si comparara y fallara, tardaría. Un rechazo instantáneo deja dos causas: el usuario ya
+no existe o está archivado, o el ERP está aplicando su bloqueo por intentos. Ninguna de las dos
+se arregla desde el código.
+
+**⛔ Y lo que la medición NO confirmó.** Se sospechó que el volumen de logins de esta
+integración lo había provocado. **La evidencia no lo sostiene**: `SyncOdooCorrida` tiene solo
+2 filas, las dos manuales y las dos exitosas — el cron nunca llegó a correr. El total de
+autenticaciones fue del orden de quince, casi todas exitosas, y los logins exitosos no cuentan
+para el contador de fallos. La causa quedó del lado del ERP.
+
+**Pero la auditoría encontró tres bombas de tiempo reales**, y las tres están arregladas:
+
+1. **El cron reintentaba ante CUALQUIER fallo.** `shouldRun` es `hour >= 6` y el scheduler
+   tickea cada 60 s: con la autenticación rechazada eso son **~1080 reintentos por día**, uno
+   por minuto — y el período del tick es igual al del bloqueo de Odoo, así que el bloqueo se
+   sostiene solo mientras el bucle corra. Era el único job del scheduler que liberaba el claim
+   sin mirar la causa. Ahora solo lo libera si el fallo es de RED o la corrida fue parcial.
+2. **`uid ??= await autenticar()` no serializa.** Cachea el resultado, no la promesa, así que
+   dos llamadas concurrentes autentican las dos. La pantalla hacía dos lecturas en paralelo:
+   una apertura costaba 2 logins, y 4 con el doble render de React en desarrollo.
+3. **No había freno tras un fallo.** El error se mostraba, el botón quedaba habilitado, y la
+   reacción natural —recargar— sumaba más intentos.
+
+⭐ **Y el arreglo de fondo hizo desaparecer el problema entero**: la pantalla **ya no llama al
+ERP**. Los montos salen de `FacturaOdoo` y los clientes del catálogo guardado — las dos cosas
+están en la base desde que existe el sync. Abrir `/cobranza/odoo` ahora cuesta **cero
+autenticaciones**. Solo el botón «Actualizar lista desde Odoo» y el cron diario tocan el ERP.
+
+**Qué lo revertiría.** Nada de esto. La única parte discutible es la sesión compartida a nivel
+de módulo, que contradice una decisión anterior de este mismo archivo («cachear por instancia,
+no en el módulo»). Ese razonamiento estaba incompleto: pesaba el riesgo de arrastrar un uid
+viejo —que se detecta solo, porque la operación siguiente falla— y no pesaba que el costo de
+re-autenticar no es tiempo sino **cuota contra un ERP que castiga el volumen de logins**.
+
+---
+
+## 2026-09-02 · La guarda del 50 % protegía de la catástrofe y dejaba pasar el desastre
+
+**Qué se decidió.** Se agregó `esBorradoMasivo()`: si de golpe desaparecen más de 5 facturas
+—o más del 5 % del espejo— **no se marca ninguna** como DESAPARECIDA y la corrida lo reporta.
+
+**Por qué.** `esCorridaParcial` corta en el 50 %, pero una corrida que trae el **60 %** pasa ese
+filtro y después marca el 40 % restante como desaparecido: **cientos de facturas borradas del
+espejo por un fallo que no fue un borrado**. El umbral protegía del caso extremo y dejaba
+abierto el rango 50-99 %, que es el más probable.
+
+⚠ La asimetría es deliberada: perder la marca de una factura realmente borrada es recuperable
+—vuelve en la corrida siguiente—; marcar 200 vivas como desaparecidas vacía el cronograma de
+medio año y nadie sabe por qué.
+
+**Qué la revertiría.** Que aparezca una purga legítima y masiva en Odoo. Ahí hay que subir el
+umbral a mano y dejar dicho por qué, no sacar la guarda.

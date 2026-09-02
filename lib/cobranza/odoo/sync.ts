@@ -26,9 +26,10 @@ import {
   dominioFacturasDesde,
   dominioFacturasVenta,
   explicarFallo,
+  type OdooFalloClase,
   type OdooTransport,
 } from "./transporte";
-import { calcularDeltas, esCorridaParcial, mapearFactura, type Delta, type FacturaEspejada } from "./espejo";
+import { calcularDeltas, esBorradoMasivo, esCorridaParcial, mapearFactura, type Delta, type FacturaEspejada } from "./espejo";
 
 export interface ResultadoSync {
   corridaId: string;
@@ -43,6 +44,12 @@ export interface ResultadoSync {
   sinCuenta: number;
   movidasDesdeLaUltima: number | null;
   error: string | null;
+  /**
+   * ⚠ QUÉ CLASE de fallo fue. Sin esto el llamador no puede distinguir «se cayó la red»
+   * —reintentar tiene sentido— de «Odoo rechazó el usuario», donde reintentar cada minuto es
+   * exactamente lo que profundiza el bloqueo del ERP.
+   */
+  clase: OdooFalloClase | null;
   duracionMs: number;
 }
 
@@ -81,6 +88,7 @@ export async function sincronizarOdoo(opts: {
     sinCuenta: 0,
     movidasDesdeLaUltima: null,
     error: null,
+    clase: null,
     duracionMs: 0,
   };
 
@@ -116,7 +124,6 @@ export async function sincronizarOdoo(opts: {
        facturas ya no existen. */
     if (res.parcial) {
       res.error = `La lectura trajo ${vistas.length} facturas contra ${conocidas} conocidas (menos de la mitad): no se espeja nada.`;
-      await cerrar(corrida.id, res, t0);
       return res;
     }
 
@@ -250,6 +257,14 @@ export async function sincronizarOdoo(opts: {
       where: { estadoEspejo: "VIGENTE", odooMoveId: { notIn: vistosIds } },
       select: { id: true, odooMoveId: true, numero: true },
     });
+    if (esBorradoMasivo(desaparecidas.length, conocidas)) {
+      /* ⚠ No se marca ninguna. Perder la marca de una borrada de verdad es recuperable —vuelve
+         en la corrida siguiente—; marcar 200 vivas como desaparecidas vacía el cronograma de
+         medio año y nadie sabe por qué. */
+      res.error = `${desaparecidas.length} facturas dejaron de venir de golpe (de ${conocidas} conocidas). Eso no parece un borrado: no se marcó ninguna como desaparecida.`;
+      res.clase = "PROTOCOLO";
+      return res;
+    }
     for (const d of desaparecidas) {
       await prisma.facturaOdoo.update({ where: { id: d.id }, data: { estadoEspejo: "DESAPARECIDA" } });
       await prisma.facturaOdooCambio.create({
@@ -270,9 +285,15 @@ export async function sincronizarOdoo(opts: {
        porque cambió la contraseña» y «no sé, no anda». */
     res.error =
       e instanceof OdooError ? `${explicarFallo(e.clase)} | ${e.message}` : e instanceof Error ? e.message : String(e);
+    res.clase = e instanceof OdooError ? e.clase : "PROTOCOLO";
+  } finally {
+    /* ⛔ En `finally`, no después del catch. Si algo tira fuera del try —o alguien agrega un
+       `return` temprano— la fila queda ABIERTA para siempre, y una corrida abierta es
+       indistinguible de una que sigue corriendo. Es justo lo que vigila INV24: el fallo que
+       no se ve. */
+    await cerrar(corrida.id, res, t0);
   }
 
-  await cerrar(corrida.id, res, t0);
   return res;
 }
 

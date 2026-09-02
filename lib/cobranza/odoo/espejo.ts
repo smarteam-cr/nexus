@@ -340,3 +340,25 @@ export function calcularDeltas(previa: FacturaPrevia, nueva: FacturaEspejada, cu
 export function esCorridaParcial(traidas: number, conocidas: number): boolean {
   return conocidas > 0 && traidas < conocidas * 0.5;
 }
+
+/**
+ * ¿Están desapareciendo TANTAS facturas de golpe que es más probable un problema de lectura
+ * que un borrado real?
+ *
+ * ⚠⚠ La guarda del 50 % deja un hueco peligroso: una corrida que trae el 60 % pasa el filtro
+ * de «parcial» y después marca **el 40 % restante como DESAPARECIDA** — cientos de facturas
+ * borradas del espejo por un fallo que no fue un borrado. El umbral del 50 % protege contra la
+ * catástrofe y deja pasar el desastre.
+ *
+ * Nadie borra 20 facturas emitidas en un día. Una o dos, sí — un asiento mal cargado que se
+ * anula. Por eso el corte es por PROPORCIÓN con un piso absoluto: hasta 5 desapariciones son
+ * plausibles; más del 5 % del espejo, no.
+ *
+ * ⛔ Cuando salta, NO se marca ninguna. Perder la marca de una factura realmente borrada es
+ * recuperable —vuelve en la corrida siguiente—; marcar 200 vivas como desaparecidas vacía el
+ * cronograma de medio año y nadie sabe por qué.
+ */
+export function esBorradoMasivo(desaparecidas: number, conocidas: number): boolean {
+  if (desaparecidas === 0) return false;
+  return desaparecidas > Math.max(5, conocidas * 0.05);
+}

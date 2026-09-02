@@ -16,6 +16,7 @@
  * que es la forma más cara de fallar: el código de arriba cree que le fue bien.
  */
 import https from "node:https";
+import { crearGuardiaDeSesion, type GuardiaDeSesion } from "./sesion";
 import {
   OdooError,
   clasificarFalloOdoo,
@@ -51,8 +52,9 @@ export const ODOO_DEFAULTS = {
  * una contraseña mala — o sea que el fallo se vería como «credenciales rechazadas» y alguien
  * pasaría una tarde revisando el ERP.
  *
- * ⚠ Cada intento fallido cuenta para el cooldown de Odoo (5 por IP, 60 s). Nunca se prueba
- * un secreto que no tenemos.
+ * ⚠ Cada intento fallido cuenta para el bloqueo por IP de Odoo (`base.login_cooldown_after`,
+ * 10 por defecto en Odoo 17; `base.login_cooldown_duration`, 60 s). Nunca se prueba un secreto
+ * que no tenemos.
  */
 export function configDesdeEntorno(env: NodeJS.ProcessEnv = process.env): OdooConfig {
   const password = env.ODOO_PASSWORD ?? "";
@@ -107,6 +109,58 @@ function pedir(cfg: OdooConfig, path: string, contentType: string, cuerpo: strin
 
 /* ── Autenticación ──────────────────────────────────────────────────────────────── */
 
+/**
+ * ⚠⚠ ESTADO DE MÓDULO, Y NO POR COMODIDAD. Odoo **castiga el volumen de logins**: tras N
+ * fallos desde una IP corta por un rato, y ese corte lo comparte todo el que salga por esa IP.
+ *
+ * Medido el 2026-09-02: el sync corrió bien a las 07:17 UTC y media hora después
+ * `authenticate` empezó a devolver `false`. La sonda midió **8 ms de sobrecosto sobre la red**
+ * — o sea que Odoo ni llegó a evaluar la contraseña, que es lo que cuesta cientos de
+ * milisegundos de PBKDF2. Fue un rechazo de cortocircuito, compatible con el bloqueo por IP.
+ *
+ * Lo provocó este archivo: cada `crearTransporteXmlRpc` autenticaba de cero, y encima
+ * `uid ??= await autenticar(cfg)` **no serializaba** — dos lecturas en paralelo con `uid` en
+ * null disparaban DOS autenticaciones a la vez. Una carga de pantalla costaba 2, y con el
+ * doble render de React en desarrollo, 4.
+ *
+ * ⛔ Una corrección anterior de este mismo archivo decía que cachear en el módulo era peligroso
+ * «para no arrastrar un uid de un usuario que ya no existe». Ese razonamiento estaba
+ * incompleto: no pesaba que el costo de re-autenticar no es tiempo, es CUOTA. Y un uid viejo
+ * se detecta solo — la operación siguiente falla con su propio error.
+ */
+let guardia: GuardiaDeSesion | null = null;
+let claveDeGuardia = "";
+
+/** Para las pruebas y para cuando alguien arregla la contraseña y no quiere esperar. */
+export function olvidarSesionOdoo(): void {
+  guardia?.olvidar();
+  guardia = null;
+  claveDeGuardia = "";
+}
+
+/** Cuánto falta para poder reintentar, en ms. 0 = se puede ahora. */
+export function esperaRestanteOdooMs(): number {
+  return guardia?.esperaRestanteMs() ?? 0;
+}
+
+/**
+ * ⚠ El guardia se rehace si cambia la configuración —otro host, otro usuario, otra
+ * contraseña—: arrastrar el freno de una credencial vieja bloquearía una nueva que sí sirve.
+ */
+function guardiaDe(cfg: OdooConfig): GuardiaDeSesion {
+  const clave = `${cfg.host}|${cfg.db}|${cfg.login}|${cfg.password.length}`;
+  if (!guardia || claveDeGuardia !== clave) {
+    claveDeGuardia = clave;
+    guardia = crearGuardiaDeSesion({
+      ahora: () => Date.now(),
+      autenticar: () => autenticar(cfg),
+      mensajeEspera: (min) =>
+        `Odoo rechazó el usuario y se está esperando ${min} min antes de reintentar. Cada intento de más alarga el bloqueo del ERP, así que no sirve recargar.`,
+    });
+  }
+  return guardia;
+}
+
 const xmlStr = (v: string) => `<value><string>${escaparXml(v)}</string></value>`;
 
 /** La contraseña viaja dentro de un XML. Un `&` sin escapar rompe el documento entero. */
@@ -123,6 +177,17 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
   const uid = r.texto.match(/<value><int>(\d+)<\/int><\/value>/)?.[1];
   if (uid) return Number(uid);
 
+  /* ⚠ ANTES de concluir «te rechazó»: puede que ni siquiera haya contestado el ERP. Un 502 de
+     un proxy, o una página de mantenimiento, no traen un uid — y sin este chequeo el código
+     interpretaba ese silencio como credenciales malas y mandaba a alguien a revisar el
+     usuario en Odoo por un problema de infraestructura. */
+  if (r.status !== 200 || !r.texto.includes("<methodResponse")) {
+    throw new OdooError(
+      "RED",
+      `El servidor de Odoo no contestó una respuesta válida (HTTP ${r.status}). No es que rechace el usuario: no llegó a atender.`,
+    );
+  }
+
   /* ⚠ `authenticate()` devuelve `false` para contraseña mala, 2FA activo, usuario archivado
      y cooldown por IP. Por el valor de retorno NO se distinguen, así que el mensaje los
      nombra a los cuatro en vez de afirmar el que suena más probable. */
@@ -131,7 +196,7 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
     "AUTENTICACION",
     fault
       ? `Odoo rechazó la autenticación: ${fault.slice(0, 300)}`
-      : `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo si la contraseña cambió, si hay verificación en dos pasos, si el usuario está archivado, o si la IP está bloqueada por intentos fallidos.`,
+      : `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo en cuatro casos: contraseña cambiada, verificación en dos pasos, usuario archivado, o bloqueo temporal por intentos fallidos. Hay que revisarlo en el ERP; desde acá no se distinguen.`,
   );
 }
 
@@ -143,10 +208,8 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
  * una llamada por corrida, que contra 348 facturas no se nota.
  */
 export function crearTransporteXmlRpc(cfg: OdooConfig): OdooTransport {
-  let uid: number | null = null;
-
   async function llamar(modelo: string, metodo: string, args: unknown[], kwargs: Record<string, unknown> = {}) {
-    uid ??= await autenticar(cfg);
+    const uid = await guardiaDe(cfg).uid();
     const cuerpo = JSON.stringify({
       jsonrpc: "2.0",
       method: "call",

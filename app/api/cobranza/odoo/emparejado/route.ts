@@ -39,7 +39,10 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q");
   if (q !== null) return NextResponse.json(await buscarEnOdoo(q));
 
-  const [estado, sinVinculo] = await Promise.all([cargarEmparejado(), cuentasSinVinculo()]);
+  /* ⚠ Solo `?refrescar=1` toca el ERP. La carga normal sale del espejo y del catálogo
+     guardados: consultar Odoo en cada render fue lo que provocó el bloqueo del 2026-09-02. */
+  const refrescar = req.nextUrl.searchParams.get("refrescar") === "1";
+  const [estado, sinVinculo] = await Promise.all([cargarEmparejado({ refrescar }), cuentasSinVinculo()]);
   return NextResponse.json({ ...estado, cuentasSinVinculo: sinVinculo });
 }
 

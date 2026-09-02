@@ -17,15 +17,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
-import {
-  ODOO_CAMPOS_FACTURA,
-  ODOO_CAMPOS_PARTNER,
-  OdooError,
-  dominioClientes,
-  dominioFacturasVenta,
-  explicarFallo,
-} from "./transporte";
-import { mapearFactura, textoOdoo } from "./espejo";
+import { ODOO_CAMPOS_PARTNER, OdooError, dominioClientes, explicarFallo } from "./transporte";
+import { textoOdoo } from "./espejo";
 import {
   buscarPartners,
   cedulaAAprender,
@@ -83,7 +76,22 @@ export interface EstadoEmparejado {
   errorOdoo: string | null;
 }
 
-export async function cargarEmparejado(): Promise<EstadoEmparejado> {
+/**
+ * ⚠⚠ POR DEFECTO **NO LLAMA AL ERP**. Los partners salen del catálogo guardado y los montos
+ * del espejo de facturas — las dos cosas ya están en la base desde que corre el sync.
+ *
+ * Antes esta función consultaba Odoo en cada carga de pantalla, y estaba escrito en la
+ * bitácora como una decisión provisional: «con el espejo de la etapa 2 andando, los montos
+ * salen de FacturaOdoo y la consulta al ERP desaparece sola». Desapareció.
+ *
+ * ⛔ No es una optimización: es la causa de un incidente. El 2026-09-02 Odoo empezó a rechazar
+ * el usuario media hora después de una corrida exitosa, con un rechazo de cortocircuito de
+ * 8 ms —ni evaluó la contraseña— compatible con su bloqueo por volumen de logins. Cada carga
+ * de esta pantalla eran 2 autenticaciones, y 4 con el doble render de React en desarrollo.
+ *
+ * `refrescar: true` es el único camino que toca el ERP, y lo dispara una persona con un botón.
+ */
+export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Promise<EstadoEmparejado> {
   const cuentasDb = await prisma.cuentaFinanciera.findMany({
     select: {
       id: true,
@@ -98,40 +106,40 @@ export async function cargarEmparejado(): Promise<EstadoEmparejado> {
   let facturasLeidas = 0;
   let errorOdoo: string | null = null;
 
-  try {
-    const t = crearTransporteXmlRpc(configDesdeEntorno());
-    const [crudosPartner, crudasFacturas] = await Promise.all([
-      t.buscarYLeer("res.partner", dominioClientes(), ODOO_CAMPOS_PARTNER, { order: "name asc" }),
-      t.buscarYLeer("account.move", dominioFacturasVenta(), ODOO_CAMPOS_FACTURA, { order: "id asc" }),
-    ]);
-    facturasLeidas = crudasFacturas.length;
+  /* Los montos para proponer salen del ESPEJO, no del ERP. Solo las facturas propiamente
+     dichas: una nota de crédito por el mismo monto que un cobro apuntaría al partner correcto
+     por la razón equivocada. */
+  const espejo = await prisma.facturaOdoo.findMany({
+    where: { estadoEspejo: "VIGENTE", moveType: "out_invoice" },
+    select: { odooPartnerId: true, montoNeto: true, moneda: true },
+  });
+  montosOdoo = espejo.map((f) => ({
+    odooPartnerId: f.odooPartnerId,
+    montoNeto: Number(f.montoNeto),
+    moneda: f.moneda,
+  }));
+  facturasLeidas = espejo.length;
 
+  if (opts.refrescar) try {
+    /* UNA sola lectura, y solo la lista de clientes: los montos ya salieron del espejo. */
+    const t = crearTransporteXmlRpc(configDesdeEntorno());
+    const crudosPartner = await t.buscarYLeer("res.partner", dominioClientes(), ODOO_CAMPOS_PARTNER, {
+      order: "name asc",
+    });
     partnersOdoo = crudosPartner.map((p) => ({
       odooPartnerId: Number(p.id),
       nombre: textoOdoo(p.name) ?? "",
       vat: textoOdoo(p.vat),
       customerRank: Number(p.customer_rank ?? 0),
     }));
-
-    for (const c of crudasFacturas) {
-      const r = mapearFactura(c);
-      /* Solo facturas propiamente dichas: una nota de crédito por el mismo monto que un
-         cobro apuntaría al partner correcto por la razón equivocada. */
-      if ("rechazo" in r || r.factura.moveType !== "out_invoice") continue;
-      montosOdoo.push({
-        odooPartnerId: r.factura.odooPartnerId,
-        montoNeto: r.factura.montoNeto,
-        moneda: r.factura.moneda,
-      });
-    }
-
     await recordarPartners(partnersOdoo);
   } catch (e) {
     /* ⛔ No se traga el error. Un ERP que no responde es un hallazgo, no un problema a
-       resolver en silencio dejando la pantalla vacía. */
+       resolver en silencio. ⚠ Pero los montos NO se descartan: vienen del espejo, que sigue
+       siendo válido aunque el ERP esté caído. Vaciarlos borraría las propuestas por monto
+       —que son 9 de las 15— por un problema que no las afecta. */
     errorOdoo =
       e instanceof OdooError ? `${explicarFallo(e.clase)} (${e.message})` : e instanceof Error ? e.message : String(e);
-    montosOdoo = [];
   }
 
   const guardados = await prisma.odooPartnerVinculo.findMany({

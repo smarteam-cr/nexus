@@ -220,7 +220,8 @@ const ventasGanadasDaily: JobDef = {
  * Esperar al emparejado costaría no tener espejo por días, sin ganar nada.
  *
  * ⚠ Necesita `ODOO_PASSWORD`. Sin eso ni se intenta: un intento en vano cuenta para el
- * bloqueo por IP de Odoo (5 fallos, 60 s). `ODOO_SYNC_ENABLED=0` lo apaga sin sacar el código.
+ * bloqueo por IP de Odoo (10 fallos por defecto en Odoo 17). `ODOO_SYNC_ENABLED=0` lo apaga
+ * sin sacar el código.
  */
 const odooEspejoDaily: JobDef = {
   key: "odoo-espejo-daily",
@@ -232,13 +233,23 @@ const odooEspejoDaily: JobDef = {
     const { sincronizarOdoo } = await import("@/lib/cobranza/odoo/sync");
     const r = await sincronizarOdoo({ disparadaPor: "cron" });
 
-    // Fallo o corrida parcial: los dos son transitorios y el claim se libera para reintentar
-    // en el próximo tick. Mismo criterio que ventas-ganadas-daily.
+    // ⚠⚠ SOLO se libera el claim cuando el fallo es TRANSITORIO. Este job era el único del
+    // scheduler que lo liberaba ante cualquier fallo, y el tick corre cada 60 s: con la
+    // autenticación rechazada eso son ~1080 reintentos por día, uno por minuto, cada uno
+    // contando para el bloqueo por IP de Odoo — que se sostiene solo mientras el bucle corra.
+    //
+    // Un rechazo de credenciales NO se arregla reintentando. Se apaga y se avisa.
+    const transitorio = r.parcial || r.clase === "RED";
     if (!r.ok) {
-      await prisma.cronJobState
-        .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
-        .catch(() => {});
-      console.error(`[jobs/odoo-espejo] ${dateKey} — ${r.parcial ? "corrida PARCIAL" : "FALLÓ"}: ${r.error}; claim liberado`);
+      if (transitorio) {
+        await prisma.cronJobState
+          .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+          .catch(() => {});
+      }
+      console.error(
+        `[jobs/odoo-espejo] ${dateKey} — ${r.parcial ? "corrida PARCIAL" : `FALLÓ (${r.clase ?? "?"})`}: ${r.error}; ` +
+          (transitorio ? "claim liberado para reintentar" : "claim RETENIDO: no se reintenta hasta mañana"),
+      );
       return;
     }
     console.log(
