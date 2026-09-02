@@ -205,6 +205,55 @@ CREATE POLICY deny_all_non_superuser ON "VentaGanadaCambio"
   TO PUBLIC
   USING (false);
 
+-- Espejo de Odoo (2026-09-02). El bucle de arriba ya les habilita RLS, y sin policies eso
+-- ya es deny-all — pero la policy explícita sobrevive a que alguien agregue una permisiva
+-- más adelante sin darse cuenta de lo que había.
+--
+-- ⚠ Estaban en el .sql de la migración y NO acá, así que reconstruir el proyecto desde cero
+-- las habría dejado afuera: la migración se corre una vez, esta red se corre siempre.
+-- Son facturas de clientes con montos y cédulas.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "FacturaOdoo";
+CREATE POLICY deny_all_non_superuser ON "FacturaOdoo"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "FacturaOdooCambio";
+CREATE POLICY deny_all_non_superuser ON "FacturaOdooCambio"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "CobroFacturaOdoo";
+CREATE POLICY deny_all_non_superuser ON "CobroFacturaOdoo"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "OdooPartnerVinculo";
+CREATE POLICY deny_all_non_superuser ON "OdooPartnerVinculo"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "SyncOdooCorrida";
+CREATE POLICY deny_all_non_superuser ON "SyncOdooCorrida"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "DiferenciaOdooAceptada";
+CREATE POLICY deny_all_non_superuser ON "DiferenciaOdooAceptada"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 DROP POLICY IF EXISTS deny_all_non_superuser ON "EgresoMensual";
 CREATE POLICY deny_all_non_superuser ON "EgresoMensual"
   AS RESTRICTIVE

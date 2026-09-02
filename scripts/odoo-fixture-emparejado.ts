@@ -71,14 +71,16 @@ async function main() {
       id: true,
       cedulaJuridica: true,
       client: { select: { name: true } },
-      cobros: { select: { monto: true } },
+      cobros: { select: { monto: true, moneda: true } },
     },
   });
   const cuentas = cuentasDb.map((c) => ({
     cuentaId: c.id,
     nombre: c.client.name,
     cedulaJuridica: c.cedulaJuridica,
-    montos: [...new Set(c.cobros.map((x) => Number(x.monto)))].sort((a, b) => a - b),
+    montos: [...new Map(c.cobros.map((x) => [`${x.moneda}|${Number(x.monto)}`, { monto: Number(x.monto), moneda: x.moneda }])).values()].sort(
+      (a, b) => a.monto - b.monto,
+    ),
   }));
 
   const fixture = {

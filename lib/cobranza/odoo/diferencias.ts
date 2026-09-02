@@ -130,8 +130,20 @@ const CENTAVOS = (n: number) => Math.round(n * 100);
 const DIA = 86_400_000;
 const dias = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DIA;
 
-/** Ventana en la que una factura puede corresponder a un cobro programado. */
-const VENTANA_DIAS = 45;
+/**
+ * Ventana en la que una factura puede corresponder a un cobro programado.
+ *
+ * ⚠ Son DOS, y la diferencia importa. El monto exacto es evidencia fuerte, así que se le da
+ * medio año: un cobro programado en enero que se facturó en abril es normal. El monto
+ * aproximado es evidencia débil y se queda en 45 días, o una factura de enero se aparea con un
+ * cobro de diciembre y la lista reporta una «diferencia de monto» que son dos hechos distintos.
+ *
+ * ⛔ Y la ventana del exacto NO puede ser infinita, que es como estaba: sin límite, un cobro
+ * recurrente de USD 2.000 se apareaba con la factura de 2.000 de hace tres años, dejando al
+ * cobro de este mes sin factura y sin que nada lo dijera.
+ */
+const VENTANA_EXACTO_DIAS = 180;
+const VENTANA_APROX_DIAS = 45;
 
 /**
  * Cruza cobros contra facturas de la MISMA cuenta.
@@ -147,7 +159,22 @@ const VENTANA_DIAS = 45;
  * ⛔ Las notas de crédito (`out_refund`) NO se aparean con cobros. Una nota corrige una
  * factura, no cubre una cuota, y aparearla haría desaparecer un cobro que sigue pendiente.
  */
+/**
+ * Más cerca en el tiempo primero, y **con desempate por id**.
+ *
+ * ⚠ El desempate no es cosmético: sin él, dos facturas del mismo día por el mismo monto se
+ * ordenaban según el orden en que Postgres devolvió las filas — que sin `ORDER BY` no está
+ * garantizado. La misma consulta podía aparear cobros con facturas distintas en dos corridas
+ * seguidas, y la lista del CFO cambiaba sin que nadie hubiera tocado nada.
+ */
+const porCercania = (c: CobroParaCruzar) => (a: FacturaParaCruzar, b: FacturaParaCruzar) =>
+  dias(a.invoiceDate, c.fechaProgramada) - dias(b.invoiceDate, c.fechaProgramada) ||
+  a.odooMoveId - b.odooMoveId;
+
 export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly FacturaParaCruzar[]): ResultadoCruce {
+  /* Y el recorrido de los cobros también es determinista: el orden de entrada decide quién
+     se queda con una factura que dos podrían reclamar. */
+  const enOrden = [...cobros].sort((x, y) => x.fechaProgramada.localeCompare(y.fechaProgramada) || x.id.localeCompare(y.id));
   const facturables = facturas.filter((f) => f.cuentaId && f.moveType !== "out_refund" && f.state !== "cancel");
   const usadas = new Set<string>();
   const pares: ParCobroFactura[] = [];
@@ -162,10 +189,16 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
 
   /* Primera pasada: monto exacto. Se hace ENTERA antes de la aproximada para que una
      coincidencia perfecta nunca pierda su factura contra una parecida de otro cobro. */
-  for (const c of cobros) {
+  for (const c of enOrden) {
     const cands = (porCuenta.get(c.cuentaId) ?? [])
-      .filter((f) => !usadas.has(f.id) && f.moneda === c.moneda && CENTAVOS(f.montoNeto) === CENTAVOS(c.monto))
-      .sort((a, b) => dias(a.invoiceDate, c.fechaProgramada) - dias(b.invoiceDate, c.fechaProgramada));
+      .filter(
+        (f) =>
+          !usadas.has(f.id) &&
+          f.moneda === c.moneda &&
+          CENTAVOS(f.montoNeto) === CENTAVOS(c.monto) &&
+          dias(f.invoiceDate, c.fechaProgramada) <= VENTANA_EXACTO_DIAS,
+      )
+      .sort(porCercania(c));
     const hit = cands[0];
     if (hit) {
       usadas.add(hit.id);
@@ -176,11 +209,13 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
   /* Segunda: misma cuenta, misma moneda, fecha cerca, monto distinto. Es la línea más útil
      de todas — no dice «falta algo», dice «esto no coincide y son X pesos». */
   const apareados = new Set(pares.map((p) => p.cobroId));
-  for (const c of cobros) {
+  for (const c of enOrden) {
     if (apareados.has(c.id)) continue;
     const cands = (porCuenta.get(c.cuentaId) ?? [])
-      .filter((f) => !usadas.has(f.id) && f.moneda === c.moneda && dias(f.invoiceDate, c.fechaProgramada) <= VENTANA_DIAS)
-      .sort((a, b) => dias(a.invoiceDate, c.fechaProgramada) - dias(b.invoiceDate, c.fechaProgramada));
+      .filter(
+        (f) => !usadas.has(f.id) && f.moneda === c.moneda && dias(f.invoiceDate, c.fechaProgramada) <= VENTANA_APROX_DIAS,
+      )
+      .sort(porCercania(c));
     const hit = cands[0];
     if (!hit) {
       cobrosSolos.push(c);

@@ -156,6 +156,10 @@ function guardiaDe(cfg: OdooConfig): GuardiaDeSesion {
       autenticar: () => autenticar(cfg),
       mensajeEspera: (min) =>
         `Odoo rechazó el usuario y se está esperando ${min} min antes de reintentar. Cada intento de más alarga el bloqueo del ERP, así que no sirve recargar.`,
+      /* ⚠ Con la clase correcta. Como `Error` pelado, aguas arriba se leía como fallo de
+         PROTOCOLO y el cron retenía su turno del día: un bloqueo de un minuto costaba la
+         corrida entera. */
+      errorDeEspera: (texto) => new OdooError("AUTENTICACION", texto),
     });
   }
   return guardia;
@@ -174,6 +178,23 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
     `<param>${xmlStr(cfg.db)}</param><param>${xmlStr(cfg.login)}</param><param>${xmlStr(cfg.password)}</param>` +
     `<param><value><struct></struct></value></param></params></methodCall>`;
   const r = await pedir(cfg, "/xmlrpc/2/common", "text/xml", xml);
+
+  /**
+   * ⛔⛔ EL FAULT SE MIRA PRIMERO, Y NO ES UNA CORTESÍA.
+   *
+   * Una respuesta de error de XML-RPC lleva `<name>faultCode</name><value><int>3</int></value>`
+   * — y el regex de abajo matchea CUALQUIER `<int>`. O sea que un error de Odoo se leía como un
+   * login exitoso con `uid = 3`, que además **reseteaba el freno de reintentos** y dejaba al
+   * resto del código operando con un uid inventado.
+   */
+  if (r.texto.includes("<fault>")) {
+    const fault = r.texto.match(/<name>faultString<\/name>\s*<value><string>([\s\S]*?)<\/string>/)?.[1] ?? "";
+    throw new OdooError(
+      clasificarFalloOdoo(fault, fault),
+      `Odoo devolvió un error al autenticar: ${fault.slice(0, 300) || "(sin detalle)"}`,
+    );
+  }
+
   const uid = r.texto.match(/<value><int>(\d+)<\/int><\/value>/)?.[1];
   if (uid) return Number(uid);
 
@@ -191,12 +212,10 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
   /* ⚠ `authenticate()` devuelve `false` para contraseña mala, 2FA activo, usuario archivado
      y cooldown por IP. Por el valor de retorno NO se distinguen, así que el mensaje los
      nombra a los cuatro en vez de afirmar el que suena más probable. */
-  const fault = r.texto.match(/<name>faultString<\/name>\s*<value><string>([\s\S]*?)<\/string>/)?.[1];
+  /* Llegar acá significa `<boolean>0</boolean>`: Odoo dijo que no, sin decir por qué. */
   throw new OdooError(
     "AUTENTICACION",
-    fault
-      ? `Odoo rechazó la autenticación: ${fault.slice(0, 300)}`
-      : `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo en cuatro casos: contraseña cambiada, verificación en dos pasos, usuario archivado, o bloqueo temporal por intentos fallidos. Hay que revisarlo en el ERP; desde acá no se distinguen.`,
+    `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo en cuatro casos: contraseña cambiada, verificación en dos pasos, usuario archivado, o bloqueo temporal por intentos fallidos. Hay que revisarlo en el ERP; desde acá no se distinguen.`,
   );
 }
 

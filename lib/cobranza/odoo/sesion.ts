@@ -44,6 +44,15 @@ export interface OpcionesDeSesion {
   esperasMin?: readonly number[];
   /** El mensaje que se le muestra a la persona mientras hay que esperar. */
   mensajeEspera?: (minutosRestantes: number) => string;
+  /**
+   * Cómo se construye el error del freno.
+   *
+   * ⚠ Existe porque el freno tiraba un `Error` pelado, y aguas arriba eso se clasificaba como
+   * fallo de PROTOCOLO — no de AUTENTICACIÓN. El cron entonces retenía su turno del día, así
+   * que **un bloqueo de un minuto le costaba la corrida entera**. El tipo del error decide si
+   * se reintenta; no puede quedar librado a un `new Error`.
+   */
+  errorDeEspera?: (mensaje: string) => Error;
 }
 
 export const SESION_MS_DEFAULT = 30 * 60_000;
@@ -85,7 +94,10 @@ export function crearGuardiaDeSesion(opts: OpcionesDeSesion): GuardiaDeSesion {
       /* ⛔ El freno va PRIMERO. Si fuera al final, una ráfaga concurrente ya habría mandado
          sus logins antes de llegar acá — que es exactamente el modo en que esto falló. */
       const falta = Math.max(0, bloqueadoHasta - t);
-      if (falta > 0) throw new Error(mensaje(Math.ceil(falta / 60_000)));
+      if (falta > 0) {
+        const texto = mensaje(Math.ceil(falta / 60_000));
+        throw opts.errorDeEspera ? opts.errorDeEspera(texto) : new Error(texto);
+      }
 
       if (uidVigente !== null && expiraEn > t) return uidVigente;
 

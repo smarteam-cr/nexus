@@ -29,13 +29,26 @@ import {
   type OdooFalloClase,
   type OdooTransport,
 } from "./transporte";
-import { calcularDeltas, esBorradoMasivo, esCorridaParcial, mapearFactura, type Delta, type FacturaEspejada } from "./espejo";
+import {
+  calcularDeltas,
+  esBorradoMasivo,
+  esCorridaParcial,
+  mapearFactura,
+  type Delta,
+  type FacturaEspejada,
+  type TipoCambioBitacora,
+} from "./espejo";
+
+/** El separador del detalle de rechazos. Constante para no pelear con el escapado. */
+const SALTO = String.fromCharCode(10);
 
 export interface ResultadoSync {
   corridaId: string;
   ok: boolean;
   parcial: boolean;
   facturasVistas: number;
+  /** Las que además se pudieron LEER. `facturasVistas - espejadas` = rechazadas. */
+  espejadas: number;
   creadas: number;
   actualizadas: number;
   desaparecidas: number;
@@ -80,6 +93,7 @@ export async function sincronizarOdoo(opts: {
     ok: false,
     parcial: false,
     facturasVistas: 0,
+    espejadas: 0,
     creadas: 0,
     actualizadas: 0,
     desaparecidas: 0,
@@ -116,6 +130,8 @@ export async function sincronizarOdoo(opts: {
       else vistas.push(r.factura);
     }
 
+    res.espejadas = vistas.length;
+
     const conocidas = await prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } });
     res.parcial = esCorridaParcial(vistas.length, conocidas);
 
@@ -139,7 +155,9 @@ export async function sincronizarOdoo(opts: {
         id: true,
         odooMoveId: true,
         montoTotal: true,
+        montoNeto: true,
         montoResidual: true,
+        moneda: true,
         paymentState: true,
         state: true,
         invoiceDate: true,
@@ -189,6 +207,8 @@ export async function sincronizarOdoo(opts: {
       const deltas: Delta[] = calcularDeltas(
         {
           montoTotal: Number(previa.montoTotal),
+          montoNeto: Number(previa.montoNeto),
+          moneda: previa.moneda,
           montoResidual: Number(previa.montoResidual),
           paymentState: previa.paymentState,
           state: previa.state,
@@ -211,21 +231,36 @@ export async function sincronizarOdoo(opts: {
         continue;
       }
 
-      await prisma.facturaOdoo.update({ where: { id: previa.id }, data: datos });
-      for (const d of deltas) {
-        await prisma.facturaOdooCambio.create({
-          data: {
-            facturaId: previa.id,
-            odooMoveId: f.odooMoveId,
-            numero: f.numero,
-            tipo: d.tipo,
-            anterior: d.anterior,
-            nuevo: d.nuevo,
+      /* ⚠ La resurrección SÍ deja rastro. El comentario de arriba lo prometía y el código no lo
+         hacía: con `deltas` vacío el bucle no iteraba, así que una factura que volvía de
+         DESAPARECIDA se reactivaba sin una sola línea que lo dijera. */
+      const aEscribir: Array<{ tipo: TipoCambioBitacora; anterior: string; nuevo: string }> = revivio
+        ? [{ tipo: "DESAPARECIDA" as const, anterior: "DESAPARECIDA", nuevo: "VIGENTE" }, ...deltas]
+        : deltas;
+
+      /* ⛔ La fila y su bitácora en UNA escritura anidada, no en dos sueltas. Si el proceso
+         moría entre las dos, la fila quedaba con los valores nuevos y la corrida siguiente ya
+         no encontraba deltas: el cambio se perdía para siempre y re-correr el sync no lo
+         reparaba. Es el peor caso de re-ejecución — parece idempotente y consumió el evento. */
+      await prisma.facturaOdoo.update({
+        where: { id: previa.id },
+        data: {
+          ...datos,
+          cambios: {
+            create: aEscribir.map((d) => ({
+              odooMoveId: f.odooMoveId,
+              numero: f.numero,
+              tipo: d.tipo,
+              anterior: d.anterior,
+              nuevo: d.nuevo,
+            })),
           },
-        });
-      }
+        },
+      });
+      /* Los contadores se suman DESPUÉS de escribir: sumarlos antes hace que la corrida
+         reporte trabajo que no llegó a pasar. */
       res.actualizadas++;
-      res.cambios += deltas.length;
+      res.cambios += aEscribir.length;
     }
 
     if (nuevas.length) {
@@ -252,7 +287,19 @@ export async function sincronizarOdoo(opts: {
     /* ⛔ NUNCA se borra una fila: se marca. Una factura que Odoo dejó de devolver puede ser
        un borrado real, un cambio de permisos o un filtro que quedó mal — y la que se borró es
        justamente la que hace falta para entender por qué un cobro quedó sin factura. */
-    const vistosIds = vistas.map((f) => f.odooMoveId);
+    /**
+     * ⚠⚠ De las CRUDAS, no de las mapeadas. Éste es el defecto que siete auditorías
+     * independientes encontraron por separado.
+     *
+     * Una factura que Odoo SÍ devuelve pero que `mapearFactura` rechaza —le falta la fecha, el
+     * partner o la moneda— salía de `vistas`, y el sync concluía que había desaparecido del
+     * ERP. La marcaba DESAPARECIDA, con lo que sale del cronograma del cliente y de la mesa
+     * del CFO, **y la bitácora afirmaba que Odoo la borró, que es falso**.
+     *
+     * Odoo la sigue devolviendo. Que no la sepamos leer es un problema nuestro, y se cuenta
+     * aparte en `rechazadas`.
+     */
+    const vistosIds = crudas.map((c) => Number(c.id)).filter((n) => Number.isFinite(n) && n > 0);
     const desaparecidas = await prisma.facturaOdoo.findMany({
       where: { estadoEspejo: "VIGENTE", odooMoveId: { notIn: vistosIds } },
       select: { id: true, odooMoveId: true, numero: true },
@@ -266,19 +313,25 @@ export async function sincronizarOdoo(opts: {
       return res;
     }
     for (const d of desaparecidas) {
-      await prisma.facturaOdoo.update({ where: { id: d.id }, data: { estadoEspejo: "DESAPARECIDA" } });
-      await prisma.facturaOdooCambio.create({
+      await prisma.facturaOdoo.update({
+        where: { id: d.id },
         data: {
-          facturaId: d.id,
-          odooMoveId: d.odooMoveId,
-          numero: d.numero,
-          tipo: "DESAPARECIDA",
-          anterior: "VIGENTE",
-          nuevo: "DESAPARECIDA",
+          estadoEspejo: "DESAPARECIDA",
+          cambios: {
+            create: {
+              odooMoveId: d.odooMoveId,
+              numero: d.numero,
+              tipo: "DESAPARECIDA",
+              anterior: "VIGENTE",
+              nuevo: "DESAPARECIDA",
+            },
+          },
         },
       });
+      /* Adentro del bucle: asignar el total después hacía que un corte a mitad reportara cero
+         desaparecidas habiendo marcado la mitad. */
+      res.desaparecidas++;
     }
-    res.desaparecidas = desaparecidas.length;
     res.ok = true;
   } catch (e) {
     /* El texto del error se GUARDA. Es la diferencia entre «viene fallando hace tres días
@@ -309,7 +362,12 @@ async function cerrar(corridaId: string, res: ResultadoSync, t0: number): Promis
       creadas: res.creadas,
       actualizadas: res.actualizadas,
       desaparecidas: res.desaparecidas,
-      vinculadas: res.facturasVistas - res.sinCuenta,
+      /* ⚠ Sobre las MAPEADAS, no sobre las crudas. `facturasVistas` cuenta lo que Odoo devolvió
+         y `sinCuenta` solo lo que se pudo leer: restarlas inflaba el número exactamente en la
+         cantidad de rechazadas, y ese número va a pantalla. */
+      vinculadas: Math.max(0, res.espejadas - res.sinCuenta),
+      rechazadas: res.rechazadas.length,
+      detalleRechazos: res.rechazadas.length ? res.rechazadas.slice(0, 50).join(SALTO) : null,
       error: res.error,
       duracionMs: res.duracionMs,
     },
@@ -324,6 +382,8 @@ export async function ultimaCorrida(): Promise<{
   parcial: boolean;
   error: string | null;
   facturasVistas: number;
+  /** Las que además se pudieron LEER. `facturasVistas - espejadas` = rechazadas. */
+  espejadas: number;
   creadas: number;
   actualizadas: number;
   desaparecidas: number;
@@ -338,6 +398,7 @@ export async function ultimaCorrida(): Promise<{
     parcial: c.parcial,
     error: c.error,
     facturasVistas: c.facturasVistas,
+    espejadas: c.facturasVistas - c.rechazadas,
     creadas: c.creadas,
     actualizadas: c.actualizadas,
     desaparecidas: c.desaparecidas,

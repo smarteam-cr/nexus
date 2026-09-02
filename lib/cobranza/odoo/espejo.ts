@@ -273,7 +273,14 @@ export function proponerSemaforo(
 
 /* ── 4. La bitácora ─────────────────────────────────────────────────────────────── */
 
-export type TipoCambio = "MONTO" | "RESIDUAL" | "ESTADO_PAGO" | "ESTADO" | "FECHA" | "CUENTA";
+/**
+ * Los tipos que `calcularDeltas` puede producir. NO incluye `ALTA` ni `DESAPARECIDA`: esos dos
+ * los decide el sync mirando si la fila existía, no comparando campos.
+ */
+export type TipoCambio = "MONTO" | "NETO" | "MONEDA" | "RESIDUAL" | "ESTADO_PAGO" | "ESTADO" | "FECHA" | "CUENTA";
+
+/** Todo lo que puede ir a la bitácora, incluidos los dos que no salen de una comparación. */
+export type TipoCambioBitacora = TipoCambio | "ALTA" | "DESAPARECIDA";
 
 export interface Delta {
   tipo: TipoCambio;
@@ -284,7 +291,10 @@ export interface Delta {
 /** Lo que el espejo ya tenía guardado de esta factura. */
 export interface FacturaPrevia {
   montoTotal: number;
+  /** ⚠ El que se compara contra `Cobro.monto`. Ver el comentario de `calcularDeltas`. */
+  montoNeto: number;
   montoResidual: number;
+  moneda: string;
   paymentState: string;
   state: string;
   invoiceDate: string;
@@ -298,6 +308,15 @@ export interface FacturaPrevia {
  * ⚠ El monto se compara **redondeado a dos decimales**. Odoo hace la aritmética en float y
  * devuelve `2000.0000000000002` cada tanto: sin el redondeo, la bitácora registraría un
  * cambio de monto por corrida en facturas que nadie tocó, y a la semana nadie la lee.
+ *
+ * ⚠⚠ ESTA FUNCIÓN NO SOLO ESCRIBE LA BITÁCORA: **decide si la fila se actualiza**. El sync
+ * salta el UPDATE cuando no hay deltas, así que un campo que no se compare acá se queda con el
+ * valor viejo en el espejo **para siempre, y en silencio**.
+ *
+ * Por eso `montoNeto` y `moneda` se comparan aunque casi nunca cambien solos: el neto es
+ * justamente el número que se cruza contra `Cobro.monto` —los cobros están cargados sin IVA—,
+ * y una corrección de moneda en Odoo es la que más falta que llegue, porque es el error que
+ * más plata distorsiona. Los dos faltaban hasta el 2026-09-03.
  */
 export function calcularDeltas(previa: FacturaPrevia, nueva: FacturaEspejada, cuentaIdNueva: string | null): Delta[] {
   const d: Delta[] = [];
@@ -305,6 +324,12 @@ export function calcularDeltas(previa: FacturaPrevia, nueva: FacturaEspejada, cu
 
   if (dosDec(previa.montoTotal) !== dosDec(nueva.montoTotal)) {
     d.push({ tipo: "MONTO", anterior: dosDec(previa.montoTotal), nuevo: dosDec(nueva.montoTotal) });
+  }
+  if (dosDec(previa.montoNeto) !== dosDec(nueva.montoNeto)) {
+    d.push({ tipo: "NETO", anterior: dosDec(previa.montoNeto), nuevo: dosDec(nueva.montoNeto) });
+  }
+  if (previa.moneda !== nueva.moneda) {
+    d.push({ tipo: "MONEDA", anterior: previa.moneda, nuevo: nueva.moneda });
   }
   if (dosDec(previa.montoResidual) !== dosDec(nueva.montoResidual)) {
     d.push({ tipo: "RESIDUAL", anterior: dosDec(previa.montoResidual), nuevo: dosDec(nueva.montoResidual) });

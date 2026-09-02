@@ -4396,6 +4396,11 @@ enum FacturaOdooCambioTipo {
   FECHA
   CUENTA // se resolvió o cambió a qué CuentaFinanciera pertenece
   DESAPARECIDA
+  // ⚠ NETO y MONEDA se agregaron el 2026-09-03. Sin ellos `calcularDeltas` no los comparaba, y
+  // como el UPDATE de la factura solo corre cuando hay algún delta, una corrección de esos dos
+  // campos en Odoo NUNCA llegaba al espejo. `montoNeto` es el que se compara contra Cobro.monto.
+  NETO
+  MONEDA
 }
 
 enum OdooVinculoVia {
@@ -4545,6 +4550,12 @@ model SyncOdooCorrida {
   actualizadas   Int @default(0)
   desaparecidas  Int @default(0)
   vinculadas     Int @default(0)
+
+  /// Cuántas facturas devolvió Odoo que el espejo no pudo leer. 0 es lo normal.
+  /// Antes este número solo salía al log del contenedor: una factura sin fecha o sin partner
+  /// se congelaba con datos viejos y nadie lo veía.
+  rechazadas      Int     @default(0)
+  detalleRechazos String? @db.Text
 
   error      String? @db.Text
   duracionMs Int?

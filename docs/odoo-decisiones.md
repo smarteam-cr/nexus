@@ -519,3 +519,67 @@ leyendo el código.
 se puede es esconderlas.
 
 **Qué la revertiría.** Nada.
+
+---
+
+## 2026-09-03 · Auditoría de buenas prácticas: 63 hallazgos, 11 defectos distintos
+
+87 agentes sobre nueve dimensiones —idempotencia, integridad, fallos parciales,
+observabilidad, seguridad, contrato con el ERP, tiempo/moneda, acoplamiento, pruebas— con
+verificación adversarial. 63 confirmados, 15 refutados. Deduplicados, **once defectos**.
+
+### ⚠⚠ El que encontraron SIETE auditorías por separado
+
+Una factura que Odoo **sí devuelve** pero que `mapearFactura` rechaza —le falta la fecha, el
+partner o la moneda— salía de `vistas`, y `vistosIds` se armaba de ahí. El sync concluía que
+había desaparecido del ERP: la marcaba DESAPARECIDA, con lo que **sale del cronograma del
+cliente y de la mesa del CFO**, y la bitácora afirmaba que Odoo la borró — que es falso.
+
+Ahora `vistosIds` sale de las CRUDAS. Que no la sepamos leer es un problema nuestro, y se
+cuenta aparte en `rechazadas`, que antes solo iba al log del contenedor.
+
+### ⚠⚠ El espejo se congelaba con un neto viejo, para siempre
+
+`calcularDeltas` comparaba total, residual, estados, fecha y cuenta — pero **no `montoNeto` ni
+`moneda`**. Y como el UPDATE solo corre cuando hay algún delta, una corrección de esos campos
+en Odoo **nunca llegaba**.
+
+`montoNeto` es justamente el campo que se cruza contra `Cobro.monto`. O sea que **el descuadre
+que el espejo existe para detectar era el que no podía ver.** Y `moneda` es el error que más
+plata distorsiona: hay 6 facturas emitidas en la moneda equivocada, una de 11.541.250.
+
+### ⭐ Y exigir la moneda en el emparejado sacó el último falso positivo
+
+`candidatosPorMonto` ignoraba la moneda, saltándose la misma regla que `cruzar()` ya aplicaba
+—«USD 2.000 y CRC 2.000 no son el mismo hecho, son 500 veces distintos»—. El noveno candidato,
+`Apptividad → Border Freight` (mexicana), coincidía por un monto en otra moneda.
+
+La señal pasó de **9 propuestas con 8 aciertos a 8 propuestas con 8 aciertos**. Una menos y
+cero errores — el cambio que uno quiere, y que la pantalla no habría delatado nunca porque un
+falso positivo se ve idéntico a un acierto hasta que alguien lo confirma.
+
+### Los demás
+
+- **El `faultCode` se leía como uid.** Una respuesta de error de XML-RPC trae
+  `faultCode → <int>3</int>`, y el regex matcheaba cualquier `<int>`: un error se leía como un
+  login exitoso con uid=3, **y reseteaba el freno**. Ahora el fault se mira primero.
+- **El freno tiraba un `Error` pelado**, que aguas arriba se clasificaba como PROTOCOLO. El
+  cron entonces retenía su turno: **un bloqueo de un minuto costaba la corrida del día**.
+- **La corrida parcial reintentaba cada 60 s.** Arreglé el caso de autenticación y dejé este
+  abierto: 1080 corridas por día llenando la tabla y enterrando la última corrida buena.
+- **La fila y su bitácora se escribían por separado.** Un corte entre las dos dejaba la fila
+  actualizada sin rastro, y la corrida siguiente ya no encontraba deltas: el cambio se perdía
+  **para siempre**, y re-correr el sync no lo reparaba. Ahora es una escritura anidada.
+- **La resurrección no dejaba rastro**, al revés de lo que prometía su propio comentario: con
+  `deltas` vacío el bucle no iteraba.
+- **`vinculadas` mezclaba dos universos** (crudas menos mapeadas) y se inflaba con cada
+  rechazo. Ese número va a pantalla.
+- **La pasada de monto exacto no tenía ventana de fechas**: un cobro recurrente se apareaba con
+  la factura de hace tres años y el de este mes quedaba «sin factura».
+- **El apareo dependía del orden en que Postgres devolvía las filas.** Sin `ORDER BY` eso no
+  está garantizado: la lista del CFO podía cambiar entre corridas sin que nadie tocara nada.
+- **Las 6 tablas del espejo no estaban en `policies.sql`.** El bucle les habilita RLS, pero la
+  policy explícita vivía solo en el `.sql` de la migración — que se corre una vez, mientras que
+  esa red se corre siempre. Reconstruir el proyecto desde cero las habría dejado afuera.
+
+**Qué revertiría todo esto.** Nada. Son defectos, no decisiones.

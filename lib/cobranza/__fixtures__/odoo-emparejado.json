@@ -1,6 +1,6 @@
 {
   "_generadoPor": "scripts/odoo-fixture-emparejado.ts",
-  "_nota": "Datos REALES de solo lectura, tomados de erp.smarteamcr.com y de la base de Nexus. Si cambian los conteos del test, es porque cambió el matcher o cambió el negocio: hay que decidir cuál de los dos.",
+  "_nota": "Datos REALES de solo lectura, tomados de erp.smarteamcr.com y de la base de Nexus. Si cambian los conteos del test, es porque cambió el matcher o cambió el negocio: hay que decidir cuál de los dos. Los montos llevan moneda desde 2026-09-03: los 202 cobros de la base son todos USD.",
   "partners": [
     {
       "odooPartnerId": 11,
@@ -501,8 +501,14 @@
       "nombre": "Iberorutas",
       "cedulaJuridica": null,
       "montos": [
-        150,
-        3550
+        {
+          "monto": 150,
+          "moneda": "USD"
+        },
+        {
+          "monto": 3550,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -516,8 +522,14 @@
       "nombre": "Corrugando",
       "cedulaJuridica": null,
       "montos": [
-        2100,
-        2493
+        {
+          "monto": 2100,
+          "moneda": "USD"
+        },
+        {
+          "monto": 2493,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -525,8 +537,14 @@
       "nombre": "ACCCSA",
       "cedulaJuridica": null,
       "montos": [
-        500,
-        712
+        {
+          "monto": 500,
+          "moneda": "USD"
+        },
+        {
+          "monto": 712,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -534,7 +552,10 @@
       "nombre": "Transportes Juanva",
       "cedulaJuridica": null,
       "montos": [
-        500
+        {
+          "monto": 500,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -542,7 +563,10 @@
       "nombre": "Forestales Latinoamericanos",
       "cedulaJuridica": null,
       "montos": [
-        1300
+        {
+          "monto": 1300,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -550,9 +574,18 @@
       "nombre": "Ecoquintas",
       "cedulaJuridica": null,
       "montos": [
-        150,
-        1300,
-        1880
+        {
+          "monto": 150,
+          "moneda": "USD"
+        },
+        {
+          "monto": 1300,
+          "moneda": "USD"
+        },
+        {
+          "monto": 1880,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -560,7 +593,10 @@
       "nombre": "Amvac Latam",
       "cedulaJuridica": null,
       "montos": [
-        1848
+        {
+          "monto": 1848,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -568,7 +604,10 @@
       "nombre": "KAIZEN KAPITAL",
       "cedulaJuridica": null,
       "montos": [
-        21501
+        {
+          "monto": 21501,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -576,7 +615,10 @@
       "nombre": "Seléctrica",
       "cedulaJuridica": null,
       "montos": [
-        45
+        {
+          "monto": 45,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -584,7 +626,10 @@
       "nombre": "Electrocaribe",
       "cedulaJuridica": null,
       "montos": [
-        45
+        {
+          "monto": 45,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -592,7 +637,10 @@
       "nombre": "IIA",
       "cedulaJuridica": null,
       "montos": [
-        60
+        {
+          "monto": 60,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -600,7 +648,10 @@
       "nombre": "Don Juan Tours",
       "cedulaJuridica": null,
       "montos": [
-        720
+        {
+          "monto": 720,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -608,7 +659,10 @@
       "nombre": "APRECAP",
       "cedulaJuridica": null,
       "montos": [
-        65
+        {
+          "monto": 65,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -616,7 +670,10 @@
       "nombre": "Honda Costa Rica",
       "cedulaJuridica": null,
       "montos": [
-        500
+        {
+          "monto": 500,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -624,7 +681,10 @@
       "nombre": "MTS MULTISERVICIOS",
       "cedulaJuridica": null,
       "montos": [
-        420
+        {
+          "monto": 420,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -632,7 +692,10 @@
       "nombre": "Grupo Servica",
       "cedulaJuridica": null,
       "montos": [
-        90
+        {
+          "monto": 90,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -640,7 +703,10 @@
       "nombre": "Librería Internacional",
       "cedulaJuridica": null,
       "montos": [
-        900
+        {
+          "monto": 900,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -648,7 +714,10 @@
       "nombre": "Global Supply S.A",
       "cedulaJuridica": null,
       "montos": [
-        1867
+        {
+          "monto": 1867,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -656,7 +725,10 @@
       "nombre": "Pacuare Luxury Realty CR S.A.",
       "cedulaJuridica": null,
       "montos": [
-        480
+        {
+          "monto": 480,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -664,8 +736,14 @@
       "nombre": "TEC- AE",
       "cedulaJuridica": null,
       "montos": [
-        1620,
-        3240
+        {
+          "monto": 1620,
+          "moneda": "USD"
+        },
+        {
+          "monto": 3240,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -673,7 +751,10 @@
       "nombre": "Eurostone",
       "cedulaJuridica": null,
       "montos": [
-        320
+        {
+          "monto": 320,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -681,7 +762,10 @@
       "nombre": "Hotel Alta Las Palomas",
       "cedulaJuridica": null,
       "montos": [
-        550
+        {
+          "monto": 550,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -689,7 +773,10 @@
       "nombre": "Cicadex",
       "cedulaJuridica": null,
       "montos": [
-        1366.66
+        {
+          "monto": 1366.66,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -697,8 +784,14 @@
       "nombre": "BLUESAT",
       "cedulaJuridica": null,
       "montos": [
-        250,
-        700
+        {
+          "monto": 250,
+          "moneda": "USD"
+        },
+        {
+          "monto": 700,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -706,7 +799,10 @@
       "nombre": "Secure Title Latin America",
       "cedulaJuridica": null,
       "montos": [
-        2000
+        {
+          "monto": 2000,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -714,7 +810,10 @@
       "nombre": "Club de Amantes del Vino",
       "cedulaJuridica": null,
       "montos": [
-        3373
+        {
+          "monto": 3373,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -722,7 +821,10 @@
       "nombre": "Grupo Inve",
       "cedulaJuridica": null,
       "montos": [
-        12500
+        {
+          "monto": 12500,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -730,8 +832,14 @@
       "nombre": "Ferreteria Noelito",
       "cedulaJuridica": null,
       "montos": [
-        289,
-        2100
+        {
+          "monto": 289,
+          "moneda": "USD"
+        },
+        {
+          "monto": 2100,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -739,9 +847,18 @@
       "nombre": "Construtecho",
       "cedulaJuridica": null,
       "montos": [
-        550,
-        2280,
-        4560
+        {
+          "monto": 550,
+          "moneda": "USD"
+        },
+        {
+          "monto": 2280,
+          "moneda": "USD"
+        },
+        {
+          "monto": 4560,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -749,7 +866,10 @@
       "nombre": "Selvatura",
       "cedulaJuridica": "3101098834",
       "montos": [
-        2000
+        {
+          "monto": 2000,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -757,7 +877,10 @@
       "nombre": "Real Shipping & Trade",
       "cedulaJuridica": null,
       "montos": [
-        2000
+        {
+          "monto": 2000,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -765,7 +888,10 @@
       "nombre": "ALFA+ (LISJ)",
       "cedulaJuridica": null,
       "montos": [
-        900
+        {
+          "monto": 900,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -773,8 +899,14 @@
       "nombre": "Apptividad",
       "cedulaJuridica": null,
       "montos": [
-        1350,
-        3150
+        {
+          "monto": 1350,
+          "moneda": "USD"
+        },
+        {
+          "monto": 3150,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -782,7 +914,10 @@
       "nombre": "Plant",
       "cedulaJuridica": null,
       "montos": [
-        180
+        {
+          "monto": 180,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -790,7 +925,10 @@
       "nombre": "PRIMO",
       "cedulaJuridica": null,
       "montos": [
-        1666.67
+        {
+          "monto": 1666.67,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -798,8 +936,14 @@
       "nombre": "Analisalab",
       "cedulaJuridica": null,
       "montos": [
-        3000,
-        3166.67
+        {
+          "monto": 3000,
+          "moneda": "USD"
+        },
+        {
+          "monto": 3166.67,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -807,8 +951,14 @@
       "nombre": "Teamnet",
       "cedulaJuridica": null,
       "montos": [
-        1500,
-        2000
+        {
+          "monto": 1500,
+          "moneda": "USD"
+        },
+        {
+          "monto": 2000,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -816,8 +966,14 @@
       "nombre": "AMC - Atlas Mining & Construction",
       "cedulaJuridica": null,
       "montos": [
-        250,
-        2450
+        {
+          "monto": 250,
+          "moneda": "USD"
+        },
+        {
+          "monto": 2450,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -825,7 +981,10 @@
       "nombre": "MSC Payroll",
       "cedulaJuridica": null,
       "montos": [
-        1680
+        {
+          "monto": 1680,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -833,7 +992,10 @@
       "nombre": "Visual Branding",
       "cedulaJuridica": null,
       "montos": [
-        1780
+        {
+          "monto": 1780,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -841,7 +1003,10 @@
       "nombre": "Metzger Supplies",
       "cedulaJuridica": null,
       "montos": [
-        925
+        {
+          "monto": 925,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -867,7 +1032,10 @@
       "nombre": "ALMOTEC",
       "cedulaJuridica": "3-101-105018",
       "montos": [
-        2300
+        {
+          "monto": 2300,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -875,7 +1043,10 @@
       "nombre": "Spectrum",
       "cedulaJuridica": null,
       "montos": [
-        2333
+        {
+          "monto": 2333,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -883,7 +1054,10 @@
       "nombre": "Multiquimica",
       "cedulaJuridica": null,
       "montos": [
-        3400
+        {
+          "monto": 3400,
+          "moneda": "USD"
+        }
       ]
     },
     {
@@ -891,7 +1065,10 @@
       "nombre": "Wherex",
       "cedulaJuridica": null,
       "montos": [
-        2125
+        {
+          "monto": 2125,
+          "moneda": "USD"
+        }
       ]
     }
   ],

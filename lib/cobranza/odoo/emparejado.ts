@@ -91,8 +91,15 @@ export interface CuentaNexus {
   cuentaId: string;
   nombre: string;
   cedulaJuridica: string | null;
-  /** Los montos NETOS distintos que Nexus tiene cargados para esta cuenta. */
-  montos: number[];
+  /**
+   * Los montos NETOS distintos que Nexus tiene cargados para esta cuenta, **con su moneda**.
+   *
+   * ⚠ La moneda no es decoración. `cruzar()` de diferencias.ts ya exigía moneda igual para
+   * aparear —«USD 2.000 y CRC 2.000 no son el mismo hecho, son 500 veces distintos»— y esta
+   * función se saltaba esa misma regla: proponía un cliente de Odoo cuya factura en colones
+   * coincidía en número con un cobro en dólares.
+   */
+  montos: Array<{ monto: number; moneda: string }>;
 }
 
 /** Un monto neto facturado en Odoo, con el partner que lo emitió. */
@@ -142,22 +149,24 @@ export function candidatosPorMonto(
   cuentas: readonly CuentaNexus[],
   montosOdoo: readonly MontoDeOdoo[],
 ): Map<string, Candidato[]> {
-  const cuentasPorMonto = new Map<number, Set<string>>();
+  /* La clave lleva la MONEDA. Sin ella, una factura de CRC 2.000 emparejaba con un cobro de
+     USD 2.000 y proponía el cliente equivocado con toda la evidencia a favor. */
+  const clave = (monto: number, moneda: string) => `${moneda}|${CENTAVOS(monto)}`;
+
+  const cuentasPorMonto = new Map<string, Set<string>>();
   for (const c of cuentas) {
     for (const m of c.montos) {
-      if (m <= 0) continue;
-      const k = CENTAVOS(m);
+      if (m.monto <= 0) continue;
+      const k = clave(m.monto, m.moneda);
       (cuentasPorMonto.get(k) ?? cuentasPorMonto.set(k, new Set()).get(k)!).add(c.cuentaId);
     }
   }
 
-  const partnersPorMonto = new Map<number, Set<number>>();
-  const monedaDe = new Map<number, string>();
+  const partnersPorMonto = new Map<string, Set<number>>();
   for (const f of montosOdoo) {
     if (f.montoNeto <= 0) continue;
-    const k = CENTAVOS(f.montoNeto);
+    const k = clave(f.montoNeto, f.moneda);
     (partnersPorMonto.get(k) ?? partnersPorMonto.set(k, new Set()).get(k)!).add(f.odooPartnerId);
-    monedaDe.set(k, f.moneda);
   }
 
   const out = new Map<string, Candidato[]>();
@@ -167,8 +176,9 @@ export function candidatosPorMonto(
     if (!ps || ps.size !== 1) continue;
     const cuentaId = [...cs][0]!;
     const odooPartnerId = [...ps][0]!;
-    const monto = (k / 100).toFixed(2);
-    const evidencia = `Odoo tiene una factura de ${monedaDe.get(k) ?? ""} ${monto} y esta cuenta un cobro por el mismo monto. Ningún otro cliente comparte esa cifra.`;
+    const [moneda, centavos] = k.split("|");
+    const monto = (Number(centavos) / 100).toFixed(2);
+    const evidencia = `Odoo tiene una factura de ${moneda} ${monto} y esta cuenta un cobro por el mismo monto en la misma moneda. Ningún otro cliente comparte esa cifra.`;
     const lista = out.get(cuentaId) ?? [];
     if (!lista.some((c) => c.odooPartnerId === odooPartnerId)) {
       lista.push({ odooPartnerId, nombre: "", via: "MONTO", evidencia });

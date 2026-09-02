@@ -196,6 +196,8 @@ describe("el semáforo: Odoo promueve, nunca degrada, y nunca decide", () => {
 describe("la bitácora de cambios", () => {
   const PREVIA: FacturaPrevia = {
     montoTotal: 2260,
+    montoNeto: 2000,
+    moneda: "USD",
     montoResidual: 0,
     paymentState: "in_payment",
     state: "posted",
@@ -222,6 +224,23 @@ describe("la bitácora de cambios", () => {
   it("registra el cambio de estado de pago, que es el que mueve el semáforo", () => {
     const d = calcularDeltas({ ...PREVIA, paymentState: "not_paid" }, NUEVA, "cta_1");
     expect(d).toEqual([{ tipo: "ESTADO_PAGO", anterior: "not_paid", nuevo: "in_payment" }]);
+  });
+
+  it("⚠⚠ registra un cambio de NETO aunque el total no se mueva", () => {
+    /* Es el defecto que estuvo vivo hasta el 2026-09-03. `calcularDeltas` no solo escribe la
+       bitácora: DECIDE SI LA FILA SE ACTUALIZA — el sync salta el UPDATE cuando no hay deltas.
+       Sin este caso, una reclasificación de impuesto en Odoo (mismo total, otro neto) dejaba el
+       espejo con el neto viejo PARA SIEMPRE. Y el neto es justamente el número que se cruza
+       contra Cobro.monto, porque los cobros están cargados sin IVA. */
+    const d = calcularDeltas({ ...PREVIA, montoNeto: 1800 }, NUEVA, "cta_1");
+    expect(d).toEqual([{ tipo: "NETO", anterior: "1800.00", nuevo: "2000.00" }]);
+  });
+
+  it("⚠⚠ y un cambio de MONEDA, que es el que más plata distorsiona", () => {
+    /* Medido: hay 6 casos de facturas emitidas en la moneda equivocada, una de 11.541.250. Si
+       alguien la corrige en Odoo y el espejo no lo registra, la corrección no llega nunca. */
+    const d = calcularDeltas({ ...PREVIA, moneda: "CRC" }, NUEVA, "cta_1");
+    expect(d).toEqual([{ tipo: "MONEDA", anterior: "CRC", nuevo: "USD" }]);
   });
 
   it("registra la reatribución de cuenta con «(ninguno)» del lado vacío", () => {

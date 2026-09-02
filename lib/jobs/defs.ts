@@ -239,7 +239,11 @@ const odooEspejoDaily: JobDef = {
     // contando para el bloqueo por IP de Odoo — que se sostiene solo mientras el bucle corra.
     //
     // Un rechazo de credenciales NO se arregla reintentando. Se apaga y se avisa.
-    const transitorio = r.parcial || r.clase === "RED";
+    /* ⚠ `parcial` NO libera el turno. Una corrida parcial que se repite —Odoo devolviendo la
+       mitad porque algo está mal allá— reintentaba cada 60 s todo el día: 1080 corridas, 1080
+       filas de basura en SyncOdooCorrida, y la evidencia de la última corrida buena enterrada.
+       Si el ERP devuelve la mitad, esperar un minuto no lo arregla; esperar a mañana, tal vez. */
+    const transitorio = r.clase === "RED";
     if (!r.ok) {
       if (transitorio) {
         await prisma.cronJobState

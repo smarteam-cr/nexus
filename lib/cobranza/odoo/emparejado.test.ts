@@ -47,16 +47,30 @@ describe("el emparejado contra los datos reales", () => {
     expect(FIX.partners).toHaveLength(82);
   });
 
-  it("⚠ solo 15 de 49 cuentas tienen un candidato de primera, y eso decide la pantalla", () => {
-    /* Con 15 resueltas y 34 sin resolver, «confirmá estas 49 propuestas» sería una pantalla
+  it("⚠ solo 14 de 49 cuentas tienen un candidato de primera, y eso decide la pantalla", () => {
+    /* Con 14 resueltas y 35 sin resolver, «confirmá estas 49 propuestas» sería una pantalla
        vacía. El flujo principal tiene que ser BUSCAR, y las propuestas el atajo. */
     expect(conteo("CEDULA")).toBe(2);
     expect(conteo("NOMBRE_EXACTO")).toBe(4);
-    expect(conteo("MONTO")).toBe(9);
+    expect(conteo("MONTO")).toBe(8);
     expect(conteo("DUDOSA")).toBe(5);
     expect(conteo("INEMPAREJABLE")).toBe(1);
-    expect(conteo("SIN_CANDIDATO")).toBe(28);
+    expect(conteo("SIN_CANDIDATO")).toBe(29);
     expect(PROPUESTAS).toHaveLength(49);
+  });
+
+  it("⭐ exigir la MONEDA sacó el único falso positivo que quedaba", () => {
+    /* La señal de monto era 8 aciertos de 9. El noveno era `Apptividad → Border Freight S. de
+       R.L. de C.V.` —una empresa mexicana— y coincidía por un monto en OTRA moneda.
+
+       Al exigir que la moneda también coincida, la señal pasó de 9 propuestas con 8 aciertos a
+       **8 propuestas con 8 aciertos**. Una propuesta menos y cero errores: exactamente el
+       cambio que uno quiere y que la pantalla no habría delatado nunca, porque un falso
+       positivo se ve idéntico a un acierto hasta que alguien lo confirma. */
+    expect(de("Apptividad")?.clase).toBe("SIN_CANDIDATO");
+    for (const p of PROPUESTAS.filter((x) => x.clase === "MONTO")) {
+      expect(p.candidatos[0]?.evidencia, p.cuentaNombre).toMatch(/misma moneda/i);
+    }
   });
 
   it("⭐ la señal de MONTO resuelve justo lo que el nombre no puede", () => {
@@ -133,11 +147,11 @@ describe("las cédulas de un Odoo sin base_vat instalado", () => {
 });
 
 describe("la señal de monto, aislada", () => {
-  const cuenta = (id: string, nombre: string, montos: number[]): CuentaNexus => ({
+  const cuenta = (id: string, nombre: string, montos: number[], moneda = "USD"): CuentaNexus => ({
     cuentaId: id,
     nombre,
     cedulaJuridica: null,
-    montos,
+    montos: montos.map((monto) => ({ monto, moneda })),
   });
 
   it("⛔ no propone nada cuando el monto lo comparten dos cuentas", () => {
@@ -166,6 +180,26 @@ describe("la señal de monto, aislada", () => {
        decimal 15 es exactamente el bug que nadie encuentra mirando la pantalla. */
     const r = candidatosPorMonto([cuenta("a", "A", [1500.3])], [{ odooPartnerId: 7, montoNeto: 1500.1 + 0.2, moneda: "USD" }]);
     expect(r.get("a")?.[0]?.odooPartnerId).toBe(7);
+  });
+
+  it("⛔ NUNCA propone a través de monedas distintas", () => {
+    /* `cruzar()` ya exigía moneda igual para aparear un cobro con su factura —«USD 2.000 y
+       CRC 2.000 no son el mismo hecho, son 500 veces distintos»— y esta función se saltaba la
+       misma regla: proponía el cliente cuya factura en colones coincidía en número con un
+       cobro en dólares, con toda la evidencia a favor. */
+    const r = candidatosPorMonto(
+      [cuenta("a", "A", [2000], "USD")],
+      [{ odooPartnerId: 7, montoNeto: 2000, moneda: "CRC" }],
+    );
+    expect(r.size).toBe(0);
+  });
+
+  it("y la evidencia dice que la moneda coincide, porque ahora es verdad", () => {
+    const r = candidatosPorMonto(
+      [cuenta("a", "A", [2000], "USD")],
+      [{ odooPartnerId: 7, montoNeto: 2000, moneda: "USD" }],
+    );
+    expect(r.get("a")?.[0]?.evidencia).toMatch(/misma moneda/i);
   });
 
   it("ignora los montos en cero o negativos", () => {

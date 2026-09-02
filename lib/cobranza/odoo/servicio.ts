@@ -96,7 +96,9 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       id: true,
       cedulaJuridica: true,
       client: { select: { name: true } },
-      cobros: { select: { monto: true } },
+      /* ⚠ La MONEDA viaja con el monto: sin ella el emparejado proponía un cliente cuya
+         factura en colones coincidía en número con un cobro en dólares. */
+      cobros: { select: { monto: true, moneda: true } },
     },
   });
 
@@ -166,7 +168,7 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       cuentaId: c.id,
       nombre: c.client.name,
       cedulaJuridica: c.cedulaJuridica,
-      montos: [...new Set(c.cobros.map((x) => Number(x.monto)))],
+      montos: [...new Map(c.cobros.map((x) => [`${x.moneda}|${Number(x.monto)}`, { monto: Number(x.monto), moneda: x.moneda }])).values()],
     }));
 
   /* Un partner ya vinculado o ya marcado «no es cliente nuestro» no vuelve a proponerse:
@@ -361,8 +363,11 @@ export async function cargarDiferencias(): Promise<{
         fechaEmision: true,
         cuenta: { select: { client: { select: { name: true } } } },
       },
+      orderBy: [{ fechaProgramada: "asc" }, { id: "asc" }],
     }),
-    prisma.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE" } }),
+    /* ⚠ Con orden explícito. `cruzar()` desempata por id, pero una consulta sin ORDER BY no
+       garantiza nada y el apareo no debería depender de eso en dos lugares distintos. */
+    prisma.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE" }, orderBy: { odooMoveId: "asc" } }),
     prisma.cuentaFinanciera.count(),
     prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
     prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),

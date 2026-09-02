@@ -124,6 +124,33 @@ describe("cruzar cobros con facturas", () => {
     expect(r.facturasSolas).toHaveLength(1);
   });
 
+  it("⛔ el monto exacto tampoco cruza los años", () => {
+    /* La pasada exacta no tenía NINGUNA ventana. Con un cobro recurrente de USD 2.000, la
+       factura de 2.000 de hace tres años se apareaba con el cobro de este mes — y el cobro de
+       verdad quedaba «sin factura» sin que nada lo dijera. */
+    const r = cruzar([cobro({ monto: 2000 })], [factura({ montoNeto: 2000, invoiceDate: "2023-07-15" })]);
+    expect(r.pares).toHaveLength(0);
+    expect(r.cobrosSolos).toHaveLength(1);
+  });
+
+  it("pero sí acepta unos meses de desfase, porque el monto exacto es evidencia fuerte", () => {
+    /* Un cobro programado en enero facturado en abril es normal. */
+    const r = cruzar([cobro({ monto: 2000 })], [factura({ montoNeto: 2000, invoiceDate: "2026-10-15" })]);
+    expect(r.pares).toHaveLength(1);
+  });
+
+  it("⚠ el apareo es DETERMINISTA aunque las filas vengan en cualquier orden", () => {
+    /* Sin desempate, dos facturas del mismo día por el mismo monto se ordenaban según el orden
+       en que Postgres devolvió las filas — que sin ORDER BY no está garantizado. La lista del
+       CFO cambiaba entre corridas sin que nadie hubiera tocado nada. */
+    const fa = factura({ id: "fA", odooMoveId: 10, numero: "F-10" });
+    const fb = factura({ id: "fB", odooMoveId: 20, numero: "F-20" });
+    const r1 = cruzar([cobro()], [fa, fb]);
+    const r2 = cruzar([cobro()], [fb, fa]);
+    expect(r1.pares[0]?.facturaId).toBe(r2.pares[0]?.facturaId);
+    expect(r1.pares[0]?.facturaId).toBe("fA"); // el odooMoveId más chico desempata
+  });
+
   it("⛔ una factura no se usa dos veces", () => {
     const r = cruzar([cobro({ id: "cA" }), cobro({ id: "cB" })], [factura()]);
     expect(r.pares).toHaveLength(1);
