@@ -581,16 +581,57 @@ encender el sync antes produce un espejo mal atribuido que cuesta más limpiar q
 
 **Entregable visible**: las facturas de Odoo aparecen al lado de los cobros.
 
-### Etapa 3 · Semáforo y listas de cruce — ~2 días
+### Etapa 3 · Semáforo y la mesa de trabajo con el CFO — ~3 días
+
+Esta etapa es **una sola pantalla**, y su propósito no es informar: es que Elías y Alexander se
+sienten juntos y vayan cerrando diferencias hasta que los números coincidan.
 
 - `promoverSemaforo` cableado, con la marca «sin conciliar».
-- **La primera lista es «cobro sin factura»** — es la que Alexander dijo que más le sirve.
-  Después: «factura sin cobro», «monto distinto», «moneda dispar».
-- Todas viven **dentro de cobranza, en una sola lista ordenada por la plata que mueve**,
-  reusando `InconsistenciasPanel` tal cual (recibe `Inconsistencia[]` + `moneda` y nada más).
-- INV23 e INV25.
+- **Una sola lista, ordenada por la plata que mueve**, reusando `InconsistenciasPanel` tal cual
+  —recibe `Inconsistencia[]` + `moneda` y nada más—. Ese componente nació exactamente para
+  esto: *«nadie podía sentarse con el CFO y decir son estas doce cosas, en este orden, y estas
+  cuatro las decidís vos»*. Cada línea ya trae **cuánta plata mueve**, **quién la resuelve**
+  (SISTEMA / COBRANZA / DIRECCIÓN), **qué hacer**, y enlaces para comprobarla.
+- Los cruces, en orden de utilidad declarada por Alexander:
+  1. **«cobro sin factura»** — la que más le sirve.
+  2. «factura sin cobro» · 3. «el monto no coincide» · 4. «moneda dispar» ·
+  5. «factura absurda» (INV26) · 6. «partner de Odoo sin cuenta en Nexus».
+- INV23, INV25 e INV26.
 
-**Entregable visible**: el dashboard de gerencia deja de arrastrar data vieja.
+#### ⚠ Lo que esta lista necesita y su molde NO tiene: poder decir «esto está bien así»
+
+`InconsistenciasPanel` **no guarda estado a propósito**: un punto se cierra arreglando el dato
+y desaparece solo. Eso funciona cuando toda diferencia es un error. Acá **no lo es**: Odoo tiene
+82 clientes y Nexus 49 cuentas, hay notas de crédito que no corrigen ningún cobro, y va a haber
+redondeos que alguien decida aceptar.
+
+Sin un «aceptado», esas líneas **vuelven en cada sesión** y en la tercera nadie mira la lista —
+que es exactamente el modo de falla de `upsertAlertas`, que es aditiva y nunca cierra nada.
+
+```prisma
+model DiferenciaOdooAceptada {
+  id     String @id @default(cuid())
+  // Clave estable de la diferencia, mismo criterio que el dedupeKey de las alertas.
+  clave  String @unique
+  motivo String @db.Text   // por qué está bien así — obligatorio, no opcional
+
+  /**
+   * ⚠ La huella de los NÚMEROS aceptados. Se acepta ESA diferencia ($2.000 contra $2.260),
+   * no «este par para siempre». Si el monto cambia, la línea vuelve sola: una aceptación
+   * no puede convertirse en el lugar donde se esconde un problema nuevo.
+   */
+  huella String
+
+  aceptadaPor String
+  aceptadaEn  DateTime @default(now())
+}
+```
+
+Y la pantalla muestra **«N aceptadas»** con un enlace para verlas: aceptar esconde de la lista
+de trabajo, nunca del sistema.
+
+**Entregable visible**: una reunión con el CFO donde las diferencias se cierran una por una y
+la próxima vez arranca donde quedó la anterior.
 
 ### Etapa 4 · Configuración — ~1 día
 
@@ -600,7 +641,7 @@ encender el sync antes produce un espejo mal atribuido que cuesta más limpiar q
   (`cobranza.read`), dentro de Cobranza.
 - El espejo de facturas es **solo finanzas**: no aparece en CS.
 
-**Total: ~8 días.** Fase 1 son **facturas y pagos**; egresos no.
+**Total: ~9 días.** Fase 1 son **facturas y pagos**; egresos no.
 
 ---
 
