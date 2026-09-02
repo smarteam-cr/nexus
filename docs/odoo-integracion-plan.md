@@ -102,59 +102,90 @@ que REST no puede hacer ni con el permiso otorgado.
 
 ---
 
-## 3 · El emparejado dio peor de lo esperado
+## 3 · El emparejado: por qué falla, y qué sí funciona
 
-Esta es la sección que cambia el alcance de la primera pantalla.
+Esta es la sección que define la primera pantalla, y se reescribió entera el 2026-09-02
+cuando se supo **por qué** falla.
 
-| Resultado | Cuentas |
+### El nombre nunca va a funcionar, y ahora se sabe la razón
+
+| Emparejando por nombre | Cuentas |
 |---|---|
-| Emparejan por **cédula** | **2** |
-| Emparejan por **nombre exacto** | **4** |
-| Candidato dudoso (hay que revisar) | 8 |
-| **Sin ningún candidato** | **33** |
-| Inemparejables por nombre (`IIA`, `TEC- AE`) | 2 |
+| por **cédula** | 2 |
+| por **nombre exacto** | 4 |
+| candidato dudoso | 8 |
+| **sin ningún candidato** | **33** |
+| inemparejables (`IIA`, `TEC- AE`) | 2 |
 
-**6 de 49 se resuelven solas. El 88 % lo tiene que decidir una persona.**
+**6 de 49 se resuelven solas.** La causa dejó de ser una hipótesis: Nexus guarda el nombre
+comercial y Odoo la **razón social**, y no se parecen en nada. El caso que lo probó:
 
-Por qué: Nexus guarda el nombre comercial (`ALMOTEC`, `Wherex`, `Teamnet`) y Odoo la razón
-social (`CORPORACION ALMOTEC SOCIEDAD ANONIMA`). El matcher es conservador a propósito —
-aflojarlo trae de vuelta el bug de «Amvac Latam» contra «Forestales LATAM».
+> **Iberorutas** factura en Odoo como **«SERVICIOS SAN MATEO Y SANTA ELENA DEL SUR S.A.»**
+> (vat 3101903870). Sus facturas son de $3.550 — exactamente el monto de la hoja.
 
-### Consecuencia para el diseño
+Ningún ajuste al matcher de nombres puede resolver eso. No es que esté mal afinado: **no hay
+información en común entre las dos cadenas.**
 
-**La pantalla de emparejado NO puede ser «confirmá estas 49 propuestas».** Con 6 propuestas y
-43 huecos, eso sería una pantalla vacía. Tiene que ser:
+### ⭐ Lo que sí funciona: emparejar por MONTO
 
-1. **Un buscador**, primero. Alexander escribe «almotec» y ve los `res.partner` que matchean
-   por nombre, por vat o por correo. Ese es el flujo principal, no el de excepción.
-2. **Las propuestas arriba**, como atajo para las 14 que sí tienen candidato.
-3. **Poder marcar «este partner de Odoo no es cliente nuestro»** — Odoo tiene 82 clientes y
-   Nexus 49 cuentas; la diferencia no es un error, es historia.
+Nexus sabe cuánto le cobra a cada cuenta. Odoo sabe cuánto le factura a cada partner. Medido
+sobre las facturas de 2025-2026:
 
-### Los casos que ya se sabía que fallan — confirmados, y con matices
-
-| Caso | Resultado real |
+| Emparejando por monto exacto del cobro | Cuentas |
 |---|---|
-| **Corrugando ↔ ACCCSA** | «Corrugando» **no existe en Odoo**. Sí existe `[35] ACCCSA REVISTA & PUBLICACIONES S.A.` (vat 3101497341, 44 facturas). Nexus tiene las dos como cuentas separadas → el vínculo lo tiene que hacer una persona. |
-| **Analisalab ↔ Grupo Inve** | «Analisalab» **no existe en Odoo**. «Inve» trae 4 candidatos, ninguno obviamente correcto. Requiere decisión humana. |
-| **TEC-AE ↔ TEC TAE** | «tae» **no existe en Odoo**. «tec» trae 9 candidatos ruidosos. Confirma el diagnóstico: sin palabras distintivas, no hay heurística. |
+| **candidato único** | **17** |
+| ambiguo (2+ candidatos) | 9 |
+| sin coincidencia | 23 |
 
-### Y un hallazgo nuevo: 8 vat duplicados en Odoo
-
-Confirma que el vínculo `res.partner → CuentaFinanciera` es **N:1**. Pero además hay
-duplicados literales que son suciedad de datos, no holdings:
+Y resuelve **exactamente los casos que el nombre no puede**:
 
 ```
-3006087315 → FUNDACION TECNOLÓGICA DE COSTA RICA | Nancy Solano | FUNDACIÓN TECNOLÓGICA DE COSTA RICA
-3007219667 → JUNTA DE DESARROLLO ... | JUNTA DE DESARROLLO ... (copia)
-3014042104 → MUNICIPALIDAD DE CARRILLO GUANACASTE | MUNICIPALIDAD DE CARRILLO GUANACASTE
+Corrugando              -> ACCCSA REVISTA & PUBLICACIONES S.A.        ← el caso que reportó Elías
+TEC- AE                 -> FUNDACION TECNOLÓGICA DE COSTA RICA        ← "inemparejable" por nombre
+APRECAP                 -> ASOCIACION PRO PREVENCION Y LUCHA ...      ← la cuenta ES el acrónimo
+Cicadex                 -> CONSORCIO INTERAMERICANO CARIBE DE EXPORT. ← ídem
+Librería Internacional  -> DESARROLLOS CULTURALES COSTARRICENSES      ← razón social sin relación
+Hotel Alta Las Palomas  -> ALTA LAS PALOMAS A.L.P. S.R.L.
 ```
 
-⚠ Y **`base_vat` no está instalado**: el `vat` de Odoo es texto libre sin validar. De 123
-partners con vat, **46 no tienen un solo dígito**. Los formatos conviven: `3101497341`,
-`3-101-105018`, `31010746160` (11 dígitos, probablemente un typo).
+⚠ **Pero produce falsos positivos y por eso NUNCA puede ser automático.** De los 17 únicos,
+unos 6 están mal —Bluesat→Forestales, Teamnet→Fundación Tecnológica, Construtecho→Alta Las
+Palomas— porque dos clientes comparten un monto redondo ($250, $700, $2.000). El monto es una
+**señal fuerte, no una regla**.
 
----
+### Consecuencia: cómo tiene que ser la pantalla
+
+Deja de ser «confirmá 49 propuestas» y pasa a ser **un asistente de decisión** con tres
+señales, cada una mostrando su evidencia:
+
+1. **Por cédula** — 2 casos hoy, pero es la única señal sin falsos positivos.
+2. **Por monto** — la más productiva. Muestra *qué* facturas coincidieron, con fecha y número,
+   para que Alexander confirme en dos segundos en vez de buscar a ciegas.
+3. **Por nombre** — la más débil acá, queda como desempate.
+
+Más un **buscador libre** (nombre, vat, correo, monto) para lo que ninguna señal resuelva, y
+un botón **«este partner de Odoo no es cliente nuestro»**.
+
+⚠ Y al confirmar, **escribe la `cedulaJuridica` en la cuenta desde el `vat` de Odoo**. Es lo
+que hace que el trabajo de una tarde no haya que repetirlo nunca.
+
+### Los tres casos que ya se sabía que fallaban
+
+| Caso | Por nombre | Por monto |
+|---|---|---|
+| **Corrugando ↔ ACCCSA** | ✗ «Corrugando» no existe en Odoo | ✅ **resuelto** |
+| **TEC-AE ↔ TEC TAE** | ✗ sin palabras distintivas | ✅ **resuelto** — es la Fundación Tecnológica |
+| **Analisalab ↔ Grupo Inve** | ✗ no existe en Odoo | ✗ sin coincidencia — queda manual |
+
+### El resto del panorama de Odoo
+
+- **Una sola empresa**: `CR SMARTEAM S.A.` (Costa Rica, moneda CRC). Las 111 facturas de 2026
+  son suyas. Si hubiera facturación desde otra entidad, este espejo no la ve.
+- **8 vat duplicados** → el vínculo partner→cuenta es N:1, confirmado. Algunos son holdings
+  reales; otros son duplicados literales («(copia)», dos grafías de la misma fundación).
+- **`base_vat` no está instalado**: el `vat` es texto libre. De 123 con vat, **46 no tienen un
+  solo dígito**, y conviven `3101497341`, `3-101-105018` y `31010746160`.
+
 
 ## 4 · Las trampas, medidas contra la base real
 
@@ -166,6 +197,19 @@ partners con vat, **46 no tienen un solo dígito**. Los formatos conviven: `3101
 | Notas de crédito | 44, y solo **15** con `reversed_entry_id` | **29 huérfanas (66 %)** — ese campo NO sirve para enlazar |
 | Facturas con varios vencimientos | **0** de 345 | el caso no existe hoy; el modelo igual lo soporta |
 | `invoicing_legacy` | 0 | ✅ sin residuos de migración vieja |
+
+### ⚠⚠ Una factura de $11.541.250,00 en Odoo
+
+`FAC/2026/0232`, a PUBLIMARK. Es **856 veces** la siguiente más grande y representa el
+**97,7 %** de todo lo facturado en 2026 según Odoo. Las otras facturas de ese mismo cliente
+son de $13.475 y $23.082,50.
+
+Casi seguro es un monto en colones cargado en una factura en dólares. **Cualquier total que se
+calcule desde Odoo lo hereda**: el neto de 2026 pasa de $11.814.274 a **$273.024** al sacarla
+—que sí es coherente con los $305.046 de cobros de Nexus—.
+
+→ Por eso el espejo nace con **INV26** (§8): ninguna factura espejada puede desviarse más de
+20× de la mediana de su propio cliente sin quedar marcada.
 
 ### ⚠⚠ El hallazgo grande: `in_payment` en 176 de 304 facturas de cliente
 
@@ -221,6 +265,11 @@ camino elegido — pero sí aplicaría a la contingencia REST.
   contra `montoTotal`. Ver la advertencia del schema: sin esto, las 304 facturas salen
   descuadradas por 13 % y la lista de cruce nace inservible.
 - `promoverSemaforo(estadoNexus, paymentState)` → la regla de «promueve, nunca degrada».
+- `llevaImpuesto(cuentaId)` → si las facturas de ese cliente traen IVA. **Nadie más lo sabe**:
+  Nexus no tiene el impuesto como dato, y la regla no se puede deducir del país —de las 111
+  facturas de 2026, **100 llevan impuesto y las 11 exentas son todas costarricenses**—.
+  Alimenta dos superficies que hoy salen sin declarar nada: el borrador de cobro que se le
+  manda al cliente y la sección de Inversión de las propuestas.
 - `vencimientoDe(invoiceDate, creditoDias)` → `invoice_date + creditoDias`. **No usa
   `invoice_date_due`** (es el máximo de los vencimientos, y los 90 días de Colby no están
   configurados en ninguno de los dos lados).
@@ -466,6 +515,12 @@ Ningún `Cobro` tiene `confirmadoPor` que empiece con `odoo:`. La promoción a v
 el espejo; confirmarla sigue siendo de una persona (misma doctrina que INV3, y la misma regla
 del importador de comisiones: si `confirmadoPor` lo puso una persona, Odoo no pisa).
 
+**INV26 · ninguna factura espejada es absurda.**
+Ninguna `FacturaOdoo` se desvía más de **20×** de la mediana de su propio cliente. Existe por
+un caso real: `FAC/2026/0232` dice $11.541.250 cuando las demás de ese cliente son de $13.475.
+Sin esto, un dedo de más en Odoo se propaga al reporte de equilibrio de Nexus y a la reunión
+de dirección.
+
 Formato: `✗ INVnn VIOLADO: …` con la lista de ofensores indentada con `    · ` y la línea
 `Remedio: <comando exacto>`; `✓ INVnn: …` cuando pasa.
 
@@ -504,7 +559,11 @@ encender el sync antes produce un espejo mal atribuido que cuesta más limpiar q
 
 - Migración (§7) + `OdooPartnerVinculo`.
 - Transporte XML-RPC + lectura de `res.partner`.
-- Pantalla en Cobranza: buscador primero, propuestas arriba, botón «no es cliente nuestro».
+- Pantalla en Cobranza: **tres señales con su evidencia** (cédula · monto · nombre), buscador
+  libre, y botón «no es cliente nuestro». La señal de monto es la más productiva —17 candidatos
+  únicos contra 6 por nombre— y es la que resuelve Corrugando→ACCCSA y TEC-AE→Fundación
+  Tecnológica. ⚠ Ninguna se aplica sola: ~6 de los 17 son falsos positivos por montos redondos
+  compartidos.
 - ⚠ **Al confirmar un vínculo, escribe la `cedulaJuridica` en la `CuentaFinanciera` desde el
   `vat` de Odoo**, normalizada a solo dígitos. Es lo que convierte una tarde de trabajo manual
   en un emparejado que después se sostiene solo.
@@ -556,6 +615,7 @@ encender el sync antes produce un espejo mal atribuido que cuesta más limpiar q
 | **Odoo cambia un monto ya facturado** | La bitácora `FacturaOdooCambio` lo registra con tipo `MONTO` | El cobro confirmado por una persona NO se pisa; se registra la divergencia |
 | **Se suman CRC y USD sin avisar** | El test §K se pone rojo si el espejo toca `crcPorUsd` | Monto nativo siempre; `monedaDispar` marca la fila |
 | **La contraseña de `direct` circula** | — | Ver pregunta 8 de §12 |
+| **Un monto absurdo de Odoo contamina el reporte** | INV26 lo marca; ya hay uno de $11,5 M | El espejo lo trae pero marcado; no entra a ningún total hasta que alguien lo revise |
 | **La otra PC aplica el SQL a medias** | `npx prisma migrate diff` muestra drift | Coordinar los `ALTER TYPE`; el repo lo comparten 2 máquinas |
 
 ---
@@ -576,13 +636,18 @@ default de 15 días. **Los 90 días de Colby no están configurados en Nexus tam
 solo que falten en Odoo. ¿Se cargan los términos reales antes de encender, o se acepta que 48
 cuentas venzan a 15 días?
 
-**3. El emparejado son 43 decisiones manuales.**
-¿Alexander las hace todas de una, o se arranca con las cuentas activas (46 de 49) y las 3
-`PENDIENTE_DATOS` quedan para después?
+**3. El emparejado son ~35 decisiones manuales.**
+Con la señal de monto bajó de 43 a ~35 (17 candidatos únicos, de los cuales ~11 correctos).
+¿Alexander las hace todas de una, o se arranca con las cuentas activas (46 de 49)?
 
 **4. Odoo tiene 82 clientes y Nexus 49 cuentas.**
 ¿Los ~33 que facturan en Odoo y no existen en Nexus son historia que se ignora, o hay negocio
 ahí que Nexus no está viendo? Cambia si «factura sin cuenta» es una lista de trabajo o ruido.
+
+**4.b ⚠ La factura de $11.541.250 a PUBLIMARK.**
+¿Es un error de carga —un monto en colones dentro de una factura en dólares— o hay algo real
+ahí? Es el 97,7 % de lo facturado en 2026 según Odoo. Si es error, conviene corregirlo **en
+Odoo** antes de encender el espejo; INV26 lo va a marcar igual, pero es mejor que no exista.
 
 **5. Hay duplicados literales en Odoo.**
 `MUNICIPALIDAD DE CARRILLO GUANACASTE` dos veces, `JUNTA DE DESARROLLO ... (copia)`,
@@ -631,6 +696,18 @@ huérfana? Se puede por `partner_id`, pero entonces no se sabe qué cobro corrig
 XML-RPC acepta una **API key nativa** en lugar de la contraseña (Preferencias → Seguridad de la
 cuenta). Es estrictamente mejor: se puede revocar sin cambiar la contraseña de nadie. ¿Se pide,
 o se arranca con la contraseña y se migra después?
+
+**8.b ¿El espejo alimenta el correo de cobro y las propuestas?**
+El espejo va a ser el único lugar que sabe, por cliente, si su factura lleva impuesto —hoy
+Nexus no tiene ese dato y no se puede deducir del país—. Con eso, el borrador de cobro podría
+decir «$2.000 + IVA» en vez de «$2.000» a secas, y la propuesta podría calcular el total en
+vez de depender de una nota escrita a mano.
+
+⚠ Hoy hay 13 propuestas publicadas con sección de Inversión: **10 no mencionan impuestos** y
+de las 3 que sí, **una dice «+ 2 % de iva»**. Eso es una cifra contractual mal, por escrito,
+frente a un cliente — y no espera al espejo para arreglarse.
+
+¿Va como etapa 5 de este plan, o como trabajo aparte?
 
 **9. ¿El sync corre solo desde el arranque?**
 El job entra en `lib/jobs/defs.ts` con el lock que ya existe, pero puede nacer detrás de un
