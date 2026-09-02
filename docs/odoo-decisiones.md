@@ -342,3 +342,46 @@ dimensionarla. Y el balde ahora **avisa en su propio detalle** de que su total e
 la línea fina vuelve a contar por sí sola. Hay un test para cada lado.
 
 **Qué la revertiría.** Nada. El doble conteo no tiene defensa.
+
+---
+
+## 2026-09-02 · La factura al lado del cobro se aparea AL VUELO, no por vínculo confirmado
+
+**Qué se decidió.** El cronograma calcula qué factura corresponde a cada cobro con `cruzar()`
+—el mismo módulo que arma la lista de diferencias— en vez de leer `CobroFacturaOdoo`.
+
+**Por qué.** Dos razones, y la primera es la que importa:
+
+1. **Que las dos pantallas no puedan contradecirse.** Si el cronograma tuviera su propia regla
+   de apareo, una diría «este cobro ya está facturado» y la otra lo listaría como «cobro sin
+   factura». Ninguna de las dos sería creíble, y no habría forma de saber cuál mirar.
+2. Funciona desde el minuto en que alguien empareja un cliente, sin un segundo paso de
+   confirmación por cada uno de los 347 documentos.
+
+⚠ La tabla `CobroFacturaOdoo` queda creada y sin usar. Sirve para el día que haga falta fijar
+un vínculo a mano contra lo que el apareo automático decide — pero no se llenó «por si acaso»:
+una tabla con datos que nadie escribe ni lee es peor que una vacía.
+
+⛔ Nada de esto escribe: el cobro conserva su estado y su `confirmadoPor` (INV25).
+
+**Qué la revertiría.** Que aparezca un caso donde el apareo automático se equivoque y alguien
+tenga que corregirlo a mano. Ahí `CobroFacturaOdoo` pasa a ser la excepción que pisa al cálculo.
+
+---
+
+## 2026-09-02 · `/settings/odoo` es solo lectura
+
+**Qué se decidió.** La pantalla muestra el estado de la conexión y las últimas 20 corridas, y
+no tiene ningún interruptor.
+
+**Por qué.** Las dos banderas (`ODOO_SYNC_ENABLED`, `ODOO_PROMOCION_VERDE`) viven en el `.env`
+del servidor. Un interruptor en pantalla daría a entender que se apaga desde ahí, y después de
+un redeploy volvería al valor del entorno **sin que nadie entienda por qué**. Un control que
+miente es peor que no tener control.
+
+⚠ Y el texto del fallo va en su propio bloque, NO como tooltip de la celda roja: el punto de
+guardar cada corrida es poder decir «viene fallando hace tres días», y eso no se lee pasando el
+mouse por encima de siete filas. Lo señaló el trinquete de errores rojos ad-hoc, que tenía
+razón — un error persistente va en `<Alert variant="danger">`.
+
+**Qué la revertiría.** Mover las banderas a la base. Ahí el interruptor sería honesto.

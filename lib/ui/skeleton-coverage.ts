@@ -100,6 +100,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   settings: { modo: "own" },
   // La pantalla de gasto son tres números en grilla + dos tablas; heredar el de
   // /settings (tres paneles apilados) prometería otra forma.
+  "settings/odoo": { modo: "inherits", de: "settings" },
   "settings/gasto-ia": { modo: "own" },
   integrations: { modo: "own" },
   knowledge: { modo: "own" },

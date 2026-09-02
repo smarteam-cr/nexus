@@ -47,6 +47,16 @@ import {
   type EnlaceItem,
   type ItemInconsistencia,
 } from "@/lib/finanzas/inconsistencias";
+import { cruzar } from "@/lib/cobranza/odoo/diferencias";
+import { proponerSemaforo } from "@/lib/cobranza/odoo/espejo";
+/**
+ * ⚠ La promoción a verde nace APAGADA. 188 facturas están en `in_payment`, un estado que
+ * Odoo 17 Community nunca asigna —o esta base viene de Enterprise, o hay un módulo de
+ * terceros—. Encenderla sin saber qué significa pondría 188 cobros en verde de golpe, y el
+ * verde en Nexus es plata que entró. Se enciende con ODOO_PROMOCION_VERDE=1 cuando esté la
+ * respuesta; hasta entonces el espejo muestra la señal pero no propone estado.
+ */
+const PROMOCION_ODOO_HABILITADA = process.env.ODOO_PROMOCION_VERDE === "1";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import {
   calendarioDePersona,
@@ -118,6 +128,27 @@ export interface CobroDTO {
   referenciaExterna: string | null;
   promesaPago: string | null; // ISO date — fecha en que el cliente prometió pagar
   notas: string | null;
+  /**
+   * La factura de Odoo que le corresponde, si la hay. **Es un espejo, no una fuente**: nada de
+   * acá cambia el estado del cobro (INV25).
+   *
+   * ⚠ El apareo se calcula con `cruzar()` de lib/cobranza/odoo/diferencias.ts — el MISMO
+   * módulo que arma la lista de diferencias. Si el cronograma usara su propia regla, las dos
+   * pantallas se contradirían y ninguna de las dos sería creíble.
+   */
+  facturaOdoo: {
+    numero: string;
+    invoiceDate: string;
+    montoNeto: number;
+    montoTotal: number;
+    moneda: string;
+    paymentState: string;
+    /** Qué propone Odoo sobre este cobro. `estadoPropuesto` es null mientras la promoción esté apagada. */
+    senal: string;
+    sinConciliar: boolean;
+    estadoPropuesto: string | null;
+    nota: string;
+  } | null;
 }
 
 export interface CuotaPlanDTO {
@@ -250,7 +281,7 @@ type CobroRow = {
   notas: string | null;
 };
 
-function serializeCobro(c: CobroRow): CobroDTO {
+function serializeCobro(c: CobroRow, facturas?: ReadonlyMap<string, CobroDTO["facturaOdoo"]>): CobroDTO {
   return {
     id: c.id,
     servicioId: c.servicioId,
@@ -267,6 +298,7 @@ function serializeCobro(c: CobroRow): CobroDTO {
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
     confirmadoEn: iso(c.confirmadoEn),
+    facturaOdoo: facturas?.get(c.id) ?? null,
     referenciaExterna: c.referenciaExterna,
     promesaPago: isoDay(c.promesaPago),
     notas: c.notas,
@@ -445,6 +477,22 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
      opciones sin explicarle por qué. Si mañana se quiere que el picker avise "este es
      hermano de una implementación, cobra el otro", eso es un aviso en la UI, no un filtro
      silencioso — y es tema de la tanda de cobranza. */
+  /**
+   * ── La factura de Odoo al lado de cada cobro ────────────────────────────────────
+   * Se aparea AL VUELO con `cruzar()`, el mismo módulo que arma la lista de diferencias, en
+   * vez de leer los vínculos confirmados de `CobroFacturaOdoo`. Dos razones:
+   *
+   *  1. Que las dos pantallas no puedan contradecirse. Si el cronograma tuviera su propia
+   *     regla de apareo, una diría «este cobro ya está facturado» y la otra lo listaría como
+   *     «cobro sin factura», y ninguna sería creíble.
+   *  2. Que funcione desde el minuto en que alguien empareja el cliente, sin un segundo paso
+   *     de confirmación por cada uno de los 347 documentos.
+   *
+   * ⛔ Nada de esto escribe: el cobro conserva su estado y su `confirmadoPor` (INV25). El
+   * espejo dice qué ve Odoo; el semáforo lo sigue moviendo una persona.
+   */
+  const facturasPorCobro = await aparearFacturasDeOdoo(cuenta.id, cuenta.client.name, cuenta.servicios);
+
   const proyectos = await prisma.project.findMany({
     where: proyectoClasificableWhere({ clientId: cuenta.clientId }),
     select: { id: true, name: true, timeline: { select: { anchorStartDate: true } } },
@@ -498,7 +546,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
             })),
           }
         : null,
-      cobros: s.cobros.map(serializeCobro),
+      cobros: s.cobros.map((c) => serializeCobro(c, facturasPorCobro)),
     })),
     bitacora: cuenta.bitacora.map((b) => ({
       id: b.id,
@@ -2683,4 +2731,84 @@ async function armarEstadoParaAuditar(
           }
         : null,
   };
+}
+
+
+/**
+ * Aparea los cobros de UNA cuenta con las facturas que Odoo le emitió.
+ *
+ * ⚠ Devuelve un mapa vacío sin tocar la base cuando la cuenta no tiene facturas espejadas —
+ * que hoy es el caso de todas, porque falta emparejar. La pantalla no cambia hasta que el
+ * emparejado exista, y eso es lo correcto: mostrar una factura de otro cliente sería peor que
+ * no mostrar ninguna.
+ */
+async function aparearFacturasDeOdoo(
+  cuentaId: string,
+  cuentaNombre: string,
+  servicios: ReadonlyArray<{ cobros: ReadonlyArray<CobroRow> }>,
+): Promise<Map<string, CobroDTO["facturaOdoo"]>> {
+  const out = new Map<string, CobroDTO["facturaOdoo"]>();
+  const facturasDb = await prisma.facturaOdoo.findMany({ where: { cuentaId, estadoEspejo: "VIGENTE" } });
+  if (!facturasDb.length) return out;
+
+  const cobros = servicios.flatMap((s) =>
+    s.cobros.map((c) => ({
+      id: c.id,
+      cuentaId,
+      cuentaNombre,
+      periodo: c.periodo,
+      fechaProgramada: isoDay(c.fechaProgramada)!,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      estado: c.estado,
+      facturado: c.fechaEmision !== null,
+    })),
+  );
+  const facturas = facturasDb.map((f) => ({
+    id: f.id,
+    odooMoveId: f.odooMoveId,
+    numero: f.numero,
+    cuentaId: f.cuentaId,
+    odooPartnerId: f.odooPartnerId,
+    odooPartnerNombre: f.odooPartnerNombre,
+    invoiceDate: isoDay(f.invoiceDate)!,
+    montoNeto: num(f.montoNeto)!,
+    montoTotal: num(f.montoTotal)!,
+    montoImpuesto: num(f.montoImpuesto)!,
+    moneda: f.moneda,
+    moveType: f.moveType,
+    paymentState: f.paymentState,
+    state: f.state,
+  }));
+
+  const porId = new Map(facturas.map((f) => [f.id, f]));
+  const estadoDe = new Map(cobros.map((c) => [c.id, c.estado]));
+  const cruce = cruzar(cobros, facturas);
+
+  /* Los pares exactos y los de monto distinto: los dos muestran la factura. Un monto que no
+     coincide es JUSTAMENTE lo que hay que ver al lado del cobro, no algo a esconder. */
+  const asignar = (cobroId: string, facturaId: string) => {
+    const f = porId.get(facturaId);
+    if (!f) return;
+    const p = proponerSemaforo(
+      (estadoDe.get(cobroId) ?? "PROGRAMADO") as Parameters<typeof proponerSemaforo>[0],
+      f.paymentState,
+      { promocionHabilitada: PROMOCION_ODOO_HABILITADA },
+    );
+    out.set(cobroId, {
+      numero: f.numero,
+      invoiceDate: f.invoiceDate,
+      montoNeto: f.montoNeto,
+      montoTotal: f.montoTotal,
+      moneda: f.moneda,
+      paymentState: f.paymentState,
+      senal: p.senal,
+      sinConciliar: p.sinConciliar,
+      estadoPropuesto: p.estadoPropuesto,
+      nota: p.divergencia ? `${p.nota} (${p.divergencia})` : p.nota,
+    });
+  };
+  for (const par of cruce.pares) asignar(par.cobroId, par.facturaId);
+  for (const d of cruce.montosDistintos) asignar(d.cobroId, d.facturaId);
+  return out;
 }

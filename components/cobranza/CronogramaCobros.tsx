@@ -26,6 +26,19 @@ import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
 
+/**
+ * Las señales de Odoo en castellano. ⚠ «Pagada sin conciliar» NO es lo mismo que pagada: el
+ * pago está registrado pero todavía no se cruzó contra el banco, y son 188 facturas.
+ */
+const ETIQUETA_SENAL: Record<string, string> = {
+  PAGADA: "pagada",
+  PAGADA_SIN_CONCILIAR: "pagada, falta conciliar",
+  PARCIAL: "pago parcial",
+  IMPAGA: "impaga",
+  ANULADA_POR_NOTA_DE_CREDITO: "anulada por nota de crédito",
+  DESCONOCIDA: "estado desconocido",
+};
+
 export default function CronogramaCobros({
   cobros,
   todayISO,
@@ -241,6 +254,28 @@ export default function CronogramaCobros({
                   Confirmado por {c.confirmadoPor}
                   {c.referenciaExterna && (
                     <span className="text-fg-muted"> · ref. {c.referenciaExterna}</span>
+                  )}
+                </p>
+              )}
+              {/* La factura REAL de Odoo, al lado del cobro. Es un espejo: no cambia el estado
+                  ni el semáforo — eso lo sigue moviendo una persona (INV25). */}
+              {c.facturaOdoo && (
+                <p className="mt-1 text-[10px] text-fg-muted">
+                  Odoo: <span className="text-fg-secondary">{c.facturaOdoo.numero}</span> ·{" "}
+                  {fmtFecha(c.facturaOdoo.invoiceDate)} · {ETIQUETA_SENAL[c.facturaOdoo.senal] ?? c.facturaOdoo.senal}
+                  {/* ⚠ El total CON impuesto se muestra solo cuando difiere del neto. Los cobros
+                      de Nexus están cargados sin IVA, y el cliente recibe una factura que sí
+                      puede traerlo: ver los dos números es lo que evita la llamada incómoda. */}
+                  {c.facturaOdoo.montoTotal !== c.facturaOdoo.montoNeto && (
+                    <span>
+                      {" "}
+                      · con impuesto {c.facturaOdoo.moneda}{" "}
+                      {c.facturaOdoo.montoTotal.toLocaleString("es-CR", { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                  {c.facturaOdoo.sinConciliar && <span className="text-amber-600"> · sin conciliar en Odoo</span>}
+                  {c.facturaOdoo.estadoPropuesto === "COBRADO" && (
+                    <span className="text-emerald-600"> · Odoo dice que ya está pagada</span>
                   )}
                 </p>
               )}
