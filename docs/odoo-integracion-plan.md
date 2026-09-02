@@ -757,6 +757,70 @@ completo. Recomiendo eso; confirmame.
 
 ---
 
+## 13 · Cómo se ejecuta esto solo, y dónde no puede
+
+Sección agregada el 2026-09-02, cuando Elías pidió avanzar en continuo. Es el contrato de
+autonomía: qué decido yo, qué se convierte en una línea de trabajo en vez de un freno, y qué
+necesita su mano sí o sí.
+
+### Lo que decido solo, y anoto
+
+Toda decisión técnica queda en **`docs/odoo-decisiones.md`**, append-only, una entrada por
+decisión con el porqué y qué la revertiría. Nombres de campos, forma de las pantallas, umbrales,
+qué se prueba y qué no, cómo se serializa un delta: eso es mío y no vale la pena consultarlo.
+
+### Lo que NO me detiene: se convierte en una línea de trabajo
+
+⭐ **La regla que hace posible avanzar sin frenar.** Cuando me tope con un dato raro, una
+ambigüedad de negocio o algo que no cuadre, **no paro a preguntar**: lo convierto en una
+`Inconsistencia` de la lista de la etapa 3, con su monto, su dueño y qué hacer. Así el trabajo
+sigue y la duda queda en la mesa donde Elías y Alexander la van a ver igual.
+
+Ya hay cuatro candidatas identificadas antes de escribir una línea de código:
+
+| Hallazgo | Dueño | Se resuelve |
+|---|---|---|
+| La factura de **$11.541.250** a PUBLIMARK | DIRECCIÓN | corrigiéndola en Odoo (probablemente son colones) |
+| **`in_payment` en 176 de 304** facturas, en una base que dice ser Community | DIRECCIÓN | confirmando si es Enterprise o un módulo |
+| **`creditoDias` null en 48 de 49** cuentas → todas vencen a 15 días | COBRANZA | cargando los términos reales |
+| **10 de 13 propuestas** sin declarar impuestos, y una dice «+2 %» | DIRECCIÓN | decidiendo el formato y corrigiendo la del 2 % |
+
+### ⛔ Lo que necesita tu mano, y por qué
+
+| | Por qué |
+|---|---|
+| **Push y deploy** | Política tuya: commiteo, no pusheo. La integración no la ve Alexander hasta que despliegues. |
+| **Ver las pantallas** | El navegador de esta sesión no tiene sesión iniciada y no me voy a autenticar. Verifico por tests, por render en Node y midiendo el DOM; el visto bueno visual es tuyo. |
+| **Las preguntas de negocio** | No las decido: las convierto en líneas de la lista (arriba). |
+
+### ✅ Lo que sí hago sin consultar
+
+- **Aplicar la migración**: es aditiva, idempotente, y el drift-check dio limpio (solo el ruido
+  conocido de pgvector y los 4 índices de Project). Reversible: las tablas son mías.
+- **Encender el sync**: solo escribe filas espejo, que son datos derivados y borrables.
+- **NO promover ningún cobro a verde solo**: eso lo confirma una persona, lo dice INV25, y no
+  cambia porque yo esté trabajando en continuo.
+
+### El orden real, con lo que bloquea marcado
+
+```
+Etapa 1  emparejado      ── nada la bloquea ──────────────────► puedo entera
+Etapa 2  sync            ── nada la bloquea ──────────────────► puedo entera
+Etapa 3  mesa de trabajo ── nada la bloquea ──────────────────► puedo entera
+Etapa 4  configuración   ── nada la bloquea ──────────────────► puedo entera
+         ────────────────────────────────────────────────────
+         deploy          ── ⛔ tuyo
+         cablear la promoción a verde ── ⚠ espera la respuesta de `in_payment`
+```
+
+⚠ Lo único de las cuatro etapas que queda a medias sin respuesta tuya es **cablear la
+promoción a verde** (etapa 3). Todo lo demás —el espejo, el emparejado, las listas, la
+configuración— se construye y se prueba sin depender de nadie. La promoción queda escrita,
+probada y **apagada detrás de un flag**, lista para encenderse el día que se confirme qué
+significa `in_payment`.
+
+---
+
 ## Verificación
 
 ```powershell
