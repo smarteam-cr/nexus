@@ -1,5 +1,35 @@
 # Integración Nexus ↔ Odoo — plan de implementación
 
+> ## ✅ EJECUTADO — 2026-09-02
+>
+> Las cuatro etapas están hechas y **el sync está corriendo contra producción**. Nada
+> pusheado: el deploy es tuyo.
+>
+> | Etapa | Estado | Qué quedó |
+> |---|---|---|
+> | 1 · Emparejado | ✅ | 6 tablas con RLS · transporte XML-RPC · `/cobranza/odoo` |
+> | 2 · El sync | ✅ | **347 facturas espejadas** · job diario · INV23/24/25 |
+> | 3 · Diferencias | ✅ | 5 líneas ordenadas por plata, con «está bien así» |
+> | 4 · Configuración | ✅ | `/settings/odoo` · la factura al lado de cada cobro |
+>
+> ### ⚠ Lo que falta, y no lo puede hacer el código
+>
+> 1. **Emparejar los 49 clientes** en `/cobranza/odoo`. Es el cuello de botella: hasta que
+>    se haga, las 347 facturas existen pero no aparecen en ningún cronograma. 15 tienen
+>    candidato propuesto con su evidencia; el resto se busca a mano.
+> 2. **Responder qué significa `in_payment`** (188 facturas). Hasta entonces la promoción a
+>    verde queda apagada — encenderla a ciegas pondría 188 cobros en verde de golpe.
+> 3. **`FAC/2026/0243`**: USD 11.541.250, marcada pagada. Su gemela del mismo día por el
+>    mismo importe fue anulada y reemitida en colones, o sea que el error de moneda ya se
+>    detectó una vez. Esta tercera distorsiona toda lectura en dólares.
+> 4. **La pantalla no se abrió en un navegador.** El puerto de producción lo tiene otra
+>    sesión y la base local no levanta. Está probado el camino de servidor completo.
+>
+> Las decisiones tomadas durante la ejecución están en
+> [odoo-decisiones.md](./odoo-decisiones.md) — 13 entradas, cada una con su porqué y qué la
+> revertiría.
+
+
 **Fecha** 2026-09-02 · **Diagnóstico que lo respalda** [odoo-diagnostico.md](./odoo-diagnostico.md)
 
 Este documento tiene dos lectores. La sección 1 es para quien necesita entender qué cambia en
