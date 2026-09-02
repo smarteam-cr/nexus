@@ -600,14 +600,28 @@ quincena y no con quincena × 1,13 (Selvatura 2.000, Global Supply 1.867, Cicade
 O sea que **el IVA existía en el origen y se descartó al importar**, y el reporte de equilibrio
 no modela impuestos: cero menciones en todo el archivo.
 
-Eso deja dos preguntas encadenadas:
+**Los egresos también son netos — el piso NO está inflado.** Se auditó el 2026-09-02 y la
+respuesta es tranquilizadora: el libro de egresos tiene **0 columnas de IVA** (contra 56 en el
+de facturaciones), 21 de 25 herramientas son enteros exactos en dólares —imposible si vinieran
+×1,13—, el alquiler está en 100.000 CRC redondos (con impuesto diría 113.000), y **el 84,6 %
+del burn son salarios**, que no llevan IVA por naturaleza. Las dos puntas del cociente son
+netas. Y descartar la columna de IVA al importar **fue una decisión documentada**, no un
+descuido: está en el docstring del parser, en `DECISIONS.md`, y candadeada con dos tests.
 
-- **¿Los EGRESOS están cargados netos también?** Si los ingresos son netos y los costos vienen
-  con impuesto, el piso mensual está inflado y nadie lo sabe. Es lo primero que hay que
-  responder, y no depende de Odoo.
-- **¿Querés una línea de IVA en el equilibrio?** El espejo ya va a traer `amount_tax` por
-  factura, así que el dato está. Mostrarlo es una decisión: hoy el reporte dice un piso sin
-  declarar que es neto.
+⚠ El sesgo que sí existe va en la dirección CONTRARIA: los SaaS extranjeros se registran a
+precio de lista, no al cargo real de la tarjeta —en Costa Rica el emisor percibe el 13 % sobre
+servicios digitales del exterior—, así que el burn está **sub-estimado en hasta USD 233/mes
+(0,9 %)**. Es chico, pero va para el otro lado del que uno esperaría.
+
+### ⚠⚠ La trampa que esto le pone a la etapa que alimente el equilibrio desde el espejo
+
+Odoo **sí** guarda `amount_tax`. Si algún día el reporte se alimenta del espejo sin cuidado,
+**los ingresos van a aparecer 13 % más altos y los egresos casi iguales — y eso se va a leer
+como un margen que no existe.** La regla es la misma que la del cruce: al equilibrio entra
+`montoNeto`, nunca `montoTotal`.
+
+Queda una sola pregunta, y es de negocio: **¿querés una línea de IVA en el reporte?** El dato
+va a estar. Mostrarlo es opcional; hoy el piso mensual no declara que es neto.
 
 **7. 29 de 44 notas de crédito no tienen factura de origen.**
 `reversed_entry_id` está vacío en el 66 %. ¿A qué cuenta se atribuye una nota de crédito
