@@ -19,6 +19,44 @@
  */
 import type { Inconsistencia, ItemInconsistencia } from "@/lib/finanzas/inconsistencias";
 
+/* ── Cómo se cierra cada línea ──────────────────────────────────────────────────── */
+
+/**
+ * En qué sistema se arregla. Es la primera pregunta que hace quien mira la lista, y sin
+ * respuesta cada línea obliga a abrir los dos sistemas para averiguarlo.
+ */
+export type DondeSeArregla =
+  | "ODOO" // hay que tocar el ERP
+  | "NEXUS" // se arregla acá adentro
+  | "PREGUNTANDO"; // no lo resuelve nadie tecleando: falta un dato de negocio
+
+/**
+ * Una diferencia con su salida. Extiende el contrato de `inconsistencias.ts` —así la lista
+ * sigue ordenándose por plata y sumando sin doble conteo— y le agrega lo único que ese
+ * contrato no tiene: **los pasos concretos**.
+ *
+ * ⚠ `queHacer` del contrato original es UNA oración. Alcanza para un titular y no para
+ * ejecutar: quien abre esta pantalla necesita saber en qué sistema entrar, qué buscar, y qué
+ * hacer con lo que encuentre. Sin eso la lista se lee, se asiente, y no se cierra nunca.
+ */
+export interface DiferenciaOdoo extends Inconsistencia {
+  donde: DondeSeArregla;
+  /** Los pasos, en orden. Cada uno una acción, no una explicación. */
+  pasos: string[];
+  /** A dónde ir dentro de Nexus, cuando la salida está acá mismo. */
+  atajo?: { etiqueta: string; tab: "emparejar" };
+  /** Qué significa aceptarla, para que «está bien así» no sea un botón a ciegas. */
+  queSignificaAceptar: string;
+  /**
+   * `true` = alguien la marcó «está bien así» y sus números no cambiaron desde entonces.
+   *
+   * ⚠ Sigue viniendo en la lista, marcada, en vez de desaparecer. Si se filtrara acá **no
+   * habría forma de volver a abrirla**: quedaría cerrada para siempre por un clic. Quien la
+   * consume decide dónde ponerla; quien la calcula no le esconde nada.
+   */
+  aceptada: boolean;
+}
+
 /* ── Lo que entra ───────────────────────────────────────────────────────────────── */
 
 export interface CobroParaCruzar {
@@ -218,16 +256,16 @@ export function montosEnDosMonedas(facturas: readonly FacturaParaCruzar[]): Arra
  * La lista completa. El orden lo decide la plata, salvo lo que no se puede cuantificar, que
  * va al final.
  */
-export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[] {
-  const out: Inconsistencia[] = [];
+export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[] {
+  const out: DiferenciaOdoo[] = [];
   const cruce = cruzar(estado.cobros, estado.facturas);
 
   /* ⚠ La huella se calcula SIEMPRE con `huellaDe`, sobre la línea ya armada. Tener una
      segunda definición acá —aunque sea equivalente hoy— hace que la pantalla acepte con una
      huella y el detector compare con otra: la aceptación no surte efecto nunca y nadie
      entiende por qué. Ya pasó al escribir esto; lo cazó `diferencias.test.ts`. */
-  const agregar = (inc: Inconsistencia) => {
-    if (estado.aceptadas.get(inc.codigo) !== huellaDe(inc)) out.push(inc);
+  const agregar = (inc: Omit<DiferenciaOdoo, "aceptada">) => {
+    out.push({ ...inc, aceptada: estado.aceptadas.get(inc.codigo) === huellaDe(inc) });
   };
 
   /* ⚠ ODOO-SIN-CUENTA es el BALDE: mientras falte emparejar, casi todas las facturas caen
@@ -256,6 +294,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       yaContadoEn: contenidaEnSinCuenta(
         estado.facturas.filter((f) => dosMonedas.some((d) => CENTAVOS(d.monto) === CENTAVOS(f.montoNeto))),
       ),
+      donde: "ODOO",
+      pasos: [
+        "Abrí en Odoo cada par de facturas de la lista de abajo (los números están en cada línea).",
+        "Mirá cuál de las dos salió en la moneda que no era. La pista: el importe idéntico en dólares y en colones no puede ser correcto con un tipo de cambio de ~500.",
+        "Anulá en Odoo la que está mal y, si hace falta, reemitila en la moneda correcta.",
+        "Al día siguiente el sync la trae anulada y la línea desaparece sola.",
+      ],
+      queSignificaAceptar:
+        "Que estos pares en dos monedas son correctos y no hay nada que anular. La línea vuelve si aparece un par nuevo o cambia un monto.",
       queHacer: "Revisar cada par en Odoo y anular la que salió en la moneda que no era.",
       resuelve: "DIRECCION",
       items: dosMonedas.map((x) => ({
@@ -280,6 +327,16 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
           ? ` ⚠ Ese total está INFLADO: incluye las facturas de la línea «mismo monto en dos monedas», donde un importe en colones salió marcado en dólares. La cifra real en dólares es mucho menor.`
           : ""),
       montoEnJuego: s.principal,
+      donde: "NEXUS",
+      atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
+      pasos: [
+        "Andá a la pestaña «Emparejar» de esta misma pantalla.",
+        "Para cada cuenta, confirmá el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
+        "Si un cliente de Odoo no es cliente nuestro, marcalo como ajeno para que deje de aparecer.",
+        "A medida que emparejás, estas facturas se atribuyen solas — el sync recalcula la cuenta en cada corrida.",
+      ],
+      queSignificaAceptar:
+        "Que estas facturas pueden quedar sin atribuir. Casi nunca es lo correcto: lo que corresponde es emparejar.",
       queHacer: "Emparejar los clientes de Odoo con las cuentas de Nexus en /cobranza/odoo.",
       resuelve: "COBRANZA",
       items: agruparPorPartner(sinCuenta),
@@ -295,6 +352,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       titulo: `${cruce.montosDistintos.length} cobros con un monto distinto al de su factura`,
       detalle: `Nexus dice una cifra y Odoo otra para el mismo cobro. La diferencia total es ${s.texto}. Puede ser un descuento que se aplicó al facturar, o un error de carga en el plan de pago.`,
       montoEnJuego: s.principal,
+      donde: "NEXUS",
+      pasos: [
+        "Abrí el cliente en Cobranza y compará su plan de pago contra la factura de Odoo (el número está en cada línea).",
+        "Si el descuento o el ajuste se aplicó al facturar y el plan quedó viejo, corregí el plan en Nexus.",
+        "Si el plan estaba bien y la factura salió con otro monto, la corrección va del lado de Odoo.",
+        "⚠ Ojo con el impuesto: Nexus guarda el monto SIN IVA. Si la diferencia es del 13 %, el problema es de comparación, no de plata.",
+      ],
+      queSignificaAceptar:
+        "Que estas diferencias de monto son esperadas —un descuento pactado, un redondeo— y no hay que corregir nada. Si el monto cambia, la línea vuelve.",
       queHacer: "Comparar cada par y corregir el que esté mal: el plan en Nexus o la factura en Odoo.",
       resuelve: "COBRANZA",
       items: cruce.montosDistintos
@@ -318,6 +384,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       titulo: `${cobrosSinFactura.length} cobros marcados facturados que no tienen factura en Odoo`,
       detalle: `Nexus los da por facturados —o hasta por cobrados— y en Odoo no hay ningún documento que les corresponda. O la factura no se emitió, o se emitió a un cliente que todavía no está emparejado. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
+      donde: "ODOO",
+      pasos: [
+        "Buscá en Odoo si la factura existe con otro nombre de cliente. Si aparece, el problema es el emparejado: arreglalo en la pestaña «Emparejar».",
+        "Si no existe, hay que emitirla en Odoo.",
+        "Si no correspondía facturarla, sacale la marca de facturado al cobro en Nexus.",
+        "⚠ Los cobros marcados COBRADO que no tienen factura son los más urgentes: significa que entró plata sin documento.",
+      ],
+      queSignificaAceptar:
+        "Que estos cobros pueden estar marcados facturados sin respaldo en Odoo. Solo tiene sentido si sabés que se facturaron por fuera del ERP.",
       queHacer: "Verificar en Odoo si la factura existe; si no existe, emitirla o revertir la marca en Nexus.",
       resuelve: "COBRANZA",
       items: cobrosSinFactura
@@ -341,6 +416,14 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       titulo: `${facturasSinCobro.length} facturas de Odoo sin un cobro que las explique`,
       detalle: `Se le facturó a un cliente que Nexus conoce, pero no hay ningún cobro planificado que corresponda. Puede ser facturación de años anteriores —el plan de pago de Nexus solo cubre lo vigente— o algo que se facturó fuera del plan. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
+      donde: "NEXUS",
+      pasos: [
+        "Fijate la fecha de cada factura. Si es de un año que Nexus no cubre, es historia y no hay nada que hacer — aceptala.",
+        "Si es de un servicio vigente, falta cargar ese servicio o su plan de pago en Cobranza.",
+        "Si el cliente está mal emparejado, la factura es de otro: arreglalo en «Emparejar».",
+      ],
+      queSignificaAceptar:
+        "Que estas facturas son de años anteriores o de cosas que Nexus no planifica. Es la aceptación más común y legítima de la lista.",
       queHacer: "Revisar si falta cargar el servicio en Nexus, o si es facturación vieja que no hace falta espejar.",
       resuelve: "COBRANZA",
       items: facturasSinCobro
@@ -366,6 +449,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       detalle: `Odoo 17 Community nunca marca «in_payment» —su código devuelve «paid» directamente—, así que o esta base viene de Enterprise, o tiene un módulo de terceros. En Enterprise significa «ya pagaron, falta conciliar contra el banco», que es justo lo que hace falta para poner esos cobros en verde. Si significa otra cosa, encender la promoción pondría ${enPago.length} cobros en verde de golpe sin que la plata haya entrado. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
       yaContadoEn: contenidaEnSinCuenta(enPago),
+      donde: "PREGUNTANDO",
+      pasos: [
+        "Preguntale a quien administra Odoo de dónde sale el estado «in_payment» en esta base.",
+        "Si significa «ya pagaron, falta conciliar contra el banco» —que es lo que significa en Odoo Enterprise—, se puede encender la promoción a verde.",
+        "Si viene de un módulo de terceros con otro significado, hay que entenderlo antes de tocar nada.",
+        "Con la respuesta, la promoción se enciende poniendo ODOO_PROMOCION_VERDE=1 en el servidor.",
+      ],
+      queSignificaAceptar:
+        "Que ya se sabe qué significa y no hace falta seguir viéndolo. ⚠ Aceptarlo NO enciende la promoción a verde: eso es una bandera aparte.",
       queHacer: "Preguntarle al administrador de Odoo de dónde sale ese estado. Hasta entonces la promoción a verde queda apagada.",
       resuelve: "DIRECCION",
       items: [
@@ -388,13 +480,25 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): Inconsistencia[
       detalle: `Pueden ser exenciones legítimas o impuesto que faltó cargar. No se puede decidir por país: las exentas medidas son de empresas costarricenses igual que las que sí lo llevan. Importa porque el borrador de cobro le dice al cliente un monto sin impuesto, y la factura que recibe puede traerlo. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
       yaContadoEn: contenidaEnSinCuenta(exentas),
+      donde: "PREGUNTANDO",
+      pasos: [
+        "Pasale la lista al contador y confirmá cuáles son exenciones reales.",
+        "Si alguna debía llevar impuesto, hay que corregir la factura en Odoo.",
+        "⚠ No se puede decidir por país: las exentas medidas son de empresas costarricenses igual que las que sí lo llevan.",
+      ],
+      queSignificaAceptar:
+        "Que las exenciones están confirmadas por el contador. La línea vuelve si aparece una factura exenta nueva.",
       queHacer: "Confirmar con el contador cuáles son exenciones reales.",
       resuelve: "DIRECCION",
       items: agruparPorPartner(exentas),
     });
   }
 
-  return out.sort((a, b) => (b.montoEnJuego ?? -1) - (a.montoEnJuego ?? -1));
+  /* Las aceptadas van al final: siguen a la vista para poder reabrirlas, pero no compiten con
+     lo que todavía hay que resolver. */
+  return out.sort(
+    (a, b) => Number(a.aceptada) - Number(b.aceptada) || (b.montoEnJuego ?? -1) - (a.montoEnJuego ?? -1),
+  );
 }
 
 /** Agrupa por cliente para que una lista de 347 filas sea legible. */
@@ -422,6 +526,6 @@ function agruparPorPartner(facturas: readonly FacturaParaCruzar[]): ItemInconsis
  *
  * ⚠ Una aceptación no puede convertirse en el lugar donde se esconde un problema nuevo.
  */
-export function huellaDe(inc: Inconsistencia): string {
+export function huellaDe(inc: Pick<Inconsistencia, "items">): string {
   return inc.items.map((i) => `${i.texto}=${i.monto ?? ""}`).join("|");
 }

@@ -223,7 +223,9 @@ describe("la lista para el CFO", () => {
       facturas,
       aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
     });
-    expect(conAceptada.find((i) => i.codigo === "ODOO-MONEDA")).toBeUndefined();
+    /* ⚠ NO desaparece: se marca. Si se filtrara, «volver a abrir» sería inalcanzable y la
+       línea quedaría cerrada para siempre por un clic. */
+    expect(conAceptada.find((i) => i.codigo === "ODOO-MONEDA")?.aceptada).toBe(true);
 
     const cambiada = detectarDiferenciasOdoo({
       ...base,
@@ -231,7 +233,7 @@ describe("la lista para el CFO", () => {
       facturas: facturas.map((f) => ({ ...f, montoNeto: 9999 })),
       aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
     });
-    expect(cambiada.find((i) => i.codigo === "ODOO-MONEDA")).toBeDefined();
+    expect(cambiada.find((i) => i.codigo === "ODOO-MONEDA")?.aceptada).toBe(false);
   });
 
   it("el estado in_payment sale como decisión de dirección, no como tarea de cobranza", () => {
@@ -276,6 +278,27 @@ describe("la lista para el CFO", () => {
       ],
     });
     expect(lista.find((i) => i.codigo === "ODOO-MONEDA")?.yaContadoEn).toBeUndefined();
+  });
+
+  it("las aceptadas van al FINAL, no compiten con lo que hay que resolver", () => {
+    const facturas = [
+      factura({ id: "b", odooMoveId: 2, cuentaId: "cta1", montoNeto: 5000, moneda: "USD", odooPartnerId: 77 }),
+      factura({ id: "c", odooMoveId: 3, cuentaId: "cta1", montoNeto: 5000, moneda: "CRC", odooPartnerId: 77 }),
+      factura({ id: "d", odooMoveId: 4, cuentaId: null, montoNeto: 10, moneda: "USD" }),
+    ];
+    const antes = detectarDiferenciasOdoo({ ...base, cobros: [], facturas });
+    const moneda = antes.find((i) => i.codigo === "ODOO-MONEDA")!;
+    expect(antes[0]!.codigo, "sin aceptar, la más cara va primero").toBe("ODOO-MONEDA");
+
+    const despues = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas,
+      aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
+    });
+    expect(despues[despues.length - 1]!.codigo, "aceptada, se va al final aunque sea la más cara").toBe(
+      "ODOO-MONEDA",
+    );
   });
 
   it("no inventa líneas cuando no hay nada que reportar", () => {

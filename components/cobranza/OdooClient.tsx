@@ -1,0 +1,187 @@
+"use client";
+
+/**
+ * components/cobranza/OdooClient.tsx
+ *
+ * Las tres pestañas de la integración con Odoo: **qué es**, **emparejar**, **lo que no cuadra**.
+ *
+ * ── POR QUÉ HAY UNA PESTAÑA QUE SOLO EXPLICA ────────────────────────────────────
+ * Esta pantalla la abre alguien que no la construyó, cada varias semanas, para hacer un
+ * trabajo puntual. Sin una página que diga qué hace la integración —y sobre todo **qué NO
+ * hace**— cada visita empieza reconstruyendo el modelo mental desde cero, y las dos preguntas
+ * que aparecen siempre son las mismas: «¿esto le escribe a Odoo?» y «¿esto mueve mis cobros?».
+ *
+ * Las dos respuestas son que no, y están escritas grandes.
+ */
+import { useState } from "react";
+import { Tabs } from "@/components/ui";
+import EmparejadoOdoo from "./EmparejadoOdoo";
+import DiferenciasOdoo from "./DiferenciasOdoo";
+
+type Pestana = "que-es" | "emparejar" | "no-cuadra";
+
+export default function OdooClient({
+  corrida,
+  conteos,
+}: {
+  corrida: {
+    iniciadaEn: string;
+    terminadaEn: string | null;
+    ok: boolean;
+    parcial: boolean;
+    error: string | null;
+    facturasVistas: number;
+  } | null;
+  conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
+}) {
+  const [tab, setTab] = useState<Pestana>(
+    /* Arranca donde está el trabajo: si falta emparejar, esa es la pestaña. Si ya está todo
+       emparejado, lo que queda es resolver diferencias. */
+    conteos.cuentasVinculadas < conteos.cuentas ? "emparejar" : "no-cuadra",
+  );
+
+  return (
+    <div className="space-y-4">
+      <Tabs
+        aria-label="Secciones de la integración con Odoo"
+        variant="underline"
+        value={tab}
+        onChange={(k) => setTab(k as Pestana)}
+        items={[
+          { key: "que-es", label: "Cómo funciona" },
+          {
+            key: "emparejar",
+            label: "Emparejar",
+            count: conteos.cuentas - conteos.cuentasVinculadas,
+            title: "Decirle a Nexus qué cliente de Odoo corresponde a cada cuenta",
+          },
+          {
+            key: "no-cuadra",
+            label: "Lo que no cuadra",
+            count: conteos.diferencias,
+            title: "Diferencias entre lo que Nexus planificó y lo que Odoo facturó",
+          },
+        ]}
+      />
+
+      {corrida && (
+        <p className="text-xs text-fg-muted">
+          Espejo actualizado el {corrida.iniciadaEn.slice(0, 16).replace("T", " ")} UTC · {corrida.facturasVistas}{" "}
+          facturas
+          {!corrida.ok && (
+            <span className="text-red-600">
+              {" "}
+              · ⚠ la última corrida {corrida.parcial ? "quedó incompleta" : "falló"}
+              {corrida.error ? `: ${corrida.error}` : ""}
+            </span>
+          )}
+          {corrida.terminadaEn === null && <span className="text-amber-600"> · sin terminar</span>}
+        </p>
+      )}
+
+      {tab === "que-es" && <QueEs conteos={conteos} />}
+      {tab === "emparejar" && <EmparejadoOdoo />}
+      {tab === "no-cuadra" && <DiferenciasOdoo onIrAEmparejar={() => setTab("emparejar")} />}
+    </div>
+  );
+}
+
+/* ── La pestaña que explica ──────────────────────────────────────────────────────── */
+
+function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number } }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-line bg-surface p-5">
+        <h2 className="text-base font-semibold text-fg">Para qué existe</h2>
+        <p className="mt-2 text-sm text-fg-secondary">
+          Hasta ahora la misma información vivía en cuatro lugares: el banco, Odoo, Nexus y una hoja de cálculo.
+          Cuando se emitía una factura había que anotarla en Odoo y volver a Nexus a marcar el cobro como facturado.
+          Cuando entraba un pago, lo mismo. Nadie hacía nada mal — simplemente los dos sistemas no se hablaban, y la
+          única conexión entre ellos era una persona copiando datos.
+        </p>
+        <p className="mt-2 text-sm text-fg-secondary">
+          El costo caro no era el tiempo: era que <strong className="text-fg">los dos sistemas se separaban sin que
+          nadie se enterara</strong>. Nexus podía decir que un cliente debe plata que ya pagó, y eso subía hasta la
+          reunión de dirección.
+        </p>
+        <p className="mt-2 text-sm text-fg-secondary">
+          Ahora Nexus lee Odoo todos los días y pone las facturas reales al lado de los cobros planificados. Lo que no
+          coincide aparece en una lista, con su monto y con quién lo puede cerrar.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
+          <h3 className="text-sm font-semibold text-emerald-700">Lo que sí hace</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
+            <li>· Trae las facturas de venta de Odoo, una vez por día.</li>
+            <li>· Las muestra al lado del cobro que les corresponde, con su número y su estado real.</li>
+            <li>· Lista lo que no cuadra, ordenado por la plata que mueve.</li>
+            <li>· Guarda el monto sin impuesto y el total, porque los cobros de Nexus están cargados sin IVA.</li>
+          </ul>
+        </div>
+
+        {/* ⛔ Estas dos son LAS preguntas que aparecen siempre. Van grandes y en negativo. */}
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-5">
+          <h3 className="text-sm font-semibold text-red-700">Lo que NO hace, a propósito</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
+            <li>
+              · <strong className="text-fg">Nunca escribe en Odoo.</strong> Ni una línea. Es solo lectura, siempre.
+            </li>
+            <li>
+              · <strong className="text-fg">Nunca marca un cobro como cobrado.</strong> Puede mostrar que Odoo dice
+              que la factura está pagada, pero pasar un cobro a verde lo sigue haciendo una persona con nombre.
+            </li>
+            <li>· Nunca convierte moneda: si el cobro está en dólares y la factura en colones, muestra las dos.</li>
+            <li>· No reemplaza el plan de pago. Odoo no sabe en cuántas cuotas se le cobra a cada cliente; eso vive acá.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-line bg-surface p-5">
+        <h2 className="text-base font-semibold text-fg">Cómo se usa</h2>
+        <ol className="mt-2 space-y-2 text-sm text-fg-secondary">
+          <li>
+            <strong className="text-fg">1. Emparejar, una sola vez.</strong> Decile a Nexus qué cliente de Odoo
+            corresponde a cada cuenta. Hace falta porque Nexus guarda el nombre comercial («Iberorutas») y Odoo la
+            razón social («Servicios San Mateo y Santa Elena del Sur S.A.»), y no se parecen. Al confirmar se guarda
+            la cédula, así que la próxima vez se sostiene solo.
+          </li>
+          <li>
+            <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
+            qué sistema se arregla y los pasos. Si una diferencia está bien así, se marca con el motivo y deja de
+            aparecer — pero vuelve sola si los números cambian.
+          </li>
+          <li>
+            <strong className="text-fg">3. Nada más.</strong> El sync corre solo cada mañana. Si falla, se dice arriba
+            de estas pestañas en vez de quedar en un log que nadie lee.
+          </li>
+        </ol>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Dato n={conteos.facturas} etiqueta="facturas espejadas" pie="Solo lectura desde Odoo." />
+        <Dato
+          n={conteos.cuentasVinculadas}
+          de={conteos.cuentas}
+          etiqueta="cuentas emparejadas"
+          pie="Las que faltan no pueden mostrar sus facturas."
+        />
+        <Dato n={conteos.diferencias} etiqueta="cosas por resolver" pie="Ordenadas por la plata que mueven." />
+      </div>
+    </div>
+  );
+}
+
+function Dato({ n, de, etiqueta, pie }: { n: number; de?: number; etiqueta: string; pie: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <p className="text-2xl font-bold tabular-nums text-fg">
+        {n}
+        {de !== undefined && <span className="text-base font-normal text-fg-muted"> / {de}</span>}
+      </p>
+      <p className="text-sm text-fg-secondary">{etiqueta}</p>
+      <p className="mt-0.5 text-xs text-fg-muted">{pie}</p>
+    </div>
+  );
+}

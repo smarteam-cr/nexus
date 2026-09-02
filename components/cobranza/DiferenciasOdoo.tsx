@@ -3,25 +3,26 @@
 /**
  * components/cobranza/DiferenciasOdoo.tsx
  *
- * Todo lo que no cuadra entre Nexus y Odoo, ordenado por plata. Es la agenda de la reunión
- * con el CFO: «son estas cosas, en este orden, y estas las decidís vos».
+ * Lo que no cuadra entre Nexus y Odoo, ordenado por plata, **con su salida en cada línea**.
  *
- * Reusa `InconsistenciasPanel` **tal cual** —el mismo que ya usa el reporte de equilibrio—
- * porque recibe `Inconsistencia[]` y nada más. Lo que se agrega es lo que ese panel no tiene
- * y esta lista sí necesita: poder decir **«está bien así»**.
+ * ── POR QUÉ NO REUSA `InconsistenciasPanel` ─────────────────────────────────────
+ * Se intentó, y era la decisión escrita en el plan. No sobrevivió al contacto con el uso: ese
+ * panel no admite acciones por línea, así que «marcar como está bien así» quedó como un
+ * formulario suelto abajo de todo, con **un desplegable de códigos** (`ODOO-SIN-CUENTA`,
+ * `ODOO-MONEDA`) separado de las líneas sobre las que actuaba. Nadie podía saber qué hacía.
  *
- * ⚠ Por qué hace falta esa parte: el panel original no guarda estado a propósito, y eso sirve
- * cuando toda diferencia es un error. Acá NO lo es — Odoo tiene 82 clientes y Nexus 49
- * cuentas, hay notas de crédito que no corrigen ningún cobro, y va a haber redondeos que
- * alguien acepte. Sin poder cerrarlas, esas líneas vuelven en cada sesión y **a la tercera
- * nadie mira la lista**.
+ * Reusar un componente no vale un control que la gente no entiende. Acá la acción vive **en la
+ * línea**, con su nombre y con lo que significa aceptarla escrito al lado del botón.
+ *
+ * ── Y CADA LÍNEA DICE CÓMO SE CIERRA ────────────────────────────────────────────
+ * En qué sistema se arregla —Odoo, Nexus, o preguntando— y los pasos, en orden. Una lista de
+ * diferencias sin salida se lee, se asiente, y no se cierra nunca.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Input, Select, Spinner } from "@/components/ui";
+import { Button, EmptyState, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import InconsistenciasPanel from "@/components/finanzas/equilibrio/InconsistenciasPanel";
-import type { Inconsistencia } from "@/lib/finanzas/inconsistencias";
+import type { DiferenciaOdoo, DondeSeArregla } from "@/lib/cobranza/odoo/diferencias";
 
 interface Aceptada {
   clave: string;
@@ -30,18 +31,44 @@ interface Aceptada {
   aceptadaEn: string;
 }
 interface Respuesta {
-  inconsistencias: Inconsistencia[];
+  inconsistencias: DiferenciaOdoo[];
   aceptadas: Aceptada[];
   medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
 }
 
-export default function DiferenciasOdoo() {
+/** Dónde se arregla, en palabras de quien lo va a hacer. */
+const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: string }> = {
+  ODOO: {
+    label: "Se arregla en Odoo",
+    chip: "text-violet-600 bg-violet-500/10 border-violet-500/30",
+    pie: "Al día siguiente el sync trae el cambio y la línea desaparece sola.",
+  },
+  NEXUS: {
+    label: "Se arregla en Nexus",
+    chip: "text-brand bg-brand/10 border-brand/30",
+    pie: "El cambio se ve en la próxima carga de esta pantalla.",
+  },
+  PREGUNTANDO: {
+    label: "Falta un dato de negocio",
+    chip: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+    pie: "Esto no se resuelve tecleando: alguien tiene que responder una pregunta.",
+  },
+};
+
+const SEV: Record<string, string> = {
+  ALTA: "text-red-600 bg-red-500/10 border-red-500/30",
+  MEDIA: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+  BAJA: "text-fg-muted bg-surface-muted border-line",
+};
+
+const miles = (n: number) => n.toLocaleString("es-CR", { maximumFractionDigits: 0 });
+
+export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: () => void }) {
   const toast = useToast();
   const [data, setData] = useState<Respuesta | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [clave, setClave] = useState("");
-  const [motivo, setMotivo] = useState("");
-  const [guardando, setGuardando] = useState(false);
+  const [guardando, setGuardando] = useState<string | null>(null);
+  const [verCerradas, setVerCerradas] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -59,26 +86,32 @@ export default function DiferenciasOdoo() {
   }, [cargar]);
 
   const enviar = useCallback(
-    async (body: Record<string, unknown>, exito: string) => {
-      setGuardando(true);
+    async (body: Record<string, unknown>, clave: string, exito: string) => {
+      setGuardando(clave);
       try {
         await fetchJson("/api/cobranza/odoo/diferencias", { method: "POST", body: JSON.stringify(body) });
         toast.success(exito);
-        setClave("");
-        setMotivo("");
         await cargar();
       } catch (e) {
         toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
       } finally {
-        setGuardando(false);
+        setGuardando(null);
       }
     },
     [cargar, toast],
   );
 
-  /* La moneda del panel es la que más plata mueve. Los montos NO se convierten: cada línea
-     lleva su desglose por moneda en el detalle. */
-  const moneda = useMemo(() => "USD", []);
+  /* El titular NO suma las líneas marcadas `yaContadoEn`: son subconjuntos de otra y contarlas
+     daría una cifra que no existe. Y no se mezclan monedas. */
+  const enJuego = useMemo(
+    () =>
+      (data?.inconsistencias ?? [])
+        .filter((i) => !i.yaContadoEn && !i.aceptada)
+        .reduce((a, i) => a + (i.montoEnJuego ?? 0), 0),
+    [data],
+  );
+  const abiertas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => !i.aceptada), [data]);
+  const cerradas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => i.aceptada), [data]);
 
   if (cargando && !data) {
     return (
@@ -89,82 +122,235 @@ export default function DiferenciasOdoo() {
   }
   if (!data) return null;
 
-  const abiertas = data.inconsistencias.map((i) => i.codigo);
+  const aceptadaDe = new Map(data.aceptadas.map((a) => [a.clave, a]));
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-fg-muted">
-        Cruzado sobre {data.medido.cobros} cobros de Nexus y {data.medido.facturas} facturas de Odoo.{" "}
-        {data.medido.cuentasSinVinculo > 0 && (
-          <>
-            Faltan emparejar {data.medido.cuentasSinVinculo} de {data.medido.cuentasTotales} cuentas, así que parte de
-            lo de abajo se resuelve solo al emparejar.
-          </>
-        )}
-      </p>
+      <div className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+        <p className="text-fg">
+          {abiertas.length === 0 ? (
+            "Nexus y Odoo cuadran."
+          ) : (
+            <>
+              <strong className="text-lg tabular-nums">{abiertas.length}</strong> cosas por resolver, la
+              más cara primero.
+            </>
+          )}
+        </p>
+        <p className="mt-0.5 text-xs text-fg-muted">
+          Cruzado sobre {data.medido.cobros} cobros de Nexus y {data.medido.facturas} facturas de Odoo.
+          {data.medido.cuentasSinVinculo > 0 && (
+            <> Faltan emparejar {data.medido.cuentasSinVinculo} de {data.medido.cuentasTotales} cuentas.</>
+          )}
+          {enJuego > 0 && (
+            <>
+              {" "}
+              Suman <span className="tabular-nums">{miles(enJuego)}</span> en la moneda que más mueve cada línea —{" "}
+              {/* ⚠ Dicho explícitamente: es lo que evita que alguien lea el titular como «la
+                  empresa tiene 60 millones en riesgo». */}
+              no es un total en una sola moneda ni es plata perdida.
+            </>
+          )}
+        </p>
+      </div>
 
-      <InconsistenciasPanel inconsistencias={data.inconsistencias} moneda={moneda} />
-
-      {abiertas.length > 0 && (
-        <div className="rounded-lg border border-line bg-surface p-3">
-          <div className="text-sm font-medium text-fg">Marcar una línea como «está bien así»</div>
-          {/* ⚠ El motivo es obligatorio: una aceptación sin razón escrita es indistinguible de
-              un clic para sacarse la línea de encima, y a los tres meses nadie sabe cuál fue. */}
-          <p className="mt-0.5 text-xs text-fg-muted">
-            Se guarda con los números de hoy. Si el monto cambia, la línea vuelve sola — una aceptación no puede
-            esconder un problema nuevo.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Select value={clave} onChange={(e) => setClave(e.target.value)} className="min-w-48 text-sm">
-              <option value="">Elegí la línea…</option>
-              {abiertas.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-            <Input
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Por qué está bien así"
-              className="min-w-64 flex-1 text-sm"
-            />
-            <Button
-              size="sm"
-              disabled={guardando || !clave || motivo.trim().length < 5}
-              onClick={() => enviar({ accion: "aceptar", clave, motivo }, "Listo, esa línea queda cerrada.")}
-            >
-              {guardando ? "Guardando…" : "Está bien así"}
-            </Button>
-          </div>
-        </div>
+      {abiertas.length === 0 && cerradas.length === 0 ? (
+        <EmptyState
+          title="No hay nada que resolver"
+          description="Todos los cobros de Nexus tienen su factura en Odoo y los montos coinciden."
+        />
+      ) : (
+        abiertas.map((inc) => (
+          <Linea
+            key={inc.codigo}
+            inc={inc}
+            aceptada={aceptadaDe.get(inc.codigo)}
+            guardando={guardando === inc.codigo}
+            onIrAEmparejar={onIrAEmparejar}
+            onAceptar={(motivo) =>
+              enviar(
+                { accion: "aceptar", clave: inc.codigo, motivo },
+                inc.codigo,
+                "Listo, esa línea queda cerrada.",
+              )
+            }
+            onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
+          />
+        ))
       )}
 
-      {data.aceptadas.length > 0 && (
-        <div className="rounded-lg border border-line bg-surface p-3">
-          <div className="text-sm font-medium text-fg">Diferencias aceptadas ({data.aceptadas.length})</div>
-          <div className="mt-1">
-            {data.aceptadas.map((a) => (
-              <div key={a.clave} className="flex items-start gap-3 border-b border-line py-2 last:border-0">
+      {/* ⚠ Las aceptadas siguen a la vista, plegadas. Si se ocultaran del todo no habría forma
+          de volver a abrirlas: quedarían cerradas para siempre por un clic. */}
+      {cerradas.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setVerCerradas((v) => !v)}
+            className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-left text-sm text-fg-secondary hover:bg-surface-hover"
+          >
+            <span className="text-fg-muted">{verCerradas ? "▾" : "▸"}</span>
+            {cerradas.length} marcadas «está bien así»
+            <span className="text-xs text-fg-muted">— vuelven solas si los montos cambian</span>
+          </button>
+          {verCerradas && (
+            <div className="mt-2 space-y-2">
+              {cerradas.map((inc) => (
+                <Linea
+                  key={inc.codigo}
+                  inc={inc}
+                  aceptada={aceptadaDe.get(inc.codigo)}
+                  guardando={guardando === inc.codigo}
+                  onIrAEmparejar={onIrAEmparejar}
+                  onAceptar={() => undefined}
+                  onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Una línea, con su salida ────────────────────────────────────────────────────── */
+
+function Linea({
+  inc,
+  aceptada,
+  guardando,
+  onAceptar,
+  onReabrir,
+  onIrAEmparejar,
+}: {
+  inc: DiferenciaOdoo;
+  aceptada?: Aceptada;
+  guardando: boolean;
+  onAceptar: (motivo: string) => void;
+  onReabrir: () => void;
+  onIrAEmparejar?: () => void;
+}) {
+  const [verDetalle, setVerDetalle] = useState(false);
+  const [aceptando, setAceptando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const donde = DONDE[inc.donde];
+
+  return (
+    <div className="rounded-lg border border-line bg-surface">
+      <div className="border-b border-line p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-full border px-2 py-0.5 text-xs ${SEV[inc.severidad] ?? SEV.BAJA}`}>
+            {inc.severidad.toLowerCase()}
+          </span>
+          <span className={`rounded-full border px-2 py-0.5 text-xs ${donde.chip}`}>{donde.label}</span>
+          {inc.montoEnJuego !== null && (
+            <span className="ml-auto text-sm tabular-nums text-fg-secondary">
+              {miles(inc.montoEnJuego)}
+              {/* La línea que ya cuenta esta plata desde otro ángulo. Sin decirlo, el lector
+                  suma dos veces lo mismo. */}
+              {inc.yaContadoEn && (
+                <span className="ml-1 text-xs text-fg-muted">(ya contado en {inc.yaContadoEn})</span>
+              )}
+            </span>
+          )}
+        </div>
+        <h3 className="mt-1.5 text-sm font-semibold text-fg">{inc.titulo}</h3>
+        <p className="mt-1 text-sm text-fg-secondary">{inc.detalle}</p>
+      </div>
+
+      <div className="p-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Cómo se arregla</h4>
+        <ol className="mt-1.5 space-y-1">
+          {inc.pasos.map((paso, i) => (
+            <li key={i} className="flex gap-2 text-sm text-fg-secondary">
+              <span className="shrink-0 tabular-nums text-fg-muted">{i + 1}.</span>
+              <span>{paso}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-xs text-fg-muted">{donde.pie}</p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {inc.atajo && onIrAEmparejar && (
+            <Button size="sm" onClick={onIrAEmparejar}>
+              {inc.atajo.etiqueta}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => setVerDetalle((v) => !v)}>
+            {verDetalle ? "Ocultar" : `Ver las ${inc.items.length}`}
+          </Button>
+          {!aceptada && !aceptando && (
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setAceptando(true)}>
+              Está bien así
+            </Button>
+          )}
+        </div>
+
+        {/* ⚠ Lo que significa aceptar se dice ANTES de aceptar, junto al campo. El control
+            anterior era un desplegable de códigos sin ninguna explicación. */}
+        {aceptando && !aceptada && (
+          <div className="mt-3 rounded-md border border-line bg-surface-muted p-3">
+            <p className="text-sm text-fg">Marcar esta línea como «está bien así»</p>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              {inc.queSignificaAceptar} Se guarda con los números de hoy: si cambian, la línea vuelve sola.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Input
+                autoFocus
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Por qué está bien así (queda registrado con tu nombre)"
+                className="min-w-64 flex-1 text-sm"
+              />
+              <Button size="sm" disabled={guardando || motivo.trim().length < 5} onClick={() => onAceptar(motivo)}>
+                {guardando ? "Guardando…" : "Confirmar"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAceptando(false);
+                  setMotivo("");
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {aceptada && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-line bg-surface-muted p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-fg">Marcada «está bien así»</p>
+              <p className="mt-0.5 text-xs text-fg-muted">
+                {aceptada.motivo} · {aceptada.aceptadaPor} · {aceptada.aceptadaEn.slice(0, 10)}
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" disabled={guardando} onClick={onReabrir}>
+              Volver a abrir
+            </Button>
+          </div>
+        )}
+
+        {verDetalle && (
+          <div className="mt-3 max-h-96 overflow-y-auto rounded-md border border-line">
+            {inc.items.map((it, i) => (
+              <div key={i} className="flex items-start gap-3 border-b border-line px-3 py-1.5 last:border-0">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-fg">{a.clave}</div>
-                  <div className="text-xs text-fg-muted">
-                    {a.motivo} · {a.aceptadaPor} · {a.aceptadaEn.slice(0, 10)}
+                  <div className="truncate text-sm text-fg-secondary" title={it.texto}>
+                    {it.texto}
                   </div>
+                  {it.nota && <div className="truncate text-xs text-fg-muted">{it.nota}</div>}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={guardando}
-                  onClick={() => enviar({ accion: "reabrir", clave: a.clave }, "Vuelve a la lista.")}
-                >
-                  Volver a abrir
-                </Button>
+                {it.monto !== undefined && (
+                  <span className="shrink-0 text-xs tabular-nums text-fg-muted">{miles(it.monto)}</span>
+                )}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

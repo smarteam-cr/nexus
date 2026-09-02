@@ -29,8 +29,7 @@ import {
   type PartnerOdoo,
   type PropuestaEmparejado,
 } from "./emparejado";
-import { detectarDiferenciasOdoo, huellaDe } from "./diferencias";
-import type { Inconsistencia } from "@/lib/finanzas/inconsistencias";
+import { detectarDiferenciasOdoo, huellaDe, type DiferenciaOdoo } from "./diferencias";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
 
 export class EmparejadoError extends Error {
@@ -345,7 +344,7 @@ export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nom
  * consulta barata; el día que no lo sea, se pagina la PANTALLA, no la detección.
  */
 export async function cargarDiferencias(): Promise<{
-  inconsistencias: Inconsistencia[];
+  inconsistencias: DiferenciaOdoo[];
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
   medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
 }> {

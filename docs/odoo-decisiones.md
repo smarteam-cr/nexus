@@ -451,3 +451,71 @@ medio año y nadie sabe por qué.
 
 **Qué la revertiría.** Que aparezca una purga legítima y masiva en Odoo. Ahí hay que subir el
 umbral a mano y dejar dicho por qué, no sacar la guarda.
+
+---
+
+## 2026-09-02 · La pantalla se parte en tres pestañas, y una solo explica
+
+**Qué se decidió.** `/cobranza/odoo` tiene **Cómo funciona · Emparejar · Lo que no cuadra**, y
+abre en la pestaña donde está el trabajo.
+
+**Por qué la que explica.** Esta pantalla la abre alguien que no la construyó, cada varias
+semanas, para una tarea puntual. Sin una página que diga qué hace la integración —y sobre todo
+**qué NO hace**— cada visita empieza reconstruyendo el modelo mental desde cero. Las dos
+preguntas que aparecen siempre son «¿esto le escribe a Odoo?» y «¿esto mueve mis cobros?»; las
+dos respuestas son que no, y ahora están escritas grandes y en negativo.
+
+**Qué la revertiría.** Que la integración deje de ser algo que se toca cada tanto.
+
+---
+
+## 2026-09-03 · ⛔ Se abandona `InconsistenciasPanel`, y el motivo importa
+
+**Qué se decidió.** La lista de diferencias tiene su propio componente. La decisión anterior
+—«reusar `InconsistenciasPanel` tal cual»— queda revertida.
+
+**Por qué.** No sobrevivió al contacto con el uso. Ese panel **no admite acciones por línea**,
+así que «marcar como está bien así» terminó siendo un formulario suelto al pie con **un
+desplegable de códigos crudos** (`ODOO-SIN-CUENTA`, `ODOO-MONEDA`) desconectado de las líneas
+sobre las que actuaba. Nadie que abriera la pantalla podía saber qué era ni para qué servía.
+
+⭐ **Reusar un componente no vale un control que la gente no entiende.** Ahora la acción vive en
+la línea, con su nombre, y con **lo que significa aceptarla escrito al lado del botón** — antes
+de apretarlo, no después.
+
+**Qué la revertiría.** Que `InconsistenciasPanel` aprenda acciones por línea. Ahí conviene
+volver, porque la lista del reporte de equilibrio va a necesitar lo mismo.
+
+---
+
+## 2026-09-03 · Cada diferencia trae DÓNDE y CÓMO se arregla
+
+**Qué se decidió.** `DiferenciaOdoo` extiende el contrato con `donde` (Odoo · Nexus ·
+preguntando) y `pasos[]`.
+
+**Por qué.** El contrato original trae `queHacer`, que es **una oración**. Alcanza para un
+titular y no para ejecutar: quien abre la pantalla necesita saber en qué sistema entrar, qué
+buscar y qué hacer con lo que encuentre. **Una lista de diferencias sin salida se lee, se
+asiente, y no se cierra nunca.**
+
+Y la primera pregunta de todas es en qué sistema se toca. Sin responderla, cada línea obliga a
+abrir los dos para averiguarlo.
+
+**Qué la revertiría.** Nada. Si algo, faltan enlaces directos al documento en Odoo.
+
+---
+
+## 2026-09-03 · ⚠ Una línea aceptada NO desaparece: se marca
+
+**Qué se decidió.** `detectarDiferenciasOdoo` devuelve también las aceptadas, con
+`aceptada: true`, y la pantalla las deja plegadas al final.
+
+**Por qué.** Al principio se filtraban en el detector. Eso hacía que **«volver a abrir» fuera
+inalcanzable**: la línea quedaba cerrada para siempre por un clic, sin superficie donde
+deshacerlo. El bug estaba en mi propio diseño y lo encontré recorriendo la pantalla, no
+leyendo el código.
+
+⚠ Los totales y el badge sí las excluyen: están cerradas, no son trabajo pendiente. Lo que no
+se puede es esconderlas.
+
+**Qué la revertiría.** Nada.
