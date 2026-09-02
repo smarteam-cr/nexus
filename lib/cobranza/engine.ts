@@ -77,7 +77,9 @@ export interface AlertaDraft {
     | "INCONSISTENCIA_CICLO"
     | "ARRANQUE_CAMBIADO"
     | "MONTOS_DESCUADRADOS"
-    | "PROMESA_INCUMPLIDA";
+    | "PROMESA_INCUMPLIDA"
+    | "SYNC_ODOO_FALLIDO"
+    | "FACTURA_SIN_COBRO";
   urgencia: "ALTA" | "MEDIA" | "BAJA";
   cuentaId: string;
   cobroId?: string;

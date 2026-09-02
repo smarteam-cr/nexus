@@ -2788,6 +2788,9 @@ enum CobranzaOrigenCobro {
   // engine —que clampea al ciclo corriente y no puede backfillear— pero con numCuota
   // = orden del plan, así el engine lo reconoce y no propone cambios fantasma.
   IMPORTACION
+  /// Espejo de Odoo: el cobro nacio de una factura que Odoo ya tenia y Nexus no. Ver
+  /// docs/odoo-integracion-plan.md. NUNCA se marca COBRADO por el sync (INV25).
+  ODOO
 }
 
 enum CobranzaTipoAlerta {
@@ -2799,6 +2802,11 @@ enum CobranzaTipoAlerta {
   ARRANQUE_CAMBIADO // fechaInicioFacturacion divergió del anchorStartDate actual
   MONTOS_DESCUADRADOS // plan activo cuya expansión no suma el montoTotal (aviso, no invariante)
   PROMESA_INCUMPLIDA // la promesa de pago pasó sin que el cobro llegara a COBRADO
+  /// El sync con Odoo fallo. Existe porque hoy un job roto solo va al log del contenedor y
+  /// nadie se entera; INV24 exige que toda corrida fallida tenga la suya.
+  SYNC_ODOO_FALLIDO
+  /// Hay una factura en Odoo que ningun cobro de Nexus reclama.
+  FACTURA_SIN_COBRO
 }
 
 enum CobranzaUrgencia {
@@ -2876,6 +2884,10 @@ model CuentaFinanciera {
   cobros    Cobro[] // vía cuentaId denormalizado en Cobro (panel sin doble join)
   alertas   AlertaCobro[]
   bitacora  BitacoraCobro[]
+
+  // Espejo de Odoo (solo lectura)
+  facturasOdoo FacturaOdoo[]
+  vinculosOdoo OdooPartnerVinculo[]
 
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
@@ -3003,8 +3015,9 @@ model Cobro {
   promesaPago       DateTime?
   notas             String?             @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  cobroFacturaOdoos CobroFacturaOdoo[]
 
   @@unique([servicioId, numCuota])
   @@index([cuentaId, fechaProgramada])
@@ -4354,4 +4367,209 @@ model SicopAdjunto {
   @@unique([hubspotTicketId, hubspotFileId])
   @@index([hubspotTicketId])
   @@index([estado])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ESPEJO DE ODOO — solo lectura. Ver docs/odoo-integracion-plan.md
+//
+// Odoo es dueño de los HECHOS (factura emitida, pago recibido, IVA); Nexus sigue siendo
+// dueño de la INTENCIÓN (qué debería facturarse y cuándo — el `Cobro` con su
+// `fechaProgramada`, que Odoo no conoce). El espejo COMPLETA el modelo, no lo reemplaza,
+// y Nexus NUNCA escribe hacia Odoo.
+//
+// Molde: `VentaGanada` — identidad por id externo con @unique de UNA columna, nunca borra
+// sino que marca, y bitácora aparte. NO se usa el par fuente/fuenteIdExterno: ya está
+// ocupado con "sheet" en 45 de 49 cuentas y es un solo par por fila.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum FacturaOdooEstadoEspejo {
+  VIGENTE // vuelve del sync, normal
+  DESAPARECIDA // ya no vuelve de Odoo. NUNCA se borra la fila.
+}
+
+enum FacturaOdooCambioTipo {
+  ALTA
+  MONTO
+  RESIDUAL
+  ESTADO_PAGO // payment_state
+  ESTADO // state (draft/posted/cancel)
+  FECHA
+  CUENTA // se resolvió o cambió a qué CuentaFinanciera pertenece
+  DESAPARECIDA
+}
+
+enum OdooVinculoVia {
+  CEDULA // por vat — la única señal sin falsos positivos
+  MONTO // por monto exacto de factura — la más productiva (17 candidatos contra 6 del nombre)
+  NOMBRE // la más débil acá: Odoo guarda razón social y Nexus nombre comercial
+  MANUAL // lo resolvió una persona buscando
+}
+
+model FacturaOdoo {
+  id String @id @default(cuid())
+
+  /// La factura en Odoo. Es la identidad: re-sincronizar actualiza, nunca duplica.
+  odooMoveId   Int    @unique
+  numero       String
+  moveType     String
+  state        String
+  paymentState String
+
+  invoiceDate DateTime @db.Date
+
+  /// Se guarda para AUDITAR la diferencia, pero el vencimiento se calcula con
+  /// invoice_date + CuentaFinanciera.creditoDias: el de cabecera es el MÁXIMO de los
+  /// vencimientos, y los 90 días de Colby no están configurados en ninguno de los dos lados.
+  invoiceDateDue DateTime? @db.Date
+
+  /// ESTE es el que se compara contra Cobro.monto (amount_untaxed). Los cobros de Nexus se
+  /// importaron SIN IVA — medido: 12 de 13 clientes coinciden con la columna de quincena de
+  /// la hoja y no con quincena por 1,13. Comparar contra montoTotal marcaría las 304 facturas
+  /// como descuadradas por exactamente 13 %.
+  montoNeto     Decimal @db.Decimal(14, 2)
+  montoTotal    Decimal @db.Decimal(14, 2)
+  montoResidual Decimal @db.Decimal(14, 2)
+  montoImpuesto Decimal @db.Decimal(14, 2)
+
+  /// Con signo: amount_total es POSITIVO también en las notas de crédito, así que sumar
+  /// facturas y notas con montoTotal sobreestima la venta y nada avisa.
+  montoTotalSigned Decimal @db.Decimal(14, 2)
+
+  /// Moneda NATIVA del documento. NO el enum CobranzaMoneda: Odoo puede traer otras. Acá no
+  /// se convierte nada — convertir() de lib/finanzas/equilibrio.ts es el único punto.
+  moneda String
+
+  odooPartnerId     Int
+  odooPartnerNombre String
+  cuentaId          String?
+  cuenta            CuentaFinanciera? @relation(fields: [cuentaId], references: [id], onDelete: SetNull)
+
+  estadoEspejo   FacturaOdooEstadoEspejo @default(VIGENTE)
+  sincronizadoEn DateTime
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  cambios  FacturaOdooCambio[] @relation("CambiosDeFactura")
+  vinculos CobroFacturaOdoo[]
+
+  @@index([cuentaId])
+  @@index([invoiceDate])
+  @@index([paymentState, invoiceDate])
+}
+
+/// Historia APPEND-ONLY de lo que se movió en una factura (patrón VentaGanadaCambio).
+model FacturaOdooCambio {
+  id        String       @id @default(cuid())
+  facturaId String?
+  factura   FacturaOdoo? @relation("CambiosDeFactura", fields: [facturaId], references: [id], onDelete: SetNull)
+
+  /// Snapshot autosuficiente: la fila se lee sola aunque la factura cambie o se borre.
+  odooMoveId Int
+  numero     String
+
+  tipo     FacturaOdooCambioTipo
+  anterior String?
+  nuevo    String?
+
+  /// El molde VentaGanadaCambio NO tiene este campo: su bitácora la escribe siempre el sync,
+  /// sin actor humano. Acá el emparejado lo edita una persona, y sin esto no se puede
+  /// distinguir "lo movió Odoo" de "lo movió Alexander".
+  registradoPor String?
+  detectadoEn   DateTime @default(now())
+
+  @@index([facturaId])
+  @@index([detectadoEn])
+}
+
+/// N:M a propósito: una factura puede cubrir varias cuotas, y una nota de crédito ninguna.
+model CobroFacturaOdoo {
+  id        String      @id @default(cuid())
+  cobroId   String
+  cobro     Cobro       @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  facturaId String
+  factura   FacturaOdoo @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+
+  /// false = lo propuso el sistema y nadie lo confirmó todavía.
+  confirmado   Boolean  @default(false)
+  vinculadoPor String?
+  vinculadoEn  DateTime @default(now())
+
+  /// Cobro y factura en monedas distintas: se MARCA y se muestran las dos cifras. Cuadrarlas
+  /// exigiría convertir, y este módulo no convierte.
+  monedaDispar Boolean @default(false)
+
+  @@unique([cobroId, facturaId])
+  @@index([facturaId])
+}
+
+/// N:1: varios res.partner de Odoo pueden apuntar a UNA CuentaFinanciera — un holding factura
+/// con varios nombres, y hay 8 vat duplicados en Odoo que lo confirman. Por eso el @unique va
+/// del lado del partner.
+model OdooPartnerVinculo {
+  id                String  @id @default(cuid())
+  odooPartnerId     Int     @unique
+  odooPartnerNombre String
+  odooVat           String?
+
+  cuentaId String?
+  cuenta   CuentaFinanciera? @relation(fields: [cuentaId], references: [id], onDelete: SetNull)
+
+  via OdooVinculoVia?
+
+  /// true = "este partner de Odoo no es cliente nuestro". Odoo tiene 82 clientes y Nexus 49
+  /// cuentas: la diferencia es historia, no un hueco que haya que llenar.
+  ignorado      Boolean   @default(false)
+  confirmadoPor String?
+  confirmadoEn  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cuentaId])
+}
+
+/// Existe porque CronJobState guarda ESTADO, no historia: una fila por job, el claim se
+/// estampa ANTES de correr, y no hay campo de error. Con eso no se puede decir "viene fallando
+/// hace tres días" — que es lo que hoy nadie puede saber cuando un job se rompe, porque el
+/// error solo va al log del contenedor.
+model SyncOdooCorrida {
+  id           String    @id @default(cuid())
+  iniciadaEn   DateTime  @default(now())
+  terminadaEn  DateTime?
+  ok           Boolean   @default(false)
+  parcial      Boolean   @default(false)
+  disparadaPor String
+
+  facturasVistas Int @default(0)
+  creadas        Int @default(0)
+  actualizadas   Int @default(0)
+  desaparecidas  Int @default(0)
+  vinculadas     Int @default(0)
+
+  error      String? @db.Text
+  duracionMs Int?
+
+  @@index([iniciadaEn])
+  @@index([ok, iniciadaEn])
+}
+
+/// La mesa de trabajo con el CFO necesita poder decir "esto está bien así". El molde
+/// (InconsistenciasPanel) no guarda estado a propósito, y eso sirve cuando toda diferencia es
+/// un error — acá NO lo es: Odoo tiene 82 clientes y Nexus 49 cuentas, hay notas de crédito
+/// que no corrigen ningún cobro, y va a haber redondeos que alguien acepte. Sin esto, esas
+/// líneas vuelven en cada sesión y a la tercera nadie mira la lista.
+model DiferenciaOdooAceptada {
+  id String @id @default(cuid())
+
+  /// Clave estable de la diferencia, mismo criterio que el dedupeKey de las alertas.
+  clave  String @unique
+  motivo String @db.Text
+
+  /// La huella de los NÚMEROS aceptados. Se acepta ESA diferencia (2.000 contra 2.260), no
+  /// "este par para siempre": si el monto cambia, la línea vuelve sola. Una aceptación no
+  /// puede convertirse en el lugar donde se esconde un problema nuevo.
+  huella String
+
+  aceptadaPor String
+  aceptadaEn  DateTime @default(now())
 }

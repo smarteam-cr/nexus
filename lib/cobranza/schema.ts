@@ -49,7 +49,16 @@ export const COBRANZA_TIPOS_ALERTA = [
   "ARRANQUE_CAMBIADO",
   "MONTOS_DESCUADRADOS",
   "PROMESA_INCUMPLIDA",
+  "SYNC_ODOO_FALLIDO",
+  "FACTURA_SIN_COBRO",
 ] as const;
+/**
+ * ⚠ Este espejo NO existia: el origen viajaba como `string` con un comentario, y el
+ * comentario de queries.ts estaba desactualizado (le faltaba IMPORTACION, que son los 202
+ * cobros de la base). Se crea al agregar ODOO para que el proximo valor no se pierda igual.
+ */
+export const COBRANZA_ORIGENES_COBRO = ["PLAN", "CATCH_UP", "MANUAL", "IMPORTACION", "ODOO"] as const;
+
 export const COBRANZA_URGENCIAS = ["ALTA", "MEDIA", "BAJA"] as const;
 export const COBRANZA_ALERTA_ESTADOS = ["ABIERTA", "VISTA", "RESUELTA", "DESCARTADA"] as const;
 export const BITACORA_TIPOS = ["LLAMADA", "CORREO", "NOTA"] as const; // ACTUALIZACION_IA solo la escribe el sistema
