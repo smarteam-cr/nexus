@@ -4,13 +4,16 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Badge,
   Avatar,
+  Button,
   EmptyState,
   Table,
   TableSkeleton,
   type TableColumn,
 } from "@/components/ui";
 import MemberPermissionsModal from "./MemberPermissionsModal";
+import NuevoMiembroModal from "./NuevoMiembroModal";
 import RoleTemplatesPanel from "./RoleTemplatesPanel";
+import { ROLE_LABEL } from "./roles-ui";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -26,18 +29,6 @@ interface TeamMember {
   photoUrl: string | null;
   createdAt: string;
 }
-
-// Etiqueta inline (no se importa lib/auth/roles para no arrastrar Prisma al cliente).
-// Espejo de ROLE_LABEL de lib/auth/roles.ts — el VALOR del enum de DB no cambia.
-const ROLE_LABEL: Record<string, string> = {
-  CSE: "CSE",
-  VENTAS: "Sales",
-  DEV: "Dev",
-  CSL: "CSL",
-  MARKETING: "Marketing",
-  ADMIN: "Asistente administrativo", // Finanzas: solo Cobranza
-  SUPER_ADMIN: "Super Admin",
-};
 
 // ── Avatar con edición de foto (lápiz al hover) ─────────────────────────────────
 /**
@@ -130,6 +121,18 @@ export default function TeamManager({
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"miembros" | "plantillas">("miembros");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [creando, setCreando] = useState(false);
+
+  /**
+   * El botón de alta. Se pinta en DOS lugares y no es duplicación por descuido: la tabla y el
+   * estado vacío son ramas excluyentes, y el `action` del toolbar vive DENTRO de la tabla — así
+   * que con la lista vacía el botón desaparecía justo cuando es lo único que hay para hacer.
+   */
+  const botonDeAlta = canAdminPermissions ? (
+    <Button variant="primary" size="sm" onClick={() => setCreando(true)}>
+      Nuevo miembro
+    </Button>
+  ) : undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -235,7 +238,12 @@ export default function TeamManager({
             <EmptyState
               variant="dashed"
               title="Aún no hay miembros del equipo activos"
-              description="Los miembros se siembran/gestionan por scripts (seed-team, assign-team-roles)."
+              description={
+                canAdminPermissions
+                  ? "Dá de alta a la primera persona: queda habilitada para entrar con su cuenta de Google."
+                  : "El alta de miembros la hace un Super Admin desde esta misma página."
+              }
+              action={botonDeAlta}
             />
           ) : (
             <Table
@@ -248,9 +256,14 @@ export default function TeamManager({
                 getText: (m) => `${m.name} ${m.email} ${m.area ?? ""} ${m.roleEnum}`,
               }}
               initialSort={{ key: "member", dir: "asc" }}
+              action={botonDeAlta}
             />
           )}
         </>
+      )}
+
+      {creando && (
+        <NuevoMiembroModal onClose={() => setCreando(false)} onCreated={load} />
       )}
 
       {editingId && (

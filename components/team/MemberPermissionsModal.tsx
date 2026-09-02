@@ -19,16 +19,7 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import PermissionMatrix from "./PermissionMatrix";
 
-// Espejo client-safe de ROLE_LABEL (lib/auth/roles.ts) — el enum de DB no cambia.
-const ROLE_OPTIONS = [
-  { value: "CSE", label: "CSE" },
-  { value: "VENTAS", label: "Sales" },
-  { value: "DEV", label: "Dev" },
-  { value: "CSL", label: "CSL" },
-  { value: "MARKETING", label: "Marketing" },
-  { value: "ADMIN", label: "Asistente administrativo" },
-  { value: "SUPER_ADMIN", label: "Super Admin" },
-] as const;
+import { ROLE_OPTIONS } from "./roles-ui";
 
 interface MemberBundle {
   member: {
