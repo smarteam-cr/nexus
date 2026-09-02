@@ -2,7 +2,7 @@
 
 **Servidor** `https://erp.smarteamcr.com` · **base** `smarteamcr` · **usuario** `direct`
 **Sonda** `scripts/odoo-diagnostico.ts` (descartable, solo lectura, no escribe ni en Odoo ni en Nexus)
-**Fecha de la corrida** 2026-08-28
+**Fecha de la corrida** 2026-08-28 (protocolo) · **2026-09-02** (datos, con la contraseña ya cargada)
 
 ---
 
@@ -14,33 +14,31 @@
 | Transporte (cuerpo en GET desde Node) | ✅ medido |
 | Contrato del módulo REST | ✅ leído del código fuente + verificado adversarialmente |
 | Semántica de los campos contables de Odoo 17 | ✅ leído del fuente de Odoo |
-| **Volúmenes, conteos y desgloses de datos** | ⛔ **BLOQUEADO** |
-| **Emparejado Odoo ↔ Nexus (lado Odoo)** | ⛔ **BLOQUEADO** |
+| **Volúmenes, conteos y desgloses de datos** | ✅ medido (2026-09-02) |
+| **Emparejado Odoo ↔ Nexus (lado Odoo)** | ✅ medido (2026-09-02) |
 | Emparejado (lado Nexus) | ✅ medido |
-| Trampas conocidas, medidas contra la base real | ⛔ **BLOQUEADO** |
+| Trampas conocidas, medidas contra la base real | ✅ medido (2026-09-02) |
 
-### ⛔ Por qué está bloqueado
+### ✅ Se completó el 2026-09-02
 
-`ODOO_PASSWORD` **no existe** en ninguna de las tres tablas de entorno de Windows (proceso,
-usuario, máquina), ni en ningún `.env` del repo. Verificado, no supuesto.
+`ODOO_PASSWORD` se cargó en `.env` y la sonda corrió entera. Los resultados están abajo; el
+plan que sale de ellos vive en [odoo-integracion-plan.md](./odoo-integracion-plan.md).
 
-**No se intentó ningún login con credenciales inventadas, a propósito.** Odoo 17 trae
-`_assert_can_auth`: tras `base.login_cooldown_after` fallos (por defecto **5**) desde una IP,
-esa IP entra en cooldown `base.login_cooldown_duration` segundos (por defecto **60**) y
-durante ese rato **hasta las credenciales correctas devuelven `false`**. Y si Odoo está
-detrás de un proxy sin `proxy_mode`, el contador se lleva por la IP del proxy: un sondeo
-puede dejar sin login a todos los usuarios legítimos. Sondear no es gratis.
+⚠ **El transporte lo decidió el PERMISO, no el volumen.** REST autentica y entrega su API key,
+pero devuelve **403 en los nueve modelos**: el módulo de Cybrosys necesita leer `ir.model` para
+resolver su propia configuración y `direct` no puede. El mensaje literal de Odoo:
 
-### Cómo completarlo
+> `No puede acceder a los registros 'Modelos' (ir.model). Esta operación está permitida para
+> los siguientes grupos: Administración/Permisos de acceso`
 
-```powershell
-$env:ODOO_PASSWORD = "la-contraseña-de-direct"; npx tsx scripts/odoo-diagnostico.ts --json docs/odoo-diagnostico.json
-```
+Destrabarlo exige darle a `direct` permisos de **administrador del ERP**. XML-RPC, en cambio,
+funcionó sin habilitar nada: `authenticate` devolvió `uid=33` y `execute_kw` leyó las 1.421
+facturas. Todos los números de las secciones 4 a 6 salieron por ahí.
 
-⚠ La sonda nunca imprime ni guarda la contraseña ni la API key: de la key solo registra su
-largo. El JSON crudo que produce **sí** trae nombres y cédulas de clientes reales.
-
----
+⚠ Durante el sondeo previo, antes de conocer el mecanismo de cooldown, se hicieron ~9
+peticiones con credenciales inválidas. Odoo 17 corta por IP a los 5 fallos durante 60 s
+(`base.login_cooldown_after` / `_duration`), y detrás de un proxy sin `proxy_mode` ese corte lo
+comparten todos los clientes. La sonda ya se niega a intentar login sin contraseña.
 
 ## 1 · El servidor (medido, sin credenciales)
 
@@ -170,16 +168,28 @@ pico de RAM y posible corte por `limit_time_real` / `limit_memory_hard`.
 
 ---
 
-## 4 · Los datos ⛔ BLOQUEADO
+## 4 · Los datos — medido el 2026-09-02
 
-Sin `ODOO_PASSWORD` no hay un solo número de esta sección. La sonda ya tiene programadas
-todas las consultas; corren en una sola pasada apenas exista la variable:
+Todo por XML-RPC (`uid=33`). REST no pudo leer un solo modelo.
 
-`res.partner` total / con `vat` / con `customer_rank>0` / con facturas · `account.move` total,
-por `move_type`, por `state` · `out_invoice` publicadas 2026 por moneda y por `payment_state`
-· `account.move.line` total y por `display_type` · `account.payment` total y rango de fechas ·
-`account.bank.statement.line` total, sin conciliar, y ambos por diario · `account.journal` con
-su moneda · y si está instalado `base_vat`.
+| Modelo | Total | Desglose |
+|---|---|---|
+| `account.move` | **1.421** | `entry` 972 · `out_invoice` 304 · `in_invoice` 100 · `out_refund` 44 · `in_refund` 1 |
+| `account.move` por `state` | | `posted` 1.389 · `draft` 27 · `cancel` 5 |
+| **`account.move.line`** | **3.579** | ← el número que decidía la viabilidad por volumen |
+| `res.partner` | 169 | **123** con `vat` · **82** con `customer_rank>0` · **73** con al menos una factura |
+| `account.payment` | 209 | de **2022-07-09** a **2026-07-08** |
+| `account.bank.statement.line` | 497 | **14 sin conciliar** |
+| `account.journal` | 18 | 4 en USD explícito; el resto hereda la moneda de la compañía |
+
+**`out_invoice` publicadas de 2026: 111** — 104 en USD, 7 en CRC.
+Por `payment_state`: `paid` 53 · `not_paid` 42 · `reversed` 16.
+
+⚠ **`base_vat` NO está instalado**: el `vat` de Odoo es texto libre, sin ninguna validación.
+
+**Los 18 diarios**: `INV` (facturas de cliente) · `FACTU` (proveedores) · `MISCE` · `CAMBI`
+(diferencia de cambio) · `BNK1`–`BNK8` (BAC y BCR, colones y dólares, más 4 tarjetas AMEX) ·
+`V24C`/`V24D`/`V32C`/`V32D` (VISA) · `CSH1` (efectivo) · `CABA`.
 
 ---
 
@@ -234,21 +244,90 @@ contra cualquier cosa que contenga esas letras — que es exactamente el caso qu
 (TEC-AE vs TEC TAE). **Estas dos necesitan cédula o un mapeo a mano; no hay heurística de
 nombre que las resuelva.**
 
-### Lado Odoo ⛔ BLOQUEADO
+### Lado Odoo — medido, y el resultado es peor de lo esperado
 
-Pendientes: la lista de `res.partner` cliente con `id`/`name`/`vat`, los `vat` duplicados (el
-indicador de que un holding factura con varios nombres), los formatos crudos de `vat`, y la
-búsqueda explícita de `corrugando` / `acccsa` / `analisalab` / `inve` / `tec` / `tae` /
-`amvac` / `forestales`.
+**Odoo: 169 `res.partner`, 82 con `customer_rank>0`.** Contra las 49 cuentas de Nexus:
 
-⚠ **Corrugando/ACCCSA y Analisalab/Grupo Inve existen como cuentas SEPARADAS en Nexus** (las
-cuatro están en las 49). O sea que no es solo "Odoo factura con otro nombre": Nexus ya tiene
-las dos puntas, y el cruce va a proponer emparejar una factura de ACCCSA con dos cuentas
-candidatas. Eso lo decide una persona, no una heurística.
+| Resultado | Cuentas |
+|---|---|
+| Emparejan por **cédula** | **2** — Selvatura → `[137] INVERSIONES TURISTICAS MONTEVERDE S.A.` · ALMOTEC → `[179] CORPORACION ALMOTEC S.A.` |
+| Emparejan por **nombre exacto** | **4** — Transportes Juanva · Forestales Latinoamericanos · Global Supply · Pacuare Luxury Realty |
+| Candidato dudoso | 8 — ACCCSA, Ecoquintas, Electrocaribe, APRECAP, MTS, Grupo Servica, Eurostone, Cicadex |
+| **Sin ningún candidato** | **33** |
+| Inemparejables por nombre | 2 — `IIA`, `TEC- AE` |
+
+→ **6 de 49 se resuelven solas. El 88 % necesita una decisión humana.** Nexus guarda el nombre
+comercial y Odoo la razón social; el matcher es conservador a propósito.
+
+### Los tres casos que ya se sabían — confirmados
+
+| Caso | Resultado |
+|---|---|
+| **Corrugando ↔ ACCCSA** | «Corrugando» NO existe en Odoo. Sí `[35] ACCCSA REVISTA & PUBLICACIONES S.A.` (vat 3101497341, 44 facturas). |
+| **Analisalab ↔ Grupo Inve** | «Analisalab» NO existe en Odoo. «Inve» trae 4 candidatos, ninguno obvio. |
+| **TEC-AE ↔ TEC TAE** | «tae» NO existe en Odoo. «tec» trae 9 candidatos ruidosos. |
+
+### ⚠ 8 vat duplicados — el vínculo es N:1, confirmado
+
+```
+3002662018 → ASOCIACION PRO PREVENCION ... CANCER DE PROSTATA | Lisseth Arguedas
+3101690307 → ELECTROCARIBE S&C S.A. | Adrey Chavez
+3006087315 → FUNDACION TECNOLÓGICA DE COSTA RICA | Nancy Solano | FUNDACIÓN TECNOLÓGICA DE COSTA RICA
+3007219667 → JUNTA DE DESARROLLO REGIONAL ... | JUNTA DE DESARROLLO REGIONAL ... (copia)
+3014042104 → MUNICIPALIDAD DE CARRILLO GUANACASTE | MUNICIPALIDAD DE CARRILLO GUANACASTE
+3101028741 → PUBLIMARK S.A. | PUBLIMARK S.A.
+3102797760 → RELEVA CONSULTORES S.R.L. | RELEVA CONSULTORES S.R.L.
+3102456875 → TRANSPORTES REFRIGERADOS HL S.R.L. | Raquel Lobo
+```
+
+Algunos son holdings reales; otros son **duplicados literales** («(copia)», dos grafías de la
+misma fundación). Los dos casos existen y el emparejado tiene que tolerar ambos.
+
+### Los formatos de `vat`, sin validación que los ordene
+
+| Forma | Cuántos |
+|---|---|
+| 10 dígitos (jurídica/NITE) | 108 |
+| **sin un solo dígito** | **46** |
+| 9 dígitos (física) | 13 |
+| 11–12 dígitos (DIMEX) | 2 |
+
+Conviven `3101497341`, `3-101-105018` y `31010746160` (11 dígitos — probablemente un typo).
 
 ---
 
 ## 6 · Trampas del modelo de datos de Odoo 17
+
+### Lo que dieron al medirlas (2026-09-02, sobre 345 facturas de venta publicadas)
+
+| Trampa | Medición |
+|---|---|
+| `amount_untaxed = 0` | **0** de 345 ✅ |
+| `amount_total = 0` | **0** de 345 ✅ |
+| `amount_tax = 0` | **30** de 345 — exentos o 0 %, hay que confirmarlo |
+| `amount_residual = 0` | 279 de 345 — la mayoría saldada |
+| Notas de crédito | 44, y solo **15** con `reversed_entry_id` → **29 huérfanas (66 %)** |
+| Facturas con **varios vencimientos reales** | **0** de 345 — el caso no existe hoy |
+| `invoicing_legacy` | 0 ✅ |
+| Términos de pago definidos | 10, de los cuales 2 con más de una cuota: «30% Now, Balance 60 Days» y «E1» |
+| Facturas con término de pago asignado | 17 de 345 |
+
+### ⚠⚠ `in_payment` en 176 de 304 facturas de cliente
+
+El fuente de Odoo 17 **Community** nunca asigna ese estado — su hook devuelve literalmente
+`'paid'`. Que aparezca en 176 facturas significa que **esta base no es Community pura**: o vino
+de Enterprise, o tiene un módulo de terceros.
+
+Y es justo el dato que hacía falta: `in_payment` significa «el pago está registrado pero
+todavía no se concilió contra el banco». Es decir, **ya pagaron y falta el trabajo
+administrativo** — exactamente la situación que el semáforo de Nexus no debe castigar.
+
+Distribución completa de `payment_state` sobre `out_invoice`:
+`in_payment` **176** · `paid` 59 · `not_paid` 50 · `reversed` 16 · `partial` 3.
+
+⚠ Antes de cablear la promoción a verde hay que confirmar de dónde sale ese estado. Si es un
+módulo custom, su semántica podría no ser la de Enterprise.
+
 
 Leído del fuente de Odoo 17.0. Los conteos contra la base real están ⛔ bloqueados, pero
 estas son las trampas confirmadas que hay que medir y que cambian la interpretación:
@@ -354,96 +433,45 @@ está corregida para no intentar ningún login sin contraseña.
 
 ## 8 · Mi lectura
 
-### ¿Alcanza REST?
+### El transporte
 
-**Para un espejo de solo lectura que se refresca completo, probablemente sí. Para
-sincronización incremental, no — y no es cuestión de volumen sino de contrato.**
+**XML-RPC, y no por preferencia: es el único de los dos que hoy lee datos.** REST autentica
+pero devuelve 403 en los nueve modelos, y destrabarlo exige darle a `direct` permisos de
+administrador del ERP — mucho más de lo que la integración necesita. XML-RPC funcionó con la
+contraseña que ya estaba, sin habilitar nada, y encima acepta `domain`/`limit`/`offset` y filtro
+por `write_date`, o sea sincronización incremental, que REST no puede hacer ni con el permiso.
 
-El módulo **no acepta ningún filtro**. Ni `domain`, ni `limit`, ni fecha de modificación. La
-única operación posible es *"dame la tabla entera de este modelo con estos campos"*. Eso
-significa que:
-
-- No se puede pedir "las facturas que cambiaron desde ayer". Cada refresco es un volcado
-  completo de `account.move` **y** `account.move.line`.
-- Todo el filtrado, agrupado y conteo pasa a hacerse **del lado de Nexus**, sobre el volcado.
-- El límite duro no es la red: es el **worker de Odoo**, que serializa la tabla entera en
-  memoria con un solo `json.dumps` antes de responder. Con `account.move.line` grande, el
-  riesgo es un corte por `limit_time_real`/`limit_memory_hard` — que además se va a ver como
-  un **200 con HTML**, no como un error.
-
-**El número que decide es `account.move.line`.** Es lo primero que hay que medir, y la sonda
-lo pide con `fields=["id"]` justamente para dimensionarlo al costo mínimo.
-
-### ¿Hace falta XML-RPC?
-
-**Mi recomendación es sí, y pedirlo ya.** No como plan B: como el camino principal.
-
-El endpoint **existe y responde**. Lo único que falta es que `direct` pueda autenticarse, y en
-Odoo 17 eso **no requiere instalar ni habilitar nada** — no hay flag de API. Con la key nativa
-(Preferencias → Seguridad de la cuenta → Nueva clave de API) y el grupo
-`account.group_account_readonly`, el especialista lo resuelve en minutos.
-
-Lo que se gana es desproporcionado: `search_count`, `read_group` y `search_read` con `domain`,
-`limit` y `offset`. Un conteo por `payment_state` pasa de "volcar 100% de `account.move` y
-agrupar en Nexus" a **una llamada que devuelve seis filas**. Y habilita la sincronización
-incremental por `write_date`, que con REST es directamente imposible.
-
-**Y hay un argumento de seguridad que pesa más que el de rendimiento**: el módulo REST manda
-la **contraseña en texto plano en cada petición** y guarda su "API key" **sin hash** en una
-columna de `res_users`. XML-RPC con una key nativa es estrictamente más seguro que lo que ya
-está instalado.
+El volumen resultó irrelevante para la decisión: **3.579 líneas** en `account.move.line` es una
+base chica que cualquiera de los dos transportes soportaría.
 
 ### Campos vacíos o inconsistentes
 
-Del lado **Nexus**, medido: **46 de 49 cuentas sin `cedulaJuridica`**, y de las 3 que hay, dos
-formatos distintos y una que es un RFC mexicano. Ese es el hallazgo que más condiciona el
-proyecto: **el emparejado por identificador fiscal hoy no existe**. Va a haber que capturarlo,
-y el mejor momento es tomarlo de Odoo en la primera corrida.
+- **Lado Nexus**: 46 de 49 cuentas sin `cedulaJuridica`, y **48 de 49 sin `creditoDias`** — o
+  sea que el vencimiento de casi toda la cartera va a calcularse con el default de 15 días.
+  Los 90 días de Colby no están configurados **en Nexus tampoco**.
+- **Lado Odoo**: `base_vat` no instalado, 46 de 123 `vat` sin un solo dígito, 8 vat duplicados,
+  y 29 de 44 notas de crédito sin factura de origen.
 
-Del lado **Odoo**: bloqueado. Pero las trampas de §6 dicen dónde mirar.
+### Las sorpresas
 
-### Las sorpresas — lo que no anticipaste
+**1. REST está bloqueado por permisos, no por volumen.** Era el candidato «que no depende de
+nadie» y resultó el único que necesita que alguien habilite algo.
 
-**1. `fields` es obligatorio y va en el cuerpo de un GET.**
-No es un extra opcional: sin cuerpo el módulo tira **500**. Y `fetch` de Node —el cliente por
-defecto de Nexus— **no puede mandarlo**. Toda la integración tiene que usar `node:https` con
-`Content-Length` explícito. Es una restricción de arquitectura, no un detalle.
+**2. `in_payment` en 176 facturas, en una base que dice ser Community.** Es el hallazgo más
+importante para el diseño del semáforo, y también el que más hay que confirmar.
 
-**2. La "API key" del módulo es decorativa.**
-`/send_request` autentica con `login`+`password` en **cada** llamada. La contraseña de `direct`
-va a viajar en cada petición, para siempre. Eso hace **obligatorio** un usuario de servicio
-dedicado y de solo lectura — no es una buena práctica opcional.
+**3. 6 de 49 cuentas emparejan solas.** El emparejado no es una pantalla de confirmación: es
+una tarde de trabajo manual con buscador.
 
-**3. Ningún error devuelve el status correcto.**
-Todo es `200` con HTML. Cualquier lógica de reintento, alerta o "¿anda la integración?" basada
-en códigos HTTP **nunca va a dispararse**. Hay que detectar el error parseando el cuerpo.
-Un fallo de este API se va a ver como éxito.
+**4. Ninguna factura tiene varios vencimientos.** La trampa de `invoice_date_due` como máximo
+existe en el modelo pero no en estos datos — igual conviene no depender de ese campo.
 
-**4. `amount_total` es positivo también en las notas de crédito.**
-Sumar facturas y notas de crédito con `amount_total` da un número inflado y **nada avisa**. Es
-el error de signo más probable, y es silencioso.
+**5. `amount_total` positivo en las notas de crédito** sigue siendo el riesgo silencioso: con
+44 notas por sumar mal, el vendido del año se infla y nada avisa.
 
-**5. `reversed_entry_id` no sirve para enlazar una NC con su factura.**
-Está NULL en la mayoría de las notas creadas a mano. Preguntaste por "facturas saldadas por
-nota de crédito": el camino no es ese campo ni `payment_state='reversed'` (que además
-subcuenta los casos mixtos), sino la conciliación.
+**6. Hay duplicados literales en Odoo** —«(copia)», dos grafías de la misma fundación— que no
+son holdings sino suciedad de datos.
 
-**6. `invoice_date_due` es el MÁXIMO de los vencimientos.**
-Si alguna factura tiene cuotas, una antigüedad calculada sobre la cabecera **subestima el
-vencido**. Nexus ya tiene un criterio único de vencido para cobranza: hay que decidir
-deliberadamente cuál manda cuando Odoo diga otra cosa.
+---
 
-**7. Odoo 17 tiene rate limiting de login por IP, y detrás de un proxy es de todos.**
-No lo esperaba y me hizo cambiar la sonda. Con `proxy_mode` mal configurado, cinco intentos
-fallidos de una integración pueden dejar sin login a las personas.
-
-**8. Dos de tus cuentas no se pueden emparejar por nombre, y no es culpa de Odoo.**
-`IIA` y `TEC- AE` no tienen ninguna palabra de 4+ letras. Bajar el umbral para rescatarlas
-rompería el resto — es literalmente el caso "TEC" contra cualquier cosa. Necesitan cédula o
-mapeo manual, y conviene saberlo antes de diseñar la pantalla de emparejado.
-
-**9. Corrugando/ACCCSA y Analisalab/Grupo Inve están las CUATRO en Nexus.**
-No es "Odoo usa otro nombre": Nexus tiene las dos puntas como cuentas separadas. El cruce va a
-proponer dos candidatas para la misma factura. La pantalla de emparejado tiene que soportar
-**varias cuentas de Nexus apuntando a un mismo `res.partner`** — que es exactamente lo que
-significa "un holding factura por todos".
+**El plan que sale de todo esto**: [odoo-integracion-plan.md](./odoo-integracion-plan.md).
