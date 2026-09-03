@@ -554,6 +554,33 @@ export async function guardCobranzaAccess(): Promise<
 }
 
 /**
+ * COBRANZA · ESCRITURA. Para todo lo que cambia plata: estado de un cobro, revertir una
+ * factura, liberar y regenerar.
+ *
+ * ⚠ Existe porque `guardCobranzaAccess` solo pide `read`, y ese es el mismo permiso que abre
+ * la pantalla — o sea que quien podía MIRAR la cartera podía deshacer un cobro confirmado y
+ * borrar la autoría de una factura, sin dejar rastro.
+ *
+ * ⛔ NO se aplica a las otras 26 rutas mutantes del módulo todavía: es un cambio de
+ * comportamiento grande para cerrar un agujero que este ticket no abrió. Va con su propia
+ * auditoría. Lo que sí se cierra acá es la INVERSIÓN: que revertir a mano pidiera menos
+ * permiso que hacerlo con preview, firma y auditoría.
+ */
+export async function guardCobranzaEditor(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!(await can(guard.teamMember, "cobranza", "write"))) {
+    return NextResponse.json(
+      { error: "Tu rol puede ver Cobranza pero no editarla." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}
+
+/**
  * COSTOS RECURRENTES + CAJA NETA (Cobranza fase 4): SOLO dirección
  * (SUPER_ADMIN, fuente única `COSTOS_ROLES`). Los salarios estimados son la
  * información más sensible del sistema — ADMIN NO pasa ni por API, y esta capa

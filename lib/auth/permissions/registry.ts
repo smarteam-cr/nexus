@@ -238,7 +238,13 @@ export const PERMISSION_SECTIONS = [
     label: "Cobranza",
     actions: [
       { key: "read", label: "Acceder al módulo", enforced: true },
-      { key: "write", label: "Editar", enforced: false },
+      /* ⚠ `write` estuvo declarada y APAGADA: ningún guard la consultaba, así que el switch
+         ni aparecía en /team y quien podía MIRAR la cartera podía revertir una factura o
+         deshacer un cobro confirmado. Se encendió al agregar «liberar facturas», que es una
+         operación con plata adentro. Medido antes de encenderla: ningún rol ni persona se
+         queda afuera — ADMIN y SUPER_ADMIN son los únicos con la sección y los dos ya la
+         tenían concedida (scripts/inspect-liberar-facturas.ts, bloque A). */
+      { key: "write", label: "Editar (incluye liberar facturas)", enforced: true },
     ],
   },
   {

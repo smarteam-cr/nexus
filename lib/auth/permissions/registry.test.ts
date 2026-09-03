@@ -56,3 +56,18 @@ test("D — secciones con acciones y labels presentes", () => {
     for (const a of s.actions) expect(a.label.trim().length).toBeGreaterThan(0);
   }
 });
+
+test("E — cobranza.write sigue EXIGIÉNDOSE, no solo declarada", () => {
+  /* ⚠ `enforced: false` significa «declarada pero ningún guard la consulta», y el switch ni
+     aparece en /team (PermissionMatrix.tsx filtra por enforced). Con la celda apagada,
+     `guardCobranzaEditor` queda de adorno: cualquiera con acceso de lectura podría revertir
+     una factura y deshacer un cobro confirmado, que es el agujero que se vino a cerrar.
+
+     Si alguien la vuelve a apagar, el guard no falla ni tira: simplemente deja pasar a todos.
+     Por eso el test mira el registry y no el guard. */
+  const cobranza = PERMISSION_SECTIONS.find((s) => s.key === "cobranza");
+  expect(cobranza, "desapareció la sección cobranza").toBeDefined();
+  const write = cobranza!.actions.find((a) => a.key === "write");
+  expect(write, "desapareció la acción cobranza.write").toBeDefined();
+  expect(write!.enforced, "cobranza.write volvió a estar apagada").toBe(true);
+});

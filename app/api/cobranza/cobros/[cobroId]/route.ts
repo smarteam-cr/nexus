@@ -5,14 +5,17 @@
  *           fechaProgramada/monto solo editables en PROGRAMADO.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCobranzaAccess } from "@/lib/auth/api-guards";
+import { guardCobranzaEditor } from "@/lib/auth/api-guards";
 import { cambiarEstadoCobro, CobranzaError } from "@/lib/cobranza/mutations";
 import { cobroPatchSchema } from "@/lib/cobranza/schema";
 
 type Params = { params: Promise<{ cobroId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const guard = await guardCobranzaAccess();
+  /* ⚠ EDITOR, no lectura. Este endpoint revierte facturas y cambia el estado de un cobro:
+     es la puerta por la que se deshace plata. Estaba con el mismo permiso que abrir la
+     pantalla. Medido antes de cambiarlo: nadie pierde acceso. */
+  const guard = await guardCobranzaEditor();
   if (guard instanceof NextResponse) return guard;
   const { cobroId } = await params;
 
