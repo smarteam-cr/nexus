@@ -16,7 +16,9 @@ import {
   splitCatchUp,
   sumaPlanExpandido,
   type AlertaDraft,
+  type CobroDraft,
   type CobroExistente,
+  type ReconcileResult,
   type PlanEngineInput,
   type ServicioEngineInput,
 } from "./engine";
@@ -233,11 +235,53 @@ export interface GenerateResult {
  * dos veces). Los catch-up (períodos ya pasados) nacen origen=CATCH_UP + alerta
  * INCONSISTENCIA_CICLO para que Alex confirme. Deja rastro en BitacoraCobro.
  */
-export async function generateCobros(
-  servicioId: string,
-  byEmail: string,
-  todayISO: string,
-): Promise<GenerateResult> {
+/**
+ * Todo lo que se puede saber ANTES de escribir: las lecturas, las cuatro validaciones y el
+ * cómputo puro del motor.
+ *
+ * ── POR QUÉ ESTÁ PARTIDO ────────────────────────────────────────────────────────
+ * El corte ya existía en el código —lecturas y funciones puras primero, una sola
+ * `$transaction` después—, solo que no tenía nombre. Ponérselo permite **mostrar lo que va a
+ * pasar antes de que pase**: el diálogo que pide confirmación pinta exactamente esto.
+ *
+ * ⛔ NO se hace con un flag `dryRun: boolean` en `generateCobros`. Un booleano que decide si
+ * una función escribe o no es la clase de bandera que alguien invierte por accidente, y el
+ * accidente acá borra cobros.
+ *
+ * ⚠ Tira igual que antes: 404 sin servicio, 400 sin plan activo, 400 sin fecha de inicio, y
+ * **409 si el plan no suma el total del servicio**. Quien quiera el detalle sin la excepción
+ * tiene que atraparla — es a propósito: son las mismas reglas, no una copia relajada.
+ */
+export interface PlanDeMaterializacion {
+  servicio: {
+    id: string;
+    cuentaId: string;
+    moneda: ServicioEngineInput["moneda"];
+    /** Las filas crudas de los cobros: hacen falta para snapshotear antes de tocar nada. */
+    cobros: Array<{
+      id: string;
+      numCuota: number | null;
+      periodo: string;
+      monto: number;
+      estado: string;
+      origen: string;
+      fechaEmisionISO: string | null;
+      facturadoPor: string | null;
+      referenciaExterna: string | null;
+      promesaPagoISO: string | null;
+    }>;
+  };
+  planId: string;
+  servicioInput: ServicioEngineInput;
+  planInput: PlanEngineInput;
+  existentes: CobroExistente[];
+  drafts: CobroDraft[];
+  rec: ReconcileResult;
+  regulares: CobroDraft[];
+  catchUp: CobroDraft[];
+}
+
+export async function planificarCobros(servicioId: string, todayISO: string): Promise<PlanDeMaterializacion> {
   const servicio = await prisma.servicioContratado.findUnique({
     where: { id: servicioId },
     include: {
@@ -304,11 +348,54 @@ export async function generateCobros(
   const rec = reconcileCobros(drafts, existentes);
   const { regulares, catchUp } = splitCatchUp(rec.toCreate, todayISO);
 
+  return {
+    servicio: {
+      id: servicio.id,
+      cuentaId: servicio.cuenta.id,
+      moneda: servicioInput.moneda,
+      cobros: servicio.cobros.map((c) => ({
+        id: c.id,
+        numCuota: c.numCuota,
+        periodo: c.periodo,
+        monto: Number(c.monto),
+        estado: c.estado,
+        origen: c.origen,
+        fechaEmisionISO: isoDay(c.fechaEmision),
+        facturadoPor: c.facturadoPor,
+        referenciaExterna: c.referenciaExterna,
+        promesaPagoISO: isoDay(c.promesaPago),
+      })),
+    },
+    planId: plan.id,
+    servicioInput,
+    planInput,
+    existentes,
+    drafts,
+    rec,
+    regulares,
+    catchUp,
+  };
+}
+
+/**
+ * Materializa/reconcilia los Cobros del servicio desde su plan activo. Idempotente:
+ * re-ejecutar sin cambios de plan = 0 mutaciones (el botón del demo se puede apretar
+ * dos veces). Los catch-up (períodos ya pasados) nacen origen=CATCH_UP + alerta
+ * INCONSISTENCIA_CICLO para que Alex confirme. Deja rastro en BitacoraCobro.
+ */
+export async function generateCobros(
+  servicioId: string,
+  byEmail: string,
+  todayISO: string,
+): Promise<GenerateResult> {
+  const p = await planificarCobros(servicioId, todayISO);
+  const { servicio, planId, rec, regulares, catchUp } = p;
+
   await prisma.$transaction(async (tx) => {
     const mkData = (d: (typeof regulares)[number], origen: "PLAN" | "CATCH_UP") => ({
       servicioId: servicio.id,
-      cuentaId: servicio.cuenta.id,
-      planId: plan.id,
+      cuentaId: servicio.cuentaId,
+      planId,
       numCuota: d.numCuota,
       periodo: d.periodo,
       fechaProgramada: dayUTC(d.fechaProgramadaISO),
@@ -330,7 +417,7 @@ export async function generateCobros(
     if (regulares.length || catchUp.length || rec.toUpdate.length || rec.toDelete.length) {
       await tx.bitacoraCobro.create({
         data: {
-          cuentaId: servicio.cuenta.id,
+          cuentaId: servicio.cuentaId,
           tipo: "ACTUALIZACION_IA",
           contenido: `Materialización de cobros por ${byEmail}: ${regulares.length + catchUp.length} nuevos (${catchUp.length} catch-up), ${rec.toUpdate.length} ajustados, ${rec.toDelete.length} eliminados.`,
         },
@@ -345,15 +432,15 @@ export async function generateCobros(
       select: { id: true, fechaProgramada: true, monto: true },
     });
     const cliente = await prisma.cuentaFinanciera.findUnique({
-      where: { id: servicio.cuenta.id },
+      where: { id: servicio.cuentaId },
       select: { client: { select: { name: true } } },
     });
     await upsertAlertas(
       cobrosCatchUp.map((c) => ({
-        dedupeKey: `INCONSISTENCIA_CICLO:${servicio.cuenta.id}:${c.id}`,
+        dedupeKey: `INCONSISTENCIA_CICLO:${servicio.cuentaId}:${c.id}`,
         tipo: "INCONSISTENCIA_CICLO" as const,
         urgencia: "MEDIA" as const,
-        cuentaId: servicio.cuenta.id,
+        cuentaId: servicio.cuentaId,
         cobroId: c.id,
         mensaje: `${cliente?.client.name ?? "Cliente"}: cobro de catch-up generado por desfase de arranque (${isoDay(c.fechaProgramada)}) — pendiente de tu confirmación.`,
         evidencia: { servicioId, fechaProgramada: isoDay(c.fechaProgramada), monto: Number(c.monto) },
@@ -379,12 +466,31 @@ export async function generateCobros(
  *  - Salir de COBRADO limpia la tripleta (confirmadoPor/En + fechaCobro).
  *  - fechaProgramada/monto SOLO editables mientras el cobro está PROGRAMADO (409).
  */
-export async function cambiarEstadoCobro(
+/**
+ * El cliente de Prisma o el de una transacción. Existe para que este chokepoint pueda correr
+ * DENTRO de una `$transaction` sin duplicar sus reglas.
+ *
+ * ⚠ Sin esto, liberar varias facturas y regenerar los cobros serían N+1 escrituras sueltas: si
+ * el proceso muere en el medio quedan facturas revertidas, cobros sin regenerar, y un estado
+ * que no es representable ni en el diálogo que lo pidió ni en un rollback.
+ */
+export type ClienteDb = Prisma.TransactionClient | typeof prisma;
+
+/**
+ * La versión transaccional del chokepoint. `cambiarEstadoCobro` es un envoltorio de una línea.
+ *
+ * ⛔ Toda regla vive acá y en ningún otro lado: INV3 (COBRADO exige `confirmadoPor`), el 409 de
+ * la comisión ya liquidada, el 409 de editar monto o fecha fuera de PROGRAMADO, la limpieza de
+ * la autoría al revertir y el des-snooze de las alertas al soltar una promesa. Escribir una
+ * segunda función que toque `Cobro.estado` sería tener dos versiones de esas reglas.
+ */
+export async function cambiarEstadoCobroTx(
+  db: ClienteDb,
   cobroId: string,
   patch: z.infer<typeof cobroPatchSchema>,
   byEmail: string,
 ) {
-  const cobro = await prisma.cobro.findUnique({ where: { id: cobroId } });
+  const cobro = await db.cobro.findUnique({ where: { id: cobroId } });
   if (!cobro) throw new CobranzaError("El cobro no existe.", 404);
 
   if ((patch.fechaProgramada !== undefined || patch.monto !== undefined) && cobro.estado !== "PROGRAMADO") {
@@ -445,7 +551,7 @@ export async function cambiarEstadoCobro(
         // y hay que deshacerla a mano primero.
         // Es un count server-side y el mensaje NO lleva montos: quien revierte
         // un cobro es ADMIN y las comisiones de vendedor son SUPER_ADMIN-only.
-        const liquidadas = await prisma.comisionVendedor.count({
+        const liquidadas = await db.comisionVendedor.count({
           where: { cobroIds: { has: cobroId } },
         });
         if (liquidadas > 0) {
@@ -464,17 +570,17 @@ export async function cambiarEstadoCobro(
     data.fechaCobro = patch.fechaCobro ? dayUTC(patch.fechaCobro) : null;
   }
 
-  const updated = await prisma.cobro.update({ where: { id: cobroId }, data });
+  const updated = await db.cobro.update({ where: { id: cobroId }, data });
 
   if (patch.promesaPago !== undefined) {
     // AUTO-SNOOZE: registrar la promesa calla YA las alertas vivas de este cobro
     // hasta la fecha prometida (el humano ya gestionó — sin esto el ruido viejo
     // sigue en el feed hasta el próximo corte); quitarla las despierta.
-    await prisma.alertaCobro.updateMany({
+    await db.alertaCobro.updateMany({
       where: { cobroId, estado: { in: ["ABIERTA", "VISTA"] } },
       data: { posponerHasta: patch.promesaPago ? dayUTC(patch.promesaPago) : null },
     });
-    await prisma.bitacoraCobro.create({
+    await db.bitacoraCobro.create({
       data: {
         cuentaId: cobro.cuentaId,
         cobroId,
@@ -488,6 +594,15 @@ export async function cambiarEstadoCobro(
   }
 
   return updated;
+}
+
+/** El chokepoint de siempre, fuera de transacción. Mismo comportamiento, misma firma. */
+export async function cambiarEstadoCobro(
+  cobroId: string,
+  patch: z.infer<typeof cobroPatchSchema>,
+  byEmail: string,
+) {
+  return cambiarEstadoCobroTx(prisma, cobroId, patch, byEmail);
 }
 
 // ── Pago manual: un cobro que no salió de un plan ───────────────────────────────
