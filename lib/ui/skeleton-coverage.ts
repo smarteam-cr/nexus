@@ -98,10 +98,12 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },
   settings: { modo: "own" },
-  // La pantalla de gasto son tres números en grilla + dos tablas; heredar el de
-  // /settings (tres paneles apilados) prometería otra forma.
-  "settings/odoo": { modo: "inherits", de: "settings" },
-  "settings/gasto-ia": { modo: "own" },
+  // Odoo es una pantalla de estado (tarjetas + una tabla de corridas). Hereda el de
+  // /integrations, que es la grilla de tarjetas donde ahora vive.
+  // ⚠ Antes heredaba el de /settings, que dibujaba tres paneles apilados; al quedar /settings
+  // con un solo panel, esa herencia habría prometido un tercio de la pantalla.
+  "integrations/odoo": { modo: "inherits", de: "integrations" },
+  "integrations/gasto-ia": { modo: "own" },
   integrations: { modo: "own" },
   knowledge: { modo: "own" },
   agents: { modo: "own" },

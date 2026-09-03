@@ -2,7 +2,7 @@
  * lib/ai/gasto-en-integraciones.ts — EL GASTO EN CLAUDE, RESUMIDO PARA LA TARJETA DE INTEGRACIONES.
  *
  * ── POR QUÉ NO REUSA `resumirGasto` ──────────────────────────────────────────────────────────
- * `/settings/gasto-ia` lee hasta 20.000 filas y las resume EN MEMORIA, porque ahí se necesita el
+ * `/integrations/gasto-ia` lee hasta 20.000 filas y las resume EN MEMORIA, porque ahí se necesita el
  * desglose por agente, por corrida y por día. La tarjeta de integraciones necesita dos números:
  * traer 20.000 filas para sumarlas sería pagar una pantalla entera por un titular, en una página
  * que se abre para configurar logos.

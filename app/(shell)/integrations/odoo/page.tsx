@@ -1,7 +1,7 @@
 /**
- * /settings/odoo — el estado de la conexión con el ERP. Solo lectura, SOLO SUPER_ADMIN.
+ * /integrations/odoo — el estado de la conexión con el ERP. Solo lectura, SOLO SUPER_ADMIN.
  *
- * Mismo gate que `/settings/gasto-ia`: el redirect corta ANTES de la query.
+ * Mismo gate que `/integrations/gasto-ia`: el redirect corta ANTES de la query.
  *
  * ── QUÉ CONVIERTE EN DECISIÓN ───────────────────────────────────────────────
  * El sync escribe una fila por corrida en `SyncOdooCorrida` desde el 2026-09-02. Sin una

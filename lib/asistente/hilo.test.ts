@@ -105,7 +105,7 @@ describe("el chat no escribe el documento", () => {
 describe("el modelo es fijo por hilo", () => {
   /* ⛔ No es una preferencia: el modelo es parte de la clave de la caché de prompt de Anthropic.
      Cambiarlo a mitad de una conversación invalida el prefijo cacheado entero y se paga de nuevo,
-     sin error y sin log — el gasto aparece semanas después en /settings/gasto-ia sin explicación. */
+     sin error y sin log — el gasto aparece semanas después en /integrations/gasto-ia sin explicación. */
   it("mismo modelo → se sigue el hilo", () => {
     expect(decidirHilo({ modelo: "claude-sonnet-5" }, "claude-sonnet-5")).toEqual({
       accion: "reusar",

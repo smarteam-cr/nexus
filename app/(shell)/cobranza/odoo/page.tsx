@@ -43,7 +43,7 @@ export default async function OdooPage() {
       <OdooClient
         corrida={corrida}
         conteos={{ facturas, cuentasVinculadas, cuentas, diferencias }}
-        /* ⚠ /settings/odoo es SOLO SUPER_ADMIN. Mostrarle el enlace a un ADMIN sería un
+        /* ⚠ /integrations/odoo es SOLO SUPER_ADMIN. Mostrarle el enlace a un ADMIN sería un
            callejón sin salida: hace clic y el gate lo rebota a /clients, que se lee como un
            error de la app y no como una restricción. */
         puedeVerCorridas={isCostosRole(ctx.role)}

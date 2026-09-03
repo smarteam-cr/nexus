@@ -265,7 +265,7 @@ export async function POST(
   if (!validation.valid || !validation.parsed) {
     console.warn("[timeline/assist] Propuesta inválida:", validation.errors);
     /* ⚠ La corrida se cerraba SOLA en RUNNING por este camino (medido: una fila del 2026-08-20
-       colgada). Sin esto, `/settings/gasto-ia` cuenta un intento que nunca termina. */
+       colgada). Sin esto, `/integrations/gasto-ia` cuenta un intento que nunca termina. */
     await marcarError(run.id, `propuesta inválida: ${(validation.errors ?? []).slice(0, 3).join(" · ")}`);
     return NextResponse.json(
       { error: "assist_invalid_proposal", details: validation.errors },

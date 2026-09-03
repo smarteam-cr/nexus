@@ -4,7 +4,7 @@
  * Correr: `npx vitest run lib/ai/gasto-en-integraciones.test.ts --project unit`.
  *
  * ── LA GUARDA QUE IMPORTA, Y POR QUÉ ES ESTRUCTURAL ──────────────────────────────────────────
- * `/settings/gasto-ia` está gateada a los roles de costos, con el redirect ANTES de la query: «es
+ * `/integrations/gasto-ia` está gateada a los roles de costos, con el redirect ANTES de la query: «es
  * plata, y se trata como tal». `/integrations` es otra cosa — la abre cualquier consultor interno
  * para conectar HubSpot o subir un logo.
  *
@@ -71,7 +71,7 @@ describe("el número que se muestra no contradice a la pantalla grande", () => {
     expect(CARGADOR).toContain("costo7");
     expect(
       /costoHoy|llamadasHoy|claveDeHoy/.test(CARGADOR),
-      "apareció un total de «hoy»: va a discrepar con /settings/gasto-ia, que corta por hora de CR",
+      "apareció un total de «hoy»: va a discrepar con /integrations/gasto-ia, que corta por hora de CR",
     ).toBe(false);
   });
 

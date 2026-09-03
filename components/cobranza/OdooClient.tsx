@@ -35,7 +35,7 @@ export default function OdooClient({
     facturasVistas: number;
   } | null;
   conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
-  /** Solo SUPER_ADMIN llega a /settings/odoo. Sin esto el enlace sería un rebote. */
+  /** Solo SUPER_ADMIN llega a /integrations/odoo. Sin esto el enlace sería un rebote. */
   puedeVerCorridas?: boolean;
 }) {
   const [tab, setTab] = useState<Pestana>(
@@ -83,7 +83,7 @@ export default function OdooClient({
           {/* El historial completo: cuándo corrió cada vez, qué trajo, qué falló. Es donde se
               va cuando esta línea dice algo raro. */}
           {puedeVerCorridas && (
-            <Link href="/settings/odoo" className="text-brand underline hover:no-underline">
+            <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
               Ver todas las corridas →
             </Link>
           )}
@@ -93,7 +93,7 @@ export default function OdooClient({
       {!corrida && puedeVerCorridas && (
         <p className="text-xs text-fg-muted">
           El sync no corrió todavía.{" "}
-          <Link href="/settings/odoo" className="text-brand underline hover:no-underline">
+          <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
             Ver el estado de la conexión →
           </Link>
         </p>

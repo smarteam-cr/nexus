@@ -128,7 +128,7 @@ describe("el modificador repara ANTES de juzgar", () => {
 
   it("⚠ y la corrida se cierra cuando la propuesta se rechaza", () => {
     /* Medido: una fila del 2026-08-20 quedó colgada en RUNNING para siempre porque este camino
-       devolvía 422 sin cerrarla. `/settings/gasto-ia` contaba un intento que nunca termina.
+       devolvía 422 sin cerrarla. `/integrations/gasto-ia` contaba un intento que nunca termina.
        La edición que la pone en rojo: sacar el `marcarError` de la rama del 422. */
     const i = RUTA.indexOf("assist_invalid_proposal");
     const tramo = RUTA.slice(Math.max(0, i - 400), i);

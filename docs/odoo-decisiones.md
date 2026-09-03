@@ -369,7 +369,7 @@ tenga que corregirlo a mano. Ahí `CobroFacturaOdoo` pasa a ser la excepción qu
 
 ---
 
-## 2026-09-02 · `/settings/odoo` es solo lectura
+## 2026-09-02 · `/integrations/odoo` es solo lectura
 
 **Qué se decidió.** La pantalla muestra el estado de la conexión y las últimas 20 corridas, y
 no tiene ningún interruptor.

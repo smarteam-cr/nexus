@@ -181,7 +181,7 @@ function bloqueDeSeccionesNombradas(
     .join("\n");
 }
 
-/** El agente, para que sus corridas se puedan separar en `/settings/gasto-ia`. */
+/** El agente, para que sus corridas se puedan separar en `/integrations/gasto-ia`. */
 export const SLUG_DEL_ASISTENTE = "asistente-chat";
 
 /**

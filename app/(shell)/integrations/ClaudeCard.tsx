@@ -6,10 +6,10 @@
  * ── POR QUÉ EXISTE ───────────────────────────────────────────────────────────────────────────
  * Nexus usa Claude en ~30 caminos —handoff, kickoff, cronograma, briefs, el asistente— pero en
  * `/integrations` solo se veían HubSpot y Google. La integración más usada del producto era la
- * única invisible, y su gasto vivía en `/settings/gasto-ia`, una pantalla que hay que saber que
- * existe.
+ * única invisible, y su gasto vivía en `/integrations/gasto-ia`, una pantalla que había que saber que
+ * existía. Desde el 2026-08-23 el detalle vive acá al lado, en `/integrations/gasto-ia`.
  *
- * ⛔ EL GASTO ES PLATA, Y SE TRATA COMO TAL. `/settings/gasto-ia` está gateada a los roles de
+ * ⛔ EL GASTO ES PLATA, Y SE TRATA COMO TAL. El detalle está gateado a los roles de
  * costos (`isCostosRole`), y `/integrations` la ve cualquier consultor interno. Así que el número
  * llega en `gasto: null` para quien no tiene ese rol — no oculto por CSS, AUSENTE del payload,
  * igual que hace la pantalla original. Ver la guarda en `lib/ai/gasto-en-integraciones.test.ts`.
@@ -118,7 +118,7 @@ export default function ClaudeCard({ gasto, medidorListo }: Props) {
               </p>
 
               <Link
-                href="/settings/gasto-ia"
+                href="/integrations/gasto-ia"
                 className="inline-flex items-center gap-1 text-xs font-semibold text-brand-light hover:text-brand transition-colors"
               >
                 Ver el gasto por día, por agente y por corrida →

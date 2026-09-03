@@ -77,9 +77,9 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "sales/use-cases": { custom: "admin de casos de uso con contenedor propio" },
   sessions: { custom: "layout propio de dos paneles (aside + detalle)" },
   "sessions/categories": { custom: "hereda el layout de sesiones" },
-  settings: { custom: "página de ajustes con contenedor propio (candidata a SHELL_NARROW)" },
-  "settings/odoo": { shell: "SHELL_DEFAULT" },
-  "settings/gasto-ia": { shell: "SHELL_DEFAULT" },
+  settings: { shell: "SHELL_DEFAULT" },
+  "integrations/odoo": { shell: "SHELL_DEFAULT" },
+  "integrations/gasto-ia": { shell: "SHELL_DEFAULT" },
   team: { custom: "página de equipo con contenedor propio (candidata a SHELL_NARROW)" },
   agents: { custom: "catálogo con contenedor propio (candidata a SHELL_DEFAULT — ola B5)" },
 };

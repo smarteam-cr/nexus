@@ -343,7 +343,12 @@ export const APP_NAV: readonly NavItemConfig[] = [
   },
   {
     key: "config",
-    label: "Configuración",
+    /* Se llamaba «Configuración» y competía con el «Configuración» del menú del avatar, que lleva
+       a otra pantalla. Dos entradas con el mismo nombre y distinto destino: la persona aprende que
+       una de las dos no es la que busca, y prueba las dos cada vez. Acá vive lo que Nexus conecta
+       con el mundo —HubSpot, Google, Claude, Odoo— así que se llama por lo que es.
+       ⚠ La `key` NO cambia: `lib/ui/nav-gates.test.ts` congela las keys visibles por rol. */
+    label: "Integraciones",
     href: "/integrations",
     gate: { kind: "permission", section: "configuracion", action: "read" },
     group: "administracion",

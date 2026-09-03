@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
+import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
@@ -89,7 +90,7 @@ export default async function IntegrationsPage({
 
   const { hs_connected } = await searchParams;
 
-  /* ⛔ EL GASTO ES PLATA. `/settings/gasto-ia` está gateada a los roles de costos y esta página
+  /* ⛔ EL GASTO ES PLATA. `/integrations/gasto-ia` está gateada a los roles de costos y esta página
      la ve cualquier consultor interno, así que el número se CONSULTA solo si el rol lo permite:
      quien no lo tiene recibe `null`, no un dato escondido con CSS. Mismo criterio que la
      pantalla original («ni un byte de gasto entra al payload de un no autorizado»). */
@@ -100,6 +101,30 @@ export default async function IntegrationsPage({
   /* El medidor puede no existir todavía (su migración es aditiva y puede llegar después del
      deploy). Solo se puede afirmar que falta cuando SÍ se lo fue a buscar. */
   const medidorListo = !puedeVerGasto || resumen !== null;
+  /* Ídem Odoo: el detalle es `isCostosRole` (SOLO SUPER_ADMIN) con redirect ANTES de la query, así
+     que el estado se consulta solo si el rol lo permite. Ver `OdooCard`. */
+  const estadoDeOdoo: EstadoDeOdoo | null = puedeVerGasto
+    ? await (async () => {
+        const [corridas, facturas] = await Promise.all([
+          prisma.syncOdooCorrida.findMany({
+            orderBy: { iniciadaEn: "desc" },
+            take: 20,
+            select: { terminadaEn: true, ok: true },
+          }),
+          prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
+        ]);
+        const hayPassword = !!process.env.ODOO_PASSWORD;
+        return {
+          hayPassword,
+          syncEncendido: hayPassword && process.env.ODOO_SYNC_ENABLED !== "0",
+          facturas,
+          ultimaCorrida:
+            corridas[0]?.terminadaEn?.toISOString().slice(0, 10) ?? null,
+          corridasConProblema: corridas.filter((c) => c.terminadaEn === null || !c.ok).length,
+        };
+      })()
+    : null;
+
   const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
@@ -116,8 +141,8 @@ export default async function IntegrationsPage({
   return (
     <div className={`flex-1 overflow-y-auto ${SHELL_DEFAULT}`}>
       <PageHeader
-        title="Configuración general"
-        description="Marca e integraciones de Nexus — configuración global, compartida por todos los clientes."
+        title="Integraciones"
+        description="Lo que Nexus conecta con el mundo, y la marca con la que sale. Configuración global, compartida por todos los clientes."
       />
 
       {/* Grid de integraciones */}
@@ -139,6 +164,10 @@ export default async function IntegrationsPage({
             era la única que no aparecía acá; su gasto vivía en una pantalla que hay que saber
             que existe. */}
         <ClaudeCard gasto={gastoDeClaude} medidorListo={medidorListo} />
+
+        {/* Odoo — el ERP del que salen las facturas de cobranza. Su pantalla se mudó acá desde
+            /settings, y sin esta tarjeta se quedaba sin ninguna entrada propia. */}
+        <OdooCard estado={estadoDeOdoo} />
 
         {/* Logo de Smarteam — config global de marca (páginas externas) */}
         <section className="rounded-xl bg-surface border border-line p-5">
@@ -182,6 +211,16 @@ export default async function IntegrationsPage({
             </div>
           </div>
         </section>
+      </div>
+
+      {/* «Acerca del Workspace», que vivía en /settings. Se mudó acá porque es información del
+          SISTEMA —qué es Nexus y con qué versión corre—, no una preferencia de quien mira. */}
+      <div className="max-w-2xl mt-6 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
+        <span>Workspace de Consultoría IA</span>
+        <span aria-hidden="true">·</span>
+        <span>Versión 0.2.0</span>
+        <span aria-hidden="true">·</span>
+        <span>Powered by Claude AI</span>
       </div>
     </div>
   );

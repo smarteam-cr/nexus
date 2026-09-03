@@ -1,5 +1,5 @@
 /**
- * /settings/gasto-ia — CUÁNTO ESTÁ GASTANDO NEXUS EN CLAUDE. Solo lectura, SOLO SUPER_ADMIN.
+ * /integrations/gasto-ia — CUÁNTO ESTÁ GASTANDO NEXUS EN CLAUDE. Solo lectura, SOLO SUPER_ADMIN.
  *
  * Gate igual al de `finanzas/costos`: el redirect corta ANTES de la query, así que ni un byte de
  * gasto entra al payload de un no-SUPER_ADMIN. Es plata, y se trata como tal.
@@ -91,8 +91,8 @@ export default async function GastoDeIaPage() {
         <PageHeader
           title="Gasto en IA"
           description="Lo que cuesta cada llamada a Claude"
-          backHref="/settings"
-          backLabel="Configuración"
+          backHref="/integrations"
+          backLabel="Integraciones"
         />
         <Alert variant="warning" title="El libro del medidor todavía no existe en esta base">
           Falta correr la migración <code>scripts/sql/2026-08-17-llm-call.sql</code>. Es aditiva
@@ -112,8 +112,8 @@ export default async function GastoDeIaPage() {
       <PageHeader
         title="Gasto en IA"
         description="Lo que cuesta cada llamada a Claude. Solo lectura — se cruza contra la consola de Anthropic, no la reemplaza."
-        backHref="/settings"
-        backLabel="Configuración"
+        backHref="/integrations"
+        backLabel="Integraciones"
       />
 
       {recortado && (

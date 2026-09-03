@@ -10,7 +10,7 @@
 > | 1 · Emparejado | ✅ | 6 tablas con RLS · transporte XML-RPC · `/cobranza/odoo` |
 > | 2 · El sync | ✅ | **347 facturas espejadas** · job diario · INV23/24/25 |
 > | 3 · Diferencias | ✅ | 5 líneas ordenadas por plata, con «está bien así» |
-> | 4 · Configuración | ✅ | `/settings/odoo` · la factura al lado de cada cobro |
+> | 4 · Configuración | ✅ | `/integrations/odoo` · la factura al lado de cada cobro |
 >
 > ### ⚠ Lo que falta, y no lo puede hacer el código
 >
@@ -696,8 +696,8 @@ la próxima vez arranca donde quedó la anterior.
 
 ### Etapa 4 · Configuración — ~1 día
 
-- `/settings/odoo`, **solo SUPER_ADMIN** (`requireInternalUser()` + `isCostosRole`, el patrón
-  de `/settings/gasto-ia`).
+- `/integrations/odoo`, **solo SUPER_ADMIN** (`requireInternalUser()` + `isCostosRole`, el patrón
+  de `/integrations/gasto-ia`).
 - El resultado del sync —cuándo corrió, qué trajo, qué falló— lo ve **quien cobra**
   (`cobranza.read`), dentro de Cobranza.
 - El espejo de facturas es **solo finanzas**: no aparece en CS.

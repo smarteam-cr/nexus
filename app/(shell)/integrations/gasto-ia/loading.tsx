@@ -1,5 +1,5 @@
 /**
- * Loading skeleton de /settings/gasto-ia.
+ * Loading skeleton de /integrations/gasto-ia.
  *
  * FORMA REAL (page.tsx, contenedor SHELL_DEFAULT): header + tres tarjetas de número en
  * grilla de 3 + un panel de dos columnas + dos tablas. El skeleton NO hereda el de
