@@ -148,3 +148,62 @@ describe("lo del SISTEMA vive en Integraciones; lo de la PERSONA, en Preferencia
     expect(src).toMatch(/estadoDeOdoo[^\n]*=\s*puedeVerGasto/);
   });
 });
+
+describe("⛔ la pantalla pide la MISMA llave que su ítem del menú", () => {
+  /**
+   * ── EL FALLO QUE LO TRAE ─────────────────────────────────────────────────────────────────────
+   * El ítem del nav exigía `configuracion.read`; la página, solo la sesión de consultor. O sea que
+   * el menú se la escondía a cuatro roles y la dirección se la daba igual. Los escritos nunca
+   * estuvieron abiertos —los logos y la importación de HubSpot exigen `configuracion.manage`—, así
+   * que lo de más era la vista.
+   *
+   * ⭐ Y lo que lo convierte en un arreglo: `HubspotSystemCard` YA estaba escrita afirmando que «la
+   * página entra con `configuracion.read`». Era falso. Una premisa equivocada escrita en el código
+   * es peor que una puerta abierta: la puerta se ve, la premisa se hereda.
+   *
+   * ── POR QUÉ ESTA GUARDA SE DERIVA Y NO SE TRANSCRIBE ─────────────────────────────────────────
+   * Congelar el literal `"configuracion", "read"` protegería el valor de HOY. Lo que hace falta
+   * proteger es la RELACIÓN: el día que alguien cambie el gate del ítem, esta assert tiene que
+   * decirle que la página lo siga. Por eso la sección y la acción salen del propio `nav-config`.
+   */
+  const src = () => leer("app/(shell)/integrations/page.tsx");
+
+  it("la guarda está mirando un gate de permiso de verdad", () => {
+    expect(itemConfig?.gate?.kind, "el ítem dejó de gatear por permiso: revisar esta guarda").toBe(
+      "permission",
+    );
+  });
+
+  it("⭐ la página exige la sección y la acción que declara el nav", () => {
+    const gate = itemConfig?.gate as { section: string; action: string };
+    expect(
+      src(),
+      `el nav pide ${gate.section}.${gate.action} y la página no: quien sepa la dirección entra igual`,
+    ).toContain(`can(ctx.teamMember, "${gate.section}", "${gate.action}")`);
+  });
+
+  it("⛔ y corta ANTES de leer la base", () => {
+    /* Mismo criterio que las dos pantallas de plata: si la consulta corre primero, el dato ya
+       salió de la base aunque después se redirija. Se busca el literal del corte, no una regex:
+       la forma exacta está escrita una sola vez y es la que hay que proteger. */
+    /* ⚠ Se mide DENTRO del cuerpo de la página, no sobre el archivo: arriba hay funciones
+       auxiliares que consultan la base y que solo se DECLARAN ahí — medir el archivo entero
+       ponía la guarda en rojo por un motivo falso. */
+    const cuerpo = src().slice(src().indexOf("export default async function"));
+    expect(cuerpo.length, "se movió el componente: la guarda no mira nada").toBeGreaterThan(500);
+    const corte = cuerpo.indexOf("if (!ctx || !(await can(ctx.teamMember");
+    expect(corte, "no hay corte por permiso en esta página").toBeGreaterThan(0);
+    expect(corte, "la consulta corre ANTES del candado — el dato ya salió").toBeLessThan(
+      cuerpo.indexOf("prisma."),
+    );
+  });
+
+  it("⛔ y el comentario de HubspotSystemCard dejó de mentir", () => {
+    /* Estaba escrito como si el gate existiera. Ahora existe — y si alguien lo saca, esta assert
+       cae junto con las de arriba, que es lo que evita que la premisa vuelva a quedar suelta. */
+    expect(leer("app/(shell)/integrations/HubspotSystemCard.tsx")).toContain(
+      "la página entra con `configuracion.read`",
+    );
+  });
+});
+

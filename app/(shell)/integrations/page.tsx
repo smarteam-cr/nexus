@@ -10,6 +10,7 @@ import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
 import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 
@@ -95,6 +96,25 @@ export default async function IntegrationsPage({
      quien no lo tiene recibe `null`, no un dato escondido con CSS. Mismo criterio que la
      pantalla original («ni un byte de gasto entra al payload de un no autorizado»). */
   const ctx = await requireInternalUser().catch(() => null);
+
+  /**
+   * ⛔ LA MISMA LLAVE QUE SU ÍTEM DEL MENÚ, y hasta hoy no la tenía.
+   *
+   * El ítem del nav exige `configuracion.read` (lo tienen CSL, Marketing y Super Admin), pero esta
+   * página entraba con la sola sesión de consultor: quien supiera la dirección entraba igual,
+   * aunque el menú no se la mostrara. Los ESCRITOS nunca estuvieron abiertos —subir los logos e
+   * importar de HubSpot exigen `configuracion.manage`—, así que lo que estaba de más era la vista,
+   * no el poder.
+   *
+   * ⭐ Y lo que lo vuelve un arreglo y no una prolijidad: `HubspotSystemCard` ya está escrita
+   * afirmando que «la página entra con `configuracion.read`». Era FALSO. Una premisa equivocada
+   * escrita en el código es peor que una puerta abierta: la puerta se ve, la premisa se hereda.
+   *
+   * ⚠ Va ANTES de las consultas, igual que en `/integrations/odoo` y `/integrations/gasto-ia`: si
+   * la lectura corriera primero, el dato ya salió de la base aunque después se redirija.
+   */
+  if (!ctx || !(await can(ctx.teamMember, "configuracion", "read"))) redirect("/clients");
+
   const puedeVerGasto = isCostosRole(ctx?.role);
   const resumen = puedeVerGasto ? await gastoResumidoDeClaude() : null;
   const gastoDeClaude: GastoDeClaude | null = resumen;
