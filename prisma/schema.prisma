@@ -2886,8 +2886,9 @@ model CuentaFinanciera {
   bitacora  BitacoraCobro[]
 
   // Espejo de Odoo (solo lectura)
-  facturasOdoo FacturaOdoo[]
-  vinculosOdoo OdooPartnerVinculo[]
+  facturasOdoo     FacturaOdoo[]
+  vinculosOdoo     OdooPartnerVinculo[]
+  facturaLiberadas FacturaLiberada[]
 
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
@@ -3027,6 +3028,68 @@ model Cobro {
 // ─── AlertaCobro ────────────────────────────────────────────────────────────────
 // Alerta generada por el cómputo de cartera (clon del ciclo de vida de CsAlert):
 // dedup por dedupeKey (merge si sigue ABIERTA/VISTA; supresión 7d si RESUELTA/DESCARTADA).
+/// Una factura que se soltó de su cobro porque el acuerdo de pago cambió.
+///
+/// ── DOS TRABAJOS EN UNA TABLA ───────────────────────────────────────────────────
+/// 1. **Archiva la autoría** que `cambiarEstadoCobro` destruye al revertir: pone
+///    `facturadoPor`/`facturadoEn` en null y el único rastro que queda es `updatedAt`, sin
+///    autor ni valor anterior.
+/// 2. **Es la cola de trabajo hacia el ERP.** Nexus nunca escribe allá, así que el documento
+///    emitido lo tiene que anular una persona — y si eso no queda anotado de este lado, se
+///    pierde.
+///
+/// ⚠ `cobroId` y `servicioId` NO son llaves foráneas a propósito: el cobro se BORRA al
+/// regenerar. Un Cascade se llevaría el rastro de la factura que hay que anular; un SetNull
+/// dejaría la fila sin saber de qué cobro venía. Por eso lleva **snapshot completo**: se lee
+/// sola, sin el cobro y meses después.
+model FacturaLiberada {
+  id       String           @id @default(cuid())
+  cuentaId String
+  cuenta   CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  /// Sueltos a propósito. Ver la nota de arriba.
+  servicioId String?
+  cobroId    String?
+
+  /// El snapshot: la fila tiene que poder leerse sin el cobro ni el servicio.
+  clienteNombre     String
+  numCuota          Int?
+  periodo           String
+  monto             Decimal        @db.Decimal(12, 2)
+  moneda            CobranzaMoneda
+  fechaEmision      DateTime?      @db.Date
+  referenciaExterna String?
+  /// ⚠ Quién había facturado. Es el dato que el revert de hoy destruye.
+  facturadoPor      String?
+
+  /// En qué sistema vive el documento. Se CONFIRMA al liberar, no se hereda en silencio:
+  /// `CuentaFinanciera.viaCobro` tiene ODOO por defecto y 16 cuentas internacionales lo
+  /// arrastran sin que nadie lo haya elegido.
+  plataforma CobranzaViaCobro
+  decision   CobranzaDecisionFactura
+  motivo     String?
+
+  liberadaPor String
+  liberadaEn  DateTime @default(now())
+
+  /// ODOO se cierra solo cuando el sync ve el documento anulado. MERCURY y OTRA no tienen
+  /// espejo: las cierra una persona.
+  resueltaEn  DateTime?
+  resueltaPor String?
+
+  @@index([resueltaEn])
+  @@index([cuentaId])
+  @@index([cobroId])
+}
+
+/// CANCELAR = el documento se anula o se elimina en el ERP.
+/// REVERTIR = se emite una nota de crédito que lo reversa; los dos documentos quedan.
+/// Se elige una por factura, SIN default: depende de si ya salió al cliente.
+enum CobranzaDecisionFactura {
+  CANCELAR
+  REVERTIR
+}
+
 model AlertaCobro {
   id       String           @id @default(cuid())
   cuentaId String

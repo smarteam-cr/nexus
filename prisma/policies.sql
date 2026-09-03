@@ -205,6 +205,15 @@ CREATE POLICY deny_all_non_superuser ON "VentaGanadaCambio"
   TO PUBLIC
   USING (false);
 
+-- Facturas liberadas (2026-09-04). Archiva la autoría de facturación que el revert destruye,
+-- y es la cola de trabajo hacia el ERP. Lleva montos y nombres de clientes.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "FacturaLiberada";
+CREATE POLICY deny_all_non_superuser ON "FacturaLiberada"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- Espejo de Odoo (2026-09-02). El bucle de arriba ya les habilita RLS, y sin policies eso
 -- ya es deny-all — pero la policy explícita sobrevive a que alguien agregue una permisiva
 -- más adelante sin darse cuenta de lo que había.
