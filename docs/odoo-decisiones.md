@@ -583,3 +583,93 @@ falso positivo se ve idéntico a un acierto hasta que alguien lo confirma.
   esa red se corre siempre. Reconstruir el proyecto desde cero las habría dejado afuera.
 
 **Qué revertiría todo esto.** Nada. Son defectos, no decisiones.
+
+---
+
+## Cuadrar el cronograma al cambiar el acuerdo de pago (2026-09-04)
+
+Nace de Wherex. El cliente se fue, se acordó un pago distinto, el plan se editó a 2 cuotas por
+$5.100 — y los cobros siguieron siendo los 4 originales de $2.125 = **$8.500**. Alexander guardó
+**seis veces** entre las 20:40 y las 20:52 creyendo que no tomaba. El guardado funcionó las seis:
+guardar el acuerdo y materializar los cobros son dos gestos separados, y ninguno lo decía.
+
+Y apretar «Generar cobros» tampoco lo arreglaba: tres de los cuatro cobros estaban facturados y
+el motor no los toca. El botón dejaba el cronograma en **$6.375** contra un acuerdo de $5.100.
+
+### Las decisiones
+
+**No se agregó un estado `ANULADO` al cobro.** Obligaría a excluirlo en 8 sitios de lectura
+(`queries.ts`, `antiguedad.ts`, `planilla.ts`, `comisiones.ts`, `digest.ts`…). Un sitio olvidado
+hace que plata anulada siga contando — peor que el problema que resuelve. La evidencia va en
+`FacturaLiberada`, tabla propia.
+*Qué lo revertiría:* que hiciera falta ver los cobros anulados en el cronograma mismo, no como
+una lista aparte. Ahí el costo de los 8 sitios se paga con algo.
+
+**`AlertaCobro.cobroId` sigue sin llave foránea.** `cobroId = null` **ya significa** «alerta a
+nivel cuenta»; un `SetNull` convertiría en silencio la alerta de un cobro borrado en una de la
+cuenta entera. Se cierran en la misma transacción (`cerrarAlertasDeCobros`) y lo vigila **INV26**.
+*Qué lo revertiría:* separar «es de la cuenta» de «era de un cobro que ya no está» en dos campos.
+Con eso el `SetNull` deja de mentir y la FK pasa a ser gratis.
+
+**Liberar suelta el estado Y la fecha de emisión, juntos.** `esIntocable` mira las dos cosas por
+separado, y ese es el nudo por el que «Revertir factura» —que solo limpia la fecha— nunca
+desbloqueó nada. Hacían falta dos gestos por cobro y la pantalla nombraba uno.
+*Qué lo revertiría:* nada. Era un defecto.
+
+**Cancelar o revertir se pregunta siempre, sin default.** Depende de si el documento ya salió al
+cliente, que es algo que solo sabe quien lo emitió. Cada fila arranca en «dejarlo como está».
+*Qué lo revertiría:* que se midiera que en la práctica es siempre la misma, y que preguntarlo sea
+un trámite. Hoy no hay con qué medirlo: la función se estrena con 2 servicios y 3 cobros.
+
+**La promesa de pago se cae al liberar.** Una promesa sobre un monto que el acuerdo nuevo ya no
+pide calla alertas por una cifra que no existe. Sale gratis: `cambiarEstadoCobro` con
+`promesaPago: null` ya des-snoozea y escribe bitácora.
+
+**Todo en una sola transacción, y el preview lo calcula el servidor.** Lo natural sería un PATCH
+por cobro más un POST de generar; si el navegador se cierra en el medio quedan dos facturas
+sueltas, el resto sin regenerar, cero solicitudes al ERP y cero auditoría — un estado que no es
+representable ni en el diálogo que lo pidió ni en un rollback. Y el preview sale de **la misma
+función que después ejecuta**: si el cliente recalculara, mostraría algo que el servidor no va a
+hacer.
+
+**El diálogo se abre ANTES de `onSaved()`.** El padre desmonta el formulario al refrescar
+(`setEditingId(null)`) y se llevaría el diálogo puesto. Refresca al cerrar.
+
+**El total en vivo vive en `sumaConDecisiones`, no en el componente.** Es la última cifra que
+alguien lee antes de tocar plata; en el componente no la puede probar el project `unit`. Seis
+tests, con los pasos intermedios calculados a mano — incluido el que engaña: soltar solo el
+cobro #3 baja el total y **sigue sin cuadrar**.
+
+**Al soltar se corrige `viaCobro` de la cuenta, pero solo si TODAS las decisiones coinciden.**
+`viaCobro` nace en ODOO y 16 cuentas internacionales lo arrastran sin que nadie lo haya elegido —
+Wherex entre ellas, que factura por Mercury. Alguien acaba de mirar la factura y decir dónde vive
+de verdad; se aprovecha. Con facturas en dos plataformas no se toca: elegir una a dedo sería
+cambiar un default equivocado por otro.
+
+### La línea hacia el ERP
+
+**Nexus no escribe en el ERP, ni «solo para anular».** La cola más una persona es el diseño: un
+bug en una función pura no puede volverse un hecho fiscal irreversible.
+*Qué lo revertiría:* nada previsible. Escribir en el ERP es una clase de riesgo distinta.
+
+**Cuándo cierra cada liberación.** `ODOO + CANCELAR` cierra cuando el documento sale del espejo —
+el sync solo trae `estadoEspejo: VIGENTE`, así que su desaparición ES la evidencia. `ODOO +
+REVERTIR` cierra con la nota de crédito (`out_refund`) de igual monto, moneda y partner: el
+original **no** desaparece, y esperarlo sería esperar para siempre. **MERCURY y OTRA no cierran
+nunca solas** — no hay espejo que las vea.
+
+**Una liberación sin número de documento tampoco cierra sola, aunque sea de Odoo.** Es tentador
+darla por buena para que la lista quede limpia; sería inventar que alguien anuló algo.
+
+**La línea de MERCURY es la única con acción por fila, y la de ODOO no la tiene.** Poder marcar
+«hecho» a mano algo que el espejo verifica sería poder esconder un documento que sigue emitido.
+`resolverLiberacion` rechaza con 409 sobre una liberación de Odoo.
+
+**Las 16 cuentas internacionales marcadas «Odoo» salen como línea propia, sin monto.** No es
+plata mal contada: es la etiqueta que manda a buscar al ERP equivocado. No se corrigen a ciegas —
+hay internacionales que sí facturan por Odoo.
+
+**INV28 usa 15 días** porque la cobranza de esta casa trabaja en tandas quincenales: algo que
+sobrevivió una tanda entera es algo que nadie está mirando, no algo que va en camino.
+*Qué lo revertiría:* medir que las anulaciones fuera de Odoo tardan legítimamente más. Subirlo
+solo hace que el aviso llegue más tarde; no arregla nada.

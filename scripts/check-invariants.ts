@@ -1180,6 +1180,127 @@ async function main(): Promise<number> {
     console.log(`✓ INV25: ningún cobro fue confirmado por el sync — la plata la sigue confirmando una persona.`);
   }
 
+  /* ── INV26 · ninguna alerta apunta a un cobro que ya no existe ────────────────────────────
+     `AlertaCobro.cobroId` es un String SUELTO, sin llave foránea, y a propósito: `cobroId = null`
+     ya significa «alerta a nivel cuenta», así que un `SetNull` convertiría en silencio la alerta
+     de un cobro borrado en una de la cuenta entera. El precio de esa decisión es que nada impide
+     que el cobro desaparezca y la alerta quede apuntando al vacío.
+
+     ⚠ Y desaparecen: `generateCobros` borra los sobrantes cuando cambia el acuerdo de pago, y
+     `deleteServicio` cascadea. La rama de borrado estuvo inerte hasta que se le sacó el filtro
+     por origen el 2026-09-02 — o sea que el defecto era LATENTE y quedó ARMADO. Lo que cierra el
+     agujero es `cerrarAlertasDeCobros`, llamada desde los dos caminos; esto vigila que no vuelva
+     a abrirse por un tercero. */
+  const alertasConCobro = await prisma.alertaCobro.findMany({
+    where: { cobroId: { not: null } },
+    select: { id: true, cobroId: true, tipo: true, estado: true, cuenta: { select: { client: { select: { name: true } } } } },
+  });
+  const cobrosVivos = new Set(
+    (await prisma.cobro.findMany({ select: { id: true } })).map((c) => c.id),
+  );
+  const huerfanas = alertasConCobro.filter((a) => !cobrosVivos.has(a.cobroId!));
+  if (huerfanas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV26 VIOLADO: ${huerfanas.length} alerta(s) apuntan a un cobro que ya no existe:\n` +
+        huerfanas
+          .slice(0, 20)
+          .map((a) => `    · ${a.cuenta.client.name}: ${a.tipo} (${a.estado}) → cobro ${a.cobroId}`)
+          .join("\n") +
+        `\n    Remedio: cerrarlas con motivo (RESUELTA), no borrarlas — la supresión de 7 días de` +
+        `\n    upsertAlertas lee las filas cerradas. Ver cerrarAlertasDeCobros en lib/cobranza/mutations.ts.`,
+    );
+  } else {
+    console.log(`✓ INV26: las ${alertasConCobro.length} alertas de cobro apuntan a cobros que existen.`);
+  }
+
+  /* ── INV27 · la autoría de una factura vive y muere entera ────────────────────────────────
+     `facturadoPor` y `facturadoEn` son un solo hecho: quién emitió y cuándo. Uno sin el otro no
+     es media respuesta, es una respuesta rota — y la Fase 0 midió que ya había víctimas del
+     revert destructivo, que limpiaba la fecha de emisión y dejaba el nombre colgando.
+
+     ⚠ `fechaEmision` es un campo distinto y puede faltar legítimamente (un cobro programado no
+     tiene ninguno de los tres). Lo que no puede pasar es tener uno de la pareja sin el otro. */
+  const autoriaRota = await prisma.cobro.findMany({
+    where: {
+      OR: [
+        { facturadoPor: { not: null }, facturadoEn: null },
+        { facturadoPor: null, facturadoEn: { not: null } },
+      ],
+    },
+    select: {
+      id: true,
+      numCuota: true,
+      facturadoPor: true,
+      facturadoEn: true,
+      cuenta: { select: { client: { select: { name: true } } } },
+    },
+  });
+  if (autoriaRota.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV27 VIOLADO: ${autoriaRota.length} cobro(s) tienen media autoría de facturación:\n` +
+        autoriaRota
+          .slice(0, 20)
+          .map(
+            (c) =>
+              `    · ${c.cuenta.client.name} #${c.numCuota ?? "?"}: por=${c.facturadoPor ?? "—"} en=${
+                c.facturadoEn ? c.facturadoEn.toISOString().slice(0, 10) : "—"
+              }`,
+          )
+          .join("\n") +
+        `\n    Remedio: limpiar los dos, o reponer el que falta desde BitacoraCobro.` +
+        `\n    Toda escritura de esta pareja pasa por cambiarEstadoCobroTx: si esto está en rojo, alguien la esquivó.`,
+    );
+  } else {
+    console.log(`✓ INV27: la autoría de facturación está entera o ausente, nunca a medias.`);
+  }
+
+  /* ── INV28 · ninguna factura soltada fuera de Odoo se queda esperando para siempre ────────
+     Es la línea que evita que «Nexus no escribe en el ERP» se convierta en «Nexus pide y nadie
+     hace». Una liberación de ODOO la cierra el sync solo; una de MERCURY u OTRA solo la cierra
+     una persona, y si nadie la cierra el documento sigue emitido contra un cliente que ya no lo
+     debe — sin que nada avise.
+
+     ⚠ El umbral son 15 días porque la cobranza de esta casa trabaja en tandas quincenales: algo
+     que sobrevivió una tanda entera es algo que nadie está mirando, no algo que va en camino.
+     Subirlo solo hace que el aviso llegue más tarde; no arregla nada. */
+  const DIAS_LIBERACION = 15;
+  const limiteLiberacion = new Date(Date.now() - DIAS_LIBERACION * 86_400_000);
+  const liberacionesViejas = await prisma.facturaLiberada.findMany({
+    where: { resueltaEn: null, plataforma: { not: "ODOO" }, liberadaEn: { lt: limiteLiberacion } },
+    select: {
+      id: true,
+      clienteNombre: true,
+      monto: true,
+      moneda: true,
+      plataforma: true,
+      decision: true,
+      referenciaExterna: true,
+      liberadaEn: true,
+      liberadaPor: true,
+    },
+    orderBy: { liberadaEn: "asc" },
+  });
+  if (liberacionesViejas.length > 0) {
+    violations++;
+    console.error(
+      `✗ INV28 VIOLADO: ${liberacionesViejas.length} factura(s) soltadas fuera de Odoo llevan más de ${DIAS_LIBERACION} días sin anular:\n` +
+        liberacionesViejas
+          .slice(0, 20)
+          .map(
+            (l) =>
+              `    · ${l.clienteNombre}: ${l.moneda} ${Number(l.monto).toFixed(2)} — ${l.plataforma} ${l.decision.toLowerCase()}` +
+              ` ${l.referenciaExterna ?? "(sin número)"} · soltada ${l.liberadaEn.toISOString().slice(0, 10)} por ${l.liberadaPor}`,
+          )
+          .join("\n") +
+        `\n    Remedio: anular el documento en su plataforma y marcarlo resuelto en /cobranza/odoo` +
+        `\n    → «Lo que no cuadra» → «${"Ya está anulada"}». Nada lo verifica por vos: no hay espejo de esa plataforma.`,
+    );
+  } else {
+    console.log(`✓ INV28: ninguna factura soltada fuera de Odoo lleva más de ${DIAS_LIBERACION} días sin resolver.`);
+  }
+
   return violations;
 }
 
