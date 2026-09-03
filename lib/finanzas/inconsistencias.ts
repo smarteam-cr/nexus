@@ -45,6 +45,11 @@ export interface EnlaceItem {
  * se pueda comparar de un vistazo contra el total de la línea.
  */
 export interface ItemInconsistencia {
+  /**
+   * Identidad de la fila, cuando la fila es una cosa que se puede cerrar de a una. La mayoría
+   * de los ítems son texto agrupado y no la necesitan.
+   */
+  id?: string;
   texto: string;
   /** El monto de ESTE ítem. undefined = el ítem no mueve plata. */
   monto?: number;

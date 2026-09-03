@@ -27,6 +27,7 @@ import type { Inconsistencia, ItemInconsistencia } from "@/lib/finanzas/inconsis
  */
 export type DondeSeArregla =
   | "ODOO" // hay que tocar el ERP
+  | "MERCURY" // se factura por fuera de Odoo: el espejo NUNCA va a cerrar esta línea solo
   | "NEXUS" // se arregla acá adentro
   | "PREGUNTANDO"; // no lo resuelve nadie tecleando: falta un dato de negocio
 
@@ -47,6 +48,14 @@ export interface DiferenciaOdoo extends Inconsistencia {
   atajo?: { etiqueta: string; tab: "emparejar" };
   /** Qué significa aceptarla, para que «está bien así» no sea un botón a ciegas. */
   queSignificaAceptar: string;
+  /**
+   * Una acción por fila del detalle, para las líneas que **solo cierra una persona**.
+   *
+   * ⛔ No la lleva ninguna línea que un sync pueda cerrar. Poder marcar «hecho» a mano algo que
+   * el espejo verifica sería poder esconder un documento que sigue emitido — que es justo lo
+   * contrario de para qué existe la lista.
+   */
+  accionPorItem?: { etiqueta: string; ayuda: string };
   /**
    * `true` = alguien la marcó «está bien así» y sus números no cambiaron desde entonces.
    *
@@ -88,9 +97,48 @@ export interface FacturaParaCruzar {
   state: string;
 }
 
+/**
+ * Una factura que Nexus soltó porque el acuerdo de pago cambió, y que alguien tiene que anular
+ * del lado del ERP.
+ *
+ * ⛔ Nexus NO escribe en el ERP, ni «solo para anular». Estas filas son la cola de trabajo, y
+ * mientras estén abiertas la plata que representan sigue emitida contra un cliente que ya no la
+ * debe. Es la línea que evita que «Nexus no escribe en el ERP» se vuelva «Nexus pide y nadie
+ * hace».
+ */
+export interface LiberacionParaCruzar {
+  id: string;
+  cuentaId: string;
+  clienteNombre: string;
+  numCuota: number | null;
+  periodo: string;
+  monto: number;
+  moneda: string;
+  fechaEmision: string | null;
+  /** El número de documento en el ERP. Sin esto no hay forma de verificarlo solo. */
+  referenciaExterna: string | null;
+  plataforma: string;
+  decision: string;
+  liberadaPor: string;
+  liberadaEn: string;
+  /** Alguien la cerró a mano. Cierra cualquier plataforma, incluida ODOO. */
+  resuelta: boolean;
+}
+
+/** Lo mínimo de la cuenta para poder decir dónde se factura de verdad. */
+export interface CuentaParaCruzar {
+  id: string;
+  nombre: string;
+  tipo: string;
+  viaCobro: string;
+}
+
 export interface EstadoDelCruce {
   cobros: CobroParaCruzar[];
   facturas: FacturaParaCruzar[];
+  /** Las facturas soltadas al recuadrar un acuerdo, resueltas y sin resolver. */
+  liberaciones: LiberacionParaCruzar[];
+  cuentas: CuentaParaCruzar[];
   /** Cuentas de Nexus sin cliente de Odoo asignado todavía. */
   cuentasSinVinculo: number;
   cuentasTotales: number;
@@ -287,6 +335,92 @@ export function montosEnDosMonedas(facturas: readonly FacturaParaCruzar[]): Arra
     .sort((a, b) => b.monto - a.monto);
 }
 
+/* ── Las facturas soltadas, y cuándo deja de haber trabajo pendiente ────────────── */
+
+/**
+ * Por qué una liberación sigue abierta. Es lo que decide el texto de la línea: mandar a alguien
+ * a «anular la factura» cuando el problema es que Nexus no tiene el número del documento es
+ * mandarlo a buscar algo que no puede encontrar.
+ */
+export type PorQueSigueAbierta =
+  | "documento-vigente" // ODOO+CANCELAR: el espejo lo sigue trayendo, o sea que nadie lo anuló
+  | "sin-nota-de-credito" // ODOO+REVERTIR: no aparece la nota de crédito que lo reversa
+  | "sin-numero" // se liberó sin número de documento: no hay nada contra qué verificar
+  | "sin-espejo"; // MERCURY / OTRA: no hay sync que la pueda cerrar
+
+export interface LiberacionPendiente {
+  liberacion: LiberacionParaCruzar;
+  porQue: PorQueSigueAbierta;
+}
+
+/**
+ * Cuáles de las facturas soltadas siguen sin resolverse en el ERP.
+ *
+ * ── LA REGLA DE CIERRE, POR PLATAFORMA ──────────────────────────────────────────
+ * **ODOO + CANCELAR** cierra cuando el documento deja de estar vigente en el espejo: el sync
+ * solo trae `estadoEspejo: VIGENTE`, así que su desaparición ES la evidencia de que alguien lo
+ * anuló o lo borró.
+ *
+ * **ODOO + REVERTIR** cierra cuando aparece una nota de crédito (`out_refund`) del mismo
+ * partner, por el mismo monto y moneda, con fecha igual o posterior. El original NO desaparece
+ * —eso es lo que distingue revertir de cancelar— así que esperarlo a él sería esperar para
+ * siempre.
+ *
+ * **MERCURY y OTRA no cierran nunca solas.** No tienen espejo. Las cierra una persona, y decirlo
+ * así es honesto: la alternativa es una línea que se queda abierta para siempre sin explicar por
+ * qué, hasta que alguien deja de mirar la lista entera.
+ *
+ * ⚠ Una liberación SIN número de documento tampoco cierra sola, aunque sea de Odoo. Es tentador
+ * darla por buena para que la lista quede limpia; sería inventar que alguien anuló algo.
+ *
+ * PURA: sin reloj. Cuánto tiempo es demasiado lo decide INV28, que sí lo tiene.
+ */
+export function liberacionesPendientes(
+  liberaciones: readonly LiberacionParaCruzar[],
+  facturas: readonly FacturaParaCruzar[],
+): LiberacionPendiente[] {
+  const porNumero = new Map(facturas.map((f) => [f.numero, f]));
+  const notas = facturas.filter((f) => f.moveType === "out_refund");
+
+  const out: LiberacionPendiente[] = [];
+  for (const l of liberaciones) {
+    if (l.resuelta) continue;
+
+    if (l.plataforma !== "ODOO") {
+      out.push({ liberacion: l, porQue: "sin-espejo" });
+      continue;
+    }
+    if (!l.referenciaExterna) {
+      out.push({ liberacion: l, porQue: "sin-numero" });
+      continue;
+    }
+
+    const original = porNumero.get(l.referenciaExterna);
+
+    if (l.decision === "CANCELAR") {
+      /* Que ya no esté es exactamente lo que se pidió. */
+      if (original) out.push({ liberacion: l, porQue: "documento-vigente" });
+      continue;
+    }
+
+    /* REVERTIR. Sin el original no hay partner ni monto contra qué buscar la nota: se deja
+       abierta en vez de darla por cerrada, que es el error caro de los dos. */
+    if (!original) {
+      out.push({ liberacion: l, porQue: "sin-nota-de-credito" });
+      continue;
+    }
+    const reversada = notas.some(
+      (n) =>
+        n.odooPartnerId === original.odooPartnerId &&
+        n.moneda === original.moneda &&
+        CENTAVOS(n.montoNeto) === CENTAVOS(original.montoNeto) &&
+        n.invoiceDate >= original.invoiceDate,
+    );
+    if (!reversada) out.push({ liberacion: l, porQue: "sin-nota-de-credito" });
+  }
+  return out;
+}
+
 /**
  * La lista completa. El orden lo decide la plata, salvo lo que no se puede cuantificar, que
  * va al final.
@@ -442,7 +576,14 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
   }
 
   /* ── 5. Facturas atribuidas sin cobro que las explique ───────────────────────── */
-  const facturasSinCobro = cruce.facturasSolas.filter((f) => f.cuentaId);
+  /* ⚠ Una factura recién liberada queda huérfana POR DISEÑO: soltarla es justamente quitarle
+     el cobro. Sin esta exclusión aparecería acá como si nadie supiera de dónde salió, cuando
+     hay una fila que dice quién la soltó, cuándo y por qué. Se cuenta una vez, en la línea que
+     la explica mejor. */
+  const liberadas = new Set(
+    estado.liberaciones.map((l) => l.referenciaExterna).filter((n): n is string => !!n),
+  );
+  const facturasSinCobro = cruce.facturasSolas.filter((f) => f.cuentaId && !liberadas.has(f.numero));
   if (facturasSinCobro.length) {
     const s = porMoneda(facturasSinCobro.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
     agregar({
@@ -526,6 +667,112 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       queHacer: "Confirmar con el contador cuáles son exenciones reales.",
       resuelve: "DIRECCION",
       items: agruparPorPartner(exentas),
+    });
+  }
+
+  /* ── 8 y 9. Las facturas que Nexus soltó y alguien tiene que anular ──────────── */
+  const pendientes = liberacionesPendientes(estado.liberaciones, estado.facturas);
+  const itemDeLiberacion = (p: LiberacionPendiente): ItemInconsistencia => ({
+    id: p.liberacion.id,
+    texto: `${p.liberacion.clienteNombre} — ${fmt(p.liberacion.monto, p.liberacion.moneda)}`,
+    monto: p.liberacion.monto,
+    nota:
+      `${p.liberacion.referenciaExterna ?? "sin número"} · cuota ${p.liberacion.numCuota ?? "?"} · ` +
+      `${p.liberacion.decision === "CANCELAR" ? "anular" : "revertir"} · ` +
+      `soltada por ${p.liberacion.liberadaPor} el ${p.liberacion.liberadaEn}` +
+      (p.porQue === "sin-numero" ? " · ⚠ sin número de documento" : ""),
+  });
+
+  const enOdoo = pendientes.filter((p) => p.liberacion.plataforma === "ODOO");
+  if (enOdoo.length) {
+    const s = porMoneda(enOdoo.map((p) => ({ monto: p.liberacion.monto, moneda: p.liberacion.moneda })));
+    const sinNumero = enOdoo.filter((p) => p.porQue === "sin-numero").length;
+    agregar({
+      codigo: "ODOO-LIBERADAS-PENDIENTES",
+      severidad: "ALTA",
+      titulo: `${enOdoo.length} facturas que Nexus soltó siguen emitidas en Odoo`,
+      detalle:
+        `Al recuadrar un acuerdo de pago, alguien decidió que estas facturas ya no aplican y las soltó de su cobro. ` +
+        `Nexus NO escribe en el ERP: los documentos siguen ahí, emitidos contra clientes que ya no deben ese monto. ` +
+        `Suman ${s.texto}.` +
+        (sinNumero ? ` ⚠ ${sinNumero} se soltaron sin número de documento y no hay forma de verificarlas solas.` : ""),
+      montoEnJuego: s.principal,
+      /* ⚠ Severidad ALTA con dueño en COBRANZA: es la línea que evita que «Nexus no escribe en
+         el ERP» se convierta en «Nexus pide y nadie hace». */
+      donde: "ODOO",
+      pasos: [
+        "Abrí Odoo y buscá cada documento por su número.",
+        "Las que dicen «anular»: cancelalas o borralas según lo que permita el estado del documento.",
+        "Las que dicen «revertir»: emitile una nota de crédito por el mismo monto y moneda.",
+        "El sync las saca de esta lista solo, en la próxima corrida. No hay que marcar nada acá.",
+      ],
+      queSignificaAceptar:
+        "Que estas facturas se pueden quedar como están. ⚠ Es plata emitida contra un cliente que no la debe: aceptarlo es una decisión contable, no una limpieza de pantalla.",
+      queHacer: "Anular o revertir en Odoo cada documento de la lista, según lo que se decidió al soltarlo.",
+      resuelve: "COBRANZA",
+      items: enOdoo.sort((a, b) => b.liberacion.monto - a.liberacion.monto).map(itemDeLiberacion),
+    });
+  }
+
+  const fueraDeOdoo = pendientes.filter((p) => p.liberacion.plataforma !== "ODOO");
+  if (fueraDeOdoo.length) {
+    const s = porMoneda(fueraDeOdoo.map((p) => ({ monto: p.liberacion.monto, moneda: p.liberacion.moneda })));
+    agregar({
+      codigo: "LIBERADAS-FUERA-DE-ODOO",
+      severidad: "ALTA",
+      titulo: `${fueraDeOdoo.length} facturas soltadas se emitieron fuera de Odoo`,
+      detalle: `Se facturaron por Mercury o por otra vía, así que el sync con Odoo no las va a ver nunca y esta línea NO se cierra sola. La cierra una persona, cuando confirma que el documento se anuló allá. Suman ${s.texto}.`,
+      montoEnJuego: s.principal,
+      donde: "MERCURY",
+      pasos: [
+        "Entrá a la plataforma donde se emitió (Mercury, u otra) y buscá el documento.",
+        "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
+        "Volvé acá y marcala resuelta: no hay sync que lo pueda hacer por vos.",
+      ],
+      queSignificaAceptar:
+        "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay espejo que los traiga de vuelta.",
+      queHacer: "Anular el documento en la plataforma donde se emitió y marcar la liberación resuelta.",
+      /* ⚠ La única línea de la lista con acción por fila, y es porque no hay sync que la pueda
+         cerrar. Sin esto el texto manda a marcarla resuelta en un botón que no existe. */
+      accionPorItem: {
+        etiqueta: "Ya está anulada",
+        ayuda: "Marcala solo después de verlo anulado en la plataforma. Nada lo verifica por vos.",
+      },
+      resuelve: "COBRANZA",
+      items: fueraDeOdoo.sort((a, b) => b.liberacion.monto - a.liberacion.monto).map(itemDeLiberacion),
+    });
+  }
+
+  /* ── 10. El default que dice Odoo sobre cuentas que no facturan por Odoo ──────── */
+  /* ⚠ `viaCobro` nace en ODOO. Cuentas internacionales que facturan por Mercury lo arrastran
+     sin que nadie lo haya elegido, y ese default mentiroso es lo que hace que una liberación
+     salga con la plataforma equivocada y termine en la lista de Odoo, esperando un sync que
+     nunca la va a cerrar. Salen como línea propia, para revisarlas una por una: corregirlas a
+     ciegas sería cambiar un default equivocado por otro. */
+  const viaDudosa = estado.cuentas.filter((c) => c.tipo === "INTERNACIONAL" && c.viaCobro === "ODOO");
+  if (viaDudosa.length) {
+    agregar({
+      codigo: "CUENTA-INTERNACIONAL-EN-ODOO",
+      severidad: "MEDIA",
+      titulo: `${viaDudosa.length} cuentas internacionales dicen facturar por Odoo`,
+      /* No hay monto: el problema no es plata mal contada, es una etiqueta que manda a buscar
+         al lugar equivocado. Sin `montoEnJuego` la línea ordena al final, que es donde va. */
+      montoEnJuego: null,
+      detalle:
+        "Es el valor por defecto, no una elección: `viaCobro` nace en ODOO y estas cuentas nunca lo cambiaron. Importa porque decide dónde se va a buscar una factura cuando haya que anularla, y una cuenta internacional que factura por Mercury mandaría a alguien a buscar en el ERP equivocado. No se puede corregir a ciegas: hay internacionales que sí facturan por Odoo.",
+      donde: "PREGUNTANDO",
+      pasos: [
+        "Por cada cuenta, mirá una factura real y confirmá en qué plataforma se emitió.",
+        "Corregí la vía de cobro en la ficha de la cuenta.",
+        "Al soltar una factura, el diálogo ya avisa de esta contradicción y lo que se elija ahí corrige la cuenta sola.",
+      ],
+      queSignificaAceptar: "Que estas cuentas sí facturan por Odoo aunque sean internacionales. La línea vuelve si aparece una cuenta internacional nueva con el default puesto.",
+      queHacer: "Confirmar con finanzas en qué plataforma factura cada una y corregir la vía de cobro.",
+      resuelve: "COBRANZA",
+      items: viaDudosa
+        .slice()
+        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .map((c) => ({ texto: c.nombre, nota: "internacional · vía de cobro: Odoo (por defecto)" })),
     });
   }
 

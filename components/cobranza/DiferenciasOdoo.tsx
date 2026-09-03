@@ -43,6 +43,14 @@ const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: string }
     chip: "text-violet-600 bg-violet-500/10 border-violet-500/30",
     pie: "Al día siguiente el sync trae el cambio y la línea desaparece sola.",
   },
+  /* ⚠ Su pie dice lo contrario que el de ODOO a propósito: acá NO hay sync que cierre la
+     línea. Si dijera lo mismo, alguien anularía la factura en Mercury y esperaría para siempre
+     a que la lista se limpie sola. */
+  MERCURY: {
+    label: "Se arregla fuera de Odoo",
+    chip: "text-cyan-600 bg-cyan-500/10 border-cyan-500/30",
+    pie: "Ningún sync ve esta plataforma: hay que volver acá y marcarla resuelta a mano.",
+  },
   NEXUS: {
     label: "Se arregla en Nexus",
     chip: "text-brand bg-brand/10 border-brand/30",
@@ -175,6 +183,13 @@ export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: (
               )
             }
             onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
+            onResolverItem={(id) =>
+              enviar(
+                { accion: "resolver-liberacion", liberacionId: id },
+                inc.codigo,
+                "Anotado. Esa factura sale de la lista.",
+              )
+            }
           />
         ))
       )}
@@ -203,6 +218,7 @@ export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: (
                   onIrAEmparejar={onIrAEmparejar}
                   onAceptar={() => undefined}
                   onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
+                  onResolverItem={() => undefined}
                 />
               ))}
             </div>
@@ -222,6 +238,7 @@ function Linea({
   onAceptar,
   onReabrir,
   onIrAEmparejar,
+  onResolverItem,
 }: {
   inc: DiferenciaOdoo;
   aceptada?: Aceptada;
@@ -229,6 +246,8 @@ function Linea({
   onAceptar: (motivo: string) => void;
   onReabrir: () => void;
   onIrAEmparejar?: () => void;
+  /** Cerrar UNA fila del detalle. Solo lo usan las líneas con `accionPorItem`. */
+  onResolverItem: (liberacionId: string) => void;
 }) {
   const [verDetalle, setVerDetalle] = useState(false);
   const [aceptando, setAceptando] = useState(false);
@@ -345,6 +364,20 @@ function Linea({
                 </div>
                 {it.monto !== undefined && (
                   <span className="shrink-0 text-xs tabular-nums text-fg-muted">{miles(it.monto)}</span>
+                )}
+                {/* ⚠ Solo aparece en las líneas que ningún sync puede cerrar. Poder marcar
+                    «hecho» algo que el espejo verifica sería poder esconderlo. */}
+                {inc.accionPorItem && it.id && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={guardando}
+                    title={inc.accionPorItem.ayuda}
+                    onClick={() => onResolverItem(it.id!)}
+                    className="shrink-0"
+                  >
+                    {inc.accionPorItem.etiqueta}
+                  </Button>
                 )}
               </div>
             ))}

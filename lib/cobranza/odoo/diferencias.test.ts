@@ -16,9 +16,11 @@ import {
   cruzar,
   detectarDiferenciasOdoo,
   huellaDe,
+  liberacionesPendientes,
   montosEnDosMonedas,
   type CobroParaCruzar,
   type FacturaParaCruzar,
+  type LiberacionParaCruzar,
 } from "./diferencias";
 
 const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
@@ -49,6 +51,24 @@ const factura = (p: Partial<FacturaParaCruzar> = {}): FacturaParaCruzar => ({
   moveType: "out_invoice",
   paymentState: "paid",
   state: "posted",
+  ...p,
+});
+
+const liberada = (p: Partial<LiberacionParaCruzar> = {}): LiberacionParaCruzar => ({
+  id: "l1",
+  cuentaId: "cta1",
+  clienteNombre: "Wherex",
+  numCuota: 2,
+  periodo: "2026-06",
+  monto: 2125,
+  moneda: "USD",
+  fechaEmision: "2026-06-15",
+  referenciaExterna: "FAC/2026/0001",
+  plataforma: "ODOO",
+  decision: "CANCELAR",
+  liberadaPor: "egonzalez@smarteamcr.com",
+  liberadaEn: "2026-09-04",
+  resuelta: false,
   ...p,
 });
 
@@ -189,7 +209,13 @@ describe("el mismo monto en dos monedas", () => {
 });
 
 describe("la lista para el CFO", () => {
-  const base = { cuentasSinVinculo: 49, cuentasTotales: 49, aceptadas: new Map<string, string>() };
+  const base = {
+    cuentasSinVinculo: 49,
+    cuentasTotales: 49,
+    liberaciones: [],
+    cuentas: [],
+    aceptadas: new Map<string, string>(),
+  };
 
   it("⚠ NUNCA suma dólares con colones", () => {
     /* `convertir()` de lib/finanzas/equilibrio.ts es el único punto de conversión del sistema.
@@ -330,5 +356,188 @@ describe("la lista para el CFO", () => {
 
   it("no inventa líneas cuando no hay nada que reportar", () => {
     expect(detectarDiferenciasOdoo({ ...base, cobros: [], facturas: [] })).toEqual([]);
+  });
+});
+
+/**
+ * ── ⭐ CUÁNDO DEJA DE HABER TRABAJO PENDIENTE ───────────────────────────────────
+ * Nexus suelta la factura de este lado, pero el documento sigue emitido allá. Estas reglas son
+ * lo único que hace que la línea se cierre — o que se quede abierta hasta que alguien la
+ * cierre. Equivocarse hacia «cerrada» es lo caro: la plata sigue facturada contra un cliente
+ * que ya no la debe, y nadie vuelve a mirarla.
+ */
+describe("⭐ liberaciones: la regla de cierre por plataforma", () => {
+  const laFactura = factura({ numero: "FAC/2026/0001", odooPartnerId: 10, montoNeto: 2125, moneda: "USD" });
+
+  it("ODOO + CANCELAR sigue abierta mientras el documento esté en el espejo", () => {
+    const p = liberacionesPendientes([liberada()], [laFactura]);
+    expect(p).toHaveLength(1);
+    expect(p[0].porQue).toBe("documento-vigente");
+  });
+
+  it("ODOO + CANCELAR cierra cuando el documento sale del espejo", () => {
+    /* El sync solo trae `estadoEspejo: VIGENTE`. Que ya no esté ES la evidencia de que
+       alguien lo anuló: no hace falta preguntarle nada a nadie. */
+    expect(liberacionesPendientes([liberada()], [])).toHaveLength(0);
+  });
+
+  it("⚠ ODOO + REVERTIR NO cierra porque el documento siga ahí: tiene que seguir ahí", () => {
+    /* Es la diferencia entre las dos decisiones. Revertir deja los dos documentos; esperar a
+       que el original desaparezca sería esperar para siempre. */
+    const p = liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura]);
+    expect(p).toHaveLength(1);
+    expect(p[0].porQue).toBe("sin-nota-de-credito");
+  });
+
+  it("ODOO + REVERTIR cierra con la nota de crédito de igual monto, moneda y partner", () => {
+    const nota = factura({
+      id: "f2",
+      odooMoveId: 2,
+      numero: "NC/2026/0001",
+      moveType: "out_refund",
+      montoNeto: 2125,
+      moneda: "USD",
+      odooPartnerId: 10,
+      invoiceDate: "2026-09-05",
+    });
+    expect(liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, nota])).toHaveLength(0);
+  });
+
+  it("⚠ una nota de crédito de OTRO cliente no cierra nada", () => {
+    const ajena = factura({
+      id: "f3",
+      odooMoveId: 3,
+      numero: "NC/2026/0009",
+      moveType: "out_refund",
+      montoNeto: 2125,
+      moneda: "USD",
+      odooPartnerId: 99,
+      invoiceDate: "2026-09-05",
+    });
+    expect(liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, ajena])).toHaveLength(1);
+  });
+
+  it("⚠ ni una por el mismo número en la otra moneda", () => {
+    /* El mismo defecto que ya costó caro en el emparejado: 2.125 en colones y 2.125 en dólares
+       coinciden en número y no son lo mismo. */
+    const enColones = factura({
+      id: "f4",
+      odooMoveId: 4,
+      numero: "NC/2026/0010",
+      moveType: "out_refund",
+      montoNeto: 2125,
+      moneda: "CRC",
+      odooPartnerId: 10,
+      invoiceDate: "2026-09-05",
+    });
+    expect(liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, enColones])).toHaveLength(1);
+  });
+
+  it("MERCURY y OTRA no cierran nunca solas: no hay espejo que las vea", () => {
+    const p = liberacionesPendientes(
+      [liberada({ plataforma: "MERCURY" }), liberada({ id: "l2", plataforma: "OTRA" })],
+      [], // ni siquiera con el espejo vacío
+    );
+    expect(p).toHaveLength(2);
+    expect(p.map((x) => x.porQue)).toEqual(["sin-espejo", "sin-espejo"]);
+  });
+
+  it("pero sí las cierra una persona, y eso vale para cualquier plataforma", () => {
+    expect(liberacionesPendientes([liberada({ plataforma: "MERCURY", resuelta: true })], [])).toHaveLength(0);
+    expect(liberacionesPendientes([liberada({ resuelta: true })], [laFactura])).toHaveLength(0);
+  });
+
+  it("⚠ sin número de documento no cierra sola, aunque sea de Odoo", () => {
+    /* Darla por buena dejaría la lista limpia inventando que alguien anuló algo. */
+    const p = liberacionesPendientes([liberada({ referenciaExterna: null })], []);
+    expect(p).toHaveLength(1);
+    expect(p[0].porQue).toBe("sin-numero");
+  });
+});
+
+describe("⚠ la factura liberada no se cuenta dos veces", () => {
+  const base = {
+    cuentasSinVinculo: 0,
+    cuentasTotales: 1,
+    cuentas: [],
+    aceptadas: new Map<string, string>(),
+  };
+  /* Soltar una factura es, literalmente, quitarle su cobro: sin la exclusión aparecería como
+     huérfana en ODOO-FACTURA-SIN-COBRO, además de en su propia línea. */
+  const huerfana = factura({ numero: "FAC/2026/0001", cuentaId: "cta1", montoNeto: 2125 });
+
+  it("sin liberación sale como factura sin cobro", () => {
+    const lista = detectarDiferenciasOdoo({ ...base, cobros: [], facturas: [huerfana], liberaciones: [] });
+    expect(lista.map((i) => i.codigo)).toContain("ODOO-FACTURA-SIN-COBRO");
+  });
+
+  it("con la liberación sale UNA vez, en la línea que la explica", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [huerfana],
+      liberaciones: [liberada()],
+    });
+    const codigos = lista.map((i) => i.codigo);
+    expect(codigos).not.toContain("ODOO-FACTURA-SIN-COBRO");
+    expect(codigos).toContain("ODOO-LIBERADAS-PENDIENTES");
+  });
+
+  it("las de fuera de Odoo van en su propia línea, con salida MERCURY", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [],
+      liberaciones: [liberada({ plataforma: "MERCURY" })],
+    });
+    const l = lista.find((i) => i.codigo === "LIBERADAS-FUERA-DE-ODOO");
+    expect(l?.donde).toBe("MERCURY");
+    expect(l?.montoEnJuego).toBe(2125);
+  });
+
+  it("una liberación resuelta no genera ninguna línea", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [],
+      liberaciones: [liberada({ resuelta: true })],
+    });
+    expect(lista.map((i) => i.codigo)).not.toContain("ODOO-LIBERADAS-PENDIENTES");
+  });
+});
+
+describe("el default que dice Odoo sobre cuentas que no facturan por Odoo", () => {
+  const base = {
+    cobros: [],
+    facturas: [],
+    liberaciones: [],
+    cuentasSinVinculo: 0,
+    cuentasTotales: 2,
+    aceptadas: new Map<string, string>(),
+  };
+
+  it("las internacionales con viaCobro ODOO salen como línea propia, sin monto", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cuentas: [
+        { id: "a", nombre: "Wherex", tipo: "INTERNACIONAL", viaCobro: "ODOO" },
+        { id: "b", nombre: "Selvatura", tipo: "NACIONAL", viaCobro: "ODOO" },
+        { id: "c", nombre: "Colby", tipo: "INTERNACIONAL", viaCobro: "MERCURY" },
+      ],
+    });
+    const l = lista.find((i) => i.codigo === "CUENTA-INTERNACIONAL-EN-ODOO");
+    expect(l?.items).toHaveLength(1);
+    expect(l?.items[0].texto).toBe("Wherex");
+    /* Sin monto: el problema no es plata mal contada, es una etiqueta que manda a buscar al
+       lugar equivocado. */
+    expect(l?.montoEnJuego).toBeNull();
+  });
+
+  it("sin cuentas internacionales mal marcadas, la línea no existe", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cuentas: [{ id: "b", nombre: "Selvatura", tipo: "NACIONAL", viaCobro: "ODOO" }],
+    });
+    expect(lista.map((i) => i.codigo)).not.toContain("CUENTA-INTERNACIONAL-EN-ODOO");
   });
 });

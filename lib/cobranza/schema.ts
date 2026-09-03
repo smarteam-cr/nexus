@@ -938,6 +938,15 @@ export type OdooDiferenciaAceptar = z.infer<typeof odooDiferenciaAceptarSchema>;
 
 export const odooDiferenciaReabrirSchema = z.object({ clave: z.string().trim().min(3).max(64) });
 
+/**
+ * Cerrar a mano una factura soltada que se emitió fuera de Odoo. ⚠ Es una AFIRMACIÓN sobre un
+ * sistema que Nexus no puede ver: nada la verifica, así que queda con nombre y fecha.
+ */
+export const odooResolverLiberacionSchema = z.object({
+  liberacionId: idDeBase,
+  nota: z.string().trim().max(500).optional(),
+});
+
 /* ── Soltar facturas al recuadrar el acuerdo ─────────────────────────────────
  *
  * ⚠ Sin default entre CANCELAR y REVERTIR: la persona elige factura por factura, porque

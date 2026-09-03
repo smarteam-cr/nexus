@@ -350,7 +350,7 @@ export async function cargarDiferencias(): Promise<{
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
   medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
 }> {
-  const [cobrosDb, facturasDb, cuentasTotales, vinculadas, aceptadasDb] = await Promise.all([
+  const [cobrosDb, facturasDb, cuentasDb, vinculadas, aceptadasDb, liberadasDb] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -368,10 +368,17 @@ export async function cargarDiferencias(): Promise<{
     /* ⚠ Con orden explícito. `cruzar()` desempata por id, pero una consulta sin ORDER BY no
        garantiza nada y el apareo no debería depender de eso en dos lugares distintos. */
     prisma.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE" }, orderBy: { odooMoveId: "asc" } }),
-    prisma.cuentaFinanciera.count(),
+    prisma.cuentaFinanciera.findMany({
+      select: { id: true, tipo: true, viaCobro: true, client: { select: { name: true } } },
+    }),
     prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
     prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
+    /* ⚠ Se leen las RESUELTAS también. `liberacionesPendientes` decide cuáles siguen abiertas;
+       filtrar acá pondría esa regla en dos lugares, y el módulo puro dejaría de poder probarla
+       contra el caso «alguien la cerró a mano». */
+    prisma.facturaLiberada.findMany({ orderBy: { liberadaEn: "desc" } }),
   ]);
+  const cuentasTotales = cuentasDb.length;
 
   const inconsistencias = detectarDiferenciasOdoo({
     cobros: cobrosDb.map((c) => ({
@@ -401,6 +408,28 @@ export async function cargarDiferencias(): Promise<{
       paymentState: f.paymentState,
       state: f.state,
     })),
+    liberaciones: liberadasDb.map((l) => ({
+      id: l.id,
+      cuentaId: l.cuentaId,
+      clienteNombre: l.clienteNombre,
+      numCuota: l.numCuota,
+      periodo: l.periodo,
+      monto: Number(l.monto),
+      moneda: l.moneda,
+      fechaEmision: l.fechaEmision ? l.fechaEmision.toISOString().slice(0, 10) : null,
+      referenciaExterna: l.referenciaExterna,
+      plataforma: l.plataforma,
+      decision: l.decision,
+      liberadaPor: l.liberadaPor,
+      liberadaEn: l.liberadaEn.toISOString().slice(0, 10),
+      resuelta: l.resueltaEn !== null,
+    })),
+    cuentas: cuentasDb.map((c) => ({
+      id: c.id,
+      nombre: c.client.name,
+      tipo: c.tipo,
+      viaCobro: c.viaCobro,
+    })),
     cuentasSinVinculo: cuentasTotales - vinculadas,
     cuentasTotales,
     aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
@@ -416,6 +445,43 @@ export async function cargarDiferencias(): Promise<{
     })),
     medido: { cobros: cobrosDb.length, facturas: facturasDb.length, cuentasSinVinculo: cuentasTotales - vinculadas, cuentasTotales },
   };
+}
+
+/**
+ * Cerrar a mano una factura soltada. Es el único cierre posible para MERCURY y OTRA: no hay
+ * espejo que las vea, así que la evidencia es que una persona lo dice y firma.
+ *
+ * ⛔ Se rechaza sobre una liberación de ODOO. Ahí la cierra el sync cuando ve el documento
+ * anulado; permitir el cierre a mano sería permitir esconder una factura que sigue emitida —
+ * exactamente lo que esta lista existe para no dejar pasar.
+ */
+export async function resolverLiberacion(
+  input: { liberacionId: string; nota?: string },
+  actor: string,
+): Promise<void> {
+  const l = await prisma.facturaLiberada.findUnique({
+    where: { id: input.liberacionId },
+    select: { plataforma: true, resueltaEn: true, motivo: true },
+  });
+  if (!l) throw new EmparejadoError("Esa liberación ya no existe.", 404);
+  if (l.plataforma === "ODOO") {
+    throw new EmparejadoError(
+      "Esta factura es de Odoo: el sync la cierra solo cuando vea el documento anulado. No hace falta marcarla.",
+      409,
+    );
+  }
+  if (l.resueltaEn) throw new EmparejadoError("Esa liberación ya estaba resuelta.", 409);
+
+  await prisma.facturaLiberada.update({
+    where: { id: input.liberacionId },
+    data: {
+      resueltaEn: new Date(),
+      resueltaPor: actor,
+      /* La nota se ACUMULA sobre el motivo original en vez de pisarlo: por qué se soltó y por
+         qué se dio por cerrada son dos cosas distintas y las dos importan después. */
+      motivo: input.nota ? [l.motivo, `Resuelta: ${input.nota}`].filter(Boolean).join(" · ") : l.motivo,
+    },
+  });
 }
 
 /**
