@@ -8,6 +8,7 @@
  *    COBRADO exige el email del guard (confirmadoPor); revertir limpia la tripleta.
  *    La red dura del invariante está en scripts/check-invariants.ts.
  */
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import {
@@ -167,7 +168,40 @@ export async function updateServicio(servicioId: string, data: z.infer<typeof se
   });
 }
 
-export async function deleteServicio(servicioId: string) {
+/**
+ * Cierra las alertas de cobros que van a dejar de existir.
+ *
+ * ── ⚠⚠ POR QUÉ ES NECESARIO ─────────────────────────────────────────────────────
+ * `AlertaCobro.cobroId` NO es llave foránea: borrar un cobro deja su alerta viva apuntando a
+ * un id que ya no existe. La alerta sigue en el feed, con su mensaje viejo, y el drill-down
+ * no lleva a ningún lado.
+ *
+ * Hoy hay CERO huérfanas, pero no por diseño: la rama que borra cobros estuvo inerte porque
+ * filtraba por origen PLAN/CATCH_UP y los 202 cobros de la base son IMPORTACION. Ese filtro se
+ * sacó el 2026-09-02, así que el defecto está armado y dispara en el próximo borrado.
+ *
+ * ⛔ Se CIERRA, no se borra: la supresión de 7 días de `upsertAlertas` usa las filas cerradas
+ * para no resucitar lo mismo en el corte siguiente, y una alerta que estuvo abierta 40 días y
+ * la resolvió alguien con nombre es la traza del trabajo de cobranza.
+ *
+ * ⛔ Y SOLO las de cobros que mueren. Cerrar la de un cobro que sobrevive se tragaría en
+ * silencio una alerta legítima nueva sobre ese mismo cobro durante una semana entera.
+ */
+export async function cerrarAlertasDeCobros(
+  db: ClienteDb,
+  cobroIds: readonly string[],
+  motivo: string,
+  byEmail: string,
+): Promise<number> {
+  if (cobroIds.length === 0) return 0;
+  const r = await db.alertaCobro.updateMany({
+    where: { cobroId: { in: [...cobroIds] }, estado: { in: ["ABIERTA", "VISTA"] } },
+    data: { estado: "RESUELTA", resueltaEn: new Date(), resueltaPor: byEmail, mensaje: motivo },
+  });
+  return r.count;
+}
+
+export async function deleteServicio(servicioId: string, byEmail = "sistema") {
   const cobrados = await prisma.cobro.count({ where: { servicioId, estado: "COBRADO" } });
   if (cobrados > 0) {
     throw new CobranzaError(
@@ -175,7 +209,19 @@ export async function deleteServicio(servicioId: string) {
       409,
     );
   }
-  return prisma.servicioContratado.delete({ where: { id: servicioId } });
+  /* ⚠ Las alertas se cierran ANTES del delete: `Cobro.servicioId` es Cascade, así que después
+     los ids ya no existen y no hay a quién cerrarle nada. Era el segundo camino que dejaba
+     huérfanas, y el que nadie estaba mirando. */
+  const cobros = await prisma.cobro.findMany({ where: { servicioId }, select: { id: true } });
+  return prisma.$transaction(async (tx) => {
+    await cerrarAlertasDeCobros(
+      tx,
+      cobros.map((c) => c.id),
+      "El servicio se eliminó: este cobro ya no existe.",
+      byEmail,
+    );
+    return tx.servicioContratado.delete({ where: { id: servicioId } });
+  });
 }
 
 // ── Plan de pago (1 activo por servicio, transaccional) ─────────────────────────
@@ -229,12 +275,6 @@ export interface GenerateResult {
   untouched: number;
 }
 
-/**
- * Materializa/reconcilia los Cobros del servicio desde su plan activo. Idempotente:
- * re-ejecutar sin cambios de plan = 0 mutaciones (el botón del demo se puede apretar
- * dos veces). Los catch-up (períodos ya pasados) nacen origen=CATCH_UP + alerta
- * INCONSISTENCIA_CICLO para que Alex confirme. Deja rastro en BitacoraCobro.
- */
 /**
  * Todo lo que se puede saber ANTES de escribir: las lecturas, las cuatro validaciones y el
  * cómputo puro del motor.
@@ -378,6 +418,25 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
 }
 
 /**
+ * La huella del cronograma que se le mostró a la persona.
+ *
+ * ⚠ Existe porque entre que el diálogo se abre y que alguien lo confirma pueden pasar horas —
+ * un almuerzo, otra pestaña, o el sync de Odoo marcando una factura. Sin esto se confirmaría un
+ * preview que ya no describe la realidad, y se soltarían facturas que hoy no corresponden.
+ *
+ * Lleva el plan y, por cada cobro, lo único que decide qué se puede tocar: estado, monto y si
+ * tiene factura. NO lleva `updatedAt`, así que un guardado que no cambió nada de eso no
+ * invalida el diálogo — se trata de cazar cambios reales, no cualquier escritura.
+ */
+export function huellaDelCronograma(p: PlanDeMaterializacion): string {
+  const filas = [...p.servicio.cobros]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((c) => `${c.id}|${c.estado}|${c.monto.toFixed(2)}|${c.fechaEmisionISO ?? ""}`)
+    .join(";");
+  return createHash("sha256").update(`${p.planId}::${filas}`).digest("hex").slice(0, 32);
+}
+
+/**
  * Materializa/reconcilia los Cobros del servicio desde su plan activo. Idempotente:
  * re-ejecutar sin cambios de plan = 0 mutaciones (el botón del demo se puede apretar
  * dos veces). Los catch-up (períodos ya pasados) nacen origen=CATCH_UP + alerta
@@ -412,7 +471,16 @@ export async function generateCobros(
         data: { fechaProgramada: dayUTC(u.fechaProgramadaISO), monto: u.monto, periodo: u.periodo },
       });
     }
-    if (rec.toDelete.length) await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
+    if (rec.toDelete.length) {
+      /* Antes del delete, por la misma razón: después ya no hay a quién cerrarle la alerta. */
+      await cerrarAlertasDeCobros(
+        tx,
+        rec.toDelete,
+        "El acuerdo de pago cambió y este cobro dejó de existir.",
+        byEmail,
+      );
+      await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
+    }
 
     if (regulares.length || catchUp.length || rec.toUpdate.length || rec.toDelete.length) {
       await tx.bitacoraCobro.create({
@@ -603,6 +671,201 @@ export async function cambiarEstadoCobro(
   byEmail: string,
 ) {
   return cambiarEstadoCobroTx(prisma, cobroId, patch, byEmail);
+}
+
+// ── Liberar una factura y recuadrar el cronograma ───────────────────────────────
+
+export interface DecisionDeLiberacion {
+  cobroId: string;
+  decision: "CANCELAR" | "REVERTIR";
+  plataforma: "MERCURY" | "ODOO" | "OTRA";
+  motivo?: string;
+}
+
+export interface ResultadoLiberacion extends GenerateResult {
+  liberados: number;
+  alertasCerradas: number;
+  /** Las líneas de trabajo que quedaron hacia el ERP. Nexus no las puede resolver solo. */
+  solicitudes: Array<{ plataforma: string; decision: string; numero: string | null; monto: number }>;
+}
+
+/**
+ * Suelta las facturas que el acuerdo nuevo ya no justifica y regenera el cronograma, **todo en
+ * una sola transacción**.
+ *
+ * ── POR QUÉ NO SON N LLAMADAS DEL CLIENTE ───────────────────────────────────────
+ * Es lo que la pantalla haría naturalmente: un PATCH por cobro y después un POST de generar.
+ * Si el navegador se cierra después del segundo, quedan dos facturas sueltas, el resto de los
+ * cobros sin regenerar, cero solicitudes al ERP y cero auditoría — un estado que **no es
+ * representable ni en el diálogo que lo pidió ni en un rollback**. El fallo aceptable acá es
+ * «no pasó nada».
+ *
+ * ── LO QUE SUELTA CADA LIBERACIÓN ───────────────────────────────────────────────
+ * Quita la factura Y devuelve a PROGRAMADO. Hacen falta las dos: `esIntocable` mira el estado
+ * y la fecha de emisión por separado, y ese es el nudo por el que «Revertir factura» —que solo
+ * limpia la fecha— nunca desbloqueó nada.
+ *
+ * Y suelta la promesa de pago, que además des-snoozea las alertas del cobro: una promesa sobre
+ * un monto que el acuerdo nuevo ya no pide calla alertas por una cifra que no existe.
+ *
+ * ⛔ NO escribe en el ERP. La factura la anula una persona; lo que queda de este lado es la
+ * fila de `FacturaLiberada`, que es a la vez la evidencia y la línea de trabajo.
+ */
+export async function liberarYRegenerar(
+  servicioId: string,
+  decisiones: readonly DecisionDeLiberacion[],
+  byEmail: string,
+  todayISO: string,
+  huellaEsperada?: string,
+): Promise<ResultadoLiberacion> {
+  /* ⚠ PRIMERO se planifica, y recién después se libera. Las cuatro validaciones —incluido el
+     409 de «el plan no suma el total del servicio»— no dependen de los cobros, así que
+     validando antes es IMPOSIBLE el escenario «solté tres facturas y después la generación
+     abortó por un plan descuadrado». */
+  const previo = await planificarCobros(servicioId, todayISO);
+
+  if (huellaEsperada && huellaDelCronograma(previo) !== huellaEsperada) {
+    throw new CobranzaError(
+      "El cronograma cambió desde que abriste esto. Volvé a revisarlo antes de confirmar.",
+      409,
+    );
+  }
+
+  const porId = new Map(previo.servicio.cobros.map((c) => [c.id, c]));
+  for (const d of decisiones) {
+    const c = porId.get(d.cobroId);
+    if (!c) throw new CobranzaError("Uno de los cobros a liberar no pertenece a este servicio.", 400);
+    if (c.estado === "COBRADO") {
+      throw new CobranzaError(
+        `El cobro #${c.numCuota ?? "?"} está COBRADO: la plata entró. Revertir un cobro es otra decisión y se hace desde el cronograma.`,
+        409,
+      );
+    }
+    if (c.origen === "MANUAL") {
+      throw new CobranzaError(
+        `El cobro #${c.numCuota ?? "?"} se creó a mano: regenerar no lo iba a tocar, así que liberarlo no cambia nada.`,
+        409,
+      );
+    }
+    if (c.fechaEmisionISO === null && c.estado === "PROGRAMADO") {
+      throw new CobranzaError(`El cobro #${c.numCuota ?? "?"} no está bloqueado: el motor ya lo ajusta solo.`, 409);
+    }
+  }
+
+  const cuenta = await prisma.cuentaFinanciera.findUnique({
+    where: { id: previo.servicio.cuentaId },
+    select: { client: { select: { name: true } } },
+  });
+  const clienteNombre = cuenta?.client.name ?? "Cliente";
+
+  const solicitudes: ResultadoLiberacion["solicitudes"] = [];
+  let alertasCerradas = 0;
+
+  const res = await prisma.$transaction(async (tx) => {
+    /* 1. La evidencia PRIMERO: se snapshotea antes de que `cambiarEstadoCobroTx` limpie la
+          autoría. Si se hiciera después, `facturadoPor` ya sería null — que es exactamente el
+          dato que esta tabla existe para no perder. */
+    for (const d of decisiones) {
+      const c = porId.get(d.cobroId)!;
+      await tx.facturaLiberada.create({
+        data: {
+          cuentaId: previo.servicio.cuentaId,
+          servicioId: previo.servicio.id,
+          cobroId: c.id,
+          clienteNombre,
+          numCuota: c.numCuota,
+          periodo: c.periodo,
+          monto: c.monto,
+          moneda: previo.servicioInput.moneda,
+          fechaEmision: c.fechaEmisionISO ? dayUTC(c.fechaEmisionISO) : null,
+          referenciaExterna: c.referenciaExterna,
+          facturadoPor: c.facturadoPor,
+          plataforma: d.plataforma,
+          decision: d.decision,
+          motivo: d.motivo ?? null,
+          liberadaPor: byEmail,
+        },
+      });
+      solicitudes.push({ plataforma: d.plataforma, decision: d.decision, numero: c.referenciaExterna, monto: c.monto });
+    }
+
+    /* 2. Soltar, por el chokepoint: así no hay una segunda versión de sus reglas. */
+    for (const d of decisiones) {
+      await cambiarEstadoCobroTx(tx, d.cobroId, { estado: "PROGRAMADO", fechaEmision: null, promesaPago: null }, byEmail);
+    }
+
+    /* 3. Recién ahora se reconcilia, sobre el estado POST-liberación. Se relee de la
+          transacción en vez de usar la fotografía previa: los liberados acaban de dejar de ser
+          intocables, y reconciliar contra la foto vieja los volvería a saltear. */
+    const existentes: CobroExistente[] = (
+      await tx.cobro.findMany({
+        where: { servicioId },
+        select: { id: true, numCuota: true, estado: true, origen: true, fechaEmision: true, fechaProgramada: true, monto: true },
+      })
+    ).map((c) => ({
+      id: c.id,
+      numCuota: c.numCuota,
+      estado: c.estado,
+      origen: c.origen,
+      fechaEmision: isoDay(c.fechaEmision),
+      fechaProgramadaISO: isoDay(c.fechaProgramada)!,
+      monto: Number(c.monto),
+    }));
+    const rec = reconcileCobros(previo.drafts, existentes);
+    const { regulares, catchUp } = splitCatchUp(rec.toCreate, todayISO);
+
+    const mkData = (d: CobroDraft, origen: "PLAN" | "CATCH_UP") => ({
+      servicioId,
+      cuentaId: previo.servicio.cuentaId,
+      planId: previo.planId,
+      numCuota: d.numCuota,
+      periodo: d.periodo,
+      fechaProgramada: dayUTC(d.fechaProgramadaISO),
+      monto: d.monto,
+      moneda: previo.servicioInput.moneda,
+      origen,
+      notas: d.descripcion ?? null,
+    });
+    if (regulares.length) await tx.cobro.createMany({ data: regulares.map((d) => mkData(d, "PLAN")) });
+    if (catchUp.length) await tx.cobro.createMany({ data: catchUp.map((d) => mkData(d, "CATCH_UP")) });
+    for (const u of rec.toUpdate) {
+      await tx.cobro.update({
+        where: { id: u.id },
+        data: { fechaProgramada: dayUTC(u.fechaProgramadaISO), monto: u.monto, periodo: u.periodo },
+      });
+    }
+    if (rec.toDelete.length) {
+      alertasCerradas = await cerrarAlertasDeCobros(
+        tx,
+        rec.toDelete,
+        "El acuerdo de pago cambió y este cobro dejó de existir.",
+        byEmail,
+      );
+      await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
+    }
+
+    await tx.bitacoraCobro.create({
+      data: {
+        cuentaId: previo.servicio.cuentaId,
+        tipo: "ACTUALIZACION_IA",
+        contenido:
+          `Acuerdo de pago recuadrado por ${byEmail}: ${decisiones.length} factura(s) liberada(s) ` +
+          `(${decisiones.map((d) => d.decision.toLowerCase()).join(", ")}), ` +
+          `${regulares.length + catchUp.length} cobro(s) nuevo(s), ${rec.toUpdate.length} ajustado(s), ${rec.toDelete.length} eliminado(s).`,
+        usuarioEmail: byEmail,
+      },
+    });
+
+    return {
+      created: regulares.length + catchUp.length,
+      updated: rec.toUpdate.length,
+      deleted: rec.toDelete.length,
+      catchUp: catchUp.length,
+      untouched: rec.untouched.length,
+    };
+  });
+
+  return { ...res, liberados: decisiones.length, alertasCerradas, solicitudes };
 }
 
 // ── Pago manual: un cobro que no salió de un plan ───────────────────────────────
