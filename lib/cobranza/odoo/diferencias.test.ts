@@ -541,3 +541,98 @@ describe("el default que dice Odoo sobre cuentas que no facturan por Odoo", () =
     expect(lista.map((i) => i.codigo)).not.toContain("CUENTA-INTERNACIONAL-EN-ODOO");
   });
 });
+
+/**
+ * ── ⚠ LO QUE SE PODÍA BORRAR SIN QUE NADA SE PUSIERA ROJO ──────────────────────
+ * Una auditoría por mutación encontró que la condición de fecha al aparear la nota de crédito
+ * se podía reemplazar por `true` y los 40 tests seguían pasando. Sin ella, una nota de crédito
+ * VIEJA del mismo cliente y monto —una devolución anterior, sin relación— cierra una liberación
+ * nueva: una factura que sigue emitida desaparece de la mesa del CFO sin que nadie la revirtiera.
+ */
+describe("⚠ la nota de crédito tiene que ser POSTERIOR a la factura", () => {
+  const laFactura = factura({
+    numero: "FAC/2026/0001",
+    odooPartnerId: 10,
+    montoNeto: 2125,
+    moneda: "USD",
+    invoiceDate: "2026-06-15",
+  });
+  const notaEn = (fecha: string) =>
+    factura({
+      id: `nc-${fecha}`,
+      odooMoveId: 99,
+      numero: `NC/${fecha}`,
+      moveType: "out_refund",
+      montoNeto: 2125,
+      moneda: "USD",
+      odooPartnerId: 10,
+      invoiceDate: fecha,
+    });
+
+  it("una nota ANTERIOR no cierra nada, aunque coincida en todo lo demás", () => {
+    const p = liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, notaEn("2026-03-01")]);
+    expect(p).toHaveLength(1);
+    expect(p[0].porQue).toBe("sin-nota-de-credito");
+  });
+
+  it("una del MISMO día sí: revertir en el acto es legítimo", () => {
+    expect(liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, notaEn("2026-06-15")])).toHaveLength(0);
+  });
+
+  it("y una posterior también", () => {
+    expect(liberacionesPendientes([liberada({ decision: "REVERTIR" })], [laFactura, notaEn("2026-09-01")])).toHaveLength(0);
+  });
+});
+
+/**
+ * ── ⚠⚠ SIN NÚMERO DE DOCUMENTO ES OTRA LÍNEA, NO UN MATIZ ──────────────────────
+ * Se cierran de maneras distintas: con número el sync ve el documento anularse; sin número no
+ * hay nada contra qué mirar. Juntas bajo un texto que promete «el sync las saca solas», la mitad
+ * sin número quedaba esperando para siempre — y `referenciaExterna` solo se escribe al registrar
+ * el pago, así que un cobro facturado y no cobrado (justo el que se libera) casi nunca lo tiene.
+ */
+describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () => {
+  const base = {
+    cobros: [],
+    facturas: [],
+    cuentasSinVinculo: 0,
+    cuentasTotales: 1,
+    cuentas: [],
+    aceptadas: new Map<string, string>(),
+  };
+
+  it("la sin número sale aparte, con acción por fila y su propio pie", () => {
+    const lista = detectarDiferenciasOdoo({ ...base, liberaciones: [liberada({ referenciaExterna: null })] });
+    const conNumero = lista.find((i) => i.codigo === "ODOO-LIBERADAS-PENDIENTES");
+    const sinNumero = lista.find((i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO");
+    expect(conNumero, "sin filas con número, esa línea no existe").toBeUndefined();
+    expect(sinNumero?.montoEnJuego).toBe(2125);
+    /* ⚠ La acción por fila es lo único que puede cerrarla: el sync no la ve. */
+    expect(sinNumero?.accionPorItem).toBeDefined();
+    /* ⚠ Y el pie NO puede ser el genérico de ODOO, que promete que desaparece sola. */
+    expect(sinNumero?.pie).toBeTruthy();
+  });
+
+  it("la que sí tiene número NO lleva acción por fila: la cierra el sync", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      facturas: [factura({ numero: "FAC/2026/0001" })],
+      liberaciones: [liberada()],
+    });
+    const conNumero = lista.find((i) => i.codigo === "ODOO-LIBERADAS-PENDIENTES");
+    expect(conNumero).toBeDefined();
+    /* Poder marcar «hecho» algo que el espejo verifica sería poder esconderlo. */
+    expect(conNumero?.accionPorItem).toBeUndefined();
+    expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO")).toBeUndefined();
+  });
+
+  it("con las dos clases mezcladas salen las dos líneas, sin contar la misma plata dos veces", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      facturas: [factura({ numero: "FAC/2026/0001" })],
+      liberaciones: [liberada(), liberada({ id: "l2", monto: 500, referenciaExterna: null })],
+    });
+    expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-PENDIENTES")?.montoEnJuego).toBe(2125);
+    expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO")?.montoEnJuego).toBe(500);
+  });
+});

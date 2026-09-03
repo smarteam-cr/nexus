@@ -45,7 +45,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (guard instanceof NextResponse) return guard;
   const { servicioId } = await params;
   try {
-    await deleteServicio(servicioId);
+    await deleteServicio(servicioId, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof CobranzaError) {

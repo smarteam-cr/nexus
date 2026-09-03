@@ -1191,8 +1191,15 @@ async function main(): Promise<number> {
      por origen el 2026-09-02 — o sea que el defecto era LATENTE y quedó ARMADO. Lo que cierra el
      agujero es `cerrarAlertasDeCobros`, llamada desde los dos caminos; esto vigila que no vuelva
      a abrirse por un tercero. */
+  /* ⚠⚠ Solo se miran las ABIERTAS y VISTAS, y esa condición NO es un relajamiento: es la
+     diferencia entre vigilar algo y quedar en rojo para siempre. `cerrarAlertasDeCobros` cierra
+     con RESUELTA **conservando `cobroId` a propósito** —la supresión de 7 días de `upsertAlertas`
+     lee esas filas— y después borra el cobro. Sin este filtro, la primera regeneración que borre
+     un cobro con alerta deja el invariante en rojo permanente, con un remedio impreso que es
+     exactamente lo que el código acaba de hacer. Un tablero que no puede volver a verde deja de
+     leerse, y se lleva puestos a INV25 y a los otros 27 que están al lado. */
   const alertasConCobro = await prisma.alertaCobro.findMany({
-    where: { cobroId: { not: null } },
+    where: { cobroId: { not: null }, estado: { in: ["ABIERTA", "VISTA"] } },
     select: { id: true, cobroId: true, tipo: true, estado: true, cuenta: { select: { client: { select: { name: true } } } } },
   });
   const cobrosVivos = new Set(
@@ -1207,11 +1214,11 @@ async function main(): Promise<number> {
           .slice(0, 20)
           .map((a) => `    · ${a.cuenta.client.name}: ${a.tipo} (${a.estado}) → cobro ${a.cobroId}`)
           .join("\n") +
-        `\n    Remedio: cerrarlas con motivo (RESUELTA), no borrarlas — la supresión de 7 días de` +
-        `\n    upsertAlertas lee las filas cerradas. Ver cerrarAlertasDeCobros en lib/cobranza/mutations.ts.`,
+        `\n    Remedio: cerrarlas con cerrarAlertasDeCobros (RESUELTA + motivo + autor). Si están así,` +
+        `\n    alguien borró cobros sin pasar por ese chokepoint. Ver lib/cobranza/mutations.ts.`,
     );
   } else {
-    console.log(`✓ INV26: las ${alertasConCobro.length} alertas de cobro apuntan a cobros que existen.`);
+    console.log(`✓ INV26: las ${alertasConCobro.length} alertas de cobro vivas apuntan a cobros que existen.`);
   }
 
   /* ── INV27 · la autoría de una factura vive y muere entera ────────────────────────────────

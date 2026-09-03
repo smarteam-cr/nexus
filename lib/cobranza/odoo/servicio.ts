@@ -451,9 +451,14 @@ export async function cargarDiferencias(): Promise<{
  * Cerrar a mano una factura soltada. Es el único cierre posible para MERCURY y OTRA: no hay
  * espejo que las vea, así que la evidencia es que una persona lo dice y firma.
  *
- * ⛔ Se rechaza sobre una liberación de ODOO. Ahí la cierra el sync cuando ve el documento
- * anulado; permitir el cierre a mano sería permitir esconder una factura que sigue emitida —
- * exactamente lo que esta lista existe para no dejar pasar.
+ * ⛔ Se rechaza sobre una liberación de ODOO **que tenga número de documento**. Ahí la cierra el
+ * sync cuando ve el documento anulado; permitir el cierre a mano sería permitir esconder una
+ * factura que sigue emitida — exactamente lo que esta lista existe para no dejar pasar.
+ *
+ * ⚠ Pero SIN número el sync no tiene contra qué compararla, así que esa misma regla la dejaba
+ * abierta para siempre: sin cierre automático, sin botón y fuera de INV28. Esas sí las cierra
+ * una persona. La asimetría es el punto: se pide a mano exactamente donde no hay nada que
+ * verifique, y solo ahí.
  */
 export async function resolverLiberacion(
   input: { liberacionId: string; nota?: string },
@@ -461,12 +466,12 @@ export async function resolverLiberacion(
 ): Promise<void> {
   const l = await prisma.facturaLiberada.findUnique({
     where: { id: input.liberacionId },
-    select: { plataforma: true, resueltaEn: true, motivo: true },
+    select: { plataforma: true, resueltaEn: true, motivo: true, referenciaExterna: true },
   });
   if (!l) throw new EmparejadoError("Esa liberación ya no existe.", 404);
-  if (l.plataforma === "ODOO") {
+  if (l.plataforma === "ODOO" && l.referenciaExterna) {
     throw new EmparejadoError(
-      "Esta factura es de Odoo: el sync la cierra solo cuando vea el documento anulado. No hace falta marcarla.",
+      "Esta factura es de Odoo y tiene número: el sync la cierra solo cuando vea el documento anulado. No hace falta marcarla.",
       409,
     );
   }

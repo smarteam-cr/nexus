@@ -19,10 +19,11 @@
  * poder reescribir un cobro ya facturado.
  */
 import { describe, it, expect } from "vitest";
-import { materializeCobros, type CobroDraft, type PlanEngineInput, type ServicioEngineInput } from "./engine";
+import { esIntocable, materializeCobros, type CobroDraft, type PlanEngineInput, type ServicioEngineInput } from "./engine";
 import {
   BLOQUEO_LABEL,
   bloqueoDe,
+  LIBERABLES,
   planDeCambios,
   sumaConDecisiones,
   type Bloqueo,
@@ -270,7 +271,7 @@ describe("⭐ el total en vivo, a medida que se elige", () => {
 
   /* ⚠ Los pasos de en medio son lo que la persona mira mientras decide. Cada uno se puede
      comprobar a mano contra los cobros de arriba, que es todo el punto de tenerlos escritos. */
-  it("soltando SOLO el #2 quedan 4.250: sube a 2.975, y el #3 sigue existiendo", () => {
+  it("soltando SOLO el #2 quedan 7.225: sube a 2.975, y el #3 sigue existiendo", () => {
     // 2.125 (#1 cobrado) + 2.975 (#2 pasa a seguir el acuerdo) − 2.125 … el #3 sobrevive:
     // 5.100 del acuerdo + 2.125 del #3, que el acuerdo ya no pide.
     expect(sumaConDecisiones(plan, new Set([id(2)]))).toBe(7225);
@@ -351,5 +352,79 @@ describe("⚠⚠ Teamnet — cuando no hay nada que soltar, el número tiene que
        se arregla igual: mandar a alguien a no hacer nada tampoco sirve. */
     expect(plan.ajustar.map((a) => a.numCuota)).toEqual([3, 4]);
     expect(plan.ajustar.every((a) => a.aMonto === 1875)).toBe(true);
+  });
+});
+
+/**
+ * ── ⚠⚠ EL TEST QUE UN COMENTARIO DECÍA QUE EXISTÍA ─────────────────────────────
+ * `planDeCambios` tiene una guarda con este comentario: «si alguien las hace divergir, la fila
+ * desaparece de la pantalla en vez de romperla — y el test de equivalencia lo cace». Ese test
+ * no existía. Una auditoría por mutación lo comprobó: agregándole `SIN_DATO` a `bloqueoDe`, los
+ * 4.700 tests de la suite seguían en verde.
+ *
+ * Y la divergencia no es cosmética. Un cobro donde `esIntocable` dice true y `bloqueoDe` dice
+ * null se salta el primer bucle (`if (esIntocable(c)) continue`) Y la guarda del segundo: no
+ * entra a `bloqueados`, ni a `ajustar`, ni a `borrar`. Como `sumaCorrigiendo` solo corrige sobre
+ * `bloqueados`, su monto no se resta ni se suma — **el diálogo promete que el cronograma queda
+ * en el total del acuerdo mientras ese cobro intocable sobrevive con su monto viejo**. Es la
+ * forma más silenciosa que tiene esta pantalla de mentir sobre plata.
+ *
+ * Por eso el producto cartesiano completo y no una muestra: los tres estados que importan salen
+ * de enums, y el día que alguien agregue un miembro, este test lo obliga a decidir.
+ */
+describe("⚠⚠ `esIntocable` y `bloqueoDe` leen las MISMAS tres condiciones", () => {
+  const ESTADOS = ["PROGRAMADO", "POR_COBRAR", "COBRADO", "SIN_DATO"] as const;
+  const EMISIONES = [null, "2026-06-15"] as const;
+  const ORIGENES = ["PLAN", "CATCH_UP", "MANUAL", "IMPORTACION"] as const;
+
+  it("dan lo mismo en las 32 combinaciones de (estado × fechaEmisión × origen)", () => {
+    const divergen: string[] = [];
+    let n = 0;
+    for (const estado of ESTADOS) {
+      for (const fechaEmision of EMISIONES) {
+        for (const origen of ORIGENES) {
+          n++;
+          const c = cobro({ id: "eq", numCuota: 1, estado, fechaEmision, origen });
+          /* `esIntocable` decide si el motor lo puede reescribir; `bloqueoDe` decide si la
+             pantalla lo muestra. Que una diga true y la otra null es el hueco. */
+          const intocable = esIntocable(c);
+          const motivo = bloqueoDe(c);
+          if (intocable !== (motivo !== null)) {
+            divergen.push(`${estado} · emision=${fechaEmision ?? "null"} · ${origen} → esIntocable=${intocable} bloqueoDe=${motivo}`);
+          }
+        }
+      }
+    }
+    expect(n).toBe(32);
+    expect(divergen, "estos casos desaparecerían del diálogo Y de los tres números").toEqual([]);
+  });
+
+  it("todo motivo tiene su etiqueta en pantalla, y ninguna sobra", () => {
+    /* `BLOQUEO_LABEL` es un Record exhaustivo, así que agregar un motivo sin etiqueta ya es
+       error de tsc. Esto cubre el otro lado: una etiqueta para un motivo que nadie produce. */
+    const producidos = new Set<string>();
+    for (const estado of ESTADOS) {
+      for (const fechaEmision of EMISIONES) {
+        for (const origen of ORIGENES) {
+          const m = bloqueoDe(cobro({ id: "eq", numCuota: 1, estado, fechaEmision, origen }));
+          if (m) producidos.add(m);
+        }
+      }
+    }
+    expect([...producidos].sort()).toEqual(Object.keys(BLOQUEO_LABEL).sort());
+  });
+
+  it("⚠ ningún motivo liberable puede salir de un cobro que el motor sí podría tocar", () => {
+    /* Soltar algo que no estaba bloqueado escribiría una línea de trabajo hacia el ERP por una
+       factura que nadie tiene que anular. La API lo rechaza con 409; acá se vigila el origen. */
+    for (const estado of ESTADOS) {
+      for (const fechaEmision of EMISIONES) {
+        for (const origen of ORIGENES) {
+          const c = cobro({ id: "eq", numCuota: 1, estado, fechaEmision, origen });
+          const m = bloqueoDe(c);
+          if (m && LIBERABLES.has(m)) expect(esIntocable(c), `${estado}/${fechaEmision}/${origen}`).toBe(true);
+        }
+      }
+    }
   });
 });

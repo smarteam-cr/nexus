@@ -218,7 +218,16 @@ export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: (
                   onIrAEmparejar={onIrAEmparejar}
                   onAceptar={() => undefined}
                   onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
-                  onResolverItem={() => undefined}
+                  /* ⚠ Acá había `() => undefined`: el botón se dibujaba igual y el clic no hacía
+                     NADA — sin toast, sin error, sin deshabilitarse. Que la línea esté marcada
+                     «está bien así» no anula la factura: sigue emitida y sigue contando. */
+                  onResolverItem={(id) =>
+                    enviar(
+                      { accion: "resolver-liberacion", liberacionId: id },
+                      inc.codigo,
+                      "Anotado. Esa factura sale de la lista.",
+                    )
+                  }
                 />
               ))}
             </div>
@@ -287,7 +296,8 @@ function Linea({
             </li>
           ))}
         </ol>
-        <p className="mt-2 text-xs text-fg-muted">{donde.pie}</p>
+        {/* La línea puede tener su propia historia de cierre; el pie del `donde` es el default. */}
+        <p className="mt-2 text-xs text-fg-muted">{inc.pie ?? donde.pie}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {inc.atajo && onIrAEmparejar && (
