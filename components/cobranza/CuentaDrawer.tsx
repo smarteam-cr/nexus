@@ -318,6 +318,8 @@ export default function CuentaDrawer({
                     servicio={null}
                     proyectos={cuenta.proyectos}
                     monedaCuenta={cuenta.moneda}
+                    viaCobroDeLaCuenta={cuenta.viaCobro}
+                    cuentaEsInternacional={cuenta.tipo === "INTERNACIONAL"}
                     onSaved={async () => {
                       setAdding(false);
                       await load(false);
@@ -647,6 +649,8 @@ function ServicioCard({
               servicio={servicio}
               proyectos={cuenta.proyectos}
               monedaCuenta={cuenta.moneda}
+              viaCobroDeLaCuenta={cuenta.viaCobro}
+              cuentaEsInternacional={cuenta.tipo === "INTERNACIONAL"}
               onSaved={onSaved}
               onCancel={onCancelEdit}
               onGenerar={onGenerar}

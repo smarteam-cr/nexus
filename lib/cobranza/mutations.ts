@@ -756,9 +756,23 @@ export async function liberarYRegenerar(
 
   const cuenta = await prisma.cuentaFinanciera.findUnique({
     where: { id: previo.servicio.cuentaId },
-    select: { client: { select: { name: true } } },
+    select: { viaCobro: true, client: { select: { name: true } } },
   });
   const clienteNombre = cuenta?.client.name ?? "Cliente";
+
+  /**
+   * ⚠ La corrección del default mentiroso. `viaCobro` nace en ODOO y 16 cuentas internacionales
+   * lo arrastran sin que nadie lo haya elegido — Wherex entre ellas, que factura por Mercury.
+   * Acá alguien acaba de mirar la factura y decir dónde vive de verdad; se aprovecha para que el
+   * dato deje de mentir, en vez de volver a preguntar lo mismo la próxima vez.
+   *
+   * ⛔ Solo si TODAS las decisiones coinciden. Si un servicio tiene facturas en dos plataformas,
+   * la vía de la cuenta es una pregunta más grande que esta pantalla, y elegir una a dedo sería
+   * cambiar un default equivocado por otro.
+   */
+  const plataformas = new Set(decisiones.map((d) => d.plataforma));
+  const corregirVia =
+    plataformas.size === 1 && cuenta && !plataformas.has(cuenta.viaCobro) ? [...plataformas][0] : null;
 
   const solicitudes: ResultadoLiberacion["solicitudes"] = [];
   let alertasCerradas = 0;
@@ -844,6 +858,21 @@ export async function liberarYRegenerar(
         byEmail,
       );
       await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
+    }
+
+    if (corregirVia && cuenta) {
+      await tx.cuentaFinanciera.update({
+        where: { id: previo.servicio.cuentaId },
+        data: { viaCobro: corregirVia },
+      });
+      await tx.bitacoraCobro.create({
+        data: {
+          cuentaId: previo.servicio.cuentaId,
+          tipo: "ACTUALIZACION_IA",
+          contenido: `Vía de cobro corregida de ${cuenta.viaCobro} a ${corregirVia}: es donde ${byEmail} confirmó que viven las facturas de este servicio.`,
+          usuarioEmail: byEmail,
+        },
+      });
     }
 
     await tx.bitacoraCobro.create({

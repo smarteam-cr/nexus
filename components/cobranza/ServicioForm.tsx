@@ -13,6 +13,12 @@
  * el aviso vivía en un `title`, que nadie lee. Editar las cuotas y apretarlo sin guardar
  * antes materializaba el plan viejo, en silencio y con toast de éxito. Ahora guarda primero:
  * se llama "Guardar y generar cobros" y hace las dos cosas en ese orden.
+ *
+ * ⚠⚠ Y encadenarlos tampoco alcanzaba. Guardar un acuerdo NUEVO no toca los cobros ya
+ * facturados, así que Alexander cortó Wherex a $5.100, guardó SEIS veces con toast verde, y el
+ * cronograma se quedó en $8.500. Ni «Guardar y generar» lo arreglaba: el motor saltea lo
+ * facturado y habría quedado en $6.375. Por eso, al guardar, esto ahora PREGUNTA por el preview
+ * y abre `CuadrarCronogramaDialog` cuando el acuerdo nuevo choca con facturas ya emitidas.
  */
 import { useMemo, useState } from "react";
 import { IconCheck } from "@/components/ui";
@@ -22,6 +28,8 @@ import DatePickerField from "@/components/ui/DatePickerField";
 // Motor puro (sin Prisma) — suma-vs-total en vivo para avisar descuadres al capturar.
 import { sumaPlanExpandido, type PlanEngineInput } from "@/lib/cobranza/engine";
 import type { CuentaDetailDTO, ServicioDTO } from "@/lib/cobranza";
+import type { PlanDeCambios } from "@/lib/cobranza/plan-vs-cobros";
+import CuadrarCronogramaDialog, { aPlataforma, type DecisionElegida } from "./CuadrarCronogramaDialog";
 import {
   COBRANZA_TIPOS_SERVICIO,
   COBRANZA_MODALIDADES,
@@ -54,6 +62,8 @@ export default function ServicioForm({
   servicio,
   proyectos,
   monedaCuenta,
+  viaCobroDeLaCuenta,
+  cuentaEsInternacional,
   onSaved,
   onCancel,
   onGenerar,
@@ -63,6 +73,9 @@ export default function ServicioForm({
   servicio: ServicioDTO | null;
   proyectos: CuentaDetailDTO["proyectos"];
   monedaCuenta: string;
+  /** Dónde se factura esta cuenta, para proponerlo al soltar una factura. Se confirma, no se hereda. */
+  viaCobroDeLaCuenta: string;
+  cuentaEsInternacional: boolean;
   onSaved: () => Promise<void> | void;
   onCancel: () => void;
   /** Solo en edición: generar cobros desde el último plan GUARDADO. */
@@ -103,6 +116,9 @@ export default function ServicioForm({
   );
   const [planNotas, setPlanNotas] = useState(plan?.notas ?? "");
   const [saving, setSaving] = useState(false);
+  /* Lo que hay que cuadrar tras guardar el acuerdo. `null` = no hay choque con facturas. */
+  const [cuadrar, setCuadrar] = useState<{ preview: PlanDeCambios; huella: string; servicioId: string } | null>(null);
+  const [aplicando, setAplicando] = useState(false);
 
   // Suma en vivo del plan vs monto total (aviso de MONTOS_DESCUADRADOS al capturar).
   const sumaPlan = useMemo(() => {
@@ -243,6 +259,20 @@ export default function ServicioForm({
         body: JSON.stringify(planBody),
       });
 
+      /* El preview va DESPUÉS del PUT y no antes: preguntado antes describiría lo que pasaría
+         con el acuerdo VIEJO, que es justo el error que este encadenado existe para cerrar.
+         Solo en edición: un servicio recién creado no tiene cobros con los que chocar. */
+      if (servicio) {
+        const p = await previewDelCronograma(servicioId);
+        if (p && p.preview.bloqueados.some((b) => !b.coincide)) {
+          toast.success("Acuerdo guardado. Falta cuadrar el cronograma.");
+          /* ⚠ Se abre ANTES de `onSaved()` a propósito: el padre desmonta este formulario al
+             refrescar (`setEditingId(null)`), y el diálogo se iría con él. Refresca al cerrar. */
+          setCuadrar({ ...p, servicioId });
+          return;
+        }
+      }
+
       toast.success(servicio ? "Servicio actualizado." : "Servicio creado con su plan.");
       await onSaved();
       // El orden importa: generar ANTES de que el PUT del plan termine materializaría el
@@ -255,8 +285,82 @@ export default function ServicioForm({
     }
   }
 
+  /**
+   * Qué le va a pasar a los cobros. Lo calcula el SERVIDOR con la misma función que después
+   * ejecuta: si el cliente lo recalculara, mostraría algo que el servidor no va a hacer.
+   *
+   * ⚠ Un preview que falla NO es un guardado que falló. El servicio y el plan ya están en la
+   * base; se dice lo que pasó y se sigue por el camino de siempre.
+   */
+  async function previewDelCronograma(id: string) {
+    try {
+      return await fetchJson<{ preview: PlanDeCambios; huella: string }>(
+        `/api/cobranza/servicios/${id}/generar`,
+      );
+    } catch (e) {
+      toast.error(
+        e instanceof ApiError
+          ? `Guardado, pero no se pudo calcular qué pasa con los cobros: ${e.message}`
+          : "Guardado, pero no se pudo calcular qué pasa con los cobros.",
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Confirmar el cuadre. Va con la huella que se le mostró a la persona: si el cronograma cambió
+   * mientras el diálogo estaba abierto, el servidor devuelve 409 en vez de ejecutar sobre algo
+   * que ya no es.
+   *
+   * Sin decisiones el cuerpo lleva `liberar: []`, y el endpoint se comporta EXACTAMENTE como el
+   * botón «Generar cobros» de siempre — misma ruta, mismo guard de lectura.
+   */
+  async function confirmarCuadre(decisiones: DecisionElegida[]) {
+    if (!cuadrar || aplicando) return;
+    setAplicando(true);
+    try {
+      const { result } = await fetchJson<{
+        result: { created: number; updated: number; deleted: number; liberados?: number };
+      }>(`/api/cobranza/servicios/${cuadrar.servicioId}/generar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liberar: decisiones, huella: cuadrar.huella }),
+      });
+      toast.success(
+        `Cronograma cuadrado: ${result.created} nuevo(s), ${result.updated} ajustado(s), ` +
+          `${result.deleted} eliminado(s)` +
+          (result.liberados ? `, ${result.liberados} factura(s) por anular en el ERP.` : "."),
+      );
+      setCuadrar(null);
+      await onSaved();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo cuadrar el cronograma.");
+    } finally {
+      setAplicando(false);
+    }
+  }
+
+  async function cerrarCuadre() {
+    setCuadrar(null);
+    /* El acuerdo SÍ se guardó: refrescar es lo que hace que el aviso de descuadre aparezca en
+       el panel. Salir sin refrescar dejaría la pantalla diciendo que todo cuadra. */
+    await onSaved();
+  }
+
   return (
     <div className="space-y-3">
+      {cuadrar && (
+        <CuadrarCronogramaDialog
+          preview={cuadrar.preview}
+          moneda={moneda}
+          viaCobroDeLaCuenta={aPlataforma(viaCobroDeLaCuenta)}
+          cuentaEsInternacional={cuentaEsInternacional}
+          guardando={aplicando}
+          onCancel={cerrarCuadre}
+          onConfirm={confirmarCuadre}
+        />
+      )}
+
       {/* ── Servicio ── */}
       <div className="grid grid-cols-2 gap-3">
         <div>

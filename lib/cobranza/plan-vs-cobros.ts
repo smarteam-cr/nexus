@@ -253,3 +253,27 @@ export function planDeCambios(
     sumaSiSeLibera,
   };
 }
+
+/**
+ * Lo que sumaría el cronograma soltando EXACTAMENTE estos cobros. Es el número que el diálogo
+ * muestra en vivo mientras la persona elige, y el único que hace visible para qué sirve soltar
+ * una factura.
+ *
+ * ⚠ Vive acá y no en el componente por la misma razón que las otras tres sumas: es la cifra que
+ * alguien mira antes de confirmar algo con plata adentro, así que tiene que poder probarse.
+ *
+ * ── LA REGLA, EN UNA FRASE ──────────────────────────────────────────────────────
+ * **El acuerdo se cumple, salvo donde un cobro bloqueado lo impide.** Se arranca de lo que el
+ * acuerdo pide y se corrige por cada bloqueado que NO se suelta:
+ *   · si el acuerdo pide esa cuota → se queda con su monto de hoy en vez del pedido
+ *   · si el acuerdo ya no la pide → sobrevive igual, sumando de más
+ * Un bloqueado que SÍ se suelta no corrige nada: pasa a seguir el acuerdo, o desaparece con él.
+ *
+ * Con `soltados` vacío da `sumaSiNoSeLibera`; con todos los liberables, `sumaSiSeLibera`.
+ */
+export function sumaConDecisiones(p: PlanDeCambios, soltados: ReadonlySet<string>): number {
+  const correccion = p.bloqueados
+    .filter((b) => !soltados.has(b.cobroId))
+    .reduce((n, b) => n + (b.montoSegunPlan === null ? b.monto : b.monto - b.montoSegunPlan), 0);
+  return round2(p.sumaDelPlan + correccion);
+}

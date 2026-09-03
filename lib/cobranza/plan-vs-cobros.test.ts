@@ -20,7 +20,14 @@
  */
 import { describe, it, expect } from "vitest";
 import { materializeCobros, type CobroDraft, type PlanEngineInput, type ServicioEngineInput } from "./engine";
-import { BLOQUEO_LABEL, bloqueoDe, planDeCambios, type Bloqueo, type CobroMaterializado } from "./plan-vs-cobros";
+import {
+  BLOQUEO_LABEL,
+  bloqueoDe,
+  planDeCambios,
+  sumaConDecisiones,
+  type Bloqueo,
+  type CobroMaterializado,
+} from "./plan-vs-cobros";
 
 /* ── El caso Wherex, tal cual está en producción ─────────────────────────────────── */
 
@@ -236,5 +243,59 @@ describe("los cobros que no cuelgan de ninguna cuota", () => {
     expect(plan.borrar).toEqual([]);
     expect(plan.bloqueados).toEqual([]);
     expect(plan.crear).toHaveLength(1);
+  });
+});
+
+/**
+ * ── ⭐ EL NÚMERO QUE SE MIRA ANTES DE CONFIRMAR ─────────────────────────────────
+ * El diálogo recalcula el total en vivo a medida que se elige factura por factura. Es la única
+ * cifra que hace visible para qué sirve soltar una, y la última que alguien lee antes de tocar
+ * plata. Que salga bien en los extremos no alcanza: lo que la persona ve casi siempre es un
+ * estado intermedio.
+ */
+describe("⭐ el total en vivo, a medida que se elige", () => {
+  const plan = planDeCambios(DRAFTS_WHEREX, COBROS_WHEREX);
+  const id = (n: number) => plan.bloqueados.find((b) => b.numCuota === n)!.cobroId;
+
+  it("sin soltar nada da exactamente `sumaSiNoSeLibera`", () => {
+    expect(sumaConDecisiones(plan, new Set())).toBe(plan.sumaSiNoSeLibera);
+    expect(sumaConDecisiones(plan, new Set())).toBe(6375);
+  });
+
+  it("soltando todo lo soltable da exactamente `sumaSiSeLibera`", () => {
+    const soltables = new Set(plan.bloqueados.filter((b) => b.liberable).map((b) => b.cobroId));
+    expect(sumaConDecisiones(plan, soltables)).toBe(plan.sumaSiSeLibera);
+    expect(sumaConDecisiones(plan, soltables)).toBe(5100);
+  });
+
+  /* ⚠ Los pasos de en medio son lo que la persona mira mientras decide. Cada uno se puede
+     comprobar a mano contra los cobros de arriba, que es todo el punto de tenerlos escritos. */
+  it("soltando SOLO el #2 quedan 4.250: sube a 2.975, y el #3 sigue existiendo", () => {
+    // 2.125 (#1 cobrado) + 2.975 (#2 pasa a seguir el acuerdo) − 2.125 … el #3 sobrevive:
+    // 5.100 del acuerdo + 2.125 del #3, que el acuerdo ya no pide.
+    expect(sumaConDecisiones(plan, new Set([id(2)]))).toBe(7225);
+  });
+
+  it("⚠ soltando SOLO el #3 NO cuadra: sigue en 5.100 − 850 = 4.250", () => {
+    /* Es el caso que engaña: se soltó una factura, el total bajó, y aun así no cuadra porque el
+       #2 quedó congelado en 2.125 contra los 2.975 que el acuerdo pide. Sin este número en
+       pantalla, confirmar acá se siente resuelto. */
+    expect(sumaConDecisiones(plan, new Set([id(3)]))).toBe(4250);
+  });
+
+  it("soltar el cobro COBRADO no cambia nada: ya coincide con el acuerdo", () => {
+    /* La API lo rechaza con 409 antes de llegar acá, pero el número tampoco tiene que moverse:
+       la cuota 1 pide 2.125 y el cobro vale 2.125. */
+    expect(sumaConDecisiones(plan, new Set([id(1)]))).toBe(6375);
+  });
+
+  it("un cronograma que ya cuadra da el total del acuerdo, suelte lo que suelte", () => {
+    const yaCuadra = planDeCambios(DRAFTS_WHEREX, [
+      cobro({ id: "x1", numCuota: 1, periodo: "2026-05", estado: "COBRADO", fechaEmision: "2026-05-15" }),
+      cobro({ id: "x2", numCuota: 2, periodo: "2026-06", monto: 2975, fechaProgramadaISO: "2026-06-15" }),
+    ]);
+    expect(yaCuadra.sumaDelPlan).toBe(5100);
+    expect(sumaConDecisiones(yaCuadra, new Set())).toBe(5100);
+    expect(sumaConDecisiones(yaCuadra, new Set(["x1"]))).toBe(5100);
   });
 });
