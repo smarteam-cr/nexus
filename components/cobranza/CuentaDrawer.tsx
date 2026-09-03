@@ -36,7 +36,8 @@ import {
   LABEL_CLS,
 } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
-import { compararPlanConCobros } from "@/lib/cobranza/plan-vs-cobros";
+import { BLOQUEO_LABEL, planDeCambios } from "@/lib/cobranza/plan-vs-cobros";
+import { materializeCobros } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 
@@ -712,7 +713,12 @@ function ServicioCard({
                 </p>
               )}
 
-              <DesfaseDelCronograma plan={plan} servicio={servicio} />
+              <DesfaseDelCronograma
+                plan={plan}
+                servicio={servicio}
+                diaCobroAncla={cuenta.diaCobroAncla}
+                todayISO={todayISO}
+              />
 
               <div className="flex items-center gap-2">
                 <button
@@ -764,47 +770,114 @@ function ServicioCard({
  * frase de cierre. Y esa frase se calcula, no se elige: dice cuántas arregla el botón. Ver
  * `lib/cobranza/plan-vs-cobros.ts`.
  */
-const BLOQUEO_LABEL: Record<string, string> = {
-  cobrado: "ya cobrado",
-  facturado: "ya facturado",
-  manual: "creado a mano",
-};
+function DesfaseDelCronograma({
+  plan,
+  servicio,
+  diaCobroAncla,
+  todayISO,
+}: {
+  plan: ServicioDTO["planActivo"];
+  servicio: ServicioDTO;
+  diaCobroAncla: number | null;
+  todayISO: string;
+}) {
+  if (!plan || !servicio.fechaInicioFacturacion) return null;
 
-function DesfaseDelCronograma({ plan, servicio }: { plan: ServicioDTO["planActivo"]; servicio: ServicioDTO }) {
-  if (!plan || plan.cuotas.length === 0) return null;
-  const d = compararPlanConCobros(plan.cuotas, servicio.cobros);
+  /* ⚠ Se compara contra lo que el motor VA A ESCRIBIR, no contra las cuotas guardadas. Las
+     plantillas PAREJO y SUSCRIPCION ignoran esas filas y calculan el monto solas, y
+     ENTRADA_Y_RESTO las trata como porcentaje: comparar contra las crudas daba falso positivo
+     en tres de las cuatro. `materializeCobros` es puro, así que corre acá sin ir al servidor. */
+  let d;
+  try {
+    const drafts = materializeCobros(
+      {
+        id: servicio.id,
+        montoTotal: servicio.montoTotal,
+        moneda: servicio.moneda === "CRC" ? "CRC" : "USD",
+        fechaInicioFacturacion: servicio.fechaInicioFacturacion,
+        duracionMeses: servicio.duracionMeses,
+        diaCobroAncla,
+      },
+      {
+        template: plan.template === "PAREJO" || plan.template === "ENTRADA_Y_RESTO" || plan.template === "SUSCRIPCION" ? plan.template : "PERSONALIZADO",
+        numCuotas: plan.numCuotas,
+        cuotas: plan.cuotas.map((q) => ({
+          orden: q.orden,
+          base: q.base === "PORCENTAJE" ? "PORCENTAJE" : "MONTO_FIJO",
+          valor: q.valor,
+          offsetMeses: q.offsetMeses,
+          descripcion: q.descripcion ?? undefined,
+        })),
+      },
+      { todayISO },
+    );
+    d = planDeCambios(
+      drafts,
+      servicio.cobros.map((c) => ({
+        id: c.id,
+        numCuota: c.numCuota,
+        periodo: c.periodo,
+        monto: c.monto,
+        estado: c.estado,
+        fechaEmision: c.fechaEmision,
+        origen: c.origen,
+        fechaProgramadaISO: c.fechaProgramada,
+        promesaPago: c.promesaPago,
+      })),
+    );
+  } catch {
+    /* Un plan que el motor no puede materializar ya tiene su propio error al generar; acá
+       callar es mejor que pintar un aviso que no se puede accionar. */
+    return null;
+  }
   if (!d.hay) return null;
 
   const m = (n: number) => fmtMonto(n, servicio.moneda);
+  const pendientes = d.bloqueados.filter((b) => !b.coincide);
+  const soltables = pendientes.filter((b) => b.liberable).length;
   const cierre =
-    d.requierenManual === 0
+    pendientes.length === 0
       ? "Generar cobros deja el cronograma alineado."
-      : d.lasArreglaRegenerar === 0
-        ? "Generar cobros no cambia ninguna: hay que corregirlas cobro por cobro."
-        : `Generar cobros arregla ${d.lasArreglaRegenerar}; las otras ${d.requierenManual} hay que corregirlas cobro por cobro.`;
+      : soltables === 0
+        ? `Generar cobros no alcanza: ${pendientes.length} cobro(s) están bloqueados y no se pueden soltar desde acá.`
+        : `Generar cobros deja el cronograma en ${m(d.sumaSiNoSeLibera)}. Soltando ${soltables} factura(s) queda en ${m(d.sumaSiSeLibera)}.`;
 
   return (
     <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 space-y-1.5">
       <p className="text-[11px] text-warn-ink">
-        <strong className="font-medium">El cronograma no coincide con el plan.</strong>
+        <strong className="font-medium">El cronograma no coincide con el acuerdo.</strong>
         <span className="text-warn-ink/80 tabular-nums">
-          {"  "}Plan {d.cuotasEnElPlan} cuota{d.cuotasEnElPlan === 1 ? "" : "s"} · {m(d.sumaDelPlan)}
-          {"   "}Cronograma {d.cobrosVivos} cobro{d.cobrosVivos === 1 ? "" : "s"} · {m(d.sumaDeLosCobros)}
+          {"  "}El acuerdo pide {m(d.sumaDelPlan)}
+          {"   "}Hoy hay {m(servicio.cobros.reduce((n, c) => n + c.monto, 0))}
         </span>
       </p>
 
       <ul className="space-y-0.5">
-        {d.diferencias.map((x) => (
-          <li key={`${x.tipo}-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
+        {d.ajustar.map((x) => (
+          <li key={`aj-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
             <span className="tabular-nums font-medium w-6">#{x.numCuota}</span>
             <span className="flex-1 min-w-0 tabular-nums">
-              {x.tipo === "monto"
-                ? `el plan dice ${m(x.enElPlan!)}, el cobro ${m(x.enElCobro!)}`
-                : x.tipo === "sobra"
-                  ? `ya no está en el plan (${m(x.enElCobro!)})`
-                  : `falta generarla (${m(x.enElPlan!)})`}
+              se ajusta de {m(x.deMonto)} a {m(x.aMonto)}
             </span>
-            {x.bloqueo && <span className="text-warn-ink/60">{BLOQUEO_LABEL[x.bloqueo]}</span>}
+          </li>
+        ))}
+        {d.borrar.map((x) => (
+          <li key={`bo-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
+            <span className="tabular-nums font-medium w-6">#{x.numCuota}</span>
+            <span className="flex-1 min-w-0 tabular-nums">se elimina ({m(x.monto)}) — el acuerdo ya no lo pide</span>
+          </li>
+        ))}
+        {pendientes.map((x) => (
+          <li key={`bl-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
+            <span className="tabular-nums font-medium w-6">#{x.numCuota}</span>
+            <span className="flex-1 min-w-0 tabular-nums">
+              {x.montoSegunPlan === null
+                ? `el acuerdo ya no lo pide (${m(x.monto)})`
+                : `el acuerdo dice ${m(x.montoSegunPlan)}, el cobro ${m(x.monto)}`}
+            </span>
+            {/* ⚠ El motivo real. Antes acá decía «ya facturado» también para cobros SIN
+                factura, y mandaba a revertir algo que no existe. */}
+            <span className="text-warn-ink/60">{BLOQUEO_LABEL[x.motivo]}</span>
           </li>
         ))}
       </ul>

@@ -415,15 +415,27 @@ export function materializeCobros(
  * que el plan activo dejó de pedir— no es historia importada: es una proyección que
  * el plan contradice, y dejarla es lo que hace que el cronograma mienta.
  */
+/**
+ * ¿El motor NO va a poder reescribir este cobro al regenerar?
+ *
+ * Tres motivos en OR, y la distinción importa: **no alcanza con quitarle la factura** si además
+ * salió de PROGRAMADO. Es el nudo que hacía que «Revertir factura» no desbloqueara nada.
+ *
+ * ⚠ La firma es ESTRUCTURAL a propósito. Esta regla se necesita en dos formas distintas —el
+ * `CobroExistente` del motor y el DTO de la pantalla— y hasta el 2026-09-04 estaba **escrita
+ * dos veces**, con un comentario pidiendo sincronizarlas a mano. Nada las ataba: la pantalla
+ * podía prometer algo que el motor no hacía.
+ */
+export function esIntocable(c: { estado: string; fechaEmision: string | null; origen: string }): boolean {
+  return c.estado !== "PROGRAMADO" || c.fechaEmision !== null || c.origen === "MANUAL";
+}
+
 export function reconcileCobros(drafts: CobroDraft[], existing: CobroExistente[]): ReconcileResult {
   const result: ReconcileResult = { toCreate: [], toUpdate: [], toDelete: [], untouched: [] };
   const byNumCuota = new Map<number, CobroExistente>();
   for (const e of existing) {
     if (e.numCuota !== null) byNumCuota.set(e.numCuota, e);
   }
-
-  const esIntocable = (e: CobroExistente) =>
-    e.estado !== "PROGRAMADO" || e.fechaEmision !== null || e.origen === "MANUAL";
 
   const draftNums = new Set<number>();
   for (const d of drafts) {

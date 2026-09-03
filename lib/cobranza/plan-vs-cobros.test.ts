@@ -3,174 +3,238 @@
  *
  * Correr: `npx vitest run lib/cobranza/plan-vs-cobros.test.ts --project unit`.
  *
- * Los dos casos centrales son REALES, leídos de producción el 2026-09-02: son exactamente los
- * dos clientes que Alexander reportó, con sus números.
+ * ── EL CASO QUE ESTE ARCHIVO PROTEGE ────────────────────────────────────────────
+ * Wherex, con los números reales de producción. El cliente dejó de pagar, se fue, y se acordó
+ * un pago distinto: el plan pasó a 2 cuotas por **$5.100**, pero los cobros siguieron siendo
+ * los 4 originales de $2.125 = **$8.500**, con tres ya facturados y uno cobrado.
+ *
+ * Las tres sumas son la aserción principal, porque son lo único que le explica a una persona
+ * para qué sirve soltar una factura:
+ *
+ *     hoy .................. 8.500
+ *     si no se suelta nada .. 6.375   ← el botón «Generar cobros» solo llega hasta acá
+ *     soltando lo soltable .. 5.100   ✓
+ *
+ * ⚠ Si el segundo número deja de ser 6.375, alguien aflojó `esIntocable` y el motor pasó a
+ * poder reescribir un cobro ya facturado.
  */
 import { describe, it, expect } from "vitest";
-import { compararPlanConCobros, esIntocable, type CobroMaterializado } from "./plan-vs-cobros";
+import { materializeCobros, type CobroDraft, type PlanEngineInput, type ServicioEngineInput } from "./engine";
+import { BLOQUEO_LABEL, bloqueoDe, planDeCambios, type Bloqueo, type CobroMaterializado } from "./plan-vs-cobros";
 
-const cobro = (
-  numCuota: number | null,
-  monto: number,
-  estado = "PROGRAMADO",
-  fechaEmision: string | null = null,
-  origen = "IMPORTACION",
-): CobroMaterializado => ({ numCuota, monto, estado, fechaEmision, origen });
+/* ── El caso Wherex, tal cual está en producción ─────────────────────────────────── */
 
-describe("Wherex — el caso que se reportó", () => {
+const SERVICIO_WHEREX: ServicioEngineInput = {
+  id: "svc-wherex",
+  montoTotal: 5100,
+  moneda: "USD",
+  fechaInicioFacturacion: "2026-05-15",
+  duracionMeses: 2,
+  diaCobroAncla: 15,
+};
+
+/** El acuerdo NUEVO: 2.125 al arrancar y el resto al mes. Suma 5.100 = el total del servicio. */
+const PLAN_WHEREX: PlanEngineInput = {
+  template: "PERSONALIZADO",
+  numCuotas: null,
+  cuotas: [
+    { orden: 1, base: "MONTO_FIJO", valor: 2125, offsetMeses: 0 },
+    { orden: 2, base: "MONTO_FIJO", valor: 2975, offsetMeses: 1 },
+  ],
+};
+
+const cobro = (p: Partial<CobroMaterializado> & { id: string; numCuota: number | null }): CobroMaterializado => ({
+  periodo: "2026-05",
+  monto: 2125,
+  estado: "PROGRAMADO",
+  fechaEmision: null,
+  origen: "IMPORTACION",
+  fechaProgramadaISO: "2026-05-15",
+  ...p,
+});
+
+/** Los 4 cobros que hay hoy, con su estado real. */
+const COBROS_WHEREX: CobroMaterializado[] = [
+  cobro({ id: "c1", numCuota: 1, periodo: "2026-05", estado: "COBRADO", fechaEmision: "2026-05-15", fechaProgramadaISO: "2026-05-15" }),
+  cobro({ id: "c2", numCuota: 2, periodo: "2026-06", estado: "POR_COBRAR", fechaEmision: "2026-06-15", fechaProgramadaISO: "2026-06-15", promesaPago: "2026-08-20" }),
+  cobro({ id: "c3", numCuota: 3, periodo: "2026-07", estado: "POR_COBRAR", fechaEmision: "2026-07-15", fechaProgramadaISO: "2026-07-15" }),
+  cobro({ id: "c4", numCuota: 4, periodo: "2026-08", estado: "PROGRAMADO", fechaProgramadaISO: "2026-08-15" }),
+];
+
+const DRAFTS_WHEREX = materializeCobros(SERVICIO_WHEREX, PLAN_WHEREX, { todayISO: "2026-09-04" });
+
+describe("Wherex — el caso real", () => {
+  const plan = planDeCambios(DRAFTS_WHEREX, COBROS_WHEREX);
+  const de = (n: number) => plan.bloqueados.find((b) => b.numCuota === n);
+
+  it("⭐ las tres sumas: 8.500 hoy · 6.375 sin soltar nada · 5.100 soltando", () => {
+    expect(COBROS_WHEREX.reduce((n, c) => n + c.monto, 0), "lo que hay hoy").toBe(8500);
+    expect(plan.sumaDelPlan, "lo que vale el servicio").toBe(5100);
+    /* ⚠ Éste es el número que explica el feature: apretar «Generar cobros» a secas deja el
+       cronograma en 6.375, porque tres de los cuatro cobros son intocables. Sigue sin cuadrar. */
+    expect(plan.sumaSiNoSeLibera, "solo regenerando").toBe(6375);
+    expect(plan.sumaSiSeLibera, "soltando lo soltable").toBe(5100);
+  });
+
+  it("el cobro ya COBRADO no se toca, y además ya coincide con el plan", () => {
+    /* La plata entró y el acuerdo nuevo pide exactamente eso para la cuota 1: no hay nada que
+       hacer con él. Marcarlo como «hay que resolver esto» sería ruido. */
+    const c1 = de(1);
+    expect(c1?.motivo).toBe("cobrado");
+    expect(c1?.coincide).toBe(true);
+    expect(c1?.liberable).toBe(false);
+    expect(c1?.montoSegunPlan).toBe(2125);
+  });
+
+  it("el facturado que el plan pide por otro monto se puede soltar", () => {
+    const c2 = de(2);
+    expect(c2?.motivo).toBe("facturado");
+    expect(c2?.montoSegunPlan).toBe(2975);
+    expect(c2?.coincide).toBe(false);
+    expect(c2?.liberable).toBe(true);
+    /* Tiene una promesa de pago del 20 de agosto sobre un monto que ya no existe. */
+    expect(c2?.tienePromesa).toBe(true);
+  });
+
+  it("el facturado que el plan ya NI PIDE también, y se distingue del anterior", () => {
+    const c3 = de(3);
+    expect(c3?.motivo).toBe("facturado");
+    expect(c3?.montoSegunPlan, "el plan ya no tiene una cuota 3").toBeNull();
+    expect(c3?.liberable).toBe(true);
+  });
+
+  it("el único sin factura lo borra el motor solo", () => {
+    expect(plan.borrar.map((b) => b.numCuota)).toEqual([4]);
+    expect(plan.bloqueados.some((b) => b.numCuota === 4)).toBe(false);
+  });
+
+  it("⛔ y no propone crear ni ajustar nada mientras los cobros sigan bloqueados", () => {
+    /* Las dos cuotas del plan tienen un cobro enfrente y los dos son intocables. El motor no
+       puede hacer NADA por su cuenta salvo borrar el #4 — que es exactamente el problema. */
+    expect(plan.crear).toEqual([]);
+    expect(plan.ajustar).toEqual([]);
+  });
+});
+
+describe("después de soltar las facturas", () => {
+  it("⭐ Wherex queda en 2.125 cobrado + 2.975 = 5.100", () => {
+    /* Soltar = quitarle la factura Y devolverlo a PROGRAMADO. Hacen falta las DOS cosas: con
+       solo quitarle la factura, `esIntocable` sigue siendo true por el estado. */
+    const liberados = COBROS_WHEREX.map((c) =>
+      c.id === "c2" || c.id === "c3" ? { ...c, estado: "PROGRAMADO", fechaEmision: null, promesaPago: null } : c,
+    );
+    const plan = planDeCambios(DRAFTS_WHEREX, liberados);
+
+    expect(plan.ajustar).toEqual([
+      { cobroId: "c2", numCuota: 2, deMonto: 2125, aMonto: 2975, deFecha: "2026-06-15", aFecha: "2026-06-15" },
+    ]);
+    expect(plan.borrar.map((b) => b.numCuota)).toEqual([3, 4]);
+    /* El #1 sigue bloqueado —está cobrado— pero coincide, así que no es trabajo pendiente. */
+    expect(plan.bloqueados.map((b) => b.numCuota)).toEqual([1]);
+    expect(plan.bloqueados[0]?.coincide).toBe(true);
+    expect(2125 + 2975).toBe(5100);
+  });
+
+  it("⛔ quitar SOLO la factura no alcanza: el estado lo sigue bloqueando", () => {
+    /* Es el nudo del caso real, y la razón por la que «Revertir factura» no arreglaba nada:
+       limpia la fecha de emisión y no toca el estado. */
+    const soloSinFactura = COBROS_WHEREX.map((c) => (c.id === "c2" ? { ...c, fechaEmision: null } : c));
+    const plan = planDeCambios(DRAFTS_WHEREX, soloSinFactura);
+    const c2 = plan.bloqueados.find((b) => b.numCuota === 2);
+    expect(c2?.motivo, "sigue bloqueado, ahora por el estado").toBe("en-curso");
+    expect(plan.ajustar, "el motor todavía no puede ajustarlo").toEqual([]);
+  });
+});
+
+describe("⚠ el motivo del bloqueo: la etiqueta que mentía", () => {
+  it("⛔ un POR_COBRAR SIN factura no se rotula «facturado»", () => {
+    /* Hasta el 2026-09-04 sí, y la pantalla mandaba a revertir una factura que no existe —
+       una instrucción irrealizable que dejaba a la persona igual de trabada que antes. */
+    const c = cobro({ id: "x", numCuota: 1, estado: "POR_COBRAR", fechaEmision: null });
+    expect(bloqueoDe(c)).toBe("en-curso");
+    expect(BLOQUEO_LABEL["en-curso"]).toMatch(/sin factura/i);
+  });
+
+  it("la factura manda sobre el estado", () => {
+    expect(bloqueoDe(cobro({ id: "x", numCuota: 1, estado: "PROGRAMADO", fechaEmision: "2026-06-15" }))).toBe("facturado");
+  });
+
+  it("cobrado y manual ganan sobre todo lo demás", () => {
+    expect(bloqueoDe(cobro({ id: "x", numCuota: 1, estado: "COBRADO", fechaEmision: "2026-06-15" }))).toBe("cobrado");
+    expect(bloqueoDe(cobro({ id: "x", numCuota: 1, origen: "MANUAL", estado: "COBRADO" }))).toBe("manual");
+  });
+
+  it("un PROGRAMADO limpio no está bloqueado", () => {
+    expect(bloqueoDe(cobro({ id: "x", numCuota: 1 }))).toBeNull();
+  });
+
+  it("⛔ todo motivo tiene su etiqueta", () => {
+    /* `BLOQUEO_LABEL` es un Record exhaustivo: agregar un motivo sin etiqueta no compila. */
+    const motivos: Array<Exclude<Bloqueo, null>> = ["cobrado", "facturado", "en-curso", "manual"];
+    for (const m of motivos) expect(BLOQUEO_LABEL[m].length).toBeGreaterThan(3);
+  });
+});
+
+describe("⚠⚠ y el falso positivo que se comía tres plantillas de cuatro", () => {
   /**
-   * Estado real: el plan ACTIVO dice 2 cuotas por $5.100 (guardado 6 veces entre las 20:40 y
-   * las 20:52), y los cobros siguen diciendo 4 por $8.500. El guardado SIEMPRE funcionó.
+   * `generateCobros` nunca usa las filas `CuotaPlan` directamente: las expande según la
+   * plantilla. Comparar contra las crudas daba diferencias donde el motor no ve ninguna.
    */
-  const PLAN = [
-    { orden: 1, valor: 2125 },
-    { orden: 2, valor: 2975 },
-  ];
-  const COBROS = [
-    cobro(1, 2125, "COBRADO", "2026-05-15"),
-    cobro(2, 2125, "POR_COBRAR", "2026-06-15"),
-    cobro(3, 2125, "POR_COBRAR", "2026-07-15"),
-    cobro(4, 2125, "PROGRAMADO", null),
-  ];
+  it("PAREJO: el motor ignora las cuotas crudas y calcula total/n — cero diferencias", () => {
+    const servicio: ServicioEngineInput = {
+      id: "s",
+      montoTotal: 6900,
+      moneda: "USD",
+      fechaInicioFacturacion: "2026-06-15",
+      duracionMeses: 3,
+      diaCobroAncla: 15,
+    };
+    const plan: PlanEngineInput = { template: "PAREJO", numCuotas: 3, cuotas: [] };
+    const drafts = materializeCobros(servicio, plan, { todayISO: "2026-09-04" });
+    expect(drafts.map((d) => d.monto)).toEqual([2300, 2300, 2300]);
 
-  it("detecta el desfase que la pantalla no mostraba", () => {
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.hay).toBe(true);
-    expect(d.cuotasEnElPlan).toBe(2);
-    expect(d.cobrosVivos).toBe(4);
-    expect(d.sumaDelPlan).toBe(5100);
-    expect(d.sumaDeLosCobros).toBe(8500);
-  });
-
-  it("da UNA fila por diferencia, que es lo que la pantalla pinta", () => {
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.diferencias).toEqual([
-      { numCuota: 2, tipo: "monto", enElPlan: 2975, enElCobro: 2125, bloqueo: "facturado" },
-      { numCuota: 3, tipo: "sobra", enElPlan: null, enElCobro: 2125, bloqueo: "facturado" },
-      { numCuota: 4, tipo: "sobra", enElPlan: null, enElCobro: 2125, bloqueo: null },
-    ]);
-  });
-
-  it("el #4 SÍ lo borra regenerar: está PROGRAMADO y sin factura", () => {
-    /* Antes no: el motor pedía además `origen ∈ {PLAN, CATCH_UP}` y todos los cobros de la
-       base son IMPORTACION. Esa condición se sacó (ver engine.test.ts G7-G9), así que el
-       único candado es `esIntocable` — y este cobro no lo activa. */
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.diferencias.find((x) => x.numCuota === 4)?.bloqueo).toBeNull();
-  });
-
-  it("regenerar arregla 1 de las 3; las otras 2 piden revertir la factura primero", () => {
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.lasArreglaRegenerar).toBe(1);
-    expect(d.requierenManual).toBe(2);
-  });
-});
-
-describe("Real Shipping & Trade — el otro caso reportado", () => {
-  /** Plan activo: 3 cuotas por $4.000. Cobros: 3 por $6.000, todos POR_COBRAR. */
-  const PLAN = [
-    { orden: 1, valor: 1500 },
-    { orden: 2, valor: 1500 },
-    { orden: 3, valor: 1000 },
-  ];
-  const COBROS = [cobro(1, 2000, "POR_COBRAR"), cobro(2, 2000, "POR_COBRAR"), cobro(3, 2000, "POR_COBRAR")];
-
-  it("mismo número de cuotas, los tres montos viejos, ninguno sobra", () => {
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.sumaDelPlan).toBe(4000);
-    expect(d.sumaDeLosCobros).toBe(6000);
-    expect(d.diferencias.map((x) => [x.numCuota, x.tipo, x.enElPlan, x.enElCobro])).toEqual([
-      [1, "monto", 1500, 2000],
-      [2, "monto", 1500, 2000],
-      [3, "monto", 1000, 2000],
-    ]);
-  });
-
-  it("⚠ acá regenerar sigue sin arreglar nada, y esto lo descubrió esta prueba", () => {
-    /* Yo esperaba que este caso sí se arreglara solo porque ningún cobro tiene factura
-       emitida. Me equivoqué: `esIntocable` protege todo lo que no esté en PROGRAMADO, y los
-       tres están en POR_COBRAR. Hay que revertir la factura de cada uno primero. */
-    const d = compararPlanConCobros(PLAN, COBROS);
-    expect(d.lasArreglaRegenerar).toBe(0);
-    expect(d.diferencias.every((x) => x.bloqueo === "facturado")).toBe(true);
-  });
-});
-
-describe("cuándo regenerar SÍ sirve", () => {
-  it("un servicio sin cobros todavía: faltan todas y ninguna está bloqueada", () => {
-    const d = compararPlanConCobros([{ orden: 1, valor: 10 }, { orden: 2, valor: 20 }], []);
-    expect(d.diferencias.map((x) => [x.numCuota, x.tipo, x.bloqueo])).toEqual([
-      [1, "falta", null],
-      [2, "falta", null],
-    ]);
-    expect(d.lasArreglaRegenerar).toBe(2);
-    expect(d.requierenManual).toBe(0);
-  });
-
-  it("un cobro PROGRAMADO de origen PLAN sí se actualiza y sí se borra", () => {
-    const d = compararPlanConCobros(
-      [{ orden: 1, valor: 500 }],
-      [cobro(1, 300, "PROGRAMADO", null, "PLAN"), cobro(2, 300, "PROGRAMADO", null, "PLAN")],
+    const cobros = drafts.map((d, i) =>
+      cobro({ id: `c${i}`, numCuota: d.numCuota, monto: d.monto, periodo: d.periodo, fechaProgramadaISO: d.fechaProgramadaISO }),
     );
-    expect(d.diferencias.map((x) => x.bloqueo)).toEqual([null, null]);
-    expect(d.lasArreglaRegenerar).toBe(2);
+    /* Con las cuotas crudas —que acá son CERO filas— los tres cobros habrían salido como que
+       «sobran», y el aviso habría mandado a arreglar un cronograma que está perfecto. */
+    expect(planDeCambios(drafts, cobros).hay, "PAREJO en paz no debe reportar nada").toBe(false);
   });
 
-  it("mezcla: unas se arreglan solas y otras no — la pantalla tiene que decir las dos cosas", () => {
-    const d = compararPlanConCobros(
-      [{ orden: 1, valor: 500 }, { orden: 2, valor: 500 }],
-      [cobro(1, 300, "COBRADO", "2026-01-15"), cobro(2, 300, "PROGRAMADO", null, "PLAN")],
+  it("ENTRADA_Y_RESTO: el valor de la cuota es un PORCENTAJE, no un monto", () => {
+    const servicio: ServicioEngineInput = {
+      id: "s",
+      montoTotal: 10000,
+      moneda: "USD",
+      fechaInicioFacturacion: "2026-06-15",
+      duracionMeses: 3,
+      diaCobroAncla: 15,
+    };
+    /* «70 % de entrada por descuento y 30 % al terminar» — el caso documentado en el repo. */
+    const plan: PlanEngineInput = {
+      template: "ENTRADA_Y_RESTO",
+      numCuotas: 3,
+      cuotas: [{ orden: 1, base: "PORCENTAJE", valor: 70, offsetMeses: 0 }],
+    };
+    const drafts = materializeCobros(servicio, plan, { todayISO: "2026-09-04" });
+    expect(drafts[0]?.monto, "la entrada es el 70 % de 10.000").toBe(7000);
+
+    const cobros = drafts.map((d, i) =>
+      cobro({ id: `c${i}`, numCuota: d.numCuota, monto: d.monto, periodo: d.periodo, fechaProgramadaISO: d.fechaProgramadaISO }),
     );
-    expect(d.lasArreglaRegenerar).toBe(1);
-    expect(d.requierenManual).toBe(1);
+    /* Comparando contra la cuota cruda, el «70» se leía como $70 contra un cobro de $7.000:
+       una diferencia de 6.930 que no existe. */
+    expect(planDeCambios(drafts, cobros).hay).toBe(false);
   });
 });
 
-describe("cuándo NO hay que molestar a nadie", () => {
-  it("plan y cobros alineados: sin desfase", () => {
-    const d = compararPlanConCobros(
-      [{ orden: 1, valor: 1000 }, { orden: 2, valor: 500 }],
-      [cobro(1, 1000, "COBRADO", "2026-01-15"), cobro(2, 500)],
-    );
-    expect(d.hay).toBe(false);
-    expect(d.diferencias).toEqual([]);
-  });
-
-  it("una diferencia de un céntimo es redondeo, no un cambio de plan", () => {
-    expect(compararPlanConCobros([{ orden: 1, valor: 1000 }], [cobro(1, 1000.01)]).hay).toBe(false);
-  });
-
-  it("un cobro SIN numCuota no se compara ni cuenta como sobrante", () => {
-    /* Suscripciones y ajustes manuales no cuelgan de una cuota del plan. Contarlos como
-       sobrantes pondría un aviso permanente en toda cuenta con suscripción. */
-    const d = compararPlanConCobros([{ orden: 1, valor: 1000 }], [cobro(1, 1000), cobro(null, 300)]);
-    expect(d.hay).toBe(false);
-    expect(d.cobrosVivos).toBe(1);
-  });
-});
-
-describe("qué bloquea a un cobro, y por qué motivo", () => {
-  it("cada bloqueo tiene su nombre propio", () => {
-    const conUn = (c: CobroMaterializado) => compararPlanConCobros([{ orden: 1, valor: 999 }], [c]).diferencias[0]?.bloqueo;
-    expect(conUn(cobro(1, 100, "COBRADO", null, "PLAN"))).toBe("cobrado");
-    expect(conUn(cobro(1, 100, "POR_COBRAR", null, "PLAN"))).toBe("facturado");
-    expect(conUn(cobro(1, 100, "PROGRAMADO", "2026-01-01", "PLAN"))).toBe("facturado");
-    expect(conUn(cobro(1, 100, "PROGRAMADO", null, "MANUAL"))).toBe("manual");
-    expect(conUn(cobro(1, 100, "PROGRAMADO", null, "PLAN"))).toBeNull();
-    expect(conUn(cobro(1, 100, "PROGRAMADO", null, "IMPORTACION"))).toBeNull();
-  });
-
-  it("el origen IMPORTACION ya no bloquea nada — ni un monto viejo ni un sobrante", () => {
-    /* Los 202 cobros de la base son IMPORTACION. Mientras esa condición estuvo en el motor,
-       achicar un plan no borraba nada en producción. Si vuelve al motor, este caso avisa. */
-    expect(compararPlanConCobros([{ orden: 1, valor: 999 }], [cobro(1, 100)]).diferencias[0]?.bloqueo).toBeNull();
-    expect(compararPlanConCobros([], [cobro(1, 100)]).diferencias[0]?.bloqueo).toBeNull();
-  });
-
-  it("`esIntocable` sigue reflejando la regla del motor", () => {
-    expect(esIntocable(cobro(1, 100, "PROGRAMADO", null, "PLAN"))).toBe(false);
-    expect(esIntocable(cobro(1, 100, "COBRADO", null, "PLAN"))).toBe(true);
-    expect(esIntocable(cobro(1, 100, "PROGRAMADO", "2026-01-01", "PLAN"))).toBe(true);
-    expect(esIntocable(cobro(1, 100, "PROGRAMADO", null, "MANUAL"))).toBe(true);
+describe("los cobros que no cuelgan de ninguna cuota", () => {
+  it("un cobro sin numCuota se ignora, igual que en el motor", () => {
+    const suelto = cobro({ id: "manual-1", numCuota: null, monto: 999, origen: "MANUAL" });
+    const drafts: CobroDraft[] = [{ numCuota: 1, periodo: "2026-05", fechaProgramadaISO: "2026-05-15", monto: 2125 }];
+    const plan = planDeCambios(drafts, [suelto]);
+    expect(plan.borrar).toEqual([]);
+    expect(plan.bloqueados).toEqual([]);
+    expect(plan.crear).toHaveLength(1);
   });
 });
