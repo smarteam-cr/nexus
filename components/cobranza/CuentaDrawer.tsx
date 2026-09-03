@@ -127,8 +127,28 @@ export default function CuentaDrawer({
   useEffect(() => {
     if (!cuentaId) return;
     // Reset de UI al abrir otra cuenta (el form se repuebla en el load).
+    setExpandedId(null);
     load(true);
   }, [cuentaId, load]);
+
+  /**
+   * El primer servicio abre EXPANDIDO.
+   *
+   * ⚠ Casi todas las cuentas tienen un solo servicio, y ahí ese clic no decide nada: obligaba
+   * a un paso extra para ver lo único que hay. Y lo que esconde es justo lo que se viene a
+   * mirar — las cuotas, los cobros, y el aviso de que el plan y los cobros no coinciden.
+   *
+   * ⛔ Solo el PRIMERO, no todos: una cuenta con cinco servicios abiertos es una pared.
+   *
+   * Depende de `cuenta?.id` y no de `cuenta`, así que corre una vez por cuenta abierta. Si
+   * dependiera del objeto, cada recarga tras guardar volvería a expandir lo que la persona
+   * acaba de cerrar.
+   */
+  useEffect(() => {
+    if (!cuenta?.id) return;
+    setExpandedId((prev) => prev ?? cuenta.servicios[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuenta?.id]);
 
   function closeDrawer() {
     setExpandedId(null);
