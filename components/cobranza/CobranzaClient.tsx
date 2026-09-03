@@ -208,13 +208,25 @@ export default function CobranzaClient({
         title="Cobranza"
         description="Registrá los pagos que entran, mirá qué está vencido y llevá el control de cada cliente."
         action={
-          <button
-            type="button"
-            onClick={() => setBuscadorOpen(true)}
-            className="text-sm font-medium px-4 py-2 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
-          >
-            Registrar pago
-          </button>
+          <div className="flex items-center gap-2">
+            {/* ⚠ Vive ACÁ y no dentro de una pestaña. Estuvo en la barra de «Clientes», al lado
+                de «Importar CSV», porque los dos son mantenimiento puntual de cuentas — pero
+                nadie lo encontraba: todo el mundo cae en «Cobros» y ahí no se veía. La
+                integración alimenta el módulo entero, así que se ve desde cualquier pestaña. */}
+            <Link
+              href="/cobranza/odoo"
+              className="text-sm font-medium px-4 py-2 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+            >
+              Odoo
+            </Link>
+            <button
+              type="button"
+              onClick={() => setBuscadorOpen(true)}
+              className="text-sm font-medium px-4 py-2 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
+            >
+              Registrar pago
+            </button>
+          </div>
         }
       />
 

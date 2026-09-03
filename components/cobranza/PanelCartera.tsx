@@ -180,12 +180,6 @@ export default function PanelCartera({
 
         <div className="ml-auto flex items-center gap-2">
           <Link
-            href="/cobranza/odoo"
-            className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
-          >
-            Odoo
-          </Link>
-          <Link
             href="/cobranza/importar"
             className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
           >
