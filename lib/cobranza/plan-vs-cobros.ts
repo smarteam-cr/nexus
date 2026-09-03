@@ -151,6 +151,30 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /** En centavos: 0.1 + 0.2 no es 0.3 en punto flotante, y un descuadre por el decimal 15 no se ve. */
 const CENT = (n: number) => Math.round(n * 100);
 
+const NADA_SOLTADO: ReadonlySet<string> = new Set();
+
+/**
+ * El total del cronograma soltando exactamente `soltados`. **Es la única definición**: las tres
+ * sumas del preview y el número que el diálogo recalcula en vivo salen todas de acá.
+ *
+ * ── LA REGLA, EN UNA FRASE ──────────────────────────────────────────────────────
+ * **El acuerdo se cumple, salvo donde un cobro bloqueado lo impide.** Se arranca de lo que el
+ * acuerdo pide y se corrige por cada bloqueado que NO se suelta:
+ *   · si el acuerdo pide esa cuota → se queda con su monto de hoy en vez del pedido
+ *   · si el acuerdo ya no la pide → sobrevive igual, sumando de más
+ * Un bloqueado que SÍ se suelta no corrige nada: pasa a seguir el acuerdo, o desaparece con él.
+ */
+function sumaCorrigiendo(
+  sumaDelPlan: number,
+  bloqueados: readonly CobroBloqueado[],
+  soltados: ReadonlySet<string>,
+): number {
+  const correccion = bloqueados
+    .filter((b) => !soltados.has(b.cobroId))
+    .reduce((n, b) => n + (b.montoSegunPlan === null ? b.monto : b.monto - b.montoSegunPlan), 0);
+  return round2(sumaDelPlan + correccion);
+}
+
 /**
  * Qué le pasa a cada cobro si se regenera con estos drafts.
  *
@@ -225,21 +249,20 @@ export function planDeCambios(
 
   /**
    * ⚠ Los dos escenarios que el diálogo tiene que poder decir. La diferencia entre ellos es lo
-   * único que explica para qué sirve soltar una factura:
+   * único que explica para qué sirve soltar una factura — y los dos salen de `sumaCorrigiendo`,
+   * la MISMA función que recalcula el total en vivo mientras la persona elige.
    *
-   *   SIN soltar  → los bloqueados se quedan con su monto de hoy; el resto sigue al plan.
-   *   SOLTANDO    → los liberables pasan a valer lo que el plan pide, o desaparecen si el plan
-   *                 ya no los pide. Lo no liberable que el plan tampoco pide igual se queda.
+   * ⚠⚠ `sumaSiSeLibera` tenía su propia fórmula hasta el 2026-09-04, y estaba mal: daba por
+   * hecho que un bloqueado NO liberable que el plan sí pide igual iba a seguir al plan. No
+   * puede: es intocable. En Teamnet —dos cobros COBRADOS de 2.000 contra un acuerdo que pide
+   * 1.875— prometía 7.500 cuando el piso real es 7.750, o sea prometía cuadrar sin ninguna
+   * acción posible que lo lograra. El caso Wherex no lo cazaba porque ahí el único bloqueado no
+   * liberable ya coincidía con el plan.
    */
-  const enBloqueados = new Set(bloqueados.map((b) => b.numCuota));
   const sumaDelPlan = round2(drafts.reduce((n, d) => n + d.monto, 0));
-  const sumaSiNoSeLibera = round2(
-    drafts.filter((d) => !enBloqueados.has(d.numCuota)).reduce((n, d) => n + d.monto, 0) +
-      bloqueados.reduce((n, b) => n + b.monto, 0),
-  );
-  const sumaSiSeLibera = round2(
-    sumaDelPlan + bloqueados.filter((b) => !b.liberable && b.montoSegunPlan === null).reduce((n, b) => n + b.monto, 0),
-  );
+  const liberables = new Set(bloqueados.filter((b) => b.liberable).map((b) => b.cobroId));
+  const sumaSiNoSeLibera = sumaCorrigiendo(sumaDelPlan, bloqueados, NADA_SOLTADO);
+  const sumaSiSeLibera = sumaCorrigiendo(sumaDelPlan, bloqueados, liberables);
 
   return {
     hay: crear.length + ajustar.length + borrar.length + bloqueados.filter((b) => !b.coincide).length > 0,
@@ -262,18 +285,9 @@ export function planDeCambios(
  * ⚠ Vive acá y no en el componente por la misma razón que las otras tres sumas: es la cifra que
  * alguien mira antes de confirmar algo con plata adentro, así que tiene que poder probarse.
  *
- * ── LA REGLA, EN UNA FRASE ──────────────────────────────────────────────────────
- * **El acuerdo se cumple, salvo donde un cobro bloqueado lo impide.** Se arranca de lo que el
- * acuerdo pide y se corrige por cada bloqueado que NO se suelta:
- *   · si el acuerdo pide esa cuota → se queda con su monto de hoy en vez del pedido
- *   · si el acuerdo ya no la pide → sobrevive igual, sumando de más
- * Un bloqueado que SÍ se suelta no corrige nada: pasa a seguir el acuerdo, o desaparece con él.
- *
- * Con `soltados` vacío da `sumaSiNoSeLibera`; con todos los liberables, `sumaSiSeLibera`.
+ * Con `soltados` vacío da `sumaSiNoSeLibera`; con todos los liberables, `sumaSiSeLibera`. No es
+ * una coincidencia que se cumpla: las tres son la misma función.
  */
 export function sumaConDecisiones(p: PlanDeCambios, soltados: ReadonlySet<string>): number {
-  const correccion = p.bloqueados
-    .filter((b) => !soltados.has(b.cobroId))
-    .reduce((n, b) => n + (b.montoSegunPlan === null ? b.monto : b.monto - b.montoSegunPlan), 0);
-  return round2(p.sumaDelPlan + correccion);
+  return sumaCorrigiendo(p.sumaDelPlan, p.bloqueados, soltados);
 }

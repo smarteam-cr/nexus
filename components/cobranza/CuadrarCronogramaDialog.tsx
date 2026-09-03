@@ -109,6 +109,14 @@ export default function CuadrarCronogramaDialog({
   );
 
   const cuadra = Math.abs(sumaElegida - preview.sumaDelPlan) < 0.01;
+  /**
+   * ⚠ Hay casos donde soltar no puede cerrar la diferencia porque no hay nada soltable —
+   * Teamnet: dos cobros COBRADOS de 2.000 contra un acuerdo que pide 1.875. Sin decirlo, el
+   * cierre muestra un número rojo y tres opciones que no lo mueven, y quien lo lee prueba
+   * combinaciones hasta rendirse. Es el callejón sin salida que este diálogo existe para
+   * cerrar, así que se nombra.
+   */
+  const sinSalida = !cuadra && pendientes.length > 0 && pendientes.every((b) => !b.liberable);
 
   return (
     <Modal
@@ -200,6 +208,14 @@ export default function CuadrarCronogramaDialog({
             Con lo que elegiste: <strong className="text-fg">{m(sumaElegida)}</strong>
             {cuadra && <span className="text-emerald-600"> ✓</span>}
           </p>
+          {sinSalida && (
+            <p className="mt-2 text-[11px] text-amber-600">
+              ⚠ Esa diferencia de <strong>{m(Math.abs(sumaElegida - preview.sumaDelPlan))}</strong> no
+              se cierra desde acá: ninguno de estos cobros se puede soltar. Lo que sí se puede
+              regenerar se regenera igual — el resto es una conversación con finanzas sobre plata
+              que ya entró.
+            </p>
+          )}
           {decisiones.length > 0 && (
             <p className="mt-2 text-[11px] text-fg-muted">
               {/* ⛔ Se dice explícitamente. Nexus no escribe en el ERP, y creer que sí es la

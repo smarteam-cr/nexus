@@ -299,3 +299,57 @@ describe("⭐ el total en vivo, a medida que se elige", () => {
     expect(sumaConDecisiones(yaCuadra, new Set(["x1"]))).toBe(5100);
   });
 });
+
+/**
+ * ── ⚠⚠ TEAMNET: LA PROMESA QUE NO SE PODÍA CUMPLIR ─────────────────────────────
+ * Segundo caso real de producción, y el que destapó que `sumaSiSeLibera` tenía su propia
+ * fórmula. Dos cobros ya COBRADOS de $2.000 cada uno contra un acuerdo que ahora pide $1.875:
+ * la plata entró, son intocables, y **no hay nada que soltar**. Aun así el preview prometía
+ * $7.500 — o sea prometía cuadrar sin que existiera ninguna acción que lo lograra.
+ *
+ * El caso Wherex no lo cazaba porque ahí el único bloqueado no liberable ya coincidía con el
+ * plan, y una corrección de cero es invisible.
+ */
+describe("⚠⚠ Teamnet — cuando no hay nada que soltar, el número tiene que decirlo", () => {
+  const SERVICIO_TEAMNET: ServicioEngineInput = {
+    id: "svc-teamnet",
+    montoTotal: 7500,
+    moneda: "USD",
+    fechaInicioFacturacion: "2026-01-15",
+    duracionMeses: 4,
+    diaCobroAncla: 15,
+  };
+  /** El acuerdo nuevo: 4 cuotas parejas de 1.875. Los dos primeros cobros ya se pagaron a 2.000. */
+  const PLAN_TEAMNET: PlanEngineInput = { template: "PAREJO", numCuotas: 4, cuotas: [] };
+  const DRAFTS = materializeCobros(SERVICIO_TEAMNET, PLAN_TEAMNET, { todayISO: "2026-09-04" });
+
+  const COBROS: CobroMaterializado[] = [
+    cobro({ id: "t1", numCuota: 1, periodo: "2026-01", monto: 2000, estado: "COBRADO", fechaEmision: "2026-01-15", fechaProgramadaISO: "2026-01-15" }),
+    cobro({ id: "t2", numCuota: 2, periodo: "2026-02", monto: 2000, estado: "COBRADO", fechaEmision: "2026-02-15", fechaProgramadaISO: "2026-02-15" }),
+    cobro({ id: "t3", numCuota: 3, periodo: "2026-03", monto: 2000, fechaProgramadaISO: "2026-03-15" }),
+    cobro({ id: "t4", numCuota: 4, periodo: "2026-04", monto: 2000, fechaProgramadaISO: "2026-04-15" }),
+  ];
+
+  const plan = planDeCambios(DRAFTS, COBROS);
+
+  it("⭐ soltar todo lo soltable NO llega al acuerdo, porque no hay nada soltable", () => {
+    expect(plan.sumaDelPlan, "lo que vale el servicio").toBe(7500);
+    expect(plan.bloqueados.every((b) => !b.liberable), "ninguno se puede soltar").toBe(true);
+    /* Los dos escenarios son el MISMO número, y eso es la verdad: no hay nada que elegir. */
+    expect(plan.sumaSiNoSeLibera).toBe(7750);
+    expect(plan.sumaSiSeLibera, "el piso real, no el deseado").toBe(7750);
+  });
+
+  it("las tres sumas y el total en vivo son la misma función", () => {
+    const liberables = new Set(plan.bloqueados.filter((b) => b.liberable).map((b) => b.cobroId));
+    expect(sumaConDecisiones(plan, new Set())).toBe(plan.sumaSiNoSeLibera);
+    expect(sumaConDecisiones(plan, liberables)).toBe(plan.sumaSiSeLibera);
+  });
+
+  it("el motor sí ajusta las dos cuotas que todavía no se cobraron", () => {
+    /* La diferencia de 250 no tiene salida en este diálogo, pero lo que SÍ se puede arreglar
+       se arregla igual: mandar a alguien a no hacer nada tampoco sirve. */
+    expect(plan.ajustar.map((a) => a.numCuota)).toEqual([3, 4]);
+    expect(plan.ajustar.every((a) => a.aMonto === 1875)).toBe(true);
+  });
+});
