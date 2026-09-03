@@ -159,6 +159,49 @@ function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: nu
         </ol>
       </div>
 
+      {/* ⚠ Esta tabla existe porque la pantalla muestra «pagada, falta conciliar» en cada
+          cobro y nunca decía qué significa. El vocabulario es de Odoo, no del negocio, y
+          quien lo lee no tiene por qué conocerlo. */}
+      <div className="rounded-lg border border-line bg-surface p-5">
+        <h2 className="text-base font-semibold text-fg">Qué quiere decir cada estado</h2>
+        <p className="mt-1 text-sm text-fg-secondary">
+          Odoo le hace a cada factura una sola pregunta: <em>¿cuánto de esto ya se saldó, y cómo?</em> Hay cinco
+          respuestas posibles, y Nexus las muestra tal cual vienen.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-muted">
+                <th className="py-1.5 pr-4 font-medium">Odoo dice</th>
+                <th className="py-1.5 pr-4 font-medium">En cristiano</th>
+                <th className="py-1.5 font-medium">¿Entró la plata?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <Estado codigo="not_paid" que="Sin pagar. Se emitió y no entró nada." plata="No" />
+              <Estado codigo="partial" que="Pagada a medias. Entró una parte." plata="En parte" />
+              <Estado
+                codigo="in_payment"
+                que="Pagada, falta cuadrarla con el banco. Está registrado que el cliente pagó, pero nadie ató todavía ese pago a la línea del extracto."
+                plata="Sí"
+              />
+              <Estado codigo="paid" que="Pagada y cuadrada contra el extracto bancario." plata="Sí" />
+              <Estado
+                codigo="reversed"
+                que="Saldada, pero con una nota de crédito. La factura ya no debe nada porque se anuló, no porque alguien pagara."
+                plata="NO"
+                alerta
+              />
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-fg-muted">
+          ⚠ <strong className="text-fg">«Saldo cero» no es lo mismo que «cobrada».</strong> Las anuladas por nota de
+          crédito también quedan en cero, y ahí no entró un peso. Por eso Nexus las trata aparte y nunca las propone
+          como cobradas.
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Dato n={conteos.facturas} etiqueta="facturas espejadas" pie="Solo lectura desde Odoo." />
         <Dato
@@ -170,6 +213,28 @@ function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: nu
         <Dato n={conteos.diferencias} etiqueta="cosas por resolver" pie="Ordenadas por la plata que mueven." />
       </div>
     </div>
+  );
+}
+
+function Estado({
+  codigo,
+  que,
+  plata,
+  alerta,
+}: {
+  codigo: string;
+  que: string;
+  plata: string;
+  alerta?: boolean;
+}) {
+  return (
+    <tr className="border-b border-line last:border-0">
+      <td className="py-1.5 pr-4 align-top">
+        <code className="text-xs text-fg-secondary">{codigo}</code>
+      </td>
+      <td className="py-1.5 pr-4 align-top text-fg-secondary">{que}</td>
+      <td className={`py-1.5 align-top font-medium ${alerta ? "text-red-600" : "text-fg"}`}>{plata}</td>
+    </tr>
   );
 }
 

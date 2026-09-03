@@ -39,6 +39,22 @@ const ETIQUETA_SENAL: Record<string, string> = {
   DESCONOCIDA: "estado desconocido",
 };
 
+/**
+ * La explicación al pasar el mouse. El vocabulario de arriba es corto para que entre en una
+ * línea, pero «pagada, falta conciliar» no se entiende sin contexto — y la diferencia entre
+ * esa y «anulada» es la diferencia entre plata que entró y plata que no.
+ */
+const AYUDA_SENAL: Record<string, string> = {
+  PAGADA: "Odoo registró el pago y ya lo cuadró contra el extracto bancario.",
+  PAGADA_SIN_CONCILIAR:
+    "Está registrado que el cliente pagó, pero todavía nadie ató ese pago a la línea del banco. La plata entró; falta el último paso de contabilidad.",
+  PARCIAL: "El cliente pagó una parte. El resto sigue pendiente.",
+  IMPAGA: "Odoo no registra ningún pago sobre esta factura.",
+  ANULADA_POR_NOTA_DE_CREDITO:
+    "⚠ La factura ya no debe nada, pero NO porque alguien pagara: se anuló con una nota de crédito. Acá no entró plata.",
+  DESCONOCIDA: "Odoo devolvió un estado de pago que este espejo no conoce.",
+};
+
 export default function CronogramaCobros({
   cobros,
   todayISO,
@@ -262,7 +278,13 @@ export default function CronogramaCobros({
               {c.facturaOdoo && (
                 <p className="mt-1 text-[10px] text-fg-muted">
                   Odoo: <span className="text-fg-secondary">{c.facturaOdoo.numero}</span> ·{" "}
-                  {fmtFecha(c.facturaOdoo.invoiceDate)} · {ETIQUETA_SENAL[c.facturaOdoo.senal] ?? c.facturaOdoo.senal}
+                  {fmtFecha(c.facturaOdoo.invoiceDate)} ·{" "}
+                  <span
+                    title={AYUDA_SENAL[c.facturaOdoo.senal] ?? undefined}
+                    className="underline decoration-dotted"
+                  >
+                    {ETIQUETA_SENAL[c.facturaOdoo.senal] ?? c.facturaOdoo.senal}
+                  </span>
                   {/* ⚠ El total CON impuesto se muestra solo cuando difiere del neto. Los cobros
                       de Nexus están cargados sin IVA, y el cliente recibe una factura que sí
                       puede traerlo: ver los dos números es lo que evita la llamada incómoda. */}
