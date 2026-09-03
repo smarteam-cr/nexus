@@ -183,7 +183,7 @@ export default function PanelCartera({
             href="/cobranza/odoo"
             className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
           >
-            Emparejar con Odoo
+            Odoo
           </Link>
           <Link
             href="/cobranza/importar"

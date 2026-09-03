@@ -13,6 +13,7 @@
  *
  * Las dos respuestas son que no, y están escritas grandes.
  */
+import Link from "next/link";
 import { useState } from "react";
 import { Tabs } from "@/components/ui";
 import EmparejadoOdoo from "./EmparejadoOdoo";
@@ -23,6 +24,7 @@ type Pestana = "que-es" | "emparejar" | "no-cuadra";
 export default function OdooClient({
   corrida,
   conteos,
+  puedeVerCorridas,
 }: {
   corrida: {
     iniciadaEn: string;
@@ -33,6 +35,8 @@ export default function OdooClient({
     facturasVistas: number;
   } | null;
   conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
+  /** Solo SUPER_ADMIN llega a /settings/odoo. Sin esto el enlace sería un rebote. */
+  puedeVerCorridas?: boolean;
 }) {
   const [tab, setTab] = useState<Pestana>(
     /* Arranca donde está el trabajo: si falta emparejar, esa es la pestaña. Si ya está todo
@@ -65,7 +69,7 @@ export default function OdooClient({
       />
 
       {corrida && (
-        <p className="text-xs text-fg-muted">
+        <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
           Espejo actualizado el {corrida.iniciadaEn.slice(0, 16).replace("T", " ")} UTC · {corrida.facturasVistas}{" "}
           facturas
           {!corrida.ok && (
@@ -76,6 +80,22 @@ export default function OdooClient({
             </span>
           )}
           {corrida.terminadaEn === null && <span className="text-amber-600"> · sin terminar</span>}
+          {/* El historial completo: cuándo corrió cada vez, qué trajo, qué falló. Es donde se
+              va cuando esta línea dice algo raro. */}
+          {puedeVerCorridas && (
+            <Link href="/settings/odoo" className="text-brand underline hover:no-underline">
+              Ver todas las corridas →
+            </Link>
+          )}
+        </p>
+      )}
+      {/* Si nunca corrió, el enlace igual sirve: ahí se ve la conexión y las banderas. */}
+      {!corrida && puedeVerCorridas && (
+        <p className="text-xs text-fg-muted">
+          El sync no corrió todavía.{" "}
+          <Link href="/settings/odoo" className="text-brand underline hover:no-underline">
+            Ver el estado de la conexión →
+          </Link>
         </p>
       )}
 

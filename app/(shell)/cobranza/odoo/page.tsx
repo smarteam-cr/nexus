@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { prisma } from "@/lib/db/prisma";
 import { ultimaCorrida } from "@/lib/cobranza/odoo/sync";
 import { cargarDiferencias } from "@/lib/cobranza/odoo/servicio";
@@ -42,6 +43,10 @@ export default async function OdooPage() {
       <OdooClient
         corrida={corrida}
         conteos={{ facturas, cuentasVinculadas, cuentas, diferencias }}
+        /* ⚠ /settings/odoo es SOLO SUPER_ADMIN. Mostrarle el enlace a un ADMIN sería un
+           callejón sin salida: hace clic y el gate lo rebota a /clients, que se lee como un
+           error de la app y no como una restricción. */
+        puedeVerCorridas={isCostosRole(ctx.role)}
       />
     </div>
   );

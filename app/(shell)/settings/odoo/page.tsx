@@ -13,11 +13,13 @@
  * base: un interruptor en pantalla daría a entender que se apaga desde acá, y después de un
  * redeploy volvería al valor del entorno sin que nadie entienda por qué.
  */
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -47,6 +49,9 @@ export default async function SettingsOdooPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
+      {/* El camino de vuelta. Esta pantalla se abre desde Cobranza para mirar una corrida, y
+          sin salida obliga a usar el botón del navegador o a volver por el menú. */}
+      <BackLink href="/cobranza/odoo">Volver a la integración</BackLink>
       <PageHeader
         title="Odoo"
         description="De dónde salen las facturas que Nexus muestra al lado de cada cobro, y si el espejo está al día."
@@ -83,7 +88,12 @@ export default async function SettingsOdooPage() {
           <p className="mt-1 text-sm text-fg-muted">
             {/* Es el cuello de botella real: sin emparejar, las facturas existen pero no se
                 pueden poner al lado de ningún cobro. */}
-            Las facturas sin emparejar no aparecen en ningún cronograma.
+            Las facturas sin emparejar no aparecen en ningún cronograma.{" "}
+            {vinculos < cuentas && (
+              <Link href="/cobranza/odoo" className="text-brand underline hover:no-underline">
+                Emparejar →
+              </Link>
+            )}
           </p>
         </Card>
         <Card className="p-5">
