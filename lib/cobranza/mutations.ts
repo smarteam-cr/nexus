@@ -305,6 +305,7 @@ export interface PlanDeMaterializacion {
       monto: number;
       estado: string;
       origen: string;
+      fechaProgramadaISO: string;
       fechaEmisionISO: string | null;
       facturadoPor: string | null;
       referenciaExterna: string | null;
@@ -400,6 +401,7 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
         monto: Number(c.monto),
         estado: c.estado,
         origen: c.origen,
+        fechaProgramadaISO: isoDay(c.fechaProgramada)!,
         fechaEmisionISO: isoDay(c.fechaEmision),
         facturadoPor: c.facturadoPor,
         referenciaExterna: c.referenciaExterna,

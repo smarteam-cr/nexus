@@ -937,3 +937,31 @@ export const odooDiferenciaAceptarSchema = z.object({
 export type OdooDiferenciaAceptar = z.infer<typeof odooDiferenciaAceptarSchema>;
 
 export const odooDiferenciaReabrirSchema = z.object({ clave: z.string().trim().min(3).max(64) });
+
+/* ── Soltar facturas al recuadrar el acuerdo ─────────────────────────────────
+ *
+ * ⚠ Sin default entre CANCELAR y REVERTIR: la persona elige factura por factura, porque
+ * depende de si el documento ya salió al cliente. Un default acá sería el sistema decidiendo
+ * algo que solo sabe quien lo emitió.
+ */
+export const odooLiberarDecisionSchema = z.object({
+  cobroId: idDeBase,
+  decision: z.enum(["CANCELAR", "REVERTIR"]),
+  /**
+   * En qué sistema vive el documento. Se CONFIRMA, no se hereda: `CuentaFinanciera.viaCobro`
+   * trae ODOO por defecto y 16 cuentas internacionales lo arrastran sin que nadie lo haya
+   * elegido — incluida una que factura por Mercury.
+   */
+  plataforma: z.enum(COBRANZA_VIAS_COBRO),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+export const liberarPostSchema = z.object({
+  liberar: z.array(odooLiberarDecisionSchema).max(50).default([]),
+  /**
+   * La huella del cronograma que se le mostró a la persona. Si cambió desde que abrió el
+   * diálogo, la operación se rechaza con 409 en vez de ejecutar sobre algo que ya no es.
+   */
+  huella: z.string().trim().length(32).optional(),
+});
+export type LiberarPost = z.infer<typeof liberarPostSchema>;
