@@ -9,6 +9,7 @@
  * conserva una copia inline de ninguno), y ninguno de estos módulos escribe en la base.
  */
 import { describe, expect, it } from "vitest";
+import { pipelineByKey } from "@/lib/projects/kind";
 import fs from "node:fs";
 import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
@@ -126,13 +127,29 @@ describe("proyectos: INV8, INV8c, INV10, INV11, INV14", () => {
     expect((await INV10.correr(baseFalsa({ project: [] }), AHORA)).ok).toBe(true);
   });
 
-  it("INV11 · una etapa que la tabla no declara viola; un pipeline que la tabla no conoce no es asunto suyo", async () => {
-    const huerfana = { name: "Cuenta", hubspotPipelineId: "826270797", hubspotPipelineStageId: "etapa-inventada", hubspotPipelineStageLabel: "Nueva", client: cliente };
+  it("INV11 · una etapa que la tabla no declara viola; y desde D-05 un pipeline que la tabla no conoce TAMBIÉN", async () => {
+    /* ⚠ INVERTIDO el 2026-09-04 (D-05). Hasta entonces este test afirmaba «un pipeline que la
+       tabla no conoce no es asunto suyo»: era la fila que clasificaba A CIEGAS (cae a legacy y se
+       comporta como Customer Success) sin que ningún invariante lo dijera. El remedio NO es
+       inventar la fila: lo decide Elías con el panel de HubSpot, y por eso el mensaje lo dice. */
+    const cs = pipelineByKey("customer-success");
+    const huerfana = { name: "Cuenta", hubspotPipelineId: cs.hubspotPipelineId, hubspotPipelineStageId: "etapa-inventada", hubspotPipelineStageLabel: "Nueva", client: cliente };
     const r = await INV11.correr(baseFalsa({ project: [huerfana] }), AHORA);
     expect(r.ok).toBe(false);
-    expect(r.lineas.join("\n")).toContain('etapa etapa-inventada ("Nueva") del pipeline 826270797');
-    const legacy = { ...huerfana, hubspotPipelineId: "pipeline-desconocido" };
-    expect((await INV11.correr(baseFalsa({ project: [legacy] }), AHORA)).ok).toBe(true);
+    expect(r.lineas.join("\n")).toContain(`etapa etapa-inventada ("Nueva") del pipeline ${cs.hubspotPipelineId}`);
+
+    const desconocido = { ...huerfana, hubspotPipelineId: "pipeline-desconocido" };
+    const llamadas: Llamada[] = [];
+    const d = await INV11.correr(baseFalsa({ project: [desconocido] }, llamadas), AHORA);
+    expect(d.ok, "un pipeline que la tabla no conoce clasifica a ciegas: es un rojo").toBe(false);
+    expect(d.lineas.join("\n")).toContain('"Cuenta" → pipeline pipeline-desconocido');
+    expect(d.lineas.join("\n"), "el remedio es una decisión de Elías, no una fila inventada").toContain("NO inventar la fila");
+    /* Sin exigir etapa: un activo de pipeline desconocido con la etapa vacía también viola. */
+    expect(where(llamadas, "project").hubspotPipelineStageId, "la consulta no puede filtrar por etapa").toBeUndefined();
+    expect((await INV11.correr(baseFalsa({ project: [{ ...desconocido, hubspotPipelineStageId: null }] }), AHORA)).ok).toBe(false);
+
+    const sano = { ...huerfana, hubspotPipelineStageId: cs.initialStageId };
+    expect((await INV11.correr(baseFalsa({ project: [sano] }), AHORA)).ok).toBe(true);
   });
 
   it("INV14 · un alta a medio hacer desde hace más de 12 h viola, con su remedio si falta el pipeline sellado", async () => {

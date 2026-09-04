@@ -159,15 +159,22 @@ export const INV10: Invariante = {
  * etapa que la tabla no declara, se ve. No detecta una etapa nueva que nadie usó todavía (para eso
  * está `scripts/inspect-project-pipelines.ts`), pero sí el momento en que empieza a importar.
  *
- * Solo ACTIVOS y solo con pipeline RESUELTO: un `hubspotPipelineId` nulo es la fila legacy (ya la
- * cubre INV10) y un proyecto inactivo no entra a ninguno de los cuatro alcances.
+ * Solo ACTIVOS: un proyecto inactivo no entra a ninguno de los cuatro alcances. Un
+ * `hubspotPipelineId` nulo es la fila legacy (la cubre INV10).
+ *
+ * D-05 (2026-09-04): un pipeline NO nulo que la tabla no declara TAMBIÉN viola. Antes se lo
+ * saltaba («no es asunto de esta invariante»), y así un proyecto activo de un pipeline que
+ * Nexus no conoce clasificaba A CIEGAS —cae a legacy: cartera, vigilante y cobranza como si
+ * fuera Customer Success— sin que ningún invariante lo dijera. El remedio NO es inventar la
+ * fila: qué es ese pipeline y si entra a la tabla lo decide Elías con el panel de HubSpot.
  */
 export const INV11: Invariante = {
   id: "11",
   nombre: "toda etapa materializada activa está declarada en la tabla",
   async correr(db) {
-    const conEtapa = await db.project.findMany({
-      where: { status: "active", hubspotPipelineId: { not: null }, hubspotPipelineStageId: { not: null } },
+    // D-05: sin exigir etapa — un pipeline desconocido viola aunque la etapa venga vacía.
+    const conPipeline = await db.project.findMany({
+      where: { status: "active", hubspotPipelineId: { not: null } },
       select: {
         name: true,
         hubspotPipelineId: true,
@@ -176,13 +183,32 @@ export const INV11: Invariante = {
         client: { select: { name: true } },
       },
     });
-    const etapasHuerfanas = conEtapa.filter((p) => {
+    const pipelinesDesconocidos = conPipeline.filter((p) => !resolvePipeline(p.hubspotPipelineId));
+    const etapasHuerfanas = conPipeline.filter((p) => {
       const def = resolvePipeline(p.hubspotPipelineId);
-      // Pipeline no declarado → fila legacy, no es asunto de esta invariante.
-      return def ? !buscarEtapa(def, p.hubspotPipelineStageId) : false;
+      return !!def && p.hubspotPipelineStageId !== null && !buscarEtapa(def, p.hubspotPipelineStageId);
     });
+    if (pipelinesDesconocidos.length === 0 && etapasHuerfanas.length === 0) {
+      return cumple("✓ INV11: toda etapa materializada activa está declarada en la tabla, y ningún activo está en un pipeline desconocido.");
+    }
+    const lineas: string[] = [];
+    if (pipelinesDesconocidos.length > 0) {
+      lineas.push(
+        `✗ INV11 VIOLADO: ${pipelinesDesconocidos.length} proyecto(s) activo(s) están en un pipeline que ` +
+          `lib/projects/kind.ts no declara — clasifican A CIEGAS (caen a legacy: cartera, vigilante y ` +
+          `cobranza como si fueran Customer Success).`,
+        ...pipelinesDesconocidos
+          .slice(0, 10)
+          .map((p) => `    - ${p.client.name} · "${p.name}" → pipeline ${p.hubspotPipelineId}`),
+        ...(pipelinesDesconocidos.length > 10 ? [`    … y ${pipelinesDesconocidos.length - 10} más`] : []),
+        "  ⛔ NO inventar la fila. Abrí el panel de HubSpot (Objetos → Proyectos → Pipelines), mirá qué\n" +
+          "  es ese pipeline y decidí con Elías si entra a `PROJECT_PIPELINES` (con sus etapas transcritas\n" +
+          "  por `npx tsx scripts/inspect-project-pipelines.ts`) o si esos proyectos se mueven a uno de\n" +
+          "  los tres. Hasta entonces este rojo es a propósito.",
+      );
+    }
     if (etapasHuerfanas.length > 0) {
-      return viola(
+      lineas.push(
         `✗ INV11 VIOLADO: ${etapasHuerfanas.length} proyecto(s) activo(s) están en una etapa que ` +
           `lib/projects/kind.ts no declara.`,
         ...etapasHuerfanas
@@ -199,7 +225,7 @@ export const INV11: Invariante = {
           "  cierre cambió de id, hay proyectos que se cierran o se abren mal.",
       );
     }
-    return cumple("✓ INV11: toda etapa materializada activa está declarada en la tabla.");
+    return viola(lineas[0], ...lineas.slice(1));
   },
 };
 
