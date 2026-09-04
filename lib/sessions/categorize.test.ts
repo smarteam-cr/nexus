@@ -31,6 +31,15 @@
  * Correr: `npx vitest run lib/sessions/categorize.test.ts --project unit`.
  */
 import { test, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  construirIndice,
+  filasDelGrupo,
+  grupoAParam,
+  grupoDeSesion,
+  paramAGrupo,
+} from "./indice-de-grupos";
 import {
   categorizeSession,
   computeAmbiguousNameTokens,
@@ -359,4 +368,65 @@ test("16 — orphan: sin participantes → 'Sin participantes'; dominio desconoc
     label: "desconocido.cr",
     domain: "desconocido.cr",
   });
+});
+
+// ── C-19 (2026-09-04): /sessions manda el índice + el grupo elegido, no las 16k filas ──────────
+
+test("C-19 — el índice cuenta por grupo (huérfanas por dominio, o label sin dominio) y filasDelGrupo filtra", () => {
+  /* La edición que lo pone en rojo: agrupar las huérfanas por label «porque es lo que se ve»
+     (dos dominios con el mismo label se funden y `?g=orphan:<dominio>` deja de encontrarlas), o
+     que filasDelGrupo devuelva todo cuando no hay grupo. */
+  const filas = [
+    { id: "1", group: { kind: "client" as const, id: "c1", label: "Acme" }, hasTranscript: true },
+    { id: "2", group: { kind: "client" as const, id: "c1", label: "Acme" }, hasTranscript: false },
+    { id: "3", group: { kind: "hubspotCompany" as const, id: "h1", label: "Beta", domain: "beta.cr" }, hasTranscript: true },
+    { id: "4", group: { kind: "category" as const, id: "k1", label: "Interna", categoryKind: "internal" }, hasTranscript: false },
+    { id: "5", group: { kind: "orphan" as const, label: "gamma.cr", domain: "gamma.cr" }, hasTranscript: true },
+    { id: "6", group: { kind: "orphan" as const, label: "Sin dominio" }, hasTranscript: false },
+  ];
+  const indice = construirIndice(filas);
+  expect(indice.byClient).toEqual({ c1: { total: 2, withTranscript: 1 } });
+  expect(indice.byHubspotCompany).toEqual({ h1: { total: 1, withTranscript: 1 } });
+  expect(indice.byCategory).toEqual({ k1: { total: 1, withTranscript: 0 } });
+  expect(indice.orphans).toEqual({
+    "gamma.cr": { label: "gamma.cr", domain: "gamma.cr", total: 1, withTranscript: 1 },
+    "Sin dominio": { label: "Sin dominio", domain: undefined, total: 1, withTranscript: 0 },
+  });
+  expect(indice.total).toBe(6);
+
+  expect(filasDelGrupo(filas, { kind: "client", id: "c1" }).map((f) => f.id)).toEqual(["1", "2"]);
+  expect(filasDelGrupo(filas, { kind: "orphan", id: "gamma.cr" }).map((f) => f.id)).toEqual(["5"]);
+  expect(filasDelGrupo(filas, { kind: "orphan", id: "Sin dominio" }).map((f) => f.id)).toEqual(["6"]);
+  expect(filasDelGrupo(filas, null), "sin grupo elegido no viaja ninguna fila").toEqual([]);
+  // La selección de una huérfana se identifica por su dominio: la misma clave que usa el índice.
+  expect(grupoDeSesion(filas[4].group)).toEqual({ kind: "orphan", id: "gamma.cr" });
+});
+
+test("C-19 — `?g=` va y vuelve, y un valor inválido devuelve null en vez de lanzar", () => {
+  expect(paramAGrupo(grupoAParam({ kind: "client", id: "c1" }))).toEqual({ kind: "client", id: "c1" });
+  expect(paramAGrupo(grupoAParam({ kind: "orphan", id: "gamma.cr" }))).toEqual({ kind: "orphan", id: "gamma.cr" });
+  expect(paramAGrupo("cliente:c1"), "kind inexistente").toBeNull();
+  expect(paramAGrupo("client:"), "id vacío").toBeNull();
+  expect(paramAGrupo("client:%E0%A4%A"), "URI mal formada").toBeNull();
+  expect(paramAGrupo(undefined)).toBeNull();
+});
+
+test("C-19 — la página manda el índice + las filas del grupo, y el cliente adopta las filas nuevas", () => {
+  /* La edición que lo pone en rojo: volver a `sessions={sessionsWithMeta}` en la página «porque
+     el cliente ya filtraba» — las 16k filas de vuelta en cada clic; o sacar la adopción en el
+     cliente: al cambiar de grupo llegan filas nuevas y la lista sigue mostrando las viejas. */
+  const leer = (rel: string) =>
+    fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  const page = leer("app/(shell)/sessions/page.tsx");
+  expect(page, "la página vuelve a mandar el historial completo").not.toContain("sessions={sessionsWithMeta}");
+  expect(page).toContain("sessions={filas}");
+  expect(page).toContain("indice={indice}");
+  expect(page, "el grupo lo resuelve el servidor de la URL").toContain("paramAGrupo(uno(sp.g))");
+  const cliente = leer("app/(shell)/sessions/SessionsClient.tsx");
+  expect(cliente, "el cliente vuelve a contar los grupos con las filas (que ya no son todas)").not.toContain("bump(byClient");
+  expect(cliente).toContain("new Map(Object.entries(indice.byClient))");
+  expect(cliente, "sin adopción, al cambiar de grupo la lista sigue mostrando las filas viejas").toContain(
+    "if (initialSessions !== filasAdoptadas) {",
+  );
+  expect(cliente, "los helpers de `?g=` tienen un solo dueño").not.toContain("function paramToGroup(");
 });

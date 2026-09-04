@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
+import {
+  claveDeGrupo,
+  grupoAParam,
+  paramAGrupo,
+  type GrupoElegido,
+  type IndiceDeGrupos,
+} from "@/lib/sessions/indice-de-grupos";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import AnalysisPanel from "./AnalysisPanel";
 import { IconCheck, Alert } from "@/components/ui";
@@ -80,7 +87,12 @@ interface TeamMemberLite {
 }
 
 interface Props {
+  /** C-19: SOLO las filas del grupo elegido (o ninguna). El resto es índice. */
   sessions: Session[];
+  /** Conteos por grupo para la barra lateral, contados en el servidor sobre TODAS las sesiones. */
+  indice: IndiceDeGrupos;
+  /** El grupo que el servidor resolvió de la URL (`?g=`, o el de `?s=`). */
+  grupoInicial: GrupoElegido;
   clients: Client[];
   categories: CategoryLite[];
   hubspotCompanies: HubspotCompanyLite[];
@@ -105,37 +117,13 @@ export interface Cobertura {
 }
 
 // Identificador compuesto del grupo seleccionado en la sidebar
-type SelectedGroupKey = { kind: SessionGroup["kind"]; id: string } | null;
+type SelectedGroupKey = GrupoElegido;
 
 // Modo del panel derecho — sessions (default) o analysis (Fase 9)
 type ViewMode = "sessions" | "analysis";
 
-const VALID_GROUP_KINDS = new Set<SessionGroup["kind"]>([
-  "client", "hubspotCompany", "category", "orphan",
-]);
-
-function groupKey(g: SessionGroup): string {
-  if (g.kind === "orphan") return `orphan:${g.domain ?? g.label}`;
-  return `${g.kind}:${g.id}`;
-}
-
-/** Convierte un SelectedGroupKey a string para query param (?g=...). */
-function groupToParam(g: SelectedGroupKey): string | null {
-  if (!g) return null;
-  return `${g.kind}:${encodeURIComponent(g.id)}`;
-}
-
-/** Parsea query param ?g=... a SelectedGroupKey. Tolerante a IDs inválidos. */
-function paramToGroup(param: string | null): SelectedGroupKey {
-  if (!param) return null;
-  const idx = param.indexOf(":");
-  if (idx === -1) return null;
-  const kind = param.slice(0, idx) as SessionGroup["kind"];
-  if (!VALID_GROUP_KINDS.has(kind)) return null;
-  const id = decodeURIComponent(param.slice(idx + 1));
-  if (!id) return null;
-  return { kind, id };
-}
+// C-19: la clave del grupo y los helpers de `?g=` viven en lib/sessions/indice-de-grupos.ts —
+// el servidor los necesita para resolver el grupo de la URL y mandar solo sus filas.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1576,6 +1564,8 @@ function SidebarSessionItem({ session, isActive, onClick }: {
 
 export default function SessionsClient({
   sessions: initialSessions,
+  indice,
+  grupoInicial,
   clients,
   categories,
   hubspotCompanies,
@@ -1583,6 +1573,15 @@ export default function SessionsClient({
   cobertura,
 }: Props) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  /* C-19: las filas vienen del servidor POR GRUPO y cambian con cada selección (la URL cambia y
+     el servidor re-renderiza). El estado local existe para las ediciones optimistas
+     (handleClientChanged); cuando llega una tanda nueva, la adopta. Ajuste durante el render
+     con guarda —nunca useEffect— el idioma del repo (PopInput en sections.tsx). */
+  const [filasAdoptadas, setFilasAdoptadas] = useState(initialSessions);
+  if (initialSessions !== filasAdoptadas) {
+    setFilasAdoptadas(initialSessions);
+    setSessions(initialSessions);
+  }
 
   // ── Auto-sync silencioso de Google Meet ────────────────────────────────────
   // Dispara sync + enrich en background al cargar la página. El endpoint tiene
@@ -1598,24 +1597,11 @@ export default function SessionsClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Hidratación inicial: leemos los params UNA vez al montar.
-  // Si hay `s` pero no `g`, derivamos `g` desde el group de la sesión.
-  const [selectedGroup, setSelectedGroup] = useState<SelectedGroupKey>(() => {
-    const gParam = searchParams.get("g");
-    const sParam = searchParams.get("s");
-    const fromG = paramToGroup(gParam);
-    if (fromG) return fromG;
-    if (sParam) {
-      const s = initialSessions.find((x) => x.id === sParam);
-      if (s) {
-        if (s.group.kind === "orphan") {
-          return { kind: "orphan", id: s.group.domain ?? s.group.label };
-        }
-        return { kind: s.group.kind, id: s.group.id };
-      }
-    }
-    return null;
-  });
+  // Hidratación inicial: el grupo lo resolvió el SERVIDOR de la URL (`?g=`, o el de `?s=`) —
+  // es el mismo que decidió qué filas mandar. El param se relee solo como red.
+  const [selectedGroup, setSelectedGroup] = useState<SelectedGroupKey>(
+    () => grupoInicial ?? paramAGrupo(searchParams.get("g")),
+  );
 
   const [selectedSession, setSelectedSession] = useState<Session | null>(() => {
     const sParam = searchParams.get("s");
@@ -1652,9 +1638,12 @@ export default function SessionsClient({
   //   ?s=sessionId            — sesión abierta en el panel derecho (Fase 8)
   //   ?view=analysis          — tab "Análisis" activo (Fase 9)
   //   ?analysis=runId         — AgentRun abierto en AnalysisPanel (Fase 9)
+  /* C-19: `router.replace` con otro `?g=` hace que el servidor re-renderice con las filas de ese
+     grupo. La transición dice cuándo están llegando, para no mostrar «No hay sesiones» mientras. */
+  const [cargandoGrupo, startTransition] = useTransition();
   useEffect(() => {
     const params = new URLSearchParams();
-    const gParam = groupToParam(selectedGroup);
+    const gParam = grupoAParam(selectedGroup);
     if (gParam) params.set("g", gParam);
     if (selectedSession) params.set("s", selectedSession.id);
     if (viewMode === "analysis") params.set("view", "analysis");
@@ -1664,7 +1653,9 @@ export default function SessionsClient({
     // Solo navegar si la URL realmente cambia (evita loops y noise)
     const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
     if (next !== current) {
-      router.replace(next, { scroll: false });
+      startTransition(() => {
+        router.replace(next, { scroll: false });
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup, selectedSession, viewMode, currentAnalysisRunId]);
@@ -1683,48 +1674,22 @@ export default function SessionsClient({
     return false;
   }
 
-  // Listas pre-agrupadas para la sidebar.
-  // Cada entry guarda contador dual: total y withTranscript.
-  const groupedSidebar = useMemo(() => {
-    type CountPair = { total: number; withTranscript: number };
-    const init = (): CountPair => ({ total: 0, withTranscript: 0 });
-    const bump = (m: Map<string, CountPair>, k: string, hasTr: boolean) => {
-      const e = m.get(k) ?? init();
-      e.total += 1;
-      if (hasTr) e.withTranscript += 1;
-      m.set(k, e);
-    };
-
-    const byClient = new Map<string, CountPair>();
-    const byHubspotCompany = new Map<string, CountPair>();
-    const byCategory = new Map<string, CountPair>();
-    const orphans = new Map<string, { label: string; total: number; withTranscript: number; domain?: string }>();
-
-    for (const s of sessions) {
-      const g = s.group;
-      const hasTr = s.hasTranscript;
-      if (g.kind === "client") bump(byClient, g.id, hasTr);
-      else if (g.kind === "hubspotCompany") bump(byHubspotCompany, g.id, hasTr);
-      else if (g.kind === "category") bump(byCategory, g.id, hasTr);
-      else if (g.kind === "orphan") {
-        const key = g.domain ?? g.label;
-        const existing = orphans.get(key);
-        if (existing) {
-          existing.total += 1;
-          if (hasTr) existing.withTranscript += 1;
-        } else {
-          orphans.set(key, { label: g.label, total: 1, withTranscript: hasTr ? 1 : 0, domain: g.domain });
-        }
-      }
-    }
-
-    return { byClient, byHubspotCompany, byCategory, orphans };
-  }, [sessions]);
+  // Listas pre-agrupadas para la sidebar — C-19: contadas en el SERVIDOR sobre todas las
+  // sesiones (`indice`); acá solo cambian de forma (Record → Map) para la lista.
+  const groupedSidebar = useMemo(
+    () => ({
+      byClient: new Map(Object.entries(indice.byClient)),
+      byHubspotCompany: new Map(Object.entries(indice.byHubspotCompany)),
+      byCategory: new Map(Object.entries(indice.byCategory)),
+      orphans: new Map(Object.entries(indice.orphans)),
+    }),
+    [indice],
+  );
 
   const sidebarSessions = useMemo(() => {
     if (selectedGroup === null) return [];
     const target = `${selectedGroup.kind}:${selectedGroup.id}`;
-    return sessions.filter((s) => groupKey(s.group) === target);
+    return sessions.filter((s) => claveDeGrupo(s.group) === target);
   }, [sessions, selectedGroup]);
 
   // Cliente seleccionado (solo si el grupo es de tipo client)
@@ -1784,6 +1749,8 @@ export default function SessionsClient({
     setSelectedSession((prev) =>
       prev?.id === sessionId ? { ...prev, clientId, manualClientId: clientId } : prev
     );
+    // C-19: los conteos de la barra los cuenta el servidor; que los recuente con el dueño nuevo.
+    router.refresh();
   }
 
   return (
@@ -2057,7 +2024,9 @@ export default function SessionsClient({
             {/* Lista de sesiones */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {sidebarSessions.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-8">No hay sesiones</p>
+                <p className="text-xs text-gray-600 text-center py-8">
+                  {cargandoGrupo ? "Cargando sesiones…" : "No hay sesiones"}
+                </p>
               ) : (
                 sidebarSessions.map((s) => (
                   <SidebarSessionItem

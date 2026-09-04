@@ -14,6 +14,7 @@ import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { getTeamMembers } from "@/lib/cache/team";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
+import { construirIndice, filasDelGrupo, grupoDeSesion, paramAGrupo } from "@/lib/sessions/indice-de-grupos";
 
 // ISR: re-validamos cada 30s. Mutaciones críticas pueden llamar revalidatePath("/sessions")
 // si necesitan reflejarse inmediato.
@@ -21,7 +22,11 @@ import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
 // Antes era ISR (revalidate = 30) cuando la sesión no dependía de cookies.
 export const dynamic = "force-dynamic";
 
-export default async function SessionsPage() {
+export default async function SessionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   try {
     await requireConsultantSession();
   } catch {
@@ -193,6 +198,19 @@ export default async function SessionsPage() {
     };
   });
 
+  // ── 6b. C-19 (2026-09-04): el índice de la barra + SOLO las filas del grupo elegido ──
+  // Antes viajaban las ~16k filas al navegador en cada render — y como el grupo vive en la URL
+  // y cada clic hace `router.replace`, eso era en CADA selección. La categorización sigue
+  // corriendo entera acá (el índice la necesita); lo que cambia es lo que cruza el cable.
+  // El grupo sale de `?g=`; si solo viene `?s=`, del grupo de esa sesión (como hacía el cliente).
+  const sp = await searchParams;
+  const uno = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
+  const sesionPedida = uno(sp.s);
+  const porSesion = sesionPedida ? sessionsWithMeta.find((s) => s.id === sesionPedida) : undefined;
+  const grupoInicial = paramAGrupo(uno(sp.g)) ?? (porSesion ? grupoDeSesion(porSesion.group) : null);
+  const indice = construirIndice(sessionsWithMeta);
+  const filas = filasDelGrupo(sessionsWithMeta, grupoInicial);
+
   // ── 7. Empresas HubSpot únicas (para sidebar) ──────────────────────────────
   const hubspotCompanies = [...hubspotCompaniesByDomain.values()];
 
@@ -240,7 +258,9 @@ export default async function SessionsPage() {
 
   return (
     <SessionsClient
-      sessions={sessionsWithMeta}
+      sessions={filas}
+      indice={indice}
+      grupoInicial={grupoInicial}
       clients={clients}
       categories={categories}
       hubspotCompanies={hubspotCompanies}
