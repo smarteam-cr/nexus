@@ -150,7 +150,11 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "Arma las CANDIDATAS del business case (panel + preselección), no el prompt. La generación lee ids elegidos y " +
       "solo su transcripción, así que una futura no llega al modelo. Se deja visible por consistencia con CTX1.2.",
   },
-  "lib/clients/meeting-dates.ts": { clase: "agenda", motivo: "Primera/última reunión. Ya separa pasado de futuro por su cuenta." },
+  "lib/clients/meeting-dates.ts": { clase: "agenda", motivo: "Última reunión por equipo, por SQL crudo (DISTINCT ON, C-11). Ya separa pasado de futuro por su cuenta." },
+  "lib/handoff/feeding.ts": {
+    clase: "plomeria",
+    motivo: "Mide el largo del transcript de ids YA elegidos por el chokepoint (sin cargar el blob); la membresía y el corte los decide session-relevance.",
+  },
   "lib/clients/last-interaction.ts": { clase: "agenda", motivo: "Última interacción Y próxima: hace las DOS consultas, partidas a propósito." },
   "components/clients/EspacioSesiones.tsx": {
     clase: "agenda",
@@ -198,7 +202,10 @@ const CORTAN_POR_FECHA = [
 ];
 
 const RAIZ = join(__dirname, "..", "..");
-const LEE_SESIONES = /(firefliesSession|sessionProject)\.findMany/;
+// C-11 (2026-09-04): un lector por SQL crudo (`FROM "FirefliesSession"`) también es un lector — sin
+// esta rama, meeting-dates (que pasó a DISTINCT ON) quedaba «fantasma» y dos lectores crudos que ya
+// existían nacían exentos de la guarda.
+const LEE_SESIONES = /(firefliesSession|sessionProject)\.findMany|FROM "FirefliesSession"/;
 
 function archivosDeCodigo(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
