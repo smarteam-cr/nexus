@@ -270,3 +270,51 @@ describe("⛔ la sesión de un desactivado no sirve: requireConsultantSession ex
   });
 });
 
+// ── N2c · Las tarjetas también: una card es de un cliente, y la guarda es ESA ─────────────
+
+describe("⛔ ninguna ruta de tarjetas queda sin guarda de cliente", () => {
+  /**
+   * Auditoría 2026-09-03: `app/api/cards/[cardId]/*` no tenía NINGUNA guarda propia. Lo único que
+   * las frenaba era el middleware, que deja pasar cualquier sesión: quien conociera un id de card
+   * podía aceptar/fusionar/borrar borradores de cualquier cliente, y `send-to-canvas` clonaba
+   * contenido a un proyecto de CUALQUIER cliente vía `targetProjectId` del body. Era una puerta
+   * lateral al mismo dato que el ratchet de arriba cerró para `app/api/projects`.
+   *
+   * Acá no hay `clientId` en la URL: el ámbito sale de la tarjeta, así que la guarda válida es
+   * `guardAccessToClient(` sobre `card.clientId`, y tiene que estar en TODOS los handlers.
+   */
+  const BASE_CARDS = "app/api/cards";
+  const archivos = routes(BASE_CARDS);
+
+  it("el escaneo encuentra el árbol (no pasa en vacío)", () => {
+    expect(archivos.length, `solo ${archivos.length} route.ts bajo ${BASE_CARDS}`).toBeGreaterThanOrEqual(2);
+  });
+
+  it("⭐ cada handler carga la tarjeta y pasa por guardAccessToClient", () => {
+    const ofensores: string[] = [];
+    let total = 0;
+    for (const rel of archivos) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      const hs = [...src.matchAll(HANDLER)];
+      total += hs.length;
+      for (let i = 0; i < hs.length; i++) {
+        const cuerpo = src.slice(hs[i].index!, i + 1 < hs.length ? hs[i + 1].index! : src.length);
+        if (!cuerpo.includes("guardAccessToClient(")) ofensores.push(`${rel} → ${hs[i][1]}`);
+      }
+    }
+    expect(total, `solo ${total} handlers bajo ${BASE_CARDS} — ¿el regex dejó de matchear?`).toBeGreaterThanOrEqual(3);
+    expect(
+      ofensores,
+      `Estos handlers de tarjetas no acotan por cliente (guardAccessToClient sobre card.clientId):\n${ofensores.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("⛔ y el proyecto destino de send-to-canvas se cruza con el cliente de la tarjeta", () => {
+    /* Un `targetProjectId` del body sin cruzar es exactamente el clon a un cliente ajeno. */
+    const src = fs.readFileSync(path.join(RAIZ, `${BASE_CARDS}/[cardId]/send-to-canvas/route.ts`), "utf8");
+    expect(src, "volvió a aceptarse el proyecto destino sin cruzarlo con el cliente").toMatch(
+      /project\.findFirst\(\{\s*where:\s*\{\s*id:\s*destProjectId,\s*clientId:\s*original\.clientId/,
+    );
+  });
+});
+

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 
 const PROJECT_SECTIONS = [
   "objetivo_alcance",
@@ -20,16 +21,21 @@ const CLIENT_SECTIONS = [
   "oportunidades_futuras",
 ];
 
+/**
+ * POST /api/cards/[cardId]/send-to-canvas — clonar una tarjeta a un canvas de proyecto o proponerla
+ * al canvas de empresa.
+ *
+ * ⛔ TENÍA CERO GUARDA (auditoría 2026-09-03), y era la peor de las dos rutas de tarjetas: aceptaba
+ * un `targetProjectId` del body sin cruzarlo con nada, así que con solo pasar el middleware se podía
+ * clonar contenido a un proyecto de CUALQUIER cliente. La tarjeta se carga primero, el ámbito sale
+ * de ella (`guardAccessToClient(original.clientId)`), y el proyecto destino tiene que pertenecer a
+ * ESE mismo cliente — si no, 404, igual que si no existiera.
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   const { cardId } = await params;
-  const { target, section, targetProjectId } = await req.json();
-
-  if (!target || !section) {
-    return NextResponse.json({ error: "target and section required" }, { status: 400 });
-  }
 
   // Buscar el card original
   const original = await prisma.clientContextCard.findUnique({
@@ -51,14 +57,36 @@ export async function POST(
     return NextResponse.json({ error: "card not found" }, { status: 404 });
   }
 
+  const guard = await guardAccessToClient(original.clientId);
+  if (guard instanceof NextResponse) return guard;
+
+  const { target, section, targetProjectId } = await req.json();
+
+  if (!target || !section) {
+    return NextResponse.json({ error: "target and section required" }, { status: 400 });
+  }
+
   // ── Enviar al canvas de proyecto ──
   if (target === "project") {
     if (!PROJECT_SECTIONS.includes(section)) {
       return NextResponse.json({ error: "invalid project section" }, { status: 400 });
     }
 
+    const destProjectId: string | null = targetProjectId || original.projectId;
+    if (!destProjectId) {
+      return NextResponse.json({ error: "targetProjectId required" }, { status: 400 });
+    }
+    /* El destino viene del body: se cruza con el cliente de la tarjeta. Un id de otro cliente es
+       indistinguible de uno inexistente, a propósito. */
+    const destino = await prisma.project.findFirst({
+      where: { id: destProjectId, clientId: original.clientId },
+      select: { id: true },
+    });
+    if (!destino) {
+      return NextResponse.json({ error: "project not found" }, { status: 404 });
+    }
+
     // Verificar si ya existe un clon en el proyecto destino
-    const destProjectId = targetProjectId || original.projectId;
     const existing = await prisma.clientContextCard.findFirst({
       where: { parentCardId: cardId, projectId: destProjectId, canvasSection: { not: null } },
       select: { id: true, canvasSection: true },
@@ -138,29 +166,33 @@ export async function GET(
 ) {
   const { cardId } = await params;
 
-  const [clone, card] = await Promise.all([
-    prisma.clientContextCard.findFirst({
-      where: { parentCardId: cardId, canvasSection: { not: null } },
-      select: { id: true, canvasSection: true },
-    }),
-    prisma.clientContextCard.findUnique({
-      where: { id: cardId },
-      select: {
-        agentRun: {
-          select: {
-            agent: {
-              select: { defaultCanvasSection: true },
-            },
+  const card = await prisma.clientContextCard.findUnique({
+    where: { id: cardId },
+    select: {
+      clientId: true,
+      agentRun: {
+        select: {
+          agent: {
+            select: { defaultCanvasSection: true },
           },
         },
       },
-    }),
-  ]);
+    },
+  });
+  if (!card) return NextResponse.json({ error: "card not found" }, { status: 404 });
+
+  const guard = await guardAccessToClient(card.clientId);
+  if (guard instanceof NextResponse) return guard;
+
+  const clone = await prisma.clientContextCard.findFirst({
+    where: { parentCardId: cardId, canvasSection: { not: null } },
+    select: { id: true, canvasSection: true },
+  });
 
   return NextResponse.json({
     inCanvas: !!clone,
     cloneId: clone?.id ?? null,
     section: clone?.canvasSection ?? null,
-    suggestedSection: card?.agentRun?.agent?.defaultCanvasSection ?? null,
+    suggestedSection: card.agentRun?.agent?.defaultCanvasSection ?? null,
   });
 }
