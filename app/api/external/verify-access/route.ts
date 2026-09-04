@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
 import { EXTERNAL_ACCESS_COOKIE, publicableAfuera } from "@/lib/external/access";
+import { armarCredencial } from "@/lib/external/credencial";
 import { bloqueoVigente, claveDeIp, clearAttempts, registrarFallo } from "@/lib/external/verify-rate-limit";
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -127,14 +128,15 @@ export async function POST(req: NextRequest) {
     projectName: access.project.name,
   });
 
-  // Cookie httpOnly que transporta el token → sale de la URL (sin Referer-leak).
+  // Cookie httpOnly que transporta el token + la versión de la contraseña (A-11: cambiarla
+  // invalida esta cookie) → el token sale de la URL (sin Referer-leak).
   // NO otorga acceso por sí sola: la ruta pública re-resuelve el token y re-chequea
   // revokedAt + kickoffPublishedAt server-side EN CADA render (ver kickoff-view.ts).
   // Persistente ~30 días; al expirar o al revocar/despublicar, el cliente re-verifica
   // con el enlace original. `secure` solo en prod (en localhost http no se setearía).
   res.cookies.set({
     name: EXTERNAL_ACCESS_COOKIE,
-    value: token,
+    value: armarCredencial(token, access.passwordHash),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

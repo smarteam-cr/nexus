@@ -13,6 +13,7 @@
  * chequeo habría dos modos vigentes a la vez para el mismo token — y el que decide sería
  * "por qué puerta entró el cliente la primera vez", que es exactamente lo que no queremos.
  */
+import { leerCredencial } from "@/lib/external/credencial";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import ExternalShell from "@/components/external/ExternalShell";
@@ -30,10 +31,14 @@ export const dynamic = "force-dynamic";
 
 export default async function ExternalBusinessCasePage() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(BUSINESS_CASE_COOKIE)?.value ?? "";
+  // A-11: la cookie es `<token>.<versión>`; una vieja (token pelado) no parsea y cae a denied.
+  const cred = leerCredencial(cookieStore.get(BUSINESS_CASE_COOKIE)?.value);
+  const token = cred?.token ?? "";
 
   const [state, brandLogos] = await Promise.all([
-    token ? resolveBusinessCaseAccess(token) : Promise.resolve({ kind: "denied" as const }),
+    cred
+      ? resolveBusinessCaseAccess(cred.token, { version: cred.version })
+      : Promise.resolve({ kind: "denied" as const }),
     getBrandLogos(),
   ]);
 

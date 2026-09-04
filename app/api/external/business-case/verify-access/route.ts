@@ -26,6 +26,7 @@ import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_CASE_COOKIE, BC_TOKEN_RE } from "@/lib/external/business-case-view";
 import { BC_COOKIE_PATH, bcOpenPath } from "@/lib/business-cases/access-url";
 import { bloqueoVigente, claveDeIp, clearAttempts, registrarFallo } from "@/lib/external/verify-rate-limit";
+import { armarCredencial } from "@/lib/external/credencial";
 
 const GENERIC_INVALID = { ok: false, reason: "invalid" } as const;
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
   });
   res.cookies.set({
     name: BUSINESS_CASE_COOKIE,
-    value: token,
+    value: armarCredencial(token, access.passwordHash),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

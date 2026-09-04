@@ -21,8 +21,15 @@
  * ⚠ Este NO es el único lugar que resuelve un token: `/api/external/verify-access`
  * hace su propia consulta para canjear la contraseña por la cookie de 30 días y
  * NO pasa por acá. El mismo check tiene que estar en los DOS.
+ *
+ * ── LA COOKIE LLEVA LA VERSIÓN DE LA CONTRASEÑA (A-11) ────────────────────────
+ * `resolveActiveAccess` recibe el VALOR DE LA COOKIE (`<token>.<versión>`, ver
+ * lib/external/credencial.ts), nunca un token pelado: la versión se deriva del hash
+ * vigente, y una cookie canjeada con una contraseña anterior deja de coincidir. Así
+ * cambiar la contraseña expulsa a quien ya había entrado — que es para lo que se cambia.
  */
 import { prisma } from "@/lib/db/prisma";
+import { credencialVigente, leerCredencial } from "@/lib/external/credencial";
 import {
   hechosDeProyecto,
   projectCapabilities,
@@ -52,14 +59,18 @@ export interface ActiveAccess {
 }
 
 /**
- * token → acceso ACTIVO (no revocado) → proyecto con sus flags de publicación.
+ * credencial de la cookie → acceso ACTIVO (no revocado, versión vigente) → proyecto con
+ * sus flags de publicación.
  * Devuelve null si el token tiene forma inválida, no existe o está revocado —
  * nunca lanza por "denegado". El check del flag de la superficie corre en cada
  * chokepoint (la cookie de 30 días jamás otorga acceso por sí sola).
  */
-export async function resolveActiveAccess(token: string): Promise<ActiveAccess | null> {
-  // 0. Forma del token (evita tocar DB con basura).
-  if (!token || !TOKEN_RE.test(token)) return null;
+export async function resolveActiveAccess(credencial: string): Promise<ActiveAccess | null> {
+  // 0. Forma de la credencial: `<token>.<versión>` (evita tocar DB con basura; una cookie
+  //    vieja con el token pelado tampoco pasa de acá).
+  const cred = leerCredencial(credencial);
+  if (!cred) return null;
+  const token = cred.token;
 
   // 1. token → acceso → proyecto (con AMBOS flags de publicación).
   const access = await prisma.projectExternalAccess.findUnique({
@@ -67,6 +78,7 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
     select: {
       id: true,
       revokedAt: true,
+      passwordHash: true,
       project: {
         select: {
           id: true,
@@ -92,6 +104,10 @@ export async function resolveActiveAccess(token: string): Promise<ActiveAccess |
 
   // 2. Acceso revocado → gana sobre la cookie, en CADA lectura.
   if (access.revokedAt) return null;
+
+  // 2b. La versión de la cookie tiene que ser la del hash VIGENTE: cambiar la contraseña
+  //     invalida toda cookie canjeada con la anterior (A-11).
+  if (!credencialVigente(cred, access.passwordHash)) return null;
 
   /* 3. ¿El proyecto admite publicación externa? Un proyecto interno de Smarteam no tiene
         cliente del otro lado. Devolver `null` —y no un error propio— es deliberado: para

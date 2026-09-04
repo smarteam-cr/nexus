@@ -22,6 +22,7 @@
  * en la mano: un token inventado sigue cayendo en `denied`, igual que siempre. Lo único
  * que se filtra es "este link existió", a quien ya tenía el link.
  */
+import { credencialVigente } from "@/lib/external/credencial";
 import { prisma } from "@/lib/db/prisma";
 
 /** Cookie httpOnly propia del business case (no choca con la del kickoff). */
@@ -82,13 +83,17 @@ export type BusinessCaseAccessState =
     };
 
 /**
- * token → estado de acceso completo. NUNCA lanza por "denegado".
+ * token → estado de acceso completo. NUNCA lanza por "denegado". Desde la COOKIE se pasa
+ * además `{ version }` (ver lib/external/credencial.ts); desde la URL abierta, no.
  *
  * `businessCaseId` sale de acá para que la aprobación (POST /approve) no tenga que
  * resolver el token por su cuenta: un segundo lugar que traduzca token → caso sería un
  * segundo lugar donde acordarse de revocado/publicado/caducado.
  */
-export async function resolveBusinessCaseAccess(token: string): Promise<BusinessCaseAccessState> {
+export async function resolveBusinessCaseAccess(
+  token: string,
+  opts: { version?: string } = {},
+): Promise<BusinessCaseAccessState> {
   if (!token || !BC_TOKEN_RE.test(token)) return { kind: "denied" };
 
   const access = await prisma.businessCaseExternalAccess.findUnique({
@@ -97,6 +102,7 @@ export async function resolveBusinessCaseAccess(token: string): Promise<Business
       id: true,
       revokedAt: true,
       requiresPassword: true,
+      passwordHash: true,
       expiresAt: true,
       createdByEmail: true,
       businessCase: {
@@ -115,6 +121,18 @@ export async function resolveBusinessCaseAccess(token: string): Promise<Business
   });
   if (!access) return { kind: "denied" };
   if (access.revokedAt) return { kind: "denied" };
+
+  /* A-11: si la propuesta pide contraseña y el caller viene de la COOKIE (trae versión), la
+     versión tiene que ser la del hash vigente — cambiar la contraseña expulsa a quien ya entró.
+     Sin versión (el token de la URL de una propuesta abierta) no hay nada que cotejar: el
+     `requiresPassword` de la respuesta manda a /verify. */
+  if (
+    access.requiresPassword &&
+    opts.version !== undefined &&
+    !credencialVigente({ token, version: opts.version }, access.passwordHash)
+  ) {
+    return { kind: "denied" };
+  }
 
   const bc = access.businessCase;
   if (!bc.publishedAt) return { kind: "denied" };

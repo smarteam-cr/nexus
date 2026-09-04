@@ -32,12 +32,15 @@
  *      bcrypt y el rate-limit protegían nada.
  *   6. Los fallos de verify-access se cuentan por TOKEN y por IP: contar solo por token dejaba
  *      gratis probar una contraseña contra miles de tokens.
+ *   7. La cookie lleva la VERSIÓN de la contraseña (A-11): cambiarla expulsa a quien ya entró.
+ *      Antes la cookie valía 30 días pasara lo que pasara.
  */
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { evaluarContrasena, LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
 import { claveDeIp, POLITICA_POR_IP, POLITICA_POR_TOKEN } from "@/lib/external/verify-rate-limit";
+import { armarCredencial, credencialVigente, leerCredencial, versionDeCredencial } from "@/lib/external/credencial";
 
 // verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -230,5 +233,46 @@ describe("candado 6 — los fallos de verify-access se cuentan por token Y por I
     expect(compara, "la guarda no mira nada").toBeGreaterThanOrEqual(3);
     expect(fallos, "un bcrypt.compare cuyo fallo no se registra contra token E IP").toBe(compara);
     expect(src.includes("registerFailure("), "quedó un fallo contado solo por token").toBe(false);
+  });
+});
+
+describe("candado 7 — cambiar la contraseña mata las cookies vivas (A-11)", () => {
+  const TOKEN = "a".repeat(64);
+
+  it("la cookie lleva la versión del hash; otro hash → otra versión; un token pelado no es credencial", () => {
+    /* La edicion que lo pone en rojo: que credencialVigente ignore el hash, o que leerCredencial
+       acepte un token sin versión (la cookie de antes de A-11 volvería a valer). */
+    const cookie = armarCredencial(TOKEN, "$2b$12$hashViejo");
+    const cred = leerCredencial(cookie);
+    expect(cred).toEqual({ token: TOKEN, version: versionDeCredencial("$2b$12$hashViejo") });
+    expect(credencialVigente(cred!, "$2b$12$hashViejo")).toBe(true);
+    expect(
+      credencialVigente(cred!, "$2b$12$hashNuevo"),
+      "la contraseña cambió y la cookie sigue valiendo",
+    ).toBe(false);
+    expect(leerCredencial(TOKEN), "un token pelado (cookie vieja) no es una credencial").toBeNull();
+    expect(leerCredencial(`${TOKEN}.zzzzzzzz`)).toBeNull();
+    expect(leerCredencial(undefined)).toBeNull();
+  });
+
+  it("los chokepoints cotejan la versión y los dos verify la escriben en la cookie", () => {
+    const lee = (f: string) => sinComentarios(fs.readFileSync(path.join(RAIZ, f), "utf8"));
+    const access = lee("lib/external/access.ts");
+    expect(access, "el resolver del proyecto parsea la credencial").toContain("leerCredencial(credencial)");
+    expect(access, "…y coteja la versión contra el hash vigente").toContain(
+      "credencialVigente(cred, access.passwordHash)",
+    );
+    const bc = lee("lib/external/business-case-view.ts");
+    expect(bc).toContain("credencialVigente({ token, version: opts.version }, access.passwordHash)");
+    const pagina = lee("app/external/business-case/page.tsx");
+    expect(pagina, "la página del BC parsea la cookie y pasa la versión").toContain("{ version: cred.version }");
+    for (const ruta of [
+      "app/api/external/verify-access/route.ts",
+      "app/api/external/business-case/verify-access/route.ts",
+    ]) {
+      const src = lee(ruta);
+      expect(src, ruta).toContain("value: armarCredencial(token, access.passwordHash)");
+      expect(/value:\s*token\b/.test(src), `${ruta}: la cookie volvió a llevar el token pelado`).toBe(false);
+    }
   });
 });
