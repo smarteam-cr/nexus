@@ -17,6 +17,9 @@
  *   - ventas-ganadas-daily → espejo de los tratos ganados de HubSpot (lo VENDIDO del
  *     año, con su fecha de cierre). Diario ≥ 6:00 CR, incluidos fines de semana: un
  *     trato se gana cualquier día, y el reporte anual lo lee de la base.
+ *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
+ *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
+ *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
  */
 import { tickMarketingCron } from "@/lib/marketing/cron";
 import { prisma } from "@/lib/db/prisma";
@@ -262,7 +265,29 @@ const odooEspejoDaily: JobDef = {
   },
 };
 
+/**
+ * Los invariantes que solo miran la base (`lib/invariantes/`), una vez al día ≥ 7:00 CR — después
+ * de los espejos de las 6 (ventas, Odoo), para que INV23/INV24 vean la corrida de hoy. Si alguno
+ * está en rojo el job LANZA a propósito: el scheduler lo anota en `lastResult` (semáforo rojo en
+ * Integraciones, B-03) y lo manda a Sentry con `tags.job` (B-02). El claim del día se queda:
+ * un invariante violado no se arregla reintentando cada minuto, se arregla alguien. Solo
+ * lecturas. Los que necesitan HubSpot o el sistema de archivos siguen en
+ * `scripts/check-invariants.ts`, a mano. (B-08, 2026-09-04)
+ */
+const invariantsDaily: JobDef = {
+  key: "invariants-daily",
+  shouldRun: (_now, parts) => parts.hour >= 7,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("invariants-daily", dateKey, now))) return;
+    const { correrJobDeInvariantes } = await import("@/lib/invariantes/job");
+    const resumen = await correrJobDeInvariantes(prisma, now);
+    console.log(`[jobs/invariants] ${dateKey} — ${resumen}`);
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, invariantsDaily];
 }

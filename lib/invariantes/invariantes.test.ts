@@ -18,6 +18,7 @@ import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28,
   type Invariante,
 } from "./index";
+import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 
 type Fila = Record<string, unknown>;
 type Llamada = { modelo: string; metodo: string; args: Record<string, unknown> };
@@ -257,10 +258,12 @@ describe("cronograma y Odoo: INV22, INV23, INV24", () => {
   });
 });
 
+const RAIZ = process.cwd();
+const soloCodigo = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
+const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ, rel), "utf8"));
+
 describe("el registro y el consumidor", () => {
-  const RAIZ = process.cwd();
-  const soloCodigo = (src: string) =>
-    src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
 
   it("el registro tiene los 18 solo-base, con ids únicos y en el orden del gate", () => {
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -301,5 +304,49 @@ describe("el registro y el consumidor", () => {
       const src = soloCodigo(fs.readFileSync(path.join(dir, f), "utf8"));
       expect(src, `${f} escribe`).not.toMatch(/\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$queryRaw/);
     }
+  });
+});
+
+describe("el job invariants-daily (B-08)", () => {
+  /**
+   * El job existe para que un invariante violado deje de depender de que alguien corra el gate a
+   * mano. En rojo LANZA: es lo que hace que el scheduler lo anote en `lastResult` (semáforo rojo)
+   * y lo mande a Sentry — devolver «ok» con un log sería el silencio que B-02 vino a matar.
+   */
+  it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
+    /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("18 invariantes solo-base en verde");
+    const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
+    await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
+    const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
+    expect(e.violados).toEqual(["3", "5"]);
+    expect(e.name, "el scheduler escribe `${name}: ${message}` en lastResult").toBe("InvariantesViolados");
+    expect(e.message).toContain("2 invariante(s) en rojo: INV3, INV5");
+    expect(e.message).toContain("✗ INV3 VIOLADO: 2 Cobro(s)");
+  });
+
+  it("el mensaje se acota al tope, con la primera línea de cada uno", () => {
+    const corrida = {
+      ok: false,
+      resultados: [
+        { id: "1", nombre: "a", ok: true, lineas: ["✓ INV1: bien."] },
+        { id: "22", nombre: "b", ok: false, lineas: ["✗ INV22 VIOLADO: 3 tarea(s)\n    · detalle largo"] },
+      ],
+    };
+    expect(mensajeDeViolaciones(corrida)).toBe("1 invariante(s) en rojo: INV22 — ✗ INV22 VIOLADO: 3 tarea(s)");
+    const largo = mensajeDeViolaciones({ ...corrida, resultados: [{ id: "9", nombre: "c", ok: false, lineas: ["x".repeat(2000)] }] }, 100);
+    expect(largo.length).toBe(100);
+    expect(largo.endsWith("…")).toBe(true);
+  });
+
+  it("está registrado en lib/jobs/defs.ts: clave, claim del día y allJobs()", () => {
+    /* La edición que lo pone en rojo: sacarlo de allJobs() «mientras se calibra» — el semáforo lo
+       mostraría gris para siempre y nadie sabría que dejó de correr. */
+    const defs = soloCodigoDe("lib/jobs/defs.ts");
+    expect(defs).toContain(`key: "${JOB_INVARIANTES}"`);
+    expect(defs).toContain(`claimDateKey("${JOB_INVARIANTES}"`);
+    expect(defs).toContain("correrJobDeInvariantes(prisma, now)");
+    const allJobs = defs.slice(defs.indexOf("export function allJobs()"));
+    expect(allJobs, "tiene que estar en la lista que corre el tick").toContain("invariantsDaily");
   });
 });
