@@ -189,3 +189,35 @@ describe("las líneas base de eslint y tsc solo bajan (A-23)", () => {
     expect(src).toContain("process.exit(resultados.every(Boolean) ? 0 : 1)");
   });
 });
+
+describe("deploy.sh EJECUTA el rollback y re-verifica /api/health (B-04)", () => {
+  /**
+   * Hasta el 2026-09-04 el script, ante un contenedor que no llegaba a healthy o un smoke fallido,
+   * IMPRIMÍA el comando de rollback y salía con 1: producción quedaba caída hasta que alguien lo
+   * copiara. Ahora lo ejecuta y vuelve a preguntar /api/health.
+   */
+  const src = () => fs.readFileSync(path.join(process.cwd(), "scripts/deploy.sh"), "utf8");
+
+  it("hay una función rollback que vuelve a la imagen anterior y consulta la salud", () => {
+    /* La edicion que lo pone en rojo: volver a imprimir el comando en vez de correrlo, o sacarle
+       la re-verificación de /api/health. */
+    const s = src();
+    const inicio = s.indexOf("rollback() {");
+    expect(inicio, "no hay función rollback()").toBeGreaterThan(-1);
+    const fin = s.indexOf("\n}", inicio);
+    const cuerpo = s.slice(inicio, fin);
+    expect(cuerpo, "el tag a la imagen anterior tiene que EJECUTARSE, no imprimirse").toMatch(
+      /^\s*docker tag nexus:prev nexus:latest\s*$/m,
+    );
+    expect(cuerpo).toContain("docker compose up -d --no-build app");
+    expect(cuerpo, "el rollback tiene que volver a preguntar /api/health").toContain(
+      'curl -fsS --max-time 10 "$HEALTH_URL"',
+    );
+  });
+
+  it("los tres puntos de fallo llaman a rollback, y ninguno lo imprime", () => {
+    const s = src();
+    expect((s.match(/^\s*rollback\s*$/gm) ?? []).length, "faltan llamadas a rollback").toBeGreaterThanOrEqual(3);
+    expect(/red "ROLLBACK: docker tag/.test(s), "volvió el rollback que solo se imprime").toBe(false);
+  });
+});

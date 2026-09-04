@@ -10,8 +10,15 @@
 # ya se había adelantado desde dev. Acá no hay juicio humano: se rebuildéa
 # siempre, y el smoke final verifica que lo que CORRE es lo que se bajó.
 #
-# Si algo falla, el contenedor anterior queda intacto o el script imprime el
-# rollback exacto. Nunca deja el sistema peor de lo que estaba.
+# Si el build falla, el contenedor anterior queda intacto. Si el contenedor nuevo
+# no llega a healthy o el smoke falla, el script EJECUTA el rollback (vuelve a la
+# imagen anterior y re-verifica /api/health) — desde B-04 (2026-09-04) ya no lo
+# imprime para que alguien lo copie a las 3 de la mañana. Nunca deja el sistema
+# peor de lo que estaba.
+#
+# ⚠ El script se reescribe a sí mismo (git merge --ff-only en el paso 1): el deploy
+# que trae un cambio en deploy.sh corre con la versión VIEJA del script. Para ese
+# deploy: `git pull --ff-only` a mano primero, después `bash scripts/deploy.sh`.
 ###############################################################################
 set -Eeuo pipefail
 
@@ -20,6 +27,35 @@ HEALTH_URL="http://localhost:3004/api/health"
 
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
+
+# ── Rollback EJECUTADO: vuelve a la imagen anterior y re-verifica /api/health ──
+# Sale siempre con 1 (el deploy falló); lo que cambia es si el sistema quedó como
+# estaba (ROLLBACK OK) o necesita a alguien (ROLLBACK FALLO).
+rollback() {
+  red "ROLLBACK: volviendo a la imagen anterior (${PREV_SHA})..."
+  if ! docker image inspect nexus:prev >/dev/null 2>&1; then
+    red "ROLLBACK IMPOSIBLE: no hay imagen nexus:prev. Intervencion manual."
+    exit 1
+  fi
+  docker tag nexus:prev nexus:latest
+  if ! docker compose up -d --no-build app; then
+    red "ROLLBACK FALLO: docker compose up -d --no-build app no levanto. Intervencion manual."
+    exit 1
+  fi
+  for _ in $(seq 1 12); do
+    sleep 5
+    if PREV_BODY="$(curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null)"; then
+      PREV_OK="$(echo "$PREV_BODY" | grep -o '"ok":[a-z]*' | cut -d: -f2)"
+      PREV_RUNNING="$(echo "$PREV_BODY" | grep -o '"sha":"[^"]*"' | cut -d'"' -f4)"
+      if [ "$PREV_OK" = "true" ]; then
+        green "ROLLBACK OK — ${PREV_RUNNING:-?} corriendo y healthy (esperado ${PREV_SHA}). El deploy de ${SHA} NO quedo."
+        exit 1
+      fi
+    fi
+  done
+  red "ROLLBACK FALLO: /api/health no respondio ok en 60s. Intervencion manual (docker logs nexus)."
+  exit 1
+}
 
 cd "$APP_DIR"
 
@@ -50,16 +86,14 @@ fi
 if ! docker compose up -d --wait --wait-timeout 120 app; then
   red "El contenedor nuevo NO llego a healthy en 120s. Ultimos logs:"
   docker logs nexus --tail 80 || true
-  red "ROLLBACK: docker tag nexus:prev nexus:latest && docker compose up -d --no-build app"
-  exit 1
+  rollback
 fi
 
 # ── 5) Smoke: lo que CORRE es el commit que acabamos de bajar ────────────────
 sleep 2
 if ! BODY="$(curl -fsS --max-time 10 "$HEALTH_URL")"; then
   red "SMOKE FALLO: $HEALTH_URL no responde."
-  red "ROLLBACK: docker tag nexus:prev nexus:latest && docker compose up -d --no-build app"
-  exit 1
+  rollback
 fi
 RUNNING_SHA="$(echo "$BODY" | grep -o '"sha":"[^"]*"' | cut -d'"' -f4)"
 OK="$(echo "$BODY" | grep -o '"ok":[a-z]*' | cut -d: -f2)"
@@ -70,8 +104,7 @@ if [ "$OK" != "true" ] || [ "$RUNNING_SHA" != "$SHA" ]; then
   if [ "$RUNNING_SHA" != "$SHA" ]; then
     red "SHA distinto = el contenedor sirve una imagen VIEJA (deploy mixto)."
   fi
-  red "ROLLBACK: docker tag nexus:prev nexus:latest && docker compose up -d --no-build app"
-  exit 1
+  rollback
 fi
 
 green "DEPLOY OK — ${SHA} corriendo y healthy."

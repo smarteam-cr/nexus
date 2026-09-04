@@ -73,8 +73,13 @@ cd /opt/smartflow/Nexus && bash scripts/deploy.sh
 UNA línea, sin decisiones. El script hace: pull ff-only → **rebuild SIEMPRE** →
 swap esperando healthy (healthcheck del compose = `/api/health`) → smoke
 (`ok:true` **y** el SHA corriendo == HEAD del checkout). Si algo falla, el
-contenedor viejo queda intacto o el script imprime el rollback exacto:
-`docker tag nexus:prev nexus:latest && docker compose up -d --no-build app`.
+contenedor viejo queda intacto (build fallido) o el script **EJECUTA el rollback**: vuelve a
+la imagen anterior (`nexus:prev`), re-verifica `/api/health` y dice si quedó healthy (B-04,
+2026-09-04). Antes solo imprimía el comando para que alguien lo copiara.
+
+⚠️ **`deploy.sh` se reescribe a sí mismo** (`git merge --ff-only` en su paso 1): el deploy
+que trae un cambio en `deploy.sh` corre con la versión VIEJA del script. Para ese deploy,
+primero `git pull --ff-only` a mano y después `bash scripts/deploy.sh`.
 
 ⚠️ **NUNCA `docker compose up -d` a mano sin `--build` después de un pull.**
 Eso re-levanta la imagen VIEJA contra la base con schema nuevo = el "deploy
