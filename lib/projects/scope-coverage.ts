@@ -53,6 +53,14 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "bug: regenerar un documento de un proyecto inactivo del MISMO cliente es legítimo; otro " +
       "cliente no lo es, y eso es lo único que cruza.",
   },
+  "app/api/clients/[id]/deal-line-items/route.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: cruza UN projectId que vino del query con el cliente " +
+      "de la URL (auditoría 2026-09-03: sin el cruce, un proyecto de OTRO cliente hacía que la ruta " +
+      "leyera y GUARDARA el deal ajeno). Un criterio de alcance acá sería el bug: pedir los line " +
+      "items de un proyecto inactivo del MISMO cliente es legítimo.",
+  },
   "app/api/cards/[cardId]/send-to-canvas/route.ts": {
     modo: "exento",
     razon:

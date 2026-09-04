@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { withClientAccess as withAuth } from "@/lib/api";
+import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string; cardId: string }> };
 
 // PUT /api/clients/[id]/context-cards/[cardId]
 // Body: { title?, content?, order? }
-export const PUT = withAuth(async (request, { params }: Params) => {
+export const PUT = withClientAccess(async (request, { params }: Params) => {
   try {
     const { id, cardId } = await params;
     const body = (await request.json()) as {
@@ -43,7 +43,7 @@ export const PUT = withAuth(async (request, { params }: Params) => {
 });
 
 // DELETE /api/clients/[id]/context-cards/[cardId]
-export const DELETE = withAuth(async (_req, { params }: Params) => {
+export const DELETE = withClientAccess(async (_req, { params }: Params) => {
   try {
     const { id, cardId } = await params;
 

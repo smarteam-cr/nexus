@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { withAuth, apiError } from "@/lib/api";
+import { withClientAccess, apiError } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
 // GET /api/clients/[id]/context-cards
 // ?noRun=true  → solo cards manuales (agentRunId IS NULL)
 // Sin param    → cards del último AgentRun DONE; fallback a manuales si no hay runs.
-export const GET = withAuth(async (req: NextRequest, { params }: Params) => {
+export const GET = withClientAccess(async (req: NextRequest, { params }: Params) => {
   const { id } = await params;
   const noRun = new URL(req.url).searchParams.get("noRun") === "true";
 
@@ -50,7 +50,7 @@ export const GET = withAuth(async (req: NextRequest, { params }: Params) => {
 
 // POST /api/clients/[id]/context-cards
 // Body: { title, content?, order? }
-export const POST = withAuth(async (req: NextRequest, { params }: Params) => {
+export const POST = withClientAccess(async (req: NextRequest, { params }: Params) => {
   const { id } = await params;
   const { title, content, order, agentRunId } = (await req.json()) as {
     title: string;

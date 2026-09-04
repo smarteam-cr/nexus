@@ -1,4 +1,4 @@
-import { withAuth } from "@/lib/api";
+import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import { Client } from "@hubspot/api-client";
@@ -48,15 +48,24 @@ interface SearchResult {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const GET = withAuth(async (
+export const GET = withClientAccess(async (
   _request,
   { params }: { params: Promise<{ id: string }> }
 ) => {
   const { id: clientId } = await params;
 
+  /* SELECT explícito, nunca un include de la relación entera: hubspotAccount trae accessToken y
+     refreshToken, y un include amplio los cargaba en memoria por un handler que solo necesita el
+     nombre del hub y el portal. Lo que no se selecciona no se puede filtrar por accidente. */
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    include: { hubspotAccount: true },
+    select: {
+      id: true,
+      name: true,
+      company: true,
+      hubspotCompanyId: true,
+      hubspotAccount: { select: { id: true, hubName: true, hubspotPortalId: true } },
+    },
   });
 
   if (!client) {

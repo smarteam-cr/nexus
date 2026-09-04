@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import type { Client as HsClient } from "@hubspot/api-client";
@@ -125,7 +125,7 @@ async function fetchDealData(hsClient: HsClient, dealId: string): Promise<{
   return { deal, lineItems };
 }
 
-export const GET = withAuth(async (
+export const GET = withClientAccess(async (
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
@@ -138,7 +138,11 @@ export const GET = withAuth(async (
       where: { id: clientId },
       include: { hubspotAccount: { select: { id: true } } },
     }),
-    projectId ? prisma.project.findUnique({ where: { id: projectId }, select: { id: true, hubspotDealId: true } }) : null,
+    /* El projectId viene del query: se cruza con el cliente de la URL. Sin esto, un proyecto de OTRO
+       cliente hacía que esta ruta leyera y GUARDARA (línea del auto-guardado) el deal ajeno. */
+    projectId
+      ? prisma.project.findFirst({ where: { id: projectId, clientId }, select: { id: true, hubspotDealId: true } })
+      : null,
   ]);
 
   if (!client?.hubspotCompanyId) {

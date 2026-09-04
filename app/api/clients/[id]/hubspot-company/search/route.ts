@@ -1,4 +1,4 @@
-import { withAuth } from "@/lib/api";
+import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient } from "@/lib/hubspot/client";
 import { NextResponse } from "next/server";
@@ -21,7 +21,7 @@ interface SearchResult {
   total: number;
 }
 
-export const GET = withAuth(async (
+export const GET = withClientAccess(async (
   request,
   { params }: { params: Promise<{ id: string }> }
 ) => {

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 
-export const POST = withAuth(async (
+export const POST = withClientAccess(async (
   _req,
   { params }: { params: Promise<{ id: string }> }
 ) => {

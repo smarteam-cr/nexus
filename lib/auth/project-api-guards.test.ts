@@ -318,3 +318,103 @@ describe("⛔ ninguna ruta de tarjetas queda sin guarda de cliente", () => {
   });
 });
 
+// ── N2d · Las rutas de cliente: el ámbito es el cliente de la URL ─────────────────────────
+
+describe("⛔ ninguna ruta bajo app/api/clients/[id] queda sin guarda de cliente", () => {
+  /**
+   * Auditoría 2026-09-03: seis rutas bajo `clients/[id]` recibían el id de la URL con `withAuth`
+   * (cualquier sesión) y no lo cruzaban con el acceso del usuario. Un CSE —el único rol scoped—
+   * leía las tarjetas de contexto, los deals con sus montos y la ficha comercial de TODOS los
+   * clientes, y podía re-apuntar el vínculo HubSpot de un cliente ajeno (lo que después contamina
+   * handoffs, CS360 y cobranza con datos de otra empresa).
+   *
+   * Acá la guarda válida es la que acota al cliente de la URL: `withClientAccess(` o
+   * `guardAccessToClient(`. Las de proyecto también valen (acotan más). Y hay excepciones, todas
+   * con la condición que las sostiene: una CAPACIDAD que solo tienen los roles que ven todos los
+   * clientes (`clientes.delete` y `clientes.share` son de CSL/SA; `ventas.read` de Ventas/CSL/SA —
+   * ver lib/auth/permissions/defaults.ts). Si esa capacidad se le diera al CSE, estas excepciones
+   * dejarían de valer y habría que volver a acotar por cliente.
+   */
+  const BASE_CLIENTES = "app/api/clients/[id]";
+  const GUARDAS_CLIENTE = [...GUARDAS, "withClientAccess(", "guardAccessToClient("];
+  const EXENTOS_CLIENTE: Record<string, { metodos: string[]; motivo: string; exige: string[] }> = {
+    "app/api/clients/[id]/route.ts": {
+      metodos: ["DELETE"],
+      motivo: "borrar un cliente es de quien ve todos los clientes (clientes.delete: CSL/SA)",
+      exige: ['guardCapability("deleteClients")'],
+    },
+    "app/api/clients/[id]/projects/[projectId]/route.ts": {
+      metodos: ["DELETE"],
+      motivo: "ídem, y además cruza el proyecto con el cliente de la URL",
+      exige: ['guardCapability("deleteClients")', "project.clientId !== clientId"],
+    },
+    "app/api/clients/[id]/assignments/route.ts": {
+      metodos: ["GET", "POST"],
+      motivo: "compartir clientes es de quien ve todos (clientes.share: CSL/SA)",
+      exige: ['guardCapability("shareClients")'],
+    },
+    "app/api/clients/[id]/assignments/[assignmentId]/route.ts": {
+      metodos: ["DELETE"],
+      motivo: "ídem, y cruza la asignación con el cliente de la URL",
+      exige: ['guardCapability("shareClients")', "existing.clientId !== id"],
+    },
+    "app/api/clients/[id]/business-cases/route.ts": {
+      metodos: ["GET", "POST"],
+      motivo: "las propuestas comerciales son de Ventas/CSL/SA, que ven todos los clientes (ventas.read)",
+      exige: ["guardSalesAccess()"],
+    },
+  };
+  const archivos = routes(BASE_CLIENTES);
+
+  it("el escaneo encuentra el árbol (no pasa en vacío)", () => {
+    expect(archivos.length, `solo ${archivos.length} route.ts bajo ${BASE_CLIENTES}`).toBeGreaterThanOrEqual(20);
+  });
+
+  it("⭐ cada handler acota al cliente de la URL, o es una excepción que sigue sosteniéndose", () => {
+    const ofensores: string[] = [];
+    let total = 0;
+    for (const rel of archivos) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      const hs = [...src.matchAll(HANDLER)];
+      total += hs.length;
+      const exento = EXENTOS_CLIENTE[rel];
+      for (let i = 0; i < hs.length; i++) {
+        const metodo = hs[i][1];
+        const cuerpo = src.slice(hs[i].index!, i + 1 < hs.length ? hs[i + 1].index! : src.length);
+        if (exento?.metodos.includes(metodo)) {
+          const faltan = exento.exige.filter((g) => !cuerpo.includes(g));
+          expect(
+            faltan,
+            `${rel} ${metodo} está eximido por «${exento.motivo}» pero perdió lo que sostiene la excepción: ${faltan.join(", ")}`,
+          ).toEqual([]);
+          continue;
+        }
+        if (!GUARDAS_CLIENTE.some((g) => cuerpo.includes(g))) ofensores.push(`${rel} → ${metodo}`);
+      }
+    }
+    expect(total, `solo ${total} handlers bajo ${BASE_CLIENTES} — ¿el regex dejó de matchear?`).toBeGreaterThanOrEqual(30);
+    expect(
+      ofensores,
+      `Estos handlers reciben el id del cliente y no lo cruzan con el acceso del usuario (withClientAccess / guardAccessToClient):\n${ofensores.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("⛔ deal-line-items cruza el projectId del query con el cliente de la URL", () => {
+    /* Sin esto, un proyecto de OTRO cliente hacía que la ruta leyera y GUARDARA el deal ajeno. */
+    const src = fs.readFileSync(path.join(RAIZ, `${BASE_CLIENTES}/deal-line-items/route.ts`), "utf8");
+    expect(src).toContain("where: { id: projectId, clientId }");
+  });
+
+  it("⛔ hubspot-info no hace include de la cuenta: los tokens no entran a memoria por un GET de ficha", () => {
+    const src = fs.readFileSync(path.join(RAIZ, `${BASE_CLIENTES}/hubspot-info/route.ts`), "utf8");
+    expect(src, "volvió el include amplio: accessToken y refreshToken viajan en memoria por un GET").not.toContain(
+      "include: { hubspotAccount: true }",
+    );
+  });
+
+  it("⛔ crear un cliente con un token de HubSpot pide lo mismo que crearlo a mano", () => {
+    const src = fs.readFileSync(path.join(RAIZ, "app/api/clients/connect/route.ts"), "utf8");
+    expect(src).toContain('withCapability("seeAllClients"');
+  });
+});
+

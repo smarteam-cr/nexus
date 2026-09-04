@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
@@ -22,7 +22,7 @@ interface HsCompany {
 // Crea un nuevo cliente a partir de un HubSpot Private App Token.
 // No requiere OAuth ni redirects de browser.
 
-export const POST = withAuth(async (request) => {
+export const POST = withCapability("seeAllClients", async (request) => {
   let token: string;
   try {
     const body = await request.json();
