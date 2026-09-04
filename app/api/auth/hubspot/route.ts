@@ -1,4 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAccessToClient, guardCapability, guardInternalUser, guardPermission } from "@/lib/auth/api-guards";
+import {
+  COOKIE_NONCE_OAUTH,
+  PATH_COOKIE_NONCE_OAUTH,
+  VIDA_DEL_NONCE_SEG,
+  firmarState,
+  nuevoNonce,
+  type PayloadDeState,
+} from "@/lib/hubspot/oauth-state";
 
 const HUBSPOT_SCOPES = [
   // ── CRM Objects ─────────────────────────────────────────────
@@ -66,24 +75,54 @@ const HUBSPOT_SCOPES = [
 //   la app pública y volver a autorizar la conexión del sistema.
 const HUBSPOT_OPTIONAL_SCOPES = ["social", "crm.objects.partner-clients.read", "files"].join(" ");
 
+/**
+ * GET /api/auth/hubspot — arranca el OAuth con HubSpot.
+ *
+ * ⛔ YA NO ES PÚBLICA. Era un prefijo abierto en el middleware y el `state` iba sin firma: cualquiera
+ * podía arrancar el flujo con su portal y el callback lo tomaba por bueno. Ahora:
+ *   1. exige usuario interno, y por variante el permiso que corresponde —`system=1` la misma celda
+ *      que gobierna la pantalla de Integraciones (`configuracion.manage`), `clientId` el acceso a
+ *      ESE cliente, `newClient` la capacidad de crear clientes—;
+ *   2. firma el `state` con `HUBSPOT_CLIENT_SECRET` y lo ata a un nonce que viaja en una cookie
+ *      httpOnly acotada al callback. Ver `lib/hubspot/oauth-state.ts`.
+ */
 export async function GET(request: NextRequest) {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId");
   const newClient = searchParams.get("newClient") === "1";
   const isSystem = searchParams.get("system") === "1";
 
-  // Codificar contexto en state para recuperarlo en el callback
-  const statePayload = isSystem
+  /* El permiso se decide por lo que se va a HACER, no por quién pregunta. La misma regla se
+     vuelve a aplicar en el callback: el state firmado dice qué se pidió, no quién puede. */
+  if (isSystem) {
+    const g = await guardPermission("configuracion", "manage");
+    if (g instanceof NextResponse) return g;
+  } else if (clientId) {
+    const g = await guardAccessToClient(clientId);
+    if (g instanceof NextResponse) return g;
+  } else if (newClient) {
+    const g = await guardCapability("seeAllClients");
+    if (g instanceof NextResponse) return g;
+  }
+
+  const secreto = process.env.HUBSPOT_CLIENT_SECRET;
+  if (!secreto) {
+    return NextResponse.redirect(`${process.env.APP_URL}/integrations?error=oauth_config`);
+  }
+
+  const payload: PayloadDeState = isSystem
     ? { system: true }
     : clientId
-    ? { clientId }
-    : newClient
-    ? { newClient: true }
-    : null;
+      ? { clientId }
+      : newClient
+        ? { newClient: true }
+        : {};
 
-  const state = statePayload
-    ? Buffer.from(JSON.stringify(statePayload)).toString("base64")
-    : undefined;
+  const nonce = nuevoNonce();
+  const state = firmarState(payload, nonce, secreto);
 
   const params = new URLSearchParams({
     client_id: process.env.HUBSPOT_CLIENT_ID!,
@@ -91,9 +130,17 @@ export async function GET(request: NextRequest) {
     scope: HUBSPOT_SCOPES,
     optional_scope: HUBSPOT_OPTIONAL_SCOPES,
     response_type: "code",
-    ...(state ? { state } : {}),
+    state,
   });
 
-  const authUrl = `https://app.hubspot.com/oauth/authorize?${params}`;
-  return NextResponse.redirect(authUrl);
+  const res = NextResponse.redirect(`https://app.hubspot.com/oauth/authorize?${params}`);
+  /* El nonce vive SOLO en el navegador que arrancó el flujo, y solo se manda al callback. */
+  res.cookies.set(COOKIE_NONCE_OAUTH, nonce, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: PATH_COOKIE_NONCE_OAUTH,
+    maxAge: VIDA_DEL_NONCE_SEG,
+  });
+  return res;
 }

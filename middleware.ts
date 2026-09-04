@@ -30,9 +30,12 @@ const PUBLIC_PATHS = ["/", "/sw.js", "/api/health"];
 //   - /api/external/*      → endpoints públicos del cliente externo (verify,
 //                            futuro: lecturas del landing). Cada endpoint hace
 //                            su propia validación (token+pass o JWT externo).
+/* ⛔ `/api/auth/hubspot` y `/api/auth/callback` YA NO están acá. Eran públicas y el `state` del
+   OAuth iba sin firma: cualquiera, sin sesión, podía reemplazar la cuenta de HubSpot del sistema
+   por su propio portal (auditoría 2026-09-03). HubSpot vuelve al callback por una redirección
+   top-level, y la cookie de sesión (SameSite=Lax) viaja en ella: exigir sesión no rompe el flujo.
+   Ver lib/hubspot/oauth-state.ts. */
 const PUBLIC_PREFIXES = [
-  "/api/auth/hubspot",
-  "/api/auth/callback",
   "/auth/",
   "/external/",
   "/api/external/",
