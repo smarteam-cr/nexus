@@ -224,6 +224,24 @@ const ENDURECIDOS: Array<{ archivo: string; metodo: string; guarda: string; porq
       "borra el canvas entero con cascada a secciones y bloques, sin vuelta atrás. Borrar UNA " +
       "tarea del cronograma ya exigía capacidad; el contenedor no puede estar más suelto.",
   },
+  // A-22 (auditoría 2026-09-03): las compuertas del ciclo mueven la etapa (marcar
+  // ENTREGA_REALIZADA lleva el proyecto a FINALIZADO; desmarcar la retrocede). Con solo
+  // acceso al proyecto, un rol de lectura podía cerrar o reabrir un proyecto.
+  {
+    archivo: "app/api/projects/[projectId]/stage-gates/route.ts",
+    metodo: "POST",
+    guarda: "guardTimelineEdit(",
+    porque:
+      "marcar una compuerta mueve la etapa del ciclo (ENTREGA_REALIZADA → FINALIZADO): exige " +
+      "la misma celda que las otras escrituras del ciclo (cronograma.write), no solo acceso.",
+  },
+  {
+    archivo: "app/api/projects/[projectId]/stage-gates/route.ts",
+    metodo: "DELETE",
+    guarda: "guardTimelineEdit(",
+    porque:
+      "desmarcar una compuerta RETROCEDE la etapa: misma celda que marcarla, no solo acceso.",
+  },
 ];
 
 describe("las guardas endurecidas siguen puestas", () => {

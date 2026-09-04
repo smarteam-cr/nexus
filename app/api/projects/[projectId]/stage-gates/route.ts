@@ -8,8 +8,12 @@
  *   POST   { gate: <ProjectStageGateKey>, note? } → upsert (source "cse")
  *   DELETE { gate }                               → desmarca
  *
- * Guard: acceso al proyecto (los gates son trabajo operativo del CSE, no
- * curación de cartera — el override de etapa sí exige seeAllClients).
+ * Guard: acceso al proyecto + la celda `cronograma.write` (`guardTimelineEdit`), la misma que
+ * exigen las otras escrituras del ciclo (re-anclar, confirmar el detalle). Antes bastaba el
+ * acceso al proyecto (A-22, auditoría 2026-09-03): cualquier interno con acceso —incluido un
+ * rol de solo lectura— podía marcar ENTREGA_REALIZADA y mandar el proyecto a FINALIZADO, o
+ * desmarcar una compuerta y retroceder la etapa. Los gates son trabajo operativo del CSE, no
+ * curación de cartera — el override de etapa sí exige seeAllClients.
  *
  * Y un segundo guard: las compuertas son de la metodología de CUSTOMER SUCCESS. Un proyecto
  * de Desarrollo o de Sitios web mueve su etapa en HubSpot — ver lib/lifecycle/gate.ts. El
@@ -17,7 +21,7 @@
  * poder deshacerse aunque el proyecto se haya reclasificado después.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { vetoSiNoCorreCicloDeCs } from "@/lib/lifecycle";
 import { prisma } from "@/lib/db/prisma";
 import type { ProjectStageGateKey } from "@prisma/client";
@@ -36,7 +40,7 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
   const veto = await vetoSiNoCorreCicloDeCs(projectId);
   if (veto) return veto;
@@ -72,7 +76,7 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const guard = await guardAccessToProject(projectId);
+  const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
