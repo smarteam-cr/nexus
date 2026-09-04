@@ -16,10 +16,16 @@
  *    Al agregar un modelo nuevo al schema se puede rotar el canario.
  *  - `pool`: estado del pool de pg — `waiting` sostenido > 0 = presión de
  *    conexiones (la antesala del "Connection terminated").
+ *  - `invariantesOk` (B-09): UN booleano —true/false/null— con lo que dijo la última
+ *    corrida del job `invariants-daily` (B-08). Nada más: ni cuáles ni el texto (el
+ *    endpoint es público; el detalle vive en el semáforo de Integraciones). ⚠ NO
+ *    participa del `ok`: un invariante violado es un dato mal escrito, no un
+ *    contenedor caído — si tumbara el healthcheck, Docker reiniciaría la app en bucle.
  *
  * No expone secretos: el SHA es público en el repo y los stats son números.
  */
 import { prisma, poolStats } from "@/lib/db/prisma";
+import { leerInvariantesOk } from "@/lib/invariantes/salud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +50,9 @@ export async function GET() {
     checks.prismaClient = e instanceof Error ? e.message.slice(0, 200) : "fail";
   }
 
+  // Best-effort y aparte del `ok`: nunca cae ni tumba el health (ver lib/invariantes/salud.ts).
+  const invariantesOk = await leerInvariantesOk();
+
   return Response.json(
     {
       ok,
@@ -51,6 +60,7 @@ export async function GET() {
       uptimeSec: Math.round(process.uptime()),
       pool: poolStats(),
       checks,
+      invariantesOk,
     },
     { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } },
   );

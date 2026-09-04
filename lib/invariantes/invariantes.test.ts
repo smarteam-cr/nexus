@@ -19,6 +19,7 @@ import {
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
+import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 
 type Fila = Record<string, unknown>;
 type Llamada = { modelo: string; metodo: string; args: Record<string, unknown> };
@@ -348,5 +349,48 @@ describe("el job invariants-daily (B-08)", () => {
     expect(defs).toContain("correrJobDeInvariantes(prisma, now)");
     const allJobs = defs.slice(defs.indexOf("export function allJobs()"));
     expect(allJobs, "tiene que estar en la lista que corre el tick").toContain("invariantsDaily");
+  });
+});
+
+describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", () => {
+  /**
+   * El health es público. De los invariantes cruza `invariantesOk` —true/false/null— y ningún
+   * detalle; y NUNCA participa del `ok`: un invariante violado es un dato mal escrito, no un
+   * contenedor caído. Si tumbara el healthcheck, Docker reiniciaría la app en bucle.
+   */
+  const estado = (resultado: { ok: true; at: string } | { ok: false; error: string; at: string } | null) => ({
+    key: JOB_INVARIANTES, lastRunAt: null, lastRunDateKey: null, resultado,
+  });
+
+  it("true si la última corrida dio verde, false si dio rojo, null si el job nunca corrió", () => {
+    /* La edición que lo pone en rojo: devolver false cuando no hay corrida — en un deploy recién
+       hecho diría «invariantes rotos» sin haber mirado nada. */
+    expect(invariantesOkDesde(estado({ ok: true, at: "2026-09-04T13:00:00Z" }))).toBe(true);
+    expect(invariantesOkDesde(estado({ ok: false, error: "InvariantesViolados: 1 invariante(s) en rojo: INV3", at: "x" }))).toBe(false);
+    expect(invariantesOkDesde(estado(null))).toBeNull();
+    expect(invariantesOkDesde(undefined)).toBeNull();
+  });
+
+  it("leerInvariantesOk pregunta por el job y nunca lanza: si la lectura falla, null", async () => {
+    const pedidas: string[][] = [];
+    const ok = await leerInvariantesOk(async (keys) => {
+      pedidas.push(keys);
+      return [estado({ ok: true, at: "x" })];
+    });
+    expect(ok).toBe(true);
+    expect(pedidas).toEqual([[JOB_INVARIANTES]]);
+    await expect(leerInvariantesOk(async () => { throw new Error("db caída"); })).resolves.toBeNull();
+  });
+
+  it("la ruta lo expone como campo suelto, sin detalle, y el `ok` del health no depende de él", () => {
+    /* Las ediciones que lo ponen en rojo: exponer `lineas`/`error` de la corrida en el JSON
+       (es público), o hacer `ok = ok && invariantesOk` (tumbaría el healthcheck del compose). */
+    const src = soloCodigoDe("app/api/health/route.ts");
+    expect(src).toContain('from "@/lib/invariantes/salud"');
+    expect(src).toContain("invariantesOk,");
+    expect(src, "el health sigue decidiendo el 503 solo por db y cliente Prisma").toContain("status: ok ? 200 : 503");
+    expect((src.match(/ok = false/g) ?? []).length, "solo los dos checks de infraestructura apagan el ok").toBe(2);
+    expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
+    expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
   });
 });
