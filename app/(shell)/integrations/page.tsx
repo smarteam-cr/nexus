@@ -4,10 +4,13 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
+import { leerEstadoDeJobs } from "@/lib/jobs/estado";
+import { allJobs } from "@/lib/jobs/defs";
 import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
 import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
+import JobsSemaforo from "./JobsSemaforo";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
@@ -157,6 +160,9 @@ export default async function IntegrationsPage({
   const smarteamLogoUrl = systemCfg?.smarteamLogoUrl ?? null;
   const hubspotLogoUrl = systemCfg?.hubspotLogoUrl ?? null;
   const insiderLogoUrl = systemCfg?.insiderLogoUrl ?? null;
+  /* B-03: el semáforo de los jobs del server. Lee CronJobState.lastResult bajo la clave de cada
+     job del registry (lib/jobs/defs.ts); lo escribe el scheduler en cada corrida. */
+  const jobs = await leerEstadoDeJobs(allJobs().map((j) => j.key));
 
   return (
     <div className={`flex-1 overflow-y-auto ${SHELL_DEFAULT}`}>
@@ -188,6 +194,10 @@ export default async function IntegrationsPage({
         {/* Odoo — el ERP del que salen las facturas de cobranza. Su pantalla se mudó acá desde
             /settings, y sin esta tarjeta se quedaba sin ninguna entrada propia. */}
         <OdooCard estado={estadoDeOdoo} />
+
+        {/* Jobs del server — el semáforo (B-03). Hasta hoy un job que fallaba era una línea en
+            docker logs que nadie leía; acá se ve cómo terminó la última corrida de cada uno. */}
+        <JobsSemaforo jobs={jobs} />
 
         {/* Logo de Smarteam — config global de marca (páginas externas) */}
         <section className="rounded-xl bg-surface border border-line p-5">

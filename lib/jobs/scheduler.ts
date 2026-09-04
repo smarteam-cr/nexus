@@ -8,6 +8,8 @@
  *  - Idempotente (segundo start = no-op) — mismo contrato que el cron viejo.
  *  - try/catch POR JOB: un job roto no tumba a los demás — y llega a Sentry con
  *    `tags.job` (B-02): en el VPS un console.error es una línea que nadie lee.
+ *  - Cada corrida deja su resultado en CronJobState.lastResult (B-03): el semáforo de
+ *    Integraciones lo pinta. El claim del día NO se libera al fallar (ver lib/jobs/estado.ts).
  *  - Flag anti-reentrada: si un tick tarda más de 60s (p.ej. refresh de señales
  *    de muchos clientes), el siguiente tick se salta en vez de solaparse.
  *
@@ -15,6 +17,7 @@
  * solo PROD los setea; en dev los jobs se prueban por scripts).
  */
 import * as Sentry from "@sentry/nextjs";
+import { registrarResultado } from "./estado";
 import { crDateParts } from "./time";
 import { allJobs } from "./defs";
 
@@ -27,7 +30,11 @@ export async function runSchedulerTick(now: Date): Promise<void> {
   const parts = crDateParts(now);
   for (const job of allJobs()) {
     try {
-      if (await job.shouldRun(now, parts)) await job.run(now);
+      if (await job.shouldRun(now, parts)) {
+        await job.run(now);
+        // B-03: la corrida que terminó bien queda anotada (con rezago de hasta 10 min por job).
+        await registrarResultado(job.key, { ok: true, at: now.toISOString() });
+      }
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       // B-02 (auditoría 2026-09-03): diez jobs podían fallar todos los días y el primero en
@@ -35,6 +42,8 @@ export async function runSchedulerTick(now: Date): Promise<void> {
       // nombre + mensaje (A-15) — el objeto entero, con su stack, viaja en el evento.
       console.error(`[jobs] ${job.key} falló: ${err.name}: ${err.message}`);
       Sentry.captureException(err, { tags: { job: job.key } });
+      // B-03: el fallo queda anotado SIEMPRE — registrarResultado nunca lanza.
+      await registrarResultado(job.key, { ok: false, error: `${err.name}: ${err.message}`, at: now.toISOString() });
     }
   }
 }

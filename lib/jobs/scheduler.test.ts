@@ -9,13 +9,18 @@
  * Correr: `npx vitest run lib/jobs/scheduler.test.ts --project unit`.
  */
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 
-const { captureException, corridas } = vi.hoisted(() => ({
+const { captureException, corridas, registrarResultado } = vi.hoisted(() => ({
   captureException: vi.fn(),
   corridas: [] as string[],
+  registrarResultado: vi.fn(),
 }));
 
 vi.mock("@sentry/nextjs", () => ({ captureException }));
+// El registro del resultado toca prisma: acá solo importa QUÉ se anota.
+vi.mock("./estado", () => ({ registrarResultado }));
 
 // El registry real arrastra prisma, HubSpot y media app: acá alcanzan dos jobs de mentira.
 vi.mock("./defs", () => ({
@@ -54,5 +59,18 @@ describe("runSchedulerTick", () => {
     expect((err as Error).message).toBe("boom del job");
     expect(ctx, "sin tags.job, en Sentry no se sabe QUÉ job falló").toMatchObject({ tags: { job: "explota" } });
     expect(corridas, "un job roto no tumba a los demás").toEqual(["sano"]);
+    // B-03: cada corrida deja su resultado; el fallo, con nombre + mensaje.
+    expect(registrarResultado).toHaveBeenCalledWith(
+      "explota",
+      expect.objectContaining({ ok: false, error: "Error: boom del job" }),
+    );
+    expect(registrarResultado).toHaveBeenCalledWith("sano", expect.objectContaining({ ok: true }));
+  });
+
+  it("el semáforo está montado en Integraciones y lee el estado de los jobs (B-03)", () => {
+    /* La edicion que lo pone en rojo: sacar <JobsSemaforo de la página «porque ensucia». */
+    const src = fs.readFileSync(path.join(process.cwd(), "app/(shell)/integrations/page.tsx"), "utf8");
+    expect(src, "la tarjeta tiene que estar montada").toContain("<JobsSemaforo");
+    expect(src, "y alimentada con el estado real").toContain("leerEstadoDeJobs(");
   });
 });
