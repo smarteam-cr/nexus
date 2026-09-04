@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { costoDeLlamada, formatearUsd, precioDe, PRECIOS } from "./precios";
 
 /**
@@ -67,7 +69,8 @@ describe("⭐ las cuatro clases de token se cobran por separado", () => {
 
 describe("un modelo sin tarifa devuelve null, no cero", () => {
   it("⛔ null y no 0 — un 0 se suma en silencio y deja el total mintiendo", () => {
-    expect(costoDeLlamada("claude-sonnet-4-5", { inputTokens: 999_999, outputTokens: 999_999 })).toBeNull();
+    // Sonnet 4.5 ya tiene tarifa (C-01): el "sin tarifa" pasa a ser un id que no existe.
+    expect(costoDeLlamada("claude-sonnet-99", { inputTokens: 999_999, outputTokens: 999_999 })).toBeNull();
     expect(costoDeLlamada("modelo-inventado", { inputTokens: 1, outputTokens: 1 })).toBeNull();
   });
 
@@ -109,5 +112,61 @@ describe("el formato no dice «gratis» cuando no lo es", () => {
     expect(formatearUsd(0.195)).toBe("$0.20");
     expect(formatearUsd(0)).toBe("$0");
     expect(formatearUsd(null)).toBe("—");
+  });
+});
+
+describe("Sonnet 5 y Sonnet 4.5 tienen tarifa (C-01)", () => {
+  /* La edición que lo pone en rojo: sacar la entrada de Sonnet 5 «hasta verificarla» — un agente
+     migrado a ese modelo gastaría con costo null y el tope diario no lo vería. */
+  it("Sonnet 5 cobra $3/$15 (el precio de lanzamiento venció el 2026-08-31) y dice que hay que verificarlo", () => {
+    const p = precioDe("claude-sonnet-5");
+    expect(p).not.toBeNull();
+    expect(p?.entrada).toBe(3);
+    expect(p?.salida).toBe(15);
+    expect(p?.nota, "la tarifa salió del SDK: tiene que decir que falta verificarla").toContain("verificar en consola");
+    expect(costoDeLlamada("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBe(18);
+  });
+
+  it("Sonnet 4.5 cobra igual que 4.6 por su id corto y por el datado", () => {
+    const corto = costoDeLlamada("claude-sonnet-4-5", { inputTokens: 1_000_000, outputTokens: 0 });
+    const datado = costoDeLlamada("claude-sonnet-4-5-20250929", { inputTokens: 1_000_000, outputTokens: 0 });
+    expect(corto).toBe(3);
+    expect(datado).toBe(corto);
+  });
+
+  it("toda tarifa lleva fecha de verificación (los precios envejecen)", () => {
+    for (const [modelo, p] of Object.entries(PRECIOS)) {
+      expect(p.verificado, modelo).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    }
+  });
+});
+
+describe("los cuatro caminos que más gastaban sin dueño salen atribuidos (C-01)", () => {
+  /**
+   * Hasta el 2026-09-04 solo el runner de /analyze envolvía sus llamadas con `conContextoDeIA`: el
+   * post-proceso de sesiones, el clasificador, el vigilante y el agente de canvas emitían filas de
+   * LlmCall con agente, cliente y humano en null — y sin humano no se puede saber contra qué
+   * presupuesto cobrar. Cada uno declara ahora `triggeredByEmail` a propósito (null = automático).
+   */
+  const RAIZ = process.cwd();
+  const sinComentarios = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
+  const CAMINOS = [
+    "lib/sessions/post-process.ts",
+    "lib/sessions/classify-session-project.ts",
+    "lib/cs/watchdog.ts",
+    "lib/canvas/update-agent.ts",
+  ];
+
+  it("cada llamada a Claude de esos archivos está adentro de conContextoDeIA, con triggeredByEmail explícito", () => {
+    /* La edición que lo pone en rojo: sacarle el wrap a una llamada «porque total corre solo». */
+    for (const rel of CAMINOS) {
+      const src = sinComentarios(fs.readFileSync(path.join(RAIZ, rel), "utf8"));
+      const llamadas = src.split("anthropic.messages.create(").length - 1;
+      expect(llamadas, `${rel}: el escaneo no encontró la llamada`).toBeGreaterThan(0);
+      const envueltas = src.split("conContextoDeIA(").length - 1;
+      expect(envueltas, `${rel}: llamadas a Claude sin atribuir`).toBe(llamadas);
+      expect(src, `${rel}: el contexto tiene que decir quién apretó el botón (o null a propósito)`).toContain("triggeredByEmail:");
+    }
   });
 });

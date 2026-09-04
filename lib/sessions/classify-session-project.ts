@@ -24,6 +24,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { isLockedLink } from "@/lib/sessions/session-project-locks";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
@@ -234,12 +235,20 @@ export async function classifySessionToProjects(
 
   let rawText: string;
   try {
-    const msg = await anthropic.messages.create({
+    // Atribuida (C-01): el clasificador se dispara solo → presupuesto automático.
+    const ctxDeGasto = {
+      agentSlug: AGENT_ID_SESSION_PROJECT_CLASSIFIER,
+      clientId,
+      projectId: null,
+      triggeredByEmail: null,
+      origen: "sessions/classify-session-project",
+    };
+    const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1200,
       system: agent.systemPrompt,
       messages: [{ role: "user", content: userMessage }],
-    });
+    }));
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();
   } catch (e) {
     return { status: "error", reason: `Claude error: ${(e as Error).message}` };

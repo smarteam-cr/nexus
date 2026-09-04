@@ -43,6 +43,8 @@ export interface PrecioDeModelo {
   factorLecturaCache: number;
   /** Cuándo se verificó contra la tarifa publicada. */
   verificado: string;
+  /** De dónde salió la tarifa cuando NO fue de la consola de facturación (C-01). */
+  nota?: string;
 }
 
 const FACTOR_ESCRITURA_CACHE = 1.25;
@@ -69,11 +71,32 @@ export const PRECIOS: Record<string, PrecioDeModelo> = {
     factorLecturaCache: FACTOR_LECTURA_CACHE,
     verificado: "2026-08-17",
   },
+  // Sonnet 5 y Sonnet 4.5 (C-01, 2026-09-04): tarifas tomadas del SDK, no de la consola.
+  // ⚠ VERIFICAR EN LA CONSOLA DE FACTURACIÓN: el precio de lanzamiento de Sonnet 5 ($2/$10)
+  // venció el 2026-08-31; acá se cobra el vigente ($3/$15). Sin esta entrada, migrar un agente
+  // a Sonnet 5 (C-04) haría que su gasto saliera `null` y el tope diario no lo viera.
+  "claude-sonnet-5": {
+    entrada: 3.0,
+    salida: 15.0,
+    factorEscrituraCache: FACTOR_ESCRITURA_CACHE,
+    factorLecturaCache: FACTOR_LECTURA_CACHE,
+    verificado: "2026-09-04",
+    nota: "tarifa del SDK, no de la consola — verificar en consola",
+  },
+  "claude-sonnet-4-5": {
+    entrada: 3.0,
+    salida: 15.0,
+    factorEscrituraCache: FACTOR_ESCRITURA_CACHE,
+    factorLecturaCache: FACTOR_LECTURA_CACHE,
+    verificado: "2026-09-04",
+    nota: "tarifa del SDK, no de la consola — verificar en consola",
+  },
 };
 
 /** Alias sin fecha → id con fecha, para que las dos formas de nombrar un modelo cobren igual. */
 const ALIAS: Record<string, string> = {
   "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-5-20250929": "claude-sonnet-4-5",
 };
 
 export function precioDe(model: string): PrecioDeModelo | null {

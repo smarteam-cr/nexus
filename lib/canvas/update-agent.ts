@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS } from "./template";
 import type { ClientCanvas, ProjectCanvas } from "./template";
 import { deepMergeCanvas, validateCanvasKeys } from "./merge";
@@ -36,13 +37,15 @@ export async function updateCanvasAsync(
   cards: { title: string; content: string }[]
 ) {
   // Cargar canvas actuales + agentes de canvas de la BD
-  const [client, project, canvasAgents] = await Promise.all([
+  const [client, project, canvasAgents, corrida] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { canvas: true, name: true } }),
     prisma.project.findUnique({ where: { id: projectId }, select: { canvas: true } }),
     prisma.agent.findMany({
       where: { agentType: { in: ["CANVAS_PROJECT", "CANVAS_CLIENT"] }, status: "ACTIVE" },
-      select: { agentType: true, systemPrompt: true, additionalInstructions: true },
+      select: { id: true, agentType: true, systemPrompt: true, additionalInstructions: true },
     }),
+    // Quién apretó el botón de la corrida que disparó esto (C-01): esta llamada la paga esa persona.
+    prisma.agentRun.findUnique({ where: { id: agentRunId }, select: { triggeredByEmail: true } }),
   ]);
 
   if (!client || !project) return;
@@ -98,13 +101,22 @@ ${cardsText}
 Extrae la información relevante de las cards para actualizar ambos canvas.`;
 
   try {
-    const msg = await anthropic.messages.create({
+    // Atribuida (C-01): hereda el humano de la corrida que la disparó → presupuesto humano.
+    const ctxDeGasto = {
+      agentSlug: clientAgent?.id ?? null,
+      agentRunId,
+      clientId,
+      projectId,
+      triggeredByEmail: corrida?.triggeredByEmail ?? null,
+      origen: "canvas/update-agent",
+    };
+    const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 8192,
       temperature: 0,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
-    });
+    }));
 
     // (b.type === "text" narrowea al TextBlock del SDK — un predicate custom con
     // shape propio deja de compilar cuando el SDK agrega campos requeridos.)

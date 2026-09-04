@@ -14,6 +14,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import {
   categorizeSession,
   buildInternalDomainsSet,
@@ -216,15 +217,22 @@ export async function postProcessSession(
     .filter(Boolean)
     .join("\n");
 
-  // 6. Llamar a Claude
+  // 6. Llamar a Claude — atribuida (C-01): sin humano detrás, cobra contra el presupuesto automático.
   let rawText: string;
   try {
-    const msg = await anthropic.messages.create({
+    const ctxDeGasto = {
+      agentSlug: AGENT_ID_POST_SESSION,
+      clientId: client.id,
+      projectId: project?.id ?? null,
+      triggeredByEmail: null,
+      origen: "sessions/post-process",
+    };
+    const msg = await conContextoDeIA(ctxDeGasto, async () => anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4000,
       system: (await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "",
       messages: [{ role: "user", content: userMessage }],
-    });
+    }));
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();
   } catch (e) {
     return { status: "error", sessionId, clientId: client.id, reason: `Claude error: ${(e as Error).message}` };

@@ -13,6 +13,13 @@
  *   se dispara al navegar, y `reclassifyClientSessions` sale de 6 lugares distintos. Vara corta.
  * · **Humano** es alguien esperando un handoff. Cortarlo a la mitad es peor que el gasto. Vara larga.
  *
+ * ⚠ EL VIGILANTE NO SE REALIMENTA (C-01, 2026-09-04). Desde C-01 sus llamadas salen atribuidas
+ * (`agent-cs-watchdog`, sin humano → presupuesto automático), pero cuando el tope se agote y el
+ * bloqueo esté encendido (C-02), cada llamada del sweep va a fallar UNA POR UNA en el chokepoint:
+ * la corrida queda en ERROR —visible— y el sweep sigue intentando con el siguiente proyecto en
+ * vez de frenar o espaciarse. Que el vigilante mire el presupuesto antes de arrancar es tanda
+ * propia, no de este archivo.
+ *
  * Hoy existen topes de CONCURRENCIA (`MAX_PROJECTS_PER_DEBOUNCE_TICK`, cooldowns, claims por día)
  * pero ninguno mira tokens ni dinero: un loop de llamadas baratas pasa por debajo de todos.
  *

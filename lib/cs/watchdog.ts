@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import type { CsAlertCategory, CsAlertSeverity } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
 import { buildWatchdogContext } from "./watchdog-context";
 import { claimDateKey } from "@/lib/jobs/registry";
@@ -243,7 +244,17 @@ async function runForProjectInner(
       }
     }
 
-    const msg = await anthropic.messages.create({
+    // Atribuida (C-01): el vigilante corre solo → presupuesto automático. No se realimenta con el
+    // tope (ver lib/ai/presupuesto.ts): si se agota, esta llamada falla y la corrida queda en ERROR.
+    const ctxDeGasto = {
+      agentSlug: AGENT_ID,
+      agentRunId: run.id,
+      clientId: project.clientId,
+      projectId,
+      triggeredByEmail: null,
+      origen: "cs/watchdog",
+    };
+    const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2500,
       system: agent.systemPrompt,
@@ -253,7 +264,7 @@ async function runForProjectInner(
           content: `${ctx.serialized}\n\nTriá este proyecto según tus instrucciones. Devolvé SOLO el JSON.`,
         },
       ],
-    });
+    }));
     if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
     const rawText = msg.content
       .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
