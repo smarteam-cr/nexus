@@ -10,6 +10,7 @@
  * NO confundir con `lib/storage/client.ts` que apunta a OTRO proyecto Supabase
  * usado solo para Storage de documentos.
  */
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -55,11 +56,18 @@ export async function createSupabaseServerClient() {
 /**
  * Atajo para leer el usuario autenticado en server-side.
  * Devuelve null si no hay sesión válida.
+ *
+ * `cache()` de React (C-07, 2026-09-04): DENTRO de un mismo request, la primera llamada va a
+ * Supabase Auth y las siguientes —el layout, la página y dos guards que preguntan lo mismo—
+ * reciben el mismo resultado sin viajar. Es el molde de `lib/lifecycle/load.ts`. Fuera de un
+ * request (un script, un test) React no tiene dónde memorizar y la función corre normal: no
+ * cambia nada, no falla. ⚠ Solo dentro del request: la caché ENTRE requests es otra decisión
+ * (C-08) — desactivar a alguien sigue surtiendo efecto en su próximo request.
  */
-export async function getSupabaseUser() {
+export const getSupabaseUser = cache(async () => {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-}
+});

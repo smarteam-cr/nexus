@@ -650,3 +650,36 @@ describe("⛔ los handlers que escriben Json directo del body pasan por zod ante
     expect(ofensores, "estos handlers escriben lo que llega en el body sin validarlo").toEqual([]);
   });
 });
+
+describe("la cadena de auth se resuelve UNA vez por request (C-07)", () => {
+  /**
+   * Un render de una página interna preguntaba «¿quién sos?» hasta tres veces (layout, página,
+   * guard), y cada vez era un viaje a Supabase Auth más una lectura de AppUser. `cache()` de React
+   * memoriza dentro del request; fuera de un request corre normal. Esto se prueba por fuente porque
+   * la memoria de `cache` vive en el dispatcher de React de un request real: en un test unitario
+   * no hay dónde memorizar, y un test «de comportamiento» daría verde por el motivo equivocado.
+   */
+  const leer = (rel: string) =>
+    fs
+      .readFileSync(path.join(RAIZ, rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith("//"))
+      .join("\n");
+
+  it("getSupabaseUser y requireUser están envueltas en cache() de React; el cliente y el callback no", () => {
+    /* La edición que lo pone en rojo: volver a `export async function requireUser` «porque cache
+       es de Server Components» — vuelven los tres viajes por render, sin error y sin log. */
+    const server = leer("lib/supabase/server.ts");
+    const auth = leer("lib/auth/supabase.ts");
+    expect(server).toContain('import { cache } from "react"');
+    expect(auth).toContain('import { cache } from "react"');
+    expect(server, "getSupabaseUser sin cache: cada guard vuelve a Supabase Auth").toMatch(/export const getSupabaseUser = cache\(async \(\)/);
+    expect(auth, "requireUser sin cache: cada guard vuelve a leer AppUser").toMatch(/export const requireUser = cache\(async \(\)/);
+    // Lo que NO se cachea, a propósito: el cliente escribe cookies (tiene que ser fresco), y las
+    // derivadas (requireInternalUser) ya heredan la memoria de requireUser.
+    expect(server).toMatch(/export async function createSupabaseServerClient\(\)/);
+    expect(auth).toMatch(/export async function requireInternalUser\(\)/);
+    expect((auth.match(/cache\(/g) ?? []).length, "un solo cache() en la cadena: el resto deriva").toBe(1);
+  });
+});
