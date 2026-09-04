@@ -106,3 +106,20 @@ describe("el umbral vive en UN solo lugar", () => {
     expect(src).toContain("run-colgada");
   });
 });
+
+describe("C-13: el feed no trae el output de las corridas; el motivo del error se pide aparte", () => {
+  it("el select no incluye `output`, y el texto del error sale de una lectura acotada a las corridas en ERROR", () => {
+    /* La edición que lo pone en rojo: `output: true` de vuelta en el select «para no hacer dos
+       consultas» — el documento entero de cada corrida DONE, hasta 25 veces por tick, para no
+       mostrarlo. */
+    const src = fs.readFileSync(path.join(process.cwd(), "app/api/agent-runs/route.ts"), "utf8");
+    const i = src.indexOf("const select = {");
+    const select = src.slice(i, src.indexOf("satisfies Prisma.AgentRunSelect", i));
+    expect(select.length, "la guarda no está mirando el select").toBeGreaterThan(50);
+    expect(select, "el output de todas las corridas del feed, cada tick").not.toContain("output: true");
+    expect(src, "la segunda lectura tiene que acotarse a las que están en ERROR").toContain('.filter((r) => r.status === "ERROR").map((r) => r.id)');
+    expect(src).toContain("id: { in: idsConError }");
+    expect(src).toContain("select: { id: true, output: true }");
+    expect(src, "el motivo del error sale de esa lectura, no del select del feed").toContain("parseRunError(outputPorId.get(r.id) ?? null)");
+  });
+});

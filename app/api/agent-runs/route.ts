@@ -56,7 +56,9 @@ export async function GET(req: NextRequest) {
     projectId: true,
     businessCaseId: true,
     stepLabel: true,
-    output: true,
+    // C-13 (2026-09-04): sin `output`. En una corrida DONE es el documento entero (decenas de
+    // KB) y el feed no lo muestra; solo lo usa para el motivo de las que están en ERROR, y ese
+    // se pide aparte, abajo, para esas filas nada más. Hasta 25 filas por tick, cada 4-60 s.
     triggeredByEmail: true,
     agent: { select: { name: true } },
     client: { select: { name: true } },
@@ -100,6 +102,15 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
+  // C-13: el `output` solo de las corridas en ERROR (es el mensaje humano del fallo).
+  const idsConError = [...running, ...recent].filter((r) => r.status === "ERROR").map((r) => r.id);
+  const outputPorId = new Map(
+    (idsConError.length === 0
+      ? []
+      : await prisma.agentRun.findMany({ where: { id: { in: idsConError } }, select: { id: true, output: true } })
+    ).map((r) => [r.id, r.output] as const),
+  );
+
   const serialize = (r: (typeof running)[number]) => {
     /* Una colgada se REPORTA como fallada aunque la base diga `RUNNING`. La fila no se toca:
        esto es una lectura, y arreglar el dato es otra decisión (hay un script para eso). */
@@ -117,7 +128,7 @@ export async function GET(req: NextRequest) {
     /* El motivo se escribe acá y no se deduce del `output`: una corrida colgada no dejó
        output —murió antes—, así que `parseRunError` devolvería el genérico "no pudo completar
        la tarea", que no distingue "falló" de "la mataron". */
-    error: colgada ? MOTIVO_COLGADA : r.status === "ERROR" ? parseRunError(r.output) : null,
+    error: colgada ? MOTIVO_COLGADA : r.status === "ERROR" ? parseRunError(outputPorId.get(r.id) ?? null) : null,
     // ¿La lancé YO? Gobierna el aviso emergente (solo lo tuyo interrumpe) y el
     // filtro por defecto del panel. Las corridas de sistema tienen el campo null,
     // así que jamás son "mías" — nunca avisan, que es lo correcto.
