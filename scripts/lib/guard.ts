@@ -7,6 +7,8 @@
  *
  *   - SIEMPRE imprime a stderr contra qué host se va a escribir (nunca credenciales).
  *   - Si el host es Supabase y NO está `ALLOW_PROD_WRITE=1`, ABORTA antes de escribir.
+ *   - Con `--apply`, RESPALDA con pg_dump las tablas que el script declara ANTES de habilitar
+ *     la escritura, y si el respaldo falla no hay escritura (B-06, 2026-09-04).
  *
  * Cómo autorizar una escritura a prod (decisión explícita, por comando):
  *   bash:        ALLOW_PROD_WRITE=1 npx tsx scripts/lo-que-sea.ts --apply
@@ -24,8 +26,9 @@
  * INV12 (check-invariants) exige que todo script con `--apply` importe este módulo.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 export type VeredictoEscritura = {
   permitido: boolean;
@@ -101,14 +104,181 @@ export function assertProdWriteAllowed(contexto = "escritura"): void {
   process.exit(1);
 }
 
+// ── B-06 · Respaldo obligatorio antes de todo --apply ───────────────────────────────────────
+//
+// Supabase restaura la base ENTERA o nada (RUNBOOK «Respaldo y restauración»). Un UPDATE
+// equivocado sobre una tabla no tenía vuelta atrás parcial: dos scripts volcaban a mano lo que
+// tocaban (purge-future-sessions, reparar-rempro) y los otros ~90 escribían sin red. Ahora el
+// guard respalda con pg_dump las `tablas` que el script declara, a
+// `backups/<AAAA-MM-DD>-<script>/<Tabla>.<HHMMSS>.sql`, ANTES de devolver `true`.
+
+/** Un nombre de tabla de Prisma: identificador simple. Es lo único de acá que llega a la línea de comandos. */
+const NOMBRE_DE_TABLA = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export type ArchivoDeRespaldo = { tabla: string; ruta: string };
+export type PlanDeRespaldo = { dir: string; archivos: ArchivoDeRespaldo[] };
+export type ResultadoPgDump = { status: number | null; detalle: string };
+export type EjecutorDePgDump = (args: string[]) => ResultadoPgDump;
+export type ResultadoDeRespaldo =
+  | { ok: true; plan: PlanDeRespaldo }
+  | { ok: false; plan: PlanDeRespaldo; motivo: string };
+
+/** `AAAA-MM-DD` y `HHMMSS` en hora LOCAL: es la fecha que la persona ve en el explorador. */
+function fechaYHora(ahora: Date): { fecha: string; hora: string } {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    fecha: `${ahora.getFullYear()}-${p(ahora.getMonth() + 1)}-${p(ahora.getDate())}`,
+    hora: `${p(ahora.getHours())}${p(ahora.getMinutes())}${p(ahora.getSeconds())}`,
+  };
+}
+
+/** El script que corre (`scripts/foo.ts` → `foo`), para nombrar la carpeta del respaldo. Puro. */
+export function nombreDelScript(argv1 = process.argv[1] ?? ""): string {
+  return basename(argv1).replace(/\.(ts|js|mjs|cjs)$/, "") || "script";
+}
+
 /**
- * Reemplazo 1:1 del patrón `const APPLY = process.argv.includes("--apply")`:
- * mismo booleano, pero si es --apply el guard corre ANTES de devolver.
+ * Dónde va cada tabla: `<raiz>/<AAAA-MM-DD>-<script>/<Tabla>.<HHMMSS>.sql`. Puro. La hora en el
+ * nombre hace que dos corridas del mismo día no se pisen. Un nombre que no sea un identificador
+ * simple se rechaza (y una lista vacía también: «respaldar nada» no es respaldar).
  */
-export function resolverApply(): boolean {
+export function planDeRespaldo(
+  tablas: string[],
+  opts: { script: string; ahora: Date; raiz?: string },
+): PlanDeRespaldo {
+  const unicas = [...new Set(tablas)];
+  if (unicas.length === 0) throw new Error("planDeRespaldo: la lista de tablas está vacía");
+  for (const t of unicas) {
+    if (!NOMBRE_DE_TABLA.test(t)) throw new Error(`planDeRespaldo: «${t}» no es un nombre de tabla válido`);
+  }
+  const { fecha, hora } = fechaYHora(opts.ahora);
+  const dir = join(opts.raiz ?? "backups", `${fecha}-${opts.script}`);
+  return { dir, archivos: unicas.map((tabla) => ({ tabla, ruta: join(dir, `${tabla}.${hora}.sql`) })) };
+}
+
+/**
+ * La URL que recibe pg_dump: libpq rechaza parámetros que no conoce, y las URLs de Supabase suelen
+ * traer `pgbouncer=true`, `connection_limit=…` o `schema=…` (son de Prisma). Se conserva solo
+ * `sslmode`. Puro. Las credenciales SÍ viajan (pg_dump las necesita): por eso esta URL jamás se
+ * imprime — lo que se imprime es `describirDestino`.
+ */
+export function urlParaPgDump(url: string): string {
+  const u = new URL(url);
+  const sslmode = u.searchParams.get("sslmode");
+  u.search = "";
+  if (sslmode) u.searchParams.set("sslmode", sslmode);
+  return u.toString();
+}
+
+/**
+ * Los argumentos de pg_dump para UNA tabla, puro: solo datos, formato plano, sin dueños ni privilegios
+ * (Supabase los tiene distintos), y la tabla entre comillas dobles porque los nombres de Prisma son
+ * PascalCase y Postgres los cita así. Restaurar una tabla:
+ *   psql "$DATABASE_URL" -f backups/<fecha>-<script>/<Tabla>.<hora>.sql
+ * (el COPY AGREGA filas: sobre una tabla que todavía tiene datos, primero decidir qué hacer con ellos).
+ */
+export function argumentosPgDump(url: string, tabla: string, ruta: string): string[] {
+  return [
+    `--dbname=${urlParaPgDump(url)}`,
+    "--data-only",
+    "--format=plain",
+    "--no-owner",
+    "--no-privileges",
+    `--table="${tabla}"`,
+    `--file=${ruta}`,
+  ];
+}
+
+/** El ejecutor real: `pg_dump` del PATH. Que no esté instalado vuelve como detalle, no como excepción. */
+export const pgDumpReal: EjecutorDePgDump = (args) => {
+  const r = spawnSync("pg_dump", args, { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" });
+  if (r.error) {
+    const codigo = (r.error as { code?: string }).code;
+    return {
+      status: null,
+      detalle: codigo === "ENOENT" ? "pg_dump no está instalado o no está en el PATH" : r.error.message,
+    };
+  }
+  const stderr = (r.stderr ?? "").trim();
+  return { status: r.status, detalle: stderr.split(/\r?\n/).slice(-3).join(" · ") };
+};
+
+/**
+ * Corre pg_dump por tabla y verifica que cada archivo exista y no esté vacío. Falla en la primera
+ * tabla que no se pudo respaldar: un respaldo a medias no es un respaldo. No imprime la URL.
+ */
+export function respaldarTablas(
+  url: string,
+  plan: PlanDeRespaldo,
+  pgDump: EjecutorDePgDump = pgDumpReal,
+): ResultadoDeRespaldo {
+  mkdirSync(plan.dir, { recursive: true });
+  for (const { tabla, ruta } of plan.archivos) {
+    const r = pgDump(argumentosPgDump(url, tabla, ruta));
+    if (r.status !== 0) {
+      return {
+        ok: false,
+        plan,
+        motivo: `pg_dump de «${tabla}» terminó con ${r.status ?? "error"}: ${r.detalle || "sin detalle"}`,
+      };
+    }
+    let bytes = 0;
+    try {
+      bytes = statSync(ruta).size;
+    } catch {
+      bytes = 0;
+    }
+    if (bytes === 0) return { ok: false, plan, motivo: `el respaldo de «${tabla}» quedó vacío (${ruta})` };
+  }
+  return { ok: true, plan };
+}
+
+export type OpcionesDeApply = {
+  /** Las tablas que el script ESCRIBE. Con `--apply` se respaldan ANTES de devolver `true`. */
+  tablas?: string[];
+  /** Solo para tests: el ejecutor de pg_dump, la carpeta raíz de los respaldos y el reloj. */
+  pgDump?: EjecutorDePgDump;
+  raiz?: string;
+  ahora?: Date;
+};
+
+/**
+ * Reemplazo 1:1 del patrón `const APPLY = process.argv.includes("--apply")`: mismo booleano, pero
+ * si es --apply (1) el guard corre ANTES de devolver y (2) desde B-06 las `tablas` que el script
+ * declara se respaldan — y si el respaldo falla, NO hay escritura:
+ *
+ *   const APPLY = resolverApply({ tablas: ["SessionProject"] });
+ *
+ * Sin `tablas` el script escribe sin red y lo dice a stderr; `lib/db/guard-de-escritura.test.ts`
+ * congela cuáles son (la lista solo encoge). `SIN_RESPALDO=1` salta el respaldo POR COMANDO: una
+ * decisión explícita, como ALLOW_PROD_WRITE, nunca fija en el .env.
+ */
+export function resolverApply(opts: OpcionesDeApply = {}): boolean {
   const apply = process.argv.includes("--apply");
-  if (apply) assertProdWriteAllowed("--apply");
-  return apply;
+  if (!apply) return false;
+  assertProdWriteAllowed("--apply");
+  const tablas = opts.tablas ?? [];
+  if (tablas.length === 0) {
+    console.error(
+      "[guard] ⚠ sin respaldo automático: este script no declara `tablas` (B-06). Si algo sale mal, Supabase solo restaura la base entera.",
+    );
+    return true;
+  }
+  if (process.env.SIN_RESPALDO === "1") {
+    console.error(`[guard] ⚠ SIN_RESPALDO=1: se escribe ${tablas.join(", ")} sin respaldar. Decisión tuya.`);
+    return true;
+  }
+  const plan = planDeRespaldo(tablas, { script: nombreDelScript(), ahora: opts.ahora ?? new Date(), raiz: opts.raiz });
+  console.error(`[guard] respaldando ${tablas.join(", ")} → ${plan.dir}`);
+  const r = respaldarTablas(process.env.DATABASE_URL ?? "", plan, opts.pgDump);
+  if (!r.ok) {
+    console.error(`\n⛔ ABORTADO: sin respaldo no hay escritura. ${r.motivo}.`);
+    console.error("   Instalá las herramientas cliente de PostgreSQL (pg_dump en el PATH) y volvé a correr.");
+    console.error("   Para escribir SIN respaldo, a sabiendas: SIN_RESPALDO=1 <mismo comando>.");
+    process.exit(1);
+  }
+  console.error(`[guard] respaldo OK: ${r.plan.archivos.map((a) => a.ruta).join(", ")}`);
+  return true;
 }
 
 // Hosts LOCALES reconocidos (loopback en sus tres formas). Vive acá y no en cada script

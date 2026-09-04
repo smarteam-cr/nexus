@@ -22,7 +22,8 @@ import { prisma } from "@/lib/db/prisma";
  *   npx tsx scripts/cleanup-cross-client-session-projects.ts            # dry-run
  *   npx tsx scripts/cleanup-cross-client-session-projects.ts --apply    # borra (PROD)
  */
-const APPLY = resolverApply();
+// B-06: con --apply, SessionProject se respalda a backups/ ANTES de borrar nada.
+const APPLY = resolverApply({ tablas: ["SessionProject"] });
 
 async function main() {
   console.log(

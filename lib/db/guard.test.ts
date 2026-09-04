@@ -13,8 +13,9 @@
  *   - qué comandos del CLI de Prisma cuentan como escritura (la lista positiva de
  *     guardPrismaCli — un falso positivo acá rompería `prisma generate` en el build).
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   describirDestino,
@@ -22,6 +23,13 @@ import {
   veredictoEscritura,
   veredictoPrismaCli,
   tieneAllowProdWriteFijo,
+  argumentosPgDump,
+  nombreDelScript,
+  planDeRespaldo,
+  resolverApply,
+  respaldarTablas,
+  urlParaPgDump,
+  type EjecutorDePgDump,
 } from "../../scripts/lib/guard";
 
 const PROD = "postgresql://user:secreta123@db.abcd1234.supabase.co:5432/postgres";
@@ -219,5 +227,126 @@ describe("deploy.sh EJECUTA el rollback y re-verifica /api/health (B-04)", () =>
     const s = src();
     expect((s.match(/^\s*rollback\s*$/gm) ?? []).length, "faltan llamadas a rollback").toBeGreaterThanOrEqual(3);
     expect(/red "ROLLBACK: docker tag/.test(s), "volvió el rollback que solo se imprime").toBe(false);
+  });
+});
+
+describe("todo --apply respalda las tablas que declara ANTES de escribir (B-06)", () => {
+  /**
+   * Hasta el 2026-09-04 un `--apply` escribía sin red: Supabase restaura la base ENTERA o nada, así
+   * que un UPDATE equivocado sobre una tabla no tenía vuelta atrás parcial. Ahora el guard respalda
+   * con pg_dump las `tablas` que el script declara, y si el respaldo falla NO hay escritura.
+   */
+  const AHORA = new Date(2026, 8, 4, 9, 5, 7); // 4 sep 2026 · 09:05:07 local
+  const argvOriginal = process.argv;
+  const urlOriginal = process.env.DATABASE_URL;
+  let raiz = "";
+  let stderr: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    raiz = fs.mkdtempSync(path.join(os.tmpdir(), "b06-"));
+    process.argv = ["node", "C:/repo/scripts/cleanup-cross-client-session-projects.ts", "--apply"];
+    process.env.DATABASE_URL = LOCAL; // host local: el guard deja pasar sin ALLOW_PROD_WRITE
+    delete process.env.SIN_RESPALDO;
+    stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.argv = argvOriginal;
+    if (urlOriginal === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = urlOriginal;
+    delete process.env.SIN_RESPALDO;
+    vi.restoreAllMocks();
+    fs.rmSync(raiz, { recursive: true, force: true });
+  });
+
+  /** Un pg_dump falso que anota cómo lo llamaron y escribe el archivo que le pidieron. */
+  const pgDumpFalso = (llamadas: string[][], contenido = "-- dump\n"): EjecutorDePgDump => (args) => {
+    llamadas.push(args);
+    const ruta = (args.find((a) => a.startsWith("--file=")) ?? "").slice("--file=".length);
+    fs.writeFileSync(ruta, contenido);
+    return { status: 0, detalle: "" };
+  };
+  const lineasDeStderr = (): string[] => stderr.mock.calls.map((c: unknown[]) => String(c[0]));
+
+  it("el plan: backups/<fecha>-<script>/<Tabla>.<hora>.sql, sin repetidas, y rechaza lo que no es una tabla", () => {
+    const plan = planDeRespaldo(["SessionProject", "Project", "SessionProject"], { script: "cleanup-x", ahora: AHORA, raiz });
+    expect(plan.dir).toBe(path.join(raiz, "2026-09-04-cleanup-x"));
+    expect(plan.archivos.map((a) => path.basename(a.ruta))).toEqual(["SessionProject.090507.sql", "Project.090507.sql"]);
+    expect(() => planDeRespaldo([], { script: "x", ahora: AHORA })).toThrow("vacía");
+    expect(() => planDeRespaldo(['Session"; DROP TABLE x; --'], { script: "x", ahora: AHORA })).toThrow("no es un nombre de tabla");
+    expect(nombreDelScript("C:/repo/scripts/cleanup-x.ts")).toBe("cleanup-x");
+  });
+
+  it("la URL que recibe pg_dump pierde los parámetros de Prisma y conserva sslmode y credenciales", () => {
+    const url = urlParaPgDump(`${POOLER}?pgbouncer=true&connection_limit=1&sslmode=require&schema=public`);
+    expect(url).toBe("postgresql://user:secreta123@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require");
+    const args = argumentosPgDump(PROD, "SessionProject", "backups/x/SessionProject.sql");
+    expect(args).toContain("--data-only");
+    expect(args, "los nombres de Prisma son PascalCase: pg_dump los cita").toContain('--table="SessionProject"');
+    expect(args).toContain("--file=backups/x/SessionProject.sql");
+    // Lo que se IMPRIME sigue siendo el destino sin credenciales.
+    expect(describirDestino(PROD)).not.toContain("secreta123");
+  });
+
+  it("con --apply y tablas: el respaldo corre DESPUÉS del guard y ANTES de devolver true, y el archivo queda", () => {
+    /* La edición que lo pone en rojo: sacarle a resolverApply la llamada a respaldarTablas —
+       vuelve a ser el booleano de siempre y el script escribe sin red. */
+    const llamadas: string[][] = [];
+    const resultado = resolverApply({ tablas: ["SessionProject"], pgDump: pgDumpFalso(llamadas), raiz, ahora: AHORA });
+    expect(resultado).toBe(true);
+    expect(llamadas, "pg_dump tiene que haber corrido una vez por tabla").toHaveLength(1);
+    expect(llamadas[0]).toContain('--table="SessionProject"');
+    const ruta = path.join(raiz, "2026-09-04-cleanup-cross-client-session-projects", "SessionProject.090507.sql");
+    expect(fs.existsSync(ruta), `falta el respaldo en ${ruta}`).toBe(true);
+    const lineas = lineasDeStderr();
+    const guard = lineas.findIndex((l) => l.includes("--apply → destino"));
+    const respaldo = lineas.findIndex((l) => l.includes("respaldando SessionProject"));
+    expect(guard, "el guard de prod tiene que decidir primero").toBeGreaterThan(-1);
+    expect(respaldo).toBeGreaterThan(guard);
+  });
+
+  it("si pg_dump falla o deja el archivo vacío, NO hay escritura: aborta con exit 1", () => {
+    /* La edición que lo pone en rojo: ignorar `r.ok` y devolver true igual — el script escribiría
+       creyendo que tiene respaldo. */
+    const salir = vi.spyOn(process, "exit").mockImplementation((code?: number | string | null) => {
+      throw new Error(`exit ${code}`);
+    });
+    const roto: EjecutorDePgDump = () => ({ status: 1, detalle: "pg_dump: error: connection failed" });
+    expect(() => resolverApply({ tablas: ["SessionProject"], pgDump: roto, raiz, ahora: AHORA })).toThrow("exit 1");
+    expect(salir).toHaveBeenCalledWith(1);
+    expect(lineasDeStderr().some((l) => l.includes("sin respaldo no hay escritura"))).toBe(true);
+
+    const vacio = pgDumpFalso([], "");
+    expect(() => resolverApply({ tablas: ["SessionProject"], pgDump: vacio, raiz, ahora: AHORA })).toThrow("exit 1");
+    expect(lineasDeStderr().some((l) => l.includes("quedó vacío"))).toBe(true);
+  });
+
+  it("respaldarTablas para en la primera tabla que falla: un respaldo a medias no es un respaldo", () => {
+    const plan = planDeRespaldo(["A", "B"], { script: "x", ahora: AHORA, raiz });
+    let n = 0;
+    const segundaFalla: EjecutorDePgDump = (args) => {
+      n += 1;
+      if (n === 1) return pgDumpFalso([])(args);
+      return { status: null, detalle: "pg_dump no está instalado o no está en el PATH" };
+    };
+    const r = respaldarTablas(LOCAL, plan, segundaFalla);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.motivo).toContain("«B»");
+  });
+
+  it("sin --apply no respalda nada y devuelve false; sin tablas devuelve true pero AVISA; SIN_RESPALDO=1 salta a sabiendas", () => {
+    const llamadas: string[][] = [];
+    process.argv = ["node", "C:/repo/scripts/x.ts"];
+    expect(resolverApply({ tablas: ["SessionProject"], pgDump: pgDumpFalso(llamadas), raiz })).toBe(false);
+    expect(llamadas).toHaveLength(0);
+
+    process.argv = ["node", "C:/repo/scripts/x.ts", "--apply"];
+    expect(resolverApply({ pgDump: pgDumpFalso(llamadas), raiz })).toBe(true);
+    expect(llamadas).toHaveLength(0);
+    expect(lineasDeStderr().some((l) => l.includes("sin respaldo automático"))).toBe(true);
+
+    process.env.SIN_RESPALDO = "1";
+    expect(resolverApply({ tablas: ["SessionProject"], pgDump: pgDumpFalso(llamadas), raiz })).toBe(true);
+    expect(llamadas).toHaveLength(0);
+    expect(lineasDeStderr().some((l) => l.includes("SIN_RESPALDO=1"))).toBe(true);
   });
 });

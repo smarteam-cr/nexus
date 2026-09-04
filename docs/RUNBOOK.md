@@ -208,10 +208,14 @@ mirando el panel.
 4. Desde una PC, `npx tsx scripts/check-invariants.ts` (solo lectura) y revisar INV2 e INV7.
 5. Anotar acá qué se restauró, a qué instante y qué se perdió.
 
-**Antes de una escritura arriesgada, un respaldo propio**: los scripts con `--apply` que ya
-vuelcan las tablas que tocan a `backups/` son el molde (`scripts/purge-future-sessions.ts`,
-`scripts/reparar-rempro.ts`); B-06 lo vuelve obligatorio para todos. Un `pg_dump` de una tabla
-es la única restauración PARCIAL que existe: Supabase restaura todo o nada.
+**Antes de una escritura arriesgada, un respaldo propio** (B-06, 2026-09-04): todo script con
+`--apply` que declare sus tablas —`resolverApply({ tablas: ["SessionProject"] })`— las respalda
+con `pg_dump` a `backups/<fecha>-<script>/<Tabla>.<hora>.sql` ANTES de escribir, y si el respaldo
+falla no escribe. Exige `pg_dump` en el PATH de la PC que corre el script (herramientas cliente
+de PostgreSQL); `SIN_RESPALDO=1` lo salta por comando, a sabiendas. Los scripts que todavía no
+declaran tablas están congelados en `lib/db/guard-de-escritura.test.ts` (la lista solo encoge).
+Un `pg_dump` de una tabla es la única restauración PARCIAL que existe: Supabase restaura todo o
+nada. Restaurar: `psql "$DATABASE_URL" -f backups/<fecha>-<script>/<Tabla>.<hora>.sql`.
 
 ## Reconstruir el VPS desde cero
 

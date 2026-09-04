@@ -177,3 +177,148 @@ describe("ningun script escribe en produccion sin pedir permiso", () => {
     expect(escribeSqlCrudo("prisma.$queryRaw`SELECT 1`")).toBe(false);
   });
 });
+
+/**
+ * DEUDA CONOCIDA (B-06, censo del 2026-09-04): 88 scripts con `--apply` que NO declaran las tablas que
+ * escriben, asi que corren SIN respaldo automatico (Supabase restaura la base entera o nada). La
+ * lista SOLO ENCOGE. El arreglo es una linea, y el molde es scripts/cleanup-cross-client-session-projects.ts:
+ *
+ *     const APPLY = resolverApply({ tablas: ["SessionProject"] });
+ */
+const SIN_TABLAS: string[] = [
+  "scripts/agregar-dominio-a-cliente.ts",
+  "scripts/apply-policies.ts",
+  "scripts/archive/seed-propuesta-csl.ts",
+  "scripts/archive/seed-roles.ts",
+  "scripts/archive/seed-test-user.ts",
+  "scripts/assign-team-roles.ts",
+  "scripts/backfill-handoff-generated.ts",
+  "scripts/backfill-kickoff-sections.ts",
+  "scripts/backfill-lifecycle-stage.ts",
+  "scripts/backfill-project-pipeline.ts",
+  "scripts/backfill-resolved-client.ts",
+  "scripts/backfill-timeline-anchor.ts",
+  "scripts/backfill-titulos-portada.ts",
+  "scripts/backfill-ventas-ganadas.ts",
+  "scripts/cargar-tipo-cambio.ts",
+  "scripts/cerrar-corridas-colgadas.ts",
+  "scripts/cleanup-agents.ts",
+  "scripts/cleanup-cobranza-demo.ts",
+  "scripts/cleanup-handoff-dup-projects.ts",
+  "scripts/cleanup-mapeo-draft-cards.ts",
+  "scripts/cleanup-partner-created-clients.ts",
+  "scripts/clear-kickoff-blocks.ts",
+  "scripts/corregir-nomina-agosto-2026.ts",
+  "scripts/corregir-sesiones-cruzadas.ts",
+  "scripts/crear-integraciones-lote.ts",
+  "scripts/create-team-member.ts",
+  "scripts/deactivate-team-members.ts",
+  "scripts/delete-canvas.ts",
+  "scripts/delete-empty-handoff-shells.ts",
+  "scripts/estado-handoff-por-tipo.ts",
+  "scripts/fix-titulos-basura.ts",
+  "scripts/fusionar-fases-cronograma.ts",
+  "scripts/heal-handoff-anchors.ts",
+  "scripts/import-comisiones-partner.ts",
+  "scripts/import-egresos-xlsx.ts",
+  "scripts/import-facturaciones-xlsx.ts",
+  "scripts/import-planilla-xlsx.ts",
+  "scripts/limpiar-piezas-basura.ts",
+  "scripts/merge-duplicate-clients.ts",
+  "scripts/merge-particularidades-duplicadas.ts",
+  "scripts/migrar-tipo-implementacion-a-tag.ts",
+  "scripts/migrate-add-exploracion-canvas.ts",
+  "scripts/migrate-add-handoff-canvas.ts",
+  "scripts/migrate-add-kickoff-canvas.ts",
+  "scripts/migrate-canvas-reorg.ts",
+  "scripts/migrate-create-handoff-entities.ts",
+  "scripts/migrate-pending-items-to-action-items.ts",
+  "scripts/migrate-procesos-to-blocks.ts",
+  "scripts/migrate-sessions-to-projects.ts",
+  "scripts/migrate-strategy-to-client-info.ts",
+  "scripts/mover-bc-de-cliente.ts",
+  "scripts/probar-asistente.ts",
+  "scripts/purge-future-sessions.ts",
+  "scripts/reapuntar-empresa-fusionada.ts",
+  "scripts/reassign-cross-client-to-project-client.ts",
+  "scripts/reassign-felipe-to-lorena.ts",
+  "scripts/reassign-inve-project-to-heiver.ts",
+  "scripts/reassign-kolbi-to-heiver.ts",
+  "scripts/reclassify-client-sessions.ts",
+  "scripts/recuperar-transcripts-meet.ts",
+  "scripts/register-client-domains.ts",
+  "scripts/rename-default-canvas.ts",
+  "scripts/renombrar-cliente.ts",
+  "scripts/reorder-canvases.ts",
+  "scripts/reparar-rempro.ts",
+  "scripts/reset-all-onboarding.ts",
+  "scripts/reset-client-onboarding.ts",
+  "scripts/reset-clients-content.ts",
+  "scripts/reset-handoff-kickoff-timeline-procesos.ts",
+  "scripts/reset-one-project.ts",
+  "scripts/reset-procesos-client.ts",
+  "scripts/restore-project-tags-from-runs.ts",
+  "scripts/run-marketing-cron-tick.ts",
+  "scripts/run-partner-sync.ts",
+  "scripts/sanar-semanas-fuera-de-fase.ts",
+  "scripts/sanar-vinculos-de-alta.ts",
+  "scripts/seed-app-users.ts",
+  "scripts/seed-buyer-personas.ts",
+  "scripts/seed-cobranza-demo-historia.ts",
+  "scripts/seed-cobranza-demo.ts",
+  "scripts/seed-costos-demo.ts",
+  "scripts/seed-partners-comerciales.ts",
+  "scripts/seed-perfil-cse.ts",
+  "scripts/seed-propuesta-asistente-contable.ts",
+  "scripts/seed-propuesta-cse.ts",
+  "scripts/seed-role-permissions.ts",
+  "scripts/sellar-pipeline-del-alta.ts",
+  "scripts/unignore-hubspot-service.ts",
+];
+
+/** `resolverApply()` pelado, como llamada real (no la mencion en una cadena de check-invariants). */
+const APPLY_SIN_TABLAS = /\bresolverApply\(\s*\)\s*;/;
+
+function applySinTablas(): string[] {
+  const encontrados: string[] = [];
+  const caminar = (dir: string) => {
+    for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) {
+        caminar(rel);
+        continue;
+      }
+      if (!e.name.endsWith(".ts")) continue;
+      if (APPLY_SIN_TABLAS.test(soloCodigo(fs.readFileSync(path.join(RAIZ, rel), "utf8")))) encontrados.push(rel);
+    }
+  };
+  caminar("scripts");
+  return encontrados.sort();
+}
+
+describe("todo --apply declara las tablas que escribe, o esta en la lista de deuda (B-06)", () => {
+  const actuales = applySinTablas();
+  const conocidos = new Set(SIN_TABLAS);
+
+  it("no aparece un --apply nuevo sin tablas", () => {
+    /* La edicion que la pone en rojo: un script nuevo con `const APPLY = resolverApply();` — escribe
+       en produccion sin que nadie pueda volver atras una tabla. */
+    const nuevos = actuales.filter((f) => !conocidos.has(f));
+    expect(
+      nuevos,
+      "Estos --apply no declaran las tablas que escriben y corren sin respaldo. " +
+        'Declaralas: resolverApply({ tablas: ["LaTabla"] }) — molde: scripts/cleanup-cross-client-session-projects.ts.',
+    ).toEqual([]);
+  });
+
+  it("y la lista solo encoge (si le declaraste las tablas a uno, sacalo)", () => {
+    const actualesSet = new Set(actuales);
+    const sobran = SIN_TABLAS.filter((f) => !actualesSet.has(f));
+    expect(sobran, "Estos ya declaran tablas (o ya no existen): sacalos de SIN_TABLAS.").toEqual([]);
+  });
+
+  it("el escaneo encuentra algo (si no, pasa por vacio)", () => {
+    expect(actuales.length, "el escaneo dejo de encontrar llamadas a resolverApply()").toBeGreaterThan(50);
+  });
+});
