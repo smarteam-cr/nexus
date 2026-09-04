@@ -4,6 +4,17 @@ import { prisma } from "@/lib/db/prisma";
 import { apiError } from "@/lib/api";
 import { guardCapability } from "@/lib/auth/api-guards";
 import { revalidateTeamMembers, TEAM_MEMBER_SAFE_SELECT } from "@/lib/cache/team";
+import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { z } from "zod";
+
+/* A-20 (auditoría 2026-09-03): el PUT tomaba name/email/area del body sin forma ni tope.
+   Estricto; `role` sobrevive como alias legacy de `area` (lo que mandaba el form viejo). */
+const putMemberSchema = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  email: z.email().max(254),
+  area: z.string().max(100).nullable().optional(),
+  role: z.string().max(100).nullable().optional(),
+});
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -37,8 +48,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const target = await loadProtectedTarget(id, guard.role);
   if (target instanceof NextResponse) return target;
 
-  const { name, email, area, role } = await req.json();
-  if (!name?.trim() || !email?.trim()) return apiError("name y email son requeridos", 400);
+  const parsed = putMemberSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return cuerpoInvalido(parsed.error);
+  const { name, email, area, role } = parsed.data;
 
   try {
     const member = await prisma.teamMember.update({

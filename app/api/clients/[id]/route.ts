@@ -4,6 +4,20 @@ import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { clampLogoScale } from "@/lib/ui/logo-scale";
+import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { z } from "zod";
+
+/* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
+   sobre cualquier cosa). Estricto: los campos que la ficha edita, con sus topes, y nada más —
+   un campo desconocido es 400, no un silencio. */
+const patchClientSchema = z.strictObject({
+  name: z.string().trim().min(1).max(200).optional(),
+  company: z.string().max(200).nullable().optional(),
+  industry: z.string().max(200).nullable().optional(),
+  notes: z.string().max(20_000).nullable().optional(),
+  emailDomains: z.array(z.string().max(253)).max(50).optional(),
+  logoScale: z.number().nullable().optional(),
+});
 
 // GET /api/clients/[id]
 export async function GET(
@@ -47,7 +61,9 @@ export async function PATCH(
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
 
-  const data = await request.json();
+  const parsed = patchClientSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return cuerpoInvalido(parsed.error);
+  const data = parsed.data;
   const client = await prisma.client.update({
     where: { id },
     data: {

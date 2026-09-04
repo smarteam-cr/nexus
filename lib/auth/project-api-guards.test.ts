@@ -602,6 +602,9 @@ describe("⛔ los handlers que escriben Json directo del body pasan por zod ante
     "app/api/agents/[id]/route.ts",
     "app/api/projects/[projectId]/canvases/[canvasId]/route.ts",
     "app/api/projects/[projectId]/canvas-sections/[sectionId]/blocks/route.ts",
+    // A-20: la ficha del cliente y el miembro del equipo, mismo molde.
+    "app/api/clients/[id]/route.ts",
+    "app/api/team/[id]/route.ts",
   ];
   const ESCRITURA = /prisma\.\w+\.(?:create|update|updateMany|upsert|delete|deleteMany)\(/;
 
@@ -625,7 +628,7 @@ describe("⛔ los handlers que escriben Json directo del body pasan por zod ante
         "z.strictObject(",
       );
     }
-    expect(handlersConBody, "la guarda no mira nada").toBeGreaterThanOrEqual(5);
+    expect(handlersConBody, "la guarda no mira nada").toBeGreaterThanOrEqual(7);
     expect(ofensores, "estos handlers escriben lo que llega en el body sin validarlo").toEqual([]);
   });
 });
