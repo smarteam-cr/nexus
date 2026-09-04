@@ -10,6 +10,7 @@ import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-ca
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { ProjectGpsSkeleton } from "./skeletons";
 import type { Frente, FrenteKey } from "@/lib/projects/kind";
+import { pctConTranscript, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
 import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
@@ -104,6 +105,8 @@ interface GPSData {
    * lista de siempre en vez de nada.
    */
   frentes?: Frente[];
+  /** D-08: % de reuniones del cliente con transcripción (últimos 90 días). Ausente en respuestas viejas. */
+  coberturaDelCliente?: CoberturaDelCliente | null;
   projectInfo?: ProjectInfo;
   historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
   setup?: SetupSignals; // #5 — qué canvas tiene generados el proyecto (indicador del widget)
@@ -459,6 +462,8 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   // Los frentes que este proyecto muestra, con su rótulo — los manda el servidor.
   const frentes = data.frentes ?? FRENTES_LEGACY;
+  const cobertura = data.coberturaDelCliente ?? null;
+  const pctTranscript = cobertura ? pctConTranscript(cobertura) : null;
   const canvasChips = data.canvasChips ?? [];
   const etapa = data.etapa ?? null;
 
@@ -635,6 +640,16 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               <div key={f.key}>{renderLastFront(f.key, f.label)}</div>
             ))}
           </div>
+          {/* D-08: la cobertura de transcripción de ESTE cliente. Sin reuniones pasadas no se pinta:
+             un «0%» sobre cero reuniones sería una acusación sobre nada. */}
+          {cobertura && pctTranscript !== null && (
+            <div
+              className="mt-2 text-[10px] text-fg-muted"
+              title={`Reuniones del cliente de los últimos ${cobertura.ventanaDias} días que dejaron transcripción. Lo que no se graba no alimenta ningún documento.`}
+            >
+              Con transcripción: <strong>{pctTranscript}%</strong> ({cobertura.conTranscript} de {cobertura.pasadas}, últimos 3 meses)
+            </div>
+          )}
           <button
             onClick={() => setMinuteDialogOpen(true)}
             className="mt-auto pt-2 text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"

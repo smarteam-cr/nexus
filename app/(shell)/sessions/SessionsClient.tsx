@@ -11,6 +11,7 @@ import {
   type GrupoElegido,
   type IndiceDeGrupos,
 } from "@/lib/sessions/indice-de-grupos";
+import type { FilaDeCoberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import AnalysisPanel from "./AnalysisPanel";
 import { IconCheck, Alert } from "@/components/ui";
@@ -114,6 +115,8 @@ export interface Cobertura {
   conClienteSinTr: number;
   adentro: number;
   adentroSinTr: number;
+  /** D-08: el mismo número, por persona de Customer Success presente (peor cobertura primero). */
+  porCse: FilaDeCoberturaPorCse[];
 }
 
 // Identificador compuesto del grupo seleccionado en la sidebar
@@ -210,7 +213,7 @@ function RoleBadge({ role }: { role: string }) {
  * meterla al denominador haría que el número empeore solo por agendar.
  */
 function AvisoDeCobertura({ cobertura }: { cobertura: Cobertura }) {
-  const { conCliente, conClienteSinTr, adentro, adentroSinTr } = cobertura;
+  const { conCliente, conClienteSinTr, adentro, adentroSinTr, porCse } = cobertura;
   const total = conCliente + adentro;
   if (total === 0) return null;
 
@@ -233,6 +236,18 @@ function AvisoDeCobertura({ cobertura }: { cobertura: Cobertura }) {
           {adentroSinTr} de {adentro}). Lo que no se graba no alimenta ningún documento — y
           pedirlo después de la reunión ya no sirve.
         </span>
+        {/* D-08: quién. El número global no dice a quién pedirle que grabe; esto sí. */}
+        {porCse.length > 0 && (
+          <div className="mt-2 text-xs text-fg-muted">
+            Sin transcripción, por CSE:{" "}
+            {porCse.map((f, i) => (
+              <span key={f.email}>
+                {i > 0 && " · "}
+                <strong>{f.nombre}</strong> {pct(f.sinTranscript, f.total)}% ({f.sinTranscript} de {f.total})
+              </span>
+            ))}
+          </div>
+        )}
       </Alert>
     </div>
   );

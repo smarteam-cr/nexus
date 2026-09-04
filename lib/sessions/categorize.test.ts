@@ -31,6 +31,7 @@
  * Correr: `npx vitest run lib/sessions/categorize.test.ts --project unit`.
  */
 import { test, expect } from "vitest";
+import { coberturaPorCse } from "./cobertura-por-cse";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -457,4 +458,68 @@ test("C-20 — cambiar de grupo pide la ruta (con guard interno) y NO re-renderi
   expect(cliente, "la URL sigue a la selección sin pedirle nada al servidor").toContain('window.history.replaceState(null, "", next)');
   expect(cliente, "las filas de un grupo se piden a la ruta").toContain("/api/sessions/grupo?g=");
   expect(cliente, "y se guardan por grupo: un grupo se pide UNA vez").toContain("setGrupos((prev) => ({ ...prev, [clave]: filas }))");
+});
+
+// ── D-08 (2026-09-04): % de reuniones con transcripción, por CSE y por cliente ──────────────────
+/* El aviso de /sessions decía «N% no dejó transcripción» y nadie podía responder de QUIÉN. Ahora se
+   agrupa por persona de Customer Success sobre las filas que la página ya carga, y la ficha del
+   cliente (el GPS del proyecto) dice el % de ese cliente con dos COUNT sobre el índice. */
+
+test("D-08 · coberturaPorCse: solo lo ocurrido en la ventana, solo roles de CS, una reunión con dos CSE cuenta para los dos", () => {
+  const ahora = new Date("2026-09-04T12:00:00Z");
+  const dias = (n: number) => new Date(ahora.getTime() - n * 24 * 60 * 60 * 1000);
+  const equipo = [
+    { name: "Ana", email: "Ana@smarteamcr.com", roleEnum: "CSE" },
+    { name: "Luis", email: "luis@smarteamcr.com", roleEnum: "CSL" },
+    { name: "Pepe", email: "pepe@smarteamcr.com", roleEnum: "VENTAS" },
+  ];
+  const sesiones = [
+    { id: "s1", date: dias(1), participants: ["ana@smarteamcr.com", "luis@smarteamcr.com", "x@cliente.com"] },
+    { id: "s2", date: dias(10).toISOString(), participants: ["ana@smarteamcr.com"] },
+    { id: "agendada", date: dias(-1), participants: ["ana@smarteamcr.com"] },
+    { id: "vieja", date: dias(100), participants: ["ana@smarteamcr.com"] },
+    { id: "ventas", date: dias(2), participants: ["pepe@smarteamcr.com"] },
+  ];
+  const conTranscript = new Set(["s1"]);
+  const filas = coberturaPorCse(sesiones, equipo, (id) => conTranscript.has(id), ahora);
+
+  expect(filas.map((f) => f.email), "solo CS, peor cobertura primero; Ventas no entra").toEqual(["Ana@smarteamcr.com", "luis@smarteamcr.com"]);
+  const ana = filas[0]!;
+  expect({ total: ana.total, sinTranscript: ana.sinTranscript }, "una reunión agendada no es una reunión que hubo, y >90 días queda afuera").toEqual({ total: 2, sinTranscript: 1 });
+  expect(filas[1], "la reunión con dos CSE cuenta para los dos").toMatchObject({ nombre: "Luis", total: 1, sinTranscript: 0 });
+  expect(coberturaPorCse(sesiones, [{ name: "Pepe", email: "pepe@smarteamcr.com", roleEnum: "VENTAS" }], () => false, ahora)).toEqual([]);
+});
+
+test("D-08 · /sessions agrupa por CSE sobre lo que ya cargó, y el aviso lo PINTA", () => {
+  /* La edición que lo pone en rojo: calcular `porCse` con una consulta nueva «para que sea exacto»
+     (el ítem exige cero consultas pesadas: son las mismas filas), o mandarlo al cliente y no pintarlo
+     — un dato que llega y no se pinta es idéntico a un dato que no llega. */
+  const cargador = fs.readFileSync(path.join(process.cwd(), "lib/sessions/cargar-sesiones-categorizadas.ts"), "utf8");
+  expect(cargador, "el desglose sale de las filas ya cargadas, con el mismo criterio de transcript y el mismo reloj")
+    .toContain("const porCse = coberturaPorCse(sessions, teamMembers, (id) => withTranscriptSet.has(id), now);");
+  expect(cargador).toContain("return { conCliente, conClienteSinTr, adentro, adentroSinTr, porCse };");
+
+  const cliente = fs.readFileSync(path.join(process.cwd(), "app/(shell)/sessions/SessionsClient.tsx"), "utf8");
+  const aviso = cliente.slice(cliente.indexOf("function AvisoDeCobertura("), cliente.indexOf("// ── Badge de fuente"));
+  expect(aviso.length, "la guarda no mira nada").toBeGreaterThan(400);
+  expect(aviso, "el aviso pinta el desglose por CSE, no solo el número global").toContain("Sin transcripción, por CSE:");
+  expect(aviso, "cada fila dice el % y el conteo de ESA persona").toContain("{pct(f.sinTranscript, f.total)}% ({f.sinTranscript} de {f.total})");
+});
+
+test("D-08 · la ficha del cliente: el GPS cuenta con dos COUNT (pasadas, con transcript no vacío) y el widget lo pinta", () => {
+  /* La edición que lo pone en rojo: contar `transcript: { not: null }` sin excluir `""` («total
+     analizables» mentiría hacia arriba, lección de C-10); contar también lo agendado (el % empeora solo
+     por agendar); o traer filas en vez de contar. */
+  const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/projects/[projectId]/gps/route.ts"), "utf8");
+  const bloque = ruta.slice(ruta.indexOf("const ahoraCobertura"), ruta.indexOf("const pendingItemsCompat"));
+  expect(bloque.length, "la guarda no mira nada").toBeGreaterThan(200);
+  expect(bloque, "solo las que ya ocurrieron, dentro de la ventana").toContain("date: { gte: desdeCobertura, lt: ahoraCobertura }");
+  expect(bloque, "«con transcripción» = no nula Y no vacía").toContain('transcript: { not: null }, NOT: { transcript: "" }');
+  expect(bloque, "se cuenta, no se traen filas").toContain("prisma.firefliesSession.count({ where: whereCobertura })");
+  expect(bloque).not.toContain("findMany");
+  expect(ruta, "el dato viaja en la respuesta del GPS").toMatch(/^\s+coberturaDelCliente,$/m);
+
+  const widget = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectGPS.tsx"), "utf8");
+  expect(widget, "el widget lo pinta con el % único del módulo").toContain("Con transcripción: <strong>{pctTranscript}%</strong>");
+  expect(widget, "sin reuniones pasadas no se pinta un 0% sobre nada").toContain("cobertura && pctTranscript !== null &&");
 });

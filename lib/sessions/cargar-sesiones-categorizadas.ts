@@ -18,6 +18,7 @@ import {
 } from "@/lib/sessions/categorize";
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
+import { coberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
 import { getTeamMembers } from "@/lib/cache/team";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
@@ -233,7 +234,11 @@ export async function cargarSesionesCategorizadas() {
         if (sinTranscript) conClienteSinTr++;
       }
     }
-    return { conCliente, conClienteSinTr, adentro, adentroSinTr };
+    /* D-08 (2026-09-04): la misma pregunta POR CSE, sobre estas mismas filas (`sessions` ya
+       está en memoria, `teamMembers` viene del cache): cero consultas nuevas. Mismo corte de
+       fecha (pasadas, 90 días) y mismo criterio de «con transcripción» (`withTranscriptSet`). */
+    const porCse = coberturaPorCse(sessions, teamMembers, (id) => withTranscriptSet.has(id), now);
+    return { conCliente, conClienteSinTr, adentro, adentroSinTr, porCse };
   })();
 
   return { sessionsWithMeta, clients, categories, hubspotCompanies, teamMembersLite, cobertura };

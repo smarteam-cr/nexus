@@ -20,6 +20,7 @@ import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
 import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
@@ -433,6 +434,23 @@ export const GET = withProjectAccess(async (
 
   // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
   // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
+  /* D-08 (2026-09-04): % de reuniones del CLIENTE con transcripción — la ficha del cliente. Dos
+     COUNT sobre el índice [resolvedClientId, date], nunca filas ni blobs. Solo las que YA
+     ocurrieron y dentro de la ventana (la misma que el aviso de /sessions), y «con transcripción»
+     con el criterio único del repo: no nula y no vacía (`""` no es un transcript, lección de C-10). */
+  const ahoraCobertura = new Date();
+  const desdeCobertura = new Date(ahoraCobertura.getTime() - VENTANA_DE_COBERTURA_DIAS * 24 * 60 * 60 * 1000);
+  const whereCobertura = { ...whereBelongsToClient(project.clientId), date: { gte: desdeCobertura, lt: ahoraCobertura } };
+  const [reunionesPasadas, reunionesConTranscript] = await Promise.all([
+    prisma.firefliesSession.count({ where: whereCobertura }),
+    prisma.firefliesSession.count({ where: { ...whereCobertura, transcript: { not: null }, NOT: { transcript: "" } } }),
+  ]);
+  const coberturaDelCliente: CoberturaDelCliente = {
+    pasadas: reunionesPasadas,
+    conTranscript: reunionesConTranscript,
+    ventanaDias: VENTANA_DE_COBERTURA_DIAS,
+  };
+
   const pendingItemsCompat = openItems.map(toCompat);
   const historyItems = historyRows.map(toCompat);
 
@@ -457,6 +475,8 @@ export const GET = withProjectAccess(async (
     /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.
        El servidor manda la lista ya filtrada por `piezaAplica`; el widget solo pinta. */
     canvasChips,
+    /* D-08: % de reuniones del cliente con transcripción (últimos 90 días, solo las ocurridas). */
+    coberturaDelCliente,
     /* El resumen citado del proyecto, con su veredicto de frescura ya resuelto. `null` = todavía
        no se generó, que el widget pinta distinto de «se generó y no dice nada». */
     brief,
