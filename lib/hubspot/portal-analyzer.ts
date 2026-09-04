@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { refreshAccessToken } from "./client";
+import { refreshAccessToken, tokenDeCuenta } from "./client";
 import { readAccountState, HubspotAccountState, PipelineDef, WorkflowDef, SequenceDef } from "./reader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1102,7 +1102,7 @@ export async function getFreshToken(accountId: string): Promise<string> {
     return refreshed.access_token;
   }
 
-  return account.accessToken;
+  return tokenDeCuenta(account);
 }
 
 /**
@@ -1233,7 +1233,7 @@ export async function buildPortalSnapshot(accountId: string): Promise<PortalSnap
     where: { id: accountId },
     select: { accessToken: true },
   });
-  const token = account?.accessToken ?? "";
+  const token = account ? tokenDeCuenta(account) : "";
 
   const pipelineCount = Object.values(accountState.pipelines).flat().length;
   const customObjectsCount = accountState.customObjects.length;

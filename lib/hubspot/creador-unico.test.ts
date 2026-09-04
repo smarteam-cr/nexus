@@ -328,3 +328,42 @@ describe("el cuerpo del POST, para los tres pipelines", () => {
     expect(llamadas).toHaveLength(0);
   });
 });
+
+describe("C-25: el token de una cuenta de HubSpot se lee por UN accesor (lib/hubspot/client.ts)", () => {
+  /**
+   * Paso (i) de cifrar los tokens en reposo. Si un solo lector sigue haciendo `.accessToken` por
+   * su cuenta, el día que la columna guarde `enc:…` ese lector manda texto cifrado a HubSpot y
+   * falla con un 401 que no dice por qué. Por eso el accesor es único y esto lo vigila ANTES de
+   * que exista el cifrado: hoy son 2 lectores en lib y 7 scripts, y todos pasan por `tokenDeCuenta`.
+   *
+   * Los tokens de los ENLACES EXTERNOS (`ProjectExternalAccess.accessToken`) son otra cosa y no
+   * entran: el censo es sobre los archivos que nombran `hubspotAccount`.
+   */
+  const ACCESOR = "lib/hubspot/client.ts";
+  const lectoresDeHubspot = [...PRODUCCION, ...archivosDe("scripts")]
+    .filter((f) => !/\.test\.tsx?$/.test(f) && rel(f) !== ACCESOR)
+    .filter((f) => /\bhubspotAccount\b|\bHubspotAccount\b/.test(sinComentarios(fs.readFileSync(f, "utf8"))));
+
+  it("el accesor existe, y client.ts mismo lee la columna solo a través de él", () => {
+    /* La edición que la pone en rojo: `return account.accessToken` de vuelta en client.ts «porque
+       es lo mismo» — hoy sí; con el cifrado, no. */
+    const src = sinComentarios(fs.readFileSync(path.join(RAIZ, ACCESOR), "utf8"));
+    expect(src).toContain("export function tokenDeCuenta(");
+    expect(src.split("tokenDeCuenta(account)").length - 1, "las tres lecturas internas pasan por el accesor").toBe(3);
+    expect(src, "client.ts lee la columna a mano").not.toContain("account.accessToken");
+  });
+
+  it("LA guarda: ningún archivo que nombra hubspotAccount lee `.accessToken` fuera del accesor", () => {
+    /* La edición que la pone en rojo: `const token = accountRow?.accessToken ?? ""` de vuelta en
+       reader.ts, o `return acc.accessToken` en cualquiera de los scripts. */
+    expect(lectoresDeHubspot.length, "el censo no está mirando nada").toBeGreaterThanOrEqual(8);
+    const culpables = lectoresDeHubspot
+      .filter((f) => /\.accessToken\b/.test(sinComentarios(fs.readFileSync(f, "utf8"))))
+      .map(rel);
+    expect(
+      culpables,
+      "Estos archivos leen el token de una cuenta de HubSpot a mano. Usá `tokenDeCuenta(cuenta)` de " +
+        "lib/hubspot/client.ts: es el único lugar que va a saber descifrarlo.",
+    ).toEqual([]);
+  });
+});

@@ -1,5 +1,5 @@
 import { Client } from "@hubspot/api-client";
-import { getHubspotClient } from "./client";
+import { getHubspotClient, tokenDeCuenta } from "./client";
 import { prisma } from "@/lib/db/prisma";
 
 export interface HubspotAccountState {
@@ -94,7 +94,7 @@ export async function readAccountState(
     where: { id: accountId },
     select: { accessToken: true },
   });
-  const token = accountRow?.accessToken ?? "";
+  const token = accountRow ? tokenDeCuenta(accountRow) : "";
 
   const [
     propertiesResult,

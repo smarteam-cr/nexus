@@ -1,6 +1,23 @@
 import { Client } from "@hubspot/api-client";
 import { prisma } from "@/lib/db/prisma";
 
+/**
+ * C-25 (2026-09-04) — EL ÚNICO lugar que sabe cómo se lee el token de una cuenta de HubSpot.
+ *
+ * Paso (i) de cifrar los tokens en reposo. Hoy devuelve la columna tal cual; el paso (ii) va a
+ * descifrar ACÁ (prefijo `enc:`, lectura dual) sin que ningún lector cambie, y el (iii) va a
+ * rechazar el texto plano. Para que eso sea posible, NADIE lee `.accessToken` de una
+ * HubspotAccount fuera de este archivo — ni en lib, ni en app, ni en scripts. Lo vigila
+ * lib/hubspot/creador-unico.test.ts: un archivo que nombra `hubspotAccount` y lee
+ * `.accessToken` es un rojo.
+ *
+ * ⚠ Los tokens de los ENLACES EXTERNOS (`ProjectExternalAccess.accessToken`, Business Case)
+ * son otra cosa: identifican un link, no autentican contra HubSpot. No pasan por acá.
+ */
+export function tokenDeCuenta(cuenta: { accessToken: string }): string {
+  return cuenta.accessToken;
+}
+
 // ── Cuenta del sistema (Smarteam) ─────────────────────────────────────────────
 
 export async function getSystemHubspotClient(): Promise<Client> {
@@ -20,7 +37,7 @@ export async function getSystemHubspotClient(): Promise<Client> {
     });
     return new Client({ accessToken: refreshed.access_token });
   }
-  return new Client({ accessToken: account.accessToken });
+  return new Client({ accessToken: tokenDeCuenta(account) });
 }
 
 /**
@@ -60,7 +77,7 @@ export async function getSystemAccessToken(): Promise<string> {
     });
     return refreshed.access_token;
   }
-  return account.accessToken;
+  return tokenDeCuenta(account);
 }
 
 export async function getHubspotClient(accountId: string): Promise<Client> {
@@ -86,7 +103,7 @@ export async function getHubspotClient(accountId: string): Promise<Client> {
     return new Client({ accessToken: refreshed.access_token });
   }
 
-  return new Client({ accessToken: account.accessToken });
+  return new Client({ accessToken: tokenDeCuenta(account) });
 }
 
 export async function refreshAccessToken(refreshToken: string) {

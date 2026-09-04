@@ -27,6 +27,7 @@
 import "dotenv/config";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
+import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { resolverHermanos } from "@/lib/hubspot/sync-projects";
 
@@ -46,7 +47,7 @@ const LOTE = 100; // techo de la API de batch/read de HubSpot
 async function tokenDeCuenta(accountId: string): Promise<string | null> {
   const acc = await prisma.hubspotAccount.findUnique({ where: { id: accountId } });
   if (!acc) return null;
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return acc.accessToken;
+  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
   const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

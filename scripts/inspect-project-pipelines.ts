@@ -25,6 +25,7 @@
 import "dotenv/config";
 import { createScriptDb } from "./lib/db";
 import { PROJECT_PIPELINES } from "@/lib/projects/kind";
+import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
 
 // Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
 // las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
@@ -58,7 +59,7 @@ const PIPELINE_CS_CONOCIDO = "826270797";
 async function systemToken(): Promise<string> {
   const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
   if (!acc) throw new Error("No hay cuenta HubSpot del sistema");
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return acc.accessToken;
+  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
   const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

@@ -16,6 +16,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
+import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -26,7 +27,7 @@ const PROPS = "hs_name,nombre_del_proyecto,hs_status,estatus_del_proyecto,hs_pip
 async function systemToken(): Promise<string> {
   const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
   if (!acc) throw new Error("No hay cuenta HubSpot del sistema");
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return acc.accessToken;
+  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
   const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
