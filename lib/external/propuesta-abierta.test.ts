@@ -36,6 +36,8 @@
  *      Antes la cookie valía 30 días pasara lo que pasara.
  *   8. El token no viaja a Sentry (A-12): cada error en una página externa se llevaba la URL
  *      —con la llave adentro— a un tercero, en el cliente y en el servidor.
+ *   9. (candado 4, ampliado por A-13) Toda la app sale con `X-Frame-Options: DENY`, `nosniff`
+ *      y una CSP en report-only. Sin ellas, cualquier sitio puede enmarcar la propuesta.
  */
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -44,6 +46,7 @@ import { evaluarContrasena, LARGO_MINIMO_CONTRASENA } from "@/lib/external/polit
 import { claveDeIp, POLITICA_POR_IP, POLITICA_POR_TOKEN } from "@/lib/external/verify-rate-limit";
 import { armarCredencial, credencialVigente, leerCredencial, versionDeCredencial } from "@/lib/external/credencial";
 import { tacharTokensDelEvento } from "@/lib/observability/scrub";
+import { CABECERAS_DE_SEGURIDAD, politicaCsp, reportUriDesdeDsn } from "@/lib/observability/csp";
 
 // verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -168,6 +171,38 @@ describe("candado 4 — /external sale con Referrer-Policy: no-referrer", () => 
       "Sin no-referrer, el logo del cliente (Supabase Storage, otro origen) le entrega el " +
         "token entero a un tercero por el header Referer.",
     ).toBe(true);
+  });
+
+  it("y las cabeceras de seguridad para TODA la app (A-13): frame DENY, nosniff, CSP report-only", () => {
+    /* La edicion que lo pone en rojo: acotar el bloque a /external, sacar X-Frame-Options, o
+       pasar la CSP a modo enforce sin haber leído los reportes. */
+    const src = config();
+    expect(
+      /source:\s*["']\/:path\*["']/.test(src),
+      "El bloque tiene que cubrir /:path* — la app entera, no solo /external.",
+    ).toBe(true);
+    expect(src, "next.config.ts consume el único dueño de las cabeceras").toContain("CABECERAS_DE_SEGURIDAD(");
+    const porClave = Object.fromEntries(CABECERAS_DE_SEGURIDAD({}).map((c) => [c.key, c.value]));
+    expect(porClave["X-Frame-Options"]).toBe("DENY");
+    expect(porClave["X-Content-Type-Options"]).toBe("nosniff");
+    expect(porClave["Content-Security-Policy-Report-Only"]).toContain("default-src 'self'");
+    expect(
+      porClave["Content-Security-Policy"],
+      "La CSP nace en report-only: se endurece DESPUÉS de leer los reportes de producción.",
+    ).toBeUndefined();
+    expect(porClave["Strict-Transport-Security"], "HSTS es de nginx, no de la app").toBeUndefined();
+  });
+
+  it("la CSP no declara frame-ancestors, cierra object-src y reporta a Sentry cuando hay DSN", () => {
+    /* La edicion que lo pone en rojo: sumar frame-ancestors «porque es lo moderno». */
+    expect(politicaCsp(), "el plan lo excluye: XFO ya cubre el framing").not.toContain("frame-ancestors");
+    expect(politicaCsp()).toContain("object-src 'none'");
+    expect(politicaCsp()).not.toContain("report-uri");
+    const uri = reportUriDesdeDsn("https://abc123@o4507.ingest.us.sentry.io/4509");
+    expect(uri).toBe("https://o4507.ingest.us.sentry.io/api/4509/security/?sentry_key=abc123");
+    expect(politicaCsp({ reportUri: uri })).toContain(`report-uri ${uri}`);
+    expect(reportUriDesdeDsn(undefined)).toBeNull();
+    expect(reportUriDesdeDsn("no-es-una-url")).toBeNull();
   });
 });
 

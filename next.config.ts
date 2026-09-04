@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { CABECERAS_DE_SEGURIDAD, reportUriDesdeDsn } from "./lib/observability/csp";
 
 // Silenciar DeprecationWarning de url.parse() que viene de dependencias externas
 process.removeAllListeners("warning");
@@ -43,6 +44,17 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      /* A-13 (auditoría 2026-09-03): cabeceras de seguridad para TODA la app.
+         `X-Frame-Options: DENY` (nada de Nexus se carga en un iframe: el único iframe del
+         repo es `srcdoc` y esta cabecera no le aplica), `nosniff`, y una CSP en modo
+         REPORT-ONLY —no bloquea nada todavía: primero se leen los reportes en Sentry,
+         después se endurece (ver lib/observability/csp.ts)—. HSTS queda en nginx (Elías). */
+      {
+        source: "/:path*",
+        headers: CABECERAS_DE_SEGURIDAD({
+          reportUri: reportUriDesdeDsn(process.env.NEXT_PUBLIC_SENTRY_DSN),
+        }),
+      },
       {
         source: "/external/:path*",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
