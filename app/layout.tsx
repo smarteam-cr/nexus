@@ -19,12 +19,20 @@ const geistMono = Geist_Mono({
 
 // Design system del landing de Kickoff (Smarteam). Solo se usan dentro de
 // `.kickoff-landing` vía sus CSS variables; no cambian la fuente del resto de la app.
+//
+// C-15 (2026-09-04): `preload: false` en las tres familias de landing. El layout raíz las
+// declara para TODA la app, y con el default Next emitía un <link rel="preload"> por archivo
+// de fuente en cada página interna —donde ninguna se usa—. Sin preload la @font-face queda
+// igual (la landing y las vistas externas la piden cuando la necesitan, con `display: swap`);
+// solo desaparece la descarga anticipada en las páginas que no la usan. Geist sigue con
+// preload: es la fuente de la app.
 const montserrat = Montserrat({
   variable: "--font-montserrat",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
   display: "swap",
+  preload: false,
 });
 
 const openSans = Open_Sans({
@@ -32,6 +40,7 @@ const openSans = Open_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
+  preload: false,
 });
 
 // Línea gráfica Smarteam (retema 2026-07): familia ÚNICA de las landings
@@ -42,6 +51,7 @@ const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {

@@ -51,3 +51,36 @@ describe("cobertura de contenedores (page-shell)", () => {
     ).toEqual([]);
   });
 });
+
+describe("C-15: el shell no exporta `revalidate`, y las fuentes de landing no se precargan en la app", () => {
+  /**
+   * Toda página de app/(shell) es DINÁMICA: el layout lee la cookie del tema y cada page llama a
+   * un `require…User`. Un `export const revalidate = N` ahí no cachea nada — solo promete algo
+   * que Next ignora, y el próximo que lo lea cree que la página se sirve cacheada. Cinco páginas
+   * lo tenían (medido el 2026-09-04). Y el layout raíz declara tres familias de landing que
+   * ninguna página interna usa: con el default, Next precargaba sus archivos en TODAS.
+   */
+  it("ninguna page.tsx de app/(shell) exporta revalidate", () => {
+    /* La edición que lo pone en rojo: volver a poner `export const revalidate = 60` en una page
+       del shell «para que cachee» — no cachea, y miente. */
+    const conRevalidate = RUTAS.map((r) => path.join(BASE, r, "page.tsx"))
+      .filter((f) => /^export const revalidate\b/m.test(fs.readFileSync(path.join(RAIZ, f), "utf8")))
+      .map(norm);
+    expect(RUTAS.length, "la guarda no está mirando ninguna página").toBeGreaterThan(20);
+    expect(conRevalidate, "revalidate en una ruta dinámica: no aplica y engaña al que lo lee").toEqual([]);
+  });
+
+  it("las tres familias de landing llevan preload: false; Geist (la de la app) no", () => {
+    /* La edición que lo pone en rojo: sacar `preload: false` de una familia «porque la landing
+       la usa» — la landing la sigue pidiendo igual; lo que vuelve es la precarga en toda la app. */
+    const src = fs.readFileSync(path.join(RAIZ, "app/layout.tsx"), "utf8");
+    for (const familia of ["Montserrat(", "Open_Sans(", "Plus_Jakarta_Sans("]) {
+      const i = src.indexOf(familia);
+      expect(i, `${familia} salió del layout`).toBeGreaterThan(-1);
+      const bloque = src.slice(i, src.indexOf("});", i));
+      expect(bloque, `${familia} se precarga en toda la app`).toContain("preload: false");
+    }
+    const geist = src.slice(src.indexOf("Geist({"), src.indexOf("});", src.indexOf("Geist({")));
+    expect(geist, "Geist es la fuente de la app: sí se precarga").not.toContain("preload: false");
+  });
+});

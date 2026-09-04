@@ -3,9 +3,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import AgentsClient from "./AgentsClient";
 
-// ISR 60s para la lista de agentes. Mutaciones (crear/editar/eliminar) deben
-// llamar revalidatePath("/agents").
-export const revalidate = 60;
+// Página DINÁMICA (cada page llama a un `require…User` y el layout lee la cookie del tema): un
+// `export const revalidate` acá nunca cacheó nada — se retiró en C-15 (2026-09-04).
 
 export default async function AgentsPage() {
   try {

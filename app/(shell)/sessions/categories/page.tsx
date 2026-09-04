@@ -3,9 +3,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import CategoriesClient from "./CategoriesClient";
 
-// Admin de categorías de dominios — cambia poco. ISR 5 min.
-// Las mutaciones de SessionCategory deben llamar revalidatePath("/sessions/categories").
-export const revalidate = 300;
+// Página DINÁMICA (cada page llama a un `require…User` y el layout lee la cookie del tema): un
+// `export const revalidate` acá nunca cacheó nada — se retiró en C-15 (2026-09-04).
 
 export default async function SessionCategoriesPage() {
   try {

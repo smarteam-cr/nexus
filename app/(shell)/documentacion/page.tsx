@@ -44,7 +44,6 @@ import {
 } from "@/lib/manual/armar";
 
 // El contenido cambia con el código, no con el minuto: se revalida seguido pero no en cada visita.
-export const revalidate = 300;
 
 export default async function DocumentacionPage() {
   const ctx = await requireInternalUser().catch(() => null);

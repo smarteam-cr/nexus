@@ -4,9 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import AgentFormClient from "./AgentFormClient";
 import RunsHistory from "./RunsHistory";
 
-// Detalle de agente — ISR 30s. PATCH/DELETE deben llamar
-// revalidatePath(`/agents/${id}`) para reflejar cambios inmediatos.
-export const revalidate = 30;
+// Página DINÁMICA (cada page llama a un `require…User` y el layout lee la cookie del tema): un
+// `export const revalidate` acá nunca cacheó nada — se retiró en C-15 (2026-09-04).
 
 export default async function AgentFormPage({
   params,

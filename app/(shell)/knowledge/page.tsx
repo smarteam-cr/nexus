@@ -5,9 +5,8 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
 import KnowledgeClient from "./KnowledgeClient";
 
-// Listado de conocimientos — ISR 2 min. Upload/delete deben llamar
-// revalidatePath("/knowledge").
-export const revalidate = 120;
+// Página DINÁMICA (cada page llama a un `require…User` y el layout lee la cookie del tema): un
+// `export const revalidate` acá nunca cacheó nada — se retiró en C-15 (2026-09-04).
 
 export default async function KnowledgePage() {
   try {
