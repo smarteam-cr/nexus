@@ -20,6 +20,8 @@ import {
   describirDestino,
   esHostProduccion,
   veredictoEscritura,
+  veredictoPrismaCli,
+  tieneAllowProdWriteFijo,
 } from "../../scripts/lib/guard";
 
 const PROD = "postgresql://user:secreta123@db.abcd1234.supabase.co:5432/postgres";
@@ -102,12 +104,10 @@ describe("describirDestino — nunca credenciales", () => {
   });
 });
 
-describe("guardPrismaCli — la lista positiva de comandos de escritura", () => {
-  // La misma regex del guard, probada acá para que un cambio de lista sea una decisión
-  // visible: agregar un comando que no es de escritura rompería generate/build.
-  const esEscritura = (invocacion: string) =>
-    /\bdb\s+(execute|push|seed)\b/.test(invocacion) ||
-    /\bmigrate\s+(resolve|deploy|reset|dev)\b/.test(invocacion);
+describe("guardPrismaCli — la lista positiva de escritura, y la destructiva SIN llave (B-01)", () => {
+  // La decisión es pura: la misma función que corre prisma.config.ts, probada acá para que un
+  // cambio de lista sea una decisión visible (un falso positivo rompería generate/build).
+  const esEscritura = (invocacion: string) => veredictoPrismaCli(invocacion, LOCAL, {}).esEscritura;
 
   it("escritura: db execute/push/seed y migrate resolve/deploy/reset/dev", () => {
     expect(esEscritura("node prisma db execute --file x.sql")).toBe(true);
@@ -124,6 +124,34 @@ describe("guardPrismaCli — la lista positiva de comandos de escritura", () => 
     expect(esEscritura("node prisma validate")).toBe(false);
     expect(esEscritura("node prisma migrate diff --from-empty --to-schema s.prisma")).toBe(false);
     expect(esEscritura("node prisma migrate status")).toBe(false);
+  });
+
+  it("⛔ db push / migrate reset / migrate dev contra Supabase NO se destraban ni con ALLOW_PROD_WRITE=1", () => {
+    /* La edicion que lo pone en rojo: volver a que la lista destructiva pase por el semáforo.
+       `db push` ya se llevó RoleProfile una vez; con dos PCs sobre la misma base dropea columnas
+       ajenas. Es un candado, no un semáforo — el patrón de assertLocalWriteOnly. */
+    for (const cmd of ["node prisma db push", "node prisma migrate reset", "node prisma migrate dev --name x"]) {
+      for (const url of [PROD, POOLER]) {
+        const v = veredictoPrismaCli(cmd, url, { ALLOW_PROD_WRITE: "1" });
+        expect(v.esDestructivo, cmd).toBe(true);
+        expect(v.permitido, `${cmd} contra ${url} con ALLOW_PROD_WRITE=1`).toBe(false);
+        expect(v.motivo).toMatch(/PROHIBIDOS/);
+      }
+      expect(veredictoPrismaCli(cmd, LOCAL, {}).permitido, `${cmd} contra local`).toBe(true);
+    }
+    // El semáforo de siempre sigue para lo que NO es destructivo.
+    expect(veredictoPrismaCli("node prisma db execute --file x.sql", PROD, {}).permitido).toBe(false);
+    expect(veredictoPrismaCli("node prisma db execute --file x.sql", PROD, { ALLOW_PROD_WRITE: "1" }).permitido).toBe(true);
+    expect(veredictoPrismaCli("node prisma migrate deploy", PROD, { ALLOW_PROD_WRITE: "1" }).permitido).toBe(true);
+  });
+
+  it("ALLOW_PROD_WRITE fija en el .env se detecta (una línea comentada no cuenta)", () => {
+    /* La edicion que lo pone en rojo: que tieneAllowProdWriteFijo devuelva false siempre. */
+    expect(tieneAllowProdWriteFijo('DATABASE_URL="x"\nALLOW_PROD_WRITE=1\n')).toBe(true);
+    expect(tieneAllowProdWriteFijo("export ALLOW_PROD_WRITE=1")).toBe(true);
+    expect(tieneAllowProdWriteFijo('ALLOW_PROD_WRITE="0"'), "fija en 0 también es fija").toBe(true);
+    expect(tieneAllowProdWriteFijo('# ALLOW_PROD_WRITE="1"\nDATABASE_URL="x"')).toBe(false);
+    expect(tieneAllowProdWriteFijo("")).toBe(false);
   });
 });
 

@@ -12,7 +12,7 @@
  *   bash:        ALLOW_PROD_WRITE=1 npx tsx scripts/lo-que-sea.ts --apply
  *   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/lo-que-sea.ts --apply
  *
- * ⚠ CERO DEPENDENCIAS a propósito (ni pg, ni @prisma/client, ni dotenv): lo importa
+ * ⚠ CERO DEPENDENCIAS a propósito (ni pg, ni @prisma/client, ni dotenv; solo core de Node): lo importa
  * `prisma.config.ts`, que ejecuta el CLI de Prisma en TODOS sus comandos — arrastrar el client
  * acá sería una dependencia circular con el propio CLI. La carga de .env es responsabilidad
  * del caller (prisma.config.ts y scripts/lib/db.ts ya hacen `import "dotenv/config"`).
@@ -23,6 +23,9 @@
  *
  * INV12 (check-invariants) exige que todo script con `--apply` importe este módulo.
  */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 export type VeredictoEscritura = {
   permitido: boolean;
@@ -87,6 +90,7 @@ export function imprimirDestino(etiqueta = "db"): void {
  * instrucciones. Llamalo ANTES de la primera escritura (resolverApply() lo hace solo).
  */
 export function assertProdWriteAllowed(contexto = "escritura"): void {
+  abortarSiAllowProdWriteFijo();
   const v = veredictoEscritura(process.env.DATABASE_URL, process.env);
   console.error(`[guard] ${contexto} → destino: ${v.destino}`);
   if (v.permitido) return;
@@ -133,6 +137,68 @@ export function assertLocalWriteOnly(url: string | undefined, contexto = "escrit
 }
 
 /**
+ * `ALLOW_PROD_WRITE` se autoriza POR COMANDO. Fija en el `.env` del repo deja de ser una decisión
+ * y pasa a ser un reflejo: todo `--apply` corrido por costumbre escribe en producción sin que
+ * nadie lo haya pedido (B-01, auditoría 2026-09-03). `texto` es el contenido del .env; una línea
+ * comentada no cuenta. Puro: lib/db/guard.test.ts.
+ */
+export function tieneAllowProdWriteFijo(texto: string): boolean {
+  return /^\s*(?:export\s+)?ALLOW_PROD_WRITE\s*=/m.test(texto);
+}
+
+/** Lee `.env` del cwd (sin dotenv: cero dependencias) y aborta si trae la variable fija. */
+export function abortarSiAllowProdWriteFijo(dir = process.cwd()): void {
+  let texto = "";
+  try {
+    texto = readFileSync(join(dir, ".env"), "utf8");
+  } catch {
+    return; // sin .env (Docker, CI): nada que revisar
+  }
+  if (!tieneAllowProdWriteFijo(texto)) return;
+  console.error("⛔ ABORTADO: ALLOW_PROD_WRITE está FIJA en el .env del repo.");
+  console.error("   Se autoriza por comando, nunca en el archivo: sacala del .env y volvé a correr.");
+  process.exit(1);
+}
+
+export type VeredictoPrismaCli = VeredictoEscritura & { esEscritura: boolean; esDestructivo: boolean };
+
+/**
+ * La decisión del CLI de Prisma, PURA (lib/db/guard.test.ts). Dos listas:
+ *   · ESCRITURA (db execute/push/seed, migrate resolve/deploy/reset/dev): contra Supabase exige
+ *     ALLOW_PROD_WRITE=1 — el semáforo de siempre.
+ *   · DESTRUCTIVA (db push, migrate reset, migrate dev): contra Supabase NO se destraba con nada
+ *     (B-01, auditoría 2026-09-03). `db push` ya se llevó `RoleProfile` una vez (RUNBOOK inv. #2)
+ *     y con dos PCs sobre la misma base dropea columnas ajenas; `migrate reset` borra la base;
+ *     `migrate dev` genera y aplica migraciones sobre datos reales. Es el patrón de
+ *     `assertLocalWriteOnly`: un candado, no un semáforo. Contra un host local siguen valiendo.
+ */
+export function veredictoPrismaCli(
+  invocacion: string,
+  url: string | undefined,
+  env: Record<string, string | undefined>,
+): VeredictoPrismaCli {
+  const esEscritura =
+    /\bdb\s+(execute|push|seed)\b/.test(invocacion) ||
+    /\bmigrate\s+(resolve|deploy|reset|dev)\b/.test(invocacion);
+  const esDestructivo = /\bdb\s+push\b/.test(invocacion) || /\bmigrate\s+(reset|dev)\b/.test(invocacion);
+  if (!esEscritura) {
+    return { esEscritura, esDestructivo, permitido: true, destino: describirDestino(url), motivo: "no es un comando de escritura" };
+  }
+  if (esDestructivo && esHostProduccion(url)) {
+    return {
+      esEscritura,
+      esDestructivo,
+      permitido: false,
+      destino: describirDestino(url),
+      motivo:
+        "db push / migrate reset / migrate dev están PROHIBIDOS contra Supabase y no se destraban con " +
+        "ALLOW_PROD_WRITE (RUNBOOK inv. #2: dos PCs sobre la misma base)",
+    };
+  }
+  return { esEscritura, esDestructivo, ...veredictoEscritura(url, env) };
+}
+
+/**
  * Gate para el CLI de Prisma — lo llama `prisma.config.ts`, que se ejecuta en TODOS los
  * comandos (`generate`, `validate`, `db execute`, `migrate ...`). Por eso:
  *
@@ -141,21 +207,21 @@ export function assertLocalWriteOnly(url: string | undefined, contexto = "escrit
  *     fail-open deliberado para comandos desconocidos: la capa de scripts tiene su propio guard.
  *   - En Prisma 7 ningún comando de escritura acepta URL por flag (db execute solo tiene
  *     --file/--stdin): la URL sale SOLO del config → este es el único chokepoint del CLI.
+ *   - Lo DESTRUCTIVO (db push, migrate reset/dev) contra Supabase no tiene llave: ver
+ *     `veredictoPrismaCli`.
  *
  * Lanza (en vez de process.exit) para que el CLI lo reporte como error del config.
  */
 export function guardPrismaCli(url: string | undefined): void {
-  const invocacion = process.argv.join(" ");
-  const esEscritura =
-    /\bdb\s+(execute|push|seed)\b/.test(invocacion) ||
-    /\bmigrate\s+(resolve|deploy|reset|dev)\b/.test(invocacion);
-  if (!esEscritura) return;
-
-  const v = veredictoEscritura(url, process.env);
+  const v = veredictoPrismaCli(process.argv.join(" "), url, process.env);
+  if (!v.esEscritura) return;
+  abortarSiAllowProdWriteFijo();
   console.error(`[guard] prisma (escritura) → destino: ${v.destino}`);
   if (v.permitido) return;
   throw new Error(
-    `⛔ Comando de ESCRITURA de Prisma contra ${v.destino}: ${v.motivo}. ` +
-      `Si es intencional: ALLOW_PROD_WRITE=1 (bash) / $env:ALLOW_PROD_WRITE="1" (PowerShell).`,
+    v.esDestructivo
+      ? `⛔ ${v.motivo}. Destino: ${v.destino}. Contra la base compartida el camino es SQL aditivo con \`db execute\` (RUNBOOK).`
+      : `⛔ Comando de ESCRITURA de Prisma contra ${v.destino}: ${v.motivo}. ` +
+        `Si es intencional: ALLOW_PROD_WRITE=1 (bash) / $env:ALLOW_PROD_WRITE="1" (PowerShell).`,
   );
 }

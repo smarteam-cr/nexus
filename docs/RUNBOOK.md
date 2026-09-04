@@ -28,6 +28,11 @@ a claims en DB (mismo patrón `CronJobState`/`claimDateKey` que ya usan los jobs
 ## Invariante #2 — DB COMPARTIDA ENTRE 2 PCs (dual-PC)
 
 La misma Supabase Postgres la usan las dos máquinas de desarrollo Y producción.
+**El guard del CLI lo hace cumplir desde el 2026-09-04 (B-01):** `prisma db push`,
+`migrate reset` y `migrate dev` contra un host Supabase abortan SIEMPRE, sin variable que
+los destrabe — es un candado, no un semáforo. `db execute` (SQL aditivo) sigue exigiendo
+`ALLOW_PROD_WRITE=1` POR COMANDO; si la variable queda FIJA en el `.env`, todo script de
+escritura aborta hasta sacarla.
 **`prisma db push` está PROHIBIDO en cualquier forma** (ver "Lo que deploy.sh NO
 hace" más abajo — ya se llevó `RoleProfile` una vez; hasta el 2026-08-01 esta
 sección regulaba cómo usarlo "bien" y contradecía la prohibición del mismo
