@@ -1,4 +1,6 @@
-import { requireConsultantSession } from "@/lib/auth";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
+import { cargarOportunidadesDetectadas } from "@/lib/ventas/cargar-oportunidades";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import SalesClient from "./SalesClient";
@@ -25,11 +27,18 @@ export interface ProspectGroup {
 }
 
 export default async function SalesPage() {
+  let ctx: Awaited<ReturnType<typeof requireInternalUser>> | null = null;
   try {
-    await requireConsultantSession();
+    ctx = await requireInternalUser();
   } catch {
     redirect("/");
   }
+  if (!ctx) redirect("/");
+
+  /* D-11 (2026-09-04): «Oportunidades detectadas» se carga SOLO con la celda `ventas.read`. La
+     página en sí sigue abierta a todo interno (como siempre); lo que se gatea es el dato, que es
+     lo más interno del handoff. Sin la celda viaja null y el bloque no se pinta. */
+  const oportunidades = (await can(ctx.teamMember, "ventas", "read")) ? await cargarOportunidadesDetectadas() : null;
 
   // C-10 (2026-09-04): `transcript` es el blob más pesado de la tabla y acá solo se usaba para
   // saber si EXISTE. Traerlo entero para todas las reuniones de Ventas era cargar megabytes en
@@ -105,6 +114,6 @@ export default async function SalesPage() {
   );
 
   return (
-    <SalesClient prospects={prospects} />
+    <SalesClient prospects={prospects} oportunidades={oportunidades} />
   );
 }

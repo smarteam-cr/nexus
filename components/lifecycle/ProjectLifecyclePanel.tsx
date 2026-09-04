@@ -74,7 +74,7 @@ const GATE_META: Array<{ key: string; label: string; hint: string }> = [
   { key: "DEMO_APROBADA", label: "Demo funcional aprobada", hint: "El cliente aprobó lo construido sobre HubSpot" },
   { key: "CLIENTE_OPERANDO", label: "Cliente operando", hint: "Sesiones de adopción cumplidas y el cliente usa el sistema" },
   { key: "USO_VALIDADO", label: "Uso validado", hint: "Puntaje de usabilidad (UUS) sobre el umbral — el sistema lo marca solo" },
-  { key: "ENTREGA_REALIZADA", label: "Entrega realizada", hint: "Sesión de entrega + sugerencia para Ventas (cross-selling)" },
+  { key: "ENTREGA_REALIZADA", label: "Entrega realizada", hint: "Sesión de entrega + sugerencia para Ventas (cross-selling): Ventas la lee en /sales › Oportunidades detectadas" },
 ];
 const SHORT_CYCLE_GATES = new Set(["ENTREGA_REALIZADA"]);
 
@@ -375,7 +375,7 @@ export default function ProjectLifecyclePanel({ projectId }: { projectId: string
                       <input
                         value={deliveryNote}
                         onChange={(e) => setDeliveryNote(e.target.value)}
-                        placeholder="Sugerencia para Ventas (cross-selling) — se guarda al marcar"
+                        placeholder="Sugerencia para Ventas (cross-selling) — se guarda al marcar y Ventas la ve en Oportunidades detectadas"
                         className="mt-1 w-full max-w-md bg-surface border border-line rounded px-2 py-1 text-[10px] text-fg placeholder:text-fg-muted"
                       />
                     )}

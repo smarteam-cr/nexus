@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import type { ProspectGroup } from "./page";
+import type { OportunidadesDeCliente } from "@/lib/ventas/oportunidades";
+import OportunidadesDetectadas from "./OportunidadesDetectadas";
 
 interface SalesCard {
   title: string;
@@ -61,7 +63,14 @@ function CardContent({ content }: { content: string }) {
   );
 }
 
-export default function SalesClient({ prospects }: { prospects: ProspectGroup[] }) {
+export default function SalesClient({
+  prospects,
+  oportunidades,
+}: {
+  prospects: ProspectGroup[];
+  /** null = la página no las cargó (sin `ventas.read`): el bloque no se pinta. */
+  oportunidades: OportunidadesDeCliente[] | null;
+}) {
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, SalesResult>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -175,6 +184,10 @@ export default function SalesClient({ prospects }: { prospects: ProspectGroup[] 
           ))}
         </div>
       </div>
+
+      {/* D-11: por cliente, lo que el CSE sugirió al entregar y lo que el handoff registró como
+          «se conversó y no se vendió». Independiente de los prospectos: son clientes, no leads. */}
+      {oportunidades && <OportunidadesDetectadas grupos={oportunidades} />}
 
       {/* Estado vacío global */}
       {prospects.length === 0 && (

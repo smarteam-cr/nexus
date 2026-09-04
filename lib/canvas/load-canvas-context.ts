@@ -388,6 +388,63 @@ export async function loadHandoffDelHermanoMayorContext(
   );
 }
 
+/** La key de «Se conversó y no se vendió» en el canvas de handoff (lib/canvas/canvas-defs.ts). */
+const FUERA_DE_ALCANCE_KEY = "fuera_de_alcance";
+
+/** Una fila por proyecto con la sección «Se conversó y no se vendió» del handoff escrita. */
+export interface FueraDeAlcanceDeProyecto {
+  project: { id: string; name: string; clientId: string; clientName: string };
+  texto: string;
+  /** Cuándo se escribió la sección: el bloque más reciente (se recrean al regenerar). */
+  escritoEn: Date | null;
+}
+
+/**
+ * D-11 (2026-09-04) · «SE CONVERSÓ Y NO SE VENDIÓ», PARA VENTAS — de TODA la cartera.
+ *
+ * Lo que el cliente pidió en la venta y quedó fuera del alcance es la lista más directa de qué
+ * ofrecerle después, y hasta hoy solo la leía quien abría el handoff de ese proyecto. /sales la
+ * lista por cliente («Oportunidades detectadas»).
+ *
+ * Vive ACÁ y no en lib/ventas por el candado del embudo (lib/handoff/duenio.test.ts: «nadie lee
+ * el handoff fuera del embudo»): este archivo es el único sancionado para leerlo. UNA consulta
+ * para toda la cartera —una sección por proyecto, sin pasar por `loadHandoffContext` N veces—
+ * y SOLO esa key: es la sección más interna del handoff, y por eso su lectura no alimenta ningún
+ * agente ni documento — sale por una sola puerta, interna, gateada por `ventas.read`
+ * (lib/canvas/fuera-de-alcance.test.ts censa a sus consumidores). Los proyectos internos de
+ * Smarteam quedan afuera: no hay a quién venderles.
+ */
+export async function loadFueraDeAlcanceDeTodos(): Promise<FueraDeAlcanceDeProyecto[]> {
+  const secciones = await prisma.canvasSection.findMany({
+    where: { key: FUERA_DE_ALCANCE_KEY, canvas: { ...canvasOf("handoff"), project: { is: { proyectoInterno: false } } } },
+    select: {
+      canvas: {
+        select: {
+          project: { select: { id: true, name: true, clientId: true, client: { select: { name: true, company: true } } } },
+        },
+      },
+      blocks: {
+        orderBy: { order: "asc" },
+        select: { blockType: true, content: true, data: true, status: true, createdAt: true },
+      },
+    },
+  });
+  const out: FueraDeAlcanceDeProyecto[] = [];
+  for (const sec of secciones) {
+    const p = sec.canvas.project;
+    if (!p || !p.clientId) continue;
+    const texto = sec.blocks.map(blockToText).map((t) => t.trim()).filter(Boolean).join("\n\n");
+    if (!texto) continue;
+    const escritoEn = sec.blocks.reduce<Date | null>((acc, b) => (!acc || b.createdAt > acc ? b.createdAt : acc), null);
+    out.push({
+      project: { id: p.id, name: p.name, clientId: p.clientId, clientName: p.client?.name ?? p.client?.company ?? "" },
+      texto,
+      escritoEn,
+    });
+  }
+  return out;
+}
+
 /**
  * Serializa el cronograma (ProjectTimeline + fases) a texto de solo-lectura.
  * Devuelve "" si no hay timeline o no tiene fases.

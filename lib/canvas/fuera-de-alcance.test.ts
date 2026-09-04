@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { HANDOFF_CANVAS } from "./canvas-defs";
+import { agruparPorCliente, recortarTexto, type OportunidadDetectada } from "@/lib/ventas/oportunidades";
 
 /**
  * lib/canvas/fuera-de-alcance.test.ts — «SE CONVERSÓ Y NO SE VENDIÓ», Y NO SALE DE CASA.
@@ -120,5 +121,83 @@ describe("⛔ el prompt del agente de CS no se queda corto", () => {
     );
     expect(src, "no hay salida temprana: compara y escribe igual").toMatch(/!force\s*\)\s*\{[\s\S]{0,900}return;/);
     expect(src).toContain('const force = process.argv.includes("--force")');
+  });
+});
+
+describe("D-11 (2026-09-04) · la sección SÍ sale de casa hacia Ventas — por UNA puerta, interna", () => {
+  /* «Saber qué ofrecerle después» era la mitad del motivo de la sección, y hasta hoy no tenía
+     lector: solo la veía quien abría el handoff de ese proyecto. /sales la lista por cliente junto
+     con la sugerencia que el CSE deja al marcar «Entrega realizada» — que el panel vendía como
+     «sugerencia para Ventas» sin que Ventas tuviera dónde leerla. */
+  const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+  const soloCodigo = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  const item = (o: Partial<OportunidadDetectada>): OportunidadDetectada => ({
+    clientId: "c1", clientName: "Acme", projectId: "p1", projectName: "CRM", fuente: "handoff", texto: "x", fecha: null, autor: null, ...o,
+  });
+
+  it("agrupa por cliente: la sugerencia humana antes que el handoff, lo reciente primero, sin fecha al final", () => {
+    const grupos = agruparPorCliente([
+      item({ clientId: "c2", clientName: "Beta", fuente: "handoff", fecha: null }),
+      item({ clientId: "c1", fuente: "handoff", fecha: "2026-08-01T00:00:00.000Z", texto: "h-viejo" }),
+      item({ clientId: "c1", fuente: "handoff", fecha: "2026-09-01T00:00:00.000Z", texto: "h-nuevo" }),
+      item({ clientId: "c1", fuente: "entrega", fecha: "2026-07-01T00:00:00.000Z", texto: "sugerencia", autor: "ana@smarteamcr.com" }),
+      item({ clientId: "c3", clientName: "Gamma", fuente: "entrega", fecha: "2026-09-03T00:00:00.000Z" }),
+    ]);
+    expect(grupos.map((g) => g.clientName), "por ítem más reciente; sin fecha al final").toEqual(["Gamma", "Acme", "Beta"]);
+    const acme = grupos[1]!;
+    expect(acme.ultima).toBe("2026-09-01T00:00:00.000Z");
+    expect(acme.items.map((i) => i.texto), "la sugerencia del CSE va primero aunque sea más vieja; el handoff, nuevo → viejo").toEqual(["sugerencia", "h-nuevo", "h-viejo"]);
+  });
+
+  it("recorta con «…» por encima del tope y nunca devuelve más que el tope", () => {
+    expect(recortarTexto("  hola \r\n\r\n\r\n\r\nmundo  ")).toBe("hola\n\nmundo");
+    const largo = recortarTexto("a".repeat(2000), 50);
+    expect(largo.length).toBeLessThanOrEqual(50);
+    expect(largo.endsWith("…")).toBe(true);
+  });
+
+  it("⭐ la sección tiene UN lector fuera del embudo, y es interno (lib/ventas), nunca un documento", () => {
+    /* La edición que lo pone en rojo: importar `loadFueraDeAlcanceDeTodos` desde un generador de
+       documento «para que el kickoff sepa qué no vendimos» — es exactamente lo que el describe de
+       arriba impide por las allowlists, y esta puerta nueva lo saltearía. */
+    const lector = leer("lib/canvas/load-canvas-context.ts");
+    expect(lector, "el lector vive en el archivo sancionado por el candado del embudo").toContain("export async function loadFueraDeAlcanceDeTodos(");
+    const cuerpo = lector.slice(lector.indexOf("export async function loadFueraDeAlcanceDeTodos("), lector.indexOf("Serializa el cronograma"));
+    expect(cuerpo.length, "la guarda no mira nada").toBeGreaterThan(300);
+    expect(cuerpo, "solo ESA key").toContain("key: FUERA_DE_ALCANCE_KEY");
+    expect(lector).toContain(`const FUERA_DE_ALCANCE_KEY = "${KEY}"`);
+    expect(cuerpo, "los internos de Smarteam quedan afuera: no hay a quién venderles").toContain("proyectoInterno: false");
+
+    const consumidores: string[] = [];
+    const rec = (d: string) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) rec(p);
+        else if ((e.name.endsWith(".ts") || e.name.endsWith(".tsx")) && !e.name.includes(".test.")) {
+          const rel = path.relative(RAIZ, p).split(path.sep).join("/");
+          if (rel === "lib/canvas/load-canvas-context.ts") continue;
+          if (/loadFueraDeAlcanceDeTodos\s*\(/.test(soloCodigo(fs.readFileSync(p, "utf8")))) consumidores.push(rel);
+        }
+      }
+    };
+    for (const d of ["lib", "app", "components", "scripts"]) rec(path.join(RAIZ, d));
+    expect(consumidores.sort(), "un lector nuevo de «se conversó y no se vendió»: si alimenta un documento, es lo que el cliente pidió y NO le vendimos").toEqual(["lib/ventas/cargar-oportunidades.ts"]);
+  });
+
+  it("LA guarda: /sales carga las oportunidades SOLO con `ventas.read`, y las dos fuentes son las declaradas", () => {
+    /* La edición que lo pone en rojo: cargarlas para todo interno «porque la página ya es interna» —
+       la página sí; el dato es lo más interno del handoff y lo decide la celda de Ventas. */
+    const pagina = soloCodigo(leer("app/(shell)/sales/page.tsx"));
+    expect(pagina).toContain('(await can(ctx.teamMember, "ventas", "read")) ? await cargarOportunidadesDetectadas() : null');
+    expect(pagina).toContain("<SalesClient prospects={prospects} oportunidades={oportunidades} />");
+    const cliente = soloCodigo(leer("app/(shell)/sales/SalesClient.tsx"));
+    expect(cliente, "sin datos no se pinta nada, ni un bloque vacío").toContain("{oportunidades && <OportunidadesDetectadas grupos={oportunidades} />}");
+    const cargador = soloCodigo(leer("lib/ventas/cargar-oportunidades.ts"));
+    expect(cargador, "la nota de la compuerta de entrega, solo las que tienen texto").toContain('gate: "ENTREGA_REALIZADA", note: { not: null }, project: { proyectoInterno: false }');
+    expect(cargador).toContain("loadFueraDeAlcanceDeTodos()");
+    expect(cargador, "solo lectura: nada de acá escribe").not.toMatch(/\.(update|create|upsert|delete)(Many)?\(/);
+    const panel = leer("components/lifecycle/ProjectLifecyclePanel.tsx");
+    expect(panel, "el panel dejó de prometer un traspaso que no existía: ahora dice dónde se lee").toContain("Ventas la lee en /sales › Oportunidades detectadas");
   });
 });
