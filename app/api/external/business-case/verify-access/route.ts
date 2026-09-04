@@ -25,7 +25,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_CASE_COOKIE, BC_TOKEN_RE } from "@/lib/external/business-case-view";
 import { BC_COOKIE_PATH, bcOpenPath } from "@/lib/business-cases/access-url";
-import { getRemainingBlockSeconds, registerFailure, clearAttempts } from "@/lib/external/verify-rate-limit";
+import { bloqueoVigente, claveDeIp, clearAttempts, registrarFallo } from "@/lib/external/verify-rate-limit";
 
 const GENERIC_INVALID = { ok: false, reason: "invalid" } as const;
 
@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
   }
 
   const now = Date.now();
-  const remaining = await getRemainingBlockSeconds(token, now);
+  const ip = claveDeIp(req.headers);
+  const remaining = await bloqueoVigente(token, ip, now);
   if (remaining > 0) {
     return NextResponse.json(
       { ok: false, reason: "rate_limited", retryAfterSeconds: remaining },
@@ -65,17 +66,17 @@ export async function POST(req: NextRequest) {
 
   if (!access) {
     await bcrypt.compare(password, "$2b$12$ZxYzZxYzZxYzZxYzZxYzZ.PadPadPadPadPadPadPadPadPadPadPadPa");
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
   if (access.revokedAt) {
     await bcrypt.compare(password, access.passwordHash);
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
   const passwordOk = await bcrypt.compare(password, access.passwordHash);
   if (!passwordOk) {
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 

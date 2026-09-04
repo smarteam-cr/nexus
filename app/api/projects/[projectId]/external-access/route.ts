@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes, randomInt } from "node:crypto";
 import bcrypt from "bcrypt";
+import { evaluarContrasena } from "@/lib/external/politica-de-contrasena";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
@@ -26,8 +27,7 @@ import { prisma } from "@/lib/db/prisma";
 const TOKEN_BYTES = 32;          // 32 bytes hex → 64 chars, 256 bits de entropía
 const PASSWORD_LENGTH = 12;       // 12 chars del alphabet de abajo (~71 bits)
 const BCRYPT_ROUNDS = 12;
-const MIN_PASSWORD_LEN = 8;        // mínimo para contraseñas custom del CSE
-const MAX_PASSWORD_LEN = 64;
+// El largo y el diccionario de una contraseña CUSTOM viven en lib/external/politica-de-contrasena.ts (A-10).
 // Alphabet sin caracteres visualmente ambiguos (0/O/I/l/1) para reducir errores
 // de tipeo cuando el cliente copia la password.
 const PASSWORD_ALPHABET =
@@ -142,32 +142,36 @@ export async function PATCH(
     body = {};
   }
 
-  let password: string;
-  if (typeof body.password === "string") {
-    password = body.password.trim();
-    if (password.length < MIN_PASSWORD_LEN || password.length > MAX_PASSWORD_LEN) {
-      return NextResponse.json(
-        { error: `La contraseña debe tener entre ${MIN_PASSWORD_LEN} y ${MAX_PASSWORD_LEN} caracteres.` },
-        { status: 400 },
-      );
-    }
-    if (/\s/.test(password)) {
-      return NextResponse.json({ error: "La contraseña no puede tener espacios." }, { status: 400 });
-    }
-  } else {
-    // Sin password en el body → regenerar una aleatoria.
-    password = generatePassword();
-  }
-
   const existing = await prisma.projectExternalAccess.findUnique({
     where: { projectId },
-    select: { id: true },
+    select: {
+      id: true,
+      project: { select: { name: true, client: { select: { name: true, company: true } } } },
+    },
   });
   if (!existing) {
     return NextResponse.json(
       { error: "No hay acceso externo para este proyecto. Generá uno primero." },
       { status: 404 },
     );
+  }
+
+  let password: string;
+  if (typeof body.password === "string") {
+    password = body.password.trim();
+    // A-10: la política vive en un solo lugar y rechaza por MOTIVO (largo, diccionario, el
+    // nombre del cliente o del proyecto, repeticiones, secuencias). El mensaje va al CSE tal cual.
+    const veredicto = evaluarContrasena(password, [
+      existing.project.name,
+      existing.project.client.name,
+      existing.project.client.company ?? "",
+    ]);
+    if (!veredicto.ok) {
+      return NextResponse.json({ error: veredicto.mensaje }, { status: 400 });
+    }
+  } else {
+    // Sin password en el body → regenerar una aleatoria.
+    password = generatePassword();
   }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);

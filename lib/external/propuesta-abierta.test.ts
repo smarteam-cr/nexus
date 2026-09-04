@@ -25,10 +25,22 @@
  *
  * Ninguna de las cuatro se rompe con un error visible: se rompen en silencio y la propuesta
  * de un cliente queda indexable, cacheada o filtrada. Por eso son test y no comentario.
+ *
+ * ── Y LA PUERTA CON CONTRASEÑA (candados 5 y 6, A-10, auditoría 2026-09-03) ─────────────
+ *   5. La contraseña CUSTOM del enlace de un proyecto pasa por `evaluarContrasena`: 12+ y sin
+ *      diccionario ni el nombre del cliente. Con 8 y sin filtro, «smarteam2026» era válida y el
+ *      bcrypt y el rate-limit protegían nada.
+ *   6. Los fallos de verify-access se cuentan por TOKEN y por IP: contar solo por token dejaba
+ *      gratis probar una contraseña contra miles de tokens.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { evaluarContrasena, LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
+import { claveDeIp, POLITICA_POR_IP, POLITICA_POR_TOKEN } from "@/lib/external/verify-rate-limit";
+
+// verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 const RAIZ = process.cwd();
 
@@ -150,5 +162,73 @@ describe("candado 4 — /external sale con Referrer-Policy: no-referrer", () => 
       "Sin no-referrer, el logo del cliente (Supabase Storage, otro origen) le entrega el " +
         "token entero a un tercero por el header Referer.",
     ).toBe(true);
+  });
+});
+
+describe("candado 5 — la contraseña custom del enlace pasa por la política", () => {
+  it("rechaza lo que cualquiera prueba primero, cada cosa por su motivo", () => {
+    /* La edicion que lo pone en rojo: sacar el diccionario de evaluarContrasena (o volver a
+       validar solo el largo en la ruta, como antes). */
+    expect(LARGO_MINIMO_CONTRASENA).toBeGreaterThanOrEqual(12);
+    expect(evaluarContrasena("123456")).toMatchObject({ ok: false, motivo: "corta" });
+    expect(evaluarContrasena("smarteam2026")).toMatchObject({ ok: false, motivo: "diccionario" });
+    expect(evaluarContrasena("Password1234!")).toMatchObject({ ok: false, motivo: "diccionario" });
+    expect(evaluarContrasena("Contraseña-12")).toMatchObject({ ok: false, motivo: "diccionario" });
+    expect(
+      evaluarContrasena("Wherex-Kickoff-2026", ["Implementación HubSpot | Wherex 2026", "Wherex S.A."]),
+    ).toMatchObject({ ok: false, motivo: "propia" });
+    expect(evaluarContrasena("aaaaaaaaaaaa")).toMatchObject({ ok: false, motivo: "repetitiva" });
+    expect(evaluarContrasena("abcdefghijkl")).toMatchObject({ ok: false, motivo: "secuencia" });
+    expect(evaluarContrasena("con espacios adentro")).toMatchObject({ ok: false, motivo: "espacios" });
+    // Un año en el nombre del proyecto NO convierte a «2026» en palabra prohibida.
+    expect(evaluarContrasena("Tr3s-Colinas-Verdes-2026", ["Sitio web 2026"])).toEqual({ ok: true });
+  });
+
+  it("la ruta que fija la contraseña la consulta, y no conserva su regla vieja de largo", () => {
+    const src = sinComentarios(
+      fs.readFileSync(path.join(RAIZ, "app/api/projects/[projectId]/external-access/route.ts"), "utf8"),
+    );
+    expect(src, "PATCH tiene que pasar la contraseña custom por evaluarContrasena(").toContain("evaluarContrasena(");
+    expect(
+      src.includes("MIN_PASSWORD_LEN"),
+      "La regla de largo vivía inline en la ruta (8 chars). Si vuelve, la política deja de ser la única voz.",
+    ).toBe(false);
+    expect(
+      /evaluarContrasena\(password,\s*\[/.test(src),
+      "Sin las palabras propias (nombre del proyecto y del cliente), el nombre del asunto del correo sigue siendo válido.",
+    ).toBe(true);
+  });
+});
+
+describe("candado 6 — los fallos de verify-access se cuentan por token Y por IP", () => {
+  const cabeceras = (m: Record<string, string>) => ({ get: (n: string) => m[n.toLowerCase()] ?? null });
+
+  it("la clave de IP sale del proxy; sin cabecera no hay clave (nadie cae en un balde común)", () => {
+    /* La edicion que lo pone en rojo: leer solo x-real-ip, o devolver una clave fija sin cabecera. */
+    expect(claveDeIp(cabeceras({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" }))).toBe("ip:203.0.113.9");
+    expect(claveDeIp(cabeceras({ "x-real-ip": "198.51.100.7" }))).toBe("ip:198.51.100.7");
+    expect(claveDeIp(cabeceras({}))).toBeNull();
+  });
+
+  it("la política por IP es más laxa que la del token (una oficina comparte IP)", () => {
+    expect(POLITICA_POR_IP.maxFallos).toBeGreaterThan(POLITICA_POR_TOKEN.maxFallos);
+  });
+
+  it.each([
+    "app/api/external/verify-access/route.ts",
+    "app/api/external/business-case/verify-access/route.ts",
+  ])("%s registra cada fallo contra las dos claves", (ruta) => {
+    /* La edicion que lo pone en rojo: volver a registerFailure(token, now) en un solo camino. */
+    const src = sinComentarios(fs.readFileSync(path.join(RAIZ, ruta), "utf8"));
+    expect(src).toContain("claveDeIp(req.headers)");
+    expect(src).toContain("bloqueoVigente(token, ip, now)");
+    /* Cada bcrypt.compare es un camino que puede fallar (token inexistente con el hash falso,
+       revocado, no publicable, contraseña mala) y CADA uno registra contra las dos claves. Se
+       exige igualdad, no un piso: con un piso, sacarle la IP a un solo camino seguía verde. */
+    const compara = src.match(/bcrypt\.compare\(/g)?.length ?? 0;
+    const fallos = src.match(/registrarFallo\(token, ip, now\)/g)?.length ?? 0;
+    expect(compara, "la guarda no mira nada").toBeGreaterThanOrEqual(3);
+    expect(fallos, "un bcrypt.compare cuyo fallo no se registra contra token E IP").toBe(compara);
+    expect(src.includes("registerFailure("), "quedó un fallo contado solo por token").toBe(false);
   });
 });

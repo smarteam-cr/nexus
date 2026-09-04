@@ -15,6 +15,8 @@
  *
  * Rate limiting PERSISTIDO por token (lib/external/verify-rate-limit.ts,
  * tabla ExternalVerifyAttempt): 5 fallos en 5 min → bloqueo de 10 min (429).
+ * Y por IP (A-10): 20 fallos en 15 min → 15 min, para quien rota tokens con la misma
+ * contraseña. Sin cabecera del proxy no se cuenta por IP (ver claveDeIp).
  * Es protección mínima contra brute-force online. Para defensa real frente a
  * brute-force, la entropía de la password (12 chars del alphabet sin ambiguos
  * → ~71 bits) y el costo de bcrypt(12) son lo que cuenta. Antes era un Map en
@@ -24,7 +26,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/db/prisma";
 import { EXTERNAL_ACCESS_COOKIE, publicableAfuera } from "@/lib/external/access";
-import { getRemainingBlockSeconds, registerFailure, clearAttempts } from "@/lib/external/verify-rate-limit";
+import { bloqueoVigente, claveDeIp, clearAttempts, registrarFallo } from "@/lib/external/verify-rate-limit";
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,8 @@ export async function POST(req: NextRequest) {
   }
 
   const now = Date.now();
-  const remaining = await getRemainingBlockSeconds(token, now);
+  const ip = claveDeIp(req.headers);
+  const remaining = await bloqueoVigente(token, ip, now);
   if (remaining > 0) {
     return NextResponse.json(
       { ok: false, reason: "rate_limited", retryAfterSeconds: remaining },
@@ -82,14 +85,14 @@ export async function POST(req: NextRequest) {
   // uno existente con password mala, lo cual filtra qué tokens son válidos).
   if (!access) {
     await bcrypt.compare(password, "$2b$12$ZxYzZxYzZxYzZxYzZxYzZ.PadPadPadPadPadPadPadPadPadPadPadPa");
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
   // Caso 2: acceso revocado. Mismo mensaje genérico — no revelamos el estado.
   if (access.revokedAt) {
     await bcrypt.compare(password, access.passwordHash);
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
@@ -100,14 +103,14 @@ export async function POST(req: NextRequest) {
      estado interno que no le corresponde. */
   if (!publicableAfuera(access.project)) {
     await bcrypt.compare(password, access.passwordHash);
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
   // Caso 3: comparar contraseña real.
   const passwordOk = await bcrypt.compare(password, access.passwordHash);
   if (!passwordOk) {
-    await registerFailure(token, now);
+    await registrarFallo(token, ip, now);
     return NextResponse.json(GENERIC_INVALID, { status: 401 });
   }
 
