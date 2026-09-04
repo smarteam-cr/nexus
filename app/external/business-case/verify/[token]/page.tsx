@@ -6,9 +6,17 @@
  * recursos externos (el token va en la URL → un request cross-origin lo filtraría
  * por Referer).
  */
+import type { Metadata } from "next";
 import { BusinessCaseVerifyForm } from "./VerifyForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  // A-14: la URL lleva el token y circula por correo — que ningún buscador la indexe. Título
+  // genérico A PROPÓSITO: no se resuelve el token acá y el título viaja en historiales.
+  title: "Smarteam",
+  robots: { index: false, follow: false },
+};
 
 export default async function BusinessCaseVerifyPage({
   params,

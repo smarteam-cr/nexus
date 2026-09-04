@@ -16,9 +16,17 @@
  * origen distinto lo filtraría por el header Referer. Si algún día se agrega
  * un link "Powered by Nexus" o similar, debe apuntar al mismo dominio.
  */
+import type { Metadata } from "next";
 import { VerifyForm } from "./VerifyForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  // A-14: la URL lleva el token y circula por correo — que ningún buscador la indexe. Título
+  // genérico A PROPÓSITO: no se resuelve el token acá y el título viaja en historiales.
+  title: "Smarteam",
+  robots: { index: false, follow: false },
+};
 
 export default async function ExternalVerifyPage({
   params,

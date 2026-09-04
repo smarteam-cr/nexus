@@ -39,6 +39,15 @@ const SUPERFICIE = [
   "app/external/entrega",
   "app/api/projects/[projectId]/publish-entrega",
   "app/api/projects/[projectId]/delivery",
+  // A-14 (auditoría 2026-09-03): la MISMA prohibición para las otras superficies que el
+  // cliente lee — kickoff, cronograma, desarrollo y propuesta — y para todo lo que las pinta.
+  // Un rojo nuevo acá es un hallazgo real: se arregla, no se allowlistea.
+  "lib/external/kickoff-view.ts",
+  "lib/external/timeline-view.ts",
+  "lib/external/desarrollo-view.ts",
+  "lib/external/business-case-view.ts",
+  "components/external",
+  "app/external",
 ];
 
 /** Los identificadores reales del schema. No frases sueltas: nombres que se pueden escribir. */
@@ -97,7 +106,7 @@ function archivosDe(entrada: string): string[] {
   return out;
 }
 
-describe("privacidad de partner en la Entrega", () => {
+describe("privacidad de partner en la Entrega y en toda superficie que el cliente lee", () => {
   it("la superficie declarada existe entera (una lista que apunta a la nada no protege nada)", () => {
     const faltan = SUPERFICIE.filter((e) => !fs.existsSync(path.join(RAIZ, e)));
     expect(faltan, "entradas de SUPERFICIE que ya no existen — ¿se renombró un archivo?").toEqual(

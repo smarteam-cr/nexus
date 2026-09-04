@@ -12,8 +12,8 @@
  *      proyectos (ver lib/projects/publicable.test.ts, candado 2).
  *   2. Que las páginas con token en la URL sean `force-dynamic`. Sin eso Next cachea el
  *      segmento y **revocar el link no surte efecto**.
- *   3. Que la puerta abierta declare `noindex`. La URL circula por correo y no tiene otra
- *      puerta detrás.
+ *   3. Que TODA página con token declare `noindex` (A-14: antes solo la abierta). La URL
+ *      circula por correo y no tiene otra puerta detrás.
  *   4. Que TODA la superficie externa salga con `Referrer-Policy: no-referrer`. Estas URLs
  *      llevan el token en el path y las páginas pintan imágenes de otro origen (el logo del
  *      cliente vive en Supabase Storage): sin la política, el `Referer` de esa imagen se
@@ -77,6 +77,12 @@ const rel = (f: string) => path.relative(RAIZ, f).replace(/\\/g, "/");
 
 const PAGINA_ABIERTA = path.join(RAIZ, "app/external/propuesta/[token]/page.tsx");
 
+/** Descubre `app/external/**\/[token]/page.tsx` — sin lista que mantener. */
+const paginasConToken = (): string[] =>
+  archivosDe("app/external").filter(
+    (f) => f.endsWith("page.tsx") && path.basename(path.dirname(f)) === "[token]",
+  );
+
 describe("candado 1 — solo el chokepoint resuelve un token de PROPUESTA", () => {
   /* Los cuatro que pueden tocar la tabla por token, y por qué:
      - el chokepoint (el resolver de las dos puertas),
@@ -111,12 +117,6 @@ describe("candado 1 — solo el chokepoint resuelve un token de PROPUESTA", () =
 });
 
 describe("candado 2 — toda página externa con token en la URL es force-dynamic", () => {
-  /** Descubre `app/external/**\/[token]/page.tsx` — sin lista que mantener. */
-  const paginasConToken = (): string[] =>
-    archivosDe("app/external").filter(
-      (f) => f.endsWith("page.tsx") && path.basename(path.dirname(f)) === "[token]",
-    );
-
   it("las descubre (la abierta y la de verify, como mínimo)", () => {
     expect(paginasConToken().length).toBeGreaterThanOrEqual(2);
   });
@@ -132,23 +132,31 @@ describe("candado 2 — toda página externa con token en la URL es force-dynami
   });
 });
 
-describe("candado 3 — la puerta ABIERTA no se indexa ni filtra el token", () => {
-  const src = () => fs.readFileSync(PAGINA_ABIERTA, "utf8");
+describe("candado 3 — ninguna página con token se indexa ni filtra el token", () => {
 
   it("la página existe donde el constructor de URLs dice", () => {
     expect(fs.existsSync(PAGINA_ABIERTA)).toBe(true);
   });
 
-  it("declara noindex", () => {
+  it("TODAS declaran noindex (A-14: también las de verify y la del documento)", () => {
+    /* La edicion que lo pone en rojo: crear app/external/<x>/[token]/page.tsx sin metadata, o
+       sacarle el robots a una de las de verify. */
+    const sinNoindex = paginasConToken()
+      .filter((f) => !/robots:\s*\{[^}]*index:\s*false/.test(sinComentarios(fs.readFileSync(f, "utf8"))))
+      .map(rel);
+    expect(paginasConToken().length, "la guarda no mira nada").toBeGreaterThanOrEqual(4);
     expect(
-      /robots:\s*\{[^}]*index:\s*false/.test(sinComentarios(src())),
-      "La URL circula por correo y no tiene otra puerta detrás: tiene que ir noindex.",
-    ).toBe(true);
+      sinNoindex,
+      "La URL lleva el token y circula por correo: toda página con token va noindex.",
+    ).toEqual([]);
   });
 
-  it("NO usa metadata.referrer (rompe la hidratación; va por header)", () => {
+  it("NINGUNA usa metadata.referrer (rompe la hidratación; va por header)", () => {
+    const conReferrer = paginasConToken()
+      .filter((f) => /referrer:\s*["']no-referrer["']/.test(sinComentarios(fs.readFileSync(f, "utf8"))))
+      .map(rel);
     expect(
-      /referrer:\s*["']no-referrer["']/.test(sinComentarios(src())),
+      conReferrer.length > 0,
       "El <meta name=referrer> que emite Next lo hoistea React 19 en la hidratación y " +
         "rompe el recorrido de esta página (tiene formulario). La política va como header " +
         "en next.config.ts — ver el candado 4.",
