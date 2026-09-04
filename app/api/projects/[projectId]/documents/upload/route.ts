@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { getStorageClient, BUCKET_NAME, MAX_FILE_SIZE, ensureBucket, storagePath } from "@/lib/storage/client";
+import {
+  getStorageClient,
+  BUCKET_NAME,
+  MAX_FILE_SIZE,
+  ensureBucket,
+  storagePath,
+  isDocumentMimeAllowed,
+} from "@/lib/storage/client";
 import { extractText } from "@/lib/documents/extract-text";
 
 export async function POST(
@@ -31,6 +38,18 @@ export async function POST(
 
   if (file.size > MAX_FILE_SIZE) {
     return NextResponse.json({ error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)` }, { status: 400 });
+  }
+
+  // A-17: el tipo lo decide la allowlist del bucket, ANTES de subir y de intentar extraer
+  // texto. `file.type` lo declara el navegador (se puede mentir), pero cierra el caso común:
+  // un .exe, un .html o un .svg con script guardados como «documento» del cliente.
+  if (!isDocumentMimeAllowed(file.type)) {
+    return NextResponse.json(
+      {
+        error: `Tipo de archivo no permitido (${file.type || "desconocido"}). Se aceptan PDF, Office, texto/CSV e imágenes.`,
+      },
+      { status: 415 },
+    );
   }
 
   // Storage debe estar configurado para subir archivos. Si no, error claro

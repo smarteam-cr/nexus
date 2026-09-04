@@ -18,6 +18,26 @@
 
 export const MAX_EXTRACTED_CHARS = 50_000;
 
+/** A-17: tope para que un PDF o un Office enorme o malicioso no deje el request colgado. */
+export const EXTRACT_TIMEOUT_MS = 20_000;
+
+/**
+ * Devuelve `null` si `promesa` no resolvió dentro de `ms`. No cancela el trabajo (pdf-parse y
+ * officeparser no se pueden interrumpir) pero sí destraba al caller: el documento se guarda
+ * sin `content`, igual que cuando la extracción falla.
+ */
+export async function conTope<T>(promesa: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tope = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  try {
+    return await Promise.race([promesa, tope]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // MimeTypes de Office (OOXML) soportados por officeparser.
 const OFFICE_MIME_TYPES = new Set([
   // Word
@@ -38,10 +58,15 @@ const OFFICE_MIME_TYPES = new Set([
  * Extrae texto de un buffer según su mimeType. Devuelve el texto (truncado a
  * MAX_EXTRACTED_CHARS) o null si el formato no se soporta o la extracción falla.
  */
-export async function extractText(
-  buffer: Buffer,
-  mimeType: string,
-): Promise<string | null> {
+export async function extractText(buffer: Buffer, mimeType: string): Promise<string | null> {
+  try {
+    return await conTope(extraerSinTope(buffer, mimeType), EXTRACT_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}
+
+async function extraerSinTope(buffer: Buffer, mimeType: string): Promise<string | null> {
   try {
     // Plain text / CSV
     if (mimeType === "text/plain" || mimeType === "text/csv") {

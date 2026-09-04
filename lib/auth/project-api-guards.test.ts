@@ -26,6 +26,9 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { enmascararCorreo } from "@/lib/auth/enmascarar-correo";
+import { isDocumentMimeAllowed } from "@/lib/storage/client";
+import { conTope } from "@/lib/documents/extract-text";
+import { esUrlPermitidaParaElPdf, hostDeSupabase } from "@/lib/print/hosts-permitidos";
 
 const RAIZ = process.cwd();
 const BASE = "app/api/projects";
@@ -535,5 +538,55 @@ describe("⛔ los logs no llevan el objeto de error entero ni el correo de un in
     expect(enmascararCorreo("dmarin@smarteamcr.com")).toBe("d***@smarteamcr.com");
     expect(enmascararCorreo("sin-arroba")).toBe("***");
     expect(enmascararCorreo("@raro.com")).toBe("***");
+  });
+});
+
+describe("⛔ subir un documento exige un MIME de la allowlist, la extracción tiene tope y el PDF no sale a la red", () => {
+  /**
+   * A-17 (auditoría 2026-09-03). La subida aceptaba cualquier `file.type` (el bucket solo aplica su
+   * allowlist al CREARSE), `extractText` podía quedarse colgada con un PDF o un Office malicioso, y
+   * el Chromium que imprime los PDF salía a cualquier host que un documento nombrara — con el
+   * pdfToken en el Referer.
+   */
+  const lee = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+
+  it("el handler de subida rechaza el MIME ANTES de subir", () => {
+    /* La edicion que lo pone en rojo: sacar el if, o moverlo después del .upload( */
+    const src = lee("app/api/projects/[projectId]/documents/upload/route.ts");
+    const gate = src.indexOf("isDocumentMimeAllowed(file.type)");
+    const subida = src.indexOf(".upload(");
+    expect(gate, "el handler no consulta la allowlist").toBeGreaterThan(-1);
+    expect(subida).toBeGreaterThan(-1);
+    expect(gate, "la allowlist se consulta DESPUÉS de subir").toBeLessThan(subida);
+    expect(isDocumentMimeAllowed("application/pdf")).toBe(true);
+    expect(isDocumentMimeAllowed("text/html")).toBe(false);
+    expect(isDocumentMimeAllowed("image/svg+xml"), "un SVG puede llevar script").toBe(false);
+    expect(isDocumentMimeAllowed("")).toBe(false);
+  });
+
+  it("la extracción de texto tiene tope: una promesa que nunca vuelve devuelve null", async () => {
+    /* La edicion que lo pone en rojo: que extractText llame a extraerSinTope sin conTope. */
+    const nunca = new Promise<string>(() => {});
+    expect(await conTope(nunca, 20)).toBeNull();
+    expect(await conTope(Promise.resolve("ok"), 20)).toBe("ok");
+    const src = lee("lib/documents/extract-text.ts");
+    expect(src, "extractText tiene que pasar por conTope").toContain(
+      "conTope(extraerSinTope(buffer, mimeType), EXTRACT_TIMEOUT_MS)",
+    );
+  });
+
+  it("el navegador que imprime solo sale a la app y al Storage de Supabase", () => {
+    /* La edicion que lo pone en rojo: sacar setRequestInterception, dejar pasar cualquier host, o
+       que esUrlPermitidaParaElPdf devuelva true para todo. */
+    const src = lee("lib/print/pdf-runner.ts");
+    expect(src).toContain("page.setRequestInterception(true)");
+    expect(src).toContain("esUrlPermitidaParaElPdf(r.url(), hostsPermitidos)");
+    const supa = hostDeSupabase({ SUPABASE_URL: "https://abc.supabase.co" });
+    expect(supa).toBe("abc.supabase.co");
+    expect(esUrlPermitidaParaElPdf("http://127.0.0.1:3000/print/doc/x?pdfToken=y", [supa])).toBe(true);
+    expect(esUrlPermitidaParaElPdf("https://abc.supabase.co/storage/v1/object/public/logos/x.png", [supa])).toBe(true);
+    expect(esUrlPermitidaParaElPdf("data:image/png;base64,AAAA", [supa])).toBe(true);
+    expect(esUrlPermitidaParaElPdf("https://evil.example/pixel.png", [supa]), "un host ajeno sale").toBe(false);
+    expect(esUrlPermitidaParaElPdf("https://evil.example/pixel.png", [null])).toBe(false);
   });
 });

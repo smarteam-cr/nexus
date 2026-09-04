@@ -10,6 +10,7 @@
  * (1000px de ancho, ×1.04+24, 18.000px de techo, 2 concurrentes, cola de 4) y sus razones
  * viajaron enteros — son el resultado de haber medido, no defaults.
  */
+import { esUrlPermitidaParaElPdf, hostDeSupabase } from "@/lib/print/hosts-permitidos";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { PRINT_PAGE_WIDTH } from "./page-metrics";
 
@@ -137,6 +138,21 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
     });
     page.on("framenavigated", (f) => {
       if (f === page.mainFrame()) navegaciones++;
+    });
+
+    /* A-17: el navegador headless solo sale a la propia app y al Storage de Supabase (los
+       logos). Cualquier otro destino —una imagen remota en un html_embed, un <link> externo—
+       se aborta y se anota: el servidor no se vuelve un cliente HTTP hacia donde diga un
+       documento, ni le regala el pdfToken en el Referer a un tercero. */
+    const hostsPermitidos = [hostDeSupabase()];
+    await page.setRequestInterception(true);
+    page.on("request", (r) => {
+      if (esUrlPermitidaParaElPdf(r.url(), hostsPermitidos)) {
+        void r.continue();
+      } else {
+        errores.push(`bloqueado (host no permitido): ${r.url().slice(0, 120)}`);
+        void r.abort("blockedbyclient");
+      }
     });
 
     await page.goto(url, { waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS });

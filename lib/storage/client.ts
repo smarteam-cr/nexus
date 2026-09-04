@@ -24,6 +24,31 @@ const SUPABASE_SECRET_KEY =
 export const BUCKET_NAME = "client-documents";
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+/**
+ * A-17 (auditoría 2026-09-03): los MIME que el bucket acepta — y los que el handler de subida
+ * exige ANTES de subir. El bucket solo aplica esta lista al CREARSE (`ensureBucket`); en un
+ * bucket que ya existe manda lo que se configuró aquella vez, así que el gate real es el
+ * handler. Sin SVG a propósito: un SVG puede llevar script.
+ */
+export const DOCUMENT_MIME_TYPES: readonly string[] = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-powerpoint",
+  "text/plain",
+  "text/csv",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+];
+
+export function isDocumentMimeAllowed(mime: string): boolean {
+  return DOCUMENT_MIME_TYPES.includes(mime);
+}
+
 let _client: SupabaseClient | null = null;
 let _warned = false;
 
@@ -66,20 +91,7 @@ export async function ensureBucket() {
     await client.storage.createBucket(BUCKET_NAME, {
       public: false,
       fileSizeLimit: MAX_FILE_SIZE,
-      allowedMimeTypes: [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-powerpoint",
-        "text/plain",
-        "text/csv",
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-      ],
+      allowedMimeTypes: [...DOCUMENT_MIME_TYPES],
     });
   }
 }
