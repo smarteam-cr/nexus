@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Alert, Modal } from "@/components/ui";
 import type { UniversoTraible, EmpresaTraible } from "@/lib/hubspot/empresas-con-proyecto";
+import { conLaPreseleccionadaPrimero } from "@/lib/hubspot/preseleccion-traible";
 
 /**
  * app/(shell)/clients/TraerDeHubspot.tsx — el botón que trae empresas que HubSpot ya tiene.
@@ -25,14 +26,31 @@ import type { UniversoTraible, EmpresaTraible } from "@/lib/hubspot/empresas-con
  * denominador (pegado al número, no en un párrafo aparte), el aviso de ficha parecida, y a quién
  * le va a aparecer. Lo que se explicaba —por qué puede haber dos fichas, qué es la cuarentena de
  * cobranza— se cayó: nadie lee un párrafo para apretar un botón de dos opciones.
+ *
+ * ── LA PRESELECCIÓN (C-18, 2026-09-04) ──────────────────────────────────────
+ * `/clients?traer=<companyId>&empresa=<nombre>` viene del placeholder de /sessions («esta
+ * empresa de HubSpot no es Client»). Con el parámetro el modal ARRANCA abierto, pide el
+ * universo solo, pone esa empresa primera y, si no está entre las traíbles, lo dice: el
+ * universo solo ofrece empresas con un proyecto que falta traer.
  */
+type UniversoConEnganche = UniversoTraible & { enganchadaDe?: { actor: string; hace: number } | null };
+
+/** Fuera del componente a propósito: lo llaman el botón y el efecto de la preselección. */
+async function pedirUniverso(): Promise<UniversoConEnganche> {
+  const res = await fetch("/api/clients/traer-de-hubspot");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "No se pudo consultar HubSpot.");
+  return data;
+}
+
 export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
-  const [cargando, setCargando] = useState(false);
-  const [universo, setUniverso] = useState<
-    (UniversoTraible & { enganchadaDe?: { actor: string; hace: number } | null }) | null
-  >(null);
+  const searchParams = useSearchParams();
+  const companyIdATraer = searchParams.get("traer");
+  const nombreDeLaTraida = searchParams.get("empresa");
+  const [abierto, setAbierto] = useState(!!companyIdATraer);
+  const [cargando, setCargando] = useState(!!companyIdATraer);
+  const [universo, setUniverso] = useState<UniversoConEnganche | null>(null);
   const [error, setError] = useState<string | null>(null);
   /* Un CONJUNTO y no un id: con dos filas apretadas seguidas, la primera en volver le apagaba
      el spinner a la segunda —que seguía en vuelo— y su botón quedaba habilitado otra vez. La
@@ -50,16 +68,27 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
        encima de una lista que se lee como si estuviera viva. */
     setUniverso(null);
     try {
-      const res = await fetch("/api/clients/traer-de-hubspot");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo consultar HubSpot.");
-      setUniverso(data);
+      setUniverso(await pedirUniverso());
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot.");
     } finally {
       setCargando(false);
     }
   }
+
+  /* La preselección: el modal ya arrancó abierto y «cargando»; acá solo llega el universo.
+     Sin `setState` sincrónico en el efecto (el estado inicial ya lo dejó listo). */
+  useEffect(() => {
+    if (!companyIdATraer) return;
+    let vivo = true;
+    pedirUniverso()
+      .then((u) => { if (vivo) setUniverso(u); })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [companyIdATraer]);
+
+  const { lista, encontrada } = conLaPreseleccionadaPrimero(universo?.traibles ?? [], companyIdATraer);
 
   async function traer(
     empresa: EmpresaTraible,
@@ -161,10 +190,18 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
             </p>
           )}
 
-          {universo?.traibles.map((e) => (
+          {companyIdATraer && universo && !encontrada && (
+            <Alert variant="warning">
+              «{nombreDeLaTraida ?? companyIdATraer}» no está entre las que se pueden traer: o ya es cliente de
+              Nexus bajo otra ficha, o en HubSpot no tiene un proyecto que falte traer.
+            </Alert>
+          )}
+
+          {lista.map((e) => (
             <FilaEmpresa
               key={e.companyId}
               empresa={e}
+              preseleccionada={e.companyId === companyIdATraer}
               ocupada={trayendo.has(e.companyId)}
               resultado={resultados[e.companyId]}
               onTraer={(opts) => traer(e, opts)}
@@ -242,11 +279,14 @@ interface ResultadoFila {
 
 function FilaEmpresa({
   empresa,
+  preseleccionada = false,
   ocupada,
   resultado,
   onTraer,
 }: {
   empresa: EmpresaTraible;
+  /** C-18: la que la persona venía a traer desde /sessions. Se marca, no se trae sola. */
+  preseleccionada?: boolean;
   ocupada: boolean;
   resultado?: ResultadoFila;
   onTraer: (opts: { confirmoGemela?: boolean; adoptarEnClientId?: string }) => void;
@@ -307,7 +347,10 @@ function FilaEmpresa({
     <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-1.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-fg truncate">{empresa.rotulo}</p>
+          <p className="text-sm font-medium text-fg truncate">
+            {empresa.rotulo}
+            {preseleccionada && <span className="ml-2 text-xs font-normal text-brand">la que venías a traer</span>}
+          </p>
           {/* Se cayó el tipo de pipeline: es el mismo en casi todas y no cambia la decisión.
               Queda el nombre del proyecto (para reconocerlo) y el encargado (que decide a quién
               le va a aparecer). */}

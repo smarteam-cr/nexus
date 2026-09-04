@@ -84,7 +84,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/sessions/[id]/SessionView.tsx": 49,
   "app/(shell)/sessions/AnalysisPanel.tsx": 72,
   "app/(shell)/sessions/categories/CategoriesClient.tsx": 51,
-  "app/(shell)/sessions/SessionsClient.tsx": 164,
+  "app/(shell)/sessions/SessionsClient.tsx": 161,
   "app/(shell)/team/page.tsx": 2,
   "app/LoginForm.tsx": 5,
   "app/portal/page.tsx": 22,

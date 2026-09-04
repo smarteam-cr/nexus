@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import AnalysisPanel from "./AnalysisPanel";
@@ -2131,7 +2132,11 @@ export default function SessionsClient({
                 onRunChange={setCurrentAnalysisRunId}
               />
             ) : (
-              <NonClientAnalysisPlaceholder kind={selectedGroup.kind} />
+              <NonClientAnalysisPlaceholder
+                kind={selectedGroup.kind}
+                hubspotCompanyId={selectedGroup.kind === "hubspotCompany" ? selectedGroup.id : null}
+                nombre={selectedGroupLabel}
+              />
             )
           ) : selectedSession ? (
             <SessionDetail
@@ -2200,7 +2205,12 @@ function PanelTab({ active, onClick, children }: {
 
 // ── Placeholder cuando el grupo no es Client (no se puede analizar) ──────────
 
-function NonClientAnalysisPlaceholder({ kind }: { kind: SessionGroup["kind"] }) {
+function NonClientAnalysisPlaceholder({ kind, hubspotCompanyId, nombre }: {
+  kind: SessionGroup["kind"];
+  /** Solo para `hubspotCompany`: el id de la empresa en HubSpot, para llegar a Clientes con ella preseleccionada. */
+  hubspotCompanyId: string | null;
+  nombre: string;
+}) {
   const labels: Record<string, string> = {
     hubspotCompany: "empresa de HubSpot",
     category:       "categoría",
@@ -2219,20 +2229,26 @@ function NonClientAnalysisPlaceholder({ kind }: { kind: SessionGroup["kind"] }) 
           Esta {label} no es Client de Nexus
         </p>
         <p className="text-xs text-gray-500 leading-relaxed">
-          El hub de análisis solo opera sobre Clients de Nexus. Promové primero esta {label} a Client
-          para poder generar análisis de ventas o servicio sobre sus sesiones.
+          {hubspotCompanyId
+            ? "El hub de análisis solo opera sobre Clients de Nexus. Traé la empresa desde Clientes: si en HubSpot tiene un proyecto, el botón «Traer de HubSpot» la ofrece con esta preseleccionada."
+            : "El hub de análisis solo opera sobre Clients de Nexus. Estas sesiones se asignan a un cliente una por una, desde la propia sesión."}
         </p>
       </div>
-      <button
-        disabled
-        title="Próximamente: promover empresa HubSpot a Client de Nexus."
-        className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-800 bg-gray-900/40 text-xs text-gray-600 cursor-not-allowed"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        Promover a Client · próximamente
-      </button>
+      {/* C-18 (2026-09-04): acá hubo meses un botón deshabilitado «Promover a Client · próximamente».
+          Un control que no hace nada es peor que ninguno; el camino real ya existe (Clientes →
+          «Traer de HubSpot»), así que el enlace lleva ahí con la empresa preseleccionada. Para
+          categorías y grupos sin clasificar no hay nada que traer: no se pinta ningún botón. */}
+      {hubspotCompanyId && (
+        <Link
+          href={`/clients?traer=${encodeURIComponent(hubspotCompanyId)}&empresa=${encodeURIComponent(nombre)}`}
+          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-line bg-surface text-xs text-fg-secondary hover:text-fg hover:bg-surface-hover"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Traer «{nombre}» de HubSpot
+        </Link>
+      )}
     </div>
   );
 }

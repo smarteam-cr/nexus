@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { conLaPreseleccionadaPrimero } from "@/lib/hubspot/preseleccion-traible";
 
 /**
  * lib/projects/alta-traida.test.ts — EL ALTA DE UN PROYECTO QUE HUBSPOT YA TENÍA.
@@ -303,5 +304,50 @@ describe("el modal no celebra un alta a medio hacer", () => {
     expect(src, "la ruta dejó de decir si el alta terminó: el modal no puede saberlo").toContain(
       "termino: alta.termino",
     );
+  });
+});
+
+describe("C-18: el botón muerto de /sessions es un enlace, y el modal preselecciona la empresa", () => {
+  const SESSIONS = "app/(shell)/sessions/SessionsClient.tsx";
+
+  it("LA guarda: el placeholder de una empresa de HubSpot enlaza a Clientes con la empresa preseleccionada", () => {
+    /* La edición que lo pone en rojo: volver al `<button disabled>` «próximamente» —un control
+       que no hizo nada durante meses— o quitarle el `?traer=` al enlace: llega a Clientes y la
+       persona tiene que encontrar la empresa a mano en el modal. */
+    const src = fuente(SESSIONS);
+    const i = src.indexOf("function NonClientAnalysisPlaceholder(");
+    expect(i, "se movió el placeholder; revisar esta guarda").toBeGreaterThan(0);
+    const fin = src.indexOf("function ClientListItem(", i);
+    expect(fin, "se movió el ítem del sidebar; revisar esta guarda").toBeGreaterThan(i);
+    const bloque = src.slice(i, fin);
+    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(300);
+    expect(bloque, "volvió el botón que no hace nada").not.toContain("disabled");
+    expect(bloque, "volvió el «próximamente»").not.toMatch(/pr[oó]ximamente/i);
+    expect(bloque, "el enlace tiene que llevar la empresa preseleccionada").toContain(
+      "/clients?traer=${encodeURIComponent(hubspotCompanyId)}",
+    );
+  });
+
+  it("y el modal se abre solo con `?traer`, pone esa empresa primera y dice cuando no está", () => {
+    const src = fuente(MODAL);
+    expect(src).toContain('searchParams.get("traer")');
+    /* ⚠ La línea ENTERA de `abierto`, no el fragmento: la primera versión buscaba solo
+       `useState(!!companyIdATraer)`, que también lo tiene `cargando` — con `abierto` roto a
+       `useState(false)` seguía verde. Se cazó rompiéndola. */
+    expect(src, "el modal tiene que ARRANCAR abierto cuando lo mandan a traer una empresa").toContain(
+      "const [abierto, setAbierto] = useState(!!companyIdATraer)",
+    );
+    expect(src, "la preselección la decide el helper puro, no un sort a mano").toContain("conLaPreseleccionadaPrimero(");
+    expect(src, "si la empresa no está entre las traíbles, se dice").toContain("no está entre las que se pueden traer");
+  });
+
+  it("y el helper pone la elegida primera sin perder ninguna, y no inventa una que no está", () => {
+    const lista = [{ companyId: "a" }, { companyId: "b" }, { companyId: "c" }];
+    expect(conLaPreseleccionadaPrimero(lista, "c")).toEqual({
+      lista: [{ companyId: "c" }, { companyId: "a" }, { companyId: "b" }],
+      encontrada: true,
+    });
+    expect(conLaPreseleccionadaPrimero(lista, "zzz")).toEqual({ lista, encontrada: false });
+    expect(conLaPreseleccionadaPrimero(lista, null)).toEqual({ lista, encontrada: false });
   });
 });
