@@ -4,18 +4,34 @@ import { join } from "node:path";
 import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
-import { buscarEtapa, resolvePipeline, PROJECT_PIPELINES } from "@/lib/projects/kind";
+import { PROJECT_PIPELINES } from "@/lib/projects/kind";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
-import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
+import {
+  INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28,
+  type Invariante,
+} from "@/lib/invariantes";
+
+/**
+ * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
+ * (B-07, 2026-09-04): ✓ a stdout, ✗ y su detalle a stderr. Devuelve 1 si viola.
+ */
+async function reportar(inv: Invariante, db: typeof prisma): Promise<number> {
+  const r = await inv.correr(db, new Date());
+  for (const linea of r.lineas) (r.ok ? console.log : console.error)(linea);
+  return r.ok ? 0 : 1;
+}
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
  * Exit ≠0 si alguno se viola. Lo invoca la skill /ship antes de commitear, y se puede
  * correr a mano: `npx tsx scripts/check-invariants.ts` (o `npm run check:invariants`).
+ *
+ * ⚠ B-07 (2026-09-04): los invariantes que solo miran la base viven en `lib/invariantes/` y acá
+ * se IMPRIMEN (`reportar`), para que un job y /api/health también los corran. Los demás siguen acá.
  *
  * Invariantes:
  *   1. Ningún `SessionProject` cruza cliente: la sesión (resolvedClientId/manualClientId)
@@ -83,26 +99,8 @@ import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 async function main(): Promise<number> {
   let violations = 0;
 
-  // ── Inv 1: ningún SessionProject cruza cliente ──
-  const links = await prisma.sessionProject.findMany({
-    select: {
-      project: { select: { clientId: true } },
-      session: { select: { id: true, title: true, resolvedClientId: true, manualClientId: true } },
-    },
-  });
-  const cross = links.filter((l) => {
-    const pc = l.project.clientId;
-    const { resolvedClientId: r, manualClientId: m } = l.session;
-    return r !== null && pc !== r && pc !== m;
-  });
-  if (cross.length > 0) {
-    violations++;
-    console.error(`✗ INV1 VIOLADO: ${cross.length} SessionProject cruzan cliente (contexto de un cliente alimentaría a otro).`);
-    console.error("  Corré: npx tsx scripts/cleanup-cross-client-session-projects.ts --apply");
-    for (const l of cross.slice(0, 10)) console.error(`    - "${l.session.title}" (${l.session.id})`);
-  } else {
-    console.log("✓ INV1: ningún SessionProject cruza cliente.");
-  }
+  // ── Inv 1 → lib/invariantes/sesiones.ts (B-07) ──
+  violations += await reportar(INV1, prisma);
 
   // ── Inv 2: materialización fresca (resolvedClientId == categorize en vivo) ──
   try {
@@ -119,19 +117,8 @@ async function main(): Promise<number> {
     console.error("⚠ INV2 no verificable (¿HubSpot/DB caído?):", e instanceof Error ? e.message : e);
   }
 
-  // ── Inv 3: ningún Cobro COBRADO sin confirmadoPor (Cobranza — el humano confirma
-  //    lo que mueve dinero; chokepoint: lib/cobranza/mutations.ts#cambiarEstadoCobro) ──
-  const cobradosSinConfirmar = await prisma.cobro.count({
-    where: { estado: "COBRADO", confirmadoPor: null },
-  });
-  if (cobradosSinConfirmar > 0) {
-    violations++;
-    console.error(
-      `✗ INV3 VIOLADO: ${cobradosSinConfirmar} Cobro(s) en estado COBRADO sin confirmadoPor (¿alguien escribió estado sin pasar por el chokepoint?).`,
-    );
-  } else {
-    console.log("✓ INV3: todo Cobro COBRADO tiene confirmadoPor.");
-  }
+  // ── Inv 3 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV3, prisma);
 
   // ── Inv 4: enums del cliente generado ⊆ enums de Postgres ──
   const dbEnums = await prisma.$queryRaw<Array<{ typname: string; enumlabel: string }>>`
@@ -172,18 +159,8 @@ async function main(): Promise<number> {
     console.warn(`⚠ INV4 (no bloquea): la DB tiene ${extra.length} valor(es) de enum que este cliente no conoce (¿drift de la otra PC sin mergear?): ${extra.slice(0, 8).join(", ")}`);
   }
 
-  // ── Inv 5: ningún Cobro con fechaEmision sin facturadoPor (espejo de INV3 — Tanda B) ──
-  const facturadosSinAutoria = await prisma.cobro.count({
-    where: { fechaEmision: { not: null }, facturadoPor: null },
-  });
-  if (facturadosSinAutoria > 0) {
-    violations++;
-    console.error(
-      `✗ INV5 VIOLADO: ${facturadosSinAutoria} Cobro(s) con fechaEmision sin facturadoPor (¿alguien escribió fechaEmision sin pasar por el chokepoint?).`,
-    );
-  } else {
-    console.log("✓ INV5: todo Cobro con fechaEmision tiene facturadoPor.");
-  }
+  // ── Inv 5 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV5, prisma);
 
   // ── Inv 6: ningún `new Pool(` sin `max:` (post-mortem EMAXCONNSESSION jul-2026:
   //    el default de pg es max:10 y el pooler de Supabase da ~15 slots COMPARTIDOS
@@ -293,97 +270,9 @@ async function main(): Promise<number> {
     );
   }
 
-  // ── Inv 8: el hermano de un proyecto está sano ──
-  // Decide facturación, así que un vínculo torcido es plata mal contada.
-  const conVinculo = await prisma.project.findMany({
-    where: {
-      OR: [{ hermanoCsProjectId: { not: null } }, { hubspotRelatedProjectIds: { isEmpty: false } }],
-    },
-    select: {
-      id: true,
-      name: true,
-      clientId: true,
-      hubspotServiceId: true,
-      hubspotPipelineId: true,
-      hubspotRelatedProjectIds: true,
-      hermanoCsProjectId: true,
-      updatedAt: true,
-      client: { select: { name: true } },
-    },
-  });
-  const porId = new Map(conVinculo.map((p) => [p.id, p]));
-
-  // 8a. Cruzar cliente. El resolvedor solo mira dentro del mismo cliente, así que esto solo
-  // puede aparecer por un dato viejo o escrito a mano.
-  const hermanosCruzados: string[] = [];
-  // 8b. Hermano de sí mismo.
-  const hermanosDeSiMismo: string[] = [];
-  for (const p of conVinculo) {
-    if (!p.hermanoCsProjectId) continue;
-    if (p.hermanoCsProjectId === p.id) {
-      hermanosDeSiMismo.push(`${p.client.name} · "${p.name}"`);
-      continue;
-    }
-    const otro = porId.get(p.hermanoCsProjectId);
-    // Si el hermano no está en este conjunto hay que traerlo aparte para saber su cliente.
-    const clienteDelOtro =
-      otro?.clientId ??
-      (await prisma.project.findUnique({
-        where: { id: p.hermanoCsProjectId },
-        select: { clientId: true },
-      }))?.clientId ??
-      null;
-    if (clienteDelOtro === null) {
-      /* ⚠ Apunta a un proyecto que ya no existe. Acá decía que eso "degrada a aparte (se
-         factura), que es el lado seguro" — y es FALSO, corregido el 2026-08-05: el criterio de
-         cobranza `NO_ES_HERMANO_DE_CS` exige `hermanoCsProjectId === null`, y un puntero muerto
-         NO es null. O sea que el proyecto **deja de facturar en silencio** hasta que el próximo
-         sync recalcule los hermanos. Es lo contrario del lado seguro, y el operador que leía este
-         mensaje se quedaba tranquilo. */
-      hermanosCruzados.push(`${p.client.name} · "${p.name}" → apunta a un proyecto BORRADO`);
-    } else if (clienteDelOtro !== p.clientId) {
-      hermanosCruzados.push(`${p.client.name} · "${p.name}" → hermano de OTRO cliente`);
-    }
-  }
-  if (hermanosCruzados.length > 0 || hermanosDeSiMismo.length > 0) {
-    violations++;
-    console.error(`✗ INV8: ${hermanosCruzados.length + hermanosDeSiMismo.length} hermano(s) mal resuelto(s):`);
-    for (const s of [...hermanosCruzados, ...hermanosDeSiMismo]) console.error(`    - ${s}`);
-    console.error("  Un hermano decide si el proyecto se factura. Revisar la asociación en HubSpot.");
-  } else {
-    console.log("✓ INV8a/b: ningún hermano cruza cliente ni es hermano de sí mismo.");
-  }
-
-  // 8c. Vínculos declarados que siguen sin resolver aunque el proyecto apuntado YA existe en
-  // Nexus. Uno pendiente es normal (el hermano todavía no entró); uno pendiente con el
-  // objetivo presente significa que `resolverHermanos` no corrió o falló.
-  const idsHsPresentes = new Set(
-    (
-      await prisma.project.findMany({
-        where: { hubspotServiceId: { not: null } },
-        select: { hubspotServiceId: true, clientId: true, hubspotPipelineId: true },
-      })
-    )
-      .filter((p) => p.hubspotPipelineId === "826270797")
-      .map((p) => `${p.clientId}:${p.hubspotServiceId}`),
-  );
-  const SIETE_DIAS = 7 * 24 * 60 * 60 * 1000;
-  const pendientesResolubles = conVinculo.filter(
-    (p) =>
-      p.hermanoCsProjectId === null &&
-      p.hubspotRelatedProjectIds.some((r) => idsHsPresentes.has(`${p.clientId}:${r}`)) &&
-      Date.now() - p.updatedAt.getTime() > SIETE_DIAS,
-  );
-  if (pendientesResolubles.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV8c: ${pendientesResolubles.length} proyecto(s) con un vínculo declarado hace más de 7 días cuyo hermano SÍ existe en Nexus:`,
-    );
-    for (const p of pendientesResolubles) console.error(`    - ${p.client.name} · "${p.name}"`);
-    console.error("  resolverHermanos() (lib/hubspot/sync-projects.ts) no está corriendo o falla.");
-  } else {
-    console.log("✓ INV8c: no hay hermanos resolubles sin resolver.");
-  }
+  // ── Inv 8 (a/b) y 8c → lib/invariantes/proyectos.ts (B-07) ──
+  violations += await reportar(INV8, prisma);
+  violations += await reportar(INV8c, prisma);
 
   // ── Inv 9: el fragmento SQL y el predicado en memoria coinciden SOBRE LOS DATOS REALES ──
   // scope.test.ts prueba la LÓGICA con filas sintéticas; esto la prueba con las filas que
@@ -459,98 +348,11 @@ async function main(): Promise<number> {
     }
   }
 
-  // ── Inv 10: ningún proyecto sincronizado ACTIVO se quedó sin clase ──
-  // Un proyecto con hubspotServiceId y sin hubspotPipelineId es uno que el sync escribió sin
-  // decirle de qué pipeline viene. Mientras dura, se comporta como Customer Success.
-  //
-  // Se mira SOLO los activos, y no es para que el invariante pase: los cuatro criterios de
-  // alcance (lib/projects/scope.ts) exigen `status: "active"`, así que un proyecto inactivo
-  // no entra a cartera, ni a cobranza, ni al vigilante. La justificación de este invariante
-  // no le aplica. Hoy eso deja afuera a 18 fantasmas de un portal de cliente al que ya no
-  // tenemos acceso, que van a quedar en NULL para siempre y no molestan a nadie.
-  //
-  // El día de gracia cubre la ventana normal entre aplicar el SQL y correr el backfill.
-  const UN_DIA = 24 * 60 * 60 * 1000;
-  const sinClase = await prisma.project.findMany({
-    where: {
-      status: "active",
-      hubspotServiceId: { not: null },
-      hubspotPipelineId: null,
-      updatedAt: { lt: new Date(Date.now() - UN_DIA) },
-    },
-    select: { name: true, status: true, client: { select: { name: true } } },
-  });
-  if (sinClase.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV10 VIOLADO: ${sinClase.length} proyecto(s) sincronizado(s) sin pipeline resuelto ` +
-        `(se comportan como Customer Success: cartera, vigilante y cobranza).`,
-    );
-    for (const p of sinClase.slice(0, 10)) {
-      console.error(`    - ${p.client.name} · "${p.name}" (${p.status})`);
-    }
-    if (sinClase.length > 10) console.error(`    … y ${sinClase.length - 10} más`);
-    console.error("  Corré: npx tsx scripts/backfill-project-pipeline.ts --apply");
-    console.error(
-      "  Si el backfill los reporta como «no está en ese portal», el objeto de HubSpot ya no\n" +
-        "  existe: el proyecto está de más en Nexus y va por la Zona de peligro de la ficha,\n" +
-        "  no por el backfill.",
-    );
-  } else {
-    console.log("✓ INV10: todo proyecto sincronizado tiene su pipeline resuelto.");
-  }
+  // ── Inv 10 → lib/invariantes/proyectos.ts (B-07) ──
+  violations += await reportar(INV10, prisma);
 
-  // ── Inv 11: ninguna etapa materializada ACTIVA quedó fuera de la tabla ──
-  //
-  // `PROJECT_PIPELINES[].stages` está TRANSCRITO a mano del portal. HubSpot deja agregar y
-  // renombrar etapas desde la UI, y eso pasó: el 2026-07-30 aparecieron 4 etapas nuevas en el
-  // pipeline de Customer Success y la tabla siguió verde todo el día con la versión vieja —
-  // ningún test la miraba contra la realidad.
-  //
-  // Esta invariante cierra el lazo por el único lado que puede: si alguien MUEVE un proyecto a
-  // una etapa que la tabla no declara, se ve. No detecta una etapa nueva que nadie usó todavía
-  // (para eso está `scripts/inspect-project-pipelines.ts`), pero sí el momento en que empieza
-  // a importar.
-  //
-  // Solo ACTIVOS y solo con pipeline RESUELTO: un `hubspotPipelineId` nulo es la fila legacy
-  // (ya la cubre INV10) y un proyecto inactivo no entra a ninguno de los cuatro alcances.
-  const conEtapa = await prisma.project.findMany({
-    where: { status: "active", hubspotPipelineId: { not: null }, hubspotPipelineStageId: { not: null } },
-    select: {
-      name: true,
-      hubspotPipelineId: true,
-      hubspotPipelineStageId: true,
-      hubspotPipelineStageLabel: true,
-      client: { select: { name: true } },
-    },
-  });
-  const etapasHuerfanas = conEtapa.filter((p) => {
-    const def = resolvePipeline(p.hubspotPipelineId);
-    // Pipeline no declarado → fila legacy, no es asunto de esta invariante.
-    return def ? !buscarEtapa(def, p.hubspotPipelineStageId) : false;
-  });
-  if (etapasHuerfanas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV11 VIOLADO: ${etapasHuerfanas.length} proyecto(s) activo(s) están en una etapa que ` +
-        `lib/projects/kind.ts no declara.`,
-    );
-    for (const p of etapasHuerfanas.slice(0, 10)) {
-      console.error(
-        `    - ${p.client.name} · "${p.name}" → etapa ${p.hubspotPipelineStageId} ` +
-          `("${p.hubspotPipelineStageLabel ?? "sin rótulo"}") del pipeline ${p.hubspotPipelineId}`,
-      );
-    }
-    if (etapasHuerfanas.length > 10) console.error(`    … y ${etapasHuerfanas.length - 10} más`);
-    console.error(
-      "  Alguien agregó o renombró etapas en HubSpot. Corré\n" +
-        "  `npx tsx scripts/inspect-project-pipelines.ts` y transcribí las etapas nuevas a\n" +
-        "  `PROJECT_PIPELINES[].stages`. ⚠ Revisá también `closedStageIds`: si una etapa de\n" +
-        "  cierre cambió de id, hay proyectos que se cierran o se abren mal.",
-    );
-  } else {
-    console.log("✓ INV11: toda etapa materializada activa está declarada en la tabla.");
-  }
+  // ── Inv 11 → lib/invariantes/proyectos.ts (B-07) ──
+  violations += await reportar(INV11, prisma);
 
   // ── Inv 12: el guard anti-prod está cableado en TODOS los caminos de escritura ─────
   //
@@ -701,70 +503,8 @@ async function main(): Promise<number> {
     console.error("⚠ INV13 no verificable (¿HubSpot caído o sin cuenta del sistema?):", e instanceof Error ? e.message : e);
   }
 
-  // ── Inv 14: ningún alta lleva días a medio hacer ──
-  /**
-   * ── POR QUÉ ESTE INVARIANTE, Y QUÉ LO HIZO NECESARIO ────────────────────────
-   * Un alta a medio hacer pone al proyecto en cuarentena: existe, se abre, se ve normal — y no
-   * cobra, no suma a la cartera de nadie, no le nace el handoff y no se le publica nada al
-   * cliente. Es el estado más caro del sistema y el más silencioso.
-   *
-   * La cuarentena está bien: un alta a mitad de camino NO tiene que facturar. Lo que estaba mal
-   * es que nadie mide CUÁNTO HACE que está así. El 2026-08-05/06 dos proyectos entraron en
-   * cuarentena permanente por una comparación insatisfacible, y los trece invariantes anteriores
-   * dieron verde: INV9 compara SQL contra memoria y los dos coinciden en excluirlos; INV10 busca
-   * proyectos sin pipeline y los dos SÍ lo tenían; INV11 mira etapas declaradas y la suya lo
-   * estaba. Ninguno pregunta lo único que importa acá: hace cuánto.
-   *
-   * Sin esto, un bug de un minuto se convierte en una pérdida permanente. El molde es el de
-   * INV8c —«un vínculo declarado hace más de 7 días»—, que ya existe para los hermanos.
-   *
-   * ⚠ El umbral es de HORAS y no de días a propósito: el camino feliz termina el alta EN LÍNEA,
-   * dentro del mismo request. Un alta que sigue viva a la mañana siguiente no está tardando:
-   * está trabada.
-   */
-  const HORAS_DE_GRACIA = 12;
-  const limiteAlta = new Date(Date.now() - HORAS_DE_GRACIA * 3600_000);
-  /**
-   * ⚠ `altaEstado != null` NO es «el alta está en curso»: `listo` es un estado y se PERSISTE.
-   * Con ese filtro el invariante marcaba en rojo todos los proyectos que alguna vez pasaron por
-   * el alta —los cuatro que hay— incluidos los que terminaron bien hace días. Se derivan de la
-   * tabla, que es la que sabe cuáles significan «a medio hacer».
-   */
-  const EN_CURSO = ESTADOS_DE_ALTA.filter(altaEnCurso);
-  const altasViejas = await prisma.project.findMany({
-    where: { altaEstado: { in: [...EN_CURSO] }, altaIniciadaAt: { lt: limiteAlta } },
-    select: {
-      id: true, name: true, altaEstado: true, altaError: true, altaIntentos: true,
-      altaIniciadaAt: true, altaPipelineElegido: true, hubspotPipelineId: true,
-      client: { select: { name: true } },
-    },
-    orderBy: { altaIniciadaAt: "asc" },
-  });
-  if (altasViejas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV14 VIOLADO: ${altasViejas.length} alta(s) llevan más de ${HORAS_DE_GRACIA} h sin terminar ` +
-        `(esos proyectos NO cobran, no suman a la cartera y no se pueden publicar).`,
-    );
-    for (const a of altasViejas.slice(0, 10)) {
-      const dias = Math.floor((Date.now() - a.altaIniciadaAt!.getTime()) / 86_400_000);
-      console.error(
-        `    - ${a.client.name} / ${a.name}: ${a.altaEstado} hace ${dias} d, ${a.altaIntentos} intento(s)`,
-      );
-      console.error(`      ${a.altaError ?? "(sin motivo escrito)"}`);
-      /* El caso concreto que originó el invariante lleva su propio remedio: sin el pipeline
-         sellado la comparación del motor es insatisfacible y «Reintentar» no puede ganar. */
-      if (!a.altaPipelineElegido && a.hubspotPipelineId) {
-        console.error(
-          `      ⚠ sin pipeline elegido y HubSpot dice ${a.hubspotPipelineId}: ` +
-            `corré npx tsx scripts/sellar-pipeline-del-alta.ts --apply`,
-        );
-      }
-    }
-    if (altasViejas.length > 10) console.error(`    … y ${altasViejas.length - 10} más`);
-  } else {
-    console.log(`✓ INV14: ningún alta lleva más de ${HORAS_DE_GRACIA} h a medio hacer.`);
-  }
+  // ── Inv 14 → lib/invariantes/proyectos.ts (B-07) ──
+  violations += await reportar(INV14, prisma);
 
   // ── Inv 15: un solo agente por (grupo, tipo de proyecto) ──
   /**
@@ -958,361 +698,35 @@ async function main(): Promise<number> {
     console.log(`✓ INV17: los ${idsDeCta.length} botones «Generar» apuntan a agentes activos.`);
   }
 
-  // ── Inv 18: ningún PagoPlanilla PAGADO sin confirmadoPor (libro de planilla —
-  //    espejo EXACTO de INV3; chokepoint: lib/cobranza/mutations.ts#pagarQuincena) ──
-  const quincenasSinConfirmar = await prisma.pagoPlanilla.count({
-    where: { estado: "PAGADO", confirmadoPor: null },
-  });
-  if (quincenasSinConfirmar > 0) {
-    violations++;
-    console.error(
-      `✗ INV18 VIOLADO: ${quincenasSinConfirmar} quincena(s) del libro en estado PAGADO sin confirmadoPor (¿alguien escribió el estado sin pasar por el chokepoint?).`,
-    );
-  } else {
-    console.log("✓ INV18: toda quincena PAGADA del libro tiene confirmadoPor.");
-  }
+  // ── Inv 18 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV18, prisma);
 
-  // ── Inv 20: ninguna ComisionPartner COBRADA sin confirmadoPor (espejo de INV3 y
-  //    INV18; chokepoint: lib/cobranza/mutations.ts#cambiarEstadoComisionPartner).
-  //    Hace falta por lo mismo que en los cobros: `scripts/import-comisiones-partner.ts`
-  //    escribe filas POR FUERA de las mutations, y "esta plata entró" es una
-  //    afirmación que tiene que quedar firmada por alguien. ──
-  const comisionesSinConfirmar = await prisma.comisionPartner.count({
-    where: { estado: "COBRADO", confirmadoPor: null },
-  });
-  if (comisionesSinConfirmar > 0) {
-    violations++;
-    console.error(
-      `✗ INV20 VIOLADO: ${comisionesSinConfirmar} comisión(es) de aliado en estado COBRADO sin confirmadoPor (¿alguien escribió el estado sin pasar por el chokepoint?).`,
-    );
-  } else {
-    console.log("✓ INV20: toda comisión de aliado COBRADA tiene confirmadoPor.");
-  }
+  // ── Inv 20 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV20, prisma);
 
-  /* ── Inv 21: ningún proyecto activo se quedó SIN NINGUNA reunión vinculada mientras su
-     cliente sí tiene sesiones (2026-08-18) ─────────────────────────────────────────────
-     El alta sella `Project.altaReclasificadoAt` para pagar la reclasificación una sola vez.
-     El sello es correcto; lo que faltaba es que la corrida tuviera algo que mirar. Dos formas
-     de que no lo tenga, las dos vistas en producción el mismo día:
-       (a) el cliente acaba de nacer en el alta y todavía ninguna sesión le fue atribuida
-           («Discover Puerto Rico»: cliente creado 2 segundos antes de reclasificar);
-       (b) el historial del cliente es más viejo que la ventana de la reclasificación
-           («kamalio»: 3 sesiones de 2025, alta de agosto 2026).
-     En los dos casos el CSE ve lo mismo —el proyecto no tiene ninguna reunión— y como el
-     sello ya está puesto, no se arregla solo nunca. Este invariante lo hace visible.
-     Remedio: `scripts/sanar-vinculos-de-alta.ts` (dry-run primero). ⚠ Si se cambia el
-     criterio de acá, cambiarlo también allá: el invariante y su remedio tienen que mirar lo
-     mismo, o el gate reporta algo que el script no cubre. */
-  const conSello = await prisma.project.findMany({
-    where: { status: "active", altaReclasificadoAt: { not: null } },
-    select: { id: true, name: true, clientId: true, _count: { select: { sessions: true } } },
-  });
-  const huerfanos: string[] = [];
-  for (const p of conSello) {
-    if (p._count.sessions > 0) continue;
-    const sesionesDelCliente = await prisma.firefliesSession.count({
-      where: {
-        OR: [{ manualClientId: p.clientId }, { manualClientId: null, resolvedClientId: p.clientId }],
-        date: { lte: new Date() },
-      },
-    });
-    if (sesionesDelCliente > 0) huerfanos.push(`${p.name} (${sesionesDelCliente} sesión/es del cliente)`);
-  }
-  if (huerfanos.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV21 VIOLADO: ${huerfanos.length} proyecto(s) sin NINGUNA reunión vinculada aunque su cliente sí tiene:\n` +
-        huerfanos.map((h) => `    · ${h}`).join("\n") +
-        `\n    Remedio: npx tsx --env-file=.env scripts/sanar-vinculos-de-alta.ts (dry-run primero).`,
-    );
-  } else {
-    console.log(`✓ INV21: ningún proyecto quedó sin reuniones teniendo el cliente sesiones (${conSello.length} con sello).`);
-  }
+  // ── Inv 21 → lib/invariantes/sesiones.ts (B-07) ──
+  violations += await reportar(INV21, prisma);
 
-  /* ── INV22 · ninguna tarea vive en una semana que su fase no tiene ────────────────────────
-     Medido el 2026-08-20: **34 tareas en 7 fases de 5 proyectos** con `weekIndex >= durationWeeks`.
-     Multiquimica tiene 10 tareas en una fase de UNA semana.
+  // ── Inv 22 → lib/invariantes/cronograma.ts (B-07) ──
+  violations += await reportar(INV22, prisma);
 
-     Cómo llegaron ahí: `tasks` es opcional en el PUT («undefined = no tocar») y el validador solo
-     mira las tareas que vienen EN el payload. Un cuerpo que solo acorta `durationWeeks` pasa
-     limpio y deja las existentes fuera de rango, sin error y sin aviso.
+  // ── Inv 23 → lib/invariantes/odoo.ts (B-07) ──
+  violations += await reportar(INV23, prisma);
 
-     ⭐ Por qué es un invariante y no una curiosidad: el modificador de IA devuelve el cronograma
-     COMPLETO, así que copia esas semanas inválidas y su propuesta se rechaza ENTERA. Esos
-     proyectos no podían usar «Pedir cambio con IA» en absoluto — 231 s y $0,29 de modelo por
-     intento, con un mensaje que nadie puede accionar. El PUT ya no las genera; esto vigila que no
-     vuelvan, y cuenta las que quedaron.
-     Remedio: `scripts/sanar-semanas-fuera-de-fase.ts` (dry-run primero). */
-  const fasesConTareas = await prisma.timelinePhase.findMany({
-    select: {
-      name: true,
-      durationWeeks: true,
-      timeline: { select: { project: { select: { name: true } } } },
-      tasks: { select: { weekIndex: true } },
-    },
-  });
-  const desbordadas: string[] = [];
-  let tareasDesbordadas = 0;
-  for (const f of fasesConTareas) {
-    const malas = f.tasks.filter((t) => t.weekIndex >= f.durationWeeks || t.weekIndex < 0).length;
-    if (malas === 0) continue;
-    tareasDesbordadas += malas;
-    desbordadas.push(
-      `${f.timeline.project.name} · «${f.name}» (${f.durationWeeks} sem): ${malas} tarea(s)`,
-    );
-  }
-  if (desbordadas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV22 VIOLADO: ${tareasDesbordadas} tarea(s) en ${desbordadas.length} fase(s) viven en una semana que su fase no tiene.\n` +
-        desbordadas.map((d) => `    · ${d}`).join("\n") +
-        `\n    Efecto: esos cronogramas NO pueden usar «Pedir cambio con IA» — la propuesta se rechaza entera.` +
-        `\n    Remedio: npx tsx --env-file=.env scripts/sanar-semanas-fuera-de-fase.ts (dry-run primero).`,
-    );
-  } else {
-    console.log(
-      `✓ INV22: ninguna tarea fuera del rango de semanas de su fase (${fasesConTareas.length} fases).`,
-    );
-  }
+  // ── Inv 24 → lib/invariantes/odoo.ts (B-07) ──
+  violations += await reportar(INV24, prisma);
 
+  // ── Inv 25 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV25, prisma);
 
-  /* ── INV23 · el espejo de Odoo sigue siendo un espejo ─────────────────────────────────────
-     Toda `FacturaOdoo` guarda el monto en la MONEDA NATIVA del documento. `convertir()` de
-     lib/finanzas/equilibrio.ts es el único punto de conversión del sistema, y este invariante
-     vigila el lado de los datos: una moneda que no es la del ERP significa que alguien escribió
-     ahí sin pasar por el sync.
+  // ── Inv 26 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV26, prisma);
 
-     ⚠ Y el neto no puede superar al total. Es la forma en que se detecta el error caro: los
-     cobros de Nexus están cargados SIN IVA y se comparan contra `montoNeto`; si alguien
-     "arregla" el mapeo cruzando los campos, 304 facturas quedan descuadradas por 13 % y nada
-     avisa, porque los dos números siguen siendo montos plausibles.
-     Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync. */
-  const facturasOdoo = await prisma.facturaOdoo.findMany({
-    select: { numero: true, moneda: true, montoNeto: true, montoTotal: true, montoImpuesto: true },
-  });
-  const MONEDAS_CONOCIDAS = new Set(["USD", "CRC"]);
-  const espejoRoto: string[] = [];
-  for (const f of facturasOdoo) {
-    if (!MONEDAS_CONOCIDAS.has(f.moneda)) {
-      espejoRoto.push(`${f.numero}: moneda «${f.moneda}» que el espejo no conoce`);
-      continue;
-    }
-    const neto = Number(f.montoNeto);
-    const total = Number(f.montoTotal);
-    // Con un céntimo de tolerancia: Odoo hace la aritmética en float.
-    if (neto > total + 0.01) {
-      espejoRoto.push(`${f.numero}: neto ${neto.toFixed(2)} mayor que el total ${total.toFixed(2)}`);
-    }
-  }
-  if (espejoRoto.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV23 VIOLADO: ${espejoRoto.length} factura(s) espejadas con montos que el sync no pudo haber escrito:\n` +
-        espejoRoto.slice(0, 20).map((d) => `    · ${d}`).join("\n") +
-        `\n    Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync.`,
-    );
-  } else {
-    console.log(`✓ INV23: las ${facturasOdoo.length} facturas espejadas están en moneda nativa y con montos coherentes.`);
-  }
+  // ── Inv 27 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV27, prisma);
 
-  /* ── INV24 · ninguna corrida del sync quedó muda ──────────────────────────────────────────
-     Existe porque HOY, cuando un job se rompe, el error solo va al log del contenedor: nadie
-     puede saber que «viene fallando hace tres días». `CronJobState` no ayuda — guarda estado,
-     no historia, y no tiene campo de error.
-
-     Dos formas de quedar mudo, y las dos se vigilan:
-       · una corrida que falló y NO guardó el texto del error → no se puede diagnosticar;
-       · una corrida ABIERTA hace más de 6 horas → el proceso se murió a mitad y la fila quedó
-         indistinguible de «todavía corriendo». Ese es el fallo que no se ve.
-     Remedio: revisar el log del contenedor de esa fecha y correr el sync a mano. */
-  const HACE_7_DIAS = new Date(Date.now() - 7 * 86_400_000);
-  const HACE_6_HORAS = new Date(Date.now() - 6 * 3_600_000);
-  const corridas = await prisma.syncOdooCorrida.findMany({
-    where: { iniciadaEn: { gte: HACE_7_DIAS } },
-    select: { id: true, iniciadaEn: true, terminadaEn: true, ok: true, error: true, disparadaPor: true },
-    orderBy: { iniciadaEn: "desc" },
-  });
-  const mudas = corridas
-    .filter(
-      (c) =>
-        (c.terminadaEn === null && c.iniciadaEn < HACE_6_HORAS) || (c.terminadaEn !== null && !c.ok && !c.error?.trim()),
-    )
-    .map((c) =>
-      c.terminadaEn === null
-        ? `${c.iniciadaEn.toISOString()} (${c.disparadaPor}): abierta hace más de 6 h — el proceso se murió a mitad`
-        : `${c.iniciadaEn.toISOString()} (${c.disparadaPor}): falló y no guardó el error`,
-    );
-  if (mudas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV24 VIOLADO: ${mudas.length} corrida(s) del sync de Odoo no dejaron rastro de por qué:\n` +
-        mudas.map((d) => `    · ${d}`).join("\n") +
-        `\n    Remedio: revisar el log del contenedor de esa fecha; correr el sync a mano desde /cobranza.`,
-    );
-  } else {
-    console.log(`✓ INV24: las ${corridas.length} corridas del sync de los últimos 7 días dejaron su resultado escrito.`);
-  }
-
-  /* ── INV25 · Odoo nunca confirma plata ────────────────────────────────────────────────────
-     El espejo PROPONE que un cobro pasó a verde; confirmarlo sigue siendo de una persona con
-     nombre. Misma doctrina que INV3 y que el importador de comisiones.
-
-     ⚠ Se vigila el DATO y no el código —eso lo hace guardas.test.ts—: un script suelto o una
-     consulta a mano pueden escribir lo que el código no escribe. Y el modo en que esto se
-     rompería de verdad es alguien "destrabando" 176 cobros de un saque con un UPDATE.
-     Remedio: revertir esos cobros a POR_COBRAR y confirmarlos uno por uno desde la UI. */
-  const confirmadosPorMaquina = await prisma.cobro.findMany({
-    where: {
-      OR: [
-        { confirmadoPor: { startsWith: "odoo", mode: "insensitive" } },
-        { confirmadoPor: { startsWith: "sync", mode: "insensitive" } },
-        { confirmadoPor: { startsWith: "cron", mode: "insensitive" } },
-      ],
-    },
-    select: { id: true, monto: true, moneda: true, confirmadoPor: true, cuenta: { select: { client: { select: { name: true } } } } },
-  });
-  if (confirmadosPorMaquina.length > 0) {
-    violations++;
-    const plata = confirmadosPorMaquina.reduce((a, c) => a + Number(c.monto), 0);
-    console.error(
-      `✗ INV25 VIOLADO: ${confirmadosPorMaquina.length} cobro(s) por ${plata.toFixed(2)} los confirmó una máquina, no una persona:\n` +
-        confirmadosPorMaquina
-          .slice(0, 20)
-          .map((c) => `    · ${c.cuenta.client.name}: ${c.moneda} ${Number(c.monto).toFixed(2)} — confirmadoPor="${c.confirmadoPor}"`)
-          .join("\n") +
-        `\n    Remedio: revertirlos a POR_COBRAR y confirmarlos uno por uno desde /cobranza.`,
-    );
-  } else {
-    console.log(`✓ INV25: ningún cobro fue confirmado por el sync — la plata la sigue confirmando una persona.`);
-  }
-
-  /* ── INV26 · ninguna alerta apunta a un cobro que ya no existe ────────────────────────────
-     `AlertaCobro.cobroId` es un String SUELTO, sin llave foránea, y a propósito: `cobroId = null`
-     ya significa «alerta a nivel cuenta», así que un `SetNull` convertiría en silencio la alerta
-     de un cobro borrado en una de la cuenta entera. El precio de esa decisión es que nada impide
-     que el cobro desaparezca y la alerta quede apuntando al vacío.
-
-     ⚠ Y desaparecen: `generateCobros` borra los sobrantes cuando cambia el acuerdo de pago, y
-     `deleteServicio` cascadea. La rama de borrado estuvo inerte hasta que se le sacó el filtro
-     por origen el 2026-09-02 — o sea que el defecto era LATENTE y quedó ARMADO. Lo que cierra el
-     agujero es `cerrarAlertasDeCobros`, llamada desde los dos caminos; esto vigila que no vuelva
-     a abrirse por un tercero. */
-  /* ⚠⚠ Solo se miran las ABIERTAS y VISTAS, y esa condición NO es un relajamiento: es la
-     diferencia entre vigilar algo y quedar en rojo para siempre. `cerrarAlertasDeCobros` cierra
-     con RESUELTA **conservando `cobroId` a propósito** —la supresión de 7 días de `upsertAlertas`
-     lee esas filas— y después borra el cobro. Sin este filtro, la primera regeneración que borre
-     un cobro con alerta deja el invariante en rojo permanente, con un remedio impreso que es
-     exactamente lo que el código acaba de hacer. Un tablero que no puede volver a verde deja de
-     leerse, y se lleva puestos a INV25 y a los otros 27 que están al lado. */
-  const alertasConCobro = await prisma.alertaCobro.findMany({
-    where: { cobroId: { not: null }, estado: { in: ["ABIERTA", "VISTA"] } },
-    select: { id: true, cobroId: true, tipo: true, estado: true, cuenta: { select: { client: { select: { name: true } } } } },
-  });
-  const cobrosVivos = new Set(
-    (await prisma.cobro.findMany({ select: { id: true } })).map((c) => c.id),
-  );
-  const huerfanas = alertasConCobro.filter((a) => !cobrosVivos.has(a.cobroId!));
-  if (huerfanas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV26 VIOLADO: ${huerfanas.length} alerta(s) apuntan a un cobro que ya no existe:\n` +
-        huerfanas
-          .slice(0, 20)
-          .map((a) => `    · ${a.cuenta.client.name}: ${a.tipo} (${a.estado}) → cobro ${a.cobroId}`)
-          .join("\n") +
-        `\n    Remedio: cerrarlas con cerrarAlertasDeCobros (RESUELTA + motivo + autor). Si están así,` +
-        `\n    alguien borró cobros sin pasar por ese chokepoint. Ver lib/cobranza/mutations.ts.`,
-    );
-  } else {
-    console.log(`✓ INV26: las ${alertasConCobro.length} alertas de cobro vivas apuntan a cobros que existen.`);
-  }
-
-  /* ── INV27 · la autoría de una factura vive y muere entera ────────────────────────────────
-     `facturadoPor` y `facturadoEn` son un solo hecho: quién emitió y cuándo. Uno sin el otro no
-     es media respuesta, es una respuesta rota — y la Fase 0 midió que ya había víctimas del
-     revert destructivo, que limpiaba la fecha de emisión y dejaba el nombre colgando.
-
-     ⚠ `fechaEmision` es un campo distinto y puede faltar legítimamente (un cobro programado no
-     tiene ninguno de los tres). Lo que no puede pasar es tener uno de la pareja sin el otro. */
-  const autoriaRota = await prisma.cobro.findMany({
-    where: {
-      OR: [
-        { facturadoPor: { not: null }, facturadoEn: null },
-        { facturadoPor: null, facturadoEn: { not: null } },
-      ],
-    },
-    select: {
-      id: true,
-      numCuota: true,
-      facturadoPor: true,
-      facturadoEn: true,
-      cuenta: { select: { client: { select: { name: true } } } },
-    },
-  });
-  if (autoriaRota.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV27 VIOLADO: ${autoriaRota.length} cobro(s) tienen media autoría de facturación:\n` +
-        autoriaRota
-          .slice(0, 20)
-          .map(
-            (c) =>
-              `    · ${c.cuenta.client.name} #${c.numCuota ?? "?"}: por=${c.facturadoPor ?? "—"} en=${
-                c.facturadoEn ? c.facturadoEn.toISOString().slice(0, 10) : "—"
-              }`,
-          )
-          .join("\n") +
-        `\n    Remedio: limpiar los dos, o reponer el que falta desde BitacoraCobro.` +
-        `\n    Toda escritura de esta pareja pasa por cambiarEstadoCobroTx: si esto está en rojo, alguien la esquivó.`,
-    );
-  } else {
-    console.log(`✓ INV27: la autoría de facturación está entera o ausente, nunca a medias.`);
-  }
-
-  /* ── INV28 · ninguna factura soltada fuera de Odoo se queda esperando para siempre ────────
-     Es la línea que evita que «Nexus no escribe en el ERP» se convierta en «Nexus pide y nadie
-     hace». Una liberación de ODOO la cierra el sync solo; una de MERCURY u OTRA solo la cierra
-     una persona, y si nadie la cierra el documento sigue emitido contra un cliente que ya no lo
-     debe — sin que nada avise.
-
-     ⚠ El umbral son 15 días porque la cobranza de esta casa trabaja en tandas quincenales: algo
-     que sobrevivió una tanda entera es algo que nadie está mirando, no algo que va en camino.
-     Subirlo solo hace que el aviso llegue más tarde; no arregla nada. */
-  const DIAS_LIBERACION = 15;
-  const limiteLiberacion = new Date(Date.now() - DIAS_LIBERACION * 86_400_000);
-  const liberacionesViejas = await prisma.facturaLiberada.findMany({
-    where: { resueltaEn: null, plataforma: { not: "ODOO" }, liberadaEn: { lt: limiteLiberacion } },
-    select: {
-      id: true,
-      clienteNombre: true,
-      monto: true,
-      moneda: true,
-      plataforma: true,
-      decision: true,
-      referenciaExterna: true,
-      liberadaEn: true,
-      liberadaPor: true,
-    },
-    orderBy: { liberadaEn: "asc" },
-  });
-  if (liberacionesViejas.length > 0) {
-    violations++;
-    console.error(
-      `✗ INV28 VIOLADO: ${liberacionesViejas.length} factura(s) soltadas fuera de Odoo llevan más de ${DIAS_LIBERACION} días sin anular:\n` +
-        liberacionesViejas
-          .slice(0, 20)
-          .map(
-            (l) =>
-              `    · ${l.clienteNombre}: ${l.moneda} ${Number(l.monto).toFixed(2)} — ${l.plataforma} ${l.decision.toLowerCase()}` +
-              ` ${l.referenciaExterna ?? "(sin número)"} · soltada ${l.liberadaEn.toISOString().slice(0, 10)} por ${l.liberadaPor}`,
-          )
-          .join("\n") +
-        `\n    Remedio: anular el documento en su plataforma y marcarlo resuelto en /cobranza/odoo` +
-        `\n    → «Lo que no cuadra» → «${"Ya está anulada"}». Nada lo verifica por vos: no hay espejo de esa plataforma.`,
-    );
-  } else {
-    console.log(`✓ INV28: ninguna factura soltada fuera de Odoo lleva más de ${DIAS_LIBERACION} días sin resolver.`);
-  }
+  // ── Inv 28 → lib/invariantes/cobranza.ts (B-07) ──
+  violations += await reportar(INV28, prisma);
 
   return violations;
 }

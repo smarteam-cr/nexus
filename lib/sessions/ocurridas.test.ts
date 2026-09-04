@@ -114,6 +114,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     motivo: "Toma 50 y manda 5 a Claude. Las agendadas se llevaban las plazas trayendo nada.",
   },
   "app/api/sessions/analyze/route.ts": { clase: "contexto", motivo: "El hub de análisis. Ya cortaba (`date: { lt: new Date() }`)." },
+  "lib/invariantes/sesiones.ts": {
+    clase: "contexto",
+    motivo: "INV21 (B-07): cuenta las sesiones del cliente para AFIRMAR que un proyecto quedó sin reuniones. Corta por `date: { lte: ahora }` — una reunión agendada no es una reunión que hubo.",
+  },
   "app/api/sales/analyze/route.ts": {
     clase: "contexto",
     motivo: "Acotado por `transcript: { not: null }` sobre ids explícitos — una futura no tiene transcripción.",

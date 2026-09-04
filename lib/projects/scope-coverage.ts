@@ -215,4 +215,17 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
     modo: "exento",
     razon: "carga el ciclo de vida por `id IN` de una lista que el caller ya filtró.",
   },
+  // B-07 (2026-09-04): los invariantes solo-base leen proyectos para VIGILAR, no para elegir un alcance.
+  "lib/invariantes/proyectos.ts": {
+    modo: "exento",
+    razon:
+      "INV8/8c/10/11/14 miran hermanos, clase, etapa y alta de TODOS los proyectos a propósito: un " +
+      "invariante que aplicara un criterio de alcance dejaría de ver justamente lo que está mal clasificado.",
+  },
+  "lib/invariantes/sesiones.ts": {
+    modo: "exento",
+    razon:
+      "INV21 recorre los proyectos activos con sello de reclasificación para encontrar los que quedaron sin " +
+      "reuniones: es una vigilancia sobre el conjunto entero, no una pantalla con alcance.",
+  },
 };
