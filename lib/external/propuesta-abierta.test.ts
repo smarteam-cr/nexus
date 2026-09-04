@@ -38,6 +38,8 @@
  *      —con la llave adentro— a un tercero, en el cliente y en el servidor.
  *   9. (candado 4, ampliado por A-13) Toda la app sale con `X-Frame-Options: DENY`, `nosniff`
  *      y una CSP en report-only. Sin ellas, cualquier sitio puede enmarcar la propuesta.
+ *  10. (candado 9, A-21) La propuesta se aprueba UNA sola vez: la condición va en el `where`
+ *      de la escritura. Con check-then-act, dos aprobaciones a la vez registraban a la última.
  */
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -47,6 +49,7 @@ import { claveDeIp, POLITICA_POR_IP, POLITICA_POR_TOKEN } from "@/lib/external/v
 import { armarCredencial, credencialVigente, leerCredencial, versionDeCredencial } from "@/lib/external/credencial";
 import { tacharTokensDelEvento } from "@/lib/observability/scrub";
 import { CABECERAS_DE_SEGURIDAD, politicaCsp, reportUriDesdeDsn } from "@/lib/observability/csp";
+import { aprobarUnaSolaVez, type BaseDeAprobacion } from "@/lib/business-cases/aprobacion";
 
 // verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -363,4 +366,65 @@ describe("candado 8 — el token externo no viaja a Sentry (A-12)", () => {
       );
     },
   );
+});
+
+describe("candado 9 — la propuesta se aprueba UNA sola vez, aunque dos la aprueben a la vez (A-21)", () => {
+  const ID = "bc-1";
+
+  /** Una base que honra el `where` como Postgres: con `approvedAt: null` solo escribe si sigue libre. */
+  function baseFalsa() {
+    let fila = {
+      publishedAt: new Date("2026-09-01T00:00:00Z"),
+      approvedAt: null as Date | null,
+      approvedByEmail: null as string | null,
+      approvedByName: null as string | null,
+      approvedSnapshotAt: null as Date | null,
+    };
+    const db: BaseDeAprobacion = {
+      businessCase: {
+        findUnique: async ({ where }) => (where.id === ID ? { ...fila } : null),
+        updateMany: async ({ where, data }) => {
+          if (where.id !== ID) return { count: 0 };
+          const exigeLibre = "approvedAt" in where && where.approvedAt === null;
+          if (exigeLibre && fila.approvedAt !== null) return { count: 0 };
+          fila = { ...fila, ...data };
+          return { count: 1 };
+        },
+      },
+    };
+    return { db, fila: () => fila };
+  }
+
+  it("la segunda aprobación no pisa a la primera, ni en secuencia ni en carrera", async () => {
+    /* La edicion que lo pone en rojo: sacar `approvedAt: null` del where (vuelve el check-then-act),
+       o devolver yaEstaba:false sin mirar el count. */
+    const uno = baseFalsa();
+    const a = await aprobarUnaSolaVez(uno.db, ID, { email: "ana@cliente.com", name: "Ana" });
+    const b = await aprobarUnaSolaVez(uno.db, ID, { email: "beto@cliente.com" });
+    expect(a).toMatchObject({ yaEstaba: false, approval: { approvedByEmail: "ana@cliente.com", approvedByName: "Ana" } });
+    expect(b, "la segunda tiene que ver a la PRIMERA, no pisarla").toMatchObject({
+      yaEstaba: true,
+      approval: { approvedByEmail: "ana@cliente.com" },
+    });
+    expect(uno.fila().approvedByEmail).toBe("ana@cliente.com");
+
+    // La carrera de verdad: las dos leen «sin aprobar» ANTES de que ninguna escriba.
+    const dos = baseFalsa();
+    const [x, y] = await Promise.all([
+      aprobarUnaSolaVez(dos.db, ID, { email: "x@cliente.com" }),
+      aprobarUnaSolaVez(dos.db, ID, { email: "y@cliente.com" }),
+    ]);
+    expect([x, y].filter((r) => !r.yaEstaba).length, "exactamente una gana la carrera").toBe(1);
+    const ganadora = dos.fila().approvedByEmail;
+    expect([x.approval.approvedByEmail, y.approval.approvedByEmail], "las dos ven la MISMA aprobación").toEqual([
+      ganadora,
+      ganadora,
+    ]);
+  });
+
+  it("mutations.ts delega en la versión atómica y ya no hace check-then-act", () => {
+    const src = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/business-cases/mutations.ts"), "utf8"));
+    expect(src).toContain("aprobarUnaSolaVez(prisma, businessCaseId, input)");
+    expect(src.includes("if (bc.approvedAt)"), "volvió el check-then-act").toBe(false);
+  });
 });

@@ -10,6 +10,7 @@ import bcrypt from "bcrypt";
 import { Prisma, type BusinessCaseBlockType } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { BLOCK_ORDER, type GeneratedBlock } from "./schema";
+import { aprobarUnaSolaVez, type Aprobacion } from "./aprobacion";
 import { sanitizeTags } from "@/lib/tags/catalog";
 
 const BCRYPT_ROUNDS = 12;
@@ -419,19 +420,16 @@ export async function setAccessExpiry(
 
 // ── Aprobación del cliente ───────────────────────────────────────────────────
 
-export interface BcApproval {
-  approvedAt: Date;
-  approvedByEmail: string | null;
-  approvedByName: string | null;
-  approvedSnapshotAt: Date | null;
-}
+export type BcApproval = Aprobacion;
 
 /**
  * El prospecto aprueba la propuesta desde la propia landing (sin login, solo su correo).
  *
- * IDEMPOTENTE por diseño: si ya estaba aprobada devuelve la aprobación EXISTENTE sin
- * pisarla. Quién aprobó primero es el dato que le importa a Ventas; permitir que un
- * segundo click lo reescriba convertiría el registro en "el último que pasó por acá".
+ * IDEMPOTENTE Y ATÓMICA (A-21): si ya estaba aprobada devuelve la aprobación EXISTENTE sin
+ * pisarla, y dos aprobaciones concurrentes no pueden registrar a la última — la condición
+ * viaja en el `where` de la escritura, no en un `if` previo. Quién aprobó primero es el dato
+ * que le importa a Ventas. La lógica vive en `./aprobacion.ts`, probada con una base falsa
+ * que honra el `where` como Postgres.
  *
  * `approvedSnapshotAt` congela el `publishedAt` del momento → si el CSE republica
  * después, la UI puede avisar que se aprobó otra versión.
@@ -440,35 +438,7 @@ export async function approveBusinessCase(
   businessCaseId: string,
   input: { email: string; name?: string | null },
 ): Promise<{ approval: BcApproval; yaEstaba: boolean }> {
-  const bc = await prisma.businessCase.findUnique({
-    where: { id: businessCaseId },
-    select: { publishedAt: true, approvedAt: true, approvedByEmail: true, approvedByName: true, approvedSnapshotAt: true },
-  });
-  if (!bc) throw new Error("business case inexistente");
-
-  if (bc.approvedAt) {
-    return {
-      yaEstaba: true,
-      approval: {
-        approvedAt: bc.approvedAt,
-        approvedByEmail: bc.approvedByEmail,
-        approvedByName: bc.approvedByName,
-        approvedSnapshotAt: bc.approvedSnapshotAt,
-      },
-    };
-  }
-
-  const updated = await prisma.businessCase.update({
-    where: { id: businessCaseId },
-    data: {
-      approvedAt: new Date(),
-      approvedByEmail: input.email,
-      approvedByName: input.name?.trim() || null,
-      approvedSnapshotAt: bc.publishedAt,
-    },
-    select: { approvedAt: true, approvedByEmail: true, approvedByName: true, approvedSnapshotAt: true },
-  });
-  return { yaEstaba: false, approval: updated as BcApproval };
+  return aprobarUnaSolaVez(prisma, businessCaseId, input);
 }
 
 /** Borra la aprobación (aprobaciones de prueba, correo equivocado). Solo interno. */
