@@ -152,12 +152,94 @@ Activación 100% por env — sin las vars, cero cambio de comportamiento:
 
 ## Jobs del scheduler (`lib/jobs/defs.ts`)
 
-Tick de 60s, gated por `CRON_ENABLED=1` (solo prod). Claims por fecha en
-`CronJobState` — matar el contenedor a mitad de un job NO re-dispara ese día
-(salvo los que liberan claim en fallo transitorio). Jobs: marketing-weekly,
-cs-signals-daily, cs-partner-daily, cs-watchdog-daily, cs-watchdog-debounce,
-**maintenance-daily** (barre `PrintJobToken` expirados y filas viejas de
-`ExternalVerifyAttempt`).
+Tick de 60 s, gated por `CRON_ENABLED=1` (solo prod; lo pone `docker-compose.yml`). Claims
+por fecha en `CronJobState`: matar el contenedor a mitad de un job NO re-dispara ese día.
+Cada corrida deja su resultado en `CronJobState.lastResult` y el **semáforo de
+Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02). Hasta el
+2026-09-04 esta sección listaba 6 jobs; son 10 (`allJobs()`), más dos disparos por navegación:
+
+| Job | Cuándo | Gate | Qué hace |
+|---|---|---|---|
+| `marketing-weekly` | cada tick; ventana propia (viernes 6:00 CR) + claim propio en `MarketingSettings` | — | delega a `tickMarketingCron` tal cual |
+| `cs-signals-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | refresca las señales HubSpot de Éxito del cliente |
+| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope |
+| `cs-watchdog-daily` | L–V ≥ 7:00 CR (después de las señales) | `CS_WATCHDOG_ENABLED=1` + `CsSettings.watchdogEnabled` | sweep del watchdog con pre-filtro determinístico |
+| `cs-watchdog-debounce` | cada tick | `CS_WATCHDOG_ENABLED=1` | triage de eventos «quiesced» (>15 min), hasta 5 proyectos por tick |
+| `maintenance-daily` | una vez al día, a cualquier hora | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h |
+| `cobranza-quincenal` | ≥ 7:00 CR en los días de corte (`esDiaDeCorte`) | `COBRANZA_CRON_ENABLED=1` | la tanda quincenal de cobranza |
+| `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
+| `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
+| `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee) |
+
+⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env`, cinco de estos se apagan EN
+SILENCIO — el semáforo los muestra en gris («nunca corrió»), que es la señal.
+
+**Dos disparos por navegación**, que no pasan por el scheduler:
+- **Auto-sync de Google Meet**: `POST /api/integrations/google/auto-sync` al cargar el shell
+  (`components/layout/SidebarShell.tsx`) y la pantalla de sesiones
+  (`app/(shell)/sessions/SessionsClient.tsx`), con cooldown de 20 min en el servidor.
+- **Espejo de proyectos de HubSpot**: `POST /api/clients/[id]/sync-projects` al abrir la ficha de
+  un cliente (`app/(shell)/clients/[id]/WorkspaceClient.tsx`), con cooldown en el servidor.
+
+## Respaldo y restauración (Supabase)
+
+La base de Nexus es UNA Supabase Postgres (plan Pro) compartida por producción y las dos PCs
+(inv. #2). Hasta el 2026-09-04 nadie en el repo sabía qué respaldo existe ni cómo se restaura
+(auditoría 2026-09-03): esta sección lo escribe y deja marcados los huecos que solo se cierran
+mirando el panel.
+
+**Lo que hace Supabase Pro por su cuenta** (confirmar en el panel — ver huecos):
+- Respaldo diario automático de la base entera, con **7 días** de retención en el plan Pro.
+- Point-in-Time Recovery (restaurar a un instante exacto) es un **add-on pago**; sin él se
+  restaura al respaldo diario más cercano y se pierde lo del día.
+- Dónde mirar: panel de Supabase → proyecto → **Database → Backups**.
+
+**Huecos que solo se cierran desde el panel** (Elías):
+- [[Elías: ¿PITR está contratado? Si no, el peor caso es perder hasta 24 h de datos.]]
+- [[Elías: retención real que muestra el panel (7 días es el default del plan Pro).]]
+- [[Elías: fecha del último simulacro de restauración — nunca se hizo uno; hacerlo ANTES de necesitarlo.]]
+
+**Cómo restaurar** (el respaldo de Supabase restaura la base ENTERA — no hay restauración por tabla):
+1. Que nada escriba mientras tanto: en el VPS, `docker compose stop app`; avisar a las dos PCs
+   que no corran scripts con `--apply`.
+2. Panel de Supabase → Database → Backups → elegir el respaldo (o el instante, con PITR) →
+   **Restore**. Se restaura sobre el mismo proyecto; tarda minutos y la base queda inaccesible.
+3. Volver a levantar: `docker compose up -d --wait app` y verificar `/api/health` (`ok:true`).
+4. Desde una PC, `npx tsx scripts/check-invariants.ts` (solo lectura) y revisar INV2 e INV7.
+5. Anotar acá qué se restauró, a qué instante y qué se perdió.
+
+**Antes de una escritura arriesgada, un respaldo propio**: los scripts con `--apply` que ya
+vuelcan las tablas que tocan a `backups/` son el molde (`scripts/purge-future-sessions.ts`,
+`scripts/reparar-rempro.ts`); B-06 lo vuelve obligatorio para todos. Un `pg_dump` de una tabla
+es la única restauración PARCIAL que existe: Supabase restaura todo o nada.
+
+## Reconstruir el VPS desde cero
+
+Derivado de `docker-compose.yml`, `Dockerfile` y `scripts/deploy.sh` (2026-09-04). Si el VPS
+desaparece, esto es todo lo que hay que rehacer — la base vive en Supabase y no se pierde con él.
+
+1. **Máquina**: Linux con Docker + Docker Compose v2, `git` y `bash`. nginx delante (TLS; también
+   `X-Forwarded-For`, que alimenta el rate-limit por IP de verify-access, y HSTS). ⚠ El CPU tiene
+   que correr el Chrome for Testing que baja el Dockerfile: el `chromium` de Debian crashea con
+   SIGILL en el CPU virtualizado del VPS actual (ver «Export PDF»).
+2. **Checkout**: `git clone <origin> /opt/smartflow/Nexus` — `deploy.sh` asume esa ruta
+   (`APP_DIR`) y un checkout limpio.
+3. **`.env` en esa carpeta** (no está en git; referencia completa en `.env.example`):
+   - build-args, se inlinean en el bundle: `NEXT_PUBLIC_SUPABASE_URL`,
+     `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SENTRY_DSN`.
+   - runtime (`env_file`): `DATABASE_URL` (⚠ el pooler, puerto 6543 — inv. #3), `SUPABASE_URL`
+     y `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, las de HubSpot
+     (`HUBSPOT_CLIENT_SECRET` y compañía), `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL`,
+     `SENTRY_DSN`, `APP_URL`, `CS_WATCHDOG_ENABLED=1`, `COBRANZA_CRON_ENABLED=1`, Odoo
+     (`ODOO_PASSWORD`…) y el Data Lake. `CRON_ENABLED=1` y `PORT` los pone el compose.
+   - ⛔ `ALLOW_PROD_WRITE` NUNCA fija en el `.env` (el guard aborta, B-01).
+   - [[Elías: de dónde se recupera el .env del VPS si se pierde — gestor de contraseñas o copia cifrada. Hoy no hay copia declarada.]]
+4. **Primer arranque**: `cd /opt/smartflow/Nexus && bash scripts/deploy.sh`. Hace pull ff-only,
+   build (baja Chrome for Testing, `prisma generate`, salida standalone), levanta con healthcheck
+   (`/api/health`) y smoke del sha. Puerto `3004` en el host.
+5. **Después**: reconectar HubSpot del sistema desde Integraciones si hace falta (el token vive
+   en la base, así que suele sobrevivir), mirar el semáforo de jobs en Integraciones al día
+   siguiente, y `npx tsx scripts/check-invariants.ts` desde una PC.
 
 ## Export PDF (Chromium)
 

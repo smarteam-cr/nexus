@@ -171,3 +171,45 @@ describe("estructura de la documentación", () => {
     }
   });
 });
+
+describe("el RUNBOOK dice la verdad sobre los jobs y tiene las secciones de recuperación (B-05)", () => {
+  /**
+   * Hasta el 2026-09-04 el RUNBOOK listaba 6 jobs cuando corrían 10, y no decía qué respaldo
+   * existe ni cómo se reconstruye el VPS. Un runbook que miente sobre lo que corre en prod es
+   * peor que ninguno: se le cree.
+   */
+  const RUNBOOK = leer("docs/RUNBOOK.md");
+  const seccion = (titulo: string) => {
+    const i = RUNBOOK.indexOf(`## ${titulo}`);
+    if (i === -1) return "";
+    const j = RUNBOOK.indexOf("\n## ", i + 3);
+    return RUNBOOK.slice(i, j === -1 ? undefined : j);
+  };
+
+  it("la tabla de jobs nombra a TODOS los jobs del registry (incluidos los del watchdog)", () => {
+    /* La edicion que lo pone en rojo: sumar un job a defs.ts sin documentarlo, o borrar una fila. */
+    const defs = leer("lib/jobs/defs.ts");
+    const watchdog = leer("lib/cs/watchdog.ts");
+    const claves = [
+      ...[...defs.matchAll(/^\s*key: "([a-z0-9-]+)"/gm)].map((m) => m[1]),
+      ...[...watchdog.matchAll(/key: "(cs-watchdog-[a-z]+)"/g)].map((m) => m[1]),
+    ];
+    expect(claves.length, "el escaneo no encontró los jobs").toBeGreaterThanOrEqual(10);
+    const tabla = seccion("Jobs del scheduler");
+    const faltan = claves.filter((k) => !tabla.includes(`\`${k}\``));
+    expect(faltan, "jobs que corren en prod y el RUNBOOK no nombra").toEqual([]);
+    expect(tabla, "los disparos por navegación también son jobs, aunque no pasen por el scheduler").toContain(
+      "/api/integrations/google/auto-sync",
+    );
+  });
+
+  it("existen «Respaldo y restauración» y «Reconstruir el VPS desde cero», con lo mínimo adentro", () => {
+    /* La edicion que lo pone en rojo: borrar una sección «porque ya no aplica». */
+    const respaldo = seccion("Respaldo y restauración");
+    expect(respaldo, "cómo restaurar").toContain("Restore");
+    expect(respaldo, "qué verificar después").toContain("check-invariants");
+    const vps = seccion("Reconstruir el VPS desde cero");
+    expect(vps).toContain("deploy.sh");
+    expect(vps).toContain(".env");
+  });
+});
