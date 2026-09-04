@@ -175,11 +175,13 @@ type SetupSignals = {
 };
 
 // Pill de un canvas generado, en el tema CLARO del widget (no reusa el SetupPill del panel).
-function SetupChip({ state, label }: { state: "done" | "draft" | "missing"; label: ReactNode }) {
+// `optional` (D-02): le corresponde, no está, y no se reclama — neutro, no rojo.
+function SetupChip({ state, label }: { state: "done" | "draft" | "missing" | "optional"; label: ReactNode }) {
   const cls = {
     done: "text-emerald-700 bg-emerald-50 border-emerald-200",
     draft: "text-amber-700 bg-amber-50 border-amber-200",
     missing: "text-red-600 bg-red-50 border-red-200",
+    optional: "text-fg-muted bg-surface-muted border-line",
   }[state];
   return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
 }
@@ -698,13 +700,23 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 {canvasChips.map((c) => (
                   <SetupChip
                     key={c.slug}
-                    state={c.estado === "generada" ? "done" : c.estado === "borrador" ? "draft" : "missing"}
+                    state={
+                      c.estado === "generada"
+                        ? "done"
+                        : c.estado === "borrador"
+                          ? "draft"
+                          : c.estado === "opcional"
+                            ? "optional"
+                            : "missing"
+                    }
                     label={
                       c.estado === "generada"
                         ? <><IconCheck className="w-3 h-3" />{c.label}</>
                         : c.estado === "borrador"
                           ? `${c.label} sin subir`
-                          : c.label
+                          : c.estado === "opcional"
+                            ? `${c.label} · opcional`
+                            : c.label
                     }
                   />
                 ))}

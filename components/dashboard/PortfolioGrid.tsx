@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/Toast";
 import { IconCheck } from "@/components/ui/AcceptReject";
 import { plural, fmtFull } from "@/lib/timeline/weeks";
 import type { PortfolioRow } from "@/lib/portfolio/load";
+import { PIEZAS_NO_REQUERIDAS } from "@/lib/pieces/registry";
 
 type Health = "SALUDABLE" | "EN_FRICCION" | "EN_RIESGO" | "PAUSADO";
 type Summary = PortfolioRow["summary"];
@@ -424,14 +425,28 @@ function ClientHeaderRow({ g, right, chips }: { g: ClientGroup; right?: ReactNod
   );
 }
 
-// Pill de un paso del setup: done (verde) / draft (ámbar) / missing (rojo).
-function SetupPill({ state, label }: { state: "done" | "draft" | "missing"; label: ReactNode }) {
+// Pill de un paso del setup: done (verde) / draft (ámbar) / missing (rojo) / optional (neutro:
+// le corresponde, no está, y no se reclama — D-02, ver PIEZAS_NO_REQUERIDAS).
+function SetupPill({ state, label }: { state: "done" | "draft" | "missing" | "optional"; label: ReactNode }) {
   const cls = {
     done: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
     draft: "text-amber-600 bg-amber-500/10 border-amber-500/30",
     missing: "text-red-600 bg-red-500/10 border-red-500/25",
+    optional: "text-fg-muted bg-surface-muted border-line",
   }[state];
   return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
+}
+
+/**
+ * La pill del kickoff (D-02). `null` = no le corresponde al pipeline → sin pill (como en el
+ * widget). `false` = le corresponde y no está — y como es «no requerido», NEUTRO, no rojo:
+ * un rojo por algo opcional enseña a ignorar los rojos del handoff, que sí faltan.
+ */
+function KickoffPill({ kickoff }: { kickoff: boolean | null }) {
+  if (kickoff === null) return null;
+  if (kickoff) return <SetupPill state="done" label={<><IconCheck className="w-3 h-3" />Kickoff</>} />;
+  const noRequerido = PIEZAS_NO_REQUERIDAS.has("kickoff");
+  return <SetupPill state={noRequerido ? "optional" : "missing"} label={noRequerido ? "Kickoff · opcional" : "Sin kickoff"} />;
 }
 
 // Deep-link al panel del cliente con el tab del proyecto seleccionado (?tab=), NO a la página
@@ -518,7 +533,7 @@ function ActionCard({
           nivel CLIENTE → va en el encabezado del grupo, no se duplica en la card. */}
       <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
         <SetupPill state={r.setup.handoff ? "done" : "missing"} label={r.setup.handoff ? <><IconCheck className="w-3 h-3" />Handoff</> : "Sin handoff"} />
-        <SetupPill state={r.setup.kickoff ? "done" : "missing"} label={r.setup.kickoff ? <><IconCheck className="w-3 h-3" />Kickoff</> : "Sin kickoff"} />
+        <KickoffPill kickoff={r.setup.kickoff} />
         <SetupPill
           state={r.setup.cronograma === "publicado" ? "done" : r.setup.cronograma === "borrador" ? "draft" : "missing"}
           label={r.setup.cronograma === "publicado" ? <><IconCheck className="w-3 h-3" />Cronograma</> : r.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
@@ -602,7 +617,7 @@ function NodataRow({ r }: { r: PortfolioRow }) {
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
           <SetupPill state={s.handoff ? "done" : "missing"} label={s.handoff ? <><IconCheck className="w-3 h-3" />Handoff</> : "Sin handoff"} />
-          <SetupPill state={s.kickoff ? "done" : "missing"} label={s.kickoff ? <><IconCheck className="w-3 h-3" />Kickoff</> : "Sin kickoff"} />
+          <KickoffPill kickoff={s.kickoff} />
           <SetupPill
             state={s.cronograma === "publicado" ? "done" : s.cronograma === "borrador" ? "draft" : "missing"}
             label={s.cronograma === "publicado" ? <><IconCheck className="w-3 h-3" />Cronograma</> : s.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}

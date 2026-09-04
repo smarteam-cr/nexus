@@ -114,10 +114,11 @@ export const PIECES: PieceDefinition[] = [
     isDefaultCanvas: true,
     // El kickoff es un paso NO REQUERIDO —un proyecto puede no llevarlo— pero NO es
     // apagable: siempre está en la lista de piezas (decisión de negocio 2026-07-24).
-    // El motivo es que el kickoff sostiene tres subsistemas ajenos: el semáforo de la
-    // cartera lo pinta ROJO por ausencia ("Sin kickoff") y ordena por él; el motor de
-    // etapas deja el proyecto clavado en HAND_OFF sin él; y clavado ahí se APAGAN todas
-    // las alarmas del cronograma. Apagar una pieza nunca puede silenciar el cronograma.
+    // El motivo es que el kickoff sostiene tres subsistemas ajenos: la cartera lo cuenta
+    // y ordena por él (desde D-02, 2026-09-04, lo pinta NEUTRO y no rojo: está en
+    // PIEZAS_NO_REQUERIDAS, abajo); el motor de etapas deja el proyecto clavado en
+    // HAND_OFF sin él; y clavado ahí se APAGAN todas las alarmas del cronograma. Apagar
+    // una pieza nunca puede silenciar el cronograma.
     // "No requerido" ya está resuelto donde importa: no publicarlo no traba el avance
     // ni alarma. Si algún día se quiere el interruptor, hay que arreglar esas tres
     // superficies primero — no alcanza con dar vuelta este booleano.
@@ -356,3 +357,17 @@ export function piecesEnabledByTags(tags: string[]): PieceDefinition[] {
   const set = new Set(tags);
   return PIECES.filter((p) => p.optional && p.enabledByTags.some((t) => set.has(t)));
 }
+
+/**
+ * D-02 (2026-09-04) — las piezas que le CORRESPONDEN a un proyecto pero NO se le reclaman.
+ *
+ * Hoy solo el kickoff: es «no requerido» desde el 2026-07-24 (ver su entrada arriba), pero la
+ * cartera seguía pintándolo ROJO por ausencia, igual que el handoff que sí falta. Un chip rojo
+ * por algo opcional enseña a ignorar los rojos. Con esto, el widget del proyecto
+ * (lib/flow/canvas-chips.ts → estado `opcional`) y la cartera (PortfolioGrid) lo pintan NEUTRO:
+ * «le corresponde, no está, y nadie te lo va a reclamar». Distinto de `null`/ausente (no le
+ * corresponde al pipeline) y de `pendiente`/rojo (te falta).
+ *
+ * ⚠ Sin imports a propósito: lo lee un componente de cliente (la cartera).
+ */
+export const PIEZAS_NO_REQUERIDAS: ReadonlySet<string> = new Set(["kickoff"]);

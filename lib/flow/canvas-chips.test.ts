@@ -12,6 +12,9 @@
  *    información que el CSE usa; aplastarla a "generada" esconde el paso que falta.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { PIEZAS_NO_REQUERIDAS } from "@/lib/pieces/registry";
 import { buildCanvasChips } from "./canvas-chips";
 import { pipelineByKey } from "@/lib/projects/kind";
 
@@ -155,5 +158,43 @@ describe("el estado de cada chip", () => {
   it("procesos sale de la señal del cliente", () => {
     expect(estadoDe("procesos", { tieneProcesos: true })).toBe("generada");
     expect(estadoDe("procesos", { tieneProcesos: false })).toBe("pendiente");
+  });
+});
+
+describe("D-02: el kickoff que falta es «opcional», no «pendiente» — y las dos superficies lo pintan neutro", () => {
+  /**
+   * El kickoff es «no requerido» desde el 2026-07-24 (lib/pieces/registry.ts), pero la cartera
+   * seguía pintándolo ROJO por ausencia, igual que un handoff que sí falta. Un rojo por algo
+   * opcional enseña a ignorar los rojos. El dueño de «no requerida» es UNO (`PIEZAS_NO_REQUERIDAS`)
+   * y lo consumen el widget (estado `opcional`) y la cartera (pill neutra).
+   */
+  const leer = (rel: string) =>
+    fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  it("LA guarda: en una implementación sin kickoff, el chip dice «opcional»; las demás piezas siguen «pendiente»", () => {
+    /* La edición que la pone en rojo: sacar el kickoff de PIEZAS_NO_REQUERIDAS «para que se note
+       que falta», o que canvas-chips vuelva a mapear todo lo vacío a «pendiente». */
+    expect(PIEZAS_NO_REQUERIDAS.has("kickoff"), "el kickoff es no requerido (decisión 2026-07-24)").toBe(true);
+    expect(estadoDe("kickoff")).toBe("opcional");
+    expect(estadoDe("diagnosis"), "una pieza requerida que falta sigue en rojo").toBe("pendiente");
+    expect(estadoDe("handoff"), "el handoff que falta sigue en rojo").toBe("pendiente");
+    expect(
+      estadoDe("kickoff", { canvases: [{ id: "k", slug: "kickoff", name: "Kickoff", hasContent: true }] }),
+      "generado sigue siendo generado",
+    ).toBe("generada");
+  });
+
+  it("y el widget y la cartera pintan «opcional» en NEUTRO, nunca en rojo", () => {
+    /* La edición que la pone en rojo: `state={r.setup.kickoff ? "done" : "missing"}` de vuelta en la
+       cartera, o el widget mapeando «opcional» a «missing». */
+    const gps = leer("components/clients/ProjectGPS.tsx");
+    expect(gps, "el widget no distingue «opcional»").toContain('c.estado === "opcional"');
+    expect(gps).toContain('? "optional"');
+    const grid = leer("components/dashboard/PortfolioGrid.tsx");
+    expect(grid, "la cartera decide por su cuenta si el kickoff se reclama").toContain('PIEZAS_NO_REQUERIDAS.has("kickoff")');
+    /* Sobre el USO, no sobre el nombre: que la constante se lea no prueba que decida el color. */
+    expect(grid, "la pill del kickoff no sale de la constante").toContain('state={noRequerido ? "optional" : "missing"}');
+    expect(grid, "la cartera volvió al rojo por ausencia").not.toMatch(/setup\.kickoff \? "done" : "missing"|s\.kickoff \? "done" : "missing"/);
+    expect(grid, "sin pill cuando no le corresponde (como en el widget)").toContain("if (kickoff === null) return null;");
   });
 });

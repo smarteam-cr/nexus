@@ -22,6 +22,7 @@
  * dice "te falta". El desplegable del panel sigue siendo el MAPA completo — ahí sí están
  * todas, porque ahí se activan.
  */
+import { PIEZAS_NO_REQUERIDAS } from "@/lib/pieces/registry";
 import { buildPieceRows, type CanvasParaFila } from "./dropdown-rows";
 import { piezaAplica } from "./piece-readiness";
 
@@ -31,7 +32,9 @@ export type EstadoDeChip =
   /** Existe pero a medio camino — hoy solo el Cronograma, que distingue subido de no subido. */
   | "borrador"
   /** Le corresponde y todavía no está. */
-  | "pendiente";
+  | "pendiente"
+  /** Le corresponde, no está, y NO se reclama (D-02): `PIEZAS_NO_REQUERIDAS`. Se pinta neutro. */
+  | "opcional";
 
 export interface ChipDeCanvas {
   slug: string;
@@ -102,10 +105,13 @@ export function buildCanvasChips(input: EntradaDeChips): ChipDeCanvas[] {
                 : "pendiente"
           : r.state === "generada"
             ? "generada"
-            : /* "vacía" y "por activar" son lo mismo para quien mira el estado: no hay nada
-                 escrito. La diferencia (existe el canvas o hay que crearlo) importa en el
-                 desplegable, que es donde se hace clic. */
-              "pendiente",
+            : PIEZAS_NO_REQUERIDAS.has(r.slug)
+              ? /* D-02: le corresponde y no está, pero nadie se lo reclama — neutro, no rojo. */
+                "opcional"
+              : /* "vacía" y "por activar" son lo mismo para quien mira el estado: no hay nada
+                   escrito. La diferencia (existe el canvas o hay que crearlo) importa en el
+                   desplegable, que es donde se hace clic. */
+                "pendiente",
     }));
 
   chips.push({
