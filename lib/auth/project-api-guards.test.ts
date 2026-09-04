@@ -236,3 +236,37 @@ describe("las guardas endurecidas siguen puestas", () => {
     });
   }
 });
+
+describe("⛔ la sesión de un desactivado no sirve: requireConsultantSession exige usuario interno", () => {
+  /**
+   * Auditoría 2026-09-03: `requireConsultantSession` —la guarda de 35 handlers y 13 páginas— miraba
+   * solo que existiera un usuario de Supabase. Un empleado desactivado con la pestaña abierta seguía
+   * entrando (y el middleware le renovaba la sesión en cada request, así que no expiraba nunca); entre
+   * lo que veía: el `systemPrompt` de los 30 agentes y las transcripciones de cualquier reunión.
+   *
+   * La edición que la pone en rojo: volver a `getSupabaseUser()` «porque es más liviano». Es
+   * exactamente la versión vieja.
+   */
+  const src = fs.readFileSync(path.join(RAIZ, "lib/auth.ts"), "utf8");
+  const codigo = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const desde = codigo.indexOf("export async function requireConsultantSession");
+  const cuerpo = codigo.slice(desde, codigo.indexOf("export ", desde + 10));
+
+  it("la función existe y la guarda la encuentra", () => {
+    expect(desde, "se movió requireConsultantSession: la guarda no mira nada").toBeGreaterThan(0);
+    expect(cuerpo.length).toBeGreaterThan(40);
+  });
+
+  it("⭐ delega en requireInternalUser (INTERNAL + TeamMember + no desactivado)", () => {
+    expect(cuerpo, "volvió a conformarse con la sesión: un desactivado entra de nuevo").toContain(
+      "requireInternalUser(",
+    );
+  });
+
+  it("⛔ y ya no se conforma con getSupabaseUser", () => {
+    expect(cuerpo, "volvió getSupabaseUser(): acepta a cualquiera con sesión, desactivado incluido").not.toContain(
+      "getSupabaseUser(",
+    );
+  });
+});
+

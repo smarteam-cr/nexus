@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSupabaseUser } from "@/lib/supabase/server";
+import { requireInternalUser } from "@/lib/auth/supabase";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -27,13 +28,25 @@ export async function getConsultantSession(): Promise<boolean> {
 }
 
 /**
- * @deprecated Usar `requireUser()` de `@/lib/auth/supabase` en código nuevo.
+ * @deprecated Usar `requireInternalUser()` de `@/lib/auth/supabase` en código nuevo.
  *
- * Lanza un error si no hay sesión. Usar en API routes legacy.
+ * ⛔ DESDE 2026-09-04 EXIGE USUARIO INTERNO ACTIVO, no solo sesión.
+ *
+ * Antes miraba únicamente que existiera un usuario de Supabase. Eso dejaba abiertas dos puertas,
+ * medidas en la auditoría del 2026-09-03: (1) un empleado DESACTIVADO con la pestaña abierta seguía
+ * entrando por los 35 handlers y las 13 páginas que llaman a esta función — y no expiraba nunca,
+ * porque el middleware le renueva la sesión en cada request; (2) cualquier cuenta de Supabase sin
+ * `AppUser INTERNAL` (el callback de login la rechaza, pero una sesión ya emitida no vuelve a pasar
+ * por ahí) entraba igual. Entre lo que exponían: el `systemPrompt` completo de los 30 agentes y las
+ * transcripciones de cualquier reunión.
+ *
+ * Delegar en `requireInternalUser` cierra las dos de una: exige `kind === "INTERNAL"`, TeamMember
+ * vinculado y `deactivatedAt` nulo. Nadie que hoy PUEDA loguearse queda afuera, porque el callback
+ * ya exige exactamente eso al entrar. Lo único que cambia es que dejar de ser del equipo surte
+ * efecto en el próximo request, no en el próximo login.
  */
 export async function requireConsultantSession(): Promise<void> {
-  const user = await getSupabaseUser();
-  if (!user) throw new Error("Unauthorized");
+  await requireInternalUser();
 }
 
 // ─── HubSpot por cliente ──────────────────────────────────────────────────────
