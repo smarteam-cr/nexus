@@ -1,8 +1,9 @@
-import { withAuth, withPermission } from "@/lib/api";
+import { withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 
-export const GET = withAuth(async (
+/* Ídem al catálogo: el prompt entero, solo para quien puede ver agentes. */
+export const GET = withPermission("agentes", "read", async (
   _request,
   { params }: { params: Promise<{ id: string }> }
 ) => {

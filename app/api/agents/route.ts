@@ -1,8 +1,12 @@
-import { withAuth, withPermission } from "@/lib/api";
+import { withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
 
-export const GET = withAuth(async (request) => {
+/* ⛔ El catálogo devuelve el `systemPrompt` COMPLETO de los 30 agentes: el know-how operativo de la
+   agencia. Entraba con cualquier sesión (auditoría 2026-09-03); editarlos ya exigía `agentes.manage`.
+   Leer y editar quedan bajo la misma sección: `agentes.read` la tienen los roles que administran o
+   miran el catálogo (Ventas, Dev, CSL, Marketing), no cualquier sesión. */
+export const GET = withPermission("agentes", "read", async (request) => {
   const { searchParams } = new URL(request.url);
   const stageParam = searchParams.get("stage");
 

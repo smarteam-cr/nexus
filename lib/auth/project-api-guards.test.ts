@@ -461,3 +461,40 @@ describe("⛔ ninguna lectura de hubspotAccount.findFirst va sin `where`", () =>
   });
 });
 
+// ── N4 · Los prompts de los agentes son know-how: solo quien puede ver agentes ────────────
+
+describe("⛔ ninguna ruta de agentes entra con solo sesión", () => {
+  /**
+   * Auditoría 2026-09-03: `GET /api/agents` y `/api/agents/[id]` devolvían el `systemPrompt`
+   * COMPLETO de los 30 agentes —el know-how operativo de la agencia— con solo una sesión de
+   * Supabase (y, hasta A-02, incluso a un desactivado), mientras editarlos ya exigía
+   * `agentes.manage`. Leer y editar viven bajo la misma sección del registry (`agentes.read`,
+   * `agentes.manage`), y `effective-prompt` ya lo hacía bien: es el molde.
+   */
+  const BASE_AGENTES = "app/api/agents";
+  const archivos = routes(BASE_AGENTES);
+
+  it("el escaneo encuentra el árbol (no pasa en vacío)", () => {
+    expect(archivos.length, `solo ${archivos.length} route.ts bajo ${BASE_AGENTES}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it("⭐ cada handler pasa por withPermission(\"agentes\", …)", () => {
+    const ofensores: string[] = [];
+    let total = 0;
+    for (const rel of archivos) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      const hs = [...src.matchAll(HANDLER)];
+      total += hs.length;
+      for (let i = 0; i < hs.length; i++) {
+        const cuerpo = src.slice(hs[i].index!, i + 1 < hs.length ? hs[i + 1].index! : src.length);
+        if (!cuerpo.includes('withPermission("agentes"')) ofensores.push(`${rel} → ${hs[i][1]}`);
+      }
+    }
+    expect(total, `solo ${total} handlers bajo ${BASE_AGENTES} — ¿el regex dejó de matchear?`).toBeGreaterThanOrEqual(6);
+    expect(
+      ofensores,
+      "Estos handlers de agentes no exigen la sección `agentes`: el prompt sale con cualquier sesión",
+    ).toEqual([]);
+  });
+});
+
