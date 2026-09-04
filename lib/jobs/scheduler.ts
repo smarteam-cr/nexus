@@ -6,13 +6,15 @@
  * marketing ahora es un job más (con su mecánica intacta).
  *
  *  - Idempotente (segundo start = no-op) — mismo contrato que el cron viejo.
- *  - try/catch POR JOB: un job roto no tumba a los demás.
+ *  - try/catch POR JOB: un job roto no tumba a los demás — y llega a Sentry con
+ *    `tags.job` (B-02): en el VPS un console.error es una línea que nadie lee.
  *  - Flag anti-reentrada: si un tick tarda más de 60s (p.ej. refresh de señales
  *    de muchos clientes), el siguiente tick se salta en vez de solaparse.
  *
  * Lo arranca instrumentation.ts (gates NEXT_RUNTIME nodejs + CRON_ENABLED=1 —
  * solo PROD los setea; en dev los jobs se prueban por scripts).
  */
+import * as Sentry from "@sentry/nextjs";
 import { crDateParts } from "./time";
 import { allJobs } from "./defs";
 
@@ -27,7 +29,12 @@ export async function runSchedulerTick(now: Date): Promise<void> {
     try {
       if (await job.shouldRun(now, parts)) await job.run(now);
     } catch (e) {
-      console.error(`[jobs] ${job.key} falló:`, e);
+      const err = e instanceof Error ? e : new Error(String(e));
+      // B-02 (auditoría 2026-09-03): diez jobs podían fallar todos los días y el primero en
+      // enterarse era un cliente. A Sentry con el job como tag (sin DSN es no-op); al log,
+      // nombre + mensaje (A-15) — el objeto entero, con su stack, viaja en el evento.
+      console.error(`[jobs] ${job.key} falló: ${err.name}: ${err.message}`);
+      Sentry.captureException(err, { tags: { job: job.key } });
     }
   }
 }
@@ -38,14 +45,22 @@ export function startScheduler(): void {
 
   // init() de cada job (asegurar singletons) — best-effort, no bloquea el boot.
   for (const job of allJobs()) {
-    job.init?.().catch((e) => console.error(`[jobs] init de ${job.key} falló:`, e));
+    job.init?.().catch((e) => {
+      const err = e instanceof Error ? e : new Error(String(e));
+      console.error(`[jobs] init de ${job.key} falló: ${err.name}: ${err.message}`);
+      Sentry.captureException(err, { tags: { job: job.key, fase: "init" } });
+    });
   }
 
   interval = setInterval(() => {
     if (ticking) return; // el tick anterior sigue corriendo — no solapar
     ticking = true;
     runSchedulerTick(new Date())
-      .catch((e) => console.error("[jobs] tick falló:", e))
+      .catch((e) => {
+        const err = e instanceof Error ? e : new Error(String(e));
+        console.error(`[jobs] tick falló: ${err.name}: ${err.message}`);
+        Sentry.captureException(err, { tags: { job: "scheduler-tick" } });
+      })
       .finally(() => {
         ticking = false;
       });
