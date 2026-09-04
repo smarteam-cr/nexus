@@ -57,7 +57,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
-import { loadProjectSummary } from "@/lib/portfolio/load";
+import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
 // Normaliza un string de fecha entrante al MISMO ISO que produce el lado DB
@@ -243,6 +243,14 @@ function readPublishedParticularidades(snapshot: unknown): TimelineResponse["pub
   });
 }
 
+/** C-17: quita `actualStart`/`actualEnd` — el select los trae para el summary, no para el cable. */
+function sinFechasReales<T extends { actualStart: unknown; actualEnd: unknown }>(x: T): Omit<T, "actualStart" | "actualEnd"> {
+  const copia = { ...x } as Record<string, unknown>;
+  delete copia.actualStart;
+  delete copia.actualEnd;
+  return copia as Omit<T, "actualStart" | "actualEnd">;
+}
+
 async function loadTimeline(projectId: string): Promise<TimelineResponse | { exists: false }> {
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
@@ -259,7 +267,12 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       pendingParticularidades: true,
       pendingParticularidadesRunId: true,
       publishedSnapshot: true,
-      project: { select: { timelinePublishedAt: true } },
+      project: { select: { timelinePublishedAt: true, status: true, healthStatusOverride: true } },
+      // C-17 (2026-09-04): lo que el summary del panel «Qué hacer acá» necesita y este select no
+      // traía (más las fechas reales de fases y tareas, abajo). Antes `loadProjectSummary` volvía
+      // a leer fases y tareas ENTERAS para conseguirlo: dos veces el árbol por cada GET.
+      baselines: { where: { isActive: true }, take: 1, select: { snapshot: true, firmness: true } },
+      changes: { where: { kind: "PROGRESS" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
       particularidades: {
         orderBy: { occurredAt: "desc" },
         select: {
@@ -299,6 +312,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           source: true,
           status: true,
           needsValidation: true,
+          actualStart: true, // C-17: para el summary; no viaja al cable (sinFechasReales)
+          actualEnd: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
             select: {
@@ -317,6 +332,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               type: true,
               startDateOverride: true,
               dueDateOverride: true,
+              actualStart: true, // C-17: para el summary; no viaja al cable
+              actualEnd: true,
             },
           },
         },
@@ -328,7 +345,12 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
   // y si falla no puede tumbar el cronograma en sí.
   const [kickoffDate, summary] = await Promise.all([
     getKickoffSessionDate(projectId),
-    loadProjectSummary(projectId).catch(() => null),
+    // C-17: el summary sale del árbol que ya se leyó arriba; el único viaje extra es el ciclo de vida.
+    loadProjectSummaryDesdeArbol(projectId, {
+      status: tl.project.status,
+      healthStatusOverride: tl.project.healthStatusOverride,
+      timeline: tl,
+    }).catch(() => null),
   ]);
   // Sesiones de entrega reales por fase (calculado, no persistido). null por fase
   // = futura o sin anchor → la UI usa el estimado `sessionCount`.
@@ -338,8 +360,10 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     phases: tl.phases.map((p) => ({ id: p.id, durationWeeks: p.durationWeeks, startWeek: p.startWeek })),
   });
   const solapes = nombresDeFasesSolapadas(tl.phases);
+  // Al cable van los mismos campos de siempre: las fechas reales que trajo el select son del summary.
   const phases = tl.phases.map((p) => ({
-    ...p,
+    ...sinFechasReales(p),
+    tasks: p.tasks.map(sinFechasReales),
     actualSessionCount: deliveryByPhase?.get(p.id) ?? null,
     solapaCon: solapes.get(p.id) ?? [],
   }));

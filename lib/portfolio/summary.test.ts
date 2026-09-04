@@ -21,6 +21,9 @@ import {
   type SummaryLifecycleInput,
 } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
+import fs from "node:fs";
+import path from "node:path";
+import { summaryDesdeArbol, type ArbolDeSummary } from "./load";
 
 const NOW = new Date("2026-06-21T00:00:00Z");
 const d = (s: string) => new Date(s);
@@ -367,4 +370,65 @@ test("J — SIN handoff generado (defined=false): sin etapa, sin alarmas, sin ri
   expect(s.riskCandidate).toBe(false);
   expect(s.overduePhases).toBe(1); // se sigue calculando, pero NO escala salud
   expect(s.health.derived).toBe("SALUDABLE");
+});
+
+// ── C-17 (2026-09-04): un solo mapeo árbol → summary, y el GET del cronograma no relee el árbol ──
+
+test("C-17 — summaryDesdeArbol lee el baseline activo, el último PROGRESS y las fechas del árbol", () => {
+  /* La edición que lo pone en rojo: un mapeo que ignore `changes` (lastProgressAt: null) o
+     `baselines` — el summary sale «sin actividad» y «sin línea base», y nada falla. */
+  const arbol = (extra: Partial<Pick<NonNullable<ArbolDeSummary["timeline"]>, "baselines" | "changes">>): ArbolDeSummary => ({
+    status: "active",
+    healthStatusOverride: null,
+    timeline: {
+      anchorStartDate: d("2026-06-01"),
+      phases: [
+        {
+          id: "p1", name: "Kickoff", status: "PENDING", order: 0, durationWeeks: 2, startWeek: null, actualStart: null, actualEnd: null,
+          tasks: [
+            { id: "t1", status: "DONE", weekIndex: 0, actualStart: null, actualEnd: null, needsValidation: false },
+            { id: "t2", status: "PENDING", weekIndex: 1, actualStart: null, actualEnd: null, needsValidation: false },
+          ],
+        },
+      ],
+      baselines: [],
+      changes: [],
+      ...extra,
+    },
+  });
+  const sin = summaryDesdeArbol(arbol({}), null, NOW);
+  expect(sin.progress).toMatchObject({ tasksDone: 1, tasksTotal: 2, phasesTotal: 1 });
+  expect(sin.hasBaseline).toBe(false);
+
+  const con = summaryDesdeArbol(
+    arbol({
+      baselines: [{ snapshot: { anchorStartDate: "2026-06-01", phases: [] }, firmness: { label: "FIRM" } }],
+      changes: [{ createdAt: d("2026-06-18T00:00:00Z") }],
+    }),
+    null,
+    NOW,
+  );
+  expect(con.hasBaseline, "el baseline activo tiene que salir de baselines[0]").toBe(true);
+  expect(con.weakBaseline, "la firmeza sale de firmness.label").toBe(false);
+  expect(con.daysSinceActivity, "el último PROGRESS tiene que salir de changes[0]").toBe(3);
+});
+
+test("C-17 — el GET del cronograma arma el summary con el árbol que ya leyó, y el mapeo tiene UN solo dueño", () => {
+  /* La edición que lo pone en rojo: volver a `loadProjectSummary(projectId)` en el GET «porque es
+     más corto» — fases y tareas enteras dos veces por request; o copiar el mapeo de vuelta en
+     loadPortfolio «para no depender del helper». */
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+  const sinComentarios = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  const route = sinComentarios(leer("app/api/projects/[projectId]/timeline/route.ts"));
+  expect(route, "el GET vuelve a leer fases y tareas enteras para el panel").not.toContain("loadProjectSummary(projectId)");
+  expect(route).toContain("loadProjectSummaryDesdeArbol(projectId,");
+  expect(route, "el summary tiene que salir del árbol que el GET ya trajo").toContain("timeline: tl,");
+  const select = route.slice(route.indexOf("async function loadTimeline("), route.indexOf("if (!tl) return { exists: false }"));
+  expect(select.length, "la guarda no está mirando el select del GET").toBeGreaterThan(500);
+  for (const campo of ['kind: "PROGRESS"', "isActive: true", "healthStatusOverride: true"]) {
+    expect(select, `el select del GET dejó de traer ${campo}: el summary saldría a medias`).toContain(campo);
+  }
+  const load = sinComentarios(leer("lib/portfolio/load.ts"));
+  expect(load.split("computeProjectSummary(").length - 1, "el mapeo árbol → summary tiene UN solo dueño").toBe(1);
+  expect(load.split("summaryDesdeArbol(").length - 1, "cartera, un proyecto y el GET pasan por el mismo mapeo").toBeGreaterThanOrEqual(3);
 });

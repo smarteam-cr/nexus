@@ -11,7 +11,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma, ProjectHealth } from "@prisma/client";
-import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput } from "./summary";
+import { computeProjectSummary, type ProjectSummary, type SummaryLifecycleInput, type SummaryPhase } from "./summary";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
@@ -253,38 +253,7 @@ export async function loadPortfolio(
     const activeBaseline = tl?.baselines?.[0] ?? null;
     const lc = tl?.id ? lastChangeByTimeline.get(tl.id) : undefined;
     const projectSteps = stepsByProject.get(p.id);
-    const summary = computeProjectSummary({
-      status: p.status,
-      anchorStartDate: tl?.anchorStartDate ?? null,
-      phases: (tl?.phases ?? []).map((ph) => ({
-        id: ph.id,
-        name: ph.name,
-        status: ph.status,
-        order: ph.order,
-        durationWeeks: ph.durationWeeks,
-        startWeek: ph.startWeek,
-        actualStart: ph.actualStart,
-        actualEnd: ph.actualEnd,
-        tasks: ph.tasks.map((t) => ({
-          id: t.id,
-          status: t.status,
-          weekIndex: t.weekIndex,
-          actualStart: t.actualStart,
-          actualEnd: t.actualEnd,
-          needsValidation: t.needsValidation,
-        })),
-      })),
-      baseline: activeBaseline
-        ? {
-            snapshot: activeBaseline.snapshot as unknown as BaselineSnapshot,
-            firmnessLabel: (activeBaseline.firmness as { label?: string } | null)?.label ?? "WEAK",
-          }
-        : null,
-      lastProgressAt: tl?.changes?.[0]?.createdAt ?? null,
-      healthOverride: p.healthStatusOverride,
-      lifecycle: toSummaryLifecycle(lifecycleByProject.get(p.id) ?? null),
-      now,
-    });
+    const summary = summaryDesdeArbol(p, lifecycleByProject.get(p.id) ?? null, now);
     return {
       projectId: p.id,
       projectName: p.name,
@@ -315,6 +284,59 @@ export async function loadPortfolio(
       healthProposedReason: p.healthProposedReason,
       healthProposedAt: p.healthProposedAt?.toISOString() ?? null,
     };
+  });
+}
+
+/**
+ * C-17 (2026-09-04): UN solo mapeo árbol → summary para los tres lectores — la cartera, el
+ * summary de un proyecto, y el GET del cronograma, que ya tiene fases y tareas en mano para
+ * pintarlas y antes volvía a leerlas ENTERAS solo para el panel «Qué hacer acá».
+ *
+ * `ArbolDeSummary` es el contrato mínimo: quien traiga el árbol de la base tiene que traer
+ * TAMBIÉN las fechas reales de fases y tareas, el baseline activo y el último PROGRESS. Si le
+ * falta uno, `tsc` lo rechaza acá — en vez de que el summary salga a medias («sin actividad»,
+ * «sin línea base») sin que nada falle.
+ */
+export interface ArbolDeSummary {
+  status: string;
+  healthStatusOverride: ProjectHealth | null;
+  timeline: {
+    anchorStartDate: Date | null;
+    phases: SummaryPhase[];
+    baselines: Array<{ snapshot: unknown; firmness: unknown }>;
+    changes: Array<{ createdAt: Date }>;
+  } | null;
+}
+
+export function summaryDesdeArbol(
+  arbol: ArbolDeSummary,
+  lifecycle: ProjectLifecycle | null,
+  now: Date = new Date(),
+): ProjectSummary {
+  const tl = arbol.timeline;
+  const activeBaseline = tl?.baselines?.[0] ?? null;
+  return computeProjectSummary({
+    status: arbol.status,
+    anchorStartDate: tl?.anchorStartDate ?? null,
+    phases: (tl?.phases ?? []).map((ph) => ({
+      id: ph.id, name: ph.name, status: ph.status, order: ph.order,
+      durationWeeks: ph.durationWeeks, startWeek: ph.startWeek,
+      actualStart: ph.actualStart, actualEnd: ph.actualEnd,
+      tasks: ph.tasks.map((t) => ({
+        id: t.id, status: t.status, weekIndex: t.weekIndex,
+        actualStart: t.actualStart, actualEnd: t.actualEnd, needsValidation: t.needsValidation,
+      })),
+    })),
+    baseline: activeBaseline
+      ? {
+          snapshot: activeBaseline.snapshot as BaselineSnapshot,
+          firmnessLabel: (activeBaseline.firmness as { label?: string } | null)?.label ?? "WEAK",
+        }
+      : null,
+    lastProgressAt: tl?.changes?.[0]?.createdAt ?? null,
+    healthOverride: arbol.healthStatusOverride,
+    lifecycle: toSummaryLifecycle(lifecycle),
+    now,
   });
 }
 
@@ -351,30 +373,16 @@ export async function loadProjectSummary(projectId: string): Promise<ProjectSumm
   });
   if (!p) return null;
 
-  const tl = p.timeline;
-  const activeBaseline = tl?.baselines?.[0] ?? null;
   const lifecycleByProject = await loadLifecycleBatch([projectId]);
-  return computeProjectSummary({
-    status: p.status,
-    anchorStartDate: tl?.anchorStartDate ?? null,
-    phases: (tl?.phases ?? []).map((ph) => ({
-      id: ph.id, name: ph.name, status: ph.status, order: ph.order,
-      durationWeeks: ph.durationWeeks, startWeek: ph.startWeek,
-      actualStart: ph.actualStart, actualEnd: ph.actualEnd,
-      tasks: ph.tasks.map((t) => ({
-        id: t.id, status: t.status, weekIndex: t.weekIndex,
-        actualStart: t.actualStart, actualEnd: t.actualEnd, needsValidation: t.needsValidation,
-      })),
-    })),
-    baseline: activeBaseline
-      ? {
-          snapshot: activeBaseline.snapshot as unknown as BaselineSnapshot,
-          firmnessLabel: (activeBaseline.firmness as { label?: string } | null)?.label ?? "WEAK",
-        }
-      : null,
-    lastProgressAt: tl?.changes?.[0]?.createdAt ?? null,
-    healthOverride: p.healthStatusOverride,
-    lifecycle: toSummaryLifecycle(lifecycleByProject.get(projectId) ?? null),
-    now: new Date(),
-  });
+  return summaryDesdeArbol(p, lifecycleByProject.get(projectId) ?? null);
+}
+
+/**
+ * C-17: el summary de un proyecto cuyo árbol YA se leyó. El GET del cronograma trae fases y
+ * tareas para pintarlas y las pasa acá en vez de pedirlas de nuevo; el único viaje que queda
+ * es el del ciclo de vida (compuertas + snapshot de Partner), que no viene en ese árbol.
+ */
+export async function loadProjectSummaryDesdeArbol(projectId: string, arbol: ArbolDeSummary): Promise<ProjectSummary> {
+  const lifecycleByProject = await loadLifecycleBatch([projectId]);
+  return summaryDesdeArbol(arbol, lifecycleByProject.get(projectId) ?? null);
 }
