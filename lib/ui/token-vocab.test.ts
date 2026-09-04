@@ -86,11 +86,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/sessions/categories/CategoriesClient.tsx": 51,
   "app/(shell)/sessions/SessionsClient.tsx": 161,
   "app/(shell)/team/page.tsx": 2,
-  "app/LoginForm.tsx": 5,
-  "app/portal/page.tsx": 22,
-  "app/portal/PortalTabs.tsx": 236,
-  "app/portal/RefreshButton.tsx": 6,
-  "app/portal/SwitchAccountButton.tsx": 2,
   "components/business-cases/BusinessCaseStepper.tsx": 4,
   "components/business-cases/BusinessCaseWorkspace.tsx": 1,
   "components/business-cases/ContextCard.tsx": 2,
@@ -231,7 +226,6 @@ const DEUDA_TABBARS: Record<string, number> = {
  * TaskDetailDrawer/TimelineAssistDialog son área de la otra PC.
  */
 const DEUDA_OVERLAYS: Record<string, number> = {
-  "app/portal/PortalTabs.tsx": 1,
   "components/canvas/CronogramaCanvas.tsx": 1,
   "components/canvas/TaskDetailDrawer.tsx": 1,
   "components/canvas/TimelineAssistDialog.tsx": 1,

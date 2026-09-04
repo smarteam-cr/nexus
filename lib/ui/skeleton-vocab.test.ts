@@ -45,7 +45,6 @@ const DEUDA = {
   animatePulse: [
     "app/(shell)/audits/[id]/AuditDetailClient.tsx",
     "app/(shell)/marketing/generacion/EngineClient.tsx",
-    "app/portal/page.tsx",
     "components/business-cases/BusinessCaseWorkspace.tsx",
     "components/clients/ClientContextCards.tsx",
   ],

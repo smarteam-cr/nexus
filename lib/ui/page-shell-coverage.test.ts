@@ -84,3 +84,58 @@ describe("C-15: el shell no exporta `revalidate`, y las fuentes de landing no se
     expect(geist, "Geist es la fuente de la app: sí se precarga").not.toContain("preload: false");
   });
 });
+
+describe("D-01: las páginas FUERA de app/(shell) están declaradas, con el motivo escrito", () => {
+  /**
+   * Los registros de cobertura (page-shell, skeleton) solo miran app/(shell). Todo lo que vive
+   * afuera queda sin dueño: así sobrevivió /portal meses sin que nada lo enlazara, con un botón
+   * que posteaba a un logout inexistente, y así el retiro de las etapas dejó pantallas huérfanas
+   * que seguían siendo alcanzables. Este censo es la lista cerrada: una página nueva fuera del
+   * shell se declara acá con su porqué, o es un rojo.
+   *
+   * ⚠ Las cuatro de «existente al 2026-09-04» NO se auditaron en D-01 (el ítem era /portal):
+   * quedan declaradas tal como están para que el censo sea honesto, no como aval.
+   */
+  const FUERA_DEL_SHELL: Record<string, string> = {
+    "app/page.tsx": "la raíz: entrada de la app (login) y redirección al shell",
+    "app/contenido/page.tsx": "existente al 2026-09-04 — no se auditó su enlace en D-01",
+    "app/dashboard/page.tsx": "existente al 2026-09-04 — no se auditó su enlace en D-01",
+    "app/exito-cliente/page.tsx": "existente al 2026-09-04 — no se auditó su enlace en D-01",
+    "app/icp/page.tsx": "existente al 2026-09-04 — no se auditó su enlace en D-01",
+    "app/print/canvas/[clientId]/[canvasId]/page.tsx": "el render de un canvas para el PDF (puppeteer)",
+    "app/print/doc/[type]/[id]/page.tsx": "el render unificado de documentos para el PDF (puppeteer)",
+  };
+
+  function paginasFueraDelShell(dir: string, acc: string[] = []): string[] {
+    for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+      const rel = norm(path.join(dir, e.name));
+      if (e.isDirectory()) {
+        if (rel === "app/(shell)" || rel === "app/api" || rel === "app/external") continue;
+        paginasFueraDelShell(rel, acc);
+      } else if (e.name === "page.tsx") {
+        acc.push(rel);
+      }
+    }
+    return acc;
+  }
+
+  it("ninguna página fuera del shell sin declarar — /portal no vuelve sin decir para qué", () => {
+    /* La edición que lo pone en rojo: crear app/portal/page.tsx (o cualquier page.tsx fuera del
+       shell) sin sumarla acá con su motivo. */
+    const reales = paginasFueraDelShell("app").sort();
+    expect(reales.length, "el censo no está mirando nada").toBeGreaterThan(3);
+    const sinDeclarar = reales.filter((r) => !(r in FUERA_DEL_SHELL));
+    expect(sinDeclarar, "páginas fuera de app/(shell) que nadie declaró (¿quién las enlaza?)").toEqual([]);
+    const huerfanas = Object.keys(FUERA_DEL_SHELL).filter((r) => !reales.includes(r));
+    expect(huerfanas, "entradas del censo que ya no existen: borralas").toEqual([]);
+    for (const [ruta, motivo] of Object.entries(FUERA_DEL_SHELL)) {
+      expect(motivo.trim().length, `${ruta} sin motivo`).toBeGreaterThan(10);
+    }
+  });
+
+  it("y lo que D-01 borró no está: /portal, su botón de cambiar cuenta y el LoginForm huérfano", () => {
+    for (const ido of ["app/portal", "app/LoginForm.tsx"]) {
+      expect(fs.existsSync(path.join(RAIZ, ido)), `${ido} volvió`).toBe(false);
+    }
+  });
+});
