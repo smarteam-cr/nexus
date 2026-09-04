@@ -108,3 +108,48 @@ describe("la etapa inventada no vuelve", () => {
     }
   });
 });
+
+describe("D-04: las otras dos columnas retiradas tampoco vuelven (shareToken, evidence de compuertas)", () => {
+  /**
+   * `Project.shareToken`: la «vista pública sin contraseña» nunca existió — cero lectores, cero
+   * escritores. `ProjectStageGate.evidence`: se ESCRIBE al marcar una compuerta (load.ts, el
+   * backfill) pero nadie la LEE: el drill a la señal nunca se construyó. Las dos quedan en el
+   * schema marcadas RETIRADA (un DROP es irreversible y no hace falta), y por eso hace falta
+   * esto: mientras existan, `select: { shareToken: true }` compila.
+   */
+  const CODIGO = ["app", "components", "lib", "scripts"];
+  const soloCodigo = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const archivos = () =>
+    CODIGO.flatMap((dir) => listarTsx(dir))
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .map((f) => ({ rel: f.split(path.sep).join("/"), src: soloCodigo(fs.readFileSync(path.join(RAIZ, f), "utf8")) }));
+
+  it("el schema las marca RETIRADA, en la línea de la columna", () => {
+    /* La edición que lo pone en rojo: borrar el aviso «porque ensucia el schema». */
+    const schema = fs.readFileSync(path.join(RAIZ, "prisma/schema.prisma"), "utf8");
+    expect(schema).toMatch(/^\s+shareToken\s+String\?\s+@unique\s+\/\/ ⛔ RETIRADA/m);
+    const gate = schema.slice(schema.indexOf("model ProjectStageGate {"));
+    const evidence = gate.slice(0, gate.indexOf("}")).split("\n").find((l) => /^\s+evidence\s+Json\?/.test(l));
+    expect(evidence, "la columna evidence de ProjectStageGate desapareció del schema").toBeDefined();
+    expect(evidence, "la evidence de compuertas dejó de estar marcada RETIRADA").toContain("⛔ RETIRADA");
+  });
+
+  it("⛔ nadie nombra shareToken en código", () => {
+    /* La edición que lo pone en rojo: `select: { shareToken: true }` en cualquier lector — es el
+       gesto exacto que resucita una feature que nunca existió. */
+    const culpables = archivos().filter((a) => /\bshareToken\b/.test(a.src)).map((a) => a.rel);
+    expect(culpables, "shareToken volvió al código: la vista pública sin contraseña nunca existió").toEqual([]);
+  });
+
+  it("⛔ la evidence de las compuertas solo la nombran sus dos ESCRITORES, y nadie la lee", () => {
+    /* La edición que lo pone en rojo: un `select: { evidence: true }` sobre projectStageGate en
+       cualquier archivo — o un tercer escritor sin declararlo acá. `evidence` también es una
+       columna viva de CsAlert: el censo se acota a los archivos que hablan de compuertas. */
+    const ESCRITORES = ["lib/lifecycle/load.ts", "scripts/backfill-lifecycle-stage.ts"];
+    const enCompuertas = archivos()
+      .filter((a) => /\bevidence\b/.test(a.src) && /stageGate|StageGate|\bgates\b/.test(a.src))
+      .map((a) => a.rel)
+      .sort();
+    expect(enCompuertas, "un archivo nuevo nombra la evidence de las compuertas: si la LEE, la columna está retirada; si la escribe, declaralo").toEqual([...ESCRITORES].sort());
+  });
+});

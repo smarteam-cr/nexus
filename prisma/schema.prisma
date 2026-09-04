@@ -244,7 +244,7 @@ model Project {
   currentStep        Int                 @default(0)
   canvas             Json? // DEPRECATED — ya no se lee para renderizar el canvas
   tags               String[]            @default([]) // Tags generales del proyecto (e.g. "Marketing Hub", "Sales Hub")
-  shareToken         String?             @unique // Token para vista pública del cliente
+  shareToken         String?             @unique // ⛔ RETIRADA (2026-09-04): sin lectores ni escritores — la «vista pública sin contraseña» nunca existió; el acceso externo es ProjectExternalAccess. Respaldo hasta el DROP. Guarda: lib/projects/etapa-retirada.test.ts
 
   // GPS del proyecto
   nextSessionDate    DateTime? // LEGACY (project-wide) — reemplazado por los overrides por frente de abajo
@@ -551,7 +551,7 @@ model ProjectStageGate {
   markedBy  String? // email del CSE; null = sistema
   source    String              @default("cse") // "cse" | "system" | "backfill"
   note      String?             @db.Text // p.ej. sugerencia de cross-selling en ENTREGA_REALIZADA
-  evidence  Json? // { sessionId?, canvasId?, uusScore? } — drill a la señal que lo justificó
+  evidence  Json? // ⛔ RETIRADA (2026-09-04): nadie la LEE — el drill a la señal nunca se construyó. La siguen escribiendo lib/lifecycle/load.ts y scripts/backfill-lifecycle-stage.ts hasta el DROP. Guarda: lib/projects/etapa-retirada.test.ts
 
   @@unique([projectId, gate])
   @@index([projectId])
@@ -968,7 +968,7 @@ enum TimelineTaskStatus {
 // 1:1 con Project. El CSE genera/regenera/revoca desde el panel del proyecto.
 // La contraseña se devuelve EN PLANO una sola vez al generarla; después solo
 // queda el hash (bcrypt 12 rounds). Si se pierde, hay que regenerar.
-// Coexiste con Project.shareToken (vista pública sin contraseña, feature aparte).
+// Project.shareToken quedó RETIRADA (2026-09-04): la vista pública sin contraseña nunca existió.
 
 model ProjectExternalAccess {
   id             String      @id @default(cuid())
