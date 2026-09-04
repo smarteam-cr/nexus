@@ -20,6 +20,7 @@ import {
   findDefAcrossTemplates,
 } from "@/components/landing/configs/templates.defs";
 import { HUBSPOT_TEMPLATE_ID } from "@/lib/business-cases/case-types";
+import { GeneracionFallidaError, diagnosticarRespuesta } from "@/lib/business-cases/diagnostico-de-generacion";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -141,14 +142,11 @@ export async function generateSectionsForTemplate(
   // parseó, ABORTAR acá (antes de la transacción del route) — sin esto, parseObject
   // devuelve {} y coerceToSchema vacía TODO: nacería un caso nuevo VACÍO y activo,
   // desactivando el bueno anterior, con toast de éxito.
-  if (msg.stop_reason === "max_tokens") {
-    throw new Error("la generación se cortó por límite de tokens — reintentá (si persiste, reducí las fuentes de contexto)");
-  }
-  const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-  const obj = parseObject(text);
-  if (Object.keys(obj).length === 0) {
-    throw new Error("el agente no devolvió un JSON válido — reintentá la generación");
-  }
+  // B-10: el error lleva stop_reason y el largo del texto — el route lo escribe en
+  // AgentRun.output, y ahí se distingue un corte por tokens de un JSON malformado.
+  const respuesta = diagnosticarRespuesta(msg);
+  if (!respuesta.ok) throw new GeneracionFallidaError(respuesta.diagnostico);
+  const obj = respuesta.obj;
 
   // Idioma ≠ español: el agente devuelve los títulos/eyebrows de sección traducidos
   // en "__titles"/"__eyebrows" (keys válidas del template solamente).

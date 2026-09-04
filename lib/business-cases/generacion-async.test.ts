@@ -22,6 +22,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { serializeTimeline, type TimelineItem } from "@/lib/hubspot/company-timeline";
+import { GeneracionFallidaError, diagnosticarRespuesta } from "@/lib/business-cases/diagnostico-de-generacion";
 
 const RAIZ = process.cwd();
 const RUTA_GENERATE = path.join(RAIZ, "app/api/business-cases/[id]/generate/route.ts");
@@ -111,5 +112,65 @@ describe("candado 2 — la X del contexto filtra de verdad", () => {
     ];
     const vacio = new Set<string>();
     expect(serializeTimeline(items.filter((i) => !vacio.has(i.id)))).toBe(serializeTimeline(items));
+  });
+});
+
+describe("candado B-10 — una generación fallida dice POR QUÉ falló (stop_reason y largo del texto)", () => {
+  /**
+   * 1 de 4 propuestas terminaba en ERROR con un output que solo decía «reintentá». Un corte por
+   * max_tokens y un JSON malformado se tratan distinto (reducir contexto vs. arreglar el prompt)
+   * y se veían igual. El diagnóstico viaja en el mensaje, y el route escribe el mensaje en
+   * `AgentRun.output` — así que el output del run en ERROR ahora los distingue.
+   */
+  const respuesta = (stop_reason: string | null, texto: string) => ({
+    stop_reason,
+    content: [{ type: "text", text: texto }],
+  });
+
+  it("truncada por tokens: el diagnóstico lo dice ANTES de intentar parsear, con el largo", () => {
+    /* La edición que lo pone en rojo: parsear primero — un JSON cortado a la mitad se reportaría
+       como «JSON inválido» y mandaría a arreglar el prompt cuando el problema es el tamaño. */
+    const r = diagnosticarRespuesta(respuesta("max_tokens", '{"hero": {"titulo": "Propuesta pa'), () => {
+      throw new Error("no se parsea una respuesta truncada");
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.diagnostico.motivo).toBe("max_tokens");
+    expect(r.diagnostico.textoLength).toBe(33);
+    expect(r.diagnostico.mensaje).toContain("se cortó por límite de tokens");
+    expect(r.diagnostico.mensaje).toContain("[stop_reason=max_tokens · texto=33 chars]");
+  });
+
+  it("terminó pero el JSON no parsea: json_invalido, con el stop_reason real y el largo", () => {
+    const r = diagnosticarRespuesta(respuesta("end_turn", "Acá va la propuesta: no puedo devolver JSON."));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.diagnostico.motivo).toBe("json_invalido");
+    expect(r.diagnostico.mensaje).toContain("[stop_reason=end_turn · texto=44 chars]");
+    // El error que lanza canvas-agent lleva el diagnóstico Y el mensaje: lo que el route escribe.
+    const e = new GeneracionFallidaError(r.diagnostico);
+    expect(e.message).toBe(r.diagnostico.mensaje);
+    expect(e.name).toBe("GeneracionFallida");
+    expect(e.diagnostico.stopReason).toBe("end_turn");
+  });
+
+  it("una respuesta sana devuelve el objeto parseado", () => {
+    const r = diagnosticarRespuesta(respuesta("end_turn", '```json\n{"hero": {"titulo": "Propuesta"}}\n```'));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.obj).toEqual({ hero: { titulo: "Propuesta" } });
+  });
+
+  it("canvas-agent.ts consume el diagnóstico y el route escribe err.message en el output del run", () => {
+    /* La edición que lo pone en rojo: volver al `throw new Error("…reintentá")` inline, que
+       era exactamente lo que dejaba el output mudo. */
+    const agente = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/business-cases/canvas-agent.ts"), "utf8"));
+    expect(agente).toContain("diagnosticarRespuesta(msg)");
+    expect(agente).toContain("throw new GeneracionFallidaError(");
+    expect(agente, "sin copia inline del chequeo de max_tokens").not.toContain('msg.stop_reason === "max_tokens"');
+    const route = generate();
+    expect(route, "el diagnóstico llega al run porque el route persiste el mensaje del error").toMatch(
+      /status: "ERROR", output: message/,
+    );
   });
 });
