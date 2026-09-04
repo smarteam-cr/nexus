@@ -6,8 +6,11 @@ import { buildPortalSnapshot, PortalSnapshot } from "@/lib/hubspot/portal-analyz
 /** GET → devuelve snapshot desde DB (o lo construye si no existe) */
 export const GET = withAuth(async () => {
   try {
-    // En transición: usar la primera cuenta HubSpot disponible
+    /* ⛔ SIEMPRE la cuenta del SISTEMA. Auditoría 2026-09-03: sin `where`, Postgres devolvía «la
+       primera cuenta que haya» — con ~50 cuentas de clientes en la tabla, una arbitraria — y este GET
+       servía el snapshot del portal de un CLIENTE a cualquier sesión. Lectura cross-cliente sin error. */
     const account = await prisma.hubspotAccount.findFirst({
+      where: { isSystem: true },
       select: { id: true, portalSnapshot: true, portalSnapshotAt: true },
     });
 
@@ -44,6 +47,7 @@ export const GET = withAuth(async () => {
 export const POST = withAuth(async () => {
   try {
     const account = await prisma.hubspotAccount.findFirst({
+      where: { isSystem: true },
       select: { id: true },
     });
 

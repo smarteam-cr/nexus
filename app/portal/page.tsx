@@ -45,6 +45,7 @@ export default async function PortalPage() {
     await requireConsultantSession();
     // En transición: usar la primera cuenta HubSpot disponible
     account = await prisma.hubspotAccount.findFirst({
+      where: { isSystem: true },
       select: { id: true, portalSnapshot: true, portalSnapshotAt: true },
     });
   } catch {

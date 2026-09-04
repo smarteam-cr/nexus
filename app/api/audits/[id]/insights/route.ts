@@ -88,7 +88,7 @@ export const POST = withAuth(async (_req, { params }: Params) => {
     // Usa la cuenta del audit si tiene accountId, o la primera disponible
     let enrichment: AuditEnrichment | null = null;
     try {
-      const accountId = audit.accountId ?? (await prisma.hubspotAccount.findFirst())?.id;
+      const accountId = audit.accountId ?? (await prisma.hubspotAccount.findFirst({ where: { isSystem: true } }))?.id;
       if (accountId) {
         const token = await getFreshToken(accountId);
         enrichment = await fetchAuditEnrichment(token);

@@ -28,7 +28,7 @@ export const POST = withAuth(async (request) => {
     // Obtener la cuenta HubSpot del cliente (si hay clientId) o la primera disponible
     const account = clientId
       ? await prisma.hubspotAccount.findUnique({ where: { clientId } })
-      : await prisma.hubspotAccount.findFirst();
+      : await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
 
     if (!account) {
       return NextResponse.json({ error: "No hay cuenta HubSpot conectada" }, { status: 400 });

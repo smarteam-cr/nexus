@@ -418,3 +418,46 @@ describe("⛔ ninguna ruta bajo app/api/clients/[id] queda sin guarda de cliente
   });
 });
 
+// ── N3 · «La primera cuenta que haya» no es una cuenta ────────────────────────────────────
+
+describe("⛔ ninguna lectura de hubspotAccount.findFirst va sin `where`", () => {
+  /**
+   * Auditoría 2026-09-03: `app/api/hubspot/read` hacía `hubspotAccount.findFirst()` sin filtro y
+   * servía el snapshot del portal de «la primera cuenta que haya» —con ~50 cuentas de clientes en
+   * la tabla, una arbitraria— a cualquier sesión. Lectura cross-cliente sin error. El mismo
+   * `findFirst()` pelado estaba en audits, insights y knowledge, con el comentario «la primera
+   * disponible» como si eso significara algo.
+   *
+   * La regla: toda llamada lleva `where` (normalmente `isSystem: true`). Se escanea el ÁRBOL, no
+   * una lista de archivos, para que la próxima copia también caiga.
+   */
+  const fuentes = (dir: string, acc: string[] = []): string[] => {
+    const abs = path.join(RAIZ, dir);
+    if (!fs.existsSync(abs)) return acc;
+    for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) fuentes(rel, acc);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) acc.push(rel);
+    }
+    return acc;
+  };
+
+  it("⭐ en app/ y lib/, cada findFirst sobre hubspotAccount filtra", () => {
+    const sinWhere: string[] = [];
+    let total = 0;
+    for (const rel of [...fuentes("app"), ...fuentes("lib")]) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      for (const m of src.matchAll(/hubspotAccount\.findFirst\(/g)) {
+        total += 1;
+        const tramo = src.slice(m.index!, m.index! + 200);
+        if (!/^hubspotAccount\.findFirst\(\s*\{[\s\S]{0,120}?where\s*:/.test(tramo)) sinWhere.push(rel);
+      }
+    }
+    expect(total, "no se encontró ningún findFirst: ¿cambió el nombre del modelo?").toBeGreaterThanOrEqual(4);
+    expect(
+      sinWhere,
+      "Estos findFirst sobre hubspotAccount no filtran: devuelven una cuenta ARBITRARIA, que puede ser la de un cliente",
+    ).toEqual([]);
+  });
+});
+

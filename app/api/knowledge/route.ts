@@ -27,7 +27,7 @@ export const POST = withPermission("conocimientos", "write", async (request) => 
     }
 
     // Obtener la primera cuenta HubSpot disponible (requerido por el schema)
-    const account = await prisma.hubspotAccount.findFirst();
+    const account = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
     if (!account) {
       return NextResponse.json({ error: "No hay cuenta HubSpot conectada" }, { status: 400 });
     }
