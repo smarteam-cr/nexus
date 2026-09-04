@@ -41,6 +41,7 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
 import { partitionByValidation } from "./particularidad-state";
 import { actionsFromSignals } from "./project-actions-input";
 import type { ProjectAction } from "./project-actions";
+import { diasSinConfirmar, type BorradorFechable } from "./avance-sin-confirmar";
 
 export interface ProjectActionsRow {
   projectId: string;
@@ -74,6 +75,7 @@ export async function loadProjectActions(
         anchorStartDate: true,
         detailConfirmedAt: true,
         pendingProgress: true,
+        pendingProgressRunId: true,
         pendingProposal: true,
         pendingParticularidades: true,
         particularidades: {
@@ -121,6 +123,14 @@ export async function loadProjectActions(
     canvases.filter((c): c is typeof c & { projectId: string } => !!c.projectId).map((c) => [c.projectId, c.id]),
   );
 
+  /* D-12: cuándo se generó cada borrador de avance. Los nuevos traen `generatedAt`; los
+     anteriores al 2026-09-04 no, y su fecha sale de la corrida que los produjo. */
+  const runIds = timelines.map((t) => t.pendingProgressRunId).filter((id): id is string => !!id);
+  const runs = runIds.length
+    ? await prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, createdAt: true } })
+    : [];
+  const fechaDeCorrida = new Map(runs.map((x) => [x.id, x.createdAt]));
+
   return rows.map((r) => {
     const tl = tlByProject.get(r.projectId);
     const { confirmadas, sugerencias } = partitionByValidation(tl?.particularidades ?? []);
@@ -143,6 +153,11 @@ export async function loadProjectActions(
           // cuentan, o un cronograma con una tarea a mano se leería como detallado.
           hasTasks: phases.some((p) => p.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED")),
           pendingProgress: !!tl?.pendingProgress,
+          pendingProgressDias: diasSinConfirmar(
+            (tl?.pendingProgress as unknown as BorradorFechable | null) ?? null,
+            tl?.pendingProgressRunId ? (fechaDeCorrida.get(tl.pendingProgressRunId) ?? null) : null,
+            now,
+          ),
           pendingParticularidades: Array.isArray(tl?.pendingParticularidades)
             ? tl.pendingParticularidades.length
             : 0,

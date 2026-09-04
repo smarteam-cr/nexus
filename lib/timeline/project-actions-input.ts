@@ -71,6 +71,8 @@ export interface TimelineActionSignals {
   hasTasks: boolean;
   /** Borradores del agente esperando confirmación. */
   pendingProgress: boolean;
+  /** D-12: días desde que se generó el borrador de avance; null = sin borrador o sin fecha. */
+  pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
   /** Confirmadas (needsValidation = false). */
@@ -110,6 +112,7 @@ export function buildActionsInput(
 
   return {
     pendingProgress: s.pendingProgress,
+    pendingProgressDias: s.pendingProgressDias ?? null,
     pendingParticularidades: s.pendingParticularidades,
     pendingProposal: s.pendingProposal,
     sugerenciasDelEquipo: s.sugerenciasDelEquipo,

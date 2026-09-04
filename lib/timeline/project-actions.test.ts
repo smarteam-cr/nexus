@@ -6,6 +6,9 @@
  */
 import { test, expect } from "vitest";
 import { buildProjectActions, groupActions, splitBlocking, type ProjectActionsInput } from "./project-actions";
+import { DIAS_PARA_AVISAR, avanceSinConfirmarVencido, diasSinConfirmar, rotuloDeAvanceSinConfirmar } from "./avance-sin-confirmar";
+import fs from "node:fs";
+import path from "node:path";
 
 const sano: ProjectActionsInput = {
   pendingProgress: false,
@@ -197,4 +200,50 @@ test("alcance informa sin CTA (no tiene destino en esta pantalla)", () => {
   const alcance = a.find((x) => x.id === "alcance")!;
   expect(alcance.cta).toBeNull();
   expect(alcance.title).toContain("+3 tareas");
+});
+
+// ── D-12 (2026-09-04): el borrador de avance tiene edad, y a los 7 días grita ────────────────
+/* La acción decía «hay avance que no confirmaste» el día 1 igual que el día 40, y la cartera no lo
+   decía en absoluto. Un borrador de semanas es peor que ninguno: el cliente mira un avance más
+   viejo que el real y el vigilante de CS razona sobre ese avance viejo. */
+
+test("D-12 · diasSinConfirmar: generatedAt manda, la corrida es el respaldo, y sin fecha no se inventa edad", () => {
+  const ahora = new Date("2026-09-04T12:00:00.000Z");
+  expect(diasSinConfirmar(null, new Date("2026-08-01"), ahora), "sin borrador no hay edad").toBeNull();
+  expect(diasSinConfirmar({ generatedAt: "2026-08-25T12:00:00.000Z" }, new Date("2026-01-01"), ahora), "generatedAt gana sobre la corrida").toBe(10);
+  expect(diasSinConfirmar({}, new Date("2026-08-31T12:00:00.000Z"), ahora), "un borrador viejo se fecha por su corrida").toBe(4);
+  expect(diasSinConfirmar({}, null, ahora), "sin ninguna fecha: null, no 0").toBeNull();
+  expect(diasSinConfirmar({ generatedAt: "2026-09-10T00:00:00.000Z" }, null, ahora), "nunca negativo").toBe(0);
+  expect(avanceSinConfirmarVencido(DIAS_PARA_AVISAR - 1)).toBe(false);
+  expect(avanceSinConfirmarVencido(DIAS_PARA_AVISAR)).toBe(true);
+  expect(avanceSinConfirmarVencido(null)).toBe(false);
+  expect(rotuloDeAvanceSinConfirmar(1)).toBe("Avance sin confirmar · 1 día");
+});
+
+test("D-12 · a los 7 días la acción pasa a ámbar y dice desde cuándo; antes, igual que siempre", () => {
+  const joven = buildProjectActions({ ...sano, pendingProgress: true, pendingProgressDias: 3 }).find((x) => x.id === "draft-progress")!;
+  expect(joven.tone).toBe("info");
+  expect(joven.title).toBe("Hay avance detectado que no confirmaste");
+  const viejo = buildProjectActions({ ...sano, pendingProgress: true, pendingProgressDias: 9 }).find((x) => x.id === "draft-progress")!;
+  expect(viejo.tone, "a los 7 días deja de ser una nota informativa").toBe("warn");
+  expect(viejo.title).toBe("Hay avance detectado sin confirmar desde hace 9 días");
+  const sinFecha = buildProjectActions({ ...sano, pendingProgress: true, pendingProgressDias: null }).find((x) => x.id === "draft-progress")!;
+  expect(sinFecha.tone, "sin fecha conocida no se grita: no se avisa lo que no se sabe").toBe("info");
+});
+
+test("D-12 · LA guarda: el borrador nace con fecha, los dos cargadores la leen, y la cartera la PINTA y la CUENTA", () => {
+  /* La edición que lo pone en rojo: sacar `generatedAt` del borrador «porque el tipo ya tiene runId»
+     (la fecha de la corrida es el respaldo de los viejos, no la fuente); o dejar la edad en el
+     summary sin pintarla — un dato que llega y no se pinta es idéntico a un dato que no llega. */
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  expect(leer("lib/timeline/regenerate-progress.ts"), "el borrador nace con fecha").toContain("generatedAt: new Date().toISOString(),");
+  for (const rel of ["lib/timeline/project-actions-loader.ts", "lib/portfolio/load.ts"]) {
+    const src = leer(rel);
+    expect(src, `${rel}: trae la corrida para fechar los borradores viejos`).toContain("pendingProgressRunId: true");
+    expect(src, `${rel}: la edad sale del único calculador`).toContain("diasSinConfirmar(");
+  }
+  const cartera = leer("components/dashboard/PortfolioGrid.tsx");
+  expect(cartera, "la pill de la tarjeta").toContain('<SetupPill state="draft" label={rotuloDeAvanceSinConfirmar(r.avanceSinConfirmarDias)} />');
+  expect(cartera, "el contador de tareas vencidas de la cartera").toContain('plural(tareasVencidas, "tarea vencida", "tareas vencidas")');
+  expect(cartera, "el contador de avances sin confirmar").toContain('plural(avancesSinConfirmar, "avance sin confirmar", "avances sin confirmar")');
 });

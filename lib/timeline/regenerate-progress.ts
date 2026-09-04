@@ -434,6 +434,8 @@ export async function regenerateTimelineProgress(
         currentPhaseId,
         asOfSessionId: opts.asOfSessionId ?? null,
         reasoning: typeof prog.reasoning === "string" ? prog.reasoning : "",
+        // D-12: la edad del borrador. Sin esto, «avance sin confirmar» no puede decir desde cuándo.
+        generatedAt: new Date().toISOString(),
         phases: phasesDone,
         tasks: tasksDraft,
       } as Prisma.InputJsonValue;

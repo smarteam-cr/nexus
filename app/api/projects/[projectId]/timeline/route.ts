@@ -87,6 +87,8 @@ export interface PendingProgress {
   currentPhaseId: string | null;
   asOfSessionId: string | null;
   reasoning: string;
+  /** D-12: cuándo se generó el borrador (ISO). Ausente en los anteriores al 2026-09-04. */
+  generatedAt?: string | null;
   phases: Array<{ id: string; done: boolean }>;
   tasks: Array<{ id: string; done: boolean }>;
 }

@@ -19,6 +19,7 @@ import { IconCheck } from "@/components/ui/AcceptReject";
 import { plural, fmtFull } from "@/lib/timeline/weeks";
 import type { PortfolioRow } from "@/lib/portfolio/load";
 import { PIEZAS_NO_REQUERIDAS } from "@/lib/pieces/registry";
+import { DIAS_PARA_AVISAR, avanceSinConfirmarVencido, rotuloDeAvanceSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
 
 type Health = "SALUDABLE" | "EN_FRICCION" | "EN_RIESGO" | "PAUSADO";
 type Summary = PortfolioRow["summary"];
@@ -257,6 +258,13 @@ export default function PortfolioGrid({
 
   const filtering = !!q.trim() || cseFilter !== "all";
 
+  /* D-12: dos números de la cartera que antes solo se veían tarjeta por tarjeta: las tareas
+     vencidas (solo donde las alarmas de cronograma aplican) y los borradores de avance que
+     llevan más de una semana sin que nadie los confirme. */
+  const conVencidas = filtered.filter((r) => r.summary.scheduleAlarmsActive && r.summary.overdueTasks > 0);
+  const tareasVencidas = conVencidas.reduce((n, r) => n + r.summary.overdueTasks, 0);
+  const avancesSinConfirmar = filtered.filter((r) => avanceSinConfirmarVencido(r.avanceSinConfirmarDias)).length;
+
   return (
     <div className="space-y-7">
       {/* ── Tablero de control ── */}
@@ -266,6 +274,17 @@ export default function PortfolioGrid({
         <Stat label="Sin datos" count={nodata.length} tone="neutral" onClick={() => scrollTo("sec-nodata")} />
         <Stat label="Saludable" count={healthy.length} tone="emerald" onClick={() => { setShowHealthy(true); scrollTo("sec-healthy"); }} />
       </div>
+      {(tareasVencidas > 0 || avancesSinConfirmar > 0) && (
+        <p className="text-xs text-fg-muted">
+          {tareasVencidas > 0 && (
+            <span>{plural(tareasVencidas, "tarea vencida", "tareas vencidas")} en {plural(conVencidas.length, "proyecto", "proyectos")}</span>
+          )}
+          {tareasVencidas > 0 && avancesSinConfirmar > 0 && <span> · </span>}
+          {avancesSinConfirmar > 0 && (
+            <span>{plural(avancesSinConfirmar, "avance sin confirmar", "avances sin confirmar")} hace más de {DIAS_PARA_AVISAR} días</span>
+          )}
+        </p>
+      )}
 
       {/* ── Búsqueda + CSE ── */}
       <div className="flex flex-wrap items-center gap-2">
@@ -538,6 +557,10 @@ function ActionCard({
           state={r.setup.cronograma === "publicado" ? "done" : r.setup.cronograma === "borrador" ? "draft" : "missing"}
           label={r.setup.cronograma === "publicado" ? <><IconCheck className="w-3 h-3" />Cronograma</> : r.setup.cronograma === "borrador" ? "Cronograma sin subir" : "Sin cronograma"}
         />
+        {/* D-12: el borrador de avance que nadie confirma hace más de una semana. */}
+        {r.avanceSinConfirmarDias !== null && avanceSinConfirmarVencido(r.avanceSinConfirmarDias) && (
+          <SetupPill state="draft" label={rotuloDeAvanceSinConfirmar(r.avanceSinConfirmarDias)} />
+        )}
       </div>
     </div>
   );

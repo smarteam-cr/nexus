@@ -24,6 +24,7 @@ import {
 } from "./project-setup";
 import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
+import { diasSinConfirmar, type BorradorFechable } from "@/lib/timeline/avance-sin-confirmar";
 
 export interface PortfolioRow {
   projectId: string;
@@ -61,6 +62,8 @@ export interface PortfolioRow {
   healthProposed: ProjectHealth | null;
   healthProposedReason: string | null;
   healthProposedAt: string | null;
+  /** D-12: días que lleva el borrador de avance sin confirmar; null = sin borrador o sin fecha. */
+  avanceSinConfirmarDias: number | null;
 }
 
 /**
@@ -140,6 +143,8 @@ export async function loadPortfolio(
         select: {
           id: true,
           anchorStartDate: true,
+          pendingProgress: true,
+          pendingProgressRunId: true,
           phases: {
             orderBy: { order: "asc" },
             select: {
@@ -189,6 +194,14 @@ export async function loadPortfolio(
       })
     : [];
   const lastChangeByTimeline = new Map(lastChanges.map((c) => [c.timelineId, c]));
+
+  /* D-12: cuándo se generó cada borrador de avance (los nuevos traen `generatedAt`; los
+     anteriores se fechan por su corrida). Una consulta batcheada, solo los que tienen borrador. */
+  const runIds = projects.map((p) => p.timeline?.pendingProgressRunId).filter((id): id is string => !!id);
+  const runs = runIds.length
+    ? await prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, createdAt: true } })
+    : [];
+  const fechaDeCorrida = new Map(runs.map((x) => [x.id, x.createdAt]));
 
   const projectIds = projects.map((p) => p.id);
   const clientIds = [...new Set(projects.map((p) => p.clientId))];
@@ -283,6 +296,11 @@ export async function loadPortfolio(
       healthProposed: p.healthProposed,
       healthProposedReason: p.healthProposedReason,
       healthProposedAt: p.healthProposedAt?.toISOString() ?? null,
+      avanceSinConfirmarDias: diasSinConfirmar(
+        (tl?.pendingProgress as unknown as BorradorFechable | null) ?? null,
+        tl?.pendingProgressRunId ? (fechaDeCorrida.get(tl.pendingProgressRunId) ?? null) : null,
+        now,
+      ),
     };
   });
 }

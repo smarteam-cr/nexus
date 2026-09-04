@@ -88,6 +88,7 @@ import {
 } from "@/lib/ui/logo-scale";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
+import { diasSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
 
 interface TaskDraft {
   id?: string;
@@ -195,6 +196,8 @@ interface ServerPhase {
 
 // D.2 — borrador de avance que propone el agente (el CSE confirma → status real).
 interface PendingProgress {
+  /** D-12: cuándo se generó el borrador (ISO). Ausente en los anteriores al 2026-09-04. */
+  generatedAt?: string | null;
   currentPhaseId: string | null;
   asOfSessionId: string | null;
   reasoning: string;
@@ -2182,6 +2185,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           detailConfirmedAt,
           hasTasks: hasAiDetail,
           pendingProgress: showProgressBanner,
+          pendingProgressDias: showProgressBanner ? diasSinConfirmar(pendingProgress, null, new Date()) : null,
           pendingParticularidades: showParticBanner ? (pendingParticularidades?.length ?? 0) : 0,
           pendingProposal: !!proposal,
           particularidades,

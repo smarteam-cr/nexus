@@ -1,3 +1,4 @@
+import { avanceSinConfirmarVencido } from "./avance-sin-confirmar";
 /**
  * lib/timeline/project-actions.ts
  *
@@ -57,6 +58,8 @@ export interface ProjectAction {
 export interface ProjectActionsInput {
   // ── Borradores del agente esperando confirmación ──
   pendingProgress: boolean;
+  /** D-12: días desde que se generó el borrador; null = sin borrador o sin fecha conocida. */
+  pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
   /** Lo que reportó una PERSONA del equipo (needsValidation) y espera respuesta del CSE. */
@@ -97,10 +100,19 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
 
   // ── DECIDIR ────────────────────────────────────────────────────────────────
   if (i.pendingProgress) {
+    /* D-12: a los 7 días el aviso cambia de tono y dice desde cuándo. Un borrador de semanas
+       es peor que ninguno: el cliente mira un avance más viejo que el real y el vigilante de
+       CS razona sobre ese avance viejo. */
+    const dias = i.pendingProgressDias ?? null;
+    const vencido = avanceSinConfirmarVencido(dias);
     out.push({
-      id: "draft-progress", group: "decidir", tone: "info",
-      title: "Hay avance detectado que no confirmaste",
-      why: "Hasta que lo confirmes, vos y el cliente miran un avance más viejo que el real.",
+      id: "draft-progress", group: "decidir", tone: vencido ? "warn" : "info",
+      title: vencido && dias !== null
+        ? `Hay avance detectado sin confirmar desde hace ${plural(dias, "día", "días")}`
+        : "Hay avance detectado que no confirmaste",
+      why: vencido
+        ? "Lleva más de una semana esperando. Vos y el cliente miran un avance más viejo que el real, y el vigilante de CS razona sobre ese avance viejo."
+        : "Hasta que lo confirmes, vos y el cliente miran un avance más viejo que el real.",
       cta: "Revisar avance",
     });
   }
