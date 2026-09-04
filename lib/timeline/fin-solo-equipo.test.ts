@@ -129,3 +129,47 @@ describe("el cierre SÍ llega a las superficies internas", () => {
     );
   });
 });
+
+describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada memo declara TODAS sus deps", () => {
+  /**
+   * El Gantt vuelve a renderizar con cada tecla de un título, cada tick del poll y cada movimiento
+   * de arrastre. Antes de C-16 (2026-09-04) recalculaba en cada uno los rangos, el calendario, el
+   * cierre, el índice de la propuesta y los contadores sobre TODAS las fases y tareas. Las cinco
+   * van en `useMemo` — y la guarda mira las DEPS, no solo que haya un memo: un memo con una dep de
+   * menos devuelve un cierre viejo al cambiar el ancla, que es peor que recalcular.
+   */
+  const MEMOS: Array<[string, RegExp]> = [
+    ["rangos", /const ranges = useMemo\(\(\) => computePhaseRanges\(phases\), \[phases\]\);/],
+    ["calendario", /const total = useMemo\(\(\) => timelineSpan\(phases\), \[phases\]\);/],
+    ["cierre", /const cierre = useMemo\(\(\) => projectedEnd\(anchor, phases\), \[anchor, phases\]\);/],
+    ["índice de la propuesta", /const \{ proposalModByPhase, proposalAdds \} = useMemo\([\s\S]*?\[proposalDeltas\],\s*\);/],
+    ["contadores", /const \{ tasksTotal, tasksDone, delayWeeks \} = useMemo\([\s\S]*?\[phases, particularidades\],\s*\);/],
+  ];
+
+  it("las cinco derivaciones están en useMemo con sus deps exactas", () => {
+    /* La edición que lo pone en rojo: volver a `const ranges = computePhaseRanges(phases)` «porque es
+       más simple» — o dejar el memo y sacarle una dep (`[phases]` en el cierre: el ancla cambia y el
+       cierre que se pinta es el viejo). */
+    const src = sinComentarios(leer("components/canvas/TimelineGantt.tsx"));
+    const i = src.indexOf("export default function TimelineGantt(");
+    expect(i, "la guarda no encontró el componente").toBeGreaterThan(-1);
+    const cuerpo = src.slice(i, src.indexOf("const sensors = useSensors(", i));
+    expect(cuerpo.length, "la guarda no está mirando el tramo de las derivaciones").toBeGreaterThan(400);
+    for (const [nombre, patron] of MEMOS) {
+      expect(cuerpo, `«${nombre}» dejó de estar en useMemo, o cambió sus deps`).toMatch(patron);
+    }
+  });
+
+  it("ninguna de las cinco vuelve a calcularse pelada en el cuerpo del componente", () => {
+    const src = sinComentarios(leer("components/canvas/TimelineGantt.tsx"));
+    for (const pelada of [
+      "const ranges = computePhaseRanges(",
+      "const total = timelineSpan(",
+      "const cierre = projectedEnd(",
+      "const proposalModByPhase = new Map(",
+      "const tasksTotal = phases.reduce(",
+    ]) {
+      expect(src, `${pelada} se recalcula en cada render`).not.toContain(pelada);
+    }
+  });
+});

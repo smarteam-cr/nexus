@@ -447,7 +447,14 @@ export default function TimelineGantt({
   /** Qué sugerencia tiene el antes/después abierto. Una sola a la vez: son filas contiguas y
    *  varias desplegadas a la vez vuelven el Gantt ilegible. */
   const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null);
-  const ranges = computePhaseRanges(phases);
+  // C-16 (2026-09-04): las cinco derivaciones del cronograma van en useMemo. El Gantt vuelve a
+  // renderizar con cada tecla de un título, cada tick del poll y cada movimiento de arrastre, y
+  // antes recalculaba en cada uno los rangos, el calendario, el cierre, el índice de la propuesta
+  // y los contadores sobre TODAS las fases y tareas — el mismo resultado, N veces por segundo.
+  // Las deps son exactamente las props de las que cada una deriva: una dep de menos es peor que
+  // ningún memo (un cierre viejo al cambiar el ancla). `phases` llega memoizado del canvas, igual
+  // que ya asumía `repetidas`.
+  const ranges = useMemo(() => computePhaseRanges(phases), [phases]);
   /* ¿Hay dos fases que son el mismo trabajo con otro nombre? Es un AVISO sobre las fases que YA
      existen —el caso real de Wherex, tres pares conviviendo sobre 11 fases—, no una acción: el
      avance del proyecto las cuenta dos veces y con esa cantidad de filas nadie lo ve a ojo.
@@ -457,10 +464,10 @@ export default function TimelineGantt({
     () => fasesProbablementeRepetidas(phases.filter((p) => p.id).map((p) => ({ id: p.id!, name: p.name }))),
     [phases],
   );
-  const total = timelineSpan(phases); // ancho de calendario (max end) — soporta fases en paralelo
+  const total = useMemo(() => timelineSpan(phases), [phases]); // ancho de calendario (max end) — soporta fases en paralelo
   // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
   // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
-  const cierre = projectedEnd(anchor, phases);
+  const cierre = useMemo(() => projectedEnd(anchor, phases), [anchor, phases]);
   // Tanda K — lo que se PINTA (override si existe) y si hay que preguntar (diverge del vivo).
   const cierreVisible = displayedEnd(closeOverride, cierre);
   const cierreDiverge = closeDateDiverges(closeOverride, cierre);
@@ -479,26 +486,32 @@ export default function TimelineGantt({
   // cambios sobre fases existentes por phaseId (badge en su fila) + fases nuevas (filas fantasma).
   // El gate de edición se hace en cada punto de uso (`!readOnly && onResolveProposalDelta`), que
   // además ESTRECHA el tipo del handler y evita aserciones `!`.
-  const proposalModByPhase = new Map(
-    (proposalDeltas ?? []).flatMap((d) => (d.kind === "MODIFY_PHASE" ? [[d.phaseId, d] as const] : [])),
+  const { proposalModByPhase, proposalAdds } = useMemo(
+    () => ({
+      proposalModByPhase: new Map(
+        (proposalDeltas ?? []).flatMap((d) => (d.kind === "MODIFY_PHASE" ? [[d.phaseId, d] as const] : [])),
+      ),
+      proposalAdds: (proposalDeltas ?? []).filter((d) => d.kind === "ADD_PHASE"),
+    }),
+    [proposalDeltas],
   );
-  const proposalAdds = (proposalDeltas ?? []).filter((d) => d.kind === "ADD_PHASE");
 
   // Estado en una línea, con el MISMO helper que redacta el del cliente. Antes acá decía
   // "cronograma finalizado" apenas se acababa el calendario, aunque quedaran tareas abiertas:
   // el helper exige que estén TODAS resueltas y si no dice "En cierre · quedan N".
-  const tasksTotal = phases.reduce((n, p) => n + p.tasks.length, 0);
-  const tasksDone = phases.reduce(
-    (n, p) => n + p.tasks.filter((t) => t.status === "DONE" || t.status === "SUSPENDED").length,
-    0,
+  const { tasksTotal, tasksDone, delayWeeks } = useMemo(
+    () => ({
+      tasksTotal: phases.reduce((n, p) => n + p.tasks.length, 0),
+      tasksDone: phases.reduce(
+        (n, p) => n + p.tasks.filter((t) => t.status === "DONE" || t.status === "SUSPENDED").length,
+        0,
+      ),
+      delayWeeks: summarizeParticularidades(particularidades ?? []).totalWeeks,
+    }),
+    [phases, particularidades],
   );
-  const statusLine = clientStatusLine({
-    curWeek,
-    totalWeeks: total,
-    tasksDone,
-    tasksTotal,
-    delayWeeks: summarizeParticularidades(particularidades ?? []).totalWeeks,
-  });
+  // `curWeek` cambia al hidratar: la línea de estado se arma afuera del memo (es barata).
+  const statusLine = clientStatusLine({ curWeek, totalWeeks: total, tasksDone, tasksTotal, delayWeeks });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
