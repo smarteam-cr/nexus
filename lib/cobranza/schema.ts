@@ -955,13 +955,19 @@ export const odooResolverLiberacionSchema = z.object({
  */
 export const odooLiberarDecisionSchema = z.object({
   cobroId: idDeBase,
-  decision: z.enum(["CANCELAR", "REVERTIR"]),
+  /**
+   * ⚠ OPCIONAL, y no por comodidad. Un cobro puede estar bloqueado **sin factura emitida** (salió
+   * de PROGRAMADO y nadie marcó la factura): ahí no hay documento que anular ni revertir, y
+   * exigir una de las dos mandaba a alguien a buscar en el ERP algo que no existe — el mismo
+   * defecto que la Fase 4 cerró en el aviso. El servidor lo exige solo cuando hay factura.
+   */
+  decision: z.enum(["CANCELAR", "REVERTIR"]).optional(),
   /**
    * En qué sistema vive el documento. Se CONFIRMA, no se hereda: `CuentaFinanciera.viaCobro`
    * trae ODOO por defecto y 16 cuentas internacionales lo arrastran sin que nadie lo haya
    * elegido — incluida una que factura por Mercury.
    */
-  plataforma: z.enum(COBRANZA_VIAS_COBRO),
+  plataforma: z.enum(COBRANZA_VIAS_COBRO).optional(),
   motivo: z.string().trim().max(500).optional(),
 });
 
@@ -972,5 +978,14 @@ export const liberarPostSchema = z.object({
    * diálogo, la operación se rechaza con 409 en vez de ejecutar sobre algo que ya no es.
    */
   huella: z.string().trim().length(32).optional(),
+  /**
+   * Corregir además la vía de cobro de la CUENTA con lo que se eligió acá.
+   *
+   * ⚠ Explícito, y por defecto NO. La pregunta del diálogo es «¿dónde se emitió ESTA factura?»,
+   * en pasado y por documento; contestar «Mercury» sobre una factura vieja no significa que la
+   * cuenta facture por Mercury hoy. Deducirlo cambiaba en silencio el default de toda la cuenta
+   * y mandaba las liberaciones siguientes a la plataforma equivocada.
+   */
+  corregirViaCobro: z.boolean().default(false),
 });
 export type LiberarPost = z.infer<typeof liberarPostSchema>;

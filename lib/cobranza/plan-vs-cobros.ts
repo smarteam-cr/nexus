@@ -37,8 +37,9 @@
  *
  * Módulo PURO: sin Prisma, sin red, sin reloj.
  */
+import { createHash } from "node:crypto";
 import { esIntocable } from "./engine";
-import type { CobroDraft } from "./engine";
+import type { CobroDraft, ServicioEngineInput } from "./engine";
 
 /* ── Lo que entra ───────────────────────────────────────────────────────────────── */
 
@@ -141,6 +142,25 @@ export interface PlanDeCambios {
 
   /** Lo que el plan pide en total. */
   sumaDelPlan: number;
+  /**
+   * Lo que suman HOY los cobros que el acuerdo gobierna. **Misma base que `sumaDelPlan`**, y por
+   * eso vive acá y no se calcula en la pantalla.
+   *
+   * ⚠ El panel lo sumaba por su cuenta con `servicio.cobros.reduce(...)` sobre la lista cruda:
+   * incluía los cobros MANUAL sin `numCuota` —que este módulo ignora a propósito— y los
+   * formateaba con la moneda del servicio sin mirar la del cobro. Un pago manual de ₡250.000
+   * junto a un acuerdo de $5.100 pintaba «Hoy hay $255.100». Dos números uno al lado del otro,
+   * sobre bases distintas, en la caja que existe justamente para decir que algo no cuadra.
+   */
+  sumaDeLosCobros: number;
+  /**
+   * Cuántos cobros del servicio no cuelgan de ninguna cuota del acuerdo (manuales, ajustes).
+   *
+   * ⚠ Se cuentan, NO se suman: pueden estar en otra moneda, y sumarlos sería repetir el mismo
+   * error con otro nombre. `convertir()` de lib/finanzas/equilibrio.ts es el único punto de
+   * conversión del sistema, y este módulo es puro.
+   */
+  fueraDelAcuerdo: number;
   /** Lo que quedaría si se confirma SIN soltar nada. */
   sumaSiNoSeLibera: number;
   /** Lo que quedaría soltando todo lo que se puede soltar. */
@@ -260,6 +280,7 @@ export function planDeCambios(
    * liberable ya coincidía con el plan.
    */
   const sumaDelPlan = round2(drafts.reduce((n, d) => n + d.monto, 0));
+  const sumaDeLosCobros = round2(conCuota.reduce((n, c) => n + c.monto, 0));
   const liberables = new Set(bloqueados.filter((b) => b.liberable).map((b) => b.cobroId));
   const sumaSiNoSeLibera = sumaCorrigiendo(sumaDelPlan, bloqueados, NADA_SOLTADO);
   const sumaSiSeLibera = sumaCorrigiendo(sumaDelPlan, bloqueados, liberables);
@@ -272,6 +293,8 @@ export function planDeCambios(
     sinCambios,
     bloqueados,
     sumaDelPlan,
+    sumaDeLosCobros,
+    fueraDelAcuerdo: cobros.length - conCuota.length,
     sumaSiNoSeLibera,
     sumaSiSeLibera,
   };
@@ -290,4 +313,56 @@ export function planDeCambios(
  */
 export function sumaConDecisiones(p: PlanDeCambios, soltados: ReadonlySet<string>): number {
   return sumaCorrigiendo(p.sumaDelPlan, p.bloqueados, soltados);
+}
+
+/* ── La huella del cronograma ────────────────────────────────────────────────────── */
+
+/** Lo mínimo de un cobro que, si cambia, invalida lo que la persona vio en el diálogo. */
+export interface CobroParaHuella {
+  id: string;
+  estado: string;
+  monto: number;
+  fechaEmision: string | null;
+}
+
+/**
+ * La foto de todo lo que produce los números del diálogo, en 32 caracteres.
+ *
+ * ── QUÉ PROBLEMA RESUELVE ───────────────────────────────────────────────────────
+ * Entre que alguien abre el diálogo y aprieta confirmar pasan minutos. En el medio, otra
+ * pestaña —u otra persona— puede mover algo. Confirmar entonces ejecutaría sobre un estado
+ * distinto al que se aprobó, soltando facturas emitidas y escribiendo montos que nadie vio.
+ * Si la huella no coincide, el servidor responde 409 en vez de ejecutar.
+ *
+ * ⚠⚠ Hashea el PLAN, LOS COBROS **y EL SERVICIO**. Los tres, y no los dos primeros: el motor
+ * lee además el monto total del servicio, su duración, su fecha de arranque y el día de cobro
+ * de la cuenta. Sin ellos, cambiar el «día de cobro» en otra pestaña —un PATCH que no toca ni
+ * el plan ni ningún cobro— dejaba la huella idéntica, el 409 no saltaba, y la confirmación
+ * corría con TODAS las fechas programadas movidas.
+ *
+ * ⚠ Vive en el módulo puro y no junto a la transacción que la usa, justamente para que se
+ * pueda probar qué la mueve y qué no. Cuando estaba del otro lado, la única forma de saber si
+ * cubría algo era leerla.
+ *
+ * PURA: sin Prisma, sin red, sin reloj. El orden de los cobros no importa — se ordenan acá.
+ */
+export function huellaDelCronograma(
+  planId: string,
+  servicio: ServicioEngineInput,
+  cobros: readonly CobroParaHuella[],
+): string {
+  const filas = [...cobros]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((c) => `${c.id}|${c.estado}|${c.monto.toFixed(2)}|${c.fechaEmision ?? ""}`)
+    .join(";");
+  const entradas = [
+    planId,
+    servicio.montoTotal.toFixed(2),
+    servicio.moneda,
+    servicio.fechaInicioFacturacion ?? "",
+    servicio.duracionMeses ?? "",
+    servicio.diaCobroAncla ?? "",
+    filas,
+  ].join("::");
+  return createHash("sha256").update(entradas).digest("hex").slice(0, 32);
 }

@@ -60,7 +60,16 @@ export default function CronogramaCobros({
   todayISO,
   onRefresh,
   creditoDias,
+  puedeEditar = true,
 }: {
+  /**
+   * `cobranza.write`. Apagado, la fila se vuelve de solo lectura: los estados y las fechas se
+   * siguen viendo, pero desaparecen los controles que escriben.
+   *
+   * ⚠ Default `true` a propósito: el enforcement de verdad vive en los endpoints, y un default
+   * `false` haría que cualquier montaje que se olvide de pasarlo se vea roto en vez de seguro.
+   */
+  puedeEditar?: boolean;
   cobros: CobroDTO[];
   todayISO: string;
   /** Recarga el detalle (tras COBRADO trae confirmadoPor fresco). */
@@ -204,7 +213,7 @@ export default function CronogramaCobros({
                     prometió {fmtFecha(c.promesaPago)}
                   </span>
                 )}
-                {c.fechaEmision ? (
+                {!puedeEditar ? null : c.fechaEmision ? (
                   <button
                     type="button"
                     onClick={() => applyFacturar(c, null)}
@@ -223,7 +232,7 @@ export default function CronogramaCobros({
                     Marcar facturado
                   </button>
                 )}
-                {c.estado !== "COBRADO" && (
+                {puedeEditar && c.estado !== "COBRADO" && (
                   <>
                     <button
                       type="button"

@@ -373,10 +373,12 @@ export async function cargarDiferencias(): Promise<{
     }),
     prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
     prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
-    /* ⚠ Se leen las RESUELTAS también. `liberacionesPendientes` decide cuáles siguen abiertas;
-       filtrar acá pondría esa regla en dos lugares, y el módulo puro dejaría de poder probarla
-       contra el caso «alguien la cerró a mano». */
-    prisma.facturaLiberada.findMany({ orderBy: { liberadaEn: "desc" } }),
+    /* Solo las que siguen abiertas: una resuelta no produce ninguna línea, y traerlas todas
+       hacía crecer esta consulta para siempre sin que nada lo usara. La regla de qué es
+       «pendiente» sigue viviendo entera en `liberacionesPendientes` —el módulo puro la prueba
+       contra el caso «alguien la cerró a mano»—; acá solo se evita traer lo que ya se sabe
+       que va a descartar. */
+    prisma.facturaLiberada.findMany({ where: { resueltaEn: null }, orderBy: { liberadaEn: "desc" } }),
   ]);
   const cuentasTotales = cuentasDb.length;
 

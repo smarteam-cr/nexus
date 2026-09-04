@@ -71,7 +71,20 @@ const SEV: Record<string, string> = {
 
 const miles = (n: number) => n.toLocaleString("es-CR", { maximumFractionDigits: 0 });
 
-export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: () => void }) {
+export default function DiferenciasOdoo({
+  onIrAEmparejar,
+  puedeEditar = true,
+}: {
+  onIrAEmparejar?: () => void;
+  /**
+   * `cobranza.write`. Apagado, la lista se lee igual pero no se ofrecen los controles que
+   * escriben — «Ya está anulada» sobre todo, que afirma algo sobre un sistema externo.
+   *
+   * ⚠ Default `true`: el enforcement vive en el endpoint, y un default `false` haría que un
+   * montaje que se olvide de pasarlo se vea roto en vez de seguro.
+   */
+  puedeEditar?: boolean;
+}) {
   const toast = useToast();
   const [data, setData] = useState<Respuesta | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -174,6 +187,7 @@ export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: (
             inc={inc}
             aceptada={aceptadaDe.get(inc.codigo)}
             guardando={guardando === inc.codigo}
+            puedeEditar={puedeEditar}
             onIrAEmparejar={onIrAEmparejar}
             onAceptar={(motivo) =>
               enviar(
@@ -215,6 +229,7 @@ export default function DiferenciasOdoo({ onIrAEmparejar }: { onIrAEmparejar?: (
                   inc={inc}
                   aceptada={aceptadaDe.get(inc.codigo)}
                   guardando={guardando === inc.codigo}
+                  puedeEditar={puedeEditar}
                   onIrAEmparejar={onIrAEmparejar}
                   onAceptar={() => undefined}
                   onReabrir={() => enviar({ accion: "reabrir", clave: inc.codigo }, inc.codigo, "Vuelve a la lista.")}
@@ -244,6 +259,7 @@ function Linea({
   inc,
   aceptada,
   guardando,
+  puedeEditar,
   onAceptar,
   onReabrir,
   onIrAEmparejar,
@@ -255,6 +271,8 @@ function Linea({
   onAceptar: (motivo: string) => void;
   onReabrir: () => void;
   onIrAEmparejar?: () => void;
+  /** `cobranza.write`: sin esto la línea se lee, pero no se cierra ninguna fila a mano. */
+  puedeEditar: boolean;
   /** Cerrar UNA fila del detalle. Solo lo usan las líneas con `accionPorItem`. */
   onResolverItem: (liberacionId: string) => void;
 }) {
@@ -377,7 +395,7 @@ function Linea({
                 )}
                 {/* ⚠ Solo aparece en las líneas que ningún sync puede cerrar. Poder marcar
                     «hecho» algo que el espejo verifica sería poder esconderlo. */}
-                {inc.accionPorItem && it.id && (
+                {puedeEditar && inc.accionPorItem && it.id && (
                   <Button
                     variant="ghost"
                     size="sm"

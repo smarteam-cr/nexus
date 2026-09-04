@@ -87,10 +87,17 @@ const SECTION_TITLE_CLS =
 export default function CuentaDrawer({
   cuentaId,
   todayISO,
+  puedeEditar,
   onClose,
 }: {
   cuentaId: string | null;
   todayISO: string;
+  /**
+   * `cobranza.write`, resuelto en el servidor. Decide qué se DIBUJA; el permiso de verdad lo
+   * sigue exigiendo cada endpoint. Que la pantalla lo respete no es seguridad — es no ofrecerle
+   * a alguien un botón que le va a rebotar.
+   */
+  puedeEditar: boolean;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -265,7 +272,13 @@ export default function CuentaDrawer({
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className={SECTION_TITLE_CLS}>Servicios contratados</h3>
-                {!adding && (
+                {/* ⚠ Decirlo UNA vez arriba, en vez de esconder cada botón sin explicación. Un
+                    control que desaparece sin decir por qué se lee como que la pantalla está
+                    rota. */}
+                {!puedeEditar && (
+                  <span className="text-[11px] text-fg-muted">Solo lectura: tu rol no edita Cobranza</span>
+                )}
+                {puedeEditar && !adding && (
                   <button
                     type="button"
                     onClick={() => {
@@ -307,6 +320,7 @@ export default function CuentaDrawer({
                   generando={generando === s.id}
                   onRefresh={() => load(false)}
                   cuenta={cuenta}
+                  puedeEditar={puedeEditar}
                 />
               ))}
 
@@ -585,7 +599,9 @@ function ServicioCard({
   onGenerar,
   generando,
   onRefresh,
+  puedeEditar,
 }: {
+  puedeEditar: boolean;
   servicio: ServicioDTO;
   cuenta: CuentaDetailDTO;
   todayISO: string;
@@ -725,28 +741,33 @@ function ServicioCard({
               />
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
-                >
-                  Editar servicio
-                </button>
-                <button
-                  type="button"
-                  onClick={onGenerar}
-                  disabled={generando || !plan}
-                  title={!plan ? "Configurá el plan primero" : undefined}
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-40"
-                >
-                  {generando ? "Generando…" : "Generar cobros"}
-                </button>
+                {puedeEditar && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onEdit}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+                    >
+                      Editar servicio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onGenerar}
+                      disabled={generando || !plan}
+                      title={!plan ? "Configurá el plan primero" : undefined}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-40"
+                    >
+                      {generando ? "Generando…" : "Generar cobros"}
+                    </button>
+                  </>
+                )}
               </div>
 
               <CronogramaCobros
                 cobros={servicio.cobros}
                 todayISO={todayISO}
                 onRefresh={onRefresh}
+                puedeEditar={puedeEditar}
                 creditoDias={cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS}
               />
             </>
@@ -852,11 +873,33 @@ function DesfaseDelCronograma({
         <strong className="font-medium">El cronograma no coincide con el acuerdo.</strong>
         <span className="text-warn-ink/80 tabular-nums">
           {"  "}El acuerdo pide {m(d.sumaDelPlan)}
-          {"   "}Hoy hay {m(servicio.cobros.reduce((n, c) => n + c.monto, 0))}
+          {/* ⚠ Los dos números salen de `planDeCambios`. Sumar acá los cobros a mano metía los
+              manuales sin cuota —que el motor ni mira— y los pintaba con la moneda del
+              servicio aunque fueran de otra. */}
+          {"   "}Hoy hay {m(d.sumaDeLosCobros)}
         </span>
+        {d.fueraDelAcuerdo > 0 && (
+          /* Se cuentan y no se suman: pueden estar en otra moneda. Pero se nombran, porque si
+             no, la diferencia entre lo que dice el cronograma y este número no se explica. */
+          <span className="text-warn-ink/60">
+            {"  "}(+{d.fueraDelAcuerdo} cobro{d.fueraDelAcuerdo === 1 ? "" : "s"} fuera del acuerdo,
+            que regenerar no toca)
+          </span>
+        )}
       </p>
 
       <ul className="space-y-0.5">
+        {/* ⚠ Faltaban. Con un acuerdo cuyas cuotas todavía no se materializaron, `crear` es lo
+            ÚNICO que tiene filas y la caja salía con el titular, los dos totales y la lista
+            vacía — el aviso más inútil posible: dice que algo no cuadra y no dice qué. */}
+        {d.crear.map((x) => (
+          <li key={`cr-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
+            <span className="tabular-nums font-medium w-6">#{x.numCuota}</span>
+            <span className="flex-1 min-w-0 tabular-nums">
+              falta generarlo ({m(x.monto)}) — {fmtFecha(x.fechaProgramadaISO)}
+            </span>
+          </li>
+        ))}
         {d.ajustar.map((x) => (
           <li key={`aj-${x.numCuota}`} className="text-[11px] text-warn-ink/90 flex flex-wrap gap-x-2">
             <span className="tabular-nums font-medium w-6">#{x.numCuota}</span>

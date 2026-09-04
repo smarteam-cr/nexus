@@ -8,7 +8,6 @@
  *    COBRADO exige el email del guard (confirmadoPor); revertir limpia la tripleta.
  *    La red dura del invariante está en scripts/check-invariants.ts.
  */
-import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import {
@@ -24,6 +23,7 @@ import {
   type ServicioEngineInput,
 } from "./engine";
 import { crDateParts } from "@/lib/jobs/time";
+import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import type { z } from "zod";
 import type {
   cuentaCreateSchema,
@@ -431,11 +431,19 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
  * invalida el diálogo — se trata de cazar cambios reales, no cualquier escritura.
  */
 export function huellaDelCronograma(p: PlanDeMaterializacion): string {
-  const filas = [...p.servicio.cobros]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((c) => `${c.id}|${c.estado}|${c.monto.toFixed(2)}|${c.fechaEmisionISO ?? ""}`)
-    .join(";");
-  return createHash("sha256").update(`${p.planId}::${filas}`).digest("hex").slice(0, 32);
+  /* Un envoltorio de una línea: la regla —y sobre todo QUÉ entra en la foto— vive en el módulo
+     puro, donde se puede probar que cambiar el día de cobro la mueve. Acá solo se traduce la
+     forma de la base a la del motor. */
+  return huellaPura(
+    p.planId,
+    p.servicioInput,
+    p.servicio.cobros.map((c) => ({
+      id: c.id,
+      estado: c.estado,
+      monto: c.monto,
+      fechaEmision: c.fechaEmisionISO,
+    })),
+  );
 }
 
 /**
@@ -495,28 +503,7 @@ export async function generateCobros(
     }
   });
 
-  // Alertas de catch-up (fuera de la tx: el dedup lee lo recién creado).
-  if (catchUp.length > 0) {
-    const cobrosCatchUp = await prisma.cobro.findMany({
-      where: { servicioId, origen: "CATCH_UP", estado: "PROGRAMADO" },
-      select: { id: true, fechaProgramada: true, monto: true },
-    });
-    const cliente = await prisma.cuentaFinanciera.findUnique({
-      where: { id: servicio.cuentaId },
-      select: { client: { select: { name: true } } },
-    });
-    await upsertAlertas(
-      cobrosCatchUp.map((c) => ({
-        dedupeKey: `INCONSISTENCIA_CICLO:${servicio.cuentaId}:${c.id}`,
-        tipo: "INCONSISTENCIA_CICLO" as const,
-        urgencia: "MEDIA" as const,
-        cuentaId: servicio.cuentaId,
-        cobroId: c.id,
-        mensaje: `${cliente?.client.name ?? "Cliente"}: cobro de catch-up generado por desfase de arranque (${isoDay(c.fechaProgramada)}) — pendiente de tu confirmación.`,
-        evidencia: { servicioId, fechaProgramada: isoDay(c.fechaProgramada), monto: Number(c.monto) },
-      })),
-    );
-  }
+  if (catchUp.length > 0) await alertarCatchUp(servicioId, servicio.cuentaId);
 
   return {
     created: regulares.length + catchUp.length,
@@ -598,7 +585,10 @@ export async function cambiarEstadoCobroTx(
   // sobre un COBRADO (ya llegó) y NO se limpia al cobrar (trazabilidad de si
   // cumplió). Semáforos y métricas NO cambian — la promesa solo calla alertas.
   if (patch.promesaPago !== undefined) {
-    if (cobro.estado === "COBRADO") {
+    /* ⚠ El 409 solo si de verdad se está poniendo una promesa. Mandar `null` sobre un COBRADO
+       que nunca tuvo promesa no es un error: es un no-op, y rechazarlo hacía que liberar una
+       factura dependiera del orden en que se validan cosas que no se están cambiando. */
+    if (cobro.estado === "COBRADO" && patch.promesaPago) {
       throw new CobranzaError("El cobro ya está COBRADO — la promesa no aplica.", 409);
     }
     data.promesaPago = patch.promesaPago ? dayUTC(patch.promesaPago) : null;
@@ -642,7 +632,20 @@ export async function cambiarEstadoCobroTx(
 
   const updated = await db.cobro.update({ where: { id: cobroId }, data });
 
-  if (patch.promesaPago !== undefined) {
+  /**
+   * ⚠ `!== undefined` NO alcanza: hay que comparar contra lo que había. Liberar una factura
+   * manda `promesaPago: null` fijo para todos los cobros, y sin esta comparación cada uno
+   * escribía «Promesa de pago retirada.» en la bitácora del cliente aunque nunca hubiera
+   * habido promesa — en la misma bitácora que se lee para reconstruir qué pasó con la plata.
+   *
+   * ⚠⚠ Y peor: el `updateMany` de abajo limpia `posponerHasta`, que NO lo escribe solo la
+   * promesa — también el botón «posponer» de las alertas, que no tiene nada que ver con un
+   * acuerdo con el cliente. Soltar una factura despertaba en silencio alertas que alguien
+   * había pospuesto a mano por otro motivo.
+   */
+  const promesaAntes = cobro.promesaPago ? isoDay(cobro.promesaPago) : null;
+  const promesaAhora = patch.promesaPago ?? null;
+  if (patch.promesaPago !== undefined && promesaAhora !== promesaAntes) {
     // AUTO-SNOOZE: registrar la promesa calla YA las alertas vivas de este cobro
     // hasta la fecha prometida (el humano ya gestionó — sin esto el ruido viejo
     // sigue en el feed hasta el próximo corte); quitarla las despierta.
@@ -679,8 +682,9 @@ export async function cambiarEstadoCobro(
 
 export interface DecisionDeLiberacion {
   cobroId: string;
-  decision: "CANCELAR" | "REVERTIR";
-  plataforma: "MERCURY" | "ODOO" | "OTRA";
+  /** Qué hacer con el documento. Ausente = el cobro no tenía factura: no hay nada que hacer. */
+  decision?: "CANCELAR" | "REVERTIR";
+  plataforma?: "MERCURY" | "ODOO" | "OTRA";
   motivo?: string;
 }
 
@@ -719,6 +723,7 @@ export async function liberarYRegenerar(
   byEmail: string,
   todayISO: string,
   huellaEsperada?: string,
+  corregirViaCobro = false,
 ): Promise<ResultadoLiberacion> {
   /* ⚠ PRIMERO se planifica, y recién después se libera. Las cuatro validaciones —incluido el
      409 de «el plan no suma el total del servicio»— no dependen de los cobros, así que
@@ -731,6 +736,15 @@ export async function liberarYRegenerar(
       "El cronograma cambió desde que abriste esto. Volvé a revisarlo antes de confirmar.",
       409,
     );
+  }
+
+  /* ⚠ Dos entradas para el MISMO cobro pasaban las cuatro validaciones porque las dos leen la
+     misma fotografía: la segunda ya no encontraba el cobro bloqueado, pero nada la miraba.
+     Quedaban dos líneas de trabajo hacia el ERP por el mismo documento, con instrucciones que
+     se contradicen (uno lo anula, el otro le emite nota de crédito). */
+  const repetido = decisiones.find((d, i) => decisiones.findIndex((o) => o.cobroId === d.cobroId) !== i);
+  if (repetido) {
+    throw new CobranzaError("Un mismo cobro no puede soltarse dos veces en la misma operación.", 400);
   }
 
   const porId = new Map(previo.servicio.cobros.map((c) => [c.id, c]));
@@ -752,6 +766,15 @@ export async function liberarYRegenerar(
     if (c.fechaEmisionISO === null && c.estado === "PROGRAMADO") {
       throw new CobranzaError(`El cobro #${c.numCuota ?? "?"} no está bloqueado: el motor ya lo ajusta solo.`, 409);
     }
+    /* ⚠ La factura manda: con documento emitido hay que decir qué hacer con él, y sin documento
+       no hay nada que decir. Al revés —exigir siempre una decisión— se escribía una línea de
+       trabajo hacia el ERP por una factura que no existe, imposible de cerrar. */
+    if (c.fechaEmisionISO !== null && (!d.decision || !d.plataforma)) {
+      throw new CobranzaError(
+        `El cobro #${c.numCuota ?? "?"} tiene factura emitida: hay que decir qué hacer con ella y dónde está.`,
+        400,
+      );
+    }
   }
 
   const cuenta = await prisma.cuentaFinanciera.findUnique({
@@ -770,19 +793,42 @@ export async function liberarYRegenerar(
    * la vía de la cuenta es una pregunta más grande que esta pantalla, y elegir una a dedo sería
    * cambiar un default equivocado por otro.
    */
-  const plataformas = new Set(decisiones.map((d) => d.plataforma));
+  const plataformas = new Set(
+    decisiones.map((d) => d.plataforma).filter((p): p is NonNullable<typeof p> => !!p),
+  );
   const corregirVia =
-    plataformas.size === 1 && cuenta && !plataformas.has(cuenta.viaCobro) ? [...plataformas][0] : null;
+    corregirViaCobro && plataformas.size === 1 && cuenta && !plataformas.has(cuenta.viaCobro)
+      ? [...plataformas][0]
+      : null;
 
   const solicitudes: ResultadoLiberacion["solicitudes"] = [];
   let alertasCerradas = 0;
 
+  /**
+   * ⚠ Con `timeout` explícito. El default de Prisma son 5 s, y esto encadena ~5 idas y vueltas
+   * por factura soltada (evidencia + el chokepoint entero) más una por cada cobro ajustado. Con
+   * el universo de hoy —2 servicios, 3 cobros— sobra; con un servicio largo o un mal minuto del
+   * pooler, no. Falla cerrada (P2028 hace rollback de todo, que es el «todo o nada» que esta
+   * función promete), pero caerse por reloj es un 500 opaco para quien apretó confirmar.
+   */
   const res = await prisma.$transaction(async (tx) => {
     /* 1. La evidencia PRIMERO: se snapshotea antes de que `cambiarEstadoCobroTx` limpie la
           autoría. Si se hiciera después, `facturadoPor` ya sería null — que es exactamente el
           dato que esta tabla existe para no perder. */
     for (const d of decisiones) {
       const c = porId.get(d.cobroId)!;
+      /* ⛔ Sin factura NO se escribe línea de trabajo. Soltar un cobro que salió de PROGRAMADO
+         sin que nadie marcara la factura no le pide nada a nadie en ningún ERP: el rastro queda
+         en la bitácora, que es donde va lo que pasó de este lado. */
+      if (c.fechaEmisionISO === null) continue;
+      const { decision, plataforma } = d;
+      /* Ya lo validó el bucle de arriba. La guarda no es defensa contra el usuario: es para que
+         el día que alguien mueva esa validación, esto reviente acá en vez de escribir una fila
+         de evidencia a medias — que es el único dato que queda de una factura que hay que
+         anular. Por eso una guarda y no un `!`. */
+      if (!decision || !plataforma) {
+        throw new CobranzaError(`Falta decir qué hacer con la factura del cobro #${c.numCuota ?? "?"}.`, 400);
+      }
       await tx.facturaLiberada.create({
         data: {
           cuentaId: previo.servicio.cuentaId,
@@ -796,13 +842,13 @@ export async function liberarYRegenerar(
           fechaEmision: c.fechaEmisionISO ? dayUTC(c.fechaEmisionISO) : null,
           referenciaExterna: c.referenciaExterna,
           facturadoPor: c.facturadoPor,
-          plataforma: d.plataforma,
-          decision: d.decision,
+          plataforma,
+          decision,
           motivo: d.motivo ?? null,
           liberadaPor: byEmail,
         },
       });
-      solicitudes.push({ plataforma: d.plataforma, decision: d.decision, numero: c.referenciaExterna, monto: c.monto });
+      solicitudes.push({ plataforma, decision, numero: c.referenciaExterna, monto: c.monto });
     }
 
     /* 2. Soltar, por el chokepoint: así no hay una segunda versión de sus reglas. */
@@ -879,10 +925,18 @@ export async function liberarYRegenerar(
       data: {
         cuentaId: previo.servicio.cuentaId,
         tipo: "ACTUALIZACION_IA",
+        /* La bitácora distingue los dos casos: soltar una factura le pide algo a una persona
+           en el ERP; soltar un cobro sin factura no le pide nada a nadie. Meterlos en el mismo
+           conteo hacía que la bitácora reclamara trabajo que no existe. */
         contenido:
-          `Acuerdo de pago recuadrado por ${byEmail}: ${decisiones.length} factura(s) liberada(s) ` +
-          `(${decisiones.map((d) => d.decision.toLowerCase()).join(", ")}), ` +
-          `${regulares.length + catchUp.length} cobro(s) nuevo(s), ${rec.toUpdate.length} ajustado(s), ${rec.toDelete.length} eliminado(s).`,
+          `Acuerdo de pago recuadrado por ${byEmail}: ` +
+          (solicitudes.length
+            ? `${solicitudes.length} factura(s) liberada(s) (${solicitudes.map((x) => x.decision.toLowerCase()).join(", ")})`
+            : "sin facturas que anular") +
+          (decisiones.length > solicitudes.length
+            ? `, ${decisiones.length - solicitudes.length} cobro(s) soltado(s) sin factura emitida`
+            : "") +
+          `, ${regulares.length + catchUp.length} cobro(s) nuevo(s), ${rec.toUpdate.length} ajustado(s), ${rec.toDelete.length} eliminado(s).`,
         usuarioEmail: byEmail,
       },
     });
@@ -894,7 +948,12 @@ export async function liberarYRegenerar(
       catchUp: catchUp.length,
       untouched: rec.untouched.length,
     };
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
+
+  /* ⚠ Fuera de la transacción, igual que en `generateCobros` y por la misma razón: `upsertAlertas`
+     deduplica leyendo lo recién creado. Faltaba, y los cobros de períodos vencidos que este
+     camino crea nacían sin nadie que los tuviera que confirmar. */
+  if (res.catchUp > 0) await alertarCatchUp(servicioId, previo.servicio.cuentaId);
 
   return { ...res, liberados: decisiones.length, alertasCerradas, solicitudes };
 }
@@ -966,6 +1025,41 @@ export async function createCobroManual(
  * hay FK destino; viajan solo en el snapshot/digest.
  */
 const URGENCIA_PESO: Record<string, number> = { BAJA: 0, MEDIA: 1, ALTA: 2 };
+
+/**
+ * La alerta que pide confirmar los cobros de períodos ya vencidos.
+ *
+ * ⚠ Vive fuera de la transacción a propósito: `upsertAlertas` deduplica leyendo lo recién
+ * creado, así que adentro no vería nada.
+ *
+ * ⚠⚠ Y es una función y no un bloque suelto porque **hay dos caminos que crean catch-up**:
+ * «Generar cobros» y recuadrar el acuerdo desde el diálogo. El segundo se escribió sin esto y
+ * los cobros nacían mudos: nadie los tenía que confirmar hasta el corte quincenal siguiente —
+ * hasta 15 días de un cobro vencido sin que nada lo pidiera. Por el botón viejo, la misma
+ * alerta salía en el acto.
+ */
+async function alertarCatchUp(servicioId: string, cuentaId: string): Promise<void> {
+  const cobrosCatchUp = await prisma.cobro.findMany({
+    where: { servicioId, origen: "CATCH_UP", estado: "PROGRAMADO" },
+    select: { id: true, fechaProgramada: true, monto: true },
+  });
+  if (cobrosCatchUp.length === 0) return;
+  const cliente = await prisma.cuentaFinanciera.findUnique({
+    where: { id: cuentaId },
+    select: { client: { select: { name: true } } },
+  });
+  await upsertAlertas(
+    cobrosCatchUp.map((c) => ({
+      dedupeKey: `INCONSISTENCIA_CICLO:${cuentaId}:${c.id}`,
+      tipo: "INCONSISTENCIA_CICLO" as const,
+      urgencia: "MEDIA" as const,
+      cuentaId,
+      cobroId: c.id,
+      mensaje: `${cliente?.client.name ?? "Cliente"}: cobro de catch-up generado por desfase de arranque (${isoDay(c.fechaProgramada)}) — pendiente de tu confirmación.`,
+      evidencia: { servicioId, fechaProgramada: isoDay(c.fechaProgramada), monto: Number(c.monto) },
+    })),
+  );
+}
 
 export async function upsertAlertas(drafts: AlertaDraft[]): Promise<{ created: number; merged: number; suppressed: number }> {
   let created = 0;

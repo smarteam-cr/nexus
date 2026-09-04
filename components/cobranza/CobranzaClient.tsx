@@ -72,6 +72,7 @@ export default function CobranzaClient({
   initialRiesgo,
   initialComisiones,
   role,
+  puedeEditar,
   todayISO,
 }: {
   initialCola: ColaCobroRow[];
@@ -83,6 +84,8 @@ export default function CobranzaClient({
   initialRiesgo: RiesgoPagoItem[];
   /** Las comisiones de aliado, para la pestaña donde se cobran. */
   initialComisiones: ComisionPartnerDTO[];
+  /** `cobranza.write` resuelto en el servidor. Decide qué se DIBUJA, no qué se permite. */
+  puedeEditar: boolean;
   role: string;
   todayISO: string;
 }) {
@@ -305,6 +308,7 @@ export default function CobranzaClient({
       <CuentaDrawer
         cuentaId={openCuentaId}
         todayISO={todayISO}
+        puedeEditar={puedeEditar}
         onClose={() => {
           setOpenCuentaId(null);
           // El drawer pudo cambiar cobros/estados → re-sincronizar lo visible.

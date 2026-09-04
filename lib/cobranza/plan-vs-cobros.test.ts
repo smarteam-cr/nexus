@@ -23,6 +23,7 @@ import { esIntocable, materializeCobros, type CobroDraft, type PlanEngineInput, 
 import {
   BLOQUEO_LABEL,
   bloqueoDe,
+  huellaDelCronograma,
   LIBERABLES,
   planDeCambios,
   sumaConDecisiones,
@@ -426,5 +427,111 @@ describe("⚠⚠ `esIntocable` y `bloqueoDe` leen las MISMAS tres condiciones", 
         }
       }
     }
+  });
+});
+
+/**
+ * ── ⚠ LOS DOS NÚMEROS DEL AVISO, SOBRE LA MISMA BASE ───────────────────────────
+ * El panel sumaba «Hoy hay» por su cuenta, con `servicio.cobros.reduce(...)` sobre la lista
+ * cruda: metía los cobros MANUAL sin cuota —que este módulo ignora a propósito— y los pintaba
+ * con la moneda del servicio aunque fueran de otra. Un pago manual de ₡250.000 al lado de un
+ * acuerdo de $5.100 daba «Hoy hay $255.100». Dos números uno junto al otro, sobre bases
+ * distintas, en la caja que existe justamente para decir que algo no cuadra.
+ */
+describe("⚠ «El acuerdo pide» y «Hoy hay» salen del mismo lugar", () => {
+  it("`sumaDeLosCobros` cuenta solo los cobros que el acuerdo gobierna", () => {
+    const plan = planDeCambios(DRAFTS_WHEREX, COBROS_WHEREX);
+    expect(plan.sumaDeLosCobros, "los 4 cobros con cuota").toBe(8500);
+    expect(plan.fueraDelAcuerdo).toBe(0);
+  });
+
+  it("⭐ un cobro manual sin cuota NO entra en la suma: se cuenta aparte", () => {
+    const conManual = planDeCambios(DRAFTS_WHEREX, [
+      ...COBROS_WHEREX,
+      cobro({ id: "man", numCuota: null, periodo: "2026-08", monto: 250_000, origen: "MANUAL" }),
+    ]);
+    /* Mismo total que sin él: el motor no lo toca y el acuerdo no lo pide. Sumarlo era además
+       mezclar monedas, que es el único error que este módulo tiene prohibido cometer. */
+    expect(conManual.sumaDeLosCobros).toBe(8500);
+    expect(conManual.fueraDelAcuerdo, "se nombra, no se suma").toBe(1);
+    /* Y no mueve ninguno de los tres números del diálogo. */
+    expect(conManual.sumaDelPlan).toBe(5100);
+    expect(conManual.sumaSiNoSeLibera).toBe(6375);
+    expect(conManual.sumaSiSeLibera).toBe(5100);
+  });
+
+  it("con el cronograma vacío, `hay` es true y `crear` tiene las filas que explican por qué", () => {
+    /* El aviso se pintaba con la lista VACÍA: `crear` contaba para `hay` pero no se dibujaba.
+       Un aviso que dice que algo no cuadra y no dice qué es peor que no avisar. */
+    const sinCobros = planDeCambios(DRAFTS_WHEREX, []);
+    expect(sinCobros.hay).toBe(true);
+    expect(sinCobros.crear.length).toBeGreaterThan(0);
+    expect(sinCobros.ajustar).toEqual([]);
+    expect(sinCobros.borrar).toEqual([]);
+    expect(sinCobros.bloqueados).toEqual([]);
+    expect(sinCobros.sumaDeLosCobros).toBe(0);
+  });
+});
+
+/**
+ * ── ⚠⚠ QUÉ INVALIDA EL DIÁLOGO Y QUÉ NO ───────────────────────────────────────
+ * La huella es lo único que impide que confirmar ejecute sobre un estado distinto al que se
+ * aprobó. Que cubra lo correcto no se puede leer: hay que probarlo campo por campo, porque el
+ * modo de fallar es silencioso — el 409 no salta y las facturas se sueltan igual.
+ *
+ * Hasta el 2026-09-05 solo miraba el plan y los cobros. Cambiar el día de cobro de la cuenta en
+ * otra pestaña movía TODAS las fechas del preview sin mover la huella.
+ */
+describe("⚠⚠ la huella cubre todo lo que mueve los números", () => {
+  const S = SERVICIO_WHEREX;
+  const C = COBROS_WHEREX.map((c) => ({
+    id: c.id,
+    estado: c.estado,
+    monto: c.monto,
+    fechaEmision: c.fechaEmision,
+  }));
+  const base = huellaDelCronograma("plan-1", S, C);
+
+  it("mide 32 caracteres — lo que el schema de la API acepta", () => {
+    expect(base).toHaveLength(32);
+  });
+
+  it("no depende del orden en que vengan los cobros", () => {
+    /* La consulta no garantiza orden. Si la huella dependiera de él, el 409 saltaría solo
+       porque Postgres devolvió las filas al revés, y nadie entendería por qué. */
+    expect(huellaDelCronograma("plan-1", S, [...C].reverse())).toBe(base);
+  });
+
+  it("cambia si cambia el plan activo", () => {
+    expect(huellaDelCronograma("plan-2", S, C)).not.toBe(base);
+  });
+
+  it.each([
+    ["el monto del cobro", C.map((c, i) => (i === 0 ? { ...c, monto: c.monto + 1 } : c))],
+    ["el estado del cobro", C.map((c, i) => (i === 0 ? { ...c, estado: "SIN_DATO" } : c))],
+    ["la fecha de emisión", C.map((c, i) => (i === 3 ? { ...c, fechaEmision: "2026-08-15" } : c))],
+    ["que aparezca un cobro nuevo", [...C, { id: "c9", estado: "PROGRAMADO", monto: 1, fechaEmision: null }]],
+    ["que desaparezca uno", C.slice(1)],
+  ])("cambia si cambia %s", (_, cobros) => {
+    expect(huellaDelCronograma("plan-1", S, cobros)).not.toBe(base);
+  });
+
+  it.each([
+    ["el monto total del servicio", { ...S, montoTotal: 5101 }],
+    ["la fecha de arranque", { ...S, fechaInicioFacturacion: "2026-06-01" }],
+    ["la duración", { ...S, duracionMeses: 3 }],
+    /* ⭐ El que faltaba. Es un PATCH de la CUENTA: no toca el plan ni ningún cobro, y mueve
+       todas las fechas programadas del preview. */
+    ["el día de cobro de la cuenta", { ...S, diaCobroAncla: 1 }],
+    ["la moneda", { ...S, moneda: "CRC" as const }],
+  ])("⭐ cambia si cambia %s", (_, servicio) => {
+    expect(huellaDelCronograma("plan-1", servicio, C)).not.toBe(base);
+  });
+
+  it("NO cambia por algo que el motor no lee", () => {
+    /* Al revés también importa: una huella que se mueve con cualquier escritura haría que el
+       diálogo tire 409 constantemente y la gente aprenda a reintentar sin leer. El `id` del
+       servicio no entra en ningún cálculo del cronograma. */
+    expect(huellaDelCronograma("plan-1", { ...S, id: "otro-id" }, C)).toBe(base);
   });
 });

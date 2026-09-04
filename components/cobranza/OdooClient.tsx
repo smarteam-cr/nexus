@@ -25,7 +25,10 @@ export default function OdooClient({
   corrida,
   conteos,
   puedeVerCorridas,
+  puedeEditar,
 }: {
+  /** `cobranza.write`: decide si se dibujan los controles que cierran una línea a mano. */
+  puedeEditar: boolean;
   corrida: {
     iniciadaEn: string;
     terminadaEn: string | null;
@@ -101,7 +104,9 @@ export default function OdooClient({
 
       {tab === "que-es" && <QueEs conteos={conteos} />}
       {tab === "emparejar" && <EmparejadoOdoo />}
-      {tab === "no-cuadra" && <DiferenciasOdoo onIrAEmparejar={() => setTab("emparejar")} />}
+      {tab === "no-cuadra" && (
+        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} />
+      )}
     </div>
   );
 }

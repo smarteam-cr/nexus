@@ -91,6 +91,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         guard.user.email,
         todayISO,
         parsed?.success ? parsed.data.huella : undefined,
+        parsed?.success ? parsed.data.corregirViaCobro : false,
       );
       return NextResponse.json({ result });
     }

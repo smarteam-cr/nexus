@@ -23,6 +23,10 @@ export const dynamic = "force-dynamic";
 export default async function OdooPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
+  /* Cerrar a mano una factura soltada es una ESCRITURA: afirma que alguien anuló un documento
+     en un sistema que Nexus no puede verificar. La API ya lo exige; acá se evita ofrecer el
+     botón a quien va a chocar con un 403. */
+  const puedeEditar = await can(ctx.teamMember, "cobranza", "write");
 
   const [corrida, facturas, cuentasVinculadas, cuentas, diferencias] = await Promise.all([
     ultimaCorrida(),
@@ -47,6 +51,7 @@ export default async function OdooPage() {
            callejón sin salida: hace clic y el gate lo rebota a /clients, que se lee como un
            error de la app y no como una restricción. */
         puedeVerCorridas={isCostosRole(ctx.role)}
+        puedeEditar={puedeEditar}
       />
     </div>
   );

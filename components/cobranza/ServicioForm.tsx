@@ -315,7 +315,7 @@ export default function ServicioForm({
    * Sin decisiones el cuerpo lleva `liberar: []`, y el endpoint se comporta EXACTAMENTE como el
    * botón «Generar cobros» de siempre — misma ruta, mismo guard de lectura.
    */
-  async function confirmarCuadre(decisiones: DecisionElegida[]) {
+  async function confirmarCuadre(decisiones: DecisionElegida[], corregirViaCobro: boolean) {
     if (!cuadrar || aplicando) return;
     setAplicando(true);
     try {
@@ -324,7 +324,7 @@ export default function ServicioForm({
       }>(`/api/cobranza/servicios/${cuadrar.servicioId}/generar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ liberar: decisiones, huella: cuadrar.huella }),
+        body: JSON.stringify({ liberar: decisiones, huella: cuadrar.huella, corregirViaCobro }),
       });
       toast.success(
         `Cronograma cuadrado: ${result.created} nuevo(s), ${result.updated} ajustado(s), ` +

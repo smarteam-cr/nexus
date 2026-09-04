@@ -26,6 +26,11 @@ export const dynamic = "force-dynamic";
 export default async function CobranzaPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
+  /* ⚠ La API ya exige `cobranza.write` para liberar facturas y deshacer cobros, pero la pantalla
+     no lo miraba: quien solo puede ver la cartera igual veía los botones y recién chocaba con
+     un 403 al confirmar. Un permiso que solo se manifiesta como error es un permiso que se
+     descubre fallando. */
+  const puedeEditar = await can(ctx.teamMember, "cobranza", "write");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
   const [cola, cartera, alertas, snapshot, proyeccion, series, riesgo, comisiones] = await Promise.all([
@@ -55,6 +60,7 @@ export default async function CobranzaPage() {
         initialSeries={series}
         initialRiesgo={riesgo}
         role={ctx.role}
+        puedeEditar={puedeEditar}
         todayISO={todayISO}
       />
     </div>

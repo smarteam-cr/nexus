@@ -41,8 +41,12 @@ export type Plataforma = "MERCURY" | "ODOO" | "OTRA";
 
 export interface DecisionElegida {
   cobroId: string;
-  decision: DecisionFactura;
-  plataforma: Plataforma;
+  /**
+   * Ausente = el cobro está bloqueado pero **no tiene factura emitida**: no hay documento que
+   * anular, así que no hay nada que decidir ni línea de trabajo que abrir hacia ningún ERP.
+   */
+  decision?: DecisionFactura;
+  plataforma?: Plataforma;
   motivo?: string;
 }
 
@@ -88,10 +92,11 @@ export default function CuadrarCronogramaDialog({
   cuentaEsInternacional: boolean;
   guardando: boolean;
   onCancel: () => void;
-  onConfirm: (decisiones: DecisionElegida[]) => void;
+  onConfirm: (decisiones: DecisionElegida[], corregirViaCobro: boolean) => void;
 }) {
   const pendientes = useMemo(() => preview.bloqueados.filter((b) => !b.coincide), [preview]);
   const [elegido, setElegido] = useState<Record<string, DecisionElegida | undefined>>({});
+  const [corregirVia, setCorregirVia] = useState(false);
 
   const m = (n: number) => fmtMonto(n, moneda);
   const decisiones = Object.values(elegido).filter((d): d is DecisionElegida => !!d);
@@ -107,6 +112,21 @@ export default function CuadrarCronogramaDialog({
     () => sumaConDecisiones(preview, new Set(decisiones.map((d) => d.cobroId))),
     [decisiones, preview],
   );
+
+  /**
+   * ⚠ Si todo lo elegido apunta a una plataforma distinta a la de la cuenta, se OFRECE
+   * corregirla — no se deduce. La pregunta de cada fila es «¿dónde se emitió ESTA factura?», en
+   * pasado y por documento: contestar «Mercury» sobre una factura vieja no dice que la cuenta
+   * facture por Mercury hoy. Antes se escribía solo, sin que el diálogo ni el toast lo
+   * mencionaran, y la liberación siguiente nacía apuntando a la plataforma equivocada.
+   */
+  const plataformasElegidas = new Set(
+    decisiones.map((d) => d.plataforma).filter((p): p is Plataforma => !!p),
+  );
+  const viaSugerida =
+    plataformasElegidas.size === 1 && !plataformasElegidas.has(viaCobroDeLaCuenta)
+      ? [...plataformasElegidas][0]
+      : null;
 
   const cuadra = Math.abs(sumaElegida - preview.sumaDelPlan) < 0.01;
   /**
@@ -134,7 +154,7 @@ export default function CuadrarCronogramaDialog({
           <button
             type="button"
             disabled={guardando}
-            onClick={() => onConfirm(decisiones)}
+            onClick={() => onConfirm(decisiones, !!viaSugerida && corregirVia)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50"
           >
             {guardando ? "Aplicando…" : decisiones.length > 0 ? `Soltar ${decisiones.length} y regenerar` : "Solo regenerar"}
@@ -216,6 +236,29 @@ export default function CuadrarCronogramaDialog({
               que ya entró.
             </p>
           )}
+          {viaSugerida && (
+            <label className="mt-2 flex items-start gap-2 text-[11px] text-fg-secondary">
+              <input
+                type="checkbox"
+                checked={corregirVia}
+                onChange={(e) => setCorregirVia(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Y corregir la vía de cobro de la cuenta: hoy dice{" "}
+                <strong className="text-fg">{PLATAFORMA_LABEL[viaCobroDeLaCuenta]}</strong> y elegiste{" "}
+                <strong className="text-fg">{PLATAFORMA_LABEL[viaSugerida]}</strong>.
+                {cuentaEsInternacional && viaCobroDeLaCuenta === "ODOO" && (
+                  <span className="text-amber-600">
+                    {" "}Es internacional con Odoo por defecto — probablemente nadie lo eligió.
+                  </span>
+                )}{" "}
+                <span className="text-fg-muted">
+                  Cambia dónde se va a buscar la próxima factura de este cliente, no solo estas.
+                </span>
+              </span>
+            </label>
+          )}
           {decisiones.length > 0 && (
             <p className="mt-2 text-[11px] text-fg-muted">
               {/* ⛔ Se dice explícitamente. Nexus no escribe en el ERP, y creer que sí es la
@@ -256,8 +299,12 @@ function FilaBloqueada({
      contradicen se muestra el conflicto en vez de elegir en silencio. */
   const plataformaDudosa = cuentaEsInternacional && viaCobroDeLaCuenta === "ODOO";
 
-  const elegir = (decision: DecisionFactura | null) => {
+  /** Sin fecha de emisión no hay documento en ningún lado: la decisión de ERP no aplica. */
+  const sinFactura = b.fechaEmision === null;
+
+  const elegir = (decision: DecisionFactura | "SIN_FACTURA" | null) => {
     if (decision === null) return onElegir(undefined);
+    if (decision === "SIN_FACTURA") return onElegir({ cobroId: b.cobroId });
     onElegir({ cobroId: b.cobroId, decision, plataforma, motivo: motivo.trim() || undefined });
   };
 
@@ -285,6 +332,23 @@ function FilaBloqueada({
             ? "La plata entró. Revertir un cobro es otra decisión y se hace desde el cronograma."
             : "Se creó a mano: regenerar no lo iba a tocar igual."}
         </p>
+      ) : sinFactura ? (
+        /* ⚠⚠ Un cobro puede estar bloqueado SIN factura: salió de PROGRAMADO y nadie marcó
+           ninguna. Acá se ofrecían igual «Cancelar la factura» y «Revertir la factura» —
+           mandando a anular en el ERP un documento que la fila de arriba acaba de decir que no
+           existe, y escribiendo una línea de trabajo imposible de cerrar. Es exactamente el
+           defecto que la Fase 4 cerró en el aviso, reintroducido con una escritura detrás.
+           Sin factura hay UNA sola cosa que hacer: soltarlo. */
+        <>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Opcion activa={!elegido} onClick={() => elegir(null)} label="Dejarlo como está" />
+            <Opcion activa={!!elegido} onClick={() => elegir("SIN_FACTURA")} label="Soltarlo" />
+          </div>
+          <p className="mt-1.5 text-[11px] text-fg-muted">
+            No hay factura emitida: soltarlo deja que el motor lo ajuste y{" "}
+            <strong className="text-fg">no le pide nada a nadie en el ERP</strong>.
+          </p>
+        </>
       ) : (
         <>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -301,7 +365,7 @@ function FilaBloqueada({
             />
           </div>
 
-          {elegido && (
+          {elegido?.decision && (
             <div className="mt-2 space-y-1.5">
               <p className="text-[11px] text-fg-muted">{QUE_HACE[elegido.decision]}</p>
               <div className="flex flex-wrap items-center gap-2">
