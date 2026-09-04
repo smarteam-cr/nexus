@@ -18,7 +18,7 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { AssistSectionDef } from "@/lib/ai/assist";
-import { ROLE_SECTIONS, type RoleSectionKey } from "@/lib/roles/schema";
+import { ROLE_SECTIONS, type RoleSectionKey } from "@/lib/roles/roles-ui";
 
 type Theme = "dark" | "light" | "soft";
 interface SectionMeta {

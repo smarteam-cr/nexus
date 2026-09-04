@@ -18,7 +18,7 @@
  * se edita in-situ, se comparte y se publica como cualquier documento de /roles.
  */
 import type { BCSectionDef } from "./business-case.defs";
-import type { RoleSectionKey } from "@/lib/roles/schema";
+import type { RoleSectionKey } from "@/lib/roles/roles-ui";
 import { SECTION_META } from "./roles.defs";
 
 const NO_AGENT = { agentGenerated: false, agentHint: "", brief: "" } as const;

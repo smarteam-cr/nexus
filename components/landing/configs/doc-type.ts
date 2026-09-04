@@ -8,7 +8,7 @@
  * `*.defs.ts` / `*.ts`.
  */
 import type { LandingConfig } from "../types";
-import type { RoleDocTypeValue } from "@/lib/roles/schema";
+import type { RoleDocTypeValue } from "@/lib/roles/roles-ui";
 import { landingConfigForRoles } from "./roles";
 import { landingConfigForPropuesta } from "./propuesta";
 

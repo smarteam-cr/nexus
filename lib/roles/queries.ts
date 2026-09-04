@@ -15,7 +15,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { visibleRoleWhere, type RoleAccessSubject } from "./access";
-import type { RoleDocTypeValue } from "./schema";
+import type { RoleDocTypeValue } from "./roles-ui";
 
 /** Metadatos (sin `content`) — para el índice de administración y el sidebar. */
 const ROLE_META_SELECT = {

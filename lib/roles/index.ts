@@ -15,9 +15,10 @@
  *
  * OJO (ARCHITECTURE §5/§8): `queries`/`mutations` son server-only (importan
  * Prisma). Los componentes cliente NO deben importar este barrel — usan la API
- * (`/api/roles`) y, para las labels de la plantilla, importan `./schema` directo
- * (client-safe).
+ * (`/api/roles`) y, para las labels de la plantilla, importan `./roles-ui` directo
+ * (client-safe, sin zod — C-24).
  */
+export * from "./roles-ui";
 export * from "./schema";
 export * from "./queries";
 export * from "./mutations";

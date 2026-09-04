@@ -16,7 +16,7 @@ import {
   PROPUESTA_CONTENT_KEYS,
   PROPUESTA_SECTION_DEFS,
 } from "@/components/landing/configs/propuesta.defs";
-import type { RoleDocTypeValue } from "./schema";
+import type { RoleDocTypeValue } from "./roles-ui";
 
 const CONTENT_KEYS: Record<RoleDocTypeValue, readonly string[]> = {
   PERFIL: ROLE_CONTENT_KEYS,

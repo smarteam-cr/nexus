@@ -1,11 +1,14 @@
 /**
  * lib/roles/schema.ts
  *
- * Schemas Zod + metadata de secciones del módulo Roles (perfiles de puesto del
- * equipo). Client-safe: solo `zod` y constantes — lo importan tanto las routes
- * (validación en la frontera, ARCHITECTURE §3) como los componentes de UI y el
- * template config del motor de landing (`components/landing/configs/roles.defs.ts`).
- * NO importa Prisma ni nada server-only.
+ * Schemas Zod del módulo Roles (perfiles de puesto del equipo): la validación en la
+ * frontera (ARCHITECTURE §3) de `app/api/roles/**`. Server-side.
+ *
+ * C-24 (2026-09-04): las CONSTANTES puras (tipos de documento, rótulos, las 12 secciones)
+ * viven en `./roles-ui.ts`, que es lo que importan los componentes de cliente y el template
+ * config del motor. Antes vivían acá, y como este archivo importa zod, cada `"use client"`
+ * que quería un rótulo se llevaba los 266 KB de zod al navegador. Un componente de cliente
+ * NO importa este archivo (lo vigila lib/auth/client-safe.test.ts).
  *
  * El contenido de cada rol vive como JSON estructurado por sección en
  * `RoleProfile.content` — un mapa `{ [sectionKey]: data }` cuyo shape lo definen los
@@ -13,19 +16,7 @@
  * se valida como objeto opaco (la forma la garantizan los componentes, no la API).
  */
 import { z } from "zod";
-
-/**
- * Los dos tipos de documento que viven en `RoleProfile`. Espejo client-safe del enum
- * `RoleDocType` de Prisma (que no se puede importar acá sin arrastrar el cliente).
- * El tipo NO es cosmético: decide con qué PLANTILLA del motor se renderiza la fila.
- */
-export const ROLE_DOC_TYPES = ["PERFIL", "PROPUESTA"] as const;
-export type RoleDocTypeValue = (typeof ROLE_DOC_TYPES)[number];
-
-export const ROLE_DOC_TYPE_LABEL: Record<RoleDocTypeValue, string> = {
-  PERFIL: "Perfil de puesto",
-  PROPUESTA: "Propuesta",
-};
+import { ROLE_DOC_TYPES } from "./roles-ui";
 
 export const roleCreateSchema = z.object({
   docType: z.enum(ROLE_DOC_TYPES).default("PERFIL"),
@@ -49,35 +40,3 @@ export const rolePatchSchema = roleCreateSchema.omit({ docType: true }).partial(
 
 export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 export type RolePatchInput = z.infer<typeof rolePatchSchema>;
-
-/**
- * Las secciones de CONTENIDO de la plantilla (fuente única de labels + orden + las
- * `key` del mapa `content`). El hero (title/area/summary) NO está acá — vive en las
- * columnas de metadatos, no en `content`. El template config del motor
- * (`roles.defs.ts`) deriva sus defs de esta lista.
- *
- * El bloque del medio implementa **4DX** (The 4 Disciplines of Execution), pero la página
- * es una GUÍA DE TRABAJO, no un curso: los `label` están en lenguaje llano y en primera
- * persona (responden lo que la persona se pregunta), el término técnico vive en el
- * `eyebrow` de `roles.defs.ts` y la teoría solo en el tooltip ⓘ. Por eso NO hay una
- * sección de metodología: explicar 4DX no es tarea de la página de un puesto.
- *
- * Orden deliberado: la meta (D1) → lo que hago cada semana (D2 lead) → cómo sé si funciona
- * (D2 lag) → dónde lo veo (D3) → con quién me reúno (D4). Las acciones van ANTES del
- * resultado: lo primero que alguien necesita al abrir su rol es qué hacer.
- */
-export const ROLE_SECTIONS = [
-  { key: "profile", label: "Perfil de puesto" },
-  { key: "responsibilities", label: "Responsabilidades" },
-  { key: "wig", label: "La meta que persigo" },
-  { key: "leadMeasures", label: "Lo que hago cada semana" },
-  { key: "lagMeasures", label: "Cómo sé si está funcionando" },
-  { key: "scoreboard", label: "Dónde lo veo en HubSpot" },
-  { key: "cadencia", label: "Con quién me reúno y de qué" },
-  { key: "successPaths", label: "Caminos de éxito" },
-  { key: "failurePaths", label: "Caminos de fracaso" },
-  { key: "maturityPath", label: "Ruta de madurez" },
-  { key: "transitionPeriod", label: "Período de transición y crecimiento" },
-] as const;
-
-export type RoleSectionKey = (typeof ROLE_SECTIONS)[number]["key"];

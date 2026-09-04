@@ -16,7 +16,7 @@
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { landingConfigForDocType } from "@/components/landing/configs/doc-type";
 import { contentKeysForDocType, escalaForDocType } from "@/lib/roles/doc-type";
-import type { RoleDocTypeValue } from "@/lib/roles/schema";
+import type { RoleDocTypeValue } from "@/lib/roles/roles-ui";
 
 export interface RoleDocHero {
   title: string;

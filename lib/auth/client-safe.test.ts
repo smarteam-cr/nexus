@@ -53,6 +53,50 @@ const modulosDeServidor = new Set(
 );
 
 /**
+ * C-24 (2026-09-04): los módulos de `lib/` que importan zod DIRECTAMENTE. Zod pesa 266 KB en
+ * el navegador y ninguna pantalla lo necesita para pintar: valida en la frontera HTTP, del
+ * lado del servidor. Un `"use client"` que importa un VALOR de uno de estos módulos se lo
+ * lleva entero al bundle — y no falla en ningún lado: solo se ve en el peso.
+ */
+const modulosConZod = new Set(
+  archivos("lib")
+    .filter((f) => /from\s+["']zod["']/.test(fs.readFileSync(f, "utf8")))
+    .map((f) => path.resolve(f)),
+);
+
+/**
+ * DEUDA CONOCIDA (C-24, 2026-09-04): los componentes de cliente que YA importaban un valor de un
+ * módulo con zod cuando se escribió la regla. Solo ENCOGE: se saca una entrada cuando el
+ * módulo se parte en «esquemas» + «constantes puras» (molde: lib/roles/roles-ui.ts, que es lo
+ * que hizo este ítem con los 2 de Roles). Una entrada nueva es un rojo.
+ * ⛔ `lib/cobranza/schema.ts` es de la otra sesión: sus 19 consumidores se destraban partiéndolo
+ * ahí, no tocando esta lista.
+ */
+const DEUDA_ZOD: ReadonlySet<string> = new Set([
+  "components/cobranza/AlertasCobranza.tsx → @/lib/cobranza/schema",
+  "components/cobranza/BuscarPagoModal.tsx → @/lib/cobranza/schema",
+  "components/cobranza/ColaCobros.tsx → @/lib/cobranza/schema",
+  "components/cobranza/CostoForm.tsx → @/lib/cobranza/schema",
+  "components/cobranza/CostosPanel.tsx → @/lib/cobranza/schema",
+  "components/cobranza/CronogramaCobros.tsx → @/lib/cobranza/schema",
+  "components/cobranza/CuentaDrawer.tsx → @/lib/cobranza/schema",
+  "components/cobranza/ImportWizard.tsx → @/lib/cobranza/schema",
+  "components/cobranza/MovimientosSection.tsx → @/lib/cobranza/schema",
+  "components/cobranza/NuevaEmpresaModal.tsx → @/lib/cobranza/schema",
+  "components/cobranza/PanelCartera.tsx → @/lib/cobranza/schema",
+  "components/cobranza/RegistrarPagoManualDialog.tsx → @/lib/cobranza/schema",
+  "components/cobranza/ServicioForm.tsx → @/lib/cobranza/schema",
+  "components/cobranza/TagsInput.tsx → @/lib/cobranza/schema",
+  "components/finanzas/ComisionesPartnerPanel.tsx → @/lib/cobranza/schema",
+  "components/finanzas/TarjetasPanel.tsx → @/lib/cobranza/schema",
+  "components/finanzas/equilibrio/CurvaEquilibrio.tsx → @/lib/cobranza/schema",
+  "components/finanzas/equilibrio/DesgloseIngresos.tsx → @/lib/cobranza/schema",
+  "components/finanzas/equilibrio/EquilibrioClient.tsx → @/lib/cobranza/schema",
+  "app/(shell)/marketing/contenido/ContentClient.tsx → @/lib/marketing/schema",
+  "app/(shell)/marketing/generacion/EngineClient.tsx → @/lib/marketing/schema",
+]);
+
+/**
  * Imports de VALOR (los `import type` se borran en compilación y son seguros).
  * Se saltea `import type { … }` y también los specifiers marcados `type` uno por uno.
  */
@@ -79,7 +123,8 @@ describe("los componentes de cliente no importan módulos de servidor", () => {
     expect(modulosDeServidor.size).toBeGreaterThan(20);
   });
 
-  it("ningún «use client» importa un VALOR de un módulo que toca Prisma", () => {
+  /** `componente → spec` por cada import de VALOR desde un «use client» a un módulo del conjunto. */
+  function culpablesContra(modulos: ReadonlySet<string>): string[] {
     const culpables: string[] = [];
     for (const f of [...archivos("components"), ...archivos("app")]) {
       const src = fs.readFileSync(f, "utf8");
@@ -87,11 +132,16 @@ describe("los componentes de cliente no importan módulos de servidor", () => {
       if (!/^\s*(["'])use client\1/.test(src)) continue;
       for (const spec of importsDeValor(src)) {
         const destino = resolverAlias(spec);
-        if (destino && modulosDeServidor.has(path.resolve(destino))) {
-          culpables.push(`${path.relative(RAIZ, f)} → ${spec}`);
+        if (destino && modulos.has(path.resolve(destino))) {
+          culpables.push(`${path.relative(RAIZ, f).split(path.sep).join("/")} → ${spec}`);
         }
       }
     }
+    return culpables;
+  }
+
+  it("ningún «use client» importa un VALOR de un módulo que toca Prisma", () => {
+    const culpables = culpablesContra(modulosDeServidor);
     expect(
       culpables,
       "Un componente de cliente está importando un VALOR de un módulo que importa Prisma: eso " +
@@ -100,5 +150,26 @@ describe("los componentes de cliente no importan módulos de servidor", () => {
         "usá `import type` (se borra en compilación). Si necesitás la función, movela a un " +
         "módulo PURO — el molde es lib/lifecycle/etapa-ui.ts.",
     ).toEqual([]);
+  });
+
+  it("C-24: ningún «use client» NUEVO importa un VALOR de un módulo con zod — la deuda solo encoge", () => {
+    /* La edición que la pone en rojo: `import { ROLE_DOC_TYPE_LABEL } from "@/lib/roles/schema"`
+       de vuelta en un componente de Roles (zod al navegador otra vez), o un `import { z }` en
+       lib/roles/roles-ui.ts «para validar ahí también». */
+    expect(modulosConZod.size, "el escaneo de zod no corre en vacío").toBeGreaterThan(5);
+    expect(
+      modulosConZod.has(path.resolve(path.join(RAIZ, "lib/roles/roles-ui.ts"))),
+      "lib/roles/roles-ui.ts es el módulo PURO de Roles: no puede importar zod",
+    ).toBe(false);
+    const culpables = culpablesContra(modulosConZod);
+    const nuevos = culpables.filter((c) => !DEUDA_ZOD.has(c));
+    expect(
+      nuevos,
+      "Un componente de cliente importa un VALOR de un módulo que importa zod: 266 KB al bundle " +
+        "del navegador para pintar. Mové las constantes puras a un módulo sin zod (molde: " +
+        "lib/roles/roles-ui.ts) e importá de ahí.",
+    ).toEqual([]);
+    const pagados = [...DEUDA_ZOD].filter((d) => !culpables.includes(d));
+    expect(pagados, "estas entradas de DEUDA_ZOD ya no importan zod: borralas (la deuda solo encoge)").toEqual([]);
   });
 });

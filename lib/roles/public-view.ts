@@ -17,7 +17,7 @@
  * desactiva un puesto sin entender que le está cortando el link a un candidato, es acá.
  */
 import { prisma } from "@/lib/db/prisma";
-import type { RoleDocTypeValue } from "./schema";
+import type { RoleDocTypeValue } from "./roles-ui";
 
 /** Forma del token: 64 chars hex (crypto.randomBytes(32)). Igual que el externo. */
 export const ROLE_PUBLIC_TOKEN_RE = /^[a-f0-9]{64}$/i;

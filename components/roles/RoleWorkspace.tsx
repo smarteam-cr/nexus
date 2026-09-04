@@ -29,7 +29,7 @@ import { useEjecutarOperacionesDelChatDeRol } from "@/components/asistente/ejecu
 import { ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
 import { landingConfigForDocType } from "@/components/landing/configs/doc-type";
 import { contentKeysForDocType, escalaForDocType, sectionDefsForDocType } from "@/lib/roles/doc-type";
-import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
+import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/roles-ui";
 
 /** Respuesta de POST /api/roles/[id]/assist (espejo de DocumentAssistResult + runId). */
 interface AssistResult {

@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
-import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/schema";
+import { ROLE_DOC_TYPE_LABEL, type RoleDocTypeValue } from "@/lib/roles/roles-ui";
 
 type RoleRow = {
   id: string;

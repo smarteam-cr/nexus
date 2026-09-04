@@ -3,7 +3,8 @@
  * Correr: `npx vitest run lib/roles/roles.test.ts --project unit`.
  */
 import { test, expect } from "vitest";
-import { roleCreateSchema, rolePatchSchema, ROLE_SECTIONS } from "./schema";
+import { roleCreateSchema, rolePatchSchema } from "./schema";
+import { ROLE_SECTIONS } from "./roles-ui";
 import { ROLE_SECTION_DEFS, ROLE_CONTENT_KEYS, rolesAssistContract } from "@/components/landing/configs/roles.defs";
 import { ROLES_SECTION_COMPONENTS } from "@/components/landing/configs/roles";
 
