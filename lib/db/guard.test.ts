@@ -350,3 +350,52 @@ describe("todo --apply respalda las tablas que declara ANTES de escribir (B-06)"
     expect(lineasDeStderr().some((l) => l.includes("SIN_RESPALDO=1"))).toBe(true);
   });
 });
+
+describe("el SQL de índices de C-06 es aditivo, inocuo de re-aplicar y nombra columnas que existen", () => {
+  /**
+   * El loop no aplica SQL (lo aplica Elías). Lo que sí puede vigilar es que el archivo que le deja
+   * no pueda hacer daño ni fallar por un typo: cada CREATE INDEX lleva IF NOT EXISTS (re-aplicar
+   * es inocuo), ninguno lleva CONCURRENTLY (`prisma db execute` corre en una transacción y ahí
+   * CONCURRENTLY revienta), cada columna existe en su modelo de schema.prisma con ese nombre
+   * exacto, y el archivo trae la línea `@@index` que hay que espejar por cada índice — si no se
+   * espejan, el próximo `db push` de la otra PC los dropea (RUNBOOK inv. #2).
+   */
+  const SQL = "scripts/sql/2026-09-04-indices-agentrun-contextcard.sql";
+  const sql = fs.readFileSync(path.join(process.cwd(), SQL), "utf8");
+  const schema = fs.readFileSync(path.join(process.cwd(), "prisma/schema.prisma"), "utf8");
+  const sinComentarios = sql.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("--")).join("\n");
+  const sentencias = [...sinComentarios.matchAll(/CREATE INDEX\s+(IF NOT EXISTS\s+)?"(\w+)"\s+ON\s+"(\w+)"\s*(?:USING\s+(\w+))?\s*\(([^)]*)\)/gi)];
+  const columnasDe = (modelo: string): Set<string> => {
+    const m = schema.match(new RegExp(`^model ${modelo} \\{([\\s\\S]*?)^\\}`, "m"));
+    expect(m, `el modelo ${modelo} no está en schema.prisma`).not.toBeNull();
+    return new Set([...(m?.[1] ?? "").matchAll(/^\s+(\w+)\s+\S/gm)].map((x) => x[1]));
+  };
+
+  it("cinco índices, todos IF NOT EXISTS y ninguno CONCURRENTLY", () => {
+    /* La edición que lo pone en rojo: sacar un IF NOT EXISTS «porque ya sé que no existe», o
+       agregar CONCURRENTLY «para no bloquear». */
+    // Primero CONCURRENTLY: el escaneo de abajo no cuenta esa forma, y el rojo tiene que decir POR QUÉ.
+    expect(/CONCURRENTLY/i.test(sinComentarios), "CONCURRENTLY no puede correr dentro de la transacción de db execute").toBe(false);
+    expect(sentencias.length, "el escaneo no encontró los CREATE INDEX").toBe(5);
+    for (const [, ifNotExists, nombre] of sentencias) {
+      expect(ifNotExists, `${nombre}: sin IF NOT EXISTS re-aplicar el archivo falla`).toBeTruthy();
+    }
+  });
+
+  it("cada columna existe en su modelo con ese nombre exacto, y el nombre sigue la convención de Prisma", () => {
+    /* La edición que lo pone en rojo: escribir `sourceSessionIds` como `source_session_ids`. */
+    for (const [, , nombre, modelo, , cols] of sentencias) {
+      const columnas = columnasDe(modelo);
+      const pedidas = cols.split(",").map((c) => c.trim().replace(/"/g, ""));
+      for (const c of pedidas) expect(columnas.has(c), `${modelo}.${c} no existe en schema.prisma`).toBe(true);
+      expect(nombre, "el nombre tiene que ser Modelo_cols_idx para que el espejo sea el MISMO índice").toBe(`${modelo}_${pedidas.join("_")}_idx`);
+    }
+  });
+
+  it("trae la línea @@index a espejar por cada índice (si no se espejan, db push los dropea)", () => {
+    // Solo el bloque de espejo (líneas de comentario indentadas), no la prosa que cita un índice viejo.
+    const espejos = (sql.match(/^--\s{4,}@@index\(\[/gm) ?? []).length;
+    expect(espejos).toBe(sentencias.length);
+    expect(sql).toContain("prisma generate");
+  });
+});
