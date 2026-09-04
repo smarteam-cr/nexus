@@ -1,5 +1,6 @@
 "use client";
 
+import { useAgentRuns } from "@/components/ai/AgentRunsProvider";
 import { useState, useEffect, useCallback, useRef } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -156,11 +157,15 @@ export default function SectionBlockList({
     return () => clearTimeout(timer);
   }, [sections, cellSize, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling
+  // Polling — C-09 (2026-09-04): solo mientras haya una corrida de agente en curso (ver
+  // useCanvasSections). Sin provider (fuera del shell) se conserva el poll de siempre.
+  const corridas = useAgentRuns();
+  const hayEnCurso = corridas ? corridas.running.length > 0 : true;
   const lastBlockCount = useRef(0);
   const fetchRef = useRef(fetchSections);
   useEffect(() => { fetchRef.current = fetchSections; }); // latest ref (no tocar refs en render)
   useEffect(() => {
+    if (!hayEnCurso) return; // C-09: sin corridas en curso no hay nada que captar
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/canvas-sections?canvasId=${canvasId}`)
         .then((r) => r.json())
@@ -172,7 +177,14 @@ export default function SectionBlockList({
         }).catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [projectId, canvasId]);
+  }, [projectId, canvasId, hayEnCurso]);
+  // C-09: al terminar la última corrida, una relectura más (el último bloque pudo caer
+  // entre el tick anterior y el cierre del poll).
+  const habiaEnCurso = useRef(false);
+  useEffect(() => {
+    if (habiaEnCurso.current && !hayEnCurso) fetchRef.current();
+    habiaEnCurso.current = hayEnCurso;
+  }, [hayEnCurso]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections((prev) => {

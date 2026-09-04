@@ -26,6 +26,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BlockData } from "./BlockRenderer";
 import { useUndo } from "@/components/ui/UndoProvider";
+import { useAgentRuns } from "@/components/ai/AgentRunsProvider";
 
 export interface SectionWithBlocks {
   id: string;
@@ -67,6 +68,12 @@ export function useCanvasSections(
   options?: { poll?: boolean },
 ) {
   const pollEnabled = options?.poll !== false;
+  // C-09 (2026-09-04): el poll de 5 s solo corre mientras haya una corrida de agente EN CURSO.
+  // Sin corridas, nadie escribe bloques DRAFT desde afuera: releer el canvas cada 5 s era puro
+  // tráfico (y re-renders) para nadie. Fuera del shell (sin provider) se conserva el poll de
+  // siempre: es el caso raro, y el fallo seguro es «poll de más», nunca «canvas viejo».
+  const corridas = useAgentRuns();
+  const hayEnCurso = corridas ? corridas.running.length > 0 : true;
   const [sections, setSections] = useState<SectionWithBlocks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,6 +217,7 @@ export function useCanvasSections(
   useEffect(() => {
     if (!pollEnabled) return; // el business case no necesita polling (generación síncrona)
     if (!canvasId) return; // sin canvas, el poll solo generaría 400s cada 5 s
+    if (!hayEnCurso) return; // C-09: sin corridas en curso no hay nada que captar
     const id = setInterval(() => {
       fetch(listUrl)
         .then((r) => r.json())
@@ -223,7 +231,15 @@ export function useCanvasSections(
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [listUrl, pollEnabled, canvasId]);
+  }, [listUrl, pollEnabled, canvasId, hayEnCurso]);
+
+  // C-09: cuando la última corrida termina, UNA relectura más. El poll se apaga con ella, y el
+  // último bloque que el agente escribió pudo caer entre el tick anterior y el cierre.
+  const habiaEnCurso = useRef(false);
+  useEffect(() => {
+    if (habiaEnCurso.current && !hayEnCurso && pollEnabled && canvasId) refetchRef.current();
+    habiaEnCurso.current = hayEnCurso;
+  }, [hayEnCurso, pollEnabled, canvasId]);
 
   const clearError = useCallback(() => setError(null), []);
 

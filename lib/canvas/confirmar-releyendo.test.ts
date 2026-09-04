@@ -321,3 +321,38 @@ describe("la sección entera en el reintento", () => {
     expect(TURNO).toContain('...(secciones ? [{ type: "text" as const, text: secciones }] : [])');
   });
 });
+
+describe("el canvas no se relee cada 5 s sin corridas activas (C-09)", () => {
+  /**
+   * Medido el 2026-09-03: con un canvas abierto y ningún agente corriendo, la pestaña Network
+   * mostraba una lectura del canvas entero cada 5 s, para nadie. El poll existe para captar los
+   * bloques DRAFT que un agente escribe async — y `useAgentRuns()` ya sabe si hay alguno en
+   * curso. Sin provider (fuera del shell) se conserva el poll: el fallo seguro es «poll de más».
+   */
+  const ARCHIVOS = ["components/canvas/useCanvasSections.ts", "components/canvas/SectionBlockList.tsx"];
+
+  it("los dos polls están condicionados a running.length, y el intervalo no arranca sin corridas", () => {
+    /* La edición que lo pone en rojo: sacar el `if (!hayEnCurso) return;` «porque a veces el
+       provider se atrasa» — vuelve la lectura cada 5 s para nadie, sin error y sin log. */
+    for (const rel of ARCHIVOS) {
+      const src = leer(rel);
+      expect(src, `${rel}: tiene que preguntarle al provider`).toContain("useAgentRuns()");
+      expect(src, `${rel}: la condición es que haya corridas en curso`).toContain("corridas.running.length > 0");
+      const i = src.indexOf("setInterval(");
+      expect(i, `${rel}: el escaneo no encontró el poll`).toBeGreaterThan(-1);
+      const efecto = src.slice(src.lastIndexOf("useEffect(", i), i);
+      expect(efecto, `${rel}: el intervalo arranca aunque no haya corridas`).toContain("if (!hayEnCurso) return;");
+      const deps = src.slice(i, src.indexOf("]);", src.indexOf("return () => clearInterval", i)));
+      expect(deps, `${rel}: hayEnCurso tiene que estar en las deps, o el poll no se apaga al terminar`).toContain("hayEnCurso");
+    }
+  });
+
+  it("y al terminar la última corrida hacen UNA relectura más (el último bloque pudo caer entre ticks)", () => {
+    for (const rel of ARCHIVOS) {
+      const src = leer(rel);
+      expect(src, `${rel}: sin la relectura de cierre el último bloque del agente se ve recién al recargar`).toContain(
+        "habiaEnCurso.current && !hayEnCurso",
+      );
+    }
+  });
+});
