@@ -17,12 +17,18 @@
  *     gate v1 de timeline/assist) — para el agente de detalle Y planificación
  *     (que escribe el esqueleto).
  * Sin projectId (corridas legacy a nivel cliente) no hay señal → "generate".
+ *
+ * ⛔ FAIL-CLOSED (A-18, auditoría 2026-09-03): un `agentGroup` que ESTÁ en el registro de
+ * piezas (lib/pieces/registry.ts) y no tiene su `case` acá NO cae a null — lanza. Caer a null
+ * sería correr sin celda de permiso, en silencio, como ya pasó con una variante del detalle
+ * de cronograma. Los grupos que no escriben una pieza siguen devolviendo null.
  */
 import { prisma } from "@/lib/db/prisma";
 import { esAgenteDeDetalle } from "@/lib/agents/resolver";
 import { ID_ASSIST_CRONOGRAMA } from "@/lib/agents/timeline-assist";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { pieceByAgentGroup } from "@/lib/pieces/registry";
 
 export type ArtifactGate = {
   section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion" | "entrega";
@@ -174,6 +180,13 @@ export async function resolveArtifactGate(
           return Array.isArray(nodes) && nodes.length > 0;
         });
         return { section: "procesos", action: has ? "regenerate" : "generate" };
+      }
+      /* A-18: un grupo del registro de piezas sin `case` arriba se corta acá, ruidoso. Lo que
+         NO escribe una pieza (análisis, watchdog, marketing, cobranza) sigue cayendo a null. */
+      if (agent.agentGroup && pieceByAgentGroup(agent.agentGroup)) {
+        throw new Error(
+          `artifact-gate: el grupo "${agent.agentGroup}" está en el registro de piezas y no tiene gate — no corre sin celda de permiso.`,
+        );
       }
       return null;
     }

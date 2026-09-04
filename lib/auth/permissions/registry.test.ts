@@ -6,10 +6,14 @@
  *   B) uniformMap/allTrueMap cubren TODA celda del registry (mapas completos).
  *   C) isKnownCell / sectionByKey: celdas reales sí, inventadas no.
  *   D) Toda sección tiene ≥1 acción y labels no vacíos (el modal no muestra vacío).
+ *   F) Todo `agentGroup` del registro de piezas tiene su `case` en artifact-gate, y el
+ *      `default` es fail-closed para los que no (A-18): correr sin celda no es una opción.
  *
  * Correr: `npx vitest run lib/auth/permissions/registry.test.ts --project unit`.
  */
-import { test, expect } from "vitest";
+import { test, expect, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   PERMISSION_SECTIONS,
   allTrueMap,
@@ -17,6 +21,11 @@ import {
   isKnownCell,
   sectionByKey,
 } from "./registry";
+import { PIECES } from "@/lib/pieces/registry";
+import { resolveArtifactGate } from "./artifact-gate";
+
+// artifact-gate toca prisma en los `case` con señal; acá solo se ejercita el `default`.
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 test("A — sin claves duplicadas (secciones y acciones)", () => {
   const sectionKeys = PERMISSION_SECTIONS.map((s) => s.key);
@@ -70,4 +79,29 @@ test("E — cobranza.write sigue EXIGIÉNDOSE, no solo declarada", () => {
   const write = cobranza!.actions.find((a) => a.key === "write");
   expect(write, "desapareció la acción cobranza.write").toBeDefined();
   expect(write!.enforced, "cobranza.write volvió a estar apagada").toBe(true);
+});
+
+test("F — todo agentGroup del registro de piezas tiene gate, y el default es fail-closed (A-18)", async () => {
+  /* La edicion que lo pone en rojo: borrar (o renombrar) un `case` de artifact-gate, o volver a
+     que el `default` devuelva null para un grupo del registro. Un grupo sin gate corría sin celda
+     de permiso, en silencio — ya pasó con una variante del detalle de cronograma. */
+  const src = fs.readFileSync(path.join(process.cwd(), "lib/auth/permissions/artifact-gate.ts"), "utf8");
+  const grupos = PIECES.map((p) => p.agentGroup).filter((g): g is string => !!g);
+  expect(grupos.length, "el registro de piezas dejó de declarar grupos").toBeGreaterThanOrEqual(10);
+
+  const sinCase = grupos.filter((g) => !src.includes(`case "${g}":`));
+  // Los que no tienen `case` tienen que ser RECHAZADOS por el default, nunca corridos sin celda.
+  for (const g of sinCase) {
+    await expect(
+      resolveArtifactGate({ id: "cualquiera", agentGroup: g }, "cliente", null),
+      `el grupo "${g}" no tiene case y el default lo deja pasar sin celda`,
+    ).rejects.toThrow(/no tiene gate/);
+  }
+  // Hoy el único sin `case` es la propuesta comercial: su agente corre por su propio camino
+  // (lib/business-cases), nunca por /analyze. Si aparece otro acá, o le falta el case o le
+  // falta el camino propio — las dos cosas se deciden, no se allowlistean.
+  expect(sinCase).toEqual(["businesscase"]);
+
+  // Un grupo que NO está en el registro sigue cayendo a null: análisis, watchdog, marketing…
+  expect(await resolveArtifactGate({ id: "cualquiera", agentGroup: "marketing" }, "cliente", null)).toBeNull();
 });
