@@ -14,6 +14,8 @@
  *     guardPrismaCli — un falso positivo acá rompería `prisma generate` en el build).
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   describirDestino,
   esHostProduccion,
@@ -122,5 +124,40 @@ describe("guardPrismaCli — la lista positiva de comandos de escritura", () => 
     expect(esEscritura("node prisma validate")).toBe(false);
     expect(esEscritura("node prisma migrate diff --from-empty --to-schema s.prisma")).toBe(false);
     expect(esEscritura("node prisma migrate status")).toBe(false);
+  });
+});
+
+describe("las líneas base de eslint y tsc solo bajan (A-23)", () => {
+  /**
+   * `eslint-baseline.txt` decía 67 cuando el conteo real era 57 y nadie leía el archivo
+   * (auditoría 2026-09-03). Dos custodias: `scripts/check-baselines.ts` compara la REALIDAD
+   * contra los archivos (falla si la supera y también si quedó por debajo sin bajarla), y esta
+   * guarda impide que los archivos SUBAN solos — subir uno exige tocar estos dos números, o sea
+   * un diff que alguien lee.
+   */
+  const TOPE_ESLINT = 57;
+  const TOPE_TSC = 0;
+  const leer = (archivo: string) =>
+    Number.parseInt(fs.readFileSync(path.join(process.cwd(), archivo), "utf8").trim(), 10);
+
+  it("eslint-baseline.txt y tsc-baseline.txt son enteros y no pasan del tope", () => {
+    /* La edicion que lo pone en rojo: escribir 58 en eslint-baseline.txt sin bajar la deuda. */
+    const eslint = leer("eslint-baseline.txt");
+    const tsc = leer("tsc-baseline.txt");
+    expect(Number.isInteger(eslint) && eslint >= 0, "eslint-baseline.txt no es un entero").toBe(true);
+    expect(Number.isInteger(tsc) && tsc >= 0, "tsc-baseline.txt no es un entero").toBe(true);
+    expect(eslint, "la línea base de eslint SUBIÓ: la deuda solo baja").toBeLessThanOrEqual(TOPE_ESLINT);
+    expect(tsc, "la línea base de tsc SUBIÓ: está en cero y se queda en cero").toBeLessThanOrEqual(TOPE_TSC);
+  });
+
+  it("scripts/check-baselines.ts compara la realidad contra los DOS archivos y falla si difiere", () => {
+    /* La edicion que lo pone en rojo: que el script deje de leer uno de los archivos, o que
+       devuelva 0 pase lo que pase. */
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts/check-baselines.ts"), "utf8");
+    expect(src).toContain('"eslint-baseline.txt"');
+    expect(src).toContain('"tsc-baseline.txt"');
+    expect(src, "si la realidad supera la línea base tiene que fallar").toContain("real > base");
+    expect(src, "si quedó por debajo, se baja en el mismo commit").toContain("real < base");
+    expect(src).toContain("process.exit(resultados.every(Boolean) ? 0 : 1)");
   });
 });
