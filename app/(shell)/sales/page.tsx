@@ -31,13 +31,23 @@ export default async function SalesPage() {
     redirect("/");
   }
 
-  const sessions = await prisma.firefliesSession.findMany({
-    where: {
-      participants: { hasSome: [...SALES_EMAILS] },
-    },
-    orderBy: { date: "desc" },
-    select: { id: true, title: true, date: true, participants: true, duration: true, transcript: true },
-  });
+  // C-10 (2026-09-04): `transcript` es el blob más pesado de la tabla y acá solo se usaba para
+  // saber si EXISTE. Traerlo entero para todas las reuniones de Ventas era cargar megabytes en
+  // cada visita. Mismo patrón que /sessions: la lista sin el blob + los ids que tienen transcript.
+  // ⚠ `""` no cuenta como transcript (antes era `!!s.transcript`): el filtro lo excluye igual, así
+  // que el conteo de analizables es el mismo de antes.
+  const [sessions, conTranscript] = await Promise.all([
+    prisma.firefliesSession.findMany({
+      where: { participants: { hasSome: [...SALES_EMAILS] } },
+      orderBy: { date: "desc" },
+      select: { id: true, title: true, date: true, participants: true, duration: true },
+    }),
+    prisma.firefliesSession.findMany({
+      where: { participants: { hasSome: [...SALES_EMAILS] }, transcript: { not: null }, NOT: { transcript: "" } },
+      select: { id: true },
+    }),
+  ]);
+  const idsConTranscript = new Set(conTranscript.map((s) => s.id));
 
   // Agrupar por dominio externo
   const groupMap = new Map<string, ProspectGroup>();
@@ -74,7 +84,7 @@ export default async function SalesPage() {
     }
 
     const group = groupMap.get(domain)!;
-    const hasTranscript = !!s.transcript;
+    const hasTranscript = idsConTranscript.has(s.id);
     group.sessionCount++;
     if (hasTranscript) group.analyzableCount++;
     group.sessions.push({ id: s.id, title: s.title, date: s.date.toISOString(), hasTranscript });

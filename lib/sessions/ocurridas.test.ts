@@ -280,3 +280,17 @@ describe("censo de lectores de sesiones", () => {
     expect(sessions).not.toMatch(/date:\s*\{\s*lte:\s*new Date\(\)/);
   });
 });
+
+describe("/sales no carga el texto de las transcripciones para saber si existen (C-10)", () => {
+  /* Medido el 2026-09-03: la lista de Ventas traía `transcript` entero de todas las reuniones
+     con un rep, y lo único que hacía con él era `!!s.transcript`. Mismo patrón que /sessions:
+     la lista sin el blob, y los ids con transcript por una consulta aparte. */
+  it("el select de la lista no trae `transcript`, y los ids con transcript salen aparte excluyendo el vacío", () => {
+    /* La edición que lo pone en rojo: volver a `transcript: true` en el select «porque es más simple». */
+    const src = readFileSync(join(RAIZ, "app/(shell)/sales/page.tsx"), "utf8").replace(/\/\/[^\n]*/g, "");
+    expect(src, "el blob entero de todas las reuniones de Ventas, por visita").not.toMatch(/transcript:\s*true/);
+    expect(src).toMatch(/transcript:\s*\{\s*not:\s*null\s*\}/);
+    expect(src, '`""` no es un transcript: el conteo de analizables tiene que ser el de antes').toMatch(/NOT:\s*\{\s*transcript:\s*""\s*\}/);
+    expect(src).toContain("idsConTranscript.has(s.id)");
+  });
+});
