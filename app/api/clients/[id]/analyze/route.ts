@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { proyectoDelCliente } from "@/lib/projects/proyecto-del-cliente";
 import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
@@ -147,6 +148,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       select: { id: true },
     });
     bodyProjectId = strat?.id ?? null;
+  }
+  /* ⛔ UN PROYECTO DEL BODY NO ES DE NADIE HASTA QUE SE CRUZA CON EL CLIENTE DE LA URL.
+     `withClientAccess` validó el cliente de la URL, no el proyecto del body: con el id crudo, un CSE
+     con acceso a un solo cliente podía generar o regenerar los documentos de IA del proyecto de OTRO
+     (auditoría 2026-09-03). Un proyecto ajeno es 404, indistinguible de uno inexistente, a propósito.
+     Va ANTES de cargar nada: ningún runner ni escritura ve un id que no pasó por acá. */
+  if (bodyProjectId) {
+    const propio = await proyectoDelCliente(prisma, { projectId: bodyProjectId, clientId });
+    if (!propio) return apiError("not_found", 404);
   }
   // Señal para confirmar en dev que corre el código nuevo y si llegó async (A2).
   console.log(`[analyze] POST agentId=${bodyAgentId ?? "—"} async=${body?.async === true} stage=${bodyStage} step=${bodyStep} project=${bodyProjectId ?? "—"}`);

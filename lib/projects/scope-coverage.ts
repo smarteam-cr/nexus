@@ -44,6 +44,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/projects/proyecto-del-cliente.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: es el helper puro que cruza UN id que vino del body " +
+      "con el cliente de la URL (auditoría 2026-09-03: analyze usaba el id crudo y un CSE podía " +
+      "regenerar los documentos del proyecto de OTRO cliente). Un criterio de alcance acá sería el " +
+      "bug: regenerar un documento de un proyecto inactivo del MISMO cliente es legítimo; otro " +
+      "cliente no lo es, y eso es lo único que cruza.",
+  },
   "app/api/cards/[cardId]/send-to-canvas/route.ts": {
     modo: "exento",
     razon:
