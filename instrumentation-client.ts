@@ -8,10 +8,15 @@
  * viajar como build-arg (docker-compose.yml → Dockerfile), no solo en el .env
  * de runtime. Ver docs/RUNBOOK.md.
  */
-import * as Sentry from "@sentry/nextjs";
 import { tacharTokensDelEvento } from "@/lib/observability/scrub";
+import { conSentry } from "@/lib/observability/sentry-lazy";
 
-if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+// C-14 (2026-09-04): el SDK ya no viaja en el chunk raíz de todas las páginas. Se carga con
+// `import()` solo si hay DSN (ver lib/observability/sentry-lazy.ts), en un chunk aparte y
+// después de la hidratación. Sin DSN nunca se descarga.
+let transicion: ((href: string, navigationType: string) => void) | null = null;
+
+conSentry((Sentry) => {
   Sentry.init({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     environment: process.env.NODE_ENV ?? "development",
@@ -28,8 +33,13 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     beforeSend: tacharTokensDelEvento,
     beforeBreadcrumb: tacharTokensDelEvento,
   });
-}
+  transicion = Sentry.captureRouterTransitionStart;
+});
 
-// Hook de navegación del App Router (requerido por @sentry/nextjs para
-// correlacionar errores con la ruta activa). No-op sin init.
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+// Hook de navegación del App Router (requerido por @sentry/nextjs para correlacionar
+// errores con la ruta activa). Next lo exige SINCRÓNICO y presente al cargar el módulo:
+// es un wrapper que, hasta que el SDK llegue, no hace nada (igual que sin DSN) y después
+// reenvía. Una transición perdida en esos milisegundos no rompe ninguna captura.
+export const onRouterTransitionStart = (href: string, navigationType: string): void => {
+  transicion?.(href, navigationType);
+};

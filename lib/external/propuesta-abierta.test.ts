@@ -428,3 +428,45 @@ describe("candado 9 — la propuesta se aprueba UNA sola vez, aunque dos la apru
     expect(src.includes("if (bc.approvedAt)"), "volvió el check-then-act").toBe(false);
   });
 });
+
+describe("candado 10 — el SDK de Sentry no viaja en el chunk de todas las páginas (C-14)", () => {
+  /**
+   * Medido el 2026-09-04: 426 KB de los 674 KB que descarga TODA página eran el SDK, con DSN o
+   * sin él. En el navegador se carga bajo demanda (lib/observability/sentry-lazy.ts): sin
+   * `NEXT_PUBLIC_SENTRY_DSN` nunca; con DSN, en un chunk aparte. Un import ESTÁTICO en cualquier
+   * módulo de cliente lo devuelve al chunk raíz sin que nada falle — solo se ve en el peso.
+   */
+  const caminar = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) caminar(rel, out);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(rel);
+    }
+    return out;
+  };
+
+  it("ningún módulo de cliente importa @sentry/nextjs de forma estática", () => {
+    /* La edición que lo pone en rojo: volver a `import * as Sentry from "@sentry/nextjs"` en un
+       error.tsx «porque es más simple» — el SDK vuelve al chunk de todas las páginas de ese árbol. */
+    const clientes = [
+      "instrumentation-client.ts",
+      "lib/observability/report-error.ts",
+      ...[...caminar("app"), ...caminar("components")].filter((f) => /^\s*"use client"/m.test(fs.readFileSync(path.join(RAIZ, f), "utf8"))),
+    ];
+    expect(clientes.length, "el escaneo no encontró módulos de cliente").toBeGreaterThan(20);
+    const estaticos = clientes.filter((f) => /from\s+"@sentry\/nextjs"/.test(sinComentarios(fs.readFileSync(path.join(RAIZ, f), "utf8"))));
+    expect(estaticos, "estos módulos de cliente meten el SDK entero en el chunk raíz").toEqual([]);
+  });
+
+  it("el cargador es bajo demanda, gateado por el DSN literal, y el hook de navegación sigue sincrónico", () => {
+    const lazy = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/observability/sentry-lazy.ts"), "utf8"));
+    expect(lazy).toContain('import("@sentry/nextjs")');
+    expect(lazy, "el DSN tiene que leerse literal para que Next lo inline").toContain("process.env.NEXT_PUBLIC_SENTRY_DSN");
+    const cliente = sinComentarios(fs.readFileSync(path.join(RAIZ, "instrumentation-client.ts"), "utf8"));
+    expect(cliente).toContain("conSentry(");
+    expect(cliente, "Next exige el hook sincrónico y presente al cargar: tiene que ser un wrapper").toMatch(
+      /export const onRouterTransitionStart = \(href: string, navigationType: string\): void =>/,
+    );
+  });
+});

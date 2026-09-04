@@ -8,17 +8,19 @@
  *
  * El sistema de toasts (useToast) llama a esto en cada `toast.error(...)`, así
  * que todos los errores visibles al usuario quedan trackeados automáticamente.
+ *
+ * C-14 (2026-09-04): el Toast vive en el layout raíz, así que un import estático del SDK
+ * acá lo metía en el chunk de TODAS las páginas. Va por `conSentry`: bajo demanda, solo con DSN.
  */
-import * as Sentry from "@sentry/nextjs";
+import { conSentry } from "./sentry-lazy";
 
 export function reportClientError(
   error: unknown,
   context?: Record<string, unknown>,
 ): void {
-  Sentry.captureException(
-    error instanceof Error ? error : new Error(String(error)),
-    { extra: context },
-  );
+  conSentry((Sentry) => {
+    Sentry.captureException(error instanceof Error ? error : new Error(String(error)), { extra: context });
+  });
   if (context) console.error("[client-error]", error, context);
   else console.error("[client-error]", error);
 }

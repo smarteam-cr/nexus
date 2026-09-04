@@ -14,7 +14,7 @@
  * si el error es determinista, vuelve a caer acá y no más arriba.
  */
 import { Component, type ReactNode } from "react";
-import * as Sentry from "@sentry/nextjs";
+import { conSentry } from "@/lib/observability/sentry-lazy";
 
 interface Props {
   /** Nombre visible del canvas ("Kickoff", "Cronograma"…) para el fallback. */
@@ -34,7 +34,7 @@ export default class CanvasBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    Sentry.captureException(error, { tags: { canvas: this.props.label } }); // no-op sin DSN
+    conSentry((Sentry) => Sentry.captureException(error, { tags: { canvas: this.props.label } })); // C-14: bajo demanda
     console.error(`[canvas boundary] ${this.props.label}:`, error);
   }
 

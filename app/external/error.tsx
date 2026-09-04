@@ -19,7 +19,7 @@
  * los incidentes que más queremos ver.
  */
 import { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
+import { conSentry } from "@/lib/observability/sentry-lazy";
 
 export default function ExternalError({
   error,
@@ -29,7 +29,7 @@ export default function ExternalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error);
+    conSentry((Sentry) => Sentry.captureException(error)); // C-14: bajo demanda, solo con DSN
   }, [error]);
 
   return (

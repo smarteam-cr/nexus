@@ -15,7 +15,7 @@
  * cubre los errores de render/hidratación del cliente).
  */
 import { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
+import { conSentry } from "@/lib/observability/sentry-lazy";
 
 export default function ShellSectionError({
   error,
@@ -25,7 +25,7 @@ export default function ShellSectionError({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error); // no-op sin DSN configurado
+    conSentry((Sentry) => Sentry.captureException(error)); // C-14: bajo demanda, solo con DSN
     console.error("[shell error boundary]", error);
   }, [error]);
 

@@ -16,7 +16,7 @@
  * 2026; ahora las secciones internas caen primero en (shell)/error.tsx y el externo
  * en external/error.tsx, así que esto es solo el backstop real.
  */
-import * as Sentry from "@sentry/nextjs";
+import { conSentry } from "@/lib/observability/sentry-lazy";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -27,7 +27,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error); // no-op sin DSN configurado
+    conSentry((Sentry) => Sentry.captureException(error)); // C-14: bajo demanda, solo con DSN
     console.error("[global error boundary]", error);
   }, [error]);
 
