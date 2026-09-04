@@ -212,4 +212,17 @@ describe("el RUNBOOK dice la verdad sobre los jobs y tiene las secciones de recu
     expect(vps).toContain("deploy.sh");
     expect(vps).toContain(".env");
   });
+
+  it("el .env.example declara TODA variable que decide si un job corre, y cual key de Anthropic es la de prod (B-11)", () => {
+    /* La edicion que lo pone en rojo: borrar COBRANZA_CRON_ENABLED del .env.example «porque ya
+       esta en el VPS» — la proxima reconstruccion del VPS apaga la cobranza quincenal sin avisar. */
+    const fuentes = ["lib/jobs/defs.ts", "lib/cs/watchdog.ts"].map(leer).join("\n");
+    const variables = [...new Set([...fuentes.matchAll(/process\.env\.([A-Z_]+)/g)].map((m) => m[1]))].sort();
+    expect(variables, "el escaneo no encontro los gates de los jobs").toContain("CS_WATCHDOG_ENABLED");
+    expect(variables).toContain("COBRANZA_CRON_ENABLED");
+    const ejemplo = leer(".env.example");
+    const noDeclaradas = variables.filter((v) => !new RegExp(`^#?\\s*${v}=`, "m").test(ejemplo));
+    expect(noDeclaradas, "variables que apagan un job y el .env.example no declara").toEqual([]);
+    expect(ejemplo, "la nota de cual ANTHROPIC_API_KEY es la de produccion").toContain("key de PRODUCCION");
+  });
 });
