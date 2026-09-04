@@ -20,6 +20,7 @@ import {
   piecesCreatedWithProject,
   piecesEnabledByTags,
 } from "./registry";
+import { proposedPieces, resolvePieceStates } from "./piece-state";
 
 describe("integridad del registro", () => {
   it("los slugs son únicos", () => {
@@ -230,5 +231,44 @@ describe("ownRenderer ↔ el panel del proyecto", () => {
       src,
       "el panel volvió a escribir a mano la lista de canvases con renderer propio",
     ).toMatch(/CANVAS_CON_RENDERER_PROPIO = new Set\(\s*PIECES\.filter/);
+  });
+});
+
+describe("D-03: los tags encienden piezas también desde el PUT de tags, y HUBSPOT_STAGE_VALUE se fue", () => {
+  /**
+   * `enabledByTags` prometía que un tag enciende una pieza, pero solo el handoff lo evaluaba: un
+   * tag puesto a mano después no hacía nada. El PUT de tags enciende exactamente lo que
+   * `resolvePieceStates` propone — sin canvas y con el tag — y nunca una pieza apagada a mano.
+   */
+  const leer = (rel: string) =>
+    fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  it("el contrato que usa el PUT: con el tag y sin canvas se propone; apagada a mano, NO", () => {
+    expect(proposedPieces(resolvePieceStates({ tags: ["custom_dev"], canvases: [] })).map((p) => p.slug)).toEqual([
+      "tech-requirements",
+    ]);
+    const apagada = [{ id: "c1", slug: "tech-requirements", name: "Desarrollo", disabledAt: new Date("2026-09-01") }];
+    expect(
+      proposedPieces(resolvePieceStates({ tags: ["custom_dev"], canvases: apagada })),
+      "una pieza que el CSE apagó no se propone: el PUT no la reenciende",
+    ).toEqual([]);
+  });
+
+  it("LA guarda: el PUT de tags enciende lo propuesto con ensurePieceCanvas, y el registro ya no dice que nadie lo evalúa", () => {
+    /* La edición que la pone en rojo: volver el PUT a `update` + `json({ tags })` «porque el
+       desplegable ya lo propone» — propone, no enciende; o encender por `piecesEnabledByTags`
+       directo, que reenciende lo que el CSE apagó. */
+    const put = leer("app/api/projects/[projectId]/tags/route.ts");
+    expect(put, "el PUT enciende lo que resolvePieceStates propone").toContain("proposedPieces(resolvePieceStates({ tags, canvases }))");
+    expect(put).toContain("ensurePieceCanvas(projectId, pieza.slug)");
+    expect(put, "la respuesta dice qué se encendió").toContain("piezasEncendidas");
+    const registro = fs.readFileSync(path.join(process.cwd(), "lib/pieces/registry.ts"), "utf8");
+    expect(registro, "el comentario de enabledByTags volvió a mentir").not.toContain("un tag agregado después no hace nada");
+  });
+
+  it("HUBSPOT_STAGE_VALUE no vuelve: nadie la leía", () => {
+    for (const rel of ["lib/lifecycle/stage-engine.ts", "lib/lifecycle/index.ts"]) {
+      expect(leer(rel), `${rel} declara/exporta HUBSPOT_STAGE_VALUE otra vez`).not.toContain("HUBSPOT_STAGE_VALUE");
+    }
   });
 });

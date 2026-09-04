@@ -20,7 +20,6 @@ export {
   FULL_CYCLE_ORDER,
   SHORT_CYCLE_ORDER,
   STAGE_LABEL_ES,
-  HUBSPOT_STAGE_VALUE,
   type LifecycleSignals,
   type InferredStage,
   type LifecycleCycle,

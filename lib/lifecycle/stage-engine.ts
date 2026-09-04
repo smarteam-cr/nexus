@@ -104,23 +104,9 @@ export const STAGE_LABEL_ES: Record<ProjectLifecycleStage, string> = {
   FINALIZADO: "Finalizado",
 };
 
-/**
- * Internal value de la futura propiedad de HubSpot (sync bidireccional). Identidad
- * HOY a propósito: el enum de Prisma se diseñó con slugs estables; el mapeo queda
- * DECLARADO para que el write a HubSpot de mañana no dependa de nombres de enum.
- */
-export const HUBSPOT_STAGE_VALUE: Record<ProjectLifecycleStage, string> = {
-  HAND_OFF: "HAND_OFF",
-  EXPLORACION: "EXPLORACION",
-  DIAGNOSTICO: "DIAGNOSTICO",
-  PLANIFICACION: "PLANIFICACION",
-  CONFIGURACION_TECNICA: "CONFIGURACION_TECNICA",
-  ADOPCION: "ADOPCION",
-  VALIDACION_USO: "VALIDACION_USO",
-  ENTREGA: "ENTREGA",
-  OPERACION_CONTINUA: "OPERACION_CONTINUA",
-  FINALIZADO: "FINALIZADO",
-};
+// D-03 (2026-09-04): acá vivía `HUBSPOT_STAGE_VALUE`, el mapeo etapa → valor de una propiedad
+// de HubSpot «de mañana» que nunca llegó: nadie lo leía. Cuando exista la escritura hacia
+// HubSpot, el mapeo se declara junto a ella, no acá por adelantado.
 
 // ── Inferencia ────────────────────────────────────────────────────────────────
 

@@ -64,8 +64,8 @@ export interface PieceDefinition {
   optional: boolean;
   /**
    * Tags que ENCIENDEN una pieza opcional. Vacío = la enciende una persona a mano.
-   * (F2 la evalúa también cuando el CSE cambia los tags — hoy solo se mira una vez,
-   * durante el handoff, y por eso un tag agregado después no hace nada.)
+   * Se evalúa en el handoff (al detectar el tag) y, desde D-03 (2026-09-04), también en el
+   * PUT de tags: lo que `resolvePieceStates` propone se enciende; lo apagado a mano, no.
    */
   enabledByTags: string[];
   /** Tiene componente propio en vez del renderer genérico de secciones. */

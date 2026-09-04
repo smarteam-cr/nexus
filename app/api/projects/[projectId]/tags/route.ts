@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { sanitizeTags, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
+import { ensurePieceCanvas } from "@/lib/pieces/ensure-canvas";
+import { proposedPieces, resolvePieceStates } from "@/lib/pieces/piece-state";
 
 // GET: tags del proyecto (auto-deriva un producto desde serviceType si está vacío). Lectura abierta.
 export async function GET(
@@ -59,5 +61,24 @@ export async function PUT(
   const tags = sanitizeTags((raw as { tags?: unknown })?.tags);
 
   await prisma.project.update({ where: { id: projectId }, data: { tags } });
-  return NextResponse.json({ tags });
+
+  // D-03 (2026-09-04): los tags ENCIENDEN piezas (`enabledByTags`, lib/pieces/registry.ts).
+  // Hasta hoy solo el handoff las encendía al detectar el tag; un tag puesto a mano después no
+  // hacía nada. Se enciende exactamente lo que `resolvePieceStates` PROPONE —sin canvas y con
+  // el tag— y nunca una pieza que el CSE apagó a propósito: esa queda «off», no «proposed».
+  // Best-effort: los tags ya están guardados; una pieza que no se pudo encender no los deshace.
+  const canvases = await prisma.projectCanvas.findMany({
+    where: { projectId },
+    select: { id: true, slug: true, name: true, disabledAt: true },
+  });
+  const piezasEncendidas: string[] = [];
+  for (const pieza of proposedPieces(resolvePieceStates({ tags, canvases }))) {
+    try {
+      const r = await ensurePieceCanvas(projectId, pieza.slug);
+      if (r.outcome !== "sin-cambios") piezasEncendidas.push(pieza.slug);
+    } catch (e) {
+      console.warn(`[tags] no se pudo encender «${pieza.slug}»:`, e instanceof Error ? e.message : e);
+    }
+  }
+  return NextResponse.json({ tags, piezasEncendidas });
 }
