@@ -170,7 +170,7 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
           currentUrl={logoUrl}
           endpoint={`/api/clients/${clientId}/logo`}
           label="Logo del cliente"
-          hint="PNG, JPG, WebP o SVG · máx 4MB."
+          hint="PNG, JPG, WebP o SVG · máx 300 KB."
         />
       </div>
 
@@ -243,7 +243,7 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
               label="Versión oscura"
               uploadLabel="Subir versión para fondo oscuro"
               emptyLabel="Sin versión oscura"
-              hint="PNG, JPG, WebP o SVG · máx 4MB."
+              hint="PNG, JPG, WebP o SVG · máx 300 KB."
             />
           </div>
         </>

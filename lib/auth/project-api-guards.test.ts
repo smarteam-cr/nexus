@@ -683,3 +683,44 @@ describe("la cadena de auth se resuelve UNA vez por request (C-07)", () => {
     expect((auth.match(/cache\(/g) ?? []).length, "un solo cache() en la cadena: el resto deriva").toBe(1);
   });
 });
+
+describe("C-22: el logo tiene tope de 300 KB, con el porqué, en las DOS rutas y en la interfaz", () => {
+  /**
+   * Un logo se pinta a ~30 px de alto; aceptar 4 MB solo hacía más lenta cada página que el
+   * cliente deja abierta. Sin `sharp` (dependencia nativa) no se achica en el servidor: se rechaza
+   * CON el porqué. El mensaje tiene un solo dueño para que las dos rutas digan lo mismo, y las
+   * imágenes de contenido (portadas) conservan el límite físico del bucket.
+   */
+  it("LA guarda: 300 KB, el mensaje explica el porqué, y las portadas siguen con el límite del bucket", async () => {
+    /* La edición que la pone en rojo: volver `MAX_LOGO_SIZE` a 4 MB «porque el bucket lo permite»,
+       o un mensaje que solo diga «muy grande» sin decir qué hacer. */
+    const { MAX_LOGO_SIZE, MAX_IMAGE_SIZE, PUBLIC_BUCKET_MAX_SIZE, mensajeDeLogoMuyGrande } = await import(
+      "@/lib/storage/public-assets"
+    );
+    expect(MAX_LOGO_SIZE).toBe(300 * 1024);
+    expect(MAX_IMAGE_SIZE, "una portada se pinta grande: conserva el límite del bucket").toBe(PUBLIC_BUCKET_MAX_SIZE);
+    expect(PUBLIC_BUCKET_MAX_SIZE).toBe(4 * 1024 * 1024);
+    const msg = mensajeDeLogoMuyGrande(2_457_600);
+    expect(msg).toContain("2400 KB");
+    expect(msg).toContain("300 KB");
+    expect(msg, "el mensaje tiene que decir POR QUÉ (se muestra chico)").toContain("30 px");
+    expect(msg, "y qué hacer").toContain("SVG");
+  });
+
+  /* `lee` vive dentro de otro describe (misma trampa que en C-13): lector propio. */
+  const leeC22 = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+  it("las dos rutas de logo rechazan con el mensaje único, y la interfaz promete 300 KB, no 4 MB", () => {
+    /* La edición que la pone en rojo: un `máx ${MAX_LOGO_SIZE / 1024 / 1024}MB` de vuelta en una ruta
+       (diría «máx 0.29MB»), o un hint que siga diciendo «máx 4MB». */
+    for (const ruta of ["app/api/clients/[id]/logo/route.ts", "app/api/system/brand-logos/[brand]/route.ts"]) {
+      const src = leeC22(ruta);
+      expect(src, `${ruta} no usa el mensaje único`).toContain("mensajeDeLogoMuyGrande(file.size)");
+      expect(src, `${ruta} arma el tope a mano`).not.toContain("MAX_LOGO_SIZE / 1024 / 1024");
+    }
+    for (const [archivo, veces] of [["components/clients/ClientInfoPanel.tsx", 2], ["app/(shell)/integrations/page.tsx", 3]] as const) {
+      const src = leeC22(archivo);
+      expect(src, `${archivo} sigue prometiendo 4MB`).not.toContain("máx 4MB");
+      expect(src.split("máx 300 KB").length - 1, `${archivo}: los hints de logo`).toBe(veces);
+    }
+  });
+});

@@ -13,7 +13,28 @@
 import { getStorageClient } from "./client";
 
 export const PUBLIC_BUCKET = "public-assets";
-export const MAX_LOGO_SIZE = 4 * 1024 * 1024; // 4MB
+/** El límite FÍSICO del bucket público — lo comparten los logos y las imágenes de contenido. */
+export const PUBLIC_BUCKET_MAX_SIZE = 4 * 1024 * 1024; // 4MB
+
+/**
+ * C-22 (2026-09-04): un logo se pinta a ~30 px de alto (rail del cliente, portadas, PDF). Un
+ * archivo de 4 MB no se ve mejor que uno de 300 KB: solo carga más lento en cada página que el
+ * cliente deja abierta. 300 KB alcanza de sobra para un PNG/WebP de ~600 px de ancho, o un SVG.
+ * Sin `sharp` (dependencia nativa; no entra al Docker en una tanda desatendida) acá no se puede
+ * achicar: se rechaza CON el porqué, y el mensaje tiene un solo dueño (`mensajeDeLogoMuyGrande`)
+ * para que las dos rutas de logo digan lo mismo.
+ */
+export const MAX_LOGO_SIZE = 300 * 1024; // 300 KB
+export const MAX_LOGO_SIZE_LABEL = "300 KB";
+
+export function mensajeDeLogoMuyGrande(bytes: number): string {
+  const kb = Math.round(bytes / 1024);
+  return (
+    `El logo pesa ${kb} KB y el máximo es ${MAX_LOGO_SIZE_LABEL}. Se muestra a unos 30 px de alto, así que ` +
+    "más peso no se ve mejor: solo carga más lento en cada página del cliente. Exportalo más chico " +
+    "(un PNG o WebP de unos 600 px de ancho alcanza) o subilo en SVG."
+  );
+}
 
 /** MIME permitidos para logos. SVG vía <img> (cross-origin) no ejecuta scripts. */
 export const LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
@@ -24,9 +45,10 @@ export function isAllowedLogoType(mime: string): boolean {
 
 /** MIME para IMÁGENES de contenido subidas por usuarios (portadas, diagramas):
  *  SIN SVG (los diagramas van rasterizados). Subset de los MIME del bucket —
- *  el bucket ya limita a LOGO_MIME_TYPES y 4MB a nivel Supabase. */
+ *  el bucket ya limita a LOGO_MIME_TYPES y 4MB a nivel Supabase. Una portada SÍ se
+ *  pinta grande: conserva el límite del bucket, no el de los logos (C-22). */
 export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
-export const MAX_IMAGE_SIZE = MAX_LOGO_SIZE; // 4MB (límite del bucket)
+export const MAX_IMAGE_SIZE = PUBLIC_BUCKET_MAX_SIZE; // 4MB (límite del bucket)
 
 export function isAllowedImageType(mime: string): boolean {
   return IMAGE_MIME_TYPES.includes(mime);
@@ -40,7 +62,7 @@ export async function ensurePublicBucket(): Promise<void> {
   if (!data) {
     await client.storage.createBucket(PUBLIC_BUCKET, {
       public: true,
-      fileSizeLimit: MAX_LOGO_SIZE,
+      fileSizeLimit: PUBLIC_BUCKET_MAX_SIZE,
       allowedMimeTypes: LOGO_MIME_TYPES,
     });
   }

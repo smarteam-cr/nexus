@@ -209,7 +209,7 @@ export default async function IntegrationsPage({
             currentUrl={smarteamLogoUrl}
             endpoint="/api/system/smarteam-logo"
             label="Logo de Smarteam"
-            hint="PNG, JPG, WebP o SVG · máx 4MB."
+            hint="PNG, JPG, WebP o SVG · máx 300 KB."
           />
         </section>
 
@@ -227,7 +227,7 @@ export default async function IntegrationsPage({
                 currentUrl={hubspotLogoUrl}
                 endpoint="/api/system/brand-logos/hubspot"
                 label="Logo de HubSpot"
-                hint="PNG, JPG, WebP o SVG · máx 4MB."
+                hint="PNG, JPG, WebP o SVG · máx 300 KB."
               />
             </div>
             <div className="rounded-lg border border-line p-4">
@@ -236,7 +236,7 @@ export default async function IntegrationsPage({
                 currentUrl={insiderLogoUrl}
                 endpoint="/api/system/brand-logos/insider"
                 label="Logo de Insider One"
-                hint="PNG, JPG, WebP o SVG · máx 4MB."
+                hint="PNG, JPG, WebP o SVG · máx 300 KB."
               />
             </div>
           </div>

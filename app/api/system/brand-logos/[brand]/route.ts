@@ -18,6 +18,7 @@ import {
   removePublicAsset,
   isAllowedLogoType,
   MAX_LOGO_SIZE,
+  mensajeDeLogoMuyGrande,
 } from "@/lib/storage/public-assets";
 
 const SYSTEM_ID = "system";
@@ -61,7 +62,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ error: "Formato no soportado. Usá PNG, JPG, WebP o SVG." }, { status: 400 });
   }
   if (file.size > MAX_LOGO_SIZE) {
-    return NextResponse.json({ error: `La imagen es muy grande (máx ${MAX_LOGO_SIZE / 1024 / 1024}MB).` }, { status: 400 });
+    // C-22: el porqué va en el mensaje, y el mensaje tiene un solo dueño (public-assets.ts).
+    return NextResponse.json({ error: mensajeDeLogoMuyGrande(file.size) }, { status: 400 });
   }
 
   const url = await uploadPublicAsset(def.path, await file.arrayBuffer(), file.type);
