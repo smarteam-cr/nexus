@@ -111,9 +111,24 @@ function sectionsBlock(sections: AssistSectionDef[]): string {
 /** Corre el assist: 1 llamada (+continuaciones de pause_turn) → propuesta validada. */
 export async function runDocumentAssist(input: DocumentAssistInput): Promise<DocumentAssistResult> {
   const system = `${input.systemPrompt.trim()}\n\n${fixedRules(input)}`;
-  const user = `${input.context ? `Contexto del proyecto:\n\n${input.context}\n\n---\n\n` : ""}El documento actual, sección por sección:\n\n${sectionsBlock(input.sections)}\n\n---\n\nInstrucción del usuario: ${input.instruction}\n\nDevuelve el objeto JSON con las secciones que cambian.`;
+  // C-03 (2026-09-04): contexto + documento es el prefijo estable — idéntico entre las
+  // continuaciones de pause_turn de este mismo pedido y entre dos pedidos seguidos sobre el
+  // mismo documento. Se marca como breakpoint de caché; la instrucción, que cambia cada vez,
+  // va DESPUÉS. Bajo el mínimo cacheable la marca no hace nada, y no falla.
+  const prefijo = `${input.context ? `Contexto del proyecto:\n\n${input.context}\n\n---\n\n` : ""}El documento actual, sección por sección:\n\n${sectionsBlock(input.sections)}`;
 
-  const messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: user }];
+  const messages: Anthropic.Messages.MessageParam[] = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: prefijo, cache_control: { type: "ephemeral" } },
+        {
+          type: "text",
+          text: `\n\n---\n\nInstrucción del usuario: ${input.instruction}\n\nDevuelve el objeto JSON con las secciones que cambian.`,
+        },
+      ],
+    },
+  ];
   const warnings: string[] = [];
   const citations = new Map<string, string>(); // url → title
   let usedWebSearch = false;

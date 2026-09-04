@@ -40,7 +40,17 @@ export async function generarTextoDeBrief(
       max_tokens: BRIEF_MAX_TOKENS,
       system: systemPrompt,
       messages: [
-        { role: "user", content: `${serialized}\n\n${instruccion} Devolvé SOLO el JSON.${extra}` },
+        {
+          role: "user",
+          // C-03 (2026-09-04): el contexto serializado es el prefijo estable — el reintento conciso
+          // lo relee de la caché a 0,1× en vez de pagarlo entero dos veces. La instrucción y el
+          // `extra` cambian entre intentos: van DESPUÉS del breakpoint. Bajo el mínimo cacheable
+          // (1.024 tokens en Sonnet) la marca no hace nada, y no falla.
+          content: [
+            { type: "text", text: serialized, cache_control: { type: "ephemeral" } },
+            { type: "text", text: `\n\n${instruccion} Devolvé SOLO el JSON.${extra}` },
+          ],
+        },
       ],
     });
   const textoDe = (msg: Awaited<ReturnType<typeof pedir>>) =>

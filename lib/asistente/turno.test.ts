@@ -724,3 +724,31 @@ describe("el chat actúa en el mismo turno, no pide permiso", () => {
     expect(COLA_DOC, "se puede volver a reapuntar en silencio").toContain("NO LO APUNTES A OTRO CAMPO");
   });
 });
+
+describe("los otros dos consumidores de contexto grande también cachean el prefijo (C-03)", () => {
+  /* brief-llm reintenta con la MISMA serialización cuando se corta por max_tokens, y assist
+     re-envía el mismo primer mensaje en cada continuación de pause_turn: sin breakpoint, cada
+     reintento paga el contexto entero otra vez. Lo caro es el contexto; la instrucción no. */
+  const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+
+  it("brief-llm: UN breakpoint, sobre el contexto serializado, y la instrucción después", () => {
+    /* La edición que lo pone en rojo: volver al string único `${serialized}\n\n${instruccion}`. */
+    const src = leer("lib/cs/brief-llm.ts");
+    const marcas = (src.match(/cache_control: \{ type: "ephemeral" \}/g) ?? []).length;
+    expect(marcas, "un breakpoint por llamada: cada uno es una escritura de caché que se paga").toBe(1);
+    const posCache = src.indexOf("cache_control");
+    expect(src.lastIndexOf("text: serialized", posCache), "el breakpoint tiene que ir sobre el contexto").toBeGreaterThan(-1);
+    expect(src.indexOf("${instruccion}", posCache), "la instrucción cambia entre intentos: va después del breakpoint").toBeGreaterThan(posCache);
+  });
+
+  it("assist: UN breakpoint sobre contexto + documento, y la instrucción del usuario después", () => {
+    /* La edición que lo pone en rojo: meter la instrucción en el bloque marcado — cada pedido
+       distinto invalidaría el prefijo entero, sin error y sin log. */
+    const src = leer("lib/ai/assist.ts");
+    const marcas = (src.match(/cache_control: \{ type: "ephemeral" \}/g) ?? []).length;
+    expect(marcas).toBe(1);
+    const posCache = src.indexOf("cache_control");
+    expect(src.lastIndexOf("sectionsBlock(input.sections)", posCache), "el documento tiene que estar en el prefijo").toBeGreaterThan(-1);
+    expect(src.indexOf("Instrucción del usuario", posCache), "la instrucción no puede entrar al prefijo cacheado").toBeGreaterThan(posCache);
+  });
+});
