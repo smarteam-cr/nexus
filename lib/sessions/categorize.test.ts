@@ -430,3 +430,31 @@ test("C-19 — la página manda el índice + las filas del grupo, y el cliente a
   );
   expect(cliente, "los helpers de `?g=` tienen un solo dueño").not.toContain("function paramToGroup(");
 });
+
+test("C-20 — cambiar de grupo pide la ruta (con guard interno) y NO re-renderiza el servidor; página y ruta cargan por el mismo cargador", () => {
+  /* La edición que lo pone en rojo: volver a `router.replace` en el cliente (cada clic re-corre la
+     página entera en el servidor), sacarle `withInternal` a la ruta (las sesiones de todos los
+     clientes con solo una sesión de Supabase), o que la página vuelva a consultar por su cuenta
+     (dos cargadores que divergen: la barra cuenta una cosa y la ruta devuelve otra). */
+  const leer = (rel: string) =>
+    fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  const ruta = leer("app/api/sessions/grupo/route.ts");
+  expect(ruta, "la ruta tiene que exigir usuario interno").toMatch(/export const GET = withInternal\(/);
+  expect(ruta).toContain("paramAGrupo(req.nextUrl.searchParams.get(\"g\"))");
+  expect(ruta, "la ruta carga por el mismo cargador que la página").toContain("cargarSesionesCategorizadas()");
+  expect(ruta).toContain("filasDelGrupo(sessionsWithMeta, grupo)");
+
+  const page = leer("app/(shell)/sessions/page.tsx");
+  expect(page, "la página tiene que cargar por el mismo cargador que la ruta").toContain("await cargarSesionesCategorizadas()");
+  expect(page, "la página vuelve a consultar por su cuenta: dos cargadores que divergen").not.toContain("prisma.");
+
+  const cargador = leer("lib/sessions/cargar-sesiones-categorizadas.ts");
+  expect(cargador).toContain("prisma.firefliesSession.findMany(");
+  expect(cargador, "las futuras se MARCAN, no se esconden").not.toMatch(/date:\s*\{\s*lte:/);
+
+  const cliente = leer("app/(shell)/sessions/SessionsClient.tsx");
+  expect(cliente, "router.replace re-corre la página entera en el servidor en cada clic").not.toContain("router.replace(");
+  expect(cliente, "la URL sigue a la selección sin pedirle nada al servidor").toContain('window.history.replaceState(null, "", next)');
+  expect(cliente, "las filas de un grupo se piden a la ruta").toContain("/api/sessions/grupo?g=");
+  expect(cliente, "y se guardan por grupo: un grupo se pide UNA vez").toContain("setGrupos((prev) => ({ ...prev, [clave]: filas }))");
+});

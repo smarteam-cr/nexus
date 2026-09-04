@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useTransition } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
@@ -121,6 +121,9 @@ type SelectedGroupKey = GrupoElegido;
 
 // Modo del panel derecho — sessions (default) o analysis (Fase 9)
 type ViewMode = "sessions" | "analysis";
+
+/** Identidad estable para «este grupo no tiene filas (todavía)»: los memos que dependen de la lista no se recalculan por nada. */
+const SIN_FILAS: Session[] = [];
 
 // C-19: la clave del grupo y los helpers de `?g=` viven en lib/sessions/indice-de-grupos.ts —
 // el servidor los necesita para resolver el grupo de la URL y mandar solo sus filas.
@@ -1572,16 +1575,27 @@ export default function SessionsClient({
   teamMembers,
   cobertura,
 }: Props) {
-  const [sessions, setSessions] = useState<Session[]>(initialSessions);
-  /* C-19: las filas vienen del servidor POR GRUPO y cambian con cada selección (la URL cambia y
-     el servidor re-renderiza). El estado local existe para las ediciones optimistas
-     (handleClientChanged); cuando llega una tanda nueva, la adopta. Ajuste durante el render
-     con guarda —nunca useEffect— el idioma del repo (PopInput en sections.tsx). */
+  /* C-20 (2026-09-04): las filas viven en una CACHÉ por grupo. El servidor manda las del grupo
+     de la URL al entrar (C-19); cambiar de grupo pide las de ese grupo a /api/sessions/grupo
+     UNA vez y las guarda. La URL se actualiza con history.replaceState —sin re-render del
+     servidor—, así que la cascada de categorización corre al entrar y una vez por grupo, no
+     por clic. */
+  const claveDe = (g: SelectedGroupKey) => (g ? `${g.kind}:${g.id}` : null);
+  const [grupos, setGrupos] = useState<Record<string, Session[]>>(() => {
+    const k = claveDe(grupoInicial);
+    return k ? { [k]: initialSessions } : {};
+  });
+  /* Cuando el servidor vuelve a mandar filas (router.refresh tras reasignar un cliente) se
+     adoptan para su grupo. Ajuste durante el render con guarda —nunca useEffect— el idioma del
+     repo (PopInput en sections.tsx). */
   const [filasAdoptadas, setFilasAdoptadas] = useState(initialSessions);
   if (initialSessions !== filasAdoptadas) {
     setFilasAdoptadas(initialSessions);
-    setSessions(initialSessions);
+    const k = claveDe(grupoInicial);
+    if (k) setGrupos((prev) => ({ ...prev, [k]: initialSessions }));
   }
+  const [errorDeGrupo, setErrorDeGrupo] = useState<string | null>(null);
+  const [reintento, setReintento] = useState(0);
 
   // ── Auto-sync silencioso de Google Meet ────────────────────────────────────
   // Dispara sync + enrich en background al cargar la página. El endpoint tiene
@@ -1638,9 +1652,35 @@ export default function SessionsClient({
   //   ?s=sessionId            — sesión abierta en el panel derecho (Fase 8)
   //   ?view=analysis          — tab "Análisis" activo (Fase 9)
   //   ?analysis=runId         — AgentRun abierto en AnalysisPanel (Fase 9)
-  /* C-19: `router.replace` con otro `?g=` hace que el servidor re-renderice con las filas de ese
-     grupo. La transición dice cuándo están llegando, para no mostrar «No hay sesiones» mientras. */
-  const [cargandoGrupo, startTransition] = useTransition();
+  /* C-20: las filas del grupo elegido salen de la caché; si no están, se piden a la ruta. */
+  const claveSeleccionada = claveDe(selectedGroup);
+  const sessions = (claveSeleccionada && grupos[claveSeleccionada]) || SIN_FILAS;
+  const faltaCargar = claveSeleccionada !== null && !(claveSeleccionada in grupos);
+  const cargandoGrupo = faltaCargar && !errorDeGrupo;
+  useEffect(() => {
+    if (!faltaCargar || !selectedGroup || !claveSeleccionada) return;
+    const ctrl = new AbortController();
+    const clave = claveSeleccionada;
+    fetch(`/api/sessions/grupo?g=${encodeURIComponent(grupoAParam(selectedGroup) ?? "")}`, { signal: ctrl.signal })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "No se pudieron cargar las sesiones.");
+        return (data.filas ?? []) as Session[];
+      })
+      .then((filas) => {
+        setGrupos((prev) => ({ ...prev, [clave]: filas }));
+        setErrorDeGrupo(null);
+      })
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        setErrorDeGrupo(e instanceof Error ? e.message : "No se pudieron cargar las sesiones.");
+      });
+    return () => ctrl.abort();
+  }, [faltaCargar, claveSeleccionada, selectedGroup, reintento]);
+
+  /* La URL sigue a la selección SIN pedirle nada al servidor: `history.replaceState` se integra
+     con `useSearchParams` (Next ≥ 14.1) y no re-renderiza la página. Antes era `router.replace`,
+     y cada clic —de grupo o de sesión— volvía a correr la página entera en el servidor. */
   useEffect(() => {
     const params = new URLSearchParams();
     const gParam = grupoAParam(selectedGroup);
@@ -1653,9 +1693,7 @@ export default function SessionsClient({
     // Solo navegar si la URL realmente cambia (evita loops y noise)
     const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
     if (next !== current) {
-      startTransition(() => {
-        router.replace(next, { scroll: false });
-      });
+      window.history.replaceState(null, "", next);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup, selectedSession, viewMode, currentAnalysisRunId]);
@@ -1736,16 +1774,22 @@ export default function SessionsClient({
   }
 
   function handleClientChanged(sessionId: string, clientId: string | null) {
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id !== sessionId) return s;
-        const newClient = clientId ? clients.find((c) => c.id === clientId) : null;
-        const newGroup: SessionGroup = newClient
-          ? { kind: "client", id: newClient.id, label: newClient.name, company: newClient.company }
-          : s.group; // si quitan el override, el group se recalcularía en server-side; aquí mantenemos
-        return { ...s, clientId, manualClientId: clientId, group: newGroup };
-      })
-    );
+    /* Optimista sobre el grupo abierto; los DEMÁS grupos cacheados se descartan: la sesión pudo
+       pasar a uno de ellos, y una caché que la omite es la mentira que C-19 vino a evitar. */
+    const k = claveDe(selectedGroup);
+    setGrupos((prev) => {
+      if (!k || !prev[k]) return {};
+      return {
+        [k]: prev[k].map((s) => {
+          if (s.id !== sessionId) return s;
+          const newClient = clientId ? clients.find((c) => c.id === clientId) : null;
+          const newGroup: SessionGroup = newClient
+            ? { kind: "client", id: newClient.id, label: newClient.name, company: newClient.company }
+            : s.group; // si quitan el override, el group se recalcularía en server-side; aquí mantenemos
+          return { ...s, clientId, manualClientId: clientId, group: newGroup };
+        }),
+      };
+    });
     setSelectedSession((prev) =>
       prev?.id === sessionId ? { ...prev, clientId, manualClientId: clientId } : prev
     );
@@ -2024,9 +2068,22 @@ export default function SessionsClient({
             {/* Lista de sesiones */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {sidebarSessions.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-8">
-                  {cargandoGrupo ? "Cargando sesiones…" : "No hay sesiones"}
-                </p>
+                errorDeGrupo ? (
+                  <p className="text-xs text-warn-ink text-center py-8">
+                    {errorDeGrupo}{" "}
+                    <button
+                      type="button"
+                      className="underline text-brand"
+                      onClick={() => { setErrorDeGrupo(null); setReintento((n) => n + 1); }}
+                    >
+                      Reintentar
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-600 text-center py-8">
+                    {cargandoGrupo ? "Cargando sesiones…" : "No hay sesiones"}
+                  </p>
+                )
               ) : (
                 sidebarSessions.map((s) => (
                   <SidebarSessionItem

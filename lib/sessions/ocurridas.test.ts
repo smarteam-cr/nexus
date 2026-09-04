@@ -132,9 +132,9 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
 
   // ── agenda: NO cortan, y es la decisión correcta ─────────────────────────────
-  "app/(shell)/sessions/page.tsx": {
+  "lib/sessions/cargar-sesiones-categorizadas.ts": {
     clase: "agenda",
-    motivo: "Decisión CTX1.2: las 459 futuras se MARCAN, no se esconden. Cortar acá sería volver al bug anterior.",
+    motivo: "El cargador de /sessions y de GET /api/sessions/grupo (C-20). Decisión CTX1.2: las 459 futuras se MARCAN, no se esconden. Cortar acá sería volver al bug anterior.",
   },
   "app/(shell)/sales/page.tsx": { clase: "agenda", motivo: "Listado de reuniones de Ventas; la agenda es parte de lo que se mira." },
   "app/api/projects/[projectId]/gps/route.ts": { clase: "agenda", motivo: "«Próxima reunión» — su razón de ser es el futuro." },
@@ -283,7 +283,8 @@ describe("censo de lectores de sesiones", () => {
 
   it("los lectores de AGENDA no cortan — esconder el futuro es el bug opuesto", () => {
     // /sessions es el caso canónico: la decisión CTX1.2 fue marcarlas, no esconderlas.
-    const sessions = readFileSync(join(RAIZ, "app/(shell)/sessions/page.tsx"), "utf8");
+    // C-20: la consulta vive en el cargador compartido; la página ya no consulta nada.
+    const sessions = readFileSync(join(RAIZ, "lib/sessions/cargar-sesiones-categorizadas.ts"), "utf8");
     expect(sessions).not.toMatch(/date:\s*\{\s*lte:\s*new Date\(\)/);
   });
 });

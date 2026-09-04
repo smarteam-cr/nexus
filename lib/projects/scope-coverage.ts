@@ -40,7 +40,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },
-  "app/(shell)/sessions/page.tsx": { modo: "criterio", criterio: "clasificable" },
+  // C-20: las consultas de /sessions viven en el cargador compartido con /api/sessions/grupo.
+  "lib/sessions/cargar-sesiones-categorizadas.ts": { modo: "criterio", criterio: "clasificable" },
   "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
