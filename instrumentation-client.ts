@@ -9,6 +9,7 @@
  * de runtime. Ver docs/RUNBOOK.md.
  */
 import * as Sentry from "@sentry/nextjs";
+import { tacharTokensDelEvento } from "@/lib/observability/scrub";
 
 if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
   Sentry.init({
@@ -22,6 +23,10 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     // Mismo criterio que el server (instrumentation.ts): ruido de conexiones que
     // el usuario corta a mitad de camino. NO filtrar señales de pool/DB.
     ignoreErrors: [/ECONNRESET/, /\baborted\b/i],
+    // A-12: el token del enlace externo (64 hex en la URL) no viaja a Sentry — ni en
+    // request.url, ni en la transaction, ni en los breadcrumbs. Ver lib/observability/scrub.ts.
+    beforeSend: tacharTokensDelEvento,
+    beforeBreadcrumb: tacharTokensDelEvento,
   });
 }
 

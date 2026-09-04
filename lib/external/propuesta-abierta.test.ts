@@ -34,6 +34,8 @@
  *      gratis probar una contraseña contra miles de tokens.
  *   7. La cookie lleva la VERSIÓN de la contraseña (A-11): cambiarla expulsa a quien ya entró.
  *      Antes la cookie valía 30 días pasara lo que pasara.
+ *   8. El token no viaja a Sentry (A-12): cada error en una página externa se llevaba la URL
+ *      —con la llave adentro— a un tercero, en el cliente y en el servidor.
  */
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -41,6 +43,7 @@ import path from "node:path";
 import { evaluarContrasena, LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
 import { claveDeIp, POLITICA_POR_IP, POLITICA_POR_TOKEN } from "@/lib/external/verify-rate-limit";
 import { armarCredencial, credencialVigente, leerCredencial, versionDeCredencial } from "@/lib/external/credencial";
+import { tacharTokensDelEvento } from "@/lib/observability/scrub";
 
 // verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -275,4 +278,46 @@ describe("candado 7 — cambiar la contraseña mata las cookies vivas (A-11)", (
       expect(/value:\s*token\b/.test(src), `${ruta}: la cookie volvió a llevar el token pelado`).toBe(false);
     }
   });
+});
+
+describe("candado 8 — el token externo no viaja a Sentry (A-12)", () => {
+  const TOKEN = "b".repeat(64);
+
+  it("tacha toda cadena de 64 hex en cualquier rincón del evento, sin mutar el original", () => {
+    /* La edicion que lo pone en rojo: que tacharToken devuelva el texto tal cual, o que el
+       recorrido deje de bajar a breadcrumbs / contexts / extra. */
+    const evento = {
+      request: {
+        url: `https://nexus.smarteamcr.com/external/verify/${TOKEN}`,
+        headers: { Referer: `/external/propuesta/${TOKEN}` },
+      },
+      transaction: `/external/verify/${TOKEN}`,
+      contexts: { nextjs: { request_path: `/external/verify/${TOKEN}` } },
+      breadcrumbs: [
+        { category: "navigation", data: { to: `/external/kickoff?t=${TOKEN}` } },
+        { message: `GET /external/propuesta/${TOKEN}` },
+      ],
+      extra: { anidado: { lista: [`token=${TOKEN}`] } },
+      event_id: "0123456789abcdef0123456789abcdef",
+    };
+    const limpio = tacharTokensDelEvento(evento);
+    const json = JSON.stringify(limpio);
+    expect(json).not.toContain(TOKEN);
+    expect(json.match(/\[token\]/g)?.length, "los 7 lugares donde viajaba").toBe(7);
+    expect(limpio.event_id, "un id de 32 hex no es un token").toBe(evento.event_id);
+    expect(JSON.stringify(evento), "no muta el evento original").toContain(TOKEN);
+  });
+
+  it.each(["instrumentation-client.ts", "instrumentation.ts"])(
+    "%s lo cablea en beforeSend y beforeBreadcrumb",
+    (archivo) => {
+      /* La edicion que lo pone en rojo: sacar beforeSend de un init («total, tracesSampleRate es 0»). */
+      const src = sinComentarios(fs.readFileSync(path.join(RAIZ, archivo), "utf8"));
+      expect(src).toContain('from "@/lib/observability/scrub"');
+      expect(src, "beforeSend cubre el evento").toContain("beforeSend: tacharTokensDelEvento");
+      expect(src, "beforeBreadcrumb cubre la navegación y los fetch").toContain(
+        "beforeBreadcrumb: tacharTokensDelEvento",
+      );
+    },
+  );
 });

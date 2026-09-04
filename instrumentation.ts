@@ -18,6 +18,7 @@
 export const runtime = "nodejs";
 
 import * as Sentry from "@sentry/nextjs";
+import { tacharTokensDelEvento } from "@/lib/observability/scrub";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -40,6 +41,10 @@ export async function register() {
       // OJO: NO filtrar "Connection terminated" ni "max clients reached" — esos
       // son el pool agotándose y TIENEN que seguir llegando.
       ignoreErrors: [/ECONNRESET/, /\baborted\b/i],
+      // A-12: el token del enlace externo (64 hex en la URL) no viaja a Sentry — ni en
+      // request.url, ni en la transaction, ni en los breadcrumbs. Ver lib/observability/scrub.ts.
+      beforeSend: tacharTokensDelEvento,
+      beforeBreadcrumb: tacharTokensDelEvento,
     });
   }
 
