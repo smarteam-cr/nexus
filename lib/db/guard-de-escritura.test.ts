@@ -12,6 +12,14 @@
  * agentes— pasa de largo. Medido el 2026-08-19: **50 scripts** escriben en produccion sin ningun
  * guard, e INV12 daba VERDE con los 50 abiertos.
  *
+ * ── Y EL SEGUNDO AGUJERO (A-09, 2026-09-04) ─────────────────────────────────────────────────
+ * Ni INV12 ni este trinquete miraban el SQL CRUDO: `pool.query(`ALTER TABLE …`)` no es
+ * `prisma.x.update` ni `$executeRaw`. Tres scripts de la migracion de roles (`migrate-roles-step1/2`,
+ * `rename-team-member-role`) hacian ALTER/UPDATE contra produccion sin guard y sin `--apply` — y el
+ * primero ASCENDIA a SUPER_ADMIN a todo ADMIN, porque el enum cambio despues de escribirlos. Se
+ * borraron, y la deteccion —compartida con INV12 en `lib/db/escritura-sql-cruda.ts`— pasa a contar
+ * el VERBO: un script de solo SELECT no es escritura.
+ *
  * No es teorico. Esa misma noche `seed-post-session-agent.ts` reescribio el prompt vivo del agente
  * de post-sesion en produccion sin pedir absolutamente nada: un `npx tsx` y listo.
  *
@@ -30,6 +38,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 
 const RAIZ = process.cwd();
 
@@ -118,7 +127,7 @@ function escribenSinGuard(): string[] {
       }
       if (!e.name.endsWith(".ts")) continue;
       const src = soloCodigo(fs.readFileSync(path.join(RAIZ, rel), "utf8"));
-      if (ESCRIBE.test(src) && !TIENE_GUARD.test(src)) encontrados.push(rel);
+      if ((ESCRIBE.test(src) || escribeSqlCrudo(src)) && !TIENE_GUARD.test(src)) encontrados.push(rel);
     }
   };
   caminar("scripts");
@@ -154,5 +163,17 @@ describe("ningun script escribe en produccion sin pedir permiso", () => {
   it("el escaneo encuentra algo (si no, pasa por vacio)", () => {
     // Sin el piso, romper el patron de deteccion deja el test en verde sin mirar nada.
     expect(actuales.length, "el escaneo de scripts/ dejo de encontrar escrituras").toBeGreaterThan(30);
+  });
+
+  it("el SQL crudo cuenta como escritura, y el verbo decide (A-09)", () => {
+    /* La edicion que la pone en rojo: sacar la rama de pool/client.query de la deteccion — asi
+       nacieron los tres scripts de la migracion de roles, con ALTER y UPDATE sin guard. */
+    expect(escribeSqlCrudo("await pool.query(`ALTER TABLE TeamMember RENAME COLUMN role TO area`);")).toBe(true);
+    const multilinea = ["const r = await client.query(`", "  UPDATE TeamMember SET area = $1", "`, [area]);"].join(String.fromCharCode(10));
+    expect(escribeSqlCrudo(multilinea), "el verbo en la linea siguiente a la comilla").toBe(true);
+    expect(escribeSqlCrudo("await pool.query(`drop table Legacy`)"), "minusculas").toBe(true);
+    // Solo leer no es escribir: inspect-delivery-sessions.ts vive de SELECT y no necesita guard.
+    expect(escribeSqlCrudo("const rows = await pool.query(`SELECT id, status FROM DeliverySession`)")).toBe(false);
+    expect(escribeSqlCrudo("prisma.$queryRaw`SELECT 1`")).toBe(false);
   });
 });

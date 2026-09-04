@@ -10,6 +10,7 @@ import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { ESTADOS_DE_ALTA, altaEnCurso } from "@/lib/projects/alta";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
+import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 
 /**
  * scripts/check-invariants.ts — BLINDAJE DURO de los invariantes medulares de Nexus.
@@ -556,7 +557,8 @@ async function main(): Promise<number> {
   // La base es PRODUCCIÓN (invariante #3 de CLAUDE.md): un `--apply` corrido por reflejo
   // escribe sobre datos reales. Este invariante es DURO desde el día 1 (deuda inicial 0:
   // el sweep de la misma tanda migró los 60 scripts) y verifica cuatro cosas:
-  //   (a) todo scripts/**/*.ts que maneje `--apply` usa el guard (resolverApply /
+  //   (a) todo scripts/**/*.ts que maneje `--apply` —o escriba SQL crudo con verbo de
+//       escritura (A-09)— usa el guard (resolverApply /
   //       assertProdWriteAllowed) — allowlist para los 2 reporters read-only que solo
   //       IMPRIMEN comandos de remediación con --apply;
   //   (b) prisma.config.ts llama a guardPrismaCli (chokepoint del CLI de Prisma);
@@ -593,7 +595,11 @@ async function main(): Promise<number> {
       const rel = norm(full).replace(norm(process.cwd()) + "/", "");
       if (ALLOWLIST_INV12.has(rel)) continue;
       const src = readFileSync(full, "utf8");
-      if (src.includes("--apply") && !USA_GUARD.test(src)) sinGuard.push(rel);
+      // A-09 (auditoría 2026-09-03): también el SQL crudo con verbo de escritura (pool/client.query
+      // con INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE), tenga o no `--apply`. Los tres scripts
+      // de la migración de roles hacían ALTER/UPDATE sin guard y sin `--apply`: INV12 no los veía.
+      // El verbo decide: un script de solo SELECT (inspect-delivery-sessions.ts) no cuenta.
+      if ((src.includes("--apply") || escribeSqlCrudo(src)) && !USA_GUARD.test(src)) sinGuard.push(rel);
     }
   };
   walkGuard(join(process.cwd(), "scripts"));
@@ -623,7 +629,7 @@ async function main(): Promise<number> {
     console.error("  Importá scripts/lib/guard.ts: `const APPLY = resolverApply()` en scripts con --apply,");
     console.error("  `assertProdWriteAllowed()` en seeds que escriben siempre.");
   } else {
-    console.log("✓ INV12: el guard anti-prod cubre scripts --apply, el CLI de Prisma y los seeds.");
+    console.log("✓ INV12: el guard anti-prod cubre scripts --apply, el SQL crudo de escritura, el CLI de Prisma y los seeds.");
   }
 
   // ── Inv 13: ninguna empresa guardada quedó fusionada en HubSpot ─────────────
