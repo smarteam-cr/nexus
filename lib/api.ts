@@ -33,8 +33,12 @@ async function runHandlerSafely<C extends RouteContext>(
   try {
     return await handler(req, ctx);
   } catch (e) {
-    console.error(`[api] ${req.method} ${req.nextUrl.pathname}:`, e);
-    Sentry.captureException(e instanceof Error ? e : new Error(String(e)));
+    const err = e instanceof Error ? e : new Error(String(e));
+    // A-15: al log va nombre + mensaje, NO el objeto entero — un error de Prisma o de fetch
+    // arrastra la consulta, los parámetros o el cuerpo del request (datos de clientes) a
+    // stdout. El objeto completo, con su stack, viaja a Sentry (que ya tacha tokens, A-12).
+    console.error(`[api] ${req.method} ${req.nextUrl.pathname}: ${err.name}: ${err.message}`);
+    Sentry.captureException(err);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",

@@ -11,6 +11,7 @@
  * y redirige a /clients. Si falla, hace signOut y redirige a / con un
  * mensaje de error en query string.
  */
+import { enmascararCorreo } from "@/lib/auth/enmascarar-correo";
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db/prisma";
@@ -49,7 +50,8 @@ export async function GET(req: NextRequest) {
 
   // 3. Filtro: dominio Smarteam
   if (!email.endsWith(ALLOWED_DOMAIN)) {
-    console.warn(`[/auth/callback] Email fuera del dominio: ${email}`);
+    // A-15: un intento fallido se loguea con el correo ENMASCARADO (dominio + una pista).
+    console.warn(`[/auth/callback] Email fuera del dominio: ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
     return NextResponse.redirect(new URL("/?error=domain", req.url));
   }
@@ -66,14 +68,14 @@ export async function GET(req: NextRequest) {
   });
 
   if (!appUser || appUser.kind !== "INTERNAL") {
-    console.warn(`[/auth/callback] No hay AppUser INTERNAL para ${email}`);
+    console.warn(`[/auth/callback] No hay AppUser INTERNAL para ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
     return NextResponse.redirect(new URL("/?error=not_member", req.url));
   }
 
   // 4b. Miembro desactivado → bloquear acceso (mantiene histórico, sin login)
   if (appUser.teamMember?.deactivatedAt) {
-    console.warn(`[/auth/callback] Miembro desactivado intentó entrar: ${email}`);
+    console.warn(`[/auth/callback] Miembro desactivado intentó entrar: ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
     return NextResponse.redirect(new URL("/?error=deactivated", req.url));
   }

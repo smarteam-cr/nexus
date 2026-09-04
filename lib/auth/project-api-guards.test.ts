@@ -25,6 +25,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { enmascararCorreo } from "@/lib/auth/enmascarar-correo";
 
 const RAIZ = process.cwd();
 const BASE = "app/api/projects";
@@ -498,3 +499,41 @@ describe("⛔ ninguna ruta de agentes entra con solo sesión", () => {
   });
 });
 
+
+describe("⛔ los logs no llevan el objeto de error entero ni el correo de un intento fallido", () => {
+  /**
+   * A-15 (auditoría 2026-09-03). `runHandlerSafely` mandaba a stdout el error ENTERO: un error de
+   * Prisma o de fetch arrastra la consulta, los parámetros o el cuerpo del request —datos de
+   * clientes— a `docker logs`. Y el callback de auth escribía el correo completo de cada intento
+   * fallido de entrar. Al log van nombre + mensaje y un correo enmascarado; el objeto completo va
+   * a Sentry, que ya tacha tokens (A-12).
+   */
+  const lee = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+
+  it("lib/api.ts loguea nombre + mensaje, no el objeto", () => {
+    /* La edicion que lo pone en rojo: volver a console.error(`…`, e). */
+    const src = lee("lib/api.ts");
+    expect(/console\.error\([^;]*,\s*e\s*\)/.test(src), "el objeto de error entero vuelve a stdout").toBe(false);
+    expect(src).toContain("${err.name}: ${err.message}");
+  });
+
+  it("el callback de auth no escribe el correo de un intento fallido", () => {
+    /* La edicion que lo pone en rojo: `${email}` de vuelta en cualquier console.warn. */
+    const src = lee("app/auth/callback/route.ts");
+    const warnsConCorreo = [...src.matchAll(/console\.warn\([^\n]*/g)]
+      .map((m) => m[0])
+      .filter((l) => l.includes("${email}"));
+    expect(warnsConCorreo, "un intento fallido se loguea con el correo completo").toEqual([]);
+    expect(
+      src.match(/enmascararCorreo\(email\)/g)?.length ?? 0,
+      "los tres avisos de intento fallido enmascaran el correo",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("enmascarar deja el dominio y una pista, nunca el correo", () => {
+    /* La edicion que lo pone en rojo: devolver el correo tal cual. */
+    expect(enmascararCorreo("dmarin@smarteamcr.com")).toBe("d***@smarteamcr.com");
+    expect(enmascararCorreo("sin-arroba")).toBe("***");
+    expect(enmascararCorreo("@raro.com")).toBe("***");
+  });
+});
