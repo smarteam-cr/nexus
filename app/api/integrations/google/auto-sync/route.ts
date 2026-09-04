@@ -6,7 +6,8 @@ import { guardInternalUser } from "@/lib/auth/api-guards";
  * POST /api/integrations/google/auto-sync
  *
  * Endpoint ligero para disparar sync+enrich desde el cliente (fire-and-forget).
- * Tiene cooldown de 20 min en memoria — responde inmediatamente con el resultado.
+ * Cooldown de 20 min persistido en CronJobState; con el cooldown vigente responde sin
+ * escribir nada (C-21). Responde inmediatamente con el resultado.
  * No requiere autenticación (solo usable internamente desde la app).
  */
 export async function POST() {

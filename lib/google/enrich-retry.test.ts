@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import type { PrismaClient } from "@prisma/client";
+import { autoSyncGoogleMeet, COOLDOWN_MS, type DepsDeAutoSync, type EstadoDeAutoSync } from "./auto-sync";
 import {
   datosDeEscritura,
   esReintentable,
@@ -360,5 +362,101 @@ describe("candado: toda impersonación pasa por el chokepoint", () => {
     expect(pasadas, "las pasadas volvieron a exigir organizerEmail y re-excluyen las ~267").not.toContain(
       "organizerEmail: { not: null }",
     );
+  });
+});
+
+describe("C-21: el auto-sync no escribe en vano — lee el claim antes de tomarlo", () => {
+  /**
+   * Cada carga del shell, de /sessions y de la ficha de un cliente dispara el auto-sync. Antes
+   * cada disparo hacía un upsert + un updateMany que casi siempre no ganaba: dos escrituras por
+   * navegación para no hacer nada. Ahora: con el cooldown vigente, UNA lectura y ningún write; y
+   * el proceso recuerda hasta cuándo rige, así que las cargas siguientes no tocan la base.
+   */
+  const AHORA_MS = new Date("2026-09-04T12:00:00Z").getTime();
+
+  function armar(lastRunAt: Date | null | "sin-fila", opts: { syncFalla?: boolean } = {}) {
+    const llamadas: string[] = [];
+    const escrituras: Array<Record<string, unknown>> = [];
+    const db = {
+      cronJobState: {
+        findUnique: async () => {
+          llamadas.push("findUnique");
+          return lastRunAt === "sin-fila" ? null : { lastRunAt };
+        },
+        upsert: async () => {
+          llamadas.push("upsert");
+          return {};
+        },
+        updateMany: async (args: { data: Record<string, unknown> }) => {
+          llamadas.push("updateMany");
+          escrituras.push(args.data);
+          return { count: 1 };
+        },
+      },
+    } as unknown as Pick<PrismaClient, "cronJobState">;
+    const estado: EstadoDeAutoSync = { running: false, cooldownHasta: null };
+    const deps: DepsDeAutoSync = {
+      db,
+      sync: async () => {
+        llamadas.push("sync");
+        if (opts.syncFalla) throw new Error("Calendar 500");
+        return { synced: 1, alreadyExisted: 0 };
+      },
+      enrich: async () => {
+        llamadas.push("enrich");
+        return { enriched: 0, skipped: 0, errors: 0 };
+      },
+      ahora: () => new Date(AHORA_MS),
+      configurado: () => true,
+      estado,
+    };
+    return { deps, llamadas, escrituras, estado };
+  }
+
+  it("LA guarda: con el cooldown vigente hay UNA lectura y ningún write", async () => {
+    /* La edición que la pone en rojo: volver al upsert + updateMany incondicionales, o comparar
+       contra 0 en vez de COOLDOWN_MS. */
+    const { deps, llamadas, estado } = armar(new Date(AHORA_MS - 5 * 60 * 1000));
+    const r = await autoSyncGoogleMeet(deps);
+    expect(r).toEqual({ skipped: true, reason: "cooldown" });
+    expect(llamadas, "con el cooldown vigente no se escribe nada").toEqual(["findUnique"]);
+    expect(estado.cooldownHasta, "el proceso recuerda hasta cuándo rige").toBe(AHORA_MS - 5 * 60 * 1000 + COOLDOWN_MS);
+  });
+
+  it("y la segunda carga dentro del cooldown no toca la base: ni lectura", async () => {
+    /* La edición que la pone en rojo: dejar `cooldownHasta` en null tras la lectura. */
+    const { deps, llamadas } = armar(new Date(AHORA_MS - 5 * 60 * 1000));
+    await autoSyncGoogleMeet(deps);
+    await autoSyncGoogleMeet(deps);
+    expect(llamadas, "la segunda carga se contesta desde la memoria del proceso").toEqual(["findUnique"]);
+  });
+
+  it("cuando toca correr: lectura + claim (sin upsert, la fila ya existe) + sync + enrich", async () => {
+    const { deps, llamadas, escrituras, estado } = armar(new Date(AHORA_MS - 25 * 60 * 1000));
+    const r = await autoSyncGoogleMeet(deps);
+    expect(r.skipped).toBe(false);
+    expect(llamadas).toEqual(["findUnique", "updateMany", "sync", "enrich"]);
+    expect(escrituras).toEqual([{ lastRunAt: new Date(AHORA_MS) }]);
+    expect(estado.cooldownHasta).toBe(AHORA_MS + COOLDOWN_MS);
+    expect(estado.running).toBe(false);
+  });
+
+  it("la fila se crea SOLO la primera vez (sin fila → upsert; con fila → no)", async () => {
+    const { deps, llamadas } = armar("sin-fila");
+    await autoSyncGoogleMeet(deps);
+    expect(llamadas).toEqual(["findUnique", "upsert", "updateMany", "sync", "enrich"]);
+  });
+
+  it("si el sync falla, el claim se libera en la base Y en la memoria del proceso", async () => {
+    /* La edición que la pone en rojo: no limpiar `cooldownHasta` en el catch — el proceso creería
+       que corrió y no reintentaría hasta el cooldown completo, que es lo que el comentario del
+       catch promete evitar. */
+    const { deps, llamadas, escrituras, estado } = armar(new Date(AHORA_MS - 25 * 60 * 1000), { syncFalla: true });
+    const r = await autoSyncGoogleMeet(deps);
+    expect(r).toEqual({ skipped: true, reason: "error" });
+    expect(llamadas).toEqual(["findUnique", "updateMany", "sync", "updateMany"]);
+    expect(escrituras[1], "el claim se libera en la base").toEqual({ lastRunAt: null });
+    expect(estado.cooldownHasta, "y en la memoria del proceso").toBeNull();
+    expect(estado.running).toBe(false);
   });
 });
