@@ -10,6 +10,8 @@
  * 1 de enero de 1970», el problema no sería el bug: sería que el cliente lo archivó.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   buildDeliveryClaims,
   metricasDeCumplimiento,
@@ -38,6 +40,7 @@ const base: ClaimsInput = {
   reuniones: 0,
   corrimiento: null,
   hubs: [],
+  alcance: null,
 };
 
 describe("la cohorte con el cronograma sin marcar", () => {
@@ -171,5 +174,57 @@ describe("los pendientes", () => {
   it("respeta el tope: una lista de 40 pendientes no es una lista", () => {
     const f = fase({ tasks: tareas(40) });
     expect(pendientesAbiertos([f])).toHaveLength(12);
+  });
+});
+
+describe("D-09 · la Entrega mide LO PROMETIDO: alcance agregado y atraso atribuido", () => {
+  /* Antes el documento decía cuántas tareas se hicieron y cuánto se movió la fecha, pero no
+     cuánto creció el alcance respecto de la foto del plan ni de quién fue el atraso. Las dos
+     tarjetas se calculan acá — el agente sigue sin escribir un número — y se omiten sin dato. */
+  const labels = (c: ClaimsInput) => metricasDeCumplimiento(buildDeliveryClaims(c)).map((m) => `${m.value} · ${m.label}`);
+
+  it("con foto medible y firme, lo agregado se afirma; y el 0 también («cerró como se prometió»)", () => {
+    const foto = { measurable: true, addedPhases: 0, addedTasks: 3, attenuated: false };
+    expect(labels({ ...base, alcance: foto })).toContain("+3 · Tareas sumadas al alcance prometido");
+    expect(labels({ ...base, alcance: { ...foto, addedPhases: 1 } })).toContain("+3 · Tareas sumadas al alcance prometido (en 1 fase nueva)");
+    expect(labels({ ...base, alcance: { ...foto, addedTasks: 0, addedPhases: 2 } })).toContain("+2 · Fases sumadas al alcance prometido");
+    expect(labels({ ...base, alcance: { ...foto, addedTasks: 0 } })).toContain("Sin extras · El alcance cerró como se prometió");
+  });
+
+  it("sin foto, o con foto DÉBIL, no se afirma nada del alcance", () => {
+    /* La edición que lo pone en rojo: dejar pasar `attenuated` «porque igual es un número». Con
+       una foto débil lo agregado suele ser el detalle que la foto no tenía: afirmarlo como extra
+       es cobrarle al cliente una imprecisión nuestra. Sin foto (118 de 132 proyectos) no hay
+       promesa contra la cual medir. */
+    const sinFoto = { measurable: false, addedPhases: 0, addedTasks: 0, attenuated: false };
+    const debil = { measurable: true, addedPhases: 1, addedTasks: 9, attenuated: true };
+    expect(buildDeliveryClaims({ ...base, alcance: sinFoto }).alcance).toBeNull();
+    expect(buildDeliveryClaims({ ...base, alcance: debil }).alcance, "una foto débil no afirma extras").toBeNull();
+    expect(labels({ ...base, alcance: debil }).join("\n")).not.toMatch(/alcance/);
+    expect(buildDeliveryClaims({ ...base, alcance: null }).alcance).toBeNull();
+  });
+
+  it("el atraso atribuido: el total como valor, el reparto como rótulo, con el redactor único", () => {
+    /* La edición que lo pone en rojo: redactar el reparto a mano en claims.ts (una segunda copia
+       de BUCKET_LABEL que diverge sola), o perder el reparto «para no señalar». */
+    const c = buildDeliveryClaims({ ...base, corrimiento: { totalWeeks: 4, byParty: { CLIENTE: 3, SMARTEAM: 1 } } });
+    const tarjeta = metricasDeCumplimiento(c).find((m) => m.value === "4 semanas");
+    expect(tarjeta?.label).toBe("De atraso registrado: 3 del cliente y 1 de Smarteam");
+    expect(labels({ ...base, corrimiento: { totalWeeks: 1, byParty: { AMBOS: 1 } } })).toContain("1 semana · De atraso registrado: 1 compartidas");
+    expect(labels({ ...base, corrimiento: { totalWeeks: 0, byParty: {} } }).join("\n"), "sin atraso no hay tarjeta").not.toMatch(/atraso/);
+  });
+
+  it("LA guarda: el generador manda la foto y las desviaciones con el MISMO gate que la vista del cliente", () => {
+    /* La edición que lo pone en rojo: pedir las particularidades sin `needsValidation: false` (una
+       sugerencia del agente sin confirmar sumaría al atraso que el cliente lee), o sin
+       `visibleExternal: true` (una desviación interna cruzaría al documento); o dejar `alcance`
+       fuera de la llamada «porque casi nunca hay foto». */
+    const gen = fs.readFileSync(path.join(process.cwd(), "lib/canvas/entrega-generate.ts"), "utf8");
+    const seleccion = gen.slice(gen.indexOf("particularidades: {"), gen.indexOf("loadProjectSummary(projectId)"));
+    expect(seleccion.length, "la guarda no mira nada").toBeGreaterThan(80);
+    expect(seleccion, "mismo gate por registro que lib/external/timeline-view.ts").toContain("where: { visibleExternal: true, needsValidation: false }");
+    expect(seleccion, "solo lo que suma el atraso").toContain("select: { kind: true, party: true, weeksImpact: true, estado: true }");
+    expect(gen, "el sumador único, no una suma a mano").toContain("corrimiento: summarizeParticularidades(project?.timeline?.particularidades ?? [])");
+    expect(gen, "la foto del plan llega a las afirmaciones").toContain("alcance: summary?.scope ?? null");
   });
 });

@@ -167,9 +167,21 @@ export function attributionSentence(
   // Decía "corrimiento", que es jerga de gestión: no dice qué pasó y suena a eufemismo. "Atraso"
   // nombra la cosa. (Antes acá había un comentario justificando que la jerga se quedaba porque era
   // vocabulario de equipo; el equipo dijo que no.)
-  const items = ATTRIBUTION_BUCKETS.filter((b) => s.byParty[b] > 0)
-    .sort((a, b) => s.byParty[b] - s.byParty[a] || ATTRIBUTION_BUCKETS.indexOf(a) - ATTRIBUTION_BUCKETS.indexOf(b))
-    .map((b) => `${s.byParty[b]} ${BUCKET_LABEL[b]}`);
+  const desglose = attributionBreakdown(s.byParty);
   const head = `${semanas(s.totalWeeks)} de atraso acumulado`;
-  return items.length > 0 ? `${head}: ${joinEs(items)}.` : `${head}.`;
+  return desglose ? `${head}: ${desglose}.` : `${head}.`;
+}
+
+/**
+ * SOLO el reparto por responsable, de MAYOR a MENOR: «5 compartidas, 1 del cliente y 1 de Smarteam».
+ * `null` si ningún bucket suma. Es la única redacción del reparto (D-09, 2026-09-04): la usa la
+ * frase interna de arriba y la tarjeta de atraso de la Entrega (lib/delivery/claims.ts), que pone
+ * el total como valor y el reparto como rótulo. Un `byParty` parcial (buckets ausentes) cuenta 0.
+ */
+export function attributionBreakdown(byParty: Partial<Record<string, number>>): string | null {
+  const peso = (b: AttributionBucket) => byParty[b] ?? 0;
+  const items = ATTRIBUTION_BUCKETS.filter((b) => peso(b) > 0)
+    .sort((a, b) => peso(b) - peso(a) || ATTRIBUTION_BUCKETS.indexOf(a) - ATTRIBUTION_BUCKETS.indexOf(b))
+    .map((b) => `${peso(b)} ${BUCKET_LABEL[b]}`);
+  return items.length > 0 ? joinEs(items) : null;
 }

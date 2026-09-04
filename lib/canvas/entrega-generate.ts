@@ -32,6 +32,7 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { loadProjectSummary } from "@/lib/portfolio/load";
+import { summarizeParticularidades } from "@/lib/timeline/particularidades-summary";
 import {
   buildDeliveryClaims,
   metricasDeCumplimiento,
@@ -127,6 +128,13 @@ export async function runEntregaGeneration(opts: {
                 startWeek: true,
                 tasks: { select: { title: true, status: true, party: true } },
               },
+            },
+            /* D-09: las desviaciones que el CSE curó como visibles al cliente, con el MISMO gate
+               por registro que el chokepoint de la vista externa (lib/external/timeline-view.ts):
+               visibles Y confirmadas. Solo lo que suma el atraso; la cita interna nunca se pide. */
+            particularidades: {
+              where: { visibleExternal: true, needsValidation: false },
+              select: { kind: true, party: true, weeksImpact: true, estado: true },
             },
           },
         },
@@ -232,8 +240,11 @@ export async function runEntregaGeneration(opts: {
     closeDateOverride: project?.timeline?.closeDateOverride?.toISOString() ?? null,
     closing: summary?.closing ?? { projectedISO: null, promisedISO: null, driftDays: null },
     reuniones: reuniones.total,
-    // El corrimiento atribuido entra cuando se curen las particularidades visibles al cliente.
-    corrimiento: null,
+    /* D-09: el atraso atribuido, sumado por el ÚNICO sumador del repo (solo kind ATRASO; incluye
+       las cerradas a propósito: el calendario ya se movió). `buildDeliveryClaims` lo anula si
+       da 0. Y la foto del plan: cuánto se sumó a lo prometido. */
+    corrimiento: summarizeParticularidades(project?.timeline?.particularidades ?? []),
+    alcance: summary?.scope ?? null,
     hubs,
   });
 

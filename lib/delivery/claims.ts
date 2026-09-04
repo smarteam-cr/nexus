@@ -30,6 +30,7 @@
  */
 import { projectedEnd, displayedEnd, type PhaseSpanLike } from "@/lib/timeline/weeks";
 import { resolvedTaskCounts } from "@/lib/timeline/progress-model";
+import { attributionBreakdown } from "@/lib/timeline/particularidades-summary";
 
 /** Lo mínimo que hace falta de una fase para afirmar algo sobre ella. */
 export interface FaseParaEntrega extends PhaseSpanLike {
@@ -51,6 +52,20 @@ export interface ClaimsInput {
   corrimiento: { totalWeeks: number; byParty: Record<string, number> } | null;
   /** Hubs vendidos, ya resueltos a etiqueta legible. */
   hubs: string[];
+  /**
+   * `summary.scope` — el diff del plan VIVO contra la foto congelada al aprobar (D-09). `null`
+   * cuando el summary no se pudo cargar. ⚠ `measurable: false` (sin foto) y `attenuated: true`
+   * (foto débil: lo agregado es probablemente detalle, no extra real) NO afirman nada.
+   */
+  alcance: AlcanceParaEntrega | null;
+}
+
+/** Lo mínimo de `ProjectSummary["scope"]` que la Entrega necesita (estructural, sin importar el summary). */
+export interface AlcanceParaEntrega {
+  measurable: boolean;
+  addedPhases: number;
+  addedTasks: number;
+  attenuated: boolean;
 }
 
 /** Una tarjeta de la sección «El plan, cumplido». Mismo shape que `RoiData.metrics`. */
@@ -79,6 +94,11 @@ export interface DeliveryClaims {
   corrimiento: { totalWeeks: number; byParty: Record<string, number> } | null;
   reuniones: number | null;
   hubs: string[];
+  /**
+   * Lo que se sumó al alcance PROMETIDO (la foto del plan). `null` = no hay foto medible o es
+   * débil: no se afirma. Un 0 SÍ se afirma: «cerró como se vendió» es una noticia del documento.
+   */
+  alcance: { tareasAgregadas: number; fasesAgregadas: number } | null;
 }
 
 /**
@@ -134,6 +154,13 @@ export function buildDeliveryClaims(input: ClaimsInput): DeliveryClaims {
     corrimiento: input.corrimiento && input.corrimiento.totalWeeks > 0 ? input.corrimiento : null,
     reuniones: input.reuniones > 0 ? input.reuniones : null,
     hubs: input.hubs,
+    /* Sin foto no hay promesa contra la cual medir; con foto DÉBIL, lo «agregado» suele ser el
+       detalle que la foto no tenía, y afirmarlo como extra sería cobrarle al cliente una
+       imprecisión nuestra. Las dos caen a null: la tarjeta no se pinta. */
+    alcance:
+      input.alcance && input.alcance.measurable && !input.alcance.attenuated
+        ? { tareasAgregadas: input.alcance.addedTasks, fasesAgregadas: input.alcance.addedPhases }
+        : null,
   };
 }
 
@@ -193,6 +220,37 @@ export function metricasDeCumplimiento(claims: DeliveryClaims): MetricaDeEntrega
             label: d > 0 ? "Se corrió el cierre respecto de lo prometido" : "Se adelantó el cierre respecto de lo prometido",
           },
     );
+  }
+
+  /* D-09 (2026-09-04) · LO PROMETIDO. Dos tarjetas que antes no existían: cuánto se sumó al
+     alcance de la foto del plan, y cuánto se corrió el calendario con su causa. Las dos se
+     calculan acá, nunca las escribe el agente; las dos se omiten sin dato (`null`). */
+  if (claims.alcance) {
+    const { tareasAgregadas: t, fasesAgregadas: f } = claims.alcance;
+    if (t > 0) {
+      const fases = f > 0 ? ` (en ${f} ${f === 1 ? "fase nueva" : "fases nuevas"})` : "";
+      out.push({
+        value: `+${t}`,
+        label: `${t === 1 ? "Tarea sumada" : "Tareas sumadas"} al alcance prometido${fases}`,
+      });
+    } else if (f > 0) {
+      out.push({ value: `+${f}`, label: f === 1 ? "Fase sumada al alcance prometido" : "Fases sumadas al alcance prometido" });
+    } else {
+      out.push({ value: "Sin extras", label: "El alcance cerró como se prometió" });
+    }
+  }
+
+  /* El atraso ATRIBUIDO sale de las particularidades que el CSE curó como visibles al cliente:
+     cada una ya se le comunicó con su responsable, así que el reparto no dice nada nuevo —
+     lo suma. El total es el valor; el reparto, con UN solo redactor (`attributionBreakdown`),
+     es el rótulo. Decisión de Elías (2026-08-12): el plazo y el corrimiento se dicen. */
+  if (claims.corrimiento) {
+    const w = claims.corrimiento.totalWeeks;
+    const reparto = attributionBreakdown(claims.corrimiento.byParty);
+    out.push({
+      value: `${w} ${w === 1 ? "semana" : "semanas"}`,
+      label: reparto ? `De atraso registrado: ${reparto}` : "De atraso registrado",
+    });
   }
 
   return out;

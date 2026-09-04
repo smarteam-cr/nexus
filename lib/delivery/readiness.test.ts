@@ -22,6 +22,7 @@ const claims = (o: Partial<DeliveryClaims> = {}): DeliveryClaims => ({
   corrimientoDelPlan: 0,
   corrimiento: null,
   reuniones: 65,
+  alcance: null,
   hubs: ["Sales Hub"],
   ...o,
 });

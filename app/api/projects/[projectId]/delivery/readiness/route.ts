@@ -67,6 +67,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
     reuniones: membresia.sessions.length,
     corrimiento: null,
     hubs: tagLabels(project?.tags ?? []),
+    // D-09: la misma foto del plan que usa el runner, para que el panel y el documento afirmen lo mismo.
+    alcance: summary?.scope ?? null,
   });
 
   /* ⚠ La cobertura REAL (cuántas reuniones tienen transcripción) exigiría leer el contenido de
