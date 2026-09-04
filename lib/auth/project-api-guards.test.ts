@@ -590,3 +590,42 @@ describe("⛔ subir un documento exige un MIME de la allowlist, la extracción t
     expect(esUrlPermitidaParaElPdf("https://evil.example/pixel.png", [null])).toBe(false);
   });
 });
+
+describe("⛔ los handlers que escriben Json directo del body pasan por zod antes de tocar la base", () => {
+  /**
+   * A-19 (auditoría 2026-09-03). Tres rutas escribían lo que llegaba en el body tal cual —el
+   * prompt de un agente, las `sections` de un canvas que después leen los agentes, el `data` de
+   * un bloque— sin validar forma, enum ni tamaño. Molde: app/api/team/[id]/permissions/route.ts
+   * (`z.strictObject` + `.safeParse` + 400).
+   */
+  const ARCHIVOS = [
+    "app/api/agents/[id]/route.ts",
+    "app/api/projects/[projectId]/canvases/[canvasId]/route.ts",
+    "app/api/projects/[projectId]/canvas-sections/[sectionId]/blocks/route.ts",
+  ];
+  const ESCRITURA = /prisma\.\w+\.(?:create|update|updateMany|upsert|delete|deleteMany)\(/;
+
+  it("cada handler que lee el body lo valida con .safeParse( ANTES de la primera escritura", () => {
+    /* La edicion que lo pone en rojo: un handler que vuelva a `await req.json()` pelado, que use
+       `.parse(` (tira 500 en vez de contestar 400), o que valide después de escribir. */
+    const ofensores: string[] = [];
+    let handlersConBody = 0;
+    for (const rel of ARCHIVOS) {
+      const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
+      const hs = [...src.matchAll(HANDLER)];
+      for (let i = 0; i < hs.length; i++) {
+        const cuerpo = src.slice(hs[i].index!, i + 1 < hs.length ? hs[i + 1].index! : src.length);
+        if (!cuerpo.includes(".json()")) continue;
+        handlersConBody++;
+        const parse = cuerpo.indexOf(".safeParse(");
+        const escritura = cuerpo.search(ESCRITURA);
+        if (parse === -1 || (escritura !== -1 && parse > escritura)) ofensores.push(`${rel} → ${hs[i][1]}`);
+      }
+      expect(src, `${rel}: los esquemas van con z.strictObject (un campo desconocido es error)`).toContain(
+        "z.strictObject(",
+      );
+    }
+    expect(handlersConBody, "la guarda no mira nada").toBeGreaterThanOrEqual(5);
+    expect(ofensores, "estos handlers escriben lo que llega en el body sin validarlo").toEqual([]);
+  });
+});

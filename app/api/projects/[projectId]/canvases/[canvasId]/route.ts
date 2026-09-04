@@ -5,8 +5,22 @@ import {
   denyHandoffCanvasEditForCse,
 } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { z } from "zod";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
+
+/* A-19 (auditoría 2026-09-03): `sections` es el Json de ProjectCanvas.sections
+   ([{key,label,brief?,previousBrief?,hidden?}] + la entry reservada __doc) y lo leen después los
+   agentes. Se exige la forma —entradas planas de escalares acotados— para que un body
+   arbitrario no quede escrito tal cual en la base. */
+const entradaDeSeccion = z
+  .object({ key: z.string().min(1).max(200) })
+  .catchall(z.union([z.string().max(20_000), z.number(), z.boolean(), z.null()]));
+const putCanvasSchema = z.strictObject({
+  name: z.string().trim().min(1).max(200).optional(),
+  sections: z.array(entradaDeSeccion).max(300).optional(),
+});
 
 // PUT: update canvas name or sections
 export async function PUT(req: NextRequest, { params }: { params: Params }) {
@@ -26,11 +40,13 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(target.name);
   if (denied) return denied;
 
-  const body = await req.json();
+  const parsed = putCanvasSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return cuerpoInvalido(parsed.error);
+  const body = parsed.data;
 
   const data: Record<string, unknown> = {};
-  if ("name" in body && body.name?.trim()) data.name = body.name.trim();
-  if ("sections" in body) data.sections = body.sections;
+  if (body.name) data.name = body.name;
+  if (body.sections !== undefined) data.sections = body.sections;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });

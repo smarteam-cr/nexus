@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
+import { BlockStatus, BlockType, Prisma } from "@prisma/client";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
+import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { z } from "zod";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
+
+/* A-19 (auditoría 2026-09-03): `data` es el Json del bloque (tarjeta, diagrama…): se exige un
+   objeto acotado en tamaño, no cualquier cosa. El contenido sigue siendo libre —es lo que la
+   persona escribe—, pero con tope. Estricto: un campo desconocido es 400. */
+const datosDeBloque = z
+  .record(z.string(), z.unknown())
+  .refine((v) => JSON.stringify(v).length <= 1_000_000, { message: "data supera 1 MB" });
+const postBloqueSchema = z.strictObject({
+  blockType: z.enum(BlockType).optional(),
+  content: z.string().max(200_000).nullable().optional(),
+  data: datosDeBloque.nullable().optional(),
+});
+const putBloqueSchema = z.strictObject({
+  blockId: z.string().min(1).max(64),
+  undo: z.boolean().optional(),
+  content: z.string().max(200_000).nullable().optional(),
+  data: datosDeBloque.nullable().optional(),
+  status: z.enum(BlockStatus).optional(),
+  colSpan: z.number().int().min(1).max(4).optional(),
+  colStart: z.number().int().min(1).max(4).nullable().optional(),
+  rowSpan: z.number().int().min(1).max(40).optional(),
+});
+const deleteBloqueSchema = z.strictObject({ blockId: z.string().min(1).max(64) });
 
 // Json null en Prisma necesita DbNull (no el literal null). Para escribir un valor Json
 // que puede venir null (al guardar previous*/undo), normalizamos.
@@ -28,7 +53,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
   if (denied) return denied;
 
-  const { blockType, content, data } = await req.json();
+  const parsedPost = postBloqueSchema.safeParse(await req.json().catch(() => null));
+  if (!parsedPost.success) return cuerpoInvalido(parsedPost.error);
+  const { blockType, content, data } = parsedPost.data;
 
   const maxOrder = await prisma.canvasBlock.aggregate({
     where: { sectionId },
@@ -40,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       sectionId,
       blockType: blockType ?? "TEXT",
       content: content ?? "",
-      data: data ?? undefined,
+      data: (data ?? undefined) as Prisma.InputJsonValue | undefined,
       order: (maxOrder._max.order ?? -1) + 1,
       source: "HUMAN",
       status: "CONFIRMED",
@@ -59,11 +86,9 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
   if (denied) return denied;
 
-  const body = await req.json();
-
-  if (!body.blockId) {
-    return NextResponse.json({ error: "blockId required" }, { status: 400 });
-  }
+  const parsedPut = putBloqueSchema.safeParse(await req.json().catch(() => null));
+  if (!parsedPut.success) return cuerpoInvalido(parsedPut.error);
+  const body = parsedPut.data;
 
   const block = await prisma.canvasBlock.findFirst({
     where: { id: body.blockId, sectionId },
@@ -95,7 +120,7 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     updateData.previousData = jsonInput(block.data);
   }
   if ("content" in body) updateData.content = body.content;
-  if ("data" in body) updateData.data = body.data;
+  if ("data" in body) updateData.data = jsonInput(body.data as Prisma.JsonValue | null | undefined);
   if ("status" in body) updateData.status = body.status;
   if ("colSpan" in body) updateData.colSpan = Math.min(4, Math.max(1, Number(body.colSpan)));
   if ("colStart" in body) updateData.colStart = body.colStart === null ? null : Math.min(4, Math.max(1, Number(body.colStart)));
@@ -126,11 +151,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
   if (denied) return denied;
 
-  const { blockId } = await req.json();
-
-  if (!blockId) {
-    return NextResponse.json({ error: "blockId required" }, { status: 400 });
-  }
+  const parsedDelete = deleteBloqueSchema.safeParse(await req.json().catch(() => null));
+  if (!parsedDelete.success) return cuerpoInvalido(parsedDelete.error);
+  const { blockId } = parsedDelete.data;
 
   await prisma.canvasBlock.deleteMany({
     where: { id: blockId, sectionId },
