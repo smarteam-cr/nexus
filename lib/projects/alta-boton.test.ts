@@ -368,3 +368,14 @@ describe("las tres puertas dicen lo que hacen", () => {
     );
   });
 });
+
+describe("C-12: projects-of-company cuenta los bloques de todos los proyectos en UNA consulta", () => {
+  it("no hay un COUNT por proyecto adentro de un for; la lectura va por `projectId: { in }`", () => {
+    /* La edición que lo pone en rojo: volver al `for … prisma.canvasBlock.count` — N viajes por
+       cada apertura del stepper, uno por proyecto de la empresa. */
+    const src = fs.readFileSync(path.join(process.cwd(), "app/api/handoffs/projects-of-company/route.ts"), "utf8");
+    expect(src, "un COUNT por proyecto es un viaje por proyecto").not.toContain("canvasBlock.count(");
+    expect(src).toMatch(/projectId:\s*\{\s*in:\s*nexusProjects\.map/);
+    expect(src).toContain("blocks: { some: {} }");
+  });
+});

@@ -21,7 +21,9 @@ export interface BookendSessionRow {
   title: string;
   date: Date;
   participants: string[];
-  summary: unknown;
+  /** Opcional desde C-12: el GPS ya no trae el blob de TODAS las sesiones — lo pide aparte solo
+   *  para los bookends que lo muestran (`hidratarResumenes`). */
+  summary?: unknown;
   googleDocId: string | null;
   googleEventId: string | null;
 }
@@ -142,6 +144,32 @@ export function computeBookends(
     fronts: {
       ventas: frontPair(salesEmails),
       cs: frontPair(entregaEmails),
+    },
+  };
+}
+
+/**
+ * C-12 (2026-09-04): los ids cuyos `summary` hacen falta — como mucho tres (la última global y
+ * la última de cada frente), sin repetir. El caller pide SOLO esos blobs en vez de traer el
+ * summary de todas las sesiones del cliente para usar tres.
+ */
+export function idsQueNecesitanResumen(b: SessionBookends): string[] {
+  const ids = [b.last?.sessionId, b.fronts.ventas.last?.sessionId, b.fronts.cs.last?.sessionId];
+  return [...new Set(ids.filter((id): id is string => typeof id === "string"))];
+}
+
+/** Pone el texto del summary en los bookends que lo muestran. Puro: no toca lo que no está en el mapa. */
+export function hidratarResumenes(b: SessionBookends, resumenPorId: Map<string, unknown>): SessionBookends {
+  const texto = (sessionId: string, actual: string | null) =>
+    resumenPorId.has(sessionId) ? extractSummaryText(resumenPorId.get(sessionId)) : actual;
+  const front = (f: FrontSession | null): FrontSession | null =>
+    f ? { ...f, summary: texto(f.sessionId, f.summary) } : null;
+  return {
+    ...b,
+    last: b.last ? { ...b.last, summary: texto(b.last.sessionId, b.last.summary) } : null,
+    fronts: {
+      ventas: { next: b.fronts.ventas.next, last: front(b.fronts.ventas.last) },
+      cs: { next: b.fronts.cs.next, last: front(b.fronts.cs.last) },
     },
   };
 }

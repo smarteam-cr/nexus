@@ -71,13 +71,20 @@ export async function GET(req: NextRequest) {
          esto, el desplegable ofrece desarrollos y el rechazo llega recién al enviar. */
       select: { id: true, hubspotServiceId: true, hubspotPipelineId: true },
     });
+    // C-12 (2026-09-04): una sola consulta para todos los proyectos en vez de un COUNT por cada
+    // uno — con N proyectos en la empresa eran N viajes por cada apertura del stepper.
+    const seccionesConBloques =
+      nexusProjects.length === 0
+        ? []
+        : await prisma.canvasSection.findMany({
+            where: {
+              blocks: { some: {} },
+              canvas: canvasOfNested("handoff", { projectId: { in: nexusProjects.map((p) => p.id) } }),
+            },
+            select: { canvas: { select: { projectId: true } } },
+          });
     const generated = new Set<string>();
-    for (const np of nexusProjects) {
-      const blocks = await prisma.canvasBlock.count({
-        where: { section: { canvas: canvasOfNested("handoff", { projectId: np.id }) } },
-      });
-      if (blocks > 0) generated.add(np.id);
-    }
+    for (const sec of seccionesConBloques) if (sec.canvas.projectId) generated.add(sec.canvas.projectId);
     const byServiceId = new Map(
       nexusProjects.map((p) => [
         p.hubspotServiceId!,

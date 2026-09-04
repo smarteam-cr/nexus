@@ -6,7 +6,7 @@
  * clasificación mixed y la extracción del summary de Fireflies.
  */
 import { test, expect } from "vitest";
-import { computeBookends, extractSummaryText, type BookendSessionRow } from "./bookends";
+import { computeBookends, extractSummaryText, hidratarResumenes, idsQueNecesitanResumen, type BookendSessionRow } from "./bookends";
 
 const NOW = Date.UTC(2026, 6, 15, 12, 0, 0); // 2026-07-15 12:00Z
 
@@ -97,4 +97,37 @@ test("sesión EXACTAMENTE en now cuenta como pasada (> vs <=)", () => {
   const r = computeBookends([enNow], NOW, VENTAS, ENTREGA);
   expect(r.last?.sessionId).toBe(enNow.id);
   expect(r.next).toBeNull();
+});
+
+test("C-12: sin summary en las filas, los bookends salen sin texto; los ids que lo necesitan son ≤ 3 sin repetir; hidratar pone solo lo del mapa", () => {
+  /* La edición que lo pone en rojo: que `hidratarResumenes` pise con null lo que no está en el mapa,
+     o que `idsQueNecesitanResumen` repita la misma sesión cuando es la última global Y la de un frente. */
+  const fila = (id: string, dias: number, participants: string[]): BookendSessionRow => ({
+    id,
+    title: id,
+    date: new Date(Date.now() - dias * 86_400_000),
+    participants,
+    googleDocId: null,
+    googleEventId: null,
+  });
+  const ventas = new Set(["v@smarteamcr.com"]);
+  const entrega = new Set(["c@smarteamcr.com"]);
+  const b = computeBookends(
+    [fila("mixta", 1, ["v@smarteamcr.com", "c@smarteamcr.com"]), fila("solo-cse", 3, ["c@smarteamcr.com"])],
+    Date.now(),
+    ventas,
+    entrega,
+  );
+  expect(b.last?.summary).toBeNull();
+  // La última global, la de ventas y la de entrega son LA MISMA sesión: un solo id.
+  expect(idsQueNecesitanResumen(b)).toEqual(["mixta"]);
+
+  const h = hidratarResumenes(b, new Map([["mixta", { overview: "Se acordó el alcance." }]]));
+  expect(h.last?.summary).toBe("Se acordó el alcance.");
+  expect(h.fronts.ventas.last?.summary).toBe("Se acordó el alcance.");
+  expect(h.fronts.cs.last?.summary).toBe("Se acordó el alcance.");
+  // Lo que no está en el mapa queda como estaba (no se pisa con null).
+  const parcial = hidratarResumenes({ ...h, last: h.last }, new Map());
+  expect(parcial.last?.summary).toBe("Se acordó el alcance.");
+  expect(b.next).toBeNull();
 });

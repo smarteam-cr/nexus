@@ -182,4 +182,20 @@ describe("candado: el widget no lleva los frentes de memoria", () => {
       expect(src, `el select del GPS no trae ${col}`).toContain(col);
     }
   });
+
+  it("C-12: el GPS no trae el summary de todas las sesiones — lo pide aparte solo para los bookends", () => {
+    /* La edición que lo pone en rojo: volver a `summary: true` en el select de las sesiones del
+       cliente «porque así ya estaba» — el blob más pesado de la fila, por cada sesión, en cada
+       apertura del widget, para mostrar tres. */
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "app/api/projects/[projectId]/gps/route.ts"),
+      "utf8",
+    );
+    const i = src.indexOf("whereBelongsToClient(clientId)");
+    const select = src.slice(i, src.indexOf("orderBy", i));
+    expect(select.length, "la guarda no está mirando el select").toBeGreaterThan(40);
+    expect(select, "el summary de TODAS las sesiones del cliente en cada apertura").not.toContain("summary: true");
+    expect(src).toContain("idsQueNecesitanResumen(");
+    expect(src).toContain("hidratarResumenes(");
+  });
 });

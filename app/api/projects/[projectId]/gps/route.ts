@@ -4,7 +4,13 @@ import { Prisma } from "@prisma/client";
 import { withProjectAccess } from "@/lib/api";
 import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
-import { computeBookends, type FrontSession, type SessionBookends } from "@/lib/sessions/bookends";
+import {
+  computeBookends,
+  hidratarResumenes,
+  idsQueNecesitanResumen,
+  type FrontSession,
+  type SessionBookends,
+} from "@/lib/sessions/bookends";
 import { loadProjectSetup } from "@/lib/portfolio/project-setup";
 import { canvasOfNested, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
@@ -48,7 +54,8 @@ async function getClientSessionBookends(
         participants: true,
         googleEventId: true,
         googleDocId: true,
-        summary: true,
+        // C-12 (2026-09-04): sin `summary`. Es el blob más pesado de la fila y de todas las
+        // sesiones del cliente el widget muestra el de TRES: se piden aparte, abajo.
       },
       orderBy: { date: "desc" },
     }),
@@ -69,7 +76,15 @@ async function getClientSessionBookends(
     desarrollo: emails.devEmails,
   };
 
-  return computeBookends(sessions, Date.now(), emails.salesEmails, porEquipo[equipoDeEntrega]);
+  const bookends = computeBookends(sessions, Date.now(), emails.salesEmails, porEquipo[equipoDeEntrega]);
+  // C-12: el summary solo de los bookends que lo muestran (≤ 3 ids), no de todo el historial.
+  const ids = idsQueNecesitanResumen(bookends);
+  if (ids.length === 0) return bookends;
+  const resumenes = await prisma.firefliesSession.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, summary: true },
+  });
+  return hidratarResumenes(bookends, new Map(resumenes.map((r) => [r.id, r.summary as unknown])));
 }
 
 /* La consulta EN VIVO a HubSpot por la etapa se retiró (2026-07-30). Estaba acá porque el
