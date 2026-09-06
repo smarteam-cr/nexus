@@ -12,6 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
+import { armarCredencial } from "@/lib/external/credencial";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -37,7 +38,7 @@ async function main() {
       name: true,
       kickoffPublishedAt: true,
       timelinePublishedAt: true,
-      externalAccess: { select: { accessToken: true, revokedAt: true } },
+      externalAccess: { select: { accessToken: true, revokedAt: true, passwordHash: true } },
     },
   });
   if (!project) { console.log(`(sin proyecto para "${term}")`); return; }
@@ -50,7 +51,10 @@ async function main() {
   const token = acc.accessToken;
   console.log(`  token: ${token.slice(0, 8)}…${token.slice(-4)}\n`);
 
-  const cookie = `nexus_ext_access=${token}`;
+  /* A-11: la cookie es `<token>.<versión>`, no el token pelado. Con el formato viejo este script
+     reportaria «sin acceso» para TODA vista externa y el diagnostico mentiria justo cuando se
+     lo necesita: el dia del deploy. */
+  const cookie = `nexus_ext_access=${armarCredencial(token, acc.passwordHash)}`;
   for (const path of ["/external/kickoff", "/external/cronograma"]) {
     const res = await fetch(`${BASE}${path}`, { headers: { Cookie: cookie } });
     const html = await res.text();

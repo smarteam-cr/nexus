@@ -465,13 +465,20 @@ test("C-20 — cambiar de grupo pide la ruta (con guard interno) y NO re-renderi
    agrupa por persona de Customer Success sobre las filas que la página ya carga, y la ficha del
    cliente (el GPS del proyecto) dice el % de ese cliente con dos COUNT sobre el índice. */
 
-test("D-08 · coberturaPorCse: solo lo ocurrido en la ventana, solo roles de CS, una reunión con dos CSE cuenta para los dos", () => {
+test("D-08 · coberturaPorCse: solo lo ocurrido en la ventana, quién es CS lo decide el ÁREA, y una reunión con dos CSE cuenta para los dos", () => {
   const ahora = new Date("2026-09-04T12:00:00Z");
   const dias = (n: number) => new Date(ahora.getTime() - n * 24 * 60 * 60 * 1000);
+  /* ⚠ El eje es el ÁREA, no la celda de permisos (corregido el 2026-09-05). Hasta entonces esto
+     filtraba por `roleEnum ∈ {CSE, CSL}`, un criterio propio que divergía del dueño único del repo
+     (`isCseMember`, lib/sessions/areas.ts) justo en el caso que el schema documenta con nombre y
+     apellido: alguien de Customer Success con `roleEnum: SUPER_ADMIN` desaparecía del desglose sin
+     que nada avisara, y su línea salía corta como si grabara todo.
+     Luis es el caso que lo prueba: su permiso NO es "CSE" y aun así cuenta, porque su área sí. */
   const equipo = [
-    { name: "Ana", email: "Ana@smarteamcr.com", roleEnum: "CSE" },
-    { name: "Luis", email: "luis@smarteamcr.com", roleEnum: "CSL" },
-    { name: "Pepe", email: "pepe@smarteamcr.com", roleEnum: "VENTAS" },
+    { name: "Ana", email: "Ana@smarteamcr.com", area: "CSE", roleEnum: "CSE" },
+    { name: "Luis", email: "luis@smarteamcr.com", area: "CSE", roleEnum: "CSL" },
+    { name: "Sofi", email: "sofi@smarteamcr.com", area: "CSE", roleEnum: "SUPER_ADMIN" },
+    { name: "Pepe", email: "pepe@smarteamcr.com", area: "Ventas", roleEnum: "VENTAS" },
   ];
   const sesiones = [
     { id: "s1", date: dias(1), participants: ["ana@smarteamcr.com", "luis@smarteamcr.com", "x@cliente.com"] },
@@ -479,15 +486,26 @@ test("D-08 · coberturaPorCse: solo lo ocurrido en la ventana, solo roles de CS,
     { id: "agendada", date: dias(-1), participants: ["ana@smarteamcr.com"] },
     { id: "vieja", date: dias(100), participants: ["ana@smarteamcr.com"] },
     { id: "ventas", date: dias(2), participants: ["pepe@smarteamcr.com"] },
+    { id: "sofi", date: dias(3), participants: ["sofi@smarteamcr.com"] },
   ];
   const conTranscript = new Set(["s1"]);
   const filas = coberturaPorCse(sesiones, equipo, (id) => conTranscript.has(id), ahora);
 
-  expect(filas.map((f) => f.email), "solo CS, peor cobertura primero; Ventas no entra").toEqual(["Ana@smarteamcr.com", "luis@smarteamcr.com"]);
-  const ana = filas[0]!;
+  expect(
+    filas.map((f) => f.email),
+    "entran los de ÁREA CS aunque su permiso no sea CSE; Ventas no entra; peor cobertura primero",
+  ).toEqual(["sofi@smarteamcr.com", "Ana@smarteamcr.com", "luis@smarteamcr.com"]);
+  expect(
+    filas[0],
+    "el caso que el criterio viejo perdía: área CS con permiso de super admin, y su única reunión sin grabar",
+  ).toMatchObject({ nombre: "Sofi", total: 1, sinTranscript: 1 });
+  const ana = filas.find((f) => f.nombre === "Ana")!;
   expect({ total: ana.total, sinTranscript: ana.sinTranscript }, "una reunión agendada no es una reunión que hubo, y >90 días queda afuera").toEqual({ total: 2, sinTranscript: 1 });
-  expect(filas[1], "la reunión con dos CSE cuenta para los dos").toMatchObject({ nombre: "Luis", total: 1, sinTranscript: 0 });
-  expect(coberturaPorCse(sesiones, [{ name: "Pepe", email: "pepe@smarteamcr.com", roleEnum: "VENTAS" }], () => false, ahora)).toEqual([]);
+  expect(filas.find((f) => f.nombre === "Luis"), "la reunión con dos CSE cuenta para los dos").toMatchObject({ total: 1, sinTranscript: 0 });
+  expect(
+    coberturaPorCse(sesiones, [{ name: "Pepe", email: "pepe@smarteamcr.com", area: "Ventas", roleEnum: "VENTAS" }], () => false, ahora),
+    "sin nadie de CS en el equipo no hay desglose",
+  ).toEqual([]);
 });
 
 test("D-08 · /sessions agrupa por CSE sobre lo que ya cargó, y el aviso lo PINTA", () => {

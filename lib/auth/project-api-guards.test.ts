@@ -684,7 +684,7 @@ describe("la cadena de auth se resuelve UNA vez por request (C-07)", () => {
   });
 });
 
-describe("C-22: el logo tiene tope de 300 KB, con el porqué, en las DOS rutas y en la interfaz", () => {
+describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas que pesan archivos", () => {
   /**
    * Un logo se pinta a ~30 px de alto; aceptar 4 MB solo hacía más lenta cada página que el
    * cliente deja abierta. Sin `sharp` (dependencia nativa) no se achica en el servidor: se rechaza
@@ -709,14 +709,73 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en las DOS rutas y
 
   /* `lee` vive dentro de otro describe (misma trampa que en C-13): lector propio. */
   const leeC22 = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
-  it("las dos rutas de logo rechazan con el mensaje único, y la interfaz promete 300 KB, no 4 MB", () => {
-    /* La edición que la pone en rojo: un `máx ${MAX_LOGO_SIZE / 1024 / 1024}MB` de vuelta en una ruta
-       (diría «máx 0.29MB»), o un hint que siga diciendo «máx 4MB». */
-    for (const ruta of ["app/api/clients/[id]/logo/route.ts", "app/api/system/brand-logos/[brand]/route.ts"]) {
-      const src = leeC22(ruta);
-      expect(src, `${ruta} no usa el mensaje único`).toContain("mensajeDeLogoMuyGrande(file.size)");
-      expect(src, `${ruta} arma el tope a mano`).not.toContain("MAX_LOGO_SIZE / 1024 / 1024");
+  /* MENCIONAR NO ES USAR: el comentario que explica por qué la foto NO usa el tope del logo lo
+     nombra, y sin esto la guarda premiaría borrar la explicación. */
+  const sinComentariosC22 = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  /**
+   * Toda ruta que compare el peso de un archivo subido, DESCUBIERTA — no transcrita.
+   *
+   * ⚠ Esta lista era de dos rutas escritas a mano, y ahí estuvo el error: `MAX_LOGO_SIZE` lo usaban
+   * CUATRO, y al bajarlo de 4 MB a 300 KB las otras dos quedaron con el tope nuevo y el mensaje
+   * viejo — la foto del equipo pasó a rechazar casi toda foto de celular diciendo literalmente
+   * «máx 0.29296875MB». Un censo que transcribe solo protege lo que alguien se acordó de escribir;
+   * uno que descubre protege la clase entera. (Cazado en la revisión previa al push, 2026-09-05.)
+   */
+  function rutasQuePesanArchivos(): string[] {
+    const raiz = path.join(process.cwd(), "app", "api");
+    const out: string[] = [];
+    const rec = (d: string) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) rec(p);
+        else if (e.name === "route.ts" && /file\.size\s*>/.test(fs.readFileSync(p, "utf8"))) {
+          out.push(path.relative(process.cwd(), p).split(path.sep).join("/"));
+        }
+      }
+    };
+    rec(raiz);
+    return out.sort();
+  }
+
+  it("NINGUNA ruta que pese un archivo arma el mensaje a mano — se descubren, no se transcriben", () => {
+    /* La edición que la pone en rojo: un `máx ${MAX_LOGO_SIZE / 1024 / 1024}MB` de vuelta en
+       CUALQUIER ruta (diría «máx 0.29MB»), o una ruta nueva que rechace sin explicar el porqué. */
+    const rutas = rutasQuePesanArchivos();
+    expect(rutas.length, "el censo no encontró ninguna ruta: ¿cambió la forma del chequeo?").toBeGreaterThanOrEqual(4);
+    /* Los topes en KB (logo, foto) NO se imprimen dividiendo por MB: ahí nació el «0.29296875MB».
+       `MAX_IMAGE_SIZE` sí puede, porque es el del bucket y son 4 MB redondos. */
+    const TOPES_EN_KB = /(MAX_LOGO_SIZE|MAX_PHOTO_SIZE)\s*\/\s*1024\s*\/\s*1024/;
+    for (const ruta of rutas) {
+      const src = sinComentariosC22(leeC22(ruta));
+      expect(src, `${ruta} imprime un tope en KB dividiendo por MB: eso dice «máx 0.29296875MB»`).not.toMatch(TOPES_EN_KB);
+      if (/MAX_LOGO_SIZE|MAX_PHOTO_SIZE/.test(src)) {
+        expect(
+          /mensajeDe\w+MuyGrande\(file\.size\)/.test(src),
+          `${ruta} rechaza un logo o una foto sin el mensaje de dueño único (mensajeDe…MuyGrande)`,
+        ).toBe(true);
+      }
     }
+  });
+
+  it("la FOTO del equipo no comparte tope con el LOGO: no es un logo de 30 px", async () => {
+    /* La edición que la pone en rojo: volver la foto a `MAX_LOGO_SIZE`. Una foto se pinta a 140 px
+       en el kickoff que abre el cliente y llega de un celular sin procesar; con 300 KB se
+       rechazaban casi todas. */
+    const { MAX_PHOTO_SIZE, MAX_LOGO_SIZE, PUBLIC_BUCKET_MAX_SIZE, mensajeDeFotoMuyGrande } = await import(
+      "@/lib/storage/public-assets"
+    );
+    expect(MAX_PHOTO_SIZE).toBeGreaterThan(MAX_LOGO_SIZE);
+    expect(MAX_PHOTO_SIZE, "sigue por debajo del límite físico del bucket").toBeLessThan(PUBLIC_BUCKET_MAX_SIZE);
+    expect(mensajeDeFotoMuyGrande(2_457_600), "el mensaje dice el peso real y el tope").toContain("2400 KB");
+    expect(mensajeDeFotoMuyGrande(2_457_600)).toContain("1 MB");
+    const foto = sinComentariosC22(leeC22("app/api/team/[id]/photo/route.ts"));
+    expect(foto, "la foto usa su propio tope").toContain("MAX_PHOTO_SIZE");
+    expect(foto, "y no el del logo").not.toContain("MAX_LOGO_SIZE");
+  });
+
+  it("la interfaz promete 300 KB, no 4 MB", () => {
     for (const [archivo, veces] of [["components/clients/ClientInfoPanel.tsx", 2], ["app/(shell)/integrations/page.tsx", 3]] as const) {
       const src = leeC22(archivo);
       expect(src, `${archivo} sigue prometiendo 4MB`).not.toContain("máx 4MB");

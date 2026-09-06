@@ -42,7 +42,9 @@ rollback() {
     red "ROLLBACK FALLO: docker compose up -d --no-build app no levanto. Intervencion manual."
     exit 1
   fi
-  for _ in $(seq 1 12); do
+  # 24 vueltas = 120 s, el MISMO plazo que se le da al contenedor nuevo. Con 12 (60 s) el
+  # rollback podia gritar «FALLO» sobre un contenedor viejo que solo tardaba un poco mas.
+  for _ in $(seq 1 24); do
     sleep 5
     if PREV_BODY="$(curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null)"; then
       PREV_OK="$(echo "$PREV_BODY" | grep -o '"ok":[a-z]*' | cut -d: -f2)"
@@ -53,7 +55,7 @@ rollback() {
       fi
     fi
   done
-  red "ROLLBACK FALLO: /api/health no respondio ok en 60s. Intervencion manual (docker logs nexus)."
+  red "ROLLBACK FALLO: /api/health no respondio ok en 120s. Intervencion manual (docker logs nexus)."
   exit 1
 }
 

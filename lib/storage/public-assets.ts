@@ -27,6 +27,25 @@ export const PUBLIC_BUCKET_MAX_SIZE = 4 * 1024 * 1024; // 4MB
 export const MAX_LOGO_SIZE = 300 * 1024; // 300 KB
 export const MAX_LOGO_SIZE_LABEL = "300 KB";
 
+/**
+ * ⚠ La FOTO de una persona del equipo NO es un logo, y por eso no comparte su tope.
+ *
+ * C-22 bajó `MAX_LOGO_SIZE` a 300 KB con un argumento que vale solo para un logo: se pinta a
+ * ~30 px de alto. Una foto de equipo se pinta a 140 px en el kickoff que abre el cliente, y las
+ * fotos llegan de un celular sin procesar — con 300 KB se rechazaban casi todas. 1 MB entra
+ * holgado para 140 px en pantalla retina y sigue cuatro veces por debajo del tope del bucket.
+ */
+export const MAX_PHOTO_SIZE = 1024 * 1024; // 1 MB
+export const MAX_PHOTO_SIZE_LABEL = "1 MB";
+
+export function mensajeDeFotoMuyGrande(bytes: number): string {
+  const kb = Math.round(bytes / 1024);
+  return (
+    `La foto pesa ${kb} KB y el máximo es ${MAX_PHOTO_SIZE_LABEL}. Se muestra a unos 140 px, así que ` +
+    `no hace falta más: exportala más chica o recortala antes de subirla.`
+  );
+}
+
 export function mensajeDeLogoMuyGrande(bytes: number): string {
   const kb = Math.round(bytes / 1024);
   return (

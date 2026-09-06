@@ -189,7 +189,14 @@ describe("D-11 (2026-09-04) · la sección SÍ sale de casa hacia Ventas — por
     /* La edición que lo pone en rojo: cargarlas para todo interno «porque la página ya es interna» —
        la página sí; el dato es lo más interno del handoff y lo decide la celda de Ventas. */
     const pagina = soloCodigo(leer("app/(shell)/sales/page.tsx"));
-    expect(pagina).toContain('(await can(ctx.teamMember, "ventas", "read")) ? await cargarOportunidadesDetectadas() : null');
+    /* Se afirma la GARANTÍA, no la forma exacta de escribirla: la celda decide, y sin ella viaja
+       `null`. Antes esto anclaba el ternario entero en una línea y se puso rojo al meter la carga
+       dentro del `Promise.all` de la página — un cambio que no toca el gate. */
+    expect(pagina, "la celda de Ventas es la que decide").toContain('can(ctx.teamMember, "ventas", "read")');
+    expect(
+      /puedeVerOportunidades\s*\?\s*cargarOportunidadesDetectadas\(\)\s*:\s*Promise\.resolve\(null\)/.test(pagina),
+      "sin la celda no se carga nada: tiene que viajar null, no la lista",
+    ).toBe(true);
     expect(pagina).toContain("<SalesClient prospects={prospects} oportunidades={oportunidades} />");
     const cliente = soloCodigo(leer("app/(shell)/sales/SalesClient.tsx"));
     expect(cliente, "sin datos no se pinta nada, ni un bloque vacío").toContain("{oportunidades && <OportunidadesDetectadas grupos={oportunidades} />}");

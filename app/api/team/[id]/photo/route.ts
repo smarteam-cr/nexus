@@ -17,7 +17,8 @@ import {
   uploadPublicAsset,
   removePublicAsset,
   isAllowedLogoType,
-  MAX_LOGO_SIZE,
+  MAX_PHOTO_SIZE,
+  mensajeDeFotoMuyGrande,
 } from "@/lib/storage/public-assets";
 import { revalidateTeamMembers } from "@/lib/cache/team";
 
@@ -38,8 +39,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!isAllowedLogoType(file.type)) {
     return NextResponse.json({ error: "Formato no soportado. Usá PNG, JPG, WebP o SVG." }, { status: 400 });
   }
-  if (file.size > MAX_LOGO_SIZE) {
-    return NextResponse.json({ error: `La imagen es muy grande (máx ${MAX_LOGO_SIZE / 1024 / 1024}MB).` }, { status: 400 });
+  /* El tope de la FOTO, no el del logo: C-22 bajó `MAX_LOGO_SIZE` a 300 KB por un logo de 30 px
+     y esta ruta quedó arrastrada, rechazando casi toda foto de celular con un mensaje que
+     además decía «máx 0.29296875MB». */
+  if (file.size > MAX_PHOTO_SIZE) {
+    return NextResponse.json({ error: mensajeDeFotoMuyGrande(file.size) }, { status: 400 });
   }
 
   const url = await uploadPublicAsset(photoPath(id), await file.arrayBuffer(), file.type);

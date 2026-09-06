@@ -30,7 +30,6 @@
  */
 import { projectedEnd, displayedEnd, type PhaseSpanLike } from "@/lib/timeline/weeks";
 import { resolvedTaskCounts } from "@/lib/timeline/progress-model";
-import { attributionBreakdown } from "@/lib/timeline/particularidades-summary";
 
 /** Lo mínimo que hace falta de una fase para afirmar algo sobre ella. */
 export interface FaseParaEntrega extends PhaseSpanLike {
@@ -240,16 +239,21 @@ export function metricasDeCumplimiento(claims: DeliveryClaims): MetricaDeEntrega
     }
   }
 
-  /* El atraso ATRIBUIDO sale de las particularidades que el CSE curó como visibles al cliente:
-     cada una ya se le comunicó con su responsable, así que el reparto no dice nada nuevo —
-     lo suma. El total es el valor; el reparto, con UN solo redactor (`attributionBreakdown`),
-     es el rótulo. Decisión de Elías (2026-08-12): el plazo y el corrimiento se dicen. */
+  /* El atraso se dice; QUIÉN lo causó, NO. Decisión de Elías (2026-08-12): el plazo y el
+     corrimiento se le comunican al cliente. Pero el REPARTO por responsable es otra cosa, y el
+     repo ya lo tenía decidido en sentido contrario para esta audiencia:
+     `attributionSentence(..., { audience: "cliente" })` dice «qué pasó y cuándo terminamos» SIN
+     reparto, porque «el marcador de faltas no le sirve y pone la relación a la defensiva»
+     (lib/timeline/particularidades-summary.ts). D-09 metió acá el desglose interno —«3 del
+     cliente y 1 de Smarteam»— en el documento que el cliente archiva, contradiciendo esa
+     decisión sin que nadie la revocara. Se revirtió el 2026-09-05: el total sí, el culpable no.
+     ⛔ Si algún día se quiere el reparto acá, es una decisión de negocio explícita, no un
+     detalle de redacción: cambia lo que el cliente lee sobre su propio proyecto. */
   if (claims.corrimiento) {
     const w = claims.corrimiento.totalWeeks;
-    const reparto = attributionBreakdown(claims.corrimiento.byParty);
     out.push({
       value: `${w} ${w === 1 ? "semana" : "semanas"}`,
-      label: reparto ? `De atraso registrado: ${reparto}` : "De atraso registrado",
+      label: "De atraso registrado",
     });
   }
 

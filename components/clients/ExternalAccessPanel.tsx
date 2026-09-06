@@ -26,6 +26,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
 import {
   PUBLISH_SURFACES,
   publishSurface,
@@ -475,7 +476,10 @@ function PasswordEditor({
 
   const trimmed = input.trim();
   const dirty = input !== (saved ?? "");
-  const validLen = trimmed.length >= 8 && trimmed.length <= 64 && !/\s/.test(trimmed);
+  // A-10 subió el mínimo del SERVIDOR a 12; el panel seguía habilitando Guardar con 9 y el
+  // CSE se comía un 400. La constante es la misma que valida el servidor, así que no pueden
+  // volver a divergir.
+  const validLen = trimmed.length >= LARGO_MINIMO_CONTRASENA && trimmed.length <= 64 && !/\s/.test(trimmed);
 
   const copy = async () => {
     if (!input) return;
@@ -546,7 +550,9 @@ function PasswordEditor({
 
       {error && <p className="text-[11px] text-red-500 mt-1.5">{error}</p>}
       {!error && trimmed.length > 0 && !validLen && (
-        <p className="text-[11px] text-amber-600 mt-1.5">La contraseña debe tener 8–64 caracteres, sin espacios.</p>
+        <p className="text-[11px] text-amber-600 mt-1.5">
+          La contraseña debe tener {LARGO_MINIMO_CONTRASENA}–64 caracteres, sin espacios.
+        </p>
       )}
     </div>
   );

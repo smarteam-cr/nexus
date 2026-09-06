@@ -161,12 +161,17 @@ export default function HubspotSystemCard({
                 </button>
                 )}
 
+                {/* A-01 cerró el OAuth: `?system=1` exige `configuracion.manage` —la MISMA celda que
+                    `puedeImportar`—. Sin el gate, quien no la tiene navega a un 403 que el browser
+                    pinta como JSON crudo, porque es un <a> de navegación, no un fetch. */}
+                {puedeImportar && (
                 <a
                   href="/api/auth/hubspot?system=1"
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-700 text-gray-400 text-xs font-medium hover:bg-gray-800 hover:text-white transition-colors"
                 >
                   Reconectar / Cambiar cuenta
                 </a>
+                )}
               </div>
             </div>
           ) : (

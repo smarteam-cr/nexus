@@ -174,9 +174,13 @@ export function attributionSentence(
 
 /**
  * SOLO el reparto por responsable, de MAYOR a MENOR: «5 compartidas, 1 del cliente y 1 de Smarteam».
- * `null` si ningún bucket suma. Es la única redacción del reparto (D-09, 2026-09-04): la usa la
- * frase interna de arriba y la tarjeta de atraso de la Entrega (lib/delivery/claims.ts), que pone
- * el total como valor y el reparto como rótulo. Un `byParty` parcial (buckets ausentes) cuenta 0.
+ * `null` si ningún bucket suma. Un `byParty` parcial (buckets ausentes) cuenta 0.
+ *
+ * ⛔ ES INTERNO. Su único consumidor es la frase de arriba con `audience: "interno"`, y así tiene
+ * que quedarse: el reparto de responsables NO va en nada que lea el cliente. D-09 lo interpoló en
+ * la tarjeta de atraso de la Entrega —que el cliente archiva— y se revirtió el 2026-09-05; la
+ * guarda que lo impide vive en lib/delivery/claims.test.ts. Extraerlo igual valió la pena: la
+ * frase interna dejó de tener la redacción del reparto embutida adentro.
  */
 export function attributionBreakdown(byParty: Partial<Record<string, number>>): string | null {
   const peso = (b: AttributionBucket) => byParty[b] ?? 0;

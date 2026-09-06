@@ -18,6 +18,7 @@ import {
   removePublicAsset,
   isAllowedLogoType,
   MAX_LOGO_SIZE,
+  mensajeDeLogoMuyGrande,
 } from "@/lib/storage/public-assets";
 
 const SYSTEM_ID = "system";
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formato no soportado. Usá PNG, JPG, WebP o SVG." }, { status: 400 });
   }
   if (file.size > MAX_LOGO_SIZE) {
-    return NextResponse.json({ error: `La imagen es muy grande (máx ${MAX_LOGO_SIZE / 1024 / 1024}MB).` }, { status: 400 });
+    // Mismo dueño del mensaje que las otras rutas de logo: antes decía «máx 0.29296875MB».
+    return NextResponse.json({ error: mensajeDeLogoMuyGrande(file.size) }, { status: 400 });
   }
 
   const url = await uploadPublicAsset(LOGO_PATH, await file.arrayBuffer(), file.type);

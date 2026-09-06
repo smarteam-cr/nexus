@@ -14,9 +14,11 @@
  *  - «Con transcripción» lo decide quien llama (`tieneTranscript`), con el criterio ÚNICO del repo:
  *    no nula y no vacía — `""` no es un transcript (lección de C-10).
  *
- * ⛔ Sin imports a propósito: lo importan `SessionsClient.tsx` y `ProjectGPS.tsx` ("use client").
- * Importar prisma o zod desde acá los arrastraría al bundle (lib/auth/client-safe.test.ts).
+ * ⛔ Client-safe: lo importan `SessionsClient.tsx` y `ProjectGPS.tsx` ("use client"), así que solo
+ * puede importar módulos igual de puros. `lib/sessions/areas.ts` lo es (cero imports); prisma o
+ * zod no (lib/auth/client-safe.test.ts).
  */
+import { isCseMember } from "./areas";
 
 export interface SesionParaCobertura {
   id: string;
@@ -27,8 +29,10 @@ export interface SesionParaCobertura {
 export interface MiembroParaCobertura {
   name: string;
   email: string;
-  /** El rol de permisos (`TeamMember.roleEnum`), no el `area` libre: es lo que dice quién es CS. */
-  roleEnum: string | null;
+  /** Área funcional — el eje de ANÁLISIS. Es lo que dice quién hace Customer Success. */
+  area?: string | null;
+  /** Rol de permisos (`TeamRole`). Solo como respaldo del área, vía `isCseMember`. */
+  roleEnum?: string | null;
 }
 
 export interface FilaDeCoberturaPorCse {
@@ -39,9 +43,6 @@ export interface FilaDeCoberturaPorCse {
   /** De ésas, las que no dejaron transcripción. */
   sinTranscript: number;
 }
-
-/** Los roles que cuentan como «CSE» para la cobertura: quienes llevan la relación con el cliente. */
-export const ROLES_DE_CUSTOMER_SUCCESS: ReadonlySet<string> = new Set(["CSE", "CSL"]);
 
 export const VENTANA_DE_COBERTURA_DIAS = 90;
 
@@ -59,9 +60,13 @@ export function coberturaPorCse(
   ahora: Date,
   ventanaDias: number = VENTANA_DE_COBERTURA_DIAS,
 ): FilaDeCoberturaPorCse[] {
+  /* Quién hace Customer Success lo decide el ÁREA, no la celda de permisos, y lo decide el dueño
+     único del repo (`isCseMember`). Con el rol solo, un CSE real con `roleEnum: SUPER_ADMIN`
+     —el caso que el propio schema documenta con nombre y apellido— desaparecía del desglose sin
+     que nada avisara: la línea salía corta y parecía que esa persona graba todo. */
   const cse = new Map<string, MiembroParaCobertura>();
   for (const m of equipo) {
-    if (m.roleEnum && ROLES_DE_CUSTOMER_SUCCESS.has(m.roleEnum)) cse.set(m.email.toLowerCase(), m);
+    if (isCseMember(m)) cse.set(m.email.toLowerCase(), m);
   }
   if (cse.size === 0) return [];
 

@@ -204,13 +204,45 @@ describe("D-09 · la Entrega mide LO PROMETIDO: alcance agregado y atraso atribu
     expect(buildDeliveryClaims({ ...base, alcance: null }).alcance).toBeNull();
   });
 
-  it("el atraso atribuido: el total como valor, el reparto como rótulo, con el redactor único", () => {
-    /* La edición que lo pone en rojo: redactar el reparto a mano en claims.ts (una segunda copia
-       de BUCKET_LABEL que diverge sola), o perder el reparto «para no señalar». */
+  it("⛔ el atraso se dice, el CULPABLE no: ningún rótulo de la Entrega reparte responsables", () => {
+    /* ── INVERTIDO el 2026-09-05, y el motivo importa más que el assert ──────────────────────
+       Hasta hoy este test EXIGÍA lo contrario: que el rótulo dijera «De atraso registrado: 3 del
+       cliente y 1 de Smarteam». Estaba mal, y la revisión previa al push lo cazó: la Entrega es un
+       documento que el CLIENTE abre y archiva, y el repo ya tenía tomada la decisión opuesta para
+       esa audiencia — `attributionSentence(..., { audience: "cliente" })` da «qué pasó y cuándo
+       terminamos» SIN reparto, porque «el marcador de faltas no le sirve y pone la relación a la
+       defensiva» (lib/timeline/particularidades-summary.ts). D-09 metió el desglose interno en el
+       documento externo sin que nadie revocara esa decisión.
+
+       Lo que se conserva de D-09: el TOTAL sí se dice (decisión de Elías, 2026-08-12: el plazo y
+       el corrimiento se comunican). Lo que se revirtió: quién lo causó.
+
+       La edición que lo pone en rojo: volver a interpolar `attributionBreakdown` —o cualquier
+       reparto escrito a mano— en el rótulo. El assert no mira UNA tarjeta sino TODAS, así que
+       tampoco alcanza con meterlo por otra métrica. */
     const c = buildDeliveryClaims({ ...base, corrimiento: { totalWeeks: 4, byParty: { CLIENTE: 3, SMARTEAM: 1 } } });
     const tarjeta = metricasDeCumplimiento(c).find((m) => m.value === "4 semanas");
-    expect(tarjeta?.label).toBe("De atraso registrado: 3 del cliente y 1 de Smarteam");
-    expect(labels({ ...base, corrimiento: { totalWeeks: 1, byParty: { AMBOS: 1 } } })).toContain("1 semana · De atraso registrado: 1 compartidas");
+    expect(tarjeta?.label, "el total se dice; el reparto no").toBe("De atraso registrado");
+
+    const NOMBRA_CULPABLE = /del cliente|de Smarteam|de desarrollo|compartidas|sin atribuir/i;
+    const CASOS: Array<Record<string, number>> = [
+      { CLIENTE: 3, SMARTEAM: 1 },
+      { AMBOS: 1 },
+      { DEV: 2, SIN_ATRIBUIR: 1 },
+    ];
+    for (const caso of CASOS) {
+      const total = Object.values(caso).reduce((a, b) => a + b, 0);
+      const metricas = metricasDeCumplimiento(
+        buildDeliveryClaims({ ...base, corrimiento: { totalWeeks: total, byParty: caso } }),
+      );
+      for (const m of metricas) {
+        expect(
+          `${m.value} ${m.label}`,
+          "una métrica de la Entrega nombró a un responsable: eso lo lee el cliente",
+        ).not.toMatch(NOMBRA_CULPABLE);
+      }
+    }
+
     expect(labels({ ...base, corrimiento: { totalWeeks: 0, byParty: {} } }).join("\n"), "sin atraso no hay tarjeta").not.toMatch(/atraso/);
   });
 

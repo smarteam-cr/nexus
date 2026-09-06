@@ -38,14 +38,17 @@ export default async function SalesPage() {
   /* D-11 (2026-09-04): «Oportunidades detectadas» se carga SOLO con la celda `ventas.read`. La
      página en sí sigue abierta a todo interno (como siempre); lo que se gatea es el dato, que es
      lo más interno del handoff. Sin la celda viaja null y el bloque no se pinta. */
-  const oportunidades = (await can(ctx.teamMember, "ventas", "read")) ? await cargarOportunidadesDetectadas() : null;
+  const puedeVerOportunidades = await can(ctx.teamMember, "ventas", "read");
 
   // C-10 (2026-09-04): `transcript` es el blob más pesado de la tabla y acá solo se usaba para
   // saber si EXISTE. Traerlo entero para todas las reuniones de Ventas era cargar megabytes en
   // cada visita. Mismo patrón que /sessions: la lista sin el blob + los ids que tienen transcript.
   // ⚠ `""` no cuenta como transcript (antes era `!!s.transcript`): el filtro lo excluye igual, así
   // que el conteo de analizables es el mismo de antes.
-  const [sessions, conTranscript] = await Promise.all([
+  // Las oportunidades entran al MISMO Promise.all: son independientes de las sesiones y en serie
+  // sumaban su latencia a la de la página.
+  const [oportunidades, sessions, conTranscript] = await Promise.all([
+    puedeVerOportunidades ? cargarOportunidadesDetectadas() : Promise.resolve(null),
     prisma.firefliesSession.findMany({
       where: { participants: { hasSome: [...SALES_EMAILS] } },
       orderBy: { date: "desc" },
