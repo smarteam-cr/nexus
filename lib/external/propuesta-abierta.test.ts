@@ -470,3 +470,35 @@ describe("candado 10 — el SDK de Sentry no viaja en el chunk de todas las pág
     );
   });
 });
+
+describe("candado 5b — el PANEL del CSE no puede prometer un largo distinto del que el servidor exige", () => {
+  /**
+   * A-10 subió el mínimo del servidor a 12 y el panel siguió validando `>= 8` y diciendo
+   * «8–64 caracteres»: el CSE escribía una de 9, el botón se habilitaba, y el servidor contestaba
+   * 400. Se arregló el 2026-09-05 haciendo que el panel IMPORTE las mismas constantes.
+   *
+   * Este candado existe porque ese arreglo era el único de los tres de esa tanda sin guarda: nada
+   * impedía que alguien volviera a escribir el número a mano, y la divergencia es invisible hasta
+   * que un CSE se come el 400.
+   *
+   * La edición que lo pone en rojo: cambiar `LARGO_MINIMO_CONTRASENA` por un 12 literal (o el
+   * máximo por un 64) en el panel.
+   */
+  const panel = fs.readFileSync(path.join(process.cwd(), "components/clients/ExternalAccessPanel.tsx"), "utf8");
+
+  it("el panel deriva el largo de la política, no lo transcribe", () => {
+    const validacion = panel.slice(panel.indexOf("const validLen"), panel.indexOf("const validLen") + 260);
+    expect(validacion.length, "la guarda no mira nada: se movió `validLen`").toBeGreaterThan(60);
+    expect(validacion, "el mínimo sale de la política").toContain("LARGO_MINIMO_CONTRASENA");
+    expect(validacion, "y el máximo también: era el mismo bug en el otro extremo").toContain("LARGO_MAXIMO_CONTRASENA");
+    expect(
+      /trimmed\.length\s*[><]=?\s*\d/.test(validacion),
+      "el panel volvió a comparar el largo contra un número escrito a mano",
+    ).toBe(false);
+  });
+
+  it("y el texto que lee el CSE dice los mismos números", () => {
+    expect(panel, "el aviso del panel transcribió un largo").not.toMatch(/tener \d+[–-]\d+ caracteres/);
+    expect(panel).toContain("{LARGO_MINIMO_CONTRASENA}–{LARGO_MAXIMO_CONTRASENA} caracteres");
+  });
+});

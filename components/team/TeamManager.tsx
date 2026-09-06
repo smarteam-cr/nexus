@@ -10,6 +10,8 @@ import {
   TableSkeleton,
   type TableColumn,
 } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
+import { MAX_PHOTO_SIZE_LABEL } from "@/lib/storage/public-assets";
 import MemberPermissionsModal from "./MemberPermissionsModal";
 import NuevoMiembroModal from "./NuevoMiembroModal";
 import RoleTemplatesPanel from "./RoleTemplatesPanel";
@@ -47,6 +49,7 @@ function TeamPhotoAvatar({
 }) {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,7 +60,18 @@ function TeamPhotoAvatar({
       fd.append("file", file);
       const res = await fetch(`/api/team/${member.id}/photo`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.photoUrl) onUploaded(member.id, data.photoUrl);
+      /* ⚠ Sin esta rama la subida fallaba EN SILENCIO: el spinner giraba, paraba, y no pasaba
+         nada — ni la foto cambiaba ni aparecía un error. El servidor sí explica por qué
+         (formato no soportado, pesa de más, almacenamiento apagado) y ese texto se tiraba a la
+         basura acá. Es lo que hacía invisible el tope de C-22: la persona no tenía forma de
+         saber que su foto se rechazaba por peso. (Revisión previa al push, 2026-09-05.) */
+      if (!res.ok) {
+        toast.error(typeof data?.error === "string" ? data.error : "No se pudo subir la foto.");
+        return;
+      }
+      if (data.photoUrl) onUploaded(member.id, data.photoUrl);
+    } catch {
+      toast.error("Error de red al subir la foto.");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -79,7 +93,9 @@ function TeamPhotoAvatar({
           inputRef.current?.click();
         }}
         disabled={busy}
-        title={member.photoUrl ? "Cambiar foto" : "Subir foto"}
+        /* El tope se DICE antes de elegir el archivo, no despues de que el servidor rechace:
+           era la otra mitad del bug de C-22 —la interfaz no prometia ningun tamano—. */
+        title={`${member.photoUrl ? "Cambiar foto" : "Subir foto"} · PNG, JPG o WebP, máx ${MAX_PHOTO_SIZE_LABEL}`}
         className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover/photo:opacity-100 focus-visible:opacity-100 disabled:cursor-wait"
       >
         {busy ? (

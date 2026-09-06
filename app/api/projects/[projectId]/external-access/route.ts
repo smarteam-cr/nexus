@@ -120,7 +120,8 @@ export async function POST(
 /**
  * Cambia la contraseña sin rotar el token. Dos modos:
  *   - body { password: "..." } → contraseña CUSTOM (la que el CSE eligió/editó).
- *     Validada: 8–64 chars, sin espacios.
+ *     Validada por `lib/external/politica-de-contrasena` (A-10): mínimo 12 —no 8—, tope 64, sin
+ *     espacios, y sin las del diccionario corto ni el nombre del cliente/proyecto.
  *   - body vacío / sin password → REGENERA una aleatoria (12 chars seguros).
  *
  * Actualiza accessPassword (plano, visible) + passwordHash (lo usa verify).

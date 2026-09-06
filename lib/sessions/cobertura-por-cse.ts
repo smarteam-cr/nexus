@@ -63,7 +63,13 @@ export function coberturaPorCse(
   /* Quién hace Customer Success lo decide el ÁREA, no la celda de permisos, y lo decide el dueño
      único del repo (`isCseMember`). Con el rol solo, un CSE real con `roleEnum: SUPER_ADMIN`
      —el caso que el propio schema documenta con nombre y apellido— desaparecía del desglose sin
-     que nada avisara: la línea salía corta y parecía que esa persona graba todo. */
+     que nada avisara: la línea salía corta y parecía que esa persona graba todo.
+
+     ⚠ `isCseMember` es `area === "CSE" || roleEnum === "CSE"`, así que alguien cuya área se
+     escriba distinto («CSL», «Customer Success») queda afuera. Verificado contra el roster real
+     (scripts/assign-team-roles.ts): el único CSL del equipo tiene `area: "CSE"`, así que hoy no se
+     pierde nadie. Si mañana falta alguien en el desglose, el arreglo es su ÁREA en /team —no un
+     criterio nuevo acá, que es exactamente la divergencia de la que se acaba de salir. */
   const cse = new Map<string, MiembroParaCobertura>();
   for (const m of equipo) {
     if (isCseMember(m)) cse.set(m.email.toLowerCase(), m);

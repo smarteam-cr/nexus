@@ -26,7 +26,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
-import { LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
+import { LARGO_MAXIMO_CONTRASENA, LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
 import {
   PUBLISH_SURFACES,
   publishSurface,
@@ -479,7 +479,8 @@ function PasswordEditor({
   // A-10 subió el mínimo del SERVIDOR a 12; el panel seguía habilitando Guardar con 9 y el
   // CSE se comía un 400. La constante es la misma que valida el servidor, así que no pueden
   // volver a divergir.
-  const validLen = trimmed.length >= LARGO_MINIMO_CONTRASENA && trimmed.length <= 64 && !/\s/.test(trimmed);
+  const validLen =
+    trimmed.length >= LARGO_MINIMO_CONTRASENA && trimmed.length <= LARGO_MAXIMO_CONTRASENA && !/\s/.test(trimmed);
 
   const copy = async () => {
     if (!input) return;
@@ -549,9 +550,12 @@ function PasswordEditor({
       </div>
 
       {error && <p className="text-[11px] text-red-500 mt-1.5">{error}</p>}
-      {!error && trimmed.length > 0 && !validLen && (
+      {/* `dirty`: sin esto, un acceso creado ANTES de que el mínimo subiera a 12 mostraba el aviso
+          ámbar de forma permanente, sin nada que el CSE pudiera hacer para apagarlo — su
+          contraseña sigue siendo válida y no hay por qué pedirle que la cambie. */}
+      {!error && dirty && trimmed.length > 0 && !validLen && (
         <p className="text-[11px] text-amber-600 mt-1.5">
-          La contraseña debe tener {LARGO_MINIMO_CONTRASENA}–64 caracteres, sin espacios.
+          La contraseña debe tener {LARGO_MINIMO_CONTRASENA}–{LARGO_MAXIMO_CONTRASENA} caracteres, sin espacios.
         </p>
       )}
     </div>

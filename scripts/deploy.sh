@@ -42,9 +42,13 @@ rollback() {
     red "ROLLBACK FALLO: docker compose up -d --no-build app no levanto. Intervencion manual."
     exit 1
   fi
-  # 24 vueltas = 120 s, el MISMO plazo que se le da al contenedor nuevo. Con 12 (60 s) el
-  # rollback podia gritar «FALLO» sobre un contenedor viejo que solo tardaba un poco mas.
-  for _ in $(seq 1 24); do
+  # Contra un RELOJ, no contra un contador: cada vuelta cuesta `sleep 5` MAS lo que tarde el
+  # curl (hasta --max-time 10), asi que 24 vueltas podian ser 360 s y despues mentir «en 120s».
+  # Y ese no es un caso raro: cuando el motivo del rollback es la base, /api/health no rechaza
+  # la conexion — se cuelga esperando a Prisma — y el curl consume su tope entero cada vuelta.
+  # 120 s es el MISMO plazo que se le da al contenedor nuevo (--wait-timeout, mas abajo).
+  ROLLBACK_FIN=$((SECONDS + 120))
+  while [ "$SECONDS" -lt "$ROLLBACK_FIN" ]; do
     sleep 5
     if PREV_BODY="$(curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null)"; then
       PREV_OK="$(echo "$PREV_BODY" | grep -o '"ok":[a-z]*' | cut -d: -f2)"
@@ -55,7 +59,7 @@ rollback() {
       fi
     fi
   done
-  red "ROLLBACK FALLO: /api/health no respondio ok en 120s. Intervencion manual (docker logs nexus)."
+  red "ROLLBACK FALLO: /api/health no respondio ok en ${SECONDS}s. Intervencion manual (docker logs nexus)."
   exit 1
 }
 

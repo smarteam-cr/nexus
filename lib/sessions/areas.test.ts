@@ -96,6 +96,22 @@ describe("los otros frentes no se movieron", () => {
     expect(isCseMember({ email: "jarauz@smarteamcr.com", area: "Development", roleEnum: "CSE" })).toBe(true);
   });
 
+  it("⭐ el CSL es Customer Success — por área o por rol, porque «CSL» es las dos cosas", () => {
+    /* Hasta el 2026-09-05 esto miraba solo «CSE», y «CSL» es un ÁREA que el formulario de alta
+       ofrece (AREA_OPTIONS, components/team/roles-ui.ts). Un miembro con esa área no caía en
+       NINGÚN frente —ni Ventas, ni CSE, ni Desarrollo—: desaparecía en silencio de las fechas de
+       última reunión de la cartera, del widget de frentes y del desglose de cobertura de /sessions.
+       El líder de cuentas lleva reuniones con el cliente igual que un CSE.
+
+       La edición que lo pone en rojo: volver `isCseMember` a `area === "CSE" || roleEnum === "CSE"`. */
+    expect(isCseMember({ email: "l@smarteamcr.com", area: "CSL", roleEnum: "CSL" }), "área CSL").toBe(true);
+    expect(isCseMember({ email: "l@smarteamcr.com", area: "CSL", roleEnum: "SUPER_ADMIN" }), "área CSL con otro permiso").toBe(true);
+    expect(isCseMember({ email: "l@smarteamcr.com", area: "CSE", roleEnum: "CSL" }), "el caso del roster real").toBe(true);
+    // Y no se lleva puesto a nadie más: Ventas y Desarrollo siguen afuera.
+    expect(isCseMember({ email: "v@smarteamcr.com", area: "Ventas", roleEnum: "VENTAS" })).toBe(false);
+    expect(isCseMember({ email: "d@smarteamcr.com", area: "Development", roleEnum: "DEV" })).toBe(false);
+  });
+
   it("internalEmails los trae a TODOS", () => {
     expect(sets.internalEmails.size).toBe(ROSTER.length);
   });

@@ -110,8 +110,14 @@ function semanas(n: number): string {
   return `${n} ${n === 1 ? "semana" : "semanas"}`;
 }
 
-/** Etiqueta de cada bucket. La unidad ("semanas") va una sola vez en el titular. */
-const BUCKET_LABEL: Record<AttributionBucket, string> = {
+/**
+ * Etiqueta de cada bucket. La unidad ("semanas") va una sola vez en el titular.
+ *
+ * Exportado para que la guarda de la Entrega (lib/delivery/claims.test.ts) DERIVE de acá la lista
+ * de palabras que no pueden aparecer en un documento del cliente, en vez de transcribirla: una
+ * etiqueta nueva o renombrada quedaría fuera del regex y la guarda se pudriría en silencio.
+ */
+export const BUCKET_LABEL: Record<AttributionBucket, string> = {
   AMBOS: "compartidas",
   CLIENTE: "del cliente",
   SMARTEAM: "de Smarteam",

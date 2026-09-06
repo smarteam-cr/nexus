@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { BUCKET_LABEL } from "@/lib/timeline/particularidades-summary";
 import path from "node:path";
 import {
   buildDeliveryClaims,
@@ -224,7 +225,11 @@ describe("D-09 · la Entrega mide LO PROMETIDO: alcance agregado y atraso atribu
     const tarjeta = metricasDeCumplimiento(c).find((m) => m.value === "4 semanas");
     expect(tarjeta?.label, "el total se dice; el reparto no").toBe("De atraso registrado");
 
-    const NOMBRA_CULPABLE = /del cliente|de Smarteam|de desarrollo|compartidas|sin atribuir/i;
+    /* DERIVADO del mapa real, no transcrito: si mañana se agrega un bucket («de un tercero»),
+       entra solo a la guarda. Transcribirlo la dejaba pudrirse sin avisar. */
+    const etiquetas = Object.values(BUCKET_LABEL);
+    expect(etiquetas.length, "el mapa de etiquetas quedó vacío: la guarda no miraría nada").toBeGreaterThanOrEqual(5);
+    const NOMBRA_CULPABLE = new RegExp(etiquetas.map((t) => t.replace(/[^\w\sáéíóúñ]/gi, "\\$&")).join("|"), "i");
     const CASOS: Array<Record<string, number>> = [
       { CLIENTE: 3, SMARTEAM: 1 },
       { AMBOS: 1 },

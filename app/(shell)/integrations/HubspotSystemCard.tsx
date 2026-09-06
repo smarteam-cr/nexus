@@ -174,7 +174,7 @@ export default function HubspotSystemCard({
                 )}
               </div>
             </div>
-          ) : (
+          ) : puedeImportar ? (
             <a
               href="/api/auth/hubspot?system=1"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ff7a59] hover:bg-[#ff8f73] text-white text-xs font-medium transition-colors"
@@ -184,6 +184,14 @@ export default function HubspotSystemCard({
               </svg>
               Conectar HubSpot del sistema
             </a>
+          ) : (
+            /* Mismo gate que el de reconectar: `?system=1` exige `configuracion.manage`. Acá se dice
+               por qué no hay botón, en vez de dejar un hueco mudo — el hueco se lee como «esto está
+               roto» y termina en una consulta que no hacía falta. */
+            <p className="text-xs text-fg-muted">
+              La cuenta de HubSpot del sistema no está conectada. Conectarla la habilita quien administra la
+              configuración de Nexus.
+            </p>
           )}
         </div>
       </div>

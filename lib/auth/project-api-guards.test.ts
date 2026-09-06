@@ -730,7 +730,10 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
       for (const e of fs.readdirSync(d, { withFileTypes: true })) {
         const p = path.join(d, e.name);
         if (e.isDirectory()) rec(p);
-        else if (e.name === "route.ts" && /file\.size\s*>/.test(fs.readFileSync(p, "utf8"))) {
+        /* Se caza por la CONSTANTE del tope, no por `file.size` — renombrar la variable local
+           (`archivo`, `blob`, `f`) sacaba la ruta del censo sin que nada avisara, que es
+           exactamente la clase de falso negativo que este censo vino a matar. */
+        else if (e.name === "route.ts" && /MAX_\w*(?:SIZE|BYTES)|\.size\s*>/.test(fs.readFileSync(p, "utf8"))) {
           out.push(path.relative(process.cwd(), p).split(path.sep).join("/"));
         }
       }
@@ -773,6 +776,31 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
     const foto = sinComentariosC22(leeC22("app/api/team/[id]/photo/route.ts"));
     expect(foto, "la foto usa su propio tope").toContain("MAX_PHOTO_SIZE");
     expect(foto, "y no el del logo").not.toContain("MAX_LOGO_SIZE");
+  });
+
+  it("⛔ ninguna subida de archivo falla EN SILENCIO: el mensaje del servidor se muestra", () => {
+    /**
+     * El tope y el mensaje no sirven de nada si el cliente los tira a la basura. `TeamPhotoAvatar`
+     * hacía `if (res.ok && data.photoUrl) …` sin rama `else`: el CSE elegía una foto de 2 MB, el
+     * spinner giraba, paraba, y no pasaba nada — ni la foto cambiaba ni aparecía un error. Eso es
+     * lo que hacía INVISIBLE el tope de C-22, y por eso el «máx 0.29296875MB» nunca se vio: no es
+     * que fuera feo, es que no llegaba.
+     *
+     * La edición que lo pone en rojo: sacar el manejo de `!res.ok` de cualquier uploader.
+     */
+    const uploaders = ["components/team/TeamManager.tsx", "components/ui/LogoUploader.tsx"];
+    for (const rel of uploaders) {
+      const src = sinComentariosC22(leeC22(rel));
+      expect(src, `${rel} dejó de subir con FormData: revisar esta guarda`).toContain("FormData()");
+      expect(
+        /if\s*\(\s*!res\.ok\s*\)/.test(src),
+        `${rel} no mira si la respuesta falló: la subida falla en silencio y el mensaje del servidor se pierde`,
+      ).toBe(true);
+      expect(
+        /data\??\.?\.?error|data\?\.error|data\.error/.test(src),
+        `${rel} descarta el texto que el servidor manda en \`error\``,
+      ).toBe(true);
+    }
   });
 
   it("la interfaz promete 300 KB, no 4 MB", () => {

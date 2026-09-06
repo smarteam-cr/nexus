@@ -25,8 +25,20 @@ export function isSalesMember(m: TeamMemberLite): boolean {
   return m.area === "Ventas" || m.area === "Sales" || m.roleEnum === "VENTAS";
 }
 
+/**
+ * Customer Success = CSE **y CSL**. El líder de cuentas lleva reuniones con el cliente igual que
+ * un CSE, así que pertenece al mismo frente.
+ *
+ * ⚠ «CSL» no es solo un rol de permisos: es un ÁREA que el formulario de alta ofrece
+ * (`AREA_OPTIONS`, components/team/roles-ui.ts). Hasta el 2026-09-05 esta función solo miraba
+ * «CSE», así que un miembro con área «CSL» no caía en NINGÚN frente —ni Ventas ni CSE ni
+ * Desarrollo— y desaparecía en silencio de las fechas de última reunión de la cartera, del widget
+ * de frentes del proyecto y del desglose de cobertura de /sessions. Se descubrió al migrar ese
+ * desglose a esta función: su criterio viejo (por rol) sí contemplaba CSL, y el cambio lo habría
+ * perdido. Se arregló acá, en el dueño único, en vez de en el consumidor.
+ */
 export function isCseMember(m: TeamMemberLite): boolean {
-  return m.area === "CSE" || m.roleEnum === "CSE";
+  return m.area === "CSE" || m.area === "CSL" || m.roleEnum === "CSE" || m.roleEnum === "CSL";
 }
 
 // Desarrollo/dev: el área es un set abierto (String?), así que contemplamos las

@@ -154,8 +154,18 @@ aplicadas a producción.
 
 ### Si algo sale mal
 
-`deploy.sh` **no revierte solo**: imprime el comando y sale con 1.
+`deploy.sh` **revierte solo** desde B-04 (2026-09-04): si el contenedor nuevo no llega a healthy,
+vuelve a la imagen anterior, re-verifica `/api/health` y sale con 1. Antes solo imprimía el comando
+para que alguien lo copiara — si leés eso en algún lado, está viejo (ver `docs/RUNBOOK.md`).
 
-```bash
-docker tag nexus:prev nexus:latest && docker compose up -d --no-build app
-```
+**Lo único que hay que hacer es leer cuál de las tres líneas imprimió:**
+
+| Línea | Qué pasó | Qué hacer |
+|---|---|---|
+| `ROLLBACK OK — <sha> corriendo y healthy` | Producción volvió sola al commit anterior | Nada. Mirar por qué falló el nuevo, sin apuro |
+| `ROLLBACK FALLO: /api/health no respondio ok en <N>s` | Se revirtió la imagen pero el health no confirmó | `docker logs nexus --tail 80`. ⚠ Puede tardar: el health consulta la base, así que si el problema es la base, cada sondeo agota su tope |
+| `ROLLBACK IMPOSIBLE` | No había imagen previa (primer deploy) | Mano: `docker logs nexus --tail 80` |
+
+⚠ **No corras el rollback a mano antes de leer esas líneas**: el script ya hizo
+`docker tag nexus:prev nexus:latest` y levantó el contenedor. Repetirlo sobre un rollback que
+funcionó no rompe nada, pero te hace diagnosticar sobre un estado que no es el real.
