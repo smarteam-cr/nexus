@@ -45,8 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   }
 
   const path = `kickoff-images/${projectId}/${randomUUID()}.${EXT_BY_MIME[file.type] ?? "bin"}`;
-  const raw = await uploadPublicAsset(path, await file.arrayBuffer(), file.type);
-  if (!raw) return NextResponse.json({ error: "No se pudo subir la imagen." }, { status: 500 });
+  const subida = await uploadPublicAsset(path, await file.arrayBuffer(), file.type);
+  if (!subida.ok) return NextResponse.json({ error: subida.mensaje, motivo: subida.motivo }, { status: 502 });
 
-  return NextResponse.json({ url: raw.split("?")[0] });
+  return NextResponse.json({ url: subida.url.split("?")[0] });
 }

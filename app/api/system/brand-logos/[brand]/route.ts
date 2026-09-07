@@ -66,8 +66,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json({ error: mensajeDeLogoMuyGrande(file.size) }, { status: 400 });
   }
 
-  const url = await uploadPublicAsset(def.path, await file.arrayBuffer(), file.type);
-  if (!url) return NextResponse.json({ error: "No se pudo subir el logo." }, { status: 500 });
+  const subida = await uploadPublicAsset(def.path, await file.arrayBuffer(), file.type);
+  if (!subida.ok) return NextResponse.json({ error: subida.mensaje, motivo: subida.motivo }, { status: 502 });
+  const url = subida.url;
 
   await prisma.systemConfig.upsert({
     where: { id: SYSTEM_ID },

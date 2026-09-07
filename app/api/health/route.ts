@@ -26,11 +26,12 @@
  */
 import { prisma, poolStats } from "@/lib/db/prisma";
 import { leerInvariantesOk } from "@/lib/invariantes/salud";
+import { storageAcepta } from "@/lib/storage/public-assets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   const checks: Record<string, string> = {};
   let ok = true;
 
@@ -53,6 +54,19 @@ export async function GET() {
   // Best-effort y aparte del `ok`: nunca cae ni tumba el health (ver lib/invariantes/salud.ts).
   const invariantesOk = await leerInvariantesOk();
 
+  /* ── ¿El almacenamiento acepta las credenciales del servidor? (2026-09-07) ────────────────
+     SOLO con `?storage=1`, nunca en el healthcheck del compose: es una llamada de red a
+     Supabase y este endpoint lo golpea cada 15 s. Sirve para responder en un curl la pregunta
+     que hoy exige que alguien intente subir una foto y falle: «¿la clave del servidor sirve?».
+     Un booleano y nada más — el endpoint es PÚBLICO (mismo criterio que `invariantesOk`, B-09),
+     así que el detalle del error queda en los logs del servidor, no acá.
+     ⛔ NO participa del `ok`: el storage caído no es el contenedor caído, y si tumbara el
+     healthcheck Docker reiniciaría en bucle por algo que se arregla en el `.env`. */
+  let storageOk: boolean | null = null;
+  if (new URL(req.url).searchParams.get("storage") === "1") {
+    storageOk = await storageAcepta().catch(() => false);
+  }
+
   return Response.json(
     {
       ok,
@@ -61,6 +75,7 @@ export async function GET() {
       pool: poolStats(),
       checks,
       invariantesOk,
+      storageOk,
     },
     { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } },
   );

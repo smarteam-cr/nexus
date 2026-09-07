@@ -803,6 +803,39 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
     }
   });
 
+  it("⛔ el error del almacenamiento NO se tira: las seis rutas propagan el motivo", () => {
+    /**
+     * `uploadPublicAsset` hacía `if (error) return null` y las seis rutas contestaban «No se pudo
+     * subir…». El error real de Supabase —el ÚNICO dato que sirve para arreglarlo— no llegaba ni a
+     * la pantalla ni a los logs, así que diagnosticar «no puedo subir la foto de X» exigía leer el
+     * código y adivinar entre la clave del servidor, el tamaño, el tipo y la red.
+     *
+     * La edición que lo pone en rojo: volver cualquier ruta a `if (!url) … "No se pudo subir"`.
+     */
+    const fuente = leeC22("lib/storage/public-assets.ts");
+    expect(fuente, "el resultado dejó de llevar el motivo").toContain("motivo: MotivoDeFalloAlSubir");
+    expect(sinComentariosC22(fuente), "el error volvió a tirarse").not.toMatch(/if\s*\(error\)\s*return null/);
+    expect(fuente, "y se loguea para que quede rastro en el servidor").toContain("[storage] upload falló");
+
+    const RUTAS = [
+      "app/api/team/[id]/photo/route.ts",
+      "app/api/clients/[id]/logo/route.ts",
+      "app/api/system/brand-logos/[brand]/route.ts",
+      "app/api/system/smarteam-logo/route.ts",
+      "app/api/business-cases/[id]/images/route.ts",
+      "app/api/projects/[projectId]/images/route.ts",
+    ];
+    for (const rel of RUTAS) {
+      const src = sinComentariosC22(leeC22(rel));
+      expect(src, `${rel} ya no usa uploadPublicAsset: revisar esta guarda`).toContain("uploadPublicAsset(");
+      expect(src, `${rel} descarta el motivo y contesta un mensaje generico`).toContain("subida.mensaje");
+      expect(
+        /No se pudo subir (la foto|el logo|la imagen)/.test(src),
+        `${rel} volvió al mensaje generico que no le dice a nadie que arreglar`,
+      ).toBe(false);
+    }
+  });
+
   it("la interfaz promete 300 KB, no 4 MB", () => {
     for (const [archivo, veces] of [["components/clients/ClientInfoPanel.tsx", 2], ["app/(shell)/integrations/page.tsx", 3]] as const) {
       const src = leeC22(archivo);

@@ -48,9 +48,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const path = `bc-images/${id}/${randomUUID()}.${EXT_BY_MIME[file.type] ?? "bin"}`;
-  const raw = await uploadPublicAsset(path, await file.arrayBuffer(), file.type);
-  if (!raw) return NextResponse.json({ error: "No se pudo subir la imagen." }, { status: 500 });
+  const subida = await uploadPublicAsset(path, await file.arrayBuffer(), file.type);
+  if (!subida.ok) return NextResponse.json({ error: subida.mensaje, motivo: subida.motivo }, { status: 502 });
 
-  const url = raw.split("?")[0];
+  const url = subida.url.split("?")[0];
   return NextResponse.json({ url });
 }

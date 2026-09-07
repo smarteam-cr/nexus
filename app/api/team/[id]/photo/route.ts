@@ -46,8 +46,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: mensajeDeFotoMuyGrande(file.size) }, { status: 400 });
   }
 
-  const url = await uploadPublicAsset(photoPath(id), await file.arrayBuffer(), file.type);
-  if (!url) return NextResponse.json({ error: "No se pudo subir la foto." }, { status: 500 });
+  const subida = await uploadPublicAsset(photoPath(id), await file.arrayBuffer(), file.type);
+  if (!subida.ok) {
+    // El motivo VIAJA: «no se pudo» no le dice a nadie qué arreglar (ver public-assets.ts).
+    return NextResponse.json({ error: subida.mensaje, motivo: subida.motivo }, { status: 502 });
+  }
+  const url = subida.url;
 
   await prisma.teamMember.update({ where: { id }, data: { photoUrl: url } });
   revalidateTeamMembers();

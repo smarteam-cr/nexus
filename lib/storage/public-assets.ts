@@ -95,25 +95,91 @@ export function publicAssetUrl(path: string): string | null {
 }
 
 /**
+ * Por qué falló una subida. El motivo IMPORTA: cada uno se arregla en un lugar distinto y
+ * decirle «no se pudo» a la persona la deja sin nada que hacer.
+ */
+export type MotivoDeFalloAlSubir =
+  /** No hay credenciales de Storage en el entorno. Se arregla en el `.env` del servidor. */
+  | "sin-credenciales"
+  /** Las credenciales existen pero Supabase las rechaza (revocadas, rotadas, de otro proyecto). */
+  | "credenciales-invalidas"
+  /** El bucket rechazó el archivo (tamaño o tipo por encima de lo que él acepta). */
+  | "rechazado-por-el-bucket"
+  /** Cualquier otra cosa: red, timeout, 5xx de Supabase. */
+  | "error";
+
+export type ResultadoDeSubida =
+  | { ok: true; url: string }
+  | { ok: false; motivo: MotivoDeFalloAlSubir; mensaje: string; detalle: string };
+
+/**
+ * Traduce el error crudo de Supabase Storage a un motivo y a una frase que se le puede mostrar
+ * a una persona. Sin esto, los seis lugares que suben archivos dicen «no se pudo» y el error
+ * real —el único dato que sirve— se pierde.
+ */
+function interpretarFalloDeSubida(detalle: string, status?: number): { motivo: MotivoDeFalloAlSubir; mensaje: string } {
+  const t = detalle.toLowerCase();
+  if (status === 401 || status === 403 || t.includes("unauthorized") || t.includes("invalid") && t.includes("key") || t.includes("jwt") || t.includes("signature")) {
+    return {
+      motivo: "credenciales-invalidas",
+      mensaje:
+        "El almacenamiento rechazó las credenciales del servidor. No es tu archivo: hay que revisar " +
+        "la clave de Supabase en el servidor (SUPABASE_SECRET_KEY o SUPABASE_SERVICE_ROLE_KEY).",
+    };
+  }
+  if (t.includes("exceeded the maximum allowed size") || t.includes("payload too large") || status === 413) {
+    return { motivo: "rechazado-por-el-bucket", mensaje: `El archivo supera el máximo que acepta el almacenamiento (${Math.round(PUBLIC_BUCKET_MAX_SIZE / 1024 / 1024)} MB).` };
+  }
+  if (t.includes("mime") || t.includes("content type") || t.includes("not supported")) {
+    return { motivo: "rechazado-por-el-bucket", mensaje: "El almacenamiento no acepta ese tipo de archivo. Probá con PNG, JPG o WebP." };
+  }
+  return { motivo: "error", mensaje: `El almacenamiento falló al guardar el archivo: ${detalle}` };
+}
+
+/**
  * Sube (upsert) un asset al bucket público en un path FIJO (sin timestamp → no
  * acumula huérfanos al reemplazar). Devuelve la URL pública con un query
- * cache-bust (`?t=`) para invalidar el CDN al reemplazar. Null si falla / sin Storage.
+ * cache-bust (`?t=`) para invalidar el CDN al reemplazar.
+ *
+ * ⚠ DEVUELVE EL MOTIVO, no un `null` pelado. Hasta el 2026-09-07 hacía `if (error) return null`
+ * y el error de Supabase se tiraba a la basura: los SEIS lugares que suben archivos contestaban
+ * «No se pudo subir…» y no había forma de saber si era la clave del servidor, el tamaño, el tipo
+ * o la red — ni desde la pantalla ni desde los logs. Diagnosticar exigía leer el código y
+ * adivinar. El motivo se propaga y además se loguea (nombre + mensaje, nunca el objeto entero,
+ * como manda A-15).
  */
 export async function uploadPublicAsset(
   path: string,
   bytes: ArrayBuffer | Uint8Array | Buffer,
   contentType: string,
-): Promise<string | null> {
+): Promise<ResultadoDeSubida> {
   const client = getStorageClient();
-  if (!client) return null;
+  if (!client) {
+    return {
+      ok: false,
+      motivo: "sin-credenciales",
+      mensaje: "El almacenamiento no está configurado en el servidor.",
+      detalle: "getStorageClient() devolvió null",
+    };
+  }
   await ensurePublicBucket();
   const body = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes;
   const { error } = await client.storage
     .from(PUBLIC_BUCKET)
     .upload(path, body, { contentType, upsert: true });
-  if (error) return null;
+  if (error) {
+    const detalle = error.message || String(error);
+    const status = (error as { statusCode?: number | string }).statusCode;
+    const { motivo, mensaje } = interpretarFalloDeSubida(detalle, typeof status === "string" ? Number(status) : status);
+    console.error(`[storage] upload falló (${motivo}) en «${path}»: ${detalle}`);
+    return { ok: false, motivo, mensaje, detalle };
+  }
   const url = publicAssetUrl(path);
-  return url ? `${url}?t=${Date.now()}` : null;
+  if (!url) {
+    console.error(`[storage] subió «${path}» pero no se pudo derivar su URL pública`);
+    return { ok: false, motivo: "error", mensaje: "Se guardó el archivo pero no se pudo obtener su dirección.", detalle: "publicAssetUrl devolvió null" };
+  }
+  return { ok: true, url: `${url}?t=${Date.now()}` };
 }
 
 /** Borra un asset público. No-op si Storage no está configurado. */
@@ -121,4 +187,23 @@ export async function removePublicAsset(path: string): Promise<void> {
   const client = getStorageClient();
   if (!client) return;
   await client.storage.from(PUBLIC_BUCKET).remove([path]);
+}
+
+/**
+ * ¿El almacenamiento acepta las credenciales de ESTE servidor? Solo lectura: pide el bucket, no
+ * sube nada.
+ *
+ * Existe porque la pregunta «¿la clave de Supabase del servidor sirve?» solo se podía responder
+ * pidiéndole a alguien que intentara subir una foto y fallara — y el fallo, además, no decía la
+ * causa. Lo consume `/api/health?storage=1`, que devuelve el booleano y nada más.
+ */
+export async function storageAcepta(): Promise<boolean> {
+  const client = getStorageClient();
+  if (!client) return false;
+  const { error } = await client.storage.getBucket(PUBLIC_BUCKET);
+  if (error) {
+    console.error(`[storage] el bucket «${PUBLIC_BUCKET}» no respondió: ${error.message}`);
+    return false;
+  }
+  return true;
 }
