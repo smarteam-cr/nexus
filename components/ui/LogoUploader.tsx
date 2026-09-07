@@ -9,6 +9,7 @@
  */
 import { useState, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { achicarImagen } from "@/lib/ui/achicar-imagen";
 
 export function LogoUploader({
   currentUrl,
@@ -45,8 +46,12 @@ export function LogoUploader({
     setBusy(true);
     setError(null);
     try {
+      /* Mismo motivo que en la foto del equipo: se achica antes de salir del navegador, así no
+         choca contra el tope del handler, el del bucket ni el del proxy. Un SVG pasa intacto
+         (es vectorial) y, si el reescalado falla, sube el original. */
+      const { archivo } = await achicarImagen(file);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", archivo);
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

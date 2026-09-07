@@ -11,7 +11,7 @@ import {
   type TableColumn,
 } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
-import { MAX_PHOTO_SIZE_LABEL } from "@/lib/storage/public-assets";
+import { achicarImagen } from "@/lib/ui/achicar-imagen";
 import MemberPermissionsModal from "./MemberPermissionsModal";
 import NuevoMiembroModal from "./NuevoMiembroModal";
 import RoleTemplatesPanel from "./RoleTemplatesPanel";
@@ -56,8 +56,15 @@ function TeamPhotoAvatar({
     if (!file) return;
     setBusy(true);
     try {
+      /* Se achica ACÁ, antes de salir del navegador. Una foto de teléfono son 3-8 MB para pintar
+         un avatar de 44 px, y en el camino hay tres topes distintos —el handler, el bucket y el
+         `client_max_body_size` del nginx del VPS, que no vive en este repo—. Cuando el que corta
+         es el proxy, la respuesta es HTML y acá abajo no hay `error` que mostrar: la persona lee
+         «No se pudo subir la foto» sin ninguna pista. Achicando primero no se toca ningún tope.
+         Si el reescalado falla, sube el original: no optimizar nunca puede impedir subir. */
+      const { archivo } = await achicarImagen(file);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", archivo);
       const res = await fetch(`/api/team/${member.id}/photo`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       /* ⚠ Sin esta rama la subida fallaba EN SILENCIO: el spinner giraba, paraba, y no pasaba
@@ -66,7 +73,15 @@ function TeamPhotoAvatar({
          basura acá. Es lo que hacía invisible el tope de C-22: la persona no tenía forma de
          saber que su foto se rechazaba por peso. (Revisión previa al push, 2026-09-05.) */
       if (!res.ok) {
-        toast.error(typeof data?.error === "string" ? data.error : "No se pudo subir la foto.");
+        /* Un 413 lo devuelve el PROXY, no la app: viene con HTML, así que no hay `error` que
+           mostrar y el genérico no le dice nada a nadie. Se nombra por lo que es. */
+        const msg =
+          res.status === 413
+            ? "La foto es demasiado pesada para el servidor. Probá con una más liviana."
+            : typeof data?.error === "string"
+              ? data.error
+              : `No se pudo subir la foto (error ${res.status}).`;
+        toast.error(msg);
         return;
       }
       if (data.photoUrl) onUploaded(member.id, data.photoUrl);
@@ -93,9 +108,8 @@ function TeamPhotoAvatar({
           inputRef.current?.click();
         }}
         disabled={busy}
-        /* El tope se DICE antes de elegir el archivo, no despues de que el servidor rechace:
-           era la otra mitad del bug de C-22 —la interfaz no prometia ningun tamano—. */
-        title={`${member.photoUrl ? "Cambiar foto" : "Subir foto"} · PNG, JPG o WebP, máx ${MAX_PHOTO_SIZE_LABEL}`}
+        // Ya no se promete un tope: la foto se achica sola antes de subirse, venga del tamaño que venga.
+        title={`${member.photoUrl ? "Cambiar foto" : "Subir foto"} · PNG, JPG o WebP`}
         className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover/photo:opacity-100 focus-visible:opacity-100 disabled:cursor-wait"
       >
         {busy ? (

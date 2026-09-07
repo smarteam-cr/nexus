@@ -33,7 +33,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "El almacenamiento no está configurado." }, { status: 503 });
   }
 
-  const form = await req.formData();
+  /* ⚠ `formData()` LANZA si el cuerpo llegó cortado o mal formado —lo que pasa justamente cuando
+     un proxy corta la subida a mitad—. Sin este try, la excepción sube, Next contesta un 500 sin
+     `error` en el JSON, y el cliente cae a su mensaje genérico: el fallo se vuelve mudo otra vez. */
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch (e) {
+    console.error(`[team/photo] cuerpo ilegible: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`);
+    return NextResponse.json(
+      { error: "El archivo no llegó completo al servidor. Suele pasar con fotos muy pesadas: probá con una más liviana." },
+      { status: 400 },
+    );
+  }
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No se envió ningún archivo." }, { status: 400 });
   if (!isAllowedLogoType(file.type)) {
