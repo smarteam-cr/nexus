@@ -1021,7 +1021,11 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   contenido quedó como semilla en `scripts/data/`. La URL vieja sobrevive 5 días como
   REDIRECT que resuelve el token vivo (nunca `permanentRedirect`: un 308 cacheado
   sobreviviría a la revocación) — si sirviera contenido propio, revocar no cerraría nada.
-  **Se borra el 2026-08-04** junto con `lib/roles/csl-legacy.ts`.
+  Iba a borrarse el 2026-08-04 junto con `lib/roles/csl-legacy.ts`; **se retiró el
+  2026-09-10**, un mes tarde, con Elías confirmando que ya no se usaba. Hasta ese día PROD
+  seguía respondiendo 307: la dirección fija, sin token ni contraseña, le entregaba el token
+  vivo del link (con la oferta salarial) a cualquiera que la conociera. Retirar el puente no
+  rota el token que ya entregó — eso se hace republicando desde /roles.
 
 ## Exploración (descubrimiento del negocio del cliente)
 - **Qué es y por qué**: cuando el kickoff ya pasó y el proyecto arranca, el CSE tiene que

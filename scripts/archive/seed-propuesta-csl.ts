@@ -26,18 +26,17 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { PROPUESTA_CSL_HERO, PROPUESTA_CSL_CONTENT } from "../data/propuesta-csl-v1";
 
-// Inlineado al archivar (2026-08-01): venía de @/lib/roles/csl-legacy, que se borra el
-// 2026-08-04 junto con el puente /external/propuesta/csl — el archivo no debe romper tsc.
+// Inlineado al archivar (2026-08-01): venía de @/lib/roles/csl-legacy, que se borró el
+// 2026-09-10 junto con el puente /external/propuesta/csl — el archivo no debe romper tsc.
 const PROPUESTA_CSL_ID = "propuesta-csl-v1";
 
 const APPLY = resolverApply();
 
 /**
  * Firma de la semilla. Va en `createdByEmail` (auditoría) y en `publicPublishedByEmail`,
- * donde además es FUNCIONAL: el puente `/external/propuesta/csl` compara contra este valor
- * exacto para saber si el link publicado sigue siendo el de la migración. Si se cambia acá,
- * hay que cambiarlo allá (son 5 días de vida — no se abstrajo a una constante compartida
- * para que el borrado del 2026-08-04 no deje residuo).
+ * donde además FUE funcional hasta el 2026-09-10: el puente `/external/propuesta/csl`
+ * comparaba contra este valor exacto para saber si el link publicado seguía siendo el de la
+ * migración. El puente se retiró ese día; hoy el valor es solo auditoría.
  */
 const SEED_EMAIL = "seed:propuesta-csl";
 
@@ -94,10 +93,8 @@ async function main() {
       // sigue siendo una decisión — se toma desde /roles con "Revocar".
       publicToken,
       publicPublishedAt: new Date(),
-      // Este valor es funcional, no decorativo: el puente `/external/propuesta/csl` solo
-      // redirige mientras el link publicado sea EL de la migración. Republicar desde el
-      // panel lo pisa con el email de quien publica → el puente muere solo, que es lo que
-      // se quiere (republicar existe para matar un link filtrado).
+      // Fue funcional hasta el 2026-09-10 (ver SEED_EMAIL): el puente `/external/propuesta/csl`
+      // solo redirigía mientras el link publicado fuera EL de la migración. Ese día se retiró.
       publicPublishedByEmail: SEED_EMAIL,
     },
   });
