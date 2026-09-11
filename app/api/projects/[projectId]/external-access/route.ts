@@ -12,7 +12,7 @@
  * cliente puede gestionar el acceso externo de sus proyectos.
  *
  * IMPORTANTE: el endpoint que CONSUME estas credenciales (verificación del
- * cliente externo) vive en /api/external/verify-access. NO debe llamarse
+ * cliente externo) vive en /external/verify-access. NO debe llamarse
  * desde el panel del CSE — es para el cliente final.
  */
 import { NextRequest, NextResponse } from "next/server";

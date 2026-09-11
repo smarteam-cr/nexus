@@ -61,6 +61,17 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  /**
+   * El canje de contraseña se mudó de /api/external/verify-access a /external/verify-access
+   * (2026-09-10: para sumar a la lista de proyectos abiertos del navegador hay que LEERLA, y su
+   * cookie tiene path /external). Una pestaña de verificación abierta desde ANTES del deploy tiene
+   * el formulario viejo y postea a la dirección vieja: sin esto recibe un 404 y le dice al cliente
+   * «contraseña incorrecta» con la contraseña correcta. `permanent: false` = 307, que conserva el
+   * método y el cuerpo del POST.
+   */
+  async redirects() {
+    return [{ source: "/api/external/verify-access", destination: "/external/verify-access", permanent: false }];
+  },
   // Los DOS bundlers conviven a propósito: `next build` corre con TURBOPACK (la vía
   // probada de prod — usa serverExternalPackages + turbopack:{}), mientras `next dev`
   // corre con webpack (--webpack en el wrapper, por el bug de junction points de

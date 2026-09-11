@@ -207,7 +207,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**323**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**324**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -688,7 +688,7 @@ No intentes todo a la vez. La secuencia mínima para no atorarte es:
 
 **Ya no quedan ítems 🔴 sin tachar.** Los cimientos de seguridad están listos para abrir el módulo de onboarding por capas. Próximos planes a encarar (en orden sugerido, cada uno con su propio documento de plan):
 
-a. ~~**Mecanismo de acceso del cliente externo** (token + contraseña por proyecto)~~ ✅ **HECHO** (Fase 1 del módulo externo, junio 2026). Modelo `ProjectExternalAccess` + endpoints `/api/projects/[id]/external-access` (CSE) + `/api/external/verify-access` (cliente) + página mínima `/external/verify/[token]`.
+a. ~~**Mecanismo de acceso del cliente externo** (token + contraseña por proyecto)~~ ✅ **HECHO** (Fase 1 del módulo externo, junio 2026). Modelo `ProjectExternalAccess` + endpoints `/api/projects/[id]/external-access` (CSE) + `/external/verify-access` (cliente; hasta 2026-09-10 vivía en `/api/external/`) + página mínima `/external/verify/[token]`. Desde 2026-09-10 cada superficie vive en `/external/<superficie>/<id del acceso>` y el navegador recuerda varios proyectos (ver DECISIONS «Acceso externo»).
 b. ~~**Agente de handoff Sales→CS + cronograma estructurado**~~ ✅ **HECHO** (Fase 2 del módulo externo, junio 2026). Agente "Análisis inicial" reorientado a "Handoff Sales→CS" con 8 secciones laser-focused (formato block). Canvas "Handoff" agregado a `DEFAULT_PROJECT_CANVASES` + migrado retroactivamente. Modelos `ProjectTimeline` + `TimelinePhase` + enum `TimelinePhaseSource`. Endpoints `GET/PUT/DELETE /api/projects/[id]/timeline`. El agente NUNCA pisa el cronograma existente al re-ejecutarse — la propuesta queda en `AgentRun.output` para trazabilidad.
 c. **Landing real del cliente externo** — pendiente. Decide:
    - Cómo se mueve el token fuera de la URL (cookie HTTP-only post-verify, header Authorization, magic link a sesión Supabase EXTERNAL).

@@ -8,7 +8,7 @@
  *     tareas {title, weekIndex, status, party} SOLO si detailConfirmedAt. Lo consumen los DOS
  *     chokepoints (kickoff-view para la sección embebida y el de esta página):
  *     un único select decide qué cruza al cliente — sin drift entre superficies.
- *   - getPublishedTimelineForToken(token): chokepoint de /external/cronograma.
+ *   - getPublishedTimelineForToken(credencial, accesoId): chokepoint de /external/cronograma/[acceso].
  *     Doble check OBLIGATORIO en CADA lectura: acceso activo (forma del token +
  *     existencia + revokedAt, vía resolveActiveAccess) + timelinePublishedAt
  *     != null. Cualquiera falla → null (la cookie nunca otorga acceso sola).
@@ -189,9 +189,11 @@ export async function readPublishedClientTimeline(projectId: string): Promise<Ex
  * cronograma NO publicado) — el motivo nunca se revela.
  */
 export async function getPublishedTimelineForToken(
-  token: string,
+  credencial: string,
+  accesoId: string,
 ): Promise<ExternalTimelinePage | null> {
-  const access = await resolveActiveAccess(token);
+  // Acceso activo Y que sea el que nombra la dirección: una credencial de otro proyecto → null.
+  const access = await resolveActiveAccess(credencial, accesoId);
   if (!access) return null;
 
   // Check de superficie EXPLÍCITO (regla unificada D.1.5): despublicar el

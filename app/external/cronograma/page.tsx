@@ -1,50 +1,22 @@
 /**
- * /external/cronograma
+ * /external/cronograma — la dirección VIEJA, sin proyecto. Ya no muestra contenido.
  *
- * Página PÚBLICA propia del cronograma (D.1.5) — la superficie independiente
- * del kickoff. Server component: lee la cookie httpOnly `nexus_ext_access`
- * (el MISMO acceso del proyecto que el kickoff — scope /external), pasa por el
- * chokepoint server-side y renderiza read-only en el chrome de marca.
- *
- * Toda la seguridad vive en getPublishedTimelineForToken (lib/external/
- * timeline-view): resuelve token→proyecto, re-chequea revokedAt +
- * timelinePublishedAt EN CADA render, y devuelve fases + acciones por semana
- * en shape limpio (tareas solo si el detalle está confirmado). Si algo no
- * aplica → null → mensaje neutro. La cookie por sí sola NO otorga acceso.
- *
- * `force-dynamic`: lee cookies por request, nunca se cachea.
+ * Era a donde se llegaba después de poner la contraseña, así que quedó en favoritos, en
+ * historiales y en al menos un mensaje reenviado: el incidente del 2026-09-10, en que Elías abrió
+ * «el cronograma de Judesur» y vio el de Wherex porque su navegador tenía abierto Wherex. No nombra
+ * ningún proyecto, así que no puede elegir uno: lista los que este navegador ya abrió y deja que la
+ * persona elija. La dirección de cada proyecto es /external/cronograma/[acceso].
  */
-import { cookies } from "next/headers";
-import ExternalShell from "@/components/external/ExternalShell";
-import NoAccess from "@/components/external/NoAccess";
-import TimelineLanding from "@/components/external/TimelineLanding";
-import { getPublishedTimelineForToken } from "@/lib/external/timeline-view";
-import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
-import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
+import type { Metadata } from "next";
+import DireccionSinProyecto from "@/components/external/DireccionSinProyecto";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExternalCronogramaPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(EXTERNAL_ACCESS_COOKIE)?.value ?? "";
+export const metadata: Metadata = {
+  title: "Smarteam",
+  robots: { index: false, follow: false },
+};
 
-  const [data, smarteamLogoUrl] = await Promise.all([
-    token ? getPublishedTimelineForToken(token) : Promise.resolve(null),
-    getSmarteamLogoUrl(),
-  ]);
-
-  return (
-    <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
-      {data ? (
-        <TimelineLanding
-          clientName={data.clientName}
-          clientLogoUrl={data.clientLogoUrl}
-          clientLogoScale={data.clientLogoScale}
-          timeline={data.timeline}
-        />
-      ) : (
-        <NoAccess />
-      )}
-    </ExternalShell>
-  );
+export default function ExternalCronogramaSinProyecto() {
+  return <DireccionSinProyecto superficie="cronograma" />;
 }

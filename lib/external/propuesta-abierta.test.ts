@@ -267,7 +267,9 @@ describe("candado 6 — los fallos de verify-access se cuentan por token Y por I
   });
 
   it.each([
-    "app/api/external/verify-access/route.ts",
+    // 2026-09-10: el verify de proyectos se mudó de /api/external a /external para poder LEER la
+    // lista de proyectos abiertos del navegador (su cookie tiene path /external). Mismas reglas.
+    "app/external/verify-access/route.ts",
     "app/api/external/business-case/verify-access/route.ts",
   ])("%s registra cada fallo contra las dos claves", (ruta) => {
     /* La edicion que lo pone en rojo: volver a registerFailure(token, now) en un solo camino. */
@@ -315,14 +317,16 @@ describe("candado 7 — cambiar la contraseña mata las cookies vivas (A-11)", (
     expect(bc).toContain("credencialVigente({ token, version: opts.version }, access.passwordHash)");
     const pagina = lee("app/external/business-case/page.tsx");
     expect(pagina, "la página del BC parsea la cookie y pasa la versión").toContain("{ version: cred.version }");
-    for (const ruta of [
-      "app/api/external/verify-access/route.ts",
-      "app/api/external/business-case/verify-access/route.ts",
-    ]) {
-      const src = lee(ruta);
-      expect(src, ruta).toContain("value: armarCredencial(token, access.passwordHash)");
-      expect(/value:\s*token\b/.test(src), `${ruta}: la cookie volvió a llevar el token pelado`).toBe(false);
-    }
+    // El verify del BC sigue con UNA credencial por cookie: la escribe entera.
+    const bcVerify = lee("app/api/external/business-case/verify-access/route.ts");
+    expect(bcVerify).toContain("value: armarCredencial(token, access.passwordHash)");
+    expect(/value:\s*token\b/.test(bcVerify), "el verify del BC volvió a llevar el token pelado").toBe(false);
+    /* El de proyectos SUMA la credencial a una lista (2026-09-10: un navegador recuerda varios
+       proyectos, lib/external/lista-de-accesos.ts). Se exige lo mismo que antes sobre la entrada
+       nueva: que sea `armarCredencial(token, hash)` —con versión—, nunca el token pelado. */
+    const verify = lee("app/external/verify-access/route.ts");
+    expect(verify).toMatch(/sumarALaListaDeAccesos\([\s\S]{0,160}armarCredencial\(token, access\.passwordHash\)/);
+    expect(/value:\s*token\b/.test(verify), "el verify de proyectos volvió a llevar el token pelado").toBe(false);
   });
 });
 

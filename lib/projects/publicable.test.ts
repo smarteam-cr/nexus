@@ -148,9 +148,11 @@ describe("candado 2 — solo dos archivos resuelven un token de acceso externo",
   const SANCIONADOS = [
     // El resolver común de las tres vistas externas.
     "lib\\external\\access.ts",
-    // El canje contraseña → cookie de 30 días. NO pasa por el resolver: hace su propia
+    // El canje contraseña → credencial de 30 días. NO pasa por el resolver: hace su propia
     // consulta, y por eso el check de `publicable` tiene que estar en los DOS.
-    "app\\api\\external\\verify-access\\route.ts",
+    // 2026-09-10: se mudó de app/api/external a app/external para poder leer la lista de
+    // proyectos abiertos del navegador (su cookie tiene path /external). Sigue siendo el mismo.
+    "app\\external\\verify-access\\route.ts",
   ];
 
   it("nadie más consulta ProjectExternalAccess por accessToken", () => {

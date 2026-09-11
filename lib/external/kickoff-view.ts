@@ -3,7 +3,7 @@
  *
  * CHOKEPOINT de seguridad del KICKOFF externo (Fase C.1). Es el ÚNICO lugar
  * donde un token de cliente se resuelve a los datos del kickoff. Corre SIEMPRE
- * server-side (lo invoca la ruta pública app/external/kickoff/page.tsx en cada
+ * server-side (lo invoca la ruta pública app/external/kickoff/[acceso]/page.tsx en cada
  * render).
  *
  * Modelo de seguridad (las 3 decisiones de Fase C viven acá):
@@ -46,10 +46,12 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
  * por "denegado" — un null = no mostrar nada.
  */
 export async function getPublishedKickoffForToken(
-  token: string,
+  credencial: string,
+  accesoId: string,
 ): Promise<KickoffLandingData | null> {
-  // 1-2. token → acceso activo → proyecto (forma + existencia + revokedAt).
-  const access = await resolveActiveAccess(token);
+  // 1-2. credencial → acceso activo DEL PROYECTO QUE NOMBRA LA DIRECCIÓN → proyecto
+  //      (forma + existencia + revokedAt + versión + publicable + que sea ese acceso).
+  const access = await resolveActiveAccess(credencial, accesoId);
   if (!access) return null;
 
   // Check de superficie EXPLÍCITO: Kickoff publicado, en CADA lectura.

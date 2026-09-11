@@ -43,8 +43,32 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   cuenta — evita el "ya tiene handoff" fantasma tras un reset).
 - **Owner = Lorena solo al CREAR de cero** (vía `HUBSPOT_HANDOFF_OWNER_ID`), no al adjuntar.
 
+## Acceso externo — la dirección nombra el proyecto
+- **Toda página externa de un proyecto vive en `/external/<superficie>/<id del acceso>`, y
+  nunca muestra un proyecto distinto del que nombra** (`resolveActiveAccess(credencial, accesoId)`
+  exige que la credencial sea de ESE acceso). *Por qué:* el 2026-09-10 a Elías le pasaron
+  `/external/cronograma` con el código de Judesur y vio el de Wherex. No era caché: esa dirección
+  era el destino después de la contraseña, no decía de qué proyecto era, y el navegador guardaba
+  UNA credencial (la del último enlace abierto). Quedaba en la barra con cara de compartible.
+- **El navegador recuerda VARIOS proyectos** (cookie `nexus_ext_accesos`, lista con tope de 8 y
+  30 días por entrada — `lib/external/lista-de-accesos.ts`). El verify se mudó a
+  `/external/verify-access` porque para sumar hay que LEER la lista, y su path es `/external`.
+- **«Ver otros proyectos» lista solo lo que ese navegador ya abrió con su contraseña, y solo del
+  MISMO cliente** (decisión de Elías: la opción 1). *Por qué:* no mostrarle a nadie un proyecto que
+  no le compartieron, no abrir otra forma de entrar, y no poner el nombre de otro cliente en la
+  pantalla de una reunión (el CSE proyecta estas páginas).
+- **Las direcciones sin proyecto (`/external/cronograma`, etc.) nunca muestran contenido:** listan
+  lo abierto en ese navegador y dejan elegir. Si lo abierto es de MÁS DE UN cliente, la lista queda
+  plegada detrás de un clic: esa página también puede estar proyectada en una reunión. *Se
+  descartó* una contraseña por empresa con portal: hoy solo 1 cliente tiene dos cronogramas
+  publicados, obligaba a migrar los 25 accesos, y el acceso pasaba a ser todo o nada por empresa.
+- ⚠ **Deuda: el Business Case con contraseña tiene el mismo defecto** (una sola cookie
+  `nexus_bc_access` y un destino fijo `/external/business-case`). Quedó fuera de este cambio a
+  propósito; como las propuestas son abiertas por defecto desde el 2026-08-20, solo afecta a las
+  que piden contraseña.
+
 ## Cronograma — vista del cliente
-- **El cronograma compartible (`/external/cronograma`) muestra, por tarea, el ESTADO
+- **El cronograma compartible (`/external/cronograma/[acceso]`) muestra, por tarea, el ESTADO
   (hecho / en curso / pendiente + "atrasada" derivada de la fecha) y el RESPONSABLE
   (Cliente / Smarteam / Ambos).** *Por qué:* el cliente necesita ver el progreso y de quién
   depende cada cosa. Revierte el criterio previo "el avance es interno, el cliente no ve

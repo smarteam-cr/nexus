@@ -6,7 +6,7 @@
  *      tocar credenciales reales) — simula POST: guarda accessPassword (plano) + hash.
  *   2. Lee de vuelta: accessPassword == plano, bcrypt(plano) matchea el hash.
  *   3. Simula PATCH custom: cambia a una contraseña propia (plano + hash nuevos).
- *   4. Pega al endpoint PÚBLICO real /api/external/verify-access con la custom →
+ *   4. Pega al endpoint PÚBLICO real /external/verify-access con la custom →
  *      ok:true (el hash sigue validando de punta a punta); con una mala → 401.
  *   5. Borra el acceso de prueba (restaura el estado "sin acceso").
  *
@@ -82,7 +82,7 @@ async function main() {
     ok("la autogenerada vieja YA NO valida", !(await bcrypt.compare(autoPw, a2!.passwordHash)));
 
     // 4. Endpoint PÚBLICO real: verify-access con la custom → ok; con mala → 401.
-    const good = await fetch(`${BASE}/api/external/verify-access`, {
+    const good = await fetch(`${BASE}/external/verify-access`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password: customPw }),
@@ -90,7 +90,7 @@ async function main() {
     const goodJson = await good.json().catch(() => ({}));
     ok("verify-access acepta la custom (HTTP real)", good.status === 200 && goodJson?.ok === true, { status: good.status });
 
-    const bad = await fetch(`${BASE}/api/external/verify-access`, {
+    const bad = await fetch(`${BASE}/external/verify-access`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password: "claveIncorrecta" }),

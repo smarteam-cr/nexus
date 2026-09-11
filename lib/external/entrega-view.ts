@@ -50,8 +50,9 @@ interface SnapshotSection {
   blocks: Array<{ blockType: string; content: string | null; data: unknown }>;
 }
 
-export async function getEntregaForToken(token: string): Promise<EntregaViewData | null> {
-  const access = await resolveActiveAccess(token);
+export async function getEntregaForToken(credencial: string, accesoId: string): Promise<EntregaViewData | null> {
+  // Acceso activo Y que sea el que nombra la dirección: una credencial de otro proyecto → null.
+  const access = await resolveActiveAccess(credencial, accesoId);
   if (!access) return null;
   if (!access.project.entregaPublishedAt) return null;
 

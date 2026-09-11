@@ -3,11 +3,11 @@
 /**
  * Form de verificación del cliente externo.
  *
- * Único input: contraseña. POST a /api/external/verify-access con { token, password }.
+ * Único input: contraseña. POST a /external/verify-access con { token, password }.
  * Estados:
  *   - idle:        form visible
  *   - loading:     mientras llega la respuesta
- *   - success:     muestra "Acceso concedido al proyecto: X"
+ *   - success:     muestra "Entrando a <proyecto> · <cliente>"
  *   - denied:      "Token o contraseña incorrectos"
  *   - rateLimited: "Demasiados intentos. Probá en N minutos"
  *   - error:       error de red u otro caso inesperado
@@ -17,27 +17,25 @@
  */
 import { useState, FormEvent } from "react";
 import { IconCheck } from "@/components/ui/AcceptReject";
+import { esIdDeAcceso, rutaDeSuperficie, superficieDeNext } from "@/lib/external/rutas";
 
 type State =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "success"; projectName: string }
+  | { kind: "success"; proyecto: string; cliente: string }
   | { kind: "denied" }
   | { kind: "rateLimited"; retryAfterSeconds: number }
   | { kind: "error" };
 
 /**
- * Destino post-verify por superficie (D.1.5) — WHITELIST CERRADA: el param
- * `next` jamás se interpola en la URL (nada de open redirect). Default kickoff
- * para los links ya compartidos sin param.
+ * Destino post-verify: la dirección de ESTE proyecto en la superficie que pide el enlace
+ * (`?next=`, lista cerrada — lib/external/rutas.ts). El id lo manda el servidor y se valida acá:
+ * nada del parámetro ni de la respuesta se interpola en una URL sin pasar por `rutaDeSuperficie`.
+ *
+ * Antes el destino era `/external/<superficie>` sin proyecto: quedaba en la barra con cara de
+ * compartible y, reenviado, mostraba el último proyecto que había abierto el navegador de quien lo
+ * recibía (incidente del 2026-09-10).
  */
-const SURFACE_PATHS: Record<string, string> = {
-  kickoff: "/external/kickoff",
-  cronograma: "/external/cronograma",
-  desarrollo: "/external/desarrollo",
-  entrega: "/external/entrega",
-};
-
 export function VerifyForm({ token, next }: { token: string; next?: string }) {
   const [password, setPassword] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -49,7 +47,7 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
     setState({ kind: "loading" });
 
     try {
-      const res = await fetch("/api/external/verify-access", {
+      const res = await fetch("/external/verify-access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
@@ -57,12 +55,20 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
       const data = await res.json().catch(() => ({}));
 
       if (res.status === 200 && data?.ok) {
+        // Sin un id válido no hay a dónde ir: mejor un error que una dirección armada con basura.
+        if (!esIdDeAcceso(data.acceso)) {
+          setState({ kind: "error" });
+          return;
+        }
         setPassword("");
-        setState({ kind: "success", projectName: data.projectName ?? "" });
-        // La cookie httpOnly ya la seteó el endpoint. Navegación full (no
-        // router.push) para que el server component de destino la lea. El
-        // destino sale de la whitelist según el link que abrió el cliente.
-        window.location.assign(SURFACE_PATHS[next ?? ""] ?? SURFACE_PATHS.kickoff);
+        setState({
+          kind: "success",
+          proyecto: typeof data.proyecto === "string" ? data.proyecto : "",
+          cliente: typeof data.cliente === "string" ? data.cliente : "",
+        });
+        // La credencial httpOnly ya la sumó el endpoint. Navegación full (no router.push) para
+        // que el server component de destino la lea.
+        window.location.assign(rutaDeSuperficie(data.acceso, superficieDeNext(next)));
         return;
       }
       if (res.status === 429) {
@@ -93,8 +99,11 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
               Acceso concedido
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              {state.projectName ? (
-                <>Entrando a <span className="font-medium text-gray-900">{state.projectName}</span>…</>
+              {state.proyecto ? (
+                <>
+                  Entrando a <span className="font-medium text-gray-900">{state.proyecto}</span>
+                  {state.cliente && <> · {state.cliente}</>}…
+                </>
               ) : (
                 <>Entrando al proyecto…</>
               )}

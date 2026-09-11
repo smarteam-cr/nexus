@@ -3,7 +3,7 @@
  *
  * CHOKEPOINT de seguridad del canvas DESARROLLO (requerimiento técnico) externo.
  * Único lugar donde un token de acceso externo se resuelve a los datos del
- * requerimiento. Corre SIEMPRE server-side (app/external/desarrollo/page.tsx).
+ * requerimiento. Corre SIEMPRE server-side (app/external/desarrollo/[acceso]/page.tsx).
  *
  * Modelo de seguridad (igual que kickoff-view, DOS checks en CADA lectura):
  *   1. token → acceso ACTIVO no revocado (resolveActiveAccess).
@@ -34,9 +34,9 @@ export interface DesarrolloViewData {
   rows: DesarrolloSectionRow[];
 }
 
-export async function getDesarrolloForToken(token: string): Promise<DesarrolloViewData | null> {
-  // 1-2. token → acceso activo → proyecto (forma + existencia + revokedAt).
-  const access = await resolveActiveAccess(token);
+export async function getDesarrolloForToken(credencial: string, accesoId: string): Promise<DesarrolloViewData | null> {
+  // 1-2. credencial → acceso activo DEL PROYECTO QUE NOMBRA LA DIRECCIÓN → proyecto.
+  const access = await resolveActiveAccess(credencial, accesoId);
   if (!access) return null;
 
   // Check de superficie EXPLÍCITO: requerimiento compartido, en CADA lectura.

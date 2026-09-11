@@ -1,35 +1,20 @@
 /**
- * /external/entrega
+ * /external/entrega — la dirección VIEJA, sin proyecto. Ya no muestra contenido.
  *
- * Ruta PÚBLICA donde el CLIENTE lee el documento de cierre de su proyecto. Server component:
- * lee la cookie httpOnly `nexus_ext_access` (el mismo token del proyecto que destraba las
- * otras superficies) y pasa por el chokepoint `getEntregaForToken`, que exige
- * `entregaPublishedAt != null` en CADA render — despublicar corta al instante.
- *
- * Read-only. `force-dynamic`: lee cookies por request.
+ * No nombra ningún proyecto (ver el incidente del 2026-09-10 en app/external/cronograma/page.tsx):
+ * lista los que este navegador ya abrió y deja elegir. La dirección de cada proyecto es
+ * /external/entrega/[acceso].
  */
-import { cookies } from "next/headers";
-import EntregaClientView from "@/components/external/EntregaClientView";
-import ExternalShell from "@/components/external/ExternalShell";
-import NoAccess from "@/components/external/NoAccess";
-import { getEntregaForToken } from "@/lib/external/entrega-view";
-import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
-import { EXTERNAL_ACCESS_COOKIE } from "@/lib/external/access";
+import type { Metadata } from "next";
+import DireccionSinProyecto from "@/components/external/DireccionSinProyecto";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExternalEntregaPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(EXTERNAL_ACCESS_COOKIE)?.value ?? "";
+export const metadata: Metadata = {
+  title: "Smarteam",
+  robots: { index: false, follow: false },
+};
 
-  const [data, smarteamLogoUrl] = await Promise.all([
-    token ? getEntregaForToken(token) : Promise.resolve(null),
-    getSmarteamLogoUrl(),
-  ]);
-
-  return (
-    <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
-      {data ? <EntregaClientView data={data} /> : <NoAccess />}
-    </ExternalShell>
-  );
+export default function ExternalEntregaSinProyecto() {
+  return <DireccionSinProyecto superficie="entrega" />;
 }

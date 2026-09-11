@@ -4,7 +4,7 @@
  * Página pública para que el cliente externo ingrese la contraseña que el CSE
  * le compartió por canal seguro. NO valida el token en el server (sería filtrar
  * información — la página se renderiza idéntica exista o no el token; solo el
- * POST a /api/external/verify-access decide).
+ * POST a /external/verify-access decide).
  *
  * Esta página es deliberadamente mínima: forma parte de la Fase 1 del módulo
  * externo, el landing real se construye en una fase próxima. Por ahora solo

@@ -31,6 +31,15 @@ import { armarCredencial } from "@/lib/external/credencial";
 const GENERIC_INVALID = { ok: false, reason: "invalid" } as const;
 
 export async function POST(req: NextRequest) {
+  /* Solo el formulario de Nexus canjea una contraseña: un formulario de OTRO sitio no puede mandar
+     application/json, y el navegador marca el origen en Sec-Fetch-Site. Sin esto cualquier página
+     podía hacer que el navegador del prospecto postee acá y le gaste intentos al token y a su IP. */
+  const tipo = (req.headers.get("content-type") ?? "").toLowerCase();
+  const sitio = req.headers.get("sec-fetch-site");
+  if (!tipo.startsWith("application/json") || (sitio !== null && sitio !== "same-origin")) {
+    return NextResponse.json(GENERIC_INVALID, { status: 403 });
+  }
+
   let body: { token?: unknown; password?: unknown };
   try {
     body = await req.json();

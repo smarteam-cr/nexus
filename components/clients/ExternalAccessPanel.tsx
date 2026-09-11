@@ -355,7 +355,7 @@ function ManageView({
           <p className="text-xs text-fg-muted">
             {isRevoked
               ? "El acceso está revocado. Generá uno nuevo para reactivarlo."
-              : "Activo. El cliente entra con el link + la contraseña. Entregásela por canal seguro."}
+              : "Activo. El cliente entra con el link de acá + la contraseña (entregásela por canal seguro). La dirección que queda en el navegador después de entrar no sirve para compartir."}
           </p>
         </div>
         <span

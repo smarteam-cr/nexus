@@ -25,7 +25,7 @@ const PUBLIC_PATHS = ["/", "/sw.js", "/api/health"];
 //   - /auth/*              → rutas de Supabase Auth (google, callback, signout)
 //   - /external/*          → landing del cliente externo (Fase 1 módulo externo).
 //                            La página verifica token+contraseña vía
-//                            /api/external/verify-access. Requiere acceso público
+//                            /external/verify-access. Requiere acceso público
 //                            porque el cliente final no tiene sesión Supabase.
 //   - /api/external/*      → endpoints públicos del cliente externo (verify,
 //                            futuro: lecturas del landing). Cada endpoint hace
