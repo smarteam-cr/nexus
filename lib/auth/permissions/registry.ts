@@ -252,6 +252,18 @@ export const PERMISSION_SECTIONS = [
     label: "Conocimientos",
     actions: [{ key: "write", label: "Editar documentos", enforced: true }],
   },
+  /* Documentación: la base de conocimiento del EQUIPO (`/documentacion`). Leer es de todo
+     interno —el menú no tiene gate—, así que no hay acción `read`. `manage` es lo que ordena la
+     base entera: archivar y restaurar páginas ajenas, bloquear y desbloquear, y editar las
+     bloqueadas. ⚠ No confundir con `conocimientos`: ésa es la biblioteca que leen los AGENTES. */
+  {
+    key: "documentacion",
+    label: "Documentación",
+    actions: [
+      { key: "write", label: "Crear y editar páginas", enforced: true },
+      { key: "manage", label: "Archivar, restaurar y bloquear páginas", enforced: true },
+    ],
+  },
   {
     key: "equipo",
     label: "Equipo",

@@ -46,3 +46,20 @@ export function anclaDeAgente(agentId: string): string {
 export function anclaDeEtapa(stage: string): string {
   return `etapa-${stage.toLowerCase()}`;
 }
+
+/**
+ * La página del manual DENTRO de la base de conocimiento (`/documentacion`).
+ *
+ * Hasta el 2026-09-11 el manual era la pantalla entera del módulo y las anclas colgaban de
+ * `/documentacion`. Ahora es una página más de la base —editable, con sus bloques vivos— y vive
+ * en su slug. El slug es fijo y lo siembra `scripts/seed-documentacion.ts`.
+ */
+export const SLUG_COMO_FUNCIONA = "como-funciona-nexus";
+
+/**
+ * La dirección de la ficha de un documento dentro del manual. La usa el «¿Qué es esto?» de cada
+ * canvas: un solo lugar que sabe dónde vive el manual, así mover la página no rompe ese puntero.
+ */
+export function urlDeDocumentoEnManual(slug: string): string {
+  return `/documentacion/${SLUG_COMO_FUNCIONA}#${anclaDeDocumento(slug)}`;
+}

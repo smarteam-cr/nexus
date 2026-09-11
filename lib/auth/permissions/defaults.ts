@@ -72,6 +72,9 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
        de CSL/SUPER_ADMIN por su chequeo propio. */
     customerSuccess: ["read"],
     marketing: ["read"],
+    // Documentación: todo el equipo escribe la base (como en Notion). Ordenarla —archivar
+    // páginas ajenas, bloquear— es de liderazgo (`manage`, solo CSL).
+    documentacion: ["write"],
   }),
   // VENTAS: ve todo + handoff completo + cronograma (sin regenerar IA) + área
   // de Ventas + auditorías + agentes + conocimientos.
@@ -100,6 +103,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     ventas: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
+    documentacion: ["write"],
     agentes: ["read"],
     auditoria: ["read"],
   }),
@@ -135,6 +139,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     ventas: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
+    documentacion: ["write"],
     agentes: ["read"],
     auditoria: ["read"],
   }),
@@ -183,6 +188,9 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     agentes: ["read"],
     auditoria: ["read"],
     configuracion: ["read"],
+    // CSL es el único rol (fuera de SUPER_ADMIN) que ORDENA la base: archivar páginas ajenas,
+    // restaurarlas y bloquear las que no se tocan. Misma doctrina que `cronograma.delete`.
+    documentacion: ["write", "manage"],
   }),
   // MARKETING: ≈ CSL pero sin borrar clientes, sin regenerar cronograma, sin
   // área de Ventas ni auditorías; editor del área de Marketing.
@@ -203,6 +211,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     asistente: ["read"],
     marketing: ["read", "write"],
     conocimientos: ["write"],
+    documentacion: ["write"],
     agentes: ["read"],
     configuracion: ["read"],
   }),
@@ -211,6 +220,9 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   ADMIN: grant({
     marketing: ["read"],
     cobranza: ["read", "write"],
+    // La base de conocimiento es del equipo entero, Finanzas incluida: es donde se escribe
+    // cómo se hacen las cosas. Es su única celda fuera de Cobranza y Marketing.
+    documentacion: ["write"],
   }),
   // SUPER_ADMIN: all-true. El engine ni siquiera consulta esta fila (hardcodea
   // allTrueMap), pero se declara completa para hasCapability/capabilitiesFor sync.

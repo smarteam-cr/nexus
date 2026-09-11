@@ -26,6 +26,8 @@ import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
+// La dirección de la ficha del documento dentro del manual — un solo lugar que sabe dónde vive.
+import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
@@ -770,7 +772,7 @@ export default function ProjectCanvasPanel({
               )}
             {!isResumenCanvas && activeSlug && pieceBySlug(activeSlug) && (
               <a
-                href={`/documentacion#doc-${activeSlug}`}
+                href={urlDeDocumentoEnManual(activeSlug)}
                 className="shrink-0 text-xs text-fg-muted hover:text-fg transition-colors"
                 title={`Qué es el canvas ${pieceLabel(activeSlug)} y cuándo se usa`}
               >

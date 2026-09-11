@@ -3,11 +3,14 @@
  *
  * Cada etapa enlaza al documento que la cierra: es el salto que antes había que hacer de memoria
  * entre dos pestañas que nunca se veían juntas.
+ *
+ * ⚠ RECIBE sus datos por props (antes los iba a buscar él mismo). Desde el 2026-09-11 esto se
+ * pinta DENTRO de una página de la base de conocimiento, del lado del cliente: los registros se
+ * leen en el servidor (`lib/documentacion/vivos.ts`) para no mandarlos enteros al navegador.
  */
 import { anclaDeDocumento } from "@/lib/manual/anclas";
-import { INTRO_RECORRIDO } from "@/lib/manual/contenido";
-import { armarRecorrido, armarCicloCorto, type EtapaDoc } from "@/lib/manual/armar";
-import { Bloque, Pildora, PildoraLink, Seccion } from "./Piezas";
+import type { EtapaDoc } from "@/lib/manual/armar";
+import { Pildora, PildoraLink } from "./Piezas";
 
 function Etapa({ e, total }: { e: EtapaDoc; total: number }) {
   return (
@@ -45,15 +48,10 @@ function Etapa({ e, total }: { e: EtapaDoc; total: number }) {
   );
 }
 
-export default function Recorrido() {
-  const etapas = armarRecorrido();
-  const corto = armarCicloCorto();
-
+export default function Recorrido({ etapas, corto }: { etapas: EtapaDoc[]; corto: EtapaDoc[] }) {
   return (
-    <Seccion id="recorrido" titulo="El recorrido">
-      <Bloque b={INTRO_RECORRIDO} />
-
-      <ol className="mt-6">
+    <div>
+      <ol>
         {etapas.map((e) => (
           <Etapa key={e.clave} e={e} total={etapas.length} />
         ))}
@@ -71,6 +69,6 @@ export default function Recorrido() {
           ))}
         </div>
       </div>
-    </Seccion>
+    </div>
   );
 }

@@ -18,7 +18,9 @@ import { PIECES } from "@/lib/pieces/registry";
 import { CANVAS_DEF_BY_SLUG, HANDOFF_CANVAS, AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { PROJECT_PROPERTIES } from "@/lib/hubspot/project-properties";
 import { FULL_CYCLE_ORDER, SHORT_CYCLE_ORDER } from "@/lib/lifecycle/stage-engine";
-import { DOC_PIEZAS, DOC_AGENTES, ETAPAS, SIN_SECCIONES } from "./contenido";
+import { APP_NAV } from "@/components/layout/nav-config";
+import { ROLE_LABEL } from "@/lib/auth/roles";
+import { DOC_PIEZAS, DOC_AGENTES, DOC_MENU, DOC_ROLES, ETAPAS, SIN_SECCIONES } from "./contenido";
 import { SECCIONES, anclaDeAgente, anclaDeDocumento } from "./anclas";
 import {
   armarDocumentos,
@@ -258,6 +260,44 @@ describe("Documentación · HubSpot", () => {
   });
 });
 
+describe("Documentación · el menú y los roles no se quedan sin explicación", () => {
+  /* El bloque vivo del menú y el de los roles listan lo que el código ya sabe (nombres, rutas,
+     quién ve cada sección, qué permisos trae cada rol). Lo único escrito a mano es la frase que
+     dice PARA QUÉ está cada uno — y es justo lo que se olvida al agregar un módulo. */
+  it("cada sección del menú tiene su frase", () => {
+    const sinFrase = APP_NAV.filter((i) => !DOC_MENU[i.key]?.trim()).map(
+      (i) => `${i.label} (${i.key})`,
+    );
+    expect(
+      sinFrase,
+      `Agregaste ${sinFrase.length} sección(es) al menú sin explicarlas en la Documentación.\n` +
+        `Escribí su entrada en lib/manual/contenido.ts → DOC_MENU:\n` +
+        sinFrase.map((s) => `  "${s}": "…",`).join("\n"),
+    ).toEqual([]);
+  });
+
+  it("no sobran frases de secciones que ya no están en el menú", () => {
+    const claves = new Set(APP_NAV.map((i) => i.key));
+    const huerfanas = Object.keys(DOC_MENU).filter((k) => !claves.has(k));
+    expect(
+      huerfanas,
+      `Estas claves de DOC_MENU ya no existen en el menú: ${huerfanas.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("cada rol del equipo tiene su frase", () => {
+    const sinFrase = Object.keys(ROLE_LABEL).filter((r) => !DOC_ROLES[r]?.trim());
+    expect(
+      sinFrase,
+      `Estos roles no tienen frase en DOC_ROLES: ${sinFrase.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("no sobran roles que ya no existen", () => {
+    expect(Object.keys(DOC_ROLES).filter((r) => !(r in ROLE_LABEL))).toEqual([]);
+  });
+});
+
 describe("Documentación · privacidad", () => {
   /* La sección NO tiene gate: la ve todo el equipo. El catálogo de /agents, en cambio, está
      detrás del permiso `agentes.read` justamente porque muestra y edita los prompts. Traer un
@@ -271,13 +311,17 @@ describe("Documentación · privacidad", () => {
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^[ \t]*\/\/.*$/gm, "");
 
-  it("la página no lee el prompt de los agentes", () => {
-    const src = sinComentarios("app/(shell)/documentacion/page.tsx");
+  /* ⚠ El escaneo apunta a `lib/documentacion/vivos.ts`, que es donde vive la consulta desde el
+     2026-09-11: el manual dejó de ser la pantalla del módulo y pasó a ser una página de la base
+     de conocimiento, armada por bloques vivos. Si esto siguiera mirando el `page.tsx` viejo,
+     pasaría siempre — sin revisar nada. */
+  it("el armado de los bloques vivos no lee el prompt de los agentes", () => {
+    const src = sinComentarios("lib/documentacion/vivos.ts");
     expect(src).not.toContain("systemPrompt");
     expect(src).not.toContain("additionalInstructions");
   });
 
-  it("la página tampoco lee la descripción libre de la base", () => {
+  it("el armado tampoco lee la descripción libre de la base", () => {
     /* `Agent.description` se edita desde /agents sin deploy, sin test y sin regla de audiencia:
        es la MISMA clase de fuga que el prompt, con otra puerta. La explicación de cada agente
        vive curada en contenido.ts.

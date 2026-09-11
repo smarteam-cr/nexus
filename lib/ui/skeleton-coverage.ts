@@ -94,6 +94,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
 
   // ── Documentación y administración ──────────────────────────────────────────
   documentacion: { modo: "own" },
+  // Forma PROPIA: una página de lectura (ícono + título + cuerpo), no el índice del módulo.
+  "documentacion/[slug]": { modo: "own" },
   roles: { modo: "own" },
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },

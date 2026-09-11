@@ -21,12 +21,6 @@
  * ya existe y vive en ARCHITECTURE.md / docs/DECISIONS.md — no se duplica acá.
  */
 
-export interface BloqueNarrativo {
-  titulo: string;
-  parrafos: string[];
-  bullets?: { titulo: string; detalle: string }[];
-}
-
 export interface DocDePieza {
   /** Qué problema resuelve, en una o dos frases. */
   paraQue: string;
@@ -34,89 +28,16 @@ export interface DocDePieza {
   cuando: string;
 }
 
-// ── Sección "Cómo funciona" ────────────────────────────────────────────────────
-
-export const QUE_ES: BloqueNarrativo = {
-  titulo: "Qué es Nexus",
-  parrafos: [
-    "Nexus es el lugar donde vive lo que sabemos de cada cliente. Escucha las reuniones que el equipo tiene con ellos, las ordena por cliente y proyecto, y a partir de ahí arma los documentos con los que trabajamos: el traspaso de Ventas a Customer Success, el arranque, el cronograma, el diagnóstico.",
-    "No reemplaza a HubSpot ni compite con él. HubSpot sigue siendo donde vive el negocio —las empresas, los tratos, los proyectos y su etapa—. Nexus lee de ahí y le devuelve el trabajo hecho.",
-    "La idea de fondo es que nadie tenga que reconstruir el contexto de un cliente a mano. Si la información ya se dijo en una reunión, Nexus la tiene; lo que hace falta es revisarla y corregirla, no escribirla desde cero.",
-  ],
-};
-
-export const QUE_TE_AHORRA: BloqueNarrativo = {
-  titulo: "Qué te ahorra",
-  parrafos: [
-    "Lo que sigue no es una promesa de la herramienta: es lo que efectivamente deja de hacerse a mano.",
-  ],
-  bullets: [
-    {
-      titulo: "Escuchar grabaciones para entender qué se vendió",
-      detalle:
-        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisas un documento y corriges lo que esté mal.",
-    },
-    {
-      titulo: "Rearmar el cronograma desde cero en cada proyecto",
-      detalle:
-        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Tú ajustas fechas y responsables; no partes de una hoja en blanco.",
-    },
-    {
-      titulo: "Perder el contexto cuando alguien cambia de proyecto",
-      detalle:
-        "Todo lo que se habló con un cliente queda junto y atado a él. Quien entra después lee, no pregunta.",
-    },
-    {
-      titulo: "Preguntar dos veces lo mismo",
-      detalle:
-        "La guía de exploración separa lo que el cliente YA nos dijo de lo que estamos dando por supuesto, y las preguntas salen de ahí.",
-    },
-    {
-      titulo: "Escribirle al cliente desde una hoja en blanco",
-      detalle:
-        "Los documentos que ve el cliente —arranque, cronograma, propuesta— salen con el tono y la línea gráfica de Smarteam, listos para revisar.",
-    },
-  ],
-};
-
-export const QUE_NO_HACE: BloqueNarrativo = {
-  titulo: "Qué NO hace Nexus",
-  parrafos: [
-    "Tan importante como lo que hace es dónde termina, para no buscar acá algo que vive en otro lado.",
-  ],
-  bullets: [
-    {
-      titulo: "No es el CRM",
-      detalle:
-        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. Si mueves la tarjeta allá, Nexus lo refleja; al revés no.",
-    },
-    {
-      titulo: "No es contabilidad",
-      detalle:
-        "Cobranza controla a quién le toca cobrar y cómo va cada cobro. Las facturas, la conciliación bancaria y la contabilidad viven en Odoo y Mercury.",
-    },
-    {
-      titulo: "No decide por ti",
-      detalle:
-        "Todo lo que escribe un agente es un borrador. Nada se publica al cliente ni se da por bueno sin que una persona lo revise.",
-    },
-    {
-      titulo: "No manda correos solo",
-      detalle:
-        "Cuando redacta un mensaje de cobro, lo deja listo para que tú lo edites y lo envíes. No sale nada automáticamente.",
-    },
-  ],
-};
-
-// ── Sección "El recorrido" ─────────────────────────────────────────────────────
-
-export const INTRO_RECORRIDO: BloqueNarrativo = {
-  titulo: "Cómo avanza un proyecto",
-  parrafos: [
-    "Un proyecto de implementación recorre estas etapas en orden. La etapa en la que está no la elige nadie a mano: Nexus la deduce de lo que ya pasó —si el arranque se publicó, si el cronograma se consensuó, si la demo se aprobó— y por eso siempre refleja el estado real, no el que alguien se acordó de marcar.",
-    "Las etapas con documento son en las que hay algo que abrir y trabajar. Las que aparecen como hito no tienen documento a propósito: se marcan cuando ocurren y ya.",
-  ],
-};
+/* ── LA NARRATIVA SE MUDÓ A LA PÁGINA (2026-09-11) ────────────────────────────
+ * «Qué es Nexus», «Qué te ahorra», «Qué NO hace», las introducciones de cada sección y los dos
+ * bloques de HubSpot vivían acá como constantes y se pintaban desde el código. Hoy son contenido
+ * EDITABLE de la página «¿Cómo funciona Nexus?» de la base de conocimiento, sembrado por
+ * `lib/documentacion/semillas/como-funciona.ts`.
+ *
+ * Lo que SIGUE acá es lo que alimenta a los bloques vivos —las frases que ningún registro sabe,
+ * con su test que falla si falta alguna—: las etapas, los documentos, los agentes, el menú y los
+ * roles. Esa mitad no se puede editar desde la app a propósito: se deriva, y por eso no envejece.
+ */
 
 /**
  * Una frase por etapa: qué pasa ahí, en lenguaje de negocio. TODO lo demás de esta sección
@@ -148,10 +69,7 @@ export const ETAPAS: Record<string, string> = {
   FINALIZADO: "El proyecto terminó. Queda como historia consultable del cliente.",
 };
 
-// ── Sección "Los documentos" ───────────────────────────────────────────────────
-
-export const INTRO_DOCUMENTOS =
-  "Cada proyecto tiene un menú de documentos. Algunos nacen con el proyecto y otros aparecen solo si hacen falta. Los que dicen «lo ve el cliente» se le pueden publicar con un enlace; el resto son de uso interno y el cliente nunca los ve.";
+// ── Los documentos ─────────────────────────────────────────────────────────────
 
 /**
  * Un párrafo por documento. La CLAVE es el identificador estable de la pieza
@@ -276,49 +194,61 @@ export const DOC_AGENTES: Record<string, string> = {
     "Escribe la propuesta comercial para un prospecto a partir de lo que se habló con él: qué le duele, qué le proponemos y qué gana.",
 };
 
-export const INTRO_AGENTES: BloqueNarrativo = {
-  titulo: "Qué es un agente",
-  parrafos: [
-    "Un agente es una tarea de inteligencia artificial con un encargo concreto: leer cierto material y escribir cierto documento. No es un chat: no se conversa con él, se dispara y devuelve un borrador.",
-    "Algunos los disparas tú con el botón «Generar» del documento. Otros corren solos cuando entra una reunión nueva.",
-    "Lo que escriben SIEMPRE es un borrador. La regla del equipo es revisarlo antes de darlo por bueno, y con más razón antes de que lo vea el cliente.",
-  ],
+// ── El menú ────────────────────────────────────────────────────────────────────
+
+/**
+ * Qué hay en cada sección del menú, en una frase.
+ *
+ * La CLAVE es la `key` del ítem en `components/layout/nav-config.tsx`, que es el registro
+ * estable: el label puede cambiar (pasó con «Configuración» → «Integraciones») sin que la
+ * explicación se pierda. Los nombres, las direcciones y quién ve cada sección NO se escriben
+ * acá: salen del mismo registro que dibuja el menú.
+ *
+ * ⚠ Agregar un módulo al menú SIN agregarlo acá hace fallar `manual.test.ts`. Es a propósito:
+ * una sección nueva sin explicación aparecería como una fila muda.
+ */
+export const DOC_MENU: Record<string, string> = {
+  clients:
+    "La cartera: todas las empresas, con sus proyectos adentro. Es la pantalla donde se trabaja el día a día de un cliente.",
+  marketing:
+    "El contenido de Smarteam: ideas, temas, campañas, la voz de marca y a quién le hablamos.",
+  "customer-success":
+    "El tablero del líder de CS: cómo viene cada cuenta, qué está trabado y qué cliente está en riesgo.",
+  sales:
+    "Lo que se vende: las propuestas para prospectos, el catálogo de casos de uso y las licitaciones de SICOP.",
+  finanzas:
+    "La plata: qué se cobró, qué está vencido y —para dirección— los costos, la caja y el punto de equilibrio.",
+  audits: "Fotos del portal de HubSpot de Smarteam, con el análisis que les hace la IA.",
+  sessions:
+    "Todas las reuniones de Google Meet, ordenadas por cliente, con su minuta y sus compromisos.",
+  knowledge:
+    "La biblioteca que leen los AGENTES: metodologías, procesos y especificaciones de HubSpot. No es esta base: acá escribimos para personas.",
+  documentacion:
+    "Esta base: cómo funciona Nexus y cómo trabajamos. La escribe el equipo y la lee todo el equipo.",
+  agents:
+    "El catálogo de los agentes de IA y su calibración. Los agentes se disparan desde su documento, no desde acá.",
+  team: "El equipo, sus roles y la matriz de permisos. Solo dirección.",
+  roles:
+    "Los perfiles de puesto y las propuestas laborales, como documentos que se pueden compartir por enlace.",
+  config:
+    "Lo que Nexus conecta con el mundo: HubSpot, Google, Claude y Odoo, con el estado de cada conexión y cuánto se gasta en IA.",
 };
 
-// ── Sección "HubSpot" ──────────────────────────────────────────────────────────
+// ── Sección "Roles" ────────────────────────────────────────────────────────────
 
-export const INTRO_HUBSPOT: BloqueNarrativo = {
-  titulo: "Cómo se conecta con HubSpot",
-  parrafos: [
-    "HubSpot es la fuente de verdad del negocio: las empresas, los tratos y los proyectos con su etapa. Nexus se conecta a nuestro portal y trabaja sobre eso.",
-    "La relación es principalmente de lectura. Nexus mira mucho y escribe poco, y lo poco que escribe está acotado a propósito.",
-  ],
+/**
+ * Qué hace cada rol, en una frase. La clave es el valor del enum `TeamRole`.
+ *
+ * ⚠ Los PERMISOS exactos no se escriben acá: se derivan del registro de permisos. Esto contesta
+ * la otra pregunta, la que ningún registro sabe: para qué está ese rol en la empresa.
+ */
+export const DOC_ROLES: Record<string, string> = {
+  CSE: "Lleva sus propios clientes de punta a punta: explora, diagnostica, arma el cronograma y acompaña la adopción.",
+  VENTAS: "Vende: arma propuestas, cierra tratos y traspasa el cliente a Customer Success.",
+  DEV: "Construye lo que no sale de configurar HubSpot: integraciones, automatizaciones y desarrollos a la medida.",
+  CSL: "Lidera Customer Success: mira la cartera entera, reasigna cuentas y es quien regenera un cronograma con IA.",
+  MARKETING: "Maneja el contenido y la presencia de Smarteam, y ve a todos los clientes.",
+  ADMIN: "Asistente administrativo: cobranza y finanzas del día a día.",
+  SUPER_ADMIN: "Dirección: puede todo, incluida la administración del equipo y de los permisos.",
 };
 
-export const HUBSPOT_ESCRIBE: BloqueNarrativo = {
-  titulo: "Qué escribe Nexus en HubSpot",
-  parrafos: ["Es una lista corta, y ésa es la idea:"],
-  bullets: [
-    {
-      titulo: "Crea el proyecto al dar un traspaso",
-      detalle:
-        "Cuando se genera el traspaso, Nexus crea el proyecto en el pipeline de Customer Success, lo asocia a la empresa y al trato, y lo deja en la etapa inicial.",
-    },
-    {
-      titulo: "Marca a la empresa como en onboarding",
-      detalle: "Para que se vea desde HubSpot que ese cliente arrancó.",
-    },
-    {
-      titulo: "Deja borradores sociales",
-      detalle:
-        "Desde Marketing se puede mandar una idea aprobada al compositor social de HubSpot. Queda como BORRADOR: publicar lo hace una persona.",
-    },
-  ],
-};
-
-export const HUBSPOT_NO_ESCRIBE: BloqueNarrativo = {
-  titulo: "Qué NO toca",
-  parrafos: [
-    "Nexus no mueve la etapa de un proyecto, no edita tratos, no cambia propiedades de empresas ni de contactos, y no borra nada. Si un proyecto tiene que avanzar de etapa, alguien lo mueve en HubSpot y Nexus lo refleja.",
-  ],
-};

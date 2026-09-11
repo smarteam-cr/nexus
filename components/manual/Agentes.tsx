@@ -6,10 +6,9 @@
  * agente. Por eso NO se reagrupan por documento, aunque acá se vea la tentación.
  */
 import { anclaDeAgente, anclaDeDocumento } from "@/lib/manual/anclas";
-import { INTRO_AGENTES } from "@/lib/manual/contenido";
 import type { AgenteDoc, CategoriaDeAgentes } from "@/lib/manual/armar";
 import { Badge, EmptyState } from "@/components/ui";
-import { Bloque, Pildora, PildoraLink, Seccion } from "./Piezas";
+import { Pildora, PildoraLink } from "./Piezas";
 
 function Agente({ a }: { a: AgenteDoc }) {
   return (
@@ -38,28 +37,28 @@ function Agente({ a }: { a: AgenteDoc }) {
 }
 
 export default function Agentes({ categorias }: { categorias: CategoriaDeAgentes[] }) {
-  return (
-    <Seccion id="agentes" titulo="Los agentes">
-      <Bloque b={INTRO_AGENTES} />
+  if (categorias.length === 0) {
+    return (
+      <EmptyState
+        title="Todavía no hay agentes configurados"
+        description="El catálogo se llena cuando se siembran los agentes del flujo. Si estás viendo esto en producción, avisá — la pantalla está bien, faltan los datos."
+      />
+    );
+  }
 
-      {categorias.length === 0 ? (
-        <EmptyState
-          title="Todavía no hay agentes configurados"
-          description="El catálogo se llena cuando se siembran los agentes del flujo. Si estás viendo esto en producción, avisá — la pantalla está bien, faltan los datos."
-        />
-      ) : (
-        categorias.map((c) => (
-          <section key={c.key} className="mb-8">
-            <h3 className="text-sm font-semibold text-fg">{c.label}</h3>
-            <p className="text-xs text-fg-muted mt-0.5 mb-3 max-w-prose">{c.description}</p>
-            <div className="grid gap-3">
-              {c.agentes.map((a) => (
-                <Agente key={a.id} a={a} />
-              ))}
-            </div>
-          </section>
-        ))
-      )}
-    </Seccion>
+  return (
+    <div>
+      {categorias.map((c) => (
+        <section key={c.key} className="mb-8">
+          <h3 className="text-sm font-semibold text-fg">{c.label}</h3>
+          <p className="text-xs text-fg-muted mt-0.5 mb-3 max-w-prose">{c.description}</p>
+          <div className="grid gap-3">
+            {c.agentes.map((a) => (
+              <Agente key={a.id} a={a} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }

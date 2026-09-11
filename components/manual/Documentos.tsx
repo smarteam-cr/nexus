@@ -7,13 +7,12 @@
  * contenido dos veces en la misma página.
  *
  * Las secciones NO van colapsadas. "¿Qué trae el kickoff?" es probablemente el dato que más se
- * viene a buscar, y detrás de un desplegable no lo alcanza ni el ojo ni el Ctrl+F del navegador
- * —que es el único buscador que esta pantalla necesita y va a tener—.
+ * viene a buscar, y detrás de un desplegable no lo alcanza ni el ojo ni el buscador.
  */
 import { anclaDeAgente, anclaDeDocumento } from "@/lib/manual/anclas";
-import { INTRO_DOCUMENTOS, SIN_SECCIONES } from "@/lib/manual/contenido";
+import { SIN_SECCIONES } from "@/lib/manual/contenido";
 import type { DocumentoDoc } from "@/lib/manual/armar";
-import { Pildora, PildoraLink, Seccion } from "./Piezas";
+import { Pildora, PildoraLink } from "./Piezas";
 
 function Zona({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
@@ -94,12 +93,10 @@ function Documento({ d }: { d: DocumentoDoc }) {
 
 export default function Documentos({ docs }: { docs: DocumentoDoc[] }) {
   return (
-    <Seccion id="documentos" titulo="Los documentos" intro={INTRO_DOCUMENTOS}>
-      <div className="grid gap-4">
-        {docs.map((d) => (
-          <Documento key={d.slug} d={d} />
-        ))}
-      </div>
-    </Seccion>
+    <div className="grid gap-4">
+      {docs.map((d) => (
+        <Documento key={d.slug} d={d} />
+      ))}
+    </div>
   );
 }

@@ -1,0 +1,42 @@
+/*
+ * components/documentacion/editor.css — el tema de BlockNote atado a los tokens de Nexus.
+ *
+ * BlockNote declara sus colores como variables en `.bn-root` y `.bn-root[data-color-scheme=dark]`
+ * (especificidad 0,2,0). Acá se re-apuntan a las variables semánticas de `app/globals.css`, que
+ * ya flipean solas con `html.light`: UN solo mapeo sirve para los dos temas, sin duplicar paletas.
+ * El selector con `[data-color-scheme]` pesa 0,3,0 y gana sin depender del orden en que el
+ * bundler encadene los CSS.
+ *
+ * ⚠ Este archivo se importa desde `EditorDePagina.tsx` (el módulo que se carga perezoso), NUNCA
+ * con `@import` desde `globals.css`: Turbopack no relee los CSS encadenados por `@import`
+ * (docs/KNOWN-ERRORS.md).
+ */
+.nx-doc .bn-root[data-color-scheme],
+.nx-doc .bn-root {
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: var(--foreground);
+  --bn-colors-menu-background: var(--surface);
+  --bn-colors-tooltip-text: var(--foreground);
+  --bn-colors-tooltip-background: var(--surface-hover);
+  --bn-colors-hovered-text: var(--foreground);
+  --bn-colors-hovered-background: var(--surface-hover);
+  --bn-colors-selected-text: var(--foreground);
+  --bn-colors-selected-background: var(--surface-active);
+  --bn-colors-disabled-text: var(--fg-muted);
+  --bn-colors-disabled-background: var(--surface-muted);
+  --bn-colors-border: var(--line);
+  --bn-colors-side-menu: var(--fg-muted);
+  --bn-colors-shadow: rgb(0 0 0 / 0.25);
+  /* La app usa su propia tipografía: la Inter que trae BlockNote no se carga. */
+  --bn-font-family: inherit;
+  /* Los menús del editor (/, barra de formato, arrastre) son popovers: misma capa que
+     POPOVER en lib/ui/z.ts — por encima de lo sticky y de los drawers, por debajo de los toasts. */
+  --bn-ui-base-z-index: 80;
+}
+
+/* El editor hereda el ancho de la columna de lectura; el margen izquierdo es el que BlockNote
+   reserva para la manija de arrastre y el «+». */
+.nx-doc .bn-editor {
+  padding-inline: 54px 0;
+}

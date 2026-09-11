@@ -1,86 +1,99 @@
 /**
- * app/(shell)/documentacion/page.tsx — el manual de Nexus para el equipo.
+ * app/(shell)/documentacion/page.tsx — el Inicio de la base de conocimiento.
  *
- * La sección NO tiene gate en el sidebar (la ve todo el mundo, como Clientes o Sesiones), pero
- * el guard real va acá igual: el ítem del menú es cosmético y no autoriza nada
- * (ARCHITECTURE §1-UI punto 4).
+ * Reemplaza al manual, que hasta el 2026-09-11 ERA esta pantalla y vivía escrito en el código.
+ * Ahora el manual es una página más de la base («¿Cómo funciona Nexus?») y acá se entra: las
+ * páginas de primer nivel y lo último que alguien editó.
  *
- * ── POR QUÉ TODO SE RENDERIZA DE UNA, SIN PESTAÑAS ───────────────────────────
- * Hasta el 2026-08-02 esto eran cuatro pestañas con el estado en `?s=`, y tres cuartas partes
- * del manual NO estaban en el DOM: el Ctrl+F del navegador —el único buscador que una
- * documentación de ~40 unidades necesita— veía la cuarta parte y devolvía "no encontrado" sin
- * avisar. Y como el panel se resolvía en el CLIENTE, un link con ancla llegaba antes de que el
- * destino existiera y el navegador no saltaba a ningún lado.
- *
- * Con todo servido desde el servidor y seguido: Ctrl+F alcanza el manual entero, `#doc-kickoff`
- * es un link que se pega en un chat, y la pantalla dejó de necesitar `useSearchParams` y su
- * `<Suspense>`. Es menos código del que había.
- *
- * ⚠ El `select` de agentes es DELIBERADAMENTE acotado y NO trae `systemPrompt` ni
- * `additionalInstructions`: los prompts son calibración interna y viven detrás del permiso de
- * `/agents`; esta pantalla no tiene ese permiso. Lo congela `lib/manual/manual.test.ts`.
- *
- * Tampoco trae `description`, y por la misma razón de fondo: es texto libre de la base que se
- * edita desde `/agents` sin deploy, sin test y sin regla de audiencia — llegó a publicar jerga
- * de desarrollador acá. La explicación de cada agente vive curada en `lib/manual/contenido.ts`.
+ * El guard va acá aunque el layout también mire: el ítem del menú es cosmético y no autoriza nada.
  */
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db/prisma";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import { PageHeader } from "@/components/ui";
-import IndiceDeSecciones from "@/components/manual/IndiceDeSecciones";
-import ComoFunciona from "@/components/manual/ComoFunciona";
-import Recorrido from "@/components/manual/Recorrido";
-import Documentos from "@/components/manual/Documentos";
-import Agentes from "@/components/manual/Agentes";
-import HubSpot from "@/components/manual/HubSpot";
-import {
-  armarDocumentos,
-  armarAgentes,
-  armarPipelines,
-  armarPropiedades,
-  totalPropiedades,
-} from "@/lib/manual/armar";
+import { PageHeader, EmptyState } from "@/components/ui";
+import { arbolDePaginas, editadasHacePoco } from "@/lib/documentacion/consultas";
+import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
 
-// El contenido cambia con el código, no con el minuto: se revalida seguido pero no en cada visita.
-
-export default async function DocumentacionPage() {
+export default async function InicioDeDocumentacion() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/clients");
 
-  const filas = await prisma.agent.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      agentType: true,
-      agentGroup: true,
-    },
-  });
+  const [arbol, recientes, puedeEscribir] = await Promise.all([
+    arbolDePaginas(),
+    editadasHacePoco(),
+    can(ctx.teamMember, "documentacion", "write"),
+  ]);
 
   return (
     <div className={SHELL_DEFAULT}>
+      {/* Los enlaces viejos del manual traen su ancla en la dirección; esto los reenvía. */}
+      <RedirigirAnclaVieja />
+
       <PageHeader
         title="Documentación"
-        description="Cómo funciona Nexus, qué hace cada documento y cómo se conecta con HubSpot."
+        description="La base de conocimiento del equipo: cómo funciona Nexus, cómo trabajamos y todo lo que vayamos escribiendo."
       />
 
-      <div className="lg:flex lg:items-start lg:gap-10">
-        <IndiceDeSecciones className="mb-6 lg:mb-0 lg:sticky lg:top-6 lg:w-52 lg:shrink-0" />
-        <div className="min-w-0 flex-1 max-w-3xl">
-          <ComoFunciona />
-          <Recorrido />
-          <Documentos docs={armarDocumentos()} />
-          <Agentes categorias={armarAgentes(filas)} />
-          <HubSpot
-            pipelines={armarPipelines()}
-            grupos={armarPropiedades()}
-            totalProps={totalPropiedades()}
-          />
+      {arbol.length === 0 ? (
+        <EmptyState
+          title="Todavía no hay páginas"
+          description={
+            puedeEscribir
+              ? "Creá la primera desde el «+» del panel de la izquierda."
+              : "Cuando alguien del equipo escriba la primera, va a aparecer acá."
+          }
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {arbol.map((p) => (
+            <Link
+              key={p.id}
+              href={`/documentacion/${p.slug}`}
+              className="rounded-lg border border-line bg-surface p-4 transition-colors hover:bg-surface-hover"
+            >
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true">{p.icono ?? "📄"}</span>
+                <span className="truncate font-medium text-fg">{p.titulo}</span>
+                {p.bloqueada && (
+                  <span className="text-2xs text-fg-muted" title="Bloqueada: la edita el liderazgo">
+                    🔒
+                  </span>
+                )}
+              </div>
+              {p.hijas.length > 0 && (
+                <p className="mt-2 truncate text-xs text-fg-muted">
+                  {p.hijas.length} {p.hijas.length === 1 ? "subpágina" : "subpáginas"}:{" "}
+                  {p.hijas.map((h) => h.titulo).join(" · ")}
+                </p>
+              )}
+            </Link>
+          ))}
         </div>
-      </div>
+      )}
+
+      {recientes.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-2 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+            Editadas hace poco
+          </h2>
+          <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
+            {recientes.map((p) => (
+              <li key={p.id}>
+                <Link
+                  href={`/documentacion/${p.slug}`}
+                  className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-surface-hover"
+                >
+                  <span aria-hidden="true">{p.icono ?? "📄"}</span>
+                  <span className="min-w-0 flex-1 truncate text-fg">{p.titulo}</span>
+                  <span className="shrink-0 text-2xs text-fg-muted">{p.editadaPorEmail}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

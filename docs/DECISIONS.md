@@ -1601,6 +1601,11 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   teclado), librería de markdown, motor `LandingView`, versionado, i18n, analytics por artículo,
   widget "¿te sirvió?", breadcrumbs, prev/next, y una banda de frescura con test de caducidad —
   un ratchet que se satisface bumpeando una fecha es peor que no tenerlo.
+  **⚠ SUPERADO EL 2026-09-11** para cuatro de esa lista —buscador, command palette, versionado y
+  breadcrumbs—: entraron con la base de conocimiento. El descarte era correcto PARA LO QUE ERA
+  —un manual de ~40 unidades escrito por desarrolladores, donde el Ctrl+F alcanza—; dejó de serlo
+  cuando el módulo pasó a ser una base que escribe el equipo y que crece sin techo. Ver la sección
+  «Documentación pasa a ser una base de conocimiento».
 - **Iteración prevista, no ahora**: las recetas "cómo hago X" (el ítem más caro de mantener: sus
   nombres de pantalla y de botón tienen que COMPONERSE desde `nav-config.tsx` y
   `CANVAS_PRIMARY_AGENT`, nunca como strings sueltos, más un test de que toda ruta citada existe);
@@ -2856,3 +2861,59 @@ fabricarla.
 - **Los enlaces entran por parámetro a los módulos puros.** `auditarRespaldoDeFactura`
   recibe un `enlacesDe(clientId)`: ahí se decide QUÉ está mal, no dónde se mira. Sin eso, un
   módulo de dominio tendría que conocer rutas de la app y el portal de HubSpot.
+
+## Documentación pasa a ser una base de conocimiento (2026-09-11)
+
+> El módulo era un manual de solo lectura escrito en el código: para corregir una frase hacía
+> falta un desarrollador y un deploy. Elías pidió convertirlo en una base tipo Notion, que
+> escriba el equipo. La decisión de encuadre —la audiencia sigue siendo el equipo de Smarteam,
+> en lenguaje de negocio— no cambia; lo que cambia es QUIÉN puede escribir y DÓNDE vive el texto.
+
+- **El texto se muda a la base; lo DERIVADO se queda derivado.** Es la mitad de la decisión que
+  más importa, porque es la que evita repetir el error que el módulo vino a resolver en agosto.
+  La narrativa («qué es Nexus», «qué te ahorra») ahora es contenido editable. Las listas —el menú,
+  las etapas, los documentos, los agentes, HubSpot y los roles— NO se copiaron a la base: son
+  bloques `vivo`, que declaran una fuente y se arman en el servidor desde los mismos registros
+  que gobiernan la app (`lib/documentacion/vivos.ts`). Una doc escrita 100 % a mano miente a los
+  tres meses; ésta sigue actualizándose sola en la mitad que ningún humano debería mantener.
+  - El costo de la otra opción (copiar todo a la base al sembrar) se vio en el acto: el manual
+    viejo afirmaba que Nexus DEDUCE la etapa y que nunca escribe etapas ni propiedades en
+    HubSpot — falso desde el 2026-07-30. Congelar eso en la base lo habría vuelto permanente.
+- **Modelo propio (`PaginaDoc`) y NO `KnowledgeDocument`.** Son dos cosas con el mismo nombre
+  vulgar y distinto dueño: `KnowledgeDocument` (`/knowledge`) es la biblioteca que entra a los
+  PROMPTS de los agentes por tags; esta base es para personas. Si compartieran tabla, una página
+  escrita al pasar terminaría dentro del informe que recibe un cliente. Lo sostiene un test:
+  `lib/agents`, `lib/canvas`, `lib/knowledge` y `lib/ai` no pueden nombrar `PaginaDoc`.
+  - Elías eligió mantenerlas separadas por ahora; unificarlas con un interruptor «la leen los
+    agentes» es otra tanda, y con esta frontera puesta se puede hacer sin riesgo.
+- **El contenido se escribe con control de versión; el título y el ícono, no.** El guardado manda
+  la `version` que leyó y el UPDATE es `WHERE id AND version`: si otra persona guardó primero, el
+  editor avisa en vez de pisarla. Pedirle lo mismo al título sería inventar un conflicto entre dos
+  cambios que no chocan — renombrar en una pestaña haría fallar el autoguardado de la otra.
+- **Las dos páginas sembradas nacen BLOQUEADAS.** El reglamento de la Escala y el manual de la app
+  son documentos que se consultan para decidir; que cualquiera los edite sin querer es un riesgo
+  distinto al de una página de notas. El candado no las vuelve intocables: se saca con un clic
+  desde el menú del árbol, y solo `documentacion.manage` (CSL) puede sacarlo.
+- **Arrastrar reordena ENTRE HERMANAS; anidar es «Mover a…».** Un árbol con drop por profundidad
+  necesita zonas de destino, autoscroll y una defensa contra el anidado accidental — la parte cara
+  y la que más se equivoca. El diálogo resuelve lo mismo, funciona por teclado y muestra
+  deshabilitadas la propia página y su rama (el ciclo que el servidor rechaza ni se ofrece).
+- **Editor: BlockNote (MPL-2.0), sin sus paquetes `@blocknote/xl-*` (GPL).** Trae de fábrica el
+  menú «/», el arrastre, los desplegables, las tablas y el español; lo que se agregó encima son
+  dos bloques propios (`aviso` y `vivo`). La licencia la vigila un test, no la memoria.
+  - Los bloques de ARCHIVO (imagen, video, audio) se sacaron del ESQUEMA, no solo del menú: si
+    solo se escondieran, pegar una imagen crearía un bloque roto apuntando a ningún lado. Vuelven
+    cuando exista la subida.
+- **Nada se borra.** Archivar manda la rama entera a la papelera con un mismo lote y la devuelve
+  igual. Una base de conocimiento sin papelera es una base donde nadie archiva.
+- **La siembra no pisa lo que escribió una persona.** Compara la `version` actual contra la que
+  quedó al sembrar (`semillaVersion`); si difieren, salta la página y lo dice. Se compara por
+  número y no por contenido porque el editor normaliza los bloques al cargarlos: comparar el JSON
+  daría «editada» siempre. Para pisar igual hay que nombrarla: `--forzar <slug>`, y antes se
+  guarda una versión en el historial.
+- **Lo que esto SUPERA de la decisión de 2026-08-02**: el buscador, el command palette, el
+  versionado y las migas de pan estaban descartados «para no re-litigarlo», y el descarte era
+  correcto para lo que el módulo era entonces (~40 unidades, Ctrl+F alcanza). Con una base que
+  crece y que escribe el equipo, los cuatro pasan a ser necesarios. Lo que NO cambió: los prompts
+  de los agentes siguen sin cruzar a esta pantalla (el escaneo de privacidad ahora apunta a
+  `lib/documentacion/vivos.ts`, que es donde vive la consulta), y la pantalla usa solo tokens.

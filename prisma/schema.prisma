@@ -4647,3 +4647,89 @@ model DiferenciaOdooAceptada {
   aceptadaPor String
   aceptadaEn  DateTime @default(now())
 }
+
+/// Una página de la base de conocimiento del EQUIPO (`/documentacion`), al estilo de Notion:
+/// páginas y subpáginas que cualquiera del equipo lee y que edita quien tenga `documentacion.write`.
+/// SQL: scripts/sql/2026-09-11-documentacion-paginas.sql (⛔ nunca `db push`).
+///
+/// ⛔ NO ES `KnowledgeDocument`. Ésa es la biblioteca que leen los AGENTES por tags; ésta es para
+/// personas, y ningún agente la lee (lo vigila `lib/documentacion/guardas.test.ts`).
+model PaginaDoc {
+  id String @id @default(cuid())
+
+  /// El árbol. `Restrict`: no hay borrado definitivo, y una página con hijas no puede
+  /// desaparecer dejándolas colgadas. Archivar se lleva la rama entera (ver `archivadaLote`).
+  parentId String?
+  parent   PaginaDoc?  @relation("ArbolDePaginas", fields: [parentId], references: [id], onDelete: Restrict)
+  hijas    PaginaDoc[] @relation("ArbolDePaginas")
+
+  /// La dirección de la página (`/documentacion/<slug>`). Única y ESTABLE: renombrar no la
+  /// cambia, así no se rompen los enlaces pegados en un chat.
+  slug   String  @unique
+  titulo String
+  /// Un emoji.
+  icono  String?
+  /// Posición entre sus hermanas, densa (0..n-1). Se renumera en cada movimiento.
+  orden  Int     @default(0)
+
+  /// El JSON de bloques del editor (BlockNote). La forma vive en `lib/documentacion/tipos.ts`.
+  contenido Json   @default("[]")
+  /// El contenido en texto plano, derivado en el SERVIDOR al guardar (nunca lo manda el navegador).
+  texto     String @default("")
+  /// Título + texto + lo derivado de los bloques vivos, sin tildes ni mayúsculas: lo que busca Ctrl+K.
+  busqueda  String @default("")
+
+  /// ⚠ CONTROL DE CONCURRENCIA del contenido: el guardado manda la versión que leyó y la
+  /// escritura es `WHERE id AND version`. Si otra persona guardó antes, avisa en vez de pisar.
+  /// Renombrar, cambiar el ícono o mover NO la suben.
+  version Int @default(1)
+
+  /// Bloqueada = solo `documentacion.manage` la edita o le agrega subpáginas.
+  bloqueada Boolean @default(false)
+  /// Página del sistema (las dos sembradas): no se archiva.
+  fija      Boolean @default(false)
+  /// La `version` que quedó al sembrar. Si hoy es distinta, una persona la editó y la siembra
+  /// NO la pisa. Se compara por número y no por contenido: el editor normaliza los bloques al
+  /// cargarlos, así que el JSON cambia sin que nadie edite.
+  semillaVersion Int?
+
+  /// Papelera. Archivar marca la rama entera con el MISMO lote, y restaurar devuelve ese grupo.
+  archivadaAt   DateTime?
+  archivadaLote String?
+
+  creadaPorEmail  String?
+  editadaPorEmail String?
+  /// La última edición de una PERSONA. `updatedAt` también se mueve al reordenar, así que no
+  /// sirve para "editadas hace poco".
+  editadaAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versiones PaginaDocVersion[]
+
+  @@index([parentId, orden])
+  @@index([archivadaAt])
+}
+
+/// El historial de una página: fotos del contenido para poder volver atrás. El tope por página
+/// vive en `lib/documentacion/tipos.ts` (TOPE_DE_VERSIONES).
+model PaginaDocVersion {
+  id String @id @default(cuid())
+
+  paginaId String
+  pagina   PaginaDoc @relation(fields: [paginaId], references: [id], onDelete: Cascade)
+
+  /// La `version` de la página en el momento de la foto.
+  version    Int
+  titulo     String
+  icono      String?
+  contenido  Json
+  /// autoguardado · antes-de-restaurar · semilla · antes-de-forzar (String y no enum: INV4).
+  motivo     String
+  autorEmail String?
+
+  createdAt DateTime @default(now())
+
+  @@index([paginaId, createdAt])
+}

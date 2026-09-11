@@ -1,19 +1,16 @@
 /**
- * components/manual/HubSpot.tsx — cómo se conecta Nexus con el portal.
+ * components/manual/HubSpot.tsx — los pipelines del portal y lo que Nexus le pide a cada proyecto.
  *
- * Abre por la pregunta que de verdad se hace el equipo ("¿qué pasa si muevo la tarjeta?") y
- * termina con los nombres internos de las propiedades. Ése apéndice SÍ va colapsado, y es la
- * única excepción de la pantalla: no es contenido comparable, es una lista que se consulta para
- * ir a buscarla a HubSpot, y la mayoría de los lectores no la necesita nunca.
+ * El apéndice con los nombres internos de las propiedades SÍ va colapsado, y es la única
+ * excepción: no es contenido comparable, es una lista que se consulta para ir a buscarla a
+ * HubSpot, y la mayoría de los lectores no la necesita nunca.
+ *
+ * ⚠ La narrativa —qué escribe y qué no escribe Nexus en HubSpot— ya NO vive acá: es texto
+ * editable de la página «¿Cómo funciona Nexus?». Acá queda solo lo que se deriva del código.
  */
-import {
-  INTRO_HUBSPOT,
-  HUBSPOT_ESCRIBE,
-  HUBSPOT_NO_ESCRIBE,
-} from "@/lib/manual/contenido";
 import type { GrupoDePropiedades, PipelineDoc } from "@/lib/manual/armar";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
-import { Bloque, Pildora, Seccion } from "./Piezas";
+import { Pildora } from "./Piezas";
 
 export default function HubSpot({
   pipelines,
@@ -25,11 +22,7 @@ export default function HubSpot({
   totalProps: number;
 }) {
   return (
-    <Seccion id="hubspot" titulo="HubSpot">
-      <Bloque b={INTRO_HUBSPOT} />
-      <Bloque b={HUBSPOT_NO_ESCRIBE} />
-      <Bloque b={HUBSPOT_ESCRIBE} />
-
+    <div>
       <div className="mb-8">
         <h3 className="text-sm font-semibold text-fg mb-1">Los tipos de proyecto</h3>
         <p className="text-sm text-fg-secondary mb-3 max-w-prose">
@@ -79,7 +72,7 @@ export default function HubSpot({
           </div>
         </CollapsibleSection>
       </div>
-    </Seccion>
+    </div>
   );
 }
 

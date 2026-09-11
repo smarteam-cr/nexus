@@ -26,7 +26,6 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   clients: { shell: "SHELL_DEFAULT" },
   cobranza: { shell: "SHELL_DEFAULT" },
   "customer-success": { shell: "SHELL_DEFAULT" },
-  documentacion: { shell: "SHELL_DEFAULT" },
   "customer-success/[clientId]": { shell: "SHELL_DEFAULT" },
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },
   "finanzas/equilibrio": { shell: "SHELL_DEFAULT" },
@@ -57,6 +56,8 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "audits/[id]": { custom: "detalle de auditoría con contenedor propio" },
 
   // ── El layout del área pone el contenedor ───────────────────────────────────
+  documentacion: { custom: "el layout de documentación pone el árbol + el contenedor" },
+  "documentacion/[slug]": { custom: "el layout de documentación pone el árbol + el contenedor" },
   "marketing/contenido": { custom: "el layout de marketing pone header + tabs + contenedor" },
   "marketing/generacion": { custom: "el layout de marketing pone el contenedor" },
   "marketing/ideas-de-campana": { custom: "el layout de marketing pone el contenedor" },
