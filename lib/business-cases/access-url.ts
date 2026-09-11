@@ -4,43 +4,37 @@
  * ÚNICO lugar que arma la URL que el prospecto recibe. Sin dependencias (ni Prisma ni
  * Next): lo importan tanto las rutas de API como las páginas públicas.
  *
- * ── LA REGLA MEDULAR DEL MÓDULO ──────────────────────────────────────────────
- * Un token por propuesta, que NO rota. El MODO decide cuál de las dos puertas sirve, y
- * la otra REDIRIGE a la que sirve:
+ * ── UNA SOLA PUERTA (2026-09-10) ─────────────────────────────────────────────
+ * La propuesta se abre por `/external/propuesta/{token}`: la URL es el secreto (token de 256
+ * bits). Hasta el 2026-09-10 había una segunda puerta, CON contraseña (verify → cookie →
+ * `/external/business-case`), y se RETIRÓ en vez de rehacerla:
  *
- *   requiresPassword=false → /external/propuesta/{token}                 (render directo)
- *   requiresPassword=true  → /external/business-case/verify/{token}      (contraseña → cookie)
+ *   - Nadie la usaba. Medido ese día en producción: 0 de las 14 propuestas vivas pedían
+ *     contraseña, y ninguna de las 6 creadas desde la apertura masiva del 2026-08-20 la encendió.
+ *   - Tenía el defecto del incidente de proyectos (Judesur pedido, Wherex servido): el navegador
+ *     guardaba UNA cookie y la dirección de destino no nombraba la propuesta. Una dirección
+ *     reenviada mostraba la última propuesta abierta en ese navegador — o, si esa ya estaba
+ *     abierta, dejaba en la barra SU enlace, con precios.
  *
- * Que el token no rote es lo que permite que ningún link ya enviado quede muerto cuando
- * Ventas cambia el modo — incluida la apertura masiva del 2026-08-20, donde toda propuesta
- * viva pasó de contraseña a abierta y el link de los correos ya enviados siguió andando.
+ * Los enlaces con contraseña que siguen en correos ya enviados no quedan muertos: esa dirección
+ * lleva a la propuesta del token de SU PROPIA URL (app/external/business-case/verify/[token]).
  *
- * Corolario que hay que tener presente: como el token no rota, ABRIR una propuesta que
- * estaba protegida le da acceso a todo el que alguna vez vio esa URL. Es exactamente la
- * decisión que tomó Ventas; si algún día se quiere lo contrario, el lugar es
- * `setAccessMode` (rotar ahí), no acá.
+ * El token no rota: republicar deja el link exactamente como estaba. La única rotación es la de
+ * un acceso REVOCADO que se vuelve a subir (`ensureAccess`, lib/business-cases/mutations.ts): si
+ * un link se filtró, se revoca y se sube de nuevo.
+ *
+ * ⚠ Si algún día vuelve a hacer falta una propuesta protegida, NO se revive el modo viejo: se
+ * construye como el acceso de proyectos (la dirección nombra el acceso, el navegador recuerda
+ * varios y el resolver exige el id — lib/external/rutas.ts y lib/external/lista-de-accesos.ts).
+ * Lo hace cumplir el candado 11 de lib/external/propuesta-abierta.test.ts.
  */
 
-/** Puerta ABIERTA: la URL es el secreto (token de 256 bits). */
+/** La única puerta de la propuesta. */
 export const BC_OPEN_BASE = "/external/propuesta";
-/** Puerta con CONTRASEÑA: form de verify que canjea contraseña por cookie. */
-export const BC_VERIFY_BASE = "/external/business-case/verify";
-/** Landing servido por cookie (solo modo con contraseña). */
-export const BC_COOKIE_PATH = "/external/business-case";
 
-/** Path relativo de la puerta abierta (para `redirect()` dentro de la app). */
+/** Path relativo de la propuesta (para `redirect()` dentro de la app). */
 export function bcOpenPath(token: string): string {
   return `${BC_OPEN_BASE}/${token}`;
-}
-
-/** Path relativo de la puerta con contraseña. */
-export function bcVerifyPath(token: string): string {
-  return `${BC_VERIFY_BASE}/${token}`;
-}
-
-/** Path que corresponde al modo vigente. */
-export function bcPathForMode(token: string, requiresPassword: boolean): string {
-  return requiresPassword ? bcVerifyPath(token) : bcOpenPath(token);
 }
 
 /**
@@ -50,6 +44,6 @@ export function bcPathForMode(token: string, requiresPassword: boolean): string 
  * self-hosted el request entra por la red interna y el origin sería `localhost:3000` — un
  * link que no le sirve a nadie. Mismo criterio que /api/roles/[id]/publico.
  */
-export function buildBcAccessUrl(base: string, token: string, requiresPassword: boolean): string {
-  return `${base.replace(/\/+$/, "")}${bcPathForMode(token, requiresPassword)}`;
+export function buildBcAccessUrl(base: string, token: string): string {
+  return `${base.replace(/\/+$/, "")}${bcOpenPath(token)}`;
 }

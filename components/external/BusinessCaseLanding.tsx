@@ -1,14 +1,11 @@
 /**
  * components/external/BusinessCaseLanding.tsx
  *
- * El render de la propuesta publicada, COMPARTIDO por las dos puertas:
- *   · /external/propuesta/{token}   (abierta — la URL es el secreto)
- *   · /external/business-case       (con contraseña — servida por cookie)
+ * El render de la propuesta publicada, en /external/propuesta/{token}: la única puerta desde
+ * que se retiró el modo con contraseña (2026-09-10, el porqué en lib/business-cases/access-url.ts).
  *
- * Vive en un componente y no duplicado en cada página porque el prospecto tiene que ver
- * exactamente lo mismo por cualquiera de las dos; una copia se bifurca el día que alguien
- * toque el chrome de una sola. Server component: no toca DB (el chokepoint ya resolvió),
- * solo compone.
+ * Vive en un componente y no dentro de la página para que la página solo decida el acceso y
+ * este archivo solo componga. Server component: no toca DB (el chokepoint ya resolvió).
  *
  * La barra de aprobación va DESPUÉS del <LandingView> y FUERA del motor de landing: así no
  * hay que tocar templates ni configs, y —clave— no aparece en el PDF, que se arma por otra

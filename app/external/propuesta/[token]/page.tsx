@@ -1,9 +1,11 @@
 /**
- * /external/propuesta/[token] — la propuesta SIN contraseña (el modo por defecto).
+ * /external/propuesta/[token] — la propuesta. Desde el 2026-09-10, su única puerta.
  *
  * Sin login y sin contraseña: la URL ES el secreto (token de 256 bits). Mismo modelo que
  * /external/doc/[token] (documentos de Roles), y el que Ventas pidió para bajar la
- * fricción del envío de propuestas.
+ * fricción del envío de propuestas. El modo con contraseña se retiró (el porqué, en
+ * lib/business-cases/access-url.ts), así que esta página ya no redirige a ningún lado: los
+ * enlaces viejos con contraseña son los que llegan acá.
  *
  * Toda la seguridad vive en `resolveBusinessCaseAccess` (chokepoint fail-closed): re-chequea
  * token, revocación, publicación y caducidad en CADA render. `force-dynamic` no es
@@ -21,13 +23,12 @@
  * `noindex` porque la URL circula por correo y no tiene otra puerta que la proteja.
  */
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import BusinessCaseLanding from "@/components/external/BusinessCaseLanding";
 import PropuestaCaducada from "@/components/external/PropuestaCaducada";
 import ExternalShell from "@/components/external/ExternalShell";
 import { getBrandLogos } from "@/lib/external/smarteam-logo";
 import { resolveBusinessCaseAccess } from "@/lib/external/business-case-view";
-import { bcVerifyPath } from "@/lib/business-cases/access-url";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +60,6 @@ export default async function PropuestaPublicaPage({
       </ExternalShell>
     );
   }
-
-  // El CSE encendió el check de contraseña: esta puerta deja de servir y manda a la otra.
-  // `redirect()` temporal, NUNCA `permanentRedirect()`: un 308 se cachea en el navegador
-  // para siempre y sobreviviría a volver a abrir la propuesta.
-  if (state.requiresPassword) redirect(bcVerifyPath(token));
 
   return (
     <BusinessCaseLanding

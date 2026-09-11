@@ -251,20 +251,19 @@ export async function deleteBlock(blockId: string) {
  *  el panel "Acceso del cliente" (PATCH .../external-access) — esto es solo el arranque. */
 export const DIAS_DE_CADUCIDAD_POR_DEFECTO = 30;
 
-/** Forma del acceso que devuelven ensureAccess / setAccessMode / setAccessExpiry. */
+/**
+ * Forma del acceso que devuelven ensureAccess / setAccessExpiry. Sin contraseña ni modo: desde
+ * el 2026-09-10 la propuesta se abre solo por su link (lib/business-cases/access-url.ts).
+ */
 export interface BcAccessRow {
   id: string;
   accessToken: string;
-  accessPassword: string | null;
-  requiresPassword: boolean;
   expiresAt: Date | null;
 }
 
 const ACCESS_SELECT = {
   id: true,
   accessToken: true,
-  accessPassword: true,
-  requiresPassword: true,
   expiresAt: true,
 } as const;
 
@@ -275,13 +274,16 @@ function vencimientoPorDefecto(): Date {
 /**
  * Crea o REUSA el acceso del business case. Es idempotente a propósito.
  *
- * ⚠ Ya NO rota el token de un acceso vivo, y NO decide el modo: el modo lo cambia solo
- * `setAccessMode`. Publicar de nuevo tiene que dejar el link EXACTAMENTE como estaba —
- * antes rotaba cuando faltaba `accessPassword`, y con eso una republicación podía
- * invalidar en silencio el link que el vendedor ya había mandado por correo.
+ * ⚠ Ya NO rota el token de un acceso vivo. Publicar de nuevo tiene que dejar el link
+ * EXACTAMENTE como estaba — antes rotaba cuando faltaba `accessPassword`, y con eso una
+ * republicación podía invalidar en silencio el link que el vendedor ya había mandado por correo.
  *
  * La única rotación que queda es la de un acceso REVOCADO que vuelve a publicarse: ahí
  * rotar es el punto (el CSE revocó justamente para matar un link filtrado).
+ *
+ * La contraseña se sigue generando solo porque `passwordHash` es NOT NULL en el schema: desde el
+ * 2026-09-10 nada la muestra ni la pide (el modo con contraseña se retiró —
+ * lib/business-cases/access-url.ts), y sacar la columna exigiría SQL por algo que no molesta.
  */
 export async function ensureAccess(
   businessCaseId: string,
@@ -293,18 +295,16 @@ export async function ensureAccess(
   });
 
   if (existing && !existing.revokedAt) {
-    // Vivo: se respeta token, contraseña y modo. Solo se (re)arma la ventana de
-    // caducidad si nunca se fijó o si ya venció — republicar revive una propuesta
-    // caducada, que es lo que el CSE espera al volver a tocar "Subir al cliente".
+    // Vivo: se respeta el token. Solo se (re)arma la ventana de caducidad si nunca se
+    // fijó o si ya venció — republicar revive una propuesta caducada, que es lo que el
+    // CSE espera al volver a tocar "Subir al cliente".
     const venceYa = !existing.expiresAt || existing.expiresAt.getTime() <= Date.now();
     if (!venceYa) {
       // Explícito y no un rest-spread: `revokedAt` entró al select solo para decidir acá y
-      // no es parte de BcAccessRow. Nombrar los cinco campos deja el shape visible.
+      // no es parte de BcAccessRow. Nombrar los tres campos deja el shape visible.
       return {
         id: existing.id,
         accessToken: existing.accessToken,
-        accessPassword: existing.accessPassword,
-        requiresPassword: existing.requiresPassword,
         expiresAt: existing.expiresAt,
       };
     }
@@ -332,9 +332,6 @@ export async function ensureAccess(
       accessToken,
       passwordHash,
       accessPassword: password,
-      // Un acceso revocado que revive vuelve al modo por defecto (abierto): la decisión
-      // de pedir contraseña se toma sobre el link NUEVO, no se hereda del que se mató.
-      requiresPassword: false,
       expiresAt: vencimientoPorDefecto(),
       revokedAt: null,
       lastUsedAt: null,
@@ -346,12 +343,12 @@ export async function ensureAccess(
 }
 
 /**
- * Acceso VIVO sobre el que ajustar modo/caducidad; lo crea si no existe.
+ * Acceso VIVO sobre el que ajustar la caducidad; lo crea si no existe.
  *
  * Devuelve `null` cuando la fila existe pero está REVOCADA. Es el punto entero de que
  * esta función exista: `ensureAccess` resucita un acceso revocado (para eso está, la
- * republicación lo necesita), así que enchufarle el toggle del panel haría que marcar un
- * check reviviera en silencio un link que alguien mató a propósito porque se había
+ * republicación lo necesita), así que enchufarle el campo de caducidad del panel haría que
+ * tocarlo reviviera en silencio un link que alguien mató a propósito porque se había
  * filtrado. Revivir un acceso es una sola cosa y tiene un solo botón: "Subir al cliente".
  */
 async function accesoVivoOCreado(
@@ -364,43 +361,6 @@ async function accesoVivoOCreado(
   });
   if (existing?.revokedAt) return null;
   return ensureAccess(businessCaseId, createdByEmail);
-}
-
-/**
- * Cambia el MODO de acceso (con / sin contraseña). No rota el token: la puerta que deja
- * de servir redirige a la que sirve (ver lib/business-cases/access-url.ts), así ningún
- * link ya enviado queda muerto.
- *
- * Al ENCENDER la contraseña se regenera: la anterior pudo haber circulado en claro por el
- * panel mientras la propuesta estaba abierta, y una contraseña "nueva" que en realidad es
- * la vieja es peor que no tenerla, porque el vendedor cree que rotó.
- *
- * `null` = el acceso está revocado y no se toca (ver accesoVivoOCreado).
- */
-export async function setAccessMode(
-  businessCaseId: string,
-  requiresPassword: boolean,
-  createdByEmail?: string | null,
-): Promise<BcAccessRow | null> {
-  const access = await accesoVivoOCreado(businessCaseId, createdByEmail);
-  if (!access) return null;
-  if (access.requiresPassword === requiresPassword) return access;
-
-  if (!requiresPassword) {
-    return prisma.businessCaseExternalAccess.update({
-      where: { businessCaseId },
-      data: { requiresPassword: false },
-      select: ACCESS_SELECT,
-    });
-  }
-
-  const password = generatePassword();
-  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  return prisma.businessCaseExternalAccess.update({
-    where: { businessCaseId },
-    data: { requiresPassword: true, passwordHash, accessPassword: password },
-    select: ACCESS_SELECT,
-  });
 }
 
 /** Fija (o quita, con null) la caducidad del link. `null` = acceso revocado, no se toca. */

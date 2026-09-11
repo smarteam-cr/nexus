@@ -62,10 +62,19 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   plegada detrás de un clic: esa página también puede estar proyectada en una reunión. *Se
   descartó* una contraseña por empresa con portal: hoy solo 1 cliente tiene dos cronogramas
   publicados, obligaba a migrar los 25 accesos, y el acceso pasaba a ser todo o nada por empresa.
-- ⚠ **Deuda: el Business Case con contraseña tiene el mismo defecto** (una sola cookie
-  `nexus_bc_access` y un destino fijo `/external/business-case`). Quedó fuera de este cambio a
-  propósito; como las propuestas son abiertas por defecto desde el 2026-08-20, solo afecta a las
-  que piden contraseña.
+- **La propuesta tiene UNA sola puerta: el modo con contraseña se RETIRÓ (2026-09-10), no se
+  rehízo.** Tenía el mismo defecto (una sola cookie `nexus_bc_access` y un destino fijo
+  `/external/business-case` que no nombraba la propuesta: una dirección reenviada mostraba la
+  última propuesta abierta en ese navegador o dejaba en la barra el enlace abierto de OTRA, con
+  precios). *Por qué retirarlo y no rehacerlo:* medido ese día en producción, 0 de las 14
+  propuestas vivas pedían contraseña y ninguna de las 6 creadas desde la apertura masiva del
+  2026-08-20 la había encendido (decisión de Elías). *Qué quedó:* la propuesta se abre solo por
+  `/external/propuesta/<token>`; los enlaces con contraseña que siguen en correos
+  (`/external/business-case/verify/<token>`) llevan a la propuesta de SU token; la dirección sin
+  propuesta dice que no indica ninguna y no redirige; el panel de Ventas perdió el check y el PATCH
+  que lo pide contesta 410. La columna `requiresPassword` queda en la base sin lectores (sin SQL).
+  *Si vuelve a hacer falta* una propuesta protegida, se construye como el acceso de proyectos; no
+  se revive la vieja (candado 11 de `lib/external/propuesta-abierta.test.ts`).
 
 ## Cronograma — vista del cliente
 - **El cronograma compartible (`/external/cronograma/[acceso]`) muestra, por tarea, el ESTADO

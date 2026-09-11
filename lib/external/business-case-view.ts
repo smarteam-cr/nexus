@@ -8,11 +8,12 @@
  * publicado (publishedAt != null). Sirve el publishedSnapshot congelado (secciones
  * + bloques CONFIRMED), sin exponer ids/estado internos.
  *
- * ── QUÉ DECIDE ACÁ Y QUÉ NO ──────────────────────────────────────────────────
- * Acá viven los checks del ACCESO (forma del token, revocado, publicado, caducado) y
- * se DEVUELVE el modo (`requiresPassword`) sin actuar sobre él. Cuál de las dos puertas
- * puede servir con ese modo lo decide cada página, en su propio archivo — mismo criterio
- * que lib/external/access.ts: la seguridad de cada superficie se lee donde se decide.
+ * ── UNA SOLA PUERTA (2026-09-10) ──────────────────────────────────────────────
+ * Acá viven los checks del ACCESO (forma del token, revocado, publicado, caducado) y el token es
+ * la única llave: el modo con contraseña se retiró (el porqué, en lib/business-cases/access-url.ts).
+ * La columna `requiresPassword` sigue en la base y nadie la lee: una fila de antes del retiro con
+ * el bit encendido se sirve igual que cualquier otra, por la única puerta que queda. Tampoco hay
+ * versión de contraseña que cotejar (A-11): sin cookie, no queda credencial que sobreviva a nada.
  *
  * ── LA EXCEPCIÓN AL "TODOS LOS FALLOS SE VEN IGUAL" ──────────────────────────
  * Todo el módulo externo devuelve fallos indistinguibles a propósito. `expired` es la
@@ -22,11 +23,8 @@
  * en la mano: un token inventado sigue cayendo en `denied`, igual que siempre. Lo único
  * que se filtra es "este link existió", a quien ya tenía el link.
  */
-import { credencialVigente } from "@/lib/external/credencial";
 import { prisma } from "@/lib/db/prisma";
 
-/** Cookie httpOnly propia del business case (no choca con la del kickoff). */
-export const BUSINESS_CASE_COOKIE = "nexus_bc_access";
 export const BC_TOKEN_RE = /^[a-f0-9]{64}$/i;
 
 export type BusinessCaseLandingBlock = {
@@ -74,8 +72,6 @@ export type BusinessCaseAccessState =
   | { kind: "expired"; contactEmail: string | null }
   | {
       kind: "ok";
-      /** true = esta propuesta se sirve por /verify + cookie; false = por /external/propuesta/{token}. */
-      requiresPassword: boolean;
       businessCaseId: string;
       data: BusinessCaseLandingData;
       approval: BusinessCaseApproval | null;
@@ -83,17 +79,13 @@ export type BusinessCaseAccessState =
     };
 
 /**
- * token → estado de acceso completo. NUNCA lanza por "denegado". Desde la COOKIE se pasa
- * además `{ version }` (ver lib/external/credencial.ts); desde la URL abierta, no.
+ * token → estado de acceso completo. NUNCA lanza por "denegado".
  *
  * `businessCaseId` sale de acá para que la aprobación (POST /approve) no tenga que
  * resolver el token por su cuenta: un segundo lugar que traduzca token → caso sería un
  * segundo lugar donde acordarse de revocado/publicado/caducado.
  */
-export async function resolveBusinessCaseAccess(
-  token: string,
-  opts: { version?: string } = {},
-): Promise<BusinessCaseAccessState> {
+export async function resolveBusinessCaseAccess(token: string): Promise<BusinessCaseAccessState> {
   if (!token || !BC_TOKEN_RE.test(token)) return { kind: "denied" };
 
   const access = await prisma.businessCaseExternalAccess.findUnique({
@@ -101,8 +93,6 @@ export async function resolveBusinessCaseAccess(
     select: {
       id: true,
       revokedAt: true,
-      requiresPassword: true,
-      passwordHash: true,
       expiresAt: true,
       createdByEmail: true,
       businessCase: {
@@ -122,18 +112,6 @@ export async function resolveBusinessCaseAccess(
   if (!access) return { kind: "denied" };
   if (access.revokedAt) return { kind: "denied" };
 
-  /* A-11: si la propuesta pide contraseña y el caller viene de la COOKIE (trae versión), la
-     versión tiene que ser la del hash vigente — cambiar la contraseña expulsa a quien ya entró.
-     Sin versión (el token de la URL de una propuesta abierta) no hay nada que cotejar: el
-     `requiresPassword` de la respuesta manda a /verify. */
-  if (
-    access.requiresPassword &&
-    opts.version !== undefined &&
-    !credencialVigente({ token, version: opts.version }, access.passwordHash)
-  ) {
-    return { kind: "denied" };
-  }
-
   const bc = access.businessCase;
   if (!bc.publishedAt) return { kind: "denied" };
 
@@ -152,7 +130,6 @@ export async function resolveBusinessCaseAccess(
 
   return {
     kind: "ok",
-    requiresPassword: access.requiresPassword,
     businessCaseId: bc.id,
     expiresAt: access.expiresAt?.toISOString() ?? null,
     approval: bc.approvedAt

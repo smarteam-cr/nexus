@@ -179,10 +179,7 @@ export async function POST(
   return NextResponse.json({
     published: true,
     accessToken: access.accessToken,
-    requiresPassword: access.requiresPassword,
-    // Sin contraseña vigente no se devuelve una: ver la misma decisión en external-access.
-    password: access.requiresPassword ? access.accessPassword : null,
-    url: buildBcAccessUrl(base, access.accessToken, access.requiresPassword),
+    url: buildBcAccessUrl(base, access.accessToken),
     expiresAt: access.expiresAt,
   });
 }

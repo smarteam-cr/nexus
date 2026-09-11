@@ -12,6 +12,10 @@
  * No hay rate-limit propio y no hace falta: `approveBusinessCase` es idempotente (la
  * primera aprobación gana y no se pisa), así que martillar esto no cambia ningún dato.
  * Lo que protege el endpoint es el token, igual que a la propia propuesta.
+ *
+ * Y el token solo: desde que se retiró el modo con contraseña (2026-09-10, el porqué en
+ * lib/business-cases/access-url.ts) no hay versión de contraseña que cotejar. Quien puede leer
+ * la propuesta puede aprobarla, que es exactamente lo que se quiere.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { resolveBusinessCaseAccess } from "@/lib/external/business-case-view";

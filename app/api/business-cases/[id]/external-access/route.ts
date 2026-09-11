@@ -1,13 +1,12 @@
 /**
  * /api/business-cases/[id]/external-access — el panel de COMPARTIR de una propuesta.
  *
- *   GET   → estado del acceso: link del modo vigente, contraseña (solo si el modo la usa),
- *           caducidad, revocación y estado de aprobación del cliente.
- *   PATCH → cambia el modo (con/sin contraseña), la caducidad, o borra la aprobación.
+ *   GET   → estado del acceso: link, caducidad, revocación y estado de aprobación del cliente.
+ *   PATCH → cambia la caducidad o borra la aprobación.
  *
- * Nunca devuelve el passwordHash. Los dos verbos están gateados con `guardSalesAccess`:
- * quitarle la contraseña a una propuesta lo puede hacer todo el equipo de ventas, el
- * mismo permiso con el que ya la publica (decisión de negocio del 2026-08-20).
+ * No devuelve ninguna contraseña: desde el 2026-09-10 la propuesta no tiene (el modo con
+ * contraseña se retiró — el porqué, en lib/business-cases/access-url.ts). Los dos verbos están
+ * gateados con `guardSalesAccess`, el mismo permiso con el que ya se publica.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
@@ -16,7 +15,6 @@ import { buildBcAccessUrl } from "@/lib/business-cases/access-url";
 import {
   clearApproval,
   setAccessExpiry,
-  setAccessMode,
   DIAS_DE_CADUCIDAD_POR_DEFECTO,
 } from "@/lib/business-cases/mutations";
 
@@ -33,8 +31,6 @@ async function leerEstado(req: NextRequest, id: string) {
       where: { businessCaseId: id },
       select: {
         accessToken: true,
-        accessPassword: true,
-        requiresPassword: true,
         expiresAt: true,
         enabledAt: true,
         revokedAt: true,
@@ -68,16 +64,12 @@ async function leerEstado(req: NextRequest, id: string) {
     : null;
 
   if (!access) {
-    return { exists: false, requiresPassword: false, approval: aprobacion };
+    return { exists: false, approval: aprobacion };
   }
   return {
     exists: true,
     accessToken: access.accessToken,
-    requiresPassword: access.requiresPassword,
-    // Sin contraseña vigente NO se devuelve ninguna: que el panel muestre una que no sirve
-    // termina con el vendedor mandándosela al cliente y el cliente escribiendo que no anda.
-    accessPassword: access.requiresPassword ? access.accessPassword : null,
-    url: buildBcAccessUrl(base(req), access.accessToken, access.requiresPassword),
+    url: buildBcAccessUrl(base(req), access.accessToken),
     expiresAt: access.expiresAt,
     enabledAt: access.enabledAt,
     revokedAt: access.revokedAt,
@@ -97,7 +89,7 @@ export async function GET(
 }
 
 /**
- * PATCH { requiresPassword?, expiresInDays?, clearApproval? }
+ * PATCH { expiresInDays?, clearApproval? }
  *
  * `expiresInDays`: número de días DESDE AHORA, o null para "no caduca". Se guarda ya
  * resuelto a fecha (`expiresAt`) y no como cantidad de días: dos fuentes para el mismo
@@ -105,8 +97,8 @@ export async function GET(
  * tipo de fecha que después nadie puede explicarle al cliente.
  *
  * Si la propuesta todavía no tiene fila de acceso, se crea. Una fila sin `publishedAt` no
- * expone nada (el chokepoint la rechaza), así que el CSE puede dejar elegido el modo ANTES
- * de tocar "Subir al cliente" y mandar un solo link, el correcto, la primera vez.
+ * expone nada (el chokepoint la rechaza), así que el CSE puede dejar fijada la caducidad
+ * ANTES de tocar "Subir al cliente".
  */
 export async function PATCH(
   req: NextRequest,
@@ -126,18 +118,25 @@ export async function PATCH(
     return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
 
+  /* El check «Pedir contraseña» se retiró el 2026-09-10. Una pestaña del panel abierta desde antes
+     todavía puede mandarlo: se contesta que no —en vez de ignorarlo— para que el CSE no lea «Ahora
+     pide contraseña» sobre una propuesta que sigue abierta. Apagarlo no pide nada: ya está abierta. */
+  if (body.requiresPassword === true) {
+    return NextResponse.json(
+      {
+        error:
+          "Las propuestas ya no se protegen con contraseña: el link es el acceso. Si se filtró, revocalo y volvé a subirla al cliente.",
+      },
+      { status: 410 },
+    );
+  }
+
   const email = guard.user.email ?? null;
-  // `null` de setAccessMode/setAccessExpiry = el acceso está REVOCADO. No se revive por un
-  // toggle: revivirlo es "Subir al cliente", y solo ahí, porque genera un token nuevo.
+  // `null` de setAccessExpiry = el acceso está REVOCADO. No se revive por un ajuste del
+  // panel: revivirlo es "Subir al cliente", y solo ahí, porque genera un token nuevo.
   const REVOCADO = {
     error: "El acceso de esta propuesta está revocado. Volvé a subirla al cliente para generar un link nuevo.",
   };
-
-  if (typeof body.requiresPassword === "boolean") {
-    if (!(await setAccessMode(id, body.requiresPassword, email))) {
-      return NextResponse.json(REVOCADO, { status: 409 });
-    }
-  }
 
   if (body.expiresInDays !== undefined) {
     if (body.expiresInDays === null) {

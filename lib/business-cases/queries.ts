@@ -30,12 +30,9 @@ export async function getBusinessCase(id: string) {
       transcripts: { orderBy: { createdAt: "asc" } },
       access: {
         select: {
+          // Sin contraseña ni modo: desde el 2026-09-10 la propuesta no tiene (el modo se
+          // retiró — lib/business-cases/access-url.ts), así que no viajan a ningún lado.
           accessToken: true,
-          accessPassword: true,
-          // El MODO viaja con la contraseña o el lector no puede saber si esa contraseña
-          // gobierna algo: desde el 2026-08-20 una propuesta abierta igual tiene una
-          // guardada (ver el comentario de `requiresPassword` en el schema).
-          requiresPassword: true,
           expiresAt: true,
           enabledAt: true,
           revokedAt: true,

@@ -392,7 +392,10 @@ describe("5 · las direcciones sin proyecto no pintan contenido, y solo Nexus ca
     expect(src, "el formulario necesita el id para armar la dirección").toContain("acceso: access.id");
   });
 
-  it.each(["app/external/verify-access/route.ts", "app/api/external/business-case/verify-access/route.ts"])(
+  /* Hasta el 2026-09-10 también estaba acá el verify de la PROPUESTA: se borró junto con su modo con
+     contraseña (candado 11 de lib/external/propuesta-abierta.test.ts), y ya no queda contraseña de
+     propuesta que alguien pueda hacer gastar desde otro sitio. */
+  it.each(["app/external/verify-access/route.ts"])(
     "%s solo acepta el formulario de Nexus (JSON y mismo sitio), antes de leer nada",
     (ruta) => {
       /* La edición que lo pone en rojo: sacar el chequeo — un formulario de otro sitio vuelve a

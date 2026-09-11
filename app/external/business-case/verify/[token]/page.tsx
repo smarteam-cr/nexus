@@ -1,48 +1,35 @@
 /**
- * /external/business-case/verify/[token]
+ * /external/business-case/verify/[token] — la dirección de las propuestas CON contraseña.
  *
- * Página pública: el prospecto ingresa la contraseña que le compartió el vendedor.
- * No valida el token en el server (se renderiza idéntica exista o no). CERO
- * recursos externos (el token va en la URL → un request cross-origin lo filtraría
- * por Referer).
+ * El modo con contraseña se retiró el 2026-09-10 (el porqué, en lib/business-cases/access-url.ts).
+ * Esta dirección sigue en correos ya enviados, así que vive: lleva a la propuesta del token de SU
+ * PROPIA URL y a ninguna otra. No lee cookies ni toca la base —la puerta abierta decide si se
+ * sirve: revocada, sin publicar o caducada, igual que siempre— y ya no pide una contraseña que
+ * nadie recuerda: el token de esta URL abría la propuesta por la puerta abierta de todos modos.
+ *
+ * Un valor sin forma de token no se redirige: 404 neutro. Así, de la URL solo pasan al destino
+ * 64 hex. `redirect()` temporal, NUNCA `permanentRedirect()`: un 308 queda cacheado en el
+ * navegador.
  */
 import type { Metadata } from "next";
-import { BusinessCaseVerifyForm } from "./VerifyForm";
+import { notFound, redirect } from "next/navigation";
+import { bcOpenPath } from "@/lib/business-cases/access-url";
+import { BC_TOKEN_RE } from "@/lib/external/business-case-view";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  // A-14: la URL lleva el token y circula por correo — que ningún buscador la indexe. Título
-  // genérico A PROPÓSITO: no se resuelve el token acá y el título viaja en historiales.
+  // A-14: la URL lleva el token y circula por correo — que ningún buscador la indexe.
   title: "Smarteam",
   robots: { index: false, follow: false },
 };
 
-export default async function BusinessCaseVerifyPage({
+export default async function PropuestaConContrasenaRetirada({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-
-  return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-smarteam.png" alt="Smarteam" className="h-9 w-auto mx-auto mb-4" />
-          <h1 className="text-lg font-semibold text-gray-900">Caso de negocio</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Ingresa la contraseña que te compartió tu contacto en Smarteam.
-          </p>
-        </div>
-
-        <BusinessCaseVerifyForm token={token} />
-
-        <p className="mt-8 text-xs text-gray-400 text-center">
-          Si no recibiste una contraseña, contacta al equipo de Smarteam.
-        </p>
-      </div>
-    </main>
-  );
+  if (!BC_TOKEN_RE.test(token)) notFound();
+  redirect(bcOpenPath(token));
 }

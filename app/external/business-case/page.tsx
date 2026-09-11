@@ -1,68 +1,62 @@
 /**
- * /external/business-case
+ * /external/business-case — la dirección SIN propuesta. Nunca muestra contenido ni redirige.
  *
- * La puerta CON CONTRASEÑA (el modo opcional, el check del panel de Ventas). Server
- * component: lee la cookie httpOnly `nexus_bc_access` (token, fuera de la URL), pasa por
- * el chokepoint server-side y renderiza read-only con el MOTOR de landing.
+ * Era el destino del modo con contraseña, retirado el 2026-09-10 (el porqué, en
+ * lib/business-cases/access-url.ts): servía la propuesta de la cookie `nexus_bc_access` y, si esa
+ * propuesta ya estaba abierta, redirigía a SU enlace abierto. Como la dirección no nombraba la
+ * propuesta, reenviarla mostraba —o dejaba en la barra, con precios— la última que hubiera abierto
+ * el navegador de quien la recibía: el mismo defecto que el incidente de proyectos de ese día.
  *
- * Toda la seguridad vive en resolveBusinessCaseAccess (re-chequea revocación, publicación
- * y caducidad EN CADA render). `force-dynamic`: nunca se cachea.
+ * Ahora no lee cookies, no resuelve ningún token y no redirige: dice que la dirección no indica
+ * la propuesta y cómo llegar a la suya. Queda viva —y no como un 404 de Next— porque sigue en
+ * historiales y favoritos, y un cliente no tiene por qué ver una página de error.
  *
- * ⚠ Exige `requiresPassword === true`. La cookie sola no alcanza y no debe alcanzar: si el
- * CSE apagó el check, esta superficie deja de servir y manda a la URL abierta. Sin ese
- * chequeo habría dos modos vigentes a la vez para el mismo token — y el que decide sería
- * "por qué puerta entró el cliente la primera vez", que es exactamente lo que no queremos.
+ * `force-dynamic`: el logo de marca sale de la config global (lib/external/smarteam-logo.ts) y
+ * no se resuelve al compilar.
  */
-import { leerCredencial } from "@/lib/external/credencial";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import ExternalShell from "@/components/external/ExternalShell";
-import NoAccess from "@/components/external/NoAccess";
-import PropuestaCaducada from "@/components/external/PropuestaCaducada";
-import BusinessCaseLanding from "@/components/external/BusinessCaseLanding";
-import { getBrandLogos } from "@/lib/external/smarteam-logo";
-import {
-  BUSINESS_CASE_COOKIE,
-  resolveBusinessCaseAccess,
-} from "@/lib/external/business-case-view";
-import { bcOpenPath } from "@/lib/business-cases/access-url";
+import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExternalBusinessCasePage() {
-  const cookieStore = await cookies();
-  // A-11: la cookie es `<token>.<versión>`; una vieja (token pelado) no parsea y cae a denied.
-  const cred = leerCredencial(cookieStore.get(BUSINESS_CASE_COOKIE)?.value);
-  const token = cred?.token ?? "";
+export const metadata: Metadata = {
+  title: "Smarteam",
+  robots: { index: false, follow: false },
+};
 
-  const [state, brandLogos] = await Promise.all([
-    cred
-      ? resolveBusinessCaseAccess(cred.token, { version: cred.version })
-      : Promise.resolve({ kind: "denied" as const }),
-    getBrandLogos(),
-  ]);
+export default async function PropuestaSinDireccion() {
+  const smarteamLogoUrl = await getSmarteamLogoUrl();
 
-  if (state.kind === "expired") {
-    return (
-      <ExternalShell smarteamLogoUrl={brandLogos.smarteam}>
-        <PropuestaCaducada contactEmail={state.contactEmail} />
-      </ExternalShell>
-    );
-  }
-
-  // La propuesta ya no pide contraseña → el link abierto es el que manda.
-  if (state.kind === "ok" && !state.requiresPassword) redirect(bcOpenPath(token));
-
-  return state.kind === "ok" ? (
-    <BusinessCaseLanding
-      data={state.data}
-      approval={state.approval}
-      approveToken={token}
-      brandLogos={brandLogos}
-    />
-  ) : (
-    <ExternalShell smarteamLogoUrl={brandLogos.smarteam}>
-      <NoAccess />
+  return (
+    <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
+          padding: "48px 16px",
+        }}
+      >
+        <div style={{ maxWidth: 400, textAlign: "center" }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 20,
+              fontWeight: 600,
+              color: "#111827",
+              fontFamily: "var(--font-montserrat), system-ui, sans-serif",
+            }}
+          >
+            Esta dirección no indica la propuesta
+          </h1>
+          <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.6, color: "#6b7280" }}>
+            Para ver tu propuesta, abre el enlace que te compartió tu contacto en Smarteam: lleva
+            directo a ella.
+          </p>
+        </div>
+      </div>
     </ExternalShell>
   );
 }

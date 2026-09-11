@@ -6,8 +6,8 @@
  * secreto, y esa URL lleva precios. Todo lo que la protege se reduce a cuatro cosas
  * frágiles, cada una a un descuido de distancia:
  *
- *   1. Que el token se resuelva SIEMPRE por el chokepoint. Un quinto archivo que consulte
- *      `businessCaseExternalAccess` por `accessToken` es un quinto lugar donde acordarse de
+ *   1. Que el token se resuelva SIEMPRE por el chokepoint. Un cuarto archivo que consulte
+ *      `businessCaseExternalAccess` por `accessToken` es un cuarto lugar donde acordarse de
  *      revocado + publicado + caducado. Es exactamente la falla que ya se pagó del lado de
  *      proyectos (ver lib/projects/publicable.test.ts, candado 2).
  *   2. Que las páginas con token en la URL sean `force-dynamic`. Sin eso Next cachea el
@@ -40,6 +40,10 @@
  *      y una CSP en report-only. Sin ellas, cualquier sitio puede enmarcar la propuesta.
  *  10. (candado 9, A-21) La propuesta se aprueba UNA sola vez: la condición va en el `where`
  *      de la escritura. Con check-then-act, dos aprobaciones a la vez registraban a la última.
+ *  11. (2026-09-10) La propuesta tiene UNA sola puerta: el modo con contraseña se retiró (0 de 14
+ *      propuestas vivas lo usaban, y tenía el defecto de la dirección que no nombra lo que muestra).
+ *      Ni su cookie, ni su canje de contraseña, ni una dirección sin propuesta que muestre algo
+ *      pueden volver a medias.
  */
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -50,9 +54,13 @@ import { armarCredencial, credencialVigente, leerCredencial, versionDeCredencial
 import { tacharTokensDelEvento } from "@/lib/observability/scrub";
 import { CABECERAS_DE_SEGURIDAD, politicaCsp, reportUriDesdeDsn } from "@/lib/observability/csp";
 import { aprobarUnaSolaVez, type BaseDeAprobacion } from "@/lib/business-cases/aprobacion";
+import * as accessUrl from "@/lib/business-cases/access-url";
+import { resolveBusinessCaseAccess } from "@/lib/external/business-case-view";
 
 // verify-rate-limit toca prisma al REGISTRAR; acá solo se usan sus partes puras (clave y políticas).
-vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+// El chokepoint de la propuesta (candado 11) lee su acceso de esta base falsa.
+const bcDb = vi.hoisted(() => ({ findUnique: vi.fn(), update: vi.fn() }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: { businessCaseExternalAccess: bcDb } }));
 
 const RAIZ = process.cwd();
 
@@ -87,14 +95,14 @@ const paginasConToken = (): string[] =>
   );
 
 describe("candado 1 — solo el chokepoint resuelve un token de PROPUESTA", () => {
-  /* Los cuatro que pueden tocar la tabla por token, y por qué:
-     - el chokepoint (el resolver de las dos puertas),
-     - verify-access (canjea contraseña por cookie; NO pasa por el resolver),
+  /* Los tres que pueden tocar la tabla por token, y por qué:
+     - el chokepoint (el resolver de la única puerta),
      - external-access (panel interno, gateado con guardSalesAccess; no sirve contenido),
-     - mutations (crea/rota el acceso; tampoco sirve contenido). */
+     - mutations (crea/rota el acceso; tampoco sirve contenido).
+     Hasta el 2026-09-10 había un cuarto, el verify-access de la propuesta (canjeaba contraseña por
+     cookie sin pasar por el resolver): se borró con el modo con contraseña (candado 11). */
   const SANCIONADOS = [
     "lib/external/business-case-view.ts",
-    "app/api/external/business-case/verify-access/route.ts",
     "app/api/business-cases/[id]/external-access/route.ts",
     "lib/business-cases/mutations.ts",
   ];
@@ -112,7 +120,7 @@ describe("candado 1 — solo el chokepoint resuelve un token de PROPUESTA", () =
     }
     expect(
       culpables,
-      "Un quinto lugar que canjea un token de PROPUESTA es un quinto lugar donde hay que " +
+      "Un cuarto lugar que canjea un token de PROPUESTA es un cuarto lugar donde hay que " +
         "acordarse de revocado + publicado + caducado. Si tiene que existir, primero movelo " +
         "a lib/external/business-case-view.ts.",
     ).toEqual([]);
@@ -270,7 +278,8 @@ describe("candado 6 — los fallos de verify-access se cuentan por token Y por I
     // 2026-09-10: el verify de proyectos se mudó de /api/external a /external para poder LEER la
     // lista de proyectos abiertos del navegador (su cookie tiene path /external). Mismas reglas.
     "app/external/verify-access/route.ts",
-    "app/api/external/business-case/verify-access/route.ts",
+    // El de la PROPUESTA estaba acá hasta el 2026-09-10: se borró con su modo con contraseña
+    // (candado 11). Sin contraseña de propuesta no queda nada que adivinar ni fallos que contar.
   ])("%s registra cada fallo contra las dos claves", (ruta) => {
     /* La edicion que lo pone en rojo: volver a registerFailure(token, now) en un solo camino. */
     const src = sinComentarios(fs.readFileSync(path.join(RAIZ, ruta), "utf8"));
@@ -306,21 +315,17 @@ describe("candado 7 — cambiar la contraseña mata las cookies vivas (A-11)", (
     expect(leerCredencial(undefined)).toBeNull();
   });
 
-  it("los chokepoints cotejan la versión y los dos verify la escriben en la cookie", () => {
+  it("el chokepoint de proyectos coteja la versión y su verify la escribe en la cookie", () => {
     const lee = (f: string) => sinComentarios(fs.readFileSync(path.join(RAIZ, f), "utf8"));
     const access = lee("lib/external/access.ts");
     expect(access, "el resolver del proyecto parsea la credencial").toContain("leerCredencial(credencial)");
     expect(access, "…y coteja la versión contra el hash vigente").toContain(
       "credencialVigente(cred, access.passwordHash)",
     );
-    const bc = lee("lib/external/business-case-view.ts");
-    expect(bc).toContain("credencialVigente({ token, version: opts.version }, access.passwordHash)");
-    const pagina = lee("app/external/business-case/page.tsx");
-    expect(pagina, "la página del BC parsea la cookie y pasa la versión").toContain("{ version: cred.version }");
-    // El verify del BC sigue con UNA credencial por cookie: la escribe entera.
-    const bcVerify = lee("app/api/external/business-case/verify-access/route.ts");
-    expect(bcVerify).toContain("value: armarCredencial(token, access.passwordHash)");
-    expect(/value:\s*token\b/.test(bcVerify), "el verify del BC volvió a llevar el token pelado").toBe(false);
+    /* La PROPUESTA salió de este candado el 2026-09-10, y no por aflojarlo: se retiró su modo con
+       contraseña, así que no le queda cookie que sobreviva a un cambio de contraseña ni versión que
+       cotejar — lo que A-11 protegía ya no puede ocurrir. Que esa cookie no vuelva, con versión o
+       sin ella, lo exige el candado 11 (nadie lee ni escribe una cookie de propuesta). */
     /* El de proyectos SUMA la credencial a una lista (2026-09-10: un navegador recuerda varios
        proyectos, lib/external/lista-de-accesos.ts). Se exige lo mismo que antes sobre la entrada
        nueva: que sea `armarCredencial(token, hash)` —con versión—, nunca el token pelado. */
@@ -504,5 +509,143 @@ describe("candado 5b — el PANEL del CSE no puede prometer un largo distinto de
   it("y el texto que lee el CSE dice los mismos números", () => {
     expect(panel, "el aviso del panel transcribió un largo").not.toMatch(/tener \d+[–-]\d+ caracteres/);
     expect(panel).toContain("{LARGO_MINIMO_CONTRASENA}–{LARGO_MAXIMO_CONTRASENA} caracteres");
+  });
+});
+
+describe("candado 11 — la propuesta tiene UNA sola puerta: el modo con contraseña se retiró (2026-09-10)", () => {
+  /**
+   * El modo con contraseña guardaba UNA cookie (`nexus_bc_access`) y su destino,
+   * `/external/business-case`, no nombraba la propuesta: una dirección reenviada mostraba la última
+   * propuesta abierta en ese navegador o, si esa ya estaba abierta, dejaba en la barra SU enlace, con
+   * precios. Es el incidente de proyectos del mismo día (Judesur pedido, Wherex servido), del lado de
+   * Ventas. Medido ese día: 0 de las 14 propuestas vivas pedían contraseña, así que se retiró en vez
+   * de rehacerse (decisión de Elías).
+   *
+   * Este candado impide que vuelva a medias. Si algún día hace falta una propuesta protegida, se
+   * construye como el acceso de proyectos (lib/external/rutas.ts + lista-de-accesos.ts) y este
+   * candado se reescribe con el motivo — no se afloja.
+   */
+  const TOKEN = "c".repeat(64);
+  const lee = (f: string) => sinComentarios(fs.readFileSync(path.join(RAIZ, f), "utf8"));
+  const existe = (f: string) => fs.existsSync(path.join(RAIZ, f));
+
+  it("el constructor arma una sola dirección: la de la propuesta", () => {
+    /* La edición que lo pone en rojo: volver a exportar la dirección del verify o la de la cookie,
+       o que el constructor vuelva a conocer la puerta con contraseña aunque sea escrita a mano. */
+    expect(accessUrl.buildBcAccessUrl("https://nexus.smarteamcr.com/", TOKEN)).toBe(
+      `https://nexus.smarteamcr.com/external/propuesta/${TOKEN}`,
+    );
+    const exportados = Object.keys(accessUrl);
+    for (const viejo of ["BC_VERIFY_BASE", "BC_COOKIE_PATH", "bcVerifyPath", "bcPathForMode"]) {
+      expect(exportados, `volvió ${viejo}: una segunda puerta`).not.toContain(viejo);
+    }
+    expect(
+      lee("lib/business-cases/access-url.ts").includes("/external/business-case"),
+      "el constructor volvió a conocer la puerta con contraseña",
+    ).toBe(false);
+  });
+
+  it("⭐ la dirección sin propuesta no muestra contenido, no lee cookies y no redirige", () => {
+    /* La edición que lo pone en rojo: volver a servir la propuesta de la cookie en
+       app/external/business-case/page.tsx, o redirigir «a la abierta» desde ahí. Es la dirección que
+       se reenvía y no nombra ninguna propuesta: cualquier propuesta que muestre es de otro. */
+    const src = lee("app/external/business-case/page.tsx");
+    expect(src.length, "la guarda no mira nada").toBeGreaterThan(200);
+    expect(/\bcookies\(/.test(src), "leyó una cookie").toBe(false);
+    expect(src.includes("resolveBusinessCaseAccess"), "resolvió una propuesta").toBe(false);
+    expect(src.includes("BusinessCaseLanding"), "pintó una propuesta").toBe(false);
+    expect(/\b(redirect|permanentRedirect)\(/.test(src), "eligió una propuesta por la persona").toBe(false);
+    expect(src).toMatch(/robots:\s*\{[^}]*index:\s*false/);
+  });
+
+  it("el enlace viejo con contraseña lleva a la propuesta de SU token, sin formulario ni cookie", () => {
+    /* La edición que lo pone en rojo: redirigir a otra cosa que el token de la propia URL, sacar el
+       chequeo de forma (pasaría `../` al destino) o volver a poner el formulario. */
+    const src = lee("app/external/business-case/verify/[token]/page.tsx");
+    expect(src, "sin el chequeo de forma, cualquier cosa de la URL termina en el destino").toContain(
+      "if (!BC_TOKEN_RE.test(token)) notFound()",
+    );
+    expect(src, "lleva a la propuesta del token de SU dirección").toContain("redirect(bcOpenPath(token))");
+    expect(src.includes("permanentRedirect("), "un 308 queda cacheado en el navegador").toBe(false);
+    expect(/\bcookies\(/.test(src), "leyó una cookie").toBe(false);
+    expect(
+      existe("app/external/business-case/verify/[token]/VerifyForm.tsx"),
+      "volvió el formulario de contraseña",
+    ).toBe(false);
+  });
+
+  it("nadie lee ni escribe una cookie de propuesta, y el canje de contraseña ya no existe", () => {
+    /* La edición que lo pone en rojo: volver a declarar la cookie (en business-case-view o donde
+       sea) o volver a crear app/api/external/business-case/verify-access. */
+    expect(
+      existe("app/api/external/business-case/verify-access/route.ts"),
+      "volvió el canje de contraseña de la propuesta",
+    ).toBe(false);
+    const culpables: string[] = [];
+    for (const dir of ["lib", "app", "components"]) {
+      for (const f of archivosDe(dir)) {
+        const src = sinComentarios(fs.readFileSync(f, "utf8"));
+        if (/["'`]nexus_bc_access["'`]/.test(src) || src.includes("BUSINESS_CASE_COOKIE")) culpables.push(rel(f));
+      }
+    }
+    expect(culpables, "una cookie de propuesta es volver a la dirección que no nombra la propuesta").toEqual([]);
+  });
+
+  it("⭐ el modo ya no gobierna nada: una fila vieja con contraseña se sirve por la única puerta", async () => {
+    /* La edición que lo pone en rojo: volver a ramificar por `requiresPassword` — en el chokepoint
+       (denegar o devolver el modo) o en una página (redirigir al verify, que hoy redirige de vuelta:
+       un bucle). */
+    bcDb.findUnique.mockResolvedValue({
+      id: "acc_1",
+      revokedAt: null,
+      requiresPassword: true, // una fila de antes del retiro, con el bit encendido
+      passwordHash: "$2b$12$hashDeAntes",
+      expiresAt: null,
+      createdByEmail: "cse@smarteamcr.com",
+      businessCase: {
+        id: "bc_1",
+        name: "Propuesta",
+        publishedAt: new Date("2026-09-01T00:00:00Z"),
+        publishedSnapshot: { name: "Propuesta", clientName: "Cliente", sections: [] },
+        approvedAt: null,
+        approvedByEmail: null,
+        approvedByName: null,
+        client: { name: "Cliente", logoUrl: null, logoDarkUrl: null, logoScale: null },
+      },
+    });
+    bcDb.update.mockResolvedValue({});
+    const estado = await resolveBusinessCaseAccess(TOKEN);
+    expect(estado.kind, "una propuesta vieja con contraseña quedó sin puerta").toBe("ok");
+    expect(estado, "el chokepoint volvió a devolver el modo").not.toHaveProperty("requiresPassword");
+
+    const leenElModo = ["lib", "app", "components"]
+      .flatMap((d) => archivosDe(d))
+      .map(rel)
+      // La única que lo nombra es el PATCH del panel, y para RECHAZARLO (último `it` de este candado).
+      .filter((r) => r !== "app/api/business-cases/[id]/external-access/route.ts")
+      .filter((r) => /\brequiresPassword\b/.test(lee(r)));
+    expect(leenElModo, "alguien volvió a leer el modo retirado").toEqual([]);
+
+    expect(
+      /credencialVigente|leerCredencial/.test(lee("lib/external/business-case-view.ts")),
+      "el chokepoint de la propuesta volvió a cotejar una credencial de contraseña",
+    ).toBe(false);
+    expect(lee("app/api/external/business-case/approve/route.ts"), "approve resuelve con el token solo").toContain(
+      "resolveBusinessCaseAccess(token)",
+    );
+  });
+
+  it("el panel de Ventas no ofrece la contraseña, y el servidor la rechaza", () => {
+    /* La edición que lo pone en rojo: volver a poner el check «Pedir contraseña» en el panel, o que el
+       PATCH vuelva a aceptar `requiresPassword: true`. */
+    const panel = lee("components/business-cases/BcAccessButton.tsx");
+    expect(panel.includes("Pedir contraseña"), "volvió el check al panel").toBe(false);
+    expect(/requiresPassword|accessPassword/.test(panel), "el panel volvió a leer o mandar el modo").toBe(false);
+    const ruta = lee("app/api/business-cases/[id]/external-access/route.ts");
+    expect(ruta, "el PATCH tiene que rechazar el check con 410").toMatch(
+      /if \(body\.requiresPassword === true\) \{\s*return NextResponse\.json\([\s\S]{0,300}status: 410/,
+    );
+    expect(ruta.includes("setAccessMode"), "el PATCH volvió a cambiar el modo").toBe(false);
+    expect(lee("lib/business-cases/mutations.ts").includes("setAccessMode"), "volvió la mutación del modo").toBe(false);
   });
 });

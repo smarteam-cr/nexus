@@ -2,7 +2,9 @@
  * lib/external/credencial.ts — LA COOKIE EXTERNA LLEVA EL TOKEN **Y** LA VERSIÓN DE LA CONTRASEÑA.
  *
  * Auditoría 2026-09-03 (A-11): las cookies `nexus_ext_access` / `nexus_bc_access` transportaban
- * el token pelado y valían 30 días pasara lo que pasara. Cambiar la contraseña del enlace —el
+ * el token pelado y valían 30 días pasara lo que pasara. (La de la propuesta ya no existe: se fue
+ * con el modo con contraseña el 2026-09-10. Hoy la credencial solo vive en la lista de proyectos
+ * abiertos del navegador, lib/external/lista-de-accesos.ts.) Cambiar la contraseña del enlace —el
  * gesto que un CSE hace justamente cuando sospecha que se filtró— no expulsaba a nadie: quien ya
  * había entrado seguía entrando hasta que la cookie venciera sola.
  *
