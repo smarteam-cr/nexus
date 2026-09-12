@@ -2948,3 +2948,27 @@ fabricarla.
 - **Ctrl+K abre el buscador salvo dentro del editor con texto seleccionado**, donde es «crear
   enlace» de BlockNote. Robarle el atajo al editor para ganar uno que ya tiene su botón en el árbol
   habría roto una función que la gente usa escribiendo.
+
+### Las tarjetas: dos bloques, no uno (2026-09-11, tercera pasada)
+
+> Con los cuatro artículos llegó el pedido de escribir «con cards». Las tarjetas del manual viejo
+> las pintaba el código; ninguna persona podía hacer una.
+
+- **Son dos bloques que trabajan de a pares**, como una lista y sus ítems: `tarjetas` es la rejilla
+  (una, dos o tres columnas) y `tarjeta` lleva el título en su renglón y el cuerpo como hijos. La
+  alternativa —un solo bloque con un campo de título y un campo de texto— habría necesitado un
+  formulario adentro del editor: dos cajas que no son ProseMirror, sin negrita, sin enlaces y sin
+  el «/». Con dos bloques, el cuerpo de una tarjeta es contenido normal.
+- ⚠ **El recuadro y la rejilla se pintan en el CSS, no en el render del bloque.** No es una
+  preferencia de estilo: los hijos de un bloque los dibuja BlockNote FUERA del elemento que
+  devuelve el render, en un grupo hermano. Un borde puesto en el render encerraría el título y
+  dejaría el cuerpo afuera. Por la misma razón la rejilla se declara sobre ese grupo hermano.
+- **Las columnas libres quedan descartadas**, que sería lo «de Notion»: su paquete es GPL y está
+  prohibido por licencia (hay test). Las tarjetas cubren el caso real —un grupo de ideas cortas,
+  una al lado de la otra— sin traer un modelo de layout entero.
+- **Al insertar la rejilla, el cursor va a su primera tarjeta.** La rejilla no acepta texto: dejar
+  el cursor ahí hace que lo primero que se escriba caiga en el bloque de arriba. El bloque vivo, en
+  cambio, no recibe el cursor: no se escribe nunca.
+- **El h4 existía y no se veía.** El esquema aceptaba los seis niveles y el menú «/» los ofrecía,
+  pero el CSS solo vestía tres: un h4 heredaba el tamaño del primero. La lección que deja es del
+  tipo aburrido y caro — una función a medio terminar se ve igual que una función rota.

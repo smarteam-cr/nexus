@@ -29,11 +29,18 @@ export interface MencionASembrar {
   icono?: string;
 }
 
+/** Un enlace a una dirección de AFUERA. Adentro de la base se enlaza con `mencion`. */
+export interface EnlaceASembrar {
+  enlaceA: string;
+  texto: string;
+}
+
 /** Texto con formato: `t("normal", ["negrita", { negrita: true }], { mencionA: "slug", … })`. */
 export type Pieza =
   | string
   | [texto: string, estilos: { negrita?: boolean; italica?: boolean; codigo?: boolean }]
-  | MencionASembrar;
+  | MencionASembrar
+  | EnlaceASembrar;
 
 function enLinea(piezas: Pieza[]): unknown[] {
   return piezas.map((pieza) => {
@@ -48,6 +55,13 @@ function enLinea(piezas: Pieza[]): unknown[] {
           ...(estilos.italica ? { italic: true } : {}),
           ...(estilos.codigo ? { code: true } : {}),
         },
+      };
+    }
+    if ("enlaceA" in pieza) {
+      return {
+        type: "link",
+        href: pieza.enlaceA,
+        content: [{ type: "text", text: pieza.texto, styles: {} }],
       };
     }
     /* `paginaId` queda vacío a propósito: la siembra lo completa cuando todas las páginas existen
@@ -96,7 +110,10 @@ export function resolverMenciones(
   }));
 }
 
-export const titulo = (nivel: 1 | 2 | 3, texto: string): BloqueGuardado => ({
+/** Un enlace de afuera, para usar dentro de `parrafoRico`. */
+export const enlace = (texto: string, url: string): EnlaceASembrar => ({ enlaceA: url, texto });
+
+export const titulo = (nivel: 1 | 2 | 3 | 4, texto: string): BloqueGuardado => ({
   type: "heading",
   props: { level: nivel },
   content: texto,
@@ -117,6 +134,13 @@ export const vinneta = (texto: string): BloqueGuardado => ({
 
 export const numerado = (texto: string): BloqueGuardado => ({
   type: "numberedListItem",
+  content: texto,
+});
+
+/** Un ítem con casilla, para las listas de «esto se hace». */
+export const tarea = (texto: string): BloqueGuardado => ({
+  type: "checkListItem",
+  props: { checked: false },
   content: texto,
 });
 
@@ -145,6 +169,26 @@ export const tabla = (filas: string[][]): BloqueGuardado => ({
     type: "tableContent",
     rows: filas.map((celdas) => ({ cells: celdas })),
   },
+});
+
+/**
+ * Una tarjeta: el título se ve en grande y el cuerpo debajo. Vive siempre adentro de `tarjetas`.
+ * El cuerpo admite varios párrafos, que es lo que la diferencia de una viñeta.
+ */
+export const tarjeta = (encabezado: string, ...cuerpo: (string | BloqueGuardado)[]): BloqueGuardado => ({
+  type: "tarjeta",
+  content: encabezado,
+  children: cuerpo.map((c) => (typeof c === "string" ? parrafo(c) : c)),
+});
+
+/** La rejilla de tarjetas: una, dos o tres columnas. */
+export const tarjetas = (
+  columnas: "1" | "2" | "3",
+  ...hijas: BloqueGuardado[]
+): BloqueGuardado => ({
+  type: "tarjetas",
+  props: { columnas },
+  children: hijas,
 });
 
 /** El bloque que se arma solo desde los registros de Nexus. */

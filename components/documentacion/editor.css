@@ -64,6 +64,23 @@
 .nx-doc [data-content-type="heading"][data-level="3"] {
   --level: 1.08em;
 }
+/* Del cuarto nivel para abajo el tamaño ya no alcanza para marcar jerarquía: sin estas reglas un
+   h4 hereda el 1.6em del primero y se ve como un título de sección. Se distingue por versalitas y
+   menos aire arriba, que es lo que hace un rótulo dentro de una sección. */
+.nx-doc [data-content-type="heading"][data-level="4"],
+.nx-doc [data-content-type="heading"][data-level="5"],
+.nx-doc [data-content-type="heading"][data-level="6"] {
+  --level: 0.95em;
+  padding-top: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--fg-secondary);
+}
+.nx-doc [data-content-type="heading"][data-level="5"] {
+  --level: 0.9em;
+}
+.nx-doc [data-content-type="heading"][data-level="6"] {
+  --level: 0.85em;
+}
 
 /* El texto de ayuda del bloque vacío («Escribí / para comandos»). */
 .nx-doc .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
@@ -113,8 +130,79 @@
   color: var(--foreground);
 }
 
-/* Los enlaces del texto (los `@` a otras páginas traen su propio estilo). */
+/* Los enlaces del texto (los `@` a otras páginas traen su propio estilo).
+   ⚠ El token es `--color-brand` (Tailwind v4 lo declara en @theme). Con `--brand`, que no existe,
+   la variable queda vacía y el enlace hereda el color del texto: se ve igual que lo que no es un
+   enlace. */
 .nx-doc .bn-inline-content a {
-  color: var(--brand);
+  color: var(--color-brand);
   text-underline-offset: 2px;
+}
+
+/* ── 5 · Las tarjetas ───────────────────────────────────────────────────────── */
+
+/*
+ * Por qué la caja y la rejilla se pintan acá y no en el componente: los HIJOS de un bloque no se
+ * dibujan adentro del elemento que devuelve su render, sino en un grupo hermano
+ * (`.bn-block-group`). Un borde puesto en el render dejaría el cuerpo de la tarjeta afuera del
+ * recuadro, y una rejilla puesta ahí no tendría a quién acomodar.
+ *
+ * El `:has` cubre las dos formas en que BlockNote envuelve el contenido: los bloques propios van
+ * dentro de un `.react-renderer`, los de fábrica no.
+ */
+
+/* La rejilla: las tarjetas se acomodan en columnas, sin la sangría de un bloque anidado. */
+.nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjetas"]) > .bn-block-group,
+.nx-doc .bn-block:has(> [data-content-type="tarjetas"]) > .bn-block-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-left: 0;
+  margin-block: 0.5rem 1rem;
+}
+.nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjetas"] [data-columnas="1"])
+  > .bn-block-group {
+  grid-template-columns: minmax(0, 1fr);
+}
+.nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjetas"] [data-columnas="3"])
+  > .bn-block-group {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* En pantalla angosta, una sola columna: dos tarjetas de 160 px no se leen. */
+@media (max-width: 700px) {
+  .nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjetas"]) > .bn-block-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Cada tarjeta: el recuadro va en el contenedor del bloque, que es lo único que abarca el título
+   Y el cuerpo. */
+.nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjeta"]),
+.nx-doc .bn-block:has(> [data-content-type="tarjeta"]) {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background-color: var(--surface);
+  padding: 0.875rem 1rem;
+}
+/* El cuerpo de la tarjeta: sin sangría y más tenue que el título. */
+.nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjeta"]) > .bn-block-group {
+  margin-left: 0;
+  margin-top: 0.25rem;
+  color: var(--fg-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+/* BlockNote dibuja una línea vertical a la izquierda de todo bloque anidado, para mostrar de quién
+   es hijo. Adentro de una tarjeta esa guía sobra —el recuadro ya dice dónde empieza y dónde
+   termina— y se ve como una barra suelta pegada al borde. */
+.nx-doc
+  .bn-block:has(> .react-renderer > [data-content-type="tarjetas"])
+  > .bn-block-group
+  > .bn-block-outer::before,
+.nx-doc
+  .bn-block:has(> .react-renderer > [data-content-type="tarjeta"])
+  > .bn-block-group
+  > .bn-block-outer::before {
+  content: none;
 }

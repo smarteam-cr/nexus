@@ -28,6 +28,8 @@ import { resolverApply } from "./lib/guard";
 import { createScriptDb } from "./lib/db";
 import { construirComoFunciona } from "@/lib/documentacion/semillas/como-funciona";
 import { construirEscala } from "@/lib/documentacion/semillas/escala";
+import { construirGuiaCse } from "@/lib/documentacion/semillas/guia-cse";
+import { construirTrabajarEnSmarteam } from "@/lib/documentacion/semillas/trabajar-en-smarteam";
 import { resolverMenciones, type PaginaSembrada } from "@/lib/documentacion/semillas/bloques";
 import { textoDeBloques, textoDeBusqueda } from "@/lib/documentacion/texto";
 import type { BloqueGuardado } from "@/lib/documentacion/tipos";
@@ -131,7 +133,13 @@ async function sembrar(
 async function main() {
   const { prisma, close } = createScriptDb();
   try {
-    const paginas = [construirComoFunciona(), construirEscala()];
+    /* El orden del array es el orden del árbol: lo primero que se lee, primero. */
+    const paginas = [
+      construirComoFunciona(),
+      construirEscala(),
+      construirGuiaCse(),
+      construirTrabajarEnSmarteam(),
+    ];
 
     console.log(`\n${APPLY ? "✍  Sembrando" : "👀 En seco (agregá --apply para escribir)"}\n`);
     for (const [i, pagina] of paginas.entries()) {

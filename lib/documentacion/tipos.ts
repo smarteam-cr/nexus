@@ -27,8 +27,15 @@ export const TIPOS_DE_FABRICA = [
   "divider",
 ] as const;
 
-/** Los bloques propios de Nexus: el aviso de color y el bloque que se arma solo desde el código. */
-export const TIPOS_PROPIOS = ["aviso", "vivo"] as const;
+/**
+ * Los bloques propios de Nexus: el aviso de color, el bloque que se arma solo desde el código y
+ * las tarjetas —la rejilla y cada tarjeta adentro, que es un bloque con hijos—.
+ */
+export const TIPOS_PROPIOS = ["aviso", "vivo", "tarjetas", "tarjeta"] as const;
+
+/** Cuántas columnas admite una rejilla de tarjetas. Lo comparten el bloque y las semillas. */
+export const COLUMNAS_DE_TARJETAS = ["1", "2", "3"] as const;
+export type ColumnasDeTarjetas = (typeof COLUMNAS_DE_TARJETAS)[number];
 
 export type TipoDeBloque = (typeof TIPOS_DE_FABRICA)[number] | (typeof TIPOS_PROPIOS)[number];
 

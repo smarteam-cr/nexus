@@ -1,25 +1,37 @@
 /**
- * lib/documentacion/semillas/paginas.test.ts — que las dos páginas sembradas salgan completas.
+ * lib/documentacion/semillas/paginas.test.ts — que los artículos sembrados salgan completos.
  *
  * El riesgo de un constructor de páginas no es que reviente: es que produzca una página a medias
  * —un desplegable sin contenido, una dimensión sin señales, un bloque vivo con una fuente que no
  * existe— y que eso quede publicado como si fuera la documentación oficial. Acá se cuenta y se
  * afirma la forma.
+ *
+ * ⚠ El array `ARTICULOS` es el mismo que siembra `scripts/seed-documentacion.ts`: si se agrega una
+ * página allá y no acá, nadie revisa su forma.
  */
 import { describe, expect, it } from "vitest";
 import { construirComoFunciona } from "./como-funciona";
 import { construirEscala } from "./escala";
+import { construirGuiaCse } from "./guia-cse";
+import { construirTrabajarEnSmarteam } from "./trabajar-en-smarteam";
 import { leerReglamentoV5 } from "./escala-v5";
 import { FUENTES_VIVAS, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
 import { textoDeBloques } from "../texto";
 
-/** Todos los bloques, incluidos los hijos de los desplegables. */
+const ARTICULOS = () => [
+  construirComoFunciona(),
+  construirEscala(),
+  construirGuiaCse(),
+  construirTrabajarEnSmarteam(),
+];
+
+/** Todos los bloques, incluidos los hijos de los desplegables y de las tarjetas. */
 function todos(bloques: BloqueGuardado[]): BloqueGuardado[] {
   return bloques.flatMap((b) => [b, ...todos(b.children ?? [])]);
 }
 
-describe("las dos páginas usan solo bloques que el editor conoce", () => {
-  const paginas = [construirComoFunciona(), construirEscala()];
+describe("los artículos usan solo bloques que el editor conoce", () => {
+  const paginas = ARTICULOS();
   const conHijas = paginas.flatMap((p) => [p, ...(p.hijas ?? [])]);
 
   it("ningún tipo de bloque inventado", () => {
@@ -48,6 +60,20 @@ describe("las dos páginas usan solo bloques que el editor conoce", () => {
         (b) => b.type === "toggleListItem" && (b.children ?? []).length === 0,
       );
       expect(vacios, pagina.slug).toEqual([]);
+    }
+  });
+
+  it("las tarjetas van siempre adentro de una rejilla, y ninguna rejilla queda vacía", () => {
+    for (const pagina of conHijas) {
+      const rejillas = todos(pagina.bloques).filter((b) => b.type === "tarjetas");
+      for (const r of rejillas) {
+        expect((r.children ?? []).length, `${pagina.slug}: rejilla vacía`).toBeGreaterThan(0);
+        const ajenas = (r.children ?? []).filter((h) => h.type !== "tarjeta");
+        expect(ajenas.map((h) => h.type), `${pagina.slug}: adentro de la rejilla`).toEqual([]);
+      }
+      /* Una tarjeta suelta se vería como un recuadro a lo ancho, fuera de toda rejilla. */
+      const sueltas = pagina.bloques.filter((b) => b.type === "tarjeta");
+      expect(sueltas, `${pagina.slug}: tarjeta fuera de una rejilla`).toEqual([]);
     }
   });
 });
@@ -130,7 +156,7 @@ describe("«Escala de rendimiento»", () => {
 });
 
 describe("los enlaces entre las páginas sembradas apuntan a algo que existe", () => {
-  const paginas = [construirComoFunciona(), construirEscala()];
+  const paginas = ARTICULOS();
   const conHijas = paginas.flatMap((p) => [p, ...(p.hijas ?? [])]);
   const slugsSembrados = new Set(conHijas.map((p) => p.slug));
 
@@ -170,5 +196,73 @@ describe("los enlaces entre las páginas sembradas apuntan a algo que existe", (
     for (const area of paginas[1].hijas ?? []) {
       expect(slugsMencionados(area.bloques), area.slug).toContain("escala-de-rendimiento");
     }
+  });
+
+  it("los cuatro artículos se nombran entre sí: ninguno queda aislado", () => {
+    for (const pagina of paginas) {
+      expect(
+        slugsMencionados(pagina.bloques).length,
+        `${pagina.slug} no enlaza a ninguna otra página`,
+      ).toBeGreaterThan(0);
+    }
+    const nombrados = new Set(conHijas.flatMap((p) => slugsMencionados(p.bloques)));
+    for (const pagina of paginas) {
+      expect(nombrados, `a ${pagina.slug} no la nombra nadie`).toContain(pagina.slug);
+    }
+  });
+});
+
+describe("«Guía de CSE»", () => {
+  const pagina = construirGuiaCse();
+  const texto = textoDeBloques(pagina.bloques);
+
+  it("tiene su dirección, su título y su ícono", () => {
+    expect(pagina.slug).toBe("guia-de-cse");
+    expect(pagina.titulo).toBe("Guía de CSE");
+    expect(pagina.icono).toBe("🎯");
+  });
+
+  it("el recorrido y los documentos salen de bloques vivos, no escritos a mano", () => {
+    const fuentes = todos(pagina.bloques)
+      .filter((b) => b.type === "vivo")
+      .map((b) => (b.props as { fuente?: string }).fuente);
+    expect(fuentes).toContain("recorrido");
+    expect(fuentes).toContain("documentos");
+  });
+
+  it("dice qué cierra cada etapa y qué no le toca al CSE", () => {
+    expect(texto).toContain("Cronograma consensuado");
+    expect(texto).toContain("Uso validado");
+    expect(texto).toMatch(/suspende/i);
+  });
+
+  it("sostiene la regla del borrador", () => {
+    expect(texto).toMatch(/borrador/i);
+  });
+});
+
+describe("«¿Cómo trabajar en Smarteam?»", () => {
+  const pagina = construirTrabajarEnSmarteam();
+  const texto = textoDeBloques(pagina.bloques);
+
+  it("tiene su dirección, su título y su ícono", () => {
+    expect(pagina.slug).toBe("como-trabajar-en-smarteam");
+    expect(pagina.titulo).toBe("¿Cómo trabajar en Smarteam?");
+    expect(pagina.icono).toBe("🤝");
+  });
+
+  it("trae los cuatro canales con su uso", () => {
+    for (const canal of ["Slack", "Google Meet", "Correo", "WhatsApp"]) {
+      expect(texto, canal).toContain(canal);
+    }
+  });
+
+  it("fija el tiempo de respuesta y el formato del título de una reunión", () => {
+    expect(texto).toContain("3 horas");
+    expect(texto).toContain("Tema | Nombre del cliente");
+  });
+
+  it("⛔ dice que una reunión sin transcripción no alimenta ningún documento", () => {
+    expect(texto).toMatch(/sin transcripci[oó]n no alimenta ning[uú]n documento/i);
   });
 });

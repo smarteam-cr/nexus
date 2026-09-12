@@ -22,7 +22,10 @@ import {
   mencion,
   parrafo,
   parrafoRico,
+  tarjeta,
+  tarjetas,
   titulo,
+  vinneta,
   type PaginaSembrada,
 } from "./bloques";
 import type { BloqueGuardado } from "../tipos";
@@ -48,18 +51,51 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "Qué te ahorra"),
     parrafo("Lo que sigue no es una promesa de la herramienta: es lo que efectivamente deja de hacerse a mano."),
-    parrafoRico(["Escuchar grabaciones para entender qué se vendió. ", { negrita: true }], "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisás un documento y corregís lo que esté mal."),
-    parrafoRico(["Rearmar el cronograma desde cero. ", { negrita: true }], "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Vos ajustás fechas y responsables; no partís de una hoja en blanco."),
-    parrafoRico(["Perder el contexto cuando alguien cambia de proyecto. ", { negrita: true }], "Todo lo que se habló con un cliente queda junto y atado a él. Quien entra después lee, no pregunta."),
-    parrafoRico(["Preguntar dos veces lo mismo. ", { negrita: true }], "La guía de exploración separa lo que el cliente YA nos dijo de lo que estamos dando por supuesto, y las preguntas salen de ahí."),
-    parrafoRico(["Escribirle al cliente desde una hoja en blanco. ", { negrita: true }], "Los documentos que ve el cliente —arranque, cronograma, propuesta— salen con el tono y la línea gráfica de Smarteam, listos para revisar."),
+    tarjetas(
+      "2",
+      tarjeta(
+        "Escuchar grabaciones para entender qué se vendió",
+        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisás un documento y corregís lo que esté mal.",
+      ),
+      tarjeta(
+        "Rearmar el cronograma desde cero en cada proyecto",
+        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Vos ajustás fechas y responsables; no partís de una hoja en blanco.",
+      ),
+      tarjeta(
+        "Perder el contexto cuando alguien cambia de proyecto",
+        "Todo lo que se habló con un cliente queda junto y atado a él. Quien entra después lee, no pregunta.",
+      ),
+      tarjeta(
+        "Preguntar dos veces lo mismo",
+        "La guía de exploración separa lo que el cliente YA nos dijo de lo que estamos dando por supuesto, y las preguntas salen de ahí.",
+      ),
+      tarjeta(
+        "Escribirle al cliente desde una hoja en blanco",
+        "Los documentos que ve el cliente —arranque, cronograma, propuesta— salen con el tono y la línea gráfica de Smarteam, listos para revisar.",
+      ),
+    ),
 
     titulo(2, "Qué NO hace Nexus"),
     parrafo("Tan importante como lo que hace es dónde termina, para no buscar acá algo que vive en otro lado."),
-    parrafoRico(["No es el CRM. ", { negrita: true }], "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. La etapa la movés allá; Nexus la refleja, y puede sugerirte un cambio que vos confirmás con un clic."),
-    parrafoRico(["No es contabilidad. ", { negrita: true }], "Cobranza controla a quién le toca cobrar y cómo va cada cobro. Las facturas y la conciliación viven en Odoo y Mercury."),
-    parrafoRico(["No decide por vos. ", { negrita: true }], "Todo lo que escribe un agente es un borrador. Nada se publica al cliente ni se da por bueno sin que una persona lo revise."),
-    parrafoRico(["No manda correos solo. ", { negrita: true }], "Cuando redacta un mensaje de cobro, lo deja listo para que vos lo edites y lo envíes."),
+    tarjetas(
+      "2",
+      tarjeta(
+        "No es el CRM",
+        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. La etapa la movés allá; Nexus la refleja, y puede sugerirte un cambio que vos confirmás con un clic.",
+      ),
+      tarjeta(
+        "No es contabilidad",
+        "Cobranza controla a quién le toca cobrar y cómo va cada cobro. Las facturas y la conciliación viven en Odoo y Mercury.",
+      ),
+      tarjeta(
+        "No decide por vos",
+        "Todo lo que escribe un agente es un borrador. Nada se publica al cliente ni se da por bueno sin que una persona lo revise.",
+      ),
+      tarjeta(
+        "No manda correos solo",
+        "Cuando redacta un mensaje de cobro, lo deja listo para que vos lo edites y lo envíes.",
+      ),
+    ),
 
     titulo(2, "El menú, sección por sección"),
     parrafo("Qué hay en cada parte de la app y quién la ve. Esta lista sale del propio menú: no se escribe a mano."),
@@ -108,8 +144,14 @@ function bloques(): BloqueGuardado[] {
     parrafo(
       "HubSpot es la fuente de verdad del negocio: las empresas, los tratos y los proyectos con su etapa. Nexus se conecta a nuestro portal y trabaja sobre eso. La relación es principalmente de lectura: mira mucho y escribe poco.",
     ),
-    parrafoRico(["Qué escribe: ", { negrita: true }], "crea el proyecto al dar un traspaso y lo asocia a la empresa y al trato; marca a la empresa como en onboarding; actualiza el estado y la etapa del proyecto cuando el CSE confirma la sugerencia; cambia el CSE encargado (solo liderazgo); marca un proyecto como interno; y deja borradores de publicaciones sociales."),
-    parrafoRico(["Qué NO toca: ", { negrita: true }], "no edita tratos, no cambia propiedades de empresas ni de contactos, y no borra nada. Publicar una publicación social la hace una persona."),
+    titulo(4, "Qué escribe"),
+    parrafo(
+      "Crea el proyecto al dar un traspaso y lo asocia a la empresa y al trato; marca a la empresa como en onboarding; actualiza el estado y la etapa del proyecto cuando el CSE confirma la sugerencia; cambia el CSE encargado (solo liderazgo); marca un proyecto como interno; y deja borradores de publicaciones sociales.",
+    ),
+    titulo(4, "Qué NO toca"),
+    parrafo(
+      "No edita tratos, no cambia propiedades de empresas ni de contactos, y no borra nada. Publicar una publicación social la hace una persona.",
+    ),
     bloqueVivo("hubspot"),
 
     titulo(2, "Las otras conexiones"),
@@ -135,6 +177,53 @@ function bloques(): BloqueGuardado[] {
     titulo(2, "Los roles del equipo"),
     parrafo("Para qué está cada rol y qué secciones toca por defecto."),
     bloqueVivo("roles"),
+
+    titulo(2, "Dónde se escribe cada cosa"),
+    parrafo(
+      "Hay tres lugares donde queda escrito lo que sabemos, y se confunden seguido. La diferencia no es el tema: es quién lo lee.",
+    ),
+    tarjetas(
+      "3",
+      tarjeta(
+        "Documentación (esta base)",
+        "Cómo trabajamos y cómo funciona lo que usamos. La leen personas del equipo.",
+        "Ningún agente la lee: lo que escribas acá no cambia lo que escribe la IA.",
+      ),
+      tarjeta(
+        "Conocimientos",
+        "La biblioteca que leen los agentes cuando arman un documento: reglamentos, catálogos y material de referencia, ordenado por etiquetas.",
+        "Si querés que la IA tenga en cuenta algo, va acá.",
+      ),
+      tarjeta(
+        "HubSpot",
+        "El negocio: empresas, tratos, proyectos y su etapa.",
+        "Si tiene que aparecer en un reporte o moverse en un pipeline, va allá.",
+      ),
+    ),
+
+    titulo(2, "Cómo se usa esta base"),
+    titulo(4, "Escribir y enlazar"),
+    vinneta("Una página se escribe con bloques: «/» abre el menú con títulos, listas, tablas, avisos, desplegables y tarjetas."),
+    vinneta("«@» enlaza otra página. Si todavía no existe, la crea con ese nombre y la enlaza de una, sin salir de la frase."),
+    vinneta("Abajo de cada página aparece «Enlazan acá»: quién la nombra. Por eso conviene enlazar en vez de repetir."),
+    titulo(4, "Encontrar y volver atrás"),
+    vinneta("Ctrl+K busca en el título y en el texto de todas las páginas, con tildes o sin ellas."),
+    vinneta("Cada página guarda su historial: se puede ver una versión anterior y restaurarla."),
+    vinneta("Archivar no borra. La papelera guarda la página con sus subpáginas y las devuelve enteras."),
+    aviso(
+      "info",
+      ["Quién puede escribir: ", { negrita: true }],
+      "por ahora, Customer Success Lead y la dirección. El resto del equipo lee. Se abre el día que haga falta.",
+    ),
+
+    titulo(2, "Seguir leyendo"),
+    parrafoRico(
+      "Cómo nos comunicamos puertas adentro y qué se espera de cada reunión: ",
+      mencion("como-trabajar-en-smarteam", "¿Cómo trabajar en Smarteam?", "🤝"),
+      ". El recorrido completo de una cuenta, etapa por etapa: ",
+      mencion("guia-de-cse", "Guía de CSE", "🎯"),
+      ".",
+    ),
 
     divisor(),
     parrafoRico([

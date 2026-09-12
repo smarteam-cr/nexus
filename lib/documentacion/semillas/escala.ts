@@ -16,6 +16,8 @@ import {
   parrafo,
   parrafoRico,
   tabla,
+  tarjeta,
+  tarjetas,
   titulo,
   vinneta,
   type PaginaSembrada,
@@ -76,6 +78,33 @@ function paginaPrincipal(): BloqueGuardado[] {
       ["En una frase: ", { negrita: true }],
       "la Escala es la vara con la que medimos qué tan bien opera un departamento —Ventas, Marketing o Servicio— en cinco niveles. No mide qué herramientas tiene: mide cómo trabaja.",
     ),
+    parrafoRico([`Reglamento versión ${reglamento.version}. `, { italica: true }], [
+      "Esta página es la explicación para el equipo; el detalle de cada dimensión está en las subpáginas de área.",
+      { italica: true },
+    ]),
+
+    titulo(2, "Por qué existe"),
+    parrafo(
+      "Cuando una empresa nos pregunta «¿cómo estamos?», la respuesta fácil es una opinión: suena a que depende de con quién hable el cliente y de qué día tuvimos. La Escala existe para que no sea así. Es un modelo de madurez: describe estados en los que un departamento puede estar, y ubica al cliente en uno con la evidencia que juntamos.",
+    ),
+    parrafo(
+      "El valor no está en el número. Está en que dos personas distintas, mirando el mismo departamento, lleguen al mismo lugar — y en que el cliente entienda por qué está ahí y qué lo mueve al siguiente nivel.",
+    ),
+    aviso(
+      "advertencia",
+      ["No mide herramientas, mide comportamiento. ", { negrita: true }],
+      "Tener HubSpot Enterprise no sube a nadie de nivel. Lo que sube de nivel es que el proceso se siga, que el dato sea confiable y que la automatización tenga lógica.",
+    ),
+
+    titulo(2, "Cuándo se usa"),
+    parrafo(
+      "No es un ejercicio aparte: es parte del recorrido de una cuenta y aparece siempre en los mismos momentos.",
+    ),
+    numerado("En la exploración se junta la evidencia: cómo trabaja hoy el departamento, con qué datos y con qué cadencia."),
+    numerado("En el diagnóstico se ubica cada dimensión en su nivel, con su evidencia al lado."),
+    numerado("En la propuesta, la brecha entre donde está y donde quiere estar es lo que justifica el plan."),
+    numerado("Entre 60 y 90 días después de entregar, se vuelve a medir para ver qué se movió de verdad."),
+    numerado("Después, una vez por trimestre, para que el avance sea visible y no una impresión."),
 
     titulo(2, "Las tres piezas"),
     parrafo(
@@ -86,10 +115,10 @@ function paginaPrincipal(): BloqueGuardado[] {
     numerado("El resultado: lo que se le devuelve al cliente — en qué nivel está y qué le toca mejorar."),
 
     titulo(2, "Los cinco niveles"),
-    tabla([
-      ["Nivel", "Qué significa"],
-      ...NIVELES_V5.map((n, i) => [`${i + 1} · ${n}`, QUE_SIGNIFICA[n] ?? ""]),
-    ]),
+    tarjetas(
+      "2",
+      ...NIVELES_V5.map((n, i) => tarjeta(`${i + 1} · ${n}`, QUE_SIGNIFICA[n] ?? "")),
+    ),
     aviso(
       "exito",
       ["Funcional es la base. ", { negrita: true }],
@@ -127,6 +156,14 @@ function paginaPrincipal(): BloqueGuardado[] {
     ),
     parrafo(
       "Además del nivel, se anota qué tan cerca está de cruzar al siguiente. Se anota una vez sobre la dimensión («Funcional, cerca de Eficiente»), no señal por señal.",
+    ),
+
+    titulo(2, "Cómo se relacionan las dos capas"),
+    parrafo(
+      "La base operativa habilita; la producción es lo que sale. No son dos mitades que se suman: sin datos confiables, roles definidos, cadencia de decisión y automatización con lógica, no hay dónde apoyar la proactividad sistemática ni el aprendizaje continuo, por mucha voluntad que le ponga el equipo.",
+    ),
+    parrafo(
+      "Por eso la producción está definida de forma escueta en Funcional, y tres dimensiones ni siquiera tienen ese nivel. No es falta de criterio: esa capacidad todavía no puede existir. Un departamento Funcional es liviano en producción de forma honesta.",
     ),
 
     titulo(2, "Lo que dice la brecha entre las dos capas"),
@@ -207,6 +244,15 @@ function paginaPrincipal(): BloqueGuardado[] {
 
     titulo(2, "Glosario"),
     ...GLOSARIO.map(([termino, definicion]) => parrafoRico([`${termino}: `, { negrita: true }], definicion)),
+
+    titulo(2, "Quién la aplica"),
+    parrafoRico(
+      "La aplica quien lleva la cuenta, con el material de la exploración. Cómo encaja en el recorrido de un proyecto está en ",
+      mencion("guia-de-cse", "Guía de CSE", "🎯"),
+      ", y el diagnóstico que se le entrega al cliente se arma en Nexus: ",
+      mencion("como-funciona-nexus", "¿Cómo funciona Nexus?", "🧭"),
+      ".",
+    ),
 
     divisor(),
     parrafoRico([`Escala de Rendimiento Smarteam · versión ${reglamento.version}`, { italica: true }]),

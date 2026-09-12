@@ -31,6 +31,23 @@ describe("textoDeBloques", () => {
     expect(textoDeBloques(bloques)).toBe("Deficiente\nSin proceso.");
   });
 
+  it("una tarjeta aporta su título y su cuerpo (si no, no se encontraría al buscar)", () => {
+    const bloques: BloqueGuardado[] = [
+      {
+        type: "tarjetas",
+        props: { columnas: "2" },
+        children: [
+          {
+            type: "tarjeta",
+            content: "No es el CRM",
+            children: [{ type: "paragraph", content: "La etapa se mueve en HubSpot." }],
+          },
+        ],
+      },
+    ];
+    expect(textoDeBloques(bloques)).toBe("No es el CRM\nLa etapa se mueve en HubSpot.");
+  });
+
   it("las tablas salen fila por fila, con las celdas separadas", () => {
     const bloques: BloqueGuardado[] = [
       {
@@ -145,6 +162,19 @@ describe("sanearBloques", () => {
         ],
       },
     ]);
+  });
+
+  it("la rejilla y sus tarjetas sobreviven enteras", () => {
+    const bloques = sanearBloques([
+      {
+        type: "tarjetas",
+        props: { columnas: "3" },
+        children: [{ type: "tarjeta", content: "Título", children: [{ type: "paragraph", content: "Cuerpo" }] }],
+      },
+    ]);
+    expect(bloques[0].type).toBe("tarjetas");
+    expect(bloques[0].children?.[0].type).toBe("tarjeta");
+    expect(bloques[0].children?.[0].children?.[0].content).toBe("Cuerpo");
   });
 
   it("algo que no es una lista da una página vacía", () => {

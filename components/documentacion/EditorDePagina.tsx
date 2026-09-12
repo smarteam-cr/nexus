@@ -39,15 +39,23 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui";
 import { useTheme } from "@/lib/theme";
-import { FUENTES_VIVAS } from "@/lib/documentacion/tipos";
+import { COLUMNAS_DE_TARJETAS, FUENTES_VIVAS } from "@/lib/documentacion/tipos";
 import { TONOS_DE_AVISO } from "./bloques/Aviso";
 import { ETIQUETAS_DE_FUENTE } from "./bloques/Vivo";
+import { ETIQUETAS_DE_COLUMNAS } from "./bloques/Tarjetas";
 import { usePaginasEnlazables } from "./ContextoDePaginas";
 import {
   esquemaDeDocumentacion,
   type BloqueDeDocumentacion,
   type BloqueParcialDeDocumentacion,
 } from "./esquema-editor";
+
+/** Una tarjeta lista para escribir: el título en la línea del bloque y el cuerpo como hijo. */
+const tarjetaEnBlanco = (): BloqueParcialDeDocumentacion => ({
+  type: "tarjeta",
+  content: "",
+  children: [{ type: "paragraph", content: "" }],
+});
 
 const NOMBRE_DEL_TONO: Record<string, string> = {
   info: "Aviso · dato útil",
@@ -88,8 +96,26 @@ export default function EditorDePagina({
   /** El menú «/»: los bloques de fábrica más los dos propios (avisos y los que se arman solos). */
   const traerItems = useCallback(
     async (consulta: string) => {
-      const insertar = (bloque: BloqueParcialDeDocumentacion) => {
-        editor.insertBlocks([bloque], editor.getTextCursorPosition().block, "after");
+      /**
+       * Inserta el bloque debajo del actual y deja el cursor donde se escribe.
+       *
+       * ⚠ `cursor` NO es un detalle: el cursor solo puede ir a un bloque que acepte texto. La
+       * rejilla de tarjetas y el bloque vivo no aceptan —la rejilla ordena a sus hijas, el vivo se
+       * arma solo—, así que en la rejilla el cursor va a su primera tarjeta y en el vivo se queda
+       * donde estaba.
+       */
+      const insertar = (
+        bloque: BloqueParcialDeDocumentacion,
+        cursor: "propio" | "primera-hija" | "no" = "propio",
+      ) => {
+        const [insertado] = editor.insertBlocks(
+          [bloque],
+          editor.getTextCursorPosition().block,
+          "after",
+        );
+        if (cursor === "no" || !insertado) return;
+        const destino = cursor === "primera-hija" ? insertado.children?.[0] : insertado;
+        if (destino) editor.setTextCursorPosition(destino, "end");
       };
       const propios = [
         ...TONOS_DE_AVISO.map((tono) => ({
@@ -102,8 +128,30 @@ export default function EditorDePagina({
           title: ETIQUETAS_DE_FUENTE[fuente],
           group: "Se arma solo",
           subtext: "Sale de Nexus y se actualiza solo: no se escribe a mano.",
-          onItemClick: () => insertar({ type: "vivo", props: { fuente } }),
+          onItemClick: () => insertar({ type: "vivo", props: { fuente } }, "no"),
         })),
+        /* La rejilla nace CON dos tarjetas escritas: una rejilla vacía es una zona muerta donde
+           no se sabe dónde escribir. Cada tarjeta trae su párrafo de cuerpo ya anidado. */
+        ...COLUMNAS_DE_TARJETAS.map((columnas) => ({
+          title: ETIQUETAS_DE_COLUMNAS[columnas],
+          group: "Tarjetas",
+          subtext: "Un grupo de recuadros, uno al lado del otro: título arriba y explicación abajo.",
+          onItemClick: () =>
+            insertar(
+              {
+                type: "tarjetas",
+                props: { columnas },
+                children: [tarjetaEnBlanco(), tarjetaEnBlanco()],
+              },
+              "primera-hija",
+            ),
+        })),
+        {
+          title: "Una tarjeta más",
+          group: "Tarjetas",
+          subtext: "Se agrega adentro de una rejilla que ya exista.",
+          onItemClick: () => insertar(tarjetaEnBlanco()),
+        },
       ];
       return filterSuggestionItems(
         [...getDefaultReactSlashMenuItems(editor), ...propios],

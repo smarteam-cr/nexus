@@ -9,10 +9,11 @@
  * solo del menú «/»— porque así tampoco entran pegando una imagen: sin un lugar donde subirla
  * quedaría un bloque roto apuntando a nada.
  *
- * Los dos bloques propios:
- *   · «aviso» — el recuadro de color, con los tokens del tema.
- *   · «vivo»  — el que no se escribe: se arma solo desde los registros de Nexus.
- * Los dos specs se crean a nivel de módulo (regla `react-hooks/static-components`).
+ * Los bloques propios:
+ *   · «aviso»    — el recuadro de color, con los tokens del tema.
+ *   · «vivo»     — el que no se escribe: se arma solo desde los registros de Nexus.
+ *   · «tarjetas» — la rejilla, y «tarjeta» cada una adentro: van siempre de a pares.
+ * Los specs se crean a nivel de módulo (regla `react-hooks/static-components`).
  *
  * ⚠ Solo lo importa código de CLIENTE (el editor). Los tipos se pueden importar desde cualquier
  * lado con `import type`, que no arrastra BlockNote al servidor.
@@ -21,6 +22,7 @@ import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@
 import { TIPOS_DE_FABRICA } from "@/lib/documentacion/tipos";
 import { bloqueAviso } from "./bloques/Aviso";
 import { bloqueVivo } from "./bloques/Vivo";
+import { bloqueTarjeta, bloqueTarjetas } from "./bloques/Tarjetas";
 import { mencionDePagina } from "./bloques/Mencion";
 
 function elegir<T extends object, K extends keyof T>(objeto: T, claves: readonly K[]): Pick<T, K> {
@@ -34,6 +36,8 @@ export const esquemaDeDocumentacion = BlockNoteSchema.create({
     ...elegir(defaultBlockSpecs, TIPOS_DE_FABRICA),
     aviso: bloqueAviso(),
     vivo: bloqueVivo(),
+    tarjetas: bloqueTarjetas(),
+    tarjeta: bloqueTarjeta(),
   },
   /* El enlace a otra página, que se escribe con «@». Es contenido EN LÍNEA y no un bloque: va
      adentro de una frase, como cualquier palabra. */
