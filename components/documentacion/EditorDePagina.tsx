@@ -89,6 +89,14 @@ export default function EditorDePagina({
   const editor = useCreateBlockNote({
     schema: esquemaDeDocumentacion,
     dictionary: es,
+    /* ⚠ Sin los estilos de fábrica. Esa clase hace DOS cosas: fija la tipografía del editor (Inter
+       16px, que la app ya define) y —lo importante— resetea `p, h1-h6, li` a `margin:0; padding:0;
+       font-size:inherit` para TODO lo que viva adentro. Los bloques vivos meten componentes de la
+       app ahí adentro, y ese reset les borraba el tamaño y el aire: el recorrido perdía la sangría
+       y el número de la etapa se montaba sobre el título. El reset equivalente lo pone el preflight
+       de Tailwind, que sí respeta las clases del componente; el tamaño base se fija en
+       `editor.css`. */
+    defaultStyles: false,
     // BlockNote rechaza un arreglo vacío: sin contenido, que arranque con su párrafo en blanco.
     initialContent: contenidoInicial.length > 0 ? contenidoInicial : undefined,
   });

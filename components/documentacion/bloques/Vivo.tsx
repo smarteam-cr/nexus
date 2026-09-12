@@ -11,9 +11,11 @@
  * En edición se muestra un rótulo explicando justamente eso, porque un bloque que no se puede
  * escribir tiene que decir por qué.
  */
+import { useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { FUENTES_VIVAS, type FuenteViva } from "@/lib/documentacion/tipos";
 import { useVivos } from "../ContextoDeVivos";
+import { IconoCandado } from "../iconos";
 import Recorrido from "@/components/manual/Recorrido";
 import Documentos from "@/components/manual/Documentos";
 import Agentes from "@/components/manual/Agentes";
@@ -104,6 +106,43 @@ function Contenido({ fuente }: { fuente: FuenteViva }) {
   );
 }
 
+/**
+ * Cómo se ve el bloque MIENTRAS SE EDITA: plegado, con su nombre y el motivo.
+ *
+ * Desplegado mide más de mil píxeles, y con esa altura la manija de arrastre de BlockNote —que se
+ * ancla arriba del bloque— queda lejísimos del cursor: para moverlo o sacarlo había que subir
+ * hasta el tope y el menú se escapaba al bloque de al lado en el camino. Plegado entra en un
+ * renglón, así que la manija y el «+» quedan a mano. Y de paso dice lo que no se ve: que eso no se
+ * escribe, se arma solo.
+ */
+function VivoPlegado({ fuente }: { fuente: FuenteViva }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div className="my-2 rounded-lg border border-line bg-surface-muted">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2">
+        <IconoCandado className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+        <span className="text-sm font-medium text-fg">{ETIQUETAS_DE_FUENTE[fuente]}</span>
+        <span className="text-xs text-fg-muted">Se arma solo desde Nexus · no se escribe a mano</span>
+        <button
+          type="button"
+          /* Sin esto, el clic mueve el cursor del editor antes de llegar al botón y el bloque
+             queda seleccionado por sorpresa. */
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setAbierto((v) => !v)}
+          className="ml-auto rounded-md border border-line bg-surface px-2 py-0.5 text-xs text-fg-secondary transition-colors hover:text-fg"
+        >
+          {abierto ? "Ocultar" : "Ver cómo queda"}
+        </button>
+      </div>
+      {abierto && (
+        <div className="border-t border-line px-3 py-3">
+          <Contenido fuente={fuente} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const bloqueVivo = createReactBlockSpec(
   {
     type: "vivo",
@@ -117,12 +156,7 @@ export const bloqueVivo = createReactBlockSpec(
       const fuente = (block.props.fuente as FuenteViva) ?? "menu";
       return (
         <div className="my-3" data-fuente-viva={fuente}>
-          {editor.isEditable && (
-            <p className="mb-1 text-2xs uppercase tracking-wide text-fg-muted">
-              {ETIQUETAS_DE_FUENTE[fuente]} · se actualiza solo desde Nexus
-            </p>
-          )}
-          <Contenido fuente={fuente} />
+          {editor.isEditable ? <VivoPlegado fuente={fuente} /> : <Contenido fuente={fuente} />}
         </div>
       );
     },
