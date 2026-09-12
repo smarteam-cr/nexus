@@ -251,6 +251,8 @@ function paginaPrincipal(): BloqueGuardado[] {
       mencion("guia-de-cse", "Guía de CSE", "🎯"),
       ", y el diagnóstico que se le entrega al cliente se arma en Nexus: ",
       mencion("como-funciona-nexus", "¿Cómo funciona Nexus?", "🧭"),
+      ". Cómo se hacen las preguntas que la alimentan, con una por dimensión: ",
+      mencion("descubrimiento", "Descubrimiento", "🔎"),
       ".",
     ),
 

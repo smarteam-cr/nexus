@@ -14,6 +14,8 @@ import { construirComoFunciona } from "./como-funciona";
 import { construirEscala } from "./escala";
 import { construirGuiaCse } from "./guia-cse";
 import { construirTrabajarEnSmarteam } from "./trabajar-en-smarteam";
+import { construirCustomerSuccess } from "./customer-success";
+import type { PaginaSembrada } from "./bloques";
 import { leerReglamentoV5 } from "./escala-v5";
 import { FUENTES_VIVAS, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
 import { textoDeBloques } from "../texto";
@@ -21,7 +23,7 @@ import { textoDeBloques } from "../texto";
 const ARTICULOS = () => [
   construirComoFunciona(),
   construirEscala(),
-  construirGuiaCse(),
+  construirCustomerSuccess(),
   construirTrabajarEnSmarteam(),
 ];
 
@@ -30,9 +32,18 @@ function todos(bloques: BloqueGuardado[]): BloqueGuardado[] {
   return bloques.flatMap((b) => [b, ...todos(b.children ?? [])]);
 }
 
+/**
+ * Una página con TODAS sus descendientes. Recursivo a propósito: Customer Success tiene nietas
+ * (las competencias, las piezas de la relación con el cliente, el proceso de SmartLoop), y con un
+ * solo nivel una mención a una nieta se leería como un enlace a una página que no existe.
+ */
+function aplanar(pagina: PaginaSembrada): PaginaSembrada[] {
+  return [pagina, ...(pagina.hijas ?? []).flatMap(aplanar)];
+}
+
 describe("los artículos usan solo bloques que el editor conoce", () => {
   const paginas = ARTICULOS();
-  const conHijas = paginas.flatMap((p) => [p, ...(p.hijas ?? [])]);
+  const conHijas = paginas.flatMap(aplanar);
 
   it("ningún tipo de bloque inventado", () => {
     for (const pagina of conHijas) {
@@ -157,7 +168,7 @@ describe("«Escala de rendimiento»", () => {
 
 describe("los enlaces entre las páginas sembradas apuntan a algo que existe", () => {
   const paginas = ARTICULOS();
-  const conHijas = paginas.flatMap((p) => [p, ...(p.hijas ?? [])]);
+  const conHijas = paginas.flatMap(aplanar);
   const slugsSembrados = new Set(conHijas.map((p) => p.slug));
 
   /** Los slugs a los que apunta cada mención («@») del contenido. */
@@ -264,5 +275,81 @@ describe("«¿Cómo trabajar en Smarteam?»", () => {
 
   it("⛔ dice que una reunión sin transcripción no alimenta ningún documento", () => {
     expect(texto).toMatch(/sin transcripci[oó]n no alimenta ning[uú]n documento/i);
+  });
+});
+
+describe("«Customer Success»", () => {
+  const cs = construirCustomerSuccess();
+  const todas = aplanar(cs);
+  const hija = (slug: string) => {
+    const encontrada = todas.find((p) => p.slug === slug);
+    if (!encontrada) throw new Error(`falta la página ${slug}`);
+    return encontrada;
+  };
+  const hijasDe = (slug: string) => (hija(slug).hijas ?? []).map((h) => h.slug);
+
+  it("arma el árbol completo, en su orden", () => {
+    expect(cs.slug).toBe("customer-success");
+    expect(cs.hijas?.map((h) => h.slug)).toEqual([
+      "rol-cse",
+      "rol-csl",
+      "guia-de-cse",
+      "competencias-core",
+      "relacion-con-el-cliente",
+      "land-and-expand",
+      "smartloop",
+    ]);
+    expect(hijasDe("competencias-core")).toEqual([
+      "competencia-dominio",
+      "competencia-resolucion",
+      "competencia-relacional",
+    ]);
+    expect(hijasDe("relacion-con-el-cliente")).toEqual([
+      "empatia-y-confianza",
+      "antes-de-una-reunion",
+      "descubrimiento",
+    ]);
+    expect(hijasDe("smartloop")).toEqual(["smartloop-proceso-operativo"]);
+    expect(todas).toHaveLength(15);
+  });
+
+  it("la Guía de CSE es la misma página de siempre, movida adentro — no una copia distinta", () => {
+    expect(hija("guia-de-cse")).toEqual(construirGuiaCse());
+  });
+
+  it("⛔ ninguna página de la sección trae sueldo, comisiones ni condiciones de contratación", () => {
+    for (const p of todas) {
+      expect(textoDeBloques(p.bloques), p.slug).not.toMatch(
+        /salario|sueldo|comisi[oó]n|ontop|vacaciones|\bUSD\b|\$\s?\d/i,
+      );
+    }
+  });
+
+  it("cada competencia trae caminos de éxito y de fracaso para el CSE y para el CSL", () => {
+    for (const slug of ["competencia-dominio", "competencia-resolucion", "competencia-relacional"]) {
+      const texto = textoDeBloques(hija(slug).bloques);
+      expect(texto, slug).toContain("En el CSE");
+      expect(texto, slug).toContain("En el CSL");
+      expect(texto.match(/Caminos de éxito/g), slug).toHaveLength(2);
+      expect(texto.match(/Caminos de fracaso/g), slug).toHaveLength(2);
+    }
+  });
+
+  it("el banco de preguntas trae las 24 preguntas del reglamento vigente", () => {
+    const texto = textoDeBloques(hija("descubrimiento").bloques);
+    const preguntas = leerReglamentoV5().areas.flatMap((area) => area.dimensiones.map((d) => d.pregunta));
+    expect(preguntas).toHaveLength(24);
+    for (const pregunta of preguntas) expect(texto, pregunta).toContain(pregunta);
+  });
+
+  it("⚠ el proceso operativo de SmartLoop abre avisando que es una propuesta a validar", () => {
+    const [primero] = hija("smartloop-proceso-operativo").bloques;
+    expect(primero.type).toBe("aviso");
+    expect(textoDeBloques([primero])).toMatch(/Propuesta a validar/);
+  });
+
+  it("⚠ SmartLoop no arrastra la Escala vieja de la landing (Capacidad/Output con pesos)", () => {
+    const texto = textoDeBloques([...hija("smartloop").bloques, ...hija("smartloop-proceso-operativo").bloques]);
+    expect(texto).not.toMatch(/Output|Capacidad \d|60 ?%|40 ?%/);
   });
 });

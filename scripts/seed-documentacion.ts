@@ -1,15 +1,21 @@
 /**
- * scripts/seed-documentacion.ts — siembra las dos páginas iniciales de la base de conocimiento.
+ * scripts/seed-documentacion.ts — siembra los artículos de la base de conocimiento.
  *
- *   «¿Cómo funciona Nexus?»  — el manual, con sus bloques vivos.
- *   «Escala de rendimiento»  — el reglamento v5.2.0, con una subpágina por área.
+ *   «¿Cómo funciona Nexus?»       — el manual, con sus bloques vivos.
+ *   «Escala de rendimiento»       — el reglamento v5.2.0, con una subpágina por área.
+ *   «Customer Success»            — el departamento: roles, competencias, relación con el cliente,
+ *                                   Land and Expand y SmartLoop (con la Guía de CSE adentro).
+ *   «¿Cómo trabajar en Smarteam?» — canales, grabación y cómo se escribe a distancia.
  *
- * ── LAS DOS REGLAS QUE LO HACEN SEGURO DE REPETIR ────────────────────────────
+ * ── LAS TRES REGLAS QUE LO HACEN SEGURO DE REPETIR ───────────────────────────
  * 1. Es IDEMPOTENTE por `slug`: correrlo dos veces no duplica nada.
  * 2. NO pisa lo que escribió una persona. Al sembrar se guarda en `semillaVersion` la versión
  *    que quedó; si hoy la página tiene otra, alguien la editó y se SALTA. Para pisarla igual hay
  *    que pedirlo por su nombre: `--forzar <slug>` (y antes se guarda una versión en el historial,
  *    así lo editado no se pierde).
+ * 3. La ESTRUCTURA sí es de la semilla. Una página editada que la semilla ubica en otro lugar del
+ *    árbol se MUEVE —madre y orden— sin tocar su contenido ni su versión. La decisión vive en
+ *    `lib/documentacion/semillas/accion.ts`, que tiene sus pruebas.
  *
  * ⚠ Se compara por NÚMERO de versión y no por contenido: el editor normaliza los bloques al
  * cargarlos (les agrega ids y props por defecto), así que el JSON guardado cambia sin que nadie
@@ -28,9 +34,10 @@ import { resolverApply } from "./lib/guard";
 import { createScriptDb } from "./lib/db";
 import { construirComoFunciona } from "@/lib/documentacion/semillas/como-funciona";
 import { construirEscala } from "@/lib/documentacion/semillas/escala";
-import { construirGuiaCse } from "@/lib/documentacion/semillas/guia-cse";
+import { construirCustomerSuccess } from "@/lib/documentacion/semillas/customer-success";
 import { construirTrabajarEnSmarteam } from "@/lib/documentacion/semillas/trabajar-en-smarteam";
 import { resolverMenciones, type PaginaSembrada } from "@/lib/documentacion/semillas/bloques";
+import { decidirAccion } from "@/lib/documentacion/semillas/accion";
 import { textoDeBloques, textoDeBusqueda } from "@/lib/documentacion/texto";
 import type { BloqueGuardado } from "@/lib/documentacion/tipos";
 
@@ -41,7 +48,7 @@ const FORZAR = new Set(
   process.argv.filter((arg, i) => process.argv[i - 1] === "--forzar" && !arg.startsWith("--")),
 );
 
-type Accion = "crear" | "actualizar" | "saltar" | "enlazar";
+type Accion = "crear" | "actualizar" | "saltar" | "mover" | "enlazar";
 const bitacora: { accion: Accion; slug: string; detalle?: string }[] = [];
 
 /** Lo que se escribió en esta corrida: la segunda pasada le completa los enlaces. */
@@ -67,12 +74,18 @@ async function sembrar(
   pagina: PaginaSembrada,
   parentId: string | null,
   orden: number,
+  madrePendiente = false,
 ): Promise<void> {
   const existente = await prisma.paginaDoc.findUnique({ where: { slug: pagina.slug } });
   const datos = contenidoDe(pagina);
   let id = existente?.id ?? null;
+  const { accion, editada } = decidirAccion(
+    existente,
+    { parentId, orden, madrePendiente },
+    FORZAR.has(pagina.slug),
+  );
 
-  if (!existente) {
+  if (!existente || accion === "crear") {
     bitacora.push({ accion: "crear", slug: pagina.slug });
     if (APPLY) {
       const creada = await prisma.paginaDoc.create({
@@ -82,20 +95,30 @@ async function sembrar(
       escritas.push({ id: creada.id, slug: pagina.slug, bloques: pagina.bloques as BloqueGuardado[] });
     }
   } else {
-    const laEditoAlguien =
-      existente.semillaVersion === null || existente.version !== existente.semillaVersion;
+    const editadaPor = `la editó una persona (versión ${existente.version}, sembrada ${existente.semillaVersion ?? "—"})`;
 
-    if (laEditoAlguien && !FORZAR.has(pagina.slug)) {
+    if (accion === "saltar") {
       bitacora.push({
         accion: "saltar",
         slug: pagina.slug,
-        detalle: `la editó una persona (versión ${existente.version}, sembrada ${existente.semillaVersion ?? "—"}). Para pisarla: --forzar ${pagina.slug}`,
+        detalle: `${editadaPor}. Para pisarla: --forzar ${pagina.slug}`,
       });
+    } else if (accion === "mover") {
+      /* Solo el lugar en el árbol: el contenido es de quien la editó, y la versión no sube (mover
+         no es editar, igual que en la app). */
+      bitacora.push({
+        accion: "mover",
+        slug: pagina.slug,
+        detalle: `${editadaPor}: se lleva a su lugar en el árbol sin tocar su contenido`,
+      });
+      if (APPLY) {
+        await prisma.paginaDoc.update({ where: { id: existente.id }, data: { parentId, orden } });
+      }
     } else {
       bitacora.push({
         accion: "actualizar",
         slug: pagina.slug,
-        detalle: laEditoAlguien ? "forzada: se guarda una versión antes de pisar" : undefined,
+        detalle: editada ? "forzada: se guarda una versión antes de pisar" : undefined,
       });
       if (APPLY) {
         await prisma.$transaction(async (tx) => {
@@ -106,7 +129,7 @@ async function sembrar(
               titulo: existente.titulo,
               icono: existente.icono,
               contenido: existente.contenido as Prisma.InputJsonValue,
-              motivo: laEditoAlguien ? "antes-de-forzar" : "semilla",
+              motivo: editada ? "antes-de-forzar" : "semilla",
             },
           });
           const version = existente.version + 1;
@@ -125,8 +148,9 @@ async function sembrar(
   }
 
   for (const [i, hija] of (pagina.hijas ?? []).entries()) {
-    // En seco no hay id de la madre todavía: se reporta igual, con la madre en null.
-    await sembrar(prisma, hija, id, i);
+    /* En seco, una madre que se va a crear todavía no tiene id: se avisa, para que un `null` que
+       significa «todavía no sé» no se lea como «está en la raíz». */
+    await sembrar(prisma, hija, id, i, id === null);
   }
 }
 
@@ -137,7 +161,7 @@ async function main() {
     const paginas = [
       construirComoFunciona(),
       construirEscala(),
-      construirGuiaCse(),
+      construirCustomerSuccess(),
       construirTrabajarEnSmarteam(),
     ];
 
@@ -173,17 +197,23 @@ async function main() {
       }
     }
 
-    const simbolo: Record<Accion, string> = { crear: "+", actualizar: "~", saltar: "=", enlazar: "→" };
+    const simbolo: Record<Accion, string> = {
+      crear: "+",
+      actualizar: "~",
+      saltar: "=",
+      mover: "↳",
+      enlazar: "→",
+    };
     for (const linea of bitacora) {
       console.log(
         `  ${simbolo[linea.accion]} ${linea.accion.padEnd(11)} ${linea.slug}${linea.detalle ? `\n      ${linea.detalle}` : ""}`,
       );
     }
 
-    const saltadas = bitacora.filter((l) => l.accion === "saltar").length;
+    const cuantas = (accion: Accion) => bitacora.filter((l) => l.accion === accion).length;
     console.log(
-      `\n${bitacora.length} página(s): ${bitacora.filter((l) => l.accion === "crear").length} nuevas, ` +
-        `${bitacora.filter((l) => l.accion === "actualizar").length} actualizadas, ${saltadas} salteadas.\n`,
+      `\n${bitacora.length} página(s): ${cuantas("crear")} nuevas, ${cuantas("actualizar")} actualizadas, ` +
+        `${cuantas("mover")} movidas, ${cuantas("saltar")} salteadas.\n`,
     );
   } finally {
     await close();

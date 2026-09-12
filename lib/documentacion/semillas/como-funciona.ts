@@ -222,6 +222,8 @@ function bloques(): BloqueGuardado[] {
       mencion("como-trabajar-en-smarteam", "¿Cómo trabajar en Smarteam?", "🤝"),
       ". El recorrido completo de una cuenta, etapa por etapa: ",
       mencion("guia-de-cse", "Guía de CSE", "🎯"),
+      ". Todo lo del departamento que lleva las cuentas —roles, competencias y cómo se trabaja con el cliente—: ",
+      mencion("customer-success", "Customer Success", "🌱"),
       ".",
     ),
 

@@ -2972,3 +2972,34 @@ fabricarla.
 - **El h4 existía y no se veía.** El esquema aceptaba los seis niveles y el menú «/» los ofrecía,
   pero el CSS solo vestía tres: un h4 heredaba el tamaño del primero. La lección que deja es del
   tipo aburrido y caro — una función a medio terminar se ve igual que una función rota.
+
+### La sección de Customer Success (2026-09-12)
+
+> Elías pidió la arquitectura de documentación del departamento, armada con lo que ya existía:
+> los perfiles de Roles, la Guía de CSE, el material de SmartLoop, más competencias, confianza,
+> reuniones, descubrimiento y Land and Expand.
+
+- **Los roles se COPIAN curados, no se leen en vivo desde Roles.** Un bloque vivo habría sido lo
+  «correcto» contra el desfase, pero mostraría en una base que lee todo el equipo lo que mañana se
+  escriba en un perfil de puesto —y los perfiles conviven con propuestas que traen sueldo y
+  comisiones—. El costo es que la copia puede quedar vieja: por eso cada página dice de qué perfil
+  y de qué fecha sale. ⛔ Un test impide que aparezcan sueldo, comisiones u Ontop.
+- **Los caminos se ordenan por competencia, no por rol.** Los perfiles traen «caminos de éxito» y
+  «de fracaso» sueltos; repartirlos entre dominio, resolución y habilidad relacional muestra dónde
+  un rol queda corto. Lo que faltaba se completó y se marca «agregado»: distinguir lo que dice el
+  perfil de lo que no es la condición para que la guía no reescriba el puesto en silencio.
+- **El banco de preguntas de descubrimiento sale del reglamento, no se tipea.** Son las mismas 24
+  preguntas que ordenan la Escala; tipearlas las desalinearía en la próxima versión.
+- **El proceso operativo de SmartLoop se escribió como propuesta, a la vista.** No existía en ningún
+  lado. En vez de esperarlo, se armó con lo que Nexus ya hace con los proyectos recurrentes y se
+  marcó «a validar» lo que no tiene respaldo, con las preguntas abiertas en un aviso. Una página
+  que dice qué no sabe es más útil que una que no existe, y menos peligrosa que una que lo inventa.
+- **La estructura del árbol es de la semilla; el contenido editado, de la persona.** La Guía de CSE
+  ya estaba editada cuando tuvo que quedar adentro de Customer Success. La siembra la salteaba
+  entera —lugar incluido—, y la única salida era `--forzar`, que pisaba lo escrito. Ahora una
+  página editada que la semilla ubica en otro lugar se mueve sin cambiar versión ni contenido
+  (`lib/documentacion/semillas/accion.ts`). La contracara, aceptada: si alguien mueve a mano una
+  página sembrada, la próxima siembra la devuelve a su lugar.
+- **Una guía no nombra lo que no se puede usar.** El agente «Preparación de entrevistas» está
+  activo en la base pero nunca corrió y no tiene botón en ninguna pantalla; mandar al equipo a
+  usarlo le quitaría crédito a la guía en la primera lectura.
