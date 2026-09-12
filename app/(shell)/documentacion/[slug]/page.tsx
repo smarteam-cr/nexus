@@ -54,6 +54,9 @@ export default async function PaginaDeDocumentacion({
     .slice(0, -1)
     .map((p) => ({ label: p.titulo, href: `/documentacion/${p.slug}` }));
 
+  // `vivas` ya viene ordenada por `orden`: las subpáginas salen en el mismo orden que en el árbol.
+  const hijas = vivas.filter((p) => p.parentId === pagina.id);
+
   return (
     <div className={SHELL_DEFAULT}>
       <div className="mx-auto max-w-3xl">
@@ -80,8 +83,37 @@ export default async function PaginaDeDocumentacion({
             slug: p.slug,
             titulo: p.titulo,
             icono: p.icono,
+            /* Dónde vive cada una: en el menú «@» distingue dos páginas con el mismo nombre. */
+            ruta: rutaDe(p.id, vivas)
+              .slice(0, -1)
+              .map((x) => x.titulo),
           }))}
         />
+
+        {/* Las páginas que cuelgan de ésta. En el árbol ya están, pero una página tiene que
+            poder recorrerse sola: quien llega por un enlace no mira el panel de la izquierda. */}
+        {hijas.length > 0 && (
+          <section className="mt-10">
+            <h2 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+              Subpáginas
+            </h2>
+            <ul>
+              {hijas.map((h) => (
+                <li key={h.id}>
+                  <Link
+                    href={`/documentacion/${h.slug}`}
+                    className="-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg transition-colors hover:bg-surface-hover"
+                  >
+                    <span aria-hidden="true">{h.icono ?? "📄"}</span>
+                    <span className="font-medium underline decoration-line underline-offset-2">
+                      {h.titulo}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* El enlace visto al revés: quién nombra a esta página. Es lo que hace que la base se
             pueda recorrer en los dos sentidos, como en Notion. */}

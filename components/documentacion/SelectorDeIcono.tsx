@@ -39,7 +39,7 @@ export default function SelectorDeIcono({ icono, editable, onElegir }: Props) {
 
   if (!editable) {
     return (
-      <span className="px-1 text-3xl leading-none" aria-hidden="true">
+      <span className="px-1 text-5xl leading-none" aria-hidden="true">
         {icono ?? "📄"}
       </span>
     );
@@ -60,7 +60,7 @@ export default function SelectorDeIcono({ icono, editable, onElegir }: Props) {
         aria-expanded={abierto}
         aria-label="Cambiar el ícono de la página"
         title="Cambiar el ícono"
-        className="rounded-lg px-1 text-3xl leading-none transition-colors hover:bg-surface-hover"
+        className="rounded-lg px-1 text-5xl leading-none transition-colors hover:bg-surface-hover"
       >
         {icono ?? "📄"}
       </button>

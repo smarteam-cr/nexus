@@ -18,6 +18,8 @@ export interface PaginaEnlazable {
   slug: string;
   titulo: string;
   icono: string | null;
+  /** Dónde vive, para distinguir dos páginas con el mismo nombre en el menú «@». */
+  ruta: string[];
 }
 
 interface Valor {

@@ -124,13 +124,17 @@ export default function EncabezadoDePagina({
     <header className="mb-6">
       {migas.length > 0 && <Breadcrumbs crumbs={migas} className="mb-2" />}
 
-      <div className="flex items-start gap-1">
+      {/* El ícono va ARRIBA del título y no al lado: es la jerarquía de una página, no una viñeta
+          del renglón. Además deja el título alineado con el texto del contenido. */}
+      <div className="mb-1 -ml-1">
         <SelectorDeIcono
           icono={icono}
           editable={editable}
           onElegir={(valor) => void guardarMeta({ icono: valor }, "Ícono cambiado.")}
         />
+      </div>
 
+      <div className="flex items-start gap-1">
         {editandoTitulo ? (
           <input
             autoFocus
@@ -163,7 +167,7 @@ export default function EncabezadoDePagina({
           </h1>
         )}
 
-        <div className="flex shrink-0 items-center gap-2 pt-3">
+        <div className="flex shrink-0 items-center gap-2 pt-2">
           {editable && TEXTO_DEL_ESTADO[estado] && (
             <span className="text-2xs text-fg-muted" aria-live="polite">
               {TEXTO_DEL_ESTADO[estado]}

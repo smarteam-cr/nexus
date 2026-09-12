@@ -12,8 +12,9 @@
  *   · El ESQUEMA: `esquema-editor.ts` (sin bloques de archivo, con el aviso y el bloque vivo).
  *   · El MENÚ «/»: los de fábrica más los dos propios. Se apaga el de fábrica (`slashMenu={false}`)
  *     y se monta el controlador a mano; es la única forma de sumarle ítems.
- *   · El MENÚ «@»: enlazar a otra página de la base, como en Notion. Inserta el ID de la página,
- *     no su nombre: el título se resuelve al pintar y por eso un renombre no deja rastros viejos.
+ *   · El MENÚ «@»: enlazar a otra página de la base —o CREARLA con ese nombre y enlazarla de una,
+ *     como en Notion. Inserta el ID de la página, no su nombre: el título se resuelve al pintar, y
+ *     por eso un renombre no deja rastros viejos.
  *
  * ⚠ Los dos `getItems` van MEMOIZADOS. El controlador registra su disparador en un efecto: una
  * función nueva en cada render lo des-registra y lo vuelve a registrar sin parar.
@@ -26,6 +27,7 @@ import "@blocknote/react/style.css";
 import "@blocknote/mantine/style.css";
 import "./editor.css";
 import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { filterSuggestionItems } from "@blocknote/core";
 import { es } from "@blocknote/core/locales";
 import {
@@ -34,6 +36,8 @@ import {
   useCreateBlockNote,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
+import { fetchJson } from "@/lib/api/fetch-json";
+import { useToast } from "@/components/ui";
 import { useTheme } from "@/lib/theme";
 import { FUENTES_VIVAS } from "@/lib/documentacion/tipos";
 import { TONOS_DE_AVISO } from "./bloques/Aviso";
@@ -53,6 +57,8 @@ const NOMBRE_DEL_TONO: Record<string, string> = {
 };
 
 export interface EditorDePaginaProps {
+  /** La página que se está editando: el «@» crea las subpáginas nuevas adentro de ésta. */
+  paginaId: string;
   /** Los bloques guardados. Vacío = página nueva (BlockNote arranca con un párrafo en blanco). */
   contenidoInicial: BloqueParcialDeDocumentacion[];
   /** Falso = solo lectura (sin permiso de edición, o página bloqueada). */
@@ -61,8 +67,15 @@ export interface EditorDePaginaProps {
   onCambio?: (documento: BloqueDeDocumentacion[]) => void;
 }
 
-export default function EditorDePagina({ contenidoInicial, editable, onCambio }: EditorDePaginaProps) {
+export default function EditorDePagina({
+  paginaId,
+  contenidoInicial,
+  editable,
+  onCambio,
+}: EditorDePaginaProps) {
   const { isDark } = useTheme();
+  const router = useRouter();
+  const toast = useToast();
   const { lista: paginas } = usePaginasEnlazables();
 
   const editor = useCreateBlockNote({
@@ -100,29 +113,77 @@ export default function EditorDePagina({ contenidoInicial, editable, onCambio }:
     [editor],
   );
 
-  /** El menú «@»: enlazar a otra página de la base. */
+  /**
+   * El menú «@»: enlazar a una página que ya existe, o CREARLA con ese nombre y enlazarla de una.
+   *
+   * Lo segundo es lo que hace que escribir no se corte: nombrás algo que todavía no está escrito,
+   * la página queda creada en su lugar del árbol y seguís en la frase. Es como funciona Notion.
+   */
   const traerPaginas = useCallback(
     async (consulta: string) => {
-      const q = consulta.trim().toLowerCase();
-      return paginas
+      const texto = consulta.trim();
+      const q = texto.toLowerCase();
+
+      const enlazar = (p: { id: string; slug: string; titulo: string; icono: string | null }) => {
+        editor.insertInlineContent([
+          {
+            type: "mencion",
+            props: { paginaId: p.id, slug: p.slug, titulo: p.titulo, icono: p.icono ?? "" },
+          },
+          " ",
+        ]);
+      };
+
+      const crearYEnlazar = async (parentId: string | null) => {
+        try {
+          const r = await fetchJson<{
+            pagina: { id: string; slug: string; titulo: string };
+          }>("/api/documentacion/paginas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ titulo: texto, parentId }),
+          });
+          enlazar({ ...r.pagina, icono: null });
+          toast.success(`Página «${r.pagina.titulo}» creada.`);
+          router.refresh();
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "No se pudo crear la página.");
+        }
+      };
+
+      const existentes = paginas
         .filter((p) => !q || p.titulo.toLowerCase().includes(q))
         .slice(0, 20)
         .map((p) => ({
           title: p.titulo,
           group: "Enlazar a una página",
+          /* Dónde vive: dos páginas se pueden llamar igual en ramas distintas. */
+          subtext: p.ruta.length > 0 ? p.ruta.join(" / ") : "Nivel más alto",
           icon: <span aria-hidden="true">{p.icono ?? "📄"}</span>,
-          onItemClick: () => {
-            editor.insertInlineContent([
-              {
-                type: "mencion",
-                props: { paginaId: p.id, slug: p.slug, titulo: p.titulo, icono: p.icono ?? "" },
-              },
-              " ",
-            ]);
-          },
+          onItemClick: () => enlazar(p),
         }));
+
+      if (!texto) return existentes;
+
+      return [
+        ...existentes,
+        {
+          title: `Nueva subpágina «${texto}»`,
+          group: "Crear",
+          subtext: "Se crea adentro de esta página y queda enlazada acá.",
+          icon: <span aria-hidden="true">＋</span>,
+          onItemClick: () => void crearYEnlazar(paginaId),
+        },
+        {
+          title: `Nueva página «${texto}»`,
+          group: "Crear",
+          subtext: "Se crea en el nivel más alto del árbol.",
+          icon: <span aria-hidden="true">↗</span>,
+          onItemClick: () => void crearYEnlazar(null),
+        },
+      ];
     },
-    [editor, paginas],
+    [editor, paginas, paginaId, router, toast],
   );
 
   return (

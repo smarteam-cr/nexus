@@ -1,16 +1,24 @@
 /*
- * components/documentacion/editor.css — el tema de BlockNote atado a los tokens de Nexus.
+ * components/documentacion/editor.css — el tema del editor, atado a los tokens de Nexus.
  *
- * BlockNote declara sus colores como variables en `.bn-root` y `.bn-root[data-color-scheme=dark]`
- * (especificidad 0,2,0). Acá se re-apuntan a las variables semánticas de `app/globals.css`, que
- * ya flipean solas con `html.light`: UN solo mapeo sirve para los dos temas, sin duplicar paletas.
- * El selector con `[data-color-scheme]` pesa 0,3,0 y gana sin depender del orden en que el
- * bundler encadene los CSS.
+ * ── LAS DOS MITADES DE ESTE ARCHIVO ──────────────────────────────────────────
+ * 1. El MAPEO de colores: BlockNote declara los suyos como variables en `.bn-root` y
+ *    `.bn-root[data-color-scheme=dark]` (especificidad 0,2,0). Acá se re-apuntan a las variables
+ *    semánticas de `app/globals.css`, que ya flipean solas con `html.light`: UN solo mapeo sirve
+ *    para los dos temas, sin duplicar paletas. El selector con `[data-color-scheme]` pesa 0,3,0 y
+ *    gana sin depender del orden en que el bundler encadene los CSS.
+ * 2. Los RETOQUES de los bloques que BlockNote pinta con colores FIJOS —la cita, el separador, la
+ *    tabla, el bloque de código—. Ésos no salen de sus variables: están escritos a mano en su CSS
+ *    con grises que funcionan en un tema y se rompen en el otro (una tabla con bordes `#ddd` sobre
+ *    fondo oscuro es una reja blanca). Cada uno se re-apunta acá a un token.
  *
  * ⚠ Este archivo se importa desde `EditorDePagina.tsx` (el módulo que se carga perezoso), NUNCA
  * con `@import` desde `globals.css`: Turbopack no relee los CSS encadenados por `@import`
  * (docs/KNOWN-ERRORS.md).
  */
+
+/* ── 1 · Los colores del editor ─────────────────────────────────────────────── */
+
 .nx-doc .bn-root[data-color-scheme],
 .nx-doc .bn-root {
   --bn-colors-editor-text: var(--foreground);
@@ -30,13 +38,83 @@
   --bn-colors-shadow: rgb(0 0 0 / 0.25);
   /* La app usa su propia tipografía: la Inter que trae BlockNote no se carga. */
   --bn-font-family: inherit;
-  /* Los menús del editor (/, barra de formato, arrastre) son popovers: misma capa que
-     POPOVER en lib/ui/z.ts — por encima de lo sticky y de los drawers, por debajo de los toasts. */
+  /* Los menús del editor (/, @, barra de formato, arrastre) son popovers: misma capa que POPOVER
+     en lib/ui/z.ts — por encima de lo sticky y de los drawers, por debajo de los toasts. */
   --bn-ui-base-z-index: 80;
+  --bn-border-radius: 8px;
 }
 
-/* El editor hereda el ancho de la columna de lectura; el margen izquierdo es el que BlockNote
-   reserva para la manija de arrastre y el «+». */
+/* ── 2 · El lienzo ──────────────────────────────────────────────────────────── */
+
+/* El margen izquierdo es el que BlockNote reserva para la manija de arrastre y el «+»: sin él,
+   los controles quedarían encima del texto. A la derecha no hace falta. */
 .nx-doc .bn-editor {
   padding-inline: 54px 0;
+}
+
+/* Los encabezados del CONTENIDO, más chicos que el título de la página (que es el h1 real) y con
+   aire arriba: es el ritmo que hace legible una página larga. BlockNote los trae en 3em/2em. */
+.nx-doc [data-content-type="heading"] {
+  --level: 1.6em;
+  padding-top: 1.6rem;
+}
+.nx-doc [data-content-type="heading"][data-level="2"] {
+  --level: 1.3em;
+}
+.nx-doc [data-content-type="heading"][data-level="3"] {
+  --level: 1.08em;
+}
+
+/* El texto de ayuda del bloque vacío («Escribí / para comandos»). */
+.nx-doc .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  color: var(--fg-muted);
+}
+
+/* ── 3 · Los bloques que BlockNote pinta con colores fijos ──────────────────── */
+
+.nx-doc [data-content-type="quote"] blockquote {
+  color: var(--fg-secondary);
+  border-left-color: var(--line);
+}
+
+.nx-doc [data-content-type="divider"] hr {
+  border-top-color: var(--line);
+}
+
+/* La tabla: bordes con el token (los `#ddd` de fábrica son una reja blanca en modo oscuro) y el
+   encabezado con fondo suave, como cualquier tabla de la app. */
+.nx-doc .bn-editor [data-content-type="table"] th,
+.nx-doc .bn-editor [data-content-type="table"] td {
+  border-color: var(--line);
+}
+.nx-doc .bn-editor [data-content-type="table"] th {
+  background-color: var(--surface-muted);
+}
+
+/* El bloque de código nace negro con texto blanco: en modo claro es una mancha. Se le da la
+   superficie tenue del tema, que en oscuro sigue siendo oscura. */
+.nx-doc .bn-block-content[data-content-type="codeBlock"] {
+  background-color: var(--surface-muted);
+  color: var(--foreground);
+  border: 1px solid var(--line);
+}
+
+/* ── 4 · Los controles que aparecen al pasar el mouse ───────────────────────── */
+
+/* La manija de arrastre y el «+» viven en el margen y solo se ven al pasar por el bloque. Se les
+   da el mismo lenguaje que a los botones del árbol: apagados, y con fondo al apuntarlos. */
+.nx-doc .bn-side-menu button {
+  border-radius: 6px;
+  color: var(--fg-muted);
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.nx-doc .bn-side-menu button:hover {
+  background-color: var(--surface-hover);
+  color: var(--foreground);
+}
+
+/* Los enlaces del texto (los `@` a otras páginas traen su propio estilo). */
+.nx-doc .bn-inline-content a {
+  color: var(--brand);
+  text-underline-offset: 2px;
 }

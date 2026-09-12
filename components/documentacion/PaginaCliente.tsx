@@ -151,6 +151,7 @@ export default function PaginaCliente({
           {editable && <AvisoDeGuardado estado={estado} />}
           <EditorDePagina
             key={pagina.id}
+            paginaId={pagina.id}
             contenidoInicial={contenido}
             editable={editable && estado !== "conflicto"}
             onCambio={editable ? (documento) => alCambiar(documento as unknown[]) : undefined}
