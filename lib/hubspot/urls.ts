@@ -13,6 +13,8 @@
  * ninguna, así que el portal se pasa siempre explícito — nunca hay un default.
  */
 
+import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
+
 const APP = "https://app.hubspot.com";
 
 /** Ficha de una empresa. `null` si falta cualquiera de las dos piezas: sin las dos no hay link. */
@@ -60,4 +62,25 @@ export function hubspotTicketUrl(
 export function hubspotCompanyListUrl(portalId: string | null | undefined): string | null {
   if (!portalId) return null;
   return `${APP}/contacts/${portalId}/companies/list`;
+}
+
+/**
+ * Ficha de un PROYECTO. Acá la forma cambia, y por eso vale un helper propio: «projects» es un
+ * objeto PERSONALIZADO de HubSpot, así que su ficha no vive en `/contacts/<portal>/project/<id>`
+ * —ese segmento no existe— sino en `/contacts/<portal>/record/<objectTypeId>/<id>`. El
+ * objectTypeId lo declara un solo lugar (`OBJETO_PROYECTOS`), el mismo que usa el creador del
+ * record: escribirlo a mano acá sería la segunda copia de un número que, equivocado, abre otro
+ * objeto entero.
+ *
+ * ⚠ El portal es el del SISTEMA (el CRM de Smarteam), donde viven los records de proyecto —
+ * nunca el portal propio del cliente, aunque la ficha tenga uno conectado.
+ *
+ * `null` si falta cualquiera de las dos piezas: sin las dos no hay link.
+ */
+export function hubspotProjectUrl(
+  portalId: string | null | undefined,
+  projectRecordId: string | null | undefined,
+): string | null {
+  if (!portalId || !projectRecordId) return null;
+  return `${APP}/contacts/${portalId}/record/${OBJETO_PROYECTOS}/${projectRecordId}`;
 }

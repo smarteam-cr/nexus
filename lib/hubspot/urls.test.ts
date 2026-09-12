@@ -8,7 +8,13 @@
  * decidir NO pintarlo.
  */
 import { describe, expect, it } from "vitest";
-import { hubspotCompanyListUrl, hubspotCompanyUrl, hubspotDealUrl } from "./urls";
+import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
+import {
+  hubspotCompanyListUrl,
+  hubspotCompanyUrl,
+  hubspotDealUrl,
+  hubspotProjectUrl,
+} from "./urls";
 
 describe("URLs de HubSpot", () => {
   it("la ficha de empresa apunta al portal correcto, en singular", () => {
@@ -47,5 +53,29 @@ describe("hubspotDealUrl", () => {
     expect(hubspotDealUrl(null, "39218114285")).toBeNull();
     expect(hubspotDealUrl("6553628", null)).toBeNull();
     expect(hubspotDealUrl("6553628", "")).toBeNull();
+  });
+});
+
+
+describe("hubspotProjectUrl", () => {
+  it("un proyecto es un objeto PERSONALIZADO: va por /record/<objectTypeId>/<id>", () => {
+    // La trampa: copiar la forma de empresa o trato (`/project/<id>`) da un 404 dentro de
+    // HubSpot que se lee como "no tengo permiso". El objeto personalizado se abre por /record.
+    expect(hubspotProjectUrl("6553628", "586345112479")).toBe(
+      `https://app.hubspot.com/contacts/6553628/record/${OBJETO_PROYECTOS}/586345112479`,
+    );
+  });
+
+  it("el objectTypeId sale del único lugar que lo declara, no de una copia", () => {
+    // Si alguien escribe el número a mano en urls.ts, esta comparación deja de probar nada:
+    // por eso se arma la URL esperada CON la constante.
+    expect(hubspotProjectUrl("1", "2")).toContain(`/record/${OBJETO_PROYECTOS}/`);
+  });
+
+  it("sin portal o sin record NO inventa una URL", () => {
+    expect(hubspotProjectUrl(null, "586345112479")).toBeNull();
+    expect(hubspotProjectUrl("6553628", null)).toBeNull();
+    expect(hubspotProjectUrl("6553628", "")).toBeNull();
+    expect(hubspotProjectUrl("", "586345112479")).toBeNull();
   });
 });

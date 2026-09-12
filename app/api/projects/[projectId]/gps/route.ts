@@ -22,6 +22,7 @@ import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
+import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -272,8 +273,23 @@ export const GET = withProjectAccess(async (
      cuarto pipeline es una fila de la tabla y no un `if` adentro de React. */
 
   // ── Info del proyecto (propiedades de HubSpot + base) ────────────────────
+  /* El link a la ficha del proyecto en HubSpot. El portal es el del SISTEMA (el CRM de
+     Smarteam): los records de proyecto viven ahí, no en el portal propio del cliente cuando lo
+     conectó — cruzarlos abre un record ajeno o ninguno (ver lib/hubspot/urls.ts). La consulta
+     se paga SOLO si el proyecto está espejado: uno creado a mano en Nexus no tiene ficha que
+     abrir, y sin portal el helper devuelve null y el widget pinta el nombre sin enlace. */
+  const portalDelSistema = project.hubspotServiceId
+    ? (
+        await prisma.hubspotAccount.findFirst({
+          where: { isSystem: true },
+          select: { hubspotPortalId: true },
+        })
+      )?.hubspotPortalId ?? null
+    : null;
+
   const projectInfo = {
     name: project.name,
+    hubspotUrl: hubspotProjectUrl(portalDelSistema, project.hubspotServiceId),
     pipelineName: project.hubspotPipelineName,
     cseEncargado: project.hubspotOwnerName,
     cseEncargadoEmail: project.hubspotOwnerEmail,

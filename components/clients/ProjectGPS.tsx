@@ -76,6 +76,9 @@ interface FrontPair {
 
 interface ProjectInfo {
   name: string | null;
+  /** Ficha del proyecto en HubSpot, armada en el servidor. `null`/ausente = proyecto sin
+      espejo o sin portal: se pinta el nombre sin enlace, nunca un link a medias. */
+  hubspotUrl?: string | null;
   pipelineName: string | null;
   cseEncargado: string | null;
   cseEncargadoEmail: string | null;
@@ -602,7 +605,19 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           {info.name && (
             <span className="min-w-0 truncate">
               <span className="text-fg-muted">Proyecto: </span>
-              <span className="text-fg font-medium" title={info.name}>{info.name}</span>
+              {info.hubspotUrl ? (
+                <a
+                  href={info.hubspotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-fg font-medium hover:text-brand hover:underline"
+                  title={`${info.name} — abrir en HubSpot`}
+                >
+                  {info.name}
+                </a>
+              ) : (
+                <span className="text-fg font-medium" title={info.name}>{info.name}</span>
+              )}
             </span>
           )}
           {info.pipelineName && (
