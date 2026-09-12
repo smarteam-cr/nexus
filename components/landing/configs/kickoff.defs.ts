@@ -98,7 +98,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     empty: { intro: "", items: [] },
     agentHint: "3-5 objetivos acordados, en cards de una línea.",
     brief:
-      "3-5 objetivos del proyecto en el lenguaje del cliente. `title` = el objetivo en 3-6 palabras; `detail` = UNA línea de contexto (opcional, máx. 20 palabras). `intro` opcional: una frase. SOLO lo respaldado por el handoff — no inflar. Fuente: `alcance_contratado` y `expectativas`. La comparación Hoy/Con-el-sistema NO va acá (tiene su propia sección).",
+      "3-5 objetivos del proyecto en el lenguaje del cliente. `title` = el objetivo en 3-6 palabras; `detail` = UNA línea de contexto (opcional, máx. 20 palabras). `intro` opcional: una frase. SOLO lo respaldado por el handoff — no inflar. Fuente: `resultados_cliente` (los resultados de negocio que el cliente necesita alcanzar), completado con `alcance_contratado` y `expectativas`. Los objetivos dicen QUÉ se logra; cómo se mide va en las métricas. La comparación Hoy/Con-el-sistema NO va acá (tiene su propia sección).",
     /* ⚠ Escribía su propia copia del esquema de prosa, idéntica a la constante. Sexta copia, y la
        única que se quedó afuera al consolidar las cinco: por eso la guarda de abajo prueba que
        TODA sección de prosa comparte la constante, en vez de contar archivos. */
@@ -181,7 +181,7 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     empty: proseEmpty,
     agentHint: "3-4 métricas de éxito, una línea cada una.",
     brief:
-      "3-4 cards de métricas. `title` = la métrica en 3-6 palabras; `detail` = UNA línea de cómo se mide. Si el handoff no trae métricas, formulalas como PROPUESTA ('Proponemos medir…'), nunca como algo ya acordado. Fuente: `expectativas`. Nunca inventes cifras.",
+      "3-4 cards de métricas. `title` = la métrica en 3-6 palabras; `detail` = UNA línea de cómo se mide. Si el handoff no trae métricas, formulalas como PROPUESTA ('Proponemos medir…'), nunca como algo ya acordado. Fuente: `resultados_cliente` (CÓMO se verifica cada resultado) y, si no alcanza, `expectativas`. No repitas los objetivos: las métricas dicen cómo se sabe que se lograron. Nunca inventes cifras.",
     schema: proseSchema,
     schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
@@ -353,8 +353,15 @@ export const KICKOFF_DEF_BY_KEY: Record<string, BCSectionDef> = Object.fromEntri
  * fuente, no solo prohibidas en el prompt. Excluidas a propósito:
  *   `acuerdos_promesas` (compromisos comerciales), `motivacion_decision` (por qué nos
  *   eligieron), `estado_en_flight` (estado interno), `riesgos_banderas` (riesgos).
+ *
+ * Entra PRIMERA, con decisión escrita (Elías, 2026-09-12): `resultados_cliente` — los
+ * resultados de negocio que el cliente declaró que necesita alcanzar. Son sus palabras sobre
+ * su propio negocio, así que devolvérselos al arrancar es lo contrario de una fuga: es lo que
+ * hace que los objetivos y las métricas del kickoff se prometan contra lo mismo que la Entrega
+ * va a medir.
  */
 export const KICKOFF_HANDOFF_KEYS = [
+  "resultados_cliente",
   "fecha_inicio_kickoff",
   "alcance_contratado",
   "desarrollo",

@@ -135,14 +135,26 @@ export const IMPLEMENTACION_CIERRE_DEFAULT = {
 // YA NO se crea con createDefaultCanvases: el handoff es una entidad cliente-level
 // (model Handoff) que arranca el proyecto, y su canvas lo monta el FLUJO de
 // creación de handoffs (createHandoffCanvas, Fase 4). Se mantiene la definición
-// acá como fuente ÚNICA de las 11 secciones — el agente "Handoff Sales→CS" escribe
+// acá como fuente ÚNICA de las 12 secciones — el agente "Handoff Sales→CS" escribe
 // en ellas vía AGENT_GROUP_TO_CANVAS. Cada sección 1:1 con una card del agente.
+/**
+ * La sección que explica el PROPÓSITO del proyecto: a qué resultados de negocio tiene que llegar el
+ * cliente. Un solo lugar la nombra — la UI la lee para destacarla y las guardas para exigirla —,
+ * así que ni la pantalla ni los tests transcriben la key.
+ */
+export const HANDOFF_SECCION_PRINCIPAL = "resultados_cliente";
+
 export const HANDOFF_CANVAS: CanvasDefinition = {
   slug: "handoff",
   name: "Handoff",
   isDefault: false,
   order: 0,
   sections: [
+    /* LA SECCIÓN PRINCIPAL: para qué hace todo esto el cliente (2026-09-12). Va PRIMERA a
+       propósito, por dos motivos: `CanvasLinearView` la pinta destacada a ancho completo, y como
+       el contexto del handoff se serializa por `order`, entra primero al presupuesto de los
+       documentos que la leen (kickoff y Entrega) — un recorte se come lo de abajo, no esto. */
+    { key: "resultados_cliente",   label: "Resultados que el cliente necesita alcanzar" },
     { key: "fecha_inicio_kickoff", label: "Fecha de inicio / Kickoff" },
     { key: "acuerdos_promesas",    label: "Acuerdos clave y promesas especiales" },
     { key: "alcance_contratado",   label: "¿Qué vendimos?" },

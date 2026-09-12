@@ -17,7 +17,7 @@
  *
  * ── EL CONTRATO QUE NO SE PUEDE ROMPER ──────────────────────────────────────
  * Los tres prompts producen EL MISMO JSON:
- *   · `sections` con las MISMAS 10 keys (se derivan de HANDOFF_CANVAS acá abajo, no se
+ *   · `sections` con las MISMAS keys (se derivan de HANDOFF_CANVAS acá abajo, no se
  *     transcriben: `reconcileHandoffCanvasSections` corre ANTES DE CADA generación y
  *     renormaliza el canvas contra esa plantilla única, así que una key propia se perdería en
  *     la primera regeneración).
@@ -48,7 +48,7 @@ import "dotenv/config";
 import { assertProdWriteAllowed } from "./lib/guard";
 import { createScriptPool } from "./lib/db";
 import { PROJECT_PIPELINES } from "../lib/projects/kind";
-import { AGENTES_HANDOFF_POR_TIPO, KEYS } from "../lib/agents/handoff-por-tipo";
+import { AGENTES_HANDOFF_POR_TIPO, SECCION_DEFAULT } from "../lib/agents/handoff-por-tipo";
 
 assertProdWriteAllowed("scripts/seed-handoff-agents-por-tipo.ts");
 const { pool } = createScriptPool();
@@ -105,7 +105,7 @@ async function main() {
         associatedStep: 0,
         sectionLabel: null,
         // Tiene que ser una key que EXISTA en el canvas de handoff, o el bloque cae en la nada.
-        defaultCanvasSection: KEYS[1],
+        defaultCanvasSection: SECCION_DEFAULT,
         additionalInstructions: null,
       },
       update: {
@@ -114,7 +114,7 @@ async function main() {
         systemPrompt: def.systemPrompt,
         agentGroup: "handoff",
         pipelineKey: def.pipelineKey,
-        defaultCanvasSection: KEYS[1],
+        defaultCanvasSection: SECCION_DEFAULT,
         // status / outputType / associatedStages / associatedStep / groupOrder — sin cambios.
       },
       select: { id: true, name: true, pipelineKey: true, status: true, defaultCanvasSection: true },

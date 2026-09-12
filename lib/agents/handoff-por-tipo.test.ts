@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { AGENTES_HANDOFF_POR_TIPO, KEYS, PROMPT_DEV, PROMPT_WEB, bloqueDeSecciones } from "./handoff-por-tipo";
+import {
+  AGENTES_HANDOFF_POR_TIPO,
+  KEYS,
+  PROMPT_DEV,
+  PROMPT_WEB,
+  SECCION_DEFAULT,
+  bloqueDeSecciones,
+} from "./handoff-por-tipo";
 import { HANDOFF_CANVAS } from "@/lib/canvas/canvas-defs";
 import { lineaDeAvance, pipelineByKey } from "@/lib/projects/kind";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "./resolver";
@@ -229,5 +236,36 @@ describe("candado: el seed avisa en vez de pisar", () => {
       "cmmla1g1x00005wijix3qnr7u",
     );
     expect(src, "el seed importa del seed viejo").not.toContain('from "./seed-handoff-agent');
+  });
+});
+
+describe("los RESULTADOS del cliente y la recurrencia (2026-09-12)", () => {
+  const SEED_CS = fs.readFileSync(path.join(RAIZ, "scripts/seed-handoff-agent.ts"), "utf8");
+  const LOS_TRES: ReadonlyArray<readonly [string, string]> = [...PROMPTS, ["customer success (seed)", SEED_CS]];
+
+  it("LA guarda: los tres escriben los resultados como HITOS o METAS SOSTENIDAS según la modalidad", () => {
+    /* La edición que la pone en rojo: sacar la variante de la guía «para simplificarla». El handoff
+       de un servicio recurrente vuelve a prometer hitos con fecha de fin que nunca llegan. */
+    for (const [tipo, p] of LOS_TRES) {
+      expect(p, `${tipo}: la guía de resultados perdió la variante de fin definido`).toContain("HITOS");
+      expect(p, `${tipo}: la guía de resultados perdió la variante recurrente`).toContain("METAS SOSTENIDAS");
+    }
+  });
+
+  it("isRecurrent se pide como BOOLEANO, nunca entre comillas", () => {
+    /* La edición que la pone en rojo: volver a `"isRecurrent": "<true o false>"`. El modelo devuelve
+       el string, el consumidor espera un booleano y el tag recurrente no se escribe, sin un log. */
+    for (const [tipo, p] of LOS_TRES) {
+      expect(p, `${tipo}: isRecurrent vuelve a pedirse como string`).not.toContain('"isRecurrent": "');
+    }
+  });
+
+  it("la sección default se nombra, no se cuenta por posición", () => {
+    /* La edición que la pone en rojo: volver a `KEYS[1]`. La próxima sección que entre al principio
+       de la plantilla le cambia el default a los dos agentes, en silencio. */
+    const seed = fs.readFileSync(path.join(RAIZ, SEED), "utf8");
+    expect(seed, "el seed usa una posición de KEYS").not.toMatch(/KEYS\[\d+\]/);
+    expect(seed).toContain("defaultCanvasSection: SECCION_DEFAULT");
+    expect(KEYS, "la sección default no existe en el canvas").toContain(SECCION_DEFAULT);
   });
 });

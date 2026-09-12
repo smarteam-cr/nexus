@@ -174,6 +174,16 @@ const LECTORES: Lector[] = [
     exposicion: "interno",
     porque: "el resumen «cómo va este proyecto» es del equipo; nunca sale de Nexus",
   },
+  {
+    archivo: "app/api/clients/[id]/analyze/route.ts",
+    ancla: "loadCiclosAnterioresContext",
+    pieza: "handoff",
+    exposicion: "interno",
+    porque:
+      "los CICLOS ANTERIORES de un servicio recurrente: la Entrega publicada de cada proyecto previo " +
+      "y, si no la tiene, su handoff filtrado. Alimenta el handoff, que es interno; lo que de ahí " +
+      "llegue al cliente pasa después por las allowlists de kickoff y Entrega que este archivo guarda",
+  },
 ];
 
 /**
@@ -217,7 +227,9 @@ function llamadasQueLeenElHandoff(): Llamada[] {
         .readFileSync(p, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, " ")
         .replace(/^\s*\/\/.*$/gm, " ");
-      const re = /loadHandoffContext\s*\(/g;
+      /* `loadCiclosAnterioresContext` también lee handoffs —los de ciclos ANTERIORES— y sin esta
+         segunda forma era invisible para el censo: ni huérfana ni declarada. */
+      const re = /load(?:HandoffContext|CiclosAnterioresContext)\s*\(/g;
       let m: RegExpExecArray | null;
       while ((m = re.exec(src)) !== null) {
         out.push({
@@ -362,5 +374,20 @@ describe("⚠ lo que el kickoff y la Entrega NO pueden ver", () => {
       const lista = src.slice(i, src.indexOf("as const", i));
       expect((lista.match(/"/g) ?? []).length / 2, `${constante} quedó vacía`).toBeGreaterThan(2);
     }
+  });
+});
+
+describe("⭐ los RESULTADOS del cliente cruzan al kickoff y a la Entrega (Elías, 2026-09-12)", () => {
+  it.each([
+    ["kickoff", "components/landing/configs/kickoff.defs.ts", "KICKOFF_HANDOFF_KEYS"],
+    ["Entrega", "components/landing/configs/entrega.defs.ts", "ENTREGA_HANDOFF_KEYS"],
+  ])("la allowlist de %s lleva «resultados_cliente»", (_doc, archivo, constante) => {
+    /* La edición que la pone en rojo: sacarla de la Entrega «porque el cierre ya tiene logros». El
+       kickoff promete contra los resultados y la Entrega deja de poder medir contra lo mismo. */
+    const src = leer(archivo);
+    const i = src.indexOf(`export const ${constante}`);
+    expect(i, `no encontré ${constante}`).toBeGreaterThan(-1);
+    const lista = src.slice(i, src.indexOf("as const", i));
+    expect(lista, `${constante} perdió los resultados del cliente`).toContain('"resultados_cliente"');
   });
 });

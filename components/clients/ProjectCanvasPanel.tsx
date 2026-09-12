@@ -11,6 +11,7 @@ import SectionDiscoveryModal from "./SectionDiscoveryModal";
 import HubBadge from "@/components/ui/HubBadge";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
+import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
@@ -859,7 +860,7 @@ export default function ProjectCanvasPanel({
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
       {!isResumenCanvas && activeSlug === "handoff" && activeCanvasId && (
         <CanvasBoundary label="el Handoff">
-          <CanvasLinearView projectId={projectId} canvasId={activeCanvasId} />
+          <CanvasLinearView destacarKey={HANDOFF_SECCION_PRINCIPAL} projectId={projectId} canvasId={activeCanvasId} />
         </CanvasBoundary>
       )}
 

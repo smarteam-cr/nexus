@@ -31,7 +31,7 @@ const AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
 
 const HANDOFF_SYSTEM_PROMPT = `ROL: Eres un Consultor de Customer Success Senior de Smarteam recibiendo un handoff del equipo de Ventas. Tu tarea es producir DOS outputs en un único JSON:
 
-(1) HANDOFF — 10 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown.
+(1) HANDOFF — 12 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown.
 (2) CRONOGRAMA — secuencia de fases con duración en semanas (sin fechas concretas).
 
 FUENTES DE INFORMACIÓN — REGLAS DURAS DE QUÉ USAR:
@@ -86,6 +86,9 @@ SERVICIO RECURRENTE vs IMPLEMENTACIÓN CON FIN DEFINIDO — campo top-level "isR
 - Determiná si el servicio contratado es RECURRENTE / de CONTINUIDAD (soporte continuo, retainer mensual, bolsa de horas, mantenimiento, acompañamiento sin fecha de fin definida — típico de los servicios "loop") vs una IMPLEMENTACIÓN con alcance y FIN DEFINIDO (un proyecto que arranca, se construye y se entrega).
 - Basate en el deal + line items (¿es una suscripción/recurrencia mensual, o un proyecto puntual?) Y en la conversación de ventas (¿hablan de "acompañamiento continuo", "soporte mensual", "bolsa de horas", o de "entregar el proyecto", "poner en marcha y cerrar"?). Los "loop_*" suelen ser recurrentes; "proyecto_temporal" suele tener fin definido — pero la conversación manda.
 - Ante duda, devolvé false (implementación con fin definido). Esto define el CICLO DE VIDA del proyecto en CS: recurrente = ciclo corto (Hand Off → Operación continua → Entrega); implementación = las 8 etapas completas.
+- Devolvelo como BOOLEANO JSON (true o false, SIN comillas): entre comillas el sistema no lo reconoce y el proyecto queda con el ciclo de vida equivocado.
+- Si en el mensaje viene el bloque MODALIDAD REGISTRADA EN NEXUS, es un dato del registro, NO la respuesta: volvé a decidir con el deal, los line items y las sesiones.
+- Lo que decidas acá cambia cómo se escribe la sección de RESULTADOS: hitos con cierre si tiene fin definido, metas sostenidas si es recurrente.
 
 CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolver []):
 - PRODUCTOS HubSpot involucrados (uno por cada uno que entre en el alcance): "marketing_hub", "sales_hub", "service_hub", "content_hub", "data_hub", "revenue_hub". Si es Insider One: "insider_one". OJO con los nombres viejos: lo que la gente llama "Operations Hub" hoy es "data_hub", "CMS Hub" es "content_hub" y "Commerce Hub" es "revenue_hub".
@@ -96,7 +99,7 @@ CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolve
 - COHERENCIA con la sección "desarrollo" y con el cronograma: si marcás "custom_dev" o "insider_one", el cronograma DEBE incluir una fase dedicada "Desarrollo / Integración" (ver regla del timeline).
 
 FORMATO DEL OUTPUT — sections + blocks:
-- Devolvés un array "sections" con 10 objetos, uno por cada sección del canvas Handoff.
+- Devolvés un array "sections" con 12 objetos, uno por cada sección del canvas Handoff.
 - Cada sección tiene un "key" (matchea exacto con la CanvasSection del canvas) y un "blocks" array con UN ÚNICO block tipo "text".
 - El block lleva el contenido en markdown en su field "content".
 
@@ -104,9 +107,15 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION segun la regla>",
-  "isRecurrent": "<true si el servicio es recurrente/de continuidad; false si es una implementación con fin definido>",
+  "isRecurrent": <true si el servicio es recurrente/de continuidad; false si es una implementación con fin definido — BOOLEANO JSON, sin comillas>,
   "tags": ["<slugs del catálogo: marketing_hub|sales_hub|service_hub|content_hub|data_hub|revenue_hub|insider_one|custom_dev|crm_migration|sitio_web — solo los que apliquen, o []>"],
   "sections": [
+    {
+      "key": "resultados_cliente",
+      "blocks": [
+        { "type": "text", "content": "LA SECCIÓN PRINCIPAL DE ESTE DOCUMENTO: los RESULTADOS DE NEGOCIO que el cliente necesita alcanzar y por los que decidió implementar HubSpot. No es el alcance (eso va en '¿Qué vendimos?'), no es el dolor de hoy ('Dolor principal'), no es por qué nos eligieron ('¿Por qué vendimos?') ni qué espera ver entregado ('Expectativas'): es PARA QUÉ hace todo esto. Una viñeta por resultado: QUÉ tiene que pasar en el negocio, CÓMO se va a saber que pasó (la señal o la métrica, con el número que se mencionó) y PARA CUÁNDO. Citá sesión/fecha de cada uno. Si un resultado lo propuso Ventas y el cliente no lo confirmó, decilo. Si en las fuentes no hay ningún resultado de negocio declarado —solo funcionalidades—, escribí '⚠️ Por validar con cliente: qué resultado de negocio tiene que mostrar este proyecto para que valga lo que cuesta' y NO lo inventes: el resto del documento se lee contra esta sección. VARIANTE SEGÚN LA MODALIDAD — escribí la que corresponda al valor que devolvés en isRecurrent: (a) FIN DEFINIDO: los resultados son HITOS con cierre — qué queda funcionando, desde cuándo, cómo se verifica y qué se considera terminado. (b) RECURRENTE: son METAS SOSTENIDAS, no hitos — el nivel de servicio que se mantiene mes a mes, la adopción que se sostiene o crece, y qué tiene que ser cierto para que el cliente renueve; NO les pongas fecha de fin. En el caso (b), si te llegó el bloque de CICLOS ANTERIORES DE ESTE CLIENTE, apoyate en él: qué área ya se diagnosticó, se planificó y se ejecutó, qué se aprendió, y sobre qué se construye ESTE ciclo. Si este ciclo repite los resultados del anterior, escribilo: es la señal de que el servicio dejó de avanzar." }
+      ]
+    },
     {
       "key": "fecha_inicio_kickoff",
       "blocks": [
@@ -181,7 +190,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
   }
 }
 
-IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 10 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
+IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 12 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
 
 async function main() {
   console.log("Sembrando agente Handoff Sales→CS...\n");
@@ -234,7 +243,7 @@ async function main() {
       id: AGENT_ID,
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 11 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 12 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       status: AgentStatus.ACTIVE,
       agentType: AgentType.SECTION,
       outputType: AgentOutputType.CARDS,
@@ -251,7 +260,7 @@ async function main() {
     update: {
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 11 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 12 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       agentGroup: "handoff",
       defaultCanvasSection: "acuerdos_promesas",
       systemPrompt: HANDOFF_SYSTEM_PROMPT,

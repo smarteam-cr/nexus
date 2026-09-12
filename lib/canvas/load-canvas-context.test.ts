@@ -13,7 +13,14 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { flattenCardData, ENTREGA_PREVIA_KEYS, formatEntregaPreviaBlock } from "./load-canvas-context";
+import {
+  flattenCardData,
+  ENTREGA_PREVIA_KEYS,
+  formatEntregaPreviaBlock,
+  CICLOS_ANTERIORES_HANDOFF_KEYS,
+  TOPES_CICLOS_ANTERIORES,
+} from "./load-canvas-context";
+import { HANDOFF_CANVAS } from "./canvas-defs";
 import { ENTREGA_SECTION_DEFS } from "@/components/landing/configs/entrega.defs";
 
 /** El shape real de la sección `sesiones` de Exploración (formato nuevo). */
@@ -176,5 +183,55 @@ describe("Fase 10 — «qué logramos antes»: la Entrega previa entra al contex
       const bloqueQuery = cuerpo.slice(iEntrega, cuerpo.indexOf("]);", iEntrega));
       expect(bloqueQuery, "la query de la Entrega no excluye el proyecto actual").toContain("excluirActual");
     });
+  });
+});
+
+describe("los CICLOS ANTERIORES de un recurrente (2026-09-12)", () => {
+  const src = fs.readFileSync(path.join(process.cwd(), "lib/canvas/load-canvas-context.ts"), "utf8");
+  const i = src.indexOf("export async function loadCiclosAnterioresContext");
+  const cuerpo = i < 0 ? "" : src.slice(i, src.indexOf("\nfunction ", i));
+
+  it("las secciones del handoff previo existen, y NO incluyen las internas ni las que tientan a copiar", () => {
+    /* La edición que la pone en rojo: sumar `fuera_de_alcance` «para no re-ofrecer lo mismo». Entra
+       al prompt del handoff nuevo, y de ahí la única barrera que queda es la allowlist del kickoff. */
+    const keys = HANDOFF_CANVAS.sections.map((s) => s.key);
+    for (const k of CICLOS_ANTERIORES_HANDOFF_KEYS) expect(keys, `«${k}» no existe en el handoff`).toContain(k);
+    const prohibidas = [
+      "fuera_de_alcance",
+      "riesgos_banderas",
+      "motivacion_decision",
+      "stakeholders_handoff",
+      "fecha_inicio_kickoff",
+      "dolor_principal",
+      "expectativas",
+    ];
+    for (const k of prohibidas) {
+      expect(CICLOS_ANTERIORES_HANDOFF_KEYS as readonly string[], `«${k}» no puede cruzar de un ciclo a otro`).not.toContain(k);
+    }
+  });
+
+  it("topes: hasta 3 ciclos, y cada documento por debajo del total", () => {
+    expect(TOPES_CICLOS_ANTERIORES.ciclos).toBe(3);
+    expect(TOPES_CICLOS_ANTERIORES.porEntrega).toBeLessThan(TOPES_CICLOS_ANTERIORES.total);
+    expect(TOPES_CICLOS_ANTERIORES.porHandoff).toBeLessThan(TOPES_CICLOS_ANTERIORES.total);
+  });
+
+  it("LA guarda: la Entrega PUBLICADA va primero y el handoff es solo el respaldo", () => {
+    /* La edición que la pone en rojo: leer el handoff de todos los ciclos, o la Entrega sin exigir que
+       esté publicada. La primera mete material que nadie revisó; la segunda, un borrador ajeno. */
+    expect(i, "no encontré loadCiclosAnterioresContext").toBeGreaterThan(0);
+    expect(cuerpo.length, "la guarda no mira nada").toBeGreaterThan(800);
+    expect(cuerpo, "la Entrega tiene que estar publicada").toMatch(/publishedSnapshotAt:\s*\{\s*not:\s*null\s*\}/);
+    expect(cuerpo, "de la Entrega, solo lo confirmado y filtrado").toMatch(
+      /"delivery",\s*\{\s*onlyConfirmed:\s*true,\s*includeKeys:\s*ENTREGA_PREVIA_KEYS/,
+    );
+    expect(cuerpo, "el handoff previo va filtrado").toContain("includeKeys: CICLOS_ANTERIORES_HANDOFF_KEYS");
+    const iEntrega = cuerpo.indexOf('loadCanvasContext(p.id, "delivery"');
+    const iHandoff = cuerpo.indexOf('"handoff", {');
+    expect(iEntrega, "falta la lectura de la Entrega").toBeGreaterThan(0);
+    expect(iHandoff, "el handoff tiene que ser la rama del respaldo, después de la Entrega").toBeGreaterThan(iEntrega);
+    expect(cuerpo, "la procedencia viaja adentro del texto").toContain("CICLOS ANTERIORES DE ESTE CLIENTE");
+    expect(cuerpo).toContain("NO copies sus fechas");
+    expect(cuerpo, "el proyecto actual no puede citarse a sí mismo").toContain("excludeProjectId");
   });
 });

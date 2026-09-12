@@ -48,6 +48,14 @@ interface BlockLite {
   status: string;
 }
 
+/* OJO: acá NO va `status: "active"` — el contexto de los agentes incluye a propósito los
+   proyectos ya terminados del cliente. Por eso se compone a mano con el átomo del sentinel en
+   vez de usar `proyectoClasificableWhere`, que sí exige activo (deuda declarada y contada en
+   scope-coverage.test.ts — tope 1: se define UNA vez, a nivel de módulo, y las queries de
+   `loadPriorRelationshipContext` y `loadCiclosAnterioresContext` la REUSAN, nunca la vuelven a
+   escribir). */
+const noEsSentinel = { OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }] };
+
 /**
  * Marco breve de la relación PREVIA del cliente con Smarteam (proyectos y handoffs
  * anteriores al actual), listo para inyectar como contexto en el prompt de un agente.
@@ -70,12 +78,6 @@ export async function loadPriorRelationshipContext(
   excludeProjectId?: string | null,
 ): Promise<string> {
   const excluirActual = excludeProjectId ? { id: { not: excludeProjectId } } : {};
-  /* OJO: acá NO va `status: "active"` — el contexto del agente incluye a propósito los
-     proyectos ya terminados del cliente. Por eso se compone a mano con el átomo del sentinel
-     en vez de usar `proyectoClasificableWhere`, que sí exige activo (deuda declarada y
-     contada en scope-coverage.test.ts — tope 1: se define UNA vez y las dos queries de abajo
-     la REUSAN, nunca la vuelven a escribir). */
-  const noEsSentinel = { OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }] };
   const [priorProjects, priorHandoffs, entregaPrevia] = await Promise.all([
     prisma.project.findMany({
       where: { clientId, ...noEsSentinel, ...excluirActual },
@@ -133,6 +135,106 @@ export async function loadPriorRelationshipContext(
       : "";
 
   return [cabecera, bloqueEntrega].filter(Boolean).join("\n\n");
+}
+
+/**
+ * Las secciones del HANDOFF de un ciclo anterior que se leen cuando ese ciclo no publicó su
+ * Entrega. Deliberadamente cuatro: qué se propuso lograr, qué área cubrió, qué base técnica dejó y
+ * qué quedó abierto. Quedan afuera las homónimas que el agente más tienta copiar (fechas,
+ * stakeholders, dolor, motivación, expectativas, riesgos) y, sobre todo, `fuera_de_alcance`: es la
+ * sección más interna del handoff y tiene un solo lector.
+ */
+export const CICLOS_ANTERIORES_HANDOFF_KEYS = [
+  "resultados_cliente",
+  "alcance_contratado",
+  "desarrollo",
+  "estado_en_flight",
+] as const;
+
+/** Topes del bloque de ciclos anteriores. El tope por documento se aplica ANTES que el total, así
+ *  el ciclo más viejo no se lo come el más reciente. Mismo orden de magnitud que el hermano mayor. */
+export const TOPES_CICLOS_ANTERIORES = { ciclos: 3, porEntrega: 2000, porHandoff: 1800, total: 6000 } as const;
+
+/**
+ * Los CICLOS ANTERIORES de un cliente con servicio RECURRENTE (2026-09-12, decisión de Elías).
+ *
+ * Un recurrente avanza por ciclos: se diagnostica, se planifica, se ejecuta y se aprende, y el ciclo
+ * siguiente toma otra área con el mismo método. Para que los RESULTADOS del ciclo nuevo se apoyen en
+ * lo ya hecho, se leen hasta 3 proyectos anteriores del cliente —del más reciente al más viejo— y de
+ * cada uno UNA sola cosa:
+ *   1. su ENTREGA PUBLICADA, si la tiene: la escribió y la publicó una persona;
+ *   2. si no, su HANDOFF, filtrado a `CICLOS_ANTERIORES_HANDOFF_KEYS`. Un handoff no lo revisa
+ *      nadie (sus bloques nacen confirmados), por eso es el respaldo y no la fuente.
+ *
+ * Vive en este archivo porque es el único sancionado por el candado del embudo para leer un
+ * handoff ajeno —igual que `loadHandoffDelHermanoMayorContext`— y la procedencia (proyecto, qué
+ * documento, de cuándo) viaja ADENTRO del texto.
+ *
+ * Devuelve "" si no hay ciclos con contenido: sin encabezado vacío, que gasta presupuesto y le
+ * sugiere al modelo que le falta algo.
+ */
+export async function loadCiclosAnterioresContext(
+  clientId: string,
+  excludeProjectId?: string | null,
+): Promise<string> {
+  const candidatos = await prisma.project.findMany({
+    where: { clientId, ...noEsSentinel, ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}) },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+    select: { id: true, name: true, createdAt: true },
+  });
+  if (candidatos.length === 0) return "";
+
+  const conEntregaPublicada = new Set(
+    (
+      await prisma.projectCanvas.findMany({
+        where: {
+          ...canvasOf("delivery"),
+          publishedSnapshotAt: { not: null },
+          projectId: { in: candidatos.map((c) => c.id) },
+        },
+        select: { projectId: true },
+      })
+    ).map((c) => c.projectId),
+  );
+
+  const bloques: string[] = [];
+  let usado = 0;
+  for (const p of candidatos) {
+    if (bloques.length >= TOPES_CICLOS_ANTERIORES.ciclos) break;
+    const esEntrega = conEntregaPublicada.has(p.id);
+    const texto = esEntrega
+      ? (await loadCanvasContext(p.id, "delivery", { onlyConfirmed: true, includeKeys: ENTREGA_PREVIA_KEYS })).slice(
+          0,
+          TOPES_CICLOS_ANTERIORES.porEntrega,
+        )
+      : (
+          await loadCanvasContext(p.id, "handoff", {
+            onlyConfirmed: false,
+            includeKeys: CICLOS_ANTERIORES_HANDOFF_KEYS,
+          })
+        ).slice(0, TOPES_CICLOS_ANTERIORES.porHandoff);
+    if (!texto) continue;
+    const origen = esEntrega ? "Entrega publicada" : "handoff: ese proyecto no publicó su Entrega";
+    const bloque = `--- Ciclo anterior: «${p.name}» (${origen}; proyecto del ${p.createdAt.toISOString().slice(0, 10)}) ---\n${texto}`;
+    if (usado + bloque.length > TOPES_CICLOS_ANTERIORES.total) break;
+    bloques.push(bloque);
+    usado += bloque.length;
+  }
+  if (bloques.length === 0) return "";
+
+  return (
+    "=== CICLOS ANTERIORES DE ESTE CLIENTE (servicio recurrente) ===\n" +
+    "Un servicio recurrente avanza por ciclos: se diagnostica, se planifica, se ejecuta y se aprende, y el " +
+    "ciclo siguiente toma otra área con el mismo método. Lo que sigue es lo que dejaron los ciclos ANTERIORES " +
+    "de este mismo cliente, del más reciente al más viejo. Usalo para UNA cosa: que los RESULTADOS de este " +
+    "ciclo se apoyen en lo ya hecho y aprendido — qué área ya se cubrió, qué quedó abierto, sobre qué se " +
+    "construye ahora. Si este ciclo repite los resultados del anterior, escribilo: es la señal de que el " +
+    "servicio dejó de avanzar.\n" +
+    "NO copies sus fechas, fases, stakeholders ni compromisos como propios: son de otro ciclo.\n" +
+    bloques.join("\n\n") +
+    "\n"
+  );
 }
 
 function blockToText(b: BlockLite): string {

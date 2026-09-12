@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
+import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
@@ -162,7 +163,7 @@ function HandoffDelHermano({
           {/* El documento es del hermano: el canvas y el proyecto que se le pasan son los
               SUYOS. Pasar este projectId acá rendería el canvas contra el proyecto
               equivocado. */}
-          <CanvasLinearView projectId={duenio.projectId} canvasId={canvasId} canEdit={canEdit} />
+          <CanvasLinearView projectId={duenio.projectId} canvasId={canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
         </div>
       )}
     </section>
@@ -620,7 +621,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
 
       {generated && showDoc && status.canvasId && (
         <div className="border-t border-line px-4 py-4">
-          <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} />
+          <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
         </div>
       )}
 

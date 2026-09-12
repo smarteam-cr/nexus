@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { HANDOFF_CANVAS } from "./canvas-defs";
+import { HANDOFF_CANVAS, HANDOFF_SECCION_PRINCIPAL } from "./canvas-defs";
 import { agruparPorCliente, recortarTexto, type OportunidadDetectada } from "@/lib/ventas/oportunidades";
 
 /**
@@ -206,5 +206,69 @@ describe("D-11 (2026-09-04) · la sección SÍ sale de casa hacia Ventas — por
     expect(cargador, "solo lectura: nada de acá escribe").not.toMatch(/\.(update|create|upsert|delete)(Many)?\(/);
     const panel = leer("components/lifecycle/ProjectLifecyclePanel.tsx");
     expect(panel, "el panel dejó de prometer un traspaso que no existía: ahora dice dónde se lee").toContain("Ventas la lee en /sales › Oportunidades detectadas");
+  });
+});
+
+/**
+ * ⭐ LA SECCIÓN PRINCIPAL DEL HANDOFF (2026-09-12): los resultados de negocio que el cliente necesita
+ * alcanzar. Explica el propósito del proyecto, así que va primera, se pinta destacada y, cuando el
+ * servicio es recurrente, el agente lo sabe y la escribe como metas sostenidas.
+ */
+describe("⭐ la sección principal: los resultados que el cliente necesita alcanzar", () => {
+  const leerArchivo = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+  const sinComentarios = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  it("es la PRIMERA sección del handoff, con su rótulo", () => {
+    /* La edición que la pone en rojo: moverla al medio del array «para agruparla con las
+       expectativas». Deja de ser lo primero que se lee, y en el contexto de kickoff y Entrega el
+       propósito deja de entrar primero al presupuesto. */
+    expect(HANDOFF_CANVAS.sections[0]).toEqual({
+      key: HANDOFF_SECCION_PRINCIPAL,
+      label: "Resultados que el cliente necesita alcanzar",
+    });
+  });
+
+  it("LA guarda: se pinta DESTACADA en todos los lugares donde se lee el handoff", () => {
+    /* La edición que la pone en rojo: borrar `destacarKey` de uno de los usos. El handoff del
+       hermano mayor —el que ve el menor— se vería distinto del propio, sin ningún error. */
+    const seccion = sinComentarios(leerArchivo("components/clients/ProjectHandoffSection.tsx"));
+    const usos = [...seccion.matchAll(/<CanvasLinearView\b[^>]*\/>/g)].map((m) => m[0]);
+    expect(usos.length, "cambió la cantidad de usos del documento: revisá que todos destaquen").toBe(2);
+    for (const uso of usos) {
+      expect(uso, "un uso del documento no destaca la sección principal").toContain(
+        "destacarKey={HANDOFF_SECCION_PRINCIPAL}",
+      );
+    }
+    const panel = sinComentarios(leerArchivo("components/clients/ProjectCanvasPanel.tsx"));
+    expect(panel, "el panel de canvas también muestra el handoff").toContain(
+      "destacarKey={HANDOFF_SECCION_PRINCIPAL}",
+    );
+    const vista = sinComentarios(leerArchivo("components/canvas/CanvasLinearView.tsx"));
+    expect(vista, "la destacada va a ancho completo").toMatch(/SECCION_PRINCIPAL\s*=\s*"[^"]*lg:col-span-2/);
+    expect(vista, "la vista dejó de comparar contra la prop").toContain("section.key === destacarKey");
+  });
+
+  it("el agente recibe la MODALIDAD registrada solo si es recurrente, y se interpola", () => {
+    /* La edición que la pone en rojo: armar el bloque y olvidarse de pegarlo en el mensaje. El dato
+       llega al servidor y no al modelo, que es idéntico a que no llegue. */
+    const ruta = sinComentarios(leerArchivo("app/api/clients/[id]/analyze/route.ts"));
+    const i = ruta.indexOf("const modalidadRegistradaBlock");
+    expect(i, "no encontré el bloque de modalidad").toBeGreaterThan(0);
+    expect(ruta.slice(i, i + 300), "el bloque solo aplica al handoff y con el tag").toMatch(
+      /isHandoffAgent[\s\S]*RECURRENTE_TAG/,
+    );
+    expect(ruta, "el bloque se arma pero no se interpola").toContain(
+      "${handoffDelMayorBlock}${modalidadRegistradaBlock}",
+    );
+    expect(ruta).toContain("MODALIDAD REGISTRADA EN NEXUS: SERVICIO RECURRENTE");
+    expect(ruta, "solo el positivo: anclar «fin definido» mata la decisión del agente").not.toMatch(
+      /MODALIDAD REGISTRADA EN NEXUS: (FIN|IMPLEMENTACI)/,
+    );
+    const j = ruta.indexOf("loadCiclosAnterioresContext(clientId, bodyProjectId)");
+    expect(j, "los ciclos anteriores no se piden").toBeGreaterThan(0);
+    expect(ruta.slice(Math.max(0, j - 250), j), "los ciclos anteriores son solo para recurrentes").toContain(
+      "RECURRENTE_TAG",
+    );
   });
 });

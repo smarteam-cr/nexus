@@ -30,7 +30,7 @@ import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
-import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
@@ -1603,7 +1603,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     const parts: string[] = [];
     const tipo = tipoDeImplementacion(slugs);
     if (tipo) parts.push(`Modalidad: ${labelForTag(tipo)}`);
-    const resto = tagLabels(slugs.filter((s) => ejeExcluyenteDe(s) !== EJE_TIPO_IMPLEMENTACION));
+    /* `recurrente` es una MODALIDAD de servicio, no un producto: enterrado en «Productos/alcance»
+       se leía como uno más (el mismo modo de falla que el comentario de arriba describe para la
+       implementación). Sale con nombre propio, y solo cuando está: sin tag, la línea no cambia. */
+    if (slugs.includes(RECURRENTE_TAG)) parts.push("Modalidad de servicio: recurrente (continuidad, sin fecha de fin)");
+    const resto = tagLabels(
+      slugs.filter((s) => ejeExcluyenteDe(s) !== EJE_TIPO_IMPLEMENTACION && s !== RECURRENTE_TAG),
+    );
     if (resto.length) parts.push(`Productos/alcance: ${resto.join(", ")}`);
     return parts.length ? parts.join(" · ") : null;
   })();
@@ -1746,6 +1752,23 @@ ${excl}
      describía un proyecto trabado sin decir que estaba trabado.
      `""` cuando no hay nada cargado (24 de los 67 proyectos espejados), así el prompt de esos
      queda byte-idéntico al de siempre. */
+  /* La MODALIDAD REGISTRADA, solo cuando el proyecto ya está marcado recurrente (2026-09-12).
+     No reincide en la circularidad que se documenta arriba: no toca la línea «Modalidad», trae
+     la procedencia del dato y le ORDENA al agente volver a decidir — y el bucle es rompible de
+     verdad, porque si devuelve false el tag se quita al persistir. Solo el positivo: decirle
+     «fin definido» sería anclar la única decisión que vale la pena que tome. Sin tag ⇒ "" y el
+     prompt queda byte-idéntico al de siempre. */
+  const modalidadRegistradaBlock =
+    isHandoffAgent && sanitizeTags(dealProject?.tags ?? []).includes(RECURRENTE_TAG)
+      ? "=== MODALIDAD REGISTRADA EN NEXUS: SERVICIO RECURRENTE ===\n" +
+        "Este proyecto ya está marcado como servicio recurrente en Nexus. El dato lo escribió una persona " +
+        "o una corrida anterior de este mismo agente: NO es la respuesta y no te libera de decidir. Volvé a " +
+        "determinar isRecurrent desde el deal, los line items y las sesiones; si concluís que tiene fin " +
+        "definido, devolvé false y escribí el documento así — la etiqueta se corrige con lo que devuelvas.\n" +
+        "Si tu conclusión coincide, los RESULTADOS se escriben como metas sostenidas (nivel de servicio, " +
+        "adopción, renovación) en vez de hitos con fecha de fin. El resto del documento no cambia.\n\n"
+      : "";
+
   const operativaBlock = dealProject ? bloqueDeOperativa(dealProject) : "";
 
   const baseUserMessage = `${cseExclusionsBlock}Empresa: ${companyName}
@@ -1797,7 +1820,7 @@ ${[
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
 ].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${operativaBlock ? `${operativaBlock}
 
-` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${modalidadRegistradaBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
@@ -1900,6 +1923,22 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       if (frame) userMessage = `${userMessage}\n\n${frame}`;
     } catch (e) {
       console.error("[analyze handoff] marco relación previa error:", e);
+    }
+  }
+
+  /* Los CICLOS ANTERIORES de un servicio RECURRENTE (2026-09-12, decisión de Elías): un recurrente
+     diagnostica, planifica, ejecuta y aprende, y repite en otra área. Los resultados del ciclo nuevo
+     se apoyan en lo que dejaron los anteriores — la Entrega publicada de cada uno y, solo si ese
+     proyecto no la publicó, su handoff filtrado. Solo con el tag: para el resto, nada cambia. */
+  if (isHandoffAgent && sanitizeTags(dealProject?.tags ?? []).includes(RECURRENTE_TAG)) {
+    try {
+      const ciclos = await loadCiclosAnterioresContext(clientId, bodyProjectId);
+      if (ciclos) {
+        userMessage = `${userMessage}\n\n${ciclos}`;
+        console.log(`[analyze handoff] ciclos anteriores inyectados (${ciclos.length} chars)`);
+      }
+    } catch (e) {
+      console.error("[analyze handoff] ciclos anteriores error:", e);
     }
   }
 
@@ -2852,8 +2891,19 @@ async function persistTimelineFromAgentOutput(
         if (typeof implType === "string") push(normalizeTag(implType) ?? undefined);
 
         // Tag manejado `recurrente`: SOLO el handoff, y solo si trajo un booleano `isRecurrent`.
-        const isRecurrent = (analysisJson as { isRecurrent?: unknown } | null)?.isRecurrent;
-        if (isHandoff && typeof isRecurrent === "boolean") {
+        const isRecurrentCrudo = (analysisJson as { isRecurrent?: unknown } | null)?.isRecurrent;
+        /* Booleano, o el mismo valor entre comillas: hasta el 2026-09-12 los tres prompts lo pedían
+           como string, y un "true" pasaba de largo sin escribir el tag ni dejar rastro. */
+        let isRecurrent: boolean | null = null;
+        if (typeof isRecurrentCrudo === "boolean") isRecurrent = isRecurrentCrudo;
+        else if (isRecurrentCrudo === "true") isRecurrent = true;
+        else if (isRecurrentCrudo === "false") isRecurrent = false;
+        if (isHandoff && isRecurrentCrudo !== undefined && isRecurrent === null) {
+          console.warn(
+            `[analyze handoff] isRecurrent ilegible (${JSON.stringify(isRecurrentCrudo).slice(0, 60)}): el tag recurrente no se tocó`,
+          );
+        }
+        if (isHandoff && isRecurrent !== null) {
           const i = next.indexOf(RECURRENTE_TAG);
           if (isRecurrent && i === -1) next.push(RECURRENTE_TAG);
           if (!isRecurrent && i !== -1) next.splice(i, 1);

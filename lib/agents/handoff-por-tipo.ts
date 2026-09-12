@@ -17,7 +17,7 @@
  *
  * ── EL CONTRATO QUE NO SE PUEDE ROMPER ──────────────────────────────────────
  * Los tres prompts producen EL MISMO JSON:
- *   · `sections` con las MISMAS 11 keys (se derivan de HANDOFF_CANVAS, no se transcriben:
+ *   · `sections` con las MISMAS keys (se derivan de HANDOFF_CANVAS, no se transcriben:
  *     `reconcileHandoffCanvasSections` corre ANTES DE CADA generación y renormaliza el canvas
  *     contra esa plantilla única, así que una key propia se perdería en la primera regeneración).
  *   · `timeline.phases` con `durationWeeks`.
@@ -35,11 +35,18 @@ import { lineaDeAvance, pipelineByKey } from "@/lib/projects/kind";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 
 /**
- * Las 10 keys, derivadas de la plantilla del canvas. Transcribirlas sería crear una segunda
+ * Las keys, derivadas de la plantilla del canvas. Transcribirlas sería crear una segunda
  * fuente que puede divergir en silencio: una key que la plantilla no tiene se descarta al
  * escribir y esa sección del documento sale vacía, sin error.
  */
 export const KEYS = HANDOFF_CANVAS.sections.map((s) => s.key);
+
+/**
+ * La sección donde cae un bloque suelto del agente (`defaultCanvasSection`). Por NOMBRE, no por
+ * posición: hasta el 2026-09-12 era `KEYS[1]`, y agregar una sección al principio de la plantilla
+ * le cambiaba el default a los dos agentes por tipo en silencio. Es la misma que usa el de CS.
+ */
+export const SECCION_DEFAULT = "acuerdos_promesas";
 
 /** La línea de entrega que HubSpot declara para este tipo, sin las etapas terminales. */
 function lineaDeEntrega(key: ProjectPipelineKey): string {
@@ -112,12 +119,16 @@ CLASIFICACIÓN (TAGS) — array de slugs, podés devolver []:
 IMPLEMENTACIÓN vs RE-IMPLEMENTACIÓN — campo "implementationType":
 - IMPLEMENTATION si el cliente arranca con HubSpot por primera vez; REIMPLEMENTATION si ya lo usa o viene de otro CRM que va a reemplazar. Sin señal clara: IMPLEMENTATION.
 
-RECURRENTE vs FIN DEFINIDO — campo "isRecurrent" (true/false):
-- true si es soporte continuo / retainer / bolsa de horas / mantenimiento sin fecha de fin. false si es un proyecto que arranca, se construye y se entrega. Ante duda, false.`;
+RECURRENTE vs FIN DEFINIDO — campo "isRecurrent" (true/false, BOOLEANO JSON sin comillas):
+- true si es soporte continuo / retainer / bolsa de horas / mantenimiento sin fecha de fin. false si es un proyecto que arranca, se construye y se entrega. Ante duda, false.
+- Si en el mensaje viene el bloque MODALIDAD REGISTRADA EN NEXUS, es un dato del registro, NO la respuesta: volvé a decidir con el deal y las sesiones.
+- Lo que decidas cambia cómo se escribe la sección de RESULTADOS: hitos con cierre si tiene fin definido, metas sostenidas si es recurrente.`;
 
 // ── El agente de DESARROLLO E INTEGRACIÓN ────────────────────────────────────
 
 const GUIAS_DEV: Record<string, string> = {
+  resultados_cliente:
+    "LA SECCIÓN PRINCIPAL: los RESULTADOS DE NEGOCIO por los que el cliente paga este desarrollo — no la especificación técnica (eso va en «Integraciones, migraciones y desarrollo») ni el entregable. Una viñeta por resultado: QUÉ tiene que pasar en la operación cuando el software esté andando (horas que se dejan de hacer a mano, dato que llega solo, error que desaparece), CÓMO se verifica (la señal o el número, si se dijo) y PARA CUÁNDO. Citá sesión/fecha. Si lo propuso Ventas y el cliente no lo confirmó, marcalo. Si solo hay requisitos técnicos y ningún resultado declarado, escribí '⚠️ Por validar con cliente: qué resultado de negocio tiene que mostrar este desarrollo para que valga lo que cuesta' y NO lo inventes. VARIANTE SEGÚN LA MODALIDAD, coherente con el isRecurrent que devolvés: si tiene FIN DEFINIDO, los resultados son HITOS con cierre (qué queda funcionando, desde cuándo, cómo se verifica). Si es RECURRENTE (bolsa de horas, mantenimiento, evolutivo continuo), son METAS SOSTENIDAS y SIN fecha de fin: nivel de servicio, tiempo de respuesta, disponibilidad de la integración, adopción, renovación — y si te llegó el bloque de CICLOS ANTERIORES, decí sobre qué ciclo previo se apoya éste.",
   fecha_inicio_kickoff:
     "CUÁNDO arranca el trabajo técnico y de qué depende para arrancar (accesos, credenciales de terceros, ambientes). Buscá fechas en sesiones, notas y deal. Si no hay evidencia: '⚠️ Por validar: fecha de arranque y quién entrega los accesos'.",
   acuerdos_promesas:
@@ -170,7 +181,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION>",
-  "isRecurrent": "<true o false>",
+  "isRecurrent": <true o false — BOOLEANO JSON, sin comillas>,
   "tags": ["<slugs del catálogo, o []>"],
 ${bloqueDeSecciones(GUIAS_DEV)},
   "timeline": {
@@ -185,6 +196,8 @@ IMPORTANTE: el content de arriba describe QUÉ va en cada sección — NO lo cop
 // ── El agente de SITIOS WEB ──────────────────────────────────────────────────
 
 const GUIAS_WEB: Record<string, string> = {
+  resultados_cliente:
+    "LA SECCIÓN PRINCIPAL: para qué quiere el sitio el cliente, en resultados de negocio — no páginas ni plantillas (eso va en «¿Qué vendimos?») ni el gusto estético (eso va en «Expectativas»). Una viñeta por resultado: QUÉ tiene que cambiar (consultas que entran por el sitio, que el equipo pueda editar sin un dev, que deje de perder al que entra por celular), CÓMO se verifica y PARA CUÁNDO, con el número si se mencionó. Citá sesión/fecha. Si no hay ningún resultado declarado, escribí '⚠️ Por validar con cliente: qué tiene que lograr el sitio para que el cliente lo considere un éxito' y NO lo inventes. VARIANTE SEGÚN LA MODALIDAD, coherente con el isRecurrent que devolvés: con FIN DEFINIDO son HITOS con salida a producción y cierre; si es RECURRENTE son METAS SOSTENIDAS y SIN fecha de fin (mantenimiento, publicación continua, mejoras mes a mes, renovación), y si te llegó el bloque de CICLOS ANTERIORES decí sobre qué ciclo previo se apoya éste.",
   fecha_inicio_kickoff:
     "CUÁNDO arranca y de qué depende: accesos al dominio y al hosting, manual de marca, contenidos y fotos del cliente. El insumo que más atrasa un sitio es el CONTENIDO — decí explícitamente quién lo entrega y para cuándo.",
   acuerdos_promesas:
@@ -236,7 +249,7 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
 
 {
   "implementationType": "<IMPLEMENTATION o REIMPLEMENTATION>",
-  "isRecurrent": "<true o false>",
+  "isRecurrent": <true o false — BOOLEANO JSON, sin comillas>,
   "tags": ["<slugs del catálogo, o []>"],
 ${bloqueDeSecciones(GUIAS_WEB)},
   "timeline": {
@@ -264,7 +277,7 @@ export const AGENTES_HANDOFF_POR_TIPO: DefinicionDeAgente[] = [
     pipelineKey: "development",
     name: "Handoff de desarrollo e integración",
     description:
-      "Genera el handoff de un proyecto de desarrollo o integración a partir de las sesiones de venta y preventa técnica. Produce las 10 secciones con el detalle técnico como eje + las fases del cronograma (relevamiento, diseño, build por objeto, pruebas, entrega).",
+      `Genera el handoff de un proyecto de desarrollo o integración a partir de las sesiones de venta y preventa técnica. Produce las ${KEYS.length} secciones con los resultados del cliente y el detalle técnico como eje + las fases del cronograma (relevamiento, diseño, build por objeto, pruebas, entrega).`,
     systemPrompt: PROMPT_DEV,
   },
   {
@@ -272,7 +285,7 @@ export const AGENTES_HANDOFF_POR_TIPO: DefinicionDeAgente[] = [
     pipelineKey: "web",
     name: "Handoff de sitio web",
     description:
-      "Genera el handoff de un proyecto de sitio web a partir de las sesiones de venta. Produce las 10 secciones orientadas a diseño, contenido y entrega + las fases del cronograma (exploración, mockup, consenso, desarrollo, entrega).",
+      `Genera el handoff de un proyecto de sitio web a partir de las sesiones de venta. Produce las ${KEYS.length} secciones orientadas a resultados, diseño, contenido y entrega + las fases del cronograma (exploración, mockup, consenso, desarrollo, entrega).`,
     systemPrompt: PROMPT_WEB,
   },
 ];

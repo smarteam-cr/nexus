@@ -411,8 +411,13 @@ export const ENTREGA_DEF_BY_KEY: Record<string, BCSectionDef> = Object.fromEntri
  *
  * ⚠ Es un ALLOWLIST, no una lista de prohibidos: una sección nueva del handoff nace FUERA. Si
  * alguna vez tiene que entrar, entra con una decisión escrita acá, no por omisión.
+ *
+ * ✅ Entró, PRIMERA, con esa decisión (Elías, 2026-09-12): `resultados_cliente` — contra qué se
+ * miden los logros y la continuidad. Es el propósito que el cliente declaró, en sus palabras, así
+ * que devolvérselo en el cierre es lo contrario de una fuga: el kickoff lo prometió contra lo mismo.
  */
 export const ENTREGA_HANDOFF_KEYS = [
+  "resultados_cliente",
   "alcance_contratado",
   "desarrollo",
   "dolor_principal",

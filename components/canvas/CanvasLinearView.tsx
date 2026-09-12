@@ -19,6 +19,15 @@ import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useCanvasSections } from "./useCanvasSections";
 import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
 
+/* La cáscara de cada sección. Escritas UNA vez a propósito: el trinquete de grises
+   (lib/ui/token-vocab.test.ts) cuenta los crudos de este archivo y muerde en las dos
+   direcciones, así que la variante destacada usa SOLO tokens y la normal conserva los suyos
+   sin repetirlos en un ternario. */
+const SECCION_NORMAL = "rounded-2xl border border-gray-800 bg-gray-900 shadow-sm";
+const SECCION_PRINCIPAL = "rounded-2xl border border-brand bg-surface ring-1 ring-brand/25 shadow-sm lg:col-span-2";
+const CABECERA_NORMAL = "flex items-center gap-2 px-5 py-3.5 border-b border-gray-800";
+const CABECERA_PRINCIPAL = "flex items-center gap-2 px-5 py-4 border-b border-line";
+
 /** Un bloque "tiene contenido" si su texto o su data traen algo (no un manual vacío). */
 function blockHasContent(block: BlockData): boolean {
   if (block.content && block.content.trim().length > 0) return true;
@@ -36,6 +45,7 @@ export default function CanvasLinearView({
   canvasId,
   onlyKey,
   canEdit = true,
+  destacarKey,
 }: {
   projectId: string;
   canvasId: string;
@@ -43,6 +53,10 @@ export default function CanvasLinearView({
   onlyKey?: string;
   // RBAC: false = solo lectura (ej. el CSE en el handoff). Default true (kickoff editable).
   canEdit?: boolean;
+  /* La sección que explica el PROPÓSITO del documento: se pinta primera en jerarquía, a ancho
+     completo y con acento de marca. La decide quien monta la vista (el handoff pasa
+     HANDOFF_SECCION_PRINCIPAL); sin la prop, todas se ven iguales, como siempre. */
+  destacarKey?: string;
 }) {
   const {
     sections: allSections,
@@ -146,10 +160,19 @@ export default function CanvasLinearView({
 
       {/* Sections — onlyKey: una sección a ancho completo; si no, 2 por fila */}
       <div className={onlyKey ? "space-y-5" : "grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"}>
-      {sections.map((section) => (
-        <section key={section.id} className="rounded-2xl border border-gray-800 bg-gray-900 shadow-sm">
-          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-800">
-            <h3 className="text-base font-bold text-white flex-1">{section.label}</h3>
+      {sections.map((section) => {
+        const destacada = section.key === destacarKey;
+        return (
+        <section key={section.id} className={destacada ? SECCION_PRINCIPAL : SECCION_NORMAL}>
+          <div className={destacada ? CABECERA_PRINCIPAL : CABECERA_NORMAL}>
+            <div className="flex-1 min-w-0">
+              {destacada && (
+                <p className="text-[10px] font-bold uppercase tracking-wider text-brand mb-0.5">
+                  El propósito del proyecto
+                </p>
+              )}
+              <h3 className={destacada ? "text-lg font-bold text-fg" : "text-base font-bold text-white"}>{section.label}</h3>
+            </div>
             {section.blocks.length > 0 && (
               <span className="text-[10px] font-medium text-gray-400 bg-gray-800 rounded-full w-5 h-5 flex items-center justify-center">
                 {section.blocks.length}
@@ -188,7 +211,8 @@ export default function CanvasLinearView({
             )}
           </div>
         </section>
-      ))}
+        );
+      })}
       </div>
     </div>
 
