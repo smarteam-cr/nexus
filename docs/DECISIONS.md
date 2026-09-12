@@ -2917,3 +2917,34 @@ fabricarla.
   crece y que escribe el equipo, los cuatro pasan a ser necesarios. Lo que NO cambió: los prompts
   de los agentes siguen sin cruzar a esta pantalla (el escaneo de privacidad ahora apunta a
   `lib/documentacion/vivos.ts`, que es donde vive la consulta), y la pantalla usa solo tokens.
+
+### La segunda pasada, el mismo día: lo que faltaba para que fuera usable
+
+> Elías la abrió, la usó cinco minutos y volvió con cuatro cosas: el selector de ícono era una
+> columna de cuarenta renglones, escribir tenía que ser de pocas manos, faltaba conectar páginas
+> entre sí, y faltaba el resto del oficio (buscar, volver atrás, recuperar lo archivado).
+
+- **Escribir es de CSL y de dirección; el resto del equipo LEE.** El default nació con los seis
+  roles operativos escribiendo —«como en Notion»— y se corrigió antes de que la base tuviera
+  contenido. El motivo es de sentido único: abrirla después es cambiar una línea de la matriz; lo
+  ya escrito por doce manos, en cambio, no se recoge. Leer sigue sin celda (es de todo interno), y
+  cualquier persona se puede habilitar desde Equipo sin tocar código.
+- **El enlace entre páginas guarda el ID, no el nombre.** Es la decisión que hace que la base
+  aguante el tiempo: el título y el ícono que se ven se resuelven al pintar contra el índice que
+  baja del servidor, así que renombrar una página no deja su nombre viejo escrito en las diez que
+  la nombran. El título guardado queda como respaldo para cuando la página enlazada ya no está —
+  ahí se muestra tachado, en vez de un enlace que no lleva a ningún lado.
+  - La vuelta («Enlazan acá») se calcula buscando el id DENTRO del contenido, sin una tabla de
+    enlaces. Una tabla hay que sincronizarla en cada guardado y se desincroniza en silencio; esto
+    no puede quedar viejo. El costo es un escaneo de una tabla de decenas de filas.
+  - Las dos páginas sembradas nacen enlazadas entre sí, y la siembra completa los ids en una
+    SEGUNDA pasada: al armar el contenido, la página destino todavía no existe.
+- **El selector de ícono es una grilla, y ahí está la lección.** La primera versión reusó `Menu`,
+  que apila un ítem por fila: cuarenta emojis se volvieron una columna altísima que tapaba media
+  pantalla para elegir un dibujo de 16 píxeles. Reusar la primitiva de la casa es la regla, pero
+  `Menu` es para ACCIONES con etiqueta; un selector visual se escanea con la vista. Lo que sí se
+  reusa es la mecánica (`usePanelFlotante`): posición fija desde el botón, el scroll externo
+  cierra, Escape devuelve el foco.
+- **Ctrl+K abre el buscador salvo dentro del editor con texto seleccionado**, donde es «crear
+  enlace» de BlockNote. Robarle el atajo al editor para ganar uno que ya tiene su botón en el árbol
+  habría roto una función que la gente usa escribiendo.

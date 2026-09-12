@@ -20,8 +20,11 @@ function textoEnLinea(contenido: unknown): string {
     .map((pieza) => {
       if (typeof pieza === "string") return pieza;
       if (!pieza || typeof pieza !== "object") return "";
-      const p = pieza as { text?: unknown; content?: unknown };
+      const p = pieza as { text?: unknown; content?: unknown; props?: { titulo?: unknown } };
       if (typeof p.text === "string") return p.text;
+      /* Una mención a otra página no tiene texto propio: su título vive en las props. Sin esto,
+         buscar el nombre de una página no encontraría a las que la nombran. */
+      if (typeof p.props?.titulo === "string") return p.props.titulo;
       // Un enlace guarda su texto adentro, como piezas.
       return p.content !== undefined ? textoEnLinea(p.content) : "";
     })

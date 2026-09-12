@@ -12,10 +12,11 @@
  *   · El ESQUEMA: `esquema-editor.ts` (sin bloques de archivo, con el aviso y el bloque vivo).
  *   · El MENÚ «/»: los de fábrica más los dos propios. Se apaga el de fábrica (`slashMenu={false}`)
  *     y se monta el controlador a mano; es la única forma de sumarle ítems.
+ *   · El MENÚ «@»: enlazar a otra página de la base, como en Notion. Inserta el ID de la página,
+ *     no su nombre: el título se resuelve al pintar y por eso un renombre no deja rastros viejos.
  *
- * ⚠ `traerItems` va MEMOIZADO. El controlador registra el disparador «/» en un efecto atado a esa
- * función: una nueva en cada render lo des-registra y lo vuelve a registrar sin parar, y el menú
- * puede no estar registrado justo cuando alguien escribe «/».
+ * ⚠ Los dos `getItems` van MEMOIZADOS. El controlador registra su disparador en un efecto: una
+ * función nueva en cada render lo des-registra y lo vuelve a registrar sin parar.
  *
  * `contenidoInicial` se lee UNA vez, al crear el editor. Para mostrar otra página, el padre lo
  * remonta con `key`: así no se mezclan los historiales de deshacer de dos páginas distintas.
@@ -37,6 +38,7 @@ import { useTheme } from "@/lib/theme";
 import { FUENTES_VIVAS } from "@/lib/documentacion/tipos";
 import { TONOS_DE_AVISO } from "./bloques/Aviso";
 import { ETIQUETAS_DE_FUENTE } from "./bloques/Vivo";
+import { usePaginasEnlazables } from "./ContextoDePaginas";
 import {
   esquemaDeDocumentacion,
   type BloqueDeDocumentacion,
@@ -61,6 +63,8 @@ export interface EditorDePaginaProps {
 
 export default function EditorDePagina({ contenidoInicial, editable, onCambio }: EditorDePaginaProps) {
   const { isDark } = useTheme();
+  const { lista: paginas } = usePaginasEnlazables();
+
   const editor = useCreateBlockNote({
     schema: esquemaDeDocumentacion,
     dictionary: es,
@@ -68,6 +72,7 @@ export default function EditorDePagina({ contenidoInicial, editable, onCambio }:
     initialContent: contenidoInicial.length > 0 ? contenidoInicial : undefined,
   });
 
+  /** El menú «/»: los bloques de fábrica más los dos propios (avisos y los que se arman solos). */
   const traerItems = useCallback(
     async (consulta: string) => {
       const insertar = (bloque: BloqueParcialDeDocumentacion) => {
@@ -95,6 +100,31 @@ export default function EditorDePagina({ contenidoInicial, editable, onCambio }:
     [editor],
   );
 
+  /** El menú «@»: enlazar a otra página de la base. */
+  const traerPaginas = useCallback(
+    async (consulta: string) => {
+      const q = consulta.trim().toLowerCase();
+      return paginas
+        .filter((p) => !q || p.titulo.toLowerCase().includes(q))
+        .slice(0, 20)
+        .map((p) => ({
+          title: p.titulo,
+          group: "Enlazar a una página",
+          icon: <span aria-hidden="true">{p.icono ?? "📄"}</span>,
+          onItemClick: () => {
+            editor.insertInlineContent([
+              {
+                type: "mencion",
+                props: { paginaId: p.id, slug: p.slug, titulo: p.titulo, icono: p.icono ?? "" },
+              },
+              " ",
+            ]);
+          },
+        }));
+    },
+    [editor, paginas],
+  );
+
   return (
     <BlockNoteView
       editor={editor}
@@ -104,6 +134,7 @@ export default function EditorDePagina({ contenidoInicial, editable, onCambio }:
       onChange={onCambio ? () => onCambio(editor.document) : undefined}
     >
       <SuggestionMenuController triggerCharacter="/" getItems={traerItems} />
+      <SuggestionMenuController triggerCharacter="@" getItems={traerPaginas} />
     </BlockNoteView>
   );
 }

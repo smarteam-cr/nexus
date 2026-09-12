@@ -22,23 +22,78 @@ export interface PaginaSembrada {
 export type Tono = "info" | "advertencia" | "exito" | "peligro";
 export type Fuente = "menu" | "recorrido" | "documentos" | "agentes" | "hubspot" | "roles";
 
-/** Texto con formato: `t("normal", ["negrita", { negrita: true }])`. */
-export type Pieza = string | [texto: string, estilos: { negrita?: boolean; italica?: boolean; codigo?: boolean }];
+/** Un enlace a otra página sembrada. El id lo completa la siembra, que es la que lo conoce. */
+export interface MencionASembrar {
+  mencionA: string;
+  titulo: string;
+  icono?: string;
+}
+
+/** Texto con formato: `t("normal", ["negrita", { negrita: true }], { mencionA: "slug", … })`. */
+export type Pieza =
+  | string
+  | [texto: string, estilos: { negrita?: boolean; italica?: boolean; codigo?: boolean }]
+  | MencionASembrar;
 
 function enLinea(piezas: Pieza[]): unknown[] {
   return piezas.map((pieza) => {
     if (typeof pieza === "string") return { type: "text", text: pieza, styles: {} };
-    const [texto, estilos] = pieza;
+    if (Array.isArray(pieza)) {
+      const [texto, estilos] = pieza;
+      return {
+        type: "text",
+        text: texto,
+        styles: {
+          ...(estilos.negrita ? { bold: true } : {}),
+          ...(estilos.italica ? { italic: true } : {}),
+          ...(estilos.codigo ? { code: true } : {}),
+        },
+      };
+    }
+    /* `paginaId` queda vacío a propósito: la siembra lo completa cuando todas las páginas existen
+       y sus ids se conocen. Con el slug solo, el enlace ya funciona; con el id, además aparece en
+       el «Enlazan acá» de la página destino. */
     return {
-      type: "text",
-      text: texto,
-      styles: {
-        ...(estilos.negrita ? { bold: true } : {}),
-        ...(estilos.italica ? { italic: true } : {}),
-        ...(estilos.codigo ? { code: true } : {}),
-      },
+      type: "mencion",
+      props: { paginaId: "", slug: pieza.mencionA, titulo: pieza.titulo, icono: pieza.icono ?? "" },
     };
   });
+}
+
+/** Un enlace a otra página, para usar dentro de `parrafoRico`. */
+export const mencion = (slug: string, titulo: string, icono?: string): MencionASembrar => ({
+  mencionA: slug,
+  titulo,
+  icono,
+});
+
+/**
+ * Completa el `paginaId` de cada mención con el id real de la página que nombra.
+ *
+ * Se corre DESPUÉS de crear todas las páginas: al armar el contenido, la página destino todavía
+ * puede no existir. Sin el id, el enlace igual anda (tiene el slug), pero la página destino no
+ * sabría quién la nombra — y esa vuelta es la mitad del valor de enlazar.
+ */
+export function resolverMenciones(
+  bloques: BloqueGuardado[],
+  idPorSlug: Map<string, string>,
+): BloqueGuardado[] {
+  const enContenido = (contenido: unknown): unknown => {
+    if (!Array.isArray(contenido)) return contenido;
+    return contenido.map((pieza) => {
+      if (!pieza || typeof pieza !== "object") return pieza;
+      const p = pieza as { type?: unknown; props?: { slug?: unknown; paginaId?: unknown } };
+      if (p.type !== "mencion" || typeof p.props?.slug !== "string") return pieza;
+      const id = idPorSlug.get(p.props.slug);
+      return id ? { ...p, props: { ...p.props, paginaId: id } } : pieza;
+    });
+  };
+
+  return bloques.map((b) => ({
+    ...b,
+    content: enContenido(b.content),
+    ...(b.children ? { children: resolverMenciones(b.children, idPorSlug) } : {}),
+  }));
 }
 
 export const titulo = (nivel: 1 | 2 | 3, texto: string): BloqueGuardado => ({

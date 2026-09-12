@@ -9,6 +9,7 @@
 import {
   aviso,
   cita,
+  mencion,
   desplegable,
   divisor,
   numerado,
@@ -194,7 +195,14 @@ function paginaPrincipal(): BloqueGuardado[] {
 
     titulo(2, "El detalle, área por área"),
     parrafo(
-      "Las tres subpáginas de esta página tienen el detalle completo: la pregunta de cada dimensión y, nivel por nivel, las señales con las que se reconoce.",
+      "Cada área tiene su propia página con el detalle completo: la pregunta de cada dimensión y, nivel por nivel, las señales con las que se reconoce.",
+    ),
+    parrafoRico(
+      mencion("escala-ventas", "Ventas", "💼"),
+      "  ·  ",
+      mencion("escala-marketing", "Marketing", "📣"),
+      "  ·  ",
+      mencion("escala-servicio", "Servicio", "🎧"),
     ),
 
     titulo(2, "Glosario"),
@@ -242,6 +250,11 @@ function paginaDeArea(area: AreaV5, panorama: ReturnType<typeof leerReglamentoV5
     icono: ICONO_POR_AREA[area.nombre] ?? "📄",
     bloques: [
       parrafo(area.intro),
+      parrafoRico(
+        "Esta página es el detalle de un área. Las reglas que valen para las tres —cómo se calcula el nivel, qué dice la brecha, cuándo se vuelve a medir— están en ",
+        mencion("escala-de-rendimiento", "Escala de rendimiento", "📈"),
+        ".",
+      ),
 
       titulo(2, "Los cinco niveles de un vistazo"),
       parrafo("Cómo se ve el departamento en cada nivel, en el lenguaje con el que se le devuelve el resultado al cliente."),

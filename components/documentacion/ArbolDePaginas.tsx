@@ -41,6 +41,8 @@ import { fetchJson } from "@/lib/api/fetch-json";
 import { Menu, useToast, type MenuItemDef } from "@/components/ui";
 import type { NodoDelArbol } from "@/lib/documentacion/tipos";
 import MoverPaginaDialog from "./MoverPaginaDialog";
+import BuscadorDocs from "./BuscadorDocs";
+import PapeleraDocs from "./PapeleraDocs";
 
 interface Props {
   arbol: NodoDelArbol[];
@@ -104,6 +106,8 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
   const [abiertas, setAbiertas] = useState<Set<string>>(() => ramasHastaElSlug(arbol, slugActual));
   const [renombrando, setRenombrando] = useState<string | null>(null);
   const [moviendo, setMoviendo] = useState<NodoDelArbol | null>(null);
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  const [papeleraAbierta, setPapeleraAbierta] = useState(false);
   const [ocupado, setOcupado] = useState(false);
 
   const padrePorId = useMemo(() => mapaDePadres(arbol), [arbol]);
@@ -348,18 +352,30 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
 
   return (
     <nav aria-label="Páginas de Documentación" className="text-sm">
-      <div className="mb-2 flex items-center justify-between px-1">
+      <div className="mb-2 flex items-center gap-1 px-1">
         <Link
           href="/documentacion"
-          className="text-2xs font-semibold uppercase tracking-wide text-fg-muted hover:text-fg"
+          className="mr-auto text-2xs font-semibold uppercase tracking-wide text-fg-muted hover:text-fg"
         >
           Documentación
         </Link>
+        <button
+          type="button"
+          onClick={() => setBuscadorAbierto(true)}
+          className="rounded px-1 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          title="Buscar en la documentación (Ctrl+K)"
+          aria-label="Buscar en la documentación"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5" aria-hidden="true">
+            <circle cx="9" cy="9" r="6" />
+            <path d="M14 14l4 4" strokeLinecap="round" />
+          </svg>
+        </button>
         {puedeEscribir && (
           <button
             type="button"
             onClick={() => void crear(null)}
-            className="rounded px-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+            className="rounded px-1 text-lg leading-none text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
             title="Nueva página"
             aria-label="Nueva página"
           >
@@ -379,6 +395,16 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
         </DndContext>
       )}
 
+      <div className="mt-4 border-t border-line pt-2">
+        <button
+          type="button"
+          onClick={() => setPapeleraAbierta(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+        >
+          <span aria-hidden="true">🗑️</span> Papelera
+        </button>
+      </div>
+
       <MoverPaginaDialog
         nodo={moviendo}
         arbol={arbol}
@@ -388,6 +414,15 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
           setMoviendo(null);
           if (id) void mover(id, parentId);
         }}
+      />
+
+      {/* Los dos viven acá porque el árbol está en el LAYOUT: así el Ctrl+K funciona en cualquier
+          página de la documentación, y la papelera se abre desde donde se archiva. */}
+      <BuscadorDocs abierto={buscadorAbierto} onCambiar={setBuscadorAbierto} />
+      <PapeleraDocs
+        abierta={papeleraAbierta}
+        puedeRestaurar={puedeAdministrar}
+        onCerrar={() => setPapeleraAbierta(false)}
       />
     </nav>
   );

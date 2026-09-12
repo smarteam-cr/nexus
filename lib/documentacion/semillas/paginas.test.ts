@@ -128,3 +128,47 @@ describe("«Escala de rendimiento»", () => {
     expect(texto).toContain("Agentes de IA califican leads");
   });
 });
+
+describe("los enlaces entre las páginas sembradas apuntan a algo que existe", () => {
+  const paginas = [construirComoFunciona(), construirEscala()];
+  const conHijas = paginas.flatMap((p) => [p, ...(p.hijas ?? [])]);
+  const slugsSembrados = new Set(conHijas.map((p) => p.slug));
+
+  /** Los slugs a los que apunta cada mención («@») del contenido. */
+  function slugsMencionados(bloques: BloqueGuardado[]): string[] {
+    const encontrados: string[] = [];
+    const enContenido = (contenido: unknown) => {
+      if (!Array.isArray(contenido)) return;
+      for (const pieza of contenido) {
+        if (!pieza || typeof pieza !== "object") continue;
+        const p = pieza as { type?: unknown; props?: { slug?: unknown } };
+        if (p.type === "mencion" && typeof p.props?.slug === "string") encontrados.push(p.props.slug);
+      }
+    };
+    for (const b of todos(bloques)) enContenido(b.content);
+    return encontrados;
+  }
+
+  it("la base nace conectada: hay enlaces entre páginas", () => {
+    const total = conHijas.flatMap((p) => slugsMencionados(p.bloques)).length;
+    expect(total, "las páginas sembradas deberían enlazarse entre sí").toBeGreaterThan(0);
+  });
+
+  it("ningún enlace apunta a una página que no se siembra", () => {
+    for (const pagina of conHijas) {
+      const muertos = slugsMencionados(pagina.bloques).filter((s) => !slugsSembrados.has(s));
+      expect(
+        muertos,
+        `${pagina.slug} enlaza a páginas que no existen: ${muertos.join(", ")}`,
+      ).toEqual([]);
+    }
+  });
+
+  it("el manual apunta a la Escala, y cada área a su página madre", () => {
+    const manual = paginas[0];
+    expect(slugsMencionados(manual.bloques)).toContain("escala-de-rendimiento");
+    for (const area of paginas[1].hijas ?? []) {
+      expect(slugsMencionados(area.bloques), area.slug).toContain("escala-de-rendimiento");
+    }
+  });
+});

@@ -79,6 +79,26 @@ export async function editadasHacePoco(limite = 6) {
   });
 }
 
+/**
+ * Las páginas que NOMBRAN a ésta (el enlace visto al revés). Es lo que convierte páginas sueltas
+ * en una base: desde una página se ve quién la referencia, sin tener que acordarse.
+ *
+ * Se busca el id adentro del contenido en vez de mantener una tabla de enlaces: una tabla hay que
+ * sincronizarla en cada guardado y se desincroniza en silencio; esto no puede quedar viejo. El
+ * costo es un escaneo de una tabla de decenas de filas.
+ */
+export async function paginasQueMencionan(id: string) {
+  const patron = `%${id}%`;
+  return prisma.$queryRaw<{ id: string; slug: string; titulo: string; icono: string | null }[]>`
+    SELECT "id", "slug", "titulo", "icono"
+    FROM "PaginaDoc"
+    WHERE "archivadaAt" IS NULL
+      AND "id" <> ${id}
+      AND "contenido"::text LIKE ${patron}
+    ORDER BY "titulo" ASC
+  `;
+}
+
 /* ── Crear ──────────────────────────────────────────────────────────────────── */
 
 export async function crearPagina(datos: {

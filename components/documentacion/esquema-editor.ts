@@ -17,10 +17,11 @@
  * ⚠ Solo lo importa código de CLIENTE (el editor). Los tipos se pueden importar desde cualquier
  * lado con `import type`, que no arrastra BlockNote al servidor.
  */
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { TIPOS_DE_FABRICA } from "@/lib/documentacion/tipos";
 import { bloqueAviso } from "./bloques/Aviso";
 import { bloqueVivo } from "./bloques/Vivo";
+import { mencionDePagina } from "./bloques/Mencion";
 
 function elegir<T extends object, K extends keyof T>(objeto: T, claves: readonly K[]): Pick<T, K> {
   const salida = {} as Pick<T, K>;
@@ -33,6 +34,12 @@ export const esquemaDeDocumentacion = BlockNoteSchema.create({
     ...elegir(defaultBlockSpecs, TIPOS_DE_FABRICA),
     aviso: bloqueAviso(),
     vivo: bloqueVivo(),
+  },
+  /* El enlace a otra página, que se escribe con «@». Es contenido EN LÍNEA y no un bloque: va
+     adentro de una frase, como cualquier palabra. */
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    mencion: mencionDePagina,
   },
 });
 

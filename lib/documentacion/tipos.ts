@@ -81,3 +81,6 @@ export const TOPE_DE_VERSIONES = 200;
 
 /** Una foto nueva del historial solo si la última tiene más de esto, o si es de otra persona. */
 export const MINUTOS_ENTRE_VERSIONES = 10;
+
+/** Cómo va el guardado de la página que se está editando (lo muestra el encabezado). */
+export type EstadoDeGuardado = "guardado" | "pendiente" | "guardando" | "conflicto" | "error";

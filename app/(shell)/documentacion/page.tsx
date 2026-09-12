@@ -33,7 +33,7 @@ export default async function InicioDeDocumentacion() {
 
       <PageHeader
         title="Documentación"
-        description="La base de conocimiento del equipo: cómo funciona Nexus, cómo trabajamos y todo lo que vayamos escribiendo."
+        description="La base de conocimiento del equipo: cómo funciona Nexus, cómo trabajamos y todo lo que vayamos escribiendo. Buscá en todas las páginas con Ctrl+K."
       />
 
       {arbol.length === 0 ? (
@@ -42,7 +42,7 @@ export default async function InicioDeDocumentacion() {
           description={
             puedeEscribir
               ? "Creá la primera desde el «+» del panel de la izquierda."
-              : "Cuando alguien del equipo escriba la primera, va a aparecer acá."
+              : "Cuando el liderazgo escriba la primera, va a aparecer acá."
           }
         />
       ) : (

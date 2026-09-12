@@ -28,7 +28,7 @@ import { resolverApply } from "./lib/guard";
 import { createScriptDb } from "./lib/db";
 import { construirComoFunciona } from "@/lib/documentacion/semillas/como-funciona";
 import { construirEscala } from "@/lib/documentacion/semillas/escala";
-import type { PaginaSembrada } from "@/lib/documentacion/semillas/bloques";
+import { resolverMenciones, type PaginaSembrada } from "@/lib/documentacion/semillas/bloques";
 import { textoDeBloques, textoDeBusqueda } from "@/lib/documentacion/texto";
 import type { BloqueGuardado } from "@/lib/documentacion/tipos";
 
@@ -39,8 +39,11 @@ const FORZAR = new Set(
   process.argv.filter((arg, i) => process.argv[i - 1] === "--forzar" && !arg.startsWith("--")),
 );
 
-type Accion = "crear" | "actualizar" | "saltar";
+type Accion = "crear" | "actualizar" | "saltar" | "enlazar";
 const bitacora: { accion: Accion; slug: string; detalle?: string }[] = [];
+
+/** Lo que se escribió en esta corrida: la segunda pasada le completa los enlaces. */
+const escritas: { id: string; slug: string; bloques: BloqueGuardado[] }[] = [];
 
 function contenidoDe(pagina: PaginaSembrada) {
   const bloques = pagina.bloques as BloqueGuardado[];
@@ -74,6 +77,7 @@ async function sembrar(
         data: { ...datos, slug: pagina.slug, parentId, orden, version: 1, semillaVersion: 1 },
       });
       id = creada.id;
+      escritas.push({ id: creada.id, slug: pagina.slug, bloques: pagina.bloques as BloqueGuardado[] });
     }
   } else {
     const laEditoAlguien =
@@ -109,6 +113,11 @@ async function sembrar(
             data: { ...datos, parentId, orden, version, semillaVersion: version },
           });
         });
+        escritas.push({
+          id: existente.id,
+          slug: pagina.slug,
+          bloques: pagina.bloques as BloqueGuardado[],
+        });
       }
     }
   }
@@ -129,7 +138,34 @@ async function main() {
       await sembrar(prisma, pagina, null, i);
     }
 
-    const simbolo: Record<Accion, string> = { crear: "+", actualizar: "~", saltar: "=" };
+    /* SEGUNDA PASADA: los enlaces entre páginas. Al armar el contenido, la página destino todavía
+       puede no existir, así que las menciones se escriben con el slug y sin id. Con todas creadas,
+       acá se completa el id — que es lo que hace que la página destino sepa quién la nombra. */
+    if (APPLY && escritas.length > 0) {
+      const todas = await prisma.paginaDoc.findMany({ select: { id: true, slug: true } });
+      const idPorSlug = new Map(todas.map((p) => [p.slug, p.id]));
+
+      for (const escrita of escritas) {
+        const resueltos = resolverMenciones(escrita.bloques, idPorSlug);
+        if (JSON.stringify(resueltos) === JSON.stringify(escrita.bloques)) continue;
+
+        const pagina = await prisma.paginaDoc.findUniqueOrThrow({ where: { id: escrita.id } });
+        const texto = textoDeBloques(resueltos);
+        await prisma.paginaDoc.update({
+          where: { id: escrita.id },
+          data: {
+            contenido: resueltos as unknown as Prisma.InputJsonValue,
+            texto,
+            busqueda: textoDeBusqueda(pagina.titulo, texto),
+            version: pagina.version + 1,
+            semillaVersion: pagina.version + 1,
+          },
+        });
+        bitacora.push({ accion: "enlazar", slug: escrita.slug, detalle: "enlaces completados" });
+      }
+    }
+
+    const simbolo: Record<Accion, string> = { crear: "+", actualizar: "~", saltar: "=", enlazar: "→" };
     for (const linea of bitacora) {
       console.log(
         `  ${simbolo[linea.accion]} ${linea.accion.padEnd(11)} ${linea.slug}${linea.detalle ? `\n      ${linea.detalle}` : ""}`,

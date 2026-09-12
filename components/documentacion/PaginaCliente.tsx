@@ -1,29 +1,33 @@
 "use client";
 
 /**
- * components/documentacion/PaginaCliente.tsx — el editor de la página y su guardado.
+ * components/documentacion/PaginaCliente.tsx — la página entera del lado del cliente.
  *
- * Existe, primero, para lo único que un Server Component no puede hacer: cargar el editor con
- * `dynamic(..., { ssr: false })`. Y segundo, para el guardado, que tiene tres reglas:
+ * Es el dueño de tres cosas que tienen que vivir juntas:
+ *   · el ENCABEZADO (ícono, título, estado del guardado y acciones);
+ *   · el EDITOR, que se carga perezoso y solo en el navegador (`ssr: false`, lo único que un
+ *     Server Component no puede hacer);
+ *   · el GUARDADO.
  *
+ * Las tres reglas del guardado:
  *   · Se guarda SOLO cuando la persona cambia algo, y recién ~1,2 s después de la última tecla.
  *   · Cada guardado manda la VERSIÓN que se está editando. Si otra persona guardó primero, el
  *     servidor responde 409: se corta el autoguardado y se avisa, en vez de pisar su trabajo.
  *   · Si la pestaña se cierra o se oculta con un cambio pendiente, se manda igual (`keepalive`).
- *     Sin eso, escribir y cerrar pierde lo último escrito.
  *
- * También monta el proveedor de los datos VIVOS: el bloque que se arma solo los lee de acá, y el
- * que monta un contexto nunca es el que lo consume.
- *
- * El `key` con el id de la página remonta el editor al navegar: su contenido inicial se lee una
- * sola vez.
+ * Monta además los dos contextos que el editor necesita: los datos VIVOS (lo que se arma solo
+ * desde Nexus) y el índice de PÁGINAS (para el menú «@» y para que cada mención muestre el título
+ * actual de la página que enlaza). El que monta un contexto nunca es el que lo consume.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { SkeletonText } from "@/components/ui";
+import type { EstadoDeGuardado } from "@/lib/documentacion/tipos";
 import type { DatosVivos } from "@/lib/documentacion/vivos";
 import { ProveedorDeVivos } from "./ContextoDeVivos";
+import { ProveedorDePaginas, type PaginaEnlazable } from "./ContextoDePaginas";
+import EncabezadoDePagina from "./EncabezadoDePagina";
 import type { BloqueParcialDeDocumentacion } from "./esquema-editor";
 
 const EditorDePagina = dynamic(() => import("./EditorDePagina").then((m) => m.default), {
@@ -31,28 +35,39 @@ const EditorDePagina = dynamic(() => import("./EditorDePagina").then((m) => m.de
   loading: () => <SkeletonText lines={6} />,
 });
 
-type Estado = "guardado" | "pendiente" | "guardando" | "conflicto" | "error";
-
 export interface PaginaClienteProps {
-  paginaId: string;
-  version: number;
+  pagina: {
+    id: string;
+    slug: string;
+    titulo: string;
+    icono: string | null;
+    bloqueada: boolean;
+    fija: boolean;
+    version: number;
+  };
+  migas: { label: string; href: string }[];
   contenido: BloqueParcialDeDocumentacion[];
   editable: boolean;
+  puedeAdministrar: boolean;
   /** Lo que el servidor calculó para los bloques vivos. `null` = la página no tiene ninguno. */
   vivos: DatosVivos | null;
+  /** El índice de páginas: alimenta el menú «@» y los títulos de las menciones. */
+  paginas: PaginaEnlazable[];
 }
 
 const ESPERA_MS = 1200;
 
 export default function PaginaCliente({
-  paginaId,
-  version,
+  pagina,
+  migas,
   contenido,
   editable,
+  puedeAdministrar,
   vivos,
+  paginas,
 }: PaginaClienteProps) {
-  const [estado, setEstado] = useState<Estado>("guardado");
-  const versionRef = useRef(version);
+  const [estado, setEstado] = useState<EstadoDeGuardado>("guardado");
+  const versionRef = useRef(pagina.version);
   const pendiente = useRef<unknown[] | null>(null);
   const reloj = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,7 +77,7 @@ export default function PaginaCliente({
     pendiente.current = null;
     setEstado("guardando");
     try {
-      const r = await fetchJson<{ version: number }>(`/api/documentacion/paginas/${paginaId}`, {
+      const r = await fetchJson<{ version: number }>(`/api/documentacion/paginas/${pagina.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ version: versionRef.current, contenido: documento }),
@@ -78,7 +93,7 @@ export default function PaginaCliente({
       pendiente.current = documento;
       setEstado("error");
     }
-  }, [paginaId]);
+  }, [pagina.id]);
 
   const alCambiar = useCallback(
     (documento: unknown[]) => {
@@ -91,14 +106,14 @@ export default function PaginaCliente({
   );
 
   /* Cerrar o esconder la pestaña con algo sin guardar: se manda con `keepalive`, que sobrevive a
-     que la página se descargue. `visibilitychange` es el evento que los navegadores garantizan
-     en móvil (`beforeunload` no dispara al cambiar de app). */
+     que la página se descargue. `visibilitychange` es el evento que los navegadores garantizan en
+     móvil (`beforeunload` no dispara al cambiar de app). */
   useEffect(() => {
     const vaciar = () => {
       const documento = pendiente.current;
       if (!documento) return;
       pendiente.current = null;
-      void fetch(`/api/documentacion/paginas/${paginaId}`, {
+      void fetch(`/api/documentacion/paginas/${pagina.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ version: versionRef.current, contenido: documento }),
@@ -114,24 +129,40 @@ export default function PaginaCliente({
       if (reloj.current) clearTimeout(reloj.current);
       vaciar();
     };
-  }, [paginaId]);
+  }, [pagina.id]);
 
   return (
-    <ProveedorDeVivos datos={vivos}>
-      <div className="nx-doc">
-        {editable && <Aviso estado={estado} />}
-        <EditorDePagina
-          key={paginaId}
-          contenidoInicial={contenido}
-          editable={editable && estado !== "conflicto"}
-          onCambio={editable ? (documento) => alCambiar(documento as unknown[]) : undefined}
+    <ProveedorDePaginas paginas={paginas}>
+      <ProveedorDeVivos datos={vivos}>
+        <EncabezadoDePagina
+          paginaId={pagina.id}
+          slug={pagina.slug}
+          titulo={pagina.titulo}
+          icono={pagina.icono}
+          migas={migas}
+          bloqueada={pagina.bloqueada}
+          fija={pagina.fija}
+          editable={editable}
+          puedeAdministrar={puedeAdministrar}
+          estado={estado}
         />
-      </div>
-    </ProveedorDeVivos>
+
+        <div className="nx-doc">
+          {editable && <AvisoDeGuardado estado={estado} />}
+          <EditorDePagina
+            key={pagina.id}
+            contenidoInicial={contenido}
+            editable={editable && estado !== "conflicto"}
+            onCambio={editable ? (documento) => alCambiar(documento as unknown[]) : undefined}
+          />
+        </div>
+      </ProveedorDeVivos>
+    </ProveedorDePaginas>
   );
 }
 
-function Aviso({ estado }: { estado: Estado }) {
+/** Solo aparece cuando algo salió mal: el estado normal lo dice el encabezado, en chiquito. */
+function AvisoDeGuardado({ estado }: { estado: EstadoDeGuardado }) {
   if (estado === "conflicto") {
     return (
       <div className="mb-3 rounded-md border border-warn-line bg-warn-surface px-3 py-2 text-sm text-warn-ink">
@@ -155,11 +186,5 @@ function Aviso({ estado }: { estado: Estado }) {
       </div>
     );
   }
-  const texto =
-    estado === "guardando" ? "Guardando…" : estado === "pendiente" ? "Sin guardar" : "Guardado";
-  return (
-    <p className="mb-2 text-right text-2xs text-fg-muted" aria-live="polite">
-      {texto}
-    </p>
-  );
+  return null;
 }

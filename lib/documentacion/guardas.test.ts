@@ -7,7 +7,7 @@
  *   3. Ningún agente lee las páginas: ésta es la base de las PERSONAS, y meterla en un prompt
  *      cambiaría lo que el cliente recibe sin que nadie lo decida.
  *   4. No entra ningún `@blocknote/xl-*`: son GPL, y el resto del editor es MPL-2.0.
- *   5. Los permisos por defecto son los acordados: todos escriben, solo el liderazgo ordena.
+ *   5. Los permisos por defecto son los acordados: escribe CSL (y SUPER_ADMIN), el resto lee.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -107,17 +107,27 @@ describe("4 · el editor se queda en su licencia", () => {
 
 describe("5 · los permisos por defecto del módulo", () => {
   const OPERATIVOS = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN"] as const;
+  const SOLO_LECTURA = OPERATIVOS.filter((r) => r !== "CSL");
 
-  it("todo el equipo escribe la base", () => {
-    for (const rol of OPERATIVOS) {
-      expect(DEFAULT_MATRIX[rol].sections.documentacion.write, rol).toBe(true);
+  it("solo CSL escribe la base; el resto del equipo la lee", () => {
+    expect(DEFAULT_MATRIX.CSL.sections.documentacion.write).toBe(true);
+    for (const rol of SOLO_LECTURA) {
+      expect(
+        DEFAULT_MATRIX[rol].sections.documentacion.write,
+        `${rol} no debería escribir la documentación por defecto`,
+      ).toBe(false);
     }
   });
 
-  it("solo el liderazgo la ordena (archivar, restaurar, bloquear)", () => {
+  it("solo CSL la ordena (archivar, restaurar, bloquear)", () => {
     expect(DEFAULT_MATRIX.CSL.sections.documentacion.manage).toBe(true);
-    for (const rol of OPERATIVOS.filter((r) => r !== "CSL")) {
+    for (const rol of SOLO_LECTURA) {
       expect(DEFAULT_MATRIX[rol].sections.documentacion.manage, rol).toBe(false);
     }
+  });
+
+  it("SUPER_ADMIN puede todo (anti-lockout)", () => {
+    expect(DEFAULT_MATRIX.SUPER_ADMIN.sections.documentacion.write).toBe(true);
+    expect(DEFAULT_MATRIX.SUPER_ADMIN.sections.documentacion.manage).toBe(true);
   });
 });

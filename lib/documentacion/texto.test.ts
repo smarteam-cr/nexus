@@ -47,6 +47,23 @@ describe("textoDeBloques", () => {
     expect(textoDeBloques(bloques)).toBe("Nivel · Valor\nÓptimo · 5");
   });
 
+  it("el enlace a otra página aporta su título (si no, buscar no lo encontraría)", () => {
+    const bloques: BloqueGuardado[] = [
+      {
+        type: "paragraph",
+        content: [
+          { type: "text", text: "La vara está en ", styles: {} },
+          {
+            type: "mencion",
+            props: { paginaId: "abc", slug: "escala-de-rendimiento", titulo: "Escala de rendimiento", icono: "" },
+          },
+          { type: "text", text: ".", styles: {} },
+        ],
+      },
+    ];
+    expect(textoDeBloques(bloques)).toBe("La vara está en Escala de rendimiento.");
+  });
+
   it("los bloques sin texto no dejan renglones vacíos", () => {
     expect(textoDeBloques([{ type: "divider" }, { type: "paragraph", content: "  " }])).toBe("");
   });

@@ -19,6 +19,7 @@ import {
   aviso,
   bloqueVivo,
   divisor,
+  mencion,
   parrafo,
   parrafoRico,
   titulo,
@@ -122,6 +123,13 @@ function bloques(): BloqueGuardado[] {
     ),
     parrafo(
       "La propuesta comercial se comparte con un enlace secreto, sin contraseña, y los documentos de Roles con un enlace público.",
+    ),
+
+    titulo(2, "Con qué vara medimos a un cliente"),
+    parrafoRico(
+      "El diagnóstico que se le entrega al cliente no puntúa a ojo: usa la Escala de Rendimiento, que define cinco niveles y ocho dimensiones por departamento. El reglamento completo está en ",
+      mencion("escala-de-rendimiento", "Escala de rendimiento", "📈"),
+      ".",
     ),
 
     titulo(2, "Los roles del equipo"),
