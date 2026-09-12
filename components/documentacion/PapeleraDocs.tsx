@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Modal, Spinner, useToast } from "@/components/ui";
+import { IconoDePagina } from "./iconos";
 
 interface PaginaArchivada {
   id: string;
@@ -101,8 +102,9 @@ export default function PapeleraDocs({
             >
               <div className="min-w-0 flex-1">
                 {delGrupo.map((p) => (
-                  <p key={p.id} className="truncate text-sm text-fg">
-                    <span aria-hidden="true">{p.icono ?? "📄"}</span> {p.titulo}
+                  <p key={p.id} className="flex items-center gap-2 truncate text-sm text-fg">
+                    <IconoDePagina icono={p.icono} />
+                    {p.titulo}
                   </p>
                 ))}
                 <p className="mt-1 text-2xs text-fg-muted">

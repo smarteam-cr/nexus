@@ -22,6 +22,8 @@ import { rutaDe } from "@/lib/documentacion/arbol";
 import { sanearBloques } from "@/lib/documentacion/texto";
 import { cargarDatosVivos, tieneBloquesVivos } from "@/lib/documentacion/vivos";
 import PaginaCliente from "@/components/documentacion/PaginaCliente";
+import { IconoDePagina } from "@/components/documentacion/iconos";
+import { INSET_CONTENIDO } from "@/components/documentacion/layout";
 // Solo el TIPO: `import type` se borra al compilar, así que el editor no viaja al servidor.
 import type { BloqueParcialDeDocumentacion } from "@/components/documentacion/esquema-editor";
 
@@ -93,7 +95,7 @@ export default async function PaginaDeDocumentacion({
         {/* Las páginas que cuelgan de ésta. En el árbol ya están, pero una página tiene que
             poder recorrerse sola: quien llega por un enlace no mira el panel de la izquierda. */}
         {hijas.length > 0 && (
-          <section className="mt-10">
+          <section className={`mt-10 ${INSET_CONTENIDO}`}>
             <h2 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
               Subpáginas
             </h2>
@@ -104,7 +106,7 @@ export default async function PaginaDeDocumentacion({
                     href={`/documentacion/${h.slug}`}
                     className="-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg transition-colors hover:bg-surface-hover"
                   >
-                    <span aria-hidden="true">{h.icono ?? "📄"}</span>
+                    <IconoDePagina icono={h.icono} />
                     <span className="font-medium underline decoration-line underline-offset-2">
                       {h.titulo}
                     </span>
@@ -118,7 +120,7 @@ export default async function PaginaDeDocumentacion({
         {/* El enlace visto al revés: quién nombra a esta página. Es lo que hace que la base se
             pueda recorrer en los dos sentidos, como en Notion. */}
         {enlazanAca.length > 0 && (
-          <section className="mt-12 border-t border-line pt-4">
+          <section className={`mt-12 border-t border-line pt-4 ${INSET_CONTENIDO}`}>
             <h2 className="mb-2 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
               Enlazan acá
             </h2>
@@ -129,7 +131,7 @@ export default async function PaginaDeDocumentacion({
                     href={`/documentacion/${p.slug}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
                   >
-                    <span aria-hidden="true">{p.icono ?? "📄"}</span>
+                    <IconoDePagina icono={p.icono} />
                     {p.titulo}
                   </Link>
                 </li>

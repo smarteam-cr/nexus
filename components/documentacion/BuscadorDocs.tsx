@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Modal, Spinner } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { IconoDePagina } from "./iconos";
 
 interface Resultado {
   id: string;
@@ -141,7 +142,7 @@ export default function BuscadorDocs({ abierto, onCambiar }: { abierto: boolean;
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <span aria-hidden="true">{r.icono ?? "📄"}</span>
+                    <IconoDePagina icono={r.icono} tamanoEmoji="text-base" />
                     <span className="truncate text-sm font-medium text-fg">{r.titulo}</span>
                     {r.ruta.length > 0 && (
                       <span className="truncate text-2xs text-fg-muted">en {r.ruta.join(" › ")}</span>

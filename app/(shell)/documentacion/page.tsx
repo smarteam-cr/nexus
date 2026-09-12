@@ -15,6 +15,7 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { arbolDePaginas, editadasHacePoco } from "@/lib/documentacion/consultas";
 import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
+import { IconoDePagina } from "@/components/documentacion/iconos";
 
 export default async function InicioDeDocumentacion() {
   const ctx = await requireInternalUser().catch(() => null);
@@ -54,13 +55,8 @@ export default async function InicioDeDocumentacion() {
               className="rounded-lg border border-line bg-surface p-4 transition-colors hover:bg-surface-hover"
             >
               <div className="flex items-center gap-2">
-                <span aria-hidden="true">{p.icono ?? "📄"}</span>
+                <IconoDePagina icono={p.icono} tamanoEmoji="text-base" />
                 <span className="truncate font-medium text-fg">{p.titulo}</span>
-                {p.bloqueada && (
-                  <span className="text-2xs text-fg-muted" title="Bloqueada: la edita el liderazgo">
-                    🔒
-                  </span>
-                )}
               </div>
               {p.hijas.length > 0 && (
                 <p className="mt-2 truncate text-xs text-fg-muted">
@@ -85,7 +81,7 @@ export default async function InicioDeDocumentacion() {
                   href={`/documentacion/${p.slug}`}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-surface-hover"
                 >
-                  <span aria-hidden="true">{p.icono ?? "📄"}</span>
+                  <IconoDePagina icono={p.icono} />
                   <span className="min-w-0 flex-1 truncate text-fg">{p.titulo}</span>
                   <span className="shrink-0 text-2xs text-fg-muted">{p.editadaPorEmail}</span>
                 </Link>

@@ -40,6 +40,15 @@ import { cn } from "@/lib/cn";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Menu, useToast, type MenuItemDef } from "@/components/ui";
 import type { NodoDelArbol } from "@/lib/documentacion/tipos";
+import {
+  IconoArrastrar,
+  IconoBuscar,
+  IconoCandado,
+  IconoChevron,
+  IconoDePagina,
+  IconoMas,
+  IconoPapelera,
+} from "./iconos";
 import MoverPaginaDialog from "./MoverPaginaDialog";
 import BuscadorDocs from "./BuscadorDocs";
 import PapeleraDocs from "./PapeleraDocs";
@@ -266,18 +275,11 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
             aria-label={abierta ? "Cerrar" : "Abrir"}
             aria-expanded={abierta}
           >
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className={cn("h-3 w-3 transition-transform", abierta && "rotate-90")}
-              aria-hidden="true"
-            >
-              <path d="M7 5l6 5-6 5V5z" />
-            </svg>
+            <IconoChevron className={cn("h-3 w-3 transition-transform", abierta && "rotate-90")} />
           </button>
 
-          <span className="w-4 shrink-0 text-center text-xs" aria-hidden="true">
-            {nodo.icono ?? "📄"}
+          <span className="flex w-4 shrink-0 items-center justify-center">
+            <IconoDePagina icono={nodo.icono} className="h-3.5 w-3.5" tamanoEmoji="text-xs" />
           </span>
 
           {renombrando === nodo.id ? (
@@ -305,7 +307,9 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
               title={nodo.bloqueada ? `${nodo.titulo} · bloqueada` : nodo.titulo}
             >
               {nodo.titulo}
-              {nodo.bloqueada && <span className="ml-1 text-2xs text-fg-muted">🔒</span>}
+              {nodo.bloqueada && (
+                <IconoCandado className="ml-1 inline-block h-3 w-3 align-[-1px] text-fg-muted" />
+              )}
             </Link>
           )}
 
@@ -319,7 +323,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
                 title="Arrastrá para reordenar"
                 aria-label="Reordenar"
               >
-                ⠿
+                <IconoArrastrar />
               </button>
               <button
                 type="button"
@@ -328,7 +332,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
                 title="Nueva subpágina"
                 aria-label="Nueva subpágina"
               >
-                +
+                <IconoMas className="h-3.5 w-3.5" />
               </button>
               <Menu
                 trigger="…"
@@ -366,20 +370,17 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
           title="Buscar en la documentación (Ctrl+K)"
           aria-label="Buscar en la documentación"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5" aria-hidden="true">
-            <circle cx="9" cy="9" r="6" />
-            <path d="M14 14l4 4" strokeLinecap="round" />
-          </svg>
+          <IconoBuscar className="h-3.5 w-3.5" />
         </button>
         {puedeEscribir && (
           <button
             type="button"
             onClick={() => void crear(null)}
-            className="rounded px-1 text-lg leading-none text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className="rounded px-1 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
             title="Nueva página"
             aria-label="Nueva página"
           >
-            +
+            <IconoMas className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
@@ -390,7 +391,15 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
           {puedeEscribir ? " Creá la primera con el «+»." : ""}
         </p>
       ) : (
-        <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={alSoltar}>
+        /* ⚠ `id` FIJO: sin él, dnd-kit numera sus `aria-describedby` con un contador que arranca
+           distinto en el servidor y en el navegador, y React reporta un desajuste de hidratación
+           en cada fila del árbol. */
+        <DndContext
+          id="arbol-de-documentacion"
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          onDragEnd={alSoltar}
+        >
           <Nivel nodos={arbol} profundidad={0} />
         </DndContext>
       )}
@@ -401,7 +410,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
           onClick={() => setPapeleraAbierta(true)}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
         >
-          <span aria-hidden="true">🗑️</span> Papelera
+          <IconoPapelera className="h-3.5 w-3.5" /> Papelera
         </button>
       </div>
 

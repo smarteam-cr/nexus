@@ -16,6 +16,7 @@ import { fetchJson } from "@/lib/api/fetch-json";
 import { Breadcrumbs, Menu, useToast, type MenuItemDef } from "@/components/ui";
 import type { EstadoDeGuardado } from "@/lib/documentacion/tipos";
 import SelectorDeIcono from "./SelectorDeIcono";
+import { INSET_CONTENIDO } from "./layout";
 import HistorialDePagina from "./HistorialDePagina";
 
 /** Lo que se muestra mientras se escribe. El conflicto y el error los explica el aviso de arriba. */
@@ -121,12 +122,14 @@ export default function EncabezadoDePagina({
   }
 
   return (
-    <header className="mb-6">
+    /* El mismo inset que el texto del editor: si el encabezado arranca antes, la página se ve
+       corrida (el título a la izquierda y el contenido más adentro). */
+    <header className={`mb-6 ${INSET_CONTENIDO}`}>
       {migas.length > 0 && <Breadcrumbs crumbs={migas} className="mb-2" />}
 
       {/* El ícono va ARRIBA del título y no al lado: es la jerarquía de una página, no una viñeta
-          del renglón. Además deja el título alineado con el texto del contenido. */}
-      <div className="mb-1 -ml-1">
+          del renglón. */}
+      <div className="mb-1">
         <SelectorDeIcono
           icono={icono}
           editable={editable}
@@ -139,7 +142,7 @@ export default function EncabezadoDePagina({
           <input
             autoFocus
             defaultValue={titulo}
-            className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1 text-3xl font-semibold text-fg"
+            className="-ml-1 min-w-0 flex-1 rounded-lg border border-line bg-surface px-1 py-0.5 text-3xl font-semibold text-fg"
             onBlur={(e) => {
               setEditandoTitulo(false);
               const nuevo = e.target.value.trim();
@@ -157,11 +160,10 @@ export default function EncabezadoDePagina({
           <h1
             className={
               editable
-                ? "min-w-0 flex-1 cursor-text rounded-lg px-2 py-1 text-3xl font-semibold text-fg transition-colors hover:bg-surface-hover"
-                : "min-w-0 flex-1 px-2 py-1 text-3xl font-semibold text-fg"
+                ? "-ml-1 min-w-0 flex-1 cursor-text rounded-lg px-1 py-0.5 text-3xl font-semibold text-fg transition-colors hover:bg-surface-hover"
+                : "min-w-0 flex-1 py-0.5 text-3xl font-semibold text-fg"
             }
             onClick={() => editable && setEditandoTitulo(true)}
-            title={editable ? "Clic para renombrar" : undefined}
           >
             {titulo}
           </h1>

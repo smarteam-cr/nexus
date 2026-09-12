@@ -55,7 +55,8 @@ function PaginaEnlazada({
     <a
       href={`/documentacion/${destino}`}
       title={`Ir a «${tituloVisible}»`}
-      className="inline-flex items-baseline gap-1 rounded px-1 text-fg underline decoration-line decoration-dotted underline-offset-2 transition-colors hover:bg-surface-hover hover:decoration-fg-muted"
+      /* El `-mx-0.5` compensa el padding: sin eso queda un hueco antes del punto que sigue. */
+      className="-mx-1 inline-flex items-baseline gap-1 rounded px-1 text-fg underline decoration-line decoration-dotted underline-offset-2 transition-colors hover:bg-surface-hover hover:decoration-fg-muted"
       /* Dentro del editor, el clic por defecto coloca el cursor en vez de navegar. */
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => {

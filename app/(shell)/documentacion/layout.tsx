@@ -50,7 +50,7 @@ export default async function LayoutDeDocumentacion({
 
   return (
     <div className="flex items-start">
-      <aside className="sticky top-0 hidden h-[calc(100vh-1px)] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface-muted px-2 py-4 lg:block">
+      <aside className="sticky top-0 hidden h-[calc(100vh-1px)] w-72 shrink-0 overflow-y-auto border-r border-line bg-surface-muted px-2 py-4 lg:block">
         <Suspense fallback={<ListSkeleton rows={6} lines={1} compact />}>
           <PanelDelArbol puedeEscribir={puedeEscribir} puedeAdministrar={puedeAdministrar} />
         </Suspense>
