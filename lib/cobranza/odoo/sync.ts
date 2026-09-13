@@ -34,6 +34,7 @@ import {
   esBorradoMasivo,
   esCorridaParcial,
   espejoVencido,
+  evidenciaDesactualizada,
   mapearFactura,
   type Delta,
   type FacturaEspejada,
@@ -153,6 +154,7 @@ export async function sincronizarOdoo(opts: {
         montoTotal: true,
         montoNeto: true,
         montoResidual: true,
+        montoMonedaCompania: true,
         moneda: true,
         paymentState: true,
         state: true,
@@ -217,6 +219,7 @@ export async function sincronizarOdoo(opts: {
         montoResidual: f.montoResidual,
         montoImpuesto: f.montoImpuesto,
         montoTotalSigned: f.montoTotalSigned,
+        montoMonedaCompania: f.montoMonedaCompania,
         moneda: f.moneda,
         odooPartnerId: f.odooPartnerId,
         odooPartnerNombre: f.odooPartnerNombre,
@@ -250,7 +253,13 @@ export async function sincronizarOdoo(opts: {
       /* Una que había DESAPARECIDO y volvió también es un cambio: se registra para que la
          resurrección no pase inadvertida. */
       const revivio = previa.estadoEspejo === "DESAPARECIDA";
-      if (!deltas.length && !revivio) {
+      /* La evidencia del tipo de cambio no va a la bitácora, pero tampoco puede quedarse vieja: si
+         solo cambió ella, la fila se reescribe sin anotar nada (ver `evidenciaDesactualizada`). */
+      const evidenciaVieja = evidenciaDesactualizada(
+        previa.montoMonedaCompania === null ? null : Number(previa.montoMonedaCompania),
+        f.montoMonedaCompania,
+      );
+      if (!deltas.length && !revivio && !evidenciaVieja) {
         /* ⚠ NO se escribe una fila por factura sin cambios. Medido en la primera corrida: 347
            escrituras de a una contra Supabase tardan 63 s, y la corrida diaria en régimen es
            casi toda «sin cambios» — o sea un minuto de ida y vuelta para estampar una fecha.
@@ -277,15 +286,20 @@ export async function sincronizarOdoo(opts: {
           /* Solo si cambió: escribirla siempre es lo que pisaba una atribución hecha a mitad de
              la corrida (ver arriba). */
           ...(cambiaCuenta ? { cuentaId } : {}),
-          cambios: {
-            create: aEscribir.map((d) => ({
-              odooMoveId: f.odooMoveId,
-              numero: f.numero,
-              tipo: d.tipo,
-              anterior: d.anterior,
-              nuevo: d.nuevo,
-            })),
-          },
+          /* Sin bitácora cuando lo único que cambió es la evidencia del tipo de cambio. */
+          ...(aEscribir.length
+            ? {
+                cambios: {
+                  create: aEscribir.map((d) => ({
+                    odooMoveId: f.odooMoveId,
+                    numero: f.numero,
+                    tipo: d.tipo,
+                    anterior: d.anterior,
+                    nuevo: d.nuevo,
+                  })),
+                },
+              }
+            : {}),
         },
       });
       /* Los contadores se suman DESPUÉS de escribir: sumarlos antes hace que la corrida

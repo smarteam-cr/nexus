@@ -18,10 +18,12 @@ import {
   esBorradoMasivo,
   esCorridaParcial,
   espejoVencido,
+  evidenciaDesactualizada,
   HORAS_MAXIMAS_DEL_ESPEJO,
   fechaOdoo,
   many2one,
   mapearFactura,
+  montoConSigno,
   numeroOdoo,
   proponerSemaforo,
   senalDe,
@@ -99,13 +101,49 @@ describe("espejar una factura", () => {
     expect(mapearFactura({ ...CRUDA, currency_id: false })).toHaveProperty("rechazo");
   });
 
-  it("guarda el total CON SIGNO aparte, porque el de la nota de crédito viene positivo", () => {
+  it("⚠⚠ el total CON SIGNO va en la moneda del documento, no en colones", () => {
+    /* `amount_total_signed` de Odoo está en la moneda de la COMPAÑÍA. Hasta el 2026-09-12 el espejo
+       lo guardaba como «total con signo» y 318 facturas USD quedaron con colones adentro. Este
+       mismo test certificaba lo contrario: su fixture traía el signed igual al total. Caso medido. */
+    const r = mapearFactura({
+      ...CRUDA,
+      name: "FAC/2026/0332",
+      amount_untaxed: 13475,
+      amount_tax: 1751.75,
+      amount_total: 15226.75,
+      amount_total_signed: 6905331.13,
+    });
+    if (!("factura" in r)) throw new Error("debería espejar");
+    expect(r.factura.montoTotalSigned).toBe(15226.75);
+    expect(r.factura.montoMonedaCompania, "los colones van aparte: son la evidencia del tipo de cambio").toBe(6905331.13);
+  });
+
+  it("la nota de crédito resta: el total viene positivo y el signo sale del tipo de documento", () => {
     /* `amount_total` es positivo también en las notas de crédito: sumar facturas y notas con
        él sobreestima la venta y nada avisa. */
-    const nc = mapearFactura({ ...CRUDA, move_type: "out_refund", amount_total: 500, amount_total_signed: -500 });
+    const nc = mapearFactura({ ...CRUDA, move_type: "out_refund", amount_total: 500, amount_total_signed: -226_750 });
     if (!("factura" in nc)) throw new Error("debería espejar");
     expect(nc.factura.montoTotal).toBe(500);
     expect(nc.factura.montoTotalSigned).toBe(-500);
+    expect(nc.factura.montoMonedaCompania).toBe(-226_750);
+  });
+});
+
+describe("el total con signo y la evidencia del tipo de cambio", () => {
+  it("el signo sale del tipo de documento: solo la nota de crédito resta", () => {
+    expect(montoConSigno("out_invoice", 2260)).toBe(2260);
+    expect(montoConSigno("out_receipt", 80)).toBe(80);
+    expect(montoConSigno("out_refund", 500)).toBe(-500);
+    expect(montoConSigno("out_refund", 0), "sin -0").toBe(0);
+  });
+
+  it("⚠ la evidencia en colones se reescribe si el contador la corrige, no por ruido de float", () => {
+    /* `calcularDeltas` decide si la fila se actualiza y no la compara (no tiene tipo en la
+       bitácora): sin esta regla, un tipo de cambio corregido en Odoo no llegaría nunca. */
+    expect(evidenciaDesactualizada(6905331.13, 6905331.13)).toBe(false);
+    expect(evidenciaDesactualizada(6905331.13, 6905331.130000001)).toBe(false);
+    expect(evidenciaDesactualizada(6905331.13, 6853540.25)).toBe(true);
+    expect(evidenciaDesactualizada(null, 6905331.13), "fila que el código anterior dejó sin evidencia").toBe(true);
   });
 });
 

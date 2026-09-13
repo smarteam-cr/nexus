@@ -259,12 +259,49 @@ describe("cronograma y Odoo: INV22, INV23, INV24", () => {
   });
 
   it("INV23 · una moneda ajena al ERP o un neto mayor que el total viola; un céntimo de float no", async () => {
-    const f = (numero: string, moneda: string, neto: number, total: number) => ({ numero, moneda, montoNeto: neto, montoTotal: total, montoImpuesto: total - neto });
+    const f = (numero: string, moneda: string, neto: number, total: number) => ({
+      numero, moneda, moveType: "out_invoice", montoNeto: neto, montoTotal: total, montoImpuesto: total - neto, montoTotalSigned: total, montoResidual: 0,
+    });
     expect((await INV23.correr(baseFalsa({ facturaOdoo: [f("F-1", "USD", 100, 113), f("F-2", "CRC", 100.005, 100)] }), AHORA)).ok).toBe(true);
     const r = await INV23.correr(baseFalsa({ facturaOdoo: [f("F-3", "EUR", 1, 1), f("F-4", "USD", 113, 100)] }), AHORA);
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("F-3: moneda «EUR» que el espejo no conoce");
     expect(r.lineas[0]).toContain("F-4: neto 113.00 mayor que el total 100.00");
+  });
+
+  it("INV23 · la fila vieja, con colones en el total con signo de una factura USD, viola y nombra el SQL; la nota de crédito en negativo no", async () => {
+    /* Medido el 2026-09-12: 318 facturas USD guardaban en `montoTotalSigned` el `amount_total_signed`
+       de Odoo, que está en colones. INV23 no lo veía porque no pedía la columna. */
+    const fila = (numero: string, moveType: string, total: number, conSigno: number, saldo = 0) => ({
+      numero, moveType, moneda: "USD", montoNeto: total / 1.13, montoTotal: total, montoImpuesto: total - total / 1.13, montoTotalSigned: conSigno, montoResidual: saldo,
+    });
+    const llamadas: Llamada[] = [];
+    const sana = await INV23.correr(
+      baseFalsa(
+        { facturaOdoo: [fila("FAC/2026/0332", "out_invoice", 15226.75, 15226.75, 15226.75), fila("NC-1", "out_refund", 500, -500), fila("F-5", "out_invoice", 113, 113.004)] },
+        llamadas,
+      ),
+      AHORA,
+    );
+    expect(sana.ok).toBe(true);
+    const select = llamadas.find((l) => l.modelo === "facturaOdoo")?.args.select;
+    expect(select, "sin estas columnas el invariante no puede ver el defecto").toMatchObject({ moveType: true, montoTotalSigned: true, montoResidual: true });
+
+    const r = await INV23.correr(
+      baseFalsa({ facturaOdoo: [fila("FAC/2026/0332", "out_invoice", 15226.75, 6905331.13), fila("NC-2", "out_refund", 500, 500), fila("F-6", "out_invoice", 113, 113, 120)] }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    const texto = r.lineas.join("\n");
+    expect(texto).toContain("3 factura(s)");
+    expect(texto).toContain("FAC/2026/0332: total con signo 6905331.13 y el documento (out_invoice, USD) dice 15226.75");
+    expect(texto).toContain("NC-2: total con signo 500.00 y el documento (out_refund, USD) dice -500.00");
+    expect(texto).toContain("F-6: saldo 120.00 mayor que el total 113.00");
+    expect(texto).toContain("Remedio del total con signo (2)");
+    expect(texto).toContain("2026-09-12-4-espejo-odoo-moneda-del-documento.sql");
+
+    const sinColumna = await INV23.correr(baseFalsa({ facturaOdoo: [{ ...fila("F-7", "out_invoice", 113, 113), montoTotalSigned: undefined }] }), AHORA);
+    expect(sinColumna.ok, "una columna que no llegó no pasa callada").toBe(false);
   });
 
   it("INV24 · una corrida abierta hace más de 6 h o fallida sin error viola; una fallida CON error no", async () => {

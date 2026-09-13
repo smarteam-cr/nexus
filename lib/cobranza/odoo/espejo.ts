@@ -69,10 +69,35 @@ export interface FacturaEspejada {
   montoTotal: number;
   montoResidual: number;
   montoImpuesto: number;
+  /** El total con el signo del documento y EN SU MONEDA: negativo en las notas de crédito. */
   montoTotalSigned: number;
+  /**
+   * `amount_total_signed` tal cual: con signo y en la moneda de la COMPAÑÍA (colones), aunque la
+   * factura sea en dólares. Es la evidencia del tipo de cambio con que se registró; nada lo suma.
+   */
+  montoMonedaCompania: number;
   moneda: string;
   odooPartnerId: number;
   odooPartnerNombre: string;
+}
+
+/**
+ * El total con el signo del DOCUMENTO y en su moneda: negativo en la nota de crédito, positivo en
+ * la factura y en el recibo. `amount_total` viene positivo en los tres.
+ *
+ * ⚠⚠ NO es `amount_total_signed`. Ese campo de Odoo está en la moneda de la COMPAÑÍA —colones—
+ * aunque la factura sea en dólares, y hasta el 2026-09-12 el espejo lo guardaba como «total con
+ * signo»: 318 facturas USD con el monto en colones (FAC/2026/0332: 15.226,75 guardado como
+ * 6.905.331,13), ₡241 M en filas que dicen USD. El signo se deriva del tipo de documento, que
+ * coincidía con el de Odoo en 347 de 347.
+ *
+ * La misma regla la aplican INV23 y el CHECK `FacturaOdoo_signo_del_documento`
+ * (scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql): si cambia acá, cambia allá.
+ */
+export function montoConSigno(moveType: string, montoTotal: number): number {
+  /* Sin `-0`: para una suma es `0`, pero `Object.is` —y por lo tanto `toBe(0)`— lo distingue. */
+  if (montoTotal === 0) return 0;
+  return moveType === "out_refund" ? -montoTotal : montoTotal;
 }
 
 /**
@@ -99,11 +124,14 @@ export function mapearFactura(cruda: Record<string, unknown>): { factura: Factur
   const moneda = many2one(cruda.currency_id)?.nombre ?? null;
   if (!moneda) return { rechazo: `la factura ${odooMoveId} no tiene currency_id` };
 
+  const moveType = textoOdoo(cruda.move_type) ?? "";
+  const montoTotal = numeroOdoo(cruda.amount_total);
+
   return {
     factura: {
       odooMoveId,
       numero: textoOdoo(cruda.name) ?? `(sin número ${odooMoveId})`,
-      moveType: textoOdoo(cruda.move_type) ?? "",
+      moveType,
       state: textoOdoo(cruda.state) ?? "",
       paymentState: textoOdoo(cruda.payment_state) ?? "not_paid",
       invoiceDate,
@@ -112,12 +140,15 @@ export function mapearFactura(cruda: Record<string, unknown>): { factura: Factur
          SIN IVA. Comparar contra `montoTotal` marcaría las 304 facturas como descuadradas
          por exactamente 13 %. */
       montoNeto: numeroOdoo(cruda.amount_untaxed),
-      montoTotal: numeroOdoo(cruda.amount_total),
+      montoTotal,
       montoResidual: numeroOdoo(cruda.amount_residual),
       montoImpuesto: numeroOdoo(cruda.amount_tax),
       /* Con signo: `amount_total` es POSITIVO también en las notas de crédito, así que sumar
-         facturas y notas con él sobreestima la venta y nada avisa. */
-      montoTotalSigned: numeroOdoo(cruda.amount_total_signed),
+         facturas y notas con él sobreestima la venta y nada avisa. ⚠⚠ Sale del tipo de documento,
+         NUNCA de `amount_total_signed`, que está en colones: ver `montoConSigno`. */
+      montoTotalSigned: montoConSigno(moveType, montoTotal),
+      /* Ese sí, tal cual y aparte: es la evidencia del tipo de cambio de la factura. */
+      montoMonedaCompania: numeroOdoo(cruda.amount_total_signed),
       moneda,
       odooPartnerId: partner.id,
       odooPartnerNombre: partner.nombre,
@@ -347,6 +378,20 @@ export function calcularDeltas(previa: FacturaPrevia, nueva: FacturaEspejada, cu
     d.push({ tipo: "CUENTA", anterior: previa.cuentaId ?? "(ninguno)", nuevo: cuentaIdNueva ?? "(ninguno)" });
   }
   return d;
+}
+
+/**
+ * ¿Hay que reescribir la fila aunque `calcularDeltas` no haya encontrado nada?
+ *
+ * `montoMonedaCompania` es evidencia —el tipo de cambio con que el contador registró la factura—,
+ * no un hecho que mueva un cobro: no tiene tipo en la bitácora y no se anota. Pero `calcularDeltas`
+ * decide si la fila se actualiza, y un campo que nadie compara se queda viejo para siempre. Por eso
+ * se compara aparte, redondeado a dos decimales como los demás montos.
+ *
+ * `null` = una fila que escribió el código anterior después del SQL de la etapa 4: se completa.
+ */
+export function evidenciaDesactualizada(previa: number | null, nueva: number): boolean {
+  return previa === null || previa.toFixed(2) !== nueva.toFixed(2);
 }
 
 /* ── 5. La guarda del 50 % ──────────────────────────────────────────────────────── */

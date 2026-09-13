@@ -4501,7 +4501,17 @@ model FacturaOdoo {
 
   /// Con signo: amount_total es POSITIVO también en las notas de crédito, así que sumar
   /// facturas y notas con montoTotal sobreestima la venta y nada avisa.
+  /// ⚠⚠ En la moneda del DOCUMENTO: ±montoTotal según moveType (montoConSigno, espejo.ts). NO es
+  /// amount_total_signed de Odoo, que está en colones: hasta el 2026-09-12 lo era y 318 facturas
+  /// USD guardaban ₡241 M. Lo impide el CHECK FacturaOdoo_signo_del_documento, que Prisma no
+  /// modela (scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql).
   montoTotalSigned Decimal @db.Decimal(14, 2)
+
+  /// amount_total_signed tal cual: con signo y en la moneda de la COMPAÑÍA (colones), aunque la
+  /// factura sea en dólares. Es la única evidencia del tipo de cambio con que el contador registró
+  /// cada factura: nada lo suma ni lo compara contra un cobro. null = fila que escribió el código
+  /// anterior después del SQL; la corrida siguiente la completa.
+  montoMonedaCompania Decimal? @db.Decimal(14, 2)
 
   /// Moneda NATIVA del documento. NO el enum CobranzaMoneda: Odoo puede traer otras. Acá no
   /// se convierte nada — convertir() de lib/finanzas/equilibrio.ts es el único punto.

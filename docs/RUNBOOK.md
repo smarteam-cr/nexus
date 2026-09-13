@@ -194,7 +194,10 @@ lista cada corrida con su resultado. No hay botón para correr el sync desde la 
 
 1. **Apagado, «falta ODOO_PASSWORD»**: cargarla en el `.env` del VPS y hacer deploy; el job corre
    en el tick siguiente si ya son las 6:00 CR. ⚠ Si todavía no se aplicó el SQL que guarda cada
-   monto del espejo en su moneda (etapa 4 del plan de cobranza), ese SQL va antes que la credencial.
+   monto del espejo en su moneda (etapa 4 del plan de cobranza,
+   `scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql`), ese SQL va antes que la
+   credencial y antes que el deploy de la etapa 4. Con el SQL puesto y el código anterior, la corrida
+   falla y guarda el error en vez de escribir colones en facturas en dólares; INV23 lo confirma.
 2. **Falló por credenciales** (`AUTENTICACION` en el error): el job **retiene el turno del día** y no
    reintenta hasta mañana. Es a propósito: cada intento con la clave rechazada suma al bloqueo del
    usuario en Odoo, y reintentar cada minuto lo sostendría. Primero se arregla la causa en Odoo

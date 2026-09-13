@@ -2748,7 +2748,27 @@ async function aparearFacturasDeOdoo(
   servicios: ReadonlyArray<{ cobros: ReadonlyArray<CobroRow> }>,
 ): Promise<Map<string, CobroDTO["facturaOdoo"]>> {
   const out = new Map<string, CobroDTO["facturaOdoo"]>();
-  const facturasDb = await prisma.facturaOdoo.findMany({ where: { cuentaId, estadoEspejo: "VIGENTE" } });
+  /* `select` explícito: una columna nueva del espejo (`montoMonedaCompania`, etapa 4) no puede
+     tumbar el cronograma si el código llega a producción antes que su SQL. */
+  const facturasDb = await prisma.facturaOdoo.findMany({
+    where: { cuentaId, estadoEspejo: "VIGENTE" },
+    select: {
+      id: true,
+      odooMoveId: true,
+      numero: true,
+      cuentaId: true,
+      odooPartnerId: true,
+      odooPartnerNombre: true,
+      invoiceDate: true,
+      montoNeto: true,
+      montoTotal: true,
+      montoImpuesto: true,
+      moneda: true,
+      moveType: true,
+      paymentState: true,
+      state: true,
+    },
+  });
   if (!facturasDb.length) return out;
 
   const cobros = servicios.flatMap((s) =>

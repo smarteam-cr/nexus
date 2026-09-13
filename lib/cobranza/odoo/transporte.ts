@@ -50,6 +50,9 @@ export const ODOO_CAMPOS_FACTURA = [
   "amount_total",
   "amount_residual",
   "amount_tax",
+  /* ⚠ En la moneda de la COMPAÑÍA (colones) aunque la factura sea en dólares. Se guarda solo como
+     evidencia del tipo de cambio (`montoMonedaCompania`); el total con signo NO sale de acá, sale
+     del tipo de documento (`montoConSigno` en espejo.ts). */
   "amount_total_signed",
   "currency_id",
   "partner_id",

@@ -341,6 +341,13 @@ crédito **sobreestima** la venta neta: la nota de crédito suma en vez de resta
 Los cinco campos `_signed` son columnas reales, en moneda de la **compañía** — que además es
 lo que hay que usar para consolidar una base multi-moneda.
 
+> ⚠ **Corregido el 2026-09-12.** Para sumar *por moneda del documento*, `amount_total_signed` NO
+> es el campo correcto, justamente porque está en colones: el espejo lo guardó como «total con
+> signo» y 318 facturas USD quedaron con ₡241 M adentro. Hoy el espejo deriva el signo del
+> `move_type` (`montoConSigno` en `lib/cobranza/odoo/espejo.ts`, que coincidía en 347 de 347) y
+> guarda `amount_total_signed` aparte, en `montoMonedaCompania`, solo como evidencia del tipo de
+> cambio. Ver `scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql`.
+
 ### `payment_state`
 
 Seis valores exactos: `not_paid`, `in_payment`, `paid`, `partial`, `reversed`,

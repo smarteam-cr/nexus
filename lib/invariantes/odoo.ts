@@ -4,7 +4,7 @@
  */
 import { cumple, viola, type Invariante } from "./contrato";
 import { reatribuciones } from "@/lib/cobranza/odoo/emparejado";
-import { espejoVencido, HORAS_MAXIMAS_DEL_ESPEJO } from "@/lib/cobranza/odoo/espejo";
+import { espejoVencido, HORAS_MAXIMAS_DEL_ESPEJO, montoConSigno } from "@/lib/cobranza/odoo/espejo";
 
 /**
  * INV23 · El espejo de Odoo sigue siendo un espejo. Toda `FacturaOdoo` guarda el monto en la
@@ -16,7 +16,14 @@ import { espejoVencido, HORAS_MAXIMAS_DEL_ESPEJO } from "@/lib/cobranza/odoo/esp
  * de Nexus están cargados SIN IVA y se comparan contra `montoNeto`; si alguien "arregla" el mapeo
  * cruzando los campos, 304 facturas quedan descuadradas por 13 % y nada avisa, porque los dos
  * números siguen siendo montos plausibles.
- * Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync.
+ *
+ * ⚠⚠ Y el total con signo es ± el total en la MISMA moneda (`montoConSigno`), y el saldo no supera
+ * el total. Hasta el 2026-09-12 el sync guardaba ahí `amount_total_signed`, que Odoo da en colones:
+ * 318 facturas USD con ₡241 M adentro. Este invariante no lo veía porque no pedía esa columna —la
+ * única de monto que dejaba afuera era la que rompía su regla—. Da rojo con esas 318 hasta que se
+ * corra el SQL de la etapa 4; después, el CHECK `FacturaOdoo_signo_del_documento` impide que vuelva.
+ * Remedio: el total con signo, scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql; lo
+ * demás, revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync.
  */
 export const MONEDAS_DEL_ESPEJO = new Set(["USD", "CRC"]);
 
@@ -25,9 +32,19 @@ export const INV23: Invariante = {
   nombre: "las facturas espejadas están en moneda nativa y con montos coherentes",
   async correr(db) {
     const facturasOdoo = await db.facturaOdoo.findMany({
-      select: { numero: true, moneda: true, montoNeto: true, montoTotal: true, montoImpuesto: true },
+      select: {
+        numero: true,
+        moveType: true,
+        moneda: true,
+        montoNeto: true,
+        montoTotal: true,
+        montoImpuesto: true,
+        montoTotalSigned: true,
+        montoResidual: true,
+      },
     });
     const espejoRoto: string[] = [];
+    let conSignoRoto = 0;
     for (const f of facturasOdoo) {
       if (!MONEDAS_DEL_ESPEJO.has(f.moneda)) {
         espejoRoto.push(`${f.numero}: moneda «${f.moneda}» que el espejo no conoce`);
@@ -35,15 +52,34 @@ export const INV23: Invariante = {
       }
       const neto = Number(f.montoNeto);
       const total = Number(f.montoTotal);
+      const problemas: string[] = [];
       // Con un céntimo de tolerancia: Odoo hace la aritmética en float.
       if (neto > total + 0.01) {
-        espejoRoto.push(`${f.numero}: neto ${neto.toFixed(2)} mayor que el total ${total.toFixed(2)}`);
+        problemas.push(`neto ${neto.toFixed(2)} mayor que el total ${total.toFixed(2)}`);
       }
+      /* `!(… <= …)` y no `… > …`: un NaN —una columna que no llegó— tiene que violar, no pasar callado. */
+      const conSigno = Number(f.montoTotalSigned);
+      const esperado = montoConSigno(f.moveType, total);
+      if (!(Math.abs(conSigno - esperado) <= 0.01)) {
+        conSignoRoto++;
+        problemas.push(
+          `total con signo ${conSigno.toFixed(2)} y el documento (${f.moveType}, ${f.moneda}) dice ${esperado.toFixed(2)}`,
+        );
+      }
+      const saldo = Number(f.montoResidual);
+      if (!(saldo <= total + 0.01)) {
+        problemas.push(`saldo ${saldo.toFixed(2)} mayor que el total ${total.toFixed(2)}`);
+      }
+      if (problemas.length) espejoRoto.push(`${f.numero}: ${problemas.join("; ")}`);
     }
     if (espejoRoto.length > 0) {
       return viola(
-        `✗ INV23 VIOLADO: ${espejoRoto.length} factura(s) espejadas con montos que el sync no pudo haber escrito:\n` +
+        `✗ INV23 VIOLADO: ${espejoRoto.length} factura(s) espejadas con montos incoherentes:\n` +
           espejoRoto.slice(0, 20).map((d) => `    · ${d}`).join("\n") +
+          (espejoRoto.length > 20 ? `\n    · …y ${espejoRoto.length - 20} más` : "") +
+          (conSignoRoto > 0
+            ? `\n    Remedio del total con signo (${conSignoRoto}): correr scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql, que lo pasa a la moneda del documento y agrega el control que impide que vuelva.`
+            : "") +
           `\n    Remedio: revisar mapearFactura en lib/cobranza/odoo/espejo.ts y re-correr el sync.`,
       );
     }

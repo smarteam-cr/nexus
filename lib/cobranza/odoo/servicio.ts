@@ -392,8 +392,29 @@ export async function cargarDiferencias(): Promise<{
       orderBy: [{ fechaProgramada: "asc" }, { id: "asc" }],
     }),
     /* ⚠ Con orden explícito. `cruzar()` desempata por id, pero una consulta sin ORDER BY no
-       garantiza nada y el apareo no debería depender de eso en dos lugares distintos. */
-    prisma.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE" }, orderBy: { odooMoveId: "asc" } }),
+       garantiza nada y el apareo no debería depender de eso en dos lugares distintos.
+       Y con `select` explícito: una columna nueva del espejo (`montoMonedaCompania`, etapa 4) no
+       puede tumbar esta pantalla si el código llega a producción antes que su SQL. */
+    prisma.facturaOdoo.findMany({
+      where: { estadoEspejo: "VIGENTE" },
+      select: {
+        id: true,
+        odooMoveId: true,
+        numero: true,
+        cuentaId: true,
+        odooPartnerId: true,
+        odooPartnerNombre: true,
+        invoiceDate: true,
+        montoNeto: true,
+        montoTotal: true,
+        montoImpuesto: true,
+        moneda: true,
+        moveType: true,
+        paymentState: true,
+        state: true,
+      },
+      orderBy: { odooMoveId: "asc" },
+    }),
     prisma.cuentaFinanciera.findMany({
       select: { id: true, tipo: true, viaCobro: true, client: { select: { name: true } } },
     }),
