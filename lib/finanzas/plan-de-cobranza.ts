@@ -12,17 +12,23 @@
  *
  * ⛔ Nada de acá es un número vivo: los montos y conteos son los MEDIDOS al cerrar cada etapa
  * (2026-09-12). Lo que cambia día a día lo lee `plan-de-cobranza-vivo.ts`.
+ *
+ * ⚠ 2026-09-13: los cuatro cambios de base de la tanda ya están en producción (verificados columna
+ * por columna) y la copia de Odoo volvió, con una clave de API. Por eso ningún renglón espera la base
+ * y desaparecieron las tareas de recuperar Odoo y reatribuir facturas: el primer sync las atribuyó.
  */
 
 /** Las etapas del plan que quedaron commiteadas en verde. La 15 no se construye hasta tener las respuestas. */
 export const ETAPAS_COMMITEADAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as const;
 
 /**
- * Las que no andan hasta que Elías pone su cambio en la base de datos: la 4 (el espejo de Odoo), la
- * 7 (número de factura), la 10 (plata que no es venta) y la 12 (sociedades). La 13 no trae uno
- * propio, pero cargar el libro exige los de la 7 y la 12.
+ * Las que no andan hasta que un cambio de base esté en producción. Hasta el 2026-09-12 eran la 4, la
+ * 7, la 10, la 12 y la 13; el 2026-09-13 se verificó que los cuatro cambios ya están puestos.
+ *
+ * ⚠ Queda como lista vacía y no se borra: el test la usa para exigir que un renglón que depende de la
+ * base lo avise. La próxima tanda con un cambio de base vuelve a anotar acá sus etapas.
  */
-export const ETAPAS_QUE_ESPERAN_LA_BASE = [4, 7, 10, 12, 13] as const;
+export const ETAPAS_QUE_ESPERAN_LA_BASE: readonly number[] = [];
 
 export type Persona = "Alex" | "Marco" | "Elías";
 
@@ -60,8 +66,6 @@ export interface Decision {
 export const TITULO = "Plan de cobranza";
 export const DESCRIPCION = "Qué cambió en cobranza, qué falta y quién lo hace, y qué espera una decisión.";
 
-const CUANDO_LA_BASE = "Anda cuando Elías ponga los cambios en la base de datos.";
-
 export const QUE_HACE_AHORA: readonly CambioHecho[] = [
   {
     titulo: "Nada sale de Cobrado sin una firma",
@@ -89,7 +93,7 @@ export const QUE_HACE_AHORA: readonly CambioHecho[] = [
     consecuencia:
       "Marcar facturado pide el número de la factura, o que digás por qué no lo tenés, y queda firmado. El cruce con Odoo usa ese número en vez de adivinar por monto, y un número que ya es de otra cuenta se frena.",
     etapas: [7, 8],
-    espera: CUANDO_LA_BASE,
+    espera: null,
   },
   {
     titulo: "Los números de Dirección dejan de inflarse",
@@ -100,9 +104,12 @@ export const QUE_HACE_AHORA: readonly CambioHecho[] = [
   },
   {
     titulo: "Los avisos dejan de mentir",
+    // ⚠ 2026-09-13: acá decía «82 cobros por USD 83.187, que bajan a 18 por USD 22.270 cuando Elías
+    // reatribuya». El sync ya atribuyó las facturas, y la cifra nueva no se volvió a medir: se saca
+    // antes que publicar un número que nadie comprobó.
     consecuencia:
-      "«Lo que no cuadra» ya no acusa USD 237.355 de cobros sin factura: acusa 82 cobros por USD 83.187, que bajan a 18 por USD 22.270 cuando Elías reatribuya las facturas de Odoo. Si el espejo de Odoo o el corte quincenal se quedan viejos, sus pantallas se ponen en rojo esa misma mañana.",
-    etapas: [2, 3],
+      "«Lo que no cuadra» ya no acusa USD 237.355 de cobros sin factura que no lo eran: solo acusa lo que se puede verificar contra Odoo. La copia de Odoo trae cada monto en su moneda y deja las facturas de los clientes emparejados pegadas a su cuenta. Si esa copia o el corte quincenal se quedan viejos, sus pantallas se ponen en rojo esa misma mañana.",
+    etapas: [2, 3, 4],
     espera: null,
   },
   {
@@ -110,32 +117,39 @@ export const QUE_HACE_AHORA: readonly CambioHecho[] = [
     consecuencia:
       "Alex sube su libro y ve documento por documento qué coincide, qué no y qué falta, sin que se escriba nada. Desde ahí carga por cobrar las facturas que Nexus no tiene, con número y firma; nunca como cobradas. «Nueva empresa» pregunta por las parecidas antes de duplicar un cliente.",
     etapas: [11, 12, 13],
-    espera: "Comparar anda ya. Cargar facturas, cuando Elías ponga los cambios en la base de datos.",
+    espera: null,
   },
 ];
 
-const DESPUES_DE_ELIAS = "Después de que Elías ponga los cambios en la base de datos.";
+const APENAS_SE_PUBLIQUE = "Apenas se publique esta versión.";
 
 export const TAREAS: readonly Tarea[] = [
   {
     quien: "Alex",
     que: "Devolver a por cobrar, con «Sacar de Cobrado», los 3 cobros que nunca se depositaron: Global Supply feb-2026 ($1.867, FAC/2026/0206), IIA jun-2026 ($60, FAC/2026/0295) y Seléctrica jun-2026 ($45, FAC/2026/0302).",
-    espera: "Apenas se publique esta versión.",
+    espera: APENAS_SE_PUBLIQUE,
+  },
+  {
+    quien: "Alex",
+    // Medido el 2026-09-13 en la copia de Odoo: la factura de febrero sigue sin pagar, pero el cliente
+    // tiene dos notas de crédito por el mismo monto sin aplicar.
+    que: "Antes de cobrarle a Global Supply, confirmar con el contador si las dos notas de crédito de $2.109,71 que tiene sin aplicar le dejan saldo a favor.",
+    espera: null,
   },
   {
     quien: "Alex",
     que: "Anotar el número de factura de lo ya facturado: 144 cobros muestran «Agregar número», y en el libro «Números» propone el de 68 cuotas para confirmar con «Es esta».",
-    espera: DESPUES_DE_ELIAS,
+    espera: APENAS_SE_PUBLIQUE,
   },
   {
     quien: "Alex",
     que: "Aplicar el libro: cargar por cobrar las 78 facturas que Nexus no tiene (21 sin pagar, por ₡39.920.993,51 + US$58.331,60 según el libro) y elegir la cuenta de los 24 nombres que no traen una propuesta.",
-    espera: DESPUES_DE_ELIAS,
+    espera: APENAS_SE_PUBLIQUE,
   },
   {
     quien: "Alex",
     que: "Cargar el fondo de marketing de Insider (US$5.346,91) en Finanzas › Ingresos variables: suma a la caja, no a la venta.",
-    espera: DESPUES_DE_ELIAS,
+    espera: APENAS_SE_PUBLIQUE,
   },
   {
     quien: "Alex",
@@ -144,23 +158,18 @@ export const TAREAS: readonly Tarea[] = [
   },
   {
     quien: "Elías",
-    que: "Poner en la base de datos los 4 cambios de esta tanda y después publicar esta versión. El del espejo de Odoo va antes que la credencial.",
-    espera: null,
-  },
-  {
-    quien: "Elías",
-    que: "Recuperar el usuario de Odoo y cargar su credencial en el servidor, sin probarlo desde su computadora: cada intento suma al bloqueo.",
-    espera: "Después del cambio de base del espejo de Odoo.",
-  },
-  {
-    quien: "Elías",
-    que: "Reatribuir una vez las facturas de Odoo de los clientes ya emparejados: hasta entonces quedan 170 sin su cuenta.",
+    que: "Publicar esta versión y cargar en el servidor el usuario y la clave de Odoo, para que la copia se ponga al día sola cada mañana.",
     espera: null,
   },
   {
     quien: "Elías",
     que: "Encender el corte quincenal.",
     espera: "Con esta versión ya publicada.",
+  },
+  {
+    quien: "Elías",
+    que: "Crear en Odoo un usuario solo de lectura para Nexus, con su propia clave: hoy la copia entra con la clave de Elías, que puede modificar todo el ERP.",
+    espera: null,
   },
   {
     quien: "Elías",
@@ -205,11 +214,11 @@ export const NUMEROS_EN_VIVO = {
     etiqueta: "Última copia buena de Odoo",
     nunca: "Nunca",
     alDia: "Al día.",
-    vencido: "Lo facturado en Odoo después no está en Nexus. Vuelve cuando Elías recupere el usuario de Odoo.",
+    vencido: "Lo facturado en Odoo después de esa fecha no está en Nexus. La copia se pone al día sola cada mañana; si sigue vieja, avisale a Elías.",
   },
   facturas: {
     etiqueta: "Facturas de Odoo con su cuenta",
-    detalle: "Sube cuando Elías reatribuye las facturas y cada vez que Alex empareja un cliente.",
+    detalle: "Sube cada vez que Alex empareja un cliente de Odoo: sus facturas quedan asignadas en el momento.",
   },
   verdes: {
     etiqueta: "Cobros en Cobrado firmados por la importación",

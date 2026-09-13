@@ -713,3 +713,24 @@ y la adivinanza falla justo donde duele (Electrocaribe: una factura de mayo cont
 junio y julio).
 *Qué lo revertiría:* volver a medirla después de la carga de números del libro (etapa 11) y
 encontrar que siguen quedando cuotas sin número que solo se explican así.
+
+---
+
+## La credencial de Odoo pasa a una clave de API (2026-09-13)
+
+El usuario `direct` dejó de entrar el 2026-09-02 y nunca se supo por qué. El rechazo fue de
+cortocircuito —8 ms sobre la red, sin el hash de la contraseña—, compatible con verificación en dos
+pasos, usuario archivado o login cambiado, y **no** con una contraseña cambiada: esa Odoo la habría
+comparado. Se destrabó con una **clave de API del usuario `egonzalez@smarteamcr.com`** (super admin),
+cargada en `ODOO_PASSWORD` con `ODOO_LOGIN` apuntando a su dueño. Primer intento: OK, 364 facturas, 19
+nuevas, 168 atribuidas a su cuenta; INV23, INV30 e INV31 en verde.
+
+**Por qué una clave y no la contraseña.** Entra por la API aunque haya verificación en dos pasos, y se
+revoca sin cambiarle la contraseña a nadie.
+
+**El costo.** Es una clave de super admin guardada en dos máquinas. Nexus solo lee, pero la clave puede
+escribir en todo el ERP, y lo que hace el sync queda a nombre de Elías.
+
+**Qué la revertiría.** Un usuario de integración con el grupo «Contabilidad · Solo lectura» y su propia
+clave de API: el diseño original de `direct`. ⚠ Y si la clave vence (Odoo 17 les pone duración), el
+sync vuelve a fallar con AUTENTICACION y el mensaje ya nombra esa causa.

@@ -215,7 +215,7 @@ async function autenticar(cfg: OdooConfig): Promise<number> {
   /* Llegar acá significa `<boolean>0</boolean>`: Odoo dijo que no, sin decir por qué. */
   throw new OdooError(
     "AUTENTICACION",
-    `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo en cuatro casos: contraseña cambiada, verificación en dos pasos, usuario archivado, o bloqueo temporal por intentos fallidos. Hay que revisarlo en el ERP; desde acá no se distinguen.`,
+    `Odoo rechazó al usuario «${cfg.login}» sin decir por qué. Devuelve lo mismo si la clave de API venció o se revocó, si el usuario quedó archivado o cambió su login, si tiene verificación en dos pasos y se usa su contraseña en vez de una clave de API, o durante un bloqueo de 60 s por intentos fallidos. Hay que revisarlo en el ERP.`,
   );
 }
 

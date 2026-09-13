@@ -201,7 +201,7 @@ export function clasificarFalloOdoo(nombreExcepcion: string, mensaje: string): O
 export function explicarFallo(clase: OdooFalloClase): string {
   switch (clase) {
     case "AUTENTICACION":
-      return "Odoo rechazó el usuario. Puede ser que le cambiaran la contraseña a «direct», que le activaran verificación en dos pasos, o que el servidor esté bloqueando por intentos fallidos. Odoo no dice cuál de las tres.";
+      return "Odoo rechazó el usuario. Puede ser que la clave de API venció o la revocaron, que el usuario quedó archivado o le cambiaron el login, que le activaron verificación en dos pasos (con eso solo entra con una clave de API), o un bloqueo de un minuto por intentos fallidos. Odoo no dice cuál.";
     case "PERMISO":
       return "El usuario entró pero Odoo no lo deja leer las facturas. Hay que revisar sus permisos en el ERP.";
     case "RED":

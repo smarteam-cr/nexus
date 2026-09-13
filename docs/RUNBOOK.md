@@ -170,7 +170,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `cobranza-quincenal` | ≥ 7:00 CR en los días de corte (`esDiaDeCorte`) | `COBRANZA_CRON_ENABLED=1` | la tanda quincenal de cobranza: extiende las suscripciones, abre todas las alertas (falta facturar, cuentas sin datos, catch-ups) y guarda la foto de la quincena para Reportes. INV32 da rojo si el último corte tiene más de 17 días |
 | `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
 | `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
-| `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
+| `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
 | `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 21 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
@@ -192,16 +192,19 @@ Se ve en tres lugares: la línea de arriba de Cobranza › Odoo se pone en rojo,
 `odoo-espejo-daily` está **apagado** y por qué, o si **falló** y con qué error. `/integrations/odoo`
 lista cada corrida con su resultado. No hay botón para correr el sync desde la pantalla.
 
-1. **Apagado, «falta ODOO_PASSWORD»**: cargarla en el `.env` del VPS y hacer deploy; el job corre
-   en el tick siguiente si ya son las 6:00 CR. ⚠ Si todavía no se aplicó el SQL que guarda cada
-   monto del espejo en su moneda (etapa 4 del plan de cobranza,
-   `scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql`), ese SQL va antes que la
-   credencial y antes que el deploy de la etapa 4. Con el SQL puesto y el código anterior, la corrida
-   falla y guarda el error en vez de escribir colones en facturas en dólares; INV23 lo confirma.
+1. **Apagado, «falta ODOO_PASSWORD»**: cargar `ODOO_LOGIN` y `ODOO_PASSWORD` en el `.env` del VPS y
+   hacer deploy; el job corre en el tick siguiente si ya son las 6:00 CR. Desde el **2026-09-13** la
+   credencial es una **clave de API del usuario `egonzalez@smarteamcr.com`** (Odoo acepta la clave en
+   el casillero de contraseña). ⚠ Sin `ODOO_LOGIN`, Nexus usa `direct` con esa clave y Odoo la rechaza.
+   El SQL de la etapa 4 (`scripts/sql/2026-09-12-4-espejo-odoo-moneda-del-documento.sql`) ya está
+   aplicado en producción, igual que los de las etapas 7, 10 y 12 (verificados el 2026-09-13).
 2. **Falló por credenciales** (`AUTENTICACION` en el error): el job **retiene el turno del día** y no
    reintenta hasta mañana. Es a propósito: cada intento con la clave rechazada suma al bloqueo del
    usuario en Odoo, y reintentar cada minuto lo sostendría. Primero se arregla la causa en Odoo
-   (usuario `direct` archivado o bloqueado, contraseña cambiada, verificación en dos pasos).
+   (clave de API vencida o revocada, usuario archivado o con el login cambiado, verificación en dos
+   pasos —con eso la contraseña ya no entra por la API, solo una clave—, o el bloqueo de 60 s). ⭐ Un
+   rechazo **rápido**, sin los cientos de ms que tarda el hash de la contraseña, descarta que la
+   contraseña haya cambiado: Odoo ni la miró. Así fue el del 2026-09-02 con `direct`.
    Después, tres salidas:
    - **Esperar**: la corrida de mañana, desde las 6:00 CR, lo toma sola.
    - **Liberar el turno de hoy** (escritura a producción; la hace una persona):
@@ -209,11 +212,11 @@ lista cada corrida con su resultado. No hay botón para correr el sync desde la 
      como cualquier SQL de `scripts/sql/` (`ALLOW_PROD_WRITE=1 npx prisma db execute --file <archivo>
      --schema prisma/schema.prisma`). El scheduler lo retoma en el tick siguiente.
    - **Correr el sync a mano**: `npx tsx scripts/odoo-sync-manual.ts`, desde una PC de desarrollo
-     con la `ODOO_PASSWORD` buena en su `.env` (la base es la misma que la de producción). ⚠ **No se
+     con `ODOO_LOGIN` y `ODOO_PASSWORD` buenos en su `.env` (la base es la misma que la de producción). ⚠ **No se
      puede dentro del contenedor**: la imagen es la salida standalone de Next y no lleva `scripts/` ni
      `tsx` (`Dockerfile`). Tampoco desde el checkout del VPS, que no tiene `node_modules` (ver «Lo que
-     `deploy.sh` NO hace»). ⚠ Cada intento fallido suma al bloqueo, desde la máquina que sea: no
-     «probar a ver si anda».
+     `deploy.sh` NO hace»). ⚠ Odoo bloquea 60 s después de varios fallos seguidos desde la misma IP: un intento
+     suelto no bloquea nada, pero no lo pongas en un bucle.
 3. **Falló por red** (`RED`): el job libera el turno y reintenta en el tick siguiente; Sentry descarta
    el evento idéntico al anterior. Si dura horas, es el servidor de Odoo o la red del VPS.
 4. **Corrida parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno. Reintentar no lo arregla: el error

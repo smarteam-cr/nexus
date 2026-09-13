@@ -4,7 +4,7 @@
  * Los tres números en vivo de /finanzas/plan-de-cobranza: qué tan vieja es la copia de Odoo,
  * cuántas facturas de Odoo tienen su cuenta y cuántos cobros siguen en Cobrado con la firma de la
  * importación. Dicen si lo que falta ya se hizo sin preguntarle a nadie: el primero cambia cuando
- * vuelve el usuario de Odoo, el segundo con la reatribución y el tercero cuando Alex devuelve los 3.
+ * vuelve la copia de Odoo (volvió el 2026-09-13), el segundo cuando Alex empareja clientes y el tercero cuando Alex devuelve los 3.
  *
  * ⚠ Solo campos que ya existían en producción ANTES de los cambios de base de esta tanda, y cada
  * consulta con `select`/`count` explícito: la página puede publicarse antes que el SQL.
