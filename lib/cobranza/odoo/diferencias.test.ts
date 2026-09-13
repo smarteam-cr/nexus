@@ -19,6 +19,7 @@ import {
   huellaDe,
   liberacionesPendientes,
   montosEnDosMonedas,
+  numeroVerificableEnOdoo,
   type CobroParaCruzar,
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
@@ -473,6 +474,36 @@ describe("⭐ liberaciones: la regla de cierre por plataforma", () => {
     expect(p).toHaveLength(1);
     expect(p[0].porQue).toBe("sin-numero");
   });
+
+  it("⚠⚠ un número que no tiene forma de Odoo cuenta como sin número: el sync nunca lo va a ver", () => {
+    /* «666471587» es un número de transferencia. Tratado como número, una liberación CANCELAR se
+       daba por cerrada al no encontrarlo en el espejo: inventaba que alguien anuló el documento. */
+    const p = liberacionesPendientes([liberada({ referenciaExterna: "666471587" })], []);
+    expect(p).toHaveLength(1);
+    expect(p[0].porQue).toBe("sin-numero");
+    expect(liberacionesPendientes([liberada({ referenciaExterna: "INV-16", decision: "REVERTIR" })], [])[0]?.porQue).toBe(
+      "sin-numero",
+    );
+  });
+
+  it("«FAC/2026/0001» ausente del espejo sigue cerrándose sola, aunque llegue escrito distinto", () => {
+    expect(liberacionesPendientes([liberada()], [])).toHaveLength(0);
+    expect(liberacionesPendientes([liberada({ referenciaExterna: " fac/2026/0001" })], [])).toHaveLength(0);
+    /* Y escrito distinto también se encuentra cuando el documento sigue vigente. */
+    const vigente = liberacionesPendientes(
+      [liberada({ referenciaExterna: "fac / 2026 / 0001" })],
+      [factura({ numero: "FAC/2026/0001" })],
+    );
+    expect(vigente.map((x) => x.porQue)).toEqual(["documento-vigente"]);
+  });
+
+  it("numeroVerificableEnOdoo: normalizado y con forma de Odoo, o null", () => {
+    expect(numeroVerificableEnOdoo(" fac/2026/0001")).toBe("FAC/2026/0001");
+    expect(numeroVerificableEnOdoo("NC/2026/0003")).toBe("NC/2026/0003");
+    expect(numeroVerificableEnOdoo("666471587")).toBeNull();
+    expect(numeroVerificableEnOdoo("INV-4-1")).toBeNull();
+    expect(numeroVerificableEnOdoo(null)).toBeNull();
+  });
 });
 
 describe("⚠ la factura liberada no se cuenta dos veces", () => {
@@ -610,8 +641,9 @@ describe("⚠ la nota de crédito tiene que ser POSTERIOR a la factura", () => {
  * ── ⚠⚠ SIN NÚMERO DE DOCUMENTO ES OTRA LÍNEA, NO UN MATIZ ──────────────────────
  * Se cierran de maneras distintas: con número el sync ve el documento anularse; sin número no
  * hay nada contra qué mirar. Juntas bajo un texto que promete «el sync las saca solas», la mitad
- * sin número quedaba esperando para siempre — y `referenciaExterna` solo se escribe al registrar
- * el pago, así que un cobro facturado y no cobrado (justo el que se libera) casi nunca lo tiene.
+ * sin número quedaba esperando para siempre — y hasta la etapa 7 el número solo se escribía al
+ * registrar el pago, así que un cobro facturado y no cobrado (justo el que se libera) casi nunca lo
+ * tenía. Desde la etapa 7 la evidencia toma `Cobro.numeroFactura`.
  */
 describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () => {
   const base = {
@@ -634,6 +666,15 @@ describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () 
     expect(sinNumero?.accionPorItem).toBeDefined();
     /* ⚠ Y el pie NO puede ser el genérico de ODOO, que promete que desaparece sola. */
     expect(sinNumero?.pie).toBeTruthy();
+  });
+
+  it("una con un número que no es de Odoo va a la línea sin número, y la fila lo dice", () => {
+    const lista = detectarDiferenciasOdoo({ ...base, liberaciones: [liberada({ referenciaExterna: "666471587" })] });
+    const sinNumero = lista.find((i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO");
+    expect(sinNumero?.items[0]?.nota).toContain("666471587");
+    expect(sinNumero?.items[0]?.nota).toContain("ese número no es de un documento de Odoo");
+    expect(sinNumero?.accionPorItem, "sin sync que la vea, la cierra una persona").toBeDefined();
+    expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-PENDIENTES")).toBeUndefined();
   });
 
   it("la que sí tiene número NO lleva acción por fila: la cierra el sync", () => {

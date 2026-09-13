@@ -31,7 +31,7 @@ import {
   type PartnerOdoo,
   type PropuestaEmparejado,
 } from "./emparejado";
-import { detectarDiferenciasOdoo, huellaDe, type DiferenciaOdoo } from "./diferencias";
+import { detectarDiferenciasOdoo, huellaDe, numeroVerificableEnOdoo, type DiferenciaOdoo } from "./diferencias";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
@@ -516,6 +516,9 @@ export async function cargarDiferencias(): Promise<{
  * abierta para siempre: sin cierre automático, sin botón y fuera de INV28. Esas sí las cierra
  * una persona. La asimetría es el punto: se pide a mano exactamente donde no hay nada que
  * verifique, y solo ahí.
+ *
+ * «Con número» es `numeroVerificableEnOdoo`, la misma regla que decide si se cierra sola: un número
+ * de transferencia (666471587) no lo va a ver nunca el sync, así que cuenta como sin número.
  */
 export async function resolverLiberacion(
   input: { liberacionId: string; nota?: string },
@@ -526,7 +529,7 @@ export async function resolverLiberacion(
     select: { plataforma: true, resueltaEn: true, motivo: true, referenciaExterna: true },
   });
   if (!l) throw new EmparejadoError("Esa liberación ya no existe.", 404);
-  if (l.plataforma === "ODOO" && l.referenciaExterna) {
+  if (l.plataforma === "ODOO" && numeroVerificableEnOdoo(l.referenciaExterna)) {
     throw new EmparejadoError(
       "Esta factura es de Odoo y tiene número: el sync la cierra solo cuando vea el documento anulado. No hace falta marcarla.",
       409,

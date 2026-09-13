@@ -18,6 +18,7 @@
  * siendo el único punto de conversión del sistema.
  */
 import type { Inconsistencia, ItemInconsistencia } from "@/lib/finanzas/inconsistencias";
+import { normalizarNumeroFactura, plataformaDelNumero } from "../numero-factura";
 
 /* ── Cómo se cierra cada línea ──────────────────────────────────────────────────── */
 
@@ -456,12 +457,26 @@ export function clasificarCobrosSinFactura(
 export type PorQueSigueAbierta =
   | "documento-vigente" // ODOO+CANCELAR: el espejo lo sigue trayendo, o sea que nadie lo anuló
   | "sin-nota-de-credito" // ODOO+REVERTIR: no aparece la nota de crédito que lo reversa
-  | "sin-numero" // se liberó sin número de documento: no hay nada contra qué verificar
+  | "sin-numero" // se liberó sin un número de documento de Odoo: no hay nada contra qué verificar
   | "sin-espejo"; // MERCURY / OTRA: no hay sync que la pueda cerrar
 
 export interface LiberacionPendiente {
   liberacion: LiberacionParaCruzar;
   porQue: PorQueSigueAbierta;
+}
+
+/**
+ * El número de una factura soltada, si es uno que el espejo de Odoo puede ver: normalizado y con
+ * forma de Odoo (FAC/2026/0206). null si falta, o si es otra cosa —un número de transferencia, uno de
+ * Mercury—, que el sync no va a encontrar nunca.
+ *
+ * ⭐ La usan las dos puntas del cierre, y tienen que decir lo mismo: `liberacionesPendientes` (¿se
+ * cierra sola?) y `resolverLiberacion` en servicio.ts (¿se deja cerrar a mano?). Si una dijera «con
+ * número» y la otra «sin número», la liberación quedaría sin cierre automático y sin botón.
+ */
+export function numeroVerificableEnOdoo(numero: string | null | undefined): string | null {
+  const n = normalizarNumeroFactura(numero);
+  return n && plataformaDelNumero(n) === "ODOO" ? n : null;
 }
 
 /**
@@ -484,6 +499,10 @@ export interface LiberacionPendiente {
  * ⚠ Una liberación SIN número de documento tampoco cierra sola, aunque sea de Odoo. Es tentador
  * darla por buena para que la lista quede limpia; sería inventar que alguien anuló algo.
  *
+ * ⚠⚠ Y «sin número» incluye un número que NO es de Odoo (`numeroVerificableEnOdoo`). Un número de
+ * transferencia como 666471587 nunca va a aparecer en el espejo: con CANCELAR, «no está» se leía
+ * como «lo anularon» y la línea desaparecía sola. Es el mismo invento, con un número de por medio.
+ *
  * PURA: sin reloj. Cuánto tiempo es demasiado lo decide INV28, que sí lo tiene.
  */
 export function liberacionesPendientes(
@@ -501,12 +520,13 @@ export function liberacionesPendientes(
       out.push({ liberacion: l, porQue: "sin-espejo" });
       continue;
     }
-    if (!l.referenciaExterna) {
+    const numero = numeroVerificableEnOdoo(l.referenciaExterna);
+    if (!numero) {
       out.push({ liberacion: l, porQue: "sin-numero" });
       continue;
     }
 
-    const original = porNumero.get(l.referenciaExterna);
+    const original = porNumero.get(numero);
 
     if (l.decision === "CANCELAR") {
       /* Que ya no esté es exactamente lo que se pidió. */
@@ -743,7 +763,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
      hay una fila que dice quién la soltó, cuándo y por qué. Se cuenta una vez, en la línea que
      la explica mejor. */
   const liberadas = new Set(
-    estado.liberaciones.map((l) => l.referenciaExterna).filter((n): n is string => !!n),
+    estado.liberaciones.map((l) => normalizarNumeroFactura(l.referenciaExterna)).filter((n): n is string => !!n),
   );
   /* ⚠ Y tampoco las anteriores al PRIMER cobro que Nexus tiene cargado de esa cuenta. Medido el
      2026-09-12: 78 de los 170 documentos que se atribuyen al vincular son de antes de que Nexus
@@ -862,16 +882,21 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       `${p.liberacion.referenciaExterna ?? "sin número"} · cuota ${p.liberacion.numCuota ?? "?"} · ` +
       `${p.liberacion.decision === "CANCELAR" ? "anular" : "revertir"} · ` +
       `soltada por ${p.liberacion.liberadaPor} el ${p.liberacion.liberadaEn}` +
-      (p.porQue === "sin-numero" ? " · ⚠ sin número de documento" : ""),
+      (p.porQue !== "sin-numero"
+        ? ""
+        : p.liberacion.referenciaExterna
+          ? " · ⚠ ese número no es de un documento de Odoo"
+          : " · ⚠ sin número de documento"),
   });
 
   /* ⚠⚠ Las de Odoo se parten en DOS líneas, y no es cosmético: **se cierran de maneras
      distintas**. Con número, el sync ve el documento anularse y la línea desaparece sola. Sin
-     número no hay nada contra qué mirar — y como `referenciaExterna` solo se escribe al
-     REGISTRAR EL PAGO, un cobro facturado-y-no-cobrado (que es justo la población que se
-     libera) llega casi siempre sin él. Juntas en una sola línea, la mitad sin número quedaba
+     número no hay nada contra qué mirar — y hasta la etapa 7 el número solo se escribía al
+     REGISTRAR EL PAGO, así que un cobro facturado-y-no-cobrado (que es justo la población que se
+     libera) llegaba casi siempre sin él. Juntas en una sola línea, la mitad sin número quedaba
      esperando para siempre un sync que no la puede ver, bajo un texto que prometía lo
-     contrario. */
+     contrario. Desde la etapa 7 el número nace al marcar facturado; los facturados de antes
+     siguen sin él hasta que alguien lo agregue. */
   const enOdooSinNumero = pendientes.filter(
     (p) => p.liberacion.plataforma === "ODOO" && p.porQue === "sin-numero",
   );
@@ -914,7 +939,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       codigo: "ODOO-LIBERADAS-SIN-NUMERO",
       severidad: "ALTA",
       titulo: `${enOdooSinNumero.length} facturas soltadas sin número de documento`,
-      detalle: `Se soltaron como de Odoo, pero el cobro no guardaba el número de la factura, así que el sync no tiene contra qué compararlas: no las puede cerrar nunca. Pasa seguido porque el número se escribe al registrar el pago, y un cobro facturado y todavía no cobrado —justo el que se libera— no pasó por ahí. Suman ${s.texto}.`,
+      detalle: `Se soltaron como de Odoo, pero sin un número de documento de Odoo —el cobro no lo tenía, o tenía otro número, como el de una transferencia—, así que el sync no tiene contra qué compararlas: no las puede cerrar nunca. Pasa con los cobros facturados antes de que «Marcar facturado» pidiera el número. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
       donde: "ODOO",
       /* ⚠ Sin esto hereda el pie genérico de ODOO, que promete que el sync la saca sola. */
@@ -923,7 +948,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         "Buscá el documento en Odoo por cliente, monto y fecha — el número no lo tenemos.",
         "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
         "Volvé acá y marcala resuelta. Si no, se queda abierta para siempre.",
-        "Para que no vuelva a pasar: al marcar un cobro como facturado, guardá también el número.",
+        "Para que no vuelva a pasar: los cobros facturados sin número muestran «Agregar número» en el cronograma de la cuenta. Completalos antes de soltar otra factura.",
       ],
       queSignificaAceptar:
         "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay número que el sync pueda seguir.",
