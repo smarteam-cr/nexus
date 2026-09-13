@@ -10,7 +10,7 @@
  * feb-2026, IIA y Seléctrica jun-2026), tal como están hoy en la base: confirmados y facturados
  * por `import:facturaciones-2026` con la fecha de la QUINCENA, no la de la factura.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -23,6 +23,11 @@ import {
   type PedidoDeCambio,
 } from "./reversion-cobro";
 import { cobroPatchSchema, ESTADO_COBRO_LABEL } from "./schema";
+import { cambiarEstadoCobroTx, CobranzaError } from "./mutations";
+
+/* El chokepoint corre contra una base de mentira que se le pasa por argumento; esto solo evita
+   que importar mutations.ts arme el pool real de Postgres. */
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 const ALEX = "aarrieta@smarteamcr.com";
 const IMPORT = "import:facturaciones-2026";
@@ -193,28 +198,113 @@ describe("la bitácora cita a quien lo había confirmado", () => {
   });
 });
 
-describe("una reversión nunca deja INV3 ni INV5 en rojo", () => {
-  const antes: CobroAntesDeRevertir[] = [
-    GLOBAL_SUPPLY,
-    CONFIRMADO_A_MANO,
-    { ...CONFIRMADO_A_MANO, fechaEmisionISO: null, facturadoPor: null },
-  ];
-  const pedidos = [
+/** Todos los verdes de los casos, contra todas las salidas posibles de COBRADO. */
+const MATRIZ = [
+  GLOBAL_SUPPLY,
+  CONFIRMADO_A_MANO,
+  { ...CONFIRMADO_A_MANO, fechaEmisionISO: null, facturadoPor: null },
+].flatMap((a) =>
+  [
     { estado: "POR_COBRAR", fechaEmisionISO: "2026-06-10" },
     { estado: "POR_COBRAR" },
     { estado: "PROGRAMADO" },
     { estado: "PROGRAMADO", fechaEmisionISO: null },
     { estado: "PROGRAMADO", fechaEmisionISO: "2026-06-17" },
     { estado: "SIN_DATO", fechaEmisionISO: null },
-  ];
+  ].map((p) => [a, p] as const),
+);
 
-  it.each(antes.flatMap((a) => pedidos.map((p) => [a, p] as const)))("%o → %o", (a, p) => {
+describe("una reversión nunca deja INV3 ni INV5 en rojo", () => {
+  it.each(MATRIZ)("%o → %o", (a, p) => {
     const d = decidir(a, { ...p, reversion: { motivo: MOTIVO } }, ALEX);
     if (d.tipo !== "revertir") return; // un rechazo no escribe nada
     expect(violaINV3(d.firmasDespues)).toBe(false);
     expect(violaINV5(d.firmasDespues)).toBe(false);
     expect(d.firmasDespues.confirmadoPor).toBeNull();
     expect(d.firmasDespues.fechaCobroISO).toBeNull();
+  });
+});
+
+describe("el chokepoint escribe lo que la regla decide", () => {
+  /**
+   * `firmasDespues` es un MODELO de lo que escribe `cambiarEstadoCobroTx`, y los tests de arriba
+   * prueban el modelo. Sin este bloque el chokepoint podía dejar de re-firmar `facturadoPor`, o de
+   * limpiar `confirmadoPor` al revertir, con todo en verde: se probó a mano el 2026-09-12.
+   */
+  const dia = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00.000Z`) : null);
+  const texto = (v: unknown) => (typeof v === "string" ? v : null);
+  const isoDe = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : null);
+
+  /** Una base de mentira con la fila del cobro, que anota qué se escribió. */
+  function baseFalsa(antes: CobroAntesDeRevertir) {
+    const fila: Record<string, unknown> = {
+      id: "c1",
+      cuentaId: "cuenta-1",
+      estado: antes.estado,
+      confirmadoPor: antes.confirmadoPor,
+      confirmadoEn: dia(antes.confirmadoEnISO),
+      fechaCobro: dia(antes.fechaCobroISO),
+      fechaEmision: dia(antes.fechaEmisionISO),
+      facturadoPor: antes.facturadoPor,
+      referenciaExterna: antes.referenciaExterna,
+      promesaPago: null,
+    };
+    const escrito = { cambio: null as Record<string, unknown> | null, bitacoras: [] as Record<string, unknown>[] };
+    const db = {
+      cobro: {
+        findUnique: async () => fila,
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          escrito.cambio = data;
+          return { ...fila, ...data };
+        },
+      },
+      comisionVendedor: { count: async () => 0 },
+      bitacoraCobro: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          escrito.bitacoras.push(data);
+          return data;
+        },
+      },
+      alertaCobro: { updateMany: async () => ({ count: 0 }) },
+    };
+    /** Cómo quedó la fila, leída con la forma de `firmasDespues`. */
+    const firmasEscritas = (): FirmasDelCobro => {
+      const f = { ...fila, ...(escrito.cambio ?? {}) };
+      return {
+        estado: texto(f.estado) ?? "",
+        confirmadoPor: texto(f.confirmadoPor),
+        fechaCobroISO: isoDe(f.fechaCobro),
+        fechaEmisionISO: isoDe(f.fechaEmision),
+        facturadoPor: texto(f.facturadoPor),
+      };
+    };
+    return { db, escrito, firmasEscritas };
+  }
+
+  it.each(MATRIZ)("%o → %o", async (a, p) => {
+    const d = decidir(a, { ...p, reversion: { motivo: MOTIVO } }, ALEX);
+    const patch = cobroPatchSchema.parse({ estado: p.estado, fechaEmision: p.fechaEmisionISO, reversion: { motivo: MOTIVO } });
+    const { db, escrito, firmasEscritas } = baseFalsa(a);
+
+    if (d.tipo !== "revertir") {
+      await expect(cambiarEstadoCobroTx(db as never, "c1", patch, ALEX)).rejects.toBeInstanceOf(CobranzaError);
+      expect(escrito.cambio, "un rechazo no escribe nada").toBeNull();
+      expect(escrito.bitacoras).toEqual([]);
+      return;
+    }
+    await cambiarEstadoCobroTx(db as never, "c1", patch, ALEX);
+    expect(firmasEscritas()).toEqual(d.firmasDespues);
+    expect(escrito.bitacoras).toEqual([
+      expect.objectContaining({ cobroId: "c1", cuentaId: "cuenta-1", contenido: d.bitacora, usuarioEmail: ALEX }),
+    ]);
+  });
+
+  it("sin motivo da 400 y no toca la fila ni la bitácora", async () => {
+    const { db, escrito } = baseFalsa(GLOBAL_SUPPLY);
+    const patch = cobroPatchSchema.parse({ estado: "POR_COBRAR" });
+    await expect(cambiarEstadoCobroTx(db as never, "c1", patch, ALEX)).rejects.toMatchObject({ status: 400 });
+    expect(escrito.cambio).toBeNull();
+    expect(escrito.bitacoras).toEqual([]);
   });
 });
 
