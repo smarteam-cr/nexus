@@ -3009,7 +3009,20 @@ model Cobro {
   confirmadoEn      DateTime?
   // ReconciliationPort v1: referencia externa OPCIONAL al confirmar COBRADO (id de
   // transacción Mercury / factura Odoo). Solo metadata — la conciliación real vive allá.
+  // ⚠ Desde la etapa 7 el número de la FACTURA va en `numeroFactura`: esta queda para el
+  // número de depósito o transferencia.
   referenciaExterna String?
+  // El número de la factura (etapa 7, 2026-09-12): nace al marcar facturado, normalizado
+  // (lib/cobranza/numero-factura.ts). NO es único: una factura puede cubrir varias cuotas de
+  // la misma cuenta; en dos cuentas lo frena el chokepoint (409) y lo vigila INV33.
+  // nullable porque 144 cobros se facturaron antes de que existiera.
+  numeroFactura          String?
+  // Quién puso el número o la marca, y cuándo (INV34). Se limpia al revertir la factura.
+  numeroFacturaPor       String?
+  numeroFacturaEn        DateTime?
+  // La marca «no tengo el número», con su motivo. Excluyente con numeroFactura (CHECK
+  // Cobro_numero_o_marca, que Prisma no modela: scripts/sql/2026-09-12-7-numero-de-factura.sql).
+  sinNumeroFacturaMotivo String?
   // Promesa de pago: MARCA sobre una factura emitida, no descuento (decisión de Alex,
   // 2026-09-12). No cambia el semáforo ni saca la factura del vencido, y su alerta
   // COBRO_VENCIDO sigue a la vista con la fecha; pasada sin COBRADO, la alerta sube a
@@ -3024,6 +3037,7 @@ model Cobro {
   @@unique([servicioId, numCuota])
   @@index([cuentaId, fechaProgramada])
   @@index([estado, fechaProgramada])
+  @@index([numeroFactura])
 }
 
 // ─── AlertaCobro ────────────────────────────────────────────────────────────────

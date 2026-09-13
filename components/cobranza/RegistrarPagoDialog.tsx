@@ -90,12 +90,12 @@ export default function RegistrarPagoDialog({
         </div>
         <div>
           <label className="block text-[11px] font-medium text-fg-muted mb-1">
-            Referencia externa (opcional)
+            Número de depósito o transferencia (el de la factura va en Marcar facturado)
           </label>
           <input
             value={referencia}
             onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Id de transacción Mercury / factura Odoo"
+            placeholder="Opcional. Ej.: el id de la transferencia en Mercury"
             maxLength={200}
             className={INPUT_CLS}
           />

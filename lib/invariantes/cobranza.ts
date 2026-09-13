@@ -285,3 +285,105 @@ export const INV28: Invariante = {
     return cumple(`✓ INV28: ninguna factura soltada fuera de Odoo lleva más de ${DIAS_DE_LIBERACION} días sin resolver.`);
   },
 };
+
+/**
+ * INV33 · Ningún número de factura está en dos cuentas (etapa 7, 2026-09-12). Un documento le cobra a
+ * UN cliente: el mismo número en dos cuentas es un error de captura o un emparejado mal hecho, y
+ * cualquiera de los dos hace perseguir la misma factura dos veces. En la MISMA cuenta sí se repite:
+ * una factura que cubre varias cuotas.
+ *
+ * El chokepoint da 409 antes de escribir (lib/cobranza/numero-factura.ts); esto vigila el DATO, por si
+ * un script o una consulta a mano lo escriben por fuera.
+ * ⚠ Antes de scripts/sql/2026-09-12-7-numero-de-factura.sql la columna no existe: sale «no verificable».
+ */
+export const INV33: Invariante = {
+  id: "33",
+  nombre: "ningún número de factura está en dos cuentas",
+  async correr(db) {
+    const conNumero = await db.cobro.findMany({
+      where: { numeroFactura: { not: null } },
+      select: { numeroFactura: true, cuentaId: true, cuenta: { select: { client: { select: { name: true } } } } },
+    });
+    const cuentasPorNumero = new Map<string, Map<string, string>>();
+    for (const c of conNumero) {
+      if (!c.numeroFactura) continue;
+      const cuentas = cuentasPorNumero.get(c.numeroFactura) ?? new Map<string, string>();
+      cuentas.set(c.cuentaId, c.cuenta.client.name);
+      cuentasPorNumero.set(c.numeroFactura, cuentas);
+    }
+    const repetidos = [...cuentasPorNumero.entries()].filter(([, cuentas]) => cuentas.size > 1);
+    if (repetidos.length > 0) {
+      return viola(
+        `✗ INV33 VIOLADO: ${repetidos.length} número(s) de factura están en más de una cuenta:\n` +
+          repetidos
+            .slice(0, 20)
+            .map(([numero, cuentas]) => `    · ${numero}: ${[...cuentas.values()].join(" · ")}`)
+            .join("\n") +
+          `\n    Remedio: en el cronograma de la cuenta que no es la dueña del documento, corregir el número del cobro.` +
+          `\n    El chokepoint lo frena con un 409: si esto está en rojo, alguien escribió el número por fuera.`,
+      );
+    }
+    return cumple(`✓ INV33: los ${cuentasPorNumero.size} números de factura están cada uno en una sola cuenta.`);
+  },
+};
+
+/**
+ * INV34 · Todo número de factura tiene autor y factura (etapa 7, 2026-09-12). El número —o la marca
+ * «no tengo el número»— es una afirmación sobre un documento y vale lo que vale quien la hizo: el
+ * mismo espíritu que INV5 para la fecha de emisión. Y no hay número sin factura: revertirla lo limpia.
+ *
+ * Tres roturas: número o marca sin autor · autoría colgando sin número ni marca · número o marca en
+ * un cobro sin fecha de emisión. (Número y marca juntos no se miran: lo impide el CHECK del SQL.)
+ * ⚠ Antes de scripts/sql/2026-09-12-7-numero-de-factura.sql las columnas no existen: sale «no verificable».
+ */
+export const INV34: Invariante = {
+  id: "34",
+  nombre: "todo número de factura tiene autor y factura",
+  async correr(db) {
+    const filas = await db.cobro.findMany({
+      where: {
+        OR: [
+          { numeroFactura: { not: null } },
+          { sinNumeroFacturaMotivo: { not: null } },
+          { numeroFacturaPor: { not: null } },
+          { numeroFacturaEn: { not: null } },
+        ],
+      },
+      select: {
+        numCuota: true,
+        numeroFactura: true,
+        sinNumeroFacturaMotivo: true,
+        numeroFacturaPor: true,
+        numeroFacturaEn: true,
+        fechaEmision: true,
+        cuenta: { select: { client: { select: { name: true } } } },
+      },
+    });
+    const rotos: string[] = [];
+    for (const f of filas) {
+      const dato = f.numeroFactura ?? (f.sinNumeroFacturaMotivo ? "«no tengo el número»" : null);
+      const cobro = `${f.cuenta.client.name} #${f.numCuota ?? "?"}`;
+      if (!dato) {
+        rotos.push(`    · ${cobro}: firma de número (${f.numeroFacturaPor ?? "—"}) sin número ni marca`);
+        continue;
+      }
+      if (!f.numeroFacturaPor || !f.numeroFacturaEn) {
+        rotos.push(
+          `    · ${cobro}: ${dato} sin autor entero (por=${f.numeroFacturaPor ?? "—"} en=${
+            f.numeroFacturaEn ? f.numeroFacturaEn.toISOString().slice(0, 10) : "—"
+          })`,
+        );
+      }
+      if (!f.fechaEmision) rotos.push(`    · ${cobro}: ${dato} en un cobro sin fecha de emisión`);
+    }
+    if (rotos.length > 0) {
+      return viola(
+        `✗ INV34 VIOLADO: ${rotos.length} rotura(s) en los números de factura:\n` +
+          rotos.slice(0, 20).join("\n") +
+          `\n    Remedio: reponer la firma desde BitacoraCobro (cada número deja su línea con el correo de quien lo puso),` +
+          `\n    o revertir la factura y volver a marcarla. Toda escritura del número pasa por cambiarEstadoCobroTx.`,
+      );
+    }
+    return cumple(`✓ INV34: los ${filas.length} números de factura (o marcas «no tengo el número») tienen autor y factura.`);
+  },
+};

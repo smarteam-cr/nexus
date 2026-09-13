@@ -17,7 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32,
+  INV31, INV32, INV33, INV34,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -402,6 +402,72 @@ describe("frescura: INV31 (espejo de Odoo) e INV32 (corte de cartera)", () => {
   });
 });
 
+describe("cobranza: INV33 e INV34 (el número de factura, etapa 7)", () => {
+  const cuenta = (name: string) => ({ client: { name } });
+
+  it("INV33 · el mismo número en dos cuentas viola; repetido en cuotas de la MISMA cuenta no", async () => {
+    const llamadas: Llamada[] = [];
+    const compartida = [
+      { numeroFactura: "FAC/2026/0343", cuentaId: "mccann", cuenta: cuenta("McCann") },
+      { numeroFactura: "FAC/2026/0343", cuentaId: "mccann", cuenta: cuenta("McCann") },
+      { numeroFactura: "FAC/2026/0206", cuentaId: "global", cuenta: cuenta("Global Supply") },
+    ];
+    const sana = await INV33.correr(baseFalsa({ cobro: compartida }, llamadas), AHORA);
+    expect(sana.ok, "una factura que cubre varias cuotas de su cuenta es legítima").toBe(true);
+    expect(sana.lineas[0]).toContain("los 2 números de factura");
+    expect(where(llamadas, "cobro").numeroFactura).toEqual({ not: null });
+
+    const r = await INV33.correr(
+      baseFalsa({ cobro: [...compartida, { numeroFactura: "FAC/2026/0206", cuentaId: "publimark", cuenta: cuenta("Publimark") }] }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("1 número(s) de factura están en más de una cuenta");
+    expect(r.lineas[0]).toContain("FAC/2026/0206: Global Supply · Publimark");
+  });
+
+  it("INV34 · número o marca sin autor, firma sin número, o número sin factura violan; lo entero cumple", async () => {
+    const base = {
+      numCuota: 1,
+      numeroFactura: "FAC/2026/0206",
+      sinNumeroFacturaMotivo: null,
+      numeroFacturaPor: "aarrieta@smarteamcr.com",
+      numeroFacturaEn: hace(1),
+      fechaEmision: hace(200),
+      cuenta: cuenta("Global Supply"),
+    };
+    const conMarca = { ...base, numCuota: 2, numeroFactura: null, sinNumeroFacturaMotivo: "QuickBooks no numera" };
+    const llamadas: Llamada[] = [];
+    const sana = await INV34.correr(baseFalsa({ cobro: [base, conMarca] }, llamadas), AHORA);
+    expect(sana.ok).toBe(true);
+    expect(where(llamadas, "cobro").OR, "sin la autoría en el where no ve la firma colgando").toEqual([
+      { numeroFactura: { not: null } },
+      { sinNumeroFacturaMotivo: { not: null } },
+      { numeroFacturaPor: { not: null } },
+      { numeroFacturaEn: { not: null } },
+    ]);
+
+    const r = await INV34.correr(
+      baseFalsa({
+        cobro: [
+          { ...base, numCuota: 3, numeroFacturaPor: null },
+          { ...conMarca, numCuota: 4, numeroFacturaEn: null },
+          { ...base, numCuota: 5, numeroFactura: null },
+          { ...base, numCuota: 6, fechaEmision: null },
+        ],
+      }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    const texto = r.lineas.join("\n");
+    expect(texto).toContain("4 rotura(s)");
+    expect(texto).toContain("Global Supply #3: FAC/2026/0206 sin autor entero (por=— en=2026-09-03)");
+    expect(texto).toContain("Global Supply #4: «no tengo el número» sin autor entero");
+    expect(texto).toContain("Global Supply #5: firma de número (aarrieta@smarteamcr.com) sin número ni marca");
+    expect(texto).toContain("Global Supply #6: FAC/2026/0206 en un cobro sin fecha de emisión");
+  });
+});
+
 const RAIZ = process.cwd();
 const soloCodigo = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
@@ -409,10 +475,12 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 21 solo-base, con ids únicos y en el orden del gate", () => {
-    /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte). */
+  it("el registro tiene los 23 solo-base, con ids únicos y en el orden del gate", () => {
+    /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
+       33 y 34, el número de factura (etapa 7). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
       "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
+      "33", "34",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -460,7 +528,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("21 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("23 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

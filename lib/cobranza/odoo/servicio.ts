@@ -32,6 +32,7 @@ import {
   type PropuestaEmparejado,
 } from "./emparejado";
 import { detectarDiferenciasOdoo, huellaDe, type DiferenciaOdoo } from "./diferencias";
+import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
 
@@ -566,4 +567,84 @@ export async function aceptarDiferencia(
 
 export async function reabrirDiferencia(clave: string): Promise<void> {
   await prisma.diferenciaOdooAceptada.deleteMany({ where: { clave } });
+}
+
+/* ── 5. Elegir la factura al marcar facturado ───────────────────────────────────── */
+
+/**
+ * Los documentos del espejo que se le ofrecen a un cobro al marcarlo facturado (etapa 7). Solo LEE:
+ * elegir uno es mandar su número al chokepoint del cobro, que es el que firma. La regla de qué entra
+ * y en qué orden es `candidatasParaElCobro` (candidatas.ts, pura).
+ *
+ * ⚠ Por los clientes de Odoo VINCULADOS a la cuenta, no por `FacturaOdoo.cuentaId`: la atribución
+ * puede ir un paso atrás del vínculo, y un documento que existe no puede faltar de la lista por eso.
+ * ⛔ No llama al ERP: sale del espejo, igual que el emparejado (el bloqueo del 2026-09-02).
+ *
+ * null = el cobro no existe.
+ */
+export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDeCobro | null> {
+  const cobro = await prisma.cobro.findUnique({
+    where: { id: cobroId },
+    select: {
+      cuentaId: true,
+      monto: true,
+      moneda: true,
+      fechaProgramada: true,
+      numeroFactura: true,
+      cuenta: { select: { viaCobro: true } },
+    },
+  });
+  if (!cobro) return null;
+  const via = cobro.cuenta.viaCobro;
+  /* Mercury y QuickBooks no tienen espejo: ahí el número se teclea. */
+  if (via !== "ODOO") return { via, clientesDeOdoo: 0, candidatas: [], espejoAl: null };
+
+  const [vinculos, corridaOk] = await Promise.all([
+    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: cobro.cuentaId }, select: { odooPartnerId: true } }),
+    ultimaCorridaOk(),
+  ]);
+  const espejoAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
+  if (!vinculos.length) return { via, clientesDeOdoo: 0, candidatas: [], espejoAl };
+
+  /* `select` explícito: una columna nueva del espejo no tumba el diálogo si el código llega antes que su SQL. */
+  const facturas = await prisma.facturaOdoo.findMany({
+    where: {
+      estadoEspejo: "VIGENTE",
+      odooPartnerId: { in: vinculos.map((v) => v.odooPartnerId) },
+      moneda: cobro.moneda,
+    },
+    select: {
+      odooMoveId: true,
+      numero: true,
+      odooPartnerNombre: true,
+      invoiceDate: true,
+      montoNeto: true,
+      moneda: true,
+      moveType: true,
+      state: true,
+      paymentState: true,
+    },
+  });
+  const tomados = facturas.length
+    ? await prisma.cobro.findMany({
+        where: { id: { not: cobroId }, numeroFactura: { in: facturas.map((f) => f.numero) } },
+        select: { numeroFactura: true },
+      })
+    : [];
+
+  return {
+    via,
+    clientesDeOdoo: vinculos.length,
+    candidatas: candidatasParaElCobro(
+      facturas.map((f) => ({ ...f, invoiceDate: f.invoiceDate.toISOString().slice(0, 10), montoNeto: Number(f.montoNeto) })),
+      {
+        monto: Number(cobro.monto),
+        moneda: cobro.moneda,
+        fechaProgramada: cobro.fechaProgramada.toISOString().slice(0, 10),
+        numeroFactura: cobro.numeroFactura,
+      },
+      new Set(tomados.flatMap((t) => (t.numeroFactura ? [t.numeroFactura] : []))),
+    ),
+    espejoAl,
+  };
 }

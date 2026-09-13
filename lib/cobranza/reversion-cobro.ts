@@ -61,7 +61,12 @@ export interface PedidoDeCambio {
   estado?: string;
   /** `undefined` = no toca la fecha de emisión; `null` = la quita. */
   fechaEmisionISO?: string | null;
-  reversion?: { motivo: string; numeroFactura?: string | null };
+  /**
+   * ⚠ Sin el número de factura: desde la etapa 7 tiene su columna y su regla
+   * (lib/cobranza/numero-factura.ts), que el chokepoint aplica aparte y que deja su propia línea en
+   * la bitácora. Escribirlo también acá lo anotaba dos veces.
+   */
+  reversion?: { motivo: string };
 }
 
 /** Las dos parejas que vigilan INV3 (COBRADO ⇒ confirmadoPor) e INV5 (fechaEmision ⇒ facturadoPor). */
@@ -157,8 +162,6 @@ export function decidirReversion(
         ? byEmail
         : antes.facturadoPor;
 
-  const numeroFactura = pedido.reversion?.numeroFactura?.trim() || null;
-
   const lineas: string[] = [
     `${byEmail} sacó este cobro de ${etiqueta(antes.estado)} y lo pasó a ${etiqueta(estadoNuevo)}.`,
     `Motivo: ${motivo}`,
@@ -179,7 +182,6 @@ export function decidirReversion(
     else if (fechaDespues === null) lineas.push(`Se quitó la fecha de emisión (era ${antes.fechaEmisionISO}).`);
     else lineas.push(`Fecha de emisión corregida: ${antes.fechaEmisionISO} → ${fechaDespues}.`);
   }
-  if (numeroFactura) lineas.push(`Factura: ${numeroFactura}.`);
   if (refirmarFacturado) {
     lineas.push(`La marca de facturado pasa de «${antes.facturadoPor}» a ${byEmail}.`);
   } else if (fechaDespues === null && antes.facturadoPor) {

@@ -28,6 +28,7 @@ import {
 import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
+import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
 import {
   alertasQueYaNoAplican,
@@ -383,6 +384,8 @@ export interface PlanDeMaterializacion {
       fechaEmisionISO: string | null;
       facturadoPor: string | null;
       referenciaExterna: string | null;
+      /** El número de la factura: es el que queda en la fila de evidencia si se la suelta. */
+      numeroFactura: string | null;
       promesaPagoISO: string | null;
     }>;
   };
@@ -479,6 +482,7 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
         fechaEmisionISO: isoDay(c.fechaEmision),
         facturadoPor: c.facturadoPor,
         referenciaExterna: c.referenciaExterna,
+        numeroFactura: c.numeroFactura,
         promesaPagoISO: isoDay(c.promesaPago),
       })),
     },
@@ -614,6 +618,9 @@ export async function generateCobros(
  *  - Salir de COBRADO exige motivo (400 sin él), limpia la tripleta (confirmadoPor/En +
  *    fechaCobro) y deja en la bitácora quién lo había confirmado y quién lo revierte
  *    (lib/cobranza/reversion-cobro.ts).
+ *  - Marcar facturado (fechaEmision de null a fecha) exige el número de la factura o la marca
+ *    «no tengo el número» con motivo; un número que ya está en otra cuenta da 409; revertir la
+ *    factura limpia el número y su autoría (lib/cobranza/numero-factura.ts).
  *  - fechaProgramada/monto SOLO editables mientras el cobro está PROGRAMADO (409).
  */
 /**
@@ -668,6 +675,45 @@ export async function cambiarEstadoCobroTx(
   );
   if (reversion.tipo === "rechazo") throw new CobranzaError(reversion.mensaje, reversion.status);
 
+  /* El número de la factura: la regla vive en numero-factura.ts y también se decide ANTES de
+     escribir. El diálogo de «Sacar de Cobrado» lo manda dentro de `reversion`; vacío ahí = no lo
+     toca. Dos números distintos en el mismo pedido no se resuelven eligiendo uno en silencio. */
+  const numeroDeLaReversion = normalizarNumeroFactura(patch.reversion?.numeroFactura) ?? undefined;
+  if (
+    patch.numeroFactura !== undefined &&
+    numeroDeLaReversion !== undefined &&
+    normalizarNumeroFactura(patch.numeroFactura) !== numeroDeLaReversion
+  ) {
+    throw new CobranzaError("Llegaron dos números de factura distintos en el mismo cambio.", 400);
+  }
+  const numero = decidirNumeroFactura(
+    {
+      fechaEmisionISO: isoDay(cobro.fechaEmision),
+      numeroFactura: cobro.numeroFactura ?? null,
+      numeroFacturaPor: cobro.numeroFacturaPor ?? null,
+      sinNumeroFacturaMotivo: cobro.sinNumeroFacturaMotivo ?? null,
+    },
+    {
+      fechaEmisionISO: patch.fechaEmision,
+      numeroFactura: patch.numeroFactura !== undefined ? patch.numeroFactura : numeroDeLaReversion,
+      sinNumeroFacturaMotivo: patch.sinNumeroFacturaMotivo,
+    },
+    byEmail,
+  );
+  if (numero.tipo === "rechazo") throw new CobranzaError(numero.mensaje, numero.status);
+  /* ⚠ Un documento le cobra a un solo cliente. En la MISMA cuenta el número sí se repite —una
+     factura que cubre varias cuotas—, así que no es un unique de la base: es esta pregunta, con el
+     mismo `db` que la escritura. Lo vigila INV33 por si alguien escribe por fuera. */
+  if (numero.tipo === "escribir" && numero.numeroNuevo) {
+    const enOtraCuenta = await db.cobro.findFirst({
+      where: { numeroFactura: numero.numeroNuevo, cuentaId: { not: cobro.cuentaId } },
+      select: { cuenta: { select: { client: { select: { name: true } } } } },
+    });
+    if (enOtraCuenta) {
+      throw new CobranzaError(mensajeNumeroEnOtraCuenta(numero.numeroNuevo, enOtraCuenta.cuenta.client.name), 409);
+    }
+  }
+
   const data: Prisma.CobroUpdateInput = {};
   if (patch.fechaProgramada !== undefined) data.fechaProgramada = dayUTC(patch.fechaProgramada);
   if (patch.monto !== undefined) data.monto = patch.monto;
@@ -695,7 +741,15 @@ export async function cambiarEstadoCobroTx(
     data.facturadoPor = byEmail;
     data.facturadoEn = new Date();
   }
-  // ReconciliationPort v1: referencia externa opcional (id transacción Mercury / factura Odoo).
+  /* Número y marca van juntos con su firma: quien los pone firma, y revertir la factura limpia los
+     cuatro (el número viejo queda en la bitácora de abajo). INV34. */
+  if (numero.tipo === "escribir") {
+    data.numeroFactura = numero.numeroFactura;
+    data.sinNumeroFacturaMotivo = numero.sinNumeroFacturaMotivo;
+    data.numeroFacturaPor = numero.firmar ? byEmail : null;
+    data.numeroFacturaEn = numero.firmar ? new Date() : null;
+  }
+  // ReconciliationPort v1: referencia externa opcional (número de depósito o transferencia).
   if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
   if (patch.notas !== undefined) data.notas = patch.notas;
 
@@ -761,6 +815,20 @@ export async function cambiarEstadoCobroTx(
         cobroId,
         tipo: "NOTA",
         contenido: reversion.bitacora,
+        usuarioEmail: byEmail,
+      },
+    });
+  }
+
+  /* Cada alta, cambio o baja del número deja su línea, con el mismo `db`: un número sin rastro de
+     quién lo puso es lo que esta regla existe para no permitir. */
+  if (numero.tipo === "escribir") {
+    await db.bitacoraCobro.create({
+      data: {
+        cuentaId: cobro.cuentaId,
+        cobroId,
+        tipo: "NOTA",
+        contenido: numero.bitacora,
         usuarioEmail: byEmail,
       },
     });
@@ -984,7 +1052,11 @@ export async function liberarYRegenerar(
           monto: c.monto,
           moneda: previo.servicioInput.moneda,
           fechaEmision: c.fechaEmisionISO ? dayUTC(c.fechaEmisionISO) : null,
-          referenciaExterna: c.referenciaExterna,
+          /* ⚠ El número de la FACTURA, no la referencia del pago. La columna se llama así desde
+             antes de que el cobro tuviera número propio; renombrarla pediría SQL con el código
+             viejo corriendo. Hasta la etapa 7 se copiaba `referenciaExterna`, que en un cobro
+             facturado y no cobrado —justo el que se suelta— casi nunca tenía nada. */
+          referenciaExterna: c.numeroFactura,
           facturadoPor: c.facturadoPor,
           plataforma,
           decision,
@@ -992,7 +1064,7 @@ export async function liberarYRegenerar(
           liberadaPor: byEmail,
         },
       });
-      solicitudes.push({ plataforma, decision, numero: c.referenciaExterna, monto: c.monto });
+      solicitudes.push({ plataforma, decision, numero: c.numeroFactura, monto: c.monto });
     }
 
     /* 2. Soltar, por el chokepoint: así no hay una segunda versión de sus reglas. */

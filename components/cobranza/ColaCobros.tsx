@@ -46,7 +46,8 @@ import {
 import { fmtFecha, fmtMonto, PROMESA_CHIP } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
-import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
+import MarcarFacturadoDialog, { mensajeDeFactura, type DatosDeFactura } from "./MarcarFacturadoDialog";
+import { faltaNumeroDeFactura } from "@/lib/cobranza/numero-factura";
 
 type Grupo = GrupoCobro;
 type FiltroMoneda = "all" | "CRC" | "USD";
@@ -324,19 +325,25 @@ export default function ColaCobros({
     }
   }
 
-  // Marcar facturado / revertir: PATCH optimista sobre las filas (mismo patrón que applyPromesa).
-  async function applyFacturar(row: ColaCobroRow, fechaEmision: string | null) {
-    const prev = row.fechaEmision;
-    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, fechaEmision } : r)));
+  // Marcar facturado / agregar número / revertir: PATCH optimista sobre las filas (mismo patrón que
+  // applyPromesa). `null` = revertir, que limpia también el número: el viejo queda en la bitácora.
+  async function applyFacturar(row: ColaCobroRow, datos: DatosDeFactura | null) {
+    const previo = {
+      fechaEmision: row.fechaEmision,
+      numeroFactura: row.numeroFactura,
+      sinNumeroFacturaMotivo: row.sinNumeroFacturaMotivo,
+    };
+    const nuevo = datos ?? { fechaEmision: null, numeroFactura: null, sinNumeroFacturaMotivo: null };
+    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, ...nuevo } : r)));
     try {
       await fetchJson(`/api/cobranza/cobros/${row.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fechaEmision }),
+        body: JSON.stringify(datos ?? { fechaEmision: null }),
       });
-      toast.success(fechaEmision ? "Marcado como facturado." : "Factura revertida.");
+      toast.success(mensajeDeFactura(datos, row.numeroFactura));
     } catch (e) {
-      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, fechaEmision: prev } : r)));
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, ...previo } : r)));
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar la factura.");
     }
   }
@@ -596,10 +603,10 @@ export default function ColaCobros({
           cobro={facturarCobro}
           todayISO={todayISO}
           onCancel={() => setFacturarCobro(null)}
-          onConfirm={async ({ fechaEmision }) => {
+          onConfirm={async (datos) => {
             const row = facturarCobro;
             setFacturarCobro(null);
-            await applyFacturar(row, fechaEmision);
+            await applyFacturar(row, datos);
           }}
         />
       )}
@@ -686,14 +693,31 @@ export default function ColaCobros({
               )}
               <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                 {r.fechaEmision ? (
-                  <button
-                    type="button"
-                    onClick={() => applyFacturar(r, null)}
-                    title="Revertir la marca de facturado"
-                    className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
-                  >
-                    Revertir factura
-                  </button>
+                  <>
+                    {r.numeroFactura && (
+                      <span className="text-[10px] text-fg-muted whitespace-nowrap" title="Número de la factura">
+                        {r.numeroFactura}
+                      </span>
+                    )}
+                    {faltaNumeroDeFactura(r) && (
+                      <button
+                        type="button"
+                        onClick={() => setFacturarCobro(r)}
+                        title="Esta factura no tiene número: elegilo de Odoo o tecleálo"
+                        className="text-[11px] font-medium px-2 py-1 rounded-md border border-warn-line text-warn-ink bg-warn-surface hover:opacity-90 transition-opacity whitespace-nowrap"
+                      >
+                        Agregar número
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => applyFacturar(r, null)}
+                      title="Revertir la marca de facturado (el número, si tiene, queda en la bitácora)"
+                      className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
+                    >
+                      Revertir factura
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"

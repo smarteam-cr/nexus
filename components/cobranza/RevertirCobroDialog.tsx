@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { Alert, Modal } from "@/components/ui";
 import { esFirmaDeImportacion, MOTIVO_REVERSION_MIN } from "@/lib/cobranza/reversion-cobro";
+import { MOTIVO_SIN_NUMERO_MAX, MOTIVO_SIN_NUMERO_MIN, NUMERO_FACTURA_MAX } from "@/lib/cobranza/numero-factura";
 import { fmtFecha, fmtMonto, INPUT_CLS } from "./format";
 
 /** Shape mínimo del cobro a revertir — CobroDTO lo satisface. */
@@ -32,12 +33,16 @@ export interface CobroRevertirRef {
   confirmadoPor: string | null;
   confirmadoEn: string | null;
   facturadoPor: string | null;
+  numeroFactura?: string | null;
 }
 
 export interface DatosDeReversion {
   motivo: string;
   fechaEmision: string | null;
+  /** Va a la columna del cobro, firmado (etapa 7). null = no toca el que tenga. */
   numeroFactura: string | null;
+  /** Solo cuando la reversión le pone fecha a un cobro que no la tenía y no hay número. */
+  sinNumeroFacturaMotivo: string | null;
 }
 
 export default function RevertirCobroDialog({
@@ -59,11 +64,18 @@ export default function RevertirCobroDialog({
 }) {
   const [motivo, setMotivo] = useState("");
   const [fecha, setFecha] = useState(cobro.fechaEmision ?? "");
-  const [numero, setNumero] = useState("");
+  const [numero, setNumero] = useState(cobro.numeroFactura ?? "");
+  const [sinNumero, setSinNumero] = useState(false);
+  const [motivoSinNumero, setMotivoSinNumero] = useState("");
 
   const exigeFecha = estadoNuevo === "POR_COBRAR";
   const motivoValido = motivo.trim().length >= MOTIVO_REVERSION_MIN;
   const fechaValida = fecha ? fecha <= todayISO : !exigeFecha;
+  /* Ponerle fecha a un cobro que no la tenía es marcar facturado, y eso pide el número o decir por
+     qué no está (lib/cobranza/numero-factura.ts). Sin esto el servidor lo rechazaba con un 400. */
+  const exigeNumero = !cobro.fechaEmision && !!fecha;
+  const numeroValido =
+    !exigeNumero || (sinNumero ? motivoSinNumero.trim().length >= MOTIVO_SIN_NUMERO_MIN : !!numero.trim());
   const confirmadoPorImportacion = esFirmaDeImportacion(cobro.confirmadoPor);
   const refirmaFacturado = !!fecha && !!cobro.fechaEmision && esFirmaDeImportacion(cobro.facturadoPor);
 
@@ -91,12 +103,14 @@ export default function RevertirCobroDialog({
           </button>
           <button
             type="button"
-            disabled={!motivoValido || !fechaValida}
+            disabled={!motivoValido || !fechaValida || !numeroValido}
             onClick={() =>
               onConfirm({
                 motivo: motivo.trim(),
                 fechaEmision: fecha || null,
-                numeroFactura: numero.trim() || null,
+                /* Sin fecha no hay factura, y un número sin factura es un 400: no se manda. */
+                numeroFactura: fecha && !(exigeNumero && sinNumero) ? numero.trim() || null : null,
+                sinNumeroFacturaMotivo: exigeNumero && sinNumero ? motivoSinNumero.trim() : null,
               })
             }
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-danger-line text-danger-ink bg-danger-surface hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
@@ -151,16 +165,37 @@ export default function RevertirCobroDialog({
 
         <div>
           <label className="block text-[11px] font-medium text-fg-muted mb-1">
-            Número de factura (opcional)
+            Número de factura{exigeNumero ? "" : " (opcional)"}
           </label>
           <input
             value={numero}
             onChange={(e) => setNumero(e.target.value)}
             placeholder="FAC/2026/0206"
-            maxLength={60}
-            className={INPUT_CLS}
+            maxLength={NUMERO_FACTURA_MAX}
+            disabled={!fecha || (exigeNumero && sinNumero)}
+            className={`${INPUT_CLS} disabled:opacity-50`}
           />
-          <p className="mt-1 text-[10px] text-fg-muted">Queda anotado en la bitácora del cobro.</p>
+          <p className="mt-1 text-[10px] text-fg-muted">
+            {fecha
+              ? "Queda en el cobro a tu nombre, y en la bitácora."
+              : "Sin fecha de emisión no hay factura, y sin factura no hay número."}
+          </p>
+          {exigeNumero && (
+            <label className="mt-2 flex items-center gap-1.5 text-[11px] text-fg-secondary">
+              <input type="checkbox" checked={sinNumero} onChange={(e) => setSinNumero(e.target.checked)} />
+              No tengo el número
+            </label>
+          )}
+          {exigeNumero && sinNumero && (
+            <textarea
+              value={motivoSinNumero}
+              onChange={(e) => setMotivoSinNumero(e.target.value)}
+              rows={2}
+              maxLength={MOTIVO_SIN_NUMERO_MAX}
+              placeholder="¿Por qué no lo tenés? Ej.: QuickBooks no numera las facturas en el libro"
+              className={`${INPUT_CLS} mt-1.5`}
+            />
+          )}
         </div>
       </div>
     </Modal>

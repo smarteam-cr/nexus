@@ -122,13 +122,13 @@ describe("el motivo se exige solo al salir de COBRADO", () => {
 });
 
 describe("la bitácora cita a quien lo había confirmado", () => {
-  it("Global Supply: motivo, firma del import, fecha corregida, número y re-firma", () => {
+  it("Global Supply: motivo, firma del import, fecha corregida y re-firma", () => {
     const d = decidir(
       GLOBAL_SUPPLY,
       {
         estado: "POR_COBRAR",
         fechaEmisionISO: "2026-02-04",
-        reversion: { motivo: `  ${MOTIVO}  `, numeroFactura: " FAC/2026/0206 " },
+        reversion: { motivo: `  ${MOTIVO}  ` },
       },
       ALEX,
     );
@@ -139,7 +139,9 @@ describe("la bitácora cita a quien lo había confirmado", () => {
     expect(d.bitacora).toContain(`Lo había confirmado ${IMPORT} el 2026-02-15, con el pago fechado el 2026-02-15.`);
     expect(d.bitacora).toContain("Esa firma es de una importación, no de una persona");
     expect(d.bitacora).toContain("Fecha de emisión corregida: 2026-02-15 → 2026-02-04.");
-    expect(d.bitacora).toContain("Factura: FAC/2026/0206.");
+    /* El número ya no pasa por acá: tiene su columna y su propia línea (numero-factura.test.ts
+       prueba que «Sacar de Cobrado» lo guarda y lo anota una sola vez). */
+    expect(d.bitacora).not.toContain("Factura:");
     expect(d.bitacora).toContain(`La marca de facturado pasa de «${IMPORT}» a ${ALEX}.`);
     expect(d.refirmarFacturado).toBe(true);
     expect(d.firmasDespues).toEqual({
@@ -253,6 +255,8 @@ describe("el chokepoint escribe lo que la regla decide", () => {
     const db = {
       cobro: {
         findUnique: async () => fila,
+        /* La búsqueda del número en otra cuenta (etapa 7): acá nunca hay otra. */
+        findFirst: async () => null,
         update: async ({ data }: { data: Record<string, unknown> }) => {
           escrito.cambio = data;
           return { ...fila, ...data };
@@ -283,7 +287,16 @@ describe("el chokepoint escribe lo que la regla decide", () => {
 
   it.each(MATRIZ)("%o → %o", async (a, p) => {
     const d = decidir(a, { ...p, reversion: { motivo: MOTIVO } }, ALEX);
-    const patch = cobroPatchSchema.parse({ estado: p.estado, fechaEmision: p.fechaEmisionISO, reversion: { motivo: MOTIVO } });
+    /* Ponerle fecha a un cobro que no la tenía es marcar facturado, y desde la etapa 7 eso exige el
+       número o «no tengo el número» (numero-factura.test.ts). Acá va la marca, para que la matriz
+       siga probando las firmas de la reversión; deja su propia línea en la bitácora. */
+    const factura = a.fechaEmisionISO === null && !!p.fechaEmisionISO;
+    const patch = cobroPatchSchema.parse({
+      estado: p.estado,
+      fechaEmision: p.fechaEmisionISO,
+      reversion: { motivo: MOTIVO },
+      ...(factura ? { sinNumeroFacturaMotivo: "No está en el libro" } : {}),
+    });
     const { db, escrito, firmasEscritas } = baseFalsa(a);
 
     if (d.tipo !== "revertir") {
@@ -294,9 +307,10 @@ describe("el chokepoint escribe lo que la regla decide", () => {
     }
     await cambiarEstadoCobroTx(db as never, "c1", patch, ALEX);
     expect(firmasEscritas()).toEqual(d.firmasDespues);
-    expect(escrito.bitacoras).toEqual([
+    expect(escrito.bitacoras[0]).toEqual(
       expect.objectContaining({ cobroId: "c1", cuentaId: "cuenta-1", contenido: d.bitacora, usuarioEmail: ALEX }),
-    ]);
+    );
+    expect(escrito.bitacoras).toHaveLength(factura ? 2 : 1);
   });
 
   it("sin motivo da 400 y no toca la fila ni la bitácora", async () => {

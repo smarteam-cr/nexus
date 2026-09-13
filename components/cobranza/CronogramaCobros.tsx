@@ -25,8 +25,9 @@ import { fmtFecha, fmtMonto, PROMESA_CHIP, SEMAFORO_META } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
-import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
+import MarcarFacturadoDialog, { mensajeDeFactura, type DatosDeFactura } from "./MarcarFacturadoDialog";
 import RevertirCobroDialog, { type DatosDeReversion } from "./RevertirCobroDialog";
+import { faltaNumeroDeFactura } from "@/lib/cobranza/numero-factura";
 
 /**
  * Las señales de Odoo en castellano. ⚠ «Pagada sin conciliar» NO es lo mismo que pagada: el
@@ -103,6 +104,7 @@ export default function CronogramaCobros({
       fechaCobro?: string;
       fechaEmision?: string | null;
       reversion?: { motivo: string; numeroFactura: string | null };
+      sinNumeroFacturaMotivo?: string;
     },
   ) {
     const prevEstado = items.find((c) => c.id === cobro.id)?.estado;
@@ -150,21 +152,30 @@ export default function CronogramaCobros({
     }
   }
 
-  // Marcar facturado / revertir: sin gate de estado (única superficie que ve COBRADO — es
-  // donde se hace el backfill de facturación histórica).
-  async function applyFacturar(cobro: CobroDTO, fechaEmision: string | null) {
-    const prev = items.find((c) => c.id === cobro.id)?.fechaEmision ?? null;
-    setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, fechaEmision } : c)));
+  // Marcar facturado / agregar número / revertir: sin gate de estado (única superficie que ve
+  // COBRADO — es donde se hace el backfill de facturación histórica). `null` = revertir, que limpia
+  // también el número: el chokepoint deja el viejo en la bitácora.
+  async function applyFacturar(cobro: CobroDTO, datos: DatosDeFactura | null) {
+    const antes = items.find((c) => c.id === cobro.id);
+    const previo = antes
+      ? {
+          fechaEmision: antes.fechaEmision,
+          numeroFactura: antes.numeroFactura,
+          sinNumeroFacturaMotivo: antes.sinNumeroFacturaMotivo,
+        }
+      : null;
+    const nuevo = datos ?? { fechaEmision: null, numeroFactura: null, sinNumeroFacturaMotivo: null };
+    setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, ...nuevo } : c)));
     try {
       await fetchJson(`/api/cobranza/cobros/${cobro.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fechaEmision }),
+        body: JSON.stringify(datos ?? { fechaEmision: null }),
       });
-      toast.success(fechaEmision ? "Marcado como facturado." : "Factura revertida.");
-      onRefresh(); // trae facturadoPor/facturadoEn frescos
+      toast.success(mensajeDeFactura(datos, antes?.numeroFactura ?? null));
+      onRefresh(); // trae facturadoPor/numeroFacturaPor frescos
     } catch (e) {
-      setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, fechaEmision: prev } : c)));
+      if (previo) setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, ...previo } : c)));
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar la factura.");
     }
   }
@@ -222,14 +233,27 @@ export default function CronogramaCobros({
                   </span>
                 )}
                 {!puedeEditar ? null : c.fechaEmision ? (
-                  <button
-                    type="button"
-                    onClick={() => applyFacturar(c, null)}
-                    title="Revertir la marca de facturado"
-                    className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
-                  >
-                    Revertir factura
-                  </button>
+                  <>
+                    {/* Los 144 facturados de antes de la etapa 7 no tienen número: se agrega acá. */}
+                    {faltaNumeroDeFactura(c) && (
+                      <button
+                        type="button"
+                        onClick={() => setFacturarCobro(c)}
+                        title="Esta factura no tiene número: elegilo de Odoo o tecleálo"
+                        className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-warn-line text-warn-ink bg-warn-surface hover:opacity-90 transition-opacity flex-shrink-0"
+                      >
+                        Agregar número
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => applyFacturar(c, null)}
+                      title="Revertir la marca de facturado (el número, si tiene, queda en la bitácora)"
+                      className={`${faltaNumeroDeFactura(c) ? "" : "ml-auto "}text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0`}
+                    >
+                      Revertir factura
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -282,6 +306,24 @@ export default function CronogramaCobros({
                 <p className="mt-1 text-[10px] text-sky-600">
                   <IconCheck className="w-3 h-3 mr-1 align-middle" />
                   Facturado por {c.facturadoPor} · {fmtFecha(c.fechaEmision)}
+                  {c.numeroFactura ? (
+                    <>
+                      {" "}
+                      · <span className="font-medium">{c.numeroFactura}</span>
+                    </>
+                  ) : c.sinNumeroFacturaMotivo ? (
+                    <span className="text-fg-muted"> · sin número: {c.sinNumeroFacturaMotivo}</span>
+                  ) : null}
+                  {puedeEditar && !faltaNumeroDeFactura(c) && (
+                    <button
+                      type="button"
+                      onClick={() => setFacturarCobro(c)}
+                      title="Corregir el número de la factura (queda en la bitácora a tu nombre)"
+                      className="ml-1.5 text-fg-muted underline decoration-dotted hover:text-fg"
+                    >
+                      cambiar
+                    </button>
+                  )}
                 </p>
               )}
               {c.estado === "COBRADO" && c.confirmadoPor && (
@@ -346,13 +388,15 @@ export default function CronogramaCobros({
           estadoNuevo={revertirCobro.estado}
           todayISO={todayISO}
           onCancel={() => setRevertirCobro(null)}
-          onConfirm={async ({ motivo, fechaEmision, numeroFactura }: DatosDeReversion) => {
+          onConfirm={async ({ motivo, fechaEmision, numeroFactura, sinNumeroFacturaMotivo }: DatosDeReversion) => {
             const { cobro, estado } = revertirCobro;
             setRevertirCobro(null);
             await applyEstado(cobro, estado, {
               reversion: { motivo, numeroFactura },
               // Solo si cambió: la bitácora dice «fecha corregida» únicamente cuando lo fue.
               ...(fechaEmision !== cobro.fechaEmision ? { fechaEmision } : {}),
+              // Ponerle fecha a un cobro que no la tenía es marcar facturado: sin número, va el motivo.
+              ...(sinNumeroFacturaMotivo ? { sinNumeroFacturaMotivo } : {}),
             });
           }}
         />
@@ -379,10 +423,10 @@ export default function CronogramaCobros({
           cobro={facturarCobro}
           todayISO={todayISO}
           onCancel={() => setFacturarCobro(null)}
-          onConfirm={async ({ fechaEmision }) => {
+          onConfirm={async (datos) => {
             const cobro = facturarCobro;
             setFacturarCobro(null);
-            await applyFacturar(cobro, fechaEmision);
+            await applyFacturar(cobro, datos);
           }}
         />
       )}

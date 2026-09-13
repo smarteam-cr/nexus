@@ -223,7 +223,8 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (copiar / mailto a `correoCobro`). La generación queda registrada en la bitácora.
 - **Referencia de conciliación opcional** al confirmar COBRADO (`Cobro.referenciaExterna`, id
   de transacción Mercury / factura Odoo): trazabilidad del puente control↔contabilidad sin
-  volver a Nexus contabilidad.
+  volver a Nexus contabilidad. ⚠ Desde 2026-09-12 (etapa 7) el número de la factura va en
+  `Cobro.numeroFactura`, al marcar facturado; esta queda para el depósito o la transferencia.
 - **Métricas de cartera en `SnapshotCartera.metricas` (Json, fase 3)**: cada corte captura las
   métricas agregadas POR MONEDA (vencido/por-cobrar/programado mapeados 1:1 al semáforo, aging,
   DSO, días promedio de cobro, cobrado-en-ventana, proyectado al próximo corte) + cobertura.
@@ -3047,7 +3048,7 @@ fabricarla.
   firma vieja queda citada en la bitácora. Una firma de persona no se toca.
 - **El número de factura va al texto de la bitácora, no a `referenciaExterna` ni a `notas`.** Esas
   guardan de dónde vino cada cobro importado. Cuando el cobro tenga su columna de número, ese dato
-  pasa ahí.
+  pasa ahí. (Pasó en la etapa 7: ver abajo.)
 - **`cambiarEstadoCobro` abre su propia transacción.** Cambio y bitácora quedan juntos o no queda
   ninguno. Deja de ser cierto lo que decía la comisión de vendedor: «no tiene transacción» y «el
   revert no deja bitácora».
@@ -3056,3 +3057,31 @@ fabricarla.
   cualquier mapeo pisaba el estado de los 202 cobros, incluidos los que una persona confirmó o
   revirtió después. Queda como reporte de solo lectura, y `lib/cobranza/cargadores-sin-verdes.test.ts`
   impide que un script que escribe en `Cobro` vuelva a nombrar `confirmadoPor`.
+
+## Cobranza — la factura tiene número desde que nace (2026-09-12)
+
+> «Marcar facturado» pedía solo la fecha, y el número se podía pegar recién al registrar el pago,
+> en `referenciaExterna`. Medido ese día: 144 cobros facturados y ninguno con número. Justo lo
+> facturado y no cobrado llegaba sin él, y el cruce contra Odoo adivinaba por monto.
+
+- **El número vive en su columna, firmado.** `Cobro.numeroFactura` + `numeroFacturaPor/En` +
+  `sinNumeroFacturaMotivo` (scripts/sql/2026-09-12-7-numero-de-factura.sql, antes del deploy). La
+  regla es pura (`lib/cobranza/numero-factura.ts`) y corre en `cambiarEstadoCobroTx`: marcar
+  facturado exige el número o la marca «no tengo el número» con motivo; cambiar una fecha ya puesta
+  no exige nada (los 144 de antes siguen editables); revertir la factura limpia número y autoría y
+  deja el viejo en la bitácora; cada alta o cambio deja su línea con el correo de quien lo hizo.
+- **No es un unique.** Una factura puede cubrir varias cuotas de la misma cuenta. En dos cuentas se
+  frena con un 409 antes de escribir, y lo vigila INV33. INV34 vigila que número o marca tengan autor
+  y factura; un CHECK impide que número y marca convivan.
+- **En Odoo se elige, no se teclea.** El diálogo lista el espejo por los clientes de Odoo VINCULADOS
+  a la cuenta (no por la cuenta atribuida, que puede ir atrás), misma moneda, documentos vivos, sin
+  números ya tomados y el monto exacto primero; la fecha sale del documento. Si el documento no está
+  en el espejo, se teclea con aviso. Mercury y QuickBooks se teclean. «No tengo el número» existe
+  siempre: una factura sin número con motivo es una decisión, sin motivo es un olvido.
+- **La forma no es verificación.** `plataformaDelNumero` reconoce FAC/2026/0206 como Odoo e INV-4-1
+  como Mercury; se usa para avisar, nunca para frenar (la vía de cobro de una cuenta puede estar mal).
+- **Soltar una factura guarda su número.** `FacturaLiberada.referenciaExterna` (nombre viejo, no se
+  renombra con código viejo corriendo) toma `numeroFactura`. Una liberación de Odoo con un número sin
+  forma de Odoo cuenta como «sin número»: el sync no la puede cerrar, así que la cierra una persona.
+- **El número de «Sacar de Cobrado» pasa a la columna.** Deja de escribirse en el texto de la
+  reversión: lo anota la regla del número, una sola vez.

@@ -126,6 +126,10 @@ export interface CobroDTO {
   confirmadoPor: string | null;
   confirmadoEn: string | null;
   referenciaExterna: string | null;
+  /** El número de la factura (etapa 7), quién lo puso, o por qué no hay. null en los facturados de antes. */
+  numeroFactura: string | null;
+  numeroFacturaPor: string | null;
+  sinNumeroFacturaMotivo: string | null;
   promesaPago: string | null; // ISO date — fecha en que el cliente prometió pagar
   notas: string | null;
   /**
@@ -283,6 +287,9 @@ type CobroRow = {
   confirmadoPor: string | null;
   confirmadoEn: Date | null;
   referenciaExterna: string | null;
+  numeroFactura: string | null;
+  numeroFacturaPor: string | null;
+  sinNumeroFacturaMotivo: string | null;
   promesaPago: Date | null;
   notas: string | null;
 };
@@ -306,6 +313,9 @@ function serializeCobro(c: CobroRow, facturas?: ReadonlyMap<string, CobroDTO["fa
     confirmadoEn: iso(c.confirmadoEn),
     facturaOdoo: facturas?.get(c.id) ?? null,
     referenciaExterna: c.referenciaExterna,
+    numeroFactura: c.numeroFactura,
+    numeroFacturaPor: c.numeroFacturaPor,
+    sinNumeroFacturaMotivo: c.sinNumeroFacturaMotivo,
     promesaPago: isoDay(c.promesaPago),
     notas: c.notas,
   };
@@ -865,6 +875,9 @@ export interface ColaCobroRow {
   origen: string; // PLAN | CATCH_UP | MANUAL
   promesaPago: string | null;
   fechaEmision: string | null;
+  /** El número de la factura, o por qué no hay (etapa 7). Sin ninguno de los dos, la fila ofrece «Agregar número». */
+  numeroFactura: string | null;
+  sinNumeroFacturaMotivo: string | null;
   /** Resuelto (cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS) — nunca null acá,
    *  para que el recálculo cliente-side del semáforo (ColaCobros.tsx) sea
    *  consistente con el servidor sin tener que importar el default. */
@@ -900,6 +913,8 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       origen: true,
       promesaPago: true,
       fechaEmision: true,
+      numeroFactura: true,
+      sinNumeroFacturaMotivo: true,
       servicio: { select: { tipoServicio: true, descripcion: true } },
       cuenta: {
         select: { clientId: true, creditoDias: true, tipo: true, client: { select: { name: true } } },
@@ -927,6 +942,8 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       origen: c.origen,
       promesaPago: isoDay(c.promesaPago),
       fechaEmision: isoDay(c.fechaEmision),
+      numeroFactura: c.numeroFactura,
+      sinNumeroFacturaMotivo: c.sinNumeroFacturaMotivo,
       creditoDias: c.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS,
       tipoCuenta: c.cuenta.tipo,
     };

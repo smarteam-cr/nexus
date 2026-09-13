@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
 import { MOTIVO_REVERSION_MIN } from "./reversion-cobro";
+import { MOTIVO_SIN_NUMERO_MAX, NUMERO_FACTURA_MAX } from "./numero-factura";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -281,6 +282,8 @@ export const planPutSchema = z
  * PROGRAMADO (lo valida la mutación, que ve el estado actual). COBRADO exige
  * confirmación (la mutación setea confirmadoPor desde el guard — INV3). Salir de
  * COBRADO exige `reversion.motivo` (lo valida la mutación, que ve el estado actual).
+ * Marcar facturado exige `numeroFactura` o `sinNumeroFacturaMotivo` (lo valida la mutación con
+ * lib/cobranza/numero-factura.ts: depende de si el cobro ya tenía fecha de emisión).
  */
 export const cobroPatchSchema = z
   .object({
@@ -289,8 +292,15 @@ export const cobroPatchSchema = z
     monto,
     fechaEmision: isoDate.nullable(),
     fechaCobro: isoDate.nullable(),
-    // ReconciliationPort v1: id de transacción Mercury / factura Odoo al confirmar COBRADO.
+    // ReconciliationPort v1: número de depósito o transferencia al confirmar COBRADO. El de la
+    // factura ya no va acá: va en `numeroFactura`, al marcar facturado.
     referenciaExterna: z.string().max(200).nullable(),
+    /* El número de la factura. Se normaliza en la mutación («INV - 40» → «INV-40»); el tope va sobre
+       lo tecleado, con holgura para los espacios que la normalización quita. */
+    numeroFactura: z.string().trim().max(NUMERO_FACTURA_MAX * 2).nullable(),
+    /* «No tengo el número», con el motivo. El mínimo lo pide la mutación: un 400 que dice cuántos
+       caracteres faltan, igual en la pantalla y en el servidor. */
+    sinNumeroFacturaMotivo: z.string().trim().max(MOTIVO_SIN_NUMERO_MAX).nullable(),
     // Promesa de pago: marca la factura con esa fecha, sin sacarla del vencido (null = quitarla).
     promesaPago: isoDate.nullable(),
     notas: z.string().max(2000).nullable(),
@@ -298,9 +308,10 @@ export const cobroPatchSchema = z
      * Sacar un cobro de COBRADO (lib/cobranza/reversion-cobro.ts). El motivo va a la bitácora
      * del cobro junto con quién lo había confirmado.
      *
-     * ⚠ `numeroFactura` va SOLO al texto de la bitácora hasta que el cobro tenga su propia
-     * columna. No se escribe en `referenciaExterna` ni en `notas`: esas guardan de dónde vino
-     * cada cobro importado, y pisarlas borraría la única pista de su origen.
+     * `numeroFactura` va a la columna del cobro, con la misma regla y la misma firma que el de
+     * arriba (desde la etapa 7; hasta entonces iba solo al texto de la bitácora). Vacío = no toca
+     * el número. Nunca a `referenciaExterna` ni a `notas`: esas guardan de dónde vino cada cobro
+     * importado, y pisarlas borraría la única pista de su origen.
      */
     reversion: z.object({
       motivo: z

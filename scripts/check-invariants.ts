@@ -12,7 +12,7 @@ import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32,
+  INV31, INV32, INV33, INV34,
   type Invariante,
 } from "@/lib/invariantes";
 
@@ -737,6 +737,12 @@ async function main(): Promise<number> {
 
   // ── Inv 32 → lib/invariantes/cobranza.ts (cobranza, 2026-09-12: el corte quincenal no está viejo) ──
   violations += await reportar(INV32, prisma);
+
+  // ── Inv 33 → lib/invariantes/cobranza.ts (cobranza, 2026-09-12: un número de factura, una sola cuenta) ──
+  violations += await reportar(INV33, prisma);
+
+  // ── Inv 34 → lib/invariantes/cobranza.ts (cobranza, 2026-09-12: el número de factura tiene autor y factura) ──
+  violations += await reportar(INV34, prisma);
 
   return violations;
 }

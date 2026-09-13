@@ -152,7 +152,14 @@
   cronograma del drawer) que setea `Cobro.fechaEmision` a una fecha real — pasa el cobro del
   Reloj 1 (facturar) al Reloj 2 (cobrar). Auditado igual que `COBRADO`: `facturadoPor`/
   `facturadoEn` (chokepoint `cambiarEstadoCobro`). Reversible ("Revertir factura" → vuelve a
-  `null`, se limpia la autoría).
+  `null`, se limpia la autoría). Desde la etapa 7 (2026-09-12) exige el **número de factura** o
+  la marca «no tengo el número» con motivo.
+- **número de factura** (`Cobro.numeroFactura`): el número del documento emitido (FAC/2026/0206
+  en Odoo, INV-16 en Mercury), normalizado y firmado (`numeroFacturaPor`/`numeroFacturaEn`). Nace
+  al marcar facturado: en cuentas Odoo se elige del espejo; en Mercury y QuickBooks se teclea.
+  No es único: puede repetirse en cuotas de la misma cuenta, nunca en dos cuentas (409 + INV33).
+  Revertir la factura lo limpia y deja el viejo en la bitácora. La marca «no tengo el número» es
+  `sinNumeroFacturaMotivo`. Regla: `lib/cobranza/numero-factura.ts`.
 - **por facturar / por facturar atrasado**: estado de un cobro sin `fechaEmision` — mismo
   color amarillo en el semáforo (la urgencia se expresa en la alerta, no en el color: "en
   ventana" es `COBRO_PROXIMO`, atrasado sin gracia es `FACTURACION_ATRASADA`, urgencia ALTA).
@@ -183,8 +190,9 @@
   "en riesgo" aparte. Cuarto tab del módulo.
 - **quincena** (Cobranza): mitad de mes calendario (1–15 / 16–fin, fin clampeado) — la unidad
   operativa del ciclo de cobro de Alex.
-- **referencia externa** (`Cobro.referenciaExterna`): id de transacción Mercury / factura Odoo
-  pegado OPCIONALMENTE al confirmar COBRADO — trazabilidad hacia contabilidad sin acoplarse.
+- **referencia externa** (`Cobro.referenciaExterna`): número de depósito o transferencia pegado
+  OPCIONALMENTE al confirmar COBRADO — trazabilidad hacia contabilidad sin acoplarse. Hasta la
+  etapa 7 también recibía números de factura; el de la factura ahora es `numeroFactura`.
 - **correoCobro** (`CuentaFinanciera`): el correo al que se le cobra a ese cliente — destino del
   mailto del borrador de cobro.
 - **borrador de cobro** (`agent-cobranza-borrador`): correo de cobro redactado por IA desde el
