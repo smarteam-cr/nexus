@@ -2761,7 +2761,7 @@ async function aparearFacturasDeOdoo(
       monto: num(c.monto)!,
       moneda: c.moneda,
       estado: c.estado,
-      facturado: c.fechaEmision !== null,
+      fechaEmision: isoDay(c.fechaEmision),
     })),
   );
   const facturas = facturasDb.map((f) => ({

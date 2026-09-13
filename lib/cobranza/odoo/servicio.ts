@@ -32,6 +32,7 @@ import {
   type PropuestaEmparejado,
 } from "./emparejado";
 import { detectarDiferenciasOdoo, huellaDe, type DiferenciaOdoo } from "./diferencias";
+import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
 
 export class EmparejadoError extends Error {
@@ -375,7 +376,7 @@ export async function cargarDiferencias(): Promise<{
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
   medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
 }> {
-  const [cobrosDb, facturasDb, cuentasDb, vinculadas, aceptadasDb, liberadasDb] = await Promise.all([
+  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -396,7 +397,9 @@ export async function cargarDiferencias(): Promise<{
     prisma.cuentaFinanciera.findMany({
       select: { id: true, tipo: true, viaCobro: true, client: { select: { name: true } } },
     }),
-    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
+    /* Las CUENTAS vinculadas, no los vínculos: una cuenta con dos razones sociales en Odoo
+       contaba dos veces y el «faltan emparejar» salía más chico que la verdad. */
+    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null } }, select: { cuentaId: true } }),
     prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
     /* Solo las que siguen abiertas: una resuelta no produce ninguna línea, y traerlas todas
        hacía crecer esta consulta para siempre sin que nada lo usara. La regla de qué es
@@ -404,8 +407,11 @@ export async function cargarDiferencias(): Promise<{
        contra el caso «alguien la cerró a mano»—; acá solo se evita traer lo que ya se sabe
        que va a descartar. */
     prisma.facturaLiberada.findMany({ where: { resueltaEn: null }, orderBy: { liberadaEn: "desc" } }),
+    ultimaCorridaOk(),
   ]);
   const cuentasTotales = cuentasDb.length;
+  const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
+  const cuentasSinVinculo = cuentasDb.filter((c) => !cuentasVinculadas.has(c.id)).length;
 
   const inconsistencias = detectarDiferenciasOdoo({
     cobros: cobrosDb.map((c) => ({
@@ -417,7 +423,7 @@ export async function cargarDiferencias(): Promise<{
       monto: Number(c.monto),
       moneda: c.moneda,
       estado: c.estado,
-      facturado: c.fechaEmision !== null,
+      fechaEmision: c.fechaEmision ? c.fechaEmision.toISOString().slice(0, 10) : null,
     })),
     facturas: facturasDb.map((f) => ({
       id: f.id,
@@ -457,8 +463,10 @@ export async function cargarDiferencias(): Promise<{
       tipo: c.tipo,
       viaCobro: c.viaCobro,
     })),
-    cuentasSinVinculo: cuentasTotales - vinculadas,
+    cuentasSinVinculo,
     cuentasTotales,
+    cuentasVinculadas,
+    ultimaCorridaOk: corridaOk ? corridaOk.toISOString().slice(0, 10) : null,
     aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
   });
 
@@ -470,7 +478,7 @@ export async function cargarDiferencias(): Promise<{
       aceptadaPor: a.aceptadaPor,
       aceptadaEn: a.aceptadaEn.toISOString(),
     })),
-    medido: { cobros: cobrosDb.length, facturas: facturasDb.length, cuentasSinVinculo: cuentasTotales - vinculadas, cuentasTotales },
+    medido: { cobros: cobrosDb.length, facturas: facturasDb.length, cuentasSinVinculo, cuentasTotales },
   };
 }
 

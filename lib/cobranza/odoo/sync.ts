@@ -404,6 +404,22 @@ async function cerrar(corridaId: string, res: ResultadoSync, t0: number): Promis
   });
 }
 
+/**
+ * Cuándo empezó la última corrida BUENA del espejo. Es lo único que «Lo que no cuadra» le pide al
+ * sync para no acusar en falso: lo facturado después, el espejo todavía no lo pudo ver.
+ *
+ * ⚠ `iniciadaEn` y no `terminadaEn`: la lectura de Odoo se hace al principio, así que un documento
+ * emitido mientras la corrida escribía no entró.
+ */
+export async function ultimaCorridaOk(): Promise<Date | null> {
+  const c = await prisma.syncOdooCorrida.findFirst({
+    where: { ok: true },
+    orderBy: { iniciadaEn: "desc" },
+    select: { iniciadaEn: true },
+  });
+  return c?.iniciadaEn ?? null;
+}
+
 /** Lo que la pantalla de cobranza necesita para decir «el espejo está al día» o no. */
 export async function ultimaCorrida(): Promise<{
   iniciadaEn: string;

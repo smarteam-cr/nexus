@@ -15,6 +15,7 @@ import { describe, it, expect } from "vitest";
 import {
   cruzar,
   detectarDiferenciasOdoo,
+  esDocumentoVivo,
   huellaDe,
   liberacionesPendientes,
   montosEnDosMonedas,
@@ -32,9 +33,12 @@ const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   monto: 2000,
   moneda: "USD",
   estado: "POR_COBRAR",
-  facturado: true,
+  fechaEmision: "2026-07-15",
   ...p,
 });
+
+/** Lo que el cruce necesita saber del emparejado y del espejo, en su forma más neutra. */
+const alDia = { cuentasVinculadas: new Set<string>(["cta1"]), ultimaCorridaOk: "2026-09-02" };
 
 const factura = (p: Partial<FacturaParaCruzar> = {}): FacturaParaCruzar => ({
   id: "f1",
@@ -210,6 +214,7 @@ describe("el mismo monto en dos monedas", () => {
 
 describe("la lista para el CFO", () => {
   const base = {
+    ...alDia,
     cuentasSinVinculo: 49,
     cuentasTotales: 49,
     liberaciones: [],
@@ -237,7 +242,7 @@ describe("la lista para el CFO", () => {
     /* Sin monto no se prioriza; sin dueño no se cierra nunca. */
     const lista = detectarDiferenciasOdoo({
       ...base,
-      cobros: [cobro({ facturado: true })],
+      cobros: [cobro()],
       facturas: [factura({ cuentaId: null }), factura({ id: "f2", odooMoveId: 2, paymentState: "in_payment" })],
     });
     expect(lista.length).toBeGreaterThan(0);
@@ -316,8 +321,23 @@ describe("la lista para el CFO", () => {
     });
     expect(lista.find((i) => i.codigo === "ODOO-MONEDA")?.yaContadoEn).toBe("ODOO-SIN-CUENTA");
     expect(lista.find((i) => i.codigo === "ODOO-MONEDA")?.montoEnJuego).toBe(11541250);
-    /* Y el balde AVISA de que su propio total está inflado por esas mismas facturas. */
-    expect(lista.find((i) => i.codigo === "ODOO-SIN-CUENTA")?.detalle).toMatch(/INFLADO/);
+    /* Y el balde AVISA de que su propio total está inflado por esas mismas facturas — con la
+       cifra detectada, no con un «mucho menor» escrito a mano. */
+    expect(lista.find((i) => i.codigo === "ODOO-SIN-CUENTA")?.detalle).toMatch(/INFLADO en USD 11.541.250,00/);
+  });
+
+  it("⚠ pero no avisa INFLADO cuando las gemelas no están en el balde", () => {
+    /* Antes lo decía siempre que existiera la línea de moneda, aunque sus facturas ya tuvieran cuenta. */
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [
+        factura({ id: "b", odooMoveId: 2, cuentaId: "cta1", montoNeto: 5000, moneda: "USD", odooPartnerId: 77 }),
+        factura({ id: "c", odooMoveId: 3, cuentaId: "cta1", montoNeto: 5000, moneda: "CRC", odooPartnerId: 77 }),
+        factura({ id: "d", odooMoveId: 4, cuentaId: null, montoNeto: 10, moneda: "USD" }),
+      ],
+    });
+    expect(lista.find((i) => i.codigo === "ODOO-SIN-CUENTA")?.detalle).not.toMatch(/INFLADO/);
   });
 
   it("pero una vez emparejadas, la línea fina cuenta por sí sola", () => {
@@ -457,6 +477,7 @@ describe("⭐ liberaciones: la regla de cierre por plataforma", () => {
 
 describe("⚠ la factura liberada no se cuenta dos veces", () => {
   const base = {
+    ...alDia,
     cuentasSinVinculo: 0,
     cuentasTotales: 1,
     cuentas: [],
@@ -508,6 +529,7 @@ describe("⚠ la factura liberada no se cuenta dos veces", () => {
 
 describe("el default que dice Odoo sobre cuentas que no facturan por Odoo", () => {
   const base = {
+    ...alDia,
     cobros: [],
     facturas: [],
     liberaciones: [],
@@ -593,6 +615,7 @@ describe("⚠ la nota de crédito tiene que ser POSTERIOR a la factura", () => {
  */
 describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () => {
   const base = {
+    ...alDia,
     cobros: [],
     facturas: [],
     cuentasSinVinculo: 0,
@@ -634,5 +657,179 @@ describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () 
     });
     expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-PENDIENTES")?.montoEnJuego).toBe(2125);
     expect(lista.find((i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO")?.montoEnJuego).toBe(500);
+  });
+});
+
+/**
+ * ── ⭐ UNA SOLA REGLA DE «DOCUMENTO VIVO» ────────────────────────────────────────
+ * Medido el 2026-09-12: cada línea filtraba a su manera, y la de moneda acusaba el par de
+ * Publimark que ya estaba revertido en Odoo — y de ahí sacaba su «95,8 %» escrito a mano.
+ */
+describe("⭐ una sola regla de documento vivo", () => {
+  const base = {
+    ...alDia,
+    cuentasSinVinculo: 0,
+    cuentasTotales: 1,
+    liberaciones: [],
+    cuentas: [],
+    aceptadas: new Map<string, string>(),
+  };
+
+  it("vivo = factura emitida; la nota de crédito, la anulada y la revertida no", () => {
+    expect(esDocumentoVivo(factura())).toBe(true);
+    expect(esDocumentoVivo(factura({ moveType: "out_refund" }))).toBe(false);
+    expect(esDocumentoVivo(factura({ state: "cancel" }))).toBe(false);
+    expect(esDocumentoVivo(factura({ paymentState: "reversed" }))).toBe(false);
+  });
+
+  it("⛔ una factura revertida no se aparea con un cobro", () => {
+    /* Taparía un cobro que sigue pendiente: la factura revertida ya no le cobra nada a nadie. */
+    const r = cruzar([cobro()], [factura({ paymentState: "reversed" })]);
+    expect(r.pares).toHaveLength(0);
+    expect(r.cobrosSolos).toHaveLength(1);
+    expect(r.facturasSolas).toHaveLength(0);
+  });
+
+  it("las 4 filas de Publimark no generan ODOO-MONEDA: la de dólares ya está revertida", () => {
+    const publimark = (p: Partial<FacturaParaCruzar>) =>
+      factura({ odooPartnerId: 75, odooPartnerNombre: "PUBLIMARK SOCIEDAD ANONIMA", cuentaId: null, montoNeto: 11541250, ...p });
+    const filas = [
+      publimark({ id: "p1", odooMoveId: 232, numero: "FAC/2026/0232", moneda: "USD", paymentState: "reversed" }),
+      publimark({ id: "p2", odooMoveId: 233, numero: "FAC/2026/0233", moneda: "CRC", paymentState: "paid" }),
+      publimark({ id: "p3", odooMoveId: 243, numero: "FAC/2026/0243", moneda: "USD", moveType: "out_refund" }),
+      publimark({ id: "p4", odooMoveId: 321, numero: "FAC/2026/0321", moneda: "CRC", paymentState: "not_paid" }),
+    ];
+    expect(montosEnDosMonedas(filas)).toEqual([]);
+    expect(detectarDiferenciasOdoo({ ...base, cobros: [], facturas: filas }).map((i) => i.codigo)).not.toContain("ODOO-MONEDA");
+  });
+
+  it("Servica 90 sí la genera, y el peso en dólares sale de lo detectado", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [
+        factura({ id: "s1", odooMoveId: 231, odooPartnerId: 61, montoNeto: 90, moneda: "CRC", paymentState: "not_paid" }),
+        factura({ id: "s2", odooMoveId: 268, odooPartnerId: 61, montoNeto: 90, moneda: "USD" }),
+        factura({ id: "otra", odooMoveId: 9, odooPartnerId: 5, montoNeto: 20000, moneda: "USD" }),
+      ],
+    });
+    const moneda = lista.find((i) => i.codigo === "ODOO-MONEDA");
+    expect(moneda?.items).toHaveLength(1);
+    expect(moneda?.detalle).toContain("Ninguna llega al 1 %");
+    expect(moneda?.detalle).not.toContain("95,8");
+  });
+
+  it("…y cuando un par SÍ distorsiona los dólares, dice cuánto", () => {
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [
+        factura({ id: "u", odooMoveId: 1, odooPartnerId: 75, montoNeto: 11541250, moneda: "USD" }),
+        factura({ id: "c", odooMoveId: 2, odooPartnerId: 75, montoNeto: 11541250, moneda: "CRC" }),
+        factura({ id: "x", odooMoveId: 3, odooPartnerId: 5, montoNeto: 500000, moneda: "USD" }),
+      ],
+    });
+    expect(lista.find((i) => i.codigo === "ODOO-MONEDA")?.detalle).toContain("pesa el 95,8 %");
+  });
+
+  it("las notas de crédito y las revertidas no suman en «sin cuenta»: se cuentan aparte", () => {
+    /* Sumaban como si hubiera que cobrarlas. */
+    const lista = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [
+        factura({ id: "a", odooMoveId: 1, cuentaId: null, montoNeto: 1000 }),
+        factura({ id: "n", odooMoveId: 2, cuentaId: null, montoNeto: 1000, moveType: "out_refund" }),
+        factura({ id: "r", odooMoveId: 3, cuentaId: null, montoNeto: 5000, paymentState: "reversed" }),
+      ],
+    });
+    const l = lista.find((i) => i.codigo === "ODOO-SIN-CUENTA");
+    expect(l?.titulo).toMatch(/^1 facturas de Odoo/);
+    expect(l?.montoEnJuego).toBe(1000);
+    expect(l?.detalle).toContain("1 nota(s) de crédito");
+    expect(l?.detalle).toContain("1 documento(s) anulados o revertidos");
+    /* Y el paso que prometía «el sync recalcula la cuenta» ya no lo promete. */
+    expect(l?.pasos.join(" ")).not.toMatch(/sync recalcula/);
+  });
+});
+
+/**
+ * ── ⚠⚠ «COBRO SIN FACTURA» SOLO ACUSA LO QUE SE PUEDE VERIFICAR ──────────────────
+ * Medido el 2026-09-12: 148 cobros acusados por USD 237.355, la cifra más grande de la pantalla.
+ * Sus facturas estaban en el espejo sin atribuir, 46 eran de cuentas sin emparejar y 8 de Mercury.
+ */
+describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", () => {
+  const base = {
+    facturas: [],
+    liberaciones: [],
+    cuentas: [
+      { id: "odoo", nombre: "Amvac Latam", tipo: "NACIONAL", viaCobro: "ODOO" },
+      { id: "merc", nombre: "Colby", tipo: "NACIONAL", viaCobro: "MERCURY" },
+      { id: "qbs", nombre: "Sfera", tipo: "NACIONAL", viaCobro: "OTRA" },
+      { id: "suelta", nombre: "Wherex", tipo: "NACIONAL", viaCobro: "ODOO" },
+    ],
+    cuentasSinVinculo: 3,
+    cuentasTotales: 4,
+    cuentasVinculadas: new Set<string>(["odoo"]),
+    /* ⇒ corte = 2026-08-18 (15 días de gracia). */
+    ultimaCorridaOk: "2026-09-02" as string | null,
+    aceptadas: new Map<string, string>(),
+  };
+  const lineas = (cobros: CobroParaCruzar[], extra: Partial<typeof base> = {}) =>
+    detectarDiferenciasOdoo({ ...base, ...extra, cobros });
+  const acusa = (cobros: CobroParaCruzar[], extra: Partial<typeof base> = {}) =>
+    lineas(cobros, extra).find((i) => i.codigo === "ODOO-COBRO-SIN-FACTURA");
+
+  it("un cobro de una cuenta Mercury o QuickBooks no genera línea: no hay espejo que lo vea", () => {
+    expect(acusa([cobro({ id: "m", cuentaId: "merc" }), cobro({ id: "q", cuentaId: "qbs" })])).toBeUndefined();
+  });
+
+  it("uno de una cuenta sin emparejar suma al conteo de ODOO-SIN-CUENTA, sin monto", () => {
+    const l = lineas([cobro({ cuentaId: "suelta", cuentaNombre: "Wherex" })]);
+    expect(l.find((i) => i.codigo === "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+    const sinCuenta = l.find((i) => i.codigo === "ODOO-SIN-CUENTA");
+    expect(sinCuenta?.montoEnJuego).toBeNull();
+    expect(sinCuenta?.detalle).toContain("1 cobro(s) facturados de cuentas sin emparejar");
+    expect(sinCuenta?.items).toEqual([{ texto: "Wherex — cuenta sin emparejar", nota: "1 cobro facturado sin verificar" }]);
+  });
+
+  it("uno facturado después del corte no genera línea: el espejo todavía no pudo verlo", () => {
+    expect(acusa([cobro({ cuentaId: "odoo", fechaEmision: "2026-08-19" })])).toBeUndefined();
+    expect(acusa([cobro({ cuentaId: "odoo", fechaEmision: "2026-08-18" })]), "el día del corte sí entra").toBeDefined();
+  });
+
+  it("uno de una cuenta emparejada, facturado antes del corte y sin factura, sí: ALTA", () => {
+    const l = acusa([
+      cobro({ cuentaId: "odoo", fechaEmision: "2026-07-15", monto: 1848 }),
+      cobro({ id: "c2", cuentaId: "odoo", fechaEmision: "2026-08-30" }),
+    ]);
+    expect(l?.severidad).toBe("ALTA");
+    expect(l?.montoEnJuego).toBe(1848);
+    expect(l?.items).toHaveLength(1);
+    expect(l?.detalle).toContain("hasta el 2026-08-18");
+    expect(l?.detalle).toContain("No se cuentan 1 cobro(s) facturados después de esa fecha");
+  });
+
+  it("un COBRADO sin fecha de emisión usa la programada; uno sin facturar no se acusa", () => {
+    expect(acusa([cobro({ cuentaId: "odoo", estado: "COBRADO", fechaEmision: null, fechaProgramada: "2026-07-15" })])).toBeDefined();
+    expect(acusa([cobro({ cuentaId: "odoo", estado: "COBRADO", fechaEmision: null, fechaProgramada: "2026-08-30" })])).toBeUndefined();
+    expect(acusa([cobro({ cuentaId: "odoo", fechaEmision: null })])).toBeUndefined();
+  });
+
+  it("⛔ si el espejo nunca corrió bien, no acusa nada", () => {
+    expect(acusa([cobro({ cuentaId: "odoo" })], { ultimaCorridaOk: null })).toBeUndefined();
+  });
+
+  it("una factura de 2021 no entra a «factura sin cobro»: es de antes del primer cobro de la cuenta", () => {
+    const l = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [cobro({ cuentaId: "odoo", fechaProgramada: "2026-01-15", monto: 999, fechaEmision: null })],
+      facturas: [
+        factura({ id: "vieja", odooMoveId: 1, numero: "FAC/2021/0003", cuentaId: "odoo", invoiceDate: "2021-05-01", montoNeto: 2000 }),
+        factura({ id: "nueva", odooMoveId: 2, numero: "FAC/2026/0320", cuentaId: "odoo", invoiceDate: "2026-08-01", montoNeto: 3333 }),
+      ],
+    }).find((i) => i.codigo === "ODOO-FACTURA-SIN-COBRO");
+    expect(l?.items.map((i) => i.nota?.split(" · ")[0])).toEqual(["FAC/2026/0320"]);
+    expect(l?.detalle).toContain("No se cuentan 1 factura(s) anteriores al primer cobro");
   });
 });
