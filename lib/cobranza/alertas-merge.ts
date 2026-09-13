@@ -96,23 +96,33 @@ export function subeDeSituacion(desde: string, hacia: AlertaDraft["tipo"]): bool
   return hacia === "PROMESA_INCUMPLIDA" || (hacia === "COBRO_VENCIDO" && FALTA_FACTURAR.has(desde));
 }
 
-export function resolverMergeAlerta(d: AlertaDraft, vivas: readonly FilaViva[]): DecisionMerge {
+/**
+ * La fila viva que se queda con este borrador, o null si no hay ninguna. La usan el merge y el
+ * cierre de copias (lib/cobranza/alertas-cierre.ts): si fueran dos reglas, el cierre podría
+ * dejar abierta justo la fila que el merge no actualiza.
+ */
+export function filaQueSeQueda<F extends FilaViva>(d: AlertaDraft, vivas: readonly F[]): F | null {
   const { dedupeKey, cobroDeLaFamilia } = filasQueLeImportan(d);
   const candidatas = vivas.filter(
     (f) =>
       f.dedupeKey === dedupeKey ||
       (cobroDeLaFamilia !== null && f.cobroId === cobroDeLaFamilia && esDeLaFamiliaDelCobro(f.tipo)),
   );
-  if (candidatas.length === 0) return { accion: "crear" };
-
-  /* Si quedaron varias —filas de antes de esta regla— manda la de la misma clave; si no, la más
-     reciente. Las otras no se tocan: cerrarlas es otra decisión (el cierre automático de alertas). */
+  /* Si quedaron varias —filas de antes de esta regla, o dos cortes a la vez— manda la de la misma
+     clave; si no, la más reciente. Las otras las cierra `alertasQueYaNoAplican` como copias. */
   const [fila] = [...candidatas].sort(
     (a, b) =>
       Number(b.dedupeKey === dedupeKey) - Number(a.dedupeKey === dedupeKey) ||
       b.lastDetectedAt.getTime() - a.lastDetectedAt.getTime() ||
       a.id.localeCompare(b.id),
   );
+  return fila ?? null;
+}
+
+export function resolverMergeAlerta(d: AlertaDraft, vivas: readonly FilaViva[]): DecisionMerge {
+  const { dedupeKey } = filasQueLeImportan(d);
+  const fila = filaQueSeQueda(d, vivas);
+  if (!fila) return { accion: "crear" };
 
   const base = {
     accion: "fundir" as const,

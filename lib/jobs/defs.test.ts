@@ -14,20 +14,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResultadoSync } from "@/lib/cobranza/odoo/sync";
 
-const { claimDateKey, liberarTurno, sincronizarOdoo, tickMarketingCron } = vi.hoisted(() => ({
-  claimDateKey: vi.fn(),
-  liberarTurno: vi.fn(),
-  sincronizarOdoo: vi.fn(),
-  tickMarketingCron: vi.fn(),
-}));
+const { claimDateKey, liberarTurno, sincronizarOdoo, tickMarketingCron, refrescarAlertasDeCobranza, barrerTokens, barrerIntentos } =
+  vi.hoisted(() => ({
+    claimDateKey: vi.fn(),
+    liberarTurno: vi.fn(),
+    sincronizarOdoo: vi.fn(),
+    tickMarketingCron: vi.fn(),
+    refrescarAlertasDeCobranza: vi.fn(),
+    barrerTokens: vi.fn(),
+    barrerIntentos: vi.fn(),
+  }));
 
 // El turno del día se reclama contra la base: cada test decide si este proceso lo ganó.
 vi.mock("./registry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./registry")>()),
   claimDateKey,
 }));
-vi.mock("@/lib/db/prisma", () => ({ prisma: { cronJobState: { updateMany: liberarTurno } } }));
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    cronJobState: { updateMany: liberarTurno },
+    printJobToken: { deleteMany: barrerTokens },
+    externalVerifyAttempt: { deleteMany: barrerIntentos },
+  },
+}));
 vi.mock("@/lib/cobranza/odoo/sync", () => ({ sincronizarOdoo }));
+vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
 // El resto de lo que importa defs.ts arrastra HubSpot, Anthropic y media app, y acá no corre.
 vi.mock("@/lib/hubspot/cs-signals", () => ({ refreshAllCsSignals: vi.fn() }));
@@ -78,6 +89,47 @@ beforeEach(() => {
   liberarTurno.mockReset().mockResolvedValue({ count: 1 });
   sincronizarOdoo.mockReset();
   tickMarketingCron.mockReset();
+  refrescarAlertasDeCobranza.mockReset();
+  barrerTokens.mockReset().mockResolvedValue({ count: 0 });
+  barrerIntentos.mockReset().mockResolvedValue({ count: 0 });
+});
+
+describe("maintenance-daily", () => {
+  /* Desde el 2026-09-12 refresca también las alertas de cobranza: el corte quincenal estaba apagado
+     y una promesa rota tardaba hasta 15 días en subir. Va colgado de este job porque ya corre en
+     producción sin ninguna variable. */
+  const MEDIANOCHE = new Date("2026-09-13T06:05:00Z"); // 00:05 del 13 en Costa Rica
+
+  it("barre y refresca las alertas de cobranza con la hora del tick", async () => {
+    refrescarAlertasDeCobranza.mockResolvedValue({ hoy: "2026-09-13", creadas: 1, fundidas: 3, suprimidas: 0, cerradas: 17 });
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("maintenance-daily").run(MEDIANOCHE)).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(claimDateKey).toHaveBeenCalledWith("maintenance-daily", "2026-09-13", MEDIANOCHE);
+    expect(barrerTokens).toHaveBeenCalled();
+    expect(refrescarAlertasDeCobranza).toHaveBeenCalledWith(MEDIANOCHE);
+  });
+
+  it("un refresco que falla LANZA y retiene el turno: rojo en Integraciones, sin reintentar cada minuto", async () => {
+    refrescarAlertasDeCobranza.mockRejectedValue(new Error("ECONNRESET"));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("maintenance-daily").run(MEDIANOCHE)).rejects.toThrow("ECONNRESET");
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(liberarTurno).not.toHaveBeenCalled();
+  });
+
+  it("sin el turno del día no barre ni refresca", async () => {
+    claimDateKey.mockResolvedValue(false);
+    await expect(job("maintenance-daily").run(MEDIANOCHE)).resolves.toBe(SIN_TURNO);
+    expect(barrerTokens).not.toHaveBeenCalled();
+    expect(refrescarAlertasDeCobranza).not.toHaveBeenCalled();
+  });
 });
 
 describe("odoo-espejo-daily", () => {

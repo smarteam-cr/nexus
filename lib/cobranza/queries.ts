@@ -674,11 +674,16 @@ export async function loadRiesgo(todayISO: string): Promise<RiesgoPagoItem[]> {
  * cuentaId sustituto `client:{clientId}`: sus alertas CUENTA_SIN_DATOS viajan al
  * snapshot/digest pero NO se persisten como AlertaCobro (no hay FK destino) —
  * upsertAlertas las salta; el panel ya las muestra como fila "sin configurar".
+ *
+ * Con `cuentaId` arma solo esa cuenta (el cierre de alertas al generar cobros o guardar un plan).
+ * ⚠ El universo se sigue leyendo entero a propósito: de ahí sale `tieneProyectoReal`, que decide
+ * la urgencia de CUENTA_SIN_DATOS. Una versión «rápida» que lo adivinara podría subir esa urgencia
+ * en la base, y el merge nunca la vuelve a bajar.
  */
-export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
+export async function buildCarteraEngineInput(opts: { cuentaId?: string } = {}): Promise<CarteraEngineInput> {
   const clientes = await universoCobranza(); // MISMO universo que loadCartera (panel y digest no divergen)
   const cuentas = await prisma.cuentaFinanciera.findMany({
-    where: { clientId: { in: [...clientes.keys()] } },
+    where: { clientId: { in: [...clientes.keys()] }, ...(opts.cuentaId ? { id: opts.cuentaId } : {}) },
     select: {
       id: true,
       clientId: true,
@@ -730,6 +735,7 @@ export async function buildCarteraEngineInput(): Promise<CarteraEngineInput> {
   for (const [clientId, { name, tieneProyectoReal }] of clientes) {
     const cuenta = cuentaByClient.get(clientId);
     if (!cuenta) {
+      if (opts.cuentaId) continue; // se pidió una cuenta: los demás clientes no son parte de la respuesta
       input.cuentas.push({
         cuentaId: `client:${clientId}`,
         clienteNombre: name,

@@ -35,8 +35,11 @@
  *      G4 intocables colisionantes (COBRADO / fechaEmision / MANUAL) → untouched, draft descartado.
  *      G5 plan achicado: PROGRAMADO PLAN/CATCH_UP sin draft → toDelete; COBRADO → untouched.
  *      G6 existente con numCuota null → untouched SIEMPRE (nunca update/delete).
+ *      G10 Kaizen: los catch-up que el plan corrió al futuro vuelven a PLAN (con y sin toUpdate);
+ *          el que sigue en el pasado, el facturado y el que se borra no.
  *   H) splitCatchUp:
  *      H1 estrictamente < hoy → catchUp; == hoy y > hoy → regulares.
+ *      H2 esCatchUpPendiente: misma frontera que H1, y solo PROGRAMADO.
  *   I) semáforos — DOS RELOJES (Tanda B, 2026-07 — facturar vs cobrar):
  *      I1 COBRADO → verde aunque fechaEmisionISO sea null y la fecha esté vencida.
  *      I2 Reloj 1 (sin facturar): en ventana (incl. atrasado) → amarillo; borde exacto
@@ -64,6 +67,7 @@
  *      J7 cobro COBRADO → ninguna alerta.
  *      J8 CATCH_UP PROGRAMADO facturado y vencido → INCONSISTENCIA_CICLO ADEMÁS de COBRO_VENCIDO; no-PROGRAMADO no.
  *      J9 dedupeKey estable: mismo input dos veces → mismas keys.
+ *      J10 catch-up que el plan corrió a hoy o al futuro → sin INCONSISTENCIA_CICLO (Kaizen).
  *   K) diffAlertSets:
  *      K1 nuevas/resueltas/persistentes por dedupeKey.
  *      K2 sin cambios → sinCambios true (también con ambos sets vacíos).
@@ -140,6 +144,8 @@ import {
   materializeCobros,
   reconcileCobros,
   splitCatchUp,
+  catchUpYaNoVencidos,
+  esCatchUpPendiente,
   semaforoCobro,
   semaforoCuenta,
   sumaPlanExpandido,
@@ -666,6 +672,35 @@ test("G9 — el caso Wherex completo: cortar el contrato deja el cronograma en e
   expect(paso2.untouched).toEqual(["c1"]); // la plata ya cobrada, intacta
 });
 
+test("G10 — Kaizen: los catch-up que el plan corrió al futuro vuelven a ser cuotas del plan", () => {
+  /* Datos reales, 2026-09-11. «Generar cobros» creó 7 catch-up de feb a ago; el plan se corrigió y
+     el motor los movió a oct-2026 … abr-2027. Quedaron con origen CATCH_UP y una alerta cada uno
+     pidiendo confirmar cuotas que todavía no tocan. */
+  const HOY_KAIZEN = "2026-09-12";
+  const futuros = ["2026-10-15", "2026-11-15", "2026-12-15", "2027-01-15", "2027-02-15", "2027-03-15", "2027-04-15"];
+  const yaMovidos = futuros.map((fecha, i) =>
+    existente({ id: `k${i + 2}`, numCuota: i + 2, origen: "CATCH_UP", fechaProgramadaISO: fecha, monto: 2000 }),
+  );
+  const cuotaUno = existente({ id: "k1", numCuota: 1, origen: "IMPORTACION", fechaProgramadaISO: "2026-09-15", monto: 2000 });
+  const sinCambios: ReturnType<typeof reconcileCobros> = { toCreate: [], toUpdate: [], toDelete: [], untouched: [] };
+
+  // Hoy: la reconciliación ya los movió el 11-sep, así que no trae cambios; la fecha guardada alcanza.
+  expect(catchUpYaNoVencidos([cuotaUno, ...yaMovidos], sinCambios, HOY_KAIZEN)).toEqual(yaMovidos.map((c) => c.id));
+
+  // El 11-sep: la reconciliación los está moviendo en esta misma pasada.
+  const enElPasado = yaMovidos.map((c, i) => ({ ...c, fechaProgramadaISO: `2026-0${i + 2}-15` }));
+  const moviendo = { ...sinCambios, toUpdate: yaMovidos.map((c) => ({ id: c.id, fechaProgramadaISO: c.fechaProgramadaISO, monto: 2000, periodo: c.fechaProgramadaISO.slice(0, 7) })) };
+  expect(catchUpYaNoVencidos(enElPasado, moviendo, HOY_KAIZEN)).toHaveLength(7);
+
+  // ⛔ No vuelven a PLAN: el que sigue en el pasado, el que ya se facturó y el que se borra.
+  const sigueEnElPasado = existente({ id: "pasado", origen: "CATCH_UP", fechaProgramadaISO: "2026-08-15" });
+  const facturado = existente({ id: "facturado", origen: "CATCH_UP", fechaProgramadaISO: "2026-10-15", fechaEmision: "2026-09-10", estado: "POR_COBRAR" });
+  const borrado = existente({ id: "borrado", origen: "CATCH_UP", fechaProgramadaISO: "2026-10-15" });
+  expect(
+    catchUpYaNoVencidos([sigueEnElPasado, facturado, borrado], { ...sinCambios, toDelete: ["borrado"] }, HOY_KAIZEN),
+  ).toEqual([]);
+});
+
 // ── H) splitCatchUp ──────────────────────────────────────────────────────────────
 
 test("H1 — estrictamente < hoy → catchUp; == hoy y > hoy → regulares", () => {
@@ -675,6 +710,15 @@ test("H1 — estrictamente < hoy → catchUp; == hoy y > hoy → regulares", () 
   const { regulares, catchUp } = splitCatchUp([ayer, hoyMismo, maniana], HOY);
   expect(catchUp).toEqual([ayer]);
   expect(regulares).toEqual([hoyMismo, maniana]);
+});
+
+test("H2 — esCatchUpPendiente: la misma frontera que splitCatchUp, y solo mientras nadie lo tocó", () => {
+  const catchUp = (fechaProgramadaISO: string, estado = "PROGRAMADO") => ({ origen: "CATCH_UP", estado, fechaProgramadaISO });
+  expect(esCatchUpPendiente(catchUp("2026-07-09"), HOY)).toBe(true);
+  expect(esCatchUpPendiente(catchUp("2026-07-10"), HOY)).toBe(false); // hoy ya no es un período pasado
+  expect(esCatchUpPendiente(catchUp("2026-07-11"), HOY)).toBe(false);
+  expect(esCatchUpPendiente(catchUp("2026-07-09", "POR_COBRAR"), HOY)).toBe(false);
+  expect(esCatchUpPendiente({ origen: "PLAN", estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-09" }, HOY)).toBe(false);
 });
 
 // ── I) Semáforos — dos relojes (Tanda B) ────────────────────────────────────────
@@ -1037,6 +1081,23 @@ test("J9 — dedupeKey estable: el mismo input dos veces produce exactamente las
   expect(primera.length).toBeGreaterThan(0);
   expect(keysOf(segunda)).toEqual(keysOf(primera));
   expect(new Set(keysOf(primera)).size).toBe(primera.length); // sin keys duplicadas
+});
+
+test("J10 — un catch-up que el plan corrió a hoy o al futuro ya no pide confirmación (Kaizen)", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        servicios: [servicioCartera()],
+        cobros: [
+          cobroCartera({ cobroId: "ayer", origen: "CATCH_UP", estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-09", fechaEmisionISO: null }),
+          cobroCartera({ cobroId: "hoy", origen: "CATCH_UP", estado: "PROGRAMADO", fechaProgramadaISO: "2026-07-10", fechaEmisionISO: null }),
+          cobroCartera({ cobroId: "octubre", origen: "CATCH_UP", estado: "PROGRAMADO", fechaProgramadaISO: "2026-10-15", fechaEmisionISO: null }),
+        ],
+      }),
+    ],
+  };
+  const inconsistencias = computeAlertSet(cartera, { todayISO: HOY }).filter((a) => a.tipo === "INCONSISTENCIA_CICLO");
+  expect(inconsistencias.map((a) => a.cobroId)).toEqual(["ayer"]);
 });
 
 // ── K) diffAlertSets ─────────────────────────────────────────────────────────────

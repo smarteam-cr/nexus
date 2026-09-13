@@ -304,7 +304,7 @@ function funcionQueContiene(src: string, indice: number): string | null {
 }
 
 describe("registrar una promesa ya no esconde alertas", () => {
-  it("⛔ el chokepoint del cobro no toca las alertas", () => {
+  it("⛔ el chokepoint del cobro no toca las alertas por la promesa: solo cierra las de un cobro que se confirma", () => {
     const src = leer("lib/cobranza/mutations.ts");
     const inicio = src.indexOf("export async function cambiarEstadoCobroTx(");
     const fin = src.indexOf("export async function cambiarEstadoCobro(");
@@ -313,6 +313,10 @@ describe("registrar una promesa ya no esconde alertas", () => {
     const cuerpo = src.slice(inicio, fin);
     expect(cuerpo).not.toMatch(/alertaCobro/);
     expect(cuerpo).not.toMatch(/posponerHasta/);
+    /* Desde el 2026-09-12 confirmar COBRADO cierra las alertas de ese cobro: lo que las abrió ya no
+       pasa. Es la única vez que el chokepoint las nombra; la condición la vigila
+       lib/cobranza/alertas-cierre.test.ts. */
+    expect([...cuerpo.matchAll(/cerrarAlertasDeCobros\(/g)]).toHaveLength(1);
   });
 
   it("⛔ `posponerHasta` solo lo escriben el «Posponer» manual (`patchAlerta`) y la alerta que sube de situación (`upsertAlertas`)", () => {

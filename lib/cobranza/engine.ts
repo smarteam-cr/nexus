@@ -493,6 +493,50 @@ export function splitCatchUp(
   return { regulares, catchUp };
 }
 
+/**
+ * ¿Este cobro sigue siendo un catch-up que alguien tiene que confirmar? Un catch-up es un período
+ * YA pasado (misma regla que `splitCatchUp`: fecha estrictamente anterior a hoy) que todavía nadie
+ * tocó. Lo usan la alerta INCONSISTENCIA_CICLO y `catchUpYaNoVencidos`: una sola regla.
+ *
+ * ⚠ La fecha entra en la regla porque el plan puede correrla. Kaizen, 2026-09-11: «Generar cobros»
+ * creó 7 catch-up (feb a ago), el plan se corrigió minutos después y el motor los movió a oct-2026
+ * … abr-2027. Quedaron con origen CATCH_UP y 7 alertas pidiendo confirmar cuotas que todavía no
+ * tocan. Una fecha pasada no se vuelve futura sola, así que «ya no está en el pasado» solo puede
+ * significar que el plan la movió.
+ */
+export function esCatchUpPendiente(
+  c: { origen: string; estado: string; fechaProgramadaISO: string },
+  todayISO: string,
+): boolean {
+  return c.origen === "CATCH_UP" && c.estado === "PROGRAMADO" && diffDays(c.fechaProgramadaISO, todayISO) > 0;
+}
+
+/**
+ * Los catch-up que, con la reconciliación aplicada, dejaron de estar en el pasado: el plan los
+ * corrió al futuro y vuelven a ser cuotas del plan (origen PLAN). Sin esto el cronograma les
+ * seguía poniendo la etiqueta «catch-up» a cuotas de 2027.
+ *
+ * Solo los que el motor todavía maneja (`esIntocable` falso) y que la reconciliación no borra: uno
+ * facturado o cobrado ya lo tocó una persona y conserva su historia.
+ */
+export function catchUpYaNoVencidos(
+  existentes: readonly CobroExistente[],
+  rec: ReconcileResult,
+  todayISO: string,
+): string[] {
+  const fechaNueva = new Map(rec.toUpdate.map((u) => [u.id, u.fechaProgramadaISO]));
+  const borrados = new Set(rec.toDelete);
+  return existentes
+    .filter(
+      (c) =>
+        c.origen === "CATCH_UP" &&
+        !esIntocable(c) &&
+        !borrados.has(c.id) &&
+        !esCatchUpPendiente({ ...c, fechaProgramadaISO: fechaNueva.get(c.id) ?? c.fechaProgramadaISO }, todayISO),
+    )
+    .map((c) => c.id);
+}
+
 // ── 6. Semáforos ────────────────────────────────────────────────────────────────
 
 /**
@@ -777,7 +821,8 @@ export function computeAlertSet(
         // dentro del crédito y sin promesa rota: silencio — estado sano, no debe generar ruido
       }
 
-      if (c.origen === "CATCH_UP" && c.estado === "PROGRAMADO") {
+      // Solo mientras sigue en el pasado: un catch-up que el plan corrió al futuro no pide nada.
+      if (esCatchUpPendiente(c, opts.todayISO)) {
         out.push({
           dedupeKey: `INCONSISTENCIA_CICLO:${cuenta.cuentaId}:${c.cobroId}`,
           tipo: "INCONSISTENCIA_CICLO",

@@ -21,7 +21,7 @@ import {
   type MetricasCartera,
 } from "./engine";
 import { buildCarteraEngineInput } from "./queries";
-import { generateCobros, upsertAlertas } from "./mutations";
+import { cerrarAlertasQueYaNoAplican, generateCobros, upsertAlertas } from "./mutations";
 import { proximoDiaDeCorteISO } from "./antiguedad";
 import { inicioDeVentanaISO } from "./series-cortes";
 
@@ -57,10 +57,13 @@ export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise
     }
   }
 
-  // 2. Computar el set de alertas de toda la cartera y persistirlo (dedup).
+  // 2. Computar el set de alertas de toda la cartera y persistirlo (dedup). Y cerrar las vivas
+  //    que ya no salen: sin esto el corte solo sumaba, y el feed guardaba alertas de cobros
+  //    cobrados hace meses (lib/cobranza/alertas-cierre.ts).
   const cartera = await buildCarteraEngineInput();
   const alertSet = computeAlertSet(cartera, { todayISO });
   await upsertAlertas(alertSet);
+  await cerrarAlertasQueYaNoAplican(cartera, alertSet);
 
   // 3. Diff contra el snapshot anterior (por dedupeKey).
   const anterior = await prisma.snapshotCartera.findFirst({ orderBy: { capturedAt: "desc" } });

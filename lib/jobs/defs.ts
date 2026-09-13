@@ -112,8 +112,15 @@ const csWatchdogDebounce: JobDef = {
 };
 
 // Mantenimiento diario (NO gated por CS: es limpieza de la app, no opt-in).
-// Hoy: barre PrintJobToken expirados — el export PDF crea un token de 60s por
+// Barre PrintJobToken expirados — el export PDF crea un token de 60s por
 // descarga y sin sweeper la tabla acumulaba filas muertas indefinidamente.
+//
+// Y refresca las alertas de cobranza (2026-09-12, lib/cobranza/alertas-refresco.ts): abre los
+// vencidos y las promesas incumplidas, pone al día las filas que ya están en el feed y cierra lo
+// que dejó de pasar. Va colgado de ESTE job porque ya corre en producción todos los días sin
+// ninguna variable: el corte quincenal está apagado desde el 24-jul, y aun encendido una promesa
+// rota tardaba hasta 15 días en subir. Corre pasada la medianoche de Costa Rica, así que la alerta
+// de una promesa de ayer ya está cuando Alex abre el feed. ⚠ No guarda corte.
 const maintenanceDaily: JobDef = {
   key: "maintenance-daily",
   shouldRun: () => true, // una vez al día, a cualquier hora (claimDateKey adentro)
@@ -129,6 +136,13 @@ const maintenanceDaily: JobDef = {
     ]);
     console.log(
       `[jobs/maintenance] ${dateKey} — ${tokens.count} PrintJobToken expirados, ${attempts.count} ExternalVerifyAttempt viejos barridos`,
+    );
+    /* ⚠ Si falla, LANZA y el turno del día se queda: rojo en Integraciones y Sentry, sin martillar
+       la base cada minuto. Lo de arriba ya quedó hecho, y repetirlo mañana no le hace daño. */
+    const { refrescarAlertasDeCobranza } = await import("@/lib/cobranza/alertas-refresco");
+    const r = await refrescarAlertasDeCobranza(now);
+    console.log(
+      `[jobs/maintenance] ${dateKey} — alertas de cobranza al ${r.hoy}: ${r.creadas} abiertas, ${r.fundidas} puestas al día, ${r.cerradas} cerradas${r.suprimidas ? `, ${r.suprimidas} suprimidas` : ""}`,
     );
   },
 };

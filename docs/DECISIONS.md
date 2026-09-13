@@ -265,6 +265,19 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   Alex), y lo pospuesto como trabajo de Smarteam no esconde la deuda del cliente. Sin el segundo
   caso, el vencido de Ecoquintas del 19-sep heredaba el auto-posponer viejo de su promesa y no se
   veía hasta el 30-sep. Cualquier otro cambio respeta lo que la persona hizo con la fila.
+- **Las alertas se refrescan cada noche y se cierran solas (2026-09-12)**: `maintenance-daily` corre
+  `computeAlertSet` sobre la cartera entera, abre solo la deuda del cliente (COBRO_VENCIDO y
+  PROMESA_INCUMPLIDA), pone al día las filas que ya están en el feed y cierra las que el motor ya no
+  produce. Lo mismo, por cuenta, al generar cobros, al soltar facturas y al guardar un plan; y
+  confirmar un cobro cierra sus alertas en la misma transacción. Reglas en
+  `lib/cobranza/alertas-cierre.ts`: solo se miden los tipos que produce el motor (las de Odoo no) y
+  solo en cuentas evaluadas; de dos filas vivas sobre lo mismo se queda la que elige el merge. ⚠ Un
+  cierre del sistema se firma `sistema` y NO suprime la reaparición de 7 días: esa supresión es para
+  no re-abrir lo que resolvió una persona, no para callar una situación que vuelve. ⛔ No guarda
+  corte: la foto de la quincena la sigue guardando el corte. Hasta ese día el feed era una foto del
+  24-jul (corte apagado): 9 alertas vivas sobre cobros ya cobrados y 7 de Kaizen pidiendo confirmar
+  catch-ups que el plan había corrido al futuro. Un catch-up con fecha de hoy en adelante ya no es
+  catch-up: no alerta, y al regenerar vuelve a origen PLAN (`esCatchUpPendiente`).
 - **Riesgo de pago V1 = regla conductual simple, sin ML**: por cuenta, comportamiento = promedio
   de (fechaCobro − fechaProgramada) de sus COBRADOs (monedas juntas — es conducta del cliente);
   se bandera todo cobro pendiente con `diasAtraso > (promedio ?? 0) + RIESGO_UMBRAL_DIAS (15)`.

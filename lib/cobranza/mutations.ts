@@ -11,11 +11,14 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import {
+  catchUpYaNoVencidos,
+  computeAlertSet,
   materializeCobros,
   reconcileCobros,
   splitCatchUp,
   sumaPlanExpandido,
   type AlertaDraft,
+  type CarteraEngineInput,
   type CobroDraft,
   type CobroExistente,
   type ReconcileResult,
@@ -26,6 +29,13 @@ import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
+import {
+  alertasQueYaNoAplican,
+  cuentasEvaluadas,
+  mensajeCobroConfirmado,
+  RESUELTA_POR_SISTEMA,
+  TIPOS_DEL_MOTOR,
+} from "./alertas-cierre";
 import type { z } from "zod";
 import type {
   cuentaCreateSchema,
@@ -61,7 +71,7 @@ import type {
 } from "./schema";
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
-import { loadComisionesVendedor } from "./queries";
+import { buildCarteraEngineInput, loadComisionesVendedor } from "./queries";
 import { ESTADO_COBRO_LABEL, normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
@@ -186,8 +196,11 @@ export async function updateServicio(servicioId: string, data: z.infer<typeof se
  * para no resucitar lo mismo en el corte siguiente, y una alerta que estuvo abierta 40 días y
  * la resolvió alguien con nombre es la traza del trabajo de cobranza.
  *
- * ⛔ Y SOLO las de cobros que mueren. Cerrar la de un cobro que sobrevive se tragaría en
- * silencio una alerta legítima nueva sobre ese mismo cobro durante una semana entera.
+ * ⛔ Y SOLO las de cobros que mueren… o que se acaban de confirmar como cobrados
+ * (`cambiarEstadoCobroTx`, 2026-09-12): un cobro COBRADO no tiene ninguna alerta que el motor
+ * vuelva a producir. Cerrar la de un cobro que sigue vivo con otra firma se tragaba en silencio una
+ * alerta legítima nueva durante una semana entera; por eso la confirmación cierra con
+ * `RESUELTA_POR_SISTEMA`, que la supresión de 7 días no cuenta (lib/cobranza/alertas-cierre.ts).
  */
 export async function cerrarAlertasDeCobros(
   db: ClienteDb,
@@ -201,6 +214,60 @@ export async function cerrarAlertasDeCobros(
     data: { estado: "RESUELTA", resueltaEn: new Date(), resueltaPor: byEmail, mensaje: motivo },
   });
   return r.count;
+}
+
+/**
+ * Cierra las alertas vivas que el motor ya no produce: la situación que las abrió dejó de pasar, o
+ * son copias de otra fila viva. Qué se cierra lo decide `alertasQueYaNoAplican`
+ * (lib/cobranza/alertas-cierre.ts); acá solo se escribe.
+ *
+ * ⚠ `set` es el set COMPLETO de `computeAlertSet` sobre `cartera`. Lo llaman el corte, el refresco
+ * de cada noche y `cerrarAlertasPorClave`.
+ *
+ * Fila por fila y solo si sigue viva: si alguien la resolvió a mano entre la lectura y la
+ * escritura, queda como la dejó esa persona.
+ */
+export async function cerrarAlertasQueYaNoAplican(
+  cartera: CarteraEngineInput,
+  set: readonly AlertaDraft[],
+): Promise<number> {
+  const evaluadas = cuentasEvaluadas(cartera);
+  if (evaluadas.size === 0) return 0;
+  const vivas = await prisma.alertaCobro.findMany({
+    where: { estado: { in: ["ABIERTA", "VISTA"] }, cuentaId: { in: [...evaluadas] }, tipo: { in: [...TIPOS_DEL_MOTOR] } },
+    select: { id: true, dedupeKey: true, tipo: true, urgencia: true, cobroId: true, lastDetectedAt: true, cuentaId: true, mensaje: true },
+  });
+  let cerradas = 0;
+  for (const c of alertasQueYaNoAplican(vivas, set, evaluadas)) {
+    const r = await prisma.alertaCobro.updateMany({
+      where: { id: c.id, estado: { in: ["ABIERTA", "VISTA"] } },
+      data: { estado: "RESUELTA", resueltaEn: new Date(), resueltaPor: RESUELTA_POR_SISTEMA, mensaje: c.mensaje },
+    });
+    cerradas += r.count;
+  }
+  return cerradas;
+}
+
+/**
+ * Lo mismo para UNA cuenta, apenas cambia algo que puede haber hecho desaparecer una alerta:
+ * generar cobros, soltar facturas o guardar un plan. Es lo que cierra la INCONSISTENCIA_CICLO de un
+ * catch-up que ya se facturó o que el plan corrió al futuro, y el «plan descuadrado» de un plan que
+ * ya cuadra, sin esperar a la noche.
+ *
+ * ⚠ No frena lo que la persona pidió: corre después de que su cambio ya quedó guardado, y si falla
+ * solo avisa en el log. Un 500 acá le diría que no se guardó algo que sí se guardó, y el refresco de
+ * la noche hace el mismo cierre (y ese sí se pone en rojo si falla).
+ */
+export async function cerrarAlertasPorClave(cuentaId: string, todayISO: string): Promise<number> {
+  try {
+    const cartera = await buildCarteraEngineInput({ cuentaId });
+    return await cerrarAlertasQueYaNoAplican(cartera, computeAlertSet(cartera, { todayISO }));
+  } catch (e) {
+    console.error(
+      `[cobranza] no se pudieron cerrar las alertas que ya no aplican de la cuenta ${cuentaId} (las cierra el refresco de la noche): ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return 0;
+  }
 }
 
 export async function deleteServicio(servicioId: string, byEmail = "sistema") {
@@ -241,7 +308,7 @@ export async function setPlanActivo(servicioId: string, data: z.infer<typeof pla
       );
     }
   }
-  return prisma.$transaction(async (tx) => {
+  const guardado = await prisma.$transaction(async (tx) => {
     await tx.planDePago.updateMany({ where: { servicioId, activo: true }, data: { activo: false } });
     const plan = await tx.planDePago.create({
       data: {
@@ -263,8 +330,13 @@ export async function setPlanActivo(servicioId: string, data: z.infer<typeof pla
         })),
       });
     }
-    return plan;
+    const { cuentaId } = await tx.servicioContratado.findUniqueOrThrow({ where: { id: servicioId }, select: { cuentaId: true } });
+    return { plan, cuentaId };
   });
+  /* Un plan que ahora cuadra ya no es «plan descuadrado». Después de la transacción: el plan ya
+     quedó guardado pase lo que pase con el cierre. */
+  await cerrarAlertasPorClave(guardado.cuentaId, crDateParts(new Date()).dateKey);
+  return guardado.plan;
 }
 
 // ── CHOKEPOINT: materialización de cobros ───────────────────────────────────────
@@ -461,6 +533,9 @@ export async function generateCobros(
 ): Promise<GenerateResult> {
   const p = await planificarCobros(servicioId, todayISO);
   const { servicio, planId, rec, regulares, catchUp } = p;
+  /* Los catch-up que el plan ya corrió al futuro (Kaizen, 2026-09-11) vuelven a ser cuotas del plan.
+     Sin esto quedaban con la etiqueta «catch-up» y su alerta pidiendo confirmar cuotas de 2027. */
+  const yaNoSonCatchUp = catchUpYaNoVencidos(p.existentes, rec, todayISO);
 
   await prisma.$transaction(async (tx) => {
     const mkData = (d: (typeof regulares)[number], origen: "PLAN" | "CATCH_UP") => ({
@@ -483,6 +558,13 @@ export async function generateCobros(
         data: { fechaProgramada: dayUTC(u.fechaProgramadaISO), monto: u.monto, periodo: u.periodo },
       });
     }
+    if (yaNoSonCatchUp.length) {
+      // Solo si nadie lo tocó entre la lectura y la transacción: uno facturado conserva su historia.
+      await tx.cobro.updateMany({
+        where: { id: { in: yaNoSonCatchUp }, origen: "CATCH_UP", estado: "PROGRAMADO", fechaEmision: null },
+        data: { origen: "PLAN" },
+      });
+    }
     if (rec.toDelete.length) {
       /* Antes del delete, por la misma razón: después ya no hay a quién cerrarle la alerta. */
       await cerrarAlertasDeCobros(
@@ -494,18 +576,25 @@ export async function generateCobros(
       await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
     }
 
-    if (regulares.length || catchUp.length || rec.toUpdate.length || rec.toDelete.length) {
+    if (regulares.length || catchUp.length || rec.toUpdate.length || rec.toDelete.length || yaNoSonCatchUp.length) {
       await tx.bitacoraCobro.create({
         data: {
           cuentaId: servicio.cuentaId,
           tipo: "ACTUALIZACION_IA",
-          contenido: `Materialización de cobros por ${byEmail}: ${regulares.length + catchUp.length} nuevos (${catchUp.length} catch-up), ${rec.toUpdate.length} ajustados, ${rec.toDelete.length} eliminados.`,
+          contenido:
+            `Materialización de cobros por ${byEmail}: ${regulares.length + catchUp.length} nuevos (${catchUp.length} catch-up), ${rec.toUpdate.length} ajustados, ${rec.toDelete.length} eliminados` +
+            (yaNoSonCatchUp.length
+              ? `, ${yaNoSonCatchUp.length} catch-up que el plan corrió al futuro vuelven a ser cuotas del plan.`
+              : "."),
         },
       });
     }
   });
 
   if (catchUp.length > 0) await alertarCatchUp(servicioId, servicio.cuentaId);
+  /* Cierra lo que dejó de pasar en la cuenta: el catch-up que ya no lo es, el cobro borrado por
+     otra vía, el plan que ya cuadra. Después de `alertarCatchUp`, que abre las de los catch-up nuevos. */
+  await cerrarAlertasPorClave(servicio.cuentaId, todayISO);
 
   return {
     created: regulares.length + catchUp.length,
@@ -675,6 +764,14 @@ export async function cambiarEstadoCobroTx(
         usuarioEmail: byEmail,
       },
     });
+  }
+
+  /* Un cobro confirmado no tiene nada que alertar: se cierran sus alertas con el mismo `db` que la
+     confirmación, o quedan las dos cosas o ninguna. Hasta el 2026-09-12 se quedaban abiertas: 9
+     alertas vivas hablaban de cobros ya cobrados. Firmado por el sistema, así la supresión de 7 días
+     no las cuenta si el cobro vuelve a salir de Cobrado (lib/cobranza/alertas-cierre.ts). */
+  if (patch.estado === "COBRADO" && cobro.estado !== "COBRADO") {
+    await cerrarAlertasDeCobros(db, [cobroId], mensajeCobroConfirmado(byEmail), RESUELTA_POR_SISTEMA);
   }
 
   /**
@@ -922,6 +1019,8 @@ export async function liberarYRegenerar(
     }));
     const rec = reconcileCobros(previo.drafts, existentes);
     const { regulares, catchUp } = splitCatchUp(rec.toCreate, todayISO);
+    // Misma regla que `generateCobros`: el catch-up que el plan corrió al futuro vuelve a PLAN.
+    const yaNoSonCatchUp = catchUpYaNoVencidos(existentes, rec, todayISO);
 
     const mkData = (d: CobroDraft, origen: "PLAN" | "CATCH_UP") => ({
       servicioId,
@@ -941,6 +1040,12 @@ export async function liberarYRegenerar(
       await tx.cobro.update({
         where: { id: u.id },
         data: { fechaProgramada: dayUTC(u.fechaProgramadaISO), monto: u.monto, periodo: u.periodo },
+      });
+    }
+    if (yaNoSonCatchUp.length) {
+      await tx.cobro.updateMany({
+        where: { id: { in: yaNoSonCatchUp }, origen: "CATCH_UP", estado: "PROGRAMADO", fechaEmision: null },
+        data: { origen: "PLAN" },
       });
     }
     if (rec.toDelete.length) {
@@ -1001,8 +1106,10 @@ export async function liberarYRegenerar(
      deduplica leyendo lo recién creado. Faltaba, y los cobros de períodos vencidos que este
      camino crea nacían sin nadie que los tuviera que confirmar. */
   if (res.catchUp > 0) await alertarCatchUp(servicioId, previo.servicio.cuentaId);
+  // Lo que dejó de pasar en la cuenta con el acuerdo nuevo se cierra ya, no a la noche.
+  const cerradasPorClave = await cerrarAlertasPorClave(previo.servicio.cuentaId, todayISO);
 
-  return { ...res, liberados: decisiones.length, alertasCerradas, solicitudes };
+  return { ...res, liberados: decisiones.length, alertasCerradas: alertasCerradas + cerradasPorClave, solicitudes };
 }
 
 // ── Pago manual: un cobro que no salió de un plan ───────────────────────────────
@@ -1162,6 +1269,10 @@ export async function upsertAlertas(drafts: AlertaDraft[]): Promise<{ created: n
         dedupeKey: d.dedupeKey,
         estado: { in: ["RESUELTA", "DESCARTADA"] },
         updatedAt: { gte: hace7d },
+        /* ⚠ Solo lo que cerró una persona. Lo que cerró el sistema (la situación desapareció, el
+           cobro se confirmó) y vuelve a pasar es una alerta nueva: un cobro sacado de Cobrado por
+           error no puede pasar una semana sin su vencido (lib/cobranza/alertas-cierre.ts, regla 5). */
+        OR: [{ resueltaPor: null }, { resueltaPor: { not: RESUELTA_POR_SISTEMA } }],
       },
     });
     if (cerradaReciente) {
