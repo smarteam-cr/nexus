@@ -38,6 +38,7 @@ const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   estado: "POR_COBRAR",
   fechaEmision: "2026-07-15",
   numeroFactura: null,
+  plataformaFactura: null,
   ...p,
 });
 
@@ -869,6 +870,15 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
 
   it("⛔ si el espejo nunca corrió bien, no acusa nada", () => {
     expect(acusa([cobro({ cuentaId: "odoo" })], { ultimaCorridaOk: null })).toBeUndefined();
+  });
+
+  it("⭐ etapa 12: la plataforma anotada en la factura manda sobre la de la cuenta", () => {
+    /* Una factura de QuickBooks en una cuenta que factura por Odoo no la va a ver nunca el espejo; una de Odoo
+       en una cuenta de Mercury, sí. */
+    const emparejadas = { cuentasVinculadas: new Set<string>(["odoo", "merc"]) };
+    expect(acusa([cobro({ cuentaId: "odoo", plataformaFactura: "OTRA" })], emparejadas)).toBeUndefined();
+    expect(acusa([cobro({ cuentaId: "merc", plataformaFactura: "ODOO" })], emparejadas)).toBeDefined();
+    expect(acusa([cobro({ cuentaId: "odoo", plataformaFactura: null })], emparejadas), "sin anotar, manda la cuenta").toBeDefined();
   });
 
   it("una factura de 2021 no entra a «factura sin cobro»: es de antes del primer cobro de la cuenta", () => {

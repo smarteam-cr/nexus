@@ -29,6 +29,7 @@ import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
+import { resolverSociedad, type DecisionDeSociedad } from "./sociedades";
 import { mensajeReferenciaYaEsCobro, normalizarReferenciaExterna } from "./ingresos-no-venta";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
@@ -624,6 +625,9 @@ export async function generateCobros(
  *  - Marcar facturado (fechaEmision de null a fecha) exige el número de la factura o la marca
  *    «no tengo el número» con motivo; un número que ya está en otra cuenta da 409; revertir la
  *    factura limpia el número y su autoría (lib/cobranza/numero-factura.ts).
+ *  - A quién y dónde se facturó (etapa 12) nunca se infiere: la sociedad tiene que ser de la cuenta,
+ *    y en una cuenta que factura con dos sociedades por esa plataforma hay que decir cuál. Revertir
+ *    la factura las limpia (lib/cobranza/sociedades.ts `resolverSociedad`).
  *  - fechaProgramada/monto SOLO editables mientras el cobro está PROGRAMADO (409).
  */
 /**
@@ -717,6 +721,54 @@ export async function cambiarEstadoCobroTx(
     }
   }
 
+  /* A quién y dónde se facturó (etapa 12): la regla vive en sociedades.ts y se decide ANTES de escribir.
+     Las sociedades se leen solo si el pedido las toca, o si revierte una factura que las tenía anotadas. */
+  let sociedad: DecisionDeSociedad = { tipo: "sin-cambios" };
+  const tocaSociedad =
+    patch.plataformaFactura !== undefined ||
+    patch.sociedadFacturadaId !== undefined ||
+    /* `!!` y no `!== null`: un cobro leído sin estas columnas las trae undefined, y eso no es «tenía sociedad». */
+    (patch.fechaEmision === null && (!!cobro.plataformaFactura || !!cobro.sociedadFacturadaId));
+  if (tocaSociedad) {
+    /* Las de la cuenta, y la que el cobro tenía aunque ya no sea de la cuenta: hay que poder nombrarla. */
+    const dondeBuscar: Prisma.OdooPartnerVinculoWhereInput[] = [{ cuentaId: cobro.cuentaId }];
+    if (cobro.sociedadFacturadaId) dondeBuscar.push({ id: cobro.sociedadFacturadaId });
+    const sociedades = await db.odooPartnerVinculo.findMany({
+      where: { OR: dondeBuscar },
+      select: { id: true, plataforma: true, odooPartnerNombre: true, odooPartnerId: true, cuentaId: true },
+    });
+    /* El documento del espejo con el número del cobro, solo cuando hay con qué compararlo: una sociedad con
+       ficha de Odoo. Un número de otro cliente de Odoo no se anota a esta sociedad. */
+    const elegida = patch.sociedadFacturadaId ? sociedades.find((s) => s.id === patch.sociedadFacturadaId) : undefined;
+    const numeroFinal = numero.tipo === "escribir" ? numero.numeroFactura : cobro.numeroFactura;
+    const documento =
+      elegida && elegida.odooPartnerId !== null && numeroFinal
+        ? await db.facturaOdoo.findFirst({
+            where: { numero: numeroFinal, estadoEspejo: "VIGENTE" },
+            select: { numero: true, odooPartnerId: true, odooPartnerNombre: true },
+          })
+        : null;
+    sociedad = resolverSociedad(
+      {
+        cuentaId: cobro.cuentaId,
+        fechaEmisionISO: isoDay(cobro.fechaEmision),
+        plataformaFactura: cobro.plataformaFactura,
+        sociedadFacturadaId: cobro.sociedadFacturadaId,
+      },
+      { fechaEmisionISO: patch.fechaEmision, plataformaFactura: patch.plataformaFactura, sociedadFacturadaId: patch.sociedadFacturadaId },
+      sociedades.map((s) => ({
+        id: s.id,
+        plataforma: s.plataforma,
+        nombre: s.odooPartnerNombre,
+        odooPartnerId: s.odooPartnerId,
+        cuentaId: s.cuentaId,
+      })),
+      byEmail,
+      documento,
+    );
+    if (sociedad.tipo === "rechazo") throw new CobranzaError(sociedad.mensaje, sociedad.status);
+  }
+
   const data: Prisma.CobroUpdateInput = {};
   if (patch.fechaProgramada !== undefined) data.fechaProgramada = dayUTC(patch.fechaProgramada);
   if (patch.monto !== undefined) data.monto = patch.monto;
@@ -751,6 +803,12 @@ export async function cambiarEstadoCobroTx(
     data.sinNumeroFacturaMotivo = numero.sinNumeroFacturaMotivo;
     data.numeroFacturaPor = numero.firmar ? byEmail : null;
     data.numeroFacturaEn = numero.firmar ? new Date() : null;
+  }
+  if (sociedad.tipo === "escribir") {
+    data.plataformaFactura = sociedad.plataformaFactura;
+    data.sociedadFacturada = sociedad.sociedadFacturadaId
+      ? { connect: { id: sociedad.sociedadFacturadaId } }
+      : { disconnect: true };
   }
   // ReconciliationPort v1: referencia externa opcional (número de depósito o transferencia).
   if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
@@ -832,6 +890,19 @@ export async function cambiarEstadoCobroTx(
         cobroId,
         tipo: "NOTA",
         contenido: numero.bitacora,
+        usuarioEmail: byEmail,
+      },
+    });
+  }
+  /* Y a quién se facturó, con el mismo `db`: la elección de una sociedad sin rastro de quién la hizo
+     es lo que esta regla existe para no permitir. */
+  if (sociedad.tipo === "escribir") {
+    await db.bitacoraCobro.create({
+      data: {
+        cuentaId: cobro.cuentaId,
+        cobroId,
+        tipo: "NOTA",
+        contenido: sociedad.bitacora,
         usuarioEmail: byEmail,
       },
     });

@@ -21,7 +21,7 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { marcaPromesa, semaforoCobro } from "@/lib/cobranza/engine";
 import type { CobroDTO } from "@/lib/cobranza";
 import { COBRANZA_ESTADOS_COBRO, ESTADO_COBRO_LABEL } from "@/lib/cobranza/schema";
-import { fmtFecha, fmtMonto, PROMESA_CHIP, SEMAFORO_META } from "./format";
+import { fmtFecha, fmtMonto, PROMESA_CHIP, SEMAFORO_META, VIA_COBRO_LABEL } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
@@ -313,6 +313,16 @@ export default function CronogramaCobros({
                     </>
                   ) : c.sinNumeroFacturaMotivo ? (
                     <span className="text-fg-muted"> · sin número: {c.sinNumeroFacturaMotivo}</span>
+                  ) : null}
+                  {/* Etapa 12: a quién y dónde se facturó, si quien la marcó lo dijo. */}
+                  {c.sociedadFacturadaNombre ? (
+                    <span className="text-fg-muted">
+                      {" "}
+                      · a «{c.sociedadFacturadaNombre}»
+                      {c.plataformaFactura ? ` por ${VIA_COBRO_LABEL[c.plataformaFactura] ?? c.plataformaFactura}` : ""}
+                    </span>
+                  ) : c.plataformaFactura ? (
+                    <span className="text-fg-muted"> · por {VIA_COBRO_LABEL[c.plataformaFactura] ?? c.plataformaFactura}</span>
                   ) : null}
                   {puedeEditar && !faltaNumeroDeFactura(c) && (
                     <button

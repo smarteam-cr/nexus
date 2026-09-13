@@ -12,7 +12,7 @@ import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35,
+  INV31, INV32, INV33, INV34, INV35, INV36,
   type Invariante,
 } from "@/lib/invariantes";
 
@@ -746,6 +746,9 @@ async function main(): Promise<number> {
 
   // ── Inv 35 → lib/invariantes/cobranza.ts (finanzas, 2026-09-12: una factura no es cobro y plata que no es venta a la vez) ──
   violations += await reportar(INV35, prisma);
+
+  // ── Inv 36 → lib/invariantes/cobranza.ts (cobranza, 2026-09-13: a quién se facturó es una sociedad de la cuenta) ──
+  violations += await reportar(INV36, prisma);
 
   return violations;
 }

@@ -16,6 +16,11 @@
  * Con el cobro ya facturado (los 144 de antes) es «Agregar número»: se conserva la fecha que tenía,
  * salvo que se elija un documento con otra, que pasa a ser la del documento y el diálogo lo dice.
  *
+ * Etapa 12 (2026-09-13): también dice DÓNDE se emitió y A QUÉ SOCIEDAD. Elegir un documento del espejo
+ * es decir Odoo y su cliente. Tecleado, la plataforma arranca en la de la cuenta —a la vista, se cambia— y
+ * la sociedad se elige de las de la cuenta: con dos o más en esa plataforma no se puede guardar sin elegir.
+ * ⛔ El diálogo nunca la elige solo, ni con una sola sociedad.
+ *
  * Presentacional en lo que escribe: entrega los datos y el caller hace el PATCH. La regla la aplica el
  * chokepoint `cambiarEstadoCobro` (lib/cobranza/numero-factura.ts), que firma con el email de quien
  * confirma; un 409 «ese número ya está en otra cuenta» vuelve como toast desde el caller.
@@ -31,7 +36,13 @@ import {
   normalizarNumeroFactura,
 } from "@/lib/cobranza/numero-factura";
 import type { CandidatasDeCobro } from "@/lib/cobranza/odoo/candidatas";
-import { fmtFecha, fmtMonto, INPUT_CLS } from "./format";
+import {
+  esPlataformaDeCobro,
+  NOMBRE_DE_PLATAFORMA,
+  PLATAFORMAS_DE_COBRO,
+  type PlataformaDeCobro,
+} from "@/lib/cobranza/sociedades";
+import { fmtFecha, fmtMonto, INPUT_CLS, SELECT_CLS } from "./format";
 
 /** Shape mínimo del cobro a facturar — CobroDTO y ColaCobroRow lo satisfacen. */
 export interface CobroFacturarRef {
@@ -52,6 +63,9 @@ export interface DatosDeFactura {
   fechaEmision: string;
   numeroFactura: string | null;
   sinNumeroFacturaMotivo: string | null;
+  /** Etapa 12: dónde se emitió y a qué sociedad. Los dice quien factura; null = no lo dijo. */
+  plataformaFactura: PlataformaDeCobro | null;
+  sociedadFacturadaId: string | null;
 }
 
 /** El toast después del PATCH, igual en la cola y en el cronograma. `null` = se revirtió la factura. */
@@ -85,6 +99,8 @@ export default function MarcarFacturadoDialog({
   const [numero, setNumero] = useState(cobro.numeroFactura ?? "");
   const [fecha, setFecha] = useState(cobro.fechaEmision ?? todayISO);
   const [motivo, setMotivo] = useState("");
+  const [plataforma, setPlataforma] = useState<PlataformaDeCobro | null>(null);
+  const [sociedadId, setSociedadId] = useState<string | null>(null);
   const leidoPara = useRef<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +111,10 @@ export default function MarcarFacturadoDialog({
         const d = await fetchJson<CandidatasDeCobro>(`/api/cobranza/cobros/${cobro.id}/facturas-candidatas`);
         setDatos(d);
         if (d.candidatas.length > 0) setForma("espejo");
+        /* Lo que ya estaba anotado; si no, la plataforma de la cuenta, a la vista y cambiable. La sociedad no
+           se precarga nunca desde la cuenta: la dice quien factura. */
+        setPlataforma(d.plataformaFactura ?? (esPlataformaDeCobro(d.via) ? d.via : null));
+        setSociedadId(d.sociedadFacturadaId);
       } catch (e) {
         setErrorCarga(e instanceof ApiError ? e.message : "No se pudo leer el espejo de Odoo.");
       } finally {
@@ -108,13 +128,24 @@ export default function MarcarFacturadoDialog({
   const candidata = forma === "espejo" ? (datos?.candidatas.find((f) => f.numero === elegida) ?? null) : null;
   const numeroNormalizado = normalizarNumeroFactura(numero);
   const enLaLista = !!numeroNormalizado && !!datos?.candidatas.some((f) => f.numero === numeroNormalizado);
-  const aviso = forma === "teclear" && via ? avisoDePlataforma(numeroNormalizado, via) : null;
+
+  /* Etapa 12: un documento elegido del espejo es Odoo y su cliente; si no, lo que diga la persona. */
+  const plataformaFinal: PlataformaDeCobro | null = candidata ? "ODOO" : plataforma;
+  const sociedadesDeLaPlataforma = (datos?.sociedades ?? []).filter((s) => s.plataforma === plataformaFinal);
+  const sociedadFinal = candidata
+    ? candidata.sociedadId
+    : sociedadesDeLaPlataforma.some((s) => s.id === sociedadId)
+      ? sociedadId
+      : null;
+  const faltaSociedad = !candidata && sociedadesDeLaPlataforma.length >= 2 && !sociedadFinal;
+  const aviso = forma === "teclear" && plataformaFinal ? avisoDePlataforma(numeroNormalizado, plataformaFinal) : null;
 
   /* La fecha de un documento elegido es la del documento: no se valida contra hoy, es un hecho de Odoo. */
   const fechaFinal = candidata ? candidata.invoiceDate : fecha;
   const fechaValida = candidata ? true : !!fecha && fecha <= todayISO;
   const valido =
     fechaValida &&
+    !faltaSociedad &&
     (forma === "espejo"
       ? !!candidata
       : forma === "teclear"
@@ -126,6 +157,8 @@ export default function MarcarFacturadoDialog({
       fechaEmision: fechaFinal,
       numeroFactura: forma === "espejo" ? (candidata?.numero ?? null) : forma === "teclear" ? numeroNormalizado : null,
       sinNumeroFacturaMotivo: forma === "sinNumero" ? motivo.trim() : null,
+      plataformaFactura: plataformaFinal,
+      sociedadFacturadaId: sociedadFinal,
     });
   }
 
@@ -246,7 +279,13 @@ export default function MarcarFacturadoDialog({
             <input
               value={numero}
               onChange={(e) => setNumero(e.target.value)}
-              placeholder={via === "MERCURY" ? "INV-16" : via === "OTRA" ? "El número que dice QuickBooks" : "FAC/2026/0206"}
+              placeholder={
+                plataformaFinal === "MERCURY"
+                  ? "INV-16"
+                  : plataformaFinal === "OTRA"
+                    ? "El número que dice QuickBooks"
+                    : "FAC/2026/0206"
+              }
               maxLength={NUMERO_FACTURA_MAX}
               className={INPUT_CLS}
               autoFocus
@@ -254,7 +293,7 @@ export default function MarcarFacturadoDialog({
             {numeroNormalizado && numeroNormalizado !== numero.trim() && (
               <p className="mt-1 text-[10px] text-fg-muted">Se guarda como {numeroNormalizado}.</p>
             )}
-            {via === "ODOO" && numeroNormalizado && datos && (
+            {plataformaFinal === "ODOO" && numeroNormalizado && datos && (
               <p className="mt-1 text-[10px] text-warn-ink">
                 {enLaLista
                   ? "Esa factura está en la lista de arriba: elegila ahí y la fecha sale del documento."
@@ -285,9 +324,53 @@ export default function MarcarFacturadoDialog({
           </div>
         )}
 
+        {/* Etapa 12: dónde y a quién. Con un documento del espejo lo dice el documento (abajo). */}
+        {!cargando && !candidata && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-fg-muted mb-1">¿Dónde se emitió?</label>
+              <select
+                value={plataforma ?? ""}
+                onChange={(e) => setPlataforma(esPlataformaDeCobro(e.target.value) ? e.target.value : null)}
+                className={SELECT_CLS}
+              >
+                <option value="">Sin decir</option>
+                {PLATAFORMAS_DE_COBRO.map((p) => (
+                  <option key={p} value={p}>
+                    {NOMBRE_DE_PLATAFORMA[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {sociedadesDeLaPlataforma.length > 0 && (
+              <div>
+                <label className="block text-[11px] font-medium text-fg-muted mb-1">¿A qué sociedad se le facturó?</label>
+                <select
+                  value={sociedadFinal ?? ""}
+                  onChange={(e) => setSociedadId(e.target.value || null)}
+                  className={SELECT_CLS}
+                >
+                  <option value="">{sociedadesDeLaPlataforma.length >= 2 ? "Elegí la sociedad" : "Sin anotar"}</option>
+                  {sociedadesDeLaPlataforma.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+        {faltaSociedad && plataformaFinal && (
+          <p className="text-[10px] text-warn-ink">
+            Esta cuenta factura por {NOMBRE_DE_PLATAFORMA[plataformaFinal]} con {sociedadesDeLaPlataforma.length} sociedades:
+            elegí a cuál se le facturó. Nexus no lo adivina.
+          </p>
+        )}
+
         {candidata ? (
           <p className="text-[11px] text-fg-secondary">
-            Emitida el {fmtFecha(candidata.invoiceDate)}, según Odoo.
+            Emitida el {fmtFecha(candidata.invoiceDate)}, según Odoo, a nombre de «{candidata.odooPartnerNombre}».
             {yaFacturado && cobro.fechaEmision !== candidata.invoiceDate
               ? ` La fecha de emisión del cobro pasa de ${fmtFecha(cobro.fechaEmision)} a esa.`
               : ""}

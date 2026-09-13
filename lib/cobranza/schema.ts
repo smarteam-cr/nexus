@@ -302,6 +302,10 @@ export const cobroPatchSchema = z
     /* «No tengo el número», con el motivo. El mínimo lo pide la mutación: un 400 que dice cuántos
        caracteres faltan, igual en la pantalla y en el servidor. */
     sinNumeroFacturaMotivo: z.string().trim().max(MOTIVO_SIN_NUMERO_MAX).nullable(),
+    /* Etapa 12: dónde se emitió la factura y a qué sociedad. La regla la aplica la mutación
+       (lib/cobranza/sociedades.ts `resolverSociedad`): nunca se infiere, lo dice quien marca facturado. */
+    plataformaFactura: z.enum(COBRANZA_VIAS_COBRO).nullable(),
+    sociedadFacturadaId: idDeBase.nullable(),
     // Promesa de pago: marca la factura con esa fecha, sin sacarla del vencido (null = quitarla).
     promesaPago: isoDate.nullable(),
     notas: z.string().max(2000).nullable(),
@@ -967,6 +971,18 @@ export type OdooVinculoIgnorar = z.infer<typeof odooVinculoIgnorarSchema>;
 /** Deshacer un vínculo. La cédula aprendida NO se borra: el dato quedó bueno igual. */
 export const odooVinculoDesvincularSchema = z.object({ odooPartnerId: odooPartnerIdSchema });
 export type OdooVinculoDesvincular = z.infer<typeof odooVinculoDesvincularSchema>;
+
+/**
+ * Etapa 12: una sociedad que le factura a una cuenta por FUERA de Odoo (Mercury o QuickBooks). Las de Odoo no
+ * se agregan acá: se vinculan en el emparejado, con su ficha.
+ * ⚠ La cédula es opcional y NO es única: una misma cédula factura con varios nombres.
+ */
+export const sociedadAgregarSchema = z.object({
+  plataforma: z.enum(["MERCURY", "OTRA"]),
+  nombre: z.string().trim().min(2, "Escribí el nombre como sale en la factura").max(200),
+  cedula: z.string().trim().max(40).nullish(),
+});
+export type SociedadAgregar = z.infer<typeof sociedadAgregarSchema>;
 
 /**
  * «Está bien así» sobre una línea de la lista de diferencias con Odoo.

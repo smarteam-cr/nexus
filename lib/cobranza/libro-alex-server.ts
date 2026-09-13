@@ -233,9 +233,14 @@ export async function cargarContextoLibro(): Promise<ContextoCargado> {
         client: { select: { name: true } },
       },
     }),
-    prisma.odooPartnerVinculo.findMany({
-      select: { odooPartnerId: true, odooPartnerNombre: true, cuentaId: true, ignorado: true },
-    }),
+    /* Solo las fichas de Odoo: desde la etapa 12 la tabla guarda también las sociedades de Mercury y
+       QuickBooks, que no tienen cliente de Odoo con el que cruzar el libro. */
+    prisma.odooPartnerVinculo
+      .findMany({
+        where: { odooPartnerId: { not: null } },
+        select: { odooPartnerId: true, odooPartnerNombre: true, cuentaId: true, ignorado: true },
+      })
+      .then((vs) => vs.flatMap((v) => (v.odooPartnerId === null ? [] : [{ ...v, odooPartnerId: v.odooPartnerId }]))),
     /* `select` explícito: una columna nueva del espejo no tumba la comparación si el código llega antes que su SQL. */
     prisma.facturaOdoo.findMany({
       where: { estadoEspejo: "VIGENTE" },

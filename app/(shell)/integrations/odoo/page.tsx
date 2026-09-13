@@ -37,7 +37,8 @@ export default async function SettingsOdooPage() {
   const [corridas, facturas, vinculos, cuentas] = await Promise.all([
     prisma.syncOdooCorrida.findMany({ orderBy: { iniciadaEn: "desc" }, take: 20 }),
     prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
-    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
+    /* Solo fichas de Odoo: la tabla guarda también las sociedades de Mercury y QuickBooks (etapa 12). */
+    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } } }),
     prisma.cuentaFinanciera.count(),
   ]);
 

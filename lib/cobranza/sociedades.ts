@@ -267,3 +267,233 @@ export function candidatasPorNombre(raw: string, conocidas: readonly SociedadCon
   }
   return [];
 }
+
+/* ── Las sociedades que facturan (etapa 12) ──────────────────────────────────────── */
+
+/** Dónde se emite una factura. `OTRA` es QuickBooks. */
+export const PLATAFORMAS_DE_COBRO = ["ODOO", "MERCURY", "OTRA"] as const;
+export type PlataformaDeCobro = (typeof PLATAFORMAS_DE_COBRO)[number];
+
+export function esPlataformaDeCobro(v: string | null | undefined): v is PlataformaDeCobro {
+  return (PLATAFORMAS_DE_COBRO as readonly string[]).includes(v ?? "");
+}
+
+/** Cómo se llaman en pantalla: el mismo rótulo que `VIA_COBRO_LABEL` (components/cobranza/format.ts). */
+export const NOMBRE_DE_PLATAFORMA: Readonly<Record<PlataformaDeCobro, string>> = {
+  ODOO: "Odoo",
+  MERCURY: "Mercury",
+  OTRA: "QuickBooks",
+};
+
+/**
+ * La clave con que una sociedad es ÚNICA en su plataforma: su nombre en factura sin tildes, puntuación, forma
+ * jurídica ni la cédula pegada, pero CON lo que va entre paréntesis.
+ *
+ * ⚠ No es `claveSociedad`: esa suelta el paréntesis para encontrar la cuenta de una fila del libro. Acá
+ * «Librería Internacional» y «Librería Internacional (Desarrollos Culturales Costa Rica)» son dos nombres en
+ * factura distintos —hoy, dos cuentas con la misma cédula— y no pueden chocar. Tampoco mira la cédula: una
+ * misma cédula factura con varios nombres (DECISIONS.md, el caso Grupo Petróleo / Clínica Oceánica).
+ */
+export function claveFactura(nombre: string | null | undefined): string {
+  if (!nombre) return "";
+  const ident = identidadDelNombre(nombre);
+  return claveDeTexto([ident.nombre, ident.alias].filter(Boolean).join(" ")) || ident.clave;
+}
+
+/** Una sociedad que factura, tal como la leen el alta y la decisión del cobro. */
+export interface SociedadQueFactura {
+  id: string;
+  plataforma: PlataformaDeCobro;
+  /** El nombre con que sale en la factura (`OdooPartnerVinculo.odooPartnerNombre`). */
+  nombre: string;
+  /** La ficha de Odoo, si la tiene. Las de Mercury y QuickBooks no. */
+  odooPartnerId: number | null;
+  /** La cuenta a la que le factura. null = quedó suelta. */
+  cuentaId: string | null;
+}
+
+/** Una sociedad de la cuenta como opción del diálogo de «Marcar facturado». */
+export interface SociedadOpcion {
+  id: string;
+  plataforma: PlataformaDeCobro;
+  nombre: string;
+}
+
+/** Una sociedad de la cuenta como la muestra la ficha (GET /api/cobranza/cuentas/[cuentaId]/sociedades). */
+export interface SociedadDeLaCuenta extends SociedadOpcion {
+  cedula: string | null;
+  /** true = es una ficha de Odoo: se vincula y se desvincula en Cobranza › Odoo. */
+  conFicha: boolean;
+  /** Cuántos cobros dicen que se le facturaron. Con alguno, no se suelta. */
+  cobros: number;
+  confirmadoPor: string | null;
+}
+
+/**
+ * Con qué sociedad YA existente choca una nueva, o null. Solo contra las que no tienen ficha de Odoo y en la
+ * misma plataforma: las de Odoo se distinguen por su ficha, y «Quirinale Group» en Mercury y en QuickBooks
+ * son dos identidades distintas.
+ */
+export function choqueDeSociedad<S extends SociedadQueFactura>(
+  nueva: { plataforma: PlataformaDeCobro; nombre: string },
+  existentes: readonly S[],
+): S | null {
+  const clave = claveFactura(nueva.nombre);
+  if (!clave) return null;
+  return (
+    existentes.find(
+      (s) => s.odooPartnerId === null && s.plataforma === nueva.plataforma && claveFactura(s.nombre) === clave,
+    ) ?? null
+  );
+}
+
+/** Lo que el cobro tiene antes del cambio. Fechas como día ISO (`YYYY-MM-DD`). */
+export interface SociedadAntes {
+  cuentaId: string;
+  fechaEmisionISO: string | null;
+  plataformaFactura: PlataformaDeCobro | null;
+  sociedadFacturadaId: string | null;
+}
+
+/** El pedido, con la semántica de `cobroPatchSchema`: `undefined` = no lo toca; `null` = lo quita. */
+export interface PedidoDeSociedad {
+  fechaEmisionISO?: string | null;
+  plataformaFactura?: PlataformaDeCobro | null;
+  sociedadFacturadaId?: string | null;
+}
+
+/** El documento del espejo que tiene el número del cobro: su cliente de Odoo tiene que ser la sociedad. */
+export interface DocumentoDelNumero {
+  numero: string;
+  odooPartnerId: number;
+  odooPartnerNombre: string;
+}
+
+export type DecisionDeSociedad =
+  | { tipo: "sin-cambios" }
+  | { tipo: "rechazo"; status: 400 | 409; mensaje: string }
+  | {
+      tipo: "escribir";
+      plataformaFactura: PlataformaDeCobro | null;
+      sociedadFacturadaId: string | null;
+      /** El texto de la bitácora del cobro. */
+      bitacora: string;
+    };
+
+/**
+ * Qué pasa con la plataforma y la sociedad de la factura en un cambio del cobro.
+ *
+ * ⛔ NUNCA ELIGE SOLA. A qué sociedad se factura lo decide quien factura (Vilma, factura por factura), e
+ * inferirlo por nombre o por monto es lo que fabrica clientes duplicados. Con una sola sociedad en la
+ * plataforma tampoco la pone: sin pedido, queda sin anotar.
+ *
+ * Las reglas, en orden:
+ *  1. Sin factura después del cambio no hay plataforma ni sociedad: pedirlas es un 400, y las que había se
+ *     limpian dejando cuáles eran en la bitácora (revertir la factura).
+ *  2. Sin pedido, nada cambia: quien marca facturado sin decir dónde (un cargador, «Números» del libro) no
+ *     inventa una plataforma.
+ *  3. La sociedad tiene que ser de la cuenta (409) y de la plataforma pedida (400); su plataforma pasa a ser
+ *     la del cobro. Si el número es de un documento de Odoo de OTRO cliente, 409.
+ *  4. Cambiar la plataforma sin cambiar la sociedad no deja anotada una sociedad de otra plataforma: 400.
+ *  5. ⭐ Decir la plataforma en una cuenta que factura por ella con dos sociedades o más exige decir cuál:
+ *     Grupo INB factura por Mercury como Quirinale Group y como Ingeniería Verde.
+ *
+ * `sociedades`: las de la cuenta, más la que el cobro tenía anotada aunque ya no sea de la cuenta (para poder
+ * nombrarla). ⚠ El 409 de «ese número ya está en otra cuenta» sigue siendo de numero-factura.ts.
+ */
+export function resolverSociedad(
+  antes: SociedadAntes,
+  pedido: PedidoDeSociedad,
+  sociedades: readonly SociedadQueFactura[],
+  byEmail: string,
+  documento: DocumentoDelNumero | null = null,
+): DecisionDeSociedad {
+  const rechazo = (status: 400 | 409, mensaje: string): DecisionDeSociedad => ({ tipo: "rechazo", status, mensaje });
+  const porId = new Map(sociedades.map((s) => [s.id, s]));
+  const describir = (plataforma: PlataformaDeCobro | null, sociedadId: string | null): string => {
+    const donde = plataforma ? NOMBRE_DE_PLATAFORMA[plataforma] : null;
+    if (sociedadId) return `«${porId.get(sociedadId)?.nombre ?? sociedadId}»${donde ? ` por ${donde}` : ""}`;
+    return donde ? `por ${donde}` : "sin anotar";
+  };
+  const fechaDespues = pedido.fechaEmisionISO === undefined ? antes.fechaEmisionISO : pedido.fechaEmisionISO;
+
+  /* 1. Sin factura. */
+  if (fechaDespues === null) {
+    if (pedido.plataformaFactura || pedido.sociedadFacturadaId) {
+      return rechazo(400, "Un cobro sin factura no tiene a quién ni dónde se facturó: primero marcalo facturado.");
+    }
+    if (!antes.plataformaFactura && !antes.sociedadFacturadaId) return { tipo: "sin-cambios" };
+    return {
+      tipo: "escribir",
+      plataformaFactura: null,
+      sociedadFacturadaId: null,
+      bitacora: `Se quitó a quién se había facturado (${describir(antes.plataformaFactura, antes.sociedadFacturadaId)}): el cobro dejó de estar facturado.`,
+    };
+  }
+
+  /* 2. Sin pedido. */
+  if (pedido.plataformaFactura === undefined && pedido.sociedadFacturadaId === undefined) return { tipo: "sin-cambios" };
+
+  let plataforma = pedido.plataformaFactura !== undefined ? pedido.plataformaFactura : antes.plataformaFactura;
+  const sociedadId = pedido.sociedadFacturadaId !== undefined ? pedido.sociedadFacturadaId : antes.sociedadFacturadaId;
+
+  if (sociedadId) {
+    const s = porId.get(sociedadId);
+    /* 3. */
+    if (!s || s.cuentaId !== antes.cuentaId) {
+      return rechazo(
+        409,
+        pedido.sociedadFacturadaId !== undefined
+          ? "Esa sociedad no le factura a esta cuenta. Agregala en la cuenta, o en Cobranza › Odoo si es una ficha de Odoo."
+          : "La sociedad anotada ya no le factura a esta cuenta: elegí de nuevo a quién se facturó.",
+      );
+    }
+    if (pedido.sociedadFacturadaId !== undefined && pedido.plataformaFactura && pedido.plataformaFactura !== s.plataforma) {
+      return rechazo(
+        400,
+        `«${s.nombre}» factura por ${NOMBRE_DE_PLATAFORMA[s.plataforma]}, no por ${NOMBRE_DE_PLATAFORMA[pedido.plataformaFactura]}.`,
+      );
+    }
+    /* 4. */
+    if (pedido.sociedadFacturadaId === undefined && plataforma !== s.plataforma) {
+      return rechazo(
+        400,
+        `La factura está anotada a «${s.nombre}», que factura por ${NOMBRE_DE_PLATAFORMA[s.plataforma]}. Para cambiar la plataforma, elegí también la sociedad.`,
+      );
+    }
+    if (documento && s.odooPartnerId !== null && documento.odooPartnerId !== s.odooPartnerId) {
+      return rechazo(
+        409,
+        `La factura ${documento.numero} es de «${documento.odooPartnerNombre}» en Odoo, no de «${s.nombre}». Elegí la sociedad del documento.`,
+      );
+    }
+    plataforma = s.plataforma;
+  }
+
+  /* 5. */
+  if (pedido.plataformaFactura !== undefined && plataforma && !sociedadId) {
+    const deEsaPlataforma = sociedades.filter((s) => s.cuentaId === antes.cuentaId && s.plataforma === plataforma);
+    if (deEsaPlataforma.length >= 2) {
+      return rechazo(
+        400,
+        `Esta cuenta factura por ${NOMBRE_DE_PLATAFORMA[plataforma]} con ${deEsaPlataforma.length} sociedades (${deEsaPlataforma
+          .map((s) => `«${s.nombre}»`)
+          .join(", ")}): elegí a cuál se le facturó.`,
+      );
+    }
+  }
+
+  if (plataforma === antes.plataformaFactura && sociedadId === antes.sociedadFacturadaId) return { tipo: "sin-cambios" };
+  if (!byEmail) return rechazo(400, "Anotar a quién se facturó exige un usuario con nombre.");
+
+  const ahora = describir(plataforma, sociedadId);
+  return {
+    tipo: "escribir",
+    plataformaFactura: plataforma,
+    sociedadFacturadaId: sociedadId,
+    bitacora:
+      !antes.plataformaFactura && !antes.sociedadFacturadaId
+        ? `${byEmail} anotó que se facturó ${ahora}.`
+        : `${byEmail} cambió a quién se facturó: ${describir(antes.plataformaFactura, antes.sociedadFacturadaId)} → ${ahora}.`,
+  };
+}

@@ -393,7 +393,11 @@ export interface FacturaAtribuible {
 
 /** Un vínculo tal como está guardado. `cuentaId: null` = el partner no tiene cuenta (o se desvinculó). */
 export interface VinculoGuardadoMin {
-  odooPartnerId: number;
+  /**
+   * null = una sociedad de Mercury o QuickBooks (etapa 12): la tabla de vínculos guarda también las sociedades
+   * sin ficha de Odoo, y esas no atribuyen ninguna factura del espejo.
+   */
+  odooPartnerId: number | null;
   cuentaId: string | null;
 }
 
@@ -430,7 +434,7 @@ export function reatribuciones<F extends FacturaAtribuible>(
   vinculos: readonly VinculoGuardadoMin[],
 ): Reatribucion[] {
   const cuentaDe = new Map<number, string>();
-  for (const v of vinculos) if (v.cuentaId) cuentaDe.set(v.odooPartnerId, v.cuentaId);
+  for (const v of vinculos) if (v.cuentaId && v.odooPartnerId !== null) cuentaDe.set(v.odooPartnerId, v.cuentaId);
 
   const out: Reatribucion[] = [];
   for (const f of facturas) {

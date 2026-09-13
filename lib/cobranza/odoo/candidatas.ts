@@ -18,6 +18,7 @@
  * que firma (lib/cobranza/numero-factura.ts).
  */
 import { esDocumentoVivo } from "./diferencias";
+import type { PlataformaDeCobro, SociedadOpcion } from "../sociedades";
 
 /** Lo que se lee de cada factura del espejo (del cliente de Odoo vinculado, vigente). */
 export interface FacturaDelEspejo {
@@ -60,9 +61,18 @@ export interface CandidatasDeCobro {
   via: string;
   /** Cuántos clientes de Odoo están vinculados a la cuenta. Cero = no hay de dónde sacar la lista. */
   clientesDeOdoo: number;
-  candidatas: FacturaCandidata[];
+  /**
+   * Cada candidata dice de qué sociedad de la cuenta es su cliente de Odoo (etapa 12): elegir el documento es
+   * decir a quién se le facturó.
+   */
+  candidatas: Array<FacturaCandidata & { sociedadId: string | null }>;
   /** Día de la última lectura buena de Odoo (`YYYY-MM-DD`), o null si nunca hubo una. */
   espejoAl: string | null;
+  /** Etapa 12: las sociedades que le facturan a la cuenta, de todas las plataformas. */
+  sociedades: SociedadOpcion[];
+  /** Lo que el cobro ya tiene anotado: dónde se emitió y a quién. */
+  plataformaFactura: PlataformaDeCobro | null;
+  sociedadFacturadaId: string | null;
 }
 
 const CENTAVOS = (n: number) => Math.round(n * 100);

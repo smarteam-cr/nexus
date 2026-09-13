@@ -136,6 +136,9 @@ export interface CobroDTO {
   numeroFactura: string | null;
   numeroFacturaPor: string | null;
   sinNumeroFacturaMotivo: string | null;
+  /** Etapa 12: dónde se emitió la factura y a qué sociedad, si quien la marcó lo dijo. null en los de antes. */
+  plataformaFactura: string | null;
+  sociedadFacturadaNombre: string | null;
   promesaPago: string | null; // ISO date — fecha en que el cliente prometió pagar
   notas: string | null;
   /**
@@ -308,6 +311,9 @@ type CobroRow = {
   numeroFactura: string | null;
   numeroFacturaPor: string | null;
   sinNumeroFacturaMotivo: string | null;
+  plataformaFactura: string | null;
+  /** Etapa 12: a quién se le facturó. Opcional: solo lo trae la consulta del detalle de la cuenta. */
+  sociedadFacturada?: { odooPartnerNombre: string } | null;
   promesaPago: Date | null;
   notas: string | null;
 };
@@ -335,6 +341,8 @@ function serializeCobro(c: CobroRow, odoo?: FacturasDeOdooPorCobro): CobroDTO {
     numeroFactura: c.numeroFactura,
     numeroFacturaPor: c.numeroFacturaPor,
     sinNumeroFacturaMotivo: c.sinNumeroFacturaMotivo,
+    plataformaFactura: c.plataformaFactura,
+    sociedadFacturadaNombre: c.sociedadFacturada?.odooPartnerNombre ?? null,
     promesaPago: isoDay(c.promesaPago),
     notas: c.notas,
   };
@@ -496,7 +504,10 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
         include: {
           project: { select: { name: true, timeline: { select: { anchorStartDate: true } } } },
           planes: { where: { activo: true }, include: { cuotas: { orderBy: { orden: "asc" } } }, take: 1 },
-          cobros: { orderBy: [{ fechaProgramada: "asc" }, { numCuota: "asc" }] },
+          cobros: {
+            orderBy: [{ fechaProgramada: "asc" }, { numCuota: "asc" }],
+            include: { sociedadFacturada: { select: { odooPartnerNombre: true } } },
+          },
         },
       },
       bitacora: { orderBy: { createdAt: "desc" }, take: 50 },
@@ -2990,6 +3001,8 @@ async function aparearFacturasDeOdoo(
       fechaEmision: isoDay(c.fechaEmision),
       /* Etapa 8: el número manda. Sin él, el cruce vuelve a adivinar por monto. */
       numeroFactura: c.numeroFactura,
+      /* Etapa 12: la plataforma anotada en la factura manda sobre la de la cuenta. */
+      plataformaFactura: c.plataformaFactura,
     })),
   );
   const facturas = facturasDb.map((f) => ({

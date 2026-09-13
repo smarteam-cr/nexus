@@ -45,6 +45,14 @@ export class EmparejadoError extends Error {
   }
 }
 
+/**
+ * ¿Es una ficha de Odoo? Desde la etapa 12 `OdooPartnerVinculo` guarda también las sociedades de Mercury y
+ * QuickBooks, que no tienen ficha. El emparejado y el espejo miran solo las que la tienen.
+ */
+function conFicha<T extends { odooPartnerId: number | null }>(v: T): v is T & { odooPartnerId: number } {
+  return v.odooPartnerId !== null;
+}
+
 /* ── 1. Traer el estado ─────────────────────────────────────────────────────────── */
 
 export interface VinculoGuardado {
@@ -147,10 +155,26 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       e instanceof OdooError ? `${explicarFallo(e.clase)} (${e.message})` : e instanceof Error ? e.message : String(e);
   }
 
-  const guardados = await prisma.odooPartnerVinculo.findMany({
-    include: { cuenta: { select: { id: true, client: { select: { name: true } } } } },
-    orderBy: { odooPartnerNombre: "asc" },
-  });
+  /* ⚠ Solo las fichas de Odoo: desde la etapa 12 la tabla guarda también las sociedades de Mercury y
+     QuickBooks, que no son clientes de Odoo y no se emparejan. Con `select` explícito, así una columna
+     nueva no tumba el emparejado. */
+  const guardados = (
+    await prisma.odooPartnerVinculo.findMany({
+      where: { odooPartnerId: { not: null } },
+      select: {
+        odooPartnerId: true,
+        odooPartnerNombre: true,
+        odooVat: true,
+        cuentaId: true,
+        via: true,
+        ignorado: true,
+        confirmadoPor: true,
+        confirmadoEn: true,
+        cuenta: { select: { id: true, client: { select: { name: true } } } },
+      },
+      orderBy: { odooPartnerNombre: "asc" },
+    })
+  ).filter(conFicha);
 
   /* Si Odoo no contestó, la lista de partners sale de lo que ya se había guardado: el
      buscador y los vínculos hechos siguen funcionando. */
@@ -240,9 +264,10 @@ async function recordarPartners(partners: readonly PartnerOdoo[]): Promise<void>
 
 export async function buscarEnOdoo(consulta: string): Promise<{ partners: PartnerOdoo[]; errorOdoo: string | null }> {
   const guardados = await prisma.odooPartnerVinculo.findMany({
+    where: { odooPartnerId: { not: null } },
     select: { odooPartnerId: true, odooPartnerNombre: true, odooVat: true },
   });
-  const partners: PartnerOdoo[] = guardados.map((v) => ({
+  const partners: PartnerOdoo[] = guardados.filter(conFicha).map((v) => ({
     odooPartnerId: v.odooPartnerId,
     nombre: v.odooPartnerNombre,
     vat: v.odooVat,
@@ -364,6 +389,16 @@ export async function desvincularPartner(
 ): Promise<{ facturasDesatribuidas: number }> {
   const partner = await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } });
   if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista.", 404);
+  /* ⛔ Etapa 12: con cobros facturados a esta ficha, desvincularla los dejaría anotados a una sociedad que
+     ya no es de su cuenta (INV36). Primero se les cambia a quién se facturó. Es un conteo: nada de acá
+     escribe un cobro. */
+  const facturados = await prisma.cobro.count({ where: { sociedadFacturadaId: partner.id } });
+  if (facturados > 0) {
+    throw new EmparejadoError(
+      `${facturados} cobro(s) dicen que se le facturaron a «${partner.odooPartnerNombre}». Cambiales la sociedad en el cronograma de la cuenta antes de desvincularla.`,
+      409,
+    );
+  }
   const cambios = await prisma.$transaction(async (tx) => {
     await tx.odooPartnerVinculo.update({
       where: { odooPartnerId: input.odooPartnerId },
@@ -381,7 +416,7 @@ export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nom
       select: { id: true, cedulaJuridica: true, client: { select: { name: true } } },
       orderBy: { client: { name: "asc" } },
     }),
-    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null } }, select: { cuentaId: true } }),
+    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } }, select: { cuentaId: true } }),
   ]);
   const tomadas = new Set(vinculos.map((v) => v.cuentaId!));
   return cuentas
@@ -417,6 +452,8 @@ export async function cargarDiferencias(): Promise<{
         /* ⚠ Etapa 8: el cruce aparea primero por número. La columna es del SQL de la etapa 7, que ya
            tenía que ir antes del deploy: sin él, esta pantalla también da error. */
         numeroFactura: true,
+        /* Etapa 12: la plataforma anotada en la factura manda sobre la de la cuenta (su SQL va antes del deploy). */
+        plataformaFactura: true,
         cuenta: { select: { client: { select: { name: true } } } },
       },
       orderBy: [{ fechaProgramada: "asc" }, { id: "asc" }],
@@ -450,7 +487,7 @@ export async function cargarDiferencias(): Promise<{
     }),
     /* Las CUENTAS vinculadas, no los vínculos: una cuenta con dos razones sociales en Odoo
        contaba dos veces y el «faltan emparejar» salía más chico que la verdad. */
-    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null } }, select: { cuentaId: true } }),
+    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } }, select: { cuentaId: true } }),
     prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
     /* Solo las que siguen abiertas: una resuelta no produce ninguna línea, y traerlas todas
        hacía crecer esta consulta para siempre sin que nada lo usara. La regla de qué es
@@ -476,6 +513,7 @@ export async function cargarDiferencias(): Promise<{
       estado: c.estado,
       fechaEmision: c.fechaEmision ? c.fechaEmision.toISOString().slice(0, 10) : null,
       numeroFactura: c.numeroFactura,
+      plataformaFactura: c.plataformaFactura,
     })),
     facturas: facturasDb.map((f) => ({
       id: f.id,
@@ -624,20 +662,34 @@ export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDe
       moneda: true,
       fechaProgramada: true,
       numeroFactura: true,
+      plataformaFactura: true,
+      sociedadFacturadaId: true,
       cuenta: { select: { viaCobro: true } },
     },
   });
   if (!cobro) return null;
   const via = cobro.cuenta.viaCobro;
-  /* Mercury y QuickBooks no tienen espejo: ahí el número se teclea. */
-  if (via !== "ODOO") return { via, clientesDeOdoo: 0, candidatas: [], espejoAl: null };
 
-  const [vinculos, corridaOk] = await Promise.all([
-    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: cobro.cuentaId }, select: { odooPartnerId: true } }),
-    ultimaCorridaOk(),
-  ]);
+  /* Etapa 12: las sociedades que le facturan a la cuenta, de todas las plataformas. El diálogo pregunta a
+     cuál se le facturó; no la elige él ni esta función. */
+  const sociedadesDb = await prisma.odooPartnerVinculo.findMany({
+    where: { cuentaId: cobro.cuentaId },
+    select: { id: true, plataforma: true, odooPartnerNombre: true, odooPartnerId: true },
+    orderBy: { odooPartnerNombre: "asc" },
+  });
+  const base = {
+    via,
+    sociedades: sociedadesDb.map((s) => ({ id: s.id, plataforma: s.plataforma, nombre: s.odooPartnerNombre })),
+    plataformaFactura: cobro.plataformaFactura,
+    sociedadFacturadaId: cobro.sociedadFacturadaId,
+  };
+  /* Mercury y QuickBooks no tienen espejo: ahí el número se teclea. */
+  if (via !== "ODOO") return { ...base, clientesDeOdoo: 0, candidatas: [], espejoAl: null };
+
+  const vinculos = sociedadesDb.filter(conFicha);
+  const corridaOk = await ultimaCorridaOk();
   const espejoAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
-  if (!vinculos.length) return { via, clientesDeOdoo: 0, candidatas: [], espejoAl };
+  if (!vinculos.length) return { ...base, clientesDeOdoo: 0, candidatas: [], espejoAl };
 
   /* `select` explícito: una columna nueva del espejo no tumba el diálogo si el código llega antes que su SQL. */
   const facturas = await prisma.facturaOdoo.findMany({
@@ -649,6 +701,7 @@ export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDe
     select: {
       odooMoveId: true,
       numero: true,
+      odooPartnerId: true,
       odooPartnerNombre: true,
       invoiceDate: true,
       montoNeto: true,
@@ -665,8 +718,16 @@ export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDe
       })
     : [];
 
+  /* Elegir un documento es elegir su cliente de Odoo: cada candidata dice de qué sociedad de la cuenta es. */
+  const sociedadDelPartner = new Map(vinculos.map((v) => [v.odooPartnerId, v.id]));
+  const partnerDelNumero = new Map(facturas.map((f) => [f.numero, f.odooPartnerId]));
+  const sociedadDe = (numero: string): string | null => {
+    const partner = partnerDelNumero.get(numero);
+    return partner === undefined ? null : (sociedadDelPartner.get(partner) ?? null);
+  };
+
   return {
-    via,
+    ...base,
     clientesDeOdoo: vinculos.length,
     candidatas: candidatasParaElCobro(
       facturas.map((f) => ({ ...f, invoiceDate: f.invoiceDate.toISOString().slice(0, 10), montoNeto: Number(f.montoNeto) })),
@@ -677,7 +738,7 @@ export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDe
         numeroFactura: cobro.numeroFactura,
       },
       new Set(tomados.flatMap((t) => (t.numeroFactura ? [t.numeroFactura] : []))),
-    ),
+    ).map((c) => ({ ...c, sociedadId: sociedadDe(c.numero) })),
     espejoAl,
   };
 }

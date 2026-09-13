@@ -440,3 +440,53 @@ export const INV35: Invariante = {
     return cumple(`✓ INV35: los ${conceptoPorReferencia.size} documentos de Ingresos variables no están cargados como cobro.`);
   },
 };
+
+/**
+ * INV36 · A quién se facturó un cobro es una sociedad de SU cuenta y de la plataforma anotada, y el cobro está
+ * facturado (etapa 12, 2026-09-13). Una factura anotada a una sociedad de otra cuenta hace perseguir la plata
+ * con el nombre equivocado; una plataforma que no es la de su sociedad manda a buscar el documento al sistema
+ * equivocado.
+ *
+ * El chokepoint no deja escribirlo (`resolverSociedad`), y desvincular o soltar una sociedad con cobros da 409:
+ * esto vigila el DATO, por si un script o una consulta a mano lo escriben por fuera.
+ * ⚠ Antes de scripts/sql/2026-09-12-12-sociedades-facturadoras.sql las columnas no existen: sale «no verificable».
+ */
+export const INV36: Invariante = {
+  id: "36",
+  nombre: "a quién se facturó un cobro es una sociedad de su cuenta, y el cobro está facturado",
+  async correr(db) {
+    const filas = await db.cobro.findMany({
+      where: { OR: [{ plataformaFactura: { not: null } }, { sociedadFacturadaId: { not: null } }] },
+      select: {
+        numCuota: true,
+        cuentaId: true,
+        fechaEmision: true,
+        plataformaFactura: true,
+        cuenta: { select: { client: { select: { name: true } } } },
+        sociedadFacturada: { select: { odooPartnerNombre: true, cuentaId: true, plataforma: true } },
+      },
+    });
+    const rotos: string[] = [];
+    for (const f of filas) {
+      const cobro = `${f.cuenta.client.name} #${f.numCuota ?? "?"}`;
+      if (!f.fechaEmision) rotos.push(`    · ${cobro}: dice a quién o dónde se facturó y no está facturado`);
+      const s = f.sociedadFacturada;
+      if (!s) continue;
+      if (s.cuentaId !== f.cuentaId) {
+        rotos.push(`    · ${cobro}: facturado a «${s.odooPartnerNombre}», que no le factura a esta cuenta`);
+      }
+      if (s.plataforma !== f.plataformaFactura) {
+        rotos.push(`    · ${cobro}: «${s.odooPartnerNombre}» factura por ${s.plataforma} y el cobro dice ${f.plataformaFactura ?? "—"}`);
+      }
+    }
+    if (rotos.length > 0) {
+      return viola(
+        `✗ INV36 VIOLADO: ${rotos.length} rotura(s) en a quién se facturó:\n` +
+          rotos.slice(0, 20).join("\n") +
+          `\n    Remedio: en el cronograma de la cuenta, «cambiar» la factura y elegir la sociedad de nuevo (queda en la bitácora).` +
+          `\n    Toda escritura pasa por cambiarEstadoCobroTx: si esto está en rojo, alguien escribió por fuera.`,
+      );
+    }
+    return cumple(`✓ INV36: los ${filas.length} cobros con sociedad o plataforma anotada están facturados y a una sociedad de su cuenta.`);
+  },
+};

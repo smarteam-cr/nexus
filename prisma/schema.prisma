@@ -3030,6 +3030,15 @@ model Cobro {
   promesaPago       DateTime?
   notas             String?             @db.Text
 
+  // Etapa 12 (2026-09-13): dónde se emitió la factura y a qué sociedad se le facturó. Los dice quien
+  // marca facturado (Vilma decide factura por factura): nunca se infieren. La sociedad es una
+  // referencia, no un texto libre. nullable porque los cobros de antes no lo dicen, y porque solo
+  // valen con factura (INV36). La regla: `resolverSociedad` en lib/cobranza/sociedades.ts.
+  // SQL: scripts/sql/2026-09-12-12-sociedades-facturadoras.sql.
+  plataformaFactura   CobranzaViaCobro?
+  sociedadFacturadaId String?
+  sociedadFacturada   OdooPartnerVinculo? @relation(fields: [sociedadFacturadaId], references: [id], onDelete: SetNull)
+
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   cobroFacturaOdoos CobroFacturaOdoo[]
@@ -3038,6 +3047,7 @@ model Cobro {
   @@index([cuentaId, fechaProgramada])
   @@index([estado, fechaProgramada])
   @@index([numeroFactura])
+  @@index([sociedadFacturadaId])
 }
 
 // ─── AlertaCobro ────────────────────────────────────────────────────────────────
@@ -4618,9 +4628,24 @@ model CobroFacturaOdoo {
 /// del lado del partner.
 model OdooPartnerVinculo {
   id                String  @id @default(cuid())
-  odooPartnerId     Int     @unique
+  /// Etapa 12: opcional. Una sociedad de Mercury o QuickBooks no tiene ficha de Odoo. Sigue siendo única.
+  odooPartnerId     Int?    @unique
+  /// El nombre en factura, de cualquier plataforma. ⚠ Se llama «odoo…» porque la tabla nació para Odoo:
+  /// no se renombra, lo lee el código que corre en producción.
   odooPartnerNombre String
+  /// La cédula que trae la factura, de cualquier plataforma. Sin @unique: una cédula factura con varios nombres.
   odooVat           String?
+
+  /// Etapa 12 (2026-09-13): la tabla pasó a ser «la sociedad que le factura a una cuenta». ODOO = una ficha
+  /// del ERP. MERCURY y OTRA (QuickBooks) no tienen ficha: son únicas por (plataforma, claveFactura) con un
+  /// índice parcial que Prisma no modela, y un CHECK exige la forma de cada una
+  /// (scripts/sql/2026-09-12-12-sociedades-facturadoras.sql). ⛔ Nunca `db push`: los borraría.
+  plataforma   CobranzaViaCobro @default(ODOO)
+  /// `claveFactura()` del nombre (lib/cobranza/sociedades.ts). Solo en las sociedades sin ficha.
+  claveFactura String?
+
+  /// Los cobros que dicen que se le facturaron a esta sociedad. Con alguno, no se suelta ni se desvincula.
+  cobrosFacturados Cobro[]
 
   cuentaId String?
   cuenta   CuentaFinanciera? @relation(fields: [cuentaId], references: [id], onDelete: SetNull)

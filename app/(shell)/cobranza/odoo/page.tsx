@@ -31,7 +31,8 @@ export default async function OdooPage() {
   const [corrida, facturas, cuentasVinculadas, cuentas, diferencias] = await Promise.all([
     ultimaCorrida(),
     prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
-    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null } } }),
+    /* Solo fichas de Odoo: la tabla guarda también las sociedades de Mercury y QuickBooks (etapa 12). */
+    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } } }),
     prisma.cuentaFinanciera.count(),
     /* El badge cuenta lo que falta RESOLVER: las marcadas «está bien así» siguen en la lista
        para poder reabrirlas, pero no son trabajo pendiente. */

@@ -40,6 +40,7 @@ import { BLOQUEO_LABEL, planDeCambios } from "@/lib/cobranza/plan-vs-cobros";
 import { materializeCobros } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
+import SociedadesQueFacturan from "./SociedadesQueFacturan";
 
 interface GenerateResult {
   created: number;
@@ -343,6 +344,15 @@ export default function CuentaDrawer({
                 </div>
               )}
             </section>
+
+            {/* ── Sociedades que facturan (etapa 12): una empresa puede facturar con varias. Antes de los
+                 datos de la cuenta, porque es lo que se mira al marcar facturado. ── */}
+            <SociedadesQueFacturan
+              key={cuenta.id}
+              cuentaId={cuenta.id}
+              puedeEditar={puedeEditar}
+              tituloCls={SECTION_TITLE_CLS}
+            />
 
             {/* ── Datos de la cuenta (configuración: se toca al dar de alta) ── */}
             <section className="space-y-3">

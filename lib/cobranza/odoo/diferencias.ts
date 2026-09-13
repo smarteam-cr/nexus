@@ -101,6 +101,11 @@ export interface CobroParaCruzar {
    * adivinar por monto sin que nada lo avise.
    */
   numeroFactura: string | null;
+  /**
+   * Dónde se emitió la factura, si quien la marcó lo dijo (`Cobro.plataformaFactura`, etapa 12). null = no lo
+   * dijo, y manda la vía de cobro de la cuenta. Obligatorio por lo mismo que el número.
+   */
+  plataformaFactura: string | null;
 }
 
 export interface FacturaParaCruzar {
@@ -527,7 +532,8 @@ export interface CobrosSinFacturaClasificados {
  *   3. se facturó hasta `DIAS_DE_GRACIA_DEL_ESPEJO` días antes de la última lectura buena de Odoo.
  * Un COBRADO sin fecha de emisión usa la programada: entró plata, algo se tuvo que facturar.
  *
- * ⚠ Cuando exista la plataforma de la factura en el cobro, manda esa y no la de la cuenta.
+ * ⭐ Desde la etapa 12 manda la plataforma anotada en la factura del cobro, y solo sin ella la de la cuenta:
+ * una factura de QuickBooks en una cuenta que factura por Odoo no la va a ver nunca el espejo.
  */
 export function clasificarCobrosSinFactura(
   cobrosSolos: readonly CobroParaCruzar[],
@@ -541,7 +547,7 @@ export function clasificarCobrosSinFactura(
     const facturadoEl = c.fechaEmision ?? (c.estado === "COBRADO" ? c.fechaProgramada : null);
     if (!facturadoEl) continue;
     /* Una cuenta que no está en la lista tampoco se acusa: no se sabe por dónde factura. */
-    if (viaDe.get(c.cuentaId) !== "ODOO") continue;
+    if ((c.plataformaFactura ?? viaDe.get(c.cuentaId)) !== "ODOO") continue;
     if (!estado.cuentasVinculadas.has(c.cuentaId)) out.sinEmparejar.push(c);
     else if (corte === null || facturadoEl > corte) out.recientes.push(c);
     else out.acusables.push(c);
@@ -777,7 +783,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
   const viaDeCuenta = new Map(estado.cuentas.map((c) => [c.id, c.viaCobro]));
   const nombreDeCuenta = new Map(estado.cuentas.map((c) => [c.id, c.nombre]));
   const numerosSinPar = clasificarNumerosSinPar(cruce.conNumeroSinPar, estado.facturas).filter(
-    (x) => viaDeCuenta.get(x.cobro.cuentaId) === "ODOO",
+    (x) => (x.cobro.plataformaFactura ?? viaDeCuenta.get(x.cobro.cuentaId)) === "ODOO",
   );
 
   /* ── 1. La moneda equivocada ─────────────────────────────────────────────────── */

@@ -17,7 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35,
+  INV31, INV32, INV33, INV34, INV35, INV36,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -504,6 +504,40 @@ describe("finanzas: INV35 (una factura no es cobro y plata que no es venta a la 
   });
 });
 
+describe("cobranza: INV36 (a quién se facturó es una sociedad de la cuenta, etapa 12)", () => {
+  const fila = (p: Record<string, unknown>) => ({
+    numCuota: 1,
+    cuentaId: "inb",
+    fechaEmision: hace(10),
+    plataformaFactura: "MERCURY",
+    cuenta: { client: { name: "Grupo INB" } },
+    sociedadFacturada: { odooPartnerNombre: "Quirinale Group", cuentaId: "inb", plataforma: "MERCURY" },
+    ...p,
+  });
+
+  it("de su cuenta, de su plataforma y facturado cumple; cada rotura sale con el cobro y la sociedad", async () => {
+    const llamadas: Llamada[] = [];
+    expect((await INV36.correr(baseFalsa({ cobro: [fila({})] }, llamadas), AHORA)).ok).toBe(true);
+    expect(where(llamadas, "cobro")).toEqual({ OR: [{ plataformaFactura: { not: null } }, { sociedadFacturadaId: { not: null } }] });
+
+    const r = await INV36.correr(
+      baseFalsa({
+        cobro: [
+          fila({ numCuota: 2, sociedadFacturada: { odooPartnerNombre: "Teamnet Web", cuentaId: "teamnet", plataforma: "MERCURY" } }),
+          fila({ numCuota: 3, plataformaFactura: "OTRA" }),
+          fila({ numCuota: 4, fechaEmision: null, sociedadFacturada: null }),
+        ],
+      }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("3 rotura(s) en a quién se facturó");
+    expect(r.lineas[0]).toContain("Grupo INB #2: facturado a «Teamnet Web», que no le factura a esta cuenta");
+    expect(r.lineas[0]).toContain("Grupo INB #3: «Quirinale Group» factura por MERCURY y el cobro dice OTRA");
+    expect(r.lineas[0]).toContain("Grupo INB #4: dice a quién o dónde se facturó y no está facturado");
+  });
+});
+
 const RAIZ = process.cwd();
 const soloCodigo = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
@@ -511,12 +545,12 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 24 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 25 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
-       33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10). */
+       33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
       "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
-      "33", "34", "35",
+      "33", "34", "35", "36",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -564,7 +598,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("24 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("25 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
