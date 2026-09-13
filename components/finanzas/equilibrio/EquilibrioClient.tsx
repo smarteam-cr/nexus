@@ -39,6 +39,10 @@ import InconsistenciasPanel from "./InconsistenciasPanel";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** 0,821 → «82,1 %». null = no hay denominador, y se dice con una raya en vez de un cero. */
+const pct = (x: number | null) =>
+  x === null ? "—" : `${(x * 100).toLocaleString("es-CR", { maximumFractionDigits: 1 })} %`;
+
 export default function EquilibrioClient({ initialReporte }: { initialReporte: ReporteAnualDTO }) {
   const r = initialReporte;
   const [escenario, setEscenario] = useState<OverrideEscenario>({});
@@ -118,7 +122,25 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal);
   const margenCaja = round2(cajaTotal - ind.egresosDeCajaTotal);
 
-  const TILES: Array<{ key: string; label: string; valor: string; nota: string; serie: SerieKey | null; simulado?: boolean }> = [
+  // La apertura por moneda nativa, sin convertir. Solo se muestra si hay algo en otra moneda
+  // que la del reporte: con todo en dólares repetiría el par de arriba.
+  const monedasCobranza = Object.entries(r.cobranzaPorMoneda).sort(([a], [b]) => a.localeCompare(b));
+  const aperturaCobranza = monedasCobranza.some(([m]) => m !== moneda)
+    ? monedasCobranza.map(([m, c]) => `${m}: ${pct(c.sobreFacturado)} · ${pct(c.sobreExigible)}`).join(" | ")
+    : undefined;
+  const proyectado = r.indicadores.partnershipProyectadoTotal;
+  const cubreElPiso = r.criterios.partnershipCubreElPiso;
+
+  const TILES: Array<{
+    key: string;
+    label: string;
+    valor: string;
+    nota: string;
+    /** Una segunda línea chica, para lo que no entra en la nota. */
+    detalle?: string;
+    serie: SerieKey | null;
+    simulado?: boolean;
+  }> = [
     {
       key: "equilibrio",
       label: "Piso mensual",
@@ -153,14 +175,23 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       key: "cobrado",
       label: "Cobrado del año",
       valor: fmtMonto(ind.cobradoTotal, moneda),
-      nota: r.indicadores.tasaCobro === null ? "sin facturación" : `${Math.round(r.indicadores.tasaCobro * 100)}% de cobro`,
+      // ⚠ Las dos cifras juntas, siempre. «De lo facturado» suelta castiga haber facturado ayer;
+      // «de lo exigible» suelta esconde cuánto falta. Ver `lecturaDeCobranza`.
+      nota:
+        ind.cobranza.sobreFacturado === null
+          ? "sin facturación"
+          : `${pct(ind.cobranza.sobreFacturado)} de lo facturado · ${pct(ind.cobranza.sobreExigible)} de lo exigible`,
+      detalle: aperturaCobranza,
       serie: "cobrado",
     },
     {
       key: "porCobrar",
       label: "Cuentas por cobrar",
       valor: fmtMonto(ind.porCobrarTotal, moneda),
-      nota: "Facturado sin cobrar",
+      nota:
+        ind.porCobrarTotal > 0
+          ? `${fmtMonto(ind.porCobrarVencidoTotal, moneda)} vencido · ${fmtMonto(ind.cobranza.enPlazo, moneda)} en plazo`
+          : "Facturado sin cobrar",
       serie: null,
     },
     {
@@ -182,8 +213,11 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
     {
       key: "cubren",
       label: "Meses sobre egresos",
-      valor: `${ind.mesesQueCubren} de 12`,
-      nota: `${ind.mesesEgresoCompleto} meses con egreso completo`,
+      // ⚠ Sobre los meses que PUEDEN afirmarlo, no sobre 12. Un mes con el egreso incompleto no
+      // dice si cubre (`cubreEgresos: null`), así que «2 de 12» contaba ocho meses sin respuesta
+      // como si hubieran dado que no.
+      valor: ind.mesesEgresoCompleto === 0 ? "—" : `${ind.mesesQueCubren} de ${ind.mesesEgresoCompleto}`,
+      nota: `con egreso completo · ${meses.length - ind.mesesEgresoCompleto} sin dato completo`,
       serie: null,
       simulado: hayEscenario,
     },
@@ -191,10 +225,17 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       key: "partnership",
       label: "Partnership",
       valor: fmtMonto(ind.partnershipTotal, moneda),
-      nota:
-        r.indicadores.partnershipCobradoTotal < ind.partnershipTotal
-          ? `${fmtMonto(r.indicadores.partnershipCobradoTotal, moneda)} cobrado`
-          : "Comisiones de aliados",
+      // El valor es lo CONFIRMADO. La estimación se nombra en la nota y no suma a nada.
+      nota: [
+        cubreElPiso ? null : "no suma a los ingresos",
+        proyectado > 0
+          ? `${fmtMonto(proyectado, moneda)} estimado, fuera del margen`
+          : r.indicadores.partnershipCobradoTotal < ind.partnershipTotal
+            ? `${fmtMonto(r.indicadores.partnershipCobradoTotal, moneda)} cobrado`
+            : "Comisiones de aliados",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       serie: "partnership",
     },
   ];
@@ -289,6 +330,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
                     {t.nota}
                     {t.simulado && <span className="text-warn-ink"> · simulado</span>}
                   </p>
+                  {t.detalle && <p className="text-[10px] text-fg-muted mt-0.5 tabular-nums">{t.detalle}</p>}
                 </>
               );
               const base = "text-left rounded-xl border bg-surface px-3 py-2.5 min-h-[76px] transition-all";

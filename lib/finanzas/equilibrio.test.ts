@@ -19,6 +19,11 @@
  *   I. calcularEquilibrio — composición e invariantes
  *   J. estructura y desglose por servicio
  *   K. el FX no se escapa del módulo (candado estructural)
+ *   L. facturado = tiene factura (tipoIngresoDeCobro)
+ *   M. el % de cobranza en par, y por moneda nativa
+ *   N. una comisión estimada no es una comisión cobrada
+ *   O. PARTNERSHIP_CUBRE_EL_PISO: la pregunta abierta, en sus dos valores
+ *   P. el hueco de ventas con la tasa de cada mes
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -29,10 +34,14 @@ import {
   conceptosRecurrentes,
   convertir,
   metasDe,
+  PARTNERSHIP_CUBRE_EL_PISO,
   periodosDelAnio,
   pisoVigente,
   promedioMensual,
   reservaAguinaldoMensual,
+  sumarPorClienteEnPresentacion,
+  tipoIngresoDeCobro,
+  type CobroParaImputar,
   type EgresoDeMes,
   type FilaMes,
   type IngresoDeMes,
@@ -533,7 +542,7 @@ describe("I · calcularEquilibrio — composición e invariantes", () => {
     expect(r.meses[3]!.brecha).toBe(-8601.28);
   });
 
-  it("I5 el partnership suma a los ingresos aunque todavía no se haya cobrado", () => {
+  it("I5 el partnership CONFIRMADO suma a los ingresos aunque todavía no se haya cobrado", () => {
     const r = calcularEquilibrio([], [ing("2026-11", "COMISION_PARTNER", 53_849.25, { tipoServicio: null, cobrada: false })], {
       anio: 2026,
       hoyISO: HOY,
@@ -566,7 +575,7 @@ describe("I · calcularEquilibrio — composición e invariantes", () => {
     const r = calcularEquilibrio([], [], { anio: 2026, hoyISO: HOY });
     expect(r.meses).toHaveLength(12);
     expect(r.indicadores.egresosTotales).toBe(0);
-    expect(r.indicadores.tasaCobro).toBeNull();
+    expect(r.indicadores.cobranza).toEqual({ sobreFacturado: null, sobreExigible: null, enPlazo: 0 });
     expect(r.equilibrio.base).toBe(0);
     expect(r.calidad.avisos.some((a) => a.codigo === "SIN_MESES_ELEGIBLES")).toBe(true);
   });
@@ -718,4 +727,256 @@ describe("K · el FX no se escapa de acá", () => {
       expect(codigo).not.toMatch(/from\s+["'][^"']*finanzas\/equilibrio["']/);
     });
   }
+});
+
+// ── L ───────────────────────────────────────────────────────────────────────────
+
+describe("L · facturado = tiene factura (tipoIngresoDeCobro)", () => {
+  const cobro = (extra: Partial<CobroParaImputar>): CobroParaImputar => ({
+    estado: "PROGRAMADO",
+    periodo: "2026-06",
+    fechaProgramadaISO: "2026-06-15",
+    fechaEmisionISO: null,
+    fechaCobroISO: null,
+    ...extra,
+  });
+
+  it("L1 ALMOTEC: tres cuotas en PROGRAMADO emitidas el 19-ago dan 6.900 facturados en AGOSTO", () => {
+    // Antes figuraban como «pendiente de facturar» en jun, jul y ago mientras Cobranza las
+    // mostraba vencidas: dos pantallas contradiciéndose sobre el mismo cliente.
+    const imputadas = ["2026-06", "2026-07", "2026-08"].map((p) =>
+      tipoIngresoDeCobro(cobro({ periodo: p, fechaProgramadaISO: `${p}-15`, fechaEmisionISO: "2026-08-19" }), "2026-09-13"),
+    );
+    expect(imputadas.map((t) => `${t.tipo} ${t.periodo}`)).toEqual([
+      "POR_COBRAR 2026-08",
+      "POR_COBRAR 2026-08",
+      "POR_COBRAR 2026-08",
+    ]);
+    const r = calcularEquilibrio(
+      [],
+      imputadas.map((t) => ing(t.periodo, t.tipo, 2300, { enPlazo: t.enPlazo })),
+      { anio: 2026, hoyISO: "2026-09-13" },
+    );
+    expect(r.meses[7]!.facturado).toBe(6900);
+    // 19-ago + 15 días de crédito = 3-sep: al 13-sep ya está vencida.
+    expect(r.meses[7]!.porCobrarVencido).toBe(6900);
+    expect(r.indicadores.pendienteFacturarTotal).toBe(0);
+  });
+
+  it("L2 un POR_COBRAR sin factura NO es facturado: es backlog en su período (I6 sigue en pie)", () => {
+    expect(tipoIngresoDeCobro(cobro({ estado: "POR_COBRAR", periodo: "2026-09" }), "2026-09-13")).toEqual({
+      tipo: "PROGRAMADO",
+      periodo: "2026-09",
+      enPlazo: false,
+      sinFechaDeCobro: false,
+    });
+  });
+
+  it("L3 lo cobrado va al mes en que entró la plata; sin fecha de cobro, a su período y queda marcado", () => {
+    expect(tipoIngresoDeCobro(cobro({ estado: "COBRADO", fechaCobroISO: "2026-07-02" }), HOY)).toMatchObject({
+      tipo: "COBRADO",
+      periodo: "2026-07",
+      sinFechaDeCobro: false,
+    });
+    expect(tipoIngresoDeCobro(cobro({ estado: "COBRADO" }), HOY)).toMatchObject({
+      tipo: "COBRADO",
+      periodo: "2026-06",
+      sinFechaDeCobro: true,
+    });
+  });
+
+  it("L4 una factura con el crédito consumido y promesa de pago vigente cuenta como VENCIDA", () => {
+    // Emitida el 20-ago, prometió pagar el 15-sep. La promesa es una marca, no un descuento.
+    const conPromesa = {
+      ...cobro({ estado: "POR_COBRAR", periodo: "2026-08", fechaEmisionISO: "2026-08-20" }),
+      promesaPagoISO: "2026-09-15",
+    };
+    expect(tipoIngresoDeCobro(conPromesa, "2026-09-12").enPlazo).toBe(false);
+    // La misma factura, antes de que corra el crédito, sí está en plazo.
+    expect(tipoIngresoDeCobro(conPromesa, "2026-09-01").enPlazo).toBe(true);
+  });
+
+  it("L5 el plazo es el crédito de la CUENTA, no el estándar", () => {
+    const c = cobro({ estado: "POR_COBRAR", fechaEmisionISO: "2026-08-20", creditoDias: 30 });
+    expect(tipoIngresoDeCobro(c, "2026-09-12").enPlazo).toBe(true);
+  });
+});
+
+// ── M ───────────────────────────────────────────────────────────────────────────
+
+describe("M · el % de cobranza en par", () => {
+  it("M1 lo que está en plazo cuenta en lo facturado y NO en lo exigible", () => {
+    const r = calcularEquilibrio(
+      [],
+      [
+        ing("2026-08", "COBRADO", 8000),
+        ing("2026-08", "POR_COBRAR", 1000, { enPlazo: false }),
+        ing("2026-09", "POR_COBRAR", 1000, { enPlazo: true }),
+      ],
+      { anio: 2026, hoyISO: "2026-09-13" },
+    );
+    expect(r.indicadores.cobranza).toEqual({ sobreFacturado: 0.8, sobreExigible: 0.889, enPlazo: 1000 });
+    expect(r.indicadores.porCobrarVencidoTotal).toBe(1000);
+  });
+
+  it("M2 una factura sin la marca de plazo se trata como exigible: no se afirma lo que no se midió", () => {
+    const r = calcularEquilibrio([], [ing("2026-08", "COBRADO", 900), ing("2026-08", "POR_COBRAR", 100)], {
+      anio: 2026,
+      hoyISO: "2026-09-13",
+    });
+    expect(r.indicadores.cobranza.sobreExigible).toBe(0.9);
+  });
+
+  it("M3 la apertura es por moneda NATIVA: los colones no se convierten y se ven aunque falte la tasa", () => {
+    // Los colones del libro de Alex: 49,50 % sobre lo facturado, y casi todo lo pendiente eran
+    // tres facturas emitidas dos días antes.
+    const r = calcularEquilibrio(
+      [],
+      [
+        ing("2026-08", "COBRADO", 100),
+        ing("2026-08", "COBRADO", 39_130_000, { moneda: "CRC" }),
+        ing("2026-09", "POR_COBRAR", 39_124_837, { moneda: "CRC", enPlazo: true }),
+        ing("2026-08", "POR_COBRAR", 796_156, { moneda: "CRC" }),
+      ],
+      { anio: 2026, hoyISO: "2026-09-13" },
+    );
+    expect(r.cobranzaPorMoneda.CRC).toMatchObject({ sobreFacturado: 0.495, sobreExigible: 0.98 });
+    expect(r.cobranzaPorMoneda.USD).toMatchObject({ cobrado: 100, sobreFacturado: 1, sobreExigible: 1 });
+    // Sin tasa, en el total en dólares solo están los dólares.
+    expect(r.indicadores.cobradoTotal).toBe(100);
+  });
+});
+
+// ── N ───────────────────────────────────────────────────────────────────────────
+
+describe("N · una comisión estimada no es una comisión cobrada", () => {
+  const comision = (p: string, monto: number, extra: Partial<IngresoDeMes>) =>
+    ing(p, "COMISION_PARTNER", monto, { tipoServicio: null, ...extra });
+
+  it("N1 EL CASO REAL: los US$51.000 estimados de agosto no suman a ingresos, brecha ni margen", () => {
+    const r = calcularEquilibrio(
+      anioParejo(1000),
+      [
+        comision("2026-05", 45_921.72, { cobrada: true }),
+        comision("2026-08", 51_000, { cobrada: false, esProyeccion: true }),
+      ],
+      { anio: 2026, hoyISO: "2026-09-13" },
+    );
+    const ago = r.meses[7]!;
+    expect(ago.partnership).toBe(0);
+    expect(ago.partnershipProyectado).toBe(51_000);
+    expect(ago.ingresosTotales).toBe(0);
+    expect(ago.brecha).toBe(-1000);
+    expect(ago.cubreEgresos).toBe(false);
+    expect(r.indicadores.partnershipTotal).toBe(45_921.72);
+    expect(r.indicadores.partnershipProyectadoTotal).toBe(51_000);
+    // Nueve meses ocurridos a 1.000 de egreso contra la única comisión que entró.
+    expect(r.indicadores.margenAlDia).toBe(36_921.72);
+    expect(r.calidad.avisos.find((a) => a.codigo === "COMISIONES_ESTIMADAS")?.periodos).toEqual(["2026-08"]);
+  });
+
+  it("N2 si ya se cobró, la marca de estimación no la saca: alguien la confirmó", () => {
+    const r = calcularEquilibrio([], [comision("2026-05", 500, { cobrada: true, esProyeccion: true })], {
+      anio: 2026,
+      hoyISO: HOY,
+    });
+    expect(r.meses[4]!.partnership).toBe(500);
+    expect(r.meses[4]!.partnershipProyectado).toBe(0);
+  });
+});
+
+// ── O ───────────────────────────────────────────────────────────────────────────
+
+describe("O · PARTNERSHIP_CUBRE_EL_PISO", () => {
+  it("O1 CENTINELA: la bandera del código dice lo mismo que DECISIONS", () => {
+    // La pregunta es de Marco y Claudia. Mover la bandera sin escribir la decisión es contestarla
+    // en silencio, que es exactamente cómo nació (H12).
+    const decisiones = readFileSync("docs/DECISIONS.md", "utf8");
+    const declarada = decisiones.match(/`PARTNERSHIP_CUBRE_EL_PISO = (true|false)`/);
+    expect(declarada, "DECISIONS §El reporte anual de equilibrio tiene que declarar la bandera").not.toBeNull();
+    expect(declarada?.[1] === "true").toBe(PARTNERSHIP_CUBRE_EL_PISO);
+  });
+
+  describe.each([true, false])("con la bandera en %s", (cubre) => {
+    const reporte = () =>
+      calcularEquilibrio(
+        anioParejo(30_000),
+        [
+          ing("2026-05", "COBRADO", 15_290.33),
+          ing("2026-05", "COMISION_PARTNER", 48_770.97, { tipoServicio: null, cobrada: true }),
+          ing("2026-08", "COMISION_PARTNER", 51_000, { tipoServicio: null, cobrada: false, esProyeccion: true }),
+        ],
+        { anio: 2026, hoyISO: "2026-09-13", partnershipCubreElPiso: cubre },
+      );
+
+    it("la comisión confirmada suma a los ingresos solo si la bandera lo dice, y se muestra igual", () => {
+      const r = reporte();
+      const mayo = r.meses[4]!;
+      expect(mayo.partnership).toBe(48_770.97);
+      expect(mayo.partnershipEnIngresos).toBe(cubre ? 48_770.97 : 0);
+      expect(mayo.ingresosTotales).toBe(cubre ? 64_061.3 : 15_290.33);
+      expect(mayo.cubreEgresos).toBe(cubre);
+      expect(r.criterios.partnershipCubreElPiso).toBe(cubre);
+      expect(r.calidad.avisos.some((a) => a.codigo === "PARTNERSHIP_NO_CUBRE_EL_PISO")).toBe(!cubre);
+    });
+
+    it("la estimación no suma con ningún valor", () => {
+      expect(reporte().meses[7]!.ingresosTotales).toBe(0);
+    });
+
+    it("la caja no depende de la bandera: la comisión cobrada entró igual", () => {
+      expect(reporte().indicadores.partnershipCobradoTotal).toBe(48_770.97);
+    });
+  });
+});
+
+// ── P ───────────────────────────────────────────────────────────────────────────
+
+describe("P · sumarPorClienteEnPresentacion — el hueco de ventas con la tasa de cada mes", () => {
+  const tasas = [
+    { periodo: "2026-03", crcPorUsd: 490, fuente: "prueba" },
+    { periodo: "2026-08", crcPorUsd: 455, fuente: "prueba" },
+  ];
+
+  it("P1 cada mes con SU tasa: 490 en marzo y 455 en agosto", () => {
+    const r = sumarPorClienteEnPresentacion(
+      [
+        { clave: "c1", tipo: "COBRADO", periodo: "2026-03", monto: 490_000, moneda: "CRC", concepto: "Cliente" },
+        { clave: "c1", tipo: "POR_COBRAR", periodo: "2026-08", monto: 455_000, moneda: "CRC", concepto: "Cliente" },
+      ],
+      { monedaPresentacion: "USD", tasas },
+    );
+    expect(r.facturado.get("c1")).toBe(2000);
+    expect(r.cobrado.get("c1")).toBe(1000);
+  });
+
+  it("P2 colones SIN tasa no suman: se listan (antes entraban crudos a una suma con «$»)", () => {
+    const r = sumarPorClienteEnPresentacion(
+      [{ clave: "c1", tipo: "POR_COBRAR", periodo: "2026-10", monto: 704_563, moneda: "CRC", concepto: "Judesur" }],
+      { monedaPresentacion: "USD", tasas },
+    );
+    expect(r.facturado.has("c1")).toBe(false);
+    expect(r.noConvertidos).toEqual([{ periodo: "2026-10", moneda: "CRC", monto: 704_563, concepto: "Judesur" }]);
+  });
+
+  it("P3 un PROGRAMADO con factura respalda la venta; uno sin factura, no", () => {
+    const base: CobroParaImputar = {
+      estado: "PROGRAMADO",
+      periodo: "2026-06",
+      fechaProgramadaISO: "2026-06-15",
+      fechaEmisionISO: "2026-08-19",
+      fechaCobroISO: null,
+    };
+    const conFactura = tipoIngresoDeCobro(base, "2026-09-13");
+    const sinFactura = tipoIngresoDeCobro({ ...base, fechaEmisionISO: null }, "2026-09-13");
+    const r = sumarPorClienteEnPresentacion(
+      [
+        { clave: "almotec", tipo: conFactura.tipo, periodo: conFactura.periodo, monto: 2300, moneda: "USD", concepto: "ALMOTEC" },
+        { clave: "bluesat", tipo: sinFactura.tipo, periodo: sinFactura.periodo, monto: 475, moneda: "USD", concepto: "BLUESAT" },
+      ],
+      { monedaPresentacion: "USD", tasas: [] },
+    );
+    expect(r.facturado.get("almotec")).toBe(2300);
+    expect(r.facturado.has("bluesat")).toBe(false);
+  });
 });

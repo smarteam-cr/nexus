@@ -145,6 +145,11 @@ export interface EstadoParaAuditar {
   cobradosSinFecha: { cuantas: number; total: number };
   /** Meses del año sin tipo de cambio cargado. */
   periodosSinTasa: string[];
+  /**
+   * Cobros facturados de un cliente que no se pudieron convertir por falta de tasa, en su moneda.
+   * NO están sumados al facturado del cliente, así que su venta puede figurar descubierta.
+   */
+  facturadoSinTasa: Array<{ concepto: string; periodo: string; moneda: string; monto: number }>;
   /** Conceptos cuya moneda se dedujo del formato en vez de leerse. */
   monedaInferida: string[];
   /** Ventas en otra moneda donde la tasa de Nexus y la de HubSpot no coinciden. */
@@ -364,7 +369,15 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       montoEnJuego: null,
       queHacer: "Cargar la tasa de esos meses.",
       resuelve: "COBRANZA",
-      items: soloTexto(e.periodosSinTasa),
+      items: [
+        ...soloTexto(e.periodosSinTasa),
+        // ⚠ Sin `monto`: la lista lo imprime en la moneda del reporte, y estos montos están
+        // justamente en la otra. Van en la nota, con su moneda escrita.
+        ...e.facturadoSinTasa.map((n) => ({
+          texto: `${n.concepto} · ${n.periodo}`,
+          nota: `${n.moneda} ${n.monto.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} facturados que no suman a lo facturado del cliente`,
+        })),
+      ],
     });
   }
 

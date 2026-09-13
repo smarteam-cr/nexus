@@ -243,6 +243,111 @@ export function resumenAntiguedad(
   return out;
 }
 
+// ── Lectura de cobranza: el porcentaje en par ───────────────────────────────────
+
+/**
+ * En qué punto está la plata de un cobro para leer el % de cobranza.
+ *  - COBRADO     entró
+ *  - VENCIDO     facturado y con el crédito consumido: ya se le puede exigir al cliente
+ *  - EN_PLAZO    facturado y dentro del crédito: todavía no se le puede reclamar
+ *  - SIN_FACTURA no se emitió la factura: no es cobranza, es trabajo pendiente de Smarteam
+ *
+ * ⚠ Sale de `semaforoCobro`, la definición única de vencido, y por eso una promesa de pago no
+ * saca a nadie del vencido (decisión de Alex, 2026-09-12). Una segunda regla acá haría que el %
+ * y la cola contaran deudas distintas.
+ */
+export type ClaseDeCobranza = "COBRADO" | "VENCIDO" | "EN_PLAZO" | "SIN_FACTURA";
+
+export function claseDeCobranza(
+  cobro: { estado: string; fechaProgramadaISO: string; fechaEmisionISO: string | null },
+  todayISO: string,
+  creditoDias: number = DEFAULT_CREDITO_DIAS,
+): ClaseDeCobranza {
+  switch (semaforoCobro(cobro, todayISO, creditoDias)) {
+    case "verde":
+      return "COBRADO";
+    case "rojo":
+      return "VENCIDO";
+    case "azul":
+      return "EN_PLAZO";
+    default:
+      return "SIN_FACTURA";
+  }
+}
+
+/**
+ * El % de cobranza, leído de las dos maneras a la vez.
+ *
+ * ── POR QUÉ SON DOS Y VIAJAN JUNTAS ─────────────────────────────────────────────
+ * «Cobrado ÷ facturado» castiga a la empresa por haber facturado ayer: el libro de Alex declaró
+ * 49,50 % de cobranza en colones cuando el 98 % de ese pendiente eran tres facturas emitidas dos
+ * días antes. «Cobrado ÷ exigible» deja afuera lo que todavía está en plazo y dice cuánto de lo
+ * que ya se podía cobrar entró. Suelto, cualquiera de los dos se cita mal: el primero asusta sin
+ * motivo y el segundo esconde cuánto falta. Por eso no hay un campo con uno solo.
+ *
+ * Solo cuenta lo FACTURADO (decisión de Alex, 2026-09-12): lo que no tiene factura no entra a
+ * ninguno de los dos denominadores.
+ *
+ * null = no hay denominador. Cero sería afirmar que no se cobró nada de algo que no existe.
+ * Acá no se convierte: los montos entran ya en una sola moneda.
+ */
+export interface LecturaDeCobranza {
+  /** cobrado ÷ (cobrado + por cobrar), a tres decimales. */
+  sobreFacturado: number | null;
+  /** cobrado ÷ (cobrado + vencido), a tres decimales. */
+  sobreExigible: number | null;
+  /** Lo facturado sin cobrar que todavía está dentro del crédito. */
+  enPlazo: number;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+export function lecturaDeCobranza(m: { cobrado: number; porCobrar: number; vencido: number }): LecturaDeCobranza {
+  const facturado = m.cobrado + m.porCobrar;
+  const exigible = m.cobrado + m.vencido;
+  return {
+    sobreFacturado: facturado > 0 ? round3(m.cobrado / facturado) : null,
+    sobreExigible: exigible > 0 ? round3(m.cobrado / exigible) : null,
+    enPlazo: round2(m.porCobrar - m.vencido),
+  };
+}
+
+/** La cobranza de UNA moneda, en esa moneda. */
+export interface CobranzaDeMoneda extends LecturaDeCobranza {
+  facturado: number;
+  cobrado: number;
+  porCobrar: number;
+  vencido: number;
+}
+
+/**
+ * La apertura por moneda nativa, sin convertir. Existe para que un % presentado en dólares no
+ * esconda lo que pasa en colones: con los mismos datos, el total convertido daba ~88 % y tapaba
+ * justo lo que el libro de Alex separaba.
+ *
+ * Lo SIN_FACTURA se ignora: no es cobranza.
+ */
+export function cobranzaPorMoneda(
+  filas: ReadonlyArray<{ moneda: string; clase: ClaseDeCobranza; monto: number }>,
+): Record<string, CobranzaDeMoneda> {
+  const acc: Record<string, { cobrado: number; porCobrar: number; vencido: number }> = {};
+  for (const f of filas) {
+    if (f.clase === "SIN_FACTURA") continue;
+    const m = (acc[f.moneda] ??= { cobrado: 0, porCobrar: 0, vencido: 0 });
+    if (f.clase === "COBRADO") {
+      m.cobrado = round2(m.cobrado + f.monto);
+      continue;
+    }
+    m.porCobrar = round2(m.porCobrar + f.monto);
+    if (f.clase === "VENCIDO") m.vencido = round2(m.vencido + f.monto);
+  }
+  const out: Record<string, CobranzaDeMoneda> = {};
+  for (const [moneda, m] of Object.entries(acc)) {
+    out[moneda] = { ...m, facturado: round2(m.cobrado + m.porCobrar), ...lecturaDeCobranza(m) };
+  }
+  return out;
+}
+
 // ── Tandas de cobro ─────────────────────────────────────────────────────────────
 
 /**

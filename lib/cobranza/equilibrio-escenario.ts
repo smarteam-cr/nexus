@@ -18,6 +18,7 @@
  * agregándole un guardar: no está incompleta.
  */
 import type { FilaMes, ReporteEquilibrio } from "@/lib/finanzas/equilibrio";
+import { lecturaDeCobranza, type LecturaDeCobranza } from "./antiguedad";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -36,6 +37,7 @@ export interface IndicadoresAnio {
   facturadoTotal: number;
   cobradoTotal: number;
   porCobrarTotal: number;
+  porCobrarVencidoTotal: number;
   partnershipTotal: number;
   ingresosTotales: number;
   /** Los doce meses. PROYECCIÓN: mezcla lo ocurrido con lo comprometido. */
@@ -48,7 +50,8 @@ export interface IndicadoresAnio {
   egresosDeCajaTotal: number;
   /** Lo vendido del año. NO cambia al simular: simular mueve el facturado, no la venta. */
   vendidoTotal: number;
-  tasaCobro: number | null;
+  /** El % de cobranza en par, sobre lo REAL. Ver `lecturaDeCobranza`. */
+  cobranza: LecturaDeCobranza;
   mesesQueCubren: number;
   mesesEgresoCompleto: number;
   /** Cuántos meses están simulados. 0 = todo es real. */
@@ -69,7 +72,10 @@ export function aplicarEscenario(
   return meses.map((m) => {
     const simulado = Object.prototype.hasOwnProperty.call(override, m.periodo);
     const facturadoEfectivo = simulado ? override[m.periodo]! : m.facturado;
-    const ingresosTotales = round2(facturadoEfectivo + m.partnership);
+    // `partnershipEnIngresos` y no `partnership`: la fila ya trae aplicada la bandera
+    // PARTNERSHIP_CUBRE_EL_PISO y sin la estimación. Sumar el otro campo haría que simular un mes
+    // cambiara también el criterio.
+    const ingresosTotales = round2(facturadoEfectivo + m.partnershipEnIngresos);
     return {
       ...m,
       facturadoEfectivo,
@@ -94,13 +100,16 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
   const suma = (f: (m: MesEfectivo) => number) => round2(meses.reduce((n, m) => n + f(m), 0));
   const facturadoTotal = suma((m) => m.facturadoEfectivo);
   const cobradoTotal = suma((m) => m.cobrado);
+  const porCobrarTotal = suma((m) => m.porCobrar);
+  const porCobrarVencidoTotal = suma((m) => m.porCobrarVencido);
   const egresosTotales = suma((m) => m.egresos);
   const ingresosTotales = suma((m) => m.ingresosTotales);
   return {
     egresosTotales,
     facturadoTotal,
     cobradoTotal,
-    porCobrarTotal: suma((m) => m.porCobrar),
+    porCobrarTotal,
+    porCobrarVencidoTotal,
     partnershipTotal: suma((m) => m.partnership),
     ingresosTotales,
     margenAnual: round2(ingresosTotales - egresosTotales),
@@ -119,13 +128,10 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
     // Intocable al simular, igual que el partnership: mover el facturado de marzo es
     // preguntarse qué pasaría si se facturara más, no reescribir lo que se vendió.
     vendidoTotal: round2(meses.reduce((n, m) => n + m.vendido, 0)),
-    // La tasa de cobro se mide contra el facturado REAL: dividir por uno simulado
+    // El % de cobranza se mide contra lo facturado REAL: dividir por uno simulado
     // produciría un porcentaje de cobro inventado, que es de las cifras que más se
-    // citan sueltas fuera de la pantalla.
-    tasaCobro: (() => {
-      const real = round2(meses.reduce((n, m) => n + m.facturado, 0));
-      return real === 0 ? null : Math.round((cobradoTotal / real) * 1000) / 1000;
-    })(),
+    // citan sueltas fuera de la pantalla. Mismas tres sumas que el servidor.
+    cobranza: lecturaDeCobranza({ cobrado: cobradoTotal, porCobrar: porCobrarTotal, vencido: porCobrarVencidoTotal }),
     mesesQueCubren: meses.filter((m) => m.cubreEgresos === true).length,
     mesesEgresoCompleto: meses.filter((m) => m.estado === "COMPLETO").length,
     mesesSimulados: meses.filter((m) => m.simulado).length,
@@ -138,6 +144,10 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
  * El partnership ya cuenta como ingreso, así que lo que hay que facturar es el piso
  * MENOS lo que deja el aliado ese mes, y nunca menos de cero.
  *
+ * ⚠ Descuenta solo lo CONFIRMADO y solo si PARTNERSHIP_CUBRE_EL_PISO (`partnershipEnIngresos`).
+ * Antes restaba el partnership entero: un mes con una comisión estimada de US$51.000 figuraba
+ * sin necesidad de facturar un peso, apoyado en plata que nadie había visto entrar.
+ *
  * ⚠ SUBE, NO EMPAREJA. La primera versión le ponía a todos los meses exactamente el
  * piso, y con eso BAJABA los que ya facturaban por encima: el escenario terminaba
  * mostrando un año PEOR que el real, debajo de un botón que se lee como una aspiración.
@@ -147,7 +157,7 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
 export function igualarAlEquilibrio(meses: readonly FilaMes[], piso: number): OverrideEscenario {
   const out: OverrideEscenario = {};
   for (const m of meses) {
-    const necesario = Math.max(0, piso - m.partnership);
+    const necesario = Math.max(0, piso - m.partnershipEnIngresos);
     out[m.periodo] = round2(Math.max(necesario, m.facturado));
   }
   return out;

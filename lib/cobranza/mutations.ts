@@ -30,6 +30,7 @@ import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
+import { montoEsProyeccionPara } from "./comisiones-partner";
 import {
   alertasQueYaNoAplican,
   cuentasEvaluadas,
@@ -1654,6 +1655,10 @@ export async function createComisionPartner(
       // El estado se puede declarar al anotar: una comisión que ya entró nace COBRADO
       // (con su confirmación, INV20) y una que se espera nace POR_COBRAR.
       // `confirmadoPor` sale del guard, NUNCA del body.
+      // ⚠ Y la que se espera nace ESTIMADA. Sin esta línea la columna quedaba en su default
+      // (false) y el reporte de equilibrio contaba una comisión que nadie cobró con el mismo
+      // peso que la plata en el banco.
+      montoEsProyeccion: montoEsProyeccionPara(data.estado),
       ...(data.estado === "COBRADO"
         ? {
             estado: "COBRADO" as const,
@@ -1710,7 +1715,7 @@ export async function cambiarEstadoComisionPartner(
       ...(data.montoBruto !== undefined ? { montoBruto: data.montoBruto } : {}),
       // Confirmar es, por definición, dejar de proyectar: alguien miró el banco. Y al
       // revertir vuelve a serlo — el número que queda es el que nadie confirmó.
-      montoEsProyeccion: data.estado !== "COBRADO",
+      montoEsProyeccion: montoEsProyeccionPara(data.estado),
       ...(data.estado === "COBRADO"
         ? {
             // El refine del schema garantiza que la fecha viene: marcarla cobrada sin

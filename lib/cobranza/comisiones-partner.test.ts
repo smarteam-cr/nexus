@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   comisionesPorCobrar,
+  montoEsProyeccionPara,
   retencionDe,
   sugerenciaParaLaProxima,
   totalesPorMoneda,
@@ -176,6 +177,19 @@ describe("qué sugerir para la próxima comisión", () => {
       h("2026-02-15", 38_756.61, "COBRADO"),
     ])!;
     expect(r.monto).toBe(45_921.72);
+  });
+});
+
+describe("montoEsProyeccionPara: el monto de quién está confirmado", () => {
+  it("una comisión nueva POR_COBRAR nace como estimación; sin estado, también (nace POR_COBRAR)", () => {
+    // El alta desde la pantalla no escribía la marca y la comisión nacía con el mismo peso que la
+    // plata que ya entró: el reporte de equilibrio la contaba en el margen a la fecha.
+    expect(montoEsProyeccionPara("POR_COBRAR")).toBe(true);
+    expect(montoEsProyeccionPara(undefined)).toBe(true);
+  });
+
+  it("solo una COBRADA tiene un monto que alguien confirmó", () => {
+    expect(montoEsProyeccionPara("COBRADO")).toBe(false);
   });
 });
 

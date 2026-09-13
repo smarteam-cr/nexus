@@ -34,6 +34,32 @@
  *     de referencia.
  */
 import { periodoDe } from "@/lib/cobranza/planilla";
+import {
+  claseDeCobranza,
+  cobranzaPorMoneda,
+  lecturaDeCobranza,
+  type ClaseDeCobranza,
+  type CobranzaDeMoneda,
+  type LecturaDeCobranza,
+} from "@/lib/cobranza/antiguedad";
+import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+
+// ── La pregunta abierta de Dirección ────────────────────────────────────────────
+
+/**
+ * ¿El punto de equilibrio se cubre también con lo que pagan los aliados, o solo con venta a
+ * clientes? Lo deciden Marco y Claudia, y hasta que contesten queda en `true`, que es lo que el
+ * reporte hizo siempre sin que nadie lo firmara (hallazgo H12).
+ *
+ * Con `true` la comisión CONFIRMADA suma a los ingresos, a la brecha y a «Igualar al equilibrio».
+ * Con `false` se sigue mostrando, pero el piso se mide solo contra lo facturado. La caja no cambia
+ * con la bandera: una comisión cobrada entró al banco igual.
+ *
+ * ⚠ Que una comisión ESTIMADA no cuente NO depende de esta bandera: eso era un error y se
+ * corrigió. Moverla exige actualizar la línea de DECISIONS §El reporte anual de equilibrio; un
+ * test compara las dos y se pone rojo si no coinciden.
+ */
+export const PARTNERSHIP_CUBRE_EL_PISO = true;
 
 // ── Tipos de entrada ────────────────────────────────────────────────────────────
 
@@ -70,9 +96,16 @@ export interface EgresoDeMes {
 
 /**
  * De qué naturaleza es una plata que entra.
- *  - COBRADO / POR_COBRAR  facturado (los dos suman al facturado del mes)
- *  - PROGRAMADO            ni siquiera se facturó — NO es ingreso, es backlog
+ *  - COBRADO               entró (suma al facturado del mes en que entró)
+ *  - POR_COBRAR            TIENE FACTURA y no entró (suma al facturado del mes de emisión)
+ *  - PROGRAMADO            no tiene factura — NO es ingreso, es backlog
  *  - COMISION_PARTNER      lo que deja un aliado, cobrado o no
+ *
+ * ⚠ POR_COBRAR acá NO es el estado del cobro: es «facturado y sin cobrar», y lo decide
+ * `tipoIngresoDeCobro` mirando la fecha de emisión. El estado de la base mezcla las dos cosas —un
+ * cobro en POR_COBRAR sin factura y uno en PROGRAMADO con factura existen los dos— y leerlo
+ * directo inflaba lo facturado con lo que nunca se facturó (decisión de Alex, 2026-09-12: el % de
+ * cobranza cuenta solo lo facturado).
  */
 export type TipoIngreso = "COBRADO" | "POR_COBRAR" | "PROGRAMADO" | "COMISION_PARTNER";
 
@@ -85,6 +118,72 @@ export interface IngresoDeMes {
   tipoServicio: string | null;
   /** Solo para COMISION_PARTNER: si ya entró la plata. */
   cobrada?: boolean;
+  /**
+   * Solo para COMISION_PARTNER: nadie confirmó el monto (`ComisionPartner.montoEsProyeccion`).
+   * Una estimación no suma a ingresos, margen ni cobertura: va aparte, a `partnershipProyectado`.
+   */
+  esProyeccion?: boolean;
+  /**
+   * Solo para POR_COBRAR: la factura todavía está dentro del crédito. Sin la marca se cuenta como
+   * VENCIDA: no se puede afirmar que algo está en plazo sin haber mirado su reloj.
+   */
+  enPlazo?: boolean;
+}
+
+/** Lo que hace falta de un cobro para saber en qué mes y como qué entra al reporte. */
+export interface CobroParaImputar {
+  estado: string;
+  periodo: string;
+  fechaProgramadaISO: string;
+  fechaEmisionISO: string | null;
+  fechaCobroISO: string | null;
+  /** El de la cuenta. null o ausente = el crédito estándar. */
+  creditoDias?: number | null;
+}
+
+export interface ImputacionDeCobro {
+  tipo: Exclude<TipoIngreso, "COMISION_PARTNER">;
+  periodo: string;
+  /** Solo POR_COBRAR: facturado y dentro del crédito. */
+  enPlazo: boolean;
+  /** Solo COBRADO: no dice cuándo entró la plata y se imputó por su período. */
+  sinFechaDeCobro: boolean;
+}
+
+/**
+ * Como qué y en qué mes entra un cobro al reporte. UNA regla para el reporte y para el auditor de
+ * ventas descubiertas: si cada uno imputara por su lado, la venta «respaldada» de un cliente y lo
+ * facturado del año contarían cobros distintos.
+ *
+ *  1. Cobrado → COBRADO, en el mes en que entró la plata (sin fecha de cobro, en su período).
+ *  2. Con factura y sin cobrar → POR_COBRAR, en el mes de EMISIÓN. Da igual si su estado es
+ *     POR_COBRAR o PROGRAMADO: ALMOTEC tiene tres cuotas en PROGRAMADO emitidas el 19-ago, y hasta
+ *     acá sus US$6.900 figuraban como «pendiente de facturar» en jun, jul y ago mientras Cobranza
+ *     las mostraba vencidas.
+ *  3. Sin factura → PROGRAMADO, en su período: backlog, no ingreso.
+ *
+ * `enPlazo` sale de `claseDeCobranza`, o sea de `semaforoCobro`: una promesa de pago no saca una
+ * factura del vencido.
+ */
+export function tipoIngresoDeCobro(c: CobroParaImputar, hoyISO: string): ImputacionDeCobro {
+  const clase = claseDeCobranza(c, hoyISO, c.creditoDias ?? DEFAULT_CREDITO_DIAS);
+  if (clase === "COBRADO") {
+    return {
+      tipo: "COBRADO",
+      periodo: c.fechaCobroISO ? periodoDe(c.fechaCobroISO) : c.periodo,
+      enPlazo: false,
+      sinFechaDeCobro: !c.fechaCobroISO,
+    };
+  }
+  if (clase === "SIN_FACTURA" || !c.fechaEmisionISO) {
+    return { tipo: "PROGRAMADO", periodo: c.periodo, enPlazo: false, sinFechaDeCobro: false };
+  }
+  return {
+    tipo: "POR_COBRAR",
+    periodo: periodoDe(c.fechaEmisionISO),
+    enPlazo: clase === "EN_PLAZO",
+    sinFechaDeCobro: false,
+  };
 }
 
 export interface TasaDeMes {
@@ -124,6 +223,8 @@ export interface OpcionesEquilibrio {
    * Sin esto, la serie sale en cero y el gráfico simplemente no la dibuja.
    */
   ventas?: readonly VentaDeMes[];
+  /** Default `PARTNERSHIP_CUBRE_EL_PISO`. Entra por acá para poder probar los dos valores. */
+  partnershipCubreElPiso?: boolean;
   /**
    * Cuántas ventas ganadas quedaron fuera de `ventas` por no traer monto en HubSpot.
    * Entra por separado porque el motor no las puede contar: nunca las recibe. Sin esto,
@@ -151,11 +252,22 @@ export interface FilaMes {
   facturado: number;
   cobrado: number;
   porCobrar: number;
+  /** La parte de `porCobrar` con el crédito ya consumido (`semaforoCobro` en rojo). */
+  porCobrarVencido: number;
   /** Entregado o programado y todavía sin facturar. NO suma a los ingresos. */
   pendienteFacturar: number;
+  /** Comisión de aliado con monto CONFIRMADO, cobrada o no. */
   partnership: number;
   partnershipCobrado: number;
-  ingresosTotales: number; // facturado + partnership
+  /** Comisión de aliado que es estimación. NO suma a ingresos, brecha ni margen: se declara. */
+  partnershipProyectado: number;
+  /**
+   * Lo que el partnership aporta a los ingresos: `partnership` si PARTNERSHIP_CUBRE_EL_PISO, cero
+   * si no. Viaja en la fila para que el escenario del navegador sume lo mismo que el servidor sin
+   * tener que conocer la bandera.
+   */
+  partnershipEnIngresos: number;
+  ingresosTotales: number; // facturado + partnershipEnIngresos
   /**
    * Lo vendido en el mes en que cerró el trato. NO suma a los ingresos ni entra en la
    * brecha: es el origen de la plata, no la plata. Mezclarlo con lo facturado contaría
@@ -180,7 +292,9 @@ export type CodigoAviso =
   | "TARJETA_SOLAPA_HERRAMIENTAS"
   | "AGUINALDO_DIVISOR"
   | "MESES_PARCIALES"
-  | "SIN_MESES_ELEGIBLES";
+  | "SIN_MESES_ELEGIBLES"
+  | "COMISIONES_ESTIMADAS"
+  | "PARTNERSHIP_NO_CUBRE_EL_PISO";
 
 export interface AvisoCalidad {
   codigo: CodigoAviso;
@@ -200,9 +314,11 @@ export interface ReporteEquilibrio {
     facturadoTotal: number;
     cobradoTotal: number;
     porCobrarTotal: number;
+    porCobrarVencidoTotal: number;
     pendienteFacturarTotal: number;
     partnershipTotal: number;
     partnershipCobradoTotal: number;
+    partnershipProyectadoTotal: number;
     ingresosTotales: number;
     /** Los doce meses. Es una PROYECCIÓN, no el titular: mezcla lo ocurrido con lo que viene. */
     margenAnual: number;
@@ -227,7 +343,12 @@ export interface ReporteEquilibrio {
      * Sin este número, `vendidoTotal` se lee como un total cuando en realidad es un PISO.
      */
     ventasSinMonto: number;
-    tasaCobro: number | null;
+    /**
+     * El % de cobranza, SIEMPRE en par: sobre lo facturado y sobre lo exigible. Reemplaza a una
+     * `tasaCobro` suelta que dividía por todo lo facturado del año y castigaba a la empresa por
+     * haber facturado ayer. La apertura por moneda nativa viaja en `cobranzaPorMoneda`.
+     */
+    cobranza: LecturaDeCobranza;
     mesesQueCubren: number;
     mesesConDato: number;
     mesesEgresoCompleto: number;
@@ -273,6 +394,13 @@ export interface ReporteEquilibrio {
     montosNoConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string }>;
     convertidos: number;
   };
+  /**
+   * La cobranza del año por moneda NATIVA, sin convertir: lo que un % en dólares no deja ver.
+   * Incluye lo que no se pudo convertir por falta de tasa, porque esa plata existe igual.
+   */
+  cobranzaPorMoneda: Record<string, CobranzaDeMoneda>;
+  /** Con qué criterios se armó. Viaja para que la pantalla lo diga en vez de suponerlo. */
+  criterios: { partnershipCubreElPiso: boolean };
 }
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
@@ -330,6 +458,54 @@ export function convertir(
   if (!tasa || !Number.isFinite(tasa.crcPorUsd) || tasa.crcPorUsd <= 0) return null;
   const convertidoMonto = desde === "CRC" ? monto / tasa.crcPorUsd : monto * tasa.crcPorUsd;
   return { monto: round2(convertidoMonto), convertido: true };
+}
+
+/** Un cobro ya imputado (`tipoIngresoDeCobro`), con la clave de a quién se le suma. */
+export interface CobroDeCliente {
+  clave: string;
+  tipo: TipoIngreso;
+  periodo: string;
+  monto: number;
+  moneda: MonedaEq;
+  /** Cómo se nombra en la lista de lo que no se pudo convertir. */
+  concepto: string;
+}
+
+/**
+ * Lo facturado y lo cobrado de cada cliente, en la moneda de presentación, para medir el hueco
+ * de ventas sin respaldo por MONTO.
+ *
+ * ⚠ Cada cobro con la tasa de SU mes. La versión anterior vivía en el loader, usaba la primera
+ * tasa del año para todos y, sin tasa, dejaba el colón crudo dentro de una suma que se imprime con
+ * «$» (`conv?.monto ?? crudo`, hallazgo H26): un cliente en colones parecía cubierto ~450 veces de
+ * más y el hueco encogía solo. Sin tasa no se suma: se lista, igual que en el reporte.
+ *
+ * Solo COBRADO y POR_COBRAR (lo facturado). Lo PROGRAMADO sin factura no respalda ninguna venta;
+ * uno CON factura ya llega como POR_COBRAR.
+ */
+export function sumarPorClienteEnPresentacion(
+  cobros: readonly CobroDeCliente[],
+  opciones: { monedaPresentacion: MonedaEq; tasas: readonly TasaDeMes[] },
+): {
+  facturado: Map<string, number>;
+  cobrado: Map<string, number>;
+  noConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string }>;
+} {
+  const tasaPorPeriodo = new Map(opciones.tasas.map((t) => [t.periodo, t]));
+  const facturado = new Map<string, number>();
+  const cobrado = new Map<string, number>();
+  const noConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string }> = [];
+  for (const c of cobros) {
+    if (c.tipo !== "COBRADO" && c.tipo !== "POR_COBRAR") continue;
+    const r = convertir(c.monto, c.moneda, opciones.monedaPresentacion, tasaPorPeriodo.get(c.periodo) ?? null);
+    if (r === null) {
+      noConvertidos.push({ periodo: c.periodo, moneda: c.moneda, monto: c.monto, concepto: c.concepto });
+      continue;
+    }
+    facturado.set(c.clave, round2((facturado.get(c.clave) ?? 0) + r.monto));
+    if (c.tipo === "COBRADO") cobrado.set(c.clave, round2((cobrado.get(c.clave) ?? 0) + r.monto));
+  }
+  return { facturado, cobrado, noConvertidos };
 }
 
 /**
@@ -606,6 +782,7 @@ export function calcularEquilibrio(
 ): ReporteEquilibrio {
   const moneda = opciones.monedaPresentacion ?? "USD";
   const ventana = opciones.ventana ?? "SOLO_MEDIDOS";
+  const cubreElPiso = opciones.partnershipCubreElPiso ?? PARTNERSHIP_CUBRE_EL_PISO;
   const tasas = opciones.tasas ?? [];
   const periodos = periodosDelAnio(opciones.anio);
   const tasaPorPeriodo = new Map(tasas.map((t) => [t.periodo, t]));
@@ -659,24 +836,52 @@ export function calcularEquilibrio(
   type AccIngreso = {
     cobrado: number;
     porCobrar: number;
+    porCobrarVencido: number;
     pendiente: number;
     partnership: number;
     partnershipCobrado: number;
+    partnershipProyectado: number;
     porServicio: Record<string, number>;
   };
   const ingMes = new Map<string, AccIngreso>();
   for (const p of periodos) {
-    ingMes.set(p, { cobrado: 0, porCobrar: 0, pendiente: 0, partnership: 0, partnershipCobrado: 0, porServicio: {} });
+    ingMes.set(p, {
+      cobrado: 0,
+      porCobrar: 0,
+      porCobrarVencido: 0,
+      pendiente: 0,
+      partnership: 0,
+      partnershipCobrado: 0,
+      partnershipProyectado: 0,
+      porServicio: {},
+    });
   }
   const porServicioAnual = new Map<string, { facturado: number; cobrado: number; porCobrar: number }>();
+  /** La cobranza en moneda nativa. Se anota ANTES de convertir: lo que no tiene tasa existe igual. */
+  const cobranzaNativa: Array<{ moneda: string; clase: ClaseDeCobranza; monto: number }> = [];
 
   for (const i of ingresos) {
     const acc = ingMes.get(i.periodo);
     if (!acc) continue;
+    if (i.tipo === "COBRADO" || i.tipo === "POR_COBRAR") {
+      cobranzaNativa.push({
+        moneda: i.moneda,
+        monto: i.monto,
+        clase: i.tipo === "COBRADO" ? "COBRADO" : i.enPlazo ? "EN_PLAZO" : "VENCIDO",
+      });
+    }
     const monto = aPresentacion(i.monto, i.moneda, i.periodo, i.tipoServicio ?? "comisión de aliado");
     if (monto === null) continue;
 
     if (i.tipo === "COMISION_PARTNER") {
+      // ⚠ Una estimación no es plata ganada: los «US$51.000 exactos, dos veces» de agosto y
+      // noviembre sumaban al margen a la fecha con el mismo peso que los US$45.921,72 que sí
+      // entraron (H12). No es una decisión de Dirección, es un error de fidelidad: se declara aparte.
+      // Cobrada manda sobre la marca: si entró, alguien la confirmó.
+      if (i.esProyeccion && !i.cobrada) {
+        acc.partnershipProyectado = round2(acc.partnershipProyectado + monto);
+        continue;
+      }
       acc.partnership = round2(acc.partnership + monto);
       if (i.cobrada) acc.partnershipCobrado = round2(acc.partnershipCobrado + monto);
       continue;
@@ -686,7 +891,10 @@ export function calcularEquilibrio(
       continue;
     }
     if (i.tipo === "COBRADO") acc.cobrado = round2(acc.cobrado + monto);
-    else acc.porCobrar = round2(acc.porCobrar + monto);
+    else {
+      acc.porCobrar = round2(acc.porCobrar + monto);
+      if (!i.enPlazo) acc.porCobrarVencido = round2(acc.porCobrarVencido + monto);
+    }
 
     // El desglose por servicio es del FACTURADO (cobrado + por cobrar).
     const k = i.tipoServicio ?? "OTRO";
@@ -716,7 +924,8 @@ export function calcularEquilibrio(
     const ing = ingMes.get(periodo)!;
     const egresosMes = round2(RUBROS.reduce((n, r) => n + eg.rubros[r], 0));
     const facturado = round2(ing.cobrado + ing.porCobrar);
-    const ingresosTotales = round2(facturado + ing.partnership);
+    const partnershipEnIngresos = cubreElPiso ? ing.partnership : 0;
+    const ingresosTotales = round2(facturado + partnershipEnIngresos);
     const futuro = periodo > periodoHoy;
     const { estado, faltantes } = calidadDelMes(periodo, eg.presentes, esperados, rubrosDelAnio, egresosMes > 0);
     const { brecha, cubre } = brechaDe(ingresosTotales, egresosMes);
@@ -729,9 +938,12 @@ export function calcularEquilibrio(
       facturado,
       cobrado: ing.cobrado,
       porCobrar: ing.porCobrar,
+      porCobrarVencido: ing.porCobrarVencido,
       pendienteFacturar: ing.pendiente,
       partnership: ing.partnership,
       partnershipCobrado: ing.partnershipCobrado,
+      partnershipProyectado: ing.partnershipProyectado,
+      partnershipEnIngresos,
       ingresosTotales,
       vendido: vendidoPorMes.get(periodo) ?? 0,
       brecha,
@@ -771,6 +983,8 @@ export function calcularEquilibrio(
   const facturadoTotal = suma((m) => m.facturado);
   const ingresosTotalesAnio = suma((m) => m.ingresosTotales);
   const cobradoTotal = suma((m) => m.cobrado);
+  const porCobrarTotal = suma((m) => m.porCobrar);
+  const porCobrarVencidoTotal = suma((m) => m.porCobrarVencido);
 
   /**
    * ⚠ El margen de los doce meses mezcla ocho meses de ingreso con doce de costo, y por
@@ -781,6 +995,9 @@ export function calcularEquilibrio(
    *
    * La partición honesta es por mes ocurrido: lo que ya pasó se compara consigo mismo, y
    * lo que viene se declara aparte en vez de sumarse de contrabando.
+   *
+   * (Desde 2026-09-13 esa comisión de noviembre es una estimación y ya no suma a ningún ingreso;
+   * el corte por mes sigue valiendo para cualquier ingreso confirmado con fecha futura.)
    */
   const ocurridos = meses.filter((m) => !m.futuro);
   const margenAlDia = round2(ocurridos.reduce((n, m) => n + m.ingresosTotales - m.egresos, 0));
@@ -846,6 +1063,26 @@ export function calcularEquilibrio(
       conceptos: [],
     });
   }
+  const proyectadoTotal = round2(meses.reduce((n, m) => n + m.partnershipProyectado, 0));
+  if (proyectadoTotal > 0) {
+    avisos.push({
+      codigo: "COMISIONES_ESTIMADAS",
+      severidad: "MEDIA",
+      mensaje: `${moneda} ${proyectadoTotal.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} de comisiones de aliado son una estimación: no suman a ingresos, margen ni cobertura hasta que alguien confirme que entraron.`,
+      periodos: meses.filter((m) => m.partnershipProyectado > 0).map((m) => m.periodo),
+      conceptos: [],
+    });
+  }
+  if (!cubreElPiso && meses.some((m) => m.partnership > 0)) {
+    avisos.push({
+      codigo: "PARTNERSHIP_NO_CUBRE_EL_PISO",
+      severidad: "BAJA",
+      mensaje:
+        "Las comisiones de aliado se muestran pero no suman a los ingresos: el piso se mide solo contra lo facturado a clientes.",
+      periodos: [],
+      conceptos: [],
+    });
+  }
   if (principal.mesesUsados.length === 0) {
     avisos.push({
       codigo: "SIN_MESES_ELEGIBLES",
@@ -882,10 +1119,12 @@ export function calcularEquilibrio(
       egresosTotales,
       facturadoTotal,
       cobradoTotal,
-      porCobrarTotal: suma((m) => m.porCobrar),
+      porCobrarTotal,
+      porCobrarVencidoTotal,
       pendienteFacturarTotal: suma((m) => m.pendienteFacturar),
       partnershipTotal: suma((m) => m.partnership),
       partnershipCobradoTotal: suma((m) => m.partnershipCobrado),
+      partnershipProyectadoTotal: proyectadoTotal,
       ingresosTotales: ingresosTotalesAnio,
       /** Los doce meses. Proyección, NO titular: ver el comentario de `margenAlDia`. */
       margenAnual: round2(ingresosTotalesAnio - egresosTotales),
@@ -895,7 +1134,8 @@ export function calcularEquilibrio(
       vendidoTotal: round2([...vendidoPorMes.values()].reduce((n, v) => n + v, 0)),
       ventasConMonto: (opciones.ventas ?? []).length,
       ventasSinMonto: opciones.ventasSinMonto ?? 0,
-      tasaCobro: facturadoTotal === 0 ? null : Math.round((cobradoTotal / facturadoTotal) * 1000) / 1000,
+      // El navegador lo recalcula con las mismas tres sumas (`indicadoresDe`): mismo número.
+      cobranza: lecturaDeCobranza({ cobrado: cobradoTotal, porCobrar: porCobrarTotal, vencido: porCobrarVencidoTotal }),
       mesesQueCubren: meses.filter((m) => m.cubreEgresos === true).length,
       mesesConDato: meses.filter((m) => m.facturado > 0 || m.egresos > 0).length,
       mesesEgresoCompleto: meses.filter((m) => m.estado === "COMPLETO").length,
@@ -934,5 +1174,7 @@ export function calcularEquilibrio(
       montosNoConvertidos: noConvertidos,
       convertidos,
     },
+    cobranzaPorMoneda: cobranzaPorMoneda(cobranzaNativa),
+    criterios: { partnershipCubreElPiso: cubreElPiso },
   };
 }

@@ -124,6 +124,19 @@ export function retencionDe(
   return { monto, pct: Math.round((monto / bruto) * 10000) / 100 };
 }
 
+/**
+ * Si el monto de una comisión en este estado es una estimación.
+ *
+ * Solo una COBRADA tiene un monto que alguien confirmó mirando el banco; cualquier otra es un
+ * número que todavía nadie firmó. Existe porque el alta desde la pantalla no escribía la marca y
+ * una comisión nueva POR_COBRAR nacía con el mismo peso que la plata que ya entró: el reporte de
+ * equilibrio la contaba en el margen a la fecha. El alta, el cambio de estado y la carga del Excel
+ * leen esta regla y no una copia.
+ */
+export function montoEsProyeccionPara(estado: string | undefined): boolean {
+  return estado !== "COBRADO";
+}
+
 /** Una comisión, con lo justo para poder sugerir la próxima. */
 export interface ComisionParaProyectar {
   fecha: string;

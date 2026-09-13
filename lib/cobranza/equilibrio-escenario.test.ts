@@ -67,7 +67,8 @@ describe("aplicarEscenario", () => {
     expect(ind.ingresosTotales).toBe(r.indicadores.ingresosTotales);
     expect(ind.margenAnual).toBe(r.indicadores.margenAnual);
     expect(ind.mesesQueCubren).toBe(r.indicadores.mesesQueCubren);
-    expect(ind.tasaCobro).toBe(r.indicadores.tasaCobro);
+    expect(ind.cobranza).toEqual(r.indicadores.cobranza);
+    expect(ind.porCobrarVencidoTotal).toBe(r.indicadores.porCobrarVencidoTotal);
     expect(ind.vendidoTotal).toBe(r.indicadores.vendidoTotal);
   });
 
@@ -119,7 +120,7 @@ describe("indicadoresDe", () => {
     // cobro sin que nadie haya dejado de pagar — y ese número se cita suelto.
     const r = reporteBase();
     const conEscenario = indicadoresDe(aplicarEscenario(r.meses, { "2026-01": 200_000 }));
-    expect(conEscenario.tasaCobro).toBe(r.indicadores.tasaCobro);
+    expect(conEscenario.cobranza).toEqual(r.indicadores.cobranza);
     expect(conEscenario.facturadoTotal).not.toBe(r.indicadores.facturadoTotal);
   });
 
@@ -181,6 +182,59 @@ describe("igualarAlEquilibrio y limpiarFacturado", () => {
     // Y es distinto de resetear: ahí no quedaría ninguno simulado.
     expect(aplicarEscenario(r.meses, {}).some((m) => m.simulado)).toBe(false);
   });
+});
+
+describe("la comisión estimada y la bandera PARTNERSHIP_CUBRE_EL_PISO", () => {
+  /** Mayo con la comisión que entró y agosto con la estimación de US$51.000, como en la base. */
+  const conEstimada = (cubre: boolean) =>
+    calcularEquilibrio(
+      [eg("2026-05", 22_833.42), eg("2026-08", 14_566.42)],
+      [
+        ing("2026-05", "COBRADO", 15_290.33),
+        { periodo: "2026-05", tipo: "COMISION_PARTNER", monto: 45_921.72, moneda: "USD", tipoServicio: null, cobrada: true },
+        ing("2026-08", "COBRADO", 21_514.66),
+        {
+          periodo: "2026-08",
+          tipo: "COMISION_PARTNER",
+          monto: 51_000,
+          moneda: "USD",
+          tipoServicio: null,
+          cobrada: false,
+          esProyeccion: true,
+        },
+      ],
+      { anio: 2026, hoyISO: "2026-09-13", partnershipCubreElPiso: cubre },
+    );
+
+  it("igualar descuenta solo lo CONFIRMADO: los US$51.000 estimados de agosto no eximen de facturar", () => {
+    const ov = igualarAlEquilibrio(conEstimada(true).meses, 26_713.66);
+    expect(ov["2026-08"]).toBe(26_713.66);
+    // Mayo sí tiene la comisión que entró, y con ella ya pasa el piso: se queda con lo facturado.
+    expect(ov["2026-05"]).toBe(15_290.33);
+  });
+
+  it("con la bandera en false, igualar no le descuenta nada al aliado", () => {
+    const ov = igualarAlEquilibrio(conEstimada(false).meses, 26_713.66);
+    expect(ov["2026-05"]).toBe(26_713.66);
+  });
+
+  for (const cubre of [true, false]) {
+    it(`con la bandera en ${cubre}, el navegador reproduce al servidor al centavo`, () => {
+      const r = conEstimada(cubre);
+      const ind = indicadoresDe(aplicarEscenario(r.meses, {}));
+      expect(ind.ingresosTotales).toBe(r.indicadores.ingresosTotales);
+      expect(ind.margenAlDia).toBe(r.indicadores.margenAlDia);
+      expect(ind.comprometidoPorVenir).toBe(r.indicadores.comprometidoPorVenir);
+      expect(ind.mesesQueCubren).toBe(r.indicadores.mesesQueCubren);
+      expect(ind.cobranza).toEqual(r.indicadores.cobranza);
+    });
+
+    it(`con la bandera en ${cubre}, simular un mes no cambia el criterio del aliado`, () => {
+      const r = conEstimada(cubre);
+      const mayo = aplicarEscenario(r.meses, { "2026-05": 1000 })[4]!;
+      expect(mayo.ingresosTotales).toBe(cubre ? 46_921.72 : 1000);
+    });
+  }
 });
 
 describe("parseMonto — lo que teclea una persona", () => {

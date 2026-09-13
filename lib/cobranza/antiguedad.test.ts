@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   bucketAntiguedad,
   clasificarCobro,
+  claseDeCobranza,
+  cobranzaPorMoneda,
+  lecturaDeCobranza,
   resumenAntiguedad,
   estadoTanda,
   esDiaDeCorte,
@@ -178,6 +181,68 @@ describe("resumenAntiguedad", () => {
       HOY,
     );
     expect(r.USD).toBeUndefined();
+  });
+});
+
+describe("lectura de cobranza en par", () => {
+  it("los colones del libro de Alex: 49,5 % sobre lo facturado y 98 % sobre lo exigible", () => {
+    // El libro declaró 49,50 % en colones. De ₡39.920.993 pendientes, ₡39.124.837 eran tres
+    // facturas emitidas dos días antes, todavía en plazo. El cobrado sale de ese 49,50 %.
+    expect(lecturaDeCobranza({ cobrado: 39_130_000, porCobrar: 39_920_993, vencido: 796_156 })).toEqual({
+      sobreFacturado: 0.495,
+      sobreExigible: 0.98,
+      enPlazo: 39_124_837,
+    });
+  });
+
+  it("sin datos da null en las dos, nunca cero", () => {
+    expect(lecturaDeCobranza({ cobrado: 0, porCobrar: 0, vencido: 0 })).toEqual({
+      sobreFacturado: null,
+      sobreExigible: null,
+      enPlazo: 0,
+    });
+  });
+
+  it("todo en plazo: todavía no hay nada exigible, así que ese % es null y no 0", () => {
+    const l = lecturaDeCobranza({ cobrado: 0, porCobrar: 5000, vencido: 0 });
+    expect(l.sobreFacturado).toBe(0);
+    expect(l.sobreExigible).toBeNull();
+  });
+
+  it("una factura con el crédito consumido y promesa de pago vigente es VENCIDA", () => {
+    const conPromesa = {
+      estado: "POR_COBRAR",
+      fechaProgramadaISO: "2026-08-15",
+      fechaEmisionISO: "2026-08-20",
+      promesaPagoISO: "2026-09-15",
+    };
+    expect(claseDeCobranza(conPromesa, "2026-09-12")).toBe("VENCIDO");
+  });
+
+  it("cada clase sale del semáforo: cobrado, en plazo y sin factura", () => {
+    expect(claseDeCobranza({ estado: "COBRADO", fechaProgramadaISO: "2026-08-15", fechaEmisionISO: null }, HOY)).toBe("COBRADO");
+    expect(claseDeCobranza({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-07-15", fechaEmisionISO: "2026-07-20" }, HOY)).toBe("EN_PLAZO");
+    // Sin factura no es cobranza aunque su estado diga POR_COBRAR.
+    expect(claseDeCobranza({ estado: "POR_COBRAR", fechaProgramadaISO: "2026-05-15", fechaEmisionISO: null }, HOY)).toBe("SIN_FACTURA");
+  });
+
+  it("la apertura por moneda NUNCA suma monedas y deja afuera lo sin factura", () => {
+    const r = cobranzaPorMoneda([
+      { moneda: "USD", clase: "COBRADO", monto: 800 },
+      { moneda: "USD", clase: "VENCIDO", monto: 200 },
+      { moneda: "USD", clase: "SIN_FACTURA", monto: 9999 },
+      { moneda: "CRC", clase: "EN_PLAZO", monto: 5000 },
+    ]);
+    expect(r.USD).toEqual({
+      cobrado: 800,
+      porCobrar: 200,
+      vencido: 200,
+      facturado: 1000,
+      sobreFacturado: 0.8,
+      sobreExigible: 0.8,
+      enPlazo: 0,
+    });
+    expect(r.CRC).toMatchObject({ facturado: 5000, sobreFacturado: 0, sobreExigible: null, enPlazo: 5000 });
   });
 });
 

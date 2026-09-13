@@ -2888,6 +2888,29 @@ fabricarla.
   recibe un `enlacesDe(clientId)`: ahí se decide QUÉ está mal, no dónde se mira. Sin eso, un
   módulo de dominio tendría que conocer rutas de la app y el portal de HubSpot.
 
+- **Facturado es TENER FACTURA, no un estado del cobro** (Alex, 2026-09-12: el % de cobranza
+  cuenta solo lo facturado). `tipoIngresoDeCobro` imputa cada cobro: lo cobrado va al mes en
+  que entró la plata, lo que tiene factura y no se cobró va al mes de EMISIÓN, y lo que no tiene
+  factura queda en su período como backlog. El estado de la base mezcla las dos cosas: ALMOTEC
+  tenía tres cuotas en PROGRAMADO emitidas el 19-ago y sus US$6.900 figuraban como «pendiente de
+  facturar» mientras Cobranza las mostraba vencidas. El auditor de ventas descubiertas usa la
+  misma función y convierte cada cobro con la tasa de SU mes; sin tasa no suma, lo lista.
+- **El % de cobranza viaja en par** (`lecturaDeCobranza`): sobre lo facturado y sobre lo
+  exigible, que deja afuera lo que todavía está en plazo. No hay un campo con uno solo, porque
+  suelto cualquiera de los dos se cita mal. El vencido sale de `semaforoCobro` (una promesa no
+  saca a nadie del exigible), y la apertura por moneda nativa (`cobranzaPorMoneda`) no convierte:
+  un % en dólares tapaba justo lo que el libro de Alex separaba en colones.
+- **Una comisión estimada no es plata ganada.** Con `montoEsProyeccion` no suma a ingresos,
+  brecha, margen ni «Igualar al equilibrio»: se declara aparte, en `partnershipProyectado`. No
+  se le preguntó a nadie porque no era una decisión sino un error de fidelidad (H12): los
+  «US$51.000 exactos, dos veces» pesaban igual que lo que entró al banco. Una comisión nueva
+  POR_COBRAR nace estimada (`montoEsProyeccionPara`).
+- **`PARTNERSHIP_CUBRE_EL_PISO = true`** hasta que Marco y Claudia contesten si el punto de
+  equilibrio se cubre también con lo que pagan los aliados. `true` es lo que el reporte hizo
+  siempre sin que nadie lo firmara. Vive en `lib/finanzas/equilibrio.ts`, los tests corren con
+  los dos valores y un centinela compara esta línea con el código: cambiar la decisión exige
+  cambiar las dos. La caja no depende de la bandera: una comisión cobrada entró igual.
+
 ## Documentación pasa a ser una base de conocimiento (2026-09-11)
 
 > El módulo era un manual de solo lectura escrito en el código: para corregir una frase hacía

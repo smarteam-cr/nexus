@@ -159,6 +159,16 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
                   <td className={`${TD_NUM} text-fg-secondary`}>{m.porCobrar > 0 ? fmtMonto(m.porCobrar, moneda) : "—"}</td>
                   <td className={`${TD_NUM} text-fg-secondary`}>
                     {m.partnership > 0 ? fmtMonto(m.partnership, moneda) : "—"}
+                    {/* La columna es lo CONFIRMADO. Lo estimado se ve debajo, pero no está en
+                        «Ingresos totales»: sin la marca, la fila no sumaba a ojo. */}
+                    {m.partnershipProyectado > 0 && (
+                      <span className="block text-[10px] text-fg-muted">
+                        + {fmtMonto(m.partnershipProyectado, moneda)} estimado
+                      </span>
+                    )}
+                    {m.partnership > 0 && m.partnershipEnIngresos === 0 && (
+                      <span className="block text-[10px] text-fg-muted">no suma a los ingresos</span>
+                    )}
                   </td>
                   <td className={`${TD_NUM} text-fg font-medium`}>
                     {m.ingresosTotales > 0 ? fmtMonto(m.ingresosTotales, moneda) : "—"}

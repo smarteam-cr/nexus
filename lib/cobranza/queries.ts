@@ -79,7 +79,9 @@ import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
-  convertir,
+  sumarPorClienteEnPresentacion,
+  tipoIngresoDeCobro,
+  type CobroDeCliente,
   type CostoVigente,
   type EgresoDeMes,
   type IngresoDeMes,
@@ -2246,11 +2248,14 @@ export async function loadReporteAnual(
     monedaPresentacion?: MonedaEq;
     ventana?: VentanaEquilibrio;
     divisorAguinaldo?: number;
+    /** Default `PARTNERSHIP_CUBRE_EL_PISO`. Existe para poder medir el otro criterio. */
+    partnershipCubreElPiso?: boolean;
   },
 ): Promise<ReporteAnualDTO> {
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
+  const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
 
   const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos, filasVenta] =
     await Promise.all([
@@ -2263,19 +2268,31 @@ export async function loadReporteAnual(
       select: { periodo: true, quincena: true, monto: true, moneda: true },
     }),
     prisma.cobro.findMany({
-      where: { periodo: { in: periodos } },
+      // Por período, o porque se facturó o se cobró en el año: lo facturado va al mes de emisión y
+      // lo cobrado al mes en que entró, así que un cobro de otro período puede ser plata de este
+      // año. Al 2026-09-13 no hay ninguno; sin el OR, el primero desaparecería sin aviso.
+      where: {
+        OR: [
+          { periodo: { in: periodos } },
+          { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
+          { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
+        ],
+      },
       select: {
         periodo: true,
         monto: true,
         moneda: true,
         estado: true,
+        fechaProgramada: true,
+        fechaEmision: true,
         fechaCobro: true,
         servicio: { select: { tipoServicio: true } },
+        cuenta: { select: { creditoDias: true } },
       },
     }),
     prisma.comisionPartner.findMany({
       where: { fecha: { gte: desde, lte: hasta } },
-      select: { fecha: true, monto: true, moneda: true, estado: true },
+      select: { fecha: true, monto: true, moneda: true, estado: true, montoEsProyeccion: true },
     }),
     prisma.tipoCambioMes.findMany({
       where: { periodo: { in: periodos } },
@@ -2367,23 +2384,34 @@ export async function loadReporteAnual(
   let cobradosSinFecha = 0;
   let cobradosTotales = 0;
   for (const c of filasCobro) {
-    const monto = num(c.monto)!;
-    const base = { monto, moneda: c.moneda as MonedaEq, tipoServicio: c.servicio.tipoServicio };
-    if (c.estado === "COBRADO") {
+    // Como qué y en qué mes lo decide `tipoIngresoDeCobro`, no el estado: facturado es tener
+    // factura. El reloj del dinero es `fechaCobro`; cuando falta, el cobro se imputa por su
+    // período —que es lo único que hay— y se CUENTA, para poder rotularlo.
+    const t = tipoIngresoDeCobro(
+      {
+        estado: c.estado,
+        periodo: c.periodo,
+        fechaProgramadaISO: c.fechaProgramada.toISOString().slice(0, 10),
+        fechaEmisionISO: isoDay(c.fechaEmision),
+        fechaCobroISO: isoDay(c.fechaCobro),
+        creditoDias: c.cuenta.creditoDias,
+      },
+      hoyISO,
+    );
+    // Facturado o cobrado en otro año: es plata de ese año, no de este.
+    if (!periodos.includes(t.periodo)) continue;
+    if (t.tipo === "COBRADO") {
       cobradosTotales++;
-      // El reloj del dinero es `fechaCobro`. Cuando falta se imputa por el período de
-      // facturación —que es lo único que hay— y se CUENTA, para poder rotularlo.
-      const iso = isoDay(c.fechaCobro);
-      if (!iso) cobradosSinFecha++;
-      ingresos.push({ ...base, periodo: iso ? periodoDe(iso) : c.periodo, tipo: "COBRADO" });
-      continue;
+      if (t.sinFechaDeCobro) cobradosSinFecha++;
     }
-    if (c.estado === "POR_COBRAR") {
-      ingresos.push({ ...base, periodo: c.periodo, tipo: "POR_COBRAR" });
-      continue;
-    }
-    // PROGRAMADO y SIN_DATO: ni siquiera se facturó. No es ingreso, es backlog.
-    ingresos.push({ ...base, periodo: c.periodo, tipo: "PROGRAMADO" });
+    ingresos.push({
+      periodo: t.periodo,
+      tipo: t.tipo,
+      monto: num(c.monto)!,
+      moneda: c.moneda as MonedaEq,
+      tipoServicio: c.servicio.tipoServicio,
+      enPlazo: t.enPlazo,
+    });
   }
 
   for (const c of filasComision) {
@@ -2394,10 +2422,11 @@ export async function loadReporteAnual(
       monto: num(c.monto)!,
       moneda: c.moneda as MonedaEq,
       tipoServicio: null,
-      // Una comisión prometida SUMA a los ingresos del mes (es plata devengada, igual
-      // que una factura sin cobrar), pero solo la COBRADA cuenta como caja. Las dos
-      // cifras viajan separadas para que nadie lea una promesa como plata en el banco.
+      // Una comisión con monto confirmado SUMA a los ingresos del mes aunque no se haya cobrado
+      // (es plata devengada, igual que una factura sin cobrar), pero solo la COBRADA cuenta como
+      // caja. Una ESTIMACIÓN no suma a nada: el motor la declara aparte (H12).
       cobrada: c.estado === "COBRADO",
+      esProyeccion: c.montoEsProyeccion,
     });
   }
 
@@ -2449,6 +2478,7 @@ export async function loadReporteAnual(
     tasas,
     divisorAguinaldo: divisor,
     costosVigentes,
+    partnershipCubreElPiso: opciones?.partnershipCubreElPiso,
     // Cuando HubSpot ya convirtió, se usa SU número: es el que ve el vendedor en el
     // portal, y una segunda conversión con otra tasa haría que la misma venta valiera
     // distinto en dos pantallas. Sin monto, la venta no aporta —cero sería mentir.
@@ -2498,8 +2528,9 @@ async function armarEstadoParaAuditar(
 ): Promise<EstadoParaAuditar> {
   const desde = dayUTC(`${anio}-01-01`);
   const hasta = dayUTC(`${anio}-12-31`);
+  const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
 
-  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosPorCuenta, cuentas, ventasTodas, portal] =
+  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosDelAnio, cuentas, ventasTodas, portal] =
     await Promise.all([
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
@@ -2528,14 +2559,27 @@ async function armarEstadoParaAuditar(
       where: { cuentaFinanciera: { isNot: null }, hubspotCompanyId: null },
       select: { id: true, name: true },
     }),
-    prisma.cobro.groupBy({
-      // ⚠ moneda va en el agrupado a propósito. Hoy los 125 cobros del año son USD y la
-      // suma cruda da bien, pero hay 3 cuentas en colones: el día que una genere un cobro,
-      // sumar ₡ con $ haría que ese cliente pareciera cubierto ~500 veces de más y el
-      // hueco encogería solo. Agrupar por moneda obliga a convertir antes de sumar.
-      by: ["cuentaId", "moneda", "estado"],
-      where: { periodo: { startsWith: String(anio) }, estado: { in: ["COBRADO", "POR_COBRAR"] } },
-      _sum: { monto: true },
+    // Cobro por cobro y no agrupado: cada uno se imputa con `tipoIngresoDeCobro`, igual que en el
+    // reporte, y se convierte con la tasa de SU mes. El `groupBy` por estado dejaba afuera los
+    // PROGRAMADO que ya tienen factura (ALMOTEC, Teamnet, IIA…) y metía los POR_COBRAR sin factura.
+    prisma.cobro.findMany({
+      where: {
+        OR: [
+          { periodo: { startsWith: `${anio}-` } },
+          { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
+          { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
+        ],
+      },
+      select: {
+        cuentaId: true,
+        periodo: true,
+        monto: true,
+        moneda: true,
+        estado: true,
+        fechaProgramada: true,
+        fechaEmision: true,
+        fechaCobro: true,
+      },
     }),
     prisma.cuentaFinanciera.findMany({
       select: { id: true, clientId: true, client: { select: { name: true, hubspotCompanyId: true } } },
@@ -2561,20 +2605,38 @@ async function armarEstadoParaAuditar(
   // llamarse después). Lo cazó la primera corrida contra la base.
   const portalId = portal?.hubspotPortalId ?? null;
   const money = (n: number) => "$" + n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const tasaPresentacion = reporte.fx.tasas[0] ?? null;
-  const facturadoPorCliente = new Map<string, number>();
-  const cobradoPorCliente = new Map<string, number>();
-  for (const c of cobrosPorCuenta) {
+  const cobrosDeCliente: CobroDeCliente[] = [];
+  for (const c of cobrosDelAnio) {
     const cli = clienteDeCuenta.get(c.cuentaId);
     if (!cli) continue;
-    const crudo = Number(c._sum.monto ?? 0);
-    // Sin tasa no se inventa una: el monto se deja como está y el reporte ya avisa por
-    // separado de los meses sin tipo de cambio cargado.
-    const conv = convertir(crudo, c.moneda, reporte.monedaPresentacion, tasaPresentacion);
-    const monto = conv?.monto ?? crudo;
-    facturadoPorCliente.set(cli, (facturadoPorCliente.get(cli) ?? 0) + monto);
-    if (c.estado === "COBRADO") cobradoPorCliente.set(cli, (cobradoPorCliente.get(cli) ?? 0) + monto);
+    // El crédito de la cuenta no hace falta: acá solo importa si está facturado, no si vence.
+    const t = tipoIngresoDeCobro(
+      {
+        estado: c.estado,
+        periodo: c.periodo,
+        fechaProgramadaISO: c.fechaProgramada.toISOString().slice(0, 10),
+        fechaEmisionISO: isoDay(c.fechaEmision),
+        fechaCobroISO: isoDay(c.fechaCobro),
+      },
+      hoyISO,
+    );
+    if (!t.periodo.startsWith(`${anio}-`)) continue;
+    cobrosDeCliente.push({
+      clave: cli,
+      tipo: t.tipo,
+      periodo: t.periodo,
+      monto: num(c.monto)!,
+      moneda: c.moneda,
+      concepto: nombreDeCliente.get(cli) ?? "(sin nombre)",
+    });
   }
+  // Sin tasa no se inventa una: el monto NO se suma y queda listado en «Meses sin tipo de cambio».
+  const porCliente = sumarPorClienteEnPresentacion(cobrosDeCliente, {
+    monedaPresentacion: reporte.monedaPresentacion,
+    tasas: reporte.fx.tasas,
+  });
+  const facturadoPorCliente = porCliente.facturado;
+  const cobradoPorCliente = porCliente.cobrado;
 
   // Por qué un cliente que factura puede no tener venta: o compró por un pipeline que no
   // cuenta, o la venta quedó a nombre de la empresa madre. Las dos se arreglan distinto.
@@ -2757,7 +2819,10 @@ async function armarEstadoParaAuditar(
     facturaSoloFueraDePipeline: respaldo.soloFueraDePipeline,
     facturaDeGrupo: respaldo.deGrupo,
     cobradosSinFecha: { cuantas: cobradosSinFecha, total: cobradosTotales },
-    periodosSinTasa: reporte.fx.periodosSinTasa,
+    periodosSinTasa: [
+      ...new Set([...reporte.fx.periodosSinTasa, ...porCliente.noConvertidos.map((n) => n.periodo)]),
+    ].sort(),
+    facturadoSinTasa: porCliente.noConvertidos,
     monedaInferida: avisoMoneda?.conceptos ?? [],
     desviosDeCambio: desvios,
     tarjetaYHerramientas: { hay: !!avisoTarjeta, periodos: avisoTarjeta?.periodos ?? [] },

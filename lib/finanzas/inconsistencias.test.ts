@@ -31,6 +31,7 @@ const limpio = (): EstadoParaAuditar => ({
   facturaDeGrupo: { cuantas: 0, facturado: 0, items: [] },
   cobradosSinFecha: { cuantas: 0, total: 101 },
   periodosSinTasa: [],
+  facturadoSinTasa: [],
   monedaInferida: [],
   desviosDeCambio: [],
   tarjetaYHerramientas: { hay: false, periodos: [] },

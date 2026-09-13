@@ -297,6 +297,10 @@ export default function CurvaEquilibrio({
             vive("partnership") && m.partnership > 0
               ? fila("Partnership", m.partnership, COLOR.partnership, "barra")
               : "",
+            // Sin marcador: la estimación no se dibuja, porque no es plata de ningún mes todavía.
+            vive("partnership") && m.partnershipProyectado > 0
+              ? fila("Partnership estimado (no suma)", m.partnershipProyectado)
+              : "",
             vive("ingresosTotales")
               ? fila("Ingresos totales", m.ingresosTotales, COLOR.ingresosTotales, "punteada")
               : "",
