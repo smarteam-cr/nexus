@@ -12,7 +12,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { computeAlertSet, type AlertaDraft, type CarteraEngineInput } from "./engine";
+import { claveDeRecurrencia, computeAlertSet, type AlertaDraft, type CarteraEngineInput } from "./engine";
 import {
   alertasQueYaNoAplican,
   borradoresDelRefresco,
@@ -182,6 +182,18 @@ describe("se cierra lo que el motor ya no ve", () => {
       { id: "vieja", motivo: "copia" },
     ]);
   });
+
+  it("Seléctrica: ponerle el plan de suscripción cierra su alerta de recurrencia, por la clave (etapa 14)", () => {
+    const servicioWeb = { servicioId: "s1", descripcion: null, estado: "ACTIVO", fechaInicioFacturacion: "2026-01-15", anchorActualISO: null, modalidad: "RECURRENTE" };
+    const cuotas = [cobro("sel-8", { estado: "COBRADO", fechaProgramadaISO: "2026-08-15", fechaEmisionISO: "2026-09-04", fechaCobroISO: "2026-09-10" })];
+    const viva = fila("CUENTA_SIN_DATOS", "selectrica", null, { id: "recurrencia", dedupeKey: claveDeRecurrencia("selectrica", "s1") });
+
+    const sinPlan: CarteraEngineInput = { cuentas: [cuenta("selectrica", cuotas, { servicios: [{ ...servicioWeb, planTemplate: null }] })] };
+    expect(cierres(sinPlan, [viva])).toEqual([]);
+
+    const conPlan: CarteraEngineInput = { cuentas: [cuenta("selectrica", cuotas, { servicios: [{ ...servicioWeb, planTemplate: "SUSCRIPCION" }] })] };
+    expect(cierres(conPlan, [viva])).toEqual([expect.objectContaining({ id: "recurrencia", motivo: "ya-no-aplica" })]);
+  });
 });
 
 describe("lo que no se toca", () => {
@@ -222,6 +234,25 @@ describe("el refresco de la noche", () => {
     const abre = borradoresDelRefresco(set, []);
     expect(abre.map((d) => d.dedupeKey).sort()).toEqual(["COBRO_VENCIDO:c1:vencido", "PROMESA_INCUMPLIDA:c1:incumplida"]);
     expect(abre.every((d) => (TIPOS_QUE_ABRE_EL_REFRESCO as readonly string[]).includes(d.tipo))).toBe(true);
+  });
+
+  it("⚠ abre también la recurrencia que se apaga, y ningún otro «sin datos» (etapa 14)", () => {
+    /* Avisa con 45 días: esperar al corte, apagado en producción, era no avisar nunca. */
+    const cartera: CarteraEngineInput = {
+      cuentas: [
+        cuenta("selectrica", [cobro("sel-8", { estado: "COBRADO", fechaProgramadaISO: "2026-08-15", fechaCobroISO: "2026-09-10" })], {
+          servicios: [
+            { servicioId: "s1", descripcion: null, estado: "ACTIVO", fechaInicioFacturacion: "2026-01-15", anchorActualISO: null, modalidad: "RECURRENTE", planTemplate: null },
+          ],
+        }),
+        cuenta("sin-servicios", [], { servicios: [] }),
+      ],
+    };
+    const set = motor(cartera);
+    expect(set.map((d) => d.dedupeKey).sort()).toEqual(
+      [claveDeRecurrencia("selectrica", "s1"), "CUENTA_SIN_DATOS:sin-servicios:cuenta"].sort(),
+    );
+    expect(borradoresDelRefresco(set, []).map((d) => d.dedupeKey)).toEqual([claveDeRecurrencia("selectrica", "s1")]);
   });
 
   it("el cierre conserva lo que la alerta decía, sin encadenar si se vuelve a cerrar", () => {

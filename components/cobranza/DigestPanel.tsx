@@ -26,7 +26,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { SnapshotDTO } from "@/lib/cobranza";
 import { corteVencido, DIAS_MAXIMOS_ENTRE_CORTES } from "@/lib/cobranza/antiguedad";
-import { diffDays } from "@/lib/cobranza/engine";
+import { diffDays, esAlertaDeRecurrencia } from "@/lib/cobranza/engine";
 import { crDateParts } from "@/lib/jobs/time";
 
 /** Lo mismo que dice `cobranza-quincenal` en lib/jobs/defs.ts: días de corte ≥ 7:00 CR, opt-in por env. */
@@ -36,6 +36,8 @@ interface ResumenAlerta {
   mensaje: string;
   urgencia: string;
   tipo?: string;
+  /** Separa la recurrencia que se apaga (etapa 14) del backlog de configuración. Un corte viejo puede no traerla. */
+  dedupeKey?: string;
 }
 
 interface DigestView {
@@ -68,14 +70,17 @@ const URG_CHIP: Record<string, string> = {
   BAJA: "text-sky-600 bg-sky-500/10 border-sky-500/30",
 };
 
-/** Separa el backlog de configuración de lo operativo (sin `tipo` → operativa). */
+/** Separa el backlog de configuración de lo operativo (sin `tipo` → operativa). La recurrencia que se apaga es operativa. */
 function partirPorConfig(items: ResumenAlerta[]): {
   operativas: ResumenAlerta[];
   config: ResumenAlerta[];
 } {
   const operativas: ResumenAlerta[] = [];
   const config: ResumenAlerta[] = [];
-  for (const a of items) (a.tipo === "CUENTA_SIN_DATOS" ? config : operativas).push(a);
+  for (const a of items) {
+    const esBacklog = a.tipo === "CUENTA_SIN_DATOS" && !esAlertaDeRecurrencia({ tipo: a.tipo, dedupeKey: a.dedupeKey });
+    (esBacklog ? config : operativas).push(a);
+  }
   return { operativas, config };
 }
 
@@ -87,6 +92,7 @@ function toResumenAlertas(value: unknown): ResumenAlerta[] {
       mensaje: typeof x.mensaje === "string" ? x.mensaje : "",
       urgencia: typeof x.urgencia === "string" ? x.urgencia : "MEDIA",
       tipo: typeof x.tipo === "string" ? x.tipo : undefined,
+      dedupeKey: typeof x.dedupeKey === "string" ? x.dedupeKey : undefined,
     }))
     .filter((x) => x.mensaje);
 }

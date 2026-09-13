@@ -116,6 +116,9 @@ export interface CarteraEngineInput {
       montoTotal?: number | null;
       planTemplate?: string | null;
       sumaPlan?: number | null;
+      /** Etapa 14 (opcional — compat): RECURRENTE | PROYECTO, para la recurrencia que se apaga
+       *  (`recurrenciaSinCuotas`). Ausente = no se evalúa. */
+      modalidad?: string | null;
     }>;
     cobros: Array<{
       cobroId: string;
@@ -152,6 +155,8 @@ export const UMBRAL_VENCIDO_DIAS = 3;
 export const VENTANA_PROXIMA_DIAS = 15;
 /** Meses de horizonte rolling para SUSCRIPCION (se extiende en cada digest). */
 export const HORIZONTE_SUSCRIPCION_MESES = 3;
+/** Con cuántos días de anticipación se avisa que un servicio recurrente sin plan se queda sin cuotas (etapa 14). */
+export const AVISO_RECURRENCIA_DIAS = 45;
 
 // ── Constantes del motor de crédito (Tanda B — dos relojes) ─────────────────────
 
@@ -668,6 +673,111 @@ export function marcaPromesa(
   return diffDays(cobro.promesaPagoISO, todayISO) > 0 ? "incumplida" : "vigente";
 }
 
+// ── 6 bis. La recurrencia que se apaga (etapa 14) ───────────────────────────────
+
+/**
+ * ¿Este servicio recurrente se queda sin cuotas por delante? UNA regla para la alerta del feed
+ * (`computeAlertSet`) y para la lista de Finanzas (`servicioSinCuotasPorDelante`).
+ *
+ * ── POR QUÉ ─────────────────────────────────────────────────────────────────────
+ * Los conectores y las webs recurrentes entraron por el cargador del libro de Alex: el servicio y sus
+ * cuotas, sin plan. Sin plan nada genera la cuota siguiente, así que la recurrencia termina en la
+ * última cargada, en silencio. Medido en solo lectura el 2026-09-13, son US$904 al mes: Seléctrica no
+ * tiene cuotas desde el 15-ago ni Electrocaribe desde el 15-jul, e IIA, APRECAP, Noelito, Iberorutas
+ * y AMC terminan el 30-dic. El aviso que había (SERVICIO_SIN_COBROS) preguntaba por servicios con
+ * CERO cobros, y a estos no los iba a ver nunca: arrastran su cola de cuotas importadas.
+ *
+ * ── LA REGLA ────────────────────────────────────────────────────────────────────
+ * ACTIVO, RECURRENTE y SIN plan activo, y su última cuota —en cualquier estado— ya pasó o cae dentro
+ * de los próximos 45 días. Sin ninguna cuota cuenta como apagada.
+ *  - Con plan no avisa: la SUSCRIPCION la extiende el corte, y un plan con fin lo decidió una persona.
+ *    Es Honda CRM (PAREJO, última cuota el 15-ago): si sigue o terminó lo tiene que decir Alex.
+ *  - `modalidad` o `planTemplate` ausentes = no se evalúa, igual que MONTOS_DESCUADRADOS.
+ *  - ⚠ Don Juan Tours (US$720, una sola cuota en junio) sale como apagada. Si es un pago anual, lo
+ *    sucio es la modalidad, y lo resuelve Alex con un plan o dándolo por finalizado.
+ */
+export interface RecurrenciaSinCuotas {
+  /** La última cuota cargada (YYYY-MM-DD). null = no tiene ninguna. */
+  ultimaCuotaISO: string | null;
+  /** De hoy a la última cuota: negativo = ya pasó. null = no tiene ninguna. */
+  diasHastaUltima: number | null;
+  /** Ya no le queda ninguna cuota de hoy en adelante. */
+  apagada: boolean;
+}
+
+export function recurrenciaSinCuotas(
+  servicio: { estado: string; modalidad?: string | null; planTemplate?: string | null },
+  fechasDeSusCuotas: readonly string[],
+  todayISO: string,
+  avisoDias: number = AVISO_RECURRENCIA_DIAS,
+): RecurrenciaSinCuotas | null {
+  if (servicio.estado !== "ACTIVO" || servicio.modalidad !== "RECURRENTE") return null;
+  if (servicio.planTemplate !== null) return null; // con plan, o sin saber si lo tiene (ausente)
+  let ultima: string | null = null;
+  for (const f of fechasDeSusCuotas) {
+    const dia = toISODate(toUTCDate(f));
+    if (ultima === null || dia > ultima) ultima = dia;
+  }
+  if (ultima === null) return { ultimaCuotaISO: null, diasHastaUltima: null, apagada: true };
+  const dias = diffDays(todayISO, ultima);
+  if (dias > avisoDias) return null;
+  return { ultimaCuotaISO: ultima, diasHastaUltima: dias, apagada: dias < 0 };
+}
+
+/** Por qué un servicio activo no tiene cuotas por delante. */
+export type SinCuotasPorDelante =
+  | { motivo: "recurrencia"; recurrencia: RecurrenciaSinCuotas }
+  | { motivo: "sin-cobros" };
+
+/**
+ * La lista «Servicios sin cuotas por delante» de Finanzas (SERVICIO_SIN_COBROS): lo que cazaba
+ * siempre —un servicio activo que nunca generó un cobro, de cualquier modalidad (ALFA+, Alliance
+ * RH)— más la recurrencia que se apaga, con la MISMA regla que la alerta.
+ */
+export function servicioSinCuotasPorDelante(
+  servicio: { estado: string; modalidad?: string | null; planTemplate?: string | null },
+  fechasDeSusCuotas: readonly string[],
+  todayISO: string,
+): SinCuotasPorDelante | null {
+  if (servicio.estado !== "ACTIVO") return null;
+  const recurrencia = recurrenciaSinCuotas(servicio, fechasDeSusCuotas, todayISO);
+  if (recurrencia) return { motivo: "recurrencia", recurrencia };
+  return fechasDeSusCuotas.length === 0 ? { motivo: "sin-cobros" } : null;
+}
+
+const SUFIJO_RECURRENCIA = "recurrencia";
+
+/**
+ * La clave de la alerta. Es un CUENTA_SIN_DATOS —un tipo nuevo exigía SQL— con sufijo propio: no pisa
+ * el «sin fecha de arranque» del mismo servicio, y se cierra por su clave cuando deja de salir
+ * (lib/cobranza/alertas-cierre.ts).
+ */
+export function claveDeRecurrencia(cuentaId: string, servicioId: string): string {
+  return `CUENTA_SIN_DATOS:${cuentaId}:${servicioId}:${SUFIJO_RECURRENCIA}`;
+}
+
+/**
+ * ¿Es la alerta de una recurrencia que se apaga? No es backlog de datos: es facturación que deja de
+ * existir. La leen el refresco de la noche (la abre) y el feed (la muestra entre las operativas).
+ */
+export function esAlertaDeRecurrencia(a: { tipo: string; dedupeKey?: string | null }): boolean {
+  return a.tipo === "CUENTA_SIN_DATOS" && !!a.dedupeKey && a.dedupeKey.endsWith(`:${SUFIJO_RECURRENCIA}`);
+}
+
+/** Cómo se nombra en pantalla, en lugar de «Cuenta sin datos». */
+export const ETIQUETA_ALERTA_RECURRENCIA = "Recurrente sin cuotas";
+
+function mensajeDeRecurrencia(cliente: string, descripcion: string | null, r: RecurrenciaSinCuotas): string {
+  const servicio = `el servicio recurrente${descripcion ? ` "${descripcion}"` : ""}`;
+  const situacion =
+    r.ultimaCuotaISO === null || r.diasHastaUltima === null
+      ? "no tiene ninguna cuota cargada"
+      : r.apagada
+        ? `se quedó sin cuotas: la última fue el ${r.ultimaCuotaISO}, hace ${-r.diasHastaUltima} día(s)`
+        : `se queda sin cuotas: la última es el ${r.ultimaCuotaISO}, en ${r.diasHastaUltima} día(s)`;
+  return `${cliente}: ${servicio} ${situacion}, y no tiene plan que genere las siguientes. Ponele el plan de suscripción, o marcalo finalizado si terminó.`;
+}
+
 // ── 7. Cómputo del set de alertas ───────────────────────────────────────────────
 
 /**
@@ -718,6 +828,14 @@ export function computeAlertSet(
       });
     }
 
+    // Las fechas de las cuotas de cada servicio, para la recurrencia que se apaga.
+    const cuotasPorServicio = new Map<string, string[]>();
+    for (const c of cuenta.cobros) {
+      const fechas = cuotasPorServicio.get(c.servicioId);
+      if (fechas) fechas.push(c.fechaProgramadaISO);
+      else cuotasPorServicio.set(c.servicioId, [c.fechaProgramadaISO]);
+    }
+
     for (const s of cuenta.servicios) {
       if (s.estado !== "ACTIVO") continue;
       if (!s.fechaInicioFacturacion) {
@@ -728,6 +846,26 @@ export function computeAlertSet(
           cuentaId: cuenta.cuentaId,
           mensaje: `${cuenta.clienteNombre}: el servicio${s.descripcion ? ` "${s.descripcion}"` : ""} no tiene fecha de inicio de facturación — no se generan cobros.`,
           evidencia: { servicioId: s.servicioId },
+        });
+      }
+
+      // La recurrencia que se apaga (etapa 14). Sin ninguna cuota y sin arranque ya lo dice el aviso de
+      // arriba: la causa es la misma y se arregla en el mismo lugar.
+      const recurrencia = recurrenciaSinCuotas(s, cuotasPorServicio.get(s.servicioId) ?? [], opts.todayISO);
+      if (recurrencia && (recurrencia.ultimaCuotaISO !== null || s.fechaInicioFacturacion)) {
+        out.push({
+          dedupeKey: claveDeRecurrencia(cuenta.cuentaId, s.servicioId),
+          tipo: "CUENTA_SIN_DATOS",
+          // ⚠ No baja a BAJA sin proyecto real: casi todas estas cuentas vinieron del libro y no tienen
+          // proyecto, y lo que se pierde no es un dato sino la facturación de cada mes.
+          urgencia: recurrencia.apagada ? "ALTA" : "MEDIA",
+          cuentaId: cuenta.cuentaId,
+          mensaje: mensajeDeRecurrencia(cuenta.clienteNombre, s.descripcion, recurrencia),
+          evidencia: {
+            servicioId: s.servicioId,
+            ultimaCuota: recurrencia.ultimaCuotaISO,
+            diasHastaUltima: recurrencia.diasHastaUltima,
+          },
         });
       }
 

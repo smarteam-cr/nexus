@@ -29,6 +29,7 @@ import type {
   SnapshotSerieDTO,
 } from "@/lib/cobranza";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { esAlertaDeRecurrencia } from "@/lib/cobranza/engine";
 import ColaCobros from "./ColaCobros";
 import PanelCartera from "./PanelCartera";
 import AlertasCobranza from "./AlertasCobranza";
@@ -123,9 +124,9 @@ export default function CobranzaClient({
     .map((r) => ({ cuentaId: r.cuentaId as string, clienteNombre: r.clienteNombre }));
 
   // Badge del tab: solo lo OPERATIVO abierto — el backlog de configuración
-  // (CUENTA_SIN_DATOS) no es urgencia del día.
+  // (CUENTA_SIN_DATOS) no es urgencia del día. La recurrencia que se apaga sí (etapa 14).
   const abiertas = alertas.filter(
-    (a) => a.estado === "ABIERTA" && a.tipo !== "CUENTA_SIN_DATOS",
+    (a) => a.estado === "ABIERTA" && (a.tipo !== "CUENTA_SIN_DATOS" || esAlertaDeRecurrencia(a)),
   ).length;
 
   // ── Refresh best-effort por dataset (si falla, el tab conserva lo que tenía) ──

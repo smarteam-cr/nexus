@@ -31,13 +31,17 @@
  *    Pero una fila que YA está en el feed se pone al día aunque sea de otro tipo: la cuota #1 de
  *    Kaizen seguía «vencida hace 175 días» sobre una factura que se soltó. Una alerta que dice
  *    algo que dejó de ser cierto es peor que el ruido que se quería evitar.
+ *    ⚠ Una excepción, por clave: la recurrencia que se apaga (etapa 14, `esAlertaDeRecurrencia`). Es
+ *    un CUENTA_SIN_DATOS pero no es backlog de datos: es facturación que deja de existir, y avisa
+ *    con 45 días. Esperar al corte, apagado en producción, era no avisar. Es una fila por servicio
+ *    que se funde cada noche: no llena el feed.
  * 5. ⚠ **Lo que cierra el sistema no silencia lo que vuelve.** La supresión de 7 días de
  *    `upsertAlertas` existe para no volver a abrirle a una persona lo que ella acaba de resolver.
  *    Si la fila la cerró el sistema porque la situación desapareció y la situación vuelve —Alex
  *    saca de Cobrado un cobro mal confirmado—, es una alerta nueva y tiene que salir. Por eso
  *    estos cierres se firman con `RESUELTA_POR_SISTEMA`, y la supresión no los cuenta.
  */
-import type { AlertaDraft, CarteraEngineInput } from "./engine";
+import { esAlertaDeRecurrencia, type AlertaDraft, type CarteraEngineInput } from "./engine";
 import {
   esDeLaFamiliaDelCobro,
   filaQueSeQueda,
@@ -77,11 +81,13 @@ export function cuentasEvaluadas(cartera: CarteraEngineInput): Set<string> {
 }
 
 /**
- * Lo que el refresco de la noche le pasa a `upsertAlertas`: la deuda del cliente, más todo borrador
- * que cae sobre una fila que ya está viva (regla 4). Nunca abre una fila de otro tipo.
+ * Lo que el refresco de la noche le pasa a `upsertAlertas`: la deuda del cliente y la recurrencia que
+ * se apaga, más todo borrador que cae sobre una fila que ya está viva (regla 4). Nunca abre otra cosa.
  */
 export function borradoresDelRefresco(set: readonly AlertaDraft[], vivas: readonly FilaViva[]): AlertaDraft[] {
-  return set.filter((d) => ABRE_EL_REFRESCO.has(d.tipo) || resolverMergeAlerta(d, vivas).accion === "fundir");
+  return set.filter(
+    (d) => ABRE_EL_REFRESCO.has(d.tipo) || esAlertaDeRecurrencia(d) || resolverMergeAlerta(d, vivas).accion === "fundir",
+  );
 }
 
 /** Lo que el cierre necesita de una fila viva, además de lo que necesita el merge. */

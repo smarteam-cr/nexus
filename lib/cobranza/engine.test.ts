@@ -75,6 +75,13 @@
  *   K) diffAlertSets:
  *      K1 nuevas/resueltas/persistentes por dedupeKey.
  *      K2 sin cambios → sinCambios true (también con ambos sets vacíos).
+ *   L) MONTOS_DESCUADRADOS (L1-L4) y la recurrencia que se apaga (etapa 14, datos del 2026-09-13):
+ *      L5 Seléctrica y Electrocaribe ya se apagaron; IIA avisa recién a 45 días del 30-dic (bordes).
+ *      L6 ⛔ no avisa con plan (Honda CRM), en PROYECTO, fuera de ACTIVO ni sin saber modalidad o plan.
+ *      L7 computeAlertSet: clave propia, ALTA si se apagó y MEDIA si falta poco; sin proyecto no baja.
+ *      L8 las cuotas de OTRO servicio no la sostienen; sin cuotas y sin arranque no se duplica.
+ *      L9 servicioSinCuotasPorDelante: lo de siempre (nunca generó un cobro) más la recurrencia.
+ *      L10 la alerta de recurrencia se reconoce por su clave, no por el tipo.
  *   N) computeMetricasCartera (fase 3):
  *      N1 cartera vacía → ceros/nulls honestos (dso null, no 0) + ventana declarada.
  *      N2 CRC y USD jamás se suman; cobro sin moneda no entra a ninguna.
@@ -166,6 +173,11 @@ import {
   RIESGO_UMBRAL_DIAS,
   PlanInvalidoError,
   ultimaCuotaCargada,
+  AVISO_RECURRENCIA_DIAS,
+  claveDeRecurrencia,
+  esAlertaDeRecurrencia,
+  recurrenciaSinCuotas,
+  servicioSinCuotasPorDelante,
 } from "./engine";
 import type {
   ServicioEngineInput,
@@ -1267,6 +1279,146 @@ test("L4 — computeAlertSet: cuenta SIN proyecto real baja CUENTA_SIN_DATOS a u
   expect(imp?.tipo).toBe("CUENTA_SIN_DATOS");
   expect(imp?.urgencia).toBe("BAJA");
   expect(real?.urgencia).toBe("MEDIA");
+});
+
+/* La recurrencia que se apaga (etapa 14). Datos medidos en solo lectura el 2026-09-13: ninguno de
+   estos servicios tiene plan, sus cuotas vinieron del libro de Alex. */
+const HOY_RECURRENCIA = "2026-09-13";
+const SIN_PLAN = { estado: "ACTIVO", modalidad: "RECURRENTE", planTemplate: null };
+const recurrente = (over: Partial<ServicioCartera> = {}): ServicioCartera =>
+  servicioCartera({ modalidad: "RECURRENTE", planTemplate: null, fechaInicioFacturacion: "2026-01-15", ...over });
+
+test("L5 — recurrenciaSinCuotas: Seléctrica y Electrocaribe ya se apagaron; IIA avisa recién a 45 días del 30-dic", () => {
+  // Seléctrica: la última cuota fue el 15-ago (el orden de las fechas no importa).
+  expect(recurrenciaSinCuotas(SIN_PLAN, ["2026-07-15", "2026-08-15", "2026-06-15"], HOY_RECURRENCIA)).toEqual({
+    ultimaCuotaISO: "2026-08-15",
+    diasHastaUltima: -29,
+    apagada: true,
+  });
+  // Electrocaribe: el 15-jul.
+  expect(recurrenciaSinCuotas(SIN_PLAN, ["2026-07-15"], HOY_RECURRENCIA)?.diasHastaUltima).toBe(-60);
+
+  // IIA termina el 30-dic: hoy faltan 108 días. El 15-nov faltan 45 y avisa; el 14-nov, 46, todavía no.
+  const iia = ["2026-10-30", "2026-11-30", "2026-12-30"];
+  expect(AVISO_RECURRENCIA_DIAS).toBe(45);
+  expect(recurrenciaSinCuotas(SIN_PLAN, iia, HOY_RECURRENCIA)).toBeNull();
+  expect(recurrenciaSinCuotas(SIN_PLAN, iia, "2026-11-15")).toEqual({
+    ultimaCuotaISO: "2026-12-30",
+    diasHastaUltima: 45,
+    apagada: false,
+  });
+  expect(recurrenciaSinCuotas(SIN_PLAN, iia, "2026-11-14")).toBeNull();
+
+  // Con la última cuota hoy todavía no se apagó; mañana sí.
+  expect(recurrenciaSinCuotas(SIN_PLAN, ["2026-12-30"], "2026-12-30")?.apagada).toBe(false);
+  expect(recurrenciaSinCuotas(SIN_PLAN, ["2026-12-30"], "2026-12-31")?.apagada).toBe(true);
+  // Sin ninguna cuota cuenta como apagada; un ISO completo se lee como su día.
+  expect(recurrenciaSinCuotas(SIN_PLAN, [], HOY_RECURRENCIA)).toEqual({ ultimaCuotaISO: null, diasHastaUltima: null, apagada: true });
+  expect(recurrenciaSinCuotas(SIN_PLAN, ["2026-08-15T00:00:00.000Z"], HOY_RECURRENCIA)?.ultimaCuotaISO).toBe("2026-08-15");
+});
+
+test("L6 — ⛔ recurrenciaSinCuotas no avisa con plan, en PROYECTO, fuera de ACTIVO ni sin saber modalidad o plan", () => {
+  const agosto = ["2026-08-15"];
+  expect(recurrenciaSinCuotas({ ...SIN_PLAN, planTemplate: "SUSCRIPCION" }, agosto, HOY_RECURRENCIA)).toBeNull();
+  // Honda CRM: PAREJO de 6 meses con la última cuota el 15-ago. Si sigue o terminó lo dice Alex, no el motor.
+  expect(recurrenciaSinCuotas({ ...SIN_PLAN, planTemplate: "PAREJO" }, agosto, HOY_RECURRENCIA)).toBeNull();
+  expect(recurrenciaSinCuotas({ ...SIN_PLAN, modalidad: "PROYECTO" }, agosto, HOY_RECURRENCIA)).toBeNull();
+  expect(recurrenciaSinCuotas({ ...SIN_PLAN, estado: "FINALIZADO" }, agosto, HOY_RECURRENCIA)).toBeNull();
+  // Ausentes = no se evalúa (quien arma la cartera sin leerlos no fabrica alertas).
+  expect(recurrenciaSinCuotas({ estado: "ACTIVO", planTemplate: null }, agosto, HOY_RECURRENCIA)).toBeNull();
+  expect(recurrenciaSinCuotas({ estado: "ACTIVO", modalidad: "RECURRENTE" }, agosto, HOY_RECURRENCIA)).toBeNull();
+});
+
+test("L7 — computeAlertSet: la recurrencia que se apaga sale con su clave, ALTA si se apagó y MEDIA si falta poco", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        cuentaId: "selectrica",
+        clienteNombre: "Seléctrica",
+        tieneProyectoReal: false,
+        servicios: [recurrente({ servicioId: "web", descripcion: "Continuidad Web" })],
+        cobros: [
+          cobroCartera({ cobroId: "sel-7", servicioId: "web", estado: "COBRADO", fechaProgramadaISO: "2026-07-15" }),
+          cobroCartera({ cobroId: "sel-8", servicioId: "web", estado: "COBRADO", fechaProgramadaISO: "2026-08-15" }),
+        ],
+      }),
+      cuenta({
+        cuentaId: "iia",
+        clienteNombre: "IIA",
+        servicios: [recurrente({ servicioId: "web", fechaInicioFacturacion: "2026-01-30" })],
+        cobros: [cobroCartera({ cobroId: "iia-12", servicioId: "web", estado: "PROGRAMADO", fechaProgramadaISO: "2026-12-30" })],
+      }),
+    ],
+  };
+
+  const hoy = computeAlertSet(cartera, { todayISO: HOY_RECURRENCIA });
+  const selectrica = hoy.find((a) => a.dedupeKey === claveDeRecurrencia("selectrica", "web"));
+  // ⚠ ALTA aunque la cuenta no tenga proyecto real (L4 baja el resto a BAJA): se pierde facturación, no un dato.
+  expect(selectrica).toMatchObject({ tipo: "CUENTA_SIN_DATOS", urgencia: "ALTA", cuentaId: "selectrica" });
+  expect(selectrica?.mensaje).toBe(
+    'Seléctrica: el servicio recurrente "Continuidad Web" se quedó sin cuotas: la última fue el 2026-08-15, hace 29 día(s), y no tiene plan que genere las siguientes. Ponele el plan de suscripción, o marcalo finalizado si terminó.',
+  );
+  expect(selectrica?.evidencia).toEqual({ servicioId: "web", ultimaCuota: "2026-08-15", diasHastaUltima: -29 });
+  expect(hoy.some((a) => a.dedupeKey === claveDeRecurrencia("iia", "web"))).toBe(false);
+
+  const enNoviembre = computeAlertSet(cartera, { todayISO: "2026-11-20" });
+  const iia = enNoviembre.find((a) => a.dedupeKey === claveDeRecurrencia("iia", "web"));
+  expect(iia).toMatchObject({ urgencia: "MEDIA" });
+  expect(iia?.mensaje).toContain("se queda sin cuotas: la última es el 2026-12-30, en 40 día(s)");
+});
+
+test("L8 — computeAlertSet: las cuotas de OTRO servicio no la sostienen; sin cuotas y sin arranque no se duplica", () => {
+  const cartera: CarteraEngineInput = {
+    cuentas: [
+      cuenta({
+        cuentaId: "c1",
+        servicios: [
+          recurrente({ servicioId: "conector" }),
+          servicioCartera({ servicioId: "implementacion", modalidad: "PROYECTO", planTemplate: "PAREJO" }),
+        ],
+        // La implementación tiene cuotas hasta 2027; el conector, ninguna.
+        cobros: [cobroCartera({ cobroId: "impl-1", servicioId: "implementacion", estado: "PROGRAMADO", fechaProgramadaISO: "2027-03-15" })],
+      }),
+      cuenta({ cuentaId: "sin-arranque", servicios: [recurrente({ servicioId: "web", fechaInicioFacturacion: null })] }),
+    ],
+  };
+  const set = computeAlertSet(cartera, { todayISO: HOY_RECURRENCIA });
+
+  const conector = set.find((a) => a.dedupeKey === claveDeRecurrencia("c1", "conector"));
+  expect(conector).toMatchObject({ urgencia: "ALTA" });
+  expect(conector?.mensaje).toContain("no tiene ninguna cuota cargada");
+  expect(set.some((a) => a.dedupeKey === claveDeRecurrencia("c1", "implementacion"))).toBe(false);
+
+  // Sin arranque y sin cuotas, el aviso de siempre ya dice que no se generan cobros: no sale otro al lado.
+  expect(set.filter((a) => a.cuentaId === "sin-arranque").map((a) => a.dedupeKey)).toEqual(["CUENTA_SIN_DATOS:sin-arranque:web"]);
+});
+
+test("L9 — servicioSinCuotasPorDelante: lo de siempre (nunca generó un cobro) más la recurrencia, con la misma regla", () => {
+  // ALFA+ y Alliance RH: PROYECTO con plan y ningún cobro. Es lo único que cazaba SERVICIO_SIN_COBROS.
+  expect(servicioSinCuotasPorDelante({ estado: "ACTIVO", modalidad: "PROYECTO", planTemplate: "PAREJO" }, [], HOY_RECURRENCIA)).toEqual({
+    motivo: "sin-cobros",
+  });
+  // Seléctrica arrastra 8 cuotas importadas: antes no salía nunca.
+  expect(servicioSinCuotasPorDelante(SIN_PLAN, ["2026-07-15", "2026-08-15"], HOY_RECURRENCIA)).toEqual({
+    motivo: "recurrencia",
+    recurrencia: { ultimaCuotaISO: "2026-08-15", diasHastaUltima: -29, apagada: true },
+  });
+  // Un recurrente sin plan ni cuotas sale como recurrencia: dice más que «sin cobros».
+  expect(servicioSinCuotasPorDelante(SIN_PLAN, [], HOY_RECURRENCIA)?.motivo).toBe("recurrencia");
+  // IIA hoy, Honda CRM con su plan y un servicio finalizado sin cobros: nada.
+  expect(servicioSinCuotasPorDelante(SIN_PLAN, ["2026-12-30"], HOY_RECURRENCIA)).toBeNull();
+  expect(servicioSinCuotasPorDelante({ ...SIN_PLAN, planTemplate: "PAREJO" }, ["2026-08-15"], HOY_RECURRENCIA)).toBeNull();
+  expect(servicioSinCuotasPorDelante({ estado: "FINALIZADO", modalidad: "PROYECTO", planTemplate: null }, [], HOY_RECURRENCIA)).toBeNull();
+});
+
+test("L10 — la alerta de recurrencia se reconoce por su clave, no por el tipo", () => {
+  expect(claveDeRecurrencia("c1", "s1")).toBe("CUENTA_SIN_DATOS:c1:s1:recurrencia");
+  expect(esAlertaDeRecurrencia({ tipo: "CUENTA_SIN_DATOS", dedupeKey: claveDeRecurrencia("c1", "s1") })).toBe(true);
+  expect(esAlertaDeRecurrencia({ tipo: "CUENTA_SIN_DATOS", dedupeKey: "CUENTA_SIN_DATOS:c1:s1" })).toBe(false);
+  expect(esAlertaDeRecurrencia({ tipo: "CUENTA_SIN_DATOS", dedupeKey: "CUENTA_SIN_DATOS:c1:cuenta" })).toBe(false);
+  expect(esAlertaDeRecurrencia({ tipo: "COBRO_VENCIDO", dedupeKey: "COBRO_VENCIDO:c1:recurrencia" })).toBe(false);
+  // Un resumen de corte viejo sin la clave cae en el backlog de siempre.
+  expect(esAlertaDeRecurrencia({ tipo: "CUENTA_SIN_DATOS" })).toBe(false);
 });
 
 // ── M) proyectarIngresos ─────────────────────────────────────────────────────────

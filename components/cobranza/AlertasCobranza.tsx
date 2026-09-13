@@ -6,7 +6,9 @@
  * Feed de alertas de cobranza — clon adaptado de components/cs/AlertsFeed.tsx.
  * Dos segmentos: OPERATIVAS (gestión de cobro del día) y CONFIGURACIÓN (el
  * backlog de CUENTA_SIN_DATOS — cuentas a las que les faltan datos; no es
- * urgencia del día y no infla el badge del tab). Acciones Vista/Resolver/
+ * urgencia del día y no infla el badge del tab). ⚠ La recurrencia que se apaga
+ * (etapa 14) también es un CUENTA_SIN_DATOS, pero va entre las operativas: es
+ * facturación que deja de existir, no un dato que falta. Acciones Vista/Resolver/
  * Descartar/Posponer optimistas con revert POR ALERTA (no snapshot del array:
  * dos PATCH en vuelo no se pisan); filtros por urgencia y estado dentro del
  * segmento; evidencia expandible. El estado vive en CobranzaClient.
@@ -17,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { AlertaDTO } from "@/lib/cobranza";
 import { TIPO_ALERTA_LABEL } from "@/lib/cobranza/schema";
+import { ETIQUETA_ALERTA_RECURRENCIA, esAlertaDeRecurrencia } from "@/lib/cobranza/engine";
 import { FILTER_SELECT_CLS, fmtFecha, INPUT_CLS } from "./format";
 
 const URG_META: Record<string, { label: string; chip: string; dot: string; border: string }> = {
@@ -53,7 +56,7 @@ function tieneEvidencia(evidencia: unknown): evidencia is Record<string, unknown
 
 type Segmento = "operativas" | "configuracion";
 
-const esConfiguracion = (a: AlertaDTO) => a.tipo === "CUENTA_SIN_DATOS";
+const esConfiguracion = (a: AlertaDTO) => a.tipo === "CUENTA_SIN_DATOS" && !esAlertaDeRecurrencia(a);
 
 export default function AlertasCobranza({
   alertas,
@@ -209,7 +212,7 @@ export default function AlertasCobranza({
                       {urg.label}
                     </span>
                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted">
-                      {TIPO_ALERTA_LABEL[a.tipo] ?? a.tipo}
+                      {esAlertaDeRecurrencia(a) ? ETIQUETA_ALERTA_RECURRENCIA : (TIPO_ALERTA_LABEL[a.tipo] ?? a.tipo)}
                     </span>
                     {a.occurrences > 1 && (
                       <span className="text-[10px] text-fg-muted">detectada ×{a.occurrences}</span>
@@ -227,10 +230,14 @@ export default function AlertasCobranza({
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <div className="flex items-center gap-1">
-                    {esConfiguracion(a) && (
+                    {(esConfiguracion(a) || esAlertaDeRecurrencia(a)) && (
                       <button
                         onClick={() => onOpenCuenta(a.cuentaId)}
-                        title="Abrir la cuenta para completar los datos que faltan"
+                        title={
+                          esAlertaDeRecurrencia(a)
+                            ? "Abrir la cuenta para ponerle el plan de suscripción al servicio"
+                            : "Abrir la cuenta para completar los datos que faltan"
+                        }
                         className="text-[10px] font-medium px-2 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
                       >
                         Abrir cuenta

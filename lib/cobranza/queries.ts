@@ -17,6 +17,7 @@ import {
   proyectarGastos,
   proyectarIngresos,
   semaforoCuenta,
+  servicioSinCuotasPorDelante,
   sumaPlanExpandido,
   type CajaNeta,
   type CarteraEngineInput,
@@ -269,6 +270,8 @@ export interface AlertaDTO {
   cuentaId: string;
   clienteNombre: string;
   cobroId: string | null;
+  /** La clave con que el corte la deduplica. El feed la lee para separar la recurrencia que se apaga (etapa 14) del backlog de datos. */
+  dedupeKey: string;
   tipo: string;
   urgencia: string;
   mensaje: string;
@@ -638,6 +641,7 @@ export async function loadAlertas(filters?: {
     cuentaId: a.cuentaId,
     clienteNombre: a.cuenta.client.name,
     cobroId: a.cobroId,
+    dedupeKey: a.dedupeKey,
     tipo: a.tipo,
     urgencia: a.urgencia,
     mensaje: a.mensaje,
@@ -738,6 +742,7 @@ export async function buildCarteraEngineInput(opts: { cuentaId?: string } = {}):
           fechaInicioFacturacion: true,
           montoTotal: true,
           duracionMeses: true,
+          modalidad: true,
           project: { select: { timeline: { select: { anchorStartDate: true } } } },
           planes: {
             where: { activo: true },
@@ -825,6 +830,7 @@ export async function buildCarteraEngineInput(opts: { cuentaId?: string } = {}):
           montoTotal,
           planTemplate: plan?.template ?? null,
           sumaPlan,
+          modalidad: s.modalidad,
         };
       }),
       cobros: cuenta.cobros.map((c) => ({
@@ -2612,7 +2618,7 @@ async function armarEstadoParaAuditar(
   const hasta = dayUTC(`${anio}-12-31`);
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
 
-  const [ventas, comisiones, serviciosSinCobros, cuentasSinEmpresa, cobrosDelAnio, cuentas, ventasTodas, portal] =
+  const [ventas, comisiones, serviciosCandidatos, cuentasSinEmpresa, cobrosDelAnio, cuentas, ventasTodas, portal] =
     await Promise.all([
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
@@ -2629,11 +2635,19 @@ async function armarEstadoParaAuditar(
       where: { estado: "POR_COBRAR", fecha: { gte: desde, lte: hasta } },
       select: { partner: true, monto: true, fecha: true },
     }),
+    // Servicios activos sin cuotas por delante (etapa 14): los que nunca generaron un cobro y los
+    // recurrentes sin plan. A la regla le alcanza con la última cuota; el filtro fino es
+    // `servicioSinCuotasPorDelante`, la misma regla que la alerta del feed.
     prisma.servicioContratado.findMany({
-      where: { cobros: { none: {} }, estado: "ACTIVO" },
+      where: {
+        estado: "ACTIVO",
+        OR: [{ cobros: { none: {} } }, { modalidad: "RECURRENTE", planes: { none: { activo: true } } }],
+      },
       select: {
-        montoTotal: true, moneda: true, tipoServicio: true, modalidad: true,
+        estado: true, montoTotal: true, moneda: true, tipoServicio: true, modalidad: true,
         fechaInicioFacturacion: true, descripcion: true,
+        planes: { where: { activo: true }, take: 1, select: { template: true } },
+        cobros: { orderBy: { fechaProgramada: "desc" }, take: 1, select: { fechaProgramada: true } },
         cuenta: { select: { client: { select: { id: true, name: true, hubspotCompanyId: true } } } },
       },
     }),
@@ -2835,6 +2849,22 @@ async function armarEstadoParaAuditar(
         [{ etiqueta: "Ingresos variables", url: "/finanzas/ingresos-variables" }],
       );
 
+  // Servicios sin cuotas por delante (etapa 14). El monto va en la moneda del reporte con la tasa del
+  // mes en curso; sin tasa no se inventa una: el ítem sale sin monto y no suma. En un recurrente es
+  // lo de UN mes, que es lo que se deja de facturar cada mes.
+  const tasaDelMesEnCurso = tasaDeMes.get(hoyISO.slice(0, 7)) ?? null;
+  const serviciosSinCuotas = serviciosCandidatos.flatMap((sv) => {
+    const sinCuotas = servicioSinCuotasPorDelante(
+      { estado: sv.estado, modalidad: sv.modalidad, planTemplate: sv.planes[0]?.template ?? null },
+      sv.cobros.map((c) => c.fechaProgramada.toISOString().slice(0, 10)),
+      hoyISO,
+    );
+    if (!sinCuotas) return [];
+    const montoServicio = num(sv.montoTotal) ?? 0;
+    const monto = convertir(montoServicio, sv.moneda as MonedaEq, reporte.monedaPresentacion, tasaDelMesEnCurso)?.monto;
+    return [{ sv, sinCuotas, montoServicio, monto }];
+  });
+
   return {
     anio,
     hoyISO,
@@ -2883,21 +2913,28 @@ async function armarEstadoParaAuditar(
       fecha: isoDay(c.fecha)!,
     })),
     serviciosSinCobros: {
-      cuantas: serviciosSinCobros.length,
-      monto: serviciosSinCobros.reduce((n, s) => n + num(s.montoTotal)!, 0),
+      cuantas: serviciosSinCuotas.length,
+      monto: Math.round(serviciosSinCuotas.reduce((n, s) => n + (s.monto ?? 0), 0) * 100) / 100,
       // ⚠ Estos NO salen de HubSpot: un ServicioContratado no tiene trato. Salen de la
       // cartera de cobranza —lo que alguien configuró como vendido— y lo que les falta es
       // el plan de cobro. Por eso el enlace va al cliente en Nexus, que es donde se
       // arregla, y a su empresa en HubSpot solo como contexto.
-      items: serviciosSinCobros.map((sv) => ({
+      items: serviciosSinCuotas.map(({ sv, sinCuotas, montoServicio, monto }) => ({
         texto: sv.cuenta.client?.name ?? "(servicio sin cliente)",
-        monto: num(sv.montoTotal)!,
+        monto,
         nota: [
           `${sv.tipoServicio} · ${sv.modalidad}`,
           sv.moneda,
-          sv.fechaInicioFacturacion
-            ? `arranca ${isoDay(sv.fechaInicioFacturacion)}`
-            : "SIN fecha de arranque — por eso no generó cobros",
+          sinCuotas.motivo === "sin-cobros"
+            ? sv.fechaInicioFacturacion
+              ? `arranca ${isoDay(sv.fechaInicioFacturacion)}`
+              : "SIN fecha de arranque — por eso no generó cobros"
+            : sinCuotas.recurrencia.ultimaCuotaISO === null || sinCuotas.recurrencia.diasHastaUltima === null
+              ? "recurrente sin ninguna cuota ni plan que la genere"
+              : sinCuotas.recurrencia.apagada
+                ? `sin cuotas desde el ${sinCuotas.recurrencia.ultimaCuotaISO} y sin plan: ${montoServicio} ${sv.moneda} por mes que ya no se facturan`
+                : `última cuota el ${sinCuotas.recurrencia.ultimaCuotaISO} y sin plan: se apaga en ${sinCuotas.recurrencia.diasHastaUltima} día(s)`,
+          monto === undefined ? "sin tipo de cambio del mes: no suma" : "",
           sv.descripcion ?? "",
         ]
           .filter(Boolean)

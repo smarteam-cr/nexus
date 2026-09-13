@@ -125,7 +125,11 @@ export interface EstadoParaAuditar {
   };
   /** Comisiones de aliado que ya deberían haber entrado y no están confirmadas. */
   comisionesVencidas: Array<{ partner: string; monto: number; fecha: string }>;
-  /** Servicios activos que nunca generaron un cobro. */
+  /**
+   * Servicios activos sin cuotas por delante: los que nunca generaron un cobro, y los recurrentes sin
+   * plan cuya última cuota ya pasó o cae en los próximos 45 días (etapa 14, `servicioSinCuotasPorDelante`
+   * de lib/cobranza/engine.ts). En un recurrente, el monto es el de un mes.
+   */
   serviciosSinCobros: { cuantas: number; monto: number; items: ItemInconsistencia[] };
   /** Clientes con cuenta de cobranza pero sin empresa de HubSpot ligada. */
   cuentasSinEmpresa: { cuantas: number; items: ItemInconsistencia[] };
@@ -293,17 +297,23 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
     });
   }
 
-  // ── Servicios sin cobros ────────────────────────────────────────────────────
+  // ── Servicios sin cuotas por delante ────────────────────────────────────────
+  // ⚠ Hasta el 2026-09-13 solo contaba los que nunca generaron un cobro, y los recurrentes cargados del
+  // libro no salían nunca: arrastran sus cuotas importadas aunque ya no les quede ninguna por delante.
   if (e.serviciosSinCobros.cuantas > 0) {
     out.push({
       codigo: "SERVICIO_SIN_COBROS",
       severidad: "MEDIA",
-      titulo: "Servicios vendidos que nunca generaron un cobro",
+      titulo: "Servicios vendidos sin cuotas por delante",
       detalle:
-        "Están cargados en cobranza con su monto, pero no tienen ni una cuota programada. No aparecen en ninguna " +
-        "cifra del reporte: ni facturado, ni por cobrar, ni pendiente.",
+        "Unos nunca generaron un cobro: están cargados con su monto pero sin una sola cuota, así que no aparecen " +
+        "en ninguna cifra del reporte. Otros son recurrentes sin plan: nada genera la cuota siguiente, así que la " +
+        "recurrencia termina en la última cargada, o ya terminó, sin que nadie lo vea. En un recurrente, el monto " +
+        "es el de un mes.",
       montoEnJuego: e.serviciosSinCobros.monto,
-      queHacer: "Definirles el plan de pago para que se materialicen las cuotas, o darlos de baja si no van a facturarse.",
+      queHacer:
+        "Definirles el plan de pago —a un recurrente, el de suscripción— para que se materialicen las cuotas, o " +
+        "darlos por finalizados si no van a facturarse.",
       resuelve: "COBRANZA",
       items: e.serviciosSinCobros.items,
     });
