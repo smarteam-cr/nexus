@@ -37,7 +37,7 @@ import {
 } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
 import { BLOQUEO_LABEL, planDeCambios } from "@/lib/cobranza/plan-vs-cobros";
-import { materializeCobros } from "@/lib/cobranza/engine";
+import { materializeCobros, ultimaCuotaCargada } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 import SociedadesQueFacturan from "./SociedadesQueFacturan";
@@ -860,7 +860,8 @@ function DesfaseDelCronograma({
           descripcion: q.descripcion ?? undefined,
         })),
       },
-      { todayISO },
+      // Igual que el servidor: la suscripción no anuncia como «sobrante» la cuota cargada más allá del horizonte.
+      { todayISO, ultimaCuotaCargada: ultimaCuotaCargada(servicio.cobros) },
     );
     d = planDeCambios(
       drafts,

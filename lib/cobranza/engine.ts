@@ -224,6 +224,40 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export class PlanInvalidoError extends Error {}
 
+/**
+ * Cómo se expande un plan. `todayISO` y `horizonMeses` solo los lee la SUSCRIPCION, igual que
+ * `ultimaCuotaCargada`.
+ *
+ * ── `ultimaCuotaCargada`: UNA SUSCRIPCION NO SE ACHICA SOLA ─────────────────────
+ * El horizonte que rueda (hoy + 3 meses) es hasta dónde el motor PROYECTA, no hasta dónde llega el
+ * contrato. Pero `reconcileCobros` borra toda cuota PROGRAMADA sin factura que el plan no pide (G7,
+ * Wherex), así que sin esto la cuota cargada más allá del horizonte se leía como «el plan ya no la
+ * quiere» y se borraba.
+ *
+ * Medido en solo lectura el 2026-09-13: IIA, APRECAP, Ferretería Noelito e Iberorutas tienen sus
+ * cuotas importadas hasta el 30-dic. Con el plan de suscripción que les tiene que poner Alex,
+ * «Generar cobros» —o el corte, que extiende las suscripciones— les borraba la de diciembre, y la
+ * recurrencia que esta etapa quiere mantener viva se acortaba en el mismo acto.
+ *
+ * ⚠ Va en la EXPANSIÓN y no en la reconciliación a propósito: el aviso del panel y el diálogo de
+ * soltar facturas (lib/cobranza/plan-vs-cobros.ts) comparan contra los drafts. Si la regla viviera
+ * en `reconcileCobros`, el panel seguiría anunciando que diciembre se borra mientras el motor no lo
+ * borra. Todo el que materializa una suscripción con cobros ya cargados pasa `ultimaCuotaCargada`.
+ */
+export interface OpcionesDeExpansion {
+  todayISO: string;
+  horizonMeses?: number;
+  /** El numCuota más alto que el servicio ya tiene cargado (`ultimaCuotaCargada`). null = ninguno. */
+  ultimaCuotaCargada?: number | null;
+}
+
+/** El numCuota más alto entre los cobros del servicio. Los que no tienen cuota (manuales) no cuentan. */
+export function ultimaCuotaCargada(cobros: ReadonlyArray<{ numCuota: number | null }>): number | null {
+  let max: number | null = null;
+  for (const c of cobros) if (c.numCuota !== null && (max === null || c.numCuota > max)) max = c.numCuota;
+  return max;
+}
+
 interface CuotaExpandida {
   numCuota: number;
   offsetMeses: number;
@@ -238,14 +272,15 @@ interface CuotaExpandida {
  *  - ENTRADA_Y_RESTO: cuotas[0] = entrada (PORCENTAJE, offset 0); el resto se
  *    reparte parejo en numCuotas mensualidades desde offset 1 (mismo residuo).
  *  - SUSCRIPCION: rolling — desde offset 0 hasta monthsBetween(inicio, hoy) +
- *    horizonte. Monto = montoTotal (mensual) cada una.
+ *    horizonte, o hasta la última cuota ya cargada si llega más lejos. Monto =
+ *    montoTotal (mensual) cada una.
  *  - PERSONALIZADO: mapea las cuotas tal cual (sin invariante de suma — puede ser
  *    parcial a propósito; la UI muestra plan-vs-montoTotal como dato).
  */
 export function expandPlanCuotas(
   servicio: ServicioEngineInput,
   plan: PlanEngineInput,
-  opts: { todayISO: string; horizonMeses?: number },
+  opts: OpcionesDeExpansion,
 ): CuotaExpandida[] {
   const total = servicio.montoTotal;
 
@@ -292,7 +327,8 @@ export function expandPlanCuotas(
       if (!servicio.fechaInicioFacturacion) return [];
       const horizonte = opts.horizonMeses ?? HORIZONTE_SUSCRIPCION_MESES;
       const transcurridos = monthsBetween(servicio.fechaInicioFacturacion, opts.todayISO);
-      const hasta = transcurridos + horizonte;
+      // En la suscripción la cuota N es el offset N-1: llegar a la última cargada es llegar a su offset.
+      const hasta = Math.max(transcurridos + horizonte, (opts.ultimaCuotaCargada ?? 0) - 1);
       const out: CuotaExpandida[] = [];
       for (let off = 0; off <= hasta; off++) {
         out.push({ numCuota: off + 1, offsetMeses: off, monto: round2(total) });
@@ -380,7 +416,7 @@ export function cobroDateFor(
 export function materializeCobros(
   servicio: ServicioEngineInput,
   plan: PlanEngineInput,
-  opts: { todayISO: string; horizonMeses?: number },
+  opts: OpcionesDeExpansion,
 ): CobroDraft[] {
   if (!servicio.fechaInicioFacturacion) return [];
   const cuotas = expandPlanCuotas(servicio, plan, opts);

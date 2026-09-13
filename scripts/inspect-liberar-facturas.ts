@@ -29,7 +29,12 @@ import { join } from "node:path";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
-import { materializeCobros, type PlanEngineInput, type ServicioEngineInput } from "@/lib/cobranza/engine";
+import {
+  materializeCobros,
+  ultimaCuotaCargada,
+  type PlanEngineInput,
+  type ServicioEngineInput,
+} from "@/lib/cobranza/engine";
 import { crDateParts } from "@/lib/jobs/time";
 
 const ROLES = ["CSE", "VENTAS", "DEV", "CSL", "MARKETING", "ADMIN", "SUPER_ADMIN"] as const;
@@ -145,7 +150,7 @@ async function main() {
           offsetMeses: q.offsetMeses,
         })),
       };
-      drafts = materializeCobros(servicioInput, planInput, { todayISO });
+      drafts = materializeCobros(servicioInput, planInput, { todayISO, ultimaCuotaCargada: ultimaCuotaCargada(s.cobros) });
     } catch {
       continue; // un plan que el motor no puede materializar no es asunto de este feature
     }

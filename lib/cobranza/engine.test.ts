@@ -15,6 +15,8 @@
  *      C1 rolling: monthsBetween(inicio, hoy) + horizonte cuotas, monto mensual c/u.
  *      C2 arranque futuro → horizonte+1 cuotas; horizonMeses override respeta.
  *      C3 sin fechaInicioFacturacion → [].
+ *      C4 ⛔ llega hasta la última cuota ya cargada (IIA: 12 importadas, el rolling daba 11) y nunca
+ *         acorta; las demás plantillas la ignoran.
  *   D) expandPlanCuotas PERSONALIZADO:
  *      D1 mapea PORCENTAJE/MONTO_FIJO ordenado por orden, sin invariante de suma.
  *      D2 cero cuotas → PlanInvalidoError.
@@ -37,6 +39,8 @@
  *      G6 existente con numCuota null → untouched SIEMPRE (nunca update/delete).
  *      G10 Kaizen: los catch-up que el plan corrió al futuro vuelven a PLAN (con y sin toUpdate);
  *          el que sigue en el pasado, el facturado y el que se borra no.
+ *      G11 ⛔ Noelito e Iberorutas: arranque 30-jul con 6 cuotas importadas hasta el 30-dic → 0
+ *          cambios al ponerles el plan de suscripción; sin la última cuota, diciembre se borraba.
  *   H) splitCatchUp:
  *      H1 estrictamente < hoy → catchUp; == hoy y > hoy → regulares.
  *      H2 esCatchUpPendiente: misma frontera que H1, y solo PROGRAMADO.
@@ -161,6 +165,7 @@ import {
   computeRiesgoPago,
   RIESGO_UMBRAL_DIAS,
   PlanInvalidoError,
+  ultimaCuotaCargada,
 } from "./engine";
 import type {
   ServicioEngineInput,
@@ -411,6 +416,33 @@ test("C3 — SUSCRIPCION sin fechaInicioFacturacion → []", () => {
     { todayISO: HOY },
   );
   expect(cuotas).toEqual([]);
+});
+
+test("C4 — ⛔ SUSCRIPCION: la expansión llega hasta la última cuota ya cargada y nunca la acorta", () => {
+  /* IIA, medido el 2026-09-13: 12 cuotas importadas de enero a diciembre, arranque el 30-ene. El
+     rolling llega a monthsBetween(30-ene, 13-sep) = 7 + 3 = offset 10, la cuota #11 de noviembre: la
+     #12 de diciembre quedaba afuera del plan, y todo lo que queda afuera se borra (G7). */
+  const iia = servicio({ montoTotal: 60, fechaInicioFacturacion: "2026-01-30", diaCobroAncla: 30 });
+  const suscripcion = plan({ template: "SUSCRIPCION" });
+  const hoy = "2026-09-13";
+
+  expect(expandPlanCuotas(iia, suscripcion, { todayISO: hoy })).toHaveLength(11);
+  const conLasCargadas = expandPlanCuotas(iia, suscripcion, { todayISO: hoy, ultimaCuotaCargada: 12 });
+  expect(conLasCargadas.map((c) => c.numCuota)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  expect(conLasCargadas.every((c) => c.monto === 60)).toBe(true);
+
+  // Nunca acorta: una última cuota por debajo del horizonte no le saca nada al rolling.
+  expect(expandPlanCuotas(iia, suscripcion, { todayISO: hoy, ultimaCuotaCargada: 3 })).toHaveLength(11);
+  expect(expandPlanCuotas(iia, suscripcion, { todayISO: hoy, ultimaCuotaCargada: null })).toHaveLength(11);
+  // Las plantillas con fin no la leen: su largo lo decide el plan.
+  expect(
+    expandPlanCuotas(servicio({ montoTotal: 1000 }), plan({ numCuotas: 3 }), { todayISO: HOY, ultimaCuotaCargada: 12 }),
+  ).toHaveLength(3);
+
+  // La última cargada es el numCuota más alto; los manuales sin cuota no cuentan.
+  expect(ultimaCuotaCargada([{ numCuota: 2 }, { numCuota: null }, { numCuota: 12 }, { numCuota: 7 }])).toBe(12);
+  expect(ultimaCuotaCargada([{ numCuota: null }])).toBeNull();
+  expect(ultimaCuotaCargada([])).toBeNull();
 });
 
 // ── D) PERSONALIZADO ─────────────────────────────────────────────────────────────
@@ -699,6 +731,48 @@ test("G10 — Kaizen: los catch-up que el plan corrió al futuro vuelven a ser c
   expect(
     catchUpYaNoVencidos([sigueEnElPasado, facturado, borrado], { ...sinCambios, toDelete: ["borrado"] }, HOY_KAIZEN),
   ).toEqual([]);
+});
+
+test("G11 — ⛔ Noelito e Iberorutas: arranque 30-jul y 6 cuotas importadas hasta diciembre → 0 cambios", () => {
+  /* Datos reales, medidos el 2026-09-13: la #1 facturada, las otras cinco PROGRAMADO sin factura, todas
+     el día 30. El rolling llega a monthsBetween(30-jul, 13-sep) = 1 + 3 = la cuota #5 de noviembre.
+     ⚠ La cuenta tiene día de cobro 15: con él, las cinco sin factura se moverían al 15. Que una
+     suscripción cobre el día de su arranque espera a que Alex lo confirme (etapa 14, ítem 2), así
+     que acá el día es el del arranque. */
+  const HOY_NOELITO = "2026-09-13";
+  const noelito = servicio({ montoTotal: 289, fechaInicioFacturacion: "2026-07-30", diaCobroAncla: 30 });
+  const suscripcion = plan({ template: "SUSCRIPCION" });
+  const importadas = ["2026-07-30", "2026-08-30", "2026-09-30", "2026-10-30", "2026-11-30", "2026-12-30"].map((fecha, i) =>
+    existente({
+      id: `n${i + 1}`,
+      numCuota: i + 1,
+      origen: "IMPORTACION",
+      fechaProgramadaISO: fecha,
+      monto: 289,
+      ...(i === 0 ? { estado: "POR_COBRAR", fechaEmision: "2026-07-30" } : {}),
+    }),
+  );
+
+  const r = reconcileCobros(
+    materializeCobros(noelito, suscripcion, { todayISO: HOY_NOELITO, ultimaCuotaCargada: ultimaCuotaCargada(importadas) }),
+    importadas,
+  );
+  expect(r.toCreate).toEqual([]);
+  expect(r.toUpdate).toEqual([]);
+  expect(r.toDelete).toEqual([]);
+  expect(r.untouched.sort()).toEqual(["n1", "n2", "n3", "n4", "n5", "n6"]);
+
+  // Lo que pasaba: sin la última cuota cargada, la de diciembre era un «sobrante» del plan y se borraba.
+  expect(reconcileCobros(materializeCobros(noelito, suscripcion, { todayISO: HOY_NOELITO }), importadas).toDelete).toEqual(["n6"]);
+
+  // Cuando el horizonte la pasa, la suscripción sigue rodando: agrega enero sin tocar lo cargado.
+  const enNoviembre = reconcileCobros(
+    materializeCobros(noelito, suscripcion, { todayISO: "2026-11-01", ultimaCuotaCargada: 6 }),
+    importadas,
+  );
+  expect(enNoviembre.toCreate.map((d) => [d.numCuota, d.fechaProgramadaISO])).toEqual([[7, "2027-01-30"]]);
+  expect(enNoviembre.toUpdate).toEqual([]);
+  expect(enNoviembre.toDelete).toEqual([]);
 });
 
 // ── H) splitCatchUp ──────────────────────────────────────────────────────────────

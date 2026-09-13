@@ -17,6 +17,7 @@ import {
   reconcileCobros,
   splitCatchUp,
   sumaPlanExpandido,
+  ultimaCuotaCargada,
   type AlertaDraft,
   type CarteraEngineInput,
   type CobroDraft,
@@ -466,7 +467,12 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
     );
   }
 
-  const drafts = materializeCobros(servicioInput, planInput, { todayISO });
+  /* La suscripción llega por lo menos hasta la última cuota cargada: sin eso la de diciembre de IIA
+     o Noelito se leía como sobrante y se borraba (engine.ts `OpcionesDeExpansion`). */
+  const drafts = materializeCobros(servicioInput, planInput, {
+    todayISO,
+    ultimaCuotaCargada: ultimaCuotaCargada(existentes),
+  });
   const rec = reconcileCobros(drafts, existentes);
   const { regulares, catchUp } = splitCatchUp(rec.toCreate, todayISO);
 

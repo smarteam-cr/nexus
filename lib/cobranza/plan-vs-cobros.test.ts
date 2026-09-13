@@ -19,7 +19,16 @@
  * poder reescribir un cobro ya facturado.
  */
 import { describe, it, expect } from "vitest";
-import { esIntocable, materializeCobros, type CobroDraft, type PlanEngineInput, type ServicioEngineInput } from "./engine";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  esIntocable,
+  materializeCobros,
+  ultimaCuotaCargada,
+  type CobroDraft,
+  type PlanEngineInput,
+  type ServicioEngineInput,
+} from "./engine";
 import {
   BLOQUEO_LABEL,
   bloqueoDe,
@@ -245,6 +254,56 @@ describe("los cobros que no cuelgan de ninguna cuota", () => {
     expect(plan.borrar).toEqual([]);
     expect(plan.bloqueados).toEqual([]);
     expect(plan.crear).toHaveLength(1);
+  });
+});
+
+/**
+ * ── ⛔ UNA SUSCRIPCION NO ANUNCIA QUE BORRA LO QUE YA ESTÁ CARGADO (etapa 14) ──────
+ * Ferretería Noelito, medido el 2026-09-13: 6 cuotas importadas hasta el 30-dic, sin plan. Con el
+ * plan de suscripción, el rolling llega a noviembre, y el panel decía «el cronograma no coincide con
+ * el acuerdo» con la cuota de diciembre para borrar. El motor ya no la borra
+ * (engine.ts `OpcionesDeExpansion`), así que el panel tampoco puede anunciarlo.
+ */
+describe("⛔ la suscripción no anuncia que borra lo cargado más allá del horizonte", () => {
+  const NOELITO: ServicioEngineInput = {
+    id: "svc-noelito",
+    montoTotal: 289,
+    moneda: "USD",
+    fechaInicioFacturacion: "2026-07-30",
+    duracionMeses: null,
+    diaCobroAncla: 30,
+  };
+  const SUSCRIPCION: PlanEngineInput = { template: "SUSCRIPCION", numCuotas: null, cuotas: [] };
+  const COBROS_NOELITO: CobroMaterializado[] = ["2026-07-30", "2026-08-30", "2026-09-30", "2026-10-30", "2026-11-30", "2026-12-30"].map(
+    (fecha, i) =>
+      cobro({
+        id: `n${i + 1}`,
+        numCuota: i + 1,
+        periodo: fecha.slice(0, 7),
+        monto: 289,
+        fechaProgramadaISO: fecha,
+        ...(i === 0 ? { estado: "POR_COBRAR", fechaEmision: "2026-07-30" } : {}),
+      }),
+  );
+
+  it("con la última cuota cargada, el panel no ve nada que cambiar", () => {
+    const drafts = materializeCobros(NOELITO, SUSCRIPCION, {
+      todayISO: "2026-09-13",
+      ultimaCuotaCargada: ultimaCuotaCargada(COBROS_NOELITO),
+    });
+    const d = planDeCambios(drafts, COBROS_NOELITO);
+    expect(d.hay).toBe(false);
+    expect(d.borrar).toEqual([]);
+  });
+
+  it("⚠ el servidor y el panel le pasan la última cuota cargada al motor", () => {
+    /* Si uno de los dos deja de pasarla, vuelve el desfase: el panel anuncia que diciembre se borra
+       y el motor no lo borra, o al revés. Sin comentarios: la guarda no se cumple con el párrafo. */
+    const raiz = join(__dirname, "..", "..");
+    const leer = (rel: string) =>
+      readFileSync(join(raiz, rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(leer("lib/cobranza/mutations.ts")).toMatch(/ultimaCuotaCargada: ultimaCuotaCargada\(existentes\)/);
+    expect(leer("components/cobranza/CuentaDrawer.tsx")).toMatch(/ultimaCuotaCargada: ultimaCuotaCargada\(servicio\.cobros\)/);
   });
 });
 
