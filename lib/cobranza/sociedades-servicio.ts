@@ -18,6 +18,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { choqueDeSociedad, claveFactura, NOMBRE_DE_PLATAFORMA, type SociedadDeLaCuenta } from "./sociedades";
 import type { SociedadAgregar } from "./schema";
+import type { ClienteDb } from "./mutations";
 
 export class SociedadError extends Error {
   readonly status: number;
@@ -74,14 +75,42 @@ export async function agregarSociedad(
 ): Promise<{ id: string; retomada: boolean }> {
   const cuenta = await prisma.cuentaFinanciera.findUnique({ where: { id: cuentaId }, select: { id: true } });
   if (!cuenta) throw new SociedadError("La cuenta no existe.", 404);
+  try {
+    const r = await prisma.$transaction((tx) => agregarSociedadTx(tx, cuentaId, input, actor));
+    return { id: r.id, retomada: r.retomada };
+  } catch (e) {
+    /* El índice único parcial (plataforma, claveFactura) es la red si dos personas la agregan a la vez. */
+    if (codigoDe(e) === "P2002") {
+      throw new SociedadError(`«${input.nombre.trim()}» ya existe como sociedad de ${NOMBRE_DE_PLATAFORMA[input.plataforma]}.`, 409);
+    }
+    throw e;
+  }
+}
 
+/**
+ * La misma alta, con el cliente de base de quien la llama: aplicar el libro de Alex (etapa 13) la corre dentro
+ * de la transacción que carga el cobro, así una sociedad no queda creada sin la factura que la trajo. Una sola
+ * versión de la regla: `agregarSociedad` es este cuerpo en su propia transacción.
+ *
+ * `siYaLeFactura: "usar"` = si la sociedad ya le factura a ESTA cuenta, devolverla en vez del 409 (el libro trae
+ * la misma sociedad en varias facturas). A otra cuenta sigue siendo 409.
+ *
+ * ⚠ Sin la red del P2002: adentro de una transacción el error la aborta, y lo traduce quien la abrió.
+ */
+export async function agregarSociedadTx(
+  db: ClienteDb,
+  cuentaId: string,
+  input: SociedadAgregar,
+  actor: string,
+  opciones: { siYaLeFactura?: "error" | "usar" } = {},
+): Promise<{ id: string; retomada: boolean; yaLeFacturaba: boolean }> {
   const nombre = input.nombre.trim();
   const clave = claveFactura(nombre);
   if (!clave) throw new SociedadError("Ese nombre no alcanza para distinguir la sociedad. Escribilo como sale en la factura.");
   const cedula = input.cedula?.trim() || null;
   const donde = NOMBRE_DE_PLATAFORMA[input.plataforma];
 
-  const existentes = await prisma.odooPartnerVinculo.findMany({
+  const existentes = await db.odooPartnerVinculo.findMany({
     where: { odooPartnerId: null, plataforma: input.plataforma },
     select: {
       id: true,
@@ -104,6 +133,7 @@ export async function agregarSociedad(
     })),
   );
   if (choque && choque.cuentaId === cuentaId) {
+    if (opciones.siYaLeFactura === "usar") return { id: choque.id, retomada: false, yaLeFacturaba: true };
     throw new SociedadError(`«${choque.nombre}» ya le factura a esta cuenta por ${donde}.`, 409);
   }
   if (choque && choque.cuentaId) {
@@ -113,39 +143,31 @@ export async function agregarSociedad(
     );
   }
 
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const datos = {
-        cuentaId,
-        odooPartnerNombre: nombre,
-        odooVat: cedula,
-        via: "MANUAL" as const,
-        ignorado: false,
-        confirmadoPor: actor,
-        confirmadoEn: new Date(),
-      };
-      /* Una sociedad que alguien soltó se retoma, en vez de chocar contra el índice único. */
-      const fila = choque
-        ? await tx.odooPartnerVinculo.update({ where: { id: choque.id }, data: datos, select: { id: true } })
-        : await tx.odooPartnerVinculo.create({
-            data: { ...datos, plataforma: input.plataforma, claveFactura: clave },
-            select: { id: true },
-          });
-      await tx.bitacoraCobro.create({
-        data: {
-          cuentaId,
-          tipo: "NOTA",
-          contenido: `${actor} anotó una sociedad que le factura a la cuenta por ${donde}: «${nombre}»${cedula ? ` (cédula ${cedula})` : ""}.`,
-          usuarioEmail: actor,
-        },
+  const datos = {
+    cuentaId,
+    odooPartnerNombre: nombre,
+    odooVat: cedula,
+    via: "MANUAL" as const,
+    ignorado: false,
+    confirmadoPor: actor,
+    confirmadoEn: new Date(),
+  };
+  /* Una sociedad que alguien soltó se retoma, en vez de chocar contra el índice único. */
+  const fila = choque
+    ? await db.odooPartnerVinculo.update({ where: { id: choque.id }, data: datos, select: { id: true } })
+    : await db.odooPartnerVinculo.create({
+        data: { ...datos, plataforma: input.plataforma, claveFactura: clave },
+        select: { id: true },
       });
-      return { id: fila.id, retomada: choque !== null };
-    });
-  } catch (e) {
-    /* El índice único parcial (plataforma, claveFactura) es la red si dos personas la agregan a la vez. */
-    if (codigoDe(e) === "P2002") throw new SociedadError(`«${nombre}» ya existe como sociedad de ${donde}.`, 409);
-    throw e;
-  }
+  await db.bitacoraCobro.create({
+    data: {
+      cuentaId,
+      tipo: "NOTA",
+      contenido: `${actor} anotó una sociedad que le factura a la cuenta por ${donde}: «${nombre}»${cedula ? ` (cédula ${cedula})` : ""}.`,
+      usuarioEmail: actor,
+    },
+  });
+  return { id: fila.id, retomada: choque !== null, yaLeFacturaba: false };
 }
 
 /**

@@ -46,19 +46,25 @@ export default function NuevaEmpresaModal({
   open,
   onClose,
   onCreated,
+  inicial,
 }: {
   open: boolean;
   onClose: () => void;
   /** Recibe el cuentaId nuevo para abrir el drawer + refrescar la cartera. */
   onCreated: (cuentaId: string) => void;
+  /**
+   * Lo que ya se sabe de la empresa: aplicar el libro de Alex la abre con el nombre en factura. Solo precarga;
+   * la persona lo corrige y las parecidas se preguntan igual. Se lee al montar.
+   */
+  inicial?: { nombre: string; tipo: string; viaCobro: string; moneda: string };
 }) {
   const toast = useToast();
-  const [nombre, setNombre] = useState("");
+  const [nombre, setNombre] = useState(inicial?.nombre ?? "");
   const [dominio, setDominio] = useState("");
   const [correoCobro, setCorreoCobro] = useState("");
-  const [tipo, setTipo] = useState("NACIONAL");
-  const [viaCobro, setViaCobro] = useState("ODOO");
-  const [moneda, setMoneda] = useState("CRC");
+  const [tipo, setTipo] = useState(inicial?.tipo ?? "NACIONAL");
+  const [viaCobro, setViaCobro] = useState(inicial?.viaCobro ?? "ODOO");
+  const [moneda, setMoneda] = useState(inicial?.moneda ?? "CRC");
   const [diaCobroAncla, setDiaCobroAncla] = useState("");
   const [creditoDias, setCreditoDias] = useState("");
   const [saving, setSaving] = useState(false);

@@ -40,6 +40,7 @@ export function cobroDeNexus(c: Pick<CobroParaLibro, "id" | "cuentaId" | "period
     numeroFactura: null,
     sinNumeroFacturaMotivo: null,
     numCuota: null,
+    promesaPago: null,
     ...c,
   };
 }

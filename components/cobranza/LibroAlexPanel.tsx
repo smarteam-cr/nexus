@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * components/cobranza/LibroAlexPanel.tsx — el libro de Alex contra Nexus (etapa 11).
+ * components/cobranza/LibroAlexPanel.tsx — el libro de Alex contra Nexus (etapas 11 y 13).
  *
- * Dos pestañas sobre el lote que se subió:
+ * Tres pestañas sobre el lote que se subió:
  *   · «Fila por fila»: una propuesta por documento del libro (lib/cobranza/libro-alex.ts): coincide, no
  *     coincide, falta en Nexus, sin cuenta, no es cartera… y qué haría una persona.
  *   · «Números»: el número de factura propuesto para cada cuota (NumerosFacturaOdoo.tsx).
+ *   · «Aplicar»: las facturas que Nexus no tiene, para cargarlas por cobrar (AplicarLibroAlex.tsx).
  *
- * ⛔ «Fila por fila» solo lee. Lo único que guarda algo en toda la pantalla es «Es esta», en «Números»,
- * que anota el número por el PATCH del cobro con la firma de quien lo toca. Pasar a Cobrado o sacar de
- * Cobrado sigue siendo del cronograma de la cuenta, con una persona.
+ * ⛔ «Fila por fila» solo lee. Guardan «Es esta», en «Números», que anota el número por el PATCH del cobro con
+ * la firma de quien lo toca, y «Cargar por cobrar», en «Aplicar». Ninguna de las dos pasa un cobro a Cobrado:
+ * pasar a Cobrado o sacar de Cobrado sigue siendo del cronograma de la cuenta, con una persona.
  *
  * Se compara de nuevo al abrir y con «Volver a comparar»: si Alex corrigió algo en otra pestaña, la fila
  * cambia sin volver a subir el Excel.
@@ -22,9 +23,10 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { AccionDelLibro, PropuestaDelLibro, Veredicto, ViaDeCuenta } from "@/lib/cobranza/libro-alex";
 import type { RespuestaDelLibro } from "@/lib/cobranza/libro-alex-server";
 import NumerosFacturaOdoo from "./NumerosFacturaOdoo";
+import AplicarLibroAlex from "./AplicarLibroAlex";
 import { etiquetaMes, fmtFecha, fmtMonto, INPUT_CLS } from "./format";
 
-type Pestana = "filas" | "numeros";
+type Pestana = "filas" | "numeros" | "aplicar";
 type Filtro = Veredicto | "TODOS";
 
 /** Primero lo que hay que trabajar; lo que coincide, al final. */
@@ -163,8 +165,9 @@ export default function LibroAlexPanel({ importId, onCerrar }: { importId: strin
 
       <Alert variant="info">
         <p className="text-xs">
-          Esta comparación no escribe nada. Si Nexus y el libro no coinciden, manda el libro, pero cada corrección la hace una
-          persona desde el cronograma de la cuenta, y Nexus nunca pasa un cobro a Cobrado por lo que diga el Excel.
+          La comparación no escribe nada. Si Nexus y el libro no coinciden, manda el libro, pero cada corrección la hace una
+          persona: los números en «Números», las facturas que faltan en «Aplicar» (entran por cobrar) y lo demás desde el
+          cronograma de la cuenta. Nexus nunca pasa un cobro a Cobrado por lo que diga el Excel.
         </p>
       </Alert>
 
@@ -211,6 +214,7 @@ export default function LibroAlexPanel({ importId, onCerrar }: { importId: strin
         items={[
           { key: "filas", label: "Fila por fila", count: datos?.comparacion.filas.length, title: "Cada documento del libro contra lo que tiene Nexus" },
           { key: "numeros", label: "Números", title: "El número de factura de cada cuota, sacado del libro" },
+          { key: "aplicar", label: "Aplicar", title: "Cargar por cobrar las facturas del libro que Nexus no tiene" },
         ]}
       />
 
@@ -245,6 +249,7 @@ export default function LibroAlexPanel({ importId, onCerrar }: { importId: strin
       )}
 
       {pestana === "numeros" && <NumerosFacturaOdoo importId={importId} />}
+      {pestana === "aplicar" && <AplicarLibroAlex importId={importId} />}
     </div>
   );
 }

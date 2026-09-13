@@ -985,6 +985,26 @@ export const sociedadAgregarSchema = z.object({
 export type SociedadAgregar = z.infer<typeof sociedadAgregarSchema>;
 
 /**
+ * Etapa 13: lo que Alex pide cargar del libro. Por grupo (un nombre en factura), la cuenta que eligió, si los
+ * totales traen IVA y qué facturas tildó; y qué anotaciones van a la bitácora de su cobro. La regla la aplica
+ * `decidirCarga` (lib/cobranza/libro-alex-aplicar.ts) contra el plan de ese momento.
+ * ⛔ No tiene lugar para un estado ni una fecha de cobro: lo que entra, entra por cobrar.
+ */
+export const libroAplicarSchema = z.object({
+  grupos: z
+    .array(
+      z.object({
+        clave: z.string().min(1).max(300),
+        cuentaId: idDeBase,
+        iva: z.enum(["SIN_IVA", "CON_IVA"]).nullable(),
+        facturas: z.array(z.string().min(1).max(80)).min(1).max(500),
+      }),
+    )
+    .max(300),
+  anotaciones: z.array(z.string().min(1).max(200)).max(1000),
+});
+
+/**
  * «Está bien así» sobre una línea de la lista de diferencias con Odoo.
  *
  * ⚠ El motivo es OBLIGATORIO y de al menos 5 caracteres. Una aceptación sin razón escrita es

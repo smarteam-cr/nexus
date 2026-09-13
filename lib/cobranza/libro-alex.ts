@@ -84,6 +84,8 @@ export type CobroParaLibro = {
   numeroFactura: string | null;
   sinNumeroFacturaMotivo: string | null;
   numCuota: number | null;
+  /** `YYYY-MM-DD`. La fecha que Nexus ya tiene anotada: aplicar el libro la muestra al lado de la del texto. */
+  promesaPago: string | null;
 };
 
 export type ContextoLibro = {
@@ -257,7 +259,7 @@ export function agruparDocumentos(filas: readonly FilaLibro[]): DocumentoLibro[]
   return documentos;
 }
 
-const esDeOdoo = (f: FilaLibro) =>
+export const esDeOdoo = (f: FilaLibro) =>
   f.seccion === "ODOO" || (f.seccion === "COMPENDIO" && normalizarTexto(f.origen ?? "").startsWith("odoo"));
 
 /** Una nota de crédito o una factura que Odoo anuló o revirtió no es algo que cobrar ni un número de cobro. */

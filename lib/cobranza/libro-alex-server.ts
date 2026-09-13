@@ -6,8 +6,8 @@
  * que son puros.
  *
  * ⛔ La ÚNICA escritura es el lote: `ImportacionCobranza` con sus filas, igual que un CSV de cuentas en
- * staging. Ni cuentas, ni cobros, ni el espejo. Aplicar el libro es la etapa 13, y ni entonces entra un
- * cobro como COBRADO. Lo vigila libro-alex.test.ts.
+ * staging. Ni cuentas, ni cobros, ni el espejo. Aplicar el libro vive aparte (libro-alex-aplicar-server.ts),
+ * y ni ahí entra un cobro como COBRADO. Lo vigilan libro-alex.test.ts y libro-alex-aplicar.test.ts.
  *
  * ⚠ Sin `server-only`, igual que odoo/sync.ts: lo usan también los scripts de medición de solo lectura.
  */
@@ -178,6 +178,7 @@ const SELECT_COBRO = {
   estado: true,
   confirmadoPor: true,
   numCuota: true,
+  promesaPago: true,
   servicio: { select: { descripcion: true, tipoServicio: true } },
 } satisfies Prisma.CobroSelect;
 
@@ -202,6 +203,7 @@ const cobroParaLibro = (
   numeroFactura,
   sinNumeroFacturaMotivo,
   numCuota: c.numCuota,
+  promesaPago: c.promesaPago ? dia(c.promesaPago) : null,
 });
 
 /** ⚠ Si el código llega antes que el SQL de la etapa 7, relee sin sus columnas y lo marca. Cualquier otro error sube. */

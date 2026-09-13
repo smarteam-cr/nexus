@@ -421,8 +421,8 @@ function PasoSubir({
           {busy ? "Subiendo…" : "Arrastrá el CSV o el libro de Alex acá, o hacé clic para elegirlo"}
         </p>
         <p className="text-[11px] text-fg-muted text-center">
-          .csv del sheet de Finanzas: carga cuentas · .xlsx del libro de Alex: se compara fila por fila contra Nexus, sin escribir
-          nada · Máx 5 MB
+          .csv del sheet de Finanzas: carga cuentas · .xlsx del libro de Alex: se compara fila por fila contra Nexus, y lo que
+          elijas en «Aplicar» entra por cobrar · Máx 5 MB
         </p>
         <input
           type="file"

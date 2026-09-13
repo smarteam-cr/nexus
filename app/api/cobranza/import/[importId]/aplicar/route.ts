@@ -1,44 +1,91 @@
 /**
- * POST /api/cobranza/import/[importId]/aplicar — el APPLY del importador CSV.
+ * /api/cobranza/import/[importId]/aplicar
+ *
+ * POST de un CSV de cuentas — el APPLY del importador CSV.
  * Toma las filas VALIDA del batch EN_REVISION y las ingiere vía el AccountSource
  * "sheet" (upsert idempotente por fuente+id_externo, dedup, TX por fila). Las
  * filas REVISAR bloquean (409): se corrigen u omiten primero — nada se ingiere
  * en silencio. Best-effort: genera los cobros de las suscripciones pre-armadas.
  * Al final, UNA sola re-resolución de sesiones si se crearon clientes (JAMÁS por
  * fila — incidente 2026-07-10). Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN).
+ *
+ * El libro de Alex (etapa 13) no pasa por ahí:
+ *   GET  → el plan de carga: qué facturas del libro entrarían, en qué cuenta y con qué IVA
+ *          (lib/cobranza/libro-alex-aplicar.ts). Solo lectura. Acceso: guardCobranzaAccess.
+ *   POST → carga lo que Alex tildó, POR COBRAR y firmado por quien aplica
+ *          (lib/cobranza/libro-alex-aplicar-server.ts). Acceso: guardCobranzaEditor, el mismo que
+ *          marcar facturado. ⛔ Ninguna factura entra como COBRADO.
  */
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { guardCobranzaAccess } from "@/lib/auth/api-guards";
+import { guardCobranzaAccess, guardCobranzaEditor } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getAccountSource } from "@/lib/cobranza/adapters";
 import { generateCobros } from "@/lib/cobranza/mutations";
-import { importFilaCanonicaSchema } from "@/lib/cobranza/schema";
+import { importFilaCanonicaSchema, libroAplicarSchema } from "@/lib/cobranza/schema";
 import { slugNombre } from "@/lib/cobranza/import-core";
 import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
+import { LibroError } from "@/lib/cobranza/libro-alex-server";
+import { aplicarLote, planDelLote } from "@/lib/cobranza/libro-alex-aplicar-server";
 import type { CuentaEntrante } from "@/lib/cobranza/ports";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { crDateParts } from "@/lib/jobs/time";
 
+export const dynamic = "force-dynamic";
+
 type Params = { params: Promise<{ importId: string }> };
 
-export async function POST(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, { params }: Params) {
   const guard = await guardCobranzaAccess();
   if (guard instanceof NextResponse) return guard;
   const { importId } = await params;
+  try {
+    const respuesta = await planDelLote(importId);
+    if (!respuesta) return NextResponse.json({ error: "Ese lote no existe." }, { status: 404 });
+    return NextResponse.json(respuesta);
+  } catch (e) {
+    if (e instanceof LibroError) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
+}
+
+async function aplicarLibro(req: NextRequest, importId: string) {
+  const guard = await guardCobranzaEditor();
+  if (guard instanceof NextResponse) return guard;
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  const parsed = libroAplicarSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
+  }
+  try {
+    const resultado = await aplicarLote(importId, parsed.data, guard.user.email);
+    if (!resultado) return NextResponse.json({ error: "Ese lote no existe." }, { status: 404 });
+    return NextResponse.json(resultado);
+  } catch (e) {
+    if (e instanceof LibroError) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
+}
+
+export async function POST(req: NextRequest, { params }: Params) {
+  const guard = await guardCobranzaAccess();
+  if (guard instanceof NextResponse) return guard;
+  const { importId } = await params;
+
+  const lote = await prisma.importacionCobranza.findUnique({ where: { id: importId }, select: { fuente: true } });
+  if (!lote) return NextResponse.json({ error: "El import no existe" }, { status: 404 });
+  if (lote.fuente === FUENTE_LIBRO_ALEX) return aplicarLibro(req, importId);
 
   const batch = await prisma.importacionCobranza.findUnique({
     where: { id: importId },
     include: { filas: { orderBy: { numFila: "asc" } } },
   });
   if (!batch) return NextResponse.json({ error: "El import no existe" }, { status: 404 });
-  /* ⛔ El libro de Alex todavía no se aplica (etapa 13): por ahora se compara y se anotan números. */
-  if (batch.fuente === FUENTE_LIBRO_ALEX) {
-    return NextResponse.json(
-      { error: "El libro de Alex todavía no se aplica desde acá: por ahora se compara y se completan los números." },
-      { status: 409 },
-    );
-  }
   if (batch.estado !== "EN_REVISION") {
     return NextResponse.json(
       { error: `El import no está en revisión (estado actual: ${batch.estado}).` },
