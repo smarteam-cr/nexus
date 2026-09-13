@@ -163,24 +163,29 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
     }));
   }
 
-  const yaVinculado = new Set(guardados.filter((v) => v.cuentaId).map((v) => v.cuentaId!));
+  const yaVinculado = new Set(guardados.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
   const partnersLibres = new Set(guardados.filter((v) => v.cuentaId || v.ignorado).map((v) => v.odooPartnerId));
 
-  const cuentas: CuentaNexus[] = cuentasDb
-    .filter((c) => !yaVinculado.has(c.id))
-    .map((c) => ({
-      cuentaId: c.id,
-      nombre: c.client.name,
-      cedulaJuridica: c.cedulaJuridica,
-      montos: [...new Map(c.cobros.map((x) => [`${x.moneda}|${Number(x.monto)}`, { monto: Number(x.monto), moneda: x.moneda }])).values()],
-    }));
+  /* ⭐ Etapa 12 (H10): las cuentas ya vinculadas SIGUEN en la lista. Hasta el 2026-09-13 salían apenas
+     tenían su primer cliente de Odoo, y la segunda ficha de la misma empresa —otra sociedad, o la misma
+     cargada dos veces con la cédula tipeada distinta— quedaba inalcanzable, con sus facturas sin dueño.
+     Vuelven solo con cédula o nombre exacto (`proponerEmparejados`), y sin montos: su plata ya la
+     explica su primer cliente, y contarla haría pasar por única una cifra que no lo es. */
+  const cuentas: CuentaNexus[] = cuentasDb.map((c) => ({
+    cuentaId: c.id,
+    nombre: c.client.name,
+    cedulaJuridica: c.cedulaJuridica,
+    montos: yaVinculado.has(c.id)
+      ? []
+      : [...new Map(c.cobros.map((x) => [`${x.moneda}|${Number(x.monto)}`, { monto: Number(x.monto), moneda: x.moneda }])).values()],
+  }));
 
   /* Un partner ya vinculado o ya marcado «no es cliente nuestro» no vuelve a proponerse:
      de otro modo la lista no baja nunca y a la tercera sesión nadie la mira. */
   const candidateables = partnersOdoo.filter((p) => !partnersLibres.has(p.odooPartnerId));
 
   return {
-    propuestas: proponerEmparejados(cuentas, candidateables, montosOdoo),
+    propuestas: proponerEmparejados(cuentas, candidateables, montosOdoo, { yaVinculadas: yaVinculado }),
     vinculos: guardados.map((v) => ({
       odooPartnerId: v.odooPartnerId,
       odooPartnerNombre: v.odooPartnerNombre,
@@ -256,6 +261,11 @@ export interface ResultadoConfirmar {
   cedulaAprendida: string | null;
   /** ⚠ No null cuando Nexus y Odoo tienen cédulas distintas. NO se pisó nada. */
   conflictoCedula: { nexus: string; odoo: string } | null;
+  /**
+   * Etapa 12: la cédula de Odoo es otra, pero la de la cuenta es la de otra de sus sociedades. No es un
+   * conflicto: la ficha queda como otra sociedad de la cuenta. Tampoco se pisó nada.
+   */
+  otraSociedad: { nexus: string; odoo: string } | null;
   /** Cuántos documentos de ese cliente (facturas y notas de crédito) quedaron con esta cuenta. */
   facturasAtribuidas: number;
 }
@@ -279,9 +289,24 @@ export async function confirmarVinculo(
     throw new EmparejadoError("Ese cliente de Odoo ya está vinculado a otra cuenta. Desvinculalo primero.", 409);
   }
 
-  const aprendizaje = input.aprenderCedula ? cedulaAAprender(cuenta.cedulaJuridica, partner.odooVat) : null;
+  /* Las cédulas de las OTRAS fichas de la cuenta: con ellas, una segunda cédula deja de ser un conflicto
+     (etapa 12). Se descarta la propia en memoria: son dos o tres filas. */
+  const otrasFichas = input.aprenderCedula
+    ? await prisma.odooPartnerVinculo.findMany({
+        where: { cuentaId: input.cuentaId },
+        select: { odooPartnerId: true, odooVat: true },
+      })
+    : [];
+  const aprendizaje = input.aprenderCedula
+    ? cedulaAAprender(
+        cuenta.cedulaJuridica,
+        partner.odooVat,
+        otrasFichas.filter((v) => v.odooPartnerId !== input.odooPartnerId).map((v) => v.odooVat),
+      )
+    : null;
   const escribir = aprendizaje && "escribir" in aprendizaje ? aprendizaje.escribir : null;
   const conflicto = aprendizaje && "conflicto" in aprendizaje ? aprendizaje.conflicto : null;
+  const otraSociedad = aprendizaje && "otraSociedad" in aprendizaje ? aprendizaje.otraSociedad : null;
 
   const atribuidas = await prisma.$transaction(async (tx) => {
     await tx.odooPartnerVinculo.update({
@@ -310,6 +335,7 @@ export async function confirmarVinculo(
     cuentaId: input.cuentaId,
     cedulaAprendida: escribir,
     conflictoCedula: conflicto,
+    otraSociedad,
     facturasAtribuidas: atribuidas.length,
   };
 }

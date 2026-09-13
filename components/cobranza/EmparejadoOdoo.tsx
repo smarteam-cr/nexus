@@ -34,6 +34,8 @@ interface Propuesta {
   cuentaNombre: string;
   clase: Clase;
   candidatos: Candidato[];
+  /** La cuenta ya tiene un cliente de Odoo: esto propone otra ficha para la misma cuenta (etapa 12). */
+  otraSociedad: boolean;
 }
 interface Vinculo {
   odooPartnerId: number;
@@ -109,6 +111,8 @@ export default function EmparejadoOdoo() {
   const [buscandoPara, setBuscandoPara] = useState<string | null>(null);
   const [verVinculados, setVerVinculados] = useState(false);
   const [verSinUsar, setVerSinUsar] = useState(false);
+  /** El vínculo desde cuya fila se busca otra ficha para la misma cuenta. */
+  const [sumandoA, setSumandoA] = useState<number | null>(null);
 
   /**
    * ⚠ `refrescar` es lo ÚNICO que toca el ERP. La carga normal sale del espejo y del catálogo
@@ -145,6 +149,7 @@ export default function EmparejadoOdoo() {
         const r = await fetchJson<{
           cedulaAprendida?: string | null;
           conflictoCedula?: { nexus: string; odoo: string } | null;
+          otraSociedad?: { nexus: string; odoo: string } | null;
           facturasAtribuidas?: number;
           facturasDesatribuidas?: number;
         }>("/api/cobranza/odoo/emparejado", { method: "POST", body: JSON.stringify(body) });
@@ -164,12 +169,19 @@ export default function EmparejadoOdoo() {
           toast.error(
             `Vinculado, pero las cédulas no coinciden: Nexus tiene ${r.conflictoCedula.nexus} y Odoo ${r.conflictoCedula.odoo}. No se pisó ninguna.${efecto}`,
           );
+        } else if (r?.otraSociedad) {
+          /* Etapa 12: una segunda cédula en una cuenta que ya tenía su cliente de Odoo es otra sociedad,
+             no un error. Se dice, para que nadie salga a corregir una cédula que está bien. */
+          toast.success(
+            `${exito}${efecto} Quedó como otra sociedad de la cuenta: la cuenta sigue con la cédula ${r.otraSociedad.nexus} y esta ficha trae la ${r.otraSociedad.odoo}.`,
+          );
         } else if (r?.cedulaAprendida) {
           toast.success(`${exito}${efecto} Se guardó la cédula ${r.cedulaAprendida} en la cuenta.`);
         } else {
           toast.success(`${exito}${efecto}`);
         }
         setBuscandoPara(null);
+        setSumandoA(null);
         await cargar();
       } catch (e) {
         toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
@@ -180,10 +192,14 @@ export default function EmparejadoOdoo() {
     [cargar, toast],
   );
 
-  const pendientes = useMemo(
+  const ordenadas = useMemo(
     () => (estado?.propuestas ?? []).slice().sort((a, b) => CLASE_META[a.clase].orden - CLASE_META[b.clase].orden),
     [estado],
   );
+  /* Separadas: «no queda ninguna cuenta por vincular» sigue siendo cierto aunque haya fichas para sumarle
+     a una cuenta que ya tiene su cliente de Odoo. */
+  const pendientes = useMemo(() => ordenadas.filter((p) => !p.otraSociedad), [ordenadas]);
+  const otrasFichas = useMemo(() => ordenadas.filter((p) => p.otraSociedad), [ordenadas]);
   const vinculados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.cuentaId), [estado]);
   const sinUsar = useMemo(() => (estado?.vinculos ?? []).filter((v) => !v.cuentaId && !v.ignorado), [estado]);
   const ignorados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.ignorado), [estado]);
@@ -258,6 +274,39 @@ export default function EmparejadoOdoo() {
         </div>
       )}
 
+      {/* ⭐ Etapa 12 (H10): una cuenta que ya tiene su cliente de Odoo sigue pudiendo sumar otro. Hasta el
+          2026-09-13 desaparecía de la lista, y la segunda ficha de la misma empresa quedaba sin dueño. */}
+      {otrasFichas.length > 0 && (
+        <div className="space-y-2">
+          <div>
+            <h3 className="text-sm font-medium text-fg">
+              Otra ficha de Odoo para una cuenta ya vinculada ({otrasFichas.length})
+            </h3>
+            <p className="text-xs text-fg-muted">
+              Una ficha libre con la misma cédula o el mismo nombre que una cuenta que ya tiene su cliente de Odoo. Si
+              es otra sociedad de la misma empresa, o la misma empresa cargada dos veces en Odoo, vinculala también:
+              sus facturas pasan a esa cuenta. Si es una ficha vacía, marcala «No es cliente nuestro» más abajo.
+            </p>
+          </div>
+          {otrasFichas.map((p) => (
+            <FilaCuenta
+              key={p.cuentaId}
+              propuesta={p}
+              ocupado={ocupado === p.cuentaId}
+              buscando={buscandoPara === p.cuentaId}
+              onBuscar={() => setBuscandoPara(buscandoPara === p.cuentaId ? null : p.cuentaId)}
+              onConfirmar={(odooPartnerId, via) =>
+                accion(
+                  { accion: "confirmar", odooPartnerId, cuentaId: p.cuentaId, via, aprenderCedula: true },
+                  p.cuentaId,
+                  `Otra ficha de Odoo sumada a ${p.cuentaNombre}.`,
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+
       <Seccion
         titulo={`Clientes de Odoo sin usar (${sinUsar.length})`}
         abierta={verSinUsar}
@@ -292,30 +341,57 @@ export default function EmparejadoOdoo() {
         titulo={`Ya vinculadas (${vinculados.length})`}
         abierta={verVinculados}
         onToggle={() => setVerVinculados((v) => !v)}
+        nota="Una cuenta puede tener más de un cliente de Odoo: otra sociedad de la misma empresa, o la misma empresa cargada dos veces. «Sumar otra ficha» la agrega sin soltar la que ya tiene."
       >
-        {vinculados.map((v) => (
-          <div key={v.odooPartnerId} className="flex items-center gap-3 border-b border-line py-2 last:border-0">
-            <span className="w-48 shrink-0 truncate text-sm font-medium text-fg">{v.cuentaNombre}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-fg-secondary" title={v.odooPartnerNombre}>
-              {v.odooPartnerNombre}
-            </span>
-            {v.via && (
-              <Badge className="shrink-0 text-xs">
-                {VIA_LABEL[v.via] ?? v.via.toLowerCase()}
-              </Badge>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={ocupado === `p${v.odooPartnerId}`}
-              onClick={() =>
-                accion({ accion: "desvincular", odooPartnerId: v.odooPartnerId }, `p${v.odooPartnerId}`, "Desvinculado.")
-              }
-            >
-              Desvincular
-            </Button>
-          </div>
-        ))}
+        {vinculados.map((v) => {
+          const cuentaId = v.cuentaId;
+          if (!cuentaId) return null;
+          const clave = `s${v.odooPartnerId}`;
+          return (
+            <div key={v.odooPartnerId} className="border-b border-line py-2 last:border-0">
+              <div className="flex items-center gap-3">
+                <span className="w-48 shrink-0 truncate text-sm font-medium text-fg">{v.cuentaNombre}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-fg-secondary" title={v.odooPartnerNombre}>
+                  {v.odooPartnerNombre}
+                </span>
+                {v.via && (
+                  <Badge className="shrink-0 text-xs">
+                    {VIA_LABEL[v.via] ?? v.via.toLowerCase()}
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSumandoA(sumandoA === v.odooPartnerId ? null : v.odooPartnerId)}
+                >
+                  {sumandoA === v.odooPartnerId ? "Cerrar" : "Sumar otra ficha"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={ocupado === `p${v.odooPartnerId}`}
+                  onClick={() =>
+                    accion({ accion: "desvincular", odooPartnerId: v.odooPartnerId }, `p${v.odooPartnerId}`, "Desvinculado.")
+                  }
+                >
+                  Desvincular
+                </Button>
+              </div>
+              {sumandoA === v.odooPartnerId && (
+                <Buscador
+                  ocupado={ocupado === clave}
+                  onElegir={(odooPartnerId) =>
+                    accion(
+                      { accion: "confirmar", odooPartnerId, cuentaId, via: "MANUAL", aprenderCedula: true },
+                      clave,
+                      `Otra ficha de Odoo sumada a ${v.cuentaNombre ?? "la cuenta"}.`,
+                    )
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
       </Seccion>
 
       {ignorados.length > 0 && (
@@ -363,6 +439,11 @@ function FilaCuenta({
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium text-fg">{propuesta.cuentaNombre}</span>
         <span className={`rounded-full border px-2 py-0.5 text-xs ${meta.chip}`}>{meta.label}</span>
+        {propuesta.otraSociedad && (
+          <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs text-fg-secondary">
+            Ya tiene un cliente de Odoo
+          </span>
+        )}
         <Button variant="ghost" size="sm" className="ml-auto" onClick={onBuscar}>
           {buscando ? "Cerrar" : "Buscar en Odoo"}
         </Button>

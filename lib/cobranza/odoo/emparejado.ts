@@ -131,6 +131,12 @@ export interface PropuestaEmparejado {
   cuentaNombre: string;
   clase: ClaseEmparejado;
   candidatos: Candidato[];
+  /**
+   * Etapa 12 (H10): la cuenta YA tiene un cliente de Odoo y esto propone otra ficha para la misma cuenta
+   * —otra sociedad de la empresa, o la misma empresa cargada dos veces en Odoo—. Solo sale con señal
+   * fuerte (cédula o nombre exacto): a una cuenta vinculada no se le proponen adivinanzas.
+   */
+  otraSociedad: boolean;
 }
 
 /* ── 4. La señal de monto ───────────────────────────────────────────────────────── */
@@ -198,6 +204,12 @@ export function proponerEmparejados(
   cuentas: readonly CuentaNexus[],
   partners: readonly PartnerOdoo[],
   montosOdoo: readonly MontoDeOdoo[] = [],
+  /**
+   * `yaVinculadas`: las cuentas que ya tienen algún cliente de Odoo. Siguen en la lista, pero solo vuelven
+   * si hay una ficha libre con su cédula o su nombre exacto (`otraSociedad`). Sin la lista, todas se tratan
+   * como sin vincular, que es como se proponía antes de la etapa 12.
+   */
+  opts: { yaVinculadas?: ReadonlySet<string> } = {},
 ): PropuestaEmparejado[] {
   const porVat = new Map<string, PartnerOdoo[]>();
   for (const p of partners) {
@@ -232,23 +244,29 @@ export function proponerEmparejados(
     for (const p of porNombre.get(normalizar(c.nombre)) ?? []) reclamados.set(p.odooPartnerId, c.cuentaId);
   }
 
-  return cuentas.map((c) => {
+  return cuentas.flatMap((c): PropuestaEmparejado[] => {
     const ced = soloDigitos(c.cedulaJuridica);
     const porCedula = ced ? (porVat.get(ced) ?? []) : [];
     const exactos = porNombre.get(normalizar(c.nombre)) ?? [];
+    /* ⭐ Etapa 12 (H10): una cuenta ya vinculada puede sumar otra ficha, pero solo por cédula o nombre
+       exacto. El monto y el parecido quedan afuera: su plata ya la explica su primer cliente, y un
+       nombre parecido en una cuenta que ya tiene dueño es justo cómo se cuelgan facturas ajenas. */
+    const vinculada = opts.yaVinculadas?.has(c.cuentaId) ?? false;
 
     /* `palabrasDistintivas` corta en 4 letras: menos que eso y entran siglas como «CR», «SA»
        o «TEC» contra cualquier cosa. Un nombre hecho solo de siglas cortas —`IIA`, `TEC- AE`—
        se queda sin nada con qué comparar, y eso es un problema del nombre, no de Odoo. */
     const distintivas = palabrasDistintivas(c.nombre);
     const parciales =
-      exactos.length || distintivas.length === 0
+      vinculada || exactos.length || distintivas.length === 0
         ? []
         : partners.filter((p) => seParecen(c.nombre, p.nombre) || seParecen(p.nombre, c.nombre));
 
-    const deMonto = (porMonto.get(c.cuentaId) ?? [])
-      .filter((k) => (reclamados.get(k.odooPartnerId) ?? c.cuentaId) === c.cuentaId)
-      .map((k) => ({ ...k, nombre: nombreDe.get(k.odooPartnerId) ?? "" }));
+    const deMonto = vinculada
+      ? []
+      : (porMonto.get(c.cuentaId) ?? [])
+          .filter((k) => (reclamados.get(k.odooPartnerId) ?? c.cuentaId) === c.cuentaId)
+          .map((k) => ({ ...k, nombre: nombreDe.get(k.odooPartnerId) ?? "" }));
 
     const candidatos: Candidato[] = [
       ...porCedula.map((p) => ({
@@ -275,6 +293,8 @@ export function proponerEmparejados(
     /* Se deduplica por partner conservando la PRIMERA vía, que es la de más confianza. */
     const vistos = new Set<number>();
     const unicos = candidatos.filter((k) => !vistos.has(k.odooPartnerId) && vistos.add(k.odooPartnerId));
+    /* Una cuenta vinculada sin ficha libre que la reclame no es trabajo pendiente: no se lista. */
+    if (vinculada && unicos.length === 0) return [];
 
     const clase: ClaseEmparejado = porCedula.length
       ? "CEDULA"
@@ -288,7 +308,7 @@ export function proponerEmparejados(
               ? "INEMPAREJABLE"
               : "SIN_CANDIDATO";
 
-    return { cuentaId: c.cuentaId, cuentaNombre: c.nombre, clase, candidatos: unicos.slice(0, 6) };
+    return [{ cuentaId: c.cuentaId, cuentaNombre: c.nombre, clase, candidatos: unicos.slice(0, 6), otraSociedad: vinculada }];
   });
 }
 
@@ -335,16 +355,28 @@ export function buscarPartners(
  * ⛔ NUNCA pisa una cédula que ya está cargada. Si las dos difieren, eso es una diferencia
  * para la mesa de trabajo —puede ser que el vínculo esté mal, o que Odoo tenga el typo— y
  * resolverla en silencio a favor de Odoo perdería el dato que alguien cargó a mano.
+ *
+ * ⭐ Etapa 12: una SEGUNDA cédula no es un conflicto cuando la de la cuenta ya la explica otra de sus
+ * sociedades (`cedulasDeOtrasSociedades`). ARQUITECTURA DE MUEBLES está dos veces en Odoo, #39 con
+ * 3101746160 y #100 con 31010746160: vinculada la primera, la cuenta aprendió su cédula, y la segunda
+ * ficha es otra ficha de la misma cuenta, no un error. Sigue siendo conflicto cuando ninguna sociedad de
+ * la cuenta tiene la cédula que la cuenta dice: ahí el vínculo o la cédula cargada a mano pueden estar mal.
  */
 export function cedulaAAprender(
   cedulaEnNexus: string | null,
   vatDeOdoo: string | null,
-): { escribir: string } | { conflicto: { nexus: string; odoo: string } } | null {
+  cedulasDeOtrasSociedades: readonly (string | null)[] = [],
+):
+  | { escribir: string }
+  | { conflicto: { nexus: string; odoo: string } }
+  | { otraSociedad: { nexus: string; odoo: string } }
+  | null {
   const odoo = soloDigitos(vatDeOdoo);
   if (!odoo) return null;
   const nexus = soloDigitos(cedulaEnNexus);
   if (!nexus) return { escribir: odoo };
   if (nexus === odoo) return null;
+  if (cedulasDeOtrasSociedades.some((c) => soloDigitos(c) === nexus)) return { otraSociedad: { nexus, odoo } };
   return { conflicto: { nexus, odoo } };
 }
 

@@ -257,6 +257,76 @@ describe("lo que se aprende al confirmar un vínculo", () => {
     expect(cedulaAAprender("3101497341", null)).toBeNull();
     expect(cedulaAAprender(null, null)).toBeNull();
   });
+
+  it("⭐ etapa 12: una segunda cédula no es conflicto si la de la cuenta es la de otra de sus sociedades", () => {
+    /* ARQUITECTURA DE MUEBLES está dos veces en Odoo: #39 con 3101746160 y #100 con 31010746160 (el mismo
+       número con un 0 de más). Vinculada la primera, la cuenta aprendió su cédula; la segunda es otra
+       ficha de la misma cuenta, no un error a resolver. */
+    expect(cedulaAAprender("3101746160", "31010746160", ["3101746160"])).toEqual({
+      otraSociedad: { nexus: "3101746160", odoo: "31010746160" },
+    });
+  });
+
+  it("⛔ y sigue siendo conflicto si ninguna sociedad de la cuenta explica su cédula", () => {
+    expect(cedulaAAprender("3101497341", "3101000000", ["3101999999", null])).toEqual({
+      conflicto: { nexus: "3101497341", odoo: "3101000000" },
+    });
+  });
+
+  it("Librería Internacional ×2: la misma cédula escrita de dos formas no choca", () => {
+    /* Dos cuentas en Nexus con 3101167504 y 3-101-167504: son los mismos dígitos. */
+    expect(cedulaAAprender("3-101-167504", "3101167504", ["3101167504"])).toBeNull();
+    expect(cedulaAAprender("3101167504", "3-101-167504")).toBeNull();
+  });
+});
+
+/**
+ * ── ⭐ UNA CUENTA VINCULADA PUEDE SUMAR OTRA FICHA DE ODOO (etapa 12, H10) ─────────
+ * Hasta el 2026-09-13 la cuenta salía de la lista apenas tenía su primer cliente de Odoo, y la segunda
+ * ficha de la misma empresa quedaba inalcanzable, con sus facturas sin dueño.
+ */
+describe("⭐ una cuenta ya vinculada sigue apareciendo como candidata", () => {
+  const cuentas: CuentaNexus[] = [
+    { cuentaId: "judesur", nombre: "JUDESUR", cedulaJuridica: "3007219667", montos: [] },
+    { cuentaId: "arquitectura", nombre: "Arquitectura de Muebles", cedulaJuridica: "3101746160", montos: [] },
+    { cuentaId: "bluesat", nombre: "BLUESAT", cedulaJuridica: "3101641911", montos: [{ monto: 1500, moneda: "USD" }] },
+    { cuentaId: "selvatura", nombre: "Selvatura", cedulaJuridica: null, montos: [] },
+  ];
+  /* Los clientes de Odoo LIBRES: los ya vinculados (#66 de Judesur, #39 de Arquitectura) no llegan acá. */
+  const partners: PartnerOdoo[] = [
+    { odooPartnerId: 182, nombre: "JUDESUR (copia)", vat: "3-007-219667", customerRank: 1 },
+    { odooPartnerId: 100, nombre: "ARQUITECTURA DE MUEBLES S.A.", vat: "31010746160", customerRank: 1 },
+    { odooPartnerId: 7, nombre: "FORESTALES LATINOAMERICANOS", vat: null, customerRank: 1 },
+    { odooPartnerId: 55, nombre: "SELVATURA S.A.", vat: null, customerRank: 1 },
+  ];
+  const montos: MontoDeOdoo[] = [{ odooPartnerId: 7, montoNeto: 1500, moneda: "USD" }];
+  const propuestas = proponerEmparejados(cuentas, partners, montos, {
+    yaVinculadas: new Set(["judesur", "arquitectura", "bluesat"]),
+  });
+  const de = (id: string) => propuestas.find((p) => p.cuentaId === id);
+
+  it("la misma cédula en otra ficha: Judesur sigue en la lista, marcada como otra sociedad", () => {
+    expect(de("judesur")).toMatchObject({ clase: "CEDULA", otraSociedad: true });
+    expect(de("judesur")?.candidatos.map((c) => c.odooPartnerId)).toEqual([182]);
+  });
+
+  it("⚠ la cédula tipeada distinta no la encuentra y el nombre exacto sí: Arquitectura de Muebles #100", () => {
+    expect(de("arquitectura")).toMatchObject({ clase: "NOMBRE_EXACTO", otraSociedad: true });
+    expect(de("arquitectura")?.candidatos.map((c) => c.odooPartnerId)).toEqual([100]);
+  });
+
+  it("⛔ una cuenta vinculada no vuelve por monto: su plata ya la explica su primer cliente", () => {
+    expect(de("bluesat")).toBeUndefined();
+  });
+
+  it("una cuenta sin vincular se propone igual que antes, sin la marca", () => {
+    expect(de("selvatura")).toMatchObject({ clase: "NOMBRE_EXACTO", otraSociedad: false });
+  });
+
+  it("sin la lista de vinculadas nada cambia: las 49 del fixture real salen sin la marca", () => {
+    expect(PROPUESTAS).toHaveLength(49);
+    expect(PROPUESTAS.every((p) => !p.otraSociedad)).toBe(true);
+  });
 });
 
 /**
