@@ -34,19 +34,14 @@ export const bloqueTarjetas = createReactBlockSpec(
     content: "none",
   },
   {
-    render: ({ block, editor }) => {
+    /* Sin rótulo, ni en edición: la rejilla se reconoce por sus tarjetas. El rótulo que tuvo
+       («Tarjetas · dos columnas») era ruido en una rejilla llena y lo ÚNICO visible en una vacía
+       —una rejilla que quedó sin tarjetas al borrarlas—, que es justo la que no debería existir.
+       Esa la quita el editor apenas se vacía, y el servidor al cargar la página. El atributo es
+       lo que lee el CSS para saber cuántas columnas van. */
+    render: ({ block }) => {
       const columnas = (block.props.columnas as ColumnasDeTarjetas) ?? "2";
-      /* El atributo es lo que lee el CSS para saber cuántas columnas van; el rótulo existe solo
-         mientras se edita, para que la rejilla vacía no sea una zona invisible. */
-      return (
-        <div data-columnas={columnas}>
-          {editor.isEditable && (
-            <p className="text-2xs uppercase tracking-wide text-fg-muted">
-              Tarjetas · {columnas === "1" ? "una columna" : columnas === "3" ? "tres columnas" : "dos columnas"}
-            </p>
-          )}
-        </div>
-      );
+      return <div data-columnas={columnas} />;
     },
   },
 );

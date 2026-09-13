@@ -50,6 +50,22 @@ import {
   type BloqueParcialDeDocumentacion,
 } from "./esquema-editor";
 
+/**
+ * Las rejillas de tarjetas que se quedaron sin tarjetas. Pasa al borrar la última: un bloque sin
+ * texto propio no se va solo, y queda un hueco invisible en la página que nadie puede seleccionar.
+ */
+function rejillasVacias(bloques: BloqueDeDocumentacion[]): string[] {
+  const ids: string[] = [];
+  const recorrer = (lista: BloqueDeDocumentacion[]) => {
+    for (const b of lista) {
+      if (b.type === "tarjetas" && b.children.length === 0) ids.push(b.id);
+      recorrer(b.children);
+    }
+  };
+  recorrer(bloques);
+  return ids;
+}
+
 /** Una tarjeta lista para escribir: el título en la línea del bloque y el cuerpo como hijo. */
 const tarjetaEnBlanco = (): BloqueParcialDeDocumentacion => ({
   type: "tarjeta",
@@ -157,8 +173,25 @@ export default function EditorDePagina({
         {
           title: "Una tarjeta más",
           group: "Tarjetas",
-          subtext: "Se agrega adentro de una rejilla que ya exista.",
-          onItemClick: () => insertar(tarjetaEnBlanco()),
+          subtext: "Al lado de la tarjeta en la que estás escribiendo.",
+          onItemClick: () => {
+            /* La tarjeta en la que está el cursor: la del renglón del título, o la madre si el
+               cursor está en el cuerpo. Insertarla «después del bloque actual» sin mirar eso la
+               dejaba adentro del cuerpo de otra tarjeta, o suelta fuera de toda rejilla. */
+            const actual = editor.getTextCursorPosition().block;
+            const madre = editor.getParentBlock(actual);
+            const tarjeta = actual.type === "tarjeta" ? actual : madre?.type === "tarjeta" ? madre : undefined;
+            if (tarjeta) {
+              const [nueva] = editor.insertBlocks([tarjetaEnBlanco()], tarjeta, "after");
+              if (nueva) editor.setTextCursorPosition(nueva, "end");
+              return;
+            }
+            // Fuera de una rejilla: una rejilla nueva con una tarjeta, nunca una tarjeta suelta.
+            insertar(
+              { type: "tarjetas", props: { columnas: "2" }, children: [tarjetaEnBlanco()] },
+              "primera-hija",
+            );
+          },
         },
       ];
       return filterSuggestionItems(
@@ -248,7 +281,18 @@ export default function EditorDePagina({
       editable={editable}
       theme={isDark ? "dark" : "light"}
       slashMenu={false}
-      onChange={onCambio ? () => onCambio(editor.document) : undefined}
+      onChange={() => {
+        /* Una rejilla que se quedó sin tarjetas se quita en el acto. Fuera del ciclo del cambio
+           en curso (microtarea): quitar bloques DENTRO de la notificación de otro cambio es
+           despachar una transacción adentro de otra. La quita dispara un cambio nuevo, y ése —ya
+           limpio— es el que se guarda. */
+        const vacias = rejillasVacias(editor.document);
+        if (vacias.length > 0) {
+          queueMicrotask(() => editor.removeBlocks(vacias));
+          return;
+        }
+        onCambio?.(editor.document);
+      }}
     >
       <SuggestionMenuController triggerCharacter="/" getItems={traerItems} />
       <SuggestionMenuController triggerCharacter="@" getItems={traerPaginas} />

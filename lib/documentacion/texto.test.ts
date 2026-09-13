@@ -177,6 +177,45 @@ describe("sanearBloques", () => {
     expect(bloques[0].children?.[0].children?.[0].content).toBe("Cuerpo");
   });
 
+  it("una rejilla que quedó sin tarjetas se quita al cargar (el rótulo suelto de la Guía de CSE)", () => {
+    const bloques = sanearBloques([
+      { type: "heading", content: "Qué hace un CSE acá" },
+      { type: "tarjetas", props: { columnas: "2" }, children: [] },
+      { type: "paragraph", content: "En la mayoría de las empresas…" },
+    ]);
+    expect(bloques.map((b) => b.type)).toEqual(["heading", "paragraph"]);
+  });
+
+  it("las tarjetas sueltas seguidas se juntan en una rejilla; una sola, en una de una columna", () => {
+    const tarjeta = (titulo: string) => ({ type: "tarjeta", content: titulo, children: [] });
+    const bloques = sanearBloques([
+      tarjeta("A"),
+      tarjeta("B"),
+      { type: "paragraph", content: "corte" },
+      tarjeta("C"),
+    ]);
+    expect(bloques.map((b) => [b.type, b.props?.columnas ?? null, (b.children ?? []).length])).toEqual([
+      ["tarjetas", "2", 2],
+      ["paragraph", null, 0],
+      ["tarjetas", "1", 1],
+    ]);
+  });
+
+  it("adentro de una rejilla no reagrupa: las tarjetas ya están en su lugar", () => {
+    const bloques = sanearBloques([
+      {
+        type: "tarjetas",
+        props: { columnas: "3" },
+        children: [
+          { type: "tarjeta", content: "A" },
+          { type: "tarjeta", content: "B" },
+        ],
+      },
+    ]);
+    expect(bloques).toHaveLength(1);
+    expect(bloques[0].children?.map((h) => h.type)).toEqual(["tarjeta", "tarjeta"]);
+  });
+
   it("algo que no es una lista da una página vacía", () => {
     expect(sanearBloques({ no: "lista" })).toEqual([]);
     expect(sanearBloques(undefined)).toEqual([]);

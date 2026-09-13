@@ -118,13 +118,55 @@ export function sanearBloques(
   valor: unknown,
   conocidos: ReadonlySet<string> = TIPOS_DE_BLOQUE,
 ): BloqueGuardado[] {
+  return ordenarTarjetas(sanearLista(valor, conocidos), false);
+}
+
+/**
+ * Las tarjetas solo tienen sentido adentro de una rejilla, y una rejilla solo con tarjetas.
+ * Dos formas de romperlo con el editor en la mano, y las dos se vieron:
+ *   · una REJILLA VACÍA — queda al borrar su última tarjeta, porque un bloque sin texto propio
+ *     no se va solo. Se ve como un hueco, y en edición mostraba un rótulo suelto. Se quita.
+ *   · una TARJETA SUELTA — agregada fuera de una rejilla. Se pinta como un recuadro a todo lo
+ *     ancho. Las sueltas seguidas se juntan en una rejilla.
+ * Adentro de una rejilla no se reagrupa nada: ahí las tarjetas ya están donde tienen que estar.
+ */
+function ordenarTarjetas(bloques: BloqueGuardado[], dentroDeRejilla: boolean): BloqueGuardado[] {
+  const salida: BloqueGuardado[] = [];
+  let sueltas: BloqueGuardado[] = [];
+  const cerrarSueltas = () => {
+    if (sueltas.length === 0) return;
+    salida.push({
+      type: "tarjetas",
+      props: { columnas: sueltas.length > 1 ? "2" : "1" },
+      children: sueltas,
+    });
+    sueltas = [];
+  };
+
+  for (const b of bloques) {
+    const hijos = ordenarTarjetas(b.children ?? [], b.type === "tarjetas");
+    const bloque = { ...b, children: hijos };
+
+    if (bloque.type === "tarjetas" && hijos.length === 0) continue;
+    if (bloque.type === "tarjeta" && !dentroDeRejilla) {
+      sueltas.push(bloque);
+      continue;
+    }
+    cerrarSueltas();
+    salida.push(bloque);
+  }
+  cerrarSueltas();
+  return salida;
+}
+
+function sanearLista(valor: unknown, conocidos: ReadonlySet<string>): BloqueGuardado[] {
   if (!Array.isArray(valor)) return [];
   const salida: BloqueGuardado[] = [];
   for (const crudo of valor) {
     if (!crudo || typeof crudo !== "object" || Array.isArray(crudo)) continue;
     const b = crudo as BloqueGuardado;
     if (typeof b.type !== "string" || !b.type) continue;
-    const hijos = sanearBloques(b.children, conocidos);
+    const hijos = sanearLista(b.children, conocidos);
     if (conocidos.has(b.type)) {
       salida.push({ ...b, children: hijos });
       continue;

@@ -156,6 +156,12 @@
  * dentro de un `.react-renderer`, los de fábrica no.
  */
 
+/* La rejilla no tiene texto propio: sin esto, su renglón vacío deja un hueco arriba de las
+   tarjetas. */
+.nx-doc .bn-block-content[data-content-type="tarjetas"] {
+  padding-block: 0;
+}
+
 /* La rejilla: las tarjetas se acomodan en columnas, sin la sangría de un bloque anidado. */
 .nx-doc .bn-block:has(> .react-renderer > [data-content-type="tarjetas"]) > .bn-block-group,
 .nx-doc .bn-block:has(> [data-content-type="tarjetas"]) > .bn-block-group {
