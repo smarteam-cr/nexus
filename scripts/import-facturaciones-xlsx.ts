@@ -1,36 +1,41 @@
 /**
  * scripts/import-facturaciones-xlsx.ts
  *
- * Carga el histórico de facturación 2026 de Smarteam (el Excel de Alex) al módulo
- * de cobranza. DRY-RUN por defecto: sin `--apply` no escribe absolutamente nada.
+ * LEE el histórico de facturación 2026 de Smarteam (el Excel de Alex) y reporta qué
+ * trae: servicios, cobros por color y cómo resuelve cada cliente contra Nexus.
+ * ⛔ YA NO ESCRIBE EN LA BASE. Solo lectura, sin excepción ni bandera que lo habilite.
  *
- * Por qué un script y no el wizard CSV del panel:
- *  - el ESTADO del cobro vive en el COLOR de la celda (verde/amarillo/blanco) y solo
- *    exceljs expone el relleno; un CSV lo pierde;
- *  - la carga es HISTÓRICA y `clampInicioCicloCorriente` impide por diseño que el
- *    engine materialice cobros hacia atrás.
- * La decodificación pura vive en lib/cobranza/facturaciones-sheet.ts (con tests).
+ * ── POR QUÉ SE RETIRÓ LA CARGA (2026-09-12) ─────────────────────────────────────
+ * La carga del 23-jul escribió `estado` y `confirmadoPor = "import:facturaciones-2026"`
+ * según el COLOR de la celda: 83 cobros quedaron en verde sin que ninguna persona viera
+ * un depósito, y al menos tres nunca se depositaron. Es exactamente lo que INV3 existe
+ * para impedir, por la puerta de atrás del chokepoint.
+ *
+ * Se eligió cortar la escritura y no «mapear verde a por cobrar»: la carga hacía `upsert`
+ * con `update` sobre cada cobro, así que re-correrla con cualquier mapeo pisaba el estado
+ * de los 202 cobros ya cargados — incluidos los que una persona confirmó o revirtió a mano
+ * desde entonces. No hay mapeo que haga segura esa escritura.
+ *
+ * Lo que la reemplaza: el libro de Alex se compara fila por fila desde la pantalla y lo
+ * aplica una persona, sin que nada entre como COBRADO. La guarda que impide que esto
+ * vuelva está en lib/cobranza/cargadores-sin-verdes.test.ts.
+ *
+ * Por qué exceljs y no el wizard CSV del panel: el ESTADO vive en el COLOR de la celda
+ * y un CSV lo pierde. La decodificación pura vive en lib/cobranza/facturaciones-sheet.ts.
  *
  * Uso:
- *   npx tsx scripts/import-facturaciones-xlsx.ts                    # dry-run + reporte
- *   npx tsx scripts/import-facturaciones-xlsx.ts --escribir-mapa    # deja el mapa de clientes para revisar
- *   npx tsx scripts/import-facturaciones-xlsx.ts --apply            # escribe (exige mapa sin dudosos)
+ *   npx tsx scripts/import-facturaciones-xlsx.ts                    # reporte
+ *   npx tsx scripts/import-facturaciones-xlsx.ts --escribir-mapa    # deja el mapa de clientes en un JSON local
  *   ... --file=<ruta.xlsx> --hoja="Sitios Web CR" --solo=Corrugando
- *
- * ⚠ Requiere que la migración scripts/sql/2026-07-23-cobranza-conector-importacion.sql
- *   ya esté aplicada (enums CONECTOR e IMPORTACION).
  */
 import "dotenv/config";
-import { resolverApply } from "./lib/guard";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import ExcelJS from "exceljs";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
   ANIO_FACTURACION,
   HOJAS_FACTURACION,
-  claveServicio,
   columnasDeQuincena,
   extraerServicio,
   huellaServicio,
@@ -38,8 +43,6 @@ import {
   type ServicioExtraido,
 } from "../lib/cobranza/facturaciones-sheet";
 
-const CONFIRMADO_POR = "import:facturaciones-2026";
-const FUENTE = "sheet";
 const MAPA_DEFAULT = "scripts/data/facturaciones-clientes.json";
 const XLSX_DEFAULT = "C:/Users/ideli/Downloads/Copia de Facturaciones 2026 para Nexus.xlsx";
 
@@ -49,7 +52,9 @@ const argv = process.argv.slice(2);
 const flag = (n: string) => argv.includes(`--${n}`);
 const opt = (n: string) => argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null;
 
-const APPLY = resolverApply();
+/* Quien lo corra por costumbre con la bandera de escribir tiene que enterarse de que no pasó
+   nada, en vez de leer un reporte y creer que cargó. */
+const PIDE_ESCRITURA = flag("apply");
 const ESCRIBIR_MAPA = flag("escribir-mapa");
 const FILE = opt("file") ?? XLSX_DEFAULT;
 const MAPA_PATH = resolve(opt("mapa") ?? MAPA_DEFAULT);
@@ -338,142 +343,6 @@ function reportar(hojas: LecturaHoja[], servicios: ServicioExtraido[], duplicado
   console.log(`   Facturado sin cobrar: ${usd(mora)}`);
 }
 
-// ── 5. Escritura ────────────────────────────────────────────────────────────────
-
-async function aplicar(servicios: ServicioExtraido[], mapa: Mapa) {
-  // Una cuenta es INTERNACIONAL si el cliente aparece en alguna hoja internacional
-  // (Conectores SAAS mezcla ambos y no alcanza con el default de la hoja).
-  const internacional = new Set(
-    servicios.filter((s) => s.tipoCuenta === "INTERNACIONAL").map((s) => norm(s.cliente)),
-  );
-
-  const porCliente = new Map<string, ServicioExtraido[]>();
-  for (const s of servicios) {
-    const k = s.cliente;
-    porCliente.set(k, [...(porCliente.get(k) ?? []), s]);
-  }
-
-  let nClientes = 0;
-  let nCuentas = 0;
-  let nServicios = 0;
-  let nCobros = 0;
-
-  for (const [cliente, lista] of porCliente) {
-    const res = mapa[cliente];
-    if (!res) throw new Error(`Falta la resolución de "${cliente}" en el mapa.`);
-
-    await prisma.$transaction(async (tx) => {
-      const idExternoCliente = `facturaciones-2026:${norm(cliente).replace(/ /g, "-")}`;
-      let clientId = res.clientId;
-      if (!clientId) {
-        // Upsert por procedencia, no create: el mapa es un archivo estático que sigue
-        // diciendo "crear" después de la primera corrida, así que un create pelado
-        // reventaba contra el unique (source, sourceExternalId) al re-importar.
-        const creado = await tx.client.upsert({
-          where: { source_sourceExternalId: { source: FUENTE, sourceExternalId: idExternoCliente } },
-          create: { name: cliente, source: FUENTE, sourceExternalId: idExternoCliente },
-          update: {}, // el nombre puede haberse corregido a mano en Nexus — no se pisa
-          select: { id: true },
-        });
-        clientId = creado.id;
-        nClientes++;
-      }
-
-      const tipo = internacional.has(norm(cliente)) ? ("INTERNACIONAL" as const) : ("NACIONAL" as const);
-
-      const datosCuenta = {
-        tipo,
-        moneda: "USD" as const,
-        estadoCuenta: "ACTIVA" as const,
-        diaCobroAncla: lista[0].diaAncla,
-        fuente: FUENTE,
-        fuenteIdExterno: idExternoCliente,
-        notas: `Cargada del histórico de facturación ${ANIO_FACTURACION} (hoja de Alex).`,
-      };
-
-      // 11 clientes ya tenían cuenta, pero VACÍA y en el default de fábrica (CRC,
-      // PENDIENTE_DATOS, sin procedencia, 0 cobros): nunca se configuraron. A esas se
-      // les completan los datos —si no, quedarían en colones con cobros en dólares—.
-      // A cualquier otra NO se le toca nada: puede tener créditoDías, correo de cobro
-      // o un estado curado a mano en el panel, y la re-corrida no debe pisarlos.
-      const previa = await tx.cuentaFinanciera.findUnique({
-        where: { clientId },
-        select: { id: true, estadoCuenta: true, fuente: true, _count: { select: { cobros: true } } },
-      });
-      const sinConfigurar = previa && previa.estadoCuenta === "PENDIENTE_DATOS" && !previa.fuente && previa._count.cobros === 0;
-      const cuenta = await tx.cuentaFinanciera.upsert({
-        where: { clientId },
-        create: { clientId, ...datosCuenta },
-        update: sinConfigurar ? datosCuenta : {},
-        select: { id: true },
-      });
-      nCuentas++;
-
-      for (const s of lista) {
-        const idExterno = claveServicio(s);
-        // `descripcion` guarda el nombre COMPLETO de la fila (con el detalle que el
-        // separador " I " mezclaba con el cliente) — es la trazabilidad al documento.
-        const existente = await tx.servicioContratado.findFirst({
-          where: { cuentaId: cuenta.id, descripcion: { startsWith: `${idExterno} · ` } },
-          select: { id: true },
-        });
-        const datos = {
-          cuentaId: cuenta.id,
-          tipoServicio: s.tipoServicio,
-          modalidad: s.modalidad,
-          // Contrato del schema: para lo RECURRENTE el montoTotal es el MENSUAL.
-          montoTotal: new Prisma.Decimal(
-            s.modalidad === "RECURRENTE" ? (s.montoUniforme ?? s.cobros[0].monto) : s.montoTotal,
-          ),
-          moneda: "USD" as const,
-          fechaInicioFacturacion: s.cobros[0].fecha,
-          // Las recurrentes son abiertas (sin fin): duración null, por contrato del schema.
-          duracionMeses: s.modalidad === "RECURRENTE" ? null : s.cobros.length,
-          estado: "ACTIVO" as const,
-          descripcion: `${idExterno} · ${s.nombreCrudo}`,
-        };
-        const servicio = existente
-          ? await tx.servicioContratado.update({ where: { id: existente.id }, data: datos, select: { id: true } })
-          : await tx.servicioContratado.create({ data: datos, select: { id: true } });
-        nServicios++;
-
-        for (const c of s.cobros) {
-          const cobrado = c.estado === "COBRADO";
-          const facturado = cobrado || c.estado === "POR_COBRAR";
-          const base = {
-            cuentaId: cuenta.id,
-            periodo: c.periodo,
-            fechaProgramada: c.fecha,
-            monto: new Prisma.Decimal(c.monto),
-            moneda: "USD" as const,
-            estado: c.estado,
-            origen: "IMPORTACION" as const,
-            // El documento NO trae la fecha real de factura ni de pago: se usa la
-            // quincena programada. Queda dicho en `notas` — no se disfraza de dato bancario.
-            fechaEmision: facturado ? c.fecha : null,
-            facturadoPor: facturado ? CONFIRMADO_POR : null,
-            facturadoEn: facturado ? c.fecha : null,
-            fechaCobro: cobrado ? c.fecha : null,
-            confirmadoPor: cobrado ? CONFIRMADO_POR : null, // INV3
-            confirmadoEn: cobrado ? c.fecha : null,
-            notas: `Histórico ${ANIO_FACTURACION} · hoja "${s.hoja.trim()}" fila ${s.fila}. Fecha tomada de la quincena del documento, no del banco.`,
-          };
-          // numCuota = orden cronológico → el @@unique([servicioId, numCuota]) hace
-          // que re-correr el import actualice en vez de duplicar.
-          await tx.cobro.upsert({
-            where: { servicioId_numCuota: { servicioId: servicio.id, numCuota: c.orden } },
-            create: { servicioId: servicio.id, numCuota: c.orden, ...base },
-            update: base,
-          });
-          nCobros++;
-        }
-      }
-    });
-  }
-
-  console.log(`\n✓ Aplicado: ${nClientes} clientes creados · ${nCuentas} cuentas · ${nServicios} servicios · ${nCobros} cobros`);
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -499,20 +368,15 @@ async function aplicar(servicios: ServicioExtraido[], mapa: Mapa) {
       console.log(`  Revisá los "dudoso": poné el clientId correcto y via:"exacto", o via:"crear" si es un cliente nuevo.`);
     }
 
-    if (!APPLY) {
-      console.log(`\n(dry-run — no se escribió nada. Agregá --apply para cargar.)`);
-      return;
-    }
-
-    const dudosos = Object.values(mapa).filter((r) => r.via === "dudoso");
-    if (dudosos.length) {
+    if (PIDE_ESCRITURA) {
       console.error(
-        `\n✗ Hay ${dudosos.length} clientes sin resolver. Corré --escribir-mapa, resolvelos en ${MAPA_PATH} y volvé a aplicar.`,
+        `\n✗ Este script ya no escribe en la base: la carga pintaba cobros en verde por el color de la celda.` +
+          `\n  No se escribió nada. El libro se compara y se aplica desde la pantalla de Cobranza, y nada entra como cobrado.`,
       );
       process.exitCode = 1;
       return;
     }
-    await aplicar(servicios, mapa);
+    console.log(`\n(solo lectura — no se escribió nada en la base)`);
   } finally {
     await prisma.$disconnect();
   }

@@ -10,6 +10,8 @@
  * (el importador metió 87 cobros por su cuenta) y el revert no deja bitácora —,
  * así que había tres formas de tener un cobro sin su comisión y ningún
  * invariante que lo viera. Derivada, un revert simplemente cambia el resultado.
+ * (Desde 2026-09-12 el chokepoint abre transacción, el revert deja bitácora y el
+ * importador ya no escribe; la comisión sigue derivada porque nada de eso la obliga.)
  *
  * ⚠ La base es lo COBRADO (decisión de Elías), no lo facturado, y el reloj es
  * `fechaCobro`: el día que entró la plata. Ese día decide qué regla estaba

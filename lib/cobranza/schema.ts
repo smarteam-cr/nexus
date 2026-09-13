@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
+import { MOTIVO_REVERSION_MIN } from "./reversion-cobro";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -278,7 +279,8 @@ export const planPutSchema = z
 /**
  * PATCH de un cobro. fechaProgramada/monto solo se aceptan si el cobro está
  * PROGRAMADO (lo valida la mutación, que ve el estado actual). COBRADO exige
- * confirmación (la mutación setea confirmadoPor desde el guard — INV3).
+ * confirmación (la mutación setea confirmadoPor desde el guard — INV3). Salir de
+ * COBRADO exige `reversion.motivo` (lo valida la mutación, que ve el estado actual).
  */
 export const cobroPatchSchema = z
   .object({
@@ -292,6 +294,22 @@ export const cobroPatchSchema = z
     // Promesa de pago: calla las alertas de este cobro hasta la fecha (null = quitarla).
     promesaPago: isoDate.nullable(),
     notas: z.string().max(2000).nullable(),
+    /**
+     * Sacar un cobro de COBRADO (lib/cobranza/reversion-cobro.ts). El motivo va a la bitácora
+     * del cobro junto con quién lo había confirmado.
+     *
+     * ⚠ `numeroFactura` va SOLO al texto de la bitácora hasta que el cobro tenga su propia
+     * columna. No se escribe en `referenciaExterna` ni en `notas`: esas guardan de dónde vino
+     * cada cobro importado, y pisarlas borraría la única pista de su origen.
+     */
+    reversion: z.object({
+      motivo: z
+        .string()
+        .trim()
+        .min(MOTIVO_REVERSION_MIN, `Contá por qué sale de Cobrado (al menos ${MOTIVO_REVERSION_MIN} caracteres).`)
+        .max(1000),
+      numeroFactura: z.string().trim().max(60).nullable().optional(),
+    }),
   })
   .partial();
 

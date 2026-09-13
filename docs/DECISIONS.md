@@ -3003,3 +3003,31 @@ fabricarla.
 - **Una guía no nombra lo que no se puede usar.** El agente «Preparación de entrevistas» está
   activo en la base pero nunca corrió y no tiene botón en ninguna pantalla; mandar al equipo a
   usarlo le quitaría crédito a la guía en la primera lectura.
+
+## Cobranza — nada sale de verde sin una firma (2026-09-12)
+
+> El libro de Alex contra Nexus destapó que 83 cobros estaban en verde firmados por
+> `import:facturaciones-2026`: los pintó la carga del 23-jul según el color de la celda, y al
+> menos tres nunca se depositaron (Global Supply feb-2026, IIA y Seléctrica jun-2026, $1.972).
+> Decisión de Alex: lo cobrado se queda cobrado, salvo esos tres, que revierte él desde la pantalla.
+
+- **Sacar un cobro de COBRADO pide motivo, y deja la firma vieja en la bitácora.** Era un cambio
+  optimista en un `<select>`, sin confirmación y sin rastro, y el chokepoint borraba `confirmadoPor`:
+  el único dato que decía quién había dado la plata por entrada. Ahora el diálogo pide motivo
+  (obligatorio, también en el servidor: 400 sin él), la fecha real de la factura y, si se tiene, su
+  número; la bitácora del cobro guarda quién lo había confirmado, cuándo y quién lo revierte. La
+  regla es pura (`lib/cobranza/reversion-cobro.ts`) y corre dentro de `cambiarEstadoCobroTx`.
+- **Una firma de cargador no sobrevive a la corrección.** Si `facturadoPor` empieza con `import:`,
+  quien revierte pasa a firmar la marca de facturado: es quien acaba de mirar la factura real. La
+  firma vieja queda citada en la bitácora. Una firma de persona no se toca.
+- **El número de factura va al texto de la bitácora, no a `referenciaExterna` ni a `notas`.** Esas
+  guardan de dónde vino cada cobro importado. Cuando el cobro tenga su columna de número, ese dato
+  pasa ahí.
+- **`cambiarEstadoCobro` abre su propia transacción.** Cambio y bitácora quedan juntos o no queda
+  ninguno. Deja de ser cierto lo que decía la comisión de vendedor: «no tiene transacción» y «el
+  revert no deja bitácora».
+- **El importador del libro ya no escribe; no se le cambió el mapeo.** La alternativa era mapear
+  verde a por cobrar, pero la carga hacía `upsert` con `update` sobre cada cobro: re-correrla con
+  cualquier mapeo pisaba el estado de los 202 cobros, incluidos los que una persona confirmó o
+  revirtió después. Queda como reporte de solo lectura, y `lib/cobranza/cargadores-sin-verdes.test.ts`
+  impide que un script que escribe en `Cobro` vuelva a nombrar `confirmadoPor`.

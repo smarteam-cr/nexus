@@ -8,7 +8,8 @@
  * monto, semáforo, badge de catch-up y select de estado. Cambios optimistas con
  * revert en error (patrón AlertsFeed). Marcar COBRADO abre el RegistrarPagoDialog
  * compartido — se registra a nombre de quien confirma (INV3) con fecha del pago
- * y referencia externa opcional.
+ * y referencia externa opcional. SACARLO de COBRADO abre el RevertirCobroDialog: motivo
+ * obligatorio, fecha real de la factura y bitácora con quién lo había confirmado.
  *
  * NOTA: `semaforoCobro` se importa de lib/cobranza/engine (motor puro, sin
  * Prisma) y NO del barrel lib/cobranza, que re-exporta módulos `server-only`.
@@ -25,6 +26,7 @@ import BorradorCobroModal from "./BorradorCobroModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
+import RevertirCobroDialog, { type DatosDeReversion } from "./RevertirCobroDialog";
 
 /**
  * Las señales de Odoo en castellano. ⚠ «Pagada sin conciliar» NO es lo mismo que pagada: el
@@ -83,6 +85,7 @@ export default function CronogramaCobros({
   const [borradorCobro, setBorradorCobro] = useState<CobroDTO | null>(null);
   const [promesaCobro, setPromesaCobro] = useState<CobroDTO | null>(null);
   const [facturarCobro, setFacturarCobro] = useState<CobroDTO | null>(null);
+  const [revertirCobro, setRevertirCobro] = useState<{ cobro: CobroDTO; estado: string } | null>(null);
 
   // Re-sincronizar cuando el padre recarga el detalle (patrón oficial de
   // "adjusting state when props change" — setState durante render, sin effect).
@@ -95,7 +98,12 @@ export default function CronogramaCobros({
   async function applyEstado(
     cobro: CobroDTO,
     estado: string,
-    extra?: { referenciaExterna?: string | null; fechaCobro?: string },
+    extra?: {
+      referenciaExterna?: string | null;
+      fechaCobro?: string;
+      fechaEmision?: string | null;
+      reversion?: { motivo: string; numeroFactura: string | null };
+    },
   ) {
     const prevEstado = items.find((c) => c.id === cobro.id)?.estado;
     setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, estado } : c)));
@@ -108,6 +116,11 @@ export default function CronogramaCobros({
       if (estado === "COBRADO") {
         toast.success("Pago registrado a tu nombre.");
         onRefresh(); // trae confirmadoPor/confirmadoEn frescos
+      } else if (extra?.reversion) {
+        toast.success(
+          `Pasó a ${ESTADO_COBRO_LABEL[estado] ?? estado}. Quedó en la bitácora a tu nombre, con quién lo había confirmado.`,
+        );
+        onRefresh(); // la confirmación se limpió y la marca de facturado puede haber cambiado de firma
       }
     } catch (e) {
       if (prevEstado) {
@@ -258,6 +271,9 @@ export default function CronogramaCobros({
                     const estado = e.target.value;
                     if (estado === c.estado) return;
                     if (estado === "COBRADO") setConfirmCobro(c);
+                    /* Sacar de verde no es un click: pide motivo y deja rastro de quién lo había
+                       confirmado. Antes era un cambio optimista sin confirmación ni bitácora. */
+                    else if (c.estado === "COBRADO") setRevertirCobro({ cobro: c, estado });
                     else applyEstado(c, estado);
                   }}
                   className="text-[11px] border border-line rounded-md px-1.5 py-1 bg-surface text-fg focus:outline-none focus:border-brand flex-shrink-0"
@@ -324,6 +340,25 @@ export default function CronogramaCobros({
             const cobro = confirmCobro;
             setConfirmCobro(null);
             await applyEstado(cobro, "COBRADO", { fechaCobro, referenciaExterna });
+          }}
+        />
+      )}
+
+      {revertirCobro && (
+        <RevertirCobroDialog
+          cobro={revertirCobro.cobro}
+          etiquetaNueva={ESTADO_COBRO_LABEL[revertirCobro.estado] ?? revertirCobro.estado}
+          estadoNuevo={revertirCobro.estado}
+          todayISO={todayISO}
+          onCancel={() => setRevertirCobro(null)}
+          onConfirm={async ({ motivo, fechaEmision, numeroFactura }: DatosDeReversion) => {
+            const { cobro, estado } = revertirCobro;
+            setRevertirCobro(null);
+            await applyEstado(cobro, estado, {
+              reversion: { motivo, numeroFactura },
+              // Solo si cambió: la bitácora dice «fecha corregida» únicamente cuando lo fue.
+              ...(fechaEmision !== cobro.fechaEmision ? { fechaEmision } : {}),
+            });
           }}
         />
       )}

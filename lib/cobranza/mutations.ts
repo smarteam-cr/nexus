@@ -24,6 +24,7 @@ import {
 } from "./engine";
 import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
+import { decidirReversion } from "./reversion-cobro";
 import type { z } from "zod";
 import type {
   cuentaCreateSchema,
@@ -60,7 +61,7 @@ import type {
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
 import { loadComisionesVendedor } from "./queries";
-import { normalizePartner } from "./schema";
+import { ESTADO_COBRO_LABEL, normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
   constructor(
@@ -520,7 +521,9 @@ export async function generateCobros(
  * ÚNICA función que escribe Cobro.estado. Reglas:
  *  - estado=COBRADO exige byEmail (guard) → setea confirmadoPor/confirmadoEn +
  *    fechaCobro (default hoy). INV3: jamás COBRADO sin confirmadoPor.
- *  - Salir de COBRADO limpia la tripleta (confirmadoPor/En + fechaCobro).
+ *  - Salir de COBRADO exige motivo (400 sin él), limpia la tripleta (confirmadoPor/En +
+ *    fechaCobro) y deja en la bitácora quién lo había confirmado y quién lo revierte
+ *    (lib/cobranza/reversion-cobro.ts).
  *  - fechaProgramada/monto SOLO editables mientras el cobro está PROGRAMADO (409).
  */
 /**
@@ -557,6 +560,24 @@ export async function cambiarEstadoCobroTx(
     );
   }
 
+  /* Salir de COBRADO: la regla vive en reversion-cobro.ts y se decide ANTES de escribir nada.
+     Un 400 por falta de motivo no puede dejar medio cambio aplicado. */
+  const reversion = decidirReversion(
+    {
+      estado: cobro.estado,
+      confirmadoPor: cobro.confirmadoPor,
+      confirmadoEnISO: isoDay(cobro.confirmadoEn),
+      fechaCobroISO: isoDay(cobro.fechaCobro),
+      fechaEmisionISO: isoDay(cobro.fechaEmision),
+      facturadoPor: cobro.facturadoPor,
+      referenciaExterna: cobro.referenciaExterna,
+    },
+    { estado: patch.estado, fechaEmisionISO: patch.fechaEmision, reversion: patch.reversion },
+    byEmail,
+    ESTADO_COBRO_LABEL,
+  );
+  if (reversion.tipo === "rechazo") throw new CobranzaError(reversion.mensaje, reversion.status);
+
   const data: Prisma.CobroUpdateInput = {};
   if (patch.fechaProgramada !== undefined) data.fechaProgramada = dayUTC(patch.fechaProgramada);
   if (patch.monto !== undefined) data.monto = patch.monto;
@@ -576,6 +597,13 @@ export async function cambiarEstadoCobroTx(
       data.facturadoEn = null;
     }
     // fecha A → fecha B (edición, no un toggle): la autoría original no cambia.
+  }
+  /* ⚠ La única excepción a «la autoría original no cambia»: la marca la había puesto un cargador
+     (`import:…`) y quien saca el cobro de verde es quien acaba de mirar la factura real. La firma
+     vieja no se pierde: queda citada en la bitácora de la reversión. */
+  if (reversion.tipo === "revertir" && reversion.refirmarFacturado) {
+    data.facturadoPor = byEmail;
+    data.facturadoEn = new Date();
   }
   // ReconciliationPort v1: referencia externa opcional (id transacción Mercury / factura Odoo).
   if (patch.referenciaExterna !== undefined) data.referenciaExterna = patch.referenciaExterna;
@@ -632,6 +660,21 @@ export async function cambiarEstadoCobroTx(
 
   const updated = await db.cobro.update({ where: { id: cobroId }, data });
 
+  /* La bitácora de la reversión, con el MISMO cliente de base que el cambio: si `db` es una
+     transacción, o quedan los dos o no queda ninguno. Un cobro sacado de verde sin su rastro es
+     el estado que esta regla existe para que no se pueda representar. */
+  if (reversion.tipo === "revertir") {
+    await db.bitacoraCobro.create({
+      data: {
+        cuentaId: cobro.cuentaId,
+        cobroId,
+        tipo: "NOTA",
+        contenido: reversion.bitacora,
+        usuarioEmail: byEmail,
+      },
+    });
+  }
+
   /**
    * ⚠ `!== undefined` NO alcanza: hay que comparar contra lo que había. Liberar una factura
    * manda `promesaPago: null` fijo para todos los cobros, y sin esta comparación cada uno
@@ -669,13 +712,20 @@ export async function cambiarEstadoCobroTx(
   return updated;
 }
 
-/** El chokepoint de siempre, fuera de transacción. Mismo comportamiento, misma firma. */
+/**
+ * El chokepoint de siempre para quien no trae transacción. Mismo comportamiento, misma firma.
+ *
+ * ⚠ Abre su propia transacción. Sin ella, sacar un cobro de COBRADO eran dos escrituras sueltas
+ * —el cambio y su bitácora— y un corte en el medio dejaba el verde borrado sin rastro de quién lo
+ * había confirmado, que es justo lo que la reversión existe para no perder. Lo mismo valía para la
+ * promesa y su des-snooze.
+ */
 export async function cambiarEstadoCobro(
   cobroId: string,
   patch: z.infer<typeof cobroPatchSchema>,
   byEmail: string,
 ) {
-  return cambiarEstadoCobroTx(prisma, cobroId, patch, byEmail);
+  return prisma.$transaction((tx) => cambiarEstadoCobroTx(tx, cobroId, patch, byEmail));
 }
 
 // ── Liberar una factura y recuadrar el cronograma ───────────────────────────────

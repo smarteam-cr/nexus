@@ -2,6 +2,7 @@
  * /api/cobranza/cobros/[cobroId] — cambio de estado/campos de un cobro.
  *   PATCH → vía el CHOKEPOINT cambiarEstadoCobro (lib/cobranza/mutations.ts):
  *           COBRADO exige confirmación (setea confirmadoPor = email del guard — INV3);
+ *           SALIR de COBRADO exige `reversion.motivo` y deja bitácora (400 sin motivo);
  *           fechaProgramada/monto solo editables en PROGRAMADO.
  */
 import { NextRequest, NextResponse } from "next/server";
