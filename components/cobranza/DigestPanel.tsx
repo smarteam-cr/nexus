@@ -235,8 +235,9 @@ export default function DigestPanel({
       {corteViejo && (
         <p role="alert" className="rounded-xl border border-danger-line bg-danger-surface px-4 py-3 text-sm text-danger-ink">
           ⚠ Este corte tiene {diffDays(diaDelCorte, todayISO)} días, y entre dos cortes hay como mucho{" "}
-          {DIAS_MAXIMOS_ENTRE_CORTES}: el corte automático no está corriendo. Las alertas de cobranza y las
-          tendencias de Reportes son una foto de ese día hasta el próximo corte.
+          {DIAS_MAXIMOS_ENTRE_CORTES}: el corte automático no está corriendo. Los vencidos y las promesas
+          incumplidas se ponen al día cada noche, pero las alertas de falta facturar, cuentas sin datos y
+          catch-ups, y las tendencias de Reportes, siguen siendo una foto de ese día hasta el próximo corte.
         </p>
       )}
 

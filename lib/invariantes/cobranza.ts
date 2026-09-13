@@ -11,9 +11,12 @@ import { crDateParts } from "@/lib/jobs/time";
  * INV32 · El último corte de cartera tiene como mucho 17 días (lo máximo que hay entre dos cortes).
  * (INV31 es la frescura del espejo de Odoo, en lib/invariantes/odoo.ts.)
  *
- * El corte quincenal es el único que refresca las alertas de cobranza y el que alimenta las
- * tendencias de Reportes. Nunca se encendió en el VPS, y nada lo decía: al 2026-09-12 había un solo
- * corte, del 24-jul, y el tablero de alertas era una foto de ese día.
+ * El corte quincenal es el único que abre las alertas de falta facturar, cuentas sin datos y
+ * catch-ups, y el que alimenta las tendencias de Reportes. Nunca se encendió en el VPS, y nada lo
+ * decía: al 2026-09-12 había un solo corte, del 24-jul, y el tablero de alertas era una foto de ese
+ * día. Desde ese día los vencidos y las promesas incumplidas se refrescan cada noche
+ * (lib/cobranza/alertas-refresco.ts), así que el mensaje ya no puede decir que TODAS las alertas son
+ * la foto del corte.
  *
  * El día del corte se cuenta en hora de Costa Rica: un corte guardado a las 21:49 CR ya es el día
  * siguiente en UTC, y contar en UTC le regalaba un día. La regla es `corteVencido()`, la misma que
@@ -34,7 +37,7 @@ export const INV32: Invariante = {
     if (!corteVencido(diaDelCorte, hoy)) return cumple(`✓ INV32: el último corte de cartera es del ${diaDelCorte}.`);
     return viola(
       `✗ INV32 VIOLADO: el último corte de cartera es del ${diaDelCorte} (hace ${diffDays(diaDelCorte, hoy)} días, por ${ultimo.triggeredBy ?? "?"}): ` +
-        `las alertas de cobranza y las tendencias de Reportes son una foto de ese día.` +
+        `las tendencias de Reportes y las alertas de falta facturar, cuentas sin datos y catch-ups son una foto de ese día (los vencidos y las promesas incumplidas se refrescan cada noche).` +
         `\n    Remedio: encender el corte automático (COBRANZA_CRON_ENABLED=1 en el .env del VPS; Integraciones › Jobs del servidor dice si está apagado).` +
         `\n    Un corte a mano desde Cobranza › Corte quincenal lo pone en verde, pero no reemplaza al automático.`,
     );
