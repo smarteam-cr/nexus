@@ -73,7 +73,7 @@ El mismo diagnóstico no sirve para todos. El tamaño y madurez del cliente dete
 
 **Equilibrio correcto:**
 - 50% mapeo detallado (les ayuda a ver lo que hacen vs lo que creen que hacen)
-- 50% propuestas accionables (no solo diagnóstico, sino "con esto pasamos de nivel 1 a nivel 2")
+- 50% propuestas accionables (no solo diagnóstico, sino "con esto tu base operativa pasa de Inicial a Funcional")
 - Priorización clara: máximo 5 hallazgos principales, ordenados por impacto
 - Comparar "proceso teórico" vs "rutina real" — el contraste genera insights inmediatos
 
@@ -83,10 +83,10 @@ El mismo diagnóstico no sirve para todos. El tamaño y madurez del cliente dete
 
 ## Reglas para los agentes
 
-1. **Antes de generar un diagnóstico**, verificar el tamaño del cliente (campo \`tamano\` en el canvas de empresa) y la escala de rendimiento.
-2. **Si el tamaño es grande** (o la escala general ≥3): priorizar insights sobre mapeo. No describir lo obvio.
-3. **Si el tamaño es pequeño** (o la escala general ≤1): priorizar mapeo visual y explicaciones. Cada hallazgo necesita contexto de por qué importa.
-4. **Si es mediano** (o escala 2): equilibrar ambos enfoques.
+1. **Antes de generar un diagnóstico**, verificar el tamaño del cliente (campo \`tamano\` en el canvas de empresa) y su posición en la Escala de Rendimiento (el nivel de su base operativa).
+2. **Si el tamaño es grande** (o la base operativa ya está en Funcional o más): priorizar insights sobre mapeo. No describir lo obvio.
+3. **Si el tamaño es pequeño** (o la base operativa está en Deficiente): priorizar mapeo visual y explicaciones. Cada hallazgo necesita contexto de por qué importa.
+4. **Si es mediano** (o la base operativa está en Inicial): equilibrar ambos enfoques.
 5. **Nunca usar jerga sin definirla** para clientes pequeños.
 6. **Nunca repetir lo que el cliente ya dijo** para clientes grandes — usar sus palabras solo como evidencia para conclusions nuevas.
 `;

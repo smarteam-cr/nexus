@@ -237,7 +237,6 @@ const CATALOGO_SEEDS = [
   // Conocimiento versionado en el repo
   "scripts/seed-breeze-knowledge.ts",
   "scripts/seed-escala-rendimiento.ts",
-  "scripts/seed-escala-criterios.ts",
   "scripts/seed-caminos-opuestos.ts",
   // Marketing (settings + ICP + personas)
   "scripts/seed-marketing-module.ts",

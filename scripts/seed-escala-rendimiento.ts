@@ -1,106 +1,228 @@
 /**
- * Seed: documento "Escala de Rendimiento Smarteam" en la base de conocimiento.
+ * scripts/seed-escala-rendimiento.ts — la Escala de Rendimiento 5.2 en la base de conocimiento.
  *
- * Lee el contenido desde `scripts/data/escala_rendimiento.md` (fuente versionada
- * en el repo). Para actualizar el doc, reemplazá ese archivo y volvé a correr el seed.
+ * Siembra los DOS documentos que leen los agentes, armados desde el mismo archivo que alimenta
+ * Documentación (`lib/documentacion/semillas/escala-rendimiento-v5.md`, vía
+ * `lib/knowledge/escala-v5-documentos.ts`):
+ *   · «Escala de Rendimiento Smarteam» — el reglamento completo, etiqueta `escala_rendimiento`.
+ *     La vara del Diagnóstico; también lo tiene fijado el análisis de ventas.
+ *   · «Escala de Rendimiento — resumen para posicionar» — etiqueta `escala_resumen`. Lo leen la
+ *     Propuesta, el Kickoff y la Entrega.
  *
- * Uso: npx tsx scripts/seed-escala-rendimiento.ts
+ * ── LO QUE CUIDA ─────────────────────────────────────────────────────────────
+ * 1. El reglamento se ACTUALIZA EN EL LUGAR: conserva su id, y con él los agentes que lo tienen
+ *    fijado (`Agent.pinnedKnowledgeIds`). Uno nuevo quedaría sin fijar, y el viejo seguiría
+ *    entrando por la etiqueta.
+ * 2. Antes de pisar una versión distinta guarda una COPIA ARCHIVADA y sin etiquetas. Queda para
+ *    comparar, y ningún agente la carga: los cargadores leen solo lo publicado.
+ * 3. Es idempotente: con el contenido igual no escribe nada ni sube la versión.
  *
- * Es idempotente: si ya existe un documento con el mismo título, lo actualiza
- * (sobre-escribe contenido, summary y tags). El campo `version` se bumpea solo
- * (lo maneja Prisma vía @updatedAt).
+ * Uso:
+ *   npx tsx scripts/seed-escala-rendimiento.ts                                    (muestra qué haría)
+ *   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/seed-escala-rendimiento.ts --apply
  */
-import { PrismaClient, KnowledgeType, KnowledgeStatus, TagCategory } from "@prisma/client";
-import { sslParaConexion } from "@/lib/db/ssl";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import "dotenv/config";
+import { KnowledgeStatus, KnowledgeType, TagCategory, type PrismaClient } from "@prisma/client";
+import { resolverApply } from "./lib/guard";
+import { createScriptDb } from "./lib/db";
+import {
+  construirDocumentosDeEscala,
+  versionDeContenido,
+  type DocumentoDeEscala,
+} from "@/lib/knowledge/escala-v5-documentos";
+import { ETIQUETA_ESCALA_COMPLETA, ETIQUETA_ESCALA_RESUMEN } from "@/lib/escala/fuente";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: sslParaConexion(process.env.DATABASE_URL),
+const APPLY = resolverApply({
+  tablas: ["KnowledgeDocument", "KnowledgeTag", "_KnowledgeDocumentToKnowledgeTag"],
 });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
 
-const TITLE = "Escala de Rendimiento Smarteam";
+type Etiqueta = { category: TagCategory; value: string; label: string };
 
-const SUMMARY =
-  "Instrumento de diagnóstico, posicionamiento y aceleración del rendimiento operacional en Marketing, Sales y Service. " +
-  "Define 5 niveles (Deficiente → Óptimo) sobre 8 dimensiones por área (4 de Capacidad + 4 de Loop: Express/Tailor/Amplify/Evolve), " +
-  "el marco de aceleración en 4 fases, la curva de rendimiento (no linealidad, impacto asimétrico de IA, target por tamaño), " +
-  "el descriptor cualitativo de perfil multidimensional, y la metodología del test diagnóstico con 48 objetivos de información, " +
-  "rúbricas por nivel y reglas de scoring.";
-
-const TAGS: { category: TagCategory; value: string; label: string }[] = [
-  { category: TagCategory.TOPIC,  value: "escala_rendimiento",   label: "Escala de Rendimiento" },
-  { category: TagCategory.TOPIC,  value: "diagnostico_madurez",  label: "Diagnóstico de madurez" },
-  { category: TagCategory.DOMAIN, value: "marketing",            label: "Marketing" },
-  { category: TagCategory.DOMAIN, value: "sales",                label: "Ventas" },
-  { category: TagCategory.DOMAIN, value: "service",              label: "Servicio al cliente" },
-  { category: TagCategory.DOMAIN, value: "general",              label: "General" },
+const DOMINIOS: Etiqueta[] = [
+  { category: TagCategory.DOMAIN, value: "marketing", label: "Marketing" },
+  { category: TagCategory.DOMAIN, value: "sales", label: "Ventas" },
+  { category: TagCategory.DOMAIN, value: "service", label: "Servicio al cliente" },
+  { category: TagCategory.DOMAIN, value: "general", label: "General" },
 ];
 
-const CONTENT_PATH = resolve(__dirname, "data", "escala_rendimiento.md");
-const CONTENT = readFileSync(CONTENT_PATH, "utf-8");
+const ETIQUETAS_COMPLETA: Etiqueta[] = [
+  { category: TagCategory.TOPIC, value: ETIQUETA_ESCALA_COMPLETA, label: "Escala de Rendimiento" },
+  { category: TagCategory.TOPIC, value: "diagnostico_madurez", label: "Diagnóstico de madurez" },
+  ...DOMINIOS,
+];
 
-async function main() {
-  console.log(`[seed-escala-rendimiento] Iniciando...`);
-  console.log(`[seed-escala-rendimiento] Contenido leído de: ${CONTENT_PATH}`);
-  console.log(`[seed-escala-rendimiento] Tamaño: ${CONTENT.length.toLocaleString()} chars`);
+const ETIQUETAS_RESUMEN: Etiqueta[] = [
+  { category: TagCategory.TOPIC, value: ETIQUETA_ESCALA_RESUMEN, label: "Escala de Rendimiento — resumen" },
+  ...DOMINIOS,
+];
 
-  // 1. Upsert de tags
-  const tagIds: string[] = [];
-  for (const t of TAGS) {
-    const tag = await prisma.knowledgeTag.upsert({
-      where:  { category_value: { category: t.category, value: t.value } },
-      update: { label: t.label },
-      create: { category: t.category, value: t.value, label: t.label },
-    });
-    tagIds.push(tag.id);
+type Existente = {
+  id: string;
+  title: string;
+  status: KnowledgeStatus;
+  content: string;
+  version: number;
+  tags: { value: string }[];
+};
+
+/**
+ * El documento a actualizar. El TÍTULO manda —es como lo encuentran los fijados hechos a mano
+ * (`scripts/pin-escala-rendimiento.ts`)—; si nadie lo tiene, vale el único que lleve la etiqueta.
+ * Con varios etiquetados y ninguno con el título, no se adivina: se aborta.
+ */
+async function buscar(
+  prisma: PrismaClient,
+  titulo: string,
+  etiqueta: string,
+): Promise<{ elegido: Existente | null; otros: Existente[] }> {
+  const candidatos: Existente[] = await prisma.knowledgeDocument.findMany({
+    where: {
+      status: { not: KnowledgeStatus.ARCHIVED },
+      OR: [{ title: titulo }, { tags: { some: { value: etiqueta } } }],
+    },
+    select: { id: true, title: true, status: true, content: true, version: true, tags: { select: { value: true } } },
+    orderBy: { updatedAt: "desc" },
+  });
+  const elegido = candidatos.find((c) => c.title === titulo) ?? (candidatos.length === 1 ? candidatos[0] : null);
+  if (!elegido && candidatos.length > 1) {
+    throw new Error(
+      `Hay ${candidatos.length} documentos con la etiqueta ${etiqueta} y ninguno se llama «${titulo}»: ` +
+        candidatos.map((c) => `«${c.title}» (${c.id})`).join(", "),
+    );
   }
-  console.log(`[seed-escala-rendimiento] Tags asegurados: ${tagIds.length}`);
-
-  // 2. Buscar documento existente por título
-  const existing = await prisma.knowledgeDocument.findFirst({ where: { title: TITLE } });
-
-  if (existing) {
-    const updated = await prisma.knowledgeDocument.update({
-      where: { id: existing.id },
-      data: {
-        type:    KnowledgeType.METHODOLOGY,
-        status:  KnowledgeStatus.PUBLISHED,
-        summary: SUMMARY,
-        content: CONTENT,
-        tags:    { set: tagIds.map((id) => ({ id })) },
-      },
-    });
-    console.log(`[seed-escala-rendimiento] Actualizado: ${updated.id} — "${updated.title}" (v${updated.version})`);
-  } else {
-    const created = await prisma.knowledgeDocument.create({
-      data: {
-        type:    KnowledgeType.METHODOLOGY,
-        status:  KnowledgeStatus.PUBLISHED,
-        title:   TITLE,
-        summary: SUMMARY,
-        content: CONTENT,
-        tags:    { connect: tagIds.map((id) => ({ id })) },
-      },
-    });
-    console.log(`[seed-escala-rendimiento] Creado: ${created.id} — "${created.title}"`);
-  }
-
-  console.log(`[seed-escala-rendimiento] Listo.`);
+  return { elegido, otros: candidatos.filter((c) => c !== elegido) };
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+function mismasEtiquetas(existente: Existente, etiquetas: Etiqueta[]): boolean {
+  const tiene = new Set(existente.tags.map((t) => t.value));
+  return tiene.size === etiquetas.length && etiquetas.every((e) => tiene.has(e.value));
+}
+
+async function asegurarEtiquetas(prisma: PrismaClient, etiquetas: Etiqueta[]): Promise<string[]> {
+  const ids: string[] = [];
+  for (const e of etiquetas) {
+    const tag = await prisma.knowledgeTag.upsert({
+      where: { category_value: { category: e.category, value: e.value } },
+      update: { label: e.label },
+      create: e,
+    });
+    ids.push(tag.id);
+  }
+  return ids;
+}
+
+async function sembrar(
+  prisma: PrismaClient,
+  doc: DocumentoDeEscala,
+  etiquetas: Etiqueta[],
+  etiqueta: string,
+  version: string,
+  archivarLoAnterior: boolean,
+): Promise<void> {
+  const { elegido, otros } = await buscar(prisma, doc.titulo, etiqueta);
+  for (const o of otros) {
+    console.warn(
+      `  ⚠ «${o.title}» (${o.id}) también lleva la etiqueta ${etiqueta}: el agente lo carga junto con este.`,
+    );
+  }
+
+  if (
+    elegido &&
+    elegido.content === doc.contenido &&
+    elegido.status === KnowledgeStatus.PUBLISHED &&
+    mismasEtiquetas(elegido, etiquetas)
+  ) {
+    console.log(`= sin cambios: «${doc.titulo}» (${elegido.id}, v${elegido.version})`);
+    return;
+  }
+
+  const versionAnterior = elegido ? versionDeContenido(elegido.content) : null;
+  const archivar = archivarLoAnterior && !!elegido && versionAnterior !== version;
+  const tituloArchivado = elegido
+    ? `${elegido.title} — versión ${versionAnterior ?? "anterior a la 5"} (archivada)`
+    : "";
+
+  if (elegido) {
+    console.log(
+      `~ actualizar: «${doc.titulo}» (${elegido.id}) v${elegido.version} → v${elegido.version + 1} · ` +
+        `${elegido.content.length.toLocaleString("es")} → ${doc.contenido.length.toLocaleString("es")} caracteres` +
+        ` · contenido ${versionAnterior ?? "sin versión (v4)"} → ${version}`,
+    );
+  } else {
+    console.log(`+ crear: «${doc.titulo}» · ${doc.contenido.length.toLocaleString("es")} caracteres`);
+  }
+  if (archivar) console.log(`+ archivar copia: «${tituloArchivado}» (sin etiquetas)`);
+  if (!APPLY) return;
+
+  const tagIds = await asegurarEtiquetas(prisma, etiquetas);
+
+  if (archivar && elegido) {
+    const yaArchivada = await prisma.knowledgeDocument.findFirst({
+      where: { title: tituloArchivado, status: KnowledgeStatus.ARCHIVED },
+      select: { id: true },
+    });
+    if (yaArchivada) {
+      console.log(`  (la copia archivada ya existía: ${yaArchivada.id})`);
+    } else {
+      const copia = await prisma.knowledgeDocument.create({
+        data: {
+          type: KnowledgeType.METHODOLOGY,
+          status: KnowledgeStatus.ARCHIVED,
+          title: tituloArchivado,
+          summary: `Copia de la versión reemplazada por la ${version} el ${new Date().toISOString().slice(0, 10)}. Ningún agente la lee.`,
+          content: elegido.content,
+        },
+      });
+      console.log(`  ✓ archivada: ${copia.id}`);
+    }
+  }
+
+  if (elegido) {
+    const hecho = await prisma.knowledgeDocument.update({
+      where: { id: elegido.id },
+      data: {
+        type: KnowledgeType.METHODOLOGY,
+        status: KnowledgeStatus.PUBLISHED,
+        summary: doc.sumario,
+        content: doc.contenido,
+        version: { increment: 1 },
+        tags: { set: tagIds.map((id) => ({ id })) },
+      },
+    });
+    console.log(`  ✓ actualizado: ${hecho.id} (v${hecho.version})`);
+  } else {
+    const hecho = await prisma.knowledgeDocument.create({
+      data: {
+        type: KnowledgeType.METHODOLOGY,
+        status: KnowledgeStatus.PUBLISHED,
+        title: doc.titulo,
+        summary: doc.sumario,
+        content: doc.contenido,
+        tags: { connect: tagIds.map((id) => ({ id })) },
+      },
+    });
+    console.log(`  ✓ creado: ${hecho.id}`);
+  }
+}
+
+async function main(): Promise<void> {
+  const { version, fecha, completo, resumen } = construirDocumentosDeEscala();
+  console.log(
+    `Escala ${version} (${fecha}) · reglamento ${completo.contenido.length.toLocaleString("es")} caracteres · ` +
+      `resumen ${resumen.contenido.length.toLocaleString("es")}`,
+  );
+  console.log(APPLY ? "Modo: --apply (escribe)\n" : "Modo: en seco — no escribe nada (agregá --apply)\n");
+
+  const { prisma, close } = createScriptDb();
+  try {
+    await sembrar(prisma, completo, ETIQUETAS_COMPLETA, ETIQUETA_ESCALA_COMPLETA, version, true);
+    await sembrar(prisma, resumen, ETIQUETAS_RESUMEN, ETIQUETA_ESCALA_RESUMEN, version, false);
+  } finally {
+    await close();
+  }
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
