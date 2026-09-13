@@ -1,8 +1,9 @@
 /**
  * /api/cobranza/digest — el corte de cartera (diff-based).
  *   GET  → resumen del último SnapshotCartera (para render inicial).
- *   POST → correr el corte AHORA (el botón del demo; el JobDef del lunes llama a
- *          la misma runCobranzaDigest). Si nada cambió → digest con sinCambios.
+ *   POST → correr el corte AHORA (el botón de la pestaña Corte quincenal; el job
+ *          cobranza-quincenal de los días 1 y 15 llama a la misma runCobranzaDigest).
+ *          Si nada cambió → digest con sinCambios.
  */
 import { NextResponse } from "next/server";
 import { guardCobranzaAccess } from "@/lib/auth/api-guards";

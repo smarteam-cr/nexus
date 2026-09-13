@@ -16,7 +16,7 @@ export default function CobranzaLoading() {
     <div className={SHELL_DEFAULT}>
       <PageHeaderSkeleton titleWidth="w-28" descWidth="w-96 max-w-full" action />
 
-      {/* Cobros · Clientes · Proyección · Alertas · Reportes · Corte semanal */}
+      {/* Cobros · Clientes · Proyección · Alertas · Reportes · Corte quincenal */}
       <SkeletonTabs count={6} className="mb-6" />
 
       <div className="space-y-4">

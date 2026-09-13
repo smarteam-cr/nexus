@@ -761,7 +761,7 @@ export function computeAlertSet(
 
 // ── 8. Diff del digest ──────────────────────────────────────────────────────────
 
-/** Diff por dedupeKey entre la corrida anterior y la actual (el digest del lunes). */
+/** Diff por dedupeKey entre la corrida anterior y la actual (el corte quincenal de los días 1 y 15). */
 export function diffAlertSets(prev: AlertaDraft[], current: AlertaDraft[]): DiffAlertas {
   const prevKeys = new Set(prev.map((a) => a.dedupeKey));
   const currKeys = new Set(current.map((a) => a.dedupeKey));
@@ -1043,8 +1043,12 @@ export interface MetricasMoneda {
 
 export interface MetricasCartera {
   /** 1 = vencido contado desde la fecha programada (criterio viejo, pre-2026-07-24).
-   *  2 = vencido = factura emitida + crédito consumido (criterio único de Finanzas). */
-  version: 2;
+   *  2 = vencido = factura emitida + crédito consumido (criterio único de Finanzas).
+   *  3 = además la ventana arranca en el día de Costa Rica del corte anterior y lo proyectado llega
+   *      hasta el próximo día de corte real (1 o 15), no a +7 días (2026-09-12). Quien llama pasa
+   *      `inicioDeVentanaISO` y `proximoDiaDeCorteISO`. Los cortes guardados conservan su versión, y
+   *      Reportes no compara versiones distintas (lib/cobranza/series-cortes.ts). */
+  version: 1 | 2 | 3;
   /** Ventana del corte — desdeISO null = primer corte (sin historia, declarado). */
   ventana: { desdeISO: string | null; hastaISO: string; proximoCorteISO: string };
   moneda: { CRC: MetricasMoneda; USD: MetricasMoneda };
@@ -1220,7 +1224,7 @@ export function computeMetricasCartera(
   }
 
   return {
-    version: 2,
+    version: 3,
     ventana: {
       desdeISO: opts.desdeUltimoCorteISO,
       hastaISO: opts.todayISO,

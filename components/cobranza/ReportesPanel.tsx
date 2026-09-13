@@ -22,6 +22,7 @@ import {
   BUCKET_LABEL,
   KPI_CREDITO_DIAS,
 } from "@/lib/cobranza/antiguedad";
+import { cortesComparables, serieCobradoVsProyectado } from "@/lib/cobranza/series-cortes";
 import EChartRenderer from "@/components/charts/EChartRenderer";
 import { useChartColors, type EChartsColors } from "@/hooks/useChartColors";
 import { baseTooltip, SERIES_PALETTE } from "@/components/cs/dashboard/chart-theme";
@@ -362,9 +363,14 @@ export default function ReportesPanel({
   // no-SUPER_ADMIN — el enforcement real es server-side (la route devuelve 403).
   const [reporteVoz, setReporteVoz] = useState<"operativa" | "ejecutiva" | null>(null);
 
-  const hayTendencias = series.length >= 2;
+  /* ⚠ Las tendencias se dibujan SOLO con los cortes del mismo criterio que el último
+     (`cortesComparables`): un cambio de criterio mueve la línea sin que la cartera se mueva. El corte
+     del 24-jul (criterio 2) no se mezcla con los automáticos (criterio 3). */
+  const comparables = useMemo(() => cortesComparables(series), [series]);
+  const conOtroCriterio = series.length - comparables.length;
+  const hayTendencias = comparables.length >= 2;
   const ultimo = series.length > 0 ? series[series.length - 1] : null;
-  const fechas = useMemo(() => series.map((s) => fmtFechaCorta(s.capturedAt)), [series]);
+  const fechas = useMemo(() => comparables.map((s) => fmtFechaCorta(s.capturedAt)), [comparables]);
 
   // 1. Vencido en el tiempo — doble eje ₡/$ (CRC y USD jamás se mezclan).
   const vencidoOption = useMemo(
@@ -375,11 +381,11 @@ export default function ReportesPanel({
       xAxis: ejeX(colors, fechas),
       yAxis: [ejeYMonto(colors, "₡"), ejeYMonto(colors, "$", { splitLine: false })],
       series: [
-        lineSerie("CRC", COLOR_CRC, series.map((s) => s.metricas.moneda.CRC.totalVencido), { yAxisIndex: 0 }),
-        lineSerie("USD", COLOR_USD, series.map((s) => s.metricas.moneda.USD.totalVencido), { yAxisIndex: 1 }),
+        lineSerie("CRC", COLOR_CRC, comparables.map((s) => s.metricas.moneda.CRC.totalVencido), { yAxisIndex: 0 }),
+        lineSerie("USD", COLOR_USD, comparables.map((s) => s.metricas.moneda.USD.totalVencido), { yAxisIndex: 1 }),
       ],
     }),
-    [series, fechas, colors],
+    [comparables, fechas, colors],
   );
 
   // 2. DSO — días, un solo eje. Un corte sin exigibles es null = hueco, no cero.
@@ -395,11 +401,11 @@ export default function ReportesPanel({
         splitLine: { lineStyle: { color: colors.gridLine, type: "dashed" as const } },
       },
       series: [
-        lineSerie("CRC", COLOR_CRC, series.map((s) => s.metricas.moneda.CRC.dso)),
-        lineSerie("USD", COLOR_USD, series.map((s) => s.metricas.moneda.USD.dso)),
+        lineSerie("CRC", COLOR_CRC, comparables.map((s) => s.metricas.moneda.CRC.dso)),
+        lineSerie("USD", COLOR_USD, comparables.map((s) => s.metricas.moneda.USD.dso)),
       ],
     }),
-    [series, fechas, colors],
+    [comparables, fechas, colors],
   );
 
   // 3. Aging del vencido — 4 líneas de la moneda elegida en el toggle.
@@ -411,21 +417,19 @@ export default function ReportesPanel({
       xAxis: ejeX(colors, fechas),
       yAxis: ejeYMonto(colors, simbolo(monedaAging)),
       series: AGING_BUCKETS.map((b) =>
-        lineSerie(b.label, b.color, series.map((s) => s.metricas.moneda[monedaAging].aging[b.key])),
+        lineSerie(b.label, b.color, comparables.map((s) => s.metricas.moneda[monedaAging].aging[b.key])),
       ),
     }),
-    [series, fechas, colors, monedaAging],
+    [comparables, fechas, colors, monedaAging],
   );
 
-  // 4. Cobrado vs proyectado — el corte i−1 proyectó lo que entraría hasta i, así
-  //    que se compara contra el cobrado de i. El primer corte no tiene proyección
-  //    previa → hueco (null), no cero.
+  // 4. Cobrado vs proyectado — el corte i−1 proyectó lo que entraría hasta i, y se compara
+  //    contra el cobrado de i SOLO si i es el corte al que apuntaba i−1
+  //    (`serieCobradoVsProyectado`). El primero, o el que sigue a un corte que falta, queda
+  //    como hueco (null), no cero: comparar ventanas distintas es inventar un desvío.
   const cvpOption = useMemo(() => {
     const m = monedaCvp;
-    const cobrado = series.map((s) => s.metricas.moneda[m].totalCobradoDesdeUltimoCorte);
-    const proyectado = series.map((_, i) =>
-      i === 0 ? null : series[i - 1].metricas.moneda[m].proyectadoProximoCorte,
-    );
+    const { cobrado, proyectado } = serieCobradoVsProyectado(comparables, m);
     return {
       tooltip: tooltipMonto(colors, () => m),
       legend: legendBase(colors),
@@ -439,7 +443,7 @@ export default function ReportesPanel({
         }),
       ],
     };
-  }, [series, fechas, colors, monedaCvp]);
+  }, [comparables, fechas, colors, monedaCvp]);
 
   const cob = ultimo?.metricas.cobertura;
 
@@ -484,14 +488,29 @@ export default function ReportesPanel({
         </div>
       </div>
 
-      {/* ── Tendencias (solo con ≥2 cortes: 1 punto no es tendencia) ── */}
+      {/* ── Tendencias (solo con ≥2 cortes del mismo criterio: 1 punto no es tendencia) ── */}
       {!hayTendencias && (
         <div className="rounded-xl border border-line bg-surface-muted px-4 py-3 text-sm text-fg-muted">
           <span className="font-semibold text-fg-secondary">Todavía no hay tendencias.</span> Van{" "}
-          {series.length} corte{series.length !== 1 ? "s" : ""} guardado
-          {series.length !== 1 ? "s" : ""}; hacen falta 2 para dibujar una línea. La foto de arriba
-          es de hoy y no depende de eso — el próximo corte inaugura las curvas.
+          {comparables.length} corte{comparables.length !== 1 ? "s" : ""} comparable
+          {comparables.length !== 1 ? "s" : ""}; hacen falta 2 para dibujar una línea.
+          {conOtroCriterio > 0 && (
+            <>
+              {" "}
+              {conOtroCriterio === 1
+                ? "Hay 1 corte anterior calculado con otro criterio, que no se mezcla con los nuevos."
+                : `Hay ${conOtroCriterio} cortes anteriores calculados con otro criterio, que no se mezclan con los nuevos.`}
+            </>
+          )}{" "}
+          La foto de arriba es de hoy y no depende de eso — el próximo corte inaugura las curvas.
         </div>
+      )}
+      {hayTendencias && conOtroCriterio > 0 && (
+        <p className="text-[11px] text-fg-muted">
+          {conOtroCriterio === 1
+            ? "1 corte anterior calculado con otro criterio no se grafica: movería las líneas sin que la cartera se mueva."
+            : `${conOtroCriterio} cortes anteriores calculados con otro criterio no se grafican: moverían las líneas sin que la cartera se mueva.`}
+        </p>
       )}
       {hayTendencias && (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -500,7 +519,7 @@ export default function ReportesPanel({
               tiempo, y el DSO al final como indicador resumen. */}
           <ChartCard
             titulo="Cobrado vs proyectado"
-            nota="Lo que cada corte proyectó que entraría hasta el siguiente, contra lo realmente cobrado en esa ventana."
+            nota="Lo que cada corte proyectó que entraría hasta el siguiente, contra lo cobrado en esa misma quincena. Si faltó un corte en el medio, ese punto queda en blanco: no se comparan ventanas distintas."
             extra={<MonedaToggle value={monedaCvp} onChange={setMonedaCvp} />}
           >
             <EChartRenderer option={cvpOption} height={240} className="bg-surface" />

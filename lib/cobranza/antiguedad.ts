@@ -276,3 +276,23 @@ export const DIAS_MAXIMOS_ENTRE_CORTES = 17;
 export function corteVencido(ultimoCorteISO: string, hoyISO: string): boolean {
   return diffDays(ultimoCorteISO.slice(0, 10), hoyISO.slice(0, 10)) > DIAS_MAXIMOS_ENTRE_CORTES;
 }
+
+/**
+ * El próximo día de corte DESPUÉS de hoy: el 15 si todavía no llegó; si no, el 1 del mes siguiente.
+ * Si hoy ES día de corte, el siguiente: el corte de hoy proyecta hasta el próximo.
+ *
+ * ⚠ Existe porque el corte proyectaba «hasta dentro de 7 días», herencia de cuando era semanal. Con
+ * cortes cada quince días, «Cobrado vs proyectado» comparaba una semana de proyección contra una
+ * quincena de cobrado. Los días salen de `TANDAS`, la misma definición que `esDiaDeCorte`.
+ */
+export function proximoDiaDeCorteISO(todayISO: string): string {
+  const dias = TANDAS.map((t) => t.desde);
+  const d = diaDelMes(todayISO);
+  const dosDigitos = (n: number) => String(n).padStart(2, "0");
+  const posteriores = dias.filter((x) => x > d);
+  if (posteriores.length > 0) return `${todayISO.slice(0, 7)}-${dosDigitos(Math.min(...posteriores))}`;
+  const anio = Number(todayISO.slice(0, 4));
+  const mes = Number(todayISO.slice(5, 7));
+  const primero = dosDigitos(Math.min(...dias));
+  return mes === 12 ? `${anio + 1}-01-${primero}` : `${anio}-${dosDigitos(mes + 1)}-${primero}`;
+}

@@ -13,7 +13,9 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { addDaysISO, computeMetricasCartera, type MetricasMoneda } from "../engine";
+import { computeMetricasCartera, type MetricasMoneda } from "../engine";
+import { proximoDiaDeCorteISO } from "../antiguedad";
+import { cortesComparables, inicioDeVentanaISO } from "../series-cortes";
 import {
   buildCarteraEngineInput,
   loadAlertas,
@@ -90,19 +92,23 @@ export async function runReporteFinanzas(
   // desde el último corte" (mismo criterio que el digest — null en el primer corte).
   const ultimoSnap = await prisma.snapshotCartera.findFirst({
     orderBy: { capturedAt: "desc" },
-    select: { capturedAt: true },
+    select: { capturedAt: true, metricas: true },
   });
-  const desdeUltimoCorteISO = ultimoSnap ? ultimoSnap.capturedAt.toISOString().slice(0, 10) : null;
+  // Mismo criterio que el corte: la ventana arranca en el día de Costa Rica del último corte, y lo
+  // proyectado llega hasta el próximo día de corte real (1 o 15), no a +7 días.
+  const desdeUltimoCorteISO = inicioDeVentanaISO(ultimoSnap);
 
   // Métricas FRESCAS (en vivo — no dependen de que hoy haya corte).
   const cartera = await buildCarteraEngineInput();
   const metricas = computeMetricasCartera(cartera, {
     todayISO,
     desdeUltimoCorteISO,
-    proximoCorteISO: addDaysISO(todayISO, 7),
+    proximoCorteISO: proximoDiaDeCorteISO(todayISO),
   });
 
-  const serie = await loadSnapshotSeries(8);
+  // Solo los cortes del criterio del último: una «tendencia» entre criterios distintos narra el
+  // cambio de criterio, no la cartera (lib/cobranza/series-cortes.ts).
+  const serie = cortesComparables(await loadSnapshotSeries(8));
   const riesgo = (await loadRiesgo(todayISO)).slice(0, 15);
   const alertas = await loadAlertas({ estados: ["ABIERTA", "VISTA"] });
   const proyeccion = await loadProyeccion(todayISO);

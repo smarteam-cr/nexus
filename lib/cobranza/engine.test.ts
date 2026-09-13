@@ -1241,7 +1241,7 @@ function metricasDe(
 
 test("N1 — cartera vacía: ceros/nulls honestos (dso null, NO 0) y ventana declarada", () => {
   const m = metricasDe([], { desdeUltimoCorteISO: null });
-  expect(m.version).toBe(2);
+  expect(m.version, "3: ventana en día de Costa Rica y proyectado al próximo día de corte real").toBe(3);
   expect(m.ventana).toEqual({ desdeISO: null, hastaISO: HOY, proximoCorteISO: "2026-07-17" });
   for (const mon of ["CRC", "USD"] as const) {
     expect(m.moneda[mon].totalVencido).toBe(0);

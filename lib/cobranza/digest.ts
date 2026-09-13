@@ -13,7 +13,6 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { crDateParts } from "@/lib/jobs/time";
 import {
-  addDaysISO,
   computeAlertSet,
   computeMetricasCartera,
   diffAlertSets,
@@ -23,6 +22,8 @@ import {
 } from "./engine";
 import { buildCarteraEngineInput } from "./queries";
 import { generateCobros, upsertAlertas } from "./mutations";
+import { proximoDiaDeCorteISO } from "./antiguedad";
+import { inicioDeVentanaISO } from "./series-cortes";
 
 export interface DigestResult {
   capturedAt: string;
@@ -66,16 +67,17 @@ export async function runCobranzaDigest(now: Date, triggeredBy: string): Promise
   const prevSet: AlertaDraft[] = anterior ? (anterior.alertSet as unknown as AlertaDraft[]) : [];
   const diff = diffAlertSets(prevSet, alertSet);
 
-  // 3b. Métricas del corte (fase 3): ventana desde el corte anterior (null en el
-  //     primero — sin backfill, la historia arranca acá) hasta hoy; el proyectado
-  //     apunta al corte siguiente (+7d) y ese corte lo comparará con su cobrado.
-  const desdeUltimoCorteISO = anterior
-    ? anterior.capturedAt.toISOString().slice(0, 10)
-    : null;
+  // 3b. Métricas del corte (fase 3): ventana desde el día —en Costa Rica— del corte
+  //     anterior (null en el primero: sin backfill, la historia arranca acá) hasta hoy;
+  //     lo proyectado llega hasta el próximo día de corte real (1 o 15), y ese corte lo
+  //     comparará con su cobrado. ⚠ Hasta el 2026-09-12 era +7 días, herencia del corte
+  //     semanal, desde la fecha UTC del corte anterior: el gráfico «Cobrado vs
+  //     proyectado» iba a comparar una semana de proyección contra una quincena.
+  const desdeUltimoCorteISO = inicioDeVentanaISO(anterior);
   const metricas = computeMetricasCartera(cartera, {
     todayISO,
     desdeUltimoCorteISO,
-    proximoCorteISO: addDaysISO(todayISO, 7),
+    proximoCorteISO: proximoDiaDeCorteISO(todayISO),
   });
 
   // 4. Guardar el snapshot de esta corrida (fila-por-corrida, payload completo).
