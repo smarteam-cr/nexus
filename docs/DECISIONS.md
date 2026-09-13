@@ -260,9 +260,11 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   posponerHasta, así el snooze sobrevive a los cortes. **Única excepción (2026-09-12)**: las cuatro
   alertas del ciclo de un cobro (COBRO_PROXIMO, FACTURACION_ATRASADA, COBRO_VENCIDO,
   PROMESA_INCUMPLIDA) comparten UNA fila (`lib/cobranza/alertas-merge.ts`), y cuando esa fila sube
-  a PROMESA_INCUMPLIDA vuelve a ABIERTA, pierde quién la vio y pierde el posponer: si la fecha
-  prometida pasó sin depósito, la alerta sube (decisión 5 de Alex). Cualquier otro cambio respeta lo
-  que la persona hizo con la fila.
+  a PROMESA_INCUMPLIDA, o pasa de «falta facturar» a COBRO_VENCIDO, vuelve a ABIERTA, pierde quién
+  la vio y pierde el posponer: si la fecha prometida pasó sin depósito la alerta sube (decisión 5 de
+  Alex), y lo pospuesto como trabajo de Smarteam no esconde la deuda del cliente. Sin el segundo
+  caso, el vencido de Ecoquintas del 19-sep heredaba el auto-posponer viejo de su promesa y no se
+  veía hasta el 30-sep. Cualquier otro cambio respeta lo que la persona hizo con la fila.
 - **Riesgo de pago V1 = regla conductual simple, sin ML**: por cuenta, comportamiento = promedio
   de (fechaCobro − fechaProgramada) de sus COBRADOs (monedas juntas — es conducta del cliente);
   se bandera todo cobro pendiente con `diasAtraso > (promedio ?? 0) + RIESGO_UMBRAL_DIAS (15)`.

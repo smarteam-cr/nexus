@@ -13,8 +13,8 @@
  *        15/45/75/100 días → llena los 4 buckets del aging y banderea riesgo
  *        (45/75/100 superan promedio+15; el de 15 días no).
  *      · F-SIN-PROYECTO (USD): 2 COBRADO puntuales (día exacto).
- *   2) PROMESAS: el vencido de 15 días recibe promesa VIGENTE (hoy+5 — sus
- *      alertas se callan, chip azul) y el de 45 días una promesa PASADA
+ *   2) PROMESAS: el vencido de 15 días recibe promesa VIGENTE (hoy+5 — sigue
+ *      vencido y con su alerta, chip azul) y el de 45 días una promesa PASADA
  *      (hoy−3 — chip rojo; el próximo corte emite PROMESA_INCUMPLIDA).
  *   3) SERIE RETROACTIVA: 10 SnapshotCartera semanales hacia atrás con métricas
  *      REALES — el engine puro se corre "como si" cada lunes pasado (los cobros
@@ -92,7 +92,7 @@ const HISTORIA: Record<
       { progDias: -60, delayDias: 25, monto: 500_000 },
     ],
     vencidos: [
-      { progDias: -15, monto: 400_000, promesaDias: 5 }, // promesa VIGENTE → alertas calladas
+      { progDias: -15, monto: 400_000, promesaDias: 5 }, // promesa VIGENTE → sigue vencido, alerta a la vista
       { progDias: -45, monto: 350_000, promesaDias: -3 }, // promesa PASADA → PROMESA_INCUMPLIDA
       { progDias: -75, monto: 300_000 },
       { progDias: -100, monto: 250_000 },

@@ -612,7 +612,8 @@ export async function cambiarEstadoCobroTx(
 
   // Promesa de pago (fase 3): fecha en que el cliente prometió pagar. No aplica
   // sobre un COBRADO (ya llegó) y NO se limpia al cobrar (trazabilidad de si
-  // cumplió). Semáforos y métricas NO cambian — la promesa solo calla alertas.
+  // cumplió). Es MARCA, no descuento (decisión de Alex, 2026-09-12): no cambia el
+  // semáforo ni las métricas, y tampoco toca las alertas del cobro.
   if (patch.promesaPago !== undefined) {
     /* ⚠ El 409 solo si de verdad se está poniendo una promesa. Mandar `null` sobre un COBRADO
        que nunca tuvo promesa no es un error: es un no-op, y rechazarlo hacía que liberar una
@@ -713,8 +714,8 @@ export async function cambiarEstadoCobroTx(
  *
  * ⚠ Abre su propia transacción. Sin ella, sacar un cobro de COBRADO eran dos escrituras sueltas
  * —el cambio y su bitácora— y un corte en el medio dejaba el verde borrado sin rastro de quién lo
- * había confirmado, que es justo lo que la reversión existe para no perder. Lo mismo valía para la
- * promesa y su des-snooze.
+ * había confirmado, que es justo lo que la reversión existe para no perder. Lo mismo vale para la
+ * promesa y su bitácora.
  */
 export async function cambiarEstadoCobro(
   cobroId: string,
@@ -1142,10 +1143,11 @@ export async function upsertAlertas(drafts: AlertaDraft[]): Promise<{ created: n
           mensaje: decision.mensaje,
           urgencia: decision.urgencia,
           evidencia: (decision.evidencia ?? undefined) as Prisma.InputJsonValue | undefined,
-          /* ⚠ La ÚNICA escritura automática de `posponerHasta`: la alerta subió a PROMESA_INCUMPLIDA,
-             así que lo que alguien vio o pospuso era otra situación. Fuera de ese caso el merge no
-             toca ni el estado ni el posponer, y el «Posponer» manual sigue valiendo entre cortes.
-             Lo vigila lib/cobranza/promesa.test.ts. */
+          /* ⚠ La ÚNICA escritura automática de `posponerHasta`: la alerta subió de situación (a
+             PROMESA_INCUMPLIDA, o de «falta facturar» a COBRO_VENCIDO), así que lo que alguien vio o
+             pospuso era otra situación. Fuera de esos casos el merge no toca ni el estado ni el
+             posponer, y el «Posponer» manual sigue valiendo entre cortes. Lo vigila
+             lib/cobranza/promesa.test.ts. */
           ...(decision.reabrir
             ? { estado: "ABIERTA" as const, vistaEn: null, vistaPor: null, posponerHasta: null }
             : {}),

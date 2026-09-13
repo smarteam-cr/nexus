@@ -585,7 +585,8 @@ export async function loadAlertas(filters?: {
       // Snooze: pospuesta a futuro = fuera del feed hasta que la fecha llegue.
       // upsertAlertas NO toca posponerHasta en el merge → el snooze sobrevive
       // a los cortes; la alerta vuelve sola sin cambiar de estado. Única excepción:
-      // la alerta del cobro sube a PROMESA_INCUMPLIDA (lib/cobranza/alertas-merge.ts).
+      // la alerta del cobro sube a PROMESA_INCUMPLIDA, o de «falta facturar» a
+      // COBRO_VENCIDO (lib/cobranza/alertas-merge.ts).
       OR: [{ posponerHasta: null }, { posponerHasta: { lte: new Date() } }],
     },
     orderBy: [{ urgencia: "asc" }, { lastDetectedAt: "desc" }],

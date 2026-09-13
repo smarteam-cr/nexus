@@ -100,6 +100,22 @@ describe("resolverMergeAlerta", () => {
     });
   });
 
+  it("e2) ⛔ Ecoquintas: la «falta facturar» pospuesta sube a vencido y se reabre, sin heredar el posponer", () => {
+    /* Medido el 2026-09-12: su FACTURACION_ATRASADA seguía viva y pospuesta al 30-sep, la fecha de su
+       promesa (el auto-posponer ya retirado). La factura del 3-sep vence por crédito el 18-sep: sin
+       reabrir, el «Cobro vencido» del 19-sep se quedaba con ese posponer y los US$1.880 vencidos no
+       aparecían en el feed hasta el 30-sep. Decisión 5 de Alex: la alerta no desaparece. */
+    for (const desde of ["FACTURACION_ATRASADA", "COBRO_PROXIMO"]) {
+      const r = resolverMergeAlerta(borrador("COBRO_VENCIDO", "ecoquintas-jun"), [fila(desde, "ecoquintas-jun")]);
+      expect(r, desde).toMatchObject({
+        accion: "fundir",
+        tipo: "COBRO_VENCIDO",
+        dedupeKey: "COBRO_VENCIDO:cuenta1:ecoquintas-jun",
+        reabrir: true,
+      });
+    }
+  });
+
   it("f) incumplida → vencido otra vez (prometió otra fecha): cambia de tipo sin reabrir ni tocar el posponer", () => {
     const r = resolverMergeAlerta(borrador("COBRO_VENCIDO", "co1"), [fila("PROMESA_INCUMPLIDA", "co1")]);
     expect(r).toMatchObject({ accion: "fundir", tipo: "COBRO_VENCIDO", reabrir: false });

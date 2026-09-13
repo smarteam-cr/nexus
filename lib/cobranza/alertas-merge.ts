@@ -13,12 +13,18 @@
  * vez de subir la que Alex ya tenía en el feed.
  *
  * Ahora las cuatro comparten fila:
- *  - **Sube a PROMESA_INCUMPLIDA** → la fila vuelve a ABIERTA, se limpia quién la vio y se anula el
- *    posponer. Es la decisión 5 de Alex (2026-09-12): si la fecha pasa sin depósito, la alerta
- *    sube. Quien la vio o la pospuso lo hizo sobre otra situación, no sobre esta.
- *  - **Otro cambio de tipo dentro de la familia** (falta facturar → vencido, o incumplida → vencido
- *    porque el cliente prometió otra fecha) → la fila toma el tipo, la clave y la urgencia del corte,
- *    y respeta lo que la persona hizo con ella.
+ *  - **Sube de situación** → la fila vuelve a ABIERTA, se limpia quién la vio y se anula el
+ *    posponer: quien la vio o la pospuso lo hizo sobre otra situación, no sobre esta. Son dos casos:
+ *     · a PROMESA_INCUMPLIDA, desde cualquier tipo. Es la decisión 5 de Alex (2026-09-12): si la
+ *       fecha pasa sin depósito, la alerta sube.
+ *     · de «falta facturar» (COBRO_PROXIMO, FACTURACION_ATRASADA) a COBRO_VENCIDO: lo pospuesto era
+ *       trabajo de Smarteam y ahora es deuda del cliente. ⚠ Sin esto el vencido heredaba el posponer.
+ *       Es Ecoquintas, medido el 2026-09-12: su «falta facturar» seguía pospuesta al 30-sep por el
+ *       auto-posponer de la promesa (ya retirado), la factura vence por crédito el 18-sep, y los
+ *       US$1.880 vencidos no se iban a ver en el feed hasta el 30-sep. La alerta no desaparece.
+ *  - **Otro cambio de tipo dentro de la familia** (incumplida → vencido porque el cliente prometió
+ *    otra fecha, o vencido → falta facturar porque se revirtió la factura) → la fila toma el tipo, la
+ *    clave y la urgencia del corte, y respeta lo que la persona hizo con ella.
  *  - **Mismo tipo** → la regla de siempre: la urgencia sube si hace falta y nunca baja, y ni el
  *    estado ni el posponer se tocan. ⛔ Es lo que mantiene vivo el «Posponer» manual: lo que alguien
  *    pospuso a mano no se despierta porque el corte vuelva a ver lo mismo.
@@ -70,7 +76,7 @@ export type DecisionMerge =
       urgencia: Urgencia;
       mensaje: string;
       evidencia: Record<string, unknown> | undefined;
-      /** La alerta subió: la fila vuelve a ABIERTA, sin quién la vio y sin posponer. */
+      /** La alerta subió de situación (`subeDeSituacion`): la fila vuelve a ABIERTA, sin quién la vio y sin posponer. */
       reabrir: boolean;
     };
 
@@ -80,6 +86,14 @@ export type DecisionMerge =
  */
 export function filasQueLeImportan(d: AlertaDraft): { dedupeKey: string; cobroDeLaFamilia: string | null } {
   return { dedupeKey: d.dedupeKey, cobroDeLaFamilia: esDeLaFamiliaDelCobro(d.tipo) && d.cobroId ? d.cobroId : null };
+}
+
+/** El reloj «¿facturaste?»: trabajo pendiente de Smarteam, todavía no deuda del cliente. */
+const FALTA_FACTURAR = new Set<string>(["COBRO_PROXIMO", "FACTURACION_ATRASADA"]);
+
+/** ¿La fila pasa a una situación que nadie vio todavía? Ver «Sube de situación» arriba. */
+export function subeDeSituacion(desde: string, hacia: AlertaDraft["tipo"]): boolean {
+  return hacia === "PROMESA_INCUMPLIDA" || (hacia === "COBRO_VENCIDO" && FALTA_FACTURAR.has(desde));
 }
 
 export function resolverMergeAlerta(d: AlertaDraft, vivas: readonly FilaViva[]): DecisionMerge {
@@ -115,5 +129,5 @@ export function resolverMergeAlerta(d: AlertaDraft, vivas: readonly FilaViva[]):
     return { ...base, urgencia, reabrir: false };
   }
 
-  return { ...base, urgencia: d.urgencia, reabrir: d.tipo === "PROMESA_INCUMPLIDA" };
+  return { ...base, urgencia: d.urgencia, reabrir: subeDeSituacion(fila.tipo, d.tipo) };
 }
