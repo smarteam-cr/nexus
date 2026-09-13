@@ -3404,9 +3404,14 @@ model GastoPuntual {
 //
 // Misma línea dura que el resto del módulo: registro de CONTROL, no contabilidad
 // (sin asiento, sin impuestos, sin conciliación); CRC y USD jamás se suman.
+//
+// ⚠ ETAPA 10 (2026-09-12): lo registrado acá NO ES VENTA. El reporte de equilibrio lo
+// suma a la caja y a nada más: ni a lo facturado, ni a los ingresos, ni a la brecha, ni
+// al % de cobranza (lib/cobranza/ingresos-no-venta.ts). Nació por el fondo de marketing
+// de Insider, que entró al banco sin ser venta a un cliente.
 model IngresoVariable {
   id       String         @id @default(cuid())
-  concepto String // qué fue ("Rescate deuda 2025", "Reembolso de licencia")
+  concepto String // qué fue ("Fondo de marketing de Insider", "Reembolso de licencia")
   monto    Decimal        @db.Decimal(12, 2)
   moneda   CobranzaMoneda
   fecha    DateTime       @db.Date // día en que entró la plata
@@ -3416,6 +3421,16 @@ model IngresoVariable {
   // registro de que esa plata entró — el ingreso queda sin dueño y visible.
   clientId String?
   client   Client? @relation("IngresosVariablesDeCliente", fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Qué clase de plata es. null = sin clasificar (el reporte la lista en «Lo que no
+  // cuadra»). ⚠ String y no enum: el nombre de la categoría del fondo de aliado está
+  // pendiente, y sumarlo no puede exigir un ALTER TYPE. Los valores válidos los fija
+  // la app (CATEGORIAS_INGRESO_NO_VENTA); uno desconocido se lee como sin clasificar.
+  categoria         String?
+  // El número del documento o del depósito (INV-26), normalizado. El alta frena el
+  // mismo número ya cargado como factura de un cobro; INV35 vigila el dato.
+  // scripts/sql/2026-09-12-10-ingreso-no-venta.sql
+  referenciaExterna String?
 
   notas         String? @db.Text
   registradoPor String // email del guard que lo registró (trazabilidad, como confirmadoPor)

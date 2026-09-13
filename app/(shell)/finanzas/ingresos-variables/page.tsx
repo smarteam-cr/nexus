@@ -26,7 +26,7 @@ export default async function IngresosVariablesPage() {
   // configuradas: un ingreso variable no exige servicio contratado (y puede no
   // tener cliente del todo). CS_CLIENT_WHERE es el filtro único de "esto es un
   // cliente" — no se escribe `kind` a mano.
-  const [filas, clientes] = await Promise.all([
+  const [ingresos, clientes] = await Promise.all([
     loadIngresosVariables(todayISO),
     prisma.client.findMany({
       where: { ...CS_CLIENT_WHERE },
@@ -38,7 +38,8 @@ export default async function IngresosVariablesPage() {
   return (
     <div className={SHELL_DEFAULT}>
       <IngresosVariablesPanel
-        filas={filas}
+        filas={ingresos.filas}
+        esquemaAtrasado={ingresos.esquemaAtrasado}
         clientes={clientes}
         todayISO={todayISO}
         umbralRescateDias={RESCATE_UMBRAL_DIAS}

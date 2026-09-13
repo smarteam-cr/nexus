@@ -17,7 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34,
+  INV31, INV32, INV33, INV34, INV35,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -468,6 +468,42 @@ describe("cobranza: INV33 e INV34 (el número de factura, etapa 7)", () => {
   });
 });
 
+describe("finanzas: INV35 (una factura no es cobro y plata que no es venta a la vez, etapa 10)", () => {
+  const cobroDe = (numeroFactura: string, name: string) => ({ numeroFactura, cuenta: { client: { name } } });
+
+  it("el mismo documento en Ingresos variables y en un cobro viola, y nombra los dos lados", async () => {
+    const llamadas: Llamada[] = [];
+    const r = await INV35.correr(
+      baseFalsa(
+        {
+          ingresoVariable: [{ referenciaExterna: "INV-26", concepto: "Fondo de marketing de Insider" }],
+          cobro: [cobroDe("INV-26", "Insider"), cobroDe("FAC/2026/0206", "Global Supply")],
+        },
+        llamadas,
+      ),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("1 documento(s) están cargados como cobro y como plata que no es venta");
+    expect(r.lineas[0]).toContain("INV-26: «Fondo de marketing de Insider» en Ingresos variables · cobro de Insider");
+    // La base falsa ignora el where: que FAC/2026/0206 no aparezca prueba que el invariante vuelve a mirar.
+    expect(r.lineas[0]).not.toContain("Global Supply");
+    expect(where(llamadas, "ingresoVariable").referenciaExterna).toEqual({ not: null });
+    expect(where(llamadas, "cobro").numeroFactura).toEqual({ in: ["INV-26"] });
+  });
+
+  it("sin choque cumple; sin referencias ni pregunta por los cobros", async () => {
+    const sana = await INV35.correr(
+      baseFalsa({ ingresoVariable: [{ referenciaExterna: "INV-27", concepto: "Fondo" }], cobro: [cobroDe("INV-26", "Insider")] }),
+      AHORA,
+    );
+    expect(sana.ok).toBe(true);
+    const llamadas: Llamada[] = [];
+    expect((await INV35.correr(baseFalsa({ ingresoVariable: [] }, llamadas), AHORA)).ok).toBe(true);
+    expect(llamadas.some((l) => l.modelo === "cobro")).toBe(false);
+  });
+});
+
 const RAIZ = process.cwd();
 const soloCodigo = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
@@ -475,12 +511,12 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 23 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 24 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
-       33 y 34, el número de factura (etapa 7). */
+       33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
       "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
-      "33", "34",
+      "33", "34", "35",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -528,7 +564,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("23 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("24 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

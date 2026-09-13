@@ -9,6 +9,7 @@ import { z } from "zod";
 import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
 import { MOTIVO_REVERSION_MIN } from "./reversion-cobro";
 import { MOTIVO_SIN_NUMERO_MAX, NUMERO_FACTURA_MAX } from "./numero-factura";
+import { CATEGORIAS_INGRESO_NO_VENTA, REFERENCIA_EXTERNA_MAX } from "./ingresos-no-venta";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -378,6 +379,11 @@ export const ingresoVariableCreateSchema = z.object({
   // null / ausente = ingreso general, sin cliente.
   clientId: idDeBase.nullable().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
+  // Etapa 10: lo registrado acá no es venta. null / ausente = sin clasificar, y el reporte de
+  // equilibrio lo lista en «Lo que no cuadra» (el nombre del fondo de aliado está pendiente).
+  categoria: z.enum(CATEGORIAS_INGRESO_NO_VENTA).nullable().optional(),
+  // Número del documento o del depósito. Se normaliza al guardar, por eso el tope crudo es holgado.
+  referenciaExterna: z.string().trim().max(REFERENCIA_EXTERNA_MAX * 2).nullable().optional(),
 });
 
 export const ingresoVariablePatchSchema = ingresoVariableCreateSchema.partial();

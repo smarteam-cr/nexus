@@ -158,6 +158,12 @@ export interface EstadoParaAuditar {
   tarjetaYHerramientas: { hay: boolean; periodos: string[] };
   /** Los dos criterios de reserva de aguinaldo, si difieren. */
   aguinaldo: { segunNexus: number; segunExcel: number } | null;
+  /**
+   * La plata del año que entró sin ser venta (Ingresos variables) y no dice qué es. `monto` en la
+   * moneda del reporte; lo que no se pudo convertir va en la nota de su ítem y no suma.
+   * null = la base todavía no tiene la columna de la categoría: falta el SQL de la etapa 10.
+   */
+  ingresosSinCategoria: { cuantas: number; monto: number; items: ItemInconsistencia[] } | null;
   /** Hoy, "YYYY-MM-DD". Entra por parámetro: este módulo no lee el reloj. */
   hoyISO: string;
 }
@@ -499,6 +505,41 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       queHacer: "Confirmar qué empresas son del mismo grupo y ligarlas, para que la venta y su facturación se encuentren.",
       resuelve: "COBRANZA",
       items: e.facturaDeGrupo.items,
+    });
+  }
+
+  // ── Plata que no es venta, sin clasificar ───────────────────────────────────
+  // Ya está fuera de lo facturado y del piso, y lo que entró suma a la caja: lo que falta es decir
+  // QUÉ es. Sin eso, el año no se puede leer por concepto y la pregunta abierta queda escondida.
+  if (e.ingresosSinCategoria === null) {
+    out.push({
+      codigo: "INGRESO_SIN_CATEGORIA",
+      severidad: "MEDIA",
+      titulo: "No se puede revisar la categoría de la plata que no es venta",
+      detalle:
+        "La base todavía no tiene la columna de la categoría de Ingresos variables, así que esta lista no puede " +
+        "decir cuáles falta clasificar. Lo que ya entró sí está en la caja del reporte.",
+      montoEnJuego: null,
+      queHacer: "Aplicar scripts/sql/2026-09-12-10-ingreso-no-venta.sql.",
+      resuelve: "SISTEMA",
+      items: [],
+    });
+  } else if (e.ingresosSinCategoria.cuantas > 0) {
+    const x = e.ingresosSinCategoria;
+    out.push({
+      codigo: "INGRESO_SIN_CATEGORIA",
+      severidad: "MEDIA",
+      titulo: "Plata que entró sin ser venta y no dice qué es",
+      detalle:
+        `${x.cuantas} ingreso(s) de Ingresos variables no tienen categoría. Ya están fuera de lo facturado, del ` +
+        "% de cobranza y del punto de equilibrio, y lo que entró suma a la caja: lo que falta es el nombre. " +
+        "Un ingreso sin categoría es una pregunta abierta, no un error de carga.",
+      montoEnJuego: x.monto,
+      queHacer:
+        "Elegirle la categoría en Finanzas › Ingresos variables. Si ninguna le queda —como el fondo de marketing " +
+        "de un aliado—, la categoría nueva la decide Dirección y se suma al catálogo.",
+      resuelve: "DIRECCION",
+      items: x.items,
     });
   }
 

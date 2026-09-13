@@ -7,16 +7,27 @@
  *
  * ⚠ Por qué no reusa `RegistrarPagoManualDialog`: ese crea un `Cobro`, y el
  * schema de Cobro exige `servicioId` y `cuentaId` OBLIGATORIOS — o sea, exige
- * cliente Y servicio configurado. Un ingreso "de forma general" (una comisión
- * suelta, un reembolso, una venta puntual sin contrato) no entra ahí sin
- * inventarle un servicio fantasma que ensuciaría cartera, semáforo y proyección.
- * Por eso el cliente acá es OPCIONAL.
+ * cliente Y servicio configurado. Un ingreso "de forma general" (un reembolso, el
+ * fondo de marketing de un aliado) no entra ahí sin inventarle un servicio
+ * fantasma que ensuciaría cartera, semáforo y proyección. Por eso el cliente acá
+ * es OPCIONAL.
+ *
+ * ⚠ Desde la etapa 10 lo que se registra acá NO ES VENTA: el reporte de equilibrio
+ * lo suma a la caja y a nada más. Por eso el formulario pide la categoría (sin
+ * clasificar es válido y queda a la vista) y ya no ofrece «venta puntual».
  *
  * Drawer presentacional: al guardar llama onSaved() y el contenedor re-fetchea.
  */
 import { useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { IngresoVariableRow } from "@/lib/cobranza";
+import {
+  CATEGORIAS_INGRESO_NO_VENTA,
+  CATEGORIA_INGRESO_LABEL,
+  REFERENCIA_EXTERNA_MAX,
+  SIN_CATEGORIA_LABEL,
+  esCategoriaIngreso,
+} from "@/lib/cobranza/ingresos-no-venta";
 import { Drawer } from "@/components/ui";
 import { INPUT_CLS, SELECT_CLS, LABEL_CLS } from "@/components/cobranza/format";
 
@@ -42,6 +53,11 @@ export default function IngresoVariableForm({
   const [fecha, setFecha] = useState(ingreso?.fechaCobro ?? todayISO);
   const [clientId, setClientId] = useState(ingreso?.clientId ?? "");
   const [notas, setNotas] = useState(ingreso?.notas ?? "");
+  // Una categoría que el catálogo ya no tiene arranca en «sin clasificar»: mandarla de vuelta daría 400.
+  const [categoria, setCategoria] = useState<string>(
+    ingreso && esCategoriaIngreso(ingreso.categoria) ? ingreso.categoria : "",
+  );
+  const [referencia, setReferencia] = useState(ingreso?.referenciaExterna ?? "");
   const [saving, setSaving] = useState(false);
   const [borrando, setBorrando] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -61,6 +77,8 @@ export default function IngresoVariableForm({
       fecha,
       clientId: clientId || null, // "" = ingreso general, sin cliente
       notas: notas.trim() ? notas.trim() : null,
+      categoria: categoria || null, // "" = sin clasificar
+      referenciaExterna: referencia.trim() ? referencia.trim() : null,
     };
     try {
       if (ingreso) {
@@ -105,7 +123,7 @@ export default function IngresoVariableForm({
       open={true}
       onClose={onClose}
       title={ingreso ? "Editar ingreso" : "Registrar ingreso"}
-      description="Plata que entró fuera del ciclo quincenal, sin servicio contratado detrás."
+      description="Plata que entró y no es venta: suma a la caja, no a lo facturado ni al punto de equilibrio."
       footer={
         <>
           {/* El boton se queda MONTADO y deshabilitado: cambiarlo por un span
@@ -145,11 +163,26 @@ export default function IngresoVariableForm({
           <input
             value={concepto}
             onChange={(e) => setConcepto(e.target.value)}
-            placeholder="Ej. Reembolso, venta puntual, cuenta rescatada…"
+            placeholder="Ej. Fondo de marketing de un aliado, reembolso de una licencia…"
             maxLength={160}
             className={INPUT_CLS}
             autoFocus
           />
+        </div>
+
+        <div>
+          <label className={LABEL_CLS}>Categoría</label>
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={SELECT_CLS}>
+            <option value="">{SIN_CATEGORIA_LABEL}</option>
+            {CATEGORIAS_INGRESO_NO_VENTA.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORIA_INGRESO_LABEL[c]}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-fg-muted mt-1">
+            Si ninguna le queda, dejalo sin clasificar: el punto de equilibrio lo lista para ponerle nombre.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -189,6 +222,20 @@ export default function IngresoVariableForm({
         </div>
 
         <div>
+          <label className={LABEL_CLS}>Número de factura o de depósito (opcional)</label>
+          <input
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            placeholder="Ej. INV-26"
+            maxLength={REFERENCIA_EXTERNA_MAX}
+            className={INPUT_CLS}
+          />
+          <p className="text-[11px] text-fg-muted mt-1">
+            Con el número, Nexus frena la misma factura si ya está cargada como cobro.
+          </p>
+        </div>
+
+        <div>
           <label className={LABEL_CLS}>Cliente (opcional)</label>
           <select
             value={clientId}
@@ -221,7 +268,8 @@ export default function IngresoVariableForm({
 
         {/* La regla que evita el doble conteo, dicha donde se decide. */}
         <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-[11px] text-fg-muted">
-          Si la plata vino de un <strong className="text-fg-secondary">servicio contratado</strong>,
+          Lo que se registra acá <strong className="text-fg-secondary">no es venta</strong>. Si la
+          plata vino de una venta o de un <strong className="text-fg-secondary">servicio contratado</strong>,
           no va acá: se registra como pago en Cobranza y aparece solo en esta lista.
         </div>
 

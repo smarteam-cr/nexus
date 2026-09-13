@@ -36,6 +36,7 @@ const limpio = (): EstadoParaAuditar => ({
   desviosDeCambio: [],
   tarjetaYHerramientas: { hay: false, periodos: [] },
   aguinaldo: null,
+  ingresosSinCategoria: { cuantas: 0, monto: 0, items: [] },
 });
 
 describe("nada roto = lista vacía", () => {
@@ -317,6 +318,39 @@ describe("la lista fina nunca se trunca", () => {
     const x = detectarInconsistencias(e).find((i) => i.codigo === "VENTAS_SIN_COBRANZA")!;
     expect(x.items[0]!.monto).toBe(26_200);
     expect(x.items[0]!.enlaces![0]!.url).toContain("/deal/2");
+  });
+});
+
+describe("la plata que no es venta, sin categoría (etapa 10)", () => {
+  const mdf = {
+    texto: "Fondo de marketing de Insider",
+    monto: 5_346.91,
+    nota: "entró el 2026-07-07 · ref. INV-26 · sin cliente",
+  };
+
+  it("sale con su monto y la decide Dirección: el nombre de la categoría es la pregunta abierta", () => {
+    const e = { ...limpio(), ingresosSinCategoria: { cuantas: 1, monto: 5_346.91, items: [mdf] } };
+    const x = detectarInconsistencias(e).find((i) => i.codigo === "INGRESO_SIN_CATEGORIA")!;
+    expect(x.montoEnJuego).toBe(5_346.91);
+    expect(x.resuelve).toBe("DIRECCION");
+    expect(x.items).toEqual([mdf]);
+    // Que no se lea como plata que falta cobrar: ya está afuera de lo facturado y en la caja.
+    expect(x.detalle).toContain("fuera de lo facturado");
+  });
+
+  it("clasificada, desaparece", () => {
+    const e = { ...limpio(), ingresosSinCategoria: { cuantas: 0, monto: 0, items: [] } };
+    expect(detectarInconsistencias(e).some((i) => i.codigo === "INGRESO_SIN_CATEGORIA")).toBe(false);
+  });
+
+  it("sin el SQL de la etapa 10 no calla: pide aplicarlo, sin monto y a cargo del sistema", () => {
+    // Una lista que no puede mirar y no lo dice se lee como «todo clasificado».
+    const x = detectarInconsistencias({ ...limpio(), ingresosSinCategoria: null }).find(
+      (i) => i.codigo === "INGRESO_SIN_CATEGORIA",
+    )!;
+    expect(x.resuelve).toBe("SISTEMA");
+    expect(x.montoEnJuego).toBeNull();
+    expect(x.queHacer).toContain("2026-09-12-10-ingreso-no-venta.sql");
   });
 });
 

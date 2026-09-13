@@ -79,6 +79,7 @@ import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
+  convertir,
   sumarPorClienteEnPresentacion,
   tipoIngresoDeCobro,
   type CobroDeCliente,
@@ -100,6 +101,8 @@ import {
   type TotalDeBucket,
 } from "./partners";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
+import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import {
   devengarComisiones,
   POLITICA_PAGO_COMISION,
@@ -1003,6 +1006,66 @@ export interface IngresoVariableRow {
   notas: string | null;
   /** Solo en REGISTRADO: quién lo cargó. */
   registradoPor: string | null;
+  /**
+   * Solo en REGISTRADO: qué clase de plata que no es venta (CATEGORIAS_INGRESO_NO_VENTA).
+   * null = sin clasificar. En los derivados siempre null: vienen de un cobro, son venta.
+   */
+  categoria: string | null;
+  /** Solo en REGISTRADO: el número del documento o del depósito (INV-26). */
+  referenciaExterna: string | null;
+}
+
+export interface IngresosVariablesDTO {
+  filas: IngresoVariableRow[];
+  /**
+   * true = la base todavía no tiene la categoría ni la referencia (falta
+   * scripts/sql/2026-09-12-10-ingreso-no-venta.sql). La pantalla lo dice en vez de caerse.
+   */
+  esquemaAtrasado: boolean;
+}
+
+/** Lo que se lee de un `IngresoVariable` sin contar las columnas de la etapa 10. */
+const SELECT_INGRESO_VARIABLE = {
+  id: true,
+  concepto: true,
+  monto: true,
+  moneda: true,
+  fecha: true,
+  notas: true,
+  registradoPor: true,
+  clientId: true,
+  client: { select: { name: true } },
+} satisfies Prisma.IngresoVariableSelect;
+
+/**
+ * Las filas de `IngresoVariable`, con su categoría y su referencia.
+ *
+ * ⚠ Si el código llega antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql, relee sin esas dos
+ * columnas y lo marca: Ingresos variables y el reporte de equilibrio siguen andando y lo avisan.
+ * Cualquier otro error sube.
+ */
+async function leerIngresosVariables(
+  where: Prisma.IngresoVariableWhereInput,
+): Promise<{
+  filas: Array<Prisma.IngresoVariableGetPayload<{ select: typeof SELECT_INGRESO_VARIABLE }> & {
+    categoria: string | null;
+    referenciaExterna: string | null;
+  }>;
+  esquemaAtrasado: boolean;
+}> {
+  const orderBy: Prisma.IngresoVariableOrderByWithRelationInput[] = [{ fecha: "desc" }, { createdAt: "desc" }];
+  try {
+    const filas = await prisma.ingresoVariable.findMany({
+      where,
+      select: { ...SELECT_INGRESO_VARIABLE, categoria: true, referenciaExterna: true },
+      orderBy,
+    });
+    return { filas, esquemaAtrasado: false };
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) throw e;
+    const filas = await prisma.ingresoVariable.findMany({ where, select: SELECT_INGRESO_VARIABLE, orderBy });
+    return { filas: filas.map((f) => ({ ...f, categoria: null, referenciaExterna: null })), esquemaAtrasado: true };
+  }
 }
 
 /**
@@ -1011,31 +1074,20 @@ export interface IngresoVariableRow {
  *  1. `IngresoVariable` (REGISTRADO) — filas propias, cargadas desde la pantalla.
  *     Es la única vía para un ingreso SIN servicio contratado detrás, o sin
  *     cliente. No pueden ser un `Cobro`: ese exige servicioId + cuentaId.
+ *     ⚠ Desde la etapa 10 NO SON VENTA: el reporte de equilibrio las suma a la caja
+ *     y a nada más.
  *  2. `Cobro` ya COBRADO que entró fuera de ritmo (solo lectura acá):
  *     - `origen = MANUAL`: pago fuera de plan sobre un servicio existente.
  *     - atraso > RESCATE_UMBRAL_DIAS: salió de un plan pero entró muchísimo después.
  *
  * ⚠ NO hay doble conteo por construcción: un `IngresoVariable` nunca es un `Cobro`
- * y viceversa. La regla para la persona (dicha en la UI): si la plata vino de un
- * servicio contratado, se registra en Cobranza; acá van las que no.
+ * y viceversa. La regla para la persona (dicha en la UI): si la plata vino de una
+ * venta o de un servicio contratado, se registra en Cobranza; acá va la que no es venta.
  */
-export async function loadIngresosVariables(todayISO: string): Promise<IngresoVariableRow[]> {
+export async function loadIngresosVariables(todayISO: string): Promise<IngresosVariablesDTO> {
   void todayISO; // la ventana la define fechaCobro de cada fila, no el día de hoy
 
-  const registrados = await prisma.ingresoVariable.findMany({
-    select: {
-      id: true,
-      concepto: true,
-      monto: true,
-      moneda: true,
-      fecha: true,
-      notas: true,
-      registradoPor: true,
-      clientId: true,
-      client: { select: { name: true } },
-    },
-    orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
-  });
+  const { filas: registrados, esquemaAtrasado } = await leerIngresosVariables({});
 
   const cobros = await prisma.cobro.findMany({
     where: { estado: "COBRADO", fechaCobro: { not: null }, cuenta: { excluidaOperacion: false } },
@@ -1066,6 +1118,8 @@ export async function loadIngresosVariables(todayISO: string): Promise<IngresoVa
     tipo: "REGISTRADO",
     notas: r.notas,
     registradoPor: r.registradoPor,
+    categoria: r.categoria,
+    referenciaExterna: r.referenciaExterna,
   }));
 
   for (const c of cobros) {
@@ -1090,12 +1144,14 @@ export async function loadIngresosVariables(todayISO: string): Promise<IngresoVa
       tipo: esManual ? "MANUAL" : "RESCATE",
       notas: c.notas,
       registradoPor: null,
+      categoria: null,
+      referenciaExterna: null,
     });
   }
 
   // Orden único por fecha de entrada, mezclando ambos orígenes.
   filas.sort((a, b) => (a.fechaCobro < b.fechaCobro ? 1 : a.fechaCobro > b.fechaCobro ? -1 : 0));
-  return filas;
+  return { filas, esquemaAtrasado };
 }
 
 // ── Comisiones de PARTNER (ingreso — superficie ADMIN, gate cobranza.read) ──────
@@ -2257,7 +2313,7 @@ export async function loadReporteAnual(
   const hasta = dayUTC(`${anio}-12-31`);
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
 
-  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos, filasVenta] =
+  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos, filasVenta, filasNoVenta] =
     await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
@@ -2320,6 +2376,12 @@ export async function loadReporteAnual(
         fechaCierre: { gte: desde, lte: hasta },
       },
       select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true },
+    }),
+    // La plata que entró y no es venta (etapa 10). Solo columnas anteriores a la etapa: el reporte no
+    // se cae si el código llega antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql.
+    prisma.ingresoVariable.findMany({
+      where: { fecha: { gte: desde, lte: hasta } },
+      select: { fecha: true, monto: true, moneda: true },
     }),
   ]);
 
@@ -2429,6 +2491,15 @@ export async function loadReporteAnual(
       esProyeccion: c.montoEsProyeccion,
     });
   }
+
+  // Lo registrado en Ingresos variables NO es venta: el motor lo suma a la caja y a nada más.
+  ingresos.push(
+    ...ingresosNoVentaDelAnio(
+      filasNoVenta.map((f) => ({ fechaISO: isoDay(f.fecha)!, monto: num(f.monto)!, moneda: f.moneda as MonedaEq })),
+      anio,
+      hoyISO,
+    ),
+  );
 
   const tasas: TasaDeMes[] = filasTasa.map((t) => ({
     periodo: t.periodo,
@@ -2732,6 +2803,27 @@ async function armarEstadoParaAuditar(
   const avisoMoneda = reporte.calidad.avisos.find((a) => a.codigo === "MONEDA_INFERIDA");
   const reservaNexus = reporte.equilibrio.reservaAguinaldoMensual;
 
+  // La plata del año que entró sin ser venta y no dice qué es (etapa 10). Cada fila con la tasa de SU
+  // mes, igual que lo facturado de cada cliente. Sin el SQL de la categoría, null: la lista lo dice.
+  const tasaDeMes = new Map(reporte.fx.tasas.map((t) => [t.periodo, t]));
+  const noVenta = await leerIngresosVariables({ fecha: { gte: desde, lte: hasta } });
+  const ingresosSinCategoria = noVenta.esquemaAtrasado
+    ? null
+    : pendientesDeClasificar(
+        noVenta.filas.map((f) => ({
+          fechaISO: isoDay(f.fecha)!,
+          monto: num(f.monto)!,
+          moneda: f.moneda as MonedaEq,
+          concepto: f.concepto,
+          categoria: f.categoria,
+          referenciaExterna: f.referenciaExterna,
+          clienteNombre: f.client?.name ?? null,
+        })),
+        (monto, moneda, periodo) =>
+          convertir(monto, moneda, reporte.monedaPresentacion, tasaDeMes.get(periodo) ?? null)?.monto ?? null,
+        [{ etiqueta: "Ingresos variables", url: "/finanzas/ingresos-variables" }],
+      );
+
   return {
     anio,
     hoyISO,
@@ -2839,6 +2931,7 @@ async function armarEstadoParaAuditar(
             segunExcel: Math.round(((reservaNexus * divisorAguinaldo) / 10) * 100) / 100,
           }
         : null,
+    ingresosSinCategoria,
   };
 }
 

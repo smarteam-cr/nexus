@@ -29,6 +29,8 @@ import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
+import { mensajeReferenciaYaEsCobro, normalizarReferenciaExterna } from "./ingresos-no-venta";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
 import { montoEsProyeccionPara } from "./comisiones-partner";
 import {
@@ -2068,29 +2070,60 @@ export async function deletePagoPlanilla(pagoId: string) {
 // `cambiarEstadoCobro` porque NO son cobros: no hay factura, ni crédito, ni
 // semáforo, ni INV3 que sostener. `registradoPor` deja la trazabilidad (mismo
 // espíritu que confirmadoPor).
+// ⚠ Desde la etapa 10 lo registrado acá NO ES VENTA (lib/cobranza/ingresos-no-venta.ts).
+
+/** El 503 cuando el código llegó antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql. */
+const FALTA_SQL_INGRESO_NO_VENTA =
+  "La base todavía no tiene la categoría ni la referencia de los ingresos: falta aplicar scripts/sql/2026-09-12-10-ingreso-no-venta.sql. No se guardó nada.";
+
+/**
+ * Normaliza la referencia y frena la plata contada dos veces: si el mismo número ya es la factura de
+ * un cobro, esa plata ya está en lo facturado. El orden inverso (marcar facturado con un número ya
+ * cargado acá) no pasa por esta función: lo vigila INV35.
+ */
+async function referenciaSinDobleConteo(texto: string | null | undefined): Promise<string | null> {
+  const referencia = normalizarReferenciaExterna(texto);
+  if (!referencia) return null;
+  const cobro = await prisma.cobro.findFirst({
+    where: { numeroFactura: referencia },
+    select: { cuenta: { select: { client: { select: { name: true } } } } },
+  });
+  if (cobro) throw new CobranzaError(mensajeReferenciaYaEsCobro(referencia, cobro.cuenta.client.name), 409);
+  return referencia;
+}
 
 export async function createIngresoVariable(
   data: z.infer<typeof ingresoVariableCreateSchema>,
   byEmail: string,
 ) {
-  return prisma.ingresoVariable.create({
-    data: {
-      concepto: data.concepto,
-      monto: data.monto,
-      moneda: data.moneda,
-      fecha: dayUTC(data.fecha),
-      clientId: data.clientId ?? null,
-      notas: data.notas ?? null,
-      registradoPor: byEmail,
-    },
-    select: { id: true },
-  });
+  const referenciaExterna = await referenciaSinDobleConteo(data.referenciaExterna);
+  try {
+    return await prisma.ingresoVariable.create({
+      data: {
+        concepto: data.concepto,
+        monto: data.monto,
+        moneda: data.moneda,
+        fecha: dayUTC(data.fecha),
+        clientId: data.clientId ?? null,
+        notas: data.notas ?? null,
+        categoria: data.categoria ?? null,
+        referenciaExterna,
+        registradoPor: byEmail,
+      },
+      select: { id: true },
+    });
+  } catch (e) {
+    if (esquemaDesactualizado(e)) throw new CobranzaError(FALTA_SQL_INGRESO_NO_VENTA, 503);
+    throw e;
+  }
 }
 
 export async function updateIngresoVariable(
   ingresoId: string,
   data: z.infer<typeof ingresoVariablePatchSchema>,
 ) {
+  const referenciaExterna =
+    data.referenciaExterna !== undefined ? await referenciaSinDobleConteo(data.referenciaExterna) : undefined;
   try {
     return await prisma.ingresoVariable.update({
       where: { id: ingresoId },
@@ -2101,10 +2134,14 @@ export async function updateIngresoVariable(
         ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
         ...(data.clientId !== undefined ? { clientId: data.clientId ?? null } : {}),
         ...(data.notas !== undefined ? { notas: data.notas ?? null } : {}),
+        ...(data.categoria !== undefined ? { categoria: data.categoria ?? null } : {}),
+        ...(referenciaExterna !== undefined ? { referenciaExterna } : {}),
       },
       select: { id: true },
     });
-  } catch {
+  } catch (e) {
+    // Sin el SQL, un 404 mandaría a buscar un ingreso que sí existe.
+    if (esquemaDesactualizado(e)) throw new CobranzaError(FALTA_SQL_INGRESO_NO_VENTA, 503);
     throw new CobranzaError("No se encontró el ingreso", 404);
   }
 }

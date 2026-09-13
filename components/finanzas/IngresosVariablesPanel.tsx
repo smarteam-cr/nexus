@@ -6,9 +6,10 @@
  * La plata que entró FUERA del ciclo quincenal. Tiene DOS orígenes y por eso
  * hay tres tipos de fila:
  *  · REGISTRADO — se dio de alta acá (tabla `IngresoVariable`): puede estar
- *    relacionado con un cliente o ser GENERAL. Es lo único editable.
+ *    relacionado con un cliente o ser GENERAL. Es lo único editable. Desde la
+ *    etapa 10 NO ES VENTA: lleva categoría, y sin ella queda marcado.
  *  · MANUAL / RESCATE — DERIVADOS de cobros que ya existen (pago fuera de plan,
- *    o cuenta rescatada que entró con mucho atraso). Se editan en Cobranza.
+ *    o cuenta rescatada que entró con mucho atraso). Son venta y se editan en Cobranza.
  *
  * No hay doble conteo por construcción: un `IngresoVariable` nunca es un `Cobro`.
  * La regla para la persona está dicha en el banner y en el alta.
@@ -16,8 +17,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EmptyState, PageHeader, Table, type TableColumn } from "@/components/ui";
+import { Alert, EmptyState, PageHeader, Table, type TableColumn } from "@/components/ui";
 import type { IngresoVariableRow } from "@/lib/cobranza";
+import { esCategoriaIngreso, etiquetaDeCategoria } from "@/lib/cobranza/ingresos-no-venta";
 import { fmtMonto, fmtFecha } from "@/components/cobranza/format";
 import IngresoVariableForm from "./IngresoVariableForm";
 
@@ -58,11 +60,14 @@ function totalesPorMoneda(filas: IngresoVariableRow[]): Record<string, number> {
 
 export default function IngresosVariablesPanel({
   filas,
+  esquemaAtrasado,
   clientes,
   todayISO,
   umbralRescateDias,
 }: {
   filas: IngresoVariableRow[];
+  /** Falta scripts/sql/2026-09-12-10-ingreso-no-venta.sql: se lee, pero no se puede guardar. */
+  esquemaAtrasado: boolean;
   /** Para relacionar el ingreso con un cliente — opcional en el alta. */
   clientes: Array<{ id: string; name: string }>;
   todayISO: string;
@@ -85,6 +90,11 @@ export default function IngresosVariablesPanel({
       MANUAL: filas.filter((f) => f.tipo === "MANUAL").length,
       RESCATE: filas.filter((f) => f.tipo === "RESCATE").length,
     }),
+    [filas],
+  );
+  /** Los registrados que no dicen qué plata son. El punto de equilibrio los lista en «Lo que no cuadra». */
+  const sinClasificar = useMemo(
+    () => filas.filter((f) => f.tipo === "REGISTRADO" && !esCategoriaIngreso(f.categoria)).length,
     [filas],
   );
 
@@ -113,7 +123,34 @@ export default function IngresosVariablesPanel({
       sortValue: (r) => r.concepto,
       width: "w-44",
       hideOnMobile: true,
-      render: (r) => <span className="text-fg-secondary truncate block">{r.concepto}</span>,
+      render: (r) => (
+        <span className="block min-w-0">
+          <span className="text-fg-secondary truncate block">{r.concepto}</span>
+          {r.referenciaExterna && (
+            <span className="text-[10px] text-fg-muted truncate block">{r.referenciaExterna}</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "categoria",
+      header: "Categoría",
+      sortValue: (r) => (r.tipo === "REGISTRADO" ? etiquetaDeCategoria(r.categoria) : null),
+      width: "w-40",
+      hideOnMobile: true,
+      render: (r) =>
+        r.tipo !== "REGISTRADO" ? (
+          // Viene de un cobro: es venta, no lleva categoría de plata que no es venta.
+          <span className="text-xs text-fg-muted" title="Viene de un cobro: es venta">
+            —
+          </span>
+        ) : esCategoriaIngreso(r.categoria) ? (
+          <span className="text-fg-secondary truncate block">{etiquetaDeCategoria(r.categoria)}</span>
+        ) : (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap border-warn-line bg-warn-surface text-warn-ink">
+            {etiquetaDeCategoria(r.categoria)}
+          </span>
+        ),
     },
     {
       key: "tipo",
@@ -197,7 +234,7 @@ export default function IngresosVariablesPanel({
     <div>
       <PageHeader
         title="Ingresos variables"
-        description="Cuentas rescatadas y pagos puntuales — lo que entró fuera del flujo constante de cobranza. Las comisiones de aliados van en Comisiones de partner."
+        description="La plata que entró y no es venta, junto a los pagos puntuales y rescates que vienen de Cobranza. Las comisiones de aliados van en Comisiones de partner."
         action={
           <button
             type="button"
@@ -214,15 +251,32 @@ export default function IngresosVariablesPanel({
         <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
           Dinero que entró fuera del ciclo quincenal. Los{" "}
           <strong className="text-fg-secondary">registrados</strong> se dan de alta acá (con cliente
-          o generales, sin servicio contratado detrás). Los{" "}
+          o generales) y <strong className="text-fg-secondary">no son venta</strong>: suman a la caja,
+          no a lo facturado ni al punto de equilibrio. Los{" "}
           <strong className="text-fg-secondary">pagos puntuales</strong> y los{" "}
           <strong className="text-fg-secondary">rescatados</strong> (entraron con más de{" "}
-          {umbralRescateDias} días de atraso) aparecen solos desde{" "}
+          {umbralRescateDias} días de atraso) son venta y aparecen solos desde{" "}
           <Link href="/cobranza" className="text-brand hover:underline">
             Cobranza
           </Link>
           .
         </div>
+
+        {esquemaAtrasado && (
+          <Alert variant="warning" title="Todavía no se pueden guardar ingresos">
+            Falta aplicar scripts/sql/2026-09-12-10-ingreso-no-venta.sql: la lista se ve, pero registrar o
+            editar un ingreso no va a guardar nada hasta que esté.
+          </Alert>
+        )}
+
+        {sinClasificar > 0 && (
+          <p className="text-xs text-warn-ink">
+            {sinClasificar === 1
+              ? "1 ingreso registrado no tiene categoría."
+              : `${sinClasificar} ingresos registrados no tienen categoría.`}{" "}
+            El punto de equilibrio lo lista en «Lo que no cuadra» hasta que alguien le ponga nombre.
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTROS.map(([k, lbl]) => (
@@ -258,7 +312,10 @@ export default function IngresosVariablesPanel({
           rowKey={(r) => r.id}
           search={{
             placeholder: "Busca por cliente o concepto…",
-            getText: (r) => `${r.clienteNombre ?? "general"} ${r.concepto}`,
+            getText: (r) =>
+              `${r.clienteNombre ?? "general"} ${r.concepto} ${r.referenciaExterna ?? ""} ${
+                r.tipo === "REGISTRADO" ? etiquetaDeCategoria(r.categoria) : ""
+              }`,
           }}
           initialSort={{ key: "fechaCobro", dir: "desc" }}
           // El vacío habla del conjunto que se está mirando, no del total: con

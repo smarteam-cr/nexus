@@ -77,6 +77,7 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
   // Sube cuando una acción de arriba reescribe la columna entera. Es lo único que puede
   // pisar lo que alguien está tecleando.
   const [generacion, setGeneracion] = useState(0);
+  const hayNoVenta = meses.some((m) => m.noVenta > 0);
   const enBloque = (fn: () => void) => () => {
     fn();
     setGeneracion((g) => g + 1);
@@ -127,6 +128,9 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
               <th className={`${TH_CLS} text-right`}>Cobrado</th>
               <th className={`${TH_CLS} text-right`}>Por cobrar</th>
               <th className={`${TH_CLS} text-right`}>Partnership</th>
+              {/* Solo aparece si el año tiene plata que no es venta: una columna de rayas en los
+                  doce meses ensancharía la tabla para no decir nada. */}
+              {hayNoVenta && <th className={`${TH_CLS} text-right`}>No es venta</th>}
               <th className={`${TH_CLS} text-right`}>Ingresos totales</th>
               <th className={`${TH_CLS} text-right`}>Brecha</th>
               <th className={TH_CLS}>Estado</th>
@@ -135,7 +139,7 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
           </thead>
           <tbody className="divide-y divide-line">
             {meses.map((m) => {
-              const sinDato = m.egresos === 0 && m.facturado === 0 && m.partnership === 0;
+              const sinDato = m.egresos === 0 && m.facturado === 0 && m.partnership === 0 && m.noVenta === 0;
               return (
                 <tr
                   key={m.periodo}
@@ -170,6 +174,16 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
                       <span className="block text-[10px] text-fg-muted">no suma a los ingresos</span>
                     )}
                   </td>
+                  {hayNoVenta && (
+                    <td className={`${TD_NUM} text-fg-secondary`}>
+                      {m.noVenta > 0 ? fmtMonto(m.noVenta, moneda) : "—"}
+                      {/* Misma marca que la estimación de aliado: sin ella, la fila no suma a ojo
+                          contra «Ingresos totales». */}
+                      {m.noVenta > 0 && (
+                        <span className="block text-[10px] text-fg-muted">solo suma a la caja</span>
+                      )}
+                    </td>
+                  )}
                   <td className={`${TD_NUM} text-fg font-medium`}>
                     {m.ingresosTotales > 0 ? fmtMonto(m.ingresosTotales, moneda) : "—"}
                   </td>

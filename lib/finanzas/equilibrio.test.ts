@@ -24,6 +24,7 @@
  *   N. una comisión estimada no es una comisión cobrada
  *   O. PARTNERSHIP_CUBRE_EL_PISO: la pregunta abierta, en sus dos valores
  *   P. el hueco de ventas con la tasa de cada mes
+ *   Q. la plata que no es venta: a la caja y a nada más
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -47,6 +48,7 @@ import {
   type IngresoDeMes,
   type RubroEgreso,
 } from "./equilibrio";
+import { aplicarEscenario, indicadoresDe } from "@/lib/cobranza/equilibrio-escenario";
 
 const HOY = "2026-08-17";
 
@@ -978,5 +980,66 @@ describe("P · sumarPorClienteEnPresentacion — el hueco de ventas con la tasa 
     );
     expect(r.facturado.get("almotec")).toBe(2300);
     expect(r.facturado.has("bluesat")).toBe(false);
+  });
+});
+
+// ── Q ───────────────────────────────────────────────────────────────────────────
+
+describe("Q · la plata que no es venta: a la caja y a nada más", () => {
+  const noVenta = (p: string, monto: number, extra: Partial<IngresoDeMes> = {}) =>
+    ing(p, "NO_VENTA", monto, { tipoServicio: null, cobrada: true, ...extra });
+
+  it("Q1 no entra a lo facturado, a los ingresos, a la brecha ni a «cubre egresos»", () => {
+    // Un mes que no cubre con lo que se vendió no pasa a cubrir por un fondo de marketing.
+    const r = calcularEquilibrio(anioParejo(3000), [ing("2026-07", "COBRADO", 2000), noVenta("2026-07", 5_346.91)], {
+      anio: 2026,
+      hoyISO: "2026-09-13",
+    });
+    const jul = r.meses[6]!;
+    expect(jul.facturado).toBe(2000);
+    expect(jul.ingresosTotales).toBe(2000);
+    expect(jul.brecha).toBe(-1000);
+    expect(jul.cubreEgresos).toBe(false);
+    expect(jul.noVenta).toBe(5_346.91);
+    expect(r.indicadores.facturadoTotal).toBe(2000);
+    expect(r.indicadores.margenAlDia).toBe(2000 - 9 * 3000);
+  });
+
+  it("Q2 no toca el % de cobranza, ni el total ni por moneda", () => {
+    const r = calcularEquilibrio([], [ing("2026-07", "POR_COBRAR", 1000), noVenta("2026-07", 700)], {
+      anio: 2026,
+      hoyISO: HOY,
+    });
+    expect(r.indicadores.cobranza.sobreFacturado).toBe(0);
+    expect(Object.keys(r.cobranzaPorMoneda)).toEqual(["USD"]);
+    expect(r.cobranzaPorMoneda.USD).toEqual(
+      calcularEquilibrio([], [ing("2026-07", "POR_COBRAR", 1000)], { anio: 2026, hoyISO: HOY }).cobranzaPorMoneda.USD,
+    );
+  });
+
+  it("Q3 la caja cuenta solo lo que ya entró", () => {
+    const r = calcularEquilibrio([], [noVenta("2026-07", 500), noVenta("2026-11", 300, { cobrada: false })], {
+      anio: 2026,
+      hoyISO: HOY,
+    });
+    expect(r.indicadores.noVentaTotal).toBe(800);
+    expect(r.indicadores.noVentaCobradoTotal).toBe(500);
+    // Tampoco se cuela en lo «comprometido por venir», que es ingreso fechado.
+    expect(r.indicadores.comprometidoPorVenir).toBe(0);
+  });
+
+  it("Q4 colones sin tasa no se suman: se listan con su nombre", () => {
+    const r = calcularEquilibrio([], [noVenta("2026-07", 1_000_000, { moneda: "CRC" })], { anio: 2026, hoyISO: HOY });
+    expect(r.indicadores.noVentaTotal).toBe(0);
+    expect(r.fx.montosNoConvertidos).toEqual([
+      { periodo: "2026-07", moneda: "CRC", monto: 1_000_000, concepto: "ingreso que no es venta" },
+    ]);
+  });
+
+  it("Q5 simular en el navegador tampoco la suma: la fila la trae fuera de `ingresosTotales`", () => {
+    const r = calcularEquilibrio(anioParejo(1000), [noVenta("2026-03", 9_999)], { anio: 2026, hoyISO: HOY });
+    const efectivos = aplicarEscenario(r.meses, { "2026-03": 1000 });
+    expect(efectivos[2]!.ingresosTotales).toBe(1000);
+    expect(indicadoresDe(aplicarEscenario(r.meses, {})).ingresosTotales).toBe(r.indicadores.ingresosTotales);
   });
 });

@@ -1,6 +1,7 @@
 /**
  * /api/cobranza/ingresos-variables — entradas de dinero fuera del ciclo quincenal.
- *   GET  → { ingresos: IngresoVariableRow[] } (registrados + derivados de cobros).
+ *   GET  → { ingresos: IngresoVariableRow[], esquemaAtrasado } (registrados + derivados de cobros).
+ *          `esquemaAtrasado` = falta scripts/sql/2026-09-12-10-ingreso-no-venta.sql.
  *   POST → crea un IngresoVariable (201). `clientId` es OPCIONAL: un ingreso
  *          "de forma general" (sin cliente) es legítimo — por eso no pasa por
  *          `Cobro`, que exige servicio y cuenta.
@@ -17,7 +18,8 @@ export async function GET() {
   const guard = await guardCobranzaAccess();
   if (guard instanceof NextResponse) return guard;
   const todayISO = crDateParts(new Date()).dateKey;
-  return NextResponse.json({ ingresos: await loadIngresosVariables(todayISO) });
+  const { filas, esquemaAtrasado } = await loadIngresosVariables(todayISO);
+  return NextResponse.json({ ingresos: filas, esquemaAtrasado });
 }
 
 export async function POST(req: NextRequest) {

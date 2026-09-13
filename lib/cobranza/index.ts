@@ -46,6 +46,7 @@ export {
   type CostoMovimientoDTO,
   type ColaCobroRow,
   type IngresoVariableRow,
+  type IngresosVariablesDTO,
   type CarteraRow,
   type CuentaDetailDTO,
   type ServicioDTO,

@@ -119,7 +119,11 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   // la reserva de aguinaldo (un devengo — nadie apartó esa plata) y los egresos de meses
   // que todavía no ocurrieron. Medía los ingresos con criterio de caja y los egresos con
   // criterio de devengo, así que el "margen en caja" no era ninguna de las dos cosas.
-  const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal);
+  //
+  // La plata que entró sin ser venta (Ingresos variables) también está en el banco: suma a la caja y
+  // a nada más. No toca «Margen a la fecha», que compara lo facturado con lo que costó operar.
+  const noVentaEnCaja = r.indicadores.noVentaCobradoTotal;
+  const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal + noVentaEnCaja);
   const margenCaja = round2(cajaTotal - ind.egresosDeCajaTotal);
 
   // La apertura por moneda nativa, sin convertir. Solo se muestra si hay algo en otra moneda
@@ -207,6 +211,9 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
         ind.comprometidoPorVenir > 0
           ? `en caja ${fmtMonto(margenCaja, moneda)} · ${fmtMonto(ind.comprometidoPorVenir, moneda)} por venir`
           : `en caja: ${fmtMonto(margenCaja, moneda)}`,
+      // Sin esta línea, «en caja» sería más que cobrado + partnership y nadie sabría de dónde sale.
+      detalle:
+        noVentaEnCaja > 0 ? `la caja incluye ${fmtMonto(noVentaEnCaja, moneda)} que no es venta` : undefined,
       serie: "ingresosTotales",
       simulado: hayEscenario,
     },

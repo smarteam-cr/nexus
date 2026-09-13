@@ -100,6 +100,9 @@ export interface EgresoDeMes {
  *  - POR_COBRAR            TIENE FACTURA y no entró (suma al facturado del mes de emisión)
  *  - PROGRAMADO            no tiene factura — NO es ingreso, es backlog
  *  - COMISION_PARTNER      lo que deja un aliado, cobrado o no
+ *  - NO_VENTA              plata que entró y NO es venta (Ingresos variables: el fondo de marketing
+ *                          de un aliado, un reembolso). Suma a la caja y a nada más: ni a lo
+ *                          facturado, ni a los ingresos, ni a la brecha, ni al % de cobranza
  *
  * ⚠ POR_COBRAR acá NO es el estado del cobro: es «facturado y sin cobrar», y lo decide
  * `tipoIngresoDeCobro` mirando la fecha de emisión. El estado de la base mezcla las dos cosas —un
@@ -107,16 +110,16 @@ export interface EgresoDeMes {
  * directo inflaba lo facturado con lo que nunca se facturó (decisión de Alex, 2026-09-12: el % de
  * cobranza cuenta solo lo facturado).
  */
-export type TipoIngreso = "COBRADO" | "POR_COBRAR" | "PROGRAMADO" | "COMISION_PARTNER";
+export type TipoIngreso = "COBRADO" | "POR_COBRAR" | "PROGRAMADO" | "COMISION_PARTNER" | "NO_VENTA";
 
 export interface IngresoDeMes {
   periodo: string;
   tipo: TipoIngreso;
   monto: number;
   moneda: MonedaEq;
-  /** Para el desglose. null en las comisiones de partner: no salen de un servicio. */
+  /** Para el desglose. null en las comisiones de partner y en lo que no es venta: no salen de un servicio. */
   tipoServicio: string | null;
-  /** Solo para COMISION_PARTNER: si ya entró la plata. */
+  /** Solo para COMISION_PARTNER y NO_VENTA: si ya entró la plata. */
   cobrada?: boolean;
   /**
    * Solo para COMISION_PARTNER: nadie confirmó el monto (`ComisionPartner.montoEsProyeccion`).
@@ -142,7 +145,7 @@ export interface CobroParaImputar {
 }
 
 export interface ImputacionDeCobro {
-  tipo: Exclude<TipoIngreso, "COMISION_PARTNER">;
+  tipo: Exclude<TipoIngreso, "COMISION_PARTNER" | "NO_VENTA">;
   periodo: string;
   /** Solo POR_COBRAR: facturado y dentro del crédito. */
   enPlazo: boolean;
@@ -267,6 +270,14 @@ export interface FilaMes {
    * tener que conocer la bandera.
    */
   partnershipEnIngresos: number;
+  /**
+   * Plata que entró y NO es venta (Ingresos variables: el fondo de marketing de un aliado, un
+   * reembolso). NO suma a lo facturado, a los ingresos, a la brecha ni al % de cobranza: sumarla
+   * haría cubrir el piso con plata que no se vendió. Lo que ya entró suma a la caja.
+   */
+  noVenta: number;
+  /** La parte de `noVenta` cuya fecha ya llegó. Es la única que suma a la caja. */
+  noVentaCobrado: number;
   ingresosTotales: number; // facturado + partnershipEnIngresos
   /**
    * Lo vendido en el mes en que cerró el trato. NO suma a los ingresos ni entra en la
@@ -294,7 +305,8 @@ export type CodigoAviso =
   | "MESES_PARCIALES"
   | "SIN_MESES_ELEGIBLES"
   | "COMISIONES_ESTIMADAS"
-  | "PARTNERSHIP_NO_CUBRE_EL_PISO";
+  | "PARTNERSHIP_NO_CUBRE_EL_PISO"
+  | "INGRESOS_NO_VENTA";
 
 export interface AvisoCalidad {
   codigo: CodigoAviso;
@@ -319,6 +331,10 @@ export interface ReporteEquilibrio {
     partnershipTotal: number;
     partnershipCobradoTotal: number;
     partnershipProyectadoTotal: number;
+    /** Lo que entró sin ser venta. Se muestra; no suma a ingresos, margen, brecha ni cobranza. */
+    noVentaTotal: number;
+    /** La parte que ya entró: suma a la caja, igual que una comisión cobrada. */
+    noVentaCobradoTotal: number;
     ingresosTotales: number;
     /** Los doce meses. Es una PROYECCIÓN, no el titular: mezcla lo ocurrido con lo que viene. */
     margenAnual: number;
@@ -841,6 +857,8 @@ export function calcularEquilibrio(
     partnership: number;
     partnershipCobrado: number;
     partnershipProyectado: number;
+    noVenta: number;
+    noVentaCobrado: number;
     porServicio: Record<string, number>;
   };
   const ingMes = new Map<string, AccIngreso>();
@@ -853,6 +871,8 @@ export function calcularEquilibrio(
       partnership: 0,
       partnershipCobrado: 0,
       partnershipProyectado: 0,
+      noVenta: 0,
+      noVentaCobrado: 0,
       porServicio: {},
     });
   }
@@ -870,9 +890,18 @@ export function calcularEquilibrio(
         clase: i.tipo === "COBRADO" ? "COBRADO" : i.enPlazo ? "EN_PLAZO" : "VENCIDO",
       });
     }
-    const monto = aPresentacion(i.monto, i.moneda, i.periodo, i.tipoServicio ?? "comisión de aliado");
+    const concepto =
+      i.tipo === "NO_VENTA" ? "ingreso que no es venta" : (i.tipoServicio ?? "comisión de aliado");
+    const monto = aPresentacion(i.monto, i.moneda, i.periodo, concepto);
     if (monto === null) continue;
 
+    if (i.tipo === "NO_VENTA") {
+      // ⚠ Antes que todo lo demás: el fondo de marketing de un aliado entró al banco, pero contarlo
+      // como facturado cubría el piso con plata que nadie vendió. Va aparte y solo suma a la caja.
+      acc.noVenta = round2(acc.noVenta + monto);
+      if (i.cobrada) acc.noVentaCobrado = round2(acc.noVentaCobrado + monto);
+      continue;
+    }
     if (i.tipo === "COMISION_PARTNER") {
       // ⚠ Una estimación no es plata ganada: los «US$51.000 exactos, dos veces» de agosto y
       // noviembre sumaban al margen a la fecha con el mismo peso que los US$45.921,72 que sí
@@ -944,6 +973,8 @@ export function calcularEquilibrio(
       partnershipCobrado: ing.partnershipCobrado,
       partnershipProyectado: ing.partnershipProyectado,
       partnershipEnIngresos,
+      noVenta: ing.noVenta,
+      noVentaCobrado: ing.noVentaCobrado,
       ingresosTotales,
       vendido: vendidoPorMes.get(periodo) ?? 0,
       brecha,
@@ -985,6 +1016,7 @@ export function calcularEquilibrio(
   const cobradoTotal = suma((m) => m.cobrado);
   const porCobrarTotal = suma((m) => m.porCobrar);
   const porCobrarVencidoTotal = suma((m) => m.porCobrarVencido);
+  const noVentaTotal = suma((m) => m.noVenta);
 
   /**
    * ⚠ El margen de los doce meses mezcla ocho meses de ingreso con doce de costo, y por
@@ -1073,6 +1105,15 @@ export function calcularEquilibrio(
       conceptos: [],
     });
   }
+  if (noVentaTotal > 0) {
+    avisos.push({
+      codigo: "INGRESOS_NO_VENTA",
+      severidad: "BAJA",
+      mensaje: `${moneda} ${noVentaTotal.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} entraron sin ser venta (Ingresos variables): suman a la caja, no a lo facturado, al % de cobranza, a los ingresos ni a la brecha.`,
+      periodos: meses.filter((m) => m.noVenta > 0).map((m) => m.periodo),
+      conceptos: [],
+    });
+  }
   if (!cubreElPiso && meses.some((m) => m.partnership > 0)) {
     avisos.push({
       codigo: "PARTNERSHIP_NO_CUBRE_EL_PISO",
@@ -1125,6 +1166,8 @@ export function calcularEquilibrio(
       partnershipTotal: suma((m) => m.partnership),
       partnershipCobradoTotal: suma((m) => m.partnershipCobrado),
       partnershipProyectadoTotal: proyectadoTotal,
+      noVentaTotal,
+      noVentaCobradoTotal: suma((m) => m.noVentaCobrado),
       ingresosTotales: ingresosTotalesAnio,
       /** Los doce meses. Proyección, NO titular: ver el comentario de `margenAlDia`. */
       margenAnual: round2(ingresosTotalesAnio - egresosTotales),

@@ -387,3 +387,56 @@ export const INV34: Invariante = {
     return cumple(`✓ INV34: los ${filas.length} números de factura (o marcas «no tengo el número») tienen autor y factura.`);
   },
 };
+
+/**
+ * INV35 · Ninguna factura está cargada como cobro y como plata que no es venta (etapa 10, 2026-09-12).
+ * El mismo documento en `Cobro.numeroFactura` y en `IngresoVariable.referenciaExterna` cuenta la misma
+ * plata dos veces: como venta en lo facturado y otra vez en la caja. Es el riesgo que dejó el fondo de
+ * marketing de Insider (INV-26 + INV-27), que el Compendio cuenta como venta.
+ *
+ * El alta de un ingreso da 409 si su número ya es de un cobro (lib/cobranza/mutations.ts). El orden
+ * inverso —marcar facturado un cobro con un número ya cargado como ingreso— no lo frena nadie: por eso
+ * esto mira el DATO. Los dos lados se normalizan con la misma función, así que se comparan tal cual.
+ * ⚠ Antes de scripts/sql/2026-09-12-10-ingreso-no-venta.sql la columna no existe: sale «no verificable».
+ */
+export const INV35: Invariante = {
+  id: "35",
+  nombre: "ninguna factura está cargada como cobro y como plata que no es venta",
+  async correr(db) {
+    const ingresos = await db.ingresoVariable.findMany({
+      where: { referenciaExterna: { not: null } },
+      select: { referenciaExterna: true, concepto: true },
+    });
+    const conceptoPorReferencia = new Map<string, string>();
+    for (const i of ingresos) if (i.referenciaExterna) conceptoPorReferencia.set(i.referenciaExterna, i.concepto);
+    if (conceptoPorReferencia.size === 0) {
+      return cumple("✓ INV35: ningún ingreso que no es venta trae número de documento: no hay con qué chocar.");
+    }
+    const cobros = await db.cobro.findMany({
+      where: { numeroFactura: { in: [...conceptoPorReferencia.keys()] } },
+      select: { numeroFactura: true, cuenta: { select: { client: { select: { name: true } } } } },
+    });
+    const choques = new Map<string, Set<string>>();
+    for (const c of cobros) {
+      // Se vuelve a mirar acá y no solo en el `where`: el dato manda, no la forma de la consulta.
+      if (!c.numeroFactura || !conceptoPorReferencia.has(c.numeroFactura)) continue;
+      const clientes = choques.get(c.numeroFactura) ?? new Set<string>();
+      clientes.add(c.cuenta.client.name);
+      choques.set(c.numeroFactura, clientes);
+    }
+    if (choques.size > 0) {
+      return viola(
+        `✗ INV35 VIOLADO: ${choques.size} documento(s) están cargados como cobro y como plata que no es venta:\n` +
+          [...choques.entries()]
+            .slice(0, 20)
+            .map(
+              ([numero, clientes]) =>
+                `    · ${numero}: «${conceptoPorReferencia.get(numero)}» en Ingresos variables · cobro de ${[...clientes].join(" · ")}`,
+            )
+            .join("\n") +
+          `\n    Remedio: decidir si esa plata es venta. Si lo es, borrar el ingreso; si no, corregir el cobro en Cobranza.`,
+      );
+    }
+    return cumple(`✓ INV35: los ${conceptoPorReferencia.size} documentos de Ingresos variables no están cargados como cobro.`);
+  },
+};

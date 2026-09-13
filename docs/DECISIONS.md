@@ -3108,3 +3108,33 @@ fabricarla.
   forma de Odoo cuenta como «sin número»: el sync no la puede cerrar, así que la cierra una persona.
 - **El número de «Sacar de Cobrado» pasa a la columna.** Deja de escribirse en el texto de la
   reversión: lo anota la regla del número, una sola vez.
+
+## Finanzas — la plata que no es venta tiene casillero (2026-09-12)
+
+> El fondo de marketing de Insider (INV-26 + INV-27, US$5.346,91, depositados el 30-jun y el 7-jul)
+> entró al banco y no es venta a un cliente. El Compendio lo cuenta como venta; en Nexus, como cobro
+> inflaba lo facturado y el % de cobranza, y como comisión de aliado sumaba al punto de equilibrio.
+
+- **Lo registrado en Ingresos variables NO ES VENTA.** El reporte de equilibrio lo lee como `NO_VENTA`:
+  suma a la caja («Margen a la fecha · en caja») y a nada más, ni a lo facturado, ni a los ingresos,
+  ni a la brecha, ni al % de cobranza, ni a «Igualar al equilibrio». La tabla de meses lo muestra en su
+  columna solo si el año tiene, y un aviso de confiabilidad dice cuánto y en qué meses. Antes de esta
+  etapa `IngresoVariable` no entraba al reporte en absoluto (0 filas en la base al 2026-09-13), así que
+  ninguna cifra existente cambia. Una venta, aunque sea suelta, va a Cobranza: el formulario dejó de
+  ofrecer «venta puntual». Los pagos puntuales y rescates de la misma pantalla vienen de cobros y son venta.
+- **La categoría acepta «sin clasificar», y es texto.** El nombre de la categoría del fondo de aliado
+  lo deciden Elías y Claudia. Hasta entonces se carga sin categoría y «Lo que no cuadra» lo lista
+  (`INGRESO_SIN_CATEGORIA`, a cargo de Dirección, con su monto). Cuando haya nombre se suma una línea a
+  `CATEGORIAS_INGRESO_NO_VENTA` (lib/cobranza/ingresos-no-venta.ts), sin SQL: por eso la columna es
+  texto y no un enum. Una categoría que el código no conoce se lee como sin clasificar, así vuelve a
+  la lista. El catálogo arranca con tres que no piden decidir nada (reembolso, intereses, aporte de
+  socios) y sin «Otro», que taparía justo la pregunta abierta.
+- **La misma factura no se carga por los dos lados.** `referenciaExterna` guarda el número del documento
+  o del depósito, normalizado igual que `Cobro.numeroFactura`. El alta da 409 si ese número ya es la
+  factura de un cobro; el orden inverso no lo frena el chokepoint de los cobros (no se tocó en esta
+  etapa) y lo vigila INV35.
+- **Sin el SQL no se cae nada.** Con el código antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql,
+  Ingresos variables y el reporte avisan que falta el archivo; registrar o editar da 503.
+- **No se construyó la plata esperada.** El plan preveía `fechaEsperada`, una confirmación por persona y
+  un aviso para ingresos que todavía no entraron, solo si INV-26 e INV-27 no se habían depositado. Se
+  depositaron, así que `fecha` sigue siendo el día en que entró la plata.
