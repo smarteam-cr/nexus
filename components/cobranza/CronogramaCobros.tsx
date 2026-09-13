@@ -373,10 +373,16 @@ export default function CronogramaCobros({
                 </p>
               )}
               {/* Tiene número y el espejo no trae esa factura en esta cuenta. El porqué —no existe, es de
-                  otro cliente, está anulada— vive en «Lo que no cuadra»: una sola regla, dos pantallas. */}
+                  otro cliente, está anulada— vive en «Lo que no cuadra»: una sola regla, dos pantallas.
+                  ⚠ Pero esa lista solo afirma «Odoo no tiene ese documento» sobre lo que el espejo ya tuvo
+                  tiempo de leer. Un número recién anotado —o cualquiera, mientras el sync esté parado—
+                  todavía no aparece ahí, y el aviso no puede mandar a buscarlo como si estuviera. */}
               {!c.facturaOdoo && c.numeroSinFacturaOdoo && (
-                <p className="mt-1 text-[10px] text-amber-600">
-                  Odoo: {c.numeroFactura} no está entre las facturas de esta cuenta · el porqué está en «Lo que no cuadra con Odoo»
+                <p
+                  className="mt-1 text-[10px] text-amber-600"
+                  title="«Lo que no cuadra con Odoo» solo acusa lo que se facturó unos días antes de la última lectura buena de Odoo. Si esta factura se emitió después, todavía no está en esa lista."
+                >
+                  Odoo: {c.numeroFactura} no está entre las facturas de esta cuenta · «Lo que no cuadra con Odoo» dice por qué una vez que el espejo tuvo tiempo de leerla
                 </p>
               )}
             </li>

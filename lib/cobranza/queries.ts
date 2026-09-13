@@ -161,8 +161,9 @@ export interface CobroDTO {
     cuotas: number;
   } | null;
   /**
-   * El cobro tiene anotado un número con forma de Odoo y ninguna factura de su cuenta en el espejo le
-   * corresponde. El porqué (no existe, es de otro cliente, está anulada…) lo dice «Lo que no cuadra».
+   * El cobro tiene anotado un número con forma de Odoo, su cuenta factura por Odoo, y ninguna factura
+   * de su cuenta en el espejo le corresponde. El porqué (no existe, es de otro cliente, está
+   * anulada…) lo dice «Lo que no cuadra», pero solo cuando el espejo ya tuvo tiempo de leerla.
    */
   numeroSinFacturaOdoo: boolean;
 }
@@ -518,7 +519,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
    * ⛔ Nada de esto escribe: el cobro conserva su estado y su `confirmadoPor` (INV25). El
    * espejo dice qué ve Odoo; el semáforo lo sigue moviendo una persona.
    */
-  const facturasPorCobro = await aparearFacturasDeOdoo(cuenta.id, cuenta.client.name, cuenta.servicios);
+  const facturasPorCobro = await aparearFacturasDeOdoo(cuenta.id, cuenta.client.name, cuenta.servicios, cuenta.viaCobro);
 
   const proyectos = await prisma.project.findMany({
     where: proyectoClasificableWhere({ clientId: cuenta.clientId }),
@@ -2794,6 +2795,7 @@ async function aparearFacturasDeOdoo(
   cuentaId: string,
   cuentaNombre: string,
   servicios: ReadonlyArray<{ cobros: ReadonlyArray<CobroRow> }>,
+  viaCobro: string,
 ): Promise<FacturasDeOdooPorCobro> {
   const out = new Map<string, CobroDTO["facturaOdoo"]>();
   /* `select` explícito: una columna nueva del espejo (`montoMonedaCompania`, etapa 4) no puede
@@ -2853,9 +2855,13 @@ async function aparearFacturasDeOdoo(
   const estadoDe = new Map(cobros.map((c) => [c.id, c.estado]));
   const cruce = cruzar(cobros, facturas);
   /* Solo los números con forma de Odoo: uno de Mercury no va a aparecer en este espejo nunca, y
-     decir «no está» sobre él sería un aviso que no se puede cerrar. */
+     decir «no está» sobre él sería un aviso que no se puede cerrar.
+     ⚠ Y solo en cuentas que facturan por Odoo, el mismo filtro de «Lo que no cuadra»: el aviso manda
+     a buscar el porqué ahí, y en una cuenta de Mercury o QuickBooks esa lista no lo va a tener nunca. */
   const numeroSinPar = new Set(
-    cruce.conNumeroSinPar.filter((c) => plataformaDelNumero(c.numeroFactura) === "ODOO").map((c) => c.id),
+    viaCobro === "ODOO"
+      ? cruce.conNumeroSinPar.filter((c) => plataformaDelNumero(c.numeroFactura) === "ODOO").map((c) => c.id)
+      : [],
   );
 
   /* Los pares exactos y los de monto distinto: los dos muestran la factura. Un monto que no
