@@ -16,6 +16,8 @@ import "dotenv/config";
 import { prisma } from "../lib/db/prisma";
 import { crDateParts } from "../lib/jobs/time";
 import { allJobs } from "../lib/jobs/defs";
+import { SIN_TURNO } from "../lib/jobs/registry";
+import { motivoApagado } from "../lib/jobs/requisitos";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -29,11 +31,12 @@ async function main() {
 
   for (const job of allJobs()) {
     const matches = await job.shouldRun(now, parts);
-    console.log(`${matches ? "▶" : "·"} ${job.key}: ventana ${matches ? "MATCHEA" : "no matchea"}`);
+    const apagado = motivoApagado(job.key, process.env);
+    console.log(`${matches ? "▶" : "·"} ${job.key}: ventana ${matches ? "MATCHEA" : "no matchea"}${apagado ? ` — ${apagado}` : ""}`);
     if (matches && exec) {
       try {
-        await job.run(now);
-        console.log(`  ✓ ejecutado`);
+        const salida = await job.run(now);
+        console.log(salida === SIN_TURNO ? "  · sin turno: ya corrió hoy u otro proceso lo tomó" : "  ✓ ejecutado");
       } catch (e) {
         console.log(`  ✗ falló: ${e instanceof Error ? e.message : e}`);
       }

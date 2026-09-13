@@ -21,7 +21,7 @@ import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
 import { buildWatchdogContext } from "./watchdog-context";
-import { claimDateKey } from "@/lib/jobs/registry";
+import { claimDateKey, SIN_TURNO } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_CARTERA_WHERE, proyectoDeCarteraWhere } from "@/lib/projects/scope";
@@ -597,9 +597,10 @@ export const watchdogJobs = {
     shouldRun: (_now: Date, parts: { weekday: string; hour: number }) =>
       WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 7,
     run: async (now: Date) => {
-      if (!(await watchdogEnabled())) return;
+      // SIN_TURNO: ni apagado desde CsSettings ni sin el claim del día corrió; el scheduler no anota «ok».
+      if (!(await watchdogEnabled())) return SIN_TURNO;
       const { dateKey } = crDateParts(now);
-      if (!(await claimDateKey("cs-watchdog-daily", dateKey, now))) return;
+      if (!(await claimDateKey("cs-watchdog-daily", dateKey, now))) return SIN_TURNO;
       const r = await runWatchdogSweep(now);
       console.log(`[jobs/cs-watchdog] sweep ${dateKey}: ${r.ran}/${r.candidates} proyectos triados`);
     },

@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { leerEstadoDeJobs } from "@/lib/jobs/estado";
 import { allJobs } from "@/lib/jobs/defs";
+import { motivoApagado, motivoSchedulerApagado } from "@/lib/jobs/requisitos";
 import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
@@ -136,10 +137,8 @@ export default async function IntegrationsPage({
           }),
           prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
         ]);
-        const hayPassword = !!process.env.ODOO_PASSWORD;
         return {
-          hayPassword,
-          syncEncendido: hayPassword && process.env.ODOO_SYNC_ENABLED !== "0",
+          motivoApagado: motivoApagado("odoo-espejo-daily", process.env),
           facturas,
           ultimaCorrida:
             corridas[0]?.terminadaEn?.toISOString().slice(0, 10) ?? null,
@@ -161,8 +160,13 @@ export default async function IntegrationsPage({
   const hubspotLogoUrl = systemCfg?.hubspotLogoUrl ?? null;
   const insiderLogoUrl = systemCfg?.insiderLogoUrl ?? null;
   /* B-03: el semáforo de los jobs del server. Lee CronJobState.lastResult bajo la clave de cada
-     job del registry (lib/jobs/defs.ts); lo escribe el scheduler en cada corrida. */
-  const jobs = await leerEstadoDeJobs(allJobs().map((j) => j.key));
+     job del registry (lib/jobs/defs.ts); lo escribe el scheduler en cada corrida. El motivo de
+     apagado sale de la misma regla que usa `shouldRun`, leída contra el entorno de ESTE servidor. */
+  const jobs = (await leerEstadoDeJobs(allJobs().map((j) => j.key))).map((estado) => ({
+    ...estado,
+    motivoApagado: motivoApagado(estado.key, process.env),
+  }));
+  const schedulerApagado = motivoSchedulerApagado(process.env);
 
   return (
     <div className={`flex-1 overflow-y-auto ${SHELL_DEFAULT}`}>
@@ -197,7 +201,7 @@ export default async function IntegrationsPage({
 
         {/* Jobs del server — el semáforo (B-03). Hasta hoy un job que fallaba era una línea en
             docker logs que nadie leía; acá se ve cómo terminó la última corrida de cada uno. */}
-        <JobsSemaforo jobs={jobs} />
+        <JobsSemaforo jobs={jobs} schedulerApagado={schedulerApagado} />
 
         {/* Logo de Smarteam — config global de marca (páginas externas) */}
         <section className="rounded-xl bg-surface border border-line p-5">

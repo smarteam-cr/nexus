@@ -20,6 +20,12 @@
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
+ *
+ * ⚠ Dos reglas que valen para todos (2026-09-12):
+ *   - Un `run` que no toma el turno devuelve `SIN_TURNO`, nunca un `return` pelado: el scheduler
+ *     anota «ok» a todo lo demás, y ese «ok» tapaba el rojo de la corrida real (registry.ts).
+ *   - Las banderas del `.env` NO se leen acá a mano: pasan por `encendido()`, que usa la misma
+ *     regla con la que Integraciones dice por qué un job está apagado (requisitos.ts).
  */
 import { tickMarketingCron } from "@/lib/marketing/cron";
 import { prisma } from "@/lib/db/prisma";
@@ -27,14 +33,13 @@ import { refreshAllCsSignals } from "@/lib/hubspot/cs-signals";
 import { syncPartnerClients } from "@/lib/cs/partner-sync";
 import { syncVentasGanadas } from "@/lib/ventas/sync-ganadas";
 import { watchdogJobs } from "@/lib/cs/watchdog";
-import { claimDateKey, type JobDef } from "./registry";
+import { claimDateKey, SIN_TURNO, type JobDef } from "./registry";
+import { motivoApagado } from "./requisitos";
 import { WEEKDAYS_MON_FRI } from "./time";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
 
-/** Los jobs de Éxito del cliente son OPT-IN por env (prod los prende explícito). */
-export function csJobsEnabled(): boolean {
-  return process.env.CS_WATCHDOG_ENABLED === "1";
-}
+/** ¿La configuración de este servidor deja correr el job? Si no, Integraciones dice por qué. */
+const encendido = (jobKey: string): boolean => motivoApagado(jobKey, process.env) === null;
 
 const marketingWeekly: JobDef = {
   key: "marketing-weekly",
@@ -47,16 +52,19 @@ const marketingWeekly: JobDef = {
   // La ventana y el claim viven DENTRO de tickMarketingCron — correr cada tick.
   shouldRun: () => true,
   run: async (now) => {
-    await tickMarketingCron(now);
+    /* Fuera del viernes, o ya disparado hoy, no corrió nada: sin esto el semáforo anotaba «ok»
+       cada diez minutos toda la semana y un viernes fallido quedaba tapado al tick siguiente. */
+    const decision = await tickMarketingCron(now);
+    if (!decision.fired) return SIN_TURNO;
   },
 };
 
 const csSignalsDaily: JobDef = {
   key: "cs-signals-daily",
-  shouldRun: (_now, parts) => csJobsEnabled() && WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 6,
+  shouldRun: (_now, parts) => encendido("cs-signals-daily") && WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 6,
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
-    if (!(await claimDateKey("cs-signals-daily", dateKey, now))) return;
+    if (!(await claimDateKey("cs-signals-daily", dateKey, now))) return SIN_TURNO;
     const result = await refreshAllCsSignals({ maxAgeHours: 20 });
     console.log(
       `[jobs/cs-signals] ${dateKey} — refrescados ${result.refreshed.length}, frescos ${result.skippedFresh}, fallidos ${result.failed.length}`,
@@ -66,10 +74,10 @@ const csSignalsDaily: JobDef = {
 
 const csPartnerDaily: JobDef = {
   key: "cs-partner-daily",
-  shouldRun: (_now, parts) => csJobsEnabled() && WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 6,
+  shouldRun: (_now, parts) => encendido("cs-partner-daily") && WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 6,
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
-    if (!(await claimDateKey("cs-partner-daily", dateKey, now))) return;
+    if (!(await claimDateKey("cs-partner-daily", dateKey, now))) return SIN_TURNO;
     const r = await syncPartnerClients({ createClients: true });
     // Fallo TRANSITORIO (API caída / lock ajeno): liberar el claim del día para
     // que el próximo tick reintente. El 403 de scope NO es transitorio (dura todo
@@ -93,13 +101,13 @@ const csPartnerDaily: JobDef = {
 
 const csWatchdogDaily: JobDef = {
   key: watchdogJobs.daily.key,
-  shouldRun: (now, parts) => csJobsEnabled() && watchdogJobs.daily.shouldRun(now, parts),
+  shouldRun: (now, parts) => encendido("cs-watchdog-daily") && watchdogJobs.daily.shouldRun(now, parts),
   run: watchdogJobs.daily.run,
 };
 
 const csWatchdogDebounce: JobDef = {
   key: watchdogJobs.debounce.key,
-  shouldRun: () => csJobsEnabled(),
+  shouldRun: () => encendido("cs-watchdog-debounce"),
   run: watchdogJobs.debounce.run,
 };
 
@@ -111,7 +119,7 @@ const maintenanceDaily: JobDef = {
   shouldRun: () => true, // una vez al día, a cualquier hora (claimDateKey adentro)
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
-    if (!(await claimDateKey("maintenance-daily", dateKey, now))) return;
+    if (!(await claimDateKey("maintenance-daily", dateKey, now))) return SIN_TURNO;
     const [tokens, attempts] = await Promise.all([
       prisma.printJobToken.deleteMany({ where: { expiresAt: { lt: now } } }),
       // Rate-limit de verify-access: filas sin actividad en 24h ya no acotan nada.
@@ -138,12 +146,12 @@ const maintenanceDaily: JobDef = {
 const cobranzaQuincenal: JobDef = {
   key: "cobranza-quincenal",
   shouldRun: (_now, parts) => {
-    if (process.env.COBRANZA_CRON_ENABLED !== "1" || parts.hour < 7) return false;
+    if (!encendido("cobranza-quincenal") || parts.hour < 7) return false;
     return esDiaDeCorte(parts.dateKey);
   },
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
-    if (!(await claimDateKey("cobranza-quincenal", dateKey, now))) return;
+    if (!(await claimDateKey("cobranza-quincenal", dateKey, now))) return SIN_TURNO;
     const { runCobranzaDigest } = await import("@/lib/cobranza/digest");
     const digest = await runCobranzaDigest(now, "cron");
     console.log(
@@ -160,7 +168,7 @@ const cobranzaQuincenal: JobDef = {
 // query barata, y el backoff por fila hace que el volumen real por tick sea chico.
 const googleEnrichRetry: JobDef = {
   key: "google-enrich-retry",
-  shouldRun: () => !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY && !!process.env.GOOGLE_ADMIN_EMAIL,
+  shouldRun: () => encendido("google-enrich-retry"),
   run: async () => {
     const { drenarReintentos } = await import("@/lib/google/meet-enrichment");
     const r = await drenarReintentos(20);
@@ -188,7 +196,7 @@ const ventasGanadasDaily: JobDef = {
   run: async (now) => {
     const { crDateParts } = await import("./time");
     const { dateKey } = crDateParts(now);
-    if (!(await claimDateKey("ventas-ganadas-daily", dateKey, now))) return;
+    if (!(await claimDateKey("ventas-ganadas-daily", dateKey, now))) return SIN_TURNO;
     const anio = dateKey.slice(0, 4);
     const r = await syncVentasGanadas({ desde: `${anio}-01-01`, hasta: `${anio}-12-31` });
     // Lock ajeno o corrida parcial: los dos son transitorios. Se libera el claim del día
@@ -228,11 +236,11 @@ const ventasGanadasDaily: JobDef = {
  */
 const odooEspejoDaily: JobDef = {
   key: "odoo-espejo-daily",
-  shouldRun: (_now, parts) => !!process.env.ODOO_PASSWORD && process.env.ODOO_SYNC_ENABLED !== "0" && parts.hour >= 6,
+  shouldRun: (_now, parts) => encendido("odoo-espejo-daily") && parts.hour >= 6,
   run: async (now) => {
     const { crDateParts } = await import("./time");
     const { dateKey } = crDateParts(now);
-    if (!(await claimDateKey("odoo-espejo-daily", dateKey, now))) return;
+    if (!(await claimDateKey("odoo-espejo-daily", dateKey, now))) return SIN_TURNO;
     const { sincronizarOdoo } = await import("@/lib/cobranza/odoo/sync");
     const r = await sincronizarOdoo({ disparadaPor: "cron" });
 
@@ -253,11 +261,19 @@ const odooEspejoDaily: JobDef = {
           .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
           .catch(() => {});
       }
-      console.error(
-        `[jobs/odoo-espejo] ${dateKey} — ${r.parcial ? "corrida PARCIAL" : `FALLÓ (${r.clase ?? "?"})`}: ${r.error}; ` +
-          (transitorio ? "claim liberado para reintentar" : "claim RETENIDO: no se reintenta hasta mañana"),
+      /* ⚠ LANZA, después de decidir el turno. Hasta el 2026-09-12 un fallo iba solo al log y el
+         job volvía como si nada: el scheduler anotaba «ok» y el semáforo de Integraciones quedaba
+         en verde con el espejo muerto. Lanzar lo pinta en rojo con este texto y lo manda a Sentry.
+         Con un fallo de RED el tick siguiente reintenta y vuelve a lanzar: Sentry descarta el
+         evento idéntico al anterior (Dedupe), así que un corte de red no llena el proyecto. */
+      const fallo = new Error(
+        `${r.parcial ? "corrida PARCIAL" : `FALLÓ (${r.clase ?? "?"})`}: ${r.error}; ` +
+          (transitorio
+            ? "turno liberado: reintenta en el próximo tick"
+            : "turno RETENIDO: no reintenta hasta mañana (docs/RUNBOOK.md, «El espejo de Odoo no corre»)"),
       );
-      return;
+      fallo.name = "SyncOdooFallido";
+      throw fallo;
     }
     console.log(
       `[jobs/odoo-espejo] ${dateKey} — ${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.desaparecidas} desaparecidas, ${r.sinCuenta} sin cuenta${r.rechazadas.length ? `, ${r.rechazadas.length} rechazadas` : ""} (${r.duracionMs} ms)`,
@@ -280,7 +296,7 @@ const invariantsDaily: JobDef = {
   run: async (now) => {
     const { crDateParts } = await import("./time");
     const { dateKey } = crDateParts(now);
-    if (!(await claimDateKey("invariants-daily", dateKey, now))) return;
+    if (!(await claimDateKey("invariants-daily", dateKey, now))) return SIN_TURNO;
     const { correrJobDeInvariantes } = await import("@/lib/invariantes/job");
     const resumen = await correrJobDeInvariantes(prisma, now);
     console.log(`[jobs/invariants] ${dateKey} — ${resumen}`);

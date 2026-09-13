@@ -216,8 +216,10 @@ describe("el RUNBOOK dice la verdad sobre los jobs y tiene las secciones de recu
   it("el .env.example declara TODA variable que decide si un job corre, y cual key de Anthropic es la de prod (B-11)", () => {
     /* La edicion que lo pone en rojo: borrar COBRANZA_CRON_ENABLED del .env.example «porque ya
        esta en el VPS» — la proxima reconstruccion del VPS apaga la cobranza quincenal sin avisar. */
-    const fuentes = ["lib/jobs/defs.ts", "lib/cs/watchdog.ts"].map(leer).join("\n");
-    const variables = [...new Set([...fuentes.matchAll(/process\.env\.([A-Z_]+)/g)].map((m) => m[1]))].sort();
+    /* Desde el 2026-09-12 las banderas de los jobs se leen en lib/jobs/requisitos.ts, que recibe el
+       entorno como argumento (`env.X`) para que Integraciones diga por qué un job está apagado. */
+    const fuentes = ["lib/jobs/defs.ts", "lib/cs/watchdog.ts", "lib/jobs/requisitos.ts"].map(leer).join("\n");
+    const variables = [...new Set([...fuentes.matchAll(/\benv\.([A-Z_]+)/g)].map((m) => m[1]))].sort();
     expect(variables, "el escaneo no encontro los gates de los jobs").toContain("CS_WATCHDOG_ENABLED");
     expect(variables).toContain("COBRANZA_CRON_ENABLED");
     const ejemplo = leer(".env.example");

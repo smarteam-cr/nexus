@@ -18,9 +18,12 @@
 import Link from "next/link";
 
 export interface EstadoDeOdoo {
-  /** Sin `ODOO_PASSWORD` el sync ni siquiera lo intenta: un intento en vano cuenta para el bloqueo por IP. */
-  hayPassword: boolean;
-  syncEncendido: boolean;
+  /**
+   * Por qué el sync diario no corre en este servidor, o null si está encendido. Sale de
+   * `motivoApagado` (`lib/jobs/requisitos.ts`), la misma regla que usa el job: distingue la
+   * contraseña que falta de `ODOO_SYNC_ENABLED=0`, que antes se veían igual.
+   */
+  motivoApagado: string | null;
   /** Facturas espejadas y vigentes. Es el número que la gente reconoce. */
   facturas: number;
   /** Cuándo terminó la última corrida, ya formateada por la página. */
@@ -50,12 +53,12 @@ export default function OdooCard({ estado }: Props) {
         {estado && (
           <span
             className={
-              estado.syncEncendido
-                ? "shrink-0 text-xs font-medium text-success-ink"
-                : "shrink-0 text-xs font-medium text-fg-muted"
+              estado.motivoApagado
+                ? "shrink-0 text-xs font-medium text-fg-muted"
+                : "shrink-0 text-xs font-medium text-success-ink"
             }
           >
-            {estado.syncEncendido ? "Sincronizando" : "Apagado"}
+            {estado.motivoApagado ? "Apagado" : "Sincronizando"}
           </span>
         )}
       </div>
@@ -79,11 +82,7 @@ export default function OdooCard({ estado }: Props) {
             </div>
           </dl>
 
-          {!estado.hayPassword && (
-            <p className="mt-3 text-xs text-danger-ink">
-              Falta <code>ODOO_PASSWORD</code> en el servidor: el sync no corre.
-            </p>
-          )}
+          {estado.motivoApagado && <p className="mt-3 text-xs text-danger-ink">{estado.motivoApagado}</p>}
 
           <Link
             href="/integrations/odoo"
