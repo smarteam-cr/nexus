@@ -74,6 +74,15 @@ describe("serieCobradoVsProyectado", () => {
     expect(correspondeAlAnterior(unoOct, unoNov)).toBe(false);
   });
 
+  it("que la proyección termine en este corte no alcanza: hace falta el mismo criterio y la ventana arrancando en el anterior", () => {
+    /* La edición que lo pone en rojo: dejar solo la comparación de fechas. Un corte con otro criterio,
+       o uno cuya ventana arranca en un corte que la serie no trae, mide otra cosa. */
+    const quinceSepOtroCriterio = corte(2, quinceSep.metricas.ventana, { cobrado: 40_000, proyectado: 12_000 });
+    expect(correspondeAlAnterior(quinceSepOtroCriterio, unoOct), "otro criterio").toBe(false);
+    const unoOctDesdeOtroCorte = corte(3, { desdeISO: "2026-09-20", hastaISO: "2026-10-01", proximoCorteISO: "2026-10-15" }, { cobrado: 6_000, proyectado: 0 });
+    expect(correspondeAlAnterior(quinceSep, unoOctDesdeOtroCorte), "la ventana arranca en un corte del 20-sep").toBe(false);
+  });
+
   it("un corte a mano el 12-sep se corresponde con el automático del 15, no con el del 1", () => {
     const unoSep = corte(3, { desdeISO: "2026-08-15", hastaISO: "2026-09-01", proximoCorteISO: "2026-09-15" }, { cobrado: 0, proyectado: 7_000 });
     const aMano = corte(3, { desdeISO: "2026-09-01", hastaISO: "2026-09-12", proximoCorteISO: "2026-09-15" }, { cobrado: 3_000, proyectado: 5_000 });
