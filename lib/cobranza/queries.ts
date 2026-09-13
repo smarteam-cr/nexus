@@ -191,6 +191,12 @@ export interface BitacoraDTO {
   contenido: string;
   usuarioEmail: string | null;
   createdAt: string;
+  /**
+   * El cobro del que habla la entrada; null = nota general de la cuenta. ⚠ Hasta el 2026-09-12 no
+   * viajaba: 45 de las 66 entradas lo tenían (las de la promesa de pago y las de revertir un cobro) y
+   * llegaban a la pantalla despegadas de su factura.
+   */
+  cobroId: string | null;
 }
 
 export interface CuentaDetailDTO {
@@ -552,6 +558,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
       contenido: b.contenido,
       usuarioEmail: b.usuarioEmail,
       createdAt: iso(b.createdAt)!,
+      cobroId: b.cobroId,
     })),
     proyectos: proyectos.map((p) => ({
       id: p.id,

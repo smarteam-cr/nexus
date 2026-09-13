@@ -542,20 +542,36 @@ export default function CuentaDrawer({
                 <p className="text-xs text-fg-muted">Sin entradas todavía.</p>
               ) : (
                 <ul className="space-y-2">
-                  {cuenta.bitacora.map((b) => (
-                    <li key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted">
-                          {BITACORA_TIPO_LABEL[b.tipo] ?? b.tipo}
-                        </span>
-                        <span className="text-[10px] text-fg-muted">{fmtFecha(b.createdAt)}</span>
-                        {b.usuarioEmail && (
-                          <span className="text-[10px] text-fg-muted">· {b.usuarioEmail}</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-fg-secondary mt-1 whitespace-pre-wrap">{b.contenido}</p>
-                    </li>
-                  ))}
+                  {cuenta.bitacora.map((b) => {
+                    /* La entrada pegada a su factura: la promesa o la reversión de un cobro dicen de
+                       cuál cuota hablan. Si el cobro ya no existe, la nota queda sin etiqueta. */
+                    const cobro = b.cobroId
+                      ? cuenta.servicios.flatMap((s) => s.cobros).find((c) => c.id === b.cobroId)
+                      : undefined;
+                    return (
+                      <li key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line text-fg-muted">
+                            {BITACORA_TIPO_LABEL[b.tipo] ?? b.tipo}
+                          </span>
+                          {cobro && (
+                            <span
+                              title="Esta entrada es de ese cobro"
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line bg-surface-muted text-fg-secondary"
+                            >
+                              {cobro.numCuota != null ? `cuota #${cobro.numCuota} · ` : ""}
+                              {cobro.periodo}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-fg-muted">{fmtFecha(b.createdAt)}</span>
+                          {b.usuarioEmail && (
+                            <span className="text-[10px] text-fg-muted">· {b.usuarioEmail}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-fg-secondary mt-1 whitespace-pre-wrap">{b.contenido}</p>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>

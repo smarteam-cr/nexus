@@ -14,6 +14,7 @@ import { anthropic } from "@/lib/anthropic";
 import type { BorradorMensaje, CommunicationPort } from "../ports";
 import { getCommunicationPort } from "../adapters";
 import { DEFAULT_CREDITO_DIAS } from "../engine";
+import { lineaDePromesa } from "../borrador-contexto";
 
 const AGENT_ID = "agent-cobranza-borrador";
 export const BORRADOR_AGENT_SLUG = "cobranza-borrador-cobro";
@@ -90,7 +91,8 @@ export async function runBorradorCobro(
   if (!cobro) return { status: "skipped", reason: "cobro_no_existe" };
   if (cobro.estado === "COBRADO") return { status: "skipped", reason: "cobro_ya_cobrado" };
 
-  const ctxCom = await comm.obtenerContexto(cobro.cuenta.id);
+  /* La bitácora de ESTA factura y la general de la cuenta, nunca la de otra (borrador-contexto.ts). */
+  const ctxCom = await comm.obtenerContexto(cobro.cuenta.id, cobro.id);
 
   // ── Contexto serializado (SOLO datos reales — la regla de no-fabricación) ──
   const fechaISO = isoDay(cobro.fechaProgramada)!;
@@ -118,6 +120,12 @@ export async function runBorradorCobro(
     `⚠ Ese monto es el del SERVICIO, sin impuestos. La factura del cliente puede llevar IVA encima. NO lo presentes como "el total a pagar" ni sumes ningún impuesto vos: nombralo como el monto del servicio y, si hace falta hablar del total, remitite a la factura.`,
     `Servicio: ${cobro.servicio.tipoServicio}${cobro.servicio.descripcion ? ` — ${cobro.servicio.descripcion}` : ""}`,
     `Crédito: ${cobro.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS} días · vía de cobro: ${cobro.cuenta.viaCobro}${cobro.cuenta.responsableCobroTerceros ? ` · cobro de terceros a cargo de: ${cobro.cuenta.responsableCobroTerceros}` : ""}`,
+    /* La promesa de pago de ESTA factura, si la hay. Hasta el 2026-09-12 el prompt no la traía y el
+       correo no sabía que el cliente ya había dado una fecha. Vacía se cae en el `filter(Boolean)`. */
+    lineaDePromesa(
+      { estado: cobro.estado, fechaEmisionISO: isoDay(cobro.fechaEmision), promesaPagoISO: isoDay(cobro.promesaPago) },
+      todayISO,
+    ) ?? "",
     ``,
     `# CONTEXTO DE COMUNICACIÓN (fuente: ${comm.slot})`,
     ctxCom.ultimaComunicacion

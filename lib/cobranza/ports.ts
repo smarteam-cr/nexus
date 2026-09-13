@@ -76,9 +76,10 @@ export type ComCanal = "bitacora" | "gmail" | "meetings"; // gmail/meetings: def
 
 /** Contexto de la última comunicación con el cliente (para el borrador de cobro). */
 export interface ComContexto {
-  /** Última entrada humana de la bitácora (llamada/correo/nota). null = sin historial. */
+  /** Última entrada humana de la bitácora (llamada/correo/nota), general de la cuenta o de ESTE
+   *  cobro — nunca de otra factura (lib/cobranza/borrador-contexto.ts). null = sin historial. */
   ultimaComunicacion: { fechaISO: string; tipo: string; resumen: string } | null;
-  /** Último hilo de CORREO pegado a mano en la bitácora (texto crudo). */
+  /** Último hilo de CORREO pegado a mano en la bitácora (texto crudo), con la misma regla. */
   hiloReciente: string | null;
   correoCobro: string | null;
 }
@@ -96,7 +97,8 @@ export interface EntregaResultado {
 /** PUERTO 2 — contexto de comunicación + entrega. Impl actual: "bitacora" (manual). */
 export interface CommunicationPort {
   readonly slot: ComCanal;
-  obtenerContexto(cuentaId: string): Promise<ComContexto>;
+  /** Con `cobroId`, el contexto de ESA factura: lo general de la cuenta más lo suyo, nunca lo de otra. */
+  obtenerContexto(cuentaId: string, cobroId?: string | null): Promise<ComContexto>;
   /** v1 NO envía: registra la gestión en bitácora y devuelve cómo entregarlo a mano. */
   registrarEntrega(
     cuentaId: string,

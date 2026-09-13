@@ -9,38 +9,35 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import type { BorradorMensaje, ComContexto, CommunicationPort, EntregaResultado } from "../ports";
+import { contextoDeComunicacion, ENTRADAS_DE_BITACORA_A_LEER } from "../borrador-contexto";
 
 export const communicationBitacora: CommunicationPort = {
   slot: "bitacora",
 
-  async obtenerContexto(cuentaId: string): Promise<ComContexto> {
-    const [cuenta, ultimaHumana, ultimoCorreo] = await Promise.all([
+  /**
+   * ⚠ Con `cobroId`, solo lo general de la cuenta y lo de ESE cobro. Hasta el 2026-09-12 leía la
+   * última entrada de la cuenta entera, y el borrador de una factura citaba la nota de otra. Qué
+   * se elige lo decide `contextoDeComunicacion`; la consulta aplica la misma regla
+   * (`leCorrespondeAlCobro`) para que las notas de otras facturas no ocupen la ventana.
+   */
+  async obtenerContexto(cuentaId: string, cobroId: string | null = null): Promise<ComContexto> {
+    const [cuenta, entradas] = await Promise.all([
       prisma.cuentaFinanciera.findUnique({
         where: { id: cuentaId },
         select: { correoCobro: true },
       }),
-      prisma.bitacoraCobro.findFirst({
-        where: { cuentaId, tipo: { not: "ACTUALIZACION_IA" } },
+      prisma.bitacoraCobro.findMany({
+        where: {
+          cuentaId,
+          tipo: { not: "ACTUALIZACION_IA" },
+          ...(cobroId ? { OR: [{ cobroId: null }, { cobroId }] } : {}),
+        },
         orderBy: { createdAt: "desc" },
-        select: { tipo: true, contenido: true, createdAt: true },
-      }),
-      prisma.bitacoraCobro.findFirst({
-        where: { cuentaId, tipo: "CORREO" },
-        orderBy: { createdAt: "desc" },
-        select: { contenido: true },
+        take: ENTRADAS_DE_BITACORA_A_LEER,
+        select: { tipo: true, contenido: true, createdAt: true, cobroId: true },
       }),
     ]);
-    return {
-      ultimaComunicacion: ultimaHumana
-        ? {
-            fechaISO: ultimaHumana.createdAt.toISOString().slice(0, 10),
-            tipo: ultimaHumana.tipo,
-            resumen: ultimaHumana.contenido.slice(0, 1500),
-          }
-        : null,
-      hiloReciente: ultimoCorreo?.contenido.slice(0, 4000) ?? null,
-      correoCobro: cuenta?.correoCobro ?? null,
-    };
+    return contextoDeComunicacion(entradas, cobroId, cuenta?.correoCobro ?? null);
   },
 
   async registrarEntrega(
