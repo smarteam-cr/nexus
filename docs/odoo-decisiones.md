@@ -674,3 +674,42 @@ hay internacionales que sí facturan por Odoo.
 sobrevivió una tanda entera es algo que nadie está mirando, no algo que va en camino.
 *Qué lo revertiría:* medir que las anulaciones fuera de Odoo tardan legítimamente más. Subirlo
 solo hace que el aviso llegue más tarde; no arregla nada.
+
+---
+
+## 2026-09-13 · El cruce aparea primero por el número de la factura
+
+**Qué se decidió.** `cruzar()` hace tres pasadas: primero **por número** (`Cobro.numeroFactura`, de
+la etapa 7), después monto exacto y después monto aproximado, estas dos solo para los cobros sin
+número. Lo usan las dos pantallas, así que siguen sin poder contradecirse.
+
+**Por qué.** Medido el 2026-09-12 sobre los 3 cobros que Alex identificó con su número: por monto
+se acertaba 1. Seléctrica jun (USD 45, FAC/2026/0302) quedaba apareado con FAC/2026/0277 como
+«monto distinto», e IIA jun (USD 60, FAC/2026/0295) quedaba sin factura. Y 88 de las facturas del
+libro comparten cliente, moneda y monto con otra (PUBLIMARK tiene nueve de 15.226,75).
+
+**Varios cobros con el mismo número son una factura compartida.** Se compara la suma contra el
+neto. Si no cuadra sale como un monto distinto de la factura entera («Nexus 4.600 en 2 cuotas vs
+Odoo 6.900»), no como pago parcial. En el cronograma se lee «factura compartida por N cuotas · neto
+total», y no se propone semáforo por cuota.
+
+**⛔ Un número que no encuentra su factura no baja a las pasadas por monto.** Aparearlo con otra
+factura sería desmentir lo que una persona anotó y firmó. Tampoco cuenta como «cobro sin factura»:
+`clasificarNumerosSinPar` dice por qué, buscando el número en todo el espejo. En cuentas que
+facturan por Odoo salen dos líneas, porque piden arreglos opuestos:
+- **ODOO-NUMERO-SIN-DOCUMENTO**: Odoo no tiene el documento, es una nota de crédito, está anulada o
+  revertida, o está en otra moneda. «No existe» espera la misma gracia que «cobro sin factura».
+- **ODOO-NUMERO-DE-OTRO-CLIENTE**: el documento es de un cliente de Odoo emparejado con otra cuenta.
+  Emitir ahí duplicaría la factura, así que el atajo lleva a Emparejar.
+
+El número de un cliente de Odoo sin emparejar **no se acusa**: se cuenta en ODOO-SIN-CUENTA, que es
+donde se arregla. Un INV-x anotado en una cuenta «Odoo» va como evidencia en la nota de
+CUENTA-INTERNACIONAL-EN-ODOO, no en su texto, para no reabrir una línea aceptada.
+
+**No se construyó la pasada por monto para facturas de varias cuotas.** Medido el 2026-09-13 en
+solo lectura, con los 144 facturados todavía sin número: explicaría 6 facturas y 14 cuotas con una
+combinación única, y dejaría 6 ambiguas. Anotar el número en esas cuotas ya las aparea sin adivinar,
+y la adivinanza falla justo donde duele (Electrocaribe: una factura de mayo contra las cuotas de
+junio y julio).
+*Qué lo revertiría:* volver a medirla después de la carga de números del libro (etapa 11) y
+encontrar que siguen quedando cuotas sin número que solo se explican así.

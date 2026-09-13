@@ -361,6 +361,22 @@ export default function CronogramaCobros({
                   {c.facturaOdoo.estadoPropuesto === "COBRADO" && (
                     <span className="text-emerald-600"> · Odoo dice que ya está pagada</span>
                   )}
+                  {/* Una factura para varias cuotas (etapa 8). ⚠ No es un pago parcial: su estado de
+                      pago es el de la factura entera, y por eso no propone semáforo en esta cuota. */}
+                  {c.facturaOdoo.cuotas > 1 && (
+                    <span title="Una sola factura de Odoo cubre varias cuotas: su estado de pago es el de la factura entera, no el de esta cuota.">
+                      {" "}
+                      · factura compartida por {c.facturaOdoo.cuotas} cuotas · neto total {c.facturaOdoo.moneda}{" "}
+                      {c.facturaOdoo.montoNeto.toLocaleString("es-CR", { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </p>
+              )}
+              {/* Tiene número y el espejo no trae esa factura en esta cuenta. El porqué —no existe, es de
+                  otro cliente, está anulada— vive en «Lo que no cuadra»: una sola regla, dos pantallas. */}
+              {!c.facturaOdoo && c.numeroSinFacturaOdoo && (
+                <p className="mt-1 text-[10px] text-amber-600">
+                  Odoo: {c.numeroFactura} no está entre las facturas de esta cuenta · el porqué está en «Lo que no cuadra con Odoo»
                 </p>
               )}
             </li>

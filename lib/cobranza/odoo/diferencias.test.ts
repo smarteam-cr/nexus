@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  clasificarNumerosSinPar,
   cruzar,
   detectarDiferenciasOdoo,
   esDocumentoVivo,
@@ -21,6 +22,7 @@ import {
   montosEnDosMonedas,
   numeroVerificableEnOdoo,
   type CobroParaCruzar,
+  type DiferenciaOdoo,
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
 } from "./diferencias";
@@ -35,6 +37,7 @@ const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   moneda: "USD",
   estado: "POR_COBRAR",
   fechaEmision: "2026-07-15",
+  numeroFactura: null,
   ...p,
 });
 
@@ -879,5 +882,300 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
     }).find((i) => i.codigo === "ODOO-FACTURA-SIN-COBRO");
     expect(l?.items.map((i) => i.nota?.split(" · ")[0])).toEqual(["FAC/2026/0320"]);
     expect(l?.detalle).toContain("No se cuentan 1 factura(s) anteriores al primer cobro");
+  });
+});
+
+/**
+ * ── ⭐ ETAPA 8 · CADA COBRO CON SU FACTURA REAL ──────────────────────────────────
+ * Medido el 2026-09-12 sobre los 3 cobros que Alex identificó con su número: por monto se acertaba 1.
+ * Seléctrica jun (USD 45, FAC/2026/0302) se apareaba con FAC/2026/0277 como «monto distinto», e IIA
+ * jun (USD 60, FAC/2026/0295) quedaba sin factura. El número que una persona anotó y firmó manda.
+ */
+describe("⭐ el cobro con número se aparea por ese número", () => {
+  it("caso 1 · se queda con SU factura aunque otra por el mismo monto esté más cerca", () => {
+    const facturas = [
+      factura({ id: "f277", odooMoveId: 277, numero: "FAC/2026/0277", invoiceDate: "2026-06-15", montoNeto: 45 }),
+      factura({ id: "f302", odooMoveId: 302, numero: "FAC/2026/0302", invoiceDate: "2026-06-17", montoNeto: 45 }),
+    ];
+    const jun = cobro({ id: "jun", fechaProgramada: "2026-06-15", monto: 45 });
+    expect(cruzar([jun], facturas).pares[0]?.facturaId, "por monto gana la más cercana").toBe("f277");
+
+    /* Escrito como lo teclea una persona: el cruce normaliza igual que el chokepoint. */
+    const r = cruzar([{ ...jun, numeroFactura: " fac / 2026 / 0302 " }], facturas);
+    expect(r.pares).toEqual([{ cobroId: "jun", facturaId: "f302", cuentaNombre: "Selvatura", monto: 45, moneda: "USD", cuotas: 1 }]);
+    expect(r.facturasSolas.map((f) => f.id)).toEqual(["f277"]);
+  });
+
+  it("caso 2 · varias cuotas con el mismo número son UNA factura compartida si la suma es el neto", () => {
+    /* ALMOTEC: 3 × 2.300 contra FAC/2026/0329 por 6.900, emitida el 19-ago. */
+    const almotec = ["2026-06", "2026-07", "2026-08"].map((periodo, i) =>
+      cobro({
+        id: `al${i + 1}`,
+        cuentaNombre: "ALMOTEC",
+        periodo,
+        fechaProgramada: `${periodo}-15`,
+        monto: 2300,
+        estado: "PROGRAMADO",
+        fechaEmision: "2026-08-19",
+        numeroFactura: "FAC/2026/0329",
+      }),
+    );
+    const f329 = factura({ id: "f329", odooMoveId: 329, numero: "FAC/2026/0329", invoiceDate: "2026-08-19", montoNeto: 6900, paymentState: "not_paid" });
+
+    const r = cruzar(almotec, [f329]);
+    expect(r.pares.map((p) => [p.cobroId, p.facturaId, p.cuotas])).toEqual([
+      ["al1", "f329", 3],
+      ["al2", "f329", 3],
+      ["al3", "f329", 3],
+    ]);
+    expect(r.montosDistintos).toEqual([]);
+    expect(r.cobrosSolos).toEqual([]);
+
+    /* Sin número terminaba como está hoy en producción: una «diferencia de monto» inventada y dos
+       cuotas sin factura. */
+    const sinNumero = cruzar(almotec.map((c) => ({ ...c, numeroFactura: null })), [f329]);
+    expect(sinNumero.montosDistintos).toHaveLength(1);
+    expect(sinNumero.cobrosSolos).toHaveLength(2);
+  });
+
+  it("caso 3 · si la suma no es el neto es UN monto distinto de la factura entera, no un pago parcial", () => {
+    const dos = [
+      cobro({ id: "a", monto: 2300, numeroFactura: "FAC/2026/0329" }),
+      cobro({ id: "b", fechaProgramada: "2026-08-15", monto: 2300, numeroFactura: "FAC/2026/0329" }),
+    ];
+    const f329 = factura({ id: "f329", odooMoveId: 329, numero: "FAC/2026/0329", montoNeto: 6900 });
+    const r = cruzar(dos, [f329]);
+    expect(r.pares).toEqual([]);
+    expect(r.montosDistintos).toEqual([
+      expect.objectContaining({ cobroId: "a", cobroIds: ["a", "b"], cuotas: 2, montoCobro: 4600, montoFactura: 6900, diferencia: 2300 }),
+    ]);
+
+    const monto = detectarDiferenciasOdoo({ ...alDia, cobros: dos, facturas: [f329], liberaciones: [], cuentas: [], cuentasSinVinculo: 0, cuentasTotales: 1, aceptadas: new Map() })
+      .find((i) => i.codigo === "ODOO-MONTO");
+    expect(monto?.items).toHaveLength(1);
+    expect(monto?.items[0]?.texto).toMatch(/ en 2 cuotas vs Odoo /);
+  });
+
+  it("caso 4 · el número manda aunque la factura esté fuera de la ventana del monto aproximado", () => {
+    const r = cruzar(
+      [cobro({ monto: 2000, numeroFactura: "FAC/2026/0001" })],
+      [factura({ montoNeto: 1800, invoiceDate: "2026-11-20" })],
+    );
+    expect(r.montosDistintos).toEqual([expect.objectContaining({ numero: "FAC/2026/0001", diferencia: -200, cuotas: 1 })]);
+    expect(r.conNumeroSinPar).toEqual([]);
+  });
+
+  it("caso 5 · la factura que se llevó un número ya no la puede tomar otro cobro por monto", () => {
+    const r = cruzar(
+      [
+        cobro({ id: "cA", fechaProgramada: "2026-07-15" }),
+        cobro({ id: "cB", fechaProgramada: "2026-08-15", numeroFactura: "FAC/2026/0001" }),
+      ],
+      [factura({ id: "f1", numero: "FAC/2026/0001", invoiceDate: "2026-07-15" })],
+    );
+    expect(r.pares).toEqual([expect.objectContaining({ cobroId: "cB", facturaId: "f1" })]);
+    expect(r.cobrosSolos.map((c) => c.id)).toEqual(["cA"]);
+  });
+
+  it("caso 6 · ⛔ un número que no encuentra su factura NO se aparea por monto con otra", () => {
+    /* IIA: 60 con FAC/2026/0295, y en la cuenta hay otra factura de 60. Aparearlas sería desmentir el
+       número que una persona anotó. */
+    const r = cruzar(
+      [cobro({ id: "iia", monto: 60, numeroFactura: "FAC/2026/0295" })],
+      [factura({ id: "f274", numero: "FAC/2026/0274", montoNeto: 60 })],
+    );
+    expect(r.pares).toEqual([]);
+    expect(r.montosDistintos).toEqual([]);
+    expect(r.cobrosSolos, "tampoco es un «cobro sin factura»: su porqué es más fino").toEqual([]);
+    expect(r.conNumeroSinPar.map((c) => c.id)).toEqual(["iia"]);
+    expect(r.facturasSolas.map((f) => f.id)).toEqual(["f274"]);
+  });
+
+  it("⛔ el número no cruza cuentas ni monedas", () => {
+    const c = cobro({ numeroFactura: "FAC/2026/0001" });
+    expect(cruzar([c], [factura({ cuentaId: "cta2" })]).conNumeroSinPar).toHaveLength(1);
+    expect(cruzar([c], [factura({ moneda: "CRC" })]).conNumeroSinPar).toHaveLength(1);
+  });
+
+  it("un número de Mercury no se busca en Odoo ni se aparea por monto; uno sin forma conocida sigue por monto", () => {
+    const mercury = cruzar([cobro({ numeroFactura: "INV-16" })], [factura()]);
+    expect(mercury.pares).toEqual([]);
+    expect(mercury.conNumeroSinPar).toHaveLength(1);
+
+    /* Un número de transferencia no es de ninguna plataforma: no hay contra qué buscarlo. */
+    expect(cruzar([cobro({ numeroFactura: "666471587" })], [factura()]).pares).toHaveLength(1);
+  });
+});
+
+describe("por qué un número no lleva a su factura", () => {
+  const porQue = (numero: string, facturas: FacturaParaCruzar[], p: Partial<CobroParaCruzar> = {}) =>
+    clasificarNumerosSinPar([cobro({ numeroFactura: numero, ...p })], facturas)[0];
+
+  it("Odoo no tiene ese documento", () => {
+    expect(porQue("fac/2026/0295", [])).toEqual({
+      cobro: expect.objectContaining({ id: "c1" }),
+      numero: "FAC/2026/0295",
+      porQue: "sin-documento",
+      documento: null,
+    });
+  });
+
+  it("es de un cliente de Odoo emparejado con otra cuenta", () => {
+    expect(porQue("FAC/2026/0001", [factura({ cuentaId: "cta2" })])?.porQue).toBe("otra-cuenta");
+  });
+
+  it("sin atribuir: el documento existe y su cliente de Odoo no está emparejado con nadie", () => {
+    expect(porQue("FAC/2026/0001", [factura({ cuentaId: null })])?.porQue).toBe("sin-atribuir");
+  });
+
+  it("es una nota de crédito", () => {
+    expect(porQue("NC/2026/0001", [factura({ numero: "NC/2026/0001", moveType: "out_refund" })])?.porQue).toBe("nota-de-credito");
+  });
+
+  it("la factura está anulada o revertida", () => {
+    expect(porQue("FAC/2026/0001", [factura({ state: "cancel" })])?.porQue).toBe("anulada");
+    expect(porQue("FAC/2026/0001", [factura({ paymentState: "reversed" })])?.porQue).toBe("anulada");
+  });
+
+  it("la factura está en otra moneda", () => {
+    expect(porQue("FAC/2026/0001", [factura({ moneda: "CRC" })])?.porQue).toBe("otra-moneda");
+  });
+
+  it("es un número de Mercury", () => {
+    expect(porQue("INV-4-1", [])?.porQue).toBe("numero-de-mercury");
+  });
+
+  it("un cobro que sí tiene su factura no recibe un porqué inventado", () => {
+    expect(porQue("FAC/2026/0001", [factura()])).toBeUndefined();
+  });
+});
+
+describe("«Lo que no cuadra» con el número de la factura", () => {
+  const base = {
+    liberaciones: [],
+    cuentas: [
+      { id: "cta1", nombre: "Seléctrica", tipo: "NACIONAL", viaCobro: "ODOO" },
+      { id: "cta2", nombre: "Electrocaribe", tipo: "NACIONAL", viaCobro: "ODOO" },
+      { id: "merc", nombre: "Colby", tipo: "NACIONAL", viaCobro: "MERCURY" },
+    ],
+    cuentasSinVinculo: 0,
+    cuentasTotales: 3,
+    cuentasVinculadas: new Set<string>(["cta1", "cta2", "merc"]),
+    /* ⇒ corte = 2026-08-18 (15 días de gracia). */
+    ultimaCorridaOk: "2026-09-02" as string | null,
+    aceptadas: new Map<string, string>(),
+  };
+  const lista = (cobros: CobroParaCruzar[], facturas: FacturaParaCruzar[] = [], extra: Partial<typeof base> = {}) =>
+    detectarDiferenciasOdoo({ ...base, ...extra, cobros, facturas });
+  const linea = (l: DiferenciaOdoo[], codigo: string) => l.find((i) => i.codigo === codigo);
+
+  it("«Odoo no tiene ese documento» sale en su línea y NO en «cobro sin factura»: no se cuenta dos veces", () => {
+    const iia = cobro({ id: "iia", monto: 60, periodo: "2026-06", fechaEmision: "2026-06-10", estado: "COBRADO" });
+    const l = lista([{ ...iia, numeroFactura: "FAC/2026/0295" }]);
+    const sinDoc = linea(l, "ODOO-NUMERO-SIN-DOCUMENTO");
+    expect(sinDoc?.severidad).toBe("ALTA");
+    expect(sinDoc?.montoEnJuego).toBe(60);
+    expect(sinDoc?.items.map((i) => i.nota)).toEqual(["FAC/2026/0295 · Odoo no tiene ese documento · 2026-06 · COBRADO"]);
+    expect(linea(l, "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+
+    /* El mismo cobro sin número sí es «cobro sin factura»: la plata va a una sola de las dos líneas. */
+    const sinNumero = lista([iia]);
+    expect(linea(sinNumero, "ODOO-COBRO-SIN-FACTURA")?.montoEnJuego).toBe(60);
+    expect(linea(sinNumero, "ODOO-NUMERO-SIN-DOCUMENTO")).toBeUndefined();
+  });
+
+  it("«no existe» espera al espejo; una nota de crédito ya está en el espejo y no espera", () => {
+    const reciente = cobro({ id: "r", fechaEmision: "2026-08-30", numeroFactura: "FAC/2026/0400" });
+    expect(linea(lista([reciente]), "ODOO-NUMERO-SIN-DOCUMENTO")).toBeUndefined();
+
+    const nota = factura({ id: "nc", numero: "NC/2026/0001", moveType: "out_refund", invoiceDate: "2026-08-30" });
+    const l = linea(
+      lista([reciente, cobro({ id: "n", fechaEmision: "2026-08-30", numeroFactura: "NC/2026/0001" })], [nota]),
+      "ODOO-NUMERO-SIN-DOCUMENTO",
+    );
+    expect(l?.items.map((i) => i.nota?.split(" · ")[1])).toEqual(["es una nota de crédito, no una factura"]);
+    expect(l?.detalle).toContain("No se cuentan 1 cobro(s) con un número que el espejo todavía no pudo ver");
+  });
+
+  it("⛔ si el espejo nunca corrió bien, «no existe» no se afirma", () => {
+    expect(linea(lista([cobro({ numeroFactura: "FAC/2026/0295" })], [], { ultimaCorridaOk: null }), "ODOO-NUMERO-SIN-DOCUMENTO")).toBeUndefined();
+  });
+
+  it("«el número es de otro cliente de Odoo»: con atajo a Emparejar y la cuenta con la que está emparejado", () => {
+    const ajena = factura({ id: "f", numero: "FAC/2026/0276", cuentaId: "cta2", odooPartnerNombre: "ELECTROCARIBE S.A.", montoNeto: 90 });
+    const l = lista([cobro({ monto: 45, numeroFactura: "FAC/2026/0276" })], [ajena]);
+    const otro = linea(l, "ODOO-NUMERO-DE-OTRO-CLIENTE");
+    expect(otro?.severidad).toBe("ALTA");
+    expect(otro?.atajo?.tab).toBe("emparejar");
+    expect(otro?.items[0]?.nota).toContain("es de ELECTROCARIBE S.A., emparejado con Electrocaribe");
+    expect(linea(l, "ODOO-NUMERO-SIN-DOCUMENTO")).toBeUndefined();
+    expect(linea(l, "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+  });
+
+  it("sin atribuir no se acusa: se cuenta en ODOO-SIN-CUENTA, que es donde se arregla", () => {
+    /* Judesur: FAC/2026/0330 por ₡704.563 existe en el espejo, pero su cliente de Odoo sin cuenta. */
+    const suelta = factura({ id: "s", numero: "FAC/2026/0330", cuentaId: null, moneda: "CRC", montoNeto: 704563 });
+    const l = lista([cobro({ moneda: "CRC", monto: 704563, numeroFactura: "FAC/2026/0330" })], [suelta]);
+    expect(linea(l, "ODOO-NUMERO-SIN-DOCUMENTO")).toBeUndefined();
+    expect(linea(l, "ODOO-NUMERO-DE-OTRO-CLIENTE")).toBeUndefined();
+    expect(linea(l, "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+    expect(linea(l, "ODOO-SIN-CUENTA")?.detalle).toContain("1 cobro(s) ya tienen anotado el número de una de estas facturas");
+  });
+
+  it("⛔ una cuenta Mercury no genera ninguna línea por el número de sus cobros", () => {
+    const l = lista(
+      [
+        cobro({ id: "m1", cuentaId: "merc", numeroFactura: "FAC/2026/0999" }),
+        cobro({ id: "m2", cuentaId: "merc", numeroFactura: "INV-16" }),
+        cobro({ id: "m3", cuentaId: "merc", numeroFactura: "FAC/2026/0001" }),
+      ],
+      [factura({ id: "x", numero: "FAC/2026/0999", cuentaId: "cta2" })],
+    );
+    for (const codigo of ["ODOO-NUMERO-SIN-DOCUMENTO", "ODOO-NUMERO-DE-OTRO-CLIENTE", "ODOO-COBRO-SIN-FACTURA", "CUENTA-INTERNACIONAL-EN-ODOO"]) {
+      expect(linea(l, codigo), codigo).toBeUndefined();
+    }
+  });
+
+  it("un INV-x en una cuenta de Odoo va como evidencia en CUENTA-INTERNACIONAL-EN-ODOO, sin cambiar la huella", () => {
+    const cuentas = [
+      { id: "wx", nombre: "Wherex", tipo: "INTERNACIONAL", viaCobro: "ODOO" },
+      { id: "cta1", nombre: "Seléctrica", tipo: "NACIONAL", viaCobro: "ODOO" },
+    ];
+    const extra = { cuentas, cuentasVinculadas: new Set<string>(["wx", "cta1"]) };
+    const wherex = cobro({ id: "w", cuentaId: "wx", cuentaNombre: "Wherex" });
+    const sin = lista([wherex], [], extra);
+    const con = lista([{ ...wherex, numeroFactura: "INV-4-1" }], [], extra);
+    const lSin = linea(sin, "CUENTA-INTERNACIONAL-EN-ODOO");
+    const lCon = linea(con, "CUENTA-INTERNACIONAL-EN-ODOO");
+    if (!lSin || !lCon) throw new Error("falta la línea CUENTA-INTERNACIONAL-EN-ODOO");
+    expect(lCon.items[0]?.nota).toBe("internacional · vía de cobro: Odoo (por defecto) · ⚠ tiene facturas con número de Mercury: INV-4-1");
+    /* Una línea ya aceptada no se reabre solo por anotar un número. */
+    expect(huellaDe(lCon)).toBe(huellaDe(lSin));
+    expect(lCon.titulo).toBe(lSin.titulo);
+    /* Y no se acusa como «cobro sin factura»: su factura está en Mercury. */
+    expect(linea(sin, "ODOO-COBRO-SIN-FACTURA")).toBeDefined();
+    expect(linea(con, "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+
+    /* Una cuenta nacional con esa misma evidencia entra a la línea. */
+    const nacional = linea(lista([cobro({ numeroFactura: "INV-16" })], [], extra), "CUENTA-INTERNACIONAL-EN-ODOO");
+    expect(nacional?.items.map((i) => i.texto)).toEqual(["Seléctrica", "Wherex"]);
+    expect(nacional?.titulo).toBe("2 cuentas dicen facturar por Odoo y puede que no lo hagan");
+  });
+
+  it("la lista no cambia cuando el número dice lo mismo que ya apareaba el monto", () => {
+    const a = cobro({ id: "a", monto: 2000 });
+    const b = cobro({ id: "b", monto: 1800, fechaProgramada: "2026-08-15", fechaEmision: "2026-08-10" });
+    const facturas = [
+      factura({ id: "fa", odooMoveId: 1, numero: "FAC/2026/0001", montoNeto: 2000 }),
+      factura({ id: "fb", odooMoveId: 2, numero: "FAC/2026/0002", montoNeto: 1500, invoiceDate: "2026-08-12" }),
+      factura({ id: "fc", odooMoveId: 3, numero: "FAC/2026/0003", montoNeto: 999, invoiceDate: "2026-08-20" }),
+    ];
+    const conNumero = [
+      { ...a, numeroFactura: "FAC/2026/0001" },
+      { ...b, numeroFactura: "FAC/2026/0002" },
+    ];
+    const antes = lista([a, b], facturas);
+    expect(antes.map((i) => i.codigo)).toEqual(expect.arrayContaining(["ODOO-MONTO", "ODOO-FACTURA-SIN-COBRO"]));
+    expect(lista(conNumero, facturas)).toEqual(antes);
   });
 });

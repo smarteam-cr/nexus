@@ -388,6 +388,9 @@ export async function cargarDiferencias(): Promise<{
         moneda: true,
         estado: true,
         fechaEmision: true,
+        /* ⚠ Etapa 8: el cruce aparea primero por número. La columna es del SQL de la etapa 7, que ya
+           tenía que ir antes del deploy: sin él, esta pantalla también da error. */
+        numeroFactura: true,
         cuenta: { select: { client: { select: { name: true } } } },
       },
       orderBy: [{ fechaProgramada: "asc" }, { id: "asc" }],
@@ -446,6 +449,7 @@ export async function cargarDiferencias(): Promise<{
       moneda: c.moneda,
       estado: c.estado,
       fechaEmision: c.fechaEmision ? c.fechaEmision.toISOString().slice(0, 10) : null,
+      numeroFactura: c.numeroFactura,
     })),
     facturas: facturasDb.map((f) => ({
       id: f.id,

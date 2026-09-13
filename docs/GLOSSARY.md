@@ -160,6 +160,11 @@
   No es único: puede repetirse en cuotas de la misma cuenta, nunca en dos cuentas (409 + INV33).
   Revertir la factura lo limpia y deja el viejo en la bitácora. La marca «no tengo el número» es
   `sinNumeroFacturaMotivo`. Regla: `lib/cobranza/numero-factura.ts`.
+- **factura compartida** (Cobranza › Odoo): una factura de Odoo que cubre varias cuotas, porque
+  esas cuotas tienen anotado el mismo número (ALMOTEC: 3 × 2.300 en FAC/2026/0329). El cruce
+  (`cruzar()` en `lib/cobranza/odoo/diferencias.ts`) aparea primero por número y compara la SUMA de
+  las cuotas contra el neto. No es un pago parcial y no propone semáforo por cuota: el estado de pago
+  es el de la factura entera. Por monto nunca se adivina una factura compartida.
 - **por facturar / por facturar atrasado**: estado de un cobro sin `fechaEmision` — mismo
   color amarillo en el semáforo (la urgencia se expresa en la alerta, no en el color: "en
   ventana" es `COBRO_PROXIMO`, atrasado sin gracia es `FACTURACION_ATRASADA`, urgencia ALTA).

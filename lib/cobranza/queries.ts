@@ -48,6 +48,7 @@ import {
   type ItemInconsistencia,
 } from "@/lib/finanzas/inconsistencias";
 import { cruzar } from "@/lib/cobranza/odoo/diferencias";
+import { plataformaDelNumero } from "@/lib/cobranza/numero-factura";
 import { proponerSemaforo } from "@/lib/cobranza/odoo/espejo";
 /**
  * ⚠ La promoción a verde nace APAGADA. 188 facturas están en `in_payment`, un estado que
@@ -152,7 +153,18 @@ export interface CobroDTO {
     sinConciliar: boolean;
     estadoPropuesto: string | null;
     nota: string;
+    /**
+     * Cuántas cuotas cubre esta factura (etapa 8): 1 = la suya sola. Más de 1 = una factura
+     * compartida, apareada por el número anotado en cada cuota. ⚠ No es un pago parcial, y por eso
+     * no propone semáforo: Odoo informa el pago de la factura entera, no el de cada cuota.
+     */
+    cuotas: number;
   } | null;
+  /**
+   * El cobro tiene anotado un número con forma de Odoo y ninguna factura de su cuenta en el espejo le
+   * corresponde. El porqué (no existe, es de otro cliente, está anulada…) lo dice «Lo que no cuadra».
+   */
+  numeroSinFacturaOdoo: boolean;
 }
 
 export interface CuotaPlanDTO {
@@ -294,7 +306,7 @@ type CobroRow = {
   notas: string | null;
 };
 
-function serializeCobro(c: CobroRow, facturas?: ReadonlyMap<string, CobroDTO["facturaOdoo"]>): CobroDTO {
+function serializeCobro(c: CobroRow, odoo?: FacturasDeOdooPorCobro): CobroDTO {
   return {
     id: c.id,
     servicioId: c.servicioId,
@@ -311,7 +323,8 @@ function serializeCobro(c: CobroRow, facturas?: ReadonlyMap<string, CobroDTO["fa
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
     confirmadoEn: iso(c.confirmadoEn),
-    facturaOdoo: facturas?.get(c.id) ?? null,
+    facturaOdoo: odoo?.porCobro.get(c.id) ?? null,
+    numeroSinFacturaOdoo: odoo?.numeroSinPar.has(c.id) ?? false,
     referenciaExterna: c.referenciaExterna,
     numeroFactura: c.numeroFactura,
     numeroFacturaPor: c.numeroFacturaPor,
@@ -2764,19 +2777,24 @@ async function armarEstadoParaAuditar(
 }
 
 
+interface FacturasDeOdooPorCobro {
+  porCobro: Map<string, CobroDTO["facturaOdoo"]>;
+  /** Cobros con un número de Odoo anotado que no encontró su factura entre las de la cuenta. */
+  numeroSinPar: Set<string>;
+}
+
 /**
  * Aparea los cobros de UNA cuenta con las facturas que Odoo le emitió.
  *
- * ⚠ Devuelve un mapa vacío sin tocar la base cuando la cuenta no tiene facturas espejadas —
- * que hoy es el caso de todas, porque falta emparejar. La pantalla no cambia hasta que el
- * emparejado exista, y eso es lo correcto: mostrar una factura de otro cliente sería peor que
- * no mostrar ninguna.
+ * ⚠ Una cuenta sin facturas espejadas no tiene pares, y eso es lo correcto hasta que se empareje:
+ * mostrar una factura de otro cliente sería peor que no mostrar ninguna. Lo que sí sale igual es qué
+ * cobros tienen anotado un número de Odoo que no está entre las facturas de la cuenta.
  */
 async function aparearFacturasDeOdoo(
   cuentaId: string,
   cuentaNombre: string,
   servicios: ReadonlyArray<{ cobros: ReadonlyArray<CobroRow> }>,
-): Promise<Map<string, CobroDTO["facturaOdoo"]>> {
+): Promise<FacturasDeOdooPorCobro> {
   const out = new Map<string, CobroDTO["facturaOdoo"]>();
   /* `select` explícito: una columna nueva del espejo (`montoMonedaCompania`, etapa 4) no puede
      tumbar el cronograma si el código llega a producción antes que su SQL. */
@@ -2799,8 +2817,6 @@ async function aparearFacturasDeOdoo(
       state: true,
     },
   });
-  if (!facturasDb.length) return out;
-
   const cobros = servicios.flatMap((s) =>
     s.cobros.map((c) => ({
       id: c.id,
@@ -2812,6 +2828,8 @@ async function aparearFacturasDeOdoo(
       moneda: c.moneda,
       estado: c.estado,
       fechaEmision: isoDay(c.fechaEmision),
+      /* Etapa 8: el número manda. Sin él, el cruce vuelve a adivinar por monto. */
+      numeroFactura: c.numeroFactura,
     })),
   );
   const facturas = facturasDb.map((f) => ({
@@ -2834,10 +2852,15 @@ async function aparearFacturasDeOdoo(
   const porId = new Map(facturas.map((f) => [f.id, f]));
   const estadoDe = new Map(cobros.map((c) => [c.id, c.estado]));
   const cruce = cruzar(cobros, facturas);
+  /* Solo los números con forma de Odoo: uno de Mercury no va a aparecer en este espejo nunca, y
+     decir «no está» sobre él sería un aviso que no se puede cerrar. */
+  const numeroSinPar = new Set(
+    cruce.conNumeroSinPar.filter((c) => plataformaDelNumero(c.numeroFactura) === "ODOO").map((c) => c.id),
+  );
 
   /* Los pares exactos y los de monto distinto: los dos muestran la factura. Un monto que no
      coincide es JUSTAMENTE lo que hay que ver al lado del cobro, no algo a esconder. */
-  const asignar = (cobroId: string, facturaId: string) => {
+  const asignar = (cobroId: string, facturaId: string, cuotas: number) => {
     const f = porId.get(facturaId);
     if (!f) return;
     const p = proponerSemaforo(
@@ -2845,6 +2868,10 @@ async function aparearFacturasDeOdoo(
       f.paymentState,
       { promocionHabilitada: PROMOCION_ODOO_HABILITADA },
     );
+    /* ⚠ Una factura compartida no propone semáforo por cuota. «Pagada» es la factura entera, y
+       «pago parcial» no dice cuál de las cuotas se pagó: proponer verde en cada una sería inventarlo. */
+    const compartida = cuotas > 1;
+    const nota = p.divergencia ? `${p.nota} (${p.divergencia})` : p.nota;
     out.set(cobroId, {
       numero: f.numero,
       invoiceDate: f.invoiceDate,
@@ -2854,11 +2881,12 @@ async function aparearFacturasDeOdoo(
       paymentState: f.paymentState,
       senal: p.senal,
       sinConciliar: p.sinConciliar,
-      estadoPropuesto: p.estadoPropuesto,
-      nota: p.divergencia ? `${p.nota} (${p.divergencia})` : p.nota,
+      estadoPropuesto: compartida ? null : p.estadoPropuesto,
+      nota: compartida ? `${nota} La factura cubre ${cuotas} cuotas: su estado de pago es el de la factura entera.` : nota,
+      cuotas,
     });
   };
-  for (const par of cruce.pares) asignar(par.cobroId, par.facturaId);
-  for (const d of cruce.montosDistintos) asignar(d.cobroId, d.facturaId);
-  return out;
+  for (const par of cruce.pares) asignar(par.cobroId, par.facturaId, par.cuotas);
+  for (const d of cruce.montosDistintos) for (const id of d.cobroIds) asignar(id, d.facturaId, d.cuotas);
+  return { porCobro: out, numeroSinPar };
 }
