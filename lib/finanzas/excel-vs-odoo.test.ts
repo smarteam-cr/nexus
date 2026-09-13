@@ -158,7 +158,27 @@ describe("1 · el Excel dice pagada y Odoo no", () => {
     const x = linea(base, "EXCEL_PAGADA_ODOO_NO-USD");
     expect(numeros(x)).toEqual(["FAC/2026/0210"]);
     expect(x).toMatchObject({ montoEnJuego: 15226.75, moneda: "USD", resuelve: "COBRANZA", severidad: "ALTA" });
-    expect(x.items[0]?.nota).toBe("Odoo: sin pago · febrero de 2026");
+    expect(x.items[0]?.nota).toBe(
+      "Odoo: sin pago · Odoo tiene sin aplicar la nota de crédito FAC/2026/0246 del mismo cliente por el mismo monto: si anuló esta factura, falta aplicarla · febrero de 2026",
+    );
+  });
+
+  it("⚠ Publimark 0210 y su nota de crédito 0246, del mismo día y monto y sin aplicar: la factura nombra la nota y la nota nombra la factura", () => {
+    // Medido en la copia real: sin esto, «si no está el depósito, marcarla sin pagar» devolvía al Excel
+    // US$15.226,75 de una factura que Odoo anuló y nadie cruzó.
+    const nota = linea(base, "NOTA_DE_CREDITO_SIN_APLICAR-USD").items.find((it) => it.id === "FAC/2026/0246")?.nota;
+    expect(nota).toBe("Emitida en febrero de 2026 · mismo cliente y monto que FAC/2026/0210, que el Excel da pagada y Odoo sin pago");
+    expect(linea(base, "EXCEL_PAGADA_ODOO_NO-USD").queHacer).toMatch(/nota de crédito sin aplicar/);
+  });
+
+  it("no nombra una nota ya aplicada, de otro cliente o por otro monto", () => {
+    const notaDe0210 = (facturas: FacturaDelEspejo[]) =>
+      linea(compararExcelConOdoo(entrada({ facturas })), "EXCEL_PAGADA_ODOO_NO-USD").items.find((it) => it.id === "FAC/2026/0210")?.nota;
+    expect(notaDe0210(conFactura("FAC/2026/0246", { paymentState: "paid" }))).toBe("Odoo: sin pago · febrero de 2026");
+    expect(notaDe0210(conFactura("FAC/2026/0246", { odooPartnerId: 2 }))).toBe("Odoo: sin pago · febrero de 2026");
+    expect(notaDe0210(conFactura("FAC/2026/0246", { montoTotal: 15226.7 }))).toBe("Odoo: sin pago · febrero de 2026");
+    // Y la nota de Global Supply no nombra a 0206: el Excel la da sin pagar, no hay nada que explicar.
+    expect(linea(base, "NOTA_DE_CREDITO_SIN_APLICAR-USD").items.find((it) => it.id === "FAC/2026/0248")?.nota).toBe("Emitida en marzo de 2026");
   });
 
   it("con un pago parcial, el monto es lo que falta y no el total", () => {

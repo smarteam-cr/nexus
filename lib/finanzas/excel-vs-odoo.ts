@@ -115,6 +115,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /** Dólares primero, colones después: es el orden en que Alex lee el Excel. Nunca por monto. */
 const ordenDeMoneda = (m: string) => (m === "USD" ? 0 : m === "CRC" ? 1 : 2);
 const EN_MONEDA: Record<string, string> = { USD: "en dólares", CRC: "en colones" };
+const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
 /**
  * ¿Odoo la tiene y vale? Vigente en la copia, no anulada y no revertida. Una factura sigue la regla de la
@@ -124,6 +125,11 @@ export function vigenteEnOdoo(f: FacturaDelEspejo): boolean {
   if (f.estadoEspejo !== "VIGENTE") return false;
   if (f.moveType === "out_refund") return f.state !== "cancel" && f.paymentState !== "reversed";
   return esDocumentoVivo(f);
+}
+
+/** Una nota de crédito que Odoo tiene vigente y sin aplicar a ninguna factura: un saldo a favor del cliente. */
+function esNotaSinAplicar(f: FacturaDelEspejo): boolean {
+  return f.moveType === "out_refund" && f.estadoEspejo === "VIGENTE" && f.state !== "cancel" && f.paymentState === "not_paid";
 }
 
 /** Lo que Odoo deja por cobrar de una factura. Registrado sin conciliar (in_payment) ya no es deuda. */
@@ -220,10 +226,11 @@ const PAGADA_Y_ODOO_NO: Molde = {
   titulo: (n) => (n === 1 ? "Una factura que el Excel da por pagada y Odoo no" : `${n} facturas que el Excel da por pagadas y Odoo no`),
   detalle:
     "El Excel las marca pagadas, pero en Odoo siguen sin pago o con un pago a medias. Si la plata entró, falta " +
-    "registrarla en Odoo; si no entró, el Excel da por cobrado algo que el cliente todavía debe. El monto es lo " +
-    "que Odoo deja por cobrar.",
+    "registrarla en Odoo; si no entró, el Excel da por cobrado algo que el cliente todavía debe. Cuando al lado " +
+    "dice que Odoo tiene una nota de crédito sin aplicar del mismo cliente y por el mismo monto, lo más probable " +
+    "es que la factura se anuló y nadie cruzó la nota. El monto es lo que Odoo deja por cobrar.",
   queHacer:
-    "Buscar el depósito en el banco: si está, registrar el pago en Odoo; si no está, volver a marcarla sin pagar en el Excel.",
+    "Si al lado dice que hay una nota de crédito sin aplicar, que contabilidad la aplique en Odoo; si no, buscar el depósito en el banco: si está, registrar el pago en Odoo, y si no está, volver a marcarla sin pagar en el Excel.",
   resuelve: "COBRANZA",
 };
 
@@ -365,6 +372,15 @@ export function compararExcelConOdoo(e: EntradaExcelVsOdoo): ExcelVsOdoo {
   const montoDistinto: Caso[] = [];
   const partnersDelExcel = new Set<number>();
 
+  // Las notas de crédito que Odoo tiene sin aplicar, por ficha de cliente. Se miran dos veces: como punto
+  // propio (abajo) y al lado de cada factura que el Excel da pagada y Odoo no.
+  const notasPorPartner = new Map<number, FacturaDelEspejo[]>();
+  for (const f of e.facturas) {
+    if (esNotaSinAplicar(f)) notasPorPartner.set(f.odooPartnerId, [...(notasPorPartner.get(f.odooPartnerId) ?? []), f]);
+  }
+  /** Número de una nota → las facturas del punto 1 que explica (mismo cliente, misma moneda, mismo monto). */
+  const facturasDeLaNota = new Map<string, string[]>();
+
   for (const c of cruces) {
     const f = c.factura;
     const texto = `${c.numero} · ${c.fila.cliente}`;
@@ -397,16 +413,30 @@ export function compararExcelConOdoo(e: EntradaExcelVsOdoo): ExcelVsOdoo {
     if (c.estado === "PAGADO") {
       if (f.paymentState === "not_paid" || f.paymentState === "partial") {
         const parcial = f.paymentState === "partial";
+        const debe = parcial ? f.montoResidual : f.montoTotal;
+        // ⚠ Una nota de crédito sin aplicar del mismo cliente y por lo mismo que Odoo deja por cobrar es casi
+        // siempre la factura anulada sin cruzar: medido, Publimark 0210 y su nota 0246 son del mismo día y
+        // monto. Sin decirlo, «si no está el depósito, marcarla sin pagar» devolvía al Excel una deuda que
+        // no existe (US$18.000 entre Publimark, Fruitpoint y Fundación Tecnológica).
+        // Por número: la copia no llega en orden, y la misma nota no puede cambiar de lugar entre dos cargas.
+        const iguales = (notasPorPartner.get(f.odooPartnerId) ?? [])
+          .filter((n) => n.moneda === f.moneda && centavos(n.montoTotal) === centavos(debe))
+          .sort((a, b) => a.numero.localeCompare(b.numero));
+        for (const n of iguales) facturasDeLaNota.set(n.numero, [...(facturasDeLaNota.get(n.numero) ?? []), c.numero]);
         pagadaYOdooNo.push({
           moneda: f.moneda,
           item: {
             id: c.numero,
             texto,
-            monto: parcial ? f.montoResidual : f.montoTotal,
+            monto: debe,
             nota: juntar([
               parcial
                 ? `Odoo: pago parcial, faltan ${fmtMontoLibro(f.montoResidual, f.moneda)} de ${fmtMontoLibro(f.montoTotal, f.moneda)}`
                 : "Odoo: sin pago",
+              iguales.length > 0
+                ? `Odoo tiene sin aplicar ${iguales.length === 1 ? "la nota de crédito" : "las notas de crédito"} ` +
+                  `${enLista(iguales.map((n) => n.numero))} del mismo cliente por el mismo monto: si anuló esta factura, falta aplicarla`
+                : null,
               mes,
             ]),
           },
@@ -448,12 +478,24 @@ export function compararExcelConOdoo(e: EntradaExcelVsOdoo): ExcelVsOdoo {
   // nombre: en las pestañas de Odoo el Excel copia la razón social tal como sale en la factura.
   const notasSinAplicar: Caso[] = [];
   for (const f of e.facturas) {
-    if (f.moveType !== "out_refund" || f.estadoEspejo !== "VIGENTE" || f.state === "cancel" || f.paymentState !== "not_paid") continue;
+    if (!esNotaSinAplicar(f)) continue;
     const porNombre = clavesDeCliente(f.odooPartnerNombre).some((clave) => clientesDelExcel.has(clave));
     if (!partnersDelExcel.has(f.odooPartnerId) && !porNombre) continue;
+    // La factura que esta nota probablemente anula: dirección decide a cuál aplicarla con el número a la vista.
+    const explica = facturasDeLaNota.get(f.numero) ?? [];
     notasSinAplicar.push({
       moneda: f.moneda,
-      item: { id: f.numero, texto: `${f.numero} · ${f.odooPartnerNombre}`, monto: f.montoTotal, nota: `Emitida en ${nombreDelPeriodo(f.invoiceDate.slice(0, 7))}` },
+      item: {
+        id: f.numero,
+        texto: `${f.numero} · ${f.odooPartnerNombre}`,
+        monto: f.montoTotal,
+        nota: juntar([
+          `Emitida en ${nombreDelPeriodo(f.invoiceDate.slice(0, 7))}`,
+          explica.length > 0
+            ? `mismo cliente y monto que ${enLista(explica)}, que el Excel da ${explica.length === 1 ? "pagada" : "pagadas"} y Odoo sin pago`
+            : null,
+        ]),
+      },
     });
   }
 
@@ -555,8 +597,6 @@ const SECCION_FUERA_DE_ODOO: Record<SeccionLibro, string> = {
   COMPENDIO: "solo del Compendio",
   ODOO: "de Odoo",
 };
-
-const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
 /**
  * La nota al pie: lo que no se comparó y por qué, con su conteo. null = se comparó todo.
