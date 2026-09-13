@@ -176,3 +176,30 @@ describe("⛔ vincular solo escribe la cuenta de las facturas", () => {
     expect(src).toMatch(/reatribuciones\(/);
   });
 });
+
+/**
+ * ── ⚠ LA EVIDENCIA DEL TIPO DE CAMBIO LLEGA A LA BASE ──────────────────────────
+ * `evidenciaDesactualizada` tiene su test en espejo.test.ts, pero la decisión de escribir la vive
+ * en sync.ts. Medido el 2026-09-12: borrar `!evidenciaVieja` de la condición de «sin cambios»
+ * dejaba las 5229 pruebas en verde, y con eso un tipo de cambio corregido en Odoo —o una fila que
+ * el código anterior dejó sin colones— no llega nunca, porque `calcularDeltas` no mira esa columna.
+ */
+describe("⚠ el sync escribe la evidencia del tipo de cambio aunque no haya deltas", () => {
+  it("la condición de «sin cambios» exige que la evidencia esté al día", () => {
+    const src = fuente("sync.ts");
+    const desde = src.indexOf("const evidenciaVieja = evidenciaDesactualizada(");
+    expect(desde, "el sync dejó de comparar la evidencia").toBeGreaterThan(0);
+    const hasta = src.indexOf("sinCambio.push(previa.id)", desde);
+    expect(hasta).toBeGreaterThan(desde);
+    expect(src.slice(desde, hasta)).toMatch(/if\s*\([^)]*!evidenciaVieja[^)]*\)\s*\{/);
+  });
+
+  it("`datos` —el mismo objeto del alta y de la actualización— lleva las dos columnas", () => {
+    const src = fuente("sync.ts");
+    const desde = src.indexOf("const datos = {");
+    expect(desde).toBeGreaterThan(0);
+    const datos = src.slice(desde, src.indexOf("};", desde));
+    expect(datos).toMatch(/montoTotalSigned:\s*f\.montoTotalSigned/);
+    expect(datos).toMatch(/montoMonedaCompania:\s*f\.montoMonedaCompania/);
+  });
+});
