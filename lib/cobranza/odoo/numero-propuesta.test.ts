@@ -136,6 +136,37 @@ describe("las cuotas que el libro no nombra: el espejo, por monto y fecha", () =
   });
 });
 
+/* ⚠ Arriba, la nota de crédito, la factura tomada e INV-26 también están en el libro, y el libro las
+   descarta antes de que el espejo las vea: sacar el filtro del espejo dejaba esas pruebas en verde.
+   Acá el libro no las nombra y las tres empatan en fecha con la cuota, así que solo las frena el espejo. */
+describe("⛔ el espejo solo, sin el libro: tampoco propone lo que nunca se propone", () => {
+  const soloEspejo: ContextoLibro = {
+    cuentas: [
+      { cuentaId: "sel", nombre: "Seléctrica", razonSocial: null, cedulaJuridica: null, tipo: "NACIONAL", viaCobro: "ODOO" },
+      { cuentaId: "otra", nombre: "Electrocaribe", razonSocial: null, cedulaJuridica: null, tipo: "NACIONAL", viaCobro: "ODOO" },
+    ],
+    vinculos: [{ odooPartnerId: 5, odooPartnerNombre: "SOLIS ELECTRICA SOCIEDAD DE RESPONSABILIDAD LIMITADA", cuentaId: "sel", ignorado: false }],
+    facturas: [
+      facturaDelEspejo({ numero: "NC/2026/0009", odooPartnerId: 5, montoNeto: 45, invoiceDate: "2026-09-02", moveType: "out_refund" }),
+      facturaDelEspejo({ numero: "FAC/2026/0350", odooPartnerId: 5, montoNeto: 45, invoiceDate: "2026-09-02" }),
+      facturaDelEspejo({ numero: "INV-27", odooPartnerId: 5, montoNeto: 45, invoiceDate: "2026-09-02" }),
+      facturaDelEspejo({ numero: "FAC/2026/0351", odooPartnerId: 5, montoNeto: 45, invoiceDate: "2026-09-20" }),
+    ],
+    cobros: [
+      cobroDeNexus({ id: "sel-sep", cuentaId: "sel", periodo: "2026-09", monto: 45, estado: "POR_COBRAR", fechaEmision: "2026-09-02" }),
+      cobroDeNexus({ id: "otra-sep", cuentaId: "otra", periodo: "2026-09", monto: 45, estado: "POR_COBRAR", fechaEmision: "2026-09-02", numeroFactura: "FAC/2026/0350" }),
+    ],
+    aliados: [],
+  };
+  const soloDelEspejo = proponerNumeros([], soloEspejo, HOY);
+
+  it("la cuota recibe la factura viva más lejana antes que la nota de crédito, la tomada o INV-27 del mismo día", () => {
+    expect(soloDelEspejo.cuotas.find((q) => q.cobroId === "sel-sep")?.opcion).toMatchObject({ numero: "FAC/2026/0351", origen: "ESPEJO" });
+    const propuestosDelEspejo = soloDelEspejo.cuotas.map((q) => q.opcion.numero);
+    for (const nunca of ["NC/2026/0009", "FAC/2026/0350", "INV-27"]) expect(propuestosDelEspejo).not.toContain(nunca);
+  });
+});
+
 /* ── ⛔ La pantalla solo manda el número ────────────────────────────────────────── */
 
 const RAIZ = join(__dirname, "..", "..", "..");
