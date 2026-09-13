@@ -214,7 +214,9 @@
   (desde el día siguiente sin cobro) o nada (sin promesa, cobrado o sin factura). Incumplida →
   alerta PROMESA_INCUMPLIDA (ocupa el lugar del vencido del cobro).
 - **PROMESA_INCUMPLIDA**: alerta ALTA emitida en el corte cuando la fecha prometida pasó y el
-  cobro sigue sin entrar — dedupeKey `PROMESA_INCUMPLIDA:{cuentaId}:{cobroId}`.
+  cobro sigue sin entrar — dedupeKey `PROMESA_INCUMPLIDA:{cuentaId}:{cobroId}`. No abre una fila
+  nueva: sube la fila viva del cobro (la de falta facturar o vencido), que vuelve a ABIERTA y pierde
+  el posponer (`lib/cobranza/alertas-merge.ts`).
 - **posponerHasta / snooze** (`AlertaCobro.posponerHasta`): pausa temporal de una alerta — sale
   del feed sin cambiar de estado y vuelve sola cuando la fecha llega. Lo setea la persona
   ("Posponer"). Registrar una promesa de pago ya no lo escribe (2026-09-12).

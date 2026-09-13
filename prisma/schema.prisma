@@ -3114,8 +3114,9 @@ model AlertaCobro {
   resueltaEn    DateTime?
   resueltaPor   String? // email del guard
   // Snooze MANUAL («Posponer» de las alertas): loadAlertas la excluye hasta esta
-  // fecha; el merge del upsert NO la resucita. No cambia estado. Registrar una promesa
-  // de pago ya no la escribe (2026-09-12).
+  // fecha; el merge del upsert NO la resucita, salvo cuando la alerta del cobro sube a
+  // PROMESA_INCUMPLIDA (lib/cobranza/alertas-merge.ts). No cambia estado. Registrar
+  // una promesa de pago ya no la escribe (2026-09-12).
   posponerHasta DateTime?
 
   createdAt DateTime @default(now())

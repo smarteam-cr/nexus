@@ -257,7 +257,12 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   CommunicationPort, NO cableado.
 - **Snooze manual de alertas (`posponerHasta`) no cambia el estado**: la alerta sale del feed
   (filtro en loadAlertas) y vuelve SOLA cuando la fecha llega; el merge de upsertAlertas no toca
-  posponerHasta, así el snooze sobrevive a los cortes.
+  posponerHasta, así el snooze sobrevive a los cortes. **Única excepción (2026-09-12)**: las cuatro
+  alertas del ciclo de un cobro (COBRO_PROXIMO, FACTURACION_ATRASADA, COBRO_VENCIDO,
+  PROMESA_INCUMPLIDA) comparten UNA fila (`lib/cobranza/alertas-merge.ts`), y cuando esa fila sube
+  a PROMESA_INCUMPLIDA vuelve a ABIERTA, pierde quién la vio y pierde el posponer: si la fecha
+  prometida pasó sin depósito, la alerta sube (decisión 5 de Alex). Cualquier otro cambio respeta lo
+  que la persona hizo con la fila.
 - **Riesgo de pago V1 = regla conductual simple, sin ML**: por cuenta, comportamiento = promedio
   de (fechaCobro − fechaProgramada) de sus COBRADOs (monedas juntas — es conducta del cliente);
   se bandera todo cobro pendiente con `diasAtraso > (promedio ?? 0) + RIESGO_UMBRAL_DIAS (15)`.

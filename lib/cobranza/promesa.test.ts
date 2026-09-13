@@ -315,7 +315,7 @@ describe("registrar una promesa ya no esconde alertas", () => {
     expect(cuerpo).not.toMatch(/posponerHasta/);
   });
 
-  it("⛔ `posponerHasta` solo lo escribe el «Posponer» manual (`patchAlerta`)", () => {
+  it("⛔ `posponerHasta` solo lo escriben el «Posponer» manual (`patchAlerta`) y la subida a incumplida (`upsertAlertas`)", () => {
     /* Los únicos archivos que lo nombran: la mutación, la lectura del feed, el schema del PATCH y la
        pantalla que manda ese PATCH. Un archivo nuevo en esta lista es alguien que volvió a posponer
        alertas por su cuenta. */
@@ -335,7 +335,17 @@ describe("registrar una promesa ya no esconde alertas", () => {
     const dondeSeEscribe = new Set(
       [...src.matchAll(/posponerHasta/g)].map((m) => funcionQueContiene(src, m.index ?? 0)),
     );
-    expect([...dondeSeEscribe]).toEqual(["patchAlerta"]);
+    expect([...dondeSeEscribe].sort()).toEqual(["patchAlerta", "upsertAlertas"]);
+
+    /* Y en `upsertAlertas` solo como anulación, y solo cuando la alerta sube a incumplida
+       (lib/cobranza/alertas-merge.ts). Una asignación con otro valor es alguien posponiendo solo. */
+    const inicio = src.indexOf("export async function upsertAlertas(");
+    const fin = src.indexOf("export async function patchAlerta(");
+    expect(inicio).toBeGreaterThan(-1);
+    expect(fin).toBeGreaterThan(inicio);
+    const upsert = src.slice(inicio, fin);
+    expect([...upsert.matchAll(/posponerHasta:\s*([^,}\s]+)/g)].map((m) => m[1])).toEqual(["null"]);
+    expect(upsert).toMatch(/decision\.reabrir\s*\?\s*\{[^}]*posponerHasta: null/);
   });
 });
 

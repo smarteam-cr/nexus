@@ -25,6 +25,7 @@ import {
 import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
+import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
 import type { z } from "zod";
 import type {
   cuentaCreateSchema,
@@ -1060,16 +1061,17 @@ export async function createCobroManual(
 
 // ── Alertas: upsert con dedup (clon del runner del watchdog CS) ─────────────────
 
-/**
- * Persiste drafts de alerta con dedup por dedupeKey:
- *  - misma key ABIERTA/VISTA → merge (occurrences++, lastDetectedAt, mensaje;
- *    urgencia solo ESCALA hacia arriba).
+/*
+ * `upsertAlertas` persiste drafts de alerta con dedup:
+ *  - fila viva (ABIERTA/VISTA) → merge (occurrences++, lastDetectedAt, mensaje). Quién es «la
+ *    fila viva» y qué se le cambia lo decide `resolverMergeAlerta` (lib/cobranza/alertas-merge.ts):
+ *    las cuatro alertas del ciclo de un cobro comparten UNA fila, que sube; las demás van por clave
+ *    y su urgencia solo ESCALA hacia arriba.
  *  - misma key RESUELTA/DESCARTADA hace <7 días → se suprime (no re-nag).
  *  - si no → fila nueva.
  * Drafts con cuentaId sustituto "client:*" (clientes sin cuenta) se SALTAN — no
  * hay FK destino; viajan solo en el snapshot/digest.
  */
-const URGENCIA_PESO: Record<string, number> = { BAJA: 0, MEDIA: 1, ALTA: 2 };
 
 /**
  * La alerta que pide confirmar los cobros de períodos ya vencidos.
@@ -1115,21 +1117,38 @@ export async function upsertAlertas(drafts: AlertaDraft[]): Promise<{ created: n
   for (const d of drafts) {
     if (d.cuentaId.startsWith("client:")) continue; // sin cuenta → solo snapshot/digest
 
-    const viva = await prisma.alertaCobro.findFirst({
-      where: { dedupeKey: d.dedupeKey, estado: { in: ["ABIERTA", "VISTA"] } },
-      orderBy: { lastDetectedAt: "desc" },
+    /* Una fila por cobro, que sube (lib/cobranza/alertas-merge.ts): las cuatro alertas del ciclo de
+       un cobro buscan su fila por el cobro, no por la clave; las demás, por la clave como siempre. */
+    const { dedupeKey, cobroDeLaFamilia } = filasQueLeImportan(d);
+    const vivas = await prisma.alertaCobro.findMany({
+      where: {
+        estado: { in: ["ABIERTA", "VISTA"] },
+        OR: [
+          { dedupeKey },
+          ...(cobroDeLaFamilia ? [{ cobroId: cobroDeLaFamilia, tipo: { in: [...FAMILIA_DEL_COBRO] } }] : []),
+        ],
+      },
+      select: { id: true, dedupeKey: true, tipo: true, urgencia: true, cobroId: true, lastDetectedAt: true },
     });
-    if (viva) {
-      const escalada =
-        URGENCIA_PESO[d.urgencia] > URGENCIA_PESO[viva.urgencia] ? d.urgencia : viva.urgencia;
+    const decision = resolverMergeAlerta(d, vivas);
+    if (decision.accion === "fundir") {
       await prisma.alertaCobro.update({
-        where: { id: viva.id },
+        where: { id: decision.id },
         data: {
           occurrences: { increment: 1 },
           lastDetectedAt: new Date(),
-          mensaje: d.mensaje,
-          urgencia: escalada as never,
-          evidencia: (d.evidencia ?? undefined) as Prisma.InputJsonValue | undefined,
+          tipo: decision.tipo,
+          dedupeKey: decision.dedupeKey,
+          mensaje: decision.mensaje,
+          urgencia: decision.urgencia,
+          evidencia: (decision.evidencia ?? undefined) as Prisma.InputJsonValue | undefined,
+          /* ⚠ La ÚNICA escritura automática de `posponerHasta`: la alerta subió a PROMESA_INCUMPLIDA,
+             así que lo que alguien vio o pospuso era otra situación. Fuera de ese caso el merge no
+             toca ni el estado ni el posponer, y el «Posponer» manual sigue valiendo entre cortes.
+             Lo vigila lib/cobranza/promesa.test.ts. */
+          ...(decision.reabrir
+            ? { estado: "ABIERTA" as const, vistaEn: null, vistaPor: null, posponerHasta: null }
+            : {}),
         },
       });
       merged++;
