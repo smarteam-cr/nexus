@@ -117,6 +117,14 @@ test("D1 normalizarEnumLocal: sinónimos con mayúsculas y acentos", () => {
   expect(normalizarEnumLocal("viaCobro", "Mercury")).toBe("MERCURY");
 });
 
+test("D1b normalizarEnumLocal: QuickBooks entra por sus apodos, incluido el «QBs» del libro", () => {
+  expect(normalizarEnumLocal("viaCobro", "QBs")).toBe("OTRA");
+  expect(normalizarEnumLocal("viaCobro", "QuickBooks")).toBe("OTRA");
+  expect(normalizarEnumLocal("viaCobro", "Quick Books")).toBe("OTRA");
+  expect(normalizarEnumLocal("viaCobro", "Flywell")).toBe("OTRA");
+  expect(normalizarEnumLocal("viaCobro", "otra")).toBe("OTRA");
+});
+
 test("D2 normalizarEnumLocal: valor desconocido / vacío → null", () => {
   expect(normalizarEnumLocal("moneda", "euros")).toBeNull();
   expect(normalizarEnumLocal("tipo", "")).toBeNull();

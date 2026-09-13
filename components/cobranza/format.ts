@@ -140,10 +140,14 @@ export const MOVIMIENTO_TIPO_META: Record<string, { label: string; chip: string 
 };
 
 // Labels que lib/cobranza/schema.ts no trae (espejos chicos de la UI).
+// ⚠ `OTRA` se muestra «QuickBooks» (2026-09-12): es la tercera plataforma real —Flywell, en otra
+// sociedad— y con «Otra» nadie la elegía (0 de 51 cuentas), así que esas facturas quedaban
+// marcadas ODOO por defecto, esperando un espejo que nunca las iba a ver. El valor del enum no
+// cambia: renombrarlo pediría SQL y el código viejo sigue corriendo mientras se aplica.
 export const VIA_COBRO_LABEL: Record<string, string> = {
   MERCURY: "Mercury",
   ODOO: "Odoo",
-  OTRA: "Otra",
+  OTRA: "QuickBooks",
 };
 export const TERMINOS_PAGO_LABEL: Record<string, string> = {
   ANTICIPADO: "Anticipado",

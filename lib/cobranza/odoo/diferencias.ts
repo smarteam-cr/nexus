@@ -944,11 +944,11 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       codigo: "LIBERADAS-FUERA-DE-ODOO",
       severidad: "ALTA",
       titulo: `${fueraDeOdoo.length} facturas soltadas se emitieron fuera de Odoo`,
-      detalle: `Se facturaron por Mercury o por otra vía, así que el sync con Odoo no las va a ver nunca y esta línea NO se cierra sola. La cierra una persona, cuando confirma que el documento se anuló allá. Suman ${s.texto}.`,
+      detalle: `Se facturaron por Mercury o QuickBooks, así que el sync con Odoo no las va a ver nunca y esta línea NO se cierra sola. La cierra una persona, cuando confirma que el documento se anuló allá. Suman ${s.texto}.`,
       montoEnJuego: s.principal,
       donde: "MERCURY",
       pasos: [
-        "Entrá a la plataforma donde se emitió (Mercury, u otra) y buscá el documento.",
+        "Entrá a la plataforma donde se emitió (Mercury o QuickBooks) y buscá el documento.",
         "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
         "Volvé acá y marcala resuelta: no hay sync que lo pueda hacer por vos.",
       ],

@@ -150,6 +150,12 @@ const ENUM_SINONIMOS: Record<string, Record<string, string>> = {
     odoo: "ODOO",
     otra: "OTRA",
     otro: "OTRA",
+    // OTRA es QuickBooks. El libro de Alex la escribe «QBs», y factura desde la sociedad Flywell.
+    quickbooks: "OTRA",
+    "quick books": "OTRA",
+    qbs: "OTRA",
+    qb: "OTRA",
+    flywell: "OTRA",
   },
   moneda: {
     crc: "CRC",

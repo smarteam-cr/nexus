@@ -808,7 +808,7 @@ export const IMPORT_CAMPO_LABEL: Record<ImportCampoCanonico, string> = {
   cedulaJuridica: "Cédula jurídica",
   idExterno: "Id externo (columna id del sheet)",
   tipo: "Tipo (nacional / internacional)",
-  viaCobro: "Vía de cobro (Mercury / Odoo)",
+  viaCobro: "Vía de cobro (Mercury / Odoo / QuickBooks)",
   moneda: "Moneda (CRC / USD)",
   terminosPago: "Términos (anticipado / vencido)",
   diaCobroAncla: "Día de cobro (1–31)",

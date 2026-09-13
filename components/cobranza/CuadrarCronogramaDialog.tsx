@@ -71,10 +71,11 @@ export function aPlataforma(v: string): Plataforma {
   }
 }
 
+/* `OTRA` es QuickBooks: el mismo nombre que en la ficha de la cuenta (`VIA_COBRO_LABEL`). */
 const PLATAFORMA_LABEL: Record<Plataforma, string> = {
   MERCURY: "Mercury",
   ODOO: "Odoo",
-  OTRA: "Otra",
+  OTRA: "QuickBooks",
 };
 
 export default function CuadrarCronogramaDialog({
