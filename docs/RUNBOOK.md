@@ -155,7 +155,8 @@ Activación 100% por env — sin las vars, cero cambio de comportamiento:
 Tick de 60 s, gated por `CRON_ENABLED=1` (solo prod; lo pone `docker-compose.yml`). Claims
 por fecha en `CronJobState`: matar el contenedor a mitad de un job NO re-dispara ese día.
 Cada corrida deja su resultado en `CronJobState.lastResult` y el **semáforo de
-Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02). Hasta el
+Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02), y un job que no
+toma el turno del día no anota nada, así que un rojo queda rojo hasta la corrida siguiente. Hasta el
 2026-09-04 esta sección listaba 6 jobs; son 11 (`allJobs()`), más dos disparos por navegación:
 
 | Job | Cuándo | Gate | Qué hace |
@@ -166,14 +167,16 @@ Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02). 
 | `cs-watchdog-daily` | L–V ≥ 7:00 CR (después de las señales) | `CS_WATCHDOG_ENABLED=1` + `CsSettings.watchdogEnabled` | sweep del watchdog con pre-filtro determinístico |
 | `cs-watchdog-debounce` | cada tick | `CS_WATCHDOG_ENABLED=1` | triage de eventos «quiesced» (>15 min), hasta 5 proyectos por tick |
 | `maintenance-daily` | una vez al día, a cualquier hora | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h |
-| `cobranza-quincenal` | ≥ 7:00 CR en los días de corte (`esDiaDeCorte`) | `COBRANZA_CRON_ENABLED=1` | la tanda quincenal de cobranza |
+| `cobranza-quincenal` | ≥ 7:00 CR en los días de corte (`esDiaDeCorte`) | `COBRANZA_CRON_ENABLED=1` | la tanda quincenal de cobranza. Es lo único que refresca las alertas; INV32 da rojo si el último corte tiene más de 17 días |
 | `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
 | `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
-| `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee) |
-| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 19 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
+| `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
+| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 21 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
-⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env`, cinco de estos se apagan EN
-SILENCIO — el semáforo los muestra en gris («nunca corrió»), que es la señal.
+⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
+`ODOO_PASSWORD` tampoco el espejo. Hasta el 2026-09-12 el semáforo los pintaba en gris («nunca
+corrió»), igual que a un job que todavía no llegó a su hora; ahora dice **apagado** con el motivo, que
+sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 
 **Dos disparos por navegación**, que no pasan por el scheduler:
 - **Auto-sync de Google Meet**: `POST /api/integrations/google/auto-sync` al cargar el shell
@@ -181,6 +184,37 @@ SILENCIO — el semáforo los muestra en gris («nunca corrió»), que es la se�
   (`app/(shell)/sessions/SessionsClient.tsx`), con cooldown de 20 min en el servidor.
 - **Espejo de proyectos de HubSpot**: `POST /api/clients/[id]/sync-projects` al abrir la ficha de
   un cliente (`app/(shell)/clients/[id]/WorkspaceClient.tsx`), con cooldown en el servidor.
+
+### El espejo de Odoo no corre
+
+Se ve en tres lugares: la línea de arriba de Cobranza › Odoo se pone en rojo, INV31 da rojo en
+`invariants-daily` (y en `check-invariants.ts`), e Integraciones › Jobs del servidor dice si
+`odoo-espejo-daily` está **apagado** y por qué, o si **falló** y con qué error. `/integrations/odoo`
+lista cada corrida con su resultado. No hay botón para correr el sync desde la pantalla.
+
+1. **Apagado, «falta ODOO_PASSWORD»**: cargarla en el `.env` del VPS y hacer deploy; el job corre
+   en el tick siguiente si ya son las 6:00 CR. ⚠ Si todavía no se aplicó el SQL que guarda cada
+   monto del espejo en su moneda (etapa 4 del plan de cobranza), ese SQL va antes que la credencial.
+2. **Falló por credenciales** (`AUTENTICACION` en el error): el job **retiene el turno del día** y no
+   reintenta hasta mañana. Es a propósito: cada intento con la clave rechazada suma al bloqueo del
+   usuario en Odoo, y reintentar cada minuto lo sostendría. Primero se arregla la causa en Odoo
+   (usuario `direct` archivado o bloqueado, contraseña cambiada, verificación en dos pasos).
+   Después, tres salidas:
+   - **Esperar**: la corrida de mañana, desde las 6:00 CR, lo toma sola.
+   - **Liberar el turno de hoy** (escritura a producción; la hace una persona):
+     `UPDATE "CronJobState" SET "lastRunDateKey" = NULL WHERE id = 'odoo-espejo-daily';`, corrido
+     como cualquier SQL de `scripts/sql/` (`ALLOW_PROD_WRITE=1 npx prisma db execute --file <archivo>
+     --schema prisma/schema.prisma`). El scheduler lo retoma en el tick siguiente.
+   - **Correr el sync a mano**: `npx tsx scripts/odoo-sync-manual.ts`, desde una PC de desarrollo
+     con la `ODOO_PASSWORD` buena en su `.env` (la base es la misma que la de producción). ⚠ **No se
+     puede dentro del contenedor**: la imagen es la salida standalone de Next y no lleva `scripts/` ni
+     `tsx` (`Dockerfile`). Tampoco desde el checkout del VPS, que no tiene `node_modules` (ver «Lo que
+     `deploy.sh` NO hace»). ⚠ Cada intento fallido suma al bloqueo, desde la máquina que sea: no
+     «probar a ver si anda».
+3. **Falló por red** (`RED`): el job libera el turno y reintenta en el tick siguiente; Sentry descarta
+   el evento idéntico al anterior. Si dura horas, es el servidor de Odoo o la red del VPS.
+4. **Corrida parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno. Reintentar no lo arregla: el error
+   de `/integrations/odoo` dice qué mirar.
 
 ## Respaldo y restauración (Supabase)
 
@@ -235,8 +269,10 @@ desaparece, esto es todo lo que hay que rehacer — la base vive en Supabase y n
    - runtime (`env_file`): `DATABASE_URL` (⚠ el pooler, puerto 6543 — inv. #3), `SUPABASE_URL`
      y `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, las de HubSpot
      (`HUBSPOT_CLIENT_SECRET` y compañía), `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL`,
-     `SENTRY_DSN`, `APP_URL`, `CS_WATCHDOG_ENABLED=1`, `COBRANZA_CRON_ENABLED=1`, Odoo
-     (`ODOO_PASSWORD`…) y el Data Lake. `CRON_ENABLED=1` y `PORT` los pone el compose.
+     `SENTRY_DSN`, `APP_URL`, `CS_WATCHDOG_ENABLED=1`, `COBRANZA_CRON_ENABLED=1` (sin ella INV32 da
+     rojo a los 17 días), Odoo (`ODOO_PASSWORD`…; sin ella INV31 da rojo a las 20 h) y el Data Lake.
+     `CRON_ENABLED=1` y `PORT` los pone el compose. Si falta una bandera de un job, Integraciones ›
+     Jobs del servidor lo dice con el nombre de la variable.
    - ⛔ `ALLOW_PROD_WRITE` NUNCA fija en el `.env` (el guard aborta, B-01).
    - [[Elías: de dónde se recupera el .env del VPS si se pierde — gestor de contraseñas o copia cifrada. Hoy no hay copia declarada.]]
 4. **Primer arranque**: `cd /opt/smartflow/Nexus && bash scripts/deploy.sh`. Hace pull ff-only,

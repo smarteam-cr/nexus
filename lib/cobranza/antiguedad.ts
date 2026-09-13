@@ -261,3 +261,18 @@ export function esDiaDeCorte(todayISO: string): boolean {
   const d = diaDelMes(todayISO);
   return TANDAS.some((t) => t.desde === d);
 }
+
+/**
+ * Cuántos días puede tener el último corte antes de que su foto se considere vieja. Entre dos
+ * cortes seguidos hay como mucho 17: del 15 al 1 del mes siguiente, en un mes de 31 días.
+ *
+ * Existe porque el corte automático nunca se encendió y nadie lo notó: hasta el 2026-09-12 había
+ * UN corte, del 24-jul, y las alertas de cobranza eran una foto de ese día. Lo usan INV32 y la
+ * pestaña Corte quincenal.
+ */
+export const DIAS_MAXIMOS_ENTRE_CORTES = 17;
+
+/** ¿El último corte (día de Costa Rica, `YYYY-MM-DD`) es más viejo de lo que puede haber entre dos cortes? */
+export function corteVencido(ultimoCorteISO: string, hoyISO: string): boolean {
+  return diffDays(ultimoCorteISO.slice(0, 10), hoyISO.slice(0, 10)) > DIAS_MAXIMOS_ENTRE_CORTES;
+}

@@ -33,6 +33,7 @@ import {
   calcularDeltas,
   esBorradoMasivo,
   esCorridaParcial,
+  espejoVencido,
   mapearFactura,
   type Delta,
   type FacturaEspejada,
@@ -420,8 +421,14 @@ export async function ultimaCorridaOk(): Promise<Date | null> {
   return c?.iniciadaEn ?? null;
 }
 
-/** Lo que la pantalla de cobranza necesita para decir «el espejo está al día» o no. */
-export async function ultimaCorrida(): Promise<{
+/**
+ * Lo que la pantalla de cobranza necesita para decir «el espejo está al día» o no.
+ *
+ * ⚠ La ÚLTIMA corrida y la última BUENA son dos preguntas. Hasta el 2026-09-12 la pantalla solo
+ * tenía la primera y decía «Espejo actualizado el 2-sep» con la fecha de una corrida que había
+ * fallado, sobre una copia que llevaba diez días sin refrescarse.
+ */
+export async function ultimaCorrida(ahora: Date = new Date()): Promise<{
   iniciadaEn: string;
   terminadaEn: string | null;
   ok: boolean;
@@ -434,10 +441,22 @@ export async function ultimaCorrida(): Promise<{
   actualizadas: number;
   desaparecidas: number;
   disparadaPor: string;
+  /** Cuándo empezó la última corrida BUENA; null = nunca hubo una. */
+  ultimaOkEn: string | null;
+  /** Horas enteras desde la última corrida buena; null = nunca hubo una. */
+  horasDesdeLaUltimaBuena: number | null;
+  /** `espejoVencido()`: la misma regla que INV31. */
+  vencido: boolean;
 } | null> {
-  const c = await prisma.syncOdooCorrida.findFirst({ orderBy: { iniciadaEn: "desc" } });
+  const [c, ok] = await Promise.all([
+    prisma.syncOdooCorrida.findFirst({ orderBy: { iniciadaEn: "desc" } }),
+    ultimaCorridaOk(),
+  ]);
   if (!c) return null;
   return {
+    ultimaOkEn: ok?.toISOString() ?? null,
+    horasDesdeLaUltimaBuena: ok ? Math.floor((ahora.getTime() - ok.getTime()) / 3_600_000) : null,
+    vencido: espejoVencido(ok, ahora),
     iniciadaEn: c.iniciadaEn.toISOString(),
     terminadaEn: c.terminadaEn?.toISOString() ?? null,
     ok: c.ok,

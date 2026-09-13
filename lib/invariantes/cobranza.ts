@@ -3,6 +3,43 @@
  * qué quedó colgando (extraídos de scripts/check-invariants.ts en B-07, 2026-09-04).
  */
 import { cumple, viola, type Invariante } from "./contrato";
+import { corteVencido, DIAS_MAXIMOS_ENTRE_CORTES } from "@/lib/cobranza/antiguedad";
+import { diffDays } from "@/lib/cobranza/engine";
+import { crDateParts } from "@/lib/jobs/time";
+
+/**
+ * INV32 · El último corte de cartera tiene como mucho 17 días (lo máximo que hay entre dos cortes).
+ * (INV31 es la frescura del espejo de Odoo, en lib/invariantes/odoo.ts.)
+ *
+ * El corte quincenal es el único que refresca las alertas de cobranza y el que alimenta las
+ * tendencias de Reportes. Nunca se encendió en el VPS, y nada lo decía: al 2026-09-12 había un solo
+ * corte, del 24-jul, y el tablero de alertas era una foto de ese día.
+ *
+ * El día del corte se cuenta en hora de Costa Rica: un corte guardado a las 21:49 CR ya es el día
+ * siguiente en UTC, y contar en UTC le regalaba un día. La regla es `corteVencido()`, la misma que
+ * pinta el aviso en la pestaña Corte quincenal.
+ * ⚠ Nace en rojo hasta que se encienda el corte automático. Sin ningún corte en la historia cumple.
+ */
+export const INV32: Invariante = {
+  id: "32",
+  nombre: `el último corte de cartera tiene ${DIAS_MAXIMOS_ENTRE_CORTES} días o menos`,
+  async correr(db, ahora) {
+    const ultimo = await db.snapshotCartera.findFirst({
+      orderBy: { capturedAt: "desc" },
+      select: { capturedAt: true, triggeredBy: true },
+    });
+    if (!ultimo) return cumple("✓ INV32: todavía no hay cortes de cartera: no hay foto vieja de la que avisar.");
+    const diaDelCorte = crDateParts(ultimo.capturedAt).dateKey;
+    const hoy = crDateParts(ahora).dateKey;
+    if (!corteVencido(diaDelCorte, hoy)) return cumple(`✓ INV32: el último corte de cartera es del ${diaDelCorte}.`);
+    return viola(
+      `✗ INV32 VIOLADO: el último corte de cartera es del ${diaDelCorte} (hace ${diffDays(diaDelCorte, hoy)} días, por ${ultimo.triggeredBy ?? "?"}): ` +
+        `las alertas de cobranza y las tendencias de Reportes son una foto de ese día.` +
+        `\n    Remedio: encender el corte automático (COBRANZA_CRON_ENABLED=1 en el .env del VPS; Integraciones › Jobs del servidor dice si está apagado).` +
+        `\n    Un corte a mano desde Cobranza › Corte quincenal lo pone en verde, pero no reemplaza al automático.`,
+    );
+  },
+};
 
 /**
  * INV3 · Ningún Cobro COBRADO sin confirmadoPor (Cobranza: el humano confirma lo que mueve

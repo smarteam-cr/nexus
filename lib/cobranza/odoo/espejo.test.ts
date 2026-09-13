@@ -17,6 +17,8 @@ import {
   calcularDeltas,
   esBorradoMasivo,
   esCorridaParcial,
+  espejoVencido,
+  HORAS_MAXIMAS_DEL_ESPEJO,
   fechaOdoo,
   many2one,
   mapearFactura,
@@ -292,5 +294,28 @@ describe("la guarda del 50 %", () => {
        espejo no arrancaría nunca. */
     expect(esCorridaParcial(0, 0)).toBe(false);
     expect(esCorridaParcial(348, 0)).toBe(false);
+  });
+});
+
+describe("la frescura del espejo (INV31 y la pantalla de Odoo)", () => {
+  /* El espejo pasó diez días muerto (2026-09-02 al 12) y la pantalla decía «Espejo actualizado».
+     La regla cuenta HORAS desde la última corrida BUENA, con la hora como argumento. */
+  const ahora = new Date("2026-09-12T13:00:00Z"); // 7:00 en Costa Rica, cuando corren los invariantes
+  const haceHoras = (h: number) => new Date(ahora.getTime() - h * 3_600_000);
+
+  it("con 20 h de umbral: a 19 h está al día, a 21 h está vencido", () => {
+    expect(HORAS_MAXIMAS_DEL_ESPEJO).toBe(20);
+    expect(espejoVencido(haceHoras(19), ahora)).toBe(false);
+    expect(espejoVencido(haceHoras(21), ahora)).toBe(true);
+  });
+
+  it("la corrida de ayer a las 6:05 ya está vencida a las 7:00 de hoy; la de hoy no", () => {
+    expect(espejoVencido(new Date("2026-09-11T12:05:00Z"), ahora), "ayer, 25 h").toBe(true);
+    expect(espejoVencido(new Date("2026-09-12T12:05:00Z"), ahora), "hoy, 1 h").toBe(false);
+  });
+
+  it("sin ninguna corrida buena está vencido, y el caso medido del 2-sep también", () => {
+    expect(espejoVencido(null, ahora)).toBe(true);
+    expect(espejoVencido(new Date("2026-09-02T07:17:00Z"), ahora)).toBe(true);
   });
 });

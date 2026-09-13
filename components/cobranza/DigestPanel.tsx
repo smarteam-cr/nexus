@@ -6,7 +6,13 @@
  * El corte de cartera (diff-based): muestra el resumen del último
  * SnapshotCartera — Nuevas / Resueltas / persistentes, o "sin cambios" — y el
  * botón "Hacer el corte ahora" (POST /api/cobranza/digest). El corte automático
- * corre los lunes 7:00 CR vía scheduler; esto es el disparo manual.
+ * corre los días 1 y 15 a las 7:00 CR vía scheduler, si está encendido en el
+ * servidor; esto es el disparo manual.
+ *
+ * ⚠ Si el último corte es más viejo de lo que puede haber entre dos cortes, lo dice en rojo
+ * (`corteVencido`, la misma regla que INV32). Hasta el 2026-09-12 esta pestaña mostraba el corte
+ * del 24-jul como «Último corte» sin más, cincuenta días después, y el texto de abajo aseguraba
+ * que el automático corría «los lunes».
  *
  * Las CUENTA_SIN_DATOS (backlog de configuración) se COLAPSAN a una línea
  * expandible en Nuevas y Resueltas: 30 "sin cuenta configurada" no son 30
@@ -19,6 +25,12 @@ import { EmptyState, IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { SnapshotDTO } from "@/lib/cobranza";
+import { corteVencido, DIAS_MAXIMOS_ENTRE_CORTES } from "@/lib/cobranza/antiguedad";
+import { diffDays } from "@/lib/cobranza/engine";
+import { crDateParts } from "@/lib/jobs/time";
+
+/** Lo mismo que dice `cobranza-quincenal` en lib/jobs/defs.ts: días de corte ≥ 7:00 CR, opt-in por env. */
+const HORARIO_DEL_AUTOMATICO = "El corte automático corre los días 1 y 15 a las 7:00, si está encendido en el servidor.";
 
 interface ResumenAlerta {
   mensaje: string;
@@ -111,10 +123,13 @@ function fromResult(d: DigestResult): DigestView {
 export default function DigestPanel({
   initialSnapshot,
   onDigestDone,
+  todayISO,
 }: {
   initialSnapshot: SnapshotDTO | null;
   /** El corte puede cambiar el set de alertas → el padre refresca el tab de Alertas. */
   onDigestDone?: () => void;
+  /** Hoy en Costa Rica, calculado en el servidor: contra esto se mide si el corte es viejo. */
+  todayISO: string;
 }) {
   const toast = useToast();
   const [view, setView] = useState<DigestView | null>(() => fromSnapshot(initialSnapshot));
@@ -160,10 +175,15 @@ export default function DigestPanel({
           description="Hacé el primer corte para arrancar el registro quincenal de cambios."
           action={botonCorte}
         />
-        <p className="text-[11px] text-fg-muted text-center">El corte automático corre los lunes a las 7:00.</p>
+        <p className="text-[11px] text-fg-muted text-center">{HORARIO_DEL_AUTOMATICO}</p>
       </div>
     );
   }
+
+  /* El día del corte en hora de Costa Rica, igual que INV32: un corte a las 21:49 CR ya es el día
+     siguiente en UTC. */
+  const diaDelCorte = crDateParts(new Date(view.capturedAt)).dateKey;
+  const corteViejo = corteVencido(diaDelCorte, todayISO);
 
   /** Línea colapsable del backlog de configuración dentro de una sección. */
   const lineaConfig = (key: string, config: ResumenAlerta[]) => {
@@ -211,6 +231,14 @@ export default function DigestPanel({
         </div>
         {botonCorte}
       </div>
+
+      {corteViejo && (
+        <p role="alert" className="rounded-xl border border-danger-line bg-danger-surface px-4 py-3 text-sm text-danger-ink">
+          ⚠ Este corte tiene {diffDays(diaDelCorte, todayISO)} días, y entre dos cortes hay como mucho{" "}
+          {DIAS_MAXIMOS_ENTRE_CORTES}: el corte automático no está corriendo. Las alertas de cobranza y las
+          tendencias de Reportes son una foto de ese día hasta el próximo corte.
+        </p>
+      )}
 
       {view.sinCambios ? (
         <p className="flex items-center gap-1.5 text-sm text-emerald-600 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
@@ -270,7 +298,7 @@ export default function DigestPanel({
         </div>
       )}
 
-      <p className="text-[11px] text-fg-muted">El corte automático corre los lunes a las 7:00.</p>
+      <p className="text-[11px] text-fg-muted">{HORARIO_DEL_AUTOMATICO}</p>
     </div>
   );
 }

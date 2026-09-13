@@ -387,3 +387,27 @@ export function esBorradoMasivo(desaparecidas: number, conocidas: number): boole
   if (desaparecidas === 0) return false;
   return desaparecidas > Math.max(5, conocidas * 0.05);
 }
+
+/* ── 5. Frescura ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Cuántas horas puede tener la última corrida BUENA antes de que el espejo se considere viejo.
+ *
+ * El job corre ≥ 6:00 CR y los invariantes ≥ 7:00. Con 20 h, la mañana en que la corrida de hoy
+ * no llegó —la de ayer tiene ~25 h— ya da rojo, y la de hoy (~1 h) no.
+ * ⚠ Mirado a mano antes de las 6:00 CR, la corrida de ayer tiene ~23 h y da rojo aunque todavía
+ * no haya fallado nada: es el precio de avisar esa misma mañana.
+ */
+export const HORAS_MAXIMAS_DEL_ESPEJO = 20;
+
+/**
+ * ¿La copia de Odoo es demasiado vieja para confiar en ella? `null` = nunca hubo una corrida buena.
+ *
+ * Existe porque el espejo pasó diez días muerto (2026-09-02 al 12) sin que nada lo dijera: INV24
+ * mira que las corridas dejen rastro, y sin corridas cumplía de forma vacía; la pantalla decía
+ * «Espejo actualizado» con la fecha de una corrida fallida. La usan INV31 y Cobranza › Odoo.
+ */
+export function espejoVencido(ultimaOk: Date | null, ahora: Date): boolean {
+  if (!ultimaOk) return true;
+  return ahora.getTime() - ultimaOk.getTime() > HORAS_MAXIMAS_DEL_ESPEJO * 3_600_000;
+}

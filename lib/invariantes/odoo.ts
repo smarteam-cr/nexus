@@ -4,6 +4,7 @@
  */
 import { cumple, viola, type Invariante } from "./contrato";
 import { reatribuciones } from "@/lib/cobranza/odoo/emparejado";
+import { espejoVencido, HORAS_MAXIMAS_DEL_ESPEJO } from "@/lib/cobranza/odoo/espejo";
 
 /**
  * INV23 · El espejo de Odoo sigue siendo un espejo. Toda `FacturaOdoo` guarda el monto en la
@@ -58,7 +59,10 @@ export const INV23: Invariante = {
  *   · una corrida que falló y NO guardó el texto del error → no se puede diagnosticar;
  *   · una corrida ABIERTA hace más de 6 horas → el proceso se murió a mitad y la fila quedó
  *     indistinguible de «todavía corriendo». Ese es el fallo que no se ve.
- * Remedio: revisar el log del contenedor de esa fecha y correr el sync a mano.
+ *
+ * ⚠ Sin corridas en los últimos 7 días cumple de forma VACÍA: que el sync NO corra lo vigila INV31.
+ * Remedio: revisar el log del contenedor de esa fecha y seguir docs/RUNBOOK.md, «El espejo de Odoo
+ * no corre». (Hasta el 2026-09-12 decía «correr el sync a mano desde /cobranza»: ese botón no existe.)
  */
 export const INV24: Invariante = {
   id: "24",
@@ -86,7 +90,7 @@ export const INV24: Invariante = {
       return viola(
         `✗ INV24 VIOLADO: ${mudas.length} corrida(s) del sync de Odoo no dejaron rastro de por qué:\n` +
           mudas.map((d) => `    · ${d}`).join("\n") +
-          `\n    Remedio: revisar el log del contenedor de esa fecha; correr el sync a mano desde /cobranza.`,
+          `\n    Remedio: revisar el log del contenedor de esa fecha; para reintentar, docs/RUNBOOK.md, «El espejo de Odoo no corre» (no hay botón en pantalla).`,
       );
     }
     return cumple(`✓ INV24: las ${corridas.length} corridas del sync de los últimos 7 días dejaron su resultado escrito.`);
@@ -144,5 +148,51 @@ export const INV30: Invariante = {
       );
     }
     return cumple(`✓ INV30: las ${facturas.length} facturas vigentes del espejo tienen la cuenta de su vínculo.`);
+  },
+};
+
+/**
+ * INV31 · El espejo de Odoo tuvo una corrida BUENA en las últimas 20 horas.
+ *
+ * INV24 vigila que las corridas dejen rastro, no que existan: sin ninguna corrida cumple vacío. Así
+ * estuvo verde diez días (2026-09-02 al 12) con el espejo muerto —la última corrida buena del 2 de
+ * septiembre, la contraseña rechazada esa noche, el job sin credencial en el VPS— mientras faltaban
+ * las 13 facturas de septiembre. Nada preguntaba por la FRESCURA.
+ *
+ * El umbral y la regla son `espejoVencido()`, la misma con la que Cobranza › Odoo se pone en rojo.
+ * ⚠ Nace en rojo mientras Odoo siga caído, y se apaga sola con la primera corrida buena. Sin
+ * corridas en toda la historia cumple: no hay copia vieja de la que avisar.
+ * Remedio: docs/RUNBOOK.md, «El espejo de Odoo no corre».
+ */
+export const INV31: Invariante = {
+  id: "31",
+  nombre: `el espejo de Odoo tuvo una corrida buena en las últimas ${HORAS_MAXIMAS_DEL_ESPEJO} horas`,
+  async correr(db, ahora) {
+    const ultimaOk = await db.syncOdooCorrida.findFirst({
+      where: { ok: true },
+      orderBy: { iniciadaEn: "desc" },
+      select: { iniciadaEn: true },
+    });
+    const remedio =
+      `\n    Remedio: Integraciones › Jobs del servidor dice si odoo-espejo-daily está apagado y por qué; /integrations/odoo muestra el error de cada corrida.` +
+      `\n    Pasos en docs/RUNBOOK.md, «El espejo de Odoo no corre».`;
+
+    if (!ultimaOk) {
+      const corridas = await db.syncOdooCorrida.count();
+      if (corridas === 0) return cumple("✓ INV31: el espejo de Odoo no corrió nunca: no hay copia vieja de la que avisar.");
+      return viola(
+        `✗ INV31 VIOLADO: el espejo de Odoo tiene ${corridas} corrida(s) y ninguna terminó bien: no hay copia de Odoo en la que confiar.${remedio}`,
+      );
+    }
+
+    const horas = Math.floor((ahora.getTime() - ultimaOk.iniciadaEn.getTime()) / 3_600_000);
+    const cuando = `${ultimaOk.iniciadaEn.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+    const hace = horas < 48 ? `hace ${horas} h` : `hace ${Math.floor(horas / 24)} días`;
+    if (!espejoVencido(ultimaOk.iniciadaEn, ahora)) {
+      return cumple(`✓ INV31: la última corrida buena del espejo de Odoo es del ${cuando} (${hace}).`);
+    }
+    return viola(
+      `✗ INV31 VIOLADO: la última corrida buena del espejo de Odoo es del ${cuando} (${hace}): lo facturado en Odoo después no está en Nexus, y «Lo que no cuadra» no lo puede ver.${remedio}`,
+    );
   },
 };

@@ -8,22 +8,24 @@
  *
  * Los de acá los corre el script (como consumidor: `lib/invariantes/invariantes.test.ts` vigila
  * que consuma TODOS), y desde B-08 un job diario que deja el resultado en el semáforo de
- * Integraciones. `/api/health` los resume en un booleano (B-09).
+ * Integraciones. `/api/health` los resume en un booleano (B-09), que NO decide el `ok` del health:
+ * un invariante en rojo no tumba el deploy.
  */
 import type { PrismaClient } from "@prisma/client";
 import type { Invariante, ResultadoDeInvariante } from "./contrato";
 import { INV1, INV21 } from "./sesiones";
 import { INV10, INV11, INV14, INV8, INV8c } from "./proyectos";
-import { INV18, INV20, INV25, INV26, INV27, INV28, INV3, INV5 } from "./cobranza";
+import { INV18, INV20, INV25, INV26, INV27, INV28, INV3, INV32, INV5 } from "./cobranza";
 import { INV22 } from "./cronograma";
-import { INV23, INV24, INV30 } from "./odoo";
+import { INV23, INV24, INV30, INV31 } from "./odoo";
 
 export type { Invariante, ResultadoDeInvariante } from "./contrato";
-export { INV1, INV21, INV8, INV8c, INV10, INV11, INV14, INV3, INV5, INV18, INV20, INV25, INV26, INV27, INV28, INV22, INV23, INV24, INV30 };
+export { INV1, INV21, INV8, INV8c, INV10, INV11, INV14, INV3, INV5, INV18, INV20, INV25, INV26, INV27, INV28, INV22, INV23, INV24, INV30, INV31, INV32 };
 
 /** En el orden en que el gate los imprime. Sumar uno acá es lo que lo pone en el job y en /api/health. */
 export const INVARIANTES_SOLO_BASE: readonly Invariante[] = [
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
+  INV31, INV32,
 ];
 
 export type CorridaDeInvariantes = {

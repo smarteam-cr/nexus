@@ -17,6 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
+  INV31, INV32,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -25,7 +26,7 @@ import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 type Fila = Record<string, unknown>;
 type Llamada = { modelo: string; metodo: string; args: Record<string, unknown> };
 
-/** Por modelo: filas (para findMany/findUnique) o un número (para count). Ignora el `where`: lo que se afirma es la DECISIÓN sobre las filas y la FORMA de la consulta. */
+/** Por modelo: filas (para findMany/findUnique/findFirst) o un número (para count). Ignora el `where`: lo que se afirma es la DECISIÓN sobre las filas y la FORMA de la consulta. */
 function baseFalsa(tablas: Record<string, Fila[] | number>, llamadas: Llamada[] = []): PrismaClient {
   const filasDe = (modelo: string): Fila[] => {
     const t = tablas[modelo];
@@ -35,6 +36,11 @@ function baseFalsa(tablas: Record<string, Fila[] | number>, llamadas: Llamada[] 
     async findMany(args: Record<string, unknown>) {
       llamadas.push({ modelo, metodo: "findMany", args });
       return filasDe(modelo);
+    },
+    /** La primera fila cargada: el test la carga ya como «la más reciente que cumple el where». */
+    async findFirst(args: Record<string, unknown>) {
+      llamadas.push({ modelo, metodo: "findFirst", args });
+      return filasDe(modelo)[0] ?? null;
     },
     async count(args: Record<string, unknown>) {
       llamadas.push({ modelo, metodo: "count", args });
@@ -301,6 +307,64 @@ describe("cronograma y Odoo: INV22, INV23, INV24", () => {
   });
 });
 
+describe("frescura: INV31 (espejo de Odoo) e INV32 (corte de cartera)", () => {
+  /* Medido el 2026-09-12: la última corrida buena del espejo era del 2-sep y el único corte de
+     cartera, del 24-jul. Ningún invariante preguntaba cuándo había corrido cada cosa por última vez. */
+  const haceHoras = (h: number) => new Date(AHORA.getTime() - h * 3_600_000);
+
+  it("INV31 · a 19 h cumple; a 21 h viola con la fecha, cuánto hace y el RUNBOOK", async () => {
+    /* La edición que lo pone en rojo: mirar la última corrida en vez de la última BUENA — una
+       corrida fallida de anoche dejaba el espejo «al día». */
+    const llamadas: Llamada[] = [];
+    expect((await INV31.correr(baseFalsa({ syncOdooCorrida: [{ iniciadaEn: haceHoras(19) }] }, llamadas), AHORA)).ok).toBe(true);
+    const consulta = llamadas.find((l) => l.modelo === "syncOdooCorrida" && l.metodo === "findFirst")?.args;
+    expect(consulta?.where, "solo cuenta una corrida BUENA").toEqual({ ok: true });
+    expect(consulta?.orderBy, "la más reciente").toEqual({ iniciadaEn: "desc" });
+
+    const vieja = await INV31.correr(baseFalsa({ syncOdooCorrida: [{ iniciadaEn: haceHoras(21) }] }), AHORA);
+    expect(vieja.ok).toBe(false);
+    expect(vieja.lineas[0]).toContain("la última corrida buena del espejo de Odoo es del 2026-09-03 15:00 UTC (hace 21 h)");
+    expect(vieja.lineas[0]).toContain("docs/RUNBOOK.md, «El espejo de Odoo no corre»");
+  });
+
+  it("INV31 · el caso medido: la última buena del 2-sep, mirada el 12-sep, dice diez días", async () => {
+    const r = await INV31.correr(
+      baseFalsa({ syncOdooCorrida: [{ iniciadaEn: new Date("2026-09-02T07:17:00Z") }] }),
+      new Date("2026-09-12T13:00:00Z"),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("(hace 10 días)");
+  });
+
+  it("INV31 · corridas y ninguna buena viola; ninguna corrida en toda la historia cumple", async () => {
+    const nunca = await INV31.correr(baseFalsa({ syncOdooCorrida: 3 }), AHORA);
+    expect(nunca.ok).toBe(false);
+    expect(nunca.lineas[0]).toContain("3 corrida(s) y ninguna terminó bien");
+    expect((await INV31.correr(baseFalsa({}), AHORA)).ok, "sin espejo no hay copia vieja").toBe(true);
+  });
+
+  it("INV32 · entre dos cortes hay como mucho 17 días: del 15-ago al 1-sep cumple, al 2-sep viola", async () => {
+    const corte = { capturedAt: new Date("2026-08-15T13:05:00Z"), triggeredBy: "cron" }; // 7:05 en Costa Rica
+    const llamadas: Llamada[] = [];
+    expect((await INV32.correr(baseFalsa({ snapshotCartera: [corte] }, llamadas), new Date("2026-09-01T13:00:00Z"))).ok).toBe(true);
+    expect(llamadas[0]?.args.orderBy, "el corte más reciente").toEqual({ capturedAt: "desc" });
+    const r = await INV32.correr(baseFalsa({ snapshotCartera: [corte] }), new Date("2026-09-02T13:00:00Z"));
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("el último corte de cartera es del 2026-08-15 (hace 18 días, por cron)");
+    expect(r.lineas[0]).toContain("COBRANZA_CRON_ENABLED=1");
+  });
+
+  it("INV32 · el día del corte se cuenta en hora de Costa Rica; sin cortes cumple", async () => {
+    /* 25-jul 03:49 UTC es el 24-jul a las 21:49 en Costa Rica. Contado en UTC serían 17 días al
+       11-ago y cumpliría; en Costa Rica son 18. */
+    const corte = { capturedAt: new Date("2026-07-25T03:49:00Z"), triggeredBy: "criterio-unico-vencido" };
+    const r = await INV32.correr(baseFalsa({ snapshotCartera: [corte] }), new Date("2026-08-11T15:00:00Z"));
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("es del 2026-07-24");
+    expect((await INV32.correr(baseFalsa({}), AHORA)).ok).toBe(true);
+  });
+});
+
 const RAIZ = process.cwd();
 const soloCodigo = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
@@ -308,10 +372,10 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 19 solo-base, con ids únicos y en el orden del gate", () => {
-    /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. */
+  it("el registro tiene los 21 solo-base, con ids únicos y en el orden del gate", () => {
+    /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
-      "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30",
+      "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -359,7 +423,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("19 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("21 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

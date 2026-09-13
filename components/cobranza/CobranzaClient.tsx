@@ -301,7 +301,7 @@ export default function CobranzaClient({
         <ReportesPanel series={series} riesgo={riesgo} role={role} cola={cola} todayISO={todayISO} />
       )}
       {tab === "corte" && (
-        <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} />
+        <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} todayISO={todayISO} />
       )}
 
       {/* ── Superficies compartidas entre tabs ── */}

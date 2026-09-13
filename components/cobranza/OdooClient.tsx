@@ -12,6 +12,12 @@
  * que aparecen siempre son las mismas: «¿esto le escribe a Odoo?» y «¿esto mueve mis cobros?».
  *
  * Las dos respuestas son que no, y están escritas grandes.
+ *
+ * ── LA LÍNEA DE ARRIBA DICE SI LA COPIA ES VIEJA ────────────────────────────────
+ * Hasta el 2026-09-12 decía «Espejo actualizado el 2-sep» con la fecha de la ÚLTIMA corrida,
+ * aunque esa corrida hubiera fallado, y no decía nada cuando el sync directamente dejó de correr.
+ * Así pasaron diez días. Ahora distingue la última corrida de la última BUENA, y cuando la copia
+ * es más vieja que `espejoVencido()` (la misma regla que INV31) se pone en rojo.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -21,6 +27,21 @@ import DiferenciasOdoo from "./DiferenciasOdoo";
 
 type Pestana = "que-es" | "emparejar" | "no-cuadra";
 
+interface CorridaDelEspejo {
+  iniciadaEn: string;
+  terminadaEn: string | null;
+  ok: boolean;
+  parcial: boolean;
+  error: string | null;
+  /** Cuándo empezó la última corrida BUENA; null = nunca hubo una. */
+  ultimaOkEn: string | null;
+  horasDesdeLaUltimaBuena: number | null;
+  /** `espejoVencido()` calculado en el servidor, con su reloj. */
+  vencido: boolean;
+}
+
+type Conteos = { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
+
 export default function OdooClient({
   corrida,
   conteos,
@@ -29,15 +50,8 @@ export default function OdooClient({
 }: {
   /** `cobranza.write`: decide si se dibujan los controles que cierran una línea a mano. */
   puedeEditar: boolean;
-  corrida: {
-    iniciadaEn: string;
-    terminadaEn: string | null;
-    ok: boolean;
-    parcial: boolean;
-    error: string | null;
-    facturasVistas: number;
-  } | null;
-  conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
+  corrida: CorridaDelEspejo | null;
+  conteos: Conteos;
   /** Solo SUPER_ADMIN llega a /integrations/odoo. Sin esto el enlace sería un rebote. */
   puedeVerCorridas?: boolean;
 }) {
@@ -71,27 +85,7 @@ export default function OdooClient({
         ]}
       />
 
-      {corrida && (
-        <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
-          Espejo actualizado el {corrida.iniciadaEn.slice(0, 16).replace("T", " ")} UTC · {corrida.facturasVistas}{" "}
-          facturas
-          {!corrida.ok && (
-            <span className="text-red-600">
-              {" "}
-              · ⚠ la última corrida {corrida.parcial ? "quedó incompleta" : "falló"}
-              {corrida.error ? `: ${corrida.error}` : ""}
-            </span>
-          )}
-          {corrida.terminadaEn === null && <span className="text-amber-600"> · sin terminar</span>}
-          {/* El historial completo: cuándo corrió cada vez, qué trajo, qué falló. Es donde se
-              va cuando esta línea dice algo raro. */}
-          {puedeVerCorridas && (
-            <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
-              Ver todas las corridas →
-            </Link>
-          )}
-        </p>
-      )}
+      {corrida && <EstadoDelEspejo corrida={corrida} facturas={conteos.facturas} puedeVerCorridas={puedeVerCorridas} />}
       {/* Si nunca corrió, el enlace igual sirve: ahí se ve la conexión y las banderas. */}
       {!corrida && puedeVerCorridas && (
         <p className="text-xs text-fg-muted">
@@ -111,9 +105,76 @@ export default function OdooClient({
   );
 }
 
+/* ── La línea de arriba: de cuándo es la copia ──────────────────────────────────── */
+
+const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
+const hace = (horas: number | null) =>
+  horas === null ? "" : horas < 48 ? `hace ${horas} h` : `hace ${Math.floor(horas / 24)} días`;
+
+function EstadoDelEspejo({
+  corrida,
+  facturas,
+  puedeVerCorridas,
+}: {
+  corrida: CorridaDelEspejo;
+  facturas: number;
+  puedeVerCorridas?: boolean;
+}) {
+  /* El historial completo: cuándo corrió cada vez, qué trajo, qué falló. Es donde se va cuando
+     esta línea dice algo raro. */
+  const enlace = puedeVerCorridas ? (
+    <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
+      Ver todas las corridas →
+    </Link>
+  ) : null;
+  const sinTerminar = corrida.terminadaEn === null;
+  const queFallo =
+    !corrida.ok && !sinTerminar
+      ? `La última corrida (${utc(corrida.iniciadaEn)}) ${corrida.parcial ? "quedó incompleta" : "falló"}${corrida.error ? `: ${corrida.error}` : "."}`
+      : null;
+
+  if (corrida.vencido) {
+    return (
+      <div
+        role="alert"
+        className="space-y-1 rounded-lg border border-danger-line bg-danger-surface px-4 py-3 text-sm text-danger-ink"
+      >
+        <p className="font-semibold">
+          {corrida.ultimaOkEn
+            ? `⚠ El espejo está viejo: la última corrida buena es del ${utc(corrida.ultimaOkEn)} (${hace(corrida.horasDesdeLaUltimaBuena)}).`
+            : "⚠ El espejo nunca tuvo una corrida buena."}
+        </p>
+        <p>
+          Lo facturado en Odoo después no está acá: ni al lado de los cobros ni en «Lo que no cuadra».{" "}
+          {queFallo ??
+            (sinTerminar
+              ? `Hay una corrida sin terminar desde el ${utc(corrida.iniciadaEn)}.`
+              : "El sync no volvió a correr desde entonces.")}
+        </p>
+        {enlace && <p>{enlace}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+      {corrida.ultimaOkEn && (
+        <span>
+          Espejo actualizado el {utc(corrida.ultimaOkEn)} · {facturas} facturas
+        </span>
+      )}
+      {queFallo && <span className="text-danger-ink">· ⚠ {queFallo}</span>}
+      {sinTerminar && (
+        <span className="text-warn-ink">· la corrida del {utc(corrida.iniciadaEn)} sigue sin terminar</span>
+      )}
+      {enlace}
+    </p>
+  );
+}
+
 /* ── La pestaña que explica ──────────────────────────────────────────────────────── */
 
-function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number } }) {
+function QueEs({ conteos }: { conteos: Conteos }) {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-line bg-surface p-5">
@@ -130,25 +191,26 @@ function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: nu
           reunión de dirección.
         </p>
         <p className="mt-2 text-sm text-fg-secondary">
-          Ahora Nexus lee Odoo todos los días y pone las facturas reales al lado de los cobros planificados. Lo que no
-          coincide aparece en una lista, con su monto y con quién lo puede cerrar.
+          Ahora Nexus lee Odoo una vez por día —cuando el sync está encendido en el servidor— y pone las facturas
+          reales al lado de los cobros de las cuentas emparejadas. Lo que no coincide aparece en una lista, con su
+          monto y con quién lo puede cerrar.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
-          <h3 className="text-sm font-semibold text-emerald-700">Lo que sí hace</h3>
+        <div className="rounded-lg border border-success-line bg-success-surface p-5">
+          <h3 className="text-sm font-semibold text-success-ink">Lo que sí hace</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
             <li>· Trae las facturas de venta de Odoo, una vez por día.</li>
-            <li>· Las muestra al lado del cobro que les corresponde, con su número y su estado real.</li>
+            <li>· En las cuentas emparejadas, las muestra al lado del cobro que les corresponde, con su número y su estado real.</li>
             <li>· Lista lo que no cuadra, ordenado por la plata que mueve.</li>
             <li>· Guarda el monto sin impuesto y el total, porque los cobros de Nexus están cargados sin IVA.</li>
           </ul>
         </div>
 
         {/* ⛔ Estas dos son LAS preguntas que aparecen siempre. Van grandes y en negativo. */}
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-5">
-          <h3 className="text-sm font-semibold text-red-700">Lo que NO hace, a propósito</h3>
+        <div className="rounded-lg border border-danger-line bg-danger-surface p-5">
+          <h3 className="text-sm font-semibold text-danger-ink">Lo que NO hace, a propósito</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
             <li>
               · <strong className="text-fg">Nunca escribe en Odoo.</strong> Ni una línea. Es solo lectura, siempre.
@@ -169,8 +231,9 @@ function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: nu
           <li>
             <strong className="text-fg">1. Emparejar, una sola vez.</strong> Decile a Nexus qué cliente de Odoo
             corresponde a cada cuenta. Hace falta porque Nexus guarda el nombre comercial («Iberorutas») y Odoo la
-            razón social («Servicios San Mateo y Santa Elena del Sur S.A.»), y no se parecen. Al confirmar se guarda
-            la cédula, así que la próxima vez se sostiene solo.
+            razón social («Servicios San Mateo y Santa Elena del Sur S.A.»), y no se parecen. Al confirmar, las
+            facturas de ese cliente pasan a la cuenta en el momento, y se guarda la cédula para que la próxima vez
+            se sostenga solo.
           </li>
           <li>
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
@@ -178,8 +241,9 @@ function QueEs({ conteos }: { conteos: { facturas: number; cuentasVinculadas: nu
             aparecer — pero vuelve sola si los números cambian.
           </li>
           <li>
-            <strong className="text-fg">3. Nada más.</strong> El sync corre solo cada mañana. Si falla, se dice arriba
-            de estas pestañas en vez de quedar en un log que nadie lee.
+            <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> El sync corre solo cada mañana,
+            desde las 6. La línea de arriba de estas pestañas dice de cuándo es la última corrida buena; si falla o
+            deja de correr, se pone en rojo. Mientras esté en rojo, lo facturado después no está acá.
           </li>
         </ol>
       </div>
@@ -258,7 +322,7 @@ function Estado({
         <code className="text-xs text-fg-secondary">{codigo}</code>
       </td>
       <td className="py-1.5 pr-4 align-top text-fg-secondary">{que}</td>
-      <td className={`py-1.5 align-top font-medium ${alerta ? "text-red-600" : "text-fg"}`}>{plata}</td>
+      <td className={`py-1.5 align-top font-medium ${alerta ? "text-danger-ink" : "text-fg"}`}>{plata}</td>
     </tr>
   );
 }

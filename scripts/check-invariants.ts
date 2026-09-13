@@ -12,6 +12,7 @@ import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
+  INV31, INV32,
   type Invariante,
 } from "@/lib/invariantes";
 
@@ -730,6 +731,12 @@ async function main(): Promise<number> {
 
   // ── Inv 30 → lib/invariantes/odoo.ts (cobranza, 2026-09-12; INV29 lo reserva docs/database-refactoring-plan.md) ──
   violations += await reportar(INV30, prisma);
+
+  // ── Inv 31 → lib/invariantes/odoo.ts (cobranza, 2026-09-12: el espejo de Odoo no está viejo) ──
+  violations += await reportar(INV31, prisma);
+
+  // ── Inv 32 → lib/invariantes/cobranza.ts (cobranza, 2026-09-12: el corte quincenal no está viejo) ──
+  violations += await reportar(INV32, prisma);
 
   return violations;
 }
