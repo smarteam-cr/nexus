@@ -793,6 +793,16 @@ export const crearEmpresaSchema = z.object({
   diaCobroAncla: z.number().int().min(1).max(31).nullish(),
   creditoDias: z.number().int().min(1).max(365).nullish(),
   notas: z.string().max(4000).nullish(),
+  /**
+   * Etapa 12: la persona vio las empresas parecidas y dijo cuál es. Se le abre la cuenta a ESA, sin crear
+   * otra. Tiene que ser un cliente: una cuenta de cobro colgada de un prospecto no aparece en la cartera.
+   */
+  empresaExistenteId: idDeBase.nullish(),
+  /**
+   * La persona vio las parecidas y dijo que no es ninguna. Sin esto, con parecidas, el alta da 409 y las
+   * devuelve. ⚠ No alcanza si una comparte el DOMINIO: dos empresas distintas no comparten dominio.
+   */
+  noEsNingunaParecida: z.boolean().optional(),
 });
 
 // ── Importador CSV (AccountSource "sheet" — puerto 1) ───────────────────────────

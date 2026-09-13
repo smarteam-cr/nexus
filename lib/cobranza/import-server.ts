@@ -19,7 +19,35 @@ import { prisma } from "@/lib/db/prisma";
 import { computeAmbiguousNameTokens, effectiveDomainsForClient } from "@/lib/sessions/categorize";
 import { importFilaCanonicaSchema, type ImportCampoCanonico } from "./schema";
 import { aplicarMapeo, esDominioCompartido, nombreEnSkipList, warningsFila } from "./import-core";
-import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { CLIENT_KIND_META, CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { empresasParecidas, type EmpresaExistente } from "./empresas-parecidas";
+
+// ── Las empresas que ya existen, de TODOS los tipos ────────────────────────────────
+
+/**
+ * Todas las empresas, de cualquier tipo, con sus dominios efectivos ya sin los compartidos. Es contra lo
+ * que se buscan las parecidas antes de un alta (lib/cobranza/empresas-parecidas.ts).
+ *
+ * ⚠ Sin `CS_CLIENT_WHERE` a propósito: «Areyas» es un prospecto y «Areyá» el mismo cliente. Buscar solo
+ * en la cartera es lo que dejó pasar ese duplicado.
+ */
+export async function cargarEmpresasExistentes(): Promise<EmpresaExistente[]> {
+  const clients = await prisma.client.findMany({
+    select: { id: true, name: true, company: true, emailDomains: true, kind: true, cuentaFinanciera: { select: { id: true } } },
+  });
+  return clients.map((c) => ({
+    id: c.id,
+    nombre: c.name,
+    kind: c.kind,
+    dominios: effectiveDomainsForClient(c).filter((d) => !esDominioCompartido(d)),
+    cuentaId: c.cuentaFinanciera?.id ?? null,
+  }));
+}
+
+/** «Prospecto», «Cliente»… para los textos. Un tipo que no se conoce se muestra tal cual. */
+export function etiquetaDeTipo(kind: string): string {
+  return kind in CLIENT_KIND_META ? CLIENT_KIND_META[kind as keyof typeof CLIENT_KIND_META].label : kind;
+}
 
 // ── Índices de dedup ─────────────────────────────────────────────────────────────
 
@@ -45,6 +73,8 @@ export interface DedupIndices {
   byNombre: Map<string, ClienteRef>;
   /** Los clientes existentes (para computeAmbiguousNameTokens). */
   existentes: Array<{ name: string; company: string | null }>;
+  /** Todas las empresas, de cualquier tipo: contra ellas se avisa de las parecidas. */
+  empresas: EmpresaExistente[];
 }
 
 function normalizarNombre(s: string): string {
@@ -57,10 +87,13 @@ function normalizarNombre(s: string): string {
 }
 
 export async function buildDedupIndices(): Promise<DedupIndices> {
-  const clients = await prisma.client.findMany({
-    where: { ...CS_CLIENT_WHERE },
-    select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
-  });
+  const [clients, empresas] = await Promise.all([
+    prisma.client.findMany({
+      where: { ...CS_CLIENT_WHERE },
+      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
+    }),
+    cargarEmpresasExistentes(),
+  ]);
   const byFuenteId = new Map<string, ClienteRef>();
   const byDomain = new Map<string, ClienteRef>();
   const byNombre = new Map<string, ClienteRef>();
@@ -79,6 +112,7 @@ export async function buildDedupIndices(): Promise<DedupIndices> {
     byDomain,
     byNombre,
     existentes: clients.map((c) => ({ name: c.name, company: c.company })),
+    empresas,
   };
 }
 
@@ -125,6 +159,15 @@ export function evaluarCanonico(canonico: Record<string, unknown>, idx: DedupInd
     if (porFuente) dedup = { clientId: porFuente.id, tipo: "fuente_id", clienteNombre: porFuente.name };
     else if (porDominio) dedup = { clientId: porDominio.id, tipo: "dominio", clienteNombre: porDominio.name };
     else if (porNombre) dedup = { clientId: porNombre.id, tipo: "nombre_exacto", clienteNombre: porNombre.name };
+    /* Sin vínculo, la fila va a crear una empresa: si ya hay una que se le parece —de cualquier tipo—,
+       se AVISA. No se vincula sola: con la clave suelta, eso sería unir empresas por parecido. */
+    if (!dedup) {
+      for (const p of empresasParecidas({ nombre: c.clienteNombre, dominio: c.dominio ?? null }, idx.empresas).slice(0, 3)) {
+        errores.push(
+          `⚠ Se parece a «${p.nombre}» (${etiquetaDeTipo(p.kind)}, ${p.via === "DOMINIO" ? "mismo dominio" : "nombre parecido"}): si es la misma empresa, vinculala antes de aplicar; si no, se crea otra.`,
+        );
+      }
+    }
   } else if (typeof canonico.idExterno === "string" && canonico.idExterno) {
     idExterno = canonico.idExterno;
   }

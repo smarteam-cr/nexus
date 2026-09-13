@@ -7,9 +7,14 @@
  * (AccountSource "manual" — puerto 1). Para las cuentas que hoy viven solo en el
  * Sheet y no tienen proyecto en Nexus. Al crear, refresca la cartera y abre el
  * CuentaDrawer de la cuenta nueva para seguir configurando.
+ *
+ * Etapa 12 (2026-09-13): si ya hay empresas que se le parecen —de cualquier tipo, por dominio o por
+ * nombre—, el servidor responde 409 con la lista y acá se pregunta si es alguna. Elegir una le abre la
+ * cuenta a esa; «no es ninguna» crea la nueva. Nexus no elige por la persona: la misma empresa ya estaba
+ * dos veces en 4 casos, y unir dos por parecido sería el error opuesto.
  */
 import { useState } from "react";
-import { Modal } from "@/components/ui";
+import { Alert, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import {
@@ -18,8 +23,24 @@ import {
   COBRANZA_MONEDAS,
   TIPO_CUENTA_LABEL,
 } from "@/lib/cobranza/schema";
+import { CLIENT_KIND_META } from "@/lib/clients/kind";
+import type { EmpresaParecida } from "@/lib/cobranza/empresas-parecidas";
 import { VIA_COBRO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+
+/** La lista que manda el 409, validada: un payload inesperado no puede romper el modal. */
+function parecidasDe(payload: unknown): EmpresaParecida[] | null {
+  if (!payload || typeof payload !== "object" || !("parecidas" in payload)) return null;
+  const lista = payload.parecidas;
+  if (!Array.isArray(lista)) return null;
+  return lista.filter(
+    (p): p is EmpresaParecida =>
+      !!p && typeof p === "object" && typeof p.id === "string" && typeof p.nombre === "string" && typeof p.kind === "string",
+  );
+}
+
+const etiquetaDeTipo = (kind: string) =>
+  kind in CLIENT_KIND_META ? CLIENT_KIND_META[kind as keyof typeof CLIENT_KIND_META].label : kind;
 
 export default function NuevaEmpresaModal({
   open,
@@ -41,6 +62,8 @@ export default function NuevaEmpresaModal({
   const [diaCobroAncla, setDiaCobroAncla] = useState("");
   const [creditoDias, setCreditoDias] = useState("");
   const [saving, setSaving] = useState(false);
+  /** Las empresas parecidas que devolvió el servidor. null = todavía no hubo que preguntar. */
+  const [parecidas, setParecidas] = useState<EmpresaParecida[] | null>(null);
 
   function reset() {
     setNombre("");
@@ -51,9 +74,10 @@ export default function NuevaEmpresaModal({
     setMoneda("CRC");
     setDiaCobroAncla("");
     setCreditoDias("");
+    setParecidas(null);
   }
 
-  async function crear() {
+  async function crear(decision: { empresaExistenteId?: string; noEsNingunaParecida?: boolean } = {}) {
     if (saving) return;
     if (nombre.trim().length < 2) {
       toast.error("Indicá el nombre de la empresa.");
@@ -75,6 +99,7 @@ export default function NuevaEmpresaModal({
             moneda,
             diaCobroAncla: diaCobroAncla.trim() ? Number(diaCobroAncla) : null,
             creditoDias: creditoDias.trim() ? Number(creditoDias) : null,
+            ...decision,
           }),
         },
       );
@@ -86,11 +111,15 @@ export default function NuevaEmpresaModal({
       reset();
       onCreated(d.cuentaId);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo crear la empresa.");
+      const lista = e instanceof ApiError && e.status === 409 ? parecidasDe(e.payload) : null;
+      if (lista && lista.length > 0) setParecidas(lista);
+      else toast.error(e instanceof ApiError ? e.message : "No se pudo crear la empresa.");
     } finally {
       setSaving(false);
     }
   }
+
+  const compartenDominio = !!parecidas?.some((p) => p.via === "DOMINIO");
 
   return (
     <Modal
@@ -110,8 +139,8 @@ export default function NuevaEmpresaModal({
           </button>
           <button
             type="button"
-            onClick={crear}
-            disabled={saving}
+            onClick={() => crear()}
+            disabled={saving || parecidas !== null}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50"
           >
             {saving ? "Creando…" : "Crear empresa"}
@@ -120,11 +149,61 @@ export default function NuevaEmpresaModal({
       }
     >
       <div className="space-y-3">
+        {parecidas && (
+          <Alert variant="warning" title="Ya hay empresas que se le parecen">
+            <p className="text-xs">
+              ¿Es alguna de estas? Crear otra deja la misma empresa dos veces, con sus cobros repartidos entre las
+              dos.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {parecidas.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-surface px-2 py-1.5">
+                  <span className="text-xs font-medium text-fg">{p.nombre}</span>
+                  <span className="text-[10px] text-fg-muted">
+                    {etiquetaDeTipo(p.kind)} · {p.via === "DOMINIO" ? "mismo dominio" : "nombre parecido"}
+                    {p.cuentaId ? " · ya tiene cuenta de cobro" : ""}
+                  </span>
+                  {p.kind === "CLIENTE" ? (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => crear({ empresaExistenteId: p.id })}
+                      className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 disabled:opacity-50"
+                    >
+                      {p.cuentaId ? "Es esta: abrir su cuenta" : "Es esta: abrirle la cuenta"}
+                    </button>
+                  ) : (
+                    <span className="ml-auto text-[10px] text-fg-muted">
+                      Si es esta, pasala a Cliente en su ficha y volvé a intentar.
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {compartenDominio ? (
+              <p className="mt-2 text-xs">
+                Una comparte el dominio: si es otra empresa, sacá el dominio y volvé a crear.
+              </p>
+            ) : (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => crear({ noEsNingunaParecida: true })}
+                className="mt-2 text-[11px] font-medium underline decoration-dotted hover:opacity-80 disabled:opacity-50"
+              >
+                No es ninguna: crear «{nombre.trim()}»
+              </button>
+            )}
+          </Alert>
+        )}
         <div>
           <label className={LABEL_CLS}>Nombre de la empresa</label>
           <input
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => {
+              setNombre(e.target.value);
+              setParecidas(null);
+            }}
             placeholder="Ej. Ferretería Noelitto"
             className={INPUT_CLS}
             autoFocus
@@ -135,7 +214,10 @@ export default function NuevaEmpresaModal({
             <label className={LABEL_CLS}>Dominio (opcional)</label>
             <input
               value={dominio}
-              onChange={(e) => setDominio(e.target.value)}
+              onChange={(e) => {
+                setDominio(e.target.value);
+                setParecidas(null);
+              }}
               placeholder="empresa.com"
               className={INPUT_CLS}
             />

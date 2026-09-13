@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db/prisma";
 import { effectiveDomainsForClient } from "@/lib/sessions/categorize";
 import type { CuentaEntrante, IngestResultado } from "./ports";
 import { clampInicioCicloCorriente, esDominioCompartido, nombreEnSkipList } from "./import-core";
-import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { CLIENT_KIND_META, CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 const dayUTC = (isoDate: string) => new Date(`${isoDate}T00:00:00.000Z`);
 
@@ -26,16 +26,32 @@ export async function ingestCuentasEntrantes(
 ): Promise<IngestResultado[]> {
   // Índices en memoria UNA vez (patrón partner-sync byCompanyId/byDomain); se
   // actualizan durante el batch para que dos filas de la misma empresa no dupliquen.
-  const clients = await prisma.client.findMany({
-    where: { ...CS_CLIENT_WHERE },
-    select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
-  });
+  const [clients, fueraDeCartera] = await Promise.all([
+    prisma.client.findMany({
+      where: { ...CS_CLIENT_WHERE },
+      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
+    }),
+    prisma.client.findMany({
+      where: { NOT: CS_CLIENT_WHERE },
+      select: { name: true, company: true, emailDomains: true, kind: true },
+    }),
+  ]);
   const byFuenteId = new Map<string, string>();
   const byDomain = new Map<string, string>();
   for (const c of clients) {
     if (c.source && c.sourceExternalId) byFuenteId.set(`${c.source}:${c.sourceExternalId}`, c.id);
     for (const d of effectiveDomainsForClient(c)) {
       if (!byDomain.has(d)) byDomain.set(d, c.id);
+    }
+  }
+  /* ⚠ Etapa 12: los dominios de las empresas que NO son cartera (prospectos, aliados, nuestras). El
+     índice de arriba solo mira clientes, así que un dominio de un prospecto no frenaba nada y se creaba
+     la misma empresa otra vez. Tampoco se vincula solo: una cuenta de cobro colgada de un prospecto no
+     aparece en la cartera. La fila falla y dice de quién es el dominio. */
+  const fueraPorDominio = new Map<string, (typeof fueraDeCartera)[number]>();
+  for (const c of fueraDeCartera) {
+    for (const d of effectiveDomainsForClient(c)) {
+      if (!esDominioCompartido(d) && !fueraPorDominio.has(d)) fueraPorDominio.set(d, c);
     }
   }
 
@@ -67,6 +83,13 @@ export async function ingestCuentasEntrantes(
       cta.dedupClientId ??
       (dominioUsable ? byDomain.get(dominioUsable) : undefined) ??
       null;
+
+    const ajena = !matchId && dominioUsable ? fueraPorDominio.get(dominioUsable) : undefined;
+    if (ajena) {
+      throw new Error(
+        `El dominio ${dominioUsable} ya es de «${ajena.name}» (${CLIENT_KIND_META[ajena.kind].label}): no se crea otra empresa con el mismo dominio. Si es la misma, pasala a Cliente en su ficha y volvé a intentar; si es otra, sacá el dominio.`,
+      );
+    }
 
     return prisma.$transaction(async (tx) => {
       let clientId: string;

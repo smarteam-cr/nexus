@@ -146,11 +146,21 @@ export function identidadDelNombre(raw: string): IdentidadDelNombre {
   return { nombre: nombre || raw.trim(), clave, alias, cedula: cedulaDigitos ?? null };
 }
 
-function claveDeTexto(s: string): string {
-  const sinFormas = plano(s).replace(RE_FORMAS, " ").replace(RE_FORMAS, " ");
-  const tokens = sinFormas
+/**
+ * Las palabras que distinguen a una empresa: sin tildes, puntuación, forma jurídica ni palabras de enlace.
+ * La comparten la clave de acá y la clave suelta del alta (lib/cobranza/empresas-parecidas.ts): una sola
+ * lista de formas jurídicas, así «S.A. de C.V.» no se quita en un lado y en el otro no.
+ */
+export function palabrasDelNombre(s: string): string[] {
+  return plano(s)
+    .replace(RE_FORMAS, " ")
+    .replace(RE_FORMAS, " ")
     .split(" ")
-    .filter((p) => p && !ENLACES.has(p) && !(tieneIdentificador(p) && /[a-z]/.test(p)));
+    .filter((p) => p && !ENLACES.has(p));
+}
+
+function claveDeTexto(s: string): string {
+  const tokens = palabrasDelNombre(s).filter((p) => !(tieneIdentificador(p) && /[a-z]/.test(p)));
   /* Siglas deletreadas: «D C C» es «DCC», como la escribe la razón social de la cuenta. */
   const juntos: string[] = [];
   let letras = "";
