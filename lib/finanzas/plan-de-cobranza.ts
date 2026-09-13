@@ -94,14 +94,14 @@ export const QUE_HACE_AHORA: readonly CambioHecho[] = [
   {
     titulo: "Los números de Dirección dejan de inflarse",
     consecuencia:
-      "El % de cobranza se muestra sobre lo facturado (82,1 %; antes se veía 87,6 %) y sobre lo exigible (87,7 %), con cada moneda aparte. Las comisiones estimadas (US$108.637) ya no suman: el margen a la fecha baja de 208.067 a 168.051.",
+      "El % de cobranza se muestra sobre lo facturado (82,1 %; antes se veía 87,6 %) y sobre lo exigible (87,7 %), con cada moneda aparte. Las comisiones estimadas (US$108.637) ya no suman: el margen a la fecha baja de US$208.067 a US$168.051.",
     etapas: [9],
     espera: null,
   },
   {
     titulo: "Los avisos dejan de mentir",
     consecuencia:
-      "«Lo que no cuadra» ya no acusa USD 237.355 de cobros sin factura: con las facturas de Odoo reatribuidas quedan 18 cobros por USD 22.270. Si el espejo de Odoo o el corte quincenal se quedan viejos, sus pantallas se ponen en rojo esa misma mañana.",
+      "«Lo que no cuadra» ya no acusa USD 237.355 de cobros sin factura: acusa 82 cobros por USD 83.187, que bajan a 18 por USD 22.270 cuando Elías reatribuya las facturas de Odoo. Si el espejo de Odoo o el corte quincenal se quedan viejos, sus pantallas se ponen en rojo esa misma mañana.",
     etapas: [2, 3],
     espera: null,
   },
@@ -129,7 +129,7 @@ export const TAREAS: readonly Tarea[] = [
   },
   {
     quien: "Alex",
-    que: "Aplicar el libro: cargar por cobrar las 78 facturas que Nexus no tiene (21 sin pagar, por ₡39.920.993,51 + US$58.331,60) y elegir la cuenta de los 24 nombres que no traen una propuesta.",
+    que: "Aplicar el libro: cargar por cobrar las 78 facturas que Nexus no tiene (21 sin pagar, por ₡39.920.993,51 + US$58.331,60 según el libro) y elegir la cuenta de los 24 nombres que no traen una propuesta.",
     espera: DESPUES_DE_ELIAS,
   },
   {
@@ -181,7 +181,9 @@ export const DECISIONES: readonly Decision[] = [
   {
     quien: "Alex",
     pregunta: "JCB: ¿va a pedir nota de crédito sobre los $7.000 ya facturados, y por cuánto?",
-    mientras: "Sigue por cobrar: falta el depósito.",
+    // ⚠ Medido el 2026-09-13: «Aditec JCB» existe como empresa pero sin cuenta de cobranza, y el
+    // libro no la carga (etapa 13). «Sigue por cobrar» hacía creer que Nexus ya la sigue.
+    mientras: "Todavía no está en Nexus: la empresa no tiene cuenta de cobranza y el libro no la carga.",
   },
   {
     quien: "Marco",
@@ -191,7 +193,9 @@ export const DECISIONES: readonly Decision[] = [
   {
     quien: "Marco",
     pregunta: "¿Con qué tipo de cambio se pasan los colones a dólares?",
-    mientras: "El % de cobranza muestra cada moneda aparte, sin convertir.",
+    // ⚠ Medido el 2026-09-13: las 12 tasas de 2026 valen ₡500, tomadas del Excel de egresos. Decir
+    // solo «sin convertir» hacía creer a Dirección que el margen y el % no convierten, y convierten.
+    mientras: "Nexus usa ₡500 por dólar todo el año, el del Excel de egresos. El % de cobranza además muestra cada moneda aparte, sin convertir.",
   },
 ];
 
