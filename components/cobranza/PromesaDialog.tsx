@@ -2,10 +2,13 @@
 
 /**
  * components/cobranza/PromesaDialog.tsx — diálogo de promesa de pago, compartido
- * por la cola de cobros y el cronograma del drawer. La promesa solo calla alertas
- * — semáforos y métricas NO cambian; si la fecha pasa sin cobro, el corte emite
- * PROMESA_INCUMPLIDA. Presentacional: entrega la fecha (o null) y el caller
- * hace el PATCH.
+ * por la cola de cobros y el cronograma del drawer. Presentacional: entrega la
+ * fecha (o null) y el caller hace el PATCH.
+ *
+ * ⛔ La promesa es una MARCA, no un descuento (decisión de Alex, 2026-09-12): la
+ * factura sigue en el vencido, su alerta sigue a la vista y, si la fecha pasa sin
+ * depósito, sube a Promesa incumplida. Hasta esa fecha este diálogo decía «el
+ * semáforo no cambia» justo antes de cambiarlo y sacar la plata del vencido.
  */
 import { useState } from "react";
 import { Modal } from "@/components/ui";
@@ -17,7 +20,19 @@ export interface CobroPromesaRef {
   monto: number;
   moneda: string;
   fechaProgramada: string;
+  fechaEmision: string | null;
   promesaPago: string | null;
+}
+
+/**
+ * Lo que la promesa hace con este cobro, dicho antes de guardarla. Sin factura emitida la promesa
+ * queda anotada pero no cuenta (`marcaPromesa` da null): el cliente todavía no debe nada.
+ */
+function queHaceLaPromesa(cobro: CobroPromesaRef): string {
+  if (!cobro.fechaEmision) {
+    return "Todavía no está facturado: la fecha queda anotada y cuenta recién cuando se emita la factura.";
+  }
+  return "La factura sigue en el vencido y queda marcada con esta fecha. Su alerta sigue a la vista; si la fecha pasa sin depósito, sube a Promesa incumplida.";
 }
 
 export default function PromesaDialog({
@@ -38,7 +53,7 @@ export default function PromesaDialog({
       // Se abre ENCIMA del CuentaDrawer (z-[60]) desde el cronograma del drawer.
       z="z-[70]"
       title="¿Para cuándo prometió pagar?"
-      description={`${fmtMonto(cobro.monto, cobro.moneda)} · programado ${fmtFecha(cobro.fechaProgramada)}. Sus alertas se callan hasta la fecha prometida; el semáforo no cambia.`}
+      description={`${fmtMonto(cobro.monto, cobro.moneda)} · programado ${fmtFecha(cobro.fechaProgramada)}. ${queHaceLaPromesa(cobro)}`}
     >
       <div className="space-y-3">
         <div>

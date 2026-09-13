@@ -3010,9 +3010,10 @@ model Cobro {
   // ReconciliationPort v1: referencia externa OPCIONAL al confirmar COBRADO (id de
   // transacción Mercury / factura Odoo). Solo metadata — la conciliación real vive allá.
   referenciaExterna String?
-  // Promesa de pago: calla COBRO_VENCIDO y COBRO_PROXIMO de ESTE cobro hasta la
-  // fecha (semáforos y métricas NO cambian — honestidad); pasada sin COBRADO →
-  // alerta PROMESA_INCUMPLIDA. nullable porque la mayoría no tiene promesa.
+  // Promesa de pago: MARCA sobre una factura emitida, no descuento (decisión de Alex,
+  // 2026-09-12). No cambia el semáforo ni saca la factura del vencido, y su alerta
+  // COBRO_VENCIDO sigue a la vista con la fecha; pasada sin COBRADO, la alerta sube a
+  // PROMESA_INCUMPLIDA. Sin factura no cuenta. nullable porque la mayoría no tiene promesa.
   promesaPago       DateTime?
   notas             String?             @db.Text
 
@@ -3112,8 +3113,9 @@ model AlertaCobro {
   vistaPor      String? // email del guard
   resueltaEn    DateTime?
   resueltaPor   String? // email del guard
-  // Snooze manual (o auto-snooze al registrar promesa de pago): loadAlertas la
-  // excluye hasta esta fecha; el merge del upsert NO la resucita. No cambia estado.
+  // Snooze MANUAL («Posponer» de las alertas): loadAlertas la excluye hasta esta
+  // fecha; el merge del upsert NO la resucita. No cambia estado. Registrar una promesa
+  // de pago ya no la escribe (2026-09-12).
   posponerHasta DateTime?
 
   createdAt DateTime @default(now())

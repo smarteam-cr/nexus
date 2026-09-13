@@ -499,20 +499,26 @@ export function splitCatchUp(
  * Semáforo de un cobro — DOS RELOJES independientes (Tanda B):
  *   Reloj 1 (¿facturaste?): sin fechaEmision, la fecha programada manda — gris si
  *     todavía falta mucho, amarillo si está en ventana o ya atrasado (mismo color,
- *     la edad se expresa en la alerta, no en el semáforo). SIEMPRE prioritario:
- *     una promesa de pago NO exime de facturar.
+ *     la edad se expresa en la alerta, no en el semáforo).
  *   Reloj 2 (¿te pagaron?): ya facturado — azul mientras el crédito no corrió,
- *     rojo si se venció. Una promesa vigente calla el rojo (azul); vencida sin
- *     cobro → rojo (coherente con PROMESA_INCUMPLIDA en computeAlertSet).
+ *     rojo si se venció.
  * Fallback duro: un cobro SIN fechaEmision NUNCA es "vencido" — no facturar es
  * trabajo pendiente de Alex, no mora del cliente.
+ *
+ * ⛔ UNA PROMESA DE PAGO NO CAMBIA EL COLOR (decisión de Alex, 2026-09-12). Hasta entonces una
+ * promesa vigente volvía azul una factura vencida y, como la cola, Reportes y el corte solo cuentan
+ * como vencido lo rojo, registrarla sacaba la plata del vencido sin que entrara un colón: los
+ * US$4.298 de AMVAC y AMC desaparecían de Reportes mientras Proyección, que nunca miró la promesa,
+ * los seguía contando. La promesa es una marca al lado (`marcaPromesa`), no un descuento.
+ *
+ * ⚠ Por eso el parámetro ya no la declara. Un objeto armado en otra variable puede seguir
+ * trayéndola (ahí TypeScript no protesta) y da igual: acá no se lee.
  */
 export function semaforoCobro(
   cobro: {
     estado: string;
     fechaProgramadaISO: string;
     fechaEmisionISO: string | null;
-    promesaPagoISO?: string | null;
   },
   todayISO: string,
   creditoDias: number = DEFAULT_CREDITO_DIAS,
@@ -524,9 +530,6 @@ export function semaforoCobro(
     const diasPasados = diffDays(cobro.fechaProgramadaISO, todayISO);
     return diasPasados >= -ventanaProximaDias ? "amarillo" : "gris";
   }
-
-  const promesaISO = cobro.promesaPagoISO ?? null;
-  if (promesaISO) return diffDays(promesaISO, todayISO) > 0 ? "rojo" : "azul";
 
   const vencimientoISO = addDaysISO(cobro.fechaEmisionISO, creditoDias);
   return diffDays(vencimientoISO, todayISO) > 0 ? "rojo" : "azul";
@@ -547,7 +550,6 @@ export function semaforoCuenta(
     estado: string;
     fechaProgramadaISO: string;
     fechaEmisionISO: string | null;
-    promesaPagoISO?: string | null;
   }>,
   todayISO: string,
   creditoDias: number = DEFAULT_CREDITO_DIAS,
@@ -560,6 +562,30 @@ export function semaforoCuenta(
     if (SEMAFORO_PESO[s] > SEMAFORO_PESO[peor]) peor = s;
   }
   return peor;
+}
+
+/** Qué dice HOY la promesa de pago de un cobro. `null` = no hay nada que marcar. */
+export type MarcaPromesa = "vigente" | "incumplida";
+
+/**
+ * La marca de la promesa de pago: UNA sola regla para las alertas, la antigüedad, el corte, la
+ * cola y el borrador de correo.
+ *
+ *  - `null` si no hay promesa, si el cobro ya entró o si todavía NO TIENE FACTURA: sin factura el
+ *    cliente no debe nada y lo que falta es emitirla (Reloj 1 manda). Es Real Shipping, con una
+ *    promesa al 5-oct sobre una cuota que nunca se facturó.
+ *  - `"vigente"` hasta el día prometido inclusive: si prometió pagar hoy, hoy todavía puede.
+ *  - `"incumplida"` desde el día siguiente sin depósito.
+ *
+ * ⚠ No mira el crédito a propósito: una promesa rota está rota aunque el crédito no haya corrido.
+ * Y no le cambia el color a nadie: el semáforo mira solo el crédito (`semaforoCobro`).
+ */
+export function marcaPromesa(
+  cobro: { estado: string; fechaEmisionISO: string | null; promesaPagoISO?: string | null },
+  todayISO: string,
+): MarcaPromesa | null {
+  if (cobro.estado === "COBRADO" || !cobro.fechaEmisionISO || !cobro.promesaPagoISO) return null;
+  return diffDays(cobro.promesaPagoISO, todayISO) > 0 ? "incumplida" : "vigente";
 }
 
 // ── 7. Cómputo del set de alertas ───────────────────────────────────────────────
@@ -699,47 +725,56 @@ export function computeAlertSet(
         }
         // fuera de ventana hacia el futuro: silencio (gris, sin alerta)
       } else {
-        // Reloj 2 (¿te pagaron?) — ya facturado, acá SÍ aplica la promesa. VIGENTE
-        // (>= hoy) calla COBRO_VENCIDO (el humano ya gestionó — semáforos y
-        // métricas NO cambian); PASADA sin COBRADO → PROMESA_INCUMPLIDA que
-        // REEMPLAZA al vencido (1 alerta por cobro).
+        // Reloj 2 (¿te pagaron?) — ya facturado. Manda el crédito; la promesa es una marca.
+        //  - Promesa INCUMPLIDA (la fecha pasó sin COBRADO) → PROMESA_INCUMPLIDA (ALTA). Ocupa el
+        //    lugar del vencido: 1 alerta por cobro, y en la base es la misma fila que sube.
+        //  - Crédito corrido → COBRO_VENCIDO (ALTA), haya o no una promesa vigente, y el mensaje
+        //    dice la fecha prometida. ⛔ Hasta el 2026-09-12 la promesa vigente la callaba y la
+        //    alerta desaparecía hasta la fecha prometida. Decisión de Alex: no desaparece.
         const promesaISO = c.promesaPagoISO ?? null;
-        if (promesaISO) {
+        const marca = marcaPromesa(
+          { estado: c.estado, fechaEmisionISO, promesaPagoISO: promesaISO },
+          opts.todayISO,
+        );
+        const vencimientoISO = addDaysISO(fechaEmisionISO, creditoDias);
+        const diasVencido = diffDays(vencimientoISO, opts.todayISO);
+        if (promesaISO && marca === "incumplida") {
           const diasDesdePromesa = diffDays(promesaISO, opts.todayISO);
-          if (diasDesdePromesa > 0) {
-            out.push({
-              dedupeKey: `PROMESA_INCUMPLIDA:${cuenta.cuentaId}:${c.cobroId}`,
-              tipo: "PROMESA_INCUMPLIDA",
-              urgencia: "ALTA",
-              cuentaId: cuenta.cuentaId,
-              cobroId: c.cobroId,
-              mensaje: `${cuenta.clienteNombre}: prometió pagar ${c.monto.toLocaleString("es-CR")} el ${promesaISO} y ya pasaron ${diasDesdePromesa} día(s) sin cobro.`,
-              evidencia: {
-                servicioId: c.servicioId,
-                promesaPago: promesaISO,
-                fechaProgramada: c.fechaProgramadaISO,
-                monto: c.monto,
-                diasDesdePromesa,
-              },
-            });
-          }
-          // promesa vigente: silencio (coherente con semaforoCobro = "azul" acá)
-        } else {
-          const vencimientoISO = addDaysISO(fechaEmisionISO, creditoDias);
-          const diasVencido = diffDays(vencimientoISO, opts.todayISO);
-          if (diasVencido > 0) {
-            out.push({
-              dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
-              tipo: "COBRO_VENCIDO",
-              urgencia: "ALTA",
-              cuentaId: cuenta.cuentaId,
-              cobroId: c.cobroId,
-              mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} vencido hace ${diasVencido} día(s) (facturado ${fechaEmisionISO}, crédito ${creditoDias}d).`,
-              evidencia: { servicioId: c.servicioId, fechaEmision: fechaEmisionISO, creditoDias, monto: c.monto, diasVencido },
-            });
-          }
-          // dentro del crédito: silencio — estado sano, no debe generar ruido
+          out.push({
+            dedupeKey: `PROMESA_INCUMPLIDA:${cuenta.cuentaId}:${c.cobroId}`,
+            tipo: "PROMESA_INCUMPLIDA",
+            urgencia: "ALTA",
+            cuentaId: cuenta.cuentaId,
+            cobroId: c.cobroId,
+            mensaje: `${cuenta.clienteNombre}: prometió pagar ${c.monto.toLocaleString("es-CR")} el ${promesaISO} y ya pasaron ${diasDesdePromesa} día(s) sin cobro.`,
+            evidencia: {
+              servicioId: c.servicioId,
+              promesaPago: promesaISO,
+              fechaProgramada: c.fechaProgramadaISO,
+              monto: c.monto,
+              diasDesdePromesa,
+            },
+          });
+        } else if (diasVencido > 0) {
+          const prometio = promesaISO && marca === "vigente" ? promesaISO : null;
+          out.push({
+            dedupeKey: `COBRO_VENCIDO:${cuenta.cuentaId}:${c.cobroId}`,
+            tipo: "COBRO_VENCIDO",
+            urgencia: "ALTA",
+            cuentaId: cuenta.cuentaId,
+            cobroId: c.cobroId,
+            mensaje: `${cuenta.clienteNombre}: cobro de ${c.monto.toLocaleString("es-CR")} vencido hace ${diasVencido} día(s) (facturado ${fechaEmisionISO}, crédito ${creditoDias}d)${prometio ? ` — prometió pagar el ${prometio}` : ""}.`,
+            evidencia: {
+              servicioId: c.servicioId,
+              fechaEmision: fechaEmisionISO,
+              creditoDias,
+              monto: c.monto,
+              diasVencido,
+              ...(prometio ? { promesaPago: prometio } : {}),
+            },
+          });
         }
+        // dentro del crédito y sin promesa rota: silencio — estado sano, no debe generar ruido
       }
 
       if (c.origen === "CATCH_UP" && c.estado === "PROGRAMADO") {
@@ -1039,6 +1074,18 @@ export interface MetricasMoneda {
   diasPromedioCobro: number | null;
   /** Lo que la cartera dice que entra hasta el próximo corte (regla de gracia de proyectarIngresos). */
   proyectadoProximoCorte: number;
+  /**
+   * La promesa de pago es MARCA, no descuento (2026-09-12). Opcionales porque los cortes guardados
+   * antes no los traen.
+   *  - `vencidoConPromesa`: la parte de `totalVencido` con una promesa VIGENTE. Ya está dentro del
+   *    vencido: no se suma aparte.
+   *  - `promesaIncumplida`: facturas cuya fecha prometida pasó sin depósito, estén o no vencidas
+   *    por crédito (`marcaPromesa`).
+   */
+  vencidoConPromesa?: number;
+  nVencidoConPromesa?: number;
+  promesaIncumplida?: number;
+  nPromesaIncumplida?: number;
 }
 
 export interface MetricasCartera {
@@ -1047,8 +1094,10 @@ export interface MetricasCartera {
    *  3 = además la ventana arranca en el día de Costa Rica del corte anterior y lo proyectado llega
    *      hasta el próximo día de corte real (1 o 15), no a +7 días (2026-09-12). Quien llama pasa
    *      `inicioDeVentanaISO` y `proximoDiaDeCorteISO`. Los cortes guardados conservan su versión, y
-   *      Reportes no compara versiones distintas (lib/cobranza/series-cortes.ts). */
-  version: 1 | 2 | 3;
+   *      Reportes no compara versiones distintas (lib/cobranza/series-cortes.ts).
+   *  4 = además una promesa de pago ya no saca la factura del vencido (decisión de Alex, 2026-09-12):
+   *      con el mismo corte, el vencido de la versión 3 leía US$4.298 menos. */
+  version: 1 | 2 | 3 | 4;
   /** Ventana del corte — desdeISO null = primer corte (sin historia, declarado). */
   ventana: { desdeISO: string | null; hastaISO: string; proximoCorteISO: string };
   moneda: { CRC: MetricasMoneda; USD: MetricasMoneda };
@@ -1098,6 +1147,10 @@ export function computeMetricasCartera(
     dso: null,
     diasPromedioCobro: null,
     proyectadoProximoCorte: 0,
+    vencidoConPromesa: 0,
+    nVencidoConPromesa: 0,
+    promesaIncumplida: 0,
+    nPromesaIncumplida: 0,
   });
   const moneda = { CRC: mkMoneda(), USD: mkMoneda() };
   const dsoAcc = { CRC: { peso: 0, suma: 0 }, USD: { peso: 0, suma: 0 } };
@@ -1124,11 +1177,11 @@ export function computeMetricasCartera(
     }
 
     const creditoDias = cuenta.creditoDias ?? creditoDefault;
+    // ⚠ Sin la promesa, a mano: acá TypeScript no avisaría si viajara (objeto armado en un map).
     const cobrosSem = cuenta.cobros.map((c) => ({
       estado: c.estado,
       fechaProgramadaISO: c.fechaProgramadaISO,
       fechaEmisionISO: c.fechaEmisionISO ?? null,
-      promesaPagoISO: c.promesaPagoISO ?? null,
     }));
     const sem = semaforoCuenta(cobrosSem, opts.todayISO, creditoDias);
     if (sem === "rojo") cuentasRojas++;
@@ -1167,7 +1220,6 @@ export function computeMetricasCartera(
           estado: c.estado,
           fechaProgramadaISO: c.fechaProgramadaISO,
           fechaEmisionISO: c.fechaEmisionISO ?? null,
-          promesaPagoISO: c.promesaPagoISO ?? null,
         },
         opts.todayISO,
         creditoDias,
@@ -1188,6 +1240,21 @@ export function computeMetricasCartera(
         m.totalPorCobrar = round2(m.totalPorCobrar + c.monto);
       } else {
         m.totalProgramado = round2(m.totalProgramado + c.monto); // gris
+      }
+
+      // La promesa es MARCA: se cuenta al lado y nunca resta del vencido (misma regla que
+      // `resumenAntiguedad`, para que el corte y la pantalla de hoy digan lo mismo).
+      const marca = marcaPromesa(
+        { estado: c.estado, fechaEmisionISO: c.fechaEmisionISO ?? null, promesaPagoISO: c.promesaPagoISO },
+        opts.todayISO,
+      );
+      if (marca === "vigente" && s === "rojo") {
+        m.vencidoConPromesa = round2((m.vencidoConPromesa ?? 0) + c.monto);
+        m.nVencidoConPromesa = (m.nVencidoConPromesa ?? 0) + 1;
+      }
+      if (marca === "incumplida") {
+        m.promesaIncumplida = round2((m.promesaIncumplida ?? 0) + c.monto);
+        m.nPromesaIncumplida = (m.nPromesaIncumplida ?? 0) + 1;
       }
 
       // Se le pasó la fecha y nunca se facturó: sale del vencido pero NO desaparece
@@ -1224,7 +1291,7 @@ export function computeMetricasCartera(
   }
 
   return {
-    version: 3,
+    version: 4,
     ventana: {
       desdeISO: opts.desdeUltimoCorteISO,
       hastaISO: opts.todayISO,

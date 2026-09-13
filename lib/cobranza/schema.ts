@@ -291,7 +291,7 @@ export const cobroPatchSchema = z
     fechaCobro: isoDate.nullable(),
     // ReconciliationPort v1: id de transacción Mercury / factura Odoo al confirmar COBRADO.
     referenciaExterna: z.string().max(200).nullable(),
-    // Promesa de pago: calla las alertas de este cobro hasta la fecha (null = quitarla).
+    // Promesa de pago: marca la factura con esa fecha, sin sacarla del vencido (null = quitarla).
     promesaPago: isoDate.nullable(),
     notas: z.string().max(2000).nullable(),
     /**

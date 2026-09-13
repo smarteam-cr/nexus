@@ -243,13 +243,18 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (lo que la cartera dice que entra hasta el corte siguiente, con la gracia de los no-vencidos
   pasados contados como "hoy"); el corte SIGUIENTE lo compara contra su
   `totalCobradoDesdeUltimoCorte` (ventana exclusiva-inclusiva `(anterior, hoy]`).
-- **Promesa de pago calla alertas, NO números**: `Cobro.promesaPago` vigente suprime
-  COBRO_VENCIDO/COBRO_PROXIMO de ESE cobro en los cortes (el humano ya gestionó) y AUTO-SNOOZEA
-  sus alertas vivas al registrarse (posponerHasta = fecha prometida; quitarla las despierta).
-  Semáforos, métricas y proyección NO cambian — el dinero sigue vencido hasta que entre. Fecha
-  pasada sin COBRADO → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido/próximo (1 alerta por
-  cobro, dedupeKey propio). No se limpia al cobrar (trazabilidad de si cumplió). Gmail inbound
-  para detectarla automática = slot futuro del CommunicationPort, NO cableado.
+- **Promesa de pago = MARCA, no descuento (reescrita 2026-09-12, decisión 5 de Alex)**: la factura
+  sigue vencida y queda marcada con la fecha prometida; la alerta no desaparece; si la fecha pasa
+  sin depósito, la alerta sube. En código: `semaforoCobro` mira solo el crédito, `marcaPromesa`
+  (vigente / incumplida / null sin factura) es la única regla de la marca, COBRO_VENCIDO sigue en
+  ALTA y dice «prometió pagar el {fecha}», y la fecha pasada sin COBRADO emite PROMESA_INCUMPLIDA
+  (ALTA). Registrar la promesa ya no pospone alertas. ⛔ Lo que había antes decía «calla alertas,
+  NO números» y hacía las dos cosas: la promesa vigente pintaba de azul la factura vencida, y la cola,
+  Reportes y el corte (que cuentan como vencido solo lo rojo) la sacaban del vencido mientras
+  Proyección la seguía contando — US$4.298 de diferencia entre pantallas el 2026-09-12. Además 18 de
+  las 20 alertas pospuestas lo estaban por el auto-posponer de la promesa. No se limpia al cobrar
+  (trazabilidad de si cumplió). Gmail inbound para detectarla automática = slot futuro del
+  CommunicationPort, NO cableado.
 - **Snooze manual de alertas (`posponerHasta`) no cambia el estado**: la alerta sale del feed
   (filtro en loadAlertas) y vuelve SOLA cuando la fecha llega; el merge de upsertAlertas no toca
   posponerHasta, así el snooze sobrevive a los cortes.

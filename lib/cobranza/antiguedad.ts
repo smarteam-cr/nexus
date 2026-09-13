@@ -20,6 +20,7 @@ import {
   bucketAntiguedad,
   diffDays,
   finQuincenaISO,
+  marcaPromesa,
   semaforoCobro,
   DEFAULT_CREDITO_DIAS,
 } from "./engine";
@@ -105,12 +106,13 @@ export function clasificarCobro(c: CobroClasificable, todayISO: string): GrupoCo
 
   if (edad > 0 && !c.fechaEmision) return "sinFacturar";
 
+  /* ⛔ Sin la promesa: una factura vencida con promesa vigente sigue en su cubo (decisión de Alex,
+     2026-09-12). La promesa se cuenta aparte, como marca, en `resumenAntiguedad`. */
   const sem = semaforoCobro(
     {
       estado: c.estado,
       fechaProgramadaISO: c.fechaProgramada,
       fechaEmisionISO: c.fechaEmision,
-      promesaPagoISO: c.promesaPago ?? null,
     },
     todayISO,
     c.creditoDias ?? DEFAULT_CREDITO_DIAS,
@@ -138,6 +140,15 @@ export interface ResumenMoneda {
   /** Atrasado y sin factura emitida — pendiente de Smarteam, no del cliente. */
   sinFacturar: number;
   nSinFacturar: number;
+  /**
+   * La parte de `totalVencido` que tiene una promesa de pago VIGENTE. Ya está dentro del vencido:
+   * no se suma aparte. Existe para que registrar una promesa se vea sin achicar la deuda.
+   */
+  vencidoConPromesa: number;
+  nVencidoConPromesa: number;
+  /** Facturas cuya fecha prometida pasó sin depósito, estén o no vencidas por crédito. */
+  promesaIncumplida: number;
+  nPromesaIncumplida: number;
 }
 
 export type ResumenAntiguedad = Record<string, ResumenMoneda>;
@@ -152,6 +163,10 @@ const vacio = (): ResumenMoneda => ({
   dso: null,
   sinFacturar: 0,
   nSinFacturar: 0,
+  vencidoConPromesa: 0,
+  nVencidoConPromesa: 0,
+  promesaIncumplida: 0,
+  nPromesaIncumplida: 0,
 });
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -189,6 +204,17 @@ export function resumenAntiguedad(
       dso[c.moneda].suma += edad * c.monto;
     }
 
+    // La promesa se cuenta como MARCA: nunca resta del vencido. La incumplida se cuenta antes de
+    // mirar el grupo porque puede caer fuera del vencido (prometió antes de que corriera el crédito).
+    const marca = marcaPromesa(
+      { estado: c.estado, fechaEmisionISO: c.fechaEmision, promesaPagoISO: c.promesaPago ?? null },
+      todayISO,
+    );
+    if (marca === "incumplida") {
+      m.promesaIncumplida = round2(m.promesaIncumplida + c.monto);
+      m.nPromesaIncumplida++;
+    }
+
     const g = clasificarCobro(c, todayISO);
     if (g === "sinFacturar") {
       m.sinFacturar = round2(m.sinFacturar + c.monto);
@@ -204,6 +230,10 @@ export function resumenAntiguedad(
     if (superaCreditoEstandar(g)) {
       m.vencido30mas = round2(m.vencido30mas + c.monto);
       m.n30mas++;
+    }
+    if (marca === "vigente") {
+      m.vencidoConPromesa = round2(m.vencidoConPromesa + c.monto);
+      m.nVencidoConPromesa++;
     }
   }
 

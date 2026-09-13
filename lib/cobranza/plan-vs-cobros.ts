@@ -53,7 +53,7 @@ export interface CobroMaterializado {
   fechaEmision: string | null;
   origen: string;
   fechaProgramadaISO: string;
-  /** Una promesa viva calla las alertas del cobro; al cambiar el acuerdo deja de tener sentido. */
+  /** Una promesa viva marca la fecha en que el cliente dijo que pagaría; al cambiar el acuerdo deja de tener sentido. */
   promesaPago?: string | null;
 }
 

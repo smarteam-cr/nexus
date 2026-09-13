@@ -50,7 +50,10 @@ const VISTAS: Array<{ key: Vista; label: string }> = [
   { key: "sin_configurar", label: "Sin configurar" },
 ];
 
-const SEMAFOROS_ORDEN = ["rojo", "amarillo", "gris", "verde"] as const;
+/* Con «Facturado» (azul) adentro: una cuenta que ya facturó y espera al cliente no tenía cómo
+   filtrarse, y desde 2026-09-12 una promesa ya no pinta de azul una factura vencida, así que azul
+   quiere decir exactamente eso. */
+const SEMAFOROS_ORDEN = ["rojo", "amarillo", "azul", "gris", "verde"] as const;
 
 export default function PanelCartera({
   rows,

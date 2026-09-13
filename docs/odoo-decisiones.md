@@ -622,8 +622,9 @@ cliente, que es algo que solo sabe quien lo emitió. Cada fila arranca en «deja
 un trámite. Hoy no hay con qué medirlo: la función se estrena con 2 servicios y 3 cobros.
 
 **La promesa de pago se cae al liberar.** Una promesa sobre un monto que el acuerdo nuevo ya no
-pide calla alertas por una cifra que no existe. Sale gratis: `cambiarEstadoCobro` con
-`promesaPago: null` ya des-snoozea y escribe bitácora.
+pide marca una fecha para una cifra que no existe. Sale gratis: `cambiarEstadoCobro` con
+`promesaPago: null` ya escribe la bitácora. (Hasta el 2026-09-12 además des-posponía las alertas
+del cobro; ya no, porque registrar una promesa dejó de posponerlas.)
 
 **Todo en una sola transacción, y el preview lo calcula el servidor.** Lo natural sería un PATCH
 por cobro más un POST de generar; si el navegador se cierra en el medio quedan dos facturas

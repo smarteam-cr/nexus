@@ -26,7 +26,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, IconCheck } from "@/components/ui";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import { addDaysISO } from "@/lib/cobranza/engine";
+import { addDaysISO, marcaPromesa } from "@/lib/cobranza/engine";
 import {
   clasificarCobro,
   resumenAntiguedad,
@@ -43,7 +43,7 @@ import {
   TIPO_CUENTA_LABEL,
   COBRANZA_TIPOS_CUENTA,
 } from "@/lib/cobranza/schema";
-import { fmtFecha, fmtMonto } from "./format";
+import { fmtFecha, fmtMonto, PROMESA_CHIP } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog from "./MarcarFacturadoDialog";
@@ -78,14 +78,29 @@ const ES_VENCIDO: Record<Grupo, boolean> = {
 };
 
 /**
- * ¿Este cobro tiene una promesa de pago que vence dentro de la semana?
+ * ¿Este cobro pide atención por su promesa de pago? `"incumplida"` si la fecha pasó sin
+ * depósito, `"semana"` si vence dentro de los próximos 7 días, `null` si no.
  *
- * Vive suelto y no inline porque lo consumen DOS cosas: el número de la tarjeta azul y
- * el filtro que esa misma tarjeta enciende. Con dos copias, el día que alguien mueva la
+ * ⚠ Las incumplidas entran desde el 2026-09-12. Antes la tarjeta solo contaba lo que vencía
+ * esta semana, así que una promesa rota salía de la tarjeta al día siguiente de romperse,
+ * justo cuando más importa. La marca sale de `marcaPromesa`: sin factura no cuenta.
+ *
+ * Vive suelto y no inline porque lo consumen DOS cosas: el número de la tarjeta de promesas
+ * y el filtro que esa misma tarjeta enciende. Con dos copias, el día que alguien mueva la
  * ventana en una, la tarjeta diría "4" y la lista mostraría 3.
  */
-function esPromesaDeLaSemana(r: ColaCobroRow, todayISO: string, finSemanaISO: string): boolean {
-  return !!r.promesaPago && r.promesaPago >= todayISO && r.promesaPago < finSemanaISO;
+function atencionPorPromesa(
+  r: ColaCobroRow,
+  todayISO: string,
+  finSemanaISO: string,
+): "incumplida" | "semana" | null {
+  const marca = marcaPromesa(
+    { estado: r.estado, fechaEmisionISO: r.fechaEmision, promesaPagoISO: r.promesaPago },
+    todayISO,
+  );
+  if (marca === "incumplida") return "incumplida";
+  if (marca === "vigente" && r.promesaPago && r.promesaPago < finSemanaISO) return "semana";
+  return null;
 }
 
 /** Total por moneda de un set de filas — SIEMPRE separados (regla dura). */
@@ -264,7 +279,9 @@ export default function ColaCobros({
       nQuincena: grupos.quincena.length,
       sinFacturar: totalesPorMoneda(grupos.sinFacturar),
       nSinFacturar: grupos.sinFacturar.length,
-      promesas: rows.filter((r) => esPromesaDeLaSemana(r, todayISO, finSemana)).length,
+      promesas: rows.filter((r) => atencionPorPromesa(r, todayISO, finSemana) !== null).length,
+      promesasIncumplidas: rows.filter((r) => atencionPorPromesa(r, todayISO, finSemana) === "incumplida")
+        .length,
     }),
     [grupos, vencidos, rows, todayISO, finSemana],
   );
@@ -277,7 +294,7 @@ export default function ColaCobros({
     if (fTipo !== "all") out = out.filter((r) => r.tipoCuenta === fTipo);
     // El MISMO predicado que cuenta la tarjeta: si divergieran, el número diría 4 y
     // la lista mostraría 3, que es peor que no tener el filtro.
-    if (soloPromesas) out = out.filter((r) => esPromesaDeLaSemana(r, todayISO, finSemana));
+    if (soloPromesas) out = out.filter((r) => atencionPorPromesa(r, todayISO, finSemana) !== null);
     return out;
   };
   const visibles = Object.fromEntries(
@@ -298,8 +315,8 @@ export default function ColaCobros({
       });
       toast.success(
         promesaPago
-          ? "Promesa registrada — sus alertas se callan hasta esa fecha."
-          : "Promesa retirada — sus alertas vuelven al feed.",
+          ? "Promesa registrada: la factura sigue en el vencido, marcada con esa fecha."
+          : "Promesa retirada.",
       );
     } catch (e) {
       setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, promesaPago: prev } : r)));
@@ -415,17 +432,22 @@ export default function ColaCobros({
           } ${cards.promesas === 0 ? "cursor-default opacity-70" : "hover:bg-sky-500/10"}`}
         >
           <p className="text-[11px] font-semibold text-sky-600 uppercase tracking-wide">
-            Promesas esta semana
+            Promesas
           </p>
           <p className="mt-1.5 text-lg font-semibold text-fg tabular-nums leading-tight">
             {cards.promesas}
+            {cards.promesasIncumplidas > 0 && (
+              <span className="ml-2 text-xs font-medium text-red-600">
+                {cards.promesasIncumplidas} incumplida{cards.promesasIncumplidas !== 1 ? "s" : ""}
+              </span>
+            )}
           </p>
           <p className="text-[11px] text-fg-muted">
             {cards.promesas === 0
-              ? "sin promesas por vencer"
+              ? "ninguna incumplida ni por vencer esta semana"
               : soloPromesas
                 ? "mostrando solo estas — clic para ver todo"
-                : "clic para ver solo estos cobros"}
+                : "incumplidas y por vencer esta semana — clic para verlas"}
           </p>
         </button>
       </div>
@@ -637,22 +659,23 @@ export default function ColaCobros({
                   sin dato
                 </span>
               )}
-              {r.promesaPago && (
-                <span
-                  title={
-                    r.promesaPago >= todayISO
-                      ? "Promesa vigente: sus alertas están calladas hasta esa fecha"
-                      : "Promesa incumplida: la fecha pasó sin cobro"
-                  }
-                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${
-                    r.promesaPago >= todayISO
-                      ? "text-sky-600 bg-sky-500/10 border-sky-500/30"
-                      : "text-red-600 bg-red-500/10 border-red-500/30"
-                  }`}
-                >
-                  prometió {fmtFecha(r.promesaPago)}
-                </span>
-              )}
+              {r.promesaPago && (() => {
+                const chip =
+                  PROMESA_CHIP[
+                    marcaPromesa(
+                      { estado: r.estado, fechaEmisionISO: r.fechaEmision, promesaPagoISO: r.promesaPago },
+                      todayISO,
+                    ) ?? "sinFactura"
+                  ];
+                return (
+                  <span
+                    title={chip.title}
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${chip.chip}`}
+                  >
+                    prometió {fmtFecha(r.promesaPago)}
+                  </span>
+                );
+              })()}
               {riesgoSet.has(r.id) && (
                 <span
                   title="En riesgo: el atraso supera el comportamiento histórico de esta cuenta"

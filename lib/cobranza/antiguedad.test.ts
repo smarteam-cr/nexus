@@ -77,9 +77,11 @@ describe("clasificarCobro", () => {
     expect(clasificarCobro(c, HOY)).toBe("quincena");
   });
 
-  it("una promesa de pago vigente lo saca de los cubos de vencido", () => {
+  it("⛔ una promesa de pago vigente NO lo saca de los cubos de vencido (decisión de Alex, 2026-09-12)", () => {
+    /* Hasta esa fecha este test decía lo contrario: con la promesa el cobro caía en «Esta quincena»
+       y la plata desaparecía del vencido sin que entrara un colón. */
     const c = cobro({ fechaProgramada: "2026-01-15", promesaPago: "2026-08-10" });
-    expect(clasificarCobro(c, HOY)).toBe("quincena");
+    expect(clasificarCobro(c, HOY)).toBe("d90mas");
   });
 
   it("un futuro jamás cae en un cubo de vencido", () => {

@@ -44,11 +44,15 @@
  *      I3 Reloj 1: atrasado sin facturar NUNCA es rojo — sigue amarillo.
  *      I4 Reloj 2 (facturado): dentro del crédito → azul; crédito vencido → rojo.
  *      I5 crédito custom (90, caso Colby) sobre el mismo fechaEmision que I4 → azul.
- *      I6 promesa vigente sobre un cobro FACTURADO que sin promesa sería rojo → azul.
- *      I7 promesa VENCIDA sobre un cobro facturado → rojo (coherente con PROMESA_INCUMPLIDA).
+ *      I6 ⛔ promesa VIGENTE sobre una factura vencida (AMVAC) → sigue ROJO: el semáforo mira
+ *         solo el crédito (decisión de Alex, 2026-09-12; antes daba azul).
+ *      I7 promesa VENCIDA sobre una factura dentro del crédito → azul: la promesa rota es una
+ *         marca y una alerta, no un color.
  *      I8 promesa sobre un cobro SIN facturar se IGNORA — Reloj 1 manda, sigue amarillo
  *         (fix: antes una promesa eximía de facturar).
  *      I9 semaforoCuenta: el peor gana (rojo>amarillo>azul>gris>verde); vacía → gris.
+ *      I10 Ecoquintas y AMC: el color sale del crédito con y sin promesa; un objeto que trae la
+ *         promesa por una variable (sin chequeo de TypeScript) también da rojo.
  *   J) computeAlertSet — re-encuadrado a los dos relojes:
  *      J1 cuenta excluidaOperacion → CERO alertas aunque haya de todo.
  *      J2 tieneCuenta=false → exactamente 1 CUENTA_SIN_DATOS (media) y corta la evaluación.
@@ -81,14 +85,17 @@
  *      R4 COBRADO / excluida / sin cuenta → fuera.
  *      R5 orden: excedente desc, empate por cobroId.
  *      R6 umbral custom + constante exportada.
- *   P) promesa de pago en computeAlertSet (fase 3, re-encuadrado Tanda B):
- *      P1 promesa vigente (futura) sobre cobro FACTURADO suprime COBRO_VENCIDO.
- *      P2 promesa == hoy sigue vigente (silencio).
+ *   P) promesa de pago en computeAlertSet (re-encuadrado 2026-09-12: la promesa es marca, no descuento):
+ *      P1 ⛔ promesa vigente sobre una factura vencida NO calla COBRO_VENCIDO: sigue ALTA y dice la fecha.
+ *      P2 promesa == hoy sigue vigente: COBRO_VENCIDO todavía, no incumplida.
  *      P3 promesa pasada (facturado) → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido.
  *      P4 COBRADO con promesa pasada → nada.
- *      P5 catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido.
- *      P6 regresión: facturado y vencido SIN promesa → COBRO_VENCIDO de siempre.
+ *      P5 catch-up facturado y vencido con promesa: COBRO_VENCIDO e INCONSISTENCIA_CICLO, las dos.
+ *      P6 regresión: facturado y vencido SIN promesa → COBRO_VENCIDO de siempre, mismo mensaje.
  *      P7 promesa sobre un cobro SIN facturar se IGNORA — sigue FACTURACION_ATRASADA (Reloj 1 manda).
+ *      P8 AMVAC: vencida con promesa al 15-sep → COBRO_VENCIDO ALTA el 12-sep; incumplida el 16-sep.
+ *      P9 Ecoquintas: dentro del crédito con promesa → silencio; vencida el 20-sep → COBRO_VENCIDO.
+ *      P10 Judesur en CRC: la alerta sale en colones, sin convertir, y en ALTA.
  *   Q) finQuincenaISO + diffDays (cola de cobros):
  *      Q1 día 1 y 15 → día 15; día 16 y fin de mes → fin de mes; febrero clampeado.
  *      Q2 diffDays exportado: signo y cero.
@@ -725,48 +732,45 @@ test("I5 — crédito custom 90 (Colby) sobre el mismo fechaEmision que I4 → a
   ).toBe("azul"); // vence 2026-08-30 con crédito 90 — el mismo cobro que en I4 daba rojo con 15
 });
 
-test("I6 — promesa VIGENTE sobre un cobro facturado que sin promesa sería rojo → azul", () => {
-  expect(
-    semaforoCobro(
-      {
-        estado: "POR_COBRAR",
-        fechaProgramadaISO: "2026-06-01",
-        fechaEmisionISO: "2026-06-01", // crédito default vencido hace 24 días
-        promesaPagoISO: "2026-07-20", // futura
-      },
-      HOY,
-    ),
-  ).toBe("azul");
+/*
+ * I6–I10: desde el 2026-09-12 el semáforo ya no declara la promesa (decisión de Alex: la promesa es
+ * marca, no descuento). Los cobros la traen en una VARIABLE a propósito: así llega en producción
+ * —objetos armados en un map— y es justo el caso en que TypeScript no avisa si alguien la vuelve a
+ * leer.
+ */
+test("I6 — ⛔ promesa VIGENTE sobre una factura vencida (AMVAC) → sigue ROJO: el semáforo mira solo el crédito", () => {
+  // AMVAC, cuota del 15-ago: facturada ese día, crédito de 15 → vencida desde el 31-ago. Promesa:
+  // 15-sep (la fecha del libro de Alex). Hasta el 2026-09-12 esto daba azul y US$1.848 salían del vencido.
+  const amvac = {
+    estado: "POR_COBRAR",
+    fechaProgramadaISO: "2026-08-15",
+    fechaEmisionISO: "2026-08-15",
+    promesaPagoISO: "2026-09-15",
+  };
+  expect(semaforoCobro(amvac, "2026-09-12")).toBe("rojo");
+  expect(semaforoCuenta([amvac], "2026-09-12")).toBe("rojo");
 });
 
-test("I7 — promesa VENCIDA sobre un cobro facturado → rojo (coherente con PROMESA_INCUMPLIDA)", () => {
-  expect(
-    semaforoCobro(
-      {
-        estado: "POR_COBRAR",
-        fechaProgramadaISO: "2026-06-01",
-        fechaEmisionISO: "2026-06-01",
-        promesaPagoISO: "2026-07-01", // ya pasó
-      },
-      HOY,
-    ),
-  ).toBe("rojo");
+test("I7 — promesa VENCIDA sobre una factura dentro del crédito → azul: la promesa rota es marca y alerta, no color", () => {
+  const dentroDelCredito = {
+    estado: "POR_COBRAR",
+    fechaProgramadaISO: "2026-06-26",
+    fechaEmisionISO: "2026-06-26", // el crédito corre hasta el 11-jul
+    promesaPagoISO: "2026-07-01", // ya pasó
+  };
+  expect(semaforoCobro(dentroDelCredito, HOY)).toBe("azul");
 });
 
 test("I8 — promesa sobre un cobro SIN facturar se IGNORA: Reloj 1 manda, sigue amarillo", () => {
   // fix: antes una promesa cargada sobre un cobro sin facturar devolvía "azul"
   // ("nada que hacer") escondiendo que Alex todavía tiene que facturar.
-  expect(
-    semaforoCobro(
-      {
-        estado: "PROGRAMADO",
-        fechaProgramadaISO: "2026-06-01", // atrasadísimo, sin facturar
-        fechaEmisionISO: null,
-        promesaPagoISO: "2026-07-20", // vigente — no debe importar acá
-      },
-      HOY,
-    ),
-  ).toBe("amarillo");
+  const sinFacturar = {
+    estado: "PROGRAMADO",
+    fechaProgramadaISO: "2026-06-01", // atrasadísimo, sin facturar
+    fechaEmisionISO: null,
+    promesaPagoISO: "2026-07-20", // vigente — no debe importar acá
+  };
+  expect(semaforoCobro(sinFacturar, HOY)).toBe("amarillo");
 });
 
 test("I9 — semaforoCuenta: el peor gana (rojo>amarillo>azul>gris>verde); vacía → gris (vacío ≠ al día)", () => {
@@ -783,6 +787,35 @@ test("I9 — semaforoCuenta: el peor gana (rojo>amarillo>azul>gris>verde); vací
   // recién configurada / pendiente de datos no puede verse cobrada).
   expect(semaforoCuenta([], HOY)).toBe("gris");
   expect(semaforoCuenta([cobrado], HOY)).toBe("verde"); // con cobros y todo cobrado SÍ es verde
+});
+
+test("I10 — Ecoquintas y AMC: el color sale del crédito, con promesa o sin ella", () => {
+  // AMC, cuota del 30-ago: facturada el 19-ago (vence el 3-sep), prometió el 19-sep.
+  const amc = {
+    estado: "POR_COBRAR",
+    fechaProgramadaISO: "2026-08-30",
+    fechaEmisionISO: "2026-08-19",
+    promesaPagoISO: "2026-09-19",
+  };
+  // Ecoquintas, cuota del 30-jun: facturada el 3-sep (vence el 18-sep), prometió el 30-sep.
+  const ecoquintas = {
+    estado: "POR_COBRAR",
+    fechaProgramadaISO: "2026-06-30",
+    fechaEmisionISO: "2026-09-03",
+    promesaPagoISO: "2026-09-30",
+  };
+  expect(semaforoCobro(amc, "2026-09-12")).toBe("rojo");
+  expect(semaforoCobro(ecoquintas, "2026-09-12")).toBe("azul"); // dentro del crédito
+  expect(semaforoCobro(ecoquintas, "2026-09-20")).toBe("rojo"); // crédito corrido: la promesa vigente no lo tapa
+  expect(semaforoCuenta([amc, ecoquintas], "2026-09-12")).toBe("rojo");
+
+  // La prueba de fondo: con y sin promesa, el mismo color cualquier día.
+  for (const c of [amc, ecoquintas]) {
+    const sinPromesa = { ...c, promesaPagoISO: null };
+    for (const hoy of ["2026-09-12", "2026-09-20", "2026-10-01"]) {
+      expect(semaforoCobro(c, hoy)).toBe(semaforoCobro(sinPromesa, hoy));
+    }
+  }
 });
 
 // ── J) computeAlertSet ───────────────────────────────────────────────────────────
@@ -1241,7 +1274,7 @@ function metricasDe(
 
 test("N1 — cartera vacía: ceros/nulls honestos (dso null, NO 0) y ventana declarada", () => {
   const m = metricasDe([], { desdeUltimoCorteISO: null });
-  expect(m.version, "3: ventana en día de Costa Rica y proyectado al próximo día de corte real").toBe(3);
+  expect(m.version, "4: además la promesa de pago ya no saca la factura del vencido (2026-09-12)").toBe(4);
   expect(m.ventana).toEqual({ desdeISO: null, hastaISO: HOY, proximoCorteISO: "2026-07-17" });
   for (const mon of ["CRC", "USD"] as const) {
     expect(m.moneda[mon].totalVencido).toBe(0);
@@ -1634,12 +1667,13 @@ test("R6 — umbral custom cambia el corte", () => {
   expect(computeRiesgoPago(cartera, { todayISO: HOY })).toEqual([]); // con el default 15, ninguno
 });
 
-// ── P) Promesa de pago en computeAlertSet (re-encuadrado a los dos relojes) ──────
+// ── P) Promesa de pago en computeAlertSet (la promesa es marca, no descuento) ─────
 // La promesa SOLO se mira en el Reloj 2 (facturado) — sobre un cobro sin facturar
-// se ignora por completo (Reloj 1 manda, ver I8/P7). Todas las fixtures de abajo
-// facturan el cobro (fechaEmisionISO) para que la promesa tenga algo que callar.
+// se ignora por completo (Reloj 1 manda, ver I8/P7). Desde el 2026-09-12 (decisión de
+// Alex) una promesa vigente ya no calla nada: la alerta sigue y dice la fecha; si la
+// fecha pasa sin depósito, la alerta sube a PROMESA_INCUMPLIDA.
 
-test("P1 — promesa VIGENTE (futura) sobre cobro FACTURADO suprime COBRO_VENCIDO", () => {
+test("P1 — ⛔ promesa VIGENTE sobre una factura vencida NO calla COBRO_VENCIDO: sigue ALTA y dice la fecha", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
@@ -1658,10 +1692,18 @@ test("P1 — promesa VIGENTE (futura) sobre cobro FACTURADO suprime COBRO_VENCID
     },
     { todayISO: HOY },
   );
-  expect(alertas).toEqual([]);
+  expect(alertas).toHaveLength(1);
+  expect(alertas[0]).toMatchObject({
+    dedupeKey: "COBRO_VENCIDO:c1:co1",
+    tipo: "COBRO_VENCIDO",
+    urgencia: "ALTA",
+    cobroId: "co1",
+    evidencia: { promesaPago: "2026-07-20", diasVencido: 24 },
+  });
+  expect(alertas[0].mensaje).toContain("prometió pagar el 2026-07-20");
 });
 
-test("P2 — promesa que vence HOY sigue vigente (silencio)", () => {
+test("P2 — promesa que vence HOY sigue vigente: COBRO_VENCIDO todavía, no incumplida", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
@@ -1680,7 +1722,8 @@ test("P2 — promesa que vence HOY sigue vigente (silencio)", () => {
     },
     { todayISO: HOY },
   );
-  expect(alertas).toEqual([]);
+  expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1"]);
+  expect(alertas[0].mensaje).toContain(`prometió pagar el ${HOY}`);
 });
 
 test("P3 — promesa PASADA (facturado) → PROMESA_INCUMPLIDA (ALTA) que REEMPLAZA al vencido: 1 sola alerta", () => {
@@ -1735,7 +1778,7 @@ test("P4 — COBRADO con promesa pasada → nada (el cobro llegó, la promesa ya
   expect(alertas).toEqual([]);
 });
 
-test("P5 — catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque la promesa calle el vencido", () => {
+test("P5 — catch-up facturado y vencido con promesa: COBRO_VENCIDO e INCONSISTENCIA_CICLO, las dos", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
@@ -1748,7 +1791,7 @@ test("P5 — catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque 
               estado: "PROGRAMADO",
               fechaProgramadaISO: "2026-06-30",
               fechaEmisionISO: "2026-06-01", // facturado y vencido
-              promesaPagoISO: "2026-07-20", // vigente — calla el COBRO_VENCIDO, no la inconsistencia
+              promesaPagoISO: "2026-07-20", // vigente — ya no calla nada
             }),
           ],
         }),
@@ -1756,10 +1799,10 @@ test("P5 — catch-up facturado: INCONSISTENCIA_CICLO se sigue emitiendo aunque 
     },
     { todayISO: HOY },
   );
-  expect(keysOf(alertas)).toEqual(["INCONSISTENCIA_CICLO:c1:co1"]);
+  expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1", "INCONSISTENCIA_CICLO:c1:co1"]);
 });
 
-test("P6 — regresión: facturado y vencido SIN el campo promesa → COBRO_VENCIDO de siempre", () => {
+test("P6 — regresión: facturado y vencido SIN el campo promesa → COBRO_VENCIDO de siempre, mismo mensaje", () => {
   const alertas = computeAlertSet(
     {
       cuentas: [
@@ -1774,6 +1817,9 @@ test("P6 — regresión: facturado y vencido SIN el campo promesa → COBRO_VENC
     { todayISO: HOY },
   );
   expect(keysOf(alertas)).toEqual(["COBRO_VENCIDO:c1:co1"]);
+  // Sin promesa el texto no cambia ni una coma: los cortes comparan mensajes viejos contra nuevos.
+  expect(alertas[0].mensaje).toBe("Acme: cobro de 100 vencido hace 24 día(s) (facturado 2026-06-01, crédito 15d).");
+  expect(alertas[0].evidencia).not.toHaveProperty("promesaPago");
 });
 
 test("P7 — promesa sobre un cobro SIN facturar se IGNORA: sigue FACTURACION_ATRASADA (Reloj 1 manda)", () => {
@@ -1798,6 +1844,102 @@ test("P7 — promesa sobre un cobro SIN facturar se IGNORA: sigue FACTURACION_AT
     { todayISO: HOY },
   );
   expect(keysOf(alertas)).toEqual(["FACTURACION_ATRASADA:c1:co1"]);
+});
+
+test("P8 — AMVAC: vencida con promesa al 15-sep → COBRO_VENCIDO ALTA el 12-sep; el 16-sep sube a PROMESA_INCUMPLIDA", () => {
+  const amvac = (todayISO: string) =>
+    computeAlertSet(
+      {
+        cuentas: [
+          cuenta({
+            cuentaId: "amvac",
+            clienteNombre: "Amvac Latam",
+            servicios: [servicioCartera()],
+            cobros: [
+              cobroCartera({
+                cobroId: "amvac-ago",
+                monto: 1848,
+                fechaProgramadaISO: "2026-08-15",
+                fechaEmisionISO: "2026-08-15", // crédito de 15: vence el 30-ago
+                promesaPagoISO: "2026-09-15", // la fecha del libro de Alex
+              }),
+            ],
+          }),
+        ],
+      },
+      { todayISO },
+    );
+  const el12 = amvac("2026-09-12");
+  expect(el12.map((a) => [a.tipo, a.urgencia])).toEqual([["COBRO_VENCIDO", "ALTA"]]);
+  expect(el12[0].mensaje).toContain("prometió pagar el 2026-09-15");
+  expect(amvac("2026-09-15").map((a) => a.tipo)).toEqual(["COBRO_VENCIDO"]); // el día prometido todavía puede
+  expect(amvac("2026-09-16").map((a) => [a.dedupeKey, a.urgencia])).toEqual([
+    ["PROMESA_INCUMPLIDA:amvac:amvac-ago", "ALTA"],
+  ]);
+});
+
+test("P9 — Ecoquintas: dentro del crédito con promesa → silencio; vencida el 20-sep → COBRO_VENCIDO con la fecha", () => {
+  const ecoquintas = (todayISO: string) =>
+    computeAlertSet(
+      {
+        cuentas: [
+          cuenta({
+            cuentaId: "eco",
+            clienteNombre: "Ecoquintas",
+            servicios: [servicioCartera()],
+            cobros: [
+              cobroCartera({
+                cobroId: "eco-jun",
+                monto: 1880,
+                fechaProgramadaISO: "2026-06-30",
+                fechaEmisionISO: "2026-09-03", // crédito de 15: vence el 18-sep
+                promesaPagoISO: "2026-09-30",
+              }),
+            ],
+          }),
+        ],
+      },
+      { todayISO },
+    );
+  expect(ecoquintas("2026-09-12")).toEqual([]); // sano: facturada y dentro del crédito
+  const el20 = ecoquintas("2026-09-20");
+  expect(el20.map((a) => [a.tipo, a.urgencia])).toEqual([["COBRO_VENCIDO", "ALTA"]]);
+  expect(el20[0].mensaje).toContain("prometió pagar el 2026-09-30");
+  expect(ecoquintas("2026-10-01").map((a) => a.tipo)).toEqual(["PROMESA_INCUMPLIDA"]);
+});
+
+test("P10 — Judesur en CRC: la alerta sale en colones, sin convertir, y en ALTA", () => {
+  // Ilustrativo: FAC/2026/0330 por ₡704.563 neto todavía no está cargada en Nexus.
+  const alertas = computeAlertSet(
+    {
+      cuentas: [
+        cuenta({
+          cuentaId: "judesur",
+          clienteNombre: "Judesur",
+          servicios: [servicioCartera()],
+          cobros: [
+            cobroCartera({
+              cobroId: "judesur-ago",
+              monto: 704563,
+              moneda: "CRC",
+              fechaProgramadaISO: "2026-08-14",
+              fechaEmisionISO: "2026-08-14",
+              promesaPagoISO: "2026-09-26",
+            }),
+          ],
+        }),
+      ],
+    },
+    { todayISO: "2026-09-12" },
+  );
+  expect(alertas).toHaveLength(1);
+  expect(alertas[0]).toMatchObject({
+    tipo: "COBRO_VENCIDO",
+    urgencia: "ALTA",
+    evidencia: { monto: 704563, promesaPago: "2026-09-26" },
+  });
+  expect(alertas[0].mensaje).toContain((704563).toLocaleString("es-CR"));
+  expect(alertas[0].mensaje).toContain("prometió pagar el 2026-09-26");
 });
 
 // ── Q) finQuincenaISO + diffDays (cola de cobros) ────────────────────────────────

@@ -269,6 +269,25 @@ function FotoDeHoy({ cola, todayISO }: { cola: ColaCobroRow[]; todayISO: string 
                     ({r.nSinFacturar})
                   </span>
                 )}
+                {/* La promesa es marca, no descuento: esta plata YA está dentro del vencido total. */}
+                {r.nVencidoConPromesa > 0 && (
+                  <span className="text-fg-muted">
+                    Vencido con promesa de pago:{" "}
+                    <span className="font-semibold text-fg tabular-nums">
+                      {fmtMonto(r.vencidoConPromesa, m)}
+                    </span>{" "}
+                    ({r.nVencidoConPromesa}, incluido en el vencido)
+                  </span>
+                )}
+                {r.nPromesaIncumplida > 0 && (
+                  <span className="text-fg-muted">
+                    Promesa incumplida:{" "}
+                    <span className="font-semibold text-red-600 tabular-nums">
+                      {fmtMonto(r.promesaIncumplida, m)}
+                    </span>{" "}
+                    ({r.nPromesaIncumplida})
+                  </span>
+                )}
               </div>
             </div>
           );

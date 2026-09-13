@@ -541,7 +541,7 @@ export type ClienteDb = Prisma.TransactionClient | typeof prisma;
  *
  * ⛔ Toda regla vive acá y en ningún otro lado: INV3 (COBRADO exige `confirmadoPor`), el 409 de
  * la comisión ya liquidada, el 409 de editar monto o fecha fuera de PROGRAMADO, la limpieza de
- * la autoría al revertir y el des-snooze de las alertas al soltar una promesa. Escribir una
+ * la autoría al revertir y la bitácora de la promesa de pago. Escribir una
  * segunda función que toque `Cobro.estado` sería tener dos versiones de esas reglas.
  */
 export async function cambiarEstadoCobroTx(
@@ -681,21 +681,16 @@ export async function cambiarEstadoCobroTx(
    * escribía «Promesa de pago retirada.» en la bitácora del cliente aunque nunca hubiera
    * habido promesa — en la misma bitácora que se lee para reconstruir qué pasó con la plata.
    *
-   * ⚠⚠ Y peor: el `updateMany` de abajo limpia `posponerHasta`, que NO lo escribe solo la
-   * promesa — también el botón «posponer» de las alertas, que no tiene nada que ver con un
-   * acuerdo con el cliente. Soltar una factura despertaba en silencio alertas que alguien
-   * había pospuesto a mano por otro motivo.
+   * ⛔ Registrar una promesa NO toca las alertas del cobro (decisión de Alex, 2026-09-12). Hasta
+   * entonces las posponía hasta la fecha prometida y quitarla les borraba el posponer: medido ese
+   * día, 18 de las 20 alertas pospuestas tenían justo la fecha de su promesa. Una factura vencida
+   * con promesa sigue vencida y su alerta sigue a la vista. Y quitar la promesa ya no despierta en
+   * silencio una alerta que alguien pospuso a mano por otro motivo. Lo vigila
+   * lib/cobranza/promesa.test.ts.
    */
   const promesaAntes = cobro.promesaPago ? isoDay(cobro.promesaPago) : null;
   const promesaAhora = patch.promesaPago ?? null;
   if (patch.promesaPago !== undefined && promesaAhora !== promesaAntes) {
-    // AUTO-SNOOZE: registrar la promesa calla YA las alertas vivas de este cobro
-    // hasta la fecha prometida (el humano ya gestionó — sin esto el ruido viejo
-    // sigue en el feed hasta el próximo corte); quitarla las despierta.
-    await db.alertaCobro.updateMany({
-      where: { cobroId, estado: { in: ["ABIERTA", "VISTA"] } },
-      data: { posponerHasta: patch.promesaPago ? dayUTC(patch.promesaPago) : null },
-    });
     await db.bitacoraCobro.create({
       data: {
         cuentaId: cobro.cuentaId,
@@ -761,8 +756,8 @@ export interface ResultadoLiberacion extends GenerateResult {
  * y la fecha de emisión por separado, y ese es el nudo por el que «Revertir factura» —que solo
  * limpia la fecha— nunca desbloqueó nada.
  *
- * Y suelta la promesa de pago, que además des-snoozea las alertas del cobro: una promesa sobre
- * un monto que el acuerdo nuevo ya no pide calla alertas por una cifra que no existe.
+ * Y suelta la promesa de pago: una promesa sobre un monto que el acuerdo nuevo ya no pide marca
+ * una fecha para una cifra que no existe.
  *
  * ⛔ NO escribe en el ERP. La factura la anula una persona; lo que queda de este lado es la
  * fila de `FacturaLiberada`, que es a la vez la evidencia y la línea de trabajo.

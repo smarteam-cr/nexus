@@ -94,7 +94,8 @@ export function fmtMontoVisible(
  * Colores del semáforo (tokens + colores de estado permitidos — patrón SEV_META).
  * Dos relojes (Tanda B, 2026-07): amarillo = "te toca facturar" (Reloj 1, en ventana
  * o atrasado — mismo color, sin inflar la paleta); azul = facturado y dentro del
- * crédito (nadie actúa); rojo = crédito corrido sin pago, o promesa incumplida.
+ * crédito (nadie actúa); rojo = crédito corrido sin pago. Una promesa de pago no
+ * cambia el color (2026-09-12): va como marca aparte, ver `marcaPromesa`.
  */
 export const SEMAFORO_META: Record<Semaforo, { label: string; dot: string; chip: string }> = {
   verde: {
@@ -120,6 +121,27 @@ export const SEMAFORO_META: Record<Semaforo, { label: string; dot: string; chip:
   gris: {
     label: "Programado",
     dot: "bg-fg-muted",
+    chip: "text-fg-muted bg-surface-muted border-line",
+  },
+};
+
+/**
+ * El chip de la promesa de pago, según `marcaPromesa` (lib/cobranza/engine.ts). La promesa es
+ * MARCA, no descuento (decisión de Alex, 2026-09-12): el chip dice qué pasa con la fecha y el
+ * color del cobro lo sigue poniendo el semáforo. `sinFactura` = la fecha está anotada sobre un
+ * cobro que todavía no se facturó, y ahí no cuenta.
+ */
+export const PROMESA_CHIP: Record<"vigente" | "incumplida" | "sinFactura", { title: string; chip: string }> = {
+  vigente: {
+    title: "Promesa vigente: la factura queda marcada con esta fecha. Si pasa sin depósito, sube a Promesa incumplida",
+    chip: "text-sky-600 bg-sky-500/10 border-sky-500/30",
+  },
+  incumplida: {
+    title: "Promesa incumplida: la fecha pasó sin depósito",
+    chip: "text-red-600 bg-red-500/10 border-red-500/30",
+  },
+  sinFactura: {
+    title: "Todavía sin factura: la fecha queda anotada y cuenta cuando se emita",
     chip: "text-fg-muted bg-surface-muted border-line",
   },
 };

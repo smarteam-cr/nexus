@@ -140,8 +140,9 @@
   (`±15` días de `fechaProgramada`) o ya atrasado; es trabajo de Alex, nunca del cliente.
   **azul** = "facturado" — ya tiene `fechaEmision`, dentro del crédito; nadie tiene que actuar
   todavía. **gris** = programado a futuro fuera de ventana, o cuenta sin cobros. **rojo** =
-  crédito corrido sin pago (`fechaEmision + creditoDias` ya pasó), o promesa de pago
-  incumplida — el único rojo legítimo, mora real del cliente. `semaforoCobro`/`semaforoCuenta`
+  crédito corrido sin pago (`fechaEmision + creditoDias` ya pasó) — el único rojo legítimo, mora
+  real del cliente. Una promesa de pago no cambia el color (va como marca, ver **promesa de
+  pago**). `semaforoCobro`/`semaforoCuenta`
   (`lib/cobranza/engine.ts`) y `computeAlertSet` comparten el mismo criterio de ventana/crédito
   a propósito — nunca pueden contar historias distintas del mismo cobro.
 - **crédito / días de crédito** (`CuentaFinanciera.creditoDias`): días que tiene el cliente
@@ -206,14 +207,17 @@
 - **cobrado-vs-proyectado**: comparación entre lo que un corte proyectó que entraría hasta el
   corte siguiente (`proyectadoProximoCorte`) y lo que ese corte siguiente midió como cobrado
   en su ventana (`totalCobradoDesdeUltimoCorte`).
-- **promesa de pago** (`Cobro.promesaPago`): fecha en que el cliente prometió pagar. Vigente
-  calla las alertas de ese cobro (auto-snooze incluido); NO cambia semáforos ni métricas.
-  Vencida sin cobro → alerta PROMESA_INCUMPLIDA (reemplaza al vencido del cobro).
+- **promesa de pago** (`Cobro.promesaPago`): fecha en que el cliente prometió pagar. Es una
+  MARCA sobre una factura emitida, no un descuento (decisión de Alex, 2026-09-12): la factura
+  sigue en el vencido, su COBRO_VENCIDO sigue en ALTA diciendo la fecha y registrarla no pospone
+  nada. `marcaPromesa` la lee como **vigente** (hasta el día prometido inclusive), **incumplida**
+  (desde el día siguiente sin cobro) o nada (sin promesa, cobrado o sin factura). Incumplida →
+  alerta PROMESA_INCUMPLIDA (ocupa el lugar del vencido del cobro).
 - **PROMESA_INCUMPLIDA**: alerta ALTA emitida en el corte cuando la fecha prometida pasó y el
   cobro sigue sin entrar — dedupeKey `PROMESA_INCUMPLIDA:{cuentaId}:{cobroId}`.
 - **posponerHasta / snooze** (`AlertaCobro.posponerHasta`): pausa temporal de una alerta — sale
   del feed sin cambiar de estado y vuelve sola cuando la fecha llega. Lo setea la persona
-  ("Posponer") o el auto-snooze al registrar una promesa.
+  ("Posponer"). Registrar una promesa de pago ya no lo escribe (2026-09-12).
 - **riesgo de pago** (regla V1): cobro pendiente cuyo atraso supera el comportamiento histórico
   de su cuenta más el umbral (`RIESGO_UMBRAL_DIAS` = 15): "este cliente suele pagar a N días;
   ya va en N+15+". Sin historia, el umbral aplica a secas. Tabla en el tab Reportes.

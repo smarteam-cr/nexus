@@ -18,10 +18,10 @@ import { useState } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import { semaforoCobro } from "@/lib/cobranza/engine";
+import { marcaPromesa, semaforoCobro } from "@/lib/cobranza/engine";
 import type { CobroDTO } from "@/lib/cobranza";
 import { COBRANZA_ESTADOS_COBRO, ESTADO_COBRO_LABEL } from "@/lib/cobranza/schema";
-import { fmtFecha, fmtMonto, SEMAFORO_META } from "./format";
+import { fmtFecha, fmtMonto, PROMESA_CHIP, SEMAFORO_META } from "./format";
 import BorradorCobroModal from "./BorradorCobroModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import PromesaDialog from "./PromesaDialog";
@@ -141,8 +141,8 @@ export default function CronogramaCobros({
       });
       toast.success(
         promesaPago
-          ? "Promesa registrada — sus alertas se callan hasta esa fecha."
-          : "Promesa retirada — sus alertas vuelven al feed.",
+          ? "Promesa registrada: la factura sigue en el vencido, marcada con esa fecha."
+          : "Promesa retirada.",
       );
     } catch (e) {
       setItems((cs) => cs.map((c) => (c.id === cobro.id ? { ...c, promesaPago: prev } : c)));
@@ -187,12 +187,15 @@ export default function CronogramaCobros({
                 estado: c.estado,
                 fechaProgramadaISO: c.fechaProgramada,
                 fechaEmisionISO: c.fechaEmision,
-                promesaPagoISO: c.promesaPago,
               },
               todayISO,
               creditoDias,
             )
           ];
+          const marca = marcaPromesa(
+            { estado: c.estado, fechaEmisionISO: c.fechaEmision, promesaPagoISO: c.promesaPago },
+            todayISO,
+          );
           return (
             <li key={c.id} className="rounded-lg border border-line bg-surface px-3 py-2">
               <div className="flex items-center gap-2 flex-wrap">
@@ -212,16 +215,8 @@ export default function CronogramaCobros({
                 )}
                 {c.estado !== "COBRADO" && c.promesaPago && (
                   <span
-                    title={
-                      c.promesaPago >= todayISO
-                        ? "Promesa vigente: sus alertas están calladas hasta esa fecha"
-                        : "Promesa incumplida: la fecha pasó sin cobro"
-                    }
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${
-                      c.promesaPago >= todayISO
-                        ? "text-sky-600 bg-sky-500/10 border-sky-500/30"
-                        : "text-red-600 bg-red-500/10 border-red-500/30"
-                    }`}
+                    title={PROMESA_CHIP[marca ?? "sinFactura"].title}
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${PROMESA_CHIP[marca ?? "sinFactura"].chip}`}
                   >
                     prometió {fmtFecha(c.promesaPago)}
                   </span>
@@ -250,7 +245,7 @@ export default function CronogramaCobros({
                     <button
                       type="button"
                       onClick={() => setPromesaCobro(c)}
-                      title="Registrar la fecha en que el cliente prometió pagar (calla sus alertas hasta entonces)"
+                      title="Registrar la fecha en que el cliente prometió pagar (la factura sigue en el vencido)"
                       className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
                     >
                       Prometió
