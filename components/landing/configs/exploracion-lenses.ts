@@ -95,6 +95,12 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
     "quién adentro tiene que justificar este gasto y ante quién; qué esperan recibir cada mes (y con qué frecuencia quieren verse); " +
     "qué haría que no renueven; y quién es el reemplazo si mañana cambia el contacto.",
 
+  // ── Escala de Rendimiento ───────────────────────────────────────────────────
+  sin_escala:
+    "Este trato se vendió SIN la Escala de Rendimiento (un gobierno, una corporación con un encargo puntual): nadie va a ubicar al cliente en niveles, así que no gastes preguntas en madurez por dimensión. " +
+    "Buscá lo que el encargo necesita para cerrarse bien: el entregable exacto y cómo se reconoce terminado; quién lo aprueba y contra qué criterio escrito; " +
+    "y las reglas formales que pueden frenarlo (licitación, compras, auditoría, seguridad de la información) con sus plazos.",
+
   // ── Tipo de implementación ──────────────────────────────────────────────────
   // Son EXCLUYENTES entre sí, así que a la exploración le entra exactamente una de las dos.
   // Es el par de lentes más opuesto del catálogo: una mira lo que todavía no existe, la otra

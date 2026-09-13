@@ -12,6 +12,10 @@
  *                         vida corto (lib/lifecycle). Lo infiere el HANDOFF (isRecurrent); el CSE
  *                         lo corrige quitándolo/agregándolo en la tira. Ausencia = implementación.
  *   - `tipo_implementacion`: `implementacion` vs `reimplementacion` — EXCLUYENTES entre sí.
+ *   - `escala`:           `sin_escala` = este trato se trabaja SIN la Escala de Rendimiento (un
+ *                         gobierno, una corporación con un encargo puntual). Presencia/ausencia,
+ *                         como `recurrente`: ausente = con Escala, que es lo normal. Lo leen la
+ *                         Propuesta, el Kickoff, el Diagnóstico y la Entrega vía `usaEscala`.
  *
  * ── 2026-08-12: EL PUNTO DE PARTIDA ENTRÓ AL CATÁLOGO ────────────────────────
  * Hasta hoy la modalidad de implementación NO vivía en el array: era el enum `implementationType`,
@@ -32,7 +36,7 @@
  * slug o label y normaliza a slug, así no hace falta backfill — se normaliza al leer/escribir.
  * Desde el 2026-08-11 esa misma puerta absorbe los RENOMBRES de HubSpot (`TAG_ALIASES`).
  */
-export type TagGroup = "product" | "scope" | "modalidad" | "tipo_implementacion";
+export type TagGroup = "product" | "scope" | "modalidad" | "tipo_implementacion" | "escala";
 
 export interface TagDef {
   slug: string;
@@ -42,6 +46,14 @@ export interface TagDef {
 
 /** Slug del tag de recurrencia — su presencia en `Project.tags` = ciclo de vida corto. */
 export const RECURRENTE_TAG = "recurrente";
+
+/**
+ * Slug del interruptor de la Escala — su PRESENCIA apaga la Escala de Rendimiento en ese trato.
+ *
+ * ⚠ Es opt-OUT a propósito: Elías pidió que la Escala se use en todos, salvo la venta puntual donde
+ * no aplica. Un opt-in dejaría sin Escala a cada propuesta que alguien se olvidó de marcar.
+ */
+export const SIN_ESCALA_TAG = "sin_escala";
 
 /** Los dos slugs del punto de partida. Excluyentes: un proyecto es uno O el otro. */
 export const IMPLEMENTACION_TAG = "implementacion";
@@ -96,6 +108,8 @@ export const TAG_CATALOG: readonly TagDef[] = [
   // revisar la existente?) y el título + responsable de una tarea fija de la Semana 0.
   { slug: IMPLEMENTACION_TAG, label: "Implementación", group: "tipo_implementacion" },
   { slug: REIMPLEMENTACION_TAG, label: "Re-implementación", group: "tipo_implementacion" },
+  // ── Escala de Rendimiento (presencia/ausencia, como `recurrente`) ─────────────
+  { slug: SIN_ESCALA_TAG, label: "Sin Escala de rendimiento", group: "escala" },
 ] as const;
 
 /**
@@ -182,11 +196,12 @@ export const GRUPO_LABEL: Record<TagGroup, string> = {
   scope: "Alcance",
   tipo_implementacion: "Tipo de implementación",
   modalidad: "Modalidad",
+  escala: "Escala de rendimiento",
 };
 
 /** Los grupos en el orden en que se muestran, con su rótulo y sus tags. */
 export function seccionesDelCatalogo(): { group: TagGroup; label: string; tags: TagDef[] }[] {
-  const orden: TagGroup[] = ["product", "scope", "tipo_implementacion", "modalidad"];
+  const orden: TagGroup[] = ["product", "scope", "tipo_implementacion", "modalidad", "escala"];
   return orden.map((group) => ({
     group,
     label: GRUPO_LABEL[group],
@@ -208,6 +223,14 @@ export function ordenDeTag(slug: string): number {
 /** ¿La lista marca el servicio como recurrente? → ciclo de vida corto (lib/lifecycle). */
 export function isRecurrente(slugs: string[]): boolean {
   return sanitizeTags(slugs).includes(RECURRENTE_TAG);
+}
+
+/**
+ * ¿Este trato se trabaja CON la Escala de Rendimiento? La ÚNICA pregunta que hacen los cuatro
+ * documentos que la usan (Propuesta, Kickoff, Diagnóstico, Entrega): ninguno decide por su cuenta.
+ */
+export function usaEscala(slugs: unknown): boolean {
+  return !sanitizeTags(slugs).includes(SIN_ESCALA_TAG);
 }
 
 /** Acepta slug, label conocido o nombre MUERTO (`TAG_ALIASES`) → slug canónico; null si no. */
@@ -304,9 +327,17 @@ export function faltanEjesRequeridos(slugs: string[]): string[] {
     .map(([eje]) => eje);
 }
 
-/** Labels legibles (para mostrar / inyectar en prompts de agentes). */
+/**
+ * Labels legibles de lo que SE VENDIÓ (para mostrar / inyectar en prompts de agentes).
+ *
+ * ⚠ Sin el interruptor de la Escala: los generadores meten esta lista como «Hubs/áreas del
+ * proyecto» o «Alcance vendido», y «Sin Escala de rendimiento» ahí se leería como un producto.
+ * Cómo se trabaja el trato no es qué se vendió; quien lo necesita pregunta `usaEscala`.
+ */
 export function tagLabels(slugs: string[]): string[] {
-  return sanitizeTags(slugs).map(labelForTag);
+  return sanitizeTags(slugs)
+    .filter((s) => BY_SLUG.get(s)?.group !== "escala")
+    .map(labelForTag);
 }
 
 /** ¿La lista tiene un tag de alcance técnico? → enruta a la fase "Desarrollo / Integración" (#7).

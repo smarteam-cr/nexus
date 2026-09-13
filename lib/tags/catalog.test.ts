@@ -21,6 +21,7 @@ import {
   HUBSPOT_HUB_SLUGS,
   IMPLEMENTACION_TAG,
   REIMPLEMENTACION_TAG,
+  SIN_ESCALA_TAG,
   TAG_CATALOG,
   conTag,
   ejeExcluyenteDe,
@@ -32,7 +33,9 @@ import {
   sanitizeTags,
   seccionesDelCatalogo,
   tagDef,
+  tagLabels,
   tipoDeImplementacion,
+  usaEscala,
 } from "./catalog";
 
 describe("Catálogo de tags · los renombres de HubSpot", () => {
@@ -167,6 +170,35 @@ describe("Catálogo de tags · el eje excluyente", () => {
     // Y toda sección del selector sale del catálogo: un grupo sin rótulo se caería sin avisar.
     const enSecciones = seccionesDelCatalogo().flatMap((s) => s.tags.map((t) => t.slug));
     expect([...enSecciones].sort()).toEqual([...TAG_CATALOG.map((t) => t.slug)].sort());
+  });
+});
+
+describe("Catálogo de tags · el interruptor de la Escala", () => {
+  it("por defecto se trabaja CON Escala: hay que marcar el trato para apagarla", () => {
+    /* Opt-out a propósito (Elías, 2026-09-12): la Escala va en todos salvo la venta puntual. La
+       edición que la pone en rojo: invertir la pregunta a un opt-in, que dejaría sin Escala a cada
+       propuesta que alguien se olvidó de marcar. */
+    expect(usaEscala([])).toBe(true);
+    expect(usaEscala(["sales_hub", IMPLEMENTACION_TAG])).toBe(true);
+    expect(usaEscala(["sales_hub", SIN_ESCALA_TAG])).toBe(false);
+    expect(usaEscala(["Sin Escala de rendimiento"]), "el label también apaga").toBe(false);
+    expect(usaEscala(null)).toBe(true);
+  });
+
+  it("no es excluyente con nada: convive con cualquier clasificación", () => {
+    expect(ejeExcluyenteDe(SIN_ESCALA_TAG)).toBeNull();
+    expect(sanitizeTags([REIMPLEMENTACION_TAG, SIN_ESCALA_TAG, "recurrente"])).toEqual([
+      REIMPLEMENTACION_TAG,
+      SIN_ESCALA_TAG,
+      "recurrente",
+    ]);
+  });
+
+  it("⛔ no se cuela como si fuera algo vendido en la lista de Hubs de los prompts", () => {
+    /* Los generadores meten `tagLabels` como «Hubs/áreas del proyecto». «Sin Escala de rendimiento»
+       ahí se leería como un producto. */
+    expect(tagLabels(["sales_hub", SIN_ESCALA_TAG])).toEqual(["Sales Hub"]);
+    expect(labelForTag(SIN_ESCALA_TAG)).toBe("Sin Escala de rendimiento");
   });
 });
 

@@ -39,6 +39,8 @@ const GROUP_CLS: Record<TagGroup, string> = {
   scope: "text-violet-300 bg-violet-900/30 border-violet-700/40",
   modalidad: "text-teal-300 bg-teal-900/30 border-teal-700/40",
   tipo_implementacion: "text-brand bg-brand/10 border-brand/30",
+  // Neutro a propósito: no clasifica lo vendido, apaga la Escala en este trato.
+  escala: "text-fg-secondary bg-surface-muted border-line",
 };
 
 export default function TagsStrip({
