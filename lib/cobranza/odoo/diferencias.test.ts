@@ -781,6 +781,13 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
     lineas(cobros, extra).find((i) => i.codigo === "ODOO-COBRO-SIN-FACTURA");
 
   it("un cobro de una cuenta Mercury o QuickBooks no genera línea: no hay espejo que lo vea", () => {
+    /* ⚠ Con las dos cuentas EMPAREJADAS: sin vínculo el cobro caía en «sin emparejar» y el test
+       seguía verde aunque se borrara la regla de la vía. Un vínculo de Odoo en una cuenta que
+       factura por Mercury no hace que Odoo vaya a ver esa factura. */
+    const emparejadas = { cuentasVinculadas: new Set<string>(["odoo", "merc", "qbs"]) };
+    const l = lineas([cobro({ id: "m", cuentaId: "merc" }), cobro({ id: "q", cuentaId: "qbs" })], emparejadas);
+    expect(l.find((i) => i.codigo === "ODOO-COBRO-SIN-FACTURA")).toBeUndefined();
+    expect(l.find((i) => i.codigo === "ODOO-SIN-CUENTA"), "tampoco se cuentan como «sin emparejar»").toBeUndefined();
     expect(acusa([cobro({ id: "m", cuentaId: "merc" }), cobro({ id: "q", cuentaId: "qbs" })])).toBeUndefined();
   });
 
