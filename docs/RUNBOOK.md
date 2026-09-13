@@ -170,7 +170,7 @@ Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02). 
 | `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
 | `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
 | `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee) |
-| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 18 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
+| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 19 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env`, cinco de estos se apagan EN
 SILENCIO — el semáforo los muestra en gris («nunca corrió»), que es la señal.

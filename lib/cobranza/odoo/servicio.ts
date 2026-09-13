@@ -5,17 +5,19 @@
  * las funciones puras de `emparejado.ts`, que son las que deciden. Server-only.
  *
  * ── QUÉ ESCRIBE Y QUÉ NO ─────────────────────────────────────────────────────────
- * Escribe el catálogo de partners y los vínculos que una persona confirma. **No escribe ni
- * una fila de `FacturaOdoo`**: eso es del sync (`sync.ts`). Los montos de Odoo se leen acá
- * solo para PROPONER emparejamientos y se descartan.
+ * Escribe el catálogo de partners y los vínculos que una persona confirma. De `FacturaOdoo`
+ * escribe **una sola cosa**: la cuenta de las facturas del cliente que se vincula o desvincula,
+ * y solo a través de `atribucion.ts`. Montos, estados y fechas siguen siendo del sync. Los
+ * montos de Odoo se leen acá solo para PROPONER emparejamientos y se descartan.
  *
- * ⚠ El plan decía «emparejar ANTES de espejar o el espejo queda mal atribuido». Resultó menos
- * rígido: el sync vuelve a resolver la cuenta de cada factura en CADA corrida, así que una
- * factura no puede quedar MAL atribuida — como mucho queda sin atribuir, y se corrige sola
- * cuando alguien vincula ese cliente acá. Los dos pueden avanzar en paralelo.
+ * ⚠ Hasta el 2026-09-12 decía «se corrige sola cuando alguien vincula ese cliente», porque la
+ * cuenta la resolvía el sync en cada corrida. Con el sync caído desde el 2-sep eso fue falso
+ * durante diez días: 27 vínculos confirmados y 347 facturas sin cuenta. Ahora vincular atribuye
+ * en la misma transacción, y el sync solo escribe la cuenta cuando cambia.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { atribuirFacturasDelPartner } from "./atribucion";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
 import { ODOO_CAMPOS_PARTNER, OdooError, dominioClientes, explicarFallo } from "./transporte";
 import { textoOdoo } from "./espejo";
@@ -252,6 +254,8 @@ export interface ResultadoConfirmar {
   cedulaAprendida: string | null;
   /** ⚠ No null cuando Nexus y Odoo tienen cédulas distintas. NO se pisó nada. */
   conflictoCedula: { nexus: string; odoo: string } | null;
+  /** Cuántos documentos de ese cliente (facturas y notas de crédito) quedaron con esta cuenta. */
+  facturasAtribuidas: number;
 }
 
 export async function confirmarVinculo(
@@ -277,7 +281,7 @@ export async function confirmarVinculo(
   const escribir = aprendizaje && "escribir" in aprendizaje ? aprendizaje.escribir : null;
   const conflicto = aprendizaje && "conflicto" in aprendizaje ? aprendizaje.conflicto : null;
 
-  await prisma.$transaction(async (tx) => {
+  const atribuidas = await prisma.$transaction(async (tx) => {
     await tx.odooPartnerVinculo.update({
       where: { odooPartnerId: input.odooPartnerId },
       data: {
@@ -294,9 +298,18 @@ export async function confirmarVinculo(
     if (escribir) {
       await tx.cuentaFinanciera.update({ where: { id: cuenta.id }, data: { cedulaJuridica: escribir } });
     }
+    /* ⭐ Y las facturas de ese cliente pasan a esta cuenta en la MISMA transacción: el vínculo y
+       su efecto no pueden quedar separados, que es exactamente lo que pasó del 3 al 12-sep. */
+    return atribuirFacturasDelPartner(tx, input.odooPartnerId, actor);
   });
 
-  return { odooPartnerId: input.odooPartnerId, cuentaId: input.cuentaId, cedulaAprendida: escribir, conflictoCedula: conflicto };
+  return {
+    odooPartnerId: input.odooPartnerId,
+    cuentaId: input.cuentaId,
+    cedulaAprendida: escribir,
+    conflictoCedula: conflicto,
+    facturasAtribuidas: atribuidas.length,
+  };
 }
 
 export async function ignorarPartner(input: OdooVinculoIgnorar, actor: string): Promise<void> {
@@ -311,14 +324,26 @@ export async function ignorarPartner(input: OdooVinculoIgnorar, actor: string): 
   });
 }
 
-/** Deshacer. ⚠ La cédula aprendida NO se borra: el dato quedó bueno igual que antes. */
-export async function desvincularPartner(input: OdooVinculoDesvincular, actor: string): Promise<void> {
+/**
+ * Deshacer. ⚠ La cédula aprendida NO se borra: el dato quedó bueno igual que antes.
+ *
+ * ⚠ Las facturas SÍ vuelven a quedar sin cuenta, en la misma transacción. Dejarles la cuenta
+ * vieja las seguía apareando con los cobros de un cliente que ya no es el suyo.
+ */
+export async function desvincularPartner(
+  input: OdooVinculoDesvincular,
+  actor: string,
+): Promise<{ facturasDesatribuidas: number }> {
   const partner = await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } });
   if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista.", 404);
-  await prisma.odooPartnerVinculo.update({
-    where: { odooPartnerId: input.odooPartnerId },
-    data: { cuentaId: null, via: null, ignorado: false, confirmadoPor: actor, confirmadoEn: new Date() },
+  const cambios = await prisma.$transaction(async (tx) => {
+    await tx.odooPartnerVinculo.update({
+      where: { odooPartnerId: input.odooPartnerId },
+      data: { cuentaId: null, via: null, ignorado: false, confirmadoPor: actor, confirmadoEn: new Date() },
+    });
+    return atribuirFacturasDelPartner(tx, input.odooPartnerId, actor);
   });
+  return { facturasDesatribuidas: cambios.length };
 }
 
 /** Para la pantalla: qué cuentas de Nexus todavía no tienen partner. */

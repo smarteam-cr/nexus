@@ -3,6 +3,7 @@
  * scripts/check-invariants.ts en B-07, 2026-09-04).
  */
 import { cumple, viola, type Invariante } from "./contrato";
+import { reatribuciones } from "@/lib/cobranza/odoo/emparejado";
 
 /**
  * INV23 · El espejo de Odoo sigue siendo un espejo. Toda `FacturaOdoo` guarda el monto en la
@@ -89,5 +90,59 @@ export const INV24: Invariante = {
       );
     }
     return cumple(`✓ INV24: las ${corridas.length} corridas del sync de los últimos 7 días dejaron su resultado escrito.`);
+  },
+};
+
+/**
+ * INV30 · Toda factura VIGENTE del espejo tiene la cuenta de su vínculo, o ninguna si su cliente
+ * de Odoo no está vinculado. (Salta del 28 al 30: `docs/database-refactoring-plan.md` reserva INV29.)
+ *
+ * La cuenta tiene tres escritores —confirmar o deshacer un vínculo, el sync y la reatribución
+ * única— y cuando se desincronizan la pantalla no avisa: «Lo que no cuadra» acusa cobros sin
+ * factura cuyas facturas están en el espejo, sin atribuir. Medido el 2026-09-12: 170 facturas de
+ * los 27 clientes vinculados sin cuenta, y USD 237.355 acusados en falso durante diez días.
+ *
+ * La regla la decide `reatribuciones()` —la misma que usan los tres escritores—, así que el
+ * invariante no puede discrepar con ellos por una segunda definición.
+ * Remedio: `npx tsx scripts/odoo-reatribuir-facturas.ts` muestra qué cambiaría; con `--apply` y
+ * ALLOW_PROD_WRITE=1 lo escribe.
+ */
+export const INV30: Invariante = {
+  id: "30",
+  nombre: "las facturas espejadas tienen la cuenta de su vínculo",
+  async correr(db) {
+    const conNombre = { select: { client: { select: { name: true } } } } as const;
+    const facturas = await db.facturaOdoo.findMany({
+      where: { estadoEspejo: "VIGENTE" },
+      select: { id: true, odooMoveId: true, numero: true, odooPartnerId: true, odooPartnerNombre: true, cuentaId: true, cuenta: conNombre },
+    });
+    const vinculos = await db.odooPartnerVinculo.findMany({
+      where: { cuentaId: { not: null } },
+      select: { odooPartnerId: true, cuentaId: true, cuenta: conNombre },
+    });
+
+    const cambios = reatribuciones(facturas, vinculos);
+    if (cambios.length > 0) {
+      const facturaDe = new Map(facturas.map((f) => [f.id, f]));
+      const nombreDeCuenta = new Map<string, string>();
+      for (const x of [...facturas, ...vinculos]) if (x.cuentaId && x.cuenta) nombreDeCuenta.set(x.cuentaId, x.cuenta.client.name);
+      const cuenta = (id: string | null) => (id ? `«${nombreDeCuenta.get(id) ?? id}»` : null);
+      const sinCuenta = cambios.filter((c) => c.anterior === null).length;
+      return viola(
+        `✗ INV30 VIOLADO: ${cambios.length} factura(s) vigentes no tienen la cuenta de su vínculo (${sinCuenta} sin cuenta teniendo vínculo):\n` +
+          cambios
+            .slice(0, 20)
+            .map((c) => {
+              const quien = `${c.numero} (${facturaDe.get(c.facturaId)?.odooPartnerNombre ?? "?"})`;
+              if (c.anterior === null) return `    · ${quien}: sin cuenta, y su vínculo dice ${cuenta(c.nuevo)}`;
+              if (c.nuevo === null) return `    · ${quien}: está en ${cuenta(c.anterior)}, y su cliente de Odoo no está vinculado`;
+              return `    · ${quien}: está en ${cuenta(c.anterior)}, y su vínculo dice ${cuenta(c.nuevo)}`;
+            })
+            .join("\n") +
+          (cambios.length > 20 ? `\n    · …y ${cambios.length - 20} más` : "") +
+          `\n    Remedio: npx tsx scripts/odoo-reatribuir-facturas.ts (muestra qué cambiaría; con --apply y ALLOW_PROD_WRITE=1 lo escribe).`,
+      );
+    }
+    return cumple(`✓ INV30: las ${facturas.length} facturas vigentes del espejo tienen la cuenta de su vínculo.`);
   },
 };

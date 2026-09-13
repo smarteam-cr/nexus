@@ -10,8 +10,9 @@
  * Es a propósito: la señal de monto necesita los montos facturados, y cachearlos sería
  * inventar una capa que nadie pidió para una pantalla que se usa un puñado de veces.
  *
- * ⛔ Ninguno de estos endpoints escribe una sola fila del espejo de facturas. Emparejar va
- * ANTES de espejar: al revés se produce un espejo mal atribuido que cuesta más limpiar.
+ * ⛔ Del espejo de facturas escriben UNA sola cosa: confirmar y desvincular dejan las facturas
+ * de ese cliente con la cuenta de su vínculo (o sin cuenta), con su fila CUENTA firmada. Montos,
+ * estados y fechas siguen siendo solo del sync. La respuesta dice cuántas cambiaron.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCobranzaAccess } from "@/lib/auth/api-guards";
@@ -75,8 +76,7 @@ export async function POST(req: NextRequest) {
     if (accion === "desvincular") {
       const p = odooVinculoDesvincularSchema.safeParse(raw);
       if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
-      await desvincularPartner(p.data, actor);
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, ...(await desvincularPartner(p.data, actor)) });
     }
     return NextResponse.json({ error: "Acción desconocida." }, { status: 400 });
   } catch (e) {

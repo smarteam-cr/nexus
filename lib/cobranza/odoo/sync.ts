@@ -38,6 +38,7 @@ import {
   type FacturaEspejada,
   type TipoCambioBitacora,
 } from "./espejo";
+import { reatribuciones } from "./emparejado";
 
 /** El separador del detalle de rechazos. Constante para no pelear con el escapado. */
 const SALTO = String.fromCharCode(10);
@@ -143,12 +144,6 @@ export async function sincronizarOdoo(opts: {
       return res;
     }
 
-    const vinculos = await prisma.odooPartnerVinculo.findMany({
-      where: { cuentaId: { not: null } },
-      select: { odooPartnerId: true, cuentaId: true },
-    });
-    const cuentaDe = new Map(vinculos.map((v) => [v.odooPartnerId, v.cuentaId!]));
-
     const previas = await prisma.facturaOdoo.findMany({
       where: { odooMoveId: { in: vistas.map((f) => f.odooMoveId) } },
       select: {
@@ -166,13 +161,47 @@ export async function sincronizarOdoo(opts: {
       },
     });
     const previaDe = new Map(previas.map((p) => [p.odooMoveId, p]));
+
+    /**
+     * ⚠⚠ Los vínculos se leen DESPUÉS de las facturas guardadas, y la cuenta se escribe SOLO en
+     * las facturas donde cambia. Desde el 2026-09-12 confirmar un vínculo atribuye las facturas
+     * en el acto, así que el sync ya no es el único que escribe la cuenta.
+     *
+     * Antes era al revés: vínculos primero y `cuentaId` en cada fila que tuviera algún delta. Si
+     * alguien confirmaba un cliente mientras corría el sync —un minuto contra Supabase—, la
+     * corrida pisaba la atribución recién hecha con el mapa viejo y la dejaba sin cuenta.
+     *
+     * Con este orden, una confirmación que llega después de leer las previas no genera delta
+     * (previa y vínculo dicen lo mismo) y la fila no se toca. ⚠ Queda una ventana: desvincular
+     * DURANTE la escritura puede reponer la cuenta vieja. Se corrige en la corrida siguiente y
+     * INV30 lo marca mientras dura.
+     */
+    const vinculos = await prisma.odooPartnerVinculo.findMany({
+      where: { cuentaId: { not: null } },
+      select: { odooPartnerId: true, cuentaId: true },
+    });
+    const cuentaQueCambia = new Map(
+      reatribuciones(
+        vistas.map((f) => ({
+          id: String(f.odooMoveId),
+          odooMoveId: f.odooMoveId,
+          numero: f.numero,
+          odooPartnerId: f.odooPartnerId,
+          cuentaId: previaDe.get(f.odooMoveId)?.cuentaId ?? null,
+        })),
+        vinculos,
+      ).map((r) => [r.odooMoveId, r.nuevo]),
+    );
+
     const ahora = new Date();
     const sinCambio: string[] = [];
     const altas: Array<{ odooMoveId: number; numero: string; moneda: string; montoTotal: number }> = [];
     const nuevas: Array<Record<string, unknown>> = [];
 
     for (const f of vistas) {
-      const cuentaId = cuentaDe.get(f.odooPartnerId) ?? null;
+      const previa = previaDe.get(f.odooMoveId);
+      const cambiaCuenta = cuentaQueCambia.has(f.odooMoveId);
+      const cuentaId = cambiaCuenta ? (cuentaQueCambia.get(f.odooMoveId) ?? null) : (previa?.cuentaId ?? null);
       if (!cuentaId) res.sinCuenta++;
 
       const datos = {
@@ -190,15 +219,13 @@ export async function sincronizarOdoo(opts: {
         moneda: f.moneda,
         odooPartnerId: f.odooPartnerId,
         odooPartnerNombre: f.odooPartnerNombre,
-        cuentaId,
         estadoEspejo: "VIGENTE" as const,
         sincronizadoEn: ahora,
       };
 
-      const previa = previaDe.get(f.odooMoveId);
       if (!previa) {
         /* La primera corrida son 347 altas. De a una tardaban un minuto; juntas, una llamada. */
-        nuevas.push({ odooMoveId: f.odooMoveId, ...datos });
+        nuevas.push({ odooMoveId: f.odooMoveId, ...datos, cuentaId });
         altas.push({ odooMoveId: f.odooMoveId, numero: f.numero, moneda: f.moneda, montoTotal: f.montoTotal });
         res.creadas++;
         continue;
@@ -246,6 +273,9 @@ export async function sincronizarOdoo(opts: {
         where: { id: previa.id },
         data: {
           ...datos,
+          /* Solo si cambió: escribirla siempre es lo que pisaba una atribución hecha a mitad de
+             la corrida (ver arriba). */
+          ...(cambiaCuenta ? { cuentaId } : {}),
           cambios: {
             create: aEscribir.map((d) => ({
               odooMoveId: f.odooMoveId,

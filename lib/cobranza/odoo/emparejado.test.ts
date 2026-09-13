@@ -26,6 +26,7 @@ import {
   claseDeCedula,
   normalizar,
   proponerEmparejados,
+  reatribuciones,
   soloDigitos,
   type ClaseEmparejado,
   type CuentaNexus,
@@ -255,5 +256,53 @@ describe("lo que se aprende al confirmar un vínculo", () => {
     expect(cedulaAAprender("3-101-497341", "3101497341")).toBeNull();
     expect(cedulaAAprender("3101497341", null)).toBeNull();
     expect(cedulaAAprender(null, null)).toBeNull();
+  });
+});
+
+/**
+ * ── ⭐ VINCULAR ATRIBUYE LAS FACTURAS EN EL MOMENTO ──────────────────────────────
+ * Medido el 2026-09-12: 27 clientes emparejados el 3-sep y 347 de 347 facturas sin cuenta,
+ * porque la cuenta solo la escribía un sync que no volvió a correr. Estas reglas son las que
+ * comparten confirmar, desvincular, el sync y el invariante.
+ */
+describe("⭐ a qué cuenta va cada factura", () => {
+  const f = (id: string, odooPartnerId: number, cuentaId: string | null, moveType = "out_invoice") => ({
+    id,
+    odooMoveId: Number(id.replace(/\D/g, "")) || 1,
+    numero: `FAC/${id}`,
+    odooPartnerId,
+    cuentaId,
+    moveType,
+  });
+
+  it("atribuye las facturas Y las notas de crédito del partner vinculado", () => {
+    /* Una nota sin cuenta seguía sumando en el balde de «sin atribuir» como si hubiera que
+       cobrarla. Es del mismo cliente que la factura que corrige. */
+    const r = reatribuciones([f("f1", 38, null), f("f2", 38, null, "out_refund")], [{ odooPartnerId: 38, cuentaId: "amvac" }]);
+    expect(r.map((x) => [x.facturaId, x.anterior, x.nuevo])).toEqual([
+      ["f1", null, "amvac"],
+      ["f2", null, "amvac"],
+    ]);
+  });
+
+  it("⛔ no toca las facturas de otro cliente de Odoo", () => {
+    const r = reatribuciones([f("f1", 38, null), f("f2", 66, null)], [{ odooPartnerId: 38, cuentaId: "amvac" }]);
+    expect(r.map((x) => x.facturaId)).toEqual(["f1"]);
+  });
+
+  it("es idempotente: aplicada una vez, no queda nada que cambiar", () => {
+    const facturas = [f("f1", 38, null), f("f2", 38, "otra-cuenta")];
+    const vinculos = [{ odooPartnerId: 38, cuentaId: "amvac" }];
+    const aplicadas = facturas.map((x) => ({ ...x, cuentaId: reatribuciones([x], vinculos)[0]?.nuevo ?? x.cuentaId }));
+    expect(reatribuciones(facturas, vinculos)).toHaveLength(2);
+    expect(reatribuciones(aplicadas, vinculos)).toEqual([]);
+  });
+
+  it("desvincular deja la factura en null, no con la cuenta vieja", () => {
+    /* Con la cuenta vieja puesta, la factura seguiría apareándose con los cobros de un cliente
+       que ya no es el suyo. */
+    const r = reatribuciones([f("f1", 38, "amvac")], [{ odooPartnerId: 38, cuentaId: null }]);
+    expect(r).toEqual([{ facturaId: "f1", odooMoveId: 1, numero: "FAC/f1", anterior: "amvac", nuevo: null }]);
+    expect(reatribuciones([f("f1", 38, "amvac")], []), "sin fila de vínculo, tampoco").toHaveLength(1);
   });
 });

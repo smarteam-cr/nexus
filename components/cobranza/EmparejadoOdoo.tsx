@@ -142,21 +142,32 @@ export default function EmparejadoOdoo() {
     async (body: Record<string, unknown>, clave: string, exito: string) => {
       setOcupado(clave);
       try {
-        const r = await fetchJson<{ cedulaAprendida?: string | null; conflictoCedula?: { nexus: string; odoo: string } | null }>(
-          "/api/cobranza/odoo/emparejado",
-          { method: "POST", body: JSON.stringify(body) },
-        );
+        const r = await fetchJson<{
+          cedulaAprendida?: string | null;
+          conflictoCedula?: { nexus: string; odoo: string } | null;
+          facturasAtribuidas?: number;
+          facturasDesatribuidas?: number;
+        }>("/api/cobranza/odoo/emparejado", { method: "POST", body: JSON.stringify(body) });
+        /* ⭐ Cuántas facturas se movieron se DICE. Hasta el 2026-09-12 vincular no movía
+           ninguna —lo hacía un sync que no volvió a correr— y la pantalla decía «quedó
+           vinculada» igual: diez días de trabajo sin efecto y sin una sola pista. */
+        const documentos = (n: number) => `${n} ${n === 1 ? "documento" : "documentos"} de Odoo`;
+        const efecto = r?.facturasAtribuidas
+          ? ` Pasaron a esta cuenta ${documentos(r.facturasAtribuidas)}.`
+          : r?.facturasDesatribuidas
+            ? ` ${documentos(r.facturasDesatribuidas)} quedaron sin cuenta.`
+            : "";
         /* ⚠ El conflicto de cédula se DICE. Es la única señal sin falsos positivos y que
            Nexus y Odoo tengan dos números distintos para el mismo cliente significa que uno
            de los dos está mal — o que el vínculo lo está. */
         if (r?.conflictoCedula) {
           toast.error(
-            `Vinculado, pero las cédulas no coinciden: Nexus tiene ${r.conflictoCedula.nexus} y Odoo ${r.conflictoCedula.odoo}. No se pisó ninguna.`,
+            `Vinculado, pero las cédulas no coinciden: Nexus tiene ${r.conflictoCedula.nexus} y Odoo ${r.conflictoCedula.odoo}. No se pisó ninguna.${efecto}`,
           );
         } else if (r?.cedulaAprendida) {
-          toast.success(`${exito} Se guardó la cédula ${r.cedulaAprendida} en la cuenta.`);
+          toast.success(`${exito}${efecto} Se guardó la cédula ${r.cedulaAprendida} en la cuenta.`);
         } else {
-          toast.success(exito);
+          toast.success(`${exito}${efecto}`);
         }
         setBuscandoPara(null);
         await cargar();

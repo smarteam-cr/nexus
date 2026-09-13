@@ -16,14 +16,14 @@ import { INV1, INV21 } from "./sesiones";
 import { INV10, INV11, INV14, INV8, INV8c } from "./proyectos";
 import { INV18, INV20, INV25, INV26, INV27, INV28, INV3, INV5 } from "./cobranza";
 import { INV22 } from "./cronograma";
-import { INV23, INV24 } from "./odoo";
+import { INV23, INV24, INV30 } from "./odoo";
 
 export type { Invariante, ResultadoDeInvariante } from "./contrato";
-export { INV1, INV21, INV8, INV8c, INV10, INV11, INV14, INV3, INV5, INV18, INV20, INV25, INV26, INV27, INV28, INV22, INV23, INV24 };
+export { INV1, INV21, INV8, INV8c, INV10, INV11, INV14, INV3, INV5, INV18, INV20, INV25, INV26, INV27, INV28, INV22, INV23, INV24, INV30 };
 
 /** En el orden en que el gate los imprime. Sumar uno acá es lo que lo pone en el job y en /api/health. */
 export const INVARIANTES_SOLO_BASE: readonly Invariante[] = [
-  INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28,
+  INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
 ];
 
 export type CorridaDeInvariantes = {

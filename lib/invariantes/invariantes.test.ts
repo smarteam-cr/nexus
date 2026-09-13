@@ -16,7 +16,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
-  INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28,
+  INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -274,6 +274,31 @@ describe("cronograma y Odoo: INV22, INV23, INV24", () => {
     expect(r.lineas[0]).toContain("falló y no guardó el error");
     expect((await INV24.correr(baseFalsa({ syncOdooCorrida: [honesta, enCurso] }), AHORA)).ok).toBe(true);
   });
+
+  it("INV30 · la factura con la cuenta de su vínculo cumple; sin cuenta teniendo vínculo, o con cuenta sin vínculo, viola", async () => {
+    /* Medido el 2026-09-12: 170 facturas de clientes vinculados sin cuenta, y «Lo que no cuadra»
+       acusando USD 237.355 de cobros sin factura que sí la tenían. */
+    const amvac = { client: { name: "Amvac Latam" } };
+    const f = (numero: string, odooPartnerId: number, cuentaId: string | null) => ({
+      id: numero, odooMoveId: 1, numero, odooPartnerId, odooPartnerNombre: `PARTNER ${odooPartnerId}`, cuentaId, cuenta: cuentaId ? amvac : null,
+    });
+    const vinculos = [{ odooPartnerId: 38, cuentaId: "amvac", cuenta: amvac }];
+
+    const sana = await INV30.correr(baseFalsa({ facturaOdoo: [f("F-1", 38, "amvac"), f("F-2", 99, null)], odooPartnerVinculo: vinculos }), AHORA);
+    expect(sana.ok, "la de su vínculo, y la de un cliente sin vincular sin cuenta").toBe(true);
+
+    const llamadas: Llamada[] = [];
+    const r = await INV30.correr(
+      baseFalsa({ facturaOdoo: [f("F-3", 38, null), f("F-4", 99, "amvac")], odooPartnerVinculo: vinculos }, llamadas),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 factura(s) vigentes no tienen la cuenta de su vínculo (1 sin cuenta teniendo vínculo)");
+    expect(r.lineas[0]).toContain("F-3 (PARTNER 38): sin cuenta, y su vínculo dice «Amvac Latam»");
+    expect(r.lineas[0]).toContain("F-4 (PARTNER 99): está en «Amvac Latam», y su cliente de Odoo no está vinculado");
+    expect(r.lineas[0]).toContain("scripts/odoo-reatribuir-facturas.ts");
+    expect(where(llamadas, "facturaOdoo").estadoEspejo, "una desaparecida no la mira nadie").toBe("VIGENTE");
+  });
 });
 
 const RAIZ = process.cwd();
@@ -283,9 +308,10 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 18 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 19 solo-base, con ids únicos y en el orden del gate", () => {
+    /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
-      "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28",
+      "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -333,7 +359,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("18 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("19 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

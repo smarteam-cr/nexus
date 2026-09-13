@@ -347,3 +347,64 @@ export function cedulaAAprender(
   if (nexus === odoo) return null;
   return { conflicto: { nexus, odoo } };
 }
+
+/* ── 8. A qué cuenta va cada factura ────────────────────────────────────────────── */
+
+/** Lo mínimo de una factura del espejo para decidir su cuenta. */
+export interface FacturaAtribuible {
+  id: string;
+  odooMoveId: number;
+  numero: string;
+  odooPartnerId: number;
+  cuentaId: string | null;
+}
+
+/** Un vínculo tal como está guardado. `cuentaId: null` = el partner no tiene cuenta (o se desvinculó). */
+export interface VinculoGuardadoMin {
+  odooPartnerId: number;
+  cuentaId: string | null;
+}
+
+export interface Reatribucion {
+  facturaId: string;
+  odooMoveId: number;
+  numero: string;
+  anterior: string | null;
+  nuevo: string | null;
+}
+
+/**
+ * Qué facturas tienen que cambiar de cuenta para quedar con la de su vínculo. **La regla es una
+ * sola**: la cuenta de una factura es la cuenta del vínculo de su partner, o ninguna.
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────────
+ * Hasta el 2026-09-12 la cuenta la escribía SOLO el sync. Medido: las 27 cuentas que Alex
+ * emparejó el 3-sep no tuvieron ningún efecto, porque la última corrida buena fue el 2-sep y
+ * Odoo dejó de contestar: **347 de 347 facturas sin cuenta**, y «Lo que no cuadra» acusando
+ * USD 237.355 de «cobros sin factura» cuyas facturas estaban en el espejo, sin atribuir.
+ *
+ * La usan las tres puntas que escriben la cuenta —confirmar o deshacer un vínculo, el sync y la
+ * reatribución única— y el invariante que la vigila. Una segunda definición en cualquiera de
+ * ellas es cómo el sync termina deshaciendo lo que una persona confirmó.
+ *
+ * ⚠ No mira el tipo de documento: una nota de crédito es del mismo cliente que la factura que
+ * corrige, y dejarla sin cuenta la hacía sumar en el balde de «sin atribuir» como si hubiera
+ * que cobrarla. Qué documento cuenta como plata lo decide `esDocumentoVivo` en diferencias.ts.
+ *
+ * PURA e idempotente: aplicada una vez, la segunda pasada devuelve vacío.
+ */
+export function reatribuciones<F extends FacturaAtribuible>(
+  facturas: readonly F[],
+  vinculos: readonly VinculoGuardadoMin[],
+): Reatribucion[] {
+  const cuentaDe = new Map<number, string>();
+  for (const v of vinculos) if (v.cuentaId) cuentaDe.set(v.odooPartnerId, v.cuentaId);
+
+  const out: Reatribucion[] = [];
+  for (const f of facturas) {
+    const nuevo = cuentaDe.get(f.odooPartnerId) ?? null;
+    if ((f.cuentaId ?? null) === nuevo) continue;
+    out.push({ facturaId: f.id, odooMoveId: f.odooMoveId, numero: f.numero, anterior: f.cuentaId ?? null, nuevo });
+  }
+  return out;
+}
