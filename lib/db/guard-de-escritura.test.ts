@@ -78,6 +78,7 @@ const SIN_GUARD: string[] = [
   "scripts/seed-analysis-agents.ts",
   "scripts/seed-breeze-knowledge.ts",
   "scripts/seed-caminos-opuestos.ts",
+  "scripts/seed-canvas-agents.ts",
   "scripts/seed-demo.ts",
   "scripts/seed-desarrollo-agent.ts",
   "scripts/seed-diagnostico-agent.ts",
