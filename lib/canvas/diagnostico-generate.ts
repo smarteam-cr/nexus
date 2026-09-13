@@ -6,9 +6,9 @@
  * desde las fuentes, corre el agente tipado y persiste 1 CARD por sección EN EL LUGAR.
  *
  * ── LAS FUENTES, y por qué éstas ──────────────────────────────────────────────
- *   1. LA ESCALA 1-5 canónica, desde la base de conocimiento (tag escala_rendimiento).
- *      Es la vara de medición del informe entero. La escala 0-4 vieja del código NO se
- *      lee acá — el diagnóstico se mide con una sola vara.
+ *   1. LA ESCALA 5.2, el reglamento completo desde la base de conocimiento
+ *      (`lib/escala/contexto.ts`). Es la vara del informe entero. Con el proyecto marcado
+ *      «Sin Escala», no se carga y la sección `escala` no se genera.
  *   2. El HANDOFF, con allowlist RESTRICTIVA (cliente-safe): las secciones internas
  *      (riesgos, motivación, acuerdos) NO entran — un dato de esas secciones citado en
  *      un informe que el cliente guarda sería una filtración.
@@ -31,7 +31,7 @@ import {
 } from "@/lib/canvas/default-canvases";
 import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
-import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
+import { escalaParaElDiagnostico, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { DIAGNOSTICO_TEMPLATE, DIAGNOSTICO_HANDOFF_KEYS } from "@/components/landing/configs/diagnostico.defs";
 import { tagLabels } from "@/lib/tags/catalog";
@@ -59,22 +59,11 @@ export async function runDiagnosticoGeneration(opts: {
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
 
-  const [canvasId, handoffCtx, exploracionCtx, timelineCtx, escala, project] = await Promise.all([
+  const [canvasId, handoffCtx, exploracionCtx, timelineCtx, project] = await Promise.all([
     opts.canvasId ?? ensureDiagnosticoCanvas(projectId),
     loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
-    /* La vara: el doc canónico de la escala + los criterios por nivel/hub.
-       ⚠ El presupuesto tiene que ENTRAR el documento entero, y el de hoy mide 131.733
-       caracteres. Con el tope viejo de 20.000 no entraba NUNCA: el cargador lo omitía
-       completo y el informe se escribía sin las rúbricas — puntuando al cliente solo con
-       los nombres de los cinco niveles, en el documento que se le presenta. Se descubrió
-       en la auditoría previa al push.
-       El costo es real (unas 35.000 fichas de entrada por diagnóstico) y se paga a
-       propósito: la escala ES la vara del informe entero; sin ella el documento vale
-       menos que lo que cuesta generarlo. Si el documento crece, subir este número —
-       no dejar que se omita en silencio. */
-    loadKnowledgeByTags(["escala_rendimiento"], 160000),
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -86,9 +75,15 @@ export async function runDiagnosticoGeneration(opts: {
     }),
   ]);
 
-  const procesosCtx = project?.clientId
-    ? await serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false })
-    : "";
+  /* La vara: el reglamento 5.2 entero (~59.000 caracteres, unas 15.000 fichas por diagnóstico) —
+     o, con el proyecto marcado «Sin Escala», la instrucción de no ubicar niveles. El tope y la
+     regla de decidir por cantidad de documentos viven en `lib/escala/`. */
+  const [procesosCtx, escala] = await Promise.all([
+    project?.clientId
+      ? serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false })
+      : Promise.resolve(""),
+    escalaParaElDiagnostico(project?.tags ?? []),
+  ]);
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
@@ -99,16 +94,7 @@ export async function runDiagnosticoGeneration(opts: {
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
     hubs.length ? `Hubs/áreas del proyecto (dirigen QUÉ procesos cubre el informe): ${hubs.join(", ")}` : "",
     "",
-    "=== ESCALA DE RENDIMIENTO 1-5 — TU VARA DE MEDICIÓN ===",
-    /* Se decide por `count`, NO por `text`. Cuando ningún documento entra en el
-       presupuesto de contexto, `loadKnowledgeByTags` igual devuelve texto: la nota
-       "(N documento(s) más no entraron…)". Preguntar por `text` la tomaba como escala
-       válida y el respaldo no se usaba nunca — el agente puntuaba al cliente, en un
-       informe que se le presenta, sin la vara y sin siquiera los nombres de los niveles.
-       Es el mismo criterio que usa su hermano en implementacion-generate.ts. */
-    escala.count > 0
-      ? escala.text
-      : "(El documento de la escala no está publicado en la base de conocimiento. Usá los nombres canónicos —1 Deficiente · 2 Inicial · 3 Funcional · 4 Eficiente · 5 Óptimo— y puntuá SOLO donde la evidencia alcance.)",
+    escala.texto,
     "",
     "=== HANDOFF DEL PROYECTO (solo lo apto para el cliente) ===",
     handoffCtx || "(Sin handoff generado.)",
@@ -118,7 +104,9 @@ export async function runDiagnosticoGeneration(opts: {
     procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE (⚠ = fricción detectada) ===\n${procesosCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
     "",
-    "Escribí el informe siguiendo tus instrucciones: ubicá al cliente en la escala 1-5 (global y por área diagnosticada), explicá el nivel con causas trazables, y proyectá el nivel SIGUIENTE — no dos arriba.",
+    escala.usa
+      ? "Escribí el informe siguiendo tus instrucciones: ubicá cada área diagnosticada por capa —el piso, no el promedio— con su evidencia, leé la brecha entre capas, explicá el nivel con causas trazables y proyectá el nivel SIGUIENTE, no dos arriba."
+      : "Escribí el informe siguiendo tus instrucciones, SIN la Escala: explicá cómo opera hoy y por qué con causas trazables, y qué lo separa de lo que el proyecto tiene que lograr. Ningún nivel en ninguna sección.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -134,12 +122,21 @@ export async function runDiagnosticoGeneration(opts: {
     const d = s.blocks[0]?.data;
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
+  /* ⛔ Las tarjetas «N/5» de un diagnóstico viejo NO viajan a la generación nueva. Son una clave
+     fuera del esquema y `preserveNonSchemaKeys` las arrastraría: si esta vez el agente no ubica
+     ninguna área, el renderer volvería a mostrar los números de la v4 como si fueran de hoy. */
+  const escalaPrevia = prevDataByKey[SECCION_DE_ESCALA.diagnostico];
+  if (escalaPrevia && typeof escalaPrevia === "object") {
+    const sinTarjetasViejas = { ...(escalaPrevia as Record<string, unknown>) };
+    delete sinTarjetasViejas.metrics;
+    prevDataByKey[SECCION_DE_ESCALA.diagnostico] = sinTarjetasViejas;
+  }
 
   const gen = await generateSectionsForTemplate(
     DIAGNOSTICO_TEMPLATE,
     userMessage,
     undefined,
-    undefined,
+    escala.usa ? undefined : new Set([SECCION_DE_ESCALA.diagnostico]),
     prevDataByKey,
   );
 
@@ -166,6 +163,12 @@ export async function runDiagnosticoGeneration(opts: {
       }),
     ]);
     sectionCount++;
+  }
+  /* Con el proyecto marcado «Sin Escala» la sección no se generó, pero puede traer lo de una
+     corrida anterior. Se vacía: un informe sin Escala que muestra niveles se contradice solo. */
+  const seccionDeEscala = sectionMap.get(SECCION_DE_ESCALA.diagnostico);
+  if (!escala.usa && seccionDeEscala) {
+    await prisma.canvasBlock.deleteMany({ where: { sectionId: seccionDeEscala } });
   }
   return { canvasId, sectionCount };
 }

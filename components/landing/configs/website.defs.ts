@@ -7,7 +7,7 @@
  * "tech_architecture" (sections-shared). Schemas SOLO con hojas string.
  */
 import type { BCSectionDef } from "./business-case.defs";
-import { makeDiagramArchitectureDef } from "./shared-sections.defs";
+import { ESCALA_PROPUESTA_DEF, makeDiagramArchitectureDef } from "./shared-sections.defs";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -60,6 +60,8 @@ export const WEBSITE_SECTION_DEFS: BCSectionDef[] = [
       required: ["retos", "porQueBullets", "objetivo"],
     },
   },
+  // 2b) Dónde está la operación en la Escala — la misma def que la propuesta de HubSpot.
+  ESCALA_PROPUESTA_DEF,
   // 3) Arquitectura del sitio — DIAGRAMA dark: Home + fases con cards top-level
   {
     key: "arquitectura_sitio",

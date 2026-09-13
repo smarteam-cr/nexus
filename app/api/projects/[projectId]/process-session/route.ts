@@ -3,7 +3,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
+import { EMPTY_CLIENT_CANVAS, canvasDeEmpresaParaPrompt } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { enrichClient } from "@/lib/matching/enrichment";
 import { sessionMatchesClient } from "@/lib/matching/cascade";
@@ -113,7 +113,7 @@ Tipo de servicio: ${project.serviceType ?? "No especificado"}
 ${canvasContext}
 
 === CANVAS DE EMPRESA ===
-${JSON.stringify(clientCanvas, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(clientCanvas), null, 2)}
 
 === SESIONES POR PROCESAR (${sessionsToProcess.length}) ===
 ${sessionsText}

@@ -20,9 +20,12 @@ import {
   KickoffProcesosSection,
   KickoffCtaSection,
 } from "@/components/canvas/kickoff-sections/KickoffSections";
+import { EscalaPosicionSection } from "../sections-escala";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const KICKOFF_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
+  // «Desde dónde arrancamos»: la posición en la Escala que estimó la propuesta.
+  escala_posicion: EscalaPosicionSection,
   kickoff_hero: KickoffHeroSection,
   kickoff_prose: KickoffProseSection,
   kickoff_compara: KickoffComparaSection,

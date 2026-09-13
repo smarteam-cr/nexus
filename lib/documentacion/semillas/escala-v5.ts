@@ -16,8 +16,11 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { NIVELES_ESCALA } from "@/lib/escala/fuente";
 
-export const NIVELES_V5 = ["Deficiente", "Inicial", "Funcional", "Eficiente", "Óptimo"] as const;
+/* Una sola lista de niveles para todo el repo: la usan también el renderer de la sección y los
+   generadores, que no pueden importar este archivo porque lee del disco. */
+export const NIVELES_V5 = NIVELES_ESCALA;
 export type NombreDeNivel = (typeof NIVELES_V5)[number];
 
 export interface NivelDeDimension {

@@ -12,7 +12,8 @@ import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
-import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
+// `canvasDeEmpresaParaPrompt`: el canvas de empresa sin la escala 0-4 (2026-09-12, Escala 5.2).
+import { EMPTY_CLIENT_CANVAS, canvasDeEmpresaParaPrompt } from "@/lib/canvas/template";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientCanvas } from "@/lib/canvas/template";
@@ -43,6 +44,12 @@ import { getSessionCategories } from "@/lib/cache/session-categories";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
+import {
+  escalaParaPosicionar,
+  posicionDeLaPropuesta,
+  SECCION_DE_ESCALA,
+  type BloqueDeEscala,
+} from "@/lib/escala/contexto";
 import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
@@ -1777,32 +1784,9 @@ Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 ${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}` : ""}
 
-${(() => {
-  // ⚠ ESCALA DEPRECADA (la 0-4). La canónica es la 1-5 de la base de conocimiento
-  // (decisión 2026-07-25); el Diagnóstico ya se mide SOLO con ella — su runner ni lee
-  // este campo. Este bloque queda para los agentes legacy del camino genérico. Migrar
-  // los valores guardados 0-4 → 1-5 es un follow-up aparte (⚠ general===0 es el
-  // sentinel "sin setear", no nivel cero — una migración +1 a ciegas lo rompería).
-  const escala = (clientCanvas as unknown as Record<string, unknown>)?.escala_rendimiento as { general?: number; por_hub?: { marketing?: number; sales?: number; service?: number }; objetivo?: number } | undefined;
-  if (!escala || (escala.general ?? 0) === 0) return "";
-  const hubLines = [];
-  if (escala.por_hub?.marketing) hubLines.push(`  - Marketing Hub: nivel ${escala.por_hub.marketing}/4`);
-  if (escala.por_hub?.sales) hubLines.push(`  - Sales Hub: nivel ${escala.por_hub.sales}/4`);
-  if (escala.por_hub?.service) hubLines.push(`  - Service Hub: nivel ${escala.por_hub.service}/4`);
-  return `=== ESCALA DE RENDIMIENTO DEL CLIENTE ===
-⚠️ IMPORTANTE: El cliente está en NIVEL ${escala.general}/4 de madurez.
-${hubLines.join("\n")}
-${escala.objetivo ? `Meta: llegar a nivel ${escala.objetivo}/4.` : ""}
-
-Calibra tus recomendaciones a este nivel:
-- NO propongas soluciones de nivel ${Math.min((escala.general ?? 0) + 2, 4)} a un cliente en nivel ${escala.general}.
-- La meta es avanzar AL SIGUIENTE nivel, no saltar dos o tres niveles.
-- Referencia: Nivel 0=Deficiente, 1=Básico, 2=Estructurado, 3=Optimizado, 4=Inteligente.
-
-`;
-})()}${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
+${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
 Úsalo como base. Contenido existente = conocimiento validado. Campos vacíos = oportunidad de llenar.
-${JSON.stringify(clientCanvas, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(clientCanvas), null, 2)}
 
 ${projectCanvasText ? `=== CANVAS DEL PROYECTO (información validada por el consultor — PRIORIDAD MÁXIMA) ===
 La siguiente información fue revisada y validada por el consultor. Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores), PRIORIZA lo que dice el canvas.
@@ -1829,6 +1813,10 @@ Analiza toda la información anterior y completa las secciones de contexto del c
   // no afectar a ningún otro agente (diagnóstico, handoff, etc. quedan intactos).
   const isKickoffAgent = agent.id === "agent-kickoff-canvas";
   let userMessage = baseUserMessage;
+  /* La Escala del Kickoff (2026-09-12): el resumen para posicionar + el estimado que dejó la
+     propuesta del trato. Se guarda afuera del `if` porque la generación, más abajo, necesita saber
+     si el trato va «Sin Escala» para no generar la sección. */
+  let escalaDelKickoff: BloqueDeEscala | null = null;
   if (isKickoffAgent && bodyProjectId) {
     // El kickoff es interno: usa el handoff GENERADO aunque esté en borrador (no se
     // exige aceptación). El guard de arriba ya cortó si no hay handoff, así que el
@@ -1846,13 +1834,19 @@ Analiza toda la información anterior y completa las secciones de contexto del c
     // Los TAGS son la fuente de los hubs del titular ("implementación de HubSpot…") y
     // de los chips del hero; el handoff aporta las integraciones por nombre (Aircall…).
     const tagsLabel = tagLabels(dealProject?.tags ?? []).join(", ");
+    escalaDelKickoff = await escalaParaPosicionar(dealProject?.tags ?? [], {
+      titulo: "EL ESTIMADO QUE DEJÓ LA PROPUESTA (un antecedente de la venta, no una medición)",
+      posicion: await posicionDeLaPropuesta(bodyProjectId),
+    });
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
 === HANDOFF DEL PROYECTO (ESTA ES TU ÚNICA FUENTE) ===
 ${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
 
-${timelineCtx ? `${timelineCtx}\n\n` : ""}Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
+${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
+
+Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
   // ── 10b''. Input LEGACY del grupo planificacion ──────────────────────────────
@@ -1997,7 +1991,22 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         // sin comparación. La de-duplicación la hace el RENDER (`buildKickoffSections`), que
         // descarta el `compara` de la prosa solo cuando la sección propia tiene contenido.
       }
-      const gen = await generateSectionsForTemplate(KICKOFF_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+      const sinEscala = !!escalaDelKickoff && !escalaDelKickoff.usa;
+      const gen = await generateSectionsForTemplate(
+        KICKOFF_TEMPLATE,
+        userMessage,
+        undefined,
+        sinEscala ? new Set([SECCION_DE_ESCALA.kickoff]) : undefined,
+        prevDataByKey,
+      );
+      /* La persistencia de abajo solo reescribe las secciones que el agente devolvió: la de la
+         Escala, salteada con el trato «Sin Escala», conservaría lo de una corrida anterior. Se
+         vacía acá — un kickoff sin Escala que muestra niveles se contradice solo. */
+      if (sinEscala && targetCanvasId) {
+        await prisma.canvasBlock.deleteMany({
+          where: { section: { canvasId: targetCanvasId, key: SECCION_DE_ESCALA.kickoff } },
+        });
+      }
       analysisJson = {
         sections: gen.sections.map((s) => ({ key: s.key, blocks: [{ type: "card", data: s.data }] })),
       };

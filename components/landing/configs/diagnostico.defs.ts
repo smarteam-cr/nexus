@@ -21,9 +21,11 @@
  *   · `proximos_pasos`— reemplazada por recomendaciones + cierre.
  * Con contenido viejo se ven; vacías son blank y el modo lectura las omite solo.
  *
- * LA ESCALA: la única vara es la ESCALA 1-5 canónica (Deficiente · Inicial · Funcional ·
- * Eficiente · Óptimo) que vive en la base de conocimiento. La vieja 0-4 del código NO
- * entra acá — el runner ni la lee.
+ * LA ESCALA: la única vara es la Escala de Rendimiento 5.2 (Deficiente · Inicial · Funcional ·
+ * Eficiente · Óptimo, en dos capas por área), cuyo reglamento vive en la base de conocimiento.
+ * Desde el 2026-09-12 la sección `escala` ubica cada área por capa y con evidencia
+ * (`escala_posicion`, la misma forma que leen la Propuesta, el Kickoff y la Entrega), y un trato
+ * marcado «Sin Escala» no la genera. Ver `lib/escala/`.
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
@@ -33,8 +35,8 @@ import {
   WEB_DIAGNOSIS_SCHEMA,
   WEB_DIAGNOSIS_SCHEMA_DEL_CHAT,
   WEB_DIAGNOSIS_EMPTY,
-  ROI_SCHEMA,
-  ROI_EMPTY,
+  ESCALA_POSICION_SCHEMA,
+  ESCALA_POSICION_EMPTY,
   PROCESS_MAPPING_SCHEMA,
   PROCESS_MAPPING_EMPTY,
   PROSA_SCHEMA,
@@ -75,7 +77,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       heroTitleBrief("Diagnóstico de rendimiento") +
       "Portada del informe. `headline`: el HALLAZGO principal en una línea, dicho al cliente ('Tu proceso comercial pierde los leads que marketing ya pagó'). No pongas 'Diagnóstico de X' — el título de la página ya lo dice. " +
-      "`subhead`: 1-2 frases con el resumen honesto: dónde está hoy (nivel de la escala con su nombre) y qué es lo primero que cambia con este proyecto. " +
+      "`subhead`: 1-2 frases con el resumen honesto: dónde está hoy (con la Escala, la capa que más frena y su nivel por nombre; sin la Escala, el problema central) y qué es lo primero que cambia con este proyecto. " +
       "`tags`: los hubs/áreas diagnosticadas ('Ventas', 'Marketing', 'Servicio').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
     /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
@@ -137,15 +139,24 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     label: "Dónde estás en la escala",
     eyebrow: "Escala de rendimiento",
     theme: "dark",
-    sectionType: "roi",
+    /* 2026-09-12 — de tarjetas «N/5» a la posición 5.2 por capa. Los diagnósticos que ya tenían la
+       sección siguen pintando sus tarjetas (el renderer las reconoce): se midieron con la v4, otra
+       vara, y el runner no los traduce. */
+    sectionType: "escala_posicion",
     agentGenerated: true,
-    empty: ROI_EMPTY,
-    agentHint: "Nivel 1-5 global y por área + el nivel alcanzable con este proyecto. Máx 6 métricas.",
+    empty: ESCALA_POSICION_EMPTY,
+    agentHint: "Por área: el nivel de cada capa por su dimensión más débil, con su evidencia, la brecha y la meta.",
     brief:
-      "La ubicación en la ESCALA 1-5 (Deficiente · Inicial · Funcional · Eficiente · Óptimo — la única escala válida; nunca uses la 0-4). `metrics` (máx 6): " +
-      "`value` = 'N/5' y `label` = el área + el nombre del nivel ('Ventas — Inicial'). Incluí el nivel GENERAL primero, después por área diagnosticada, y cerrá con `value` = el nivel alcanzable y `label` = 'Alcanzable con este proyecto — <nombre>'. " +
-      "El número sale de aplicar los criterios de la escala a la evidencia — si la evidencia no alcanza para ubicar un área, no la puntúes.",
-    schema: asSchema(ROI_SCHEMA),
+      "La ubicación OFICIAL en la Escala de Rendimiento 5.2, aplicando el reglamento que recibís: cada evidencia a UNA dimensión, y el nivel de cada capa es el de su dimensión MÁS DÉBIL — el piso, nunca el promedio. " +
+      "`areas[]`: UNA por área que el proyecto cubre (Ventas, Marketing, Servicio). " +
+      "`base` = el nivel de la base operativa (x.1 a x.4) con su grafía exacta ('Funcional'); `basePiso` = la dimensión que marca ese piso y su evidencia en UNA línea, como pide el formato de salida del reglamento ('1.3 Datos — la etapa del negocio se llena a mano y la mitad queda vacía'). " +
+      "`produccion` y `produccionPiso` = lo mismo para x.5 a x.8 (1.7, 3.7 y 3.8 no tienen Funcional: su piso es Eficiente). " +
+      "`brecha` = UNA frase con la lectura de la brecha entre capas y la conversación que abre (base arriba: adopción; producción arriba: cimentar antes de empujar; parejas: subir el conjunto). " +
+      "`cercania` = solo si una capa tiene señales del nivel siguiente sin cruzarlo ('Base operativa: Funcional, cerca de Eficiente'); si no, vacío. " +
+      "`meta` = el nivel al que llega el área con ESTE proyecto — el SIGUIENTE, no dos arriba, y solo si el alcance lo respalda. " +
+      "`intro` = UNA frase de encuadre. `remedicion` = 'Volvemos a medir con las mismas dimensiones entre 60 y 90 días después de la entrega.' " +
+      "⛔ Sin evidencia para una capa, su nivel va VACÍO: un nivel sin evidencia es una caja negra, y este informe lo lee la gerencia del cliente.",
+    schema: asSchema(ESCALA_POSICION_SCHEMA),
   },
   {
     key: "causa_raiz",
@@ -173,8 +184,8 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     /* Rótulos de las dos columnas (antes se colaban por `plataforma`, ver exploracion.defs.ts). */
     chips: { retos: "Qué falta", panel: "Qué te cuesta hoy" },
     brief:
-      "La brecha entre el nivel actual y el siguiente — concreta, no aspiracional. `intro`: 1 frase de encuadre. " +
-      "`retos`: qué falta para subir de nivel — 4 a 6, cada uno `title` corto + `detail` de máximo 20 PALABRAS. " +
+      "La brecha — concreta, no aspiracional. Con la Escala: lo que separa a la capa que más frena de su SIGUIENTE nivel (las dimensiones que marcan el piso). Sin la Escala: lo que separa la operación de hoy de lo que el proyecto tiene que lograr. `intro`: 1 frase de encuadre. " +
+      "`retos`: qué falta para dar ese paso — 4 a 6, cada uno `title` corto + `detail` de máximo 20 PALABRAS. " +
       "`porQueBullets`: el IMPACTO de la brecha en resultados — 3 a 5, tiempo perdido, ventas caídas, clientes sin respuesta — con números SOLO si alguna fuente los trae, `detail` de máximo 20 PALABRAS. " +
       "`objetivo`: cuál brecha se cierra primero y por qué esa ('Primero la captura del lead: todo lo demás depende de que el dato exista').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
@@ -256,8 +267,9 @@ export const DIAGNOSTICO_TEMPLATE: BcTemplateDef = {
   features: { useCaseChecklist: false },
   agentIntro:
     "Eres el consultor senior de Smarteam que escribe el DIAGNÓSTICO DE RENDIMIENTO de un cliente: el informe que el cliente VA A LEER para entender sus resultados actuales y por qué son los que son. Se presenta en una sesión y queda en manos del cliente — cada frase tiene que sostenerse sola frente a su gerencia.\n\n" +
-    "TU MÉTODO: partí de la evidencia (exploración, procesos mapeados, su portal, el handoff), ubicá al cliente en la ESCALA DE RENDIMIENTO, y explicá el número con causas — no con síntomas. El cliente no compra un número: compra entender POR QUÉ está donde está y qué lo mueve.\n\n" +
-    "LA ESCALA (única vara): la Escala de Rendimiento 1-5 de Smarteam — 1 Deficiente · 2 Inicial · 3 Funcional · 4 Eficiente · 5 Óptimo — cuyos criterios recibís en el contexto. NUNCA uses la escala 0-4 vieja ni sus nombres (Básico/Estructurado/Optimizado/Inteligente). Al proyectar el nivel alcanzable, apuntá al SIGUIENTE nivel, no dos arriba: proponer soluciones de nivel 5 a un cliente en nivel 2 lo abruma y no lo mueve.\n\n" +
+    "TU MÉTODO: partí de la evidencia (exploración, procesos mapeados, su portal, el handoff), ubicá al cliente en la Escala de Rendimiento cuando el proyecto la usa, y explicá dónde está con causas — no con síntomas. El cliente no compra un número: compra entender POR QUÉ está donde está y qué lo mueve.\n\n" +
+    "LA ESCALA (la única vara): la Escala de Rendimiento 5.2 de Smarteam, cuyo reglamento completo recibís en el mensaje — 1 Deficiente · 2 Inicial · 3 Funcional · 4 Eficiente · 5 Óptimo, en DOS CAPAS por área: la BASE OPERATIVA (cómo está montado el departamento por dentro) y la PRODUCCIÓN (qué entrega hacia afuera). Cómo se aplica: el nivel de cada capa es el de su dimensión más débil —el piso, no el promedio—; la brecha entre capas es un hallazgo en sí; cada nivel va con su evidencia, nunca como caja negra; y vos PROPONÉS: el equipo de Smarteam lo confirma antes de presentarlo. Nunca uses otra escala ni otros nombres de nivel. Al proyectar, apuntá al SIGUIENTE nivel, no dos arriba: proponer Óptimo a un departamento Inicial lo abruma y no lo mueve.\n\n" +
+    "SIN ESCALA: si el mensaje dice que este proyecto se trabaja sin la Escala, no ubiques niveles ni los menciones en ninguna sección — el informe explica el estado y sus causas en términos del problema que el proyecto resuelve.\n\n" +
     "REGISTRO CLIENTE-FACING: tuteo, claro, sin jerga interna de Smarteam ('handoff', 'CSE', 'exploración' no existen para el cliente — decí 'las sesiones que tuvimos', 'el análisis de tu portal'). Honesto sin ser cruel: la fricción se nombra con precisión, no con burla ni eufemismo.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN (dura): NUNCA inventes datos, cifras, procesos ni personas del cliente. Todo lo que afirmes tiene que rastrearse a una fuente del contexto. Lo que la exploración marcó como 'sin verificar' NO se afirma como hecho en este informe — o se omite, o se presenta como pregunta abierta. Un número inventado en un informe que el cliente guarda es el peor error posible.\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en UNA línea. Español, tuteo. Si una sección no tiene respaldo en las fuentes, dejá sus arrays vacíos — vacío es correcto, inventado no.",

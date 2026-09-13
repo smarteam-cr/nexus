@@ -37,6 +37,8 @@ import {
   PROSA_SCHEMA,
   PROSA_EMPTY,
   PROSA_SCHEMA_DEL_CHAT,
+  ESCALA_POSICION_SCHEMA,
+  ESCALA_POSICION_EMPTY,
 } from "./shared-sections.defs";
 import { ENTREGA_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
@@ -278,6 +280,28 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
      * Borrar y mover sí: no inventan nada.
      */
     listasSoloEdicion: ["kpisConfirmados"],
+  },
+  {
+    key: "escala",
+    label: "Tu posición en la Escala",
+    eyebrow: "Dónde arrancaste y cuándo se mide",
+    theme: "dark",
+    sectionType: "escala_posicion",
+    /* ⚠ TAMPOCO LA ESCRIBE EL AGENTE (Elías, 2026-09-12: «nivel de partida + meta + remedición»).
+       El punto de partida y la meta los copia el runner del Diagnóstico, y la ventana de remedición
+       la calcula desde la fecha de entrega (`lib/escala/posicion.ts`). No hay campo por donde
+       declarar un nivel nuevo: el reglamento dice que el cambio se comprueba volviendo a medir, no
+       el día de la entrega. Sin Escala o sin diagnóstico medido, queda vacía y se apaga sola. */
+    agentGenerated: false,
+    reescritaPorNexus: true,
+    empty: ESCALA_POSICION_EMPTY,
+    agentHint: "",
+    brief:
+      "El punto de partida que midió el Diagnóstico, la meta del proyecto y cuándo se vuelve a medir. Lo escribe Nexus desde el Diagnóstico: el agente no interviene y nadie declara un nivel nuevo el día de la entrega.",
+    schema: asSchema(ESCALA_POSICION_SCHEMA),
+    /* El chat puede corregir una transcripción, pero no sumar un área: sería inventar un punto de
+       partida que nadie midió. */
+    listasSoloEdicion: ["areas"],
   },
   {
     key: "pendientes",

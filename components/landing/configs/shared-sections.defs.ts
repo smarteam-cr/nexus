@@ -272,6 +272,64 @@ export const ROI_SCHEMA = {
 } as const;
 export const ROI_EMPTY = { metrics: [] };
 
+/**
+ * ⭐ LA POSICIÓN EN LA ESCALA DE RENDIMIENTO — una sola forma para los cuatro documentos que la usan
+ * (Propuesta, Kickoff, Diagnóstico, Entrega), porque es el mismo dato en cuatro momentos: la Entrega
+ * lee lo que midió el Diagnóstico. La forma y su lectura viven en `lib/escala/posicion.ts`.
+ *
+ * El nivel va por NOMBRE («Funcional»), que es la grafía que el reglamento manda emitir y comparar.
+ */
+export const ESCALA_POSICION_SCHEMA = {
+  type: "object",
+  properties: {
+    intro: str,
+    areas: arrayOf(
+      {
+        area: str,
+        base: str,
+        basePiso: str,
+        produccion: str,
+        produccionPiso: str,
+        brecha: str,
+        cercania: str,
+        meta: str,
+      },
+      ["area"],
+    ),
+    remedicion: str,
+  },
+  required: ["areas"],
+} as const;
+export const ESCALA_POSICION_EMPTY = { intro: "", areas: [], remedicion: "" };
+
+/**
+ * «Dónde está tu operación hoy» — la Escala en la PROPUESTA. La declaran las dos plantillas con la
+ * misma def: es el mismo argumento en una propuesta de HubSpot y en una de sitio web.
+ *
+ * ⚠ En preventa el nivel es un ESTIMADO, y el brief lo obliga a decirlo: la ubicación oficial la da
+ * el Diagnóstico, con evidencia. Con el trato marcado «Sin Escala» no se genera (`skipKeys`).
+ */
+export const ESCALA_PROPUESTA_DEF: BCSectionDef = {
+  key: "posicion_escala",
+  label: "Dónde está tu operación hoy",
+  eyebrow: "Escala de rendimiento",
+  theme: "soft",
+  sectionType: "escala_posicion",
+  agentGenerated: true,
+  empty: ESCALA_POSICION_EMPTY,
+  agentHint: "El nivel ESTIMADO de cada área por capa, y la brecha como el porqué de la propuesta.",
+  brief:
+    "La Escala de Rendimiento en PREVENTA: dónde está HOY la operación del prospecto, ESTIMADO con lo que dijo en las reuniones (y con la nota del test de rendimiento si las fuentes la traen). " +
+    "Es el argumento de la propuesta: la brecha explica por qué hace falta lo que se propone. Usá el resumen de la Escala que viene en el contexto. " +
+    "`areas[]`: una por área que la propuesta toca (Ventas, Marketing, Servicio). `base` y `produccion` = el nivel estimado de cada capa con su grafía exacta (Deficiente, Inicial, Funcional, Eficiente, Óptimo) — el de su dimensión más débil, nunca un promedio; " +
+    "`basePiso` y `produccionPiso` = qué la frena, en UNA línea y con lo que dijo el prospecto ('Datos — cada vendedor lleva su propia planilla'); " +
+    "`brecha` = UNA frase: qué capa frena y qué conversación abre; `cercania` = vacío; `meta` = el nivel al que llega esa área con esta propuesta — el SIGUIENTE, no dos arriba. " +
+    "`intro` = UNA frase que diga que es un estimado ('Esto es lo que vemos desde las conversaciones; el diagnóstico lo confirma con evidencia'). " +
+    "`remedicion` = 'Lo confirmamos en el diagnóstico y lo volvemos a medir entre 60 y 90 días después de la entrega.' " +
+    "Si las fuentes no alcanzan para una capa, su nivel va vacío; si no alcanzan para ninguna área, `areas: []`. Un nivel inventado en una propuesta se cae en la primera reunión.",
+  schema: ESCALA_POSICION_SCHEMA as unknown as Record<string, unknown>,
+};
+
 export const PAIN_SCHEMA = {
   type: "object",
   properties: { items: arrayOf({ title: str, detail: str }, ["title", "detail"]) },

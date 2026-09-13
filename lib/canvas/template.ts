@@ -59,6 +59,29 @@ export const EMPTY_CLIENT_CANVAS: ClientCanvas = {
   oportunidades_futuras: [],
 };
 
+/**
+ * El canvas de empresa tal como se le muestra a un AGENTE: sin la escala 0-4.
+ *
+ * `escala_rendimiento` y `oportunidades_futuras[].escala_nivel` son la escala vieja (0-4,
+ * Básico/Estructurado/…), retirada en favor de la Escala de Rendimiento 5.2. El dato queda en el
+ * tipo y en la base —0 clientes lo tienen cargado al 2026-09-12— pero no se le da a ningún
+ * agente: el objeto vacío igual lleva «general: 0», y un agente que lo lee junto con la 5.2
+ * recibe dos varas y las mezcla.
+ */
+export function canvasDeEmpresaParaPrompt(canvas: unknown): Record<string, unknown> {
+  const copia = { ...((canvas && typeof canvas === "object" ? canvas : {}) as Record<string, unknown>) };
+  delete copia.escala_rendimiento;
+  if (Array.isArray(copia.oportunidades_futuras)) {
+    copia.oportunidades_futuras = copia.oportunidades_futuras.map((o) => {
+      if (!o || typeof o !== "object") return o;
+      const sinNivel = { ...(o as Record<string, unknown>) };
+      delete sinNivel.escala_nivel;
+      return sinNivel;
+    });
+  }
+  return copia;
+}
+
 // ─── Project Canvas (Canvas de servicio — nivel caso de uso) ─────────────────
 
 export interface ProjectCanvas {

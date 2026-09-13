@@ -412,6 +412,9 @@ describe("un renderer, un contrato de datos", () => {
        `web_investment` lo montan las DOS propuestas comerciales. Su esquema tiene que servirle a
        las dos — que es justo lo que el trinquete de arriba vigila. */
     inversion: "generico",
+    /* La posición en la Escala de Rendimiento (2026-09-12): el mismo dato en cuatro momentos
+       —Propuesta, Kickoff, Diagnóstico, Entrega—, así que un solo esquema para los cuatro. */
+    escala_posicion: "generico",
     // ── Módulos de canvas: propios de UNA pieza.
     kickoff_equipo: "modulo",
     kickoff_horarios: "modulo",
@@ -526,12 +529,13 @@ describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas"
   });
 
   it("snapshot de keys por template (cambiarlas = decisión de producto)", () => {
+    // `posicion_escala` (2026-09-12, Elías): la Escala posiciona desde la propuesta.
     expect(BC_TEMPLATES.hubspot_v1.sections.map((d) => d.key)).toEqual([
-      "hero", "dolores", "antes_despues", "solucion", "casos_de_uso", "roi",
+      "hero", "dolores", "posicion_escala", "antes_despues", "solucion", "casos_de_uso", "roi",
       "cronograma", "inversion", "partner", "cta", "arquitectura_tecnologica", "mapeo_procesos",
     ]);
     expect(BC_TEMPLATES.website_v1.sections.map((d) => d.key)).toEqual([
-      "hero", "diagnostico", "arquitectura_sitio", "arquitectura_conexion",
+      "hero", "diagnostico", "posicion_escala", "arquitectura_sitio", "arquitectura_conexion",
       "alcance", "metodologia", "inversion", "por_que_smarteam",
     ]);
     // Un template nuevo declara acá su snapshot al nacer.
@@ -567,7 +571,7 @@ describe("Kickoff: registry completo + keys congeladas", () => {
   it("snapshot de keys: bienvenida abre, cierre cierra", () => {
     expect(KICKOFF_SECTION_DEFS.map((d) => d.key)).toEqual([
       "bienvenida", "objetivos", "hoy_vs_sistema", "alcance", "equipo", "tu_rol",
-      "metricas_exito", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
+      "metricas_exito", "punto_de_partida", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
     ]);
   });
 
@@ -927,7 +931,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
     const keys = ENTREGA_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
       "portada", "resumen", "alcance", "logros",
-      "cumplimiento", "impacto", "pendientes", "continuidad", "recomendaciones", "cierre",
+      "cumplimiento", "impacto", "escala", "pendientes", "continuidad", "recomendaciones", "cierre",
     ]);
     expect(keys.indexOf("pendientes")).toBeGreaterThan(keys.indexOf("logros"));
     /* `recomendaciones` DESPUÉS de `continuidad` y no antes: la propuesta del próximo proyecto
@@ -944,10 +948,15 @@ describe("Entrega: registry completo + keys congeladas", () => {
        el cliente archiva y cita. */
     expect(ENTREGA_DEF_BY_KEY["cumplimiento"].agentGenerated).toBe(false);
     expect(ENTREGA_DEF_BY_KEY["pendientes"].agentGenerated).toBe(false);
+    /* La Escala tampoco (2026-09-12): el punto de partida lo midió el Diagnóstico y el nivel nuevo
+       no se declara el día de la entrega. Con el agente escribiéndola, «ya estás en Eficiente» es
+       la frase más natural de un cierre — y no la midió nadie. */
+    expect(ENTREGA_DEF_BY_KEY["escala"].agentGenerated).toBe(false);
     // Y el template que se le manda al modelo NO puede incluirlas.
     const alModelo = ENTREGA_SECTION_DEFS.filter((d) => d.agentGenerated !== false).map((d) => d.key);
     expect(alModelo).not.toContain("cumplimiento");
     expect(alModelo).not.toContain("pendientes");
+    expect(alModelo).not.toContain("escala");
   });
 
   it("la portada y el cierre no se ocultan ni se mueven", () => {
@@ -958,7 +967,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
       expect(ENTREGA_DEF_BY_KEY[k].noHide, `${k} no debería poder ocultarse`).toBe(true);
     }
     const ocultables = ENTREGA_SECTION_DEFS.filter((d) => !d.noHide).map((d) => d.key);
-    expect(ocultables).toHaveLength(8);
+    expect(ocultables).toHaveLength(9);
   });
 
   it("las keys 1:1 con las secciones del canvas", () => {

@@ -222,6 +222,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "equipo",         label: "Equipo del proyecto",       defaultData: { members: [] } },
       { key: "tu_rol",         label: "Lo que necesitamos de tu equipo" },
       { key: "metricas_exito", label: "Cómo mediremos el éxito" },
+      // La Escala de Rendimiento (2026-09-12): el punto de partida estimado en la propuesta.
+      { key: "punto_de_partida", label: "Desde dónde arrancamos" },
       { key: "horarios",       label: "Sesiones y horarios",       defaultData: { intro: "", options: [], sessions: [] } },
       { key: "canales",        label: "Canales de atención",       defaultData: { ...KICKOFF_CANALES_DEFAULT } },
       // Cronograma y procesos NO llevan bloque: su contenido sale de ProjectTimeline y de
@@ -514,6 +516,8 @@ export const ENTREGA_CANVAS: CanvasDefinition = {
     { key: "logros",       label: "Objetivos alcanzados" },
     { key: "cumplimiento", label: "El plan, cumplido" },
     { key: "impacto",      label: "El impacto en el negocio" },
+    // La Escala (2026-09-12): punto de partida del Diagnóstico + meta + remedición. La escribe Nexus.
+    { key: "escala",       label: "Tu posición en la Escala" },
     { key: "pendientes",   label: "Qué queda abierto" },
     { key: "continuidad",  label: "El siguiente proyecto" },
     { key: "recomendaciones", label: "Cómo sacarle más provecho" },

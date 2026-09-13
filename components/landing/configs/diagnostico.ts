@@ -9,7 +9,7 @@
  * construidos del motor —
  *   · `hero` del Business Case (de cara al cliente: brand row + portada),
  *   · `process_mapping` para el "cómo operás hoy vs cómo vas a operar",
- *   · `roi` (métricas grandes) para la escala 1-5,
+ *   · `escala_posicion` para la Escala 5.2 por capa (compartido con Propuesta, Kickoff y Entrega),
  *   · `pain` para las causas, `web_diagnosis` para la brecha,
  *   · `kickoff_prose` para contexto/recomendaciones (y las legacy solo-lectura),
  *   · `kickoff_cta` para el cierre.
@@ -21,7 +21,7 @@ import { toSectionDef } from "./templates";
 import { HeroSection, PainSection } from "../sections";
 import { WebDiagnosisSection } from "../sections-website";
 import { ProcessMappingSection } from "../sections-shared";
-import { RoiSection } from "../sections";
+import { EscalaPosicionSection } from "../sections-escala";
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,7 +29,9 @@ export const DIAGNOSTICO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>
   hero: HeroSection,
   kickoff_prose: KickoffProseSection,
   process_mapping: ProcessMappingSection,
-  roi: RoiSection,
+  // La posición en la Escala 5.2, por capa. Adentro pinta con la grilla de métricas los
+  // diagnósticos viejos que guardaron tarjetas «N/5» (ver sections-escala.tsx).
+  escala_posicion: EscalaPosicionSection,
   pain: PainSection,
   web_diagnosis: WebDiagnosisSection,
   kickoff_cta: KickoffCtaSection,

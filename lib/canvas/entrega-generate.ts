@@ -11,6 +11,9 @@
  *   2. Las dos secciones con CIFRAS —«El plan, cumplido» y «Qué queda abierto»— las escribe
  *      ESTE archivo desde el cronograma, con `lib/delivery/claims.ts`. **El agente ni las
  *      ve**: no están en el template que se le manda.
+ *   3. «Tu posición en la Escala» (2026-09-12) — el punto de partida que midió el Diagnóstico,
+ *      la meta y la ventana de remedición (`lib/escala/posicion.ts`). Tampoco la ve el agente:
+ *      el nivel nuevo no se declara el día de la entrega.
  *
  * No es una optimización: es la única promesa de honestidad del documento. Un modelo que
  * escribe «se completó el 100% del plan» en el papel que el cliente archiva no tiene quién
@@ -27,7 +30,9 @@ import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { ENTREGA_TEMPLATE, ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
-import { tagLabels } from "@/lib/tags/catalog";
+import { tagLabels, usaEscala } from "@/lib/tags/catalog";
+import { posicionDelDiagnostico } from "@/lib/escala/contexto";
+import { posicionParaLaEntrega } from "@/lib/escala/posicion";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
@@ -260,6 +265,15 @@ export async function runEntregaGeneration(opts: {
     })
   )
     sectionCount++;
+
+  /* La Escala: el punto de partida que midió el Diagnóstico, la meta y cuándo se vuelve a medir.
+     Se reescribe en cada corrida, como las cifras. Sin Escala, o sin un diagnóstico que haya ubicado
+     alguna área en 5.2, queda vacía y se apaga sola — nunca «no se midió» con un casillero en blanco. */
+  const partida = usaEscala(project?.tags ?? []) ? await posicionDelDiagnostico(projectId) : null;
+  const fechaDeEntrega =
+    project?.timeline?.closeDateOverride ??
+    (summary?.closing?.projectedISO ? new Date(summary.closing.projectedISO) : new Date());
+  if (await escribir("escala", posicionParaLaEntrega(partida, fechaDeEntrega))) sectionCount++;
 
   return { canvasId, sectionCount };
 }

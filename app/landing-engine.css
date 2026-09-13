@@ -409,6 +409,42 @@
 .stl .stl-dark .stl-metric-label { color: var(--dark-text); }
 .stl .stl-metric-note { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
+/* ── La posición en la Escala de Rendimiento (sections-escala.tsx) ────────────
+   Una tarjeta por área con sus dos capas. La cifra va en royal y no en el acento del tema: la
+   tarjeta es blanca también sobre la banda oscura, y el coral de `--accent-display` no llega a 3:1
+   sobre blanco. */
+.stl .stl-escala-grid {
+  display: grid; gap: 18px; margin-top: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+.stl .stl-escala-area { display: flex; flex-direction: column; gap: 16px; }
+.stl .stl-escala-area .stl-card-title { margin: 0; }
+.stl .stl-escala-capa { display: grid; gap: 6px; }
+.stl .stl-escala-fila { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.stl .stl-escala-rotulo {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.stl .stl-escala-nivel {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 16px; color: var(--text);
+}
+.stl .stl-escala-cifra { font-weight: 800; font-size: 22px; line-height: 1; color: var(--blue); }
+.stl .stl-escala-tramos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.stl .stl-escala-tramos span { height: 6px; border-radius: 3px; background: var(--border); }
+.stl .stl-escala-tramos span.is-on { background: var(--blue); }
+.stl .stl-escala-piso { font-size: 13.5px; line-height: 1.55; color: var(--text-2); margin: 0; }
+.stl .stl-escala-brecha { font-size: 14px; line-height: 1.55; color: var(--text); margin: 0; }
+.stl .stl-escala-cercania { font-size: 13px; line-height: 1.5; color: var(--text-muted); margin: 0; }
+.stl .stl-escala-meta { border-top: 1px solid var(--border); padding-top: 12px; margin-top: auto; }
+.stl .stl-escala-remedicion {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  margin: 22px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--text-2);
+}
+.stl .stl-dark .stl-escala-remedicion,
+.stl .stl-dark .stl-escala-remedicion .stl-escala-rotulo { color: var(--dark-text-2); }
+
 /* ── Entrega · «Lo que nos contaron» ─────────────────────────────────────────
    Un número que dijo el cliente NO es una medición nuestra, y la pantalla tiene que
    decirlo. La atribución va debajo del número, en el cuerpo del texto — no en gris chico

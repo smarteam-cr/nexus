@@ -133,6 +133,13 @@ const STRINGS = {
     es: "No se pudo registrar la aprobación. Probá de nuevo en unos segundos.",
     en: "We couldn't record the approval. Please try again in a few seconds.",
   },
+  // La posición en la Escala de Rendimiento (`sections-escala.tsx`). Los NOMBRES de los niveles no
+  // van acá: son dato del documento y el agente los escribe en el idioma pedido.
+  escalaBase: { es: "Base operativa", en: "Operating base" },
+  escalaProduccion: { es: "Producción", en: "Output" },
+  escalaBrecha: { es: "La brecha", en: "The gap" },
+  escalaMeta: { es: "Meta con este proyecto", en: "Target with this project" },
+  escalaRemedicion: { es: "Cuándo se vuelve a medir", en: "When we measure again" },
 } as const;
 
 export type LandingStringKey = keyof typeof STRINGS;

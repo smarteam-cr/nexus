@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { EMPTY_CLIENT_CANVAS } from "@/lib/canvas/template";
+import { EMPTY_CLIENT_CANVAS, canvasDeEmpresaParaPrompt } from "@/lib/canvas/template";
 import type { ClientCanvas } from "@/lib/canvas/template";
 import { validateCanvasKeys } from "@/lib/canvas/merge";
 
@@ -131,10 +131,10 @@ export async function POST(
 Tu tarea: analiza las ejecuciones recientes de agentes, transcripciones de sesiones y cards manuales del cliente para SUGERIR actualizaciones al canvas de empresa.
 
 Canvas actual de empresa:
-${JSON.stringify(clientCanvas, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(clientCanvas), null, 2)}
 
 Estructura esperada del canvas (referencia):
-${JSON.stringify(EMPTY_CLIENT_CANVAS, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(EMPTY_CLIENT_CANVAS), null, 2)}
 
 SECCIONES DISPONIBLES:
 - perfil: industria, modelo_negocio, tamano
@@ -143,8 +143,7 @@ SECCIONES DISPONIBLES:
 - herramientas: array de strings
 - contexto_comercial: { canal_adquisicion, relacion_previa, motivacion_compra }
 - retos_estrategicos: array de { descripcion, estado: "validado"|"por_validar", fuente }
-- escala_rendimiento: { general: 0-4, por_hub: { marketing, sales, service }, objetivo: 0-4 }
-- oportunidades_futuras: array de { descripcion, hub, escala_nivel: 0-4, estado: "identificada"|"propuesta"|"aceptada"|"descartada" }
+- oportunidades_futuras: array de { descripcion, hub, estado: "identificada"|"propuesta"|"aceptada"|"descartada" }
 
 REGLAS:
 1. Solo sugiere cuando hay información CONCRETA y NUEVA que no está en el canvas actual
@@ -152,7 +151,7 @@ REGLAS:
 3. Para objetos, devuelve SOLO los campos que cambiaron
 4. Para retos_estrategicos: marca como "por_validar" y en fuente pon de dónde viene
 5. Para oportunidades_futuras: marca como "identificada" si es nueva
-6. Para escala_rendimiento: solo sugiere si hay evidencia clara para cambiar un nivel
+6. NO ubiques niveles de madurez: la posición del cliente en la Escala de Rendimiento la mide el Diagnóstico
 7. NO inventes información
 8. Incluye en "source_label" una descripción legible de la fuente (ej: "Análisis inicial · 24 mar")
 9. ESTILO: todo texto en TUTEO neutro ("tú"), nunca voseo ("tenés", "querés", "Transformá")

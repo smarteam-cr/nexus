@@ -69,11 +69,14 @@ describe("🔒 el conocimiento se mide por CANTIDAD, no por si trae texto", () =
     // loadKnowledgeByTags devuelve texto aunque NINGÚN documento haya entrado en el
     // presupuesto (la nota de "no entraron"). Preguntar por `text` toma esa nota como
     // escala válida y el respaldo no se usa nunca.
-    const src = fs.readFileSync(path.join(process.cwd(), "lib/canvas/diagnostico-generate.ts"), "utf8");
+    // Desde el 2026-09-12 el bloque de la Escala del Diagnóstico se arma en lib/escala/contexto.ts.
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/escala/contexto.ts"), "utf8");
     expect(
       src.includes("escala.count > 0"),
       "el Diagnóstico volvió a decidir por `escala.text`: puede puntuar al cliente sin la vara",
     ).toBe(true);
+    const runner = fs.readFileSync(path.join(process.cwd(), "lib/canvas/diagnostico-generate.ts"), "utf8");
+    expect(runner.includes("escalaParaElDiagnostico("), "el runner dejó de pasar por el armado compartido").toBe(true);
   });
 
   it("Implementación sigue usando el mismo criterio", () => {

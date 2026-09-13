@@ -9,6 +9,10 @@
  * siembra, las pruebas y `scripts/verificar-escala-agentes.ts`.
  */
 
+/** Los cinco niveles con su grafía exacta (anexo del reglamento). Su valor es la posición + 1. */
+export const NIVELES_ESCALA = ["Deficiente", "Inicial", "Funcional", "Eficiente", "Óptimo"] as const;
+export type NombreDeNivelEscala = (typeof NIVELES_ESCALA)[number];
+
 /** El reglamento completo: la vara con que el Diagnóstico ubica al cliente dimensión por dimensión. */
 export const ETIQUETA_ESCALA_COMPLETA = "escala_rendimiento";
 

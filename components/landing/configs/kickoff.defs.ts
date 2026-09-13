@@ -26,6 +26,8 @@ import {
   PROSA_SCHEMA,
   PROSA_EMPTY,
   PROSA_SCHEMA_DEL_CHAT,
+  ESCALA_POSICION_SCHEMA,
+  ESCALA_POSICION_EMPTY,
 } from "./shared-sections.defs";
 
 const str = { type: "string" } as const;
@@ -186,6 +188,27 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
   {
+    key: "punto_de_partida",
+    label: "Desde dónde arrancamos",
+    eyebrow: "Escala de rendimiento",
+    theme: "dark",
+    sectionType: "escala_posicion",
+    agentGenerated: true,
+    empty: ESCALA_POSICION_EMPTY,
+    agentHint: "El punto de partida ESTIMADO en la Escala y a dónde apunta el proyecto, tomado de la propuesta.",
+    /* El antecedente es la propuesta del trato, y el agente lo recibe ya leído en el bloque de la
+       Escala (`lib/escala/contexto.ts`). Sin propuesta con estimado, no hay áreas: el punto de
+       partida lo mide el Diagnóstico, y un kickoff no lo adelanta inventándolo. Con el trato
+       «Sin Escala» no se genera. */
+    brief:
+      "La Escala de Rendimiento al ARRANCAR: el punto de partida y a dónde apunta el proyecto. Fuente: el bloque «ESCALA DE RENDIMIENTO» del mensaje y el estimado que dejó la propuesta, si lo trae. " +
+      "`areas[]`: copiá ese estimado por área — `base` y `produccion` con su grafía exacta, `basePiso` y `produccionPiso` en UNA línea, `brecha` en UNA frase, `meta` = el nivel al que apunta el proyecto; `cercania` vacío. " +
+      "Si el mensaje NO trae un estimado, `areas: []` — no lo inventes: el punto de partida lo mide el diagnóstico. " +
+      "`intro` = UNA frase ('Este es el punto de partida que estimamos al vender; en el diagnóstico lo confirmamos con evidencia'). " +
+      "`remedicion` = cuándo se mide: el diagnóstico en su fase del cronograma y la remedición entre 60 y 90 días después de la entrega. No inventes fechas que el cronograma no traiga.",
+    schema: ESCALA_POSICION_SCHEMA,
+  },
+  {
     key: "horarios",
     label: "Sesiones y horarios",
     eyebrow: "La cadencia",
@@ -335,6 +358,8 @@ export const KICKOFF_TEMPLATE: BcTemplateDef = {
     "PROHIBIDO: 'maximizar el valor', 'ROI garantizado', 'solución integral', 'llevar al siguiente nivel'.\n\n" +
 
     "NO USES LAS SECCIONES INTERNAS DEL HANDOFF. Los riesgos, banderas rojas, el 'por qué nos eligieron', los acuerdos comerciales y el estado interno son de Smarteam: el cliente NO los ve, ni siquiera reformulados. Si una sección te llega, ignorala.\n\n" +
+
+    "LA ESCALA DE RENDIMIENTO (solo si el mensaje la trae): el punto de partida de un kickoff es un ESTIMADO de la venta, y el diagnóstico lo confirma con evidencia. Nunca lo presentes como medido, nunca inventes un nivel que el estimado de la propuesta no traiga, y si el mensaje dice que el trato va sin Escala, no la menciones.\n\n" +
 
     "TUTEO SIEMPRE (tú: tienes, necesitas, podrás). Prohibido voseo/ustedeo.\n\n" +
 

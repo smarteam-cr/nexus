@@ -16,7 +16,12 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import { BC_SECTION_DEFS } from "./business-case.defs";
-import { makeDiagramArchitectureDef, makeProcessMappingDef, USE_CASES_DEF } from "./shared-sections.defs";
+import {
+  ESCALA_PROPUESTA_DEF,
+  makeDiagramArchitectureDef,
+  makeProcessMappingDef,
+  USE_CASES_DEF,
+} from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
 import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { esCustomKey } from "@/lib/landing/custom-sections";
@@ -55,7 +60,11 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
     // hidden:true en el Json del canvas al crear): el cliente no ve nada nuevo por
     // default. Canvases viejos (9) no cambian — adoptan la composición al regenerar.
     sections: [
-      ...BC_SECTION_DEFS.slice(0, 4), // hero · dolores · antes_despues · solucion
+      ...BC_SECTION_DEFS.slice(0, 2), // hero · dolores
+      // La Escala va DETRÁS de los dolores y antes del antes/después: los dolores dicen qué pasa,
+      // la Escala dice dónde está la operación y cuál es la brecha — el porqué de lo que sigue.
+      ESCALA_PROPUESTA_DEF,
+      ...BC_SECTION_DEFS.slice(2, 4), // antes_despues · solucion
       USE_CASES_DEF,
       ...BC_SECTION_DEFS.slice(4), // roi · cronograma · inversion · partner · cta
       // Motor de diagramas interactivo (la data vieja de tech_architecture se

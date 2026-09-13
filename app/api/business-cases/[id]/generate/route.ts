@@ -33,6 +33,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimelineItems, serializeTimeline } from "@/lib/hubspot/company-timeline";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
+import { escalaParaPosicionar, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
@@ -111,7 +112,7 @@ export async function POST(
 
   const feeding = await loadBcFeeding(id);
   const feedingIds = feeding?.feedingIds ?? [];
-  const [transcripts, sessions, conocimientoHubs] = await Promise.all([
+  const [transcripts, sessions, conocimientoHubs, escalaPropuesta] = await Promise.all([
     prisma.businessCaseTranscript.findMany({
       where: { businessCaseId: id },
       select: { rawText: true, fileName: true },
@@ -129,6 +130,10 @@ export async function POST(
     // Va en el MISMO Promise.all: es una query independiente y en serie sumaba latencia
     // a un endpoint que ya espera minutos por el modelo. Solo lee documentos PUBLICADOS.
     loadKnowledgeByTags([...HUBSPOT_HUB_SLUGS], HUBS_KNOWLEDGE_CAP),
+    /* La Escala de Rendimiento (2026-09-12): el RESUMEN para posicionar, no el reglamento — la
+       propuesta estima el nivel, no lo asigna, y ya tarda un minuto. Con el trato marcado
+       «Sin Escala» el bloque solo dice eso y la sección no se genera (ver `trabajo`). */
+    escalaParaPosicionar(bc.tags),
   ]);
 
   const parts: string[] = [];
@@ -262,6 +267,7 @@ export async function POST(
   /* PRECIO (nuestro, prohibido) vs IMPACTO (del cliente, es el argumento). El texto y su
      historia viven en lib/business-cases/money-brief.ts — un route.ts no puede exportarlo
      y el arnés de validación necesita el MISMO string, no una copia. */
+  preamble.push(escalaPropuesta.texto);
   preamble.push(MONEY_RULE_BRIEF);
   const contextForAgent = preamble.length ? `${preamble.join("\n\n")}\n\n---\n\n${context}` : context;
 
@@ -351,9 +357,16 @@ export async function POST(
         .map((d) => d.key),
     );
 
+    /* «Sin Escala» también saltea la sección de la Escala, pero NO entra a `skipKeys`: ese set
+       además ARRASTRA lo de la versión anterior (carry-forward b, más abajo), y un trato que se
+       pasó a «Sin Escala» no puede heredar el estimado de cuando la tenía. Así nace vacía. */
+    const skipDeLaGeneracion = escalaPropuesta.usa
+      ? skipKeys
+      : new Set([...skipKeys, SECCION_DE_ESCALA.propuesta]);
+
     await setPhase("Generando las secciones con IA…");
     const gen = await withTimeout(
-      generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipKeys), // LLM, FUERA de la tx
+      generateCanvasSections(contextForAgent, briefsByKey, resolved.templateId, skipDeLaGeneracion), // LLM, FUERA de la tx
       GEN_TIMEOUT_MS,
       "La generación con IA superó los 3 minutos — reintentá.",
     );

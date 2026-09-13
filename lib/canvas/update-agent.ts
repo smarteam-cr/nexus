@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
-import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS } from "./template";
+import { EMPTY_CLIENT_CANVAS, EMPTY_PROJECT_CANVAS, canvasDeEmpresaParaPrompt } from "./template";
 import type { ClientCanvas, ProjectCanvas } from "./template";
 import { deepMergeCanvas, validateCanvasKeys } from "./merge";
 
@@ -77,7 +77,7 @@ NOTA: El canvas de proyecto ya NO se actualiza automáticamente. El consultor de
 ${clientPromptPart}
 
 Estructura actual del canvas de empresa:
-${JSON.stringify(EMPTY_CLIENT_CANVAS, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(EMPTY_CLIENT_CANVAS), null, 2)}
 
 REGLAS:
 - Solo incluye secciones donde las cards tienen información CONCRETA y nueva.
@@ -93,7 +93,7 @@ Responde SOLO con JSON válido:
 }`;
 
   const userMessage = `=== CANVAS ACTUAL DE EMPRESA ===
-${JSON.stringify(clientCanvas, null, 2)}
+${JSON.stringify(canvasDeEmpresaParaPrompt(clientCanvas), null, 2)}
 
 === CARDS GENERADAS POR EL AGENTE ===
 ${cardsText}

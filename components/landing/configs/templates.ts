@@ -32,6 +32,7 @@ import {
 import { TechArchitectureSection, ProcessMappingSection, UseCasesSection } from "../sections-shared";
 import { DiagramSection } from "../sections-diagram";
 import { HubsClienteSection } from "../sections-hubs";
+import { EscalaPosicionSection } from "../sections-escala";
 import {
   WebDiagnosisSection,
   SiteArchitectureSection,
@@ -67,6 +68,8 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   tech_architecture: TechArchitectureSection,
   process_mapping: ProcessMappingSection,
   use_cases: UseCasesSection,
+  // La posición en la Escala de Rendimiento: la comparten Propuesta, Kickoff, Diagnóstico y Entrega.
+  escala_posicion: EscalaPosicionSection,
   // Motor de diagramas interactivo (FlowchartViewer como sección) — cualquier
   // template puede declarar sectionType "diagram"; la conversión lazy cubre
   // la data vieja de tech_architecture.

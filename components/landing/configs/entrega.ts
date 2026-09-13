@@ -21,6 +21,7 @@ import { HeroSection, RoiSection } from "../sections";
 import { ProcessMappingSection } from "../sections-shared";
 import { HubsClienteSection } from "../sections-hubs";
 import { ImpactoSection } from "../sections-impacto";
+import { EscalaPosicionSection } from "../sections-escala";
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +35,8 @@ export const ENTREGA_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> =
   roi: RoiSection,
   // El único propio: un dicho del cliente no es una métrica — lleva cita y atribución.
   impacto_declarado: ImpactoSection,
+  // El punto de partida en la Escala: lo escribe el runner desde el Diagnóstico, no el agente.
+  escala_posicion: EscalaPosicionSection,
   entrega_cta: KickoffCtaSection,
 };
 
