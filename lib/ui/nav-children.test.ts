@@ -111,12 +111,12 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     const bloques = groupNavChildren(visibleNavChildren(finanzas, { isCostos: true }));
     expect(bloques.map((b) => b.section)).toEqual(["Ingresos", "Costos y gastos", undefined]);
     // El run suelto son las SÍNTESIS de los bloques de arriba: la caja neta (entra −
-    // sale de acá en adelante), el punto de equilibrio (el año cerrado) y el plan de
-    // cobranza (qué cambió y qué falta, para cobranza y dirección).
+    // sale de acá en adelante), el punto de equilibrio (el año cerrado) y el Excel de
+    // cobranza contra Odoo (lo que no coincide, para cobranza y dirección).
     expect(bloques[bloques.length - 1].items.map((i) => i.href)).toEqual([
       "/finanzas/caja-neta",
       "/finanzas/equilibrio",
-      "/finanzas/plan-de-cobranza",
+      "/finanzas/excel-vs-odoo",
     ]);
   });
 

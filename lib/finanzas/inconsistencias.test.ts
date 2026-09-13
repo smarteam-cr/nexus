@@ -371,6 +371,7 @@ describe("resumirInconsistencias", () => {
     expect(resumirInconsistencias([])).toEqual({
       cuantas: 0,
       montoTotal: 0,
+      montoPorMoneda: [],
       porSeveridad: { ALTA: 0, MEDIA: 0, BAJA: 0 },
       paraDireccion: 0,
     });

@@ -115,12 +115,28 @@ function ListaDeItems({ items, moneda }: { items: ItemInconsistencia[]; moneda: 
   );
 }
 
+/** Los textos del reporte de equilibrio, que es donde nació el panel. Otra página pasa los suyos. */
+const TITULO_EQUILIBRIO = "Qué falta para cerrar el año";
+const VACIO_EQUILIBRIO =
+  "No hay inconsistencias abiertas: las ventas cuadran con la cobranza, los meses están completos y no quedan decisiones pendientes.";
+const EXPLICACION_EQUILIBRIO =
+  "El total cuenta cada peso una sola vez: las líneas marcadas «ya contado arriba» miran la misma plata desde otro ángulo. Ordenados por lo que mueven; cada uno desaparece de acá cuando el dato se corrige.";
+
 export default function InconsistenciasPanel({
   inconsistencias,
   moneda,
+  titulo = TITULO_EQUILIBRIO,
+  vacio = VACIO_EQUILIBRIO,
+  explicacion = EXPLICACION_EQUILIBRIO,
 }: {
   inconsistencias: Inconsistencia[];
+  /** La moneda del reporte: la de toda línea que no trae la suya (`Inconsistencia.moneda`). */
   moneda: string;
+  titulo?: string;
+  /** Lo que se lee cuando no hay nada abierto. */
+  vacio?: string;
+  /** La frase que sigue al titular: cómo se cuenta el total y cómo se ordena la lista. */
+  explicacion?: string;
 }) {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const resumen = useMemo(() => resumirInconsistencias(inconsistencias), [inconsistencias]);
@@ -133,29 +149,30 @@ export default function InconsistenciasPanel({
     return (
       <div className="rounded-xl border border-line bg-surface overflow-hidden">
         <div className="px-4 py-2.5 bg-surface-muted border-b border-line">
-          <h3 className="text-sm font-medium text-fg">Qué falta para cerrar el año</h3>
+          <h3 className="text-sm font-medium text-fg">{titulo}</h3>
         </div>
-        <p className="px-4 py-6 text-xs text-fg-muted">
-          No hay inconsistencias abiertas: las ventas cuadran con la cobranza, los meses están completos y no
-          quedan decisiones pendientes.
-        </p>
+        <p className="px-4 py-6 text-xs text-fg-muted">{vacio}</p>
       </div>
     );
   }
 
   const cuenta = (q: QuienResuelve) => inconsistencias.filter((x) => x.resuelve === q).length;
+  // ⚠ Una cifra por moneda, nunca una suma: con líneas en colones y en dólares el titular dice las dos.
+  // Con una sola moneda (el reporte de equilibrio) es exactamente el total de antes.
+  const enJuego =
+    resumen.montoPorMoneda.length > 0
+      ? resumen.montoPorMoneda.map((m) => fmtMonto(m.monto, m.moneda ?? moneda)).join(" y ")
+      : fmtMonto(resumen.montoTotal, moneda);
 
   return (
     <div className="rounded-xl border border-line bg-surface overflow-hidden">
       <div className="px-4 py-3 bg-surface-muted border-b border-line">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-medium text-fg">Qué falta para cerrar el año</h3>
+            <h3 className="text-sm font-medium text-fg">{titulo}</h3>
             <p className="text-[11px] text-fg-muted mt-0.5">
               {resumen.cuantas} puntos abiertos · {resumen.porSeveridad.ALTA} de prioridad alta ·{" "}
-              <span className="text-fg-secondary">{fmtMonto(resumen.montoTotal, moneda)} en juego</span>. El total
-              cuenta cada peso una sola vez: las líneas marcadas «ya contado arriba» miran la misma plata desde otro
-              ángulo. Ordenados por lo que mueven; cada uno desaparece de acá cuando el dato se corrige.
+              <span className="text-fg-secondary">{enJuego} en juego</span>. {explicacion}
             </p>
           </div>
           <Tabs
@@ -189,7 +206,7 @@ export default function InconsistenciasPanel({
                   <span className="text-sm text-fg font-medium">{x.titulo}</span>
                   {x.montoEnJuego !== null && (
                     <span className="text-sm tabular-nums text-fg-secondary ml-auto whitespace-nowrap">
-                      {fmtMonto(x.montoEnJuego, moneda)}
+                      {fmtMonto(x.montoEnJuego, x.moneda ?? moneda)}
                       {/* Sin esta marca, sumar la columna a mano da un número mayor que el
                           titular y parece que el titular está mal. Es al revés. */}
                       {x.yaContadoEn && (
@@ -201,7 +218,7 @@ export default function InconsistenciasPanel({
 
                 <p className="text-xs text-fg-secondary leading-relaxed mt-1.5">{x.detalle}</p>
 
-                {x.items.length > 0 && <ListaDeItems items={x.items} moneda={moneda} />}
+                {x.items.length > 0 && <ListaDeItems items={x.items} moneda={x.moneda ?? moneda} />}
 
                 <div className="flex flex-wrap items-baseline gap-2 mt-2">
                   <span

@@ -40,7 +40,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/costos/comisiones-vendedor": { shell: "SHELL_DEFAULT" },
   "finanzas/ingresos-variables": { shell: "SHELL_DEFAULT" },
   "finanzas/comisiones-partner": { shell: "SHELL_DEFAULT" },
-  "finanzas/plan-de-cobranza": { shell: "SHELL_DEFAULT" },
+  "finanzas/excel-vs-odoo": { shell: "SHELL_DEFAULT" },
   integrations: { shell: "SHELL_DEFAULT" },
   "sales/sicop": { shell: "SHELL_DEFAULT" },
   knowledge: { shell: "SHELL_DEFAULT" },
