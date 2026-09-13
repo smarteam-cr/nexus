@@ -19,8 +19,8 @@ export default async function ImportarCobranzaPage() {
   return (
     <div className="px-6 py-8">
       <PageHeader
-        title="Importar cuentas"
-        description="Subí el CSV del sheet de Finanzas, revisá el mapeo y las filas, y aplicá la importación."
+        title="Importar cuentas y comparar el libro"
+        description="Subí el CSV del sheet de Finanzas para cargar cuentas, o el libro de Alex (.xlsx) para ver fila por fila qué no coincide con Nexus, sin escribir nada."
       />
       <ImportWizard />
     </div>

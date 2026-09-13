@@ -186,7 +186,7 @@ export default function PanelCartera({
             href="/cobranza/importar"
             className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
           >
-            Importar CSV
+            Importar o comparar el libro
           </Link>
           <button
             type="button"

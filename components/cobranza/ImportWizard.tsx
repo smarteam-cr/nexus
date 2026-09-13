@@ -37,7 +37,9 @@ import {
   parseFechaLocal,
   parseDiaAncla,
 } from "@/lib/cobranza/import-core";
+import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
 import { INPUT_CLS, SELECT_CLS, LABEL_CLS, FILTER_SELECT_CLS, VIA_COBRO_LABEL, TERMINOS_PAGO_LABEL } from "./format";
+import LibroAlexPanel from "./LibroAlexPanel";
 
 // ── Tipos DTO (espejo de las responses de /api/cobranza/import/**) ──────────────
 
@@ -75,6 +77,8 @@ interface BatchDTO {
 interface BatchListItem {
   id: string;
   archivoNombre: string;
+  /** "sheet" = CSV de cuentas · FUENTE_LIBRO_ALEX = el libro de Alex, que se compara y no se mapea. */
+  fuente: string;
   estado: string;
   totalFilas: number;
   createdAt: string;
@@ -131,6 +135,9 @@ export default function ImportWizard() {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [busy, setBusy] = useState(false);
   const [prevBatches, setPrevBatches] = useState<BatchListItem[]>([]);
+  /* Un lote del libro de Alex no pasa por los cuatro pasos: se abre en su propia comparación. */
+  const [libroId, setLibroId] = useState<string | null>(null);
+  const [versionPrevios, setVersionPrevios] = useState(0);
 
   const adoptarBatch = useCallback((b: BatchDTO) => {
     setBatch(b);
@@ -152,10 +159,14 @@ export default function ImportWizard() {
     fetchJson<{ batches: BatchListItem[] }>("/api/cobranza/import")
       .then((d) => setPrevBatches((d.batches ?? []).filter((b) => b.estado !== "DESCARTADO")))
       .catch(() => {});
-  }, []);
+  }, [versionPrevios]);
 
   async function reabrir(id: string) {
     if (busy) return;
+    if (prevBatches.find((b) => b.id === id)?.fuente === FUENTE_LIBRO_ALEX) {
+      setLibroId(id);
+      return;
+    }
     setBusy(true);
     try {
       const data = await fetchJson<{ batch: BatchDTO }>(`/api/cobranza/import/${id}`);
@@ -173,14 +184,20 @@ export default function ImportWizard() {
 
   async function subirArchivo(file: File | null | undefined) {
     if (!file || busy) return;
-    if (!/\.csv$/i.test(file.name)) {
-      toast.error("Subí un archivo .csv (exportá el sheet como CSV).");
+    const esLibro = /\.xlsx$/i.test(file.name);
+    if (!esLibro && !/\.csv$/i.test(file.name)) {
+      toast.error("Subí el CSV del sheet de Finanzas o el libro de Alex en .xlsx.");
       return;
     }
     setBusy(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      if (esLibro) {
+        const subido = await fetchJson<{ libro: { id: string } }>("/api/cobranza/import", { method: "POST", body: fd });
+        setLibroId(subido.libro.id);
+        return;
+      }
       const data = await fetchJson<{ batch: BatchDTO }>("/api/cobranza/import", { method: "POST", body: fd });
       adoptarBatch(data.batch);
       setAvisoResolver([]);
@@ -273,6 +290,18 @@ export default function ImportWizard() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (libroId) {
+    return (
+      <LibroAlexPanel
+        importId={libroId}
+        onCerrar={() => {
+          setLibroId(null);
+          setVersionPrevios((v) => v + 1);
+        }}
+      />
+    );
   }
 
   return (
@@ -389,12 +418,15 @@ function PasoSubir({
           />
         </svg>
         <p className="text-sm text-fg-secondary">
-          {busy ? "Subiendo…" : "Arrastrá el CSV acá o hacé clic para elegirlo"}
+          {busy ? "Subiendo…" : "Arrastrá el CSV o el libro de Alex acá, o hacé clic para elegirlo"}
         </p>
-        <p className="text-[11px] text-fg-muted">Solo .csv (exportá el sheet de Finanzas como CSV) · Máx 5 MB</p>
+        <p className="text-[11px] text-fg-muted text-center">
+          .csv del sheet de Finanzas: carga cuentas · .xlsx del libro de Alex: se compara fila por fila contra Nexus, sin escribir
+          nada · Máx 5 MB
+        </p>
         <input
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx"
           className="hidden"
           disabled={busy}
           onChange={(e) => {
@@ -419,10 +451,10 @@ function PasoSubir({
                   </p>
                 </div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${b.estado === "APLICADO" ? FILA_BADGE.APLICADA : "text-fg-muted bg-surface border-line"}`}>
-                  {IMPORT_ESTADO_LABEL[b.estado] ?? b.estado}
+                  {b.fuente === FUENTE_LIBRO_ALEX ? "Libro de Alex" : (IMPORT_ESTADO_LABEL[b.estado] ?? b.estado)}
                 </span>
                 <button onClick={() => onReabrir(b.id)} disabled={busy} className={BTN_GHOST}>
-                  {b.estado === "APLICADO" ? "Ver resumen" : "Reabrir"}
+                  {b.fuente === FUENTE_LIBRO_ALEX ? "Ver la comparación" : b.estado === "APLICADO" ? "Ver resumen" : "Reabrir"}
                 </button>
               </div>
             ))}

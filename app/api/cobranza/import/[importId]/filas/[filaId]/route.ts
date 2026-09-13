@@ -12,6 +12,7 @@ import { guardCobranzaAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { importFilaCanonicaSchema } from "@/lib/cobranza/schema";
 import { buildDedupIndices, evaluarCanonico, filaUpdateData } from "@/lib/cobranza/import-server";
+import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
 
 type Params = { params: Promise<{ importId: string; filaId: string }> };
 
@@ -57,10 +58,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const fila = await prisma.importacionFila.findUnique({
     where: { id: filaId },
-    include: { import: { select: { id: true, estado: true } } },
+    include: { import: { select: { id: true, estado: true, fuente: true } } },
   });
   if (!fila || fila.import.id !== importId) {
     return NextResponse.json({ error: "La fila no existe en este import" }, { status: 404 });
+  }
+  if (fila.import.fuente === FUENTE_LIBRO_ALEX) {
+    return NextResponse.json({ error: "Las filas del libro de Alex no se editan: son lo que dice el Excel." }, { status: 409 });
   }
   if (fila.import.estado === "APLICADO" || fila.import.estado === "DESCARTADO") {
     return NextResponse.json({ error: "El import ya está cerrado — no se editan filas." }, { status: 409 });

@@ -15,6 +15,7 @@ import { getAccountSource } from "@/lib/cobranza/adapters";
 import { generateCobros } from "@/lib/cobranza/mutations";
 import { importFilaCanonicaSchema } from "@/lib/cobranza/schema";
 import { slugNombre } from "@/lib/cobranza/import-core";
+import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
 import type { CuentaEntrante } from "@/lib/cobranza/ports";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { crDateParts } from "@/lib/jobs/time";
@@ -31,6 +32,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
     include: { filas: { orderBy: { numFila: "asc" } } },
   });
   if (!batch) return NextResponse.json({ error: "El import no existe" }, { status: 404 });
+  /* ⛔ El libro de Alex todavía no se aplica (etapa 13): por ahora se compara y se anotan números. */
+  if (batch.fuente === FUENTE_LIBRO_ALEX) {
+    return NextResponse.json(
+      { error: "El libro de Alex todavía no se aplica desde acá: por ahora se compara y se completan los números." },
+      { status: 409 },
+    );
+  }
   if (batch.estado !== "EN_REVISION") {
     return NextResponse.json(
       { error: `El import no está en revisión (estado actual: ${batch.estado}).` },

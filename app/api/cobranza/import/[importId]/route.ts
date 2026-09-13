@@ -14,6 +14,7 @@ import { guardCobranzaAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { importMapeoSchema } from "@/lib/cobranza/schema";
 import { revalidarImport } from "@/lib/cobranza/import-server";
+import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
 
 type Params = { params: Promise<{ importId: string }> };
 
@@ -69,9 +70,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const existente = await prisma.importacionCobranza.findUnique({
     where: { id: importId },
-    select: { estado: true },
+    select: { estado: true, fuente: true },
   });
   if (!existente) return NextResponse.json({ error: "El import no existe" }, { status: 404 });
+  /* El libro de Alex no tiene columnas que mapear: revalidarlo como CSV pisaría sus filas. */
+  if (existente.fuente === FUENTE_LIBRO_ALEX) {
+    return NextResponse.json({ error: "El libro de Alex no se mapea: se compara fila por fila." }, { status: 409 });
+  }
   if (existente.estado === "APLICADO" || existente.estado === "DESCARTADO") {
     return NextResponse.json(
       { error: `El import ya está ${existente.estado === "APLICADO" ? "aplicado" : "descartado"} — no se puede re-mapear.` },

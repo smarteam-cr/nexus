@@ -3,7 +3,10 @@
  *   POST → FormData {file}: parsea el CSV (papaparse), crea el batch BORRADOR con
  *          el mapeo SUGERIDO (heurística de headers, editable en el wizard) + una
  *          ImportacionFila por fila cruda. Cap 5 MB (413).
- *   GET  → lista de batches (para reabrir un import a medias desde el wizard).
+ *          Un .xlsx es el LIBRO DE ALEX (etapa 11): no se mapea, se lee por pestañas y secciones y
+ *          queda como lote para compararlo contra Nexus (lib/cobranza/libro-alex-server.ts). Nada entra
+ *          a cuentas ni a cobros.
+ *   GET  → lista de batches (para reabrir un import a medias desde el wizard), con su `fuente`.
  * Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN).
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +15,7 @@ import type { Prisma } from "@prisma/client";
 import { guardCobranzaAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { sugerirMapeo } from "@/lib/cobranza/import-core";
+import { LibroError, crearLoteDelLibro } from "@/lib/cobranza/libro-alex-server";
 
 const MAX_CSV_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -25,6 +29,7 @@ export async function GET() {
     select: {
       id: true,
       archivoNombre: true,
+      fuente: true,
       estado: true,
       totalFilas: true,
       createdAt: true,
@@ -50,6 +55,16 @@ export async function POST(req: NextRequest) {
   }
   if (file.size > MAX_CSV_BYTES) {
     return NextResponse.json({ error: "El archivo supera el máximo de 5 MB." }, { status: 413 });
+  }
+
+  if (/\.xlsx$/i.test(file.name)) {
+    try {
+      const libro = await crearLoteDelLibro({ nombre: file.name, datos: await file.arrayBuffer() }, guard.user.email);
+      return NextResponse.json({ libro }, { status: 201 });
+    } catch (e) {
+      if (e instanceof LibroError) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
   }
 
   const parsed = Papa.parse<Record<string, unknown>>(await file.text(), {
