@@ -55,9 +55,11 @@ const cuenta = (nombre: string) => ({ cuentaId: `cta-${nombre}`, nombre });
 
 const doc = (clave: string, extra: Partial<DocumentoComparado> = {}): DocumentoComparado => ({
   clave,
+  seccion: "ODOO",
   numero: clave,
   cliente: clave,
   fechaFactura: "2026-09-01",
+  moneda: "USD",
   total: null,
   neto: null,
   veredicto: "COINCIDE",
@@ -231,6 +233,43 @@ describe("B · cada causa, con su caso real", () => {
     const r = una([resumen("INV-26", "Insider", 5226, { origen: "Mercury Bank - Principal" })], [doc("INV-26", { veredicto: "NO_ES_CARTERA", accion: "INGRESO_NO_VENTA" })]);
     expect(causa(r, "NO_CUADRA")?.partidas[0]?.que).toBe("el Excel la suma y no es venta a un cliente");
   });
+
+  /** Secure Title en la pestaña de QuickBooks, como la deja `compararLibro` (2026-09-14: tres cuotas de US$2.000). */
+  const contratoSecureTitle = (seccion: DocumentoComparado["seccion"], cobros: DocumentoComparado["cobros"]) =>
+    doc("Asiento contable de Recaudo QBs#9", {
+      seccion,
+      numero: null,
+      cliente: "Secure Title",
+      total: 6000,
+      veredicto: "SIN_FACTURA",
+      atadura: null,
+      cuenta: cuenta("Secure Title Latin America"),
+      cobros,
+    });
+
+  it("B11 Secure Title marcado facturado en Nexus se descuenta del contrato, no aparece como contradicción", () => {
+    // ⚠ Antes: «sin factura» seguía en US$6.000 y «Nexus y el Excel dicen otra cosa» sumaba −US$4.000 con
+    // «su resumen no la suma», que es falso. Marcarlo facturado, lo que pide la pantalla, no cerraba nada.
+    const r = una(
+      [resumen("QBS-7", "Secure Title", 6000, { origen: "Odoo - QBs" })],
+      [contratoSecureTitle("NO_INSCRITOS", [cuota("st1", "POR_COBRAR", 2000), cuota("st2", "POR_COBRAR", 2000), cuota("st3", "PROGRAMADO", 2000, null)])],
+      [nexus("st1", "Secure Title Latin America", 2000), nexus("st2", "Secure Title Latin America", 2000)],
+    );
+    expect(r.diferencia).toBe(2000);
+    expect(r.causas.map((c) => [c.causa, c.monto])).toEqual([["SIN_FACTURA", 2000]]);
+  });
+
+  it("B12 el mismo contrato pagado según el Excel y por cobrar en Nexus sí es una contradicción", () => {
+    const r = una(
+      [resumen("QBS-7", "Secure Title", 0, { origen: "Odoo - QBs", total: 6000 })],
+      [contratoSecureTitle("QUICKBOOKS", [cuota("st1", "POR_COBRAR", 2000)])],
+      [nexus("st1", "Secure Title Latin America", 2000)],
+    );
+    expect(causa(r, "SIN_FACTURA")).toBeUndefined();
+    expect(causa(r, "NO_CUADRA")?.partidas).toEqual([
+      { cliente: "Secure Title Latin America", numero: null, monto: -2000, que: "pagado según el Excel y por cobrar en Nexus" },
+    ]);
+  });
 });
 
 // ── C ───────────────────────────────────────────────────────────────────────────
@@ -255,11 +294,15 @@ describe("C · los emparejados que la comparación deja sueltos", () => {
     const r = enLaCalleContraExcel({
       filas: [resumen("FAC/2026/0328", "Iberorutas", 8023)],
       documentos: [doc("FAC/2026/0328", { cuenta: cuenta("Iberorutas"), total: 8023, neto: 7100, atadura: "MES_UNICO", cobros: [cuota("i3", "POR_COBRAR", 150)] })],
-      porCobrar: [nexus("i3", "Iberorutas", 150)],
+      porCobrar: [nexus("i1", "Iberorutas", 3550), nexus("i2", "Iberorutas", 3550), nexus("i3", "Iberorutas", 150)],
       hoyISO: HOY,
     }).USD!;
     expect(causa(r, "IVA")?.monto).toBe(923);
-    expect(causa(r, "NO_CUADRA")?.monto).toBe(6950);
+    // ⚠ Con las tres cuotas del caso real. Atada a la de US$150, salían US$6.950 «el monto no es el mismo» y las dos
+    // de US$3.550 como «el Excel no la tiene»: la misma plata, con dos historias falsas.
+    expect(causa(r, "NO_CUADRA")?.partidas).toEqual([
+      { cliente: "Iberorutas", numero: "FAC/2026/0328", monto: -150, que: "el Excel no suma lo mismo que las 3 cuotas sin número de Nexus" },
+    ]);
   });
 
   it("C3 INV-57 y la cuota de Teamnet: misma plata con días de diferencia es una pista, vale cero y queda en «sin cuenta»", () => {

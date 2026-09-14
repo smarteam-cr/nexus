@@ -46,8 +46,8 @@ const CAUSA: Record<CausaDeDiferencia, { titulo: string; accion: string; href: s
     href: IMPORTAR,
   },
   SIN_FACTURA: {
-    titulo: "Contratos de QuickBooks y «No inscritos», sin factura",
-    accion: "Nexus cuenta solo lo facturado: cargalos en Cobranza › Importar",
+    titulo: "Contratos de QuickBooks y «No inscritos» que Nexus no tiene facturados",
+    accion: "Nexus los suma cuando tienen factura: cargá los que falten en Cobranza › Importar",
     href: IMPORTAR,
   },
   FALTA_CARGAR: {

@@ -24,6 +24,8 @@
  *  2. sin cuenta: la razón social del Excel que Nexus no liga a ninguna cuenta, contra una cuota del
  *     mismo monto emitida con pocos días de diferencia (INV-57 de «Soluciones Analíticos…» y la
  *     cuota de Teamnet). Es una pista, no una elección: la partida queda en «sin cuenta» y vale cero.
+ * Y un contrato de QuickBooks o «No inscritos» que Nexus ya facturó se descuenta en «sin factura», contra su fila
+ * del Compendio: así la causa se achica cuando alguien lo marca facturado, en vez de sumar una contradicción.
  *
  * ⚠ La conversión de moneda sigue viviendo solo en `equilibrio.ts`: acá cada moneda va aparte.
  */
@@ -50,7 +52,7 @@ export interface PorCobrarDeNexus {
 /** Lo que hace falta de cada documento comparado (`compararLibro`). */
 export type DocumentoComparado = Pick<
   PropuestaDelLibro,
-  "clave" | "numero" | "cliente" | "fechaFactura" | "total" | "neto" | "veredicto" | "accion" | "atadura"
+  "clave" | "seccion" | "numero" | "cliente" | "fechaFactura" | "moneda" | "total" | "neto" | "veredicto" | "accion" | "atadura"
 > & {
   cuenta: { cuentaId: string; nombre: string } | null;
   cobros: ReadonlyArray<Pick<CobroAtado, "id" | "estado" | "fechaEmision" | "monto">>;
@@ -117,6 +119,13 @@ export function esDeudaSinFactura(f: Pick<FilaLibro, "origen">): boolean {
 /** La clave con que `agruparDocumentos` agrupa una fila: el número, o `hoja#fila` si no lo tiene. */
 const claveDeFila = (f: FilaLibro) => (esFactura(f) && f.numero ? f.numero : `${f.hoja}#${f.fila}`);
 
+/**
+ * El mismo contrato de QuickBooks o «No inscritos» en el Compendio y en su pestaña. No tienen número en común, pero
+ * Alex copia el cliente y el total tal cual (medido el 2026-09-14: los 11 contratos coinciden así).
+ */
+const claveDeContrato = (cliente: string, moneda: string, total: number | null) =>
+  `${normalizarTexto(cliente)}|${moneda}|${centavos(total ?? 0)}`;
+
 /** Un dólar o el 5 %: el mismo criterio de «parecido» que `documentosDelLibroPorCobro`. */
 const parecidos = (a: number, b: number) => Math.abs(a - b) <= Math.max(100, Math.round(Math.abs(b) * 0.05));
 
@@ -175,6 +184,8 @@ export function enLaCalleContraExcel(entrada: {
   // ── 1. Lo pendiente del Excel, agrupado por documento y moneda ────────────────
   const documentos = new Map(entrada.documentos.map((d) => [d.clave, d]));
   const pendientes = new Map<string, { clave: string; moneda: string; centavos: number; fila: FilaLibro }>();
+  /** Lo pendiente de cada contrato sin factura, por `claveDeContrato`: el paso 3 le descuenta lo que Nexus ya facturó. */
+  const contratosSinFactura = new Map<string, number>();
   for (const f of entrada.filas) {
     if (f.seccion !== "COMPENDIO") continue;
     const moneda = f.moneda ?? "USD";
@@ -182,6 +193,8 @@ export function enLaCalleContraExcel(entrada: {
     excelPorMoneda.set(moneda, (excelPorMoneda.get(moneda) ?? 0) + cents);
     if (esDeudaSinFactura(f)) {
       anotar("SIN_FACTURA", moneda, cents, f.cliente, null, "contrato de QuickBooks o «No inscritos» sin factura en Nexus");
+      const k = claveDeContrato(f.cliente, moneda, f.total);
+      contratosSinFactura.set(k, (contratosSinFactura.get(k) ?? 0) + cents);
       continue;
     }
     const clave = claveDeFila(f);
@@ -246,11 +259,22 @@ export function enLaCalleContraExcel(entrada: {
   }
 
   // ── 3. Lo que Nexus ata a una factura que el resumen del Excel no suma ────────
+  // ⚠ Salvo un contrato de QuickBooks o «No inscritos»: el resumen SÍ lo suma, en «sin factura» y sin número. Lo
+  // que Nexus ya facturó de ese contrato se descuenta ahí mismo. Sin esto, marcarlo facturado —lo que pide la
+  // pantalla— no cerraba nada: «sin factura» quedaba igual y aparecía una contradicción falsa del mismo monto.
   const enElResumen = new Set([...pendientes.values()].map((p) => p.clave));
   for (const d of entrada.documentos) {
     if (enElResumen.has(d.clave) || !d.cuenta) continue;
+    const esContrato = d.seccion === "QUICKBOOKS" || d.seccion === "NO_INSCRITOS";
+    const contrato = esContrato ? contratosSinFactura.get(claveDeContrato(d.cliente, d.moneda ?? "USD", d.total)) : undefined;
     for (const [m, cents] of tomar(cobrosDeVerdad(d).map((c) => c.id))) {
-      anotar("NO_CUADRA", m, -cents, d.cuenta.nombre, d.numero, "está en otra pestaña del Excel, pero su resumen no la suma");
+      if (contrato === undefined) {
+        anotar("NO_CUADRA", m, -cents, d.cuenta.nombre, d.numero, "está en otra pestaña del Excel, pero su resumen no la suma");
+      } else if (contrato > 0) {
+        anotar("SIN_FACTURA", m, -cents, d.cuenta.nombre, null, "ya facturado en Nexus: se descuenta del contrato del Excel");
+      } else {
+        anotar("NO_CUADRA", m, -cents, d.cuenta.nombre, null, "pagado según el Excel y por cobrar en Nexus");
+      }
     }
   }
 
