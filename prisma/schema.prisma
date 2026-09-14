@@ -4775,6 +4775,7 @@ model PaginaDoc {
   updatedAt DateTime @updatedAt
 
   versiones PaginaDocVersion[]
+  hilos     HiloDeComentariosDoc[]
 
   @@index([parentId, orden])
   @@index([archivadaAt])
@@ -4800,4 +4801,54 @@ model PaginaDocVersion {
   createdAt DateTime @default(now())
 
   @@index([paginaId, createdAt])
+}
+
+/// Un hilo de comentarios sobre una página de Documentación, como en Notion (2026-09-13).
+/// SQL: scripts/sql/2026-09-13-documentacion-comentarios.sql (⛔ nunca `db push`).
+///
+/// ⚠ Vive FUERA del contenido: BlockNote descarta su marca de comentario al pasar la página a
+/// JSON. El ancla es el id del bloque + el texto citado (con contexto antes y después); si el
+/// bloque cambió de id, se busca la cita. Comentar no toca la página ni su versión.
+/// Comenta todo el equipo; resuelven solo SUPER_ADMIN y CSL (`lib/documentacion/comentarios.ts`).
+model HiloDeComentariosDoc {
+  id String @id @default(cuid())
+
+  paginaId String
+  pagina   PaginaDoc @relation(fields: [paginaId], references: [id], onDelete: Cascade)
+
+  /// El bloque comentado (id de BlockNote, o el derivado de su posición: `sanearBloques`).
+  bloqueId String
+  /// El texto marcado. Vacío = el bloque entero.
+  cita     String @default("")
+  /// Unas letras antes y después de la cita: desempatan cuando el mismo texto aparece dos veces.
+  antes    String @default("")
+  despues  String @default("")
+
+  autorEmail String
+
+  resueltoAt       DateTime?
+  resueltoPorEmail String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comentarios ComentarioDoc[]
+
+  @@index([paginaId, resueltoAt])
+}
+
+/// Un comentario de un hilo. Borrar el último borra el hilo (lo hace la app).
+model ComentarioDoc {
+  id String @id @default(cuid())
+
+  hiloId String
+  hilo   HiloDeComentariosDoc @relation(fields: [hiloId], references: [id], onDelete: Cascade)
+
+  autorEmail String
+  cuerpo     String
+  editadoAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([hiloId, createdAt])
 }

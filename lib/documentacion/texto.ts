@@ -118,7 +118,38 @@ export function sanearBloques(
   valor: unknown,
   conocidos: ReadonlySet<string> = TIPOS_DE_BLOQUE,
 ): BloqueGuardado[] {
-  return ordenarTarjetas(sanearLista(valor, conocidos), false);
+  return conIdsEstables(ordenarTarjetas(sanearLista(valor, conocidos), false));
+}
+
+/**
+ * Todo bloque sin id recibe uno derivado de su POSICIÓN (`s-0-2-1`). Las páginas sembradas se
+ * guardan sin ids, y BlockNote les inventa uno nuevo en cada carga —distinto para cada persona—:
+ * un comentario atado al bloque no lo volvería a encontrar. Así el id es el mismo para todos y en
+ * cada carga, sin escribir la base. Los ids que ya existen no se tocan, y si uno derivado choca con
+ * uno existente se le agrega una letra (BlockNote regeneraría el repetido al azar).
+ */
+function conIdsEstables(bloques: BloqueGuardado[]): BloqueGuardado[] {
+  const usados = new Set<string>();
+  const juntar = (lista: BloqueGuardado[]) => {
+    for (const b of lista) {
+      if (b.id) usados.add(b.id);
+      juntar(b.children ?? []);
+    }
+  };
+  juntar(bloques);
+
+  const asignar = (lista: BloqueGuardado[], ruta: number[]): BloqueGuardado[] =>
+    lista.map((b, i) => {
+      const aca = [...ruta, i];
+      let id = b.id;
+      if (!id) {
+        id = `s-${aca.join("-")}`;
+        while (usados.has(id)) id = `${id}x`;
+        usados.add(id);
+      }
+      return { ...b, id, children: asignar(b.children ?? [], aca) };
+    });
+  return asignar(bloques, []);
 }
 
 /**

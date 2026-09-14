@@ -30,6 +30,8 @@ function archivosTs(dir: string): string[] {
 const rel = (f: string) => path.relative(RAIZ, f).replace(/\\/g, "/");
 const RUTAS = archivosTs(API);
 const leer = (f: string) => fs.readFileSync(f, "utf8");
+/** Las rutas de comentarios: escriben con usuario interno, no con la celda del módulo (ver 1). */
+const esDeComentarios = (f: string) => rel(f).includes("/comentarios/");
 
 /**
  * Saca comentarios antes de escanear — el mismo trato que `lib/manual/manual.test.ts` le da a su
@@ -44,17 +46,41 @@ describe("1 · la API de Documentación no se abre sin querer", () => {
     expect(RUTAS.length).toBeGreaterThan(0);
   });
 
-  it("toda escritura llama a guardPermission(\"documentacion\", …)", () => {
+  it("toda escritura (salvo comentarios) llama a guardPermission(\"documentacion\", …)", () => {
     const sinGuard = RUTAS.filter((f) => {
       const src = leer(f);
       const escribe = /export async function (POST|PATCH|PUT|DELETE)\b/.test(src);
-      return escribe && !/guardPermission\(\s*"documentacion"/.test(src);
+      return escribe && !esDeComentarios(f) && !/guardPermission\(\s*"documentacion"/.test(src);
     }).map(rel);
     expect(
       sinGuard,
       `Una escritura sin la celda del módulo no falla: ABRE. Agregá ` +
         `guardPermission("documentacion", "write"|"manage") en:\n${sinGuard.join("\n")}`,
     ).toEqual([]);
+  });
+
+  /*
+   * La EXCEPCIÓN, a conciencia (Elías, 2026-09-13): comentar es de todo el equipo, en todas las
+   * páginas, también las bloqueadas. Por eso las rutas de comentarios escriben sin la celda del
+   * módulo — pero no sin guard: exigen usuario interno, y resolver exige el rol.
+   */
+  it("los comentarios exigen usuario interno en cada escritura", () => {
+    const deComentarios = RUTAS.filter(esDeComentarios);
+    expect(deComentarios.length).toBeGreaterThan(0);
+    const sinGuard = deComentarios
+      .filter((f) => /export async function (POST|PATCH|PUT|DELETE)\b/.test(leer(f)))
+      .filter((f) => !/guardInternalUser\(/.test(leer(f)))
+      .map(rel);
+    expect(sinGuard).toEqual([]);
+  });
+
+  it("resolver un hilo mira el rol, y editar o borrar un comentario mira al autor", () => {
+    const hilo = path.join(API, "comentarios", "[hiloId]", "route.ts");
+    const comentario = path.join(API, "comentarios", "[hiloId]", "[comentarioId]", "route.ts");
+    expect(sinComentarios(leer(hilo)), "PATCH de resolver sin la regla del rol").toMatch(/puedeResolver\(/);
+    const src = sinComentarios(leer(comentario));
+    expect(src).toMatch(/puedeEditarComentario\(/);
+    expect(src).toMatch(/puedeBorrarComentario\(/);
   });
 
   it("toda lectura exige al menos usuario interno", () => {

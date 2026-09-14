@@ -52,6 +52,30 @@ export type MoverPaginaInput = z.infer<typeof MoverPagina>;
 
 export const CambiarBloqueo = z.object({ bloqueada: z.boolean() });
 
+/* ── Comentarios (2026-09-13) ─────────────────────────────────────────────────
+   El largo del contexto acompaña a `LARGO_DE_CONTEXTO` de `comentarios.ts`, con holgura. */
+const cuerpoDeComentario = z
+  .string()
+  .trim()
+  .min(1, "Escribe el comentario.")
+  .max(5000, "El comentario es demasiado largo.");
+
+/** Un hilo nuevo: dónde (bloque + texto citado, con su contexto) y el primer comentario. */
+export const CrearHilo = z.object({
+  bloqueId: id,
+  cita: z.string().max(500, "El texto marcado es demasiado largo: marca un pedazo más corto."),
+  antes: z.string().max(60),
+  despues: z.string().max(60),
+  cuerpo: cuerpoDeComentario,
+});
+export type CrearHiloInput = z.infer<typeof CrearHilo>;
+
+export const Responder = z.object({ cuerpo: cuerpoDeComentario });
+
+export const CambiarResuelto = z.object({ resuelto: z.boolean() });
+
+export const EditarComentario = z.object({ cuerpo: cuerpoDeComentario });
+
 export const Buscar = z.object({
   q: z.string().trim().min(2, "Escribí al menos dos letras.").max(120),
   limite: z.coerce.number().int().min(1).max(50).optional(),

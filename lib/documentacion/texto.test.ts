@@ -129,9 +129,46 @@ describe("fragmentoDe", () => {
 
 describe("sanearBloques", () => {
   it("conserva los bloques conocidos", () => {
-    expect(sanearBloques([{ type: "paragraph", content: "hola" }])).toEqual([
-      { type: "paragraph", content: "hola", children: [] },
+    expect(sanearBloques([{ id: "p1", type: "paragraph", content: "hola" }])).toEqual([
+      { id: "p1", type: "paragraph", content: "hola", children: [] },
     ]);
+  });
+
+  describe("ids estables (los comentarios se anclan al bloque)", () => {
+    const sembrada = () => [
+      { type: "heading", content: "Título" },
+      {
+        type: "tarjetas",
+        props: { columnas: "2" },
+        children: [{ type: "tarjeta", content: "A", children: [{ type: "paragraph", content: "cuerpo" }] }],
+      },
+    ];
+
+    it("un bloque sin id recibe uno derivado de su posición, también los hijos", () => {
+      const [titulo, rejilla] = sanearBloques(sembrada());
+      expect(titulo.id).toBe("s-0");
+      expect(rejilla.id).toBe("s-1");
+      expect(rejilla.children?.[0].id).toBe("s-1-0");
+      expect(rejilla.children?.[0].children?.[0].id).toBe("s-1-0-0");
+    });
+
+    it("dos cargas de la misma página dan los mismos ids (para todas las personas)", () => {
+      expect(sanearBloques(sembrada())).toEqual(sanearBloques(sembrada()));
+    });
+
+    it("los ids que ya existen no se tocan, y uno derivado no repite uno existente", () => {
+      const bloques = sanearBloques([
+        { id: "s-1", type: "paragraph", content: "guardado con id" },
+        { type: "paragraph", content: "sin id" },
+      ]);
+      expect(bloques.map((b) => b.id)).toEqual(["s-1", "s-1x"]);
+    });
+
+    it("la rejilla que arma para tarjetas sueltas también recibe id", () => {
+      const [rejilla] = sanearBloques([{ type: "tarjeta", content: "suelta", children: [] }]);
+      expect(rejilla.type).toBe("tarjetas");
+      expect(rejilla.id).toBe("s-0");
+    });
   });
 
   it("un bloque desconocido se vuelve párrafo con su texto, no desaparece", () => {
@@ -155,10 +192,16 @@ describe("sanearBloques", () => {
       ]),
     ).toEqual([
       {
+        id: "s-0",
         type: "toggleListItem",
         content: "t",
         children: [
-          { type: "paragraph", content: "(Acá había un bloque «video» que el editor ya no muestra.)", children: [] },
+          {
+            id: "s-0-0",
+            type: "paragraph",
+            content: "(Acá había un bloque «video» que el editor ya no muestra.)",
+            children: [],
+          },
         ],
       },
     ]);
