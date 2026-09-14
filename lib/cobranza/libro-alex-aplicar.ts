@@ -152,8 +152,11 @@ export function fechaDeAnotacion(texto: string | null | undefined, referenciaISO
  * ⛔ A la bitácora, nunca a `Cobro.notas`: ahí está de dónde vino cada cobro importado.
  */
 export function textoDeAnotacion(numero: string | null, cliente: string, anotacion: string): string {
-  return `Anotación del libro de Alex sobre ${numero ? `la factura ${numero}` : `«${cliente}»`}: «${anotacion.trim()}»`;
+  return `${INICIO_DE_ANOTACION}${numero ? `la factura ${numero}` : `«${cliente}»`}: «${anotacion.trim()}»`;
 }
+
+/** Cómo empieza toda anotación del libro en la bitácora: con esto se leen las ya escritas sin armar el plan antes. */
+export const INICIO_DE_ANOTACION = "Anotación del libro de Alex sobre ";
 
 /**
  * Las anotaciones que todavía no están en la bitácora de su cobro (o de su cuenta, `cobroId` null), una vez
@@ -409,6 +412,10 @@ export function planDelLibro(filas: readonly FilaLibro[], ctx: ContextoLibro, re
     const posibles = res.tipo === "una" ? [res.cuenta] : res.tipo === "ninguna" ? [] : res.posibles;
     const total = principal.total ?? 0;
     const moneda = principal.moneda === "CRC" ? "CRC" : "USD";
+    /* ⚠ El neto de la copia de Odoo vale aunque la comparación no haya resuelto la cuenta. Medido el 2026-09-13:
+       el plan pedía el IVA en 26 facturas de Odoo que la copia ya traía, y en 5 exentas (Fruitpoint 0222 y 0297,
+       Transportes Refrigerados HL 0306, Amvac 0331, Juanva 0230) dividir por 1,13 las habría cargado mal. */
+    const espejo = idx.facturaPorNumero.get(numero);
     const f: FacturaDelLibroACargar = {
       clave: p.clave,
       numero,
@@ -419,7 +426,7 @@ export function planDelLibro(filas: readonly FilaLibro[], ctx: ContextoLibro, re
       moneda,
       total,
       totalSinIva: round2(total / IVA_COSTA_RICA),
-      neto: p.netoFuente === "ESPEJO" ? p.neto : null,
+      neto: p.netoFuente === "ESPEJO" ? p.neto : espejo && espejo.moneda === moneda ? espejo.montoNeto : null,
       estadoLibro: p.estadoLibro,
       pagadaSegunLibro: p.estadoLibro === "PAGADO",
       anotacion: p.anotacion,

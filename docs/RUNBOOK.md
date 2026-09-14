@@ -222,6 +222,57 @@ lista cada corrida con su resultado. No hay botón para correr el sync desde la 
 4. **Corrida parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno. Reintentar no lo arregla: el error
    de `/integrations/odoo` dice qué mirar.
 
+## Cobranza
+
+### Aplicar el Excel de Alexander
+
+El Excel de cobranza de Alex («Asientos Contables Mercury Bank & Odoo Oficial.xlsx») es el medio para
+poner Nexus al día; lo que después no cuadra entre Nexus y Odoo se ve en Cobranza › Odoo › «Lo que no
+cuadra». `scripts/aplicar-excel-de-alexander.ts` hace en una corrida lo que en Cobranza › Importar son
+cuatro pantallas, con las mismas funciones y la misma bitácora y firma. El plan es puro y tiene pruebas
+(`lib/cobranza/libro-alex-carga-completa.ts`).
+
+**1. Simulacro (siempre primero).** No escribe nada, ni el lote: lee el Excel en memoria y la base en
+solo lectura, imprime por grupo qué cambiaría (cantidad y plata por moneda, nunca sumadas), lo que queda
+para una persona y si una segunda corrida cambiaría algo.
+
+```powershell
+npx tsx scripts/aplicar-excel-de-alexander.ts "C:\Users\...\Asientos Contables Mercury Bank & Odoo Oficial.xlsx"
+# con los cobrados que se registrarían:
+npx tsx scripts/aplicar-excel-de-alexander.ts "<ruta>.xlsx" --cobrar-con-firma=aarrieta@smarteamcr.com
+```
+
+**2. Aplicar.** Exige las cuatro cosas en el mismo comando: `--apply`, `--firma=<correo de alguien del
+equipo>`, `--respaldo=<carpeta fuera del repo>` y `ALLOW_PROD_WRITE=1`. El guard respalda además las
+tablas con `pg_dump` (sin `pg_dump` en el PATH aborta; `SIN_RESPALDO=1` lo salta a sabiendas).
+
+```powershell
+$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-excel-de-alexander.ts "<ruta>.xlsx" --apply --firma=aarrieta@smarteamcr.com --respaldo="C:\respaldos\excel-alex"
+```
+
+Orden, releyendo la base antes de cada paso y guardando antes en `--respaldo` un JSON con las filas que
+ese paso toca:
+0. guarda el lote del Excel (o usa el que ya tiene las mismas filas);
+1. devuelve a por cobrar las tres facturas que decidió Alex (FAC/2026/0206, 0295 y 0302), con motivo;
+2. anota los números de factura que dice el Excel en su cuota («Es esta»);
+3. carga por cobrar, con número, las facturas que Nexus no tiene y escribe las anotaciones («Aplicar»);
+4. registra las promesas de pago que traen fecha;
+5. solo con `--cobrar-con-firma=<correo>`: registra cobradas las que el Excel da pagadas, con la fecha de
+   pago del Excel y esa firma en la bitácora. Sin ese argumento se listan y no se tocan.
+
+**Lo que no hace, a propósito.** No toca montos (neto contra IVA no es diferencia), no saca de Cobrado
+nada fuera de las tres de Alex, no carga Insider, Kaizen, JCB, QuickBooks ni No inscritos, no elige
+cuentas por parecido, no empareja clientes de Odoo, no decide el IVA de una factura de Odoo que la copia
+no tiene, y no carga una factura que puede ser una cuota que Nexus ya tiene en otro mes o en otra cuenta.
+Todo eso sale al final como «Queda para una persona», con el porqué.
+
+**Correrlo dos veces no cambia nada la segunda.** Si al final dice que quedan cambios, algún paso se
+rechazó (la lista de rechazos dice cuál y por qué). ⛔ Nexus nunca escribe en Odoo.
+
+**Deshacer.** Los JSON de `--respaldo` tienen las filas de `Cobro` antes de cada paso (y los servicios
+y el lote antes de la carga); el respaldo de `pg_dump` del guard queda en `backups/`. Las facturas
+cargadas se reconocen por el servicio «Facturación importada del libro de Alex (moneda)».
+
 ## Respaldo y restauración (Supabase)
 
 La base de Nexus es UNA Supabase Postgres (plan Pro) compartida por producción y las dos PCs

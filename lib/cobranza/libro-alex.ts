@@ -501,6 +501,12 @@ export type PropuestaDelLibro = {
   cuenta: CuentaResuelta | null;
   cuentasPosibles: CuentaResuelta[];
   cobros: CobroAtado[];
+  /**
+   * Por qué señal se ataron `cobros` a esta factura. null = no se ataron por monto (un servicio, una anulada).
+   * ⚠ `MES_UNICO` es la única cuota del mes aunque el monto no dé: sirve para mostrar la diferencia, nunca
+   * para mover un estado ni anotar algo en esa cuota (Iberorutas 0328 caía en la cuota de US$150).
+   */
+  atadura: FormaDeAtadura | null;
   /** «950 = 250 + 700»: la cuota del libro partida en los servicios de Nexus que la cubren. */
   desglose: number[] | null;
   veredicto: Veredicto;
@@ -590,6 +596,7 @@ function base(doc: DocumentoLibro): PropuestaDelLibro {
     cuenta: null,
     cuentasPosibles: [],
     cobros: [],
+    atadura: null,
     desglose: null,
     veredicto: "REVISAR",
     accion: "NINGUNA",
@@ -695,6 +702,7 @@ function proponerFactura(
 
   const cobros = asignada.cobros;
   p.cobros = cobros.map(atado);
+  p.atadura = asignada.forma;
   if (cobros.length > 1) {
     p.avisos.push(`Una sola factura para ${cobros.length} cuotas de Nexus: ${cobros.map((c) => fmtMontoLibro(c.monto, c.moneda)).join(" + ")}.`);
   }
