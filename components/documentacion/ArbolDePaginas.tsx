@@ -45,6 +45,7 @@ import {
   IconoBuscar,
   IconoCandado,
   IconoChevron,
+  IconoComentario,
   IconoDePagina,
   IconoMas,
   IconoPapelera,
@@ -52,11 +53,14 @@ import {
 import MoverPaginaDialog from "./MoverPaginaDialog";
 import BuscadorDocs from "./BuscadorDocs";
 import PapeleraDocs from "./PapeleraDocs";
+import ComentariosDeLaBase from "./comentarios/ComentariosDeLaBase";
 
 interface Props {
   arbol: NodoDelArbol[];
   puedeEscribir: boolean;
   puedeAdministrar: boolean;
+  /** Hilos abiertos por id de página: el contador de cada fila y el total de arriba. */
+  comentariosAbiertos: Record<string, number>;
 }
 
 /** El id de la madre de cada página, para saber si dos páginas son hermanas. */
@@ -112,7 +116,7 @@ function contieneElSlug(nodo: NodoDelArbol, slug: string): boolean {
   return nodo.slug === slug || nodo.hijas.some((h) => contieneElSlug(h, slug));
 }
 
-export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar }: Props) {
+export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar, comentariosAbiertos }: Props) {
   const router = useRouter();
   const toast = useToast();
   const slugActual = useSelectedLayoutSegment();
@@ -122,6 +126,8 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
   const [moviendo, setMoviendo] = useState<NodoDelArbol | null>(null);
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [papeleraAbierta, setPapeleraAbierta] = useState(false);
+  const [comentariosAbierta, setComentariosAbierta] = useState(false);
+  const totalDeComentarios = Object.values(comentariosAbiertos).reduce((a, b) => a + b, 0);
   const [ocupado, setOcupado] = useState(false);
 
   const padrePorId = useMemo(() => mapaDePadres(arbol), [arbol]);
@@ -320,6 +326,19 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
             </Link>
           )}
 
+          {(comentariosAbiertos[nodo.id] ?? 0) > 0 && (
+            <span
+              className="shrink-0 rounded-full bg-warn-surface px-1.5 text-2xs font-semibold tabular-nums text-warn-ink"
+              title={
+                comentariosAbiertos[nodo.id] === 1
+                  ? "1 comentario abierto"
+                  : `${comentariosAbiertos[nodo.id]} comentarios abiertos`
+              }
+            >
+              {comentariosAbiertos[nodo.id]}
+            </span>
+          )}
+
           {/* Los botones FLOTAN sobre el final del título y solo al pasar el mouse (o con el foco):
               si ocuparan su lugar siempre, aunque invisibles, el título se cortaría lejos del borde.
               Llevan el fondo de la fila para no pisarse con el texto que tapan. */}
@@ -380,6 +399,18 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
         >
           Documentación
         </Link>
+        {totalDeComentarios > 0 && (
+          <button
+            type="button"
+            onClick={() => setComentariosAbierta(true)}
+            className="flex items-center gap-0.5 rounded px-1 text-2xs font-semibold tabular-nums text-warn-ink transition-colors hover:bg-surface-hover"
+            title="Comentarios abiertos en toda la documentación"
+            aria-label={`${totalDeComentarios} comentarios abiertos en toda la documentación`}
+          >
+            <IconoComentario className="h-3.5 w-3.5" />
+            {totalDeComentarios}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setBuscadorAbierto(true)}
@@ -450,6 +481,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
         puedeRestaurar={puedeAdministrar}
         onCerrar={() => setPapeleraAbierta(false)}
       />
+      <ComentariosDeLaBase abierta={comentariosAbierta} onCerrar={() => setComentariosAbierta(false)} />
     </nav>
   );
 }

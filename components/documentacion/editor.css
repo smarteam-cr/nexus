@@ -219,3 +219,31 @@
   > .bn-block-outer::before {
   content: none;
 }
+
+/* ── 6 · Comentarios ────────────────────────────────────────────────────────── */
+
+/* El texto comentado. Es una DECORACIÓN del editor, no parte del documento: no se guarda, no entra a
+   Ctrl+Z y se ve igual en solo lectura (ver `comentarios/extension.ts`). Tokens de aviso: se leen
+   en claro y en oscuro. */
+.nx-doc .nx-comentario {
+  background-color: var(--warn-surface);
+  border-bottom: 2px solid var(--warn-line);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.nx-doc .nx-comentario.nx-comentario-activo {
+  background-color: var(--warn-line);
+}
+
+/* Un hilo sobre el bloque entero: la decoración cae en el contenedor del bloque, y se pinta su
+   contenido (los bloques propios lo envuelven en un `.react-renderer`). */
+.nx-doc .nx-comentario-bloque > .bn-block > .bn-block-content,
+.nx-doc .nx-comentario-bloque > .bn-block > .react-renderer > .bn-block-content {
+  border-radius: 6px;
+  background-color: var(--warn-surface);
+  box-shadow: inset 3px 0 0 var(--warn-line);
+}
+.nx-doc .nx-comentario-bloque.nx-comentario-activo > .bn-block > .bn-block-content,
+.nx-doc .nx-comentario-bloque.nx-comentario-activo > .bn-block > .react-renderer > .bn-block-content {
+  background-color: var(--warn-line);
+}

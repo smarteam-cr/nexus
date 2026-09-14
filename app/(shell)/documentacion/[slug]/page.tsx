@@ -27,6 +27,7 @@ import { IconoDePagina } from "@/components/documentacion/iconos";
 import { COLUMNA_DE_PAGINA, INSET_CONTENIDO } from "@/components/documentacion/layout";
 import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
 import { SLUG_DE_INICIO } from "@/lib/documentacion/tipos";
+import { puedeResolver } from "@/lib/documentacion/comentarios";
 // Solo el TIPO: `import type` se borra al compilar, así que el editor no viaja al servidor.
 import type { BloqueParcialDeDocumentacion } from "@/components/documentacion/esquema-editor";
 
@@ -91,6 +92,9 @@ export default async function PaginaDeDocumentacion({
           contenido={contenido as unknown as BloqueParcialDeDocumentacion[]}
           editable={editable}
           puedeAdministrar={puedeAdministrar}
+          /* Comentar es de todo el equipo, en toda página; resolver, de Súper admin y CSL. */
+          yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
+          puedeResolverComentarios={puedeResolver(ctx.role)}
           vivos={vivos}
           paginas={vivas.map((p) => ({
             id: p.id,

@@ -28,6 +28,10 @@ import type { DatosVivos } from "@/lib/documentacion/vivos";
 import { ProveedorDeVivos } from "./ContextoDeVivos";
 import { ProveedorDePaginas, type PaginaEnlazable } from "./ContextoDePaginas";
 import EncabezadoDePagina from "./EncabezadoDePagina";
+import type { Autor } from "@/lib/documentacion/comentarios";
+import { ProveedorDeComentarios } from "./comentarios/ContextoDeComentarios";
+import ZonaDeComentarios from "./comentarios/ZonaDeComentarios";
+import type { AlmacenDeComentarios } from "./comentarios/almacen";
 import type { BloqueParcialDeDocumentacion } from "./esquema-editor";
 
 const EditorDePagina = dynamic(() => import("./EditorDePagina").then((m) => m.default), {
@@ -52,6 +56,12 @@ export interface PaginaClienteProps {
   vivos: DatosVivos | null;
   /** El índice de páginas: alimenta el menú «@» y los títulos de las menciones. */
   paginas: PaginaEnlazable[];
+  /** Quién está mirando: firma los comentarios que escribe. */
+  yo: Autor;
+  /** Resolver comentarios es de Súper admin y CSL: lo decide el servidor. */
+  puedeResolverComentarios: boolean;
+  /** Solo la página de prueba local lo pasa (la base local no tiene login). */
+  almacenDeComentarios?: AlmacenDeComentarios;
 }
 
 const ESPERA_MS = 1200;
@@ -63,6 +73,9 @@ export default function PaginaCliente({
   puedeAdministrar,
   vivos,
   paginas,
+  yo,
+  puedeResolverComentarios,
+  almacenDeComentarios,
 }: PaginaClienteProps) {
   const [estado, setEstado] = useState<EstadoDeGuardado>("guardado");
   const versionRef = useRef(pagina.version);
@@ -130,6 +143,15 @@ export default function PaginaCliente({
   }, [pagina.id]);
 
   return (
+    /* Por página (`key`): al pasar a otra, los comentarios, el borrador y los globos abiertos
+       arrancan de cero en vez de arrastrar los de la anterior. */
+    <ProveedorDeComentarios
+      key={pagina.id}
+      paginaId={pagina.id}
+      yo={yo}
+      puedeResolver={puedeResolverComentarios}
+      almacen={almacenDeComentarios}
+    >
     <ProveedorDePaginas paginas={paginas}>
       <ProveedorDeVivos datos={vivos}>
         <EncabezadoDePagina
@@ -144,7 +166,7 @@ export default function PaginaCliente({
           estado={estado}
         />
 
-        <div className="nx-doc">
+        <ZonaDeComentarios>
           {editable && <AvisoDeGuardado estado={estado} />}
           <EditorDePagina
             key={pagina.id}
@@ -153,9 +175,10 @@ export default function PaginaCliente({
             editable={editable && estado !== "conflicto"}
             onCambio={editable ? (documento) => alCambiar(documento as unknown[]) : undefined}
           />
-        </div>
+        </ZonaDeComentarios>
       </ProveedorDeVivos>
     </ProveedorDePaginas>
+    </ProveedorDeComentarios>
   );
 }
 

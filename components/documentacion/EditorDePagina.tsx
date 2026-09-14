@@ -26,11 +26,12 @@ import "@blocknote/core/style.css";
 import "@blocknote/react/style.css";
 import "@blocknote/mantine/style.css";
 import "./editor.css";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { filterSuggestionItems } from "@blocknote/core";
 import { es } from "@blocknote/core/locales";
 import {
+  FormattingToolbarController,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
   useCreateBlockNote,
@@ -44,6 +45,9 @@ import { TONOS_DE_AVISO } from "./bloques/Aviso";
 import { ETIQUETAS_DE_FUENTE } from "./bloques/Vivo";
 import { ETIQUETAS_DE_COLUMNAS } from "./bloques/Tarjetas";
 import { usePaginasEnlazables } from "./ContextoDePaginas";
+import { ExtensionDeComentarios } from "./comentarios/extension";
+import BarraDeFormato from "./comentarios/BarraDeFormato";
+import { useComentarios } from "./comentarios/ContextoDeComentarios";
 import {
   esquemaDeDocumentacion,
   type BloqueDeDocumentacion,
@@ -115,7 +119,23 @@ export default function EditorDePagina({
     defaultStyles: false,
     // BlockNote rechaza un arreglo vacío: sin contenido, que arranque con su párrafo en blanco.
     initialContent: contenidoInicial.length > 0 ? contenidoInicial : undefined,
+    /* El resaltado de los comentarios: una decoración, no parte del documento (no se guarda ni
+       entra a Ctrl+Z). Ver `comentarios/extension.ts`. */
+    extensions: [ExtensionDeComentarios()],
   });
+
+  /* Las piezas de comentarios se ubican sobre este editor. Se registra en la vuelta siguiente del
+     navegador: antes, BlockNote todavía no puso su DOM en la página. Con `setTimeout` y no con
+     `requestAnimationFrame`, que el navegador pausa mientras la pestaña no se dibuja (quedaba sin
+     registrar hasta volver a mirarla). */
+  const { registrarEditor } = useComentarios();
+  useEffect(() => {
+    const espera = window.setTimeout(() => registrarEditor(editor), 0);
+    return () => {
+      window.clearTimeout(espera);
+      registrarEditor(null);
+    };
+  }, [editor, registrarEditor]);
 
   /** El menú «/»: los bloques de fábrica más los dos propios (avisos y los que se arman solos). */
   const traerItems = useCallback(
@@ -281,6 +301,7 @@ export default function EditorDePagina({
       editable={editable}
       theme={isDark ? "dark" : "light"}
       slashMenu={false}
+      formattingToolbar={false}
       onChange={() => {
         /* Una rejilla que se quedó sin tarjetas se quita en el acto. Fuera del ciclo del cambio
            en curso (microtarea): quitar bloques DENTRO de la notificación de otro cambio es
@@ -294,6 +315,8 @@ export default function EditorDePagina({
         onCambio?.(editor.document);
       }}
     >
+      {/* La barra de formato de fábrica, con «Comentar» al final (se apaga la de fábrica arriba). */}
+      <FormattingToolbarController formattingToolbar={BarraDeFormato} />
       <SuggestionMenuController triggerCharacter="/" getItems={traerItems} />
       <SuggestionMenuController triggerCharacter="@" getItems={traerPaginas} />
     </BlockNoteView>

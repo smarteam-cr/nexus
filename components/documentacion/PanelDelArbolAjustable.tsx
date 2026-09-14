@@ -70,7 +70,7 @@ export default function PanelDelArbolAjustable({
         aria-valuemax={ANCHO_DEL_ARBOL.maximo}
         aria-valuenow={ancho}
         tabIndex={0}
-        title="Arrastrá para cambiar el ancho · doble clic para volver al de siempre"
+        title="Arrastra para cambiar el ancho · doble clic para volver al de siempre"
         className="group absolute inset-y-0 -right-1.5 w-3 cursor-col-resize touch-none outline-none"
         onPointerDown={(e) => {
           if (e.button !== 0) return;

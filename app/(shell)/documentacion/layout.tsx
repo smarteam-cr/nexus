@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
 import { arbolDePaginas } from "@/lib/documentacion/consultas";
+import { abiertosPorPagina } from "@/lib/documentacion/consultas-de-comentarios";
 import { COOKIE_ANCHO_DEL_ARBOL, anchoDesdeCookie } from "@/lib/documentacion/ancho-del-arbol";
 import { ListSkeleton } from "@/components/ui";
 import ArbolDePaginas from "@/components/documentacion/ArbolDePaginas";
@@ -31,14 +32,29 @@ async function PanelDelArbol({
   puedeEscribir: boolean;
   puedeAdministrar: boolean;
 }) {
-  const arbol = await arbolDePaginas();
+  const [arbol, comentariosAbiertos] = await Promise.all([arbolDePaginas(), contarComentariosAbiertos()]);
   return (
     <ArbolDePaginas
       arbol={arbol}
       puedeEscribir={puedeEscribir}
       puedeAdministrar={puedeAdministrar}
+      comentariosAbiertos={comentariosAbiertos}
     />
   );
+}
+
+/**
+ * Los hilos abiertos de cada página, para el contador del árbol. Si falla —por ejemplo, el código
+ * llegó antes que el SQL de comentarios—, el árbol abre igual, sin contadores: un contador no puede
+ * dejar a nadie sin la documentación.
+ */
+async function contarComentariosAbiertos(): Promise<Record<string, number>> {
+  try {
+    return await abiertosPorPagina();
+  } catch (e) {
+    console.error("[documentacion] no se pudieron contar los comentarios abiertos", e);
+    return {};
+  }
 }
 
 export default async function LayoutDeDocumentacion({

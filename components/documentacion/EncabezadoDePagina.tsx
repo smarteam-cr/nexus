@@ -18,6 +18,8 @@ import type { EstadoDeGuardado } from "@/lib/documentacion/tipos";
 import SelectorDeIcono from "./SelectorDeIcono";
 import { INSET_CONTENIDO } from "./layout";
 import HistorialDePagina from "./HistorialDePagina";
+import { IconoComentario } from "./iconos";
+import { useComentarios } from "./comentarios/ContextoDeComentarios";
 
 /** Lo que se muestra mientras se escribe. El conflicto y el error los explica el aviso de arriba. */
 const TEXTO_DEL_ESTADO: Partial<Record<EstadoDeGuardado, string>> = {
@@ -53,6 +55,7 @@ export default function EncabezadoDePagina({
   const toast = useToast();
   const [editandoTitulo, setEditandoTitulo] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const { abiertos, abrirPanel } = useComentarios();
 
   async function pedir(url: string, init: RequestInit, exito: string, despues?: () => void) {
     try {
@@ -187,6 +190,19 @@ export default function EncabezadoDePagina({
               {bloqueada ? "🔒 Bloqueada" : "Solo lectura"}
             </span>
           )}
+
+          <button
+            type="button"
+            onClick={() => abrirPanel()}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            title="Comentarios de la página"
+            aria-label={
+              abiertos.length === 1 ? "Comentarios: 1 abierto" : `Comentarios: ${abiertos.length} abiertos`
+            }
+          >
+            <IconoComentario className="h-4 w-4" />
+            {abiertos.length > 0 && <span className="font-semibold tabular-nums">{abiertos.length}</span>}
+          </button>
 
           <Menu
             trigger="…"

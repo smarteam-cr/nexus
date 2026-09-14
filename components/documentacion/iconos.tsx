@@ -64,6 +64,16 @@ export function IconoCandado({ className }: { className?: string }) {
   );
 }
 
+/** Un globo de diálogo: comentar, y cuántos comentarios hay. */
+export function IconoComentario({ className }: { className?: string }) {
+  return (
+    <Svg
+      className={className}
+      d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12zM8 10h8M8 14h5"
+    />
+  );
+}
+
 export function IconoChevron({ className }: { className?: string }) {
   return <Svg className={className} d="M9 6l6 6-6 6" />;
 }
