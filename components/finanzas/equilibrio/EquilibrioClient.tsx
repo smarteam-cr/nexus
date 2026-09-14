@@ -149,7 +149,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const conversionPorCobrar =
     otrasPorCobrar.length === 0 || faltanTasas
       ? null
-      : `incluye ${otrasPorCobrar.map(([m, c]) => fmtMonto(c.porCobrar, m)).join(" + ")} pasados a ${moneda} ${
+      : `incluye ${otrasPorCobrar.map(([m, c]) => fmtMonto(c.porCobrar, m)).join(" + ")} pasados a ${moneda === "USD" ? "dólares" : "colones"} ${
           tasasDelAnio.length === 1 ? `a ₡${tasasDelAnio[0]!.toLocaleString("es-CR")} por dólar` : "con la tasa de cada mes"
         }`;
   const proyectado = r.indicadores.partnershipProyectadoTotal;
