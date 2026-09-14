@@ -253,7 +253,9 @@ $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/aplicar-excel-de-alexander.ts "<ruta>
 Orden, releyendo la base antes de cada paso y guardando antes en `--respaldo` un JSON con las filas que
 ese paso toca:
 0. guarda el lote del Excel (o usa el que ya tiene las mismas filas);
-1. devuelve a por cobrar las tres facturas que decidió Alex (FAC/2026/0206, 0295 y 0302), con motivo;
+1. devuelve a por cobrar las tres facturas que decidió Alex (FAC/2026/0206, 0295 y 0302), con motivo y con la fecha
+   de emisión de su factura; si ya estaban por cobrar con otra fecha, corrige solo la fecha (paso 1b, con su línea en la
+   bitácora);
 2. anota los números de factura que dice el Excel en su cuota («Es esta»);
 3. carga por cobrar, con número, las facturas que Nexus no tiene y escribe las anotaciones («Aplicar»);
 4. registra las promesas de pago que traen fecha;

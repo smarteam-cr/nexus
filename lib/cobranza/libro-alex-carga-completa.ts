@@ -12,8 +12,8 @@
  * antes de cambiarlo. Acá está el plan completo; el script lo muestra sin escribir y, con permiso, lo aplica.
  *
  * ── LOS PASOS, EN ORDEN ──────────────────────────────────────────────────────────
- *  1. Devolver a por cobrar las tres facturas que Alex decidió (`VUELVEN_A_POR_COBRAR`), con motivo:
- *     lo mismo que «Sacar de Cobrado».
+ *  1. Devolver a por cobrar las tres facturas que Alex decidió (`VUELVEN_A_POR_COBRAR`), con motivo y con la fecha de
+ *     emisión de su factura: lo mismo que «Sacar de Cobrado». Si ya volvieron con otra fecha, se corrige solo la fecha.
  *  2. Anotar los números de factura que propone el Excel: lo mismo que «Es esta». Los que propone la copia de
  *     Odoo por monto los confirma una persona.
  *  3. Cargar por cobrar, con número, las facturas que Nexus no tiene, y escribir las anotaciones: lo mismo que
@@ -43,6 +43,7 @@ import {
   indexarContexto,
   nombreDelPeriodo,
   subconjuntoUnico,
+  VUELVEN_A_POR_COBRAR,
   type CobroParaLibro,
   type ContextoLibro,
   type FormaDeAtadura,
@@ -64,7 +65,7 @@ import {
   type PedidoDeGrupo,
 } from "./libro-alex-aplicar";
 import type { FilaLibro } from "./libro-alex-lectura";
-import { esDocumentoVivo, montosPorMoneda, type MontoEnMoneda } from "./odoo/diferencias";
+import { esDocumentoVivo, facturasDeVariasCuotas, montosPorMoneda, type MontoEnMoneda } from "./odoo/diferencias";
 import { proponerNumeros, type PatchDeNumero } from "./odoo/numero-propuesta";
 import { candidatasPorNombre } from "./sociedades";
 import { laMismaVenta, textoDeLaMismaVenta } from "./venta-duplicada";
@@ -201,6 +202,18 @@ type CuotaDelPlan = {
 };
 
 export type ReversionDelExcel = CuotaDelPlan & { numero: string; confirmadoPor: string | null; patch: PatchDeCobro };
+/**
+ * Una de las tres de Alex que ya está por cobrar con otra fecha de emisión que la de su factura. Medido el 2026-09-14:
+ * la primera corrida las devolvió con la fecha de quincena (IIA FAC/2026/0295: 30-jun contra el 10-jun de la factura),
+ * y los días de atraso salían mal.
+ */
+export type FechaDelExcel = CuotaDelPlan & {
+  numero: string;
+  antes: string | null;
+  fecha: string;
+  fuente: string;
+  patch: { fechaEmision: string };
+};
 export type NumeroDelExcel = CuotaDelPlan & { numero: string; cambiaFechaEmision: boolean; patch: PatchDeNumero };
 export type CargaDelExcel = {
   clave: string;
@@ -274,6 +287,8 @@ export type OpcionesDelPlan = {
 
 export type PlanDeCargaCompleta = {
   reversiones: ReversionDelExcel[];
+  /** La fecha de emisión que pasa a la de su factura, en las de Alex que ya estaban por cobrar. */
+  fechas: FechaDelExcel[];
   numeros: NumeroDelExcel[];
   cargas: CargaDelExcel[];
   /** Lo que se le pasa a `aplicarLote`: solo lo que `decidirCarga` acepta hoy. */
@@ -426,6 +441,62 @@ export function posibleDuplicado(
   return null;
 }
 
+/**
+ * Las cuotas que suma una factura del Excel que la comparación ató solo por ser la única del mes, con la regla de «Lo que
+ * no cuadra» (`facturasDeVariasCuotas`): así la carga y la página dicen lo mismo. null = no hay una combinación única.
+ *
+ * Medido el 2026-09-14: la carga dejó escrito «Marcala facturada con FAC/2026/0328» sobre la cuota de US$150 de Iberorutas,
+ * y la página —con razón— dice que la 0328 (US$7.100) es mayo + junio (3.550 cada una). Lo mismo con Honda FAC/2026/0311
+ * (US$1.000 = mayo + junio de 500). ⛔ Propone y nada más: el número lo anota una persona.
+ */
+export function cuotasQueCubre(
+  p: Pick<PropuestaDelLibro, "numero" | "cuenta" | "neto" | "total" | "moneda" | "fechaFactura">,
+  idx: IndiceLibro,
+  atados: ReadonlySet<string>,
+): CobroParaLibro[] | null {
+  const objetivo = p.neto ?? p.total;
+  if (!p.numero || !p.cuenta || objetivo === null || !p.fechaFactura || !p.moneda) return null;
+  const espejo = idx.facturaPorNumero.get(p.numero);
+  const factura = {
+    id: p.numero,
+    odooMoveId: espejo?.odooMoveId ?? 0,
+    cuentaId: p.cuenta.cuentaId,
+    moneda: p.moneda,
+    invoiceDate: espejo?.invoiceDate ?? p.fechaFactura,
+    montoNeto: objetivo,
+    moveType: espejo?.moveType ?? "out_invoice",
+    state: espejo?.state ?? "posted",
+    paymentState: espejo?.paymentState ?? "not_paid",
+  };
+  /* Las cuotas facturadas que ningún otro documento del libro ató con seguridad: las mismas que mira la página. */
+  const cuotas = (idx.cobrosPorCuenta.get(p.cuenta.cuentaId) ?? []).filter(
+    (c) => !atados.has(c.id) && c.estado !== "SIN_DATO" && (c.fechaEmision !== null || c.estado === "COBRADO"),
+  );
+  const [v] = facturasDeVariasCuotas([factura], cuotas);
+  return v ? v.cobros : null;
+}
+
+const cuotaEnPalabras = (c: Pick<CobroParaLibro, "periodo" | "monto" | "moneda" | "estado">) =>
+  `${nombreDelPeriodo(c.periodo)} por ${fmtMontoLibro(c.monto, c.moneda)} (${ESTADO_EN_PALABRAS[c.estado] ?? c.estado})`;
+
+/** Lo que se le dice a una persona de una factura que cubre varias cuotas y la comparación ató a otra. */
+export function textoDeCuotasQueCubre(p: Pick<PropuestaDelLibro, "numero" | "cliente" | "cuenta" | "neto" | "total" | "moneda" | "cobros">, cubre: readonly CobroParaLibro[]): string {
+  const [unica] = p.cobros;
+  return (
+    `Monto: el libro dice ${fmtMontoLibro(p.neto ?? p.total, p.moneda)}${p.neto === null ? "" : " neto"} y la factura cubre ${cubre.length} cuotas de ${p.cuenta?.nombre ?? p.cliente}: ` +
+    `${cubre.map(cuotaEnPalabras).join(" + ")}. Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anotá ${p.numero ?? "el número"} en cada una desde el cronograma` +
+    (unica ? `, no en la cuota de ${nombreDelPeriodo(unica.periodo)} por ${fmtMontoLibro(unica.monto, unica.moneda)}, que no es de esta factura.` : ".")
+  );
+}
+
+/** El texto de la bitácora de una fecha de emisión que pasa a la de su factura. Nombra la firma y de dónde sale. */
+export function textoDeFechaDelExcel(f: Pick<FechaDelExcel, "numero" | "antes" | "fecha" | "fuente">, firma: string): string {
+  return (
+    `${firma} corrigió la fecha de emisión de ${f.antes ?? "(sin fecha)"} a ${f.fecha}, la de la factura ${f.numero} según el Excel de Alexander (${f.fuente}). ` +
+    "Es una de las tres facturas que Alex decidió devolver a por cobrar el 2026-09-12; volvió con la fecha de la quincena."
+  );
+}
+
 /** El texto de la bitácora de un cobro que se da por cobrado desde el Excel. Nombra la firma y el comprobante. */
 export function textoDeCobradoDelExcel(p: Pick<PagadaDelExcel, "numero" | "fechaPago" | "fuente">, firma: string): string {
   return (
@@ -500,11 +571,14 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
   };
   const dePropuesta = (p: PropuestaDelLibro) => ({ clave: p.clave, cliente: p.cliente, numero: p.numero, monto: p.neto ?? p.total, moneda: p.moneda });
 
-  /* ── 1. Las tres que Alex devuelve a por cobrar ─────────────────────────────────── */
+  /* ── 1. Las tres que Alex devuelve a por cobrar, con la fecha de su factura ────────── */
   const reversiones: ReversionDelExcel[] = [];
+  const fechas: FechaDelExcel[] = [];
   for (const p of compararLibro(filas, ctx0).filas) {
-    if (p.accion !== "SACAR_DE_COBRADO" || !p.numero || !p.cuenta) continue;
+    if (!p.numero || !p.cuenta || !VUELVEN_A_POR_COBRAR.has(p.numero)) continue;
+    const devolver = p.accion === "SACAR_DE_COBRADO";
     if (!atadoSeguro(p)) {
+      if (!devolver) continue;
       aPersona({
         ...dePropuesta(p),
         motivo: "NO_COINCIDE",
@@ -514,8 +588,30 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
       continue;
     }
     for (const c of p.cobros) {
-      if (c.estado !== "COBRADO") continue;
-      const fechaEmision = c.fechaEmision ?? p.fechaFactura;
+      if (c.estado !== "COBRADO") {
+        /* ⚠ Ya volvió a por cobrar: se corrige solo la fecha, si no es la de su factura. Sin esto, la primera corrida
+           (2026-09-14) dejaba la fecha de quincena para siempre, porque ya no hay nada que sacar de Cobrado. */
+        if (p.fechaFactura && c.fechaEmision !== p.fechaFactura) {
+          fechas.push({
+            cobroId: c.id,
+            cuentaId: p.cuenta.cuentaId,
+            cuentaNombre: p.cuenta.nombre,
+            periodo: c.periodo,
+            monto: c.monto,
+            moneda: c.moneda,
+            estado: c.estado,
+            numero: p.numero,
+            antes: c.fechaEmision,
+            fecha: p.fechaFactura,
+            fuente: fuenteDe(p),
+            patch: { fechaEmision: p.fechaFactura },
+          });
+        }
+        continue;
+      }
+      if (!devolver) continue;
+      /* ⭐ La fecha de la factura manda sobre la que tenía el cobro: la de quincena no es la de ningún documento. */
+      const fechaEmision = p.fechaFactura ?? c.fechaEmision;
       if (!fechaEmision) {
         aPersona({ ...dePropuesta(p), motivo: "NO_COINCIDE", detalle: "Vuelve a por cobrar, pero ni el cobro ni el Excel dicen cuándo se emitió la factura." });
         continue;
@@ -532,7 +628,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
         confirmadoPor: c.confirmadoPor,
         patch: {
           estado: "POR_COBRAR",
-          ...(c.fechaEmision ? {} : { fechaEmision }),
+          ...(fechaEmision === c.fechaEmision ? {} : { fechaEmision }),
           reversion: {
             motivo: `El Excel de Alexander la da sin pagar (${fuenteDe(p)}). Es una de las tres facturas que Alex decidió devolver a por cobrar el 2026-09-12.`,
             ...(c.numeroFactura ? {} : { numeroFactura: p.numero }),
@@ -543,8 +639,8 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
   }
   const ctx1 = conCambios(
     ctx0,
-    new Map(
-      reversiones.map((r): [string, Partial<CobroParaLibro>] => [
+    new Map([
+      ...reversiones.map((r): [string, Partial<CobroParaLibro>] => [
         r.cobroId,
         {
           estado: "POR_COBRAR",
@@ -553,7 +649,8 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
           ...(r.patch.reversion?.numeroFactura ? { numeroFactura: r.patch.reversion.numeroFactura } : {}),
         },
       ]),
-    ),
+      ...fechas.map((f): [string, Partial<CobroParaLibro>] => [f.cobroId, { fechaEmision: f.fecha }]),
+    ]),
   );
 
   /* ── 2. Los números de factura que dice el Excel ─────────────────────────────────── */
@@ -688,11 +785,14 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
   for (const a of anotacionesPendientes) {
     const p = propuestas2.get(a.documento);
     if (!p || seguraParaAnotar(a, p) || p.accion === "ESPERA_DECISION" || p.veredicto === "NO_ES_CARTERA") continue;
+    const cubre = cuotasQueCubre(p, idx2, atados2);
     aPersona(
       {
         ...dePropuesta(p),
         motivo: "ANOTACION_SIN_COBRO",
-        detalle: `La anotación «${a.anotacion}» no se escribe sola: la cuota a la que iría no está atada a esta factura por el número ni por el monto exacto.`,
+        detalle: cubre
+          ? `La anotación «${a.anotacion}» no se escribe sola: la factura cubre ${cubre.map(cuotaEnPalabras).join(" + ")}, y esas cuotas se confirman anotándoles ${p.numero ?? "el número"} desde el cronograma.`
+          : `La anotación «${a.anotacion}» no se escribe sola: la cuota a la que iría no está atada a esta factura por el número ni por el monto exacto.`,
       },
       false,
     );
@@ -807,7 +907,10 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
 
   /* ── 6. Lo que queda: lo que la comparación todavía no da por igual ───────────────── */
   const noSeCarga: NoSeCargaDelExcel[] = [];
-  for (const p of compararLibro(filas, ctx5).filas) {
+  const filas5 = compararLibro(filas, ctx5).filas;
+  const idx5 = indexarContexto(ctx5);
+  const atados5 = cobrosAtadosConSeguridad(filas5);
+  for (const p of filas5) {
     if (explicados.has(p.clave)) continue;
     const anotado = p.anotacion ? ` Anotación del Excel: «${p.anotacion}».` : "";
     switch (p.veredicto) {
@@ -831,6 +934,13 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
         });
         break;
       case "NO_COINCIDE": {
+        /* Una factura atada solo por ser la única del mes que cubre varias cuotas: se dice cuáles, como la página, y no
+           «marcala facturada» sobre una cuota que no es suya. */
+        const cubre = !atadoSeguro(p) && p.diferencias.some((d) => d.startsWith("Monto:")) ? cuotasQueCubre(p, idx5, atados5) : null;
+        if (cubre) {
+          aPersona({ ...dePropuesta(p), motivo: "NO_COINCIDE", detalle: `${textoDeCuotasQueCubre(p, cubre)}${anotado}` });
+          break;
+        }
         /* Sin firma de cobro, «la da pagada» ya está en su propia lista: no se repite acá. */
         const diferencias =
           firmaDeCobro === null && conPago.has(p.clave) ? p.diferencias.filter((d) => !d.startsWith("El libro la da pagada")) : p.diferencias;
@@ -850,6 +960,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
 
   const sinCambios =
     reversiones.length === 0 &&
+    fechas.length === 0 &&
     numeros.length === 0 &&
     cargas.length === 0 &&
     anotaciones.length === 0 &&
@@ -858,6 +969,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
 
   return {
     reversiones,
+    fechas,
     numeros,
     cargas,
     pedido: pedidoFinal,
@@ -919,6 +1031,7 @@ export function resumenDelPlan(plan: PlanDeCargaCompleta, cobrarConFirma: string
   const anotacionesDeCargas = plan.cargas.filter((c) => c.anotacion).length;
   const out: GrupoDelResumen[] = [
     grupo("Vuelven a por cobrar, con motivo: las tres que decidió Alex", plan.reversiones),
+    grupo("Fechas de emisión que pasan a la de su factura, en las tres de Alex que ya estaban por cobrar", plan.fechas),
     grupo("Números de factura del Excel que se anotan en su cuota", plan.numeros, [
       `${plan.numeros.filter((n) => n.cambiaFechaEmision).length} cambian también la fecha de emisión a la del documento`,
     ]),

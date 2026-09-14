@@ -14,6 +14,7 @@
  * Con --apply, en este orden y releyendo la base antes de cada paso:
  *   0. guarda el lote del Excel (Cobranza › Importar), o usa el que ya está con las mismas filas;
  *   1. devuelve a por cobrar las tres facturas que decidió Alex, con motivo    → cambiarEstadoCobro («Sacar de Cobrado»);
+ *  1b. si ya estaban por cobrar, pasa su fecha de emisión a la de su factura     → cambiarEstadoCobroTx + bitácora;
  *   2. anota los números de factura que dice el Excel                           → cambiarEstadoCobro («Es esta»);
  *   3. carga por cobrar las facturas que faltan y escribe las anotaciones       → aplicarLote («Aplicar»);
  *   4. registra las promesas de pago con fecha                                   → cambiarEstadoCobro («Registrar promesa»);
@@ -48,6 +49,7 @@ import {
   PREFIJO_COBRO_NUEVO,
   resumenDelPlan,
   textoDeCobradoDelExcel,
+  textoDeFechaDelExcel,
   USO_DEL_SCRIPT,
   type ArgumentosDeCarga,
   type OpcionesDelPlan,
@@ -117,7 +119,14 @@ function imprimirPlan(plan: PlanDeCargaCompleta, cobrarConFirma: string | null) 
   console.log("\n══ Detalle ══");
   lista(
     "Vuelven a por cobrar",
-    plan.reversiones.map((r) => `${r.cuentaNombre} · ${r.numero} · ${r.periodo} · ${monto(r.monto, r.moneda)} · la había confirmado ${r.confirmadoPor ?? "nadie"}`),
+    plan.reversiones.map(
+      (r) =>
+        `${r.cuentaNombre} · ${r.numero} · ${r.periodo} · ${monto(r.monto, r.moneda)} · la había confirmado ${r.confirmadoPor ?? "nadie"}${r.patch.fechaEmision ? ` · fecha de emisión → ${r.patch.fechaEmision}` : ""}`,
+    ),
+  );
+  lista(
+    "Fechas de emisión que pasan a la de su factura",
+    plan.fechas.map((f) => `${f.cuentaNombre} · ${f.numero} · ${f.periodo} · ${monto(f.monto, f.moneda)} · ${f.antes ?? "sin fecha"} → ${f.fecha} (${f.fuente})`),
   );
   lista(
     "Números que se anotan",
@@ -166,7 +175,7 @@ async function simulacro(filas: readonly FilaLibro[], args: ArgumentosDeCarga) {
   console.log(
     segunda.sinCambios
       ? "\n✓ Si se aplicara, una segunda corrida no cambiaría nada."
-      : `\n⚠ Una segunda corrida todavía cambiaría algo: ${segunda.reversiones.length} reversiones, ${segunda.numeros.length} números, ${segunda.cargas.length} cargas, ${segunda.anotaciones.length} anotaciones, ${segunda.promesas.length} promesas.`,
+      : `\n⚠ Una segunda corrida todavía cambiaría algo: ${segunda.reversiones.length} reversiones, ${segunda.fechas.length} fechas, ${segunda.numeros.length} números, ${segunda.cargas.length} cargas, ${segunda.anotaciones.length} anotaciones, ${segunda.promesas.length} promesas.`,
   );
   const lotesDespues = await contarLotes();
   console.log(`Simulacro: no se escribió nada. Lotes del Excel en la base: ${lotesAntes} antes y ${lotesDespues} después.`);
@@ -231,6 +240,25 @@ async function aplicar(filas: readonly FilaLibro[], args: ArgumentosDeCarga, nom
   if (plan.reversiones.length) {
     await respaldar("1-vuelven-a-por-cobrar", plan.reversiones.map((r) => r.cobroId));
     for (const r of plan.reversiones) await intentar(`${r.cuentaNombre} ${r.numero}`, () => cambiarEstadoCobro(r.cobroId, r.patch, firma));
+  }
+
+  /* 1b · La fecha de su factura en las que ya volvieron a por cobrar */
+  ({ plan } = await planear(filas, referenciaISO, args));
+  console.log(`1b · Fechas de emisión que pasan a la de su factura: ${plan.fechas.length}`);
+  if (plan.fechas.length) {
+    await respaldar("1b-fechas", plan.fechas.map((f) => f.cobroId));
+    for (const f of plan.fechas) {
+      await intentar(`${f.cuentaNombre} ${f.numero}`, () =>
+        prisma.$transaction(async (tx) => {
+          /* Una edición de fecha a fecha: el chokepoint conserva la firma de facturado y no deja rastro solo. La línea
+             de la bitácora dice quién la cambió y de dónde sale, en la misma transacción. */
+          await cambiarEstadoCobroTx(tx, f.cobroId, f.patch, firma);
+          await tx.bitacoraCobro.create({
+            data: { cuentaId: f.cuentaId, cobroId: f.cobroId, tipo: "NOTA", contenido: textoDeFechaDelExcel(f, firma), usuarioEmail: firma },
+          });
+        }),
+      );
+    }
   }
 
   /* 2 · Los números del Excel */

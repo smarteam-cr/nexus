@@ -26,6 +26,7 @@ import {
   PREFIJO_COBRO_NUEVO,
   resumenDelPlan,
   textoDeCobradoDelExcel,
+  textoDeFechaDelExcel,
   type OpcionesDelPlan,
 } from "./libro-alex-carga-completa";
 import { cobroDeNexus, facturaDelEspejo, filaDelLibro } from "./__fixtures__/libro-alex";
@@ -381,5 +382,146 @@ describe("la misma venta contada dos veces: queda para una persona, nunca se rev
     const segunda = planDeCargaCompleta(filasVenta, plan.contextoFinal, { ...conFirma, bitacora: plan.bitacoraFinal });
     expect(segunda.sinCambios).toBe(true);
     expect(segunda.paraUnaPersona).toEqual(plan.paraUnaPersona);
+  });
+});
+
+/* ── 5. Lo que la primera corrida dejó mal (2026-09-14) ─────────────────────────── */
+
+describe("la fecha de emisión real en las tres que vuelven a por cobrar, también en las ya devueltas", () => {
+  /* Global Supply FAC/2026/0206: la factura es del 4-feb; el cobro tenía la quincena, 15-feb. */
+  const gsCtx = (cobro: Parameters<typeof cobroDeNexus>[0]): ContextoLibro => ({
+    ...ctx,
+    facturas: [facturaDelEspejo({ numero: "FAC/2026/0206", odooPartnerId: 1, montoNeto: 1867, invoiceDate: "2026-02-04" })],
+    cobros: [cobroDeNexus(cobro)],
+  });
+  const gsFila = [
+    filaDelLibro({ hoja: ODOO, fila: 14, seccion: "ODOO", cliente: "GLOBAL SUPPLY SOCIEDAD ANONIMA", numero: "FAC/2026/0206", fechaFactura: "2026-02-04", total: 2109.71, estado: "SIN_PAGAR", periodo: "2026-02" }),
+  ];
+
+  it("al devolverla, la fecha pasa a la de su factura y la segunda corrida no hace nada", () => {
+    const antes = gsCtx({ id: "gs-feb", cuentaId: "gs", periodo: "2026-02", monto: 1867, estado: "COBRADO", confirmadoPor: "import:facturaciones-2026", fechaEmision: "2026-02-15" });
+    const plan = planDeCargaCompleta(gsFila, antes, opciones);
+    expect(plan.reversiones.map((r) => r.patch)).toEqual([
+      { estado: "POR_COBRAR", fechaEmision: "2026-02-04", reversion: { motivo: expect.stringContaining("devolver a por cobrar"), numeroFactura: "FAC/2026/0206" } },
+    ]);
+    expect(plan.fechas).toEqual([]);
+    const segunda = planDeCargaCompleta(gsFila, plan.contextoFinal, { ...opciones, bitacora: plan.bitacoraFinal });
+    expect(segunda.sinCambios).toBe(true);
+    expect(segunda.contextoFinal.cobros[0]).toMatchObject({ estado: "POR_COBRAR", fechaEmision: "2026-02-04" });
+  });
+
+  it("ya devuelta con la fecha de quincena (como quedó en producción): corrige solo la fecha, una vez", () => {
+    const devuelta = gsCtx({ id: "gs-feb", cuentaId: "gs", periodo: "2026-02", monto: 1867, estado: "POR_COBRAR", fechaEmision: "2026-02-15", numeroFactura: "FAC/2026/0206" });
+    const plan = planDeCargaCompleta(gsFila, devuelta, opciones);
+    expect(plan.reversiones).toEqual([]);
+    expect(plan.fechas.map((f) => [f.cobroId, f.antes, f.fecha, f.patch])).toEqual([["gs-feb", "2026-02-15", "2026-02-04", { fechaEmision: "2026-02-04" }]]);
+    expect(plan.sinCambios).toBe(false);
+    expect(resumenDelPlan(plan, null).find((g) => g.titulo.startsWith("Fechas de emisión"))?.montos).toEqual([{ moneda: "USD", monto: 1867 }]);
+    const segunda = planDeCargaCompleta(gsFila, plan.contextoFinal, { ...opciones, bitacora: plan.bitacoraFinal });
+    expect(segunda.fechas).toEqual([]);
+    expect(segunda.sinCambios).toBe(true);
+  });
+
+  it("⛔ una factura que no es de las tres de Alex no recibe la corrección de fecha", () => {
+    const otra = gsCtx({ id: "gs-feb", cuentaId: "gs", periodo: "2026-02", monto: 1867, estado: "POR_COBRAR", fechaEmision: "2026-02-15", numeroFactura: "FAC/2026/0206" });
+    const filaOtra = [
+      filaDelLibro({ hoja: ODOO, fila: 15, seccion: "ODOO", cliente: "GLOBAL SUPPLY SOCIEDAD ANONIMA", numero: "FAC/2026/0207", fechaFactura: "2026-02-04", total: 169.5, estado: "SIN_PAGAR", periodo: "2026-02" }),
+    ];
+    expect(planDeCargaCompleta(filaOtra, otra, opciones).fechas).toEqual([]);
+  });
+
+  it("la bitácora nombra la firma, las dos fechas, el número y la fila del Excel", () => {
+    expect(textoDeFechaDelExcel({ numero: "FAC/2026/0295", antes: "2026-06-30", fecha: "2026-06-10", fuente: `«${ODOO}» fila 74` }, ALEX)).toBe(
+      `${ALEX} corrigió la fecha de emisión de 2026-06-30 a 2026-06-10, la de la factura FAC/2026/0295 según el Excel de Alexander («${ODOO}» fila 74). Es una de las tres facturas que Alex decidió devolver a por cobrar el 2026-09-12; volvió con la fecha de la quincena.`,
+    );
+  });
+});
+
+describe("Iberorutas 0328 y Honda 0311: la carga dice lo mismo que «Lo que no cuadra»", () => {
+  const conCuotas: ContextoLibro = {
+    ...ctx,
+    cuentas: [
+      { cuentaId: "ibero", nombre: "Iberorutas", razonSocial: null, cedulaJuridica: null, tipo: "NACIONAL", viaCobro: "ODOO" },
+      { cuentaId: "honda", nombre: "Honda Costa Rica", razonSocial: null, cedulaJuridica: null, tipo: "NACIONAL", viaCobro: "ODOO" },
+    ],
+    vinculos: [
+      { odooPartnerId: 50, odooPartnerNombre: "SERVICIOS SAN MATEO Y SANTA ELENA DEL SUR SOCIEDAD ANONIMA", cuentaId: "ibero", ignorado: false },
+      { odooPartnerId: 51, odooPartnerNombre: "FRANZ AMRHEIN & CO. SOCIEDAD ANONIMA", cuentaId: "honda", ignorado: false },
+    ],
+    facturas: [
+      facturaDelEspejo({ numero: "FAC/2026/0328", odooPartnerId: 50, montoNeto: 7100, invoiceDate: "2026-08-19" }),
+      facturaDelEspejo({ numero: "FAC/2026/0311", odooPartnerId: 51, montoNeto: 1000, invoiceDate: "2026-06-30", paymentState: "paid" }),
+      facturaDelEspejo({ numero: "FAC/2026/0314", odooPartnerId: 51, montoNeto: 500, invoiceDate: "2026-07-15", paymentState: "paid" }),
+    ],
+    cobros: [
+      cobroDeNexus({ id: "ib-may", cuentaId: "ibero", periodo: "2026-05", monto: 3550, estado: "POR_COBRAR", fechaEmision: "2026-05-15", promesaPago: "2026-08-31" }),
+      cobroDeNexus({ id: "ib-jun", cuentaId: "ibero", periodo: "2026-06", monto: 3550, estado: "POR_COBRAR", fechaEmision: "2026-06-15", promesaPago: "2026-08-31" }),
+      cobroDeNexus({ id: "ib-jul", cuentaId: "ibero", servicioId: "srv-qb", periodo: "2026-07", fechaProgramada: "2026-07-30", monto: 150, estado: "POR_COBRAR", fechaEmision: "2026-07-30" }),
+      cobroDeNexus({ id: "ib-ago", cuentaId: "ibero", servicioId: "srv-qb", periodo: "2026-08", monto: 150 }),
+      cobroDeNexus({ id: "h-may", cuentaId: "honda", periodo: "2026-05", monto: 500, estado: "COBRADO", confirmadoPor: ALEX }),
+      cobroDeNexus({ id: "h-jun", cuentaId: "honda", periodo: "2026-06", monto: 500, estado: "COBRADO", confirmadoPor: ALEX }),
+      cobroDeNexus({ id: "h-jul", cuentaId: "honda", periodo: "2026-07", monto: 500, estado: "COBRADO", confirmadoPor: ALEX, fechaEmision: "2026-07-15", numeroFactura: "FAC/2026/0314" }),
+    ],
+  };
+  const filasCuotas = [
+    filaDelLibro({ hoja: ODOO, fila: 90, seccion: "ODOO", cliente: "SERVICIOS SAN MATEO Y SANTA ELENA DEL SUR SOCIEDAD ANONIMA", numero: "FAC/2026/0328", fechaFactura: "2026-08-19", total: 8023, estado: "SIN_PAGAR", periodo: "2026-08", anotacion: "Ya se inicio la comuicación para cobro" }),
+    filaDelLibro({ hoja: ODOO, fila: 66, seccion: "ODOO", cliente: "FRANZ AMRHEIN & CO. SOCIEDAD ANONIMA", numero: "FAC/2026/0311", fechaFactura: "2026-06-30", total: 1130, estado: "PAGADO", periodo: "2026-06", anotacion: "Pago de Mayo y Junio 2026" }),
+  ];
+  const plan = planDeCargaCompleta(filasCuotas, conCuotas, opciones);
+  const deUna = (numero: string, motivo: string) => plan.paraUnaPersona.find((x) => x.numero === numero && x.motivo === motivo)?.detalle ?? "";
+
+  it("Iberorutas: la 0328 cubre mayo + junio, no la cuota de US$150; nada se anota solo", () => {
+    expect(deUna("FAC/2026/0328", "NO_COINCIDE")).toBe(
+      "Monto: el libro dice US$7.100 neto y la factura cubre 2 cuotas de Iberorutas: mayo de 2026 por US$3.550 (por cobrar) + junio de 2026 por US$3.550 (por cobrar). Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anotá FAC/2026/0328 en cada una desde el cronograma, no en la cuota de agosto de 2026 por US$150, que no es de esta factura. Anotación del Excel: «Ya se inicio la comuicación para cobro».",
+    );
+    expect(deUna("FAC/2026/0328", "ANOTACION_SIN_COBRO")).toBe(
+      "La anotación «Ya se inicio la comuicación para cobro» no se escribe sola: la factura cubre mayo de 2026 por US$3.550 (por cobrar) + junio de 2026 por US$3.550 (por cobrar), y esas cuotas se confirman anotándoles FAC/2026/0328 desde el cronograma.",
+    );
+    expect(plan.paraUnaPersona.some((x) => x.detalle.includes("Marcala facturada con el número FAC/2026/0328"))).toBe(false);
+    expect([plan.numeros, plan.anotaciones, plan.promesas]).toEqual([[], [], []]);
+  });
+
+  it("Honda: la 0311 cubre mayo + junio de 500", () => {
+    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain(
+      "la factura cubre 2 cuotas de Honda Costa Rica: mayo de 2026 por US$500 (cobrada) + junio de 2026 por US$500 (cobrada)",
+    );
+    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain("no en la cuota de junio de 2026 por US$500, que no es de esta factura");
+  });
+
+  it("⭐ la segunda corrida dice exactamente lo mismo", () => {
+    const segunda = planDeCargaCompleta(filasCuotas, plan.contextoFinal, { ...opciones, bitacora: plan.bitacoraFinal });
+    expect(segunda.sinCambios).toBe(true);
+    expect(segunda.paraUnaPersona).toEqual(plan.paraUnaPersona);
+  });
+});
+
+describe("la promesa va a todas las cuotas del mismo número (Ecoquintas FAC/2026/0336)", () => {
+  const eco = (promesa1880: string | null): ContextoLibro => ({
+    ...ctx,
+    facturas: [facturaDelEspejo({ numero: "FAC/2026/0336", odooPartnerId: 4, montoNeto: 3180, invoiceDate: "2026-09-03" })],
+    cuentas: [...ctx.cuentas, { cuentaId: "ecoquintas", nombre: "Ecoquintas", razonSocial: null, cedulaJuridica: null, tipo: "NACIONAL", viaCobro: "ODOO" }],
+    vinculos: [...ctx.vinculos, { odooPartnerId: 4, odooPartnerNombre: "GRUPO ECOQUINTAS SOCIEDAD ANONIMA", cuentaId: "ecoquintas", ignorado: false }],
+    cobros: [
+      cobroDeNexus({ id: "eco-1880", cuentaId: "ecoquintas", servicioId: "web", periodo: "2026-06", monto: 1880, estado: "POR_COBRAR", fechaEmision: "2026-09-03", numeroFactura: "FAC/2026/0336", promesaPago: promesa1880 }),
+      cobroDeNexus({ id: "eco-1300", cuentaId: "ecoquintas", servicioId: "impl", periodo: "2026-06", monto: 1300, estado: "POR_COBRAR", fechaEmision: "2026-09-03", numeroFactura: "FAC/2026/0336" }),
+    ],
+  });
+  const filaEco = [
+    filaDelLibro({ hoja: ODOO, fila: 95, seccion: "ODOO", cliente: "GRUPO ECOQUINTAS SOCIEDAD ANONIMA", numero: "FAC/2026/0336", fechaFactura: "2026-09-03", total: 3593.4, estado: "SIN_PAGAR", periodo: "2026-09", anotacion: "Ya se hablo con Lisbeth y realizan el pago a final de este mes" }),
+  ];
+
+  it("sin promesa en ninguna, van las dos", () => {
+    expect(planDeCargaCompleta(filaEco, eco(null), opciones).promesas.map((p) => [p.cobroId, p.promesa]).sort()).toEqual([
+      ["eco-1300", "2026-09-30"],
+      ["eco-1880", "2026-09-30"],
+    ]);
+  });
+
+  it("como estaba en producción —la de 1.880 ya prometida por Alex el 10-sep—: solo la que falta, y la segunda corrida no hace nada", () => {
+    const plan = planDeCargaCompleta(filaEco, eco("2026-09-30"), opciones);
+    expect(plan.promesas.map((p) => p.cobroId)).toEqual(["eco-1300"]);
+    const segunda = planDeCargaCompleta(filaEco, plan.contextoFinal, { ...opciones, bitacora: plan.bitacoraFinal });
+    expect(segunda.promesas).toEqual([]);
+    expect(segunda.contextoFinal.cobros.map((c) => c.promesaPago)).toEqual(["2026-09-30", "2026-09-30"]);
   });
 });

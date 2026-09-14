@@ -820,16 +820,18 @@ const mesAnterior = (iso: string) => {
  * combinaciones posibles, o dos facturas que reclaman la misma cuota con la misma señal, no se propone nada.
  * ⚠ Una cuota con un número de Odoo o de Mercury ya dijo cuál es su factura: no entra.
  */
-export function facturasDeVariasCuotas(
-  facturas: readonly FacturaParaCruzar[],
-  cuotas: readonly CobroParaCruzar[],
-): FacturaDeVariasCuotas[] {
-  const fechaDe = (c: CobroParaCruzar) => c.fechaEmision ?? c.fechaProgramada;
+export function facturasDeVariasCuotas<
+  F extends Pick<FacturaParaCruzar, "id" | "odooMoveId" | "cuentaId" | "moneda" | "invoiceDate" | "montoNeto" | "moveType" | "state" | "paymentState">,
+  C extends Pick<CobroParaCruzar, "id" | "cuentaId" | "moneda" | "monto" | "periodo" | "fechaEmision" | "fechaProgramada" | "numeroFactura">,
+>(facturas: readonly F[], cuotas: readonly C[]): Array<{ factura: F; cobros: C[] }> {
+  /* ⚠ Genérica a propósito: la carga del Excel de Alexander la llama con las facturas y cuotas del libro, y tiene que
+     proponer exactamente lo mismo que esta página (Iberorutas 0328 = mayo + junio, 2026-09-14). */
+  const fechaDe = (c: C) => c.fechaEmision ?? c.fechaProgramada;
   const sinNumero = cuotas.filter((c) => plataformaDelNumero(normalizarNumeroFactura(c.numeroFactura)) === null);
   const candidatas = [...new Map(facturas.filter((f) => f.cuentaId && esDocumentoVivo(f)).map((f) => [f.id, f])).values()].sort(
     (a, b) => a.odooMoveId - b.odooMoveId,
   );
-  const senales: ReadonlyArray<(f: FacturaParaCruzar, c: CobroParaCruzar) => boolean> = [
+  const senales: ReadonlyArray<(f: F, c: C) => boolean> = [
     (f, c) => c.fechaEmision === f.invoiceDate,
     (f, c) => c.periodo === f.invoiceDate.slice(0, 7),
     (f, c) => c.periodo === mesAnterior(f.invoiceDate),
@@ -837,9 +839,9 @@ export function facturasDeVariasCuotas(
   ];
   const usadas = new Set<string>();
   const asignadas = new Set<string>();
-  const out: FacturaDeVariasCuotas[] = [];
+  const out: Array<{ factura: F; cobros: C[] }> = [];
   for (const senal of senales) {
-    const propuestas: FacturaDeVariasCuotas[] = [];
+    const propuestas: Array<{ factura: F; cobros: C[] }> = [];
     for (const f of candidatas) {
       if (asignadas.has(f.id)) continue;
       const cercanas = sinNumero
