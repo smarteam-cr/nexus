@@ -485,7 +485,9 @@ describe("Iberorutas 0328 y Honda 0311: la carga dice lo mismo que «Lo que no c
     expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain(
       "la factura cubre 2 cuotas de Honda Costa Rica: mayo de 2026 por US$500 (cobrada) + junio de 2026 por US$500 (cobrada)",
     );
-    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain("no en la cuota de junio de 2026 por US$500, que no es de esta factura");
+    /* La cuota atada por el mes (junio) es una de las dos: no se la descarta. */
+    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain("anotá FAC/2026/0311 en cada una desde el cronograma. Anotación del Excel: «Pago de Mayo y Junio 2026».");
+    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).not.toContain("que no es de esta factura");
   });
 
   it("⭐ la segunda corrida dice exactamente lo mismo", () => {

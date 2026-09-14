@@ -482,10 +482,12 @@ const cuotaEnPalabras = (c: Pick<CobroParaLibro, "periodo" | "monto" | "moneda" 
 /** Lo que se le dice a una persona de una factura que cubre varias cuotas y la comparación ató a otra. */
 export function textoDeCuotasQueCubre(p: Pick<PropuestaDelLibro, "numero" | "cliente" | "cuenta" | "neto" | "total" | "moneda" | "cobros">, cubre: readonly CobroParaLibro[]): string {
   const [unica] = p.cobros;
+  /* ⚠ La cuota atada por el mes puede ser una de las que cubre (Honda: junio). Solo se descarta la que no lo es. */
+  const ajena = unica && !cubre.some((c) => c.id === unica.id) ? unica : null;
   return (
     `Monto: el libro dice ${fmtMontoLibro(p.neto ?? p.total, p.moneda)}${p.neto === null ? "" : " neto"} y la factura cubre ${cubre.length} cuotas de ${p.cuenta?.nombre ?? p.cliente}: ` +
     `${cubre.map(cuotaEnPalabras).join(" + ")}. Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anotá ${p.numero ?? "el número"} en cada una desde el cronograma` +
-    (unica ? `, no en la cuota de ${nombreDelPeriodo(unica.periodo)} por ${fmtMontoLibro(unica.monto, unica.moneda)}, que no es de esta factura.` : ".")
+    (ajena ? `, no en la cuota de ${nombreDelPeriodo(ajena.periodo)} por ${fmtMontoLibro(ajena.monto, ajena.moneda)}, que no es de esta factura.` : ".")
   );
 }
 
