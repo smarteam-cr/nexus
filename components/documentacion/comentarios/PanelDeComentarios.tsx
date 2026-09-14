@@ -31,13 +31,22 @@ export default function PanelDeComentarios() {
 }
 
 function ContenidoDelPanel({ inicial }: { inicial: string | null }) {
-  const { hilos, abiertos, sinUbicar, irAlTexto } = useComentarios();
+  const { hilos, abiertos, sinUbicar, irAlTexto, errorDeCarga } = useComentarios();
   const resueltos = hilos.filter((h) => h.resueltoAt);
   const [pestana, setPestana] = useState<"abiertos" | "resueltos">(() =>
     hilos.find((h) => h.id === inicial)?.resueltoAt ? "resueltos" : "abiertos",
   );
   const [desplegado, setDesplegado] = useState<string | null>(inicial);
   const lista: HiloVisto[] = pestana === "abiertos" ? [...abiertos].reverse() : [...resueltos].reverse();
+
+  if (errorDeCarga) {
+    return (
+      <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-sm text-warn-ink">
+        No se pudieron cargar los comentarios de esta página. La página se lee y se edita igual.
+        <p className="mt-1 text-xs">{errorDeCarga}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

@@ -9,8 +9,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (guard instanceof NextResponse) return guard;
 
   const { id } = await params;
-  const hilos = await hilosDePagina(id);
-  return NextResponse.json({ hilos });
+  try {
+    return NextResponse.json({ hilos: await hilosDePagina(id) });
+  } catch (e) {
+    /* Casi siempre es la base sin preparar: faltan las tablas (el SQL de comentarios no se corrió)
+       o el servidor sigue con el cliente de Prisma de antes. La página funciona igual; se responde
+       claro en vez de un 500 genérico, y como advertencia para no abrir la ventana de errores de Next. */
+    console.warn("[comentarios] no se pudieron leer los de la página", id, e instanceof Error ? e.message : e);
+    return NextResponse.json(
+      { error: "Los comentarios no están disponibles todavía: falta preparar la base." },
+      { status: 503 },
+    );
+  }
 }
 
 /**

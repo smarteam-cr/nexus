@@ -65,6 +65,8 @@ interface Valor {
   puedeResolver: boolean;
   hilos: HiloVisto[];
   abiertos: HiloVisto[];
+  /** Por qué no se pudieron cargar los hilos de la página, o `null` si se cargaron. */
+  errorDeCarga: string | null;
   /** Hilos cuyo texto ya no está en la página (los calcula la capa sobre el editor). */
   sinUbicar: ReadonlySet<string>;
   editor: EditorConComentarios | null;
@@ -123,6 +125,7 @@ export function ProveedorDeComentarios({
   const router = useRouter();
   const toast = useToast();
   const [hilos, setHilos] = useState<HiloVisto[]>([]);
+  const [errorDeCarga, setErrorDeCarga] = useState<string | null>(null);
   const [sinUbicar, setSinUbicar] = useState<ReadonlySet<string>>(new Set());
   const [editor, setEditor] = useState<EditorConComentarios | null>(null);
   const [contenedor, setContenedor] = useState<HTMLElement | null>(null);
@@ -149,18 +152,25 @@ export function ProveedorDeComentarios({
       .then((lista) => {
         if (!vigente) return;
         setHilos(lista);
+        setErrorDeCarga(null);
         if (abrioDelEnlace.current) return;
         abrioDelEnlace.current = true;
         const id = new URLSearchParams(window.location.search).get("hilo");
         if (id && lista.some((h) => h.id === id)) setPanel({ abierto: true, hiloId: id });
       })
+      /* Sin aviso emergente: una carga que falla (por ejemplo, la base todavía sin las tablas de
+         comentarios) saltaba en CADA página que se abría, sobre una página que funciona. Queda
+         en la consola y el panel lo explica; lo que falla al comentar, responder o resolver sí
+         avisa, porque ahí la persona está esperando una respuesta. */
       .catch((e: unknown) => {
-        if (vigente) toast.error(e instanceof Error ? e.message : "No se pudieron cargar los comentarios.");
+        if (!vigente) return;
+        console.warn("[comentarios] no se pudieron cargar los de esta página", e);
+        setErrorDeCarga(e instanceof Error ? e.message : "No se pudieron cargar los comentarios.");
       });
     return () => {
       vigente = false;
     };
-  }, [almacen, paginaId, toast]);
+  }, [almacen, paginaId]);
 
   /** Corre un cambio, avisa si falla, y deja todo al día (hilos y contadores del árbol). */
   const correr = useCallback(
@@ -242,6 +252,7 @@ export function ProveedorDeComentarios({
       puedeResolver,
       hilos,
       abiertos: hilos.filter((h) => !h.resueltoAt),
+      errorDeCarga,
       sinUbicar,
       editor,
       contenedor,
@@ -292,6 +303,7 @@ export function ProveedorDeComentarios({
       contenedor,
       correr,
       editor,
+      errorDeCarga,
       flotante,
       hilos,
       informarSinUbicar,
