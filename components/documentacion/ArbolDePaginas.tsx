@@ -267,7 +267,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
       >
         <div
           className={cn(
-            "group flex items-center gap-1 rounded-md pr-1 text-sm",
+            "group relative flex items-center gap-1 rounded-md pr-1 text-sm",
             activa ? "bg-surface-active text-fg" : "text-fg-secondary hover:bg-surface-hover",
           )}
           style={{ paddingLeft: 4 + profundidad * 12 }}
@@ -320,8 +320,18 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
             </Link>
           )}
 
+          {/* Los botones FLOTAN sobre el final del título y solo al pasar el mouse (o con el foco):
+              si ocuparan su lugar siempre, aunque invisibles, el título se cortaría lejos del borde.
+              Llevan el fondo de la fila para no pisarse con el texto que tapan. */}
           {puedeEscribir && (
-            <span className="flex shrink-0 items-center opacity-0 focus-within:opacity-100 group-hover:opacity-100">
+            <span
+              className={cn(
+                "pointer-events-none absolute inset-y-0 right-1 flex items-center rounded-md pl-1 opacity-0",
+                "group-hover:pointer-events-auto group-hover:opacity-100",
+                "focus-within:pointer-events-auto focus-within:opacity-100",
+                activa ? "bg-surface-active" : "bg-surface-hover",
+              )}
+            >
               <button
                 type="button"
                 {...attributes}
