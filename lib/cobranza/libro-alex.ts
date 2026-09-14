@@ -602,11 +602,8 @@ function contradicciones(doc: DocumentoLibro): string[] {
   return avisos;
 }
 
-/**
- * Sin estado en la pestaña (una factura que solo está en el Compendio): lo dice su pendiente. Lo usa también
- * «Excel vs Odoo» (lib/finanzas/excel-vs-odoo.ts): las dos lecturas del libro no pueden dar otro estado.
- */
-export function estadoDelDocumento(f: FilaLibro): EstadoLibro | null {
+/** Sin estado en la pestaña (una factura que solo está en el Compendio): lo dice su pendiente. */
+function estadoDelDocumento(f: FilaLibro): EstadoLibro | null {
   if (f.estado) return f.estado;
   if (f.seccion !== "COMPENDIO" || f.pendiente === null) return null;
   return f.pendiente > 0 ? "SIN_PAGAR" : "PAGADO";

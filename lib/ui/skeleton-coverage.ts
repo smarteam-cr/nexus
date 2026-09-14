@@ -63,9 +63,6 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // Siete indicadores + dos charts + una tabla de 12×10: no se parece a ninguna
   // otra hoja de finanzas.
   "finanzas/equilibrio": { modo: "own" },
-  // Una línea de fechas, una tarjeta de pendiente por moneda y la lista de lo que no
-  // coincide: la forma de la sección de inconsistencias del equilibrio, sin charts ni tabla.
-  "finanzas/excel-vs-odoo": { modo: "own" },
 
   // ── Customer Success ────────────────────────────────────────────────────────
   "customer-success": { modo: "own" },

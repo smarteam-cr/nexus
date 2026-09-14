@@ -71,15 +71,6 @@ export interface Inconsistencia {
   /** Cuánta plata mueve. null = no se puede cuantificar. */
   montoEnJuego: number | null;
   /**
-   * La moneda de `montoEnJuego` y de los montos de sus ítems. Sin ella, la del reporte que la muestra.
-   *
-   * ⚠ EXISTE PARA QUE NUNCA SE SUMEN COLONES CON DÓLARES. El reporte de equilibrio convierte todo a una
-   * sola moneda antes de armar la lista y no la usa. «Excel vs Odoo» (excel-vs-odoo.ts) no convierte
-   * nada: parte cada punto en una línea por moneda y la marca acá, y `resumirInconsistencias` suma cada
-   * moneda por separado. Sin la marca, el panel formateaba ₡13 millones con «$».
-   */
-  moneda?: string;
-  /**
    * El código de la línea que YA cuenta esta misma plata desde otro ángulo.
    *
    * ⚠ EXISTE POR UN ERROR QUE NO SE CAÍA SOLO: el titular decía "$437.579,78 en juego" y
@@ -573,37 +564,18 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
   });
 }
 
-/** La plata de una moneda. `moneda: null` = la del reporte (las líneas sin `moneda` propia). */
-export interface MontoEnMoneda {
-  moneda: string | null;
-  monto: number;
-}
-
 /** El titular de la sección: cuántas hay, cuánta plata mueven y cuántas decide dirección. */
 export function resumirInconsistencias(xs: readonly Inconsistencia[]): {
   cuantas: number;
-  /** Solo las líneas en la moneda del reporte (sin `moneda` propia). */
   montoTotal: number;
-  /**
-   * Una suma por moneda, en el orden en que aparece cada una. Vacío = ninguna línea tiene monto.
-   * ⚠ Nunca se juntan: con líneas en colones y en dólares el titular dice las dos cifras.
-   */
-  montoPorMoneda: MontoEnMoneda[];
   porSeveridad: Record<Severidad, number>;
   paraDireccion: number;
 } {
-  // Solo la plata DISTINTA: las líneas marcadas `yaContadoEn` miran el mismo dinero
-  // desde otro ángulo y sumarlas infla el titular sin que nada avise.
-  const cuentan = xs.filter((x) => !x.yaContadoEn && x.montoEnJuego !== null);
-  const porMoneda = new Map<string | null, number>();
-  for (const x of cuentan) {
-    const m = x.moneda ?? null;
-    porMoneda.set(m, (porMoneda.get(m) ?? 0) + (x.montoEnJuego ?? 0));
-  }
   return {
     cuantas: xs.length,
-    montoTotal: round2(xs.reduce((n, x) => n + (x.yaContadoEn || x.moneda ? 0 : (x.montoEnJuego ?? 0)), 0)),
-    montoPorMoneda: [...porMoneda].map(([moneda, monto]) => ({ moneda, monto: round2(monto) })),
+    // Solo la plata DISTINTA: las líneas marcadas `yaContadoEn` miran el mismo dinero
+    // desde otro ángulo y sumarlas infla el titular sin que nada avise.
+    montoTotal: round2(xs.reduce((n, x) => n + (x.yaContadoEn ? 0 : (x.montoEnJuego ?? 0)), 0)),
     porSeveridad: {
       ALTA: xs.filter((x) => x.severidad === "ALTA").length,
       MEDIA: xs.filter((x) => x.severidad === "MEDIA").length,
