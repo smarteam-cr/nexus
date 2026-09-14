@@ -47,11 +47,13 @@
 /* ── 2 · El lienzo ──────────────────────────────────────────────────────────── */
 
 /* El margen izquierdo es el que BlockNote reserva para la manija de arrastre y el «+»: sin él,
-   los controles quedarían encima del texto. A la derecha no hace falta.
+   los controles quedarían encima del texto. El derecho es el MISMO a propósito: los controles no se
+   ven hasta pasar el mouse, y con margen de un solo lado la página se ve corrida a la derecha. El
+   número vive también en `layout.ts` (INSET_CONTENIDO): cambian juntos.
    El tamaño base lo fijaba la clase de estilos de fábrica, que está apagada (ver
    `EditorDePagina.tsx`): sin esta línea el editor heredaría el tamaño del contenedor. */
 .nx-doc .bn-editor {
-  padding-inline: 54px 0;
+  padding-inline: 54px;
   font-size: 1rem;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;

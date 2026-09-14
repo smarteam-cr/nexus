@@ -23,7 +23,7 @@ import { sanearBloques } from "@/lib/documentacion/texto";
 import { cargarDatosVivos, tieneBloquesVivos } from "@/lib/documentacion/vivos";
 import PaginaCliente from "@/components/documentacion/PaginaCliente";
 import { IconoDePagina } from "@/components/documentacion/iconos";
-import { INSET_CONTENIDO } from "@/components/documentacion/layout";
+import { COLUMNA_DE_PAGINA, INSET_CONTENIDO } from "@/components/documentacion/layout";
 import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
 import { SLUG_DE_INICIO } from "@/lib/documentacion/tipos";
 // Solo el TIPO: `import type` se borra al compilar, así que el editor no viaja al servidor.
@@ -66,7 +66,7 @@ export default async function PaginaDeDocumentacion({
       {/* Los enlaces viejos del manual (`/documentacion#agentes`) llegan acá por la redirección del
           índice, con su ancla: esto los reenvía a «¿Cómo funciona Nexus?». */}
       {pagina.slug === SLUG_DE_INICIO && <RedirigirAnclaVieja />}
-      <div className="mx-auto max-w-3xl">
+      <div className={COLUMNA_DE_PAGINA}>
         <PaginaCliente
           pagina={{
             id: pagina.id,
