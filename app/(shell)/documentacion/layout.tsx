@@ -44,15 +44,24 @@ async function PanelDelArbol({
 }
 
 /**
- * Los hilos abiertos de cada página, para el contador del árbol. Si falla —por ejemplo, el código
- * llegó antes que el SQL de comentarios—, el árbol abre igual, sin contadores: un contador no puede
- * dejar a nadie sin la documentación.
+ * Los hilos abiertos de cada página, para el contador del árbol. Si falla, el árbol abre igual, sin
+ * contadores: un contador no puede dejar a nadie sin la documentación. Pasa en dos casos, y los
+ * dos se arreglan afuera del código:
+ *   · el código llegó antes que el SQL de comentarios (faltan las tablas);
+ *   · un servidor de desarrollo que arrancó antes del `prisma generate` sigue con el cliente viejo
+ *     en memoria (el modelo no existe para él) — se arregla reiniciándolo.
+ * Va como advertencia y no como error: está atajado, y en desarrollo un `console.error` abre la
+ * ventana de errores de Next sobre una página que funciona.
  */
 async function contarComentariosAbiertos(): Promise<Record<string, number>> {
   try {
     return await abiertosPorPagina();
   } catch (e) {
-    console.error("[documentacion] no se pudieron contar los comentarios abiertos", e);
+    console.warn(
+      "[documentacion] sin contadores de comentarios: ¿falta el SQL 2026-09-13-documentacion-comentarios, " +
+        "o el servidor arrancó antes del `prisma generate`?",
+      e instanceof Error ? e.message : e,
+    );
     return {};
   }
 }
