@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Breadcrumbs, Menu, useToast, type MenuItemDef } from "@/components/ui";
+import { Menu, useToast, type MenuItemDef } from "@/components/ui";
 import type { EstadoDeGuardado } from "@/lib/documentacion/tipos";
 import SelectorDeIcono from "./SelectorDeIcono";
 import { INSET_CONTENIDO } from "./layout";
@@ -31,7 +31,6 @@ interface Props {
   slug: string;
   titulo: string;
   icono: string | null;
-  migas: { label: string; href: string }[];
   bloqueada: boolean;
   fija: boolean;
   editable: boolean;
@@ -44,7 +43,6 @@ export default function EncabezadoDePagina({
   slug,
   titulo,
   icono,
-  migas,
   bloqueada,
   fija,
   editable,
@@ -124,8 +122,9 @@ export default function EncabezadoDePagina({
   return (
     /* El mismo inset que el texto del editor: si el encabezado arranca antes, la página se ve
        corrida (el título a la izquierda y el contenido más adentro). */
+    /* Las migas no van acá: son la barra fija de arriba (`BarraDeMigas`), que las muestra también
+       en las páginas del primer nivel. */
     <header className={`mb-6 ${INSET_CONTENIDO}`}>
-      {migas.length > 0 && <Breadcrumbs crumbs={migas} className="mb-2" />}
 
       {/* El ícono va ARRIBA del título y no al lado: es la jerarquía de una página, no una viñeta
           del renglón. */}

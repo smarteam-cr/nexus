@@ -18,10 +18,11 @@ import {
   paginasQueMencionan,
   paginasVivas,
 } from "@/lib/documentacion/consultas";
-import { rutaDe } from "@/lib/documentacion/arbol";
+import { migasDe, rutaDe } from "@/lib/documentacion/arbol";
 import { sanearBloques } from "@/lib/documentacion/texto";
 import { cargarDatosVivos, tieneBloquesVivos } from "@/lib/documentacion/vivos";
 import PaginaCliente from "@/components/documentacion/PaginaCliente";
+import BarraDeMigas from "@/components/documentacion/BarraDeMigas";
 import { IconoDePagina } from "@/components/documentacion/iconos";
 import { COLUMNA_DE_PAGINA, INSET_CONTENIDO } from "@/components/documentacion/layout";
 import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
@@ -56,14 +57,19 @@ export default async function PaginaDeDocumentacion({
   // Una página bloqueada se lee igual; editarla es del liderazgo.
   const editable = pagina.bloqueada ? puedeAdministrar : puedeEscribir;
 
-  const migas = rutaDe(pagina.id, vivas)
-    .slice(0, -1)
-    .map((p) => ({ label: p.titulo, href: `/documentacion/${p.slug}` }));
+  // De Inicio a esta página, incluida: la barra de arriba.
+  const migas = migasDe(pagina.id, vivas, SLUG_DE_INICIO).map((p) => ({
+    slug: p.slug,
+    titulo: p.titulo,
+    icono: p.icono,
+  }));
 
   // `vivas` ya viene ordenada por `orden`: las subpáginas salen en el mismo orden que en el árbol.
   const hijas = vivas.filter((p) => p.parentId === pagina.id);
 
   return (
+    <>
+    <BarraDeMigas migas={migas} />
     <div className={SHELL_DEFAULT}>
       {/* Los enlaces viejos del manual (`/documentacion#agentes`) llegan acá por la redirección del
           índice, con su ancla: esto los reenvía a «¿Cómo funciona Nexus?». */}
@@ -79,7 +85,6 @@ export default async function PaginaDeDocumentacion({
             fija: pagina.fija,
             version: pagina.version,
           }}
-          migas={migas}
           /* El contenido viaja como JSON plano (así lo guarda la base y así lo sanea el servidor).
              La conversión al tipo del editor se hace ACÁ, en el único punto donde los dos mundos
              se tocan, en vez de repetirla dentro del cliente. */
@@ -148,5 +153,6 @@ export default async function PaginaDeDocumentacion({
         )}
       </div>
     </div>
+    </>
   );
 }

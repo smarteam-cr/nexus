@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   armarArbol,
+  migasDe,
   puedeMover,
   ramaDe,
   reordenar,
@@ -66,6 +67,32 @@ describe("rutaDe", () => {
 
   it("una página que no existe da una ruta vacía", () => {
     expect(rutaDe("nada", nodos)).toEqual([]);
+  });
+});
+
+describe("migasDe", () => {
+  // Inicio y la sección son hermanas en la raíz, como en la base real.
+  const nodos = [n("inicio", null, 0), n("seccion", null, 1), n("hoja", "seccion")];
+  const migas = (id: string, lista = nodos) => migasDe(id, lista, "inicio").map((x) => x.id);
+
+  it("encabeza con Inicio aunque no sea la madre de la página", () => {
+    expect(migas("hoja")).toEqual(["inicio", "seccion", "hoja"]);
+  });
+
+  it("en Inicio, solo Inicio", () => {
+    expect(migas("inicio")).toEqual(["inicio"]);
+  });
+
+  it("una subpágina de Inicio no lo repite", () => {
+    expect(migas("sub", [...nodos, n("sub", "inicio")])).toEqual(["inicio", "sub"]);
+  });
+
+  it("sin Inicio viva, queda la ruta sola", () => {
+    expect(migas("hoja", nodos.filter((x) => x.id !== "inicio"))).toEqual(["seccion", "hoja"]);
+  });
+
+  it("una página que no está no tiene migas", () => {
+    expect(migas("nada")).toEqual([]);
   });
 });
 

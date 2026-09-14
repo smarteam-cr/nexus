@@ -18,3 +18,9 @@ export const INSET_CONTENIDO = "px-[54px]";
  * para que la página no salte al terminar de cargar.
  */
 export const COLUMNA_DE_PAGINA = "mx-auto w-full max-w-[calc(48rem+54px)]";
+
+/**
+ * El alto de la barra de migas (`BarraDeMigas.tsx`). `loading.tsx` deja el mismo hueco, así la
+ * página no salta cuando termina de cargar.
+ */
+export const ALTO_DE_BARRA_DE_MIGAS = "h-11";

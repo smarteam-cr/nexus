@@ -45,7 +45,6 @@ export interface PaginaClienteProps {
     fija: boolean;
     version: number;
   };
-  migas: { label: string; href: string }[];
   contenido: BloqueParcialDeDocumentacion[];
   editable: boolean;
   puedeAdministrar: boolean;
@@ -59,7 +58,6 @@ const ESPERA_MS = 1200;
 
 export default function PaginaCliente({
   pagina,
-  migas,
   contenido,
   editable,
   puedeAdministrar,
@@ -139,7 +137,6 @@ export default function PaginaCliente({
           slug={pagina.slug}
           titulo={pagina.titulo}
           icono={pagina.icono}
-          migas={migas}
           bloqueada={pagina.bloqueada}
           fija={pagina.fija}
           editable={editable}

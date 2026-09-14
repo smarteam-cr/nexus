@@ -75,6 +75,23 @@ export function rutaDe<T extends Enlace>(id: string, nodos: readonly T[]): T[] {
   return ruta;
 }
 
+/**
+ * Las migas de una página: de Inicio a la página, incluida. Inicio no es la madre de las secciones
+ * (es su hermana en la raíz), pero es la puerta de la base: por eso encabeza toda ruta, salvo la
+ * suya propia y salvo que no exista. Una página que no está en la lista no tiene migas.
+ */
+export function migasDe<T extends Enlace & { slug: string }>(
+  id: string,
+  nodos: readonly T[],
+  slugDeInicio: string,
+): T[] {
+  const ruta = rutaDe(id, nodos);
+  if (ruta.length === 0) return [];
+  const inicio = nodos.find((n) => n.slug === slugDeInicio);
+  if (!inicio || ruta.some((n) => n.id === inicio.id)) return ruta;
+  return [inicio, ...ruta];
+}
+
 /** Los ids de la página y de todo lo que cuelga de ella, a cualquier profundidad. */
 export function ramaDe(id: string, nodos: readonly Enlace[]): string[] {
   const hijasDe = new Map<string, string[]>();
