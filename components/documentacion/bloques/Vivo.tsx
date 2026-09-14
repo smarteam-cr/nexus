@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { FUENTES_VIVAS, type FuenteViva } from "@/lib/documentacion/tipos";
+import { iniciales } from "@/lib/documentacion/equipo";
 import { useVivos } from "../ContextoDeVivos";
 import { IconoCandado } from "../iconos";
 import Recorrido from "@/components/manual/Recorrido";
@@ -28,6 +29,7 @@ export const ETIQUETAS_DE_FUENTE: Record<FuenteViva, string> = {
   agentes: "Los agentes de IA",
   hubspot: "Los pipelines y las propiedades de HubSpot",
   roles: "Los roles del equipo",
+  equipo: "El equipo, por área",
 };
 
 function Contenido({ fuente }: { fuente: FuenteViva }) {
@@ -53,6 +55,54 @@ function Contenido({ fuente }: { fuente: FuenteViva }) {
         grupos={datos.hubspot.grupos}
         totalProps={datos.hubspot.totalProps}
       />
+    );
+  }
+
+  if (fuente === "equipo") {
+    return (
+      <div className="grid gap-5">
+        {datos.equipo.map((g) => (
+          <section key={g.area}>
+            <h3 className="mb-2 text-sm font-semibold text-fg">
+              {g.area} <span className="text-2xs font-normal text-fg-muted">· {g.personas.length}</span>
+            </h3>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {g.personas.map((p) => (
+                <li
+                  key={p.correo ?? p.nombre}
+                  className="flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
+                >
+                  {p.foto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.foto} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-fg-secondary"
+                    >
+                      {iniciales(p.nombre)}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-fg">{p.nombre}</p>
+                    <p className="truncate text-xs text-fg-muted">
+                      {p.rol}
+                      {p.correo && (
+                        <>
+                          {p.rol ? " · " : ""}
+                          <a href={`mailto:${p.correo}`} className="hover:text-fg">
+                            {p.correo}
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
     );
   }
 

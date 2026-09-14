@@ -1,13 +1,13 @@
 /**
- * lib/documentacion/semillas/paginas.test.ts — que los artículos sembrados salgan completos.
+ * lib/documentacion/semillas/paginas.test.ts — que la base sembrada salga completa y bien armada.
  *
  * El riesgo de un constructor de páginas no es que reviente: es que produzca una página a medias
  * —un desplegable sin contenido, una dimensión sin señales, un bloque vivo con una fuente que no
  * existe— y que eso quede publicado como si fuera la documentación oficial. Acá se cuenta y se
  * afirma la forma.
  *
- * ⚠ El array `ARTICULOS` es el mismo que siembra `scripts/seed-documentacion.ts`: si se agrega una
- * página allá y no acá, nadie revisa su forma.
+ * ⚠ `ARTICULOS` es la MISMA lista que siembra `scripts/seed-documentacion.ts`
+ * (`semillas/base/index.ts`): no hay una segunda copia que pueda quedarse atrás.
  */
 import { describe, expect, it } from "vitest";
 import { construirComoFunciona } from "./como-funciona";
@@ -15,17 +15,16 @@ import { construirEscala } from "./escala";
 import { construirGuiaCse } from "./guia-cse";
 import { construirTrabajarEnSmarteam } from "./trabajar-en-smarteam";
 import { construirCustomerSuccess } from "./customer-success";
+import { construirDocumentacion } from "./base";
+import { MISION, PROPOSITO, VALORES } from "./base/la-empresa";
+import { LIDERES } from "./base/lideres";
+import { HERRAMIENTAS } from "./base/recursos";
 import type { PaginaSembrada } from "./bloques";
 import { leerReglamentoV5 } from "./escala-v5";
-import { FUENTES_VIVAS, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
+import { FUENTES_VIVAS, SLUG_DE_INICIO, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
 import { textoDeBloques } from "../texto";
 
-const ARTICULOS = () => [
-  construirComoFunciona(),
-  construirEscala(),
-  construirCustomerSuccess(),
-  construirTrabajarEnSmarteam(),
-];
+const ARTICULOS = () => construirDocumentacion();
 
 /** Todos los bloques, incluidos los hijos de los desplegables y de las tarjetas. */
 function todos(bloques: BloqueGuardado[]): BloqueGuardado[] {
@@ -33,17 +32,44 @@ function todos(bloques: BloqueGuardado[]): BloqueGuardado[] {
 }
 
 /**
- * Una página con TODAS sus descendientes. Recursivo a propósito: Customer Success tiene nietas
- * (las competencias, las piezas de la relación con el cliente, el proceso de SmartLoop), y con un
- * solo nivel una mención a una nieta se leería como un enlace a una página que no existe.
+ * Una página con TODAS sus descendientes. Recursivo a propósito: la base tiene bisnietas (Customer
+ * Success cuelga de Departamentos y tiene sus propias nietas), y con un solo nivel una mención a una
+ * de ellas se leería como un enlace a una página que no existe.
  */
 function aplanar(pagina: PaginaSembrada): PaginaSembrada[] {
   return [pagina, ...(pagina.hijas ?? []).flatMap(aplanar)];
 }
 
-describe("los artículos usan solo bloques que el editor conoce", () => {
-  const paginas = ARTICULOS();
-  const conHijas = paginas.flatMap(aplanar);
+const TODAS = () => ARTICULOS().flatMap(aplanar);
+
+function porSlug(slug: string): PaginaSembrada {
+  const encontrada = TODAS().find((p) => p.slug === slug);
+  if (!encontrada) throw new Error(`falta la página ${slug}`);
+  return encontrada;
+}
+
+/** Los slugs a los que apunta cada mención («@») del contenido. */
+function slugsMencionados(bloques: BloqueGuardado[]): string[] {
+  const encontrados: string[] = [];
+  const enContenido = (contenido: unknown) => {
+    if (!Array.isArray(contenido)) return;
+    for (const pieza of contenido) {
+      if (!pieza || typeof pieza !== "object") continue;
+      const p = pieza as { type?: unknown; props?: { slug?: unknown } };
+      if (p.type === "mencion" && typeof p.props?.slug === "string") encontrados.push(p.props.slug);
+    }
+  };
+  for (const b of todos(bloques)) enContenido(b.content);
+  return encontrados;
+}
+
+const fuentesVivas = (bloques: BloqueGuardado[]) =>
+  todos(bloques)
+    .filter((b) => b.type === "vivo")
+    .map((b) => (b.props as { fuente?: string } | undefined)?.fuente ?? "");
+
+describe("la base usa solo bloques que el editor conoce", () => {
+  const conHijas = TODAS();
 
   it("ningún tipo de bloque inventado", () => {
     for (const pagina of conHijas) {
@@ -56,10 +82,7 @@ describe("los artículos usan solo bloques que el editor conoce", () => {
 
   it("las fuentes de los bloques vivos existen", () => {
     for (const pagina of conHijas) {
-      const fuentes = todos(pagina.bloques)
-        .filter((b) => b.type === "vivo")
-        .map((b) => (b.props as { fuente?: string } | undefined)?.fuente ?? "");
-      for (const f of fuentes) {
+      for (const f of fuentesVivas(pagina.bloques)) {
         expect(FUENTES_VIVAS as readonly string[], `${pagina.slug} → ${f}`).toContain(f);
       }
     }
@@ -87,6 +110,120 @@ describe("los artículos usan solo bloques que el editor conoce", () => {
       expect(sueltas, `${pagina.slug}: tarjeta fuera de una rejilla`).toEqual([]);
     }
   });
+
+  it("⛔ ningún slug se repite: dos páginas con la misma dirección se pisarían al sembrar", () => {
+    const slugs = conHijas.map((p) => p.slug);
+    const repetidos = slugs.filter((s, i) => slugs.indexOf(s) !== i);
+    expect(repetidos).toEqual([]);
+  });
+});
+
+describe("la estructura de la base", () => {
+  const raices = ARTICULOS();
+
+  it("la portada abre el árbol y las seis secciones van en su orden", () => {
+    expect(raices.map((p) => p.slug)).toEqual([
+      SLUG_DE_INICIO,
+      "la-empresa",
+      "departamentos",
+      "servicios",
+      "recursos-y-herramientas",
+      "como-trabajamos",
+      "el-equipo",
+    ]);
+  });
+
+  it("lo que ya existía queda adentro de su sección, no suelto en la raíz", () => {
+    const hijasDe = (slug: string) => (raices.find((p) => p.slug === slug)?.hijas ?? []).map((h) => h.slug);
+    expect(hijasDe("departamentos")[0]).toBe("customer-success");
+    expect(hijasDe("recursos-y-herramientas")).toEqual(
+      expect.arrayContaining(["escala-de-rendimiento", "como-funciona-nexus"]),
+    );
+    expect(hijasDe("como-trabajamos")).toContain("como-trabajar-en-smarteam");
+    for (const suelta of ["customer-success", "escala-de-rendimiento", "como-funciona-nexus", "como-trabajar-en-smarteam"]) {
+      expect(raices.map((p) => p.slug), suelta).not.toContain(suelta);
+    }
+  });
+
+  it("⭐ la portada enlaza cada sección y cada una de sus páginas directas", () => {
+    /* La edición que la pone en rojo: agregar una página a una sección y olvidarse de la portada.
+       La portada es la puerta de la base; lo que no está ahí, para quien entra, no existe. */
+    const enlazadas = new Set(slugsMencionados(raices[0].bloques));
+    for (const seccion of raices.slice(1)) {
+      expect(enlazadas, `la portada no enlaza ${seccion.slug}`).toContain(seccion.slug);
+      for (const hija of seccion.hijas ?? []) {
+        expect(enlazadas, `la portada no enlaza ${hija.slug} (de ${seccion.slug})`).toContain(hija.slug);
+      }
+    }
+  });
+
+  it("cada departamento dice quién lo lidera, igual en la tabla y en su página", () => {
+    const tabla = textoDeBloques(porSlug("departamentos").bloques);
+    for (const lider of Object.values(LIDERES)) expect(tabla, lider).toContain(lider);
+    const paginas: [string, string][] = [
+      ["departamento-ventas", LIDERES.ventas],
+      ["departamento-finanzas", LIDERES.finanzas],
+      ["departamento-desarrollo", LIDERES.desarrollo],
+      ["departamento-marketing", LIDERES.marketing],
+      ["departamento-revops", LIDERES.revops],
+      ["customer-success", LIDERES.customerSuccess],
+    ];
+    for (const [slug, lider] of paginas) {
+      expect(textoDeBloques(porSlug(slug).bloques), slug).toContain(`Lo lidera: ${lider}`);
+    }
+  });
+
+  it("⛔ ninguna página de la base trae remuneración, bonificación ni la agencia de pago", () => {
+    /* Las condiciones salen de las propuestas de contratación, y ahí conviven con lo que es de cada
+       contrato. Esta base la lee todo el equipo: de las propuestas entra solo lo que es de todos. */
+    for (const p of TODAS()) {
+      expect(textoDeBloques(p.bloques), p.slug).not.toMatch(/ontop|bonificaci[oó]n|salario|sueldo|\bUSD\b|\$\s?\d/i);
+    }
+  });
+});
+
+describe("«Propósito, misión y valores»", () => {
+  const texto = textoDeBloques(porSlug("proposito-mision-y-valores").bloques);
+
+  it("trae el propósito tal como lo escribió la dirección, y la misión", () => {
+    expect(texto).toContain(PROPOSITO);
+    expect(texto).toContain(MISION);
+  });
+
+  it("tres valores, cada uno con cómo se ve y qué no hacemos", () => {
+    expect(VALORES).toHaveLength(3);
+    for (const v of VALORES) expect(texto, v.nombre).toContain(v.nombre);
+    expect(texto.match(/Cómo se ve/g)).toHaveLength(3);
+    expect(texto.match(/Lo que no hacemos/g)).toHaveLength(3);
+  });
+});
+
+describe("«Recursos y herramientas»", () => {
+  it("las herramientas van por grupo, con Slack y sin las que ya no se usan", () => {
+    const texto = textoDeBloques(porSlug("herramientas").bloques);
+    for (const g of HERRAMIENTAS) expect(g.filas.length, g.grupo).toBeGreaterThan(0);
+    expect(texto).toContain("Slack");
+    expect(texto).not.toMatch(/Click ?Up/i);
+  });
+
+  it("la marca avisa que el manual todavía no existe", () => {
+    const [primero, segundo] = porSlug("marca").bloques;
+    expect(primero.type).toBe("aviso");
+    expect(textoDeBloques([segundo])).toMatch(/manual de marca todavía no existe/);
+  });
+});
+
+describe("«El equipo» y «Horario y condiciones»", () => {
+  it("el directorio sale de Nexus, no se escribe a mano", () => {
+    expect(fuentesVivas(porSlug("el-equipo").bloques)).toEqual(["equipo"]);
+  });
+
+  it("las condiciones traen la jornada, las vacaciones y los feriados", () => {
+    const texto = textoDeBloques(porSlug("horario-y-condiciones").bloques);
+    expect(texto).toContain("8:00 a 17:00");
+    expect(texto).toContain("12 días de vacaciones");
+    expect(texto).toContain("11 días feriados");
+  });
 });
 
 describe("«¿Cómo funciona Nexus?»", () => {
@@ -99,11 +236,9 @@ describe("«¿Cómo funciona Nexus?»", () => {
     expect(pagina.icono).toBe("🧭");
   });
 
-  it("trae las seis partes que se arman solas", () => {
-    const fuentes = todos(pagina.bloques)
-      .filter((b) => b.type === "vivo")
-      .map((b) => (b.props as { fuente?: string }).fuente);
-    expect(fuentes.sort()).toEqual([...FUENTES_VIVAS].sort());
+  it("trae las partes de la app que se arman solas", () => {
+    /* Todas menos el directorio del equipo, que vive en «El equipo»: no es parte del manual. */
+    expect(fuentesVivas(pagina.bloques).sort()).toEqual(FUENTES_VIVAS.filter((f) => f !== "equipo").sort());
   });
 
   it("⚠ corrige lo que el manual viejo decía mal sobre HubSpot", () => {
@@ -167,24 +302,8 @@ describe("«Escala de rendimiento»", () => {
 });
 
 describe("los enlaces entre las páginas sembradas apuntan a algo que existe", () => {
-  const paginas = ARTICULOS();
-  const conHijas = paginas.flatMap(aplanar);
+  const conHijas = TODAS();
   const slugsSembrados = new Set(conHijas.map((p) => p.slug));
-
-  /** Los slugs a los que apunta cada mención («@») del contenido. */
-  function slugsMencionados(bloques: BloqueGuardado[]): string[] {
-    const encontrados: string[] = [];
-    const enContenido = (contenido: unknown) => {
-      if (!Array.isArray(contenido)) return;
-      for (const pieza of contenido) {
-        if (!pieza || typeof pieza !== "object") continue;
-        const p = pieza as { type?: unknown; props?: { slug?: unknown } };
-        if (p.type === "mencion" && typeof p.props?.slug === "string") encontrados.push(p.props.slug);
-      }
-    };
-    for (const b of todos(bloques)) enContenido(b.content);
-    return encontrados;
-  }
 
   it("la base nace conectada: hay enlaces entre páginas", () => {
     const total = conHijas.flatMap((p) => slugsMencionados(p.bloques)).length;
@@ -202,22 +321,16 @@ describe("los enlaces entre las páginas sembradas apuntan a algo que existe", (
   });
 
   it("el manual apunta a la Escala, y cada área a su página madre", () => {
-    const manual = paginas[0];
-    expect(slugsMencionados(manual.bloques)).toContain("escala-de-rendimiento");
-    for (const area of paginas[1].hijas ?? []) {
+    expect(slugsMencionados(construirComoFunciona().bloques)).toContain("escala-de-rendimiento");
+    for (const area of construirEscala().hijas ?? []) {
       expect(slugsMencionados(area.bloques), area.slug).toContain("escala-de-rendimiento");
     }
   });
 
-  it("los cuatro artículos se nombran entre sí: ninguno queda aislado", () => {
-    for (const pagina of paginas) {
-      expect(
-        slugsMencionados(pagina.bloques).length,
-        `${pagina.slug} no enlaza a ninguna otra página`,
-      ).toBeGreaterThan(0);
-    }
+  it("ninguna sección queda aislada: enlaza a otra página y alguien la nombra", () => {
     const nombrados = new Set(conHijas.flatMap((p) => slugsMencionados(p.bloques)));
-    for (const pagina of paginas) {
+    for (const pagina of ARTICULOS()) {
+      expect(slugsMencionados(pagina.bloques).length, `${pagina.slug} no enlaza a ninguna otra página`).toBeGreaterThan(0);
       expect(nombrados, `a ${pagina.slug} no la nombra nadie`).toContain(pagina.slug);
     }
   });
@@ -234,9 +347,7 @@ describe("«Guía de CSE»", () => {
   });
 
   it("el recorrido y los documentos salen de bloques vivos, no escritos a mano", () => {
-    const fuentes = todos(pagina.bloques)
-      .filter((b) => b.type === "vivo")
-      .map((b) => (b.props as { fuente?: string }).fuente);
+    const fuentes = fuentesVivas(pagina.bloques);
     expect(fuentes).toContain("recorrido");
     expect(fuentes).toContain("documentos");
   });

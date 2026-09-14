@@ -1,11 +1,10 @@
 /**
- * scripts/seed-documentacion.ts — siembra los artículos de la base de conocimiento.
+ * scripts/seed-documentacion.ts — siembra la base de conocimiento entera.
  *
- *   «¿Cómo funciona Nexus?»       — el manual, con sus bloques vivos.
- *   «Escala de rendimiento»       — el reglamento v5.2.0, con una subpágina por área.
- *   «Customer Success»            — el departamento: roles, competencias, relación con el cliente,
- *                                   Land and Expand y SmartLoop (con la Guía de CSE adentro).
- *   «¿Cómo trabajar en Smarteam?» — canales, grabación y cómo se escribe a distancia.
+ * La estructura vive en `lib/documentacion/semillas/base/index.ts` (2026-09-13): una portada
+ * «Inicio» y seis secciones —La empresa, Departamentos, Servicios, Recursos y herramientas, Cómo
+ * trabajamos y El equipo—. Las páginas que antes estaban sueltas en la raíz (el manual, la Escala,
+ * Customer Success, «¿Cómo trabajar?») pasan a vivir adentro de su sección.
  *
  * ── LAS TRES REGLAS QUE LO HACEN SEGURO DE REPETIR ───────────────────────────
  * 1. Es IDEMPOTENTE por `slug`: correrlo dos veces no duplica nada.
@@ -32,10 +31,7 @@ import "dotenv/config";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { createScriptDb } from "./lib/db";
-import { construirComoFunciona } from "@/lib/documentacion/semillas/como-funciona";
-import { construirEscala } from "@/lib/documentacion/semillas/escala";
-import { construirCustomerSuccess } from "@/lib/documentacion/semillas/customer-success";
-import { construirTrabajarEnSmarteam } from "@/lib/documentacion/semillas/trabajar-en-smarteam";
+import { construirDocumentacion } from "@/lib/documentacion/semillas/base";
 import { resolverMenciones, type PaginaSembrada } from "@/lib/documentacion/semillas/bloques";
 import { decidirAccion } from "@/lib/documentacion/semillas/accion";
 import { textoDeBloques, textoDeBusqueda } from "@/lib/documentacion/texto";
@@ -158,12 +154,7 @@ async function main() {
   const { prisma, close } = createScriptDb();
   try {
     /* El orden del array es el orden del árbol: lo primero que se lee, primero. */
-    const paginas = [
-      construirComoFunciona(),
-      construirEscala(),
-      construirCustomerSuccess(),
-      construirTrabajarEnSmarteam(),
-    ];
+    const paginas = construirDocumentacion();
 
     console.log(`\n${APPLY ? "✍  Sembrando" : "👀 En seco (agregá --apply para escribir)"}\n`);
     for (const [i, pagina] of paginas.entries()) {

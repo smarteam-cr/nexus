@@ -8,7 +8,7 @@
  * PURO: no importa BlockNote. La forma vive en `lib/documentacion/tipos.ts` y la vigila
  * `sanearBloques` al cargar.
  */
-import type { BloqueGuardado } from "../tipos";
+import type { BloqueGuardado, FuenteViva } from "../tipos";
 
 /** Una página a sembrar, con sus subpáginas. */
 export interface PaginaSembrada {
@@ -20,7 +20,9 @@ export interface PaginaSembrada {
 }
 
 export type Tono = "info" | "advertencia" | "exito" | "peligro";
-export type Fuente = "menu" | "recorrido" | "documentos" | "agentes" | "hubspot" | "roles";
+/* La lista de fuentes es UNA: la del editor. Escrita dos veces, una fuente nueva quedaba fuera de
+   las semillas sin que nada avisara. */
+export type Fuente = FuenteViva;
 
 /** Un enlace a otra página sembrada. El id lo completa la siembra, que es la que lo conoce. */
 export interface MencionASembrar {

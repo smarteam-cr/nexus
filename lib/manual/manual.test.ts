@@ -332,6 +332,19 @@ describe("Documentación · privacidad", () => {
     expect(sinComentarios("app/(shell)/documentacion/page.tsx")).not.toMatch(/description:\s*true/);
   });
 
+  it("el directorio del equipo lee nombre, correo, área, rol y foto — y nada más", () => {
+    /* La edición que la pone en rojo: sumar `permissionOverrides` o los costos de la persona al
+       `select` del directorio. Esta base la lee todo el equipo; los permisos son de Equipo (solo
+       dirección) y los costos, de Finanzas. */
+    const src = sinComentarios("lib/documentacion/vivos.ts");
+    const inicio = src.indexOf("teamMember.findMany");
+    expect(inicio, "el directorio dejó de leer de TeamMember").toBeGreaterThan(-1);
+    const consulta = src.slice(inicio, src.indexOf("}),", inicio));
+    const select = consulta.slice(consulta.indexOf("select"));
+    const campos = [...select.matchAll(/(\w+):\s*true/g)].map((m) => m[1]).sort();
+    expect(campos).toEqual(["area", "email", "name", "photoUrl", "roleEnum"]);
+  });
+
   it("el tipo que consume el armado tampoco los declara", () => {
     const src = sinComentarios("lib/manual/armar.ts");
     const iface = src.slice(src.indexOf("interface FilaDeAgente"), src.indexOf("interface AgenteDoc"));

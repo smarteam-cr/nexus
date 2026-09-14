@@ -16,6 +16,7 @@ import { PageHeader, EmptyState } from "@/components/ui";
 import { arbolDePaginas, editadasHacePoco } from "@/lib/documentacion/consultas";
 import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
 import { IconoDePagina } from "@/components/documentacion/iconos";
+import { SLUG_DE_INICIO } from "@/lib/documentacion/tipos";
 
 export default async function InicioDeDocumentacion() {
   const ctx = await requireInternalUser().catch(() => null);
@@ -26,6 +27,12 @@ export default async function InicioDeDocumentacion() {
     editadasHacePoco(),
     can(ctx.teamMember, "documentacion", "write"),
   ]);
+
+  /* La base abre en su portada (2026-09-13). «Inicio» es una página más, escrita y editable como las
+     otras; lo de abajo —las páginas de primer nivel y lo editado hace poco— queda de respaldo para
+     una base que todavía no la tiene. El `#` de un enlace viejo del manual viaja con la redirección
+     (el navegador lo conserva) y lo recoge la portada, que monta `RedirigirAnclaVieja`. */
+  if (arbol.some((p) => p.slug === SLUG_DE_INICIO)) redirect(`/documentacion/${SLUG_DE_INICIO}`);
 
   return (
     <div className={SHELL_DEFAULT}>

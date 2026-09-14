@@ -70,8 +70,14 @@ export interface NodoDelArbol extends NodoDePagina {
   hijas: NodoDelArbol[];
 }
 
-/** De dónde sale un bloque vivo: cada fuente se deriva de un registro del código. */
-export const FUENTES_VIVAS = ["menu", "recorrido", "documentos", "agentes", "hubspot", "roles"] as const;
+/** La portada de la base: Documentación abre en esta página si existe (2026-09-13). */
+export const SLUG_DE_INICIO = "inicio";
+
+/**
+ * De dónde sale un bloque vivo: cada fuente se deriva de un registro del código o de la base.
+ * `equipo` (2026-09-13) es el directorio: las personas activas de Nexus, por área.
+ */
+export const FUENTES_VIVAS = ["menu", "recorrido", "documentos", "agentes", "hubspot", "roles", "equipo"] as const;
 export type FuenteViva = (typeof FUENTES_VIVAS)[number];
 
 /** Por qué se guardó una versión en el historial. */

@@ -168,6 +168,8 @@ function bloques(): BloqueGuardado[] {
       mencion("como-funciona-nexus", "¿Cómo funciona Nexus?", "🧭"),
       ". El recorrido de una cuenta, etapa por etapa: ",
       mencion("guia-de-cse", "Guía de CSE", "🎯"),
+      ". La jornada, las vacaciones y los feriados: ",
+      mencion("horario-y-condiciones", "Horario y condiciones", "⏰"),
       ".",
     ),
   ];

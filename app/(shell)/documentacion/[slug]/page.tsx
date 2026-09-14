@@ -24,6 +24,8 @@ import { cargarDatosVivos, tieneBloquesVivos } from "@/lib/documentacion/vivos";
 import PaginaCliente from "@/components/documentacion/PaginaCliente";
 import { IconoDePagina } from "@/components/documentacion/iconos";
 import { INSET_CONTENIDO } from "@/components/documentacion/layout";
+import RedirigirAnclaVieja from "@/components/documentacion/RedirigirAnclaVieja";
+import { SLUG_DE_INICIO } from "@/lib/documentacion/tipos";
 // Solo el TIPO: `import type` se borra al compilar, así que el editor no viaja al servidor.
 import type { BloqueParcialDeDocumentacion } from "@/components/documentacion/esquema-editor";
 
@@ -61,6 +63,9 @@ export default async function PaginaDeDocumentacion({
 
   return (
     <div className={SHELL_DEFAULT}>
+      {/* Los enlaces viejos del manual (`/documentacion#agentes`) llegan acá por la redirección del
+          índice, con su ancla: esto los reenvía a «¿Cómo funciona Nexus?». */}
+      {pagina.slug === SLUG_DE_INICIO && <RedirigirAnclaVieja />}
       <div className="mx-auto max-w-3xl">
         <PaginaCliente
           pagina={{

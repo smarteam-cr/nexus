@@ -36,6 +36,7 @@ import {
   type PipelineDoc,
 } from "@/lib/manual/armar";
 import { FUENTES_VIVAS, type BloqueGuardado, type FuenteViva } from "./tipos";
+import { armarEquipo, type AreaDelEquipo } from "./equipo";
 
 export interface ItemDeMenu {
   key: string;
@@ -65,6 +66,8 @@ export interface DatosVivos {
   agentes: CategoriaDeAgentes[];
   hubspot: { pipelines: PipelineDoc[]; grupos: GrupoDePropiedades[]; totalProps: number };
   roles: RolDoc[];
+  /** El directorio: las personas activas, por área (`equipo.ts`). */
+  equipo: AreaDelEquipo[];
 }
 
 /** El gate del menú, dicho para una persona. */
@@ -112,10 +115,18 @@ function armarRoles(): RolDoc[] {
 
 /** Arma TODAS las fuentes de una vez: es barato y así la página hace una sola pasada. */
 export async function cargarDatosVivos(): Promise<DatosVivos> {
-  const filas = await prisma.agent.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, status: true, agentType: true, agentGroup: true },
-  });
+  const [filas, miembros] = await Promise.all([
+    prisma.agent.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, status: true, agentType: true, agentGroup: true },
+    }),
+    /* ⚠ PRIVACIDAD: el directorio lee nombre, correo, área, rol y foto — y nada más. Ni permisos ni
+       nada que cuelgue de la persona en Finanzas: esta base la lee todo el equipo. */
+    prisma.teamMember.findMany({
+      where: { deactivatedAt: null },
+      select: { name: true, email: true, area: true, roleEnum: true, photoUrl: true },
+    }),
+  ]);
 
   return {
     menu: armarMenu(),
@@ -128,6 +139,7 @@ export async function cargarDatosVivos(): Promise<DatosVivos> {
       totalProps: totalPropiedades(),
     },
     roles: armarRoles(),
+    equipo: armarEquipo(miembros),
   };
 }
 
@@ -165,6 +177,11 @@ export function textoDeLoVivo(datos: DatosVivos, fuentes: readonly FuenteViva[])
       partes.push(datos.hubspot.pipelines.map((p) => `${p.label} ${p.help}`).join("\n"));
     }
     if (fuente === "roles") partes.push(datos.roles.map((r) => `${r.nombre} ${r.queHace}`).join("\n"));
+    if (fuente === "equipo") {
+      partes.push(
+        datos.equipo.flatMap((g) => g.personas.map((p) => `${p.nombre} ${g.area} ${p.rol}`)).join("\n"),
+      );
+    }
   }
   return partes.filter(Boolean).join("\n");
 }

@@ -217,6 +217,7 @@ function bloques(): BloqueGuardado[] {
     ),
 
     titulo(2, "Seguir leyendo"),
+    parrafoRico("La portada de toda la base: ", mencion("inicio", "Inicio", "🏠"), "."),
     parrafoRico(
       "Cómo nos comunicamos puertas adentro y qué se espera de cada reunión: ",
       mencion("como-trabajar-en-smarteam", "¿Cómo trabajar en Smarteam?", "🤝"),

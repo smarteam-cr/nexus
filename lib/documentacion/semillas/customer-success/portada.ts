@@ -21,6 +21,7 @@ import {
   vinneta,
 } from "../bloques";
 import type { BloqueGuardado } from "../../tipos";
+import { LIDERES } from "../base/lideres";
 import { a } from "./enlaces";
 
 export function bloquesDePortada(): BloqueGuardado[] {
@@ -30,6 +31,7 @@ export function bloquesDePortada(): BloqueGuardado[] {
       ["En una frase: ", { negrita: true }],
       "Customer Success es el área que se asegura de que lo que el cliente compró le resuelva el problema — y de que la cuenta crezca porque funcionó, no porque insistimos.",
     ),
+    parrafoRico(["Lo lidera: ", { negrita: true }], `${LIDERES.customerSuccess}, Customer Success Lead.`),
 
     titulo(2, "Qué hacemos"),
     parrafo(
