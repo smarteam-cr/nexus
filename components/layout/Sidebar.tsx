@@ -185,7 +185,9 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
   };
 
   return (
-    <aside className="w-full bg-background border-r border-line flex flex-col sticky top-0 h-screen overflow-hidden">
+    /* Sin `sticky` acá: dentro del contenedor con `overflow-hidden` de SidebarShell no se pegaba a
+       nada. Lo fija el contenedor; el aside solo ocupa su alto. */
+    <aside className="w-full bg-background border-r border-line flex flex-col h-full overflow-hidden">
 
       {/* ── Brand ── */}
       <div className={`h-14 border-b border-line flex-shrink-0 flex items-center ${isOpen ? "px-4 justify-between" : "justify-center"}`}>

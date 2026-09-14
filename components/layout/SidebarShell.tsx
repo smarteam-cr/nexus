@@ -83,9 +83,16 @@ export default function SidebarShell({ user, initialOpen, children }: Props) {
 
   return (
     <div className="flex min-h-screen">
-      {/* ── Sidebar con transición ── */}
+      {/* ── Sidebar con transición ──
+          ⚠ El `sticky` va ACÁ y no en el <aside> de adentro. Este contenedor necesita
+          `overflow-hidden` (recorta el menú mientras anima el ancho), y un `overflow` distinto de
+          visible convierte al elemento en el contenedor de scroll de sus hijos: un `sticky` adentro
+          se pega a ESTA caja, que no scrollea, y el menú se iba con la página en toda pantalla
+          donde scrollea la ventana (Documentación, Conocimientos, las listas largas). Desde el
+          primer commit. `self-start` hace falta porque un ítem flex estirado a la altura de la
+          página no tiene lugar donde pegarse. */}
       <div
-        className={`flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden ${
+        className={`sticky top-0 h-screen self-start flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden ${
           effectiveOpen ? "w-56" : "w-14"
         }`}
       >
