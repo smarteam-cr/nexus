@@ -74,6 +74,7 @@ const ctx: ContextoLibro = {
     cobroDeNexus({ id: "kaizen-10", cuentaId: "kaizen", periodo: "2027-06", monto: 200, numCuota: 10 }),
   ],
   aliados: ["HubSpot", "Atom Chat", "Cooby"],
+  servicios: [],
 };
 
 const libro: FilaLibro[] = [

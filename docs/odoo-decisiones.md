@@ -873,3 +873,28 @@ escondían como «historia» salen en «facturas sin cobro».
 **Qué la revertiría.** Que contabilidad deje de registrar pagos en Odoo (el estado de pago dejaría de ser evidencia),
 o que el Excel de Alexander deje de ser el medio para poner Nexus al día: sin lote, `libro` va vacío y ACCCSA vuelve
 a acusarse.
+
+---
+
+## 2026-09-14 · La misma venta contada dos veces se avisa, en la página y en la carga del Excel
+
+**Qué se decidió.** Una regla, en un solo lugar (`lib/cobranza/venta-duplicada.ts`), que usan «Lo que no cuadra» y la
+carga del Excel de Alexander: una factura con número puede ser la misma venta que cuotas de **otro** servicio de la
+misma cuenta y moneda, sin número, a hasta 15 días y cada una por no más que la factura (juntas o por separado), o que
+un servicio activo sin cobros generados que arranca a hasta 15 días y vale al menos la factura.
+- En la página, **VENTA-CONTADA-DOS-VECES** (alta, preguntando). Suma lo que está en duda —las cuotas con su clave
+  `c:`, así una cuota que ya mira otra línea suma una vez, y cada servicio hasta el monto de la factura— y no es la
+  casa de ningún documento: da una pista sobre cobros que tienen la suya.
+- En la carga, antes de cargar una factura (paso 3) y sobre las que ya están anotadas en un cobro (paso 3b). Las dos
+  van a «Queda para una persona · posible duplicado». ⛔ No se revierte nada.
+
+**Por qué.** La primera corrida del Excel (2026-09-14) cargó cobradas Real Shipping INV-9 (US$6.000, 15-ene) y Alliance
+RH INV-46 (US$120, 7-ago). Real Shipping ya tenía sus cuotas 1 y 2 (US$1.500 cada una, facturadas el 16-ene, cobradas)
+y quedó con US$9.000 cobrados; el detector no saltó porque 1.500 + 1.500 no es 6.000. Alliance RH tiene «Capacitación
+Sales» (US$240, entrada del 50 %) sin cobros: generarlos contaría la entrada dos veces. Medido sobre los 234 cobros: con
+15 días salen exactamente esas dos; con 31 se suma Multiquimica INV-38 contra una cuota programada a 19 días en otro
+servicio, que es otra venta.
+
+**Qué la revertiría.** Una cuenta que factura de verdad dos servicios distintos el mismo día con números separados y
+sin anotar: la línea se acepta («está bien así») y vuelve si cambian los números. Si eso se vuelve la mayoría, la
+ventana baja o se exige que la factura venga de una carga.

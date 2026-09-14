@@ -102,6 +102,7 @@ const ctx: ContextoLibro = {
     ]),
   ],
   aliados: ["HubSpot", "Atom Chat", "Cooby"],
+  servicios: [],
 };
 
 const libro: FilaLibro[] = [

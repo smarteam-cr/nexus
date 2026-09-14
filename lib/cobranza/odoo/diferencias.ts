@@ -22,6 +22,7 @@
 import type { Inconsistencia, ItemInconsistencia } from "@/lib/finanzas/inconsistencias";
 import { centavos as CENTAVOS, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "../montos";
 import { normalizarNumeroFactura, plataformaDelNumero } from "../numero-factura";
+import { plataEnDuda, textoDeLaMismaVenta, ventasContadasDosVeces, type ServicioDeVenta } from "../venta-duplicada";
 
 /* ── Cómo se cierra cada línea ──────────────────────────────────────────────────── */
 
@@ -154,6 +155,10 @@ export interface CobroParaCruzar {
    * dijo, y manda la vía de cobro de la cuenta. Obligatorio por lo mismo que el número.
    */
   plataformaFactura: string | null;
+  /** El servicio del cobro: «la misma venta contada dos veces» compara cuotas de servicios distintos (2026-09-14). */
+  servicioId: string;
+  /** Su descripción, para decir de qué servicio es cada cuota. */
+  servicio: string;
 }
 
 export interface FacturaParaCruzar {
@@ -235,6 +240,9 @@ export interface DocumentoDelLibro {
   porElMes: boolean;
 }
 
+/** Un servicio contratado con cuántos cobros generó. Es el de `venta-duplicada.ts`: una sola forma para las dos puntas. */
+export type ServicioParaCruzar = ServicioDeVenta;
+
 export interface EstadoDelCruce {
   cobros: CobroParaCruzar[];
   facturas: FacturaParaCruzar[];
@@ -243,6 +251,11 @@ export interface EstadoDelCruce {
    * ⭐ Obligatorio a propósito: un cargador que se olvidara de pasarlo volvería a acusar a ACCCSA sin que nada avise.
    */
   libro: ReadonlyMap<string, DocumentoDelLibro>;
+  /**
+   * Los servicios de las cuentas, con cuántos cobros generaron: uno activo sin cobros puede ser la misma venta que una
+   * factura ya cargada (Alliance RH, 2026-09-14). Obligatorio por lo mismo que `libro`.
+   */
+  servicios: ServicioParaCruzar[];
   /** Las facturas soltadas al recuadrar un acuerdo, resueltas y sin resolver. */
   liberaciones: LiberacionParaCruzar[];
   cuentas: CuentaParaCruzar[];
@@ -2263,6 +2276,53 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
               (ns ? ` · ⚠ tiene facturas con número de Mercury: ${ns.join(", ")}` : ""),
           };
         }),
+    });
+  }
+
+  /* ── 15. La misma venta contada dos veces ────────────────────────────────────────
+     ⭐ Una factura con número y, a pocos días, cuotas de otro servicio de la misma cuenta sin número, o un servicio que
+     todavía no generó sus cobros (`ventasContadasDosVeces`, la misma regla que la carga del Excel). Medido el
+     2026-09-14: Real Shipping INV-9 (US$6.000) contra sus cuotas 1 y 2 (US$1.500 + US$1.500, facturadas al día
+     siguiente) y Alliance RH INV-46 (US$120) contra «Capacitación Sales». Ninguna línea lo mostraba.
+     ⚠ La plata son las cuotas y los servicios en duda, con su clave: una cuota que ya mira otra línea suma una vez. Y la
+     línea no es la casa de nadie (`documentos` vacío): da una pista sobre cobros que tienen su propia casa. */
+  const ventas = ventasContadasDosVeces(estado.cobros, estado.servicios);
+  if (ventas.length) {
+    const plata = ventas.flatMap(plataEnDuda);
+    const montos = montosPorMoneda(plata);
+    agregar({
+      codigo: "VENTA-CONTADA-DOS-VECES",
+      severidad: "ALTA",
+      titulo:
+        ventas.length === 1
+          ? "1 venta puede estar contada dos veces en su cuenta"
+          : `${ventas.length} ventas pueden estar contadas dos veces en su cuenta`,
+      detalle:
+        `Una factura con número y, a pocos días, cuotas de otro servicio de la misma cuenta —o un servicio que todavía no generó sus cobros— que juntas o por separado pueden ser esa misma factura. Si lo son, Nexus cuenta la venta dos veces: infla lo facturado, lo cobrado y el porcentaje de cobranza. Hay hasta ${textoDeMontos(montos)} en duda. ` +
+        "⛔ Nexus no junta ni revierte nada solo.",
+      montos,
+      plata,
+      documentos: [],
+      donde: "PREGUNTANDO",
+      pasos: [
+        "Confirmá con quien vendió si la factura de cada fila es la misma venta que las cuotas o el servicio que nombra.",
+        "Si es la misma y hay un cobro de más, sacalo de Cobrado desde el cronograma, con el motivo, y anotá el número de la factura en las cuotas que quedan.",
+        "Si el servicio todavía no generó sus cobros, no los generes sin descontar la factura que ya está cargada.",
+        "Si son ventas distintas, marcá la línea «está bien así».",
+      ],
+      queSignificaAceptar:
+        "Que son ventas distintas y cada una se cuenta una vez. La línea vuelve si aparece otra factura en la misma situación.",
+      queHacer: "Confirmar con quien vendió si cada factura es la misma venta que las cuotas o el servicio que nombra.",
+      resuelve: "COBRANZA",
+      items: ventas.map((v) => {
+        const suyos = v.factura.cobroIds.flatMap((id) => cobroPorId.get(id) ?? []);
+        return {
+          texto: `${suyos[0]?.cuentaNombre ?? v.factura.cuentaId} — ${v.factura.numero} por ${fmt(v.factura.monto, v.factura.moneda)}`,
+          monto: round2(plataEnDuda(v).reduce((a, p) => a + p.monto, 0)),
+          moneda: v.factura.moneda,
+          nota: `${v.factura.fecha} · ${unicos(suyos.map((c) => estadoDelCobro(c.estado))).join(", ")} · puede ser la misma venta que ${textoDeLaMismaVenta(v)}`,
+        };
+      }),
     });
   }
 

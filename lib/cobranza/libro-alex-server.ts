@@ -20,6 +20,7 @@ import { FUENTE_LIBRO_ALEX, leerLibro, type FilaLibro, type HojaLeida } from "./
 import { hojasDelXlsx } from "./libro-alex-xlsx";
 import { compararLibro, documentosDelLibroPorCobro, type CobroParaLibro, type ComparacionDelLibro, type ContextoLibro } from "./libro-alex";
 import type { DocumentoDelLibro } from "./odoo/diferencias";
+import type { ServicioDeVenta } from "./venta-duplicada";
 import { proponerNumeros, type NumerosDelLibro } from "./odoo/numero-propuesta";
 
 export class LibroError extends Error {
@@ -224,8 +225,38 @@ async function leerCobros(): Promise<{ cobros: CobroParaLibro[]; faltaSqlNumeros
   }
 }
 
+/**
+ * Los servicios con cuántos cobros generaron. Los leen la carga del Excel y «Lo que no cuadra», para avisar una venta que
+ * puede estar contada dos veces (lib/cobranza/venta-duplicada.ts).
+ */
+export async function leerServiciosDeVenta(): Promise<ServicioDeVenta[]> {
+  const filas = await prisma.servicioContratado.findMany({
+    select: {
+      id: true,
+      cuentaId: true,
+      descripcion: true,
+      tipoServicio: true,
+      moneda: true,
+      montoTotal: true,
+      fechaInicioFacturacion: true,
+      estado: true,
+      _count: { select: { cobros: true } },
+    },
+  });
+  return filas.map((s) => ({
+    id: s.id,
+    cuentaId: s.cuentaId,
+    descripcion: s.descripcion ?? s.tipoServicio,
+    moneda: s.moneda,
+    montoTotal: Number(s.montoTotal),
+    fechaInicio: s.fechaInicioFacturacion ? dia(s.fechaInicioFacturacion) : null,
+    activo: s.estado === "ACTIVO",
+    cobros: s._count.cobros,
+  }));
+}
+
 export async function cargarContextoLibro(): Promise<ContextoCargado> {
-  const [cuentas, vinculos, facturas, aliados, comisiones, corridaOk, { cobros, faltaSqlNumeros }] = await Promise.all([
+  const [cuentas, vinculos, facturas, aliados, comisiones, corridaOk, { cobros, faltaSqlNumeros }, servicios] = await Promise.all([
     prisma.cuentaFinanciera.findMany({
       select: {
         id: true,
@@ -265,6 +296,7 @@ export async function cargarContextoLibro(): Promise<ContextoCargado> {
     prisma.comisionPartner.findMany({ select: { partner: true }, distinct: ["partner"] }),
     ultimaCorridaOk(),
     leerCobros(),
+    leerServiciosDeVenta(),
   ]);
 
   return {
@@ -286,6 +318,7 @@ export async function cargarContextoLibro(): Promise<ContextoCargado> {
       })),
       cobros,
       aliados: [...new Set([...aliados.map((a) => a.nombre), ...comisiones.map((c) => c.partner)])],
+      servicios,
     },
     faltaSqlNumeros,
     espejoAl: corridaOk ? dia(corridaOk) : null,

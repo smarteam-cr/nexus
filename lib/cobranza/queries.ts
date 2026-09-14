@@ -3000,7 +3000,7 @@ interface FacturasDeOdooPorCobro {
 async function aparearFacturasDeOdoo(
   cuentaId: string,
   cuentaNombre: string,
-  servicios: ReadonlyArray<{ cobros: ReadonlyArray<CobroRow> }>,
+  servicios: ReadonlyArray<{ id: string; descripcion: string | null; tipoServicio: string; cobros: ReadonlyArray<CobroRow> }>,
   viaCobro: string,
 ): Promise<FacturasDeOdooPorCobro> {
   const out = new Map<string, CobroDTO["facturaOdoo"]>();
@@ -3041,6 +3041,8 @@ async function aparearFacturasDeOdoo(
       numeroFactura: c.numeroFactura,
       /* Etapa 12: la plataforma anotada en la factura manda sobre la de la cuenta. */
       plataformaFactura: c.plataformaFactura,
+      servicioId: s.id,
+      servicio: s.descripcion ?? s.tipoServicio,
     })),
   );
   const facturas = facturasDb.map((f) => ({

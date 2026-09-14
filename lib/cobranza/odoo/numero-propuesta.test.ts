@@ -54,6 +54,7 @@ const ctx: ContextoLibro = {
     cobroDeNexus({ id: "otra-jul", cuentaId: "otra", periodo: "2026-07", monto: 45, estado: "COBRADO", fechaEmision: "2026-07-29", numeroFactura: "FAC/2026/0290" }),
   ],
   aliados: ["Atom Chat"],
+  servicios: [],
 };
 
 const libro: FilaLibro[] = [
@@ -157,6 +158,7 @@ describe("⛔ el espejo solo, sin el libro: tampoco propone lo que nunca se prop
       cobroDeNexus({ id: "otra-sep", cuentaId: "otra", periodo: "2026-09", monto: 45, estado: "POR_COBRAR", fechaEmision: "2026-09-02", numeroFactura: "FAC/2026/0350" }),
     ],
     aliados: [],
+    servicios: [],
   };
   const soloDelEspejo = proponerNumeros([], soloEspejo, HOY);
 

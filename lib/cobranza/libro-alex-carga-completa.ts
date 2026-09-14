@@ -67,6 +67,7 @@ import type { FilaLibro } from "./libro-alex-lectura";
 import { esDocumentoVivo, montosPorMoneda, type MontoEnMoneda } from "./odoo/diferencias";
 import { proponerNumeros, type PatchDeNumero } from "./odoo/numero-propuesta";
 import { candidatasPorNombre } from "./sociedades";
+import { laMismaVenta, textoDeLaMismaVenta } from "./venta-duplicada";
 
 /* ── Los argumentos ─────────────────────────────────────────────────────────────── */
 
@@ -353,7 +354,11 @@ const parecidos = (a: number, b: number) => Math.abs(centavos(a) - centavos(b)) 
  *  1. sin número y sin atar con seguridad a otro documento del libro, una cuota de la misma cuenta y moneda, a
  *     hasta `DIAS_DE_VENTANA_DUPLICADO` días, parecida al neto o al total;
  *  2. dos o tres cuotas de esa cuenta que suman el neto (Construtecho INV-15 = 4.560 + 550 + 2.280);
- *  3. una cuota de otra cuenta cuyo nombre se parece al de la factura (Librería Internacional está dos veces).
+ *  3. una cuota de otra cuenta cuyo nombre se parece al de la factura (Librería Internacional está dos veces);
+ *  4. la misma venta en otro servicio de la cuenta (`laMismaVenta`): cuotas sin número a pocos días que juntas o por
+ *     separado pueden ser esta factura, o un servicio sin cobros que arranca cerca. Medido el 2026-09-14: Real Shipping
+ *     INV-9 (6.000) contra sus cuotas de 1.500 + 1.500, que no suman la factura, y Alliance RH INV-46 contra la entrada
+ *     de «Capacitación Sales».
  * Devuelve el porqué en palabras, o null. ⚠ No frena por las dudas: la factura va a la lista de una persona.
  */
 export function posibleDuplicado(
@@ -409,6 +414,14 @@ export function posibleDuplicado(
     if (ajena) {
       return `La cuenta «${idx.cuentaPorId.get(candidata.id)?.nombre ?? candidata.id}» tiene una cuota sin número de ${cuota(ajena)}: puede ser esta misma factura en otra cuenta. Resolvé cuál es la cuenta antes de cargar.`;
     }
+  }
+  const venta = laMismaVenta(
+    { cuentaId, numero: f.numero, fecha: f.fechaFactura, monto, moneda: f.moneda, cobroIds: [], servicioIds: [] },
+    (idx.cobrosPorCuenta.get(cuentaId) ?? []).filter((c) => !atados.has(c.id)),
+    idx.serviciosPorCuenta.get(cuentaId) ?? [],
+  );
+  if (venta) {
+    return `${nombre} tiene, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta, y cargar esta factura la contaría dos veces. Decidilo antes de cargarla.`;
   }
   return null;
 }
@@ -627,6 +640,41 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
     if (facturas.length) grupos.push({ clave: g.clave, cuentaId: g.cuenta.cuentaId, iva, facturas });
   }
 
+  /* 3b. Una factura del Excel que ya está anotada en un cobro y puede ser una venta que Nexus tenía en otro servicio: la
+     misma regla que antes de cargar, sobre lo cargado. ⛔ No revierte nada: queda para una persona. Medido el 2026-09-14:
+     Real Shipping INV-9 y Alliance RH INV-46 entraron cobradas en la primera corrida y el detector no las vio. */
+  const cobroPorId2 = new Map(ctx2.cobros.map((c) => [c.id, c]));
+  for (const p of propuestas2.values()) {
+    if (p.atadura !== "NUMERO" || !p.numero || !p.cuenta || p.veredicto === "NO_ES_CARTERA") continue;
+    const suyos = p.cobros.flatMap((a) => cobroPorId2.get(a.id) ?? []);
+    const [primero] = suyos;
+    const [fecha] = suyos.map((c) => c.fechaEmision ?? c.fechaProgramada).sort();
+    if (!primero || !fecha) continue;
+    const monto = Math.round(suyos.reduce((a, c) => a + c.monto, 0) * 100) / 100;
+    const venta = laMismaVenta(
+      {
+        cuentaId: p.cuenta.cuentaId,
+        numero: p.numero,
+        fecha,
+        monto,
+        moneda: primero.moneda,
+        cobroIds: suyos.map((c) => c.id),
+        servicioIds: [...new Set(suyos.map((c) => c.servicioId))],
+      },
+      (idx2.cobrosPorCuenta.get(p.cuenta.cuentaId) ?? []).filter((c) => !atados2.has(c.id)),
+      idx2.serviciosPorCuenta.get(p.cuenta.cuentaId) ?? [],
+    );
+    if (!venta) continue;
+    const estados = [...new Set(suyos.map((c) => ESTADO_EN_PALABRAS[c.estado] ?? c.estado))].join(", ");
+    aPersona({
+      ...dePropuesta(p),
+      monto,
+      moneda: primero.moneda,
+      motivo: "POSIBLE_DUPLICADO",
+      detalle: `${p.cuenta.nombre} ya tiene cargada la factura ${p.numero} (${fmtMontoLibro(monto, primero.moneda)}, ${estados}) y, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta contada dos veces. Nexus no revierte nada: decidilo en el cronograma de la cuenta (también sale en Cobranza › Odoo › «Lo que no cuadra»).`,
+    });
+  }
+
   /* Una anotación va a la bitácora solo si el cobro es de verdad el de esa factura. ⛔ Nunca la de un plan de
      pagos que espera decisión (Kaizen: «no tocar»). */
   const seguraParaAnotar = (a: AnotacionDeCobro, p: PropuestaDelLibro | undefined) =>
@@ -830,7 +878,7 @@ export type GrupoDelResumen = { titulo: string; cantidad: number; montos: MontoE
 
 export const ETIQUETA_PARA_UNA_PERSONA: Readonly<Record<MotivoParaUnaPersona, string>> = {
   SIN_CUENTA: "facturas de clientes sin cuenta elegida en Nexus",
-  POSIBLE_DUPLICADO: "facturas que pueden ser una cuota que Nexus ya tiene",
+  POSIBLE_DUPLICADO: "facturas que pueden ser una cuota o una venta que Nexus ya tiene",
   FALTA_IVA: "facturas sin decir si el total trae IVA",
   COBRADO_SIN_PAGAR: "cobradas en Nexus y sin pagar en el Excel, fuera de las tres de Alex",
   NO_COINCIDE: "facturas donde Nexus y el Excel no dicen lo mismo",

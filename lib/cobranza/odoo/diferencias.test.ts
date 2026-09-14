@@ -29,6 +29,7 @@ import {
   type CobroParaCruzar,
   type DiferenciaOdoo,
   type DocumentoDelLibro,
+  type ServicioParaCruzar,
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
 } from "./diferencias";
@@ -45,6 +46,8 @@ const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   fechaEmision: "2026-07-15",
   numeroFactura: null,
   plataformaFactura: null,
+  servicioId: "srv1",
+  servicio: "Servicio",
   ...p,
 });
 
@@ -54,6 +57,7 @@ const alDia = {
   ultimaCorridaOk: "2026-09-02",
   /* Sin lote del Excel de Alexander: ninguna cuota trae su documento del libro. */
   libro: new Map<string, DocumentoDelLibro>(),
+  servicios: new Array<ServicioParaCruzar>(),
 };
 
 const factura = (p: Partial<FacturaParaCruzar> = {}): FacturaParaCruzar => ({
@@ -854,6 +858,7 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
     cuentasTotales: 4,
     cuentasVinculadas: new Set<string>(["odoo"]),
     libro: new Map<string, DocumentoDelLibro>(),
+    servicios: new Array<ServicioParaCruzar>(),
     /* ⇒ corte = 2026-08-18 (15 días de gracia). */
     ultimaCorridaOk: "2026-09-02" as string | null,
     aceptadas: new Map<string, string>(),
@@ -1110,6 +1115,7 @@ describe("«Lo que no cuadra» con el número de la factura", () => {
     cuentasTotales: 3,
     cuentasVinculadas: new Set<string>(["cta1", "cta2", "merc"]),
     libro: new Map<string, DocumentoDelLibro>(),
+    servicios: new Array<ServicioParaCruzar>(),
     /* ⇒ corte = 2026-08-18 (15 días de gracia). */
     ultimaCorridaOk: "2026-09-02" as string | null,
     aceptadas: new Map<string, string>(),
@@ -1748,5 +1754,70 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       expect.arrayContaining(["ODOO-FACTURA-VARIAS-CUOTAS", "ODOO-MONTO", "ODOO-NUMERO-SIN-DOCUMENTO", "ODOO-LIBERADAS-PENDIENTES", "ODOO-COBRO-FACTURADO-EN-MERCURY"]),
     );
     expect(coberturaDelCruce(todo)).toEqual({ facturasSinCasa: [], facturasRepetidas: [], cobrosSinCasa: [], cobrosRepetidos: [] });
+  });
+});
+
+/**
+ * ── ⭐ 2026-09-14 · LA MISMA VENTA CONTADA DOS VECES ─────────────────────────────
+ * Real Shipping INV-9 (US$6.000) entró cobrada desde el Excel y la cuenta ya tenía sus cuotas 1 y 2 (US$1.500 cada una,
+ * facturadas al día siguiente). Alliance RH INV-46 (US$120) entró cobrada y «Capacitación Sales» no generó sus cobros.
+ * La regla vive en lib/cobranza/venta-duplicada.ts; acá, que la página la muestre sin contar nada dos veces.
+ */
+describe("⭐ «Lo que no cuadra» muestra la misma venta contada dos veces", () => {
+  const cuentas = [
+    { id: "rs", nombre: "Real Shipping & Trade", tipo: "INTERNACIONAL", viaCobro: "MERCURY" },
+    { id: "al", nombre: "Alliance RH", tipo: "INTERNACIONAL", viaCobro: "MERCURY" },
+  ];
+  const libroUSD = "Facturación importada del libro de Alex (USD)";
+  const cobros = [
+    cobro({ id: "inv9", cuentaId: "rs", cuentaNombre: "Real Shipping & Trade", servicioId: "libro-rs", servicio: libroUSD, periodo: "2026-01", fechaProgramada: "2026-01-15", fechaEmision: "2026-01-15", monto: 6000, estado: "COBRADO", numeroFactura: "INV-9" }),
+    ...[1, 2].map((n) =>
+      cobro({ id: `rs-${n}`, cuentaId: "rs", cuentaNombre: "Real Shipping & Trade", servicioId: "impl", servicio: "Real Shipping", periodo: "2026-07", fechaProgramada: "2026-07-15", fechaEmision: "2026-01-16", monto: 1500, estado: "COBRADO" }),
+    ),
+    cobro({ id: "inv46", cuentaId: "al", cuentaNombre: "Alliance RH", servicioId: "libro-al", servicio: libroUSD, periodo: "2026-08", fechaProgramada: "2026-08-07", fechaEmision: "2026-08-07", monto: 120, estado: "COBRADO", numeroFactura: "INV-46" }),
+  ];
+  const servicios: ServicioParaCruzar[] = [
+    { id: "cap", cuentaId: "al", descripcion: "Capacitación Sales", moneda: "USD", montoTotal: 240, fechaInicio: "2026-08-15", activo: true, cobros: 0 },
+  ];
+  const estado = {
+    ...alDia,
+    cuentasVinculadas: new Set<string>(),
+    cuentasSinVinculo: 0,
+    cuentasTotales: 0,
+    liberaciones: [],
+    cuentas,
+    aceptadas: new Map<string, string>(),
+    facturas: [],
+    cobros,
+    servicios,
+  };
+
+  it("Real Shipping y Alliance RH salen en una línea, con la plata en duda y sin ser la casa de nadie", () => {
+    const l = detectarDiferenciasOdoo(estado).find((i) => i.codigo === "VENTA-CONTADA-DOS-VECES");
+    expect(l?.titulo).toBe("2 ventas pueden estar contadas dos veces en su cuenta");
+    expect(l?.donde).toBe("PREGUNTANDO");
+    expect(l?.items).toEqual([
+      {
+        texto: "Real Shipping & Trade — INV-9 por US$6.000",
+        monto: 3000,
+        moneda: "USD",
+        nota: "2026-01-15 · cobrado · puede ser la misma venta que US$1.500 facturada el 2026-01-16 (cobrada) + US$1.500 facturada el 2026-01-16 (cobrada), de «Real Shipping»",
+      },
+      {
+        texto: "Alliance RH — INV-46 por US$120",
+        monto: 120,
+        moneda: "USD",
+        nota: "2026-08-07 · cobrado · puede ser la misma venta que el servicio «Capacitación Sales» (US$240, arranca el 2026-08-15, todavía sin cobros)",
+      },
+    ]);
+    expect(l?.plata.map((p) => p.clave)).toEqual(["c:rs-1", "c:rs-2", "s:cap"]);
+    expect(l?.documentos).toEqual([]);
+    expect(resumenDeDiferencias(detectarDiferenciasOdoo(estado)).plata).toEqual([{ moneda: "USD", monto: 3120 }]);
+  });
+
+  it("⛔ con el número de la factura anotado en las cuotas, ya no es una venta doble", () => {
+    const anotadas = cobros.map((c) => (c.id.startsWith("rs-") ? { ...c, numeroFactura: "INV-9" } : c));
+    const l = detectarDiferenciasOdoo({ ...estado, cobros: anotadas, servicios: [] });
+    expect(l.map((i) => i.codigo)).not.toContain("VENTA-CONTADA-DOS-VECES");
   });
 });

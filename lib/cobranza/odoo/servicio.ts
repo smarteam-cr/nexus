@@ -39,7 +39,7 @@ import {
   type DiferenciaOdoo,
   type EstadoDelCruce,
 } from "./diferencias";
-import { documentosDelUltimoLibro } from "../libro-alex-server";
+import { documentosDelUltimoLibro, leerServiciosDeVenta } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
@@ -480,7 +480,7 @@ export async function cargarEstadoDelCruce(): Promise<{
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: Date }>;
   medido: MedidoDelCruce;
 }> {
-  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk, libro] = await Promise.all([
+  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk, libro, servicios] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -496,6 +496,9 @@ export async function cargarEstadoDelCruce(): Promise<{
         numeroFactura: true,
         /* Etapa 12: la plataforma anotada en la factura manda sobre la de la cuenta (su SQL va antes del deploy). */
         plataformaFactura: true,
+        /* La venta contada dos veces compara cuotas de servicios distintos (2026-09-14). */
+        servicioId: true,
+        servicio: { select: { descripcion: true, tipoServicio: true } },
         cuenta: { select: { client: { select: { name: true } } } },
       },
       orderBy: [{ fechaProgramada: "asc" }, { id: "asc" }],
@@ -543,6 +546,7 @@ export async function cargarEstadoDelCruce(): Promise<{
     ultimaCorridaOk(),
     /* Lo que el Excel de Alexander dice de las cuotas sin número (ACCCSA, facturada por Mercury). Sin lote, vacío. */
     documentosDelUltimoLibro(),
+    leerServiciosDeVenta(),
   ]);
   const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
   /* ⚠ Solo las cuentas nacionales que facturan por Odoo: son las únicas que se pueden emparejar. Medido el
@@ -566,6 +570,8 @@ export async function cargarEstadoDelCruce(): Promise<{
       fechaEmision: c.fechaEmision ? c.fechaEmision.toISOString().slice(0, 10) : null,
       numeroFactura: c.numeroFactura,
       plataformaFactura: c.plataformaFactura,
+      servicioId: c.servicioId,
+      servicio: c.servicio.descripcion ?? c.servicio.tipoServicio,
     })),
     facturas: facturasDb.map((f) => ({
       id: f.id,
@@ -607,6 +613,7 @@ export async function cargarEstadoDelCruce(): Promise<{
       viaCobro: c.viaCobro,
     })),
     libro,
+    servicios,
     cuentasSinVinculo,
     cuentasTotales,
     cuentasVinculadas,

@@ -31,6 +31,7 @@
 import { esDocumentoVivo, type DocumentoDelLibro } from "./odoo/diferencias";
 import { centavos, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "./montos";
 import { plataformaDelNumero } from "./numero-factura";
+import type { ServicioDeVenta } from "./venta-duplicada";
 import { candidatasPorNombre, claveSociedad, type SociedadConocida, type ViaDeNombre } from "./sociedades";
 import { normalizarTexto, type ColorLibro, type EstadoLibro, type FilaLibro, type SeccionLibro } from "./libro-alex-lectura";
 
@@ -90,6 +91,9 @@ export type CobroParaLibro = {
   promesaPago: string | null;
 };
 
+/** Un servicio contratado con cuántos cobros generó (el de venta-duplicada.ts). */
+export type ServicioParaLibro = ServicioDeVenta;
+
 export type ContextoLibro = {
   cuentas: readonly CuentaParaLibro[];
   vinculos: readonly VinculoParaLibro[];
@@ -97,6 +101,11 @@ export type ContextoLibro = {
   cobros: readonly CobroParaLibro[];
   /** Nombres de los aliados comerciales (HubSpot, Atom Chat, Cooby). */
   aliados: readonly string[];
+  /**
+   * Los servicios de las cuentas, con cuántos cobros generaron: la carga avisa una factura que puede ser una venta que
+   * Nexus ya tiene en otro servicio (Real Shipping INV-9, Alliance RH INV-46, 2026-09-14).
+   */
+  servicios: readonly ServicioParaLibro[];
 };
 
 /* ── Decisiones de Alex ─────────────────────────────────────────────────────────── */
@@ -146,6 +155,7 @@ export type IndiceLibro = {
   /** En orden de fecha programada y cuota: el reparto no cambia entre dos aperturas. */
   cobrosPorCuenta: ReadonlyMap<string, readonly CobroParaLibro[]>;
   cobrosPorNumero: ReadonlyMap<string, readonly CobroParaLibro[]>;
+  serviciosPorCuenta: ReadonlyMap<string, readonly ServicioParaLibro[]>;
   /** Cuentas con alguna factura del espejo que llevó impuesto. */
   cuentasConIva: ReadonlySet<string>;
   sociedades: readonly SociedadConocida[];
@@ -166,6 +176,8 @@ export function indexarContexto(ctx: ContextoLibro): IndiceLibro {
     agregar(cobrosPorCuenta, c.cuentaId, c);
     if (c.numeroFactura) agregar(cobrosPorNumero, c.numeroFactura, c);
   }
+  const serviciosPorCuenta = new Map<string, ServicioParaLibro[]>();
+  for (const s of ctx.servicios) agregar(serviciosPorCuenta, s.cuentaId, s);
   const cuentasConIva = new Set<string>();
   for (const f of ctx.facturas) {
     const cuentaId = vinculoPorPartner.get(f.odooPartnerId)?.cuentaId;
@@ -177,6 +189,7 @@ export function indexarContexto(ctx: ContextoLibro): IndiceLibro {
     facturaPorNumero: new Map(ctx.facturas.map((f) => [f.numero, f])),
     cobrosPorCuenta,
     cobrosPorNumero,
+    serviciosPorCuenta,
     cuentasConIva,
     sociedades: ctx.cuentas.map((c) => ({ id: c.cuentaId, nombres: [c.nombre, c.razonSocial], cedula: c.cedulaJuridica })),
     aliados: ctx.aliados.map((a) => ({ id: a, nombres: [a] })),

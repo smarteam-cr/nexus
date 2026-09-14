@@ -106,6 +106,7 @@ const ctx: ContextoLibro = {
     cobroDeNexus({ id: "kz2", cuentaId: "kaizen", periodo: "2026-10", monto: 9100 }),
   ],
   aliados: [],
+  servicios: [],
 };
 
 const filas: FilaLibro[] = [
@@ -316,5 +317,69 @@ describe("las piezas del plan", () => {
     expect(cargas?.montos).toEqual([{ moneda: "CRC", monto: 704563 }]);
     for (const g of resumen) expect(new Set(g.montos.map((m) => m.moneda)).size).toBe(g.montos.length);
     expect(resumen.find((g) => g.titulo.startsWith("Pagadas según el Excel"))?.titulo).toContain("no se tocan");
+  });
+});
+
+/* ── 4. La misma venta contada dos veces ────────────────────────────────────────── */
+
+/**
+ * Medido el 2026-09-14: la primera corrida cargó cobradas Real Shipping INV-9 (US$6.000) y Alliance RH INV-46 (US$120).
+ * Real Shipping ya tenía sus cuotas 1 y 2 (US$1.500 cada una, facturadas al día siguiente) y el detector no saltó porque
+ * 1.500 + 1.500 no es 6.000; Alliance RH tiene «Capacitación Sales» sin cobros generados. ⛔ Nada se revierte: se avisa.
+ */
+describe("la misma venta contada dos veces: queda para una persona, nunca se revierte", () => {
+  const DEL_LIBRO = "Facturación importada del libro de Alex (USD)";
+  const base: ContextoLibro = {
+    cuentas: [
+      { cuentaId: "rs", nombre: "Real Shipping & Trade", razonSocial: null, cedulaJuridica: null, tipo: "INTERNACIONAL", viaCobro: "MERCURY" },
+      { cuentaId: "al", nombre: "Alliance RH", razonSocial: null, cedulaJuridica: null, tipo: "INTERNACIONAL", viaCobro: "MERCURY" },
+    ],
+    vinculos: [],
+    facturas: [],
+    cobros: [1, 2].map((n) =>
+      cobroDeNexus({ id: `rs-${n}`, cuentaId: "rs", servicioId: "impl", servicio: "Real Shipping", periodo: "2026-07", monto: 1500, estado: "COBRADO", confirmadoPor: ALEX, fechaEmision: "2026-01-16", numCuota: n }),
+    ),
+    aliados: [],
+    servicios: [{ id: "cap", cuentaId: "al", descripcion: "Capacitación Sales", moneda: "USD", montoTotal: 240, fechaInicio: "2026-08-15", activo: true, cobros: 0 }],
+  };
+  const filasVenta: FilaLibro[] = [
+    filaDelLibro({ hoja: MERCURY, fila: 5, seccion: "MERCURY", cliente: "Real Shipping & Trade", numero: "INV-9", fechaFactura: "2026-01-15", fechaPago: "2026-01-23", total: 6000, estado: "PAGADO", periodo: "2026-01" }),
+    filaDelLibro({ hoja: MERCURY, fila: 60, seccion: "MERCURY", cliente: "Alliance RH", numero: "INV-46", fechaFactura: "2026-08-07", fechaPago: "2026-08-14", total: 120, estado: "PAGADO", periodo: "2026-08" }),
+  ];
+  const conFirma = { ...opciones, cobrarConFirma: ALEX };
+
+  it("antes de cargar: INV-9 e INV-46 no se cargan y quedan como posible duplicado", () => {
+    const plan = planDeCargaCompleta(filasVenta, base, conFirma);
+    expect(plan.cargas).toEqual([]);
+    const dudas = plan.paraUnaPersona.filter((x) => x.motivo === "POSIBLE_DUPLICADO");
+    expect(dudas.map((x) => x.numero).sort()).toEqual(["INV-46", "INV-9"]);
+    expect(dudas.find((x) => x.numero === "INV-9")?.detalle).toContain(
+      "US$1.500 facturada el 2026-01-16 (cobrada) + US$1.500 facturada el 2026-01-16 (cobrada), de «Real Shipping»: puede ser la misma venta",
+    );
+    expect(dudas.find((x) => x.numero === "INV-46")?.detalle).toContain("el servicio «Capacitación Sales» (US$240, arranca el 2026-08-15, todavía sin cobros)");
+  });
+
+  it("ya cargadas, como quedaron en producción: la corrida no cambia nada, las deja para una persona, y la segunda dice lo mismo", () => {
+    const firma = "egonzalez@smarteamcr.com";
+    const cargadas: ContextoLibro = {
+      ...base,
+      cobros: [
+        ...base.cobros,
+        cobroDeNexus({ id: "inv9", cuentaId: "rs", servicioId: "libro-rs", servicio: DEL_LIBRO, periodo: "2026-01", fechaProgramada: "2026-01-15", fechaEmision: "2026-01-15", monto: 6000, estado: "COBRADO", confirmadoPor: firma, numeroFactura: "INV-9" }),
+        cobroDeNexus({ id: "inv46", cuentaId: "al", servicioId: "libro-al", servicio: DEL_LIBRO, periodo: "2026-08", fechaProgramada: "2026-08-07", fechaEmision: "2026-08-07", monto: 120, estado: "COBRADO", confirmadoPor: firma, numeroFactura: "INV-46" }),
+      ],
+    };
+    const plan = planDeCargaCompleta(filasVenta, cargadas, conFirma);
+    expect(plan.sinCambios, "⛔ no revierte nada").toBe(true);
+    const dudas = plan.paraUnaPersona.filter((x) => x.motivo === "POSIBLE_DUPLICADO");
+    expect(dudas.map((x) => [x.numero, x.monto, x.moneda])).toEqual([
+      ["INV-9", 6000, "USD"],
+      ["INV-46", 120, "USD"],
+    ]);
+    expect(dudas[0]?.detalle).toMatch(/^Real Shipping & Trade ya tiene cargada la factura INV-9 \(US\$6\.000, cobrada\) y, a pocos días y en otro servicio, /);
+    expect(dudas[0]?.detalle).toContain("Nexus no revierte nada");
+    const segunda = planDeCargaCompleta(filasVenta, plan.contextoFinal, { ...conFirma, bitacora: plan.bitacoraFinal });
+    expect(segunda.sinCambios).toBe(true);
+    expect(segunda.paraUnaPersona).toEqual(plan.paraUnaPersona);
   });
 });
