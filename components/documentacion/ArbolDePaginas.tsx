@@ -107,6 +107,11 @@ function ramasHastaElSlug(arbol: NodoDelArbol[], slug: string | null): Set<strin
   return abiertas;
 }
 
+/** Si la página con ese slug es este nodo o cuelga de él, a cualquier profundidad. */
+function contieneElSlug(nodo: NodoDelArbol, slug: string): boolean {
+  return nodo.slug === slug || nodo.hijas.some((h) => contieneElSlug(h, slug));
+}
+
 export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -192,11 +197,13 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
       bloqueada ? "Página bloqueada." : "Página desbloqueada.",
     );
 
-  const archivar = (id: string) =>
-    conAviso(
-      () => fetchJson(`/api/documentacion/paginas/${id}/archivar`, { method: "POST" }),
-      "Archivada. Queda en la papelera.",
-    );
+  const archivar = (nodo: NodoDelArbol) =>
+    conAviso(async () => {
+      await fetchJson(`/api/documentacion/paginas/${nodo.id}/archivar`, { method: "POST" });
+      // Archivar se lleva también las subpáginas. Si la que está abierta se fue a la papelera,
+      // quedarse acá es mirar una página que ya no está: se vuelve a Inicio.
+      if (slugActual && contieneElSlug(nodo, slugActual)) router.replace("/documentacion");
+    }, "Archivada. Queda en la papelera.");
 
   const alSoltar = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -248,7 +255,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar 
         label: "Archivar",
         danger: true,
         disabled: nodo.fija,
-        onSelect: () => void archivar(nodo.id),
+        onSelect: () => void archivar(nodo),
       },
     ];
 

@@ -9,7 +9,7 @@
  * página sin abrir.
  */
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -39,7 +39,9 @@ export default async function PaginaDeDocumentacion({
 
   const { slug } = await params;
   const pagina = await paginaPorSlug(slug);
-  if (!pagina || pagina.archivadaAt) notFound();
+  // Una página archivada, o que ya no existe, no es un callejón sin salida: quien llega justo
+  // después de archivarla, desde otra pestaña o por un enlace viejo, vuelve a Inicio.
+  if (!pagina || pagina.archivadaAt) redirect("/documentacion");
 
   const contenido = sanearBloques(pagina.contenido);
 
