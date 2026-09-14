@@ -1960,7 +1960,11 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
   const historia = huerfanas.filter(esHistoria);
   const facturasSinCobro = huerfanas.filter((f) => !esHistoria(f));
   if (facturasSinCobro.length) {
-    const plata = facturasSinCobro.map((f) => ({ clave: `f:${f.id}`, moneda: f.moneda, monto: f.montoNeto }));
+    /* ⚠ Lo que falta cobrar, no el neto entero: una factura pagada en parte suma su saldo, con la misma clave y el mismo
+       monto que le pone la línea de notas de crédito. Medido el 2026-09-14: desde que una factura sin pagar dejó de ser
+       historia, MTS FAC/2025/0186 (US$1.140) y Forestales FAC/2025/0166 (US$700), pagadas en parte, entraban al
+       encabezado con el neto entero. */
+    const plata = facturasSinCobro.map(plataDeFactura);
     const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-FACTURA-SIN-COBRO",
@@ -1985,14 +1989,15 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       resuelve: "COBRANZA",
       items: facturasSinCobro
         .slice()
-        .sort((a, b) => b.montoNeto - a.montoNeto)
+        .sort((a, b) => netoPorCobrar(b) - netoPorCobrar(a))
         .slice(0, 60)
         .map((f) => ({
-          texto: `${f.odooPartnerNombre} — ${fmt(f.montoNeto, f.moneda)}`,
-          monto: f.montoNeto,
+          texto: `${f.odooPartnerNombre} — ${fmt(netoPorCobrar(f), f.moneda)}`,
+          monto: netoPorCobrar(f),
           moneda: f.moneda,
           nota:
             `${f.numero} · ${f.invoiceDate} · ${estadoDePagoEnPalabras(f)}` +
+            (f.paymentState === "partial" ? ` de ${fmt(f.montoNeto, f.moneda)}` : "") +
             (antesDelPrimerCobro(f) ? " · de antes del primer cobro que Nexus tiene de la cuenta" : ""),
         })),
     });

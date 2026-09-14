@@ -1331,6 +1331,21 @@ describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => 
     expect(l?.montos).toEqual([{ moneda: "CRC", monto: 704563 }]);
   });
 
+  it("una factura pagada en parte suma lo que falta cobrar, no el neto entero (MTS FAC/2025/0186, 2026-09-14)", () => {
+    const l = detectarDiferenciasOdoo({
+      ...base,
+      cobros: [],
+      facturas: [
+        factura({ id: "p", odooMoveId: 1, numero: "FAC/2026/0186", invoiceDate: "2026-08-15", montoNeto: 1140, montoTotal: 1288.2, montoResidual: 644.1, paymentState: "partial" }),
+      ],
+    }).find((i) => i.codigo === "ODOO-FACTURA-SIN-COBRO");
+    expect(l?.montos).toEqual([{ moneda: "USD", monto: 570 }]);
+    expect(l?.plata).toEqual([{ clave: "f:p", moneda: "USD", monto: 570 }]);
+    expect(l?.items).toEqual([
+      { texto: "INVERSIONES TURISTICAS MONTEVERDE SOCIEDAD ANONIMA — US$570", monto: 570, moneda: "USD", nota: "FAC/2026/0186 · 2026-08-15 · pagada en parte de US$1.140" },
+    ]);
+  });
+
   it("⛔ ningún texto que se lee dice in_payment, espejo, sync ni viaCobro", () => {
     const lista = detectarDiferenciasOdoo({
       ...base,

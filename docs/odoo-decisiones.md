@@ -916,6 +916,10 @@ ventana baja o se exige que la factura venga de una carga.
 Y `coberturaDelCruce` acepta las líneas a mirar: una prueba le quita una casa a una factura y le duplica otra a un
 cobro, y la cobertura tiene que decirlo.
 
+Y «facturas sin cobro» suma lo que falta cobrar, no el neto entero, igual que la línea de notas de crédito: MTS
+FAC/2025/0186 (US$1.140, pagada en parte) suma US$570 y Forestales FAC/2025/0166 (US$700) suma US$350. Las 6 facturas de
+2025 que dejaron de ser historia suman US$2.015, no US$2.935.
+
 **Por qué.** Medido en producción el mismo día, en solo lectura, cruzando el estado de pago por fuera del detector:
 TEC-AE FAC/2026/0272 (US$3.240, abril y mayo cobradas en Nexus, sin pagar en Odoo) estaba solo en «varias cuotas», que
 no suma ni dice el estado de pago; MTS FAC/2026/0280 (US$440, abril cobrada, sin pagar en Odoo y también en el Excel de
