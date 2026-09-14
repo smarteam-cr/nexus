@@ -25,7 +25,9 @@ import { Tabs } from "@/components/ui";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 
-type Pestana = "que-es" | "emparejar" | "no-cuadra";
+export type Pestana = "que-es" | "emparejar" | "no-cuadra";
+
+export const PESTANAS: readonly Pestana[] = ["que-es", "emparejar", "no-cuadra"];
 
 interface CorridaDelEspejo {
   iniciadaEn: string;
@@ -47,6 +49,7 @@ export default function OdooClient({
   conteos,
   puedeVerCorridas,
   puedeEditar,
+  pestanaInicial,
 }: {
   /** `cobranza.write`: decide si se dibujan los controles que cierran una línea a mano. */
   puedeEditar: boolean;
@@ -54,11 +57,16 @@ export default function OdooClient({
   conteos: Conteos;
   /** Solo SUPER_ADMIN llega a /integrations/odoo. Sin esto el enlace sería un rebote. */
   puedeVerCorridas?: boolean;
+  /**
+   * La pestaña que pidió el enlace (`?pestana=no-cuadra`). La usa «Rendimiento de cobranza» del punto de
+   * equilibrio: sin esto, «Revisalas en Lo que no cuadra» abría en «Emparejar» mientras falte emparejar.
+   */
+  pestanaInicial?: Pestana;
 }) {
   const [tab, setTab] = useState<Pestana>(
     /* Arranca donde está el trabajo: si falta emparejar, esa es la pestaña. Si ya está todo
-       emparejado, lo que queda es resolver diferencias. */
-    conteos.cuentasVinculadas < conteos.cuentas ? "emparejar" : "no-cuadra",
+       emparejado, lo que queda es resolver diferencias. Un enlace que pide una pestaña manda. */
+    pestanaInicial ?? (conteos.cuentasVinculadas < conteos.cuentas ? "emparejar" : "no-cuadra"),
   );
 
   return (

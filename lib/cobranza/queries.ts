@@ -103,6 +103,8 @@ import {
 } from "./partners";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
+import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
+import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import {
   devengarComisiones,
@@ -2297,6 +2299,8 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
   imputacion: ImputacionReporte;
   /** Todo lo que no cuadra, en una sola lista y ordenado por la plata que mueve. */
   inconsistencias: Inconsistencia[];
+  /** Lo que está en la calle según el último Excel de Alex, por moneda, con la diferencia explicada. */
+  cobranzaContraExcel: ComparacionConExcel;
 }
 
 /**
@@ -2364,6 +2368,9 @@ export async function loadReporteAnual(
         fechaCobro: true,
         servicio: { select: { tipoServicio: true } },
         cuenta: { select: { creditoDias: true } },
+        // Solo para poner cada cobro por cobrar al lado de su factura del Excel de Alex.
+        id: true,
+        cuentaId: true,
       },
     }),
     prisma.comisionPartner.findMany({
@@ -2463,6 +2470,8 @@ export async function loadReporteAnual(
 
   // ── Ingresos ────────────────────────────────────────────────────────────────
   const ingresos: IngresoDeMes[] = [];
+  /** Lo facturado del año y sin cobrar, cobro por cobro: lo que se compara con el Excel de Alex. */
+  const porCobrarDelAnio: PorCobrarParaExcel[] = [];
   let cobradosSinFecha = 0;
   let cobradosTotales = 0;
   for (const c of filasCobro) {
@@ -2487,6 +2496,15 @@ export async function loadReporteAnual(
     if (t.tipo === "COBRADO") {
       cobradosTotales++;
       if (t.sinFechaDeCobro) cobradosSinFecha++;
+    }
+    if (t.tipo === "POR_COBRAR" && periodos.includes(t.periodo) && c.fechaEmision) {
+      porCobrarDelAnio.push({
+        cobroId: c.id,
+        cuentaId: c.cuentaId,
+        moneda: c.moneda,
+        monto: num(c.monto)!,
+        fechaEmision: isoDay(c.fechaEmision)!,
+      });
     }
     ingresos.push({
       periodo: t.periodo,
@@ -2591,9 +2609,14 @@ export async function loadReporteAnual(
   // Se arma acá y no en el motor puro porque mira cosas que el reporte no toca: ventas,
   // vínculos con HubSpot, servicios sin plan de cobro. El motor sigue contestando "cuánto
   // cuesta y cuánto entra"; esto contesta "qué falta arreglar".
-  const inconsistencias = detectarInconsistencias(
-    await armarEstadoParaAuditar(anio, hoyISO, reporte, cobradosSinFecha, cobradosTotales, divisor),
-  );
+  //
+  // La comparación con el Excel de Alex va en paralelo y no puede tumbar el reporte: si falla, devuelve
+  // su propio estado de error.
+  const [estadoParaAuditar, cobranzaContraExcel] = await Promise.all([
+    armarEstadoParaAuditar(anio, hoyISO, reporte, cobradosSinFecha, cobradosTotales, divisor),
+    cargarEnLaCalleContraExcel(porCobrarDelAnio, hoyISO),
+  ]);
+  const inconsistencias = detectarInconsistencias(estadoParaAuditar);
 
   return {
     ...reporte,
@@ -2603,6 +2626,7 @@ export async function loadReporteAnual(
       mesesPlanillaIncompleta,
     },
     inconsistencias,
+    cobranzaContraExcel,
   };
 }
 

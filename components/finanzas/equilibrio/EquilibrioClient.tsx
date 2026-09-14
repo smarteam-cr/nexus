@@ -36,6 +36,7 @@ import TablaMeses from "./TablaMeses";
 import EstructuraCostos from "./EstructuraCostos";
 import ConfiabilidadDato from "./ConfiabilidadDato";
 import InconsistenciasPanel from "./InconsistenciasPanel";
+import RendimientoCobranza from "./RendimientoCobranza";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -140,6 +141,17 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const aperturaCobranza = monedasCobranza.some(([m]) => m !== moneda)
     ? monedasCobranza.map(([m, c]) => `${m}: ${pct(c.sobreFacturado)} · ${pct(c.sobreExigible)}`).join(" | ")
     : undefined;
+  // «Cuentas por cobrar» junta las monedas pasadas a la del reporte, y «Rendimiento de cobranza» las da
+  // por separado. ⚠ Sin decirlo acá, US$52.177,96 contra US$50.768,83 + ₡704.563 parecen dos números que
+  // se contradicen (2026-09-14).
+  const otrasPorCobrar = monedasCobranza.filter(([m, c]) => m !== moneda && c.porCobrar > 0);
+  const tasasDelAnio = [...new Set(r.fx.tasas.map((t) => t.crcPorUsd))];
+  const conversionPorCobrar =
+    otrasPorCobrar.length === 0 || faltanTasas
+      ? null
+      : `incluye ${otrasPorCobrar.map(([m, c]) => fmtMonto(c.porCobrar, m)).join(" + ")} pasados a ${moneda} ${
+          tasasDelAnio.length === 1 ? `a ₡${tasasDelAnio[0]!.toLocaleString("es-CR")} por dólar` : "con la tasa de cada mes"
+        }`;
   const proyectado = r.indicadores.partnershipProyectadoTotal;
   const cubreElPiso = r.criterios.partnershipCubreElPiso;
 
@@ -204,7 +216,14 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
         ind.porCobrarTotal > 0
           ? `${fmtMonto(ind.porCobrarVencidoTotal, moneda)} vencido · ${fmtMonto(ind.cobranza.enPlazo, moneda)} en plazo`
           : "Facturado sin cobrar",
-      detalle: deAntes.length > 0 ? `y ${deAntes.join(" + ")} de facturas de años anteriores` : undefined,
+      detalle:
+        [
+          conversionPorCobrar,
+          "sin IVA",
+          deAntes.length > 0 ? `y ${deAntes.join(" + ")} de facturas de años anteriores` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || undefined,
       serie: null,
     },
     {
@@ -315,6 +334,16 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               al recargar la página vuelven los datos reales.
             </Alert>
           )}
+
+          {/* Arriba de todo, la cobranza por moneda contra el Excel de Alex: es la cifra que se va a
+              comparar con el resumen de Finanzas, y la tarjeta «Cuentas por cobrar» no se puede comparar
+              porque convierte. No depende del escenario: simular mueve lo facturado, no la cobranza. */}
+          <RendimientoCobranza
+            anio={r.anio}
+            cobranza={r.cobranzaPorMoneda}
+            deAniosAnteriores={r.porCobrarDeAniosAnteriores}
+            excel={r.cobranzaContraExcel}
+          />
 
           {/* Indicadores. Los que mapean a una serie son botones y ciclan igual que los
               tags de la leyenda —enfocan, sacan del reporte, devuelven—; los que no, son
