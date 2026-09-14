@@ -31,7 +31,7 @@ import {
   type PartnerOdoo,
   type PropuestaEmparejado,
 } from "./emparejado";
-import { detectarDiferenciasOdoo, huellaDe, numeroVerificableEnOdoo, type DiferenciaOdoo } from "./diferencias";
+import { contarDocumentos, detectarDiferenciasOdoo, huellaDe, numeroVerificableEnOdoo, type DiferenciaOdoo } from "./diferencias";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
@@ -436,7 +436,17 @@ export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nom
 export async function cargarDiferencias(): Promise<{
   inconsistencias: DiferenciaOdoo[];
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
-  medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
+  medido: {
+    cobros: number;
+    /** Facturas vivas de Odoo. */
+    facturas: number;
+    /** Notas de crédito y documentos anulados o revertidos: «364 facturas» eran 296 facturas y 68 de estos. */
+    otrosDocumentos: number;
+    cuentasSinVinculo: number;
+    cuentasTotales: number;
+    /** Día de la última copia buena de Odoo (`YYYY-MM-DD`): el pie de las líneas de Odoo lo dice. */
+    espejoAl: string | null;
+  };
 }> {
   const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk] = await Promise.all([
     prisma.cobro.findMany({
@@ -474,6 +484,9 @@ export async function cargarDiferencias(): Promise<{
         invoiceDate: true,
         montoNeto: true,
         montoTotal: true,
+        /* «Por cobrar», «sin saldo» y «nota sin aplicar» salen de acá (2026-09-13). La columna es del SQL del
+           espejo original: está en producción desde el primer sync. */
+        montoResidual: true,
         montoImpuesto: true,
         moneda: true,
         moveType: true,
@@ -497,9 +510,14 @@ export async function cargarDiferencias(): Promise<{
     prisma.facturaLiberada.findMany({ where: { resueltaEn: null }, orderBy: { liberadaEn: "desc" } }),
     ultimaCorridaOk(),
   ]);
-  const cuentasTotales = cuentasDb.length;
   const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
-  const cuentasSinVinculo = cuentasDb.filter((c) => !cuentasVinculadas.has(c.id)).length;
+  /* ⚠ Solo las cuentas nacionales que facturan por Odoo: son las únicas que se pueden emparejar. Medido el
+     2026-09-13, el «falta emparejar 24 de 51» contaba cuentas de Mercury y cuentas internacionales sin ninguna
+     factura en Odoo, que nunca se van a emparejar; esas tienen su propia línea. */
+  const emparejables = cuentasDb.filter((c) => c.viaCobro === "ODOO" && c.tipo !== "INTERNACIONAL");
+  const cuentasTotales = emparejables.length;
+  const cuentasSinVinculo = emparejables.filter((c) => !cuentasVinculadas.has(c.id)).length;
+  const espejoAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
 
   const inconsistencias = detectarDiferenciasOdoo({
     cobros: cobrosDb.map((c) => ({
@@ -525,6 +543,7 @@ export async function cargarDiferencias(): Promise<{
       invoiceDate: f.invoiceDate.toISOString().slice(0, 10),
       montoNeto: Number(f.montoNeto),
       montoTotal: Number(f.montoTotal),
+      montoResidual: Number(f.montoResidual),
       montoImpuesto: Number(f.montoImpuesto),
       moneda: f.moneda,
       moveType: f.moveType,
@@ -556,9 +575,10 @@ export async function cargarDiferencias(): Promise<{
     cuentasSinVinculo,
     cuentasTotales,
     cuentasVinculadas,
-    ultimaCorridaOk: corridaOk ? corridaOk.toISOString().slice(0, 10) : null,
+    ultimaCorridaOk: espejoAl,
     aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
   });
+  const documentos = contarDocumentos(facturasDb);
 
   return {
     inconsistencias,
@@ -568,7 +588,14 @@ export async function cargarDiferencias(): Promise<{
       aceptadaPor: a.aceptadaPor,
       aceptadaEn: a.aceptadaEn.toISOString(),
     })),
-    medido: { cobros: cobrosDb.length, facturas: facturasDb.length, cuentasSinVinculo, cuentasTotales },
+    medido: {
+      cobros: cobrosDb.length,
+      facturas: documentos.facturas,
+      otrosDocumentos: documentos.otros,
+      cuentasSinVinculo,
+      cuentasTotales,
+      espejoAl,
+    },
   };
 }
 

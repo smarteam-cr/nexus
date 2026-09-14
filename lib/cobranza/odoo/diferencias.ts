@@ -1,23 +1,26 @@
 /**
  * lib/cobranza/odoo/diferencias.ts
  *
- * Todo lo que no cuadra entre Nexus y Odoo, en una sola lista ordenada por plata. Es la mesa
- * de trabajo con el CFO: «son estas cosas, en este orden, y estas las decidís vos».
+ * Todo lo que no cuadra entre Nexus y Odoo, en una sola lista. Es la mesa de trabajo con el CFO:
+ * «son estas cosas, en este orden, y estas las decidís vos».
  *
  * PURO: cero Prisma, cero red, cero `new Date()`. Entra lo medido, sale la lista.
  *
- * Reusa el contrato de `lib/finanzas/inconsistencias.ts` —y por lo tanto su pantalla— con sus
- * dos reglas, que acá valen igual:
+ * Reusa el contrato de `lib/finanzas/inconsistencias.ts` con sus dos reglas, que acá valen igual:
  *   1. **Todo se DETECTA, nada se escribe a mano.** Una lista hardcodeada de hallazgos
  *      envejece sola: sigue mostrando lo arreglado y calla lo nuevo.
  *   2. **Cada línea dice cuánta plata mueve y quién la resuelve.** Sin monto no se prioriza;
  *      sin dueño no se cierra nunca.
  *
- * ⚠⚠ **Este módulo NO convierte moneda.** Cuando hay dólares y colones en la misma línea se
- * muestran por separado, nunca sumados. `convertir()` de lib/finanzas/equilibrio.ts sigue
- * siendo el único punto de conversión del sistema.
+ * ⚠⚠ **Este módulo NO convierte moneda, y desde el 2026-09-13 tampoco suma monedas a la vista.**
+ * Cada línea trae su plata una cifra por moneda (`montos`) y los documentos que la componen (`plata`),
+ * y el encabezado suma por moneda sin repetir documentos (`resumenDeDiferencias`). Hasta entonces el
+ * encabezado decía «121 693 746» sumando colones con dólares, contaba dos veces ₡26 millones y dejaba
+ * afuera US$543.281. `convertir()` de lib/finanzas/equilibrio.ts sigue siendo el único punto de
+ * conversión del sistema.
  */
 import type { Inconsistencia, ItemInconsistencia } from "@/lib/finanzas/inconsistencias";
+import { centavos as CENTAVOS, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "../montos";
 import { normalizarNumeroFactura, plataformaDelNumero } from "../numero-factura";
 
 /* ── Cómo se cierra cada línea ──────────────────────────────────────────────────── */
@@ -28,14 +31,38 @@ import { normalizarNumeroFactura, plataformaDelNumero } from "../numero-factura"
  */
 export type DondeSeArregla =
   | "ODOO" // hay que tocar el ERP
-  | "MERCURY" // se factura por fuera de Odoo: el espejo NUNCA va a cerrar esta línea solo
+  | "MERCURY" // se factura por fuera de Odoo: la copia de Odoo NUNCA va a cerrar esta línea sola
   | "NEXUS" // se arregla acá adentro
   | "PREGUNTANDO"; // no lo resuelve nadie tecleando: falta un dato de negocio
 
+/** Plata de UNA moneda. Una lista de estas nunca se suma entre sí. */
+export interface MontoEnMoneda {
+  moneda: string;
+  monto: number;
+}
+
 /**
- * Una diferencia con su salida. Extiende el contrato de `inconsistencias.ts` —así la lista
- * sigue ordenándose por plata y sumando sin doble conteo— y le agrega lo único que ese
- * contrato no tiene: **los pasos concretos**.
+ * Un documento o un cobro que una línea cuenta como plata que no cuadra.
+ *
+ * `clave` identifica la cosa, no la línea —`f:` una factura de Odoo, `c:` un cobro de Nexus, `l:` una
+ * factura soltada, `m:` la diferencia de monto de una factura—, para que el encabezado la sume UNA vez
+ * aunque la miren dos líneas. ⚠ Es lo que reemplaza a `yaContadoEn` como regla de conteo: esa marca
+ * solo se ponía cuando TODAS las facturas de una línea estaban en otra, y ninguna línea real lo cumplía.
+ */
+export interface PlataDeLinea {
+  clave: string;
+  moneda: string;
+  monto: number;
+}
+
+export interface ItemDiferencia extends ItemInconsistencia {
+  /** La moneda de `monto`. ⚠ Sin ella el monto no se muestra: un número sin moneda es el que se suma mal. */
+  moneda?: string;
+}
+
+/**
+ * Una diferencia con su salida. Extiende el contrato de `inconsistencias.ts` y le agrega lo que ese
+ * contrato no tiene: **los pasos concretos** y **la plata por moneda**.
  *
  * ⚠ `queHacer` del contrato original es UNA oración. Alcanza para un titular y no para
  * ejecutar: quien abre esta pantalla necesita saber en qué sistema entrar, qué buscar, y qué
@@ -52,19 +79,30 @@ export interface DiferenciaOdoo extends Inconsistencia {
   /**
    * Una acción por fila del detalle, para las líneas que **solo cierra una persona**.
    *
-   * ⛔ No la lleva ninguna línea que un sync pueda cerrar. Poder marcar «hecho» a mano algo que
-   * el espejo verifica sería poder esconder un documento que sigue emitido — que es justo lo
+   * ⛔ No la lleva ninguna línea que la copia de Odoo pueda cerrar. Poder marcar «hecho» a mano algo
+   * que la copia verifica sería poder esconder un documento que sigue emitido — que es justo lo
    * contrario de para qué existe la lista.
    */
   accionPorItem?: { etiqueta: string; ayuda: string };
   /**
    * Cómo se cierra ESTA línea, cuando no es como se cierran las demás de su `donde`.
    *
-   * ⚠ El pie genérico de ODOO promete «al día siguiente el sync trae el cambio y la línea
-   * desaparece sola». Para una liberación sin número de documento eso es falso, y una promesa
-   * falsa sobre cuándo desaparece algo es cómo se aprende a ignorar una lista entera.
+   * ⚠ El pie genérico de ODOO promete que la línea se actualiza sola con la próxima copia. Para una
+   * liberación sin número de documento eso es falso, y una promesa falsa sobre cuándo desaparece algo
+   * es cómo se aprende a ignorar una lista entera.
    */
   pie?: string;
+  items: ItemDiferencia[];
+  /**
+   * Lo que mueve la línea, una cifra por moneda (dólares primero). Vacío = no se cuantifica.
+   * ⚠ Es lo que muestra la tarjeta. `montoEnJuego` queda como la cifra mayor, solo por contrato.
+   */
+  montos: MontoEnMoneda[];
+  /**
+   * Los documentos que la línea suma al encabezado. Vacío = la línea informa y no suma: pagos sin
+   * conciliar, exentas, moneda ya corregida, facturas de varias cuotas. Ver `resumenDeDiferencias`.
+   */
+  plata: PlataDeLinea[];
   /**
    * `true` = alguien la marcó «está bien así» y sus números no cambiaron desde entonces.
    *
@@ -90,7 +128,7 @@ export interface CobroParaCruzar {
    * Cuándo se marcó facturado (`Cobro.fechaEmision`, `YYYY-MM-DD`), o null si no lo está.
    *
    * ⚠ Es una FECHA y no un booleano desde el 2026-09-12: «cobro sin factura» solo puede acusar
-   * lo que el espejo ya tuvo tiempo de ver, y eso depende de cuándo se facturó.
+   * lo que la copia de Odoo ya tuvo tiempo de ver, y eso depende de cuándo se facturó.
    */
   fechaEmision: string | null;
   /**
@@ -118,6 +156,12 @@ export interface FacturaParaCruzar {
   invoiceDate: string;
   montoNeto: number;
   montoTotal: number;
+  /**
+   * Lo que Odoo deja sin pagar (o sin aplicar, en una nota de crédito), con IVA. Obligatorio desde el
+   * 2026-09-13: «por cobrar», «sin saldo» y «nota sin aplicar» salen de acá, y un cargador que no lo
+   * pasara haría que todo pareciera pagado.
+   */
+  montoResidual: number;
   montoImpuesto: number;
   moneda: string;
   moveType: string;
@@ -167,12 +211,12 @@ export interface EstadoDelCruce {
   /** Las facturas soltadas al recuadrar un acuerdo, resueltas y sin resolver. */
   liberaciones: LiberacionParaCruzar[];
   cuentas: CuentaParaCruzar[];
-  /** Cuentas de Nexus sin cliente de Odoo asignado todavía. */
+  /** Cuentas que facturan por Odoo sin cliente de Odoo asignado todavía. */
   cuentasSinVinculo: number;
   cuentasTotales: number;
   /** Las cuentas con al menos un cliente de Odoo vinculado. Sin vínculo no hay contra qué verificar. */
   cuentasVinculadas: ReadonlySet<string>;
-  /** Día (`YYYY-MM-DD`) en que empezó la última corrida BUENA del espejo. null = nunca corrió bien. */
+  /** Día (`YYYY-MM-DD`) en que empezó la última copia BUENA de Odoo. null = nunca corrió bien. */
   ultimaCorridaOk: string | null;
   /** Claves de diferencias que alguien ya marcó «está bien así», con su huella. */
   aceptadas: ReadonlyMap<string, string>;
@@ -224,10 +268,11 @@ export interface ResultadoCruce {
   montosDistintos: MontoDistinto[];
 }
 
-const CENTAVOS = (n: number) => Math.round(n * 100);
 const DIA = 86_400_000;
 const dias = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DIA;
 const restarDias = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) - n * DIA).toISOString().slice(0, 10);
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const anioDe = (iso: string) => Number(iso.slice(0, 4));
 
 /**
  * ¿Este documento es una factura que alguien debe o ya pagó? Factura —no nota de crédito—, no
@@ -235,7 +280,7 @@ const restarDias = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00
  *
  * ⭐ UNA sola regla para todo el módulo. Antes cada línea filtraba a su manera: `cruzar()` sacaba
  * las notas y las anuladas pero no las REVERTIDAS, y las líneas de moneda, «sin cuenta»,
- * in_payment y exentas no sacaban nada. Medido el 2026-09-12:
+ * pagos sin conciliar y exentas no sacaban nada. Medido el 2026-09-12:
  *   · las 4 filas de Publimark por 11.541.250 —una revertida en USD, su nota de crédito en USD y
  *     dos facturas vivas en CRC— salían como «el mismo monto en dos monedas», y eran las que
  *     dictaban el «95,8 % de la facturación en dólares» que el texto tenía escrito a mano;
@@ -250,11 +295,91 @@ export function esDocumentoVivo(f: Pick<FacturaParaCruzar, "moveType" | "state" 
 }
 
 /**
- * Cuántos días se le dan al espejo para traer una factura marcada en Nexus antes de acusarla.
+ * ¿Odoo la da por cobrar? Viva y sin pagar, del todo o en parte.
+ *
+ * ⚠ Pagada sin conciliar con el banco NO es por cobrar: Odoo ya registró el pago (medido el
+ * 2026-09-13: las 181 facturas en ese estado tienen saldo 0).
+ */
+export function estaPorCobrar(f: Pick<FacturaParaCruzar, "moveType" | "state" | "paymentState">): boolean {
+  return esDocumentoVivo(f) && (f.paymentState === "not_paid" || f.paymentState === "partial");
+}
+
+/** Lo que falta cobrar de una factura, sin IVA como todo Nexus. Pago parcial: la parte del neto que queda. */
+function netoPorCobrar(f: FacturaParaCruzar): number {
+  if (f.paymentState === "partial" && f.montoTotal > 0) return round2((f.montoNeto * f.montoResidual) / f.montoTotal);
+  return f.montoNeto;
+}
+
+/** Lo que una nota de crédito tiene sin aplicar, con IVA: su saldo, o el total si Odoo no la tocó. */
+const saldoDeNota = (f: FacturaParaCruzar) => (f.paymentState === "partial" ? f.montoResidual : f.montoTotal);
+
+const PAGO_EN_PALABRAS: Readonly<Record<string, string>> = {
+  not_paid: "sin pagar",
+  partial: "pagada en parte",
+  paid: "pagada",
+  in_payment: "pagada sin conciliar con el banco",
+  reversed: "revertida",
+  invoicing_legacy: "de antes de Odoo",
+};
+
+/** El estado de un documento como lo dice una persona. ⛔ Nunca el código de Odoo en pantalla. */
+export function estadoDePagoEnPalabras(f: Pick<FacturaParaCruzar, "moveType" | "state" | "paymentState">): string {
+  if (f.state === "cancel") return "anulada";
+  if (f.moveType === "out_refund") {
+    if (f.paymentState === "not_paid") return "nota de crédito sin aplicar";
+    if (f.paymentState === "partial") return "nota de crédito aplicada en parte";
+    return "nota de crédito aplicada";
+  }
+  return PAGO_EN_PALABRAS[f.paymentState] ?? "estado de pago desconocido";
+}
+
+const NOMBRE_DE_MONEDA: Readonly<Record<string, string>> = { USD: "dólares", CRC: "colones" };
+const nombreDeMoneda = (m: string) => NOMBRE_DE_MONEDA[m] ?? m;
+
+/** Dólares primero, después colones, después cualquier otra: el mismo orden en toda la pantalla. */
+const ordenDeMoneda = (m: string) => (m === "USD" ? 0 : m === "CRC" ? 1 : 2);
+
+/** Suma por moneda, SIN convertir, dólares primero. Es la única forma en que esta lista junta plata. */
+export function montosPorMoneda(xs: ReadonlyArray<{ monto: number; moneda: string }>): MontoEnMoneda[] {
+  const sumas = new Map<string, number>();
+  for (const x of xs) sumas.set(x.moneda, (sumas.get(x.moneda) ?? 0) + x.monto);
+  return [...sumas]
+    .map(([moneda, monto]) => ({ moneda, monto: round2(monto) }))
+    .sort((a, b) => ordenDeMoneda(a.moneda) - ordenDeMoneda(b.moneda) || a.moneda.localeCompare(b.moneda));
+}
+
+/** «US$27.420 + ₡72.493.913,64». Cada cifra con su moneda: nunca un número pelado. */
+export function textoDeMontos(ms: readonly MontoEnMoneda[]): string {
+  return ms.map((m) => fmtMontoLibro(m.monto, m.moneda)).join(" + ");
+}
+
+const fmt = (n: number, moneda: string) => fmtMontoLibro(n, moneda);
+const principal = (ms: readonly MontoEnMoneda[]): number | null => (ms.length ? Math.max(...ms.map((m) => m.monto)) : null);
+
+/**
+ * El año contra el que se decide qué es de este año y qué es historia: el de la última copia buena de
+ * Odoo, o si nunca corrió, el de la factura más nueva. PURO: el reloj no entra a este módulo.
+ */
+export function anioDeReferencia(estado: Pick<EstadoDelCruce, "ultimaCorridaOk" | "facturas">): number | null {
+  if (estado.ultimaCorridaOk) return anioDe(estado.ultimaCorridaOk);
+  const anios = estado.facturas.map((f) => anioDe(f.invoiceDate)).filter((n) => Number.isFinite(n));
+  return anios.length ? Math.max(...anios) : null;
+}
+
+/** Cuántos documentos son facturas vivas y cuántos notas de crédito o anulados: «364 facturas» eran 296. */
+export function contarDocumentos(
+  facturas: ReadonlyArray<Pick<FacturaParaCruzar, "moveType" | "state" | "paymentState">>,
+): { facturas: number; otros: number } {
+  const vivas = facturas.filter(esDocumentoVivo).length;
+  return { facturas: vivas, otros: facturas.length - vivas };
+}
+
+/**
+ * Cuántos días se le dan a la copia de Odoo para traer una factura marcada en Nexus antes de acusarla.
  *
  * Medido el 2026-09-12 sobre los 54 pares cobro-factura con fecha de emisión: en 43 la factura de
  * Odoo lleva fecha de hasta 15 días DESPUÉS de la que Nexus anotó al marcar facturado. Con menos
- * gracia, un espejo al día acusaría en falso lo que simplemente todavía no se emitió. Es además
+ * gracia, una copia al día acusaría en falso lo que simplemente todavía no se emitió. Es además
  * una quincena, el ritmo en que trabaja la cobranza de esta casa (el mismo corte que INV28).
  */
 export const DIAS_DE_GRACIA_DEL_ESPEJO = 15;
@@ -343,7 +468,7 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
          no hay contra qué buscarlo. Sigue por monto, como antes de la etapa 8. */
       sinNumero.push(c);
     } else if (forma !== "ODOO") {
-      /* INV-16 es de Mercury: el espejo de Odoo no lo va a tener nunca. */
+      /* INV-16 es de Mercury: la copia de Odoo no lo va a tener nunca. */
       conNumeroSinPar.push(c);
     } else {
       const k = `${c.cuentaId}|${c.moneda}|${numero}`;
@@ -386,22 +511,27 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
 
   /* Segunda pasada, solo para los que no tienen número: monto exacto. Se hace ENTERA antes de la
      aproximada para que una coincidencia perfecta nunca pierda su factura contra una parecida de
-     otro cobro. */
+     otro cobro.
+     ⚠ Por cercanía de TODOS los pares a la vez, no cuota por cuota. Medido el 2026-09-13 en Honda: la cuota
+     de mayo se quedaba con la factura de julio (la más cercana que le quedaba) y la de junio con la de
+     agosto, así que las de julio y agosto —con su factura del mismo día— quedaban «sin factura» y la
+     factura de mayo + junio (FAC/2026/0311) parecía de otras cuotas. Primero se juntan los pares más
+     cercanos; el empate lo deciden los ids, así la lista no cambia entre dos cargas. */
+  const exactos: Array<{ c: CobroParaCruzar; f: FacturaParaCruzar; distancia: number }> = [];
   for (const c of sinNumero) {
-    const cands = (porCuenta.get(c.cuentaId) ?? [])
-      .filter(
-        (f) =>
-          !usadas.has(f.id) &&
-          f.moneda === c.moneda &&
-          CENTAVOS(f.montoNeto) === CENTAVOS(c.monto) &&
-          dias(f.invoiceDate, c.fechaProgramada) <= VENTANA_EXACTO_DIAS,
-      )
-      .sort(porCercania(c));
-    const hit = cands[0];
-    if (hit) {
-      usadas.add(hit.id);
-      pares.push({ cobroId: c.id, facturaId: hit.id, cuentaNombre: c.cuentaNombre, monto: c.monto, moneda: c.moneda, cuotas: 1 });
+    for (const f of porCuenta.get(c.cuentaId) ?? []) {
+      if (usadas.has(f.id) || f.moneda !== c.moneda || CENTAVOS(f.montoNeto) !== CENTAVOS(c.monto)) continue;
+      const distancia = dias(f.invoiceDate, c.fechaProgramada);
+      if (distancia <= VENTANA_EXACTO_DIAS) exactos.push({ c, f, distancia });
     }
+  }
+  exactos.sort((a, b) => a.distancia - b.distancia || a.c.id.localeCompare(b.c.id) || a.f.odooMoveId - b.f.odooMoveId);
+  const conExacto = new Set<string>();
+  for (const { c, f } of exactos) {
+    if (conExacto.has(c.id) || usadas.has(f.id)) continue;
+    conExacto.add(c.id);
+    usadas.add(f.id);
+    pares.push({ cobroId: c.id, facturaId: f.id, cuentaNombre: c.cuentaNombre, monto: c.monto, moneda: c.moneda, cuotas: 1 });
   }
 
   /* Tercera: misma cuenta, misma moneda, fecha cerca, monto distinto. Es la línea más útil
@@ -443,25 +573,17 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
   };
 }
 
-/* ── La lista ───────────────────────────────────────────────────────────────────── */
-
-const fmt = (n: number, moneda: string) =>
-  `${moneda} ${n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/* ── La moneda equivocada ───────────────────────────────────────────────────────── */
 
 /**
- * Suma por moneda, SIN convertir. Devuelve el total de la moneda que más plata mueve, que es
- * lo que va en `montoEnJuego` para poder ordenar la lista — y el desglose completo va en el
- * detalle, para que nadie lea el titular como si fuera el total del mundo.
+ * Las notas de crédito que Odoo tiene sin aplicar, del todo o en parte, por cliente de Odoo, moneda y neto.
+ * La usan dos reglas: la moneda equivocada (una factura con su nota ya no es un par abierto) y la línea
+ * de notas sin aplicar.
  */
-function porMoneda(xs: ReadonlyArray<{ monto: number; moneda: string }>): { texto: string; principal: number } {
-  const sumas = new Map<string, number>();
-  for (const x of xs) sumas.set(x.moneda, (sumas.get(x.moneda) ?? 0) + x.monto);
-  const orden = [...sumas.entries()].sort((a, b) => b[1] - a[1]);
-  return {
-    texto: orden.map(([m, v]) => fmt(v, m)).join(" + "),
-    principal: orden[0]?.[1] ?? 0,
-  };
-}
+const esNotaSinAplicar = (f: FacturaParaCruzar) =>
+  f.moveType === "out_refund" && f.state !== "cancel" && (f.paymentState === "not_paid" || f.paymentState === "partial") && saldoDeNota(f) > 0;
+const llaveDeMonto = (f: Pick<FacturaParaCruzar, "odooPartnerId" | "moneda" | "montoNeto">) =>
+  `${f.odooPartnerId}|${f.moneda}|${CENTAVOS(f.montoNeto)}`;
 
 /**
  * ⭐ El mismo cliente con el MISMO monto exacto en dos monedas distintas.
@@ -473,6 +595,10 @@ function porMoneda(xs: ReadonlyArray<{ monto: number; moneda: string }>): { text
  * documentos muertos —Publimark 11.541.250 (la de USD ya revertida con su nota) y Servica 255
  * (las dos revertidas)—: pares que alguien ya había corregido en Odoo, acusados igual.
  *
+ * ⚠ Y sin la factura que ya tiene su nota de crédito sin aplicar del mismo cliente, moneda y neto. Medido
+ * el 2026-09-13: Syntepro ₡829 y Releva ₡60 ya tenían su nota en colones (FAC/2025/0251 y 0244), y la
+ * línea mandaba a emitir una corrección que existía. Esas van a la línea de notas sin aplicar.
+ *
  * ⚠ Se detecta por REGLA y no por una lista de números: una lista se queda vieja y sigue
  * mostrando lo que ya se arregló.
  */
@@ -483,9 +609,10 @@ export function montosEnDosMonedas(facturas: readonly FacturaParaCruzar[]): Arra
   monedas: string[];
   numeros: string[];
 }> {
+  const conNota = new Set(facturas.filter(esNotaSinAplicar).map(llaveDeMonto));
   const grupos = new Map<string, { partner: number; nombre: string; monto: number; monedas: Set<string>; numeros: string[] }>();
   for (const f of facturas) {
-    if (!esDocumentoVivo(f)) continue;
+    if (!esDocumentoVivo(f) || conNota.has(llaveDeMonto(f))) continue;
     const k = `${f.odooPartnerId}|${CENTAVOS(f.montoNeto)}`;
     const g = grupos.get(k) ?? {
       partner: f.odooPartnerId,
@@ -495,7 +622,7 @@ export function montosEnDosMonedas(facturas: readonly FacturaParaCruzar[]): Arra
       numeros: [],
     };
     g.monedas.add(f.moneda);
-    g.numeros.push(`${f.numero} (${f.moneda}, ${f.paymentState})`);
+    g.numeros.push(`${f.numero} (${nombreDeMoneda(f.moneda)}, ${estadoDePagoEnPalabras(f)})`);
     grupos.set(k, g);
   }
   return [...grupos.values()]
@@ -504,16 +631,206 @@ export function montosEnDosMonedas(facturas: readonly FacturaParaCruzar[]): Arra
     .sort((a, b) => b.monto - a.monto);
 }
 
-/* ── Qué cobros facturados se pueden verificar contra el espejo ─────────────────── */
+export interface MonedaCorregida {
+  odooPartnerId: number;
+  odooPartnerNombre: string;
+  monto: number;
+  /** La moneda en que salió mal, con la factura revertida y la nota de crédito que la revirtió. */
+  equivocada: { moneda: string; revertidas: string[]; notas: string[] };
+  /** La moneda en que se volvió a emitir, con sus facturas vivas. */
+  buena: { moneda: string; numeros: string[] };
+}
+
+/**
+ * Las facturas que salieron en la moneda equivocada y ya se corrigieron: en una moneda, la factura
+ * revertida y su nota de crédito; en la otra, la factura viva por el mismo importe, del mismo cliente.
+ *
+ * ── POR QUÉ ES UNA LÍNEA ─────────────────────────────────────────────────────────
+ * Publimark FAC/2026/0232 salió en dólares por 11.541.250, un importe en colones. Se revirtió con
+ * FAC/2026/0243 —una nota de crédito en dólares, por 13.041.612,50 con IVA— y se reemitió en colones
+ * (FAC/2026/0233). No hay plata por cobrar, pero hasta el 2026-09-13 la página lo decía en media frase
+ * de otra línea («notas de crédito por USD 11.595.963,50 que no suman»), que se leía como un error
+ * vivo de once millones de dólares. Dicho entero, se entiende y se confirma.
+ */
+export function monedaEquivocadaYaCorregida(facturas: readonly FacturaParaCruzar[]): MonedaCorregida[] {
+  type Lado = { vivas: FacturaParaCruzar[]; revertidas: FacturaParaCruzar[]; notas: FacturaParaCruzar[] };
+  const grupos = new Map<string, { partner: number; nombre: string; monto: number; lados: Map<string, Lado> }>();
+  for (const f of facturas) {
+    if (f.state === "cancel") continue;
+    const k = `${f.odooPartnerId}|${CENTAVOS(f.montoNeto)}`;
+    let g = grupos.get(k);
+    if (!g) grupos.set(k, (g = { partner: f.odooPartnerId, nombre: f.odooPartnerNombre, monto: f.montoNeto, lados: new Map() }));
+    let lado = g.lados.get(f.moneda);
+    if (!lado) g.lados.set(f.moneda, (lado = { vivas: [], revertidas: [], notas: [] }));
+    if (esDocumentoVivo(f)) lado.vivas.push(f);
+    else if (f.moveType === "out_refund") lado.notas.push(f);
+    else if (f.moveType === "out_invoice" && f.paymentState === "reversed") lado.revertidas.push(f);
+  }
+  const numeros = (fs: FacturaParaCruzar[]) => [...fs].sort((a, b) => a.odooMoveId - b.odooMoveId).map((f) => f.numero);
+  const out: MonedaCorregida[] = [];
+  for (const g of grupos.values()) {
+    const conVivas = [...g.lados].filter(([, l]) => l.vivas.length > 0);
+    const [buena] = conVivas;
+    if (conVivas.length !== 1 || !buena) continue;
+    for (const [moneda, lado] of g.lados) {
+      if (moneda === buena[0] || lado.vivas.length || !lado.revertidas.length || !lado.notas.length) continue;
+      out.push({
+        odooPartnerId: g.partner,
+        odooPartnerNombre: g.nombre,
+        monto: g.monto,
+        equivocada: { moneda, revertidas: numeros(lado.revertidas), notas: numeros(lado.notas) },
+        buena: { moneda: buena[0], numeros: numeros(buena[1].vivas) },
+      });
+    }
+  }
+  return out.sort((a, b) => b.monto - a.monto || a.odooPartnerNombre.localeCompare(b.odooPartnerNombre));
+}
+
+/* ── Notas de crédito sin aplicar ───────────────────────────────────────────────── */
+
+export interface NotaSinAplicar {
+  nota: FacturaParaCruzar;
+  /** Lo que la nota tiene sin aplicar, con IVA. */
+  saldo: number;
+  /** La factura sin pagar que parece anular: mismo cliente, moneda e importe. null = no se encontró. */
+  anula: FacturaParaCruzar | null;
+}
+
+/**
+ * Las notas de crédito que Odoo tiene sin aplicar, con la factura que parecen anular.
+ *
+ * ── POR QUÉ ──────────────────────────────────────────────────────────────────────
+ * Mientras una nota no se aplica, Odoo sigue dando por cobrar la factura que anula. Medido el
+ * 2026-09-13: 14 notas por US$29.930 + ₡1.005. Publimark FAC/2026/0246, US$15.226,75, del mismo día que
+ * FAC/2026/0210, que Odoo daba por cobrar; Global Supply 0248 contra FAC/2026/0206, una de las tres que
+ * Alex devuelve a por cobrar. La página las despachaba con «no suman», y solo las de clientes sin cuenta.
+ *
+ * La factura se busca por lo que dice Odoo y nada más: mismo cliente de Odoo, misma moneda, sin pagar, y
+ * el mismo importe —el saldo con IVA o el neto—, la más cercana en fecha y nunca la misma para dos notas.
+ * Es la regla que nació en «Excel vs Odoo» (06fc81c5) y se rescató antes de borrar esa página.
+ * ⚠ Es una PISTA: la aplica contabilidad, que es quien sabe a qué factura corresponde.
+ */
+export function notasDeCreditoSinAplicar(facturas: readonly FacturaParaCruzar[]): NotaSinAplicar[] {
+  const notas = facturas.filter(esNotaSinAplicar).sort((a, b) => a.odooMoveId - b.odooMoveId);
+  const porCobrar = facturas.filter(estaPorCobrar);
+  const usadas = new Set<string>();
+  const out: NotaSinAplicar[] = [];
+  for (const nota of notas) {
+    const saldo = saldoDeNota(nota);
+    const [anula] = porCobrar
+      .filter((f) => {
+        if (usadas.has(f.id) || f.odooPartnerId !== nota.odooPartnerId || f.moneda !== nota.moneda) return false;
+        const debe = f.paymentState === "partial" ? f.montoResidual : f.montoTotal;
+        return CENTAVOS(debe) === CENTAVOS(saldo) || CENTAVOS(f.montoNeto) === CENTAVOS(nota.montoNeto);
+      })
+      .sort((a, b) => dias(a.invoiceDate, nota.invoiceDate) - dias(b.invoiceDate, nota.invoiceDate) || a.odooMoveId - b.odooMoveId);
+    if (anula) usadas.add(anula.id);
+    out.push({ nota, saldo, anula: anula ?? null });
+  }
+  return out;
+}
+
+/* ── Facturas que cubren varias cuotas ──────────────────────────────────────────── */
+
+/**
+ * Cuántos días puede haber entre la factura y la fecha de cada cuota que cubre: cuatro meses. Medido el
+ * 2026-09-13: Selvatura facturó enero a marzo el 5-may (110 días) y Iberorutas reemitió mayo + junio el
+ * 19-ago, después de revertir la primera (96 días).
+ */
+export const DIAS_DE_VENTANA_VARIAS_CUOTAS = 120;
+
+export interface FacturaDeVariasCuotas {
+  factura: FacturaParaCruzar;
+  /** En orden de fecha. */
+  cobros: CobroParaCruzar[];
+}
+
+const mesAnterior = (iso: string) => {
+  const [anio = 0, mes = 1] = iso.split("-").map(Number);
+  return mes === 1 ? `${anio - 1}-12` : `${anio}-${String(mes - 1).padStart(2, "0")}`;
+};
+
+/**
+ * Las facturas cuyo neto es exactamente la suma de 2 o 3 cuotas sin número de su misma cuenta y moneda,
+ * con una sola combinación posible.
+ *
+ * ── POR QUÉ ──────────────────────────────────────────────────────────────────────
+ * Medido el 2026-09-13: de los US$24.876 de «montos distintos», solo US$40 eran un monto distinto (MTS).
+ * El resto eran facturas de varias cuotas apareadas con una sola (ALMOTEC 6.900 = 3 × 2.300; Iberorutas
+ * «150 contra 7.100», que es mayo + junio de 3.550). Y 14 de los 21 «cobros sin factura» tenían la suya.
+ *
+ * ── DE LA SEÑAL MÁS FUERTE A LA MÁS DÉBIL, CON TODAS LAS FACTURAS EN CADA UNA ──────
+ *  1. cuotas marcadas facturadas el MISMO DÍA de la factura;
+ *  2. cuotas del mes de la factura;
+ *  3. cuotas del mes anterior (facturación a mes vencido);
+ *  4. cualquier cuota a hasta `DIAS_DE_VENTANA_VARIAS_CUOTAS` días.
+ * Es el orden de `asignarCuotas` del libro de Alex. Hecho factura por factura, Ecoquintas —dos servicios,
+ * 1.300 + 1.880, facturados juntos cada mes— daba cuatro combinaciones para cada factura y ninguna salía.
+ *
+ * ⛔ PROPONE, no junta: el cruce sigue igual y la factura NO se aparea con las cuotas. La línea pide anotar
+ * el número en cada una, y el número que anota una persona es lo único que las junta. Con dos
+ * combinaciones posibles, o dos facturas que reclaman la misma cuota con la misma señal, no se propone nada.
+ * ⚠ Una cuota con un número de Odoo o de Mercury ya dijo cuál es su factura: no entra.
+ */
+export function facturasDeVariasCuotas(
+  facturas: readonly FacturaParaCruzar[],
+  cuotas: readonly CobroParaCruzar[],
+): FacturaDeVariasCuotas[] {
+  const fechaDe = (c: CobroParaCruzar) => c.fechaEmision ?? c.fechaProgramada;
+  const sinNumero = cuotas.filter((c) => plataformaDelNumero(normalizarNumeroFactura(c.numeroFactura)) === null);
+  const candidatas = [...new Map(facturas.filter((f) => f.cuentaId && esDocumentoVivo(f)).map((f) => [f.id, f])).values()].sort(
+    (a, b) => a.odooMoveId - b.odooMoveId,
+  );
+  const senales: ReadonlyArray<(f: FacturaParaCruzar, c: CobroParaCruzar) => boolean> = [
+    (f, c) => c.fechaEmision === f.invoiceDate,
+    (f, c) => c.periodo === f.invoiceDate.slice(0, 7),
+    (f, c) => c.periodo === mesAnterior(f.invoiceDate),
+    () => true,
+  ];
+  const usadas = new Set<string>();
+  const asignadas = new Set<string>();
+  const out: FacturaDeVariasCuotas[] = [];
+  for (const senal of senales) {
+    const propuestas: FacturaDeVariasCuotas[] = [];
+    for (const f of candidatas) {
+      if (asignadas.has(f.id)) continue;
+      const cercanas = sinNumero
+        .filter(
+          (c) =>
+            !usadas.has(c.id) &&
+            c.cuentaId === f.cuentaId &&
+            c.moneda === f.moneda &&
+            dias(fechaDe(c), f.invoiceDate) <= DIAS_DE_VENTANA_VARIAS_CUOTAS &&
+            senal(f, c),
+        )
+        .sort((a, b) => dias(fechaDe(a), f.invoiceDate) - dias(fechaDe(b), f.invoiceDate) || a.id.localeCompare(b.id));
+      const r = subconjuntoUnico(cercanas, (c) => CENTAVOS(c.monto), CENTAVOS(f.montoNeto), 2, 3);
+      if (Array.isArray(r)) {
+        propuestas.push({ factura: f, cobros: [...r].sort((a, b) => fechaDe(a).localeCompare(fechaDe(b)) || a.id.localeCompare(b.id)) });
+      }
+    }
+    const usos = new Map<string, number>();
+    for (const p of propuestas) for (const c of p.cobros) usos.set(c.id, (usos.get(c.id) ?? 0) + 1);
+    for (const p of propuestas) {
+      if (!p.cobros.every((c) => usos.get(c.id) === 1)) continue;
+      out.push(p);
+      asignadas.add(p.factura.id);
+      for (const c of p.cobros) usadas.add(c.id);
+    }
+  }
+  return out.sort((a, b) => a.factura.odooMoveId - b.factura.odooMoveId);
+}
+
+/* ── Qué cobros facturados se pueden verificar contra la copia de Odoo ──────────── */
 
 export interface CobrosSinFacturaClasificados {
-  /** El espejo ya tendría que haber visto su factura y no la tiene: ODOO-COBRO-SIN-FACTURA. */
+  /** La copia de Odoo ya tendría que haber visto su factura y no la tiene: ODOO-COBRO-SIN-FACTURA. */
   acusables: CobroParaCruzar[];
   /** Su cuenta factura por Odoo pero no está emparejada: se cuentan en ODOO-SIN-CUENTA, sin monto. */
   sinEmparejar: CobroParaCruzar[];
-  /** Facturados después del corte: el espejo todavía no pudo verlos. */
+  /** Facturados después del corte: la copia todavía no pudo verlos. */
   recientes: CobroParaCruzar[];
-  /** Hasta qué día se verifica. null = el espejo nunca corrió bien y no se verifica nada. */
+  /** Hasta qué día se verifica. null = la copia nunca corrió bien y no se verifica nada. */
   corte: string | null;
 }
 
@@ -523,17 +840,17 @@ export interface CobrosSinFacturaClasificados {
  * ── POR QUÉ ──────────────────────────────────────────────────────────────────────
  * Medido el 2026-09-12: «148 cobros marcados facturados que no tienen factura en Odoo», USD
  * 237.355, severidad ALTA, la cifra más grande de la pantalla. Era un artefacto: sus facturas
- * estaban en el espejo sin atribuir, 46 eran de cuentas sin emparejar y 8 de cuentas que facturan
- * por Mercury, que no tiene espejo. Una acusación que Alex podía salir a trabajar.
+ * estaban en la copia sin atribuir, 46 eran de cuentas sin emparejar y 8 de cuentas que facturan
+ * por Mercury, que no tiene copia. Una acusación que Alex podía salir a trabajar.
  *
  * Solo se acusa un cobro cuando las tres cosas se cumplen:
- *   1. su cuenta factura por ODOO — Mercury y QuickBooks no tienen espejo que lo pueda ver;
+ *   1. su cuenta factura por ODOO — Mercury y QuickBooks no tienen copia que lo pueda ver;
  *   2. su cuenta está emparejada — sin vínculo no hay contra qué buscar;
  *   3. se facturó hasta `DIAS_DE_GRACIA_DEL_ESPEJO` días antes de la última lectura buena de Odoo.
  * Un COBRADO sin fecha de emisión usa la programada: entró plata, algo se tuvo que facturar.
  *
  * ⭐ Desde la etapa 12 manda la plataforma anotada en la factura del cobro, y solo sin ella la de la cuenta:
- * una factura de QuickBooks en una cuenta que factura por Odoo no la va a ver nunca el espejo.
+ * una factura de QuickBooks en una cuenta que factura por Odoo no la va a ver nunca la copia.
  */
 export function clasificarCobrosSinFactura(
   cobrosSolos: readonly CobroParaCruzar[],
@@ -563,7 +880,7 @@ export function clasificarCobrosSinFactura(
  * mandarlo a duplicarla.
  */
 export type PorQueNoTienePar =
-  | "sin-documento" // el espejo no tiene ningún documento con ese número
+  | "sin-documento" // la copia no tiene ningún documento con ese número
   | "otra-cuenta" // es de un cliente de Odoo emparejado con OTRA cuenta de Nexus
   | "sin-atribuir" // es de un cliente de Odoo que no está emparejado con nadie: no se acusa
   | "nota-de-credito" // corrige una factura; no respalda un cobro
@@ -576,19 +893,19 @@ export interface NumeroSinPar {
   /** El número anotado, normalizado. */
   numero: string;
   porQue: PorQueNoTienePar;
-  /** El documento de Odoo con ese número, cuando el espejo lo tiene. */
+  /** El documento de Odoo con ese número, cuando la copia lo tiene. */
   documento: FacturaParaCruzar | null;
 }
 
 /**
  * Por qué se quedó sin factura cada cobro de `ResultadoCruce.conNumeroSinPar`.
  *
- * El número se busca en TODO el espejo y no solo en la cuenta: «Odoo no tiene ese documento» y «es
+ * El número se busca en TODA la copia y no solo en la cuenta: «Odoo no tiene ese documento» y «es
  * de otro cliente» piden arreglos opuestos, y solo mirando afuera de la cuenta se distinguen.
  *
  * ⚠ Clasifica, no acusa. Qué se muestra lo decide `detectarDiferenciasOdoo`: solo cuentas que
  * facturan por Odoo, «sin-atribuir» no se acusa (falta emparejar, no hay nada mal anotado) y
- * «sin-documento» espera a que el espejo haya podido ver el documento.
+ * «sin-documento» espera a que la copia haya podido ver el documento.
  */
 export function clasificarNumerosSinPar(
   cobros: readonly CobroParaCruzar[],
@@ -649,10 +966,10 @@ export function clasificarNumerosSinPar(
  * mandarlo a buscar algo que no puede encontrar.
  */
 export type PorQueSigueAbierta =
-  | "documento-vigente" // ODOO+CANCELAR: el espejo lo sigue trayendo, o sea que nadie lo anuló
+  | "documento-vigente" // ODOO+CANCELAR: la copia lo sigue trayendo, o sea que nadie lo anuló
   | "sin-nota-de-credito" // ODOO+REVERTIR: no aparece la nota de crédito que lo reversa
   | "sin-numero" // se liberó sin un número de documento de Odoo: no hay nada contra qué verificar
-  | "sin-espejo"; // MERCURY / OTRA: no hay sync que la pueda cerrar
+  | "sin-espejo"; // MERCURY / OTRA: no hay copia que la pueda cerrar
 
 export interface LiberacionPendiente {
   liberacion: LiberacionParaCruzar;
@@ -660,9 +977,9 @@ export interface LiberacionPendiente {
 }
 
 /**
- * El número de una factura soltada, si es uno que el espejo de Odoo puede ver: normalizado y con
+ * El número de una factura soltada, si es uno que la copia de Odoo puede ver: normalizado y con
  * forma de Odoo (FAC/2026/0206). null si falta, o si es otra cosa —un número de transferencia, uno de
- * Mercury—, que el sync no va a encontrar nunca.
+ * Mercury—, que la copia no va a encontrar nunca.
  *
  * ⭐ La usan las dos puntas del cierre, y tienen que decir lo mismo: `liberacionesPendientes` (¿se
  * cierra sola?) y `resolverLiberacion` en servicio.ts (¿se deja cerrar a mano?). Si una dijera «con
@@ -677,7 +994,7 @@ export function numeroVerificableEnOdoo(numero: string | null | undefined): stri
  * Cuáles de las facturas soltadas siguen sin resolverse en el ERP.
  *
  * ── LA REGLA DE CIERRE, POR PLATAFORMA ──────────────────────────────────────────
- * **ODOO + CANCELAR** cierra cuando el documento deja de estar vigente en el espejo: el sync
+ * **ODOO + CANCELAR** cierra cuando el documento deja de estar vigente en la copia: el sync
  * solo trae `estadoEspejo: VIGENTE`, así que su desaparición ES la evidencia de que alguien lo
  * anuló o lo borró.
  *
@@ -686,7 +1003,7 @@ export function numeroVerificableEnOdoo(numero: string | null | undefined): stri
  * —eso es lo que distingue revertir de cancelar— así que esperarlo a él sería esperar para
  * siempre.
  *
- * **MERCURY y OTRA no cierran nunca solas.** No tienen espejo. Las cierra una persona, y decirlo
+ * **MERCURY y OTRA no cierran nunca solas.** No tienen copia. Las cierra una persona, y decirlo
  * así es honesto: la alternativa es una línea que se queda abierta para siempre sin explicar por
  * qué, hasta que alguien deja de mirar la lista entera.
  *
@@ -694,7 +1011,7 @@ export function numeroVerificableEnOdoo(numero: string | null | undefined): stri
  * darla por buena para que la lista quede limpia; sería inventar que alguien anuló algo.
  *
  * ⚠⚠ Y «sin número» incluye un número que NO es de Odoo (`numeroVerificableEnOdoo`). Un número de
- * transferencia como 666471587 nunca va a aparecer en el espejo: con CANCELAR, «no está» se leía
+ * transferencia como 666471587 nunca va a aparecer en la copia: con CANCELAR, «no está» se leía
  * como «lo anularon» y la línea desaparecía sola. Es el mismo invento, con un número de por medio.
  *
  * PURA: sin reloj. Cuánto tiempo es demasiado lo decide INV28, que sí lo tiene.
@@ -746,115 +1063,170 @@ export function liberacionesPendientes(
   return out;
 }
 
+/* ── La lista ───────────────────────────────────────────────────────────────────── */
+
+type LineaNueva = Omit<DiferenciaOdoo, "aceptada" | "montoEnJuego" | "yaContadoEn" | "plata"> & { plata?: PlataDeLinea[] };
+
+const SEVERIDAD_ORDEN: Readonly<Record<string, number>> = { ALTA: 0, MEDIA: 1, BAJA: 2 };
+
 /**
- * La lista completa. El orden lo decide la plata, salvo lo que no se puede cuantificar, que
- * va al final.
+ * La lista completa. El orden: lo aceptado al final; después la severidad; dentro de cada severidad,
+ * los dólares y después los colones.
+ *
+ * ⚠ Hasta el 2026-09-13 ordenaba por «la moneda que más mueve» de cada línea, o sea comparando colones
+ * con dólares: «exentas» (baja, ₡1,8 millones, unos US$3.500) quedaba arriba de «cobros sin factura»
+ * (alta, US$27.420).
  */
 export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[] {
   const out: DiferenciaOdoo[] = [];
   const cruce = cruzar(estado.cobros, estado.facturas);
+  const anioRef = anioDeReferencia(estado);
 
   /* ⚠ La huella se calcula SIEMPRE con `huellaDe`, sobre la línea ya armada. Tener una
      segunda definición acá —aunque sea equivalente hoy— hace que la pantalla acepte con una
      huella y el detector compare con otra: la aceptación no surte efecto nunca y nadie
      entiende por qué. Ya pasó al escribir esto; lo cazó `diferencias.test.ts`. */
-  const agregar = (inc: Omit<DiferenciaOdoo, "aceptada">) => {
-    out.push({ ...inc, aceptada: estado.aceptadas.get(inc.codigo) === huellaDe(inc) });
+  const agregar = (inc: LineaNueva) => {
+    const linea = { ...inc, plata: inc.plata ?? [], montoEnJuego: principal(inc.montos) };
+    out.push({ ...linea, aceptada: estado.aceptadas.get(inc.codigo) === huellaDe(linea) });
   };
 
-  /* ⚠ ODOO-SIN-CUENTA es el BALDE: mientras falte emparejar, casi todas las facturas caen
-     ahí, y las líneas más finas —moneda equivocada, exentas, in_payment— son subconjuntos
-     suyos. Sumarlas todas contaría la misma plata tres veces, que es el error que ya se
-     cometió una vez en el módulo del que sale este contrato: el titular decía «$437.579,78
-     en juego» y sumaba $28.880 dos veces porque una categoría era un tercio de la otra.
-
-     `yaContadoEn` existe justamente para eso: la línea conserva su monto —sirve para
-     dimensionarla— pero `resumirInconsistencias` la deja fuera del total. */
-  const idsSinCuenta = new Set(estado.facturas.filter((f) => !f.cuentaId).map((f) => f.id));
-  const contenidaEnSinCuenta = (fs: readonly FacturaParaCruzar[]) =>
-    fs.length > 0 && fs.every((f) => idsSinCuenta.has(f.id)) ? "ODOO-SIN-CUENTA" : undefined;
-
-  /* Los documentos que son plata. El resto se cuenta, pero no suma (ver `esDocumentoVivo`). */
   const vivas = estado.facturas.filter(esDocumentoVivo);
-  const cobrosSolosClasificados = clasificarCobrosSinFactura(cruce.cobrosSolos, estado);
-  /* ⚠ Los cobros con un número que no lleva a su factura no pasan por «cobro sin factura» (no están
-     en `cobrosSolos`): su porqué es más fino y va en las líneas 4 bis. Solo cuentas que facturan por
-     Odoo, igual que la línea 4: en una cuenta de Mercury el espejo no tiene nada que verificar. */
   const viaDeCuenta = new Map(estado.cuentas.map((c) => [c.id, c.viaCobro]));
   const nombreDeCuenta = new Map(estado.cuentas.map((c) => [c.id, c.nombre]));
+  const tipoDeCuenta = new Map(estado.cuentas.map((c) => [c.id, c.tipo]));
+  const cobroPorId = new Map(estado.cobros.map((c) => [c.id, c]));
+  const facturaPorId = new Map(estado.facturas.map((f) => [f.id, f]));
+  const plataDeFactura = (f: FacturaParaCruzar): PlataDeLinea => ({ clave: `f:${f.id}`, moneda: f.moneda, monto: netoPorCobrar(f) });
+
+  /* ⚠ Los cobros con un número que no lleva a su factura no pasan por «cobro sin factura» (no están
+     en `cobrosSolos`): su porqué es más fino y va en las líneas de número. Solo cuentas que facturan por
+     Odoo: en una cuenta de Mercury la copia de Odoo no tiene nada que verificar. */
   const numerosSinPar = clasificarNumerosSinPar(cruce.conNumeroSinPar, estado.facturas).filter(
     (x) => (x.cobro.plataformaFactura ?? viaDeCuenta.get(x.cobro.cuentaId)) === "ODOO",
   );
 
-  /* ── 1. La moneda equivocada ─────────────────────────────────────────────────── */
+  /* Las cuentas que dicen facturar por Odoo y puede que no lo hagan (línea de cuentas internacionales). Se
+     sabe antes de armar nada: sus cobros sin emparejar se cuentan ahí y no en «sin cuenta». ⭐ La evidencia más
+     directa de dónde factura una cuenta es el número de sus facturas: un INV-16 anotado en una cuenta «Odoo»
+     es una factura de Mercury (etapa 8). */
+  const numerosDeMercury = new Map<string, string[]>();
+  for (const x of numerosSinPar) {
+    if (x.porQue !== "numero-de-mercury") continue;
+    let ns = numerosDeMercury.get(x.cobro.cuentaId);
+    if (!ns) numerosDeMercury.set(x.cobro.cuentaId, (ns = []));
+    if (!ns.includes(x.numero)) ns.push(x.numero);
+  }
+  const viaDudosa = estado.cuentas.filter(
+    (c) => c.viaCobro === "ODOO" && (c.tipo === "INTERNACIONAL" || numerosDeMercury.has(c.id)),
+  );
+  const idsDudosas = new Set(viaDudosa.map((c) => c.id));
+
+  /* La moneda equivocada, abierta y ya corregida. */
   const dosMonedas = montosEnDosMonedas(estado.facturas);
   const tieneGemela = (f: FacturaParaCruzar) =>
-    dosMonedas.some((d) => d.odooPartnerId === f.odooPartnerId && CENTAVOS(d.monto) === CENTAVOS(f.montoNeto));
-  if (dosMonedas.length) {
-    const enJuego = dosMonedas.reduce((a, x) => a + x.monto, 0);
-    /* ⚠ El peso se CALCULA. Estaba escrito a mano —«95,8 %»— y lo seguía diciendo cuando el par
-       que lo producía (Publimark) ya estaba revertido en Odoo. */
-    const totalUsd = vivas.filter((f) => f.moneda === "USD").reduce((a, f) => a + f.montoNeto, 0);
-    const mayorEnUsd = Math.max(0, ...dosMonedas.filter((d) => d.monedas.includes("USD")).map((d) => d.monto));
-    const peso = totalUsd > 0 ? mayorEnUsd / totalUsd : 0;
-    agregar({
-      codigo: "ODOO-MONEDA",
-      severidad: "ALTA",
-      titulo: `${dosMonedas.length} montos facturados al mismo cliente en DOS monedas distintas`,
-      detalle:
-        "El mismo cliente tiene facturas vigentes por el importe exacto en dólares y en colones. Con un tipo de cambio de ~500 eso no puede ser casualidad: alguna de las dos salió en la moneda equivocada. " +
-        (peso >= 0.01
-          ? `La más grande sola pesa el ${(peso * 100).toLocaleString("es-CR", { maximumFractionDigits: 1 })} % de toda la facturación en dólares del espejo, así que cualquier número que se mire en dólares está distorsionado hasta que se resuelva.`
-          : "Ninguna llega al 1 % de la facturación en dólares del espejo: no distorsiona los totales, pero en cada par sigue habiendo un documento mal emitido."),
-      montoEnJuego: enJuego,
-      yaContadoEn: contenidaEnSinCuenta(vivas.filter(tieneGemela)),
-      donde: "ODOO",
-      pasos: [
-        "Abrí en Odoo cada par de facturas de la lista de abajo (los números están en cada línea).",
-        "Mirá cuál de las dos salió en la moneda que no era. La pista: el importe idéntico en dólares y en colones no puede ser correcto con un tipo de cambio de ~500.",
-        "Anulá en Odoo la que está mal y, si hace falta, reemitila en la moneda correcta.",
-        "Al día siguiente el sync la trae anulada y la línea desaparece sola.",
-      ],
-      queSignificaAceptar:
-        "Que estos pares en dos monedas son correctos y no hay nada que anular. La línea vuelve si aparece un par nuevo o cambia un monto.",
-      queHacer: "Revisar cada par en Odoo y anular la que salió en la moneda que no era.",
-      resuelve: "DIRECCION",
-      items: dosMonedas.map((x) => ({
-        texto: `${x.odooPartnerNombre} — ${x.monto.toLocaleString("es-CR")} en ${x.monedas.join(" y ")}`,
-        monto: x.monto,
-        nota: x.numeros.join(" · "),
-      })),
-    });
-  }
+    esDocumentoVivo(f) && dosMonedas.some((d) => d.odooPartnerId === f.odooPartnerId && CENTAVOS(d.monto) === CENTAVOS(f.montoNeto));
+  const corregidas = monedaEquivocadaYaCorregida(estado.facturas);
+  const numerosCorregidos = new Set(corregidas.flatMap((c) => [...c.equivocada.revertidas, ...c.equivocada.notas]));
 
-  /* ── 2. Lo que no se sabe de quién es ────────────────────────────────────────── */
+  /* ⚠ Una factura recién liberada queda huérfana POR DISEÑO: soltarla es justamente quitarle el cobro. Se
+     cuenta una vez, en la línea que la explica. */
+  const liberadas = new Set(
+    estado.liberaciones.map((l) => normalizarNumeroFactura(l.referenciaExterna)).filter((n): n is string => !!n),
+  );
+
+  /* ── Las facturas que cubren varias cuotas, antes de acusar montos y cobros ─────────
+     Candidatas: las facturas sin cobro y las que el apareo aproximado juntó con una sola cuota; las cuotas
+     facturadas sin factura y las de esos mismos pares aproximados. ⛔ Nunca un par por número: ahí una
+     persona ya dijo cuál es la factura. */
+  const clasificados = clasificarCobrosSinFactura(cruce.cobrosSolos, estado);
+  const formaConocida = (n: string | null | undefined) => plataformaDelNumero(normalizarNumeroFactura(n)) !== null;
+  const aproximados = cruce.montosDistintos.filter((d) => d.cuotas === 1 && !formaConocida(cobroPorId.get(d.cobroId)?.numeroFactura));
+  const facturado = (c: CobroParaCruzar) => !!c.fechaEmision || c.estado === "COBRADO";
+  const variasCuotas = facturasDeVariasCuotas(
+    [
+      ...cruce.facturasSolas.filter((f) => f.cuentaId && !liberadas.has(f.numero) && !tieneGemela(f)),
+      ...aproximados.flatMap((d) => facturaPorId.get(d.facturaId) ?? []),
+    ],
+    [
+      ...clasificados.acusables,
+      ...clasificados.recientes,
+      ...aproximados.flatMap((d) => {
+        const c = cobroPorId.get(d.cobroId);
+        return c && facturado(c) ? [c] : [];
+      }),
+    ],
+  );
+  const facturasEnVarias = new Set(variasCuotas.map((v) => v.factura.id));
+  const cobrosEnVarias = new Set(variasCuotas.flatMap((v) => v.cobros.map((c) => c.id)));
+
+  const montosDistintos = cruce.montosDistintos.filter(
+    (d) => !facturasEnVarias.has(d.facturaId) && !d.cobroIds.some((id) => cobrosEnVarias.has(id)),
+  );
+  /* Una cuota que el apareo aproximado había juntado con una factura que resultó ser de varias cuotas
+     vuelve a ser lo que es: un cobro que no tiene la suya. */
+  const soltados = cruce.montosDistintos
+    .filter((d) => facturasEnVarias.has(d.facturaId))
+    .flatMap((d) => d.cobroIds)
+    .filter((id) => !cobrosEnVarias.has(id))
+    .flatMap((id) => cobroPorId.get(id) ?? []);
+  const reclasificados = clasificarCobrosSinFactura(soltados, estado);
+  const acusables = [...clasificados.acusables, ...reclasificados.acusables].filter((c) => !cobrosEnVarias.has(c.id));
+  const recientes = [...clasificados.recientes, ...reclasificados.recientes].filter((c) => !cobrosEnVarias.has(c.id));
+  const sinEmparejarTodos = [...clasificados.sinEmparejar, ...reclasificados.sinEmparejar];
+  /* ⚠ Los cobros de cuentas internacionales sin emparejar no se mandan a emparejar: medido el 2026-09-13, 45
+     de los 46 eran de cuentas que no tienen ni una factura en Odoo. Se cuentan en su propia línea. */
+  const sinEmparejar = sinEmparejarTodos.filter((c) => !idsDudosas.has(c.cuentaId));
+  const sinEmparejarDudosas = sinEmparejarTodos.filter((c) => idsDudosas.has(c.cuentaId));
+  const corte = clasificados.corte;
+
+  /* ── 1. Lo que no se sabe de quién es ────────────────────────────────────────── */
   const sinCuentaTodos = estado.facturas.filter((f) => !f.cuentaId);
   const sinCuenta = sinCuentaTodos.filter(esDocumentoVivo);
-  const notasSinCuenta = sinCuentaTodos.filter((f) => f.moveType === "out_refund" && f.state !== "cancel");
-  const muertasSinCuenta = sinCuentaTodos.length - sinCuenta.length - notasSinCuenta.length;
-  /* Los cobros facturados de cuentas sin emparejar se cuentan ACÁ, sin monto: sin vínculo no hay
-     contra qué verificarlos, y acusarlos en la línea 4 era acusar a ciegas. */
-  const { sinEmparejar } = cobrosSolosClasificados;
+  const porCobrarSinCuenta = sinCuenta.filter(estaPorCobrar);
+  const pagadasSinCuenta = sinCuenta.filter((f) => !estaPorCobrar(f));
+  const pagadasViejas = anioRef === null ? 0 : pagadasSinCuenta.filter((f) => anioDe(f.invoiceDate) < anioRef).length;
+  const notasSinCuentaTodas = sinCuentaTodos.filter((f) => f.moveType === "out_refund" && f.state !== "cancel");
+  const notasSinCuenta = notasSinCuentaTodas.filter((f) => !numerosCorregidos.has(f.numero));
+  const notasDeCorreccion = notasSinCuentaTodas.length - notasSinCuenta.length;
+  const muertasSinCuenta = sinCuentaTodos.length - sinCuenta.length - notasSinCuentaTodas.length;
   if (sinCuentaTodos.length || sinEmparejar.length) {
-    const s = porMoneda(sinCuenta.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
-    /* ⚠ «INFLADO» sale de lo detectado: las facturas en dólares de ESTE balde que tienen su gemela
-       exacta en colones. Antes se decía siempre que existiera la línea de moneda, aunque ninguna
-       de sus facturas estuviera acá. */
-    const infladas = sinCuenta.filter((f) => f.moneda === "USD" && tieneGemela(f));
-    const partes = [
-      sinCuentaTodos.length
-        ? `Odoo las emitió pero Nexus todavía no sabe a qué cuenta corresponden, porque falta emparejar ${estado.cuentasSinVinculo} de ${estado.cuentasTotales} clientes.`
-        : `Falta emparejar ${estado.cuentasSinVinculo} de ${estado.cuentasTotales} clientes.`,
-    ];
-    if (sinCuenta.length) partes.push(`Hasta que se emparejen, el semáforo de cobranza no puede usarlas. Suman ${s.texto}.`);
+    const plata = porCobrarSinCuenta.map(plataDeFactura);
+    const montos = montosPorMoneda(plata);
+    /* ⚠ «INFLADO» sale de lo detectado: las facturas en dólares por cobrar de ESTE balde que tienen su
+       gemela exacta en colones. */
+    const infladas = porCobrarSinCuenta.filter((f) => f.moneda === "USD" && tieneGemela(f));
+    const partes: string[] = [];
+    if (porCobrarSinCuenta.length) {
+      partes.push(
+        `Odoo las emitió, siguen sin pagar y Nexus no sabe de qué cuenta son: su cliente de Odoo no está emparejado. Hasta que se emparejen, el semáforo de cobranza no las ve. Suman ${textoDeMontos(montos)} sin IVA.`,
+      );
+    } else if (sinCuenta.length) {
+      partes.push("Ninguna está por cobrar, pero hasta emparejar su cliente de Odoo no se pueden cruzar con los cobros de Nexus.");
+    }
+    if (porCobrarSinCuenta.length && pagadasSinCuenta.length) {
+      partes.push(
+        `Además hay ${pagadasSinCuenta.length} factura(s) ya pagadas${pagadasViejas ? `, ${pagadasViejas} de años anteriores` : ""}: no son plata por cobrar y no suman.`,
+      );
+    }
+    if (estado.cuentasSinVinculo > 0) {
+      partes.push(`Falta emparejar ${estado.cuentasSinVinculo} de ${estado.cuentasTotales} clientes que facturan por Odoo.`);
+    }
     if (infladas.length) {
       partes.push(
-        `⚠ Ese total puede estar INFLADO en ${fmt(infladas.reduce((a, f) => a + f.montoNeto, 0), "USD")}: ${infladas.length === 1 ? "es una factura en dólares que tiene" : `son ${infladas.length} facturas en dólares que tienen`} su gemela exacta en colones (línea «mismo monto en dos monedas»). Si la equivocada es la de dólares, la cifra real en dólares es esa cantidad menor.`,
+        `⚠ Ese total puede estar INFLADO en ${fmt(infladas.reduce((a, f) => a + netoPorCobrar(f), 0), "USD")}: ${infladas.length === 1 ? "es una factura en dólares que tiene" : `son ${infladas.length} facturas en dólares que tienen`} su gemela exacta en colones (línea «mismo monto en dos monedas»). Si la equivocada es la de dólares, la cifra real en dólares es esa cantidad menor.`,
       );
     }
     if (notasSinCuenta.length) {
-      const n = porMoneda(notasSinCuenta.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
-      partes.push(`Además hay ${notasSinCuenta.length} nota(s) de crédito por ${n.texto} que no suman: corrigen facturas, no son plata por cobrar.`);
+      const n = montosPorMoneda(notasSinCuenta.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
+      partes.push(`Hay ${notasSinCuenta.length} nota(s) de crédito por ${textoDeMontos(n)} que no suman: corrigen facturas, no son plata por cobrar.`);
+    }
+    if (notasDeCorreccion) {
+      partes.push(
+        notasDeCorreccion === 1
+          ? "La nota de crédito que corrige una factura emitida en la moneda equivocada va en su propia línea."
+          : `Las ${notasDeCorreccion} notas de crédito que corrigen facturas emitidas en la moneda equivocada van en su propia línea.`,
+      );
     }
     if (muertasSinCuenta > 0) partes.push(`Y ${muertasSinCuenta} documento(s) anulados o revertidos, que tampoco suman.`);
     const numerosSueltos = numerosSinPar.filter((x) => x.porQue === "sin-atribuir");
@@ -870,102 +1242,282 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
     }
     agregar({
       codigo: "ODOO-SIN-CUENTA",
-      severidad: sinCuenta.length > vivas.length / 2 ? "ALTA" : "MEDIA",
-      titulo: sinCuenta.length
-        ? `${sinCuenta.length} facturas de Odoo no están atribuidas a ninguna cuenta`
-        : sinCuentaTodos.length
-          ? `${sinCuentaTodos.length} documentos de Odoo sin cuenta, ninguno por cobrar`
-          : `${sinEmparejar.length} cobros facturados no se pueden verificar: su cuenta no está emparejada`,
+      severidad: porCobrarSinCuenta.length ? "ALTA" : "MEDIA",
+      titulo: porCobrarSinCuenta.length
+        ? `${porCobrarSinCuenta.length} facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados`
+        : sinCuenta.length
+          ? `${sinCuenta.length} facturas de Odoo sin cuenta, ninguna por cobrar`
+          : sinCuentaTodos.length
+            ? `${sinCuentaTodos.length} documentos de Odoo sin cuenta, ninguno por cobrar`
+            : `${sinEmparejar.length} cobros facturados no se pueden verificar: su cuenta no está emparejada`,
       detalle: partes.join(" "),
-      montoEnJuego: sinCuenta.length ? s.principal : null,
+      montos,
+      plata,
       donde: "NEXUS",
       atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
       pasos: [
         "Andá a la pestaña «Emparejar» de esta misma pantalla.",
         "Para cada cuenta, confirmá el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
         "Si un cliente de Odoo no es cliente nuestro, marcalo como ajeno para que deje de aparecer.",
-        /* ⚠ Decía «se atribuyen solas — el sync recalcula la cuenta en cada corrida». Con el sync
-           caído desde el 2-sep fue falso diez días. Ahora es cierto sin depender de él. */
-        "Al confirmar, las facturas de ese cliente pasan a su cuenta en el acto —no hace falta esperar al sync— y sus cobros facturados empiezan a verificarse.",
+        "Al confirmar, las facturas de ese cliente pasan a su cuenta en el acto y sus cobros facturados empiezan a verificarse.",
       ],
       queSignificaAceptar:
         "Que estas facturas pueden quedar sin atribuir y esos cobros sin verificar. Casi nunca es lo correcto: lo que corresponde es emparejar.",
       queHacer: "Emparejar los clientes de Odoo con las cuentas de Nexus en /cobranza/odoo.",
       resuelve: "COBRANZA",
-      items: [...agruparPorPartner(sinCuenta), ...cuentasPorEmparejar(sinEmparejar)],
+      items: [...agruparPorPartner(porCobrarSinCuenta, netoPorCobrar), ...cuentasPorEmparejar(sinEmparejar)],
     });
   }
 
-  /* ── 3. Montos que no coinciden ──────────────────────────────────────────────── */
-  if (cruce.montosDistintos.length) {
-    const s = porMoneda(cruce.montosDistintos.map((d) => ({ monto: Math.abs(d.diferencia), moneda: d.moneda })));
+  /* ── 2. La moneda equivocada ─────────────────────────────────────────────────── */
+  if (dosMonedas.length) {
+    /* ⚠ El peso se CALCULA. Estaba escrito a mano —«95,8 %»— y lo seguía diciendo cuando el par
+       que lo producía (Publimark) ya estaba revertido en Odoo. */
+    const totalUsd = vivas.filter((f) => f.moneda === "USD").reduce((a, f) => a + f.montoNeto, 0);
+    const mayorEnUsd = Math.max(0, ...dosMonedas.filter((d) => d.monedas.includes("USD")).map((d) => d.monto));
+    const peso = totalUsd > 0 ? mayorEnUsd / totalUsd : 0;
+    agregar({
+      codigo: "ODOO-MONEDA",
+      /* Con importes chicos lo peor que puede pasar son unos cientos de dólares: no compite con lo alto. */
+      severidad: dosMonedas.some((d) => d.monto >= 1000) ? "ALTA" : "BAJA",
+      titulo: `${dosMonedas.length} montos facturados al mismo cliente en DOS monedas distintas`,
+      detalle:
+        "El mismo cliente tiene facturas vigentes por el importe exacto en dólares y en colones. Con un tipo de cambio de ~500 eso no puede ser casualidad: alguna de las dos salió en la moneda equivocada. " +
+        (peso >= 0.01
+          ? `La más grande sola pesa el ${(peso * 100).toLocaleString("es-CR", { maximumFractionDigits: 1 })} % de toda la facturación en dólares de la copia de Odoo, así que cualquier número que se mire en dólares está distorsionado hasta que se resuelva.`
+          : "Ninguna llega al 1 % de la facturación en dólares de la copia de Odoo: no distorsiona los totales, pero en cada par sigue habiendo un documento mal emitido."),
+      montos: montosPorMoneda(dosMonedas.flatMap((d) => d.monedas.map((moneda) => ({ moneda, monto: d.monto })))),
+      plata: vivas.filter((f) => tieneGemela(f) && estaPorCobrar(f)).map(plataDeFactura),
+      donde: "ODOO",
+      pasos: [
+        "Abrí en Odoo cada par de facturas de la lista de abajo (los números están en cada línea).",
+        "Mirá cuál de las dos salió en la moneda que no era. La pista: el importe idéntico en dólares y en colones no puede ser correcto con un tipo de cambio de ~500.",
+        "Anulá en Odoo la que está mal y, si hace falta, reemitila en la moneda correcta.",
+      ],
+      queSignificaAceptar:
+        "Que estos pares en dos monedas son correctos y no hay nada que anular. La línea vuelve si aparece un par nuevo o cambia un monto.",
+      queHacer: "Revisar cada par en Odoo y anular la que salió en la moneda que no era.",
+      resuelve: "DIRECCION",
+      items: dosMonedas.map((x) => ({
+        texto: `${x.odooPartnerNombre} — el mismo importe, ${fmtMontoLibro(x.monto, null)}, en ${x.monedas.map(nombreDeMoneda).join(" y ")}`,
+        monto: x.monto,
+        nota: x.numeros.join(" · "),
+      })),
+    });
+  }
+
+  /* ── 3. La moneda equivocada que ya se corrigió ──────────────────────────────── */
+  if (corregidas.length) {
+    agregar({
+      codigo: "ODOO-MONEDA-CORREGIDA",
+      severidad: "BAJA",
+      titulo:
+        corregidas.length === 1
+          ? "1 factura salió en la moneda equivocada y ya se corrigió en Odoo"
+          : `${corregidas.length} facturas salieron en la moneda equivocada y ya se corrigieron en Odoo`,
+      detalle:
+        "Se emitieron por un importe que era de la otra moneda, se revirtieron con una nota de crédito en esa misma moneda y se volvieron a emitir en la buena. No es plata por cobrar ni hay que anular nada. " +
+        "Se muestran porque la factura revertida y su nota siguen en Odoo por ese importe en la moneda equivocada: un reporte de Odoo que sume esa moneda sin descontar las reversiones sale inflado en esa cifra.",
+      montos: montosPorMoneda(corregidas.map((c) => ({ moneda: c.equivocada.moneda, monto: c.monto }))),
+      donde: "ODOO",
+      pie: "No se cierra sola: la factura revertida y su nota quedan en Odoo. Cuando contabilidad lo confirme, marcala «está bien así».",
+      pasos: [
+        "Confirmá con contabilidad que cada nota de crédito quedó aplicada a su factura equivocada (Odoo ya da las dos como cerradas).",
+        "Si algún reporte de Odoo del año sale con estos importes, pedí que lo saquen sin las facturas revertidas.",
+      ],
+      queSignificaAceptar:
+        "Que contabilidad ya lo confirmó y los reportes no las suman. La línea vuelve si aparece otra factura en la moneda equivocada.",
+      queHacer: "Confirmar con contabilidad que la corrección quedó aplicada y fuera de los reportes.",
+      resuelve: "DIRECCION",
+      items: corregidas.map((c) => ({
+        texto: `${c.odooPartnerNombre} — ${c.equivocada.revertidas.join(", ")} en ${nombreDeMoneda(c.equivocada.moneda)} por ${fmt(c.monto, c.equivocada.moneda)}`,
+        monto: c.monto,
+        moneda: c.equivocada.moneda,
+        nota: `revertida con ${c.equivocada.notas.join(", ")} · la buena: ${c.buena.numeros.join(", ")}, en ${nombreDeMoneda(c.buena.moneda)}`,
+      })),
+    });
+  }
+
+  /* ── 4. Notas de crédito sin aplicar ─────────────────────────────────────────── */
+  const notasAbiertas = notasDeCreditoSinAplicar(estado.facturas).map((n) => ({
+    ...n,
+    /* La plata es la de la factura que anula, sin IVA y con su clave: si esa factura ya está en «sin cuenta»,
+       el encabezado la cuenta una vez. Sin factura encontrada, lo que la nota tiene sin aplicar, sin IVA. */
+    plata: n.anula
+      ? plataDeFactura(n.anula)
+      : {
+          clave: `f:${n.nota.id}`,
+          moneda: n.nota.moneda,
+          monto: n.nota.montoTotal > 0 ? round2((n.nota.montoNeto * n.saldo) / n.nota.montoTotal) : n.nota.montoNeto,
+        },
+  }));
+  if (notasAbiertas.length) {
+    const plata = notasAbiertas.map((n) => n.plata);
+    const montos = montosPorMoneda(plata);
+    const deEsteAnio = anioRef !== null && notasAbiertas.some((n) => anioDe(n.nota.invoiceDate) >= anioRef);
+    agregar({
+      codigo: "ODOO-NOTA-SIN-APLICAR",
+      severidad: deEsteAnio ? "ALTA" : "MEDIA",
+      titulo: `${notasAbiertas.length} notas de crédito en Odoo sin aplicar a su factura`,
+      detalle: `Mientras una nota no se aplica, Odoo sigue dando por cobrar la factura que anula, y el cliente figura debiendo lo que ya no debe. Suman ${textoDeMontos(montos)} sin IVA. Cada fila dice qué factura parece anular: mismo cliente, misma moneda y mismo importe.`,
+      montos,
+      plata,
+      donde: "ODOO",
+      pasos: [
+        "Pasale la lista a contabilidad: cada nota se aplica en Odoo a la factura que anula (al lado dice cuál parece).",
+        "Si la factura sí se debe y la nota fue un error, que la anulen.",
+        "⚠ No le cobres al cliente una factura de la lista sin mirar su nota primero.",
+      ],
+      queSignificaAceptar:
+        "Que estas notas pueden quedar sin aplicar. ⚠ Mientras tanto Odoo le sigue cobrando al cliente la factura que anulan.",
+      queHacer: "Pedirle a contabilidad que aplique cada nota de crédito a su factura.",
+      resuelve: "COBRANZA",
+      items: notasAbiertas
+        .slice()
+        .sort((a, b) => b.nota.invoiceDate.localeCompare(a.nota.invoiceDate) || a.nota.odooMoveId - b.nota.odooMoveId)
+        .map((n, i) => ({
+          texto: `${n.nota.odooPartnerNombre} — ${n.nota.numero} por ${fmt(n.saldo, n.nota.moneda)}`,
+          monto: plata[notasAbiertas.indexOf(n)]?.monto ?? i,
+          moneda: n.nota.moneda,
+          nota: `${n.nota.invoiceDate} · ${
+            n.anula
+              ? `parece anular ${n.anula.numero}, que Odoo sigue dando por cobrar`
+              : "no hay una factura sin pagar de ese cliente por el mismo importe"
+          }`,
+        })),
+    });
+  }
+
+  /* ── 5. Montos que no coinciden ──────────────────────────────────────────────── */
+  /* ⚠ Una diferencia de exactamente el 13 % es el IVA, y no se acusa (decisión de Alex, 2026-09-12). */
+  const esIva = (d: MontoDistinto) =>
+    CENTAVOS(d.montoCobro) === CENTAVOS(d.montoFactura * IVA_COSTA_RICA) ||
+    CENTAVOS(d.montoFactura) === CENTAVOS(d.montoCobro * IVA_COSTA_RICA);
+  const deIva = montosDistintos.filter(esIva);
+  const montosReales = montosDistintos.filter((d) => !esIva(d));
+  if (montosReales.length) {
+    const plata = montosReales.map((d) => ({ clave: `m:${d.facturaId}`, moneda: d.moneda, monto: Math.abs(d.diferencia) }));
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-MONTO",
       severidad: "ALTA",
-      titulo: `${cruce.montosDistintos.length} cobros con un monto distinto al de su factura`,
-      detalle: `Nexus dice una cifra y Odoo otra para el mismo cobro. La diferencia total es ${s.texto}. Puede ser un descuento que se aplicó al facturar, o un error de carga en el plan de pago.`,
-      montoEnJuego: s.principal,
+      titulo: `${montosReales.length} cobros con un monto distinto al de su factura`,
+      detalle:
+        `Nexus dice una cifra y Odoo otra para la misma factura, y no es el IVA ni una factura que cubra varias cuotas. La diferencia total es ${textoDeMontos(montos)}. Puede ser un descuento que se aplicó al facturar, o un error de carga en el plan de pago.` +
+        (deIva.length
+          ? ` No se cuentan ${deIva.length} cobro(s) que difieren de su factura justo en el 13 %: es el IVA, y ese no se toca.`
+          : ""),
+      montos,
+      plata,
       donde: "NEXUS",
       pasos: [
         "Abrí el cliente en Cobranza y compará su plan de pago contra la factura de Odoo (el número está en cada línea).",
         "Si el descuento o el ajuste se aplicó al facturar y el plan quedó viejo, corregí el plan en Nexus.",
         "Si el plan estaba bien y la factura salió con otro monto, la corrección va del lado de Odoo.",
-        "⚠ Ojo con el impuesto: Nexus guarda el monto SIN IVA. Si la diferencia es del 13 %, el problema es de comparación, no de plata.",
       ],
       queSignificaAceptar:
         "Que estas diferencias de monto son esperadas —un descuento pactado, un redondeo— y no hay que corregir nada. Si el monto cambia, la línea vuelve.",
       queHacer: "Comparar cada par y corregir el que esté mal: el plan en Nexus o la factura en Odoo.",
       resuelve: "COBRANZA",
-      items: cruce.montosDistintos
+      items: montosReales
         .slice()
         .sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
         .map((d) => ({
           texto: `${d.cuentaNombre} — Nexus ${fmt(d.montoCobro, d.moneda)}${d.cuotas > 1 ? ` en ${d.cuotas} cuotas` : ""} vs Odoo ${fmt(d.montoFactura, d.moneda)}`,
           monto: Math.abs(d.diferencia),
-          nota: `factura ${d.numero} · diferencia ${d.diferencia > 0 ? "+" : ""}${d.diferencia.toFixed(2)}`,
+          moneda: d.moneda,
+          nota: `factura ${d.numero} · Odoo dice ${d.diferencia > 0 ? "más" : "menos"}: ${fmt(Math.abs(d.diferencia), d.moneda)}`,
         })),
     });
   }
 
-  /* ── 4. Cobros sin factura — la línea que Alexander pidió primero ─────────────── */
-  /* ⚠⚠ Solo lo que se puede VERIFICAR (`clasificarCobrosSinFactura`). Esta línea llegó a decir
-     USD 237.355 sobre facturas que estaban en el espejo, sin atribuir. */
-  const { acusables: cobrosSinFactura, recientes, corte } = cobrosSolosClasificados;
-  if (cobrosSinFactura.length > 0 && corte !== null) {
-    const s = porMoneda(cobrosSinFactura.map((c) => ({ monto: c.monto, moneda: c.moneda })));
+  /* ── 6. Facturas que cubren varias cuotas ────────────────────────────────────── */
+  if (variasCuotas.length) {
+    agregar({
+      codigo: "ODOO-FACTURA-VARIAS-CUOTAS",
+      severidad: "MEDIA",
+      titulo: `${variasCuotas.length} facturas de Odoo cubren varias cuotas de Nexus`,
+      detalle:
+        "Cada factura suma exactamente dos o tres cuotas de su cuenta que no tienen el número anotado, y no hay otra combinación que dé lo mismo. No es un monto distinto ni un cobro sin factura: falta anotar el número de la factura en cada una de esas cuotas, y con eso el cruce las junta sin adivinar. ⚠ La propuesta sale del monto: confirmala antes de anotar.",
+      montos: montosPorMoneda(variasCuotas.map((v) => ({ moneda: v.factura.moneda, monto: v.factura.montoNeto }))),
+      donde: "NEXUS",
+      pasos: [
+        "Abrí el cronograma de la cuenta de cada fila.",
+        "En cada cuota que nombra la fila, anotá el número de la factura («Agregar número»).",
+        "Si alguna cuota no es de esa factura, anotale la suya: el número que anota una persona manda sobre esta propuesta.",
+      ],
+      queSignificaAceptar:
+        "Que esas cuotas se quedan sin número. La lista las va a seguir cruzando por monto, que es justo lo que confunde a las otras líneas.",
+      queHacer: "Anotar el número de la factura en cada cuota que cubre.",
+      resuelve: "COBRANZA",
+      items: variasCuotas.map((v) => ({
+        texto: `${v.cobros[0]?.cuentaNombre ?? v.factura.odooPartnerNombre} — ${v.factura.numero} por ${fmt(v.factura.montoNeto, v.factura.moneda)}`,
+        monto: v.factura.montoNeto,
+        moneda: v.factura.moneda,
+        nota: `cubre ${v.cobros.length} cuotas: ${v.cobros.map((c) => `${c.periodo} ${fmt(c.monto, c.moneda)}`).join(" + ")} · ${estadoDePagoEnPalabras(v.factura)}`,
+      })),
+    });
+  }
+
+  /* ── 7. Cobros sin factura — la línea que Alexander pidió primero ─────────────── */
+  /* ⚠⚠ Solo lo que se puede VERIFICAR (`clasificarCobrosSinFactura`) y lo que no cubre una factura de
+     varias cuotas. Esta línea llegó a decir USD 237.355 sobre facturas que estaban en la copia, sin atribuir. */
+  if (acusables.length > 0 && corte !== null) {
+    const plata = acusables.map((c) => ({ clave: `c:${c.id}`, moneda: c.moneda, monto: c.monto }));
+    const montos = montosPorMoneda(plata);
+    /* Si la cuenta tuvo una factura por ese importe y se anuló, eso es lo que hay que decir: no «no se emitió». */
+    const anuladaDe = (c: CobroParaCruzar) =>
+      estado.facturas
+        .filter(
+          (f) =>
+            f.cuentaId === c.cuentaId &&
+            f.moveType === "out_invoice" &&
+            !esDocumentoVivo(f) &&
+            f.moneda === c.moneda &&
+            CENTAVOS(f.montoNeto) === CENTAVOS(c.monto) &&
+            dias(f.invoiceDate, c.fechaEmision ?? c.fechaProgramada) <= 60,
+        )
+        .sort((a, b) => a.odooMoveId - b.odooMoveId)[0];
     agregar({
       codigo: "ODOO-COBRO-SIN-FACTURA",
       severidad: "ALTA",
-      titulo: `${cobrosSinFactura.length} cobros marcados facturados que no tienen factura en Odoo`,
+      titulo: `${acusables.length} cobros marcados facturados que no tienen factura en Odoo`,
       detalle:
-        `Son de cuentas que facturan por Odoo y ya están emparejadas, y se marcaron facturados hasta el ${corte} —${DIAS_DE_GRACIA_DEL_ESPEJO} días antes de la última lectura buena de Odoo—, así que el espejo ya tendría que tener su documento y no lo tiene. O la factura no se emitió, o se emitió a nombre de una razón social de Odoo que no está vinculada a esta cuenta. Suman ${s.texto}.` +
+        `Son de cuentas que facturan por Odoo y ya están emparejadas, y se marcaron facturados hasta el ${corte} —${DIAS_DE_GRACIA_DEL_ESPEJO} días antes de la última copia buena de Odoo—, así que Odoo ya tendría que tener su documento y no lo tiene: ni una factura sola ni una que sume varias cuotas. O la factura no se emitió, o se emitió a nombre de una razón social de Odoo que no está vinculada a esta cuenta. Suman ${textoDeMontos(montos)}.` +
         (recientes.length
-          ? ` No se cuentan ${recientes.length} cobro(s) facturados después de esa fecha: el espejo todavía no pudo verlos.`
+          ? ` No se cuentan ${recientes.length} cobro(s) facturados después de esa fecha: todavía no pudieron llegar a la copia de Odoo.`
           : ""),
-      montoEnJuego: s.principal,
+      montos,
+      plata,
       donde: "ODOO",
       pasos: [
         "Buscá en Odoo si la factura existe a nombre de otra razón social. Si aparece, el problema es el emparejado: arreglalo en la pestaña «Emparejar».",
-        "Si no existe, hay que emitirla en Odoo.",
+        "Si no existe, hay que emitirla en Odoo. Si la fila dice que se anuló, confirmá si el cobro sigue vigente.",
         "Si no correspondía facturarla, sacale la marca de facturado al cobro en Nexus.",
-        "⚠ Los cobros marcados COBRADO que no tienen factura son los más urgentes: significa que entró plata sin documento.",
+        "Si el cobro está en Cobrado, entró plata sin un documento en Odoo: empezá por esos.",
       ],
       queSignificaAceptar:
         "Que estos cobros pueden estar marcados facturados sin respaldo en Odoo. Solo tiene sentido si sabés que se facturaron por fuera del ERP.",
       queHacer: "Verificar en Odoo si la factura existe; si no existe, emitirla o revertir la marca en Nexus.",
       resuelve: "COBRANZA",
-      items: cobrosSinFactura
+      items: acusables
         .slice()
         .sort((a, b) => b.monto - a.monto)
-        .map((c) => ({
-          texto: `${c.cuentaNombre} — ${fmt(c.monto, c.moneda)}`,
-          monto: c.monto,
-          nota: `${c.periodo} · programado ${c.fechaProgramada} · ${c.estado}`,
-        })),
+        .map((c) => {
+          const anulada = anuladaDe(c);
+          return {
+            texto: `${c.cuentaNombre} — ${fmt(c.monto, c.moneda)}`,
+            monto: c.monto,
+            moneda: c.moneda,
+            nota:
+              `${c.periodo} · programado ${c.fechaProgramada} · ${c.estado}` +
+              (anulada ? ` · tenía ${anulada.numero}, ${anulada.state === "cancel" ? "anulada" : "revertida"} en Odoo` : ""),
+          };
+        }),
     });
   }
 
-  /* ── 4 bis. Un número de factura que no lleva a su factura ────────────────────── */
+  /* ── 8. Un número de factura que no lleva a su factura ────────────────────────── */
   /* ⭐ Desde la etapa 8 el cobro con número se aparea POR ESE NÚMERO, y cuando no lo encuentra no se
      le busca otra factura por monto: se dice por qué. Son dos líneas porque piden arreglos opuestos.
      «Odoo no tiene esa factura vigente» se arregla corrigiendo el número o emitiendo la factura; «es
@@ -980,7 +1532,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       case "anulada":
         return d?.state === "cancel" ? "la factura está anulada en Odoo" : "la factura está revertida en Odoo";
       case "otra-moneda":
-        return `la factura está en ${d?.moneda ?? "otra moneda"}`;
+        return `la factura está en ${d ? nombreDeMoneda(d.moneda) : "otra moneda"}`;
       case "otra-cuenta":
         return `es de ${d?.odooPartnerNombre ?? "otro cliente"}, emparejado con ${(d?.cuentaId && nombreDeCuenta.get(d.cuentaId)) || "otra cuenta"}`;
       case "sin-atribuir":
@@ -989,38 +1541,39 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         return "es un número de Mercury";
     }
   };
-  const itemDeNumero = (x: NumeroSinPar): ItemInconsistencia => ({
+  const itemDeNumero = (x: NumeroSinPar): ItemDiferencia => ({
     texto: `${x.cobro.cuentaNombre} — ${fmt(x.cobro.monto, x.cobro.moneda)}`,
     monto: x.cobro.monto,
+    moneda: x.cobro.moneda,
     nota: `${x.numero} · ${motivoSinPar(x)} · ${x.cobro.periodo} · ${x.cobro.estado}`,
   });
   const porMontoDelCobro = (a: NumeroSinPar, b: NumeroSinPar) => b.cobro.monto - a.cobro.monto;
+  const plataDeNumero = (x: NumeroSinPar): PlataDeLinea => ({ clave: `c:${x.cobro.id}`, moneda: x.cobro.moneda, monto: x.cobro.monto });
 
-  /* «Odoo no tiene ese documento» solo se afirma sobre lo que el espejo ya tuvo tiempo de ver: la
-     misma gracia que la línea 4. Una nota de crédito, una anulada o una en otra moneda ya están en el
-     espejo, así que no esperan. */
-  const corteDelEspejo = cobrosSolosClasificados.corte;
+  /* «Odoo no tiene ese documento» solo se afirma sobre lo que la copia ya tuvo tiempo de ver: la misma
+     gracia que la línea de cobros sin factura. Una nota de crédito, una anulada o una en otra moneda ya
+     están en la copia, así que no esperan. */
   const sinFacturaVigente = numerosSinPar.filter(
     (x) => x.porQue === "sin-documento" || x.porQue === "nota-de-credito" || x.porQue === "anulada" || x.porQue === "otra-moneda",
   );
   const sinFacturaVigenteAcusables = sinFacturaVigente.filter(
-    (x) =>
-      x.porQue !== "sin-documento" ||
-      (corteDelEspejo !== null && (x.cobro.fechaEmision ?? x.cobro.fechaProgramada) <= corteDelEspejo),
+    (x) => x.porQue !== "sin-documento" || (corte !== null && (x.cobro.fechaEmision ?? x.cobro.fechaProgramada) <= corte),
   );
   const numerosTodaviaNoVistos = sinFacturaVigente.length - sinFacturaVigenteAcusables.length;
   if (sinFacturaVigenteAcusables.length) {
-    const s = porMoneda(sinFacturaVigenteAcusables.map((x) => ({ monto: x.cobro.monto, moneda: x.cobro.moneda })));
+    const plata = sinFacturaVigenteAcusables.map(plataDeNumero);
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-NUMERO-SIN-DOCUMENTO",
       severidad: "ALTA",
       titulo: `${sinFacturaVigenteAcusables.length} cobros anotan una factura que Odoo no tiene vigente`,
       detalle:
-        `Cada uno tiene anotado un número de factura de Odoo, pero en su cuenta ese número no es una factura vigente: Odoo no tiene el documento, es una nota de crédito, está anulada o está en otra moneda (cada fila dice cuál). O el número está mal anotado, o la factura que respaldaba el cobro ya no vale. Suman ${s.texto}.` +
+        `Cada uno tiene anotado un número de factura de Odoo, pero en su cuenta ese número no es una factura vigente: Odoo no tiene el documento, es una nota de crédito, está anulada o está en otra moneda (cada fila dice cuál). O el número está mal anotado, o la factura que respaldaba el cobro ya no vale. Suman ${textoDeMontos(montos)}.` +
         (numerosTodaviaNoVistos
-          ? ` No se cuentan ${numerosTodaviaNoVistos} cobro(s) con un número que el espejo todavía no pudo ver: se facturaron después de su última lectura buena, con ${DIAS_DE_GRACIA_DEL_ESPEJO} días de gracia.`
+          ? ` No se cuentan ${numerosTodaviaNoVistos} cobro(s) con un número que la copia de Odoo todavía no pudo ver: se facturaron después de su última lectura buena, con ${DIAS_DE_GRACIA_DEL_ESPEJO} días de gracia.`
           : ""),
-      montoEnJuego: s.principal,
+      montos,
+      plata,
       donde: "NEXUS",
       pasos: [
         "Buscá en Odoo el número de cada fila (al lado dice qué pasa con ese documento).",
@@ -1038,13 +1591,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
 
   const deOtroCliente = numerosSinPar.filter((x) => x.porQue === "otra-cuenta");
   if (deOtroCliente.length) {
-    const s = porMoneda(deOtroCliente.map((x) => ({ monto: x.cobro.monto, moneda: x.cobro.moneda })));
+    const plata = deOtroCliente.map(plataDeNumero);
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-NUMERO-DE-OTRO-CLIENTE",
       severidad: "ALTA",
       titulo: `${deOtroCliente.length} cobros anotan el número de una factura de otro cliente de Odoo`,
-      detalle: `El número anotado en cada cobro es de un documento que Odoo le emitió a un cliente emparejado con OTRA cuenta de Nexus (cada fila dice con cuál). O el número está mal anotado, o ese cliente de Odoo está emparejado con la cuenta equivocada. ⚠ No emitas otra factura: la que dice el número ya existe. Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
+      detalle: `El número anotado en cada cobro es de un documento que Odoo le emitió a un cliente emparejado con OTRA cuenta de Nexus (cada fila dice con cuál). O el número está mal anotado, o ese cliente de Odoo está emparejado con la cuenta equivocada. ⚠ No emitas otra factura: la que dice el número ya existe. Suman ${textoDeMontos(montos)}.`,
+      montos,
+      plata,
       donde: "NEXUS",
       atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
       pasos: [
@@ -1060,19 +1615,13 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
     });
   }
 
-  /* ── 5. Facturas atribuidas sin cobro que las explique ───────────────────────── */
-  /* ⚠ Una factura recién liberada queda huérfana POR DISEÑO: soltarla es justamente quitarle
-     el cobro. Sin esta exclusión aparecería acá como si nadie supiera de dónde salió, cuando
-     hay una fila que dice quién la soltó, cuándo y por qué. Se cuenta una vez, en la línea que
-     la explica mejor. */
-  const liberadas = new Set(
-    estado.liberaciones.map((l) => normalizarNumeroFactura(l.referenciaExterna)).filter((n): n is string => !!n),
-  );
+  /* ── 9. Facturas atribuidas sin cobro que las explique ───────────────────────── */
   /* ⚠ Y tampoco las anteriores al PRIMER cobro que Nexus tiene cargado de esa cuenta. Medido el
      2026-09-12: 78 de los 170 documentos que se atribuyen al vincular son de antes de que Nexus
-     planificara la cuenta —hay facturas de 2021—. Son historia, no un servicio sin cargar, y
-     llenaban la línea hasta taparla. Una cuenta sin ningún cobro no tiene «antes»: todas sus
-     facturas cuentan, porque es justo el servicio que falta cargar. */
+     planificara la cuenta —hay facturas de 2021—. Son historia, no un servicio sin cargar.
+     ⚠ Una cuenta sin ningún cobro no tiene «antes»: cuentan sus facturas de este año y las que siguen sin
+     pagar. Medido el 2026-09-13: JUDESUR metía ₡21,2 millones de 2024 y 2025 ya pagados, el 97 % de la
+     línea, y tapaba la única factura suya de este año. */
   const primerCobro = new Map<string, string>();
   for (const c of estado.cobros) {
     const p = primerCobro.get(c.cuentaId);
@@ -1080,32 +1629,37 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
   }
   const esHistoria = (f: FacturaParaCruzar) => {
     const p = f.cuentaId ? primerCobro.get(f.cuentaId) : undefined;
-    return p !== undefined && f.invoiceDate < p;
+    if (p !== undefined) return f.invoiceDate < p;
+    return anioRef !== null && !estaPorCobrar(f) && anioDe(f.invoiceDate) < anioRef;
   };
-  const huerfanas = cruce.facturasSolas.filter((f) => f.cuentaId && !liberadas.has(f.numero));
+  const huerfanas = cruce.facturasSolas.filter(
+    (f) => f.cuentaId && !liberadas.has(f.numero) && !facturasEnVarias.has(f.id) && !tieneGemela(f),
+  );
   const historia = huerfanas.filter(esHistoria);
   const facturasSinCobro = huerfanas.filter((f) => !esHistoria(f));
   if (facturasSinCobro.length) {
-    const s = porMoneda(facturasSinCobro.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
+    const plata = facturasSinCobro.map((f) => ({ clave: `f:${f.id}`, moneda: f.moneda, monto: f.montoNeto }));
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-FACTURA-SIN-COBRO",
       severidad: "MEDIA",
       titulo: `${facturasSinCobro.length} facturas de Odoo sin un cobro que las explique`,
       detalle:
-        `Se le facturó a un cliente que Nexus conoce, pero no hay ningún cobro planificado que corresponda. Puede ser algo que se facturó fuera del plan, o un servicio que falta cargar. Suman ${s.texto}.` +
+        `Se le facturó a un cliente que Nexus conoce, pero no hay ningún cobro planificado que corresponda, ni solo ni sumando cuotas. Puede ser algo que se facturó fuera del plan, o un servicio que falta cargar. Suman ${textoDeMontos(montos)} sin IVA.` +
         (historia.length
-          ? ` No se cuentan ${historia.length} factura(s) anteriores al primer cobro que Nexus tiene cargado de su cuenta: son historia.`
+          ? ` No se cuentan ${historia.length} factura(s) anteriores al primer cobro que Nexus tiene cargado de su cuenta, o ya pagadas de años anteriores en cuentas sin cobros: son historia.`
           : ""),
-      montoEnJuego: s.principal,
+      montos,
+      plata,
       donde: "NEXUS",
       pasos: [
-        "Fijate la fecha de cada factura. Si es de un año que Nexus no cubre, es historia y no hay nada que hacer — aceptala.",
         "Si es de un servicio vigente, falta cargar ese servicio o su plan de pago en Cobranza.",
         "Si el cliente está mal emparejado, la factura es de otro: arreglalo en «Emparejar».",
+        "Si es algo que Nexus no planifica, marcá la línea «está bien así».",
       ],
       queSignificaAceptar:
-        "Que estas facturas son de años anteriores o de cosas que Nexus no planifica. Es la aceptación más común y legítima de la lista.",
-      queHacer: "Revisar si falta cargar el servicio en Nexus, o si es facturación vieja que no hace falta espejar.",
+        "Que estas facturas son de cosas que Nexus no planifica. La línea vuelve si aparece una factura nueva.",
+      queHacer: "Revisar si falta cargar el servicio en Nexus, o si es facturación que Nexus no planifica.",
       resuelve: "COBRANZA",
       items: facturasSinCobro
         .slice()
@@ -1114,100 +1668,79 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         .map((f) => ({
           texto: `${f.odooPartnerNombre} — ${fmt(f.montoNeto, f.moneda)}`,
           monto: f.montoNeto,
-          nota: `${f.numero} · ${f.invoiceDate} · ${f.paymentState}`,
+          moneda: f.moneda,
+          nota: `${f.numero} · ${f.invoiceDate} · ${estadoDePagoEnPalabras(f)}`,
         })),
     });
   }
 
-  /* ── 6. El estado que nadie sabe qué significa ───────────────────────────────── */
-  const enPago = vivas.filter((f) => f.paymentState === "in_payment");
-  if (enPago.length) {
-    const s = porMoneda(enPago.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
-    agregar({
-      codigo: "ODOO-IN-PAYMENT",
-      severidad: "ALTA",
-      titulo: `${enPago.length} facturas en un estado de pago que este Odoo no debería poder asignar`,
-      detalle: `Odoo 17 Community nunca marca «in_payment» —su código devuelve «paid» directamente—, así que o esta base viene de Enterprise, o tiene un módulo de terceros. En Enterprise significa «ya pagaron, falta conciliar contra el banco», que es justo lo que hace falta para poner esos cobros en verde. Si significa otra cosa, encender la promoción pondría ${enPago.length} cobros en verde de golpe sin que la plata haya entrado. Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
-      yaContadoEn: contenidaEnSinCuenta(enPago),
-      donde: "PREGUNTANDO",
-      pasos: [
-        "Preguntale a quien administra Odoo de dónde sale el estado «in_payment» en esta base.",
-        "Si significa «ya pagaron, falta conciliar contra el banco» —que es lo que significa en Odoo Enterprise—, se puede encender la promoción a verde.",
-        "Si viene de un módulo de terceros con otro significado, hay que entenderlo antes de tocar nada.",
-        "Con la respuesta, la promoción se enciende poniendo ODOO_PROMOCION_VERDE=1 en el servidor.",
-      ],
-      queSignificaAceptar:
-        "Que ya se sabe qué significa y no hace falta seguir viéndolo. ⚠ Aceptarlo NO enciende la promoción a verde: eso es una bandera aparte.",
-      queHacer: "Preguntarle al administrador de Odoo de dónde sale ese estado. Hasta entonces la promoción a verde queda apagada.",
-      resuelve: "DIRECCION",
-      items: [
-        {
-          texto: `${enPago.length} facturas esperan esta respuesta para poder pasar a verde solas`,
-          nota: "La promoción está apagada por bandera; el espejo ya las trae marcadas.",
-        },
-      ],
-    });
-  }
-
-  /* ── 7. Las exentas ──────────────────────────────────────────────────────────── */
-  const exentas = vivas.filter((f) => f.montoImpuesto === 0);
-  if (exentas.length) {
-    const s = porMoneda(exentas.map((f) => ({ monto: f.montoNeto, moneda: f.moneda })));
-    agregar({
-      codigo: "ODOO-EXENTAS",
-      severidad: "BAJA",
-      titulo: `${exentas.length} facturas salieron sin impuesto`,
-      detalle: `Pueden ser exenciones legítimas o impuesto que faltó cargar. No se puede decidir por país: las exentas medidas son de empresas costarricenses igual que las que sí lo llevan. Importa porque el borrador de cobro le dice al cliente un monto sin impuesto, y la factura que recibe puede traerlo. Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
-      yaContadoEn: contenidaEnSinCuenta(exentas),
-      donde: "PREGUNTANDO",
-      pasos: [
-        "Pasale la lista al contador y confirmá cuáles son exenciones reales.",
-        "Si alguna debía llevar impuesto, hay que corregir la factura en Odoo.",
-        "⚠ No se puede decidir por país: las exentas medidas son de empresas costarricenses igual que las que sí lo llevan.",
-      ],
-      queSignificaAceptar:
-        "Que las exenciones están confirmadas por el contador. La línea vuelve si aparece una factura exenta nueva.",
-      queHacer: "Confirmar con el contador cuáles son exenciones reales.",
-      resuelve: "DIRECCION",
-      items: agruparPorPartner(exentas),
-    });
-  }
-
-  /* ── 8 y 9. Las facturas que Nexus soltó y alguien tiene que anular ──────────── */
+  /* ── 10 y 11. Las facturas que Nexus soltó y alguien tiene que anular ────────── */
   const pendientes = liberacionesPendientes(estado.liberaciones, estado.facturas);
-  const itemDeLiberacion = (p: LiberacionPendiente): ItemInconsistencia => ({
-    id: p.liberacion.id,
-    texto: `${p.liberacion.clienteNombre} — ${fmt(p.liberacion.monto, p.liberacion.moneda)}`,
+  /* Una pista para las que no tienen número: en su cuenta, una factura ya revertida o anulada por el mismo
+     importe cerca de la fecha, o ninguna factura en Odoo (entonces no se emitió acá). Medido el 2026-09-13:
+     Honda ya estaba revertida (FAC/2026/0340 con NC/2026/0018); Kaizen y Wherex no tienen nada en Odoo. */
+  const pistaDeLiberacion = (l: LiberacionParaCruzar): string | null => {
+    const deLaCuenta = estado.facturas.filter((f) => f.cuentaId === l.cuentaId);
+    if (!deLaCuenta.length) return "este cliente no tiene ninguna factura en Odoo: probablemente se emitió en Mercury o QuickBooks";
+    const referencia = l.fechaEmision ?? `${l.periodo}-15`;
+    const [muerta] = deLaCuenta
+      .filter(
+        (f) =>
+          f.moveType === "out_invoice" &&
+          !esDocumentoVivo(f) &&
+          f.moneda === l.moneda &&
+          CENTAVOS(f.montoNeto) === CENTAVOS(l.monto) &&
+          dias(f.invoiceDate, referencia) <= 30,
+      )
+      .sort((a, b) => dias(a.invoiceDate, referencia) - dias(b.invoiceDate, referencia) || a.odooMoveId - b.odooMoveId);
+    if (!muerta) return null;
+    const nota = deLaCuenta.find(
+      (n) =>
+        n.moveType === "out_refund" &&
+        n.state !== "cancel" &&
+        n.moneda === muerta.moneda &&
+        CENTAVOS(n.montoNeto) === CENTAVOS(muerta.montoNeto) &&
+        n.invoiceDate >= muerta.invoiceDate,
+    );
+    return `parece ser ${muerta.numero}, ya ${muerta.state === "cancel" ? "anulada" : "revertida"}${nota ? ` con ${nota.numero}` : ""}: si es esa, marcala resuelta`;
+  };
+  const itemDeLiberacion = (p: LiberacionPendiente): ItemDiferencia => {
+    const pista = p.porQue === "sin-numero" ? pistaDeLiberacion(p.liberacion) : null;
+    return {
+      id: p.liberacion.id,
+      texto: `${p.liberacion.clienteNombre} — ${fmt(p.liberacion.monto, p.liberacion.moneda)}`,
+      monto: p.liberacion.monto,
+      moneda: p.liberacion.moneda,
+      nota:
+        `${p.liberacion.referenciaExterna ?? "sin número"} · cuota ${p.liberacion.numCuota ?? "?"} · ` +
+        `${p.liberacion.decision === "CANCELAR" ? "anular" : "revertir"} · ` +
+        `soltada por ${p.liberacion.liberadaPor} el ${p.liberacion.liberadaEn}` +
+        (p.porQue !== "sin-numero"
+          ? ""
+          : p.liberacion.referenciaExterna
+            ? " · ⚠ ese número no es de un documento de Odoo"
+            : " · ⚠ sin número de documento") +
+        (pista ? ` · ${pista}` : ""),
+    };
+  };
+  const plataDeLiberacion = (p: LiberacionPendiente): PlataDeLinea => ({
+    clave: `l:${p.liberacion.id}`,
+    moneda: p.liberacion.moneda,
     monto: p.liberacion.monto,
-    nota:
-      `${p.liberacion.referenciaExterna ?? "sin número"} · cuota ${p.liberacion.numCuota ?? "?"} · ` +
-      `${p.liberacion.decision === "CANCELAR" ? "anular" : "revertir"} · ` +
-      `soltada por ${p.liberacion.liberadaPor} el ${p.liberacion.liberadaEn}` +
-      (p.porQue !== "sin-numero"
-        ? ""
-        : p.liberacion.referenciaExterna
-          ? " · ⚠ ese número no es de un documento de Odoo"
-          : " · ⚠ sin número de documento"),
   });
 
   /* ⚠⚠ Las de Odoo se parten en DOS líneas, y no es cosmético: **se cierran de maneras
-     distintas**. Con número, el sync ve el documento anularse y la línea desaparece sola. Sin
+     distintas**. Con número, la copia ve el documento anularse y la línea desaparece sola. Sin
      número no hay nada contra qué mirar — y hasta la etapa 7 el número solo se escribía al
      REGISTRAR EL PAGO, así que un cobro facturado-y-no-cobrado (que es justo la población que se
      libera) llegaba casi siempre sin él. Juntas en una sola línea, la mitad sin número quedaba
-     esperando para siempre un sync que no la puede ver, bajo un texto que prometía lo
-     contrario. Desde la etapa 7 el número nace al marcar facturado; los facturados de antes
-     siguen sin él hasta que alguien lo agregue. */
-  const enOdooSinNumero = pendientes.filter(
-    (p) => p.liberacion.plataforma === "ODOO" && p.porQue === "sin-numero",
-  );
-  const enOdoo = pendientes.filter(
-    (p) => p.liberacion.plataforma === "ODOO" && p.porQue !== "sin-numero",
-  );
+     esperando para siempre una copia que no la puede ver, bajo un texto que prometía lo
+     contrario. */
+  const enOdooSinNumero = pendientes.filter((p) => p.liberacion.plataforma === "ODOO" && p.porQue === "sin-numero");
+  const enOdoo = pendientes.filter((p) => p.liberacion.plataforma === "ODOO" && p.porQue !== "sin-numero");
   if (enOdoo.length) {
-    const s = porMoneda(enOdoo.map((p) => ({ monto: p.liberacion.monto, moneda: p.liberacion.moneda })));
+    const plata = enOdoo.map(plataDeLiberacion);
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-LIBERADAS-PENDIENTES",
       severidad: "ALTA",
@@ -1215,8 +1748,9 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
       detalle:
         `Al recuadrar un acuerdo de pago, alguien decidió que estas facturas ya no aplican y las soltó de su cobro. ` +
         `Nexus NO escribe en el ERP: los documentos siguen ahí, emitidos contra clientes que ya no deben ese monto. ` +
-        `Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
+        `Suman ${textoDeMontos(montos)}.`,
+      montos,
+      plata,
       /* ⚠ Severidad ALTA con dueño en COBRANZA: es la línea que evita que «Nexus no escribe en
          el ERP» se convierta en «Nexus pide y nadie hace». */
       donde: "ODOO",
@@ -1224,7 +1758,7 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         "Abrí Odoo y buscá cada documento por su número.",
         "Las que dicen «anular»: cancelalas o borralas según lo que permita el estado del documento.",
         "Las que dicen «revertir»: emitile una nota de crédito por el mismo monto y moneda.",
-        "El sync las saca de esta lista solo, en la próxima corrida. No hay que marcar nada acá.",
+        "Con la próxima copia de Odoo salen de esta lista solas. No hay que marcar nada acá.",
       ],
       queSignificaAceptar:
         "Que estas facturas se pueden quedar como están. ⚠ Es plata emitida contra un cliente que no la debe: aceptarlo es una decisión contable, no una limpieza de pantalla.",
@@ -1235,26 +1769,26 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
   }
 
   if (enOdooSinNumero.length) {
-    const s = porMoneda(
-      enOdooSinNumero.map((p) => ({ monto: p.liberacion.monto, moneda: p.liberacion.moneda })),
-    );
+    const plata = enOdooSinNumero.map(plataDeLiberacion);
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-LIBERADAS-SIN-NUMERO",
       severidad: "ALTA",
       titulo: `${enOdooSinNumero.length} facturas soltadas sin número de documento`,
-      detalle: `Se soltaron como de Odoo, pero sin un número de documento de Odoo —el cobro no lo tenía, o tenía otro número, como el de una transferencia—, así que el sync no tiene contra qué compararlas: no las puede cerrar nunca. Pasa con los cobros facturados antes de que «Marcar facturado» pidiera el número. Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
+      detalle: `Se soltaron como de Odoo, pero sin un número de documento de Odoo —el cobro no lo tenía, o tenía otro número, como el de una transferencia—, así que la copia de Odoo no tiene contra qué compararlas: no se pueden cerrar solas. Pasa con los cobros facturados antes de que «Marcar facturado» pidiera el número. Cada fila dice lo que se encontró: una factura ya revertida por el mismo importe, o un cliente sin ninguna factura en Odoo. Suman ${textoDeMontos(montos)}.`,
+      montos,
+      plata,
       donde: "ODOO",
-      /* ⚠ Sin esto hereda el pie genérico de ODOO, que promete que el sync la saca sola. */
-      pie: "El sync no puede ver estas: no hay número contra qué compararlas. Se cierran acá, a mano.",
+      /* ⚠ Sin esto hereda el pie genérico de ODOO, que promete que la línea se actualiza sola. */
+      pie: "No hay número para verificarlas con la copia de Odoo: se cierran acá, a mano.",
       pasos: [
-        "Buscá el documento en Odoo por cliente, monto y fecha — el número no lo tenemos.",
-        "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
-        "Volvé acá y marcala resuelta. Si no, se queda abierta para siempre.",
+        "Si la fila dice «parece ser», abrí ese documento en Odoo: si es el de la cuota y ya está revertido, marcala resuelta.",
+        "Si dice que el cliente no tiene facturas en Odoo, se emitió en Mercury o QuickBooks: anulala allá y marcala resuelta.",
+        "Si no dice nada, buscá el documento en Odoo por cliente, monto y fecha, anulalo o emitile la nota de crédito, y marcala resuelta.",
         "Para que no vuelva a pasar: los cobros facturados sin número muestran «Agregar número» en el cronograma de la cuenta. Completalos antes de soltar otra factura.",
       ],
       queSignificaAceptar:
-        "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay número que el sync pueda seguir.",
+        "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay número que la copia de Odoo pueda seguir.",
       queHacer: "Ubicar el documento en Odoo por cliente y monto, anularlo, y marcar la liberación resuelta.",
       accionPorItem: {
         etiqueta: "Ya está anulada",
@@ -1267,24 +1801,26 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
 
   const fueraDeOdoo = pendientes.filter((p) => p.liberacion.plataforma !== "ODOO");
   if (fueraDeOdoo.length) {
-    const s = porMoneda(fueraDeOdoo.map((p) => ({ monto: p.liberacion.monto, moneda: p.liberacion.moneda })));
+    const plata = fueraDeOdoo.map(plataDeLiberacion);
+    const montos = montosPorMoneda(plata);
     agregar({
       codigo: "LIBERADAS-FUERA-DE-ODOO",
       severidad: "ALTA",
       titulo: `${fueraDeOdoo.length} facturas soltadas se emitieron fuera de Odoo`,
-      detalle: `Se facturaron por Mercury o QuickBooks, así que el sync con Odoo no las va a ver nunca y esta línea NO se cierra sola. La cierra una persona, cuando confirma que el documento se anuló allá. Suman ${s.texto}.`,
-      montoEnJuego: s.principal,
+      detalle: `Se facturaron por Mercury o QuickBooks, así que la copia de Odoo no las va a ver nunca y esta línea NO se cierra sola. La cierra una persona, cuando confirma que el documento se anuló allá. Suman ${textoDeMontos(montos)}.`,
+      montos,
+      plata,
       donde: "MERCURY",
       pasos: [
         "Entrá a la plataforma donde se emitió (Mercury o QuickBooks) y buscá el documento.",
         "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
-        "Volvé acá y marcala resuelta: no hay sync que lo pueda hacer por vos.",
+        "Volvé acá y marcala resuelta: nada lo puede verificar por vos.",
       ],
       queSignificaAceptar:
-        "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay espejo que los traiga de vuelta.",
+        "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: Nexus no tiene copia de esas plataformas.",
       queHacer: "Anular el documento en la plataforma donde se emitió y marcar la liberación resuelta.",
-      /* ⚠ La única línea de la lista con acción por fila, y es porque no hay sync que la pueda
-         cerrar. Sin esto el texto manda a marcarla resuelta en un botón que no existe. */
+      /* ⚠ Acción por fila porque no hay copia que la pueda cerrar. Sin esto el texto manda a marcarla
+         resuelta en un botón que no existe. */
       accionPorItem: {
         etiqueta: "Ya está anulada",
         ayuda: "Marcala solo después de verlo anulado en la plataforma. Nada lo verifica por vos.",
@@ -1294,28 +1830,114 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
     });
   }
 
-  /* ── 10. El default que dice Odoo sobre cuentas que no facturan por Odoo ──────── */
-  /* ⚠ `viaCobro` nace en ODOO. Cuentas internacionales que facturan por Mercury lo arrastran
-     sin que nadie lo haya elegido, y ese default mentiroso es lo que hace que una liberación
-     salga con la plataforma equivocada y termine en la lista de Odoo, esperando un sync que
-     nunca la va a cerrar. Salen como línea propia, para revisarlas una por una: corregirlas a
-     ciegas sería cambiar un default equivocado por otro. */
-  /* ⭐ Y la evidencia más directa de dónde factura una cuenta es el número de sus facturas: un INV-16
-     anotado en una cuenta «Odoo» es una factura de Mercury (etapa 8). Va en la NOTA de la fila y no en
-     su texto, para que una línea ya aceptada no se reabra solo por anotarle un número. Una cuenta que
-     no es internacional pero tiene esa evidencia entra igual: la etiqueta está igual de mal. */
-  const numerosDeMercury = new Map<string, string[]>();
-  for (const x of numerosSinPar) {
-    if (x.porQue !== "numero-de-mercury") continue;
-    let ns = numerosDeMercury.get(x.cobro.cuentaId);
-    if (!ns) numerosDeMercury.set(x.cobro.cuentaId, (ns = []));
-    if (!ns.includes(x.numero)) ns.push(x.numero);
+  /* ── 12. Pagos registrados sin conciliar con el banco ────────────────────────── */
+  /* ⭐ Hasta el 2026-09-13 esta línea preguntaba qué significaba el estado y ofrecía «encender la promoción».
+     Los datos ya lo contestan: medido ese día, las 181 facturas en ese estado tienen saldo 0 en Odoo. Es
+     «pago registrado, falta cruzarlo con el estado de cuenta del banco», casi todo de 2021–2022. No es plata
+     por cobrar, así que informa y no suma. La bandera de la promoción a verde sigue apagada: es otra
+     decisión (docs/odoo-decisiones.md). */
+  const enPago = vivas.filter((f) => f.paymentState === "in_payment");
+  if (enPago.length) {
+    const recientesPago = anioRef === null ? enPago : enPago.filter((f) => anioDe(f.invoiceDate) >= anioRef - 1);
+    const viejasPago = enPago.filter((f) => !recientesPago.includes(f));
+    const sinSaldo = enPago.filter((f) => CENTAVOS(f.montoResidual) === 0).length;
+    const montos = montosPorMoneda(enPago.map((f) => ({ moneda: f.moneda, monto: f.montoNeto })));
+    const aniosDe = (fs: readonly FacturaParaCruzar[]) => {
+      const as = fs.map((f) => anioDe(f.invoiceDate));
+      const [min, max] = [Math.min(...as), Math.max(...as)];
+      return min === max ? `de ${min}` : `de ${min} a ${max}`;
+    };
+    const periodoReciente = anioRef === null ? "" : ` de ${anioRef - 1} y ${anioRef}`;
+    agregar({
+      codigo: "ODOO-IN-PAYMENT",
+      severidad: "BAJA",
+      titulo: recientesPago.length
+        ? `${recientesPago.length} facturas${periodoReciente} figuran pagadas en Odoo, pero el pago no está conciliado con el banco`
+        : `${enPago.length} facturas ${aniosDe(enPago)} figuran pagadas en Odoo, pero el pago no está conciliado con el banco`,
+      detalle: [
+        sinSaldo === enPago.length
+          ? "Odoo ya registró el pago de cada una y no les deja saldo: falta cruzar ese pago con el estado de cuenta del banco."
+          : `Odoo registró el pago y falta cruzarlo con el estado de cuenta del banco. ${sinSaldo} de ${enPago.length} ya no tienen saldo.`,
+        "No es plata por cobrar y no suma a lo que no cuadra.",
+        recientesPago.length && viejasPago.length ? `Hay ${viejasPago.length} más, ${aniosDe(viejasPago)}, en la misma situación.` : "",
+        `Suman ${textoDeMontos(montos)} sin IVA.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      montos,
+      donde: "ODOO",
+      pie: "Se actualiza sola con la próxima copia de Odoo, a medida que contabilidad concilie.",
+      pasos: [
+        recientesPago.length
+          ? `Pasale la lista a contabilidad para que concilie con el banco los pagos${periodoReciente}.`
+          : "Pasale la lista a contabilidad para que concilie esos pagos con el banco.",
+        "Los de años anteriores no mueven la cobranza de hoy: que los concilie cuando cierre esos años.",
+      ],
+      queSignificaAceptar:
+        "Que contabilidad ya tiene la lista. ⚠ Aceptarla no pone ningún cobro en verde: un cobro pasa a Cobrado solo cuando una persona registra el pago.",
+      queHacer: "Pasarle la lista a contabilidad para conciliar esos pagos con el banco.",
+      resuelve: "COBRANZA",
+      items: [
+        ...agruparPorPartner(recientesPago, (f) => f.montoNeto),
+        ...[...new Set(viejasPago.map((f) => anioDe(f.invoiceDate)))]
+          .sort((a, b) => b - a)
+          .map((anio) => {
+            const delAnio = viejasPago.filter((f) => anioDe(f.invoiceDate) === anio);
+            return {
+              texto: `${anio} — ${delAnio.length} factura${delAnio.length === 1 ? "" : "s"}`,
+              nota: textoDeMontos(montosPorMoneda(delAnio.map((f) => ({ moneda: f.moneda, monto: f.montoNeto })))),
+            };
+          }),
+      ],
+    });
   }
-  const viaDudosa = estado.cuentas.filter(
-    (c) => c.viaCobro === "ODOO" && (c.tipo === "INTERNACIONAL" || numerosDeMercury.has(c.id)),
-  );
+
+  /* ── 13. Las exentas ─────────────────────────────────────────────────────────── */
+  /* ⚠ Solo las del año: medido el 2026-09-13, 13 de las 21 eran historia pagada, y la frase «no se puede
+     decidir por país» era falsa para los colones (un ente público y una empresa mexicana). La plata que
+     importa es el impuesto que habría faltado, no el neto. */
+  const exentas = vivas.filter((f) => f.montoImpuesto === 0);
+  const exentasDelAnio = anioRef === null ? exentas : exentas.filter((f) => anioDe(f.invoiceDate) === anioRef);
+  if (exentasDelAnio.length) {
+    const impuesto = montosPorMoneda(exentasDelAnio.map((f) => ({ moneda: f.moneda, monto: round2(f.montoNeto * (IVA_COSTA_RICA - 1)) })));
+    const anteriores = exentas.length - exentasDelAnio.length;
+    agregar({
+      codigo: "ODOO-EXENTAS",
+      severidad: "BAJA",
+      titulo: `${exentasDelAnio.length} facturas${anioRef === null ? "" : ` de ${anioRef}`} salieron sin impuesto`,
+      detalle:
+        `Pueden ser exenciones legítimas —un cliente del exterior, un ente público— o impuesto que faltó cargar. Importa porque el borrador de cobro le dice al cliente un monto sin impuesto, y la factura que recibe puede traerlo. Si todas debían llevarlo, faltarían ${textoDeMontos(impuesto)} de IVA.` +
+        (anteriores ? ` No se cuentan ${anteriores} de años anteriores.` : ""),
+      montos: impuesto,
+      donde: "PREGUNTANDO",
+      pasos: [
+        "Pasale la lista al contador y confirmá cuáles son exenciones reales (cada fila dice si la cuenta es nacional o internacional).",
+        "Si alguna debía llevar impuesto, hay que corregir la factura en Odoo.",
+      ],
+      queSignificaAceptar:
+        "Que las exenciones están confirmadas por el contador. La línea vuelve si aparece una factura exenta nueva.",
+      queHacer: "Confirmar con el contador cuáles son exenciones reales.",
+      resuelve: "DIRECCION",
+      items: agruparPorPartner(exentasDelAnio, (f) => f.montoNeto, (fs) => {
+        const tipo = fs[0]?.cuentaId ? tipoDeCuenta.get(fs[0].cuentaId) : undefined;
+        return tipo === "INTERNACIONAL" ? "cuenta internacional" : tipo === "NACIONAL" ? "cuenta nacional" : "sin cuenta en Nexus";
+      }),
+    });
+  }
+
+  /* ── 14. La vía de cobro por defecto en cuentas que no facturan por Odoo ─────── */
+  /* ⚠ La vía de cobro nace en ODOO. Cuentas internacionales que facturan por Mercury la arrastran
+     sin que nadie la haya elegido, y ese default mentiroso es lo que hace que una liberación
+     salga con la plataforma equivocada y termine en la lista de Odoo, esperando una copia que
+     nunca la va a cerrar. Salen como línea propia, para revisarlas una por una: corregirlas a
+     ciegas sería cambiar un default equivocado por otro. ⭐ La evidencia va en la NOTA de la fila y no
+     en su texto, para que una línea ya aceptada no se reabra solo por anotarle un número. */
   const conEvidencia = viaDudosa.filter((c) => numerosDeMercury.has(c.id)).length;
   if (viaDudosa.length) {
+    const facturasDe = new Map<string, number>();
+    for (const f of estado.facturas) if (f.cuentaId) facturasDe.set(f.cuentaId, (facturasDe.get(f.cuentaId) ?? 0) + 1);
+    const sinVerificarDe = new Map<string, number>();
+    for (const c of sinEmparejarDudosas) sinVerificarDe.set(c.cuentaId, (sinVerificarDe.get(c.cuentaId) ?? 0) + 1);
     agregar({
       codigo: "CUENTA-INTERNACIONAL-EN-ODOO",
       severidad: "MEDIA",
@@ -1323,12 +1945,15 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         ? `${viaDudosa.length} cuentas internacionales dicen facturar por Odoo`
         : `${viaDudosa.length} cuentas dicen facturar por Odoo y puede que no lo hagan`,
       /* No hay monto: el problema no es plata mal contada, es una etiqueta que manda a buscar
-         al lugar equivocado. Sin `montoEnJuego` la línea ordena al final, que es donde va. */
-      montoEnJuego: null,
+         al lugar equivocado. */
+      montos: [],
       detalle:
-        "Es el valor por defecto, no una elección: `viaCobro` nace en ODOO y estas cuentas nunca lo cambiaron. Importa porque decide dónde se va a buscar una factura cuando haya que anularla, y una cuenta internacional que factura por Mercury mandaría a alguien a buscar en el ERP equivocado. No se puede corregir a ciegas: hay internacionales que sí facturan por Odoo." +
+        "Figuran como que facturan por Odoo porque es lo que trae la cuenta al crearse, no porque alguien lo haya elegido. Importa porque decide dónde se va a buscar una factura cuando haya que anularla, y una cuenta internacional que factura por Mercury mandaría a alguien a buscar en el sistema equivocado. No se puede corregir a ciegas: hay internacionales que sí facturan por Odoo. Cada fila dice cuántas facturas tiene en Odoo." +
         (conEvidencia
           ? ` ${conEvidencia === 1 ? "Una tiene" : `${conEvidencia} tienen`} cobros con un número de factura de Mercury (INV-…): es la evidencia más directa de dónde factura de verdad.`
+          : "") +
+        (sinEmparejarDudosas.length
+          ? ` Sus ${sinEmparejarDudosas.length} cobro(s) facturados no se pueden verificar contra Odoo y se cuentan acá, no como clientes por emparejar.`
           : ""),
       donde: "PREGUNTANDO",
       pasos: [
@@ -1336,7 +1961,8 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         "Corregí la vía de cobro en la ficha de la cuenta.",
         "Al soltar una factura, el diálogo ya avisa de esta contradicción y lo que se elija ahí corrige la cuenta sola.",
       ],
-      queSignificaAceptar: "Que estas cuentas sí facturan por Odoo aunque sean internacionales. La línea vuelve si aparece una cuenta internacional nueva con el default puesto.",
+      queSignificaAceptar:
+        "Que estas cuentas sí facturan por Odoo aunque sean internacionales. La línea vuelve si aparece una cuenta internacional nueva con el default puesto.",
       queHacer: "Confirmar con finanzas en qué plataforma factura cada una y corregir la vía de cobro.",
       resuelve: "COBRANZA",
       items: viaDudosa
@@ -1344,21 +1970,63 @@ export function detectarDiferenciasOdoo(estado: EstadoDelCruce): DiferenciaOdoo[
         .sort((a, b) => a.nombre.localeCompare(b.nombre))
         .map((c) => {
           const base = c.tipo === "INTERNACIONAL" ? "internacional · vía de cobro: Odoo (por defecto)" : "vía de cobro: Odoo";
+          const n = facturasDe.get(c.id) ?? 0;
+          const enOdooTexto = n === 0 ? "ninguna factura en Odoo" : `${n} documento${n === 1 ? "" : "s"} en Odoo`;
+          const sinVerificar = sinVerificarDe.get(c.id);
           const ns = numerosDeMercury.get(c.id);
-          return { texto: c.nombre, nota: ns ? `${base} · ⚠ tiene facturas con número de Mercury: ${ns.join(", ")}` : base };
+          return {
+            texto: c.nombre,
+            nota:
+              `${base} · ${enOdooTexto}` +
+              (sinVerificar ? ` · ${sinVerificar} cobro${sinVerificar === 1 ? "" : "s"} facturado${sinVerificar === 1 ? "" : "s"} sin verificar` : "") +
+              (ns ? ` · ⚠ tiene facturas con número de Mercury: ${ns.join(", ")}` : ""),
+          };
         }),
     });
   }
 
-  /* Las aceptadas van al final: siguen a la vista para poder reabrirlas, pero no compiten con
-     lo que todavía hay que resolver. */
+  /* «Ya contado en»: la primera línea de arriba que ya suma TODOS los documentos de esta. Solo es una marca
+     para quien lee: el encabezado no la necesita, porque cuenta cada documento una vez por su clave. */
+  out.forEach((linea, i) => {
+    if (!linea.plata.length) return;
+    const claves = linea.plata.map((p) => p.clave);
+    const contenedora = out.slice(0, i).find((o) => {
+      const suyas = new Set(o.plata.map((p) => p.clave));
+      return claves.every((c) => suyas.has(c));
+    });
+    if (contenedora) linea.yaContadoEn = contenedora.codigo;
+  });
+
+  const en = (d: DiferenciaOdoo, moneda: string) => d.montos.find((m) => m.moneda === moneda)?.monto ?? 0;
   return out.sort(
-    (a, b) => Number(a.aceptada) - Number(b.aceptada) || (b.montoEnJuego ?? -1) - (a.montoEnJuego ?? -1),
+    (a, b) =>
+      Number(a.aceptada) - Number(b.aceptada) ||
+      (SEVERIDAD_ORDEN[a.severidad] ?? 3) - (SEVERIDAD_ORDEN[b.severidad] ?? 3) ||
+      en(b, "USD") - en(a, "USD") ||
+      en(b, "CRC") - en(a, "CRC") ||
+      (b.montoEnJuego ?? -1) - (a.montoEnJuego ?? -1),
   );
 }
 
+/**
+ * El encabezado de la lista: cuántas líneas están abiertas y cuánta plata no cuadra, por moneda, contando
+ * cada documento UNA vez aunque lo miren varias líneas. Las aceptadas no cuentan.
+ *
+ * ⛔ Nunca una sola cifra: con colones y dólares, son dos.
+ */
+export function resumenDeDiferencias(lineas: readonly DiferenciaOdoo[]): {
+  abiertas: number;
+  plata: MontoEnMoneda[];
+  documentos: number;
+} {
+  const abiertas = lineas.filter((l) => !l.aceptada);
+  const unicas = new Map<string, PlataDeLinea>();
+  for (const l of abiertas) for (const p of l.plata) if (!unicas.has(p.clave)) unicas.set(p.clave, p);
+  return { abiertas: abiertas.length, plata: montosPorMoneda([...unicas.values()]), documentos: unicas.size };
+}
+
 /** Las cuentas sin emparejar que tienen cobros facturados: por dónde conviene empezar a emparejar. */
-function cuentasPorEmparejar(cobros: readonly CobroParaCruzar[]): ItemInconsistencia[] {
+function cuentasPorEmparejar(cobros: readonly CobroParaCruzar[]): ItemDiferencia[] {
   const g = new Map<string, { nombre: string; n: number }>();
   for (const c of cobros) {
     const p = g.get(c.cuentaId) ?? { nombre: c.cuentaNombre, n: 0 };
@@ -1373,22 +2041,27 @@ function cuentasPorEmparejar(cobros: readonly CobroParaCruzar[]): ItemInconsiste
     }));
 }
 
-/** Agrupa por cliente para que una lista de 347 filas sea legible. */
-function agruparPorPartner(facturas: readonly FacturaParaCruzar[]): ItemInconsistencia[] {
-  const g = new Map<string, { monto: number; n: number; moneda: string }>();
+/** Agrupa por cliente y moneda para que una lista de 347 filas sea legible. */
+function agruparPorPartner(
+  facturas: readonly FacturaParaCruzar[],
+  montoDe: (f: FacturaParaCruzar) => number,
+  notaExtra?: (fs: readonly FacturaParaCruzar[]) => string,
+): ItemDiferencia[] {
+  const g = new Map<string, { nombre: string; monto: number; moneda: string; facturas: FacturaParaCruzar[] }>();
   for (const f of facturas) {
     const k = `${f.odooPartnerNombre}|${f.moneda}`;
-    const p = g.get(k) ?? { monto: 0, n: 0, moneda: f.moneda };
-    p.monto += f.montoNeto;
-    p.n++;
+    const p = g.get(k) ?? { nombre: f.odooPartnerNombre, monto: 0, moneda: f.moneda, facturas: [] };
+    p.monto += montoDe(f);
+    p.facturas.push(f);
     g.set(k, p);
   }
-  return [...g.entries()]
-    .sort((a, b) => b[1].monto - a[1].monto)
-    .map(([k, v]) => ({
-      texto: `${k.split("|")[0]} — ${fmt(v.monto, v.moneda)}`,
-      monto: v.monto,
-      nota: `${v.n} factura${v.n === 1 ? "" : "s"}`,
+  return [...g.values()]
+    .sort((a, b) => ordenDeMoneda(a.moneda) - ordenDeMoneda(b.moneda) || b.monto - a.monto || a.nombre.localeCompare(b.nombre))
+    .map((v) => ({
+      texto: `${v.nombre} — ${fmt(round2(v.monto), v.moneda)}`,
+      monto: round2(v.monto),
+      moneda: v.moneda,
+      nota: `${v.facturas.length} factura${v.facturas.length === 1 ? "" : "s"}` + (notaExtra ? ` · ${notaExtra(v.facturas)}` : ""),
     }));
 }
 

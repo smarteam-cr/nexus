@@ -734,3 +734,104 @@ escribir en todo el ERP, y lo que hace el sync queda a nombre de Elías.
 **Qué la revertiría.** Un usuario de integración con el grupo «Contabilidad · Solo lectura» y su propia
 clave de API: el diseño original de `direct`. ⚠ Y si la clave vence (Odoo 17 les pone duración), el
 sync vuelve a fallar con AUTENTICACION y el mensaje ya nombra esa causa.
+
+---
+
+## 2026-09-13 · «Lo que no cuadra» dice cada monto con su moneda y cuenta cada documento una vez
+
+**Qué se decidió.** Cada línea trae su plata una cifra por moneda (`DiferenciaOdoo.montos`) y la lista
+de documentos que la componen (`plata`, con una clave por factura, cobro o liberación). El encabezado
+suma por moneda sin repetir claves (`resumenDeDiferencias`) y solo con las líneas de plata que no
+cuadra: los pagos sin conciliar, las exentas, la moneda ya corregida y las facturas de varias cuotas
+informan y no suman. Las tarjetas y las filas muestran la moneda; una fila sin moneda no muestra el
+número. La lista se ordena por severidad y, adentro, por dólares y después colones.
+
+**Por qué.** Medido con la copia de Odoo de producción: el encabezado decía «Suman 121 693 746 en la
+moneda que más mueve cada línea», que sumaba ₡121,6 millones con US$78.547, contaba dos veces ₡26,3
+millones y dejaba afuera US$543.281. Las tarjetas decían «72 493 914» y «27 420» una debajo de la otra.
+Y el orden comparaba colones con dólares: «exentas» (baja) quedaba arriba de «cobros sin factura» (alta).
+`yaContadoEn` solo se ponía cuando TODAS las facturas de una línea estaban en otra, y ninguna lo cumplía.
+
+Además, en «sin cuenta» la plata es solo lo que sigue sin pagar: 102 de las 155 facturas eran de
+2021–2022 y pagadas, y enterraban ₡34,6 millones + US$70.657 por cobrar. «Falta emparejar» cuenta solo
+las cuentas nacionales que facturan por Odoo; los cobros de las internacionales sin emparejar se
+cuentan en su línea (45 de 46 eran de cuentas sin ninguna factura en Odoo).
+
+**Qué la revertiría.** Un tipo de cambio acordado para el reporte. Aun así la conversión viviría en
+`convertir()` de lib/finanzas/equilibrio.ts, nunca acá.
+
+---
+
+## 2026-09-13 · La pregunta de los pagos sin conciliar ya la contestan los datos
+
+**Qué se decidió.** La línea ODOO-IN-PAYMENT deja de preguntarle al administrador qué significa el
+estado y dice qué es: facturas que Odoo da por pagadas y cuyo pago falta conciliar con el banco.
+Severidad baja, sin suma al encabezado, con el paso de pasarle la lista a contabilidad. El título
+cuenta las del año de la copia y el anterior; el resto va en una frase.
+
+**Por qué.** Medido el 2026-09-13: las 181 facturas vigentes en ese estado (y las 12 notas) tienen saldo
+0 en Odoo. Es «pago registrado, falta cruzarlo con el estado de cuenta», y casi todo es de 2021–2022
+(55 + 59; 2024: 7; 2025: 56; 2026: 4). La premisa de «La promoción a verde nace apagada» —«podría
+significar otra cosa»— ya no se sostiene, y la línea decía además algo falso: que encender la promoción
+pondría 181 cobros en verde de golpe. Solo 3 cobros de Nexus se juntan con esas facturas, y la promoción
+propone, no escribe.
+
+⚠ **La bandera `ODOO_PROMOCION_VERDE` sigue apagada.** Que el estado signifique «pagado» no cambia que
+un cobro pasa a Cobrado solo por una persona con firma (INV3). Encenderla es otra decisión, de dirección.
+
+**Qué la revertiría.** Una factura en ese estado con saldo en Odoo: la línea ya lo dice («N de M ya no
+tienen saldo») y habría que volver a preguntar.
+
+---
+
+## 2026-09-13 · Notas de crédito sin aplicar y moneda equivocada ya corregida, cada una en su línea
+
+**Qué se decidió.** Dos líneas nuevas, las dos por regla:
+- **ODOO-NOTA-SIN-APLICAR**: una nota de crédito vigente sin aplicar, con la factura sin pagar que
+  parece anular (mismo cliente de Odoo, misma moneda, mismo importe con IVA o neto, la más cercana en
+  fecha, nunca la misma para dos notas). Alta si la nota es del año.
+- **ODOO-MONEDA-CORREGIDA**: en una moneda, una factura revertida y su nota de crédito; en la otra, la
+  factura viva del mismo cliente por el mismo importe. Baja, sin suma: no hay nada que anular.
+
+Y la línea de dos monedas deja afuera la factura que ya tiene su nota sin aplicar: esa va a la línea
+de notas.
+
+**Por qué.** Publimark FAC/2026/0232 salió en dólares por 11.541.250, un importe en colones; se revirtió
+con FAC/2026/0243 (en dólares, 13.041.612,50 con IVA) y se reemitió en colones como FAC/2026/0233. La
+página lo decía en media frase de «sin cuenta» —«notas de crédito por USD 11.595.963,50 que no suman»—,
+que se leía como un error vivo de once millones de dólares. Y las 14 notas sin aplicar (US$29.930 +
+₡1.005) no aparecían en ningún lado, aunque mientras no se aplican Odoo sigue dando por cobrar la factura
+que anulan: Publimark 0246 contra 0210, Global Supply 0248 contra 0206 (una de las tres que Alex devuelve
+a por cobrar). Syntepro ₡829 y Releva ₡60 salían como «dos monedas» con su nota ya emitida.
+
+La regla de la nota nació en «Excel vs Odoo» (06fc81c5) y se rescató antes de borrar esa página.
+
+**Qué la revertiría.** Que contabilidad aplique las notas a mano en otro sistema y Odoo deje de ser la
+fuente del saldo. No es el caso.
+
+---
+
+## 2026-09-13 · Las facturas que cubren varias cuotas se PROPONEN en su propia línea
+
+**Qué se decidió.** Antes de acusar un monto distinto, un cobro sin factura o una factura sin cobro, se
+busca si la factura suma exactamente 2 o 3 cuotas sin número de su cuenta y moneda con una sola
+combinación posible (`facturasDeVariasCuotas`), de la señal más fuerte a la más débil: facturadas el
+mismo día, del mes de la factura, del mes anterior (a mes vencido) y, por último, cualquiera a hasta 120
+días. Si la hay, esas cuotas y esa factura salen de las otras líneas y van a ODOO-FACTURA-VARIAS-CUOTAS, que pide anotar el número en cada cuota. Con dos
+combinaciones, o dos facturas que reclaman la misma cuota, no se propone nada. Una cuota que el apareo
+aproximado había juntado con esa factura vuelve a ser un cobro sin factura. Y una diferencia de
+exactamente el 13 % no se acusa como monto distinto (decisión 3 de Alex): se cuenta en una frase.
+
+**Por qué.** Se cumplió lo que revertía la decisión del mismo día («No se construyó la pasada por monto
+para facturas de varias cuotas»): la auditoría con la carga del Excel simulada mostró que siguen quedando
+cuotas que solo se explican así. De los US$24.876 de «montos distintos», US$40 eran un monto distinto de
+verdad (MTS); el resto eran ALMOTEC 6.900 = 3 × 2.300, TEC-AE, Ecoquintas, Amvac, Honda, IIA e
+Iberorutas «150 contra 7.100». Y 14 de los 21 «cobros sin factura» tenían la suya.
+
+⛔ **No se junta nada por monto.** `cruzar()` no cambia: la factura no se aparea con las cuotas, y el
+cronograma no muestra la propuesta como un par. El número lo anota una persona y es lo único que las
+junta. La adivinanza que se temía (Electrocaribe: una factura de mayo contra junio y julio) queda como
+propuesta a confirmar, no como verdad.
+
+**Qué la revertiría.** Una propuesta que resulte equivocada en la mayoría de los casos que se confirman.
+Ahí la línea vuelve a ser «monto distinto» y las cuotas se numeran a mano.

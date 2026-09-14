@@ -29,6 +29,7 @@
  *    factura de 6.900 neto para tres cuotas de 2.300 facturadas el mismo día.
  */
 import { esDocumentoVivo } from "./odoo/diferencias";
+import { centavos, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "./montos";
 import { candidatasPorNombre, claveSociedad, type SociedadConocida, type ViaDeNombre } from "./sociedades";
 import { normalizarTexto, type ColorLibro, type EstadoLibro, type FilaLibro, type SeccionLibro } from "./libro-alex-lectura";
 
@@ -119,8 +120,10 @@ export const VUELVEN_A_POR_COBRAR: ReadonlySet<string> = new Set(["FAC/2026/0206
 
 /* ── Números ────────────────────────────────────────────────────────────────────── */
 
-export const IVA_COSTA_RICA = 1.13;
-export const centavos = (n: number) => Math.round(n * 100);
+/* El IVA, los centavos, el formato y la búsqueda de combinaciones viven en montos.ts: «Lo que no cuadra»
+   (odoo/diferencias.ts) también los usa, y este módulo ya importa de allá. Se re-exportan para no mover a
+   nadie que los traía de acá. */
+export { centavos, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -131,52 +134,6 @@ export function nombreDelPeriodo(periodo: string | null): string {
   const [anio, mes] = periodo.split("-");
   const nombre = MESES[Number(mes) - 1];
   return nombre && anio ? `${nombre} de ${anio}` : periodo;
-}
-
-/** `US$1.867` · `₡796.156,19`. Sin Intl: el texto de una propuesta no puede cambiar con el locale del servidor. */
-export function fmtMontoLibro(n: number | null, moneda: string | null): string {
-  if (n === null) return "—";
-  const simbolo = moneda === "CRC" ? "₡" : moneda === "USD" ? "US$" : moneda ? `${moneda} ` : "";
-  const [entero = "0", decimales = "00"] = Math.abs(n).toFixed(2).split(".");
-  const miles = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${n < 0 ? "−" : ""}${simbolo}${miles}${decimales === "00" ? "" : `,${decimales}`}`;
-}
-
-/**
- * La única combinación de elementos (entre `min` y `max`) cuyos montos suman exactamente `objetivo`
- * centavos. `"varios"` si hay más de una: elegir entre dos combinaciones iguales es adivinar.
- */
-export function subconjuntoUnico<T>(
-  items: readonly T[],
-  montoEnCentavos: (t: T) => number,
-  objetivo: number,
-  min: number,
-  max: number,
-): T[] | "varios" | null {
-  const universo = items.slice(0, 16);
-  const busqueda: { hallado: T[] | null; varios: boolean } = { hallado: null, varios: false };
-  const actual: T[] = [];
-  const buscar = (desde: number, suma: number): void => {
-    if (busqueda.varios) return;
-    if (actual.length >= min && suma === objetivo) {
-      if (busqueda.hallado) busqueda.varios = true;
-      else busqueda.hallado = [...actual];
-      return;
-    }
-    if (actual.length === max) return;
-    for (let i = desde; i < universo.length; i++) {
-      const item = universo[i];
-      if (item === undefined) continue;
-      const c = montoEnCentavos(item);
-      if (c <= 0 || suma + c > objetivo) continue;
-      actual.push(item);
-      buscar(i + 1, suma + c);
-      actual.pop();
-      if (busqueda.varios) return;
-    }
-  };
-  if (objetivo > 0) buscar(0, 0);
-  return busqueda.varios ? "varios" : busqueda.hallado;
 }
 
 /* ── Índice ─────────────────────────────────────────────────────────────────────── */

@@ -22,7 +22,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, EmptyState, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import type { DiferenciaOdoo, DondeSeArregla } from "@/lib/cobranza/odoo/diferencias";
+import {
+  resumenDeDiferencias,
+  textoDeMontos,
+  type DiferenciaOdoo,
+  type DondeSeArregla,
+} from "@/lib/cobranza/odoo/diferencias";
 
 interface Aceptada {
   clave: string;
@@ -33,33 +38,43 @@ interface Aceptada {
 interface Respuesta {
   inconsistencias: DiferenciaOdoo[];
   aceptadas: Aceptada[];
-  medido: { cobros: number; facturas: number; cuentasSinVinculo: number; cuentasTotales: number };
+  medido: {
+    cobros: number;
+    facturas: number;
+    otrosDocumentos: number;
+    cuentasSinVinculo: number;
+    cuentasTotales: number;
+    espejoAl: string | null;
+  };
 }
 
-/** Dónde se arregla, en palabras de quien lo va a hacer. */
-const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: string }> = {
+/** Dónde se arregla, en palabras de quien lo va a hacer. El pie recibe el día de la última copia buena de Odoo. */
+const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoAl: string | null) => string }> = {
+  /* ⚠ Decía «al día siguiente el sync trae el cambio»: la copia de Odoo estuvo sin actualizarse del 2 al
+     13-sep. Un pie con la fecha real no promete lo que no se cumple. */
   ODOO: {
     label: "Se arregla en Odoo",
     chip: "text-violet-600 bg-violet-500/10 border-violet-500/30",
-    pie: "Al día siguiente el sync trae el cambio y la línea desaparece sola.",
+    pie: (espejoAl) =>
+      `Con la próxima copia de Odoo la línea se actualiza sola${espejoAl ? ` (la última buena es del ${espejoAl})` : ""}.`,
   },
-  /* ⚠ Su pie dice lo contrario que el de ODOO a propósito: acá NO hay sync que cierre la
+  /* ⚠ Su pie dice lo contrario que el de ODOO a propósito: acá NO hay copia que cierre la
      línea. Si dijera lo mismo, alguien anularía la factura en Mercury y esperaría para siempre
      a que la lista se limpie sola. */
   MERCURY: {
     label: "Se arregla fuera de Odoo",
     chip: "text-cyan-600 bg-cyan-500/10 border-cyan-500/30",
-    pie: "Ningún sync ve esta plataforma: hay que volver acá y marcarla resuelta a mano.",
+    pie: () => "Nexus no tiene copia de esa plataforma: hay que volver acá y marcarla resuelta a mano.",
   },
   NEXUS: {
     label: "Se arregla en Nexus",
     chip: "text-brand bg-brand/10 border-brand/30",
-    pie: "El cambio se ve en la próxima carga de esta pantalla.",
+    pie: () => "El cambio se ve en la próxima carga de esta pantalla.",
   },
   PREGUNTANDO: {
     label: "Falta un dato de negocio",
     chip: "text-amber-600 bg-amber-500/10 border-amber-500/30",
-    pie: "Esto no se resuelve tecleando: alguien tiene que responder una pregunta.",
+    pie: () => "Esto no se resuelve tecleando: alguien tiene que responder una pregunta.",
   },
 };
 
@@ -68,8 +83,6 @@ const SEV: Record<string, string> = {
   MEDIA: "text-amber-600 bg-amber-500/10 border-amber-500/30",
   BAJA: "text-fg-muted bg-surface-muted border-line",
 };
-
-const miles = (n: number) => n.toLocaleString("es-CR", { maximumFractionDigits: 0 });
 
 export default function DiferenciasOdoo({
   onIrAEmparejar,
@@ -122,17 +135,17 @@ export default function DiferenciasOdoo({
     [cargar, toast],
   );
 
-  /* El titular NO suma las líneas marcadas `yaContadoEn`: son subconjuntos de otra y contarlas
-     daría una cifra que no existe. Y no se mezclan monedas. */
-  const enJuego = useMemo(
-    () =>
-      (data?.inconsistencias ?? [])
-        .filter((i) => !i.yaContadoEn && !i.aceptada)
-        .reduce((a, i) => a + (i.montoEnJuego ?? 0), 0),
-    [data],
-  );
+  /* ⚠ El titular suma por moneda y cuenta cada documento UNA vez aunque lo miren varias líneas
+     (`resumenDeDiferencias`, con sus pruebas). Hasta el 2026-09-13 decía «121 693 746» sumando colones
+     con dólares y contaba dos veces ₡26 millones. */
+  const resumen = useMemo(() => resumenDeDiferencias(data?.inconsistencias ?? []), [data]);
   const abiertas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => !i.aceptada), [data]);
   const cerradas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => i.aceptada), [data]);
+  /* «Ya contado en» con el título de la otra línea: el código (ODOO-SIN-CUENTA) no lo entiende nadie. */
+  const tituloDe = useMemo(
+    () => new Map((data?.inconsistencias ?? []).map((i) => [i.codigo, i.titulo] as const)),
+    [data],
+  );
 
   if (cargando && !data) {
     return (
@@ -153,25 +166,32 @@ export default function DiferenciasOdoo({
             "Nexus y Odoo cuadran."
           ) : (
             <>
-              <strong className="text-lg tabular-nums">{abiertas.length}</strong> cosas por resolver, la
-              más cara primero.
+              <strong className="text-lg tabular-nums">{abiertas.length}</strong> cosas por resolver, las
+              más urgentes primero.
             </>
           )}
         </p>
+        {resumen.plata.length > 0 && (
+          <p className="mt-1 text-fg">
+            Lo que no cuadra suma <span className="font-medium tabular-nums">{textoDeMontos(resumen.plata)}</span>
+            <span className="text-fg-muted">, sin IVA.</span>
+          </p>
+        )}
         <p className="mt-0.5 text-xs text-fg-muted">
-          Cruzado sobre {data.medido.cobros} cobros de Nexus y {data.medido.facturas} facturas de Odoo.
+          {/* ⚠ Dicho explícitamente: es lo que evita que alguien lea el titular como «la empresa tiene
+              60 millones en riesgo», o que sume las dos monedas a mano. */}
+          {resumen.plata.length > 0 &&
+            "Cada moneda por separado y cada documento contado una vez, aunque lo miren varias líneas; no es plata perdida. "}
+          Cruzado sobre {data.medido.cobros} cobros de Nexus y {data.medido.facturas} facturas de Odoo
+          {data.medido.otrosDocumentos > 0 && <> (más {data.medido.otrosDocumentos} notas de crédito o documentos anulados)</>}.
           {data.medido.cuentasSinVinculo > 0 && (
-            <> Faltan emparejar {data.medido.cuentasSinVinculo} de {data.medido.cuentasTotales} cuentas.</>
-          )}
-          {enJuego > 0 && (
             <>
               {" "}
-              Suman <span className="tabular-nums">{miles(enJuego)}</span> en la moneda que más mueve cada línea —{" "}
-              {/* ⚠ Dicho explícitamente: es lo que evita que alguien lea el titular como «la
-                  empresa tiene 60 millones en riesgo». */}
-              no es un total en una sola moneda ni es plata perdida.
+              Faltan emparejar {data.medido.cuentasSinVinculo} de {data.medido.cuentasTotales} clientes que facturan
+              por Odoo.
             </>
           )}
+          {data.medido.espejoAl && <> Última copia buena de Odoo: {data.medido.espejoAl}.</>}
         </p>
       </div>
 
@@ -185,6 +205,8 @@ export default function DiferenciasOdoo({
           <Linea
             key={inc.codigo}
             inc={inc}
+            tituloDe={tituloDe}
+            espejoAl={data.medido.espejoAl}
             aceptada={aceptadaDe.get(inc.codigo)}
             guardando={guardando === inc.codigo}
             puedeEditar={puedeEditar}
@@ -227,6 +249,8 @@ export default function DiferenciasOdoo({
                 <Linea
                   key={inc.codigo}
                   inc={inc}
+                  tituloDe={tituloDe}
+                  espejoAl={data.medido.espejoAl}
                   aceptada={aceptadaDe.get(inc.codigo)}
                   guardando={guardando === inc.codigo}
                   puedeEditar={puedeEditar}
@@ -257,6 +281,8 @@ export default function DiferenciasOdoo({
 
 function Linea({
   inc,
+  tituloDe,
+  espejoAl,
   aceptada,
   guardando,
   puedeEditar,
@@ -266,6 +292,10 @@ function Linea({
   onResolverItem,
 }: {
   inc: DiferenciaOdoo;
+  /** El título de cada línea por su código, para decir «ya contado en» con palabras. */
+  tituloDe: ReadonlyMap<string, string>;
+  /** Día de la última copia buena de Odoo, para el pie de las líneas que se cierran solas. */
+  espejoAl: string | null;
   aceptada?: Aceptada;
   guardando: boolean;
   onAceptar: (motivo: string) => void;
@@ -289,13 +319,17 @@ function Linea({
             {inc.severidad.toLowerCase()}
           </span>
           <span className={`rounded-full border px-2 py-0.5 text-xs ${donde.chip}`}>{donde.label}</span>
-          {inc.montoEnJuego !== null && (
+          {inc.montos.length > 0 && (
             <span className="ml-auto text-sm tabular-nums text-fg-secondary">
-              {miles(inc.montoEnJuego)}
+              {/* ⛔ Cada cifra con su moneda y nunca sumadas: «72 493 914» sin moneda eran colones puestos
+                  al lado de dólares. */}
+              {textoDeMontos(inc.montos)}
               {/* La línea que ya cuenta esta plata desde otro ángulo. Sin decirlo, el lector
                   suma dos veces lo mismo. */}
               {inc.yaContadoEn && (
-                <span className="ml-1 text-xs text-fg-muted">(ya contado en {inc.yaContadoEn})</span>
+                <span className="ml-1 text-xs text-fg-muted">
+                  (ya contado en «{tituloDe.get(inc.yaContadoEn) ?? "otra línea"}»)
+                </span>
               )}
             </span>
           )}
@@ -315,7 +349,7 @@ function Linea({
           ))}
         </ol>
         {/* La línea puede tener su propia historia de cierre; el pie del `donde` es el default. */}
-        <p className="mt-2 text-xs text-fg-muted">{inc.pie ?? donde.pie}</p>
+        <p className="mt-2 text-xs text-fg-muted">{inc.pie ?? donde.pie(espejoAl)}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {inc.atajo && onIrAEmparejar && (
@@ -390,8 +424,11 @@ function Linea({
                   </div>
                   {it.nota && <div className="truncate text-xs text-fg-muted">{it.nota}</div>}
                 </div>
-                {it.monto !== undefined && (
-                  <span className="shrink-0 text-xs tabular-nums text-fg-muted">{miles(it.monto)}</span>
+                {/* Sin moneda no se muestra el número: el texto de la fila ya lo dice con palabras. */}
+                {it.monto !== undefined && it.moneda && (
+                  <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+                    {textoDeMontos([{ moneda: it.moneda, monto: it.monto }])}
+                  </span>
                 )}
                 {/* ⚠ Solo aparece en las líneas que ningún sync puede cerrar. Poder marcar
                     «hecho» algo que el espejo verifica sería poder esconderlo. */}
