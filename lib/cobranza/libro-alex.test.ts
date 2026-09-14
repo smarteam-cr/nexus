@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FilaLibro } from "./libro-alex-lectura";
-import { compararLibro, subconjuntoUnico, type ContextoLibro, type PropuestaDelLibro } from "./libro-alex";
+import { compararLibro, documentosDelLibroPorCobro, subconjuntoUnico, type ContextoLibro, type PropuestaDelLibro } from "./libro-alex";
 import { cobroDeNexus, facturaDelEspejo, filaDelLibro } from "./__fixtures__/libro-alex";
 
 /* ── Armado ─────────────────────────────────────────────────────────────────────── */
@@ -274,5 +274,35 @@ describe("⛔ el libro solo lee, salvo el lote que se sube", () => {
       expect(src, f).not.toMatch(/estado:\s*["']COBRADO["']/);
       expect([...src.matchAll(ESCRITURA)].map((m) => m[0]).filter((e) => !e.startsWith(".importacionCobranza.")), f).toEqual([]);
     }
+  });
+});
+
+describe("lo que el libro le dice a «Lo que no cuadra»", () => {
+  /* Medido el 2026-09-14: ACCCSA, cinco cuotas de US$712; el libro trae INV-4-1 a INV-4-4 por US$712,50. */
+  const acccsa: ContextoLibro = {
+    ...ctx,
+    cobros: [
+      ...["01", "02"].map((m) => cobroDeNexus({ id: `acccsa-${m}`, cuentaId: "acccsa", periodo: `2026-${m}`, monto: 712, estado: "COBRADO", fechaEmision: `2026-${m}-15` })),
+      cobroDeNexus({ id: "acccsa-06", cuentaId: "acccsa", periodo: "2026-06", monto: 150, estado: "POR_COBRAR", fechaEmision: "2026-06-15" }),
+    ],
+  };
+  const filas: FilaLibro[] = [
+    filaDelLibro({ hoja: MERCURY, fila: 2, seccion: "MERCURY", cliente: "ACCCSA", numero: "INV-4-1", fechaFactura: "2026-01-15", total: 712.5, estado: "PAGADO", periodo: "2026-01" }),
+    filaDelLibro({ hoja: MERCURY, fila: 10, seccion: "MERCURY", cliente: "ACCCSA", numero: "INV-4-2", fechaFactura: "2026-02-15", total: 712.5, estado: "PAGADO", periodo: "2026-02" }),
+    /* La única cuota del mes con otro monto no dice nada: Iberorutas 0328 caía en la cuota de US$150. */
+    filaDelLibro({ hoja: MERCURY, fila: 40, seccion: "MERCURY", cliente: "ACCCSA", numero: "INV-60", fechaFactura: "2026-06-20", total: 7100, estado: "SIN_PAGAR", periodo: "2026-06" }),
+  ];
+
+  it("documentosDelLibroPorCobro: la cuota atada por el mes con un monto parecido trae su factura de Mercury; con otro monto, nada", () => {
+    const docs = documentosDelLibroPorCobro(filas, acccsa);
+    expect(Object.fromEntries(docs)).toEqual({
+      "acccsa-01": { numero: "INV-4-1", plataforma: "MERCURY", total: 712.5, moneda: "USD", fuente: `«${MERCURY}» fila 2`, porElMes: true },
+      "acccsa-02": { numero: "INV-4-2", plataforma: "MERCURY", total: 712.5, moneda: "USD", fuente: `«${MERCURY}» fila 10`, porElMes: true },
+    });
+  });
+
+  it("una cuota que ya tiene número no recibe el documento del libro: su número manda", () => {
+    const conNumero: ContextoLibro = { ...acccsa, cobros: acccsa.cobros.map((c) => (c.id === "acccsa-01" ? { ...c, numeroFactura: "INV-4-1" } : c)) };
+    expect([...documentosDelLibroPorCobro(filas, conNumero).keys()]).toEqual(["acccsa-02"]);
   });
 });

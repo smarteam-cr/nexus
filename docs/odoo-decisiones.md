@@ -835,3 +835,41 @@ propuesta a confirmar, no como verdad.
 
 **Qué la revertiría.** Una propuesta que resulte equivocada en la mayoría de los casos que se confirman.
 Ahí la línea vuelve a ser «monto distinto» y las cuotas se numeran a mano.
+
+---
+
+## 2026-09-14 · «Lo que no cuadra» muestra el estado de pago contradicho, lo que el Excel da por Mercury y lo que se caía
+
+**Qué se decidió.** Tres líneas nuevas y tres reglas corregidas, todas por regla:
+- **ODOO-POR-COBRAR-PAGADA** (alta, se arregla en Nexus): un par juntado —por número o por monto exacto— con el
+  cobro fuera de Cobrado y la factura pagada en Odoo (pagada o pagada sin conciliar). Suma los cobros.
+- **ODOO-COBRADO-SIN-PAGAR** (alta, preguntando): el cobro en Cobrado y su factura sin pagar. Suma lo que Odoo deja
+  sin pagar, con la clave de la factura: si una nota de crédito parece anularla, el encabezado la cuenta una vez.
+  ⛔ Pide verificar el depósito; no saca nada de Cobrado (decisión 1 de Alex).
+- **ODOO-COBRO-FACTURADO-EN-MERCURY** (media, no suma): una cuota sin número ni plataforma anotada, en una cuenta
+  que dice facturar por Odoo, que el último Excel de Alexander cubre con una factura de Mercury. No se acusa como
+  «cobro sin factura»; se pide anotar el número. El cargador arma `EstadoDelCruce.libro` con la comparación del libro
+  (`documentosDelLibroPorCobro`): cuotas atadas por número, fecha o monto exacto, o la única del mes con un monto
+  parecido (un dólar o el 5 %). Una plataforma anotada por una persona manda sobre el Excel.
+- La factura que el apareo aproximado juntó con una cuota que resultó ser de otra factura de varias cuotas vuelve a
+  «factura sin cobro».
+- Una factura que Odoo sigue dando por cobrar nunca es historia, aunque sea de antes del primer cobro de la cuenta.
+- La pista de «cobro sin factura» busca la factura anulada o revertida cerca de la fecha de emisión **o** de la
+  programada, y nombra la nota de crédito que la revirtió.
+
+Y cada línea dice su casa (`DiferenciaOdoo.documentos`): las facturas y cobros de los que habla, sumen o no.
+`coberturaDelCruce` prueba que toda factura viva sin pagar de una cuenta emparejada, y todo cobro facturado que la
+copia ya pudo ver, termina juntado o en exactamente una línea. Una línea que solo da una pista (la nota que parece
+anular una factura) no es la casa de esa factura.
+
+**Por qué.** Medido en producción el 2026-09-14, después de aplicar el Excel: 4 cobros por cobrar con su factura
+pagada (US$4.626) y 6 cobrados con la suya sin pagar (US$6.730) no salían en ninguna línea, y el encabezado «mejoraba»
+justo porque habían dejado «facturas sin cobro». TEC-AE FAC/2026/0298 (US$4.860, sin pagar) se juntaba por monto con
+mayo, mayo pasaba a la 0272 (abril + mayo) y la 0298 desaparecía. ACCCSA, 5 × US$712, era el 75 % de «cobros sin
+factura» y el Excel la trae como INV-4-1 a INV-4-4 de Mercury. Hotel Alta Las Palomas se marcó facturada el 10-ago y
+su factura de marzo (revertida) quedaba a 158 días. Con la cobertura, 6 facturas de 2025 sin pagar (US$2.935) que se
+escondían como «historia» salen en «facturas sin cobro».
+
+**Qué la revertiría.** Que contabilidad deje de registrar pagos en Odoo (el estado de pago dejaría de ser evidencia),
+o que el Excel de Alexander deje de ser el medio para poner Nexus al día: sin lote, `libro` va vacío y ACCCSA vuelve
+a acusarse.

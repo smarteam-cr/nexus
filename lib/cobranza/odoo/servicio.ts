@@ -31,7 +31,15 @@ import {
   type PartnerOdoo,
   type PropuestaEmparejado,
 } from "./emparejado";
-import { contarDocumentos, detectarDiferenciasOdoo, huellaDe, numeroVerificableEnOdoo, type DiferenciaOdoo } from "./diferencias";
+import {
+  contarDocumentos,
+  detectarDiferenciasOdoo,
+  huellaDe,
+  numeroVerificableEnOdoo,
+  type DiferenciaOdoo,
+  type EstadoDelCruce,
+} from "./diferencias";
+import { documentosDelUltimoLibro } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
 import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
@@ -436,19 +444,43 @@ export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nom
 export async function cargarDiferencias(): Promise<{
   inconsistencias: DiferenciaOdoo[];
   aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
-  medido: {
-    cobros: number;
-    /** Facturas vivas de Odoo. */
-    facturas: number;
-    /** Notas de crédito y documentos anulados o revertidos: «364 facturas» eran 296 facturas y 68 de estos. */
-    otrosDocumentos: number;
-    cuentasSinVinculo: number;
-    cuentasTotales: number;
-    /** Día de la última copia buena de Odoo (`YYYY-MM-DD`): el pie de las líneas de Odoo lo dice. */
-    espejoAl: string | null;
-  };
+  medido: MedidoDelCruce;
 }> {
-  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk] = await Promise.all([
+  const { estado, aceptadas, medido } = await cargarEstadoDelCruce();
+  return {
+    inconsistencias: detectarDiferenciasOdoo(estado),
+    aceptadas: aceptadas.map((a) => ({
+      clave: a.clave,
+      motivo: a.motivo,
+      aceptadaPor: a.aceptadaPor,
+      aceptadaEn: a.aceptadaEn.toISOString(),
+    })),
+    medido,
+  };
+}
+
+type MedidoDelCruce = {
+  cobros: number;
+  /** Facturas vivas de Odoo. */
+  facturas: number;
+  /** Notas de crédito y documentos anulados o revertidos: «364 facturas» eran 296 facturas y 68 de estos. */
+  otrosDocumentos: number;
+  cuentasSinVinculo: number;
+  cuentasTotales: number;
+  /** Día de la última copia buena de Odoo (`YYYY-MM-DD`): el pie de las líneas de Odoo lo dice. */
+  espejoAl: string | null;
+};
+
+/**
+ * Lo que «Lo que no cuadra» cruza, leído de la base. Aparte de `cargarDiferencias` para que una medición de solo
+ * lectura pruebe la cobertura (`coberturaDelCruce`) con exactamente lo mismo que ve la pantalla.
+ */
+export async function cargarEstadoDelCruce(): Promise<{
+  estado: EstadoDelCruce;
+  aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: Date }>;
+  medido: MedidoDelCruce;
+}> {
+  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk, libro] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -509,6 +541,8 @@ export async function cargarDiferencias(): Promise<{
        que va a descartar. */
     prisma.facturaLiberada.findMany({ where: { resueltaEn: null }, orderBy: { liberadaEn: "desc" } }),
     ultimaCorridaOk(),
+    /* Lo que el Excel de Alexander dice de las cuotas sin número (ACCCSA, facturada por Mercury). Sin lote, vacío. */
+    documentosDelUltimoLibro(),
   ]);
   const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
   /* ⚠ Solo las cuentas nacionales que facturan por Odoo: son las únicas que se pueden emparejar. Medido el
@@ -519,7 +553,7 @@ export async function cargarDiferencias(): Promise<{
   const cuentasSinVinculo = emparejables.filter((c) => !cuentasVinculadas.has(c.id)).length;
   const espejoAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
 
-  const inconsistencias = detectarDiferenciasOdoo({
+  const estado: EstadoDelCruce = {
     cobros: cobrosDb.map((c) => ({
       id: c.id,
       cuentaId: c.cuentaId,
@@ -572,22 +606,18 @@ export async function cargarDiferencias(): Promise<{
       tipo: c.tipo,
       viaCobro: c.viaCobro,
     })),
+    libro,
     cuentasSinVinculo,
     cuentasTotales,
     cuentasVinculadas,
     ultimaCorridaOk: espejoAl,
     aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
-  });
+  };
   const documentos = contarDocumentos(facturasDb);
 
   return {
-    inconsistencias,
-    aceptadas: aceptadasDb.map((a) => ({
-      clave: a.clave,
-      motivo: a.motivo,
-      aceptadaPor: a.aceptadaPor,
-      aceptadaEn: a.aceptadaEn.toISOString(),
-    })),
+    estado,
+    aceptadas: aceptadasDb,
     medido: {
       cobros: cobrosDb.length,
       facturas: documentos.facturas,

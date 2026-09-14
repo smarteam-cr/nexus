@@ -18,7 +18,8 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { ultimaCorridaOk } from "./odoo/sync";
 import { FUENTE_LIBRO_ALEX, leerLibro, type FilaLibro, type HojaLeida } from "./libro-alex-lectura";
 import { hojasDelXlsx } from "./libro-alex-xlsx";
-import { compararLibro, type CobroParaLibro, type ComparacionDelLibro, type ContextoLibro } from "./libro-alex";
+import { compararLibro, documentosDelLibroPorCobro, type CobroParaLibro, type ComparacionDelLibro, type ContextoLibro } from "./libro-alex";
+import type { DocumentoDelLibro } from "./odoo/diferencias";
 import { proponerNumeros, type NumerosDelLibro } from "./odoo/numero-propuesta";
 
 export class LibroError extends Error {
@@ -289,6 +290,22 @@ export async function cargarContextoLibro(): Promise<ContextoCargado> {
     faltaSqlNumeros,
     espejoAl: corridaOk ? dia(corridaOk) : null,
   };
+}
+
+/**
+ * La factura con que el último Excel de Alexander cubre cada cobro sin número (cobroId → documento), para «Lo que no
+ * cuadra». Vacío si nunca se subió el Excel. Lee lo mismo que la comparación: el último lote no descartado contra lo
+ * que Nexus tiene hoy (`documentosDelLibroPorCobro`, puro).
+ */
+export async function documentosDelUltimoLibro(): Promise<Map<string, DocumentoDelLibro>> {
+  const ultimo = await prisma.importacionCobranza.findFirst({
+    where: { fuente: FUENTE_LIBRO_ALEX, estado: { not: "DESCARTADO" } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (!ultimo) return new Map();
+  const [lote, { ctx }] = await Promise.all([leerLoteDelLibro(ultimo.id), cargarContextoLibro()]);
+  return lote ? documentosDelLibroPorCobro(lote.filas, ctx) : new Map();
 }
 
 /* ── La comparación ─────────────────────────────────────────────────────────────── */

@@ -28,8 +28,9 @@
  * 4. Una fila puede cubrir varias cuotas o varios servicios: Bluesat 950 = 250 + 700; ALMOTEC, una
  *    factura de 6.900 neto para tres cuotas de 2.300 facturadas el mismo día.
  */
-import { esDocumentoVivo } from "./odoo/diferencias";
+import { esDocumentoVivo, type DocumentoDelLibro } from "./odoo/diferencias";
 import { centavos, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "./montos";
+import { plataformaDelNumero } from "./numero-factura";
 import { candidatasPorNombre, claveSociedad, type SociedadConocida, type ViaDeNombre } from "./sociedades";
 import { normalizarTexto, type ColorLibro, type EstadoLibro, type FilaLibro, type SeccionLibro } from "./libro-alex-lectura";
 
@@ -976,4 +977,42 @@ export function compararLibro(filas: readonly FilaLibro[], ctx: ContextoLibro): 
   };
   for (const p of filasOut) conteo[p.veredicto] += 1;
   return { filas: filasOut, conteo };
+}
+
+/* ── Lo que el libro le dice a «Lo que no cuadra» ───────────────────────────────── */
+
+/**
+ * La factura con que el libro cubre cada cobro que todavía no tiene número (cobroId → documento). La usa «Lo que no
+ * cuadra» para no acusar de «sin factura en Odoo» una cuota que el libro da facturada por Mercury.
+ *
+ * Solo las facturas con número (Odoo, Mercury, Compendio) y solo cuotas atadas de verdad: por el número, la fecha de
+ * emisión o el monto exacto; o la única del mes con un monto parecido (un dólar o el 5 %). Medido el 2026-09-14:
+ * ACCCSA INV-4-1 a INV-4-4 (US$712,50) quedan atadas a sus cuotas de US$712 por el mes. ⛔ La única del mes con otro
+ * monto no dice nada: Iberorutas 0328 (US$7.100) caía en la cuota de US$150.
+ */
+export function documentosDelLibroPorCobro(filas: readonly FilaLibro[], ctx: ContextoLibro): Map<string, DocumentoDelLibro> {
+  const out = new Map<string, DocumentoDelLibro>();
+  const parecidos = (a: number, b: number) => Math.abs(centavos(a) - centavos(b)) <= Math.max(100, Math.round(centavos(b) * 0.05));
+  for (const p of compararLibro(filas, ctx).filas) {
+    if (!p.numero || !SECCIONES_CON_NUMERO.has(p.seccion) || p.veredicto === "NO_ES_CARTERA" || p.atadura === null) continue;
+    const plataforma = plataformaDelNumero(p.numero);
+    if (plataforma === null) continue;
+    const objetivo = p.neto ?? p.total;
+    const [unica] = p.cobros;
+    const porElMes = p.atadura === "MES_UNICO";
+    if (porElMes && (p.cobros.length !== 1 || !unica || objetivo === null || !parecidos(objetivo, unica.monto))) continue;
+    const [fuente] = p.fuentes;
+    for (const c of p.cobros) {
+      if (c.numeroFactura || out.has(c.id)) continue;
+      out.set(c.id, {
+        numero: p.numero,
+        plataforma,
+        total: p.total,
+        moneda: p.moneda,
+        fuente: fuente ? `«${fuente.hoja}» fila ${fuente.fila}` : "el Excel",
+        porElMes,
+      });
+    }
+  }
+  return out;
 }
