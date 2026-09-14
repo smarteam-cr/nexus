@@ -40,6 +40,11 @@ export function etiquetaMes(periodo: string): string {
   return `${MESES_LARGOS[m - 1] ?? periodo} ${periodo.slice(0, 4)}`;
 }
 
+/** "2026-07" → "jul". Para listar varios meses en una línea chica. */
+export function etiquetaMesCorta(periodo: string): string {
+  return MESES[Number(periodo.slice(5, 7)) - 1] ?? periodo;
+}
+
 /** "2026-07-15" → "15 jul 2026" ("—" si null). */
 export function fmtFecha(iso: string | null | undefined): string {
   if (!iso) return "—";

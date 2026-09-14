@@ -25,6 +25,8 @@
  *   O. PARTNERSHIP_CUBRE_EL_PISO: la pregunta abierta, en sus dos valores
  *   P. el hueco de ventas con la tasa de cada mes
  *   Q. la plata que no es venta: a la caja y a nada más
+ *   R. el margen a la fecha no cuenta meses con el gasto a medias
+ *   S. lo facturado en años anteriores y sin cobrar sigue en la calle
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -34,6 +36,7 @@ import {
   calidadDelMes,
   conceptosRecurrentes,
   convertir,
+  margenDeMesesCompletos,
   metasDe,
   PARTNERSHIP_CUBRE_EL_PISO,
   periodosDelAnio,
@@ -1041,5 +1044,108 @@ describe("Q · la plata que no es venta: a la caja y a nada más", () => {
     const efectivos = aplicarEscenario(r.meses, { "2026-03": 1000 });
     expect(efectivos[2]!.ingresosTotales).toBe(1000);
     expect(indicadoresDe(aplicarEscenario(r.meses, {})).ingresosTotales).toBe(r.indicadores.ingresosTotales);
+  });
+});
+
+// ── R ───────────────────────────────────────────────────────────────────────────
+
+describe("R · el margen a la fecha no cuenta meses con el gasto a medias", () => {
+  /**
+   * La forma del libro al 2026-09-14: enero a marzo sin costos fijos, abril a julio completos, agosto
+   * sin la 2ª quincena y septiembre sin planilla. Diez mil de cobro todos los meses.
+   */
+  const reporte = () => {
+    const egresos: EgresoDeMes[] = [];
+    for (const p of periodosDelAnio(2026).slice(0, 9)) {
+      const mes = Number(p.slice(5, 7));
+      if (mes <= 8) egresos.push(eg(p, "PLANILLA", "planilla-q1", 2000));
+      if (mes <= 7) egresos.push(eg(p, "PLANILLA", "planilla-q2", 2000));
+      if (mes >= 4) egresos.push(eg(p, "FIJO_OPERACION", "Alquiler", 3000));
+    }
+    const ingresos = periodosDelAnio(2026)
+      .slice(0, 9)
+      .map((p) => ing(p, "COBRADO", 10_000));
+    return calcularEquilibrio(egresos, ingresos, { anio: 2026, hoyISO: "2026-09-14" });
+  };
+
+  it("R1 EL CASO REAL: solo abril a julio entran, y los meses que quedan fuera se nombran", () => {
+    const r = reporte();
+    expect(r.meses.filter((m) => m.estado === "PARCIAL" && !m.futuro).map((m) => m.periodo)).toEqual([
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-08",
+      "2026-09",
+    ]);
+    expect(r.indicadores.mesesDelMargen).toEqual(["2026-04", "2026-05", "2026-06", "2026-07"]);
+    expect(r.indicadores.mesesFueraDelMargen).toEqual(["2026-01", "2026-02", "2026-03", "2026-08", "2026-09"]);
+    // Cuatro meses a 10.000 − 7.000. Contando todos los ocurridos daba 42.000: 30.000 de gasto que faltaba.
+    expect(r.indicadores.margenAlDia).toBe(12_000);
+  });
+
+  it("R2 la caja se mide sobre los mismos meses que el margen", () => {
+    const r = reporte();
+    expect(r.indicadores.cajaAlDia).toBe(40_000);
+    expect(r.indicadores.egresosDeCajaTotal).toBe(28_000);
+  });
+
+  it("R3 el navegador da lo mismo, y simular un mes a medias no lo mete al margen", () => {
+    const r = reporte();
+    const ind = indicadoresDe(aplicarEscenario(r.meses, {}));
+    expect(ind.margenAlDia).toBe(r.indicadores.margenAlDia);
+    expect(ind.mesesFueraDelMargen).toEqual(r.indicadores.mesesFueraDelMargen);
+    expect(ind.cajaAlDia).toBe(r.indicadores.cajaAlDia);
+    expect(ind.egresosDeCajaTotal).toBe(r.indicadores.egresosDeCajaTotal);
+    expect(indicadoresDe(aplicarEscenario(r.meses, { "2026-08": 99_999 })).margenAlDia).toBe(12_000);
+    expect(indicadoresDe(aplicarEscenario(r.meses, { "2026-05": 12_000 })).margenAlDia).toBe(14_000);
+  });
+
+  it("R4 sin ningún mes completo no hay margen: la lista vacía lo dice", () => {
+    const r = calcularEquilibrio([], [ing("2026-02", "COBRADO", 5000)], { anio: 2026, hoyISO: "2026-03-10" });
+    expect(margenDeMesesCompletos(r.meses)).toMatchObject({ margenAlDia: 0, mesesDelMargen: [], cajaAlDia: 0 });
+    expect(r.indicadores.mesesFueraDelMargen).toEqual(["2026-01", "2026-02", "2026-03"]);
+  });
+});
+
+// ── S ───────────────────────────────────────────────────────────────────────────
+
+describe("S · lo facturado en años anteriores y sin cobrar sigue en la calle", () => {
+  it("S1 una factura de diciembre sin pagar no desaparece el 1 de enero, y no suma al año", () => {
+    const imputada = tipoIngresoDeCobro(
+      { estado: "PROGRAMADO", periodo: "2025-12", fechaProgramadaISO: "2025-12-15", fechaEmisionISO: "2025-12-10", fechaCobroISO: null },
+      "2026-01-05",
+    );
+    expect(imputada).toMatchObject({ tipo: "POR_COBRAR", periodo: "2025-12", enPlazo: false });
+    const r = calcularEquilibrio(
+      [],
+      [
+        ing(imputada.periodo, imputada.tipo, 2975, { enPlazo: imputada.enPlazo }),
+        ing("2025-11", "POR_COBRAR", 150, { enPlazo: true }),
+        ing("2026-01", "POR_COBRAR", 1000),
+      ],
+      { anio: 2026, hoyISO: "2026-01-05" },
+    );
+    expect(r.porCobrarDeAniosAnteriores).toEqual({ USD: { porCobrar: 3125, vencido: 2975, facturas: 2 } });
+    expect(r.indicadores.porCobrarTotal).toBe(1000);
+    expect(r.indicadores.facturadoTotal).toBe(1000);
+    expect(r.cobranzaPorMoneda.USD?.porCobrar).toBe(1000);
+  });
+
+  it("S2 en colones y sin tasa: queda en su moneda, sin convertir y sin ir a lo no convertido", () => {
+    const r = calcularEquilibrio([], [ing("2025-12", "POR_COBRAR", 704_563, { moneda: "CRC" })], {
+      anio: 2026,
+      hoyISO: "2026-01-05",
+    });
+    expect(r.porCobrarDeAniosAnteriores.CRC).toEqual({ porCobrar: 704_563, vencido: 704_563, facturas: 1 });
+    expect(r.fx.montosNoConvertidos).toEqual([]);
+  });
+
+  it("S3 lo de un año POSTERIOR, lo cobrado y lo sin factura de otro año no cuentan", () => {
+    const r = calcularEquilibrio(
+      [],
+      [ing("2027-01", "POR_COBRAR", 500), ing("2024-12", "COBRADO", 800), ing("2024-12", "PROGRAMADO", 900)],
+      { anio: 2026, hoyISO: "2026-12-31" },
+    );
+    expect(r.porCobrarDeAniosAnteriores).toEqual({});
   });
 });

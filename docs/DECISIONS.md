@@ -2844,7 +2844,13 @@ fabricarla.
   entra, pero la planilla de septiembre a diciembre vale cero porque el libro de pagos
   solo tiene lo pagado. El tile es **«Margen a la fecha»** (`margenAlDia`) y lo que viene
   se declara al lado (`comprometidoPorVenir`), nunca sumado. `margenAnual` sigue en el DTO
-  rotulado como proyección.
+  rotulado como proyección. **Tampoco entra un mes ocurrido con el gasto incompleto**
+  (2026-09-14, `margenDeMesesCompletos`): enero a marzo sin costos fijos, agosto sin la 2ª
+  quincena y septiembre sin planilla inflaban el margen entre ≈US$17.500 y ≈US$36.000. Los
+  meses que quedan fuera se nombran en el tile, y la caja usa esos mismos meses.
+- **Lo facturado en años anteriores y sin cobrar sigue en la calle** (`porCobrarDeAniosAnteriores`,
+  2026-09-14): por moneda, sin convertir y sin sumar al año. Sin eso, el 1 de enero una factura de
+  diciembre sin pagar desaparecía de «Cuentas por cobrar».
 - **La caja se mide contra egreso de caja, no contra el egreso entero** (`egresosDeCajaTotal`).
   Sin eso, el «margen en caja» descontaba la reserva de aguinaldo —un devengo, nadie apartó
   esa plata— y los egresos de meses que no ocurrieron: medía los ingresos con criterio de

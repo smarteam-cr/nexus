@@ -229,6 +229,17 @@ describe("la comisión estimada y la bandera PARTNERSHIP_CUBRE_EL_PISO", () => {
       expect(ind.cobranza).toEqual(r.indicadores.cobranza);
     });
 
+    it(`con la bandera en ${cubre}, los meses fuera del margen y la caja dan lo mismo que el servidor`, () => {
+      const r = conEstimada(cubre);
+      const ind = indicadoresDe(aplicarEscenario(r.meses, {}));
+      // Enero a septiembre ocurrieron y solo mayo y agosto tienen gasto: el resto queda fuera, por nombre.
+      expect(ind.mesesFueraDelMargen).toEqual(r.indicadores.mesesFueraDelMargen);
+      expect(ind.mesesDelMargen).toEqual(r.indicadores.mesesDelMargen);
+      expect(ind.cajaAlDia).toBe(r.indicadores.cajaAlDia);
+      expect(ind.egresosDeCajaTotal).toBe(r.indicadores.egresosDeCajaTotal);
+      expect(ind.noVentaEnCajaAlDia).toBe(r.indicadores.noVentaEnCajaAlDia);
+    });
+
     it(`con la bandera en ${cubre}, simular un mes no cambia el criterio del aliado`, () => {
       const r = conEstimada(cubre);
       const mayo = aplicarEscenario(r.meses, { "2026-05": 1000 })[4]!;

@@ -17,7 +17,7 @@
  * lo que este módulo existe para evitar. Si alguien viene a "completar la feature"
  * agregándole un guardar: no está incompleta.
  */
-import type { FilaMes, ReporteEquilibrio } from "@/lib/finanzas/equilibrio";
+import { margenDeMesesCompletos, type FilaMes, type ReporteEquilibrio } from "@/lib/finanzas/equilibrio";
 import { lecturaDeCobranza, type LecturaDeCobranza } from "./antiguedad";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -42,12 +42,18 @@ export interface IndicadoresAnio {
   ingresosTotales: number;
   /** Los doce meses. PROYECCIÓN: mezcla lo ocurrido con lo comprometido. */
   margenAnual: number;
-  /** Solo los meses ya ocurridos — el titular. */
+  /** Solo los meses ya ocurridos con el gasto completo — el titular. */
   margenAlDia: number;
+  mesesDelMargen: string[];
+  /** Ocurridos, con el gasto incompleto: fuera del margen y dichos por nombre. */
+  mesesFueraDelMargen: string[];
   /** Ingreso ya fechado en meses que no llegaron. Se declara aparte. */
   comprometidoPorVenir: number;
-  /** Egreso que salió del banco: sin meses futuros, sin la reserva de aguinaldo. */
+  /** Egreso que salió del banco en los meses del margen, sin la reserva de aguinaldo. */
   egresosDeCajaTotal: number;
+  /** Lo que entró al banco en los meses del margen. */
+  cajaAlDia: number;
+  noVentaEnCajaAlDia: number;
   /** Lo vendido del año. NO cambia al simular: simular mueve el facturado, no la venta. */
   vendidoTotal: number;
   /** El % de cobranza en par, sobre lo REAL. Ver `lecturaDeCobranza`. */
@@ -113,17 +119,12 @@ export function indicadoresDe(meses: readonly MesEfectivo[]): IndicadoresAnio {
     partnershipTotal: suma((m) => m.partnership),
     ingresosTotales,
     margenAnual: round2(ingresosTotales - egresosTotales),
-    // Espejo EXACTO del criterio del servidor (lib/finanzas/equilibrio.ts): si estas tres
-    // se calcularan distinto acá, el encabezado cambiaría de significado al simular y
-    // nadie se daría cuenta. El test de paridad con escenario vacío lo sostiene.
-    margenAlDia: round2(
-      meses.filter((m) => !m.futuro).reduce((n, m) => n + m.ingresosTotales - m.egresos, 0),
-    ),
+    // La MISMA función que usa el servidor (lib/finanzas/equilibrio.ts), no una copia: si el margen
+    // se calculara distinto acá, el encabezado cambiaría de significado al simular y nadie se daría
+    // cuenta. El test de paridad con escenario vacío lo sostiene.
+    ...margenDeMesesCompletos(meses),
     comprometidoPorVenir: round2(
       meses.filter((m) => m.futuro).reduce((n, m) => n + m.ingresosTotales, 0),
-    ),
-    egresosDeCajaTotal: round2(
-      meses.filter((m) => !m.futuro).reduce((n, m) => n + m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO, 0),
     ),
     // Intocable al simular, igual que el partnership: mover el facturado de marzo es
     // preguntarse qué pasaría si se facturara más, no reescribir lo que se vendió.

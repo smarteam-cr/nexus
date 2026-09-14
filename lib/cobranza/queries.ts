@@ -2349,6 +2349,9 @@ export async function loadReporteAnual(
           { periodo: { in: periodos } },
           { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
           { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
+          // Facturado antes de este año y sin cobrar: sigue en la calle (`porCobrarDeAniosAnteriores`).
+          // Sin esto, el 1 de enero una factura de diciembre sin pagar desaparecía de «Cuentas por cobrar».
+          { fechaEmision: { lt: desde }, estado: { not: "COBRADO" } },
         ],
       },
       select: {
@@ -2477,8 +2480,10 @@ export async function loadReporteAnual(
       },
       hoyISO,
     );
-    // Facturado o cobrado en otro año: es plata de ese año, no de este.
-    if (!periodos.includes(t.periodo)) continue;
+    // Facturado o cobrado en otro año: es plata de ese año, no de este. Salvo lo facturado ANTES y sin
+    // cobrar, que el motor junta aparte, sin sumarlo al año (`porCobrarDeAniosAnteriores`).
+    const deAntesSinCobrar = t.tipo === "POR_COBRAR" && t.periodo < periodos[0]!;
+    if (!periodos.includes(t.periodo) && !deAntesSinCobrar) continue;
     if (t.tipo === "COBRADO") {
       cobradosTotales++;
       if (t.sinFechaDeCobro) cobradosSinFecha++;

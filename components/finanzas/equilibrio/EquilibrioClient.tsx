@@ -20,7 +20,7 @@
  */
 import { useMemo, useState } from "react";
 import { PageHeader, Alert, EmptyState } from "@/components/ui";
-import { fmtMonto, etiquetaMes } from "@/components/cobranza/format";
+import { fmtMonto, etiquetaMes, etiquetaMesCorta } from "@/components/cobranza/format";
 import {
   aplicarEscenario,
   igualarAlEquilibrio,
@@ -122,9 +122,17 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   //
   // La plata que entró sin ser venta (Ingresos variables) también está en el banco: suma a la caja y
   // a nada más. No toca «Margen a la fecha», que compara lo facturado con lo que costó operar.
-  const noVentaEnCaja = r.indicadores.noVentaCobradoTotal;
-  const cajaTotal = round2(ind.cobradoTotal + r.indicadores.partnershipCobradoTotal + noVentaEnCaja);
-  const margenCaja = round2(cajaTotal - ind.egresosDeCajaTotal);
+  //
+  // ⚠ La caja cuenta los MISMOS meses que el margen (`margenDeMesesCompletos`): lo que entró en nueve
+  // meses menos lo que salió en cuatro no es la caja de ningún período.
+  const noVentaEnCaja = ind.noVentaEnCajaAlDia;
+  const margenCaja = round2(ind.cajaAlDia - ind.egresosDeCajaTotal);
+  const fueraDelMargen = ind.mesesFueraDelMargen.map(etiquetaMesCorta).join(", ");
+
+  // Lo facturado en años anteriores que sigue sin cobrar, en su moneda: no está en el total del año.
+  const deAntes = Object.entries(r.porCobrarDeAniosAnteriores)
+    .filter(([, a]) => a.porCobrar > 0)
+    .map(([m, a]) => fmtMonto(a.porCobrar, m));
 
   // La apertura por moneda nativa, sin convertir. Solo se muestra si hay algo en otra moneda
   // que la del reporte: con todo en dólares repetiría el par de arriba.
@@ -196,6 +204,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
         ind.porCobrarTotal > 0
           ? `${fmtMonto(ind.porCobrarVencidoTotal, moneda)} vencido · ${fmtMonto(ind.cobranza.enPlazo, moneda)} en plazo`
           : "Facturado sin cobrar",
+      detalle: deAntes.length > 0 ? `y ${deAntes.join(" + ")} de facturas de años anteriores` : undefined,
       serie: null,
     },
     {
@@ -206,14 +215,24 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       // 12 de costo, y el año "ganaba" ~$32.000 de cobrar el futuro sin pagarlo. Lo que
       // viene se declara en la nota, no se suma.
       label: "Margen a la fecha",
-      valor: fmtMonto(ind.margenAlDia, moneda),
+      // Sin un solo mes con el gasto completo no hay margen que afirmar: una raya, no un cero.
+      valor: ind.mesesDelMargen.length === 0 ? "—" : fmtMonto(ind.margenAlDia, moneda),
       nota:
-        ind.comprometidoPorVenir > 0
-          ? `en caja ${fmtMonto(margenCaja, moneda)} · ${fmtMonto(ind.comprometidoPorVenir, moneda)} por venir`
-          : `en caja: ${fmtMonto(margenCaja, moneda)}`,
-      // Sin esta línea, «en caja» sería más que cobrado + partnership y nadie sabría de dónde sale.
+        ind.mesesDelMargen.length === 0
+          ? "ningún mes tiene el gasto completo"
+          : ind.comprometidoPorVenir > 0
+            ? `en caja ${fmtMonto(margenCaja, moneda)} · ${fmtMonto(ind.comprometidoPorVenir, moneda)} por venir`
+            : `en caja: ${fmtMonto(margenCaja, moneda)}`,
+      // Los meses que no entran se nombran: un margen de cuatro meses leído como de nueve es el error
+      // que esto vino a sacar. Y sin la línea de lo que no es venta, «en caja» sería más que cobrado +
+      // partnership y nadie sabría de dónde sale.
       detalle:
-        noVentaEnCaja > 0 ? `la caja incluye ${fmtMonto(noVentaEnCaja, moneda)} que no es venta` : undefined,
+        [
+          fueraDelMargen ? `sin ${fueraDelMargen}: les falta gasto cargado` : null,
+          noVentaEnCaja > 0 ? `la caja incluye ${fmtMonto(noVentaEnCaja, moneda)} que no es venta` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || undefined,
       serie: "ingresosTotales",
       simulado: hayEscenario,
     },

@@ -338,12 +338,23 @@ export interface ReporteEquilibrio {
     ingresosTotales: number;
     /** Los doce meses. Es una PROYECCIÓN, no el titular: mezcla lo ocurrido con lo que viene. */
     margenAnual: number;
-    /** Solo los meses que ya ocurrieron. Este sí compara peras con peras. */
+    /**
+     * Solo los meses que ya ocurrieron Y tienen el gasto completo (`margenDeMesesCompletos`). Este sí
+     * compara peras con peras.
+     */
     margenAlDia: number;
+    /** Los meses que entran a `margenAlDia`. */
+    mesesDelMargen: string[];
+    /** Los meses que ya ocurrieron y quedan fuera del margen porque les falta gasto. */
+    mesesFueraDelMargen: string[];
     /** Ingreso ya fechado en meses que todavía no llegaron. Se declara, no se suma al margen. */
     comprometidoPorVenir: number;
-    /** Egreso que de verdad salió del banco: sin meses futuros y sin la reserva de aguinaldo. */
+    /** Egreso que de verdad salió del banco en los meses del margen, sin la reserva de aguinaldo. */
     egresosDeCajaTotal: number;
+    /** Lo que entró al banco en los meses del margen: cobrado, comisión cobrada y lo que no es venta. */
+    cajaAlDia: number;
+    /** La parte de `cajaAlDia` que no es venta (Ingresos variables). */
+    noVentaEnCajaAlDia: number;
     /**
      * Lo vendido en el año: los tratos ganados, por su mes de cierre.
      *
@@ -415,6 +426,15 @@ export interface ReporteEquilibrio {
    * Incluye lo que no se pudo convertir por falta de tasa, porque esa plata existe igual.
    */
   cobranzaPorMoneda: Record<string, CobranzaDeMoneda>;
+  /**
+   * Lo facturado en años ANTERIORES que sigue sin cobrar, por moneda nativa y sin convertir.
+   *
+   * ⚠ Existe porque lo por cobrar se ubica en el mes de emisión y el año solo tiene sus doce meses:
+   * sin esto, una factura de diciembre sin pagar desaparecía de «Cuentas por cobrar» el 1 de enero,
+   * sin que nadie la cobrara. No suma a lo facturado ni al % del año: es plata de otro año que
+   * todavía está en la calle. Sin convertir porque la tasa de ese mes no es del año del reporte.
+   */
+  porCobrarDeAniosAnteriores: Record<string, { porCobrar: number; vencido: number; facturas: number }>;
   /** Con qué criterios se armó. Viaja para que la pantalla lo diga en vez de suponerlo. */
   criterios: { partnershipCubreElPiso: boolean };
 }
@@ -781,6 +801,57 @@ export function etiquetaRubro(r: RubroEgreso): string {
   }
 }
 
+/** Lo mínimo de un mes para medir el margen a la fecha. `MesEfectivo` del escenario también sirve. */
+export type MesParaMargen = Pick<
+  FilaMes,
+  | "periodo"
+  | "futuro"
+  | "estado"
+  | "ingresosTotales"
+  | "egresos"
+  | "egresosPorRubro"
+  | "cobrado"
+  | "partnershipCobrado"
+  | "noVentaCobrado"
+>;
+
+/**
+ * El margen a la fecha y su caja, sobre los meses que ya ocurrieron Y tienen el gasto completo.
+ *
+ * ⚠ UN MES CON EL GASTO A MEDIAS NO ENTRA. Hasta el 2026-09-14 entraban todos los que ya pasaron, y el
+ * margen salía inflado entre ≈US$17.500 y ≈US$36.000: enero a marzo sin costos fijos ni tarjeta,
+ * agosto sin la 2ª quincena de planilla, septiembre sin planilla. Es la misma regla que ya sostenía
+ * «cubre egresos» (null en un mes PARCIAL) y el promedio del piso, que este número no respetaba. Los
+ * meses que quedan fuera se devuelven por nombre para que la pantalla los diga.
+ *
+ * La caja usa los MISMOS meses: restar el egreso de cuatro meses a lo que entró en nueve daba un
+ * «margen en caja» que no era de ningún período.
+ *
+ * Una sola función para el servidor y para el escenario del navegador: con dos copias, el tile
+ * cambiaría de significado al simular y nadie lo notaría.
+ */
+export function margenDeMesesCompletos(meses: readonly MesParaMargen[]): {
+  margenAlDia: number;
+  egresosDeCajaTotal: number;
+  cajaAlDia: number;
+  noVentaEnCajaAlDia: number;
+  mesesDelMargen: string[];
+  mesesFueraDelMargen: string[];
+} {
+  const ocurridos = meses.filter((m) => !m.futuro);
+  const delMargen = ocurridos.filter((m) => m.estado === "COMPLETO");
+  const suma = (f: (m: MesParaMargen) => number) => round2(delMargen.reduce((n, m) => n + f(m), 0));
+  return {
+    margenAlDia: suma((m) => m.ingresosTotales - m.egresos),
+    // Sin la reserva de aguinaldo: es un devengo, nadie apartó esa plata en una cuenta.
+    egresosDeCajaTotal: suma((m) => m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO),
+    cajaAlDia: suma((m) => m.cobrado + m.partnershipCobrado + m.noVentaCobrado),
+    noVentaEnCajaAlDia: suma((m) => m.noVentaCobrado),
+    mesesDelMargen: delMargen.map((m) => m.periodo),
+    mesesFueraDelMargen: ocurridos.filter((m) => m.estado !== "COMPLETO").map((m) => m.periodo),
+  };
+}
+
 // ── La función ──────────────────────────────────────────────────────────────────
 
 /**
@@ -879,10 +950,20 @@ export function calcularEquilibrio(
   const porServicioAnual = new Map<string, { facturado: number; cobrado: number; porCobrar: number }>();
   /** La cobranza en moneda nativa. Se anota ANTES de convertir: lo que no tiene tasa existe igual. */
   const cobranzaNativa: Array<{ moneda: string; clase: ClaseDeCobranza; monto: number }> = [];
+  const deAniosAnteriores: ReporteEquilibrio["porCobrarDeAniosAnteriores"] = {};
 
   for (const i of ingresos) {
     const acc = ingMes.get(i.periodo);
-    if (!acc) continue;
+    if (!acc) {
+      // Facturado antes de este año y sin cobrar: sigue en la calle aunque su mes no esté en el reporte.
+      if (i.tipo === "POR_COBRAR" && periodos.length > 0 && i.periodo < periodos[0]!) {
+        const a = (deAniosAnteriores[i.moneda] ??= { porCobrar: 0, vencido: 0, facturas: 0 });
+        a.porCobrar = round2(a.porCobrar + i.monto);
+        if (!i.enPlazo) a.vencido = round2(a.vencido + i.monto);
+        a.facturas++;
+      }
+      continue;
+    }
     if (i.tipo === "COBRADO" || i.tipo === "POR_COBRAR") {
       cobranzaNativa.push({
         moneda: i.moneda,
@@ -1030,19 +1111,14 @@ export function calcularEquilibrio(
    *
    * (Desde 2026-09-13 esa comisión de noviembre es una estimación y ya no suma a ningún ingreso;
    * el corte por mes sigue valiendo para cualquier ingreso confirmado con fecha futura.)
+   *
+   * Y desde 2026-09-14 tampoco entran los meses ocurridos con el gasto incompleto: ver
+   * `margenDeMesesCompletos`. Con `egresosTotales` a secas, además, el «margen en caja» restaba
+   * $31.687 que nunca se pagaron (la reserva de aguinaldo y los meses futuros).
    */
-  const ocurridos = meses.filter((m) => !m.futuro);
-  const margenAlDia = round2(ocurridos.reduce((n, m) => n + m.ingresosTotales - m.egresos, 0));
+  const margen = margenDeMesesCompletos(meses);
   const comprometidoPorVenir = round2(
     meses.filter((m) => m.futuro).reduce((n, m) => n + m.ingresosTotales, 0),
-  );
-  /**
-   * El egreso que de verdad salió del banco: sin los meses que no ocurrieron y sin la
-   * reserva de aguinaldo, que es un devengo —nadie apartó esa plata en una cuenta—. Con
-   * `egresosTotales` a secas, el "margen en caja" restaba $31.687 que nunca se pagaron.
-   */
-  const egresosDeCajaTotal = round2(
-    ocurridos.reduce((n, m) => n + m.egresos - m.egresosPorRubro.RESERVA_AGUINALDO, 0),
   );
 
   // ── Avisos de calidad ─────────────────────────────────────────────────────────
@@ -1171,9 +1247,8 @@ export function calcularEquilibrio(
       ingresosTotales: ingresosTotalesAnio,
       /** Los doce meses. Proyección, NO titular: ver el comentario de `margenAlDia`. */
       margenAnual: round2(ingresosTotalesAnio - egresosTotales),
-      margenAlDia,
+      ...margen,
       comprometidoPorVenir,
-      egresosDeCajaTotal,
       vendidoTotal: round2([...vendidoPorMes.values()].reduce((n, v) => n + v, 0)),
       ventasConMonto: (opciones.ventas ?? []).length,
       ventasSinMonto: opciones.ventasSinMonto ?? 0,
@@ -1218,6 +1293,7 @@ export function calcularEquilibrio(
       convertidos,
     },
     cobranzaPorMoneda: cobranzaPorMoneda(cobranzaNativa),
+    porCobrarDeAniosAnteriores: deAniosAnteriores,
     criterios: { partnershipCubreElPiso: cubreElPiso },
   };
 }
