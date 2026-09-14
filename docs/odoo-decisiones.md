@@ -898,3 +898,29 @@ servicio, que es otra venta.
 **Qué la revertiría.** Una cuenta que factura de verdad dos servicios distintos el mismo día con números separados y
 sin anotar: la línea se acepta («está bien así») y vuelve si cambian los números. Si eso se vuelve la mayoría, la
 ventana baja o se exige que la factura venga de una carga.
+
+---
+
+## 2026-09-14 · El estado de pago también se mira en las propuestas, y la cobertura prueba que ve un hueco
+
+**Qué se decidió.** Cambia la regla de arriba («un par juntado —por número o por monto exacto—»):
+**ODOO-POR-COBRAR-PAGADA** y **ODOO-COBRADO-SIN-PAGAR** miran también las facturas de varias cuotas y los pares de
+«montos distintos». Esas filas avisan que son una propuesta y no son la casa de sus documentos: la casa sigue siendo
+«varias cuotas» o «montos distintos», y ahí se ven una sola vez.
+- La plata de una factura de varias cuotas es la de un par: la factura (sin pagar) o los cobros (por cobrar).
+- La de un par de «montos distintos» no pasa de lo que dicen los dos, porque la diferencia ya la suma su línea con
+  su propia clave: cobrado sin pagar suma lo menor entre lo cobrado y lo que Odoo deja sin pagar; por cobrar pagada
+  suma los cobros, o la factura si Nexus dice más. MTS FAC/2026/0280: US$420 acá y US$20 allá son los US$440 de la
+  factura.
+
+Y `coberturaDelCruce` acepta las líneas a mirar: una prueba le quita una casa a una factura y le duplica otra a un
+cobro, y la cobertura tiene que decirlo.
+
+**Por qué.** Medido en producción el mismo día, en solo lectura, cruzando el estado de pago por fuera del detector:
+TEC-AE FAC/2026/0272 (US$3.240, abril y mayo cobradas en Nexus, sin pagar en Odoo) estaba solo en «varias cuotas», que
+no suma ni dice el estado de pago; MTS FAC/2026/0280 (US$440, abril cobrada, sin pagar en Odoo y también en el Excel de
+Alexander, que pide el depósito) salía solo como una diferencia de US$20. Y la prueba de cobertura solo afirmaba que no
+había huecos: con la cobertura rota (sin anotar ninguna factura sin casa), todas las pruebas seguían en verde.
+
+**Qué la revertiría.** Que las propuestas por monto resulten equivocadas en la mayoría de los casos que se confirman:
+ahí el estado de pago vuelve a mirarse solo en los pares juntados y la propuesta avisa en su propia línea.

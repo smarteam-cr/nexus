@@ -1664,15 +1664,23 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     ]);
   });
 
-  it("cobrado en Nexus y sin pagar en Odoo: TEC-AE 0218 y 0200, y Juanva 0197; la factura que anula una nota suma una vez", () => {
+  it("cobrado en Nexus y sin pagar en Odoo: TEC-AE 0218, 0272 y 0200, y Juanva 0197; la factura que anula una nota suma una vez", () => {
     const l = linea(lista, "ODOO-COBRADO-SIN-PAGAR");
     expect(l?.donde).toBe("PREGUNTANDO");
-    expect(l?.titulo).toBe("3 cobros en Cobrado con su factura sin pagar en Odoo");
+    expect(l?.titulo).toBe("5 cobros en Cobrado con su factura sin pagar en Odoo");
     expect(l?.items.map((i) => [i.texto, i.nota])).toEqual([
       ["TEC- AE — FAC/2026/0218 por US$3.240", "2026-02 US$3.240 · cobrado en Nexus · sin pagar en Odoo"],
+      /* ⚠ La propuesta de varias cuotas también: hasta el 2026-09-14 la 0272 estaba solo en «varias cuotas», que no suma
+         ni dice que abril y mayo están cobradas. */
+      [
+        "TEC- AE — FAC/2026/0272 por US$3.240",
+        "2026-04 US$1.620 + 2026-05 US$1.620 · cobrado en Nexus · sin pagar en Odoo · ⚠ la factura cubre estas cuotas según la suma: confirmalo al anotarles el número",
+      ],
       ["TEC- AE — FAC/2026/0200 por US$1.620", "2026-03 US$1.620 · cobrado en Nexus · sin pagar en Odoo"],
       ["Transportes Juanva — FAC/2026/0197 por US$500", "2026-01 US$500 · cobrado en Nexus · sin pagar en Odoo"],
     ]);
+    expect(l?.documentos, "la casa de la 0272 es «varias cuotas»").not.toContain("f:f272");
+    expect(l?.plata).toContainEqual({ clave: "f:f272", moneda: "USD", monto: 3240 });
     expect(lista.filter((x) => x.plata.some((p) => p.clave === "f:f200")).map((x) => x.codigo).sort()).toEqual([
       "ODOO-COBRADO-SIN-PAGAR",
       "ODOO-NOTA-SIN-APLICAR",
@@ -1705,7 +1713,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     ]);
     const acusadas = linea(lista, "ODOO-COBRO-SIN-FACTURA")?.items.filter((i) => i.texto.startsWith("ACCCSA"));
     expect(acusadas?.map((i) => i.nota)).toEqual([
-      "2026-05 · programado 2026-05-15 · COBRADO · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: buscala ahí antes de emitirla en Odoo",
+      "2026-05 · programado 2026-05-15 · cobrado · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: buscala ahí antes de emitirla en Odoo",
     ]);
   });
 
@@ -1719,8 +1727,56 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
   it("Hotel Alta Las Palomas: la fila dice que su factura se revirtió, aunque la cuota se marcó facturada meses después", () => {
     const fila = linea(lista, "ODOO-COBRO-SIN-FACTURA")?.items.find((i) => i.texto.startsWith("Hotel Alta Las Palomas"));
     expect(fila?.nota).toBe(
-      "2026-03 · programado 2026-03-15 · POR_COBRAR · tenía FAC/2026/0225, revertida en Odoo con NC/2026/0019: si la cuota ya no se debe, decidí qué pasa con ella",
+      "2026-03 · programado 2026-03-15 · por cobrar · tenía FAC/2026/0225, revertida en Odoo con NC/2026/0019: si la cuota ya no se debe, decidí qué pasa con ella",
     );
+  });
+
+  it("⚠ el par de «montos distintos» también: MTS 0280 sale con lo cobrado, y la diferencia de monto se cuenta una sola vez", () => {
+    const deMts = { cuentaId: "mts", odooPartnerId: 42, odooPartnerNombre: "MTS MULTISERVICIOS DE COSTA RICA SOCIEDAD ANONIMA" };
+    const conMts = {
+      ...base,
+      cuentas: [{ id: "mts", nombre: "MTS MULTISERVICIOS", tipo: "NACIONAL", viaCobro: "ODOO" }],
+      cuentasVinculadas: new Set(["mts"]),
+      libro: new Map<string, DocumentoDelLibro>(),
+      /* Medido el 2026-09-14: abril cobrado por US$420; FAC/2026/0280 por US$440, sin pagar en Odoo y en el Excel. */
+      cobros: [cobro({ id: "mts-04", cuentaId: "mts", cuentaNombre: "MTS MULTISERVICIOS", periodo: "2026-04", fechaProgramada: "2026-04-30", fechaEmision: "2026-04-30", monto: 420, estado: "COBRADO" })],
+      facturas: [sinPagar({ ...deMts, id: "f280", odooMoveId: 280, numero: "FAC/2026/0280", invoiceDate: "2026-05-05", montoNeto: 440 })],
+    };
+    const l = detectarDiferenciasOdoo(conMts);
+    const sinPagarL = linea(l, "ODOO-COBRADO-SIN-PAGAR");
+    expect(sinPagarL?.items).toEqual([
+      {
+        texto: "MTS MULTISERVICIOS — FAC/2026/0280 por US$420",
+        monto: 420,
+        moneda: "USD",
+        nota: "2026-04 US$420 · cobrado en Nexus · sin pagar en Odoo · ⚠ Nexus dice US$420 y la factura US$440: la diferencia va en la línea de montos distintos",
+      },
+    ]);
+    expect(sinPagarL?.documentos, "su casa es «montos distintos»").toEqual([]);
+    expect(linea(l, "ODOO-MONTO")?.plata).toEqual([{ clave: "m:f280", moneda: "USD", monto: 20 }]);
+    expect(resumenDeDiferencias(l).plata, "420 + 20 son los 440 de la factura, no 460").toEqual([{ moneda: "USD", monto: 440 }]);
+    expect(coberturaDelCruce(conMts)).toEqual({ facturasSinCasa: [], facturasRepetidas: [], cobrosSinCasa: [], cobrosRepetidos: [] });
+
+    /* Al revés, y con Nexus diciendo más que la factura: por cobrar por US$470 contra una factura pagada de US$440. */
+    const porCobrar = { ...conMts.cobros[0], estado: "POR_COBRAR", monto: 470 };
+    const pagada = factura({ ...deMts, id: "f280", odooMoveId: 280, numero: "FAC/2026/0280", invoiceDate: "2026-05-05", montoNeto: 440 });
+    const l2 = detectarDiferenciasOdoo({ ...conMts, cobros: [porCobrar], facturas: [pagada] });
+    expect(linea(l2, "ODOO-POR-COBRAR-PAGADA")?.plata).toEqual([{ clave: "f:f280", moneda: "USD", monto: 440 }]);
+    expect(resumenDeDiferencias(l2).plata, "440 + 30 son los 470 que Nexus da por cobrar").toEqual([{ moneda: "USD", monto: 470 }]);
+  });
+
+  it("⭐ la cobertura ve el hueco: una factura que ninguna línea nombra y un cobro que está en dos", () => {
+    const conHueco = lista.map((l) =>
+      l.codigo === "ODOO-FACTURA-SIN-COBRO"
+        ? { ...l, documentos: l.documentos.filter((d) => d !== "f:f298") }
+        : l.codigo === "ODOO-COBRO-FACTURADO-EN-MERCURY"
+          ? { ...l, documentos: [...l.documentos, "c:palomas-03"] }
+          : l,
+    );
+    const c = coberturaDelCruce(estado, conHueco);
+    expect(c.facturasSinCasa.map((f) => f.numero)).toEqual(["FAC/2026/0298"]);
+    expect(c.cobrosRepetidos.map((x) => [x.cobro.id, x.lineas])).toEqual([["palomas-03", ["ODOO-COBRO-SIN-FACTURA", "ODOO-COBRO-FACTURADO-EN-MERCURY"]]]);
+    expect(coberturaDelCruce(estado)).toEqual({ facturasSinCasa: [], facturasRepetidas: [], cobrosSinCasa: [], cobrosRepetidos: [] });
   });
 
   it("⭐ cobertura: toda factura por cobrar y todo cobro facturado terminan juntados o en una sola línea", () => {

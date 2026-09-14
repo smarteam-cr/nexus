@@ -1272,25 +1272,43 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
     .filter((d) => !facturasEnVarias.has(d.facturaId) && d.cobroIds.some((id) => cobrosEnVarias.has(id)))
     .flatMap((d) => facturaPorId.get(d.facturaId) ?? []);
 
-  /* ── El estado de pago que Nexus y Odoo no dicen igual, sobre los pares juntados ────
-     ⚠ Solo pares (por número o por monto exacto): un par aproximado ya está en «montos distintos». Medido el
-     2026-09-14, después de cargar el Excel: 4 cobros por cobrar con su factura pagada en Odoo (US$4.626, Global Supply
-     0323, Servica 0285, Amvac 0331, Forestales 0269) y 6 cobrados con la suya sin pagar (US$6.730, sobre todo TEC-AE).
-     Ninguna línea los mostraba, y el encabezado «mejoraba» justo porque habían salido de «facturas sin cobro». */
-  const paresPorFactura = new Map<string, { factura: FacturaParaCruzar; cobros: CobroParaCruzar[] }>();
+  /* ── El estado de pago que Nexus y Odoo no dicen igual ──────────────────────────────
+     Medido el 2026-09-14, después de cargar el Excel: 4 cobros por cobrar con su factura pagada en Odoo (US$4.626, Global
+     Supply 0323, Servica 0285, Amvac 0331, Forestales 0269) y 6 cobrados con la suya sin pagar (US$6.730, sobre todo
+     TEC-AE). Ninguna línea los mostraba, y el encabezado «mejoraba» justo porque habían salido de «facturas sin cobro».
+     ⚠ No solo los pares juntados (por número, por monto exacto o justo en el IVA): también las facturas de varias cuotas
+     y los pares de «montos distintos». Medido el mismo día: TEC-AE FAC/2026/0272 (US$3.240, abril y mayo cobradas)
+     estaba solo en «varias cuotas» y MTS FAC/2026/0280 (US$440, abril cobrada; el Excel de Alexander también la da sin
+     pagar) solo en «montos distintos». Ninguna de las dos líneas dice el estado de pago ni suma la factura: se
+     escondían. */
+  /* ⚠ Una diferencia de exactamente el 13 % es el IVA, y no se acusa (decisión de Alex, 2026-09-12). */
+  const esIva = (d: MontoDistinto) =>
+    CENTAVOS(d.montoCobro) === CENTAVOS(d.montoFactura * IVA_COSTA_RICA) ||
+    CENTAVOS(d.montoFactura) === CENTAVOS(d.montoCobro * IVA_COSTA_RICA);
+  type ParDePago = { factura: FacturaParaCruzar; cobros: CobroParaCruzar[]; origen: "JUNTADO" | "VARIAS_CUOTAS" | "MONTO" };
+  const paresPorFactura = new Map<string, ParDePago>();
   for (const p of cruce.pares) {
     const f = facturaPorId.get(p.facturaId);
     const c = cobroPorId.get(p.cobroId);
     if (!f || !c) continue;
-    const g = paresPorFactura.get(f.id) ?? { factura: f, cobros: [] };
+    const g = paresPorFactura.get(f.id) ?? { factura: f, cobros: [], origen: "JUNTADO" };
     g.cobros.push(c);
     paresPorFactura.set(f.id, g);
   }
+  const paresDePago: ParDePago[] = [
+    ...paresPorFactura.values(),
+    ...variasCuotas.map((v): ParDePago => ({ factura: v.factura, cobros: v.cobros, origen: "VARIAS_CUOTAS" })),
+    ...montosDistintos.flatMap((d): ParDePago[] => {
+      const f = facturaPorId.get(d.facturaId);
+      const cobros = d.cobroIds.flatMap((id) => cobroPorId.get(id) ?? []);
+      return f && cobros.length ? [{ factura: f, cobros, origen: esIva(d) ? "JUNTADO" : "MONTO" }] : [];
+    }),
+  ];
   const pagadaEnOdoo = (f: FacturaParaCruzar) => esDocumentoVivo(f) && (f.paymentState === "paid" || f.paymentState === "in_payment");
-  const porCobrarPagadas = [...paresPorFactura.values()]
+  const porCobrarPagadas = paresDePago
     .map((g) => ({ ...g, cobros: g.cobros.filter((c) => c.estado !== "COBRADO") }))
     .filter((g) => g.cobros.length > 0 && pagadaEnOdoo(g.factura));
-  const cobradasSinPagar = [...paresPorFactura.values()]
+  const cobradasSinPagar = paresDePago
     .map((g) => ({ ...g, cobros: g.cobros.filter((c) => c.estado === "COBRADO") }))
     .filter((g) => g.cobros.length > 0 && estaPorCobrar(g.factura));
 
@@ -1512,10 +1530,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
   }
 
   /* ── 5. Montos que no coinciden ──────────────────────────────────────────────── */
-  /* ⚠ Una diferencia de exactamente el 13 % es el IVA, y no se acusa (decisión de Alex, 2026-09-12). */
-  const esIva = (d: MontoDistinto) =>
-    CENTAVOS(d.montoCobro) === CENTAVOS(d.montoFactura * IVA_COSTA_RICA) ||
-    CENTAVOS(d.montoFactura) === CENTAVOS(d.montoCobro * IVA_COSTA_RICA);
+  /* `esIva` está arriba: el estado de pago también lo necesita. */
   const deIva = montosDistintos.filter(esIva);
   const montosReales = montosDistintos.filter((d) => !esIva(d));
   if (montosReales.length) {
@@ -1560,13 +1575,34 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
      quien encuentra (o no) el depósito. Ninguna mueve un cobro sola: entrar o salir de Cobrado lo firma una persona. */
   const cuotasDe = (cs: readonly CobroParaCruzar[]) => cs.map((c) => `${c.periodo} ${fmt(c.monto, c.moneda)}`).join(" + ");
   /* ⚠ La fila no dice si el par se juntó por el número o por el monto: anotarle el número a un cobro que ya se juntaba
-     por monto no puede cambiar la lista (lo vigila «la lista no cambia cuando el número dice lo mismo…»). */
+     por monto no puede cambiar la lista (lo vigila «la lista no cambia cuando el número dice lo mismo…»). Sí dice si es
+     una propuesta —varias cuotas o un monto distinto—, que se confirma antes de registrar nada. */
   const sumaDe = (cs: readonly CobroParaCruzar[]) => round2(cs.reduce((a, c) => a + c.monto, 0));
   const nombreDelPar = (g: { factura: FacturaParaCruzar; cobros: readonly CobroParaCruzar[] }) => g.cobros[0]?.cuentaNombre ?? g.factura.odooPartnerNombre;
+  /* La casa de un par juntado es esta línea. La de una propuesta es la suya («varias cuotas», «montos distintos»): acá es
+     una pista y no se lista, o la cobertura la vería en dos líneas. */
+  const casaDelPar = (g: ParDePago) => (g.origen === "JUNTADO" ? [`f:${g.factura.id}`, ...g.cobros.map((c) => `c:${c.id}`)] : []);
+  const avisoDelPar = (g: ParDePago) =>
+    g.origen === "VARIAS_CUOTAS"
+      ? " · ⚠ la factura cubre estas cuotas según la suma: confirmalo al anotarles el número"
+      : g.origen === "MONTO"
+        ? ` · ⚠ Nexus dice ${fmt(sumaDe(g.cobros), g.factura.moneda)} y la factura ${fmt(g.factura.montoNeto, g.factura.moneda)}: la diferencia va en la línea de montos distintos`
+        : "";
+  /* ⚠ En un par de «montos distintos» la plata no pasa de lo que dicen los dos: la diferencia ya la suma su línea, con su
+     propia clave. MTS FAC/2026/0280: US$420 acá y US$20 allá son los US$440 de la factura, no US$460. */
+  const plataPorCobrar = (g: ParDePago): PlataDeLinea[] =>
+    g.origen === "MONTO" && sumaDe(g.cobros) > g.factura.montoNeto
+      ? [{ clave: `f:${g.factura.id}`, moneda: g.factura.moneda, monto: g.factura.montoNeto }]
+      : g.cobros.map((c) => ({ clave: `c:${c.id}`, moneda: c.moneda, monto: c.monto }));
+  const plataSinPagar = (g: ParDePago): PlataDeLinea =>
+    g.origen === "MONTO"
+      ? { clave: `f:${g.factura.id}`, moneda: g.factura.moneda, monto: round2(Math.min(sumaDe(g.cobros), netoPorCobrar(g.factura))) }
+      : plataDeFactura(g.factura);
+  const montoDe = (ps: readonly PlataDeLinea[]) => round2(ps.reduce((a, p) => a + p.monto, 0));
 
   if (porCobrarPagadas.length) {
     const cobros = porCobrarPagadas.flatMap((g) => g.cobros);
-    const plata = cobros.map((c) => ({ clave: `c:${c.id}`, moneda: c.moneda, monto: c.monto }));
+    const plata = porCobrarPagadas.flatMap(plataPorCobrar);
     const montos = montosPorMoneda(plata);
     agregar({
       codigo: "ODOO-POR-COBRAR-PAGADA",
@@ -1577,7 +1613,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "⛔ Nexus no los pasa a Cobrado por lo que diga Odoo: el pago lo registra una persona, con el comprobante.",
       montos,
       plata,
-      documentos: porCobrarPagadas.flatMap((g) => [`f:${g.factura.id}`, ...g.cobros.map((c) => `c:${c.id}`)]),
+      documentos: porCobrarPagadas.flatMap(casaDelPar),
       donde: "NEXUS",
       pasos: [
         "Abrí el cronograma de la cuenta de cada fila.",
@@ -1590,12 +1626,12 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       resuelve: "COBRANZA",
       items: porCobrarPagadas
         .slice()
-        .sort((a, b) => sumaDe(b.cobros) - sumaDe(a.cobros) || a.factura.odooMoveId - b.factura.odooMoveId)
+        .sort((a, b) => montoDe(plataPorCobrar(b)) - montoDe(plataPorCobrar(a)) || a.factura.odooMoveId - b.factura.odooMoveId)
         .map((g) => ({
-          texto: `${nombreDelPar(g)} — ${g.factura.numero} por ${fmt(sumaDe(g.cobros), g.factura.moneda)}`,
-          monto: sumaDe(g.cobros),
+          texto: `${nombreDelPar(g)} — ${g.factura.numero} por ${fmt(montoDe(plataPorCobrar(g)), g.factura.moneda)}`,
+          monto: montoDe(plataPorCobrar(g)),
           moneda: g.factura.moneda,
-          nota: `${cuotasDe(g.cobros)} · ${unicos(g.cobros.map((c) => estadoDelCobro(c.estado))).join(", ")} en Nexus · ${estadoDePagoEnPalabras(g.factura)} en Odoo`,
+          nota: `${cuotasDe(g.cobros)} · ${unicos(g.cobros.map((c) => estadoDelCobro(c.estado))).join(", ")} en Nexus · ${estadoDePagoEnPalabras(g.factura)} en Odoo${avisoDelPar(g)}`,
         })),
     });
   }
@@ -1604,19 +1640,20 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
     /* ⚠ La plata es lo que Odoo deja sin pagar, con la clave de la factura: si una nota de crédito parece anularla, el
        encabezado la cuenta una sola vez (TEC-AE 0200 contra la nota 0250). En una factura de varias cuotas con solo
        algunas cobradas es la factura entera: la pregunta es la misma. */
-    const plata = cobradasSinPagar.map((g) => plataDeFactura(g.factura));
+    const plata = cobradasSinPagar.map(plataSinPagar);
     const montos = montosPorMoneda(plata);
     const cobros = cobradasSinPagar.reduce((n, g) => n + g.cobros.length, 0);
+    const conDiferencia = cobradasSinPagar.some((g) => g.origen === "MONTO");
     agregar({
       codigo: "ODOO-COBRADO-SIN-PAGAR",
       severidad: "ALTA",
       titulo: `${cobros} cobros en Cobrado con su factura sin pagar en Odoo`,
       detalle:
-        `Nexus los da por cobrados y Odoo sigue esperando el pago de su factura. O entró la plata y falta registrarla en Odoo, o no entró y el cobro está en Cobrado de más. Odoo deja sin pagar ${textoDeMontos(montos)} sin IVA. ` +
+        `Nexus los da por cobrados y Odoo sigue esperando el pago de su factura. O entró la plata y falta registrarla en Odoo, o no entró y el cobro está en Cobrado de más. Odoo deja sin pagar ${textoDeMontos(montos)} sin IVA${conDiferencia ? ", sin repetir la diferencia de monto que ya suma su línea" : ""}. ` +
         "⛔ Lo cobrado se queda cobrado salvo lo que decidió Alex: esta lista es para verificar el depósito, no para sacar de Cobrado en bloque.",
       montos,
       plata,
-      documentos: cobradasSinPagar.flatMap((g) => [`f:${g.factura.id}`, ...g.cobros.map((c) => `c:${c.id}`)]),
+      documentos: cobradasSinPagar.flatMap(casaDelPar),
       donde: "PREGUNTANDO",
       pasos: [
         "Buscá en el banco el depósito de cada fila.",
@@ -1630,12 +1667,12 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       resuelve: "COBRANZA",
       items: cobradasSinPagar
         .slice()
-        .sort((a, b) => netoPorCobrar(b.factura) - netoPorCobrar(a.factura) || a.factura.odooMoveId - b.factura.odooMoveId)
+        .sort((a, b) => plataSinPagar(b).monto - plataSinPagar(a).monto || a.factura.odooMoveId - b.factura.odooMoveId)
         .map((g) => ({
-          texto: `${nombreDelPar(g)} — ${g.factura.numero} por ${fmt(netoPorCobrar(g.factura), g.factura.moneda)}`,
-          monto: netoPorCobrar(g.factura),
+          texto: `${nombreDelPar(g)} — ${g.factura.numero} por ${fmt(plataSinPagar(g).monto, g.factura.moneda)}`,
+          monto: plataSinPagar(g).monto,
           moneda: g.factura.moneda,
-          nota: `${cuotasDe(g.cobros)} · cobrado en Nexus · ${estadoDePagoEnPalabras(g.factura)} en Odoo`,
+          nota: `${cuotasDe(g.cobros)} · cobrado en Nexus · ${estadoDePagoEnPalabras(g.factura)} en Odoo${avisoDelPar(g)}`,
         })),
     });
   }
@@ -1733,7 +1770,8 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
             monto: c.monto,
             moneda: c.moneda,
             nota:
-              `${c.periodo} · programado ${c.fechaProgramada} · ${c.estado}` +
+              /* ⛔ El estado en palabras: «POR_COBRAR» en pantalla no lo lee nadie. */
+              `${c.periodo} · programado ${c.fechaProgramada} · ${estadoDelCobro(c.estado)}` +
               (anulada
                 ? ` · tenía ${anulada.numero}, ${anulada.state === "cancel" ? "anulada" : "revertida"} en Odoo${
                     notaDe(anulada) ? ` con ${notaDe(anulada)?.numero}` : ""
@@ -2378,9 +2416,14 @@ export interface CoberturaDelCruce {
  * Medido el 2026-09-14, después de cargar el Excel de Alexander: TEC-AE FAC/2026/0298 (US$4.860, sin pagar) no estaba
  * en ninguna línea, ni antes ni después de la carga; se había caído entre «montos distintos» y «varias cuotas». Cada
  * línea nueva tiene su prueba; esta es la que caza lo que no tiene línea.
+ *
+ * `lineas`: las que se miran; sin pasarlas, las del detector. ⚠ Existe para probar que la cobertura VE un hueco: hasta
+ * el 2026-09-14 la única prueba afirmaba «0 y 0», y una cobertura rota que no anotara nada también daba 0 y 0.
  */
-export function coberturaDelCruce(estado: EstadoDelCruce): CoberturaDelCruce {
-  const { lineas, juntados } = detectar(estado);
+export function coberturaDelCruce(estado: EstadoDelCruce, lineasAMirar?: readonly DiferenciaOdoo[]): CoberturaDelCruce {
+  const detectado = detectar(estado);
+  const lineas = lineasAMirar ?? detectado.lineas;
+  const { juntados } = detectado;
   const casas = new Map<string, string[]>();
   for (const l of lineas) for (const d of l.documentos) casas.set(d, [...(casas.get(d) ?? []), l.codigo]);
   const corte = estado.ultimaCorridaOk ? restarDias(estado.ultimaCorridaOk, DIAS_DE_GRACIA_DEL_ESPEJO) : null;
