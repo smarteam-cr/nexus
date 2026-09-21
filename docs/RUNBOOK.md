@@ -13,12 +13,13 @@ bajo esa condición:
 | Mecanismo | Dónde | Qué pasa con 2+ réplicas |
 |---|---|---|
 | Semáforo de export PDF (máx 2 Chromium + cola de 4) | `lib/print/pdf-runner.ts (cap ÚNICO para todos los tipos del registro de impresión)` | El cap sería POR réplica (2×N Chromiums) |
-| Guard `running` del auto-sync de Google | `lib/google/auto-sync.ts` | Cubierto igual por el claim en DB (CronJobState) |
+| Guard `running` del auto-sync de Google, y corrida única de la sync de Meet (el botón «Sincronizar» recibe la que está en vuelo) | `lib/google/auto-sync.ts`, `lib/google/meet-sync.ts` | El auto-sync queda cubierto por el turno en DB (CronJobState); el botón manual de otra réplica podría correr en paralelo |
 | Locks en-proceso de watchdog / signals / partner refresh | `lib/cs/*` | Dos réplicas podrían correr el mismo sweep en paralelo |
 | Guard 409 anti-doble-generación de BC (AgentRun RUNNING ≤5min) | `generate/route.ts` | Sigue funcionando (es contra DB) |
 
-**Persistido en DB (sobrevive deploys, ya NO es in-memory):** el cooldown del
-auto-sync de Google (`CronJobState`, key `google-auto-sync`) y el rate-limit de
+**Persistido en DB (sobrevive deploys, ya NO es in-memory):** el turno del
+auto-sync de Google (`CronJobState`, key `google-auto-sync`: `lastRunAt` = «no correr antes de»,
+`lastResult` = cómo terminó la última y cuántos fallos seguidos lleva) y el rate-limit de
 verify-access externo (`ExternalVerifyAttempt`, helper
 `lib/external/verify-rate-limit.ts`).
 
@@ -181,7 +182,13 @@ sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 **Dos disparos por navegación**, que no pasan por el scheduler:
 - **Auto-sync de Google Meet**: `POST /api/integrations/google/auto-sync` al cargar el shell
   (`components/layout/SidebarShell.tsx`) y la pantalla de sesiones
-  (`app/(shell)/sessions/SessionsClient.tsx`), con cooldown de 20 min en el servidor.
+  (`app/(shell)/sessions/SessionsClient.tsx`), con freno en el servidor desde el 2026-09-21
+  (incidente de 821 % de CPU): 20 min de espera contados desde el FIN de la corrida, espera
+  creciente tras un fallo (5, 10, 20, 40, hasta 60 min), un turno que vence a la hora si el proceso
+  muere a mitad, y nunca dos corridas a la vez. Mira 30 días hacia atrás (`GOOGLE_MEET_DAYS_BACK`
+  lo cambia) y solo escribe las reuniones que cambiaron. Para traer algo YA, el botón «Sincronizar»
+  de Integraciones corre la sync sin esperar el turno; el backfill de un año está en
+  `lib/google/meet-sync-cambios.ts` (`diasHaciaAtras`).
 - **Espejo de proyectos de HubSpot**: `POST /api/clients/[id]/sync-projects` al abrir la ficha de
   un cliente (`app/(shell)/clients/[id]/WorkspaceClient.tsx`), con cooldown en el servidor.
 
