@@ -19,8 +19,31 @@ import { IMPORT_CAMPOS_CANONICOS, type ImportCampoCanonico } from "./schema";
  * (filas de totales, separadores). Duplicado a propósito: Cobranza no importa
  * internals de lib/cs (aislamiento de módulos).
  */
-export const COBRANZA_IMPORT_SKIP =
-  /^(smarteam([ _].*)?|hub id:.*|total(es)?([ :].*)?|subtotal.*|n\/?a|-+|\.+|s\/n|sin nombre)$/i;
+export const COBRANZA_IMPORT_SKIP = new RegExp(
+  "^(" +
+    [
+      "smarteam([ _].*)?",
+      "hub id:.*",
+      /* ⚠ Una fila de totales es «Total» sola, con dos puntos o un monto, o seguida de una palabra de
+         totales. Antes era «total» + espacio + CUALQUIER cosa, y frenó a la empresa real «Total Finco
+         S.A.» (2026-09-21) al darla de alta a mano. Lo que no está en esta lista de palabras pasa. */
+      "total",
+      "total\\s*[:=].*",
+      "total\\s*[\\d$₡][\\d$₡.,\\s-]*",
+      "total\\s+(general|global|final|neto|bruto|mensual|anual|mes|año|periodo|período|quincena|semana|" +
+        "facturado|cobrado|pendiente|pagado|recaudado|usd|crc|colones|d[oó]lares|a pagar|por cobrar|" +
+        "del? (la )?(facturaci[oó]n|ventas|cobros|cobranza|mes|año|periodo|período|semana|quincena))(\\s.*)?",
+      "totales(\\s.*)?",
+      "sub-?\\s?total.*",
+      "n\\/?a",
+      "-+",
+      "\\.+",
+      "s\\/n",
+      "sin nombre",
+    ].join("|") +
+    ")$",
+  "i",
+);
 
 export function nombreEnSkipList(nombre: string): boolean {
   return COBRANZA_IMPORT_SKIP.test(nombre.trim());

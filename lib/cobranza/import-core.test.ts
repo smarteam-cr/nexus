@@ -160,6 +160,40 @@ test("G2 nombreEnSkipList: empresa real → false", () => {
   expect(nombreEnSkipList("Ferretería Noelitto")).toBe(false);
 });
 
+test("G3 nombreEnSkipList: las filas de totales de una hoja siguen frenadas", () => {
+  for (const fila of [
+    "Total",
+    " TOTAL ",
+    "Total:",
+    "Total: 1.500,00",
+    "Total = 12500",
+    "Total $ 12.500,00",
+    "TOTAL ₡1.500.000",
+    "Total 12500",
+    "TOTAL USD",
+    "Total general",
+    "TOTAL FACTURADO",
+    "Total por cobrar",
+    "Total a pagar",
+    "Total del mes",
+    "Total de facturación",
+    "Total año 2026",
+    "Totales",
+    "Totales del mes",
+    "Subtotal",
+    "Sub-total Mercury",
+  ]) {
+    expect(nombreEnSkipList(fila), fila).toBe(true);
+  }
+});
+
+test("G4 nombreEnSkipList: una empresa que empieza con «Total» no es una fila de totales", () => {
+  // 2026-09-21: «Total Finco S.A.» no se podía dar de alta desde «Nueva empresa».
+  for (const empresa of ["Total Finco S.A.", "Total Finco", "TOTAL FINCO SOCIEDAD ANONIMA", "Total Energies", "Total Pass", "TotalPlay", "Totalizadora del Norte"]) {
+    expect(nombreEnSkipList(empresa), empresa).toBe(false);
+  }
+});
+
 // ── H) sugerirMapeo ──────────────────────────────────────────────────────────────
 
 test("H1 sugerirMapeo: headers conocidos mapean al campo canónico con el header ORIGINAL", () => {

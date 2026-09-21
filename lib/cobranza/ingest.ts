@@ -98,7 +98,9 @@ export async function ingestCuentasEntrantes(
       if (!matchId) {
         // Guarda dura del resolver: la cola de revisión ya filtró, pero acá no se confía.
         if (nombreEnSkipList(cta.clienteNombre)) {
-          throw new Error(`"${cta.clienteNombre}" está en la lista de exclusión — no se crea automáticamente.`);
+          throw new Error(
+            `"${cta.clienteNombre}" parece una fila de totales o un nombre interno de Smarteam: no se da de alta como empresa.`,
+          );
         }
         try {
           const client = await tx.client.create({
