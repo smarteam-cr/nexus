@@ -21,12 +21,18 @@
  *    endpoint es público; el detalle vive en el semáforo de Integraciones). ⚠ NO
  *    participa del `ok`: un invariante violado es un dato mal escrito, no un
  *    contenedor caído — si tumbara el healthcheck, Docker reiniciaría la app en bucle.
+ *  - `memoriaMb` y `atrasoHiloMs` (2026-09-21): rss, heapUsed y el tope del heap, y el atraso del
+ *    hilo de JS (p50/p99/máx de la última ventana de 10 s). El incidente de ese día (821 % de CPU,
+ *    1,13 GiB, 15–25 s congelado durante horas) no se vio venir porque nada medía esto. Solo
+ *    números (lib/observability/medidor-proceso.ts). ⚠ NO participan del `ok`: un heap alto no es
+ *    un contenedor caído; el aviso va a los logs.
  *
  * No expone secretos: el SHA es público en el repo y los stats son números.
  */
 import { prisma, poolStats } from "@/lib/db/prisma";
 import { leerInvariantesOk } from "@/lib/invariantes/salud";
 import { storageAcepta } from "@/lib/storage/public-assets";
+import { leerProceso } from "@/lib/observability/medidor-proceso";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,12 +73,16 @@ export async function GET(req: Request) {
     storageOk = await storageAcepta().catch(() => false);
   }
 
+  const proceso = leerProceso();
+
   return Response.json(
     {
       ok,
       sha: process.env.GIT_SHA ?? "unknown",
       uptimeSec: Math.round(process.uptime()),
       pool: poolStats(),
+      memoriaMb: { rss: proceso.rssMb, heapUsed: proceso.heapUsedMb, heapLimit: proceso.heapLimitMb },
+      atrasoHiloMs: proceso.atrasoMs,
       checks,
       invariantesOk,
       storageOk,

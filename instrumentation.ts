@@ -1,7 +1,9 @@
 /**
  * instrumentation.ts — Next.js lo ejecuta UNA vez en el boot del server.
- * Único uso hoy: arrancar el SCHEDULER de jobs (lib/jobs) — marketing semanal +
- * jobs de Éxito del cliente (estos últimos además gated por CS_WATCHDOG_ENABLED).
+ * Usos: Sentry del server, el MEDIDOR de memoria y atraso del hilo
+ * (lib/observability/medidor-proceso.ts, siempre) y el SCHEDULER de jobs (lib/jobs) —
+ * marketing semanal + jobs de Éxito del cliente (estos últimos además gated por
+ * CS_WATCHDOG_ENABLED).
  *
  * Gates:
  *  - NEXT_RUNTIME nodejs (no edge).
@@ -47,6 +49,11 @@ export async function register() {
       beforeBreadcrumb: tacharTokensDelEvento,
     });
   }
+
+  // Medidor de memoria y atraso del hilo de JS (incidente 2026-09-21): desde el arranque y no
+  // desde el primer /api/health, para que el aviso en los logs cubra todo. Idempotente.
+  const { iniciarMedidor } = await import("@/lib/observability/medidor-proceso");
+  iniciarMedidor();
 
   if (process.env.CRON_ENABLED !== "1") return;
   const { startScheduler } = await import("@/lib/jobs/scheduler");
