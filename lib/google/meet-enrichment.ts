@@ -365,6 +365,8 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     await prisma.firefliesSession.update({
       where: { id: s.id },
       data: datosDeEscritura(lectura, null, s.enrichAttempts, new Date()),
+      // Sin select, Prisma devuelve la fila entera (transcripción incluida) para tirarla (2026-09-21).
+      select: { id: true },
     });
     console.log(
       `[google/enrich] ✗ "${s.title}": ${lectura.error} (status ${lectura.status ?? "—"}, intento ${s.enrichAttempts + 1}/${MAX_ENRICH_ATTEMPTS})`,
@@ -386,6 +388,9 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
   await prisma.firefliesSession.update({
     where: { id: s.id },
     data: datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, new Date()),
+    // ⚠ Sin select, el UPDATE devuelve la transcripción y el resumen que acaba de escribir: el doble
+    // de memoria por sesión, para tirarlo (incidente 2026-09-21).
+    select: { id: true },
   });
 
   // Auto-trigger del Análisis post-sesión: con transcript real Y RECIENTE, generar minuta

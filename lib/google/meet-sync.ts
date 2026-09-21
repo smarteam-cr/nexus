@@ -3,8 +3,8 @@
  *
  * Sincronización de sesiones Google Meet → FirefliesSession DB.
  *
- * Guarda TODOS los eventos de Google Meet del dominio (365 días por defecto),
- * independientemente de si pertenecen a un cliente registrado.
+ * Guarda TODOS los eventos de Google Meet del dominio (30 días por defecto, ver
+ * `diasHaciaAtras`), independientemente de si pertenecen a un cliente registrado.
  * El matching con cliente/empresa/categoría se hace en tiempo de consulta
  * (ver lib/sessions/categorize.ts).
  *
@@ -13,46 +13,64 @@
  *   2. Para cada usuario (batches de 5): impersona y busca eventos de Calendar
  *      con conferenceData.conferenceSolution.key.type === 'hangoutsMeet'
  *      — pagina con nextPageToken hasta cubrir todo el rango DAYS_BACK
- *   3. Deduplica por googleEventId (el mismo evento aparece en calendarios de varios asistentes)
- *   4. Hace upsert en FirefliesSession con source='google_meet'
+ *   3. Junta las copias de cada reunión por googleEventId (el mismo evento aparece en
+ *      calendarios de varios asistentes) → UNA por corrida
+ *   4. Lee de la base solo esas filas y solo las columnas que deciden si cambió
+ *   5. Crea las nuevas y hace UPDATE SOLO de lo que difiere (lib/google/meet-sync-cambios.ts)
+ *
+ * ⚠ Incidente 2026-09-21 (821 % de CPU, 1,13 GiB, producción sin atender): esta corrida vive DENTRO
+ * del proceso web. Con 365 días, un UPDATE incondicional por copia y la fila entera de vuelta en cada
+ * UPDATE, cada corrida hacía 15.011 UPDATE y armaba ~221 MB para tirarlos, cada 20 minutos.
  */
 
 import { google } from "googleapis";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
 import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
+import {
+  cambiosDeSesion,
+  diasHaciaAtras,
+  enLotes,
+  eventIdDeFila,
+  fusionarCopia,
+  idDeSesion,
+  participantesConOrganizador,
+  SELECT_SESION_GUARDADA,
+  type EventoMeet,
+  type SesionGuardada,
+} from "@/lib/google/meet-sync-cambios";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export type MeetSyncResult = {
+  /** Reuniones nuevas (filas creadas). */
   synced: number;
+  /** Reuniones de la ventana que ya estaban en la base (cambiaran o no). */
   alreadyExisted: number;
   total: number;
+  /** De las que ya existían, cuántas tuvieron un UPDATE porque algo cambió. */
+  actualizadas: number;
+  /** Cuántas veces aparecieron las reuniones en los calendarios (una por asistente interno). */
+  apariciones: number;
 };
-
-interface MeetEvent {
-  eventId: string;
-  title: string;
-  date: Date;
-  durationMinutes: number;
-  participants: string[];
-  googleDocId?: string;
-  organizerEmail: string;
-}
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-// Retención por defecto: 1 año hacia atrás.
-// Configurable via env GOOGLE_MEET_DAYS_BACK para casos puntuales (backfill mayor).
-const DAYS_BACK = Number(process.env.GOOGLE_MEET_DAYS_BACK ?? 365);
+// Ventana por defecto: 30 días (antes 365). GOOGLE_MEET_DAYS_BACK sigue mandando si está.
+// Qué se pierde y cómo hacer un backfill: ver `diasHaciaAtras` en meet-sync-cambios.ts.
+const DAYS_BACK = diasHaciaAtras(process.env.GOOGLE_MEET_DAYS_BACK);
 const USER_BATCH_SIZE = 5;
 const PAGE_SIZE = 250; // máx que Google Calendar API permite por página
 const MAX_PAGES_PER_USER = 20; // safety cap: 250 * 20 = 5000 eventos/usuario
 const MIME_GOOGLE_DOC = "application/vnd.google-apps.document";
+/** Ids por `IN (...)` al leer lo guardado. */
+const LOTE_LECTURA = 500;
+/** Reuniones entre dos cesiones del hilo al escribir (categorizar cuesta ~0,16 ms cada una). */
+const LOTE_ESCRITURA = 100;
 
 // ── Fetch de eventos Meet para un usuario (paginado) ──────────────────────────
 
-async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS_BACK): Promise<MeetEvent[]> {
+async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS_BACK): Promise<EventoMeet[]> {
   try {
     const auth = getImpersonatedAuth(userEmail);
     const calendar = google.calendar({ version: "v3", auth });
@@ -66,12 +84,11 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
     const timeMax = new Date();
     timeMax.setDate(timeMax.getDate() + 1);
 
-    const events: MeetEvent[] = [];
+    const events: EventoMeet[] = [];
     let pageToken: string | undefined = undefined;
     let pagesFetched = 0;
 
     do {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res: { data: { items?: import("googleapis").calendar_v3.Schema$Event[]; nextPageToken?: string | null } } = await calendar.events.list({
         calendarId: "primary",
         timeMin: timeMin.toISOString(),
@@ -108,7 +125,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
 function processItems(
   items: import("googleapis").calendar_v3.Schema$Event[],
   userEmail: string,
-  events: MeetEvent[],
+  events: EventoMeet[],
   bounds: { timeMin: Date; timeMax: Date }
 ): void {
   let outOfRange = 0;
@@ -166,26 +183,46 @@ function processItems(
 
 // ── Función principal de sync ─────────────────────────────────────────────────
 
+/* Una sola corrida a la vez en el proceso (2026-09-21): el auto-sync tiene su propio candado, pero
+   el botón «Sincronizar» de Integraciones llama acá directo y podía arrancar una segunda corrida
+   en paralelo. Quien llega con una corrida en vuelo recibe el resultado de esa, no arranca otra. */
+let corridaEnVuelo: Promise<MeetSyncResult> | null = null;
+
 /**
  * Sincroniza TODOS los eventos de Google Meet del dominio.
  * No filtra por cliente — cualquier reunión con Meet se guarda.
- * Deduplica por googleEventId para evitar duplicados entre usuarios del mismo evento.
  *
- * @param options.daysBack Días hacia atrás a sincronizar (default: 365 o GOOGLE_MEET_DAYS_BACK).
- *                         Útil para backfill puntual con rangos mayores.
+ * @param options.daysBack Días hacia atrás a sincronizar (default: 30 o GOOGLE_MEET_DAYS_BACK).
+ *                         Útil para backfill puntual con rangos mayores (scripts/backfill-meet.ts).
  */
-export async function syncGoogleMeetSessions(
-  options: { daysBack?: number } = {}
-): Promise<MeetSyncResult> {
-  const daysBack = options.daysBack ?? DAYS_BACK;
+export function syncGoogleMeetSessions(options: { daysBack?: number } = {}): Promise<MeetSyncResult> {
+  if (corridaEnVuelo) {
+    console.log("[google/sync] ya hay una corrida en vuelo en este proceso — devuelvo la suya");
+    return corridaEnVuelo;
+  }
+  const corrida = correrSync(options.daysBack ?? DAYS_BACK).finally(() => {
+    corridaEnVuelo = null;
+  });
+  corridaEnVuelo = corrida;
+  return corrida;
+}
+
+/** Deja correr al resto de los pedidos entre lotes: una corrida larga no congela el proceso. */
+function cederElHilo(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+async function correrSync(daysBack: number): Promise<MeetSyncResult> {
+  const t0 = Date.now();
   console.log(`[google/sync] Iniciando sync con daysBack=${daysBack}`);
+  const vacio: MeetSyncResult = { synced: 0, alreadyExisted: 0, total: 0, actualizadas: 0, apariciones: 0 };
 
   const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
   const serviceKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 
   if (!adminEmail || !serviceKey) {
     console.log("[google/sync] Variables GOOGLE_ADMIN_EMAIL o GOOGLE_SERVICE_ACCOUNT_KEY no configuradas");
-    return { synced: 0, alreadyExisted: 0, total: 0 };
+    return vacio;
   }
 
   // 1. Listar usuarios del dominio
@@ -194,153 +231,141 @@ export async function syncGoogleMeetSessions(
     domainUsers = await listDomainUsers();
   } catch (err) {
     console.log("[google/sync] Error listando usuarios del dominio:", err instanceof Error ? err.message : err);
-    return { synced: 0, alreadyExisted: 0, total: 0 };
+    return vacio;
   }
 
   if (domainUsers.length === 0) {
     console.log("[google/sync] No se encontraron usuarios en el dominio");
-    return { synced: 0, alreadyExisted: 0, total: 0 };
+    return vacio;
   }
 
   console.log(`[google/sync] Procesando ${domainUsers.length} usuarios del dominio`);
 
-  // 2. Cargar sesiones ya en DB (con googleDocId actual) → Map O(1) por eventId.
-  //    Necesitamos el googleDocId actual para detectar si apareció uno NUEVO
-  //    post-reunión y resetear `enrichedAt: null` para que el enrich lo procese.
-  //    IMPORTANTE: se incluyen también las filas PRE-REFACTOR (id "gmeet_…" pero
-  //    googleEventId nulo o source distinto) — antes quedaban fuera del mapa y el
-  //    create() de abajo chocaba con P2002 contra ellas EN CADA corrida, para
-  //    siempre (visible en logs de prod: los mismos IDs fallando en cada boot).
-  //    Para esas filas el eventId se deriva del propio id; el UPDATE las "sana"
-  //    (les escribe googleEventId) preservando su manualClientId.
-  const existingByEventId = new Map<string, { id: string; googleDocId: string | null; manualClientId: string | null }>();
-  const existingSessions = await prisma.firefliesSession.findMany({
-    where: { OR: [{ source: "google_meet" }, { id: { startsWith: "gmeet_" } }] },
-    select: { id: true, googleEventId: true, googleDocId: true, manualClientId: true },
-  });
-  for (const s of existingSessions) {
-    const eventId = s.googleEventId ?? (s.id.startsWith("gmeet_") ? s.id.slice("gmeet_".length) : null);
-    if (eventId) {
-      existingByEventId.set(eventId, { id: s.id, googleDocId: s.googleDocId, manualClientId: s.manualClientId });
-    }
-  }
-
-  // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada upsert.
-  const categorizeCtx = await buildCategorizeCtx();
-
-  // 3. Procesar usuarios en batches de 5
-  let synced = 0;
-  let alreadyExisted = 0;
-  let docDiscovered = 0; // contador de docs nuevos encontrados en sesiones existentes
-
+  // 2. Traer los calendarios (batches de 5 usuarios) y juntar las copias de cada reunión.
+  //    La misma reunión aparece en el calendario de cada asistente interno: antes se escribía una
+  //    vez por copia (15.011 UPDATE por corrida para 6.176 reuniones). Ahora queda UNA por eventId.
+  const eventos = new Map<string, EventoMeet>();
+  let apariciones = 0;
   for (let i = 0; i < domainUsers.length; i += USER_BATCH_SIZE) {
     const userBatch = domainUsers.slice(i, i + USER_BATCH_SIZE);
-    const batchResults = await Promise.all(
-      userBatch.map((u) => fetchMeetEventsForUser(u.email, daysBack))
-    );
-
+    const batchResults = await Promise.all(userBatch.map((u) => fetchMeetEventsForUser(u.email, daysBack)));
     for (const events of batchResults) {
       for (const event of events) {
-        // Incluir organizerEmail en participants para matching de ventas en consultas
-        const allParticipants = event.organizerEmail
-          ? [...new Set([...event.participants, event.organizerEmail])]
-          : event.participants;
-
-        const sessionId = `gmeet_${event.eventId}`;
-        const existing = existingByEventId.get(event.eventId);
-        const eventDocId = event.googleDocId ?? null;
-
-        try {
-          if (existing) {
-            // Sesión ya existe en DB. Detectar si apareció un Doc NUEVO
-            // (típicamente Gemini Notes generado post-reunión).
-            const docJustAppeared = !existing.googleDocId && !!eventDocId;
-            const docChanged = !!existing.googleDocId && !!eventDocId && existing.googleDocId !== eventDocId;
-            const shouldResetEnrichment = docJustAppeared || docChanged;
-
-            await prisma.firefliesSession.update({
-              where: { id: existing.id },
-              data: {
-                title: event.title,
-                date: event.date,
-                duration: event.durationMinutes,
-                participants: allParticipants,
-                googleEventId: event.eventId,
-                googleDocId: eventDocId,
-                organizerEmail: event.organizerEmail,
-                source: "google_meet",
-                // PERF #1: re-resolver el cliente (honra el override manualClientId existente).
-                resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: existing.manualClientId }, categorizeCtx),
-                // Si el Doc apareció (o cambió) post-sync inicial, resetear
-                // `enrichedAt: null` para forzar que el enrich lo procese
-                // en la próxima pasada y descargue transcript + summary.
-                /* Reset COMPLETO (auditoría 2026-08-08): con solo `enrichedAt: null`, una
-                   fila sellada por tope (attempts=5) a la que después le aparece el doc
-                   quedaba en limbo permanente — invisible para las pasadas (attempts:0),
-                   para el job (lt 5), para el rescate y para el force. Mismo reset que ya
-                   hace la ruta de force. */
-                ...(shouldResetEnrichment
-                  ? { enrichedAt: null, enrichAttempts: 0, enrichError: null }
-                  : {}),
-              },
-            });
-
-            alreadyExisted++;
-            if (shouldResetEnrichment) {
-              docDiscovered++;
-              console.log(`[google/sync] Doc descubierto post-sync para ${event.eventId} (${event.title}). enrichedAt reset.`);
-            }
-          } else {
-            // Sesión nueva. UPSERT (no create): si otra corrida concurrente creó la
-            // fila entre nuestra precarga del mapa y este write (cooldown reseteado
-            // por deploy, disparo manual en paralelo…), el create fallaba con P2002.
-            // En la rama update NO se toca resolvedClientId: no conocemos el
-            // manualClientId de esa fila (no estaba en el mapa) y recalcularlo con
-            // null podría pisar una asignación manual — la próxima corrida la ve
-            // en el mapa y la actualiza completa por la rama de arriba.
-            await prisma.firefliesSession.upsert({
-              where: { id: sessionId },
-              create: {
-                id: sessionId,
-                title: event.title,
-                date: event.date,
-                duration: event.durationMinutes,
-                participants: allParticipants,
-                source: "google_meet",
-                googleEventId: event.eventId,
-                googleDocId: eventDocId,
-                organizerEmail: event.organizerEmail,
-                // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
-                resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
-              },
-              update: {
-                title: event.title,
-                date: event.date,
-                duration: event.durationMinutes,
-                participants: allParticipants,
-                source: "google_meet",
-                googleEventId: event.eventId,
-                googleDocId: eventDocId,
-                organizerEmail: event.organizerEmail,
-              },
-            });
-
-            existingByEventId.set(event.eventId, { id: sessionId, googleDocId: eventDocId, manualClientId: null });
-            synced++;
-          }
-        } catch (err) {
-          console.log(
-            `[google/sync] WARN error persistiendo sesión ${event.eventId} ("${event.title}", ${event.date.toISOString()}):`,
-            err instanceof Error ? err.message : err
-          );
-        }
+        apariciones++;
+        eventos.set(event.eventId, fusionarCopia(eventos.get(event.eventId), event));
       }
     }
   }
 
+  // 3. Leer de la base SOLO las filas de esas reuniones y SOLO las columnas que deciden si algo
+  //    cambió (SELECT_SESION_GUARDADA: ni transcripción ni resumen). Antes se precargaban las
+  //    7.767 filas de Meet aunque la ventana trajera 656.
+  //    Se incluyen las filas PRE-REFACTOR (id "gmeet_…" con googleEventId nulo o source distinto):
+  //    si quedaran afuera, el upsert de abajo las trataría como nuevas; la comparación las «sana»
+  //    (les escribe googleEventId y source) preservando su manualClientId.
+  const guardadas = new Map<string, SesionGuardada>();
+  for (const lote of enLotes([...eventos.keys()], LOTE_LECTURA)) {
+    const filas = await prisma.firefliesSession.findMany({
+      where: {
+        AND: [
+          { OR: [{ source: "google_meet" }, { id: { startsWith: "gmeet_" } }] },
+          { OR: [{ googleEventId: { in: lote } }, { id: { in: lote.map(idDeSesion) } }] },
+        ],
+      },
+      select: SELECT_SESION_GUARDADA,
+    });
+    for (const fila of filas) {
+      const eventId = eventIdDeFila(fila);
+      if (eventId) guardadas.set(eventId, fila);
+    }
+  }
+
+  // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada write.
+  const categorizeCtx = await buildCategorizeCtx();
+
+  // 4. Escribir solo lo nuevo o lo que cambió.
+  let synced = 0;
+  let alreadyExisted = 0;
+  let actualizadas = 0;
+  let docDiscovered = 0; // contador de docs nuevos encontrados en sesiones existentes
+
+  for (const lote of enLotes([...eventos.values()], LOTE_ESCRITURA)) {
+    for (const event of lote) {
+      const allParticipants = participantesConOrganizador(event);
+      const existing = guardadas.get(event.eventId);
+
+      try {
+        if (existing) {
+          alreadyExisted++;
+          const { cambios, docNuevo } = cambiosDeSesion(
+            existing,
+            event,
+            allParticipants,
+            // PERF #1: re-resolver el cliente (honra el override manualClientId existente).
+            resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: existing.manualClientId }, categorizeCtx),
+          );
+          if (!cambios) continue; // nada cambió → ningún UPDATE
+
+          // ⚠ `select: { id: true }`: sin él, Prisma devuelve la fila ENTERA (transcripción y
+          // resumen incluidos) por cada UPDATE — eran ~221 MB armados en memoria por corrida.
+          await prisma.firefliesSession.update({ where: { id: existing.id }, data: cambios, select: { id: true } });
+          actualizadas++;
+          if (docNuevo) {
+            docDiscovered++;
+            console.log(`[google/sync] Doc descubierto post-sync para ${event.eventId} (${event.title}). enrichedAt reset.`);
+          }
+        } else {
+          // Sesión nueva. UPSERT (no create): si otra corrida (otro proceso, un script de backfill)
+          // creó la fila entre nuestra lectura y este write, el create fallaba con P2002.
+          // En la rama update NO se toca resolvedClientId: no conocemos el manualClientId de esa
+          // fila y recalcularlo con null podría pisar una asignación manual — la próxima corrida
+          // la lee y la compara completa por la rama de arriba.
+          const sessionId = idDeSesion(event.eventId);
+          const eventDocId = event.googleDocId ?? null;
+          await prisma.firefliesSession.upsert({
+            where: { id: sessionId },
+            create: {
+              id: sessionId,
+              title: event.title,
+              date: event.date,
+              duration: event.durationMinutes,
+              participants: allParticipants,
+              source: "google_meet",
+              googleEventId: event.eventId,
+              googleDocId: eventDocId,
+              organizerEmail: event.organizerEmail,
+              // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
+              resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
+            },
+            update: {
+              title: event.title,
+              date: event.date,
+              duration: event.durationMinutes,
+              participants: allParticipants,
+              source: "google_meet",
+              googleEventId: event.eventId,
+              // Mismo criterio que la comparación: el Doc nunca se borra con el null de Google.
+              ...(eventDocId ? { googleDocId: eventDocId } : {}),
+              organizerEmail: event.organizerEmail,
+            },
+            select: { id: true },
+          });
+          synced++;
+        }
+      } catch (err) {
+        console.log(
+          `[google/sync] WARN error persistiendo sesión ${event.eventId} ("${event.title}", ${event.date.toISOString()}):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+    await cederElHilo();
+  }
+
   const total = synced + alreadyExisted;
   console.log(
-    `[google/sync] Completado: ${synced} nuevas, ${alreadyExisted} actualizadas (${docDiscovered} con Doc nuevo descubierto)`
+    `[google/sync] Completado en ${Math.round((Date.now() - t0) / 1000)} s: ${eventos.size} reuniones (${apariciones} apariciones en calendarios), ` +
+      `${synced} nuevas, ${actualizadas} actualizadas, ${alreadyExisted - actualizadas} sin cambios (${docDiscovered} con Doc nuevo descubierto)`
   );
-  return { synced, alreadyExisted, total };
+  return { synced, alreadyExisted, total, actualizadas, apariciones };
 }

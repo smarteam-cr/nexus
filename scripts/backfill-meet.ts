@@ -5,7 +5,9 @@
  * Útil después de extender DAYS_BACK (90 → 365) para traer eventos
  * históricos que el sync regular no incluía.
  *
- * Por defecto sincroniza 365 días hacia atrás (config en meet-sync.ts).
+ * Por defecto sincroniza 365 días hacia atrás (default de ESTE script: la sync automática
+ * mira solo 30 desde el 2026-09-21, ver `diasHaciaAtras` en lib/google/meet-sync-cambios.ts).
+ * ⚠ Escribe en la base compartida, que es la de producción.
  * Para forzar un rango distinto, usar la env var GOOGLE_MEET_DAYS_BACK
  * o pasar argumento posicional:
  *

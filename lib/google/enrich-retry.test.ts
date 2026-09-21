@@ -11,6 +11,7 @@ import {
   MAX_ENRICH_ATTEMPTS,
   type LecturaDoc,
 } from "./enrich-retry";
+import { cambiosDeSesion } from "./meet-sync-cambios";
 
 /**
  * lib/google/enrich-retry.test.ts — LA POLÍTICA DE ESCRITURA Y REINTENTO, COMO TABLA.
@@ -308,18 +309,23 @@ describe("candados de la auditoría 2026-08-08", () => {
        DISPARADOR — reducir la condición a solo `docChanged` dejaba todo verde y devolvía al
        limbo el caso principal (el Gemini Notes que APARECE post-reunión). La edición que la
        pone en rojo: tocar el payload O la condición. */
+    /* 2026-09-21: la decisión se mudó a `cambiosDeSesion` (lib/google/meet-sync-cambios.ts), que
+       ahora escribe solo lo que cambió. Se prueba por COMPORTAMIENTO sobre la fila sellada por tope
+       (el disparador y el payload a la vez), y por fuente que meet-sync la use y escriba lo que
+       devuelve. */
+    const sellada = {
+      id: "gmeet_ev1", title: "T", date: new Date("2026-08-01T15:00:00Z"), duration: 60,
+      participants: ["a@smarteamcr.com"], googleEventId: "ev1", googleDocId: null,
+      organizerEmail: "a@smarteamcr.com", source: "google_meet", manualClientId: null, resolvedClientId: null,
+    };
+    const conDoc = { eventId: "ev1", title: "T", date: sellada.date, durationMinutes: 60, participants: ["a@smarteamcr.com"], googleDocId: "doc1", organizerEmail: "a@smarteamcr.com" };
+    const r = cambiosDeSesion(sellada, conDoc, ["a@smarteamcr.com"], null);
+    expect(r.docNuevo, "el disparador perdió el caso «el doc APARECE» — la fila sellada por tope queda en limbo").toBe(true);
+    expect(r.cambios, "el reset dejó de ser completo").toEqual({ googleDocId: "doc1", enrichedAt: null, enrichAttempts: 0, enrichError: null });
+
     const src = fuente("lib/google/meet-sync.ts");
-    const iDef = src.indexOf("const shouldResetEnrichment");
-    expect(iDef, "desapareció shouldResetEnrichment de meet-sync").toBeGreaterThan(-1);
-    const condicion = src.slice(iDef, iDef + 200);
-    expect(condicion, "el disparador perdió el caso «el doc APARECE» — la fila sellada por tope queda en limbo").toContain(
-      "docJustAppeared",
-    );
-    const iUso = src.indexOf("...(shouldResetEnrichment");
-    expect(iUso, "el reset condicional desapareció del update").toBeGreaterThan(-1);
-    const bloque = src.slice(iUso, iUso + 260);
-    expect(bloque, "el reset dejó de limpiar attempts").toContain("enrichAttempts: 0");
-    expect(bloque).toContain("enrichError: null");
+    expect(src, "meet-sync dejó de decidir con cambiosDeSesion").toContain("cambiosDeSesion(");
+    expect(src, "meet-sync dejó de escribir lo que devuelve cambiosDeSesion").toContain("data: cambios");
   });
 
   it("el rescate exige --deploy-confirmado además de --apply", () => {
