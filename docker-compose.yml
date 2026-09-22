@@ -37,12 +37,12 @@ services:
     # a propósito, no dejarlo sin beneficio real (innecesariamente ancho).
     shm_size: "1gb"
     # ── Límites (incidente 2026-09-21) ────────────────────────────────────────
-    # Sin límites, el proceso llenó la memoria y quedó trabado limpiándola: 821 % de
-    # CPU, 1,13 GiB, 0 consultas a la base en 60 s y 502 en nginx, congelado horas en
-    # un VPS que comparte con otras apps. Con tope, se muere con aviso y Docker lo
-    # levanta (restart: unless-stopped) en vez de quedar colgado:
-    #   · cpus 3: uso normal < 1 núcleo; nunca más se come el VPS (tiene ≥ 9: el
-    #     incidente llegó a 8,2). ⚠ Con menos núcleos que esto el contenedor no arranca.
+    # Sin límites, el proceso se comió la CPU del VPS (docker stats: 821 %, 1,13 GiB) y
+    # se congeló horas, con demoras de más de 10 s y 502 en nginx, en un servidor que
+    # comparte con otras apps. Con tope, se muere con aviso y Docker lo levanta
+    # (restart: unless-stopped) en vez de quedar colgado:
+    #   · cpus 2: el VPS tiene 4 núcleos (`nproc`, medido el 2026-09-22) y ~15 apps más;
+    #     Nexus en uso normal ocupa < 1. ⚠ Con más núcleos que el host, no arranca.
     #   · mem_limit 3g y memswap_limit 3g (sin swap): heap de 2 GB + Chrome de los PDF
     #     (máx 2) + nativo. Con swap, un proceso lleno se arrastra en vez de morir.
     #   · NODE_OPTIONS (abajo): el tope del heap por debajo del del contenedor, así
@@ -50,7 +50,7 @@ services:
     #     no el kernel en silencio.
     # Qué hacer en un incidente (foto de memoria, detener sin perder logs):
     # docs/RUNBOOK.md, «Incidente de memoria o CPU».
-    cpus: "3"
+    cpus: "2"
     mem_limit: 3g
     memswap_limit: 3g
     ports:

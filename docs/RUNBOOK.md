@@ -156,9 +156,11 @@ Activación 100% por env — sin las vars, cero cambio de comportamiento:
 
 ## Incidente de memoria o CPU (el contenedor se congela)
 
-El 2026-09-21 el proceso llenó la memoria y quedó trabado limpiándola: 821 % de CPU, 1,13 GiB,
-cero consultas a la base en 60 s y 502 en nginx, después de horas congelándose 15–25 s. Desde
-entonces el contenedor tiene tope en `docker-compose.yml` (3 núcleos, 3 GB sin swap, heap de 2 GB):
+El 2026-09-21 el proceso se comió la CPU del VPS (docker stats: 821 %, 1,13 GiB) y quedó congelado:
+horas de demoras de 15–25 s y después 502 en nginx. ⚠ El VPS tiene solo 4 núcleos y lo comparten ~15
+apps; el 2026-09-22, con Nexus quieto, la carga promedio seguía en 85–93 por otras (mongodb-4,
+smartflow-app, sicop). Desde entonces el contenedor tiene tope en `docker-compose.yml` (2 núcleos,
+3 GB sin swap, heap de 2 GB):
 si se vuelve a llenar, Node muere con «JavaScript heap out of memory» y Docker lo levanta solo
 (`restart: unless-stopped`), en vez de quedar colgado. ⚠ Docker NO reinicia un contenedor
 «unhealthy»: un proceso trabado sin llegar al tope sigue necesitando a una persona.
