@@ -19,7 +19,10 @@ bajo esa condición:
 
 **Persistido en DB (sobrevive deploys, ya NO es in-memory):** el turno del
 auto-sync de Google (`CronJobState`, key `google-auto-sync`: `lastRunAt` = «no correr antes de»,
-`lastResult` = cómo terminó la última y cuántos fallos seguidos lleva) y el rate-limit de
+`lastResult` = cómo terminó la última y cuántos fallos seguidos lleva, más la marca `noAntesDe`
+= `lastRunAt` que dice que la fila la escribió el código nuevo; ⚠ sin esa marca, `lastRunAt` es el
+ARRANQUE de una corrida del código anterior al 2026-09-21 —la imagen previa, un `dev:prod` sin
+pull— y se respetan sus 20 min; el turno se toma comparando con lo leído) y el rate-limit de
 verify-access externo (`ExternalVerifyAttempt`, helper
 `lib/external/verify-rate-limit.ts`).
 

@@ -24,7 +24,10 @@
  * ⚠ La columna `lastRunAt` de la fila `google-auto-sync` ya NO es «cuándo arrancó la última»:
  * es «no correr antes de». Mientras corre, vale el vencimiento del turno; al terminar, el fin más
  * el cooldown (o más la espera, si falló). Se reusa la columna para no cambiar el schema.
- * `lastResult` guarda cómo terminó la última: `{ at, ok, fallosSeguidos, … }`.
+ * `lastResult` guarda cómo terminó la última: `{ at, ok, fallosSeguidos, noAntesDe, … }`.
+ * ⚠ Convive con el código VIEJO, que en la misma columna guarda el ARRANQUE de su corrida: la
+ * marca `lastResult.noAntesDe` dice quién escribió `lastRunAt` (ver `noCorrerAntesDe`), y el turno
+ * se toma comparando con lo LEÍDO, no con la hora.
  */
 
 import type { Prisma } from "@prisma/client";
@@ -45,11 +48,39 @@ export function esperaTrasFallo(fallosSeguidos: number): number {
   return Math.min(ESPERA_BASE_MS * 2 ** (n - 1), ESPERA_TOPE_MS);
 }
 
+/** `lastResult` como objeto, o null si no es uno (nunca se escribió, o es ilegible). */
+function objetoDe(lastResult: Prisma.JsonValue | null): Prisma.JsonObject | null {
+  return lastResult && typeof lastResult === "object" && !Array.isArray(lastResult) ? lastResult : null;
+}
+
 /** Los fallos seguidos que anotó la última corrida en `lastResult` (0 si no hay nada legible). */
 export function fallosSeguidosDe(lastResult: Prisma.JsonValue | null): number {
-  if (!lastResult || typeof lastResult !== "object" || Array.isArray(lastResult)) return 0;
-  const n = lastResult.fallosSeguidos;
+  const n = objetoDe(lastResult)?.fallosSeguidos;
   return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * Hasta cuándo no correr (ms), según la fila; null = libre.
+ *
+ * ⚠ Convivencia con el código VIEJO (el anterior al freno del 2026-09-21): guarda en `lastRunAt` el
+ * ARRANQUE de su corrida, que dura 6–15 min, y no escribe `lastResult`. Ese código sigue vivo en la
+ * imagen de producción hasta el deploy, en el `npm run dev:prod` de una PC que no hizo pull (corre
+ * el auto-sync contra la base de producción) y en un rollback. Leído como «no correr antes de», ese
+ * arranque ya pasó: este código arrancaba otra corrida EN MEDIO de la del proceso viejo, con dos
+ * sync y dos enriquecimientos a la vez sobre la misma base (resúmenes de IA y acciones duplicadas).
+ * Por eso este código deja en `lastResult.noAntesDe` la MISMA fecha que escribe en `lastRunAt`, al
+ * tomar el turno y al cerrarlo. Si coinciden, la fila es nuestra y `lastRunAt` rige tal cual. Si no,
+ * la escribió el código viejo y rige su propia regla: 20 min desde ese arranque.
+ */
+export function noCorrerAntesDe(fila: { lastRunAt: Date | null; lastResult: Prisma.JsonValue | null } | null): number | null {
+  if (!fila?.lastRunAt) return null;
+  const t = fila.lastRunAt.getTime();
+  return objetoDe(fila.lastResult)?.noAntesDe === fila.lastRunAt.toISOString() ? t : t + COOLDOWN_MS;
+}
+
+/** `lastResult` con la marca de que `lastRunAt = noAntesDe` lo escribió este código (conserva lo demás). */
+export function conMarca(lastResult: Prisma.JsonValue | null, noAntesDe: Date): Prisma.InputJsonObject {
+  return { ...(objetoDe(lastResult) ?? {}), noAntesDe: noAntesDe.toISOString() };
 }
 
 /** Memoria del PROCESO: el mutex, y hasta cuándo no vale la pena ni mirar la base. */
@@ -58,10 +89,12 @@ export interface EstadoDeAutoSync {
   cooldownHasta: number | null;
 }
 
-/** Las dos formas de condición que usa el turno: tomarlo (libre o vencido) y cerrarlo (si sigue siendo nuestro). */
-export type DondeDelTurno =
-  | { id: string; OR: Array<{ lastRunAt: null } | { lastRunAt: { lte: Date } }> }
-  | { id: string; lastRunAt: Date };
+/**
+ * La condición del turno, al tomarlo y al cerrarlo: `lastRunAt` sigue siendo EXACTAMENTE el que se
+ * leyó (o el que escribimos). Compara-y-cambia: si otro proceso, nuevo o viejo, escribió la fila en
+ * el medio, no se toca.
+ */
+export type DondeDelTurno = { id: string; lastRunAt: Date | null };
 
 /** Lo que el auto-sync usa de CronJobState, nada más: así se prueba con una tabla falsa. */
 export interface DbDeTurnos {
@@ -73,7 +106,7 @@ export interface DbDeTurnos {
     upsert(args: { where: { id: string }; create: { id: string }; update: Record<string, never> }): PromiseLike<unknown>;
     updateMany(args: {
       where: DondeDelTurno;
-      data: { lastRunAt: Date; lastResult?: Prisma.InputJsonValue };
+      data: { lastRunAt: Date; lastResult: Prisma.InputJsonObject };
     }): PromiseLike<{ count: number }>;
   };
 }
@@ -104,11 +137,13 @@ const DEPS_REALES: DepsDeAutoSync = {
 };
 
 /** Cierra el turno SOLO si sigue siendo nuestro: si venció y lo tomó otro, no se le pisa. */
-async function cerrarTurno(db: DbDeTurnos, turno: Date, noAntesDe: number, resultado: Prisma.InputJsonValue): Promise<void> {
+async function cerrarTurno(db: DbDeTurnos, turno: Date, noAntesDe: number, resultado: Prisma.InputJsonObject): Promise<void> {
+  const proxima = new Date(noAntesDe);
   try {
     await db.cronJobState.updateMany({
       where: { id: JOB_KEY, lastRunAt: turno },
-      data: { lastRunAt: new Date(noAntesDe), lastResult: resultado },
+      // La marca (ver `noCorrerAntesDe`): esta `lastRunAt` la escribió este código.
+      data: { lastRunAt: proxima, lastResult: { ...resultado, noAntesDe: proxima.toISOString() } },
     });
   } catch (err) {
     // Si no se puede cerrar, el turno queda hasta su vencimiento: una espera más larga, nunca una corrida doble.
@@ -146,20 +181,25 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
   try {
     // C-21: LEER antes de escribir. Con el turno bloqueado esta lectura es todo lo que pasa.
     const fila = await db.cronJobState.findUnique({ where: { id: JOB_KEY }, select: { lastRunAt: true, lastResult: true } });
-    const noAntesDe = fila?.lastRunAt?.getTime() ?? null;
+    // Nuestra marca → `lastRunAt` tal cual; sin ella, el arranque de un proceso VIEJO + 20 min.
+    const noAntesDe = noCorrerAntesDe(fila);
     if (noAntesDe !== null && inicio < noAntesDe) {
       estado.cooldownHasta = noAntesDe;
       return { skipped: true, reason: "cooldown" };
     }
-    fallosPrevios = fallosSeguidosDe(fila?.lastResult ?? null);
+    const leida = fila?.lastRunAt ?? null;
+    const resultadoPrevio = fila?.lastResult ?? null;
+    fallosPrevios = fallosSeguidosDe(resultadoPrevio);
 
-    // Turno atómico: la fila existe (se crea solo la primera vez) y el UPDATE condicional solo gana
-    // si está libre o vencido. count=0 → otro proceso lo tomó entre la lectura y acá → skip.
+    // Turno atómico: la fila existe (se crea solo la primera vez) y el UPDATE solo gana si
+    // `lastRunAt` sigue siendo el que se LEYÓ. count=0 → otro proceso (nuevo o viejo) la escribió
+    // entre la lectura y acá → skip. ⚠ No comparar contra la hora (`lastRunAt <= ahora`): el
+    // arranque de una corrida vieja en curso también es «anterior a ahora» y se le metía otra encima.
     if (!fila) await db.cronJobState.upsert({ where: { id: JOB_KEY }, create: { id: JOB_KEY }, update: {} });
     const vence = new Date(inicio + VENCE_TURNO_MS);
     const claim = await db.cronJobState.updateMany({
-      where: { id: JOB_KEY, OR: [{ lastRunAt: null }, { lastRunAt: { lte: new Date(inicio) } }] },
-      data: { lastRunAt: vence },
+      where: { id: JOB_KEY, lastRunAt: leida },
+      data: { lastRunAt: vence, lastResult: conMarca(resultadoPrevio, vence) },
     });
     if (claim.count === 0) {
       return { skipped: true, reason: "cooldown" };

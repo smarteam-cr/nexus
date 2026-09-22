@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest";
 import type { Prisma } from "@prisma/client";
 import {
   autoSyncGoogleMeet,
+  conMarca,
   COOLDOWN_MS,
   esperaTrasFallo,
   ESPERA_BASE_MS,
   ESPERA_TOPE_MS,
   fallosSeguidosDe,
+  noCorrerAntesDe,
   VENCE_TURNO_MS,
   type DbDeTurnos,
   type DepsDeAutoSync,
@@ -19,9 +21,9 @@ import {
  * Incidente 2026-09-21 (821 % de CPU, producción sin atender): el cooldown de 20 min se contaba
  * desde el ARRANQUE de corridas que duraban 6–15 min, y al fallar se liberaba el turno y la carga
  * siguiente volvía a correr todo. Estas pruebas fijan el freno: cooldown desde el FIN, espera
- * creciente tras un fallo, una corrida a la vez en el proceso y entre procesos, y un turno que
- * vence si el proceso muere a mitad. Más C-21 (2026-09-04): con el turno bloqueado, una lectura
- * y ningún write.
+ * creciente tras un fallo, una corrida a la vez en el proceso y entre procesos (también contra un
+ * proceso con el código VIEJO), y un turno que vence si el proceso muere a mitad. Más C-21
+ * (2026-09-04): con el turno bloqueado, una lectura y ningún write.
  */
 
 const MIN = 60 * 1000;
@@ -29,9 +31,20 @@ const T0 = new Date("2026-09-21T15:00:00Z").getTime();
 
 type Fila = { lastRunAt: Date | null; lastResult: Prisma.JsonValue | null };
 
+/** La fila como la deja ESTE código: `lastRunAt` = «no correr antes de», con su marca en `lastResult`. */
+function filaNuestra(noAntesDe: number, resultado: Prisma.JsonObject = {}): Fila {
+  const d = new Date(noAntesDe);
+  return { lastRunAt: d, lastResult: { ...resultado, noAntesDe: d.toISOString() } };
+}
+
+/** La fila como la deja el código VIEJO (anterior al 2026-09-21) al tomar el turno: su ARRANQUE. */
+function filaVieja(arranque: number, lastResult: Prisma.JsonValue | null = null): Fila {
+  return { lastRunAt: new Date(arranque), lastResult };
+}
+
 /** Una fila de CronJobState en memoria, con la MISMA condición atómica que el UPDATE real. */
 function tablaFalsa(inicial: Fila | null) {
-  const t = { fila: inicial, llamadas: [] as string[], escrituras: [] as Array<{ lastRunAt: Date; lastResult?: Prisma.InputJsonValue }> };
+  const t = { fila: inicial, llamadas: [] as string[], escrituras: [] as Array<{ lastRunAt: Date; lastResult: Prisma.InputJsonObject }> };
   // Cede el hilo como una ida a la base: así dos corridas en paralelo se intercalan de verdad.
   const red = () => new Promise<void>((r) => setImmediate(r));
   const db: DbDeTurnos = {
@@ -52,14 +65,12 @@ function tablaFalsa(inicial: Fila | null) {
         t.llamadas.push("updateMany");
         const fila = t.fila;
         if (!fila) return { count: 0 };
-        const cumple =
-          "OR" in where
-            ? where.OR.some((c) => (c.lastRunAt === null ? fila.lastRunAt === null : fila.lastRunAt !== null && fila.lastRunAt <= c.lastRunAt.lte))
-            : fila.lastRunAt?.getTime() === where.lastRunAt.getTime();
+        // Compara-y-cambia, como `WHERE "lastRunAt" = $1` (o `IS NULL`).
+        const cumple = (fila.lastRunAt?.getTime() ?? null) === (where.lastRunAt?.getTime() ?? null);
         if (!cumple) return { count: 0 };
         t.escrituras.push(data);
         // Ida y vuelta por JSON, como la columna real.
-        t.fila = { lastRunAt: data.lastRunAt, lastResult: data.lastResult === undefined ? fila.lastResult : JSON.parse(JSON.stringify(data.lastResult)) };
+        t.fila = { lastRunAt: data.lastRunAt, lastResult: JSON.parse(JSON.stringify(data.lastResult)) };
         return { count: 1 };
       },
     },
@@ -97,7 +108,7 @@ function proceso(
 describe("C-21: con el turno bloqueado no se escribe nada", () => {
   it("LA guarda: UNA lectura y ningún write; el proceso recuerda hasta cuándo", async () => {
     /* La edición que la pone en rojo: volver al upsert + updateMany incondicionales. */
-    const { t, db } = tablaFalsa({ lastRunAt: new Date(T0 + 5 * MIN), lastResult: null });
+    const { t, db } = tablaFalsa(filaNuestra(T0 + 5 * MIN));
     const { deps, estado } = proceso(db, { reloj: { ms: T0 } });
     expect(await autoSyncGoogleMeet(deps)).toEqual({ skipped: true, reason: "cooldown" });
     expect(t.llamadas).toEqual(["findUnique"]);
@@ -105,7 +116,7 @@ describe("C-21: con el turno bloqueado no se escribe nada", () => {
   });
 
   it("y la segunda carga dentro del cooldown no toca la base: ni lectura", async () => {
-    const { t, db } = tablaFalsa({ lastRunAt: new Date(T0 + 5 * MIN), lastResult: null });
+    const { t, db } = tablaFalsa(filaNuestra(T0 + 5 * MIN));
     const { deps } = proceso(db, { reloj: { ms: T0 } });
     await autoSyncGoogleMeet(deps);
     await autoSyncGoogleMeet(deps);
@@ -125,7 +136,7 @@ describe("el cooldown cuenta desde el FIN de la corrida", () => {
     /* La edición que la pone en rojo: calcular la próxima desde el inicio (lo que hacía el código
        del incidente: corridas de 15 min con 5 min de respiro). */
     const reloj = { ms: T0 };
-    const { t, db } = tablaFalsa({ lastRunAt: new Date(T0 - 1 * MIN), lastResult: null });
+    const { t, db } = tablaFalsa(filaNuestra(T0 - 1 * MIN));
     const llamadas: string[] = [];
     const { deps, estado } = proceso(db, { reloj, duraMs: 15 * MIN, llamadas });
     const r = await autoSyncGoogleMeet(deps);
@@ -134,6 +145,7 @@ describe("el cooldown cuenta desde el FIN de la corrida", () => {
     const fin = T0 + 15 * MIN;
     expect(t.fila?.lastRunAt?.getTime(), "la base").toBe(fin + COOLDOWN_MS);
     expect(estado.cooldownHasta, "la memoria del proceso").toBe(fin + COOLDOWN_MS);
+    expect(noCorrerAntesDe(t.fila), "el cierre deja su marca: la próxima lectura lo toma tal cual").toBe(fin + COOLDOWN_MS);
 
     // 25 min después del inicio (10 después del fin): con el cálculo viejo ya correría otra.
     const otro = proceso(db, { reloj: { ms: T0 + 25 * MIN }, llamadas });
@@ -146,7 +158,8 @@ describe("el cooldown cuenta desde el FIN de la corrida", () => {
     const { t, db } = tablaFalsa({ lastRunAt: null, lastResult: null });
     const { deps } = proceso(db, { reloj });
     await autoSyncGoogleMeet(deps);
-    expect(t.escrituras[0], "el claim").toEqual({ lastRunAt: new Date(T0 + VENCE_TURNO_MS) });
+    const vence = new Date(T0 + VENCE_TURNO_MS);
+    expect(t.escrituras[0], "el claim, con su marca").toEqual({ lastRunAt: vence, lastResult: { noAntesDe: vence.toISOString() } });
     expect(t.escrituras[1]?.lastResult).toMatchObject({ ok: true, fallosSeguidos: 0, sync: { nuevas: 1, existentes: 0 } });
   });
 });
@@ -173,7 +186,7 @@ describe("si falla, espera antes de reintentar", () => {
 
   it("la espera crece con los fallos seguidos (lo lee de la fila) y un éxito la resetea", async () => {
     const reloj = { ms: T0 };
-    const { t, db } = tablaFalsa({ lastRunAt: new Date(T0 - MIN), lastResult: { ok: false, fallosSeguidos: 2 } });
+    const { t, db } = tablaFalsa(filaNuestra(T0 - MIN, { ok: false, fallosSeguidos: 2 }));
     const falla = proceso(db, { reloj, falla: true });
     await autoSyncGoogleMeet(falla.deps);
     expect(t.fila?.lastRunAt?.getTime()).toBe(T0 + 4 * ESPERA_BASE_MS);
@@ -238,7 +251,7 @@ describe("nunca dos corridas a la vez", () => {
   });
 
   it("un proceso que murió a mitad: su turno bloquea hasta vencer, y después se libera solo", async () => {
-    const { db } = tablaFalsa({ lastRunAt: new Date(T0 + VENCE_TURNO_MS), lastResult: null }); // lo tomó y murió en T0
+    const { db } = tablaFalsa(filaNuestra(T0 + VENCE_TURNO_MS)); // lo tomó en T0 y murió
     const llamadas: string[] = [];
     const antes = proceso(db, { reloj: { ms: T0 + 30 * MIN }, llamadas });
     expect(await autoSyncGoogleMeet(antes.deps)).toEqual({ skipped: true, reason: "cooldown" });
@@ -266,5 +279,79 @@ describe("nunca dos corridas a la vez", () => {
     soltarA();
     expect((await corridaA).skipped).toBe(false);
     expect(t.fila?.lastRunAt?.getTime(), "A no pisó el turno de B").toBe(deB);
+  });
+});
+
+describe("convive con un proceso del código VIEJO (hasta el deploy, un dev:prod sin pull, un rollback)", () => {
+  /* El código anterior al 2026-09-21 guarda en `lastRunAt` el ARRANQUE de su corrida (6–15 min) y
+     no escribe `lastResult`. Leído como «no correr antes de», ese arranque ya pasó y este código
+     arrancaba otra corrida encima: dos sync y dos enriquecimientos a la vez sobre la base de
+     producción. */
+  it("LA guarda: con una corrida vieja en curso NO arranca otra — espera los 20 min del viejo", async () => {
+    /* La edición que la pone en rojo: leer `lastRunAt` a secas como «no correr antes de». */
+    const { t, db } = tablaFalsa(filaVieja(T0)); // el proceso viejo arrancó en T0 y sigue corriendo
+    const llamadas: string[] = [];
+    const nuevo = proceso(db, { reloj: { ms: T0 + 5 * MIN }, llamadas });
+    expect(await autoSyncGoogleMeet(nuevo.deps)).toEqual({ skipped: true, reason: "cooldown" });
+    expect(t.llamadas, "una lectura y nada más").toEqual(["findUnique"]);
+    expect(nuevo.estado.cooldownHasta).toBe(T0 + COOLDOWN_MS);
+    expect(llamadas).toEqual([]);
+
+    // A los 20 min del arranque viejo (lo mismo que esperaría él) ya le toca.
+    const despues = proceso(db, { reloj: { ms: T0 + COOLDOWN_MS }, llamadas });
+    expect((await autoSyncGoogleMeet(despues.deps)).skipped).toBe(false);
+    expect(llamadas).toEqual(["sync", "enrich"]);
+  });
+
+  it("una marca nuestra VIEJA no tapa un arranque viejo posterior", async () => {
+    /* Nosotros cerramos (marca = T0 - 30 min) y DESPUÉS un proceso viejo tomó el turno en T0: su
+       `lastRunAt` ya no coincide con la marca, así que rige la regla del viejo. */
+    const cerradaPorNosotros = filaNuestra(T0 - 30 * MIN, { ok: true, fallosSeguidos: 0 });
+    const { db } = tablaFalsa({ ...cerradaPorNosotros, lastRunAt: new Date(T0) });
+    const nuevo = proceso(db, { reloj: { ms: T0 + 10 * MIN } });
+    expect(await autoSyncGoogleMeet(nuevo.deps)).toEqual({ skipped: true, reason: "cooldown" });
+    expect(nuevo.estado.cooldownHasta).toBe(T0 + COOLDOWN_MS);
+  });
+
+  it("si otro proceso (viejo o nuevo) escribe la fila entre la lectura y el turno, no corre", async () => {
+    /* La edición que la pone en rojo: tomar el turno por hora (`lastRunAt <= ahora`) en vez de por
+       lo leído: el arranque del viejo, que es «anterior a ahora», no lo frenaba. */
+    const { t, db } = tablaFalsa({ lastRunAt: null, lastResult: null });
+    const conCarrera: DbDeTurnos = {
+      cronJobState: {
+        ...db.cronJobState,
+        async findUnique(args) {
+          const leida = await db.cronJobState.findUnique(args);
+          t.fila = filaVieja(T0); // el viejo toma el turno justo después de nuestra lectura
+          return leida;
+        },
+      },
+    };
+    const llamadas: string[] = [];
+    const nuevo = proceso(conCarrera, { reloj: { ms: T0 }, llamadas });
+    expect(await autoSyncGoogleMeet(nuevo.deps)).toEqual({ skipped: true, reason: "cooldown" });
+    expect(llamadas).toEqual([]);
+    expect(t.fila?.lastRunAt?.getTime(), "no le pisó el turno al viejo").toBe(T0);
+  });
+
+  it("el código viejo, al fallar, libera el turno (lastRunAt null): este corre", async () => {
+    const { db } = tablaFalsa({ lastRunAt: null, lastResult: null });
+    const nuevo = proceso(db, { reloj: { ms: T0 } });
+    expect((await autoSyncGoogleMeet(nuevo.deps)).skipped).toBe(false);
+  });
+
+  it("noCorrerAntesDe y conMarca", () => {
+    expect(noCorrerAntesDe(null)).toBeNull();
+    expect(noCorrerAntesDe({ lastRunAt: null, lastResult: { noAntesDe: "x" } })).toBeNull();
+    expect(noCorrerAntesDe(filaNuestra(T0))).toBe(T0);
+    expect(noCorrerAntesDe(filaVieja(T0))).toBe(T0 + COOLDOWN_MS);
+    expect(noCorrerAntesDe(filaVieja(T0, "ilegible"))).toBe(T0 + COOLDOWN_MS);
+    // La marca conserva lo que ya había (los fallos seguidos, cómo terminó la última).
+    expect(conMarca({ ok: false, fallosSeguidos: 2 }, new Date(T0))).toEqual({
+      ok: false,
+      fallosSeguidos: 2,
+      noAntesDe: new Date(T0).toISOString(),
+    });
+    expect(conMarca(null, new Date(T0))).toEqual({ noAntesDe: new Date(T0).toISOString() });
   });
 });
