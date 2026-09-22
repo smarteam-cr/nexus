@@ -3,6 +3,8 @@ import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { vetoSiElHandoffEsDeOtro } from "@/lib/handoff/duenio";
 import { prisma } from "@/lib/db/prisma";
 import { adoptarSesionSinDuenio, belongsToClient } from "@/lib/sessions/project-sources";
+import { decidirAlAgregar, motivoParaNoAdoptar } from "@/lib/sessions/candidatas-internas";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 
 /**
  * POST /api/projects/[projectId]/handoff-sessions
@@ -40,38 +42,73 @@ export async function POST(
     return NextResponse.json({ error: "sessionId y feeds (boolean) requeridos" }, { status: 400 });
   }
 
-  // Hardening INV1 (escritura): si el link no existe todavía, el CREATE vincularía la
-  // sesión al proyecto — validar que la sesión pertenezca al cliente del proyecto
-  // (misma regla que el chokepoint de lectura). Un link ya existente solo cambia su
-  // override de handoff, no crea vínculo nuevo.
-  const existing = await prisma.sessionProject.findUnique({
-    where: { sessionId_projectId: { sessionId, projectId } },
-    select: { id: true },
+  const [existing, session] = await Promise.all([
+    prisma.sessionProject.findUnique({
+      where: { sessionId_projectId: { sessionId, projectId } },
+      select: { id: true },
+    }),
+    prisma.firefliesSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        resolvedClientId: true,
+        manualClientId: true,
+        participants: true,
+        organizerEmail: true,
+        projects: { select: { project: { select: { clientId: true } } } },
+      },
+    }),
+  ]);
+  if (!session) {
+    return NextResponse.json({ error: "Sesión no existe" }, { status: 404 });
+  }
+
+  /* Sin dueño: vincular no alcanza. `getProjectMemberSessions` descarta al LEER lo que no
+     pertenece al cliente, así que el link quedaría escrito, el botón parecería haber funcionado
+     y el handoff seguiría vacío. Adoptarla la vuelve del cliente de verdad.
+
+     En CUALQUIER proyecto desde el 2026-09-22 (decisión de Elías): el buscador del Contexto de
+     cualquier proyecto las encuentra por texto (session-candidates/sin-duenio). Solo se adopta lo
+     que no es de nadie por las dos vías —una sesión con dueño nunca se reasigna— y solo lo que
+     `motivoParaNoAdoptar` deja: la regla vive en un módulo puro y la lee también el buscador. */
+  const sinDuenio = session.resolvedClientId === null && session.manualClientId === null;
+  let motivoNoAdoptable: string | null = null;
+  if (body.feeds && sinDuenio) {
+    const categorias = await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } });
+    motivoNoAdoptable = motivoParaNoAdoptar(
+      {
+        participants: session.participants,
+        organizerEmail: session.organizerEmail,
+        clientesDeSusProyectos: session.projects.map((p) => p.project.clientId),
+      },
+      guard.clientId,
+      buildInternalDomainsSet(categorias),
+    );
+  }
+
+  const decision = decidirAlAgregar({
+    vinculoExiste: existing !== null,
+    quiereIncluir: body.feeds,
+    sinDuenio,
+    perteneceAlCliente: belongsToClient(session, guard.clientId),
+    motivoNoAdoptable,
   });
-  if (!existing) {
-    const session = await prisma.firefliesSession.findUnique({
+  if (decision.tipo === "rechazar") {
+    return NextResponse.json({ error: decision.error }, { status: decision.status });
+  }
+  if (decision.tipo === "adoptar") {
+    await adoptarSesionSinDuenio(sessionId, guard.clientId, guard.teamMember.email ?? null);
+    /* Carrera: entre la lectura de arriba y la adopción, otra persona pudo asignarla a otro
+       cliente (la adopción no pisa: solo escribe si sigue sin dueño). Se relee y, si no quedó de
+       este cliente, no se vincula — el vínculo quedaría cruzado. */
+    const ahora = await prisma.firefliesSession.findUnique({
       where: { id: sessionId },
       select: { resolvedClientId: true, manualClientId: true },
     });
-    if (!session) {
-      return NextResponse.json({ error: "Sesión no existe" }, { status: 404 });
-    }
-    if (session.resolvedClientId !== null && !belongsToClient(session, guard.clientId)) {
+    if (!ahora || !belongsToClient(ahora, guard.clientId)) {
       return NextResponse.json(
-        { error: "La sesión pertenece a otro cliente — no se puede vincular a este proyecto." },
-        { status: 400 },
+        { error: "Otra persona acaba de asignar esta reunión a otro cliente: revisala en Sesiones." },
+        { status: 409 },
       );
-    }
-
-    /* Sin dueño: vincular no alcanza. `getProjectMemberSessions` descarta al LEER lo que no
-       pertenece al cliente, así que el link quedaría escrito, el botón parecería haber
-       funcionado y el handoff seguiría vacío. Adoptarla la vuelve del cliente de verdad.
-
-       Solo en proyectos INTERNOS, que son los únicos a los que se les ofrecen estas reuniones
-       (ver session-candidates): en uno normal, una sesión huérfana que llegue acá es un intento
-       fuera del camino previsto y se trata como antes — se vincula y el chokepoint decide. */
-    if (guard.interno && session.resolvedClientId === null && session.manualClientId === null) {
-      await adoptarSesionSinDuenio(sessionId, guard.clientId);
     }
   }
 

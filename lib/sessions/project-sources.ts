@@ -112,7 +112,12 @@ export async function adoptarSesionSinDuenio(
   /* Con procedencia "adopcion": es un EFECTO de agregar la reunión al proyecto, no una
      decisión de a quién pertenece. Es lo único que un "devolver a internas" puede deshacer
      solo, sin arriesgarse a pisar una elección humana. */
-  await asignarDuenioManual(sessionId, clientId, { origen: "adopcion", actorEmail });
+  const escribio = await asignarDuenioManual(sessionId, clientId, {
+    origen: "adopcion",
+    actorEmail,
+    soloSiSinDuenio: true,
+  });
+  if (!escribio) return false;
   const { reResolveSession } = await import("./resolve-client");
   await reResolveSession(sessionId, undefined, { reclassify: false });
   return true;

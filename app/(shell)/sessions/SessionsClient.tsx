@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { normalize, type SessionGroup } from "@/lib/sessions/categorize";
+import { coincideConLaBusqueda } from "@/lib/sessions/candidatas-internas";
 import {
   claveDeGrupo,
   grupoAParam,
@@ -1654,6 +1655,15 @@ export default function SessionsClient({
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
+  /* Buscador DENTRO de un grupo (2026-09-22). «Interna» tiene miles de reuniones y la vista de un
+     grupo no tenía cómo buscar: el buscador de arriba solo filtra la lista de grupos y desaparece al
+     entrar. Se guarda junto a la clave del grupo donde se escribió, así al cambiar de grupo arranca
+     vacío sin un efecto que lo resetee. */
+  const [filtroGrupo, setFiltroGrupo] = useState<{ clave: string | null; texto: string }>({
+    clave: null,
+    texto: "",
+  });
+
   // Auto-focus del input la primera vez que se monta el componente
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -1744,6 +1754,16 @@ export default function SessionsClient({
     const target = `${selectedGroup.kind}:${selectedGroup.id}`;
     return sessions.filter((s) => claveDeGrupo(s.group) === target);
   }, [sessions, selectedGroup]);
+
+  // Lo que se pinta de la lista del grupo: título, persona o dominio, sin tildes (coincideConLaBusqueda).
+  const textoGrupo = filtroGrupo.clave === claveSeleccionada ? filtroGrupo.texto : "";
+  const sesionesDelGrupo = useMemo(
+    () =>
+      textoGrupo.trim()
+        ? sidebarSessions.filter((s) => coincideConLaBusqueda(s, textoGrupo))
+        : sidebarSessions,
+    [sidebarSessions, textoGrupo],
+  );
 
   // Cliente seleccionado (solo si el grupo es de tipo client)
   const selectedClient = useMemo(() => {
@@ -2078,6 +2098,22 @@ export default function SessionsClient({
                   <span className="text-gray-700 ml-1">· Categoría</span>
                 )}
               </p>
+              <input
+                type="text"
+                value={textoGrupo}
+                onChange={(e) => setFiltroGrupo({ clave: claveSeleccionada, texto: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setFiltroGrupo({ clave: claveSeleccionada, texto: "" });
+                }}
+                aria-label="Buscar en este grupo"
+                placeholder="Título, persona o dominio…"
+                className="mt-2 w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-md text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand"
+              />
+              {textoGrupo.trim() !== "" && (
+                <p className="mt-1 text-[11px] text-fg-muted">
+                  {sesionesDelGrupo.length} de {sidebarSessions.length} coinciden
+                </p>
+              )}
             </div>
 
             {/* Lista de sesiones */}
@@ -2099,8 +2135,12 @@ export default function SessionsClient({
                     {cargandoGrupo ? "Cargando sesiones…" : "No hay sesiones"}
                   </p>
                 )
+              ) : sesionesDelGrupo.length === 0 ? (
+                <p className="text-xs text-fg-muted text-center py-8">
+                  Ninguna reunión de este grupo coincide con «{textoGrupo.trim()}».
+                </p>
               ) : (
-                sidebarSessions.map((s) => (
+                sesionesDelGrupo.map((s) => (
                   <SidebarSessionItem
                     key={s.id}
                     session={s}

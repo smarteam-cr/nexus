@@ -142,6 +142,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "agenda",
     motivo: "El modal de curación marca las futuras a propósito (candidatas-internas). Esconderlas rompe el rescate.",
   },
+  "app/api/projects/[projectId]/session-candidates/sin-duenio/route.ts": {
+    clase: "agenda",
+    motivo: "El buscador del mismo modal, sobre las sin dueño: una persona elige. Ya deja afuera las futuras, como el resto de las candidatas.",
+  },
   "app/api/projects/[projectId]/project-sessions/route.ts": { clase: "agenda", motivo: "Curación de membresía: se decide sobre TODO, incluida la agenda." },
   "app/api/projects/[projectId]/meetings/route.ts": { clase: "agenda", motivo: "La pestaña Reuniones del proyecto." },
   "lib/business-cases/feeding.ts": {

@@ -168,7 +168,11 @@ export async function GET(
      el cronograma a stakeholders). O sea que este material ahora PUEDE viajar en un documento
      publicado. Se decidió a sabiendas: el destinatario de un interno publicado es de casa, y el
      enlace no es público. Si algún día eso deja de ser cierto, el lugar para atajarlo es acá —
-     este gate es lo único que separa las reuniones de puertas adentro del resto del sistema. */
+     este gate es lo único que separa las reuniones de puertas adentro del resto del sistema.
+
+     ⚠ 2026-09-22 (decisión de Elías): a un proyecto NO interno las huérfanas se le ofrecen, pero
+     solo por BÚSQUEDA y nunca como lista — ver session-candidates/sin-duenio. Este gate sigue
+     siendo el que decide la lista completa. */
   const huerfanas = guard.interno
     ? await prisma.firefliesSession.findMany({
         where: {

@@ -4,7 +4,9 @@ import path from "node:path";
 import {
   PISO_REUNIONES_INTERNAS,
   coincideConLaBusqueda,
+  decidirAlAgregar,
   esReunionDePuertasAdentro,
+  motivoParaNoAdoptar,
 } from "./candidatas-internas";
 
 /**
@@ -127,7 +129,11 @@ describe("está cableado, y con los frenos puestos", () => {
        orden de un dólar por click, y encima puede proponer links que nadie pidió. */
     const src = leer("lib/sessions/project-sources.ts");
     const i = src.indexOf("export async function adoptarSesionSinDuenio");
-    expect(src.slice(i, i + 900)).toContain("reclassify: false");
+    /* Hasta el cierre de la función, no un largo fijo: el cuerpo creció (2026-09-22, escritura
+       condicional) y un tope de 900 caracteres dejaba la llamada afuera de lo que se revisaba. */
+    const cuerpo = src.slice(i, src.indexOf("\n}\n", i));
+    expect(cuerpo.length, "la guarda no está mirando la función").toBeGreaterThan(200);
+    expect(cuerpo).toContain("reclassify: false");
   });
 
   it("el grupo interno está gateado por proyecto INTERNO", () => {
@@ -257,5 +263,131 @@ describe("el buscador no ofrece humo", () => {
       "futura:",
     );
     expect(sinComentarios(leer(MODAL)), "el panel dejó de avisarlo").toContain("todavía no ocurrió");
+  });
+});
+
+describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (2026-09-22)", () => {
+  /* Caso Club de Amantes del Vino: «[Sales & Service handoff] CAV» tenía transcripción pero era
+     100 % interna y su título usaba la sigla del cliente, así que quedó sin dueño y ningún proyecto
+     la ofrecía. Decisión de Elías: el buscador del Contexto de cualquier proyecto también busca en
+     las sin dueño — solo por texto, nunca como lista — y agregarla la asigna al cliente. */
+  const RAIZ = process.cwd();
+  const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+  const RUTA = "app/api/projects/[projectId]/session-candidates/sin-duenio/route.ts";
+
+  it("busca solo en lo que no es de nadie, ya ocurrido, con mínimo de letras y con tope", () => {
+    const src = leer(RUTA);
+    expect(src, "sin guarda de acceso al proyecto").toContain("guardAccessToProject(");
+    expect(src).toContain('s."resolvedClientId" IS NULL');
+    expect(src).toContain('s."manualClientId" IS NULL');
+    expect(src, "ofrecería reuniones que todavía no ocurrieron").toContain('s."date" <= ${ahora}');
+    expect(src, "sin tope devolvería miles de filas").toMatch(/LIMIT \$\{TOPE_SIN_DUENIO\}/);
+    expect(src, "sin mínimo de letras sería la lista completa de huérfanas").toContain(
+      "q.length < MIN_BUSQUEDA_SIN_DUENIO",
+    );
+  });
+
+  it("agregar una sin dueño la asigna al cliente en CUALQUIER proyecto, no solo en los internos", () => {
+    const src = leer("app/api/projects/[projectId]/handoff-sessions/route.ts");
+    expect(src, "la puerta dejó de decidir con la función que tiene test").toContain("decidirAlAgregar(");
+    expect(src, "la puerta dejó de aplicar la regla de quién se adopta").toContain("motivoParaNoAdoptar(");
+    expect(
+      src,
+      "volvió el gate de proyecto interno: «Agregar y asignar» escribiría un vínculo que se descarta al leer",
+    ).not.toContain("guard.interno");
+    expect(src).toContain("session.resolvedClientId === null && session.manualClientId === null");
+  });
+
+  it("LA guarda del arreglo: una sin dueño YA vinculada a este proyecto también se asigna", () => {
+    /* La primera versión adoptaba solo si el vínculo NO existía: «Agregar y asignar» sobre una
+       reunión ya vinculada (una excluida, o una que otro camino vinculó) no asignaba nada y el
+       buscador la volvía a ofrecer para siempre. */
+    const base = { quiereIncluir: true, sinDuenio: true, perteneceAlCliente: false, motivoNoAdoptable: null };
+    expect(decidirAlAgregar({ ...base, vinculoExiste: true })).toEqual({ tipo: "adoptar" });
+    expect(decidirAlAgregar({ ...base, vinculoExiste: false })).toEqual({ tipo: "adoptar" });
+  });
+
+  it("la puerta decide lo mismo que antes en todo lo demás", () => {
+    const nada = { vinculoExiste: false, quiereIncluir: true, sinDuenio: false, perteneceAlCliente: true, motivoNoAdoptable: null };
+    // Del cliente: se vincula, sin adoptar nada.
+    expect(decidirAlAgregar(nada)).toEqual({ tipo: "vincular" });
+    // De OTRO cliente y el vínculo es nuevo: rechazo (hardening INV1).
+    expect(decidirAlAgregar({ ...nada, perteneceAlCliente: false })).toMatchObject({ tipo: "rechazar", status: 400 });
+    // De otro cliente pero el vínculo ya existía: solo cambia el override.
+    expect(decidirAlAgregar({ ...nada, perteneceAlCliente: false, vinculoExiste: true })).toEqual({ tipo: "vincular" });
+    // Excluir una sin dueño no la asigna a nadie.
+    expect(
+      decidirAlAgregar({ ...nada, sinDuenio: true, perteneceAlCliente: false, quiereIncluir: false }),
+    ).toEqual({ tipo: "vincular" });
+    // Sin dueño pero con motivo: 409 con el motivo, y no se adopta.
+    expect(
+      decidirAlAgregar({ ...nada, sinDuenio: true, perteneceAlCliente: false, motivoNoAdoptable: "porque sí" }),
+    ).toEqual({ tipo: "rechazar", status: 409, error: "porque sí" });
+  });
+
+  it("con un clic solo se asigna una reunión donde estuvo únicamente el equipo, y que no cuelga de otro cliente", () => {
+    const CLIENTE = "cliente-cav";
+    const interna = { participants: [YO, OTRO_NUESTRO], clientesDeSusProyectos: [] as string[] };
+    expect(motivoParaNoAdoptar(interna, CLIENTE, PROPIOS)).toBeNull();
+    // Ya vinculada a un proyecto de ESTE cliente: sigue siendo asignable.
+    expect(motivoParaNoAdoptar({ ...interna, clientesDeSusProyectos: [CLIENTE] }, CLIENTE, PROPIOS)).toBeNull();
+    // Cuelga de un proyecto de OTRO cliente: asignarla dejaría el vínculo cruzado (INV1 en rojo).
+    expect(motivoParaNoAdoptar({ ...interna, clientesDeSusProyectos: ["otro"] }, CLIENTE, PROPIOS)).toMatch(
+      /otro cliente/,
+    );
+    // Alguien de afuera que no es de ningún cliente: puede ser un prospecto, no se fija a mano con un clic.
+    expect(
+      motivoParaNoAdoptar({ ...interna, participants: [YO, DE_AFUERA] }, CLIENTE, PROPIOS),
+    ).toMatch(/no es del equipo/);
+    // Sin nadie registrado: no hay con qué decidir.
+    expect(motivoParaNoAdoptar({ ...interna, participants: [] }, CLIENTE, PROPIOS)).toMatch(/quién estuvo/);
+  });
+
+  it("el buscador y la puerta leen la MISMA regla, y el modal no ofrece el botón que va a fallar", () => {
+    expect(leer(RUTA), "el buscador ya no marca cuáles no se asignan con un clic").toContain(
+      "motivoNoAdoptable: motivoParaNoAdoptar(",
+    );
+    const modal = leer("components/clients/SessionSelectionReview.tsx");
+    expect(modal, "las no asignables tienen que mandar a Sesiones").toContain("/sessions?s=${");
+    expect(modal, "una respuesta de error de la puerta vuelve a tragarse").toContain("toast.error(");
+  });
+
+  it("la adopción queda a nombre de quien apretó, y no pisa una asignación hecha en paralelo", () => {
+    const ruta = leer("app/api/projects/[projectId]/handoff-sessions/route.ts");
+    expect(ruta, "la adopción vuelve a quedar sin autor").toContain("guard.teamMember.email");
+    expect(ruta, "se dejó de releer después de adoptar").toContain("belongsToClient(ahora, guard.clientId)");
+    const fuentes = leer("lib/sessions/project-sources.ts");
+    expect(fuentes, "la adopción vuelve a escribir sin mirar si otro la asignó").toContain(
+      "soloSiSinDuenio: true",
+    );
+    const chokepoint = leer("lib/sessions/duenio-manual.ts");
+    expect(chokepoint).toContain("where: { id: sessionId, resolvedClientId: null, manualClientId: null }");
+  });
+
+  it("el modal pide las sin dueño solo con suficientes letras", () => {
+    const src = leer("components/clients/SessionSelectionReview.tsx");
+    expect(src).toContain("/session-candidates/sin-duenio?q=");
+    expect(src).toContain("consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO");
+  });
+
+  it("el modal no dice «también se buscó» antes de buscar, ni cuando la búsqueda falló", () => {
+    /* Con un booleano de «buscando» aparte, los 300 ms de espera y cualquier error se pintaban
+       como una búsqueda que corrió y no encontró nada. «Pendiente» se deriva de la respuesta
+       guardada, y el error queda guardado con la búsqueda que falló. */
+    const src = leer("components/clients/SessionSelectionReview.tsx");
+    expect(src).toContain("sinDuenio.q !== consultaSinDuenio");
+    expect(src, "un fallo vuelve a quedar mudo").toContain("sesiones: [], error: true");
+    expect(src, "volvió el booleano que mentía").not.toContain("setBuscandoSinDuenio");
+  });
+
+  it("buscar ignora tildes y mayúsculas", () => {
+    expect(coincideConLaBusqueda({ title: "Multiquímica | Revisión", participants: [] }, "multiquimica")).toBe(true);
+    expect(coincideConLaBusqueda({ title: "Otra", participants: ["josé@empresa.cr"] }, "JOSE")).toBe(true);
+  });
+
+  it("la vista de un grupo en /sessions tiene su propio buscador y filtra lo que se pinta", () => {
+    const src = leer("app/(shell)/sessions/SessionsClient.tsx");
+    expect(src).toContain('aria-label="Buscar en este grupo"');
+    expect(src, "el buscador del grupo no filtra la lista que se pinta").toContain("sesionesDelGrupo.map(");
   });
 });

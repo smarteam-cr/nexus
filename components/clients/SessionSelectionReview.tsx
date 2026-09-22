@@ -17,7 +17,8 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui";
-import { coincideConLaBusqueda } from "@/lib/sessions/candidatas-internas";
+import { useToast } from "@/components/ui/Toast";
+import { coincideConLaBusqueda, MIN_BUSQUEDA_SIN_DUENIO } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
@@ -68,6 +69,16 @@ interface CandidateSession {
   sinContenido?: boolean;
   /** Reunión del equipo que todavía no es de ningún cliente. Agregarla también la asigna. */
   sinDuenio?: boolean;
+  /**
+   * Solo gente nuestra en la sala. Lo manda la búsqueda de sin dueño: `false` = hubo alguien de
+   * afuera cuyo dominio no es de ningún cliente, y la fila dice «sin cliente asignado».
+   */
+  soloEquipo?: boolean;
+  /**
+   * Sin dueño, pero NO se asigna con un clic (hubo gente de afuera, o ya cuelga de un proyecto de
+   * otro cliente). Trae el motivo; la fila manda a Sesiones en vez de ofrecer «Agregar y asignar».
+   */
+  motivoNoAdoptable?: string | null;
 }
 
 function fmtDuracion(min: number | null | undefined): string | null {
@@ -110,6 +121,43 @@ export default function SessionSelectionReview({
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
 
+  /* Reuniones SIN DUEÑO que coinciden con lo escrito (session-candidates/sin-duenio, 2026-09-22).
+     Se piden solo con MIN_BUSQUEDA_SIN_DUENIO letras o más y se guardan junto a la búsqueda que las
+     trajo: una respuesta vieja nunca se pinta debajo de una búsqueda nueva. */
+  const [sinDuenio, setSinDuenio] = useState<{ q: string; sesiones: CandidateSession[]; error?: boolean }>({
+    q: "",
+    sesiones: [],
+  });
+  const consultaSinDuenio = showModal ? search.trim() : "";
+  /* «Pendiente» se DERIVA: hay una búsqueda que corresponde hacer y la respuesta guardada no es de
+     ella. Con un booleano aparte, los 300 ms de espera y cualquier fallo se pintaban como
+     «también se buscó» sin haber buscado nada. */
+  const sinDuenioPendiente =
+    consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q !== consultaSinDuenio;
+  useEffect(() => {
+    if (consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/session-candidates/sin-duenio?q=${encodeURIComponent(consultaSinDuenio)}`, {
+        signal: ctrl.signal,
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then((d: { sesiones?: CandidateSession[] }) => setSinDuenio({ q: consultaSinDuenio, sesiones: d.sesiones ?? [] }))
+        .catch(() => {
+          /* Un fallo cierra ESTA búsqueda con su error: sin esto quedaba «Buscando…» para siempre,
+             o —peor— se leía como una búsqueda que corrió y no encontró nada. */
+          if (!ctrl.signal.aborted) setSinDuenio({ q: consultaSinDuenio, sesiones: [], error: true });
+        });
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [consultaSinDuenio, projectId]);
+
   const reload = useCallback(async () => {
     try {
       const r = await fetch(`/api/projects/${projectId}/session-candidates`);
@@ -135,23 +183,30 @@ export default function SessionSelectionReview({
     };
   }, [projectId]);
 
+  const toast = useToast();
   const setFeeds = useCallback(
     async (sessionId: string, feeds: boolean) => {
       setBusyId(sessionId);
       try {
-        await fetch(`/api/projects/${projectId}/handoff-sessions`, {
+        const r = await fetch(`/api/projects/${projectId}/handoff-sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, feeds }),
         });
+        /* La puerta puede negarse (reunión de otro cliente, gente de afuera, otra persona la
+           asignó recién). Tragarse la respuesta era dejar el botón sin efecto y sin explicación. */
+        if (!r.ok) {
+          const d = (await r.json().catch(() => null)) as { error?: string } | null;
+          toast.error(d?.error ?? "No se pudo actualizar la sesión.");
+        }
         await reload();
         onChange?.();
       } catch {
-        /* ignore */
+        toast.error("No se pudo actualizar la sesión: revisá la conexión.");
       }
       setBusyId(null);
     },
-    [projectId, reload, onChange],
+    [projectId, reload, onChange, toast],
   );
 
   useEffect(() => {
@@ -165,6 +220,15 @@ export default function SessionSelectionReview({
   /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
      con alguien de tal empresa", y ese dato no está en el título. Escribir un dominio la encuentra. */
   const filtered = candidates.filter((c) => coincideConLaBusqueda(c, search));
+  /* Las sin dueño van DEBAJO de las del cliente, con su separador, y sin repetir: una que ya está en
+     alguna lista (un proyecto interno ya las recibe todas) o que se acaba de agregar no se duplica. */
+  const yaListadas = new Set([...feeding, ...excluded, ...candidates].map((s) => s.sessionId));
+  const huerfanasQueCoinciden =
+    consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q === consultaSinDuenio
+      ? sinDuenio.sesiones.filter((s) => !yaListadas.has(s.sessionId))
+      : [];
+  const filasDelModal: Array<CandidateSession | "separador"> =
+    huerfanasQueCoinciden.length > 0 ? [...filtered, "separador", ...huerfanasQueCoinciden] : filtered;
 
   // Modal de "buscar más sesiones" — compartido por el render normal y el de columna.
   const searchModal = (
@@ -181,16 +245,52 @@ export default function SessionSelectionReview({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar por título, persona o dominio…"
-        className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-3"
+        aria-label="Buscar sesiones"
+        aria-describedby="ayuda-buscar-sesiones"
+        autoFocus
+        className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-1.5"
       />
-      {filtered.length === 0 ? (
-        <p className="text-xs text-fg-muted py-2">No hay más sesiones.</p>
+      <p id="ayuda-buscar-sesiones" className="text-[11px] text-fg-muted mb-3">
+        {consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO ? (
+          `Con ${MIN_BUSQUEDA_SIN_DUENIO} letras o más también se busca en las reuniones que no tienen cliente asignado.`
+        ) : sinDuenioPendiente ? (
+          "Buscando también en las reuniones sin cliente asignado…"
+        ) : sinDuenio.error ? (
+          <span className="text-warn-ink">
+            No se pudo buscar en las reuniones sin cliente asignado. Probá de nuevo en un momento.
+          </span>
+        ) : (
+          "También se buscó en las reuniones sin cliente asignado."
+        )}
+      </p>
+      {filasDelModal.length === 0 ? (
+        <p className="text-xs text-fg-muted py-2">
+          {sinDuenioPendiente
+            ? "Buscando…"
+            : search.trim()
+              ? `Ninguna reunión coincide con «${search.trim()}»${
+                  consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && !sinDuenio.error
+                    ? ", tampoco entre las que no tienen cliente asignado"
+                    : ""
+                }.`
+              : "No hay más sesiones."}
+        </p>
       ) : (
         // ⚠ El tope va en vh, no en un valor fijo: el cuerpo del Modal YA scrollea dentro de un
         // panel de max-h-[85vh], así que el `max-h-80` (320px) que había acá creaba un scroll
         // anidado — cuatro filas visibles y el resto de la pantalla desperdiciado.
         <ul className="space-y-1.5 max-h-[60vh] overflow-y-auto">
-          {filtered.map((c) => {
+          {filasDelModal.map((c) => {
+            if (c === "separador") {
+              return (
+                <li
+                  key="separador-sin-duenio"
+                  className="pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-muted"
+                >
+                  Sin cliente asignado · al agregarla queda como reunión de este cliente
+                </li>
+              );
+            }
             /* Quiénes estuvieron en la sala es EL dato que decide, y hasta ahora no se mostraba:
                una reunión con alguien de `lacav.cl` adentro es del proyecto de CAV aunque el
                título no lo diga, y una donde estuvimos solos nosotros es del equipo por más que
@@ -220,7 +320,7 @@ export default function SessionSelectionReview({
                   )}
                   {c.sinDuenio && (
                     <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
-                      reunión del equipo
+                      {c.soloEquipo === false ? "sin cliente asignado" : "reunión del equipo"}
                     </span>
                   )}
                   {c.sinContenido && (
@@ -238,6 +338,9 @@ export default function SessionSelectionReview({
                     </span>
                   )}
                 </div>
+                {c.sinDuenio && c.motivoNoAdoptable && (
+                  <div className="text-[10px] text-warn-ink mt-0.5">{c.motivoNoAdoptable}</div>
+                )}
                 {(sala || c.reason) && (
                   /* El motivo ("Ventas en la sala", "título de venta") YA llegaba y vivía
                      escondido en el tooltip del <li> — o sea, invisible en móvil y en cualquier
@@ -249,6 +352,19 @@ export default function SessionSelectionReview({
                   </div>
                 )}
               </div>
+              {c.sinDuenio && c.motivoNoAdoptable ? (
+                /* No hay botón que prometa lo que la puerta va a rechazar: va a Sesiones, con la
+                   reunión abierta, donde se ve quién estuvo y se elige el cliente a mano. */
+                <a
+                  href={`/sessions?s=${encodeURIComponent(c.sessionId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={c.motivoNoAdoptable}
+                  className="text-[11px] font-semibold text-brand hover:text-brand-dark transition-colors flex-shrink-0"
+                >
+                  Asignar en Sesiones
+                </a>
+              ) : (
               <button
                 onClick={() => setFeeds(c.sessionId, true)}
                 disabled={busyId === c.sessionId}
@@ -259,6 +375,7 @@ export default function SessionSelectionReview({
               >
                 {c.excluidaAca ? "Reincluir" : c.sinDuenio ? "Agregar y asignar" : "Agregar"}
               </button>
+              )}
             </li>
             );
           })}

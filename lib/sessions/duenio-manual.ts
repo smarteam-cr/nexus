@@ -33,22 +33,35 @@ export type OrigenDelDuenio = "humano" | "adopcion";
  *
  * @param actorEmail quién lo hizo. `null` para escrituras de sistema (la adopción corre dentro de
  *   un POST con usuario, así que en la práctica siempre viene; queda nullable para no inventar).
+ * @param soloSiSinDuenio escribe SOLO si la sesión sigue sin dueño por las dos vías, en la misma
+ *   sentencia (Postgres decide). Es lo que usa la adopción: leer «sin dueño» y después escribir
+ *   dejaba una ventana donde dos personas, desde dos proyectos de clientes distintos, adoptaban
+ *   la misma reunión y ganaba la última en silencio.
+ * @returns si escribió. Sin `soloSiSinDuenio`, siempre `true`.
  */
 export async function asignarDuenioManual(
   sessionId: string,
   clientId: string | null,
-  opts: { origen: OrigenDelDuenio; actorEmail: string | null },
-): Promise<void> {
-  await prisma.firefliesSession.update({
-    where: { id: sessionId },
-    data: {
-      manualClientId: clientId,
-      // Los tres van juntos SIEMPRE. Separarlos es cómo se pierde la procedencia.
-      manualClientSource: clientId ? opts.origen : null,
-      manualClientBy: clientId ? opts.actorEmail : null,
-      manualClientAt: clientId ? new Date() : null,
-    },
-  });
+  opts: { origen: OrigenDelDuenio; actorEmail: string | null; soloSiSinDuenio?: boolean },
+): Promise<boolean> {
+  const data = {
+    manualClientId: clientId,
+    // Los tres van juntos SIEMPRE. Separarlos es cómo se pierde la procedencia.
+    manualClientSource: clientId ? opts.origen : null,
+    manualClientBy: clientId ? opts.actorEmail : null,
+    manualClientAt: clientId ? new Date() : null,
+  };
+  if (opts.soloSiSinDuenio) {
+    const { count } = await prisma.firefliesSession.updateMany({
+      where: { id: sessionId, resolvedClientId: null, manualClientId: null },
+      data,
+    });
+    return count > 0;
+  }
+  /* `update` y no `updateMany` a propósito: un id que no existe tiene que fallar ruidoso, como
+     siempre, y no devolver «listo» sobre nada. */
+  await prisma.firefliesSession.update({ where: { id: sessionId }, data });
+  return true;
 }
 
 /**
