@@ -36,6 +36,23 @@ services:
     # el código con --disable-crash-reporter) → se revirtió el seccomp:unconfined
     # a propósito, no dejarlo sin beneficio real (innecesariamente ancho).
     shm_size: "1gb"
+    # ── Límites (incidente 2026-09-21) ────────────────────────────────────────
+    # Sin límites, el proceso llenó la memoria y quedó trabado limpiándola: 821 % de
+    # CPU, 1,13 GiB, 0 consultas a la base en 60 s y 502 en nginx, congelado horas en
+    # un VPS que comparte con otras apps. Con tope, se muere con aviso y Docker lo
+    # levanta (restart: unless-stopped) en vez de quedar colgado:
+    #   · cpus 3: uso normal < 1 núcleo; nunca más se come el VPS (tiene ≥ 9: el
+    #     incidente llegó a 8,2). ⚠ Con menos núcleos que esto el contenedor no arranca.
+    #   · mem_limit 3g y memswap_limit 3g (sin swap): heap de 2 GB + Chrome de los PDF
+    #     (máx 2) + nativo. Con swap, un proceso lleno se arrastra en vez de morir.
+    #   · NODE_OPTIONS (abajo): el tope del heap por debajo del del contenedor, así
+    #     muere Node con «JavaScript heap out of memory» (legible en `docker logs`) y
+    #     no el kernel en silencio.
+    # Qué hacer en un incidente (foto de memoria, detener sin perder logs):
+    # docs/RUNBOOK.md, «Incidente de memoria o CPU».
+    cpus: "3"
+    mem_limit: 3g
+    memswap_limit: 3g
     ports:
       - "${PORT:-3004}:3004"
     # Inyecta DATABASE_URL, claves de servicio, Anthropic, HubSpot, Google,
@@ -49,6 +66,12 @@ services:
       # Cron del módulo Contenido (viernes 6:00 America Costa Rica). Solo PROD:
       # dev no setea esta var → instrumentation.ts no arranca el intervalo.
       CRON_ENABLED: "1"
+      # Tope del heap de V8 (ver «Límites» arriba). ⚠ Este valor le gana a un
+      # NODE_OPTIONS del .env (environment > env_file): no ponerlo ahí.
+      # NODE_DIAG_OPTIONS va VACÍA de fábrica: solo se carga en el .env durante un
+      # incidente, para sacar una foto de memoria (docs/RUNBOOK.md). Nunca fija:
+      # escribir la foto congela el proceso y pide tanta memoria como el heap.
+      NODE_OPTIONS: "--max-old-space-size=2048 ${NODE_DIAG_OPTIONS:-}"
     # Healthcheck contra /api/health (público). `deploy.sh` usa `up -d --wait`,
     # que espera este estado: si el server no arranca o el canario de Prisma
     # truena (cliente stale), el deploy FALLA solo en vez de servir errores.

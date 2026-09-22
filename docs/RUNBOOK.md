@@ -151,6 +151,71 @@ Activación 100% por env — sin las vars, cero cambio de comportamiento:
 - Smoke test post-activación: forzar un error (p.ej. URL de API inexistente
   desde la UI) y verificar que aparece en el proyecto de Sentry.
 
+## Incidente de memoria o CPU (el contenedor se congela)
+
+El 2026-09-21 el proceso llenó la memoria y quedó trabado limpiándola: 821 % de CPU, 1,13 GiB,
+cero consultas a la base en 60 s y 502 en nginx, después de horas congelándose 15–25 s. Desde
+entonces el contenedor tiene tope en `docker-compose.yml` (3 núcleos, 3 GB sin swap, heap de 2 GB):
+si se vuelve a llenar, Node muere con «JavaScript heap out of memory» y Docker lo levanta solo
+(`restart: unless-stopped`), en vez de quedar colgado. ⚠ Docker NO reinicia un contenedor
+«unhealthy»: un proceso trabado sin llegar al tope sigue necesitando a una persona.
+
+**1. Mirar antes de tocar.** Reiniciar borra la evidencia de memoria y de hilos.
+
+```bash
+curl -s localhost:3004/api/health        # memoriaMb y atrasoHiloMs, si todavía responde
+docker stats --no-stream nexus
+docker logs nexus --since 6h 2>&1 | grep '\[medidor\]' | tail -20     # desde cuándo se degrada
+docker logs nexus --since 6h 2>&1 | grep -iE 'heap out of memory|mark-compact|allocation failed' | tail
+docker inspect -f '{{.RestartCount}} reinicios · OOMKilled={{.State.OOMKilled}} · desde {{.State.StartedAt}}' nexus
+```
+
+- `[medidor] <fecha> ⚠ hilo atrasado N ms`: el hilo de JS se trabó más de 2 s. `heap al NN % del
+  tope`: la memoria se está llenando. Sale como mucho una por minuto
+  (`lib/observability/medidor-proceso.ts`). Las líneas de alrededor dicen qué estaba corriendo
+  (por ejemplo `[google/sync]`). ⚠ Si el hilo queda trabado del todo, la línea sale recién cuando
+  se destraba.
+- `OOMKilled=true`: lo mató el kernel por pasar los 3 GB con memoria que no es del heap (Chrome de
+  los PDF, buffers). Si el que muere es Node, el log dice «heap out of memory».
+- Referencia: el rss normal medido el 2026-09-21 es de unos 200 MB.
+
+**2. Guardar los logs y detener sin perderlos.**
+
+```bash
+docker logs nexus --since 24h > ~/nexus-$(date +%F-%H%M).log 2>&1
+docker compose stop app       # detiene; el contenedor queda, con sus logs y su /tmp
+docker compose start app      # vuelve a levantar EL MISMO contenedor
+```
+
+⛔ Nunca `docker compose down` ni `docker rm` en un incidente: borran el contenedor y, con él, sus
+logs y su `/tmp` (donde queda la foto de memoria). Un deploy o un `--force-recreate` también lo
+recrean: guardar los logs antes.
+
+**3. Sacar una foto de memoria (heap snapshot).** No está prendida de fábrica: escribirla congela
+el proceso varios segundos y pide tanta memoria como el heap. Se prende para atrapar la próxima vez
+que se llene:
+
+1. En el `.env` del VPS (`/opt/smartflow/Nexus/.env`):
+   ```
+   NODE_DIAG_OPTIONS=--max-old-space-size=1536 --heapsnapshot-near-heap-limit=1 --diagnostic-dir=/tmp
+   ```
+   El compose la suma a `NODE_OPTIONS`. El tope baja a 1,5 GB a propósito: escribir la foto pide
+   otro tanto de memoria y el contenedor tiene 3 GB. ⚠ Ocupa ~1,5 GB de disco por foto.
+2. Guardar los logs (paso 2) y recrear el contenedor con la MISMA imagen:
+   `docker compose up -d --no-build --force-recreate app`. ⚠ Solo si no hubo un `git pull` sin
+   deploy en el medio (sería el «deploy mixto», ver Deploy).
+3. Cuando el heap se acerque al tope, Node escribe `/tmp/Heap.<fecha>.<hora>.<pid>…heapsnapshot` y
+   muere; Docker lo levanta en el mismo contenedor, sin borrar `/tmp`.
+4. Llevársela: `docker exec nexus sh -c 'ls -la /tmp/*.heapsnapshot'` y
+   `docker cp nexus:/tmp/<archivo>.heapsnapshot ~/`. Se abre en Chrome → DevTools → Memory → Load;
+   la vista «Summary» ordenada por «Retained Size» dice qué llenó la memoria.
+5. Sacar `NODE_DIAG_OPTIONS` del `.env` y recrear otra vez (paso 2). ⚠ Que no quede puesta: cada
+   vez que el heap se acerque al tope congela el proceso y escribe gigas al disco.
+
+⚠ `NODE_OPTIONS` en el `.env` NO sirve: el `environment` del compose le gana al `env_file`. Si
+quedó una del incidente, sacarla para no confundir. Lo mismo con un `docker update --cpus/--memory`
+hecho a mano: se pierde al recrear el contenedor; los límites viven en `docker-compose.yml`.
+
 ## Jobs del scheduler (`lib/jobs/defs.ts`)
 
 Tick de 60 s, gated por `CRON_ENABLED=1` (solo prod; lo pone `docker-compose.yml`). Claims
