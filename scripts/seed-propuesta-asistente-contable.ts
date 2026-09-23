@@ -28,7 +28,8 @@ import { resolverApply } from "./lib/guard";
 /** El documento ya existe (lo creó Elías desde /roles); esto llena su contenido. */
 const ROLE_ID = "cmsy8l1we000o07lljv1x8i2p";
 
-const AREA = "Finanzas y Administración · Smarteam";
+const TITLE = "Dinia Marín · Asistente Administrativo Contable";
+const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
   "Mantiene la contabilidad, la cobranza y los contratos al día en Odoo — y le devuelve al CFO el tiempo que hoy se le va en operación.";
 
@@ -402,7 +403,7 @@ async function main() {
 
     await prisma.roleProfile.update({
       where: { id: ROLE_ID },
-      data: { area: AREA, summary: SUMMARY, content: CONTENT },
+      data: { title: TITLE, area: AREA, summary: SUMMARY, content: CONTENT },
     });
     console.log("\n✓ Contenido cargado. Abrí /roles y revisá el documento.");
   } finally {

@@ -8,7 +8,7 @@
  * Es el CLON EXACTO de la propuesta de Valentina Sandoval
  * (`propuesta-cse-valentina-v1`): mismo contenido carácter por carácter — misma
  * oferta, mismas comisiones, misma fecha de ingreso. Lo ÚNICO que cambia es el
- * nombre de la candidata en el `area`. Pedido de Elías el 2026-09-22: "igual igual".
+ * nombre de la candidata. Pedido de Elías el 2026-09-22: "igual igual".
  *
  * Respecto de la propuesta original de Caroline Bersot (`propuesta-cse-v1`), las dos
  * arrastran las mismas tres diferencias:
@@ -20,9 +20,10 @@
  *   3. ENTRA EL INGRESO: "jueves 1 de octubre de 2026" como primera línea de
  *      «Otros detalles», que es la fecha que sí importa en esta propuesta.
  *
- * El `area` lleva el nombre de la candidata (patrón de la propuesta del Asistente
- * Administrativo Contable): ya son TRES propuestas de CSE tituladas igual, así que es
- * lo único que las distingue en la lista de Roles y en el encabezado del documento.
+ * ⚠ El nombre va en el `title` y NO en el `area` (cambio del 2026-09-22, ver
+ * `scripts/renombrar-propuestas-por-candidato.ts`): el flyout de Roles lista por
+ * `title` y corta por el final, así que con el nombre en el `area` las tres
+ * propuestas de CSE se veían idénticas. El `area` quedó como rótulo genérico.
  *
  * El contenido va como literal y NO leyendo el documento de Valentina ni el de Caro:
  * si alguno de ellos cambia, volver a correr esto no debe arrastrar ese cambio ni
@@ -36,8 +37,8 @@ import { createScriptDb } from "./lib/db";
 import { resolverApply } from "./lib/guard";
 
 const ROLE_ID = "propuesta-cse-liliana-v1";
-const TITLE = "Customer Success Executive";
-const AREA = "Propuesta de contratación para Liliana Moreno";
+const TITLE = "Liliana Moreno · Customer Success Executive";
+const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
   "Dueño de sus cuentas: implementa HubSpot de punta a punta y logra que el cliente resuelva su problema, no solo que el proyecto se entregue.";
 

@@ -16,9 +16,10 @@
  *   3. ENTRA EL INGRESO: "jueves 1 de octubre de 2026" como primera línea de
  *      «Otros detalles», que es la fecha que sí importa en esta propuesta.
  *
- * El `area` lleva el nombre de la candidata (patrón de la propuesta del Asistente
- * Administrativo Contable): con dos propuestas de CSE tituladas igual, es lo único
- * que las distingue en la lista de Roles y en el encabezado del documento.
+ * ⚠ El nombre va en el `title` y NO en el `area` (cambio del 2026-09-22, ver
+ * `scripts/renombrar-propuestas-por-candidato.ts`): el flyout de Roles lista por
+ * `title` y corta por el final, así que con el nombre en el `area` las tres
+ * propuestas de CSE se veían idénticas. El `area` quedó como rótulo genérico.
  *
  * El contenido va como literal y NO leyendo el documento de Caro: si mañana el de
  * ella cambia, volver a correr esto no debe arrastrar ese cambio ni pisar lo que se
@@ -32,8 +33,8 @@ import { createScriptDb } from "./lib/db";
 import { resolverApply } from "./lib/guard";
 
 const ROLE_ID = "propuesta-cse-valentina-v1";
-const TITLE = "Customer Success Executive";
-const AREA = "Propuesta de contratación para Valentina Sandoval";
+const TITLE = "Valentina Sandoval · Customer Success Executive";
+const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
   "Dueño de sus cuentas: implementa HubSpot de punta a punta y logra que el cliente resuelva su problema, no solo que el proyecto se entregue.";
 

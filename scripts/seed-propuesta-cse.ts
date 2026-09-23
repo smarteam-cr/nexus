@@ -25,8 +25,8 @@ import { createScriptDb } from "./lib/db";
 import { resolverApply } from "./lib/guard";
 
 const ROLE_ID = "propuesta-cse-v1";
-const TITLE = "Customer Success Executive";
-const AREA = "Customer Success · Smarteam";
+const TITLE = "Caroline Bersot · Customer Success Executive";
+const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
   "Dueño de sus cuentas: implementa HubSpot de punta a punta y logra que el cliente resuelva su problema, no solo que el proyecto se entregue.";
 
