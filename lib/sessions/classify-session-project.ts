@@ -26,7 +26,7 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import { isLockedLink } from "@/lib/sessions/session-project-locks";
+import { isLockedLink, WHERE_VINCULO_VIRGEN } from "@/lib/sessions/session-project-locks";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 
 export { isLockedLink } from "@/lib/sessions/session-project-locks";
@@ -89,7 +89,15 @@ export async function classifySessionToProjects(
   // 2. Links existentes: locks POR LINK (manual / revisado / tombstone / override).
   const existing = await prisma.sessionProject.findMany({
     where: { sessionId },
-    select: { projectId: true, source: true, isPrimary: true, reviewedAt: true, included: true, handoffOverride: true },
+    select: {
+      projectId: true,
+      source: true,
+      isPrimary: true,
+      reviewedAt: true,
+      included: true,
+      handoffOverride: true,
+      timelineOverride: true,
+    },
   });
   const lockedByProject = new Map(existing.filter(isLockedLink).map((e) => [e.projectId, e]));
   // Tombstone: un humano excluyó ESTE proyecto — la IA no lo re-propone jamás.
@@ -347,9 +355,9 @@ export async function classifySessionToProjects(
     where: {
       sessionId,
       source: { in: ["agent", "legacy"] },
-      reviewedAt: null,
-      included: true,
-      handoffOverride: null,
+      // El negativo exacto del candado, con UN dueño: con los literales a mano, sumar una señal
+      // humana nueva al candado dejaba este borrado pisándola en silencio.
+      ...WHERE_VINCULO_VIRGEN,
       projectId: { notIn: [...proposedIds] },
     },
   });

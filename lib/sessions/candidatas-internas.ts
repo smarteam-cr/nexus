@@ -153,6 +153,18 @@ export function decidirAlAgregar(i: {
   perteneceAlCliente: boolean;
   motivoNoAdoptable: string | null;
 }): DecisionAlAgregar {
+  /* La X sobre un vínculo que YA NO EXISTE no crea nada (revisión adversarial, 2026-09-23). El
+     panel queda montado con una lista vieja: si mientras tanto alguien sacó la reunión del
+     proyecto (o el clasificador borró un vínculo virgen), la X entraba por el `create` del upsert
+     y la VOLVÍA a hacer miembro —con candado de «manual»— deshaciendo la decisión de otra persona.
+     Excluir es sacar; nunca puede sumar membresía. Vale para las dos puertas (handoff y cronograma). */
+  if (!i.vinculoExiste && !i.quiereIncluir) {
+    return {
+      tipo: "rechazar",
+      status: 409,
+      error: "Esta reunión ya no es de este proyecto: se actualizó la lista.",
+    };
+  }
   /* Hardening INV1 (escritura): un vínculo NUEVO a una sesión de otro cliente se rechaza. Un
      vínculo que ya existe solo cambia su override, no crea pertenencia. */
   if (!i.vinculoExiste && !i.sinDuenio && !i.perteneceAlCliente) {

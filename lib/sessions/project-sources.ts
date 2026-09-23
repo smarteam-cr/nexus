@@ -18,6 +18,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { asignarDuenioManual } from "./duenio-manual";
+import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -26,6 +27,8 @@ export interface ProjectSourceSession {
   date: number; // epoch ms
   participants: string[]; // organizerEmail incluido (para detectar Ventas/roles)
   handoffOverride: boolean | null; // solo significativo en getProjectHandoffSessions
+  /** El afinado del CRONOGRAMA (la X / «Agregar» de su Contexto). Ver lib/timeline/session-feeding. */
+  timelineOverride: boolean | null;
   /** Link primario de la sesión en ESTE proyecto (política linkFeedsHandoff aguas abajo). */
   isPrimary: boolean;
   /** Confianza del clasificador para este link (null si manual/legacy). */
@@ -145,6 +148,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
     where: { projectId, included: true },
     select: {
       handoffOverride: true,
+      timelineOverride: true,
       isPrimary: true,
       confidence: true,
       session: {
@@ -175,6 +179,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       date: s.date.getTime(),
       participants: foldOrganizer(s.participants, s.organizerEmail),
       handoffOverride: l.handoffOverride,
+      timelineOverride: l.timelineOverride,
       isPrimary: l.isPrimary,
       confidence: l.confidence,
     });
@@ -202,6 +207,22 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
  */
 export async function getProjectHandoffSessions(projectId: string): Promise<ProjectSourcesResult> {
   return getProjectMemberSessions(projectId);
+}
+
+/**
+ * Sesiones que alimentan al CRONOGRAMA (2026-09-23, «Contexto del cronograma»): la membresía del
+ * proyecto menos las que el CSE sacó con la X del cronograma. Pasa por el MISMO chokepoint que el
+ * resto —la pertenencia al cliente y el tombstone no se re-implementan— y aplica la regla única de
+ * `lib/timeline/session-feeding.ts`. Las futuras NO se cortan acá: eso lo hace quien arma el
+ * material, igual que para el handoff.
+ */
+export async function getProjectTimelineSessions(projectId: string): Promise<ProjectSourcesResult> {
+  const r = await getProjectMemberSessions(projectId);
+  return {
+    // La membresía ya trae `included: true`; la regla lo vuelve a mirar a propósito (una sola regla).
+    sessions: r.sessions.filter((s) => linkFeedsTimeline({ included: true, timelineOverride: s.timelineOverride })),
+    dropped: r.dropped,
+  };
 }
 
 /**
@@ -240,6 +261,7 @@ export async function getClientSessions(
     // NO usa la política de link `linkFeedsHandoff` — sin SessionProject no hay
     // primario/confianza; estos campos existen solo para satisfacer la interface.
     handoffOverride: null,
+    timelineOverride: null,
     isPrimary: false,
     confidence: null,
   }));

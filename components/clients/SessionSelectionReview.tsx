@@ -20,6 +20,7 @@ import { Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { coincideConLaBusqueda, MIN_BUSQUEDA_SIN_DUENIO } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
+import { usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 interface FeedingSession {
@@ -100,8 +101,15 @@ export default function SessionSelectionReview({
   columnMode = false,
   onCount,
   onExcludedCount,
+  destino = "handoff",
 }: {
   projectId: string;
+  /**
+   * Para qué documento es el panel (2026-09-23): el HANDOFF (el de siempre) o el CRONOGRAMA
+   * («Contexto del cronograma»). Cambia la regla de qué alimenta, a qué puerta escribe y los
+   * textos; lo que cambia vive en `lib/sessions/destinos-de-contexto.ts`.
+   */
+  destino?: DestinoDeContexto;
   onChange?: () => void;
   readOnly?: boolean;
   /** Render compacto para la columna "Google Meet" de Contexto (sin header propio). */
@@ -111,6 +119,17 @@ export default function SessionSelectionReview({
   /** Reporta la cantidad de sesiones excluidas a mano (para el contador honesto). */
   onExcludedCount?: (n: number) => void;
 }) {
+  const esCronograma = destino === "cronograma";
+  /* Cada destino lee su lista y escribe en SU puerta: la X del cronograma nunca toca el handoff. */
+  const urlCandidatas = `/api/projects/${projectId}/session-candidates${esCronograma ? "?para=cronograma" : ""}`;
+  const urlPuerta = esCronograma
+    ? `/api/projects/${projectId}/timeline/sessions`
+    : `/api/projects/${projectId}/handoff-sessions`;
+  const documento = esCronograma ? "cronograma" : "handoff";
+  /* El cronograma no tiene regla de relevancia: ninguna reunión se destaca ni se atenúa por su
+     título (el chip «aplica» es del handoff). */
+  const conRegla = usaReglaDeRelevancia(destino);
+
   const [data, setData] = useState<{ feeding: FeedingSession[]; excluded: ExcludedSession[]; candidates: CandidateSession[] }>({
     feeding: [],
     excluded: [],
@@ -145,7 +164,15 @@ export default function SessionSelectionReview({
           if (!r.ok) throw new Error(String(r.status));
           return r.json();
         })
-        .then((d: { sesiones?: CandidateSession[] }) => setSinDuenio({ q: consultaSinDuenio, sesiones: d.sesiones ?? [] }))
+        .then((d: { sesiones?: CandidateSession[] }) =>
+          setSinDuenio({
+            q: consultaSinDuenio,
+            /* La búsqueda de sin dueño viene con el criterio del HANDOFF (aplica / motivo). En el
+               cronograma no hay regla de relevancia: se limpia para no atenuar ni explicar con un
+               motivo que no aplica. */
+            sesiones: (d.sesiones ?? []).map((x) => (conRegla ? x : { ...x, applies: true, reason: "" })),
+          }),
+        )
         .catch(() => {
           /* Un fallo cierra ESTA búsqueda con su error: sin esto quedaba «Buscando…» para siempre,
              o —peor— se leía como una búsqueda que corrió y no encontró nada. */
@@ -156,20 +183,20 @@ export default function SessionSelectionReview({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [consultaSinDuenio, projectId]);
+  }, [consultaSinDuenio, projectId, conRegla]);
 
   const reload = useCallback(async () => {
     try {
-      const r = await fetch(`/api/projects/${projectId}/session-candidates`);
+      const r = await fetch(urlCandidatas);
       if (r.ok) setData(await r.json());
     } catch {
       /* ignore */
     }
-  }, [projectId]);
+  }, [urlCandidatas]);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/projects/${projectId}/session-candidates`)
+    fetch(urlCandidatas)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && !cancelled) setData(d);
@@ -181,14 +208,14 @@ export default function SessionSelectionReview({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [urlCandidatas]);
 
   const toast = useToast();
   const setFeeds = useCallback(
     async (sessionId: string, feeds: boolean) => {
       setBusyId(sessionId);
       try {
-        const r = await fetch(`/api/projects/${projectId}/handoff-sessions`, {
+        const r = await fetch(urlPuerta, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, feeds }),
@@ -206,7 +233,7 @@ export default function SessionSelectionReview({
       }
       setBusyId(null);
     },
-    [projectId, reload, onChange, toast],
+    [urlPuerta, reload, onChange, toast],
   );
 
   useEffect(() => {
@@ -301,14 +328,14 @@ export default function SessionSelectionReview({
             return (
             <li
               key={c.sessionId}
-              className={`flex items-start gap-2 rounded-lg border border-line px-3 py-2 ${c.applies && !c.sinContenido ? "" : "opacity-60"}`}
+              className={`flex items-start gap-2 rounded-lg border border-line px-3 py-2 ${(c.applies || !conRegla) && !c.sinContenido ? "" : "opacity-60"}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-fg truncate">{c.title || "Sin título"}</span>
                   <span className="text-[10px] text-fg-muted flex-shrink-0">{fmtDate(c.date)}</span>
                   {dur && <span className="text-[10px] text-fg-muted flex-shrink-0">· {dur}</span>}
-                  {c.applies && (
+                  {conRegla && c.applies && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 flex-shrink-0">
                       aplica
                     </span>
@@ -405,13 +432,13 @@ export default function SessionSelectionReview({
             <strong>
               {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
             </strong>{" "}
-            este handoff sin transcripción ni resumen. El documento se va a escribir sobre ese
+            este {documento} sin transcripción ni resumen. El documento se va a escribir sobre ese
             hueco — si tenés las notas, pegalas en <em>Fuentes manuales</em>.
           </p>
         )}
         <ContextColumnList
           loading={loading}
-          empty="Ninguna sesión alimenta este handoff. Agregala con “Buscar más sesiones”."
+          empty={`Ninguna sesión alimenta este ${documento}. Agregala con “Buscar más sesiones”.`}
         >
           {feeding.map((s) => (
             <ContextRow
@@ -427,7 +454,7 @@ export default function SessionSelectionReview({
                     : { label: "Incluida", tone: "green" }
               }
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
-              removeTitle="Excluir del handoff (no la desvincula del proyecto)"
+              removeTitle={`Excluir del ${documento} (no la desvincula del proyecto)`}
             />
           ))}
           {excluded.map((s) => (

@@ -108,7 +108,7 @@ async function processClient(client: { id: string; name: string }): Promise<void
       projects: {
         select: {
           projectId: true, isPrimary: true, source: true, confidence: true,
-          included: true, reviewedAt: true, handoffOverride: true,
+          included: true, reviewedAt: true, handoffOverride: true, timelineOverride: true,
         },
       },
     },

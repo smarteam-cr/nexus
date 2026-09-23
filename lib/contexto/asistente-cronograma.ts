@@ -40,6 +40,13 @@ export interface CrudasDelAssist {
   desarrolloCtx: string;
   /** Bloque de operativa de HubSpot (estado, prioridad, motivo de bloqueo). "" si no aplica. */
   operativaCtx: string;
+  /**
+   * «Contexto del cronograma» (2026-09-23): las reuniones que el CSE deja entrar y sus notas, ya
+   * rotuladas. Este es el ÚNICO agente que puede tocar FASES una vez creado el cronograma, así que
+   * es por acá que las reuniones elegidas llegan a las fases. Solo se agregan con texto.
+   */
+  reunionesCtx?: string;
+  notasCtx?: string;
 }
 
 export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
@@ -70,6 +77,12 @@ export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
         ? `=== CÓMO VA EL PROYECTO HOY (según HubSpot) ===\n${crudas.operativaCtx}`
         : "",
     },
+    ...(crudas.reunionesCtx?.trim()
+      ? [{ key: "reuniones-del-cronograma", ambito: "proyecto" as const, texto: crudas.reunionesCtx }]
+      : []),
+    ...(crudas.notasCtx?.trim()
+      ? [{ key: "notas-del-cronograma", ambito: "proyecto" as const, texto: crudas.notasCtx }]
+      : []),
   ];
 }
 
@@ -87,6 +100,6 @@ export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
  * aparece igual con y sin la regla, la regla no está ganada y la guarda es decorativa.
  */
 export const REGLA_DE_FRONTERA_DEL_ASSIST = `⛔ FRONTERA — el contexto de arriba es INTERNO; el cronograma que devuelves lo LEE EL CLIENTE.
-- Usá el handoff, el requerimiento técnico y la operativa para DECIDIR qué cambiar (qué tareas hacen falta, en qué orden, cuánto duran). NUNCA los copies al texto.
+- Usá el handoff, el requerimiento técnico, la operativa, las reuniones y las notas del CSE para DECIDIR qué cambiar (qué tareas hacen falta, en qué orden, cuánto duran). NUNCA los copies al texto.
 - Ningún título ni nota puede contener: nombres de personas del equipo de Smarteam, montos, condiciones comerciales, riesgos internos, ni frases textuales de esos documentos.
 - Si una fuente interna te da la razón para agregar una tarea, escribí la TAREA, no la razón.`;

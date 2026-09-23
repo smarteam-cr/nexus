@@ -101,6 +101,12 @@ describe("el buscador del modal", () => {
   });
 });
 
+/** Las rutas que agregan una reunión a un proyecto. Las DOS pasan por la misma puerta. */
+const PUERTAS_DE_AGREGAR = [
+  "app/api/projects/[projectId]/handoff-sessions/route.ts",
+  "app/api/projects/[projectId]/timeline/sessions/route.ts",
+];
+
 describe("está cableado, y con los frenos puestos", () => {
   const RAIZ = process.cwd();
   const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
@@ -109,9 +115,14 @@ describe("está cableado, y con los frenos puestos", () => {
     /* Sin esto el botón "Agregar" parece funcionar —el vínculo se escribe— pero el chokepoint lo
        descarta al leer con un console.warn que nadie mira, y el handoff sigue vacío. Es la misma
        falla silenciosa que toda esta tanda vino a matar. */
-    expect(leer("app/api/projects/[projectId]/handoff-sessions/route.ts")).toContain(
-      "adoptarSesionSinDuenio(",
-    );
+    /* 2026-09-23: la lógica se mudó a `lib/sessions/agregar-sesion.ts` porque ahora hay DOS
+       puertas (handoff y cronograma). La guarda sigue al código y exige que las dos lo usen. */
+    expect(leer("lib/sessions/agregar-sesion.ts")).toContain("adoptarSesionSinDuenio(");
+    for (const ruta of PUERTAS_DE_AGREGAR) {
+      expect(leer(ruta), `${ruta} vincula por su cuenta, sin la puerta única`).toContain(
+        "prepararVinculoManual(",
+      );
+    }
   });
 
   it("solo se adopta lo que NO tiene dueño, por las dos vías", () => {
@@ -288,13 +299,14 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
   });
 
   it("agregar una sin dueño la asigna al cliente en CUALQUIER proyecto, no solo en los internos", () => {
-    const src = leer("app/api/projects/[projectId]/handoff-sessions/route.ts");
+    const src = leer("lib/sessions/agregar-sesion.ts");
     expect(src, "la puerta dejó de decidir con la función que tiene test").toContain("decidirAlAgregar(");
     expect(src, "la puerta dejó de aplicar la regla de quién se adopta").toContain("motivoParaNoAdoptar(");
     expect(
       src,
       "volvió el gate de proyecto interno: «Agregar y asignar» escribiría un vínculo que se descarta al leer",
     ).not.toContain("guard.interno");
+    for (const ruta of PUERTAS_DE_AGREGAR) expect(leer(ruta), ruta).not.toContain("guard.interno");
     expect(src).toContain("session.resolvedClientId === null && session.manualClientId === null");
   });
 
@@ -315,10 +327,24 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
     expect(decidirAlAgregar({ ...nada, perteneceAlCliente: false })).toMatchObject({ tipo: "rechazar", status: 400 });
     // De otro cliente pero el vínculo ya existía: solo cambia el override.
     expect(decidirAlAgregar({ ...nada, perteneceAlCliente: false, vinculoExiste: true })).toEqual({ tipo: "vincular" });
-    // Excluir una sin dueño no la asigna a nadie.
+    // Excluir una sin dueño YA VINCULADA no la asigna a nadie: solo cambia el afinado.
     expect(
-      decidirAlAgregar({ ...nada, sinDuenio: true, perteneceAlCliente: false, quiereIncluir: false }),
+      decidirAlAgregar({
+        ...nada,
+        vinculoExiste: true,
+        sinDuenio: true,
+        perteneceAlCliente: false,
+        quiereIncluir: false,
+      }),
     ).toEqual({ tipo: "vincular" });
+    /* ⭐ La X sobre un vínculo que ya NO existe se rechaza (2026-09-23): antes entraba por el
+       `create` del upsert y volvía a hacer miembro a una reunión que otra persona había sacado. */
+    for (const sinDuenio of [true, false]) {
+      expect(
+        decidirAlAgregar({ ...nada, vinculoExiste: false, sinDuenio, quiereIncluir: false }),
+        `sinDuenio=${sinDuenio}`,
+      ).toMatchObject({ tipo: "rechazar", status: 409 });
+    }
     // Sin dueño pero con motivo: 409 con el motivo, y no se adopta.
     expect(
       decidirAlAgregar({ ...nada, sinDuenio: true, perteneceAlCliente: false, motivoNoAdoptable: "porque sí" }),
@@ -353,9 +379,11 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
   });
 
   it("la adopción queda a nombre de quien apretó, y no pisa una asignación hecha en paralelo", () => {
-    const ruta = leer("app/api/projects/[projectId]/handoff-sessions/route.ts");
-    expect(ruta, "la adopción vuelve a quedar sin autor").toContain("guard.teamMember.email");
-    expect(ruta, "se dejó de releer después de adoptar").toContain("belongsToClient(ahora, guard.clientId)");
+    for (const r of PUERTAS_DE_AGREGAR) {
+      expect(leer(r), `${r}: la adopción vuelve a quedar sin autor`).toContain("guard.teamMember.email");
+    }
+    const puerta = leer("lib/sessions/agregar-sesion.ts");
+    expect(puerta, "se dejó de releer después de adoptar").toContain("belongsToClient(ahora, i.clientId)");
     const fuentes = leer("lib/sessions/project-sources.ts");
     expect(fuentes, "la adopción vuelve a escribir sin mirar si otro la asignó").toContain(
       "soloSiSinDuenio: true",

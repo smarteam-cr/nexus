@@ -28,6 +28,7 @@ import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
+import { cargarNotasDelCronograma } from "@/lib/contexto/cargar";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -114,6 +115,12 @@ export interface ProgressMessageInputs {
    */
   operativaBlock: string;
   sessionsBlock: string;
+  /**
+   * Las notas del «Contexto del cronograma» (2026-09-23), ya rotuladas. Opcional y condicional:
+   * sin notas el mensaje queda byte-idéntico al de antes. Va DESPUÉS de las sesiones: es material
+   * del mismo tipo (lo que pasó), pegado a mano porque no quedó en ninguna reunión.
+   */
+  notasBlock?: string;
   handoffCtx: string;
   timelineCtx: string;
 }
@@ -138,6 +145,7 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     "=== SESIONES PASADAS DEL PROYECTO (detallan qué se hizo) ===",
     i.sessionsBlock || "(sin sesiones pasadas registradas)",
     "",
+    ...(i.notasBlock?.trim() ? [i.notasBlock, ""] : []),
     "=== HANDOFF CURADO (alcance del proyecto) ===",
     i.handoffCtx || "(sin handoff confirmado)",
     "",
@@ -233,7 +241,7 @@ export async function regenerateTimelineProgress(
 
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado + las
     //    instrucciones del CSE (mismo canvas "timeline" que ya lee el detalle — Tanda N).
-    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma, categorias] = await Promise.all([
+    const [pastSessions, handoffCtx, timelineCtx, canvasCronograma, categorias, notasBlock] = await Promise.all([
       getPastSessionsForProject(projectId),
       loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
@@ -245,6 +253,9 @@ export async function regenerateTimelineProgress(
          fuente que usa la atribución— para que el rótulo no se separe de ella. Cacheado (TTL 10
          min): cambian poco y se editan en /sessions/categories sin deploy. */
       getSessionCategories(),
+      /* Las notas del «Contexto del cronograma». Las REUNIONES no hace falta cargarlas aparte:
+         `getPastSessionsForProject` ya respeta la X del CSE (whereAlimentaCronograma). */
+      cargarNotasDelCronograma(projectId),
     ]);
     const dominiosPropios = buildInternalDomainsSet(categorias);
     const instrucciones = bloqueDeInstruccionesDeDoc(
@@ -309,6 +320,7 @@ export async function regenerateTimelineProgress(
       stageLabel,
       operativaBlock: bloqueDeOperativa(project),
       sessionsBlock,
+      notasBlock,
       handoffCtx,
       timelineCtx,
     });

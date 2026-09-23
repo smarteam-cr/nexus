@@ -466,6 +466,7 @@ model Project {
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
   handoffSources      HandoffSource[]
+  timelineSources     TimelineSource[]
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
@@ -604,8 +605,9 @@ model Handoff {
 // ETIQUETADA como manual (distinta de las sesiones verificadas del sync). Keyed por
 // projectId (el handoff es 1:1 con el project; persiste aunque el Handoff aún no exista
 // o se recree → reproducible/auditable). El analyze la re-lee en CADA corrida, así una
-// regeneración la vuelve a incluir. SOLO la lee el path de handoff; NO se muestra en el
-// tab Documentos ni alimenta a otros agentes.
+// regeneración la vuelve a incluir. La leen el handoff y el mapeo de procesos del cliente;
+// NO se muestra en el tab Documentos. ⚠ Por eso las notas del CRONOGRAMA no viven acá: van en
+// `TimelineSource` (ningún lector de ésta filtra por tipo).
 model HandoffSource {
   id             String    @id @default(cuid())
   projectId      String
@@ -617,6 +619,28 @@ model HandoffSource {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime? // soft-delete (auditable; el read filtra deletedAt:null)
+
+  @@index([projectId, createdAt])
+}
+
+// ─── TimelineSource — nota MANUAL del cronograma (2026-09-23) ──────────────────
+// El «Contexto del cronograma»: lo que el CSE pega a mano para que el agente arme fases y
+// tareas (una decisión que no quedó en ninguna reunión, un cambio de prioridades, etc.).
+// Hermana de HandoffSource pero en tabla PROPIA: aquélla la leen el handoff, el mapeo de
+// procesos de todo el cliente y el gate de material del handoff, sin filtrar por tipo.
+// Keyed por projectId y no por el cronograma: sobrevive a borrarlo y regenerarlo.
+// La leen SOLO los agentes del cronograma (detalle, «Pedir cambio con IA» y avance), vía
+// lib/contexto/cargar.ts. RLS encendida en su SQL (2026-09-23-contexto-cronograma.sql).
+model TimelineSource {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String?
+  content        String    @db.Text
+  createdByEmail String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   @@index([projectId, createdAt])
 }
@@ -2023,6 +2047,12 @@ model SessionProject {
   // venta/handoff/kickoff o Ventas en la sala): null = seguí la regla; true = forzá
   // incluir (agregada a mano desde el pop-up); false = forzá excluir (la "X" del panel).
   handoffOverride Boolean?
+  // El mismo afinado, pero para el CRONOGRAMA (2026-09-23, «Contexto del cronograma»): null =
+  // sigue la regla (toda reunión del proyecto alimenta); true = agregada a mano; false = la X del
+  // CSE (sale SOLO del cronograma: sigue siendo del proyecto para handoff, Entrega y minutas).
+  // La regla vive en lib/timeline/session-feeding.ts. ⚠ Lockea el link igual que handoffOverride
+  // (session-project-locks.ts): sin eso el clasificador borra la X del CSE en silencio.
+  timelineOverride Boolean?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())

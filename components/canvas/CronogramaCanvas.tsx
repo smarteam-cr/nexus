@@ -42,6 +42,7 @@ import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
+import CronogramaContextSection from "./CronogramaContextSection";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
 import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
 import SugerenciasParticularidad, { type SugerenciaItem } from "./SugerenciasParticularidad";
@@ -3142,7 +3143,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           las tareas («las fases de QA van al final», «sin capacitaciones»). Vive en la entry
           `__doc` del canvas — no en una columna — y se pinta acá porque una instrucción que
           existe y no se ve termina re-escrita a mano en cada regeneración. */}
+      {/* ── CONTEXTO DEL CRONOGRAMA (2026-09-23) ──────────────────────────────
+          Las reuniones que alimentan al cronograma (la X y el «Agregar» del CSE) y sus notas a
+          mano, con la caja de instrucciones de abajo como tercera pieza. Reemplaza a la caja suelta
+          en el mismo lugar: arriba del documento no crece nada. */}
       {canEdit && (
+        <CronogramaContextSection
+          projectId={projectId}
+          canEdit={canEdit}
+          generado={hasAiDetail}
+          instruccionesActivas={!!briefGuardado}
+        >
         <div className="rounded-xl border border-line bg-surface px-4 py-2.5">
           <button
             onClick={() => setShowBrief((v) => !v)}
@@ -3188,6 +3199,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </div>
           )}
         </div>
+        </CronogramaContextSection>
       )}
 
       {phases.length === 0 ? (

@@ -61,7 +61,7 @@ export async function reclassifyClientSessions(
     select: {
       id: true,
       projects: {
-        select: { source: true, reviewedAt: true, included: true, handoffOverride: true },
+        select: { source: true, reviewedAt: true, included: true, handoffOverride: true, timelineOverride: true },
       },
     },
   });

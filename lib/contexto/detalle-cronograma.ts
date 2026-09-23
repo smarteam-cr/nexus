@@ -79,7 +79,22 @@ export function fuentesDelDetalle(crudas: {
   timelineCtx: string;
   handoffCtx: string;
   desarrolloCtx: string;
+  /**
+   * «Contexto del cronograma» (2026-09-23): las reuniones que el CSE deja entrar y sus notas, YA
+   * rotuladas por `lib/contexto/material-cronograma.ts`. Opcionales y SOLO se agregan con texto:
+   * sin material, la lista de fuentes y el mensaje quedan idénticos a los de antes (el golden lo
+   * afirma).
+   */
+  reunionesCtx?: string;
+  notasCtx?: string;
 }): FuenteDeContexto[] {
+  const delContexto: FuenteDeContexto[] = [];
+  if (crudas.reunionesCtx?.trim()) {
+    delContexto.push({ key: "reuniones-del-cronograma", ambito: "proyecto", texto: crudas.reunionesCtx });
+  }
+  if (crudas.notasCtx?.trim()) {
+    delContexto.push({ key: "notas-del-cronograma", ambito: "proyecto", texto: crudas.notasCtx });
+  }
   return [
     {
       key: "cronograma-actual",
@@ -98,6 +113,7 @@ export function fuentesDelDetalle(crudas: {
         ? `=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos, llaves y conexiones) ===\n${crudas.desarrolloCtx}`
         : "",
     },
+    ...delContexto,
   ];
 }
 
@@ -121,6 +137,14 @@ export function renderDetalleDeCronograma(i: InsumosDelDetalle): string {
   const cronograma = porKey.get("cronograma-actual") ?? "";
   const handoff = porKey.get("handoff-curado") ?? "";
   const requerimiento = porKey.get("requerimiento-tecnico") ?? "";
+  /* Las fuentes del «Contexto del cronograma». Van DESPUÉS del requerimiento: primero lo que se
+     prometió (handoff) y lo técnico, después lo que efectivamente pasó en el proyecto. Vacías no
+     suman ni un carácter — ese es el golden. */
+  const delContexto = ["reuniones-del-cronograma", "notas-del-cronograma"]
+    .map((k) => porKey.get(k) ?? "")
+    .filter((t) => t.trim())
+    .map((t) => `\n${t}\n`)
+    .join("");
   const e = i.encabezado;
 
   let msg = `${i.instrucciones}Empresa: ${e.companyName}
@@ -129,7 +153,7 @@ ${e.serviceTypeLabel ? `Tipo de servicio contratado: ${e.serviceTypeLabel}\n` : 
 ${cronograma}
 
 ${handoff}
-${requerimiento ? `\n${requerimiento}\n` : ""}
+${requerimiento ? `\n${requerimiento}\n` : ""}${delContexto}
 === REGLAS SEGÚN LA CLASIFICACIÓN ===
 ${reglasDeClasificacion(i.clasificacion)}
 

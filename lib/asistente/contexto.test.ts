@@ -89,7 +89,7 @@ describe("el contexto del chat se mantiene liviano", () => {
     const infracciones: string[] = [];
     for (const archivo of archivosDelAsistente()) {
       const src = soloCodigo(fs.readFileSync(path.join(RAIZ, archivo), "utf8"));
-      for (const tabla of ["firefliesSession", "handoffSource"]) {
+      for (const tabla of ["firefliesSession", "handoffSource", "timelineSource"]) {
         if (src.includes(`prisma.${tabla}.`)) {
           infracciones.push(`${archivo.split(path.sep).join("/")} → prisma.${tabla}`);
         }

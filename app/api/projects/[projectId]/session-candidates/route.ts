@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
+import { classifyHandoffSession } from "@/lib/handoff/session-relevance";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import {
   PISO_REUNIONES_INTERNAS,
@@ -10,6 +10,14 @@ import {
 } from "@/lib/sessions/candidatas-internas";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
+import {
+  alimenta,
+  excluidaAMano,
+  forzadaAMano,
+  origenDelVinculo,
+  parseDestino,
+  usaReglaDeRelevancia,
+} from "@/lib/sessions/destinos-de-contexto";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -23,15 +31,22 @@ import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-so
  *     (¿la regla la incluiría?) para destacarlas. Agregar una la fuerza al handoff.
  *
  * Solo lectura. Incluir/excluir va por POST /api/projects/[projectId]/handoff-sessions.
+ *
+ * ── `?para=cronograma` (2026-09-23, «Contexto del cronograma») ──────────────
+ * El mismo panel para el CRONOGRAMA: `feeding`/`excluded` salen de su regla (toda reunión del
+ * proyecto, con la X y el «Agregar» del CSE en `timelineOverride`) y las candidatas no llevan la
+ * regla de relevancia del handoff. Lo que cambia entre los dos destinos vive en
+ * `lib/sessions/destinos-de-contexto.ts`; incluir/excluir va por POST .../timeline/sessions.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
   const { clientId } = guard;
+  const destino = parseDestino(req.nextUrl.searchParams.get("para"));
 
   const salesEmails = await salesPresenceEmails();
   const applies = (title: string, participants: string[], organizerEmail: string | null): boolean =>
@@ -44,6 +59,7 @@ export async function GET(
       confidence: true,
       rationale: true,
       handoffOverride: true,
+      timelineOverride: true,
       included: true,
       reviewedAt: true,
       isPrimary: true,
@@ -68,11 +84,12 @@ export async function GET(
   // ¿Esta sesión linkeada alimenta el handoff? Excluida de la membresía del proyecto
   // (included=false, tombstone humano) no alimenta NADA; si es miembro, aplica la
   // política de link (primario / confianza alta / forzada) + la regla de relevancia.
+  //   El cronograma no tiene regla de relevancia: `alimenta` ni la consulta en ese destino.
   const feeds = (r: (typeof linkedRows)[number]): boolean =>
-    r.included &&
-    linkFeedsHandoff(
-      { isPrimary: r.isPrimary, confidence: r.confidence, handoffOverride: r.handoffOverride },
-      applies(r.session.title, r.session.participants, r.session.organizerEmail),
+    alimenta(
+      destino,
+      r,
+      usaReglaDeRelevancia(destino) && applies(r.session.title, r.session.participants, r.session.organizerEmail),
     );
 
   // Atribución multi-proyecto: nombres de los OTROS proyectos donde también está
@@ -103,10 +120,10 @@ export async function GET(
       source: r.source,
       confidence: r.confidence,
       rationale: r.rationale,
-      forced: r.handoffOverride === true,
+      forced: forzadaAMano(destino, r),
       alsoIn: alsoInBySession.get(r.session.id) ?? [],
-      // Por qué alimenta (con la política nueva no hay otro caso): la UI lo muestra en la fila.
-      origin: r.handoffOverride === true ? "forzada a mano" : r.isPrimary ? "primaria" : "confianza alta",
+      // Por qué alimenta: la UI lo muestra en la fila. Cada destino lo dice con sus palabras.
+      origin: origenDelVinculo(destino, r),
       /* ⚠ Los dos grupos de CANDIDATAS excluyen las futuras (`date: { lte: new Date() }`), pero
          `feeding` nunca tuvo ese filtro: una reunión que todavía no ocurrió puede estar
          alimentando un handoff y ser invisible en todas las listas. Medido: 30 vínculos así hoy.
@@ -124,7 +141,7 @@ export async function GET(
   // pero siguen siendo del proyecto. Se muestran como "Excluida" con un toggle para
   // re-incluirlas — es la reversa visible del anclaje de la Fase 1, sin ir al modal.
   const excluded = safeRows
-    .filter((r) => r.included && r.handoffOverride === false)
+    .filter((r) => excluidaAMano(destino, r))
     .sort((a, b) => b.session.date.getTime() - a.session.date.getTime())
     .map((r) => ({
       sessionId: r.session.id,
@@ -259,7 +276,11 @@ export async function GET(
        vuelven con su marca y el botón dice "Reincluir" en vez de "Agregar". */
     .filter((s) => !feedingIds.has(s.id))
     .map((s) => {
-      const cls = classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails);
+      /* El cronograma no tiene regla de relevancia: toda reunión del cliente puede alimentarlo,
+         así que ninguna se destaca ni se atenúa por el título. */
+      const cls = usaReglaDeRelevancia(destino)
+        ? classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails)
+        : { include: true, reason: "" };
       return {
         sessionId: s.id,
         title: s.title,

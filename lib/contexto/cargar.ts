@@ -18,6 +18,22 @@ import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
 import { fuentesDelAssist } from "./asistente-cronograma";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
+import { getProjectTimelineSessions } from "@/lib/sessions/project-sources";
+import { fetchTranscriptContent } from "@/lib/sessions/transcript";
+import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
+import { HANDOFF_SESSION_CHAR_TIERS } from "@/lib/handoff/session-budget";
+import { soloOcurridas } from "@/lib/sessions/ocurridas";
+import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
+import {
+  MAX_REUNIONES_A_LEER,
+  bloqueDeNotasDelCronograma,
+  bloqueDeReunionesDelCronograma,
+  repartirEspacio,
+  type NotaParaElCronograma,
+  type ReunionParaElCronograma,
+} from "./material-cronograma";
 
 /**
  * El contexto del Detalle de Cronograma (pieza "timeline"):
@@ -32,7 +48,7 @@ export async function cargarContextoDelDetalle(
   projectId: string,
   pipelineKey: ProjectPipelineKey | null = null,
 ): Promise<ContextoDeProyecto> {
-  const [handoffCtx, timelineCtx, desarrolloCtx, canvasCronograma] = await Promise.all([
+  const [handoffCtx, timelineCtx, desarrolloCtx, canvasCronograma, mat] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: true }),
     loadTimelineContext(projectId, { includeIds: true }),
     loadDesarrolloContext(projectId),
@@ -40,11 +56,19 @@ export async function cargarContextoDelDetalle(
       where: { projectId, ...canvasOf("timeline") },
       select: { sections: true },
     }),
+    // ÚLTIMO a propósito: el censo de handoff-al-cliente mide la distancia hasta el embudo.
+    cargarMaterialDelCronograma(projectId),
   ]);
   return {
     projectId,
     pipelineKey,
-    fuentes: fuentesDelDetalle({ timelineCtx, handoffCtx, desarrolloCtx }),
+    fuentes: fuentesDelDetalle({
+      timelineCtx,
+      handoffCtx,
+      desarrolloCtx,
+      reunionesCtx: mat.reuniones,
+      notasCtx: mat.notas,
+    }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     ),
@@ -75,7 +99,7 @@ export async function cargarContextoDelAssist(
   projectId: string,
   cronogramaCtx: string,
 ): Promise<ContextoDeProyecto> {
-  const [handoffCtx, desarrolloCtx, canvasCronograma, proyecto] = await Promise.all([
+  const [handoffCtx, desarrolloCtx, canvasCronograma, proyecto, mat] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: true }),
     loadDesarrolloContext(projectId),
     prisma.projectCanvas.findFirst({
@@ -94,6 +118,8 @@ export async function cargarContextoDelAssist(
         hubspotAdoptionState: true,
       },
     }),
+    // ÚLTIMO a propósito, igual que en el detalle: el censo mide la distancia hasta el embudo.
+    cargarMaterialDelCronograma(projectId),
   ]);
   return {
     projectId,
@@ -103,9 +129,116 @@ export async function cargarContextoDelAssist(
       handoffCtx,
       desarrolloCtx,
       operativaCtx: proyecto ? bloqueDeOperativa(proyecto, { incluirRotulo: false }) : "",
+      reunionesCtx: mat.reuniones,
+      notasCtx: mat.notas,
     }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
     ),
   };
+}
+
+/**
+ * EL MATERIAL DEL «CONTEXTO DEL CRONOGRAMA» (2026-09-23): las reuniones que el CSE deja entrar y
+ * las notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
+ *
+ * Lo leen el detalle (tareas y cuáles son reuniones) y «Pedir cambio con IA» (el único que puede
+ * tocar fases). Devuelve `""` en lo que no haya: los armadores omiten la fuente vacía y el prompt
+ * de un proyecto sin material queda byte-idéntico al de antes.
+ *
+ * ── CÓMO SE REPARTE EL ESPACIO ───────────────────────────────────────────────
+ * Por defecto entran TODAS las reuniones del proyecto (la regla de `session-feeding.ts`), así que
+ * con 60 reuniones no caben enteras. Primero se LEEN (las agregadas a mano todas; del resto, las
+ * `MAX_REUNIONES_A_LEER` más recientes), se descartan las que no dejaron nada, y recién ahí se
+ * reparte con `repartirEspacio` (puro, en ./material-cronograma.ts, con su test): las que el CSE
+ * AGREGÓ A MANO van primero con su propio cupo. Repartir antes de leer le daba las cotas grandes a
+ * reuniones vacías y dejaba la que tenía material con 400 caracteres (revisión 2026-09-23).
+ *
+ * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
+ * la pertenencia al cliente y el tombstone no se re-implementan acá. Las futuras se cortan con
+ * `soloOcurridas`, la misma regla que usa todo lector de reuniones.
+ */
+export async function cargarMaterialDelCronograma(
+  projectId: string,
+): Promise<{ reuniones: string; notas: string }> {
+  const [{ sessions }, notas, categorias] = await Promise.all([
+    getProjectTimelineSessions(projectId),
+    leerNotasDelCronograma(projectId),
+    getSessionCategories(),
+  ]);
+  const dominiosPropios = buildInternalDomainsSet(categorias);
+  const ahora = Date.now();
+
+  const pasadas = soloOcurridas(sessions, ahora).sort((a, b) => b.date - a.date);
+  const aLeer = [
+    ...pasadas.filter((s) => s.timelineOverride === true),
+    ...pasadas.filter((s) => s.timelineOverride !== true).slice(0, MAX_REUNIONES_A_LEER),
+  ];
+
+  /* De a tandas: con 50 reuniones, un Promise.all abriría 50 lecturas de transcript a la vez contra
+     el mismo pool que atiende la pantalla. Cada lectura trae como mucho la cota más grande del
+     reparto; después se recorta a la que le toque, sin volver a leer. */
+  const contenidoPorId = new Map<string, string>();
+  for (let i = 0; i < aLeer.length; i += 8) {
+    const tanda = aLeer.slice(i, i + 8);
+    const leidos = await Promise.all(
+      tanda.map((s) => fetchTranscriptContent(s.id, s.title, { maxChars: HANDOFF_SESSION_CHAR_TIERS[0] })),
+    );
+    tanda.forEach((s, k) => {
+      const c = leidos[k];
+      if (c && c.trim()) contenidoPorId.set(s.id, c);
+    });
+  }
+
+  const conContenido = aLeer.filter((s) => contenidoPorId.has(s.id));
+  const espacio = repartirEspacio(
+    conContenido.map((s) => ({
+      id: s.id,
+      title: s.title,
+      date: s.date,
+      agregadaAMano: s.timelineOverride === true,
+    })),
+    ahora,
+  );
+
+  const reuniones: ReunionParaElCronograma[] = conContenido
+    .filter((s) => espacio.has(s.id))
+    .map((s) => ({
+      title: s.title,
+      date: s.date,
+      prefijoDeSala: prefijoDeSala(etiquetaDeSala({ participants: s.participants }, dominiosPropios)),
+      contenido: (contenidoPorId.get(s.id) ?? "").slice(0, espacio.get(s.id)),
+      agregadaAMano: s.timelineOverride === true,
+    }))
+    // En orden cronológico: el cronograma se lee como una historia.
+    .sort((a, b) => a.date - b.date);
+
+  return {
+    reuniones: bloqueDeReunionesDelCronograma(reuniones),
+    notas: bloqueDeNotasDelCronograma(notas),
+  };
+}
+
+/** Solo las NOTAS (el agente de avance lee sus reuniones por su propio camino). */
+export async function cargarNotasDelCronograma(projectId: string): Promise<string> {
+  return bloqueDeNotasDelCronograma(await leerNotasDelCronograma(projectId));
+}
+
+/**
+ * Las notas vivas del proyecto. La tolerancia a que la tabla falte cubre solo un SQL aplicado a
+ * medias: sin la columna `timelineOverride` (el mismo SQL), la lectura de reuniones de arriba ya
+ * habría reventado. El orden obligatorio sigue siendo SQL → deploy.
+ */
+async function leerNotasDelCronograma(projectId: string): Promise<NotaParaElCronograma[]> {
+  if (!modeloDisponible(prisma.timelineSource)) return [];
+  try {
+    return await prisma.timelineSource.findMany({
+      where: { projectId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      select: { title: true, content: true },
+    });
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return [];
+    throw e;
+  }
 }

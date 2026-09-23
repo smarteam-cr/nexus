@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
+import { whereAlimentaCronograma } from "@/lib/timeline/session-feeding";
 
 export interface PastSessionContext {
   id: string;
@@ -46,8 +47,11 @@ export async function getPastSessionsForProject(
   if (!project) return [];
 
   const links = await prisma.sessionProject.findMany({
-    // `included: true`: las sesiones excluidas por humano (tombstone) no alimentan el avance.
-    where: { projectId, included: true, session: { date: { lte: now } } },
+    /* La regla del CRONOGRAMA (lib/timeline/session-feeding.ts): el tombstone (`included`) y la X
+       del Contexto del cronograma (`timelineOverride=false`) no alimentan el avance. Va en el
+       WHERE, no filtrada después: con `take` en 12, filtrar en memoria dejaba menos de 12 cuando
+       el CSE sacaba reuniones recientes. */
+    where: { projectId, ...whereAlimentaCronograma(), session: { date: { lte: now } } },
     orderBy: { session: { date: "desc" } },
     take: opts.limit ?? 12,
     select: {
