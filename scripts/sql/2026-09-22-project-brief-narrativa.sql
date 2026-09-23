@@ -9,7 +9,10 @@
 -- CUALQUIER cliente revienta contra Postgres — es el incidente de `closeDateOverride` (Tanda M),
 -- byte por byte.
 --
---   npx prisma db execute --file scripts/sql/2026-09-22-project-brief-narrativa.sql --schema prisma/schema.prisma
+--   ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-09-22-project-brief-narrativa.sql
+--
+-- ⚠ SIN `--schema`: con Prisma 7 esa opción ya no existe (la conexión sale de prisma.config.ts) y
+-- el comando muere con «unknown or unexpected option», sin aplicar nada y sin que se note.
 --
 -- Después, en la máquina de desarrollo: `npx prisma generate` y REINICIAR el dev server (si no,
 -- el cliente viejo en memoria sigue sin conocer la columna y las escrituras fallan en silencio).
