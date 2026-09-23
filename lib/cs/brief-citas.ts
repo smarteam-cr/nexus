@@ -44,10 +44,23 @@ export interface BriefStatement {
 
 export interface BriefParseado {
   headline: string | null;
+  /**
+   * El resumen en PROSA, si el prompt lo pidió (hoy: solo el brief de PROYECTO).
+   *
+   * ⚠ NO lleva cita, y esa es una excepción deliberada a la regla de oro de este módulo: es una
+   * SÍNTESIS de todo el contexto —el recorrido del cliente y lo que dice el handoff—, no una
+   * afirmación puntual sobre un hecho, así que no hay una fuente que la respalde sin mentir.
+   * Lo que se afirma con evidencia sigue yendo en `statements`, donde cada línea trae la suya.
+   * El límite de largo es el único freno: un párrafo, no un documento.
+   */
+  narrativa: string | null;
   statements: BriefStatement[];
   /** Cuántas afirmaciones se tiraron. Se muestra: un descarte alto es señal de prompt flojo. */
   discarded: number;
 }
+
+/** Tope de la narrativa. Dos o tres párrafos; más que eso deja de ser un resumen. */
+export const TOPE_NARRATIVA_CHARS = 2000;
 
 /**
  * El primer objeto JSON balanceado del texto.
@@ -95,9 +108,9 @@ export function parsearBriefCitado(
 ): BriefParseado {
   const jsonText = extraerJson(rawText);
   if (!jsonText) throw new Error("output del agente sin JSON");
-  let parsed: { headline?: unknown; statements?: unknown };
+  let parsed: { headline?: unknown; narrativa?: unknown; statements?: unknown };
   try {
-    parsed = JSON.parse(jsonText) as { headline?: unknown; statements?: unknown };
+    parsed = JSON.parse(jsonText) as { headline?: unknown; narrativa?: unknown; statements?: unknown };
   } catch {
     throw new Error("output del agente con JSON inválido");
   }
@@ -126,6 +139,12 @@ export function parsearBriefCitado(
     headline:
       typeof parsed.headline === "string" && parsed.headline.trim()
         ? parsed.headline.trim().slice(0, 400)
+        : null,
+    /* Ausente en el brief de CUENTA, cuyo prompt no la pide: `null`, no un error. Un campo
+       opcional que falta no es una salida malformada. */
+    narrativa:
+      typeof parsed.narrativa === "string" && parsed.narrativa.trim()
+        ? parsed.narrativa.trim().slice(0, TOPE_NARRATIVA_CHARS)
         : null,
     statements,
     discarded,

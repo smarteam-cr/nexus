@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  TOPE_NARRATIVA_CHARS,
   TOPE_STATEMENTS,
   extraerJson,
   parsearBriefCitado,
@@ -151,5 +152,46 @@ describe("extraerJson respeta comillas y escapes", () => {
 
   it("sin llaves, null", () => {
     expect(extraerJson("no hay nada")).toBeNull();
+  });
+});
+
+/**
+ * ⭐ LA NARRATIVA ES OPCIONAL, Y TIENE TOPE (2026-09-22)
+ *
+ * El resumen de PROYECTO gana un párrafo en prosa arriba de las afirmaciones; el de CUENTA no lo
+ * pide. Este módulo es compartido, así que el campo tiene que ser aditivo en los dos sentidos:
+ * si no viene, `null` y nada más — volverlo obligatorio rompería el brief de cuenta de golpe.
+ */
+describe("la narrativa (opcional) del resumen", () => {
+  const FUENTES = new Map([
+    ["sesion:s1", { kind: "sesion", id: "s1", label: "Kickoff", date: null }],
+  ]);
+  const conStatements = (extra: Record<string, unknown>) =>
+    parsearBriefCitado(
+      JSON.stringify({ statements: [{ text: "Algo", source: "sesion:s1" }], ...extra }),
+      FUENTES,
+    );
+
+  it("sin narrativa devuelve null y NO lanza — es el caso del brief de cuenta", () => {
+    expect(conStatements({}).narrativa).toBeNull();
+  });
+
+  it("una narrativa vacía o que no es texto queda en null, no en cadena vacía", () => {
+    /* `""` pintaría un bloque en blanco arriba de los hallazgos: un hueco que se lee como error. */
+    expect(conStatements({ narrativa: "   " }).narrativa).toBeNull();
+    expect(conStatements({ narrativa: 42 }).narrativa).toBeNull();
+  });
+
+  it("se recorta al tope: un documento entero no entra a la fila ni a la pantalla", () => {
+    const larga = conStatements({ narrativa: "x".repeat(TOPE_NARRATIVA_CHARS * 3) }).narrativa;
+    expect(larga?.length).toBe(TOPE_NARRATIVA_CHARS);
+  });
+
+  it("no toca lo demás: el titular y las afirmaciones salen igual", () => {
+    const r = conStatements({ headline: "Va trabado", narrativa: "Se vendió una migración." });
+    expect(r.headline).toBe("Va trabado");
+    expect(r.narrativa).toBe("Se vendió una migración.");
+    expect(r.statements).toHaveLength(1);
+    expect(r.discarded).toBe(0);
   });
 });

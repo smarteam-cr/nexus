@@ -153,3 +153,45 @@ describe("el agente sin sembrar no es un error", () => {
     expect(leer(RUNNER)).toMatch(/if \(!agent\) return \{ status: "skipped", reason: "agent_not_seeded" \}/);
   });
 });
+
+/**
+ * ⭐ EL MATERIAL DEL RECORRIDO (2026-09-22)
+ *
+ * El resumen pasó a contar también de dónde viene el cliente y dónde está parado el plan. Las dos
+ * fuentes entran por `agregar()` —el único camino que escribe texto y mapa juntos— pero el runner
+ * es quien las CARGA, y ahí el modo de falla es distinto: si alguien saca la lectura, el contexto
+ * sigue armándose perfecto con menos material y el párrafo se vuelve genérico sin que nada falle.
+ */
+describe("⭐ el recorrido del cliente y el plan llegan al contexto", () => {
+  const RUNNER = "lib/projects/project-brief.ts";
+  const src = () => fs.readFileSync(path.join(process.cwd(), RUNNER), "utf8");
+
+  it("lee la relación previa del cliente, excluyendo ESTE proyecto", () => {
+    /* Sin el `excludeProjectId`, el proyecto actual se cuenta a sí mismo como historia previa y
+       el párrafo abre diciendo que el cliente ya tenía este mismo proyecto. */
+    expect(src()).toContain("loadPriorRelationshipContext(p.clientId, projectId)");
+  });
+
+  it("lee el cronograma medido, y un fallo suyo NO tumba el resumen", () => {
+    const s = src();
+    expect(s).toContain("loadProjectSummary(projectId)");
+    expect(s, "un cronograma ilegible pasaría a tumbar todo el resumen").toContain(
+      "loadProjectSummary(projectId).catch(() => null)",
+    );
+    expect(s, "el summary llega crudo: hay que serializarlo con el módulo que tiene test").toContain(
+      "textoDeCronogramaParaBrief(summary)",
+    );
+  });
+
+  it("el prompt sembrado PIDE la narrativa, y dice que no lleva cita", () => {
+    /* El campo puede existir en el parser, en la base y en la pantalla, y el modelo no emitirlo
+       nunca: el resultado es una columna siempre nula y una pantalla que no muestra nada, sin un
+       solo error. El prompt es la mitad de esta funcionalidad. */
+    const seed = fs.readFileSync(
+      path.join(process.cwd(), "scripts/create-project-brief-agent.ts"),
+      "utf8",
+    );
+    expect(seed, "el prompt dejó de pedir el párrafo").toContain('"narrativa"');
+    expect(seed, "el prompt no aclara que la narrativa va sin citas").toContain("sin citas");
+  });
+});

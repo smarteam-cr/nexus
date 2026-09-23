@@ -26,7 +26,9 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
-import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
+import { loadHandoffContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
+import { loadProjectSummary } from "@/lib/portfolio/load";
+import { textoDeCronogramaParaBrief } from "./brief-cronograma";
 import { armarContextoDeBrief, type DatosDeBrief } from "./brief-fuentes";
 
 const AGENT_ID = "agent-project-brief";
@@ -53,6 +55,8 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
     where: { id: projectId },
     select: {
       name: true,
+      clientId: true,
+      createdAt: true,
       client: { select: { name: true } },
       hubspotStatus: true,
       hubspotPriority: true,
@@ -75,8 +79,16 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
      afuera de las fuentes citables, medido en la base en vez de fila por fila. */
   const ocurridas = { projects: { some: { projectId } }, date: { lte: new Date() } } as const;
 
-  const [sesiones, desviaciones, categorias, handoffTexto, totalOcurridas, sinRegistro] =
-    await Promise.all([
+  const [
+    sesiones,
+    desviaciones,
+    categorias,
+    handoffTexto,
+    totalOcurridas,
+    sinRegistro,
+    historiaDelCliente,
+    summary,
+  ] = await Promise.all([
     prisma.firefliesSession.findMany({
       /* ⚠ SOLO LAS QUE YA OCURRIERON. Las más recientes incluían las AGENDADAS —hay 459 sesiones
          futuras en el corpus por la agenda recurrente de Google—, así que el resumen se armaba
@@ -116,6 +128,14 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
     prisma.firefliesSession.count({
       where: { ...ocurridas, transcript: null, summary: { equals: Prisma.DbNull } },
     }),
+    /* EL RECORRIDO DEL CLIENTE (2026-09-22). El mismo bloque que ya leen el handoff y la
+       exploración: proyectos y handoffs anteriores + la última Entrega publicada. Es lo que deja
+       contar de dónde viene la relación en vez de arrancar la historia en la reunión de la
+       semana pasada. Presupuesto propio y chico (~2,5k chars) — es trasfondo, no alcance. */
+    loadPriorRelationshipContext(p.clientId, projectId),
+    /* EL PLAN, MEDIDO. `catch` a null y no throw: que el cronograma no se pueda leer no puede
+       tumbar el resumen entero — el resto del material sigue sirviendo. */
+    loadProjectSummary(projectId).catch(() => null),
     ]);
 
   /* El contenido lo serializa el helper compartido: sabe leer los DOS shapes de resumen
@@ -130,6 +150,7 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
   return {
     projectName: p.name,
     clientName: p.client?.name ?? "sin cliente",
+    arranque: p.createdAt,
     /* `bloqueDeOperativa` devuelve "" cuando no hay nada cargado, y el armador omite los bloques
        vacíos de los DOS lados — así un proyecto sin operativa no gana una fuente hueca. */
     operativa: bloqueDeOperativa(p, { incluirRotulo: false }) || null,
@@ -145,6 +166,8 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
        la fuente (el armador omite los bloques vacíos de los dos lados), así que un proyecto sin
        handoff generado no gana una fuente hueca que el modelo podría citar. */
     handoff: handoffTexto.trim() ? { texto: handoffTexto, at: p.handoff?.updatedAt ?? null } : null,
+    cronograma: textoDeCronogramaParaBrief(summary),
+    historiaDelCliente: historiaDelCliente.trim() || null,
     sesiones: sesiones.map((s, i) => ({
       id: s.id,
       title: s.title,
@@ -230,19 +253,24 @@ export async function runProjectBrief(
       ctx.serialized,
       "Redactá el resumen de cómo va ESTE proyecto según tus instrucciones.",
     );
-    const { headline, statements, discarded } = parsearBriefCitado(rawText, ctx.sources);
+    const { headline, narrativa, statements, discarded } = parsearBriefCitado(rawText, ctx.sources);
 
     await prisma.projectBrief.upsert({
       where: { projectId },
       create: {
         projectId,
         headline,
+        narrativa,
         statements: statements as unknown as Prisma.InputJsonValue,
         agentRunId: run.id,
         generatedAt: new Date(),
       },
+      /* ⚠ Los DOS lados del upsert escriben `narrativa`. Con el campo solo en `create`, el primer
+         resumen la tendría y cada regeneración la dejaría congelada en la versión vieja — un texto
+         que envejece sin que nada lo diga. */
       update: {
         headline,
+        narrativa,
         statements: statements as unknown as Prisma.InputJsonValue,
         agentRunId: run.id,
         generatedAt: new Date(),

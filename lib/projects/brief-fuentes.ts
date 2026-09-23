@@ -25,6 +25,17 @@ import type { BriefSource } from "@/lib/cs/brief-citas";
 /** Cap por bloque: una minuta larga no puede comerse el presupuesto del resto del contexto. */
 export const MAX_CHARS_POR_BLOQUE = 4000;
 
+/**
+ * El handoff tiene su propio cupo, y más grande (2026-09-22).
+ *
+ * Es UN bloque con las 12 secciones del documento adentro, serializadas por orden, así que con el
+ * cupo común se cortaba SIEMPRE a la altura de «¿Qué vendimos?»: lo que se prometió —que es
+ * contra lo que se mide todo lo demás— entraba a medias, y «Riesgos y banderas rojas» no entraba
+ * nunca. Se midió al agregarle la narrativa al resumen, que es justo la parte que se apoya en
+ * esas secciones: sin esto, el párrafo cuenta el proyecto desde la mitad del documento.
+ */
+export const MAX_CHARS_HANDOFF = 9000;
+
 export interface ContextoDeBrief {
   serialized: string;
   sources: Map<string, BriefSource>;
@@ -63,11 +74,26 @@ export interface CoberturaDeMaterial {
 export interface DatosDeBrief {
   projectName: string;
   clientName: string;
+  /** Cuándo nació el proyecto en Nexus. Es la línea de largada del recorrido que se narra. */
+  arranque: Date | null;
   /** Cómo va según el equipo, cargado a mano en HubSpot. Ya viene traducido a español. */
   operativa: string | null;
   operativaAt: Date | null;
   etapa: { label: string; fuente: string; at: Date | null } | null;
   handoff: { texto: string; at: Date | null } | null;
+  /**
+   * El PLAN, medido: fases cerradas, atraso, para cuándo cierra hoy y cuánto se corrió.
+   * Ya serializado por `textoDeCronogramaParaBrief`, que omite lo que no se puede afirmar.
+   */
+  cronograma: string | null;
+  /**
+   * El recorrido del CLIENTE con Smarteam antes de este proyecto (proyectos previos, handoffs,
+   * la última Entrega publicada). Serializado por `loadPriorRelationshipContext`.
+   *
+   * ⚠ Es trasfondo, no alcance: lo que pasó en OTRO proyecto no es un hecho sobre éste. El prompt
+   * lo dice y el bloque lo repite adentro del texto.
+   */
+  historiaDelCliente: string | null;
   sesiones: SesionParaBrief[];
   desviaciones: DesviacionParaBrief[];
   cobertura: CoberturaDeMaterial;
@@ -90,8 +116,13 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
   const sources = new Map<string, BriefSource>();
   const bloques: string[] = [];
 
-  /** El ÚNICO camino: registra la fuente y escribe su bloque. Nunca uno sin el otro. */
-  const agregar = (s: FuenteConFecha, contenido: string) => {
+  /**
+   * El ÚNICO camino: registra la fuente y escribe su bloque. Nunca uno sin el otro.
+   *
+   * El cupo es POR BLOQUE y no global a propósito: el material no vale lo mismo por carácter, y
+   * el único que hoy se pasa del común es el handoff (ver `MAX_CHARS_HANDOFF`).
+   */
+  const agregar = (s: FuenteConFecha, contenido: string, cap = MAX_CHARS_POR_BLOQUE) => {
     const limpio = contenido.trim();
     // Un bloque vacío sería una fuente citable que no dice nada: se omite de los DOS lados.
     if (!limpio) return;
@@ -103,12 +134,15 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
     });
     bloques.push(
       `### FUENTE [${s.kind}:${s.id}] — ${s.label} (${fmtCorto(s.date)})\n` +
-        limpio.slice(0, MAX_CHARS_POR_BLOQUE),
+        limpio.slice(0, cap),
     );
   };
 
   // El encabezado NO es una fuente: nombra al proyecto, no afirma nada sobre él.
-  bloques.push(`# PROYECTO: ${d.projectName} — cliente: ${d.clientName}`);
+  bloques.push(
+    `# PROYECTO: ${d.projectName} — cliente: ${d.clientName}` +
+      (d.arranque ? ` — dado de alta el ${fmtCorto(d.arranque)}` : ""),
+  );
 
   if (d.etapa) {
     agregar(
@@ -128,6 +162,30 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
     agregar(
       { kind: "handoff", id: "propio", label: "Handoff del proyecto", date: d.handoff.at },
       d.handoff.texto,
+      MAX_CHARS_HANDOFF,
+    );
+  }
+
+  /* EL PLAN, MEDIDO POR NEXUS (2026-09-22). Va DESPUÉS del handoff a propósito: primero lo que se
+     prometió, después cómo va contra esa promesa — que es el orden en que hay que leerlo.
+     La fecha es `null` porque no es un hecho de una fecha: es el estado de hoy, recalculado en
+     cada lectura. */
+  if (d.cronograma) {
+    agregar(
+      { kind: "cronograma", id: "actual", label: "Cronograma del proyecto", date: null },
+      d.cronograma,
+    );
+  }
+
+  /* EL RECORRIDO DEL CLIENTE, como TRASFONDO. La advertencia va adentro del bloque —no solo en el
+     prompt— porque es el error que este material invita: contar como propio el alcance de otro
+     proyecto. Mismo molde que `loadHandoffDelHermanoMayorContext`. */
+  if (d.historiaDelCliente) {
+    agregar(
+      { kind: "historia", id: "cliente", label: "Historia del cliente con Smarteam", date: null },
+      `${d.historiaDelCliente}\n\n⚠ Esto es de OTROS proyectos del mismo cliente: sirve para ` +
+        `entender de dónde viene la relación, NO para afirmar nada sobre el proyecto actual ni ` +
+        `para copiar sus fechas o compromisos.`,
     );
   }
 

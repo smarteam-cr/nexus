@@ -15,6 +15,7 @@ import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import AltaTrabada from "@/components/projects/AltaTrabada";
+import { altaEnCurso, parseEstadoDeAlta } from "@/lib/projects/alta";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 
@@ -558,7 +559,12 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
       {/* El alta a medio hacer, ARRIBA de todo y en su versión completa: el widget es donde
           alguien va a averiguar por qué el proyecto se comporta raro, así que acá el cartel
           tiene que traer el motivo y el último intento, no solo el rótulo. */}
-      {data.alta?.estado && (
+      {/* ⚠ La condición es «¿hay algo que mostrar?», no «¿hay un estado de alta?». `altaEstado`
+          es "listo" en todo proyecto que se dio de alta bien, así que con la condición vieja este
+          envoltorio se pintaba igual —16 px de padding— mientras `AltaTrabada` devolvía null: un
+          hueco fantasma arriba del resumen, visible en la captura de Elías y en cada ficha. El que
+          decide si se pinta y el que trae el espacio tienen que ser el mismo. */}
+      {data.alta && altaEnCurso(parseEstadoDeAlta(data.alta.estado)) && (
         <div className="p-4 pb-0">
           <AltaTrabada
             projectId={projectId}

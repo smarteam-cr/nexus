@@ -36,6 +36,11 @@ CÓMO PESAR LAS REUNIONES:
 
 QUÉ ESCRIBIR:
 - "headline": UNA frase con el estado neto del proyecto. Si está trabado, la frase lo dice y por qué.
+- "narrativa": DOS párrafos cortos (máximo 120 palabras en total) que cuenten la HISTORIA del proyecto, para alguien que no lo venía siguiendo. Primer párrafo: qué se vendió y para qué — sale del handoff (fuente [handoff:propio]) — y de dónde viene este cliente si hay fuente [historia:cliente]. Segundo párrafo: dónde está parado hoy (etapa, avance del plan, atraso, para cuándo cierra) y qué es lo próximo que tiene que pasar. Es un TEXTO CORRIDO, en prosa, sin viñetas y sin citas: la evidencia va en los statements, que se leen justo debajo.
+  · Las reglas de largo y de "una idea por statement" NO aplican acá: esto es prosa, y tiene que leerse como algo que le contarías a un compañero en el pasillo.
+  · Tampoco inventes acá lo que no podrías afirmar en un statement: si no está en el contexto, no va. Sin handoff ni historia, escribí solo el segundo párrafo.
+  · Si el material no alcanza ni para eso, devolvé "narrativa": null. Un párrafo de relleno es peor que ninguno.
+  · ⚠ La fuente [historia:cliente] es de OTROS proyectos del mismo cliente: sirve para decir de dónde viene la relación, NUNCA para contar su alcance como si fuera de éste.
 - "statements": 4 a 10 afirmaciones, las más accionables primero. Con fechas y números concretos siempre que la fuente los tenga.
 - UNA IDEA POR STATEMENT, y CORTO: apuntá a 25 palabras, máximo 40. Si tenés dos ideas, son dos statements (o la segunda no vale la pena).
 - NO metas la evidencia ni la fecha DENTRO de la frase ("según la reunión del 28 de julio…", "el 24 de julio se admitió…"). La pantalla ya muestra de qué reunión salió, con su fecha y su hora, al lado del statement. Repetirlo adentro es ruido que empuja la frase a tres renglones.
@@ -47,6 +52,7 @@ TONO: español neutro, voseo, directo. Quien lo lee tiene la llamada en cinco mi
 FORMATO DE SALIDA — SOLO este JSON, sin markdown ni texto extra:
 {
   "headline": "una frase con el estado neto del proyecto",
+  "narrativa": "dos párrafos separados por una línea en blanco: qué se vendió y de dónde viene el cliente; después dónde está hoy y qué sigue",
   "statements": [
     { "text": "afirmación concreta con fechas o números si los hay", "source": "kind:id" }
   ]
@@ -55,7 +61,8 @@ FORMATO DE SALIDA — SOLO este JSON, sin markdown ni texto extra:
 REGLAS DE SALIDA:
 - "source" es el token EXACTO de una fuente del contexto (sin corchetes).
 - Máximo 10 statements.
-- No repitas la misma idea con dos fuentes distintas: elegí la más fuerte.`;
+- No repitas la misma idea con dos fuentes distintas: elegí la más fuerte.
+- La "narrativa" no repite los statements: los ENMARCA. Si lo único que tenés para decir ya está en la lista, devolvé null.`;
 
 async function main() {
   const force = process.argv.includes("--force");

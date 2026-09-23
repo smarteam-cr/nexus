@@ -93,6 +93,17 @@ function Cita({ source }: { source: { kind: string; id: string; label: string; d
 
 export interface BriefDeProyecto {
   headline: string | null;
+  /**
+   * El resumen en PROSA, arriba de las afirmaciones (2026-09-22).
+   *
+   * Las afirmaciones citadas contestan «qué pasó»; esto contesta «de qué se trata este proyecto y
+   * dónde está parado»: qué se vendió y para qué (el handoff), por dónde viene el recorrido y
+   * hacia dónde va. Sin eso, quien no venía siguiendo el proyecto lee ocho hallazgos sueltos y
+   * tiene que reconstruir la historia solo.
+   *
+   * `null` en los resúmenes generados antes de este cambio: la sección simplemente no lo pinta.
+   */
+  narrativa: string | null;
   statements: Array<{
     text: string;
     source: { kind: string; id: string; label: string; date: string | null };
@@ -115,6 +126,11 @@ export default function ProjectBriefSection({
 }) {
   const toast = useToast();
   const [generando, setGenerando] = useState(false);
+  /* Arranca ABIERTO: es la respuesta a «cómo va esto», que es la pregunta con la que alguien abre
+     el widget. El toggle existe para poder sacarlo del camino cuando ya se leyó, no para
+     esconderlo por default. No se recuerda entre cargas a propósito: un resumen que quedó
+     colapsado de ayer es exactamente el que nadie vuelve a leer. */
+  const [abierto, setAbierto] = useState(true);
 
   async function generar() {
     setGenerando(true);
@@ -164,7 +180,40 @@ export default function ProjectBriefSection({
   }
 
   return (
-    <div className="px-4 py-3 border-b border-line space-y-3">
+    <div className="border-b border-line">
+      {/* ── EL ENCABEZADO ES EL TOGGLE ──────────────────────────────────────────
+          Molde: `components/clients/ProjectContextSection.tsx:112-132` (chevron + título +
+          contexto + «Colapsar/Expandir» a la derecha). Colapsado se sigue leyendo LO QUE IMPORTA
+          —el titular y el aviso de vencido—: un toggle que esconde la única frase que alguien
+          necesita obliga a abrirlo siempre, y entonces no sirve de nada. */}
+      <button
+        onClick={() => setAbierto(!abierto)}
+        aria-expanded={abierto}
+        className="w-full flex items-start gap-2.5 px-4 py-3 hover:bg-surface-hover transition-colors text-left"
+      >
+        <svg
+          className={`w-4 h-4 mt-0.5 text-fg-secondary flex-shrink-0 transition-transform ${abierto ? "" : "-rotate-90"}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-fg leading-snug">
+            {brief.headline ?? "Resumen del proyecto"}
+          </span>
+          <span className="mt-0.5 block text-[10px] text-fg-muted">
+            {brief.statements.length} hallazgo{brief.statements.length === 1 ? "" : "s"} · generado{" "}
+            {fmtChipDate(brief.generatedAt)}
+            {brief.vencido ? " · quedó viejo" : ""}
+          </span>
+        </span>
+        <span className="text-xs text-fg-muted flex-shrink-0">{abierto ? "Colapsar" : "Expandir"}</span>
+      </button>
+      {/* Se oculta con `hidden` en vez de desmontarse: el estado de «generando» y el scroll de la
+          lista sobreviven al toggle, igual que en la sección de Contexto. */}
+      <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
       {brief.vencido && (
         <div className="flex items-start gap-2 text-[11px] border border-warn-line bg-warn-surface text-warn-ink rounded-lg px-3 py-2">
           {/* El motivo, no un «quedó viejo» genérico: es lo que dice si hace falta regenerar ya
@@ -179,8 +228,20 @@ export default function ProjectBriefSection({
           </button>
         </div>
       )}
-      {brief.headline && (
-        <p className="text-sm font-semibold text-fg leading-snug">{brief.headline}</p>
+      {/* El titular ya vive en el encabezado (se lee también colapsado): repetirlo acá sería
+          la misma frase dos veces seguidas. */}
+      {brief.narrativa && (
+        /* La NARRATIVA va primero y se lee como texto corrido: es el contexto que vuelve
+           interpretables a los hallazgos de abajo. Sin cita al pie a propósito —es una síntesis
+           de todo el material, no una afirmación puntual—; lo que se afirma con evidencia va en
+           la lista, donde cada línea trae su fuente. */
+        <div className="space-y-2 border-l-2 border-brand/30 pl-2.5">
+          {brief.narrativa.split(/\n{2,}/).map((parrafo, i) => (
+            <p key={i} className="text-xs text-fg-secondary leading-relaxed">
+              {parrafo.trim()}
+            </p>
+          ))}
+        </div>
       )}
       {/* Cada afirmación es un BLOQUE, no una línea corrida: la cita va DEBAJO del texto, no
           pegada al final. Antes competían en el mismo renglón —el texto se cortaba justo donde
@@ -199,19 +260,16 @@ export default function ProjectBriefSection({
           </li>
         ))}
       </ul>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-fg-muted">
-          Generado {fmtChipDate(brief.generatedAt)}
-        </span>
-        {!brief.vencido && (
-          <button
-            onClick={generar}
-            disabled={generando}
-            className="text-[10px] text-brand hover:text-brand/80 disabled:opacity-50"
-          >
-            {generando ? "Regenerando…" : "↻ Regenerar"}
-          </button>
-        )}
+      {!brief.vencido && (
+        /* La fecha ya está en el encabezado; acá queda solo la acción. */
+        <button
+          onClick={generar}
+          disabled={generando}
+          className="text-[10px] text-brand hover:text-brand/80 disabled:opacity-50"
+        >
+          {generando ? "Regenerando…" : "↻ Regenerar"}
+        </button>
+      )}
       </div>
     </div>
   );

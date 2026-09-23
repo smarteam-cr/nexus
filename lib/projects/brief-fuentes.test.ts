@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { armarContextoDeBrief, MAX_CHARS_POR_BLOQUE, type DatosDeBrief } from "./brief-fuentes";
+import { armarContextoDeBrief, MAX_CHARS_HANDOFF, MAX_CHARS_POR_BLOQUE, type DatosDeBrief } from "./brief-fuentes";
 import { parsearBriefCitado } from "@/lib/cs/brief-citas";
 
 /**
@@ -21,6 +21,9 @@ const AYER = new Date("2026-08-15T10:00:00Z");
 const datos = (over: Partial<DatosDeBrief> = {}): DatosDeBrief => ({
   projectName: "Migración Salesforce",
   clientName: "Wherex",
+  arranque: AYER,
+  cronograma: null,
+  historiaDelCliente: null,
   operativa: "Estado: Retrasado · Motivo: Atraso por cliente",
   operativaAt: AYER,
   etapa: { label: "Onboarding", fuente: "el pipeline de HubSpot", at: AYER },
@@ -168,6 +171,9 @@ describe("nada vacío se vuelve citable", () => {
     const { sources } = armarContextoDeBrief({
       projectName: "P",
       clientName: "C",
+      arranque: null,
+      cronograma: null,
+      historiaDelCliente: null,
       operativa: null,
       operativaAt: null,
       etapa: null,
@@ -182,11 +188,59 @@ describe("nada vacío se vuelve citable", () => {
 
 describe("presupuesto y etiquetas", () => {
   it("un bloque enorme se recorta", () => {
+    /* La sesión sigue en el cupo común: es el caso que este test vino a cuidar (una minuta larga
+       comiéndose el presupuesto de todo lo demás). */
     const { serialized } = armarContextoDeBrief(
-      datos({ handoff: { texto: "x".repeat(MAX_CHARS_POR_BLOQUE * 3), at: AYER } }),
+      datos({
+        sesiones: [
+          {
+            id: "larga",
+            title: "Reunión kilométrica",
+            date: AYER,
+            content: "x".repeat(MAX_CHARS_POR_BLOQUE * 3),
+            etiquetaDeSala: null,
+          },
+        ],
+      }),
+    );
+    const bloque = serialized.split("### FUENTE [sesion:larga]")[1].split("### ")[0];
+    expect(bloque.length).toBeLessThan(MAX_CHARS_POR_BLOQUE + 200);
+  });
+
+  it("el HANDOFF tiene su propio cupo, más grande — y es el único", () => {
+    /* Entra como UN bloque con las 12 secciones adentro, serializadas por orden: con el cupo
+       común llegaba decapitado justo donde están «¿Qué vendimos?» y «Riesgos», que es sobre lo
+       que se apoya la narrativa del resumen. Subir el cupo GLOBAL en vez de éste multiplicaría el
+       contexto por 12 sesiones + 10 desviaciones y se vería recién en la factura. */
+    const { serialized } = armarContextoDeBrief(
+      datos({ handoff: { texto: "x".repeat(MAX_CHARS_HANDOFF * 2), at: AYER } }),
     );
     const bloque = serialized.split("### FUENTE [handoff:propio]")[1].split("### ")[0];
-    expect(bloque.length).toBeLessThan(MAX_CHARS_POR_BLOQUE + 200);
+    expect(bloque.length).toBeGreaterThan(MAX_CHARS_POR_BLOQUE * 2);
+    expect(bloque.length).toBeLessThan(MAX_CHARS_HANDOFF + 200);
+  });
+
+  it("el recorrido del cliente y el cronograma entran como FUENTES, no como texto suelto", () => {
+    /* Es la regla del archivo: material en el texto sin clave en el mapa = el modelo lo cita y
+       cada afirmación que salga de ahí se descarta, en silencio. */
+    const { serialized, sources } = armarContextoDeBrief(
+      datos({
+        historiaDelCliente: "Proyectos previos: Sitio web (2025).",
+        cronograma: "Avance del plan: 2 de 5 fases cerradas.",
+      }),
+    );
+    expect(sources.has("historia:cliente")).toBe(true);
+    expect(sources.has("cronograma:actual")).toBe(true);
+    expect(serialized).toContain("### FUENTE [historia:cliente]");
+    expect(serialized).toContain("### FUENTE [cronograma:actual]");
+    /* La advertencia viaja ADENTRO del bloque, no solo en el prompt: el error que este material
+       invita es contar el alcance de otro proyecto como propio. */
+    expect(serialized).toContain("de OTROS proyectos del mismo cliente");
+
+    // Sin material, ninguna de las dos se registra: nada vacío se vuelve citable.
+    const vacio = armarContextoDeBrief(datos({ historiaDelCliente: null, cronograma: null }));
+    expect(vacio.sources.has("historia:cliente")).toBe(false);
+    expect(vacio.sources.has("cronograma:actual")).toBe(false);
   });
 
   it("la sala viaja en el rótulo de la reunión", () => {

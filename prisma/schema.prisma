@@ -2658,6 +2658,10 @@ model ProjectBrief {
   projectId   String    @unique
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   headline    String?   @db.Text
+  // El resumen en prosa que va ARRIBA de las afirmaciones: el recorrido del cliente y lo que
+  // dice el handoff. Sin cita a propósito (es una síntesis, no un hecho puntual) y nullable:
+  // los briefs anteriores al 2026-09-22 no lo tienen y la pantalla simplemente no lo pinta.
+  narrativa   String?   @db.Text
   statements  Json // [{ text, source: { kind, id, label, date } }]
   agentRunId  String? // AgentRun que lo generó (trazabilidad)
   generatedAt DateTime  @default(now())

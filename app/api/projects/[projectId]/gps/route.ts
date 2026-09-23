@@ -391,10 +391,16 @@ export const GET = withProjectAccess(async (
      La frescura se DERIVA acá, en el servidor, y NO viajan cuatro fechas para que el navegador
      saque la conclusión: dos consumidores calculándola por su cuenta terminarían diciendo cosas
      distintas sobre el mismo resumen. Viaja el veredicto y su motivo. */
-  const [briefRow, ultimaSesion, ultimaDesviacion] = await Promise.all([
+  const [briefRow, ultimaSesion, ultimaDesviacion, handoffRow] = await Promise.all([
     prisma.projectBrief.findUnique({
       where: { projectId },
-      select: { headline: true, statements: true, generatedAt: true, staleAt: true },
+      select: {
+        headline: true,
+        narrativa: true,
+        statements: true,
+        generatedAt: true,
+        staleAt: true,
+      },
     }),
     prisma.firefliesSession.findFirst({
       where: {
@@ -414,10 +420,14 @@ export const GET = withProjectAccess(async (
       orderBy: { lastDetectedAt: "desc" },
       select: { lastDetectedAt: true },
     }),
+    /* Cuándo se regeneró el handoff. Antes viajaba `null` —o sea que la señal existía y nadie la
+       alimentaba— y desde el 2026-09-22 importa el doble: la narrativa del resumen se apoya en el
+       handoff, así que un handoff nuevo deja el texto contando una versión vieja de lo vendido. */
+    prisma.handoff.findUnique({ where: { projectId }, select: { updatedAt: true } }),
   ]);
   const frescura = evaluarFrescura(briefRow?.generatedAt ?? null, {
     ultimaSesionConContenido: ultimaSesion?.date ?? null,
-    handoffActualizadoEn: null,
+    handoffActualizadoEn: handoffRow?.updatedAt ?? null,
     /* ⛔ NO se usa `hubspotStageSyncedAt`: significa «la última vez que la REVALIDAMOS», no
        «cuándo cambió». El espejo corre cada vez que alguien abre la ficha del cliente, así que
        ese sello es casi siempre posterior al resumen y el cartel de vencido quedaría encendido
@@ -432,6 +442,7 @@ export const GET = withProjectAccess(async (
   const brief = briefRow
     ? {
         headline: briefRow.headline,
+        narrativa: briefRow.narrativa,
         statements: briefRow.statements,
         generatedAt: briefRow.generatedAt.toISOString(),
         vencido: frescura.vencido,

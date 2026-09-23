@@ -145,3 +145,106 @@ describe("dónde vive y cómo degrada", () => {
     expect(src).not.toMatch(/\b(bg|text|border)-(gray|slate|zinc|amber)-\d/);
   });
 });
+
+/**
+ * ⭐ EL RESUMEN EN PROSA — Y EL VIAJE COMPLETO DE UN CAMPO NUEVO (2026-09-22)
+ *
+ * Elías pidió un texto arriba de los hallazgos que entienda el recorrido del cliente y el último
+ * handoff. El modo de falla de un campo así no es que se rompa: es que se genere, se PAGUE y no
+ * llegue. Son cuatro saltos —el parser, el upsert, el select del GPS, el DTO— y cada uno falla en
+ * silencio por separado. Por eso la guarda recorre el viaje entero, no la pantalla sola.
+ */
+describe("⭐ la narrativa llega de punta a punta", () => {
+  it("el runner la desestructura y la escribe en las DOS ramas del upsert", () => {
+    /* Con `narrativa` solo en `create`, el primer resumen la tendría y cada regeneración la
+       dejaría congelada: un párrafo que envejece mientras la fecha de arriba dice «recién
+       generado». Es el mismo defecto que el upsert de este archivo ya evita para `headline`. */
+    const src = leer("lib/projects/project-brief.ts");
+    expect(src, "el runner no lee la narrativa que el parser devuelve").toContain(
+      "const { headline, narrativa, statements, discarded }",
+    );
+    const i = src.indexOf("prisma.projectBrief.upsert");
+    const upsert = src.slice(i, src.indexOf("});", i));
+    const enCreate = upsert.slice(upsert.indexOf("create:"), upsert.indexOf("update:"));
+    const enUpdate = upsert.slice(upsert.indexOf("update:"));
+    expect(enCreate, "la narrativa no se guarda al crear").toContain("narrativa");
+    expect(enUpdate, "la narrativa no se actualiza al regenerar").toContain("narrativa");
+  });
+
+  it("el GPS la SELECCIONA y la manda en el DTO", () => {
+    /* El select es campo por campo: agregar la columna a la base y al parser sin tocarlo deja el
+       párrafo escrito en Postgres y nunca leído. */
+    const src = leer(GPS_API);
+    expect(src, "el select del resumen no pide la narrativa").toContain("narrativa: true");
+    expect(src, "la narrativa no viaja al navegador").toContain("narrativa: briefRow.narrativa");
+  });
+
+  it("la pantalla la pinta ARRIBA de los hallazgos", () => {
+    /* El párrafo existe para volver interpretable a la lista. Debajo es una coda que nadie lee.
+       ⚠ La primera versión de esta guarda buscaba el literal `brief.narrativa` en cualquier parte
+       del archivo: quedaba VERDE con el bloque apagado (`{false && brief.narrativa && …}`), que es
+       exactamente cómo se apaga algo «un rato» y se olvida. Ahora se ancla en la condición EXACTA
+       y se mira el tramo que pinta, igual que la fila de las afirmaciones. */
+    const src = sinComentarios(SECCION);
+    const iNarrativa = src.indexOf("{brief.narrativa && (");
+    const iLista = src.indexOf("brief.statements.map");
+    expect(iNarrativa, "la sección dejó de pintar la narrativa (o la condición cambió)").toBeGreaterThan(-1);
+    expect(iNarrativa, "la narrativa quedó DEBAJO de los hallazgos").toBeLessThan(iLista);
+    const tramo = src.slice(iNarrativa, iLista);
+    expect(tramo, "la narrativa no se pinta como texto").toMatch(/<p\b/);
+  });
+});
+
+/**
+ * ⭐ EL TOGGLE NO PUEDE ESCONDER LO QUE HAY QUE VER
+ *
+ * Una sección colapsable es una forma de esconder cosas, y lo primero que se esconde suele ser
+ * justo lo que avisa. Colapsado se tienen que seguir leyendo el titular y el «quedó viejo».
+ */
+describe("⭐ la sección se colapsa sin perder el aviso", () => {
+  const encabezado = () => {
+    const src = sinComentarios(SECCION);
+    const i = src.indexOf("aria-expanded");
+    expect(i, "el encabezado dejó de ser un toggle accesible").toBeGreaterThan(-1);
+    const tramo = src.slice(i, src.indexOf('className={abierto ? "', i));
+    expect(tramo.length, "la guarda no está mirando el encabezado").toBeGreaterThan(100);
+    return tramo;
+  };
+
+  it("el titular y el aviso de vencido viven FUERA del cuerpo colapsable", () => {
+    const h = encabezado();
+    expect(h, "el titular quedó adentro del cuerpo: colapsado no se lee nada").toContain(
+      "brief.headline",
+    );
+    expect(h, "colapsado ya no se ve que el resumen quedó viejo").toContain("brief.vencido");
+  });
+
+  it("el cuerpo se OCULTA, no se desmonta", () => {
+    /* Desmontarlo tira el estado de «generando» y cualquier scroll: el toggle pasaría a tener
+       efectos que nadie pidió. Mismo criterio que la sección de Contexto. */
+    expect(sinComentarios(SECCION)).toContain('className={abierto ? "');
+  });
+});
+
+describe("⭐ el cartel de alta no deja un hueco cuando no tiene nada que decir", () => {
+  it("el widget pregunta si HAY algo que mostrar, no si existe el estado", () => {
+    /* `altaEstado` es "listo" en todo proyecto bien dado de alta, así que la condición vieja
+       pintaba un envoltorio con `p-4` mientras `AltaTrabada` devolvía null: 16 px de aire arriba
+       del resumen, en cada ficha, sin que nada fallara. */
+    const src = sinComentarios(WIDGET);
+    expect(src, "volvió el envoltorio que se pinta con el cartel vacío").toContain(
+      "altaEnCurso(parseEstadoDeAlta(data.alta.estado))",
+    );
+  });
+});
+
+describe("⭐ regenerar el handoff vence el resumen", () => {
+  it("el GPS alimenta la señal en vez de mandar null", () => {
+    /* La narrativa se apoya en el handoff: con la señal apagada, el resumen se sigue diciendo
+       fresco mientras cuenta una versión vieja de lo que se vendió. */
+    const src = sinComentarios(GPS_API);
+    expect(src, "la señal del handoff volvió a viajar apagada").toContain(
+      "handoffActualizadoEn: handoffRow?.updatedAt ?? null",
+    );
+  });
+});
