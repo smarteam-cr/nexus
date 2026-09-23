@@ -37,7 +37,7 @@ const EMAIL_DESTINO = "avanegas@smarteamcr.com";
 const OTORGA = "egonzalez@smarteamcr.com";
 
 async function main() {
-  const APPLY = resolverApply();
+  const APPLY = resolverApply({ tablas: ["RoleProfileShare"] });
   const REVOCAR = process.argv.includes("--revocar");
   const { prisma, close } = createScriptDb();
   try {

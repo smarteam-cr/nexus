@@ -57,7 +57,7 @@ const RENOMBRES: { id: string; title: string; nota: string }[] = [
 ];
 
 async function main() {
-  const APPLY = resolverApply();
+  const APPLY = resolverApply({ tablas: ["RoleProfile"] });
   const { prisma, close } = createScriptDb();
   try {
     let cambios = 0;

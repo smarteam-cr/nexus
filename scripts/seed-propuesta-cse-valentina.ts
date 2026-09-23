@@ -381,7 +381,7 @@ const CONTENT = {
 };
 
 async function main() {
-  const APPLY = resolverApply();
+  const APPLY = resolverApply({ tablas: ["RoleProfile"] });
   const { prisma, close } = createScriptDb();
   try {
     const previo = await prisma.roleProfile.findUnique({
