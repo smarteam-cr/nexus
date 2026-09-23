@@ -69,6 +69,23 @@ export function canEditRoleDocs(subject: { role: string }): boolean {
 }
 
 /**
+ * ¿Puede administrar CON QUIÉN se comparte (lista de lectores + link público)?
+ *
+ * Dirección y el **CSL** — decisión de Elías del 2026-09-23. Es deliberadamente MÁS ancho
+ * que `canEditRoleDocs`: el CSL no edita el contenido, pero sí dirige quién lo ve, porque
+ * es quien maneja la contratación de su equipo y necesita mandarle la propuesta a un
+ * candidato sin pasar por dirección.
+ *
+ * ⚠ Esto NO alcanza por sí solo: dice QUIÉN, no SOBRE QUÉ. La contención de un rol que no
+ * es SUPER_ADMIN es la VISIBILIDAD del documento, y esa la agrega `guardRolesSharing`
+ * (lib/auth/api-guards.ts) con `canReadRoleDoc`. Sin ese segundo chequeo, un CSL podría
+ * publicar el link de una propuesta que ni siquiera ve, adivinando el id.
+ */
+export function canShareRoleDocs(subject: { role: string }): boolean {
+  return subject.role === "SUPER_ADMIN" || subject.role === "CSL";
+}
+
+/**
  * ¿Puede leer ESTE documento? Derivado del mismo `where` (composición, no una
  * segunda regla). Devuelve boolean para que el caller elija su respuesta — la
  * convención del repo es 404, no 403: un 403 confirmaría que el documento existe.

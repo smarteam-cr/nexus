@@ -43,6 +43,29 @@ const QUERIES = path.join(RAIZ, "lib", "roles", "queries.ts");
 const GET_CON_PRISMA_PERMITIDO = new Set(["publico/route.ts", "shares/route.ts"]);
 
 /**
+ * Las rutas donde ADMINISTRAR EL ACCESO dejó de ser exclusivo de dirección (2026-09-23,
+ * pedido de Elías): el CSL también comparte y publica el link. Usan `guardRolesSharing`
+ * en vez de `guardRolesAdmin`.
+ *
+ * ⚠ La diferencia que este test protege NO es el nombre del guard sino su ARGUMENTO:
+ * `guardRolesAdmin()` no necesitaba saber de qué documento se hablaba porque solo dejaba
+ * pasar a quien los ve todos. En cuanto entra un rol que NO los ve todos, el id que viene
+ * en la URL deja de ser inocuo, y `guardRolesSharing(id)` es lo único que impide publicar
+ * el link público —la URL sin login que abre la oferta con sueldo— de una propuesta ajena
+ * probando ids. Por eso se exige la llamada CON el id, no a secas.
+ *
+ * Sumar una ruta acá es ensanchar quién dirige el acceso a documentos con salarios: que
+ * cueste una línea en un test es el punto.
+ */
+const GUARD_DE_ACCESO = "guardRolesSharing(id)";
+const RUTAS_DE_ACCESO = new Set(["[id]/shares/route.ts", "[id]/publico/route.ts"]);
+
+/** El guard que le toca a un route.ts, por su ruta relativa a app/api/roles. */
+function guardEsperado(rel: string): string {
+  return RUTAS_DE_ACCESO.has(rel) ? GUARD_DE_ACCESO : "guardRolesAdmin(";
+}
+
+/**
  * `export async function GET` y `export const GET = withAuth(...)`: el repo usa los DOS
  * estilos, y un regex que solo mire `async function` saltea el mayoritario EN SILENCIO.
  * Mismo patrón que `lib/auth/project-api-guards.test.ts`.
@@ -148,20 +171,68 @@ describe("guards de app/api/roles", () => {
     }
   });
 
-  it("TODA escritura exige guardRolesAdmin", () => {
+  it("TODA escritura exige su guard (y el de acceso, con el id del documento)", () => {
     for (const ruta of rutas) {
       // ⚠ `soloCodigo` NO es opcional acá: sin él, un handler que solo MENCIONE
       // `guardRolesAdmin(` en un comentario o en un string pasa el test sin llamarlo nunca.
       // Es exactamente el agujero §P4 que ya se pagó una vez en costos-privacy.test.ts.
       const src = soloCodigo(fs.readFileSync(ruta, "utf8"));
+      const rel = path.relative(DIR, ruta).replace(/\\/g, "/");
+      const esperado = guardEsperado(rel);
       for (const h of handlers(src)) {
         if (h.metodo === "GET") continue;
         expect(
-          h.cuerpo.includes("guardRolesAdmin("),
-          `${path.relative(RAIZ, ruta)} — ${h.metodo} SIN guardRolesAdmin (compartir da LECTURA)`,
+          h.cuerpo.includes(esperado),
+          `${path.relative(RAIZ, ruta)} — ${h.metodo} SIN ${esperado} (compartir da LECTURA)`,
         ).toBe(true);
       }
     }
+  });
+
+  it("las rutas de ACCESO gatean TAMBIÉN sus GET, y con el id", () => {
+    // Acá el GET no es inocuo como en el resto del módulo: el de `publico` devuelve la URL
+    // sin login —o sea la capability entera— y el de `shares`, quiénes la tienen. Si alguno
+    // se quedara en `guardInternalUser`, cualquier interno leería el link de una propuesta.
+    for (const rel of RUTAS_DE_ACCESO) {
+      const ruta = path.join(DIR, ...rel.split("/"));
+      expect(fs.existsSync(ruta), `falta app/api/roles/${rel} — ¿se movió? actualizá RUTAS_DE_ACCESO`).toBe(true);
+      const src = soloCodigo(fs.readFileSync(ruta, "utf8"));
+      const hs = handlers(src);
+      expect(hs.length, `${rel} — 0 handlers detectados`).toBeGreaterThan(0);
+      for (const h of hs) {
+        expect(
+          h.cuerpo.includes(GUARD_DE_ACCESO),
+          `${rel} — ${h.metodo} no llama ${GUARD_DE_ACCESO}. Sin el id, un rol que no ve ` +
+            "todos los documentos administra el acceso de cualquiera probando ids.",
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("solo dirección y el CSL administran el acceso (la regla vive en un lugar)", () => {
+    // El guard NO reimplementa la lista de roles: la consume de lib/roles/access, que es
+    // de donde también la lee la página para decidir si pinta el panel. Dos copias
+    // derivarían, y la que manda es la del server.
+    // Fuente CRUDA a propósito: los roles son literales de string y `soloCodigo` los
+    // blanquea, así que sobre el fuente blanqueado este chequeo no puede ver "CSL". El
+    // alcance es UN cuerpo de función, así que un comentario no lo falsea por accidente.
+    const acceso = fs.readFileSync(path.join(RAIZ, "lib", "roles", "access.ts"), "utf8");
+    const m = /export function canShareRoleDocs[\s\S]*?\n}/.exec(acceso);
+    expect(m, "lib/roles/access.ts ya no exporta canShareRoleDocs").toBeTruthy();
+    expect(
+      /SUPER_ADMIN/.test(m![0]) && /"CSL"/.test(m![0]),
+      "canShareRoleDocs cambió de alcance. Es quién dirige el acceso a documentos con " +
+        "salarios: si el cambio es a propósito, actualizá también este test.",
+    ).toBe(true);
+
+    const guards = soloCodigo(fs.readFileSync(path.join(RAIZ, "lib", "auth", "api-guards.ts"), "utf8"));
+    const g = /export async function guardRolesSharing[\s\S]*?\n}/.exec(guards);
+    expect(g, "lib/auth/api-guards.ts ya no exporta guardRolesSharing").toBeTruthy();
+    expect(
+      g![0].includes("canShareRoleDocs(") && g![0].includes("canReadRoleDoc("),
+      "guardRolesSharing perdió uno de sus dos chequeos: el rol (canShareRoleDocs) Y la " +
+        "visibilidad del documento (canReadRoleDoc). El segundo es la contención.",
+    ).toBe(true);
   });
 
   it("ningún GET de contenido consulta Prisma sin pasar por lib/roles/queries", () => {

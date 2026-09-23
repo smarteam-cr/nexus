@@ -1,8 +1,13 @@
 /**
  * /api/roles/[id]/publico — el LINK PÚBLICO oculto de un documento de Roles.
  *
- * GET estado · POST publica (genera token) · DELETE revoca. Los tres SOLO SUPER_ADMIN:
- * publicar la oferta económica de una propuesta es una decisión de dirección.
+ * GET estado · POST publica (genera token) · DELETE revoca. Los tres son de dirección **y
+ * del CSL** (`guardRolesSharing`, 2026-09-23), acotados a los documentos que quien llama ya
+ * puede leer: el CSL manda la propuesta al candidato sin pasar por dirección.
+ *
+ * ⚠ Es la superficie más delicada del módulo: el POST genera una URL SIN LOGIN que abre la
+ * oferta económica. Por eso el guard recibe el `id` — sin ese chequeo de visibilidad,
+ * cualquier CSL podría publicar el link de una propuesta ajena probando ids.
  *
  * El token es la capability: 32 bytes de `crypto.randomBytes` en hex (256 bits, mismo
  * generador que `ProjectExternalAccess`). NO hay contraseña ni cookie — la URL ES el
@@ -12,7 +17,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { guardRolesAdmin } from "@/lib/auth/api-guards";
+import { guardRolesSharing } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -48,18 +53,18 @@ async function leer(req: NextRequest, id: string): Promise<EstadoPublico | null>
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
-  const guard = await guardRolesAdmin();
-  if (guard instanceof NextResponse) return guard;
   const { id } = await params;
+  const guard = await guardRolesSharing(id);
+  if (guard instanceof NextResponse) return guard;
   const estado = await leer(req, id);
   if (!estado) return NextResponse.json({ error: "El documento no existe" }, { status: 404 });
   return NextResponse.json(estado);
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const guard = await guardRolesAdmin();
-  if (guard instanceof NextResponse) return guard;
   const { id } = await params;
+  const guard = await guardRolesSharing(id);
+  if (guard instanceof NextResponse) return guard;
 
   // Publicar de nuevo ROTA el token a propósito: si el anterior circuló de más, dejarlo
   // vivo sería exactamente lo que se quiere evitar al republicar.
@@ -80,9 +85,9 @@ export async function POST(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
-  const guard = await guardRolesAdmin();
-  if (guard instanceof NextResponse) return guard;
   const { id } = await params;
+  const guard = await guardRolesSharing(id);
+  if (guard instanceof NextResponse) return guard;
 
   try {
     await prisma.roleProfile.update({

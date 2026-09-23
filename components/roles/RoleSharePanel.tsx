@@ -8,8 +8,11 @@
  *  · LINK PÚBLICO — una URL oculta con un token de 64 hex, sin login y sin contraseña.
  *    Publicar la genera; revocar la mata (y no vuelve: republicar da un token nuevo).
  *
- * Solo lo monta la página cuando el usuario es SUPER_ADMIN — los 3 endpoints que consume
- * exigen lo mismo del lado del server.
+ * Lo monta la página cuando el usuario puede ADMINISTRAR EL ACCESO —dirección y el CSL,
+ * `canShareRoleDocs`— que desde el 2026-09-23 ya no es lo mismo que poder editar: el CSL ve
+ * este panel arriba de un documento de solo lectura. Los 6 endpoints que consume exigen lo
+ * mismo del lado del server (`guardRolesSharing`) y además que el documento le sea visible,
+ * así que el panel nunca es la única barrera.
  */
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
@@ -140,8 +143,8 @@ export default function RoleSharePanel({ roleId }: { roleId: string }) {
         <div className="space-y-2">
           <p className="text-xs font-semibold text-fg">Con el equipo</p>
           <p className="text-xs text-fg-muted">
-            Quien lo tenga compartido lo ve en su sección Roles y lo puede leer. No lo edita ni lo
-            comparte con nadie más.
+            Quien lo tenga compartido lo ve en su sección Roles y lo puede leer, pero no lo edita.
+            Dirigir quién lo ve es de dirección y del CSL.
           </p>
 
           {shares === null ? (
