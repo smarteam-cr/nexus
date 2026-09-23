@@ -11,16 +11,16 @@
  * El filtro de acceso vive DENTRO de `getRole` (visibleRoleWhere): sin compartir devuelve
  * null y respondemos el MISMO 404 que si no existiera — un 403 confirmaría su existencia.
  *
- * ⚠ COMPARTIR YA NO ES LO MISMO QUE EDITAR (2026-09-23). El panel «Quién puede ver este
- * documento» se monta con `canShare` (dirección + CSL) y no con `canEdit` (solo dirección):
- * el CSL dirige quién ve el documento y publica su link público, pero sigue viendo el
- * `RoleDocView` de solo lectura. Son dos preguntas distintas y ahora tienen dos flags.
+ * ⚠ QUIÉN ES «DIRECCIÓN» ACÁ: desde 2026-09-23, `canEditRoleDocs` (→ `esAdminDeRoles`)
+ * incluye al **CSL**, así que el CSL cae en la rama del workspace: edita, comparte, publica
+ * el link, crea y borra. El `RoleDocView` queda para quien solo tiene un documento
+ * compartido.
  */
 import { BackLink } from "@/components/ui";
 import { redirect, notFound } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { getRole } from "@/lib/roles/queries";
-import { canEditRoleDocs, canShareRoleDocs } from "@/lib/roles/access";
+import { canEditRoleDocs } from "@/lib/roles/access";
 /* El envoltorio y no el workspace: el proveedor del aplicador tiene que ser ANCESTRO del editor
    —el que provee no consume— y esta página es de servidor. Ver `RolConChat`. */
 import RolConChat from "@/components/roles/RolConChat";
@@ -40,12 +40,6 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
   if (!role) notFound();
 
   const canEdit = canEditRoleDocs({ role: ctx.role });
-  /* EDITAR y COMPARTIR dejaron de ser el mismo permiso (2026-09-23): el CSL administra
-     quién ve el documento —y publica su link— sin poder tocar el contenido. Por eso el
-     panel se monta con `canShare` y el workspace sigue con `canEdit`. Los endpoints que
-     consume el panel exigen lo mismo del lado del server (`guardRolesSharing`), acotado
-     además a los documentos que esa persona ya puede leer. */
-  const canShare = canShareRoleDocs({ role: ctx.role });
 
   // El PDF existe SOLO para el perfil de puesto: su adaptador arma el documento con la
   // plantilla de roles, así que una propuesta saldría sin la oferta y sin "Cómo es
@@ -61,7 +55,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
         {tipoPdf && <PrintDownloadButton tipo={tipoPdf} docId={role.id} />}
       </div>
       <div className="px-6 py-6 space-y-4">
-        {canShare && <RoleSharePanel roleId={role.id} />}
+        {canEdit && <RoleSharePanel roleId={role.id} />}
         {canEdit ? (
           <RolConChat
             role={{

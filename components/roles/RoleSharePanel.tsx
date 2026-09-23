@@ -8,11 +8,10 @@
  *  · LINK PÚBLICO — una URL oculta con un token de 64 hex, sin login y sin contraseña.
  *    Publicar la genera; revocar la mata (y no vuelve: republicar da un token nuevo).
  *
- * Lo monta la página cuando el usuario puede ADMINISTRAR EL ACCESO —dirección y el CSL,
- * `canShareRoleDocs`— que desde el 2026-09-23 ya no es lo mismo que poder editar: el CSL ve
- * este panel arriba de un documento de solo lectura. Los 6 endpoints que consume exigen lo
- * mismo del lado del server (`guardRolesSharing`) y además que el documento le sea visible,
- * así que el panel nunca es la única barrera.
+ * Lo monta la página cuando el usuario ADMINISTRA la sección —dirección y el CSL,
+ * `canEditRoleDocs` → `esAdminDeRoles`, 2026-09-23—. Los 6 endpoints que consume exigen lo
+ * mismo del lado del server (`guardRolesAdmin`), así que el panel nunca es la única barrera:
+ * esconderlo es cortesía, no seguridad.
  */
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";

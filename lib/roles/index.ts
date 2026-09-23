@@ -3,8 +3,9 @@
  * contratación, según `RoleProfile.docType`), documentados a mano y renderizados
  * como páginas web resumidas.
  *
- * ESCRIBIR es solo de dirección (`guardRolesAdmin` en toda la API); LEER no:
- * el filtro es `visibleRoleWhere` (./access) — SUPER_ADMIN ve todo, el resto solo
+ * ADMINISTRAR (ver todo, escribir, crear, borrar, compartir, publicar) es de dirección
+ * y del CSL — `esAdminDeRoles`, con `guardRolesAdmin` en toda la API. LEER, no: el
+ * filtro es `visibleRoleWhere` (./access) — quien administra ve todo, el resto solo
  * lo que le compartieron (`RoleProfileShare`), y el link público (`publicToken`)
  * abre una lectura sin login por `./public-view`. Por eso las lecturas de
  * `./queries` toman un `subject` y filtran con él: no asumas superficie cerrada —

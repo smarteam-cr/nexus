@@ -36,7 +36,7 @@ import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getRole } from "@/lib/roles/queries";
-import { SYSTEM_SUBJECT } from "@/lib/roles/access";
+import { SYSTEM_SUBJECT, esAdminDeRoles } from "@/lib/roles/access";
 import { ROLE_CONTENT_KEYS } from "@/components/landing/configs/roles.defs";
 import { filasCtxFaltantes, type CanalesConContenido } from "./ctx-rows";
 import { isBlank } from "@/lib/landing/is-blank";
@@ -120,7 +120,7 @@ export async function authorizePrintDoc(tipo: PrintDocType, docId: string): Prom
   const ok =
     tipo.scope === "business-case"
       ? await can(ctx.teamMember, "ventas", "read") // el mismo guard que el resto de ventas
-      : ctx.role === "SUPER_ADMIN"; // perfiles de puesto, igual que /roles/[id]
+      : esAdminDeRoles({ role: ctx.role }); // perfiles de puesto, igual que /roles/[id]
   return ok ? { ok: true, email: ctx.teamMember.email ?? null } : { ok: false, status: 403 };
 }
 
@@ -339,7 +339,7 @@ export async function loadPrintDoc(
  * vez del estado local — y por eso el papel sale igual que la pantalla.
  *
  * Un perfil desactivado SÍ se imprime: ni `getRole` ni la página `/roles/[id]` filtran por
- * `active`, y solo un SUPER_ADMIN llega hasta acá. Inventar el filtro solo en el camino del
+ * `active`, y hasta acá solo llega quien administra Roles. Inventar el filtro solo en el camino del
  * PDF sería una regla que no existe en ningún otro lado.
  */
 async function cargarPerfilDePuesto(

@@ -2,9 +2,10 @@
  * lib/roles/access.ts — quién puede LEER un documento de /roles.
  *
  * ── EL MODELO, EN UNA LÍNEA ──────────────────────────────────────────────────
- * Escribir es de SUPER_ADMIN, siempre (`guardRolesAdmin`). Leer es de SUPER_ADMIN
- * MÁS quien tenga ese documento COMPARTIDO (`RoleProfileShare`). No hay estados
- * intermedios: o te lo compartieron o el documento no existe para vos.
+ * Administrar —ver todo, escribir, crear, borrar, compartir, publicar— es de dirección Y
+ * del CSL (`esAdminDeRoles`, `guardRolesAdmin`). El resto solo LEE, y solo los documentos
+ * que le hayan COMPARTIDO (`RoleProfileShare`). No hay estados intermedios: o administrás
+ * la sección, o te compartieron un documento, o ese documento no existe para vos.
  *
  * Todo el filtro vive en `visibleRoleWhere` y las dos preguntas que importan
  * ("¿qué lista veo?" y "¿puedo abrir este?") se derivan de ÉL — nunca dos
@@ -53,36 +54,39 @@ export const SYSTEM_SUBJECT: RoleAccessSubject = Object.freeze({
  * El `where` de Prisma con los documentos que ESTE usuario puede leer.
  * SUPER_ADMIN → `{}` (todos). Cualquier otro → solo los compartidos con él.
  */
+/**
+ * LA regla del módulo: quién administra Roles como dirección — ve todo, edita, crea, borra,
+ * comparte y publica links. SUPER_ADMIN y **CSL** (decisión de Elías, 2026-09-23).
+ *
+ * Es UNA sola función y no una lista repetida en cada gate a propósito: `visibleRoleWhere`,
+ * `canEditRoleDocs`, `guardRolesAdmin`, el ítem del sidebar y el gate del PDF la consumen
+ * toda. Antes el CSL tenía un permiso PARCIAL (compartía pero solo veía lo compartido) y eso
+ * no cerraba: habría podido crear un documento que después no podía abrir.
+ *
+ * ⚠ Es por ROL, no por persona: cualquier CSL presente y futuro ve las propuestas con su
+ * oferta económica. Ensancharla otra vez es una decisión de dirección, no un detalle.
+ */
+export function esAdminDeRoles(subject: { role: string }): boolean {
+  return subject.role === "SUPER_ADMIN" || subject.role === "CSL";
+}
+
 export function visibleRoleWhere(subject: RoleAccessSubject): Prisma.RoleProfileWhereInput {
   /* Identidad REFERENCIAL y no `subject.role === "__system__"`: un subject armado desde un
      body, desde la DB o desde un querystring no puede SER esta constante ni por coincidencia.
      Y una copia (`{ ...SYSTEM_SUBJECT }`) cae al filtro de compartidos con un teamMemberId
      que no existe → no ve nada: el modo de falla es no-ver-nada, nunca ver-todo. */
   if (subject === SYSTEM_SUBJECT) return {};
-  if (subject.role === "SUPER_ADMIN") return {};
+  if (esAdminDeRoles(subject)) return {};
   return { shares: { some: { teamMemberId: subject.teamMemberId } } };
 }
 
-/** ¿Este usuario puede EDITAR? Solo dirección — el compartido es de lectura. */
-export function canEditRoleDocs(subject: { role: string }): boolean {
-  return subject.role === "SUPER_ADMIN";
-}
-
 /**
- * ¿Puede administrar CON QUIÉN se comparte (lista de lectores + link público)?
- *
- * Dirección y el **CSL** — decisión de Elías del 2026-09-23. Es deliberadamente MÁS ancho
- * que `canEditRoleDocs`: el CSL no edita el contenido, pero sí dirige quién lo ve, porque
- * es quien maneja la contratación de su equipo y necesita mandarle la propuesta a un
- * candidato sin pasar por dirección.
- *
- * ⚠ Esto NO alcanza por sí solo: dice QUIÉN, no SOBRE QUÉ. La contención de un rol que no
- * es SUPER_ADMIN es la VISIBILIDAD del documento, y esa la agrega `guardRolesSharing`
- * (lib/auth/api-guards.ts) con `canReadRoleDoc`. Sin ese segundo chequeo, un CSL podría
- * publicar el link de una propuesta que ni siquiera ve, adivinando el id.
+ * ¿Puede EDITAR, crear, borrar y administrar el acceso? Lo mismo que `esAdminDeRoles`: un
+ * alias con el nombre que usan las pantallas, para que la pregunta se lea donde se hace.
+ * Quien solo tiene un documento compartido lo lee y nada más.
  */
-export function canShareRoleDocs(subject: { role: string }): boolean {
-  return subject.role === "SUPER_ADMIN" || subject.role === "CSL";
+export function canEditRoleDocs(subject: { role: string }): boolean {
+  return esAdminDeRoles(subject);
 }
 
 /**

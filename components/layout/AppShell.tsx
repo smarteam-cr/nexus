@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
-import { hasSharedRoleDocs } from "@/lib/roles/access";
+import { esAdminDeRoles, hasSharedRoleDocs } from "@/lib/roles/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
@@ -40,7 +40,14 @@ export default async function AppShell({
      `findFirst` por índice — este archivo corre en CADA navegación y en 2026-07 se sacó de
      acá `getClientsForSidebar` justo por ser el query más caliente del proyecto. */
   const hasSharedDocs =
-    isSuperAdmin || !user.teamMember ? false : await hasSharedRoleDocs(user.teamMember.id);
+    isSuperAdmin || !user.teamMember
+      ? false
+      : /* El CSL administra la sección entera desde 2026-09-23: entra por ROL, no por tener
+           algo compartido. Sin esto, un CSL sin shares no vería el ítem y tampoco podría
+           crear el primer documento — la pantalla sería inalcanzable. Se evalúa ANTES que la
+           query para no pagarla. */
+        esAdminDeRoles({ role: user.teamMember.roleEnum }) ||
+        (await hasSharedRoleDocs(user.teamMember.id));
 
   // Info compacta para el avatar del sidebar + gating de navegación.
   const userLite = {

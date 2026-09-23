@@ -33,10 +33,10 @@ import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 // hard-coded (más estricto que cobranza.read y NO editable por la matriz de
 // permisos — los salarios no se abren desde /team). guardCostosAccess lo usa.
 import { isCostosRole } from "./cobranza-roles";
-// Roles (/roles): `guardRolesSharing` necesita saber QUIÉN administra el acceso y si ESE
-// documento le es visible. La regla de visibilidad vive en un solo lugar (lib/roles/access)
-// y este guard la consume; no la reimplementa.
-import { canReadRoleDoc, canShareRoleDocs } from "@/lib/roles/access";
+// Roles (/roles): quién administra la sección vive en UN solo lugar (lib/roles/access), del
+// que también sale el filtro de visibilidad y el gate de las pantallas. Este guard lo
+// consume; no lo reimplementa.
+import { esAdminDeRoles } from "@/lib/roles/access";
 import type { TeamRole } from "@prisma/client";
 import { pieceByName } from "@/lib/pieces/registry";
 import {
@@ -607,62 +607,28 @@ export async function guardCostosAccess(): Promise<
 }
 
 /**
- * ROLES (perfiles de puesto del equipo): SOLO SUPER_ADMIN — docs internos de
- * dirección, gate hardcodeado fuera de la matriz de permisos (mismo criterio que
- * Costos; una sección de docs solo-SA no se delega). PRIMERA línea de TODO handler
- * bajo /api/roles… salvo los dos que administran el ACCESO, que usan
- * `guardRolesSharing` (abajo).
+ * ROLES (perfiles de puesto y propuestas): quien ADMINISTRA la sección — dirección y el
+ * **CSL** (`esAdminDeRoles`, 2026-09-23). Gate hardcodeado fuera de la matriz de permisos
+ * (mismo criterio que Costos: no se delega por plantilla). PRIMERA línea de TODO handler
+ * bajo /api/roles.
+ *
+ * ⚠ NO lleva el id del documento, y eso SOLO es correcto mientras quien pasa este guard vea
+ * TODOS los documentos —que es justo lo que garantiza `esAdminDeRoles` en `visibleRoleWhere`,
+ * la misma función—. Si alguna vez entra acá un rol con visibilidad PARCIAL, este guard deja
+ * de alcanzar: estos handlers toman el id de la URL, así que habría que verificar además
+ * `canReadRoleDoc(subject, id)` o ese rol administraría documentos ajenos probando ids. Las
+ * dos mitades tienen que moverse juntas.
  */
 export async function guardRolesAdmin(): Promise<
   Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (guard.role !== "SUPER_ADMIN") {
+  if (!esAdminDeRoles({ role: guard.role })) {
     return NextResponse.json(
-      { error: "La sección de Roles es solo para Super Admin." },
+      { error: "La sección de Roles es para dirección y el CSL." },
       { status: 403 },
     );
-  }
-  return guard;
-}
-
-/**
- * ROLES · administrar el ACCESO a UN documento: la lista de lectores del equipo
- * (`/shares`) y el link público (`/publico`). Dirección **y el CSL**, por decisión de
- * Elías del 2026-09-23 — el CSL maneja la contratación de su equipo y le manda la
- * propuesta al candidato sin pasar por dirección.
- *
- * ⚠ POR QUÉ PIDE `roleId` Y `guardRolesAdmin` NO: para un SUPER_ADMIN el documento da
- * igual, ve todos. En cuanto entra un rol que NO los ve todos, el id del documento deja
- * de ser inocuo: estos handlers lo toman de la URL, así que sin verificar visibilidad un
- * CSL podría publicar el link público —la URL sin login que abre la oferta con sueldo— de
- * una propuesta que ni siquiera tiene compartida, probando ids. La contención es
- * `canReadRoleDoc`: solo administra el acceso de lo que ya puede leer.
- *
- * Responde 404 y no 403 cuando el documento no le es visible: es la convención del módulo
- * (un 403 confirmaría que ese id existe).
- */
-export async function guardRolesSharing(
-  roleId: string,
-): Promise<Awaited<ReturnType<typeof requireInternalUser>> | NextResponse> {
-  const guard = await guardInternalUser();
-  if (guard instanceof NextResponse) return guard;
-
-  if (!canShareRoleDocs({ role: guard.role })) {
-    return NextResponse.json(
-      { error: "Compartir un documento de Roles es de dirección o del CSL." },
-      { status: 403 },
-    );
-  }
-  if (guard.role !== "SUPER_ADMIN") {
-    const visible = await canReadRoleDoc(
-      { role: guard.role, teamMemberId: guard.teamMember.id },
-      roleId,
-    );
-    if (!visible) {
-      return NextResponse.json({ error: "El documento no existe" }, { status: 404 });
-    }
   }
   return guard;
 }

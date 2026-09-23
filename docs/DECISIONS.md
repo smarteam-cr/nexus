@@ -885,6 +885,19 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   registry de permisos — una sección de docs de dirección no debe ser delegable por plantilla, y
   SUPER_ADMIN ya es all-true en el engine, así que una celda de matriz no compraría nada. Se evita
   el churn del modal de /team.
+- **El CSL administra Roles como dirección (2026-09-23).** `esAdminDeRoles` (`lib/roles/access.ts`)
+  = `SUPER_ADMIN | CSL`, y de ella derivan las cuatro puertas: `visibleRoleWhere` (ve todo),
+  `canEditRoleDocs` (las dos pantallas), `guardRolesAdmin` (toda la API) y el gate del PDF. Decisión
+  de Elías: el CSL lleva la contratación de su equipo y necesita el documento completo —editarlo,
+  compartirlo y mandarle el link al candidato— sin pasar por dirección. **Sigue sin ser delegable
+  por plantilla**: es una lista hardcodeada de roles, no una celda de la matriz.
+  ⚠ **Por qué VER y ADMINISTRAR se movieron juntos**: `guardRolesAdmin` no recibe el id del
+  documento, y eso solo es correcto mientras quien lo pasa vea TODOS. Un permiso PARCIAL (el primer
+  intento: compartir sí, ver solo lo compartido) no cerraba por dos lados — el CSL habría podido
+  crear un documento que no podía abrir, y habría hecho falta `canReadRoleDoc` por documento en cada
+  handler para que no administrara ajenos probando ids. Congelado en `lib/roles/access.test.ts`
+  («ADMINISTRAR y VER son la misma respuesta») y en `lib/roles/api-guards.test.ts`.
+  ⚠ Es por ROL: **cualquier CSL** presente y futuro ve las propuestas con su oferta económica.
 - **Plantilla FIJA de 11 secciones** (fuente única `ROLE_SECTIONS` en `lib/roles/schema.ts`):
   Perfil · Responsabilidades · **[bloque 4DX: WIG · Predicción · Arrastre · Marcador · Cadencia]** ·
   Caminos de éxito · Caminos de fracaso · Ruta de madurez · Período de transición.
