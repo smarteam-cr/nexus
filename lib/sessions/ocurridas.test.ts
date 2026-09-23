@@ -146,6 +146,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "agenda",
     motivo: "El buscador del mismo modal, sobre las sin dueño: una persona elige. Ya deja afuera las futuras, como el resto de las candidatas.",
   },
+  "app/api/projects/[projectId]/timeline/calendario/route.ts": {
+    clase: "agenda",
+    motivo:
+      "«De tu calendario» del buscador del Contexto del cronograma: una persona elige. Ya deja afuera las futuras; " +
+      "lo que llega al modelo lo corta después cargarMaterialDelCronograma (soloOcurridas).",
+  },
   "app/api/projects/[projectId]/project-sessions/route.ts": { clase: "agenda", motivo: "Curación de membresía: se decide sobre TODO, incluida la agenda." },
   "app/api/projects/[projectId]/meetings/route.ts": { clase: "agenda", motivo: "La pestaña Reuniones del proyecto." },
   "lib/business-cases/feeding.ts": {

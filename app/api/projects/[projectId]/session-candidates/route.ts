@@ -33,10 +33,11 @@ import {
  * Solo lectura. Incluir/excluir va por POST /api/projects/[projectId]/handoff-sessions.
  *
  * ── `?para=cronograma` (2026-09-23, «Contexto del cronograma») ──────────────
- * El mismo panel para el CRONOGRAMA: `feeding`/`excluded` salen de su regla (toda reunión del
- * proyecto, con la X y el «Agregar» del CSE en `timelineOverride`) y las candidatas no llevan la
- * regla de relevancia del handoff. Lo que cambia entre los dos destinos vive en
- * `lib/sessions/destinos-de-contexto.ts`; incluir/excluir va por POST .../timeline/sessions.
+ * El mismo panel para el CRONOGRAMA, donde entra SOLO lo que el CSE eligió: `feeding` son las
+ * elegidas, no hay `excluded` (sacar es dejar de elegir), y las candidatas son las DEMÁS reuniones
+ * del PROYECTO, sin la regla de relevancia del handoff. Las de su calendario las trae
+ * .../timeline/calendario. Lo que cambia entre los dos destinos vive en
+ * `lib/sessions/destinos-de-contexto.ts`; elegir/sacar va por POST .../timeline/sessions.
  */
 export async function GET(
   req: NextRequest,
@@ -66,7 +67,7 @@ export async function GET(
       session: {
         select: {
           id: true, title: true, date: true, participants: true, organizerEmail: true,
-          resolvedClientId: true, manualClientId: true,
+          resolvedClientId: true, manualClientId: true, duration: true,
         },
       },
     },
@@ -156,7 +157,11 @@ export async function GET(
   // las que entrarían por regla, para destacarlas arriba. Ownership = misma regla que
   // belongsToClient (resolvedClientId O manualClientId) — antes solo resolvedClientId
   // y una sesión asignada a mano desaparecía de la columna Y del modal.
-  const clientSessions = await prisma.firefliesSession.findMany({
+  /* El cronograma no ofrece las demás reuniones del cliente: sus candidatas son las del PROYECTO
+     (abajo) y las del calendario de quien busca (.../timeline/calendario), que es lo que pidió
+     Elías. Por eso ni se consultan. */
+  const esCronograma = destino === "cronograma";
+  const clientSessions = esCronograma ? [] : await prisma.firefliesSession.findMany({
     where: {
       ...whereBelongsToClient(clientId),
       date: { lte: new Date() },
@@ -190,7 +195,7 @@ export async function GET(
      ⚠ 2026-09-22 (decisión de Elías): a un proyecto NO interno las huérfanas se le ofrecen, pero
      solo por BÚSQUEDA y nunca como lista — ver session-candidates/sin-duenio. Este gate sigue
      siendo el que decide la lista completa. */
-  const huerfanas = guard.interno
+  const huerfanas = guard.interno && !esCronograma
     ? await prisma.firefliesSession.findMany({
         where: {
           // Sin dueño por las dos vías: si ya es de alguien, o aparece arriba o no es de acá.
@@ -216,7 +221,7 @@ export async function GET(
       })
     : [];
 
-  const dominiosPropios = guard.interno
+  const dominiosPropios = guard.interno && !esCronograma
     ? buildInternalDomainsSet(
         await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
       )
@@ -244,9 +249,19 @@ export async function GET(
      así que una reunión vacía se pintaba «Incluida» en verde —indistinguible de una llena de
      material— y el CSE no tenía cómo saber que ese documento se está escribiendo sobre nada.
      Es el mismo pecado que la lista de candidatas ya había dejado de cometer. */
+  /* Las candidatas del CRONOGRAMA: las demás reuniones del proyecto (vínculo vivo) que todavía no
+     se eligieron. Salen de las mismas filas ya filtradas por el chokepoint (`safeRows`), así que
+     un vínculo cruzado nunca se ofrece. */
+  const delProyecto = esCronograma
+    ? safeRows
+        .filter((r) => r.included && !feedingIds.has(r.session.id))
+        .map((r) => ({ ...r.session, projects: [] as { projectId: string }[] }))
+    : [];
+
   const idsVisibles = [
     ...clientSessions.map((s) => s.id),
     ...internas.map((s) => s.id),
+    ...delProyecto.map((s) => s.id),
     ...feeding.map((f) => f.sessionId),
   ];
   const conContenido = new Set<string>(
@@ -265,7 +280,7 @@ export async function GET(
         ).map((r) => r.id),
   );
 
-  const candidates = [...clientSessions, ...internas]
+  const candidates = [...clientSessions, ...internas, ...delProyecto]
     /* ⚠ Se saca `!excludedIds.has(s.id)` A PROPÓSITO, y volver a ponerlo parece la optimización
        más obvia del archivo ("no muestres lo que ya está excluido"). Reconstruye el incidente: la
        «X» sacaba la sesión de la lista **y del único buscador que podía traerla de vuelta**, así
@@ -295,7 +310,9 @@ export async function GET(
         applies: cls.include,
         // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
         reason: cls.reason,
-        linkedElsewhere: s.projects.some((p) => p.projectId !== projectId),
+        linkedElsewhere: esCronograma
+          ? (alsoInBySession.get(s.id) ?? []).length > 0
+          : s.projects.some((p) => p.projectId !== projectId),
         /* La sacó un humano de este proyecto. Viaja para que el botón diga "Reincluir" y la fila
            lo muestre: una excluida que vuelve al buscador sin marca se lee como una que nunca
            estuvo, y la persona no entiende por qué "reaparece". */
@@ -307,6 +324,9 @@ export async function GET(
         /* Sin dueño: agregarla NO es solo vincularla, también la va a hacer de este cliente. El
            botón lo dice, porque es un efecto que no se ve desde el modal. */
         sinDuenio: internas.some((i) => i.id === s.id),
+        /* Solo las del proyecto pueden ser futuras (las demás candidatas ya las cortan en la
+           consulta): se marcan, porque elegirla no aporta nada hasta que ocurra. */
+        futura: s.date.getTime() > Date.now(),
       };
     })
     /* Las que aplican primero y, dentro de cada bloque, lo más reciente arriba. El `date desc` ya

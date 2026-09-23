@@ -7,6 +7,7 @@ import {
   decidirAlAgregar,
   esReunionDePuertasAdentro,
   motivoParaNoAdoptar,
+  motivoParaNoElegirDelCalendario,
 } from "./candidatas-internas";
 
 /**
@@ -417,5 +418,29 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
     const src = leer("app/(shell)/sessions/SessionsClient.tsx");
     expect(src).toContain('aria-label="Buscar en este grupo"');
     expect(src, "el buscador del grupo no filtra la lista que se pinta").toContain("sesionesDelGrupo.map(");
+  });
+});
+
+describe("el calendario del cronograma: qué se puede elegir (2026-09-23)", () => {
+  const base = { perteneceAlCliente: false, sinDuenio: false, motivoNoAdoptable: null, nombreDelDuenio: null };
+
+  it("una reunión de ESTE cliente se elige con un clic", () => {
+    expect(motivoParaNoElegirDelCalendario({ ...base, perteneceAlCliente: true })).toBeNull();
+  });
+
+  it("⛔ una de OTRO cliente se muestra con su motivo, nunca con un botón", () => {
+    /* Llevaría el material de un cliente al cronograma de otro (INV1). La puerta la rechaza igual:
+       el motivo existe para que el botón no prometa lo que la puerta va a negar. */
+    const m = motivoParaNoElegirDelCalendario({ ...base, nombreDelDuenio: "Wherex" });
+    expect(m).toContain("«Wherex»");
+    expect(m).toContain("Sesiones");
+    expect(motivoParaNoElegirDelCalendario(base), "sin nombre también se dice").toContain("otro cliente");
+  });
+
+  it("una sin dueño sigue la regla de adopción de siempre", () => {
+    expect(motivoParaNoElegirDelCalendario({ ...base, sinDuenio: true })).toBeNull();
+    expect(
+      motivoParaNoElegirDelCalendario({ ...base, sinDuenio: true, motivoNoAdoptable: "Estuvo gente de afuera" }),
+    ).toBe("Estuvo gente de afuera");
   });
 });

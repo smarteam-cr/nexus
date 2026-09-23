@@ -434,8 +434,10 @@ test("la caja de instrucciones se pinta y solo guarda lo que una persona tipeó"
     path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
     "utf8",
   );
+  // Rótulo renombrado el 2026-09-23 a pedido de Elías (antes «Instrucciones para la IA de este
+  // documento»): ahora vive debajo del Contexto del cronograma y es lo que se suma a lo elegido.
   expect(src, "desapareció la caja de instrucciones del cronograma").toContain(
-    "Instrucciones para la IA de este documento",
+    "Instrucciones adicionales",
   );
   // El flag dirty es la lección del bug de «Regenerar» del handoff: sin él, un draft que
   // nunca se re-sembró se ve igual que uno que alguien vació a mano.

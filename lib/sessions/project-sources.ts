@@ -210,8 +210,9 @@ export async function getProjectHandoffSessions(projectId: string): Promise<Proj
 }
 
 /**
- * Sesiones que alimentan al CRONOGRAMA (2026-09-23, «Contexto del cronograma»): la membresía del
- * proyecto menos las que el CSE sacó con la X del cronograma. Pasa por el MISMO chokepoint que el
+ * Sesiones que alimentan al CRONOGRAMA (2026-09-23, «Contexto del cronograma»): de la membresía del
+ * proyecto, SOLO las que el CSE eligió (las que trae de su calendario quedan como reuniones del
+ * proyecto al elegirlas, así que también pasan por acá). Pasa por el MISMO chokepoint que el
  * resto —la pertenencia al cliente y el tombstone no se re-implementan— y aplica la regla única de
  * `lib/timeline/session-feeding.ts`. Las futuras NO se cortan acá: eso lo hace quien arma el
  * material, igual que para el handoff.

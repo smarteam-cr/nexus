@@ -26,7 +26,6 @@ const R = (over: Partial<ReunionParaElCronograma> = {}): ReunionParaElCronograma
   date: Date.UTC(2026, 8, 10),
   prefijoDeSala: "[CON EL CLIENTE] ",
   contenido: "Se acordó mover la migración a la fase 3.",
-  agregadaAMano: false,
   ...over,
 });
 
@@ -50,15 +49,12 @@ describe("las reuniones", () => {
     expect(b).toContain("NUNCA copies a un título de tarea");
   });
 
-  it("marca las que el CSE agregó a mano, para que el agente no las ignore", () => {
-    // La marca va en el ENCABEZADO de la reunión (el rótulo general también nombra la frase).
-    const encabezado = (b: string) => b.split("\n").find((l) => l.startsWith("### ")) ?? "";
-    expect(encabezado(bloqueDeReunionesDelCronograma([R({ agregadaAMano: true })]))).toContain(
-      "la agregó el CSE a mano",
-    );
-    expect(encabezado(bloqueDeReunionesDelCronograma([R({ agregadaAMano: false })]))).not.toContain(
-      "la agregó",
-    );
+  it("el rótulo dice que las ELIGIÓ el CSE — todas, sin marca por reunión", () => {
+    /* Desde el 2026-09-23 el cronograma lee SOLO lo elegido: una marca «agregada a mano» por
+       reunión quedaría en todas y dejaría de decir algo. */
+    const b = bloqueDeReunionesDelCronograma([R(), R({ title: "Otra" })]);
+    expect(b.split("\n")[0]).toContain("QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA");
+    expect(b).not.toContain("a mano");
   });
 });
 

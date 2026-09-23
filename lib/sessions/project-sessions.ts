@@ -12,7 +12,6 @@ import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
-import { whereAlimentaCronograma } from "@/lib/timeline/session-feeding";
 
 export interface PastSessionContext {
   id: string;
@@ -47,11 +46,13 @@ export async function getPastSessionsForProject(
   if (!project) return [];
 
   const links = await prisma.sessionProject.findMany({
-    /* La regla del CRONOGRAMA (lib/timeline/session-feeding.ts): el tombstone (`included`) y la X
-       del Contexto del cronograma (`timelineOverride=false`) no alimentan el avance. Va en el
-       WHERE, no filtrada después: con `take` en 12, filtrar en memoria dejaba menos de 12 cuando
-       el CSE sacaba reuniones recientes. */
-    where: { projectId, ...whereAlimentaCronograma(), session: { date: { lte: now } } },
+    /* `included: true`: las sesiones excluidas por humano (tombstone) no alimentan el avance.
+       ⚠ NO usa la elección del «Contexto del cronograma» (`timelineOverride`), a propósito: allá
+       entran solo las reuniones que el CSE eligió, y el avance existe para enterarse SOLO de lo que
+       pasó en la última reunión. Atarlo a la elección lo dejaba ciego hasta que alguien se
+       acordara de elegirla. Las que se eligen desde el calendario ya quedan como reuniones del
+       proyecto, así que si son recientes entran acá igual. */
+    where: { projectId, included: true, session: { date: { lte: now } } },
     orderBy: { session: { date: "desc" } },
     take: opts.limit ?? 12,
     select: {

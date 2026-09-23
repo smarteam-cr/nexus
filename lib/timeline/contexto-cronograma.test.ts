@@ -25,7 +25,7 @@ const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 const sinComentarios = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\{\/\*[\s\S]*?\*\/\}/g, " ").replace(/^\s*\/\/.*$/gm, " ");
 
-const REUNIONES = "=== REUNIONES DEL PROYECTO QUE EL CSE DEJA ENTRAR AL CRONOGRAMA (material INTERNO) ===\nx";
+const REUNIONES = "=== REUNIONES QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA (material INTERNO) ===\nx";
 const NOTAS = "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nCENTINELA-NOTA";
 
 describe("⭐ el agente que arma las TAREAS lee el material", () => {
@@ -38,7 +38,7 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
 
   it("con material, las dos fuentes entran al mensaje", () => {
     const msg = renderDetalleDeCronograma(insumos(REUNIONES, NOTAS));
-    expect(msg).toContain("QUE EL CSE DEJA ENTRAR AL CRONOGRAMA");
+    expect(msg).toContain("QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA");
     expect(msg).toContain("CENTINELA-NOTA");
   });
 
@@ -90,7 +90,7 @@ describe("⭐ «Pedir cambio con IA» — el único que toca FASES — también"
   });
 });
 
-describe("⭐ el AVANCE respeta la X y lee las notas", () => {
+describe("⭐ el AVANCE lee las notas, y sus reuniones NO dependen de lo elegido", () => {
   const base = {
     instrucciones: "",
     companyName: "C",
@@ -108,12 +108,14 @@ describe("⭐ el AVANCE respeta la X y lee las notas", () => {
     expect(buildProgressUserMessage({ ...base, notasBlock: "  " })).toBe(buildProgressUserMessage(base));
   });
 
-  it("las reuniones del avance salen con la regla del cronograma, en el WHERE", () => {
-    /* Filtrar después del `take: 12` dejaba menos de 12 cuando el CSE sacaba reuniones recientes. */
+  it("el avance lee las reuniones recientes del PROYECTO, no las elegidas", () => {
+    /* Desde el 2026-09-23 el Contexto del cronograma es de elección (entra solo lo elegido). El
+       avance existe para enterarse SOLO de lo que pasó en la última reunión: atarlo a la elección
+       lo dejaba ciego hasta que alguien se acordara de elegirla. */
     const src = sinComentarios(leer("lib/sessions/project-sessions.ts"));
-    expect(src, "el avance volvió a leer reuniones que el CSE sacó del cronograma").toContain(
-      "...whereAlimentaCronograma()",
-    );
+    expect(src, "el avance volvió a depender de lo elegido para el cronograma").not.toContain("timelineOverride");
+    expect(src, "el avance volvió a depender de lo elegido para el cronograma").not.toContain("session-feeding");
+    expect(src, "el avance perdió el tombstone").toContain("where: { projectId, included: true, session: { date: { lte: now } } }");
   });
 });
 
@@ -122,6 +124,7 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
     "app/api/projects/[projectId]/timeline/sessions/route.ts",
     "app/api/projects/[projectId]/timeline/sources/route.ts",
     "app/api/projects/[projectId]/timeline/sources/[id]/route.ts",
+    "app/api/projects/[projectId]/timeline/calendario/route.ts",
   ];
 
   it("escriben con `guardTimelineEdit` (cronograma.write) y sin el veto del handoff", () => {
@@ -136,11 +139,12 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
     }
   });
 
-  it("⛔ la X del cronograma NO escribe el afinado del handoff (ni al revés)", () => {
+  it("⛔ elegir y sacar del cronograma NO escribe el afinado del handoff (ni al revés)", () => {
     const cron = sinComentarios(leer("app/api/projects/[projectId]/timeline/sessions/route.ts"));
-    expect(cron).toContain("timelineOverride: body.feeds");
-    // «Reincluir» después de una X vuelve a la regla (null), no la marca como agregada a mano.
-    expect(cron, "deshacer la X volvió a marcarla como agregada a mano").toContain("deshaceLaX ? null : true");
+    expect(cron, "elegir dejó de marcarla como elegida").toContain("update: { timelineOverride: true, included: true }");
+    // La X deja de elegirla (null): «no elegida» es un solo estado, y así el clasificador la recupera.
+    expect(cron, "la X volvió a escribir un estado aparte").toContain("data: { timelineOverride: null }");
+    expect(cron, "la X volvió a escribir un estado aparte").not.toContain("timelineOverride: false");
     expect(cron, "la puerta del cronograma está tocando el handoff").not.toContain("handoffOverride");
     const hand = sinComentarios(leer("app/api/projects/[projectId]/handoff-sessions/route.ts"));
     expect(hand, "la puerta del handoff está tocando el cronograma").not.toContain("timelineOverride");
@@ -149,7 +153,7 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
   it("⛔ las notas viven en su tabla: nada de HandoffSource", () => {
     /* HandoffSource la leen el handoff, el mapeo de procesos de TODO el cliente y el gate de
        material del handoff, sin filtrar por tipo: una nota del cronograma ahí se cuela en los tres. */
-    for (const r of RUTAS.slice(1)) {
+    for (const r of RUTAS.slice(1, 3)) {
       expect(sinComentarios(leer(r)), r).not.toContain("handoffSource");
     }
     const cargar = sinComentarios(leer("lib/contexto/cargar.ts"));
@@ -167,38 +171,23 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
   });
 });
 
-describe("⭐ lo que el CSE agregó a mano entra primero, y lo vacío no ocupa lugar", () => {
+describe("⭐ el reparto: lo reciente primero, nunca pasa el tope, y lo vacío no ocupa lugar", () => {
   const DIA = 86_400_000;
   const AHORA = Date.UTC(2026, 8, 23);
-  const reunion = (id: string, diasAtras: number, agregadaAMano = false): ReunionConContenido => ({
+  const reunion = (id: string, diasAtras: number): ReunionConContenido => ({
     id,
     title: id,
     date: AHORA - diasAtras * DIA,
-    agregadaAMano,
   });
 
-  it("la agregada a mano VIEJA entra con la cota grande aunque haya 60 recientes", () => {
-    /* Con la regla «entran todas», el reparto premia la más reciente: sin cupo propio, la reunión
-       de venta que alguien fue a buscar a propósito llegaba con 400 caracteres o no llegaba. */
-    const recientes = Array.from({ length: 60 }, (_, i) => reunion(`r${i}`, i + 1));
-    const espacio = repartirEspacio([...recientes, reunion("venta", 400, true)], AHORA);
-    expect(espacio.get("venta")).toBe(4000);
-  });
-
-  it("las agregadas que no entran en su cupo compiten en el general, no se pierden", () => {
-    /* 25 y no menos: el cupo de las agregadas (16.000) ya admite ~15 con la escala de cotas, así
-       que con pocas nunca se prueba el desborde (la primera versión de esta guarda usaba 12 y
-       quedaba verde aunque las que sobraban se tiraran). */
-    const agregadas = Array.from({ length: 25 }, (_, i) => reunion(`a${i}`, i + 1, true));
-    const espacio = repartirEspacio(agregadas, AHORA);
-    expect(espacio.size, "alguna agregada se perdió entera").toBe(25);
+  it("la más reciente se lleva la cota grande", () => {
+    const espacio = repartirEspacio([reunion("vieja", 90), reunion("ayer", 1)], AHORA);
+    expect(espacio.get("ayer")).toBe(4000);
+    expect(espacio.get("vieja")).toBeLessThan(4000);
   });
 
   it("nunca pasa el tope total", () => {
-    const muchas = [
-      ...Array.from({ length: 40 }, (_, i) => reunion(`a${i}`, i + 1, true)),
-      ...Array.from({ length: 80 }, (_, i) => reunion(`r${i}`, i + 1)),
-    ];
+    const muchas = Array.from({ length: 120 }, (_, i) => reunion(`r${i}`, i + 1));
     const total = [...repartirEspacio(muchas, AHORA).values()].reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(TOPE_REUNIONES_CRONOGRAMA);
   });
@@ -219,5 +208,46 @@ describe("⭐ lo que el CSE agregó a mano entra primero, y lo vacío no ocupa l
     // Y las reuniones salen del chokepoint, nunca de una lectura directa de vínculos.
     expect(tramo).toContain("getProjectTimelineSessions(projectId)");
     expect(tramo).not.toContain("prisma.sessionProject");
+  });
+});
+
+describe("⭐ el buscador: las reuniones del proyecto y las de TU calendario", () => {
+  const ruta = () => sinComentarios(leer("app/api/projects/[projectId]/timeline/calendario/route.ts"));
+
+  it("el calendario es el de quien busca, y sin futuras", () => {
+    const src = ruta();
+    expect(src, "dejó de buscar por el correo de quien usa el buscador").toContain("guard.teamMember.email");
+    expect(src, "dejó de mirar al organizador").toContain(`lower(s."organizerEmail") = \${email}`);
+    expect(src, "dejó de mirar a los invitados").toContain(`WHERE lower(p) = \${email}`);
+    expect(src, "volvió a ofrecer reuniones que no ocurrieron").toContain(`s."date" <= \${ahora}`);
+  });
+
+  it("una lista cortada dice que hay más", () => {
+    const src = ruta();
+    expect(src).toContain("LIMIT ${tope + 1}");
+    expect(src).toContain("hayMas");
+  });
+
+  it("⛔ las de otro cliente se MARCAN con la regla única, no se esconden ni se ofrecen", () => {
+    expect(ruta()).toContain("motivoParaNoElegirDelCalendario(");
+  });
+
+  it("las candidatas del proyecto salen de las filas del chokepoint, no de una consulta aparte", () => {
+    /* `safeRows` ya descartó los vínculos cruzados: una consulta propia podría ofrecer una reunión
+       de otro cliente que quedó colgada del proyecto. */
+    const src = sinComentarios(leer("app/api/projects/[projectId]/session-candidates/route.ts"));
+    expect(src).toMatch(/const delProyecto = esCronograma\s*\?\s*safeRows/);
+    expect(src, "el cronograma volvió a ofrecer todas las reuniones del cliente").toContain(
+      "const clientSessions = esCronograma ? [] :",
+    );
+  });
+
+  it("la pantalla pide el calendario solo para el cronograma, y no repite lo ya listado", () => {
+    const src = leer("components/clients/SessionSelectionReview.tsx");
+    expect(src).toContain("/timeline/calendario?q=");
+    expect(src).toContain("showModal && esCronograma ?");
+    expect(src, "el calendario vuelve a mostrar lo que ya está en otra lista").toContain(
+      "!yaListadas.has(s.sessionId) && coincideConLaBusqueda(s, search)",
+    );
   });
 });

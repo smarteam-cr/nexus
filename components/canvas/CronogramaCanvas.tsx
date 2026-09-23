@@ -3162,7 +3162,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <svg className={`w-3 h-3 transition-transform ${showBrief ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            Instrucciones para la IA de este documento
+            Instrucciones adicionales
             {briefDirty && docBrief.trim() !== (briefGuardado ?? "") ? (
               <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
                 sin guardar

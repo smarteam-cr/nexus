@@ -128,6 +128,35 @@ export function motivoParaNoAdoptar(
   return null;
 }
 
+/**
+ * Cuántas letras hacen falta para que el buscador del «Contexto del cronograma» busque en TODO el
+ * calendario de quien lo usa (2026-09-23). Con menos, muestra sus reuniones más recientes.
+ */
+export const MIN_BUSQUEDA_CALENDARIO = 3;
+
+/**
+ * ¿Por qué una reunión del CALENDARIO de quien busca no se puede elegir para el cronograma de este
+ * proyecto? `null` = se puede. Lo leen el buscador (timeline/session-search) para no ofrecer un botón
+ * que la puerta va a rechazar; la puerta (`prepararVinculoManual`) aplica la misma decisión por su
+ * cuenta con `decidirAlAgregar`.
+ *
+ * Una reunión de OTRO cliente se muestra igual —esconderla sería que alguien la busque en su
+ * calendario y crea que no existe— pero no se elige: llevaría el material de un cliente al
+ * cronograma de otro (INV1). Si está mal asignada, se corrige en Sesiones.
+ */
+export function motivoParaNoElegirDelCalendario(i: {
+  perteneceAlCliente: boolean;
+  sinDuenio: boolean;
+  /** `motivoParaNoAdoptar(…)` — solo cuenta cuando es sin dueño. */
+  motivoNoAdoptable: string | null;
+  /** El cliente al que pertenece hoy, para decirlo. */
+  nombreDelDuenio: string | null;
+}): string | null {
+  if (i.perteneceAlCliente) return null;
+  if (i.sinDuenio) return i.motivoNoAdoptable;
+  return `Es de «${i.nombreDelDuenio ?? "otro cliente"}»: no puede alimentar el cronograma de otro cliente. Si está mal asignada, corregila en Sesiones.`;
+}
+
 /** Qué hace la puerta de «Agregar» con una sesión. Ver `decidirAlAgregar`. */
 export type DecisionAlAgregar =
   | { tipo: "rechazar"; status: 400 | 409; error: string }

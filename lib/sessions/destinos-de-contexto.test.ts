@@ -68,26 +68,30 @@ describe("el HANDOFF no cambia ni una coma", () => {
 });
 
 describe("el CRONOGRAMA tiene su propia regla", () => {
-  it("toda reunión del proyecto alimenta, AUNQUE la regla del handoff diga que no", () => {
+  it("entra SOLO la que el CSE eligió — ya no entran todas las del proyecto", () => {
+    /* Segunda versión (2026-09-23, pedido de Elías): la primera dejaba entrar las 61 reuniones del
+       proyecto y el CSE sacaba con la X. Volver a eso es el modo de falla silencioso. */
+    expect(alimenta("cronograma", { ...base, timelineOverride: true }, false)).toBe(true);
+    expect(alimenta("cronograma", base, true)).toBe(false);
+    expect(alimenta("cronograma", { ...base, isPrimary: true, confidence: 0.9 }, true)).toBe(false);
+  });
+
+  it("no mira la regla del handoff ni su afinado — y el tombstone manda sobre todo", () => {
     /* Una semanal de implementación: el handoff la descarta por título (aplica=false) y el
-       cronograma la necesita. */
-    expect(alimenta("cronograma", base, false)).toBe(true);
-    expect(alimenta("cronograma", { ...base, confidence: 0.1 }, false)).toBe(true);
-  });
-
-  it("solo la X del cronograma la saca — y el tombstone manda sobre todo", () => {
-    expect(alimenta("cronograma", { ...base, timelineOverride: false }, true)).toBe(false);
+       cronograma la lee igual si el CSE la eligió. */
+    expect(alimenta("cronograma", { ...base, timelineOverride: true, confidence: 0.1 }, false)).toBe(true);
+    expect(alimenta("cronograma", { ...base, timelineOverride: true, handoffOverride: false }, true)).toBe(true);
+    expect(alimenta("cronograma", { ...base, handoffOverride: true }, true)).toBe(false);
     expect(alimenta("cronograma", { ...base, included: false, timelineOverride: true }, true)).toBe(false);
-    // La X del HANDOFF no la saca del cronograma.
-    expect(alimenta("cronograma", { ...base, handoffOverride: false }, true)).toBe(true);
   });
 
-  it("excluida y agregada miran SU afinado", () => {
-    expect(excluidaAMano("cronograma", { ...base, timelineOverride: false })).toBe(true);
+  it("no hay lista de «excluidas»: sacar es dejar de elegir", () => {
+    /* Un `false` de la primera versión no puede reaparecer como «Excluida» con un botón que la
+       vuelve a meter: vuelve al buscador como cualquier otra reunión del proyecto. */
+    expect(excluidaAMano("cronograma", { ...base, timelineOverride: false })).toBe(false);
     expect(excluidaAMano("cronograma", { ...base, handoffOverride: false })).toBe(false);
     expect(forzadaAMano("cronograma", { ...base, timelineOverride: true })).toBe(true);
-    expect(origenDelVinculo("cronograma", { ...base, timelineOverride: true })).toBe("agregada a mano");
-    expect(origenDelVinculo("cronograma", base)).toBe("reunión del proyecto");
+    expect(origenDelVinculo("cronograma", { ...base, timelineOverride: true })).toBe("elegida para el cronograma");
   });
 
   it("no usa la regla de relevancia (ni el chip «aplica» del buscador)", () => {

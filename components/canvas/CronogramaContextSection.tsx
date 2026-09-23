@@ -5,14 +5,16 @@
  *
  * El gemelo de la sección «Contexto» del handoff (`components/clients/ProjectContextSection.tsx`),
  * para el CRONOGRAMA y sin la columna de HubSpot (pedido de Elías). Dos columnas:
- *   · Google Meet — las reuniones que alimentan al cronograma: por defecto TODAS las del proyecto;
- *     la X saca una SOLO del cronograma y «Buscar más sesiones» suma la que falte.
+ *   · Google Meet — SOLO las reuniones que el CSE eligió (segunda versión, 2026-09-23: la primera
+ *     metía todas las del proyecto y eran 61 de golpe). «Buscar sesiones» ofrece las del proyecto y
+ *     las del calendario de quien busca; la X deja de elegirla.
  *   · Fuentes manuales — notas pegadas a mano (una decisión que no quedó en ninguna reunión).
- * Abajo, a todo el ancho, las «Instrucciones para la IA» que ya existían: llegan como `children`
+ * Abajo, a todo el ancho, las «Instrucciones adicionales» que ya existían: llegan como `children`
  * porque su JSX tiene que seguir escrito en CronogramaCanvas.tsx (lo exige proposal-deltas.test.ts).
  *
- * Lo leen el detalle (tareas por semana y cuáles son reuniones), «Pedir cambio con IA» (el único que
- * toca fases) y el avance. Todo sigue terminando en propuesta: nada de esto escribe tareas solo.
+ * Las reuniones elegidas las leen el detalle (tareas por semana y cuáles son reuniones) y «Pedir
+ * cambio con IA» (el único que toca fases); las notas, también el avance. El avance NO depende de lo
+ * elegido: lee solo las reuniones recientes del proyecto. Todo sigue terminando en propuesta.
  *
  * ⚠ Archivo aparte a propósito: CronogramaCanvas.tsx está al tope del trinquete de grises, y lo
  * nuevo nace con tokens del tema.
@@ -39,17 +41,15 @@ export default function CronogramaContextSection({
   generado: boolean;
   /** Para el resumen de la línea cerrada: si hay instrucciones guardadas. */
   instruccionesActivas: boolean;
-  /** La caja de «Instrucciones para la IA», tal cual vive en CronogramaCanvas. */
+  /** La caja de «Instrucciones adicionales», tal cual vive en CronogramaCanvas. */
   children?: ReactNode;
 }) {
   const [override, setOverride] = useState<boolean | null>(null);
   const abierto = override ?? !generado;
 
   const [reuniones, setReunionesState] = useState(0);
-  const [excluidas, setExcluidasState] = useState(0);
   const [notas, setNotasState] = useState(0);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
-  const setExcluidas = useCallback((n: number) => setExcluidasState((c) => (c === n ? c : n)), []);
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
   return (
@@ -71,8 +71,7 @@ export default function CronogramaContextSection({
         {/* Cerrada se sigue leyendo con qué se va a generar: sin abrirla, sabés si la IA va a leer
             reuniones, notas o instrucciones. */}
         <span className="text-[11px] text-fg-muted truncate">
-          {reuniones} {reuniones === 1 ? "reunión" : "reuniones"}
-          {excluidas > 0 ? ` · ${excluidas} sacada${excluidas === 1 ? "" : "s"}` : ""} · {notas} nota
+          {reuniones} {reuniones === 1 ? "reunión elegida" : "reuniones elegidas"} · {notas} nota
           {notas === 1 ? "" : "s"}
           {instruccionesActivas ? " · instrucciones activas" : ""}
         </span>
@@ -84,10 +83,10 @@ export default function CronogramaContextSection({
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
           Con esto la IA arma las tareas de cada fase, decide cuáles son reuniones con el cliente y
-          propone cambios de fases desde «Pedir cambio con IA». Entran todas las reuniones del
-          proyecto: <span className="font-medium text-fg-secondary">sacá</span> las que no sirven y{" "}
-          <span className="font-medium text-fg-secondary">sumá</span> las que falten. Sacarla de acá
-          no la saca del handoff ni del proyecto.
+          propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
+          <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
+          buscalas entre las del proyecto o en tu calendario. Sacarla de acá no la saca del handoff
+          ni del proyecto.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
@@ -96,7 +95,6 @@ export default function CronogramaContextSection({
               destino="cronograma"
               columnMode
               onCount={setReuniones}
-              onExcludedCount={setExcluidas}
               readOnly={!canEdit}
             />
           </ContextColumn>

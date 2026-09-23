@@ -10,7 +10,10 @@
  *   - reviewedAt !== null        → un humano confirmó/curó este link
  *   - included === false         → tombstone: un humano EXCLUYÓ este proyecto
  *   - handoffOverride !== null   → la "X"/"Agregar" del panel de handoff lo tocó
- *   - timelineOverride === true  → el «Agregar» del Contexto del CRONOGRAMA (2026-09-23)
+ *   - timelineOverride === true  → el CSE eligió la reunión en el Contexto del CRONOGRAMA (2026-09-23)
+ *
+ * Desde la segunda versión (2026-09-23, entra solo lo elegido) la X escribe `null`; un `false` solo
+ * queda de la primera. Ninguno de los dos lockea, y el motivo sigue siendo el de abajo.
  *
  * ⚠ La X del cronograma (`timelineOverride === false`) NO lockea, a propósito. La primera versión
  * la contaba como señal humana y eso congelaba la reunión ENTERA: `reclassify` saltea toda sesión

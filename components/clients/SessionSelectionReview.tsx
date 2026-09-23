@@ -18,7 +18,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
-import { coincideConLaBusqueda, MIN_BUSQUEDA_SIN_DUENIO } from "@/lib/sessions/candidatas-internas";
+import {
+  coincideConLaBusqueda,
+  MIN_BUSQUEDA_CALENDARIO,
+  MIN_BUSQUEDA_SIN_DUENIO,
+} from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
@@ -76,11 +80,17 @@ interface CandidateSession {
    */
   soloEquipo?: boolean;
   /**
-   * Sin dueño, pero NO se asigna con un clic (hubo gente de afuera, o ya cuelga de un proyecto de
-   * otro cliente). Trae el motivo; la fila manda a Sesiones en vez de ofrecer «Agregar y asignar».
+   * No se agrega con un clic, y por qué: sin dueño con gente de afuera o colgada de otro cliente, o
+   * —en el calendario del cronograma— una reunión de OTRO cliente. La fila manda a Sesiones en vez
+   * de ofrecer un botón que la puerta va a rechazar.
    */
   motivoNoAdoptable?: string | null;
+  /** Todavía no ocurrió (solo las reuniones del proyecto que se ofrecen en el cronograma). */
+  futura?: boolean;
 }
+
+/** Una fila del modal o el rótulo de un grupo. */
+type FilaDelModal = CandidateSession | { separador: string };
 
 function fmtDuracion(min: number | null | undefined): string | null {
   /* Redondeado a minutos: el dato viene con decimales y "47,3 min" no ayuda a decidir nada.
@@ -147,7 +157,9 @@ export default function SessionSelectionReview({
     q: "",
     sesiones: [],
   });
-  const consultaSinDuenio = showModal ? search.trim() : "";
+  /* El cronograma no busca huérfanas sueltas: busca en el calendario de quien lo usa (abajo), que
+     ya trae las del equipo en las que estuvo. */
+  const consultaSinDuenio = showModal && !esCronograma ? search.trim() : "";
   /* «Pendiente» se DERIVA: hay una búsqueda que corresponde hacer y la respuesta guardada no es de
      ella. Con un booleano aparte, los 300 ms de espera y cualquier fallo se pintaban como
      «también se buscó» sin haber buscado nada. */
@@ -184,6 +196,48 @@ export default function SessionSelectionReview({
       ctrl.abort();
     };
   }, [consultaSinDuenio, projectId, conRegla]);
+
+  /* «De tu calendario» — solo el CRONOGRAMA (2026-09-23): las reuniones de quien busca que todavía
+     no son del proyecto. Sin escribir nada llegan sus más recientes; con MIN_BUSQUEDA_CALENDARIO
+     letras o más, todo su historial. Mismo cuidado que arriba: la respuesta se guarda con la clave
+     que la pidió y «pendiente» se deriva. */
+  const [calendario, setCalendario] = useState<{
+    clave: string | null;
+    sesiones: CandidateSession[];
+    hayMas: boolean;
+    error?: boolean;
+  }>({ clave: null, sesiones: [], hayMas: false });
+  const consultaCalendario = search.trim();
+  const claveCalendario =
+    showModal && esCronograma ? (consultaCalendario.length >= MIN_BUSQUEDA_CALENDARIO ? consultaCalendario : "") : null;
+  const calendarioPendiente = claveCalendario !== null && calendario.clave !== claveCalendario;
+  useEffect(() => {
+    if (claveCalendario === null) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(
+      () => {
+        fetch(`/api/projects/${projectId}/timeline/calendario?q=${encodeURIComponent(claveCalendario)}`, {
+          signal: ctrl.signal,
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error(String(r.status));
+            return r.json();
+          })
+          .then((d: { sesiones?: CandidateSession[]; hayMas?: boolean }) =>
+            setCalendario({ clave: claveCalendario, sesiones: d.sesiones ?? [], hayMas: !!d.hayMas }),
+          )
+          .catch(() => {
+            if (!ctrl.signal.aborted) setCalendario({ clave: claveCalendario, sesiones: [], hayMas: false, error: true });
+          });
+      },
+      // Al abrir, sin espera: lo primero que se ve es la lista, no un «Buscando…».
+      claveCalendario ? 300 : 0,
+    );
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [claveCalendario, projectId]);
 
   const reload = useCallback(async () => {
     try {
@@ -254,8 +308,22 @@ export default function SessionSelectionReview({
     consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q === consultaSinDuenio
       ? sinDuenio.sesiones.filter((s) => !yaListadas.has(s.sessionId))
       : [];
-  const filasDelModal: Array<CandidateSession | "separador"> =
-    huerfanasQueCoinciden.length > 0 ? [...filtered, "separador", ...huerfanasQueCoinciden] : filtered;
+  /* El calendario también se filtra acá con lo escrito: con una o dos letras el servidor devuelve
+     las recientes sin filtrar, y la lista tiene que responder igual a lo que se tipea. */
+  const delCalendario =
+    claveCalendario !== null && calendario.clave === claveCalendario
+      ? calendario.sesiones.filter((s) => !yaListadas.has(s.sessionId) && coincideConLaBusqueda(s, search))
+      : [];
+  const filasDelModal: FilaDelModal[] = esCronograma
+    ? [
+        ...(filtered.length > 0 ? [{ separador: "Del proyecto" }, ...filtered] : []),
+        ...(delCalendario.length > 0
+          ? [{ separador: "De tu calendario · al elegirla queda como reunión del proyecto" }, ...delCalendario]
+          : []),
+      ]
+    : huerfanasQueCoinciden.length > 0
+      ? [...filtered, { separador: "Sin cliente asignado · al agregarla queda como reunión de este cliente" }, ...huerfanasQueCoinciden]
+      : filtered;
 
   // Modal de "buscar más sesiones" — compartido por el render normal y el de columna.
   const searchModal = (
@@ -271,14 +339,30 @@ export default function SessionSelectionReview({
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por título, persona o dominio…"
+        placeholder={
+          esCronograma
+            ? "Buscar en el proyecto y en tu calendario — título, persona o dominio…"
+            : "Buscar por título, persona o dominio…"
+        }
         aria-label="Buscar sesiones"
         aria-describedby="ayuda-buscar-sesiones"
         autoFocus
         className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-1.5"
       />
       <p id="ayuda-buscar-sesiones" className="text-[11px] text-fg-muted mb-3">
-        {consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO ? (
+        {esCronograma ? (
+          calendarioPendiente ? (
+            "Buscando en tu calendario…"
+          ) : calendario.error ? (
+            <span className="text-warn-ink">
+              No se pudo buscar en tu calendario. Probá de nuevo en un momento.
+            </span>
+          ) : claveCalendario ? (
+            `Se buscó en todo tu calendario${calendario.hayMas ? " — hay más resultados: afiná la búsqueda" : ""}.`
+          ) : (
+            `Arriba, las reuniones del proyecto; abajo, tus reuniones más recientes. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario.`
+          )
+        ) : consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO ? (
           `Con ${MIN_BUSQUEDA_SIN_DUENIO} letras o más también se busca en las reuniones que no tienen cliente asignado.`
         ) : sinDuenioPendiente ? (
           "Buscando también en las reuniones sin cliente asignado…"
@@ -292,9 +376,13 @@ export default function SessionSelectionReview({
       </p>
       {filasDelModal.length === 0 ? (
         <p className="text-xs text-fg-muted py-2">
-          {sinDuenioPendiente
+          {sinDuenioPendiente || calendarioPendiente
             ? "Buscando…"
-            : search.trim()
+            : esCronograma
+              ? search.trim()
+                ? `Ninguna reunión coincide con «${search.trim()}», ni en el proyecto ni en tu calendario.`
+                : "No hay reuniones para elegir: ni del proyecto ni en tu calendario."
+              : search.trim()
               ? `Ninguna reunión coincide con «${search.trim()}»${
                   consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && !sinDuenio.error
                     ? ", tampoco entre las que no tienen cliente asignado"
@@ -308,13 +396,13 @@ export default function SessionSelectionReview({
         // anidado — cuatro filas visibles y el resto de la pantalla desperdiciado.
         <ul className="space-y-1.5 max-h-[60vh] overflow-y-auto">
           {filasDelModal.map((c) => {
-            if (c === "separador") {
+            if ("separador" in c) {
               return (
                 <li
-                  key="separador-sin-duenio"
+                  key={`separador-${c.separador}`}
                   className="pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-muted"
                 >
-                  Sin cliente asignado · al agregarla queda como reunión de este cliente
+                  {c.separador}
                 </li>
               );
             }
@@ -350,7 +438,12 @@ export default function SessionSelectionReview({
                       {c.soloEquipo === false ? "sin cliente asignado" : "reunión del equipo"}
                     </span>
                   )}
-                  {c.sinContenido && (
+                  {c.futura && (
+                    <span className="text-[9px] font-medium text-warn-ink bg-warn-surface border border-warn-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      aún no ocurrió
+                    </span>
+                  )}
+                  {c.sinContenido && !c.futura && (
                     /* Se muestra igual —esconderla sería otra desaparición silenciosa— pero
                        marcada: la reunión pasó y no quedó nada de qué leer. */
                     <span className="text-[9px] font-medium text-warn-ink bg-warn-surface border border-warn-line rounded-full px-1.5 py-0.5 flex-shrink-0">
@@ -365,7 +458,7 @@ export default function SessionSelectionReview({
                     </span>
                   )}
                 </div>
-                {c.sinDuenio && c.motivoNoAdoptable && (
+                {c.motivoNoAdoptable && (
                   <div className="text-[10px] text-warn-ink mt-0.5">{c.motivoNoAdoptable}</div>
                 )}
                 {(sala || c.reason) && (
@@ -379,7 +472,7 @@ export default function SessionSelectionReview({
                   </div>
                 )}
               </div>
-              {c.sinDuenio && c.motivoNoAdoptable ? (
+              {c.motivoNoAdoptable ? (
                 /* No hay botón que prometa lo que la puerta va a rechazar: va a Sesiones, con la
                    reunión abierta, donde se ve quién estuvo y se elige el cliente a mano. */
                 <a
@@ -438,7 +531,11 @@ export default function SessionSelectionReview({
         )}
         <ContextColumnList
           loading={loading}
-          empty={`Ninguna sesión alimenta este ${documento}. Agregala con “Buscar más sesiones”.`}
+          empty={
+            esCronograma
+              ? "Todavía no elegiste reuniones para el cronograma. Buscalas en tu calendario o entre las del proyecto."
+              : `Ninguna sesión alimenta este ${documento}. Agregala con “Buscar más sesiones”.`
+          }
         >
           {feeding.map((s) => (
             <ContextRow
@@ -451,10 +548,14 @@ export default function SessionSelectionReview({
                   ? { label: "Aún no ocurrió", tone: "amber" }
                   : s.sinContenido
                     ? { label: "Sin transcripción", tone: "amber" }
-                    : { label: "Incluida", tone: "green" }
+                    : { label: esCronograma ? "Elegida" : "Incluida", tone: "green" }
               }
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
-              removeTitle={`Excluir del ${documento} (no la desvincula del proyecto)`}
+              removeTitle={
+                esCronograma
+                  ? "Sacar del cronograma (sigue siendo reunión del proyecto)"
+                  : `Excluir del ${documento} (no la desvincula del proyecto)`
+              }
             />
           ))}
           {excluded.map((s) => (
@@ -479,7 +580,7 @@ export default function SessionSelectionReview({
             className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-brand hover:text-brand-dark border border-dashed border-line rounded-lg px-2 py-1.5 transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
-            Buscar más sesiones
+            {esCronograma ? "Buscar sesiones" : "Buscar más sesiones"}
           </button>
         )}
         {searchModal}

@@ -6,15 +6,17 @@ import { prepararVinculoManual } from "@/lib/sessions/agregar-sesion";
 /**
  * POST /api/projects/[projectId]/timeline/sessions — «Contexto del cronograma» (2026-09-23).
  *
- * El afinado del CSE sobre qué reuniones alimentan al CRONOGRAMA, gemelo de handoff-sessions:
- *   { sessionId, feeds: true }  → «Agregar»: la reunión alimenta al cronograma aunque no sea
- *                                 miembro todavía (se vincula al proyecto, source=manual).
- *   { sessionId, feeds: false } → la X: sale SOLO del cronograma. NO desvincula la reunión del
- *                                 proyecto ni la saca del handoff, de la Entrega ni de las minutas.
+ * Qué reuniones ELIGE el CSE para el CRONOGRAMA (segunda versión, 2026-09-23: ya no entran todas
+ * las del proyecto — entra solo lo elegido, ver lib/timeline/session-feeding.ts):
+ *   { sessionId, feeds: true }  → «Agregar»: la elige. Puede venir del calendario del CSE y no ser
+ *                                 del proyecto todavía: se vincula (source=manual), con la misma
+ *                                 puerta que el handoff (rechazo cross-cliente, adopción).
+ *   { sessionId, feeds: false } → la X: deja de elegirla (`null`). NO la desvincula del proyecto ni
+ *                                 la saca del handoff, de la Entrega ni de las minutas.
  *
  * ── EL GUARD ES EL DEL CRONOGRAMA, NO EL DEL HANDOFF ─────────────────────────
  * `guardTimelineEdit` = acceso al cliente + `cronograma.write`, la misma celda que la caja de
- * «Instrucciones para la IA» de esta pieza. El guard del handoff ataba el permiso al handoff y
+ * «Instrucciones adicionales» de esta pieza. El guard del handoff ataba el permiso al handoff y
  * dejaba afuera al CSE con el cliente compartido; y su veto (el handoff es del hermano mayor) no
  * aplica acá: un desarrollo hermano tiene cronograma PROPIO. Por eso esta ruta vive bajo
  * /timeline y no lleva «handoff» en el path.
@@ -51,25 +53,25 @@ export async function POST(
   });
   if (!prep.ok) return NextResponse.json({ error: prep.error }, { status: prep.status });
 
-  /* «Reincluir» una reunión que el CSE había sacado con la X la DEVUELVE A LA REGLA (null), no la
-     marca como agregada a mano: «agregada a mano» le da cupo propio y un rótulo de prioridad para
-     el agente, y deshacer una X no es elegirla a propósito. `true` queda para el «Agregar» de
-     verdad: una reunión que no alimentaba por regla (no era del proyecto, o estaba sacada de él). */
-  const previo = await prisma.sessionProject.findUnique({
-    where: { sessionId_projectId: { sessionId, projectId } },
-    select: { included: true, timelineOverride: true },
-  });
-  const deshaceLaX = body.feeds && previo?.included === true && previo.timelineOverride === false;
-  const valor: boolean | null = !body.feeds ? false : deshaceLaX ? null : true;
+  if (!body.feeds) {
+    /* La X: `null`, no `false`. En esta versión «no elegida» es un solo estado, y `null` además le
+       devuelve el vínculo al clasificador si nada más lo lockea (session-project-locks.ts). Que el
+       vínculo exista ya lo garantizó la puerta (la X sobre uno que no existe es un 409 ahí);
+       `updateMany` y no `update` por si el clasificador lo borró entre medio: sacar algo que ya no
+       está no es un error. */
+    await prisma.sessionProject.updateMany({
+      where: { sessionId, projectId },
+      data: { timelineOverride: null },
+    });
+    return NextResponse.json({ ok: true });
+  }
 
   await prisma.sessionProject.upsert({
     where: { sessionId_projectId: { sessionId, projectId } },
-    // Solo llega acá con `feeds=true`: la X sobre un vínculo inexistente ya la rechazó la puerta.
-    create: { sessionId, projectId, source: "manual", timelineOverride: body.feeds },
-    /* Solo el afinado del CRONOGRAMA: `handoffOverride` no se toca. Agregar resucita un tombstone
-       (`included=false`) —sin eso el override quedaría en true y la reunión seguiría sin alimentar
-       nada—; la X no toca `included`, porque la reunión sigue siendo del proyecto. */
-    update: { timelineOverride: valor, ...(body.feeds ? { included: true } : {}) },
+    create: { sessionId, projectId, source: "manual", timelineOverride: true },
+    /* Solo el afinado del CRONOGRAMA: `handoffOverride` no se toca. Elegirla resucita un tombstone
+       (`included=false`) — sin eso quedaría elegida y sin alimentar nada. */
+    update: { timelineOverride: true, included: true },
   });
 
   return NextResponse.json({ ok: true });

@@ -7,22 +7,20 @@
  * cronograma es exactamente al revés — esas son las reuniones que dicen qué fases hay y qué tareas
  * se hicieron. Clonar la regla del handoff habría dejado al cronograma sin su material.
  *
- * ── LA REGLA (decisión 2026-09-23) ───────────────────────────────────────────
- * Por defecto entra TODA reunión miembro del proyecto (`included=true`, del cliente). El CSE saca
- * con la X (`timelineOverride=false`) y suma con «Agregar» (`true`). Con NULL en todas las filas de
- * hoy, nada cambia para los ~100 proyectos existentes: el agente de avance sigue viendo la reunión
- * nueva que entra después de cada sesión, sin que nadie tenga que elegirla.
+ * ── LA REGLA: ENTRA SOLO LO QUE EL CSE ELIGIÓ (decisión de Elías, 2026-09-23) ──
+ * La primera versión dejaba entrar por defecto TODA reunión del proyecto y el CSE sacaba con la X.
+ * En pantalla eso eran 61 reuniones de golpe, casi todas ruido para armar tareas. Ahora el CSE ELIGE
+ * (`timelineOverride=true`), buscándolas entre las del proyecto o en su propio calendario, y la X
+ * deja de elegirla (`null`). Un `false` que haya quedado de la primera versión vale lo mismo que
+ * `null`: no elegida.
  *
- * La X del cronograma NO toca `included` ni `handoffOverride`: la reunión sigue siendo del proyecto
- * para el handoff, la Entrega y las minutas. Solo la IA del cronograma deja de leerla.
+ * El tombstone manda sobre todo: una reunión que un humano sacó DEL PROYECTO no alimenta nada
+ * aunque esté elegida (elegirla de nuevo la vuelve a hacer del proyecto — ver timeline/sessions).
  *
- * ── LAS DOS FORMAS, PEGADAS ──────────────────────────────────────────────────
- * `linkFeedsTimeline` decide en memoria; `whereAlimentaCronograma` es la MISMA regla como `where` de
- * Prisma. Viven juntas —como `belongsToClient`/`whereBelongsToClient`— porque son una sola regla.
- *
- * ⛔ El gemelo NO se puede escribir `NOT: { timelineOverride: false }` ni `{ not: false }`: en SQL,
- * `NOT (NULL = false)` es NULL, y la fila se descarta. Hoy TODAS las filas tienen NULL, así que esa
- * forma dejaría al cronograma sin una sola reunión — sin error y sin aviso.
+ * Elegirla o sacarla NO toca `handoffOverride`: la reunión sigue siendo del proyecto para el
+ * handoff, la Entrega y las minutas. Tampoco la mira el agente de AVANCE, que lee solo las reuniones
+ * recientes del proyecto (`lib/sessions/project-sessions.ts`): detectar lo que ya pasó no puede
+ * depender de que alguien se acuerde de elegir la reunión de ayer.
  */
 
 /** Lo mínimo del vínculo sesión↔proyecto para decidir. */
@@ -35,16 +33,6 @@ export interface VinculoParaCronograma {
 export function linkFeedsTimeline(l: VinculoParaCronograma): boolean {
   // El tombstone manda sobre todo: una reunión que un humano sacó DEL PROYECTO no alimenta nada.
   if (!l.included) return false;
-  // La X del CSE, solo para el cronograma.
-  if (l.timelineOverride === false) return false;
-  // null (la regla) o true (agregada a mano).
-  return true;
-}
-
-/** La misma regla, como `where` de `SessionProject`. */
-export function whereAlimentaCronograma() {
-  return {
-    included: true,
-    OR: [{ timelineOverride: null }, { timelineOverride: true }],
-  };
+  // Solo la que el CSE eligió. `null` (nunca elegida) y `false` (la X de la primera versión) no.
+  return l.timelineOverride === true;
 }

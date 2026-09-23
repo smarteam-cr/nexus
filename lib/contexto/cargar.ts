@@ -139,20 +139,19 @@ export async function cargarContextoDelAssist(
 }
 
 /**
- * EL MATERIAL DEL «CONTEXTO DEL CRONOGRAMA» (2026-09-23): las reuniones que el CSE deja entrar y
- * las notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
+ * EL MATERIAL DEL «CONTEXTO DEL CRONOGRAMA» (2026-09-23): las reuniones que el CSE ELIGIÓ y las
+ * notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
  *
  * Lo leen el detalle (tareas y cuáles son reuniones) y «Pedir cambio con IA» (el único que puede
  * tocar fases). Devuelve `""` en lo que no haya: los armadores omiten la fuente vacía y el prompt
  * de un proyecto sin material queda byte-idéntico al de antes.
  *
  * ── CÓMO SE REPARTE EL ESPACIO ───────────────────────────────────────────────
- * Por defecto entran TODAS las reuniones del proyecto (la regla de `session-feeding.ts`), así que
- * con 60 reuniones no caben enteras. Primero se LEEN (las agregadas a mano todas; del resto, las
- * `MAX_REUNIONES_A_LEER` más recientes), se descartan las que no dejaron nada, y recién ahí se
- * reparte con `repartirEspacio` (puro, en ./material-cronograma.ts, con su test): las que el CSE
- * AGREGÓ A MANO van primero con su propio cupo. Repartir antes de leer le daba las cotas grandes a
- * reuniones vacías y dejaba la que tenía material con 400 caracteres (revisión 2026-09-23).
+ * Entran SOLO las reuniones elegidas (la regla de `session-feeding.ts`), pero igual pueden no caber
+ * enteras. Primero se LEEN (las `MAX_REUNIONES_A_LEER` más recientes), se descartan las que no
+ * dejaron nada, y recién ahí se reparte con `repartirEspacio` (puro, en ./material-cronograma.ts,
+ * con su test). Repartir antes de leer le daba las cotas grandes a reuniones vacías y dejaba la que
+ * tenía material con 400 caracteres (revisión 2026-09-23).
  *
  * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
  * la pertenencia al cliente y el tombstone no se re-implementan acá. Las futuras se cortan con
@@ -169,11 +168,9 @@ export async function cargarMaterialDelCronograma(
   const dominiosPropios = buildInternalDomainsSet(categorias);
   const ahora = Date.now();
 
-  const pasadas = soloOcurridas(sessions, ahora).sort((a, b) => b.date - a.date);
-  const aLeer = [
-    ...pasadas.filter((s) => s.timelineOverride === true),
-    ...pasadas.filter((s) => s.timelineOverride !== true).slice(0, MAX_REUNIONES_A_LEER),
-  ];
+  const aLeer = soloOcurridas(sessions, ahora)
+    .sort((a, b) => b.date - a.date)
+    .slice(0, MAX_REUNIONES_A_LEER);
 
   /* De a tandas: con 50 reuniones, un Promise.all abriría 50 lecturas de transcript a la vez contra
      el mismo pool que atiende la pantalla. Cada lectura trae como mucho la cota más grande del
@@ -192,12 +189,7 @@ export async function cargarMaterialDelCronograma(
 
   const conContenido = aLeer.filter((s) => contenidoPorId.has(s.id));
   const espacio = repartirEspacio(
-    conContenido.map((s) => ({
-      id: s.id,
-      title: s.title,
-      date: s.date,
-      agregadaAMano: s.timelineOverride === true,
-    })),
+    conContenido.map((s) => ({ id: s.id, title: s.title, date: s.date })),
     ahora,
   );
 
@@ -208,7 +200,6 @@ export async function cargarMaterialDelCronograma(
       date: s.date,
       prefijoDeSala: prefijoDeSala(etiquetaDeSala({ participants: s.participants }, dominiosPropios)),
       contenido: (contenidoPorId.get(s.id) ?? "").slice(0, espacio.get(s.id)),
-      agregadaAMano: s.timelineOverride === true,
     }))
     // En orden cronológico: el cronograma se lee como una historia.
     .sort((a, b) => a.date - b.date);

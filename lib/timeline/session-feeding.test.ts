@@ -1,51 +1,28 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { linkFeedsTimeline, whereAlimentaCronograma, type VinculoParaCronograma } from "./session-feeding";
+import { linkFeedsTimeline, type VinculoParaCronograma } from "./session-feeding";
 
 /**
- * lib/timeline/session-feeding.test.ts — LA REGLA Y SU GEMELO NO PUEDEN SEPARARSE.
+ * lib/timeline/session-feeding.test.ts — QUÉ REUNIONES LEE LA IA DEL CRONOGRAMA.
  *
- * La regla existe dos veces a propósito: en memoria (`linkFeedsTimeline`) y como `where` de Prisma
- * (`whereAlimentaCronograma`). Si divergen, la pantalla dice que una reunión alimenta y el agente
- * no la lee — o al revés — sin un solo error. El modo de falla más probable es el gemelo escrito
- * como `NOT: { timelineOverride: false }`, que en SQL descarta las filas NULL: hoy son TODAS.
+ * La regla cambió el 2026-09-23 (segunda versión, pedido de Elías): ya no entran todas las reuniones
+ * del proyecto con una X para sacar — entran SOLO las que el CSE eligió. El modo de falla silencioso
+ * es volver a la regla vieja: la pantalla mostraría las elegidas y el agente leería las 61.
  */
 
-/** Evaluador mínimo del `where`, con la semántica de SQL para NULL. */
-function evaluarWhere(where: ReturnType<typeof whereAlimentaCronograma>, v: VinculoParaCronograma): boolean {
-  if (where.included !== v.included) return false;
-  return where.OR.some((cond) => cond.timelineOverride === v.timelineOverride);
-}
-
 const TABLA: Array<[VinculoParaCronograma, boolean, string]> = [
-  [{ included: true, timelineOverride: null }, true, "la regla: toda reunión del proyecto alimenta"],
-  [{ included: true, timelineOverride: true }, true, "agregada a mano"],
-  [{ included: true, timelineOverride: false }, false, "la X del CSE, solo para el cronograma"],
+  [{ included: true, timelineOverride: true }, true, "la eligió el CSE"],
+  [{ included: true, timelineOverride: null }, false, "del proyecto pero sin elegir: ya no entran todas"],
+  [{ included: true, timelineOverride: false }, false, "la X de la primera versión vale como «no elegida»"],
+  [{ included: false, timelineOverride: true }, false, "el tombstone manda aunque esté elegida"],
   [{ included: false, timelineOverride: null }, false, "tombstone: sacada del proyecto"],
-  [{ included: false, timelineOverride: true }, false, "el tombstone manda aunque la hayan agregado"],
   [{ included: false, timelineOverride: false }, false, "tombstone y X"],
 ];
 
 describe("qué reuniones alimentan al cronograma", () => {
   it.each(TABLA)("%o → %s (%s)", (vinculo, esperado) => {
     expect(linkFeedsTimeline(vinculo)).toBe(esperado);
-  });
-
-  it("⭐ el gemelo de Prisma da LO MISMO que la regla en memoria, fila por fila", () => {
-    for (const [vinculo, esperado, motivo] of TABLA) {
-      expect(evaluarWhere(whereAlimentaCronograma(), vinculo), motivo).toBe(esperado);
-    }
-  });
-
-  it("⛔ el gemelo nunca se escribe con NOT (descartaría las filas NULL, que hoy son todas)", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "lib/timeline/session-feeding.ts"), "utf8");
-    const codigo = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-    expect(codigo).not.toMatch(/NOT\s*:/);
-    expect(codigo).not.toMatch(/not\s*:\s*false/);
-    expect(codigo, "el gemelo tiene que aceptar explícitamente el NULL").toContain(
-      "{ timelineOverride: null }",
-    );
   });
 
   it("⛔ no es la regla del handoff: no importa su clasificador por título", () => {
