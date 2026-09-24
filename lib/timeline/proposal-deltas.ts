@@ -23,6 +23,15 @@
  * "no tocar", contrato del PUT) — por eso el viejo contador "−70 tareas" mentía.
  * Una fase propuesta con un id que YA no existe (el CSE la borró después de generarse la
  * propuesta) se DESCARTA en silencio: re-crearla sería deshacer una decisión humana.
+ *
+ * ── DE DÓNDE SALE LA PROPUESTA, Y POR QUÉ (2026-09-23) ──────────────────────
+ * Además del handoff, «Regenerar todo» revisa fases y tiempos con las reuniones y notas que
+ * eligió el CSE y deja su propuesta en el mismo lugar, con `origen: "contexto"`. Esa propuesta
+ * trae un `motivo` por fase (interno: cita la reunión o la nota) y `observaciones` (lo que la IA
+ * notó y no puede aplicar sola). ⛔ Ninguno de los dos es un CAMBIO: no están en `FIELDS`, viajan
+ * en el delta solo cuando existen (spread condicional, nunca `motivo: null`) y el endpoint que
+ * aplica nunca los escribe en la fase. La propuesta del handoff no los trae y sus deltas quedan
+ * idénticos a los de antes.
  */
 
 export interface CurrentPhaseLike {
@@ -45,11 +54,22 @@ export interface ProposalPhaseLike {
   activityType?: string | null;
   /** La propuesta del handoff nunca las trae; se ignoran siempre (phase-level only). */
   tasks?: unknown;
+  /** Por qué se propone el cambio de ESTA fase (interno, solo lo ve el CSE). Nunca es un cambio. */
+  motivo?: string | null;
 }
 
 export interface ProposalLike {
   anchorStartDate: string | null;
   phases: ProposalPhaseLike[];
+  /** Solo la propuesta que sale de las reuniones y notas elegidas. Ausente = la del handoff. */
+  origen?: "contexto";
+  /** Lo que la IA notó y no se aplica solo (interno). Nunca produce un delta. */
+  observaciones?: string[];
+}
+
+/** Quién dejó la propuesta pendiente. Todo lo que no diga `contexto` es la del handoff. */
+export function origenDePropuesta(p: { origen?: unknown } | null | undefined): "contexto" | "handoff" {
+  return p?.origen === "contexto" ? "contexto" : "handoff";
 }
 
 export type PhaseField = "name" | "durationWeeks" | "startWeek" | "sessionCount" | "notes" | "activityType";
@@ -78,7 +98,15 @@ export type ProposalDelta =
       afterPhaseId: string | null;
       afterPhaseName: string | null;
     }
-  | { key: string; kind: "MODIFY_PHASE"; phaseId: string; name: string; changes: PhaseFieldChange[] }
+  | {
+      key: string;
+      kind: "MODIFY_PHASE";
+      phaseId: string;
+      name: string;
+      changes: PhaseFieldChange[];
+      /** El motivo de la fase propuesta, si lo trae. Solo para mostrarlo. */
+      motivo?: string;
+    }
   | {
       key: "reorder";
       kind: "REORDER_PHASES";
@@ -88,6 +116,8 @@ export type ProposalDelta =
        *  lista completa resultante y con 10 fases es ilegible: muestra el DESTINO, no el
        *  movimiento, así que para saber qué se movió había que diffear a ojo contra el Gantt. */
       movimientos: MovimientoDeFase[];
+      /** Los motivos de las fases que cambian de puesto, sin repetir. Solo para mostrarlos. */
+      motivos?: string[];
     }
   | { key: "anchor"; kind: "SET_ANCHOR"; from: string | null; to: string };
 
@@ -149,7 +179,15 @@ export function computeProposalDeltas(
       if (from !== to) changes.push({ field: f, from, to });
     }
     if (changes.length > 0) {
-      out.push({ key: `mod:${p.id}`, kind: "MODIFY_PHASE", phaseId: p.id, name: cur.name, changes });
+      // ⛔ Spread condicional: `motivo: null` rompería el toEqual de toda propuesta del handoff.
+      out.push({
+        key: `mod:${p.id}`,
+        kind: "MODIFY_PHASE",
+        phaseId: p.id,
+        name: cur.name,
+        changes,
+        ...(p.motivo ? { motivo: p.motivo } : {}),
+      });
     }
   });
 
@@ -177,12 +215,23 @@ export function computeProposalDeltas(
       if (de === undefined || de === i + 1) return;
       movimientos.push({ id, nombre: byId.get(id)?.name ?? id, de, a: i + 1 });
     });
+    const propuestaPorId = new Map(
+      proposal.phases.filter((p): p is typeof p & { id: string } => !!p.id).map((p) => [p.id, p]),
+    );
+    const motivos = [
+      ...new Set(
+        movimientos
+          .map((m) => propuestaPorId.get(m.id)?.motivo)
+          .filter((m): m is string => typeof m === "string" && m.length > 0),
+      ),
+    ];
     out.push({
       key: "reorder",
       kind: "REORDER_PHASES",
       ids: proposedSeq,
       names: proposedSeq.map((id) => byId.get(id)?.name ?? id),
       movimientos,
+      ...(motivos.length > 0 ? { motivos } : {}),
     });
   }
 
@@ -243,6 +292,56 @@ export function buildPhaseOrder(
   }
 
   return slots;
+}
+
+/**
+ * La propuesta que QUEDA pendiente después de resolver `resolvedKeys`, reescrita de forma
+ * CANÓNICA contra las fases ya escritas (`phasesAfter`, en su orden):
+ *  - la SECUENCIA pasa a ser la del cronograma real, así un reordenamiento ya resuelto (aceptado
+ *    O descartado) no se vuelve a proponer solo en la próxima lectura;
+ *  - cada fase conserva el contenido PROPUESTO solo si su sugerencia sigue pendiente (si se
+ *    aceptó, la DB ya lo tiene; si se descartó, gana la DB);
+ *  - las fases nuevas no resueltas se reinsertan detrás de su fase ancla.
+ *
+ * Extraída TAL CUAL de proposal/apply-items (2026-09-23). La única diferencia es `...proposal`:
+ * antes se devolvía `{ anchorStartDate, phases }` a secas, así que `origen` y `observaciones` se
+ * perdían con la primera sugerencia resuelta y la propuesta de las reuniones pasaba a leerse como
+ * la del handoff a mitad de camino.
+ */
+export function reescribirPropuestaPendiente(
+  proposal: ProposalLike,
+  phasesAfter: CurrentPhaseLike[],
+  resolvedKeys: ReadonlySet<string>,
+): ProposalLike {
+  const pendingModByPhase = new Map<string, ProposalPhaseLike>();
+  const keptNewByAnchor = new Map<string | null, ProposalPhaseLike[]>();
+  proposal.phases.forEach((p, i) => {
+    if (p.id) {
+      if (!resolvedKeys.has(`mod:${p.id}`)) pendingModByPhase.set(p.id, p);
+      return;
+    }
+    if (resolvedKeys.has(`add:${i}`)) return;
+    let anchorId: string | null = null;
+    for (let j = i - 1; j >= 0; j--) {
+      const q = proposal.phases[j];
+      if (q?.id) {
+        anchorId = q.id;
+        break;
+      }
+    }
+    const arr = keptNewByAnchor.get(anchorId) ?? [];
+    arr.push(p);
+    keptNewByAnchor.set(anchorId, arr);
+  });
+
+  const rebuilt: ProposalPhaseLike[] = [...(keptNewByAnchor.get(null) ?? [])];
+  for (const ph of phasesAfter) {
+    rebuilt.push(pendingModByPhase.get(ph.id) ?? { ...ph });
+    rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
+  }
+
+  const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
+  return { ...proposal, anchorStartDate: keptAnchor, phases: rebuilt };
 }
 
 /**
@@ -329,13 +428,18 @@ export function describeChanges(changes: PhaseFieldChange[]): string {
   return sortChangesByImpact(changes).map(describeChange).join(" · ");
 }
 
+/** `startWeek` se guarda desde 0; el Gantt lo muestra desde 1 («inicia S» = startWeek + 1). */
+const semanaLegible = (v: string | number | null): string => (v == null ? "auto" : String(Number(v) + 1));
+
 /** Etiqueta humana de un cambio de campo (para el badge "Sugerencia" del Gantt). */
 export function describeChange(c: PhaseFieldChange): string {
   switch (c.field) {
     case "durationWeeks":
       return `${c.from ?? "?"} → ${c.to ?? "?"} semanas`;
     case "startWeek":
-      return `inicio S${c.from ?? "auto"} → S${c.to ?? "auto"}`;
+      /* En base 1, igual que el campo «inicia S» del Gantt (TimelineGantt: startWeek + 1). Con
+         el valor crudo el CSE aceptaba un inicio una semana antes del que leía en la fila. */
+      return `inicio S${semanaLegible(c.from)} → S${semanaLegible(c.to)}`;
     case "name":
       return `renombrar a «${c.to}»`;
     case "sessionCount":

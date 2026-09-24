@@ -295,12 +295,36 @@ export async function freezeBaseline(
 }
 
 /**
+ * Semana absoluta (desde 0) en que arranca `phaseId` según la estructura de la FOTO congelada
+ * (orden, duración y startWeek que tenía al congelarse), o null si la fase no está en la foto.
+ * Pura; la usa patchBaselinePhaseTasks.
+ *
+ * ── POR QUÉ LA FOTO Y NO LAS FASES VIVAS (2026-09-23) ────────────────────────
+ * El parche leía el inicio de las fases VIVAS suponiendo «misma estructura que al congelar». Deja
+ * de ser cierto apenas se acepta un cambio de estructura (una fase anterior que pasa de 2 a 4
+ * semanas) y DESPUÉS se regeneran las tareas: las fechas prometidas de esas tareas se corrían con
+ * la estructura nueva, así que la promesa absorbía el atraso y el portafolio dejaba de verlo. Lo
+ * prometido se mide con la estructura prometida.
+ */
+export function inicioDeFaseEnLaFoto(
+  fasesDeLaFoto: ReadonlyArray<{ id: string; order: number; durationWeeks: number; startWeek?: number | null }>,
+  phaseId: string,
+): number | null {
+  const orden = (p: { order: number }) => (Number.isFinite(p.order) ? p.order : 0);
+  const fases = [...fasesDeLaFoto].sort((a, b) => orden(a) - orden(b));
+  const idx = fases.findIndex((p) => p.id === phaseId);
+  if (idx < 0) return null;
+  return computePhaseRanges(fases)[idx].start;
+}
+
+/**
  * Parche IN-PLACE del baseline ACTIVO tras regenerar UNA fase (proyecto publicado): reemplaza SOLO
  * las tareas de esa fase en el snapshot por las tareas VIVAS actuales (ids preservados + ids nuevos),
- * con sus fechas planeadas recomputadas contra el anchor congelado. Las demás fases quedan intactas y
- * NO se crea versión nueva → el portafolio (que compara por id contra el baseline activo, summary.ts)
- * no reporta falso scope-creep ni pierde atrasos de la fase regenerada. No-op si el timeline no tiene
- * baseline activo (proyecto sin publicar). Corre DENTRO de la $transaction de la regeneración (tx).
+ * con sus fechas planeadas recomputadas contra el anchor y la estructura congelados (inicioDeFaseEnLaFoto).
+ * Las demás fases quedan intactas y NO se crea versión nueva → el portafolio (que compara por id
+ * contra el baseline activo, summary.ts) no reporta falso scope-creep ni pierde atrasos de la fase
+ * regenerada. No-op si el timeline no tiene baseline activo (proyecto sin publicar). Corre DENTRO de
+ * la $transaction de la regeneración (tx).
  */
 export async function patchBaselinePhaseTasks(
   tx: Prisma.TransactionClient,
@@ -318,16 +342,10 @@ export async function patchBaselinePhaseTasks(
   const snapIdx = snapshot.phases.findIndex((p) => p.id === phaseId);
   if (snapIdx < 0) return; // la fase no está en el baseline → no tocar
 
-  // Rangos desde las fases VIVAS (misma estructura que al congelar: orden/duración/startWeek no
-  // cambian al regenerar). r.start de la fase target = semana absoluta de arranque.
-  const phases = await tx.timelinePhase.findMany({
-    where: { timelineId },
-    orderBy: { order: "asc" },
-    select: { id: true, durationWeeks: true, startWeek: true },
-  });
-  const phaseIdx = phases.findIndex((p) => p.id === phaseId);
-  if (phaseIdx < 0) return;
-  const phaseStart = computePhaseRanges(phases)[phaseIdx].start;
+  // Semana absoluta de arranque de la fase target, desde la estructura de la FOTO congelada (no
+  // de las fases vivas): ver inicioDeFaseEnLaFoto.
+  const phaseStart = inicioDeFaseEnLaFoto(snapshot.phases, phaseId);
+  if (phaseStart === null) return;
 
   // Tareas vivas de la fase (preservadas con id viejo + regeneradas con id nuevo).
   const liveTasks = await tx.timelineTask.findMany({

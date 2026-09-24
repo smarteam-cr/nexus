@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { resincronizarFotoDeFase, vivasQueYaEstabanEnLaFoto } from "./foto-del-plan";
+import { inicioDeFaseEnLaFoto } from "./baseline";
 
 /**
  * lib/timeline/foto-del-plan.test.ts — SI LA FOTO SE TRAGA LO NUEVO, EL ALCANCE NUNCA CRECE.
@@ -142,5 +143,64 @@ describe("⭐ el parche del baseline USA esto, no reemplaza a mano", () => {
       /tasks\s*=\s*buildTaskSnapshotEntries\([^)]*liveTasks/.test(src),
       "el parche volvió a absorber TODAS las tareas vivas en la foto",
     ).toBe(false);
+  });
+});
+
+/**
+ * ── G13 · LA PROMESA NO ABSORBE EL ATRASO (2026-09-23) ──────────────────────
+ * El parche calculaba el inicio de la fase regenerada con las fases VIVAS, suponiendo que la
+ * estructura era la misma que al congelar. Deja de serlo apenas se acepta un cambio de estructura
+ * (la fase anterior pasa de 2 a 4 semanas) y DESPUÉS se regeneran las tareas —que es justo lo que
+ * hace «Regenerar todo» con reuniones: primero fases, después tareas—. Las fechas prometidas se
+ * corrían con la estructura nueva y el atraso desaparecía del portafolio, sin que nada fallara.
+ * La edición que la pone en rojo: volver a `computePhaseRanges(phases)[phaseIdx]` sobre las vivas.
+ *
+ * (Vive acá y no en baseline.test.ts: ese archivo tiene fines de línea mezclados y editarlo lo
+ * normalizaba entero.)
+ */
+describe("G13 · el inicio de la fase sale de la FOTO, no de las fases vivas", () => {
+  const foto = [
+    { id: "kick", order: 0, durationWeeks: 1, startWeek: null },
+    { id: "config", order: 1, durationWeeks: 2, startWeek: null },
+    { id: "pruebas", order: 2, durationWeeks: 2, startWeek: null },
+    { id: "paralela", order: 3, durationWeeks: 1, startWeek: 1 },
+  ];
+
+  it.each([
+    ["kick", 0],
+    ["config", 1],
+    ["pruebas", 3],
+    ["paralela", 1],
+  ])("«%s» arranca en la semana %i de la foto", (id, esperado) => {
+    expect(inicioDeFaseEnLaFoto(foto, id)).toBe(esperado);
+  });
+
+  it("⭐ con la fase anterior alargada en lo VIVO (2 → 4), la foto manda", () => {
+    const vivas = foto.map((f) => (f.id === "config" ? { ...f, durationWeeks: 4 } : f));
+    expect(inicioDeFaseEnLaFoto(vivas, "pruebas"), "control: con lo vivo daría 5").toBe(5);
+    expect(inicioDeFaseEnLaFoto(foto, "pruebas"), "la promesa se corrió con la estructura nueva").toBe(3);
+  });
+
+  it("ordena por `order`, no por la posición en el JSON; fuera de la foto → null", () => {
+    expect(inicioDeFaseEnLaFoto([...foto].reverse(), "pruebas")).toBe(3);
+    expect(inicioDeFaseEnLaFoto(foto, "nueva-despues-de-publicar")).toBeNull();
+  });
+
+  it("⛔ `patchBaselinePhaseTasks` usa la foto y ya no las fases vivas", () => {
+    const src = fs
+      .readFileSync(path.join(process.cwd(), "lib/timeline/baseline.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    const i = src.indexOf("export async function patchBaselinePhaseTasks");
+    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(-1);
+    const cuerpo = src.slice(i);
+    expect(cuerpo.length, "la guarda no está mirando nada").toBeGreaterThan(400);
+    expect(cuerpo, "el parche dejó de tomar el inicio de la foto").toContain(
+      "inicioDeFaseEnLaFoto(snapshot.phases",
+    );
+    expect(cuerpo, "el parche volvió a calcular el inicio con las fases vivas").not.toContain(
+      "computePhaseRanges(phases)[phaseIdx]",
+    );
+    expect(cuerpo, "el parche volvió a leer las fases vivas").not.toMatch(/timelinePhase\s*\.\s*findMany\(/);
   });
 });

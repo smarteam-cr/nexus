@@ -154,3 +154,59 @@ describe("el formato de salida gana dueño y tipo", () => {
     expect(ID_ASSIST_CRONOGRAMA).toBe("agent-timeline-assist");
   });
 });
+
+/**
+ * ── LA VARA DE «CAMBIAR EL CRONOGRAMA CON IA» ES UNA SOLA (2026-09-23) ──────────────────────
+ * El permiso del modificador vivía escrito dentro de su ruta. «Regenerar todo» con reuniones suma
+ * un segundo paso que también cambia el cronograma con IA (fases y tiempos, antes de las tareas),
+ * y dos copias del mismo gate divergen calladas: un paso pediría una vara y el otro otra, y el CSE
+ * vería la propuesta de fases y un 403 al seguir con las tareas. Por eso se extrajo, tal cual, a
+ * `guardIaDelCronograma` (lib/auth/api-guards.ts).
+ * Las ediciones que la ponen en rojo: volver a escribir el gate en la ruta, llamarlo después del
+ * modelo (se pagarían tokens que después se rechazan), o cambiar la vara o la señal de «ya
+ * generado» (tareas AGENT o MODIFIED, la misma que usa el gate del agente de detalle).
+ */
+describe("la vara de «cambiar el cronograma con IA» vive en un solo lugar", () => {
+  const GUARDS = "lib/auth/api-guards.ts";
+
+  it("la ruta del modificador la pide ANTES de llamar al modelo, y no la transcribe", () => {
+    const src = fuente(RUTA_ASSIST);
+    const iGate = src.indexOf("await guardIaDelCronograma(tl.id)");
+    const iClaude = src.indexOf("anthropic.messages.create");
+    expect(iGate, "la ruta del modificador dejó de pedir la vara compartida").toBeGreaterThan(-1);
+    expect(iClaude, "no se encontró la llamada a Claude").toBeGreaterThan(-1);
+    expect(iGate, "el gate corre DESPUÉS del modelo: se pagan tokens que después se rechazan").toBeLessThan(
+      iClaude,
+    );
+    expect(src, "la ruta pide la vara pero ignora el 403").toMatch(
+      /if \(iaGate instanceof NextResponse\) return iaGate;/,
+    );
+    expect(src, "el gate volvió a estar escrito dentro de la ruta: dos copias divergen").not.toContain(
+      'guardCapability("regenerateTimeline")',
+    );
+    expect(src).not.toContain("TIMELINE_ALREADY_GENERATED");
+  });
+
+  it("ya generado → regenerateTimeline; virgen → cronograma.generate; la señal del gate del detalle", () => {
+    const guards = fuente(GUARDS);
+    const i = guards.indexOf("export async function guardIaDelCronograma");
+    expect(i, "desapareció guardIaDelCronograma").toBeGreaterThan(-1);
+    const fin = guards.indexOf("export async function", i + 10);
+    const tramo = guards.slice(i, fin < 0 ? undefined : fin);
+    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(400);
+    const senal = 'source: { in: ["AGENT", "MODIFIED"] }';
+    expect(tramo, "cambió la señal de «ya generado»").toContain(senal);
+    expect(fuente(GATE), "el gate del detalle cambió de señal: los dos pasos pedirían varas distintas").toContain(
+      senal,
+    );
+    expect(tramo, "con detalle IA, la vara dejó de ser la del regen").toMatch(
+      /if \(aiDetailCount > 0\) \{\s*const regen = await guardCapability\("regenerateTimeline"\);/,
+    );
+    expect(tramo, "sin detalle IA, dejó de pedir cronograma.generate").toContain(
+      'guardPermission("cronograma", "generate")',
+    );
+    // Los mismos cuerpos de error que ya lee la pantalla.
+    expect(tramo).toContain('error: "TIMELINE_ALREADY_GENERATED"');
+    expect(tramo).toContain('error: "TIMELINE_GENERATION_FORBIDDEN"');
+  });
+});

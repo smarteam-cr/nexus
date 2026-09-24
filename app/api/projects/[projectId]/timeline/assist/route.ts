@@ -24,7 +24,7 @@
  *     hereda de lo actual ANTES de validar: omitir es «no tocar», no «borrar».
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/api-guards";
+import { guardTimelineEdit, guardIaDelCronograma } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
@@ -140,38 +140,11 @@ export async function POST(
     );
   }
 
-  // RBAC — cambiar el cronograma CON IA una vez YA generado pide regenerateTimeline (default:
-  // CSE, CSL y Super Admin; el CSE por decisión de Elías 2026-09-23). El resto (Ventas, DEV
-  // sin plantilla, Marketing) puede armarlo con IA la PRIMERA vez (sin detalle IA aún) y
-  // editarlo a mano después (editTimeline), pero no rehacerlo con IA. Señal "ya generado" =
-  // tareas source ∈ {AGENT, MODIFIED} (mismo predicado que hasAiDetail / el skip del
-  // agente de detalle). Antes de gastar tokens de Claude.
-  const aiDetailCount = await prisma.timelineTask.count({
-    where: { phase: { timelineId: tl.id }, source: { in: ["AGENT", "MODIFIED"] } },
-  });
-  if (aiDetailCount > 0) {
-    const regen = await guardCapability("regenerateTimeline");
-    if (regen instanceof NextResponse) {
-      return NextResponse.json(
-        {
-          error: "TIMELINE_ALREADY_GENERATED",
-          message: "El cronograma ya está generado. Cambiarlo con IA necesita el permiso de regenerar el cronograma; tú puedes seguir ajustándolo a mano.",
-        },
-        { status: 403 },
-      );
-    }
-  } else {
-    // Rama VIRGEN (sin detalle IA aún): la primera pasada con IA pide el permiso
-    // cronograma.generate (default: todo interno menos el asistente administrativo;
-    // editable en /team — la semilla se lo quita a Dev).
-    const gen = await guardPermission("cronograma", "generate");
-    if (gen instanceof NextResponse) {
-      return NextResponse.json(
-        { error: "TIMELINE_GENERATION_FORBIDDEN", message: "Tu rol no puede generar el cronograma con IA." },
-        { status: 403 },
-      );
-    }
-  }
+  // RBAC — cambiar el cronograma CON IA: regenerateTimeline si ya está generado (tareas AGENT o
+  // MODIFIED), cronograma.generate si no. Vive en guardIaDelCronograma (lib/auth/api-guards.ts)
+  // para que el revisor de fases de «Regenerar todo» pida la MISMA vara. Antes de gastar tokens.
+  const iaGate = await guardIaDelCronograma(tl.id);
+  if (iaGate instanceof NextResponse) return iaGate;
 
   const currentJson = JSON.stringify(
     { anchorStartDate: tl.anchorStartDate?.toISOString() ?? null, phases: tl.phases },

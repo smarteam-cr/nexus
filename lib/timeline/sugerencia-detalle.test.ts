@@ -5,7 +5,7 @@ import {
   describeMovimiento,
   movimientosPorSalto,
 } from "./sugerencia-detalle";
-import { computeProposalDeltas, type CurrentPhaseLike, type ProposalLike } from "./proposal-deltas";
+import { computeProposalDeltas, describeChange, type CurrentPhaseLike, type ProposalLike } from "./proposal-deltas";
 
 const fase = (id: string, name: string, durationWeeks: number, extra: Partial<CurrentPhaseLike> = {}): CurrentPhaseLike => ({
   id,
@@ -145,9 +145,37 @@ describe("filasDeDetalle — el antes/después que faltaba", () => {
     ]);
     const porCampo = new Map(filas.map((f) => [f.campo, f]));
     expect(porCampo.get("durationWeeks")).toMatchObject({ antes: "1 semana", despues: "6 semanas" });
-    expect(porCampo.get("startWeek")).toMatchObject({ antes: "automático (tras la fase anterior)", despues: "semana 2" });
+    /* Era «semana 2» (el valor crudo). Pasa a «semana 3» el 2026-09-23: `startWeek` se guarda
+       desde 0 y el Gantt lo muestra desde 1 («inicia S» = startWeek + 1), así que el detalle de la
+       sugerencia decía una semana antes que la fila del Gantt. Base 1 igual que el Gantt. */
+    expect(porCampo.get("startWeek")).toMatchObject({ antes: "automático (tras la fase anterior)", despues: "semana 3" });
     expect(porCampo.get("activityType")).toMatchObject({ antes: "sin tipo", despues: "Configuración" });
     expect(porCampo.get("sessionCount")).toMatchObject({ antes: "sin estimar", despues: "8" });
+  });
+});
+
+/**
+ * ── G14 · EL INICIO SE LEE EN BASE 1, IGUAL QUE EL GANTT ─────────────────────
+ * `startWeek` se guarda desde 0 y la fila del Gantt lo muestra desde 1 (el campo «inicia S» pinta
+ * `startWeek + 1`). La sugerencia mostraba el valor crudo, así que el CSE leía «inicio S2» en el
+ * recuadro y «S3» en la fila: aceptaba un inicio distinto del que creía. Con la propuesta de fases
+ * que sale de las reuniones (el revisor habla en semanas del proyecto desde 1) el desfase dejaba de
+ * ser cosmético.
+ * La edición que la pone en rojo: volver al valor crudo en `valorLegible` o en `describeChange`.
+ */
+describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () => {
+  it("el detalle antes/después suma 1", () => {
+    const [f] = filasDeDetalle([{ field: "startWeek", from: 0, to: 2 }]);
+    expect(f.antes).toBe("semana 1");
+    expect(f.despues, "el detalle volvió al valor crudo: una semana antes que el Gantt").toBe("semana 3");
+  });
+
+  it("el chip de la sugerencia suma 1 y «auto» sigue siendo auto", () => {
+    expect(describeChange({ field: "startWeek", from: null, to: 2 })).toBe("inicio Sauto → S3");
+    expect(describeChange({ field: "startWeek", from: 4, to: null })).toBe("inicio S5 → Sauto");
+    expect(describeChange({ field: "startWeek", from: 0, to: 1 }), "S0 no existe en el Gantt").toBe(
+      "inicio S1 → S2",
+    );
   });
 });
 

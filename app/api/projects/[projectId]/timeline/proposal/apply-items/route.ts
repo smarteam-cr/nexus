@@ -1,7 +1,8 @@
 /**
  * POST /api/projects/[projectId]/timeline/proposal/apply-items
  *
- * Resuelve POR ÍTEM la propuesta de cronograma pendiente (la que deja regenerar el handoff):
+ * Resuelve POR ÍTEM la propuesta de cronograma pendiente (la que deja regenerar el handoff, o la
+ * de fases y tiempos que sale de las reuniones y notas elegidas, `origen: "contexto"`):
  *   { accept: string[], discard: string[] }   ← claves de delta de
  *   lib/timeline/proposal-deltas
  *
@@ -29,6 +30,8 @@ import { Prisma, type TimelineActivityType } from "@prisma/client";
 import {
   computeProposalDeltas,
   buildPhaseOrder,
+  reescribirPropuestaPendiente,
+  origenDePropuesta,
   type ProposalLike,
   type ProposalDelta,
 } from "@/lib/timeline/proposal-deltas";
@@ -89,6 +92,7 @@ export async function POST(
       id: true,
       anchorStartDate: true,
       pendingProposal: true,
+      pendingProposalRunId: true,
       phases: { orderBy: { order: "asc" }, select: PHASE_SELECT },
     },
   });
@@ -97,6 +101,10 @@ export async function POST(
   if (!proposal || !Array.isArray(proposal.phases)) {
     return NextResponse.json({ error: "No hay propuesta pendiente" }, { status: 400 });
   }
+  /* De dónde salió: del handoff, o de las reuniones y notas que eligió el CSE («Regenerar todo»,
+     paso 1). Cambia la razón de la auditoría y le dice a la pantalla si, al no quedar ninguna,
+     sigue sola con las tareas (paso 2). Se lee ANTES de resolver: después puede no quedar nada. */
+  const origen = origenDePropuesta(proposal);
 
   const deltas = computeProposalDeltas(
     tl.phases,
@@ -143,6 +151,10 @@ export async function POST(
   /* Tareas que hubo que correr porque su fase se acortó. Viajan en la respuesta: el silencio
      acá es cómo se juntaron 34 tareas fuera de rango sin que nadie se enterara. */
   const avisosDeReubicacion: string[] = [];
+
+  /* Cuántas sugerencias quedan vivas después de esta resolución. Sale de la transacción para la
+     respuesta: con 0 y origen «contexto», la pantalla encadena el paso de las tareas. */
+  let pendientes = 0;
 
   await prisma.$transaction(async (tx) => {
     // 1) Aplicar los ACEPTADOS (solo esos; nada se aplica solo).
@@ -230,12 +242,11 @@ export async function POST(
       }
     }
 
-    // 2) Reescribir la propuesta guardada de forma CANÓNICA contra el estado post-aplicación:
-    //    - la SECUENCIA pasa a ser la del cronograma real, así un reordenamiento ya resuelto
-    //      (aceptado O descartado) no se vuelve a proponer solo en la próxima lectura;
-    //    - cada fase conserva el contenido PROPUESTO solo si su sugerencia sigue pendiente
-    //      (si se aceptó, la DB ya lo tiene; si se descartó, gana la DB);
-    //    - las fases nuevas no resueltas se reinsertan detrás de su fase ancla.
+    // 2) Reescribir la propuesta guardada de forma CANÓNICA contra el estado post-aplicación
+    //    (secuencia real, contenido propuesto solo de lo pendiente, fases nuevas en su ancla).
+    //    La regla vive en `reescribirPropuestaPendiente` (lib/timeline/proposal-deltas), pura y
+    //    probada: conserva `origen` y `observaciones`, que el objeto armado a mano perdía con la
+    //    primera resolución.
     const phasesAfter = await tx.timelinePhase.findMany({
       where: { timelineId: tl.id },
       orderBy: { order: "asc" },
@@ -246,35 +257,7 @@ export async function POST(
       select: { anchorStartDate: true },
     });
 
-    const pendingModByPhase = new Map<string, (typeof proposal.phases)[number]>();
-    const keptNewByAnchor = new Map<string | null, (typeof proposal.phases)[number][]>();
-    proposal.phases.forEach((p, i) => {
-      if (p.id) {
-        if (!resolvedKeys.has(`mod:${p.id}`)) pendingModByPhase.set(p.id, p);
-        return;
-      }
-      if (resolvedKeys.has(`add:${i}`)) return;
-      let anchorId: string | null = null;
-      for (let j = i - 1; j >= 0; j--) {
-        const q = proposal.phases[j];
-        if (q?.id) {
-          anchorId = q.id;
-          break;
-        }
-      }
-      const arr = keptNewByAnchor.get(anchorId) ?? [];
-      arr.push(p);
-      keptNewByAnchor.set(anchorId, arr);
-    });
-
-    const rebuilt: (typeof proposal.phases)[number][] = [...(keptNewByAnchor.get(null) ?? [])];
-    for (const ph of phasesAfter) {
-      rebuilt.push(pendingModByPhase.get(ph.id) ?? { ...ph });
-      rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
-    }
-
-    const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
-    const rewritten: ProposalLike = { anchorStartDate: keptAnchor, phases: rebuilt };
+    const rewritten = reescribirPropuestaPendiente(proposal, phasesAfter, resolvedKeys);
 
     // ¿Queda algún delta vivo? Si no, la propuesta se limpia entera (las fases re-emitidas
     // idénticas no son deltas — solo eran el "no borrar" del PUT del modelo viejo).
@@ -283,6 +266,7 @@ export async function POST(
       rewritten,
       tlAfter?.anchorStartDate?.toISOString() ?? null,
     );
+    pendientes = remaining.length;
 
     await tx.projectTimeline.update({
       where: { id: tl.id },
@@ -329,7 +313,7 @@ export async function POST(
         data: {
           timelineId: tl.id,
           reason:
-            `Sugerencias del handoff aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
+            `${origen === "contexto" ? "Sugerencias de las reuniones y notas elegidas" : "Sugerencias del handoff"} aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
             (corrimiento ? ` ${corrimiento}` : ""),
           kind: "AI_ASSIST",
           instruction: null,
@@ -380,10 +364,57 @@ export async function POST(
     }
   }
 
+  const descartadas = [...discardKeys].filter((k) => byKey.has(k)).length;
+
+  /* ── EL DESENLACE DE LA PROPUESTA DE LAS REUNIONES (medición, best-effort) ──────────────────
+     Solo la de origen «contexto»: `pendingProposalRunId` de la del handoff es la corrida del
+     handoff, que no se toca. Suma lo aceptado y lo descartado en CADA resolución (una por una o
+     «Aceptar/Descartar todo») y marca `resuelta` cuando no queda ninguna: con solo la última
+     llamada, resolver de a una contaría únicamente la última. Se fusiona con lo que la corrida ya
+     tenía (lo que propuso el modelo). Nunca rompe la respuesta: el cronograma ya se escribió. */
+  if (origen === "contexto" && tl.pendingProposalRunId) {
+    try {
+      const run = await prisma.agentRun.findUnique({
+        where: { id: tl.pendingProposalRunId },
+        select: { output: true },
+      });
+      let previo: Record<string, unknown> = {};
+      try {
+        const leido: unknown = JSON.parse(run?.output ?? "");
+        if (leido && typeof leido === "object" && !Array.isArray(leido)) previo = leido as Record<string, unknown>;
+      } catch {
+        /* salida vacía o no-JSON: se arranca de cero */
+      }
+      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+      await prisma.agentRun.update({
+        where: { id: tl.pendingProposalRunId },
+        data: {
+          output: JSON.stringify({
+            ...previo,
+            aceptadas: n(previo.aceptadas) + accepted.length,
+            descartadas: n(previo.descartadas) + descartadas,
+            ...(pendientes === 0
+              ? { desenlace: "resuelta", resueltaEn: now.toISOString(), resueltaPor: guard.user.email ?? null }
+              : {}),
+          }),
+        },
+      });
+    } catch (e) {
+      console.error(
+        "[proposal/apply-items] no se pudo registrar el desenlace de la propuesta:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
   return NextResponse.json({
     applied: accepted.length,
-    discarded: [...discardKeys].filter((k) => byKey.has(k)).length,
+    discarded: descartadas,
     stale: staleKeys,
+    /* Cuántas sugerencias quedan y de dónde salió la propuesta: con 0 y «contexto», la pantalla
+       sigue sola con las tareas (paso 2 de «Regenerar todo»). */
+    pendientes,
+    origen,
     /* ⚠ Solo cuando hubo algo que correr: una clave siempre presente y casi siempre vacía es
        una que la pantalla aprende a ignorar. */
     ...(avisosDeReubicacion.length > 0 ? { avisos: avisosDeReubicacion } : {}),

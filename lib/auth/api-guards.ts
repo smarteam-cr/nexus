@@ -399,6 +399,50 @@ export async function guardTimelineFullRegen(
 }
 
 /**
+ * Cambiar el cronograma CON IA (el modificador «Pedir cambio con IA» y, después, el revisor de
+ * fases y tiempos de «Regenerar todo»). Va DESPUÉS de guardTimelineEdit y ANTES de gastar tokens.
+ *
+ * Una vez YA generado pide `regenerateTimeline` (default: CSE, CSL y Super Admin; el CSE por
+ * decisión de Elías 2026-09-23). El resto (Ventas, DEV sin plantilla, Marketing) puede armarlo
+ * con IA la PRIMERA vez (sin detalle IA aún) y editarlo a mano después (editTimeline), pero no
+ * rehacerlo con IA. Señal «ya generado» = tareas source ∈ {AGENT, MODIFIED}: el mismo predicado
+ * que `hasAiTimelineDetail` (permissions/artifact-gate.ts), que gatea al agente de detalle. Dos
+ * pasos de una misma acción no pueden pedir varas distintas.
+ *
+ * Extraída TAL CUAL de timeline/assist (2026-09-23), con los mismos cuerpos de error. Devuelve
+ * la respuesta 403 si corresponde bloquear, o null si pasa.
+ */
+export async function guardIaDelCronograma(timelineId: string): Promise<NextResponse | null> {
+  const aiDetailCount = await prisma.timelineTask.count({
+    where: { phase: { timelineId }, source: { in: ["AGENT", "MODIFIED"] } },
+  });
+  if (aiDetailCount > 0) {
+    const regen = await guardCapability("regenerateTimeline");
+    if (regen instanceof NextResponse) {
+      return NextResponse.json(
+        {
+          error: "TIMELINE_ALREADY_GENERATED",
+          message: "El cronograma ya está generado. Cambiarlo con IA necesita el permiso de regenerar el cronograma; tú puedes seguir ajustándolo a mano.",
+        },
+        { status: 403 },
+      );
+    }
+  } else {
+    // Rama VIRGEN (sin detalle IA aún): la primera pasada con IA pide el permiso
+    // cronograma.generate (default: todo interno menos el asistente administrativo;
+    // editable en /team — la semilla se lo quita a Dev).
+    const gen = await guardPermission("cronograma", "generate");
+    if (gen instanceof NextResponse) {
+      return NextResponse.json(
+        { error: "TIMELINE_GENERATION_FORBIDDEN", message: "Tu rol no puede generar el cronograma con IA." },
+        { status: 403 },
+      );
+    }
+  }
+  return null;
+}
+
+/**
  * BORRAR un canvas del proyecto: acceso al CLIENTE + celda `proyectos.deleteCanvas`
  * (solo CSL y SUPER_ADMIN por default).
  *

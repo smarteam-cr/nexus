@@ -124,7 +124,9 @@ const TIPO_LEGIBLE: Record<string, string> = {
 
 function valorLegible(campo: PhaseFieldChange["field"], v: string | number | null): string {
   if (campo === "durationWeeks") return v === null ? "—" : plural(Number(v), "semana", "semanas");
-  if (campo === "startWeek") return v === null ? "automático (tras la fase anterior)" : `semana ${v}`;
+  /* `startWeek` se guarda desde 0 y el Gantt lo muestra desde 1 («inicia S» = startWeek + 1). Con
+     el valor crudo el detalle decía una semana antes que la fila que el CSE tiene enfrente. */
+  if (campo === "startWeek") return v === null ? "automático (tras la fase anterior)" : `semana ${Number(v) + 1}`;
   if (campo === "sessionCount") return v === null ? "sin estimar" : String(v);
   if (campo === "activityType") return v === null ? "sin tipo" : (TIPO_LEGIBLE[String(v)] ?? String(v));
   if (campo === "notes") {
