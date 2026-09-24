@@ -556,7 +556,9 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     const seccion = soloCodigo(leer("components/canvas/CronogramaContextSection.tsx"));
     // (2026-09-24: también con las instrucciones adicionales guardadas.)
     expect(seccion).toMatch(
-      /hayMaterialParaElPaso1\(\{\s*reuniones,\s*notas,\s*informe: informeVivo,\s*instrucciones: instruccionesActivas,\s*\}\)/,
+      /* (2026-09-24, revisión adversarial #23: si la lista de elegidas no cargó, no se afirma que no
+         hay ninguna: cuenta al menos una.) */
+      /hayMaterialParaElPaso1\(\{\s*reuniones: reunionesIlegibles \? Math\.max\(reuniones, 1\) : reuniones,\s*notas,\s*informe: informeVivo,\s*instrucciones: instruccionesActivas,\s*\}\)/,
     );
     expect(seccion).toMatch(/useEffect\(\(\) => \{\s*onMaterial\?\.\(hayMaterial\);\s*\}, \[hayMaterial, onMaterial\]\)/);
   });

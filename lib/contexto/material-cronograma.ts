@@ -123,12 +123,20 @@ export const FRONTERA_DEL_MATERIAL =
  * ⚠ «Gana lo más reciente» solo se puede cumplir si cada pieza dice su fecha: la reunión lleva la
  * suya en el encabezado y la nota, la de su carga (`cuerpoDeNotas`). Sin la de la nota, el modelo
  * suponía un orden entre una nota y una reunión (revisión del paso D1, 2026-09-23).
+ *
+ * ⛔ Y LA FECHA QUE CUENTA ES LA DE LOS HECHOS, no la de la carga (revisión adversarial, 2026-09-24).
+ * La pantalla le pide al CSE pegar en «Fuentes manuales» las notas de una reunión que no dejó
+ * transcripción: las notas de la reunión del 1 ago, pegadas el 20 sep, entraban como «lo más
+ * reciente» y le ganaban a la reunión del 1 sep que las reemplazó. `TimelineSource` no guarda la
+ * fecha de los hechos (sumarla sería un cambio de esquema): vale la que la nota diga en su título o
+ * su texto, y la de carga solo si no dice ninguna. La pantalla pide poner esa fecha en el título.
  */
 export const PESO_DE_LAS_FUENTES =
   "Cómo pesan las fuentes: las instrucciones del CSE mandan sobre todo; después, lo acordado o hecho " +
-  "en estas reuniones y en las notas del CSE (si se contradicen, gana lo más reciente: cada reunión " +
-  "lleva su fecha y cada nota, la de su carga); después, el handoff; lo típico del tipo de fase solo " +
-  "rellena lo que ninguna fuente dice.";
+  "en estas reuniones y en las notas del CSE (si se contradicen, gana lo más reciente por la fecha de " +
+  "los HECHOS: la de cada reunión; la que una nota diga en su título o su texto —«notas de la reunión " +
+  "del 1 ago»—, y solo si no dice ninguna, la de su carga); después, el handoff; lo típico del tipo de " +
+  "fase solo rellena lo que ninguna fuente dice.";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LA FECHA ─────────────────────────────────────────────────────────────────
@@ -850,17 +858,17 @@ export function bloqueDeReunionesDelCronograma(
 }
 
 /**
- * El bloque de NOTAS MANUALES. `""` sin notas. Se recorta al tope TOTAL (no por nota): el orden es el
- * de carga, así que lo que no entra es lo último que se pegó — la pantalla lo avisa. El rótulo
- * depende de quién lo lee (`LectorDelMaterial`).
+ * El bloque de NOTAS MANUALES. `""` sin notas. Se recorta al tope TOTAL (no por nota) con
+ * `notasQueEntran`: entran enteras las más NUEVAS y las más viejas que no caben se nombran (antes se
+ * perdía lo último que se pegó). La pantalla lo avisa. El rótulo depende de quién lo lee
+ * (`LectorDelMaterial`).
  */
 export function bloqueDeNotasDelCronograma(
   notas: readonly NotaParaElCronograma[],
   lector: LectorDelMaterial = "agentes",
 ): string {
-  const completo = cuerpoDeNotas(notas);
-  if (!completo) return "";
-  const cuerpo = completo.slice(0, TOPE_NOTAS_CRONOGRAMA);
+  const { texto: cuerpo } = notasQueEntran(notas);
+  if (!cuerpo) return "";
   const peso =
     lector === "chat"
       ? "Pesan igual que una reunión elegida."
@@ -868,7 +876,9 @@ export function bloqueDeNotasDelCronograma(
   return (
     `=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\n` +
     `Son hechos que no quedaron en ninguna reunión (una decisión, un cambio de prioridad, algo que ` +
-    `ya se hizo). ${peso} Cada una lleva la fecha en que el CSE la cargó. ${FRONTERA_DEL_MATERIAL}\n\n${cuerpo}`
+    `ya se hizo) o las notas de una reunión sin transcripción. ${peso} Cada una lleva la fecha en ` +
+    `que el CSE la CARGÓ, que no siempre es la de lo que cuenta: si la nota dice de qué fecha es (en ` +
+    `su título o su texto), vale esa para saber qué es más reciente. ${FRONTERA_DEL_MATERIAL}\n\n${cuerpo}`
   );
 }
 
@@ -879,18 +889,95 @@ function fechaDeCarga(createdAt: Date | string | null | undefined): string {
   return Number.isNaN(ms) ? "" : fechaEnCostaRica(ms);
 }
 
-/** El texto de las notas SIN recortar — el mismo armado que lee el agente. `""` sin notas. */
-function cuerpoDeNotas(notas: readonly NotaParaElCronograma[]): string {
+const SEPARADOR_DE_NOTAS = "\n\n---\n\n";
+
+/** Cada nota con texto, ya armada («### Nota: título — cargada el…»), en el orden de carga. */
+function piezasDeNotas(notas: readonly NotaParaElCronograma[]): { titulo: string; texto: string }[] {
   return notas
     .filter((n) => n.content.trim())
     .map((n, i) => {
+      const titulo = n.title?.trim() || `(sin título ${i + 1})`;
       const cuando = fechaDeCarga(n.createdAt);
-      return (
-        `### Nota: ${n.title?.trim() || `(sin título ${i + 1})`}${cuando ? ` — cargada el ${cuando}` : ""}\n` +
-        n.content.trim()
-      );
-    })
-    .join("\n\n---\n\n");
+      return { titulo, texto: `### Nota: ${titulo}${cuando ? ` — cargada el ${cuando}` : ""}\n${n.content.trim()}` };
+    });
+}
+
+/** El texto de las notas SIN recortar — el mismo armado que lee el agente. `""` sin notas. */
+function cuerpoDeNotas(notas: readonly NotaParaElCronograma[]): string {
+  return piezasDeNotas(notas)
+    .map((p) => p.texto)
+    .join(SEPARADOR_DE_NOTAS);
+}
+
+/** Lo que se reserva del tope para la línea que nombra las notas viejas que no entraron. */
+const RESERVA_PARA_LAS_OMITIDAS = 400;
+/** Menos que esto de una nota no le sirve a nadie: queda afuera entera, y se nombra. */
+const PISO_DE_UNA_NOTA = 400;
+/** Cuántas notas que no entraron se nombran por su título (las demás se cuentan). */
+const OMITIDAS_NOMBRADAS = 5;
+
+/**
+ * ⭐ LAS NOTAS QUE ENTRAN AL TOPE: GANA LO MÁS NUEVO (revisión adversarial, 2026-09-24). Se cortaba
+ * `completo.slice(0, TOPE)` sobre las notas en orden de carga: lo que se perdía era lo ÚLTIMO que se
+ * pegó —justo la corrección que, según el mismo rótulo, gana—, a veces a mitad de palabra y sin ninguna
+ * marca para el agente. Ahora entran enteras de la más nueva a la más vieja; la primera que no cabe
+ * entra recortada al final (con la marca de recorte) si le queda espacio útil, y las más viejas que no
+ * entran se NOMBRAN, así el agente sabe que existieron. Se presentan en orden de carga, como siempre.
+ * Sin pasar el tope, el texto es idéntico al de antes.
+ */
+export function notasQueEntran(notas: readonly NotaParaElCronograma[]): {
+  texto: string;
+  /** El largo SIN recortar: lo que mide la pantalla. */
+  caracteres: number;
+  /** Cuántas notas (las más viejas) quedaron afuera enteras. */
+  omitidas: number;
+} {
+  const piezas = piezasDeNotas(notas);
+  const completo = piezas.map((p) => p.texto).join(SEPARADOR_DE_NOTAS);
+  if (completo.length <= TOPE_NOTAS_CRONOGRAMA) return { texto: completo, caracteres: completo.length, omitidas: 0 };
+
+  const disponible = TOPE_NOTAS_CRONOGRAMA - RESERVA_PARA_LAS_OMITIDAS;
+  const entran: string[] = [];
+  let usado = 0;
+  let primeraQueEntra = piezas.length;
+  for (let i = piezas.length - 1; i >= 0; i--) {
+    const separador = entran.length > 0 ? SEPARADOR_DE_NOTAS.length : 0;
+    const costo = piezas[i].texto.length + separador;
+    if (usado + costo <= disponible) {
+      entran.unshift(piezas[i].texto);
+      usado += costo;
+      primeraQueEntra = i;
+      continue;
+    }
+    const resto = disponible - usado - separador;
+    if (resto >= PISO_DE_UNA_NOTA) {
+      entran.unshift(recortarReunion(piezas[i].texto, resto));
+      primeraQueEntra = i;
+    }
+    break;
+  }
+  const afuera = piezas.slice(0, primeraQueEntra);
+  const nombradas = afuera
+    .slice(-OMITIDAS_NOMBRADAS)
+    .map((p) => `«${p.titulo.length > 50 ? `${p.titulo.slice(0, 49)}…` : p.titulo}»`)
+    .join(", ");
+  const sinNombrar = afuera.length - OMITIDAS_NOMBRADAS;
+  const aviso =
+    afuera.length === 0
+      ? ""
+      : `[… ${afuera.length === 1 ? "1 nota más vieja no entra" : `${afuera.length} notas más viejas no entran`} por ` +
+        `espacio: ${nombradas}${sinNombrar > 0 ? ` y ${sinNombrar} más` : ""}. Lo que dicen no está acá: no lo supongas.]`;
+  const texto = [aviso, ...entran].filter(Boolean).join(SEPARADOR_DE_NOTAS).slice(0, TOPE_NOTAS_CRONOGRAMA);
+  return { texto, caracteres: completo.length, omitidas: afuera.length };
+}
+
+/**
+ * Cuántos caracteres suma lo pegado COMO LO LEE EL AGENTE (rótulos, fechas y separadores incluidos):
+ * el número que la pantalla muestra en el aviso del tope. Mostrar título + contenido daba un número
+ * menor que el tope en la misma frase que decía que no entraba (revisión adversarial, 2026-09-24).
+ */
+export function largoDeLasNotas(notas: readonly NotaParaElCronograma[]): number {
+  return cuerpoDeNotas(notas).length;
 }
 
 /**
@@ -899,7 +986,7 @@ function cuerpoDeNotas(notas: readonly NotaParaElCronograma[]): string {
  * llegaba después de que el agente ya estaba perdiendo el final.
  */
 export function notasPasanElTope(notas: readonly NotaParaElCronograma[]): boolean {
-  return cuerpoDeNotas(notas).length > TOPE_NOTAS_CRONOGRAMA;
+  return largoDeLasNotas(notas) > TOPE_NOTAS_CRONOGRAMA;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1037,8 +1124,7 @@ export function planDelMaterial(input: {
   }
 
   const cronologicas = entraron.sort((a, b) => a.r.date - b.r.date || a.r.id.localeCompare(b.r.id));
-  const cuerpo = cuerpoDeNotas(input.notas ?? []);
-  const notasQueEntran = cuerpo.slice(0, TOPE_NOTAS_CRONOGRAMA);
+  const notas = notasQueEntran(input.notas ?? []);
   return {
     reuniones: cronologicas.map(({ r, texto }) => ({
       title: r.title,
@@ -1051,13 +1137,13 @@ export function planDelMaterial(input: {
       reuniones: informe.sort((a, b) => b.date - a.date || a.sessionId.localeCompare(b.sessionId)),
       notas: {
         cantidad: (input.notas ?? []).filter((n) => n.content.trim()).length,
-        caracteres: cuerpo.length,
-        entran: notasQueEntran.length,
+        caracteres: notas.caracteres,
+        entran: notas.texto.length,
         tope: TOPE_NOTAS_CRONOGRAMA,
       },
     },
     sesionesUsadas: cronologicas.map(({ r }) => r.id),
-    materialInterno: [...cronologicas.map(({ texto }) => texto), ...(notasQueEntran ? [notasQueEntran] : [])],
+    materialInterno: [...cronologicas.map(({ texto }) => texto), ...(notas.texto ? [notas.texto] : [])],
   };
 }
 
@@ -1160,7 +1246,8 @@ export function avisoDelMaterial(r: ResumenDelInforme): string[] {
   if (r.sinContenido > 0) {
     frases.push(
       `${r.sinContenido === 1 ? "1 reunión no dejó" : `${r.sinContenido} reuniones no dejaron`} transcripción, ` +
-        "resumen ni minuta: pega sus notas en Fuentes manuales.",
+        "resumen ni minuta: pega sus notas en Fuentes manuales, con la fecha de la reunión en el título (así la " +
+        "IA sabe de cuándo son).",
     );
   }
   if (r.futuras > 0) {
@@ -1331,7 +1418,7 @@ function lineaDeCobertura(informe: InformeDelMaterial, instrucciones: boolean): 
   partes.push(
     r.notas === 0
       ? "no hay notas"
-      : `${conNumero(r.notas, "nota", "notas")}${r.notasRecortadas ? ", cortadas al final por espacio" : ""}`,
+      : `${conNumero(r.notas, "nota", "notas")}${r.notasRecortadas ? ", no entran completas: se recortaron o faltan las más viejas" : ""}`,
   );
   partes.push(instrucciones ? "y las instrucciones adicionales" : "sin instrucciones adicionales");
   return (
@@ -1379,7 +1466,9 @@ export function bloqueDelMaterialParaElChat(input: {
        nombra «el handoff», que este chat no tiene. El orden que vale acá va dicho una sola vez, en
        esta cabecera: en la conversación manda el CSE (revisión del paso C, 2026-09-24). */
     "Cómo pesan las fuentes en esta conversación: lo que te pide el CSE manda; después, sus instrucciones " +
-      "adicionales; después, las reuniones y las notas (si se contradicen, gana lo más reciente).",
+      "adicionales; después, las reuniones y las notas (si se contradicen, gana lo más reciente por la fecha " +
+      "de los HECHOS: la de la reunión, o la que la nota diga en su título o su texto; solo si no dice " +
+      "ninguna, la de su carga).",
     "⛔ Lo que escribes en `titulo` (tareas) y en `nombre` (fases) lo lee el CLIENTE, en el cronograma " +
       `publicado y en el PDF. ${FRONTERA_DEL_MATERIAL} Con el CSE, en la conversación, sí puedes citar este ` +
       "bloque y decirle de qué reunión o nota sacaste un cambio.",

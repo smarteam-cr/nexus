@@ -21,6 +21,8 @@ import {
   contenidoDeReunion,
   fechaEnCostaRica,
   insigniaDelMaterial,
+  largoDeLasNotas,
+  notasQueEntran,
   lecturaDelMaterial,
   lineaDeLectura,
   notasPasanElTope,
@@ -120,7 +122,65 @@ describe("las notas", () => {
       { title: "Cambio de prioridad", content: "Primero Service.", createdAt: new Date(Date.UTC(2026, 8, 23, 3)) },
     ]);
     expect(b).toContain("### Nota: Cambio de prioridad — cargada el 22 sep 2026\nPrimero Service.");
-    expect(PESO_DE_LAS_FUENTES).toContain("cada reunión lleva su fecha y cada nota, la de su carga");
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: pedía «cada nota, la de su
+       carga». La fecha que decide qué es más reciente es la de los HECHOS: las notas de una reunión
+       vieja, pegadas hoy, le ganaban a la reunión que las reemplazó. La de carga sigue en el
+       encabezado, y vale solo si la nota no dice otra. */
+    expect(PESO_DE_LAS_FUENTES).toContain("gana lo más reciente por la fecha de los HECHOS");
+    expect(PESO_DE_LAS_FUENTES).toContain("solo si no dice ninguna, la de su carga");
+  });
+
+  it("#11 · la fecha que cuenta es la de los HECHOS: el rótulo y la pantalla lo dicen", () => {
+    /* La reunión del 1 ago no dejó transcripción; el 20 sep el CSE pegó sus notas siguiendo el aviso.
+       Con «gana lo más reciente» por la fecha de carga, esas notas le ganaban a la reunión del 1 sep.
+       Las ediciones que la ponen en rojo: volver a la fecha de carga en el peso, en el rótulo de las
+       notas o en la cabecera del chat, o dejar de pedir la fecha en el título. */
+    const b = bloqueDeNotasDelCronograma([{ title: "Reunión del 1 ago", content: "Capacitación 2 semanas." }]);
+    expect(b).toContain("que no siempre es la de lo que cuenta: si la nota dice de qué fecha es");
+    expect(bloqueDeNotasDelCronograma([{ title: "x", content: "y" }], "chat")).toContain("vale esa para saber qué es más reciente");
+    const chat = bloqueDelMaterialParaElChat({
+      reuniones: "",
+      notas: bloqueDeNotasDelCronograma([{ title: "x", content: "y" }], "chat"),
+      informe: planDelMaterial({ elegidas: [], notas: [{ title: "x", content: "y" }] }).informe,
+      instrucciones: null,
+      ahora: Date.UTC(2026, 8, 24, 18),
+    });
+    expect(chat).toContain("gana lo más reciente por la fecha de los HECHOS");
+    const aviso = avisoDelMaterial({ ...resumenDelInforme(null), sinContenido: 1 }).join(" ");
+    expect(aviso).toContain("con la fecha de la reunión en el título");
+  });
+
+  it("#13 · al pasar el tope entran enteras las notas MÁS NUEVAS, y las viejas que no caben se nombran", () => {
+    /* Se cortaba `completo.slice(0, TOPE)` en orden de carga: se perdía lo ÚLTIMO que se pegó —la
+       corrección, que según el rótulo gana—, a mitad de palabra y sin marca. La edición que la pone en
+       rojo: volver a cortar por el principio, o sacar la línea que nombra las que no entraron. */
+    const vieja = { title: "Transcripción de agosto", content: "Pruebas 2 semanas. " + "x".repeat(12_500) };
+    const nueva = { title: "Cambio del 20 sep", content: "Cambio: Pruebas pasa a 3 semanas." };
+    const b = bloqueDeNotasDelCronograma([vieja, nueva]);
+    expect(b, "se perdió la nota más NUEVA").toContain("Cambio: Pruebas pasa a 3 semanas.");
+    expect(b.indexOf("### Nota: Transcripción de agosto"), "la vieja entra recortada, antes de la nueva").toBeLessThan(
+      b.indexOf("### Nota: Cambio del 20 sep"),
+    );
+    expect(b).toContain("[… sigue, recortado por espacio]");
+    expect(b.slice(b.indexOf("### Nota")).length).toBeLessThanOrEqual(TOPE_NOTAS_CRONOGRAMA);
+    // Tres viejas enormes: la más nueva entra entera y las que no caben se NOMBRAN.
+    const muchas = [
+      { title: "Uno", content: "a".repeat(6_000) },
+      { title: "Dos", content: "b".repeat(6_000) },
+      { title: "Tres", content: "c".repeat(6_000) },
+      nueva,
+    ];
+    const r = notasQueEntran(muchas);
+    expect(r.texto).toContain("Cambio: Pruebas pasa a 3 semanas.");
+    expect(r.texto).toMatch(/\[… 1 nota más vieja no entra por espacio: «Uno»\. Lo que dicen no está acá/);
+    expect(r.omitidas).toBe(1);
+    expect(r.texto.length).toBeLessThanOrEqual(TOPE_NOTAS_CRONOGRAMA);
+    expect(r.caracteres).toBe(largoDeLasNotas(muchas));
+    // Sin pasar el tope, idéntico a lo de siempre.
+    expect(notasQueEntran([nueva]).texto).toBe(`### Nota: Cambio del 20 sep\n${nueva.content}`);
+    // El informe cuenta lo mismo.
+    const plan = planDelMaterial({ elegidas: [], notas: muchas });
+    expect(plan.informe.notas).toMatchObject({ caracteres: largoDeLasNotas(muchas), entran: r.texto.length });
   });
 
   it("el aviso de la pantalla mide las notas CON su fecha, como las lee el agente", () => {
@@ -135,7 +195,28 @@ describe("las notas", () => {
     const ruta = fs.readFileSync(path.join(raiz, "app/api/projects/[projectId]/timeline/sources/route.ts"), "utf8");
     expect(ruta, "la ruta dejó de devolver la fecha de carga").toMatch(/const SELECT = \{[^}]*createdAt: true/);
     const columna = fs.readFileSync(path.join(raiz, "components/clients/FuentesManualesColumn.tsx"), "utf8");
-    expect(columna, "la columna dejó de pasar las notas enteras al aviso").toContain("excedeElTope(sources)");
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: pedía `excedeElTope(sources)`.
+       El aviso se decidía con el armado del servidor y se IMPRIMÍA título + contenido, así que cerca del
+       tope decía «suma 11.883… y el agente lee hasta 12.000: no entra». Ahora la columna mide UNA vez
+       (`largoQueLee`, las notas enteras) y con ese número decide y muestra. */
+    expect(columna, "la columna dejó de pasar las notas enteras al aviso").toContain("largoQueLee(sources)");
+  });
+
+  it("#20 · el número del aviso es el MISMO que decide que no entra", () => {
+    /* 3 notas de 3.955 caracteres (con su fecha de carga): título + contenido suma 11.883 (menos que el
+       tope), el armado que lee el agente —rótulos, fechas y separadores— pasa el tope. La edición que la pone en rojo: volver a imprimir la suma de título y
+       contenido, o decidir con otra medida. */
+    const tres = [1, 2, 3].map((n) => ({ title: `Nota ${n}`, content: "x".repeat(3_955), createdAt: "2026-09-23T15:00:00.000Z" }));
+    expect(tres.reduce((a, s) => a + s.title.length + s.content.length, 0)).toBeLessThan(TOPE_NOTAS_CRONOGRAMA);
+    expect(largoDeLasNotas(tres)).toBeGreaterThan(TOPE_NOTAS_CRONOGRAMA);
+    expect(notasPasanElTope(tres)).toBe(true);
+    const raiz = process.cwd();
+    const columna = fs.readFileSync(path.join(raiz, "components/clients/FuentesManualesColumn.tsx"), "utf8");
+    expect(columna).toMatch(/const largoTotal = largoQueLee\s*\?\s*largoQueLee\(sources\)/);
+    expect(columna).toContain("const pasaElTope = tope !== undefined && largoTotal > tope;");
+    expect(columna).toContain("entran enteras las notas más nuevas");
+    const seccion = fs.readFileSync(path.join(raiz, "components/canvas/CronogramaContextSection.tsx"), "utf8");
+    expect(seccion).toContain("largoQueLee={largoDeLasNotas}");
   });
 
   it("la pantalla y la ruta importan la MISMA constante, no un número escrito a mano", () => {
@@ -867,9 +948,13 @@ describe("⭐ el plan: el informe que ve el CSE sale del MISMO plan que arma el 
   it("⭐ la línea cerrada y el aviso cuentan lo mismo que el informe", () => {
     const r = resumenDelInforme(plan.informe);
     expect(parentesisDelMaterial(r)).toBe("2 recortadas, 1 no entra, 1 sin contenido");
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el aviso de la reunión sin
+       contenido pide ahora poner la fecha de la reunión en el título de la nota. Una nota vale por la
+       fecha de sus HECHOS y la tabla no la guarda: sin la fecha en el título, las notas del 1 ago
+       pegadas el 20 sep le ganaban a la reunión del 1 sep. */
     expect(avisoDelMaterial(r)).toEqual([
       "De tus 7 reuniones elegidas, la IA lee 2 completas, 2 recortadas y 1 no entra. Si eliges menos, cada una entra más completa.",
-      "1 reunión no dejó transcripción, resumen ni minuta: pega sus notas en Fuentes manuales.",
+      "1 reunión no dejó transcripción, resumen ni minuta: pega sus notas en Fuentes manuales, con la fecha de la reunión en el título (así la IA sabe de cuándo son).",
       "1 aún no ocurre: entra cuando pase.",
     ]);
   });

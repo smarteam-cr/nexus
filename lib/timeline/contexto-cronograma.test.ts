@@ -454,6 +454,24 @@ describe("⭐ la pantalla dice lo que le llega a la IA, con el MISMO cargador (p
   });
 });
 
+describe("#23 · una lista de reuniones que no cargó no es «0 reuniones elegidas»", () => {
+  it("el fallo se dice, no se cuenta como cero, y el paso 1 no se rotula como «sin material»", () => {
+    /* Revisión adversarial (2026-09-24): la carga hacía `r.ok ? r.json() : null` y `.catch(() => {})`:
+       un 500 dejaba la lista vacía y el contador en 0, la columna decía «Todavía no elegiste
+       reuniones…», la línea cerrada «0 reuniones elegidas» y el paso 1 se rotulaba sin material,
+       mientras la ruta sí las leía. Las ediciones que la ponen en rojo: volver a tragarse el error,
+       reportar el conteo con la lista fallida, o no mostrarlo en la sección. */
+    const panel = sinComentarios(leer("components/clients/SessionSelectionReview.tsx"));
+    expect(panel).toContain("if (!cancelled) setErrorDeCarga(true);");
+    expect(panel, "un fallo vuelve a contarse como 0").toContain("if (!loading && !errorDeCarga) {");
+    expect(panel).toContain("No se pudo cargar la lista de reuniones del ${documento}: recarga la página.");
+    const seccion = sinComentarios(leer("components/canvas/CronogramaContextSection.tsx"));
+    expect(seccion).toContain("onErrorDeCarga={setReunionesIlegibles}");
+    expect(seccion).toContain('"no se pudieron cargar las reuniones elegidas"');
+    expect(seccion).toContain("reuniones: reunionesIlegibles ? Math.max(reuniones, 1) : reuniones,");
+  });
+});
+
 describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () => {
   /* Regla del repo: textos de la app en tuteo. La revisión del paso C (2026-09-24) encontró voseo en
      los componentes que tocó esta feature: «Conversá el cambio…», «Revisá el Gantt…», «Podés seguir

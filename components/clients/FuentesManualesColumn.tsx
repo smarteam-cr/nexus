@@ -34,7 +34,7 @@ export default function FuentesManualesColumn({
   canEdit,
   onCount,
   tope,
-  excedeElTope,
+  largoQueLee,
   vacio = "Sin notas ni transcripciones a mano.",
   placeholder = "Pega el transcript o resumen…",
   placeholderTitulo = "Título (ej. Zoom con el cliente)",
@@ -51,12 +51,14 @@ export default function FuentesManualesColumn({
    */
   tope?: number;
   /**
-   * Cómo mide el SERVIDOR si lo pegado pasa el tope. Sin esto la columna suma título + contenido,
-   * y el servidor cuenta también los rótulos y separadores: el aviso llegaba tarde. Quien conoce
-   * el formato (p. ej. `notasPasanElTope`) lo pasa acá. Recibe las fuentes ENTERAS, con su
-   * `createdAt`: las notas del cronograma llevan la fecha de carga en su encabezado.
+   * Cuánto suma lo pegado COMO LO LEE EL AGENTE (rótulos, fechas y separadores incluidos). Con ese
+   * MISMO número se decide el aviso y se lo muestra: antes el aviso se decidía con el armado del
+   * servidor y se imprimía título + contenido, así que cerca del tope decía «suma 11.883… y el agente
+   * lee hasta 12.000: no entra» (revisión adversarial, 2026-09-24). Quien conoce el formato (p. ej.
+   * `largoDeLasNotas`) lo pasa acá. Recibe las fuentes ENTERAS, con su `createdAt`: las notas del
+   * cronograma llevan la fecha de carga en su encabezado. Sin esto, título + contenido.
    */
-  excedeElTope?: (fuentes: ReadonlyArray<{ title: string | null; content: string; createdAt?: string }>) => boolean;
+  largoQueLee?: (fuentes: ReadonlyArray<{ title: string | null; content: string; createdAt?: string }>) => number;
   vacio?: string;
   placeholder?: string;
   placeholderTitulo?: string;
@@ -154,16 +156,18 @@ export default function FuentesManualesColumn({
     [endpoint, fetchSources, toast],
   );
 
-  const largoTotal = sources.reduce((acc, s) => acc + (s.title?.length ?? 0) + s.content.length, 0);
-  const pasaElTope = tope !== undefined && (excedeElTope ? excedeElTope(sources) : largoTotal > tope);
+  const largoTotal = largoQueLee
+    ? largoQueLee(sources)
+    : sources.reduce((acc, s) => acc + (s.title?.length ?? 0) + s.content.length, 0);
+  const pasaElTope = tope !== undefined && largoTotal > tope;
 
   return (
     <>
       {pasaElTope && (
         <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
           Lo pegado suma {largoTotal.toLocaleString("es-CR")} caracteres y el agente lee hasta{" "}
-          {tope!.toLocaleString("es-CR")}: lo último que agregaste no entra entero. Resume o quita
-          alguna.
+          {tope!.toLocaleString("es-CR")}: entran enteras las notas más nuevas y lo más viejo se
+          recorta o queda afuera. Resume o quita alguna.
         </p>
       )}
       <ContextColumnList loading={loading} empty={vacio}>

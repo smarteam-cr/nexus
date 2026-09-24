@@ -24,7 +24,13 @@ const TOPE_BUSQUEDA = 50;
  * Las reuniones del PROYECTO las trae session-candidates?para=cronograma; acá van las de quien
  * busca: donde fue organizador o invitado, que todavía no son de este proyecto.
  *
- *   · sin `q` (o con menos de MIN_BUSQUEDA_CALENDARIO letras) → sus TOPE_RECIENTES más recientes;
+ *   · sin `q` (o con menos de MIN_BUSQUEDA_CALENDARIO letras) → sus TOPE_RECIENTES más recientes QUE
+ *     YA TIENEN CLIENTE: ⛔ las sin dueño no van en esta lista (revisión adversarial, 2026-09-24). La
+ *     decisión de MIN_BUSQUEDA_SIN_DUENIO (2026-09-22) es que a un proyecto normal las huérfanas se
+ *     le ofrecen ÚNICAMENTE por búsqueda, nunca como lista: «Agregar y asignar» es una escritura
+ *     durable de pertenencia que la X del cronograma no revierte, y la «Daily Smarteam» de ayer quedaba
+ *     arriba de todo, a un clic de volverse del cliente para siempre (y de alimentar su handoff, su
+ *     avance y el watchdog). Buscándola por su nombre, sigue apareciendo;
  *   · con `q` → todo su historial (título, organizador o participantes), hasta TOPE_BUSQUEDA.
  * `hayMas` dice si quedó algo afuera: una lista cortada no puede leerse como completa.
  *
@@ -58,6 +64,10 @@ export async function GET(
         OR EXISTS (SELECT 1 FROM unnest(s."participants") p WHERE p ILIKE ${patron})
       )`
     : Prisma.empty;
+  /* Sin buscar, solo las que ya son de algún cliente (ver arriba: las sin dueño, solo por búsqueda). */
+  const filtroDuenio = buscando
+    ? Prisma.empty
+    : Prisma.sql`AND (s."resolvedClientId" IS NOT NULL OR s."manualClientId" IS NOT NULL)`;
 
   /* Se pide uno más que el tope para saber si hay más sin contarlas todas. Las que ya son del
      proyecto (vínculo vivo) no van: están arriba, en la lista del proyecto. */
@@ -75,6 +85,7 @@ export async function GET(
         WHERE sp."sessionId" = s."id" AND sp."projectId" = ${projectId} AND sp."included" = true
       )
       ${filtroTexto}
+      ${filtroDuenio}
     ORDER BY s."date" DESC
     LIMIT ${tope + 1}`;
   const hayMas = encontradas.length > tope;

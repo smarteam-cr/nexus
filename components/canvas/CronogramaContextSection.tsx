@@ -27,7 +27,7 @@ import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
 import {
   TOPE_NOTAS_CRONOGRAMA,
-  notasPasanElTope,
+  largoDeLasNotas,
   parentesisDelMaterial,
   resumenDelInforme,
   type InformeDelMaterial,
@@ -65,6 +65,10 @@ export default function CronogramaContextSection({
 
   const [reuniones, setReunionesState] = useState(0);
   const [notas, setNotasState] = useState(0);
+  /* La lista de reuniones elegidas no se pudo cargar: no se afirma que hay 0 (revisión adversarial,
+     2026-09-24). La línea cerrada lo dice y el paso 1 no se rotula como «sin material»: la ruta sí
+     las lee. */
+  const [reunionesIlegibles, setReunionesIlegibles] = useState(false);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
@@ -94,7 +98,7 @@ export default function CronogramaContextSection({
      «revisando tus reuniones, notas e instrucciones» si no hay nada que revisar. Las instrucciones
      adicionales cuentan (son la fuente de más peso). */
   const hayMaterial = hayMaterialParaElPaso1({
-    reuniones,
+    reuniones: reunionesIlegibles ? Math.max(reuniones, 1) : reuniones,
     notas,
     informe: informeVivo,
     instrucciones: instruccionesActivas,
@@ -122,7 +126,9 @@ export default function CronogramaContextSection({
         {/* Cerrada se sigue leyendo con qué se va a generar: sin abrirla, sabes si la IA va a leer
             reuniones, notas o instrucciones, y si alguna reunión no le llega entera. */}
         <span className="text-[11px] text-fg-muted truncate">
-          {reuniones} {reuniones === 1 ? "reunión elegida" : "reuniones elegidas"}
+          {reunionesIlegibles
+            ? "no se pudieron cargar las reuniones elegidas"
+            : `${reuniones} ${reuniones === 1 ? "reunión elegida" : "reuniones elegidas"}`}
           {loQueNoEntra ? ` (${loQueNoEntra})` : ""} · {notas} nota
           {notas === 1 ? "" : "s"}
           {instruccionesActivas ? " · instrucciones activas" : ""}
@@ -151,6 +157,7 @@ export default function CronogramaContextSection({
               destino="cronograma"
               columnMode
               onCount={setReuniones}
+              onErrorDeCarga={setReunionesIlegibles}
               onChange={() => setVersion((v) => v + 1)}
               materialDelCronograma={informeVivo}
               readOnly={!canEdit}
@@ -162,9 +169,9 @@ export default function CronogramaContextSection({
               canEdit={canEdit}
               onCount={setNotas}
               tope={TOPE_NOTAS_CRONOGRAMA}
-              excedeElTope={notasPasanElTope}
+              largoQueLee={largoDeLasNotas}
               vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
-              placeholderTitulo="Título (ej. Cambio de prioridades)"
+              placeholderTitulo="Título, con la fecha si son notas de una reunión (ej. Reunión del 1 ago)"
               placeholder="Pega la nota, el resumen o la decisión…"
               etiquetaAgregar="Agregar nota"
             />

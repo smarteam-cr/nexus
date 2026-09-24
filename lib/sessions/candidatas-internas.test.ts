@@ -393,6 +393,24 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
     expect(chokepoint).toContain("where: { id: sessionId, resolvedClientId: null, manualClientId: null }");
   });
 
+  it("#7 · la lista del calendario SIN buscar no trae reuniones sin dueño (solo por búsqueda)", () => {
+    /* Revisión adversarial (2026-09-24): sin `q`, la ruta del calendario devolvía las 30 más recientes
+       de quien busca, huérfanas incluidas, con «Agregar y asignar» —una escritura durable de
+       pertenencia que la X del cronograma no revierte—. La decisión de MIN_BUSQUEDA_SIN_DUENIO es que a
+       un proyecto normal se le ofrecen ÚNICAMENTE por búsqueda. La edición que la pone en rojo: sacar
+       el filtro de dueño de la consulta sin búsqueda, o aplicarlo también buscando. */
+    const ruta = leer("app/api/projects/[projectId]/timeline/calendario/route.ts");
+    expect(ruta).toMatch(
+      /const filtroDuenio = buscando\s*\?\s*Prisma\.empty\s*:\s*Prisma\.sql`AND \(s\."resolvedClientId" IS NOT NULL OR s\."manualClientId" IS NOT NULL\)`;/,
+    );
+    const consulta = ruta.slice(ruta.indexOf("const encontradas"), ruta.indexOf("ORDER BY"));
+    expect(consulta, "el filtro no llega a la consulta").toContain("${filtroDuenio}");
+    const modal = leer("components/clients/SessionSelectionReview.tsx");
+    expect(modal, "la pantalla no dice que las sin cliente aparecen buscando").toContain(
+      "también en las que no tienen cliente asignado",
+    );
+  });
+
   it("el modal pide las sin dueño solo con suficientes letras", () => {
     const src = leer("components/clients/SessionSelectionReview.tsx");
     expect(src).toContain("/session-candidates/sin-duenio?q=");

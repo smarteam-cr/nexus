@@ -118,6 +118,7 @@ export default function SessionSelectionReview({
   columnMode = false,
   onCount,
   onExcludedCount,
+  onErrorDeCarga,
   destino = "handoff",
   materialDelCronograma = null,
 }: {
@@ -136,6 +137,11 @@ export default function SessionSelectionReview({
   onCount?: (n: number) => void;
   /** Reporta la cantidad de sesiones excluidas a mano (para el contador honesto). */
   onExcludedCount?: (n: number) => void;
+  /**
+   * Avisa si la lista NO se pudo cargar (true) o ya se cargó bien (false). Mientras falla, `onCount`
+   * no se llama: un fallo no es «0 reuniones elegidas» (revisión adversarial, 2026-09-24).
+   */
+  onErrorDeCarga?: (error: boolean) => void;
   /**
    * SOLO el cronograma (2026-09-23): qué le llega a la IA de cada reunión elegida — el informe de
    * GET /timeline/material, que sale del mismo cargador que usan los agentes. Con él, cada fila dice
@@ -161,6 +167,10 @@ export default function SessionSelectionReview({
     candidates: [],
   });
   const [loading, setLoading] = useState(true);
+  /* ⛔ Que la lista no cargue NO es que no haya ninguna (revisión adversarial, 2026-09-24): un 500 o
+     un corte de red dejaban la lista vacía y el contador en 0, y el cronograma decía «Todavía no
+     elegiste reuniones» mientras la IA sí las leía. */
+  const [errorDeCarga, setErrorDeCarga] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -257,7 +267,10 @@ export default function SessionSelectionReview({
   const reload = useCallback(async () => {
     try {
       const r = await fetch(urlCandidatas);
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        setData(await r.json());
+        setErrorDeCarga(false);
+      }
     } catch {
       /* ignore */
     }
@@ -266,11 +279,19 @@ export default function SessionSelectionReview({
   useEffect(() => {
     let cancelled = false;
     fetch(urlCandidatas)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && !cancelled) setData(d);
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
       })
-      .catch(() => {})
+      .then((d) => {
+        if (!cancelled) {
+          setData(d);
+          setErrorDeCarga(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setErrorDeCarga(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -306,11 +327,14 @@ export default function SessionSelectionReview({
   );
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !errorDeCarga) {
       onCount?.(data.feeding.length);
       onExcludedCount?.(data.excluded.length);
     }
-  }, [loading, data.feeding.length, data.excluded.length, onCount, onExcludedCount]);
+  }, [loading, errorDeCarga, data.feeding.length, data.excluded.length, onCount, onExcludedCount]);
+  useEffect(() => {
+    if (!loading) onErrorDeCarga?.(errorDeCarga);
+  }, [loading, errorDeCarga, onErrorDeCarga]);
 
   const { feeding, excluded, candidates } = data;
   /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
@@ -375,7 +399,7 @@ export default function SessionSelectionReview({
           ) : claveCalendario ? (
             `Se buscó en todo tu calendario${calendario.hayMas ? " — hay más resultados: afina la búsqueda" : ""}.`
           ) : (
-            `Arriba, las reuniones del proyecto; abajo, tus reuniones más recientes. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario.`
+            `Arriba, las reuniones del proyecto; abajo, tus reuniones más recientes que ya tienen cliente. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario, también en las que no tienen cliente asignado.`
           )
         ) : consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO ? (
           `Con ${MIN_BUSQUEDA_SIN_DUENIO} letras o más también se busca en las reuniones que no tienen cliente asignado.`
@@ -563,9 +587,11 @@ export default function SessionSelectionReview({
         <ContextColumnList
           loading={loading}
           empty={
-            esCronograma
-              ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-              : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
+            errorDeCarga
+              ? `No se pudo cargar la lista de reuniones del ${documento}: recarga la página. Lo que elegiste sigue elegido.`
+              : esCronograma
+                ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
+                : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
           }
         >
           {feeding.map((s) => (
@@ -633,7 +659,9 @@ export default function SessionSelectionReview({
 
       {feeding.length === 0 ? (
         <p className="text-xs text-fg-muted">
-          Todavía no hay sesiones de venta para este proyecto. Busca más abajo o pega la transcripción a mano.
+          {errorDeCarga
+            ? "No se pudo cargar la lista de sesiones del handoff: recarga la página. Lo que elegiste sigue elegido."
+            : "Todavía no hay sesiones de venta para este proyecto. Busca más abajo o pega la transcripción a mano."}
         </p>
       ) : (
         <ul className="space-y-2">
