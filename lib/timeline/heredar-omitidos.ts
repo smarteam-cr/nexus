@@ -23,6 +23,12 @@
  *     previa arma el ítem «tarea-se-muda» (lib/timeline/assist-items.ts): si fueran distintos, la
  *     pantalla mostraría una mudanza que el servidor no reconoció, o al revés. Con dos homónimas no
  *     se adivina.
+ *
+ *  ⚠ «Sin id» es lo que la vista previa ve DESPUÉS del saneo de la ruta, no lo que mandó el modelo
+ *  (revisión del paso D2, 2026-09-24): la ruta le QUITA el id a una tarea con un id que no es de
+ *  nadie («traía un id desconocido») y a una conocida que cambió a otra fase conocida. Si acá esas
+ *  contaran como «con id», la vista previa mostraba «Mueve «X»» por título y el servidor no le había
+ *  heredado nada: al aceptarla, la tarea mudada llegaba sin dueño, sin tipo y sin nota.
  *  No toca title, weekIndex, order ni durationWeeks, ni la regla «tasks ausente = []» de la ruta.
  *  Solo hereda valores que existen: heredar un null sería lo mismo que omitirlo.
  */
@@ -50,7 +56,10 @@ export interface FaseParaHeredar {
 export interface Herencia {
   /** Cuántos campos se completaron con lo actual. */
   heredados: number;
-  /** Ids de las tareas actuales reconocidas como MUDADAS a otra fase (regla 3). */
+  /**
+   * Ids de las tareas actuales reconocidas como MUDADAS a otra fase por título (regla 3): son las
+   * que la vista previa muestra como «tarea-se-muda» sobre la propuesta ya saneada por la ruta.
+   */
   mudanzas: string[];
 }
 
@@ -97,16 +106,23 @@ export function heredarLoOmitido(crudo: unknown, actuales: readonly FaseParaHere
     const faseActual = idDeFase ? faseActualPorId.get(idDeFase) : undefined;
     if (faseActual) out.heredados += completar(fase, faseActual, CAMPOS_DE_FASE);
 
-    const claveFase = idDeFase ?? `n${i}`; // la misma clave que `claveDeFase` de assist-items
+    /* La misma clave que `claveDeFase` de assist-items sobre la propuesta SANEADA: la ruta le quita
+       a la fase un id desconocido, y entonces la vista previa la llama `n${i}`. */
+    const claveFase = faseActual ? faseActual.id : `n${i}`;
     if (!Array.isArray(fase.tasks)) return;
     fase.tasks.forEach((tarea, j) => {
       if (!esObjeto(tarea)) return;
       const idDeTarea = typeof tarea.id === "string" && tarea.id ? tarea.id : null;
-      if (idDeTarea) {
-        idsPropuestos.add(idDeTarea);
-        // Regla 2.
-        const actual = tareaActualPorId.get(idDeTarea);
-        if (actual) out.heredados += completar(tarea, actual, CAMPOS_DE_TAREA);
+      const actual = idDeTarea ? tareaActualPorId.get(idDeTarea) : undefined;
+      // Regla 2.
+      if (actual) out.heredados += completar(tarea, actual, CAMPOS_DE_TAREA);
+      /* El id que CONSERVA la ruta (assist/route.ts, «Saneo anti-alucinación»): el de una tarea
+         actual que sigue en su fase, o que va a una fase que la ruta no reconoce. Al id desconocido
+         y al de la que cambió a otra fase conocida se lo quita: para la vista previa son tareas sin
+         id, y así tienen que contar acá. */
+      const conservaId = !!actual && !(faseActual && faseDeTarea.get(idDeTarea!) !== faseActual.id);
+      if (conservaId) {
+        idsPropuestos.add(idDeTarea!);
         return;
       }
       if (typeof tarea.title === "string") sinId.push({ claveFase, clave: `${claveFase}:${j}`, tarea });

@@ -24,9 +24,15 @@
  * en curso / hecho); si la semana ya pasó y la tarea no está DONE se marca
  * "atrasada" en rojo APARTE (tag + punto de fase + anillo de celda). Celda
  * atenuada = semana pasada o todas sus tareas DONE.
- * Las tareas needsValidation se GRITAN a propósito (fila amber + badge): si el
- * CSE confirma sin revisar, esos títulos cruzan al cliente — este tratamiento
- * es la barrera. La marca en sí nunca cruza (columna excluida del mapper externo).
+ * ⚠ `needsValidation` NO se pinta acá (desde c29efc3b): la fila amber y el badge
+ * «Por validar» se reemplazaron por la procedencia IA/CSE. La marca sigue en la
+ * base —y desde 2026-09-23 la escriben también las tareas «por validar» que se
+ * aplican desde la curación—: cuenta en la firmeza del baseline al publicar
+ * (lib/timeline/baseline.ts; con más de la mitad marcadas queda WEAK y el portafolio
+ * atenúa su alarma de alcance) y se limpia al editar el contenido de la tarea.
+ * «Confirmar detalle» no la limpia. Donde el CSE la ve es en la curación
+ * (PhaseRegenPanel), antes de aplicar. La marca nunca cruza al cliente (columna
+ * excluida del mapper externo).
  */
 
 import { useState, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";

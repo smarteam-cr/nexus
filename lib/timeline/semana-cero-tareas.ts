@@ -136,6 +136,30 @@ export function tareasFijasDeSemanaCero(
     }));
 }
 
+/** Por qué una tarea propuesta está «por validar» cuando es la típica del tipo de fase. */
+export const MOTIVO_POR_VALIDAR_TIPICA =
+  "La IA no la sacó del handoff, de las reuniones ni de las notas: es la típica de este tipo de fase. " +
+  "Si la editas, queda como revisada.";
+
+/** Por qué la tarea fija de base de datos está «por validar»: falta un dato del proyecto, no una fuente. */
+export const MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR =
+  "El proyecto no dice si es implementación o re-implementación: se puso la de una implementación desde " +
+  "cero. Confírmala o cámbiala. Si la editas, queda como revisada.";
+
+/**
+ * POR QUÉ una tarea está «por validar», para el tooltip de la curación (revisión del paso D2,
+ * 2026-09-24). La misma marca llega por dos razones distintas: la típica del tipo de fase que la IA
+ * no sacó de ninguna fuente, y la tarea fija de base de datos de la Semana 0 cuando el proyecto no
+ * tiene definido su punto de partida (`porValidar: tipo === null`, arriba). El tooltip de la
+ * primera explicaba mal la segunda. Se reconoce por su título, que es texto fijo de este archivo.
+ */
+export function motivoDePorValidar(titulo: string): string {
+  const t = normalizar(titulo);
+  return t === normalizar(TAREA_BD_DESDE_CERO.title) || t === normalizar(TAREA_BD_EXISTENTE.title)
+    ? MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR
+    : MOTIVO_POR_VALIDAR_TIPICA;
+}
+
 /**
  * Cuál de las fases hace de «Semana 0»: la primera por orden, con fallback por nombre para los
  * cronogramas viejos («Kick-off», «Semana 0 – Arranque»). `null` si no hay fases.

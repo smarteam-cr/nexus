@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { heredarLoOmitido, type FaseParaHeredar } from "./heredar-omitidos";
-import { diffAssist, type FaseActual, type PropuestaDelAssist } from "./assist-items";
+import { diffAssist, huella, proyectarAceptados, type FaseActual, type PropuestaDelAssist } from "./assist-items";
 
 const ACTUALES: FaseParaHeredar[] = [
   {
@@ -130,6 +130,22 @@ describe("heredarLoOmitido — las tareas", () => {
     expect(mudada.weekIndex).toBe(1);
   });
 
+  it("⭐ una tarea mudada con un id DESCONOCIDO cuenta como sin id: hereda dueño, tipo y nota", () => {
+    /* Revisión del paso D2 (2026-09-24): el modelo copia mal un id («t2x»). La ruta se lo quita
+       («traía un id desconocido») y la vista previa la muestra como «Mueve «Capacitación de
+       usuarios»» por título. Antes la herencia la trataba como «con id», no le heredaba nada, y al
+       aceptar la mudanza la tarea llegaba sin dueño, sin tipo y sin nota.
+       La edición que la pone en rojo: volver a sumar a `idsPropuestos` cualquier id string. */
+    const c = crudo();
+    c.phases[1].tasks![1] = { id: "t2x", title: "Capacitación de usuarios", weekIndex: 1, order: 0 };
+    const r = heredarLoOmitido(c, ACTUALES);
+    expect(r.mudanzas, "el servidor no reconoció la mudanza que la vista previa muestra").toEqual(["t2"]);
+    const mudada = c.phases[1].tasks![1];
+    expect(mudada.party, "la tarea mudada nació sin dueño").toBe("AMBOS");
+    expect(mudada.type).toBe("SESSION");
+    expect(mudada.notes).toBe("Dos grupos");
+  });
+
   it("con dos homónimas no se adivina: ninguna hereda", () => {
     const c = crudo();
     c.phases[1].tasks!.push({ title: "Capacitación de usuarios", weekIndex: 0, order: 1 });
@@ -164,21 +180,75 @@ describe("⭐ paridad con la vista previa: el servidor reconoce las MISMAS mudan
     tasks: f.tasks.map((t) => ({ ...t, weekIndex: 0, party: t.party as never, type: t.type as never })),
   }));
 
-  it("los ids mudados coinciden con los ítems «tarea-se-muda»", () => {
-    const casos: Json[] = [crudo()];
+  /**
+   * El saneo de ids de la ruta (assist/route.ts, «Saneo anti-alucinación»), tal cual: la vista previa
+   * ve la propuesta DESPUÉS de esto. Una fase con id desconocido pierde el id; una tarea pierde el
+   * suyo si no es de nadie o si cambió a otra fase conocida. La guarda de la ruta, abajo, exige que
+   * esas dos reglas sigan ahí.
+   *
+   * ⚠ Revisión del paso D2 (2026-09-24): la paridad se comparaba contra el crudo del modelo, no
+   * contra lo saneado. Una mudanza con un id copiado mal quedaba verde acá y rota en la pantalla.
+   */
+  function sanearComoLaRuta(c: Json): PropuestaDelAssist {
+    const fasesConocidas = new Set(ACTUALES.map((f) => f.id));
+    const faseDeTarea = new Map(ACTUALES.flatMap((f) => f.tasks.map((t) => [t.id, f.id] as const)));
+    const copia = structuredClone(c);
+    for (const p of copia.phases) {
+      const phaseId = typeof p.id === "string" && fasesConocidas.has(p.id) ? p.id : undefined;
+      if (!phaseId) delete p.id;
+      for (const t of p.tasks ?? []) {
+        if (typeof t.id !== "string") continue;
+        const real = faseDeTarea.get(t.id);
+        if (!real || (phaseId && real !== phaseId)) delete t.id;
+      }
+    }
+    return copia as unknown as PropuestaDelAssist;
+  }
+
+  it("⭐ las mudanzas de la vista previa (sobre lo SANEADO) son las que el servidor reconoce, y llegan con dueño, tipo y nota", () => {
+    const casos: Array<[string, Json]> = [["base", crudo()]];
     const conHomonimas = crudo();
     conHomonimas.phases[1].tasks!.push({ title: "Capacitación de usuarios", weekIndex: 0, order: 1 });
-    casos.push(conHomonimas);
+    casos.push(["dos homónimas", conHomonimas]);
     const sinSetup = crudo();
     sinSetup.phases.shift(); // la fase de origen se va: la mudanza sobrevive igual
-    casos.push(sinSetup);
+    casos.push(["sin la fase de origen", sinSetup]);
+    const idDesconocido = crudo();
+    idDesconocido.phases[1].tasks![1] = { id: "t2x", title: "Capacitación de usuarios", weekIndex: 1, order: 0 };
+    casos.push(["id desconocido", idDesconocido]);
+    const conSuId = crudo();
+    const t1 = conSuId.phases[0].tasks!.shift()!;
+    conSuId.phases[1].tasks!.push({ id: t1.id, title: t1.title, weekIndex: 0, order: 2 }); // sin dueño, tipo ni nota
+    casos.push(["mudada con SU id", conSuId]);
+    const faseInventada = crudo();
+    faseInventada.phases[1].id = "inventada";
+    faseInventada.phases[1].tasks![1] = { id: "t2x", title: "Capacitación de usuarios", weekIndex: 1, order: 0 };
+    casos.push(["a una fase con id inventado", faseInventada]);
 
-    for (const c of casos) {
-      const deLaVista = diffAssist(comoActuales, structuredClone(c) as unknown as PropuestaDelAssist, null)
-        .filter((i) => i.clase === "tarea-se-muda")
-        .map((i) => i.key.replace("tarea-se-muda:", ""));
-      expect(heredarLoOmitido(c, ACTUALES).mudanzas).toEqual(deLaVista);
+    let mudanzasVistas = 0;
+    for (const [nombre, c] of casos) {
+      const r = heredarLoOmitido(c, ACTUALES); // muta el crudo, como en la ruta
+      const saneada = sanearComoLaRuta(c);
+      const todos = diffAssist(comoActuales, saneada, null);
+      const deLaVista = todos.filter((i) => i.clase === "tarea-se-muda").map((i) => i.key.replace("tarea-se-muda:", ""));
+      expect([...r.mudanzas].sort(), `${nombre}: la vista previa y el servidor ven mudanzas distintas`).toEqual(
+        [...deLaVista].sort(),
+      );
+      // «Aceptar todo» en la pantalla (también la fase nueva, si la mudanza va a una): la tarea llega con lo que tenía.
+      const payload = proyectarAceptados(comoActuales, saneada, new Set(todos.map((i) => i.key)), null);
+      for (const id of deLaVista) {
+        mudanzasVistas++;
+        const actual = ACTUALES.flatMap((f) => f.tasks).find((t) => t.id === id)!;
+        const llegada = payload.phases
+          .flatMap((p) => p.tasks ?? [])
+          .find((t) => !t.id && huella(t.title) === huella(actual.title));
+        expect(llegada, `${nombre}: la mudanza de ${id} no llegó`).toBeDefined();
+        expect(llegada!.party, `${nombre}: la mudanza de ${id} llegó sin dueño`).toBe(actual.party);
+        expect(llegada!.type, `${nombre}: sin tipo`).toBe(actual.type);
+        expect(llegada!.notes, `${nombre}: sin nota`).toBe(actual.notes);
+      }
     }
+    expect(mudanzasVistas, "los casos tienen que mostrar mudanzas para que la paridad pruebe algo").toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -196,6 +266,21 @@ describe("⛔ la ruta del modificador usa la herencia, y ANTES de juzgar la prop
     expect(select, "no encontré el select de las tareas").toContain("select: {");
     expect(select, "el modelo dejó de ver el dueño de cada tarea").toContain("party: true");
     expect(select, "el modelo dejó de ver el tipo de cada tarea").toContain("type: true");
+  });
+
+  it("la ruta sigue quitando los ids como los quita `sanearComoLaRuta` (la paridad depende de eso)", () => {
+    /* La herencia decide qué tarea cuenta «sin id» imitando este saneo. Si la ruta cambia cuándo le
+       quita el id a una tarea o a una fase, la paridad de arriba sigue verde contra una imitación
+       vieja: esta guarda la obliga a actualizarse junto con la ruta. */
+    expect(src, "la ruta dejó de quitarle el id desconocido a una fase").toMatch(
+      /if \(phaseId && !knownPhaseIds\.has\(phaseId\)\) \{[\s\S]{0,200}?phaseId = undefined;/,
+    );
+    expect(src, "la ruta dejó de quitarle el id desconocido a una tarea").toMatch(
+      /if \(!realPhase\) \{[\s\S]{0,200}?taskId = undefined;/,
+    );
+    expect(src, "la ruta dejó de quitarle el id a la tarea que cambió de fase").toMatch(
+      /\} else if \(phaseId && realPhase !== phaseId\) \{\s*taskId = undefined;/,
+    );
   });
 
   it("⭐ heredarLoOmitido(parsedRaw corre ANTES de repararPropuesta(parsedRaw)", () => {

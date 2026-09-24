@@ -136,17 +136,29 @@ export function fugaEn(
 export interface FugaDeTarea {
   campo: "titulo" | "nota";
   motivo: string;
+  /**
+   * Cuando el título Y la nota cruzan: el motivo de la NOTA. El chip muestra primero el título (lo
+   * primero que lee el cliente); al corregirlo, la marca pasa a la nota en vez de irse
+   * (`fugaTrasEditar`). Sin esto, editar el título borraba el chip y la nota con la fecha o la cita
+   * llegaba al Gantt del cliente sin aviso (revisión del paso D3, 2026-09-24).
+   */
+  motivoDeLaNota?: string;
 }
 
-/** Marca cada tarea: primero el título, después la nota. `fuga: null` si ninguna cruza. */
+/**
+ * Marca cada tarea: primero el título, después la nota —y si cruzan los dos, la del título lleva
+ * también el motivo de la nota—. `fuga: null` si ninguno cruza.
+ */
 export function marcarFugas<T extends { title: string; notes?: string | null }>(
   tareas: readonly T[],
   h: HuellasDeFrontera,
 ): Array<T & { fuga: FugaDeTarea | null }> {
   return tareas.map((t) => {
     const enTitulo = fugaEn(t.title, h, "titulo");
-    if (enTitulo) return { ...t, fuga: { campo: "titulo", motivo: enTitulo } };
     const enNota = fugaEn(t.notes ?? null, h, "nota");
+    if (enTitulo) {
+      return { ...t, fuga: { campo: "titulo", motivo: enTitulo, ...(enNota ? { motivoDeLaNota: enNota } : {}) } };
+    }
     return { ...t, fuga: enNota ? { campo: "nota", motivo: enNota } : null };
   });
 }

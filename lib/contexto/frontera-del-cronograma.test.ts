@@ -128,7 +128,10 @@ describe("marcar tareas y revisar propuestas", () => {
       { campo: "nota", motivo: MOTIVOS_DE_FUGA.copia },
       { campo: "titulo", motivo: MOTIVOS_DE_FUGA.cita },
       null,
-      { campo: "titulo", motivo: MOTIVOS_DE_FUGA.fecha },
+      /* 2026-09-24 (revisión del paso D3): cuando cruzan los dos, la marca del título lleva también
+         el motivo de la nota. Guardar solo el del título hacía que, al corregirlo, el chip se fuera
+         y la nota «Según la reunión de avance» llegara al Gantt del cliente sin aviso. */
+      { campo: "titulo", motivo: MOTIVOS_DE_FUGA.fecha, motivoDeLaNota: MOTIVOS_DE_FUGA.cita },
     ]);
   });
 

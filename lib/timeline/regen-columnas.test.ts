@@ -83,6 +83,28 @@ describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23
     expect(fugaTrasEditar(null, { title: "x" })).toBeNull();
   });
 
+  it("⭐ si el título Y la nota cruzan, corregir el título pasa la marca a la nota (no la borra)", () => {
+    /* Revisión del paso D3 (2026-09-24): la marca guardaba UNA fuga, la del título. Al corregirlo,
+       el chip se iba y la nota con la cita o la fecha llegaba al Gantt del cliente sin aviso.
+       La edición que la pone en rojo: volver a devolver null en cuanto se toca el título. */
+    const lasDos: FugaDeTarea = { campo: "titulo", motivo: "trae una fecha", motivoDeLaNota: "dice de dónde salió" };
+    const trasTitulo = fugaTrasEditar(lasDos, { title: "Configurar el pipeline" });
+    expect(trasTitulo, "corregir el título borró también el aviso de la nota").not.toBeNull();
+    expect(trasTitulo!.campo).toBe("nota");
+    expect(trasTitulo!.motivo).toBe("dice de dónde salió");
+    expect(trasTitulo!.motivoDeLaNota).toBeUndefined();
+    // Y la nota se sigue limpiando como siempre.
+    expect(fugaTrasEditar(trasTitulo, { notes: null })).toBeNull();
+    // Quitar la nota primero deja solo la del título; corregirlo después, nada.
+    const sinNota = fugaTrasEditar(lasDos, { notes: null });
+    expect(sinNota).toEqual({ campo: "titulo", motivo: "trae una fecha", motivoDeLaNota: undefined });
+    expect(fugaTrasEditar(sinNota, { title: "Otro" })).toBeNull();
+    // Las dos a la vez (título nuevo y nota quitada): nada que avisar.
+    expect(fugaTrasEditar(lasDos, { title: "Otro", notes: null })).toBeNull();
+    // Tocar otro campo no cambia nada.
+    expect(fugaTrasEditar(lasDos, { party: "CLIENTE" })).toBe(lasDos);
+  });
+
   it("la curación la acarrea de la propuesta, la limpia con esa regla y la muestra junto a la nota", () => {
     /* El project `unit` solo corre lib/**: el componente se mira por su código. Sin estas piezas, la
        ruta marca la fuga y la pantalla la tira (o la muestra para siempre, o nunca deja ver la nota
@@ -93,6 +115,9 @@ describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23
     expect(panel, "el panel dejó de leer la fuga de la propuesta").toContain("fuga: t.fuga ?? null,");
     expect(panel, "el panel dejó de limpiar la fuga con su regla").toContain("fuga: fugaTrasEditar(i.fuga, p)");
     expect(panel, "el chip desapareció").toContain("⚠ revisa: texto interno");
+    expect(panel, "el chip del título dejó de decir que la nota también cruza").toContain(
+      "item.fuga.motivoDeLaNota ? ` La nota también ${item.fuga.motivoDeLaNota}",
+    );
     expect(panel, "la tarjeta dejó de mostrar la nota").toContain("title={item.notes}>{item.notes}</p>");
     expect(panel, "la nota ya no se puede quitar").toContain("onClick={() => onPatch({ notes: null })}");
   });

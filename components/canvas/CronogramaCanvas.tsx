@@ -2426,9 +2426,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   if (loading) return <CronogramaSkeleton />;
 
   /* Acá se contaban `totalTasks`, `pendingValidation` y `estimatedPhases`, y existían SOLO para
-     alimentar los dos avisos ámbar permanentes que se borraron. Las marcas que representaban no
-     se perdieron: el Gantt las pinta donde importan —el badge "estimada" en la fila de su fase y
-     el "por validar" en su tarea— en vez de resumirlas arriba de todo. */
+     alimentar los dos avisos ámbar permanentes que se borraron. ⚠ La tarea «por validar» NO tiene
+     marca en el Gantt (desde c29efc3b, se reemplazó por la procedencia IA/CSE): el CSE la ve en la
+     curación antes de aplicar, y la marca queda en la base (firmeza del baseline). Ver el
+     encabezado de TimelineGantt.tsx. */
 
   // ── Drawer de detalle de tarea: resolución de la tarea VIVA + navegación ──────
   const drawerRanges = computePhaseRanges(phases);
@@ -3311,9 +3312,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           limitado". Los dos se fueron, y no se reemplazan por nada.
           Fallan el criterio de admisión que el propio motor de acciones declara: (a) no tienen una
           acción concreta —dicen "revisá", que no es un gesto—, (b) no empeoran si nadie los
-          atiende, y (c) el Gantt YA los muestra donde importa: la fase estimada lleva su badge en
-          su fila y la tarea sin validar el suyo. Eran un índice permanente de marcas que están dos
-          centímetros más abajo, ocupando el lugar del documento. Un aviso crónico deja de leerse a
+          atiende, y (c) la fase estimada ya se lee en su fila (en el indicador de la fase). ⚠ La
+          tarea sin validar NO tiene marca en el Gantt desde c29efc3b: se ve en la curación, antes
+          de aplicar (ver el encabezado de TimelineGantt.tsx). Eran un índice permanente de marcas,
+          ocupando el lugar del documento. Un aviso crónico deja de leerse a
           la semana; lo que consigue es que tampoco se lean los que sí importan. */}
 
       {/* ── EL cronograma. Propuesta del ASSIST (con tareas) → preview read-only swapeada.

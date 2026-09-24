@@ -60,14 +60,23 @@ export function phaseHasChanges(cantidadPropuesta: number): boolean {
  * «Quitar nota», una de la nota. Tocar otro campo no la limpia: cambiar el dueño no arregla una
  * fecha escrita en la nota, y el chip tiene que seguir ahí.
  *
+ * Si el título Y la nota cruzaban (`motivoDeLaNota`), corregir el título no la borra: la marca
+ * pasa a la nota, que el cliente también lee (revisión del paso D3, 2026-09-24). Tocar la nota
+ * primero la saca de la marca del título.
+ *
  * Tipado estructural, como el resto del archivo: la `FugaDeTarea` de la frontera lo satisface.
  */
-export function fugaTrasEditar<F extends { campo: "titulo" | "nota" }>(
+export function fugaTrasEditar<F extends { campo: "titulo" | "nota"; motivo: string; motivoDeLaNota?: string }>(
   fuga: F | null,
   cambio: object,
 ): F | null {
   if (!fuga) return null;
-  if (fuga.campo === "titulo" && "title" in cambio) return null;
-  if (fuga.campo === "nota" && "notes" in cambio) return null;
+  const tocaTitulo = "title" in cambio;
+  const tocaNota = "notes" in cambio;
+  if (fuga.campo === "nota") return tocaNota ? null : fuga;
+  // La marca es del título.
+  const nota = tocaNota ? undefined : fuga.motivoDeLaNota;
+  if (tocaTitulo) return nota ? { ...fuga, campo: "nota", motivo: nota, motivoDeLaNota: undefined } : null;
+  if (tocaNota && fuga.motivoDeLaNota) return { ...fuga, motivoDeLaNota: undefined };
   return fuga;
 }

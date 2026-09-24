@@ -420,4 +420,27 @@ describe("⭐ la pantalla dice lo que le llega a la IA, con el MISMO cargador (p
     expect(panel, "el aviso dejó de contar desde el informe").toContain("avisoDelMaterial(resumenDelInforme(material))");
     expect(panel, "las filas dejaron de leer su insignia del informe").toContain("insigniaDelMaterial(fila)");
   });
+
+  it("⭐ lo que se calcula del informe también se MUESTRA: insignia, detalle, aviso y paréntesis", () => {
+    /* Revisión del paso D3 (2026-09-24): la guarda de arriba solo pedía que el mapa de insignias se
+       ARMARA. Se podía volver a pintar «Elegida» en verde en cada fila, o no renderizar el aviso ni
+       el paréntesis de la línea cerrada, y todo seguía verde (probado: 68/68).
+       Las ediciones que la ponen en rojo: sacar `insignias.get(s.sessionId) ??` del badge, el
+       detalle del `meetMeta`, el render del aviso o el `(${loQueNoEntra})` de la línea. */
+    const panel = sinComentarios(leer("components/clients/SessionSelectionReview.tsx"));
+    expect(panel, "la fila dejó de usar la insignia del informe (vuelve a decir «Elegida» siempre)").toContain(
+      '(insignias.get(s.sessionId) ?? { label: esCronograma ? "Elegida" : "Incluida", tone: "green" })',
+    );
+    expect(panel, "la fila dejó de decir cuánto lee la IA cuando se corta lo principal").toContain(
+      "meta={meetMeta(s.date, s.alsoIn, s.futura, insignias.get(s.sessionId)?.detalle)}",
+    );
+    expect(panel, "el aviso del informe se calcula pero no se muestra").toMatch(
+      /\{avisoMaterial\.length > 0 && \(\s*<p[^>]*>\s*\{avisoMaterial\.join\(" "\)\}/,
+    );
+
+    const seccion = sinComentarios(leer("components/canvas/CronogramaContextSection.tsx"));
+    expect(seccion, "la línea cerrada calcula lo que no entra pero no lo muestra").toContain(
+      '{loQueNoEntra ? ` (${loQueNoEntra})` : ""}',
+    );
+  });
 });

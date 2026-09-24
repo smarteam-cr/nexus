@@ -30,6 +30,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { StatusCircle, PARTY_META, type GanttTaskStatus } from "./TimelineGantt";
 import { fugaTrasEditar, repartoInicial } from "@/lib/timeline/regen-columnas";
 import type { AvisoRepetida } from "@/lib/timeline/tarea-repetida";
+import { motivoDePorValidar } from "@/lib/timeline/semana-cero-tareas";
 import type { FugaDeTarea } from "@/lib/contexto/frontera-del-cronograma";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
@@ -52,7 +53,8 @@ export interface RegenProposedTask {
   notes: string | null;
   party: Party;
   type: "SESSION" | "TASK";
-  /** «porValidar» del agente: la típica del tipo de fase, sin respaldo en ninguna fuente. */
+  /** «porValidar»: la típica del tipo de fase, sin respaldo en ninguna fuente, o la fija de base de
+   *  datos cuando el proyecto no dice su punto de partida (el tooltip lo distingue: `motivoDePorValidar`). */
   needsValidation?: boolean;
   /** El título o la nota cruzan la frontera del material interno. Lo pone la ruta, nunca el parser. */
   fuga?: FugaDeTarea | null;
@@ -282,16 +284,17 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
           {item.isNew && <span className="text-[9px] text-brand-light font-medium">nueva</span>}
           {item.isNew && item.needsValidation && (
             <span className="text-[9px] text-fg-muted font-medium"
-              title="La IA no la sacó del handoff, de las reuniones ni de las notas: es la típica de este tipo de fase. Si la editas, queda como revisada.">
+              title={motivoDePorValidar(item.title)}>
               por validar
             </span>
           )}
           {/* El título o la nota cruzan la frontera del material interno: citan la fuente, traen un
               monto, una fecha, un plazo, un correo o copian una frase de una reunión o una nota.
-              Avisa, no bloquea: se va al corregir el título o al quitar la nota. */}
+              Avisa, no bloquea: se va al corregir el título o al quitar la nota. Si cruzan los dos,
+              corregir el título la pasa a la nota (`fugaTrasEditar`). */}
           {item.isNew && item.fuga && (
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border text-warn-ink bg-warn-surface border-warn-line"
-              title={`El cliente lee el título y la nota: ${item.fuga.campo === "titulo" ? "el título" : "la nota"} ${item.fuga.motivo}. ${item.fuga.campo === "titulo" ? "Corrige el título." : "Quita la nota, o corrígela en el Gantt después de aplicar."}`}>
+              title={`El cliente lee el título y la nota: ${item.fuga.campo === "titulo" ? "el título" : "la nota"} ${item.fuga.motivo}. ${item.fuga.campo === "titulo" ? "Corrige el título." : "Quita la nota, o corrígela en el Gantt después de aplicar."}${item.fuga.motivoDeLaNota ? ` La nota también ${item.fuga.motivoDeLaNota}: el aviso sigue en la nota cuando corrijas el título.` : ""}`}>
               ⚠ revisa: texto interno
             </span>
           )}
