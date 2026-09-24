@@ -13,8 +13,9 @@
  * porque su JSX tiene que seguir escrito en CronogramaCanvas.tsx (lo exige proposal-deltas.test.ts).
  *
  * Las reuniones elegidas las leen el detalle (tareas por semana y cuáles son reuniones) y «Pedir
- * cambio con IA» (el único que toca fases); las notas, también el avance. El avance NO depende de lo
- * elegido: lee solo las reuniones recientes del proyecto. Todo sigue terminando en propuesta.
+ * cambio con IA» (puede tocar fases, solo lo que se le pide); las notas, también el avance. El
+ * avance NO depende de lo elegido: lee solo las reuniones recientes del proyecto. ⚠ Ni el handoff
+ * (que arma las fases) ni el chat del cronograma leen este material.
  *
  * ⚠ Archivo aparte a propósito: CronogramaCanvas.tsx está al tope del trinquete de grises, y lo
  * nuevo nace con tokens del tema.
@@ -85,7 +86,7 @@ export default function CronogramaContextSection({
           Con esto la IA arma las tareas de cada fase, decide cuáles son reuniones con el cliente y
           propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
-          buscalas entre las del proyecto o en tu calendario. Sacarla de acá no la saca del handoff
+          búscalas entre las del proyecto o en tu calendario. Sacarla de acá no la saca del handoff
           ni del proyecto.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -105,9 +106,9 @@ export default function CronogramaContextSection({
               onCount={setNotas}
               tope={TOPE_NOTAS_CRONOGRAMA}
               excedeElTope={notasPasanElTope}
-              vacio="Sin notas. Pegá acá lo que no quedó en ninguna reunión."
+              vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
               placeholderTitulo="Título (ej. Cambio de prioridades)"
-              placeholder="Pegá la nota, el resumen o la decisión…"
+              placeholder="Pega la nota, el resumen o la decisión…"
               etiquetaAgregar="Agregar nota"
             />
           </ContextColumn>

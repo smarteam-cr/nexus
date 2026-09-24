@@ -65,7 +65,7 @@ export default function TimelineAssistDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-fg">Cambiar el cronograma con IA</h2>
-            <p className="text-xs text-fg-muted">Describí el cambio; la IA propone y vos revisás antes de aplicar.</p>
+            <p className="text-xs text-fg-muted">Describe el cambio; la IA propone y tú revisas antes de aplicar.</p>
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export default function TimelineAssistDialog({
 
         {/* Instrucción */}
         <div>
-          <label className="block text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1.5">Qué querés cambiar</label>
+          <label className="block text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1.5">Qué quieres cambiar</label>
           <textarea
             autoFocus
             rows={3}
@@ -97,8 +97,8 @@ export default function TimelineAssistDialog({
             onChange={(e) => setInstruction(e.target.value)}
             placeholder={
               scopedPhase
-                ? `Ej: "agregá tareas de migración de datos en ${scopedPhase.name}"`
-                : 'Ej: "atrasá Setup una semana y agregá una demo intermedia"'
+                ? `Ej: "agrega tareas de migración de datos en ${scopedPhase.name}"`
+                : 'Ej: "atrasa Setup una semana y agrega una demo intermedia"'
             }
             className="w-full text-sm bg-surface-muted border border-line rounded-lg px-3 py-2 text-fg placeholder-fg-muted focus:outline-none focus:border-brand resize-none"
           />

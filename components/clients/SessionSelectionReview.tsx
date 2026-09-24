@@ -355,10 +355,10 @@ export default function SessionSelectionReview({
             "Buscando en tu calendario…"
           ) : calendario.error ? (
             <span className="text-warn-ink">
-              No se pudo buscar en tu calendario. Probá de nuevo en un momento.
+              No se pudo buscar en tu calendario. Prueba de nuevo en un momento.
             </span>
           ) : claveCalendario ? (
-            `Se buscó en todo tu calendario${calendario.hayMas ? " — hay más resultados: afiná la búsqueda" : ""}.`
+            `Se buscó en todo tu calendario${calendario.hayMas ? " — hay más resultados: afina la búsqueda" : ""}.`
           ) : (
             `Arriba, las reuniones del proyecto; abajo, tus reuniones más recientes. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario.`
           )
@@ -368,7 +368,7 @@ export default function SessionSelectionReview({
           "Buscando también en las reuniones sin cliente asignado…"
         ) : sinDuenio.error ? (
           <span className="text-warn-ink">
-            No se pudo buscar en las reuniones sin cliente asignado. Probá de nuevo en un momento.
+            No se pudo buscar en las reuniones sin cliente asignado. Prueba de nuevo en un momento.
           </span>
         ) : (
           "También se buscó en las reuniones sin cliente asignado."
@@ -526,14 +526,14 @@ export default function SessionSelectionReview({
               {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
             </strong>{" "}
             este {documento} sin transcripción ni resumen. El documento se va a escribir sobre ese
-            hueco — si tenés las notas, pegalas en <em>Fuentes manuales</em>.
+            hueco — si tienes las notas, pégalas en <em>Fuentes manuales</em>.
           </p>
         )}
         <ContextColumnList
           loading={loading}
           empty={
             esCronograma
-              ? "Todavía no elegiste reuniones para el cronograma. Buscalas en tu calendario o entre las del proyecto."
+              ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
               : `Ninguna sesión alimenta este ${documento}. Agregala con “Buscar más sesiones”.`
           }
         >
@@ -597,12 +597,12 @@ export default function SessionSelectionReview({
       </p>
       <p className="text-[11px] text-fg-muted leading-relaxed">
         Entran la sesión primaria del proyecto y las secundarias de alta confianza que sean de
-        handoff/kickoff o tengan Ventas en la sala. Revisá y podá antes de generar.
+        handoff/kickoff o tengan Ventas en la sala. Revisa y poda antes de generar.
       </p>
 
       {feeding.length === 0 ? (
         <p className="text-xs text-fg-muted">
-          Todavía no hay sesiones de venta para este proyecto. Buscá más abajo o pegá la transcripción a mano.
+          Todavía no hay sesiones de venta para este proyecto. Busca más abajo o pega la transcripción a mano.
         </p>
       ) : (
         <ul className="space-y-2">

@@ -2577,7 +2577,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <button
               onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
-              title="Pedile a la IA un cambio del cronograma — vos revisás antes de aplicar"
+              title="Pídele a la IA un cambio del cronograma — tú revisas antes de aplicar"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
               Pedir cambio con IA
@@ -2591,7 +2591,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               onClick={() => void pedirPropuestaDeDetalle("regen")}
               disabled={allRegenLoading || allRegenApplying}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
-              title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisás y aceptás/descartás antes de aplicar, fase por fase"
+              title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisas y aceptas o descartas antes de aplicar, fase por fase"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               {allRegenLoading ? "Generando propuesta…" : "Regenerar todo el cronograma"}
@@ -2684,7 +2684,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           <div className="flex items-start gap-2 px-4 py-2.5 bg-warn-surface border-b border-warn-line">
             <span className="text-sm leading-none mt-0.5" aria-hidden>⚠</span>
             <p className="text-xs font-semibold text-warn-ink">
-              El cronograma está congelado mientras revisás esta propuesta.
+              El cronograma está congelado mientras revisas esta propuesta.
               <span className="font-normal"> Aceptá o descartá los cambios para volver a editarlo.</span>
             </p>
           </div>
@@ -3023,7 +3023,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             })}
 
             <p className="text-xs text-fg-muted pt-3 border-t border-line leading-relaxed">
-              Marcá cada tarea como hecha, suspendida o pendiente. Una fase se cierra solo cuando todas sus tareas quedan resueltas. El agente propone; vos confirmás.
+              Marca cada tarea como hecha, suspendida o pendiente. Una fase se cierra solo cuando todas sus tareas quedan resueltas. El agente propone; tú confirmas.
             </p>
           </div>
         )}
@@ -3520,7 +3520,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
               <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              {suggestingReason ? "Analizando los cambios…" : "Sugerencia automática según los cambios — editá si querés."}
+              {suggestingReason ? "Analizando los cambios…" : "Sugerencia automática según los cambios — edita si quieres."}
             </div>
             <textarea
               value={publishReasonText}

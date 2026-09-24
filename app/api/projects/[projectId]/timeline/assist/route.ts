@@ -93,7 +93,7 @@ export async function POST(
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
   if (instruction.length < 4) {
-    return NextResponse.json({ error: "Escribí qué querés cambiar del cronograma." }, { status: 400 });
+    return NextResponse.json({ error: "Escribe qué quieres cambiar del cronograma." }, { status: 400 });
   }
 
   // Cronograma actual (con ids) — el contexto que la IA edita.
@@ -147,7 +147,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "TIMELINE_ALREADY_GENERATED",
-          message: "El cronograma ya está generado. Cambiarlo con IA queda para CSL o Super Admin — vos podés seguir ajustándolo a mano.",
+          message: "El cronograma ya está generado. Cambiarlo con IA queda para CSL o Super Admin — tú puedes seguir ajustándolo a mano.",
         },
         { status: 403 },
       );

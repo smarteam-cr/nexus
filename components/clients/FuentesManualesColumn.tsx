@@ -36,7 +36,7 @@ export default function FuentesManualesColumn({
   tope,
   excedeElTope,
   vacio = "Sin notas ni transcripciones a mano.",
-  placeholder = "Pegá el transcript o resumen…",
+  placeholder = "Pega el transcript o resumen…",
   placeholderTitulo = "Título (ej. Zoom con el cliente)",
   etiquetaAgregar = "Agregar fuente",
 }: {

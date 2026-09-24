@@ -253,8 +253,9 @@ export async function regenerateTimelineProgress(
          fuente que usa la atribución— para que el rótulo no se separe de ella. Cacheado (TTL 10
          min): cambian poco y se editan en /sessions/categories sin deploy. */
       getSessionCategories(),
-      /* Las notas del «Contexto del cronograma». Las REUNIONES no hace falta cargarlas aparte:
-         `getPastSessionsForProject` ya respeta la X del CSE (whereAlimentaCronograma). */
+      /* Las notas del «Contexto del cronograma». Las REUNIONES del avance NO son las elegidas ahí:
+         son las 12 más recientes del proyecto (`getPastSessionsForProject`), a propósito — ver
+         lib/sessions/project-sessions.ts. */
       cargarNotasDelCronograma(projectId),
     ]);
     const dominiosPropios = buildInternalDomainsSet(categorias);

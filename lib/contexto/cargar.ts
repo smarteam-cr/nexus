@@ -41,6 +41,8 @@ import {
  *   · handoff-curado         — SOLO bloques confirmados por el CSE (onlyConfirmed)
  *   · requerimiento-tecnico  — el canvas Desarrollo si existe ("" si no)
  *   · instrucciones          — la entry `__doc` del canvas del cronograma (X1); "" sin brief
+ *   · reuniones / notas      — lo que el CSE eligió en el «Contexto del cronograma» (abajo);
+ *                              se omiten si no hay nada
  *
  * Sin fechas en el contexto a propósito: el agente no las calcula.
  */
@@ -142,9 +144,12 @@ export async function cargarContextoDelAssist(
  * EL MATERIAL DEL «CONTEXTO DEL CRONOGRAMA» (2026-09-23): las reuniones que el CSE ELIGIÓ y las
  * notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
  *
- * Lo leen el detalle (tareas y cuáles son reuniones) y «Pedir cambio con IA» (el único que puede
- * tocar fases). Devuelve `""` en lo que no haya: los armadores omiten la fuente vacía y el prompt
- * de un proyecto sin material queda byte-idéntico al de antes.
+ * Lo leen el detalle (tareas, su semana, cuáles son reuniones y quién las hace — NO fases ni
+ * duraciones: las tiene prohibidas) y «Pedir cambio con IA» (que sí puede tocar fases, pero solo
+ * lo que pide la instrucción). ⚠ NO lo leen el agente de handoff —que arma y re-propone las fases—
+ * ni el chat del cronograma, que cambia fases con operaciones sin ningún modelo editor detrás
+ * (validación del 2026-09-23). Devuelve `""` en lo que no haya: los armadores omiten la fuente
+ * vacía y el prompt de un proyecto sin material queda byte-idéntico al de antes.
  *
  * ── CÓMO SE REPARTE EL ESPACIO ───────────────────────────────────────────────
  * Entran SOLO las reuniones elegidas (la regla de `session-feeding.ts`), pero igual pueden no caber

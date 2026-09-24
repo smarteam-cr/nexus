@@ -154,7 +154,7 @@ export function motivoParaNoElegirDelCalendario(i: {
 }): string | null {
   if (i.perteneceAlCliente) return null;
   if (i.sinDuenio) return i.motivoNoAdoptable;
-  return `Es de «${i.nombreDelDuenio ?? "otro cliente"}»: no puede alimentar el cronograma de otro cliente. Si está mal asignada, corregila en Sesiones.`;
+  return `Es de «${i.nombreDelDuenio ?? "otro cliente"}»: no puede alimentar el cronograma de otro cliente. Si está mal asignada, corrígela en Sesiones.`;
 }
 
 /** Qué hace la puerta de «Agregar» con una sesión. Ver `decidirAlAgregar`. */

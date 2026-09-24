@@ -2047,11 +2047,11 @@ model SessionProject {
   // venta/handoff/kickoff o Ventas en la sala): null = seguí la regla; true = forzá
   // incluir (agregada a mano desde el pop-up); false = forzá excluir (la "X" del panel).
   handoffOverride Boolean?
-  // El mismo afinado, pero para el CRONOGRAMA (2026-09-23, «Contexto del cronograma»): null =
-  // sigue la regla (toda reunión del proyecto alimenta); true = agregada a mano; false = la X del
-  // CSE (sale SOLO del cronograma: sigue siendo del proyecto para handoff, Entrega y minutas).
-  // La regla vive en lib/timeline/session-feeding.ts. ⚠ Lockea el link igual que handoffOverride
-  // (session-project-locks.ts): sin eso el clasificador borra la X del CSE en silencio.
+  // La ELECCIÓN del CSE para el CRONOGRAMA (2026-09-23, «Contexto del cronograma»): true = la
+  // eligió y alimenta al cronograma; null = no elegida (la X escribe null); false = la X de la
+  // primera versión, vale igual que null. Sacarla no la saca del proyecto, del handoff, de la
+  // Entrega ni de las minutas. La regla vive en lib/timeline/session-feeding.ts. ⚠ true lockea el
+  // link contra el clasificador (session-project-locks.ts); null y false no.
   timelineOverride Boolean?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador

@@ -1870,10 +1870,10 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   }
 
   // ── 10b'. Input del agente de Detalle de Cronograma (D.1) ────────────────────
-  // Como el Kickoff, NO consume fuentes crudas: su input es el cronograma
-  // EXISTENTE (fases con ids — debe referenciarlas, no crearlas) + el handoff
-  // curado para que las tareas sean del proyecto real. Sin fechas en el
-  // contexto: el agente no las calcula.
+  // Su input es el cronograma EXISTENTE (fases con ids — debe referenciarlas, no
+  // crearlas) + el handoff curado para que las tareas sean del proyecto real + (desde
+  // el 2026-09-23) las reuniones que el CSE eligió y sus notas del «Contexto del
+  // cronograma», rotuladas. Sin fechas en el contexto: el agente no las calcula.
   //
   // CTX (2026-08-08): primera pieza migrada al contexto NOMBRADO (lib/contexto). Las
   // fuentes (cronograma-actual / handoff-curado / requerimiento-tecnico), el brief `__doc`
