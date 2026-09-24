@@ -26,7 +26,16 @@
  *    debajo del trabajo ya empezado;
  *  · un nombre vacío, largo, repetido, que entra o sale de «Desarrollo / Integración», o que
  *    cruza la frontera (fechas, plazos, montos, la cita de la fuente: lo lee el cliente);
+ *  · renombrar una fase de «Desarrollo / Integración» con un motivo que no cita la reunión, la
+ *    nota ni las instrucciones que lo piden (`motivoCitaUnaFuente`);
+ *  · ⛔ CORRER LO TERMINADO O LO EN CURSO, O CAER EN EL PASADO (revisión del paso A2): una fase
+ *    nueva o movida que arrancaría en una semana que ya pasó, una fase desfijada que quedaría en
+ *    el pasado, y cualquier cambio que le cambie el inicio a una fase terminada o en curso (una
+ *    fase nueva delante de ella, un «mover», alargar la que va antes). Se simula el plan con ESE
+ *    cambio solo —el CSE los acepta de a uno— con la misma fórmula del Gantt (`computePhaseRanges`);
  *  · más de MAX_CAMBIOS cambios o más de MAX_FASES_NUEVAS fases nuevas.
+ * Una fase nueva o un «mover» que se descartan por su nombre o por el calendario dejan además una
+ * observación: lo ACORDADO no se pierde en silencio, lo decide el CSE a mano.
  * Y NUNCA: quitar fases, mover el arranque del proyecto, escribir tareas o notas de fase. La
  * propuesta sale sin `tasks` (si no, deja de ser «solo estructura» y el Gantt se congela), sin
  * ancla, y con las notas y el tipo de cada fase tal cual estaban.
@@ -49,6 +58,7 @@ import {
 } from "./proposal-deltas";
 import { fugaEn, normalizarParaFrontera, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { diaEnCostaRica } from "@/lib/contexto/material-cronograma";
+import { extraerJson } from "@/lib/cs/brief-citas";
 
 /** Cuántos cambios se leen de una respuesta. Más que esto no es un ajuste: es otro cronograma. */
 export const MAX_CAMBIOS = 12;
@@ -144,11 +154,14 @@ export function construirPropuestaDeEstructura(input: {
 
   const { cambios: todos, observaciones: obsCrudas } = leerCrudo(input.crudo);
   const descartados: string[] = [];
-  const observaciones = obsCrudas
+  const observacionesDelModelo = obsCrudas
     .map(texto)
     .filter(Boolean)
     .slice(0, MAX_OBSERVACIONES)
     .map((o) => recortar(o, MAX_LARGO_OBSERVACION));
+  /* Las que suma el armador: una fase acordada que no entra (por su nombre o por el calendario).
+     Se juntan con las del modelo AL FINAL, con el tope de MAX_OBSERVACIONES para las dos. */
+  const observacionesDelArmador: string[] = [];
 
   if (todos.length > MAX_CAMBIOS) {
     descartados.push(`Llegaron ${todos.length} cambios: solo se leen los primeros ${MAX_CAMBIOS}.`);
@@ -175,6 +188,51 @@ export function construirPropuestaDeEstructura(input: {
     if (f.status === "DONE") return "la fase está terminada";
     if (f.status === "SUSPENDED") return "la fase está suspendida";
     return null;
+  };
+
+  /* ── EL PLAN SIMULADO: qué pasaría con UN cambio (revisión del paso A2) ──────────────────
+     El filtro de «una semana que ya pasó» miraba solo `inicioSemana`, e `intocable` solo la fase
+     que cambia. Una fase nueva detrás de la Semana 0 caía en la semana 2 y corría a las fases
+     terminadas y en curso que venían después; un «mover» igual; desfijar una fase la dejaba
+     arrancar en el pasado. Cada cambio se prueba SOLO contra el plan de hoy, porque el CSE los
+     acepta de a uno. `id: null` = la fase nueva que se está probando. */
+  type Simulada = { id: string | null; durationWeeks: number; startWeek: number | null };
+  const planDeHoy: Simulada[] = fases.map((f) => ({ id: f.id, durationWeeks: f.durationWeeks, startWeek: f.startWeek ?? null }));
+  const conCambio = (id: string, c: { durationWeeks?: number; startWeek?: number | null }): Simulada[] =>
+    planDeHoy.map((s) =>
+      s.id === id
+        ? {
+            ...s,
+            durationWeeks: c.durationWeeks ?? s.durationWeeks,
+            startWeek: c.startWeek !== undefined ? c.startWeek : s.startWeek,
+          }
+        : s,
+    );
+  /** El inicio (semana del proyecto desde 0) de la fase `cual` en un plan simulado. */
+  const inicioEn = (sim: Simulada[], cual: string | null): number => {
+    const i = sim.findIndex((s) => s.id === cual);
+    return i < 0 ? -1 : computePhaseRanges(sim)[i].start;
+  };
+  /** La fase terminada o en curso que el plan simulado CORRE (le cambia el inicio), o null. */
+  const loQueCorre = (sim: Simulada[]): string | null => {
+    const rangos = computePhaseRanges(sim);
+    for (const [i, s] of sim.entries()) {
+      const f = s.id ? porId.get(s.id) : undefined;
+      if (!f || (f.status !== "DONE" && f.status !== "IN_PROGRESS")) continue;
+      if (rangos[i].start !== inicioActual.get(f.id)) {
+        return `correría ${nombreDe(f.id)}, que ya está ${f.status === "DONE" ? "terminada" : "en curso"}`;
+      }
+    }
+    return null;
+  };
+  /** «caería en la semana N, que ya pasó», o null (sin ancla o sin `ahora` no se mira). */
+  const caeEnElPasado = (inicio: number): string | null =>
+    semanaDeHoy !== null && inicio >= 0 && inicio < semanaDeHoy ? `caería en la semana ${inicio + 1}, que ya pasó` : null;
+  /** Lo mismo para una fase que YA existe, solo si el cambio le mueve el inicio: la que se queda
+   *  donde estaba no «va» a ninguna semana (en un proyecto atrasado, su semana ya pasó igual). */
+  const laLlevaAlPasado = (sim: Simulada[], id: string): string | null => {
+    const inicio = inicioEn(sim, id);
+    return inicio === inicioActual.get(id) ? null : caeEnElPasado(inicio);
   };
 
   const ajustes = new Map<string, Ajuste>();
@@ -247,11 +305,16 @@ export function construirPropuestaDeEstructura(input: {
       if (c.name !== undefined) {
         const nombre = typeof c.name === "string" ? sanitizeTaskTitle(c.name) : "";
         if (normalizarParaFrontera(nombre) !== normalizarParaFrontera(f.name) || !nombre) {
+          /* ⛔ Una fase de «Desarrollo / Integración» se renombra solo si el motivo CITA de dónde sale
+             el pedido (prueba A3: el control la renombró 3 de 3 veces con otro nombre de Desarrollo /
+             Integración, que la regla de «entra o sale» no frena). */
           const problema =
             problemaDelNombre(nombre, f.name) ??
             (isDevIntegrationPhaseName(nombre) !== isDevIntegrationPhaseName(f.name)
               ? "el nombre entra o sale de «Desarrollo / Integración» (cambia qué tareas lleva la fase)"
-              : null);
+              : isDevIntegrationPhaseName(f.name) && !motivoCitaUnaFuente(motivo)
+                ? "renombrar una fase de «Desarrollo / Integración» pide un motivo que cite la reunión, la nota o las instrucciones que lo piden"
+                : null);
           if (problema) descartados.push(`${donde}: ${problema}.`);
           else {
             ajuste.name = nombre;
@@ -265,6 +328,26 @@ export function construirPropuestaDeEstructura(input: {
           descartados.push(`${donde}: las sesiones tienen que ser un entero de 1 a 50.`);
         } else if (c.sessionCount !== f.sessionCount) {
           ajuste.sessionCount = c.sessionCount;
+        }
+      }
+
+      /* El calendario: el inicio nuevo no cae en el pasado (desfijar deja la fase detrás de la
+         anterior, que puede ser una semana que ya pasó) y ningún cambio de tiempo corre lo
+         terminado o lo en curso. Se prueba primero el inicio y después la duración, así uno que
+         no sirve no se lleva al otro. */
+      if (ajuste.startWeek !== undefined) {
+        const sim = conCambio(id, { startWeek: ajuste.startWeek });
+        const choque = laLlevaAlPasado(sim, id) ?? loQueCorre(sim);
+        if (choque) {
+          descartados.push(`${donde}: con ese inicio ${choque}.`);
+          delete ajuste.startWeek;
+        }
+      }
+      if (ajuste.durationWeeks !== undefined) {
+        const choque = loQueCorre(conCambio(id, { durationWeeks: ajuste.durationWeeks, startWeek: ajuste.startWeek }));
+        if (choque) {
+          descartados.push(`${donde}: con ${ajuste.durationWeeks} semanas ${choque}.`);
+          delete ajuste.durationWeeks;
         }
       }
 
@@ -303,7 +386,7 @@ export function construirPropuestaDeEstructura(input: {
         descartados.push(`${donde}: ${problema}.`);
         /* Una fase ACORDADA no se pierde en silencio por su nombre: el CSE la ve y decide. */
         if (nombre) {
-          observaciones.push(
+          observacionesDelArmador.push(
             recortar(
               `Se sugirió sumar la fase «${nombre}» después de ${nombreDe(despuesDe)}, pero ${problema}: si ` +
                 `corresponde, agrégala a mano con otro nombre.`,
@@ -311,6 +394,25 @@ export function construirPropuestaDeEstructura(input: {
             ),
           );
         }
+        continue;
+      }
+      // El calendario: la fase nueva no arranca en el pasado ni corre lo terminado o lo en curso.
+      const iAncla = planDeHoy.findIndex((s) => s.id === despuesDe);
+      const conLaNueva: Simulada[] = [
+        ...planDeHoy.slice(0, iAncla + 1),
+        { id: null, durationWeeks: c.durationWeeks, startWeek: null },
+        ...planDeHoy.slice(iAncla + 1),
+      ];
+      const choque = caeEnElPasado(inicioEn(conLaNueva, null)) ?? loQueCorre(conLaNueva);
+      if (choque) {
+        descartados.push(`${donde}: ${choque}.`);
+        observacionesDelArmador.push(
+          recortar(
+            `Se sugirió sumar la fase «${nombre}» después de ${nombreDe(despuesDe)}, pero ${choque}: decide ` +
+              `tú dónde va.`,
+            MAX_LARGO_OBSERVACION,
+          ),
+        );
         continue;
       }
       nombresTomados.add(normalizarParaFrontera(nombre));
@@ -401,6 +503,22 @@ export function construirPropuestaDeEstructura(input: {
       descartados.push(`mover ${nombreDe(id)}: ya está después de ${nombreDe(m.despuesDe)}.`);
       continue;
     }
+    /* El calendario, con los «mover» ya aceptados: van JUNTOS en un solo reordenamiento. La fase
+       movida no arranca en el pasado, y nada terminado ni en curso se corre. */
+    const porIdSim = new Map(planDeHoy.map((s) => [s.id, s]));
+    const reordenado = sin.map((x) => porIdSim.get(x)!);
+    const choque = laLlevaAlPasado(reordenado, id) ?? loQueCorre(reordenado);
+    if (choque) {
+      descartados.push(`mover ${nombreDe(id)}: ${choque}.`);
+      observacionesDelArmador.push(
+        recortar(
+          `Se sugirió mover ${nombreDe(id)} después de ${nombreDe(m.despuesDe)}, pero ${choque}: decide tú si ` +
+            `se mueve.`,
+          MAX_LARGO_OBSERVACION,
+        ),
+      );
+      continue;
+    }
     orden.splice(0, orden.length, ...sin);
     anotarMotivo(id, m.motivo);
   }
@@ -412,6 +530,15 @@ export function construirPropuestaDeEstructura(input: {
     phases.push(m ? { ...p, motivo: m } : p);
     for (const n of nuevas.filter((x) => x.despuesDe === id)) phases.push(n.fase);
   }
+
+  /* UN solo tope de observaciones, al final (revisión del paso A2): antes se recortaban las del
+     modelo y cada fase descartada sumaba otra encima (5 + 2 = 7). Las del armador van siempre —son
+     lo acordado que no entró y el CSE lo tiene que decidir a mano— y las del modelo llenan el
+     resto, en su orden. */
+  const observaciones = [
+    ...observacionesDelModelo.slice(0, Math.max(0, MAX_OBSERVACIONES - observacionesDelArmador.length)),
+    ...observacionesDelArmador.slice(0, MAX_OBSERVACIONES),
+  ];
 
   const propuesta: ProposalLike = {
     anchorStartDate: null,
@@ -445,6 +572,123 @@ function semanaDelProyecto(anchorISO: string | null, ahora: number | null): numb
   return Math.floor((diaEnCostaRica(ahora) - ancla) / (7 * DIA_MS));
 }
 
+/**
+ * ¿El motivo CITA de dónde sale el pedido? Una reunión (por la palabra, un kick-off o una fecha
+ * como «23 sep»: el prompt pide citar el título y la fecha), una nota o las instrucciones del CSE.
+ * Es un piso, no un juez: «el nombre describe mejor el trabajo» no cita nada y no alcanza para
+ * renombrar una fase de «Desarrollo / Integración». Que las instrucciones EXCLUYAN un tema no es
+ * motivo para renombrar (lo dice el prompt); eso el armador no lo puede leer.
+ */
+export function motivoCitaUnaFuente(motivo: string): boolean {
+  const n = normalizarParaFrontera(motivo);
+  return (
+    /\b(notas?|reunion(es)?|instrucciones|kick ?off|kickoff)\b/.test(n) ||
+    /\b\d{1,2} (de )?(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\b/.test(n) ||
+    /\b\d{4} \d{1,2} \d{1,2}\b/.test(n)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── LEER LA RESPUESTA DEL MODELO ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * La respuesta del revisor, leída sin romperse por lo que la rodea (revisión del paso A3). El
+ * prompt pide «sin markdown», y aun así las 6 respuestas CON cambios de la prueba en vivo vinieron
+ * envueltas en ```json … ```. La ruta leía con `/\{[\s\S]*\}/` —de la primera `{` a la ÚLTIMA `}`—:
+ * una prosa después del JSON con una llave, o una llave de más al cerrar, daba ESTRUCTURA_FALLO.
+ *
+ * Ahora se sacan los cercos ``` y se prueba cada `{` como inicio del primer objeto BALANCEADO
+ * (respetando comillas y escapes: `extraerJson`, de lib/cs/brief-citas.ts). Gana el primero que
+ * parsea y TIENE FORMA de respuesta (`cambios`, `observaciones` o el envoltorio `estructura`): un
+ * objeto de adentro —un cambio suelto de un JSON roto— no pasa por la respuesta, porque «sin
+ * cambios» y «no se pudo leer» son dos avisos distintos para el CSE. null = ilegible.
+ */
+export function leerRespuestaDeEstructura(texto: string): Record<string, unknown> | null {
+  const limpio = texto.replace(/```[a-zA-Z]*/g, " ");
+  for (let i = limpio.indexOf("{"); i >= 0; i = limpio.indexOf("{", i + 1)) {
+    const candidato = extraerJson(limpio.slice(i));
+    if (!candidato) continue;
+    let valor: unknown;
+    try {
+      valor = JSON.parse(candidato);
+    } catch {
+      continue;
+    }
+    if (esObjeto(valor) && ("cambios" in valor || "observaciones" in valor || "estructura" in valor)) return valor;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── EL PLAZO TOTAL CONTRA EL PLAN: SIEMPRE EN LA DIRECCIÓN CORRECTA ─────────────
+// ─────────────────────────────────────────────────────────────────────────────
+/*
+ * Decisión de Elías: un plazo total sin detalle por fase («son 12 semanas») no se reparte; solo se
+ * compara el cierre actual contra el acordado, en una observación. La prueba en vivo (A3) mostró que
+ * esa observación podía decir lo contrario de la verdad: con el plan en 15 semanas y 12 acordadas,
+ * las 3 corridas de E3 dijeron «3 semanas de holgura», y otras dos «dentro del plazo». El CSE
+ * recibía una nota interna que TAPABA 3 semanas de exceso. Por eso el prompt obliga a UNA de estas
+ * frases (N = la diferencia en semanas), el calendario del revisor trae el largo del plan en
+ * números (`lineaDelLargoDelPlan`, lib/contexto/estructura-cronograma.ts) y
+ * `revisarDireccionDelPlazo` mide la dirección en la prueba en vivo.
+ */
+export const PLANTILLA_PLAZO_EXCEDIDO = "el plan se pasa N semanas del plazo acordado";
+export const PLANTILLA_PLAZO_CON_MARGEN = "quedan N semanas de margen";
+export const FRASE_PLAZO_JUSTO = "el plan cierra justo en el plazo acordado";
+
+/** La frase exacta para un plan de `semanasDelPlan` contra un plazo de `semanasAcordadas`. */
+export function fraseDelPlazo(semanasDelPlan: number, semanasAcordadas: number): string {
+  const d = Math.abs(semanasDelPlan - semanasAcordadas);
+  const semanas = `${d} ${d === 1 ? "semana" : "semanas"}`;
+  if (semanasDelPlan > semanasAcordadas) return PLANTILLA_PLAZO_EXCEDIDO.replace("N semanas", semanas);
+  if (semanasDelPlan < semanasAcordadas) {
+    return d === 1 ? "queda 1 semana de margen" : PLANTILLA_PLAZO_CON_MARGEN.replace("N semanas", semanas);
+  }
+  return FRASE_PLAZO_JUSTO;
+}
+
+/** Lo que dice lo contrario de la verdad, según hacia dónde va el plan (sobre el texto normalizado). */
+const DICE_QUE_SOBRA = [/\bholgura\b/, /\bmargen\b/, /\bdentro del plazo\b/, /\ba tiempo\b/];
+const DICE_QUE_SE_PASA = [/\bse pasa\b/, /\bexcede\b/, /\bsupera\b/, /\bfuera del plazo\b/, /\bse sale del plazo\b/];
+/** Justo en el plazo: ni sobra ni se pasa (que «llega a tiempo» es cierto). */
+const DICE_QUE_NO_ES_JUSTO = [/\bholgura\b/, /\bmargen\b/, ...DICE_QUE_SE_PASA];
+
+/**
+ * ¿Las observaciones comparan el plan contra un plazo total EN LA DIRECCIÓN CORRECTA? Pura, para la
+ * prueba en vivo del revisor. Pide que alguna observación sobre el plazo (la que dice «plazo» o
+ * «M semanas») traiga `fraseDelPlazo(semanasDelPlan, semanasAcordadas)` y que ninguna diga lo
+ * contrario («holgura», «margen» o «dentro del plazo» si el plan se pasa; «se pasa», «excede» o
+ * «supera» si sobra).
+ */
+export function revisarDireccionDelPlazo(
+  observaciones: readonly string[],
+  semanasDelPlan: number,
+  semanasAcordadas: number,
+): { ok: boolean; motivo: string } {
+  const delPlazo = observaciones.filter((o) => {
+    const n = normalizarParaFrontera(o);
+    return /\bplazo\b/.test(n) || new RegExp(`\\b${semanasAcordadas} semanas\\b`).test(n);
+  });
+  const esperada = fraseDelPlazo(semanasDelPlan, semanasAcordadas);
+  if (delPlazo.length === 0) return { ok: false, motivo: "ninguna observación compara el plan con el plazo acordado" };
+  if (!delPlazo.some((o) => normalizarParaFrontera(o).includes(normalizarParaFrontera(esperada)))) {
+    return { ok: false, motivo: `ninguna observación dice «${esperada}»` };
+  }
+  const contrarias =
+    semanasDelPlan > semanasAcordadas
+      ? DICE_QUE_SOBRA
+      : semanasDelPlan < semanasAcordadas
+        ? DICE_QUE_SE_PASA
+        : DICE_QUE_NO_ES_JUSTO;
+  const alReves = delPlazo.find((o) => {
+    const n = normalizarParaFrontera(o);
+    return contrarias.some((r) => r.test(n));
+  });
+  if (alReves) return { ok: false, motivo: `una observación dice lo contrario: «${alReves}»` };
+  return { ok: true, motivo: "" };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LA MÁQUINA DE PASOS DE LA PANTALLA ───────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -458,6 +702,13 @@ export type PasoTrasEstructura =
   | { paso: "tareas"; aviso?: string }
   | { paso: "detener"; mensaje: string }
   | { paso: "esperar" };
+
+/**
+ * Cuánto espera la pantalla antes de decir «Paso 1 de 2 · Revisando fases y tiempos…». Sin
+ * material la ruta vuelve en unos cientos de milisegundos (sin modelo); con material llama al
+ * modelo (mediana de 10 s en la prueba A3). Antes, el cartel salía en todo «Regenerar todo».
+ */
+export const ESPERA_ANTES_DE_DECIR_PASO_1_MS = 1200;
 
 export const AVISO_SIN_CAMBIOS = "Tus reuniones y notas no piden cambios de fases ni de tiempos.";
 export const AVISO_PROPUESTA_PENDIENTE =

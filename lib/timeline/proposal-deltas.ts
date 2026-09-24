@@ -17,7 +17,8 @@
  *                      naturaleza (no se puede reordenar "media lista"), así que va como un
  *                      único delta que se acepta o descarta entero.
  *  - SET_ANCHOR      → la propuesta trae fecha de inicio y el cronograma no tenía (derivada del
- *                      kickoff); sin esto el cambio se aplicaba invisible.
+ *                      kickoff); sin esto el cambio se aplicaba invisible. ⛔ Solo la del
+ *                      handoff: la de las reuniones (`origen: "contexto"`) nunca mueve el arranque.
  *
  * Las TAREAS nunca producen deltas acá: la propuesta del handoff no las trae (`tasks` ausente =
  * "no tocar", contrato del PUT) — por eso el viejo contador "−70 tareas" mentía.
@@ -235,7 +236,11 @@ export function computeProposalDeltas(
     });
   }
 
-  const toAnchor = day(proposal.anchorStartDate);
+  /* ⛔ LA IA NUNCA MUEVE EL ARRANQUE (decisión de Elías): la propuesta de las reuniones no da un
+     SET_ANCHOR aunque traiga ancla. El armador ya nunca la escribe; esto es la segunda línea, acá
+     y no en la ruta, para que la pantalla y `apply-items` vean los mismos deltas: si solo el
+     servidor lo ignorara, el Gantt mostraría una sugerencia de arranque que nunca se aplica. */
+  const toAnchor = origenDePropuesta(proposal) === "contexto" ? null : day(proposal.anchorStartDate);
   const fromAnchor = day(currentAnchor);
   if (toAnchor && toAnchor !== fromAnchor) {
     out.push({ key: "anchor", kind: "SET_ANCHOR", from: fromAnchor, to: toAnchor });

@@ -18,11 +18,14 @@ import {
   calendarioDeEstructura,
   fotoDeEstructura,
   fuentesDeEstructura,
+  largoDelPlanEnSemanas,
+  lineaDelLargoDelPlan,
   renderEstructuraDelCronograma,
   tieneMaterialDelCronograma,
 } from "./estructura-cronograma";
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
+import { ESPERA_ANTES_DE_DECIR_PASO_1_MS, fraseDelPlazo } from "@/lib/timeline/propuesta-de-estructura";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
 const h = vi.hoisted(() => {
@@ -144,6 +147,30 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(cal).toContain("Sin fecha de arranque");
     expect(cal).toContain("[id: arq]");
     expect(cal).not.toMatch(/\d{1,2} (ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b/);
+  });
+
+  it("⭐ cierra con el LARGO DEL PLAN en números y la cuenta del plazo hecha (revisión del paso A3)", () => {
+    /* Con el plan en 15 semanas y un plazo de 12, el revisor escribió «3 semanas de holgura» en las 3
+       corridas de E3: tenía el número y leyó al revés la resta. La edición que la pone en rojo:
+       sacar la línea de `calendarioDeEstructura`, contar la suma de las duraciones en vez del
+       calendario (con fases en paralelo es más), o escribir las frases a mano. */
+    // S0 1 · Arquitectura 2–4 · Configuración FIJADA en 5–8: 8 semanas (la suma daría 8 también;
+    // con Configuración fijada en la 3 se solapa y el largo es 6, no 8).
+    for (const cal of [
+      calendarioDeEstructura(FOTO, AHORA),
+      calendarioDeEstructura({ ...FOTO, anchorStartDate: null }, AHORA),
+    ]) {
+      expect(cal.slice(cal.lastIndexOf("\n") + 1)).toBe(lineaDelLargoDelPlan(FOTO));
+      expect(cal).toContain("⭐ LARGO DEL PLAN HOY (sin los cambios que propongas): 8 semanas, de la semana 1 a la semana 8 del proyecto.");
+    }
+    const linea = lineaDelLargoDelPlan(FOTO);
+    // La cuenta sale de las MISMAS frases que el prompt obliga y que mide la prueba en vivo.
+    expect(linea.replace("8 − M", "3")).toContain(fraseDelPlazo(8, 5));
+    expect(linea.replace("M − 8", "4")).toContain(fraseDelPlazo(8, 12));
+    const enParalelo = { ...FOTO, phases: FOTO.phases.map((f) => (f.id === "conf" ? { ...f, startWeek: 2 } : f)) };
+    expect(largoDelPlanEnSemanas(enParalelo)).toBe(6);
+    expect(lineaDelLargoDelPlan(enParalelo)).toContain(": 6 semanas, de la semana 1 a la semana 6 del proyecto.");
+    expect(lineaDelLargoDelPlan({ ...FOTO, phases: [] })).toBe("");
   });
 });
 
@@ -289,6 +316,25 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     expect(src).toContain("huellas: huellasDeFrontera(contexto.materialInterno");
   });
 
+  it("sin material no responde 409 aunque haya una propuesta pendiente (revisión del paso A2)", () => {
+    /* Con una propuesta del handoff pendiente y nada elegido, «Generar cronograma» avisaba «Hay
+       cambios de fases sin revisar… para que la IA revise las fases» aunque la IA nunca iba a
+       revisar ninguna. La edición que la pone en rojo: volver a mirar la propuesta pendiente antes
+       que el material. */
+    const iSinMaterial = src.indexOf('estado: "sin-material"');
+    const i409 = src.indexOf("tl.pendingProposal !== null");
+    expect(i409, "no se encontró el 409").toBeGreaterThan(-1);
+    expect(i409, "el 409 volvió a ir antes del chequeo del material").toBeGreaterThan(iSinMaterial);
+    expect(i409, "el 409 tiene que ir antes de la corrida y del modelo").toBeLessThan(src.indexOf("prisma.agentRun.create("));
+  });
+
+  it("lee la respuesta con `leerRespuestaDeEstructura`, no de la primera a la última llave (revisión del paso A3)", () => {
+    /* La edición que la pone en rojo: volver a `texto.match(/\{[\s\S]*\}/)` + JSON.parse. */
+    expect(src).toContain("leerRespuestaDeEstructura(texto)");
+    expect(src).not.toContain("JSON.parse(");
+    expect(src).not.toContain(".match(/\\{[\\s\\S]*\\}/)");
+  });
+
   it("⛔ la ruta no arma bloques de contexto a mano", () => {
     /* Mismo molde que el assist (asistente-cronograma.test.ts): un bloque `=== ALGO ===` escrito en
        la ruta es una fuente fuera del trinquete. Van en lib/contexto/estructura-cronograma.ts. */
@@ -362,5 +408,39 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(src).toContain("origen={origenDePropuesta(proposal)}");
     expect(src).toContain("observaciones={proposal?.observaciones}");
     expect(src).toContain("<PasoDeTareasPendiente");
+  });
+
+  it("el auto-descarte de una propuesta de las reuniones sigue la cadena SALTANDO el paso 1 (revisión del paso A2)", () => {
+    /* Sin `saltarEstructura`, el closure viejo todavía ve `proposal?.origen === "contexto"`, vuelve
+       con «Primero decide…» y la cadena queda colgada. La edición que la pone en rojo: quitar el
+       flag de la continuación de `discardProposal`, o leer el origen después de limpiar. */
+    const descartar = tramo("const discardProposal = async (", "const resolveProposalItems = async (");
+    expect(descartar.length).toBeGreaterThan(300);
+    const iOrigen = descartar.indexOf("origenDePropuesta(proposal)");
+    expect(iOrigen, "el origen no se lee").toBeGreaterThan(-1);
+    expect(iOrigen, "el origen se lee después de limpiar la propuesta").toBeLessThan(descartar.indexOf("setProposal(null)"));
+    expect(descartar).toContain("pasoTrasResolver(");
+    expect(descartar, "la continuación del auto-descarte no salta el paso 1").toMatch(
+      /pedirPropuestaDeDetalle\(modoDeLaCadena, \{ saltarEstructura: true \}\)/,
+    );
+  });
+
+  it("«Paso 1 de 2 · Revisando…» se dice solo si la revisión tarda: sin material no aparece (revisión del paso A2)", () => {
+    /* Sin material la ruta vuelve al toque, y el cartel del paso 1 salía un instante en todo
+       «Regenerar todo», diciendo que revisaba reuniones que nadie eligió. La edición que la pone en
+       rojo: mostrar el cartel o el rótulo apenas arranca la espera (sin `paso1Visible`). */
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    expect(pedir).toContain("window.setTimeout(() => setPaso1Visible(true), ESPERA_ANTES_DE_DECIR_PASO_1_MS)");
+    const iFetch = pedir.indexOf("/timeline/estructura");
+    const iApagar = pedir.indexOf("window.clearTimeout(verPaso1)");
+    expect(iApagar, "el temporizador no se apaga al volver la ruta").toBeGreaterThan(iFetch);
+    expect(pedir.indexOf("setPaso1Visible(false)")).toBeGreaterThan(iFetch);
+    // Los DOS lugares que dicen «Paso 1 de 2» dependen de `paso1Visible`.
+    const iModal = src.indexOf("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas…");
+    expect(iModal).toBeGreaterThan(-1);
+    expect(src.slice(Math.max(0, iModal - 500), iModal)).toContain("revisandoEstructura && paso1Visible && (");
+    const ocupado = tramo("const ocupado", "activo: false");
+    expect(ocupado).toMatch(/revisandoEstructura\s*\?\s*paso1Visible\s*\?\s*\{\s*activo: true,\s*rotulo: "Paso 1 de 2/);
+    expect(ESPERA_ANTES_DE_DECIR_PASO_1_MS).toBeGreaterThanOrEqual(800);
   });
 });

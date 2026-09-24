@@ -318,13 +318,15 @@ export function inicioDeFaseEnLaFoto(
 }
 
 /**
- * Parche IN-PLACE del baseline ACTIVO tras regenerar UNA fase (proyecto publicado): reemplaza SOLO
- * las tareas de esa fase en el snapshot por las tareas VIVAS actuales (ids preservados + ids nuevos),
- * con sus fechas planeadas recomputadas contra el anchor y la estructura congelados (inicioDeFaseEnLaFoto).
- * Las demás fases quedan intactas y NO se crea versión nueva → el portafolio (que compara por id
- * contra el baseline activo, summary.ts) no reporta falso scope-creep ni pierde atrasos de la fase
- * regenerada. No-op si el timeline no tiene baseline activo (proyecto sin publicar). Corre DENTRO de
- * la $transaction de la regeneración (tx).
+ * Parche IN-PLACE del baseline ACTIVO tras regenerar UNA fase (proyecto publicado): re-sincroniza
+ * SOLO las tareas de esa fase que YA ESTABAN en la foto (resincronizarFotoDeFase, por id): cada una
+ * toma la semana y el orden de su tarea viva, con las fechas planeadas recomputadas contra el anchor
+ * y la estructura congelados (inicioDeFaseEnLaFoto); la que se borró en vivo conserva lo prometido.
+ * ⛔ Las vivas con un id que la foto no tiene NO entran: son alcance nuevo, y summary.ts las cuenta
+ * justamente por no estar en la foto. Las demás fases quedan intactas y NO se crea versión nueva →
+ * el portafolio (que compara por id contra el baseline activo, summary.ts) no reporta falso
+ * scope-creep ni pierde atrasos de la fase regenerada. No-op si el timeline no tiene baseline
+ * activo (proyecto sin publicar). Corre DENTRO de la $transaction de la regeneración (tx).
  */
 export async function patchBaselinePhaseTasks(
   tx: Prisma.TransactionClient,

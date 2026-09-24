@@ -655,4 +655,49 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
     expect(respuesta, "la respuesta dejó de decir de dónde salió la propuesta").toMatch(/\borigen\s*[,:]/);
     expect(ruta, "`pendientes` dejó de salir de lo que queda vivo").toContain("pendientes = remaining.length");
   });
+
+  it("⛔ la propuesta de las reuniones nunca da SET_ANCHOR, aunque traiga ancla (la IA no mueve el arranque)", () => {
+    /* Revisión del paso A1: la única defensa era que el armador nunca escribiera un ancla, y
+       apply-items aplicaba el SET_ANCHOR de una propuesta «contexto» con la etiqueta «sugerencia del
+       handoff». Ahora `computeProposalDeltas` no lo da, y como la pantalla y apply-items usan la
+       misma función, ninguno de los dos lo ve. La edición que la pone en rojo: volver a leer
+       `proposal.anchorStartDate` sin mirar el origen. */
+    const p: ProposalLike = {
+      anchorStartDate: "2026-10-05T00:00:00.000Z",
+      origen: "contexto",
+      phases: [{ ...a }, { ...b }],
+    };
+    expect(computeProposalDeltas([a, b], p, "2026-09-14")).toEqual([]);
+    // Nada queda colgado: sin delta, la reescritura no deja una sugerencia viva que nadie ve.
+    expect(computeProposalDeltas([a, b], reescribirPropuestaPendiente(p, [a, b], new Set()), "2026-09-14")).toEqual([]);
+    // La del handoff sigue proponiendo su arranque, igual que antes.
+    const { origen: _sinOrigen, ...delHandoff } = p;
+    void _sinOrigen;
+    expect(computeProposalDeltas([a, b], delHandoff, "2026-09-14").map((d) => d.key)).toEqual(["anchor"]);
+  });
+
+  it("⛔ la auditoría cuenta las descartadas como la respuesta, y anotar el desenlace no reaviva la corrida", () => {
+    /* Revisión del paso A1. (1) La razón del TimelineChange contaba `discardKeys.size` —con las
+       claves stale— y la respuesta y el desenlace, solo las vivas: la misma resolución daba dos
+       números. (2) `updatedAt` es @updatedAt: el update del desenlace subía la corrida al tope del
+       feed (/api/agent-runs ordena por él) y el CSE recibía otro «Listo» de algo terminado hace
+       horas. La edición que la pone en rojo: volver a `discardKeys.size`, o sacar el `updatedAt`
+       explícito del update. */
+    const ruta = fs
+      .readFileSync(
+        path.join(process.cwd(), "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"),
+        "utf8",
+      )
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    expect(ruta, "la auditoría volvió a contar las claves stale").not.toContain("${discardKeys.size} descartadas");
+    expect(ruta).toContain("${accepted.length} aceptadas, ${descartadas} descartadas");
+    const iDesenlace = ruta.indexOf('desenlace: "resuelta"');
+    expect(iDesenlace, "no se encontró el desenlace").toBeGreaterThan(-1);
+    const iUpdate = ruta.lastIndexOf("prisma.agentRun.update(", iDesenlace);
+    const update = ruta.slice(iUpdate, ruta.indexOf("});", iDesenlace));
+    expect(update, "el desenlace vuelve a mover `updatedAt`").toContain("updatedAt: run.updatedAt");
+    const lectura = ruta.slice(ruta.lastIndexOf("prisma.agentRun.findUnique(", iUpdate), iUpdate);
+    expect(lectura).toContain("updatedAt: true");
+  });
 });

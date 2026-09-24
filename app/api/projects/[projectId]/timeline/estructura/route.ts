@@ -12,6 +12,7 @@
  *
  * Respuestas (la pantalla decide con `pasoTrasEstructura`, lib/timeline/propuesta-de-estructura.ts):
  *   200 { estado: "sin-material" }                        — nada elegido: ni corrida ni modelo
+ *                                                           (aunque haya una propuesta pendiente)
  *   200 { estado: "sin-cambios", observaciones }          — el material no pide cambios
  *   200 { estado: "propuesta", proposal, runId, observaciones }
  *   400 NO_TIMELINE · 403 (sin permiso de IA) · 409 PROPUESTA_PENDIENTE · 500 ESTRUCTURA_FALLO
@@ -34,7 +35,7 @@ import {
   tieneMaterialDelCronograma,
 } from "@/lib/contexto/estructura-cronograma";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
-import { construirPropuestaDeEstructura } from "@/lib/timeline/propuesta-de-estructura";
+import { construirPropuestaDeEstructura, leerRespuestaDeEstructura } from "@/lib/timeline/propuesta-de-estructura";
 
 /** Cierra la corrida sin poder romper la respuesta que el CSE está esperando. */
 async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Record<string, unknown>): Promise<void> {
@@ -85,18 +86,21 @@ export async function POST(
   if (!tl || tl.phases.length === 0) {
     return NextResponse.json({ error: "NO_TIMELINE", message: "No hay cronograma para revisar." }, { status: 400 });
   }
-  // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
-  if (tl.pendingProposal !== null) return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
 
   // RBAC — la MISMA vara que el paso 2 (el gate del detalle) y que «Pedir cambio con IA».
   const iaGate = await guardIaDelCronograma(tl.id);
   if (iaGate instanceof NextResponse) return iaGate;
 
   const contexto = await cargarContextoDeEstructura(projectId, fotoDeEstructura(tl));
-  /* ⭐ SIN MATERIAL, NADA: ni corrida, ni modelo. «Regenerar todo» sigue exactamente como antes. */
+  /* ⭐ SIN MATERIAL, NADA: ni corrida, ni modelo. «Regenerar todo» sigue exactamente como antes.
+     Va ANTES del 409 (revisión del paso A2): con una propuesta del handoff pendiente y nada
+     elegido, «Generar cronograma» avisaba «Hay cambios de fases sin revisar… para que la IA revise
+     las fases» aunque la IA nunca iba a revisar ninguna. Sin material, sigue con las tareas. */
   if (!tieneMaterialDelCronograma(contexto.fuentes)) {
     return NextResponse.json({ estado: "sin-material" });
   }
+  // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
+  if (tl.pendingProposal !== null) return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
 
   const userMessage = renderEstructuraDelCronograma({
     instrucciones: contexto.instrucciones,
@@ -147,9 +151,10 @@ export async function POST(
     );
     const bloque = msg.content.find((b) => b.type === "text");
     const texto = bloque && bloque.type === "text" ? bloque.text.trim() : "";
-    const json = texto.match(/\{[\s\S]*\}/);
-    if (!json) throw new Error("respuesta ilegible del modelo");
-    crudo = JSON.parse(json[0]);
+    /* Tolera el ```json … ``` (el modelo lo pone aunque se le pida que no), la prosa alrededor y una
+       llave de más al cerrar: ver `leerRespuestaDeEstructura`. */
+    crudo = leerRespuestaDeEstructura(texto);
+    if (crudo === null) throw new Error("respuesta ilegible del modelo");
   } catch (e) {
     console.error("[timeline/estructura] Claude error:", e instanceof Error ? e.message : e);
     await cerrarCorrida(run.id, "ERROR", { error: e instanceof Error ? e.message : "error desconocido" });

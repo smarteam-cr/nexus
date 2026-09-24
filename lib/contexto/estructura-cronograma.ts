@@ -10,7 +10,9 @@
  *                                 fase que cambia), estado y tareas hechas (para no tocar lo
  *                                 terminado ni acortar trabajo empezado) y «Hoy» (para no mover
  *                                 nada al pasado). Semanas del proyecto desde 1, como el Gantt.
- *                                 Rotulado como la BASE de los cambios, no «solo lectura».
+ *                                 Rotulado como la BASE de los cambios, no «solo lectura», y
+ *                                 cerrado con el LARGO DEL PLAN en números (para comparar un
+ *                                 plazo total sin leer al revés la resta).
  *   · handoff-curado            — solo bloques confirmados, con un respaldo PROPIO sin handoff.
  *   · reuniones / notas         — lo que el CSE eligió, con los rótulos del motor del material.
  *   · instrucciones             — el brief `__doc` del canvas del cronograma (manda sobre todo).
@@ -29,6 +31,8 @@ import {
   calendarioDelCronograma,
   type FotoDelCronograma,
 } from "./material-cronograma";
+import { timelineSpan } from "@/lib/timeline/weeks";
+import { PLANTILLA_PLAZO_CON_MARGEN, PLANTILLA_PLAZO_EXCEDIDO } from "@/lib/timeline/propuesta-de-estructura";
 
 /** El respaldo sin handoff. ⚠ No es SIN_HANDOFF_CONFIRMADO: este paso SIEMPRE tiene material. */
 export const SIN_HANDOFF_PARA_ESTRUCTURA = "(Sin handoff confirmado: apóyate solo en lo que eligió el CSE.)";
@@ -74,10 +78,41 @@ export function fotoDeEstructura(tl: {
 /**
  * EL calendario, con las tres opciones —ids, estado y «Hoy»— y rotulado como la BASE de los cambios
  * (`comoBaseDeCambios`): el de los demás agentes dice «solo lectura… úsalo SOLO para ubicar», y
- * este paso propone cambios justamente sobre él. "" sin fases.
+ * este paso propone cambios justamente sobre él. Al final, el LARGO DEL PLAN en números
+ * (`lineaDelLargoDelPlan`). "" sin fases.
  */
 export function calendarioDeEstructura(foto: FotoDelCronograma | null | undefined, ahora: number): string {
-  return calendarioDelCronograma(foto, ahora, { conIds: true, conEstado: true, conHoy: true, comoBaseDeCambios: true });
+  const cal = calendarioDelCronograma(foto, ahora, { conIds: true, conEstado: true, conHoy: true, comoBaseDeCambios: true });
+  const largo = lineaDelLargoDelPlan(foto);
+  return cal && largo ? `${cal}\n${largo}` : cal;
+}
+
+/**
+ * Cuántas semanas de calendario ocupa el plan HOY (la última semana ocupada; con fases en
+ * paralelo es menos que la suma de las duraciones), con la misma fórmula del Gantt. null sin fases.
+ */
+export function largoDelPlanEnSemanas(foto: FotoDelCronograma | null | undefined): number | null {
+  const fases = foto?.phases ?? [];
+  if (fases.length === 0) return null;
+  return timelineSpan(fases.map((f) => ({ durationWeeks: f.durationWeeks, startWeek: f.startWeek ?? null })));
+}
+
+/**
+ * ⭐ EL LARGO DEL PLAN, EN NÚMEROS, Y HACIA DÓNDE VA UN PLAZO (revisión del paso A3). Con el plan en
+ * 15 semanas y un plazo de 12, el revisor escribió «3 semanas de holgura» en las 3 corridas de E3:
+ * tenía el número y leyó al revés la resta. Esta línea le da la cifra a comparar y la cuenta hecha
+ * con las MISMAS frases que el prompt obliga a usar (lib/timeline/propuesta-de-estructura.ts). ""
+ * sin fases.
+ */
+export function lineaDelLargoDelPlan(foto: FotoDelCronograma | null | undefined): string {
+  const n = largoDelPlanEnSemanas(foto);
+  if (!n) return "";
+  return (
+    `⭐ LARGO DEL PLAN HOY (sin los cambios que propongas): ${n} ${n === 1 ? "semana" : "semanas"}, de la ` +
+    `semana 1 a la semana ${n} del proyecto. Un plazo total acordado de M semanas se compara contra ${n}: si ` +
+    `M es menor que ${n}, ${PLANTILLA_PLAZO_EXCEDIDO.replace("N", `${n} − M`)}; si M es mayor que ${n}, ` +
+    `${PLANTILLA_PLAZO_CON_MARGEN.replace("N", `M − ${n}`)}.`
+  );
 }
 
 export interface CrudasDeEstructura {

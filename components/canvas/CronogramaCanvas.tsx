@@ -68,7 +68,12 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
 import { computeProposalDeltas, origenDePropuesta, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
-import { pasoTrasEstructura, pasoTrasResolver, type RespuestaDeEstructura } from "@/lib/timeline/propuesta-de-estructura";
+import {
+  ESPERA_ANTES_DE_DECIR_PASO_1_MS,
+  pasoTrasEstructura,
+  pasoTrasResolver,
+  type RespuestaDeEstructura,
+} from "@/lib/timeline/propuesta-de-estructura";
 import PasoDeTareasPendiente from "./PasoDeTareasPendiente";
 import { impactoDeUnDelta, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
@@ -380,6 +385,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        el paso 2, nunca se dispara solo para quien no lo pidió.
      · `observacionesPaso1` / `pasoDos` — lo que el acordeón del paso 2 muestra arriba. */
   const [revisandoEstructura, setRevisandoEstructura] = useState(false);
+  /* «Paso 1 de 2 · Revisando fases y tiempos…» se dice recién cuando la revisión tarda de verdad
+     (revisión del paso A2): sin material la ruta vuelve en un instante y el cartel aparecía igual
+     en todo «Regenerar todo», diciendo que revisaba reuniones que nadie eligió. Hasta entonces la
+     espera bloquea igual, con un rótulo neutro. */
+  const [paso1Visible, setPaso1Visible] = useState(false);
   const pasoTareasRef = useRef<"primera" | "regen" | null>(null);
   const [encadenado, setEncadenado] = useState(false);
   const fijarPasoTareas = (m: "primera" | "regen" | null) => {
@@ -487,13 +497,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         detalle: "Suele tardar entre dos y cuatro minutos.",
       }
     : revisandoEstructura
-      ? {
-          /* El paso 1 de «Regenerar todo»: si el Gantt quedara editable, lo que el CSE tipee en el
-             medio lo compararía después una propuesta calculada contra la foto anterior. */
-          activo: true,
-          rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas",
-          detalle: "Suele tardar menos de un minuto.",
-        }
+      ? /* El paso 1 de «Regenerar todo»: si el Gantt quedara editable, lo que el CSE tipee en el
+           medio lo compararía después una propuesta calculada contra la foto anterior. Bloquea
+           desde el primer instante; el rótulo del paso 1 sale solo con `paso1Visible`. */
+        paso1Visible
+        ? {
+            activo: true,
+            rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas",
+            detalle: "Suele tardar menos de un minuto.",
+          }
+        : { activo: true, rotulo: "Preparando la propuesta del cronograma", detalle: "Un momento." }
     : generating
         ? {
           activo: true,
@@ -1402,6 +1415,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       setPasoDos(false);
       setObservacionesPaso1([]);
       setRevisandoEstructura(true);
+      const verPaso1 = window.setTimeout(() => setPaso1Visible(true), ESPERA_ANTES_DE_DECIR_PASO_1_MS);
       let respuesta: RespuestaDeEstructura;
       let estructura: { proposal?: unknown; runId?: unknown; observaciones?: unknown } = {};
       try {
@@ -1412,6 +1426,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       } catch {
         respuesta = { red: true };
       }
+      window.clearTimeout(verPaso1);
+      setPaso1Visible(false);
       setRevisandoEstructura(false);
       const paso = pasoTrasEstructura(respuesta);
       if (paso.paso === "detener") {
@@ -2745,7 +2761,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                   onClick={() => void pedirPropuestaDeDetalle("primera")}
                   disabled={generating}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
-                  title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff"
+                  title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff. Si elegiste reuniones o notas, primero revisa fases y tiempos con ellas (tú decides cada cambio)"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   Generar cronograma
@@ -3645,8 +3661,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           </div>
         </Modal>
       )}
-      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. */}
-      {revisandoEstructura && (
+      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. Sin material la
+          ruta vuelve antes de que `paso1Visible` se encienda: el cartel no aparece. */}
+      {revisandoEstructura && paso1Visible && (
         <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
           <div className="flex items-center gap-3 py-1">
             <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />

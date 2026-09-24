@@ -281,6 +281,10 @@ export async function POST(
     });
   }, { maxWait: 10000, timeout: 30000 });
 
+  /* Las descartadas que CUENTAN: solo claves vivas. `discardKeys` trae también las stale, y la
+     auditoría, la respuesta y el desenlace de la corrida tienen que decir el mismo número. */
+  const descartadas = [...discardKeys].filter((k) => byKey.has(k)).length;
+
   // Audit best-effort POST-tx (mismo patrón que phases/[phaseId]/apply): solo si se aplicó algo
   // (aceptar O fusionar — las dos mutan el cronograma real).
   if (accepted.length > 0) {
@@ -313,7 +317,7 @@ export async function POST(
         data: {
           timelineId: tl.id,
           reason:
-            `${origen === "contexto" ? "Sugerencias de las reuniones y notas elegidas" : "Sugerencias del handoff"} aceptadas por ítem (${accepted.length} aceptadas, ${discardKeys.size} descartadas).` +
+            `${origen === "contexto" ? "Sugerencias de las reuniones y notas elegidas" : "Sugerencias del handoff"} aceptadas por ítem (${accepted.length} aceptadas, ${descartadas} descartadas).` +
             (corrimiento ? ` ${corrimiento}` : ""),
           kind: "AI_ASSIST",
           instruction: null,
@@ -350,6 +354,8 @@ export async function POST(
               {
                 entityType: "TIMELINE",
                 entityId: tl.id,
+                /* Siempre del handoff: la propuesta de las reuniones no da SET_ANCHOR ni aunque
+                   traiga ancla (`computeProposalDeltas`), así que `anchorAceptado` es solo suyo. */
                 label: "Fecha de arranque (sugerencia del handoff aceptada)",
                 action: "ANCHOR_CHANGED",
                 before: { anchorStartDate: anchorAntes, projectedEnd: projectedEnd(anchorAntes, fasesAntes).label },
@@ -364,19 +370,21 @@ export async function POST(
     }
   }
 
-  const descartadas = [...discardKeys].filter((k) => byKey.has(k)).length;
-
   /* ── EL DESENLACE DE LA PROPUESTA DE LAS REUNIONES (medición, best-effort) ──────────────────
      Solo la de origen «contexto»: `pendingProposalRunId` de la del handoff es la corrida del
      handoff, que no se toca. Suma lo aceptado y lo descartado en CADA resolución (una por una o
      «Aceptar/Descartar todo») y marca `resuelta` cuando no queda ninguna: con solo la última
      llamada, resolver de a una contaría únicamente la última. Se fusiona con lo que la corrida ya
-     tenía (lo que propuso el modelo). Nunca rompe la respuesta: el cronograma ya se escribió. */
+     tenía (lo que propuso el modelo). Nunca rompe la respuesta: el cronograma ya se escribió.
+     ⛔ `updatedAt` se escribe con el valor que YA tenía (revisión del paso A1): es @updatedAt, y el
+     feed de corridas (/api/agent-runs) ordena por él y avisa de lo que no vio en la sesión. Anotar
+     el desenlace al día siguiente subía la corrida al tope y el CSE recibía otro «Listo: Fases y
+     tiempos…» de algo que había terminado hacía horas. Prisma respeta un valor explícito. */
   if (origen === "contexto" && tl.pendingProposalRunId) {
     try {
       const run = await prisma.agentRun.findUnique({
         where: { id: tl.pendingProposalRunId },
-        select: { output: true },
+        select: { output: true, updatedAt: true },
       });
       let previo: Record<string, unknown> = {};
       try {
@@ -397,6 +405,7 @@ export async function POST(
               ? { desenlace: "resuelta", resueltaEn: now.toISOString(), resueltaPor: guard.user.email ?? null }
               : {}),
           }),
+          ...(run ? { updatedAt: run.updatedAt } : {}),
         },
       });
     } catch (e) {

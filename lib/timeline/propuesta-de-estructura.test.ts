@@ -16,10 +16,18 @@ import {
   AVISO_FALLO_DE_ESTRUCTURA,
   AVISO_PROPUESTA_PENDIENTE,
   AVISO_SIN_CAMBIOS,
+  FRASE_PLAZO_JUSTO,
   MAX_FASES_NUEVAS,
+  MAX_OBSERVACIONES,
+  PLANTILLA_PLAZO_CON_MARGEN,
+  PLANTILLA_PLAZO_EXCEDIDO,
   construirPropuestaDeEstructura,
+  fraseDelPlazo,
+  leerRespuestaDeEstructura,
+  motivoCitaUnaFuente,
   pasoTrasEstructura,
   pasoTrasResolver,
+  revisarDireccionDelPlazo,
   type FaseParaEstructura,
 } from "./propuesta-de-estructura";
 import { computeProposalDeltas } from "./proposal-deltas";
@@ -44,6 +52,13 @@ const fase = (over: Partial<FaseParaEstructura> & { id: string; order: number })
 /**
  * Semanas del proyecto (0-based): S0 0 · A 1-3 · B 4-7 · C 8-9 · D 10-11 · E 12 · F 13-14.
  * La Semana 0 está PENDIENTE a propósito: así la bloquea su propio filtro, no el de «terminada».
+ *
+ * ⚠ E (Go-live, TERMINADA) va FIJADA en su semana 12, la misma que ya calculaba el plan: ninguna
+ * semana cambia. Motivo (revisión del paso A2, 2026-09-24): el armador ahora descarta todo cambio
+ * que le corra el inicio a una fase terminada o en curso, y una terminada que arranca «tras la
+ * anterior» detrás de fases pendientes la corría CUALQUIER alargue o fase nueva de más arriba —
+ * estos casos prueban otra cosa (los filtros de siempre). Ese caso, el de la terminada sin fijar,
+ * tiene su propia fila en «#17 · lo terminado y lo en curso no se corren».
  */
 const FASES: FaseParaEstructura[] = [
   fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1 }),
@@ -63,7 +78,7 @@ const FASES: FaseParaEstructura[] = [
   fase({ id: "b", order: 2, name: "Configuración y migración", durationWeeks: 4 }),
   fase({ id: "c", order: 3, name: "Capacitación", activityType: "ADOPCION" }),
   fase({ id: "d", order: 4, name: "Pruebas y ajustes" }),
-  fase({ id: "e", order: 5, name: "Go-live", durationWeeks: 1, status: "DONE" }),
+  fase({ id: "e", order: 5, name: "Go-live", durationWeeks: 1, status: "DONE", startWeek: 12 }),
   fase({ id: "f", order: 6, name: "Soporte posterior", status: "SUSPENDED" }),
 ];
 
@@ -294,6 +309,295 @@ describe("⛔ la frontera sobre los NOMBRES de fase (los lee el cliente al acept
   });
 });
 
+/**
+ * UN PROYECTO EN MARCHA, como los de verdad. Ancla lunes 14-sep; semanas del proyecto (0-based):
+ * S0 0 (terminada) · A 1-3 (terminada) · B 4-7 (en curso) · C 8-9 · D FIJADA en 11-12 · E 13.
+ * «Hoy» = lunes 30-nov = semana 11 del proyecto (0-based): C ya quedó atrás en el calendario.
+ */
+const EN_MARCHA: FaseParaEstructura[] = [
+  fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1, status: "DONE" }),
+  fase({ id: "a", order: 1, name: "Arquitectura y planificación", durationWeeks: 3, status: "DONE" }),
+  fase({
+    id: "b",
+    order: 2,
+    name: "Configuración y migración",
+    durationWeeks: 4,
+    status: "IN_PROGRESS",
+    tasks: [
+      { status: "DONE", weekIndex: 0 },
+      { status: "IN_PROGRESS", weekIndex: 1 },
+    ],
+  }),
+  fase({ id: "c", order: 3, name: "Capacitación" }),
+  fase({ id: "d", order: 4, name: "Pruebas y ajustes", startWeek: 11 }),
+  fase({ id: "e", order: 5, name: "Go-live", durationWeeks: 1 }),
+];
+const ANCLA_EN_MARCHA = "2026-09-14T00:00:00.000Z";
+const HOY_EN_MARCHA = Date.UTC(2026, 10, 30, 18); // lunes 30 nov 2026, mediodía en Costa Rica
+
+describe("#17 · lo terminado y lo en curso no se corren, y nada cae en el pasado", () => {
+  /* Revisión del paso A2: solo `inicioSemana` pasaba por el filtro de «semana que ya pasó», e
+     `intocable` miraba solo la fase que cambia. Un «agregar» o un «mover» detrás de la Semana 0
+     caían en la semana 2 y corrían a las fases terminadas y en curso; desfijar una fase la dejaba
+     arrancar en el pasado. Cada fila se pone en rojo si se borra SU filtro en el armador. */
+  const conHoy = { fases: EN_MARCHA, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_EN_MARCHA };
+  const sinHoy = { fases: EN_MARCHA, anchorISO: ANCLA_EN_MARCHA };
+  const armarCon = (base: Omit<Parameters<typeof construirPropuestaDeEstructura>[0], "crudo">, cambios: unknown[]) =>
+    construirPropuestaDeEstructura({ ...base, crudo: { cambios, observaciones: [] } });
+
+  const CASOS: Array<[string, Omit<Parameters<typeof construirPropuestaDeEstructura>[0], "crudo">, unknown, RegExp]> = [
+    [
+      "una fase nueva detrás de la Semana 0 caería en el pasado",
+      conHoy,
+      { tipo: "agregar", despuesDeFaseId: "s0", name: "Piloto con socios", durationWeeks: 1, motivo: "M" },
+      /agregar «Piloto con socios»: caería en la semana 2, que ya pasó/,
+    ],
+    [
+      "mover una fase detrás de la Semana 0 la llevaría al pasado",
+      conHoy,
+      { tipo: "mover", faseId: "c", despuesDeFaseId: "s0", motivo: "M" },
+      /mover «Capacitación»: caería en la semana 2, que ya pasó/,
+    ],
+    [
+      "desfijar una fase la haría arrancar en una semana que ya pasó",
+      conHoy,
+      { tipo: "ajustar", faseId: "d", inicioSemana: null, motivo: "M" },
+      /ajustar «Pruebas y ajustes»: con ese inicio caería en la semana 11, que ya pasó/,
+    ],
+    [
+      "sin «hoy»: una fase nueva delante de la que está en curso la correría",
+      sinHoy,
+      { tipo: "agregar", despuesDeFaseId: "a", name: "Piloto con socios", durationWeeks: 1, motivo: "M" },
+      /correría «Configuración y migración», que ya está en curso/,
+    ],
+    [
+      "sin «hoy»: mover una fase delante de la que está en curso la correría",
+      sinHoy,
+      { tipo: "mover", faseId: "c", despuesDeFaseId: "a", motivo: "M" },
+      /mover «Capacitación»: correría «Configuración y migración», que ya está en curso/,
+    ],
+    [
+      "alargar una pendiente que tiene detrás una terminada sin fijar la correría",
+      { fases: FASES.map((f) => (f.id === "e" ? { ...f, startWeek: null } : f)), anchorISO: null },
+      { tipo: "ajustar", faseId: "b", durationWeeks: 5, motivo: "M" },
+      /ajustar «Configuración y migración»: con 5 semanas correría «Go-live», que ya está terminada/,
+    ],
+  ];
+
+  it.each(CASOS)("descarta: %s", (_nombre, base, cambio, motivo) => {
+    const r = armarCon(base, [cambio]);
+    expect(r.propuesta, JSON.stringify(r.deltas)).toBeNull();
+    expect(r.descartados.join(" | ")).toMatch(motivo);
+  });
+
+  it("lo ACORDADO que no entra por el calendario no se pierde: queda en las observaciones", () => {
+    const agregar = armarCon(conHoy, [CASOS[0][2]]);
+    expect(agregar.observaciones.join(" ")).toMatch(/Se sugirió sumar la fase «Piloto con socios».*ya pasó: decide tú dónde va/);
+    const mover = armarCon(conHoy, [CASOS[1][2]]);
+    expect(mover.observaciones.join(" ")).toMatch(/Se sugirió mover «Capacitación».*ya pasó: decide tú si se mueve/);
+  });
+
+  it("lo que va hacia adelante pasa: una fase nueva después de la fijada y alargar una pendiente", () => {
+    /* La edición que la pone en rojo: un filtro que descarte de más (por ejemplo, mirar el orden en
+       vez del inicio y rechazar todo lo que va detrás de una fase fijada). */
+    const r = armarCon(conHoy, [
+      { tipo: "agregar", despuesDeFaseId: "d", name: "Piloto con socios", durationWeeks: 1, motivo: "M" },
+      { tipo: "ajustar", faseId: "c", durationWeeks: 3, motivo: "M" },
+    ]);
+    expect(r.descartados).toEqual([]);
+    expect(r.deltas.map((d) => d.key).sort()).toEqual(["add:5", "mod:c"]);
+  });
+
+  it("sin «hoy», desfijar la fase fijada entra: no corre nada terminado ni en curso", () => {
+    /* El filtro del pasado necesita «hoy»; sin él, solo cuenta lo que se corre. */
+    const r = armarCon(sinHoy, [{ tipo: "ajustar", faseId: "d", inicioSemana: null, motivo: "M" }]);
+    expect(r.descartados).toEqual([]);
+    expect(r.deltas).toHaveLength(1);
+  });
+});
+
+describe("(d) · renombrar una fase de «Desarrollo / Integración» pide citar de dónde sale", () => {
+  /* Prueba A3, ronda r2: el control renombró «Desarrollo SDK / Integración» a «Desarrollo e
+     integración» 3 de 3 veces. El armador no lo frenaba: los dos nombres son de Desarrollo /
+     Integración, así que la regla de «entra o sale» no aplica. Ahora el motivo tiene que CITAR una
+     reunión, una nota o las instrucciones. La edición que la pone en rojo: borrar la condición de
+     `motivoCitaUnaFuente` en el armador. */
+  const CON_DEV: FaseParaEstructura[] = [
+    ...FASES,
+    fase({ id: "dev", order: 7, name: "Desarrollo SDK / Integración", durationWeeks: 3, startWeek: 4 }),
+  ];
+  const renombrar = (motivo: string) =>
+    construirPropuestaDeEstructura({
+      fases: CON_DEV,
+      anchorISO: null,
+      crudo: { cambios: [{ tipo: "ajustar", faseId: "dev", name: "Desarrollo e integración", motivo }] },
+    });
+
+  it("con un motivo que no cita nada, no se renombra", () => {
+    const r = renombrar("El nombre describe mejor el trabajo de la fase.");
+    expect(r.propuesta).toBeNull();
+    expect(r.descartados.join(" ")).toMatch(/pide un motivo que cite la reunión, la nota o las instrucciones/);
+  });
+
+  it("citando la reunión, la nota o las instrucciones, sí", () => {
+    for (const motivo of [
+      "Kick off - CAV (23 sep 2026): se acordó llamarla «Desarrollo e integración».",
+      "Nota 'Acuerdo con el cliente': el cliente pidió ese nombre.",
+      "Instrucciones del CSE: llamar a la fase «Desarrollo e integración».",
+    ]) {
+      expect(renombrar(motivo).deltas, motivo).toHaveLength(1);
+    }
+  });
+
+  it("es solo para las de Desarrollo / Integración: otra fase se renombra con el motivo que traiga", () => {
+    const r = armar([{ tipo: "ajustar", faseId: "d", name: "Pruebas con usuarios", motivo: "M" }]);
+    expect(r.deltas).toHaveLength(1);
+  });
+
+  it("qué cuenta como citar una fuente", () => {
+    for (const s of [
+      "Nota 'Acuerdo con el cliente (23 sep)', cargada el 23 sep 2026",
+      "Reunión «CAV: Definiendo cronograma»",
+      "Según las instrucciones del CSE",
+      "Kick off - CAV",
+      "CAV: Definiendo cronograma (21 sep 2026): se sumó un journey",
+      "Acordado el 2026-09-23",
+    ]) {
+      expect(motivoCitaUnaFuente(s), s).toBe(true);
+    }
+    for (const s of ["El nombre describe mejor el trabajo", "Para que el cliente lo entienda", "M", ""]) {
+      expect(motivoCitaUnaFuente(s), s).toBe(false);
+    }
+  });
+});
+
+describe("#20 · un solo tope de observaciones, y lo acordado que no entró va siempre", () => {
+  it(`${MAX_OBSERVACIONES} del modelo + 2 fases descartadas por su nombre = ${MAX_OBSERVACIONES}, con las 2`, () => {
+    /* Revisión del paso A2: el corte se aplicaba a las del modelo y cada fase descartada sumaba otra
+       encima (5 + 2 = 7). La edición que la pone en rojo: volver a empujar a la lista ya cortada. */
+    const huellas = huellasDeFrontera(["Se acordó un piloto de una semana con Rafaela Pinzón."]);
+    const delModelo = ["o1", "o2", "o3", "o4", "o5"];
+    const r = construirPropuestaDeEstructura({
+      fases: FASES,
+      anchorISO: null,
+      huellas,
+      crudo: {
+        cambios: [
+          { tipo: "agregar", despuesDeFaseId: "b", name: "Piloto de 1 semana", durationWeeks: 1, motivo: "M" },
+          { tipo: "agregar", despuesDeFaseId: "c", name: "Cierre 31 de diciembre", durationWeeks: 1, motivo: "M" },
+        ],
+        observaciones: delModelo,
+      },
+    });
+    expect(r.observaciones).toHaveLength(MAX_OBSERVACIONES);
+    expect(r.observaciones.slice(0, 3)).toEqual(["o1", "o2", "o3"]);
+    expect(r.observaciones.join(" ")).toContain("«Piloto de 1 semana»");
+    expect(r.observaciones.join(" ")).toContain("«Cierre 31 de diciembre»");
+  });
+});
+
+describe("(a) · la respuesta del modelo se lee aunque venga envuelta", () => {
+  /* Prueba A3: las 6 respuestas CON cambios vinieron en ```json … ```, pese a «sin markdown». La
+     ruta las leía de la primera `{` a la ÚLTIMA `}`: prosa con una llave después, o una llave de
+     más, daban ESTRUCTURA_FALLO. La edición que la pone en rojo: volver a `/\{[\s\S]*\}/`. */
+  const RESPUESTA = '{"cambios":[{"tipo":"ajustar","faseId":"c","durationWeeks":3,"motivo":"Nota del 23 sep"}],"observaciones":["o"]}';
+
+  it("con cerco ```json, con prosa alrededor (con llaves) y con una llave de más", () => {
+    const CASOS: Array<[string, string[]]> = [
+      [RESPUESTA, ["o"]],
+      ["```json\n" + RESPUESTA + "\n```", ["o"]],
+      ["Aquí va la revisión:\n```json\n" + RESPUESTA + "\n```\nNota: el formato {cambios} va arriba.", ["o"]],
+      ["Formato {x: 1}. Respuesta: " + RESPUESTA + " — fin }", ["o"]],
+      ['{"estructura":{"cambios":[],"observaciones":["o"]}}}', ["o"]],
+      ['{"cambios":[],"observaciones":["una } suelta y una { también"]}', ["una } suelta y una { también"]],
+    ];
+    for (const [texto, observaciones] of CASOS) {
+      const r = leerRespuestaDeEstructura(texto);
+      expect(r, texto).not.toBeNull();
+      expect(construirPropuestaDeEstructura({ fases: FASES, crudo: r, anchorISO: null }).observaciones, texto).toEqual(
+        observaciones,
+      );
+    }
+  });
+
+  it("una respuesta real de la prueba A3 (r1-E1, con cerco y en varias líneas) da sus dos cambios", () => {
+    const real = [
+      "```json",
+      "{",
+      '  "cambios": [',
+      '    {"tipo": "ajustar", "faseId": "c", "durationWeeks": 3, "motivo": "Nota \'Acuerdo con el cliente (23 sep)\': más espacio entre sesiones."},',
+      '    {"tipo": "agregar", "despuesDeFaseId": "d", "name": "Piloto de lanzamiento", "durationWeeks": 1, "sessionCount": null, "activityType": "SEGUIMIENTO", "motivo": "Nota \'Acuerdo con el cliente (23 sep)\': piloto de 1 semana."}',
+      "  ],",
+      '  "observaciones": ["La Semana 0 se atrasó 3 días: es una desviación ya ocurrida."]',
+      "}",
+      "```",
+    ].join("\n");
+    const r = construirPropuestaDeEstructura({ fases: FASES, crudo: leerRespuestaDeEstructura(real), anchorISO: null });
+    expect(r.deltas.map((d) => d.key).sort()).toEqual(["add:5", "mod:c"]);
+  });
+
+  it("ilegible = null, y un objeto de ADENTRO de un JSON roto no pasa por la respuesta", () => {
+    /* «Sin cambios» y «no se pudo leer» son dos avisos distintos: un cambio suelto rescatado de un
+       JSON roto se leería como una respuesta sin cambios. */
+    for (const texto of [
+      "",
+      "sin cambios",
+      '{"cambios":[{"tipo":"ajustar","faseId":"c","motivo":"M"}] "observaciones":[]}',
+      '{"cambios":[],"observaciones":["sin cerrar]}',
+    ]) {
+      expect(leerRespuestaDeEstructura(texto), texto).toBeNull();
+    }
+  });
+});
+
+describe("(b) · el plazo total contra el plan, en la dirección correcta", () => {
+  /* Prueba A3: con el plan en 15 semanas y 12 acordadas, las 3 corridas de E3 dijeron «3 semanas de
+     holgura» y otras dos «dentro del plazo». El comparador solo buscaba «12 semanas» y no lo vio. */
+  it("la frase exacta, en las tres direcciones y en singular", () => {
+    expect(fraseDelPlazo(15, 12)).toBe("el plan se pasa 3 semanas del plazo acordado");
+    expect(fraseDelPlazo(13, 12)).toBe("el plan se pasa 1 semana del plazo acordado");
+    expect(fraseDelPlazo(10, 12)).toBe("quedan 2 semanas de margen");
+    expect(fraseDelPlazo(11, 12)).toBe("queda 1 semana de margen");
+    expect(fraseDelPlazo(12, 12)).toBe(FRASE_PLAZO_JUSTO);
+  });
+
+  it("el revisor de la prueba en vivo: marca las observaciones reales que decían lo contrario", () => {
+    const E3 =
+      "El kickoff confirmó 12 semanas de proyecto (reunión 'Kick off - CAV', 23 sep 2026); el calendario actual cierra en " +
+      "la semana 15 (4 ene 2027), lo que da 3 semanas de holgura sobre las 12 acordadas; el CSE debe decidir si ajusta el cierre.";
+    const E1 =
+      "El kickoff del 23 de septiembre confirmó 12 semanas de proyecto; el cierre actual del calendario es la semana 15 " +
+      "(28 dic), lo que está dentro del plazo, pero los cambios propuestos suman semanas adicionales.";
+    // En la dirección correcta pero sin la frase: tampoco alcanza (la frase es lo que se pide).
+    const sinFrase =
+      "El kick-off fijó un plazo de 12 semanas; el cierre planificado actual es semana 15, lo que excede ese plazo.";
+    for (const o of [E3, E1, sinFrase]) expect(revisarDireccionDelPlazo([o], 15, 12).ok, o).toBe(false);
+    expect(revisarDireccionDelPlazo([E3], 15, 12).motivo).toContain("el plan se pasa 3 semanas del plazo acordado");
+  });
+
+  it("acepta la frase correcta y rechaza una contraria al lado", () => {
+    const bien = "El kick-off acordó 12 semanas: el plan se pasa 3 semanas del plazo acordado (hoy dura 15).";
+    expect(revisarDireccionDelPlazo(["Otra cosa.", bien], 15, 12)).toEqual({ ok: true, motivo: "" });
+    expect(revisarDireccionDelPlazo([bien, "Con el plazo de 12 semanas todavía hay holgura."], 15, 12).ok).toBe(false);
+    expect(revisarDireccionDelPlazo(["El plazo es de 12 semanas: quedan 2 semanas de margen."], 10, 12).ok).toBe(true);
+    expect(revisarDireccionDelPlazo(["El plazo es de 12 semanas: el plan se pasa 2 semanas del plazo acordado."], 10, 12).ok).toBe(false);
+    expect(revisarDireccionDelPlazo(["Nada sobre plazos."], 15, 12).ok).toBe(false);
+  });
+
+  it("el prompt obliga a esas frases, desde las mismas constantes", () => {
+    /* La edición que la pone en rojo: volver a «anota el cierre actual contra el plazo acordado» a
+       secas, o escribir las frases a mano en el prompt (dejarían de ser las que mide la prueba). */
+    const P = PROMPT_ESTRUCTURA_CRONOGRAMA;
+    const regla = P.split("\n").find((l) => l.includes("plazo TOTAL")) ?? "";
+    for (const f of [PLANTILLA_PLAZO_EXCEDIDO, PLANTILLA_PLAZO_CON_MARGEN, FRASE_PLAZO_JUSTO]) expect(regla).toContain(`«${f}»`);
+    expect(regla).toContain("LARGO DEL PLAN HOY");
+    expect(regla).toMatch(/nunca digas «holgura», «margen» ni «dentro del plazo»/);
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/agents/estructura-cronograma.ts"), "utf8");
+    expect(src).toContain("${PLANTILLA_PLAZO_EXCEDIDO}");
+    expect(src).toContain("${PLANTILLA_PLAZO_CON_MARGEN}");
+  });
+});
+
 describe("G4 · sin cambios reales no se guarda nada", () => {
   it("un «ajustar» al mismo valor, o cambios: [], dan propuesta null", () => {
     /* La edición que la pone en rojo: devolver la propuesta con 0 deltas. El auto-descarte de la
@@ -433,12 +737,24 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
     expect(P).toMatch(/SIN tiempo propio[^\n]*NO es una fase nueva ni alarga ninguna/);
   });
 
-  it("chocar con las instrucciones del CSE no es motivo para cambiar ni renombrar una fase", () => {
+  it("una EXCLUSIÓN de las instrucciones no es motivo para tocar una fase; que las instrucciones lo PIDAN, sí", () => {
     /* El control renombraba «Desarrollo SDK / Integración» porque el brief dice «nada de
-       integraciones», y el armador no lo frena (el nombre nuevo también es de Desarrollo /
-       Integración). La edición que la pone en rojo: borrar la regla o sacarla de PROHIBIDO. */
+       integraciones». ⚠ ACTUALIZADA en la revisión del paso A3 (2026-09-24), con esta razón: el
+       texto medido decía «Renombrar… sin que una reunión o una nota pida…» y «Cambiar o renombrar
+       una fase porque choca con las instrucciones del CSE», que también frenaba un brief que PIDE
+       un cambio («Capacitación dura 3 semanas») contra la decisión 4 (las instrucciones mandan).
+       Lo que la prueba en vivo midió —la exclusión— sigue prohibido; lo que se abre es el pedido.
+       La edición que la pone en rojo: volver a la frase amplia, sacar las instrucciones de las
+       razones para renombrar, o borrar la regla de la exclusión. */
     const prohibido = P.slice(P.indexOf("PROHIBIDO"), P.indexOf("SEMANAS:"));
-    expect(prohibido).toMatch(/renombrar una fase porque choca con las instrucciones del CSE/);
+    expect(prohibido).toMatch(/renombrar una fase porque su tema choca con una EXCLUSIÓN de las instrucciones del CSE/);
+    expect(prohibido, "volvió la frase amplia: frena también un brief que pide el cambio").not.toMatch(
+      /porque choca con las instrucciones del CSE/,
+    );
+    expect(prohibido).toMatch(/Que las instrucciones PIDAN un cambio de fases o de tiempos sí es motivo/);
+    expect(prohibido).toMatch(
+      /Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto/,
+    );
     expect(prohibido).toMatch(/que el material describa su trabajo con otras palabras no es motivo/);
   });
 });

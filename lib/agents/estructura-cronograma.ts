@@ -22,7 +22,8 @@
  *  2. La IA nunca quita fases ni mueve la fecha de arranque del proyecto: lo avisa en
  *     «observaciones» y lo decide una persona.
  *  3. Un plazo total sin detalle por fase («son 12 semanas») no se reparte: solo se compara el
- *     cierre actual contra el acordado, en «observaciones».
+ *     cierre actual contra el acordado, en «observaciones», y en la dirección correcta: si el plan
+ *     dura más, dice por cuántas semanas SE PASA.
  *  4. El peso de las fuentes es el de todos los agentes del cronograma (`PESO_DE_LAS_FUENTES`):
  *     las instrucciones del CSE mandan, después lo elegido (y entre eso, lo más reciente), después
  *     el handoff.
@@ -40,11 +41,31 @@
  * pero el control empezó a renombrar fases (0 de 3) y se volvió a este texto. Un cambio acá se
  * vuelve a medir con varias corridas por caso: una sola no dice nada.
  *
+ * ── ⚠ CAMBIADO DESPUÉS DE ESA MEDICIÓN, SIN MEDIR TODAVÍA (revisión del paso A3, 2026-09-24) ──
+ *  · El renombre: también vale cuando lo piden las instrucciones del CSE (la decisión 4 dice que
+ *    mandan); lo que no es motivo es que el TEMA de una fase choque con una EXCLUSIÓN de las
+ *    instrucciones («nada de integraciones»). El texto medido prohibía «cambiar o renombrar porque
+ *    choca con las instrucciones», que también frenaba un brief que PIDE un cambio.
+ *  · El plazo total: la observación usa una de tres frases fijas (`fraseDelPlazo`). El texto medido
+ *    decía «anota el cierre actual contra el plazo acordado», y en 5 de 24 corridas la observación
+ *    decía lo contrario de la verdad («3 semanas de holgura» con el plan 3 semanas PASADO). El
+ *    calendario ahora cierra con el «LARGO DEL PLAN HOY» y la cuenta hecha.
+ *  Se miden en vivo en la fase final; `revisarDireccionDelPlazo` mide la dirección del plazo.
+ *  El «sin markdown» sigue sin cumplirse cuando hay cambios (6 de 6 con ```json): la ruta ya no
+ *  depende de eso (`leerRespuestaDeEstructura`).
+ *
  * ⚠ Los tipos de fase se interpolan desde el validador (`ACTIVITY_TYPES`), no se transcriben: un
  * tipo nuevo aparece solo. Los límites, desde el armador que los hace cumplir.
  */
 import { ACTIVITY_TYPES } from "@/lib/timeline/validate";
-import { MAX_CAMBIOS, MAX_FASES_NUEVAS, MAX_OBSERVACIONES } from "@/lib/timeline/propuesta-de-estructura";
+import {
+  FRASE_PLAZO_JUSTO,
+  MAX_CAMBIOS,
+  MAX_FASES_NUEVAS,
+  MAX_OBSERVACIONES,
+  PLANTILLA_PLAZO_CON_MARGEN,
+  PLANTILLA_PLAZO_EXCEDIDO,
+} from "@/lib/timeline/propuesta-de-estructura";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 
 /** Solo el slug del medidor y de la corrida. ⛔ No es el id de una fila de `Agent` (ver arriba). */
@@ -58,7 +79,7 @@ CUÁNDO PROPONER UN CAMBIO:
 - Lo que se suma SIN tiempo propio (un journey más, un piloto o una sesión sin duración, un orden de trabajo dentro de una fase) NO es una fase nueva ni alarga ninguna: lo arma el paso de las tareas. Si hace falta, anótalo en "observaciones".
 - «Sin cambios» es la respuesta normal. Si el material no pide cambiar fases ni tiempos, devuelve "cambios": [].
 - Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase: el plan se mantiene y el atraso queda como desviación. Anótalo en "observaciones".
-- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre») NO se reparte entre las fases: anota en "observaciones" el cierre actual del calendario contra el plazo acordado, y el CSE decide.
+- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre») NO se reparte entre las fases: anota en "observaciones" el cierre actual del calendario contra el plazo acordado, y el CSE decide. Compáralo con el «LARGO DEL PLAN HOY» del calendario (un plazo en fecha, ubícalo antes en su semana del proyecto) y dilo con UNA de estas frases, con N = la diferencia en semanas: si el plan dura MÁS que el plazo, «${PLANTILLA_PLAZO_EXCEDIDO}»; si dura MENOS, «${PLANTILLA_PLAZO_CON_MARGEN}»; si dura lo mismo, «${FRASE_PLAZO_JUSTO}». Si el plan dura más, nunca digas «holgura», «margen» ni «dentro del plazo».
 - ${PESO_DE_LAS_FUENTES}
 
 PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
@@ -66,8 +87,8 @@ PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
 - Mover la FECHA DE ARRANQUE del proyecto.
 - Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off.
 - Cambiar las notas o el tipo de una fase que ya existe.
-- Renombrar una fase sin que una reunión o una nota pida llamarla distinto (que el material describa su trabajo con otras palabras no es motivo), y nunca hacia ni desde un nombre de «Desarrollo / Integración».
-- Cambiar o renombrar una fase porque choca con las instrucciones del CSE (por ejemplo, un tema que excluyen): dilo en "observaciones".
+- Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto (que el material describa su trabajo con otras palabras no es motivo), y nunca hacia ni desde un nombre de «Desarrollo / Integración».
+- Cambiar o renombrar una fase porque su tema choca con una EXCLUSIÓN de las instrucciones del CSE (por ejemplo, «nada de integraciones»): dilo en "observaciones". Que las instrucciones PIDAN un cambio de fases o de tiempos sí es motivo.
 - Mover una fase a una semana que ya pasó, o cambiar el inicio de una fase que ya empezó.
 
 SEMANAS:

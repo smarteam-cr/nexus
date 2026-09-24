@@ -550,8 +550,12 @@ antes de leer el handoff y de llamar al modelo. Su prompt (`lib/agents/estructur
 NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y correría sin celda de
 permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
 `agentId: null` y el `agentSlug` del medidor. El armador (`lib/timeline/propuesta-de-estructura.ts`)
-hace cumplir lo que el prompt prohíbe: quitar fases, mover el arranque, tocar lo terminado y nombres
-de fase que cruzan la frontera. El baseline se parcha con la estructura de la FOTO congelada
+hace cumplir lo que el prompt prohíbe: quitar fases, mover el arranque (tampoco lo da
+`computeProposalDeltas` para una propuesta `origen: "contexto"`), tocar o correr lo terminado y lo
+en curso, llevar una fase a una semana que ya pasó, renombrar una de «Desarrollo / Integración» sin
+citar la fuente y nombres de fase que cruzan la frontera. La respuesta se lee con
+`leerRespuestaDeEstructura` (primer objeto balanceado, sin cercos ni prosa), no con un
+`JSON.parse(texto.match(…))` (regla 3). El baseline se parcha con la estructura de la FOTO congelada
 (`inicioDeFaseEnLaFoto` en `lib/timeline/baseline.ts`): aplicar las tareas sobre una estructura
 nueva no le corre la fecha a la promesa.
 
