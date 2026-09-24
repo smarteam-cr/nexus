@@ -102,6 +102,37 @@ export function medirPropuesta(
     anchorAfterDeltas(anclaActual, propuesta, todas),
     phasesAfterDeltas(actuales, propuesta, todas),
   );
+  return evaluarMagnitud({
+    fasesActuales,
+    fasesRenombradas,
+    fasesConDuracionDistinta,
+    fasesNuevas,
+    reordena,
+    mueveArranque,
+    finAntes,
+    finDespues,
+  });
+}
+
+/** Lo que hace falta contar para decidir si una propuesta es «otro cronograma». */
+export interface ConteoDeLaPropuesta {
+  fasesActuales: number;
+  fasesRenombradas: number;
+  fasesConDuracionDistinta: number;
+  fasesNuevas: number;
+  reordena: boolean;
+  mueveArranque: boolean;
+  finAntes: ProjectedEnd;
+  finDespues: ProjectedEnd;
+}
+
+/**
+ * Los umbrales, aparte de cómo se cuenta (2026-09-24): el borrador del cronograma
+ * (lib/timeline/borrador.ts) cuenta sobre sus propios cambios y tiene que decir «otro cronograma»
+ * con EXACTAMENTE la misma regla que la propuesta vieja. Una sola regla, dos formas de contar.
+ */
+export function evaluarMagnitud(c: ConteoDeLaPropuesta): MagnitudPropuesta {
+  const { fasesActuales, fasesRenombradas, fasesConDuracionDistinta, fasesNuevas, reordena, mueveArranque, finAntes, finDespues } = c;
   const spanAntes = finAntes.spanWeeks;
   const spanDespues = finDespues.spanWeeks;
   const semanasDeCorrimiento = spanDespues - spanAntes;

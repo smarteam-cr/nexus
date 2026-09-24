@@ -58,6 +58,15 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
       "duración sin mirarlas. Mismo agujero que el PUT, en otra puerta. Ahora acomoda y avisa.",
   },
   {
+    /* Entró el 2026-09-24 (E1 del borrador del cronograma): es el escritor de la revisión nueva de
+       la propuesta de fases y heredó de apply-items el acomodo. */
+    archivo: "lib/timeline/escribir-estructura.ts",
+    protege:
+      "Aplica el borrador del cronograma (POST /timeline/borrador/aplicar) dentro de una transacción. " +
+      "Heredó de apply-items el acomodo: si una fase se acorta, las tareas que quedaban más allá pasan " +
+      "a la última semana que existe y el aviso vuelve en la respuesta (`avisos`).",
+  },
+  {
     archivo: "app/api/projects/[projectId]/timeline/detail/apply-all/route.ts",
     protege:
       "NO cambia la duración: la LEE para pasársela a `normalizeCuratedTasks`, que acota las " +
@@ -141,6 +150,16 @@ describe("los dos caminos vivos acomodan de verdad", () => {
     );
     expect(items).toContain("nuevaDuracion < antes.durationWeeks");
     expect(items).toContain("weekIndex: { gte: nuevaDuracion }");
+  });
+
+  it("⛔ y el escritor del borrador también, y lo avisa", () => {
+    /* La edición que la pone en rojo: extraer el escritor de apply-items sin su bloque de
+       reubicación, o dejar de juntar el aviso. */
+    const escritor = leer("lib/timeline/escribir-estructura.ts");
+    expect(escritor).toContain("nuevaDuracion < antes.durationWeeks");
+    expect(escritor).toContain("weekIndex: { gte: nuevaDuracion }");
+    expect(escritor, "el escritor corre las tareas en silencio").toMatch(/avisos\.push\(/);
+    expect(escritor, "el escritor junta el aviso pero no lo devuelve").toMatch(/return \{ avisos, creadas \}/);
   });
 
   it("⚠ y los dos lo AVISAN: el silencio es cómo esto se acumuló", () => {
