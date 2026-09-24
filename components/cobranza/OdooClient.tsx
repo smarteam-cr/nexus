@@ -24,10 +24,8 @@ import { useState } from "react";
 import { Tabs } from "@/components/ui";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
-
-export type Pestana = "que-es" | "emparejar" | "no-cuadra";
-
-export const PESTANAS: readonly Pestana[] = ["que-es", "emparejar", "no-cuadra"];
+// ⚠ Viven en un módulo neutral: la página (servidor) también las lee, y de un "use client" no podría.
+import type { Pestana } from "@/lib/cobranza/odoo/pestanas";
 
 interface CorridaDelEspejo {
   iniciadaEn: string;

@@ -16,7 +16,8 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { prisma } from "@/lib/db/prisma";
 import { ultimaCorrida } from "@/lib/cobranza/odoo/sync";
 import { cargarDiferencias } from "@/lib/cobranza/odoo/servicio";
-import OdooClient, { PESTANAS } from "@/components/cobranza/OdooClient";
+import { pestanaDe } from "@/lib/cobranza/odoo/pestanas";
+import OdooClient from "@/components/cobranza/OdooClient";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function OdooPage({ searchParams }: { searchParams: Promise
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
   const { pestana } = await searchParams;
-  const pestanaInicial = PESTANAS.find((p) => p === pestana);
+  const pestanaInicial = pestanaDe(pestana);
   /* Cerrar a mano una factura soltada es una ESCRITURA: afirma que alguien anuló un documento
      en un sistema que Nexus no puede verificar. La API ya lo exige; acá se evita ofrecer el
      botón a quien va a chocar con un 403. */

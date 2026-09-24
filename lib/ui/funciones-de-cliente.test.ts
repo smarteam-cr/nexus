@@ -19,6 +19,13 @@
  * Solo falla en el navegador, con sesión iniciada, en la pantalla real.
  *
  * Este archivo es el único lugar donde ese error se caza barato.
+ *
+ * ── Y VOLVIÓ POR OTRA PUERTA (2026-09-20 → 24) ──────────────────────────────────
+ * `/cobranza/odoo` cayó al boundary en producción cuatro días: la página hacía
+ * `PESTANAS.find(...)` con una lista importada de OdooClient ("use client"). Del lado del
+ * servidor esa lista no es un arreglo sino una referencia opaca («m.PESTANAS.find is not a
+ * function»). El guard no la vio por dos huecos: solo miraba `import { … }` (no
+ * `import Defecto, { … }`) y solo cazaba la LLAMADA `x()`, no el acceso `x.algo` ni `x[i]`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -65,7 +72,7 @@ describe("las variantes del botón no pueden volver al lado del cliente", () => 
  * de un archivo "use client" —siguiendo el barril, que es justamente por donde se
  * coló el defecto— y falla si alguno de esos nombres se INVOCA.
  */
-describe("ningún Server Component invoca una función del lado del cliente", () => {
+describe("ningún Server Component usa un valor del lado del cliente", () => {
   function resolverModulo(desde: string, spec: string): string | null {
     const base = spec.startsWith("@/")
       ? join(RAIZ, spec.slice(2))
@@ -132,7 +139,8 @@ describe("ningún Server Component invoca una función del lado del cliente", ()
 
     for (const f of servidores) {
       const src = readFileSync(f, "utf8");
-      for (const imp of src.matchAll(/import\s*\{([^}]+)\}\s*from\s*"([^"]+)"/g)) {
+      // `import Defecto, { a, b }` también: por ahí entró PESTANAS (2026-09-20).
+      for (const imp of src.matchAll(/import\s+(?:\w+\s*,\s*)?\{([^}]+)\}\s*from\s*"([^"]+)"/g)) {
         const destino = resolverModulo(f, imp[2]!);
         if (!destino) continue;
         const deCliente = exportsDeCliente(destino);
@@ -145,9 +153,10 @@ describe("ningún Server Component invoca una función del lado del cliente", ()
           const origen = partes[0]!.trim();
           const local = partes[partes.length - 1]!.trim();
           if (!deCliente.has(origen)) continue;
-          // La LLAMADA, no la mención: `<Componente />` está perfecto, `fn()` no.
-          if (new RegExp(`\\b${local}\\s*\\(`).test(src)) {
-            culpables.push(`${relative(RAIZ, f).split("\\").join("/")} invoca ${local}() de ${imp[2]}`);
+          // USARLO, no mencionarlo: `<Componente />` está perfecto; `fn()`, `LISTA.find(...)` y
+          // `LISTA[0]` no, porque del lado del servidor no hay valor adentro, solo una referencia.
+          if (new RegExp(`\\b${local}\\s*(\\(|\\.(?!\\.)|\\[)`).test(src)) {
+            culpables.push(`${relative(RAIZ, f).split("\\").join("/")} usa ${local} de ${imp[2]}`);
           }
         }
       }
