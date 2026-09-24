@@ -49,7 +49,8 @@
  *  · El plazo total: la observación usa una de tres frases fijas (`fraseDelPlazo`). El texto medido
  *    decía «anota el cierre actual contra el plazo acordado», y en 5 de 24 corridas la observación
  *    decía lo contrario de la verdad («3 semanas de holgura» con el plan 3 semanas PASADO). El
- *    calendario ahora cierra con el «LARGO DEL PLAN HOY» y la cuenta hecha.
+ *    calendario cerraba con el «LARGO DEL PLAN HOY» y la cuenta hecha (desde el 2026-09-24, con el
+ *    «CIERRE ACTUAL»: ver abajo).
  *  · (segunda vuelta de la revisión) El «motivo» cita también las instrucciones del CSE («escribe
  *    "Instrucciones del CSE:"»): la regla y el ejemplo del FORMATO solo nombraban la reunión o la
  *    nota, y el armador exige que un renombre de «Desarrollo / Integración» cite su fuente. Y el
@@ -61,6 +62,10 @@
  *    ellas solas la revisión corre (son la fuente de más peso). Y la Semana 0 se lee del calendario,
  *    que dice cuál es o que el proyecto no tiene (Desarrollo y Web): el texto medido la nombraba sin
  *    decir cuál, y el armador descartaba en silencio lo acordado sobre la primera fase de un desarrollo.
+ *  · (revisión adversarial, 2026-09-24) El plazo se compara contra el «CIERRE ACTUAL» del calendario,
+ *    no contra el largo de las fases: con un cierre fijado a mano, es ese (el que ve el CSE); con el
+ *    cierre planificado ya pasado y fases sin terminar, hoy. Y un plazo contado desde hoy se pasa a
+ *    semanas del proyecto sumándole la semana de hoy.
  *  Se miden en vivo en la fase final; `revisarDireccionDelPlazo` mide la dirección del plazo.
  *  El «sin markdown» sigue sin cumplirse cuando hay cambios (6 de 6 con ```json): la ruta ya no
  *  depende de eso (`leerRespuestaDeEstructura`).
@@ -90,7 +95,7 @@ CUÁNDO PROPONER UN CAMBIO:
 - Lo que se suma SIN tiempo propio (un journey más, un piloto o una sesión sin duración, un orden de trabajo dentro de una fase) NO es una fase nueva ni alarga ninguna: lo arma el paso de las tareas. Si hace falta, anótalo en "observaciones".
 - «Sin cambios» es la respuesta normal. Si el material no pide cambiar fases ni tiempos, devuelve "cambios": [].
 - Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase: el plan se mantiene y el atraso queda como desviación. Anótalo en "observaciones".
-- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre») NO se reparte entre las fases: anota en "observaciones" el cierre actual del calendario contra el plazo acordado, y el CSE decide. Compáralo con el «LARGO DEL PLAN HOY» del calendario (un plazo en fecha, ubícalo antes en su semana del proyecto) y dilo con UNA de estas frases, con N = la diferencia en semanas: si el plan dura MÁS que el plazo, «${PLANTILLA_PLAZO_EXCEDIDO}»; si dura MENOS, «${PLANTILLA_PLAZO_CON_MARGEN}»; si dura lo mismo, «${FRASE_PLAZO_JUSTO}». Si el plan dura más, nunca digas «holgura», «margen» ni «dentro del plazo».
+- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre», «nos quedan 6 semanas») NO se reparte entre las fases: anota en "observaciones" el cierre actual contra el plazo acordado, y el CSE decide. Compáralo con el «CIERRE ACTUAL» del calendario (ahí dice cómo pasar el plazo a una semana del proyecto: uno en fecha, o uno contado desde hoy) y dilo con UNA de estas frases, con N = la diferencia en semanas: si el plan cierra DESPUÉS del plazo, «${PLANTILLA_PLAZO_EXCEDIDO}»; si cierra ANTES, «${PLANTILLA_PLAZO_CON_MARGEN}»; si cierra en el plazo, «${FRASE_PLAZO_JUSTO}». Si el plan cierra después, nunca digas «holgura», «margen» ni «dentro del plazo».
 - ${PESO_DE_LAS_FUENTES}
 
 PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):

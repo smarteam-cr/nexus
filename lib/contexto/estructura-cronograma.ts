@@ -12,8 +12,8 @@
  *                                 nada al pasado). Semanas del proyecto desde 1, como el Gantt.
  *                                 Rotulado como la BASE de los cambios, no «solo lectura»; dice
  *                                 cuál es la Semana 0 (o que el proyecto no tiene) y cierra con el
- *                                 LARGO DEL PLAN en números (para comparar un plazo total sin leer
- *                                 al revés la resta).
+ *                                 CIERRE ACTUAL en números (el fijado a mano, o hoy si el planificado
+ *                                 ya pasó) para comparar un plazo total sin leer al revés la resta.
  *   · instrucciones             — el brief `__doc`; con él solo, la revisión igual corre.
  *   · handoff-curado            — solo bloques confirmados, con un respaldo PROPIO sin handoff.
  *   · reuniones / notas         — lo que el CSE eligió, con los rótulos del motor del material.
@@ -31,10 +31,12 @@ import { renderFuentes, type FuenteDeContexto } from "./tipos";
 import {
   FRONTERA_DEL_MATERIAL,
   calendarioDelCronograma,
+  diaEnCostaRica,
   type FotoDelCronograma,
 } from "./material-cronograma";
 import { timelineSpan } from "@/lib/timeline/weeks";
 import {
+  FRASE_PLAZO_JUSTO,
   PLANTILLA_PLAZO_CON_MARGEN,
   PLANTILLA_PLAZO_EXCEDIDO,
   faseDeSemanaCero,
@@ -84,8 +86,8 @@ export function fotoDeEstructura(tl: {
 /**
  * EL calendario, con las tres opciones —ids, estado y «Hoy»— y rotulado como la BASE de los cambios
  * (`comoBaseDeCambios`): el de los demás agentes dice «solo lectura… úsalo SOLO para ubicar», y
- * este paso propone cambios justamente sobre él. Al final, el LARGO DEL PLAN en números
- * (`lineaDelLargoDelPlan`). "" sin fases.
+ * este paso propone cambios justamente sobre él. Al final, el CIERRE ACTUAL en números
+ * (`lineaDelCierreActual`). "" sin fases.
  */
 export function calendarioDeEstructura(
   foto: FotoDelCronograma | null | undefined,
@@ -94,7 +96,7 @@ export function calendarioDeEstructura(
 ): string {
   const cal = calendarioDelCronograma(foto, ahora, { conIds: true, conEstado: true, conHoy: true, comoBaseDeCambios: true });
   if (!cal) return cal;
-  const lineas = [cal, lineaDeLaSemanaCero(foto, opts.conSemanaCero), lineaDelLargoDelPlan(foto)];
+  const lineas = [cal, lineaDeLaSemanaCero(foto, opts.conSemanaCero), lineaDelCierreActual(foto, ahora)];
   return lineas.filter(Boolean).join("\n");
 }
 
@@ -125,20 +127,85 @@ export function largoDelPlanEnSemanas(foto: FotoDelCronograma | null | undefined
 }
 
 /**
- * ⭐ EL LARGO DEL PLAN, EN NÚMEROS, Y HACIA DÓNDE VA UN PLAZO (revisión del paso A3). Con el plan en
- * 15 semanas y un plazo de 12, el revisor escribió «3 semanas de holgura» en las 3 corridas de E3:
- * tenía el número y leyó al revés la resta. Esta línea le da la cifra a comparar y la cuenta hecha
- * con las MISMAS frases que el prompt obliga a usar (lib/timeline/propuesta-de-estructura.ts). ""
- * sin fases.
+ * ⭐ EL CIERRE ACTUAL, EN SEMANAS DEL PROYECTO (revisión adversarial, 2026-09-24). La decisión de
+ * negocio es comparar el cierre ACTUAL contra el plazo acordado. La primera versión (paso A3)
+ * comparaba contra el largo de las fases, y eso no es el cierre que ve el CSE:
+ *  · con un cierre FIJADO A MANO (Tanda K) —el que muestran el chip, el chat y el cliente—, las fases
+ *    podían terminar en la 12 y el cierre visible en la 15: con un plazo de 13 el revisor escribía
+ *    «queda 1 semana de margen» cuando el cierre visible se pasaba 2;
+ *  · con el proyecto ATRASADO —hoy ya pasó el cierre planificado y quedan fases sin terminar, el caso
+ *    común a media ejecución—, el plan no cierra antes de hoy, aunque las fases digan otra cosa.
+ * `semana` es la semana del proyecto (desde 1) en que el plan cierra hoy. null sin fases.
  */
-export function lineaDelLargoDelPlan(foto: FotoDelCronograma | null | undefined): string {
+export interface CierreActual {
+  semana: number;
+  /** De dónde sale: el fin de las fases, el cierre fijado a mano, u hoy (el planificado ya pasó). */
+  porque: "fases" | "fijado" | "vencido";
+  /** El fin de las fases (la última semana ocupada). */
+  semanasDeLasFases: number;
+  /** El cierre sin mirar hoy: el fijado a mano, o el fin de las fases. */
+  planificado: number;
+  /** La semana de hoy (desde 1), o null sin ancla. */
+  semanaDeHoy: number | null;
+}
+
+const SEMANA_MS = 7 * 86_400_000;
+
+/** El día de una fecha GUARDADA COMO DÍA (el ancla, el cierre fijado), como medianoche UTC. */
+function diaGuardado(fecha: Date | string | null | undefined): number | null {
+  if (!fecha) return null;
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+export function cierreActualDelPlan(foto: FotoDelCronograma | null | undefined, ahora: number): CierreActual | null {
   const n = largoDelPlanEnSemanas(foto);
-  if (!n) return "";
+  if (!n) return null;
+  const ancla = diaGuardado(foto?.anchorStartDate);
+  // «Hoy» con la MISMA cuenta que la línea «Hoy:» del calendario (el día en Costa Rica).
+  const semanaDeHoy = ancla === null ? null : Math.floor((diaEnCostaRica(ahora) - ancla) / SEMANA_MS) + 1;
+  const fijado = diaGuardado(foto?.closeDateOverride);
+  const conFijado = ancla !== null && fijado !== null;
+  // El cierre fijado cae en la semana que lo contiene: el fin de las fases (ancla + n semanas) da n.
+  const planificado = conFijado ? Math.max(1, Math.ceil((fijado - ancla) / SEMANA_MS)) : n;
+  const quedanFases = (foto?.phases ?? []).some((f) => f.status !== "DONE" && f.status !== "SUSPENDED");
+  if (semanaDeHoy !== null && quedanFases && semanaDeHoy > planificado) {
+    return { semana: semanaDeHoy, porque: "vencido", semanasDeLasFases: n, planificado, semanaDeHoy };
+  }
+  return { semana: planificado, porque: conFijado ? "fijado" : "fases", semanasDeLasFases: n, planificado, semanaDeHoy };
+}
+
+/**
+ * La línea del calendario del revisor: el CIERRE ACTUAL (`cierreActualDelPlan`) y la cuenta del plazo
+ * hecha con las MISMAS frases que el prompt obliga a usar (lib/timeline/propuesta-de-estructura.ts).
+ * También dice cómo pasar a semanas del proyecto un plazo contado DESDE HOY («nos quedan 6 semanas»):
+ * con la fórmula literal, M = 6 en la semana 10 daba «el plan se pasa 9 semanas» cuando quedaba 1 de
+ * margen (revisión adversarial, 2026-09-24). "" sin fases.
+ */
+export function lineaDelCierreActual(foto: FotoDelCronograma | null | undefined, ahora: number): string {
+  const c = cierreActualDelPlan(foto, ahora);
+  if (!c) return "";
+  const N = c.semana;
+  const porque =
+    c.porque === "fases"
+      ? `el fin de las fases, de la semana 1 a la semana ${N}`
+      : c.porque === "fijado"
+        ? `el cierre fijado a mano, que es el que ve el CSE (las fases terminan en la semana ${c.semanasDeLasFases})`
+        : `hoy: el cierre planificado (semana ${c.planificado}) ya pasó y quedan fases sin terminar, así que el ` +
+          `proyecto cierra esta semana o después`;
+  const hoy = c.semanaDeHoy !== null ? ` Hoy es la semana ${c.semanaDeHoy} del proyecto.` : "";
+  const desdeHoy =
+    c.semanaDeHoy !== null
+      ? `si se cuenta desde hoy («nos quedan 6 semanas», «en dos meses»), súmale la semana de hoy: M = ${c.semanaDeHoy} + lo que dice`
+      : "si se cuenta desde hoy, sin fecha de arranque no se puede ubicar: dilo así, sin comparar";
   return (
-    `⭐ LARGO DEL PLAN HOY (sin los cambios que propongas): ${n} ${n === 1 ? "semana" : "semanas"}, de la ` +
-    `semana 1 a la semana ${n} del proyecto. Un plazo total acordado de M semanas se compara contra ${n}: si ` +
-    `M es menor que ${n}, ${PLANTILLA_PLAZO_EXCEDIDO.replace("N", `${n} − M`)}; si M es mayor que ${n}, ` +
-    `${PLANTILLA_PLAZO_CON_MARGEN.replace("N", `M − ${n}`)}.`
+    `⭐ CIERRE ACTUAL (sin los cambios que propongas): semana ${N} del proyecto — ${porque}.${hoy} ` +
+    `Un plazo total acordado se pasa primero a M, la semana del proyecto en que vence: si dice cuánto dura el ` +
+    `proyecto («son 12 semanas»), M es ese número; ${desdeHoy}; si es una fecha, M es la semana del proyecto en ` +
+    `que cae. Después se compara M contra ${N}: si M es menor que ${N}, ` +
+    `${PLANTILLA_PLAZO_EXCEDIDO.replace("N", `${N} − M`)}; si M es mayor que ${N}, ` +
+    `${PLANTILLA_PLAZO_CON_MARGEN.replace("N", `M − ${N}`)}; si son iguales, ${FRASE_PLAZO_JUSTO}.`
   );
 }
 

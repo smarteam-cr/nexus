@@ -964,7 +964,12 @@ describe("(b) · el plazo total contra el plan, en la dirección correcta", () =
     const P = PROMPT_ESTRUCTURA_CRONOGRAMA;
     const regla = P.split("\n").find((l) => l.includes("plazo TOTAL")) ?? "";
     for (const f of [PLANTILLA_PLAZO_EXCEDIDO, PLANTILLA_PLAZO_CON_MARGEN, FRASE_PLAZO_JUSTO]) expect(regla).toContain(`«${f}»`);
-    expect(regla).toContain("LARGO DEL PLAN HOY");
+    /* (2026-09-24: el calendario cierra con el «CIERRE ACTUAL» —el fijado a mano, u hoy si el
+       planificado ya pasó— en vez del «LARGO DEL PLAN HOY», y el prompt nombra el plazo contado desde
+       hoy. La edición que la pone en rojo: volver a comparar contra el largo de las fases.) */
+    expect(regla).toContain("«CIERRE ACTUAL»");
+    expect(regla).toMatch(/contado desde hoy/);
+    expect(regla).not.toContain("LARGO DEL PLAN");
     expect(regla).toMatch(/nunca digas «holgura», «margen» ni «dentro del plazo»/);
     const src = fs.readFileSync(path.join(process.cwd(), "lib/agents/estructura-cronograma.ts"), "utf8");
     expect(src).toContain("${PLANTILLA_PLAZO_EXCEDIDO}");

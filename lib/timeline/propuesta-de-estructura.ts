@@ -832,9 +832,12 @@ function ultimaRespuestaEn(texto: string): Record<string, unknown> | null {
  * esa observación podía decir lo contrario de la verdad: con el plan en 15 semanas y 12 acordadas,
  * las 3 corridas de E3 dijeron «3 semanas de holgura», y otras dos «dentro del plazo». El CSE
  * recibía una nota interna que TAPABA 3 semanas de exceso. Por eso el prompt obliga a UNA de estas
- * frases (N = la diferencia en semanas), el calendario del revisor trae el largo del plan en
- * números (`lineaDelLargoDelPlan`, lib/contexto/estructura-cronograma.ts) y
- * `revisarDireccionDelPlazo` mide la dirección en la prueba en vivo.
+ * frases (N = la diferencia en semanas), el calendario del revisor trae el CIERRE ACTUAL en
+ * números (`lineaDelCierreActual`, lib/contexto/estructura-cronograma.ts: el fijado a mano, u hoy si
+ * el planificado ya pasó con fases sin terminar; revisión adversarial, 2026-09-24) y
+ * `revisarDireccionDelPlazo` mide la dirección en la prueba en vivo. ⚠ Quien la llame le pasa como
+ * `semanasDelPlan` la semana del cierre ACTUAL (`cierreActualDelPlan(...).semana`), no el largo de las
+ * fases: medir contra la misma base equivocada que el texto no detectaría el error.
  */
 export const PLANTILLA_PLAZO_EXCEDIDO = "el plan se pasa N semanas del plazo acordado";
 export const PLANTILLA_PLAZO_CON_MARGEN = "quedan N semanas de margen";
