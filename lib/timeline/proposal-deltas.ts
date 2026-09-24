@@ -1,21 +1,22 @@
 /**
  * lib/timeline/proposal-deltas.ts
  *
- * Deltas POR ÍTEM de una propuesta de cronograma (`ProjectTimeline.pendingProposal`) contra las
- * fases actuales — funciones PURAS, client-safe (sin Prisma). Es la matemática única del modelo
- * "diff EN el Gantt real": la propuesta (que el handoff re-emite ya reconciliada por id, sin
- * `tasks`) se descompone en sugerencias discretas que el CSE acepta o descarta una por una,
- * en vez de un swap todo-o-nada del Gantt.
+ * Deltas POR ÍTEM de una propuesta de cronograma (`ProjectTimeline.pendingProposal`) contra unas
+ * fases — funciones PURAS, client-safe (sin Prisma). La propuesta (que el handoff re-emite ya
+ * reconciliada por id, sin `tasks`) se descompone en cambios discretos. Desde E1 del borrador del
+ * cronograma (2026-09-24) NO se resuelven uno por uno en el Gantt: `convertirPropuestaVieja`
+ * (lib/timeline/borrador.ts) los calcula contra la FOTO de cuando llegó la propuesta y los vuelve la
+ * lista numerada de la barra de revisión, que se aplica entera o en parte de una sola vez.
  *
  * Tipos de delta:
- *  - ADD_PHASE       → fase propuesta sin id (no matcheó ninguna existente): fila fantasma.
+ *  - ADD_PHASE       → fase propuesta sin id (no matcheó ninguna existente): una fase nueva.
  *                      `afterPhaseId` dice DÓNDE va (la fase anterior en la propuesta), para
- *                      que al aceptarla caiga en su lugar y no al final del cronograma.
+ *                      que al aplicarla caiga en su lugar y no al final del cronograma.
  *  - MODIFY_PHASE    → fase existente cuyo contenido difiere (nombre/duración/inicio/tipo/
- *                      sesiones/notas): badge "Sugerencia" en la fila real.
+ *                      sesiones/notas): un cambio por campo en la lista.
  *  - REORDER_PHASES  → la propuesta pone las MISMAS fases en otro orden. Es global por
  *                      naturaleza (no se puede reordenar "media lista"), así que va como un
- *                      único delta que se acepta o descarta entero.
+ *                      único cambio que se aplica o se deja fuera entero.
  *  - SET_ANCHOR      → la propuesta trae fecha de inicio y el cronograma no tenía (derivada del
  *                      kickoff); sin esto el cambio se aplicaba invisible. ⛔ Solo la del
  *                      handoff: la de las reuniones (`origen: "contexto"`) nunca mueve el arranque.

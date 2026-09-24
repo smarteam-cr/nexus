@@ -25,8 +25,13 @@
  * ⚠ El formato viejo no guarda `desde`. La conversión lo fija contra una FOTO (`base`): la del
  * cronograma que la pantalla tenía cuando le llegó la propuesta. La pantalla la manda al aplicar y
  * el servidor convierte con la misma foto, así los dos arman el mismo borrador. Lo que el CSE edite
- * DESPUÉS de esa foto choca y queda fuera. Recargar la página toma una foto nueva: es el límite del
- * formato viejo, y se resuelve antes de E2 (el formato nuevo guarda el `desde` al crearse).
+ * DESPUÉS de esa foto choca y queda fuera.
+ * La foto se RECUERDA en el navegador, por proyecto, token y contenido de la propuesta (abajo,
+ * «LA FOTO SE RECUERDA»): cambiar de canvas, terminar «Chequear avance» (remonta el cronograma) o
+ * recargar usan la MISMA foto. Si no, una edición a mano hecha durante la revisión pasaba de ⚠ a
+ * «aplica» con solo volver a entrar, y «Aplicar todo» la revertía. Lo que queda: otro navegador u
+ * otra computadora toman una foto nueva. Es el límite del formato viejo y se resuelve en E2 (el
+ * formato nuevo guarda el `desde` al crearse).
  * Dos cosas del handoff sí se saben sin foto, por cómo lo arma analyze (reconcile-proposal.ts):
  *   · la FECHA DE ARRANQUE solo la propone cuando el proyecto no tenía (`existente ?? kickoff`): su
  *     `desde` es siempre null, y una fecha que hoy puso una persona choca;
@@ -46,7 +51,15 @@ import {
   type ProposalPhaseLike,
 } from "./proposal-deltas";
 import { describeMovimiento, filasDeDetalle, movimientosPorSalto } from "./sugerencia-detalle";
-import { computePhaseRanges, describeEndShift, fmtFull, plural, projectedEnd, type ProjectedEnd } from "./weeks";
+import {
+  computePhaseRanges,
+  describeEndShift,
+  endShiftDays,
+  fmtFull,
+  plural,
+  projectedEnd,
+  type ProjectedEnd,
+} from "./weeks";
 import { evaluarMagnitud, type MagnitudPropuesta } from "./magnitud-propuesta";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -419,7 +432,10 @@ export interface PlanDeAplicacion {
   aplicadas: Cambio[];
   /** N: los que se van a escribir. */
   marcadas: number;
-  /** M: los que todavía difieren de lo vivo (todos menos los `ya-esta`). */
+  /** Los que el CSE puede marcar (`aplica` + `excluido`): lo que «Aplicar todo» aplica. Un choque
+   *  no cuenta: nunca se aplica, así que no puede faltar para que sea «todo». */
+  aplicables: number;
+  /** Los que todavía difieren de lo vivo (todos menos los `ya-esta`), choques incluidos. */
   total: number;
   choques: number;
   huella: string;
@@ -609,6 +625,7 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
     items,
     aplicadas,
     marcadas: aplicadas.length,
+    aplicables: items.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
     total: items.filter((it) => it.estado !== "ya-esta").length,
     choques: items.filter((it) => it.estado === "choque").length,
     huella,
@@ -773,6 +790,8 @@ export interface ResumenDelBorrador {
   observaciones: string[];
   items: ItemDeLaLista[];
   marcadas: number;
+  /** Lo que se puede marcar: `marcadas === aplicables` es «Aplicar todo», con choques o sin ellos. */
+  aplicables: number;
   total: number;
   choques: number;
   huella: string;
@@ -783,6 +802,8 @@ export interface ResumenDelBorrador {
   corrimiento: string | null;
   /** Cuán distinta es la propuesta ENTERA (lo que se puede aplicar): el aviso de «otro cronograma». */
   magnitud: MagnitudPropuesta;
+  /** Cuán distinto es lo MARCADO, que es lo que el botón va a escribir: decide la confirmación. */
+  magnitudDeLoMarcado: MagnitudPropuesta;
 }
 
 function nombreDeFase(vivo: Vivo, id: string, respaldo: string): string {
@@ -878,27 +899,23 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
   const cierreAntes = projectedEnd(vivo.ancla, vivo.fases);
   const cierreDespues = projectedEnd(proyeccion.ancla, proyeccion.fases);
 
-  // La magnitud: sobre todo lo que se PUEDE aplicar (pendiente o desmarcado), como si se marcara todo.
+  /* Dos magnitudes, con la MISMA regla (`evaluarMagnitud`):
+     · la de la propuesta entera —todo lo que se PUEDE aplicar, pendiente o desmarcado, como si se
+       marcara todo—: el aviso de «otro cronograma» y el color de la barra;
+     · la de lo MARCADO —lo que el botón va a escribir—: decide si se confirma. Antes la confirmación
+       pedía «todo marcado», y con un solo choque (justo el caso de E1: el CSE editó un campo) o una
+       nota desmarcada, un cronograma prácticamente nuevo se aplicaba con un clic. */
   const aplicables = plan.items.filter((it) => it.estado === "aplica" || it.estado === "excluido").map((it) => it.cambio);
-  const fasesCon = (campo: CampoDeFase) =>
-    new Set(aplicables.flatMap((c) => (c.tipo === "fase-cambia" && c.campo === campo ? [c.faseId] : []))).size;
   const entera = proyectar(vivo, borrador, []);
-  const magnitud = evaluarMagnitud({
-    fasesActuales: vivo.fases.length,
-    fasesRenombradas: fasesCon("name"),
-    fasesConDuracionDistinta: fasesCon("durationWeeks"),
-    fasesNuevas: aplicables.filter((c) => c.tipo === "fase-nueva").length,
-    reordena: aplicables.some((c) => c.tipo === "orden"),
-    mueveArranque: aplicables.some((c) => c.tipo === "ancla"),
-    finAntes: cierreAntes,
-    finDespues: projectedEnd(entera.ancla, entera.fases),
-  });
+  const magnitud = magnitudDe(vivo, aplicables, cierreAntes, projectedEnd(entera.ancla, entera.fases));
+  const magnitudDeLoMarcado = magnitudDe(vivo, plan.aplicadas, cierreAntes, cierreDespues);
 
   return {
     origen: borrador.origen,
     observaciones: borrador.observaciones,
     items,
     marcadas: plan.marcadas,
+    aplicables: plan.aplicables,
     total: plan.total,
     choques: plan.choques,
     huella: plan.huella,
@@ -907,7 +924,29 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
     cierreDespues,
     corrimiento: describeEndShift(cierreAntes, cierreDespues),
     magnitud,
+    magnitudDeLoMarcado,
   };
+}
+
+/** La magnitud de un conjunto de cambios, contada como la cuenta la franja vieja (por FASE). */
+function magnitudDe(
+  vivo: Vivo,
+  cambios: readonly Cambio[],
+  finAntes: ProjectedEnd,
+  finDespues: ProjectedEnd,
+): MagnitudPropuesta {
+  const fasesCon = (campo: CampoDeFase) =>
+    new Set(cambios.flatMap((c) => (c.tipo === "fase-cambia" && c.campo === campo ? [c.faseId] : []))).size;
+  return evaluarMagnitud({
+    fasesActuales: vivo.fases.length,
+    fasesRenombradas: fasesCon("name"),
+    fasesConDuracionDistinta: fasesCon("durationWeeks"),
+    fasesNuevas: cambios.filter((c) => c.tipo === "fase-nueva").length,
+    reordena: cambios.some((c) => c.tipo === "orden"),
+    mueveArranque: cambios.some((c) => c.tipo === "ancla"),
+    finAntes,
+    finDespues,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -923,10 +962,59 @@ export const AVISO_SUBIR_CON_PROPUESTA =
 export const TEXTO_VER_ANTES = "Ver como estaba antes";
 export const TEXTO_VER_PROPUESTA = "Ver la propuesta";
 
-/** «Aplicar todo» si va todo lo que se puede aplicar; si no, «Aplicar N de M». */
-export function textoDeAplicar(marcadas: number, total: number): string {
-  return marcadas === total ? "Aplicar todo" : `Aplicar ${marcadas} de ${total}`;
+/**
+ * «Aplicar todo» si va todo lo que se puede aplicar; si no, «Aplicar N de M». M es lo que se puede
+ * MARCAR (`aplicables`), no el total: un choque nunca se aplica, así que con un ⚠ en la lista el
+ * botón igual dice «Aplicar todo» cuando está marcado todo lo limpio (plan §1.3: «Aplicar todo»
+ * aplica solo lo limpio).
+ */
+export function textoDeAplicar(marcadas: number, aplicables: number): string {
+  return marcadas === aplicables ? "Aplicar todo" : `Aplicar ${marcadas} de ${aplicables}`;
 }
+
+/**
+ * ¿El botón tiene que pedir confirmación antes de aplicar? Sí cuando lo MARCADO es prácticamente
+ * otro cronograma, marcado entero o no: la confirmación cuida lo que se escribe, no la cantidad de
+ * casillas. Con un choque o una nota desmarcada, lo demás sigue siendo otro plan.
+ */
+export function pideConfirmacion(r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado">): boolean {
+  return r.marcadas > 0 && r.magnitudDeLoMarcado.esCronogramaNuevo;
+}
+
+/**
+ * El cierre antes → después en una frase, para la barra y la confirmación. Con un cierre FIJADO a
+ * mano (Tanda K) la fecha que ven «Ver como estaba antes», «Ver la propuesta» y el cliente es la
+ * fijada, y aplicar no la toca: se dice eso, y el corrimiento es el del plan calculado. Si no, el
+ * «antes» de la barra era una fecha que no aparecía en ningún lado.
+ */
+export function fraseDelCierre(
+  r: Pick<ResumenDelBorrador, "corrimiento" | "cierreAntes" | "cierreDespues">,
+  cierreFijado: string | null = null,
+): string {
+  const antes = r.cierreAntes;
+  const despues = r.cierreDespues;
+  const semanas =
+    antes.spanWeeks === despues.spanWeeks
+      ? `el plan sigue en ${plural(despues.spanWeeks, "semana", "semanas")}`
+      : `el plan pasa de ${plural(antes.spanWeeks, "semana", "semanas")} a ${plural(despues.spanWeeks, "semana", "semanas")}`;
+  if (!cierreFijado) {
+    if (r.corrimiento) return r.corrimiento;
+    return `${semanas.charAt(0).toUpperCase()}${semanas.slice(1)} (sin fecha de arranque no hay fecha de cierre).`;
+  }
+  const calculado =
+    antes.date && despues.date
+      ? endShiftDays(antes, despues) === 0
+        ? `el plan calculado sigue terminando el ${despues.label}`
+        : `el plan calculado pasa de terminar el ${antes.label} a terminar el ${despues.label}`
+      : semanas;
+  return `El cierre está fijado a mano el ${fmtFull(cierreFijado)} y aplicar no lo cambia; ${calculado}.`;
+}
+
+/** El PUT con motivo respondió 409 PROPUESTA_ABIERTA y en pantalla está la vista previa del
+ *  modificador: la propuesta guardada entró mientras la IA trabajaba (otra pantalla regeneró) y no
+ *  hay barra que la muestre. Se dice qué hacer, sin tirar el resultado de la IA sin preguntar. */
+export const AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA =
+  "Mientras la IA trabajaba entró una propuesta de cambios de fases que nadie decidió todavía, y no se aplica nada encima de ella. Descarta esta vista previa para verla arriba del Gantt; cuando la resuelvas, vuelve a pedir el cambio.";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── EL ESTADO DE LA REVISIÓN EN PANTALLA (puro, lo usa el hook) ──────────────
@@ -954,9 +1042,15 @@ export function claveDeRevision(json: unknown, token: string | null): string | n
   return `${token ?? ""}|${huellaDeTexto(JSON.stringify(json))}`;
 }
 
-/** Una propuesta distinta: foto nueva, nada desmarcado, y se mira la propuesta. */
-export function revisionPara(clave: string | null, vivo: Vivo): EstadoDeRevision {
-  return clave === null ? REVISION_VACIA : { clave, base: vivo, sin: new Set(), vista: "propuesta" };
+/**
+ * Una propuesta distinta: se mira la propuesta, con la foto y lo desmarcado que se recuerden de ESA
+ * misma propuesta (volver a entrar o recargar), o con la foto de este momento y nada desmarcado.
+ */
+export function revisionPara(clave: string | null, vivo: Vivo, recuerdo: RecuerdoDeLaRevision | null = null): EstadoDeRevision {
+  if (clave === null) return REVISION_VACIA;
+  return recuerdo
+    ? { clave, base: recuerdo.foto, sin: new Set(recuerdo.sin), vista: "propuesta" }
+    : { clave, base: vivo, sin: new Set(), vista: "propuesta" };
 }
 
 export function alternarVista(e: EstadoDeRevision): EstadoDeRevision {
@@ -968,4 +1062,95 @@ export function marcarCambio(e: EstadoDeRevision, clave: string, incluir: boolea
   if (incluir) sin.delete(clave);
   else sin.add(clave);
   return { ...e, sin };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── LA FOTO SE RECUERDA (en el navegador, nunca en el servidor) ──────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// El cronograma se DESMONTA al cambiar de canvas (Handoff, Kickoff…) y se remonta al terminar
+// «Chequear avance»; recargar también empieza de cero. Si la foto viviera solo en el estado del
+// componente, al volver se tomaba una foto NUEVA del cronograma ya editado: la edición a mano pasaba
+// de ⚠ a «aplica», marcada, y «Aplicar todo» la revertía (revisión de E1, 2026-09-24).
+// Por eso la foto (y lo desmarcado) se recuerdan por PROYECTO, atados a la identidad de la
+// propuesta —token + contenido (`claveDeRevision`)—: una propuesta distinta, aunque tenga el mismo
+// contenido, arranca con su propia foto. Una sola entrada por proyecto: la propuesta nueva pisa la
+// vieja, y aplicar o descartar la borra. Nada de esto viaja al servidor ni cambia el formato
+// guardado (E1 no escribe el formato nuevo): es memoria de la pantalla que sobrevive al remonte.
+
+/** Lo mínimo de `Storage` que usa la pantalla: `localStorage` en el navegador, un Map en los tests. */
+export interface AlmacenDeFotos {
+  getItem(clave: string): string | null;
+  setItem(clave: string, valor: string): void;
+  removeItem(clave: string): void;
+}
+
+/** Lo que se recuerda de una propuesta: la foto contra la que se convirtió y lo desmarcado. */
+export interface RecuerdoDeLaRevision {
+  foto: Vivo;
+  sin: string[];
+}
+
+/** Un almacén que vive lo que viva el módulo: sobrevive al remonte del canvas aunque el navegador
+ *  no deje usar `localStorage` (modo privado, sitio bloqueado). Los tests lo usan de doble. */
+export function almacenEnMemoria(): AlmacenDeFotos {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k) => m.get(k) ?? null,
+    setItem: (k, v) => void m.set(k, v),
+    removeItem: (k) => void m.delete(k),
+  };
+}
+
+/** Dónde vive la foto de la propuesta abierta de un proyecto: UNA entrada por proyecto. */
+export const claveDeLaFoto = (projectId: string): string => `nexus:cronograma:foto-de-la-propuesta:${projectId}`;
+
+/**
+ * La foto (y lo desmarcado) recordados para ESA propuesta (`revision` = `claveDeRevision`), o null:
+ * no hay, es de otra propuesta, está rota o el navegador no deja leer. Nunca tira: sin recuerdo, la
+ * pantalla toma la foto de ahora, que es lo que hacía antes.
+ */
+export function recuerdoDeLaRevision(
+  almacen: AlmacenDeFotos | null,
+  projectId: string,
+  revision: string,
+): RecuerdoDeLaRevision | null {
+  if (!almacen) return null;
+  try {
+    const crudo = almacen.getItem(claveDeLaFoto(projectId));
+    if (!crudo) return null;
+    const json: unknown = JSON.parse(crudo);
+    if (!esObjeto(json) || json.revision !== revision) return null;
+    const foto = leerFoto(json.foto);
+    if (!foto) return null;
+    const sin = Array.isArray(json.sin) ? json.sin.filter((s): s is string => typeof s === "string") : [];
+    return { foto, sin };
+  } catch {
+    return null;
+  }
+}
+
+/** Guarda la foto y lo desmarcado de esa propuesta (pisa lo de la propuesta anterior del proyecto). */
+export function recordarRevision(
+  almacen: AlmacenDeFotos | null,
+  projectId: string,
+  revision: string,
+  recuerdo: RecuerdoDeLaRevision,
+): void {
+  if (!almacen) return;
+  try {
+    almacen.setItem(claveDeLaFoto(projectId), JSON.stringify({ revision, foto: recuerdo.foto, sin: recuerdo.sin }));
+  } catch {
+    /* sin lugar o sin permiso: la revisión sigue en memoria, como antes */
+  }
+}
+
+/** La propuesta se resolvió (aplicada o descartada): su foto ya no sirve. */
+export function olvidarRevision(almacen: AlmacenDeFotos | null, projectId: string): void {
+  if (!almacen) return;
+  try {
+    almacen.removeItem(claveDeLaFoto(projectId));
+  } catch {
+    /* nada que hacer: la próxima propuesta la pisa */
+  }
 }

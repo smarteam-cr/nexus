@@ -228,9 +228,15 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     );
     expect(tramo, "el aviso dejó de listar POR QUÉ es distinto").toContain("magnitud.motivos");
     expect(tramo, "el aviso dejó de aclarar que no se borra nada").toContain("Aplicar no borra nada");
-    // El corrimiento del cierre va en la barra FIJA, siempre a la vista (no solo en el aviso).
-    expect(src, "la barra dejó de decir cuánto se mueve la fecha de fin").toContain("{fraseDelCierre(resumen)}");
-    expect(src).toContain("if (r.corrimiento) return r.corrimiento;");
+    /* El corrimiento del cierre va en la barra FIJA, siempre a la vista (no solo en el aviso).
+       ⚠ REAPUNTADA en la corrección de E1 (2026-09-24), con esta razón: la frase salió del componente
+       a `fraseDelCierre` (lib/timeline/borrador.ts) para decir también el cierre fijado a mano, y su
+       contenido (el corrimiento, o las semanas) se prueba ahí, llamándola. Acá se pide que la barra
+       la pinte, con el cierre fijado. */
+    expect(src, "la barra dejó de decir cuánto se mueve la fecha de fin").toContain(
+      "const cierre = fraseDelCierre(resumen, cierreFijado);",
+    );
+    expect(src).toContain('<p className="text-xs text-fg-secondary">{cierre}</p>');
   });
 
   it("el botón grande abre confirmación y el confirm dice la verdad sobre lo que pasa", () => {
@@ -241,7 +247,11 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     const i = src.indexOf("<ConfirmDialog");
     expect(i, "desapareció la confirmación del reemplazo total").toBeGreaterThan(-1);
     const tramo = src.slice(i);
-    expect(tramo, "el botón perdió su etiqueta").toContain("Aplicar todo");
+    /* ⚠ REAPUNTADA en la corrección de E1 (2026-09-24), con esta razón: la confirmación ya no es solo
+       de «Aplicar todo» —también la pide «Aplicar N de M» cuando lo marcado sigue siendo otro
+       cronograma—, así que el botón del diálogo dice lo mismo que el de la barra (`textoDeAplicar`). */
+    expect(tramo, "el botón perdió su etiqueta").toContain("confirmLabel={textoDelBoton}");
+    expect(src).toContain("const textoDelBoton = textoDeAplicar(marcadas, aplicables);");
     expect(tramo, "el confirm dejó de decir que no se borra nada — el modelo es ADITIVO").toContain(
       "No se borra ninguna fase ni ninguna tarea",
     );
@@ -249,10 +259,16 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
       tramo,
       'el confirm se pintó como destructivo: el rojo dice "esto borra" y acá no se borra nada',
     ).not.toContain('variant="destructive"');
-    // Y el botón de la barra tiene que ABRIR el confirm en el caso masivo, no aplicar de una.
+    /* Y el botón de la barra tiene que ABRIR el confirm en el caso masivo, no aplicar de una.
+       ⚠ REESCRITA en la corrección de E1 (2026-09-24), con esta razón: la condición era
+       `otroCronograma && todo`, y con un solo choque (el CSE editó un campo: justo el caso de E1) o
+       una nota desmarcada, `todo` era falso y un cronograma prácticamente nuevo se aplicaba con un
+       clic. Ahora decide `pideConfirmacion(resumen)`: lo MARCADO es otro cronograma, marcado entero o
+       no (sus casos, en borrador.test.ts). */
     expect(src, "el botón grande dejó de pedir confirmación en el caso masivo").toContain(
-      "otroCronograma && todo ? setConfirmar(true) : onAplicar()",
+      "pideConfirmacion(resumen) ? setConfirmar(true) : onAplicar()",
     );
+    expect(src, "la confirmación volvió a depender de que esté todo marcado").not.toMatch(/&&\s*todo\s*\?/);
   });
 
   it("un cambio CHICO no cambia nada de lo que ya existía", () => {

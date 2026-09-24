@@ -11,25 +11,38 @@
  *      todo deja intacta su edición.
  *   4. NÚMEROS: la lista se numera de corrido, determinista, y no se corre al marcar ni al editar.
  *   5. LA HUELLA: cambia si cambia lo que se aplicaría, y solo entonces.
+ *   6-9. La vista, la barra, el estado de la pantalla y la foto que viaja.
+ *   10-12. (Revisión de E1, 2026-09-24) «Aplicar todo» con un choque y la confirmación de otro
+ *      cronograma; el cierre fijado a mano; y la foto RECORDADA entre montajes (volver al canvas no
+ *      convierte una edición a mano en «aplica»).
  */
 import { describe, expect, it } from "vitest";
 import {
+  almacenEnMemoria,
   alternarVista,
   BLOQUEO_VERSION_NUEVA,
+  claveDeLaFoto,
   claveDeRevision,
   convertirPropuestaVieja,
   debeDescartarseSolo,
   esBorradorGuardado,
   FORMATO_BORRADOR,
+  fraseDelCierre,
   huellaDeTexto,
   leerBorrador,
   leerFoto,
   marcarCambio,
+  olvidarRevision,
+  pideConfirmacion,
   planDeAplicacion,
   proyectar,
+  recordarRevision,
+  recuerdoDeLaRevision,
   resumir,
   revisionPara,
   REVISION_VACIA,
+  textoDeAplicar,
+  type AlmacenDeFotos,
   type Borrador,
   type FaseViva,
   type Vivo,
@@ -518,5 +531,156 @@ describe("9 · la foto que manda la pantalla se valida", () => {
     expect(leerFoto({ ancla: 3, fases: [] })).toBeNull();
     expect(leerFoto({ ancla: null, fases: [{ id: "x", name: "X", durationWeeks: "1" }] })).toBeNull();
     expect(leerFoto({ ancla: null, fases: [{ id: "x", name: "X", durationWeeks: 1, notes: 4 }] })).toBeNull();
+  });
+});
+
+describe("10 · «Aplicar todo» aplica lo limpio, y la confirmación mira lo MARCADO", () => {
+  /* Una propuesta que rehace el plan: renombra y alarga casi todo. */
+  const MUCHAS: ProposalLike = {
+    anchorStartDate: null,
+    phases: [
+      { ...A, name: "Uno", durationWeeks: 3 },
+      { ...B, name: "Dos", durationWeeks: 5 },
+      { ...C, name: "Tres", durationWeeks: 6, notes: "otra nota" },
+      { ...D, name: "Cuatro" },
+    ],
+  };
+  const b = convertirPropuestaVieja(MUCHAS, VIVO);
+  /* El CSE, con la propuesta abierta, alarga Pruebas a mano: ese cambio choca. */
+  const conUnaEdicion: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 9 } : x)) };
+
+  it("⭐ con un choque, marcado todo lo limpio el botón dice «Aplicar todo» (M = lo que se puede marcar)", () => {
+    /* La edición que la pone en rojo: comparar contra `total`, que cuenta el choque: el botón decía
+       «Aplicar N de N+1» con todo lo que se puede aplicar ya marcado. */
+    const r = resumir(conUnaEdicion, b, []);
+    expect(r.choques).toBe(1);
+    expect(r.total).toBe(r.aplicables + 1);
+    expect(r.marcadas).toBe(r.aplicables);
+    expect(textoDeAplicar(r.marcadas, r.aplicables)).toBe("Aplicar todo");
+    const sinUna = resumir(conUnaEdicion, b, ["fase:c:notes"]);
+    expect(textoDeAplicar(sinUna.marcadas, sinUna.aplicables)).toBe(`Aplicar ${r.aplicables - 1} de ${r.aplicables}`);
+    // Y lo que choca nunca se escribe, aunque el botón diga «todo».
+    expect(planDeAplicacion(conUnaEdicion, b, []).aplicadas.map((c) => c.clave)).not.toContain("fase:c:durationWeeks");
+  });
+
+  it("⭐ otro cronograma pide confirmación aunque haya un choque o una casilla desmarcada", () => {
+    /* La edición que la pone en rojo: volver a `otroCronograma && todo` — con un solo ⚠ (el caso de
+       E1: el CSE editó un campo) o una nota desmarcada, un cronograma nuevo se aplicaba con un clic. */
+    expect(pideConfirmacion(resumir(VIVO, b, []))).toBe(true);
+    expect(pideConfirmacion(resumir(conUnaEdicion, b, [])), "con un choque").toBe(true);
+    expect(pideConfirmacion(resumir(VIVO, b, ["fase:c:notes"])), "con una nota desmarcada").toBe(true);
+  });
+
+  it("si lo marcado ya no es otro cronograma (o no hay nada marcado), no se confirma", () => {
+    const casiNada = b.cambios.map((c) => c.clave).filter((k) => k !== "fase:b:durationWeeks");
+    const r = resumir(VIVO, b, casiNada);
+    expect(r.magnitud.esCronogramaNuevo, "la propuesta entera sigue siendo otro cronograma").toBe(true);
+    expect(r.marcadas).toBe(1);
+    expect(pideConfirmacion(r)).toBe(false);
+    expect(pideConfirmacion(resumir(VIVO, b, b.cambios.map((c) => c.clave)))).toBe(false);
+    // Y un ajuste chico nunca.
+    expect(pideConfirmacion(resumir(VIVO, soloDuracionDeC(), []))).toBe(false);
+  });
+});
+
+describe("11 · el cierre de la barra, también con un cierre fijado a mano (Tanda K)", () => {
+  const vivo: Vivo = { ...VIVO, ancla: "2026-09-07" };
+  const b = convertirPropuestaVieja({ ...HANDOFF, anchorStartDate: null }, vivo);
+
+  it("sin cierre fijado, el corrimiento; sin arranque, las semanas", () => {
+    expect(fraseDelCierre(resumir(vivo, b, []))).toBe("El cierre se corre 21 días: 26 oct 2026 → 16 nov 2026.");
+    expect(fraseDelCierre(resumir(VIVO, b, []))).toBe(
+      "El plan pasa de 7 semanas a 10 semanas (sin fecha de arranque no hay fecha de cierre).",
+    );
+    expect(fraseDelCierre(resumir(VIVO, b, b.cambios.map((c) => c.clave)))).toBe(
+      "El plan sigue en 7 semanas (sin fecha de arranque no hay fecha de cierre).",
+    );
+  });
+
+  it("⭐ con un cierre fijado, la fecha que se nombra es la fijada, y se dice que aplicar no la toca", () => {
+    /* La edición que la pone en rojo: ignorar el cierre fijado — la barra decía «26 oct → 16 nov»
+       mientras «Ver como estaba antes» y el cliente mostraban el 30 nov. */
+    expect(fraseDelCierre(resumir(vivo, b, []), "2026-11-30")).toBe(
+      "El cierre está fijado a mano el 30 nov 2026 y aplicar no lo cambia; el plan calculado pasa de terminar el 26 oct 2026 a terminar el 16 nov 2026.",
+    );
+    expect(fraseDelCierre(resumir(vivo, b, b.cambios.map((c) => c.clave)), "2026-11-30")).toBe(
+      "El cierre está fijado a mano el 30 nov 2026 y aplicar no lo cambia; el plan calculado sigue terminando el 26 oct 2026.",
+    );
+    expect(fraseDelCierre(resumir(VIVO, b, []), "2026-11-30")).toBe(
+      "El cierre está fijado a mano el 30 nov 2026 y aplicar no lo cambia; el plan pasa de 7 semanas a 10 semanas.",
+    );
+  });
+});
+
+describe("12 · la foto se RECUERDA entre montajes: volver no convierte una edición a mano en «aplica»", () => {
+  /* El caso del probe de la revisión: el handoff propone Pruebas 3 → 4; con la propuesta abierta, el
+     CSE pone 5 a mano, cambia de canvas (el cronograma se desmonta) y vuelve. */
+  const PROP: ProposalLike = { anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, durationWeeks: 4 }, { ...D }] };
+  const editado: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 5 } : x)) };
+  const estadoDe = (vivo: Vivo, e: ReturnType<typeof revisionPara>) =>
+    planDeAplicacion(vivo, leerBorrador(PROP, e.base!)!, e.sin).items.find((it) => it.cambio.clave === "fase:c:durationWeeks")!
+      .estado;
+
+  it("⭐ montar → recordar → editar → remontar: la foto es la de antes y la edición sigue siendo un choque", () => {
+    /* La edición que la pone en rojo: remontar sin leer lo recordado (la foto nueva ya trae el 5, el
+       cambio pasa a «aplica», marcado, y aplicar escribe 4 encima del 5). */
+    const almacen = almacenEnMemoria();
+    const clave = claveDeRevision(PROP, "run-1")!;
+    const primera = revisionPara(clave, VIVO, recuerdoDeLaRevision(almacen, "p1", clave));
+    recordarRevision(almacen, "p1", clave, { foto: primera.base!, sin: [...primera.sin] });
+    expect(estadoDe(editado, primera)).toBe("choque");
+
+    const alVolver = revisionPara(clave, editado, recuerdoDeLaRevision(almacen, "p1", clave));
+    expect(alVolver.base, "tomó una foto nueva del cronograma ya editado").toEqual(VIVO);
+    expect(estadoDe(editado, alVolver)).toBe("choque");
+    const pr = proyectar(editado, leerBorrador(PROP, alVolver.base!)!, alVolver.sin);
+    expect(pr.fases.find((x) => x.id === "c")!.durationWeeks, "aplicar todo revierte la edición a mano").toBe(5);
+
+    // Lo que pasaba sin recordar: foto nueva, y la edición del CSE se revertía.
+    expect(estadoDe(editado, revisionPara(clave, editado, null))).toBe("aplica");
+  });
+
+  it("lo desmarcado también vuelve; otra propuesta (otro token u otro proyecto) no hereda la foto", () => {
+    const almacen = almacenEnMemoria();
+    const clave = claveDeRevision(PROP, "run-1")!;
+    recordarRevision(almacen, "p1", clave, { foto: VIVO, sin: ["fase:c:durationWeeks"] });
+    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toEqual({ foto: VIVO, sin: ["fase:c:durationWeeks"] });
+    expect([...revisionPara(clave, editado, recuerdoDeLaRevision(almacen, "p1", clave)).sin]).toEqual([
+      "fase:c:durationWeeks",
+    ]);
+    // El mismo contenido con otro token es OTRA propuesta: arranca con su propia foto.
+    const otra = claveDeRevision(PROP, "run-2")!;
+    expect(recuerdoDeLaRevision(almacen, "p1", otra)).toBeNull();
+    expect(recuerdoDeLaRevision(almacen, "p2", clave), "la de otro proyecto").toBeNull();
+    // Una sola entrada por proyecto: la propuesta nueva pisa la vieja; aplicar o descartar la borra.
+    recordarRevision(almacen, "p1", otra, { foto: editado, sin: [] });
+    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toBeNull();
+    olvidarRevision(almacen, "p1");
+    expect(recuerdoDeLaRevision(almacen, "p1", otra)).toBeNull();
+    expect(claveDeLaFoto("p1")).toBe("nexus:cronograma:foto-de-la-propuesta:p1");
+  });
+
+  it("nunca tira: basura guardada, un navegador que no deja leer ni escribir, o sin almacén", () => {
+    const clave = claveDeRevision(PROP, "run-1")!;
+    const basura = almacenEnMemoria();
+    basura.setItem(claveDeLaFoto("p1"), "{no es json");
+    expect(recuerdoDeLaRevision(basura, "p1", clave)).toBeNull();
+    basura.setItem(claveDeLaFoto("p1"), JSON.stringify({ revision: clave, foto: { ancla: 3, fases: [] } }));
+    expect(recuerdoDeLaRevision(basura, "p1", clave), "una foto sin forma no se usa").toBeNull();
+    const bloqueado: AlmacenDeFotos = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {
+        throw new Error("SecurityError");
+      },
+    };
+    expect(recuerdoDeLaRevision(bloqueado, "p1", clave)).toBeNull();
+    expect(() => recordarRevision(bloqueado, "p1", clave, { foto: VIVO, sin: [] })).not.toThrow();
+    expect(() => olvidarRevision(bloqueado, "p1")).not.toThrow();
+    expect(recuerdoDeLaRevision(null, "p1", clave)).toBeNull();
   });
 });

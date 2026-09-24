@@ -74,6 +74,15 @@ const soloCodigo = (s: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
     .replace(/^\s*\/\/.*$/gm, " ");
+/** El código entre dos marcadores. TIRA si falta alguno: un tramo vacío o hasta el final del
+ *  archivo haría pasar una negación mirando otra cosa. */
+const tramoDe = (src: string, desde: string, hasta: string) => {
+  const i = src.indexOf(desde);
+  if (i < 0) throw new Error(`no encuentro el inicio del tramo: «${desde}»`);
+  const j = src.indexOf(hasta, i + desde.length);
+  if (j < 0) throw new Error(`no encuentro el fin del tramo: «${hasta}» (después de «${desde}»)`);
+  return src.slice(i, j);
+};
 
 const DIA = 86_400_000;
 const AHORA = Date.UTC(2026, 9, 7, 18); // miércoles 7 oct 2026, semana 4 del proyecto
@@ -521,10 +530,10 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
 
 describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", () => {
   const src = soloCodigo(leer("components/canvas/CronogramaCanvas.tsx"));
-  const tramo = (desde: string, hasta: string) => {
-    const i = src.indexOf(desde);
-    return i < 0 ? "" : src.slice(i, src.indexOf(hasta, i + desde.length));
-  };
+  /* ⚠ Si falta un marcador, TIRA con su nombre (revisión de E1, 2026-09-24): antes devolvía "" sin
+     el de inicio y, sin el de fin, `slice(i, -1)` leía hasta el final del archivo sin avisar, así que
+     una negación sobre el tramo podía pasar mirando otra cosa. */
+  const tramo = (desde: string, hasta: string) => tramoDe(src, desde, hasta);
 
   it("pedirPropuestaDeDetalle pide la estructura ANTES del detalle, salvo en la continuación", () => {
     /* La edición que la pone en rojo: que la continuación no salte el paso 1 (re-propondría fases
@@ -668,10 +677,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
  */
 describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y el paso 1 lee lo guardado", () => {
   const canvas = soloCodigo(leer("components/canvas/CronogramaCanvas.tsx"));
-  const tramo = (desde: string, hasta: string) => {
-    const i = canvas.indexOf(desde);
-    return i < 0 ? "" : canvas.slice(i, canvas.indexOf(hasta, i + desde.length));
-  };
+  const tramo = (desde: string, hasta: string) => tramoDe(canvas, desde, hasta);
 
   it("#1 · el paso 1 espera el autoguardado EN VUELO (y lo que quedó sin mandar) antes de leer la base", () => {
     /* La edición que la pone en rojo: volver a `if (dirty && !saving) await autoSave();` (con un PUT
@@ -715,9 +721,13 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   });
 
   it("#4 · descartar la del modificador no toca el servidor, y el DELETE solo borra la que la pantalla tiene enfrente", () => {
-    /* La edición que la pone en rojo: el DELETE incondicional de antes, o sin `runId`. */
+    /* ⚠ REESCRITA en la corrección de E1 (2026-09-24), con esta razón: la condición se lee UNA vez en
+       `eraDelModificador`, porque ahora también decide traer la propuesta guardada al descartar la
+       vista previa del modificador. Pide lo mismo que antes.
+       La edición que la pone en rojo: el DELETE incondicional de antes, o sin `runId`. */
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
-    const iSi = descartar.indexOf("if (!proposalMeta.current.deAssist) {");
+    expect(descartar).toContain("const eraDelModificador = proposalMeta.current.deAssist;");
+    const iSi = descartar.indexOf("if (!eraDelModificador) {");
     expect(iSi, "el DELETE ya no depende de dónde vive la propuesta").toBeGreaterThan(-1);
     expect(iSi).toBeLessThan(descartar.indexOf("/timeline/proposal`"));
     expect(descartar).toContain("runId: proposalMeta.current.runId");

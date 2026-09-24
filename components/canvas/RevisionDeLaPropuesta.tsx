@@ -9,6 +9,12 @@
  * «Ver la propuesta» (el mismo Gantt, en el mismo lugar), una lista numerada con casillas y el
  * cierre antes → después. Nada se aplica solo: «Aplicar todo» / «Aplicar N de M» o «Descartar».
  *
+ * ⛔ DEVUELVE HERMANOS, NO UN CONTENEDOR: la barra fija, la lista y el diálogo. Quien la usa los pone
+ * en el MISMO bloque que el Gantt (CronogramaCanvas, `revision.contenedorRef`). Un elemento `sticky`
+ * no sale de su bloque padre: envuelta en su propia <section>, la barra se iba con la sección apenas
+ * se bajaba al Gantt, y el botón que alterna y «Aplicar» dejaban de estar a mano justo mientras se
+ * miraban las filas de abajo (revisión de E1, 2026-09-24).
+ *
  * Solo pinta: la lista, los estados, el cierre y la magnitud salen de `resumir`
  * (lib/timeline/borrador.ts) y el estado de la pantalla, de `useBorradorDelCronograma`.
  * Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo, warn = lo que choca).
@@ -20,23 +26,15 @@ import { cn } from "@/lib/cn";
 import { plural } from "@/lib/timeline/weeks";
 import { redactarResumenDeCambios } from "@/lib/timeline/magnitud-propuesta";
 import {
+  fraseDelCierre,
   LINEA_DEL_CLIENTE,
+  pideConfirmacion,
   TEXTO_VER_ANTES,
   TEXTO_VER_PROPUESTA,
   textoDeAplicar,
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
-
-/** El cierre antes → después en una frase, con o sin fecha de arranque. */
-function fraseDelCierre(r: ResumenDelBorrador): string {
-  if (r.corrimiento) return r.corrimiento;
-  const antes = r.cierreAntes.spanWeeks;
-  const despues = r.cierreDespues.spanWeeks;
-  return antes === despues
-    ? `El plan sigue en ${plural(despues, "semana", "semanas")} (sin fecha de arranque no hay fecha de cierre).`
-    : `El plan pasa de ${plural(antes, "semana", "semanas")} a ${plural(despues, "semana", "semanas")} (sin fecha de arranque no hay fecha de cierre).`;
-}
 
 export default function RevisionDeLaPropuesta({
   resumen,
@@ -45,8 +43,9 @@ export default function RevisionDeLaPropuesta({
   onMarcar,
   onAplicar,
   onDescartar,
-  trabajando,
+  enCurso,
   encadenado,
+  cierreFijado,
   barraRef,
 }: {
   resumen: ResumenDelBorrador;
@@ -55,79 +54,84 @@ export default function RevisionDeLaPropuesta({
   onMarcar: (clave: string, incluir: boolean) => void;
   onAplicar: () => void;
   onDescartar: () => void;
-  /** Aplicando o descartando: los botones y las casillas se apagan. */
-  trabajando: boolean;
+  /** Aplicando o descartando: los dos botones y las casillas se apagan hasta que termine. */
+  enCurso: "aplicar" | "descartar" | null;
   /** Esta pantalla sigue sola con las tareas al resolverla (paso 1 de 2 de «Regenerar todo»). */
   encadenado: boolean;
+  /** El cierre fijado a mano (Tanda K), YYYY-MM-DD, o null: aplicar no lo toca. */
+  cierreFijado: string | null;
   barraRef: RefObject<HTMLDivElement | null>;
 }) {
   const [confirmar, setConfirmar] = useState(false);
-  const { items, marcadas, total, choques, magnitud, bloqueo, origen, observaciones } = resumen;
+  const { items, marcadas, aplicables, total, choques, magnitud, bloqueo, origen, observaciones } = resumen;
   const delContexto = origen === "contexto";
   const otroCronograma = magnitud.esCronogramaNuevo;
-  const todo = marcadas === total;
-  const pedirAplicar = () => (otroCronograma && todo ? setConfirmar(true) : onAplicar());
+  const trabajando = enCurso !== null;
+  const textoDelBoton = textoDeAplicar(marcadas, aplicables);
+  const pedirAplicar = () => (pideConfirmacion(resumen) ? setConfirmar(true) : onAplicar());
+  const cierre = fraseDelCierre(resumen, cierreFijado);
 
   return (
-    /* El ancla del botón «Revisar la propuesta» del encabezado y de «Qué hacer acá». */
-    <section
-      id="cronograma-propuesta"
-      aria-label="Propuesta de cambios de fases"
-      className="scroll-mt-24 rounded-xl border border-info-line bg-surface"
-    >
-      {/* ── LA BARRA FIJA: qué es, cómo mirarla, qué pasa con el cliente y los dos botones ── */}
-      <div ref={barraRef} className="sticky top-0 z-20 rounded-t-xl bg-surface">
-        <div
-          className={cn(
-            "rounded-t-xl border-b px-3 py-2 space-y-1.5",
-            /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
-            otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
-          )}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
-              {otroCronograma
-                ? `La IA propone otro cronograma — ${plural(total, "cambio", "cambios")}`
-                : `La IA propone ${plural(total, "cambio de fases", "cambios de fases")}`}
-            </span>
-            <span className="text-xs text-fg-muted">
-              {delContexto ? "de las reuniones y notas que elegiste" : "del último handoff"} · las tareas y sus estados no se tocan
-            </span>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="secondary" onClick={onAlternar} aria-pressed={vista === "antes"}>
-                {vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={pedirAplicar}
-                disabled={trabajando || marcadas === 0 || bloqueo !== null}
-                title={marcadas === 0 ? "No hay ningún cambio marcado: si no quieres ninguno, descarta la propuesta" : undefined}
-              >
-                {trabajando ? "Aplicando…" : textoDeAplicar(marcadas, total)}
-              </Button>
-              <Button size="sm" variant="secondary" onClick={onDescartar} disabled={trabajando}>
-                Descartar
-              </Button>
-            </div>
+    <>
+      {/* ── LA BARRA FIJA: qué es, cómo mirarla, qué pasa con el cliente y los botones ──
+          `id`: el ancla del botón «Revisar N cambios» del encabezado. */}
+      <div
+        id="cronograma-propuesta"
+        ref={barraRef}
+        role="region"
+        aria-label="Propuesta de cambios de fases"
+        className={cn(
+          "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 space-y-1.5 shadow-sm",
+          /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
+          otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
+            {otroCronograma
+              ? `La IA propone otro cronograma — ${plural(total, "cambio", "cambios")}`
+              : `La IA propone ${plural(total, "cambio de fases", "cambios de fases")}`}
+          </span>
+          <span className="text-xs text-fg-muted">
+            {delContexto ? "de las reuniones y notas que elegiste" : "del último handoff"} · las tareas y sus estados no se tocan
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* UN botón, con el texto de lo que vas a ver al apretarlo. Sin `aria-pressed`: con un
+                texto que cambia, el lector anunciaría «Ver la propuesta, presionado». */}
+            <Button size="sm" variant="secondary" onClick={onAlternar}>
+              {vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={pedirAplicar}
+              disabled={trabajando || marcadas === 0 || bloqueo !== null}
+              title={marcadas === 0 ? "No hay ningún cambio marcado: si no quieres ninguno, descarta la propuesta" : undefined}
+            >
+              {enCurso === "aplicar" ? "Aplicando…" : textoDelBoton}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={onDescartar} disabled={trabajando}>
+              {enCurso === "descartar" ? "Descartando…" : "Descartar"}
+            </Button>
           </div>
-          <p className="text-xs text-fg-secondary">{fraseDelCierre(resumen)}</p>
-          <p className="text-xs font-semibold text-fg">{LINEA_DEL_CLIENTE}</p>
-          {vista === "antes" ? (
-            <p className="text-xs text-fg-muted">
-              Estás viendo el cronograma actual y puedes seguir editándolo. Si cambias algo que la propuesta también
-              cambia, ese cambio queda fuera (⚠).
-            </p>
-          ) : (
-            <p className="text-xs text-fg-muted">
-              Estás viendo la propuesta, solo para leer: las filas marcadas son las que cambian.
-            </p>
-          )}
         </div>
+        <p className="text-xs text-fg-secondary">{cierre}</p>
+        <p className="text-xs font-semibold text-fg">{LINEA_DEL_CLIENTE}</p>
+        {vista === "antes" ? (
+          <p className="text-xs text-fg-muted">
+            Estás viendo el cronograma actual y puedes seguir editándolo. Si cambias algo que la propuesta también
+            cambia, ese cambio queda fuera (⚠).
+          </p>
+        ) : (
+          <p className="text-xs text-fg-muted">
+            Estás viendo la propuesta, solo para leer: las filas marcadas son las que cambian.
+          </p>
+        )}
       </div>
 
-      {/* ── EL CUERPO: la lista numerada, lo que la IA notó y el aviso de «otro cronograma» ── */}
-      <div className="px-3 py-2 space-y-2">
+      {/* ── LA LISTA: numerada, con casillas, lo que la IA notó y el aviso de «otro cronograma».
+          No es fija: una lista larga no puede tapar el Gantt. ── */}
+      <section aria-label="Cambios propuestos" className="rounded-xl border border-line bg-surface px-3 py-2 space-y-2">
         {encadenado && delContexto && (
           <p className="text-xs font-semibold text-info-ink">
             Paso 1 de 2 · Aplica o descarta la propuesta y después armo las tareas.
@@ -234,16 +238,17 @@ export default function RevisionDeLaPropuesta({
             </ul>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Solo cuando es OTRO cronograma y va todo: para un ajuste chico, confirmar sería la fricción
-          que enseña a apretar sin leer. ⚠ variant="default": el rojo prometería un borrado que no ocurre. */}
+      {/* Cuando lo MARCADO es otro cronograma (`pideConfirmacion`), marcado entero o no: para un ajuste
+          chico, confirmar sería la fricción que enseña a apretar sin leer.
+          ⚠ variant="default": el rojo prometería un borrado que no ocurre. */}
       <ConfirmDialog
         open={confirmar}
         variant="default"
         title="¿Aplicar el cronograma que propone la IA?"
-        confirmLabel="Aplicar todo"
-        loading={trabajando}
+        confirmLabel={textoDelBoton}
+        loading={enCurso === "aplicar"}
         onCancel={() => setConfirmar(false)}
         onConfirm={() => {
           setConfirmar(false);
@@ -252,9 +257,8 @@ export default function RevisionDeLaPropuesta({
         description={
           <>
             <span className="block">
-              Se {total === 1 ? "aplica el cambio" : `aplican los ${total} cambios`} de una sola vez:{" "}
-              {redactarResumenDeCambios(magnitud)}.
-              {resumen.corrimiento ? ` ${resumen.corrimiento}` : ""}
+              Se {marcadas === 1 ? "aplica el cambio marcado" : `aplican los ${marcadas} cambios marcados`} de una sola
+              vez: {redactarResumenDeCambios(resumen.magnitudDeLoMarcado)}. {cierre}
             </span>
             <span className="block mt-2">
               No se borra ninguna fase ni ninguna tarea: las tareas y sus estados quedan como están, y las fases nuevas
@@ -263,6 +267,6 @@ export default function RevisionDeLaPropuesta({
           </>
         }
       />
-    </section>
+    </>
   );
 }

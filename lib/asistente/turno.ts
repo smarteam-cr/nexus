@@ -456,8 +456,8 @@ como cita.
 Si te piden rehacer todas las tareas, o revisar las fases y sus tiempos desde las reuniones y las
 notas, di lo que dice la línea «PARA REHACER TODO» del contexto: el botón que el CSE ve hoy, con su
 condición, o que hoy no hay ninguno. Ese botón lee el material con más espacio, primero propone los
-cambios de fases y tiempos (el CSE acepta o descarta cada uno) y después arma las tareas. Los pedidos
-puntuales los sigues atendiendo tú.`;
+cambios de fases y tiempos (el CSE los revisa en una lista arriba del Gantt y aplica los que quiere) y
+después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.`;
 
 /**
  * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento

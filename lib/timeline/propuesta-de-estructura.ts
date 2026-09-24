@@ -10,8 +10,10 @@
  * movían (el detalle tiene prohibido tocarlas). Ahora, con reuniones o notas elegidas, un revisor
  * corto propone CAMBIOS de estructura (ajustar, agregar o mover) y este armador los convierte en
  * la MISMA propuesta de solo estructura que ya deja el handoff en `pendingProposal`: el CSE la
- * decide uno por uno en el Gantt real, con la franja, los badges y el impacto en el cierre de
- * siempre. Después, la pantalla encadena el detalle de siempre sobre la estructura aceptada.
+ * revisa en la barra de arriba del Gantt (E1 del borrador, `RevisionDeLaPropuesta`) —la lista
+ * numerada con casillas, «Ver como estaba antes» ↔ «Ver la propuesta» y el cierre antes → después—
+ * y la aplica entera o en parte, o la descarta. Después, la pantalla encadena el detalle de siempre
+ * sobre la estructura decidida.
  *
  * ── LO QUE EL MODELO NO PUEDE HACER, AUNQUE LO DIGA ─────────────────────────
  * El prompt (lib/agents/estructura-cronograma.ts) lo prohíbe y ESTE archivo lo hace cumplir: una
@@ -1028,17 +1030,18 @@ export const AVISO_DECIDE_PRIMERO =
 export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fases; sigo con las tareas.";
 /**
  * Por qué NINGÚN otro cambio con IA se aplica mientras haya cambios de fases sin decidir: el chat
- * (sus dos carriles) y «IA» de una fase guardan con un PUT con motivo, que borra `pendingProposal`
- * (timeline/route.ts), y descartar lo que proponen borraba la guardada. Una sola frase para los
- * dos caminos, y la misma idea le llega al modelo del chat en su contexto.
+ * (sus dos carriles) y «IA» de una fase guardan con un PUT con motivo, que borraba `pendingProposal`
+ * en silencio; desde E1 ese PUT responde 409 PROPUESTA_ABIERTA (timeline/route.ts) y la pantalla
+ * frena antes, con esta frase. Descartar lo que proponen borraba la guardada. Una sola frase para
+ * los dos caminos, y la misma idea le llega al modelo del chat en su contexto.
  */
 export const CAMBIOS_DE_FASES_SIN_DECIDIR =
   "Primero decide los cambios de fases sugeridos (arriba del Gantt): mientras estén sin decidir, no se aplica ningún otro cambio con IA.";
 
 /**
  * Qué hace la pantalla después de pedir la estructura (paso 1):
- *  · 'esperar'  — hay una propuesta: el CSE la decide en el Gantt y, al resolver la última, sigue
- *                 el paso 2;
+ *  · 'esperar'  — hay una propuesta: el CSE la revisa en la barra de arriba del Gantt y, al
+ *                 aplicarla o descartarla, sigue el paso 2;
  *  · 'decidir'  — 409: YA hay cambios de fases sin decidir (del handoff, o de una revisión que se
  *                 pidió en otra pestaña o la pidió otra persona). ⛔ NO sigue con las tareas
  *                 (revisión adversarial, 2026-09-24): antes corría igual el detalle —la corrida más

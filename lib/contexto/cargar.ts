@@ -279,7 +279,8 @@ export interface MaterialDelCronograma {
  * Lo leen el detalle (tareas, su semana, cuáles son reuniones y quién las hace — NO fases ni
  * duraciones: las tiene prohibidas), «Pedir cambio con IA» (que sí puede tocar fases, pero solo
  * lo que pide la instrucción), el revisor de fases y tiempos de «Regenerar todo»
- * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE decide uno por uno) y el chat
+ * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE revisa en la barra de arriba
+ * del Gantt y aplica enteros o en parte) y el chat
  * del cronograma (`cargarMaterialParaElChat`, con su propio espacio: decisión de Elías del
  * 2026-09-23). ⚠ NO lo lee el agente de handoff —que arma y re-propone las fases—. Devuelve `""`
  * en lo que no haya, y los armadores omiten la fuente vacía: sin material, sus BLOQUES no suman ni un
