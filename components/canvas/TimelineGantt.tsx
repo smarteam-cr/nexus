@@ -1115,7 +1115,7 @@ export default function TimelineGantt({
                                     key={c.field}
                                     className="text-xs text-fg-secondary bg-surface border border-line rounded px-2 py-0.5 max-w-full break-words"
                                   >
-                                    {describeChange(c)}
+                                    {describeChange(c, { inicioActual: range.start })}
                                   </span>
                                 ))}
                               </div>

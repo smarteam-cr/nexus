@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   impactoDeUnDelta,
   filasDeDetalle,
@@ -170,11 +172,27 @@ describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () =
     expect(f.despues, "el detalle volvió al valor crudo: una semana antes que el Gantt").toBe("semana 3");
   });
 
-  it("el chip de la sugerencia suma 1 y «auto» sigue siendo auto", () => {
-    expect(describeChange({ field: "startWeek", from: null, to: 2 })).toBe("inicio Sauto → S3");
-    expect(describeChange({ field: "startWeek", from: 4, to: null })).toBe("inicio S5 → Sauto");
+  it("el chip de la sugerencia suma 1, y un inicio automático se lee por la semana en que arranca hoy", () => {
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: fijaba «inicio Sauto → S3».
+       Un inicio automático (startWeek null) es el caso normal, y «Sauto» no dice si la sugerencia
+       adelanta o atrasa la fase. Ahora el chip dice la semana en que arranca HOY (`inicioActual`, la
+       que pinta la fila) o «tras la anterior». La edición que la pone en rojo: volver a «Sauto», o
+       que el Gantt deje de pasar el inicio de la fila. */
+    expect(describeChange({ field: "startWeek", from: null, to: 6 }, { inicioActual: 4 })).toBe("inicio S5 → S7");
+    expect(describeChange({ field: "startWeek", from: null, to: 2 })).toBe("inicio tras la anterior → S3");
+    expect(describeChange({ field: "startWeek", from: 4, to: null })).toBe("inicio S5 → tras la anterior");
     expect(describeChange({ field: "startWeek", from: 0, to: 1 }), "S0 no existe en el Gantt").toBe(
       "inicio S1 → S2",
+    );
+    for (const c of [
+      { field: "startWeek" as const, from: null, to: 2 },
+      { field: "startWeek" as const, from: 4, to: null },
+    ]) {
+      expect(describeChange(c, { inicioActual: 3 })).not.toContain("auto");
+    }
+    const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8");
+    expect(gantt, "el chip del Gantt no sabe dónde arranca hoy la fase").toContain(
+      "describeChange(c, { inicioActual: range.start })",
     );
   });
 });

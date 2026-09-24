@@ -69,11 +69,15 @@ import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
 import { computeProposalDeltas, origenDePropuesta, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
 import {
+  AVISO_DECIDE_PRIMERO,
+  AVISO_PROPUESTA_PENDIENTE,
+  CAMBIOS_DE_FASES_SIN_DECIDIR,
   pasoTrasEstructura,
   pasoTrasResolver,
   type RespuestaDeEstructura,
 } from "@/lib/timeline/propuesta-de-estructura";
 import PasoDeTareasPendiente from "./PasoDeTareasPendiente";
+import ObservacionesDelPaso1 from "./ObservacionesDelPaso1";
 import { impactoDeUnDelta, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
@@ -830,6 +834,26 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     }
   }, [projectId]);
 
+  /**
+   * Trae la propuesta GUARDADA y la pone en pantalla, reemplazando la que haya: la llaman quienes
+   * saben que la del servidor cambió (el 409 del paso 1, o el de `apply-items` cuando la que se
+   * estaba decidiendo ya no es la guardada). Devuelve la propuesta, o null si no hay o falló.
+   */
+  const traerPropuestaPendiente = async (): Promise<Proposal | null> => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
+      proposalMeta.current = { deAssist: false, runId: (data.pendingProposalRunId as string | null) ?? null };
+      setProposal(nueva);
+      bumpGpsRefresh();
+      return nueva;
+    } catch {
+      return null;
+    }
+  };
+
   // "Hoy" recién después de hidratar: en SSR no existe, y calcularlo en el primer render
   // desincroniza servidor y cliente (mismo patrón que TimelineGantt).
   const hydrated = useHydrated();
@@ -1178,8 +1202,23 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   // automática para el audit (TimelineChange). Single-flight (el efecto no lo dispara
   // mientras hay uno en curso). Si el CSE editó DURANTE el PUT (editSeq cambió) NO
   // pisamos su trabajo con la respuesta del server — dejamos dirty para re-guardar.
-  const autoSave = async () => {
-    if (saving || validateLocal() !== null) return;
+  /* ⛔ UN SOLO GUARDADO EN VUELO, Y SE PUEDE ESPERAR (revisión adversarial, 2026-09-24). El paso 1
+     de «Regenerar todo» lee las fases de la BASE: si arrancaba con un autoguardado en vuelo (el
+     `saving` de su closure no lo veía), leía la foto de ANTES y su propuesta traía de vuelta lo que
+     el CSE acababa de cambiar. La promesa se fija ANTES del primer await: un segundo llamado (el
+     timer, o el paso 1) espera la MISMA en vez de mandar otro PUT con la misma foto y sin los ids
+     que el primero acaba de crear. */
+  const guardadoEnVueloRef = useRef<Promise<void> | null>(null);
+  const autoSave = (): Promise<void> => {
+    if (guardadoEnVueloRef.current) return guardadoEnVueloRef.current;
+    if (validateLocal() !== null) return Promise.resolve();
+    const enVuelo = guardarAhora().finally(() => {
+      guardadoEnVueloRef.current = null;
+    });
+    guardadoEnVueloRef.current = enVuelo;
+    return enVuelo;
+  };
+  const guardarAhora = async () => {
     const seq = editSeq.current;
     setSaving(true);
     setError(null);
@@ -1353,6 +1392,44 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, phases, anchor, closeOverride, proposal, saving]);
 
+  /* Lo ÚLTIMO de la pantalla, para esperar el guardado desde un callback async: el `dirty` y el
+     `autoSave` de su closure son los del render en que se apretó el botón (y ese `autoSave`
+     mandaría la foto de entonces, sin los ids que el guardado en vuelo acaba de crear). */
+  const ultimoParaGuardarRef = useRef<{ dirty: boolean; autoSave: () => Promise<void>; invalido: string | null }>({
+    dirty: false,
+    autoSave: () => Promise.resolve(),
+    invalido: null,
+  });
+  useEffect(() => {
+    ultimoParaGuardarRef.current = { dirty, autoSave, invalido: validateLocal() };
+  });
+  /**
+   * ⭐ ESPERA A QUE LO EDITADO QUEDE EN LA BASE antes de que el paso 1 la lea (revisión adversarial,
+   * 2026-09-24): el guardado en vuelo, y si después sigue quedando algo sin mandar, uno más con el
+   * estado de ESTE momento. null = guardado; si no, por qué no se pudo (el paso 1 no arranca: leería
+   * una foto que no es la que el CSE tiene enfrente).
+   */
+  const esperarQueSeGuarde = async (): Promise<string | null> => {
+    const unRespiro = () => new Promise<void>((r) => window.setTimeout(r, 60));
+    for (let vuelta = 0; vuelta < 6; vuelta++) {
+      const enVuelo = guardadoEnVueloRef.current;
+      if (enVuelo) {
+        await enVuelo;
+        await unRespiro(); // que la pantalla adopte lo que devolvió el guardado
+        continue;
+      }
+      const ultimo = ultimoParaGuardarRef.current;
+      if (!ultimo.dirty) return null;
+      if (ultimo.invalido) return ultimo.invalido;
+      if (editSeq.current === lastFailedSeqRef.current) break;
+      await ultimo.autoSave();
+      await unRespiro();
+    }
+    return ultimoParaGuardarRef.current.dirty
+      ? "No se pudo guardar lo último que cambiaste en el cronograma: revísalo y vuelve a intentar."
+      : null;
+  };
+
   // Fijar/cambiar la fecha de arranque desde el Gantt: actualiza el preview (fechas
   // reales) y marca dirty — se PERSISTE con "Guardar cronograma", no al instante.
   const setAnchorFromGantt = (ymd: string) => {
@@ -1411,8 +1488,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         toast.info("Primero decide los cambios de fases que sugirió la IA; después sigo con las tareas.");
         return;
       }
-      // Lo que el CSE editó y el autoguardado todavía no mandó: el paso 1 lee la base.
-      if (dirty && !saving) await autoSave();
+      /* El paso 1 lee la BASE: primero tiene que estar ahí lo que el CSE editó, también lo que un
+         autoguardado EN VUELO todavía está mandando (antes solo se miraba `dirty && !saving`, y
+         con un PUT en curso la ruta leía la foto de antes: la propuesta revertía lo recién
+         cambiado). Si no se puede guardar, el paso 1 no arranca. */
+      const sinGuardar = await esperarQueSeGuarde();
+      if (sinGuardar) {
+        toast.error(sinGuardar);
+        return;
+      }
       setPasoDos(false);
       setObservacionesPaso1([]);
       setRevisandoEstructura(true);
@@ -1430,6 +1514,24 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const paso = pasoTrasEstructura(respuesta);
       if (paso.paso === "detener") {
         toast.error(paso.mensaje);
+        return;
+      }
+      if (paso.paso === "decidir") {
+        /* 409: YA hay cambios de fases sin decidir (del handoff, o de una revisión que se pidió en
+           otra pestaña o la pidió otra persona). ⛔ NO se arma el detalle —la corrida más cara del
+           cronograma— sobre fases que nadie decidió (revisión adversarial, 2026-09-24): se trae esa
+           propuesta a la pantalla y, si es la de las reuniones, las tareas siguen solas al decidirla. */
+        const pendiente = await traerPropuestaPendiente();
+        if (origenDePropuesta(pendiente) === "contexto" && pendiente) {
+          fijarPasoTareas(modo);
+          toast.info(AVISO_DECIDE_PRIMERO);
+        } else {
+          toast.info(AVISO_PROPUESTA_PENDIENTE);
+        }
+        window.setTimeout(
+          () => document.getElementById("cronograma-propuesta")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          150,
+        );
         return;
       }
       if (paso.paso === "esperar") {
@@ -1453,8 +1555,6 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           : [],
       );
       if (paso.aviso) toast.info(paso.aviso);
-      // El handoff pudo dejar su propuesta mientras tanto: que se vea en vez de esperar a recargar.
-      if (!respuesta.red && respuesta.status === 409) void refrescarPropuesta();
     }
     if (modo === "primera") maybeRequestPermission();
     setAllRegenModo(modo);
@@ -1641,6 +1741,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   ): Promise<{ fallo: string | null; avisos: string[] }> => {
     if (instruction.trim().length < 4 || assisting)
       return { fallo: "El pedido es muy corto o ya hay uno en curso.", avisos: [] };
+    /* ⛔ CON CAMBIOS DE FASES SIN DECIDIR, EL MODIFICADOR TAMPOCO (revisión adversarial,
+       2026-09-24). La guarda vivía solo en el carril rápido del chat. Este camino —«IA» de una fase
+       y el acuerdo viejo del chat— reemplazaba en memoria la propuesta de las reuniones por la suya:
+       aplicarla (PUT con motivo) o descartarla (DELETE) borraba la guardada, con sus sugerencias sin
+       decidir, y la cadena de «Regenerar todo» ofrecía el paso 2 sobre fases que nadie decidió. */
+    if (proposal && structureOnlyProposal) {
+      setError(CAMBIOS_DE_FASES_SIN_DECIDIR);
+      return { fallo: CAMBIOS_DE_FASES_SIN_DECIDIR, avisos: [] };
+    }
     setAssisting(true);
     let avisosDelAssist: string[] = [];
     setError(null);
@@ -1711,7 +1820,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        y la cadena de «Regenerar todo» quedaba esperando un paso 2 que nunca llegaba. El chat
        muestra el motivo; el acuerdo sigue ahí para aplicarlo después. */
     if (proposal && structureOnlyProposal) {
-      return { fallo: "Primero decide los cambios de fases sugeridos (arriba del Gantt).", avisos: [] };
+      return { fallo: CAMBIOS_DE_FASES_SIN_DECIDIR, avisos: [] };
     }
     const { payload, avisos, rechazadas } = aplicarOperaciones(
       fasesActualesDelAssist,
@@ -1827,17 +1936,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     const observacionesDescartadas = proposal?.observaciones ?? [];
     const modoDeLaCadena = pasoTareasRef.current;
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
-    // limpiarla en el server para que no reaparezca al recargar. La de assist es solo en
-    // memoria (el DELETE es no-op inofensivo). El estado local se limpia pase lo que pase.
-    try {
-      await fetch(`/api/projects/${projectId}/timeline/proposal`, {
-        method: "DELETE",
-        // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
-        // dejar un log server-side con la corrida que se evaporó (ver la ruta).
-        ...(reason ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) } : {}),
-      });
-    } catch {
-      /* limpiar local igual */
+    // limpiarla en el server para que no reaparezca al recargar. El estado local se limpia pase
+    // lo que pase.
+    /* ⛔ La del modificador vive SOLO en memoria: descartarla no toca el servidor (revisión
+       adversarial, 2026-09-24). El DELETE «no-op inofensivo» no lo era: borraba la propuesta que
+       SÍ estaba guardada —por ejemplo, las sugerencias de fases de las reuniones a medio decidir—.
+       Y la guardada se borra solo si es la misma que esta pantalla tiene enfrente (`runId`: la ruta
+       responde 409 si es otra). */
+    let guardadaEsOtra = false;
+    if (!proposalMeta.current.deAssist) {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/timeline/proposal`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
+          // dejar un log server-side con la corrida que se evaporó (ver la ruta).
+          body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
+        });
+        guardadaEsOtra = res.status === 409;
+      } catch {
+        /* limpiar local igual */
+      }
     }
     proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
@@ -1848,6 +1967,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
        aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
     bumpGpsRefresh();
+    if (guardadaEsOtra) {
+      /* La guardada ya no es la que se descartó (otra la reemplazó): no se borró nada, se trae la que
+         está y la cadena de la descartada no sigue. */
+      fijarPasoTareas(null);
+      void traerPropuestaPendiente();
+      return;
+    }
     if (origenDescartado === "contexto") {
       fijarPasoTareas(null);
       const siguiente = pasoTrasResolver({
@@ -1877,8 +2003,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       const res = await fetch(`/api/projects/${projectId}/timeline/proposal/apply-items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accept, discard }),
+        /* `runId`: la propuesta que el CSE tiene ENFRENTE. Si la guardada es otra (el handoff la
+           reemplazó, o se decidió en otra pestaña), la ruta no aplica nada y responde 409. */
+        body: JSON.stringify({ accept, discard, runId: proposalMeta.current.runId }),
       });
+      if (res.status === 409) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d?.message ?? "Las sugerencias cambiaron mientras las revisabas: revisa la lista actualizada.");
+        fijarPasoTareas(null);
+        await traerPropuestaPendiente();
+        return;
+      }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast.error(d?.error ?? "No se pudo resolver la sugerencia.");
@@ -3469,6 +3604,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               onCerrar={() => setOfrecerTareas(false)}
             />
           )}
+          {/* Lo que notó el paso 1 cuando NO hay acordeón del paso 2 que lo muestre (falló, volvió
+              sin tareas, o se ofrece): el aviso «los ves en «La IA también notó»» no puede quedar
+              como una promesa rota. Con una propuesta de fases en pantalla, las muestra la franja. */}
+          {observacionesPaso1.length > 0 &&
+            !allRegenPreview &&
+            !allRegenLoading &&
+            !generating &&
+            !revisandoEstructura &&
+            !(proposal && structureOnlyProposal) && (
+              <ObservacionesDelPaso1 observaciones={observacionesPaso1} onCerrar={() => setObservacionesPaso1([])} />
+            )}
           <TimelineGantt
             anchor={anchor || null}
             phases={ganttPhases}
@@ -3486,7 +3632,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             closeOverride={closeOverride}
             onSetCloseOverride={setCloseOverrideFromGantt}
             onAssistPhase={
-              (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
+              /* Con cambios de fases sin decidir, «IA» de una fase no se ofrece: su propuesta
+                 reemplazaría la de las reuniones en pantalla y aplicarla o descartarla borraba la
+                 guardada (revisión adversarial, 2026-09-24; `submitAssist` también lo frena). */
+              (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && !(proposal && structureOnlyProposal)
                 ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
                 : undefined
             }

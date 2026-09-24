@@ -45,6 +45,10 @@
  * Y NUNCA: quitar fases, mover el arranque del proyecto, escribir tareas o notas de fase. La
  * propuesta sale sin `tasks` (si no, deja de ser «solo estructura» y el Gantt se congela), sin
  * ancla, y con las notas y el tipo de cada fase tal cual estaban.
+ * ⭐ Y dice QUÉ cambia, no una foto (revisión adversarial, 2026-09-24): `campos` por fase (solo esos
+ * se comparan contra la fase viva y solo esos se escriben) y `movidas` (el reordenamiento se arma
+ * sobre el orden vivo). Lo que el CSE edite mientras la propuesta espera no vuelve como sugerencia
+ * de revertirlo. Ver lib/timeline/proposal-deltas.ts.
  *
  * El `motivo` (interno, cita la reunión o la nota) viaja en la fase propuesta y en el delta, nunca
  * como un cambio: lo ve el CSE en el Gantt («Por qué (solo lo ves tú)») y el endpoint que aplica
@@ -58,6 +62,8 @@ import { elegirFaseDeSemanaCero } from "./semana-cero-tareas";
 import {
   computeProposalDeltas,
   type CurrentPhaseLike,
+  type MovidaDeFase,
+  type PhaseField,
   type ProposalDelta,
   type ProposalLike,
   type ProposalPhaseLike,
@@ -547,6 +553,12 @@ export function construirPropuestaDeEstructura(input: {
     fases.map((f) => {
       const a = ajustes.get(f.id);
       if (a) anotarMotivo(f.id, a.motivo);
+      /* ⭐ LOS CAMPOS QUE SE PROPONEN, y solo esos (revisión adversarial, 2026-09-24): los deltas se
+         recalculan contra las fases VIVAS, y con la foto entera cualquier cosa que el CSE editara
+         después (una nota, un nombre, otra duración) volvía como sugerencia de revertirla. */
+      const campos: PhaseField[] = a
+        ? (["durationWeeks", "startWeek", "name", "sessionCount"] as const).filter((k) => a[k] !== undefined)
+        : [];
       return [
         f.id,
         {
@@ -558,19 +570,24 @@ export function construirPropuestaDeEstructura(input: {
           // ⛔ Las notas y el tipo de una fase existente NUNCA salen del modelo.
           notes: f.notes ?? null,
           activityType: f.activityType ?? null,
+          campos,
         },
       ];
     }),
   );
 
-  // Orden: el de hoy, con cada «mover» aplicado en el orden en que llegó.
-  const orden = fases.map((f) => f.id);
+  /* El ORDEN no se guarda como foto: cada «mover» aceptado queda en `movidas` y el reordenamiento se
+     arma sobre el orden vivo (`secuenciaPropuesta`, lib/timeline/proposal-deltas.ts). El array de
+     fases va en el orden de hoy, con las nuevas detrás de su ancla. `ordenSimulado` es solo para el
+     calendario: los «mover» se prueban JUNTOS, en el orden en que llegaron. */
+  const ordenSimulado = fases.map((f) => f.id);
+  const movidasAceptadas: MovidaDeFase[] = [];
   for (const [id, m] of movidas) {
-    const sin = orden.filter((x) => x !== id);
+    const sin = ordenSimulado.filter((x) => x !== id);
     const at = sin.indexOf(m.despuesDe);
     if (at < 0) continue;
     sin.splice(at + 1, 0, id);
-    if (sin.join("\u0000") === orden.join("\u0000")) {
+    if (sin.join("\u0000") === ordenSimulado.join("\u0000")) {
       descartados.push(`mover ${nombreDe(id)}: ya está después de ${nombreDe(m.despuesDe)}.`);
       continue;
     }
@@ -585,12 +602,13 @@ export function construirPropuestaDeEstructura(input: {
       perdidoPorElCalendario(`mover ${nombreDe(id)} después de ${nombreDe(m.despuesDe)}`, choque, "si se mueve");
       continue;
     }
-    orden.splice(0, orden.length, ...sin);
+    ordenSimulado.splice(0, ordenSimulado.length, ...sin);
+    movidasAceptadas.push({ id, despuesDe: m.despuesDe });
     anotarMotivo(id, m.motivo);
   }
 
   const phases: ProposalPhaseLike[] = [];
-  for (const id of orden) {
+  for (const id of fases.map((f) => f.id)) {
     const p = copia.get(id)!;
     const m = motivos.get(id);
     phases.push(m ? { ...p, motivo: m } : p);
@@ -611,6 +629,7 @@ export function construirPropuestaDeEstructura(input: {
     phases,
     origen: "contexto",
     observaciones,
+    movidas: movidasAceptadas,
   };
   const actuales: CurrentPhaseLike[] = fases.map((f) => ({
     id: f.id,
@@ -853,7 +872,8 @@ export type RespuestaDeEstructura =
 export type PasoTrasEstructura =
   | { paso: "tareas"; aviso?: string }
   | { paso: "detener"; mensaje: string }
-  | { paso: "esperar" };
+  | { paso: "esperar" }
+  | { paso: "decidir" };
 
 /**
  * ¿La revisión de fases va a leer algo? Lo decide lo que la pantalla YA SABE del «Contexto del
@@ -880,18 +900,36 @@ export const AVISO_SIN_CAMBIOS = "Tus reuniones y notas no piden cambios de fase
  *  notó». Decir «no piden cambios» sería falso y contradiría a esa misma observación. */
 export const AVISO_ACORDADO_SIN_ENTRAR =
   "Tus reuniones o notas piden cambios de fases que no se pueden proponer solos: los ves en «La IA también notó» y decides tú.";
+/** 409 con la propuesta del HANDOFF pendiente: no se arman tareas sobre fases sin decidir. */
 export const AVISO_PROPUESTA_PENDIENTE =
   "Hay cambios de fases sin revisar: resuélvelos y vuelve a regenerar para que la IA revise las fases.";
+/** 409 con una propuesta de las REUNIONES pendiente (la dejó otra pestaña u otra persona). */
+export const AVISO_DECIDE_PRIMERO =
+  "Ya hay cambios de fases sugeridos por la IA sin decidir: decídelos y después sigo con las tareas.";
 export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fases; sigo con las tareas.";
+/**
+ * Por qué NINGÚN otro cambio con IA se aplica mientras haya cambios de fases sin decidir: el chat
+ * (sus dos carriles) y «IA» de una fase guardan con un PUT con motivo, que borra `pendingProposal`
+ * (timeline/route.ts), y descartar lo que proponen borraba la guardada. Una sola frase para los
+ * dos caminos, y la misma idea le llega al modelo del chat en su contexto.
+ */
+export const CAMBIOS_DE_FASES_SIN_DECIDIR =
+  "Primero decide los cambios de fases sugeridos (arriba del Gantt): mientras estén sin decidir, no se aplica ningún otro cambio con IA.";
 
 /**
  * Qué hace la pantalla después de pedir la estructura (paso 1):
  *  · 'esperar'  — hay una propuesta: el CSE la decide en el Gantt y, al resolver la última, sigue
  *                 el paso 2;
+ *  · 'decidir'  — 409: YA hay cambios de fases sin decidir (del handoff, o de una revisión que se
+ *                 pidió en otra pestaña o la pidió otra persona). ⛔ NO sigue con las tareas
+ *                 (revisión adversarial, 2026-09-24): antes corría igual el detalle —la corrida más
+ *                 cara del cronograma— sobre fases que nadie había decidido, y el aviso mismo pedía
+ *                 volver a regenerar: se pagaba dos veces. La pantalla trae esa propuesta, la
+ *                 muestra y, si es la de las reuniones, sigue con las tareas al decidirla;
  *  · 'tareas'   — no hay nada que decidir (sin material, sin cambios, o solo lo acordado que no se
- *                 pudo proponer: el aviso lo dice) o el paso 1 no se pudo hacer (409, falla, red):
- *                 sigue con las tareas. ⛔ Una falla del paso 1 NUNCA traba al CSE: el detalle de
- *                 siempre corre igual;
+ *                 pudo proponer: el aviso lo dice) o el paso 1 falló (falla, red): sigue con las
+ *                 tareas. ⛔ Una falla del paso 1 NUNCA traba al CSE: el detalle de siempre corre
+ *                 igual;
  *  · 'detener'  — 403: sin permiso para cambiar el cronograma con IA, el paso 2 tampoco lo tendría.
  */
 export function pasoTrasEstructura(r: RespuestaDeEstructura): PasoTrasEstructura {
@@ -902,7 +940,7 @@ export function pasoTrasEstructura(r: RespuestaDeEstructura): PasoTrasEstructura
       mensaje: typeof r.message === "string" && r.message ? r.message : "No tienes permiso para cambiar el cronograma con IA.",
     };
   }
-  if (r.status === 409) return { paso: "tareas", aviso: AVISO_PROPUESTA_PENDIENTE };
+  if (r.status === 409) return { paso: "decidir" };
   if (r.status < 200 || r.status >= 300) return { paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA };
   if (r.estado === "propuesta") return { paso: "esperar" };
   if (r.estado === "sin-cambios") {
@@ -911,6 +949,32 @@ export function pasoTrasEstructura(r: RespuestaDeEstructura): PasoTrasEstructura
   }
   if (r.estado === "sin-material") return { paso: "tareas" };
   return { paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA };
+}
+
+/**
+ * El fallo de la revisión de fases COMO LO LEE EL CSE, para la corrida (revisión adversarial,
+ * 2026-09-24). La corrida guardaba el mensaje crudo del SDK («529 {"type":"error",…
+ * overloaded_error…}», «Request timed out.») y el centro de corridas lo mostraba en un toast rojo,
+ * en inglés, encima del aviso de la pantalla que decía «sigo con las tareas»: dos avisos que se
+ * contradecían. Ahora dice lo MISMO que la pantalla, con la causa en tuteo. El crudo va aparte, en
+ * `detalle` (lo lee quien investiga, no `parseRunError`).
+ */
+export function errorDeLaRevisionDeFases(e: unknown): string {
+  const status = (e as { status?: number } | null)?.status;
+  const crudo = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  const causa =
+    status === 529 || crudo.includes("overloaded")
+      ? "la IA está sobrecargada"
+      : status === 429 || crudo.includes("rate limit")
+        ? "se pasó el límite de uso de la IA"
+        : /timeout|timed out|etimedout|econnreset|network/.test(crudo)
+          ? "la IA tardó demasiado o se cortó la conexión"
+          : crudo.includes("ilegible")
+            ? "la IA devolvió una respuesta que no se pudo leer"
+            : status === 401 || crudo.includes("credit balance") || crudo.includes("api key")
+              ? "hay un problema con la cuenta de la IA: avísale a Elías"
+              : "la IA no respondió bien";
+  return `No se pudieron revisar las fases esta vez (${causa}); se siguió con las tareas.`;
 }
 
 /**

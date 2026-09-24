@@ -33,6 +33,15 @@
  * en el delta solo cuando existen (spread condicional, nunca `motivo: null`) y el endpoint que
  * aplica nunca los escribe en la fase. La propuesta del handoff no los trae y sus deltas quedan
  * idénticos a los de antes.
+ *
+ * ── LA DE LAS REUNIONES GUARDA LA INTENCIÓN, NO UNA FOTO (revisión adversarial, 2026-09-24) ──
+ * La propuesta copiaba TODAS las fases tal como estaban al crearla, y los deltas se recalculan
+ * contra las fases VIVAS campo por campo. Con el Gantt editable mientras la propuesta espera, lo
+ * que el CSE cambiaba después (una nota, un nombre, la duración de otra fase, el orden) volvía como
+ * una «sugerencia» que lo revertía, pegada en la misma clave al cambio que sí pidió la reunión: al
+ * aceptar la duración se pisaba la nota nueva con la vieja. Ahora la propuesta de las reuniones
+ * dice QUÉ quiere cambiar: `campos` por fase (solo esos se comparan y se escriben) y `movidas`
+ * (el reordenamiento se arma sobre el orden VIVO). La del handoff, que no los trae, sigue igual.
  */
 
 export interface CurrentPhaseLike {
@@ -57,6 +66,19 @@ export interface ProposalPhaseLike {
   tasks?: unknown;
   /** Por qué se propone el cambio de ESTA fase (interno, solo lo ve el CSE). Nunca es un cambio. */
   motivo?: string | null;
+  /**
+   * Solo la propuesta de las reuniones (`origen: "contexto"`): los campos que la IA propone cambiar
+   * en ESTA fase. Solo esos se comparan contra la fase viva (y solo esos escribe `apply-items`); lo
+   * que el CSE edite después en otro campo no vuelve como sugerencia de revertirlo. Ausente = todos
+   * (la del handoff, o una propuesta de las reuniones guardada antes de este campo).
+   */
+  campos?: PhaseField[] | null;
+}
+
+/** Un «mover» aceptado por el armador: la fase `id` va justo después de `despuesDe`. */
+export interface MovidaDeFase {
+  id: string;
+  despuesDe: string;
 }
 
 export interface ProposalLike {
@@ -66,12 +88,31 @@ export interface ProposalLike {
   origen?: "contexto";
   /** Lo que la IA notó y no se aplica solo (interno). Nunca produce un delta. */
   observaciones?: string[];
+  /**
+   * Solo la propuesta de las reuniones: los «mover» que propone, en orden. El reordenamiento se
+   * arma aplicándolos sobre el orden VIVO (`secuenciaPropuesta`), así un orden que el CSE cambió a
+   * mano después no se revierte. `[]` = no reordena. Ausente = el orden es el del array `phases`
+   * (la del handoff, o una de las reuniones guardada antes de este campo).
+   */
+  movidas?: MovidaDeFase[];
 }
 
 /** Quién dejó la propuesta pendiente. Todo lo que no diga `contexto` es la del handoff. */
 export function origenDePropuesta(p: { origen?: unknown } | null | undefined): "contexto" | "handoff" {
   return p?.origen === "contexto" ? "contexto" : "handoff";
 }
+
+/*
+ * Lo que ve quien regeneró el handoff cuando su propuesta de fases NO se guardó (va detrás de «El
+ * handoff se generó, pero el cronograma no se actualizó: …», components/clients/ProjectHandoffSection).
+ * La de las reuniones pesa más que la del handoff y no se pisa (analyze/route.ts).
+ */
+export const AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE =
+  "tiene cambios de fases sugeridos desde las reuniones y notas elegidas, sin decidir, y el handoff no los pisa. " +
+  "Cuando se decidan, vuelve a generar el handoff para ver sus sugerencias de fases.";
+export const AVISO_OTRA_PROPUESTA_ENTRO =
+  "otra propuesta de cambios de fases entró mientras se generaba el handoff, y no se pisa. Cuando se decida, " +
+  "vuelve a generar el handoff para ver sus sugerencias de fases.";
 
 export type PhaseField = "name" | "durationWeeks" | "startWeek" | "sessionCount" | "notes" | "activityType";
 
@@ -129,7 +170,38 @@ export type OrderedSlot =
 
 const FIELDS: PhaseField[] = ["name", "durationWeeks", "startWeek", "sessionCount", "notes", "activityType"];
 
-const val = (p: CurrentPhaseLike | ProposalPhaseLike, f: PhaseField): string | number | null => {
+/**
+ * Los campos que se comparan (y se escriben) de una fase propuesta: los de su `campos` si es la
+ * propuesta de las reuniones y los trae; si no, todos (la del handoff, sin cambios).
+ */
+export function camposDeLaFasePropuesta(p: ProposalPhaseLike, proposal: ProposalLike): PhaseField[] {
+  if (origenDePropuesta(proposal) !== "contexto" || !Array.isArray(p.campos)) return FIELDS;
+  return FIELDS.filter((f) => p.campos!.includes(f));
+}
+
+/**
+ * EL ORDEN PROPUESTO de las fases existentes (`actuales`, en su orden vivo). La del handoff (o una
+ * de las reuniones sin `movidas`): el del array `phases`, filtrado a las que existen. La de las
+ * reuniones con `movidas`: el orden VIVO con cada «mover» aplicado —un «mover» cuya fase o ancla ya
+ * no existe se ignora—, así lo que el CSE reordenó a mano después no vuelve como sugerencia.
+ * Lo usan los deltas, el orden final al aceptar y la reescritura de lo pendiente: una sola regla.
+ */
+export function secuenciaPropuesta(actuales: readonly string[], proposal: ProposalLike): string[] {
+  const existe = new Set(actuales);
+  if (origenDePropuesta(proposal) === "contexto" && Array.isArray(proposal.movidas)) {
+    let orden = [...actuales];
+    for (const m of proposal.movidas) {
+      if (!existe.has(m.id) || !existe.has(m.despuesDe) || m.id === m.despuesDe) continue;
+      const sin = orden.filter((x) => x !== m.id);
+      sin.splice(sin.indexOf(m.despuesDe) + 1, 0, m.id);
+      orden = sin;
+    }
+    return orden;
+  }
+  return proposal.phases.map((p) => p.id).filter((id): id is string => !!id && existe.has(id));
+}
+
+const val =(p: CurrentPhaseLike | ProposalPhaseLike, f: PhaseField): string | number | null => {
   const v = p[f];
   return v === undefined ? null : v;
 };
@@ -174,7 +246,8 @@ export function computeProposalDeltas(
     const cur = byId.get(p.id);
     if (!cur) return; // la fase fue borrada por un humano después de la propuesta → delta stale
     const changes: PhaseFieldChange[] = [];
-    for (const f of FIELDS) {
+    // La de las reuniones compara SOLO los campos que propone (ver `campos`); la del handoff, todos.
+    for (const f of camposDeLaFasePropuesta(p, proposal)) {
       const from = val(cur, f);
       const to = val(p, f);
       if (from !== to) changes.push({ field: f, from, to });
@@ -194,10 +267,12 @@ export function computeProposalDeltas(
 
   // REORDER: las mismas fases en otro orden. Se compara la SECUENCIA de las fases que existen
   // hoy, tal como vienen en la propuesta, contra su orden actual. Antes esto no producía ningún
-  // delta: una propuesta que solo reordenaba se descartaba sola, en silencio.
-  const proposedSeq = proposal.phases
-    .map((p) => p.id)
-    .filter((id): id is string => !!id && byId.has(id));
+  // delta: una propuesta que solo reordenaba se descartaba sola, en silencio. La de las reuniones
+  // la arma con sus `movidas` sobre el orden vivo (`secuenciaPropuesta`).
+  const proposedSeq = secuenciaPropuesta(
+    current.map((p) => p.id),
+    proposal,
+  );
   const currentSeq = current.map((p) => p.id).filter((id) => proposedSeq.includes(id));
   if (proposedSeq.length > 1 && proposedSeq.join("\u0000") !== currentSeq.join("\u0000")) {
     /* El orden RESULTANTE, con el mismo criterio que `buildPhaseOrder` cuando el reorder se
@@ -267,9 +342,11 @@ export function buildPhaseOrder(
   const slots: OrderedSlot[] = current.map((p) => ({ kind: "existing", id: p.id }));
 
   if (acceptedKeys.has("reorder")) {
-    const wanted = proposal.phases
-      .map((p) => p.id)
-      .filter((id): id is string => !!id && slots.some((s) => s.kind === "existing" && s.id === id));
+    // La MISMA secuencia que mostró el delta (con las `movidas` de la de las reuniones).
+    const wanted = secuenciaPropuesta(
+      current.map((p) => p.id),
+      proposal,
+    );
     const rest = slots.filter((s) => s.kind === "existing" && !wanted.includes(s.id));
     slots.length = 0;
     for (const id of wanted) slots.push({ kind: "existing", id });
@@ -359,18 +436,30 @@ export function reescribirPropuestaPendiente(
     } else if (cabeza === null) alPrincipio.push(ph);
     else grupos.get(cabeza)!.push(ph);
   }
-  const secuencia = resolvedKeys.has("reorder")
-    ? phasesAfter
-    : [...alPrincipio, ...idsPropuestos.flatMap((id) => grupos.get(id) ?? [])];
+  /* La de las reuniones con `movidas` no guarda el orden en el array: su reordenamiento se arma
+     sobre el orden vivo, así que la secuencia es SIEMPRE la real, y resuelto el «mover» (aceptado o
+     descartado) sus `movidas` se van con él. */
+  const conMovidas = origenDePropuesta(proposal) === "contexto" && Array.isArray(proposal.movidas);
+  const secuencia =
+    resolvedKeys.has("reorder") || conMovidas
+      ? phasesAfter
+      : [...alPrincipio, ...idsPropuestos.flatMap((id) => grupos.get(id) ?? [])];
 
   const rebuilt: ProposalPhaseLike[] = [...(keptNewByAnchor.get(null) ?? [])];
   for (const ph of secuencia) {
-    rebuilt.push(pendingModByPhase.get(ph.id) ?? { ...ph });
+    /* Una fase sin sugerencia pendiente se re-emite con lo que tiene la base; en la de las
+       reuniones, sin ningún campo propuesto (`campos: []`): así no puede volver como sugerencia. */
+    rebuilt.push(pendingModByPhase.get(ph.id) ?? (conMovidas ? { ...ph, campos: [] } : { ...ph }));
     rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
   }
 
   const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
-  return { ...proposal, anchorStartDate: keptAnchor, phases: rebuilt };
+  return {
+    ...proposal,
+    anchorStartDate: keptAnchor,
+    phases: rebuilt,
+    ...(conMovidas && resolvedKeys.has("reorder") ? { movidas: [] } : {}),
+  };
 }
 
 /**
@@ -421,10 +510,14 @@ export function phasesAfterDeltas(
        cosmético: computeProposalDeltas normaliza `undefined → null` (ver `val`) y el endpoint
        escribe `null`, así que tomar el valor crudo daría un span distinto del que se aplicaría. */
     const propuesta = acceptedKeys.has(`mod:${slot.id}`) ? propuestasPorId.get(slot.id) : undefined;
-    const fuente = propuesta ?? actualesPorId.get(slot.id);
+    const actual = actualesPorId.get(slot.id);
+    /* Solo lo que la sugerencia CAMBIA sale de la propuesta (la de las reuniones trae `campos`): la
+       duración que el CSE editó después no se proyecta con el valor viejo de la foto. */
+    const campos = propuesta ? camposDeLaFasePropuesta(propuesta, proposal) : [];
+    const deLaPropuesta = (f: PhaseField) => !!propuesta && campos.includes(f);
     return {
-      durationWeeks: fuente?.durationWeeks ?? 0,
-      startWeek: fuente?.startWeek ?? null,
+      durationWeeks: (deLaPropuesta("durationWeeks") ? propuesta?.durationWeeks : actual?.durationWeeks) ?? 0,
+      startWeek: (deLaPropuesta("startWeek") ? propuesta?.startWeek : actual?.startWeek) ?? null,
     };
   });
 }
@@ -454,21 +547,36 @@ export function sortChangesByImpact(changes: PhaseFieldChange[]): PhaseFieldChan
 
 /** Frase completa de una sugerencia: TODOS los cambios, del más consecuente al menos. */
 export function describeChanges(changes: PhaseFieldChange[]): string {
-  return sortChangesByImpact(changes).map(describeChange).join(" · ");
+  return sortChangesByImpact(changes)
+    .map((c) => describeChange(c))
+    .join(" · ");
 }
 
-/** `startWeek` se guarda desde 0; el Gantt lo muestra desde 1 («inicia S» = startWeek + 1). */
-const semanaLegible = (v: string | number | null): string => (v == null ? "auto" : String(Number(v) + 1));
+/** Lo que el chip no puede saber solo: dónde arranca HOY la fase (semana del proyecto desde 0). */
+export interface ContextoDelCambio {
+  /** El inicio que la fase tiene hoy en el Gantt, aunque arranque sola tras la anterior. */
+  inicioActual?: number | null;
+}
 
-/** Etiqueta humana de un cambio de campo (para el badge "Sugerencia" del Gantt). */
-export function describeChange(c: PhaseFieldChange): string {
+/**
+ * Etiqueta humana de un cambio de campo (para el badge "Sugerencia" del Gantt).
+ *
+ * El inicio va en base 1, igual que el campo «inicia S» del Gantt (TimelineGantt: startWeek + 1):
+ * con el valor crudo el CSE aceptaba un inicio una semana antes del que leía en la fila. Y una fase
+ * que arranca sola (`startWeek` null, el caso normal) se lee por la semana en que arranca HOY
+ * (`inicioActual`), o «tras la anterior»: el chip decía «inicio Sauto → S7» y no se sabía si la
+ * sugerencia la adelantaba o la atrasaba (revisión adversarial, 2026-09-24).
+ */
+export function describeChange(c: PhaseFieldChange, ctx: ContextoDelCambio = {}): string {
   switch (c.field) {
     case "durationWeeks":
       return `${c.from ?? "?"} → ${c.to ?? "?"} semanas`;
-    case "startWeek":
-      /* En base 1, igual que el campo «inicia S» del Gantt (TimelineGantt: startWeek + 1). Con
-         el valor crudo el CSE aceptaba un inicio una semana antes del que leía en la fila. */
-      return `inicio S${semanaLegible(c.from)} → S${semanaLegible(c.to)}`;
+    case "startWeek": {
+      const desde =
+        c.from != null ? `S${Number(c.from) + 1}` : ctx.inicioActual != null ? `S${ctx.inicioActual + 1}` : "tras la anterior";
+      const hasta = c.to != null ? `S${Number(c.to) + 1}` : "tras la anterior";
+      return `inicio ${desde} → ${hasta}`;
+    }
     case "name":
       return `renombrar a «${c.to}»`;
     case "sessionCount":

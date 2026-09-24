@@ -276,6 +276,22 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
 }
 
 /**
+ * ⛔ CON CAMBIOS DE FASES SIN DECIDIR, LO QUE ACUERDE EL CHAT NO SE APLICA (revisión adversarial,
+ * 2026-09-24). La pantalla corta el «Aplicar» mientras haya una propuesta de fases pendiente (la del
+ * handoff o la de la revisión de «Regenerar todo»): guardar con motivo la borraría. El modelo no lo
+ * sabía: armaba la lista numerada, el CSE la revisaba y «Aplicar» fallaba siempre. "" sin propuesta.
+ */
+export function lineaDeCambiosDeFasesSinDecidir(hay: boolean): string {
+  if (!hay) return "";
+  return (
+    "⛔ HAY CAMBIOS DE FASES SIN DECIDIR arriba del Gantt (sugerencias del handoff o de la revisión de " +
+    "fases de «Regenerar todo»). Mientras estén, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
+    "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que aceptar o descartar " +
+    "esas sugerencias (botón «Revisar…», arriba del Gantt). Puedes conversar el cambio y dejarlo para después."
+  );
+}
+
+/**
  * El contexto del chat sobre el CRONOGRAMA.
  *
  * Trae las fases con su id y, debajo, sus tareas por semana con su título, su handle y su estado
@@ -449,6 +465,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `Cierre proyectado: ${cierre ?? "no se puede calcular sin fecha de arranque"}`,
     `Ancho de calendario: ${fin.spanWeeks} semanas`,
     ...(timeline.phases.length > 0 ? ["", paraRehacerTodo] : []),
+    ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true)] : []),
     "",
     /* ⚠ Decía «REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)»: de
        cuando el chat emitía una instrucción que un segundo modelo ejecutaba. Desde el 2026-08-20

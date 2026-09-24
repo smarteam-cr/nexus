@@ -37,7 +37,11 @@ import {
   tieneMaterialDelCronograma,
 } from "@/lib/contexto/estructura-cronograma";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
-import { construirPropuestaDeEstructura, leerRespuestaDeEstructura } from "@/lib/timeline/propuesta-de-estructura";
+import {
+  construirPropuestaDeEstructura,
+  errorDeLaRevisionDeFases,
+  leerRespuestaDeEstructura,
+} from "@/lib/timeline/propuesta-de-estructura";
 
 /** Cierra la corrida sin poder romper la respuesta que el CSE está esperando. */
 async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Record<string, unknown>): Promise<void> {
@@ -159,7 +163,12 @@ export async function POST(
     if (crudo === null) throw new Error("respuesta ilegible del modelo");
   } catch (e) {
     console.error("[timeline/estructura] Claude error:", e instanceof Error ? e.message : e);
-    await cerrarCorrida(run.id, "ERROR", { error: e instanceof Error ? e.message : "error desconocido" });
+    /* ⛔ `error` es lo que el centro de corridas le muestra al CSE (`parseRunError`): la frase de
+       la pantalla con la causa en tuteo, nunca el crudo del SDK. El crudo, en `detalle`. */
+    await cerrarCorrida(run.id, "ERROR", {
+      error: errorDeLaRevisionDeFases(e),
+      detalle: e instanceof Error ? e.message : "error desconocido",
+    });
     return NextResponse.json(
       { error: "ESTRUCTURA_FALLO", message: "No se pudieron revisar las fases esta vez." },
       { status: 500 },

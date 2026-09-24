@@ -3,8 +3,9 @@
  *
  * Resuelve POR ÍTEM la propuesta de cronograma pendiente (la que deja regenerar el handoff, o la
  * de fases y tiempos que sale de las reuniones y notas elegidas, `origen: "contexto"`):
- *   { accept: string[], discard: string[] }   ← claves de delta de
- *   lib/timeline/proposal-deltas
+ *   { accept: string[], discard: string[], runId?: string | null }   ← claves de delta de
+ *   lib/timeline/proposal-deltas, y la corrida de la propuesta que el CSE tiene en pantalla (409
+ *   PROPUESTA_CAMBIO si la guardada es otra: ver abajo)
  *
  * El modelo "diff EN el Gantt real": la propuesta ya no se aplica todo-o-nada con un PUT del
  * árbol completo — cada sugerencia (fase nueva / cambio de fase / fecha de arranque) se acepta o
@@ -76,7 +77,7 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const body = (raw ?? {}) as { accept?: unknown; discard?: unknown };
+  const body = (raw ?? {}) as { accept?: unknown; discard?: unknown; runId?: unknown };
   const keys = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((k): k is string => typeof k === "string" && !!k) : [];
   const acceptKeys = new Set(keys(body.accept));
@@ -100,6 +101,27 @@ export async function POST(
   const proposal = tl.pendingProposal as ProposalLike | null;
   if (!proposal || !Array.isArray(proposal.phases)) {
     return NextResponse.json({ error: "No hay propuesta pendiente" }, { status: 400 });
+  }
+  /* ⛔ SE APLICA LA PROPUESTA QUE EL CSE TIENE ENFRENTE, O NADA (revisión adversarial, 2026-09-24).
+     Las claves (`mod:<id>`, `add:<i>`, `reorder`) se resuelven contra la propuesta GUARDADA. Si
+     mientras el CSE decidía otra la reemplazó —el handoff regenerado, otra pestaña—, una clave que
+     existía en las dos aplicaba el contenido de la otra (otro nombre, otras notas, otra fase nueva
+     en ese índice) y la auditoría se lo atribuía a quien no era. La pantalla manda la corrida de la
+     propuesta que pintó (`runId`); si no es la guardada, no se escribe nada y la pantalla la trae
+     de nuevo. Sin `runId` en el cuerpo (un cliente viejo) se resuelve como antes. */
+  if ("runId" in body) {
+    const vista = typeof body.runId === "string" && body.runId ? body.runId : null;
+    if (vista !== (tl.pendingProposalRunId ?? null)) {
+      return NextResponse.json(
+        {
+          error: "PROPUESTA_CAMBIO",
+          message:
+            "Las sugerencias cambiaron mientras las revisabas (se regeneró el handoff o se revisaron en otra " +
+            "pestaña): no se aplicó nada. Revisa la lista actualizada.",
+        },
+        { status: 409 },
+      );
+    }
   }
   /* De dónde salió: del handoff, o de las reuniones y notas que eligió el CSE («Regenerar todo»,
      paso 1). Cambia la razón de la auditoría y le dice a la pantalla si, al no quedar ninguna,

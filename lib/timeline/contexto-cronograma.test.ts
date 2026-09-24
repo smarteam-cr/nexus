@@ -461,6 +461,7 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "components/canvas/AllPhasesRegenModal.tsx",
     "components/canvas/CronogramaCanvas.tsx",
     "components/canvas/CronogramaContextSection.tsx",
+    "components/canvas/ObservacionesDelPaso1.tsx",
     "components/canvas/PasoDeTareasPendiente.tsx",
     "components/canvas/PhaseRegenPanel.tsx",
     "components/canvas/ProposalGlobalStrip.tsx",

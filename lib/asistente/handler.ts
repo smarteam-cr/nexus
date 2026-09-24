@@ -188,7 +188,9 @@ ${vistaPrevia ? "Revisa la vista previa antes de aceptar." : `Ya quedó guardado
                  a la persona a «aceptar los cambios» la deja buscando un banner que no existe —y
                  peor, sugiere que lo que ya está guardado todavía se puede descartar. */
               `✅ Listo, ${elDocumento} ya quedó actualizado. Si algo no está como esperabas, dímelo y lo ajustamos.`
-        : `⛔ No se pudo aplicar: ${detalle || "el editor rechazó el cambio"}. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.`),
+        : /* El punto final del motivo se saca: el motivo de la pantalla ya puede traerlo, y el hilo
+             —que el modelo vuelve a leer— quedaba con «(arriba del Gantt)..». */
+          `⛔ No se pudo aplicar: ${(detalle || "el editor rechazó el cambio").replace(/[\s.]+$/, "")}. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.`),
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));
   }

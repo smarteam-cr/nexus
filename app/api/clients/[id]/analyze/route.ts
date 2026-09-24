@@ -9,6 +9,11 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
+import {
+  AVISO_OTRA_PROPUESTA_ENTRO,
+  AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE,
+  origenDePropuesta,
+} from "@/lib/timeline/proposal-deltas";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -3069,6 +3074,8 @@ async function persistTimelineFromAgentOutput(
       where: { projectId: bodyProjectId },
       select: {
         anchorStartDate: true,
+        pendingProposal: true,
+        pendingProposalRunId: true,
         phases: {
           orderBy: { order: "asc" },
           select: { id: true, name: true, durationWeeks: true, startWeek: true, sessionCount: true, notes: true, activityType: true },
@@ -3104,13 +3111,39 @@ async function persistTimelineFromAgentOutput(
         return { timelineSyncError: null };
       }
 
-      await prisma.projectTimeline.update({
-        where: { projectId: bodyProjectId },
+      /* ⛔ LA PROPUESTA DE LAS REUNIONES NO SE PISA (revisión adversarial, 2026-09-24). El paso 1 de
+         «Regenerar todo» deja en este mismo campo los cambios de fases que salen de las reuniones y
+         notas que eligió el CSE (`origen: "contexto"`), y esa ruta nunca pisa la del handoff. Al
+         revés no había guarda: regenerar el handoff la reemplazaba a mitad de la revisión, la
+         pantalla seguía mostrando la vieja y «Aceptar» aplicaba por clave el contenido del handoff.
+         Lo elegido por el CSE pesa más que el handoff: su propuesta se queda, y quien regeneró se
+         entera por el aviso de siempre (`timelineSyncError`). La del handoff se sigue reemplazando
+         como antes. La escritura va condicionada a lo que se leyó: si en el medio entró otra, no
+         se pisa. */
+      if (origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null) === "contexto") {
+        console.log(
+          `[analyze] pendingProposal del handoff NO guardada: hay cambios de fases de las reuniones sin decidir (project ${bodyProjectId}, run ${agentRunId}).`,
+        );
+        return { timelineSyncError: AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE };
+      }
+      const escrita = await prisma.projectTimeline.updateMany({
+        where: {
+          projectId: bodyProjectId,
+          ...(existing.pendingProposal === null
+            ? { pendingProposal: { equals: Prisma.DbNull } }
+            : { pendingProposalRunId: existing.pendingProposalRunId }),
+        },
         data: {
           pendingProposal: { anchorStartDate: reconciled.anchorStartDate, phases: reconciled.phases } as unknown as Prisma.InputJsonValue,
           pendingProposalRunId: agentRunId,
         },
       });
+      if (escrita.count === 0) {
+        console.log(
+          `[analyze] pendingProposal del handoff NO guardada: otra propuesta entró mientras se generaba (project ${bodyProjectId}, run ${agentRunId}).`,
+        );
+        return { timelineSyncError: AVISO_OTRA_PROPUESTA_ENTRO };
+      }
       console.log(
         `[analyze] ✓ pendingProposal guardada (${reconciled.phases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
       );

@@ -52,7 +52,8 @@ import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs"
 const h = vi.hoisted(() => ({ cargarMaterialParaElChat: vi.fn() }));
 vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: h.cargarMaterialParaElChat }));
 
-const { TECHO_DEL_PREFIJO_CHARS, lineaParaRehacerTodo, materialDelCronograma } = await import("./contexto");
+const { TECHO_DEL_PREFIJO_CHARS, lineaParaRehacerTodo, lineaDeCambiosDeFasesSinDecidir, materialDelCronograma } =
+  await import("./contexto");
 
 /** Blanquea comentarios conservando offsets: NOMBRAR algo para prohibirlo no es usarlo. */
 function soloCodigo(src: string): string {
@@ -411,6 +412,21 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
         }
       }
     }
+  });
+
+  it("#16 · con cambios de fases sin decidir, el modelo SABE que lo que acuerde no se aplica", () => {
+    /* Revisión adversarial (2026-09-24): la pantalla corta el «Aplicar» del chat mientras haya una
+       propuesta de fases pendiente (del handoff o de «Regenerar todo»), pero el modelo no lo sabía:
+       armaba la lista numerada y ofrecía «Aplicar», que fallaba siempre. La edición que la pone en
+       rojo: sacar la línea del contexto, o que deje de depender de la propuesta pendiente. */
+    expect(lineaDeCambiosDeFasesSinDecidir(false)).toBe("");
+    const linea = lineaDeCambiosDeFasesSinDecidir(true);
+    expect(linea).toContain("NINGÚN cambio que acuerdes se puede aplicar");
+    expect(linea, "tiene que decirlo ANTES de armar la lista").toContain("dilo ANTES de armar la lista");
+    expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true)] : [])');
+    // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
+    const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");
+    expect(handler).toContain('(detalle || "el editor rechazó el cambio").replace(/[\\s.]+$/, "")');
   });
 
   it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {

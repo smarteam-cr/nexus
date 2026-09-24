@@ -480,3 +480,110 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(pedir).toContain("acordadoSinEntrar: d?.acordadoSinEntrar");
   });
 });
+
+/**
+ * ── G15 · LA PROPUESTA DE FASES NO SE PISA, NO SE BORRA DE REBOTE Y NO SE PAGA DOS VECES ──
+ * Revisión adversarial (2026-09-24). Cada guarda nombra la edición que la pone en rojo.
+ */
+describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y el paso 1 lee lo guardado", () => {
+  const canvas = soloCodigo(leer("components/canvas/CronogramaCanvas.tsx"));
+  const tramo = (desde: string, hasta: string) => {
+    const i = canvas.indexOf(desde);
+    return i < 0 ? "" : canvas.slice(i, canvas.indexOf(hasta, i + desde.length));
+  };
+
+  it("#1 · el paso 1 espera el autoguardado EN VUELO (y lo que quedó sin mandar) antes de leer la base", () => {
+    /* La edición que la pone en rojo: volver a `if (dirty && !saving) await autoSave();` (con un PUT
+       en curso no esperaba nada), o que `autoSave` deje de devolver el guardado en vuelo. */
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const iEspera = pedir.indexOf("await esperarQueSeGuarde()");
+    expect(iEspera, "el paso 1 no espera el guardado").toBeGreaterThan(-1);
+    expect(iEspera).toBeLessThan(pedir.indexOf("/timeline/estructura"));
+    expect(pedir).not.toContain("if (dirty && !saving) await autoSave();");
+    const autoSave = tramo("const autoSave = (): Promise<void> => {", "const guardarAhora");
+    expect(autoSave).toContain("if (guardadoEnVueloRef.current) return guardadoEnVueloRef.current;");
+    expect(autoSave.indexOf("guardadoEnVueloRef.current = enVuelo;")).toBeGreaterThan(-1);
+    const esperar = tramo("const esperarQueSeGuarde = async ()", "const setAnchorFromGantt");
+    expect(esperar).toContain("await enVuelo;");
+    expect(esperar, "lo que quedó sin mandar se guarda con el estado de AHORA, no el del clic").toContain(
+      "await ultimo.autoSave();",
+    );
+  });
+
+  it("#8 · un 409 del paso 1 NO arma el detalle pago: trae la propuesta y espera a que se decida", () => {
+    /* La edición que la pone en rojo: seguir hasta `/analyze` en la rama «decidir». */
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const iDecidir = pedir.indexOf('if (paso.paso === "decidir") {');
+    expect(iDecidir).toBeGreaterThan(-1);
+    const rama = pedir.slice(iDecidir, pedir.indexOf("return;", iDecidir));
+    expect(rama).toContain("traerPropuestaPendiente()");
+    expect(rama, "si es la de las reuniones, la cadena sigue al decidirla").toContain("fijarPasoTareas(modo)");
+    expect(pedir.indexOf("return;", iDecidir)).toBeLessThan(pedir.indexOf("/analyze"));
+  });
+
+  it("#4 · con cambios de fases sin decidir, ni «IA» de una fase ni el acuerdo viejo del chat reemplazan la propuesta", () => {
+    /* La edición que la pone en rojo: sacar la guarda de `submitAssist`, o volver a ofrecer «IA» por
+       fase con una propuesta de estructura en pantalla. */
+    const assist = tramo("const submitAssist = async (", "const aplicarOperacionesAcordadas");
+    const iGuarda = assist.indexOf("if (proposal && structureOnlyProposal) {");
+    expect(iGuarda, "submitAssist no frena").toBeGreaterThan(-1);
+    expect(iGuarda).toBeLessThan(assist.indexOf("/timeline/assist"));
+    expect(assist.slice(iGuarda, iGuarda + 200)).toContain("fallo: CAMBIOS_DE_FASES_SIN_DECIDIR");
+    expect(canvas).toMatch(/onAssistPhase=\{\s*\(hasAiDetail \? canRegenerateTimeline : canGenerateTimeline\) && !\(proposal && structureOnlyProposal\)/);
+  });
+
+  it("#4 · descartar la del modificador no toca el servidor, y el DELETE solo borra la que la pantalla tiene enfrente", () => {
+    /* La edición que la pone en rojo: el DELETE incondicional de antes, o sin `runId`. */
+    const descartar = tramo("const discardProposal = async (", "const resolveProposalItems = async (");
+    const iSi = descartar.indexOf("if (!proposalMeta.current.deAssist) {");
+    expect(iSi, "el DELETE ya no depende de dónde vive la propuesta").toBeGreaterThan(-1);
+    expect(iSi).toBeLessThan(descartar.indexOf("/timeline/proposal`"));
+    expect(descartar).toContain("runId: proposalMeta.current.runId");
+    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/route.ts"));
+    expect(ruta).toContain('if (body && "runId" in body) {');
+    expect(ruta, "el borrado no está condicionado a la corrida que se leyó").toContain(
+      "where: { projectId, pendingProposalRunId: existing.pendingProposalRunId }",
+    );
+  });
+
+  it("#3 / #6 · aplicar una sugerencia exige que la guardada sea la que el CSE tiene enfrente", () => {
+    /* La edición que la pone en rojo: sacar el 409 de apply-items, moverlo después de la transacción,
+       o que la pantalla deje de mandar el `runId`. */
+    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"));
+    const i409 = ruta.indexOf('error: "PROPUESTA_CAMBIO"');
+    expect(i409).toBeGreaterThan(-1);
+    expect(i409).toBeLessThan(ruta.indexOf("prisma.$transaction("));
+    expect(ruta.slice(ruta.indexOf('if ("runId" in body) {'), i409)).toContain(
+      "vista !== (tl.pendingProposalRunId ?? null)",
+    );
+    const resolver = tramo("const resolveProposalItems = async (", "useEffect(");
+    expect(resolver).toContain("runId: proposalMeta.current.runId");
+    expect(resolver.slice(resolver.indexOf("res.status === 409"))).toContain("traerPropuestaPendiente()");
+  });
+
+  it("#3 / #6 · el handoff no pisa una propuesta de las reuniones sin decidir", () => {
+    /* La edición que la pone en rojo: volver al `update` plano de `pendingProposal`, o sacar el chequeo
+       del origen. */
+    const analyze = soloCodigo(leer("app/api/clients/[id]/analyze/route.ts"));
+    const iOrigen = analyze.indexOf('origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null) === "contexto"');
+    expect(iOrigen, "no mira de dónde es la propuesta pendiente").toBeGreaterThan(-1);
+    const iEscritura = analyze.indexOf("pendingProposal: { anchorStartDate: reconciled.anchorStartDate");
+    expect(iOrigen).toBeLessThan(iEscritura);
+    const escritura = analyze.slice(analyze.lastIndexOf("prisma.projectTimeline.", iEscritura), iEscritura);
+    expect(escritura, "la escritura no está condicionada a lo que se leyó").toContain("updateMany(");
+    expect(analyze.slice(iOrigen, iEscritura)).toContain("AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE");
+  });
+
+  it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío", () => {
+    /* La edición que la pone en rojo: mostrar las observaciones solo en el acordeón del paso 2. */
+    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*!allRegenPreview &&/);
+    expect(canvas).toContain("<ObservacionesDelPaso1 observaciones={observacionesPaso1}");
+  });
+
+  it("#22 · la corrida fallida guarda la frase de la pantalla, no el crudo del SDK", () => {
+    /* La edición que la pone en rojo: volver a `{ error: e.message }` en el catch de la ruta. */
+    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/estructura/route.ts"));
+    const iCatch = ruta.indexOf("} catch (e) {");
+    expect(ruta.slice(iCatch, ruta.indexOf("ESTRUCTURA_FALLO", iCatch))).toContain("error: errorDeLaRevisionDeFases(e)");
+  });
+});

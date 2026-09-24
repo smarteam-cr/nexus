@@ -14,9 +14,12 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   AVISO_ACORDADO_SIN_ENTRAR,
+  AVISO_DECIDE_PRIMERO,
   AVISO_FALLO_DE_ESTRUCTURA,
   AVISO_PROPUESTA_PENDIENTE,
   AVISO_SIN_CAMBIOS,
+  CAMBIOS_DE_FASES_SIN_DECIDIR,
+  errorDeLaRevisionDeFases,
   FRASE_PLAZO_JUSTO,
   MAX_FASES_NUEVAS,
   MAX_OBSERVACIONES,
@@ -32,7 +35,7 @@ import {
   revisarDireccionDelPlazo,
   type FaseParaEstructura,
 } from "./propuesta-de-estructura";
-import { computeProposalDeltas } from "./proposal-deltas";
+import { buildPhaseOrder, computeProposalDeltas, reescribirPropuestaPendiente } from "./proposal-deltas";
 import { ACTIVITY_TYPES } from "./validate";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
@@ -261,7 +264,16 @@ describe("G3 · los filtros: lo que el modelo no puede hacer, aunque lo pida", (
       { tipo: "agregar", despuesDeFaseId: "a", name: "Revisión de artes y contenidos", durationWeeks: 1, motivo: "Nota «Acuerdo de alcance»" },
       { tipo: "mover", faseId: "d", despuesDeFaseId: "b", motivo: "Reunión del 22 sep: pruebas antes de capacitar" },
     ]);
-    const nombres = r.propuesta!.phases.map((p) => p.name);
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: miraba el orden del ARRAY de
+       la propuesta. Ahora el «mover» viaja como intención (`movidas`) y el array va en el orden de
+       hoy, así un orden que el CSE cambie a mano mientras la propuesta espera no se revierte. Lo que
+       importa —y se sigue pidiendo— es el orden que QUEDA al aceptar todo (`buildPhaseOrder`). */
+    expect(r.propuesta!.movidas).toEqual([{ id: "d", despuesDe: "b" }]);
+    const actuales = FASES.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks }));
+    const porId = new Map(actuales.map((f) => [f.id, f.name]));
+    const nombres = buildPhaseOrder(actuales, r.propuesta!, new Set(r.deltas.map((d) => d.key))).map((s) =>
+      s.kind === "new" ? s.phase.name : porId.get(s.id),
+    );
     expect(nombres).toEqual([
       "Semana 0 – Arranque",
       "Arquitectura y planificación",
@@ -873,13 +885,106 @@ describe("G4 · sin cambios reales no se guarda nada", () => {
   });
 });
 
+/**
+ * ── #1 / #28 · LA PROPUESTA DICE QUÉ CAMBIA, NO GUARDA UNA FOTO (revisión adversarial, 2026-09-24) ──
+ * La propuesta copiaba todas las fases tal como estaban, y los deltas se recalculan contra las fases
+ * VIVAS campo por campo. Lo que el CSE editaba mientras la propuesta esperaba —o lo que un autoguardado
+ * en vuelo todavía no había escrito cuando el paso 1 leyó la base— volvía como una «sugerencia» que lo
+ * revertía, pegada al cambio de la reunión en la MISMA clave: aceptar la duración pisaba la nota nueva.
+ */
+describe("#1 / #28 · lo que el CSE edita mientras la propuesta espera no vuelve como sugerencia", () => {
+  const vivas = (cambios: (f: FaseParaEstructura) => Partial<FaseParaEstructura>) =>
+    FASES.map((f) => ({ ...f, ...cambios(f) })).map(({ id, name, durationWeeks, startWeek, sessionCount, notes, activityType }) => ({
+      id, name, durationWeeks, startWeek, sessionCount, notes, activityType,
+    }));
+
+  it("otra nota, otro nombre, otra duración: solo queda el cambio que pidió la reunión", () => {
+    /* La edición que la pone en rojo: comparar TODOS los campos (sacar `camposDeLaFasePropuesta` de
+       computeProposalDeltas) o no escribir `campos` en el armador. */
+    const r = armar([{ tipo: "ajustar", faseId: "c", durationWeeks: 3, motivo: "Reunión 22 sep: Capacitación pasa a 3" }]);
+    const despues = vivas((f) =>
+      f.id === "c"
+        ? { notes: "Llevar manual impreso" }
+        : f.id === "b"
+          ? { name: "Configuración CRM" }
+          : f.id === "d"
+            ? { durationWeeks: 4 }
+            : {},
+    );
+    const deltas = computeProposalDeltas(despues, r.propuesta!, null);
+    expect(deltas.map((d) => d.key)).toEqual(["mod:c"]);
+    const mod = deltas[0];
+    expect(mod.kind === "MODIFY_PHASE" ? mod.changes : null, "aceptar la duración pisaría la nota nueva").toEqual([
+      { field: "durationWeeks", from: 2, to: 3 },
+    ]);
+  });
+
+  it("la foto vieja de un autoguardado en vuelo no revierte lo recién guardado", () => {
+    /* El caso de la revisión: el paso 1 leyó «Pruebas» con 2 semanas y la nota vieja; el PUT en vuelo
+       dejó 4 semanas y la nota nueva. El modelo solo sumó una fase: no hay nada que revertir. */
+    const r = armar([
+      { tipo: "agregar", despuesDeFaseId: "d", name: "Piloto con socios", durationWeeks: 1, motivo: "Reunión 22 sep" },
+    ]);
+    const despues = vivas((f) => (f.id === "d" ? { durationWeeks: 4, notes: "Lo acordado el 22" } : {}));
+    expect(computeProposalDeltas(despues, r.propuesta!, null).map((d) => d.key)).toEqual(["add:5"]);
+  });
+
+  it("un orden cambiado a mano no vuelve como reordenamiento, y un «mover» pendiente se arma sobre el orden vivo", () => {
+    /* La edición que la pone en rojo: volver a tomar el orden del array (sin `movidas`) en
+       `secuenciaPropuesta`, o guardar el array ya movido en el armador. */
+    const sinMover = armar([{ tipo: "ajustar", faseId: "c", durationWeeks: 3, motivo: "M" }]);
+    const aMano = vivas(() => ({}));
+    [aMano[3], aMano[4]] = [aMano[4], aMano[3]]; // el CSE puso «Pruebas» antes de «Capacitación»
+    expect(computeProposalDeltas(aMano, sinMover.propuesta!, null).map((d) => d.key)).toEqual(["mod:c"]);
+
+    const conMover = armar([{ tipo: "mover", faseId: "b", despuesDeFaseId: "d", motivo: "Reunión 22 sep" }]);
+    const reorden = computeProposalDeltas(aMano, conMover.propuesta!, null).find((d) => d.kind === "REORDER_PHASES");
+    expect(reorden && reorden.kind === "REORDER_PHASES" ? reorden.ids : null, "el «mover» revierte el orden manual").toEqual([
+      "s0", "a", "d", "b", "c", "e", "f",
+    ]);
+    expect(buildPhaseOrder(aMano, conMover.propuesta!, new Set(["reorder"])).map((s) => (s.kind === "existing" ? s.id : "nueva"))).toEqual([
+      "s0", "a", "d", "b", "c", "e", "f",
+    ]);
+  });
+
+  it("resolver una sugerencia no convierte al resto en una foto: después de reescribir, sigue sin revertir", () => {
+    /* La edición que la pone en rojo: re-emitir las fases sin sugerencia SIN `campos: []` en
+       `reescribirPropuestaPendiente` (volverían a compararse todos sus campos). */
+    const r = armar([
+      { tipo: "ajustar", faseId: "c", durationWeeks: 3, motivo: "M1" },
+      { tipo: "mover", faseId: "b", despuesDeFaseId: "d", motivo: "M2" },
+    ]);
+    // Se aceptó «Capacitación» a 3 semanas; después el CSE le escribe una nota a esa fase y a otra.
+    const base = vivas((f) => (f.id === "c" ? { durationWeeks: 3 } : {}));
+    const reescrita = reescribirPropuestaPendiente(r.propuesta!, base, new Set(["mod:c"]));
+    const conNota = base.map((f) => (f.id === "a" || f.id === "c" ? { ...f, notes: "nota que escribió el CSE" } : f));
+    expect(computeProposalDeltas(conNota, reescrita, null).map((d) => d.key)).toEqual(["reorder"]);
+    // Resuelto el «mover», sus movidas se van con él.
+    expect(reescribirPropuestaPendiente(reescrita, base, new Set(["reorder"])).movidas).toEqual([]);
+  });
+
+  it("la del handoff (sin `campos` ni `movidas`) sigue comparando todo, como antes", () => {
+    const actuales = vivas(() => ({}));
+    const handoff = {
+      anchorStartDate: null,
+      phases: actuales.map((f) => (f.id === "c" ? { ...f, notes: "nota del handoff" } : { ...f })),
+    };
+    expect(computeProposalDeltas(actuales, handoff, null).map((d) => d.key)).toEqual(["mod:c"]);
+  });
+});
+
 describe("la máquina de pasos de la pantalla", () => {
   it("después de pedir la estructura", () => {
     /* ⛔ Una falla del paso 1 NUNCA traba al CSE: sigue con las tareas. Solo el 403 detiene (sin
        permiso, el paso 2 tampoco lo tendría). */
     expect(pasoTrasEstructura({ red: true })).toEqual({ paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA });
     expect(pasoTrasEstructura({ status: 500 })).toEqual({ paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA });
-    expect(pasoTrasEstructura({ status: 409 })).toEqual({ paso: "tareas", aviso: AVISO_PROPUESTA_PENDIENTE });
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el 409 seguía con las tareas
+       («tareas» + AVISO_PROPUESTA_PENDIENTE). Un 409 no es una falla del paso 1: YA hay cambios de
+       fases sin decidir, y el detalle —la corrida más cara— se armaba sobre fases que nadie decidió;
+       el mismo aviso pedía volver a regenerar, así que se pagaba dos veces. Ahora la pantalla trae esa
+       propuesta y espera («decidir»). La edición que la pone en rojo: volver a «tareas» en el 409. */
+    expect(pasoTrasEstructura({ status: 409 })).toEqual({ paso: "decidir" });
     expect(pasoTrasEstructura({ status: 403, message: "Sin permiso." })).toEqual({ paso: "detener", mensaje: "Sin permiso." });
     expect(pasoTrasEstructura({ status: 200, estado: "propuesta" })).toEqual({ paso: "esperar" });
     expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios" })).toEqual({ paso: "tareas", aviso: AVISO_SIN_CAMBIOS });
@@ -910,8 +1015,24 @@ describe("la máquina de pasos de la pantalla", () => {
     expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: false })).toBe("ofrecer");
   });
 
+  it("#22 · el fallo del paso 1 se guarda como lo lee el CSE: la frase de la pantalla y la causa en tuteo", () => {
+    /* La corrida guardaba el crudo del SDK y el centro de corridas lo mostraba en un toast rojo, en
+       inglés, encima de «sigo con las tareas». La edición que la pone en rojo: devolver `e.message`. */
+    const sobrecarga = Object.assign(new Error('529 {"type":"error","error":{"type":"overloaded_error"}}'), { status: 529 });
+    expect(errorDeLaRevisionDeFases(sobrecarga)).toBe(
+      "No se pudieron revisar las fases esta vez (la IA está sobrecargada); se siguió con las tareas.",
+    );
+    expect(errorDeLaRevisionDeFases(new Error("Request timed out."))).toContain("tardó demasiado");
+    expect(errorDeLaRevisionDeFases(new Error("respuesta ilegible del modelo"))).toContain("no se pudo leer");
+    for (const e of [sobrecarga, new Error("Request timed out."), new Error("x"), "cualquier cosa"]) {
+      const t = errorDeLaRevisionDeFases(e);
+      expect(t).toContain("se siguió con las tareas");
+      expect(t).not.toMatch(/overloaded|timed out|\{|avisá|probá/i);
+    }
+  });
+
   it("los avisos van en tuteo", () => {
-    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR]) {
+    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_DECIDE_PRIMERO, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR, CAMBIOS_DE_FASES_SIN_DECIDIR]) {
       expect(aviso).not.toMatch(/resolvélos|volvé|revisá|podés|decidís|ves vos/);
     }
   });
