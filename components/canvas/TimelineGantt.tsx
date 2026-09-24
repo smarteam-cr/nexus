@@ -172,7 +172,7 @@ interface Props {
   // Crear un AVISO a mano (el CSE le escribe algo al cliente). Si viene, el bloque se muestra
   // aunque no haya ninguna particularidad todavía — si no, no habría dónde poner el botón.
   onAddParticularidad?: () => void;
-  // Sugerencias de ESTRUCTURA pendientes (propuesta del handoff, solo fases): se dibujan DENTRO
+  // Sugerencias de ESTRUCTURA pendientes (propuesta de estructura, solo fases): se dibujan DENTRO
   // del Gantt real — badge "Sugerencia" en la fila de la fase afectada + fila fantasma por fase
   // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
   proposalDeltas?: ProposalDelta[];
@@ -482,7 +482,7 @@ export default function TimelineGantt({
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const editable = !readOnly && !!onUpdateTask;
 
-  // Sugerencias de estructura (propuesta del handoff) indexadas para el render in-place:
+  // Sugerencias de estructura (del handoff o de las reuniones elegidas) indexadas para el render in-place:
   // cambios sobre fases existentes por phaseId (badge en su fila) + fases nuevas (filas fantasma).
   // El gate de edición se hace en cada punto de uso (`!readOnly && onResolveProposalDelta`), que
   // además ESTRECHA el tipo del handler y evita aserciones `!`.
@@ -1068,7 +1068,7 @@ export default function TimelineGantt({
                         </span>
                       </div>
 
-                      {/* ── SUGERENCIA DE LA IA SOBRE ESTA FASE (propuesta del handoff) ──────
+                      {/* ── SUGERENCIA DE LA IA SOBRE ESTA FASE (propuesta de estructura) ────
                           Vive en su PROPIA fila, a lo ancho de la columna, y no dentro de la
                           hilera de chips de arriba. Ahí estaba antes y se rompía: el chip iba
                           en un `ml-auto` (alineado a la derecha) con un solo string largo
@@ -1149,6 +1149,15 @@ export default function TimelineGantt({
                                 {p.tasks.length > 0
                                   ? ` — conserva sus ${plural(p.tasks.length, "tarea actual", "tareas actuales")}.`
                                   : "."}
+                              </p>
+                            )}
+
+                            {/* El motivo de la IA (la propuesta de las reuniones y notas elegidas lo
+                                trae; la del handoff no). Interno: cita la reunión o la nota, así que
+                                nunca se escribe en la fase ni llega al cliente. */}
+                            {d.motivo && (
+                              <p className="text-xs leading-relaxed text-fg-secondary">
+                                <span className="font-semibold text-fg">Por qué (solo lo ves tú):</span> {d.motivo}
                               </p>
                             )}
 
@@ -1366,9 +1375,10 @@ export default function TimelineGantt({
             })}
             </SortableContext>
             </DndContext>
-            {/* Fases NUEVAS propuestas por la IA (del handoff) — filas fantasma dentro del
-                cronograma real: no existen hasta que el CSE las acepta. Nacen vacías; las
-                tareas se detallan después con "regenerar solo esta fase". */}
+            {/* Fases NUEVAS propuestas por la IA (propuesta de estructura: del handoff o de las
+                reuniones y notas elegidas) — filas fantasma dentro del cronograma real: no existen
+                hasta que el CSE las acepta. Nacen vacías; las tareas llegan con el paso 2 de
+                «Regenerar todo» o con "regenerar solo esta fase". */}
             {!readOnly &&
               onResolveProposalDelta &&
               proposalAdds.map((d) => (
@@ -1418,6 +1428,11 @@ export default function TimelineGantt({
                       </button>
                     </span>
                   </div>
+                  {d.phase.motivo && (
+                    <p className="text-xs leading-relaxed text-fg-secondary">
+                      <span className="font-semibold text-fg">Por qué (solo lo ves tú):</span> {d.phase.motivo}
+                    </p>
+                  )}
                 </div>
               ))}
             {editable && onAddPhase && (

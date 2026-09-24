@@ -18,6 +18,7 @@ import { resolvePipeline, type ProjectPipelineKey } from "@/lib/projects/kind";
 import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
 import { fuentesDelAssist } from "./asistente-cronograma";
+import { calendarioDeEstructura, fuentesDeEstructura } from "./estructura-cronograma";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 import { getProjectTimelineSessions } from "@/lib/sessions/project-sources";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
@@ -161,6 +162,61 @@ export async function cargarContextoDelAssist(
   };
 }
 
+/**
+ * El contexto del REVISOR DE FASES Y TIEMPOS (pieza "estructura"): el paso 1 de «Regenerar todo»
+ * cuando el CSE eligió reuniones o pegó notas (ver ./estructura-cronograma.ts y la ruta
+ * `timeline/estructura`).
+ *
+ *   · calendario-del-cronograma — el del plan, CON ids, estado y «Hoy», sobre la foto que pasa la ruta
+ *   · handoff-curado            — SOLO bloques confirmados (con un respaldo propio sin handoff)
+ *   · reuniones / notas         — lo elegido en el «Contexto del cronograma»
+ *   · instrucciones             — la entry `__doc` del canvas del cronograma, igual que el detalle
+ *
+ * ⭐ PRIMERO EL MATERIAL. Sin reuniones con contenido ni notas no hay nada que revisar: devuelve
+ * SIN fuentes y la ruta vuelve antes de crear la corrida. Por eso el handoff —la lectura pesada— se
+ * lee recién DESPUÉS de saber que hay material: un «Regenerar todo» sin material no paga ni el
+ * modelo ni el handoff.
+ *
+ * ⚠ LA FOTO LA PASA LA RUTA (`foto`, con ids, estado y tareas hechas de cada fase) y viaja al
+ * cargador del material como `opts.fases`: el modelo, el calendario, la ubicación de cada reunión
+ * y el armador que valida la respuesta miran LA MISMA foto. Leerla dos veces abriría la puerta a
+ * que el modelo nombre una fase que el armador ya no tiene.
+ */
+export async function cargarContextoDeEstructura(
+  projectId: string,
+  foto: FotoDelCronograma,
+): Promise<ContextoDeProyecto> {
+  const [mat, canvasCronograma, proyecto] = await Promise.all([
+    cargarMaterialDelCronograma(projectId, { fases: foto }),
+    prisma.projectCanvas.findFirst({
+      where: { projectId, ...canvasOf("timeline") },
+      select: { sections: true },
+    }),
+    // El tipo sale del pipeline, nunca se guarda (regla del multipipeline).
+    prisma.project.findUnique({ where: { id: projectId }, select: { hubspotPipelineId: true } }),
+  ]);
+  const pipelineKey = resolvePipeline(proyecto?.hubspotPipelineId ?? null)?.key ?? null;
+  if (!mat.reuniones.trim() && !mat.notas.trim()) {
+    return { projectId, pipelineKey, fuentes: [], instrucciones: "", sesionesUsadas: [], materialInterno: [] };
+  }
+  const handoffCtx = await loadHandoffContext(projectId, { onlyConfirmed: true });
+  return {
+    projectId,
+    pipelineKey,
+    fuentes: fuentesDeEstructura({
+      calendarioCtx: calendarioDeEstructura(foto, Date.now()),
+      handoffCtx,
+      reunionesCtx: mat.reuniones,
+      notasCtx: mat.notas,
+    }),
+    instrucciones: bloqueDeInstruccionesDeDoc(
+      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
+    ),
+    sesionesUsadas: mat.sesionesUsadas,
+    materialInterno: mat.materialInterno,
+  };
+}
+
 export interface OpcionesDelMaterial {
   /** Tope total de caracteres de reuniones (el chat usa uno menor). Default: TOPE_REUNIONES_CRONOGRAMA. */
   topeReuniones?: number;
@@ -198,9 +254,11 @@ export interface MaterialDelCronograma {
  * notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
  *
  * Lo leen el detalle (tareas, su semana, cuáles son reuniones y quién las hace — NO fases ni
- * duraciones: las tiene prohibidas) y «Pedir cambio con IA» (que sí puede tocar fases, pero solo
- * lo que pide la instrucción). ⚠ NO lo leen el agente de handoff —que arma y re-propone las fases—
- * ni, por ahora, el chat del cronograma. Devuelve `""` en lo que no haya: los armadores omiten la
+ * duraciones: las tiene prohibidas), «Pedir cambio con IA» (que sí puede tocar fases, pero solo
+ * lo que pide la instrucción) y el revisor de fases y tiempos de «Regenerar todo»
+ * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE decide uno por uno). ⚠ NO lo
+ * leen el agente de handoff —que arma y re-propone las fases— ni, por ahora, el chat del
+ * cronograma. Devuelve `""` en lo que no haya: los armadores omiten la
  * fuente vacía y el prompt de un proyecto sin material queda byte-idéntico al de antes.
  *
  * ── QUÉ SE LEE (lector propio, validación del 2026-09-23) ────────────────────

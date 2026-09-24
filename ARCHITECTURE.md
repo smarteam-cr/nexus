@@ -207,7 +207,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**369**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**371**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -539,6 +539,21 @@ for (const t of ALL_PUBLIC_TABLES) {
 6. **Rate limiting + tracking de costos** (deuda): wrapper `callClaude(params, ctx: { agentId, clientId })` que registra tokens consumidos en un nuevo modelo `ClaudeUsage`. A implementar antes del primer proyecto que dispare >50 llamadas/día.
 
 **Por qué**: la IA es un costo variable y un punto único de error. Centralizar el parseo evita 6 maneras distintas de fallar; centralizar el tracking evita facturas sorpresa.
+
+**Un prompt que vive SOLO en código, a propósito — el revisor de fases de «Regenerar todo»**: con
+reuniones o notas elegidas en el «Contexto del cronograma», «Regenerar todo el cronograma» corre en
+dos pasos. El paso 1 (`app/api/projects/[projectId]/timeline/estructura/route.ts`) revisa fases y
+tiempos y deja sus cambios en `pendingProposal` con `origen: "contexto"` —la misma propuesta de
+solo estructura que deja el handoff—, que el CSE decide uno por uno en el Gantt; al resolver la
+última, la pantalla sigue sola con el paso 2, el detalle de siempre. Sin material, el paso 1 vuelve
+antes de leer el handoff y de llamar al modelo. Su prompt (`lib/agents/estructura-cronograma.ts`)
+NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y correría sin celda de
+permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
+`agentId: null` y el `agentSlug` del medidor. El armador (`lib/timeline/propuesta-de-estructura.ts`)
+hace cumplir lo que el prompt prohíbe: quitar fases, mover el arranque, tocar lo terminado y nombres
+de fase que cruzan la frontera. El baseline se parcha con la estructura de la FOTO congelada
+(`inicioDeFaseEnLaFoto` en `lib/timeline/baseline.ts`): aplicar las tareas sobre una estructura
+nueva no le corre la fecha a la promesa.
 
 ---
 

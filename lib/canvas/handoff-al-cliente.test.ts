@@ -146,8 +146,8 @@ const LECTORES: Lector[] = [
     exposicion: "por_curacion",
     porque:
       "el agente de detalle emite TÍTULOS DE TAREA, no prosa, y el CSE los cura antes de que " +
-      "el cronograma se publique. ⚠ Revisar en la Tanda 8: hoy la PRIMERA generación todavía " +
-      "escribe sin pasar por curación, y ahí esta declaración deja de ser cierta",
+      "el cronograma se publique. Desde el 2026-08-16 también la PRIMERA generación pasa por " +
+      "curación (`pedirPropuestaDeDetalle` pide una propuesta; el acordeón la cura antes de escribir)",
   },
   {
     archivo: "lib/contexto/cargar.ts",
@@ -161,6 +161,20 @@ const LECTORES: Lector[] = [
       "⚠ Es la MISMA pieza que el detalle, así que son dos entradas del mismo archivo y por eso " +
       "las dos llevan ancla: el censo cuenta LLAMADAS, no archivos — sin ancla, la segunda " +
       "entraba emparejada por la primera y nadie la miraba.",
+  },
+  {
+    archivo: "lib/contexto/cargar.ts",
+    /* ⚠ El ancla va DESPUÉS de la llamada (el armado de sus fuentes, dentro de los 320 caracteres
+       que el censo mira hacia adelante) y no en el nombre del cargador: este lee el handoff recién
+       después de confirmar que hay material, así que la firma queda a más de 260 caracteres. */
+    ancla: "fuentesDeEstructura",
+    pieza: "timeline",
+    exposicion: "por_curacion",
+    porque:
+      "el revisor de fases y tiempos de «Regenerar todo» (2026-09-23): propone nombres y semanas " +
+      "de fase que el CSE acepta uno por uno en el Gantt; nunca escribe notas ni tareas. Un nombre " +
+      "de fase aceptado lo lee el cliente: por eso el armador lo pasa por la frontera y descarta el " +
+      "que trae una fecha, un plazo, un monto o la cita de la fuente",
   },
   {
     archivo: "lib/timeline/regenerate-progress.ts",

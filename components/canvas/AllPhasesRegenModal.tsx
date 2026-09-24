@@ -33,12 +33,26 @@ export interface AllPhasesRegenModalProps {
   /** «primera» = el cronograma todavía no tiene tareas (la primera generación, que desde
    *  2026-08-16 también se cura). Cambia SOLO el copy: el mecanismo es el mismo. */
   modo?: "primera" | "regen";
+  /** «Regenerar todo» en dos pasos: las fases se acaban de decidir en el Gantt (paso 1) y esto es
+   *  el paso 2. Solo cambia el encabezado. */
+  pasoDos?: boolean;
+  /** Lo que la IA notó al revisar fases y tiempos y no se aplica solo (interno, solo lo ve el CSE). */
+  observaciones?: string[];
   applying: boolean;
   onCancel: () => void;
   onApply: (payload: Array<{ phaseId: string; tasks: FinalTask[] }>) => void;
 }
 
-export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, onCancel, onApply }: AllPhasesRegenModalProps) {
+export function AllPhasesRegenModal({
+  open,
+  phases,
+  modo = "regen",
+  pasoDos = false,
+  observaciones = [],
+  applying,
+  onCancel,
+  onApply,
+}: AllPhasesRegenModalProps) {
   const primera = modo === "primera";
   const [openIds, setOpenIds] = useState<Set<string>>(
     () => new Set(phases.filter((p) => phaseHasChanges(p.proposed.length)).map((p) => p.phaseId)),
@@ -64,6 +78,11 @@ export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, on
   return (
     <Modal open={open} onClose={() => { if (!applying) onCancel(); }} size="xxl" closeOnBackdrop={!applying} closeOnEscape={!applying}>
       <div className="min-w-0">
+        {pasoDos && (
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-info-ink mb-1">
+            Paso 2 de 2 · Tareas sobre las fases que acabas de decidir
+          </p>
+        )}
         <p className="text-sm font-medium text-fg">
           {primera ? "Revisa las tareas antes de crearlas" : "Regenerar todo el cronograma"}
         </p>
@@ -89,6 +108,18 @@ export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, on
           no marca nada como hecho. Para eso está <strong className="text-fg-secondary font-medium">Re-chequear
           avance</strong>, que propone qué ya se completó y tú confirmas.
         </p>
+        {/* Lo que la IA notó al revisar fases y tiempos y no puede aplicar sola (un atraso que ya
+            pasó, un plazo total sin detalle por fase): se lee antes de curar. Nunca va al cliente. */}
+        {observaciones.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-medium text-fg-secondary">La IA también notó (no se aplica sola):</p>
+            <ul className="mt-0.5 space-y-0.5 text-xs text-fg-muted">
+              {observaciones.map((o, i) => (
+                <li key={i}>· {o}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 space-y-2 max-h-[65vh] overflow-y-auto">

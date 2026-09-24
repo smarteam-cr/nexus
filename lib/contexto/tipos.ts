@@ -70,8 +70,11 @@ export interface ContextoDeProyecto {
  * edita la pieza `"timeline"`. Entra igual porque lo que este registro gobierna es «qué
  * generaciones arman su contexto con nombre en vez de a mano en la ruta», y el modificador es
  * una generación más — la que hasta el 2026-08-18 no veía nada del negocio.
+ *
+ * `"estructura"` tampoco es una pieza: es el revisor de FASES Y TIEMPOS del paso 1 de «Regenerar
+ * todo» (2026-09-23), que también edita la pieza `"timeline"` (ver ./estructura-cronograma.ts).
  */
-export const PIEZAS_CON_CONTEXTO_NOMBRADO: readonly string[] = ["timeline", "assist"];
+export const PIEZAS_CON_CONTEXTO_NOMBRADO: readonly string[] = ["timeline", "assist", "estructura"];
 
 /** Serializa las fuentes al prompt, en orden, salteando las vacías. */
 export function renderFuentes(fuentes: readonly FuenteDeContexto[]): string {

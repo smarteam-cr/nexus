@@ -298,7 +298,8 @@ export function buildPhaseOrder(
  * La propuesta que QUEDA pendiente después de resolver `resolvedKeys`, reescrita de forma
  * CANÓNICA contra las fases ya escritas (`phasesAfter`, en su orden):
  *  - la SECUENCIA pasa a ser la del cronograma real, así un reordenamiento ya resuelto (aceptado
- *    O descartado) no se vuelve a proponer solo en la próxima lectura;
+ *    O descartado) no se vuelve a proponer solo en la próxima lectura; si el reordenamiento sigue
+ *    PENDIENTE, se conserva el orden propuesto (ver abajo);
  *  - cada fase conserva el contenido PROPUESTO solo si su sugerencia sigue pendiente (si se
  *    aceptó, la DB ya lo tiene; si se descartó, gana la DB);
  *  - las fases nuevas no resueltas se reinsertan detrás de su fase ancla.
@@ -334,8 +335,31 @@ export function reescribirPropuestaPendiente(
     keptNewByAnchor.set(anchorId, arr);
   });
 
-  const rebuilt: ProposalPhaseLike[] = [...(keptNewByAnchor.get(null) ?? [])];
+  /* ⛔ UN REORDENAMIENTO PENDIENTE NO SE PIERDE POR RESOLVER OTRA COSA (2026-09-23). Antes la
+     secuencia salía SIEMPRE del cronograma real: aceptar una duración borraba sin aviso el
+     «mover» que seguía sin decidir, y nadie lo había aceptado ni descartado. Mientras `reorder`
+     no esté resuelto, las existentes van en el orden PROPUESTO. Una fase que la propuesta no
+     nombra (la que se acaba de crear al aceptar un «agregar») viaja pegada a la fase que tiene
+     delante en el cronograma real: si fuera al final, el reordenamiento pasaría a mover también
+     la fase recién aceptada. Sin reordenamiento pendiente la secuencia es idéntica a la real. */
+  const idsPropuestos = [...new Set(proposal.phases.map((p) => p.id).filter((id): id is string => !!id))];
+  const nombradas = new Set(idsPropuestos);
+  const alPrincipio: CurrentPhaseLike[] = [];
+  const grupos = new Map<string, CurrentPhaseLike[]>();
+  let cabeza: string | null = null;
   for (const ph of phasesAfter) {
+    if (nombradas.has(ph.id)) {
+      cabeza = ph.id;
+      grupos.set(ph.id, [ph]);
+    } else if (cabeza === null) alPrincipio.push(ph);
+    else grupos.get(cabeza)!.push(ph);
+  }
+  const secuencia = resolvedKeys.has("reorder")
+    ? phasesAfter
+    : [...alPrincipio, ...idsPropuestos.flatMap((id) => grupos.get(id) ?? [])];
+
+  const rebuilt: ProposalPhaseLike[] = [...(keptNewByAnchor.get(null) ?? [])];
+  for (const ph of secuencia) {
     rebuilt.push(pendingModByPhase.get(ph.id) ?? { ...ph });
     rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
   }

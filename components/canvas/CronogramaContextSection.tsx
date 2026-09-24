@@ -113,8 +113,9 @@ export default function CronogramaContextSection({
           `hidden` para no desmontar ni volver a pedir todo al abrir y cerrar. */}
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
-          Con esto la IA arma las tareas de cada fase, decide cuáles son reuniones con el cliente y
-          propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
+          Con esto la IA revisa las fases y sus tiempos al «Regenerar todo el cronograma» (tú aceptas o
+          descartas cada cambio), arma las tareas de cada fase, decide cuáles son reuniones con el
+          cliente y propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
           búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo
           mientras quepa; si eliges muchas, se reparten el espacio. Sacarla de acá no la saca del

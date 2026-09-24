@@ -90,6 +90,30 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     }
   });
 
+  it("⭐ el revisor de fases de «Regenerar todo» carga el material con SU foto, y el handoff recién después", () => {
+    /* El paso 1 de «Regenerar todo» (2026-09-23). Su tramo corta en la siguiente `export async
+       function`, así que estas aserciones son SUYAS y no las cubre el cargador vecino. Las ediciones
+       que la ponen en rojo: dejar de pasarle la foto al material (el modelo y el armador verían
+       planes distintos), perder las notas, o volver a leer el handoff antes de saber si hay
+       material (todo «Regenerar todo» sin material pagaría esa lectura). */
+    const tramo = tramoDe(sinComentarios(leer("lib/contexto/cargar.ts")), "cargarContextoDeEstructura");
+    expect(tramo.length, "la guarda no está mirando el cargador del revisor").toBeGreaterThan(200);
+    expect(tramo, "el revisor dejó de cargar el material con la foto de la ruta").toContain(
+      "cargarMaterialDelCronograma(projectId, { fases: foto })",
+    );
+    expect(tramo, "el revisor carga el material pero no lo pasa").toContain("reunionesCtx: mat.reuniones");
+    expect(tramo, "el revisor perdió las notas").toContain("notasCtx: mat.notas");
+    expect(tramo, "el revisor perdió qué reuniones leyó").toContain("sesionesUsadas: mat.sesionesUsadas");
+    expect(tramo, "el revisor perdió el material para revisar la frontera").toContain(
+      "materialInterno: mat.materialInterno",
+    );
+    const iSale = tramo.indexOf("if (!mat.reuniones.trim() && !mat.notas.trim())");
+    expect(iSale, "el revisor dejó de salir antes sin material").toBeGreaterThan(-1);
+    expect(tramo.indexOf("loadHandoffContext("), "el handoff se lee antes de saber si hay material").toBeGreaterThan(
+      iSale,
+    );
+  });
+
   it("⭐ el detalle recibe el calendario SIN «Hoy» y «Pedir cambio con IA», CON «Hoy»", () => {
     /* Con «Hoy», el detalle vaciaba las semanas que ya pasaron aunque su trabajo no estuviera hecho;
        el modificador edita un cronograma vivo y sí tiene que saberlo. La edición que la pone en

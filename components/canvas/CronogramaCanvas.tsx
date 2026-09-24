@@ -67,7 +67,9 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
-import { computeProposalDeltas, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
+import { computeProposalDeltas, origenDePropuesta, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
+import { pasoTrasEstructura, pasoTrasResolver, type RespuestaDeEstructura } from "@/lib/timeline/propuesta-de-estructura";
+import PasoDeTareasPendiente from "./PasoDeTareasPendiente";
 import { impactoDeUnDelta, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
 import { medirPropuesta, type MagnitudPropuesta } from "@/lib/timeline/magnitud-propuesta";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
@@ -155,10 +157,16 @@ interface ProposalPhase {
   notes?: string | null;
   activityType?: string | null;
   tasks?: ProposalTask[];
+  /** Por qué la IA propone cambiar ESTA fase (solo la propuesta de las reuniones; interno). */
+  motivo?: string | null;
 }
 interface Proposal {
   anchorStartDate: string | null;
   phases: ProposalPhase[];
+  /** «contexto» = salió de las reuniones y notas elegidas (paso 1 de «Regenerar todo»). Sin él, del handoff. */
+  origen?: "contexto";
+  /** Lo que la IA notó y no se aplica solo (interno). */
+  observaciones?: string[];
 }
 
 interface ServerTask {
@@ -360,6 +368,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [allRegenRunId, setAllRegenRunId] = useState<string | null>(null);
   const [allRegenLoading, setAllRegenLoading] = useState(false);
   const [allRegenApplying, setAllRegenApplying] = useState(false);
+  /* ── «REGENERAR TODO» EN DOS PASOS (2026-09-23) ─────────────────────────────────────────
+     Con reuniones o notas elegidas, el paso 1 (POST /timeline/estructura) propone cambios de
+     fases y tiempos que el CSE decide en el Gantt; al resolver la última sugerencia sigue solo el
+     paso 2, el detalle de siempre (`pedirPropuestaDeDetalle(modo, { saltarEstructura: true })`).
+     · `revisandoEstructura` — el paso 1 está corriendo: bloquea como cualquier espera de la IA.
+     · `pasoTareasRef` — con qué modo seguir al resolver la última sugerencia; null = esta pantalla
+       no inició ninguna cadena. Es un ref porque lo leen callbacks async; `encadenado` es su
+       espejo para PINTAR (un ref leído en el render no vuelve a pintar).
+     · `ofrecerTareas` — la cadena no arrancó acá (recargó, o las resolvió otra persona): se ofrece
+       el paso 2, nunca se dispara solo para quien no lo pidió.
+     · `observacionesPaso1` / `pasoDos` — lo que el acordeón del paso 2 muestra arriba. */
+  const [revisandoEstructura, setRevisandoEstructura] = useState(false);
+  const pasoTareasRef = useRef<"primera" | "regen" | null>(null);
+  const [encadenado, setEncadenado] = useState(false);
+  const fijarPasoTareas = (m: "primera" | "regen" | null) => {
+    pasoTareasRef.current = m;
+    setEncadenado(m !== null);
+  };
+  const [ofrecerTareas, setOfrecerTareas] = useState(false);
+  const [observacionesPaso1, setObservacionesPaso1] = useState<string[]>([]);
+  const [pasoDos, setPasoDos] = useState(false);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -456,6 +485,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         rotulo: "Reescribiendo el cronograma con IA",
         detalle: "Suele tardar entre dos y cuatro minutos.",
       }
+    : revisandoEstructura
+      ? {
+          /* El paso 1 de «Regenerar todo»: si el Gantt quedara editable, lo que el CSE tipee en el
+             medio lo compararía después una propuesta calculada contra la foto anterior. */
+          activo: true,
+          rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas",
+          detalle: "Suele tardar menos de un minuto.",
+        }
     : generating
         ? {
           activo: true,
@@ -675,6 +712,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           proposalMeta.current = { deAssist: false, runId: data.pendingProposalRunId ?? null };
           return data.pendingProposal ? (data.pendingProposal as Proposal) : null;
         });
+        /* La cadena de «Regenerar todo» esperaba que se resolvieran los cambios de fases, y la
+           propuesta ya no está en el servidor (la resolvió otra persona, o la borró algo que no pasó
+           por acá): el paso 2 no puede quedar colgado, se OFRECE. Si en su lugar hay otra propuesta
+           (el handoff escribió la suya), la cadena se corta: esa no la pidió este «Regenerar todo». */
+        if (pasoTareasRef.current !== null && origenDePropuesta(data.pendingProposal) !== "contexto") {
+          pasoTareasRef.current = null;
+          setEncadenado(false);
+          if (!data.pendingProposal) setOfrecerTareas(true);
+        }
         // D.2 — borrador de avance: lo expone el GET. Pre-tildá las fases propuestas y, de las
         // tareas, SOLO las que el agente infirió hechas (done:true). El resto arranca Pendiente
         // y nada Suspendido — el CSE resuelve cada tarea (hecha/suspendida) antes de cerrar la fase.
@@ -1324,9 +1370,77 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
      una PROPUESTA que el CSE cura antes de que se escriba una sola fila. Hasta el 2026-08-16 la
      primera escribía DIRECTO: era la única del cronograma que entraba sin que nadie la mirara, y
      justo la que más tareas crea. Ahora las dos terminan en el mismo acordeón, y el servidor ya
-     no tiene una rama que persista sin curar. */
-  const pedirPropuestaDeDetalle = async (modo: "primera" | "regen") => {
+     no tiene una rama que persista sin curar.
+
+     ⭐ EN DOS PASOS CUANDO HAY MATERIAL (2026-09-23). Paso 1: POST /timeline/estructura revisa si
+     las reuniones y notas elegidas cambian FASES o TIEMPOS; sin material vuelve al toque y todo
+     sigue como antes. Si propone cambios, el CSE los decide en el Gantt y, al resolver el último,
+     `resolveProposalItems` vuelve a llamar acá con `saltarEstructura` (paso 2: las tareas sobre
+     la estructura ya decidida). ⛔ La continuación SIEMPRE salta el paso 1: si no, re-propondría
+     fases en bucle. Y una falla del paso 1 nunca traba al CSE: sigue con las tareas. */
+  const pedirPropuestaDeDetalle = async (
+    modo: "primera" | "regen",
+    opts?: { saltarEstructura?: boolean },
+  ) => {
     await flushDocBrief();
+    setOfrecerTareas(false);
+    if (opts?.saltarEstructura) {
+      // Las fases se acaban de decidir: el acordeón lo dice.
+      setPasoDos(true);
+    } else {
+      /* Una propuesta de las reuniones SIN decidir: primero esa. Pedir otra daría 409, y las
+         tareas se armarían sobre fases que el CSE todavía no aceptó ni descartó. */
+      if (proposal?.origen === "contexto") {
+        fijarPasoTareas(modo);
+        document.getElementById("cronograma-propuesta")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast.info("Primero decide los cambios de fases que sugirió la IA; después sigo con las tareas.");
+        return;
+      }
+      // Lo que el CSE editó y el autoguardado todavía no mandó: el paso 1 lee la base.
+      if (dirty && !saving) await autoSave();
+      setPasoDos(false);
+      setObservacionesPaso1([]);
+      setRevisandoEstructura(true);
+      let respuesta: RespuestaDeEstructura;
+      let estructura: { proposal?: unknown; runId?: unknown; observaciones?: unknown } = {};
+      try {
+        const res = await fetch(`/api/projects/${projectId}/timeline/estructura`, { method: "POST" });
+        const d = await res.json().catch(() => ({}));
+        estructura = d ?? {};
+        respuesta = { status: res.status, estado: d?.estado, message: d?.message };
+      } catch {
+        respuesta = { red: true };
+      }
+      setRevisandoEstructura(false);
+      const paso = pasoTrasEstructura(respuesta);
+      if (paso.paso === "detener") {
+        toast.error(paso.mensaje);
+        return;
+      }
+      if (paso.paso === "esperar") {
+        // Persistida (pendingProposal): recargar no la pierde, y se resuelve con la franja de siempre.
+        proposalMeta.current = {
+          deAssist: false,
+          runId: typeof estructura.runId === "string" ? estructura.runId : null,
+        };
+        setProposal(estructura.proposal as Proposal);
+        fijarPasoTareas(modo);
+        bumpGpsRefresh();
+        window.setTimeout(
+          () => document.getElementById("cronograma-propuesta")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          150,
+        );
+        return;
+      }
+      setObservacionesPaso1(
+        Array.isArray(estructura.observaciones)
+          ? estructura.observaciones.filter((o): o is string => typeof o === "string" && !!o.trim())
+          : [],
+      );
+      if (paso.aviso) toast.info(paso.aviso);
+      // El handoff pudo dejar su propuesta mientras tanto: que se vea en vez de esperar a recargar.
+      if (!respuesta.red && respuesta.status === 409) void refrescarPropuesta();
+    }
     if (modo === "primera") maybeRequestPermission();
     setAllRegenModo(modo);
     setAllRegenPreview(null);
@@ -1357,7 +1471,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         /* Una propuesta vacía NO abre el acordeón: un modal con cero tareas se lee como «el
            sistema no hizo nada» y deja al CSE sin saber si reintentar. */
         if (fases.length === 0 || fases.every((f: { tasks?: unknown[] }) => (f.tasks ?? []).length === 0)) {
-          const vacio = "El agente no propuso tareas. Revisá que el cronograma tenga fases y volvé a intentar.";
+          const vacio = "El agente no propuso tareas. Revisa que el cronograma tenga fases y vuelve a intentar.";
           if (modo === "primera") setError(vacio);
           else toast.info(vacio);
         } else {
@@ -1464,6 +1578,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         await load();
         clearScope(undoScope);
         setAllRegenPreview(null);
+        setPasoDos(false);
+        setObservacionesPaso1([]);
         toast.success(
           allRegenModo === "primera"
             ? `Tareas creadas — ${data?.phasesApplied ?? payload.length} fases.`
@@ -1476,7 +1592,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         if (typeof data?.preservadas === "number" && data.preservadas > 0) {
           toast.info(
             `${plural(data.preservadas, "tarea con progreso se conservó", "tareas con progreso se conservaron")} ` +
-              `pese a no venir en lo aplicado. Revisá el cronograma.`,
+              `pese a no venir en lo aplicado. Revisa el cronograma.`,
             { duration: 12000 },
           );
         }
@@ -1486,7 +1602,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           const pdata = await pres.json().catch(() => ({}));
           if (pres.ok && pdata?.status === "ok") {
             await load();
-            toast.success("Avance re-evaluado con el cronograma nuevo — confirmá abajo.");
+            toast.success("Avance re-evaluado con el cronograma nuevo — confirma abajo.");
           }
         } catch { /* best-effort, mismo criterio que generateDetail */ }
         setChainingProgress(false);
@@ -1525,7 +1641,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           data?.details?.[0] ??
             data?.message ??
             (data?.error === "assist_invalid_proposal"
-              ? "La IA devolvió una propuesta inválida — probá reformular la instrucción."
+              ? "La IA devolvió una propuesta inválida — prueba reformular la instrucción."
               : data?.error ?? "Error al pedir la actualización.");
         setError(motivo);
         setAssisting(false);
@@ -1574,6 +1690,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     ops: Operacion[],
     resumen: string,
   ): Promise<{ fallo: string | null; avisos: string[] }> => {
+    /* ⛔ CON CAMBIOS DE FASES SIN DECIDIR, EL CHAT NO APLICA (2026-09-23). Este camino guarda con
+       un PUT con motivo, y ese PUT BORRA `pendingProposal` (timeline/route.ts: solo el autoguardado
+       la conserva): las sugerencias del handoff o de las reuniones se perdían a mitad de la revisión
+       y la cadena de «Regenerar todo» quedaba esperando un paso 2 que nunca llegaba. El chat
+       muestra el motivo; el acuerdo sigue ahí para aplicarlo después. */
+    if (proposal && structureOnlyProposal) {
+      return { fallo: "Primero decide los cambios de fases sugeridos (arriba del Gantt).", avisos: [] };
+    }
     const { payload, avisos, rechazadas } = aplicarOperaciones(
       fasesActualesDelAssist,
       anchor || null,
@@ -1681,6 +1805,12 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   };
 
   const discardProposal = async (reason?: string) => {
+    /* Se leen ANTES de limpiar: si la que se va es la de las reuniones (el auto-descarte cuando el
+       CSE ya igualó el cronograma a mano), la cadena de «Regenerar todo» sigue igual que al
+       resolver la última sugerencia. */
+    const origenDescartado = origenDePropuesta(proposal);
+    const observacionesDescartadas = proposal?.observaciones ?? [];
+    const modoDeLaCadena = pasoTareasRef.current;
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
     // limpiarla en el server para que no reaparezca al recargar. La de assist es solo en
     // memoria (el DELETE es no-op inofensivo). El estado local se limpia pase lo que pase.
@@ -1703,15 +1833,31 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
        aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
     bumpGpsRefresh();
+    if (origenDescartado === "contexto") {
+      fijarPasoTareas(null);
+      const siguiente = pasoTrasResolver({
+        pendientes: 0,
+        origen: origenDescartado,
+        iniciadoAqui: modoDeLaCadena !== null,
+      });
+      setObservacionesPaso1(observacionesDescartadas);
+      if (siguiente === "auto" && modoDeLaCadena) void pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true });
+      else if (siguiente === "ofrecer") setOfrecerTareas(true);
+    }
   };
 
-  // ── Resolver POR ÍTEM la propuesta de ESTRUCTURA (la del handoff) ──
+  // ── Resolver POR ÍTEM la propuesta de ESTRUCTURA (la del handoff, o la de las reuniones) ──
   // Aceptar aplica SOLO ese cambio (fase nueva vacía / ajuste de fase / fecha de arranque);
   // descartar solo lo saca de la propuesta. "Aceptar/Descartar todo" pasa todas las claves.
   const [resolvingProposal, setResolvingProposal] = useState(false);
   const resolveProposalItems = async (accept: string[], discard: string[]) => {
     if (resolvingProposal) return;
     setResolvingProposal(true);
+    /* De dónde salió y qué notó la IA: se leen ANTES de limpiar la propuesta (después ya no está). */
+    const origenResuelto = origenDePropuesta(proposal);
+    const observacionesDeLaPropuesta = proposal?.observaciones ?? [];
+    const modoDeLaCadena = pasoTareasRef.current;
+    let siguiente: "nada" | "auto" | "ofrecer" = "nada";
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline/proposal/apply-items`, {
         method: "POST",
@@ -1723,19 +1869,52 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         toast.error(d?.error ?? "No se pudo resolver la sugerencia.");
         return;
       }
-      const d = (await res.json()) as { applied: number; discarded: number };
+      const d = (await res.json()) as {
+        applied: number;
+        discarded: number;
+        pendientes?: number;
+        avisos?: string[];
+      };
       if (d.applied > 0) toast.success(`${plural(d.applied, "sugerencia aplicada", "sugerencias aplicadas")}.`);
       else if (d.discarded > 0) toast.success(d.discarded === 1 ? "Sugerencia descartada." : "Sugerencias descartadas.");
+      /* Las tareas que se corrieron porque su fase se acortó. El servidor ya lo decía y esta
+         pantalla lo tiraba: el CSE aceptaba «4 → 2 semanas» sin enterarse de que dos tareas se
+         mudaron a la última semana. */
+      for (const aviso of Array.isArray(d.avisos) ? d.avisos : []) toast.info(aviso, { duration: 12000 });
       // Recargar todo (fases nuevas/cambiadas + propuesta reescrita). El load setea proposal
       // con `prev ?? …`, así que hay que vaciarla ANTES para que tome la fresca del server.
       proposalMeta.current = { deAssist: false, runId: null };
       setProposal(null);
+      /* La cadena se suelta ANTES de recargar: `load()` ofrece el paso 2 cuando encuentra una
+         cadena esperando y ninguna propuesta, y acá lo decide esta misma función. */
+      fijarPasoTareas(null);
       await load();
       bumpGpsRefresh();
+      const pendientes = typeof d.pendientes === "number" ? d.pendientes : 1;
+      siguiente = pasoTrasResolver({
+        pendientes,
+        origen: origenResuelto,
+        iniciadoAqui: modoDeLaCadena !== null,
+      });
+      // Quedan sugerencias de la misma propuesta: la cadena sigue esperando.
+      if (siguiente === "nada" && modoDeLaCadena && origenResuelto === "contexto" && pendientes > 0) {
+        fijarPasoTareas(modoDeLaCadena);
+      }
     } catch {
       toast.error("Error de conexión al resolver la sugerencia.");
     } finally {
       setResolvingProposal(false);
+    }
+    /* ⭐ EL PASO 2. Resuelta la última sugerencia de las reuniones: si el «Regenerar todo» lo apretó
+       esta pantalla, las tareas se piden solas sobre la estructura ya decidida — SALTANDO el paso 1
+       (si no, volvería a proponer fases en bucle). Si no, se ofrece: nunca se dispara solo para
+       quien no lo pidió. */
+    if (siguiente === "auto" && modoDeLaCadena) {
+      setObservacionesPaso1(observacionesDeLaPropuesta);
+      void pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true });
+    } else if (siguiente === "ofrecer") {
+      setObservacionesPaso1(observacionesDeLaPropuesta);
+      setOfrecerTareas(true);
     }
   };
 
@@ -2513,7 +2692,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                   ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
                   : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
               }
-              title="Conversá el cambio con el asistente: te dice qué se puede y qué fecha mueve antes de generarlo"
+              title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve antes de generarlo"
             >
               💬 Asistente
             </button>
@@ -2540,7 +2719,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
               }
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover transition-colors"
-              title="La IA propuso cambios de estructura desde el handoff — se revisan uno por uno"
+              title="La IA propuso cambios de fases — se revisan uno por uno"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
               {/* Con un cambio masivo, "Revisar 11 cambios" subestima lo que hay abajo: no son
@@ -2592,7 +2771,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               onClick={() => void pedirPropuestaDeDetalle("regen")}
               disabled={allRegenLoading || allRegenApplying}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
-              title="Propone refrescar TODAS las fases con lo que se sabe hoy — revisas y aceptas o descartas antes de aplicar, fase por fase"
+              title="Si elegiste reuniones o notas, primero revisa fases y tiempos con ellas (tú decides cada cambio); después propone las tareas de todas las fases"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               {allRegenLoading ? "Generando propuesta…" : "Regenerar todo el cronograma"}
@@ -2686,7 +2865,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <span className="text-sm leading-none mt-0.5" aria-hidden>⚠</span>
             <p className="text-xs font-semibold text-warn-ink">
               El cronograma está congelado mientras revisas esta propuesta.
-              <span className="font-normal"> Aceptá o descartá los cambios para volver a editarlo.</span>
+              <span className="font-normal"> Acepta o descarta los cambios para volver a editarlo.</span>
             </p>
           </div>
           <div className="px-4 py-3 space-y-2">
@@ -3263,6 +3442,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               </p>
             </div>
           )}
+          {/* El paso 2 de «Regenerar todo» cuando la cadena no arrancó en esta pantalla (recargó a
+              mitad de camino, o las sugerencias las resolvió otra persona): se ofrece, no se dispara. */}
+          {ofrecerTareas && canEdit && !proposal && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && (
+            <PasoDeTareasPendiente
+              trabajando={generating || allRegenLoading}
+              onGenerar={() => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })}
+              onCerrar={() => setOfrecerTareas(false)}
+            />
+          )}
           <TimelineGantt
             anchor={anchor || null}
             phases={ganttPhases}
@@ -3321,6 +3509,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                   magnitud={magnitudPropuesta}
                   working={resolvingProposal}
                   onResolve={(accept, discard) => void resolveProposalItems(accept, discard)}
+                  origen={origenDePropuesta(proposal)}
+                  encadenado={encadenado}
+                  observaciones={proposal?.observaciones}
                 />
               ) : undefined
             }
@@ -3451,6 +3642,15 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           </div>
         </Modal>
       )}
+      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. */}
+      {revisandoEstructura && (
+        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
+          <div className="flex items-center gap-3 py-1">
+            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-fg">Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas…</p>
+          </div>
+        </Modal>
+      )}
       {allRegenPreview && (() => {
         const merged: AllPhasesRegenPhase[] = allRegenPreview
           .map((pv) => {
@@ -3472,7 +3672,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             phases={merged}
             modo={allRegenModo}
             applying={allRegenApplying}
-            onCancel={() => setAllRegenPreview(null)}
+            pasoDos={pasoDos}
+            observaciones={observacionesPaso1}
+            onCancel={() => {
+              setAllRegenPreview(null);
+              setPasoDos(false);
+              setObservacionesPaso1([]);
+            }}
             onApply={applyAllRegen}
           />
         );

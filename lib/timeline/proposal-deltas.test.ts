@@ -586,6 +586,52 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
     expect(origenDePropuesta({ origen: "otro" })).toBe("handoff");
   });
 
+  it("⛔ un «mover» pendiente no se pierde por resolver otra sugerencia", () => {
+    /* Bug que la extracción conservó (revisión del paso A1): la reescritura rearmaba SIEMPRE en el
+       orden del cronograma real, así que aceptar una duración borraba sin aviso el reordenamiento
+       que nadie había decidido. Con los «mover» de la propuesta de las reuniones pasaba seguido.
+       La edición que la pone en rojo: volver a recorrer `phasesAfter` tal cual. */
+    const c = cur({ id: "c", name: "C", durationWeeks: 2 });
+    const p: ProposalLike = {
+      anchorStartDate: null,
+      origen: "contexto",
+      phases: [{ ...a, durationWeeks: 4, motivo: "M-a" }, { ...c, motivo: "M-c" }, { ...b }],
+    };
+    expect(computeProposalDeltas([a, b, c], p, null).map((d) => d.key)).toEqual(["mod:a", "reorder"]);
+
+    const despues = [{ ...a, durationWeeks: 4 }, b, c]; // mod:a aceptado; el orden sigue igual
+    const queda = reescribirPropuestaPendiente(p, despues, new Set(["mod:a"]));
+    const vivos = computeProposalDeltas(despues, queda, null);
+    expect(vivos.map((d) => d.key), "el reordenamiento pendiente se esfumó").toEqual(["reorder"]);
+    const reorder = vivos[0];
+    expect(reorder.kind === "REORDER_PHASES" ? reorder.motivos : null).toEqual(["M-c"]);
+
+    // Resuelto (acá, descartado), manda el cronograma real y no vuelve a proponerse.
+    expect(computeProposalDeltas(despues, reescribirPropuestaPendiente(queda, despues, new Set(["reorder"])), null)).toEqual(
+      [],
+    );
+  });
+
+  it("⛔ la fase recién aceptada viaja pegada a su vecina: el reordenamiento no la arrastra", () => {
+    /* Con un «mover» pendiente, una fase que la propuesta no nombra (la que se acaba de crear al
+       aceptar un «agregar») iba al final de la secuencia: el reordenamiento pasaba a mover también
+       esa fase, que nadie pidió mover. */
+    const c = cur({ id: "c", name: "C", durationWeeks: 2 });
+    const nueva = { name: "Piloto", durationWeeks: 1, sessionCount: null, notes: null, motivo: "M-n" };
+    const p: ProposalLike = {
+      anchorStartDate: null,
+      origen: "contexto",
+      phases: [{ ...a }, nueva, { ...c, motivo: "M-c" }, { ...b }],
+    };
+    // «add:1» aceptado: la fase nueva ya existe, detrás de A.
+    const creada = cur({ id: "n", name: "Piloto", durationWeeks: 1, sessionCount: null, activityType: null });
+    const despues = [a, creada, b, c];
+    const queda = reescribirPropuestaPendiente(p, despues, new Set(["add:1"]));
+    expect(queda.phases.map((f) => f.name)).toEqual(["A", "Piloto", "C", "B"]);
+    const [reorder] = computeProposalDeltas(despues, queda, null);
+    expect(reorder.kind === "REORDER_PHASES" ? reorder.movimientos.map((m) => m.id) : null).toEqual(["c", "b"]);
+  });
+
   it("⛔ la ruta usa la función y responde cuántas quedan", () => {
     const ruta = fs
       .readFileSync(

@@ -36,6 +36,9 @@ export default function ProposalGlobalStrip({
   impactoPorDelta,
   working,
   onResolve,
+  origen = "handoff",
+  encadenado = false,
+  observaciones,
 }: {
   /** TODOS los deltas de la propuesta: el contador y el aceptar-todo son sobre el total. */
   deltas: ProposalDelta[];
@@ -47,7 +50,14 @@ export default function ProposalGlobalStrip({
   impactoPorDelta: Map<string, ImpactoEnElCierre>;
   working: boolean;
   onResolve: (accept: string[], discard: string[]) => void;
+  /** De dónde salió: del handoff, o de las reuniones y notas elegidas (paso 1 de «Regenerar todo»). */
+  origen?: "contexto" | "handoff";
+  /** Esta pantalla sigue sola con las tareas al resolver la última (paso 1 de 2). */
+  encadenado?: boolean;
+  /** Lo que la IA notó y no se aplica solo. Interno: nunca llega al cliente. */
+  observaciones?: string[];
 }) {
+  const delContexto = origen === "contexto";
   // Solo estos dos no tienen fila propia en el Gantt. El resto se resuelve donde vive.
   const globales = deltas.filter((d) => d.kind === "SET_ANCHOR" || d.kind === "REORDER_PHASES");
   const [confirmarReemplazo, setConfirmarReemplazo] = useState(false);
@@ -94,7 +104,8 @@ export default function ProposalGlobalStrip({
             : `La IA sugiere ${plural(deltas.length, "cambio de estructura", "cambios de estructura")}`}
         </span>
         <span className="text-xs text-fg-muted">
-          del último handoff · las tareas y sus estados no se tocan
+          {delContexto ? "de las reuniones y notas que elegiste" : "del último handoff"} · las tareas y sus
+          estados no se tocan
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -114,6 +125,14 @@ export default function ProposalGlobalStrip({
         </div>
       </div>
 
+      {/* «Regenerar todo» con material, paso 1 de 2: sin decirlo, el CSE no sabe que al resolver la
+          última sugerencia se arman solas las tareas. */}
+      {encadenado && delContexto && (
+        <p className="text-xs font-semibold text-info-ink">
+          Paso 1 de 2 · Decide cada cambio (o «Descartar todo») y después armo las tareas
+        </p>
+      )}
+
       {/* ── EL AVISO (Tanda J) ────────────────────────────────────────────────
           Cuando el handoff se regenera con más contexto, el agente puede proponer OTRA
           descomposición del proyecto. La reconciliación empareja fases por posición, así que
@@ -122,8 +141,10 @@ export default function ProposalGlobalStrip({
       {otroCronograma && (
         <div className="space-y-1 pt-0.5">
           <p className="text-xs text-fg-secondary leading-relaxed">
-            La diferencia es tanta que esto es prácticamente un cronograma nuevo: salió de un
-            handoff con más contexto que el que armó el cronograma actual.
+            La diferencia es tanta que esto es prácticamente un cronograma nuevo:{" "}
+            {delContexto
+              ? "salió de las reuniones y notas que elegiste."
+              : "salió de un handoff con más contexto que el que armó el cronograma actual."}
           </p>
           <ul className="text-xs text-fg-secondary space-y-0.5">
             {magnitud.motivos.map((m) => (
@@ -189,6 +210,10 @@ export default function ProposalGlobalStrip({
                     </span>
                   ))
                 )}
+                {/* El motivo es interno (cita la reunión o la nota): solo lo ve el CSE. */}
+                {d.motivos && d.motivos.length > 0 && (
+                  <span className="block text-fg-muted">Por qué: {d.motivos.join(" · ")}</span>
+                )}
               </>
             )}
           </span>
@@ -212,6 +237,19 @@ export default function ProposalGlobalStrip({
           </span>
         </div>
       ))}
+
+      {/* Lo que la IA notó y NO puede aplicar sola (un atraso que ya pasó, un plazo total sin
+          detalle por fase, una fase que quizá ya no va): se lee y se decide a mano. Interno. */}
+      {observaciones && observaciones.length > 0 && (
+        <div className="space-y-0.5 border-t border-line/60 pt-1.5">
+          <p className="text-xs font-semibold text-fg-secondary">La IA también notó (no se aplica sola):</p>
+          <ul className="text-xs text-fg-muted space-y-0.5">
+            {observaciones.map((o, i) => (
+              <li key={i}>· {o}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Solo si hay cambios que NO están en esta franja: si todo es global, mandar a mirar abajo
           sería mandar a ningún lado. */}
@@ -244,7 +282,7 @@ export default function ProposalGlobalStrip({
             </span>
             <span className="block mt-2">
               No se borra ninguna fase ni ninguna tarea: las tareas y sus estados quedan como
-              están, y las fases nuevas nacen vacías. Después podés seguir editando el cronograma
+              están, y las fases nuevas nacen vacías. Después puedes seguir editando el cronograma
               a mano.
             </span>
           </>
