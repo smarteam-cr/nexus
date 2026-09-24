@@ -57,6 +57,10 @@
  *    sale de esa familia, y dentro de ella cambia solo si se pide explícitamente (antes decía
  *    «nunca hacia ni desde», que prohibía también lo que el armador acepta con la fuente citada).
  *    El armador además descarta ese renombre si el motivo es una exclusión (`motivoEsUnaExclusion`).
+ *  · (revisión adversarial, 2026-09-24) El ROL nombra también las instrucciones adicionales: con
+ *    ellas solas la revisión corre (son la fuente de más peso). Y la Semana 0 se lee del calendario,
+ *    que dice cuál es o que el proyecto no tiene (Desarrollo y Web): el texto medido la nombraba sin
+ *    decir cuál, y el armador descartaba en silencio lo acordado sobre la primera fase de un desarrollo.
  *  Se miden en vivo en la fase final; `revisarDireccionDelPlazo` mide la dirección del plazo.
  *  El «sin markdown» sigue sin cumplirse cuando hay cambios (6 de 6 con ```json): la ruta ya no
  *  depende de eso (`leerRespuestaDeEstructura`).
@@ -78,7 +82,7 @@ import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 /** Solo el slug del medidor y de la corrida. ⛔ No es el id de una fila de `Agent` (ver arriba). */
 export const ID_ESTRUCTURA_CRONOGRAMA = "agent-timeline-structure";
 
-export const PROMPT_ESTRUCTURA_CRONOGRAMA = `ROL: Revisas si las reuniones y las notas que ELIGIÓ el CSE (el consultor de Smarteam a cargo del proyecto) obligan a cambiar las FASES o los TIEMPOS de un cronograma de implementación de HubSpot que ya está en marcha. NO propones tareas: las tareas de cada fase las arma otro paso después, sobre la estructura que el CSE acepte. Cada cambio que propongas lo decide el CSE uno por uno; nada se aplica solo.
+export const PROMPT_ESTRUCTURA_CRONOGRAMA = `ROL: Revisas si las reuniones y las notas que ELIGIÓ el CSE (el consultor de Smarteam a cargo del proyecto), y sus instrucciones adicionales, obligan a cambiar las FASES o los TIEMPOS de un cronograma de implementación de HubSpot que ya está en marcha. NO propones tareas: las tareas de cada fase las arma otro paso después, sobre la estructura que el CSE acepte. Cada cambio que propongas lo decide el CSE uno por uno; nada se aplica solo.
 
 CUÁNDO PROPONER UN CAMBIO:
 - Solo con respaldo EXPLÍCITO en una reunión elegida, una nota o las instrucciones del CSE, y solo por lo que se ACORDÓ de acá en adelante: una fase nueva, una duración que se acordó cambiar, una reprogramación acordada, un orden distinto.
@@ -92,7 +96,7 @@ CUÁNDO PROPONER UN CAMBIO:
 PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
 - QUITAR una fase, aunque parezca que ya no va.
 - Mover la FECHA DE ARRANQUE del proyecto.
-- Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off.
+- Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off (el calendario dice cuál es; si dice que el proyecto no tiene, su primera fase se revisa como cualquier otra).
 - Cambiar las notas o el tipo de una fase que ya existe.
 - Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto (que el material describa su trabajo con otras palabras no es motivo). Un nombre nuevo nunca entra ni sale de «Desarrollo / Integración»: una fase de «Desarrollo / Integración» solo cambia a otro nombre de «Desarrollo / Integración», y solo si se pide explícitamente.
 - Cambiar o renombrar una fase porque su tema choca con una EXCLUSIÓN de las instrucciones del CSE (por ejemplo, «nada de integraciones»): dilo en "observaciones". Que las instrucciones PIDAN un cambio de fases o de tiempos sí es motivo.

@@ -508,7 +508,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         materialElegido
         ? {
             activo: true,
-            rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas",
+            rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones",
             detalle: "Suele tardar menos de un minuto.",
           }
         : { activo: true, rotulo: "Preparando la propuesta del cronograma", detalle: "Un momento." }
@@ -2894,7 +2894,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                   onClick={() => void pedirPropuestaDeDetalle("primera")}
                   disabled={generating}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
-                  title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff. Si elegiste reuniones o notas, primero revisa fases y tiempos con ellas (tú decides cada cambio)"
+                  title="Crea las tareas iniciales del cronograma con IA, sobre las fases del handoff. Si elegiste reuniones o notas, o escribiste instrucciones adicionales, primero revisa fases y tiempos con eso (tú decides cada cambio)"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   Generar cronograma
@@ -2922,7 +2922,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               onClick={() => void pedirPropuestaDeDetalle("regen")}
               disabled={allRegenLoading || allRegenApplying}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"
-              title="Si elegiste reuniones o notas, primero revisa fases y tiempos con ellas (tú decides cada cambio); después propone las tareas de todas las fases"
+              title="Si elegiste reuniones o notas, o escribiste instrucciones adicionales, primero revisa fases y tiempos con eso (tú decides cada cambio); después propone las tareas de todas las fases"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               {allRegenLoading ? "Generando propuesta…" : "Regenerar todo el cronograma"}
@@ -3815,7 +3815,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
           <div className="flex items-center gap-3 py-1">
             <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
-            <p className="text-sm text-fg">Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas…</p>
+            <p className="text-sm text-fg">Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…</p>
           </div>
         </Modal>
       )}

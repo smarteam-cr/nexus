@@ -55,7 +55,8 @@ export default function CronogramaContextSection({
   children?: ReactNode;
   /**
    * Avisa si hay material que la revisión de fases va a leer (`hayMaterialParaElPaso1`): con eso la
-   * pantalla decide si dice «Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas».
+   * pantalla decide si dice «Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e
+   * instrucciones».
    */
   onMaterial?: (hay: boolean) => void;
 }) {
@@ -90,8 +91,14 @@ export default function CronogramaContextSection({
   const informeVivo = hayReuniones ? informe : null;
   const loQueNoEntra = informeVivo ? parentesisDelMaterial(resumenDelInforme(informeVivo)) : "";
   /* Lo mismo que mira la ruta del paso 1, con lo que esta sección ya tiene: la pantalla no promete
-     «revisando tus reuniones y notas» si no hay nada que revisar. */
-  const hayMaterial = hayMaterialParaElPaso1({ reuniones, notas, informe: informeVivo });
+     «revisando tus reuniones, notas e instrucciones» si no hay nada que revisar. Las instrucciones
+     adicionales cuentan (son la fuente de más peso). */
+  const hayMaterial = hayMaterialParaElPaso1({
+    reuniones,
+    notas,
+    informe: informeVivo,
+    instrucciones: instruccionesActivas,
+  });
   useEffect(() => {
     onMaterial?.(hayMaterial);
   }, [hayMaterial, onMaterial]);
@@ -127,8 +134,9 @@ export default function CronogramaContextSection({
           `hidden` para no desmontar ni volver a pedir todo al abrir y cerrar. */}
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
-          Con esto la IA revisa las fases y sus tiempos al «Regenerar todo el cronograma» (tú aceptas o
-          descartas cada cambio), arma las tareas de cada fase, decide cuáles son reuniones con el
+          Con esto —y con las instrucciones adicionales de abajo— la IA revisa las fases y sus tiempos
+          al «Regenerar todo el cronograma» (tú aceptas o descartas cada cambio), arma las tareas de
+          cada fase, decide cuáles son reuniones con el
           cliente y propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
           búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo

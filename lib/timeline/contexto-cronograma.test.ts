@@ -108,7 +108,11 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     expect(tramo, "el revisor perdió el material para revisar la frontera").toContain(
       "materialInterno: mat.materialInterno",
     );
-    const iSale = tramo.indexOf("if (!mat.reuniones.trim() && !mat.notas.trim())");
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: la salida temprana pedía
+       «sin reuniones ni notas». Las «Instrucciones adicionales» solas ahora también se revisan (son
+       la fuente de más peso y no movían ninguna fase). Sigue pidiendo lo mismo de fondo: sin NADA
+       que revisar, se sale antes de leer el handoff. */
+    const iSale = tramo.indexOf("if (!mat.reuniones.trim() && !mat.notas.trim() && !brief)");
     expect(iSale, "el revisor dejó de salir antes sin material").toBeGreaterThan(-1);
     expect(tramo.indexOf("loadHandoffContext("), "el handoff se lee antes de saber si hay material").toBeGreaterThan(
       iSale,

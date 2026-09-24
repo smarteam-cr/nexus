@@ -2,7 +2,8 @@
  * POST /api/projects/[projectId]/timeline/estructura
  *
  * «Regenerar todo el cronograma» (y «Generar cronograma»), PASO 1 DE 2 — solo cuando el CSE eligió
- * reuniones o pegó notas en el «Contexto del cronograma». Una llamada corta revisa si ese material
+ * reuniones, pegó notas o escribió «Instrucciones adicionales» en el «Contexto del cronograma» (las
+ * instrucciones solas cuentan desde el 2026-09-24). Una llamada corta revisa si ese material
  * obliga a cambiar FASES o TIEMPOS y deja los cambios como la misma propuesta de solo estructura
  * que deja el handoff (`pendingProposal`, con `origen: "contexto"`): el CSE la decide uno por uno
  * en el Gantt real y `proposal/apply-items` escribe. Al resolver la última sugerencia, la pantalla
@@ -11,7 +12,7 @@
  * ⛔ ESTA RUTA NO ESCRIBE NINGUNA FASE NI NINGUNA TAREA. Solo la propuesta, y solo si no había otra.
  *
  * Respuestas (la pantalla decide con `pasoTrasEstructura`, lib/timeline/propuesta-de-estructura.ts):
- *   200 { estado: "sin-material" }                        — nada elegido: ni corrida ni modelo
+ *   200 { estado: "sin-material" }                        — nada elegido ni instrucciones: ni corrida ni modelo
  *                                                           (aunque haya una propuesta pendiente)
  *   200 { estado: "sin-cambios", observaciones, acordadoSinEntrar }
  *                                                         — no hay nada que proponer (lo acordado
@@ -33,9 +34,10 @@ import { ID_ESTRUCTURA_CRONOGRAMA, PROMPT_ESTRUCTURA_CRONOGRAMA } from "@/lib/ag
 import { cargarContextoDeEstructura } from "@/lib/contexto/cargar";
 import {
   fotoDeEstructura,
+  hayQueRevisarLasFases,
   renderEstructuraDelCronograma,
-  tieneMaterialDelCronograma,
 } from "@/lib/contexto/estructura-cronograma";
+import { claveConVozDeHandoffPropia } from "@/lib/timeline/semana-cero";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import {
   construirPropuestaDeEstructura,
@@ -98,11 +100,12 @@ export async function POST(
   if (iaGate instanceof NextResponse) return iaGate;
 
   const contexto = await cargarContextoDeEstructura(projectId, fotoDeEstructura(tl));
-  /* ⭐ SIN MATERIAL, NADA: ni corrida, ni modelo. «Regenerar todo» sigue exactamente como antes.
-     Va ANTES del 409 (revisión del paso A2): con una propuesta del handoff pendiente y nada
-     elegido, «Generar cronograma» avisaba «Hay cambios de fases sin revisar… para que la IA revise
-     las fases» aunque la IA nunca iba a revisar ninguna. Sin material, sigue con las tareas. */
-  if (!tieneMaterialDelCronograma(contexto.fuentes)) {
+  /* ⭐ SIN MATERIAL NI INSTRUCCIONES, NADA: ni corrida, ni modelo. «Regenerar todo» sigue exactamente
+     como antes. Va ANTES del 409 (revisión del paso A2): con una propuesta del handoff pendiente y
+     nada elegido, «Generar cronograma» avisaba «Hay cambios de fases sin revisar… para que la IA
+     revise las fases» aunque la IA nunca iba a revisar ninguna. Las «Instrucciones adicionales»
+     solas SÍ cuentan (revisión adversarial, 2026-09-24): son la fuente de más peso. */
+  if (!hayQueRevisarLasFases(contexto)) {
     return NextResponse.json({ estado: "sin-material" });
   }
   // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
@@ -182,6 +185,9 @@ export async function POST(
     anchorISO: tl.anchorStartDate?.toISOString() ?? null,
     huellas: huellasDeFrontera(contexto.materialInterno ?? []),
     ahora: Date.now(),
+    /* Desarrollo y Web no tienen Semana 0: su primera fase es trabajo real. La MISMA decisión que
+       nombra la Semana 0 en el calendario que leyó el modelo (cargarContextoDeEstructura). */
+    conSemanaCero: !claveConVozDeHandoffPropia(contexto.pipelineKey ?? null),
   });
 
   if (!armado.propuesta) {

@@ -20,6 +20,7 @@ import {
   AVISO_SIN_CAMBIOS,
   CAMBIOS_DE_FASES_SIN_DECIDIR,
   errorDeLaRevisionDeFases,
+  faseDeSemanaCero,
   FRASE_PLAZO_JUSTO,
   MAX_FASES_NUEVAS,
   MAX_OBSERVACIONES,
@@ -663,6 +664,126 @@ describe("(d) · renombrar una fase de «Desarrollo / Integración» pide citar 
     for (const s of ["El nombre describe mejor el trabajo", "Para que el cliente lo entienda", "M", ""]) {
       expect(motivoCitaUnaFuente(s), s).toBe(false);
     }
+  });
+});
+
+/**
+ * ── #2 / #9 / #17 / #29 · LA SEMANA 0 EXISTE SOLO SI EL PROYECTO LA TIENE, Y NADA ACORDADO SE PIERDE
+ * EN SILENCIO (revisión adversarial, 2026-09-24) ──
+ */
+describe("#2 / #9 / #17 / #29 · la Semana 0 solo si existe, y lo intocable deja su observación", () => {
+  /* Semana 0 PENDIENTE con 2 tareas hechas (como CAV) y la fase siguiente SIN trabajo empezado: acá
+     `loQueCorre` no tiene nada que proteger, así que la ÚNICA razón para descartar es la regla de la
+     Semana 0. En G3 las filas de la Semana 0 pasaban por otro motivo (la fase «a» del fixture está en
+     curso y el cambio la corría): borrar la regla dejaba la suite en verde. */
+  const CS: FaseParaEstructura[] = [
+    fase({
+      id: "s0",
+      order: 0,
+      name: "Semana 0 – Arranque",
+      durationWeeks: 1,
+      tasks: [
+        { status: "DONE", weekIndex: 0 },
+        { status: "DONE", weekIndex: 0 },
+      ],
+    }),
+    fase({ id: "diag", order: 1, name: "Diagnóstico" }),
+    fase({ id: "conf", order: 2, name: "Configuración" }),
+  ];
+  const DEV: FaseParaEstructura[] = [
+    fase({ id: "rel", order: 0, name: "Relevamiento técnico" }),
+    fase({ id: "des", order: 1, name: "Desarrollo SDK / Integración", durationWeeks: 4 }),
+    fase({ id: "pru", order: 2, name: "Pruebas" }),
+  ];
+  const armarCon = (fases: FaseParaEstructura[], cambios: unknown[], conSemanaCero?: boolean) =>
+    construirPropuestaDeEstructura({ fases, anchorISO: null, crudo: { cambios, observaciones: [] }, conSemanaCero });
+
+  it("#29 · la Semana 0 (sin nada corrido) no se ajusta ni se mueve: su PROPIA regla", () => {
+    /* La edición que la pone en rojo: borrar `if (f.id === semanaCero) return "es la Semana 0 / Kick-off";`. */
+    for (const cambio of [
+      { tipo: "ajustar", faseId: "s0", durationWeeks: 2, motivo: "Kick-off: la arrancada dura 2 semanas" },
+      { tipo: "mover", faseId: "s0", despuesDeFaseId: "diag", motivo: "Reunión 22 sep" },
+    ]) {
+      const r = armarCon(CS, [cambio]);
+      expect(r.propuesta, JSON.stringify(cambio)).toBeNull();
+      expect(r.descartados.join(" "), JSON.stringify(cambio)).toMatch(/es la Semana 0 \/ Kick-off/);
+    }
+  });
+
+  it("#2 / #9 · en Desarrollo y Web la primera fase NO es la Semana 0: lo acordado sobre ella entra", () => {
+    /* El caso de la revisión, reproducido con el armador puro: «el relevamiento pasa a 3 semanas».
+       La edición que la pone en rojo: volver a tomar la fase de order 0 como Semana 0 siempre. */
+    const pedido = { tipo: "ajustar", faseId: "rel", durationWeeks: 3, motivo: "Reunión 22 sep: el relevamiento pasa a 3 semanas" };
+    const r = armarCon(DEV, [pedido], false);
+    expect(r.descartados).toEqual([]);
+    expect(r.deltas.map((d) => d.key)).toEqual(["mod:rel"]);
+    // Con Semana 0 (el default de CS), la misma fase SÍ sería la Semana 0: y ahí queda dicho, no se pierde.
+    const cs = armarCon(DEV, [pedido]);
+    expect(cs.propuesta).toBeNull();
+    expect(cs.acordadoSinEntrar).toBe(1);
+    expect(faseDeSemanaCero(DEV, false)).toBeNull();
+    expect(faseDeSemanaCero(CS, true)?.id).toBe("s0");
+  });
+
+  it("#17 · lo acordado sobre una fase intocable, un acortar por debajo del trabajo empezado o un renombre que no entra deja su observación", () => {
+    /* Antes solo el calendario y el nombre de una fase NUEVA dejaban observación: estos se descartaban
+       y la pantalla decía «tus reuniones no piden cambios». Las ediciones que la ponen en rojo: sacar
+       el `acordadoQueNoEntra` de cada caso. */
+    const CONF: FaseParaEstructura[] = [
+      fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1, status: "DONE" }),
+      fase({
+        id: "conf",
+        order: 1,
+        name: "Configuración",
+        durationWeeks: 3,
+        tasks: [
+          { status: "DONE", weekIndex: 0 },
+          { status: "IN_PROGRESS", weekIndex: 1 },
+        ],
+      }),
+      fase({ id: "go", order: 2, name: "Go-live", durationWeeks: 1, status: "DONE", startWeek: 4 }),
+      fase({ id: "sop", order: 3, name: "Soporte", status: "SUSPENDED", startWeek: 6 }),
+    ];
+    const casos: Array<[string, unknown, RegExp]> = [
+      [
+        "la Semana 0",
+        { tipo: "ajustar", faseId: "s0", durationWeeks: 2, motivo: "M" },
+        /Se sugirió llevar «Semana 0 – Arranque» a 2 semanas, pero es la Semana 0 \/ Kick-off: decide tú si corresponde\./,
+      ],
+      [
+        "una fase terminada",
+        { tipo: "ajustar", faseId: "go", name: "Salida en vivo", motivo: "M" },
+        /Se sugirió renombrar «Go-live» a «Salida en vivo», pero la fase está terminada: decide tú si corresponde\./,
+      ],
+      [
+        "una fase suspendida (mover)",
+        { tipo: "mover", faseId: "sop", despuesDeFaseId: "conf", motivo: "M" },
+        /Se sugirió mover «Soporte» después de «Configuración», pero la fase está suspendida: decide tú si se mueve\./,
+      ],
+      [
+        "acortar por debajo del trabajo empezado",
+        { tipo: "ajustar", faseId: "conf", durationWeeks: 1, motivo: "Reunión: Configuración se cierra en 1 semana" },
+        /Se sugirió llevar «Configuración» a 1 semana, pero dejaría afuera trabajo ya empezado en su semana 2: decide tú si se ajusta\./,
+      ],
+      [
+        "un renombre que no entra (ya hay otra fase con ese nombre)",
+        { tipo: "ajustar", faseId: "conf", name: "Go-live", motivo: "M" },
+        /Se sugirió renombrar «Configuración» a «Go-live», pero ya hay otra fase con ese nombre: decide tú si se renombra\./,
+      ],
+    ];
+    for (const [nombre, cambio, observacion] of casos) {
+      const r = armarCon(CONF, [cambio]);
+      expect(r.propuesta, nombre).toBeNull();
+      expect(r.observaciones.join(" | "), nombre).toMatch(observacion);
+      expect(r.acordadoSinEntrar, nombre).toBe(1);
+      expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: r.acordadoSinEntrar })).toEqual({
+        paso: "tareas",
+        aviso: AVISO_ACORDADO_SIN_ENTRAR,
+      });
+    }
+    // Lo que no llegó a ser un acuerdo (sin motivo, un id inventado) sigue sin observación.
+    expect(armarCon(CONF, [{ tipo: "ajustar", faseId: "s0", durationWeeks: 2 }]).acordadoSinEntrar).toBe(0);
+    expect(armarCon(CONF, [{ tipo: "ajustar", faseId: "zzz", durationWeeks: 2, motivo: "M" }]).acordadoSinEntrar).toBe(0);
   });
 });
 

@@ -18,7 +18,9 @@ import {
   calendarioDeEstructura,
   fotoDeEstructura,
   fuentesDeEstructura,
+  hayQueRevisarLasFases,
   largoDelPlanEnSemanas,
+  lineaDeLaSemanaCero,
   lineaDelLargoDelPlan,
   renderEstructuraDelCronograma,
   tieneMaterialDelCronograma,
@@ -149,6 +151,30 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(cal).not.toMatch(/\d{1,2} (ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b/);
   });
 
+  it("#2 / #9 · dice CUÁL es la Semana 0, o que el proyecto no tiene (Desarrollo y Web)", () => {
+    /* Revisión adversarial (2026-09-24): el prompt prohíbe tocar «la Semana 0 / Kick-off» y el
+       calendario no decía cuál era; en un desarrollo, el modelo proponía cambios sobre su primera fase
+       («Relevamiento técnico») y el armador los descartaba en silencio por «Semana 0». La edición que
+       la pone en rojo: sacar la línea del calendario, o que el cargador no le pase la decisión del
+       pipeline. */
+    const conS0 = calendarioDeEstructura(FOTO, AHORA, { conSemanaCero: true });
+    expect(conS0).toContain("Semana 0 / Kick-off de este proyecto: «Semana 0» [id: s0]. No se toca");
+    const sinS0 = calendarioDeEstructura(FOTO, AHORA, { conSemanaCero: false });
+    expect(sinS0).toContain("Este proyecto NO tiene Semana 0 / Kick-off: su primera fase («Semana 0») es trabajo");
+    expect(sinS0).not.toContain("No se toca");
+    // El largo del plan sigue siendo la última línea.
+    expect(sinS0.slice(sinS0.lastIndexOf("\n") + 1)).toBe(lineaDelLargoDelPlan(FOTO));
+    expect(lineaDeLaSemanaCero(FOTO, undefined)).toBe("");
+    const cargador = soloCodigo(leer("lib/contexto/cargar.ts"));
+    expect(cargador).toContain(
+      "calendarioDeEstructura(foto, Date.now(), { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) })",
+    );
+    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/estructura/route.ts"));
+    expect(ruta, "el armador no sabe si el proyecto tiene Semana 0").toContain(
+      "conSemanaCero: !claveConVozDeHandoffPropia(contexto.pipelineKey ?? null)",
+    );
+  });
+
   it("⭐ cierra con el LARGO DEL PLAN en números y la cuenta del plazo hecha (revisión del paso A3)", () => {
     /* Con el plan en 15 semanas y un plazo de 12, el revisor escribió «3 semanas de holgura» en las 3
        corridas de E3: tenía el número y leyó al revés la resta. La edición que la pone en rojo:
@@ -226,13 +252,32 @@ describe("⭐ el cargador: primero el material, el handoff recién después", ()
     h.estado.filas.set("r1", { id: "r1", title: "CAV: Definiendo cronograma", summary: { overview }, minute: null });
   };
 
-  it("sin reuniones ni notas: sin fuentes, y NO lee el handoff", async () => {
-    /* La edición que la pone en rojo: volver a leer el handoff junto con el material (todo
-       «Regenerar todo» sin material pagaría esa lectura). */
+  it("sin reuniones, notas NI instrucciones: sin fuentes, y NO lee el handoff", async () => {
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el mock del canvas trae
+       siempre «Solo marketing.» como instrucciones, y las instrucciones solas ahora cuentan (ver la
+       guarda de abajo). Este caso pasa a ser el de verdad vacío: sin brief. La edición que la pone en
+       rojo sigue siendo la misma: volver a leer el handoff junto con el material. */
+    h.prisma.projectCanvas.findFirst.mockResolvedValueOnce({ sections: [] });
     const c = await cargarContextoDeEstructura("p1", FOTO);
     expect(c.fuentes).toEqual([]);
-    expect(tieneMaterialDelCronograma(c.fuentes)).toBe(false);
+    expect(hayQueRevisarLasFases(c)).toBe(false);
     expect(h.loadHandoffContext).not.toHaveBeenCalled();
+  });
+
+  it("#18 · con SOLO «Instrucciones adicionales» también se revisan las fases", async () => {
+    /* Revisión adversarial (2026-09-24): «Capacitación dura 3 semanas, no 2» en las instrucciones no
+       movía ninguna fase: sin reuniones ni notas, la ruta respondía «sin-material». La edición que la
+       pone en rojo: volver a salir sin mirar el brief en el cargador, o que la ruta mire solo el
+       material. */
+    const c = await cargarContextoDeEstructura("p1", FOTO);
+    expect(tieneMaterialDelCronograma(c.fuentes), "no hay reuniones ni notas").toBe(false);
+    expect(hayQueRevisarLasFases(c), "las instrucciones solas no disparan la revisión").toBe(true);
+    expect(c.instrucciones).toContain("Solo marketing.");
+    expect(c.fuentes.map((f) => f.key)).toEqual(["calendario-del-cronograma", "handoff-curado"]);
+    expect(hayQueRevisarLasFases({ fuentes: [], instrucciones: "  " })).toBe(false);
+    // La pantalla cuenta lo mismo para el cartel del paso 1.
+    expect(hayMaterialParaElPaso1({ reuniones: 0, notas: 0, informe: null, instrucciones: true })).toBe(true);
+    expect(hayMaterialParaElPaso1({ reuniones: 0, notas: 0, informe: null, instrucciones: false })).toBe(false);
   });
 
   it("con una reunión: el handoff CONFIRMADO, la foto de quien llama y la trazabilidad", async () => {
@@ -269,8 +314,11 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     const iSinMaterial = src.indexOf('estado: "sin-material"');
     expect(iSinMaterial).toBeGreaterThan(-1);
     expect(iSinMaterial).toBeLessThan(src.indexOf("prisma.agentRun.create("));
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: pedía
+       `!tieneMaterialDelCronograma(contexto.fuentes)`; las «Instrucciones adicionales» solas ahora
+       también se revisan (`hayQueRevisarLasFases`). Sin nada que revisar, sigue sin pagar. */
     expect(src.slice(src.indexOf("cargarContextoDeEstructura("), iSinMaterial)).toContain(
-      "!tieneMaterialDelCronograma(contexto.fuentes)",
+      "!hayQueRevisarLasFases(contexto)",
     );
   });
 
@@ -448,7 +496,8 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
     expect(pedir, "volvió el reloj: el cartel no depende de lo elegido").not.toMatch(/setTimeout\([^)]*Paso1/);
     // Los DOS lugares que dicen «Paso 1 de 2» dependen de `materialElegido`.
-    const iModal = src.indexOf("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas…");
+    // (2026-09-24: el texto suma «e instrucciones»: las instrucciones solas también se revisan.)
+    const iModal = src.indexOf("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…");
     expect(iModal).toBeGreaterThan(-1);
     expect(src.slice(Math.max(0, iModal - 500), iModal)).toContain("revisandoEstructura && materialElegido && (");
     const ocupado = tramo("const ocupado", "activo: false");
@@ -456,7 +505,10 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     // La sección lo avisa con lo que ya sabe, y la pantalla lo escucha.
     expect(src).toMatch(/<CronogramaContextSection[^>]*onMaterial=\{setMaterialElegido\}/);
     const seccion = soloCodigo(leer("components/canvas/CronogramaContextSection.tsx"));
-    expect(seccion).toContain("hayMaterialParaElPaso1({ reuniones, notas, informe: informeVivo })");
+    // (2026-09-24: también con las instrucciones adicionales guardadas.)
+    expect(seccion).toMatch(
+      /hayMaterialParaElPaso1\(\{\s*reuniones,\s*notas,\s*informe: informeVivo,\s*instrucciones: instruccionesActivas,\s*\}\)/,
+    );
     expect(seccion).toMatch(/useEffect\(\(\) => \{\s*onMaterial\?\.\(hayMaterial\);\s*\}, \[hayMaterial, onMaterial\]\)/);
   });
 

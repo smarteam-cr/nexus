@@ -19,6 +19,7 @@ import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
 import { fuentesDelAssist } from "./asistente-cronograma";
 import { calendarioDeEstructura, fuentesDeEstructura } from "./estructura-cronograma";
+import { claveConVozDeHandoffPropia } from "@/lib/timeline/semana-cero";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 import { getProjectTimelineSessions } from "@/lib/sessions/project-sources";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
@@ -169,18 +170,20 @@ export async function cargarContextoDelAssist(
 
 /**
  * El contexto del REVISOR DE FASES Y TIEMPOS (pieza "estructura"): el paso 1 de «Regenerar todo»
- * cuando el CSE eligió reuniones o pegó notas (ver ./estructura-cronograma.ts y la ruta
- * `timeline/estructura`).
+ * cuando el CSE eligió reuniones, pegó notas o escribió «Instrucciones adicionales» (ver
+ * ./estructura-cronograma.ts y la ruta `timeline/estructura`).
  *
- *   · calendario-del-cronograma — el del plan, CON ids, estado y «Hoy», sobre la foto que pasa la ruta
+ *   · calendario-del-cronograma — el del plan, CON ids, estado y «Hoy», sobre la foto que pasa la
+ *                                 ruta, y cuál es la Semana 0 (o que no hay: Desarrollo y Web)
  *   · handoff-curado            — SOLO bloques confirmados (con un respaldo propio sin handoff)
  *   · reuniones / notas         — lo elegido en el «Contexto del cronograma»
  *   · instrucciones             — la entry `__doc` del canvas del cronograma, igual que el detalle
  *
- * ⭐ PRIMERO EL MATERIAL. Sin reuniones con contenido ni notas no hay nada que revisar: devuelve
- * SIN fuentes y la ruta vuelve antes de crear la corrida. Por eso el handoff —la lectura pesada— se
- * lee recién DESPUÉS de saber que hay material: un «Regenerar todo» sin material no paga ni el
- * modelo ni el handoff.
+ * ⭐ PRIMERO EL MATERIAL. Sin reuniones con contenido, sin notas y sin instrucciones no hay nada que
+ * revisar: devuelve SIN fuentes y la ruta vuelve antes de crear la corrida. Por eso el handoff —la
+ * lectura pesada— se lee recién DESPUÉS de saber que hay algo: un «Regenerar todo» sin nada no paga
+ * ni el modelo ni el handoff. (Las instrucciones solas cuentan desde la revisión adversarial del
+ * 2026-09-24: son la fuente de más peso.)
  *
  * ⚠ LA FOTO LA PASA LA RUTA (`foto`, con ids, estado y tareas hechas de cada fase) y viaja al
  * cargador del material como `opts.fases`: el modelo, el calendario, la ubicación de cada reunión
@@ -201,7 +204,11 @@ export async function cargarContextoDeEstructura(
     prisma.project.findUnique({ where: { id: projectId }, select: { hubspotPipelineId: true } }),
   ]);
   const pipelineKey = resolvePipeline(proyecto?.hubspotPipelineId ?? null)?.key ?? null;
-  if (!mat.reuniones.trim() && !mat.notas.trim()) {
+  /* ⭐ Las «Instrucciones adicionales» solas también se revisan (revisión adversarial, 2026-09-24):
+     son la fuente de más peso, y sin reuniones ni notas el paso 1 no corría aunque pidieran cambiar
+     una fase. Sin material NI instrucciones, nada: ni el handoff se lee. */
+  const brief = canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null;
+  if (!mat.reuniones.trim() && !mat.notas.trim() && !brief) {
     return { projectId, pipelineKey, fuentes: [], instrucciones: "", sesionesUsadas: [], materialInterno: [] };
   }
   const handoffCtx = await loadHandoffContext(projectId, { onlyConfirmed: true });
@@ -209,14 +216,14 @@ export async function cargarContextoDeEstructura(
     projectId,
     pipelineKey,
     fuentes: fuentesDeEstructura({
-      calendarioCtx: calendarioDeEstructura(foto, Date.now()),
+      /* Con la Semana 0 nombrada (o dicho que no hay): la MISMA regla que usa el armador en la ruta,
+         desde la misma clave del pipeline (`claveConVozDeHandoffPropia`). */
+      calendarioCtx: calendarioDeEstructura(foto, Date.now(), { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) }),
       handoffCtx,
       reunionesCtx: mat.reuniones,
       notasCtx: mat.notas,
     }),
-    instrucciones: bloqueDeInstruccionesDeDoc(
-      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
-    ),
+    instrucciones: bloqueDeInstruccionesDeDoc(brief),
     sesionesUsadas: mat.sesionesUsadas,
     materialInterno: mat.materialInterno,
   };

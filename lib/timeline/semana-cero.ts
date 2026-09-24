@@ -32,8 +32,16 @@ export const PRIMERA_FASE_ES_ARRANQUE = /semana\s*0|semana\s*cero|kick.?off|arra
  * pipeline desconocido/legacy). `false` = respetar las fases tal como las propuso el agente.
  */
 export function tieneVozDeHandoffPropia(hubspotPipelineId: string | null): boolean {
-  const key = resolvePipeline(hubspotPipelineId)?.key ?? null;
-  return !!key && AGENTES_HANDOFF_POR_TIPO.some((a) => a.pipelineKey === key);
+  return claveConVozDeHandoffPropia(resolvePipeline(hubspotPipelineId)?.key ?? null);
+}
+
+/**
+ * Lo mismo, desde la CLAVE del pipeline ya resuelta (la que trae el contexto de un agente). La usa
+ * el revisor de fases de «Regenerar todo» para saber si el proyecto tiene Semana 0: en Desarrollo y
+ * Web no hay, y su primera fase es trabajo real (revisión adversarial, 2026-09-24).
+ */
+export function claveConVozDeHandoffPropia(pipelineKey: string | null): boolean {
+  return !!pipelineKey && AGENTES_HANDOFF_POR_TIPO.some((a) => a.pipelineKey === pipelineKey);
 }
 
 export function debeAnteponerSemanaCero(

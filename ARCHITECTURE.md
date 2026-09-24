@@ -541,12 +541,16 @@ for (const t of ALL_PUBLIC_TABLES) {
 **Por qué**: la IA es un costo variable y un punto único de error. Centralizar el parseo evita 6 maneras distintas de fallar; centralizar el tracking evita facturas sorpresa.
 
 **Un prompt que vive SOLO en código, a propósito — el revisor de fases de «Regenerar todo»**: con
-reuniones o notas elegidas en el «Contexto del cronograma», «Regenerar todo el cronograma» corre en
+reuniones o notas elegidas en el «Contexto del cronograma», o con «Instrucciones adicionales»
+(solas también cuentan: son la fuente de más peso), «Regenerar todo el cronograma» corre en
 dos pasos. El paso 1 (`app/api/projects/[projectId]/timeline/estructura/route.ts`) revisa fases y
 tiempos y deja sus cambios en `pendingProposal` con `origen: "contexto"` —la misma propuesta de
 solo estructura que deja el handoff—, que el CSE decide uno por uno en el Gantt; al resolver la
-última, la pantalla sigue sola con el paso 2, el detalle de siempre. Sin material, el paso 1 vuelve
-antes de leer el handoff y de llamar al modelo. Su prompt (`lib/agents/estructura-cronograma.ts`)
+última, la pantalla sigue sola con el paso 2, el detalle de siempre. Sin material ni instrucciones,
+el paso 1 vuelve antes de leer el handoff y de llamar al modelo. Esa propuesta dice QUÉ cambia
+(`campos` por fase y `movidas`, en `lib/timeline/proposal-deltas.ts`): lo que el CSE edita mientras
+espera no vuelve como sugerencia de revertirlo. El handoff no la pisa, y `proposal/apply-items` y
+el DELETE de la propuesta exigen el `runId` de la que el CSE tiene enfrente (409 si es otra). Su prompt (`lib/agents/estructura-cronograma.ts`)
 NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y correría sin celda de
 permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
 `agentId: null` y el `agentSlug` del medidor. El armador (`lib/timeline/propuesta-de-estructura.ts`)
@@ -557,7 +561,9 @@ reales), que una fase nueva, movida o desfijada arranque en una semana que ya pa
 pendiente se corra de rebote desde hoy o más adelante hasta una semana que ya pasó (una pendiente
 que ya estaba en el pasado por el atraso no se mira), renombrar una de «Desarrollo / Integración»
 sin citar la fuente o porque algo quedó excluido, y nombres de fase que cruzan la frontera. Lo
-acordado que descarta por el nombre o por el calendario queda como observación para el CSE. La
+acordado que descarta por el nombre, por el calendario, por tocar lo intocable (terminado,
+suspendido o la Semana 0, que solo existe si el proyecto la tiene: Desarrollo y Web no) o por
+acortar trabajo empezado queda como observación para el CSE. La
 respuesta se lee con `leerRespuestaDeEstructura` (objetos balanceados, gana el último cerco ``` que
 traiga una respuesta, o el último objeto con forma de respuesta), no con un
 `JSON.parse(texto.match(…))` (regla 3). El baseline se parcha con la estructura de la FOTO congelada

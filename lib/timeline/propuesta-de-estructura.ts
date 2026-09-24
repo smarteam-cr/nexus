@@ -39,9 +39,13 @@
  *    el plan con ESE cambio solo —el CSE los acepta de a uno— con la misma fórmula del Gantt
  *    (`computePhaseRanges`);
  *  · más de MAX_CAMBIOS cambios o más de MAX_FASES_NUEVAS fases nuevas.
- * Una fase nueva, un «mover» o un «ajustar» que se descartan por su nombre o por el calendario dejan
+ * Una fase nueva, un «mover» o un «ajustar» que se descartan por su nombre, por el calendario, por
+ * tocar una fase intocable (terminada, suspendida o la Semana 0) o por acortar trabajo empezado dejan
  * además una observación (`acordadoSinEntrar` las cuenta): lo ACORDADO no se pierde en silencio, lo
- * decide el CSE a mano.
+ * decide el CSE a mano. (Revisión adversarial, 2026-09-24: los tres últimos se descartaban sin
+ * observación y la pantalla decía «tus reuniones no piden cambios».) Lo que NO deja observación es
+ * lo que no llegó a ser un acuerdo: sin motivo, un id inventado, un valor fuera de rango o repetido.
+ * La Semana 0 existe solo si el proyecto la tiene (`faseDeSemanaCero`): Desarrollo y Web, no.
  * Y NUNCA: quitar fases, mover el arranque del proyecto, escribir tareas o notas de fase. La
  * propuesta sale sin `tasks` (si no, deja de ser «solo estructura» y el Gantt se congela), sin
  * ancla, y con las notas y el tipo de cada fase tal cual estaban.
@@ -134,6 +138,8 @@ const esObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 const texto = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const esEnteroEntre = (v: unknown, min: number, max: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+/** «1 semana», «3 semanas»: lo lee el CSE en las observaciones. */
+const enSemanas = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
 const recortar = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
 /** Los cambios y las observaciones del JSON crudo: acepta `{estructura:{…}}` o el objeto suelto. */
@@ -155,6 +161,8 @@ function leerCrudo(crudo: unknown): { cambios: unknown[]; observaciones: unknown
  * @param huellas     las del material que entró al prompt: un nombre de fase que cruza la
  *                    frontera se descarta. Sin huellas (o sin material) no se revisa.
  * @param ahora       para no mover una fase a una semana que ya pasó. Sin él no se mira.
+ * @param conSemanaCero  si el proyecto TIENE Semana 0 / Kick-off (default true). ⛔ Desarrollo y
+ *                    Web no tienen: su primera fase es trabajo real (ver `faseDeSemanaCero`).
  */
 export function construirPropuestaDeEstructura(input: {
   fases: readonly FaseParaEstructura[];
@@ -162,10 +170,11 @@ export function construirPropuestaDeEstructura(input: {
   anchorISO: string | null;
   huellas?: HuellasDeFrontera | null;
   ahora?: number | null;
+  conSemanaCero?: boolean;
 }): ResultadoDeEstructura {
   const fases = [...input.fases].sort((a, b) => a.order - b.order);
   const porId = new Map(fases.map((f) => [f.id, f]));
-  const semanaCero = elegirFaseDeSemanaCero(fases)?.id ?? null;
+  const semanaCero = faseDeSemanaCero(fases, input.conSemanaCero ?? true)?.id ?? null;
   const rangos = computePhaseRanges(fases);
   const inicioActual = new Map(fases.map((f, i) => [f.id, rangos[i].start]));
   const semanaDeHoy = semanaDelProyecto(input.anchorISO, input.ahora ?? null);
@@ -296,10 +305,32 @@ export function construirPropuestaDeEstructura(input: {
    * calendario deja una observación. Sin ella la ruta respondía «sin cambios» y la pantalla decía
    * que las reuniones no pedían cambios, cuando una reunión sí los acordó.
    */
-  const perdidoPorElCalendario = (sugerencia: string, porque: string, decide: string): void => {
+  const acordadoQueNoEntra = (sugerencia: string, porque: string, decide: string): void => {
     observacionesDelArmador.push(
       recortar(`Se sugirió ${sugerencia}, pero ${porque}: decide tú ${decide}.`, MAX_LARGO_OBSERVACION),
     );
+  };
+  const perdidoPorElCalendario = acordadoQueNoEntra;
+  /**
+   * Qué pedía un «ajustar», en palabras, para la observación de lo que no entró (revisión adversarial,
+   * 2026-09-24): «llevar «Pruebas» a 3 semanas y renombrar «Pruebas» a «Pruebas con usuarios»».
+   */
+  const loQuePideElAjuste = (f: FaseParaEstructura, c: Record<string, unknown>): string => {
+    const partes: string[] = [];
+    if (esEnteroEntre(c.durationWeeks, 1, 52)) partes.push(`llevar ${nombreDe(f.id)} a ${enSemanas(c.durationWeeks)}`);
+    if (c.inicioSemana !== undefined) {
+      partes.push(
+        `que ${nombreDe(f.id)} arranque ${esEnteroEntre(c.inicioSemana, 1, 104) ? `en la semana ${c.inicioSemana}` : "cuando termine la anterior"}`,
+      );
+    }
+    const nombre = typeof c.name === "string" ? sanitizeTaskTitle(c.name) : "";
+    if (nombre && normalizarParaFrontera(nombre) !== normalizarParaFrontera(f.name)) {
+      partes.push(`renombrar ${nombreDe(f.id)} a «${nombre}»`);
+    }
+    if (esEnteroEntre(c.sessionCount, 1, 50) && c.sessionCount !== f.sessionCount) {
+      partes.push(`llevar ${nombreDe(f.id)} a ${c.sessionCount} sesiones`);
+    }
+    return partes.length > 0 ? partes.join(" y ") : `ajustar ${nombreDe(f.id)}`;
   };
 
   const ajustes = new Map<string, Ajuste>();
@@ -333,6 +364,10 @@ export function construirPropuestaDeEstructura(input: {
       const bloqueo = intocable(f);
       if (bloqueo) {
         descartados.push(`${donde}: ${bloqueo}.`);
+        /* ⭐ Lo ACORDADO sobre una fase intocable no se pierde en silencio (revisión adversarial,
+           2026-09-24): con propuesta null y sin observación, la pantalla decía «tus reuniones no
+           piden cambios». Queda dicho y lo decide el CSE a mano. */
+        acordadoQueNoEntra(loQuePideElAjuste(f, c), bloqueo, "si corresponde");
         continue;
       }
       const ajuste: Ajuste = { motivo };
@@ -346,6 +381,11 @@ export function construirPropuestaDeEstructura(input: {
         } else if (c.durationWeeks <= trabajoEmpezado) {
           descartados.push(
             `${donde}: acortarla a ${c.durationWeeks} semanas dejaría afuera trabajo ya empezado (semana ${trabajoEmpezado + 1}).`,
+          );
+          acordadoQueNoEntra(
+            `llevar ${nombreDe(id)} a ${enSemanas(c.durationWeeks)}`,
+            `dejaría afuera trabajo ya empezado en su semana ${trabajoEmpezado + 1}`,
+            "si se ajusta",
           );
         } else {
           ajuste.durationWeeks = c.durationWeeks;
@@ -393,8 +433,11 @@ export function construirPropuestaDeEstructura(input: {
                 : esDeDesarrollo && !motivoCitaUnaFuente(motivo)
                   ? "renombrar una fase de «Desarrollo / Integración» pide un motivo que cite la reunión, la nota o las instrucciones que lo piden"
                   : null);
-          if (problema) descartados.push(`${donde}: ${problema}.`);
-          else {
+          if (problema) {
+            descartados.push(`${donde}: ${problema}.`);
+            // Un renombre pedido que no entra también queda dicho (sin nombre no hay nada que decidir).
+            if (nombre) acordadoQueNoEntra(`renombrar ${nombreDe(id)} a «${nombre}»`, problema, "si se renombra");
+          } else {
             ajuste.name = nombre;
             nombresTomados.add(normalizarParaFrontera(nombre));
           }
@@ -429,7 +472,7 @@ export function construirPropuestaDeEstructura(input: {
         );
         if (choque) {
           descartados.push(`${donde}: con ${ajuste.durationWeeks} semanas ${choque}.`);
-          perdidoPorElCalendario(`llevar ${nombreDe(id)} a ${ajuste.durationWeeks} semanas`, choque, "si se ajusta");
+          perdidoPorElCalendario(`llevar ${nombreDe(id)} a ${enSemanas(ajuste.durationWeeks)}`, choque, "si se ajusta");
           delete ajuste.durationWeeks;
         }
       }
@@ -529,6 +572,11 @@ export function construirPropuestaDeEstructura(input: {
       const bloqueo = intocable(f);
       if (bloqueo) {
         descartados.push(`${donde}: ${bloqueo}.`);
+        acordadoQueNoEntra(
+          porId.has(despuesDe) && despuesDe !== id ? `mover ${nombreDe(id)} después de ${nombreDe(despuesDe)}` : `mover ${nombreDe(id)}`,
+          bloqueo,
+          "si se mueve",
+        );
         continue;
       }
       if (!porId.has(despuesDe) || despuesDe === id) {
@@ -661,6 +709,26 @@ function semanaDelProyecto(anchorISO: string | null, ahora: number | null): numb
   if (Number.isNaN(a.getTime())) return null;
   const ancla = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
   return Math.floor((diaEnCostaRica(ahora) - ancla) / (7 * DIA_MS));
+}
+
+/**
+ * LA SEMANA 0 / KICK-OFF DEL PROYECTO, o null si no tiene — una sola regla para el armador (que no
+ * la deja tocar) y para el calendario que lee el modelo (que la nombra). `fases` EN ORDEN.
+ *
+ * ⛔ Los pipelines con agente de handoff propio (Desarrollo, Web) NO tienen Semana 0: su handoff la
+ * prohíbe y nunca se les antepone (lib/timeline/semana-cero.ts). Su primera fase es trabajo real
+ * («Relevamiento técnico»). El armador la tomaba igual como Semana 0 —la de `order` 0, se llamara
+ * como se llamara— y descartaba en silencio lo acordado sobre ella: la pantalla decía «tus reuniones
+ * no piden cambios» (revisión adversarial, 2026-09-24). Quien llama decide `conSemanaCero` con la
+ * clave del pipeline (`claveConVozDeHandoffPropia`).
+ */
+export function faseDeSemanaCero<T extends { id: string; name: string }>(
+  fasesEnOrden: readonly T[],
+  conSemanaCero: boolean,
+): T | null {
+  if (!conSemanaCero) return null;
+  const elegida = elegirFaseDeSemanaCero(fasesEnOrden.map((f, i) => ({ ...f, order: i })));
+  return elegida ? (fasesEnOrden.find((f) => f.id === elegida.id) ?? null) : null;
 }
 
 /**
@@ -883,23 +951,29 @@ export type PasoTrasEstructura =
  * lento (congelamientos de 15 a 25 s) salía aunque nadie eligiera nada. Con notas, sí. Con
  * reuniones, si el informe del cargador dice que alguna le llega a la IA (una agendada o una sin
  * resumen no cuentan); sin informe todavía, alcanza con que haya una elegida.
+ * ⭐ Con «Instrucciones adicionales» guardadas, también (revisión adversarial, 2026-09-24): son la
+ * fuente de más peso, y un «Capacitación dura 3 semanas» escrito ahí no movía ninguna fase porque
+ * sin reuniones ni notas el paso 1 no corría. La ruta lee lo mismo (`hayQueRevisarLasFases`).
  */
 export function hayMaterialParaElPaso1(input: {
   reuniones: number;
   notas: number;
   informe: { reuniones: ReadonlyArray<{ entran: number }> } | null;
+  /** Hay «Instrucciones adicionales» guardadas en el cronograma. */
+  instrucciones?: boolean;
 }): boolean {
+  if (input.instrucciones) return true;
   if (input.notas > 0) return true;
   if (input.reuniones === 0) return false;
   return input.informe ? input.informe.reuniones.some((r) => r.entran > 0) : true;
 }
 
-export const AVISO_SIN_CAMBIOS = "Tus reuniones y notas no piden cambios de fases ni de tiempos.";
+export const AVISO_SIN_CAMBIOS = "Tus reuniones, notas e instrucciones no piden cambios de fases ni de tiempos.";
 /** Sin propuesta, pero con cambios ACORDADOS que el armador no pudo proponer (por el nombre o por el
  *  calendario): quedaron en las observaciones, que el acordeón del paso 2 muestra en «La IA también
  *  notó». Decir «no piden cambios» sería falso y contradiría a esa misma observación. */
 export const AVISO_ACORDADO_SIN_ENTRAR =
-  "Tus reuniones o notas piden cambios de fases que no se pueden proponer solos: los ves en «La IA también notó» y decides tú.";
+  "Tus reuniones, notas o instrucciones piden cambios de fases que no se pueden proponer solos: los ves en «La IA también notó» y decides tú.";
 /** 409 con la propuesta del HANDOFF pendiente: no se arman tareas sobre fases sin decidir. */
 export const AVISO_PROPUESTA_PENDIENTE =
   "Hay cambios de fases sin revisar: resuélvelos y vuelve a regenerar para que la IA revise las fases.";
