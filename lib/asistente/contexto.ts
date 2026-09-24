@@ -230,7 +230,7 @@ export interface EstadoParaRehacerTodo {
  *
  * Sigue las MISMAS condiciones que los botones de arriba del Gantt (CronogramaCanvas.tsx):
  *   · «Generar cronograma»: sin tareas de la IA y NUNCA publicado. Una propuesta solo de fases
- *     (`structureOnlyProposal`) no lo esconde; una vista previa de tareas, sí.
+ *     (`hayBorrador`) no lo esconde; una vista previa de tareas, sí.
  *   · «Regenerar todo el cronograma»: con tareas de la IA y SIN ninguna propuesta pendiente.
  *   · Publicado y sin tareas de la IA: ninguno de los dos (la pantalla muestra «Chequear avance»).
  * Lo que el servidor no sabe —los permisos de quien mira (editar el cronograma y generarlo o
@@ -240,7 +240,9 @@ export interface EstadoParaRehacerTodo {
  */
 export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   const cabeza = "PARA REHACER TODO desde las reuniones y las notas elegidas: ";
-  const revisar = "se acepta o se descarta cada uno (botón «Revisar…»)";
+  /* Los botones que existen (E1, 2026-09-24): la propuesta se revisa en SU barra, arriba del Gantt
+     —se desmarca lo que no va y «Aplicar», o «Descartar»—. Ya no se acepta ni descarta uno por uno. */
+  const revisar = "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)";
   if (!e.conDetalleDeLaIA && e.publicadoAlgunaVez) {
     return (
       cabeza +
@@ -255,7 +257,7 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
       "tiene permiso de generarlo con IA, y se esconde mientras haya en pantalla una vista previa de " +
       "tareas sin decidir." +
       (e.cambiosDeFasesSinDecidir
-        ? ` Hay cambios de fases sin decidir: con reuniones o notas elegidas, primero ${revisar} y después se genera.`
+        ? ` Con cambios de fases sin decidir, primero ${revisar} y después se genera.`
         : "")
     );
   }
@@ -286,8 +288,9 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean): string {
   return (
     "⛔ HAY CAMBIOS DE FASES SIN DECIDIR arriba del Gantt (sugerencias del handoff o de la revisión de " +
     "fases de «Regenerar todo»). Mientras estén, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
-    "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que aceptar o descartar " +
-    "esas sugerencias (botón «Revisar…», arriba del Gantt). Puedes conversar el cambio y dejarlo para después."
+    "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que resolver esa propuesta en " +
+    "su barra, arriba del Gantt (desmarcar lo que no va y «Aplicar», o «Descartar»). Puedes conversar el " +
+    "cambio y dejarlo para después."
   );
 }
 

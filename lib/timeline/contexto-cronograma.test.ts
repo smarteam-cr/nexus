@@ -489,7 +489,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "components/canvas/ObservacionesDelPaso1.tsx",
     "components/canvas/PasoDeTareasPendiente.tsx",
     "components/canvas/PhaseRegenPanel.tsx",
-    "components/canvas/ProposalGlobalStrip.tsx",
+    /* E1 del borrador (2026-09-24): la franja `ProposalGlobalStrip` se borró; su texto vive ahora en
+       la barra de revisión. La guarda sigue mirando el mismo texto, en su archivo nuevo. */
+    "components/canvas/RevisionDeLaPropuesta.tsx",
     "components/canvas/TimelineAssistDialog.tsx",
     "components/canvas/TimelineGantt.tsx",
     "components/clients/FuentesManualesColumn.tsx",

@@ -622,7 +622,10 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
  * propone ya está así (una propuesta vieja, o el CSE igualó el cronograma a mano), no hay nada que
  * decidir. ⚠ Un choque NO cuenta como «ya está»: el CSE tiene que ver el ⚠ y descartarlo él.
  */
-export function debeDescartarseSolo(plan: PlanDeAplicacion): boolean {
+export function debeDescartarseSolo(plan: {
+  bloqueo: string | null;
+  items: ReadonlyArray<{ estado: EstadoDelCambio }>;
+}): boolean {
   return plan.bloqueo === null && plan.items.every((it) => it.estado === "ya-esta");
 }
 
@@ -905,6 +908,24 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
     corrimiento: describeEndShift(cierreAntes, cierreDespues),
     magnitud,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── LOS TEXTOS DE LA BARRA (acá y no en el componente: los prueban los tests) ─
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** La línea fija de la barra: lo que pasa con el cliente mientras la propuesta espera. */
+export const LINEA_DEL_CLIENTE = "El cliente sigue viendo el cronograma actual hasta que apliques.";
+/** «Subir al cliente» queda libre con una propuesta abierta, con este aviso (respuesta 4 de Elías). */
+export const AVISO_SUBIR_CON_PROPUESTA =
+  "Hay una propuesta de cambios de fases sin aplicar (arriba del Gantt): si subes ahora, el cliente ve el cronograma sin esos cambios.";
+/** El ÚNICO botón que alterna la vista: dice lo que vas a ver al apretarlo. */
+export const TEXTO_VER_ANTES = "Ver como estaba antes";
+export const TEXTO_VER_PROPUESTA = "Ver la propuesta";
+
+/** «Aplicar todo» si va todo lo que se puede aplicar; si no, «Aplicar N de M». */
+export function textoDeAplicar(marcadas: number, total: number): string {
+  return marcadas === total ? "Aplicar todo" : `Aplicar ${marcadas} de ${total}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

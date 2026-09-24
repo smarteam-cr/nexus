@@ -388,8 +388,13 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     const virgenConPropuesta = linea(false, false, true);
     expect(virgenConPropuesta).toContain("«Generar cronograma»");
     expect(virgenConPropuesta, "«Generar» SE VE con una propuesta solo de fases").not.toContain("NO se ve");
+    /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: pedía «primero se acepta o se
+       descarta cada uno», y desde E1 la propuesta ya no se resuelve uno por uno ni existe el botón
+       «Revisar…» de cada ítem: se revisa en su barra (se desmarca lo que no va y «Aplicar», o
+       «Descartar»). La guarda sigue pidiendo lo mismo de fondo: que antes de generar se decida la
+       propuesta, con los botones que la pantalla SÍ muestra. */
     expect(virgenConPropuesta, "con material, la ruta pide decidir los cambios de fases antes").toContain(
-      "primero se acepta o se descarta cada uno",
+      "primero se revisa la propuesta en su barra",
     );
 
     for (const publicado of [false, true]) {
@@ -400,7 +405,15 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
 
       const conIaYPropuesta = linea(true, publicado, true);
       expect(conIaYPropuesta, "con una propuesta pendiente «Regenerar todo» no se ve").toContain("hoy NO se ve");
-      expect(conIaYPropuesta).toContain("Primero se acepta o se descarta cada uno");
+      expect(conIaYPropuesta).toContain("Primero se revisa la propuesta en su barra");
+    }
+
+    // Ninguna línea cita el botón por ítem que ya no existe; las que hablan de la propuesta nombran
+    // los dos que sí (ver «el chat solo cita botones que la pantalla muestra», más abajo).
+    for (const l of [virgenConPropuesta, linea(true, false, true)]) {
+      expect(l).not.toContain("«Revisar…»");
+      expect(l).toContain("«Aplicar»");
+      expect(l).toContain("«Descartar»");
     }
 
     for (const d of [false, true]) {
@@ -423,6 +436,12 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     const linea = lineaDeCambiosDeFasesSinDecidir(true);
     expect(linea).toContain("NINGÚN cambio que acuerdes se puede aplicar");
     expect(linea, "tiene que decirlo ANTES de armar la lista").toContain("dilo ANTES de armar la lista");
+    /* E1 (2026-09-24): la línea citaba el botón «Revisar…» y «aceptar o descartar esas sugerencias»,
+       que ya no existen. La edición que la pone en rojo: volver a citarlos. */
+    expect(linea).not.toContain("«Revisar…»");
+    expect(linea).not.toContain("aceptar o descartar");
+    expect(linea).toContain("«Aplicar»");
+    expect(linea).toContain("«Descartar»");
     expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true)] : [])');
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
     const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");

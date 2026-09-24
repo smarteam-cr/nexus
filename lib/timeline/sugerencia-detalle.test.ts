@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
 import {
   impactoDeUnDelta,
   filasDeDetalle,
@@ -8,6 +6,7 @@ import {
   movimientosPorSalto,
 } from "./sugerencia-detalle";
 import { computeProposalDeltas, describeChange, type CurrentPhaseLike, type ProposalLike } from "./proposal-deltas";
+import { convertirPropuestaVieja, proyectar, resumir } from "./borrador";
 
 const fase = (id: string, name: string, durationWeeks: number, extra: Partial<CurrentPhaseLike> = {}): CurrentPhaseLike => ({
   id,
@@ -190,10 +189,19 @@ describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () =
     ]) {
       expect(describeChange(c, { inicioActual: 3 })).not.toContain("auto");
     }
-    const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8");
-    expect(gantt, "el chip del Gantt no sabe dónde arranca hoy la fase").toContain(
-      "describeChange(c, { inicioActual: range.start })",
-    );
+    /* ⚠ REESCRITO en E1 del borrador (2026-09-24), con esta razón: miraba que el recuadro
+       «Sugerencia» del Gantt le pasara `inicioActual: range.start` a `describeChange`. Ese recuadro
+       se fue: la propuesta se lee en la lista numerada de la barra (`resumir`) y en las marcas de la
+       vista «Ver la propuesta» (`proyectar`), y los dos tienen que saber dónde arranca HOY una fase
+       con inicio automático. Se prueba el comportamiento en vez de un literal del componente. */
+    const fases = [
+      { id: "a", name: "A", durationWeeks: 4, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      { id: "b", name: "B", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
+    ];
+    const vivo = { ancla: null, fases };
+    const b = convertirPropuestaVieja({ anchorStartDate: null, phases: [{ ...fases[0] }, { ...fases[1], startWeek: 6 }] }, vivo);
+    expect(resumir(vivo, b, []).items[0].titulo, "la lista no sabe dónde arranca hoy la fase").toBe("B · inicio S5 → S7");
+    expect(proyectar(vivo, b, []).fases[1].marca?.etiquetas).toEqual(["inicio S5 → S7"]);
   });
 });
 

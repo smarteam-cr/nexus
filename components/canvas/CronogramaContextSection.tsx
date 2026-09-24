@@ -141,7 +141,7 @@ export default function CronogramaContextSection({
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
           Con esto —y con las instrucciones adicionales de abajo— la IA revisa las fases y sus tiempos
-          al «Regenerar todo el cronograma» (tú aceptas o descartas cada cambio), arma las tareas de
+          al «Regenerar todo el cronograma» (tú revisas la propuesta y decides qué se aplica), arma las tareas de
           cada fase, decide cuáles son reuniones con el
           cliente y propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:

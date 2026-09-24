@@ -547,7 +547,12 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   });
 
   it("resolver la última sugerencia encadena el paso 2 y muestra las reubicaciones", () => {
-    const resolver = tramo("const resolveProposalItems = async (", "useEffect(");
+    /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: `resolveProposalItems` (aceptar o
+       descartar por ítem contra apply-items) se fue; la propuesta se resuelve entera con
+       `aplicarBorrador` (POST /timeline/borrador/aplicar). Lo que la guarda pide es lo mismo: la
+       cadena al paso 2 saltando el paso 1, los avisos de tareas corridas y el origen leído antes de
+       limpiar la propuesta. */
+    const resolver = tramo("const aplicarBorrador = async (", "useEffect(");
     expect(resolver.length).toBeGreaterThan(500);
     expect(resolver).toContain("pasoTrasResolver(");
     expect(resolver, "la continuación no salta el paso 1").toContain("saltarEstructura: true");
@@ -566,7 +571,8 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     /* Hueco 2 de la revisión: el Aplicar del chat hace un PUT con motivo, y ese PUT borra
        `pendingProposal`. La edición que la pone en rojo: sacar la guarda. */
     const aplicar = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
-    const iGuarda = aplicar.indexOf("if (proposal && structureOnlyProposal) {");
+    // (E1, 2026-09-24: la guarda pregunta si hay un BORRADOR guardado; antes, `structureOnlyProposal`.)
+    const iGuarda = aplicar.indexOf("if (hayBorrador) {");
     expect(iGuarda).toBeGreaterThan(-1);
     expect(iGuarda).toBeLessThan(aplicar.indexOf("aplicarOperaciones("));
     expect(aplicar.slice(iGuarda, iGuarda + 200)).toContain("fallo:");
@@ -581,8 +587,12 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   it("la espera del paso 1 bloquea, y la franja sabe de dónde salió la propuesta", () => {
     const ocupado = tramo("const ocupado", "activo: false");
     expect(ocupado).toMatch(/\brevisandoEstructura\s*\?/);
-    expect(src).toContain("origen={origenDePropuesta(proposal)}");
-    expect(src).toContain("observaciones={proposal?.observaciones}");
+    /* ⚠ REESCRITO en E1 (2026-09-24): la franja recibía `origen` y `observaciones` sueltos; la barra
+       nueva recibe el resumen del núcleo, que los trae (borrador.test.ts lo prueba), y sabe si esta
+       pantalla encadena el paso 2. */
+    expect(src).toContain("<RevisionDeLaPropuesta");
+    expect(src).toContain("resumen={revision.resumen}");
+    expect(src).toContain("encadenado={encadenado}");
     expect(src).toContain("<PasoDeTareasPendiente");
   });
 
@@ -590,7 +600,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     /* Sin `saltarEstructura`, el closure viejo todavía ve `proposal?.origen === "contexto"`, vuelve
        con «Primero decide…» y la cadena queda colgada. La edición que la pone en rojo: quitar el
        flag de la continuación de `discardProposal`, o leer el origen después de limpiar. */
-    const descartar = tramo("const discardProposal = async (", "const resolveProposalItems = async (");
+    const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
     expect(descartar.length).toBeGreaterThan(300);
     const iOrigen = descartar.indexOf("origenDePropuesta(proposal)");
     expect(iOrigen, "el origen no se lee").toBeGreaterThan(-1);
@@ -696,16 +706,17 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     /* La edición que la pone en rojo: sacar la guarda de `submitAssist`, o volver a ofrecer «IA» por
        fase con una propuesta de estructura en pantalla. */
     const assist = tramo("const submitAssist = async (", "const aplicarOperacionesAcordadas");
-    const iGuarda = assist.indexOf("if (proposal && structureOnlyProposal) {");
+    // (E1, 2026-09-24: la guarda pregunta si hay un BORRADOR guardado; antes, `structureOnlyProposal`.)
+    const iGuarda = assist.indexOf("if (hayBorrador) {");
     expect(iGuarda, "submitAssist no frena").toBeGreaterThan(-1);
     expect(iGuarda).toBeLessThan(assist.indexOf("/timeline/assist"));
     expect(assist.slice(iGuarda, iGuarda + 200)).toContain("fallo: CAMBIOS_DE_FASES_SIN_DECIDIR");
-    expect(canvas).toMatch(/onAssistPhase=\{\s*\(hasAiDetail \? canRegenerateTimeline : canGenerateTimeline\) && !\(proposal && structureOnlyProposal\)/);
+    expect(canvas).toMatch(/onAssistPhase=\{\s*\(hasAiDetail \? canRegenerateTimeline : canGenerateTimeline\) && !hayBorrador/);
   });
 
   it("#4 · descartar la del modificador no toca el servidor, y el DELETE solo borra la que la pantalla tiene enfrente", () => {
     /* La edición que la pone en rojo: el DELETE incondicional de antes, o sin `runId`. */
-    const descartar = tramo("const discardProposal = async (", "const resolveProposalItems = async (");
+    const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
     const iSi = descartar.indexOf("if (!proposalMeta.current.deAssist) {");
     expect(iSi, "el DELETE ya no depende de dónde vive la propuesta").toBeGreaterThan(-1);
     expect(iSi).toBeLessThan(descartar.indexOf("/timeline/proposal`"));
@@ -718,18 +729,27 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   });
 
   it("#3 / #6 · aplicar una sugerencia exige que la guardada sea la que el CSE tiene enfrente", () => {
-    /* La edición que la pone en rojo: sacar el 409 de apply-items, moverlo después de la transacción,
-       o que la pantalla deje de mandar el `runId`. */
-    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"));
+    /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: apply-items quedó como lápida y
+       aplicar va por POST /timeline/borrador/aplicar. La guarda pide lo mismo: el 409 ANTES de la
+       transacción si la guardada no es la que el CSE tiene enfrente (y adentro, la escritura
+       condicional del token: escribir-estructura.test.ts), y la pantalla manda su token y, con un
+       409 de otra propuesta, trae la que está. La edición que la pone en rojo: sacar el atajo del
+       409, moverlo después de la transacción, o que la pantalla deje de mandar el token. */
+    const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts"));
     const i409 = ruta.indexOf('error: "PROPUESTA_CAMBIO"');
     expect(i409).toBeGreaterThan(-1);
     expect(i409).toBeLessThan(ruta.indexOf("prisma.$transaction("));
-    expect(ruta.slice(ruta.indexOf('if ("runId" in body) {'), i409)).toContain(
-      "vista !== (tl.pendingProposalRunId ?? null)",
+    expect(ruta.slice(ruta.indexOf("if (tl.pendingProposal === null"), i409)).toContain(
+      "(tl.pendingProposalRunId ?? null) !== token",
     );
-    const resolver = tramo("const resolveProposalItems = async (", "useEffect(");
-    expect(resolver).toContain("runId: proposalMeta.current.runId");
-    expect(resolver.slice(resolver.indexOf("res.status === 409"))).toContain("traerPropuestaPendiente()");
+    const aplicar = tramo("const aplicarBorrador = async (", "useEffect(");
+    expect(aplicar.length).toBeGreaterThan(500);
+    expect(aplicar).toContain("token: proposalMeta.current.runId");
+    expect(aplicar.slice(aplicar.indexOf("res.status === 409"))).toContain("traerPropuestaPendiente()");
+    // Y la lápida no escribe nada: solo dice que se recargue.
+    const lapida = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"));
+    expect(lapida).toContain("status: 409");
+    expect(lapida).not.toMatch(/prisma\./);
   });
 
   it("#3 / #6 · el handoff no pisa una propuesta de las reuniones sin decidir", () => {

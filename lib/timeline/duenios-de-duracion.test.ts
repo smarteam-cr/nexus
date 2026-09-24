@@ -51,12 +51,9 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
       "Sin `tasks` (undefined = «no tocar»), acomoda las que quedaron más allá y lo avisa en la " +
       "respuesta. Ese segundo caso era el agujero original.",
   },
-  {
-    archivo: "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts",
-    protege:
-      "Resuelve deltas de FASE, y las tareas nunca producen un delta acá — así que escribía la " +
-      "duración sin mirarlas. Mismo agujero que el PUT, en otra puerta. Ahora acomoda y avisa.",
-  },
+  /* `proposal/apply-items` SALIÓ del censo el 2026-09-24 (E1 del borrador): quedó como lápida que
+     responde 409 y no escribe nada. Su escritura —con el acomodo que ganó acá— se mudó a
+     `lib/timeline/escribir-estructura.ts`, declarado abajo. */
   {
     /* Entró el 2026-09-24 (E1 del borrador del cronograma): es el escritor de la revisión nueva de
        la propuesta de fases y heredó de apply-items el acomodo. */
@@ -144,12 +141,17 @@ describe("los dos caminos vivos acomodan de verdad", () => {
     expect(put).toContain("weekIndex: { gte: p.durationWeeks }");
   });
 
-  it("⛔ y `apply-items` también", () => {
+  it("⛔ y `apply-items` ya no escribe: es una lápida", () => {
+    /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: pedía que apply-items acomodara
+       las tareas al acortar una fase; desde E1 no escribe NADA (responde 409 «recarga») y el acomodo
+       vive en el escritor del borrador (test de abajo). Lo que la guarda sigue impidiendo es un
+       escritor de duración sin acomodo: si la lápida vuelve a escribir, se pone en rojo acá. */
     const items = leer(
       "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts",
     );
-    expect(items).toContain("nuevaDuracion < antes.durationWeeks");
-    expect(items).toContain("weekIndex: { gte: nuevaDuracion }");
+    expect(items.length).toBeGreaterThan(100);
+    expect(items).toContain("status: 409");
+    expect(items).not.toMatch(/timelinePhase\.|timelineTask\./);
   });
 
   it("⛔ y el escritor del borrador también, y lo avisa", () => {
@@ -168,7 +170,8 @@ describe("los dos caminos vivos acomodan de verdad", () => {
        `avisos` en la respuesta. */
     for (const rel of [
       "app/api/projects/[projectId]/timeline/route.ts",
-      "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts",
+      // (E1, 2026-09-24: la ruta que aplica la propuesta es la del borrador, no apply-items.)
+      "app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts",
     ]) {
       const src = leer(rel);
       expect(src, `${rel} dejó de reportar las tareas que corrió`).toContain("avisosDeReubicacion");

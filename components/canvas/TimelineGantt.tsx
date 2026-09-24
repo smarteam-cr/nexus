@@ -75,13 +75,11 @@ import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
-import { describeChange, sortChangesByImpact, type ProposalDelta } from "@/lib/timeline/proposal-deltas";
-import { filasDeDetalle, type ImpactoEnElCierre } from "@/lib/timeline/sugerencia-detalle";
+import type { MarcaDeFase } from "@/lib/timeline/borrador";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
-import { AcceptButton, RejectButton, IconCheck, IconX } from "@/components/ui/AcceptReject";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
@@ -178,15 +176,15 @@ interface Props {
   // Crear un AVISO a mano (el CSE le escribe algo al cliente). Si viene, el bloque se muestra
   // aunque no haya ninguna particularidad todavía — si no, no habría dónde poner el botón.
   onAddParticularidad?: () => void;
-  // Sugerencias de ESTRUCTURA pendientes (propuesta de estructura, solo fases): se dibujan DENTRO
-  // del Gantt real — badge "Sugerencia" en la fila de la fase afectada + fila fantasma por fase
-  // nueva — y el CSE las resuelve una por una. El Gantt nunca se reemplaza por la propuesta.
-  proposalDeltas?: ProposalDelta[];
-  /** Cuánto movería el cierre CADA sugerencia por separado (lib/timeline/sugerencia-detalle).
-   *  Sin esto la fila dice QUÉ cambia pero no qué le hace a la fecha de fin — que es lo que se
-   *  está decidiendo. Ausente = no se pinta el chip (p. ej. sin fecha de arranque). */
-  impactoPorDelta?: Map<string, ImpactoEnElCierre>;
-  onResolveProposalDelta?: (key: string, accept: boolean) => void;
+  /**
+   * Las marcas de la vista «Ver la propuesta» (E1 del borrador del cronograma, 2026-09-24), por
+   * `key` de fase: el fondo del token tal cual y una línea a la izquierda, con etiquetas cortas
+   * («nueva», «+1 semana», «movida», «renombrada», «inicio S3 → S5»). Salen de
+   * `proyectar` (lib/timeline/borrador.ts): el Gantt no calcula nada de la propuesta, solo pinta.
+   * Reemplazan a los recuadros «Sugerencia» y a las filas fantasma «Fase propuesta», que metían la
+   * propuesta DENTRO del cronograma editable.
+   */
+  marcas?: ReadonlyMap<string, MarcaDeFase>;
   // Convertir una particularidad en TAREA del cronograma (dueño + fecha). Sin esto el botón no sale.
   onConvertParticularidad?: (id: string) => void;
   /** Dar por resuelta / reabrir. La nota es el motivo del cierre (opcional). */
@@ -200,11 +198,6 @@ interface Props {
    *  particularidades. Llega como slot y no como datos porque es un componente completo con su
    *  propio estado y sus llamadas al servidor: el Gantt solo le presta el lugar correcto. */
   sugerenciasSlot?: ReactNode;
-  /** Sugerencias GLOBALES de la propuesta de estructura (fecha de arranque, reordenamiento) más
-   *  el aceptar/descartar todo. Se dibujan en la franja de encabezado, junto al selector de fecha
-   *  que es donde se aplican. Antes vivían en un banner arriba del Gantt: un índice de algo que
-   *  estaba 300 px más abajo. */
-  proposalGlobalSlot?: ReactNode;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -432,11 +425,8 @@ export default function TimelineGantt({
   onToggleParticularidadVisible,
   onEditParticularidad,
   onAddParticularidad,
-  proposalDeltas,
-  impactoPorDelta,
-  onResolveProposalDelta,
+  marcas,
   sugerenciasSlot,
-  proposalGlobalSlot,
   onConvertParticularidad,
   onCerrarParticularidad,
   onOpenConvertedTask,
@@ -450,13 +440,11 @@ export default function TimelineGantt({
   // distinta (guarda el ISO de la sugerida que se descartó; no persiste — vuelve a avisar si
   // se recarga la página, a propósito: es un recordatorio, no una decisión escrita en la base).
   const [dismissedSuggestionIso, setDismissedSuggestionIso] = useState<string | null>(null);
-  /** Qué sugerencia tiene el antes/después abierto. Una sola a la vez: son filas contiguas y
-   *  varias desplegadas a la vez vuelven el Gantt ilegible. */
-  const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null);
-  // C-16 (2026-09-04): las cinco derivaciones del cronograma van en useMemo. El Gantt vuelve a
+  // C-16 (2026-09-04): las derivaciones del cronograma van en useMemo. El Gantt vuelve a
   // renderizar con cada tecla de un título, cada tick del poll y cada movimiento de arrastre, y
-  // antes recalculaba en cada uno los rangos, el calendario, el cierre, el índice de la propuesta
-  // y los contadores sobre TODAS las fases y tareas — el mismo resultado, N veces por segundo.
+  // antes recalculaba en cada uno los rangos, el calendario, el cierre y los contadores sobre
+  // TODAS las fases y tareas — el mismo resultado, N veces por segundo. (El índice de la
+  // propuesta que también vivía acá se fue con E1: las marcas llegan ya calculadas en `marcas`.)
   // Las deps son exactamente las props de las que cada una deriva: una dep de menos es peor que
   // ningún memo (un cierre viejo al cambiar el ancla). `phases` llega memoizado del canvas, igual
   // que ya asumía `repetidas`.
@@ -487,20 +475,6 @@ export default function TimelineGantt({
   const curWeek = today ? currentWeekIndex(anchor, today) : null;
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const editable = !readOnly && !!onUpdateTask;
-
-  // Sugerencias de estructura (del handoff o de las reuniones elegidas) indexadas para el render in-place:
-  // cambios sobre fases existentes por phaseId (badge en su fila) + fases nuevas (filas fantasma).
-  // El gate de edición se hace en cada punto de uso (`!readOnly && onResolveProposalDelta`), que
-  // además ESTRECHA el tipo del handler y evita aserciones `!`.
-  const { proposalModByPhase, proposalAdds } = useMemo(
-    () => ({
-      proposalModByPhase: new Map(
-        (proposalDeltas ?? []).flatMap((d) => (d.kind === "MODIFY_PHASE" ? [[d.phaseId, d] as const] : [])),
-      ),
-      proposalAdds: (proposalDeltas ?? []).filter((d) => d.kind === "ADD_PHASE"),
-    }),
-    [proposalDeltas],
-  );
 
   // Estado en una línea, con el MISMO helper que redacta el del cliente. Antes acá decía
   // "cronograma finalizado" apenas se acababa el calendario, aunque quedaran tareas abiertas:
@@ -823,11 +797,6 @@ export default function TimelineGantt({
         </span>
       </div>
 
-      {/* Lo global de la propuesta de estructura: acá y no en un banner arriba, porque la fecha
-          de arranque sugerida se aplica sobre el selector que está a su izquierda y el
-          reordenamiento sobre las filas que están abajo. */}
-      {proposalGlobalSlot}
-
       <div className="rounded-2xl border border-line bg-surface overflow-x-auto">
         <div style={{ minWidth: Math.max(640, 300 + total * 34) }}>
           {/* Cabecera de semanas */}
@@ -867,6 +836,9 @@ export default function TimelineGantt({
               const arrancaAntesQueLaDeArriba = i > 0 && range.start < ranges[i - 1].start;
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
+              /* La marca de la vista «Ver la propuesta»: el fondo del token TAL CUAL (ya está al 15 %
+                 en oscuro y en tono 50 en claro: a la mitad no se vería) y una línea a la izquierda. */
+              const marca = marcas?.get(p.key);
               /* El punto rojo se ganaba con "alguna tarea suya venció", que en un proyecto real
                  dispara en 7 de cada 10 fases. `buildPhaseSignal` separa eso —problema de una
                  tarea, que ya grita en su propia fila— de que la FASE se haya pasado de fecha,
@@ -896,7 +868,9 @@ export default function TimelineGantt({
               return (
                 <SortableRow key={p.key} id={p.key} data={{ type: "phase" }} disabled={!editable || !onReorderPhases}>
                 {(attributes, listeners) => (
-                <div>
+                /* `data-fase-key`: el ancla con la que la revisión de la propuesta conserva el lugar
+                   del scroll al alternar «Ver como estaba antes» ↔ «Ver la propuesta». */
+                <div data-fase-key={p.key}>
                   {/* Fila del grid */}
                   <div
                     onClick={() => {
@@ -908,7 +882,13 @@ export default function TimelineGantt({
                       }
                       toggleExpand(p.key);
                     }}
-                    className="grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-surface-hover/50 transition-colors group"
+                    className={`grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer hover:bg-surface-hover/50 transition-colors group ${
+                      marca
+                        ? marca.tono === "nueva"
+                          ? "bg-success-surface border-l-2 border-success-line"
+                          : "bg-info-surface border-l-2 border-info-line"
+                        : ""
+                    }`}
                     style={gridCols}
                   >
                     <div className="flex flex-col min-w-0 pr-2">
@@ -1074,130 +1054,25 @@ export default function TimelineGantt({
                         </span>
                       </div>
 
-                      {/* ── SUGERENCIA DE LA IA SOBRE ESTA FASE (propuesta de estructura) ────
-                          Vive en su PROPIA fila, a lo ancho de la columna, y no dentro de la
-                          hilera de chips de arriba. Ahí estaba antes y se rompía: el chip iba
-                          en un `ml-auto` (alineado a la derecha) con un solo string largo
-                          —«3 → 2 SEMANAS · 4 → 3 SESIONES · NOTAS ACTUALIZADAS»— que no entra
-                          en una columna de ~300px, así que desbordaba HACIA LA IZQUIERDA y
-                          quedaba cortado por el borde, ilegible.
-                          Ahora: `min-w-0` (sin esto un flex hijo se niega a achicarse por
-                          debajo de su contenido y vuelve a desbordar) y UN CHIP POR CAMBIO en
-                          vez de una frase — envuelven solos y cada uno se lee entero.
-                          Los cambios siguen ordenados por impacto: lo que MUEVE el cronograma
-                          (duración, semana de inicio) va primero y el renombre cosmético al
-                          final. Nada se aplica solo: se acepta o descarta acá mismo. */}
-                      {(() => {
-                        const d = p.id ? proposalModByPhase.get(p.id) : undefined;
-                        if (!d || readOnly || !onResolveProposalDelta) return null;
-                        const impacto = impactoPorDelta?.get(d.key);
-                        /* El RENOMBRE sale de la hilera de chips y se cuenta aparte: es el cambio
-                           que más redefine la fase —y el que peor se leía—, escondido como último
-                           badge de una fila de cinco. Caso real de Wherex: «Revisión y limpieza
-                           base» pasaba a llamarse «Integraciones» conservando sus 15 tareas de
-                           limpieza de base; correcto por diseño (una fase con progreso se renombra,
-                           nunca se borra) pero ilegible sin decir que las tareas se quedan. */
-                        const renombre = d.changes.find((c) => c.field === "name");
-                        const otros = sortChangesByImpact(d.changes.filter((c) => c.field !== "name"));
-                        const abierto = detalleAbierto === d.key;
-                        return (
-                          <div
-                            className="ml-[18px] mt-1.5 rounded-lg border border-info-line bg-info-surface px-2.5 py-2 min-w-0 space-y-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-start gap-2">
-                              <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-info-ink flex-shrink-0">
-                                  Sugerencia
-                                </span>
-                                {otros.map((c) => (
-                                  <span
-                                    key={c.field}
-                                    className="text-xs text-fg-secondary bg-surface border border-line rounded px-2 py-0.5 max-w-full break-words"
-                                  >
-                                    {describeChange(c, { inicioActual: range.start })}
-                                  </span>
-                                ))}
-                              </div>
-                              <span className="flex items-center gap-1 flex-shrink-0">
-                                <AcceptButton
-                                  size="xs"
-                                  aria-label={`Aceptar la sugerencia para «${p.name}»`}
-                                  title="Aceptar: aplica solo este cambio"
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, true); }}
-                                />
-                                <RejectButton
-                                  size="xs"
-                                  aria-label={`Descartar la sugerencia para «${p.name}»`}
-                                  title="Descartar la sugerencia"
-                                  onClick={(e) => { e.stopPropagation(); onResolveProposalDelta(d.key, false); }}
-                                />
-                              </span>
-                            </div>
-
-                            {/* LO QUE LE HACE A LA FECHA DE FIN. Es el dato que se está decidiendo
-                                y hasta hoy no aparecía en ninguna parte: el encabezado mostraba el
-                                cierre y las filas cambiaban duraciones sin decir cuánto lo mueven.
-                                Ámbar solo cuando de verdad se mueve — su ausencia significa "este
-                                cambio no toca fechas", que es información igual de útil. */}
-                            {impacto?.mueve && impacto.chip && (
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-                                <span className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 font-semibold text-warn-ink">
-                                  Cierre: {impacto.chip}
-                                </span>
-                                {impacto.fechas && <span className="text-fg-muted">{impacto.fechas}</span>}
-                              </div>
-                            )}
-
-                            {renombre && (
-                              <p className="text-xs leading-relaxed text-fg-secondary">
-                                Pasa a llamarse <span className="font-semibold text-fg">«{String(renombre.to)}»</span>
-                                {p.tasks.length > 0
-                                  ? ` — conserva sus ${plural(p.tasks.length, "tarea actual", "tareas actuales")}.`
-                                  : "."}
-                              </p>
-                            )}
-
-                            {/* El motivo de la IA (la propuesta de las reuniones y notas elegidas lo
-                                trae; la del handoff no). Interno: cita la reunión o la nota, así que
-                                nunca se escribe en la fase ni llega al cliente. */}
-                            {d.motivo && (
-                              <p className="text-xs leading-relaxed text-fg-secondary">
-                                <span className="font-semibold text-fg">Por qué (solo lo ves tú):</span> {d.motivo}
-                              </p>
-                            )}
-
-                            {/* El antes/después. Va detrás de un click y no de un hover: un tooltip
-                                no se puede comparar entre filas ni leer en touch, y acá hay texto
-                                largo (las notas). "notas actualizadas" era literalmente indecidible
-                                — no decía ni qué nota ni qué decía antes. */}
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setDetalleAbierto(abierto ? null : d.key); }}
-                              className="text-xs font-semibold text-info-ink hover:opacity-75 transition-opacity"
-                              aria-expanded={abierto}
+                      {/* Qué cambia en esta fila, en la vista de la propuesta: etiquetas cortas.
+                          El detalle (antes → después, el porqué) vive en la lista numerada de la
+                          barra de revisión, no acá. */}
+                      {marca && marca.etiquetas.length > 0 && (
+                        <div className="ml-[18px] mt-1 flex flex-wrap items-center gap-1">
+                          {marca.etiquetas.map((e) => (
+                            <span
+                              key={e}
+                              className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                marca.tono === "nueva"
+                                  ? "border-success-line text-success-ink"
+                                  : "border-info-line text-info-ink"
+                              }`}
                             >
-                              {abierto ? "Ocultar detalle" : "Ver detalle"}
-                            </button>
-                            {abierto && (
-                              <dl className="space-y-1 rounded border border-line bg-surface/50 px-2 py-1.5">
-                                {filasDeDetalle(d.changes).map((f) => (
-                                  <div key={f.campo} className="grid grid-cols-[6rem_1fr] gap-x-3 text-xs">
-                                    <dt className={`font-semibold ${f.mueveFechas ? "text-warn-ink" : "text-fg-muted"}`}>
-                                      {f.etiqueta}
-                                    </dt>
-                                    <dd className="min-w-0 break-words text-fg-secondary">
-                                      <span className="text-fg-muted line-through">{f.antes}</span>
-                                      <span className="mx-1 text-fg-muted">→</span>
-                                      <span className="text-fg">{f.despues}</span>
-                                    </dd>
-                                  </div>
-                                ))}
-                              </dl>
-                            )}
-                          </div>
-                        );
-                      })()}
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Celdas de semanas */}
@@ -1381,66 +1256,6 @@ export default function TimelineGantt({
             })}
             </SortableContext>
             </DndContext>
-            {/* Fases NUEVAS propuestas por la IA (propuesta de estructura: del handoff o de las
-                reuniones y notas elegidas) — filas fantasma dentro del cronograma real: no existen
-                hasta que el CSE las acepta. Nacen vacías; las tareas llegan con el paso 2 de
-                «Regenerar todo» o con "regenerar solo esta fase". */}
-            {!readOnly &&
-              onResolveProposalDelta &&
-              proposalAdds.map((d) => (
-                <div
-                  key={d.key}
-                  className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-info-line bg-info-surface px-2.5 py-2"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border text-info-ink bg-info-surface border-info-line flex-shrink-0">
-                      Fase propuesta
-                    </span>
-                    <span className="text-sm text-fg min-w-0 truncate">{d.phase.name}</span>
-                    <span className="text-xs text-fg-muted flex-shrink-0">
-                      {plural(d.phase.durationWeeks, "semana", "semanas")}
-                      {d.phase.sessionCount != null ? ` · ${plural(d.phase.sessionCount, "sesión", "sesiones")}` : ""}
-                      {/* Dónde va a quedar al aceptarla — antes caía al final sin avisar. */}
-                      {d.afterPhaseName ? ` · va después de «${d.afterPhaseName}»` : " · va al principio"}
-                    </span>
-                    {/* Una fase nueva casi siempre alarga el proyecto — decirlo acá evita que el
-                        corrimiento aparezca recién después de aceptar. */}
-                    {(() => {
-                      const impacto = impactoPorDelta?.get(d.key);
-                      if (!impacto?.mueve || !impacto.chip) return null;
-                      return (
-                        <span
-                          className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-xs font-semibold text-warn-ink flex-shrink-0"
-                          title={impacto.fechas ?? undefined}
-                        >
-                          Cierre: {impacto.chip}
-                        </span>
-                      );
-                    })()}
-                    <span className="ml-auto flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => onResolveProposalDelta(d.key, true)}
-                        title="Crear la fase (vacía; las tareas se detallan después)"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-colors"
-                      >
-                        <IconCheck className="w-3 h-3" /> Aceptar
-                      </button>
-                      <button
-                        onClick={() => onResolveProposalDelta(d.key, false)}
-                        title="Descartar esta fase propuesta"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-hover px-2 py-1 text-[11px] font-semibold text-fg-muted hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 transition-colors"
-                      >
-                        <IconX className="w-3 h-3" /> Descartar
-                      </button>
-                    </span>
-                  </div>
-                  {d.phase.motivo && (
-                    <p className="text-xs leading-relaxed text-fg-secondary">
-                      <span className="font-semibold text-fg">Por qué (solo lo ves tú):</span> {d.phase.motivo}
-                    </p>
-                  )}
-                </div>
-              ))}
             {editable && onAddPhase && (
               <button
                 onClick={onAddPhase}

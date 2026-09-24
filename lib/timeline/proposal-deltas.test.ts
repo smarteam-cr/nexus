@@ -311,22 +311,27 @@ test("con una propuesta de ESTRUCTURA, el cronograma conserva sus acciones", () 
     "utf8",
   );
 
+  /* ⚠ REESCRITO en E1 del borrador (2026-09-24), con esta razón: la condición se llama `hayBorrador`
+     (antes `structureOnlyProposal`), el CTA cuenta los cambios del resumen del núcleo (antes
+     `proposalDeltas`) y el ancla vive en la barra de revisión (la franja `ProposalGlobalStrip` se
+     borró). Lo que se protege es lo mismo: con una propuesta de fases la fila de acciones no queda
+     vacía, y el CTA lleva a la revisión sin aplicar nada. */
   expect(
     src,
     "el CTA de generar/re-chequear volvió a esconderse ante cualquier propuesta: con una de " +
       "estructura el Gantt sigue vivo y la fila de acciones no puede quedar vacía",
-  ).toContain("(!proposal || structureOnlyProposal)");
+  ).toContain("(!proposal || hayBorrador)");
 
   expect(
     src,
     "desapareció el CTA que lleva a revisar los cambios propuestos desde la fila de acciones",
-  ).toMatch(/canEdit && structureOnlyProposal && proposalDeltas\.length > 0/);
+  ).toMatch(/canEdit && hayBorrador && revision\.resumen && revision\.resumen\.total > 0/);
 
-  // El CTA lleva al ancla; no acepta desde el encabezado (aceptar N cambios sin verlos es
+  // El CTA lleva al ancla; no aplica desde el encabezado (aplicar N cambios sin verlos es
   // difícil de deshacer, y la fila no tiene espacio para explicarlos).
   expect(src).toContain('getElementById("cronograma-propuesta")');
   expect(
-    fs.readFileSync(path.join(process.cwd(), "components/canvas/ProposalGlobalStrip.tsx"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "components/canvas/RevisionDeLaPropuesta.tsx"), "utf8"),
     "el ancla del CTA se perdió: el botón del encabezado quedaría llevando a ningún lado",
   ).toContain('id="cronograma-propuesta"');
 });
@@ -632,28 +637,26 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
     expect(reorder.kind === "REORDER_PHASES" ? reorder.movimientos.map((m) => m.id) : null).toEqual(["c", "b"]);
   });
 
-  it("⛔ la ruta usa la función y responde cuántas quedan", () => {
+  it("⛔ la ruta que aplica responde que no queda nada y de dónde salió, y no reescribe la propuesta a medias", () => {
+    /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: pedía que apply-items reescribiera
+       lo que quedaba con `reescribirPropuestaPendiente` y respondiera cuántas sugerencias seguían
+       vivas. Desde E1 la propuesta se resuelve ENTERA (POST /timeline/borrador/aplicar): no queda
+       una propuesta a medias que pueda perder su `origen`, y `pendientes` es siempre 0. Lo que la
+       cadena al paso 2 necesita sigue siendo lo mismo: `pendientes` y `origen` en la respuesta. La
+       edición que la pone en rojo: sacarlos, o volver a reescribir `pendingProposal` en la ruta. */
     const ruta = fs
       .readFileSync(
-        path.join(process.cwd(), "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"),
+        path.join(process.cwd(), "app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts"),
         "utf8",
       )
       .replace(/\/\*[\s\S]*?\*\//g, " ")
       .replace(/^\s*\/\/.*$/gm, " ");
-    expect(ruta, "apply-items dejó de reescribir con la función compartida").toContain(
-      "reescribirPropuestaPendiente(",
-    );
-    expect(
-      ruta.includes("{ anchorStartDate: keptAnchor, phases: rebuilt }"),
-      "volvió la reescritura a mano: el origen se pierde con la primera sugerencia aceptada",
-    ).toBe(false);
-    // La respuesta final (la última de la ruta): sin estas dos claves la cadena al paso 2 no sabe
-    // si terminó ni si la propuesta era la de las reuniones.
     const respuesta = ruta.slice(ruta.lastIndexOf("return NextResponse.json({"));
-    expect(respuesta, "no se encontró la respuesta de la ruta").toContain("applied:");
+    expect(respuesta, "no se encontró la respuesta de la ruta").toContain("aplicadas,");
     expect(respuesta, "la respuesta dejó de decir cuántas sugerencias quedan").toMatch(/\bpendientes\s*[,:]/);
     expect(respuesta, "la respuesta dejó de decir de dónde salió la propuesta").toMatch(/\borigen\s*[,:]/);
-    expect(ruta, "`pendientes` dejó de salir de lo que queda vivo").toContain("pendientes = remaining.length");
+    expect(ruta, "la ruta volvió a reescribir la propuesta a medias").not.toContain("reescribirPropuestaPendiente(");
+    expect(ruta, "la ruta escribe la propuesta por su cuenta").not.toMatch(/pendingProposal:\s*(rewritten|Prisma\.DbNull)/);
   });
 
   it("⛔ la propuesta de las reuniones nunca da SET_ANCHOR, aunque traiga ancla (la IA no mueve el arranque)", () => {
@@ -683,15 +686,20 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
        feed (/api/agent-runs ordena por él) y el CSE recibía otro «Listo» de algo terminado hace
        horas. La edición que la pone en rojo: volver a `discardKeys.size`, o sacar el `updatedAt`
        explícito del update. */
+    /* ⚠ RE-APUNTADA en E1 del borrador (2026-09-24) a la ruta que reemplazó a apply-items, con esta
+       razón: la auditoría y el desenlace se mudaron ahí. Lo que pide es lo mismo: la razón y el
+       desenlace cuentan con los MISMOS números (aplicadas y las que quedaron fuera), y anotar el
+       desenlace no reaviva la corrida. */
     const ruta = fs
       .readFileSync(
-        path.join(process.cwd(), "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"),
+        path.join(process.cwd(), "app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts"),
         "utf8",
       )
       .replace(/\/\*[\s\S]*?\*\//g, " ")
       .replace(/^\s*\/\/.*$/gm, " ");
-    expect(ruta, "la auditoría volvió a contar las claves stale").not.toContain("${discardKeys.size} descartadas");
-    expect(ruta).toContain("${accepted.length} aceptadas, ${descartadas} descartadas");
+    expect(ruta).toContain("aplicada: ${aplicadas} de ${total}");
+    expect(ruta, "la razón y el desenlace cuentan distinto lo que quedó fuera").toContain("descartadas: n(previo.descartadas) + fuera");
+    expect(ruta).toContain("aceptadas: n(previo.aceptadas) + aplicadas");
     const iDesenlace = ruta.indexOf('desenlace: "resuelta"');
     expect(iDesenlace, "no se encontró el desenlace").toBeGreaterThan(-1);
     const iUpdate = ruta.lastIndexOf("prisma.agentRun.update(", iDesenlace);

@@ -68,7 +68,7 @@ export interface ProposalPhaseLike {
   motivo?: string | null;
   /**
    * Solo la propuesta de las reuniones (`origen: "contexto"`): los campos que la IA propone cambiar
-   * en ESTA fase. Solo esos se comparan contra la fase viva (y solo esos escribe `apply-items`); lo
+   * en ESTA fase. Solo esos se comparan contra la fase viva (y solo esos se escriben al aplicar); lo
    * que el CSE edite después en otro campo no vuelve como sugerencia de revertirlo. Ausente = todos
    * (la del handoff, o una propuesta de las reuniones guardada antes de este campo).
    */
@@ -313,7 +313,7 @@ export function computeProposalDeltas(
 
   /* ⛔ LA IA NUNCA MUEVE EL ARRANQUE (decisión de Elías): la propuesta de las reuniones no da un
      SET_ANCHOR aunque traiga ancla. El armador ya nunca la escribe; esto es la segunda línea, acá
-     y no en la ruta, para que la pantalla y `apply-items` vean los mismos deltas: si solo el
+     y no en la ruta, para que la pantalla y el servidor vean los mismos cambios: si solo el
      servidor lo ignorara, el Gantt mostraría una sugerencia de arranque que nunca se aplica. */
   const toAnchor = origenDePropuesta(proposal) === "contexto" ? null : day(proposal.anchorStartDate);
   const fromAnchor = day(currentAnchor);

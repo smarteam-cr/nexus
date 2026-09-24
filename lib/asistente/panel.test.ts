@@ -287,6 +287,9 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
       "allRegenLoading",
       "chainingProgress",
       "applying",
+      /* E1 del borrador (2026-09-24): aplicar la propuesta de fases también bloquea — el servidor
+         compara lo vivo con lo que viste, y un cambio en el medio lo haría fallar con 409. */
+      "aplicandoBorrador",
       "applyingProgress",
       "applyingPartic",
     ]) {

@@ -142,11 +142,13 @@ describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada
     ["rangos", /const ranges = useMemo\(\(\) => computePhaseRanges\(phases\), \[phases\]\);/],
     ["calendario", /const total = useMemo\(\(\) => timelineSpan\(phases\), \[phases\]\);/],
     ["cierre", /const cierre = useMemo\(\(\) => projectedEnd\(anchor, phases\), \[anchor, phases\]\);/],
-    ["índice de la propuesta", /const \{ proposalModByPhase, proposalAdds \} = useMemo\([\s\S]*?\[proposalDeltas\],\s*\);/],
+    /* «índice de la propuesta» SALIÓ el 2026-09-24 (E1 del borrador del cronograma): el Gantt ya no
+       indexa la propuesta —las marcas le llegan calculadas en `marcas` desde `proyectar`—, así que
+       no hay nada que memoizar. La guarda de abajo impide que el cálculo vuelva al Gantt. */
     ["contadores", /const \{ tasksTotal, tasksDone, delayWeeks \} = useMemo\([\s\S]*?\[phases, particularidades\],\s*\);/],
   ];
 
-  it("las cinco derivaciones están en useMemo con sus deps exactas", () => {
+  it("las cuatro derivaciones están en useMemo con sus deps exactas", () => {
     /* La edición que lo pone en rojo: volver a `const ranges = computePhaseRanges(phases)` «porque es
        más simple» — o dejar el memo y sacarle una dep (`[phases]` en el cierre: el ancla cambia y el
        cierre que se pinta es el viejo). */
@@ -160,13 +162,16 @@ describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada
     }
   });
 
-  it("ninguna de las cinco vuelve a calcularse pelada en el cuerpo del componente", () => {
+  it("ninguna vuelve a calcularse pelada en el cuerpo del componente", () => {
     const src = sinComentarios(leer("components/canvas/TimelineGantt.tsx"));
     for (const pelada of [
       "const ranges = computePhaseRanges(",
       "const total = timelineSpan(",
       "const cierre = projectedEnd(",
       "const proposalModByPhase = new Map(",
+      // Y la propuesta no se vuelve a calcular ADENTRO del Gantt, memoizada o no (E1).
+      "proyectar(",
+      "planDeAplicacion(",
       "const tasksTotal = phases.reduce(",
     ]) {
       expect(src, `${pelada} se recalcula en cada render`).not.toContain(pelada);

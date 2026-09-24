@@ -207,34 +207,41 @@ describe("redactarResumenDeCambios", () => {
  * dato que no existe.
  */
 describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir", () => {
+  /* ⚠ RE-APUNTADAS en E1 del borrador del cronograma (2026-09-24), con esta razón: la franja
+     `ProposalGlobalStrip` se borró y su aviso, su botón grande y su confirmación viven ahora en la
+     barra de revisión (`RevisionDeLaPropuesta`), que mide con `evaluarMagnitud` —la misma regla—.
+     Las guardas piden lo mismo de siempre sobre el archivo nuevo; cambian los nombres («Aplicar
+     todo» en vez de «Aceptar todo»/«Reemplazar todo», porque ya no se acepta de a uno). */
   const src = fs.readFileSync(
-    path.join(process.cwd(), "components/canvas/ProposalGlobalStrip.tsx"),
+    path.join(process.cwd(), "components/canvas/RevisionDeLaPropuesta.tsx"),
     "utf8",
   );
 
   it("el aviso nombra la diferencia, sus motivos y el corrimiento del cierre", () => {
-    /* La edición que la pone en rojo: borrar el bloque del aviso, o solo la línea de la fecha. */
-    const i = src.indexOf("otroCronograma && (");
+    /* La edición que la pone en rojo: borrar el bloque del aviso, o la línea del cierre. */
+    const i = src.indexOf("{otroCronograma && (");
     expect(i, "desapareció el aviso de cronograma nuevo; revisar esta guarda").toBeGreaterThan(-1);
-    const tramo = src.slice(i, src.indexOf("globales.length < deltas.length", i));
+    const tramo = src.slice(i, src.indexOf("{choques > 0 && (", i));
     expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(300);
     expect(tramo, "el aviso dejó de nombrar la diferencia").toContain(
       "prácticamente un cronograma nuevo",
     );
     expect(tramo, "el aviso dejó de listar POR QUÉ es distinto").toContain("magnitud.motivos");
-    expect(tramo, "el aviso dejó de decir cuánto se mueve la fecha de fin").toContain("corrimiento");
-    expect(tramo, "el aviso dejó de aclarar que no se borra nada").toContain("Aceptar no borra nada");
+    expect(tramo, "el aviso dejó de aclarar que no se borra nada").toContain("Aplicar no borra nada");
+    // El corrimiento del cierre va en la barra FIJA, siempre a la vista (no solo en el aviso).
+    expect(src, "la barra dejó de decir cuánto se mueve la fecha de fin").toContain("{fraseDelCierre(resumen)}");
+    expect(src).toContain("if (r.corrimiento) return r.corrimiento;");
   });
 
   it("el botón grande abre confirmación y el confirm dice la verdad sobre lo que pasa", () => {
-    /* Las tres afirmaciones del confirm son verificables en el código: apply-items no tiene un
-       solo `delete`, los deltas son phase-level (`tasks` nunca viaja en la propuesta) y las
-       fases nuevas se crean sin tareas. La edición que la pone en rojo: cablear el botón directo
-       a onResolve, sacar la frase de «no se borra», o pintarlo como destructivo. */
+    /* Las afirmaciones del confirm son verificables en el código: el escritor del borrador no tiene
+       un solo `delete`, la propuesta de fases nunca trae tareas y las fases nuevas se crean vacías.
+       La edición que la pone en rojo: cablear el botón directo a aplicar, sacar la frase de «no se
+       borra», o pintarlo como destructivo. */
     const i = src.indexOf("<ConfirmDialog");
     expect(i, "desapareció la confirmación del reemplazo total").toBeGreaterThan(-1);
     const tramo = src.slice(i);
-    expect(tramo, "el botón perdió su etiqueta de reemplazo").toContain("Reemplazar todo");
+    expect(tramo, "el botón perdió su etiqueta").toContain("Aplicar todo");
     expect(tramo, "el confirm dejó de decir que no se borra nada — el modelo es ADITIVO").toContain(
       "No se borra ninguna fase ni ninguna tarea",
     );
@@ -242,25 +249,21 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
       tramo,
       'el confirm se pintó como destructivo: el rojo dice "esto borra" y acá no se borra nada',
     ).not.toContain('variant="destructive"');
-    // Y el botón del encabezado tiene que ABRIR el confirm, no aplicar de una.
+    // Y el botón de la barra tiene que ABRIR el confirm en el caso masivo, no aplicar de una.
     expect(src, "el botón grande dejó de pedir confirmación en el caso masivo").toContain(
-      "otroCronograma ? setConfirmarReemplazo(true) : aceptarTodo()",
+      "otroCronograma && todo ? setConfirmar(true) : onAplicar()",
     );
   });
 
   it("un cambio CHICO no cambia nada de lo que ya existía", () => {
-    /* El caso chico tiene que seguir viéndose exactamente igual que antes de la Tanda J: misma
-       etiqueta, tratamiento neutro (NO ámbar), y "Aceptar todo" sin confirmación.
-       ⚠ 2026-08-12: los literales eran `border-blue-700/50 bg-blue-900/15` — colores CRUDOS de
-       modo oscuro que en el tema claro se veían lavados e ilegibles. Ahora son los tokens
-       `info-*`, medidos en los dos modos (8:1 en claro). Lo que la guarda fija es lo mismo de
-       siempre: que el caso chico NO use el tratamiento de advertencia. */
-    expect(src).toContain("La IA sugiere ${plural(deltas.length");
+    /* El caso chico se ve como siempre: tratamiento neutro (NO ámbar) y aplicar sin confirmación.
+       Lo que la guarda fija es que el caso chico NO use el tratamiento de advertencia. */
+    expect(src).toContain("La IA propone ${plural(total");
     expect(src).toContain("border-info-line bg-info-surface");
     expect(src, "el caso chico pasó a pintarse como advertencia").toContain(
       'otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"',
     );
-    expect(src, "el caso chico perdió su camino directo").toContain(': aceptarTodo()');
+    expect(src, "el caso chico perdió su camino directo").toContain(": onAplicar()");
   });
 });
 
@@ -296,12 +299,14 @@ describe("guardas: el corrimiento del cierre viaja por los cuatro caminos", () =
     expect(tramo, "el aviso se calcula pero no se muestra").toContain("toast.info(aviso)");
   });
 
-  it("apply-items despierta al watchdog cuando acepta un cambio de arranque", () => {
+  it("aplicar la propuesta despierta al watchdog cuando aplica un cambio de arranque", () => {
     /* Este camino movía TODAS las fechas del proyecto sin emitir ANCHOR_CHANGED: el watchdog
        —único escritor de CsAlert— no se enteraba nunca. La edición que la pone en rojo: borrar
-       la llamada a emitTimelineEventsSafe. */
-    const src = leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts");
-    const i = src.indexOf("if (anchorAceptado");
+       la llamada a emitTimelineEventsSafe.
+       ⚠ RE-APUNTADA en E1 (2026-09-24) a POST /timeline/borrador/aplicar: apply-items quedó como
+       lápida y el evento se mudó con la auditoría. */
+    const src = leer("app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts");
+    const i = src.indexOf("if (anclaAplicada");
     expect(i, "desapareció el gate del evento de arranque").toBeGreaterThan(-1);
     const tramo = src.slice(i, i + 1400);
     expect(tramo, "el evento del watchdog no se emite").toContain("emitTimelineEventsSafe(");

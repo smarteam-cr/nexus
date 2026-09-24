@@ -5,9 +5,10 @@
  * reuniones, pegó notas o escribió «Instrucciones adicionales» en el «Contexto del cronograma» (las
  * instrucciones solas cuentan desde el 2026-09-24). Una llamada corta revisa si ese material
  * obliga a cambiar FASES o TIEMPOS y deja los cambios como la misma propuesta de solo estructura
- * que deja el handoff (`pendingProposal`, con `origen: "contexto"`): el CSE la decide uno por uno
- * en el Gantt real y `proposal/apply-items` escribe. Al resolver la última sugerencia, la pantalla
- * sigue sola con el paso 2, el detalle de siempre (`/analyze`), sobre la estructura aceptada.
+ * que deja el handoff (`pendingProposal`, con `origen: "contexto"`): el CSE la revisa en la barra de
+ * arriba del Gantt y POST /timeline/borrador/aplicar escribe (desde E1, 2026-09-24; antes, uno por
+ * uno con `proposal/apply-items`). Al aplicarla o descartarla, la pantalla sigue sola con el paso 2,
+ * el detalle de siempre (`/analyze`), sobre la estructura aceptada.
  *
  * ⛔ ESTA RUTA NO ESCRIBE NINGUNA FASE NI NINGUNA TAREA. Solo la propuesta, y solo si no había otra.
  *

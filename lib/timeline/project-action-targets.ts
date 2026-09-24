@@ -59,8 +59,8 @@ export const ACTION_TARGETS: Record<string, ActionTarget> = {
   // no hay ancla a la que scrollear: se abre.
   "draft-progress": BORRADORES,
   "draft-particularidades": BORRADORES,
-  // La propuesta de estructura se resuelve DENTRO del Gantt (badges azules + filas fantasma
-  // por fase), así que el destino es el Gantt, no un banner que ya no existe.
+  // La propuesta de estructura se revisa en su barra, ARRIBA del Gantt y dentro de su mismo
+  // bloque (E1 del borrador, 2026-09-24), así que el destino sigue siendo el Gantt.
   "draft-proposal": A(ANCHORS.gantt),
 
   // ── Filas de la lista: el CTA enfoca su grupo ────────────────────────────────
