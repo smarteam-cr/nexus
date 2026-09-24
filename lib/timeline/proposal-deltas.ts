@@ -106,11 +106,15 @@ export function origenDePropuesta(p: { origen?: unknown } | null | undefined): "
 /*
  * Lo que ve quien regeneró el handoff cuando su propuesta de fases NO se guardó (va detrás de «El
  * handoff se generó, pero el cronograma no se actualizó: …», components/clients/ProjectHandoffSection).
- * La de las reuniones pesa más que la del handoff y no se pisa (analyze/route.ts).
+ * Una propuesta abierta con algo por decidir no se pisa, sea de las reuniones o de un handoff
+ * anterior (respuesta 1 de Elías, 2026-09-24; analyze/route.ts): se queda la abierta y se avisa.
  */
 export const AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE =
   "tiene cambios de fases sugeridos desde las reuniones y notas elegidas, sin decidir, y el handoff no los pisa. " +
   "Cuando se decidan, vuelve a generar el handoff para ver sus sugerencias de fases.";
+export const AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE =
+  "tiene cambios de fases sugeridos por un handoff anterior, sin decidir, y el handoff nuevo no los pisa. " +
+  "Cuando se decidan en el Cronograma, vuelve a generar el handoff para ver sus sugerencias de fases.";
 export const AVISO_OTRA_PROPUESTA_ENTRO =
   "otra propuesta de cambios de fases entró mientras se generaba el handoff, y no se pisa. Cuando se decida, " +
   "vuelve a generar el handoff para ver sus sugerencias de fases.";

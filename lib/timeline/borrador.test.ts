@@ -12,9 +12,9 @@
  *   4. NÚMEROS: la lista se numera de corrido, determinista, y no se corre al marcar ni al editar.
  *   5. LA HUELLA: cambia si cambia lo que se aplicaría, y solo entonces.
  *   6-9. La vista, la barra, el estado de la pantalla y la foto que viaja.
- *   10-12. (Revisión de E1, 2026-09-24) «Aplicar todo» con un choque y la confirmación de otro
- *      cronograma; el cierre fijado a mano; y la foto RECORDADA entre montajes (volver al canvas no
- *      convierte una edición a mano en «aplica»).
+ *   10-13. (Revisión de E1, 2026-09-24) «Aplicar todo» con un choque y la confirmación de otro
+ *      cronograma; el cierre fijado a mano; la foto RECORDADA entre montajes (volver al canvas no
+ *      convierte una edición a mano en «aplica»); y la propuesta abierta que el handoff no pisa.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -35,6 +35,7 @@ import {
   olvidarRevision,
   pideConfirmacion,
   planDeAplicacion,
+  propuestaPorDecidir,
   proyectar,
   recordarRevision,
   recuerdoDeLaRevision,
@@ -682,5 +683,30 @@ describe("12 · la foto se RECUERDA entre montajes: volver no convierte una edic
     expect(() => recordarRevision(bloqueado, "p1", clave, { foto: VIVO, sin: [] })).not.toThrow();
     expect(() => olvidarRevision(bloqueado, "p1")).not.toThrow();
     expect(recuerdoDeLaRevision(null, "p1", clave)).toBeNull();
+  });
+});
+
+describe("13 · el handoff no pisa una propuesta abierta con algo por decidir", () => {
+  it("⭐ con cambios pendientes (del handoff o de las reuniones), se queda la abierta", () => {
+    /* La edición que la pone en rojo: que analyze vuelva a proteger solo la de las reuniones — la del
+       handoff se reemplazaba a mitad de la revisión y el CSE perdía la foto y lo desmarcado. */
+    expect(propuestaPorDecidir(HANDOFF, VIVO)).toBe(true);
+    expect(propuestaPorDecidir(CONTEXTO, VIVO)).toBe(true);
+  });
+
+  it("una que ya no tiene nada que decidir no frena: se puede reemplazar sin perder nada", () => {
+    expect(propuestaPorDecidir({ anchorStartDate: null, phases: [A, B, C, D] }, VIVO)).toBe(false);
+    const hecho: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 4 } : x)) };
+    expect(propuestaPorDecidir({ anchorStartDate: null, phases: [A, B, { ...C, durationWeeks: 4 }, D] }, hecho)).toBe(false);
+    expect(propuestaPorDecidir(null, VIVO)).toBe(false);
+    // La del modificador (con tareas) no es un borrador: nunca vive guardada, no frena.
+    expect(propuestaPorDecidir({ phases: [{ ...A, tasks: [] }] }, VIVO)).toBe(false);
+  });
+
+  it("un arranque que el CSE fijó a mano después choca, y un choque también se decide (el ⚠ se ve)", () => {
+    const conArranque: Vivo = { ...VIVO, ancla: "2026-09-21" };
+    expect(
+      propuestaPorDecidir({ anchorStartDate: "2026-10-05T00:00:00.000Z", phases: [A, B, C, D] }, conArranque),
+    ).toBe(true);
   });
 });

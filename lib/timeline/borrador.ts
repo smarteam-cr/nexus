@@ -646,6 +646,22 @@ export function debeDescartarseSolo(plan: {
   return plan.bloqueo === null && plan.items.every((it) => it.estado === "ya-esta");
 }
 
+/**
+ * ¿La propuesta guardada todavía tiene algo que decidir? La usa el handoff antes de dejar la suya
+ * (analyze/route.ts): **una propuesta abierta no se pisa, sea del handoff o de las reuniones** —se
+ * queda la abierta y se avisa a quien regeneró (respuesta 1 de Elías, 2026-09-24)—. Pisarla a mitad
+ * de la revisión le cambiaba la lista al CSE, le hacía perder lo desmarcado y la foto, y su
+ * «Aplicar» terminaba en un 409.
+ * Una que ya no tiene nada que decidir (todo ya está así) no frena: reemplazarla no pierde nada, y
+ * la pantalla igual la descartaría sola. Se convierte contra LO VIVO: el handoff no tiene la foto de
+ * la pantalla, y para saber si queda algo por decidir alcanza con lo de hoy.
+ */
+export function propuestaPorDecidir(guardado: unknown, vivo: Vivo): boolean {
+  const borrador = leerBorrador(guardado, vivo);
+  if (!borrador) return false;
+  return !debeDescartarseSolo(planDeAplicacion(vivo, borrador));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── PROYECTAR: cómo quedaría el cronograma (solo lectura) ────────────────────
 // ─────────────────────────────────────────────────────────────────────────────

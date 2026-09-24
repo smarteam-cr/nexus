@@ -12,8 +12,10 @@ import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
 import {
   AVISO_OTRA_PROPUESTA_ENTRO,
   AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE,
+  AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
   origenDePropuesta,
 } from "@/lib/timeline/proposal-deltas";
+import { propuestaPorDecidir } from "@/lib/timeline/borrador";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -3111,20 +3113,30 @@ async function persistTimelineFromAgentOutput(
         return { timelineSyncError: null };
       }
 
-      /* ⛔ LA PROPUESTA DE LAS REUNIONES NO SE PISA (revisión adversarial, 2026-09-24). El paso 1 de
-         «Regenerar todo» deja en este mismo campo los cambios de fases que salen de las reuniones y
-         notas que eligió el CSE (`origen: "contexto"`), y esa ruta nunca pisa la del handoff. Al
-         revés no había guarda: regenerar el handoff la reemplazaba a mitad de la revisión, la
-         pantalla seguía mostrando la vieja y «Aceptar» aplicaba por clave el contenido del handoff.
-         Lo elegido por el CSE pesa más que el handoff: su propuesta se queda, y quien regeneró se
-         entera por el aviso de siempre (`timelineSyncError`). La del handoff se sigue reemplazando
-         como antes. La escritura va condicionada a lo que se leyó: si en el medio entró otra, no
-         se pisa. */
-      if (origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null) === "contexto") {
+      /* ⛔ UNA PROPUESTA ABIERTA NO SE PISA, SEA DE DONDE SEA (respuesta 1 de Elías, 2026-09-24:
+         «se queda la abierta y se avisa a quien regeneró»). Primero se protegió solo la de las
+         reuniones (`origen: "contexto"`, revisión adversarial del mismo día); la del handoff se seguía
+         reemplazando, y con la barra de revisión de E1 eso le cambiaba la lista a quien la estaba
+         revisando: perdía lo desmarcado y la foto, su «Aplicar» caía en un 409, y las ediciones a
+         mano que hizo durante la revisión dejaban de chocar y «Aplicar todo» las revertía.
+         Ahora se queda la abierta —del handoff anterior o de las reuniones— y quien regeneró se
+         entera por el aviso de siempre (`timelineSyncError`). Solo se reemplaza una que ya no tiene
+         nada que decidir (todo ya está así): no se pierde nada. La escritura sigue condicionada a lo
+         que se leyó: si en el medio entró otra, no se pisa. */
+      if (
+        existing.pendingProposal !== null &&
+        propuestaPorDecidir(existing.pendingProposal, { ancla: existingAnchorISO, fases: existing.phases })
+      ) {
+        const origenAbierta = origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null);
         console.log(
-          `[analyze] pendingProposal del handoff NO guardada: hay cambios de fases de las reuniones sin decidir (project ${bodyProjectId}, run ${agentRunId}).`,
+          `[analyze] pendingProposal del handoff NO guardada: hay una propuesta de fases (${origenAbierta}) sin decidir (project ${bodyProjectId}, run ${agentRunId}).`,
         );
-        return { timelineSyncError: AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE };
+        return {
+          timelineSyncError:
+            origenAbierta === "contexto"
+              ? AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE
+              : AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
+        };
       }
       const escrita = await prisma.projectTimeline.updateMany({
         where: {

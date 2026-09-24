@@ -762,17 +762,32 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(lapida).not.toMatch(/prisma\./);
   });
 
-  it("#3 / #6 · el handoff no pisa una propuesta de las reuniones sin decidir", () => {
-    /* La edición que la pone en rojo: volver al `update` plano de `pendingProposal`, o sacar el chequeo
-       del origen. */
+  it("#3 / #6 · el handoff no pisa una propuesta abierta con algo por decidir, sea de las reuniones o de un handoff anterior", () => {
+    /* ⚠ REESCRITA en la corrección de E1 (2026-09-24), con esta razón: la respuesta 1 de Elías («se
+       queda la abierta y se avisa a quien regeneró») vale para TODA propuesta abierta. La guarda de
+       antes exigía el chequeo de solo `origen === "contexto"`, y con él la del handoff se seguía
+       reemplazando a mitad de la revisión. Ahora pide: preguntarle al núcleo del borrador si la
+       abierta tiene algo por decidir ANTES de escribir, avisar con el texto de cada origen, y que la
+       escritura siga condicionada a lo que se leyó (el comportamiento de `propuestaPorDecidir` se
+       prueba en lib/timeline/borrador.test.ts).
+       La edición que la pone en rojo: volver a proteger solo la de las reuniones, sacar la pregunta,
+       o volver al `update` plano de `pendingProposal`. */
     const analyze = soloCodigo(leer("app/api/clients/[id]/analyze/route.ts"));
-    const iOrigen = analyze.indexOf('origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null) === "contexto"');
-    expect(iOrigen, "no mira de dónde es la propuesta pendiente").toBeGreaterThan(-1);
+    const iNoOp = analyze.indexOf("if (reconciled.isNoOp) {");
+    const iPregunta = analyze.indexOf("propuestaPorDecidir(existing.pendingProposal,");
     const iEscritura = analyze.indexOf("pendingProposal: { anchorStartDate: reconciled.anchorStartDate");
-    expect(iOrigen).toBeLessThan(iEscritura);
+    expect(iNoOp).toBeGreaterThan(-1);
+    expect(iPregunta, "no pregunta si la propuesta abierta tiene algo por decidir").toBeGreaterThan(iNoOp);
+    expect(iPregunta).toBeLessThan(iEscritura);
+    const antesDeEscribir = analyze.slice(iNoOp, iEscritura);
+    expect(antesDeEscribir.length).toBeGreaterThan(300);
+    expect(antesDeEscribir, "volvió a proteger solo la de las reuniones").not.toMatch(
+      /if \(origenDePropuesta\([^)]*\) === "contexto"\) \{/,
+    );
+    expect(antesDeEscribir).toContain("AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE");
+    expect(antesDeEscribir).toContain("AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE");
     const escritura = analyze.slice(analyze.lastIndexOf("prisma.projectTimeline.", iEscritura), iEscritura);
     expect(escritura, "la escritura no está condicionada a lo que se leyó").toContain("updateMany(");
-    expect(analyze.slice(iOrigen, iEscritura)).toContain("AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE");
   });
 
   it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío", () => {
