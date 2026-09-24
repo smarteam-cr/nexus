@@ -551,10 +551,15 @@ NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y cor
 permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
 `agentId: null` y el `agentSlug` del medidor. El armador (`lib/timeline/propuesta-de-estructura.ts`)
 hace cumplir lo que el prompt prohíbe: quitar fases, mover el arranque (tampoco lo da
-`computeProposalDeltas` para una propuesta `origen: "contexto"`), tocar o correr lo terminado y lo
-en curso, llevar una fase a una semana que ya pasó, renombrar una de «Desarrollo / Integración» sin
-citar la fuente y nombres de fase que cruzan la frontera. La respuesta se lee con
-`leerRespuestaDeEstructura` (primer objeto balanceado, sin cercos ni prosa), no con un
+`computeProposalDeltas` para una propuesta `origen: "contexto"`), tocar o correr lo que ya empezó
+(terminado, en curso, o PENDING con una tarea en curso o hecha, que es como queda en los datos
+reales), que una fase nueva, movida o desfijada arranque en una semana que ya pasó, que una
+pendiente se corra de rebote desde hoy o más adelante hasta una semana que ya pasó (una pendiente
+que ya estaba en el pasado por el atraso no se mira), renombrar una de «Desarrollo / Integración»
+sin citar la fuente o porque algo quedó excluido, y nombres de fase que cruzan la frontera. Lo
+acordado que descarta por el nombre o por el calendario queda como observación para el CSE. La
+respuesta se lee con `leerRespuestaDeEstructura` (objetos balanceados, gana el último cerco ``` que
+traiga una respuesta, o el último objeto con forma de respuesta), no con un
 `JSON.parse(texto.match(…))` (regla 3). El baseline se parcha con la estructura de la FOTO congelada
 (`inicioDeFaseEnLaFoto` en `lib/timeline/baseline.ts`): aplicar las tareas sobre una estructura
 nueva no le corre la fecha a la promesa.

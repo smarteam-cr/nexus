@@ -50,6 +50,13 @@
  *    decía «anota el cierre actual contra el plazo acordado», y en 5 de 24 corridas la observación
  *    decía lo contrario de la verdad («3 semanas de holgura» con el plan 3 semanas PASADO). El
  *    calendario ahora cierra con el «LARGO DEL PLAN HOY» y la cuenta hecha.
+ *  · (segunda vuelta de la revisión) El «motivo» cita también las instrucciones del CSE («escribe
+ *    "Instrucciones del CSE:"»): la regla y el ejemplo del FORMATO solo nombraban la reunión o la
+ *    nota, y el armador exige que un renombre de «Desarrollo / Integración» cite su fuente. Y el
+ *    renombre de «Desarrollo / Integración» dice lo mismo que el armador: el nombre nunca entra ni
+ *    sale de esa familia, y dentro de ella cambia solo si se pide explícitamente (antes decía
+ *    «nunca hacia ni desde», que prohibía también lo que el armador acepta con la fuente citada).
+ *    El armador además descarta ese renombre si el motivo es una exclusión (`motivoEsUnaExclusion`).
  *  Se miden en vivo en la fase final; `revisarDireccionDelPlazo` mide la dirección del plazo.
  *  El «sin markdown» sigue sin cumplirse cuando hay cambios (6 de 6 con ```json): la ruta ya no
  *  depende de eso (`leerRespuestaDeEstructura`).
@@ -87,7 +94,7 @@ PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
 - Mover la FECHA DE ARRANQUE del proyecto.
 - Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off.
 - Cambiar las notas o el tipo de una fase que ya existe.
-- Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto (que el material describa su trabajo con otras palabras no es motivo), y nunca hacia ni desde un nombre de «Desarrollo / Integración».
+- Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto (que el material describa su trabajo con otras palabras no es motivo). Un nombre nuevo nunca entra ni sale de «Desarrollo / Integración»: una fase de «Desarrollo / Integración» solo cambia a otro nombre de «Desarrollo / Integración», y solo si se pide explícitamente.
 - Cambiar o renombrar una fase porque su tema choca con una EXCLUSIÓN de las instrucciones del CSE (por ejemplo, «nada de integraciones»): dilo en "observaciones". Que las instrucciones PIDAN un cambio de fases o de tiempos sí es motivo.
 - Mover una fase a una semana que ya pasó, o cambiar el inicio de una fase que ya empezó.
 
@@ -97,16 +104,16 @@ SEMANAS:
 
 TEXTO:
 - El nombre de una fase lo lee el cliente: de 2 a 6 palabras, que digan el trabajo; sin nombres de personas, montos, fechas, plazos ni frases copiadas del material.
-- "motivo" es interno (solo lo ve el CSE): cita la reunión (su título y su fecha) o la nota de donde sale el cambio. Un cambio sin motivo se descarta.
+- "motivo" es interno (solo lo ve el CSE): cita de dónde sale el cambio: la reunión (su título y su fecha), la nota (su título) o las instrucciones del CSE (escribe «Instrucciones del CSE:» y lo que piden). Un cambio sin motivo se descarta.
 - "observaciones" también son internas: como máximo ${MAX_OBSERVACIONES}, una oración corta cada una (hasta 40 palabras).
 
 LÍMITES: como máximo ${MAX_CAMBIOS} cambios y ${MAX_FASES_NUEVAS} fases nuevas. Los ids son los del calendario ([id: …]); nunca inventes uno.
 
 FORMATO DE RESPUESTA — SOLO este JSON, sin texto antes ni después y sin markdown (empieza con { y termina con }):
 {"cambios":[
-  {"tipo":"ajustar","faseId":"<id>","durationWeeks":5,"inicioSemana":7,"name":"<nombre nuevo>","sessionCount":3,"motivo":"<reunión o nota>"},
-  {"tipo":"agregar","despuesDeFaseId":"<id>","name":"<nombre>","durationWeeks":1,"sessionCount":2,"activityType":"CONFIGURACION","motivo":"<reunión o nota>"},
-  {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión o nota>"}
+  {"tipo":"ajustar","faseId":"<id>","durationWeeks":5,"inicioSemana":7,"name":"<nombre nuevo>","sessionCount":3,"motivo":"<reunión, nota o instrucciones del CSE>"},
+  {"tipo":"agregar","despuesDeFaseId":"<id>","name":"<nombre>","durationWeeks":1,"sessionCount":2,"activityType":"CONFIGURACION","motivo":"<reunión, nota o instrucciones del CSE>"},
+  {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión, nota o instrucciones del CSE>"}
 ],"observaciones":["<una oración>"]}
 - En "ajustar" incluye SOLO los campos que cambian, y siempre "motivo".
 - "activityType" de una fase nueva: ${ACTIVITY_TYPES.join(" | ")}, o null.`;

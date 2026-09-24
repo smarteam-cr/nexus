@@ -13,6 +13,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  AVISO_ACORDADO_SIN_ENTRAR,
   AVISO_FALLO_DE_ESTRUCTURA,
   AVISO_PROPUESTA_PENDIENTE,
   AVISO_SIN_CAMBIOS,
@@ -25,6 +26,7 @@ import {
   fraseDelPlazo,
   leerRespuestaDeEstructura,
   motivoCitaUnaFuente,
+  motivoEsUnaExclusion,
   pasoTrasEstructura,
   pasoTrasResolver,
   revisarDireccionDelPlazo,
@@ -35,7 +37,7 @@ import { ACTIVITY_TYPES } from "./validate";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 import { ID_ESTRUCTURA_CRONOGRAMA, PROMPT_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
-import { renderEstructuraDelCronograma } from "@/lib/contexto/estructura-cronograma";
+import { REGLA_DE_FRONTERA_DE_ESTRUCTURA, renderEstructuraDelCronograma } from "@/lib/contexto/estructura-cronograma";
 
 const fase = (over: Partial<FaseParaEstructura> & { id: string; order: number }): FaseParaEstructura => ({
   name: over.id.toUpperCase(),
@@ -335,6 +337,38 @@ const EN_MARCHA: FaseParaEstructura[] = [
 const ANCLA_EN_MARCHA = "2026-09-14T00:00:00.000Z";
 const HOY_EN_MARCHA = Date.UTC(2026, 10, 30, 18); // lunes 30 nov 2026, mediodía en Costa Rica
 
+/**
+ * UNA FASE PENDIENTE CON TRABAJO HECHO, como las de verdad (revisión del paso A2, segunda vuelta):
+ * las tareas solo derivan DONE a la fase e IN_PROGRESS lo pone únicamente el agente de avance, así
+ * que la Semana 0 de CAV está PENDING con 2 tareas hechas. S0 0 · Diagnóstico 1-2 (PENDING, una
+ * tarea hecha y otra en curso) · Arquitectura 3-4. «Hoy» = martes 22-sep = semana 1 (0-based).
+ */
+const CON_TRABAJO_EN_PENDIENTE: FaseParaEstructura[] = [
+  fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1, status: "DONE" }),
+  fase({
+    id: "diag",
+    order: 1,
+    name: "Diagnóstico",
+    tasks: [
+      { status: "DONE", weekIndex: 0 },
+      { status: "IN_PROGRESS", weekIndex: 0 },
+    ],
+  }),
+  fase({ id: "arq", order: 2, name: "Arquitectura" }),
+];
+const HOY_EN_DIAGNOSTICO = Date.UTC(2026, 8, 22, 18);
+
+/** Un proyecto ATRASADO: S0 0 · Configuración 1-4 (pendiente) · Capacitación 5-6 (pendiente). */
+const ATRASADO: FaseParaEstructura[] = [
+  fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1, status: "DONE" }),
+  fase({ id: "x", order: 1, name: "Configuración", durationWeeks: 4 }),
+  fase({ id: "y", order: 2, name: "Capacitación", durationWeeks: 2 }),
+];
+/** Martes 20-oct = semana 5 (0-based): Capacitación arranca esta semana. */
+const HOY_EN_CAPACITACION = Date.UTC(2026, 9, 20, 18);
+/** Martes 10-nov = semana 8: Capacitación ya estaba en el pasado por el atraso. */
+const HOY_DESPUES_DE_CAPACITACION = Date.UTC(2026, 10, 10, 18);
+
 describe("#17 · lo terminado y lo en curso no se corren, y nada cae en el pasado", () => {
   /* Revisión del paso A2: solo `inicioSemana` pasaba por el filtro de «semana que ya pasó», e
      `intocable` miraba solo la fase que cambia. Un «agregar» o un «mover» detrás de la Semana 0
@@ -382,6 +416,34 @@ describe("#17 · lo terminado y lo en curso no se corren, y nada cae en el pasad
       { tipo: "ajustar", faseId: "b", durationWeeks: 5, motivo: "M" },
       /ajustar «Configuración y migración»: con 5 semanas correría «Go-live», que ya está terminada/,
     ],
+    /* Segunda vuelta: una fase PENDIENTE con trabajo hecho también ya empezó. La edición que las
+       pone en rojo: volver a mirar solo el estado de la fase en `comoVa`. */
+    [
+      "una pendiente con trabajo hecho ya empezó: un «mover» delante la correría",
+      { fases: CON_TRABAJO_EN_PENDIENTE, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_EN_DIAGNOSTICO },
+      { tipo: "mover", faseId: "arq", despuesDeFaseId: "s0", motivo: "M" },
+      /mover «Arquitectura»: correría «Diagnóstico», que ya empezó/,
+    ],
+    [
+      "una pendiente con trabajo hecho ya empezó: una fase nueva delante la correría",
+      { fases: CON_TRABAJO_EN_PENDIENTE, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_EN_DIAGNOSTICO },
+      { tipo: "agregar", despuesDeFaseId: "s0", name: "Piloto con socios", durationWeeks: 1, motivo: "M" },
+      /agregar «Piloto con socios»: correría «Diagnóstico», que ya empezó/,
+    ],
+    /* Segunda vuelta: lo que cae DE REBOTE en el pasado. La edición que las pone en rojo: sacar
+       `loQueCaeDeRebote` de `choqueDelCalendario`. */
+    [
+      "mover una fase más adelante adelanta de rebote a otra hasta una semana que ya pasó",
+      conHoy,
+      { tipo: "mover", faseId: "d", despuesDeFaseId: "e", motivo: "M" },
+      /mover «Pruebas y ajustes»: correría «Go-live» a la semana 11, que ya pasó/,
+    ],
+    [
+      "acortar una fase adelanta de rebote a la que sigue hasta una semana que ya pasó",
+      { fases: ATRASADO, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_EN_CAPACITACION },
+      { tipo: "ajustar", faseId: "x", durationWeeks: 2, motivo: "M" },
+      /ajustar «Configuración»: con 2 semanas correría «Capacitación» a la semana 4, que ya pasó/,
+    ],
   ];
 
   it.each(CASOS)("descarta: %s", (_nombre, base, cambio, motivo) => {
@@ -395,6 +457,80 @@ describe("#17 · lo terminado y lo en curso no se corren, y nada cae en el pasad
     expect(agregar.observaciones.join(" ")).toMatch(/Se sugirió sumar la fase «Piloto con socios».*ya pasó: decide tú dónde va/);
     const mover = armarCon(conHoy, [CASOS[1][2]]);
     expect(mover.observaciones.join(" ")).toMatch(/Se sugirió mover «Capacitación».*ya pasó: decide tú si se mueve/);
+  });
+
+  it("un «ajustar» descartado por el calendario también deja su observación (segunda vuelta)", () => {
+    /* La revisión lo reprodujo: B y C seguidas y en curso, «ajustar B de 4 a 6 semanas» con el motivo
+       de una reunión. Salía propuesta null, observaciones [] y la pantalla decía «Tus reuniones y
+       notas no piden cambios», cuando la reunión sí lo acordó. La edición que pone en rojo cada
+       caso: borrar su `perdidoPorElCalendario` en el «ajustar». */
+    const enCurso: FaseParaEstructura[] = [
+      fase({ id: "s0", order: 0, name: "Semana 0 – Arranque", durationWeeks: 1, status: "DONE" }),
+      fase({ id: "b", order: 1, name: "Configuración", durationWeeks: 4, status: "IN_PROGRESS" }),
+      fase({ id: "c", order: 2, name: "Capacitación", status: "IN_PROGRESS" }),
+    ];
+    const casos: Array<[string, Omit<Parameters<typeof construirPropuestaDeEstructura>[0], "crudo">, unknown, RegExp]> = [
+      [
+        "la duración",
+        { fases: enCurso, anchorISO: null },
+        { tipo: "ajustar", faseId: "b", durationWeeks: 6, motivo: "Reunión 23 sep: Configuración dura 6 semanas" },
+        /Se sugirió llevar «Configuración» a 6 semanas, pero correría «Capacitación», que ya está en curso: decide tú si se ajusta\./,
+      ],
+      [
+        "el inicio desfijado",
+        conHoy,
+        { tipo: "ajustar", faseId: "d", inicioSemana: null, motivo: "M" },
+        /Se sugirió que «Pruebas y ajustes» arranque cuando termine la anterior, pero caería en la semana 11, que ya pasó: decide tú cuándo arranca\./,
+      ],
+      [
+        "una semana de inicio que ya pasó",
+        conHoy,
+        { tipo: "ajustar", faseId: "d", inicioSemana: 10, motivo: "M" },
+        /Se sugirió que «Pruebas y ajustes» arranque en la semana 10, pero esa semana ya pasó: decide tú cuándo arranca\./,
+      ],
+      [
+        "el inicio de una fase que ya empezó",
+        { fases: CON_TRABAJO_EN_PENDIENTE, anchorISO: null },
+        { tipo: "ajustar", faseId: "diag", inicioSemana: 5, motivo: "M" },
+        /Se sugirió que «Diagnóstico» arranque en la semana 5, pero la fase ya empezó: decide tú si se mueve\./,
+      ],
+    ];
+    for (const [nombre, base, cambio, observacion] of casos) {
+      const r = armarCon(base, [cambio]);
+      expect(r.propuesta, nombre).toBeNull();
+      expect(r.observaciones.join(" | "), nombre).toMatch(observacion);
+      expect(r.acordadoSinEntrar, nombre).toBe(1);
+      // Y la pantalla no dice que las reuniones no piden cambios.
+      expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: r.acordadoSinEntrar })).toEqual({
+        paso: "tareas",
+        aviso: AVISO_ACORDADO_SIN_ENTRAR,
+      });
+    }
+  });
+
+  it("una pendiente que ya estaba en el pasado por el atraso no se mira: acortar la de antes entra", () => {
+    /* El control del rebote: en un proyecto atrasado cualquier cambio mueve a una pendiente que ya
+       quedó atrás, y bloquearlos todos dejaría al revisor sin nada que proponer. La edición que la
+       pone en rojo: mirar toda pendiente que termina en el pasado, y no solo la que llega desde hoy
+       o más adelante. */
+    const r = armarCon({ fases: ATRASADO, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_DESPUES_DE_CAPACITACION }, [
+      { tipo: "ajustar", faseId: "x", durationWeeks: 2, motivo: "M" },
+    ]);
+    expect(r.descartados).toEqual([]);
+    expect(r.deltas.map((d) => d.key)).toEqual(["mod:x"]);
+    expect(r.acordadoSinEntrar).toBe(0);
+  });
+
+  it("una tarea SUSPENDIDA no hace empezar a una fase (se aparcó sin ejecutarse)", () => {
+    /* La edición que la pone en rojo: contar como empezada cualquier tarea que no esté PENDING. */
+    const conSuspendida = CON_TRABAJO_EN_PENDIENTE.map((f) =>
+      f.id === "diag" ? { ...f, tasks: [{ status: "SUSPENDED", weekIndex: 0 }] } : f,
+    );
+    const r = armarCon({ fases: conSuspendida, anchorISO: ANCLA_EN_MARCHA, ahora: HOY_EN_DIAGNOSTICO }, [
+      { tipo: "mover", faseId: "arq", despuesDeFaseId: "s0", motivo: "M" },
+    ]);
+    expect(r.descartados).toEqual([]);
+    expect(r.deltas.map((d) => d.key)).toEqual(["reorder"]);
   });
 
   it("lo que va hacia adelante pasa: una fase nueva después de la fijada y alargar una pendiente", () => {
@@ -446,6 +582,53 @@ describe("(d) · renombrar una fase de «Desarrollo / Integración» pide citar 
       "Instrucciones del CSE: llamar a la fase «Desarrollo e integración».",
     ]) {
       expect(renombrar(motivo).deltas, motivo).toHaveLength(1);
+    }
+  });
+
+  it("⛔ las 3 salidas REALES de r2-E2 (renombre por una exclusión, citando las instrucciones) no pasan", () => {
+    /* Revisión del paso A3, segunda vuelta: la guarda de la cita atrapaba 0 de 3 en los datos
+       reales, porque los tres motivos citan «Instrucciones del CSE». Estos son sus motivos tal cual
+       (a3/salida-r2-E2-1..3.txt), con la fase real. La edición que la pone en rojo: borrar la
+       condición de `motivoEsUnaExclusion` en el armador. */
+    const REALES = [
+      "Instrucciones del CSE: excluir integraciones, ventas y servicio. La fase actual se llama «Desarrollo SDK / Integración», nombre que el cliente no debe ver y que mezcla desarrollo con integración técnica fuera del alcance de marketing. Se mantiene la fase pero se propone nombre neutral. Sin cambio de duración ni inicio.",
+      "Instrucciones del CSE: excluir integraciones, ventas y servicio. La fase 'Desarrollo SDK / Integración' corresponde al SDK personalizado para notificaciones push, que es integración/desarrollo fuera del alcance de marketing. Se propone renombrar para reflejar solo el trabajo de marketing; sin embargo, el contenido completo de esta fase queda fuera del alcance definido por el CSE. Ver observaciones.",
+      "Instrucciones del CSE: nada que no tenga que ver con marketing. La fase existe en el calendario con nombre 'Desarrollo SDK / Integración', que refiere explícitamente a desarrollo técnico fuera del alcance de marketing. Sin embargo, renombrar hacia o desde 'Desarrollo / Integración' está prohibido por las reglas. Se deja en observaciones.",
+    ];
+    const conFaseReal: FaseParaEstructura[] = [
+      ...FASES,
+      fase({ id: "cmt8yjaxv00oo07ry172iff2u", order: 7, name: "Desarrollo SDK / Integración", durationWeeks: 3, startWeek: 4 }),
+    ];
+    for (const motivo of REALES) {
+      expect(motivoCitaUnaFuente(motivo), "cita las instrucciones: la guarda vieja la dejaba pasar").toBe(true);
+      const crudo = leerRespuestaDeEstructura(
+        JSON.stringify({
+          cambios: [{ tipo: "ajustar", faseId: "cmt8yjaxv00oo07ry172iff2u", name: "Desarrollo e integración", motivo }],
+          observaciones: [],
+        }),
+      );
+      const r = construirPropuestaDeEstructura({ fases: conFaseReal, anchorISO: null, crudo });
+      expect(r.propuesta, motivo).toBeNull();
+      expect(r.descartados.join(" "), motivo).toMatch(/porque algo quedó excluido no es motivo/);
+    }
+  });
+
+  it("qué cuenta como una exclusión", () => {
+    for (const s of [
+      "Instrucciones del CSE: excluir integraciones",
+      "El brief excluye las integraciones",
+      "Queda fuera del alcance de marketing",
+      "Un nombre que el cliente no debe ver",
+      "Instrucciones del CSE: nada de integraciones",
+    ]) {
+      expect(motivoEsUnaExclusion(s), s).toBe(true);
+    }
+    for (const s of [
+      "Instrucciones del CSE: llamar a la fase «Desarrollo e integración».",
+      "Kick off - CAV (23 sep 2026): se acordó llamarla «Desarrollo e integración».",
+      "Nota 'Acuerdo con el cliente': el cliente pidió ese nombre.",
+    ]) {
+      expect(motivoEsUnaExclusion(s), s).toBe(false);
     }
   });
 
@@ -510,6 +693,9 @@ describe("(a) · la respuesta del modelo se lee aunque venga envuelta", () => {
       ["Formato {x: 1}. Respuesta: " + RESPUESTA + " — fin }", ["o"]],
       ['{"estructura":{"cambios":[],"observaciones":["o"]}}}', ["o"]],
       ['{"cambios":[],"observaciones":["una } suelta y una { también"]}', ["una } suelta y una { también"]],
+      // Envuelta con otra llave: la respuesta se busca adentro (la edición que la pone en rojo:
+      // saltar entero todo objeto que parsea, aunque no sea la respuesta).
+      ['{"respuesta":' + RESPUESTA + "}", ["o"]],
     ];
     for (const [texto, observaciones] of CASOS) {
       const r = leerRespuestaDeEstructura(texto);
@@ -534,6 +720,23 @@ describe("(a) · la respuesta del modelo se lee aunque venga envuelta", () => {
     ].join("\n");
     const r = construirPropuestaDeEstructura({ fases: FASES, crudo: leerRespuestaDeEstructura(real), anchorISO: null });
     expect(r.deltas.map((d) => d.key).sort()).toEqual(["add:5", "mod:c"]);
+  });
+
+  it("si hay varios, gana la respuesta: el último cerco ```, o el último objeto (segunda vuelta)", () => {
+    /* La revisión lo reprodujo: un modelo que repite el formato antes de contestar daba el ejemplo
+       vacío, un «sin cambios» en silencio donde antes había un ESTRUCTURA_FALLO visible. La edición
+       que pone en rojo las dos primeras: volver a quedarse con el PRIMER objeto con forma de
+       respuesta; la tercera: dejar de preferir lo que viene en un cerco. */
+    const EJEMPLO = '{"cambios": [], "observaciones": []}';
+    const CASOS: Array<[string, string]> = [
+      ["el ejemplo antes del cerco", `Formato de ejemplo: ${EJEMPLO}\n\`\`\`json\n${RESPUESTA}\n\`\`\``],
+      ["el ejemplo antes, sin cercos", `Formato de ejemplo: ${EJEMPLO}\nRespuesta: ${RESPUESTA}`],
+      ["el cerco antes de un ejemplo suelto", `\`\`\`json\n${RESPUESTA}\n\`\`\`\nSi no hubiera cambios, sería ${EJEMPLO}.`],
+    ];
+    for (const [nombre, texto] of CASOS) {
+      const r = construirPropuestaDeEstructura({ fases: FASES, crudo: leerRespuestaDeEstructura(texto), anchorISO: null });
+      expect(r.deltas.map((d) => d.key), nombre).toEqual(["mod:c"]);
+    }
   });
 
   it("ilegible = null, y un objeto de ADENTRO de un JSON roto no pasa por la respuesta", () => {
@@ -582,6 +785,44 @@ describe("(b) · el plazo total contra el plan, en la dirección correcta", () =
     expect(revisarDireccionDelPlazo(["El plazo es de 12 semanas: quedan 2 semanas de margen."], 10, 12).ok).toBe(true);
     expect(revisarDireccionDelPlazo(["El plazo es de 12 semanas: el plan se pasa 2 semanas del plazo acordado."], 10, 12).ok).toBe(false);
     expect(revisarDireccionDelPlazo(["Nada sobre plazos."], 15, 12).ok).toBe(false);
+  });
+
+  it("el medidor tolera el número, las negaciones y las observaciones que no hablan del cierre (segunda vuelta)", () => {
+    /* La revisión lo reprodujo: con 1 semana de diferencia el modelo escribe «se pasa 1 semanas» (el
+       prompt da las plantillas en plural) y el medidor decía que no; «sin margen para imprevistos»
+       se leía como contraria; y cualquier observación con «plazo» y «a tiempo» también. La edición
+       que pone en rojo cada bloque: volver a la frase exacta de `fraseDelPlazo`, sacar la negación
+       de `afirma`, o volver a medir toda observación que diga «plazo». */
+    const ACORDO = "El kick-off acordó 12 semanas: ";
+    // Singular o plural: dicen lo correcto.
+    for (const [o, plan] of [
+      ["el plan se pasa 1 semanas del plazo acordado.", 13],
+      ["el plan se pasa 1 semana del plazo acordado.", 13],
+      ["quedan 1 semanas de margen.", 11],
+      ["queda 1 semana de margen.", 11],
+    ] as const) {
+      expect(revisarDireccionDelPlazo([ACORDO + o], plan, 12), o).toEqual({ ok: true, motivo: "" });
+    }
+    // Una negación no es lo contrario.
+    for (const [o, plan] of [
+      ["el plan se pasa 3 semanas del plazo acordado, sin margen para imprevistos.", 15],
+      ["el plan se pasa 3 semanas del plazo acordado y no hay holgura.", 15],
+      ["el plan no se pasa: quedan 2 semanas de margen.", 10],
+    ] as const) {
+      expect(revisarDireccionDelPlazo([ACORDO + o], plan, 12), o).toEqual({ ok: true, motivo: "" });
+    }
+    // Otra observación con «plazo» y «a tiempo» que no habla del cierre no se mide.
+    expect(
+      revisarDireccionDelPlazo(
+        [ACORDO + "el plan se pasa 3 semanas del plazo acordado.", "El plazo de entrega de las artes se cumplió a tiempo."],
+        15,
+        12,
+      ),
+    ).toEqual({ ok: true, motivo: "" });
+    // Y lo que sí dice lo contrario sigue marcado, aunque haya una negación en OTRA cláusula.
+    expect(
+      revisarDireccionDelPlazo([ACORDO + "el plan se pasa 3 semanas del plazo acordado, pero no importa: hay holgura."], 15, 12).ok,
+    ).toBe(false);
   });
 
   it("el prompt obliga a esas frases, desde las mismas constantes", () => {
@@ -645,6 +886,22 @@ describe("la máquina de pasos de la pantalla", () => {
     expect(pasoTrasEstructura({ status: 200, estado: "sin-material" })).toEqual({ paso: "tareas" });
   });
 
+  it("sin propuesta pero con lo acordado que no entró, NO dice «no piden cambios» (segunda vuelta)", () => {
+    /* La edición que la pone en rojo: volver a responder AVISO_SIN_CAMBIOS a todo «sin-cambios». */
+    expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: 2 })).toEqual({
+      paso: "tareas",
+      aviso: AVISO_ACORDADO_SIN_ENTRAR,
+    });
+    expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: 0 })).toEqual({
+      paso: "tareas",
+      aviso: AVISO_SIN_CAMBIOS,
+    });
+    // El aviso apunta a donde el CSE lo ve: el acordeón del paso 2.
+    expect(AVISO_ACORDADO_SIN_ENTRAR).toContain("«La IA también notó»");
+    const modal = fs.readFileSync(path.join(process.cwd(), "components/canvas/AllPhasesRegenModal.tsx"), "utf8");
+    expect(modal).toContain("La IA también notó (no se aplica sola):");
+  });
+
   it("después de resolver sugerencias", () => {
     expect(pasoTrasResolver({ pendientes: 1, origen: "contexto", iniciadoAqui: true })).toBe("nada");
     expect(pasoTrasResolver({ pendientes: 0, origen: "handoff", iniciadoAqui: true })).toBe("nada");
@@ -654,8 +911,8 @@ describe("la máquina de pasos de la pantalla", () => {
   });
 
   it("los avisos van en tuteo", () => {
-    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_SIN_CAMBIOS]) {
-      expect(aviso).not.toMatch(/resolvélos|volvé|revisá|podés/);
+    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR]) {
+      expect(aviso).not.toMatch(/resolvélos|volvé|revisá|podés|decidís|ves vos/);
     }
   });
 });
@@ -756,6 +1013,37 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
       /Renombrar una fase sin que una reunión, una nota o las instrucciones del CSE pidan llamarla distinto/,
     );
     expect(prohibido).toMatch(/que el material describa su trabajo con otras palabras no es motivo/);
+  });
+
+  it("el prompt dice lo mismo que el armador: el motivo cita también las instrucciones, y el renombre de Desarrollo / Integración (segunda vuelta)", () => {
+    /* La redacción de (c) abrió los cambios que piden las instrucciones, pero la regla del motivo
+       y el ejemplo del FORMATO solo nombraban «la reunión o la nota»: el modelo no sabía cómo citar
+       unas instrucciones, y el armador exige la cita para renombrar una fase de Desarrollo /
+       Integración. Y el prompt prohibía todo renombre «hacia ni desde» Desarrollo / Integración,
+       cuando el armador acepta uno de Desarrollo / Integración a Desarrollo / Integración con la
+       fuente citada. La edición que la pone en rojo: volver a cualquiera de los textos viejos. */
+    const regla = P.split("\n").find((l) => l.startsWith('- "motivo"')) ?? "";
+    expect(regla).toMatch(/la reunión \(su título y su fecha\), la nota \(su título\) o las instrucciones del CSE/);
+    const motivosDelEjemplo = [...ejemploDelFormato().matchAll(/"motivo":"([^"]*)"/g)].map((m) => m[1]);
+    expect(motivosDelEjemplo).toEqual(Array(3).fill("<reunión, nota o instrucciones del CSE>"));
+    const prohibido = P.slice(P.indexOf("PROHIBIDO"), P.indexOf("SEMANAS:"));
+    expect(prohibido, "volvió «hacia ni desde»: prohíbe lo que el armador acepta").not.toMatch(/hacia ni desde/);
+    expect(prohibido).toMatch(
+      /Un nombre nuevo nunca entra ni sale de «Desarrollo \/ Integración»: una fase de «Desarrollo \/ Integración» solo cambia a otro nombre de «Desarrollo \/ Integración», y solo si se pide explícitamente\./,
+    );
+    // Lo mismo en la regla de la frontera que cierra el mensaje.
+    expect(REGLA_DE_FRONTERA_DE_ESTRUCTURA).toContain("cita la reunión (título y fecha), la nota o las instrucciones del CSE");
+    // Y el armador acepta justo eso: de Desarrollo / Integración a Desarrollo / Integración, citando las instrucciones.
+    const r = construirPropuestaDeEstructura({
+      fases: [...FASES, fase({ id: "dev", order: 7, name: "Desarrollo SDK / Integración", durationWeeks: 3, startWeek: 4 })],
+      anchorISO: null,
+      crudo: {
+        cambios: [
+          { tipo: "ajustar", faseId: "dev", name: "Desarrollo e integración", motivo: "Instrucciones del CSE: llamarla así." },
+        ],
+      },
+    });
+    expect(r.deltas.map((d) => d.key)).toEqual(["mod:dev"]);
   });
 });
 

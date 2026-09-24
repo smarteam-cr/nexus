@@ -13,7 +13,9 @@
  * Respuestas (la pantalla decide con `pasoTrasEstructura`, lib/timeline/propuesta-de-estructura.ts):
  *   200 { estado: "sin-material" }                        — nada elegido: ni corrida ni modelo
  *                                                           (aunque haya una propuesta pendiente)
- *   200 { estado: "sin-cambios", observaciones }          — el material no pide cambios
+ *   200 { estado: "sin-cambios", observaciones, acordadoSinEntrar }
+ *                                                         — no hay nada que proponer (lo acordado
+ *                                                           que no entró queda en observaciones)
  *   200 { estado: "propuesta", proposal, runId, observaciones }
  *   400 NO_TIMELINE · 403 (sin permiso de IA) · 409 PROPUESTA_PENDIENTE · 500 ESTRUCTURA_FALLO
  *
@@ -178,8 +180,15 @@ export async function POST(
       desenlace: "sin-cambios",
       observaciones: armado.observaciones,
       descartados: armado.descartados,
+      acordadoSinEntrar: armado.acordadoSinEntrar,
     });
-    return NextResponse.json({ estado: "sin-cambios", observaciones: armado.observaciones });
+    /* `acordadoSinEntrar`: lo acordado que el armador no pudo proponer quedó en las observaciones;
+       con eso la pantalla no dice «tus reuniones no piden cambios» (ver `pasoTrasEstructura`). */
+    return NextResponse.json({
+      estado: "sin-cambios",
+      observaciones: armado.observaciones,
+      acordadoSinEntrar: armado.acordadoSinEntrar,
+    });
   }
 
   /* ⛔ Solo si NO había otra propuesta: el handoff pudo escribir la suya mientras el modelo

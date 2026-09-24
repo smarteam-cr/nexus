@@ -25,7 +25,7 @@ import {
 } from "./estructura-cronograma";
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
-import { ESPERA_ANTES_DE_DECIR_PASO_1_MS, fraseDelPlazo } from "@/lib/timeline/propuesta-de-estructura";
+import { fraseDelPlazo, hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
 const h = vi.hoisted(() => {
@@ -335,6 +335,17 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     expect(src).not.toContain(".match(/\\{[\\s\\S]*\\}/)");
   });
 
+  it("«sin-cambios» dice cuánto de lo acordado no entró (revisión del paso A2)", () => {
+    /* Con un «ajustar», un «agregar» o un «mover» descartados por el calendario, la propuesta sale
+       null y la pantalla decía «Tus reuniones y notas no piden cambios…», que era falso. La edición
+       que la pone en rojo: responder «sin-cambios» sin `acordadoSinEntrar`. */
+    const iSinCambios = src.indexOf('estado: "sin-cambios"');
+    expect(iSinCambios).toBeGreaterThan(-1);
+    expect(src.slice(iSinCambios, src.indexOf("});", iSinCambios))).toContain(
+      "acordadoSinEntrar: armado.acordadoSinEntrar",
+    );
+  });
+
   it("⛔ la ruta no arma bloques de contexto a mano", () => {
     /* Mismo molde que el assist (asistente-cronograma.test.ts): un bloque `=== ALGO ===` escrito en
        la ruta es una fuente fuera del trinquete. Van en lib/contexto/estructura-cronograma.ts. */
@@ -425,22 +436,47 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     );
   });
 
-  it("«Paso 1 de 2 · Revisando…» se dice solo si la revisión tarda: sin material no aparece (revisión del paso A2)", () => {
-    /* Sin material la ruta vuelve al toque, y el cartel del paso 1 salía un instante en todo
-       «Regenerar todo», diciendo que revisaba reuniones que nadie eligió. La edición que la pone en
-       rojo: mostrar el cartel o el rótulo apenas arranca la espera (sin `paso1Visible`). */
+  it("«Paso 1 de 2 · Revisando…» se dice solo con material elegido, no por un reloj (revisión del paso A2)", () => {
+    /* ⚠ ACTUALIZADA en la segunda vuelta de la revisión (2026-09-24), con esta razón: la versión
+       anterior exigía un temporizador de 1,2 s (`paso1Visible`). Sin material la ruta igual lee el
+       cronograma, los permisos y lo elegido antes de responder, y en un prod lento el cartel salía
+       aunque nadie eligiera nada. Ahora lo decide el estado real: el «Contexto del cronograma»
+       avisa si hay material (`onMaterial`, con `hayMaterialParaElPaso1`). La guarda sigue pidiendo
+       lo mismo —sin material, ni el cartel ni el rótulo— con la condición verdadera. La edición que
+       la pone en rojo: mostrar el cartel o el rótulo sin mirar `materialElegido`, o no conectar el
+       aviso de la sección. */
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
-    expect(pedir).toContain("window.setTimeout(() => setPaso1Visible(true), ESPERA_ANTES_DE_DECIR_PASO_1_MS)");
-    const iFetch = pedir.indexOf("/timeline/estructura");
-    const iApagar = pedir.indexOf("window.clearTimeout(verPaso1)");
-    expect(iApagar, "el temporizador no se apaga al volver la ruta").toBeGreaterThan(iFetch);
-    expect(pedir.indexOf("setPaso1Visible(false)")).toBeGreaterThan(iFetch);
-    // Los DOS lugares que dicen «Paso 1 de 2» dependen de `paso1Visible`.
+    expect(pedir, "volvió el reloj: el cartel no depende de lo elegido").not.toMatch(/setTimeout\([^)]*Paso1/);
+    // Los DOS lugares que dicen «Paso 1 de 2» dependen de `materialElegido`.
     const iModal = src.indexOf("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas…");
     expect(iModal).toBeGreaterThan(-1);
-    expect(src.slice(Math.max(0, iModal - 500), iModal)).toContain("revisandoEstructura && paso1Visible && (");
+    expect(src.slice(Math.max(0, iModal - 500), iModal)).toContain("revisandoEstructura && materialElegido && (");
     const ocupado = tramo("const ocupado", "activo: false");
-    expect(ocupado).toMatch(/revisandoEstructura\s*\?\s*paso1Visible\s*\?\s*\{\s*activo: true,\s*rotulo: "Paso 1 de 2/);
-    expect(ESPERA_ANTES_DE_DECIR_PASO_1_MS).toBeGreaterThanOrEqual(800);
+    expect(ocupado).toMatch(/revisandoEstructura\s*\?\s*materialElegido\s*\?\s*\{\s*activo: true,\s*rotulo: "Paso 1 de 2/);
+    // La sección lo avisa con lo que ya sabe, y la pantalla lo escucha.
+    expect(src).toMatch(/<CronogramaContextSection[^>]*onMaterial=\{setMaterialElegido\}/);
+    const seccion = soloCodigo(leer("components/canvas/CronogramaContextSection.tsx"));
+    expect(seccion).toContain("hayMaterialParaElPaso1({ reuniones, notas, informe: informeVivo })");
+    expect(seccion).toMatch(/useEffect\(\(\) => \{\s*onMaterial\?\.\(hayMaterial\);\s*\}, \[hayMaterial, onMaterial\]\)/);
+  });
+
+  it("qué cuenta como material para el cartel: lo mismo que lee la ruta", () => {
+    /* La edición que la pone en rojo: contar una reunión agendada o sin resumen (el informe dice que
+       no entra nada), o ignorar las notas. */
+    const informe = (entran: number[]) => ({ reuniones: entran.map((e) => ({ entran: e })) });
+    expect(hayMaterialParaElPaso1({ reuniones: 0, notas: 0, informe: null })).toBe(false);
+    expect(hayMaterialParaElPaso1({ reuniones: 0, notas: 2, informe: null })).toBe(true);
+    // Sin informe todavía (se está pidiendo, o falló): alcanza con que haya una elegida.
+    expect(hayMaterialParaElPaso1({ reuniones: 1, notas: 0, informe: null })).toBe(true);
+    // Solo una agendada o una sin resumen: la ruta responde «sin-material».
+    expect(hayMaterialParaElPaso1({ reuniones: 2, notas: 0, informe: informe([0, 0]) })).toBe(false);
+    expect(hayMaterialParaElPaso1({ reuniones: 2, notas: 0, informe: informe([0, 4200]) })).toBe(true);
+  });
+
+  it("la pantalla lee lo acordado que no entró de la respuesta «sin-cambios» (revisión del paso A2)", () => {
+    /* Sin esto el aviso diría «tus reuniones no piden cambios» junto a una observación que dice que
+       sí los pidieron. La edición que la pone en rojo: dejar de pasar el campo a `pasoTrasEstructura`. */
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    expect(pedir).toContain("acordadoSinEntrar: d?.acordadoSinEntrar");
   });
 });

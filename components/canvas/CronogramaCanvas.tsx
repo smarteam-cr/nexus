@@ -69,7 +69,6 @@ import ProjectActionsLine from "./ProjectActionsLine";
 import ProposalGlobalStrip from "./ProposalGlobalStrip";
 import { computeProposalDeltas, origenDePropuesta, type ProposalDelta, type CurrentPhaseLike } from "@/lib/timeline/proposal-deltas";
 import {
-  ESPERA_ANTES_DE_DECIR_PASO_1_MS,
   pasoTrasEstructura,
   pasoTrasResolver,
   type RespuestaDeEstructura,
@@ -385,11 +384,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        el paso 2, nunca se dispara solo para quien no lo pidió.
      · `observacionesPaso1` / `pasoDos` — lo que el acordeón del paso 2 muestra arriba. */
   const [revisandoEstructura, setRevisandoEstructura] = useState(false);
-  /* «Paso 1 de 2 · Revisando fases y tiempos…» se dice recién cuando la revisión tarda de verdad
-     (revisión del paso A2): sin material la ruta vuelve en un instante y el cartel aparecía igual
-     en todo «Regenerar todo», diciendo que revisaba reuniones que nadie eligió. Hasta entonces la
-     espera bloquea igual, con un rótulo neutro. */
-  const [paso1Visible, setPaso1Visible] = useState(false);
+  /* «Paso 1 de 2 · Revisando fases y tiempos…» se dice SOLO si el CSE eligió material que la
+     revisión va a leer (revisión del paso A2, segunda vuelta). Lo informa el «Contexto del
+     cronograma» (`onMaterial`, con `hayMaterialParaElPaso1`). Antes lo decidía un reloj de 1,2 s, y
+     sin material la ruta igual lee el cronograma, los permisos y lo elegido: en un prod lento el
+     cartel salía aunque nadie eligiera nada. Sin material la espera bloquea igual, con un rótulo
+     neutro. */
+  const [materialElegido, setMaterialElegido] = useState(false);
   const pasoTareasRef = useRef<"primera" | "regen" | null>(null);
   const [encadenado, setEncadenado] = useState(false);
   const fijarPasoTareas = (m: "primera" | "regen" | null) => {
@@ -499,8 +500,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
     : revisandoEstructura
       ? /* El paso 1 de «Regenerar todo»: si el Gantt quedara editable, lo que el CSE tipee en el
            medio lo compararía después una propuesta calculada contra la foto anterior. Bloquea
-           desde el primer instante; el rótulo del paso 1 sale solo con `paso1Visible`. */
-        paso1Visible
+           desde el primer instante; el rótulo del paso 1 sale solo con `materialElegido`. */
+        materialElegido
         ? {
             activo: true,
             rotulo: "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas",
@@ -1415,19 +1416,16 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       setPasoDos(false);
       setObservacionesPaso1([]);
       setRevisandoEstructura(true);
-      const verPaso1 = window.setTimeout(() => setPaso1Visible(true), ESPERA_ANTES_DE_DECIR_PASO_1_MS);
       let respuesta: RespuestaDeEstructura;
       let estructura: { proposal?: unknown; runId?: unknown; observaciones?: unknown } = {};
       try {
         const res = await fetch(`/api/projects/${projectId}/timeline/estructura`, { method: "POST" });
         const d = await res.json().catch(() => ({}));
         estructura = d ?? {};
-        respuesta = { status: res.status, estado: d?.estado, message: d?.message };
+        respuesta = { status: res.status, estado: d?.estado, message: d?.message, acordadoSinEntrar: d?.acordadoSinEntrar };
       } catch {
         respuesta = { red: true };
       }
-      window.clearTimeout(verPaso1);
-      setPaso1Visible(false);
       setRevisandoEstructura(false);
       const paso = pasoTrasEstructura(respuesta);
       if (paso.paso === "detener") {
@@ -3352,6 +3350,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           canEdit={canEdit}
           generado={hasAiDetail}
           instruccionesActivas={!!briefGuardado}
+          onMaterial={setMaterialElegido}
         >
         <div className="rounded-xl border border-line bg-surface px-4 py-2.5">
           <button
@@ -3661,9 +3660,9 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           </div>
         </Modal>
       )}
-      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. Sin material la
-          ruta vuelve antes de que `paso1Visible` se encienda: el cartel no aparece. */}
-      {revisandoEstructura && paso1Visible && (
+      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. Sin material
+          elegido el cartel no aparece, tarde lo que tarde la ruta en volver. */}
+      {revisandoEstructura && materialElegido && (
         <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
           <div className="flex items-center gap-3 py-1">
             <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />

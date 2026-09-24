@@ -155,7 +155,7 @@ export function tieneMaterialDelCronograma(fuentes: readonly FuenteDeContexto[])
 export const REGLA_DE_FRONTERA_DE_ESTRUCTURA =
   "⛔ FRONTERA — el contexto de arriba es INTERNO; el nombre de una fase lo LEE EL CLIENTE en cuanto " +
   `el CSE acepta el cambio. ${FRONTERA_DEL_MATERIAL} El «motivo» y las «observaciones» son internos: ` +
-  "ahí sí cita la reunión (título y fecha) o la nota.";
+  "ahí sí cita la reunión (título y fecha), la nota o las instrucciones del CSE.";
 
 const PEDIDO_DE_ESTRUCTURA =
   "Revisa si lo que eligió el CSE obliga a cambiar las fases o los tiempos del calendario de arriba. " +

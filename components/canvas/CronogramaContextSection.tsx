@@ -32,6 +32,7 @@ import {
   resumenDelInforme,
   type InformeDelMaterial,
 } from "@/lib/contexto/material-cronograma";
+import { hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
 
 export default function CronogramaContextSection({
   projectId,
@@ -39,6 +40,7 @@ export default function CronogramaContextSection({
   generado,
   instruccionesActivas,
   children,
+  onMaterial,
 }: {
   projectId: string;
   canEdit: boolean;
@@ -51,6 +53,11 @@ export default function CronogramaContextSection({
   instruccionesActivas: boolean;
   /** La caja de «Instrucciones adicionales», tal cual vive en CronogramaCanvas. */
   children?: ReactNode;
+  /**
+   * Avisa si hay material que la revisión de fases va a leer (`hayMaterialParaElPaso1`): con eso la
+   * pantalla decide si dice «Paso 1 de 2 · Revisando fases y tiempos con tus reuniones y notas».
+   */
+  onMaterial?: (hay: boolean) => void;
 }) {
   const [override, setOverride] = useState<boolean | null>(null);
   const abierto = override ?? !generado;
@@ -82,6 +89,12 @@ export default function CronogramaContextSection({
   // Sin reuniones elegidas, un informe viejo no se muestra (se deriva: nada de limpiarlo a mano).
   const informeVivo = hayReuniones ? informe : null;
   const loQueNoEntra = informeVivo ? parentesisDelMaterial(resumenDelInforme(informeVivo)) : "";
+  /* Lo mismo que mira la ruta del paso 1, con lo que esta sección ya tiene: la pantalla no promete
+     «revisando tus reuniones y notas» si no hay nada que revisar. */
+  const hayMaterial = hayMaterialParaElPaso1({ reuniones, notas, informe: informeVivo });
+  useEffect(() => {
+    onMaterial?.(hayMaterial);
+  }, [hayMaterial, onMaterial]);
 
   return (
     <div className="rounded-xl border border-line bg-surface">
