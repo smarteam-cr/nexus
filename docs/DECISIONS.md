@@ -3169,7 +3169,7 @@ fabricarla.
   las notas y las «Instrucciones adicionales» del cronograma por `materialDelCronograma`
   (lib/asistente/contexto.ts) → `cargarMaterialParaElChat` (lib/contexto/cargar.ts). Usa el mismo
   cargador que los agentes con `PRESUPUESTO_DEL_CHAT`: 24 lecturas y 16.000 caracteres de reuniones
-  (los agentes usan 40 y 32.000), el mismo tope de notas y un techo duro de 42.000 para el bloque
+  (los agentes usan 60 y 48.000 desde el 2026-09-24), el mismo tope de notas y un techo duro de 42.000 para el bloque
   entero. Las reuniones van sin su lugar en el plan, así el bloque no cambia cuando se mueve una fase.
   Los cargadores de los agentes siguen prohibidos en lib/asistente (contexto.test.ts), y el handoff,
   los kickoffs y las reuniones no elegidas siguen afuera. Si la lectura falla, el chat contesta
@@ -3195,3 +3195,23 @@ fabricarla.
 - **Se descartó la lectura a pedido con una segunda herramienta.** Rompe la regla de una sola
   herramienta por pedido (turno.test.ts), suma una segunda llamada al modelo en el turno y deja
   contestar desde un índice de títulos, sin haber leído la reunión.
+
+## El material del cronograma: 48.000 caracteres de reuniones y los compromisos primero (2026-09-24)
+
+> Hallazgo de la validación A3: con las 8 reuniones elegidas de CAV, las 8 entraban recortadas y 7
+> perdían parte de lo PRINCIPAL. Un acuerdo escrito al final del resumen no le llegaba al revisor.
+
+- **El tope de reuniones de los agentes sube de 32.000 a 48.000** (`TOPE_REUNIONES_CRONOGRAMA`;
+  `MAX_REUNIONES_A_LEER` de 40 a 60, para seguir llenando el tope con el piso). Medido solo lectura:
+  lo principal de las 8 de CAV suma 37.992 caracteres; con 48.000 entra entero en las 8. En las 2.757
+  reuniones con resumen del último año, lo principal mide 1.871 en la mediana y 4.976 en el p90;
+  eligiendo 12 al azar, no entra entero el 37,7 % de las veces con 32.000 y el 0,2 % con 48.000.
+  Costo: hasta ~4.500–5.000 tokens más por llamada (3,2 caracteres por token, medido en la A3),
+  ~US$0,015 con Sonnet 4.6, y solo cuando lo elegido llena el espacio. Lo pagan el revisor de fases,
+  el detalle y «Pedir cambio con IA». **El chat no cambia**: sigue con 16.000 (`PRESUPUESTO_DEL_CHAT`),
+  porque lo paga en cada turno.
+- **Los compromisos de Fireflies van antes de su overview**, como Gemini ya ponía Decisiones y
+  Próximos pasos primero: lo que se recorta es el final, y lo acordado no puede ser lo primero en irse.
+- **«Si eliges menos…» solo cuando las reuniones compiten por el espacio** (`porFaltaDeEspacio` del
+  informe). Una agendada o una vacía no le quitan espacio a nadie, y la que corta el techo por reunión
+  entra igual de cortada aunque quede sola.

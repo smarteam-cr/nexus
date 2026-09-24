@@ -120,6 +120,25 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(cal).toContain("desde el 21 sep");
   });
 
+  it("⭐ el calendario es la BASE de los cambios, no «solo lectura» (revisión del paso A2)", () => {
+    /* El revisor reusa el calendario de los demás agentes, y el de ellos dice «solo lectura… úsalo SOLO
+       para ubicar». En el mismo mensaje, el pedido le dice que proponga cambios sobre esas fases, con
+       esos ids y esas semanas: un modelo que duda contesta «sin cambios» por prudencia.
+       La edición que la pone en rojo: sacar `comoBaseDeCambios` de `calendarioDeEstructura`. */
+    for (const cal of [
+      calendarioDeEstructura(FOTO, AHORA),
+      calendarioDeEstructura({ ...FOTO, anchorStartDate: null }, AHORA),
+    ]) {
+      expect(cal.startsWith("=== CALENDARIO DEL CRONOGRAMA ACTUAL (la base sobre la que propones")).toBe(true);
+      expect(cal).toContain("Sobre este calendario propones los cambios");
+      expect(cal, "el revisor volvió a recibir el calendario de «solo lectura»").not.toContain("solo lectura");
+      expect(cal).not.toContain("Úsalo SOLO");
+      expect(cal, "perdió la regla de las fechas en los nombres de fase").toContain(
+        "⛔ No escribas fechas ni plazos en ningún nombre de fase",
+      );
+    }
+  });
+
   it("sin ancla lo dice, y no inventa fechas", () => {
     const cal = calendarioDeEstructura({ ...FOTO, anchorStartDate: null }, AHORA);
     expect(cal).toContain("Sin fecha de arranque");

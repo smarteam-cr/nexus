@@ -26,7 +26,7 @@
  * sus instrucciones adicionales— entra, y SOLO por una puerta: `materialDelCronograma`
  * (lib/asistente/contexto.ts) → `cargarMaterialParaElChat` (lib/contexto/cargar.ts), con un
  * presupuesto propio y en su propio bloque. Los cargadores de los AGENTES (con su presupuesto de
- * 32.000 en reuniones) siguen prohibidos acá, y el handoff, los kickoffs y las reuniones que el
+ * 48.000 en reuniones) siguen prohibidos acá, y el handoff, los kickoffs y las reuniones que el
  * CSE no eligió siguen afuera. Las guardas de abajo hacen cumplir las dos mitades.
  */
 import { describe, it, expect, vi } from "vitest";
@@ -70,7 +70,7 @@ function archivosDelAsistente(): string[] {
  * cambia fases y tareas con operaciones, sin ningún modelo editor detrás; si no ve las reuniones
  * elegidas ni las notas, nadie las ve en ese camino). El material entra por UNA puerta con SU
  * presupuesto (`cargarMaterialParaElChat`); estas son las otras siete maneras de llegar al mismo
- * material —con el presupuesto de los agentes, 32.000 de reuniones por turno, o armándolo a
+ * material —con el presupuesto de los agentes, 48.000 de reuniones por turno, o armándolo a
  * mano— y cierran el agujero que marcó la validación: sin ellas, importar el cargador de los
  * agentes en contexto.ts dejaba esta guarda en verde.
  */
@@ -397,7 +397,7 @@ describe("⭐ el chat del cronograma lee el «Contexto del cronograma» — por 
   });
 
   it("⭐ con el presupuesto DEL CHAT y sin la ubicación de cada reunión", () => {
-    /* Con el presupuesto de los agentes el chat pagaría hasta 32.000 de reuniones por turno; con
+    /* Con el presupuesto de los agentes el chat pagaría hasta 48.000 de reuniones por turno; con
        la ubicación, cada cambio de fases cambiaría el bloque y volvería a cobrar la caché.
        Las ediciones que la ponen en rojo: llamar `cargarMaterialDelCronograma(projectId)` sin el
        segundo argumento, o sacar `sinUbicacion`. */

@@ -10,6 +10,7 @@
  *                                 fase que cambia), estado y tareas hechas (para no tocar lo
  *                                 terminado ni acortar trabajo empezado) y «Hoy» (para no mover
  *                                 nada al pasado). Semanas del proyecto desde 1, como el Gantt.
+ *                                 Rotulado como la BASE de los cambios, no «solo lectura».
  *   · handoff-curado            — solo bloques confirmados, con un respaldo PROPIO sin handoff.
  *   · reuniones / notas         — lo que el CSE eligió, con los rótulos del motor del material.
  *   · instrucciones             — el brief `__doc` del canvas del cronograma (manda sobre todo).
@@ -70,9 +71,13 @@ export function fotoDeEstructura(tl: {
   };
 }
 
-/** EL calendario, con las tres opciones: ids, estado y «Hoy». "" sin fases. */
+/**
+ * EL calendario, con las tres opciones —ids, estado y «Hoy»— y rotulado como la BASE de los cambios
+ * (`comoBaseDeCambios`): el de los demás agentes dice «solo lectura… úsalo SOLO para ubicar», y
+ * este paso propone cambios justamente sobre él. "" sin fases.
+ */
 export function calendarioDeEstructura(foto: FotoDelCronograma | null | undefined, ahora: number): string {
-  return calendarioDelCronograma(foto, ahora, { conIds: true, conEstado: true, conHoy: true });
+  return calendarioDelCronograma(foto, ahora, { conIds: true, conEstado: true, conHoy: true, comoBaseDeCambios: true });
 }
 
 export interface CrudasDeEstructura {

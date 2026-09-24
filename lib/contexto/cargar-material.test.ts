@@ -7,7 +7,7 @@ import { resumenDelInforme, type FotoDelCronograma } from "./material-cronograma
  * `cargarMaterialDelCronograma(projectId, opts)` es UNO para cuatro lectores: el detalle y «Pedir
  * cambio con IA» lo llaman sin opciones; el chat, con un tope y una lectura menores y sin la
  * ubicación de cada reunión; el revisor de fases de «Regenerar todo», con SU foto del plan. Una
- * opción que se ignora no rompe nada visible: el chat recibe el tope de 32.000, el revisor
+ * opción que se ignora no rompe nada visible: el chat recibe el tope de 48.000, el revisor
  * compara contra otra foto, y todo sigue verde. Revisión del paso D1 (2026-09-23): sacar
  * `topeReuniones` y `maxALeer` del cargador dejó verdes los 118 tests que lo rodean.
  *
@@ -100,7 +100,7 @@ describe("⭐ las opciones del cargador del material llegan", () => {
     expect(m.reuniones).toContain("«Fase de la base», su semana");
   });
 
-  it("`topeReuniones`: el material entra en ESE tope, no en el de 32.000", async () => {
+  it("`topeReuniones`: el material entra en ESE tope, no en el de 48.000", async () => {
     const m = await cargarMaterialDelCronograma("p1", { topeReuniones: 8_000 });
     const entran = m.informe.reuniones.reduce((s, x) => s + x.entran, 0);
     expect(entran).toBeLessThanOrEqual(8_000);

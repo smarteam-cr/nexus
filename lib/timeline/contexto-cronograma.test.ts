@@ -293,7 +293,7 @@ describe("⭐ el CHAT del cronograma también lee el material (decisión de Elí
 
   it("la puerta del chat llama al cargador de los agentes con SU presupuesto y sin ubicación", () => {
     /* La edición que la pone en rojo: `cargarMaterialDelCronograma(projectId)` a secas en la puerta
-       del chat (32.000 de reuniones por turno), o pasarles `PRESUPUESTO_DEL_CHAT` a los agentes
+       del chat (48.000 de reuniones por turno), o pasarles `PRESUPUESTO_DEL_CHAT` a los agentes
        (las guardas de arriba, que exigen el llamado sin opciones). */
     const src = sinComentarios(leer("lib/contexto/cargar.ts"));
     const tramo = tramoDe(src, "cargarMaterialParaElChat");

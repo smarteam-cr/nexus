@@ -289,7 +289,7 @@ export interface MaterialDelCronograma {
  * "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase.
  *
  * ⚠ Las cuatro opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
- * opción que se ignora en silencio le da al chat el tope de 32.000 o al revisor de fases otra foto.
+ * opción que se ignora en silencio le da al chat el tope de 48.000 o al revisor de fases otra foto.
  *
  * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
  * la pertenencia al cliente y el tombstone no se re-implementan acá. Las futuras se cortan con
