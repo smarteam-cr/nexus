@@ -8,7 +8,9 @@
  *      (tabla vacía → cero diffs = paridad exacta; tras el seed de F3 el único
  *      diff esperado es DEV a solo-lectura en los artefactos).
  *   3. Prueba de overrides EN MEMORIA (sin escribir DB): un CSE con
- *      cronograma.regenerate pineado debe pasar; sin el override, no.
+ *      cronograma.delete pineado debe pasar; sin el override, no. (Hasta 2026-09-23 se
+ *      probaba con cronograma.regenerate; por decisión de Elías el CSE ya lo trae por
+ *      default, así que la prueba usa una celda que el CSE sigue sin tener: borrar.)
  *   4. Las capabilities legacy derivadas de cada mapa efectivo.
  *
  * Correr: npx tsx scripts/perm-smoke.ts
@@ -50,18 +52,18 @@ async function main() {
   console.log(`\nDiffs efectivo-vs-default totales: ${totalDiffs}`);
 
   // Overrides EN MEMORIA (el engine lee permissionOverrides del subject; no se escribe DB)
-  const sinOverride = await can({ roleEnum: "CSE", permissionOverrides: null }, "cronograma", "regenerate");
+  const sinOverride = await can({ roleEnum: "CSE", permissionOverrides: null }, "cronograma", "delete");
   const conOverride = await can(
-    { roleEnum: "CSE", permissionOverrides: { v: 1, sections: { cronograma: { regenerate: true } } } },
+    { roleEnum: "CSE", permissionOverrides: { v: 1, sections: { cronograma: { delete: true } } } },
     "cronograma",
-    "regenerate",
+    "delete",
   );
   const saRecortado = await can(
     { roleEnum: "SUPER_ADMIN", permissionOverrides: { v: 1, sections: { equipo: { manage: false } } } },
     "equipo",
     "manage",
   );
-  console.log(`\nOverride en memoria — CSE cronograma.regenerate: sin=${sinOverride} con=${conOverride} (esperado false/true)`);
+  console.log(`\nOverride en memoria — CSE cronograma.delete: sin=${sinOverride} con=${conOverride} (esperado false/true)`);
   console.log(`Anti-lockout — SA con override malicioso equipo.manage=false: ${saRecortado} (esperado true)`);
   if (sinOverride || !conOverride || !saRecortado) {
     console.error("❌ FALLÓ la prueba de overrides");

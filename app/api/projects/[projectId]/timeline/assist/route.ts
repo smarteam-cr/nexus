@@ -132,10 +132,10 @@ export async function POST(
     );
   }
 
-  // RBAC — cambiar el cronograma CON IA una vez que YA está generado queda para
-  // CSL/Super Admin (capacidad regenerateTimeline). El resto (CSE, Ventas, DEV,
-  // Marketing) puede armarlo con IA la PRIMERA vez (sin detalle IA aún) y editarlo a
-  // mano después (editTimeline), pero no rehacerlo con IA. Señal "ya generado" =
+  // RBAC — cambiar el cronograma CON IA una vez YA generado pide regenerateTimeline (default:
+  // CSE, CSL y Super Admin; el CSE por decisión de Elías 2026-09-23). El resto (Ventas, DEV
+  // sin plantilla, Marketing) puede armarlo con IA la PRIMERA vez (sin detalle IA aún) y
+  // editarlo a mano después (editTimeline), pero no rehacerlo con IA. Señal "ya generado" =
   // tareas source ∈ {AGENT, MODIFIED} (mismo predicado que hasAiDetail / el skip del
   // agente de detalle). Antes de gastar tokens de Claude.
   const aiDetailCount = await prisma.timelineTask.count({
@@ -147,7 +147,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "TIMELINE_ALREADY_GENERATED",
-          message: "El cronograma ya está generado. Cambiarlo con IA queda para CSL o Super Admin — tú puedes seguir ajustándolo a mano.",
+          message: "El cronograma ya está generado. Cambiarlo con IA necesita el permiso de regenerar el cronograma; tú puedes seguir ajustándolo a mano.",
         },
         { status: 403 },
       );

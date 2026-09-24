@@ -193,7 +193,7 @@ export async function resolveArtifactGate(
   }
 }
 
-/** Copy del 403 (interno, voseo). */
+/** Copy del 403 (interno, tuteo). */
 export function artifactGateMessage(gate: ArtifactGate): string {
   // Record explícito sobre ArtifactGate["section"]: si mañana entra una sección nueva al
   // tipo y no se le pone copy acá, NO compila (antes el objeto inferido la dejaba pasar
@@ -211,6 +211,6 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     entrega: "el documento de entrega",
   };
   return gate.action === "regenerate"
-    ? `Tu rol no puede regenerar ${label[gate.section]} con IA (ya está generado). Pedile a un CSL o Super Admin, o ajustalo a mano.`
+    ? `Regenerar ${label[gate.section]} con IA (ya está generado) necesita el permiso de regenerar, y tu rol no lo tiene. Puedes seguir haciendo cambios a mano.`
     : `Tu rol no puede generar ${label[gate.section]} con IA.`;
 }

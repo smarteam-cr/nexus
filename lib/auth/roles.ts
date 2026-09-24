@@ -40,8 +40,9 @@ export type Capability =
   // BORRAR tareas/fases/cronograma. El CSE NO la tiene (solo suspende). CSL = como super admin.
   | "deleteTimeline"
   // REGENERAR/cambiar el cronograma CON IA una vez ya generado (agente de detalle /
-  // "Pedir cambio con IA"). Por default CSL + SUPER_ADMIN. El resto (incluido el CSE)
-  // genera el cronograma la PRIMERA vez y lo edita a MANO (editTimeline).
+  // "Pedir cambio con IA"). Por default CSE + CSL + SUPER_ADMIN (el CSE desde la decisión
+  // de Elías 2026-09-23). El resto (Ventas, DEV sin plantilla, Marketing) genera el
+  // cronograma la PRIMERA vez y lo edita a MANO (editTimeline).
   | "regenerateTimeline";
 
 /** Rango lineal — para gates simples de "rol mínimo". */

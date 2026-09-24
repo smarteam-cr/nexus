@@ -37,10 +37,12 @@ test("A — DEFAULT_MATRIX: 7 roles, mapas completos (toda celda explícita)", (
 });
 
 test("B — precedencia default ← plantilla ← override", () => {
-  // CSE por default: cronograma.write=true, cronograma.regenerate=false, handoff.write=false
+  // CSE por default: cronograma.write=true, cronograma.regenerate=true (decisión de Elías
+  // 2026-09-23), handoff.write=false. La plantilla APAGA regenerate para que el override que lo
+  // vuelve a prender siga probando precedencia y no solo herencia del default.
   const template: PermissionMap = {
     v: 1,
-    sections: { cronograma: { write: false }, handoff: { write: true } },
+    sections: { cronograma: { write: false, regenerate: false }, handoff: { write: true } },
   };
   const override: PermissionMap = {
     v: 1,
@@ -50,6 +52,7 @@ test("B — precedencia default ← plantilla ← override", () => {
   // Solo plantilla: pisa el default en sus celdas, hereda el resto.
   const conPlantilla = computeEffective("CSE", template, null);
   expect(conPlantilla.sections.cronograma.write).toBe(false); // plantilla pisó
+  expect(conPlantilla.sections.cronograma.regenerate).toBe(false); // plantilla pisó el default
   expect(conPlantilla.sections.handoff.write).toBe(true); // plantilla pisó
   expect(conPlantilla.sections.cronograma.generate).toBe(true); // heredado del default
   expect(conPlantilla.sections.clientes.viewAll).toBe(false); // heredado del default
@@ -57,7 +60,7 @@ test("B — precedencia default ← plantilla ← override", () => {
   // Plantilla + override: el override gana sobre la plantilla.
   const conAmbas = computeEffective("CSE", template, override);
   expect(conAmbas.sections.cronograma.write).toBe(true); // override ganó a la plantilla
-  expect(conAmbas.sections.cronograma.regenerate).toBe(true); // override pineó
+  expect(conAmbas.sections.cronograma.regenerate).toBe(true); // override ganó a la plantilla
   expect(conAmbas.sections.handoff.write).toBe(true); // plantilla (override no la tocó)
 });
 

@@ -6,7 +6,7 @@
  * fuera de alcance). Casos:
  *   A) DEV ≡ VENTAS en capacidades (invariante del rol DEV, 2026-06-30).
  *   B) SUPER_ADMIN tiene TODAS las capacidades; manageTeam es exclusiva suya.
- *   C) CSE solo editTimeline (borra → suspende: NUNCA deleteTimeline).
+ *   C) CSE editTimeline + regenerateTimeline (borra → suspende: NUNCA deleteTimeline).
  *   D) Spot-checks de la matriz: createHandoff / shareClients / deleteClients.
  *   E) Ranking lineal: CSE < VENTAS=DEV < CSL=MARKETING < SUPER_ADMIN.
  *   F) roleAtLeast: reflexivo, empates de rango en ambas direcciones, y gates.
@@ -74,9 +74,12 @@ test("B2 — ADMIN (Finanzas): CERO capacidades de la matriz — su acceso es SO
   }
 });
 
-test("C — CSE: solo editTimeline (nunca borra, suspende)", () => {
-  expect(capabilitiesFor("CSE")).toEqual(["editTimeline"]);
+test("C — CSE: editTimeline + regenerateTimeline (nunca borra, suspende)", () => {
+  // decisión de Elías 2026-09-23: el CSE itera el cronograma con IA; prod ya lo tenía por
+  // plantilla. Antes este caso exigía SOLO editTimeline.
+  expect(capabilitiesFor("CSE")).toEqual(["editTimeline", "regenerateTimeline"]);
   expect(hasCapability("CSE", "editTimeline")).toBe(true);
+  expect(hasCapability("CSE", "regenerateTimeline")).toBe(true);
   expect(hasCapability("CSE", "deleteTimeline")).toBe(false);
   expect(hasCapability("CSE", "seeAllClients")).toBe(false);
 });

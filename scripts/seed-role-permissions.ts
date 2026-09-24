@@ -51,7 +51,8 @@ const DELTAS: Partial<Record<TeamRole, Array<[string, string]>>> = {
 
 /** Celdas que el delta ENCIENDE sobre el default del rol (para superar el default de código). */
 const ENABLES: Partial<Record<TeamRole, Array<[string, string]>>> = {
-  // DEV itera el cronograma con IA: regenerate no viene en el default (solo CSL/SUPER_ADMIN).
+  // DEV itera el cronograma con IA: regenerate no viene en su default (el default lo trae
+  // CSE, CSL y SUPER_ADMIN; el CSE desde la decisión de Elías 2026-09-23, ya en el código).
   DEV: [
     ["cronograma", "regenerate"],
   ],

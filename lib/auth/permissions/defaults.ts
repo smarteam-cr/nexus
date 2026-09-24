@@ -19,6 +19,12 @@
  * deje de funcionar. Va en el default de código y no en la semilla justamente para
  * que no haya que acordarse de aplicarlo en ningún entorno.
  *
+ * SEGUNDA DESVIACIÓN (decisión de Elías 2026-09-23): el CSE trae `cronograma.regenerate`.
+ * Él es quien itera el cronograma con IA («Regenerar todo», «Pedir cambio con IA») a medida
+ * que avanzan las reuniones; la plantilla de prod ya se lo daba, así que el default de código
+ * se alinea con lo que el CSE ya vive y no cambia nada en prod. Va acá y NO en la semilla
+ * (ENABLES) para que un entorno sin plantilla se comporte igual.
+ *
  * Precedencia (computeEffective): DEFAULT_MATRIX[rol] ← plantilla del rol (DB)
  * ← overrides del usuario (sparse). SUPER_ADMIN = all-true SIEMPRE (anti-lockout:
  * ni la DB ni los overrides pueden recortarlo). Rol desconocido en runtime
@@ -48,7 +54,8 @@ function grant(grants: Grants): PermissionMap {
 
 export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // CSE (scoped): edita el cronograma pero NO borra (suspende); genera kickoff/
-  // procesos/cronograma en SUS clientes (el row-level lo acota access.ts);
+  // procesos/cronograma en SUS clientes (el row-level lo acota access.ts) y REGENERA el
+  // cronograma con IA (decisión de Elías 2026-09-23, ver el docblock);
   // NADA de handoff; lee Marketing (área universal).
   CSE: grant({
     kickoff: ["generate", "regenerate"],
@@ -59,7 +66,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     implementacion: ["generate", "regenerate"],
     entrega: ["generate", "regenerate"],
     procesos: ["generate", "regenerate"],
-    cronograma: ["write", "generate"],
+    cronograma: ["write", "generate", "regenerate"],
     asistente: ["read"],
     /* PRIMERA celda de `proyectos` que toca el CSE, y es deliberado: mantener al día el estado y
        la etapa en HubSpot es su trabajo, no del liderazgo. Si exigiera CSL, el tablero seguiría

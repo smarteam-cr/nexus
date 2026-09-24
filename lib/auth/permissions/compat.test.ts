@@ -7,7 +7,8 @@
  *   B) PARIDAD EXACTA: DEFAULT_MATRIX visto a través de compat === la matriz
  *      CAPABILITIES histórica (copia congelada acá — si alguien cambia el
  *      default de código, este test lo denuncia; el delta operativo va en la
- *      SEMILLA de DB, nunca en el default).
+ *      SEMILLA de DB, nunca en el default — salvo las desviaciones que
+ *      defaults.ts documenta en su docblock, como el regenerate del CSE).
  *   C) capabilitiesFromPermissions: deriva bien desde un mapa efectivo.
  *
  * Correr: `npx vitest run lib/auth/permissions/compat.test.ts --project unit`.
@@ -35,8 +36,11 @@ test("A — las 9 equivalencias capability → celda, congeladas", () => {
 // Copia CONGELADA de la matriz CAPABILITIES histórica (lib/auth/roles.ts hasta
 // la migración PERM 2026-07). Si este test falla, el DEFAULT de código dejó de
 // ser compat exacta con el comportamiento pre-migración — averiguar por qué.
+// Única excepción a la copia histórica: CSE suma "regenerateTimeline" por
+// decisión de Elías 2026-09-23: el CSE itera el cronograma con IA; prod ya lo
+// tenía por plantilla (ver el docblock de defaults.ts, SEGUNDA DESVIACIÓN).
 const FROZEN_CAPABILITIES: Record<TeamRole, Capability[]> = {
-  CSE: ["editTimeline"],
+  CSE: ["editTimeline", "regenerateTimeline"],
   VENTAS: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
   DEV: ["seeAllClients", "handoffAnywhere", "createHandoff", "editTimeline", "deleteTimeline"],
   CSL: ["seeAllClients", "handoffAnywhere", "shareClients", "deleteClients", "editTimeline", "deleteTimeline", "regenerateTimeline"],
@@ -59,7 +63,8 @@ test("B — paridad exacta: DEFAULT_MATRIX vía compat === CAPABILITIES congelad
 });
 
 test("C — capabilitiesFromPermissions deriva desde el mapa", () => {
-  expect(capabilitiesFromPermissions(DEFAULT_MATRIX.CSE)).toEqual(["editTimeline"]);
+  // decisión de Elías 2026-09-23: el CSE regenera el cronograma con IA (antes: solo editTimeline).
+  expect(capabilitiesFromPermissions(DEFAULT_MATRIX.CSE)).toEqual(["editTimeline", "regenerateTimeline"]);
   expect(capabilitiesFromPermissions(DEFAULT_MATRIX.ADMIN)).toEqual([]);
   expect([...capabilitiesFromPermissions(DEFAULT_MATRIX.CSL)].sort()).toEqual(
     [...FROZEN_CAPABILITIES.CSL].sort(),

@@ -376,7 +376,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const canEdit = me?.capabilities.includes("editTimeline") ?? false;
   const canDelete = me?.capabilities.includes("deleteTimeline") ?? false;
   // Cambiar el cronograma CON IA una vez generado queda para quien tenga
-  // cronograma.regenerate (default CSL/Super Admin). La PRIMERA pasada con IA pide
+  // cronograma.regenerate (default CSE, CSL y Super Admin). La PRIMERA pasada con IA pide
   // cronograma.generate (default todo interno). Espeja los gates del server
   // (timeline/assist + analyze) — la matriz es editable desde /team.
   const canRegenerateTimeline = me?.permissions?.sections?.cronograma?.regenerate === true;

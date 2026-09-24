@@ -365,8 +365,9 @@ export async function guardTimelineDelete(
  *    saque sobre trabajo que ya existe, y por eso pide más que el apply por fase.
  *  - cronograma VACÍO → alcanza `editTimeline`, la MISMA vara que el apply por fase. Es la
  *    primera generación, que desde 2026-08-16 también pasa por curación en vez de escribirse
- *    directo. Sin este escalón el CSE —que genera pero NO regenera (permissions/defaults.ts)—
- *    vería la propuesta y no podría aplicarla: le habríamos sacado la capacidad de crear el
+ *    directo. Sin este escalón Ventas y Marketing —que generan pero NO regeneran
+ *    (permissions/defaults.ts; el CSE sí regenera desde la decisión de Elías 2026-09-23)—
+ *    verían la propuesta y no podrían aplicarla: les habríamos sacado la capacidad de crear el
  *    cronograma sin decirlo en ningún lado.
  *
  * ⛔ El escalón cuelga de que no haya NI UNA tarea. Con una sola, vuelve la vara alta: ahí ya hay

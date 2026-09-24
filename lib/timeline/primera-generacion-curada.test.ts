@@ -21,10 +21,11 @@ import { elegirFaseDeSemanaCero } from "./semana-cero-tareas";
  *     cliente y se descubre en la reunión de kickoff.
  *  2. El `activityType` de cada fase. Sin él las barras del Gantt pierden su color y la leyenda que
  *     ve el cliente queda sin sentido.
- *  3. El permiso. El apply completo pedía la vara del REGEN, que el CSE no tiene
- *     (permissions/defaults.ts: `cronograma: ["write", "generate"]`). Sin el escalón por cronograma
- *     vacío, el CSE vería la propuesta y no podría aplicarla — le habríamos sacado la capacidad de
- *     crear el cronograma sin decirlo en ningún lado.
+ *  3. El permiso. El apply completo pedía la vara del REGEN, que Ventas y Marketing no tienen
+ *     (permissions/defaults.ts: `cronograma: ["write", "delete", "generate"]`; el CSE la tiene desde
+ *     la decisión de Elías 2026-09-23). Sin el escalón por cronograma vacío, esos roles verían la
+ *     propuesta y no podrían aplicarla — les habríamos sacado la capacidad de crear el cronograma
+ *     sin decirlo en ningún lado.
  */
 
 const RAIZ = process.cwd();
@@ -117,7 +118,7 @@ describe("⛔ el escalón de permiso cuelga de que el cronograma esté VACÍO", 
   });
 
   it("⚠ y el apply completo usa ESE guard, no el de vara fija", () => {
-    /* Si vuelve `guardTimelineFullRegen`, el CSE deja de poder crear el cronograma — y el síntoma
+    /* Si vuelve `guardTimelineFullRegen`, Ventas y Marketing dejan de poder crear el cronograma — y el síntoma
        es un 403 en el botón «Crear las tareas», que se lee como «se rompió el permiso», no como
        «alguien cambió el guard». */
     const apply = soloCodigo(RUTA_APPLY);
