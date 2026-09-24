@@ -58,11 +58,15 @@ export function docBriefFrom(sections: unknown): string | null {
  * «proyecto sin brief ⇒ userMessage byte-idéntico» se sostiene por construcción.
  * El rótulo viaja ADENTRO (principio del repo: la procedencia no se puede perder por
  * descuido en un call site).
+ *
+ * En tuteo (revisión adversarial, 2026-09-24): decía «cumplilas», y es lo PRIMERO que leen el
+ * revisor de fases, el detalle, «Pedir cambio con IA» y el avance cuando hay instrucciones; el resto
+ * de sus mensajes va en tuteo, y un modelo copia el registro en lo que escribe.
  */
 export function bloqueDeInstruccionesDeDoc(brief: string | null): string {
   const b = brief?.trim();
   if (!b) return "";
-  return `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cumplilas SIEMPRE) ===\n${b}\n\n`;
+  return `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\n${b}\n\n`;
 }
 
 /** Lee el array de secciones del Json de un ProjectCanvas, tolerante a basura/forma vieja. */

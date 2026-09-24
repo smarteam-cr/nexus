@@ -399,7 +399,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       return NextResponse.json(
         {
           error: "NO_TIMELINE",
-          message: "No hay cronograma con fases para detallar. Generá primero el esqueleto (handoff) o crealo a mano en el canvas Cronograma.",
+          message: "No hay cronograma con fases para detallar. Genera primero el esqueleto (handoff) o créalo a mano en el canvas Cronograma.",
         },
         { status: 400 },
       );
@@ -2180,25 +2180,25 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // saber que es reintentable, no un código seco.
   if (isFlowchart) {
     if (!analysisJson?.nodes || !Array.isArray(analysisJson.nodes) || analysisJson.nodes.length === 0) {
-      return NextResponse.json({ error: "El agente devolvió un diagrama vacío o inválido. Probá de nuevo." }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió un diagrama vacío o inválido. Prueba de nuevo." }, { status: 500 });
     }
   } else if (isCardsAndFlowcharts) {
     // Cards son opcionales (el agente puede generar solo flowcharts)
     if (!analysisJson?.flowcharts?.length && !analysisJson?.cards?.length) {
-      return NextResponse.json({ error: "El agente no devolvió contenido. Probá de nuevo." }, { status: 500 });
+      return NextResponse.json({ error: "El agente no devolvió contenido. Prueba de nuevo." }, { status: 500 });
     }
   } else if (isTimelineDetailAgent) {
     // D.1: el agente de detalle emite timelineDetail, no cards/sections.
     if (!analysisJson?.timelineDetail?.phases?.length) {
-      return NextResponse.json({ error: "El agente devolvió un detalle de cronograma inválido. Probá de nuevo." }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió un detalle de cronograma inválido. Prueba de nuevo." }, { status: 500 });
     }
   } else if (useBlockFormat) {
     if (!analysisJson?.sections?.length) {
-      return NextResponse.json({ error: "El agente devolvió bloques inválidos. Probá de nuevo." }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió bloques inválidos. Prueba de nuevo." }, { status: 500 });
     }
   } else {
     if (!analysisJson?.cards?.length) {
-      return NextResponse.json({ error: "El agente devolvió una respuesta inválida. Probá de nuevo." }, { status: 500 });
+      return NextResponse.json({ error: "El agente devolvió una respuesta inválida. Prueba de nuevo." }, { status: 500 });
     }
   }
 

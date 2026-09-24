@@ -9,6 +9,7 @@ import {
   SIN_HANDOFF_CON_MATERIAL,
   FASES_RESUELTAS_CON_MATERIAL,
   FASES_RESUELTAS_POR_INSTRUCCIONES,
+  EXCEPCION_DE_LA_FASE_A_REGENERAR,
   type ClasificacionDelDetalle,
   type EncabezadoDelDetalle,
 } from "./detalle-cronograma";
@@ -22,11 +23,19 @@ import { PIEZAS_CON_CONTEXTO_NOMBRADO, renderFuentes } from "./tipos";
  * la ruta, no reconstruido desde el módulo — si se copiara del módulo, el golden afirmaría
  * `x === x` y una regresión del template pasaría en verde). Cinco casos cruzan las cuatro
  * variables reales: con/sin desarrollo, con/sin handoff, con/sin brief, con/sin regen.
+ *
+ * ⚠ ACTUALIZADO (revisión adversarial, 2026-09-24), con esta razón: el template pasó de voseo a
+ * tuteo («Generá… marcá», «incluí», «marcalas… ubicalas», «Detallá… asigná… proponé… Usá»,
+ * «incluila», «Concentrá», «incluilas» → «Genera… marca», «incluye», «márcalas… ubícalas»,
+ * «Detalla… asigna… propón… Usa», «inclúyela», «Concentra», «inclúyelas»): el texto para el modelo
+ * va en tuteo y el módulo ya mezclaba los dos registros con los bloques nuevos. Qué pide no cambió
+ * ni una palabra. La transcripción de abajo se corrigió A MANO, frase por frase, y no se copió del
+ * módulo: sigue siendo una segunda escritura independiente, así que la guarda no afirma `x === x`.
  */
 
 /* ── EL TEMPLATE VIEJO, TRANSCRITO DE LA RUTA (pre-migración, 2026-08-08) ───── */
 const SIN_HANDOFF =
-  '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)';
+  '(Sin handoff confirmado. Genera las tareas típicas del tipo de cada fase y marca CADA una con "porValidar": true. Títulos limpios, sin marcadores.)';
 
 function viejoTemplate(i: {
   instruccionesDoc: string;
@@ -43,10 +52,10 @@ function viejoTemplate(i: {
   regeneratePhaseId?: string | null;
 }): string {
   const dbTaskRule = i.isReimpl && !i.hasMigration
-    ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluí una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
-    : `- BASE DE DATOS (#6): ${i.isReimpl ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluí en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
+    ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluye una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
+    : `- BASE DE DATOS (#6): ${i.isReimpl ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluye en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
   const techRule = i.hasTechnical
-    ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
+    ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) márcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubícalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
     : "";
   let userMessage = `${i.instruccionesDoc}Empresa: ${i.companyName}
 Industria: ${i.industry ?? "No especificada"}
@@ -60,12 +69,12 @@ ${i.desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (canvas Desarrollo — objetos
 === REGLAS SEGÚN LA CLASIFICACIÓN ===
 ${dbTaskRule}${techRule}
 
-Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada fase y propón las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usa los ids EXACTOS del input.`;
   if (i.instruccionesDoc) {
-    userMessage += `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+    userMessage += `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: inclúyela en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentra el detalle en las fases donde todavía hay trabajo por delante.`;
   }
   if (i.regeneratePhaseId) {
-    userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${i.regeneratePhaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
+    userMessage += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetalla ÚNICAMENTE las tareas de la fase id="${i.regeneratePhaseId}". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en la fase indicada.`;
   }
   return userMessage;
 }
@@ -132,6 +141,47 @@ describe("GOLDEN: el render del contexto nombrado es byte-idéntico al armado in
       expect(nuevoTemplate(insumos)).toBe(viejoTemplate(insumos));
     });
   }
+});
+
+describe("#14 · «Regenerar» una fase que el material da por resuelta: igual se detalla", () => {
+  /* Revisión adversarial (2026-09-24): con material (o instrucciones) va siempre la válvula de las
+     fases resueltas, y en la regeneración de UNA fase se sumaba después «detalla ÚNICAMENTE la fase X».
+     Si una reunión daba por cerrada X, el modelo recibía dos órdenes contrarias y devolvía
+     `tasks: []`: el CSE pagaba una corrida y veía «Sin tareas». La edición que la pone en rojo: sacar
+     la excepción del alcance, o emitirla sin la válvula (ruido sin material). */
+  const conMaterial = (regenerarFaseId: string | null, instrucciones = "") =>
+    renderDetalleDeCronograma({
+      instrucciones,
+      encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
+      fuentes: fuentesDelDetalle({
+        timelineCtx: "t",
+        handoffCtx: "h",
+        desarrolloCtx: "",
+        notasCtx: "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nLa capacitación ya se dio.",
+      }),
+      clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
+      regenerarFaseId,
+    });
+
+  it("con material y regenerando una fase, esa fase queda fuera de la válvula", () => {
+    const msg = conMaterial("f2");
+    expect(msg).toContain(FASES_RESUELTAS_CON_MATERIAL);
+    expect(msg.indexOf(EXCEPCION_DE_LA_FASE_A_REGENERAR)).toBeGreaterThan(msg.indexOf("=== ALCANCE: REGENERAR UNA SOLA FASE ==="));
+    expect(EXCEPCION_DE_LA_FASE_A_REGENERAR).toContain("detalla sus tareas aunque las instrucciones, una reunión o una nota la den por resuelta");
+  });
+
+  it("con solo instrucciones, también; sin regenerar una fase, o sin válvula, no va", () => {
+    const soloBrief = renderDetalleDeCronograma({
+      instrucciones: "=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\nx\n\n",
+      encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
+      fuentes: fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "" }),
+      clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
+      regenerarFaseId: "f2",
+    });
+    expect(soloBrief).toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
+    expect(conMaterial(null)).not.toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
+    // El golden «regen de una sola fase» (sin brief ni material) sigue sin la excepción: byte-idéntico.
+  });
 });
 
 describe("las piezas puras", () => {
@@ -302,10 +352,11 @@ describe("⭐ con material, el mensaje no se contradice con las reuniones", () =
     /* La edición que la pone en rojo: volver al fallback de siempre también con material. */
     const msg = conMaterial({ handoffCtx: "", reunionesCtx: REUNIONES });
     expect(msg).toContain(SIN_HANDOFF_CON_MATERIAL);
-    expect(msg, "con reuniones enfrente, seguía pidiendo marcar TODO por validar").not.toContain("marcá CADA una");
+    // (2026-09-24: el fallback de siempre pasó a tuteo, «marca CADA una»; la guarda pide lo mismo.)
+    expect(msg, "con reuniones enfrente, seguía pidiendo marcar TODO por validar").not.toContain("marca CADA una");
     expect(msg, "la marca de las típicas tiene que seguir existiendo").toContain('"porValidar": true');
     // Sin material rige el fallback de siempre (y el golden «sin handoff» lo fija byte a byte).
-    expect(conMaterial({ handoffCtx: "" })).toContain("marcá CADA una");
+    expect(conMaterial({ handoffCtx: "" })).toContain("marca CADA una");
     // Con handoff confirmado, ninguna variante del fallback aparece.
     expect(conMaterial({ reunionesCtx: REUNIONES })).not.toContain("Sin handoff confirmado");
   });

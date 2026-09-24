@@ -3234,3 +3234,35 @@ fabricarla.
 - **«Si eliges menos…» solo cuando las reuniones compiten por el espacio** (`porFaltaDeEspacio` del
   informe). Una agendada o una vacía no le quitan espacio a nadie, y la que corta el techo por reunión
   entra igual de cortada aunque quede sola.
+
+## Contexto del cronograma — lo que dejó la revisión adversarial (2026-09-24)
+
+> Cinco commits (8f305d53, 2acde895, a04346f9, e6fbf553 y el de los textos). Lo que cambia para el
+> negocio, en el orden en que lo nota el CSE.
+
+- **La propuesta de fases de las reuniones guarda QUÉ cambia, no una foto.** Lo que el CSE edita
+  mientras la propuesta espera (una nota, un nombre, otra duración, el orden) ya no vuelve como
+  «sugerencia» de revertirlo; el paso 1 espera el autoguardado en vuelo antes de leer la base.
+- **El handoff no pisa la propuesta de las reuniones**: lo elegido por el CSE pesa más. Quien
+  regenera el handoff lo ve en el aviso de siempre y vuelve a generarlo cuando se decida. Aplicar o
+  descartar exige que la propuesta guardada sea la que el CSE tiene enfrente (409 si es otra).
+- **Con cambios de fases sin decidir, ningún otro cambio con IA se aplica** (el chat, «IA» de una
+  fase, el acuerdo viejo del chat), y el chat lo sabe antes de armar la lista. Un 409 del paso 1 ya
+  no corre el detalle pago: trae la propuesta pendiente y espera.
+- **Las «Instrucciones adicionales» solas también disparan la revisión de fases** (son la fuente de
+  más peso): una llamada corta más en «Regenerar todo» para esos proyectos.
+- **Desarrollo y Web no tienen Semana 0**: su primera fase se revisa como cualquier otra. Todo lo
+  ACORDADO que el armador no puede proponer (lo intocable, acortar trabajo empezado, un renombre que
+  no entra) queda como observación, y se ve aunque el paso 2 falle.
+- **Un plazo total se compara contra el cierre ACTUAL**: el fijado a mano si lo hay (el que ve el
+  CSE), u hoy si el planificado ya pasó con fases sin terminar. Un plazo contado desde hoy («nos
+  quedan 6 semanas») se pasa a semanas del proyecto sumándole la de hoy.
+- **Una nota vale por la fecha de sus HECHOS** (la que diga su título o su texto; la de carga solo si
+  no dice ninguna), y al pasar el tope ganan espacio las notas más nuevas: las viejas que no entran
+  se nombran. Guardar la fecha de los hechos por nota sería un cambio de esquema: no se hizo.
+- **Sin buscar, el calendario no ofrece reuniones sin dueño** (se ofrecen solo buscando, como decidió
+  MIN_BUSQUEDA_SIN_DUENIO): «Agregar y asignar» es una escritura durable que la X no revierte.
+- **Regenerar UNA fase que una reunión da por resuelta igual la detalla**: pedirla manda.
+- **Todo el texto para el modelo del cronograma va en tuteo** (el encabezado de las instrucciones y el
+  mensaje del detalle estaban en voseo), y la guarda de tuteo caza el voseo por su forma, no por una
+  lista cerrada.

@@ -60,9 +60,12 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     expect(msg).toContain("CENTINELA-NOTA");
   });
 
-  it("sin material, el mensaje es IDÉNTICO al de antes (ni un carácter)", () => {
-    /* El golden de 5 casos de detalle-cronograma.test.ts lo afirma contra el template viejo; esto
-       afirma que las fuentes nuevas vacías no suman nada, ni siquiera con espacios. */
+  it("sin material, las fuentes vacías no suman ni un carácter (material vacío == material ausente)", () => {
+    /* ⚠ Título corregido (revisión adversarial, 2026-09-24), con esta razón: decía «el mensaje es
+       IDÉNTICO al de antes», y lo que compara es material VACÍO contra material AUSENTE, no contra el
+       mensaje de antes de la feature (que sí cambió para todos: ver el docblock de
+       `cargarMaterialDelCronograma`). La aserción no cambia. El golden de 5 casos de
+       detalle-cronograma.test.ts fija el template contra una transcripción independiente. */
     expect(renderDetalleDeCronograma(insumos("", "  "))).toBe(renderDetalleDeCronograma(insumos()));
   });
 
@@ -494,17 +497,46 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "components/clients/ProjectContextSection.tsx",
     "components/clients/SessionSelectionReview.tsx",
     "components/projects/TimelineProposalPendiente.tsx",
+    /* Y los textos del cronograma que se arman en lib/ (revisión adversarial, 2026-09-24): el panel
+       «Qué hacer acá» («vos y el cliente miran…», «si no se lo reclamás»), el mensaje del detalle
+       («Detallá… asigná…») y el encabezado de las instrucciones que leen los agentes («cumplilas»). */
+    "lib/timeline/project-actions.ts",
+    "lib/contexto/detalle-cronograma.ts",
+    "lib/business-cases/section-briefs.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
-     entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». */
+     entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión
+     adversarial (2026-09-24) encontró en las versiones base de estos mismos componentes y la lista no
+     tenía. Las formas con pronombre pegado («generala», «decime») no llevan tilde: solo las caza esta
+     lista. */
   const VOSEO = [
     "vos", "tenés", "podés", "Podés", "querés", "sabés", "sos",
     "Revisá", "revisá", "confirmá", "resolvé", "Tildá", "tildá", "Registrá", "marcá", "Generá",
     "Indicá", "Igualá", "arrastrá", "Guardá", "Agregá", "agregá", "excluí", "entrá", "Conversá",
     "activá", "Elegí", "elegí", "Pegá", "pegá", "Escribí", "Recargá", "recargá", "Copiá",
     "generala", "revisalo", "unificalas", "Ponele", "convertila", "decime", "fijate", "Fijate",
+    "editá", "editás", "revisás", "confirmás", "sacá", "volvé", "probá", "Probá", "aceptás", "descartás",
+    "Aceptá", "aceptá", "descartá", "Marcá", "dejás", "Describí", "atrasá", "podá", "Buscá", "buscá",
+    "cumplilas", "incluila", "incluilas", "marcalas", "ubicalas", "crealo",
   ];
   const palabra = (v: string) => new RegExp(`(?<!\\p{L})${v}(?!\\p{L})`, "u");
+
+  /* ⭐ LA LISTA SOLA ES CERRADA (revisión adversarial, 2026-09-24): «Aceptá o descartá cada cambio»
+     pasaba en verde porque ninguna de las dos estaba en la lista. El voseo tiene una FORMA: el
+     imperativo termina en vocal con tilde («Aceptá», «volvé», «Describí») y el presente en -ás, -és,
+     -ís («revisás», «tenés»). Toda palabra así en el código de estos componentes tiene que estar en
+     esta lista de palabras de TUTEO. Si una palabra nueva es tuteo de verdad (un futuro como
+     «mostrará», un adverbio), se suma acá, a propósito; si es voseo, se corrige el texto. */
+  const AGUDAS_DE_TUTEO = new Set([
+    "acá", "ahí", "allá", "allí", "aquí", "así", "sí", "más", "además", "atrás", "detrás", "jamás",
+    "demás", "después", "través", "qué", "está", "estás", "país",
+    "será", "serás", "verá", "verás", "estará", "podrá", "podrás", "tendrá", "tendrás", "habrá",
+    "hará", "harás", "dirá", "quedará", "aplicará", "mostrará", "cambiará", "pasará",
+    "llegará", "seguirá", "volverá", "sabrá", "deberá", "moverá", "correrá", "aparecerá",
+  ]);
+  const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
+  const agudasQueNoSonTuteo = (linea: string) =>
+    [...linea.matchAll(AGUDA)].map((m) => m[0]).filter((w) => !AGUDAS_DE_TUTEO.has(w.toLowerCase()));
 
   it("ninguna forma de voseo en el código de estos componentes", () => {
     const hallados: string[] = [];
@@ -512,17 +544,41 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
       const lineas = sinComentarios(leer(rel)).split(/\r?\n/);
       lineas.forEach((l, i) => {
         for (const v of VOSEO) if (palabra(v).test(l)) hallados.push(`${rel}:${i + 1} «${v}»`);
+        for (const w of agudasQueNoSonTuteo(l)) hallados.push(`${rel}:${i + 1} «${w}» (¿voseo? si es tuteo, súmala a AGUDAS_DE_TUTEO)`);
       });
     }
     expect(hallados, "volvió el voseo a una pantalla del cronograma").toEqual([]);
   });
 
+  it("#24 · los errores del detalle que la pantalla muestra tal cual (analyze) van en tuteo", () => {
+    /* La pantalla muestra `data?.message ?? data?.error` del paso 2 de «Regenerar todo». La ruta tiene
+       3.300 líneas y otros agentes con su propio texto, así que se miran los tramos del detalle. La
+       edición que la pone en rojo: volver a «Probá de nuevo» o «Generá… crealo». */
+    const analyze = leer("app/api/clients/[id]/analyze/route.ts");
+    const validacion = analyze.slice(analyze.indexOf("if (isFlowchart) {"), analyze.indexOf("if (isFlowchart) {") + 1800);
+    expect(validacion).toContain("El agente devolvió un detalle de cronograma inválido. Prueba de nuevo.");
+    expect(validacion, "volvió el voseo a los errores del paso 2").not.toContain("Probá de nuevo");
+    expect(analyze).toContain("Genera primero el esqueleto (handoff) o créalo a mano en el canvas Cronograma.");
+  });
+
   it("y el detector caza lo que tiene que cazar (si no, la guarda de arriba es decorativa)", () => {
-    for (const texto of ["Conversá el cambio", "— vos tenés fijado", "Ponele semanas", "entrá y generala"]) {
-      expect(VOSEO.some((v) => palabra(v).test(texto)), texto).toBe(true);
+    const caza = (texto: string) => VOSEO.some((v) => palabra(v).test(texto)) || agudasQueNoSonTuteo(texto).length > 0;
+    for (const texto of [
+      "Conversá el cambio", "— vos tenés fijado", "Ponele semanas", "entrá y generala",
+      // Las de la revisión adversarial: ninguna estaba en la lista.
+      "Paso 1 de 2 · Aceptá o descartá cada cambio", "Si editás la fase", "revisás el Gantt", "confirmás el avance",
+      "sacá la reunión", "volvé a intentar", "Probá de nuevo", "lo aceptás", "lo descartás", "Marcá la tarea",
+      "si la dejás", "Describí el cambio", "atrasá la fase", "podá el contexto", "Buscá la reunión",
+      // Y otras que ninguna lista nombró: las caza la forma.
+      "Cerrá el panel", "Mové la fase", "Pedí el cambio", "Subí la nota",
+    ]) {
+      expect(caza(texto), texto).toBe(true);
     }
-    for (const texto of ["Conversa el cambio", "el voseo", "Revisa el Gantt", "tú tienes fijado", "Ponle semanas"]) {
-      expect(VOSEO.some((v) => palabra(v).test(texto)), texto).toBe(false);
+    for (const texto of [
+      "Conversa el cambio", "el voseo", "Revisa el Gantt", "tú tienes fijado", "Ponle semanas",
+      "Acepta o descarta cada cambio", "Después se aplicará", "¿Qué más está pendiente?", "Así quedará", "acá y allá",
+    ]) {
+      expect(caza(texto), texto).toBe(false);
     }
   });
 });

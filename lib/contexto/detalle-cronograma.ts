@@ -12,6 +12,8 @@
  * viejo de la ruta y afirma igualdad exacta — mover el armado acá NO puede cambiar ni un
  * carácter de lo que el agente ve. Cualquier mejora al prompt es un cambio aparte, visible
  * en el diff de ESTE archivo (que es todo el punto: antes era invisible dentro del route).
+ * La primera mejora así (revisión adversarial, 2026-09-24): el texto pasó de voseo a tuteo, sin
+ * cambiar qué pide; el golden la transcribe igual, con la razón escrita.
  *
  * ── POR QUÉ LAS FUENTES LLEVAN EL RÓTULO ADENTRO ─────────────────────────────
  * La lección de la Tanda H (el deal del vecino, el spread pisado): la procedencia que viaja
@@ -21,10 +23,11 @@
 import { esReimplementacion } from "@/lib/tags/catalog";
 import type { FuenteDeContexto } from "./tipos";
 
-/* El fallback cuando no hay handoff confirmado — misma string que tenía la ruta. ⚠ Congelado por
-   el golden: sin material el mensaje no cambia ni un carácter (por eso sigue en voseo). */
+/* El fallback cuando no hay handoff confirmado. En tuteo desde la revisión adversarial del
+   2026-09-24 (decía «Generá… marcá»): el texto para el modelo va en tuteo, y el golden de abajo
+   fija la versión nueva con la razón escrita. */
 const SIN_HANDOFF_CONFIRMADO =
-  '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)';
+  '(Sin handoff confirmado. Genera las tareas típicas del tipo de cada fase y marca CADA una con "porValidar": true. Títulos limpios, sin marcadores.)';
 
 /**
  * El fallback SIN handoff pero CON material (reuniones elegidas o notas del CSE). El de arriba le
@@ -37,11 +40,11 @@ export const SIN_HANDOFF_CON_MATERIAL =
   '(Sin handoff confirmado. Arma las tareas con las reuniones y las notas del CSE que vienen más abajo; solo donde no digan nada, propón las tareas típicas del tipo de fase y marca ESAS con "porValidar": true. Títulos limpios, sin marcadores.)';
 
 /**
- * La válvula de «fase ya resuelta» cuando solo hay instrucciones del CSE. ⚠ Byte a byte el texto que
- * tenía la ruta (lo fija el golden «con brief»): por eso sigue en voseo.
+ * La válvula de «fase ya resuelta» cuando solo hay instrucciones del CSE. El texto que tenía la ruta
+ * (lo fija el golden «con brief»), en tuteo desde la revisión adversarial del 2026-09-24.
  */
 export const FASES_RESUELTAS_POR_INSTRUCCIONES =
-  `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+  `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: inclúyela en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentra el detalle en las fases donde todavía hay trabajo por delante.`;
 
 /**
  * La MISMA válvula cuando hay material (validación 2026-09-23): una reunión elegida o una nota del
@@ -51,6 +54,13 @@ export const FASES_RESUELTAS_POR_INSTRUCCIONES =
  */
 export const FASES_RESUELTAS_CON_MATERIAL =
   `\n\n=== FASES QUE YA ESTÁN RESUELTAS ===\nSi las instrucciones del CSE, una reunión elegida o una nota del CSE dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: inclúyela en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentra el detalle en las fases donde todavía hay trabajo por delante.`;
+
+/**
+ * Cuando el CSE regenera UNA fase y va la válvula de las fases resueltas: esa fase no entra en la
+ * válvula (ver `renderDetalleDeCronograma`).
+ */
+export const EXCEPCION_DE_LA_FASE_A_REGENERAR =
+  " Esta fase la pidió regenerar el CSE: detalla sus tareas aunque las instrucciones, una reunión o una nota la den por resuelta (la regla de las fases resueltas no vale para ella). Lo que ya se hizo va como tarea, igual que lo que falta.";
 
 /** Las fuentes del «Contexto del cronograma» que cuentan como MATERIAL (el calendario no: solo ubica). */
 const FUENTES_DE_MATERIAL = ["reuniones-del-cronograma", "notas-del-cronograma"] as const;
@@ -93,10 +103,10 @@ export function clasificacionDeTags(tagSlugs: readonly string[]): ClasificacionD
  */
 export function reglasDeClasificacion(c: ClasificacionDelDetalle): string {
   const dbTaskRule = c.esReimplementacion && !c.llevaMigracion
-    ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluí una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
-    : `- BASE DE DATOS (#6): ${c.esReimplementacion ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluí en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
+    ? `- BASE DE DATOS (#6): es una RE-IMPLEMENTACIÓN sobre un HubSpot que el cliente YA usa, SIN migración desde otro CRM. NO incluyas una tarea de "cargar/crear la base de datos"; en su lugar, en la primera fase, incluye una tarea de REVISIÓN DE ESTRUCTURA Y LIMPIEZA de la base existente (propiedades, duplicados, datos sucios).`
+    : `- BASE DE DATOS (#6): ${c.esReimplementacion ? "es una re-implementación pero CON migración desde otro CRM" : "es una implementación desde cero"}, así que SÍ incluye en la primera fase una tarea de CARGAR/ESTRUCTURAR LA BASE DE DATOS (importar y modelar los datos en HubSpot).`;
   const techRule = c.llevaDesarrollo
-    ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) marcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubicalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
+    ? `\n- DESARROLLO/INTEGRACIÓN (#7): el proyecto lleva desarrollo a medida o Insider One. Las tareas técnicas (integraciones, desarrollo, APIs) márcalas con responsable "DEV" y, si existe una fase de "Desarrollo / Integración", ubícalas SOLO ahí (no las mezcles con las tareas funcionales de otras fases).`
     : "";
   return `${dbTaskRule}${techRule}`;
 }
@@ -202,7 +212,7 @@ ${requerimiento ? `\n${requerimiento}\n` : ""}${delContexto}
 === REGLAS SEGÚN LA CLASIFICACIÓN ===
 ${reglasDeClasificacion(i.clasificacion)}
 
-Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a cada fase y proponé las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usá los ids EXACTOS del input.`;
+Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada fase y propón las tareas por semana (weekIndex relativo a la fase, < durationWeeks). Usa los ids EXACTOS del input.`;
 
   /* Con instrucciones del CSE puede haber fases YA resueltas en la vida real, fuera del orden
      que supuso el plan. Sin esto el agente les re-proponía sus tareas estándar: visto en Wherex
@@ -222,7 +232,13 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
   // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
   // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
   if (i.regenerarFaseId) {
-    msg += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetallá ÚNICAMENTE las tareas de la fase id="${i.regenerarFaseId}". Para TODAS las demás fases del input, incluilas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentrá todo el detalle en la fase indicada.`;
+    msg += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetalla ÚNICAMENTE las tareas de la fase id="${i.regenerarFaseId}". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en la fase indicada.`;
+    /* ⛔ La regla de las fases resueltas NO vale para la fase que el CSE pidió regenerar (revisión
+       adversarial, 2026-09-24). Con material o instrucciones va siempre la válvula de arriba, y si una
+       reunión daba por cerrada ESTA fase, el modelo recibía dos órdenes contrarias: devolvía
+       `tasks: []` y el CSE pagaba una corrida para ver «Sin tareas». Pedirla es lo más reciente que
+       dijo el CSE, y lo que pide el CSE manda. */
+    if (hayMaterial || i.instrucciones) msg += EXCEPCION_DE_LA_FASE_A_REGENERAR;
   }
   return msg;
 }

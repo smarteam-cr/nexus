@@ -39,8 +39,12 @@ describe("buildProgressUserMessage", () => {
   it("con brief: una sola línea en blanco entre el bloque y Empresa (no dos)", () => {
     const bloque = bloqueDeInstruccionesDeDoc("Las fases de QA van al final");
     const msg = buildProgressUserMessage({ ...base, instrucciones: bloque });
+    /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el encabezado de las
+       instrucciones decía «cumplilas» (voseo) y pasó a «cúmplelas»: es lo primero que leen los agentes
+       del cronograma cuando hay instrucciones, y el texto para el modelo va en tuteo. La guarda sigue
+       pidiendo lo mismo: una sola línea en blanco entre el bloque y Empresa. */
     expect(msg).toBe(
-      `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cumplilas SIEMPRE) ===\n` +
+      `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\n` +
         `Las fases de QA van al final\n\n` +
         `Empresa: Acme\n\n` +
         `=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===\n` +

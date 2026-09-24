@@ -276,8 +276,13 @@ export interface MaterialDelCronograma {
  * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE decide uno por uno) y el chat
  * del cronograma (`cargarMaterialParaElChat`, con su propio espacio: decisión de Elías del
  * 2026-09-23). ⚠ NO lo lee el agente de handoff —que arma y re-propone las fases—. Devuelve `""`
- * en lo que no haya: los armadores omiten la
- * fuente vacía y el prompt de un proyecto sin material queda byte-idéntico al de antes.
+ * en lo que no haya, y los armadores omiten la fuente vacía: sin material, sus BLOQUES no suman ni un
+ * carácter. ⚠ Pero el prompt de un proyecto sin material NO quedó idéntico al de antes de esta
+ * feature (revisión adversarial, 2026-09-24): desde 2c2a439c la regla de frontera de «Pedir cambio
+ * con IA» (`REGLA_DE_FRONTERA_DEL_ASSIST`) cambió para todos —no deja fechas, plazos ni nombres de
+ * personas en títulos, notas y nombres de fase, ni que el texto diga de dónde salió—, el system del
+ * detalle perdió PRIORIDAD DEL CANVAS, y el 2026-09-24 el encabezado de las instrucciones y el mensaje
+ * del detalle pasaron a tuteo. Un cambio de conducta en un proyecto sin material se busca ahí.
  *
  * ── QUÉ SE LEE (lector propio, validación del 2026-09-23) ────────────────────
  * Ya no se usa el lector del handoff (`fetchTranscriptContent`): traía el transcript ENTERO de cada

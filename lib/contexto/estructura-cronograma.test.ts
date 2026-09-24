@@ -252,7 +252,8 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
 describe("G6 · el mensaje: lo suyo, y nada del detalle", () => {
   const REUNIONES = "=== REUNIONES QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA (material INTERNO) ===\nCENTINELA-REUNION";
   const NOTAS = "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nCENTINELA-NOTA";
-  const INSTRUCCIONES = "=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cumplilas SIEMPRE) ===\nSolo marketing.\n\n";
+  /* (2026-09-24: «cúmplelas», en tuteo; decía «cumplilas». Es lo primero que lee el revisor.) */
+  const INSTRUCCIONES = "=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\nSolo marketing.\n\n";
   const fuentes = fuentesDeEstructura({
     calendarioCtx: calendarioDeEstructura(FOTO, AHORA),
     handoffCtx: "HANDOFF-CENTINELA",
@@ -276,6 +277,8 @@ describe("G6 · el mensaje: lo suyo, y nada del detalle", () => {
        choca con lo que este paso hace) o su respaldo sin handoff. */
     expect(msg).not.toContain("CRONOGRAMA A DETALLAR");
     expect(msg).not.toContain("no cambies nombres, duraciones ni orden");
+    // (2026-09-24: el respaldo del detalle pasó a tuteo; la guarda sigue pidiendo que no entre acá.)
+    expect(msg).not.toContain("Genera las tareas típicas");
     expect(msg).not.toContain("Generá las tareas típicas");
   });
 
@@ -322,6 +325,8 @@ describe("⭐ el cargador: primero el material, el handoff recién después", ()
     expect(tieneMaterialDelCronograma(c.fuentes), "no hay reuniones ni notas").toBe(false);
     expect(hayQueRevisarLasFases(c), "las instrucciones solas no disparan la revisión").toBe(true);
     expect(c.instrucciones).toContain("Solo marketing.");
+    // #15 / #25: lo PRIMERO que lee el revisor va en tuteo (decía «cumplilas»).
+    expect(c.instrucciones.startsWith("=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===")).toBe(true);
     expect(c.fuentes.map((f) => f.key)).toEqual(["calendario-del-cronograma", "handoff-curado"]);
     expect(hayQueRevisarLasFases({ fuentes: [], instrucciones: "  " })).toBe(false);
     // La pantalla cuenta lo mismo para el cartel del paso 1.

@@ -111,8 +111,8 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
         ? `Hay avance detectado sin confirmar desde hace ${plural(dias, "día", "días")}`
         : "Hay avance detectado que no confirmaste",
       why: vencido
-        ? "Lleva más de una semana esperando. Vos y el cliente miran un avance más viejo que el real, y el vigilante de CS razona sobre ese avance viejo."
-        : "Hasta que lo confirmes, vos y el cliente miran un avance más viejo que el real.",
+        ? "Lleva más de una semana esperando. Tú y el cliente miran un avance más viejo que el real, y el vigilante de CS razona sobre ese avance viejo."
+        : "Hasta que lo confirmes, tú y el cliente miran un avance más viejo que el real.",
       cta: "Revisar avance",
     });
   }
@@ -208,7 +208,7 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     out.push({
       id: "blockers-cliente", group: "atender", tone: "risk",
       title: `${plural(i.pendientesDelClienteVencidos, "entrega del cliente está vencida", "entregas del cliente están vencidas")}`,
-      why: "Es lo que frena el avance, y el cliente ya lo ve vencido. Si no se lo reclamás, el atraso queda a tu nombre.",
+      why: "Es lo que frena el avance, y el cliente ya lo ve vencido. Si no se lo reclamas, el atraso queda a tu nombre.",
       cta: "Ver las entregas",
     });
   }
