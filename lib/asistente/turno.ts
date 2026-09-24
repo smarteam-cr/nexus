@@ -447,14 +447,17 @@ preguntan.
 ⛔ Si el bloque no está, o la reunión que nombran no aparece ahí, NO la tienes: dilo en una línea y
 di que se elige en «Contexto del cronograma». Nunca completes de memoria lo que una reunión
 «seguramente» dijo.
+⚠ Si el bloque dice que NO SE PUDO LEER, el CSE quizá ya eligió todo: di que no pudiste leerlo en este
+turno y que lo intente de nuevo. No le pidas que elija lo que tal vez ya eligió.
 ⚠ Si un pedido contradice las instrucciones adicionales, dilo en UNA línea y haz lo que te pidieron:
 en esta conversación manda el CSE.
 ⚠ Un título que sale del material (nadie te lo dictó) se escribe como TAREA para el cliente, nunca
 como cita.
 Si te piden rehacer todas las tareas, o revisar las fases y sus tiempos desde las reuniones y las
-notas, recomienda el botón que el contexto nombra en «PARA REHACER TODO»: lee el material con más
-espacio, primero propone los cambios de fases y tiempos (el CSE acepta o descarta cada uno) y
-después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.`;
+notas, di lo que dice la línea «PARA REHACER TODO» del contexto: el botón que el CSE ve hoy, con su
+condición, o que hoy no hay ninguno. Ese botón lee el material con más espacio, primero propone los
+cambios de fases y tiempos (el CSE acepta o descarta cada uno) y después arma las tareas. Los pedidos
+puntuales los sigues atendiendo tú.`;
 
 /**
  * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento
@@ -958,7 +961,7 @@ export async function correrTurno(
       : { roleId: hilo.roleId ?? "" };
   const ctx = await contextoDeLaPieza(dueno, hilo.pieza);
   /* La huella cubre TODO lo que el modelo leyó: si el CSE cambió lo elegido entre dos turnos, la
-     auditoría del hilo lo ve. Sin material queda igual que antes. */
+     auditoría del hilo lo ve. Sin material, es la huella del contexto solo. */
   const sha = huellaDeContexto(ctx.material?.texto ? `${ctx.texto}\n${ctx.material.texto}` : ctx.texto);
 
   /**
@@ -1044,7 +1047,17 @@ export async function correrTurno(
     const linea = i >= 0 ? lineasCrudas[i] : null;
     return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
   });
-  const lineasVivas = describir(libro.vivas);
+  /**
+   * ⭐ UN SOLO TRADUCTOR PARA LOS DOS LECTORES (acuerdo-vivo.ts, `bloqueDePendientes`): la cajita
+   * azul del CSE y el bloque de pendientes del modelo leen LAS MISMAS líneas, con el «⚠ revisa…» de
+   * la frontera incluido. Antes el bloque de pendientes se armaba con `describir` a secas: si el CSE
+   * pedía «arregla la que dice revisa», el modelo no veía esa marca (revisión del paso C,
+   * 2026-09-24). Sin material (sin huellas) las líneas salen tal cual.
+   */
+  const huellas = esCronograma && ctx.material?.interno.length ? huellasDeFrontera(ctx.material.interno) : null;
+  const lineasParaLosDosLectores = (ops: readonly unknown[]) =>
+    esCronograma ? lineasConFrontera(describir(ops), ops as Operacion[], huellas) : describir(ops);
+  const lineasVivas = lineasParaLosDosLectores(libro.vivas);
 
   /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
 
@@ -1099,7 +1112,10 @@ export async function correrTurno(
                   lejos de los ~700 del 2026-08-19 que no llegaban al mínimo cacheable. Es igual
                   para TODOS los hilos de la pieza, así que se lee de la caché entre proyectos;
                2. el MATERIAL del cronograma — cambia solo cuando el CSE toca lo elegido. Va
-                  condicional: sin material, el pedido es el de antes con un breakpoint más;
+                  condicional: sin material (y sin error de lectura) el bloque no existe. ⚠ Eso NO
+                  deja el pedido como antes del 2026-09-23: en todo chat del cronograma el prompt
+                  suma el bloque de las reuniones y las notas, y el contexto la línea «PARA REHACER
+                  TODO» y el encabezado nuevo de las reglas duras;
                3. el CONTEXTO — cambia con cada apply. Aplicar no vuelve a cobrar lo de arriba.
              Son 3 de los 4 que permite la API, todos de 5 minutos. ⚠ Y el pedido es idéntico entre
              el primer intento y el reintento: la segunda llamada lee todo de la caché a 0,1×. */
@@ -1466,12 +1482,9 @@ export async function correrTurno(
            chat lee las reuniones y las notas elegidas, un título o un nombre de fase puede repetir
            una frase del material, o traer un monto, una fecha o un correo: esa línea termina en
            «⚠ revisa…». Mismo detector que los previews del detalle; sin material no marca nada.
-           Una línea por operación, siempre: si no, `leerAcuerdo` las descarta. */
-        lineas: lineasConFrontera(
-          describirOperaciones(paraTraducir, fusion.operaciones),
-          fusion.operaciones,
-          ctx.material?.interno.length ? huellasDeFrontera(ctx.material.interno) : null,
-        ),
+           Una línea por operación, siempre: si no, `leerAcuerdo` las descarta. Y es el MISMO
+           traductor que arma el bloque de pendientes del modelo (`lineasParaLosDosLectores`). */
+        lineas: lineasParaLosDosLectores(fusion.operaciones),
         /* La cascada viaja en el acuerdo desde el 2026-08-22: la pantalla dejó de importarla del
            cronograma para poder servir a los dos carriles sin una rama por pieza. */
         dependencias: (() => {

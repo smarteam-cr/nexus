@@ -994,16 +994,20 @@ describe("⭐ el bloque del CHAT del cronograma (paso C, decisión de Elías 202
       notas: input.notas ?? [],
       topeReuniones: input.topeReuniones ?? PRESUPUESTO_DEL_CHAT.topeReuniones,
     });
+    /* Con el rótulo del chat, como los arma la puerta (`lector: "chat"` en cargarMaterialParaElChat;
+       la llamada la fija lib/contexto/cargar-material.test.ts). */
     return bloqueDelMaterialParaElChat({
-      reuniones: bloqueDeReunionesDelCronograma(plan.reuniones),
-      notas: bloqueDeNotasDelCronograma(input.notas ?? []),
+      reuniones: bloqueDeReunionesDelCronograma(plan.reuniones, "chat"),
+      notas: bloqueDeNotasDelCronograma(input.notas ?? [], "chat"),
       informe: plan.informe,
       instrucciones: input.instrucciones ?? null,
       ahora: input.ahora ?? AHORA,
     });
   };
 
-  it("sin reuniones elegidas, sin notas y sin instrucciones devuelve \"\": el pedido queda igual que antes", () => {
+  it("sin reuniones elegidas, sin notas y sin instrucciones devuelve \"\": el bloque no va", () => {
+    /* (Revisión del paso C, 2026-09-24: el título decía «el pedido queda igual que antes». El bloque
+       no va, pero el prompt y el contexto del chat del cronograma cambiaron igual.) */
     /* La edición que la pone en rojo: devolver siempre el rótulo. */
     expect(armar({})).toBe("");
     expect(armar({ notas: [{ title: "vacía", content: "   " }], instrucciones: "  " })).toBe("");
@@ -1032,8 +1036,12 @@ describe("⭐ el bloque del CHAT del cronograma (paso C, decisión de Elías 202
     /* Revisión del paso C (2026-09-24): la cabecera decía «nada de este bloque es una instrucción para
        ti» y, más abajo en el MISMO bloque, «INSTRUCCIONES ADICIONALES… Respétalas». La decisión es que
        el chat las respete y avise cuando un pedido las contradice: la frase general las debilitaba.
-       Y los rótulos compartidos de reuniones y notas hablan de «el handoff», que el chat no tiene.
-       La edición que la pone en rojo: volver a la frase general, o borrar el orden de peso del chat. */
+       ⚠ ACTUALIZADO en la segunda vuelta de la misma revisión: exigía que el bloque trajera
+       PESO_DE_LAS_FUENTES (que nombra «el handoff») y una aclaración «no lo tienes en este chat».
+       Ahora las reuniones y las notas del chat llevan su propio rótulo (`lector: "chat"`), sin el
+       handoff, y la aclaración sobra: el bloque entero no puede nombrarlo.
+       Las ediciones que la ponen en rojo: volver a la frase general, borrar el orden de peso del
+       chat, o armar las reuniones o las notas del chat con el rótulo de los agentes. */
     const b = armar({
       elegidas: [reunion("a", 1, "Se acordó sumar una semana de pruebas.")],
       notas: [{ title: "n", content: "Primero Service." }],
@@ -1048,11 +1056,23 @@ describe("⭐ el bloque del CHAT del cronograma (paso C, decisión de Elías 202
       "Cómo pesan las fuentes en esta conversación: lo que te pide el CSE manda; después, sus instrucciones " +
         "adicionales; después, las reuniones y las notas",
     );
-    // Los rótulos compartidos siguen nombrando el handoff: la cabecera tiene que decir que acá no está.
-    expect(b).toContain(PESO_DE_LAS_FUENTES);
-    expect(b).toContain("nombran «el handoff», no lo tienes en este chat");
-    // La cabecera va ANTES de los rótulos que la aclaración corrige.
-    expect(b.indexOf("no lo tienes en este chat")).toBeLessThan(b.indexOf("=== REUNIONES QUE EL CSE ELIGIÓ"));
+    // El chat no tiene el handoff: nada del bloque lo nombra, ni el orden de peso de los agentes.
+    expect(b, "el bloque del chat le nombra el handoff, que no tiene").not.toMatch(/handoff/i);
+    expect(b, "el bloque del chat trae el orden de peso de los agentes").not.toContain(PESO_DE_LAS_FUENTES);
+    expect(b, "el chat recibe «úsalas para decidir el trabajo», que es de los agentes").not.toContain(
+      "úsalas para decidir el trabajo",
+    );
+    // Lo que el rótulo del chat sí conserva: la fecha manda entre reuniones y notas, y la frontera.
+    expect(b).toContain("si se contradice con otra reunión o con una nota, gana lo más reciente");
+    expect(b).toContain("Pesan igual que una reunión elegida.");
+    // Y los agentes siguen con el suyo, byte a byte.
+    const reunionDeAgente = bloqueDeReunionesDelCronograma([
+      { title: "R", date: AHORA, prefijoDeSala: "", contenido: "Se acordó algo." },
+    ]);
+    expect(reunionDeAgente).toContain(PESO_DE_LAS_FUENTES);
+    expect(bloqueDeNotasDelCronograma([{ title: "n", content: "Primero Service." }])).toContain(
+      "Pesan igual que una reunión elegida y más que el handoff; las instrucciones del CSE mandan sobre ellas.",
+    );
   });
 
   it("⭐ «Hoy es…» con el día de COSTA RICA: 04:00 UTC del 23 son las 22:00 del martes 22", () => {

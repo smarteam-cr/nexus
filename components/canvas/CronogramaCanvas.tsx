@@ -3081,7 +3081,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </div>
           )}
           <p className="text-[11px] text-fg-muted">
-            Los estados de las tareas existentes se conservan al aplicar. Revisá el Gantt de abajo: es la propuesta.
+            Los estados de las tareas existentes se conservan al aplicar. Revisa el Gantt de abajo: es la propuesta.
           </p>
           </div>
         </div>
@@ -3105,7 +3105,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         open={draftsOpen && (showProgressBanner || showParticBanner)}
         onClose={() => setDraftsOpen(false)}
         title="Lo que detectó el agente"
-        description="Nada de esto se aplicó todavía: revisá y confirmá."
+        description="Nada de esto se aplicó todavía: revisa y confirma."
         size="xxl"
       >
       {/* Sin `id`: el ancla `cronograma-borradores` se borró de la tabla de destinos junto con el
@@ -3119,7 +3119,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-fg">Avance detectado</p>
-                <p className="text-xs text-fg-muted mt-0.5">Revisá lo que propone el agente y confirmá antes de aplicar</p>
+                <p className="text-xs text-fg-muted mt-0.5">Revisa lo que propone el agente y confirma antes de aplicar</p>
               </div>
               <div className="ml-auto flex items-center gap-2 flex-shrink-0">
                 <button
@@ -3173,7 +3173,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                     ) : (
                       <span className="inline-flex items-center gap-1 text-2xs font-medium text-amber-300">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
-                        resolvé {pendingCount} {pendingCount === 1 ? "tarea" : "tareas"} para cerrarla
+                        resuelve {pendingCount} {pendingCount === 1 ? "tarea" : "tareas"} para cerrarla
                       </span>
                     ))}
                   </div>
@@ -3236,7 +3236,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-fg">Particularidades detectadas</p>
-                <p className="text-xs text-fg-muted mt-0.5">Tildá cuáles registrar y cuáles verá el cliente</p>
+                <p className="text-xs text-fg-muted mt-0.5">Marca cuáles registrar y cuáles verá el cliente</p>
               </div>
               <div className="ml-auto flex items-center gap-2 flex-shrink-0">
                 <button
@@ -3307,7 +3307,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             </div>
 
             <p className="text-xs text-fg-muted pt-3 border-t border-line leading-relaxed">
-              El agente las infirió de las sesiones. Registrá solo las reales; marcá «Visible al cliente» las que quieras exponer en su cronograma.
+              El agente las infirió de las sesiones. Registra solo las reales; marca «Visible al cliente» las que quieras exponer en su cronograma.
             </p>
           </div>
         )}
@@ -3421,7 +3421,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
            estado de cualquier Implementación a la que todavía no se le generó el handoff. */
         <div className="rounded-2xl border border-dashed border-gray-700 px-5 py-8 text-center text-gray-400 space-y-4">
           <p className="text-sm">
-            Generá el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
+            Genera el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
           <a
             href={cronogramaUrl}
@@ -3597,7 +3597,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       <ConfirmDialog
         open={confirmDetailOpen}
         title="Confirmar el detalle de tareas"
-        description="Las tareas por semana van a cruzar al cronograma que ve el cliente. Podés seguir editándolas después."
+        description="Las tareas por semana van a cruzar al cronograma que ve el cliente. Puedes seguir editándolas después."
         confirmLabel="Confirmar detalle"
         loading={confirmingDetail}
         onConfirm={async () => {
@@ -3750,7 +3750,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             <div>
               <h3 className="text-sm font-semibold text-gray-100">Subir al cliente</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Indicá qué cambió en esta versión. Queda registrado con un snapshot de lo publicado
+                Indica qué cambió en esta versión. Queda registrado con un snapshot de lo publicado
                 para comparar después lo planificado contra lo real.
               </p>
             </div>

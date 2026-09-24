@@ -130,6 +130,19 @@ describe("⭐ las opciones del cargador del material llegan", () => {
     expect(m.reuniones).not.toContain("del proyecto:");
     expect(m.calendario).toContain("Fase de la base");
   });
+
+  it("`lector`: con \"chat\" los rótulos de reuniones y notas no nombran el handoff; sin él, sí", async () => {
+    /* Revisión del paso C (2026-09-24): el chat recibía el rótulo de los agentes, que habla de «el
+       handoff» (el chat no lo tiene) y de «decidir el trabajo». La edición que la pone en rojo:
+       que el cargador ignore `opts.lector` al armar alguno de los dos bloques. */
+    const chat = await cargarMaterialDelCronograma("p1", { lector: "chat" });
+    expect(chat.reuniones, "las reuniones del chat nombran el handoff").not.toMatch(/handoff/i);
+    expect(chat.notas, "las notas del chat nombran el handoff").not.toMatch(/handoff/i);
+    expect(chat.reuniones).toContain("### Semanal 1 — 22 sep 2026");
+    const agentes = await cargarMaterialDelCronograma("p1");
+    expect(agentes.reuniones, "los agentes perdieron el orden de peso contra el handoff").toContain("el handoff");
+    expect(agentes.notas).toContain("más que el handoff");
+  });
 });
 
 describe("⭐ lo que el cargador lee de la base para la foto y las notas", () => {
@@ -180,11 +193,13 @@ describe("⭐ la puerta del CHAT del cronograma (paso C, decisión de Elías 202
       "del proyecto:",
     );
     expect(m.texto).toContain("### Nota: Acuerdo — cargada el 22 sep 2026");
+    // Revisión del paso C (2026-09-24): el chat no tiene el handoff, y nada de su bloque lo nombra.
+    expect(m.texto, "la puerta del chat arma los rótulos de los agentes (nombran el handoff)").not.toMatch(/handoff/i);
     const contenido = m.materialInterno.filter((t) => !t.startsWith("### Nota:"));
     expect(contenido.reduce((s, t) => s + t.length, 0), "el chat leyó más que su tope").toBeLessThanOrEqual(16_000);
   });
 
-  it("sin reuniones, sin notas y sin instrucciones: texto vacío (el pedido queda como antes)", async () => {
+  it("sin reuniones, sin notas y sin instrucciones: texto vacío (el bloque del material no va)", async () => {
     h.estado.sesiones = [];
     h.estado.notas = [];
     const m = await cargarMaterialParaElChat("p1");

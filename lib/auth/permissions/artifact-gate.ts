@@ -210,7 +210,9 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     implementacion: "la guía de implementación",
     entrega: "el documento de entrega",
   };
+  /* «(ya existe una versión)» y no «(ya está generado)»: la frase va con etiquetas en femenino y
+     en plural («la exploración del negocio», «los procesos»), y un participio fijo no concuerda. */
   return gate.action === "regenerate"
-    ? `Regenerar ${label[gate.section]} con IA (ya está generado) necesita el permiso de regenerar, y tu rol no lo tiene. Puedes seguir haciendo cambios a mano.`
+    ? `Regenerar ${label[gate.section]} con IA (ya existe una versión) necesita el permiso de regenerar, y tu rol no lo tiene. Puedes seguir haciendo cambios a mano.`
     : `Tu rol no puede generar ${label[gate.section]} con IA.`;
 }

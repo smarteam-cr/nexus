@@ -35,6 +35,7 @@ import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
 import { renderSeccionParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import {
+  AVISO_DEL_MATERIAL_ILEGIBLE,
   PRESUPUESTO_DEL_CHAT,
   TECHO_DEL_MATERIAL_DEL_CHAT_CHARS,
   TOPE_NOTAS_CRONOGRAMA,
@@ -51,7 +52,7 @@ import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs"
 const h = vi.hoisted(() => ({ cargarMaterialParaElChat: vi.fn() }));
 vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: h.cargarMaterialParaElChat }));
 
-const { TECHO_DEL_PREFIJO_CHARS, materialDelCronograma } = await import("./contexto");
+const { TECHO_DEL_PREFIJO_CHARS, lineaParaRehacerTodo, materialDelCronograma } = await import("./contexto");
 
 /** Blanquea comentarios conservando offsets: NOMBRAR algo para prohibirlo no es usarlo. */
 function soloCodigo(src: string): string {
@@ -336,15 +337,80 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
   });
 
   it("⭐ nombra el botón que rehace todo SEGÚN EL ESTADO del cronograma", () => {
-    /* Sin tareas de la IA el botón es «Generar cronograma»; con ellas, «Regenerar todo el
-       cronograma» (CronogramaCanvas, `hasAiDetail`). Recomendar el que no se ve manda al CSE a
-       buscar un botón que no está. La edición que la pone en rojo: cablear uno de los dos. */
+    /* ⚠ ACTUALIZADO 2026-09-24 (revisión del paso C). Pedía el ternario
+       `conDetalleDeLaIA ? «Regenerar…» : «Generar…»` escrito acá; la línea ahora sale de
+       `lineaParaRehacerTodo` (con su propia guarda de conducta, abajo) porque el ternario solo no
+       alcanzaba: en un cronograma publicado sin tareas de la IA recomendaba un botón que no se ve.
+       Esta guarda sigue pidiendo lo mismo de fondo: que el estado se lea de la base y llegue a la
+       línea. Las ediciones que la ponen en rojo: dejar de mirar las tareas de la IA, la foto
+       publicada o la propuesta pendiente, o sacar la línea del contexto. */
     const i = src.indexOf("const conDetalleDeLaIA");
     expect(i, "el contexto dejó de mirar si hay tareas de la IA").toBeGreaterThan(-1);
     const tramo = src.slice(i, src.indexOf("const fases = timeline.phases", i));
     expect(tramo).toContain('t.source === "AGENT" || t.source === "MODIFIED"');
-    expect(tramo).toMatch(/conDetalleDeLaIA \? "«Regenerar todo el cronograma»" : "«Generar cronograma»"/);
+    expect(tramo, "la línea dejó de salir del armador que sigue a la pantalla").toContain("lineaParaRehacerTodo({");
+    expect(tramo, "la línea dejó de saber si el cronograma ya se subió").toContain("publicadoAlgunaVez: publicaciones > 0");
+    expect(tramo, "la línea dejó de saber si hay cambios de fases sin decidir").toContain(
+      "cambiosDeFasesSinDecidir: propuestasPendientes > 0",
+    );
+    expect(src, "el contexto dejó de contar las publicaciones").toContain(
+      "prisma.projectTimeline.count({ where: { projectId, publishedSnapshot: { not: Prisma.DbNull } } })",
+    );
+    expect(src, "el contexto dejó de contar la propuesta pendiente").toContain(
+      "prisma.projectTimeline.count({ where: { projectId, pendingProposal: { not: Prisma.DbNull } } })",
+    );
     expect(src, "la línea del botón dejó de entrar al contexto").toContain('["", paraRehacerTodo]');
+  });
+
+  it("⛔ la línea «PARA REHACER TODO» nunca recomienda un botón que la pantalla no muestra", () => {
+    /* Las condiciones son las de CronogramaCanvas.tsx: «Generar cronograma» exige sin tareas de la
+       IA y `!hasPublishedOnce`, y una propuesta SOLO de fases no lo esconde; «Regenerar todo el
+       cronograma» exige tareas de la IA y ninguna propuesta; publicado sin tareas de la IA no hay
+       ninguno. Lo que el servidor no sabe (el permiso, una vista previa en pantalla) va como
+       condición. Las ediciones que la ponen en rojo: volver al ternario solo por las tareas, decir
+       que «Generar» se esconde con cambios de fases pendientes, o perder la frase del permiso. */
+    const linea = (conDetalleDeLaIA: boolean, publicadoAlgunaVez: boolean, cambiosDeFasesSinDecidir: boolean) =>
+      lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez, cambiosDeFasesSinDecidir });
+
+    for (const pendiente of [false, true]) {
+      const publicadoSinIa = linea(false, true, pendiente);
+      expect(publicadoSinIa, "publicado sin tareas de la IA no hay botón que rehaga todo").toContain("hoy NO hay botón");
+      expect(publicadoSinIa).not.toContain("«Generar cronograma»");
+      expect(publicadoSinIa).not.toContain("«Regenerar todo el cronograma»");
+    }
+
+    const virgen = linea(false, false, false);
+    expect(virgen).toContain("«Generar cronograma»");
+    expect(virgen).toContain("permiso de generar");
+    expect(virgen, "sin propuesta no hay nada que decidir antes").not.toContain("cambios de fases sin decidir");
+
+    const virgenConPropuesta = linea(false, false, true);
+    expect(virgenConPropuesta).toContain("«Generar cronograma»");
+    expect(virgenConPropuesta, "«Generar» SE VE con una propuesta solo de fases").not.toContain("NO se ve");
+    expect(virgenConPropuesta, "con material, la ruta pide decidir los cambios de fases antes").toContain(
+      "primero se acepta o se descarta cada uno",
+    );
+
+    for (const publicado of [false, true]) {
+      const conIa = linea(true, publicado, false);
+      expect(conIa).toContain("«Regenerar todo el cronograma»");
+      expect(conIa).toContain("permiso de regenerar");
+      expect(conIa).not.toContain("NO se ve");
+
+      const conIaYPropuesta = linea(true, publicado, true);
+      expect(conIaYPropuesta, "con una propuesta pendiente «Regenerar todo» no se ve").toContain("hoy NO se ve");
+      expect(conIaYPropuesta).toContain("Primero se acepta o se descarta cada uno");
+    }
+
+    for (const d of [false, true]) {
+      for (const p of [false, true]) {
+        for (const c of [false, true]) {
+          const l = linea(d, p, c);
+          expect(l.startsWith("PARA REHACER TODO"), "el prompt busca la línea por su comienzo").toBe(true);
+          expect(l.length, "la línea se come el techo del prefijo").toBeLessThan(420);
+        }
+      }
+    }
   });
 
   it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {
@@ -396,14 +462,19 @@ describe("⭐ el chat del cronograma lee el «Contexto del cronograma» — por 
     ).toEqual([]);
   });
 
-  it("⭐ con el presupuesto DEL CHAT y sin la ubicación de cada reunión", () => {
+  it("⭐ con el presupuesto DEL CHAT, sin la ubicación de cada reunión y con el rótulo del chat", () => {
     /* Con el presupuesto de los agentes el chat pagaría hasta 48.000 de reuniones por turno; con
        la ubicación, cada cambio de fases cambiaría el bloque y volvería a cobrar la caché.
+       ⚠ ACTUALIZADO 2026-09-24 (revisión del paso C): la llamada suma `lector: "chat"`, así los
+       rótulos de las reuniones y las notas no le nombran el handoff, que el chat no tiene. La
+       conducta la fija lib/contexto/cargar-material.test.ts llamando a la puerta.
        Las ediciones que la ponen en rojo: llamar `cargarMaterialDelCronograma(projectId)` sin el
-       segundo argumento, o sacar `sinUbicacion`. */
+       segundo argumento, o sacar `sinUbicacion` o el `lector`. */
     const tramo = tramoDe(soloCodigo(leer("lib/contexto/cargar.ts")), "export async function cargarMaterialParaElChat(");
     expect(tramo.length, "la guarda no está mirando la puerta").toBeGreaterThan(200);
-    expect(tramo).toContain("cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true })");
+    expect(tramo).toContain(
+      'cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true, lector: "chat" })',
+    );
     expect(tramo, "el chat dejó de leer las instrucciones adicionales").toContain("docBriefFrom(");
     expect(PRESUPUESTO_DEL_CHAT).toEqual({ topeReuniones: 16_000, maxALeer: 24 });
   });
@@ -436,9 +507,10 @@ describe("⭐ el chat del cronograma lee el «Contexto del cronograma» — por 
         createdAt: new Date(AHORA),
       }));
       const plan = planDelMaterial({ elegidas, notas, topeReuniones: PRESUPUESTO_DEL_CHAT.topeReuniones });
-      const notasDelBloque = bloqueDeNotasDelCronograma(notas);
+      // Con el rótulo del chat, como los arma la puerta (`lector: "chat"`).
+      const notasDelBloque = bloqueDeNotasDelCronograma(notas, "chat");
       const bloque = bloqueDelMaterialParaElChat({
-        reuniones: bloqueDeReunionesDelCronograma(plan.reuniones),
+        reuniones: bloqueDeReunionesDelCronograma(plan.reuniones, "chat"),
         notas: notasDelBloque,
         informe: plan.informe,
         instrucciones: "i".repeat(TOPE_INSTRUCCIONES_DEL_DOC + 1_000),
@@ -462,15 +534,21 @@ describe("⭐ el chat del cronograma lee el «Contexto del cronograma» — por 
     expect(peorCaso(2_000).bloque.length).toBeLessThanOrEqual(TECHO_DEL_MATERIAL_DEL_CHAT_CHARS);
   });
 
-  it("⚠ si el material falla, el chat sigue: texto vacío y la lectura con el error", async () => {
+  it("⚠ si el material falla, el chat sigue: el aviso de que no se pudo leer y la lectura con el error", async () => {
     /* Una transcripción ilegible, la base lenta o `unstable_cache` fuera de Next no pueden volver
        el turno un 502: contesta con el cronograma y la pantalla lo dice en ámbar.
-       La edición que la pone en rojo: sacar el try/catch de `materialDelCronograma`. */
+       ⚠ ACTUALIZADO 2026-09-24 (revisión del paso C): esperaba `texto: ""`. Con el texto vacío el
+       modelo entendía «el CSE no eligió nada» y le pedía elegir reuniones que ya había elegido. Ahora
+       el texto es `AVISO_DEL_MATERIAL_ILEGIBLE`, y el prompt dice qué hacer con él.
+       Las ediciones que la ponen en rojo: sacar el try/catch de `materialDelCronograma`, o volver
+       a devolver el texto vacío. */
     h.cargarMaterialParaElChat.mockRejectedValueOnce(new Error("transcripción ilegible"));
     const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
     const m = await materialDelCronograma("p1");
     aviso.mockRestore();
-    expect(m.texto).toBe("");
+    expect(m.texto, "el modelo no se entera de que la lectura falló").toBe(AVISO_DEL_MATERIAL_ILEGIBLE);
+    expect(m.texto).toContain("NO SE PUDO LEER");
+    expect(m.texto, "el aviso le pide al CSE elegir lo que quizá ya eligió").toContain("no le pidas que las elija");
     expect(m.interno).toEqual([]);
     expect(m.lectura.error).toBe(true);
 

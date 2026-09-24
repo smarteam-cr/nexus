@@ -310,20 +310,43 @@ describe("la regla de las fechas está en el prompt", () => {
     expect(cola, "se perdió la regla de la contradicción con las instrucciones").toContain("manda el CSE");
     expect(cola, "el chat vuelve a señalar contradicciones por su cuenta").toContain("No propongas cambios que nadie");
     expect(cola, "la recomendación dejó de apuntar al botón que nombra el contexto").toContain("PARA REHACER TODO");
+    /* Revisión del paso C (2026-09-24): la línea del contexto puede decir que hoy NO hay botón
+       (publicado sin tareas de la IA), y el material puede no haberse leído. Las ediciones que la
+       ponen en rojo: volver a «recomienda el botón» a secas, o borrar la regla de la lectura fallida
+       (el chat le pediría al CSE elegir reuniones que ya eligió). */
+    expect(cola, "el prompt obliga a recomendar un botón aunque el contexto diga que no hay").toContain(
+      "o que hoy no hay ninguno",
+    );
+    expect(cola, "el chat no sabe qué hacer cuando el material no se pudo leer").toContain("NO SE PUDO LEER");
+    expect(cola, "el chat vuelve a pedir elegir lo que ya se eligió").toContain("No le pidas que elija");
   });
 
-  it("⛔ las líneas del acuerdo del cronograma pasan por la FRONTERA", () => {
+  it("⛔ las líneas del acuerdo del cronograma pasan por la FRONTERA — y las de los pendientes también", () => {
     /* Desde que el chat lee el material, un título puede repetir una frase de una reunión, o traer
        un monto o un correo. La línea que el CSE lee antes de aplicar lo tiene que avisar.
-       La edición que la pone en rojo: armar `lineas` sin `lineasConFrontera(`. */
+       ⚠ ACTUALIZADO 2026-09-24 (revisión del paso C): pedía `lineasConFrontera(` escrito en la
+       rama del acuerdo. El bloque de pendientes del modelo se armaba sin la marca, contra «un solo
+       traductor para los dos lectores» (acuerdo-vivo.ts). Ahora los dos salen de
+       `lineasParaLosDosLectores`, y la guarda pide eso: el mismo armador en los dos lugares, con
+       la frontera adentro. Las ediciones que la ponen en rojo: armar `lineas` o `lineasVivas` con
+       otra cosa, o sacar `lineasConFrontera(` o las huellas del armador. */
+    const iArmador = FUENTE.indexOf("const lineasParaLosDosLectores");
+    expect(iArmador, "desapareció el traductor de los dos lectores").toBeGreaterThan(-1);
+    const armador = FUENTE.slice(iArmador, FUENTE.indexOf(";", iArmador));
+    expect(armador, "el traductor dejó de pasar por la frontera").toContain("lineasConFrontera(describir(ops)");
+    expect(armador, "el traductor dejó de usar las huellas del material").toContain("huellas)");
+    expect(FUENTE, "la frontera dejó de medirse contra el material de este turno").toContain(
+      "huellasDeFrontera(ctx.material.interno)",
+    );
+    expect(FUENTE, "lo pendiente que lee el modelo sale de otro traductor").toContain(
+      "const lineasVivas = lineasParaLosDosLectores(libro.vivas);",
+    );
+    expect(FUENTE, "el bloque de pendientes dejó de leer esas líneas").toContain("bloqueDePendientes(lineasVivas)");
     const i = FUENTE.indexOf("const fusion = fusionarPendientes(");
     expect(i, "se movió la rama del cronograma").toBeGreaterThan(-1);
     const rama = FUENTE.slice(i, FUENTE.indexOf("dependencias:", i));
-    expect(rama, "las líneas del acuerdo dejaron de pasar por la frontera").toMatch(
-      /lineas: lineasConFrontera\(\s*describirOperaciones\(paraTraducir, fusion\.operaciones\),\s*fusion\.operaciones,/,
-    );
-    expect(rama, "la frontera dejó de medirse contra el material de este turno").toContain(
-      "huellasDeFrontera(ctx.material.interno)",
+    expect(rama, "las líneas de la cajita salen de otro traductor").toContain(
+      "lineas: lineasParaLosDosLectores(fusion.operaciones),",
     );
   });
 
@@ -348,7 +371,9 @@ describe("el breakpoint de caché está donde cachea", () => {
        prompt enteros.
        Las ediciones que la ponen en rojo: meter el material dentro de «CONTEXTO DE ESTE
        DOCUMENTO» (cada apply lo volvería a cobrar), ponerlo después del contexto, dejarlo sin
-       condición (el pedido sin material cambiaría) o sacar el breakpoint del prompt. */
+       condición (un proyecto sin material pagaría un bloque vacío) o sacar el breakpoint del
+       prompt. (Revisión del paso C, 2026-09-24: decía que sin material el pedido quedaba como
+       antes; no es así, en todo chat del cronograma cambiaron el prompt y el contexto.) */
     const i = FUENTE.indexOf("system: [");
     const bloque = FUENTE.slice(i, FUENTE.indexOf("tools:", i));
     const marcas = [...bloque.matchAll(/cache_control/g)].map((m) => m.index!);
@@ -371,7 +396,7 @@ describe("el breakpoint de caché está donde cachea", () => {
     expect(posContexto < marcas[2], "el contexto quedó sin breakpoint al final").toBe(true);
     expect(
       /\.\.\.\(ctx\.material\?\.texto\s*\?/.test(bloque),
-      "el bloque del material dejó de ser condicional: sin material, el pedido ya no es el de antes",
+      "el bloque del material dejó de ser condicional: un proyecto sin material manda un bloque vacío",
     ).toBe(true);
     const contexto = bloque.slice(bloque.indexOf("CONTEXTO DE ESTE DOCUMENTO"));
     expect(contexto, "el material entró al bloque del contexto: cada apply lo vuelve a cobrar").not.toContain(

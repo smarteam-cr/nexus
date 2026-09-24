@@ -44,6 +44,7 @@ import {
   type FotoDelCronograma,
   type InformeDelMaterial,
   type LecturaDelMaterial,
+  type LectorDelMaterial,
   type NotaParaElCronograma,
   type ReunionElegida,
 } from "./material-cronograma";
@@ -234,6 +235,11 @@ export interface OpcionesDelMaterial {
    * calendarios se arman igual.
    */
   sinUbicacion?: boolean;
+  /**
+   * Quién lee los rótulos de las reuniones y las notas (`LectorDelMaterial`). El chat pide "chat":
+   * el rótulo de los agentes le nombra el handoff, que el chat no tiene. Default: "agentes".
+   */
+  lector?: LectorDelMaterial;
 }
 
 export interface MaterialDelCronograma {
@@ -286,9 +292,10 @@ export interface MaterialDelCronograma {
  * trabajo no esté hecho) y `calendarioConHoy`. Quien ya tiene las fases (el revisor de fases de
  * «Regenerar todo») pasa `opts.fases`, para que el modelo y el armador vean LA MISMA foto; si no, se
  * lee el cronograma (con el cierre fijado a mano, si lo hay). Sin material, los dos calendarios son
- * "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase.
+ * "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase. Y pide
+ * `opts.lector: "chat"`: los rótulos de sus reuniones y notas no le nombran el handoff.
  *
- * ⚠ Las cuatro opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
+ * ⚠ Las cinco opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
  * opción que se ignora en silencio le da al chat el tope de 48.000 o al revisor de fases otra foto.
  *
  * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
@@ -339,8 +346,8 @@ export async function cargarMaterialDelCronograma(
   const plan = planDelMaterial({ elegidas, notas, topeReuniones: opts.topeReuniones });
 
   return {
-    reuniones: bloqueDeReunionesDelCronograma(plan.reuniones),
-    notas: bloqueDeNotasDelCronograma(notas),
+    reuniones: bloqueDeReunionesDelCronograma(plan.reuniones, opts.lector),
+    notas: bloqueDeNotasDelCronograma(notas, opts.lector),
     calendario: hayMaterial ? calendarioDelCronograma(foto, ahora) : "",
     calendarioConHoy: hayMaterial ? calendarioDelCronograma(foto, ahora, { conHoy: true }) : "",
     informe: plan.informe,
@@ -454,7 +461,7 @@ export interface MaterialParaElChat {
  */
 export async function cargarMaterialParaElChat(projectId: string): Promise<MaterialParaElChat> {
   const [mat, canvasCronograma] = await Promise.all([
-    cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true }),
+    cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true, lector: "chat" }),
     prisma.projectCanvas.findFirst({
       where: { projectId, ...canvasOf("timeline") },
       select: { sections: true },

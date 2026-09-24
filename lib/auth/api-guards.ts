@@ -430,7 +430,8 @@ export async function guardIaDelCronograma(timelineId: string): Promise<NextResp
   } else {
     // Rama VIRGEN (sin detalle IA aún): la primera pasada con IA pide el permiso
     // cronograma.generate (default: todo interno menos el asistente administrativo;
-    // editable en /team — la semilla se lo quita a Dev).
+    // editable en /team). La semilla NO se lo quita a nadie: a DEV solo le apaga
+    // cronograma.delete (scripts/seed-role-permissions.ts, DELTAS).
     const gen = await guardPermission("cronograma", "generate");
     if (gen instanceof NextResponse) {
       return NextResponse.json(

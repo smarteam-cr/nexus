@@ -8,11 +8,12 @@
  * RolePermission vacía o inválida, el sistema se comporta idéntico a siempre
  * (deploy-safe). El test de compat congela esta equivalencia.
  *
- * OJO: el delta operativo pedido por el usuario (DEV a solo-lectura en
- * handoff/kickoff/cronograma/procesos) NO vive acá — vive en la SEMILLA de la
- * DB (scripts/seed-role-permissions.ts). El default de código es compat exacta.
+ * OJO: los deltas operativos por rol NO viven acá — viven en la SEMILLA de la DB
+ * (scripts/seed-role-permissions.ts: DELTAS apaga, ENABLES enciende; hoy DEV no borra
+ * cronograma y sí lo regenera con IA). El default de código es compat exacta, salvo
+ * las DOS desviaciones de abajo.
  *
- * ÚNICA DESVIACIÓN de "compat exacta" (2026-07-24): `proyectos.deleteCanvas` nace
+ * PRIMERA DESVIACIÓN de "compat exacta" (2026-07-24): `proyectos.deleteCanvas` nace
  * apagado para todos salvo CSL. Antes ese borrado solo pedía acceso al cliente, así
  * que la compat literal sería darlo a los 7 roles. Se decidió restringirlo, y es
  * gratis: el endpoint NO tiene ningún llamador en la aplicación — no hay botón que

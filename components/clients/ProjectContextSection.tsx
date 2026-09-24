@@ -88,7 +88,7 @@ export default function ProjectContextSection({
       <div className={open ? "px-5 pb-4" : "hidden"}>
         <p className="text-[11px] text-fg-muted mb-2.5">
           Estas fuentes arman el handoff. Todo lo <span className="font-medium text-fg-secondary">incluido</span> alimenta la
-          generación; <span className="font-medium text-fg-secondary">excluí</span> lo que sea de otro proyecto. En HubSpot,
+          generación; <span className="font-medium text-fg-secondary">excluye</span> lo que sea de otro proyecto. En HubSpot,
           el material de la era del proyecto; el resto queda como trasfondo.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

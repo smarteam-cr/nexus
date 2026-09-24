@@ -56,6 +56,7 @@ import { PIEZA_ROL } from "@/lib/asistente/piezas";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { esCustomKey } from "@/lib/landing/custom-sections";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sectionDefsForDocType } from "@/lib/roles/doc-type";
 import {
@@ -69,7 +70,11 @@ import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
 /* ⭐ La ÚNICA puerta del chat al material del cronograma (ver la EXCEPCIÓN del header). Trae su
    propio presupuesto: los cargadores de los agentes siguen prohibidos acá (contexto.test.ts). */
 import { cargarMaterialParaElChat } from "@/lib/contexto/cargar";
-import { LECTURA_CON_ERROR, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
+import {
+  AVISO_DEL_MATERIAL_ILEGIBLE,
+  LECTURA_CON_ERROR,
+  type LecturaDelMaterial,
+} from "@/lib/contexto/material-cronograma";
 
 /**
  * ⚠ EL TECHO, Y ES UNA DECISIÓN, NO UNA CONSTANTE SUELTA. Si el prefijo crece más que esto, algo
@@ -209,6 +214,67 @@ export interface ContextoDelAsistente {
   material?: { texto: string; lectura: LecturaDelMaterial; interno: readonly string[] };
 }
 
+/** Lo que decide la línea «PARA REHACER TODO» — ver `lineaParaRehacerTodo`. */
+export interface EstadoParaRehacerTodo {
+  /** Hay tareas AGENT o MODIFIED: el `hasAiDetail` de la pantalla. */
+  conDetalleDeLaIA: boolean;
+  /** Se subió al cliente al menos una vez (`publishedSnapshot`): el `hasPublishedOnce` de la pantalla. */
+  publicadoAlgunaVez: boolean;
+  /** Hay cambios de fases guardados sin decidir (`pendingProposal`, del handoff o del paso 1). */
+  cambiosDeFasesSinDecidir: boolean;
+}
+
+/**
+ * ⭐ LA LÍNEA «PARA REHACER TODO» DEL CONTEXTO: qué botón rehace el cronograma desde las reuniones
+ * y las notas elegidas, o que hoy no hay ninguno.
+ *
+ * Sigue las MISMAS condiciones que los botones de arriba del Gantt (CronogramaCanvas.tsx):
+ *   · «Generar cronograma»: sin tareas de la IA y NUNCA publicado. Una propuesta solo de fases
+ *     (`structureOnlyProposal`) no lo esconde; una vista previa de tareas, sí.
+ *   · «Regenerar todo el cronograma»: con tareas de la IA y SIN ninguna propuesta pendiente.
+ *   · Publicado y sin tareas de la IA: ninguno de los dos (la pantalla muestra «Chequear avance»).
+ * Lo que el servidor no sabe —los permisos de quien mira (editar el cronograma y generarlo o
+ * regenerarlo con IA) y una vista previa que vive solo en su pantalla— va dicho como condición: la línea no puede afirmar algo falso. Revisión del paso C
+ * (2026-09-24): recomendaba «Generar cronograma» en un cronograma publicado, donde no se ve, y
+ * decía que ninguno se veía con una propuesta pendiente.
+ */
+export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
+  const cabeza = "PARA REHACER TODO desde las reuniones y las notas elegidas: ";
+  const revisar = "se acepta o se descarta cada uno (botón «Revisar…»)";
+  if (!e.conDetalleDeLaIA && e.publicadoAlgunaVez) {
+    return (
+      cabeza +
+      "hoy NO hay botón. El cronograma ya se subió al cliente y no tiene tareas de la IA, y la pantalla no " +
+      "ofrece generarlo de nuevo. Dilo así y atiende acá lo que pida, cambio por cambio."
+    );
+  }
+  if (!e.conDetalleDeLaIA) {
+    return (
+      cabeza +
+      "el botón «Generar cronograma», arriba del Gantt. Solo lo ve quien puede editar el cronograma y " +
+      "tiene permiso de generarlo con IA, y se esconde mientras haya en pantalla una vista previa de " +
+      "tareas sin decidir." +
+      (e.cambiosDeFasesSinDecidir
+        ? ` Hay cambios de fases sin decidir: con reuniones o notas elegidas, primero ${revisar} y después se genera.`
+        : "")
+    );
+  }
+  if (e.cambiosDeFasesSinDecidir) {
+    return (
+      cabeza +
+      "el botón «Regenerar todo el cronograma», arriba del Gantt, pero hoy NO se ve: hay cambios de fases " +
+      `sin decidir. Primero ${revisar}, y después vuelve. Solo lo ve quien puede editar el cronograma y ` +
+      "tiene permiso de regenerarlo con IA."
+    );
+  }
+  return (
+    cabeza +
+    "el botón «Regenerar todo el cronograma», arriba del Gantt. Solo lo ve quien puede editar el " +
+    "cronograma y tiene permiso de regenerarlo con IA, y se esconde mientras haya en pantalla una " +
+    "vista previa sin decidir."
+  );
+}
+
 /**
  * El contexto del chat sobre el CRONOGRAMA.
  *
@@ -218,38 +284,44 @@ export interface ContextoDelAsistente {
  * instrucciones adicionales NO van acá: van en su propio bloque (`materialDelCronograma`).
  */
 export async function contextoDeCronograma(projectId: string): Promise<ContextoDelAsistente> {
-  const timeline = await prisma.projectTimeline.findUnique({
-    where: { projectId },
-    select: {
-      anchorStartDate: true,
-      closeDateOverride: true,
-      project: { select: { name: true, client: { select: { name: true } } } },
-      phases: {
-        orderBy: { order: "asc" },
-        select: {
-          /* ⭐ EL ID VIAJA, y es lo que deja que el asistente emita OPERACIONES en vez de una
-             instrucción de texto. Son ~25 caracteres por fase (~275 en el cronograma más grande
-             de la cartera) y compran que el destinatario de un cambio sea inequívoco: Wherex
-             tiene fases con nombres casi iguales («Marketing Hub» y «Configuración Marketing
-             Hub»), así que resolver por nombre sería adivinar. */
-          id: true,
-          name: true,
-          durationWeeks: true,
-          startWeek: true,
-          activityType: true,
-          /* ⚠ CON TÍTULO E ID desde el 2026-08-21. La primera versión mandaba solo contadores
-             y era la línea entre la FORMA y el CONTENIDO — pero se llevaba puesto el caso de
-             uso principal: el CSE pide «pasá la sesión de cierre al final» o «borrá la última
-             base» y el chat no tenía con qué nombrarlas. Las NOTAS siguen afuera (son el
-             contenido de verdad, y las lee el modificador). Ver el techo, arriba. */
-          tasks: {
-            orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            select: { id: true, title: true, weekIndex: true, status: true, source: true },
+  /* Los dos `count` dicen SI hay algo en dos columnas Json sin traerlas (la foto publicada pesa
+     lo que el cronograma entero): alimentan la línea «PARA REHACER TODO» (`lineaParaRehacerTodo`). */
+  const [timeline, publicaciones, propuestasPendientes] = await Promise.all([
+    prisma.projectTimeline.findUnique({
+      where: { projectId },
+      select: {
+        anchorStartDate: true,
+        closeDateOverride: true,
+        project: { select: { name: true, client: { select: { name: true } } } },
+        phases: {
+          orderBy: { order: "asc" },
+          select: {
+            /* ⭐ EL ID VIAJA, y es lo que deja que el asistente emita OPERACIONES en vez de una
+               instrucción de texto. Son ~25 caracteres por fase (~275 en el cronograma más grande
+               de la cartera) y compran que el destinatario de un cambio sea inequívoco: Wherex
+               tiene fases con nombres casi iguales («Marketing Hub» y «Configuración Marketing
+               Hub»), así que resolver por nombre sería adivinar. */
+            id: true,
+            name: true,
+            durationWeeks: true,
+            startWeek: true,
+            activityType: true,
+            /* ⚠ CON TÍTULO E ID desde el 2026-08-21. La primera versión mandaba solo contadores
+               y era la línea entre la FORMA y el CONTENIDO — pero se llevaba puesto el caso de
+               uso principal: el CSE pide «pasá la sesión de cierre al final» o «borrá la última
+               base» y el chat no tenía con qué nombrarlas. Las NOTAS siguen afuera (son el
+               contenido de verdad, y las lee el modificador). Ver el techo, arriba. */
+            tasks: {
+              orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
+              select: { id: true, title: true, weekIndex: true, status: true, source: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.projectTimeline.count({ where: { projectId, publishedSnapshot: { not: Prisma.DbNull } } }),
+    prisma.projectTimeline.count({ where: { projectId, pendingProposal: { not: Prisma.DbNull } } }),
+  ]);
   if (!timeline) {
     return { texto: "Este proyecto todavía no tiene cronograma.", cierreActual: null };
   }
@@ -338,19 +410,19 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   };
 
   /**
-   * ⭐ QUÉ BOTÓN REHACE TODO, según el estado — el que el CSE ve arriba del Gantt. Sin tareas de
-   * la IA es «Generar cronograma»; con ellas, «Regenerar todo el cronograma». Los dos, con
-   * reuniones o notas elegidas, primero proponen los cambios de fases y tiempos y después arman
-   * las tareas. Va en el CONTEXTO y no en el prompt: el prompt es el mismo para todos los hilos
-   * (y así se cachea entre proyectos); el estado es de este cronograma.
+   * ⭐ QUÉ BOTÓN REHACE TODO, según el estado — el que el CSE ve arriba del Gantt (o que no hay
+   * ninguno). Las condiciones son las de la pantalla; ver `lineaParaRehacerTodo`. Va en el
+   * CONTEXTO y no en el prompt: el prompt es el mismo para todos los hilos (y así se cachea entre
+   * proyectos); el estado es de este cronograma.
    */
   const conDetalleDeLaIA = timeline.phases.some((f) =>
     f.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"),
   );
-  const paraRehacerTodo =
-    `PARA REHACER TODO desde las reuniones y las notas elegidas: el botón ` +
-    `${conDetalleDeLaIA ? "«Regenerar todo el cronograma»" : "«Generar cronograma»"}, arriba del Gantt ` +
-    "(no se ve mientras haya una propuesta sin decidir: primero se decide esa).";
+  const paraRehacerTodo = lineaParaRehacerTodo({
+    conDetalleDeLaIA,
+    publicadoAlgunaVez: publicaciones > 0,
+    cambiosDeFasesSinDecidir: propuestasPendientes > 0,
+  });
 
   const fases = timeline.phases
     .map(
@@ -417,7 +489,10 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
  *
  * ⚠ SI FALLA, EL CHAT SIGUE: una transcripción ilegible, la base lenta o `unstable_cache` fuera
  * de Next (`scripts/probar-asistente.ts`) no pueden convertir el turno en un 502. Contesta solo
- * con el cronograma y la pantalla lo dice en ámbar (`LECTURA_CON_ERROR`).
+ * con el cronograma y la pantalla lo dice en ámbar (`LECTURA_CON_ERROR`). Y el MODELO también lo
+ * sabe: en el lugar del material va `AVISO_DEL_MATERIAL_ILEGIBLE`. Con el texto vacío entendía
+ * «no eligió nada» y le pedía al CSE elegir lo que ya había elegido (revisión del paso C,
+ * 2026-09-24).
  *
  * ⛔ NO se llama desde `contextoDeCronograma`: lo llama `turno.ts` en paralelo, y solo en la
  * pieza cronograma. Los kickoffs, la Entrega y Roles no pagan esta lectura.
@@ -433,7 +508,7 @@ export async function materialDelCronograma(
       projectId,
       error: e instanceof Error ? e.message : e,
     });
-    return { texto: "", lectura: LECTURA_CON_ERROR, interno: [] };
+    return { texto: AVISO_DEL_MATERIAL_ILEGIBLE, lectura: LECTURA_CON_ERROR, interno: [] };
   }
 }
 

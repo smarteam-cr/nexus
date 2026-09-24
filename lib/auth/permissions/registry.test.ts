@@ -8,6 +8,7 @@
  *   D) Toda sección tiene ≥1 acción y labels no vacíos (el modal no muestra vacío).
  *   F) Todo `agentGroup` del registro de piezas tiene su `case` en artifact-gate, y el
  *      `default` es fail-closed para los que no (A-18): correr sin celda no es una opción.
+ *   G) El 403 de «regenerar» se lee bien con cualquier etiqueta (femenino, plural).
  *
  * Correr: `npx vitest run lib/auth/permissions/registry.test.ts --project unit`.
  */
@@ -22,7 +23,7 @@ import {
   sectionByKey,
 } from "./registry";
 import { PIECES } from "@/lib/pieces/registry";
-import { resolveArtifactGate } from "./artifact-gate";
+import { artifactGateMessage, resolveArtifactGate, type ArtifactGate } from "./artifact-gate";
 
 // artifact-gate toca prisma en los `case` con señal; acá solo se ejercita el `default`.
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -104,4 +105,22 @@ test("F — todo agentGroup del registro de piezas tiene gate, y el default es f
 
   // Un grupo que NO está en el registro sigue cayendo a null: análisis, watchdog, marketing…
   expect(await resolveArtifactGate({ id: "cualquiera", agentGroup: "marketing" }, "cliente", null)).toBeNull();
+});
+
+test("G — el 403 de regenerar concuerda con cualquier etiqueta (femenino y plural)", () => {
+  /* Revisión del paso B (2026-09-24): decía «Regenerar la exploración del negocio con IA (ya está
+     generado)…» y «Regenerar los procesos con IA (ya está generado)…». Es texto que ve el usuario
+     (el 403 de /analyze). La frase fija no puede llevar un participio con género ni número.
+     La edición que la pone en rojo: volver a «(ya está generado)». */
+  const secciones: ArtifactGate["section"][] = [
+    "handoff", "kickoff", "procesos", "cronograma", "desarrollo",
+    "exploracion", "diagnostico", "planificacion", "implementacion", "entrega",
+  ];
+  for (const section of secciones) {
+    const m = artifactGateMessage({ section, action: "regenerate" });
+    expect(m, `el 403 de ${section} no dice que ya hay una versión`).toContain("(ya existe una versión)");
+    expect(m, `el 403 de ${section} lleva un participio que no concuerda con su etiqueta`).not.toMatch(
+      /\bgenerad[oa]s?\b/,
+    );
+  }
 });

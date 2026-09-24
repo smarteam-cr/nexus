@@ -73,7 +73,7 @@ const CANVAS_CON_RENDERER_PROPIO = new Set(
 /** Cómo se lee de un vistazo el estado de una pieza en el desplegable. */
 const ESTADO_PIEZA: Record<RowState, { glifo: string; hint: string }> = {
   generada:    { glifo: "✓", hint: "Generada" },
-  vacia:       { glifo: "○", hint: "Todavía sin contenido — entrá y generala" },
+  vacia:       { glifo: "○", hint: "Todavía sin contenido — entra y genérala" },
   por_activar: { glifo: "+", hint: "Este proyecto todavía no la tiene" },
 };
 
@@ -766,7 +766,7 @@ export default function ProjectCanvasPanel({
                       ? "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
                       : "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
                   }
-                  title="Conversá el cambio con el asistente antes de generarlo"
+                  title="Conversa el cambio con el asistente antes de generarlo"
                 >
                   💬 Asistente
                 </button>
@@ -974,7 +974,7 @@ export default function ProjectCanvasPanel({
           <p className="text-sm font-medium text-fg">Este proyecto no tiene piezas activas.</p>
           <p className="mt-1 text-sm text-fg-muted">
             El handoff y el cronograma siguen arriba. Para trabajar el contenido del proyecto,
-            activá una pieza.
+            activa una pieza.
           </p>
         </div>
       )}

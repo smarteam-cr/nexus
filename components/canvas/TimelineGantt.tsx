@@ -768,7 +768,7 @@ export default function TimelineGantt({
             />
             {cierreDiverge && dismissedSuggestionIso !== (cierre.date?.toISOString() ?? null) && (
               <div className="absolute left-0 top-full mt-1.5 z-40 w-72 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-[11px] text-warn-ink leading-relaxed shadow-lg">
-                El sistema ahora sugiere el cierre el <strong>{cierre.label}</strong> — vos tenés fijado el {cierreVisible.label}.
+                El sistema ahora sugiere el cierre el <strong>{cierre.label}</strong> — tú tienes fijado el {cierreVisible.label}.
                 <div className="flex items-center gap-3 mt-1.5">
                   <button
                     type="button"
@@ -944,7 +944,7 @@ export default function TimelineGantt({
                         {p.id && repetidas.has(p.id) && (
                           <span
                             className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-warn-surface text-warn-ink border border-warn-line"
-                            title={`Parece el mismo trabajo que «${repetidas.get(p.id)}». Si están repetidas, el avance del proyecto las cuenta dos veces — revisalo y unificalas a mano.`}
+                            title={`Parece el mismo trabajo que «${repetidas.get(p.id)}». Si están repetidas, el avance del proyecto las cuenta dos veces — revísalo y unifícalas a mano.`}
                           >
                             ¿repetida?
                           </span>
@@ -1032,7 +1032,7 @@ export default function TimelineGantt({
                               placeholder="auto"
                               onChange={(e) => { const raw = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { startWeek: raw != null && raw >= 1 ? raw - 1 : null }); }}
                               className="w-10 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
-                              title="Inicio de la fase (n° de semana). Vacío = automático (tras la fase anterior). Igualá el de otra fase para correr EN PARALELO."
+                              title="Inicio de la fase (n° de semana). Vacío = automático (tras la fase anterior). Iguala el de otra fase para correr EN PARALELO."
                             />
                             <span className="text-fg-muted ml-1">{fmtPhaseRange(anchor, range)}</span>
                           </span>
@@ -1221,7 +1221,7 @@ export default function TimelineGantt({
                           } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
                           } ${editable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
-                          title={editable && onUpdatePhase ? `S${w} — arrastrá para mover el inicio de la fase` : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
+                          title={editable && onUpdatePhase ? `S${w} — arrastra para mover el inicio de la fase` : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
                         />
                       );
                     })}
@@ -1289,7 +1289,7 @@ export default function TimelineGantt({
                                       disabled={!canToggle}
                                       title={
                                         !t.id
-                                          ? "Guardá el cronograma para poder cambiar el estado"
+                                          ? "Guarda el cronograma para poder cambiar el estado"
                                           : `Estado: ${STATUS_META[t.status].label} — clic para marcar como ${STATUS_META[NEXT_STATUS_QUICK[t.status]].label}`
                                       }
                                       className={`flex-shrink-0 ${!canToggle ? "opacity-50 cursor-default" : "cursor-pointer"}`}
@@ -1557,7 +1557,7 @@ export default function TimelineGantt({
             {sugerenciasSlot}
             {parts.length === 0 && (
               <p className="text-[11px] text-fg-muted leading-relaxed">
-                Todavía no hay avisos. Agregá uno para contarle al cliente algo del cronograma — por
+                Todavía no hay avisos. Agrega uno para contarle al cliente algo del cronograma — por
                 ejemplo una pausa, un cambio de contacto o un acuerdo de la última sesión.
               </p>
             )}
@@ -1609,9 +1609,9 @@ export default function TimelineGantt({
                   {
                     key: "arreglar",
                     title: "Filas para arreglar",
-                    hint: "No suman al total de atraso, lo inflan, o ya no deberían existir. Ponele semanas" +
-                      " si ya sabés cuánto movió el plan; si todavía no es un atraso sino algo que alguien" +
-                      " tiene que averiguar, convertila en tarea.",
+                    hint: "No suman al total de atraso, lo inflan, o ya no deberían existir. Ponle semanas" +
+                      " si ya sabes cuánto movió el plan; si todavía no es un atraso sino algo que alguien" +
+                      " tiene que averiguar, conviértela en tarea.",
                     items: arreglar,
                   },
                   {

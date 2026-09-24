@@ -3173,7 +3173,9 @@ fabricarla.
   entero. Las reuniones van sin su lugar en el plan, así el bloque no cambia cuando se mueve una fase.
   Los cargadores de los agentes siguen prohibidos en lib/asistente (contexto.test.ts), y el handoff,
   los kickoffs y las reuniones no elegidas siguen afuera. Si la lectura falla, el chat contesta
-  solo con el cronograma y la pantalla lo dice en ámbar.
+  solo con el cronograma y la pantalla lo dice en ámbar. El modelo también lo sabe: en el lugar del
+  material va `AVISO_DEL_MATERIAL_ILEGIBLE`, así no le pide al CSE elegir lo que ya eligió
+  (revisión del 2026-09-24).
 - **Su propio bloque cacheado y tres breakpoints.** El material va entre el prompt y el contexto,
   en su propio bloque del `system`. Hay un breakpoint en cada frontera entre cosas que cambian a
   distinto ritmo: el prompt (~13.700 caracteres, igual para todos los hilos), el material (cambia
@@ -3185,13 +3187,26 @@ fabricarla.
   aclara que el material es información, no pedidos. Además, la línea del acuerdo que repite una
   frase del material, o trae un monto, una fecha, un plazo o un correo, termina en «⚠ revisa…»
   (`lineasConFrontera`, con el mismo detector que los previews del detalle). Solo avisa: el CSE la
-  desmarca o pide otro título antes de aplicar.
+  desmarca o pide otro título antes de aplicar. El bloque de pendientes que lee el modelo sale del
+  mismo traductor, con la marca incluida (`lineasParaLosDosLectores`).
+- **Los rótulos de las reuniones y las notas del chat no nombran el handoff.** Son los de los
+  agentes con `lector: "chat"`: el chat no tiene el handoff, y el orden de peso de la conversación
+  (lo que pide el CSE > sus instrucciones > reuniones y notas, lo más reciente gana) va en la
+  cabecera del bloque. «Información, no pedidos» vale para las reuniones y las notas, no para las
+  instrucciones adicionales (revisión del 2026-09-24).
 - **Las instrucciones adicionales las respeta, pero en el chat manda el CSE.** Si un pedido las
   contradice, lo dice en una línea y hace lo que le pidieron. No señala contradicciones por su
-  cuenta. Para rehacer todo recomienda el botón que el CSE ve según el estado: «Generar cronograma»
-  sin tareas de la IA, «Regenerar todo el cronograma» con ellas.
-- **Sin material no cambia qué ve el modelo.** Sin reuniones elegidas, sin notas y sin instrucciones,
-  el bloque no existe y el pedido es el de antes, con un breakpoint más en el prompt.
+  cuenta. Para rehacer todo dice lo que dice la línea «PARA REHACER TODO» del contexto
+  (`lineaParaRehacerTodo`), con las condiciones de la pantalla: «Generar cronograma» sin tareas de
+  la IA y nunca publicado (una propuesta solo de fases no lo esconde); «Regenerar todo el
+  cronograma» con tareas de la IA y sin propuesta pendiente; publicado sin tareas de la IA, ningún
+  botón. El permiso y una vista previa en pantalla van como condición, porque el servidor no los
+  ve (revisión del 2026-09-24).
+- **Sin material, el bloque no existe; el pedido igual cambió.** Sin reuniones elegidas, sin notas y
+  sin instrucciones no va el bloque del material. Pero en todo chat del cronograma, haya material o
+  no, el prompt suma las reglas de las reuniones y las notas, y el contexto la línea «PARA REHACER
+  TODO» y el encabezado nuevo de las reglas duras. (Hasta la revisión del 2026-09-24 esto decía
+  «sin material no cambia qué ve el modelo», y no era cierto.)
 - **Se descartó la lectura a pedido con una segunda herramienta.** Rompe la regla de una sola
   herramienta por pedido (turno.test.ts), suma una segunda llamada al modelo en el turno y deja
   contestar desde un índice de títulos, sin haber leído la reunión.

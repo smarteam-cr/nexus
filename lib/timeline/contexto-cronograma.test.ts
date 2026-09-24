@@ -294,11 +294,16 @@ describe("⭐ el CHAT del cronograma también lee el material (decisión de Elí
   it("la puerta del chat llama al cargador de los agentes con SU presupuesto y sin ubicación", () => {
     /* La edición que la pone en rojo: `cargarMaterialDelCronograma(projectId)` a secas en la puerta
        del chat (48.000 de reuniones por turno), o pasarles `PRESUPUESTO_DEL_CHAT` a los agentes
-       (las guardas de arriba, que exigen el llamado sin opciones). */
+       (las guardas de arriba, que exigen el llamado sin opciones).
+       ⚠ ACTUALIZADO 2026-09-24 (revisión del paso C): la llamada suma `lector: "chat"` (los rótulos
+       del chat no nombran el handoff); lo que esta guarda pide —su presupuesto y sin ubicación— no
+       cambió. Los agentes siguen sin opciones, así que conservan el rótulo de los agentes. */
     const src = sinComentarios(leer("lib/contexto/cargar.ts"));
     const tramo = tramoDe(src, "cargarMaterialParaElChat");
     expect(tramo.length, "la guarda no está mirando la puerta del chat").toBeGreaterThan(200);
-    expect(tramo).toContain("cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true })");
+    expect(tramo).toContain(
+      'cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true, lector: "chat" })',
+    );
     for (const agente of ["cargarContextoDelDetalle", "cargarContextoDelAssist", "cargarContextoDeEstructura"]) {
       expect(tramoDe(src, agente), `${agente} tomó el presupuesto del chat`).not.toContain("PRESUPUESTO_DEL_CHAT");
     }
@@ -442,5 +447,59 @@ describe("⭐ la pantalla dice lo que le llega a la IA, con el MISMO cargador (p
     expect(seccion, "la línea cerrada calcula lo que no entra pero no lo muestra").toContain(
       '{loQueNoEntra ? ` (${loQueNoEntra})` : ""}',
     );
+  });
+});
+
+describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () => {
+  /* Regla del repo: textos de la app en tuteo. La revisión del paso C (2026-09-24) encontró voseo en
+     los componentes que tocó esta feature: «Conversá el cambio…», «Revisá el Gantt…», «Podés seguir
+     editándolas», «vos tenés fijado…», «Ponele semanas si ya sabés…», «entrá y generala»… Se
+     corrigieron y esta guarda mira el CÓDIGO (sin comentarios) de esos componentes.
+     La edición que la pone en rojo: volver a escribir cualquiera de esas formas en un texto. */
+  const COMPONENTES = [
+    "components/asistente/ChatDelAsistente.tsx",
+    "components/canvas/AllPhasesRegenModal.tsx",
+    "components/canvas/CronogramaCanvas.tsx",
+    "components/canvas/CronogramaContextSection.tsx",
+    "components/canvas/PasoDeTareasPendiente.tsx",
+    "components/canvas/PhaseRegenPanel.tsx",
+    "components/canvas/ProposalGlobalStrip.tsx",
+    "components/canvas/TimelineAssistDialog.tsx",
+    "components/canvas/TimelineGantt.tsx",
+    "components/clients/FuentesManualesColumn.tsx",
+    "components/clients/ProjectCanvasPanel.tsx",
+    "components/clients/ProjectContextSection.tsx",
+    "components/clients/SessionSelectionReview.tsx",
+    "components/projects/TimelineProposalPendiente.tsx",
+  ];
+  /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
+     entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». */
+  const VOSEO = [
+    "vos", "tenés", "podés", "Podés", "querés", "sabés", "sos",
+    "Revisá", "revisá", "confirmá", "resolvé", "Tildá", "tildá", "Registrá", "marcá", "Generá",
+    "Indicá", "Igualá", "arrastrá", "Guardá", "Agregá", "agregá", "excluí", "entrá", "Conversá",
+    "activá", "Elegí", "elegí", "Pegá", "pegá", "Escribí", "Recargá", "recargá", "Copiá",
+    "generala", "revisalo", "unificalas", "Ponele", "convertila", "decime", "fijate", "Fijate",
+  ];
+  const palabra = (v: string) => new RegExp(`(?<!\\p{L})${v}(?!\\p{L})`, "u");
+
+  it("ninguna forma de voseo en el código de estos componentes", () => {
+    const hallados: string[] = [];
+    for (const rel of COMPONENTES) {
+      const lineas = sinComentarios(leer(rel)).split(/\r?\n/);
+      lineas.forEach((l, i) => {
+        for (const v of VOSEO) if (palabra(v).test(l)) hallados.push(`${rel}:${i + 1} «${v}»`);
+      });
+    }
+    expect(hallados, "volvió el voseo a una pantalla del cronograma").toEqual([]);
+  });
+
+  it("y el detector caza lo que tiene que cazar (si no, la guarda de arriba es decorativa)", () => {
+    for (const texto of ["Conversá el cambio", "— vos tenés fijado", "Ponele semanas", "entrá y generala"]) {
+      expect(VOSEO.some((v) => palabra(v).test(texto)), texto).toBe(true);
+    }
+    for (const texto of ["Conversa el cambio", "el voseo", "Revisa el Gantt", "tú tienes fijado", "Ponle semanas"]) {
+      expect(VOSEO.some((v) => palabra(v).test(texto)), texto).toBe(false);
+    }
   });
 });
