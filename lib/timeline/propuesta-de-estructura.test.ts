@@ -27,6 +27,7 @@ import { ACTIVITY_TYPES } from "./validate";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 import { ID_ESTRUCTURA_CRONOGRAMA, PROMPT_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
+import { renderEstructuraDelCronograma } from "@/lib/contexto/estructura-cronograma";
 
 const fase = (over: Partial<FaseParaEstructura> & { id: string; order: number }): FaseParaEstructura => ({
   name: over.id.toUpperCase(),
@@ -391,6 +392,54 @@ describe("G7 · el prompt lleva las decisiones de negocio, en tuteo", () => {
     ];
     const encontradas = VOSEO.filter((v) => new RegExp(`(?<![\\wáéíóúüñ])${v}(?![\\wáéíóúüñ])`, "i").test(P));
     expect(encontradas, "el modelo copia el registro de su prompt").toEqual([]);
+  });
+});
+
+describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", () => {
+  /* Con CAV y 8 reuniones reales, el texto de A2 rompió el JSON en 3 de 12 corridas (una llave de
+     más al cerrar el envoltorio {"estructura":{…}}, o una cadena sin cerrar), dejó «un piloto de 1
+     semana» solo en observaciones y renombró fases citando las instrucciones del CSE. Con el texto
+     que fijan estas guardas: 24 de 24 corridas. */
+  const P = PROMPT_ESTRUCTURA_CRONOGRAMA;
+  /** El ejemplo del FORMATO, tal cual lo lee el modelo: de la línea que abre con «{» a la regla de «ajustar». */
+  const ejemploDelFormato = () => {
+    const desde = P.indexOf("FORMATO DE RESPUESTA");
+    const inicio = P.indexOf("\n{", desde) + 1;
+    return P.slice(inicio, P.indexOf('\n- En "ajustar"', inicio));
+  };
+
+  it("el ejemplo del formato es JSON válido y PLANO, y el armador lee sus tres cambios", () => {
+    /* La edición que la pone en rojo: volver al envoltorio {"estructura":{…}} —el que el modelo
+       cerraba con una llave de más— o dejar el ejemplo con un JSON que no parsea. */
+    const crudo = JSON.parse(ejemploDelFormato());
+    expect(Object.keys(crudo)).toEqual(["cambios", "observaciones"]);
+    const r = construirPropuestaDeEstructura({ fases: FASES, crudo, anchorISO: null });
+    // Los tres traen ids de mentira: se leen y se descartan uno por uno (no se ignoran en bloque).
+    expect(r.propuesta).toBeNull();
+    expect(r.descartados).toHaveLength(3);
+    expect(r.observaciones).toEqual(["<una oración>"]);
+    // Y se pide sin texto alrededor: una respuesta con prosa y un bloque ```json fue la que rompió.
+    expect(P).toMatch(/SOLO este JSON, sin texto antes ni después/);
+    expect(renderEstructuraDelCronograma({ instrucciones: "", fuentes: [] })).toMatch(
+      /Devuelve SOLO el JSON del formato indicado, sin texto antes ni después; si nada cambia, "cambios": \[\]\.$/,
+    );
+  });
+
+  it("una fase nueva con tiempo propio se propone; lo que se suma sin tiempo propio, no", () => {
+    /* «Se acordó un piloto de 1 semana» quedaba solo en observaciones; «el lanzamiento arranca con
+       un piloto» (sin duración) no tiene que volverse una fase. La edición que la pone en rojo:
+       borrar cualquiera de las dos reglas. */
+    expect(P).toMatch(/FASE NUEVA[^\n]*PROPIO tiempo[^\n]*"agregar"[^\n]*No la dejes solo en "observaciones"/);
+    expect(P).toMatch(/SIN tiempo propio[^\n]*NO es una fase nueva ni alarga ninguna/);
+  });
+
+  it("chocar con las instrucciones del CSE no es motivo para cambiar ni renombrar una fase", () => {
+    /* El control renombraba «Desarrollo SDK / Integración» porque el brief dice «nada de
+       integraciones», y el armador no lo frena (el nombre nuevo también es de Desarrollo /
+       Integración). La edición que la pone en rojo: borrar la regla o sacarla de PROHIBIDO. */
+    const prohibido = P.slice(P.indexOf("PROHIBIDO"), P.indexOf("SEMANAS:"));
+    expect(prohibido).toMatch(/renombrar una fase porque choca con las instrucciones del CSE/);
+    expect(prohibido).toMatch(/que el material describa su trabajo con otras palabras no es motivo/);
   });
 });
 

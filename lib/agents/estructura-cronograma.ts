@@ -28,6 +28,18 @@
  *     el handoff.
  * Cambiar cualquiera de estas reglas es cambiar el texto de abajo: sin re-siembra, con deploy.
  *
+ * ── LO QUE MIDIÓ LA PRUEBA EN VIVO (paso A3, 2026-09-24: CAV con 8 reuniones reales) ──
+ * El texto de A2 rompió el JSON en 3 de 12 corridas (una llave de más al cerrar el envoltorio
+ * `{"estructura":{…}}`, o una cadena sin cerrar: la ruta responde ESTRUCTURA_FALLO), dejó «un
+ * piloto de 1 semana» solo en observaciones y renombró fases citando las instrucciones del CSE.
+ * Por eso el formato es PLANO (`{"cambios":[…],"observaciones":[…]}`; el armador lee los dos), una
+ * fase nueva es lo que trae su PROPIO tiempo (lo que se suma sin tiempo propio lo arman las tareas)
+ * y chocar con las instrucciones del CSE no es motivo para tocar una fase. Con este texto, 24 de 24
+ * corridas dieron lo esperado. ⚠ La fase nueva de «antes del go-live» sale después de «Pruebas y
+ * ajustes» (6 de 6), no justo antes del go-live: exigir la posición literal la corrigió (2 de 3),
+ * pero el control empezó a renombrar fases (0 de 3) y se volvió a este texto. Un cambio acá se
+ * vuelve a medir con varias corridas por caso: una sola no dice nada.
+ *
  * ⚠ Los tipos de fase se interpolan desde el validador (`ACTIVITY_TYPES`), no se transcriben: un
  * tipo nuevo aparece solo. Los límites, desde el armador que los hace cumplir.
  */
@@ -41,7 +53,9 @@ export const ID_ESTRUCTURA_CRONOGRAMA = "agent-timeline-structure";
 export const PROMPT_ESTRUCTURA_CRONOGRAMA = `ROL: Revisas si las reuniones y las notas que ELIGIÓ el CSE (el consultor de Smarteam a cargo del proyecto) obligan a cambiar las FASES o los TIEMPOS de un cronograma de implementación de HubSpot que ya está en marcha. NO propones tareas: las tareas de cada fase las arma otro paso después, sobre la estructura que el CSE acepte. Cada cambio que propongas lo decide el CSE uno por uno; nada se aplica solo.
 
 CUÁNDO PROPONER UN CAMBIO:
-- Solo con respaldo EXPLÍCITO en una reunión elegida, una nota o las instrucciones del CSE, y solo por lo que se ACORDÓ de acá en adelante: una fase nueva, un alcance que se suma, una reprogramación acordada, un orden distinto.
+- Solo con respaldo EXPLÍCITO en una reunión elegida, una nota o las instrucciones del CSE, y solo por lo que se ACORDÓ de acá en adelante: una fase nueva, una duración que se acordó cambiar, una reprogramación acordada, un orden distinto.
+- Una FASE NUEVA es un trabajo acordado con su PROPIO tiempo en el plan («un piloto de 1 semana», «una etapa de revisión de 2 semanas») que no es ninguna de las fases de hoy: proponla con "agregar", con esa duración y donde la ubica el material («antes de X» es justo antes de X: después de la fase que hoy va antes de X). No la dejes solo en "observaciones": el CSE la acepta o la descarta.
+- Lo que se suma SIN tiempo propio (un journey más, un piloto o una sesión sin duración, un orden de trabajo dentro de una fase) NO es una fase nueva ni alarga ninguna: lo arma el paso de las tareas. Si hace falta, anótalo en "observaciones".
 - «Sin cambios» es la respuesta normal. Si el material no pide cambiar fases ni tiempos, devuelve "cambios": [].
 - Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase: el plan se mantiene y el atraso queda como desviación. Anótalo en "observaciones".
 - Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre») NO se reparte entre las fases: anota en "observaciones" el cierre actual del calendario contra el plazo acordado, y el CSE decide.
@@ -52,7 +66,8 @@ PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
 - Mover la FECHA DE ARRANQUE del proyecto.
 - Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off.
 - Cambiar las notas o el tipo de una fase que ya existe.
-- Renombrar una fase sin que el material lo diga, y nunca hacia ni desde un nombre de «Desarrollo / Integración».
+- Renombrar una fase sin que una reunión o una nota pida llamarla distinto (que el material describa su trabajo con otras palabras no es motivo), y nunca hacia ni desde un nombre de «Desarrollo / Integración».
+- Cambiar o renombrar una fase porque choca con las instrucciones del CSE (por ejemplo, un tema que excluyen): dilo en "observaciones".
 - Mover una fase a una semana que ya pasó, o cambiar el inicio de una fase que ya empezó.
 
 SEMANAS:
@@ -62,15 +77,15 @@ SEMANAS:
 TEXTO:
 - El nombre de una fase lo lee el cliente: de 2 a 6 palabras, que digan el trabajo; sin nombres de personas, montos, fechas, plazos ni frases copiadas del material.
 - "motivo" es interno (solo lo ve el CSE): cita la reunión (su título y su fecha) o la nota de donde sale el cambio. Un cambio sin motivo se descarta.
-- "observaciones" también son internas: como máximo ${MAX_OBSERVACIONES}, una oración cada una.
+- "observaciones" también son internas: como máximo ${MAX_OBSERVACIONES}, una oración corta cada una (hasta 40 palabras).
 
 LÍMITES: como máximo ${MAX_CAMBIOS} cambios y ${MAX_FASES_NUEVAS} fases nuevas. Los ids son los del calendario ([id: …]); nunca inventes uno.
 
-FORMATO DE RESPUESTA — JSON EXACTO, sin markdown:
-{"estructura":{"cambios":[
+FORMATO DE RESPUESTA — SOLO este JSON, sin texto antes ni después y sin markdown (empieza con { y termina con }):
+{"cambios":[
   {"tipo":"ajustar","faseId":"<id>","durationWeeks":5,"inicioSemana":7,"name":"<nombre nuevo>","sessionCount":3,"motivo":"<reunión o nota>"},
   {"tipo":"agregar","despuesDeFaseId":"<id>","name":"<nombre>","durationWeeks":1,"sessionCount":2,"activityType":"CONFIGURACION","motivo":"<reunión o nota>"},
   {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión o nota>"}
-],"observaciones":["<una oración>"]}}
+],"observaciones":["<una oración>"]}
 - En "ajustar" incluye SOLO los campos que cambian, y siempre "motivo".
 - "activityType" de una fase nueva: ${ACTIVITY_TYPES.join(" | ")}, o null.`;

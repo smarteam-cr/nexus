@@ -119,7 +119,7 @@ export const REGLA_DE_FRONTERA_DE_ESTRUCTURA =
 
 const PEDIDO_DE_ESTRUCTURA =
   "Revisa si lo que eligió el CSE obliga a cambiar las fases o los tiempos del calendario de arriba. " +
-  'Devuelve SOLO el JSON del formato indicado; si nada cambia, "cambios": [].';
+  'Devuelve SOLO el JSON del formato indicado, sin texto antes ni después; si nada cambia, "cambios": [].';
 
 /**
  * El mensaje completo: instrucciones del CSE + fuentes + frontera + el pedido. La ruta no arma
