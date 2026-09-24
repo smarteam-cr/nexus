@@ -19,6 +19,8 @@
  *                                                           que no entró queda en observaciones)
  *   200 { estado: "propuesta", proposal, runId, observaciones }
  *   400 NO_TIMELINE · 403 (sin permiso de IA) · 409 PROPUESTA_PENDIENTE · 500 ESTRUCTURA_FALLO
+ * Si el material trae un plazo total, una de las `observaciones` es la del SISTEMA (`fraseDelPlazo`):
+ * el modelo solo devuelve la semana en que vence; la comparación con el cierre la hace el código.
  *
  * Sin body. Pide la MISMA vara que el paso 2 y que «Pedir cambio con IA» (`guardIaDelCronograma`):
  * dos pasos de una misma acción no pueden pedir permisos distintos.
@@ -33,6 +35,7 @@ import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { ID_ESTRUCTURA_CRONOGRAMA, PROMPT_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
 import { cargarContextoDeEstructura } from "@/lib/contexto/cargar";
 import {
+  cierreActualDelPlan,
   fotoDeEstructura,
   hayQueRevisarLasFases,
   renderEstructuraDelCronograma,
@@ -99,7 +102,11 @@ export async function POST(
   const iaGate = await guardIaDelCronograma(tl.id);
   if (iaGate instanceof NextResponse) return iaGate;
 
-  const contexto = await cargarContextoDeEstructura(projectId, fotoDeEstructura(tl));
+  /* UNA foto y UN reloj para el calendario que lee el modelo y para el armador: el plazo total se
+     compara contra el MISMO «CIERRE ACTUAL» que leyó el modelo (depende de hoy). */
+  const foto = fotoDeEstructura(tl);
+  const ahora = Date.now();
+  const contexto = await cargarContextoDeEstructura(projectId, foto, ahora);
   /* ⭐ SIN MATERIAL NI INSTRUCCIONES, NADA: ni corrida, ni modelo. «Regenerar todo» sigue exactamente
      como antes. Va ANTES del 409 (revisión del paso A2): con una propuesta del handoff pendiente y
      nada elegido, «Generar cronograma» avisaba «Hay cambios de fases sin revisar… para que la IA
@@ -184,10 +191,13 @@ export async function POST(
     crudo,
     anchorISO: tl.anchorStartDate?.toISOString() ?? null,
     huellas: huellasDeFrontera(contexto.materialInterno ?? []),
-    ahora: Date.now(),
+    ahora,
     /* Desarrollo y Web no tienen Semana 0: su primera fase es trabajo real. La MISMA decisión que
        nombra la Semana 0 en el calendario que leyó el modelo (cargarContextoDeEstructura). */
     conSemanaCero: !claveConVozDeHandoffPropia(contexto.pipelineKey ?? null),
+    /* ⭐ El plazo total lo compara el SISTEMA (medido en vivo 2026-09-24: el modelo invertía la
+       dirección 6 de 6): contra el cierre actual del calendario que leyó, misma foto y mismo reloj. */
+    cierreActual: cierreActualDelPlan(foto, ahora)?.semana ?? null,
   });
 
   if (!armado.propuesta) {

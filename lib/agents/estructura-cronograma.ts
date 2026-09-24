@@ -23,7 +23,8 @@
  *     «observaciones» y lo decide una persona.
  *  3. Un plazo total sin detalle por fase («son 12 semanas») no se reparte: solo se compara el
  *     cierre actual contra el acordado, en «observaciones», y en la dirección correcta: si el plan
- *     dura más, dice por cuántas semanas SE PASA.
+ *     dura más, dice por cuántas semanas SE PASA. ⭐ Esa cuenta la hace el SISTEMA, no el modelo
+ *     (desde el 2026-09-24): el modelo devuelve `plazoTotal` y la frase la escribe `fraseDelPlazo`.
  *  4. El peso de las fuentes es el de todos los agentes del cronograma (`PESO_DE_LAS_FUENTES`):
  *     las instrucciones del CSE mandan, después lo elegido (y entre eso, lo más reciente), después
  *     el handoff.
@@ -46,11 +47,10 @@
  *    mandan); lo que no es motivo es que el TEMA de una fase choque con una EXCLUSIÓN de las
  *    instrucciones («nada de integraciones»). El texto medido prohibía «cambiar o renombrar porque
  *    choca con las instrucciones», que también frenaba un brief que PIDE un cambio.
- *  · El plazo total: la observación usa una de tres frases fijas (`fraseDelPlazo`). El texto medido
- *    decía «anota el cierre actual contra el plazo acordado», y en 5 de 24 corridas la observación
- *    decía lo contrario de la verdad («3 semanas de holgura» con el plan 3 semanas PASADO). El
- *    calendario cerraba con el «LARGO DEL PLAN HOY» y la cuenta hecha (desde el 2026-09-24, con el
- *    «CIERRE ACTUAL»: ver abajo).
+ *  · El plazo total: el texto medido decía «anota el cierre actual contra el plazo acordado», y en 5
+ *    de 24 corridas la observación decía lo contrario de la verdad («3 semanas de holgura» con el plan
+ *    3 semanas PASADO). Se le dieron tres frases fijas y el «CIERRE ACTUAL» con la resta explicada:
+ *    ver abajo, «EL PLAZO TOTAL LO COMPARA EL SISTEMA».
  *  · (segunda vuelta de la revisión) El «motivo» cita también las instrucciones del CSE («escribe
  *    "Instrucciones del CSE:"»): la regla y el ejemplo del FORMATO solo nombraban la reunión o la
  *    nota, y el armador exige que un renombre de «Desarrollo / Integración» cite su fuente. Y el
@@ -70,18 +70,23 @@
  *  El «sin markdown» sigue sin cumplirse cuando hay cambios (6 de 6 con ```json): la ruta ya no
  *  depende de eso (`leerRespuestaDeEstructura`).
  *
+ * ── ⭐ EL PLAZO TOTAL LO COMPARA EL SISTEMA (fase final, medido en vivo 2026-09-24, CAV) ──
+ * Con las tres frases fijas y el «CIERRE ACTUAL» en números, el kick-off de CAV dice «plazo de 12
+ * semanas» y el plan cierra en la semana 15 (fijado a mano): 6 de 6 corridas escribieron «quedan 3
+ * semanas de margen» (al revés), calcularon mal la semana de cierre en las observaciones, y 1 de 6
+ * del control negativo redistribuyó fases para entrar en el plazo. Ahora el modelo NO compara:
+ * devuelve `"plazoTotal": {"semana": M, "fuente"}` (o null) y la observación la escribe el código
+ * (`fraseDelPlazo`, lib/timeline/propuesta-de-estructura.ts) contra el MISMO cierre actual que leyó en
+ * el calendario. El calendario dice cómo pasar el plazo a M: una DURACIÓN del proyecto se cuenta desde
+ * el arranque (M = ese número, sin sumarle nada); solo lo contado desde HOY suma la semana de hoy (sin
+ * esa aclaración, 6 de 12 le sumaron la semana de hoy a una duración). Con este texto: 12 de 12 en la
+ * dirección correcta, M = 12 en las 12, y E1/E2/E3/E4 pasan 3 de 3.
+ *
  * ⚠ Los tipos de fase se interpolan desde el validador (`ACTIVITY_TYPES`), no se transcriben: un
  * tipo nuevo aparece solo. Los límites, desde el armador que los hace cumplir.
  */
 import { ACTIVITY_TYPES } from "@/lib/timeline/validate";
-import {
-  FRASE_PLAZO_JUSTO,
-  MAX_CAMBIOS,
-  MAX_FASES_NUEVAS,
-  MAX_OBSERVACIONES,
-  PLANTILLA_PLAZO_CON_MARGEN,
-  PLANTILLA_PLAZO_EXCEDIDO,
-} from "@/lib/timeline/propuesta-de-estructura";
+import { MAX_CAMBIOS, MAX_FASES_NUEVAS, MAX_OBSERVACIONES } from "@/lib/timeline/propuesta-de-estructura";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 
 /** Solo el slug del medidor y de la corrida. ⛔ No es el id de una fila de `Agent` (ver arriba). */
@@ -95,7 +100,7 @@ CUÁNDO PROPONER UN CAMBIO:
 - Lo que se suma SIN tiempo propio (un journey más, un piloto o una sesión sin duración, un orden de trabajo dentro de una fase) NO es una fase nueva ni alarga ninguna: lo arma el paso de las tareas. Si hace falta, anótalo en "observaciones".
 - «Sin cambios» es la respuesta normal. Si el material no pide cambiar fases ni tiempos, devuelve "cambios": [].
 - Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase: el plan se mantiene y el atraso queda como desviación. Anótalo en "observaciones".
-- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre», «nos quedan 6 semanas») NO se reparte entre las fases: anota en "observaciones" el cierre actual contra el plazo acordado, y el CSE decide. Compáralo con el «CIERRE ACTUAL» del calendario (ahí dice cómo pasar el plazo a una semana del proyecto: uno en fecha, o uno contado desde hoy) y dilo con UNA de estas frases, con N = la diferencia en semanas: si el plan cierra DESPUÉS del plazo, «${PLANTILLA_PLAZO_EXCEDIDO}»; si cierra ANTES, «${PLANTILLA_PLAZO_CON_MARGEN}»; si cierra en el plazo, «${FRASE_PLAZO_JUSTO}». Si el plan cierra después, nunca digas «holgura», «margen» ni «dentro del plazo».
+- Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre», «nos quedan 6 semanas») NO se reparte entre las fases ni mueve ninguna: devuélvelo en "plazoTotal", con "semana" = M, la semana del proyecto en que vence (el «CIERRE ACTUAL» del calendario dice cómo pasarlo a una semana), y "fuente" = de dónde sale (la reunión y su fecha, la nota o las instrucciones del CSE). NO lo compares tú con el cierre ni escribas esa comparación en "observaciones": la escribe el sistema, con la cuenta hecha. Tampoco calcules en "observaciones" cómo queda el cierre con tus cambios: el CSE lo ve en el Gantt. Sin un plazo total en el material, "plazoTotal": null.
 - ${PESO_DE_LAS_FUENTES}
 
 PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
@@ -123,6 +128,6 @@ FORMATO DE RESPUESTA — SOLO este JSON, sin texto antes ni después y sin markd
   {"tipo":"ajustar","faseId":"<id>","durationWeeks":5,"inicioSemana":7,"name":"<nombre nuevo>","sessionCount":3,"motivo":"<reunión, nota o instrucciones del CSE>"},
   {"tipo":"agregar","despuesDeFaseId":"<id>","name":"<nombre>","durationWeeks":1,"sessionCount":2,"activityType":"CONFIGURACION","motivo":"<reunión, nota o instrucciones del CSE>"},
   {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión, nota o instrucciones del CSE>"}
-],"observaciones":["<una oración>"]}
+],"observaciones":["<una oración>"],"plazoTotal":{"semana":9,"fuente":"<reunión y fecha, nota o instrucciones del CSE>"}}
 - En "ajustar" incluye SOLO los campos que cambian, y siempre "motivo".
 - "activityType" de una fase nueva: ${ACTIVITY_TYPES.join(" | ")}, o null.`;

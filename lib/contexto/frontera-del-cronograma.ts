@@ -105,7 +105,8 @@ const MESES =
   "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|" +
   "ene|feb|mar|abr|may|jun|jul|ago|sept?|oct|nov|dic";
 const FECHA = new RegExp(`\\b\\d{1,2}\\s+(?:de\\s+)?(?:${MESES})\\b`);
-const PLAZO = /\b\d+\s+(?:semanas?|mes|meses)\b/;
+/* Con días también (2026-09-24): «90 días», «30 días hábiles» son plazos igual que «12 semanas». */
+const PLAZO = /\b\d+\s+(?:semanas?|mes|meses|dias?)\b/;
 /* Sobre el texto ORIGINAL (la normalización se come los signos). */
 const FECHA_NUMERICA = /\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
 const MONTO = /(?:US\$|\$|₡|€|\bUSD|\bCRC|\bCLP|\bCOP|\bMXN|\bEUR)\s?\d|\d[\d.,]*\s?(?:usd|d[oó]lares|pesos|colones|euros)\b/i;

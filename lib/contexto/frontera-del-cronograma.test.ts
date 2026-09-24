@@ -51,6 +51,24 @@ describe("⭐ las fugas reales de la salida B se marcan", () => {
     });
   }
 
+  it("un plazo en DÍAS también es un plazo (2026-09-24)", () => {
+    /* «90 días» o «30 días» cruzaban la frontera igual que «12 semanas», y el detector solo conocía
+       semanas y meses. La edición que la pone en rojo: sacar «días» de `PLAZO`. */
+    for (const texto of [
+      "Reactivar a los socios que no abren correos hace 90 días",
+      "Seguimiento a los 30 días del go-live",
+      "Entrega en 1 día hábil",
+      "Plazo de 15 dias para la migración",
+    ]) {
+      expect(fugaEn(texto, h, "titulo"), texto).toBe(MOTIVOS_DE_FUGA.plazo);
+      expect(fugaEn(texto, h, "nota"), texto).toBe(MOTIVOS_DE_FUGA.plazo);
+    }
+    // Un número que no cuenta días no es un plazo: «Día 1», «2 diagramas», «las 3 dimensiones».
+    for (const texto of ["Sesión del día 1 del kick-off", "Revisar 2 diagramas de flujo", "Medir las 3 dimensiones del journey"]) {
+      expect(fugaEn(texto, h, "titulo"), texto).toBeNull();
+    }
+  });
+
   it("según la reunión, montos y correos también", () => {
     expect(fugaEn("Ajustar los segmentos según la reunión del jueves.", h)).toBe(MOTIVOS_DE_FUGA.cita);
     expect(fugaEn("Enviar la propuesta por $1.500", h, "titulo")).toBe(MOTIVOS_DE_FUGA.monto);

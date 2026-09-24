@@ -57,6 +57,9 @@
  * El `motivo` (interno, cita la reunión o la nota) viaja en la fase propuesta y en el delta, nunca
  * como un cambio: lo ve el CSE en el Gantt («Por qué (solo lo ves tú)») y el endpoint que aplica
  * nunca lo escribe (ver lib/timeline/proposal-deltas.ts).
+ *
+ * El PLAZO TOTAL tampoco lo compara el modelo (medido en vivo 2026-09-24: invertía la dirección 6 de
+ * 6): devuelve `plazoTotal` y la observación la escribe `fraseDelPlazo`, con la cuenta hecha.
  */
 import { ACTIVITY_TYPES } from "./validate";
 import { computePhaseRanges } from "./weeks";
@@ -142,13 +145,15 @@ const esEnteroEntre = (v: unknown, min: number, max: number): v is number =>
 const enSemanas = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
 const recortar = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
-/** Los cambios y las observaciones del JSON crudo: acepta `{estructura:{…}}` o el objeto suelto. */
-function leerCrudo(crudo: unknown): { cambios: unknown[]; observaciones: unknown[] } {
+/** Los cambios, las observaciones y el plazo total del JSON crudo: acepta `{estructura:{…}}` o el
+ *  objeto suelto. `plazoTotal` va CRUDO: lo valida `fraseDelPlazo`. */
+function leerCrudo(crudo: unknown): { cambios: unknown[]; observaciones: unknown[]; plazoTotal: unknown } {
   const raiz = esObjeto(crudo) && esObjeto(crudo.estructura) ? crudo.estructura : crudo;
-  if (!esObjeto(raiz)) return { cambios: [], observaciones: [] };
+  if (!esObjeto(raiz)) return { cambios: [], observaciones: [], plazoTotal: null };
   return {
     cambios: Array.isArray(raiz.cambios) ? raiz.cambios : [],
     observaciones: Array.isArray(raiz.observaciones) ? raiz.observaciones : [],
+    plazoTotal: raiz.plazoTotal ?? null,
   };
 }
 
@@ -163,6 +168,11 @@ function leerCrudo(crudo: unknown): { cambios: unknown[]; observaciones: unknown
  * @param ahora       para no mover una fase a una semana que ya pasó. Sin él no se mira.
  * @param conSemanaCero  si el proyecto TIENE Semana 0 / Kick-off (default true). ⛔ Desarrollo y
  *                    Web no tienen: su primera fase es trabajo real (ver `faseDeSemanaCero`).
+ * @param cierreActual   la semana del proyecto en que el plan cierra HOY: la MISMA que leyó el
+ *                    modelo en el calendario (`cierreActualDelPlan(foto, ahora).semana`, en
+ *                    lib/contexto/estructura-cronograma.ts, con la misma foto y el mismo `ahora`).
+ *                    Con él, el `plazoTotal` que devolvió el modelo vuelve como la observación
+ *                    del sistema (`fraseDelPlazo`). Sin él no se compara nada.
  */
 export function construirPropuestaDeEstructura(input: {
   fases: readonly FaseParaEstructura[];
@@ -171,6 +181,7 @@ export function construirPropuestaDeEstructura(input: {
   huellas?: HuellasDeFrontera | null;
   ahora?: number | null;
   conSemanaCero?: boolean;
+  cierreActual?: number | null;
 }): ResultadoDeEstructura {
   const fases = [...input.fases].sort((a, b) => a.order - b.order);
   const porId = new Map(fases.map((f) => [f.id, f]));
@@ -179,7 +190,7 @@ export function construirPropuestaDeEstructura(input: {
   const inicioActual = new Map(fases.map((f, i) => [f.id, rangos[i].start]));
   const semanaDeHoy = semanaDelProyecto(input.anchorISO, input.ahora ?? null);
 
-  const { cambios: todos, observaciones: obsCrudas } = leerCrudo(input.crudo);
+  const { cambios: todos, observaciones: obsCrudas, plazoTotal } = leerCrudo(input.crudo);
   const descartados: string[] = [];
   const observacionesDelModelo = obsCrudas
     .map(texto)
@@ -663,13 +674,25 @@ export function construirPropuestaDeEstructura(input: {
     for (const n of nuevas.filter((x) => x.despuesDe === id)) phases.push(n.fase);
   }
 
+  /* ⭐ EL PLAZO TOTAL LO COMPARA EL SISTEMA (medido en vivo 2026-09-24: el modelo invertía la
+     dirección 6 de 6). El modelo solo devuelve la semana en que vence y de dónde sale; la frase, con
+     la cuenta hecha contra el cierre actual, la escribe `fraseDelPlazo`. Un `plazoTotal` inválido
+     (no entero, fuera de 1..104) se ignora: no hay frase. */
+  const fraseDelSistema =
+    input.cierreActual != null && esObjeto(plazoTotal)
+      ? fraseDelPlazo({ semanaAcordada: plazoTotal.semana, cierreActual: input.cierreActual, fuente: plazoTotal.fuente })
+      : null;
+  const delSistema = fraseDelSistema ? [recortar(fraseDelSistema, MAX_LARGO_OBSERVACION)] : [];
+
   /* UN solo tope de observaciones, al final (revisión del paso A2): antes se recortaban las del
-     modelo y cada fase descartada sumaba otra encima (5 + 2 = 7). Las del armador van siempre —son
-     lo acordado que no entró y el CSE lo tiene que decidir a mano— y las del modelo llenan el
-     resto, en su orden. */
+     modelo y cada fase descartada sumaba otra encima (5 + 2 = 7). La del plazo va siempre (es la
+     única cuenta que el CSE no ve en otro lado), las del armador también —son lo acordado que no
+     entró y el CSE lo tiene que decidir a mano— y las del modelo llenan el resto, en su orden. */
+  const delArmador = observacionesDelArmador.slice(0, MAX_OBSERVACIONES - delSistema.length);
   const observaciones = [
-    ...observacionesDelModelo.slice(0, Math.max(0, MAX_OBSERVACIONES - observacionesDelArmador.length)),
-    ...observacionesDelArmador.slice(0, MAX_OBSERVACIONES),
+    ...observacionesDelModelo.slice(0, Math.max(0, MAX_OBSERVACIONES - delSistema.length - delArmador.length)),
+    ...delArmador,
+    ...delSistema,
   ];
 
   const propuesta: ProposalLike = {
@@ -831,27 +854,45 @@ function ultimaRespuestaEn(texto: string): Record<string, unknown> | null {
  * compara el cierre actual contra el acordado, en una observación. La prueba en vivo (A3) mostró que
  * esa observación podía decir lo contrario de la verdad: con el plan en 15 semanas y 12 acordadas,
  * las 3 corridas de E3 dijeron «3 semanas de holgura», y otras dos «dentro del plazo». El CSE
- * recibía una nota interna que TAPABA 3 semanas de exceso. Por eso el prompt obliga a UNA de estas
- * frases (N = la diferencia en semanas), el calendario del revisor trae el CIERRE ACTUAL en
- * números (`lineaDelCierreActual`, lib/contexto/estructura-cronograma.ts: el fijado a mano, u hoy si
- * el planificado ya pasó con fases sin terminar; revisión adversarial, 2026-09-24) y
- * `revisarDireccionDelPlazo` mide la dirección en la prueba en vivo. ⚠ Quien la llame le pasa como
- * `semanasDelPlan` la semana del cierre ACTUAL (`cierreActualDelPlan(...).semana`), no el largo de las
- * fases: medir contra la misma base equivocada que el texto no detectaría el error.
+ * recibía una nota interna que TAPABA 3 semanas de exceso. Se probó obligar al modelo a UNA de tres
+ * frases, con el CIERRE ACTUAL en números y la resta explicada en el calendario: igual escribió
+ * «quedan 3 semanas de margen» con el plan 3 semanas pasado.
+ *
+ * ⭐ LA CUENTA PASA AL CÓDIGO (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; con
+ * esto, 12 de 12 en la dirección correcta). El modelo devuelve `"plazoTotal": {"semana": M, "fuente"}`
+ * —M, la semana del proyecto en que vence— y `fraseDelPlazo` escribe la comparación contra el cierre
+ * actual (`cierreActualDelPlan`, lib/contexto/estructura-cronograma.ts: el fijado a mano, u hoy si el
+ * planificado ya pasó con fases sin terminar): el MISMO que leyó el modelo en su calendario, con la
+ * misma foto y el mismo `ahora` (ver la ruta). `revisarDireccionDelPlazo` sigue midiendo, en la prueba
+ * en vivo, que ninguna observación diga lo contrario.
  */
-export const PLANTILLA_PLAZO_EXCEDIDO = "el plan se pasa N semanas del plazo acordado";
-export const PLANTILLA_PLAZO_CON_MARGEN = "quedan N semanas de margen";
-export const FRASE_PLAZO_JUSTO = "el plan cierra justo en el plazo acordado";
+export const FRASE_PLAZO_JUSTO = "El plan cierra justo en el plazo acordado";
+/** Hasta qué semana del proyecto se acepta un plazo total (dos años: lo mismo que `inicioSemana`). */
+export const MAX_SEMANA_DEL_PLAZO = 104;
+/** De dónde sale el plazo (la reunión y su fecha, la nota o las instrucciones): corto, es interno. */
+const MAX_LARGO_FUENTE_DEL_PLAZO = 160;
 
-/** La frase exacta para un plan de `semanasDelPlan` contra un plazo de `semanasAcordadas`. */
-export function fraseDelPlazo(semanasDelPlan: number, semanasAcordadas: number): string {
-  const d = Math.abs(semanasDelPlan - semanasAcordadas);
-  const semanas = `${d} ${d === 1 ? "semana" : "semanas"}`;
-  if (semanasDelPlan > semanasAcordadas) return PLANTILLA_PLAZO_EXCEDIDO.replace("N semanas", semanas);
-  if (semanasDelPlan < semanasAcordadas) {
-    return d === 1 ? "queda 1 semana de margen" : PLANTILLA_PLAZO_CON_MARGEN.replace("N semanas", semanas);
-  }
-  return FRASE_PLAZO_JUSTO;
+/**
+ * LA OBSERVACIÓN DEL PLAZO TOTAL, con la cuenta hecha: el cierre actual contra la semana en que vence
+ * lo acordado. Pura. null si `semanaAcordada` o `cierreActual` no son enteros de 1 a
+ * MAX_SEMANA_DEL_PLAZO (lo que devolvió el modelo no se compara a ciegas).
+ *  · cierre DESPUÉS del plazo → «El plan se pasa N semanas del plazo acordado (semana M): …»
+ *  · cierre ANTES             → «Quedan N semanas de margen hasta el plazo acordado (semana M): …»
+ *  · en la misma semana       → «El plan cierra justo en el plazo acordado (semana M).»
+ * Con `fuente`, cierra con «Fuente: …».
+ */
+export function fraseDelPlazo(p: { semanaAcordada: unknown; cierreActual: unknown; fuente?: unknown }): string | null {
+  const { semanaAcordada: M, cierreActual: C } = p;
+  if (!esEnteroEntre(M, 1, MAX_SEMANA_DEL_PLAZO) || !esEnteroEntre(C, 1, MAX_SEMANA_DEL_PLAZO)) return null;
+  const d = Math.abs(C - M);
+  const frase =
+    C > M
+      ? `El plan se pasa ${enSemanas(d)} del plazo acordado (semana ${M}): el cierre actual es la semana ${C}.`
+      : C < M
+        ? `${d === 1 ? "Queda" : "Quedan"} ${enSemanas(d)} de margen hasta el plazo acordado (semana ${M}): el cierre actual es la semana ${C}.`
+        : `${FRASE_PLAZO_JUSTO} (semana ${M}).`;
+  const fuente = recortar(texto(p.fuente).replace(/[\s.;:,]+$/, ""), MAX_LARGO_FUENTE_DEL_PLAZO);
+  return fuente ? `${frase} Fuente: ${fuente}.` : frase;
 }
 
 /** Lo que dice lo contrario de la verdad, según hacia dónde va el plan (sobre el texto normalizado). */
@@ -863,9 +904,9 @@ const DICE_QUE_NO_ES_JUSTO = [/\bholgura\b/, /\bmargen\b/, ...DICE_QUE_SE_PASA];
 const NEGACION = /\b(sin|no|ningun|ninguna|ni|nunca|tampoco)\b/;
 
 /**
- * La frase esperada como patrón, tolerando el número (revisión del paso A3, segunda vuelta): el
- * prompt da las plantillas en plural, así que con 1 semana de diferencia el modelo escribe «se pasa 1
- * semanas» o «quedan 1 semanas de margen», que dicen lo correcto.
+ * La frase esperada como patrón, tolerando el número (revisión del paso A3, segunda vuelta): cuando
+ * el modelo escribía la comparación, con 1 semana de diferencia ponía «se pasa 1 semanas» o «quedan 1
+ * semanas de margen», que dicen lo correcto. Reconoce también la de `fraseDelPlazo` (empieza igual).
  */
 function patronDelPlazo(semanasDelPlan: number, semanasAcordadas: number): RegExp {
   const d = Math.abs(semanasDelPlan - semanasAcordadas);
@@ -893,19 +934,20 @@ function afirma(observacion: string, patrones: readonly RegExp[]): boolean {
 
 /**
  * ¿Las observaciones comparan el plan contra un plazo total EN LA DIRECCIÓN CORRECTA? Pura, para la
- * prueba en vivo del revisor. Pide que alguna observación sobre el cierre traiga
- * `fraseDelPlazo(semanasDelPlan, semanasAcordadas)` (en singular o plural) y que ninguna de las que
- * hablan del cierre afirme lo contrario («holgura», «margen» o «dentro del plazo» si el plan se pasa;
- * «se pasa», «excede» o «supera» si sobra). Habla del cierre la que trae la frase, «M semanas»,
- * «plazo acordado» o «plazo total», o «plazo» junto al cierre: otra observación con «a tiempo» (una
- * entrega que llegó a tiempo) no se mide.
+ * prueba en vivo del revisor, sobre las observaciones FINALES del armador (con la del sistema). Pide
+ * que alguna observación sobre el cierre traiga la frase de `fraseDelPlazo` (en singular o plural) y
+ * que ninguna de las que hablan del cierre afirme lo contrario («holgura», «margen» o «dentro del
+ * plazo» si el plan se pasa; «se pasa», «excede» o «supera» si sobra): el modelo ya no escribe la
+ * comparación, pero si la escribe igual y al revés, esto la marca. Habla del cierre la que trae la
+ * frase, «M semanas», «plazo acordado» o «plazo total», o «plazo» junto al cierre: otra observación
+ * con «a tiempo» (una entrega que llegó a tiempo) no se mide.
  */
 export function revisarDireccionDelPlazo(
   observaciones: readonly string[],
   semanasDelPlan: number,
   semanasAcordadas: number,
 ): { ok: boolean; motivo: string } {
-  const esperada = fraseDelPlazo(semanasDelPlan, semanasAcordadas);
+  const esperada = fraseDelPlazo({ semanaAcordada: semanasAcordadas, cierreActual: semanasDelPlan }) ?? "";
   const patron = patronDelPlazo(semanasDelPlan, semanasAcordadas);
   const delCierre = observaciones.filter((o) => {
     const n = normalizarParaFrontera(o);

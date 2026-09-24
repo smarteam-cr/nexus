@@ -24,8 +24,7 @@ import {
   FRASE_PLAZO_JUSTO,
   MAX_FASES_NUEVAS,
   MAX_OBSERVACIONES,
-  PLANTILLA_PLAZO_CON_MARGEN,
-  PLANTILLA_PLAZO_EXCEDIDO,
+  MAX_SEMANA_DEL_PLAZO,
   construirPropuestaDeEstructura,
   fraseDelPlazo,
   leerRespuestaDeEstructura,
@@ -888,14 +887,11 @@ describe("(a) · la respuesta del modelo se lee aunque venga envuelta", () => {
 
 describe("(b) · el plazo total contra el plan, en la dirección correcta", () => {
   /* Prueba A3: con el plan en 15 semanas y 12 acordadas, las 3 corridas de E3 dijeron «3 semanas de
-     holgura» y otras dos «dentro del plazo». El comparador solo buscaba «12 semanas» y no lo vio. */
-  it("la frase exacta, en las tres direcciones y en singular", () => {
-    expect(fraseDelPlazo(15, 12)).toBe("el plan se pasa 3 semanas del plazo acordado");
-    expect(fraseDelPlazo(13, 12)).toBe("el plan se pasa 1 semana del plazo acordado");
-    expect(fraseDelPlazo(10, 12)).toBe("quedan 2 semanas de margen");
-    expect(fraseDelPlazo(11, 12)).toBe("queda 1 semana de margen");
-    expect(fraseDelPlazo(12, 12)).toBe(FRASE_PLAZO_JUSTO);
-  });
+     holgura» y otras dos «dentro del plazo». El comparador solo buscaba «12 semanas» y no lo vio.
+     ⚠ ACTUALIZADA (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta pasa
+     al código): pedía las frases en minúscula que el prompt obligaba a copiar. Ahora `fraseDelPlazo`
+     escribe la observación entera, con la semana acordada y el cierre actual: sus guardas están en
+     «(b2)». Lo de fondo —la dirección, en singular y en plural— se sigue pidiendo allá. */
 
   it("el revisor de la prueba en vivo: marca las observaciones reales que decían lo contrario", () => {
     const E3 =
@@ -908,7 +904,9 @@ describe("(b) · el plazo total contra el plan, en la dirección correcta", () =
     const sinFrase =
       "El kick-off fijó un plazo de 12 semanas; el cierre planificado actual es semana 15, lo que excede ese plazo.";
     for (const o of [E3, E1, sinFrase]) expect(revisarDireccionDelPlazo([o], 15, 12).ok, o).toBe(false);
-    expect(revisarDireccionDelPlazo([E3], 15, 12).motivo).toContain("el plan se pasa 3 semanas del plazo acordado");
+    /* (2026-09-24: el motivo cita la frase del SISTEMA, que ahora empieza en mayúscula y dice la
+       semana acordada; antes, la minúscula que copiaba el modelo.) */
+    expect(revisarDireccionDelPlazo([E3], 15, 12).motivo).toContain("El plan se pasa 3 semanas del plazo acordado (semana 12)");
   });
 
   it("acepta la frase correcta y rechaza una contraria al lado", () => {
@@ -958,22 +956,182 @@ describe("(b) · el plazo total contra el plan, en la dirección correcta", () =
     ).toBe(false);
   });
 
-  it("el prompt obliga a esas frases, desde las mismas constantes", () => {
-    /* La edición que la pone en rojo: volver a «anota el cierre actual contra el plazo acordado» a
-       secas, o escribir las frases a mano en el prompt (dejarían de ser las que mide la prueba). */
+  it("el prompt pide `plazoTotal` y le PROHÍBE al modelo escribir la comparación", () => {
+    /* ⚠ ACTUALIZADA (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta pasa
+       al código), con esta razón: pedía que la regla obligara al modelo a copiar una de tres frases
+       interpoladas de las constantes. Con esas frases y el «CIERRE ACTUAL» en números, las 6 corridas
+       del kick-off de CAV escribieron «quedan 3 semanas de margen» con el plan 3 semanas pasado. Lo de
+       fondo —un plazo total no se reparte y se lee contra el «CIERRE ACTUAL»— se sigue pidiendo.
+       La edición que la pone en rojo: volver a pedirle al modelo que compare, sacar `plazoTotal` de la
+       regla o del formato, o volver a interpolarle las frases. */
     const P = PROMPT_ESTRUCTURA_CRONOGRAMA;
     const regla = P.split("\n").find((l) => l.includes("plazo TOTAL")) ?? "";
-    for (const f of [PLANTILLA_PLAZO_EXCEDIDO, PLANTILLA_PLAZO_CON_MARGEN, FRASE_PLAZO_JUSTO]) expect(regla).toContain(`«${f}»`);
-    /* (2026-09-24: el calendario cierra con el «CIERRE ACTUAL» —el fijado a mano, u hoy si el
-       planificado ya pasó— en vez del «LARGO DEL PLAN HOY», y el prompt nombra el plazo contado desde
-       hoy. La edición que la pone en rojo: volver a comparar contra el largo de las fases.) */
+    expect(regla).toMatch(/NO se reparte entre las fases ni mueve ninguna/);
+    expect(regla).toContain('devuélvelo en "plazoTotal", con "semana" = M');
     expect(regla).toContain("«CIERRE ACTUAL»");
-    expect(regla).toMatch(/contado desde hoy/);
+    expect(regla).toContain('NO lo compares tú con el cierre ni escribas esa comparación en "observaciones": la escribe el sistema');
+    expect(regla).toMatch(/Tampoco calcules en "observaciones" cómo queda el cierre con tus cambios/);
+    expect(regla).toContain('Sin un plazo total en el material, "plazoTotal": null.');
+    expect(regla, "volvió a pedirle al modelo la frase de la comparación").not.toMatch(/se pasa|de margen|justo en el plazo/);
     expect(regla).not.toContain("LARGO DEL PLAN");
-    expect(regla).toMatch(/nunca digas «holgura», «margen» ni «dentro del plazo»/);
     const src = fs.readFileSync(path.join(process.cwd(), "lib/agents/estructura-cronograma.ts"), "utf8");
-    expect(src).toContain("${PLANTILLA_PLAZO_EXCEDIDO}");
-    expect(src).toContain("${PLANTILLA_PLAZO_CON_MARGEN}");
+    expect(src, "el prompt volvió a interpolar las frases de la comparación").not.toMatch(/PLANTILLA_PLAZO|FRASE_PLAZO_JUSTO/);
+  });
+});
+
+describe("(b2) · el plazo total lo compara el SISTEMA, no el modelo (medido en vivo 2026-09-24)", () => {
+  /* Con las tres frases fijas y el «CIERRE ACTUAL» en números, el kick-off de CAV («plazo de 12
+     semanas») contra un plan que cierra en la 15 dio «quedan 3 semanas de margen» 6 de 6 veces. El
+     modelo ahora devuelve `plazoTotal` y la observación la escribe `fraseDelPlazo`: 12 de 12. */
+  it("la frase, en las tres direcciones, en singular y con la fuente", () => {
+    /* La edición que la pone en rojo: invertir la resta o la comparación (el error que cometía el
+       modelo), o perder la semana acordada o el cierre actual del texto. */
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 15 })).toBe(
+      "El plan se pasa 3 semanas del plazo acordado (semana 12): el cierre actual es la semana 15.",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 13 })).toBe(
+      "El plan se pasa 1 semana del plazo acordado (semana 12): el cierre actual es la semana 13.",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 10 })).toBe(
+      "Quedan 2 semanas de margen hasta el plazo acordado (semana 12): el cierre actual es la semana 10.",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 11 })).toBe(
+      "Queda 1 semana de margen hasta el plazo acordado (semana 12): el cierre actual es la semana 11.",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 12 })).toBe(`${FRASE_PLAZO_JUSTO} (semana 12).`);
+    // La fuente cierra la observación, sin su punto final repetido.
+    expect(
+      fraseDelPlazo({ semanaAcordada: 12, cierreActual: 15, fuente: "  Reunión 'Kick off - CAV', 23 sep 2026: 12 semanas.  " }),
+    ).toBe(
+      "El plan se pasa 3 semanas del plazo acordado (semana 12): el cierre actual es la semana 15. " +
+        "Fuente: Reunión 'Kick off - CAV', 23 sep 2026: 12 semanas.",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: 15, fuente: "x".repeat(400) })!.length).toBeLessThan(300);
+  });
+
+  it("una semana acordada inválida no se compara a ciegas: null", () => {
+    /* La edición que la pone en rojo: sacar la validación (un «12» en texto, un 0 o un 12,5 darían
+       una cuenta inventada, o «NaN semanas»). */
+    for (const M of [0, -3, MAX_SEMANA_DEL_PLAZO + 1, 12.5, Number.NaN, "12", null, undefined, { semana: 12 }]) {
+      expect(fraseDelPlazo({ semanaAcordada: M, cierreActual: 15 }), String(M)).toBeNull();
+    }
+    for (const C of [0, 15.5, null, "15"]) expect(fraseDelPlazo({ semanaAcordada: 12, cierreActual: C }), String(C)).toBeNull();
+    expect(fraseDelPlazo({ semanaAcordada: 1, cierreActual: MAX_SEMANA_DEL_PLAZO })).not.toBeNull();
+  });
+
+  const armarConPlazo = (plazoTotal: unknown, extra: Partial<Parameters<typeof construirPropuestaDeEstructura>[0]> = {}) =>
+    construirPropuestaDeEstructura({
+      fases: FASES,
+      anchorISO: null,
+      cierreActual: 15,
+      crudo: { cambios: [], observaciones: ["El kick-off acordó una duración de 12 semanas."], plazoTotal },
+      ...extra,
+    });
+
+  it("el armador suma la frase del sistema al final de las observaciones", () => {
+    /* La edición que la pone en rojo: dejar de leer `plazoTotal`, no sumar la frase, o compararla
+       contra otra cosa que el `cierreActual` que le pasa la ruta. */
+    const r = armarConPlazo({ semana: 12, fuente: "Kick off - CAV (23 sep 2026)" });
+    expect(r.observaciones).toEqual([
+      "El kick-off acordó una duración de 12 semanas.",
+      "El plan se pasa 3 semanas del plazo acordado (semana 12): el cierre actual es la semana 15. Fuente: Kick off - CAV (23 sep 2026).",
+    ]);
+    expect(r.propuesta).toBeNull();
+    // No es lo acordado que no entró: la pantalla puede seguir diciendo que no piden cambios de fases.
+    expect(r.acordadoSinEntrar).toBe(0);
+    // Dentro del envoltorio {estructura:{…}} también se lee, y sin fuente la frase va sola.
+    const envuelto = construirPropuestaDeEstructura({
+      fases: FASES,
+      anchorISO: null,
+      cierreActual: 10,
+      crudo: { estructura: { cambios: [], observaciones: [], plazoTotal: { semana: 12 } } },
+    });
+    expect(envuelto.observaciones).toEqual([
+      "Quedan 2 semanas de margen hasta el plazo acordado (semana 12): el cierre actual es la semana 10.",
+    ]);
+  });
+
+  it("sin plazo total, con uno inválido o sin cierre actual: ninguna frase del sistema", () => {
+    /* La edición que la pone en rojo: aceptar un `plazoTotal` que no es un objeto con una semana
+       entera de 1 a 104, o comparar sin el cierre que leyó el modelo. */
+    const soloLaDelModelo = ["El kick-off acordó una duración de 12 semanas."];
+    for (const plazoTotal of [
+      undefined,
+      null,
+      12,
+      "12",
+      { semana: "12" },
+      { semana: 0 },
+      { semana: 200 },
+      { semana: 12.5 },
+      { fuente: "Kick off" },
+    ]) {
+      expect(armarConPlazo(plazoTotal).observaciones, JSON.stringify(plazoTotal)).toEqual(soloLaDelModelo);
+    }
+    expect(armarConPlazo({ semana: 12, fuente: "Kick off" }, { cierreActual: null }).observaciones).toEqual(soloLaDelModelo);
+    expect(armarConPlazo({ semana: 12, fuente: "Kick off" }, { cierreActual: undefined }).observaciones).toEqual(
+      soloLaDelModelo,
+    );
+  });
+
+  it("con el tope lleno, la frase del plazo va siempre; después lo acordado que no entró", () => {
+    /* La edición que la pone en rojo: sumar la frase DESPUÉS de cortar (se perdería con 5
+       observaciones), o cortar lo acordado que no entró para hacerle lugar. */
+    const r = construirPropuestaDeEstructura({
+      fases: FASES,
+      anchorISO: null,
+      huellas: huellasDeFrontera(["Se acordó un piloto de una semana con Rafaela Pinzón."]),
+      cierreActual: 15,
+      crudo: {
+        cambios: [
+          { tipo: "agregar", despuesDeFaseId: "b", name: "Piloto de 1 semana", durationWeeks: 1, motivo: "M" },
+          { tipo: "agregar", despuesDeFaseId: "c", name: "Cierre 31 de diciembre", durationWeeks: 1, motivo: "M" },
+        ],
+        observaciones: ["o1", "o2", "o3", "o4", "o5"],
+        plazoTotal: { semana: 12, fuente: "Kick off" },
+      },
+    });
+    expect(r.observaciones).toHaveLength(MAX_OBSERVACIONES);
+    expect(r.observaciones.slice(0, 2)).toEqual(["o1", "o2"]);
+    expect(r.observaciones.join(" ")).toContain("«Piloto de 1 semana»");
+    expect(r.observaciones.join(" ")).toContain("«Cierre 31 de diciembre»");
+    expect(r.observaciones.at(-1)).toMatch(/^El plan se pasa 3 semanas del plazo acordado \(semana 12\)/);
+    expect(r.acordadoSinEntrar).toBe(2);
+  });
+
+  it("la dirección ya no depende del texto del modelo: sin que él compare, la medición da bien", () => {
+    /* Lo que midió la prueba en vivo: con `plazoTotal` y observaciones del modelo que NO comparan,
+       `revisarDireccionDelPlazo` sobre las observaciones finales da ok. Y si el modelo igual escribe
+       la comparación al revés, la medición la sigue marcando. La edición que la pone en rojo: pasarle
+       al armador el cierre y el plazo cruzados, o dejar de sumar la frase. */
+    const bien = armarConPlazo({ semana: 12, fuente: "Kick off - CAV (23 sep 2026)" });
+    expect(revisarDireccionDelPlazo(bien.observaciones, 15, 12)).toEqual({ ok: true, motivo: "" });
+    const alReves = construirPropuestaDeEstructura({
+      fases: FASES,
+      anchorISO: null,
+      cierreActual: 15,
+      crudo: {
+        cambios: [],
+        observaciones: ["El kick-off acordó 12 semanas y el plan cierra en la semana 15: hay 3 semanas de holgura."],
+        plazoTotal: { semana: 12 },
+      },
+    });
+    expect(revisarDireccionDelPlazo(alReves.observaciones, 15, 12).ok).toBe(false);
+  });
+
+  it("el formato del prompt trae `plazoTotal` y el armador lo convierte en la frase", () => {
+    /* La edición que la pone en rojo: sacar `plazoTotal` del ejemplo del formato, o cambiarle la forma
+       a una que el armador no lee. */
+    const P = PROMPT_ESTRUCTURA_CRONOGRAMA;
+    const desde = P.indexOf("FORMATO DE RESPUESTA");
+    const inicio = P.indexOf("\n{", desde) + 1;
+    const crudo = JSON.parse(P.slice(inicio, P.indexOf('\n- En "ajustar"', inicio)));
+    expect(crudo.plazoTotal).toEqual({ semana: 9, fuente: "<reunión y fecha, nota o instrucciones del CSE>" });
+    const r = construirPropuestaDeEstructura({ fases: FASES, crudo, anchorISO: null, cierreActual: 8 });
+    expect(r.observaciones.at(-1)).toBe(
+      "Queda 1 semana de margen hasta el plazo acordado (semana 9): el cierre actual es la semana 8. " +
+        "Fuente: <reunión y fecha, nota o instrucciones del CSE>.",
+    );
   });
 });
 
@@ -1184,7 +1342,11 @@ describe("G7 · el prompt lleva las decisiones de negocio, en tuteo", () => {
   it("un atraso que ya pasó no alarga la fase; un plazo total no se reparte", () => {
     /* Decisiones 1 y 3 de Elías: el plan cambia solo por lo acordado de acá en adelante. */
     expect(P).toMatch(/atraso que YA pasó[^\n]*NO alarga la fase[^\n]*observaciones/);
-    expect(P).toMatch(/plazo TOTAL[^\n]*NO se reparte[^\n]*cierre actual[^\n]*plazo acordado/);
+    /* ⚠ ACTUALIZADA (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta pasa
+       al código), con esta razón: pedía que el modelo anotara «el cierre actual contra el plazo
+       acordado». La decisión 3 sigue igual —no se reparte, se compara contra el cierre actual—, pero
+       la comparación la escribe el sistema: el modelo solo devuelve `plazoTotal`. */
+    expect(P).toMatch(/plazo TOTAL[^\n]*NO se reparte[^\n]*"plazoTotal"[^\n]*«CIERRE ACTUAL»[^\n]*la escribe el sistema/);
     expect(P).toMatch(/de acá en adelante/);
   });
 
@@ -1220,7 +1382,9 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
     /* La edición que la pone en rojo: volver al envoltorio {"estructura":{…}} —el que el modelo
        cerraba con una llave de más— o dejar el ejemplo con un JSON que no parsea. */
     const crudo = JSON.parse(ejemploDelFormato());
-    expect(Object.keys(crudo)).toEqual(["cambios", "observaciones"]);
+    /* ⚠ ACTUALIZADA (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta pasa
+       al código), con esta razón: el formato suma `plazoTotal`. Sigue PLANO, sin el envoltorio. */
+    expect(Object.keys(crudo)).toEqual(["cambios", "observaciones", "plazoTotal"]);
     const r = construirPropuestaDeEstructura({ fases: FASES, crudo, anchorISO: null });
     // Los tres traen ids de mentira: se leen y se descartan uno por uno (no se ignoran en bloque).
     expect(r.propuesta).toBeNull();

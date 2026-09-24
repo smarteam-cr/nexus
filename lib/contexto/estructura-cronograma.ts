@@ -13,7 +13,8 @@
  *                                 Rotulado como la BASE de los cambios, no «solo lectura»; dice
  *                                 cuál es la Semana 0 (o que el proyecto no tiene) y cierra con el
  *                                 CIERRE ACTUAL en números (el fijado a mano, o hoy si el planificado
- *                                 ya pasó) para comparar un plazo total sin leer al revés la resta.
+ *                                 ya pasó) y cómo pasar un plazo total a su semana. La comparación
+ *                                 la escribe el sistema, no el modelo (`fraseDelPlazo`).
  *   · instrucciones             — el brief `__doc`; con él solo, la revisión igual corre.
  *   · handoff-curado            — solo bloques confirmados, con un respaldo PROPIO sin handoff.
  *   · reuniones / notas         — lo que el CSE eligió, con los rótulos del motor del material.
@@ -35,12 +36,7 @@ import {
   type FotoDelCronograma,
 } from "./material-cronograma";
 import { timelineSpan } from "@/lib/timeline/weeks";
-import {
-  FRASE_PLAZO_JUSTO,
-  PLANTILLA_PLAZO_CON_MARGEN,
-  PLANTILLA_PLAZO_EXCEDIDO,
-  faseDeSemanaCero,
-} from "@/lib/timeline/propuesta-de-estructura";
+import { faseDeSemanaCero } from "@/lib/timeline/propuesta-de-estructura";
 
 /** El respaldo sin handoff. ⚠ No es SIN_HANDOFF_CONFIRMADO: este paso SIEMPRE tiene material. */
 export const SIN_HANDOFF_PARA_ESTRUCTURA = "(Sin handoff confirmado: apóyate solo en lo que eligió el CSE.)";
@@ -177,11 +173,20 @@ export function cierreActualDelPlan(foto: FotoDelCronograma | null | undefined, 
 }
 
 /**
- * La línea del calendario del revisor: el CIERRE ACTUAL (`cierreActualDelPlan`) y la cuenta del plazo
- * hecha con las MISMAS frases que el prompt obliga a usar (lib/timeline/propuesta-de-estructura.ts).
- * También dice cómo pasar a semanas del proyecto un plazo contado DESDE HOY («nos quedan 6 semanas»):
- * con la fórmula literal, M = 6 en la semana 10 daba «el plan se pasa 9 semanas» cuando quedaba 1 de
- * margen (revisión adversarial, 2026-09-24). "" sin fases.
+ * La línea del calendario del revisor: el CIERRE ACTUAL (`cierreActualDelPlan`) y cómo pasar un plazo
+ * total acordado a M, la semana del proyecto en que vence, para devolverlo en `plazoTotal`.
+ *
+ * ⛔ SIN LA COMPARACIÓN (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta
+ * pasa al código). Esta línea explicaba la resta («si M es menor que 15, el plan se pasa 15 − M…») y
+ * aun así el modelo escribía «quedan 3 semanas de margen» con el plan 3 semanas pasado. Ahora la
+ * comparación la escribe `fraseDelPlazo` (lib/timeline/propuesta-de-estructura.ts) contra ESTE mismo
+ * cierre: la ruta le pasa al armador `cierreActualDelPlan` con la misma foto y el mismo `ahora`.
+ *
+ * Una DURACIÓN del proyecto («son 12 semanas») se cuenta desde el arranque: M es ese número, sin
+ * sumarle nada (sin decirlo, 6 de 12 corridas le sumaron la semana de hoy). Solo un plazo contado
+ * DESDE HOY («nos quedan 6 semanas») suma la semana de hoy: con la fórmula literal, M = 6 en la semana
+ * 10 daba «el plan se pasa 9 semanas» cuando quedaba 1 de margen (revisión adversarial, 2026-09-24).
+ * "" sin fases.
  */
 export function lineaDelCierreActual(foto: FotoDelCronograma | null | undefined, ahora: number): string {
   const c = cierreActualDelPlan(foto, ahora);
@@ -197,15 +202,14 @@ export function lineaDelCierreActual(foto: FotoDelCronograma | null | undefined,
   const hoy = c.semanaDeHoy !== null ? ` Hoy es la semana ${c.semanaDeHoy} del proyecto.` : "";
   const desdeHoy =
     c.semanaDeHoy !== null
-      ? `si se cuenta desde hoy («nos quedan 6 semanas», «en dos meses»), súmale la semana de hoy: M = ${c.semanaDeHoy} + lo que dice`
-      : "si se cuenta desde hoy, sin fecha de arranque no se puede ubicar: dilo así, sin comparar";
+      ? `solo si se cuenta desde HOY («nos quedan 6 semanas», «en dos meses más»), súmale la semana de hoy: M = ${c.semanaDeHoy} + lo que dice`
+      : `si se cuenta desde hoy, sin fecha de arranque no se puede ubicar: "plazoTotal": null, y anótalo en "observaciones" sin comparar`;
   return (
     `⭐ CIERRE ACTUAL (sin los cambios que propongas): semana ${N} del proyecto — ${porque}.${hoy} ` +
-    `Un plazo total acordado se pasa primero a M, la semana del proyecto en que vence: si dice cuánto dura el ` +
-    `proyecto («son 12 semanas»), M es ese número; ${desdeHoy}; si es una fecha, M es la semana del proyecto en ` +
-    `que cae. Después se compara M contra ${N}: si M es menor que ${N}, ` +
-    `${PLANTILLA_PLAZO_EXCEDIDO.replace("N", `${N} − M`)}; si M es mayor que ${N}, ` +
-    `${PLANTILLA_PLAZO_CON_MARGEN.replace("N", `M − ${N}`)}; si son iguales, ${FRASE_PLAZO_JUSTO}.`
+    `Un plazo total acordado se devuelve en "plazoTotal" como M, la semana del proyecto en que vence (la ` +
+    `comparación con este cierre la hace el sistema): si dice cuánto dura el proyecto («son 12 semanas», «una ` +
+    `duración de 12 semanas»), se cuenta desde el arranque: M es ese número, sin sumarle nada; ${desdeHoy}; si ` +
+    `es una fecha, M es la semana del proyecto en que cae.`
   );
 }
 

@@ -167,8 +167,10 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(sinS0.slice(sinS0.lastIndexOf("\n") + 1)).toBe(lineaDelCierreActual(FOTO, AHORA));
     expect(lineaDeLaSemanaCero(FOTO, undefined)).toBe("");
     const cargador = soloCodigo(leer("lib/contexto/cargar.ts"));
+    /* (2026-09-24: `ahora` en vez de `Date.now()`: el reloj lo pasa la ruta, que compara el plazo
+       total contra el MISMO cierre actual. Lo de esta guarda —la decisión del pipeline— no cambió.) */
     expect(cargador).toContain(
-      "calendarioDeEstructura(foto, Date.now(), { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) })",
+      "calendarioDeEstructura(foto, ahora, { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) })",
     );
     const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/estructura/route.ts"));
     expect(ruta, "el armador no sabe si el proyecto tiene Semana 0").toContain(
@@ -176,15 +178,19 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     );
   });
 
-  it("⭐ cierra con el CIERRE ACTUAL en números y la cuenta del plazo hecha (revisión del paso A3)", () => {
+  it("⭐ cierra con el CIERRE ACTUAL en números y pide M, SIN la comparación (revisión del paso A3)", () => {
     /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: pedía el «LARGO DEL PLAN HOY»
        (el fin de las fases). La decisión de negocio compara el cierre ACTUAL con el plazo acordado: con
        un cierre fijado a mano es ese, y con el planificado ya pasado y fases sin terminar, hoy (ver las
-       dos guardas de abajo). Lo de fondo se sigue pidiendo igual: la última línea del calendario, la
-       cifra y la cuenta hecha con las MISMAS frases del prompt. Con el revisor en 15 semanas y un plazo
-       de 12 escribió «3 semanas de holgura» en las 3 corridas de E3: tenía el número y leyó al revés.
+       dos guardas de abajo).
+       ⚠ ACTUALIZADA OTRA VEZ (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la
+       cuenta pasa al código), con esta razón: pedía la cuenta hecha con las frases del prompt («si M es
+       menor que 15, el plan se pasa 15 − M…»), y con esa línea las 6 corridas del kick-off de CAV
+       escribieron «quedan 3 semanas de margen» con el plan 3 semanas pasado. La comparación la escribe
+       ahora `fraseDelPlazo`; la línea solo dice el cierre y cómo pasar el plazo a M para `plazoTotal`.
+       Lo de fondo se sigue pidiendo: la última línea del calendario y la cifra del cierre actual.
        La edición que la pone en rojo: sacar la línea de `calendarioDeEstructura`, contar la suma de las
-       duraciones en vez del calendario, o escribir las frases a mano. */
+       duraciones en vez del calendario, o volver a ponerle la comparación al modelo. */
     // S0 1 · Arquitectura 2–4 · Configuración FIJADA en 5–8: 8 semanas; hoy es la semana 4.
     for (const foto of [FOTO, { ...FOTO, anchorStartDate: null }]) {
       const cal = calendarioDeEstructura(foto, AHORA);
@@ -194,10 +200,16 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
       );
     }
     const linea = lineaDelCierreActual(FOTO, AHORA);
-    // La cuenta sale de las MISMAS frases que el prompt obliga y que mide la prueba en vivo.
-    expect(linea.replace("8 − M", "3")).toContain(fraseDelPlazo(8, 5));
-    expect(linea.replace("M − 8", "4")).toContain(fraseDelPlazo(8, 12));
-    expect(linea).toContain(fraseDelPlazo(8, 8));
+    expect(linea).toContain(
+      'Un plazo total acordado se devuelve en "plazoTotal" como M, la semana del proyecto en que vence (la comparación con este cierre la hace el sistema)',
+    );
+    expect(linea, "la línea volvió a explicarle la comparación al modelo").not.toMatch(
+      /Después se compara|se pasa|de margen|justo en el plazo/,
+    );
+    // Lo que el modelo NO compara lo compara el sistema contra ESTE cierre (8).
+    expect(fraseDelPlazo({ semanaAcordada: 5, cierreActual: cierreActualDelPlan(FOTO, AHORA)!.semana })).toMatch(
+      /^El plan se pasa 3 semanas del plazo acordado \(semana 5\)/,
+    );
     const enParalelo = { ...FOTO, phases: FOTO.phases.map((f) => (f.id === "conf" ? { ...f, startWeek: 2 } : f)) };
     expect(largoDelPlanEnSemanas(enParalelo)).toBe(6);
     expect(lineaDelCierreActual(enParalelo, AHORA)).toContain(": semana 6 del proyecto — el fin de las fases, de la semana 1 a la semana 6.");
@@ -216,7 +228,12 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(linea).toContain(
       "semana 11 del proyecto — el cierre fijado a mano, que es el que ve el CSE (las fases terminan en la semana 8)",
     );
-    expect(linea.replace("11 − M", "2"), "con 9 acordadas se pasa 2, no «queda 1 de margen»").toContain(fraseDelPlazo(11, 9));
+    /* (2026-09-24: la comparación la escribe el sistema contra este mismo cierre; antes se leía de la
+       cuenta que traía la línea.) */
+    expect(
+      fraseDelPlazo({ semanaAcordada: 9, cierreActual: cierreActualDelPlan(conFijado, AHORA)!.semana }),
+      "con 9 acordadas se pasa 2, no «queda 1 de margen»",
+    ).toMatch(/^El plan se pasa 2 semanas del plazo acordado \(semana 9\)/);
     expect(calendarioDeEstructura(conFijado, AHORA)).toContain("⭐ CIERRE ACTUAL (sin los cambios que propongas): semana 11 ");
   });
 
@@ -228,7 +245,10 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(cierreActualDelPlan(FOTO, tarde)).toMatchObject({ semana: 11, porque: "vencido", planificado: 8, semanaDeHoy: 11 });
     const linea = lineaDelCierreActual(FOTO, tarde);
     expect(linea).toContain("semana 11 del proyecto — hoy: el cierre planificado (semana 8) ya pasó y quedan fases sin terminar");
-    expect(linea.replace("11 − M", "2"), "con 9 acordadas ya se pasó 2").toContain(fraseDelPlazo(11, 9));
+    expect(
+      fraseDelPlazo({ semanaAcordada: 9, cierreActual: cierreActualDelPlan(FOTO, tarde)!.semana }),
+      "con 9 acordadas ya se pasó 2",
+    ).toMatch(/^El plan se pasa 2 semanas del plazo acordado \(semana 9\)/);
     // Todo terminado (o suspendido): el cierre es el planificado, aunque hoy sea después.
     const terminado = { ...FOTO, phases: FOTO.phases.map((f) => ({ ...f, status: "DONE" })) };
     expect(cierreActualDelPlan(terminado, tarde)).toMatchObject({ semana: 8, porque: "fases" });
@@ -240,12 +260,39 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
        semanas». La edición que la pone en rojo: sacar la regla del plazo contado desde hoy. */
     const linea = lineaDelCierreActual(FOTO, AHORA); // hoy: semana 4
     expect(linea).toContain("Hoy es la semana 4 del proyecto.");
+    /* ⚠ ACTUALIZADA (medido en vivo 2026-09-24: el modelo invertía la dirección 6 de 6; la cuenta pasa
+       al código), con esta razón: decía «si se cuenta desde hoy (…), súmale la semana de hoy» sin decir
+       que una DURACIÓN se cuenta desde el arranque, y en 6 de 12 corridas el modelo le sumó la semana de
+       hoy a «una duración de 12 semanas». Lo de fondo —lo contado desde hoy suma la semana de hoy— se
+       sigue pidiendo. La edición que la pone en rojo: sacar cualquiera de las dos reglas. */
     expect(linea).toContain(
-      "si se cuenta desde hoy («nos quedan 6 semanas», «en dos meses»), súmale la semana de hoy: M = 4 + lo que dice",
+      "si dice cuánto dura el proyecto («son 12 semanas», «una duración de 12 semanas»), se cuenta desde el arranque: M es ese número, sin sumarle nada",
+    );
+    expect(linea).toContain(
+      "solo si se cuenta desde HOY («nos quedan 6 semanas», «en dos meses más»), súmale la semana de hoy: M = 4 + lo que dice",
     );
     const sinAncla = lineaDelCierreActual({ ...FOTO, anchorStartDate: null }, AHORA);
     expect(sinAncla).not.toContain("Hoy es");
     expect(sinAncla).toContain("sin fecha de arranque no se puede ubicar");
+    expect(sinAncla).toContain('"plazoTotal": null, y anótalo en "observaciones" sin comparar');
+  });
+
+  it("⭐ la línea que lee el modelo es la MEDIDA en vivo (v2, 12 de 12), con los números de CAV", () => {
+    /* El texto que midió la prueba en vivo del 2026-09-24 (CAV: cierre fijado en la semana 15, hoy en
+       la 1), tal cual se mandó. La edición que la pone en rojo: cambiar la redacción sin volver a medir
+       (una sola corrida no dice nada). */
+    const cav = {
+      anchorStartDate: "2026-09-21T00:00:00.000Z",
+      closeDateOverride: "2026-12-31T00:00:00.000Z",
+      phases: [{ id: "x", name: "Todo", durationWeeks: 15, startWeek: null, status: "PENDING", hechas: 0, total: 0 }],
+    };
+    expect(lineaDelCierreActual(cav, Date.UTC(2026, 8, 24, 12))).toBe(
+      "⭐ CIERRE ACTUAL (sin los cambios que propongas): semana 15 del proyecto — el cierre fijado a mano, que es el que ve el CSE (las fases terminan en la semana 15). Hoy es la semana 1 del proyecto. " +
+        'Un plazo total acordado se devuelve en "plazoTotal" como M, la semana del proyecto en que vence (la comparación con este cierre la hace el sistema): ' +
+        "si dice cuánto dura el proyecto («son 12 semanas», «una duración de 12 semanas»), se cuenta desde el arranque: M es ese número, sin sumarle nada; " +
+        "solo si se cuenta desde HOY («nos quedan 6 semanas», «en dos meses más»), súmale la semana de hoy: M = 1 + lo que dice; " +
+        "si es una fecha, M es la semana del proyecto en que cae.",
+    );
   });
 });
 
@@ -416,6 +463,22 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
 
   it("revisa los nombres de fase contra el material que leyó", () => {
     expect(src).toContain("huellas: huellasDeFrontera(contexto.materialInterno");
+  });
+
+  it("⭐ el plazo total se compara contra el MISMO cierre actual que leyó el modelo (medido en vivo 2026-09-24)", () => {
+    /* El modelo invertía la dirección 6 de 6: la cuenta pasa al código. Pero el código tiene que
+       comparar contra el cierre que el modelo vio en su calendario —el fijado a mano, u hoy si el
+       planificado ya pasó—, no contra el largo de las fases ni con otro reloj. La edición que la pone en
+       rojo: no pasarle `cierreActual` al armador, calcularlo de otra forma, o que el cargador y el
+       armador usen dos `Date.now()` distintos. */
+    const iArmador = src.indexOf("construirPropuestaDeEstructura(");
+    expect(iArmador).toBeGreaterThan(iModelo);
+    const armador = src.slice(iArmador, src.indexOf("});", iArmador));
+    expect(armador).toContain("cierreActual: cierreActualDelPlan(foto, ahora)?.semana ?? null");
+    expect(armador).toMatch(/\bahora,/);
+    expect(src).toContain("const foto = fotoDeEstructura(tl);");
+    expect(src).toContain("cargarContextoDeEstructura(projectId, foto, ahora)");
+    expect(src.match(/Date\.now\(\)/g) ?? [], "dos relojes: el calendario y el armador podrían ver semanas distintas").toHaveLength(1);
   });
 
   it("sin material no responde 409 aunque haya una propuesta pendiente (revisión del paso A2)", () => {

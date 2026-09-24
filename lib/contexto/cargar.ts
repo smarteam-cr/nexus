@@ -189,10 +189,16 @@ export async function cargarContextoDelAssist(
  * cargador del material como `opts.fases`: el modelo, el calendario, la ubicación de cada reunión
  * y el armador que valida la respuesta miran LA MISMA foto. Leerla dos veces abriría la puerta a
  * que el modelo nombre una fase que el armador ya no tiene.
+ *
+ * ⚠ `ahora` TAMBIÉN LO PASA LA RUTA: el CIERRE ACTUAL del calendario depende de hoy (un planificado
+ * ya pasado cierra hoy), y la ruta compara el plazo total contra ese mismo cierre
+ * (`cierreActualDelPlan(foto, ahora)`, desde 2026-09-24): con dos relojes, de noche podrían ser dos
+ * semanas distintas.
  */
 export async function cargarContextoDeEstructura(
   projectId: string,
   foto: FotoDelCronograma,
+  ahora: number = Date.now(),
 ): Promise<ContextoDeProyecto> {
   const [mat, canvasCronograma, proyecto] = await Promise.all([
     cargarMaterialDelCronograma(projectId, { fases: foto }),
@@ -218,7 +224,7 @@ export async function cargarContextoDeEstructura(
     fuentes: fuentesDeEstructura({
       /* Con la Semana 0 nombrada (o dicho que no hay): la MISMA regla que usa el armador en la ruta,
          desde la misma clave del pipeline (`claveConVozDeHandoffPropia`). */
-      calendarioCtx: calendarioDeEstructura(foto, Date.now(), { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) }),
+      calendarioCtx: calendarioDeEstructura(foto, ahora, { conSemanaCero: !claveConVozDeHandoffPropia(pipelineKey) }),
       handoffCtx,
       reunionesCtx: mat.reuniones,
       notasCtx: mat.notas,
