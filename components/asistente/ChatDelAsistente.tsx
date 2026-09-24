@@ -47,6 +47,8 @@ import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
+/* Puro (sin Prisma): la misma fuente de conteos que la línea cerrada del «Contexto del cronograma». */
+import { lineaDeLectura, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 
 /**
  * ⛔ ES EL MISMO TIPO QUE EMITE EL SERVIDOR, no una copia. Antes eran dos declaraciones a mano de
@@ -160,6 +162,12 @@ export default function ChatDelAsistente({
    */
   const [desmarcadas, setDesmarcadas] = useState<Record<string, Set<number>>>({});
   const [aplicando, setAplicando] = useState(false);
+  /**
+   * ⭐ QUÉ LEYÓ DE VERDAD en el último turno del cronograma (2026-09-23): cuántas reuniones
+   * elegidas, cuántas notas y si entraron las instrucciones. Viene con la respuesta del turno; el
+   * GET no la trae (abrir el cajón no lee reuniones), así que aparece después de preguntar.
+   */
+  const [lectura, setLectura] = useState<LecturaDelMaterial | null>(null);
   const finRef = useRef<HTMLDivElement | null>(null);
   const { seccion: seccionReferida, soltar: soltarSeccion } = useChatDeSeccion();
   /* ⚠ El rótulo sale de la PIEZA, no está cableado. El chat nació sobre el cronograma y los tres
@@ -309,6 +317,7 @@ export default function ChatDelAsistente({
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? "el asistente no pudo contestar");
       setTurnos(j.hilo?.turnos ?? []);
+      setLectura(j.lectura ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "el asistente no pudo contestar");
       /* Se saca el turno optimista: dejarlo mentiría diciendo que la pregunta quedó guardada. */
@@ -339,6 +348,7 @@ export default function ChatDelAsistente({
       if (!Array.isArray(j.hilo?.turnos)) throw new Error("no se pudo empezar de cero");
       setTurnos(j.hilo.turnos);
       setInstruccionEditada({});
+      setLectura(null);
     } catch (e) {
       /* La conversación anterior queda en pantalla a propósito: del lado del servidor sigue
          siendo la viva, y el próximo mensaje va a caer ahí. */
@@ -455,7 +465,7 @@ export default function ChatDelAsistente({
         if (!quedoEscrito) {
           setError(
             `El cambio se aplicó al ${nombreDeLaPieza}, pero no se pudo dejar constancia en la ` +
-              "conversación. ⚠ No lo apliques de nuevo: se duplicaría. Recargá para ver el hilo.",
+              "conversación. ⚠ No lo apliques de nuevo: se duplicaría. Recarga para ver el hilo.",
           );
         }
         /* ⛔ EL PANEL NO SE CIERRA AL APLICAR, y es una decisión de Elías (2026-08-20).
@@ -484,7 +494,12 @@ export default function ChatDelAsistente({
       <header className="px-4 py-3 border-b border-line flex items-center justify-between shrink-0">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg truncate">Asistente · {piezaLabel}</h2>
-          <p className="text-xs text-fg-muted">Conversá el cambio antes de generarlo</p>
+          <p className="text-xs text-fg-muted">Conversa el cambio antes de generarlo</p>
+          {pieza === PIEZA_CRONOGRAMA && lectura ? (
+            <p className={`text-[11px] ${lectura.error ? "text-warn-ink" : "text-fg-muted"}`}>
+              {lineaDeLectura(lectura)}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {turnos.length > 0 && (
@@ -516,7 +531,7 @@ export default function ChatDelAsistente({
 
         {!cargando && turnos.length === 0 && (
           <div className="text-sm text-fg-secondary space-y-2">
-            <p>Preguntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
+            <p>Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
             <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
               <li>«¿Qué pasa si alargo una fase dos semanas?»</li>
               <li>«Hay fases duplicadas, ¿se pueden unir?»</li>
@@ -525,6 +540,11 @@ export default function ChatDelAsistente({
             <p className="text-xs text-fg-muted">
               Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar.
             </p>
+            {pieza === PIEZA_CRONOGRAMA ? (
+              <p className="text-xs text-fg-muted">
+                Si elegiste reuniones o pegaste notas en «Contexto del cronograma», también las lee.
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -739,7 +759,7 @@ export default function ChatDelAsistente({
                       ? " el cambio"
                       : ` los ${t.acuerdo.operaciones.length} cambios`}
                     , así que no hay qué revisar antes de aplicar. Casi siempre es el servidor
-                    sirviendo una versión vieja: recargá la página, y si sigue, hay que reiniciarlo.
+                    sirviendo una versión vieja: recarga la página, y si sigue, hay que reiniciarlo.
                     No es nada de lo que pediste.
                   </p>
                 ) : t.acuerdo.instruccion ? (
@@ -767,7 +787,7 @@ export default function ChatDelAsistente({
                       className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg resize-y"
                     />
                     <p className="mt-1 text-[11px] text-fg-muted">
-                      Podés editarla: es lo que se va a ejecutar tal cual.
+                      Puedes editarla: es lo que se va a ejecutar tal cual.
                     </p>
                   </details>
                 ) : null}
@@ -786,7 +806,7 @@ export default function ChatDelAsistente({
                  */}
                 {t.estado === "en-espera" ? (
                   <p className="mt-2 rounded-lg border border-line bg-surface-muted px-2 py-1.5 text-xs text-fg-secondary">
-                    Contestá la pregunta de arriba y estos cambios se aplican junto con lo que
+                    Contesta la pregunta de arriba y estos cambios se aplican junto con lo que
                     salga de tu respuesta — todo de una vez.
                   </p>
                 ) : null}
@@ -835,7 +855,7 @@ export default function ChatDelAsistente({
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
-                    Copiá esta instrucción y pegala en «Pedir cambio con IA» del documento.
+                    Copia esta instrucción y pégala en «Pedir cambio con IA» del documento.
                   </p>
                 )}
               </div>
@@ -869,7 +889,7 @@ export default function ChatDelAsistente({
           <p className="text-xs text-fg-muted">
             {turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
               ? `Aplicando los cambios al ${nombreDeLaPieza}…`
-              : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Podés seguir mirando el documento mientras tanto."}
+              : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Puedes seguir mirando el documento mientras tanto."}
           </p>
         )}
         {error && (
@@ -912,7 +932,7 @@ export default function ChatDelAsistente({
             }
           }}
           rows={2}
-          placeholder="Escribí qué querés cambiar…"
+          placeholder="Escribe qué quieres cambiar…"
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted resize-none overflow-y-auto"
           style={{ maxHeight: ALTO_MAXIMO_COMPOSER }}
         />

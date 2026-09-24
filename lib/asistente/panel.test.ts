@@ -843,8 +843,11 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
       PANEL.includes('t.estado === "en-espera"'),
       "volvió el botón con la pregunta abierta: un pedido se parte en dos escrituras",
     ).toBe(true);
+    /* ⚠ ACTUALIZADO 2026-09-23 (paso C del Contexto del cronograma): el literal pasó de «Contestá» a
+       «Contesta» porque los textos del cajón pasaron a TUTEO (regla del repo: tuteo, nunca voseo).
+       La aserción es la misma: el cartel que explica por qué no hay botón tiene que estar. */
     expect(
-      PANEL.includes("Contestá la pregunta de arriba"),
+      PANEL.includes("Contesta la pregunta de arriba"),
       "el botón desapareció sin decir por qué: se lee como que el chat no entendió",
     ).toBe(true);
   });

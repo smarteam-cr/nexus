@@ -195,11 +195,13 @@ ${vistaPrevia ? "Revisa la vista previa antes de aceptar." : `Ya quedó guardado
 
   const hilo = await abrirHilo(pedido);
   try {
-    const { acuerdo } = await correrTurno(hilo, parsed.data.mensaje, parsed.data.seccion);
+    const { acuerdo, lectura } = await correrTurno(hilo, parsed.data.mensaje, parsed.data.seccion);
     /* Se relee el hilo entero en vez de devolver solo la respuesta: así el panel pinta lo que
        quedó GUARDADO, no lo que creemos que se guardó. Si el turno se persistió a medias, se ve. */
     const fresco = await hiloVivo(pedido);
-    return NextResponse.json({ ...aVista(fresco), acuerdo });
+    /* `lectura`: qué leyó del «Contexto del cronograma» en ESTE turno (solo números; null fuera
+       del cronograma). El GET no la trae a propósito: abrir el cajón no lee ninguna reunión. */
+    return NextResponse.json({ ...aVista(fresco), acuerdo, lectura });
   } catch (e) {
     /* El turno del CSE se pierde si el modelo falló — a propósito: guardar una pregunta que nadie
        contestó deja el hilo con un turno colgado que el próximo pedido reenvía como contexto. */

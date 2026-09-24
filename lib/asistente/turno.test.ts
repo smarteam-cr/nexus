@@ -174,6 +174,9 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     sinComentarios(
       fs.readFileSync(path.join(RAIZ, "lib/canvas/operaciones-de-documento.ts"), "utf8"),
     ),
+    /* ⚠ SUMADO 2026-09-23 (paso C): el bloque del MATERIAL DEL CRONOGRAMA —sus rótulos, el de las
+       reuniones y el de las notas— viaja en el `system` de cada turno del chat del cronograma. */
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/contexto/material-cronograma.ts"), "utf8")),
     /* ⚠ SUMADOS 2026-08-23: los `avisoDelChat` y los `brief` de las defs se interpolan al contexto
        —`firmaDeSeccion` los pega detrás de cada sección— así que también son texto que el modelo
        lee. Vivían fuera del alcance de esta guarda y ahí se había colado un «podés». */
@@ -293,6 +296,37 @@ describe("la regla de las fechas está en el prompt", () => {
     expect(PROMPT, "se perdió el ejemplo que enseña a NO aproximar").toContain("DEL MEDIO");
   });
 
+  it("⭐ el prompt le dice qué hacer con las reuniones, las notas y las instrucciones del CSE", () => {
+    /* Decisiones de Elías del 2026-09-23: el chat lee lo elegido en «Contexto del cronograma»; si
+       la reunión que nombran no está ahí, lo DICE (no la completa de memoria); si un pedido
+       contradice las instrucciones adicionales, lo dice en una línea y manda el CSE; no señala
+       contradicciones por su cuenta; y para rehacer todo recomienda el botón que nombra el
+       contexto según el estado. La edición que la pone en rojo: borrar el bloque. */
+    const i = FUENTE.indexOf("const COLA_DEL_CRONOGRAMA");
+    const cola = FUENTE.slice(i, FUENTE.indexOf("const COLA_DE_DOCUMENTO", i));
+    expect(cola.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    expect(cola).toContain("MATERIAL DEL CRONOGRAMA");
+    expect(cola, "el chat vuelve a completar de memoria reuniones que no tiene").toContain("NO la tienes");
+    expect(cola, "se perdió la regla de la contradicción con las instrucciones").toContain("manda el CSE");
+    expect(cola, "el chat vuelve a señalar contradicciones por su cuenta").toContain("No propongas cambios que nadie");
+    expect(cola, "la recomendación dejó de apuntar al botón que nombra el contexto").toContain("PARA REHACER TODO");
+  });
+
+  it("⛔ las líneas del acuerdo del cronograma pasan por la FRONTERA", () => {
+    /* Desde que el chat lee el material, un título puede repetir una frase de una reunión, o traer
+       un monto o un correo. La línea que el CSE lee antes de aplicar lo tiene que avisar.
+       La edición que la pone en rojo: armar `lineas` sin `lineasConFrontera(`. */
+    const i = FUENTE.indexOf("const fusion = fusionarPendientes(");
+    expect(i, "se movió la rama del cronograma").toBeGreaterThan(-1);
+    const rama = FUENTE.slice(i, FUENTE.indexOf("dependencias:", i));
+    expect(rama, "las líneas del acuerdo dejaron de pasar por la frontera").toMatch(
+      /lineas: lineasConFrontera\(\s*describirOperaciones\(paraTraducir, fusion\.operaciones\),\s*fusion\.operaciones,/,
+    );
+    expect(rama, "la frontera dejó de medirse contra el material de este turno").toContain(
+      "huellasDeFrontera(ctx.material.interno)",
+    );
+  });
+
   it("⭐ y la doble confirmación antes de borrar trabajo hecho", () => {
     /* Pedido de Elías: «el chat debería avisar, esa fase fue creada por un humano, ¿seguro que
        querés borrarla?, con una confirmación doble. Pero no es que no debería poder borrarlas». */
@@ -302,26 +336,63 @@ describe("la regla de las fechas está en el prompt", () => {
 });
 
 describe("el breakpoint de caché está donde cachea", () => {
-  it("⚠ va en el bloque de CONTEXTO, nunca en el prompt solo", () => {
-    /* Medido el 2026-08-19: el prompt solo son ~700 tokens y cae bajo el mínimo cacheable de
-       Sonnet 5 (1.024). Marcarlo ahí sería una escritura de caché PAGADA que nunca se lee — sin
-       error y sin log. Juntos llegan a ~1.700 y sí cachean.
-       La edición que la pone en rojo: mover el `cache_control` al primer bloque del system. */
+  it("⚠ TRES breakpoints: el prompt, el material y el contexto, en ese orden", () => {
+    /* ⚠ REESCRITO 2026-09-23 (paso C, decisión de Elías: el chat del cronograma lee las reuniones
+       elegidas y las notas). Afirmaba EXACTAMENTE UN breakpoint, después del contexto, con la
+       medición del 2026-08-19: el prompt solo eran ~700 tokens, bajo el mínimo cacheable de
+       Sonnet 5 (1.024), y marcarlo era pagar una escritura que nunca se lee. Esa premisa ya no
+       vale: el prompt mide ~13.700 caracteres (~3.700 tokens, ~5.500 con las tools), cachea solo y
+       es IGUAL para todos los hilos de la pieza. Y ahora hay tres cosas que cambian a distinto
+       ritmo: el prompt (casi nunca), el material (cuando el CSE toca lo elegido) y el contexto (en
+       cada apply). Con un solo breakpoint al final, cada apply volvía a cobrar el material y el
+       prompt enteros.
+       Las ediciones que la ponen en rojo: meter el material dentro de «CONTEXTO DE ESTE
+       DOCUMENTO» (cada apply lo volvería a cobrar), ponerlo después del contexto, dejarlo sin
+       condición (el pedido sin material cambiaría) o sacar el breakpoint del prompt. */
     const i = FUENTE.indexOf("system: [");
     const bloque = FUENTE.slice(i, FUENTE.indexOf("tools:", i));
+    const marcas = [...bloque.matchAll(/cache_control/g)].map((m) => m.index!);
+    expect(marcas, "tienen que ser exactamente 3 breakpoints: prompt, material, contexto").toHaveLength(3);
+    expect(marcas.length, "la API permite 4 como máximo").toBeLessThanOrEqual(4);
     const posPrompt = bloque.indexOf("promptDelAsistente(");
+    const posMaterial = bloque.indexOf("ctx.material");
     const posContexto = bloque.indexOf("ctx.texto");
-    const posCache = bloque.indexOf("cache_control");
     expect(posPrompt, "el prompt salió del system").toBeGreaterThan(-1);
+    expect(posMaterial, "el material salió del system").toBeGreaterThan(-1);
     expect(posContexto, "el contexto salió del system").toBeGreaterThan(-1);
     expect(
-      posCache > posContexto && posContexto > posPrompt,
-      "el breakpoint de caché quedó antes del contexto: a ese tamaño no cachea y se paga igual",
+      posPrompt < marcas[0] && marcas[0] < posMaterial,
+      "el prompt perdió su breakpoint: cada apply lo vuelve a cobrar entero",
     ).toBe(true);
     expect(
-      (bloque.match(/cache_control/g) ?? []).length,
-      "hay más de un breakpoint: cada uno es una escritura de caché que se paga",
-    ).toBe(1);
+      posMaterial < marcas[1] && marcas[1] < posContexto,
+      "el material no tiene su propio breakpoint antes del contexto: cada apply lo vuelve a cobrar",
+    ).toBe(true);
+    expect(posContexto < marcas[2], "el contexto quedó sin breakpoint al final").toBe(true);
+    expect(
+      /\.\.\.\(ctx\.material\?\.texto\s*\?/.test(bloque),
+      "el bloque del material dejó de ser condicional: sin material, el pedido ya no es el de antes",
+    ).toBe(true);
+    const contexto = bloque.slice(bloque.indexOf("CONTEXTO DE ESTE DOCUMENTO"));
+    expect(contexto, "el material entró al bloque del contexto: cada apply lo vuelve a cobrar").not.toContain(
+      "material",
+    );
+  });
+
+  it("⭐ la huella del turno cubre el material: un cambio de lo elegido se ve en la auditoría", () => {
+    /* La huella se guarda con los dos turnos. Si mira solo el contexto, el CSE puede cambiar las
+       reuniones elegidas entre dos turnos y el hilo dice que el modelo leyó lo mismo.
+       La edición que la pone en rojo: volver a `huellaDeContexto(ctx.texto)`. */
+    const i = FUENTE.indexOf("const sha = huellaDeContexto(");
+    expect(i, "desapareció la huella del turno").toBeGreaterThan(-1);
+    const linea = FUENTE.slice(i, FUENTE.indexOf("\n", i));
+    expect(linea, "la huella dejó de incluir el material").toContain("ctx.material");
+  });
+
+  it("⭐ el turno devuelve qué leyó del material (la línea de la pantalla)", () => {
+    /* La edición que la pone en rojo: devolver el turno sin `lectura` (la pantalla deja de decir
+       qué leyó) o leerla de otro lado que no sea el material de ESTE turno. */
+    expect(FUENTE).toContain("lectura: ctx.material?.lectura ?? null");
   });
 
   it("⛔ y el bloque de PENDIENTES no entra al prefijo cacheado", () => {

@@ -28,18 +28,22 @@ import { soloOcurridas, yaOcurrio } from "@/lib/sessions/ocurridas";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import {
   MAX_REUNIONES_A_LEER,
+  PRESUPUESTO_DEL_CHAT,
   TECHO_POR_REUNION,
   UMBRAL_RESUMEN_FLACO,
   bloqueDeNotasDelCronograma,
   bloqueDeReunionesDelCronograma,
+  bloqueDelMaterialParaElChat,
   calendarioDelCronograma,
   contenidoDeReunion,
+  lecturaDelMaterial,
   planDelMaterial,
   resumenDeReunion,
   ubicarEnElCronograma,
   type ContenidoDeReunion,
   type FotoDelCronograma,
   type InformeDelMaterial,
+  type LecturaDelMaterial,
   type NotaParaElCronograma,
   type ReunionElegida,
 } from "./material-cronograma";
@@ -255,10 +259,11 @@ export interface MaterialDelCronograma {
  *
  * Lo leen el detalle (tareas, su semana, cuáles son reuniones y quién las hace — NO fases ni
  * duraciones: las tiene prohibidas), «Pedir cambio con IA» (que sí puede tocar fases, pero solo
- * lo que pide la instrucción) y el revisor de fases y tiempos de «Regenerar todo»
- * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE decide uno por uno). ⚠ NO lo
- * leen el agente de handoff —que arma y re-propone las fases— ni, por ahora, el chat del
- * cronograma. Devuelve `""` en lo que no haya: los armadores omiten la
+ * lo que pide la instrucción), el revisor de fases y tiempos de «Regenerar todo»
+ * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE decide uno por uno) y el chat
+ * del cronograma (`cargarMaterialParaElChat`, con su propio espacio: decisión de Elías del
+ * 2026-09-23). ⚠ NO lo lee el agente de handoff —que arma y re-propone las fases—. Devuelve `""`
+ * en lo que no haya: los armadores omiten la
  * fuente vacía y el prompt de un proyecto sin material queda byte-idéntico al de antes.
  *
  * ── QUÉ SE LEE (lector propio, validación del 2026-09-23) ────────────────────
@@ -421,4 +426,50 @@ async function leerNotasDelCronograma(projectId: string): Promise<NotaParaElCron
     if (esquemaDesactualizado(e)) return [];
     throw e;
   }
+}
+
+export interface MaterialParaElChat {
+  /** El bloque del chat (`bloqueDelMaterialParaElChat`): "" sin reuniones, notas ni instrucciones. */
+  texto: string;
+  /** Qué leyó, en números: la línea de la pantalla. */
+  lectura: LecturaDelMaterial;
+  /** Los textos que entraron, para marcar la frontera en las líneas del acuerdo. ⛔ Nunca se renderiza. */
+  materialInterno: string[];
+}
+
+/**
+ * EL MATERIAL PARA EL CHAT DEL CRONOGRAMA (decisión de Elías, 2026-09-23). En el cronograma el
+ * chat cambia fases y tareas con operaciones que ejecuta el código, sin un modelo editor detrás:
+ * si no ve las reuniones elegidas ni las notas, nadie las ve en ese camino.
+ *
+ * Lee con el MISMO cargador que los agentes, con `PRESUPUESTO_DEL_CHAT` (menos espacio y menos
+ * lecturas: el chat lo paga en cada turno) y `sinUbicacion` (así el bloque no cambia cada vez que
+ * se mueve una fase y la caché del chat no se vuelve a cobrar). Suma las «Instrucciones
+ * adicionales» del cronograma (el brief `__doc`), que el chat respeta salvo que el CSE le pida
+ * otra cosa en la conversación.
+ *
+ * ⚠ La única puerta desde el chat es `materialDelCronograma` (lib/asistente/contexto.ts), con su
+ * try/catch: fuera de Next (`scripts/probar-asistente.ts`) `getSessionCategories` revienta, y el
+ * chat tiene que seguir contestando con el cronograma.
+ */
+export async function cargarMaterialParaElChat(projectId: string): Promise<MaterialParaElChat> {
+  const [mat, canvasCronograma] = await Promise.all([
+    cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true }),
+    prisma.projectCanvas.findFirst({
+      where: { projectId, ...canvasOf("timeline") },
+      select: { sections: true },
+    }),
+  ]);
+  const instrucciones = canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null;
+  return {
+    texto: bloqueDelMaterialParaElChat({
+      reuniones: mat.reuniones,
+      notas: mat.notas,
+      informe: mat.informe,
+      instrucciones,
+      ahora: Date.now(),
+    }),
+    lectura: lecturaDelMaterial(mat.informe, !!instrucciones),
+    materialInterno: mat.materialInterno,
+  };
 }

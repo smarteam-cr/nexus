@@ -21,6 +21,15 @@
  * ⛔ Y NADA DE PARTNER NI DE COSTOS. El chat es una superficie nueva y no está en ningún censo de
  * privacidad: la prohibición se hace cumplir acá, con su propia guarda, antes de que exista un
  * campo donde meterlos.
+ *
+ * ── EXCEPCIÓN — decisión de Elías 2026-09-23 ─────────────────────────────────────────────────
+ * En el CRONOGRAMA el ejecutor ya no es un modelo: es `aplicarOperaciones`, código puro que
+ * escribe TAL CUAL las operaciones que el chat acordó. La premisa «el editor tiene el contexto»
+ * no se cumple ahí: si el chat no ve las reuniones que el CSE eligió ni sus notas, nadie las ve
+ * en ese camino. Por eso entran —las reuniones elegidas (con sus minutas), las notas y las
+ * «Instrucciones adicionales» del cronograma— por UNA sola puerta (`materialDelCronograma`, abajo),
+ * con un espacio propio, en su PROPIO bloque cacheado del `system` y SOLO en la pieza cronograma.
+ * El handoff, los kickoffs y las reuniones que el CSE no eligió siguen afuera.
  */
 import {
   ADVERTENCIAS_DEL_DOCUMENTO,
@@ -57,6 +66,10 @@ import { projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
+/* ⭐ La ÚNICA puerta del chat al material del cronograma (ver la EXCEPCIÓN del header). Trae su
+   propio presupuesto: los cargadores de los agentes siguen prohibidos acá (contexto.test.ts). */
+import { cargarMaterialParaElChat } from "@/lib/contexto/cargar";
+import { LECTURA_CON_ERROR, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 
 /**
  * ⚠ EL TECHO, Y ES UNA DECISIÓN, NO UNA CONSTANTE SUELTA. Si el prefijo crece más que esto, algo
@@ -183,14 +196,26 @@ export interface ContextoDelAsistente {
    * — sin eso, el dry-run aceptaría «Juan» y el editor lo rechazaría al aplicar.
    */
   directorio?: { id: string; name: string; area?: string | null; roleEnum?: string | null; photoUrl?: string | null }[];
+  /**
+   * ⭐ El material del «Contexto del cronograma» — SOLO en la pieza cronograma (ver la EXCEPCIÓN
+   * del header). Va en su PROPIO bloque del `system`, NO dentro de `texto`: el material cambia
+   * cuando el CSE toca lo elegido y el contexto cambia en cada apply, así que cada uno lleva su
+   * breakpoint de caché. Por eso `TECHO_DEL_PREFIJO_CHARS` no lo mide: tiene su propio techo
+   * (`TECHO_DEL_MATERIAL_DEL_CHAT_CHARS`).
+   *
+   * `lectura` son solo números, para la línea de la pantalla. `interno` son los textos que
+   * entraron, para marcar la frontera en las líneas del acuerdo: ⛔ no se renderizan ni viajan.
+   */
+  material?: { texto: string; lectura: LecturaDelMaterial; interno: readonly string[] };
 }
 
 /**
  * El contexto del chat sobre el CRONOGRAMA.
  *
- * ⚠ Trae los NOMBRES de las fases y cuántas tareas tiene cada una — nunca los títulos de las
- * tareas. Con los nombres alcanza para conversar ("alargá Setup una semana"); los títulos son
- * ~8.000 caracteres que el modificador ya lee cuando le toca ejecutar.
+ * Trae las fases con su id y, debajo, sus tareas por semana con su título, su handle y su estado
+ * (desde el 2026-08-21: sin títulos el chat no podía nombrar la tarea que le pedían mover). Las
+ * NOTAS de las tareas siguen afuera. Las reuniones elegidas, las notas del CSE y las
+ * instrucciones adicionales NO van acá: van en su propio bloque (`materialDelCronograma`).
  */
 export async function contextoDeCronograma(projectId: string): Promise<ContextoDelAsistente> {
   const timeline = await prisma.projectTimeline.findUnique({
@@ -312,6 +337,21 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     return renglones.join("\n");
   };
 
+  /**
+   * ⭐ QUÉ BOTÓN REHACE TODO, según el estado — el que el CSE ve arriba del Gantt. Sin tareas de
+   * la IA es «Generar cronograma»; con ellas, «Regenerar todo el cronograma». Los dos, con
+   * reuniones o notas elegidas, primero proponen los cambios de fases y tiempos y después arman
+   * las tareas. Va en el CONTEXTO y no en el prompt: el prompt es el mismo para todos los hilos
+   * (y así se cachea entre proyectos); el estado es de este cronograma.
+   */
+  const conDetalleDeLaIA = timeline.phases.some((f) =>
+    f.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"),
+  );
+  const paraRehacerTodo =
+    `PARA REHACER TODO desde las reuniones y las notas elegidas: el botón ` +
+    `${conDetalleDeLaIA ? "«Regenerar todo el cronograma»" : "«Generar cronograma»"}, arriba del Gantt ` +
+    "(no se ve mientras haya una propuesta sin decidir: primero se decide esa).";
+
   const fases = timeline.phases
     .map(
       (f, i) =>
@@ -336,8 +376,16 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,
     `Cierre proyectado: ${cierre ?? "no se puede calcular sin fecha de arranque"}`,
     `Ancho de calendario: ${fin.spanWeeks} semanas`,
+    ...(timeline.phases.length > 0 ? ["", paraRehacerTodo] : []),
     "",
-    "REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción):",
+    /* ⚠ Decía «REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)»: de
+       cuando el chat emitía una instrucción que un segundo modelo ejecutaba. Desde el 2026-08-20
+       emite operaciones que el código escribe tal cual, y desde el 2026-09-23 lee las reuniones:
+       decirle que después corre un editor con contexto era invitarlo a dejarle el trabajo a nadie. */
+    "REGLAS DURAS DEL CRONOGRAMA (las comparte con «Pedir cambio con IA»). Tus operaciones las",
+    "escribe el código TAL CUAL, sin otro modelo detrás que las revise: lo que pongas en `titulo` y",
+    "en `nombre` es lo que ve el cliente. Lo de conservar ids u omitir para borrar es de ese otro",
+    "agente; tú borras y cambias con las operaciones:",
     REGLAS_DURAS_DEL_CRONOGRAMA,
     "",
     "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",
@@ -362,6 +410,31 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     })),
     ancla: timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : null,
   };
+}
+
+/**
+ * ⭐ EL MATERIAL DEL CRONOGRAMA PARA EL CHAT — la única puerta (ver la EXCEPCIÓN del header).
+ *
+ * ⚠ SI FALLA, EL CHAT SIGUE: una transcripción ilegible, la base lenta o `unstable_cache` fuera
+ * de Next (`scripts/probar-asistente.ts`) no pueden convertir el turno en un 502. Contesta solo
+ * con el cronograma y la pantalla lo dice en ámbar (`LECTURA_CON_ERROR`).
+ *
+ * ⛔ NO se llama desde `contextoDeCronograma`: lo llama `turno.ts` en paralelo, y solo en la
+ * pieza cronograma. Los kickoffs, la Entrega y Roles no pagan esta lectura.
+ */
+export async function materialDelCronograma(
+  projectId: string,
+): Promise<NonNullable<ContextoDelAsistente["material"]>> {
+  try {
+    const m = await cargarMaterialParaElChat(projectId);
+    return { texto: m.texto, lectura: m.lectura, interno: m.materialInterno };
+  } catch (e) {
+    console.warn("[asistente] no se pudo leer el material del cronograma", {
+      projectId,
+      error: e instanceof Error ? e.message : e,
+    });
+    return { texto: "", lectura: LECTURA_CON_ERROR, interno: [] };
+  }
 }
 
 /**

@@ -51,8 +51,9 @@ export interface CrudasDelAssist {
   /**
    * «Contexto del cronograma» (2026-09-23): las reuniones que el CSE deja entrar y sus notas, ya
    * rotuladas. Una vez creado el cronograma, las FASES las tocan este agente (a pedido) y el chat
-   * del cronograma (por operaciones que el CSE acuerda); el detalle no puede. Por acá las reuniones
-   * elegidas llegan a lo que pide el CSE en «Pedir cambio con IA». Solo se agregan con texto.
+   * del cronograma (por operaciones que el CSE acuerda; desde el 2026-09-23 lee este mismo
+   * material, con un espacio menor: `cargarMaterialParaElChat`); el detalle no puede. Por acá las
+   * reuniones elegidas llegan a lo que pide el CSE en «Pedir cambio con IA». Solo se agregan con texto.
    */
   reunionesCtx?: string;
   notasCtx?: string;

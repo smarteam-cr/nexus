@@ -18,13 +18,40 @@
  * censo, y los datos del programa de partner (UUS, seats, MRR) están declarados confidenciales
  * por los términos con HubSpot. La prohibición se escribe ANTES de que exista un campo donde
  * meterlos — que es cuando todavía es barata.
+ *
+ * ── LA EXCEPCIÓN, CON SU MOTIVO — decisión de Elías 2026-09-23 ───────────────────────────────
+ * El chat del cronograma cambia fases y tareas con operaciones, sin ningún modelo editor detrás;
+ * si no ve las reuniones elegidas ni las notas, nadie las ve en ese camino. Por eso el material
+ * del «Contexto del cronograma» —las reuniones que el CSE ELIGIÓ, con sus minutas, sus notas y
+ * sus instrucciones adicionales— entra, y SOLO por una puerta: `materialDelCronograma`
+ * (lib/asistente/contexto.ts) → `cargarMaterialParaElChat` (lib/contexto/cargar.ts), con un
+ * presupuesto propio y en su propio bloque. Los cargadores de los AGENTES (con su presupuesto de
+ * 32.000 en reuniones) siguen prohibidos acá, y el handoff, los kickoffs y las reuniones que el
+ * CSE no eligió siguen afuera. Las guardas de abajo hacen cumplir las dos mitades.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
-import { TECHO_DEL_PREFIJO_CHARS } from "./contexto";
 import { renderSeccionParaElChat } from "@/lib/canvas/capacidades-de-documento";
+import {
+  PRESUPUESTO_DEL_CHAT,
+  TECHO_DEL_MATERIAL_DEL_CHAT_CHARS,
+  TOPE_NOTAS_CRONOGRAMA,
+  bloqueDeNotasDelCronograma,
+  bloqueDeReunionesDelCronograma,
+  bloqueDelMaterialParaElChat,
+  planDelMaterial,
+  type ReunionElegida,
+} from "@/lib/contexto/material-cronograma";
+import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
+
+/* La puerta del material, de mentira: la guarda «si falla, el chat sigue» la hace fallar. El resto
+   de este archivo lee código, no llama a la puerta. */
+const h = vi.hoisted(() => ({ cargarMaterialParaElChat: vi.fn() }));
+vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: h.cargarMaterialParaElChat }));
+
+const { TECHO_DEL_PREFIJO_CHARS, materialDelCronograma } = await import("./contexto");
 
 /** Blanquea comentarios conservando offsets: NOMBRAR algo para prohibirlo no es usarlo. */
 function soloCodigo(src: string): string {
@@ -38,6 +65,14 @@ function archivosDelAsistente(): string[] {
 /**
  * Los cargadores PESADOS. Cada uno trae miles de caracteres y todos tienen su dueño legítimo:
  * el editor que ejecuta la instrucción, no la conversación que la acuerda.
+ *
+ * ⚠ SUMADOS 2026-09-23, con la excepción del header (decisión de Elías: el chat del cronograma
+ * cambia fases y tareas con operaciones, sin ningún modelo editor detrás; si no ve las reuniones
+ * elegidas ni las notas, nadie las ve en ese camino). El material entra por UNA puerta con SU
+ * presupuesto (`cargarMaterialParaElChat`); estas son las otras siete maneras de llegar al mismo
+ * material —con el presupuesto de los agentes, 32.000 de reuniones por turno, o armándolo a
+ * mano— y cierran el agujero que marcó la validación: sin ellas, importar el cargador de los
+ * agentes en contexto.ts dejaba esta guarda en verde.
  */
 const CARGADORES_PESADOS = [
   "loadHandoffContext",
@@ -50,6 +85,13 @@ const CARGADORES_PESADOS = [
   "fetchTranscriptContent",
   "getProjectMemberSessions",
   "planHandoffSessionBudget",
+  "cargarMaterialDelCronograma",
+  "cargarNotasDelCronograma",
+  "cargarContextoDeEstructura",
+  "getProjectTimelineSessions",
+  "repartirEspacio",
+  "bloqueDeReunionesDelCronograma",
+  "bloqueDeNotasDelCronograma",
 ];
 
 describe("el contexto del chat se mantiene liviano", () => {
@@ -95,11 +137,16 @@ describe("el contexto del chat se mantiene liviano", () => {
         }
       }
     }
+    /* ⚠ MENSAJE ACTUALIZADO 2026-09-23 (el assert no cambió): desde la decisión de Elías de ese
+       día, las minutas de las reuniones que el CSE ELIGIÓ para el cronograma y sus notas sí llegan
+       al chat del cronograma — pero por la puerta de `materialDelCronograma`, nunca leyendo estas
+       tablas desde lib/asistente. */
     expect(
       infracciones,
       "El chat fue a buscar material de otro lado directo a la base. Puede leer el documento del " +
-        "que se está hablando; las minutas y las fuentes del handoff las lee el editor cuando " +
-        "ejecuta, no la conversación.",
+        "que se está hablando y, en el cronograma, lo elegido en «Contexto del cronograma» por " +
+        "`materialDelCronograma`; el resto de las minutas y las fuentes del handoff las lee el " +
+        "editor cuando ejecuta, no la conversación.",
     ).toEqual([]);
   });
 
@@ -286,5 +333,171 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        y el asistente no. La edición que la pone en rojo: volver al total por fase. */
     expect(src).toContain("semanas VACÍAS");
     expect(src).toContain("porSemana");
+  });
+
+  it("⭐ nombra el botón que rehace todo SEGÚN EL ESTADO del cronograma", () => {
+    /* Sin tareas de la IA el botón es «Generar cronograma»; con ellas, «Regenerar todo el
+       cronograma» (CronogramaCanvas, `hasAiDetail`). Recomendar el que no se ve manda al CSE a
+       buscar un botón que no está. La edición que la pone en rojo: cablear uno de los dos. */
+    const i = src.indexOf("const conDetalleDeLaIA");
+    expect(i, "el contexto dejó de mirar si hay tareas de la IA").toBeGreaterThan(-1);
+    const tramo = src.slice(i, src.indexOf("const fases = timeline.phases", i));
+    expect(tramo).toContain('t.source === "AGENT" || t.source === "MODIFIED"');
+    expect(tramo).toMatch(/conDetalleDeLaIA \? "«Regenerar todo el cronograma»" : "«Generar cronograma»"/);
+    expect(src, "la línea del botón dejó de entrar al contexto").toContain('["", paraRehacerTodo]');
+  });
+
+  it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {
+    /* El chat del cronograma emite operaciones que el código escribe TAL CUAL. «REGLAS DURAS DEL
+       MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)» le decía que después corría
+       otro modelo con contexto — contradictorio desde que lee las reuniones él mismo.
+       La edición que la pone en rojo: volver al encabezado viejo. */
+    expect(soloCodigo(src)).not.toContain("REGLAS DURAS DEL MODIFICADOR");
+    expect(src).toContain("REGLAS DURAS DEL CRONOGRAMA");
+  });
+});
+
+describe("⭐ el chat del cronograma lee el «Contexto del cronograma» — por UNA puerta (decisión de Elías 2026-09-23)", () => {
+  const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+  /** El cuerpo de una función exportada de un archivo, hasta la siguiente `export`. */
+  const tramoDe = (src: string, firma: string) => {
+    const i = src.indexOf(firma);
+    if (i < 0) return "";
+    const j = src.indexOf("\nexport ", i + 1);
+    return src.slice(i, j < 0 ? undefined : j);
+  };
+
+  it("⛔ el único archivo de lib/asistente que nombra la puerta es contexto.ts", () => {
+    /* Si turno.ts o handler.ts la importaran directo, saltearían el try/catch de
+       `materialDelCronograma` (un material ilegible volvería el turno un 502) y habría dos
+       lugares donde decidir qué lee el chat. La edición que la pone en rojo: importar
+       `cargarMaterialParaElChat` en turno.ts. */
+    const quienes = archivosDelAsistente().filter((f) =>
+      soloCodigo(fs.readFileSync(path.join(RAIZ, f), "utf8")).includes("cargarMaterialParaElChat"),
+    );
+    expect(quienes.map((f) => f.split(path.sep).join("/"))).toEqual(["lib/asistente/contexto.ts"]);
+  });
+
+  it("⛔ y se lee SOLO en la pieza cronograma", () => {
+    /* Los kickoffs, la Entrega y Roles no tienen por qué pagar la lectura de las reuniones.
+       La edición que la pone en rojo: subir el Promise.all arriba del `if` del cronograma. */
+    const turno = soloCodigo(leer("lib/asistente/turno.ts"));
+    const i = turno.indexOf("async function contextoDeLaPieza");
+    const fn = turno.slice(i, turno.indexOf("\n}", i));
+    const iCrono = fn.indexOf("pieza === PIEZA_CRONOGRAMA");
+    const iRol = fn.indexOf('"roleId" in dueno');
+    const lecturas = [...fn.matchAll(/materialDelCronograma\(/g)].map((m) => m.index!);
+    expect(iCrono, "se movió la rama del cronograma").toBeGreaterThan(-1);
+    expect(iRol, "se movió la rama de Roles").toBeGreaterThan(-1);
+    expect(lecturas.length, "el chat del cronograma dejó de leer el material").toBeGreaterThan(0);
+    expect(
+      lecturas.filter((i) => i < iCrono || i > iRol),
+      "el material se lee también fuera de la rama del cronograma: los demás documentos pagan la lectura",
+    ).toEqual([]);
+  });
+
+  it("⭐ con el presupuesto DEL CHAT y sin la ubicación de cada reunión", () => {
+    /* Con el presupuesto de los agentes el chat pagaría hasta 32.000 de reuniones por turno; con
+       la ubicación, cada cambio de fases cambiaría el bloque y volvería a cobrar la caché.
+       Las ediciones que la ponen en rojo: llamar `cargarMaterialDelCronograma(projectId)` sin el
+       segundo argumento, o sacar `sinUbicacion`. */
+    const tramo = tramoDe(soloCodigo(leer("lib/contexto/cargar.ts")), "export async function cargarMaterialParaElChat(");
+    expect(tramo.length, "la guarda no está mirando la puerta").toBeGreaterThan(200);
+    expect(tramo).toContain("cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true })");
+    expect(tramo, "el chat dejó de leer las instrucciones adicionales").toContain("docBriefFrom(");
+    expect(PRESUPUESTO_DEL_CHAT).toEqual({ topeReuniones: 16_000, maxALeer: 24 });
+  });
+
+  it("⛔ el bloque del chat tiene techo, y el peor caso real entra ENTERO debajo de él", () => {
+    /* Las ediciones que la ponen en rojo: subir `topeReuniones` a 24.000 (el peor caso ya no entra
+       y el final de las notas se corta), o sacar el `.slice(0, TECHO…)` del armado. */
+    expect(TECHO_DEL_MATERIAL_DEL_CHAT_CHARS).toBeLessThanOrEqual(42_000);
+    expect(PRESUPUESTO_DEL_CHAT.topeReuniones + TOPE_NOTAS_CRONOGRAMA + TOPE_INSTRUCCIONES_DEL_DOC).toBeLessThan(
+      TECHO_DEL_MATERIAL_DEL_CHAT_CHARS,
+    );
+
+    const AHORA = Date.UTC(2026, 8, 23, 18);
+    const peorCaso = (largoDelTitulo: number) => {
+      /* 60 elegidas de 10.000 caracteres (se leen las 24 más recientes), títulos largos, 10 notas
+         de 2.000 (pasan su tope) e instrucciones de más. */
+      const elegidas: ReunionElegida[] = Array.from({ length: 60 }, (_, i) => ({
+        id: `r${String(i).padStart(2, "0")}`,
+        title: "T".repeat(largoDelTitulo),
+        date: AHORA - (i + 1) * 86_400_000,
+        prefijoDeSala: "[PUERTAS ADENTRO] ",
+        lectura:
+          i < PRESUPUESTO_DEL_CHAT.maxALeer
+            ? { tipo: "leida" as const, texto: "x ".repeat(5_000), esencial: 4_000 }
+            : { tipo: "sin-leer" as const },
+      }));
+      const notas = Array.from({ length: 10 }, (_, i) => ({
+        title: `Nota ${i}`,
+        content: "n ".repeat(1_000),
+        createdAt: new Date(AHORA),
+      }));
+      const plan = planDelMaterial({ elegidas, notas, topeReuniones: PRESUPUESTO_DEL_CHAT.topeReuniones });
+      const notasDelBloque = bloqueDeNotasDelCronograma(notas);
+      const bloque = bloqueDelMaterialParaElChat({
+        reuniones: bloqueDeReunionesDelCronograma(plan.reuniones),
+        notas: notasDelBloque,
+        informe: plan.informe,
+        instrucciones: "i".repeat(TOPE_INSTRUCCIONES_DEL_DOC + 1_000),
+        ahora: AHORA,
+      });
+      return { plan, bloque, notasDelBloque };
+    };
+
+    // Títulos de 100 caracteres (los de verdad miden menos): entra ENTERO, sin tocar el techo.
+    const real = peorCaso(100);
+    expect(real.plan.reuniones.reduce((s, r) => s + (r.contenido ?? "").length, 0)).toBeLessThanOrEqual(
+      PRESUPUESTO_DEL_CHAT.topeReuniones,
+    );
+    expect(real.bloque.length).toBeLessThanOrEqual(TECHO_DEL_MATERIAL_DEL_CHAT_CHARS);
+    expect(
+      real.bloque.endsWith(real.notasDelBloque.trim()),
+      "el peor caso real ya no entra entero: el techo corta el final de las notas",
+    ).toBe(true);
+
+    // Con títulos absurdos el techo corta, pero nunca se pasa.
+    expect(peorCaso(2_000).bloque.length).toBeLessThanOrEqual(TECHO_DEL_MATERIAL_DEL_CHAT_CHARS);
+  });
+
+  it("⚠ si el material falla, el chat sigue: texto vacío y la lectura con el error", async () => {
+    /* Una transcripción ilegible, la base lenta o `unstable_cache` fuera de Next no pueden volver
+       el turno un 502: contesta con el cronograma y la pantalla lo dice en ámbar.
+       La edición que la pone en rojo: sacar el try/catch de `materialDelCronograma`. */
+    h.cargarMaterialParaElChat.mockRejectedValueOnce(new Error("transcripción ilegible"));
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const m = await materialDelCronograma("p1");
+    aviso.mockRestore();
+    expect(m.texto).toBe("");
+    expect(m.interno).toEqual([]);
+    expect(m.lectura.error).toBe(true);
+
+    h.cargarMaterialParaElChat.mockResolvedValueOnce({
+      texto: "=== MATERIAL ===",
+      lectura: { error: undefined },
+      materialInterno: ["algo"],
+    });
+    const bien = await materialDelCronograma("p1");
+    expect(bien.texto).toBe("=== MATERIAL ===");
+    expect(bien.interno).toEqual(["algo"]);
+  });
+
+  it("⭐ la pantalla dice qué leyó el chat, y los textos del cajón están en tuteo", () => {
+    /* La edición que la pone en rojo: no guardar `lectura` de la respuesta del turno (la línea no
+       aparece nunca), no devolverla desde el handler, o volver un texto del cajón al voseo. */
+    const handler = soloCodigo(leer("lib/asistente/handler.ts"));
+    expect(handler, "el handler dejó de devolver qué leyó el turno").toContain(
+      "return NextResponse.json({ ...aVista(fresco), acuerdo, lectura });",
+    );
+    const panel = leer("components/asistente/ChatDelAsistente.tsx");
+    expect(panel, "el cajón dejó de guardar qué leyó el turno").toContain("setLectura(j.lectura ?? null)");
+    expect(panel, "el cajón dejó de pintar la línea de lectura").toContain("{lineaDeLectura(lectura)}");
+    expect(panel, "la línea de un error dejó de verse en ámbar").toContain('lectura.error ? "text-warn-ink"');
+    const visibles = soloCodigo(panel);
+    for (const voseo of ["Conversá", "Preguntale", "Recargá", "recargá", "Podés", "Contestá", "Copiá", "pegala", "Escribí", "querés"]) {
+      expect(visibles.includes(voseo), `el cajón volvió al voseo: «${voseo}»`).toBe(false);
+    }
   });
 });

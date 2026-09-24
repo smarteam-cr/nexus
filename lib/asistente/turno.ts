@@ -3,8 +3,9 @@
  *
  * Arma el pedido, llama a Claude por el chokepoint de siempre (`lib/anthropic.ts`, que mide y
  * topea), persiste los dos turnos y devuelve la respuesta. ⛔ NO ESCRIBE EL DOCUMENTO: cuando hay
- * acuerdo, el modelo emite una **tool call** con la instrucción, y aplicarla es otro acto, con
- * otro botón y otro permiso.
+ * acuerdo, el modelo emite una **tool call** con OPERACIONES (en el cronograma y en los
+ * documentos; la instrucción de texto quedó solo para los hilos viejos), y aplicarlas es otro
+ * acto, con otro botón y otro permiso.
  *
  * ── POR QUÉ UNA TOOL Y NO «## PROPUESTA» EN PROSA ────────────────────────────────────────────
  * El borde entre «seguimos hablando» y «hay acuerdo» tiene que ser detectable POR MÁQUINA. Un
@@ -55,7 +56,15 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "./hilo";
-import { contextoDeCronograma, contextoDeDocumento, contextoDeRol, TOPE_POR_SECCION_CHARS } from "./contexto";
+import {
+  contextoDeCronograma,
+  contextoDeDocumento,
+  contextoDeRol,
+  materialDelCronograma,
+  TOPE_POR_SECCION_CHARS,
+} from "./contexto";
+import { huellasDeFrontera, lineasConFrontera } from "@/lib/contexto/frontera-del-cronograma";
+import type { LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
 import { leerAcuerdo, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
@@ -426,7 +435,26 @@ numeración vino a evitar.
      3 semanas y agrego ahí «Revisar todo muy bien»…»  ← la lista de abajo dice exactamente eso
 
 Solo NO llamas la herramienta cuando el pedido no entra en el vocabulario, cuando estás pidiendo la
-confirmación de un borrado, o cuando no hay nada nuevo que agregar y tampoco nada pendiente.`;
+confirmación de un borrado, o cuando no hay nada nuevo que agregar y tampoco nada pendiente.
+
+⭐ LAS REUNIONES, LAS NOTAS Y LAS INSTRUCCIONES QUE ELIGIÓ EL CSE.
+Si el contexto trae el bloque «MATERIAL DEL CRONOGRAMA», ahí están las reuniones que el CSE eligió,
+las notas que pegó y sus instrucciones adicionales, todo desde «Contexto del cronograma». Úsalas
+cuando el pedido las necesite («agrega lo que acordamos el martes», «¿qué quedó pendiente de la
+reunión de alcance?») y di en una frase de cuál sacaste el cambio. No propongas cambios que nadie
+pidió, ni señales por tu cuenta dónde una reunión no coincide con el cronograma: contesta lo que te
+preguntan.
+⛔ Si el bloque no está, o la reunión que nombran no aparece ahí, NO la tienes: dilo en una línea y
+di que se elige en «Contexto del cronograma». Nunca completes de memoria lo que una reunión
+«seguramente» dijo.
+⚠ Si un pedido contradice las instrucciones adicionales, dilo en UNA línea y haz lo que te pidieron:
+en esta conversación manda el CSE.
+⚠ Un título que sale del material (nadie te lo dictó) se escribe como TAREA para el cliente, nunca
+como cita.
+Si te piden rehacer todas las tareas, o revisar las fases y sus tiempos desde las reuniones y las
+notas, recomienda el botón que el contexto nombra en «PARA REHACER TODO»: lee el material con más
+espacio, primero propone los cambios de fases y tiempos (el CSE acepta o descarta cada uno) y
+después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.`;
 
 /**
  * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento
@@ -867,6 +895,11 @@ export interface ResultadoDelTurno {
   acuerdo: CambioAcordado | null;
   /** La huella del prefijo con el que se contestó — se guarda con los dos turnos. */
   shaDeContexto: string;
+  /**
+   * Qué leyó del «Contexto del cronograma» en ESTE turno (solo números, para la línea de la
+   * pantalla). `null` fuera del cronograma.
+   */
+  lectura: LecturaDelMaterial | null;
 }
 
 /**
@@ -880,7 +913,14 @@ async function contextoDeLaPieza(dueno: Dueno, pieza: string) {
     if (!("projectId" in dueno)) {
       return { texto: "Este documento no tiene cronograma.", cierreActual: null };
     }
-    return contextoDeCronograma(dueno.projectId);
+    /* ⭐ El material va APARTE del contexto y se lee en paralelo, SOLO acá: los kickoffs, la
+       Entrega y Roles no pagan la lectura de las reuniones. Si falla, `materialDelCronograma`
+       devuelve el texto vacío y el turno sigue con el cronograma (decisión de Elías 2026-09-23). */
+    const [ctx, material] = await Promise.all([
+      contextoDeCronograma(dueno.projectId),
+      materialDelCronograma(dueno.projectId),
+    ]);
+    return { ...ctx, material };
   }
   /* Roles reusa el motor de presentación pero no el de datos: su contenido vive en
      `RoleProfile.content`, no en filas de canvas. Devuelve la MISMA forma, así que de acá para
@@ -917,7 +957,9 @@ export async function correrTurno(
       ? { businessCaseId: hilo.businessCaseId }
       : { roleId: hilo.roleId ?? "" };
   const ctx = await contextoDeLaPieza(dueno, hilo.pieza);
-  const sha = huellaDeContexto(ctx.texto);
+  /* La huella cubre TODO lo que el modelo leyó: si el CSE cambió lo elegido entre dos turnos, la
+     auditoría del hilo lo ve. Sin material queda igual que antes. */
+  const sha = huellaDeContexto(ctx.material?.texto ? `${ctx.texto}\n${ctx.material.texto}` : ctx.texto);
 
   /**
    * ⭐ EL CRONOGRAMA DE HOY, traducible, y arriba de todo.
@@ -1051,13 +1093,21 @@ export async function correrTurno(
         anthropic.messages.create({
           model: hilo.modelo,
           max_tokens: MAX_TOKENS_DE_RESPUESTA,
-          /* ⭐ El breakpoint va al FINAL del bloque de contexto y en ningún otro lado. El prompt
-             solo (~700 tok) cae bajo el mínimo cacheable: marcarlo ahí sería una escritura de
-             caché pagada que nunca se lee, sin error y sin log. Juntos llegan a ~1.700 y sí
-             cachean. ⚠ Y es idéntico entre el primer intento y el reintento: la segunda llamada
-             lee el prefijo de la caché a 0,1×, así que reintentar cuesta el delta, no el doble. */
+          /* ⭐ TRES BREAKPOINTS, uno en cada frontera entre cosas que cambian a distinto ritmo
+             (2026-09-23; antes era uno solo, al final del contexto):
+               1. el PROMPT — ya mide ~13.700 caracteres (~3.700 tokens; con las tools, ~5.500),
+                  lejos de los ~700 del 2026-08-19 que no llegaban al mínimo cacheable. Es igual
+                  para TODOS los hilos de la pieza, así que se lee de la caché entre proyectos;
+               2. el MATERIAL del cronograma — cambia solo cuando el CSE toca lo elegido. Va
+                  condicional: sin material, el pedido es el de antes con un breakpoint más;
+               3. el CONTEXTO — cambia con cada apply. Aplicar no vuelve a cobrar lo de arriba.
+             Son 3 de los 4 que permite la API, todos de 5 minutos. ⚠ Y el pedido es idéntico entre
+             el primer intento y el reintento: la segunda llamada lee todo de la caché a 0,1×. */
           system: [
-            { type: "text", text: promptDelAsistente(esCronograma) },
+            { type: "text", text: promptDelAsistente(esCronograma), cache_control: { type: "ephemeral" } },
+            ...(ctx.material?.texto
+              ? [{ type: "text" as const, text: ctx.material.texto, cache_control: { type: "ephemeral" as const } }]
+              : []),
             {
               type: "text",
               text: `CONTEXTO DE ESTE DOCUMENTO\n\n${ctx.texto}`,
@@ -1412,7 +1462,16 @@ export async function correrTurno(
            es literalmente el turno que produjo el bug. */
         resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
         operaciones: fusion.operaciones,
-        lineas: describirOperaciones(paraTraducir, fusion.operaciones),
+        /* ⚠ LA FRONTERA, EN LA LÍNEA QUE EL CSE LEE ANTES DE APLICAR (2026-09-23). Desde que el
+           chat lee las reuniones y las notas elegidas, un título o un nombre de fase puede repetir
+           una frase del material, o traer un monto, una fecha o un correo: esa línea termina en
+           «⚠ revisa…». Mismo detector que los previews del detalle; sin material no marca nada.
+           Una línea por operación, siempre: si no, `leerAcuerdo` las descarta. */
+        lineas: lineasConFrontera(
+          describirOperaciones(paraTraducir, fusion.operaciones),
+          fusion.operaciones,
+          ctx.material?.interno.length ? huellasDeFrontera(ctx.material.interno) : null,
+        ),
         /* La cascada viaja en el acuerdo desde el 2026-08-22: la pantalla dejó de importarla del
            cronograma para poder servir a los dos carriles sin una rama por pieza. */
         dependencias: (() => {
@@ -1447,5 +1506,5 @@ export async function correrTurno(
     shaDeContexto: sha,
   });
 
-  return { respuesta, acuerdo, shaDeContexto: sha };
+  return { respuesta, acuerdo, shaDeContexto: sha, lectura: ctx.material?.lectura ?? null };
 }

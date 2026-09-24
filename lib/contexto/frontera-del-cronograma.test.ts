@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   MOTIVOS_DE_FUGA,
   VENTANA_DE_COPIA,
+  avisoDeFronteraEnLaLinea,
   fugaEn,
   fugasDeLaPropuesta,
   huellasDeFrontera,
+  lineasConFrontera,
   marcarFugas,
   normalizarParaFrontera,
 } from "./frontera-del-cronograma";
@@ -159,5 +161,49 @@ describe("marcar tareas y revisar propuestas", () => {
         "nombres de fase; corrígelo o descarta ese cambio antes de aplicar.",
     ]);
     expect(fugasDeLaPropuesta(propuesta, actuales, sinMaterial)).toEqual([]);
+  });
+});
+
+describe("⭐ las líneas del acuerdo del CHAT pasan por la frontera (paso C, 2026-09-23)", () => {
+  const OPS = [
+    { op: "tarea.crear", phaseId: "f1", titulo: "Configurar journey de reactivación", semana: 0 },
+    { op: "tarea.crear", phaseId: "f1", titulo: "Pago inicial de US$1.500 al proveedor", semana: 1 },
+    { op: "tarea.renombrar", taskId: "t1", titulo: "Escribir a ana.perez@cliente.com por los accesos" },
+    {
+      op: "fase.crear",
+      nombre: "La conexión del SDK con soporte de tarjetas dinámicas y objetos personalizados para mantener la trazabilidad",
+      semanas: 1,
+    },
+    { op: "fase.renombrar", phaseId: "f2", nombre: "Pruebas y ajustes" },
+    { op: "fase.duracion", phaseId: "f2", semanas: 3, nombre: "Pago de US$9.000" },
+  ];
+  const LINEAS = OPS.map((_, i) => `línea ${i + 1}`);
+
+  it("⛔ una línea por operación, siempre: si no, el acuerdo pierde sus líneas y el botón", () => {
+    /* `leerAcuerdo` descarta las líneas que no son una por operación. La edición que la pone en
+       rojo: devolver solo las líneas marcadas, o fusionarlas. */
+    const out = lineasConFrontera(LINEAS, OPS, h);
+    expect(out).toHaveLength(OPS.length);
+    out.forEach((l, i) => expect(l.startsWith(LINEAS[i]), `la línea ${i + 1} cambió de lugar`).toBe(true));
+  });
+
+  it("marca el monto, el correo y la frase copiada; no marca el título genérico ni lo que el cliente no lee", () => {
+    /* La edición que la pone en rojo: sacar una operación del mapa de campos, o no llamar al
+       detector. `fase.duracion` no escribe texto que lea el cliente: aunque traiga un `nombre`
+       suelto, no se marca. */
+    const out = lineasConFrontera(LINEAS, OPS, h);
+    expect(out[0]).toBe("línea 1");
+    expect(out[1]).toBe(`línea 2${avisoDeFronteraEnLaLinea(MOTIVOS_DE_FUGA.monto)}`);
+    expect(out[2]).toBe(`línea 3${avisoDeFronteraEnLaLinea(MOTIVOS_DE_FUGA.correo)}`);
+    expect(out[3]).toBe(`línea 4${avisoDeFronteraEnLaLinea(MOTIVOS_DE_FUGA.copia)}`);
+    expect(out[4]).toBe("línea 5");
+    expect(out[5]).toBe("línea 6");
+    expect(out[1]).toContain("⚠ revisa: lo lee el cliente y trae un monto");
+  });
+
+  it("sin material, o con largos distintos, devuelve las líneas tal cual", () => {
+    expect(lineasConFrontera(LINEAS, OPS, null)).toEqual(LINEAS);
+    expect(lineasConFrontera(LINEAS, OPS, sinMaterial)).toEqual(LINEAS);
+    expect(lineasConFrontera(LINEAS.slice(1), OPS, h)).toEqual(LINEAS.slice(1));
   });
 });

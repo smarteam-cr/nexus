@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
     filas: new Map<string, { id: string; title: string; summary: unknown; minute: null }>(),
     fotoDeLaBase: null as unknown,
     notas: [] as Array<{ title: string | null; content: string; createdAt: Date }>,
+    canvas: null as unknown,
   };
   const prisma = {
     firefliesSession: {
@@ -31,6 +32,8 @@ const h = vi.hoisted(() => {
     $queryRaw: vi.fn(async () => []),
     projectTimeline: { findUnique: vi.fn(async () => estado.fotoDeLaBase) },
     timelineSource: { findMany: vi.fn(async () => estado.notas) },
+    // Las «Instrucciones adicionales» del cronograma (el brief `__doc`), para la puerta del chat.
+    projectCanvas: { findFirst: vi.fn(async () => estado.canvas) },
   };
   return { estado, prisma };
 });
@@ -45,7 +48,7 @@ vi.mock("@/lib/canvas/load-canvas-context", () => ({ loadHandoffContext: vi.fn()
 vi.mock("@/lib/canvas/desarrollo-context", () => ({ loadDesarrolloContext: vi.fn() }));
 vi.mock("@/lib/cs/hubspot-ops-block", () => ({ bloqueDeOperativa: vi.fn(() => "") }));
 
-const { cargarMaterialDelCronograma } = await import("./cargar");
+const { cargarMaterialDelCronograma, cargarMaterialParaElChat } = await import("./cargar");
 
 const DIA = 86_400_000;
 const AHORA = Date.UTC(2026, 8, 23, 18);
@@ -66,6 +69,7 @@ function sembrar() {
     phases: [{ name: "Fase de la base", durationWeeks: 4, startWeek: null }],
   };
   h.estado.notas = [{ title: "Acuerdo", content: "Primero Service.", createdAt: new Date(Date.UTC(2026, 8, 22, 15)) }];
+  h.estado.canvas = null;
 }
 
 const FOTO_DE_QUIEN_LLAMA: FotoDelCronograma = {
@@ -142,5 +146,50 @@ describe("⭐ lo que el cargador lee de la base para la foto y las notas", () =>
     const args = h.prisma.timelineSource.findMany.mock.calls[0] as unknown as [{ select: Record<string, unknown> }];
     expect(args[0].select.createdAt, "la lectura de las notas dejó de pedir la fecha").toBe(true);
     expect(m.notas).toContain("### Nota: Acuerdo — cargada el 22 sep 2026\nPrimero Service.");
+  });
+});
+
+describe("⭐ la puerta del CHAT del cronograma (paso C, decisión de Elías 2026-09-23)", () => {
+  /** `n` reuniones de 5.000 caracteres, de hace 1 a `n` días. */
+  function sembrarMuchas(n: number) {
+    h.estado.sesiones = [];
+    h.estado.filas = new Map();
+    for (let i = 1; i <= n; i++) {
+      const id = `m${String(i).padStart(2, "0")}`;
+      h.estado.sesiones.push({ id, title: `Semanal ${i}`, date: AHORA - i * DIA, participants: [] });
+      const overview = Array.from({ length: 50 }, () => `${id} ${"p".repeat(96)}`).join("\n").slice(0, 5_000);
+      h.estado.filas.set(id, { id, title: `Semanal ${i}`, summary: { overview }, minute: null });
+    }
+  }
+
+  it("lee con el presupuesto del chat (24 lecturas, 16.000), sin ubicación y con las instrucciones", async () => {
+    /* Esto LLAMA a la puerta: una opción que se ignora (el tope, las lecturas, la ubicación) o las
+       instrucciones que no se leen no rompen nada visible. Las ediciones que la ponen en rojo:
+       sacar `PRESUPUESTO_DEL_CHAT` o `sinUbicacion` de la puerta, o dejar de leer el brief. */
+    sembrarMuchas(30);
+    h.estado.canvas = { sections: [{ key: "__doc", label: "Instrucciones", brief: "Nada de integraciones." }] };
+    const m = await cargarMaterialParaElChat("p1");
+    expect(h.prisma.firefliesSession.findMany.mock.calls[0][0].where.id.in, "leyó más que las 24 del chat").toHaveLength(24);
+    expect(m.lectura.elegidas).toBe(30);
+    expect(m.lectura.entran).toBe(16);
+    expect(m.lectura.afuera).toBe(14);
+    expect(m.lectura.instrucciones).toBe(true);
+    expect(m.texto).toContain("=== MATERIAL DEL CRONOGRAMA");
+    expect(m.texto).toContain("Nada de integraciones.");
+    expect(m.texto, "las reuniones del chat llevan su lugar en el plan: la caché cambia con cada fase").not.toContain(
+      "del proyecto:",
+    );
+    expect(m.texto).toContain("### Nota: Acuerdo — cargada el 22 sep 2026");
+    const contenido = m.materialInterno.filter((t) => !t.startsWith("### Nota:"));
+    expect(contenido.reduce((s, t) => s + t.length, 0), "el chat leyó más que su tope").toBeLessThanOrEqual(16_000);
+  });
+
+  it("sin reuniones, sin notas y sin instrucciones: texto vacío (el pedido queda como antes)", async () => {
+    h.estado.sesiones = [];
+    h.estado.notas = [];
+    const m = await cargarMaterialParaElChat("p1");
+    expect(m.texto).toBe("");
+    expect(m.lectura.instrucciones).toBe(false);
+    expect(m.materialInterno).toEqual([]);
   });
 });

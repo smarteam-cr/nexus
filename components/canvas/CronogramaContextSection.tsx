@@ -14,8 +14,9 @@
  *
  * Las reuniones elegidas las leen el detalle (tareas por semana y cuáles son reuniones) y «Pedir
  * cambio con IA» (puede tocar fases, solo lo que se le pide); las notas, también el avance. El
- * avance NO depende de lo elegido: lee solo las reuniones recientes del proyecto. ⚠ Ni el handoff
- * (que arma las fases) ni el chat del cronograma leen este material.
+ * avance NO depende de lo elegido: lee solo las reuniones recientes del proyecto. El 💬 Asistente
+ * del cronograma también lo lee (con su propio espacio, decisión de Elías del 2026-09-23). ⚠ El
+ * handoff (que arma las fases) no lo lee.
  *
  * ⚠ Archivo aparte a propósito: CronogramaCanvas.tsx está al tope del trinquete de grises, y lo
  * nuevo nace con tokens del tema.
@@ -119,7 +120,8 @@ export default function CronogramaContextSection({
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
           búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo
           mientras quepa; si eliges muchas, se reparten el espacio. Sacarla de acá no la saca del
-          handoff ni del proyecto.
+          handoff ni del proyecto. El 💬 Asistente del cronograma también lo lee cuando conversas
+          con él.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>

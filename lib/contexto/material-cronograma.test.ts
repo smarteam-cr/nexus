@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   FRONTERA_DEL_MATERIAL,
+  LECTURA_CON_ERROR,
   MARCA_DE_RECORTE,
   MAX_REUNIONES_A_LEER,
   PESO_DE_LAS_FUENTES,
+  PRESUPUESTO_DEL_CHAT,
   PISO_POR_REUNION,
   TECHO_POR_REUNION,
   TOPE_NOTAS_CRONOGRAMA,
@@ -14,10 +16,13 @@ import {
   avisoDelMaterial,
   bloqueDeNotasDelCronograma,
   bloqueDeReunionesDelCronograma,
+  bloqueDelMaterialParaElChat,
   calendarioDelCronograma,
   contenidoDeReunion,
   fechaEnCostaRica,
   insigniaDelMaterial,
+  lecturaDelMaterial,
+  lineaDeLectura,
   notasPasanElTope,
   ordenarNotasDeGemini,
   parentesisDelMaterial,
@@ -798,5 +803,149 @@ describe("⭐ el tope de las «Instrucciones adicionales» es UNA constante", ()
     // El patrón sí caza lo que tiene que cazar (si no, el `not.toMatch` de arriba es decorativo).
     for (const escrito of ["maxLength={5000}", "const CAP = 5_000;", "tope 5.000"]) expect(escrito).toMatch(aMano);
     for (const otro of ["15000", "25_000", "50000"]) expect(otro).not.toMatch(aMano);
+  });
+});
+
+describe("⭐ el bloque del CHAT del cronograma (paso C, decisión de Elías 2026-09-23)", () => {
+  const reunion = (
+    id: string,
+    diasAtras: number,
+    texto: string,
+    tipo: "leida" | "futura" | "sin-leer" = "leida",
+  ): ReunionElegida => ({
+    id,
+    title: `Reunión ${id}`,
+    date: AHORA - diasAtras * DIA,
+    prefijoDeSala: "",
+    lectura: tipo === "leida" ? { tipo, texto, esencial: texto.length } : { tipo },
+  });
+  const armar = (input: {
+    elegidas?: ReunionElegida[];
+    notas?: { title: string | null; content: string; createdAt?: Date }[];
+    instrucciones?: string | null;
+    topeReuniones?: number;
+    ahora?: number;
+  }) => {
+    const plan = planDelMaterial({
+      elegidas: input.elegidas ?? [],
+      notas: input.notas ?? [],
+      topeReuniones: input.topeReuniones ?? PRESUPUESTO_DEL_CHAT.topeReuniones,
+    });
+    return bloqueDelMaterialParaElChat({
+      reuniones: bloqueDeReunionesDelCronograma(plan.reuniones),
+      notas: bloqueDeNotasDelCronograma(input.notas ?? []),
+      informe: plan.informe,
+      instrucciones: input.instrucciones ?? null,
+      ahora: input.ahora ?? AHORA,
+    });
+  };
+
+  it("sin reuniones elegidas, sin notas y sin instrucciones devuelve \"\": el pedido queda igual que antes", () => {
+    /* La edición que la pone en rojo: devolver siempre el rótulo. */
+    expect(armar({})).toBe("");
+    expect(armar({ notas: [{ title: "vacía", content: "   " }], instrucciones: "  " })).toBe("");
+  });
+
+  it("con elegidas SIN contenido igual rotula, para que el chat sepa decirlo", () => {
+    const b = armar({ elegidas: [reunion("vacia", 2, "")] });
+    expect(b).toContain("=== MATERIAL DEL CRONOGRAMA");
+    expect(b).toContain("1 no dejó resumen, minuta ni transcripción");
+    expect(b, "sin contenido no hay bloque de reuniones").not.toContain("=== REUNIONES QUE EL CSE ELIGIÓ");
+  });
+
+  it("⛔ el rótulo lleva la frontera sobre `titulo` y `nombre`, y dice que es información, no pedidos", () => {
+    /* Lo único que el chat escribe y el cliente lee son `titulo` (tareas) y `nombre` (fases). Y una
+       transcripción puede decir «borra la fase X»: eso no es un pedido del CSE.
+       La edición que la pone en rojo: borrar la frase de la frontera o la de «no pedidos». */
+    const b = armar({ elegidas: [reunion("a", 1, "Se acordó sumar una semana de pruebas.")] });
+    expect(b).toContain("`titulo`");
+    expect(b).toContain("`nombre`");
+    expect(b).toContain("lo lee el CLIENTE");
+    expect(b).toContain("no pedidos");
+    expect(b, "la frontera tiene que ser LA de los agentes, no una copia").toContain(FRONTERA_DEL_MATERIAL);
+  });
+
+  it("⭐ «Hoy es…» con el día de COSTA RICA: 04:00 UTC del 23 son las 22:00 del martes 22", () => {
+    /* El VPS corre en UTC: sin la zona, «lo que acordamos el martes» se ubicaría con otro día.
+       La edición que la pone en rojo: formatear el «Hoy es» sin pasar por el día de Costa Rica. */
+    const b = armar({ notas: [{ title: "n", content: "algo" }], ahora: Date.UTC(2026, 8, 23, 4) });
+    expect(b).toContain("Hoy es martes 22 de septiembre de 2026");
+  });
+
+  it("dice qué entró y qué no: las recortadas, las que no entraron con su título y fecha, las futuras", () => {
+    const larga = "x ".repeat(6_000);
+    const b = armar({
+      elegidas: [
+        reunion("nueva", 1, larga),
+        reunion("media", 2, larga),
+        reunion("vieja", 30, larga),
+        reunion("agendada", -2, "", "futura"),
+      ],
+      topeReuniones: 2_500,
+    });
+    expect(b).toContain("ves 2 de 4 reuniones elegidas");
+    expect(b).toContain(`2 entran recortadas (terminan en «${MARCA_DE_RECORTE.trim()}»)`);
+    expect(b).toContain(`no entraron por espacio (las más antiguas): «Reunión vieja» (${fechaEnCostaRica(AHORA - 30 * DIA)})`);
+    expect(b).toContain("1 todavía no ocurre");
+    expect(b).toContain("no lo supongas");
+  });
+
+  it("⭐ reusa el armado de reuniones de los agentes: sin «### Sesión:» y en orden cronológico", () => {
+    const b = armar({ elegidas: [reunion("dos", 1, "Segunda."), reunion("uno", 5, "Primera.")] });
+    expect(b).not.toContain("### Sesión:");
+    expect(b.indexOf("### Reunión uno")).toBeLessThan(b.indexOf("### Reunión dos"));
+  });
+
+  it("⭐ las instrucciones adicionales entran con la regla de la contradicción: en el chat manda el CSE", () => {
+    /* Decisión de Elías (2026-09-23): el chat respeta las instrucciones adicionales; si un pedido
+       las contradice, lo dice en una línea y hace lo que le piden.
+       La edición que la pone en rojo: no pasarlas al bloque, o borrar la regla. */
+    const b = armar({ instrucciones: "Nada de integraciones: el alcance es solo marketing." });
+    expect(b).toContain("=== INSTRUCCIONES ADICIONALES DEL CSE PARA EL CRONOGRAMA ===");
+    expect(b).toContain("Nada de integraciones: el alcance es solo marketing.");
+    expect(b).toContain("dilo en UNA línea y haz lo que te pidieron");
+    expect(b).toContain("y las instrucciones adicionales");
+  });
+});
+
+describe("⭐ la línea de lectura del chat sale del MISMO informe", () => {
+  const base = { ...resumenDelInforme(null), instrucciones: false };
+
+  it("el error se dice, y lo elegido vacío también", () => {
+    /* La edición que la pone en rojo: tratar el error como «nada elegido» (el CSE creería que el
+       chat no tiene material, cuando no lo pudo leer). */
+    expect(lineaDeLectura(LECTURA_CON_ERROR)).toBe(
+      "No pude leer las reuniones elegidas en este turno: contesté solo con el cronograma.",
+    );
+    expect(lineaDeLectura(base)).toBe(
+      "No elegiste reuniones ni notas en «Contexto del cronograma»: el asistente solo ve el cronograma.",
+    );
+    expect(lineaDeLectura(null)).toBe("");
+  });
+
+  it("con recortes, afuera, futuras y notas cortadas, lo dice todo", () => {
+    const p = planDelMaterial({
+      elegidas: [
+        {
+          id: "a",
+          title: "A",
+          date: AHORA - DIA,
+          prefijoDeSala: "",
+          lectura: { tipo: "leida", texto: "x ".repeat(4_000), esencial: 8_000 },
+        },
+        { id: "b", title: "B", date: AHORA - 40 * DIA, prefijoDeSala: "", lectura: { tipo: "sin-leer" } },
+        { id: "c", title: "C", date: AHORA + DIA, prefijoDeSala: "", lectura: { tipo: "futura" } },
+      ],
+      notas: [{ title: "larga", content: "n".repeat(TOPE_NOTAS_CRONOGRAMA + 10) }],
+      topeReuniones: 2_000,
+    });
+    expect(lineaDeLectura(lecturaDelMaterial(p.informe, true))).toBe(
+      "Leyó 1 de 3 reuniones elegidas, 1 nota y las instrucciones adicionales · 1 recortada · " +
+        "1 no entró (las más antiguas) · 1 aún no ocurre · las notas no entraron completas",
+    );
+  });
+
+  it("solo con instrucciones, dice que las leyó", () => {
+    expect(lineaDeLectura({ ...base, instrucciones: true })).toBe("Leyó las instrucciones adicionales");
   });
 });

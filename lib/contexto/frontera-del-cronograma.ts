@@ -29,6 +29,10 @@
  *
  * ⚠ Da falsos negativos a propósito (una paráfrasis, un nombre de persona suelto): eso queda para
  * el rótulo y para la mirada del CSE.
+ *
+ * Lo usan los previews del detalle (`marcarFugas`), «Pedir cambio con IA» (`fugasDeLaPropuesta`),
+ * el revisor de fases (`fugaEn` sobre los nombres) y el chat del cronograma (`lineasConFrontera`):
+ * un solo detector.
  */
 
 export type CampoDeFrontera = "titulo" | "nota";
@@ -144,6 +148,49 @@ export function marcarFugas<T extends { title: string; notes?: string | null }>(
     if (enTitulo) return { ...t, fuga: { campo: "titulo", motivo: enTitulo } };
     const enNota = fugaEn(t.notes ?? null, h, "nota");
     return { ...t, fuga: enNota ? { campo: "nota", motivo: enNota } : null };
+  });
+}
+
+/**
+ * Las operaciones del CHAT cuyo texto lee el cliente, y el campo que lo lleva. El chat escribe
+ * títulos de tarea y nombres de fase; nada más de lo que emite llega al cronograma publicado.
+ */
+const CAMPO_QUE_LEE_EL_CLIENTE: Readonly<Record<string, "titulo" | "nombre">> = {
+  "tarea.crear": "titulo",
+  "tarea.renombrar": "titulo",
+  "fase.crear": "nombre",
+  "fase.renombrar": "nombre",
+};
+
+/** El sufijo de la línea marcada. `motivo` sale de `MOTIVOS_DE_FUGA`. */
+export const avisoDeFronteraEnLaLinea = (motivo: string) => ` — ⚠ revisa: lo lee el cliente y ${motivo}`;
+
+/**
+ * LAS LÍNEAS DEL ACUERDO DEL CHAT, con el aviso de la frontera (paso C, 2026-09-23). Desde que el
+ * chat del cronograma lee las reuniones y las notas elegidas, un título que propone puede repetir
+ * una frase del material, o traer un monto, una fecha o un correo. La regla va en el rótulo del
+ * bloque; esto es la red, y solo AVISA: la línea termina en «⚠ revisa…» y el CSE la desmarca o
+ * pide otro título antes de Aplicar.
+ *
+ * ⛔ Devuelve EXACTAMENTE una línea por operación, en el mismo orden: `leerAcuerdo` descarta las
+ * líneas que no son una por operación y el botón queda apagado (lib/asistente/acuerdo.ts). Solo
+ * les agrega un sufijo a las de `tarea.crear`, `tarea.renombrar`, `fase.crear` y `fase.renombrar`
+ * cuyo texto cruza la frontera. Sin huellas (sin material), o con largos distintos, las devuelve
+ * tal cual.
+ */
+export function lineasConFrontera(
+  lineas: readonly string[],
+  operaciones: readonly { op?: unknown; titulo?: unknown; nombre?: unknown }[],
+  h: HuellasDeFrontera | null,
+): string[] {
+  if (!h || !h.activa || lineas.length !== operaciones.length) return [...lineas];
+  return lineas.map((linea, i) => {
+    const o = operaciones[i];
+    const campo = typeof o?.op === "string" ? CAMPO_QUE_LEE_EL_CLIENTE[o.op] : undefined;
+    if (!campo) return linea;
+    const texto = o[campo];
+    const motivo = typeof texto === "string" ? fugaEn(texto, h, "titulo") : null;
+    return motivo ? `${linea}${avisoDeFronteraEnLaLinea(motivo)}` : linea;
   });
 }
 

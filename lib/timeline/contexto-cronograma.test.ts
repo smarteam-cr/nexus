@@ -5,6 +5,7 @@ import { fuentesDelDetalle, renderDetalleDeCronograma } from "@/lib/contexto/det
 import { REGLA_DE_FRONTERA_DEL_ASSIST, fuentesDelAssist } from "@/lib/contexto/asistente-cronograma";
 import { buildProgressUserMessage } from "./regenerate-progress";
 import {
+  PRESUPUESTO_DEL_CHAT,
   TECHO_POR_REUNION,
   TOPE_REUNIONES_CRONOGRAMA,
   repartirEspacio,
@@ -280,6 +281,55 @@ describe("⭐ el reparto: justo, nunca pasa el tope, y el cargador lee con su pr
     // Y las reuniones salen del chokepoint, nunca de una lectura directa de vínculos.
     expect(tramo).toContain("getProjectTimelineSessions(projectId)");
     expect(tramo).not.toContain("prisma.sessionProject");
+  });
+});
+
+describe("⭐ el CHAT del cronograma también lee el material (decisión de Elías 2026-09-23)", () => {
+  /* El chat cambia fases y tareas con operaciones que ejecuta el código, sin un modelo editor
+     detrás: si no ve lo elegido, nadie lo ve en ese camino. Lo lee con el MISMO cargador que los
+     agentes, con su propio espacio, y los agentes no se enteran. */
+  const DIA = 86_400_000;
+  const AHORA = Date.UTC(2026, 8, 23);
+
+  it("la puerta del chat llama al cargador de los agentes con SU presupuesto y sin ubicación", () => {
+    /* La edición que la pone en rojo: `cargarMaterialDelCronograma(projectId)` a secas en la puerta
+       del chat (32.000 de reuniones por turno), o pasarles `PRESUPUESTO_DEL_CHAT` a los agentes
+       (las guardas de arriba, que exigen el llamado sin opciones). */
+    const src = sinComentarios(leer("lib/contexto/cargar.ts"));
+    const tramo = tramoDe(src, "cargarMaterialParaElChat");
+    expect(tramo.length, "la guarda no está mirando la puerta del chat").toBeGreaterThan(200);
+    expect(tramo).toContain("cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true })");
+    for (const agente of ["cargarContextoDelDetalle", "cargarContextoDelAssist", "cargarContextoDeEstructura"]) {
+      expect(tramoDe(src, agente), `${agente} tomó el presupuesto del chat`).not.toContain("PRESUPUESTO_DEL_CHAT");
+    }
+  });
+
+  it("con el presupuesto del chat el reparto suma ≤ 16.000 y ninguna pasa el techo por reunión", () => {
+    /* Reemplaza a la guarda de C sobre `cotas[0]` (la escala del handoff se retiró en D1: crítica,
+       conflicto 2). La edición que la pone en rojo: subir `topeReuniones` del chat. */
+    const muchas = Array.from({ length: 40 }, (_, i) => ({
+      id: `r${i}`,
+      date: AHORA - (i + 1) * DIA,
+      esencial: 3_000,
+      largo: 9_000,
+    }));
+    const cotas = repartirEspacio(muchas, {
+      tope: PRESUPUESTO_DEL_CHAT.topeReuniones,
+      piso: 1_000,
+      techo: TECHO_POR_REUNION,
+    });
+    expect([...cotas.values()].reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(16_000);
+    expect(Math.max(...cotas.values())).toBeLessThanOrEqual(TECHO_POR_REUNION);
+    expect(PRESUPUESTO_DEL_CHAT.topeReuniones).toBeLessThan(TOPE_REUNIONES_CRONOGRAMA);
+  });
+
+  it("el lector desempata por id: dos reuniones a la misma hora dan el mismo texto en cada turno", () => {
+    /* Sin el desempate, dos reuniones a la misma hora podrían cambiar de lugar entre turnos: con
+       `maxALeer` una entra y la otra no, y el bloque del chat cambia sin que nadie toque nada — la
+       caché se vuelve a cobrar. La edición que la pone en rojo: sacar `a.id.localeCompare(b.id)`
+       del orden de lectura. */
+    const tramo = tramoDe(sinComentarios(leer("lib/contexto/cargar.ts")), "cargarMaterialDelCronograma");
+    expect(tramo).toMatch(/soloOcurridas\(sessions, ahora\)\s*\.sort\(\(a, b\) => b\.date - a\.date \|\| a\.id\.localeCompare\(b\.id\)\)/);
   });
 });
 

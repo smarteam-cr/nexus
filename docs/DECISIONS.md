@@ -3157,3 +3157,41 @@ fabricarla.
 - **No se construyó la plata esperada.** El plan preveía `fechaEsperada`, una confirmación por persona y
   un aviso para ingresos que todavía no entraron, solo si INV-26 e INV-27 no se habían depositado. Se
   depositaron, así que `fecha` sigue siendo el día en que entró la plata.
+
+## El chat del cronograma lee el «Contexto del cronograma» (2026-09-23)
+
+> Decisión de Elías. En el cronograma, el chat ya no le pasa una instrucción a otro modelo: emite
+> operaciones que el código escribe tal cual. «El chat entiende la intención; el editor tiene el
+> contexto» dejó de cumplirse ahí. Si el chat no ve las reuniones que el CSE eligió ni sus notas,
+> nadie las ve en ese camino.
+
+- **Una sola puerta, con presupuesto propio.** El chat lee las reuniones elegidas (con sus minutas),
+  las notas y las «Instrucciones adicionales» del cronograma por `materialDelCronograma`
+  (lib/asistente/contexto.ts) → `cargarMaterialParaElChat` (lib/contexto/cargar.ts). Usa el mismo
+  cargador que los agentes con `PRESUPUESTO_DEL_CHAT`: 24 lecturas y 16.000 caracteres de reuniones
+  (los agentes usan 40 y 32.000), el mismo tope de notas y un techo duro de 42.000 para el bloque
+  entero. Las reuniones van sin su lugar en el plan, así el bloque no cambia cuando se mueve una fase.
+  Los cargadores de los agentes siguen prohibidos en lib/asistente (contexto.test.ts), y el handoff,
+  los kickoffs y las reuniones no elegidas siguen afuera. Si la lectura falla, el chat contesta
+  solo con el cronograma y la pantalla lo dice en ámbar.
+- **Su propio bloque cacheado y tres breakpoints.** El material va entre el prompt y el contexto,
+  en su propio bloque del `system`. Hay un breakpoint en cada frontera entre cosas que cambian a
+  distinto ritmo: el prompt (~13.700 caracteres, igual para todos los hilos), el material (cambia
+  cuando el CSE toca lo elegido) y el contexto (cambia con cada apply). Aplicar no vuelve a cobrar
+  ni el material ni el prompt. Son 3 de los 4 que permite la API. La premisa vieja de un solo
+  breakpoint (el prompt medía ~700 tokens y no llegaba al mínimo cacheable) ya no valía.
+- **La frontera va dos veces: en el rótulo y en la línea.** El rótulo del bloque le dice que lo que
+  escribe en `titulo` y `nombre` lo lee el cliente, reusa `FRONTERA_DEL_MATERIAL` de los agentes y
+  aclara que el material es información, no pedidos. Además, la línea del acuerdo que repite una
+  frase del material, o trae un monto, una fecha, un plazo o un correo, termina en «⚠ revisa…»
+  (`lineasConFrontera`, con el mismo detector que los previews del detalle). Solo avisa: el CSE la
+  desmarca o pide otro título antes de aplicar.
+- **Las instrucciones adicionales las respeta, pero en el chat manda el CSE.** Si un pedido las
+  contradice, lo dice en una línea y hace lo que le pidieron. No señala contradicciones por su
+  cuenta. Para rehacer todo recomienda el botón que el CSE ve según el estado: «Generar cronograma»
+  sin tareas de la IA, «Regenerar todo el cronograma» con ellas.
+- **Sin material no cambia qué ve el modelo.** Sin reuniones elegidas, sin notas y sin instrucciones,
+  el bloque no existe y el pedido es el de antes, con un breakpoint más en el prompt.
+- **Se descartó la lectura a pedido con una segunda herramienta.** Rompe la regla de una sola
+  herramienta por pedido (turno.test.ts), suma una segunda llamada al modelo en el turno y deja
+  contestar desde un índice de títulos, sin haber leído la reunión.

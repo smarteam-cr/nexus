@@ -418,10 +418,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   const [suggestingReason, setSuggestingReason] = useState(false); // fetch de la razón sugerida
   const [publishReasonText, setPublishReasonText] = useState("");
   // ── Asistente IA ──
-  /* El asistente que CONVERSA antes de generar. Vive acá y no en el panel del proyecto porque
-     el «Aplicar» del acuerdo tiene que entrar por `submitAssist` — el mismo camino que «Pedir
-     cambio con IA», con su vista previa y su aceptación por ítem. Un segundo camino de escritura
-     no sería interfaz duplicada: sería lógica de pérdida de datos duplicada. */
+  /* El asistente que CONVERSA antes de generar. Vive acá y no en el panel del proyecto porque su
+     «Aplicar» escribe sobre el cronograma que este componente tiene en memoria: un acuerdo con
+     operaciones entra por `aplicarOperacionesAcordadas` (PUT directo, sin modelo ni vista previa);
+     `submitAssist` solo atiende los acuerdos viejos, guardados como instrucción de texto. Desde el
+     2026-09-23 el chat lee también las reuniones y notas elegidas en «Contexto del cronograma». */
   const [chatAbierto, setChatAbierto] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
@@ -3768,9 +3769,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         </div>
       )}
 
-      {/* ⭐ El acuerdo entra por `submitAssist` — el MISMO camino que «Pedir cambio con IA»,
-          con su vista previa en el Gantt y su aceptación por ítem. El chat acuerda; escribir
-          sigue siendo del editor, con su permiso. */}
+      {/* ⭐ Un acuerdo con operaciones entra por `aplicarOperacionesAcordadas`: un PUT directo, sin
+          modelo ni vista previa (lo que se revisa es la lista numerada del chat). `submitAssist`
+          queda para los acuerdos viejos con instrucción de texto. El chat acuerda; escribir sigue
+          siendo de esta pantalla, con su permiso. */}
       <ChatDelAsistente
         base={`/api/projects/${projectId}`}
         pieza="timeline"
