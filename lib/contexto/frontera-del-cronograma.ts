@@ -12,16 +12,19 @@
  * Un aviso que salta sobre textos legítimos se aprende a ignorar en una semana. Por eso:
  *  · sin material no hay huellas y no corre nada (`activa: false`): un proyecto que no eligió
  *    reuniones ni pegó notas no ve ningún aviso nuevo;
- *  · la COPIA se mide con ventanas de palabras seguidas, distintas por campo, calibradas contra el
- *    A/B de CAV (2026-09-23):
+ *  · la COPIA se mide con ventanas de palabras seguidas, por campo, calibradas contra el A/B de CAV
+ *    (2026-09-23):
  *      - NOTAS: 10 palabras, con al menos 5 de 4+ letras. La nota que copió el centinela S4
  *        compartía 12; las legítimas llegaron hasta 8 («tarjetas dinámicas y objetos
  *        personalizados para mantener la»).
- *      - TÍTULOS y NOMBRES de fase: 8 palabras, con al menos 4 de 4+ letras. En los 113 títulos
- *        de las dos corridas la racha más larga compartida con el material fue de 4 palabras, pero el
- *        título legítimo «Organizar carpetas en Google Drive para activos visuales» comparte 7
- *        («carpetas en Google Drive para activos visuales»): con 7 o menos saltaría sobre él. Un
- *        título describe el trabajo con las palabras de la reunión; eso no es una fuga.
+ *      - TÍTULOS y NOMBRES de fase: también 10 (recalibrado en la revisión del paso D1). Con 8,
+ *        «Organización de carpetas en Google Drive para activos visuales» (9 palabras, todas de la
+ *        reunión) salía como fuga y «Organizar carpetas en Google Drive para activos visuales» no:
+ *        el mismo trabajo, sin nada interno, separado por una palabra. En un título, lo que lo hace
+ *        fuga es lo que trae —un monto, una fecha, un plazo, un correo, la cita de la fuente—, y eso
+ *        lo marcan las reglas de arriba con cualquier largo. La copia solo marca el título largo
+ *        como una oración (10 palabras seguidas del material): eso ya no es el nombre de una tarea.
+ *        En los 113 títulos de las dos corridas la racha más larga compartida fue de 4.
  *  · sin regla de canales: «WhatsApp» puede ser una tarea legítima.
  *
  * ⚠ Da falsos negativos a propósito (una paráfrasis, un nombre de persona suelto): eso queda para
@@ -30,10 +33,14 @@
 
 export type CampoDeFrontera = "titulo" | "nota";
 
-/** Las ventanas de la COPIA, por campo. Ver el docblock: cambiarlas es recalibrar contra CAV. */
+/**
+ * Las ventanas de la COPIA, por campo. Ver el docblock: cambiarlas es recalibrar contra CAV. Hoy
+ * valen lo mismo, pero siguen separadas: los títulos se recalibraron una vez y pueden volver a
+ * moverse sin tocar las notas.
+ */
 export const VENTANA_DE_COPIA: Readonly<Record<CampoDeFrontera, { palabras: number; conContenido: number }>> = {
   nota: { palabras: 10, conContenido: 5 },
-  titulo: { palabras: 8, conContenido: 4 },
+  titulo: { palabras: 10, conContenido: 5 },
 };
 
 export interface HuellasDeFrontera {

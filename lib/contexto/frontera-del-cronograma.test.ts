@@ -19,8 +19,8 @@ import {
  *  · que marque títulos legítimos — un aviso que salta siempre se aprende a ignorar.
  *
  * El material de acá es de mentira, pero con las mismas rachas que midió la validación: el
- * centinela S4 de la nota, y una frase de reunión con «carpetas en Google Drive para activos
- * visuales» (7 palabras que un título legítimo repite).
+ * centinela S4 de la nota, y una frase de reunión con «organización de carpetas en Google Drive
+ * para activos visuales» (9 palabras que un título legítimo puede repetir enteras).
  */
 
 const MATERIAL = [
@@ -57,8 +57,9 @@ describe("⭐ las fugas reales de la salida B se marcan", () => {
     expect(fugaEn("Revisión el 2026-10-05", h, "titulo")).toBe(MOTIVOS_DE_FUGA.fecha);
   });
 
-  it("un TÍTULO que copia una frase entera de una reunión también se marca", () => {
-    expect(fugaEn("Organización de carpetas en Google Drive para activos visuales", h, "titulo")).toBe(
+  it("un TÍTULO largo como una oración, copiado del material, también se marca", () => {
+    /* 11 palabras seguidas de la nota S4: eso ya no es el nombre de una tarea, es la nota pegada. */
+    expect(fugaEn("Migración de pedidos históricos anteriores a 2024 queda fuera del alcance", h, "titulo")).toBe(
       MOTIVOS_DE_FUGA.copia,
     );
   });
@@ -71,6 +72,11 @@ describe("⭐ los textos legítimos NO se marcan", () => {
       "Configurar pipeline de ventas",
       // Comparte 7 palabras seguidas con el material: con una ventana de 7 o menos, saltaría.
       "Organizar carpetas en Google Drive para activos visuales",
+      /* Comparte las 9, y es el MISMO trabajo que el de arriba, sin nada interno (revisión del paso
+         D1, 2026-09-23): la ventana de 8 lo marcaba como fuga por una palabra de diferencia. En un
+         título, lo que lo hace fuga es un monto, una fecha, un plazo, un correo o la cita de la
+         fuente —las reglas de arriba—, no que use las palabras de la reunión. */
+      "Organización de carpetas en Google Drive para activos visuales",
       "Integración de WhatsApp con HubSpot",
       "Configurar journey de reactivación",
     ]) {

@@ -161,6 +161,12 @@ export interface OpcionesDelMaterial {
   maxALeer?: number;
   /** La foto del plan que ya tiene quien llama (ancla + fases en orden). Sin esto se lee el cronograma. */
   fases?: FotoDelCronograma | null;
+  /**
+   * Las reuniones SIN su lugar en el plan (el chat): con la ubicación, cada cambio de fases cambia
+   * el bloque y la caché del chat se vuelve a cobrar, aunque el CSE no haya tocado lo elegido. Los
+   * calendarios se arman igual.
+   */
+  sinUbicacion?: boolean;
 }
 
 export interface MaterialDelCronograma {
@@ -209,7 +215,11 @@ export interface MaterialDelCronograma {
  * lectura: `calendario` (sin «Hoy», para el detalle: con hoy vaciaría las semanas pasadas aunque su
  * trabajo no esté hecho) y `calendarioConHoy`. Quien ya tiene las fases (el revisor de fases de
  * «Regenerar todo») pasa `opts.fases`, para que el modelo y el armador vean LA MISMA foto; si no, se
- * lee el cronograma. Sin material, los dos calendarios son "".
+ * lee el cronograma (con el cierre fijado a mano, si lo hay). Sin material, los dos calendarios son
+ * "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase.
+ *
+ * ⚠ Las cuatro opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
+ * opción que se ignora en silencio le da al chat el tope de 32.000 o al revisor de fases otra foto.
  *
  * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
  * la pertenencia al cliente y el tombstone no se re-implementan acá. Las futuras se cortan con
@@ -241,7 +251,7 @@ export async function cargarMaterialDelCronograma(
 
   const hayMaterial =
     [...contenidos.values()].some((c) => c.texto.trim()) || notas.some((n) => n.content.trim());
-  const ubicar = (ms: number) => (hayMaterial ? ubicarEnElCronograma(foto, ms) : "");
+  const ubicar = (ms: number) => (!opts.sinUbicacion && hayMaterial ? ubicarEnElCronograma(foto, ms) : "");
 
   const leidas = new Set(aLeer.map((s) => s.id));
   const elegidas: ReunionElegida[] = sessions.map((s) => ({
@@ -310,12 +320,13 @@ async function leerContenidoDeReuniones(
   );
 }
 
-/** La foto del plan para el calendario: el ancla y las fases en orden. */
+/** La foto del plan para el calendario: el ancla, el cierre fijado a mano y las fases en orden. */
 async function leerFotoDelCronograma(projectId: string): Promise<FotoDelCronograma | null> {
   return prisma.projectTimeline.findUnique({
     where: { projectId },
     select: {
       anchorStartDate: true,
+      closeDateOverride: true,
       phases: { orderBy: { order: "asc" }, select: { name: true, durationWeeks: true, startWeek: true } },
     },
   });
@@ -337,7 +348,9 @@ async function leerNotasDelCronograma(projectId: string): Promise<NotaParaElCron
     return await prisma.timelineSource.findMany({
       where: { projectId, deletedAt: null },
       orderBy: { createdAt: "asc" },
-      select: { title: true, content: true },
+      // La fecha de carga va en el encabezado de cada nota: sin ella, «gana lo más reciente» no se
+      // puede aplicar entre una nota y una reunión.
+      select: { title: true, content: true, createdAt: true },
     });
   } catch (e) {
     if (esquemaDesactualizado(e)) return [];

@@ -104,6 +104,32 @@ describe("las notas", () => {
     expect(notasPasanElTope([{ title: "a", content: "corta" }])).toBe(false);
   });
 
+  it("⭐ cada nota lleva la fecha de su CARGA, en Costa Rica: sin ella, «gana lo más reciente» no se aplica", () => {
+    /* Revisión del paso D1 (2026-09-23): PESO_DE_LAS_FUENTES dice que, entre reuniones y notas,
+       gana lo más reciente; la reunión llevaba su fecha y la nota no, así que el modelo suponía
+       un orden entre las dos. */
+    const b = bloqueDeNotasDelCronograma([
+      { title: "Cambio de prioridad", content: "Primero Service.", createdAt: new Date(Date.UTC(2026, 8, 23, 3)) },
+    ]);
+    expect(b).toContain("### Nota: Cambio de prioridad — cargada el 22 sep 2026\nPrimero Service.");
+    expect(PESO_DE_LAS_FUENTES).toContain("cada reunión lleva su fecha y cada nota, la de su carga");
+  });
+
+  it("el aviso de la pantalla mide las notas CON su fecha, como las lee el agente", () => {
+    const createdAt = "2026-09-23T15:00:00.000Z";
+    const encabezado = "### Nota: a\n".length;
+    const justa = [{ title: "a", content: "x".repeat(TOPE_NOTAS_CRONOGRAMA - encabezado), createdAt }];
+    // Sin la fecha entra justo; con ella —el texto que lee el agente— pasa el tope.
+    expect(notasPasanElTope(justa.map((n) => ({ title: n.title, content: n.content })))).toBe(false);
+    expect(notasPasanElTope(justa)).toBe(true);
+    // Y la fecha llega a la pantalla: la ruta la devuelve y la columna pasa las notas ENTERAS.
+    const raiz = process.cwd();
+    const ruta = fs.readFileSync(path.join(raiz, "app/api/projects/[projectId]/timeline/sources/route.ts"), "utf8");
+    expect(ruta, "la ruta dejó de devolver la fecha de carga").toMatch(/const SELECT = \{[^}]*createdAt: true/);
+    const columna = fs.readFileSync(path.join(raiz, "components/clients/FuentesManualesColumn.tsx"), "utf8");
+    expect(columna, "la columna dejó de pasar las notas enteras al aviso").toContain("excedeElTope(sources)");
+  });
+
   it("la pantalla y la ruta importan la MISMA constante, no un número escrito a mano", () => {
     /* Si alguien escribe 12000 a mano en el componente, el día que cambie el tope la pantalla
        avisa tarde (o nunca) y el CSE cree que el agente leyó lo que se cortó. */
@@ -250,6 +276,33 @@ const GEMINI = [
   "Cómo es la calidad de estas notas específicas? Responde una breve encuesta para darnos tu opinión; por ejemplo, cuán útiles te resultaron las notas.",
 ].join("\n");
 
+/**
+ * El formato VIEJO de Gemini (795 overviews, ago 2025 – jul 2026; solo se midieron los encabezados y
+ * las líneas de plantilla, sin contenido): los pasos van DESPUÉS de los Detalles, con otro nombre.
+ * Los íconos (U+E907 y compañía) son los de la base: un carácter de uso privado pegado al relleno, o
+ * solo en su línea.
+ */
+const GEMINI_VIEJO = [
+  TITULO,
+  "Invitados      ",
+  "Archivos adjuntos ",
+  "Registros de la reunión ",
+  "Longitud de las notas: Estándar",
+  "",
+  "",
+  "Resumen",
+  "La reunión revisó el avance de la configuración y los accesos pendientes.",
+  "",
+  "Detalles",
+  `Contexto del avance: ${"se conversó en detalle sobre el estado de cada integración. ".repeat(110)}`,
+  "",
+  "Pasos siguientes recomendados",
+  "[Equipo] Definir las etapas del pipeline y validar los accesos.",
+  "",
+  "Revisa las notas de Gemini para asegurarte de que sean correctas. Obtén consejos y descubre cómo Gemini toma notas",
+  "Califica este resumen: Útil o Poco útil",
+].join("\n");
+
 describe("⭐ qué se lee de cada reunión", () => {
   it("el resumen entra ENTERO: unos «Próximos pasos» después del carácter 5.000 siguen adentro", () => {
     /* El lector del handoff cortaba el resumen en 1.500: lo accionable, al final, no llegaba nunca. */
@@ -291,6 +344,66 @@ describe("⭐ qué se lee de cada reunión", () => {
       "Cómo es la calidad de estas notas",
     ]) {
       expect(b, relleno).not.toContain(relleno);
+    }
+  });
+
+  it("⭐ el formato VIEJO de Gemini: los «Pasos siguientes recomendados» van a lo principal, aunque vengan después de los Detalles", () => {
+    /* Revisión del paso D1 (2026-09-23, solo conteos en la base): 795 de los 2.853 overviews de
+       Gemini usan este formato (ago 2025 – jul 2026), con los pasos DESPUÉS de «Detalles» y sin
+       action_items que los rescaten. Sin reconocer el encabezado, los pasos quedaban en la cola: con
+       8 elegidas (unos 4.000 caracteres cada una), en el 86 % de esas reuniones no llegaban al prompt. */
+    const c = resumenDeReunion({ title: TITULO, summary: { overview: GEMINI_VIEJO }, minuta: null });
+    const principal = c.texto.slice(0, c.esencial);
+    expect(principal).toContain("**Pasos siguientes recomendados:**\n[Equipo] Definir las etapas del pipeline");
+    expect(principal).toContain("**Resumen:**");
+    expect(principal, "los Detalles son la cola").not.toContain("Contexto del avance");
+    expect(principal.indexOf("**Pasos siguientes recomendados:**")).toBeLessThan(principal.indexOf("**Resumen:**"));
+    expect(c.texto, "relleno del formato viejo").not.toMatch(/Califica este resumen|Longitud de las notas/);
+    expect(c.texto, "los íconos de Google no significan nada fuera de su pantalla").not.toMatch(/[-]/);
+    expect(ordenarNotasDeGemini(GEMINI_VIEJO, TITULO).conPasos).toBe(true);
+    // Sin pasos de verdad, el aviso de Google no cuenta como pasos: así entran los compromisos.
+    const sinPasos = resumenDeReunion({
+      title: "x",
+      summary: {
+        overview: "Resumen\nSe habló.\n\nPróximos pasos\nNo se encontraron próximos pasos sugeridos para esta reunión.",
+        action_items: ["CENTINELA-COMPROMISO"],
+      },
+      minuta: null,
+    });
+    expect(sinPasos.texto).not.toContain("No se encontraron");
+    expect(sinPasos.texto).toContain("CENTINELA-COMPROMISO");
+
+    // Con 8 elegidas así, cada una se lleva unos 4.000 caracteres y los pasos llegan en TODAS.
+    const ocho: ReunionElegida[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `v${i}`,
+      title: TITULO,
+      date: AHORA - (i + 1) * 7 * DIA,
+      prefijoDeSala: "",
+      lectura: { tipo: "leida", ...c },
+    }));
+    const plan = planDelMaterial({ elegidas: ocho });
+    expect(c.texto.length, "el fixture tiene que no entrar entero").toBeGreaterThan(TOPE_REUNIONES_CRONOGRAMA / 8);
+    expect(plan.reuniones).toHaveLength(8);
+    for (const r of plan.reuniones) {
+      expect(r.contenido).toContain("[Equipo] Definir las etapas del pipeline");
+      expect(r.contenido!.endsWith(MARCA_DE_RECORTE), "cada una entra recortada").toBe(true);
+    }
+  });
+
+  it("las variantes del encabezado de los pasos también cuentan como pasos", () => {
+    for (const encabezado of [
+      "Próximos pasos",
+      "Próximos pasos recomendados",
+      "Próximos pasos sugeridos",
+      "Pasos siguientes",
+      "Pasos siguientes recomendados",
+      "Pasos siguientes sugeridos",
+      "Next steps",
+      "Suggested next steps",
+    ]) {
+      const g = ordenarNotasDeGemini(`Resumen\nSe habló.\n\nDetalles\nLargo.\n\n${encabezado}\nHacer X.`, "x");
+      expect(g.conPasos, encabezado).toBe(true);
+      expect(g.principal.startsWith(`**${encabezado}:**\nHacer X.`), encabezado).toBe(true);
     }
   });
 
@@ -434,6 +547,23 @@ describe("⭐ el calendario: uno solo, con el weekIndex dicho explícito", () =>
     expect(cal).toContain("⛔ No escribas fechas ni plazos en ningún título, nota ni nombre de fase");
     expect(cal, "el detalle va SIN hoy").not.toContain("Hoy:");
     expect(cal, "sin conIds no hay ids").not.toContain("[id:");
+  });
+
+  it("con el cierre fijado a mano, lo dice junto al de las fases: es el que ve el CSE", () => {
+    /* Revisión del paso D1: «son 12 semanas» se compara contra el cierre actual. Con un cierre
+       fijado a mano (Tanda K), el modelo comparaba contra una fecha distinta de la del chip. */
+    const cal = calendarioDelCronograma({ ...FOTO, closeDateOverride: "2026-11-16T00:00:00.000Z" }, AHORA);
+    expect(cal).toContain(
+      "Arranque del plan: 21 sep 2026 · cierre planificado: 26 oct 2026 (5 semanas) · cierre fijado a mano: " +
+        "16 nov 2026 (es el que ve el CSE en el cronograma).",
+    );
+    expect(calendarioDelCronograma({ ...FOTO, closeDateOverride: null }, AHORA)).not.toContain("fijado a mano");
+    const sinAncla = calendarioDelCronograma(
+      { ...FOTO, anchorStartDate: null, closeDateOverride: "2026-11-16T00:00:00.000Z" },
+      AHORA,
+      { conIds: true },
+    );
+    expect(sinAncla).toContain("cierre fijado a mano: 16 nov 2026");
   });
 
   it("con opciones suma Hoy, ids y estado (lo que usa quien revisa fases)", () => {

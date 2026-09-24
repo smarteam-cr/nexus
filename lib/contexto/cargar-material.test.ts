@@ -1,0 +1,146 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { resumenDelInforme, type FotoDelCronograma } from "./material-cronograma";
+
+/**
+ * lib/contexto/cargar-material.test.ts — LAS OPCIONES DEL CARGADOR DEL MATERIAL LLEGAN.
+ *
+ * `cargarMaterialDelCronograma(projectId, opts)` es UNO para cuatro lectores: el detalle y «Pedir
+ * cambio con IA» lo llaman sin opciones; el chat, con un tope y una lectura menores y sin la
+ * ubicación de cada reunión; el revisor de fases de «Regenerar todo», con SU foto del plan. Una
+ * opción que se ignora no rompe nada visible: el chat recibe el tope de 32.000, el revisor
+ * compara contra otra foto, y todo sigue verde. Revisión del paso D1 (2026-09-23): sacar
+ * `topeReuniones` y `maxALeer` del cargador dejó verdes los 118 tests que lo rodean.
+ *
+ * Por eso esto LLAMA al cargador, con Prisma y el chokepoint de reuniones de mentira, en vez de
+ * leer su código: lo que se afirma es lo que devuelve.
+ */
+
+const h = vi.hoisted(() => {
+  const estado = {
+    sesiones: [] as Array<{ id: string; title: string; date: number; participants: string[] }>,
+    filas: new Map<string, { id: string; title: string; summary: unknown; minute: null }>(),
+    fotoDeLaBase: null as unknown,
+    notas: [] as Array<{ title: string | null; content: string; createdAt: Date }>,
+  };
+  const prisma = {
+    firefliesSession: {
+      findMany: vi.fn(async (args: { where: { id: { in: string[] } } }) =>
+        args.where.id.in.map((id) => estado.filas.get(id)).filter(Boolean),
+      ),
+    },
+    $queryRaw: vi.fn(async () => []),
+    projectTimeline: { findUnique: vi.fn(async () => estado.fotoDeLaBase) },
+    timelineSource: { findMany: vi.fn(async () => estado.notas) },
+  };
+  return { estado, prisma };
+});
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: h.prisma }));
+vi.mock("@/lib/sessions/project-sources", () => ({
+  getProjectTimelineSessions: vi.fn(async () => ({ sessions: h.estado.sesiones, dropped: [] })),
+}));
+// unstable_cache revienta fuera de Next.
+vi.mock("@/lib/cache/session-categories", () => ({ getSessionCategories: vi.fn(async () => []) }));
+vi.mock("@/lib/canvas/load-canvas-context", () => ({ loadHandoffContext: vi.fn(), loadTimelineContext: vi.fn() }));
+vi.mock("@/lib/canvas/desarrollo-context", () => ({ loadDesarrolloContext: vi.fn() }));
+vi.mock("@/lib/cs/hubspot-ops-block", () => ({ bloqueDeOperativa: vi.fn(() => "") }));
+
+const { cargarMaterialDelCronograma } = await import("./cargar");
+
+const DIA = 86_400_000;
+const AHORA = Date.UTC(2026, 8, 23, 18);
+
+/** Cinco reuniones de 5.000 caracteres de resumen (Fireflies: pasa entero), de hace 1 a 5 días. */
+function sembrar() {
+  h.estado.sesiones = [];
+  h.estado.filas = new Map();
+  for (let i = 1; i <= 5; i++) {
+    const id = `r${i}`;
+    h.estado.sesiones.push({ id, title: `Semanal ${i}`, date: AHORA - i * DIA, participants: [] });
+    const overview = Array.from({ length: 50 }, () => `${id} ${"p".repeat(96)}`).join("\n").slice(0, 5_000);
+    h.estado.filas.set(id, { id, title: `Semanal ${i}`, summary: { overview }, minute: null });
+  }
+  h.estado.fotoDeLaBase = {
+    anchorStartDate: new Date(Date.UTC(2026, 8, 14)),
+    closeDateOverride: null,
+    phases: [{ name: "Fase de la base", durationWeeks: 4, startWeek: null }],
+  };
+  h.estado.notas = [{ title: "Acuerdo", content: "Primero Service.", createdAt: new Date(Date.UTC(2026, 8, 22, 15)) }];
+}
+
+const FOTO_DE_QUIEN_LLAMA: FotoDelCronograma = {
+  anchorStartDate: "2026-09-14T00:00:00.000Z",
+  phases: [{ id: "f1", name: "Fase de quien llama", durationWeeks: 4, startWeek: null }],
+};
+
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(AHORA);
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
+beforeEach(() => {
+  vi.clearAllMocks();
+  sembrar();
+});
+
+describe("⭐ las opciones del cargador del material llegan", () => {
+  it("sin opciones: lee las 5, entran enteras, y lee la foto del plan de la base", async () => {
+    const m = await cargarMaterialDelCronograma("p1");
+    const r = resumenDelInforme(m.informe);
+    expect(r.completas).toBe(5);
+    expect(h.prisma.firefliesSession.findMany.mock.calls[0][0].where.id.in).toHaveLength(5);
+    expect(h.prisma.projectTimeline.findUnique).toHaveBeenCalledTimes(1);
+    expect(m.calendario).toContain("Fase de la base");
+    expect(m.reuniones).toContain("«Fase de la base», su semana");
+  });
+
+  it("`topeReuniones`: el material entra en ESE tope, no en el de 32.000", async () => {
+    const m = await cargarMaterialDelCronograma("p1", { topeReuniones: 8_000 });
+    const entran = m.informe.reuniones.reduce((s, x) => s + x.entran, 0);
+    expect(entran).toBeLessThanOrEqual(8_000);
+    expect(resumenDelInforme(m.informe).completas, "con 8.000 no entra ninguna de 5.000 entera").toBe(0);
+    expect(m.sesionesUsadas).toHaveLength(5);
+  });
+
+  it("`maxALeer`: se leen solo las más recientes, y las demás salen «afuera» en el informe", async () => {
+    const m = await cargarMaterialDelCronograma("p1", { maxALeer: 2 });
+    expect([...h.prisma.firefliesSession.findMany.mock.calls[0][0].where.id.in].sort()).toEqual(["r1", "r2"]);
+    const r = resumenDelInforme(m.informe);
+    expect(r.entran).toBe(2);
+    expect(r.afuera).toBe(3);
+  });
+
+  it("`fases`: el calendario y la ubicación salen de la foto de quien llama, sin leer la base", async () => {
+    const m = await cargarMaterialDelCronograma("p1", { fases: FOTO_DE_QUIEN_LLAMA });
+    expect(h.prisma.projectTimeline.findUnique).not.toHaveBeenCalled();
+    expect(m.calendario).toContain("Fase de quien llama");
+    expect(m.calendario).not.toContain("Fase de la base");
+    expect(m.reuniones).toContain("«Fase de quien llama», su semana");
+  });
+
+  it("`sinUbicacion`: las reuniones van sin su lugar en el plan (la caché del chat), el calendario sigue", async () => {
+    const m = await cargarMaterialDelCronograma("p1", { sinUbicacion: true });
+    expect(m.reuniones).toContain("### Semanal 1 — 22 sep 2026\n");
+    expect(m.reuniones).not.toContain("del proyecto:");
+    expect(m.calendario).toContain("Fase de la base");
+  });
+});
+
+describe("⭐ lo que el cargador lee de la base para la foto y las notas", () => {
+  it("el cierre fijado a mano llega al calendario", async () => {
+    h.estado.fotoDeLaBase = { ...(h.estado.fotoDeLaBase as object), closeDateOverride: new Date(Date.UTC(2026, 10, 30)) };
+    const m = await cargarMaterialDelCronograma("p1");
+    const args = h.prisma.projectTimeline.findUnique.mock.calls[0] as unknown as [{ select: Record<string, unknown> }];
+    expect(args[0].select.closeDateOverride, "la lectura de la foto dejó de pedir el cierre fijado").toBe(true);
+    expect(m.calendario).toContain("cierre fijado a mano: 30 nov 2026");
+  });
+
+  it("cada nota llega con la fecha de su carga", async () => {
+    const m = await cargarMaterialDelCronograma("p1");
+    const args = h.prisma.timelineSource.findMany.mock.calls[0] as unknown as [{ select: Record<string, unknown> }];
+    expect(args[0].select.createdAt, "la lectura de las notas dejó de pedir la fecha").toBe(true);
+    expect(m.notas).toContain("### Nota: Acuerdo — cargada el 22 sep 2026\nPrimero Service.");
+  });
+});

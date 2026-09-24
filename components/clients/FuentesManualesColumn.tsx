@@ -53,9 +53,10 @@ export default function FuentesManualesColumn({
   /**
    * Cómo mide el SERVIDOR si lo pegado pasa el tope. Sin esto la columna suma título + contenido,
    * y el servidor cuenta también los rótulos y separadores: el aviso llegaba tarde. Quien conoce
-   * el formato (p. ej. `notasPasanElTope`) lo pasa acá.
+   * el formato (p. ej. `notasPasanElTope`) lo pasa acá. Recibe las fuentes ENTERAS, con su
+   * `createdAt`: las notas del cronograma llevan la fecha de carga en su encabezado.
    */
-  excedeElTope?: (fuentes: ReadonlyArray<{ title: string | null; content: string }>) => boolean;
+  excedeElTope?: (fuentes: ReadonlyArray<{ title: string | null; content: string; createdAt?: string }>) => boolean;
   vacio?: string;
   placeholder?: string;
   placeholderTitulo?: string;

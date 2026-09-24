@@ -51,9 +51,9 @@
  * y las notas, nunca para escribirlas: el sistema las calcula.
  *
  * ── LA FECHA ─────────────────────────────────────────────────────────────────
- * Una sola función (`fechaEnCostaRica`) para los encabezados, el «Hoy» y el «Hoy es…» del chat,
- * con la zona de Costa Rica fija: el VPS corre en UTC y una reunión de las 7 p. m. salía con el
- * día siguiente.
+ * Una sola función (`fechaEnCostaRica`) para los encabezados de reuniones y notas, el «Hoy» y el
+ * «Hoy es…» del chat, con la zona de Costa Rica fija: el VPS corre en UTC y una reunión de las
+ * 7 p. m. salía con el día siguiente.
  */
 import { MONTHS, computePhaseRanges } from "@/lib/timeline/weeks";
 
@@ -102,11 +102,16 @@ export const FRONTERA_DEL_MATERIAL =
  * EL ORDEN DE PESO entre las fuentes (decisión de Elías, 2026-09-23): las instrucciones del CSE
  * mandan; después lo elegido (reuniones y notas, y entre ellas lo más reciente); después el
  * handoff; lo típico del tipo de fase solo rellena.
+ *
+ * ⚠ «Gana lo más reciente» solo se puede cumplir si cada pieza dice su fecha: la reunión lleva la
+ * suya en el encabezado y la nota, la de su carga (`cuerpoDeNotas`). Sin la de la nota, el modelo
+ * suponía un orden entre una nota y una reunión (revisión del paso D1, 2026-09-23).
  */
 export const PESO_DE_LAS_FUENTES =
   "Cómo pesan las fuentes: las instrucciones del CSE mandan sobre todo; después, lo acordado o hecho " +
-  "en estas reuniones y en las notas del CSE (si se contradicen, gana lo más reciente); después, el " +
-  "handoff; lo típico del tipo de fase solo rellena lo que ninguna fuente dice.";
+  "en estas reuniones y en las notas del CSE (si se contradicen, gana lo más reciente: cada reunión " +
+  "lleva su fecha y cada nota, la de su carga); después, el handoff; lo típico del tipo de fase solo " +
+  "rellena lo que ninguna fuente dice.";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LA FECHA ─────────────────────────────────────────────────────────────────
@@ -217,8 +222,15 @@ const normalizarLinea = (s: string) =>
     .trim();
 
 /**
- * Las líneas de relleno de las notas de Gemini (medido en las 8 reuniones de CAV). Solo se borran
- * líneas CORTAS que EMPIEZAN así: un párrafo de Detalles que arranque con «Invitado…» no se toca.
+ * Las líneas de relleno de las notas de Gemini. Solo se borran líneas CORTAS que EMPIEZAN así: un
+ * párrafo de Detalles que arranque con «Invitado…» no se toca.
+ *
+ * Medido en las 8 reuniones de CAV y, en la revisión del paso D1 (2026-09-23), en las líneas que se
+ * repiten en 40 o más de los 2.853 overviews de Gemini de la base (solo conteos): el formato viejo
+ * suma «Califica este resumen: útil o poco útil» (299) y «Longitud de las notas: estándar» (153).
+ * Esta última —y «No se encontraron próximos pasos sugeridos…» (35)— llega con un ÍCONO delante
+ * (un carácter de uso privado, U+E000–U+F8FF): por eso los íconos se borran ANTES de comparar
+ * (`ICONOS`). «Acordada» y «Requiere más debate» NO son relleno: dicen si una decisión quedó cerrada.
  */
 const RELLENO_DE_GEMINI: readonly RegExp[] = [
   /^invitad[oa]s?(\s|$)/i,
@@ -231,9 +243,28 @@ const RELLENO_DE_GEMINI: readonly RegExp[] = [
   /^danos tu opini[oó]n/i,
   /^revisa las notas de gemini/i,
   /^¿?c[oó]mo es la calidad de estas notas/i,
+  /^califica este resumen/i,
+  /^longitud de las notas/i,
+  /^no se generaron detalles para esta reuni[oó]n/i,
+  /^no se encontraron (pr[oó]ximos pasos|pasos siguientes)/i,
 ];
 const LARGO_MAXIMO_DEL_RELLENO = 200;
 
+/**
+ * Los íconos de Google (caracteres de uso privado: solo se ven con su fuente). En la base, 1.222
+ * overviews de Gemini traen líneas que son solo un ícono, o un ícono pegado al relleno. Sin
+ * sentido fuera de la pantalla de Google: se borran.
+ */
+const ICONOS = /[-]/g;
+
+/**
+ * Los encabezados de sección de Gemini, normalizados (sin tildes ni «:» final). Hay DOS formatos en
+ * la base: el nuevo (Resumen / Decisiones / Próximos pasos / Detalles, 1.617 overviews) y el viejo
+ * (Resumen / Detalles / Pasos siguientes recomendados, 795, de agosto de 2025 a julio de 2026). En
+ * el viejo los pasos van DESPUÉS de los Detalles: sin reconocer su encabezado quedaban dentro de la
+ * cola —lo primero que se recorta— y en el 86 % de esas reuniones no llegaban al prompt (revisión
+ * del paso D1). Las variantes «recomendados/sugeridos» cubren el próximo renombre de Google.
+ */
 type Encabezado = "resumen" | "decisiones" | "pasos" | "detalles";
 const ENCABEZADOS_DE_GEMINI: Readonly<Record<string, Encabezado>> = {
   resumen: "resumen",
@@ -241,7 +272,11 @@ const ENCABEZADOS_DE_GEMINI: Readonly<Record<string, Encabezado>> = {
   decisiones: "decisiones",
   decisions: "decisiones",
   "proximos pasos": "pasos",
+  "proximos pasos recomendados": "pasos",
+  "proximos pasos sugeridos": "pasos",
   "pasos siguientes": "pasos",
+  "pasos siguientes recomendados": "pasos",
+  "pasos siguientes sugeridos": "pasos",
   "next steps": "pasos",
   "suggested next steps": "pasos",
   detalles: "detalles",
@@ -262,8 +297,10 @@ const limpiar = (s: string) => s.replace(/\n{3,}/g, "\n\n").trim();
 /**
  * LAS NOTAS DE GEMINI, en el orden que le sirve al cronograma. El overview de Gemini llega como
  * «Título / Invitado / Archivos adjuntos / Registros… / Resumen / Decisiones / Próximos pasos /
- * Detalles / Revisa las notas…». Se borra el título repetido y el relleno, y se reordena por
- * encabezados EXACTOS (una línea sola): lo accionable primero, los Detalles al final.
+ * Detalles / Revisa las notas…» o, en el formato viejo, «… / Resumen / Detalles / Pasos siguientes
+ * recomendados / Califica este resumen…». Se borra el título repetido y el relleno, y se reordena
+ * por encabezados EXACTOS (una línea sola): lo accionable primero, los Detalles al final, estén
+ * donde estén en el original.
  *
  * Si no reconoce ningún encabezado (Fireflies, u otro formato), devuelve el texto limpio sin
  * reordenar y sin perder nada. Si Google renombra los encabezados se pierde la prioridad, nunca
@@ -273,7 +310,7 @@ export function ordenarNotasDeGemini(overview: string, title: string): NotasDeGe
   let lineas = overview
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .map((l) => l.replace(/\s+$/, ""));
+    .map((l) => l.replace(ICONOS, "").replace(/\s+$/, ""));
   const primera = lineas.findIndex((l) => l.trim());
   if (primera >= 0 && title.trim() && normalizarLinea(lineas[primera]) === normalizarLinea(title)) {
     lineas.splice(primera, 1);
@@ -525,10 +562,16 @@ export interface FaseDelCalendario {
 
 /**
  * La foto del plan: el ancla y las fases YA ordenadas por `order`. Mismo shape que devuelve
- * `prisma.projectTimeline.findUnique({ select: { anchorStartDate, phases } })`.
+ * `prisma.projectTimeline.findUnique({ select: { anchorStartDate, closeDateOverride, phases } })`.
  */
 export interface FotoDelCronograma {
   anchorStartDate: Date | string | null;
+  /**
+   * El cierre que el CSE fijó a mano (Tanda K): es el que muestra el chip de la vista interna. Sin
+   * él, el calendario solo decía el cierre de las fases, y quien compare «el cierre actual» contra
+   * un plazo acordado lo comparaba contra una fecha distinta de la que ve el CSE.
+   */
+  closeDateOverride?: Date | string | null;
   phases: readonly FaseDelCalendario[];
 }
 
@@ -562,10 +605,13 @@ const ESTADOS_DE_FASE: Readonly<Record<string, string>> = {
   SUSPENDED: "suspendida",
 };
 
-/** El día de calendario del ancla (medianoche UTC). null sin ancla o con un ancla inválida. */
-function diaDelAncla(ancla: Date | string | null | undefined): number | null {
-  if (!ancla) return null;
-  const d = new Date(ancla);
+/**
+ * El día de calendario de una fecha GUARDADA COMO DÍA (el ancla, el cierre fijado a mano: los dos
+ * nacen de un date picker a medianoche UTC), como medianoche UTC. null si no hay o es inválida.
+ */
+function diaGuardado(fecha: Date | string | null | undefined): number | null {
+  if (!fecha) return null;
+  const d = new Date(fecha);
   if (Number.isNaN(d.getTime())) return null;
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
@@ -605,7 +651,7 @@ function dondeCaeLaSemana(plan: PlanEnSemanas, w: number): string {
  */
 export function ubicarEnElCronograma(foto: FotoDelCronograma | null | undefined, ms: number): string {
   const plan = planEnSemanas(foto);
-  const ancla = diaDelAncla(foto?.anchorStartDate);
+  const ancla = diaGuardado(foto?.anchorStartDate);
   if (!plan || ancla === null) return "";
   return dondeCaeLaSemana(plan, Math.floor((diaEnCostaRica(ms) - ancla) / SEMANA_MS));
 }
@@ -617,6 +663,9 @@ export function ubicarEnElCronograma(foto: FotoDelCronograma | null | undefined,
  *
  * "" sin fases. Sin ancla: "" también, salvo con `conIds` (quien propone cambios de fases necesita
  * los ids igual), y entonces sale con semanas relativas y sin fechas — nunca inventa un arranque.
+ *
+ * Con un cierre fijado a mano (`closeDateOverride`), la línea del arranque lo suma y dice que es el
+ * que ve el CSE: el cierre de las fases solo es el que el sistema calcula.
  */
 export function calendarioDelCronograma(
   foto: FotoDelCronograma | null | undefined,
@@ -625,14 +674,19 @@ export function calendarioDelCronograma(
 ): string {
   const plan = planEnSemanas(foto);
   if (!plan) return "";
-  const ancla = diaDelAncla(foto?.anchorStartDate);
+  const ancla = diaGuardado(foto?.anchorStartDate);
   if (ancla === null && !opts.conIds) return "";
+  const cierreFijado = diaGuardado(foto?.closeDateOverride);
+  const conCierreFijado =
+    cierreFijado === null
+      ? ""
+      : ` · cierre fijado a mano: ${fmtDia(cierreFijado, true)} (es el que ve el CSE en el cronograma)`;
 
   const lineas: string[] = [ROTULO_DEL_CALENDARIO];
   if (ancla !== null) {
     lineas.push(
       `Arranque del plan: ${fmtDia(ancla, true)} · cierre planificado: ${fmtDia(ancla + plan.span * SEMANA_MS, true)} ` +
-        `(${plan.span} ${plan.span === 1 ? "semana" : "semanas"}).`,
+        `(${plan.span} ${plan.span === 1 ? "semana" : "semanas"})${conCierreFijado}.`,
     );
     if (opts.conHoy) {
       const hoy = Math.floor((diaEnCostaRica(ahora) - ancla) / SEMANA_MS);
@@ -642,7 +696,10 @@ export function calendarioDelCronograma(
       );
     }
   } else {
-    lineas.push("Sin fecha de arranque: las semanas son relativas y ninguna reunión se puede ubicar en el plan.");
+    lineas.push(
+      "Sin fecha de arranque: las semanas son relativas y ninguna reunión se puede ubicar en el plan" +
+        `${conCierreFijado}.`,
+    );
   }
   lineas.push(COMO_SE_CUENTAN_LAS_SEMANAS);
 
@@ -678,8 +735,9 @@ export interface ReunionParaElCronograma {
   /** «[CON EL CLIENTE] » / «[PUERTAS ADENTRO] » / "" — de `prefijoDeSala`. */
   prefijoDeSala: string;
   /**
-   * En qué parte del plan cayó (de `ubicarEnElCronograma`). Opcional: el chat arma el bloque SIN
-   * ubicación, para que su caché no cambie cada vez que se mueve una fase.
+   * En qué parte del plan cayó (de `ubicarEnElCronograma`). Opcional: el chat pide el material con
+   * `sinUbicacion` (ver `OpcionesDelMaterial` en ./cargar.ts) y arma el bloque SIN ubicación, para
+   * que su caché no cambie cada vez que se mueve una fase.
    */
   ubicacion?: string;
   /** El contenido ya recortado a su cota. `null` = la reunión no dejó nada. */
@@ -689,6 +747,13 @@ export interface ReunionParaElCronograma {
 export interface NotaParaElCronograma {
   title: string | null;
   content: string;
+  /**
+   * Cuándo la cargó el CSE (las notas no se editan: solo se agregan o se borran). Va en su
+   * encabezado para que «si se contradicen, gana lo más reciente» (`PESO_DE_LAS_FUENTES`) se pueda
+   * aplicar entre una nota y una reunión. La pantalla pasa las notas CON esta fecha a
+   * `notasPasanElTope`: sin ella mediría un texto más corto que el que lee el agente.
+   */
+  createdAt?: Date | string | null;
 }
 
 /**
@@ -724,15 +789,28 @@ export function bloqueDeNotasDelCronograma(notas: readonly NotaParaElCronograma[
     `=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\n` +
     `Son hechos que no quedaron en ninguna reunión (una decisión, un cambio de prioridad, algo que ` +
     `ya se hizo). Pesan igual que una reunión elegida y más que el handoff; las instrucciones del CSE ` +
-    `mandan sobre ellas. ${FRONTERA_DEL_MATERIAL}\n\n${cuerpo}`
+    `mandan sobre ellas. Cada una lleva la fecha en que el CSE la cargó. ${FRONTERA_DEL_MATERIAL}\n\n${cuerpo}`
   );
+}
+
+/** «22 sep 2026» de la carga de una nota, en Costa Rica. "" sin fecha o con una inválida. */
+function fechaDeCarga(createdAt: Date | string | null | undefined): string {
+  if (!createdAt) return "";
+  const ms = new Date(createdAt).getTime();
+  return Number.isNaN(ms) ? "" : fechaEnCostaRica(ms);
 }
 
 /** El texto de las notas SIN recortar — el mismo armado que lee el agente. `""` sin notas. */
 function cuerpoDeNotas(notas: readonly NotaParaElCronograma[]): string {
   return notas
     .filter((n) => n.content.trim())
-    .map((n, i) => `### Nota: ${n.title?.trim() || `(sin título ${i + 1})`}\n${n.content.trim()}`)
+    .map((n, i) => {
+      const cuando = fechaDeCarga(n.createdAt);
+      return (
+        `### Nota: ${n.title?.trim() || `(sin título ${i + 1})`}${cuando ? ` — cargada el ${cuando}` : ""}\n` +
+        n.content.trim()
+      );
+    })
     .join("\n\n---\n\n");
 }
 
