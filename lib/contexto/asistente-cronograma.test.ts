@@ -27,6 +27,7 @@ import {
   fuentesDelAssist,
   REGLA_DE_FRONTERA_DEL_ASSIST,
   SIN_HANDOFF_CONFIRMADO_ASSIST,
+  SIN_HANDOFF_CONFIRMADO_ASSIST_CON_MATERIAL,
   type CrudasDelAssist,
 } from "./asistente-cronograma";
 import { renderFuentes, PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
@@ -73,6 +74,30 @@ describe("fuentesDelAssist", () => {
   it("sin handoff confirmado lo DICE, en vez de mandar un bloque vacío", () => {
     const f = fuentesDelAssist({ ...CRUDAS, handoffCtx: "" });
     expect(f.find((x) => x.key === "handoff-curado")!.texto).toContain(SIN_HANDOFF_CONFIRMADO_ASSIST);
+  });
+
+  const REUNIONES = "=== REUNIONES QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA (material INTERNO) ===\nx";
+  const CALENDARIO = "=== CALENDARIO DEL CRONOGRAMA ACTUAL (solo lectura) ===\nHoy: …";
+
+  it("⭐ sin handoff y CON material, no le dice «no inventes alcance fuera del cronograma»", () => {
+    /* Esa frase contradecía a las reuniones elegidas que el modelo tiene enfrente. La edición que la
+       pone en rojo: usar siempre el texto de siempre. */
+    const texto = fuentesDelAssist({ ...CRUDAS, handoffCtx: "", reunionesCtx: REUNIONES }).find(
+      (x) => x.key === "handoff-curado",
+    )!.texto;
+    expect(texto).toContain(SIN_HANDOFF_CONFIRMADO_ASSIST_CON_MATERIAL);
+    expect(texto).not.toContain(SIN_HANDOFF_CONFIRMADO_ASSIST);
+  });
+
+  it("⭐ el calendario entra SOLO con material, y antes de las reuniones", () => {
+    /* La edición que la pone en rojo: agregarlo con solo tener texto — cambiaría el mensaje de todo
+       proyecto sin material. */
+    expect(fuentesDelAssist({ ...CRUDAS, calendarioCtx: CALENDARIO }).map((x) => x.key)).not.toContain(
+      "calendario-del-cronograma",
+    );
+    const keys = fuentesDelAssist({ ...CRUDAS, calendarioCtx: CALENDARIO, reunionesCtx: REUNIONES }).map((x) => x.key);
+    expect(keys.indexOf("calendario-del-cronograma"), "con material, el calendario no llegó").toBeGreaterThan(-1);
+    expect(keys.indexOf("calendario-del-cronograma")).toBeLessThan(keys.indexOf("reuniones-del-cronograma"));
   });
 });
 
@@ -121,6 +146,18 @@ describe("la frontera entre lo interno y lo que lee el cliente", () => {
     expect(PIEZAS_CON_CONTEXTO_NOMBRADO).toContain("assist");
   });
 
+  it("⭐ la regla cubre también los nombres de fase, las fechas, los plazos y la cita de la fuente", () => {
+    /* El A/B de CAV (2026-09-23) mostró las fugas que la regla vieja no nombraba: «confirmadas en
+       kick-off», «fecha límite del 31 de diciembre», «cronograma de 12 semanas». Y este agente
+       también escribe nombres de fase, que el cliente lee igual que los títulos. */
+    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toContain("nombre de fase");
+    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toMatch(/fechas/);
+    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toMatch(/plazos/);
+    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toContain("Tampoco digas de dónde salió");
+    // En tuteo: el texto que el modelo imita sale en el tono del prompt.
+    expect(REGLA_DE_FRONTERA_DEL_ASSIST).not.toMatch(/Usá |escribí /);
+  });
+
   it("la ruta no vuelve a armar fuentes a mano — el contexto tiene un solo dueño", () => {
     const ruta = readFileSync(
       join(__dirname, "..", "..", "app/api/projects/[projectId]/timeline/assist/route.ts"),
@@ -140,5 +177,31 @@ describe("la frontera entre lo interno y lo que lee el cliente", () => {
         aMano.map((b) => `  · ${b}`).join("\n") +
         `\n\nVan en lib/contexto/asistente-cronograma.ts, como fuente con key y procedencia.`,
     ).toEqual([]);
+  });
+
+  it("⭐ la ruta revisa la propuesta contra el material que leyó y registra qué reuniones leyó", () => {
+    /* La regla es la defensa principal; esto es la red: un título nuevo que cita la reunión, trae
+       una fecha o copia una frase del material sale en la lista de avisos. La edición que la pone en
+       rojo: dejar de llamar a fugasDeLaPropuesta, o llamarla sin las huellas del material. */
+    const ruta = readFileSync(
+      join(__dirname, "..", "..", "app/api/projects/[projectId]/timeline/assist/route.ts"),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    const fugas = ruta.indexOf("fugasDeLaPropuesta(proposal, tl.phases, huellasDeFrontera(contexto.materialInterno");
+    expect(fugas, "la ruta dejó de revisar la propuesta contra la frontera").toBeGreaterThan(-1);
+    expect(ruta.slice(Math.max(0, fugas - 80), fugas), "los avisos de frontera no llegan a la lista").toContain(
+      "warnings.push(",
+    );
+    expect(fugas, "se revisa antes del rescate: lo rescatado también es texto que lee el cliente").toBeGreaterThan(
+      ruta.indexOf("rescatarProgreso(tl.phases, proposal.phases)"),
+    );
+    const alta = ruta.slice(ruta.indexOf("prisma.agentRun.create("), ruta.indexOf("const ctxDeGasto"));
+    expect(alta, "la corrida dejó de registrar qué reuniones le llegaron").toContain(
+      "sourceSessionIds: contexto.sesionesUsadas",
+    );
+    // Lo que ve el CSE y lo que lee el modelo, en tuteo.
+    expect(ruta).not.toMatch(/Probá |Modificá |devolvelas /);
   });
 });

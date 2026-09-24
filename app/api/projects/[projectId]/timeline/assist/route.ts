@@ -19,6 +19,9 @@
  *     aplicar jamás borra la fecha de arranque por omisión.
  *   - tasks ausente en una fase → [] (la propuesta es reemplazo completo;
  *     "no tocar" no existe en este flujo).
+ *   - lo que el modelo OMITE de una fase o una tarea que ya existe (arranque, tipo,
+ *     sesiones, nota; dueño, tipo y nota de la tarea, aunque se mude de fase) se
+ *     hereda de lo actual ANTES de validar: omitir es «no tocar», no «borrar».
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit, guardCapability, guardPermission } from "@/lib/auth/api-guards";
@@ -26,6 +29,8 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 import { repararPropuesta } from "@/lib/timeline/reparar-propuesta";
+import { heredarLoOmitido } from "@/lib/timeline/heredar-omitidos";
+import { fugasDeLaPropuesta, huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { rescatarProgreso } from "@/lib/timeline/rescate-progreso";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { cargarContextoDelAssist } from "@/lib/contexto/cargar";
@@ -115,11 +120,14 @@ export async function POST(
           activityType: true,
           tasks: {
             orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-            /* ⚠ Estos DOS campos sí llegan al prompt: `currentJson` serializa `tl.phases`
-               entero. Están acá para que el SERVIDOR sepa qué no puede perderse (ver el rescate
-               al final), y de paso el modelo los ve — por eso el SYSTEM_PROMPT le dice
-               explícitamente qué significan y que no las borre por omisión. */
-            select: { id: true, title: true, weekIndex: true, order: true, notes: true, status: true, source: true },
+            /* ⚠ Todo esto llega al prompt: `currentJson` serializa `tl.phases` entero.
+               `status` y `source` están para que el SERVIDOR sepa qué no puede perderse (ver el
+               rescate al final); el SYSTEM_PROMPT le dice al modelo qué significan y que no las
+               borre por omisión. `party` y `type` (validación 2026-09-23): el prompt le pedía
+               «devuélvelas con los valores que ya traían» y el modelo nunca los veía; además la
+               herencia de lo omitido (`heredarLoOmitido`, abajo) los necesita — unos 35
+               caracteres por tarea. */
+            select: { id: true, title: true, weekIndex: true, order: true, notes: true, status: true, source: true, party: true, type: true },
           },
         },
       },
@@ -175,7 +183,7 @@ export async function POST(
   // que el resto vuelva idéntico (el saneo posterior igual protege los ids).
   const scopePhase = scopePhaseId ? tl.phases.find((p) => p.id === scopePhaseId) : null;
   const scopeClause = scopePhase
-    ? `\n\n=== ALCANCE ===\nEl consultor está editando SOLO la fase id="${scopePhase.id}" ("${scopePhase.name}"). Modificá ÚNICAMENTE esa fase (y solo lo que pida la instrucción). TODAS las demás fases y sus tareas devolvelas IDÉNTICAS: mismos ids, nombres, duraciones, orden, tipos y tareas — no las reordenes ni las toques.`
+    ? `\n\n=== ALCANCE ===\nEl consultor está editando SOLO la fase id="${scopePhase.id}" ("${scopePhase.name}"). Modifica ÚNICAMENTE esa fase (y solo lo que pida la instrucción). TODAS las demás fases y sus tareas devuélvelas IDÉNTICAS: mismos ids, nombres, duraciones, orden, tipos y tareas — no las reordenes ni las toques.`
     : "";
 
   /* ── EL CONTEXTO DE NEGOCIO (Tramo 1, 2026-08-18) ──────────────────────────────────────
@@ -212,6 +220,8 @@ export async function POST(
       projectId,
       status: "RUNNING",
       stepLabel: "Cambio con IA en el cronograma",
+      // Trazabilidad: qué reuniones elegidas le llegaron (las del «Contexto del cronograma»).
+      sourceSessionIds: contexto.sesionesUsadas ?? [],
       triggeredByEmail: await triggeredByEmail(),
     },
     select: { id: true },
@@ -243,14 +253,21 @@ export async function POST(
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       await marcarError(run.id, "respuesta ilegible del modelo");
-      return NextResponse.json({ error: "No se pudo interpretar la respuesta de la IA. Probá reformulando el pedido." }, { status: 500 });
+      return NextResponse.json({ error: "No se pudo interpretar la respuesta de la IA. Prueba reformulando el pedido." }, { status: 500 });
     }
     parsedRaw = JSON.parse(jsonMatch[0]);
   } catch (e) {
     console.error("[timeline/assist] Claude error:", e instanceof Error ? e.message : e);
     await marcarError(run.id, e instanceof Error ? e.message : "error desconocido");
-    return NextResponse.json({ error: "La IA no pudo procesar el pedido. Probá de nuevo en un momento." }, { status: 500 });
+    return NextResponse.json({ error: "La IA no pudo procesar el pedido. Prueba de nuevo en un momento." }, { status: 500 });
   }
+
+  /* ── LO OMITIDO ES «NO TOCAR» (validación 2026-09-23) ─────────────────────────────────────
+     Sobre el JSON CRUDO, antes de reparar y validar: después, `sessionCount` y `notes` omitidos
+     ya son null y no se distingue un null pedido de uno por omisión. Rellena con lo actual lo que
+     el modelo no repitió (el arranque, el tipo, las sesiones y la nota de una fase; el dueño, el
+     tipo y la nota de una tarea, también si se mudó de fase). Ver lib/timeline/heredar-omitidos.ts. */
+  const herencia = heredarLoOmitido(parsedRaw, tl.phases);
 
   /* ── REPARAR ANTES DE JUZGAR (2026-08-20) ──────────────────────────────────────────────────
      Un `weekIndex` fuera de rango tiene UNA sola corrección sensata, y hasta hoy tiraba la
@@ -315,6 +332,14 @@ export async function POST(
   proposal.phases = rescate.phases;
   warnings.push(...rescate.warnings);
 
+  /* ── LA RED DE LA FRONTERA ──────────────────────────────────────────────────
+     Solo con material elegido (sin él las huellas no están activas y no avisa nada) y solo sobre
+     el texto NUEVO o CAMBIADO: un título que cita la reunión, trae una fecha o copia una frase del
+     material sale en la lista de avisos. No bloquea: el CSE corrige o descarta ese ítem. */
+  warnings.push(
+    ...fugasDeLaPropuesta(proposal, tl.phases, huellasDeFrontera(contexto.materialInterno ?? [])),
+  );
+
   /* El desenlace se cierra del otro lado: el PUT marca esta corrida como aplicada cuando el CSE
      aprieta "Aplicar" (le llega `assistRunId`). Una corrida que se queda en `propuesta` es una
      propuesta que NO se aplicó — es el denominador de la única métrica que importa acá:
@@ -330,6 +355,7 @@ export async function POST(
           scopePhaseId,
           fases: proposal.phases.length,
           tareas: proposal.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0),
+          heredados: herencia.heredados,
           warnings,
         }),
       },

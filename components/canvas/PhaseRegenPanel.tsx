@@ -48,6 +48,8 @@ export interface RegenProposedTask {
   notes: string | null;
   party: Party;
   type: "SESSION" | "TASK";
+  /** «porValidar» del agente: la típica del tipo de fase, sin respaldo en ninguna fuente. */
+  needsValidation?: boolean;
 }
 export interface FinalTask {
   id?: string;
@@ -58,6 +60,8 @@ export interface FinalTask {
   party: string | null;
   type: string | null;
   status: GanttTaskStatus;
+  /** Solo cuenta en las NUEVAS: el servidor la escribe al crear y la ignora en las que ya existen. */
+  needsValidation?: boolean;
 }
 
 interface Item {
@@ -70,7 +74,14 @@ interface Item {
   status: GanttTaskStatus;
   notes: string | null;
   isNew: boolean;
+  needsValidation: boolean;
 }
+
+/* Tocar el contenido de una tarea es revisarla: la marca «por validar» se va, con la misma regla
+   que el PUT del cronograma (cambiar título, semana, nota, dueño o tipo limpia needsValidation).
+   Marcarla hecha no es contenido. */
+const CAMPOS_DE_CONTENIDO = ["title", "weekIndex", "notes", "party", "type"] as const;
+const tocaContenido = (p: Partial<Item>) => CAMPOS_DE_CONTENIDO.some((k) => k in p);
 
 type Col = "left" | "right";
 
@@ -101,6 +112,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
   const toItem = (t: RegenCurrentTask): Item => ({
     _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
     party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
+    needsValidation: false,
   });
   const [left, setLeft] = useState<Item[]>(() => reparto.descartables.map(toItem));
   const [right, setRight] = useState<Item[]>(() => [
@@ -108,6 +120,8 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
     ...proposed.map((t) => ({
       _key: nextKey(), title: t.title, weekIndex: t.weekIndex, party: t.party, type: t.type,
       status: "PENDING" as GanttTaskStatus, notes: t.notes, isNew: true,
+      // La marca del agente viaja hasta la tarea creada (decisión de Elías 2026-09-23).
+      needsValidation: t.needsValidation === true,
     })),
   ]);
 
@@ -122,7 +136,10 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
       .map((i) => {
         const order = perWeek.get(i.weekIndex) ?? 0;
         perWeek.set(i.weekIndex, order + 1);
-        return { id: i.id, title: i.title.trim(), weekIndex: i.weekIndex, order, notes: i.notes, party: i.party, type: i.type, status: i.status };
+        return {
+          id: i.id, title: i.title.trim(), weekIndex: i.weekIndex, order, notes: i.notes, party: i.party, type: i.type, status: i.status,
+          needsValidation: i.isNew && i.needsValidation,
+        };
       });
     onChange(finals);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +182,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
   }
 
   const patch = (c: Col, key: string, p: Partial<Item>) =>
-    setList(c, listOf(c).map((i) => (i._key === key ? { ...i, ...p } : i)));
+    setList(c, listOf(c).map((i) => (i._key === key ? { ...i, ...p, ...(tocaContenido(p) ? { needsValidation: false } : {}) } : i)));
   const remove = (c: Col, key: string) => setList(c, listOf(c).filter((i) => i._key !== key));
 
   return (
@@ -252,6 +269,12 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
             ))}
           </select>
           {item.isNew && <span className="text-[9px] text-brand-light font-medium">nueva</span>}
+          {item.isNew && item.needsValidation && (
+            <span className="text-[9px] text-fg-muted font-medium"
+              title="La IA no la sacó del handoff, de las reuniones ni de las notas: es la típica de este tipo de fase. Si la editas, queda como revisada.">
+              por validar
+            </span>
+          )}
           {/* Esta tarea propuesta YA existe en otra fase. Ámbar cuando allá está hecha o en
               curso —el caso caro: se re-propone trabajo ya avanzado y el avance lo cuenta dos
               veces—; neutro si allá también está pendiente. Avisa, no bloquea: puede haber

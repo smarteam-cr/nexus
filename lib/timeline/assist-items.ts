@@ -149,8 +149,13 @@ export interface PayloadProyectado {
 const nn = <T,>(v: T | null | undefined): T | null => (v === undefined ? null : v);
 const dia = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "");
 
-/** Título normalizado — es la llave con la que se reconoce una tarea MUDADA de fase. */
-function huella(titulo: string): string {
+/**
+ * Título normalizado — es la llave con la que se reconoce una tarea MUDADA de fase. Exportada porque
+ * el servidor reconoce la mudanza con ESTA MISMA llave para heredarle el dueño, el tipo y la nota
+ * (lib/timeline/heredar-omitidos.ts): dos llaves distintas harían que la vista previa muestre una
+ * mudanza que el servidor no reconoció, o al revés.
+ */
+export function huella(titulo: string): string {
   return titulo
     .trim()
     .toLowerCase()
@@ -169,18 +174,24 @@ function claveDeFase(p: FasePropuesta, idx: number): string {
   return p.id ?? `n${idx}`;
 }
 
+/**
+ * Los cambios de una fase. `undefined` en la propuesta = «no tocar» (contrato del PUT), igual que
+ * party/type en las tareas: no es un cambio. Sin esto, una fase con arranque fijo (startWeek 3) que
+ * el modelo devolvía sin la clave salía como «arranque relativo 3 → auto» — un cambio que nadie
+ * pidió, y que aceptar la fase aplicaba de verdad.
+ */
 function faseCambio(a: FaseActual, p: FasePropuesta): string[] {
   const cambios: string[] = [];
   if (a.name !== p.name) cambios.push(`«${a.name}» → «${p.name}»`);
   if (a.durationWeeks !== p.durationWeeks)
     cambios.push(`${a.durationWeeks} → ${p.durationWeeks} ${p.durationWeeks === 1 ? "semana" : "semanas"}`);
-  if (nn(a.startWeek) !== nn(p.startWeek))
+  if (p.startWeek !== undefined && nn(a.startWeek) !== nn(p.startWeek))
     cambios.push(`arranque relativo ${nn(a.startWeek) ?? "auto"} → ${nn(p.startWeek) ?? "auto"}`);
-  if (nn(a.activityType) !== nn(p.activityType))
+  if (p.activityType !== undefined && nn(a.activityType) !== nn(p.activityType))
     cambios.push(`tipo ${nn(a.activityType) ?? "sin tipo"} → ${nn(p.activityType) ?? "sin tipo"}`);
-  if (nn(a.sessionCount) !== nn(p.sessionCount))
+  if (p.sessionCount !== undefined && nn(a.sessionCount) !== nn(p.sessionCount))
     cambios.push(`sesiones ${nn(a.sessionCount) ?? "—"} → ${nn(p.sessionCount) ?? "—"}`);
-  if (nn(a.notes) !== nn(p.notes)) cambios.push("nota de la fase");
+  if (p.notes !== undefined && nn(a.notes) !== nn(p.notes)) cambios.push("nota de la fase");
   return cambios;
 }
 
@@ -537,15 +548,21 @@ export function proyectarAceptados(
       tasks = salida;
     }
 
+    /* Con el cambio de fase aceptado, lo que la propuesta OMITIÓ (`undefined`) sale de lo actual:
+       omitir es «no tocar», no «borrar». Sin esto, aceptar «Setup pasa a 3 semanas» le borraba a
+       Setup su arranque fijo, su tipo, sus sesiones y su nota, porque el modelo no los repitió. */
+    const campo = <K extends "startWeek" | "sessionCount" | "notes" | "activityType">(k: K) =>
+      cambiaFase && p![k] !== undefined ? p![k] : a[k];
+
     return {
       id: a.id,
       name: base.name,
       order: 0, // se reasigna al final
       durationWeeks: duracion,
-      startWeek: nn(base.startWeek),
-      sessionCount: nn(base.sessionCount),
-      notes: nn(base.notes),
-      activityType: nn(base.activityType),
+      startWeek: nn(campo("startWeek")),
+      sessionCount: nn(campo("sessionCount")),
+      notes: nn(campo("notes")),
+      activityType: nn(campo("activityType")),
       ...(tasks ? { tasks } : {}),
     };
   };

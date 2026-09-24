@@ -89,9 +89,23 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
       );
     }
   });
+
+  it("⭐ el detalle recibe el calendario SIN «Hoy» y «Pedir cambio con IA», CON «Hoy»", () => {
+    /* Con «Hoy», el detalle vaciaba las semanas que ya pasaron aunque su trabajo no estuviera hecho;
+       el modificador edita un cronograma vivo y sí tiene que saberlo. La edición que la pone en
+       rojo: cruzarlos, o dejar de pasar el calendario (cargado y tirado). */
+    const src = sinComentarios(leer("lib/contexto/cargar.ts"));
+    const detalle = tramoDe(src, "cargarContextoDelDetalle");
+    const assist = tramoDe(src, "cargarContextoDelAssist");
+    expect(detalle, "el detalle dejó de recibir el calendario").toContain("calendarioCtx: mat.calendario,");
+    expect(detalle, "el detalle recibe el calendario CON «Hoy»").not.toContain("mat.calendarioConHoy");
+    expect(assist, "«Pedir cambio con IA» dejó de recibir el calendario con «Hoy»").toContain(
+      "calendarioCtx: mat.calendarioConHoy",
+    );
+  });
 });
 
-describe("⭐ «Pedir cambio con IA» — el único que toca FASES — también", () => {
+describe("⭐ «Pedir cambio con IA» —que también toca FASES— lo lee igual", () => {
   const crudas = { cronogramaCtx: "c", handoffCtx: "h", desarrolloCtx: "", operativaCtx: "" };
 
   it("con material suma las dos fuentes; sin material, las mismas de siempre", () => {

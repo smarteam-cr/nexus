@@ -34,6 +34,7 @@ import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
+import { huellasDeFrontera, marcarFugas, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
@@ -1490,11 +1491,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       "En caso de conflicto entre lo que dicen las transcripciones/documentos y una card marcada con ⚠️, prevalece siempre la card del CSE.";
   }
 
-  // Instrucción de prioridad del canvas de proyecto
-  effectiveSystemPrompt +=
-    "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
-    "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
-    "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
+  // Instrucción de prioridad del canvas de proyecto.
+  // ⚠ NO va al detalle del cronograma: su userMessage se reemplaza entero (10b') y no trae ninguna
+  // sección «CANVAS DEL PROYECTO». La orden quedaba colgada y le restaba peso a las reuniones que el
+  // CSE eligió, que son las que sí le llegan (validación 2026-09-23).
+  if (!isTimelineDetailAgent) {
+    effectiveSystemPrompt +=
+      "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
+      "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
+      "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
+  }
 
   // Inyectar reglas de formato para agentes que apuntan a canvases no-default.
   // Los GRUPOS que usan el formato sections+blocks (en lugar de cards): handoff,
@@ -1882,6 +1888,11 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // fuentes (cronograma-actual / handoff-curado / requerimiento-tecnico), el brief `__doc`
   // (X1) y el template viven allá; esta rama solo carga y renderiza. La migración es
   // byte-idéntica — el golden de lib/contexto/detalle-cronograma.test.ts lo afirma.
+  //
+  // Lo que el detalle leyó, para después: qué reuniones (la trazabilidad de la corrida, 12) y las
+  // huellas del material interno (el aviso de frontera de cada tarea propuesta, en los previews).
+  let sesionesDelDetalle: string[] = [];
+  let huellasDelDetalle: HuellasDeFrontera | null = null;
   if (isTimelineDetailAgent && bodyProjectId) {
     // El pipelineKey del contexto sale del PROYECTO, no del agente: la columna del agente
     // es NULL por convención en las variantes X2 (el tipo viaja en su id), así que leerla
@@ -1906,6 +1917,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       clasificacion: clasificacionDeTags(sanitizeTags(dealProject?.tags ?? [])),
       regenerarFaseId: regeneratePhaseId ?? null,
     });
+    sesionesDelDetalle = contexto.sesionesUsadas ?? [];
+    huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
@@ -2195,7 +2208,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         where: { id: existingRunId },
         data: {
           output:           JSON.stringify(analysisJson),
-          sourceSessionIds: handoffSourceSessionIds,
+          sourceSessionIds: isTimelineDetailAgent ? sesionesDelDetalle : handoffSourceSessionIds,
           serviceType:      dealProject?.serviceType ?? null,
         },
       })
@@ -2211,8 +2224,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
           serviceType:  dealProject?.serviceType ?? null,
           status:       "DONE",
           output:       JSON.stringify(analysisJson),
-          // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación).
-          sourceSessionIds: handoffSourceSessionIds,
+          // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación);
+          // para el detalle del cronograma, qué reuniones elegidas le llegaron.
+          sourceSessionIds: isTimelineDetailAgent ? sesionesDelDetalle : handoffSourceSessionIds,
           triggeredByEmail: await triggeredByEmail(),
         },
       });
@@ -2261,13 +2275,13 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
        de "Regenerar todo el cronograma". El prompt ya pide todas las fases por default. */
     if (bodyProjectId) {
       if (regeneratePhaseId) {
-        const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId);
+        const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId, huellasDelDetalle);
         return NextResponse.json({
           previewTasks,
           run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
         });
       }
-      const previewPhases = await computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson);
+      const previewPhases = await computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson, huellasDelDetalle);
       return NextResponse.json({
         previewPhases,
         run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
@@ -3233,11 +3247,17 @@ async function fijasDeSemanaCeroParaPreview(
  *
  * Si la fase regenerada ES la «Semana 0», se le suman las tareas fijas — con el mismo dedup que
  * el camino de todas las fases, así que sobre una Semana 0 que ya las tiene no agrega nada.
+ *
+ * Las tareas del AGENTE salen marcadas con `fuga` (`marcarFugas`, contra las huellas del material
+ * que leyó): la curación avisa si un título o una nota cruzan la frontera. Las fijas de la Semana 0
+ * se suman después y no se marcan — son texto nuestro, no del modelo. Sin material, `huellas` no
+ * está activa y ninguna sale marcada.
  */
 async function computeTimelineDetailPreview(
   projectId: string,
   analysisJson: unknown,
   phaseId: string,
+  huellas: HuellasDeFrontera | null,
 ): Promise<ComputedDetailTask[]> {
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
   if (!Array.isArray(detailRaw)) return [];
@@ -3252,11 +3272,14 @@ async function computeTimelineDetailPreview(
     (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === phaseId,
   ) as Record<string, unknown> | undefined;
   const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
-  const tasks = computeDetailTasksForPhase(
-    phase.name,
-    phase.durationWeeks,
-    phase.activityType ?? activityTypePropuesto(raw),
-    tasksRaw,
+  const tasks: ComputedDetailTask[] = marcarFugas(
+    computeDetailTasksForPhase(
+      phase.name,
+      phase.durationWeeks,
+      phase.activityType ?? activityTypePropuesto(raw),
+      tasksRaw,
+    ),
+    huellas ?? huellasDeFrontera([]),
   );
   const kickoff = elegirFaseDeSemanaCero(phases);
   if (kickoff && kickoff.id === phaseId) {
@@ -3274,11 +3297,13 @@ async function computeTimelineDetailPreview(
  *
  * Es el camino de la PRIMERA generación (desde 2026-08-16) y el de «Regenerar todo el
  * cronograma». Por eso acarrea dos cosas que antes solo sabía hacer el camino que escribía: las
- * tareas fijas de la Semana 0 y el tipo de actividad propuesto por fase.
+ * tareas fijas de la Semana 0 y el tipo de actividad propuesto por fase. Las del agente salen
+ * marcadas con `fuga`, igual que en el preview de una fase.
  */
 async function computeTimelineDetailPreviewAllPhases(
   projectId: string,
   analysisJson: unknown,
+  huellas: HuellasDeFrontera | null,
 ): Promise<DetailPreviewPhase[]> {
   const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
   const detailArr = Array.isArray(detailRaw) ? detailRaw : [];
@@ -3298,11 +3323,14 @@ async function computeTimelineDetailPreviewAllPhases(
     const raw = byId.get(phase.id);
     const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
     const propuesto = activityTypePropuesto(raw);
-    const tasks = computeDetailTasksForPhase(
-      phase.name,
-      phase.durationWeeks,
-      phase.activityType ?? propuesto,
-      tasksRaw,
+    const tasks: ComputedDetailTask[] = marcarFugas(
+      computeDetailTasksForPhase(
+        phase.name,
+        phase.durationWeeks,
+        phase.activityType ?? propuesto,
+        tasksRaw,
+      ),
+      huellas ?? huellasDeFrontera([]),
     );
     if (kickoff && kickoff.id === phase.id) {
       tasks.push(

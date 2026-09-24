@@ -21,9 +21,39 @@
 import { esReimplementacion } from "@/lib/tags/catalog";
 import type { FuenteDeContexto } from "./tipos";
 
-/* El fallback cuando no hay handoff confirmado — misma string que tenía la ruta. */
+/* El fallback cuando no hay handoff confirmado — misma string que tenía la ruta. ⚠ Congelado por
+   el golden: sin material el mensaje no cambia ni un carácter (por eso sigue en voseo). */
 const SIN_HANDOFF_CONFIRMADO =
   '(Sin handoff confirmado. Generá las tareas típicas del tipo de cada fase y marcá CADA una con "porValidar": true. Títulos limpios, sin marcadores.)';
+
+/**
+ * El fallback SIN handoff pero CON material (reuniones elegidas o notas del CSE). El de arriba le
+ * pedía marcar CADA tarea «por validar»: con reuniones enfrente, eso marcaba también las que salían
+ * de lo que el cliente acordó. Acá solo se marcan las típicas, las que ninguna fuente respalda — y
+ * esa marca ahora llega hasta la tarea creada (`needsValidation`, ver
+ * lib/timeline/apply-curated-phase.ts), así que la promesa es real.
+ */
+export const SIN_HANDOFF_CON_MATERIAL =
+  '(Sin handoff confirmado. Arma las tareas con las reuniones y las notas del CSE que vienen más abajo; solo donde no digan nada, propón las tareas típicas del tipo de fase y marca ESAS con "porValidar": true. Títulos limpios, sin marcadores.)';
+
+/**
+ * La válvula de «fase ya resuelta» cuando solo hay instrucciones del CSE. ⚠ Byte a byte el texto que
+ * tenía la ruta (lo fija el golden «con brief»): por eso sigue en voseo.
+ */
+export const FASES_RESUELTAS_POR_INSTRUCCIONES =
+  `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+
+/**
+ * La MISMA válvula cuando hay material (validación 2026-09-23): una reunión elegida o una nota del
+ * CSE también pueden decir que una fase ya se hizo, y la de arriba solo habla de «las instrucciones
+ * del CSE». Sin brief, el agente no tenía permiso de dejar quieta una fase que una reunión daba por
+ * cerrada: le re-proponía sus tareas típicas.
+ */
+export const FASES_RESUELTAS_CON_MATERIAL =
+  `\n\n=== FASES QUE YA ESTÁN RESUELTAS ===\nSi las instrucciones del CSE, una reunión elegida o una nota del CSE dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: inclúyela en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentra el detalle en las fases donde todavía hay trabajo por delante.`;
+
+/** Las fuentes del «Contexto del cronograma» que cuentan como MATERIAL (el calendario no: solo ubica). */
+const FUENTES_DE_MATERIAL = ["reuniones-del-cronograma", "notas-del-cronograma"] as const;
 
 export interface EncabezadoDelDetalle {
   companyName: string;
@@ -87,8 +117,19 @@ export function fuentesDelDetalle(crudas: {
    */
   reunionesCtx?: string;
   notasCtx?: string;
+  /**
+   * El calendario de SOLO LECTURA del plan (`calendarioDelCronograma`, sin «Hoy»: con él el modelo
+   * vaciaba las semanas pasadas aunque su trabajo no estuviera hecho). Entra SOLO con material —
+   * sirve para ubicar lo que dicen las reuniones y las notas; sin ellas es ruido y rompería el
+   * golden —, y va ANTES de las reuniones, que citan sus semanas.
+   */
+  calendarioCtx?: string;
 }): FuenteDeContexto[] {
+  const hayMaterial = !!(crudas.reunionesCtx?.trim() || crudas.notasCtx?.trim());
   const delContexto: FuenteDeContexto[] = [];
+  if (hayMaterial && crudas.calendarioCtx?.trim()) {
+    delContexto.push({ key: "calendario-del-cronograma", ambito: "proyecto", texto: crudas.calendarioCtx });
+  }
   if (crudas.reunionesCtx?.trim()) {
     delContexto.push({ key: "reuniones-del-cronograma", ambito: "proyecto", texto: crudas.reunionesCtx });
   }
@@ -104,7 +145,9 @@ export function fuentesDelDetalle(crudas: {
     {
       key: "handoff-curado",
       ambito: "proyecto",
-      texto: `=== HANDOFF CURADO (bloques confirmados por el CSE) ===\n${crudas.handoffCtx || SIN_HANDOFF_CONFIRMADO}`,
+      texto: `=== HANDOFF CURADO (bloques confirmados por el CSE) ===\n${
+        crudas.handoffCtx || (hayMaterial ? SIN_HANDOFF_CON_MATERIAL : SIN_HANDOFF_CONFIRMADO)
+      }`,
     },
     {
       key: "requerimiento-tecnico",
@@ -138,13 +181,15 @@ export function renderDetalleDeCronograma(i: InsumosDelDetalle): string {
   const handoff = porKey.get("handoff-curado") ?? "";
   const requerimiento = porKey.get("requerimiento-tecnico") ?? "";
   /* Las fuentes del «Contexto del cronograma». Van DESPUÉS del requerimiento: primero lo que se
-     prometió (handoff) y lo técnico, después lo que efectivamente pasó en el proyecto. Vacías no
-     suman ni un carácter — ese es el golden. */
-  const delContexto = ["reuniones-del-cronograma", "notas-del-cronograma"]
+     prometió (handoff) y lo técnico, después lo que efectivamente pasó en el proyecto. El
+     calendario va primero de las tres: las reuniones citan sus semanas. Vacías no suman ni un
+     carácter — ese es el golden. */
+  const delContexto = ["calendario-del-cronograma", ...FUENTES_DE_MATERIAL]
     .map((k) => porKey.get(k) ?? "")
     .filter((t) => t.trim())
     .map((t) => `\n${t}\n`)
     .join("");
+  const hayMaterial = FUENTES_DE_MATERIAL.some((k) => (porKey.get(k) ?? "").trim());
   const e = i.encabezado;
 
   let msg = `${i.instrucciones}Empresa: ${e.companyName}
@@ -165,9 +210,13 @@ Detallá el cronograma siguiendo tus instrucciones: asigná un activityType a ca
      la corrida devolvió igual las 9 tareas de siempre para esa fase. `tasks: []` es el "no la
      toques" que el modal ya sabe leer: preserva las tareas actuales enteras (el reparto vive en
      lib/timeline/regen-columnas.ts, donde `sin propuesta` NUNCA descarta nada).
-     Solo se emite con brief presente — sin instrucciones el bloque sería ruido. */
-  if (i.instrucciones) {
-    msg += `\n\n=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===\nSi las instrucciones del CSE de arriba dicen que una fase concreta ya está terminada, resuelta o que no requirió trabajo, NO le propongas tareas: incluila en el JSON con su id EXACTO y "tasks": [] — se deja como está. Vale AUNQUE esa fase venga tarde en el orden del cronograma: el orden es la expectativa inicial del plan, no el orden real en que se hizo el trabajo. Concentrá el detalle en las fases donde todavía hay trabajo por delante.`;
+     Solo se emite con brief o con material — sin ninguno de los dos el bloque sería ruido. Con
+     material va la variante que nombra también las reuniones y las notas; sin material, el texto
+     de siempre (golden «con brief»). */
+  if (hayMaterial) {
+    msg += FASES_RESUELTAS_CON_MATERIAL;
+  } else if (i.instrucciones) {
+    msg += FASES_RESUELTAS_POR_INSTRUCCIONES;
   }
 
   // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el

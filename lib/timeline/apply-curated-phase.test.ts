@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { normalizeCuratedTasks, repartoDeBorrado, type ExistingTaskRow } from "./apply-curated-phase";
 
@@ -127,5 +129,55 @@ describe("normalizeCuratedTasks", () => {
   it("notes vacías o solo whitespace se guardan como null", () => {
     const out = normalizeCuratedTasks([{ title: "A", notes: "   " }, { title: "B", notes: "algo" }], 1, new Set());
     expect(out.map((t) => t.notes)).toEqual([null, "algo"]);
+  });
+});
+
+/**
+ * ── «POR VALIDAR» LLEGA HASTA LA TAREA (hueco 5 de la crítica, decisión de Elías 2026-09-23) ───
+ * Sin handoff, el agente marca con `porValidar` las tareas típicas que ninguna fuente respalda
+ * (lib/contexto/detalle-cronograma.ts, SIN_HANDOFF_CON_MATERIAL). El preview la calculaba
+ * (`needsValidation` de compute-detail-tasks), pero la curación no la acarreaba y el apply creaba
+ * TODO con `needsValidation: false`: la marca se perdía en el camino y la firmeza del baseline
+ * contaba como firmes tareas inventadas. Tres eslabones, tres guardas.
+ */
+describe("⭐ la marca «por validar» llega hasta la tarea creada", () => {
+  it("una tarea NUEVA marcada llega marcada; sin marca, no", () => {
+    const out = normalizeCuratedTasks(
+      [
+        { title: "Típica", needsValidation: true },
+        { title: "Del material" },
+        { title: "Basura", needsValidation: "sí" },
+      ],
+      1,
+      new Set(),
+    );
+    expect(out.map((t) => t.needsValidation)).toEqual([true, false, false]);
+  });
+
+  it("⛔ una tarea que YA existe no vuelve a «por validar» desde el payload", () => {
+    /* La marca solo nace con la tarea: en el update manda la regla del PUT (tocar el contenido de
+       una de la IA la da por revisada). Un payload no puede re-marcar trabajo ya revisado. */
+    const out = normalizeCuratedTasks([{ id: "propia", title: "A", needsValidation: true }], 1, new Set(["propia"]));
+    expect(out[0].needsValidation).toBe(false);
+  });
+
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+  it("el apply CREA con la marca (no con un false fijo)", () => {
+    const src = leer("lib/timeline/apply-curated-phase.ts");
+    const i = src.indexOf("toCreate.push({");
+    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(0);
+    const alta = src.slice(i, src.indexOf("});", i));
+    expect(alta, "el apply volvió a crear todo como validado: la marca del agente se pierde").toContain(
+      "needsValidation: c.needsValidation",
+    );
+  });
+
+  it("la curación la acarrea: de la propuesta al ítem y del ítem al payload", () => {
+    const panel = leer("components/canvas/PhaseRegenPanel.tsx");
+    expect(panel, "el panel dejó de leer la marca de la propuesta").toContain(
+      "needsValidation: t.needsValidation === true",
+    );
+    expect(panel, "el panel dejó de mandar la marca al apply").toContain("needsValidation: i.isNew && i.needsValidation");
   });
 });

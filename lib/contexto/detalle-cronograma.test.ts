@@ -6,6 +6,9 @@ import {
   reglasDeClasificacion,
   fuentesDelDetalle,
   renderDetalleDeCronograma,
+  SIN_HANDOFF_CON_MATERIAL,
+  FASES_RESUELTAS_CON_MATERIAL,
+  FASES_RESUELTAS_POR_INSTRUCCIONES,
   type ClasificacionDelDetalle,
   type EncabezadoDelDetalle,
 } from "./detalle-cronograma";
@@ -255,4 +258,143 @@ describe("trinquete: el detalle del cronograma consume el contexto NOMBRADO", ()
 test("el fallback sin handoff sigue pidiendo porValidar (congelado: lo usa la UI de tareas)", () => {
   const msg = nuevoTemplate({ ...BASE, handoffCtx: "" });
   expect(msg).toContain('"porValidar": true');
+});
+
+/**
+ * ── CON MATERIAL (paso D2 de la validación del 2026-09-23) ─────────────────────
+ * Las reuniones elegidas y las notas del CSE contradecían tres textos que el detalle ya traía: el
+ * fallback sin handoff (que marcaba «por validar» CADA tarea, también las que salían de lo que el
+ * cliente acordó), la válvula de «fase ya resuelta» (que solo miraba el brief) y el calendario (que
+ * no le llegaba). Sin material, NADA de esto cambia: el golden de arriba lo sigue afirmando.
+ */
+describe("⭐ con material, el mensaje no se contradice con las reuniones", () => {
+  const REUNIONES = "=== REUNIONES QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA (material INTERNO) ===\nKick-off: se cerró Service.";
+  const NOTAS = "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nService está terminado.";
+  const CALENDARIO =
+    "=== CALENDARIO DEL CRONOGRAMA ACTUAL (solo lectura — para ubicar en el tiempo lo que dicen las reuniones y las notas) ===\n1. Arranque";
+
+  function conMaterial(
+    over: Partial<typeof BASE> & { reunionesCtx?: string; notasCtx?: string; calendarioCtx?: string },
+  ): string {
+    const i = { ...BASE, ...over };
+    return renderDetalleDeCronograma({
+      instrucciones: i.instruccionesDoc,
+      encabezado: {
+        companyName: i.companyName,
+        industry: i.industry,
+        serviceTypeLabel: i.serviceTypeLabel,
+        classificationLabel: i.classificationLabel,
+      },
+      fuentes: fuentesDelDetalle({
+        timelineCtx: i.timelineCtx,
+        handoffCtx: i.handoffCtx,
+        desarrolloCtx: i.desarrolloCtx,
+        reunionesCtx: over.reunionesCtx,
+        notasCtx: over.notasCtx,
+        calendarioCtx: over.calendarioCtx,
+      }),
+      clasificacion: { esReimplementacion: i.isReimpl, llevaMigracion: i.hasMigration, llevaDesarrollo: i.hasTechnical },
+      regenerarFaseId: i.regeneratePhaseId ?? null,
+    });
+  }
+
+  it("⭐ sin handoff y con material: solo las típicas van «por validar», no CADA una", () => {
+    /* La edición que la pone en rojo: volver al fallback de siempre también con material. */
+    const msg = conMaterial({ handoffCtx: "", reunionesCtx: REUNIONES });
+    expect(msg).toContain(SIN_HANDOFF_CON_MATERIAL);
+    expect(msg, "con reuniones enfrente, seguía pidiendo marcar TODO por validar").not.toContain("marcá CADA una");
+    expect(msg, "la marca de las típicas tiene que seguir existiendo").toContain('"porValidar": true');
+    // Sin material rige el fallback de siempre (y el golden «sin handoff» lo fija byte a byte).
+    expect(conMaterial({ handoffCtx: "" })).toContain("marcá CADA una");
+    // Con handoff confirmado, ninguna variante del fallback aparece.
+    expect(conMaterial({ reunionesCtx: REUNIONES })).not.toContain("Sin handoff confirmado");
+  });
+
+  it("⭐ la válvula de «fase resuelta» también se abre con una reunión o una nota, sin brief", () => {
+    /* La edición que la pone en rojo: que la condición vuelva a ser solo `if (i.instrucciones)`. */
+    const msg = conMaterial({ instruccionesDoc: "", notasCtx: NOTAS });
+    expect(msg).toContain("una reunión elegida o una nota");
+    expect(msg).toContain('"tasks": []');
+    expect(msg.endsWith(FASES_RESUELTAS_CON_MATERIAL), "la válvula tiene que ir al final, como la de siempre").toBe(true);
+  });
+
+  it("con brief Y material va UNA sola válvula (la que nombra las tres fuentes)", () => {
+    const msg = conMaterial({ instruccionesDoc: "Service ya está terminado.\n\n", reunionesCtx: REUNIONES });
+    expect(msg).toContain(FASES_RESUELTAS_CON_MATERIAL);
+    expect(msg).not.toContain(FASES_RESUELTAS_POR_INSTRUCCIONES);
+  });
+
+  it("con brief y SIN material, la válvula es byte a byte la de siempre", () => {
+    const msg = conMaterial({ instruccionesDoc: "Service ya está terminado.\n\n" });
+    expect(msg.endsWith(FASES_RESUELTAS_POR_INSTRUCCIONES)).toBe(true);
+    expect(msg).toBe(nuevoTemplate({ ...BASE, instruccionesDoc: "Service ya está terminado.\n\n" }));
+  });
+
+  it("⭐ el calendario entra SOLO con material, y antes de las reuniones", () => {
+    /* Sin reuniones ni notas no hay nada que ubicar: un calendario suelto le cambiaría el mensaje
+       a todo proyecto sin material. La edición que la pone en rojo: agregarlo con solo tener texto. */
+    expect(conMaterial({ calendarioCtx: CALENDARIO }), "el calendario entró sin material").toBe(nuevoTemplate(BASE));
+    const msg = conMaterial({ calendarioCtx: CALENDARIO, reunionesCtx: REUNIONES, notasCtx: NOTAS });
+    const cal = msg.indexOf("=== CALENDARIO DEL CRONOGRAMA ACTUAL");
+    const reu = msg.indexOf("=== REUNIONES QUE EL CSE ELIGIÓ");
+    const not = msg.indexOf("=== NOTAS DEL CSE");
+    expect(cal, "con material, el calendario no llegó").toBeGreaterThan(-1);
+    expect(cal, "las reuniones citan semanas del calendario: tiene que ir antes").toBeLessThan(reu);
+    expect(reu).toBeLessThan(not);
+    expect(
+      fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "", notasCtx: NOTAS, calendarioCtx: CALENDARIO }).map(
+        (f) => f.key,
+      ),
+    ).toContain("calendario-del-cronograma");
+  });
+});
+
+/**
+ * ── LA RUTA: lo que el detalle NO recibe y lo que la corrida registra ───────────────────────────
+ */
+describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle", () => {
+  const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"), "utf8");
+  const codigo = ruta.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  it("⭐ PRIORIDAD DEL CANVAS no va al detalle (su mensaje no trae ningún «CANVAS DEL PROYECTO»)", () => {
+    /* Colgada, la orden «prioriza SIEMPRE el canvas» le restaba peso a las reuniones elegidas, que
+       son lo único del proyecto que el detalle sí lee. La edición que la pone en rojo: sacar la
+       condición. */
+    const i = codigo.indexOf("PRIORIDAD DEL CANVAS");
+    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(0);
+    expect(codigo.slice(Math.max(0, i - 300), i)).toContain("if (!isTimelineDetailAgent)");
+  });
+
+  it("⭐ la corrida del detalle registra las reuniones que leyó — y el anclaje del handoff no las usa", () => {
+    const traza =
+      codigo.match(/sourceSessionIds: isTimelineDetailAgent \? sesionesDelDetalle : handoffSourceSessionIds,/g) ?? [];
+    expect(traza.length, "las dos escrituras de la corrida (async y síncrona) tienen que registrarlas").toBe(2);
+    /* El 12a estampa handoffOverride sobre las sesiones del HANDOFF. Si mirara las del detalle, cada
+       «Regenerar» anclaría al handoff las reuniones que el CSE eligió para el cronograma. */
+    expect(codigo).toContain("if (isHandoffAgent && bodyProjectId && handoffSourceSessionIds.length > 0)");
+    const rama = codigo.slice(codigo.indexOf("if (isTimelineDetailAgent && bodyProjectId) {"));
+    const tramo = rama.slice(0, rama.indexOf("\n  }"));
+    expect(tramo, "la rama dejó de guardar qué reuniones leyó").toContain("sesionesDelDetalle = contexto.sesionesUsadas");
+    expect(tramo, "la rama dejó de armar las huellas del material").toContain(
+      "huellasDelDetalle = huellasDeFrontera(contexto.materialInterno",
+    );
+  });
+
+  it("⭐ los DOS previews marcan las fugas de las tareas del agente, antes de sumar las fijas", () => {
+    for (const nombre of ["computeTimelineDetailPreview", "computeTimelineDetailPreviewAllPhases"]) {
+      const i = codigo.indexOf(`async function ${nombre}(`);
+      expect(i, `no encontré ${nombre}`).toBeGreaterThan(0);
+      const cuerpo = codigo.slice(i, codigo.indexOf("\n}", i));
+      const marca = cuerpo.indexOf("marcarFugas(");
+      expect(marca, `${nombre} dejó de marcar las fugas`).toBeGreaterThan(-1);
+      expect(cuerpo, `${nombre} dejó de recibir las huellas`).toContain("huellas: HuellasDeFrontera | null");
+      expect(marca, `${nombre}: las fijas de la Semana 0 son texto nuestro, no se marcan`).toBeLessThan(
+        cuerpo.indexOf("fijasDeSemanaCeroParaPreview("),
+      );
+    }
+    expect(codigo).toContain(
+      "computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId, huellasDelDetalle)",
+    );
+    expect(codigo).toContain("computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson, huellasDelDetalle)");
+  });
 });

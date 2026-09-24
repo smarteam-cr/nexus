@@ -31,6 +31,14 @@ import type { FuenteDeContexto } from "./tipos";
 export const SIN_HANDOFF_CONFIRMADO_ASSIST =
   "(el CSE todavía no confirmó bloques del handoff — no inventes alcance que no esté en el cronograma)";
 
+/**
+ * La misma ausencia CON material: el de arriba decía «no inventes alcance que no esté en el
+ * cronograma» y contradecía a las reuniones elegidas que el modelo tiene enfrente. Sin material
+ * se usa el de siempre.
+ */
+export const SIN_HANDOFF_CONFIRMADO_ASSIST_CON_MATERIAL =
+  "(el CSE todavía no confirmó bloques del handoff — el alcance sale del cronograma, de las reuniones elegidas y de las notas del CSE; no inventes nada fuera de eso)";
+
 export interface CrudasDelAssist {
   /** El cronograma vivo, serializado CON ids y CON el estado de cada tarea. */
   cronogramaCtx: string;
@@ -42,14 +50,23 @@ export interface CrudasDelAssist {
   operativaCtx: string;
   /**
    * «Contexto del cronograma» (2026-09-23): las reuniones que el CSE deja entrar y sus notas, ya
-   * rotuladas. Este es el ÚNICO agente que puede tocar FASES una vez creado el cronograma, así que
-   * es por acá que las reuniones elegidas llegan a las fases. Solo se agregan con texto.
+   * rotuladas. Una vez creado el cronograma, las FASES las tocan este agente (a pedido) y el chat
+   * del cronograma (por operaciones que el CSE acuerda); el detalle no puede. Por acá las reuniones
+   * elegidas llegan a lo que pide el CSE en «Pedir cambio con IA». Solo se agregan con texto.
    */
   reunionesCtx?: string;
   notasCtx?: string;
+  /**
+   * El calendario de solo lectura CON «Hoy» (`calendarioDelCronograma`): este agente edita un
+   * cronograma vivo y tiene que saber qué semanas ya pasaron. Entra SOLO con material (sin
+   * reuniones ni notas no hay nada que ubicar) y va antes de las reuniones.
+   */
+  calendarioCtx?: string;
 }
 
 export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
+  const hayMaterial = !!(crudas.reunionesCtx?.trim() || crudas.notasCtx?.trim());
+  const sinHandoff = hayMaterial ? SIN_HANDOFF_CONFIRMADO_ASSIST_CON_MATERIAL : SIN_HANDOFF_CONFIRMADO_ASSIST;
   return [
     {
       key: "cronograma-vivo",
@@ -61,7 +78,7 @@ export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
     {
       key: "handoff-curado",
       ambito: "proyecto",
-      texto: `=== QUÉ SE VENDIÓ (handoff, bloques confirmados por el CSE) ===\n${crudas.handoffCtx || SIN_HANDOFF_CONFIRMADO_ASSIST}`,
+      texto: `=== QUÉ SE VENDIÓ (handoff, bloques confirmados por el CSE) ===\n${crudas.handoffCtx || sinHandoff}`,
     },
     {
       key: "requerimiento-tecnico",
@@ -77,6 +94,9 @@ export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
         ? `=== CÓMO VA EL PROYECTO HOY (según HubSpot) ===\n${crudas.operativaCtx}`
         : "",
     },
+    ...(hayMaterial && crudas.calendarioCtx?.trim()
+      ? [{ key: "calendario-del-cronograma", ambito: "proyecto" as const, texto: crudas.calendarioCtx }]
+      : []),
     ...(crudas.reunionesCtx?.trim()
       ? [{ key: "reuniones-del-cronograma", ambito: "proyecto" as const, texto: crudas.reunionesCtx }]
       : []),
@@ -100,6 +120,7 @@ export function fuentesDelAssist(crudas: CrudasDelAssist): FuenteDeContexto[] {
  * aparece igual con y sin la regla, la regla no está ganada y la guarda es decorativa.
  */
 export const REGLA_DE_FRONTERA_DEL_ASSIST = `⛔ FRONTERA — el contexto de arriba es INTERNO; el cronograma que devuelves lo LEE EL CLIENTE.
-- Usá el handoff, el requerimiento técnico, la operativa, las reuniones y las notas del CSE para DECIDIR qué cambiar (qué tareas hacen falta, en qué orden, cuánto duran). NUNCA los copies al texto.
-- Ningún título ni nota puede contener: nombres de personas del equipo de Smarteam, montos, condiciones comerciales, riesgos internos, ni frases textuales de esos documentos.
-- Si una fuente interna te da la razón para agregar una tarea, escribí la TAREA, no la razón.`;
+- Usa el handoff, el requerimiento técnico, la operativa, las reuniones y las notas del CSE para DECIDIR qué cambiar (qué tareas hacen falta, en qué orden, cuánto duran). NUNCA los copies al texto.
+- Ningún título, nota ni nombre de fase puede contener: nombres de personas, montos, fechas, plazos, condiciones comerciales, riesgos internos ni frases textuales de esos documentos.
+- Tampoco digas de dónde salió («según la reunión», «confirmado en el kick-off», «por la nota del CSE»).
+- Si una fuente interna te da la razón para agregar una tarea, escribe la TAREA, no la razón.`;

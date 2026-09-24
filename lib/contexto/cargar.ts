@@ -51,6 +51,7 @@ import {
  *   · instrucciones          — la entry `__doc` del canvas del cronograma (X1); "" sin brief
  *   · reuniones / notas      — lo que el CSE eligió en el «Contexto del cronograma» (abajo);
  *                              se omiten si no hay nada
+ *   · calendario             — el del plan, de solo lectura y SIN «Hoy»; solo con material
  *
  * Sin fechas en lo que el agente ESCRIBE: el sistema las calcula. Con material, cada reunión
  * llega con su fecha y el lugar del plan donde cayó, y el cargador del material arma además un
@@ -80,6 +81,8 @@ export async function cargarContextoDelDetalle(
       desarrolloCtx,
       reunionesCtx: mat.reuniones,
       notasCtx: mat.notas,
+      // SIN «Hoy»: con él, el detalle vaciaba las semanas pasadas aunque su trabajo no estuviera hecho.
+      calendarioCtx: mat.calendario,
     }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
@@ -98,6 +101,8 @@ export async function cargarContextoDelDetalle(
  *   · requerimiento-tecnico  — el canvas Desarrollo si existe ("" si no)
  *   · operativa-hubspot      — estado / prioridad / motivo de bloqueo, si el equipo los cargó
  *   · instrucciones          — la misma entry `__doc` del canvas del cronograma que lee el detalle
+ *   · reuniones / notas      — lo elegido en el «Contexto del cronograma», igual que el detalle
+ *   · calendario             — el del plan CON «Hoy» (edita un cronograma vivo); solo con material
  *
  * ⚠ EL CRONOGRAMA LO PASA EL LLAMADOR, no se carga acá. La ruta ya lo trae con su select
  * propio —necesita `status` y `source` para el rescate de progreso del final— y volver a
@@ -145,6 +150,8 @@ export async function cargarContextoDelAssist(
       operativaCtx: proyecto ? bloqueDeOperativa(proyecto, { incluirRotulo: false }) : "",
       reunionesCtx: mat.reuniones,
       notasCtx: mat.notas,
+      // CON «Hoy»: este agente edita un cronograma vivo y tiene que saber qué semanas ya pasaron.
+      calendarioCtx: mat.calendarioConHoy,
     }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,

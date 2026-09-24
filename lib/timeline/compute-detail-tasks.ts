@@ -29,6 +29,13 @@ export interface ComputedDetailTask {
   needsValidation: boolean;
   party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
   type: "SESSION" | "TASK";
+  /**
+   * El título o la nota cruzan la frontera (citan la fuente, traen un monto, una fecha, un plazo, un
+   * correo o copian una frase del material interno). Lo pone la RUTA con `marcarFugas`
+   * (lib/contexto/frontera-del-cronograma.ts) sobre las huellas del material que leyó el agente —
+   * nunca este parser, que no ve el material. Solo avisa en la curación; no bloquea nada.
+   */
+  fuga?: { campo: "titulo" | "nota"; motivo: string } | null;
 }
 
 /**

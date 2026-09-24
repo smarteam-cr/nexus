@@ -39,6 +39,13 @@ export interface CuratedTaskInput {
   party: TaskParty | null;
   type: TimelineTaskType | null;
   status: TimelineTaskStatus;
+  /**
+   * «porValidar» del agente (la típica del tipo de fase, sin respaldo en ninguna fuente), acarreado
+   * desde la propuesta por la curación (decisión de Elías 2026-09-23). SOLO vale al CREAR: una tarea
+   * que ya existe no puede volver a «por validar» desde el payload — en el update manda la regla de
+   * siempre (tocar el contenido de una de la IA la da por revisada).
+   */
+  needsValidation: boolean;
 }
 
 /**
@@ -79,6 +86,7 @@ export function normalizeCuratedTasks(
       party,
       type,
       status,
+      needsValidation: id === undefined && t.needsValidation === true,
     });
   }
   return curated;
@@ -194,7 +202,8 @@ export async function applyCuratedPhaseTasks(
         notes: c.notes,
         party: c.party,
         type: c.type,
-        needsValidation: false,
+        // La marca del agente llega hasta la tarea: sin handoff, las típicas quedan «por validar».
+        needsValidation: c.needsValidation,
         source: "AGENT",
         status: c.status,
         ...(c.status !== "PENDING"

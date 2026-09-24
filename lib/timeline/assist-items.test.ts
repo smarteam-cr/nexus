@@ -373,6 +373,64 @@ describe("el payload proyectado siempre es aplicable", () => {
   });
 });
 
+describe("lo que la propuesta OMITE de una fase es «no tocar», no «borrar» (validación 2026-09-23)", () => {
+  /* El modificador devuelve a veces una fase sin `startWeek`, `activityType`, `sessionCount` o
+     `notes`. La vista previa lo leía como null: mostraba un «arranque relativo 3 → auto» que nadie
+     pidió y, al aceptar cualquier cambio de esa fase, se lo aplicaba de verdad. El servidor ya
+     hereda lo omitido (lib/timeline/heredar-omitidos.ts); esto es la segunda red, en el navegador. */
+  const conArranque: FaseActual[] = [
+    { ...ACTUALES[0], startWeek: 3, notes: "Nota de la fase", sessionCount: 2, activityType: "CONFIGURACION" },
+    ACTUALES[1],
+  ];
+  /** La propuesta alarga Setup y cambia un título de Adopción, pero de Setup OMITE los cuatro campos. */
+  function sinLosCampos(): PropuestaDelAssist {
+    const p = propuestaIgual();
+    p.phases[0] = {
+      id: "f1",
+      name: "Setup",
+      order: 0,
+      durationWeeks: 3,
+      tasks: p.phases[0].tasks,
+    };
+    p.phases[1].tasks![0].title = "Onboarding por rol y área";
+    return p;
+  }
+
+  it("⭐ LA GUARDA: con startWeek omitido no sale el ítem «arranque relativo»", () => {
+    /* La edición que la pone en rojo: volver a comparar `nn(a.startWeek) !== nn(p.startWeek)` sin
+       mirar si la propuesta trae la clave. */
+    const items = diffAssist(conArranque, sinLosCampos(), ANCLA);
+    const setup = items.find((i) => i.key === "fase-cambia:f1");
+    expect(setup, "el cambio real (la duración) tiene que seguir saliendo").toBeDefined();
+    expect(setup!.detalle).toContain("2 → 3 semanas");
+    expect(setup!.detalle, "salió un cambio de arranque que nadie pidió").not.toContain("arranque relativo");
+    expect(setup!.detalle, "salió un cambio de tipo que nadie pidió").not.toContain("tipo ");
+    expect(setup!.detalle, "salió un cambio de sesiones que nadie pidió").not.toContain("sesiones");
+    expect(setup!.detalle, "salió un cambio de nota que nadie pidió").not.toContain("nota de la fase");
+  });
+
+  it("un null EXPLÍCITO sí es un cambio (quitar el arranque fijo es un pedido legítimo)", () => {
+    const p = sinLosCampos();
+    p.phases[0].startWeek = null;
+    const setup = diffAssist(conArranque, p, ANCLA).find((i) => i.key === "fase-cambia:f1")!;
+    expect(setup.detalle).toContain("arranque relativo 3 → auto");
+  });
+
+  it("⭐ LA GUARDA: aceptar el cambio de la fase y descartar otra cosa conserva startWeek 3", () => {
+    /* La edición que la pone en rojo: volver `construirFase` a leer los cuatro campos de `base` (la
+       propuesta, con el cambio aceptado) sin caer a lo actual cuando vienen `undefined`. */
+    const payload = proyectarAceptados(conArranque, sinLosCampos(), new Set(["fase-cambia:f1"]), ANCLA);
+    const setup = payload.phases.find((f) => f.id === "f1")!;
+    expect(setup.durationWeeks, "el cambio aceptado se aplica").toBe(3);
+    expect(setup.startWeek, "aceptar la duración le borró el arranque fijo").toBe(3);
+    expect(setup.notes).toBe("Nota de la fase");
+    expect(setup.sessionCount).toBe(2);
+    expect(setup.activityType).toBe("CONFIGURACION");
+    // Y lo descartado (el título de Adopción) no entró.
+    expect(payload.phases.find((f) => f.id === "f2")!.tasks).toBeUndefined();
+  });
+});
+
 describe("el módulo llega a la pantalla", () => {
   /* La lección que este repo ya pagó dos veces: un dato que llega y NO se pinta es idéntico a un
      dato que no llega. `diffAssist` puede ser perfecto y estar completamente testeado mientras el
