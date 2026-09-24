@@ -508,6 +508,17 @@ describe("8 · el estado de la revisión en pantalla", () => {
     expect(claveDeRevision(HANDOFF, "run-2"), "otro token es otra propuesta").not.toBe(clave);
     expect(claveDeRevision({ ...HANDOFF, anchorStartDate: null }, "run-1"), "otro contenido también").not.toBe(clave);
     expect(claveDeRevision({ phases: [{ ...A, tasks: [] }] }, "x"), "la del modificador no es un borrador").toBeNull();
+    /* La MISMA propuesta con las claves en otro orden es la misma propuesta: la respuesta del POST
+       /estructura y el GET (jsonb de Postgres) no traen el mismo orden. Con el texto crudo, recargar
+       perdía la foto y una edición a mano que chocaba pasaba a «aplica» (revisión de E1). */
+    const invertir = (v: unknown): unknown =>
+      Array.isArray(v)
+        ? v.map(invertir)
+        : v && typeof v === "object"
+          ? Object.fromEntries(Object.entries(v as Record<string, unknown>).reverse().map(([k, x]) => [k, invertir(x)]))
+          : v;
+    expect(JSON.stringify(invertir(HANDOFF)), "el fixture tiene que cambiar de orden de verdad").not.toBe(JSON.stringify(HANDOFF));
+    expect(claveDeRevision(invertir(HANDOFF), "run-1"), "otro orden de claves no es otra propuesta").toBe(clave);
     const e = revisionPara(clave, VIVO);
     expect(e).toEqual({ clave, base: VIVO, sin: new Set(), vista: "propuesta" });
     expect(revisionPara(null, VIVO)).toBe(REVISION_VACIA);

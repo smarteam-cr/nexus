@@ -1052,10 +1052,28 @@ export interface EstadoDeRevision {
 
 export const REVISION_VACIA: EstadoDeRevision = { clave: null, base: null, sin: new Set(), vista: "propuesta" };
 
-/** La identidad de lo que hay guardado: token + contenido. null si no es un borrador. */
+/**
+ * La identidad de lo que hay guardado: token + contenido. null si no es un borrador.
+ *
+ * ⚠ El contenido se mide con las claves ORDENADAS (`jsonCanonico`), no con `JSON.stringify` crudo.
+ * La misma propuesta llega con otro orden de claves según el camino: la respuesta del POST
+ * /estructura trae el orden en que la armó `construirPropuestaDeEstructura`, y el GET del cronograma
+ * el que devuelve Postgres para un jsonb. Con el texto crudo eran dos «propuestas distintas»: al
+ * recargar se perdía la foto recordada y una edición a mano que chocaba pasaba a «aplica»
+ * (revisión de E1, 2026-09-24 — el caso del video de Wherex).
+ */
 export function claveDeRevision(json: unknown, token: string | null): string | null {
   if (!esBorradorGuardado(json)) return null;
-  return `${token ?? ""}|${huellaDeTexto(JSON.stringify(json))}`;
+  return `${token ?? ""}|${huellaDeTexto(jsonCanonico(json))}`;
+}
+
+/** JSON con las claves de cada objeto ordenadas: el mismo contenido da siempre el mismo texto. */
+export function jsonCanonico(v: unknown): string {
+  return JSON.stringify(v, (_k, valor: unknown) =>
+    valor && typeof valor === "object" && !Array.isArray(valor)
+      ? Object.fromEntries(Object.entries(valor as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : valor,
+  );
 }
 
 /**

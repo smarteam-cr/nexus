@@ -1984,6 +1984,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        Y la guardada se borra solo si es la misma que esta pantalla tiene enfrente (`runId`: la ruta
        responde 409 si es otra). */
     let guardadaEsOtra = false;
+    let yaNoEstaGuardada = false;
     const eraDelModificador = proposalMeta.current.deAssist;
     if (!eraDelModificador) {
       // Un doble clic (o el descarte automático encima del manual): el primer DELETE sigue en curso.
@@ -1999,6 +2000,10 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
         });
         guardadaEsOtra = res.status === 409;
+        /* Solo se olvida la foto si el servidor ya no tiene ESTA propuesta (borrada, o ya era
+           otra). Si el DELETE falló, la propuesta sigue guardada: olvidar la foto haría que al
+           recargar una edición a mano que chocaba pase a «aplica» (revisión de E1). */
+        yaNoEstaGuardada = res.ok || res.status === 409;
       } catch {
         /* limpiar local igual */
       } finally {
@@ -2006,7 +2011,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         setDescartando(false);
       }
       // La que se tenía enfrente ya no está (o ya no era la guardada): su foto recordada no sirve.
-      revisionRef.current.olvidar();
+      if (yaNoEstaGuardada) revisionRef.current.olvidar();
     }
     proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
