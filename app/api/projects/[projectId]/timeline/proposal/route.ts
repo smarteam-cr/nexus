@@ -8,8 +8,9 @@
  * Cuerpo opcional: `{ reason?, runId? }`. Con `runId` (la corrida de la propuesta que la pantalla
  * tiene enfrente), solo se limpia si la guardada es esa: 409 `otra_propuesta` si no.
  *
- * "Aplicar" la propuesta es un PUT normal a /timeline (que también limpia el pendiente);
- * "Descartar" no debe escribir el cronograma, por eso este sub-recurso dedicado.
+ * "Aplicar" la propuesta es POST /timeline/borrador/aplicar (desde el 2026-09-24: el PUT con
+ * motivo ya NO la limpia, responde 409 mientras haya una abierta); "Descartar" no debe escribir el
+ * cronograma, por eso este sub-recurso dedicado.
  *
  * Guarded con guardProjectHandoffAccess (interno/CSE).
  */

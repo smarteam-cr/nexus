@@ -57,6 +57,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
+import { MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -503,6 +504,20 @@ export async function PUT(
   // Transacción: upsert del timeline + diff de phases + diff de tasks por phase
   try {
     await prisma.$transaction(async (tx) => {
+      /* ⛔ UN GUARDADO CON MOTIVO YA NO BORRA LA PROPUESTA ABIERTA EN SILENCIO (E1 del borrador del
+         cronograma, 2026-09-24). Antes, un PUT con motivo (aplicar lo del modificador o lo acordado
+         en el chat) limpiaba `pendingProposal` sin preguntar: las sugerencias del handoff o de las
+         reuniones se perdían a mitad de la revisión, y la única guarda vivía en la pantalla. Ahora
+         responde 409 y no escribe nada; el autoguardado (skipAudit) sigue igual: editar a mano con
+         una propuesta abierta está permitido, y lo que choque lo excluye la revisión. */
+      if (!skipAudit) {
+        const abiertas = await tx.projectTimeline.count({
+          where: { projectId, pendingProposal: { not: Prisma.DbNull } },
+        });
+        if (abiertas > 0) {
+          throw Object.assign(new Error(MENSAJE_PROPUESTA_ABIERTA), { statusCode: 409 });
+        }
+      }
       // Anchor previo (solo para detectar ANCHOR_CHANGED — select trivial por PK).
       const prevTl = await tx.projectTimeline.findUnique({
         where: { projectId },
@@ -522,12 +537,9 @@ export async function PUT(
           anchorStartDate: anchorDate,
           ...(closeOverrideProvided ? { closeDateOverride: closeOverrideDate } : {}),
           lastEditedByHuman: now,
-          // Un guardado DELIBERADO (con razón: aplicar la propuesta del assist, crear la 1ra
-          // fase) invalida la propuesta pendiente — ya quedó reflejada o el humano decidió otra
-          // cosa. Los AUTO-GUARDADOS (skipAudit) NO la tocan: con las sugerencias por ítem del
-          // handoff el Gantt sigue editable mientras hay propuesta, y un autosave de una edición
-          // cualquiera no es una decisión del CSE sobre las sugerencias.
-          ...(skipAudit ? {} : { pendingProposal: Prisma.DbNull, pendingProposalRunId: null }),
+          // `pendingProposal` NO se toca acá: con una propuesta abierta, el guardado con motivo
+          // ya salió con 409 (arriba) y el autoguardado nunca la borró. Se resuelve solo en la
+          // barra de revisión (POST /timeline/borrador/aplicar) o con «Descartar».
         },
         select: { id: true },
       });
@@ -923,6 +935,10 @@ export async function PUT(
     const status = (err as { statusCode?: number })?.statusCode;
     if (status === 400) {
       return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    }
+    if (status === 409) {
+      // `error` lleva el texto: es lo que la pantalla y el chat muestran tal cual.
+      return NextResponse.json({ error: (err as Error).message, code: "PROPUESTA_ABIERTA" }, { status: 409 });
     }
     throw err;
   }

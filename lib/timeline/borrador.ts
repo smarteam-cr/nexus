@@ -438,6 +438,10 @@ const CHOQUE_ANCLA_DE_LA_NUEVA = "La fase después de la que iba ya no está: es
 const choqueNombreRepetido = (nombre: string) => `Ya hay una fase «${nombre}» en el cronograma: no se crea otra.`;
 export const BLOQUEO_VERSION_NUEVA =
   "Esta propuesta tiene cambios que esta versión de Nexus no sabe aplicar: recarga la página.";
+/** El 409 del PUT con motivo mientras hay una propuesta abierta (timeline/route.ts): lo muestran la
+ *  pantalla y el chat tal cual, así que habla de la barra que el CSE tiene enfrente. */
+export const MENSAJE_PROPUESTA_ABIERTA =
+  "Hay una propuesta de cambios de fases sin decidir (arriba del Gantt): aplícala o descártala antes de guardar este cambio.";
 
 /** El orden resultante con el cambio de orden aplicado sobre `ids`: primero las que nombra, después el resto. */
 function ordenConCambio(ids: readonly string[], c: CambioDeOrden): string[] {
