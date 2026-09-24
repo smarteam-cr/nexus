@@ -1004,3 +1004,94 @@ export function resumenDelInforme(informe: InformeDelMaterial | null | undefined
     notasRecortadas: !!informe && informe.notas.entran < informe.notas.caracteres,
   };
 }
+
+// ── LO QUE VE EL CSE (2026-09-23) ────────────────────────────────────────────
+// Los textos de la pantalla salen de acá, del informe, y no de un conteo en el componente: la
+// línea cerrada, el aviso y las insignias dicen lo mismo que el plan que armó el prompt.
+
+const conNumero = (n: number, una: string, varias: string) => `${n} ${n === 1 ? una : varias}`;
+const enLista = (partes: readonly string[]) =>
+  partes.length <= 1 ? partes.join("") : `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+
+/**
+ * El paréntesis de la línea cerrada del «Contexto del cronograma»: «2 recortadas, 1 no entra».
+ * Aparece solo si algo de lo elegido NO le llega entero a la IA —se corta parte de lo principal, no
+ * entra o no dejó contenido—; si todo entra (entero o con lo principal), devuelve "" y la línea se
+ * ve como siempre.
+ */
+export function parentesisDelMaterial(r: ResumenDelInforme): string {
+  if (r.cortanLoEsencial === 0 && r.afuera === 0 && r.sinContenido === 0) return "";
+  return [
+    r.recortadas > 0 ? conNumero(r.recortadas, "recortada", "recortadas") : "",
+    r.afuera > 0 ? `${r.afuera} no ${r.afuera === 1 ? "entra" : "entran"}` : "",
+    r.sinContenido > 0 ? `${r.sinContenido} sin contenido` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/**
+ * El aviso de la lista de reuniones elegidas, una frase por renglón. `[]` cuando no hay nada que
+ * avisar (todo entra entero o con lo principal, y ninguna está vacía ni por ocurrir).
+ */
+export function avisoDelMaterial(r: ResumenDelInforme): string[] {
+  const frases: string[] = [];
+  if (r.cortanLoEsencial > 0 || r.afuera > 0) {
+    const lee = enLista(
+      [
+        r.completas > 0 ? conNumero(r.completas, "completa", "completas") : "",
+        r.recortadas > 0 ? conNumero(r.recortadas, "recortada", "recortadas") : "",
+        r.afuera > 0 ? `${r.afuera} no ${r.afuera === 1 ? "entra" : "entran"}` : "",
+      ].filter(Boolean),
+    );
+    const de = r.elegidas === 1 ? "De tu reunión elegida" : `De tus ${r.elegidas} reuniones elegidas`;
+    // Con una sola, elegir menos no ayuda: lo que no entra es por el techo de cada reunión.
+    frases.push(`${de}, la IA lee ${lee}.${r.elegidas > 1 ? " Si eliges menos, cada una entra más completa." : ""}`);
+  }
+  if (r.sinContenido > 0) {
+    frases.push(
+      `${r.sinContenido === 1 ? "1 reunión no dejó" : `${r.sinContenido} reuniones no dejaron`} transcripción, ` +
+        "resumen ni minuta: pega sus notas en Fuentes manuales.",
+    );
+  }
+  if (r.futuras > 0) {
+    frases.push(r.futuras === 1 ? "1 aún no ocurre: entra cuando pase." : `${r.futuras} aún no ocurren: entran cuando pasen.`);
+  }
+  return frases;
+}
+
+export interface InsigniaDelMaterial {
+  label: string;
+  tone: "green" | "amber";
+  /** Para la línea de la reunión cuando se corta lo principal: «la IA lee 3 200 de 7 100 caracteres». */
+  detalle?: string;
+}
+
+/**
+ * La insignia de UNA reunión elegida, desde su fila del informe. `null` sin fila: la pantalla deja
+ * la de siempre (pasa mientras el informe se vuelve a pedir tras elegir una reunión; el cargador
+ * informa TODAS las elegidas, así que una reunión sin fila no quiere decir que no entre).
+ */
+export function insigniaDelMaterial(fila: InformeDeReunion | null | undefined): InsigniaDelMaterial | null {
+  if (!fila) return null;
+  switch (fila.estado) {
+    case "completa":
+      return { label: "Entra completa", tone: "green" };
+    case "recortada": {
+      if (!fila.cortaLoEsencial) return { label: "Entra lo principal", tone: "green" };
+      // Entre 1 y 99: una recortada nunca dice «100 %» ni «0 %».
+      const pct = Math.min(99, Math.max(1, Math.round((fila.entran / Math.max(fila.caracteres, 1)) * 100)));
+      return {
+        label: `Entra al ${pct} %`,
+        tone: "amber",
+        detalle: `la IA lee ${fila.entran.toLocaleString("es-CR")} de ${fila.caracteres.toLocaleString("es-CR")} caracteres`,
+      };
+    }
+    case "afuera":
+      return { label: "No entra", tone: "amber" };
+    case "sin-contenido":
+      return { label: "Sin contenido", tone: "amber" };
+    case "futura":
+      return { label: "Aún no ocurrió", tone: "amber" };
+  }
+}

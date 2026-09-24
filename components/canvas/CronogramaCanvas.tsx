@@ -90,6 +90,7 @@ import {
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { diasSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
+import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
 
 interface TaskDraft {
   id?: string;
@@ -3183,11 +3184,21 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
                 value={docBrief}
                 onChange={(e) => { setDocBrief(e.target.value); setBriefDirty(true); }}
                 rows={3}
-                maxLength={5000}
+                maxLength={TOPE_INSTRUCCIONES_DEL_DOC}
                 placeholder='Ej.: "El pase a producción siempre es la última tarea de la fase de Entrega."'
                 className="w-full px-3 py-2 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
               />
-              <div className="flex justify-end">
+              {/* El contador y el aviso del tope (2026-09-23): lo que pasa del tope no entra —el
+                  navegador lo corta al pegar y la ruta lo corta al guardar—, y sin esto nadie se
+                  enteraba. El número es la MISMA constante que usa la ruta. */}
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className={`text-[10px] ${docBrief.length >= TOPE_INSTRUCCIONES_DEL_DOC ? "text-warn-ink" : "text-fg-muted"}`}
+                  aria-live="polite"
+                >
+                  {docBrief.length.toLocaleString("es-CR")} / {TOPE_INSTRUCCIONES_DEL_DOC.toLocaleString("es-CR")}
+                  {docBrief.length >= TOPE_INSTRUCCIONES_DEL_DOC && " · Llegaste al tope: lo que pegues de más no entra."}
+                </p>
                 <button
                   onClick={saveDocBrief}
                   disabled={savingBrief || !briefDirty || docBrief.trim() === (briefGuardado ?? "")}

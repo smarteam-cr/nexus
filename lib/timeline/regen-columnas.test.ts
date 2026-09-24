@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { isKept, repartoInicial, phaseHasChanges } from "./regen-columnas";
+import fs from "node:fs";
+import path from "node:path";
+import { isKept, repartoInicial, phaseHasChanges, fugaTrasEditar } from "./regen-columnas";
+import type { FugaDeTarea } from "@/lib/contexto/frontera-del-cronograma";
 
 const pendienteIA = { id: "a", status: "PENDING", source: "AGENT" };
 const pendienteHumana = { id: "b", status: "PENDING", source: "HUMAN" };
@@ -58,5 +61,39 @@ describe("phaseHasChanges", () => {
   it("hay cambios ⇔ el agente propuso algo", () => {
     expect(phaseHasChanges(0)).toBe(false);
     expect(phaseHasChanges(1)).toBe(true);
+  });
+});
+
+describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23)", () => {
+  const enTitulo: FugaDeTarea = { campo: "titulo", motivo: "trae una fecha" };
+  const enNota: FugaDeTarea = { campo: "nota", motivo: "dice de dónde salió" };
+
+  it("editar el título limpia la del título; «Quitar nota», la de la nota", () => {
+    expect(fugaTrasEditar(enTitulo, { title: "Configurar el pipeline" })).toBeNull();
+    expect(fugaTrasEditar(enNota, { notes: null })).toBeNull();
+  });
+
+  it("tocar OTRO campo no la limpia: cambiar el dueño no arregla una fecha escrita en la nota", () => {
+    /* Si el chip se fuera con cualquier edición, el CSE cambia el dueño, el aviso desaparece y la
+       nota con la fecha interna llega igual al Gantt del cliente. */
+    expect(fugaTrasEditar(enNota, { title: "Otro título" })).toBe(enNota);
+    expect(fugaTrasEditar(enNota, { party: "CLIENTE" })).toBe(enNota);
+    expect(fugaTrasEditar(enTitulo, { notes: null })).toBe(enTitulo);
+    expect(fugaTrasEditar(enTitulo, { weekIndex: 2, type: "SESSION" })).toBe(enTitulo);
+    expect(fugaTrasEditar(null, { title: "x" })).toBeNull();
+  });
+
+  it("la curación la acarrea de la propuesta, la limpia con esa regla y la muestra junto a la nota", () => {
+    /* El project `unit` solo corre lib/**: el componente se mira por su código. Sin estas piezas, la
+       ruta marca la fuga y la pantalla la tira (o la muestra para siempre, o nunca deja ver la nota
+       que el cliente va a leer). */
+    const panel = fs
+      .readFileSync(path.join(process.cwd(), "components/canvas/PhaseRegenPanel.tsx"), "utf8")
+      .replace(/\r\n/g, "\n");
+    expect(panel, "el panel dejó de leer la fuga de la propuesta").toContain("fuga: t.fuga ?? null,");
+    expect(panel, "el panel dejó de limpiar la fuga con su regla").toContain("fuga: fugaTrasEditar(i.fuga, p)");
+    expect(panel, "el chip desapareció").toContain("⚠ revisa: texto interno");
+    expect(panel, "la tarjeta dejó de mostrar la nota").toContain("title={item.notes}>{item.notes}</p>");
+    expect(panel, "la nota ya no se puede quitar").toContain("onClick={() => onPatch({ notes: null })}");
   });
 });

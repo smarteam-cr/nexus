@@ -52,3 +52,22 @@ export function repartoInicial<T extends TareaActualParaReparto>(
 export function phaseHasChanges(cantidadPropuesta: number): boolean {
   return cantidadPropuesta > 0;
 }
+
+/**
+ * La marca de FUGA de una tarea propuesta después de que el CSE la edita en la curación
+ * (2026-09-23). La marca dice QUÉ campo cruza la frontera del material interno —el título o la
+ * nota— y se va solo cuando el CSE toca ESE campo: editar el título limpia una fuga del título;
+ * «Quitar nota», una de la nota. Tocar otro campo no la limpia: cambiar el dueño no arregla una
+ * fecha escrita en la nota, y el chip tiene que seguir ahí.
+ *
+ * Tipado estructural, como el resto del archivo: la `FugaDeTarea` de la frontera lo satisface.
+ */
+export function fugaTrasEditar<F extends { campo: "titulo" | "nota" }>(
+  fuga: F | null,
+  cambio: object,
+): F | null {
+  if (!fuga) return null;
+  if (fuga.campo === "titulo" && "title" in cambio) return null;
+  if (fuga.campo === "nota" && "notes" in cambio) return null;
+  return fuga;
+}

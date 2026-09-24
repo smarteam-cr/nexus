@@ -25,6 +25,13 @@ import {
 } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
+import {
+  avisoDelMaterial,
+  insigniaDelMaterial,
+  resumenDelInforme,
+  type InformeDelMaterial,
+  type InsigniaDelMaterial,
+} from "@/lib/contexto/material-cronograma";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 interface FeedingSession {
@@ -112,6 +119,7 @@ export default function SessionSelectionReview({
   onCount,
   onExcludedCount,
   destino = "handoff",
+  materialDelCronograma = null,
 }: {
   projectId: string;
   /**
@@ -128,6 +136,13 @@ export default function SessionSelectionReview({
   onCount?: (n: number) => void;
   /** Reporta la cantidad de sesiones excluidas a mano (para el contador honesto). */
   onExcludedCount?: (n: number) => void;
+  /**
+   * SOLO el cronograma (2026-09-23): qué le llega a la IA de cada reunión elegida — el informe de
+   * GET /timeline/material, que sale del mismo cargador que usan los agentes. Con él, cada fila dice
+   * si entra completa, recortada o no entra, y el aviso de arriba cuenta lo mismo. `null` (el
+   * handoff, o el informe todavía no llegó o falló) = las insignias de siempre.
+   */
+  materialDelCronograma?: InformeDelMaterial | null;
 }) {
   const esCronograma = destino === "cronograma";
   /* Cada destino lee su lista y escribe en SU puerta: la X del cronograma nunca toca el handoff. */
@@ -283,7 +298,7 @@ export default function SessionSelectionReview({
         await reload();
         onChange?.();
       } catch {
-        toast.error("No se pudo actualizar la sesión: revisá la conexión.");
+        toast.error("No se pudo actualizar la sesión: revisa la conexión.");
       }
       setBusyId(null);
     },
@@ -508,9 +523,10 @@ export default function SessionSelectionReview({
      ⚠ Lo de "todavía no ocurrió" no es cosmético: los dos grupos de CANDIDATAS excluyen las
      futuras, pero las que ya alimentan nunca pasaron por ese filtro. Una reunión agendada para la
      semana que viene puede estar alimentando el handoff de hoy —medido: 30 vínculos así— y hasta
-     ahora se veía igual que una que ya pasó. No se saca sola: se dice, y quien la puso decide. */
-  const meetMeta = (date: string, alsoIn?: string[], futura?: boolean) =>
-    `Reunión · ${fmtDate(date)}${futura ? " · todavía no ocurrió" : ""}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
+     ahora se veía igual que una que ya pasó. No se saca sola: se dice, y quien la puso decide.
+     `lectura` (solo el cronograma): cuánto de la reunión lee la IA cuando se corta lo principal. */
+  const meetMeta = (date: string, alsoIn?: string[], futura?: boolean, lectura?: string) =>
+    `Reunión · ${fmtDate(date)}${futura ? " · todavía no ocurrió" : ""}${lectura ? ` · ${lectura}` : ""}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
 
   // Modo columna (Contexto): incluidas + excluidas con toggle, "buscar más" + el modal.
   if (columnMode) {
@@ -518,9 +534,24 @@ export default function SessionSelectionReview({
        lista en vez de pedirle un contador al servidor: un número que viaja aparte de las filas
        que lo justifican se desincroniza el día que una de las dos cambie. */
     const alimentanVacias = feeding.filter((s) => s.sinContenido).length;
+    /* Con el informe del cronograma, el aviso y las insignias dicen lo que le LLEGA a la IA (el
+       mismo plan que arma el prompt), y reemplazan al aviso de las vacías: el informe también las
+       cuenta. Sin informe (el handoff, o todavía no llegó), todo queda como siempre. */
+    const material = esCronograma ? materialDelCronograma : null;
+    const avisoMaterial = material ? avisoDelMaterial(resumenDelInforme(material)) : [];
+    const insignias = new Map<string, InsigniaDelMaterial>();
+    for (const fila of material?.reuniones ?? []) {
+      const insignia = insigniaDelMaterial(fila);
+      if (insignia) insignias.set(fila.sessionId, insignia);
+    }
     return (
       <>
-        {alimentanVacias > 0 && (
+        {avisoMaterial.length > 0 && (
+          <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
+            {avisoMaterial.join(" ")}
+          </p>
+        )}
+        {!material && alimentanVacias > 0 && (
           <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
             <strong>
               {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
@@ -534,21 +565,21 @@ export default function SessionSelectionReview({
           empty={
             esCronograma
               ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-              : `Ninguna sesión alimenta este ${documento}. Agregala con “Buscar más sesiones”.`
+              : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
           }
         >
           {feeding.map((s) => (
             <ContextRow
               key={s.sessionId}
               icon={CTX_ICONS.meet}
-              meta={meetMeta(s.date, s.alsoIn, s.futura)}
+              meta={meetMeta(s.date, s.alsoIn, s.futura, insignias.get(s.sessionId)?.detalle)}
               title={s.title || "Sin título"}
               badge={
                 s.futura
                   ? { label: "Aún no ocurrió", tone: "amber" }
                   : s.sinContenido
                     ? { label: "Sin transcripción", tone: "amber" }
-                    : { label: esCronograma ? "Elegida" : "Incluida", tone: "green" }
+                    : (insignias.get(s.sessionId) ?? { label: esCronograma ? "Elegida" : "Incluida", tone: "green" })
               }
               onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
               removeTitle={

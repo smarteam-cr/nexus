@@ -38,6 +38,14 @@ export interface CanvasSectionEntry {
  */
 export const DOC_BRIEF_KEY = "__doc";
 
+/**
+ * El TOPE de las instrucciones del documento (caracteres), en UNA constante (2026-09-23): lo usan
+ * la ruta que las guarda (doc-brief, que corta ahí) y la caja de la pantalla (su `maxLength` y el
+ * contador). Antes eran dos números escritos a mano, y la pantalla no avisaba nada: el brief de
+ * CAV llegaba al agente cortado a mitad de palabra sin que nadie lo supiera.
+ */
+export const TOPE_INSTRUCCIONES_DEL_DOC = 5_000;
+
 /** El brief del DOCUMENTO (entry `__doc`), o null. Tolerante a basura como todo acá. */
 export function docBriefFrom(sections: unknown): string | null {
   const e = parseSectionEntries(sections).find((x) => x.key === DOC_BRIEF_KEY);

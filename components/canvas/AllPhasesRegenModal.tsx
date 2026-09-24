@@ -65,18 +65,18 @@ export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, on
     <Modal open={open} onClose={() => { if (!applying) onCancel(); }} size="xxl" closeOnBackdrop={!applying} closeOnEscape={!applying}>
       <div className="min-w-0">
         <p className="text-sm font-medium text-fg">
-          {primera ? "Revisá las tareas antes de crearlas" : "Regenerar todo el cronograma"}
+          {primera ? "Revisa las tareas antes de crearlas" : "Regenerar todo el cronograma"}
         </p>
         <p className="text-xs text-fg-muted mt-1">
           {primera ? (
             <>
-              El agente propuso tareas para {totalConCambios} de {phases.length} fases. Revisá fase por fase —
-              arrastrá, editá o sacá lo que no va; nada se guarda hasta que confirmes.
+              El agente propuso tareas para {totalConCambios} de {phases.length} fases. Revisa fase por fase —
+              arrastra, edita o saca lo que no va; nada se guarda hasta que confirmes.
             </>
           ) : (
             <>
-              {totalConCambios} de {phases.length} fases tienen cambios propuestos. Revisá fase por fase — arrastrá,
-              editá o marcá hechas antes de aplicar; lo que no toques queda como está.
+              {totalConCambios} de {phases.length} fases tienen cambios propuestos. Revisa fase por fase — arrastra,
+              edita o marca hechas antes de aplicar; lo que no toques queda como está.
             </>
           )}
         </p>
@@ -87,7 +87,7 @@ export function AllPhasesRegenModal({ open, phases, modo = "regen", applying, on
         <p className="text-xs text-fg-muted mt-2 leading-relaxed">
           Esto define <strong className="text-fg-secondary font-medium">qué tareas</strong> debería tener el plan —
           no marca nada como hecho. Para eso está <strong className="text-fg-secondary font-medium">Re-chequear
-          avance</strong>, que propone qué ya se completó y vos confirmás.
+          avance</strong>, que propone qué ya se completó y tú confirmas.
         </p>
       </div>
 

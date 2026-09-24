@@ -80,7 +80,7 @@ export default function FuentesManualesColumn({
         toast.error(await motivo(r, "No se pudieron cargar las fuentes manuales."));
       }
     } catch {
-      toast.error("No se pudieron cargar las fuentes manuales: revisá la conexión.");
+      toast.error("No se pudieron cargar las fuentes manuales: revisa la conexión.");
     }
   }, [endpoint, toast]);
 
@@ -136,7 +136,7 @@ export default function FuentesManualesColumn({
         toast.error(await motivo(r, "No se pudo guardar la fuente."));
       }
     } catch {
-      toast.error("No se pudo guardar la fuente: revisá la conexión.");
+      toast.error("No se pudo guardar la fuente: revisa la conexión.");
     }
     setSaving(false);
   }, [endpoint, newTitle, newContent, saving, fetchSources, toast]);
@@ -148,7 +148,7 @@ export default function FuentesManualesColumn({
         if (!r.ok) toast.error(await motivo(r, "No se pudo quitar la fuente."));
         await fetchSources();
       } catch {
-        toast.error("No se pudo quitar la fuente: revisá la conexión.");
+        toast.error("No se pudo quitar la fuente: revisa la conexión.");
       }
     },
     [endpoint, fetchSources, toast],
@@ -162,7 +162,7 @@ export default function FuentesManualesColumn({
       {pasaElTope && (
         <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
           Lo pegado suma {largoTotal.toLocaleString("es-CR")} caracteres y el agente lee hasta{" "}
-          {tope!.toLocaleString("es-CR")}: lo último que agregaste no entra entero. Resumí o quitá
+          {tope!.toLocaleString("es-CR")}: lo último que agregaste no entra entero. Resume o quita
           alguna.
         </p>
       )}

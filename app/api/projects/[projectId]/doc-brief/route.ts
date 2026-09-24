@@ -5,6 +5,7 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
 import { pieceBySlug } from "@/lib/pieces/registry";
 import {
   DOC_BRIEF_KEY,
+  TOPE_INSTRUCCIONES_DEL_DOC,
   docBriefFrom,
   withBriefUpdated,
 } from "@/lib/business-cases/section-briefs";
@@ -27,7 +28,8 @@ import {
  */
 
 type Params = Promise<{ projectId: string }>;
-const CAP = 5_000; // mismo techo que las exclusiones del handoff
+// El mismo tope que la caja de la pantalla (su `maxLength` y su contador): una sola constante.
+const CAP = TOPE_INSTRUCCIONES_DEL_DOC;
 
 async function canvasDe(projectId: string, slug: string) {
   return prisma.projectCanvas.findFirst({

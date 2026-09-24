@@ -20,11 +20,17 @@
  * ⚠ Archivo aparte a propósito: CronogramaCanvas.tsx está al tope del trinquete de grises, y lo
  * nuevo nace con tokens del tema.
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
-import { TOPE_NOTAS_CRONOGRAMA, notasPasanElTope } from "@/lib/contexto/material-cronograma";
+import {
+  TOPE_NOTAS_CRONOGRAMA,
+  notasPasanElTope,
+  parentesisDelMaterial,
+  resumenDelInforme,
+  type InformeDelMaterial,
+} from "@/lib/contexto/material-cronograma";
 
 export default function CronogramaContextSection({
   projectId,
@@ -53,6 +59,29 @@ export default function CronogramaContextSection({
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
+  /* QUÉ LE LLEGA A LA IA (2026-09-23): el informe del MISMO cargador que usan los agentes. Se
+     vuelve a pedir cada vez que se elige o se saca una reunión (`version`). Sin reuniones no hay
+     nada que informar; si falla, queda en null y las insignias vuelven a las de siempre. */
+  const [informe, setInforme] = useState<InformeDelMaterial | null>(null);
+  const [version, setVersion] = useState(0);
+  const hayReuniones = reuniones > 0;
+  useEffect(() => {
+    if (!hayReuniones) return;
+    const ctrl = new AbortController();
+    fetch(`/api/projects/${projectId}/timeline/material`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<InformeDelMaterial>) : null))
+      .then((d) => {
+        if (!ctrl.signal.aborted) setInforme(d && Array.isArray(d.reuniones) ? d : null);
+      })
+      .catch(() => {
+        if (!ctrl.signal.aborted) setInforme(null);
+      });
+    return () => ctrl.abort();
+  }, [projectId, version, hayReuniones]);
+  // Sin reuniones elegidas, un informe viejo no se muestra (se deriva: nada de limpiarlo a mano).
+  const informeVivo = hayReuniones ? informe : null;
+  const loQueNoEntra = informeVivo ? parentesisDelMaterial(resumenDelInforme(informeVivo)) : "";
+
   return (
     <div className="rounded-xl border border-line bg-surface">
       <button
@@ -69,10 +98,11 @@ export default function CronogramaContextSection({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
         <span className="text-xs font-semibold text-fg">Contexto del cronograma</span>
-        {/* Cerrada se sigue leyendo con qué se va a generar: sin abrirla, sabés si la IA va a leer
-            reuniones, notas o instrucciones. */}
+        {/* Cerrada se sigue leyendo con qué se va a generar: sin abrirla, sabes si la IA va a leer
+            reuniones, notas o instrucciones, y si alguna reunión no le llega entera. */}
         <span className="text-[11px] text-fg-muted truncate">
-          {reuniones} {reuniones === 1 ? "reunión elegida" : "reuniones elegidas"} · {notas} nota
+          {reuniones} {reuniones === 1 ? "reunión elegida" : "reuniones elegidas"}
+          {loQueNoEntra ? ` (${loQueNoEntra})` : ""} · {notas} nota
           {notas === 1 ? "" : "s"}
           {instruccionesActivas ? " · instrucciones activas" : ""}
         </span>
@@ -86,8 +116,9 @@ export default function CronogramaContextSection({
           Con esto la IA arma las tareas de cada fase, decide cuáles son reuniones con el cliente y
           propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
-          búscalas entre las del proyecto o en tu calendario. Sacarla de acá no la saca del handoff
-          ni del proyecto.
+          búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo
+          mientras quepa; si eliges muchas, se reparten el espacio. Sacarla de acá no la saca del
+          handoff ni del proyecto.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
@@ -96,6 +127,8 @@ export default function CronogramaContextSection({
               destino="cronograma"
               columnMode
               onCount={setReuniones}
+              onChange={() => setVersion((v) => v + 1)}
+              materialDelCronograma={informeVivo}
               readOnly={!canEdit}
             />
           </ContextColumn>

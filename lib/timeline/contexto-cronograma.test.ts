@@ -299,3 +299,51 @@ describe("⭐ el buscador: las reuniones del proyecto y las de TU calendario", (
     );
   });
 });
+
+describe("⭐ la pantalla dice lo que le llega a la IA, con el MISMO cargador (paso D3)", () => {
+  /* El CSE elegía reuniones sin saber cuánto de cada una leía la IA: la pantalla decía «Elegida» en
+     verde sobre reuniones que entraban cortadas o no entraban. Ahora la pantalla pide el INFORME del
+     mismo cargador que usan los agentes; dos cálculos (uno para la pantalla y otro para el prompt)
+     terminan diciendo cosas distintas. */
+  const RUTA = "app/api/projects/[projectId]/timeline/material/route.ts";
+
+  it("la ruta usa el cargador de los agentes y devuelve SOLO el informe, nunca el material", () => {
+    const src = sinComentarios(leer(RUTA));
+    expect(src, "la ruta dejó de exigir acceso al proyecto").toContain("guardAccessToProject(projectId)");
+    expect(src, "la ruta dejó de usar el cargador de los agentes (o lo llama con otros topes)").toContain(
+      "const { informe } = await cargarMaterialDelCronograma(projectId);",
+    );
+    expect(src).toContain("return NextResponse.json(informe);");
+    // El material es interno y esta ruta la lee cualquiera con acceso al proyecto.
+    expect(src, "la ruta toca el texto de las reuniones o las notas").not.toMatch(
+      /\bmat\.|\breuniones\b|\bnotas\b|materialInterno|calendario|sesionesUsadas/,
+    );
+    const respuestas = [...src.matchAll(/NextResponse\.json\(([^)]{0,40})/g)].map((m) => m[1]);
+    expect(respuestas.length).toBeGreaterThan(0);
+    for (const r of respuestas) {
+      expect(r.startsWith("informe") || r.startsWith("{ error:"), `respuesta inesperada: ${r}`).toBe(true);
+    }
+  });
+
+  it("la sección pide el informe, lo recalcula al elegir y se lo pasa a la lista", () => {
+    const seccion = sinComentarios(leer("components/canvas/CronogramaContextSection.tsx"));
+    expect(seccion).toContain("/timeline/material");
+    expect(seccion, "la lista de reuniones dejó de recibir el informe").toContain("materialDelCronograma={informeVivo}");
+    expect(seccion, "elegir o sacar una reunión ya no recalcula el informe").toContain(
+      "onChange={() => setVersion((v) => v + 1)}",
+    );
+    expect(seccion, "la línea cerrada dejó de contar desde el informe").toContain(
+      "parentesisDelMaterial(resumenDelInforme(",
+    );
+  });
+
+  it("⛔ el informe solo cambia el destino CRONOGRAMA: el handoff queda como estaba", () => {
+    const panel = sinComentarios(leer("components/clients/SessionSelectionReview.tsx"));
+    expect(panel, "el informe del cronograma se cuela en el handoff").toContain(
+      "const material = esCronograma ? materialDelCronograma : null;",
+    );
+    expect(panel, "el aviso de siempre (el del handoff) dejó de mostrarse").toContain("{!material && alimentanVacias > 0 && (");
+    expect(panel, "el aviso dejó de contar desde el informe").toContain("avisoDelMaterial(resumenDelInforme(material))");
+    expect(panel, "las filas dejaron de leer su insignia del informe").toContain("insigniaDelMaterial(fila)");
+  });
+});

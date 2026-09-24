@@ -11,13 +11,16 @@ import {
   TOPE_NOTAS_CRONOGRAMA,
   TOPE_REUNIONES_CRONOGRAMA,
   UMBRAL_RESUMEN_FLACO,
+  avisoDelMaterial,
   bloqueDeNotasDelCronograma,
   bloqueDeReunionesDelCronograma,
   calendarioDelCronograma,
   contenidoDeReunion,
   fechaEnCostaRica,
+  insigniaDelMaterial,
   notasPasanElTope,
   ordenarNotasDeGemini,
+  parentesisDelMaterial,
   planDelMaterial,
   recortarReunion,
   repartirEspacio,
@@ -720,5 +723,80 @@ describe("⭐ el plan: el informe que ve el CSE sale del MISMO plan que arma el 
       notasRecortadas: false,
     });
     expect(resumenDelInforme(null).elegidas).toBe(0);
+  });
+
+  /* LO QUE VE EL CSE (paso D3, 2026-09-23): la línea cerrada, el aviso y las insignias salen de este
+     mismo informe. Si la pantalla contara por su lado, diría «entra completa» sobre una reunión que
+     la IA lee cortada: justo lo que el informe existe para evitar. */
+  it("⭐ cada reunión lleva la insignia de SU estado en el plan", () => {
+    const insignia = (id: string) => insigniaDelMaterial(por(id));
+    expect(insignia("chica")).toEqual({ label: "Entra completa", tone: "green" });
+    // Recortada sin cortar lo principal: verde. Es la diferencia que el CSE necesita ver.
+    expect(insignia("mediana")).toEqual({ label: "Entra lo principal", tone: "green" });
+    const grande = por("grande");
+    const pct = Math.round((grande.entran / grande.caracteres) * 100);
+    expect(insignia("grande")).toEqual({
+      label: `Entra al ${pct} %`,
+      tone: "amber",
+      detalle: `la IA lee ${grande.entran.toLocaleString("es-CR")} de ${grande.caracteres.toLocaleString("es-CR")} caracteres`,
+    });
+    expect(insignia("sinleer")).toEqual({ label: "No entra", tone: "amber" });
+    expect(insignia("vacia")).toEqual({ label: "Sin contenido", tone: "amber" });
+    expect(insignia("agendada")).toEqual({ label: "Aún no ocurrió", tone: "amber" });
+    // Sin fila (el informe se está volviendo a pedir), la pantalla deja la insignia de siempre.
+    expect(insigniaDelMaterial(undefined)).toBeNull();
+  });
+
+  it("⭐ la línea cerrada y el aviso cuentan lo mismo que el informe", () => {
+    const r = resumenDelInforme(plan.informe);
+    expect(parentesisDelMaterial(r)).toBe("2 recortadas, 1 no entra, 1 sin contenido");
+    expect(avisoDelMaterial(r)).toEqual([
+      "De tus 7 reuniones elegidas, la IA lee 2 completas, 2 recortadas y 1 no entra. Si eliges menos, cada una entra más completa.",
+      "1 reunión no dejó transcripción, resumen ni minuta: pega sus notas en Fuentes manuales.",
+      "1 aún no ocurre: entra cuando pase.",
+    ]);
+  });
+
+  it("si todo entra —entero o con lo principal—, ni paréntesis ni aviso: la línea se ve como siempre", () => {
+    /* Una recortada que conserva lo principal no es un problema: avisarla sería ruido, y el aviso que
+       salta siempre se deja de leer. */
+    const p = planDelMaterial({
+      elegidas: [leida("chica", 1, 800), leida("mediana", 2, 6_000, 1_000)],
+      topeReuniones: 2_000,
+    });
+    const r = resumenDelInforme(p.informe);
+    expect(r.recortadas, "el caso tiene que tener una recortada").toBe(1);
+    expect(r.cortanLoEsencial).toBe(0);
+    expect(parentesisDelMaterial(r)).toBe("");
+    expect(avisoDelMaterial(r)).toEqual([]);
+  });
+
+  it("con UNA sola reunión, el aviso no pide elegir menos", () => {
+    const p = planDelMaterial({ elegidas: [leida("larga", 1, 30_000, 20_000)] });
+    const r = resumenDelInforme(p.informe);
+    expect(r.cortanLoEsencial).toBe(1);
+    expect(avisoDelMaterial(r)).toEqual(["De tu reunión elegida, la IA lee 1 recortada."]);
+    expect(parentesisDelMaterial(r)).toBe("1 recortada");
+  });
+});
+
+describe("⭐ el tope de las «Instrucciones adicionales» es UNA constante", () => {
+  it("la ruta que las guarda y la caja de la pantalla usan TOPE_INSTRUCCIONES_DEL_DOC, no un número a mano", () => {
+    /* Eran dos números escritos a mano (`CAP = 5_000` en la ruta, `maxLength={5000}` en la caja) y
+       la pantalla no avisaba nada: el brief de CAV llegaba cortado a mitad de palabra. Los límites de
+       dígito del patrón dejan pasar 15000 o 25_000 escritos para otra cosa. */
+    const raiz = process.cwd();
+    const aMano = /(?<![\d_])5[_.]?000(?!\d)/;
+    for (const rel of ["app/api/projects/[projectId]/doc-brief/route.ts", "components/canvas/CronogramaCanvas.tsx"]) {
+      const src = fs.readFileSync(path.join(raiz, rel), "utf8");
+      expect(src, `${rel} no usa la constante del tope`).toContain("TOPE_INSTRUCCIONES_DEL_DOC");
+      expect(src, `${rel} tiene el tope escrito a mano`).not.toMatch(aMano);
+    }
+    const caja = fs.readFileSync(path.join(raiz, "components/canvas/CronogramaCanvas.tsx"), "utf8");
+    expect(caja, "la caja dejó de usar la constante como maxLength").toContain("maxLength={TOPE_INSTRUCCIONES_DEL_DOC}");
+    expect(caja, "la caja dejó de avisar el tope").toContain("Llegaste al tope: lo que pegues de más no entra.");
+    // El patrón sí caza lo que tiene que cazar (si no, el `not.toMatch` de arriba es decorativo).
+    for (const escrito of ["maxLength={5000}", "const CAP = 5_000;", "tope 5.000"]) expect(escrito).toMatch(aMano);
+    for (const otro of ["15000", "25_000", "50000"]) expect(otro).not.toMatch(aMano);
   });
 });

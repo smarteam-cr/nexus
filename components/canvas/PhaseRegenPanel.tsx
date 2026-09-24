@@ -7,12 +7,15 @@
  * <Modal> wrapper ni el título/footer, para poder reusarla N veces dentro de un acordeón
  * (AllPhasesRegenModal.tsx, "Regenerar todo el cronograma") sin duplicar la lógica de DnD.
  *
- *   - IZQUIERDA "Tareas actuales": las tareas PENDIENTES reemplazables de la fase (paleta; arrastralas
+ *   - IZQUIERDA "Tareas actuales": las tareas PENDIENTES reemplazables de la fase (paleta; arrástralas
  *     a la derecha para conservarlas — las que queden acá se descartan al aplicar).
  *   - DERECHA "Cómo quedará la fase": el set final. Se pre-siembra con las tareas NUEVAS propuestas por
  *     la IA + las tareas existentes con avance (DONE/iniciadas) o manuales (para no perderlas).
  *
  * El CSE mueve (drag entre columnas), borra, edita (título/responsable/tipo/semana) y marca hechas.
+ * Cada tarjeta muestra su NOTA —la lee el cliente en el Gantt— con «Quitar nota», y una propuesta
+ * que cruza la frontera del material interno (lo marca la ruta con `marcarFugas`) lleva el chip
+ * «⚠ revisa: texto interno». Avisa, no bloquea (2026-09-23).
  * `onChange` reporta el resultado en cada cambio — el caller (PhaseRegenModal o
  * AllPhasesRegenModal) decide cuándo/cómo mandarlo al server. dnd propio (no reusa el del
  * Gantt, atado a semanas/fases).
@@ -25,8 +28,9 @@ import {
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { StatusCircle, PARTY_META, type GanttTaskStatus } from "./TimelineGantt";
-import { repartoInicial } from "@/lib/timeline/regen-columnas";
+import { fugaTrasEditar, repartoInicial } from "@/lib/timeline/regen-columnas";
 import type { AvisoRepetida } from "@/lib/timeline/tarea-repetida";
+import type { FugaDeTarea } from "@/lib/contexto/frontera-del-cronograma";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 type Party = (typeof PARTIES)[number];
@@ -50,6 +54,8 @@ export interface RegenProposedTask {
   type: "SESSION" | "TASK";
   /** «porValidar» del agente: la típica del tipo de fase, sin respaldo en ninguna fuente. */
   needsValidation?: boolean;
+  /** El título o la nota cruzan la frontera del material interno. Lo pone la ruta, nunca el parser. */
+  fuga?: FugaDeTarea | null;
 }
 export interface FinalTask {
   id?: string;
@@ -75,6 +81,8 @@ interface Item {
   notes: string | null;
   isNew: boolean;
   needsValidation: boolean;
+  /** Solo en las NUEVAS: se va cuando el CSE toca el campo que la tiene (`fugaTrasEditar`). */
+  fuga: FugaDeTarea | null;
 }
 
 /* Tocar el contenido de una tarea es revisarla: la marca «por validar» se va, con la misma regla
@@ -112,7 +120,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
   const toItem = (t: RegenCurrentTask): Item => ({
     _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
     party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
-    needsValidation: false,
+    needsValidation: false, fuga: null,
   });
   const [left, setLeft] = useState<Item[]>(() => reparto.descartables.map(toItem));
   const [right, setRight] = useState<Item[]>(() => [
@@ -122,6 +130,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
       status: "PENDING" as GanttTaskStatus, notes: t.notes, isNew: true,
       // La marca del agente viaja hasta la tarea creada (decisión de Elías 2026-09-23).
       needsValidation: t.needsValidation === true,
+      fuga: t.fuga ?? null,
     })),
   ]);
 
@@ -182,13 +191,15 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
   }
 
   const patch = (c: Col, key: string, p: Partial<Item>) =>
-    setList(c, listOf(c).map((i) => (i._key === key ? { ...i, ...p, ...(tocaContenido(p) ? { needsValidation: false } : {}) } : i)));
+    setList(c, listOf(c).map((i) => (i._key === key
+      ? { ...i, ...p, fuga: fugaTrasEditar(i.fuga, p), ...(tocaContenido(p) ? { needsValidation: false } : {}) }
+      : i)));
   const remove = (c: Col, key: string) => setList(c, listOf(c).filter((i) => i._key !== key));
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="grid grid-cols-2 gap-3 mt-4">
-        <Column id="left" title="Tareas actuales" subtitle="Pendientes reemplazables — arrastrá para conservar"
+        <Column id="left" title="Tareas actuales" subtitle="Pendientes reemplazables — arrastra para conservar"
           items={left} durationWeeks={durationWeeks} onPatch={(k, p) => patch("left", k, p)} onRemove={(k) => remove("left", k)}
           avisoRepetida={avisoRepetida} />
         <Column id="right" title="Cómo quedará la fase" subtitle="Resultado final (se aplica al aceptar)"
@@ -221,7 +232,7 @@ function Column({ id, title, subtitle, items, durationWeeks, onPatch, onRemove, 
               aviso={i.isNew ? (avisoRepetida?.(i.title) ?? null) : null} />
           ))}
         </SortableContext>
-        {items.length === 0 && <p className="text-[10px] text-fg-muted italic px-1 py-6 text-center">Sin tareas — arrastrá acá.</p>}
+        {items.length === 0 && <p className="text-[10px] text-fg-muted italic px-1 py-6 text-center">Sin tareas — arrastra aquí.</p>}
       </div>
     </div>
   );
@@ -275,6 +286,15 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
               por validar
             </span>
           )}
+          {/* El título o la nota cruzan la frontera del material interno: citan la fuente, traen un
+              monto, una fecha, un plazo, un correo o copian una frase de una reunión o una nota.
+              Avisa, no bloquea: se va al corregir el título o al quitar la nota. */}
+          {item.isNew && item.fuga && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border text-warn-ink bg-warn-surface border-warn-line"
+              title={`El cliente lee el título y la nota: ${item.fuga.campo === "titulo" ? "el título" : "la nota"} ${item.fuga.motivo}. ${item.fuga.campo === "titulo" ? "Corrige el título." : "Quita la nota, o corrígela en el Gantt después de aplicar."}`}>
+              ⚠ revisa: texto interno
+            </span>
+          )}
           {/* Esta tarea propuesta YA existe en otra fase. Ámbar cuando allá está hecha o en
               curso —el caso caro: se re-propone trabajo ya avanzado y el avance lo cuenta dos
               veces—; neutro si allá también está pendiente. Avisa, no bloquea: puede haber
@@ -288,7 +308,7 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
               }`}
               title={
                 aviso.yaAvanzada
-                  ? `Esta tarea ya existe en «${aviso.fase}» y allá está ${aviso.status === "DONE" ? "HECHA" : "en curso"}. Si la dejás acá, el avance del proyecto la cuenta dos veces.`
+                  ? `Esta tarea ya existe en «${aviso.fase}» y allá está ${aviso.status === "DONE" ? "HECHA" : "en curso"}. Si la dejas aquí, el avance del proyecto la cuenta dos veces.`
                   : `Esta tarea ya existe en «${aviso.fase}», también pendiente.`
               }
             >
@@ -296,6 +316,18 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
             </span>
           )}
         </div>
+        {/* LA NOTA, a la vista (2026-09-23): la lee el cliente en el Gantt, y hasta ahora el CSE
+            curaba sin verla. Una línea; entera al pasar el mouse. */}
+        {item.notes && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <p className="min-w-0 flex-1 truncate text-[10px] text-fg-muted" title={item.notes}>{item.notes}</p>
+            <button onClick={() => onPatch({ notes: null })}
+              className="flex-shrink-0 text-[10px] font-medium text-fg-muted hover:text-fg transition-colors"
+              title="La nota la lee el cliente. Quitarla deja solo el título.">
+              Quitar nota
+            </button>
+          </div>
+        )}
       </div>
       <button onClick={onRemove} className="mt-0.5 text-fg-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar">
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
