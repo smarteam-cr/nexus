@@ -5,9 +5,10 @@ import { fuentesDelDetalle, renderDetalleDeCronograma } from "@/lib/contexto/det
 import { REGLA_DE_FRONTERA_DEL_ASSIST, fuentesDelAssist } from "@/lib/contexto/asistente-cronograma";
 import { buildProgressUserMessage } from "./regenerate-progress";
 import {
+  TECHO_POR_REUNION,
   TOPE_REUNIONES_CRONOGRAMA,
   repartirEspacio,
-  type ReunionConContenido,
+  type ReunionParaRepartir,
 } from "@/lib/contexto/material-cronograma";
 
 /**
@@ -24,6 +25,22 @@ const RAIZ = process.cwd();
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 const sinComentarios = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\{\/\*[\s\S]*?\*\/\}/g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+/**
+ * El cuerpo de UN cargador de lib/contexto/cargar.ts: desde su firma hasta la SIGUIENTE
+ * `export async function` (o el final del archivo). "" si no existe.
+ *
+ * ⚠ Por qué no se corta «hasta el nombre del cargador que sigue» (validación 2026-09-23): así se
+ * cortaba antes, y un cargador nuevo metido entre dos (el de «Regenerar todo», por ejemplo) quedaba
+ * ADENTRO del tramo del anterior. Si el nuevo cargaba el material, las aserciones del de arriba
+ * seguían verdes aunque ese dejara de cargarlo: la guarda quedaba vacía sin que nada avisara.
+ */
+const tramoDe = (src: string, cargador: string): string => {
+  const i = src.indexOf(`export async function ${cargador}(`);
+  if (i < 0) return "";
+  const j = src.indexOf("export async function ", i + 1);
+  return src.slice(i, j < 0 ? undefined : j);
+};
 
 const REUNIONES = "=== REUNIONES QUE EL CSE ELIGIÓ PARA EL CRONOGRAMA (material INTERNO) ===\nx";
 const NOTAS = "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nCENTINELA-NOTA";
@@ -55,14 +72,21 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
   });
 
   it("el cargador del detalle y el de «Pedir cambio con IA» cargan el material", () => {
-    const src = leer("lib/contexto/cargar.ts");
-    const detalle = src.slice(src.indexOf("export async function cargarContextoDelDetalle"), src.indexOf("export async function cargarContextoDelAssist"));
-    const assist = src.slice(src.indexOf("export async function cargarContextoDelAssist"), src.indexOf("export async function cargarMaterialDelCronograma"));
-    for (const [nombre, tramo] of [["detalle", detalle], ["assist", assist]] as const) {
+    const src = sinComentarios(leer("lib/contexto/cargar.ts"));
+    for (const [nombre, cargador] of [
+      ["detalle", "cargarContextoDelDetalle"],
+      ["assist", "cargarContextoDelAssist"],
+    ] as const) {
+      const tramo = tramoDe(src, cargador);
       expect(tramo.length, `la guarda no está mirando el cargador del ${nombre}`).toBeGreaterThan(200);
       expect(tramo, `el ${nombre} dejó de cargar el material`).toContain("cargarMaterialDelCronograma(projectId)");
       expect(tramo, `el ${nombre} carga el material pero no lo pasa`).toContain("reunionesCtx: mat.reuniones");
       expect(tramo, `el ${nombre} carga las notas pero no las pasa`).toContain("notasCtx: mat.notas");
+      // La trazabilidad sale del MISMO material que leyó el agente, no de otra lectura.
+      expect(tramo, `el ${nombre} perdió qué reuniones leyó`).toContain("sesionesUsadas: mat.sesionesUsadas");
+      expect(tramo, `el ${nombre} perdió el material para revisar la frontera`).toContain(
+        "materialInterno: mat.materialInterno",
+      );
     }
   });
 });
@@ -171,40 +195,50 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
   });
 });
 
-describe("⭐ el reparto: lo reciente primero, nunca pasa el tope, y lo vacío no ocupa lugar", () => {
+describe("⭐ el reparto: justo, nunca pasa el tope, y el cargador lee con su propio lector", () => {
+  /* Reescrito el 2026-09-23 (validación del Contexto del cronograma): el reparto dejó de usar la
+     escala del handoff (4.000 a la más reciente, 400 a las viejas). «La más reciente se lleva la
+     cota grande» afirmaba justo lo que se retiró —el kickoff que el CSE eligió a propósito quedaba
+     en dos líneas—; las guardas del reparto justo viven en lib/contexto/material-cronograma.test.ts. */
   const DIA = 86_400_000;
   const AHORA = Date.UTC(2026, 8, 23);
-  const reunion = (id: string, diasAtras: number): ReunionConContenido => ({
+  const reunion = (id: string, diasAtras: number, largo: number): ReunionParaRepartir => ({
     id,
-    title: id,
     date: AHORA - diasAtras * DIA,
+    esencial: Math.floor(largo / 2),
+    largo,
   });
 
-  it("la más reciente se lleva la cota grande", () => {
-    const espacio = repartirEspacio([reunion("vieja", 90), reunion("ayer", 1)], AHORA);
-    expect(espacio.get("ayer")).toBe(4000);
-    expect(espacio.get("vieja")).toBeLessThan(4000);
-  });
-
-  it("nunca pasa el tope total", () => {
-    const muchas = Array.from({ length: 120 }, (_, i) => reunion(`r${i}`, i + 1));
-    const total = [...repartirEspacio(muchas, AHORA).values()].reduce((a, b) => a + b, 0);
+  it("nunca pasa el tope total, ni el techo por reunión", () => {
+    const muchas = Array.from({ length: 120 }, (_, i) => reunion(`r${i}`, i + 1, 3_000 + ((i * 7_919) % 20_000)));
+    const total = [...repartirEspacio(muchas).values()].reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(TOPE_REUNIONES_CRONOGRAMA);
+    // Con pocas y largas sobra espacio: ahí es donde el techo tiene que frenar.
+    const pocas = repartirEspacio([reunion("a", 1, 30_000), reunion("b", 2, 30_000)]);
+    expect([...pocas.values()]).toEqual([TECHO_POR_REUNION, TECHO_POR_REUNION]);
   });
 
-  it("el cargador LEE antes de repartir y descarta las vacías (no les da espacio)", () => {
-    /* Repartir antes de leer le daba las cotas grandes a reuniones sin contenido —la mitad del
-       corpus— y dejaba la que tenía material recortada. */
-    const src = leer("lib/contexto/cargar.ts");
-    const i = src.indexOf("export async function cargarMaterialDelCronograma");
-    const tramo = sinComentarios(src.slice(i, src.indexOf("export async function cargarNotasDelCronograma")));
+  it("el cargador lee con SU lector, acotado, y recién después arma el plan", () => {
+    /* El lector del handoff (`fetchTranscriptContent`) traía el transcript ENTERO de cada reunión
+       (de 7k a 61k en CAV) para después cortar el resumen en 1.500: el cronograma pagaba la lectura
+       más pesada y se quedaba sin los «Próximos pasos». El lector propio trae el resumen y la
+       minuta, y el inicio del transcript solo de las reuniones flacas. */
+    const tramo = tramoDe(sinComentarios(leer("lib/contexto/cargar.ts")), "cargarMaterialDelCronograma");
     expect(tramo.length).toBeGreaterThan(500);
-    const iLeer = tramo.indexOf("fetchTranscriptContent(");
-    const iRepartir = tramo.indexOf("repartirEspacio(");
-    expect(iLeer, "el cargador dejó de leer").toBeGreaterThan(-1);
-    expect(iRepartir, "reparte antes de saber qué tiene contenido").toBeGreaterThan(iLeer);
-    expect(tramo, "las vacías vuelven a entrar al reparto").toContain("contenidoPorId.has(s.id)");
+    expect(tramo, "volvió el lector del handoff").not.toContain("fetchTranscriptContent(");
+    expect(tramo, "volvió a traer el transcript entero").not.toMatch(/transcript:\s*true/);
+    expect(tramo, "el transcript dejó de leerse acotado en SQL").toContain('left("transcript"');
+    expect(tramo, "la lectura del contenido dejó de cortar por fecha").toContain("date: { lte: new Date(ahora) }");
     expect(tramo, "las futuras vuelven a entrar").toContain("soloOcurridas(");
+    const iLeer = tramo.indexOf("leerContenidoDeReuniones(");
+    const iPlan = tramo.indexOf("planDelMaterial(");
+    expect(iLeer, "el cargador dejó de leer").toBeGreaterThan(-1);
+    expect(iPlan, "arma el plan antes de saber qué tiene contenido").toBeGreaterThan(iLeer);
+    // Sin material, ni calendario ni ubicación: el mensaje de un proyecto sin material no cambia.
+    expect(tramo, "el calendario dejó de depender de que haya material").toContain("calendario: hayMaterial ?");
+    expect(tramo, "la ubicación dejó de depender de que haya material").toContain(
+      "hayMaterial ? ubicarEnElCronograma(foto, ms)",
+    );
     // Y las reuniones salen del chokepoint, nunca de una lectura directa de vínculos.
     expect(tramo).toContain("getProjectTimelineSessions(projectId)");
     expect(tramo).not.toContain("prisma.sessionProject");

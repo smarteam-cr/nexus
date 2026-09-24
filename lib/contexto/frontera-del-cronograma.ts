@@ -1,0 +1,200 @@
+/**
+ * lib/contexto/frontera-del-cronograma.ts — EL DETECTOR DE LA FRONTERA. Puro, client-safe.
+ *
+ * ── QUÉ HACE ─────────────────────────────────────────────────────────────────
+ * Los títulos de las tareas, sus notas y los nombres de fase los lee el CLIENTE. El material del
+ * «Contexto del cronograma» (reuniones y notas) es INTERNO. La defensa principal es el rótulo
+ * (`FRONTERA_DEL_MATERIAL`, en ./material-cronograma.ts); esto es la red: marca un texto que
+ * dice de dónde salió («confirmadas en kick-off»), trae un monto, una fecha, un plazo o un correo,
+ * o copia una frase entera del material. Solo AVISA: el CSE decide.
+ *
+ * ── PRIMERO LA PRECISIÓN ─────────────────────────────────────────────────────
+ * Un aviso que salta sobre textos legítimos se aprende a ignorar en una semana. Por eso:
+ *  · sin material no hay huellas y no corre nada (`activa: false`): un proyecto que no eligió
+ *    reuniones ni pegó notas no ve ningún aviso nuevo;
+ *  · la COPIA se mide con ventanas de palabras seguidas, distintas por campo, calibradas contra el
+ *    A/B de CAV (2026-09-23):
+ *      - NOTAS: 10 palabras, con al menos 5 de 4+ letras. La nota que copió el centinela S4
+ *        compartía 12; las legítimas llegaron hasta 8 («tarjetas dinámicas y objetos
+ *        personalizados para mantener la»).
+ *      - TÍTULOS y NOMBRES de fase: 8 palabras, con al menos 4 de 4+ letras. En los 113 títulos
+ *        de las dos corridas la racha más larga compartida con el material fue de 4 palabras, pero el
+ *        título legítimo «Organizar carpetas en Google Drive para activos visuales» comparte 7
+ *        («carpetas en Google Drive para activos visuales»): con 7 o menos saltaría sobre él. Un
+ *        título describe el trabajo con las palabras de la reunión; eso no es una fuga.
+ *  · sin regla de canales: «WhatsApp» puede ser una tarea legítima.
+ *
+ * ⚠ Da falsos negativos a propósito (una paráfrasis, un nombre de persona suelto): eso queda para
+ * el rótulo y para la mirada del CSE.
+ */
+
+export type CampoDeFrontera = "titulo" | "nota";
+
+/** Las ventanas de la COPIA, por campo. Ver el docblock: cambiarlas es recalibrar contra CAV. */
+export const VENTANA_DE_COPIA: Readonly<Record<CampoDeFrontera, { palabras: number; conContenido: number }>> = {
+  nota: { palabras: 10, conContenido: 5 },
+  titulo: { palabras: 8, conContenido: 4 },
+};
+
+export interface HuellasDeFrontera {
+  /** `false` sin material: el detector no corre. */
+  activa: boolean;
+  /** Las rachas del material, ya normalizadas, por campo. */
+  ngramas: Record<CampoDeFrontera, Set<string>>;
+}
+
+export const MOTIVOS_DE_FUGA = {
+  cita: "dice de dónde salió",
+  monto: "trae un monto",
+  fecha: "trae una fecha",
+  plazo: "trae un plazo",
+  correo: "trae un correo",
+  copia: "copia una frase de una reunión o nota",
+} as const;
+
+/** Minúsculas, sin tildes, lo que no es letra ni número pasa a espacio. */
+export function normalizarParaFrontera(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function rachas(palabras: readonly string[], largo: number, conContenido: number): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + largo <= palabras.length; i++) {
+    const ventana = palabras.slice(i, i + largo);
+    if (ventana.filter((p) => p.length >= 4).length >= conContenido) out.push(ventana.join(" "));
+  }
+  return out;
+}
+
+/** Las huellas del material INTERNO (lo que entró al prompt). Cada texto por separado. */
+export function huellasDeFrontera(textos: readonly string[]): HuellasDeFrontera {
+  const ngramas: Record<CampoDeFrontera, Set<string>> = { nota: new Set(), titulo: new Set() };
+  let activa = false;
+  for (const t of textos) {
+    if (!t || !t.trim()) continue;
+    activa = true;
+    const palabras = normalizarParaFrontera(t).split(" ").filter(Boolean);
+    for (const campo of ["nota", "titulo"] as const) {
+      const { palabras: largo, conContenido } = VENTANA_DE_COPIA[campo];
+      for (const r of rachas(palabras, largo, conContenido)) ngramas[campo].add(r);
+    }
+  }
+  return { activa, ngramas };
+}
+
+/* Sobre el texto NORMALIZADO (sin tildes ni signos): «kick-off» llega como «kick off». */
+const CITA =
+  /\b(?:segun|(?:acordad|confirmad|definid|mencionad|conversad)[oa]s?)\s+(?:(?:en|por|con)\s+)?(?:(?:el|la|los|las|lo)\s+)?(?:reunion(?:es)?|kick\s?off|kickoff|sesion(?:es)?|llamada|notas?|minuta|transcripcion)\b/;
+const MESES =
+  "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|" +
+  "ene|feb|mar|abr|may|jun|jul|ago|sept?|oct|nov|dic";
+const FECHA = new RegExp(`\\b\\d{1,2}\\s+(?:de\\s+)?(?:${MESES})\\b`);
+const PLAZO = /\b\d+\s+(?:semanas?|mes|meses)\b/;
+/* Sobre el texto ORIGINAL (la normalización se come los signos). */
+const FECHA_NUMERICA = /\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
+const MONTO = /(?:US\$|\$|₡|€|\bUSD|\bCRC|\bCLP|\bCOP|\bMXN|\bEUR)\s?\d|\d[\d.,]*\s?(?:usd|d[oó]lares|pesos|colones|euros)\b/i;
+const CORREO = /[\w.+-]+@[\w-]+\.[\w.]+/;
+
+/**
+ * El primer motivo por el que `texto` cruza la frontera, o `null`. `campo` elige la ventana de la
+ * copia: "titulo" para títulos de tarea y nombres de fase, "nota" para las notas.
+ */
+export function fugaEn(
+  texto: string | null | undefined,
+  h: HuellasDeFrontera,
+  campo: CampoDeFrontera = "nota",
+): string | null {
+  if (!h.activa || !texto || !texto.trim()) return null;
+  const n = normalizarParaFrontera(texto);
+  if (CITA.test(n)) return MOTIVOS_DE_FUGA.cita;
+  if (MONTO.test(texto)) return MOTIVOS_DE_FUGA.monto;
+  if (FECHA.test(n) || FECHA_NUMERICA.test(texto)) return MOTIVOS_DE_FUGA.fecha;
+  if (PLAZO.test(n)) return MOTIVOS_DE_FUGA.plazo;
+  if (CORREO.test(texto)) return MOTIVOS_DE_FUGA.correo;
+  const { palabras: largo, conContenido } = VENTANA_DE_COPIA[campo];
+  const palabras = n.split(" ").filter(Boolean);
+  if (rachas(palabras, largo, conContenido).some((r) => h.ngramas[campo].has(r))) return MOTIVOS_DE_FUGA.copia;
+  return null;
+}
+
+export interface FugaDeTarea {
+  campo: "titulo" | "nota";
+  motivo: string;
+}
+
+/** Marca cada tarea: primero el título, después la nota. `fuga: null` si ninguna cruza. */
+export function marcarFugas<T extends { title: string; notes?: string | null }>(
+  tareas: readonly T[],
+  h: HuellasDeFrontera,
+): Array<T & { fuga: FugaDeTarea | null }> {
+  return tareas.map((t) => {
+    const enTitulo = fugaEn(t.title, h, "titulo");
+    if (enTitulo) return { ...t, fuga: { campo: "titulo", motivo: enTitulo } };
+    const enNota = fugaEn(t.notes ?? null, h, "nota");
+    return { ...t, fuga: enNota ? { campo: "nota", motivo: enNota } : null };
+  });
+}
+
+interface TareaConTexto {
+  title?: unknown;
+  notes?: unknown;
+}
+interface FaseConTexto {
+  name?: unknown;
+  notes?: unknown;
+  tasks?: readonly TareaConTexto[] | null;
+}
+
+const recortarCita = (s: string) => (s.length > 60 ? `${s.slice(0, 57).trimEnd()}…` : s);
+
+/**
+ * Los AVISOS de una propuesta de cambios: revisa solo el texto NUEVO o CAMBIADO (lo que ya estaba
+ * en el cronograma, igual tras normalizar, no se vuelve a marcar) — títulos, notas de tarea,
+ * nombres de fase y notas de fase.
+ */
+export function fugasDeLaPropuesta(
+  propuesta: { phases?: readonly FaseConTexto[] | null } | null | undefined,
+  actuales: readonly FaseConTexto[],
+  h: HuellasDeFrontera,
+): string[] {
+  if (!h.activa || !propuesta?.phases) return [];
+  const yaEstaban = new Set<string>();
+  const anotar = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) yaEstaban.add(normalizarParaFrontera(v));
+  };
+  for (const f of actuales) {
+    anotar(f.name);
+    anotar(f.notes);
+    for (const t of f.tasks ?? []) {
+      anotar(t.title);
+      anotar(t.notes);
+    }
+  }
+
+  const avisos: string[] = [];
+  const revisar = (texto: unknown, campo: CampoDeFrontera, de: unknown, que: string, corrigelo: string) => {
+    if (typeof texto !== "string" || !texto.trim()) return;
+    if (yaEstaban.has(normalizarParaFrontera(texto))) return;
+    const motivo = fugaEn(texto, h, campo);
+    if (!motivo) return;
+    const cita = recortarCita(typeof de === "string" && de.trim() ? de.trim() : texto.trim());
+    avisos.push(
+      `“${cita}”: ${que} ${motivo} — el cliente lee títulos, notas y nombres de fase; ${corrigelo} o descarta ` +
+        `ese cambio antes de aplicar.`,
+    );
+  };
+  for (const f of propuesta.phases) {
+    revisar(f.name, "titulo", f.name, "el nombre de la fase", "corrígelo");
+    revisar(f.notes, "nota", f.name, "la nota de la fase", "corrígela");
+    for (const t of f.tasks ?? []) {
+      revisar(t.title, "titulo", t.title, "el título", "corrígelo");
+      revisar(t.notes, "nota", t.title, "la nota", "corrígela");
+    }
+  }
+  return avisos;
+}

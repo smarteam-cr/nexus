@@ -130,6 +130,14 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "Resume lo que tiene transcripción y no tiene resumen. Una futura no entra por construcción.",
   },
+  "lib/contexto/cargar.ts": {
+    clase: "contexto",
+    motivo:
+      "El material del «Contexto del cronograma» (2026-09-23): lee el resumen, la minuta y el inicio del " +
+      "transcript de las reuniones que el CSE eligió, para el detalle y «Pedir cambio con IA». Ya las filtra " +
+      "con soloOcurridas y la consulta vuelve a cortar por fecha: una agendada que el CSE eligió sale en el " +
+      "informe de la pantalla («Aún no ocurrió»), nunca en el prompt.",
+  },
 
   // ── agenda: NO cortan, y es la decisión correcta ─────────────────────────────
   "lib/sessions/cargar-sesiones-categorizadas.ts": {
@@ -209,6 +217,7 @@ const CORTAN_POR_FECHA = [
   "app/api/clients/[id]/canvas/refresh/route.ts",
   "app/api/projects/[projectId]/process-session/route.ts",
   "app/api/sessions/analyze/route.ts",
+  "lib/contexto/cargar.ts",
 ];
 
 const RAIZ = join(__dirname, "..", "..");

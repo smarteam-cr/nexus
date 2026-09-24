@@ -50,6 +50,17 @@ export interface ContextoDeProyecto {
   fuentes: FuenteDeContexto[];
   /** Instrucciones del CSE para ESTE documento (entry `__doc`), ya formateadas como bloque. */
   instrucciones: string;
+  /**
+   * Qué reuniones le llegaron al agente (ids), para la trazabilidad de la corrida
+   * (`AgentRun.sourceSessionIds`). Solo lo llenan los cargadores que leen el material del
+   * «Contexto del cronograma».
+   */
+  sesionesUsadas?: string[];
+  /**
+   * El material INTERNO tal como entró al prompt (reuniones ya recortadas + notas). ⛔ Nunca se
+   * renderiza: solo sirve para revisar la salida contra la frontera (`huellasDeFrontera`).
+   */
+  materialInterno?: string[];
 }
 
 /**
