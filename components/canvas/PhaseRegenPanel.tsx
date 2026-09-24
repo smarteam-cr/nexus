@@ -56,6 +56,9 @@ export interface RegenProposedTask {
   /** «porValidar»: la típica del tipo de fase, sin respaldo en ninguna fuente, o la fija de base de
    *  datos cuando el proyecto no dice su punto de partida (el tooltip lo distingue: `motivoDePorValidar`). */
   needsValidation?: boolean;
+  /** Por qué está por validar cuando no es la típica. Lo trae la tarea (hoy, solo la fija de base de
+   *  datos); nunca se deduce del título, que la IA también puede proponer. */
+  motivoPorValidar?: string | null;
   /** El título o la nota cruzan la frontera del material interno. Lo pone la ruta, nunca el parser. */
   fuga?: FugaDeTarea | null;
 }
@@ -83,6 +86,8 @@ interface Item {
   notes: string | null;
   isNew: boolean;
   needsValidation: boolean;
+  /** Solo en las NUEVAS: por qué está por validar (`motivoDePorValidar`). */
+  motivoPorValidar: string | null;
   /** Solo en las NUEVAS: se va cuando el CSE toca el campo que la tiene (`fugaTrasEditar`). */
   fuga: FugaDeTarea | null;
 }
@@ -122,7 +127,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
   const toItem = (t: RegenCurrentTask): Item => ({
     _key: nextKey(), id: t.id, title: t.title, weekIndex: t.weekIndex,
     party: t.party ?? null, type: t.type ?? null, status: t.status, notes: t.notes ?? null, isNew: false,
-    needsValidation: false, fuga: null,
+    needsValidation: false, motivoPorValidar: null, fuga: null,
   });
   const [left, setLeft] = useState<Item[]>(() => reparto.descartables.map(toItem));
   const [right, setRight] = useState<Item[]>(() => [
@@ -132,6 +137,7 @@ export function PhaseRegenPanel({ durationWeeks, current, proposed, onChange, av
       status: "PENDING" as GanttTaskStatus, notes: t.notes, isNew: true,
       // La marca del agente viaja hasta la tarea creada (decisión de Elías 2026-09-23).
       needsValidation: t.needsValidation === true,
+      motivoPorValidar: t.motivoPorValidar ?? null,
       fuga: t.fuga ?? null,
     })),
   ]);
@@ -284,7 +290,7 @@ function TaskCard({ item, durationWeeks, onPatch, onRemove, aviso }: {
           {item.isNew && <span className="text-[9px] text-brand-light font-medium">nueva</span>}
           {item.isNew && item.needsValidation && (
             <span className="text-[9px] text-fg-muted font-medium"
-              title={motivoDePorValidar(item.title)}>
+              title={motivoDePorValidar(item)}>
               por validar
             </span>
           )}

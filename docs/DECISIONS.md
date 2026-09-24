@@ -3206,12 +3206,16 @@ fabricarla.
   lo principal de las 8 de CAV suma 37.992 caracteres; con 48.000 entra entero en las 8. En las 2.757
   reuniones con resumen del último año, lo principal mide 1.871 en la mediana y 4.976 en el p90;
   eligiendo 12 al azar, no entra entero el 37,7 % de las veces con 32.000 y el 0,2 % con 48.000.
-  Costo: hasta ~4.500–5.000 tokens más por llamada (3,2 caracteres por token, medido en la A3),
-  ~US$0,015 con Sonnet 4.6, y solo cuando lo elegido llena el espacio. Lo pagan el revisor de fases,
+  Costo: en CAV entran 14.641 caracteres más (~4.550 tokens a 3,2 caracteres por token, medido en
+  la A3), ~US$0,014 por llamada con Sonnet 4.6, y solo cuando lo elegido llena el espacio. Es la
+  misma cifra del comentario de `TOPE_REUNIONES_CRONOGRAMA`. Lo pagan el revisor de fases,
   el detalle y «Pedir cambio con IA». **El chat no cambia**: sigue con 16.000 (`PRESUPUESTO_DEL_CHAT`),
   porque lo paga en cada turno.
 - **Los compromisos de Fireflies van antes de su overview**, como Gemini ya ponía Decisiones y
   Próximos pasos primero: lo que se recorta es el final, y lo acordado no puede ser lo primero en irse.
+  El overview, que no trae encabezados, va entonces bajo «**Resumen:**» (y también detrás de la
+  minuta revisada): pegado sin rótulo debajo de los compromisos, lo conversado se leía como un
+  compromiso más, y solo lo acordado cambia el plan (revisión del 2026-09-24).
 - **«Si eliges menos…» solo cuando las reuniones compiten por el espacio** (`porFaltaDeEspacio` del
   informe). Una agendada o una vacía no le quitan espacio a nadie, y la que corta el techo por reunión
   entra igual de cortada aunque quede sola.

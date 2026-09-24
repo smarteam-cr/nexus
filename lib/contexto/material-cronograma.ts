@@ -20,7 +20,8 @@
  * ── QUÉ SE LEE DE CADA REUNIÓN ───────────────────────────────────────────────
  * `resumenDeReunion` arma, en este orden: la minuta revisada por el CSE, los compromisos de
  * Fireflies (antes de su overview: lo acordado no puede ser lo primero que se recorta), las notas
- * de Gemini ENTERAS con Decisiones y Próximos pasos primero, el overview de Fireflies, las
+ * de Gemini ENTERAS con Decisiones y Próximos pasos primero, el overview de Fireflies (bajo
+ * «**Resumen:**» cuando algo va antes: sin rótulo se leía como parte de los compromisos), las
  * secciones, y la minuta en borrador. Al final va la COLA —lo primero que se recorta—: los
  * Detalles de Gemini, los temas clave y los bullets. El transcript entra solo si todo eso queda
  * flaco (`UMBRAL_RESUMEN_FLACO`). Antes se leía con el lector del handoff, que corta el resumen en
@@ -367,6 +368,11 @@ export function ordenarNotasDeGemini(overview: string, title: string): NotasDeGe
   };
 }
 
+/** El rótulo del overview que no trae secciones propias, cuando otro bloque va antes que él. */
+const ROTULO_DEL_OVERVIEW = "Resumen";
+/** ¿El texto ya arranca con un rótulo `**…:**` (una sección de Gemini)? */
+const EMPIEZA_CON_ROTULO = /^\*\*[^*\n]+:\*\*/;
+
 /**
  * EL CONTENIDO DE UNA REUNIÓN desde su resumen y su minuta, sin transcript (ese lo suma
  * `contenidoDeReunion` solo si esto queda flaco). Nunca agrega el título ni «### Sesión:»: el
@@ -403,7 +409,15 @@ export function resumenDeReunion(input: {
   const compromisos = asText(s.action_items).trim();
   if (compromisos && !g?.conPasos) principal.push(`**Compromisos:**\n${compromisos}`);
   if (g) {
-    principal.push(g.principal);
+    /* ⚠ El overview de Fireflies (y cualquiera sin encabezados) llega SIN rótulo. Detrás de otro
+       bloque —los compromisos, o la minuta revisada— se leía como la continuación de ese bloque: lo
+       conversado («quizás haga falta una integración…») pasaba por un compromiso del último
+       responsable, y solo lo ACORDADO cambia el plan. Si algo va antes, va bajo su propio rótulo. */
+    principal.push(
+      g.principal && principal.length > 0 && !EMPIEZA_CON_ROTULO.test(g.principal)
+        ? `**${ROTULO_DEL_OVERVIEW}:**\n${g.principal}`
+        : g.principal,
+    );
     cola.push(g.detalle);
   }
 

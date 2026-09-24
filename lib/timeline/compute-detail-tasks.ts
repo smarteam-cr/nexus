@@ -36,6 +36,12 @@ export interface ComputedDetailTask {
    * nunca este parser, que no ve el material. Solo avisa en la curación; no bloquea nada.
    */
   fuga?: { campo: "titulo" | "nota"; motivo: string } | null;
+  /**
+   * Por qué está «por validar» cuando NO es la típica que la IA no sacó de ninguna fuente. Hoy solo
+   * lo ponen las tareas fijas de la Semana 0 (`tareasFijasDeSemanaCero`); este parser nunca: sin
+   * él, el tooltip de la curación dice el de la típica (`motivoDePorValidar`).
+   */
+  motivoPorValidar?: string | null;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   tareasFijasDeSemanaCero,
   proyectoInvolucraHubSpot,
 } from "./semana-cero-tareas";
+import type { ComputedDetailTask } from "./compute-detail-tasks";
 
 /**
  * lib/timeline/semana-cero-tareas.test.ts — LAS CINCO QUE SIEMPRE ARRANCAN, Y LA QUE RAMIFICA.
@@ -94,20 +95,47 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
     /* Revisión del paso D2 (2026-09-24): desde que la marca viaja hasta la tarea, el tooltip de la
        curación le decía a la de base de datos «La IA no la sacó del handoff…: es la típica de este
        tipo de fase». No la puso la IA: la puso este archivo, porque falta el tipo del proyecto.
-       La edición que la pone en rojo: volver a un tooltip fijo en el panel, o que el motivo deje de
-       reconocer los títulos de las dos caras de la tarea. */
+       La edición que la pone en rojo: volver a un tooltip fijo en el panel, o que la fija deje de
+       traer su motivo.
+       Actualizado en la revisión del 2026-09-24: el motivo se deducía del TÍTULO, y la IA puede
+       proponer ella misma una tarea con el título de cualquiera de las dos caras marcada porValidar
+       (el dedup no agrega entonces la fija). El tooltip le decía «el proyecto no dice si es
+       implementación o re-implementación… desde cero»: falso con el tipo definido, y siempre falso
+       para la de la base existente. Ahora el motivo viaja EN la tarea; las aserciones por título
+       pasaron a ser por tarea, y el panel pasa la tarea entera. */
     const bd = tareasFijasDeSemanaCero(HUB, []).find((t) => t.needsValidation)!;
-    expect(motivoDePorValidar(bd.title)).toBe(MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR);
-    expect(motivoDePorValidar(bd.title)).toContain("implementación o re-implementación");
-    expect(motivoDePorValidar(`  ${EXISTENTE.toUpperCase()} `)).toBe(MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR);
-    expect(motivoDePorValidar("Configurar propiedades de contacto")).toBe(MOTIVO_POR_VALIDAR_TIPICA);
+    expect(bd.motivoPorValidar).toBe(MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR);
+    expect(motivoDePorValidar(bd)).toBe(MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR);
+    expect(motivoDePorValidar(bd)).toContain("implementación o re-implementación");
+    expect(motivoDePorValidar({ motivoPorValidar: null })).toBe(MOTIVO_POR_VALIDAR_TIPICA);
     expect(MOTIVO_POR_VALIDAR_TIPICA).toContain("es la típica de este tipo de fase");
+    // Las que no están por validar no traen motivo, tampoco la de base de datos con el tipo definido.
+    expect(tareasFijasDeSemanaCero(HUB, []).filter((t) => t.motivoPorValidar !== null)).toEqual([bd]);
+    expect(tareasFijasDeSemanaCero(["implementacion"], []).every((t) => t.motivoPorValidar === null)).toBe(true);
 
     const panel = fs
       .readFileSync(path.join(process.cwd(), "components/canvas/PhaseRegenPanel.tsx"), "utf8")
       .replace(/\r\n/g, "\n");
-    expect(panel, "el tooltip del panel dejó de preguntar el motivo").toContain("title={motivoDePorValidar(item.title)}");
+    expect(panel, "el tooltip del panel dejó de preguntar el motivo").toContain("title={motivoDePorValidar(item)}");
+    expect(panel, "el motivo de la propuesta no llega a la tarjeta").toContain("motivoPorValidar: t.motivoPorValidar ?? null,");
     expect(panel, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
+  });
+
+  it("⚠ la tarea que la IA propone CON EL TÍTULO de la de base de datos dice el motivo de la típica", () => {
+    /* Revisión del 2026-09-24. El caso: el detalle propone «Proporcionar bases de datos a importar»
+       (o la de la base existente) marcada porValidar en un proyecto con el tipo definido. El dedup
+       ve el título y no agrega la fija, así que la que llega a la curación es la de la IA, sin
+       motivo propio. Decirle «el proyecto no dice si es implementación o re-implementación» es
+       falso. La edición que la pone en rojo: volver a deducir el motivo del título. */
+    for (const titulo of [DESDE_CERO, EXISTENTE, `  ${EXISTENTE.toUpperCase()} `]) {
+      // Como sale del parser del detalle: sin motivo propio.
+      const deLaIA: Pick<ComputedDetailTask, "title" | "needsValidation" | "motivoPorValidar"> = {
+        title: titulo,
+        needsValidation: true,
+      };
+      expect(motivoDePorValidar(deLaIA), titulo).toBe(MOTIVO_POR_VALIDAR_TIPICA);
+    }
+    expect(tareasFijasDeSemanaCero(["implementacion"], [DESDE_CERO]), "la fija no se duplica").toHaveLength(4);
   });
 });
 

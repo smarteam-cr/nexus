@@ -470,25 +470,66 @@ describe("⭐ qué se lee de cada reunión", () => {
     expect(conMinuta.texto.indexOf("CENTINELA-MINUTA")).toBeLessThan(conMinuta.texto.indexOf("CENTINELA-COMPROMISO"));
   });
 
+  it("⭐ el overview de Fireflies va bajo SU rótulo: lo conversado no se lee como un compromiso", () => {
+    /* Revisión del 2026-09-24: con los compromisos primero, el overview de Fireflies —que no trae
+       encabezados— quedaba pegado debajo de «**Compromisos:**», sin rótulo, y el modelo podía leer
+       «quizás haga falta una integración con SAP» como compromiso del último responsable. Solo lo
+       acordado cambia el plan. El formato es el real de Fireflies (responsable en negrita, sin «:»).
+       La edición que la pone en rojo: volver a sumar el overview sin rótulo detrás de otro bloque. */
+    const OVERVIEW =
+      "El equipo revisó el avance de la configuración.\nSe mencionó que quizás haga falta una integración con SAP.";
+    const compromisos = "**Ana Pérez**\nEnviar la lista de usuarios (05:12)\n**Elías**\nAgendar la capacitación (12:40)";
+    const c = resumenDeReunion({
+      title: "Seguimiento",
+      summary: { overview: OVERVIEW, action_items: compromisos, keywords: ["alcance"] },
+      minuta: null,
+    });
+    expect(c.texto.startsWith(`**Compromisos:**\n${compromisos}\n\n**Resumen:**\n${OVERVIEW}`), c.texto).toBe(true);
+    const bloqueDeCompromisos = c.texto.slice(0, c.texto.indexOf("**Resumen:**"));
+    expect(bloqueDeCompromisos, "lo conversado quedó dentro de los compromisos").not.toContain("integración con SAP");
+
+    // Detrás de la minuta revisada, lo mismo: no es parte de lo que el CSE validó.
+    const conMinuta = resumenDeReunion({
+      title: "Seguimiento",
+      summary: { overview: OVERVIEW },
+      minuta: { summary: "CENTINELA-MINUTA", decisions: null, agreements: null, risks: null, status: "REVIEWED" },
+    });
+    expect(conMinuta.texto).toContain(`CENTINELA-MINUTA\n\n**Resumen:**\n${OVERVIEW}`);
+
+    // Solo, no necesita rótulo: el encabezado de la reunión ya lo enmarca.
+    expect(resumenDeReunion({ title: "x", summary: { overview: OVERVIEW }, minuta: null }).texto).toBe(OVERVIEW);
+    // Y un overview de Gemini, que ya trae sus rótulos, no se rotula dos veces.
+    const gemini = resumenDeReunion({
+      title: "x",
+      summary: { overview: "Resumen\nSe habló del alcance.", action_items: "CENTINELA-COMPROMISO" },
+      minuta: null,
+    });
+    expect(gemini.texto).toBe("**Compromisos:**\nCENTINELA-COMPROMISO\n\n**Resumen:**\nSe habló del alcance.");
+  });
+
   it("los íconos de Google se van y los guiones del texto quedan", () => {
-    /* La regex de los íconos va escrita con escapes (`-`): con los caracteres literales
+    /* La regex de los íconos va escrita con escapes (`\uE000-\uF8FF`): con los caracteres literales
        se lee `/[-]/g`, y «arreglarla» a eso borraba cada guion de los overviews sin que ningún test
        lo notara — el fixture de Gemini no traía guiones de contenido. */
     const overview = [
       "Resumen",
-      "Se acordó el go-live del CRM - primero Sales, después Service.",
+      "\uE907Se acordó el go-live del CRM - primero Sales, después Service.",
       "Decisiones",
-      " Usar el pipeline B2B-2026 para las cuentas nuevas.",
+      "\uE8B5 Usar el pipeline B2B-2026 para las cuentas nuevas.",
     ].join("\n");
     const g = ordenarNotasDeGemini(overview, "x");
     expect(g.principal).toContain("go-live del CRM - primero Sales");
     expect(g.principal).toContain("B2B-2026");
-    expect(g.principal).not.toMatch(/[-]/);
-    const fuente = fs.readFileSync(path.join(process.cwd(), "lib/contexto/material-cronograma.ts"), "utf8");
-    expect(
-      [...fuente].some((ch) => ch.charCodeAt(0) >= 0xe000 && ch.charCodeAt(0) <= 0xf8ff),
-      "el motor volvió a traer caracteres de uso privado LITERALES: se ven como `/[-]/g`",
-    ).toBe(false);
+    expect(g.principal).not.toMatch(/[\uE000-\uF8FF]/);
+    /* El motor Y este test (revisión del 2026-09-24: el test había vuelto a traer los caracteres
+       literales en su fixture, su comentario y su aserción, y se leían como «(`-`)» y `/[-]/`). */
+    for (const archivo of ["lib/contexto/material-cronograma.ts", "lib/contexto/material-cronograma.test.ts"]) {
+      const fuente = fs.readFileSync(path.join(process.cwd(), archivo), "utf8");
+      expect(
+        [...fuente].some((ch) => ch.charCodeAt(0) >= 0xe000 && ch.charCodeAt(0) <= 0xf8ff),
+        `${archivo} volvió a traer caracteres de uso privado LITERALES: se ven como \`/[-]/g\``,
+      ).toBe(false);
+    }
   });
 
   it("la MINUTA cuenta: sola da contenido, y la revisada va antes que Gemini", () => {

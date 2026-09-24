@@ -49,6 +49,10 @@ export interface TareaFija {
   notes: null;
   /** `true` solo en la de base de datos cuando el tipo de implementación no está definido. */
   needsValidation: boolean;
+  /** POR QUÉ está por validar (el tooltip de la curación), o `null` si no lo está. Viaja en la
+   *  tarea: deducirlo del título le ponía este motivo a la tarea que la IA propone con el mismo
+   *  título (ver `motivoDePorValidar`). */
+  motivoPorValidar: string | null;
   /** Entregables y accesos, no reuniones. */
   type: "TASK";
 }
@@ -132,6 +136,7 @@ export function tareasFijasDeSemanaCero(
       order: ordenDesde + i,
       notes: null,
       needsValidation: t.porValidar === true,
+      motivoPorValidar: t.porValidar === true ? MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR : null,
       type: "TASK" as const,
     }));
 }
@@ -150,14 +155,16 @@ export const MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR =
  * POR QUÉ una tarea está «por validar», para el tooltip de la curación (revisión del paso D2,
  * 2026-09-24). La misma marca llega por dos razones distintas: la típica del tipo de fase que la IA
  * no sacó de ninguna fuente, y la tarea fija de base de datos de la Semana 0 cuando el proyecto no
- * tiene definido su punto de partida (`porValidar: tipo === null`, arriba). El tooltip de la
- * primera explicaba mal la segunda. Se reconoce por su título, que es texto fijo de este archivo.
+ * tiene definido su punto de partida (`porValidar: tipo === null`, arriba).
+ *
+ * ⚠ El motivo lo trae LA TAREA (`motivoPorValidar`, que hoy solo ponen las fijas); sin él, es el
+ * de la típica. Antes se deducía del título, y la IA puede proponer ella misma «Proporcionar bases
+ * de datos a importar» o «Revisar y limpiar la base de datos existente» marcada porValidar: el
+ * dedup no agrega entonces la fija, y el tooltip decía «el proyecto no dice si es implementación o
+ * re-implementación… desde cero», falso con el tipo definido y siempre falso para la existente.
  */
-export function motivoDePorValidar(titulo: string): string {
-  const t = normalizar(titulo);
-  return t === normalizar(TAREA_BD_DESDE_CERO.title) || t === normalizar(TAREA_BD_EXISTENTE.title)
-    ? MOTIVO_POR_VALIDAR_TIPO_SIN_DEFINIR
-    : MOTIVO_POR_VALIDAR_TIPICA;
+export function motivoDePorValidar(tarea: { motivoPorValidar?: string | null }): string {
+  return tarea.motivoPorValidar || MOTIVO_POR_VALIDAR_TIPICA;
 }
 
 /**
