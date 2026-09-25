@@ -151,6 +151,17 @@ export async function reabrirLiberacionTx(
   });
   if (!l) return "NO_EXISTE";
   if (!l.resueltaEn) return "YA_ESTABA_ABIERTA";
+  /* ⚠ Abre solo si sigue cerrada con el MISMO cierre que se leyó, en el mismo paso en que escribe, como
+     `anularLiberacionTx`, y ANTES de tocar su historia. Dos «Deshacer» a la vez —dos pestañas, o la pantalla y el script
+     de reapertura— la reabrían dos veces: el segundo ya no encontraba la marca que el primero había deshecho y escribía
+     una historia «sin motivo» inventada, con un cierre que ya no existía, y volvía a sumar «Reabierta por…» al motivo.
+     Ahora el segundo espera al primero, ve que ya está abierta y no escribe nada (revisión del 2026-09-25). */
+  const motivo = [l.motivo, input.motivo ?? `Reabierta por ${input.actor}`].filter(Boolean).join(" · ");
+  const abierta = await tx.facturaLiberada.updateMany({
+    where: { id: l.id, resueltaEn: l.resueltaEn },
+    data: { resueltaEn: null, resueltaPor: null, motivo },
+  });
+  if (abierta.count === 0) return "YA_ESTABA_ABIERTA";
   const documento = `l:${l.id}`;
   const deshechas = await tx.diferenciaOdooMarca.updateMany({
     where: { tipo: MARCA_ANULADA, documento, deshechaEn: null },
@@ -177,10 +188,5 @@ export async function reabrirLiberacionTx(
       select: { id: true },
     });
   }
-  const motivo = [l.motivo, input.motivo ?? `Reabierta por ${input.actor}`].filter(Boolean).join(" · ");
-  await tx.facturaLiberada.updateMany({
-    where: { id: l.id },
-    data: { resueltaEn: null, resueltaPor: null, motivo },
-  });
   return "REABIERTA";
 }

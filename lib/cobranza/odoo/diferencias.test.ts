@@ -42,6 +42,7 @@ import {
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
 } from "./diferencias";
+import { reabrirLiberacionTx } from "./marcas";
 
 /**
  * Las filas como las lee una persona, sin su nombre propio (`fila`): la identidad y la huella tienen sus propias
@@ -2469,6 +2470,66 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       { documento: "l:marca-deshecha", deshechaEn: new Date("2026-09-25T18:00:00.000Z") },
     ];
     expect(soltadasCerradasSinMotivo(soltadas, marcas).map((l) => l.id)).toEqual(["sin-nada", "kaizen", "marca-deshecha"]);
+  });
+
+  /**
+   * «Deshacer» de «Ya está anulada» (`reabrirLiberacionTx`), con una transacción de mentira que anota lo que escribe.
+   * ⚠ Revisión del 2026-09-25: dos «Deshacer» a la vez la reabrían dos veces, y el segundo inventaba una historia «sin
+   * motivo» con un cierre que ya no existía. Ahora abre solo si sigue cerrada con el cierre que leyó, antes de tocar su
+   * historia. La edición que la pone en rojo: volver a abrirla sin mirar ese cierre, o después de escribir la historia.
+   */
+  describe("«Deshacer» de «Ya está anulada»", () => {
+    const cerradaEn = new Date("2026-09-25T17:37:27.000Z");
+    const txDePrueba = (o: { abre: boolean; marcasVigentes: number }) => {
+      const escrituras: Array<{ que: string; arg: Record<string, unknown> }> = [];
+      const tx = {
+        facturaLiberada: {
+          findUnique: async () => ({
+            id: "l1",
+            clienteNombre: "Wherex",
+            monto: 2125,
+            moneda: "USD",
+            referenciaExterna: null,
+            plataforma: "ODOO",
+            decision: "CANCELAR",
+            numCuota: 2,
+            motivo: null,
+            resueltaEn: cerradaEn,
+            resueltaPor: "egonzalez@smarteamcr.com",
+          }),
+          updateMany: async (arg: Record<string, unknown>) => {
+            escrituras.push({ que: "soltada", arg });
+            return { count: o.abre ? 1 : 0 };
+          },
+        },
+        diferenciaOdooMarca: {
+          updateMany: async (arg: Record<string, unknown>) => {
+            escrituras.push({ que: "deshacer marca", arg });
+            return { count: o.marcasVigentes };
+          },
+          create: async (arg: Record<string, unknown>) => {
+            escrituras.push({ que: "historia", arg });
+            return { id: "m1" };
+          },
+        },
+      };
+      return { tx: tx as never, escrituras };
+    };
+    const reabrir = (tx: never) => reabrirLiberacionTx(tx, { liberacionId: "l1", actor: "ana@smarteamcr.com", en: new Date("2026-09-26T12:00:00.000Z") });
+
+    it("abre solo si sigue cerrada con el cierre que leyó, y después guarda quién y cuándo la había cerrado", async () => {
+      const { tx, escrituras } = txDePrueba({ abre: true, marcasVigentes: 0 });
+      expect(await reabrir(tx)).toBe("REABIERTA");
+      expect(escrituras.map((e) => e.que)).toEqual(["soltada", "deshacer marca", "historia"]);
+      expect(escrituras[0]?.arg.where).toEqual({ id: "l1", resueltaEn: cerradaEn });
+      expect(escrituras[2]?.arg.data).toMatchObject({ marcadaPor: "egonzalez@smarteamcr.com", marcadaEn: cerradaEn, deshechaPor: "ana@smarteamcr.com" });
+    });
+
+    it("⚠ si otro «Deshacer» la abrió primero, no escribe ninguna historia", async () => {
+      const { tx, escrituras } = txDePrueba({ abre: false, marcasVigentes: 0 });
+      expect(await reabrir(tx)).toBe("YA_ESTABA_ABIERTA");
+      expect(escrituras.map((e) => e.que)).toEqual(["soltada"]);
+    });
   });
 });
 
