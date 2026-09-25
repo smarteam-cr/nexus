@@ -25,6 +25,7 @@ import {
   MAX_FASES_NUEVAS,
   MAX_OBSERVACIONES,
   MAX_SEMANA_DEL_PLAZO,
+  MENSAJE_ESTRUCTURA_EN_CURSO,
   construirPropuestaDeEstructura,
   fraseDelPlazo,
   leerRespuestaDeEstructura,
@@ -520,8 +521,12 @@ describe("#17 · lo terminado y lo en curso no se corren, y nada cae en el pasad
       expect(r.observaciones.join(" | "), nombre).toMatch(observacion);
       expect(r.acordadoSinEntrar, nombre).toBe(1);
       // Y la pantalla no dice que las reuniones no piden cambios.
+      /* ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: «tareas» lleva además el `token` de la
+         propuesta a la que el paso 2 le suma sus tareas; «sin-cambios» no dejó ninguna (null). El
+         aviso que se pide es el mismo. */
       expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: r.acordadoSinEntrar })).toEqual({
         paso: "tareas",
+        token: null,
         aviso: AVISO_ACORDADO_SIN_ENTRAR,
       });
     }
@@ -782,8 +787,10 @@ describe("#2 / #9 / #17 / #29 · la Semana 0 solo si existe, y lo intocable deja
       expect(r.propuesta, nombre).toBeNull();
       expect(r.observaciones.join(" | "), nombre).toMatch(observacion);
       expect(r.acordadoSinEntrar, nombre).toBe(1);
+      // (E2a P6: «tareas» lleva el `token` de la propuesta; «sin-cambios» no dejó ninguna: null.)
       expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: r.acordadoSinEntrar })).toEqual({
         paso: "tareas",
+        token: null,
         aviso: AVISO_ACORDADO_SIN_ENTRAR,
       });
     }
@@ -1267,29 +1274,79 @@ describe("#1 / #28 · lo que el CSE edita mientras la propuesta espera no vuelve
 describe("la máquina de pasos de la pantalla", () => {
   it("después de pedir la estructura", () => {
     /* ⛔ Una falla del paso 1 NUNCA traba al CSE: sigue con las tareas. Solo el 403 detiene (sin
-       permiso, el paso 2 tampoco lo tendría). */
-    expect(pasoTrasEstructura({ red: true })).toEqual({ paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA });
-    expect(pasoTrasEstructura({ status: 500 })).toEqual({ paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA });
+       permiso, el paso 2 tampoco lo tendría).
+       ⚠ REESCRITA en E2a P6 (2026-09-25), con esta razón: el paso 2 ya no espera a que el CSE decida
+       las fases. «tareas» lleva el `token` de la propuesta a la que el paso 2 le suma sus tareas (null
+       = no hay: el paso 2 crea la suya) y se retira «esperar». Lo que se pide de las fallas, del 409 y
+       del 403 es lo mismo que antes. */
+    expect(pasoTrasEstructura({ red: true })).toEqual({ paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA });
+    expect(pasoTrasEstructura({ status: 500 })).toEqual({ paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA });
     /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el 409 seguía con las tareas
        («tareas» + AVISO_PROPUESTA_PENDIENTE). Un 409 no es una falla del paso 1: YA hay cambios de
        fases sin decidir, y el detalle —la corrida más cara— se armaba sobre fases que nadie decidió;
        el mismo aviso pedía volver a regenerar, así que se pagaba dos veces. Ahora la pantalla trae esa
        propuesta y espera («decidir»). La edición que la pone en rojo: volver a «tareas» en el 409. */
     expect(pasoTrasEstructura({ status: 409 })).toEqual({ paso: "decidir" });
+    expect(pasoTrasEstructura({ status: 409, error: "PROPUESTA_PENDIENTE" })).toEqual({ paso: "decidir" });
     expect(pasoTrasEstructura({ status: 403, message: "Sin permiso." })).toEqual({ paso: "detener", mensaje: "Sin permiso." });
-    expect(pasoTrasEstructura({ status: 200, estado: "propuesta" })).toEqual({ paso: "esperar" });
-    expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios" })).toEqual({ paso: "tareas", aviso: AVISO_SIN_CAMBIOS });
-    expect(pasoTrasEstructura({ status: 200, estado: "sin-material" })).toEqual({ paso: "tareas" });
+    expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios" })).toEqual({ paso: "tareas", token: null, aviso: AVISO_SIN_CAMBIOS });
+    expect(pasoTrasEstructura({ status: 200, estado: "sin-material" })).toEqual({ paso: "tareas", token: null });
+  });
+
+  it("E2a · con una propuesta el paso 2 sigue ENSEGUIDA sobre ella; sin token, se trae la guardada", () => {
+    /* La propuesta del paso 1 ya está guardada (un `borrador-v1`): las tareas se le suman sin esperar
+       a que el CSE decida las fases. La edición que la pone en rojo: volver a «esperar» (las tareas
+       quedarían para después, en otra corrida y otra revisión), seguir sin el token (el paso 2
+       crearía OTRA propuesta: 409), o armar las tareas sin saber sobre cuál («propuesta» sin runId). */
+    expect(pasoTrasEstructura({ status: 200, estado: "propuesta", runId: "run-1" })).toEqual({ paso: "tareas", token: "run-1" });
+    expect(pasoTrasEstructura({ status: 200, estado: "propuesta" })).toEqual({ paso: "decidir" });
+    expect(pasoTrasEstructura({ status: 200, estado: "propuesta", runId: "" })).toEqual({ paso: "decidir" });
+    expect(pasoTrasEstructura({ status: 200, estado: "propuesta", runId: 7 })).toEqual({ paso: "decidir" });
+    // Ningún camino devuelve el paso que cortaba la cadena.
+    for (const r of [
+      { red: true } as const,
+      { status: 200, estado: "propuesta", runId: "r" },
+      { status: 200, estado: "sin-cambios" },
+      { status: 200, estado: "sin-material" },
+      { status: 409 },
+      { status: 500 },
+    ]) {
+      expect((pasoTrasEstructura(r) as { paso: string }).paso).not.toBe("esperar");
+    }
+  });
+
+  it("E2a · con el paso 1 ya corriendo en otra pestaña (409 ESTRUCTURA_EN_CURSO) se detiene y lo dice", () => {
+    /* El paso 1 ya no bloquea la pantalla: otra pestaña (u otra persona) puede pedirlo mientras corre
+       uno, y la ruta responde 409 ESTRUCTURA_EN_CURSO. No es «decidir» (todavía no hay propuesta que
+       traer) ni «tareas» (el paso 2 crearía otra propuesta encima). La edición que la pone en rojo:
+       tratarlo como cualquier 409, o perder el mensaje. */
+    expect(
+      pasoTrasEstructura({ status: 409, error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO }),
+    ).toEqual({ paso: "detener", mensaje: MENSAJE_ESTRUCTURA_EN_CURSO });
+    expect(pasoTrasEstructura({ status: 409, error: "ESTRUCTURA_EN_CURSO" })).toEqual({
+      paso: "detener",
+      mensaje: MENSAJE_ESTRUCTURA_EN_CURSO,
+    });
+    expect(MENSAJE_ESTRUCTURA_EN_CURSO).not.toMatch(/esperá|volvé|mirá|podés/);
+    // La ruta dice la MISMA frase (una sola fuente).
+    const ruta = fs.readFileSync(
+      path.join(process.cwd(), "app/api/projects/[projectId]/timeline/estructura/route.ts"),
+      "utf8",
+    );
+    expect(ruta).toContain('error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO');
   });
 
   it("sin propuesta pero con lo acordado que no entró, NO dice «no piden cambios» (segunda vuelta)", () => {
-    /* La edición que la pone en rojo: volver a responder AVISO_SIN_CAMBIOS a todo «sin-cambios». */
+    /* La edición que la pone en rojo: volver a responder AVISO_SIN_CAMBIOS a todo «sin-cambios».
+       (E2a P6: «tareas» lleva además `token: null`: «sin-cambios» no dejó propuesta.) */
     expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: 2 })).toEqual({
       paso: "tareas",
+      token: null,
       aviso: AVISO_ACORDADO_SIN_ENTRAR,
     });
     expect(pasoTrasEstructura({ status: 200, estado: "sin-cambios", acordadoSinEntrar: 0 })).toEqual({
       paso: "tareas",
+      token: null,
       aviso: AVISO_SIN_CAMBIOS,
     });
     // El aviso apunta a donde el CSE lo ve: el acordeón del paso 2.

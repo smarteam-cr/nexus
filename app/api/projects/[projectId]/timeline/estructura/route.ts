@@ -4,11 +4,14 @@
  * «Regenerar todo el cronograma» (y «Generar cronograma»), PASO 1 DE 2 — solo cuando el CSE eligió
  * reuniones, pegó notas o escribió «Instrucciones adicionales» en el «Contexto del cronograma» (las
  * instrucciones solas cuentan desde el 2026-09-24). Una llamada corta revisa si ese material
- * obliga a cambiar FASES o TIEMPOS y deja los cambios como la misma propuesta de solo estructura
- * que deja el handoff (`pendingProposal`, con `origen: "contexto"`): el CSE la revisa en la barra de
- * arriba del Gantt y POST /timeline/borrador/aplicar escribe (desde E1, 2026-09-24; antes, uno por
- * uno con `proposal/apply-items`). Al aplicarla o descartarla, la pantalla sigue sola con el paso 2,
- * el detalle de siempre (`/analyze`), sobre la estructura aceptada.
+ * obliga a cambiar FASES o TIEMPOS y deja los cambios como la propuesta del cronograma
+ * (`pendingProposal`, con `origen: "contexto"`): el CSE la revisa en la barra de arriba del Gantt y
+ * POST /timeline/borrador/aplicar escribe (desde E1, 2026-09-24; antes, uno por uno con
+ * `proposal/apply-items`).
+ * ⭐ Desde E2a (2026-09-25) la escribe como `borrador-v1` (`borradorBase`: las fases nuevas con su
+ * clave `n:…`, el pedido deducido de las tareas de hoy y «esperando las tareas»), y la pantalla NO
+ * espera al CSE: pide enseguida el paso 2 (`/analyze` con `borrador: { token: runId, version: 0 }`),
+ * que arma las tareas sobre la estructura PROPUESTA y las suma a ESTA misma propuesta.
  *
  * ⛔ ESTA RUTA NO ESCRIBE NINGUNA FASE NI NINGUNA TAREA. Solo la propuesta, y solo si no había otra.
  *
@@ -17,9 +20,11 @@
  *                                                           (aunque haya una propuesta pendiente)
  *   200 { estado: "sin-cambios", observaciones, acordadoSinEntrar }
  *                                                         — no hay nada que proponer (lo acordado
- *                                                           que no entró queda en observaciones)
- *   200 { estado: "propuesta", proposal, runId, observaciones }
- *   400 NO_TIMELINE · 403 (sin permiso de IA) · 409 PROPUESTA_PENDIENTE · 500 ESTRUCTURA_FALLO
+ *                                                           que no entró queda en observaciones);
+ *                                                           sin propuesta: el paso 2 crea la suya
+ *   200 { estado: "propuesta", proposal, runId, observaciones } — `proposal` es el `borrador-v1`
+ *   400 NO_TIMELINE · 403 (sin permiso de IA) · 409 PROPUESTA_PENDIENTE · 409 ESTRUCTURA_EN_CURSO
+ *   (ya corre otro paso 1 de este proyecto, de hace menos de 3 minutos) · 500 ESTRUCTURA_FALLO
  * Si el material trae un plazo total, una de las `observaciones` es la del SISTEMA (`fraseDelPlazo`):
  * el modelo solo devuelve la semana en que vence; la comparación con el cierre la hace el código.
  *
@@ -48,7 +53,13 @@ import {
   construirPropuestaDeEstructura,
   errorDeLaRevisionDeFases,
   leerRespuestaDeEstructura,
+  MENSAJE_ESTRUCTURA_EN_CURSO,
 } from "@/lib/timeline/propuesta-de-estructura";
+import { borradorBase, pedidoDelCronograma, type Vivo } from "@/lib/timeline/borrador";
+
+/** Un paso 1 de este proyecto que empezó hace menos que esto se considera en curso (el modelo tiene
+ *  90 s de tope; una corrida que quedó RUNNING porque el proceso murió deja de frenar pasado esto). */
+const VENTANA_DEL_PASO_1_EN_CURSO_MS = 3 * 60_000;
 
 /** Cierra la corrida sin poder romper la respuesta que el CSE está esperando. */
 async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Record<string, unknown>): Promise<void> {
@@ -92,7 +103,8 @@ export async function POST(
           notes: true,
           activityType: true,
           status: true,
-          tasks: { select: { status: true, weekIndex: true } },
+          // `source`: el pedido del borrador («regenerar» si ya hay tareas de la IA, si no «primera»).
+          tasks: { select: { status: true, weekIndex: true, source: true } },
         },
       },
     },
@@ -120,6 +132,23 @@ export async function POST(
   }
   // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
   if (tl.pendingProposal !== null) return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
+
+  /* E2a: el paso 1 ya no bloquea la pantalla, así que otra pestaña (u otra persona) puede pedirlo
+     mientras corre uno: dos corridas pagadas para UNA propuesta (la segunda chocaría en el
+     `updateMany`). Con uno de este proyecto empezado hace menos de 3 minutos, no se paga otro. Con el
+     MISMO reloj que el calendario y el armador (`ahora`). */
+  const pasoEnCurso = await prisma.agentRun.findFirst({
+    where: {
+      projectId,
+      agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+      status: "RUNNING",
+      createdAt: { gte: new Date(ahora - VENTANA_DEL_PASO_1_EN_CURSO_MS) },
+    },
+    select: { id: true },
+  });
+  if (pasoEnCurso) {
+    return NextResponse.json({ error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO }, { status: 409 });
+  }
 
   const userMessage = renderEstructuraDelCronograma({
     instrucciones: contexto.instrucciones,
@@ -219,12 +248,34 @@ export async function POST(
     });
   }
 
+  /* E2a: la propuesta nace como `borrador-v1`, con los `desde` fijados contra la MISMA lectura que vio
+     el modelo (`tl`), las fases nuevas con su clave `n:…` y esperando las tareas del paso 2 (que la
+     pantalla pide enseguida con este token). El pedido sale de las tareas de hoy: «regenerar» si ya hay
+     de la IA, si no «primera» (la razón de la auditoría al aplicar). */
+  const vivo: Vivo = {
+    ancla: tl.anchorStartDate?.toISOString() ?? null,
+    fases: tl.phases.map((f) => ({
+      id: f.id,
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      startWeek: f.startWeek,
+      sessionCount: f.sessionCount,
+      notes: f.notes,
+      activityType: f.activityType ?? null,
+    })),
+  };
+  const borrador = borradorBase({
+    propuesta: armado.propuesta,
+    vivo,
+    pedido: pedidoDelCronograma(tl.phases.flatMap((f) => f.tasks)),
+  });
+
   /* ⛔ Solo si NO había otra propuesta: el handoff pudo escribir la suya mientras el modelo
      pensaba, y un update plano la pisaría sin que nadie la viera. */
   const escrita = await prisma.projectTimeline.updateMany({
     where: { id: tl.id, pendingProposal: { equals: Prisma.DbNull } },
     data: {
-      pendingProposal: armado.propuesta as unknown as Prisma.InputJsonValue,
+      pendingProposal: borrador as unknown as Prisma.InputJsonValue,
       pendingProposalRunId: run.id,
     },
   });
@@ -240,9 +291,10 @@ export async function POST(
     descartados: armado.descartados,
     observaciones: armado.observaciones,
   });
+  // `proposal` es lo GUARDADO (el v1) y `runId` su token: la pantalla lo muestra y pide sus tareas.
   return NextResponse.json({
     estado: "propuesta",
-    proposal: armado.propuesta,
+    proposal: borrador,
     runId: run.id,
     observaciones: armado.observaciones,
   });

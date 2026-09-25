@@ -29,6 +29,7 @@ import {
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
 import { fraseDelPlazo, hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
+import { textoDeLaLineaDeTareas } from "@/lib/timeline/borrador";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
 const h = vi.hoisted(() => {
@@ -526,6 +527,65 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     const aMano = [...leer(RUTA).matchAll(/=== [^\n=]+ ===/g)].map((m) => m[0]);
     expect(aMano).toEqual([]);
   });
+
+  it("E2a · con un paso 1 del proyecto ya corriendo, 409 ESTRUCTURA_EN_CURSO ANTES de pagar otro", () => {
+    /* El paso 1 ya no bloquea la pantalla: otra pestaña (u otra persona) puede pedirlo mientras corre
+       uno, y serían dos corridas pagadas para UNA propuesta. La edición que la pone en rojo: sacar el
+       chequeo, moverlo después de crear la corrida (o del modelo), mirar otro agente o todas las
+       corridas vivas del proyecto, o medir la ventana con un segundo reloj. */
+    const iEnCurso = src.indexOf('error: "ESTRUCTURA_EN_CURSO"');
+    expect(iEnCurso, "no hay 409 de paso 1 en curso").toBeGreaterThan(-1);
+    const iRun = src.indexOf("prisma.agentRun.create(");
+    expect(iEnCurso, "el 409 tiene que ir antes de crear la corrida").toBeLessThan(iRun);
+    expect(iEnCurso).toBeLessThan(iModelo);
+    // Después del 409 de la propuesta pendiente (sin material no hay nada que frenar).
+    expect(iEnCurso).toBeGreaterThan(src.indexOf("tl.pendingProposal !== null"));
+    const iBusca = src.indexOf("prisma.agentRun.findFirst(");
+    expect(iBusca, "no busca la corrida en curso").toBeGreaterThan(-1);
+    expect(iBusca).toBeLessThan(iEnCurso);
+    const busca = src.slice(iBusca, src.indexOf("});", iBusca));
+    expect(busca).toContain("projectId,");
+    expect(busca, "mira otro agente: frenaría por cualquier corrida del proyecto").toContain(
+      "agentSlug: ID_ESTRUCTURA_CRONOGRAMA",
+    );
+    expect(busca).toContain('status: "RUNNING"');
+    expect(busca, "la ventana se mide con otro reloj").toMatch(/createdAt: \{ gte: new Date\(ahora - /);
+    // Y lo que encuentra es lo que responde el 409 (no un chequeo que no frena nada).
+    expect(src, "la corrida en curso se busca pero no frena").toMatch(
+      /const (\w+) = await prisma\.agentRun\.findFirst\([\s\S]*?\);\s*if \(\1\) \{\s*return NextResponse\.json\(\{ error: "ESTRUCTURA_EN_CURSO"/,
+    );
+    // Sigue habiendo UN solo reloj en la ruta (la guarda de arriba lo cuenta).
+    expect(src.match(/Date\.now\(\)/g) ?? []).toHaveLength(1);
+  });
+
+  it("E2a · la propuesta nace como `borrador-v1` DENTRO de la escritura condicionada, y es lo que responde", () => {
+    /* El paso 2 le suma sus tareas a ESTA propuesta (por su token): tiene que ser un v1, con los
+       `desde` de la MISMA lectura que vio el modelo y el pedido deducido de las tareas de hoy. La
+       edición que la pone en rojo: volver a guardar el formato viejo (`armado.propuesta`), escribir el
+       v1 con un `update` plano o fuera de la condición, o responder otra cosa que lo guardado. */
+    const iBorrador = src.indexOf("const borrador = borradorBase(");
+    expect(iBorrador, "la propuesta no se arma como borrador-v1").toBeGreaterThan(-1);
+    const armado = src.slice(iBorrador, src.indexOf("});", iBorrador));
+    expect(armado).toContain("propuesta: armado.propuesta");
+    expect(armado).toContain("vivo,");
+    expect(armado, "el pedido no sale de las tareas de hoy").toContain(
+      "pedido: pedidoDelCronograma(tl.phases.flatMap((f) => f.tasks))",
+    );
+    // El vivo sale de la MISMA lectura (`tl`), y la lectura trae la fuente de las tareas.
+    expect(src.slice(src.indexOf("const vivo: Vivo = {"), iBorrador)).toContain("fases: tl.phases.map(");
+    expect(src).toContain("tasks: { select: { status: true, weekIndex: true, source: true } }");
+    const iEscritura = src.indexOf("prisma.projectTimeline.updateMany(");
+    expect(iEscritura).toBeGreaterThan(iBorrador);
+    const escritura = src.slice(iEscritura, src.indexOf("});", iEscritura));
+    expect(escritura).toContain("pendingProposal: { equals: Prisma.DbNull }");
+    expect(escritura, "lo escrito no es el borrador").toContain("pendingProposal: borrador as unknown as Prisma.InputJsonValue");
+    expect(escritura).toContain("pendingProposalRunId: run.id");
+    expect(src, "volvió a guardarse el formato viejo").not.toContain("pendingProposal: armado.propuesta");
+    const iRespuesta = src.indexOf('estado: "propuesta"');
+    const respuesta = src.slice(iRespuesta, src.indexOf("});", iRespuesta));
+    expect(respuesta).toContain("proposal: borrador,");
+    expect(respuesta).toContain("runId: run.id,");
+  });
 });
 
 describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", () => {
@@ -550,9 +610,52 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(iSino).toBeGreaterThan(iSalto);
     expect(iEstructura, "el fetch del paso 1 no está en la rama que NO salta").toBeGreaterThan(iSino);
     expect(pedir).toContain("pasoTrasEstructura(");
-    expect(pedir.slice(0, iEstructura), "con una propuesta de las reuniones sin decidir, pide otra").toContain(
-      'proposal?.origen === "contexto"',
-    );
+    /* ⚠ REESCRITA en E2a P6 (2026-09-25), con esta razón: pedía `proposal?.origen === "contexto"`
+       antes del fetch (solo una propuesta de las reuniones frenaba). Con UN borrador por proyecto,
+       cualquier propuesta abierta frena «Generar cronograma» (se veía con una del handoff y armaba las
+       tareas sobre lo vivo, ignorándola). La edición que la pone en rojo: volver a frenar solo la de
+       las reuniones, o pedir el paso 1 con una propuesta abierta. */
+    const iFreno = pedir.indexOf("if (hayBorrador) {");
+    expect(iFreno, "con una propuesta sin decidir, pide otra").toBeGreaterThan(-1);
+    expect(iFreno).toBeLessThan(iEstructura);
+    expect(pedir.slice(iFreno, pedir.indexOf("return;", iFreno)).length).toBeGreaterThan(80);
+    expect(pedir.indexOf("return;", iFreno), "el freno no vuelve antes del paso 1").toBeLessThan(iEstructura);
+    /* E2a: el paso 2 va DETACHED y sobre la propuesta (su token y la versión que se ve), y su
+       resultado ya no vive en la memoria de la pantalla (el acordeón viejo). La edición que la pone en
+       rojo: volver al pedido síncrono, no mandar el borrador, o volver a llenar el acordeón. */
+    const iPedido = pedir.indexOf("/analyze");
+    const pedido = pedir.slice(iPedido, pedir.indexOf("});", iPedido));
+    expect(pedido.length).toBeGreaterThan(100);
+    expect(pedido).toContain('agentId: "agent-timeline-detail"');
+    expect(pedido, "el paso 2 volvió a ser síncrono (el resultado moría con la pestaña)").toContain("async: true,");
+    expect(pedido, "el paso 2 no dice sobre qué propuesta arma las tareas").toContain("borrador: { token, version },");
+    expect(pedir.length, "la guarda no está mirando la función").toBeGreaterThan(2000);
+    expect(pedir, "volvió el acordeón en memoria").not.toContain("setAllRegenPreview");
+    expect(pedir).not.toContain("previewPhases");
+  });
+
+  it("E2a · el token y la versión que viajan son los de la propuesta que se VE, o ninguno", () => {
+    /* «Armar las tareas» / «Volver a intentar» (la continuación) mandan el token y la versión del v1
+       en pantalla; el camino normal, el token que devolvió el paso 1 con versión 0 (y la muestra
+       enseguida, con su token en `proposalMeta`), o null. La edición que la pone en rojo: mandar el
+       token de otra propuesta (o de la vista previa del modificador), una versión que no es la que se
+       ve, o mostrar la propuesta del paso 1 sin su token. */
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
+    expect(continuacion).toContain("if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {");
+    expect(continuacion).toContain("token = proposalMeta.current.runId;");
+    expect(continuacion).toContain("version = versionDelBorrador(proposal);");
+    const conToken = tramoDe(pedir, "if (paso.token) {", "} else {");
+    expect(conToken).toContain("token = paso.token;");
+    expect(conToken).toContain("version = 0;");
+    const iMeta = conToken.indexOf("proposalMeta.current = { deAssist: false, runId: paso.token };");
+    expect(iMeta, "la propuesta del paso 1 se muestra sin su token").toBeGreaterThan(-1);
+    expect(iMeta).toBeLessThan(conToken.indexOf("setProposal(estructura.proposal as Proposal)"));
+    expect(conToken).toContain('setTareasDelBorrador({ estado: "faltan"');
+    // Y al volver: la propuesta «armando» se trae (con su corrida) para que la siga el borrador.
+    const iPedido = pedir.indexOf("/analyze");
+    expect(pedir.indexOf("await traerPropuestaPendiente()", iPedido), "no trae la propuesta «armando»").toBeGreaterThan(iPedido);
+    expect(pedir, "`armando` no se suelta al terminar el pedido").toMatch(/finally \{\s*setArmando\(null\);\s*\}/);
   });
 
   it("resolver la última sugerencia encadena el paso 2 y muestra las reubicaciones", () => {
@@ -593,9 +696,22 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(load).toContain("setOfrecerTareas(true)");
   });
 
-  it("la espera del paso 1 bloquea, y la franja sabe de dónde salió la propuesta", () => {
+  it("la espera del paso 1 NO bloquea (se dice en una línea), y la franja sabe de dónde salió la propuesta", () => {
+    /* ⚠ REESCRITA AL REVÉS en E2a P6 (2026-09-25), con esta razón: pedía `revisandoEstructura ?` en
+       `ocupado` (la espera del paso 1 bloqueaba el Gantt, el encabezado y el cambio de pieza), porque
+       el resultado vivía solo en la memoria de la pantalla. Ahora queda en el servidor, en la
+       propuesta, y lo editado después choca y queda fuera: la espera no bloquea. Se dice con un chip
+       en el encabezado y la línea de arriba del Gantt. La edición que la pone en rojo: volver a meter
+       la espera de «Regenerar todo» en `ocupado`, o sacar la línea. */
     const ocupado = tramo("const ocupado", "activo: false");
-    expect(ocupado).toMatch(/\brevisandoEstructura\s*\?/);
+    expect(ocupado.length, "la guarda no está mirando el estado de ocupado").toBeGreaterThan(300);
+    expect(ocupado, "la espera de «Regenerar todo» volvió a bloquear el cronograma").not.toMatch(
+      /\b(armando|revisandoEstructura|generating|allRegenLoading)\b/,
+    );
+    expect(src).toContain("<LineaDeLasTareas");
+    const chip = tramo("{(armando !== null || tareasDelBorrador?.estado === \"armando\") && (", "</span>");
+    expect(chip, "el chip del encabezado no usa los tokens del tema").toContain("text-info-ink");
+    expect(chip).not.toMatch(/\b(text|border)-blue-\d/);
     /* ⚠ REESCRITO en E1 (2026-09-24): la franja recibía `origen` y `observaciones` sueltos; la barra
        nueva recibe el resumen del núcleo, que los trae (borrador.test.ts lo prueba), y sabe si esta
        pantalla encadena el paso 2. */
@@ -603,6 +719,48 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(src).toContain("resumen={revision.resumen}");
     expect(src).toContain("encadenado={encadenado}");
     expect(src).toContain("<PasoDeTareasPendiente");
+  });
+
+  it("E2a · la línea suelta va donde va la barra, y mientras esta pantalla pide nada lanza otra corrida", () => {
+    /* Sin barra (el paso 1 corriendo, el pedido del paso 2 en vuelo, o una propuesta todavía sin
+       cambios) la línea va suelta ANTES de la barra, en su mismo contenedor. Y mientras `armando`,
+       «Generar cronograma», «Regenerar todo», el enlace «Genera las tareas» y el paso 2 ofrecido están
+       apagados, igual que con la corrida de las tareas en curso. La edición que la pone en rojo: montar
+       la línea en otro lado, o dejar vivo un botón que lanzaría una segunda corrida pagada. */
+    const iLinea = src.indexOf("<LineaDeLasTareas");
+    const iBarra = src.indexOf("{canEdit && hayBorrador && revision.resumen && (");
+    expect(iLinea).toBeGreaterThan(src.indexOf("<div ref={revision.contenedorRef}"));
+    expect(iLinea, "la línea suelta no va antes de la barra").toBeLessThan(iBarra);
+    expect(src.slice(iLinea - 60, iLinea)).toContain("{canEdit && lineaSuelta && (");
+    const linea = tramo("<LineaDeLasTareas", "/>");
+    expect(linea).toContain("trabajando={armando !== null}");
+    expect(linea).toContain("suelta");
+    const lineaSuelta = tramo("const lineaSuelta:", ": null;");
+    expect(lineaSuelta, "el paso 1 no se dice").toMatch(/armando\?\.paso === 1\s*\?\s*\{ estado: "paso-1"/);
+    expect(lineaSuelta, "con la barra montada, la línea iría dos veces").toMatch(/hayBorrador && revision\.resumen\s*\?\s*null/);
+    const apagado = 'disabled={armando !== null || tareasDelBorrador?.estado === "armando"}';
+    expect(src.split(apagado).length - 1, "«Generar cronograma», «Regenerar todo» y «Genera las tareas»").toBe(3);
+    expect(src).toContain("trabajando={armando !== null}");
+    expect(tramo("<PasoDeTareasPendiente", "/>")).toContain("trabajando={armando !== null}");
+    // «Regenerar todo» dice siempre lo mismo: la espera ya se dice en el chip y la línea.
+    expect(src).not.toContain("Generando propuesta…");
+  });
+
+  it("E2a · mientras esta pantalla pide las tareas de la propuesta en pantalla, se tratan como «armando»", () => {
+    /* En el segundo que tarda el pedido del paso 2, el servidor todavía dice «faltan» (o «fallo», con
+       «Volver a intentar»): la barra ofrecía «Armar las tareas» (una segunda corrida pagada) y dejaba
+       aplicar solo las fases de una propuesta cuyas tareas ya venían. La edición que la pone en rojo:
+       pasarle al hook (o a la línea) el estado del servidor sin mirar `armando`. */
+    const derivado = tramo("const estadoDeLasTareasEnPantalla: EstadoDeLasTareas | null =", ";");
+    expect(derivado).toMatch(/armando !== null/);
+    expect(derivado).toContain('tareasEnPantalla.estado === "faltan" || tareasEnPantalla.estado === "fallo"');
+    expect(derivado).toMatch(/\?\s*"armando"/);
+    expect(tramo("const revision = useBorradorDelCronograma({", "});")).toContain("tareas: estadoDeLasTareasEnPantalla,");
+    expect(tramo("const tareasDeLaBarra: TareasEnPantalla | null =", ": null;")).toContain(
+      "estado: estadoDeLasTareasEnPantalla,",
+    );
+    // El seguimiento sigue mirando el estado del SERVIDOR (la corrida real), no el derivado.
+    expect(src).toContain('const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;');
   });
 
   it("el auto-descarte de una propuesta de las reuniones sigue la cadena SALTANDO el paso 1 (revisión del paso A2)", () => {
@@ -637,8 +795,19 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
        fue y queda UNO, que sigue dependiendo de `materialElegido`. Que la ventana no vuelva lo cuida
        la guarda «las esperas de la IA no abren una ventana encima» (lib/asistente/panel.test.ts). */
     expect(src, "volvió la ventana del paso 1").not.toContain("revisandoEstructura && materialElegido && (");
-    const ocupado = tramo("const ocupado", "activo: false");
-    expect(ocupado).toMatch(/revisandoEstructura\s*\?\s*materialElegido\s*\?\s*\{\s*activo: true,\s*rotulo: "Paso 1 de 2/);
+    /* ⚠ REESCRITA en E2a P6 (2026-09-25), con esta razón: el rótulo vivía en `ocupado`
+       (`revisandoEstructura ? materialElegido ? { … "Paso 1 de 2`), y la espera del paso 1 ya no
+       bloquea: la dice la línea de arriba del Gantt. El texto sale de `textoDeLaLineaDeTareas`
+       («paso-1»), que dice «Paso 1 de 2» SOLO con `conMaterial`, y el Canvas le pasa
+       `materialElegido`. Pide lo mismo que antes: sin material, ni el rótulo ni el cartel. */
+    expect(
+      textoDeLaLineaDeTareas("paso-1", null, null, true)?.texto,
+      "con material, la línea no dice el paso 1",
+    ).toBe("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…");
+    const sinMaterial = textoDeLaLineaDeTareas("paso-1", null, null, false)?.texto ?? "";
+    expect(sinMaterial.length).toBeGreaterThan(10);
+    expect(sinMaterial, "sin material, la línea dice «Paso 1 de 2»").not.toContain("Paso 1 de 2");
+    expect(src, "la línea no sabe si hay material").toMatch(/<LineaDeLasTareas[^>]*conMaterial=\{materialElegido\}/);
     // La sección lo avisa con lo que ya sabe, y la pantalla lo escucha.
     expect(src).toMatch(/<CronogramaContextSection[^>]*onMaterial=\{setMaterialElegido\}/);
     const seccion = soloCodigo(leer("components/canvas/CronogramaContextSection.tsx"));
@@ -792,9 +961,24 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   });
 
   it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío", () => {
-    /* La edición que la pone en rojo: mostrar las observaciones solo en el acordeón del paso 2. */
-    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*!allRegenPreview &&/);
+    /* La edición que la pone en rojo: mostrar las observaciones solo en el acordeón del paso 2.
+       ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: el acordeón (`allRegenPreview`) ya no
+       existe; la franja se ve cuando esta pantalla ya no está pidiendo nada (`armando === null`) y no
+       hay una propuesta en pantalla. Pide lo mismo: que no dependa de un paso 2 exitoso. */
+    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*armando === null &&\s*!hayBorrador && \(/);
     expect(canvas).toContain("<ObservacionesDelPaso1 observaciones={observacionesPaso1}");
+  });
+
+  it("E2a · el acordeón viejo de «Regenerar todo» ya no se monta ni se aplica desde el Canvas", () => {
+    /* Su resultado vivía solo en memoria (cancelarlo tiraba una corrida pagada) y se aplicaba por
+       apply-all, fuera de la propuesta. El archivo sigue hasta E2b (lo lee propuesta-de-estructura.test).
+       La edición que la pone en rojo: volver a montarlo, o volver a aplicar por apply-all. */
+    expect(canvas.length).toBeGreaterThan(100_000);
+    expect(canvas).not.toContain("<AllPhasesRegenModal");
+    expect(canvas).not.toMatch(/import[^;]*AllPhasesRegenModal/);
+    expect(canvas).not.toContain("applyAllRegen");
+    expect(canvas).not.toContain("detail/apply-all");
+    expect(fs.existsSync(path.join(RAIZ, "components/canvas/AllPhasesRegenModal.tsx"))).toBe(true);
   });
 
   it("#22 · la corrida fallida guarda la frase de la pantalla, no el crudo del SDK", () => {

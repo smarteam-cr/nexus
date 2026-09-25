@@ -285,10 +285,14 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
     const fin = CANVAS.indexOf("activo: false", i);
     expect(fin, "el ternario de ocupado perdió su rama final").toBeGreaterThan(i);
     const bloque = CANVAS.slice(i, fin);
+    /* ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: la lista pierde `generating` y
+       `allRegenLoading` (la espera de «Generar cronograma» y de «Regenerar todo»). Ya no bloquean: su
+       resultado queda en el servidor, en la propuesta (antes vivía solo en memoria, y por eso el Gantt
+       no podía cambiar en el medio), y la espera se dice en el chip del encabezado y la línea de
+       arriba del Gantt (lib/contexto/estructura-cronograma.test.ts lo pide). Las demás esperas siguen
+       bloqueando igual. */
     for (const estado of [
       "assisting",
-      "generating",
-      "allRegenLoading",
       "chainingProgress",
       "applying",
       /* E1 del borrador (2026-09-24): aplicar la propuesta de fases también bloquea — el servidor
@@ -325,8 +329,9 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
          el `=>` de un `onClose` también tiene `>`; alcanza con mirar los 300 caracteres de sus props. */
       const apertura = CANVAS.slice(i, i + 300);
       expect(apertura, "la guarda no está mirando las props de la ventana").toContain("onClose");
+      // (E2a P6: `armando` es la espera de «Regenerar todo» / «Generar cronograma» desde entonces.)
       expect(antes, "volvió una ventana para una espera de la IA").not.toMatch(
-        /\b(revisandoEstructura|allRegenLoading|regenLoading|generating|assisting)\b/,
+        /\b(revisandoEstructura|allRegenLoading|regenLoading|generating|assisting|armando)\b/,
       );
       expect(apertura, "volvió una ventana de espera que no se puede cerrar").not.toContain("onClose={() => {}}");
     }
@@ -363,6 +368,13 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
       expect(cuerpo.length, "la guarda no está mirando el carril").toBeGreaterThan(80);
       expect(cuerpo, `${carril} escribe aunque la IA esté calculando`).toMatch(
         /if \(ocupado\.activo\) \{\s*return \{ fallo: esperaEnCurso\(ocupado\.rotulo\)/,
+      );
+      /* E2a P6 (2026-09-25): la espera de «Regenerar todo» / «Generar cronograma» (`armando`) salió de
+         `ocupado` (ya no bloquea el Gantt), pero el chat tampoco escribe en ese rato: la propuesta que
+         llega se calculó sobre la versión de antes. La edición que la pone en rojo: sacar este freno
+         de un carril. */
+      expect(cuerpo, `${carril} escribe mientras se arma la propuesta de «Regenerar todo»`).toMatch(
+        /if \(armando !== null\) \{\s*return \{ fallo: esperaEnCurso\(/,
       );
     }
     // El cronograma le avisa al panel, y el navegador pregunta antes de cerrar o recargar.

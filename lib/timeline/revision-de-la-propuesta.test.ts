@@ -484,7 +484,11 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     /* Respuesta 2 de Elías: se puede seguir editando; lo que choque queda fuera. La edición que la
        pone en rojo: volver a frenar el autoguardado con cualquier propuesta. */
     expect(contiene(CANVAS, "if (!dirty || (proposal && !hayBorrador) || saving || !canEdit) return;")).toBe(true);
-    expect(CANVAS.match(/if \(hayBorrador\) \{/g)?.length, "las dos guardas (modificador y chat)").toBe(2);
+    /* ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: suma la guarda de «Regenerar todo» /
+       «Generar cronograma» (`pedirPropuestaDeDetalle`): con UN borrador por proyecto, pedir otra
+       propuesta con una abierta se frena antes del paso 1. Lo que se protege es lo mismo: las guardas
+       frenan, el autoguardado no. */
+    expect(CANVAS.match(/if \(hayBorrador\) \{/g)?.length, "las tres guardas (modificador, chat y «Regenerar todo»)").toBe(3);
   });
 
   it("⭐ «Subir al cliente» queda LIBRE con un borrador abierto, con el aviso (respuesta 4 de Elías)", () => {

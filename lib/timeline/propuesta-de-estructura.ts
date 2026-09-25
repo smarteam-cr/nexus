@@ -14,6 +14,10 @@
  * numerada con casillas, «Ver como estaba antes» ↔ «Ver la propuesta» y el cierre antes → después—
  * y la aplica entera o en parte, o la descarta. Después, la pantalla encadena el detalle de siempre
  * sobre la estructura decidida.
+ * ⭐ Desde E2a (2026-09-25) la propuesta nace como `borrador-v1` y el paso 2 NO espera al CSE: arma
+ * las tareas enseguida, sobre la estructura PROPUESTA, y las suma a ESA misma propuesta (fases y
+ * tareas se revisan juntas en la barra). La cadena de dos pasos de arriba queda solo para una
+ * propuesta vieja de las reuniones que siga abierta al deploy (E2b la borra).
  *
  * ── LO QUE EL MODELO NO PUEDE HACER, AUNQUE LO DIGA ─────────────────────────
  * El prompt (lib/agents/estructura-cronograma.ts) lo prohíbe y ESTE archivo lo hace cumplir: una
@@ -980,16 +984,35 @@ export function revisarDireccionDelPlazo(
 // ── LA MÁQUINA DE PASOS DE LA PANTALLA ───────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Lo que devolvió POST /timeline/estructura, visto por la pantalla. `red` = ni llegó. */
+/** Lo que devolvió POST /timeline/estructura, visto por la pantalla. `red` = ni llegó.
+ *  `runId` es el token de la propuesta que se escribió; `error`, el código de un 409. */
 export type RespuestaDeEstructura =
   | { red: true }
-  | { red?: false; status: number; estado?: unknown; message?: unknown; acordadoSinEntrar?: unknown };
+  | {
+      red?: false;
+      status: number;
+      estado?: unknown;
+      message?: unknown;
+      acordadoSinEntrar?: unknown;
+      runId?: unknown;
+      error?: unknown;
+    };
 
+/**
+ * E2a: «tareas» sigue SIEMPRE al paso 2, ya sin esperar al CSE. `token` = la propuesta que el paso 1
+ * acaba de escribir (el paso 2 le suma sus tareas); null = no escribió ninguna (sin material, sin
+ * cambios o falló) y el paso 2 crea la suya. Se retira «esperar»: era el corte que dejaba las tareas
+ * para después de decidir las fases.
+ */
 export type PasoTrasEstructura =
-  | { paso: "tareas"; aviso?: string }
+  | { paso: "tareas"; token: string | null; aviso?: string }
   | { paso: "detener"; mensaje: string }
-  | { paso: "esperar" }
   | { paso: "decidir" };
+
+/** 409 del paso 1 cuando ya hay uno corriendo para este proyecto (otra pestaña u otra persona): lo
+ *  dice la ruta y, si el mensaje no llegara, la pantalla. */
+export const MENSAJE_ESTRUCTURA_EN_CURSO =
+  "Ya se están revisando las fases de este proyecto (en otra pestaña o por otra persona): espera un minuto y vuelve a mirar.";
 
 /**
  * ¿La revisión de fases va a leer algo? Lo decide lo que la pantalla YA SABE del «Contexto del
@@ -1043,38 +1066,50 @@ export const CAMBIOS_DE_FASES_SIN_DECIDIR =
   "Primero decide la propuesta del cronograma (arriba del Gantt): mientras esté sin decidir, no se aplica ningún otro cambio con IA.";
 
 /**
- * Qué hace la pantalla después de pedir la estructura (paso 1):
- *  · 'esperar'  — hay una propuesta: el CSE la revisa en la barra de arriba del Gantt y, al
- *                 aplicarla o descartarla, sigue el paso 2;
- *  · 'decidir'  — 409: YA hay cambios de fases sin decidir (del handoff, o de una revisión que se
- *                 pidió en otra pestaña o la pidió otra persona). ⛔ NO sigue con las tareas
- *                 (revisión adversarial, 2026-09-24): antes corría igual el detalle —la corrida más
- *                 cara del cronograma— sobre fases que nadie había decidido, y el aviso mismo pedía
- *                 volver a regenerar: se pagaba dos veces. La pantalla trae esa propuesta, la
- *                 muestra y, si es la de las reuniones, sigue con las tareas al decidirla;
- *  · 'tareas'   — no hay nada que decidir (sin material, sin cambios, o solo lo acordado que no se
- *                 pudo proponer: el aviso lo dice) o el paso 1 falló (falla, red): sigue con las
- *                 tareas. ⛔ Una falla del paso 1 NUNCA traba al CSE: el detalle de siempre corre
- *                 igual;
- *  · 'detener'  — 403: sin permiso para cambiar el cronograma con IA, el paso 2 tampoco lo tendría.
+ * Qué hace la pantalla después de pedir la estructura (paso 1). Desde E2a el paso 2 sigue SIN
+ * esperar al CSE: las tareas se arman sobre la estructura propuesta y entran a la misma propuesta.
+ *  · 'tareas' con token — hay una propuesta (un `borrador-v1` recién escrito, su token es `runId`):
+ *                 la pantalla la muestra y pide sus tareas enseguida (el paso 2 le suma las suyas);
+ *  · 'tareas' sin token — no hay nada que decidir (sin material, sin cambios, o solo lo acordado que
+ *                 no se pudo proponer: el aviso lo dice) o el paso 1 falló (falla, red): sigue con
+ *                 las tareas, que crean su propia propuesta. ⛔ Una falla del paso 1 NUNCA traba al
+ *                 CSE: el detalle corre igual;
+ *  · 'decidir'  — 409: YA hay una propuesta sin decidir (del handoff, o de una revisión que se pidió
+ *                 en otra pestaña o la pidió otra persona), o una «propuesta» sin token (no se sabe
+ *                 cuál quedó guardada). ⛔ NO sigue con las tareas (revisión adversarial,
+ *                 2026-09-24): antes corría igual el detalle —la corrida más cara del cronograma—
+ *                 sobre fases que nadie había decidido, y el aviso mismo pedía volver a regenerar: se
+ *                 pagaba dos veces. La pantalla trae esa propuesta y la muestra;
+ *  · 'detener'  — 403: sin permiso para cambiar el cronograma con IA, el paso 2 tampoco lo tendría;
+ *                 o 409 ESTRUCTURA_EN_CURSO: el paso 1 ya corre para este proyecto (otra pestaña u
+ *                 otra persona) y su propuesta aparece al volver a cargar.
  */
 export function pasoTrasEstructura(r: RespuestaDeEstructura): PasoTrasEstructura {
-  if (r.red) return { paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA };
+  if (r.red) return { paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA };
   if (r.status === 403) {
     return {
       paso: "detener",
       mensaje: typeof r.message === "string" && r.message ? r.message : "No tienes permiso para cambiar el cronograma con IA.",
     };
   }
+  if (r.status === 409 && r.error === "ESTRUCTURA_EN_CURSO") {
+    return {
+      paso: "detener",
+      mensaje: typeof r.message === "string" && r.message ? r.message : MENSAJE_ESTRUCTURA_EN_CURSO,
+    };
+  }
   if (r.status === 409) return { paso: "decidir" };
-  if (r.status < 200 || r.status >= 300) return { paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA };
-  if (r.estado === "propuesta") return { paso: "esperar" };
+  if (r.status < 200 || r.status >= 300) return { paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA };
+  if (r.estado === "propuesta") {
+    // Sin token no se sabe cuál es la guardada: se trae y se decide, nunca se arma sobre otra.
+    return typeof r.runId === "string" && r.runId ? { paso: "tareas", token: r.runId } : { paso: "decidir" };
+  }
   if (r.estado === "sin-cambios") {
     const acordado = typeof r.acordadoSinEntrar === "number" && r.acordadoSinEntrar > 0;
-    return { paso: "tareas", aviso: acordado ? AVISO_ACORDADO_SIN_ENTRAR : AVISO_SIN_CAMBIOS };
+    return { paso: "tareas", token: null, aviso: acordado ? AVISO_ACORDADO_SIN_ENTRAR : AVISO_SIN_CAMBIOS };
   }
-  if (r.estado === "sin-material") return { paso: "tareas" };
-  return { paso: "tareas", aviso: AVISO_FALLO_DE_ESTRUCTURA };
+  if (r.estado === "sin-material") return { paso: "tareas", token: null };
+  return { paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA };
 }
 
 /**
