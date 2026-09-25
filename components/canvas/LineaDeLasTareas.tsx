@@ -10,7 +10,8 @@
  * se pueden pedir, o si fallaron y por qué. Va DENTRO de la barra de revisión como segunda línea, o
  * suelta en el mismo lugar cuando todavía no hay nada que revisar (`suelta`).
  *
- * Chica a propósito: texto y, a lo sumo, un botón. Los textos salen de `textoDeLaLineaDeTareas`
+ * Chica a propósito: texto y, a lo sumo, la acción y «Descartar» (este solo suelta, con un borrador sin
+ * cambios: no hay barra que lo traiga). Los textos salen de `textoDeLaLineaDeTareas`
  * (lib/timeline/borrador.ts), que los prueban los tests; acá solo se pintan. Tokens del tema SIEMPRE:
  * info = algo en curso, warn = algo que falta.
  */
@@ -31,7 +32,10 @@ export default function LineaDeLasTareas({
   fase,
   motivo,
   conMaterial = false,
+  conCambiosDeFases = true,
   onAccion,
+  onDescartar,
+  descartando = false,
   trabajando = false,
   suelta = false,
 }: {
@@ -41,14 +45,22 @@ export default function LineaDeLasTareas({
   motivo: string | null;
   /** El CSE eligió material para el paso 1: solo así se dice «Paso 1 de 2 · Revisando…». */
   conMaterial?: boolean;
-  /** «Armar las tareas» / «Volver a intentar». Sin él, la línea solo informa. */
+  /** La propuesta trae cambios de fases que se aplican sin las tareas. Sin ellos (el borrador que nace
+   *  vacío) no se promete «solo se aplican los cambios de fases». */
+  conCambiosDeFases?: boolean;
+  /** «Armar las tareas» / «Volver a intentar». Sin él (o sin permiso de generar), la línea solo informa. */
   onAccion?: () => void;
+  /** «Descartar», para el borrador SIN cambios (no tiene barra, y la barra es la que lo trae). Sin él,
+   *  un borrador vacío que espera tareas no tenía salida hasta que la corrida terminara o se colgara. */
+  onDescartar?: () => void;
+  /** El DELETE de «Descartar» está en curso. */
+  descartando?: boolean;
   /** Aplicando, descartando o ya pidiendo: el botón no puede lanzar otra corrida. */
   trabajando?: boolean;
   /** Sin barra alrededor: la línea lleva su propio recuadro. */
   suelta?: boolean;
 }) {
-  const linea = textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial);
+  const linea = textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases);
   if (!linea) return null;
   const enCurso = estado === "paso-1" || estado === "armando";
   return (
@@ -69,8 +81,13 @@ export default function LineaDeLasTareas({
       )}
       <p className={cn("min-w-0 flex-1 text-xs", enCurso ? "text-info-ink" : "text-warn-ink")}>{linea.texto}</p>
       {linea.accion && onAccion && (
-        <Button size="xs" variant="secondary" onClick={onAccion} disabled={trabajando}>
+        <Button size="xs" variant="secondary" onClick={onAccion} disabled={trabajando || descartando}>
           {linea.accion}
+        </Button>
+      )}
+      {onDescartar && (
+        <Button size="xs" variant="secondary" onClick={onDescartar} disabled={trabajando || descartando}>
+          {descartando ? "Descartando…" : "Descartar"}
         </Button>
       )}
     </div>

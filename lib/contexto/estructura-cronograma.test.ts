@@ -29,7 +29,7 @@ import {
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
 import { fraseDelPlazo, hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
-import { textoDeLaLineaDeTareas } from "@/lib/timeline/borrador";
+import { juntarObservaciones, observacionesParaElPaso2, textoDeLaLineaDeTareas } from "@/lib/timeline/borrador";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
 const h = vi.hoisted(() => {
@@ -663,7 +663,13 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(pedido.length).toBeGreaterThan(100);
     expect(pedido).toContain('agentId: "agent-timeline-detail"');
     expect(pedido, "el paso 2 volvió a ser síncrono (el resultado moría con la pestaña)").toContain("async: true,");
-    expect(pedido, "el paso 2 no dice sobre qué propuesta arma las tareas").toContain("borrador: { token, version },");
+    /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: el pedido suma lo que notó el
+       paso 1 cuando no dejó propuesta (token null), para que el borrador vacío nazca con ello. Sigue
+       pidiendo el token y la versión de la propuesta que se ve. La edición que la pone en rojo: no
+       mandar el borrador, o mandar las observaciones con un token (el paso 1 ya las guardó en su v1). */
+    expect(pedido, "el paso 2 no dice sobre qué propuesta arma las tareas").toContain(
+      "borrador: { token, version, observaciones: token === null ? observacionesDelPaso1 : undefined },",
+    );
     expect(pedir.length, "la guarda no está mirando la función").toBeGreaterThan(2000);
     expect(pedir, "volvió el acordeón en memoria").not.toContain("setAllRegenPreview");
     expect(pedir).not.toContain("previewPhases");
@@ -779,6 +785,53 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(tramo("<PasoDeTareasPendiente", "/>")).toContain("trabajando={armando !== null}");
     // «Regenerar todo» dice siempre lo mismo: la espera ya se dice en el chip y la línea.
     expect(src).not.toContain("Generando propuesta…");
+  });
+
+  it("revisión de E2a · el borrador vacío que espera tareas tiene salida y se dice lo mismo en todos lados", () => {
+    /* El borrador vacío (el paso 1 no propuso nada) no tiene barra, y la barra es la que trae
+       «Descartar»: si la corrida moría, el proyecto quedaba trabado hasta 30 min. Además la línea suelta
+       prometía aplicar «solo los cambios de fases» sin ninguno, la oferta de después decía «Las fases
+       quedaron decididas», el chip decía «Revisando fases y tiempos…» sin material, el cartel ámbar
+       ofrecía «Genera las tareas» encima de la propuesta, y «Qué hacer acá» y el chat mandaban a
+       decidir algo que no estaba. La edición que la pone en rojo: deshacer cualquiera de esas. */
+    const linea = tramo("<LineaDeLasTareas", "/>");
+    expect(linea, "el borrador sin cambios no se puede descartar").toContain(
+      "onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}",
+    );
+    expect(linea).toContain("descartando={descartando}");
+    expect(linea, "suelta promete aplicar «solo los cambios de fases» sin ninguno").toContain("conCambiosDeFases={false}");
+    const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
+    expect(componente, "la línea no pinta «Descartar»").toMatch(/\{onDescartar && \(\s*<Button[^>]*onClick=\{onDescartar\}/);
+    expect(componente).toContain("textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases)");
+    // La oferta del paso 2 después de resolver una propuesta sin fases: neutra.
+    const oferta = soloCodigo(leer("components/canvas/PasoDeTareasPendiente.tsx"));
+    expect(oferta).toContain("textoDeLaOfertaDeTareas(conCambiosDeFases)");
+    expect(oferta, "volvió el texto fijo que afirma que se decidieron fases").not.toContain("quedaron decididas");
+    expect(tramo("<PasoDeTareasPendiente", "/>")).toContain("conCambiosDeFases={ofertaConFases}");
+    const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
+    const iFases = descartar.indexOf("const conFasesLaDescartada = traeCambiosDeFases(proposal);");
+    expect(iFases, "no se mira si la descartada traía fases").toBeGreaterThan(-1);
+    expect(iFases).toBeLessThan(descartar.indexOf("setProposal(null)"));
+    expect(tramoDe(descartar, 'else if (siguiente === "ofrecer") {', "}")).toContain("setOfertaConFases(conFasesLaDescartada);");
+    // El chip: el mismo criterio que la línea (el texto lo prueba borrador-tareas.test.ts).
+    const chip = tramo('{(armando !== null || tareasDelBorrador?.estado === "armando") && (', "</span>");
+    expect(chip, "el chip no mira si hay material").toContain("{textoDelChipDeEspera(armando?.paso === 1, materialElegido)}");
+    // El cartel ámbar: oculto con una propuesta abierta, y el texto con la MISMA condición que el `disabled`.
+    const iCartel = src.indexOf("{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && (");
+    expect(iCartel, "el cartel «Genera las tareas» se ofrece encima de la propuesta").toBeGreaterThan(-1);
+    const cartel = src.slice(iCartel, src.indexOf("</p>", iCartel));
+    expect(cartel).toContain('disabled={armando !== null || tareasDelBorrador?.estado === "armando"}');
+    expect(cartel, "el texto vuelve a decir «Genera las tareas» mientras la IA arma").toContain(
+      '{armando !== null || tareasDelBorrador?.estado === "armando" ? "Armando la propuesta…" : "Genera las tareas"}',
+    );
+    // «Qué hacer acá» y el chat: el borrador vacío no es una propuesta por decidir.
+    expect(tramo("const projectActions = useMemo(", "summary,"), "«Qué hacer acá» manda a revisar lo que no está").toContain(
+      "armandoTareas: esVacioEsperandoTareas(proposal),",
+    );
+    const chat = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
+    expect(chat, "el chat manda a decidir una propuesta que no está").toContain(
+      'fallo: esVacioEsperandoTareas(proposal) ? esperaEnCurso("la IA está armando las tareas") : CAMBIOS_DE_FASES_SIN_DECIDIR,',
+    );
   });
 
   it("E2a · mientras esta pantalla pide las tareas de la propuesta en pantalla, se tratan como «armando»", () => {
@@ -995,12 +1048,45 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(escritura, "la escritura no está condicionada a lo que se leyó").toContain("updateMany(");
   });
 
-  it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío", () => {
-    /* La edición que la pone en rojo: mostrar las observaciones solo en el acordeón del paso 2.
-       ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: el acordeón (`allRegenPreview`) ya no
-       existe; la franja se ve cuando esta pantalla ya no está pidiendo nada (`armando === null`) y no
-       hay una propuesta en pantalla. Pide lo mismo: que no dependa de un paso 2 exitoso. */
-    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*armando === null &&\s*!hayBorrador && \(/);
+  it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío, y descartar no lo borra", async () => {
+    /* ⚠ REESCRITA en la revisión de E2a (2026-09-25), con esta razón: solo miraba la condición de la
+       franja con una regex, y quedaba en verde mientras lo que notó el paso 1 se BORRABA: el paso 2 con
+       token null crea un borrador vacío sin observaciones, y al descartarlo (a mano, o solo cuando su
+       corrida falla) `discardProposal` reemplazaba la lista por la de ese borrador, []. Ahora pide:
+       (1) el pedido del paso 2 lleva lo que notó el paso 1 y la ruta lo acepta tal cual; (2) resolver
+       JUNTA, no reemplaza (se prueba la función, llamándola); (3) la franja se ve también con el
+       borrador vacío, que no tiene barra. La edición que la pone en rojo: volver a
+       `setObservacionesPaso1(observacionesDescartadas)`, que `juntarObservaciones` devuelva solo lo de
+       la propuesta, no mandar las observaciones, o volver a esconder la franja con cualquier borrador. */
+    const { leerPedidoDeTareas } = await import("@/lib/timeline/borrador-del-detalle");
+    // (1) Lo que se manda, la ruta lo acepta entero (también con muchas y largas: los techos se respetan).
+    const notadas = observacionesParaElPaso2([" Pruebas pasa a 3 semanas. ", "", 7, "Pruebas pasa a 3 semanas."]);
+    expect(notadas).toEqual(["Pruebas pasa a 3 semanas."]);
+    expect(leerPedidoDeTareas({ token: null, version: null, observaciones: notadas })).toEqual({
+      token: null,
+      version: null,
+      observaciones: notadas,
+    });
+    const muchas = observacionesParaElPaso2(Array.from({ length: 40 }, (_, i) => `${i} ${"x".repeat(1500)}`));
+    expect(muchas.length).toBeGreaterThan(0);
+    expect(leerPedidoDeTareas({ token: null, version: null, observaciones: muchas }), "la ruta rechazaría el pedido entero").not.toBe(
+      "invalido",
+    );
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const sinToken = tramoDe(pedir, "if (paso.token) {", "if (paso.aviso)");
+    expect(sinToken, "lo que notó el paso 1 no viaja en el pedido").toContain(
+      "observacionesDelPaso1 = observacionesParaElPaso2(estructura.observaciones);",
+    );
+    // (2) Descartar el borrador vacío (sin observaciones) conserva lo que notó el paso 1.
+    expect(juntarObservaciones(["Pruebas pasa a 3 semanas."], []), "descartar un v1 vacío borró lo del paso 1").toEqual([
+      "Pruebas pasa a 3 semanas.",
+    ]);
+    expect(juntarObservaciones(["A"], ["A", "B"])).toEqual(["A", "B"]);
+    const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
+    expect(descartar).toContain("setObservacionesPaso1((previas) => juntarObservaciones(previas, observacionesDescartadas));");
+    expect(canvas.match(/setObservacionesPaso1\((observacionesDescartadas|observacionesDeLaPropuesta)\)/g), "volvió a reemplazar").toBeNull();
+    // (3) La franja: sin barra que lo muestre (sin propuesta, o el borrador vacío), y con esta pantalla quieta.
+    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*armando === null &&\s*\(!hayBorrador \|\| !revision\.resumen\) && \(/);
     expect(canvas).toContain("<ObservacionesDelPaso1 observaciones={observacionesPaso1}");
   });
 

@@ -29,11 +29,11 @@ import { useState, type RefObject } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
-import { redactarResumenDeCambios } from "@/lib/timeline/magnitud-propuesta";
 import {
   fraseDelCierre,
   LINEA_DEL_CLIENTE,
   pideConfirmacion,
+  resumenDeLaConfirmacion,
   TEXTO_VER_ANTES,
   TEXTO_VER_PROPUESTA,
   textoDeAplicar,
@@ -68,8 +68,9 @@ export default function RevisionDeLaPropuesta({
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   onAplicar: () => void;
   onDescartar: () => void;
-  /** «Armar las tareas» / «Volver a intentar»: pide el paso 2 sobre ESTA propuesta. */
-  onArmarTareas: () => void;
+  /** «Armar las tareas» / «Volver a intentar»: pide el paso 2 sobre ESTA propuesta. Sin él (quien no
+   *  tiene permiso de generar o regenerar el cronograma), la línea informa sin botón. */
+  onArmarTareas?: () => void;
   /** El estado de las tareas de la propuesta (lo calcula el servidor), o null si no espera tareas
    *  (el handoff y el formato viejo). */
   tareas: TareasEnPantalla | null;
@@ -170,6 +171,7 @@ export default function RevisionDeLaPropuesta({
             fase={lineaDeTareas.fase}
             motivo={lineaDeTareas.motivo}
             onAccion={onArmarTareas}
+            conCambiosDeFases={items.length > 0}
             trabajando={trabajando}
           />
         )}
@@ -308,9 +310,10 @@ export default function RevisionDeLaPropuesta({
         }}
         description={
           <>
+            {/* Fases y tareas contadas por separado (revisión de E2a: con solo tareas decía «de una sola
+                vez: .», y las que se crean no aparecían en ningún lado). */}
             <span className="block">
-              Se {marcadas === 1 ? "aplica el cambio marcado" : `aplican los ${marcadas} cambios marcados`} de una sola
-              vez: {redactarResumenDeCambios(resumen.magnitudDeLoMarcado)}. {cierre}
+              {resumenDeLaConfirmacion(resumen)} {cierre}
             </span>
             <span className="block mt-2">{textoDeLaConfirmacion(resumen)}</span>
           </>

@@ -2008,6 +2008,117 @@ export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { titulo: s
 }
 
 /**
+ * El chip del encabezado mientras la IA trabaja: lo mismo que la línea de arriba del Gantt. «Revisando
+ * fases y tiempos…» SOLO con material elegido: sin él, el paso 1 no revisa nada (vuelve «sin-material»).
+ * Revisión de E2a: el chip lo decía siempre, y la línea de al lado decía otra cosa.
+ */
+export function textoDelChipDeEspera(enElPaso1: boolean, conMaterial: boolean): string {
+  if (!enElPaso1) return "Armando las tareas…";
+  return conMaterial ? "Revisando fases y tiempos…" : "Preparando la propuesta…";
+}
+
+/** ¿La propuesta guardada trae algún cambio de fases (o de fecha de arranque, u orden)? El handoff y el
+ *  formato viejo son solo de fases: sí. El borrador vacío del paso 2, o uno solo de tareas: no. */
+export function traeCambiosDeFases(json: unknown): boolean {
+  if (!esBorradorV1(json)) return json != null;
+  return (
+    Array.isArray(json.cambios) &&
+    json.cambios.some((c) => esObjeto(c) && !(typeof c.tipo === "string" && c.tipo.startsWith("tarea-")))
+  );
+}
+
+/* Los techos de lo que notó el paso 1 al viajar en el pedido del paso 2: los mismos que valida
+   `leerPedidoDeTareas` (lib/timeline/borrador-del-detalle.ts, server-only). Un test los ata. */
+const MAX_OBSERVACIONES_DEL_PASO_1 = 20;
+const MAX_LARGO_DE_OBSERVACION = 1000;
+
+/**
+ * Lo que notó el paso 1, listo para el pedido del paso 2 con token null: el borrador vacío nace con
+ * ellas, así la barra las muestra y sobreviven a recargar o a descartar (revisión de E2a). Textos
+ * limpios, sin repetidos y dentro de los techos de la ruta (si no, el pedido entero daría 400).
+ */
+export function observacionesParaElPaso2(obs: unknown): string[] {
+  if (!Array.isArray(obs)) return [];
+  const limpias = obs
+    .filter((o): o is string => typeof o === "string")
+    .map((o) => o.trim().slice(0, MAX_LARGO_DE_OBSERVACION))
+    .filter((o) => o.length > 0);
+  return [...new Set(limpias)].slice(0, MAX_OBSERVACIONES_DEL_PASO_1);
+}
+
+/**
+ * Lo que notó la IA, de dos fuentes, sin repetir y en orden. Al resolver una propuesta, lo que notó el
+ * paso 1 se JUNTA con lo de la propuesta, no se reemplaza: el borrador vacío del paso 2 podía traer una
+ * lista vacía, y descartarlo dejaba sin nada la franja «La IA también notó» que el aviso acababa de
+ * prometer (revisión de E2a).
+ */
+export function juntarObservaciones(delPaso1: readonly string[], deLaPropuesta: readonly string[]): string[] {
+  return [...new Set([...delPaso1, ...deLaPropuesta].map((o) => o.trim()).filter((o) => o.length > 0))];
+}
+
+export const AVISO_TAREAS_LISTAS = "Listas las tareas de la propuesta: revísala arriba del Gantt.";
+export const AVISO_DETALLE_SIN_CAMBIOS = "La IA terminó y no propone cambios del cronograma.";
+
+/** Lo que dijo el GET del cronograma al releer la propuesta, después de seguir la corrida de sus tareas. */
+export interface LecturaTrasLaCorrida {
+  /** Hay una propuesta guardada, del formato que sea. */
+  hayPropuesta: boolean;
+  /** Las tareas del `borrador-v1` guardado (su corrida, su estado y por qué fallaron), o null si no espera. */
+  tareas: { corrida: string | null; estado: EstadoDeLasTareas; motivo: string | null } | null;
+}
+
+export type DesenlaceDelSeguimiento =
+  /** Todavía no se sabe (sigue armando, o el GET falló): se vuelve a seguir, sin avisar ni darla por avisada. */
+  | { que: "seguir" }
+  /** La propuesta guardada ya no es la de esta corrida (se descartó o la reemplazó otra): nada que avisar. */
+  | { que: "callar" }
+  | { que: "avisar"; ok: boolean; tono: "exito" | "info" | "error"; texto: string };
+
+const pareceUnCodigo = (t: string) => /^[A-Z][A-Z0-9_]+$/.test(t);
+
+/**
+ * Qué hace la pantalla cuando termina de seguir la corrida que arma las tareas. Puro. Revisión de E2a:
+ *   · El GET falló (`lectura` null): no se sabe nada, así que no se avisa («no propone cambios» era
+ *     falso) y se vuelve a intentar.
+ *   · La guardada es la de esta corrida: se dice lo que el GET calculó. «listas» → que se revise;
+ *     «fallo» → la misma frase de la línea, con la causa en palabras del CSE (nunca el código de la
+ *     corrida); «armando» → se sigue. Así también se avisa UNA vez cuando una corrida colgada pasa a
+ *     «fallo» (el seguimiento se rinde a los ~6 min, y la corrida se da por muerta a los 30).
+ *   · La guardada es OTRA: se refresca en silencio.
+ *   · No hay ninguna: un ERROR es la corrida de una propuesta que se descartó (se calla); un DONE es
+ *     el paso 2 que no encontró nada que cambiar y borró el borrador vacío, así que se dice lo que
+ *     dejó la corrida (o que no propone cambios).
+ * El descarte hecho en ESTA pantalla lo calla quien descarta, antes de que la corrida termine.
+ */
+export function desenlaceDelSeguimiento(i: {
+  corrida: string;
+  estado: "DONE" | "ERROR" | "TIMEOUT";
+  lectura: LecturaTrasLaCorrida | null;
+  /** Lo que dejó dicho la corrida al terminar sin tareas (`timelineSyncError`). */
+  aviso?: string | null;
+}): DesenlaceDelSeguimiento {
+  if (i.lectura === null) return { que: "seguir" };
+  const t = i.lectura.tareas;
+  if (t !== null && t.corrida === i.corrida) {
+    if (t.estado === "armando") return { que: "seguir" };
+    if (t.estado === "listas") return { que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS };
+    if (t.estado === "fallo") {
+      const texto = textoDeLaLineaDeTareas("fallo", null, t.motivo, false, false)?.texto ?? "No se pudieron armar las tareas.";
+      return { que: "avisar", ok: false, tono: "error", texto };
+    }
+    return { que: "callar" };
+  }
+  if (i.lectura.hayPropuesta || i.estado !== "DONE") return { que: "callar" };
+  const aviso = i.aviso?.trim() ?? "";
+  return {
+    que: "avisar",
+    ok: true,
+    tono: "info",
+    texto: aviso.length > 0 && !pareceUnCodigo(aviso) ? aviso : AVISO_DETALLE_SIN_CAMBIOS,
+  };
+}
+
+/**
  * El cierre antes → después en una frase, para la barra y la confirmación. Con un cierre FIJADO a
  * mano (Tanda K) la fecha que ven «Ver como estaba antes», «Ver la propuesta» y el cliente es la
  * fijada, y aplicar no la toca: se dice eso, y el corrimiento es el del plan calculado. Si no, el

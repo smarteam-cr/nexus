@@ -15,6 +15,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  AVISO_DETALLE_SIN_CAMBIOS,
+  AVISO_TAREAS_LISTAS,
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
   borradorBase,
@@ -22,6 +24,7 @@ import {
   claveDeRevision,
   claveDeTareaQueSeVa,
   debeDescartarseSolo,
+  desenlaceDelSeguimiento,
   esBorradorV1,
   esVacioEsperandoTareas,
   estadoDeLasTareas,
@@ -39,7 +42,9 @@ import {
   textoDeLaConfirmacion,
   textoDeLaLineaDeTareas,
   textoDeLaOfertaDeTareas,
+  textoDelChipDeEspera,
   tituloDeLaBarra,
+  traeCambiosDeFases,
   traeCambiosDeTareas,
   versionDelBorrador,
   type Borrador,
@@ -745,5 +750,124 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     const sinFases = textoDeLaOfertaDeTareas(false);
     expect(`${sinFases.titulo} ${sinFases.detalle}`).not.toMatch(/fases/);
     expect(sinFases.titulo).toBe("No se pudieron armar las tareas.");
+  });
+});
+
+/**
+ * ── LA PANTALLA AL TERMINAR LA CORRIDA DE LAS TAREAS (revisión de E2a, 2026-09-25) ───────────────
+ * Qué se avisa cuando termina la corrida que arma las tareas, el chip del encabezado y si lo resuelto
+ * traía fases. Puro: el Canvas solo lo pinta (el cableado lo miran revision-de-la-propuesta.test.ts y
+ * estructura-cronograma.test.ts).
+ */
+describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta", () => {
+  const guardada = (corrida: string | null, estado: "armando" | "listas" | "fallo", motivo: string | null = null) => ({
+    hayPropuesta: true,
+    tareas: { corrida, estado, motivo },
+  });
+
+  it("⭐ la guardada es la de esta corrida: se dice lo que calculó el GET, en palabras del CSE", () => {
+    /* La edición que la pone en rojo: avisar el error crudo de la corrida («PROPUESTA_CAMBIO»,
+       «CLAUDE_ERROR»), o dar por terminada una corrida que sigue armando. */
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: guardada("r1", "listas") })).toEqual({
+      que: "avisar",
+      ok: true,
+      tono: "exito",
+      texto: AVISO_TAREAS_LISTAS,
+    });
+    expect(
+      desenlaceDelSeguimiento({ corrida: "r1", estado: "ERROR", lectura: guardada("r1", "fallo", "la IA está sobrecargada") }),
+    ).toEqual({
+      que: "avisar",
+      ok: false,
+      tono: "error",
+      texto: "No se pudieron armar las tareas: la IA está sobrecargada.",
+    });
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "ERROR", lectura: guardada("r1", "fallo") })).toMatchObject({
+      que: "avisar",
+      texto: "No se pudieron armar las tareas.",
+    });
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "TIMEOUT", lectura: guardada("r1", "armando") })).toEqual({ que: "seguir" });
+  });
+
+  it("⭐ una corrida colgada que pasa a «fallo» se avisa UNA vez (el seguimiento se rinde antes)", () => {
+    /* El seguimiento se rinde a los ~6 min (TIMEOUT) y la corrida se da por muerta a los 30: el GET ya
+       dice «fallo». Antes, la rama del TIMEOUT volvía sin avisar y después ya no había corrida que
+       seguir. La edición que la pone en rojo: que un TIMEOUT siempre siga. */
+    const colgada = desenlaceDelSeguimiento({
+      corrida: "r1",
+      estado: "TIMEOUT",
+      lectura: guardada("r1", "fallo", "se cortó a mitad de camino, probablemente por un reinicio del servidor"),
+    });
+    expect(colgada, "la corrida colgada no se avisa").toMatchObject({ que: "avisar", ok: false, tono: "error" });
+    expect(colgada.que === "avisar" ? colgada.texto : "").toMatch(/^No se pudieron armar las tareas: se cortó a mitad de camino/);
+  });
+
+  it("⭐ si la guardada ya no es la de esta corrida, nada que avisar: ni el descarte ni el reemplazo", () => {
+    /* El CSE descartó mientras se armaban (la corrida termina con un 409 o sin fusionar) u otra corrida
+       la reemplazó: avisar «PROPUESTA_CAMBIO» o «Falló: cronograma» por algo descartado a propósito
+       enseña a ignorar los avisos. La edición que la pone en rojo: avisar sin comparar la corrida. */
+    for (const estado of ["DONE", "ERROR", "TIMEOUT"] as const) {
+      expect(desenlaceDelSeguimiento({ corrida: "r1", estado, lectura: guardada("r2", "listas") }), `otra corrida (${estado})`).toEqual({
+        que: "callar",
+      });
+      expect(
+        desenlaceDelSeguimiento({ corrida: "r1", estado, lectura: { hayPropuesta: true, tareas: null } }),
+        `la del handoff (${estado})`,
+      ).toEqual({ que: "callar" });
+    }
+    // Sin ninguna guardada, un ERROR es la corrida de una propuesta que se descartó.
+    expect(
+      desenlaceDelSeguimiento({ corrida: "r1", estado: "ERROR", lectura: { hayPropuesta: false, tareas: null } }),
+      "se avisa el error de una propuesta descartada",
+    ).toEqual({ que: "callar" });
+  });
+
+  it("sin ninguna guardada y DONE: el paso 2 no encontró nada que cambiar (y borró su borrador vacío)", () => {
+    /* No es un descarte: la corrida misma borra el borrador vacío cuando no propone nada. Se dice lo que
+       dejó (lo que notó) o que no propone cambios, nunca un código. La edición que la pone en rojo:
+       callar también este caso (el CSE esperó minutos y no se entera de nada), o pasar un código. */
+    const nada = { hayPropuesta: false, tareas: null };
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada })).toEqual({
+      que: "avisar",
+      ok: true,
+      tono: "info",
+      texto: AVISO_DETALLE_SIN_CAMBIOS,
+    });
+    expect(
+      desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso: " Pruebas no tiene sesiones. " }),
+    ).toMatchObject({ texto: "Pruebas no tiene sesiones." });
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso: "PROPUESTA_CAMBIO" })).toMatchObject({
+      texto: AVISO_DETALLE_SIN_CAMBIOS,
+    });
+  });
+
+  it("⭐ si el GET falla no se sabe nada: se vuelve a mirar, sin avisar «no propone cambios»", () => {
+    /* La edición que la pone en rojo: leer un GET fallido como «no hay propuesta» (avisaba algo falso,
+       daba la corrida por avisada y la barra quedaba «armando» hasta recargar). */
+    for (const estado of ["DONE", "ERROR", "TIMEOUT"] as const) {
+      expect(desenlaceDelSeguimiento({ corrida: "r1", estado, lectura: null }), `un GET fallido (${estado}) no sigue`).toEqual({
+        que: "seguir",
+      });
+    }
+  });
+
+  it("el chip del encabezado dice lo mismo que la línea: «Revisando fases y tiempos…» solo con material", () => {
+    /* La edición que la pone en rojo: que el chip lo diga sin material (sin él, el paso 1 no revisa nada). */
+    expect(textoDelChipDeEspera(true, true)).toBe("Revisando fases y tiempos…");
+    expect(textoDelChipDeEspera(true, false), "sin material, el chip dice que revisa").toBe("Preparando la propuesta…");
+    expect(textoDelChipDeEspera(false, true)).toBe("Armando las tareas…");
+    expect(textoDelChipDeEspera(false, false)).toBe("Armando las tareas…");
+  });
+
+  it("si lo que se resuelve traía cambios de fases (la oferta del paso 2 depende de eso)", () => {
+    /* La edición que la pone en rojo: contar las tareas como fases (el borrador vacío o solo de tareas
+       ofrecería «Las fases quedaron decididas»), o dar por vacía una propuesta del formato viejo. */
+    const vacio = borradorVacio({ pedido: "regenerar", corrida: "r1" });
+    expect(traeCambiosDeFases(vacio), "el borrador vacío trae fases").toBe(false);
+    expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-se-va", clave: "tarea:x:se-va" }] })).toBe(false);
+    expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "fase-cambia", clave: "fase:b:notes" }] })).toBe(true);
+    expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-nueva" }, { tipo: "ancla" }] })).toBe(true);
+    expect(traeCambiosDeFases({ phases: [] }), "el formato viejo es de fases").toBe(true);
+    expect(traeCambiosDeFases(null)).toBe(false);
   });
 });

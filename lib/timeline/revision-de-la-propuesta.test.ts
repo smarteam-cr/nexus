@@ -556,9 +556,44 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(iYaAnunciada, "sin releer la propuesta, el cronograma remontado queda «armando»").toBeGreaterThan(
       seguimiento.indexOf("await traerPropuestaPendiente()"),
     );
-    // ~6 min sin terminar: se relee y se vuelve a seguir (no queda «armando» para siempre).
-    expect(contiene(seguimiento, 'if (r.status === "TIMEOUT") {')).toBe(true);
-    expect(contiene(seguimiento, "setVueltaDelSeguimiento((n) => n + 1);")).toBe(true);
+    /* ~6 min sin terminar: se relee y se vuelve a seguir (no queda «armando» para siempre).
+       ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía `if (r.status ===
+       "TIMEOUT") {` en el Canvas. Qué hacer al terminar (seguir, callar o avisar) lo decide ahora
+       `desenlaceDelSeguimiento` (borrador.ts), que se prueba LLAMÁNDOLO en borrador-tareas.test.ts:
+       «armando» (el TIMEOUT de siempre) y un GET que falló siguen. Acá se pide que el Canvas la use y
+       que «seguir» vuelva a mirar ANTES de dar la corrida por avisada. */
+    const iDesenlace = seguimiento.indexOf("desenlaceDelSeguimiento({");
+    expect(iDesenlace, "el Canvas decide solo qué avisar").toBeGreaterThan(seguimiento.indexOf("await traerPropuestaPendiente()"));
+    const seguir = tramo(seguimiento, 'if (desenlace.que === "seguir") {', "}");
+    expect(contiene(seguir, "setVueltaDelSeguimiento((n) => n + 1);")).toBe(true);
+    expect(contiene(seguir, "return;")).toBe(true);
+    expect(seguimiento.indexOf('if (desenlace.que === "seguir") {'), "un GET fallido da la corrida por avisada").toBeLessThan(
+      iYaAnunciada,
+    );
+    // El GET que falla NO es «no hay propuesta»: la lectura llega como null y el desenlace sigue.
+    expect(contiene(seguimiento, "lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas } : null,")).toBe(
+      true,
+    );
+    const traer = tramo(CANVAS, "const traerPropuestaPendiente = async ()", "const anteLaPropuestaGuardada");
+    expect(contiene(traer, "if (!res.ok) return { ok: false };"), "un 5xx se lee como «no hay propuesta»").toBe(true);
+    expect(contiene(traer, "} catch { return { ok: false }; }"), "un error de red se lee como «no hay propuesta»").toBe(true);
+    // Nunca el código crudo de la corrida en el aviso: el texto sale del desenlace.
+    expect(seguimiento, "el aviso volvió a leer el error crudo de la corrida").not.toMatch(/toast\.\w+\(r\.(error|timelineSyncError)/);
+    /* Solo quien edita sigue la corrida y recibe el aviso: la barra y la línea son suyas (a quien solo
+       mira le alcanza el chip). La edición que la pone en rojo: seguirla sin mirar `canEdit`. */
+    expect(
+      contiene(seguimiento, "if (!canEdit || !corridaQueArma || siguiendoRef.current === corridaQueArma) return;"),
+      "quien solo mira sigue la corrida y recibe «revísala arriba del Gantt» sin barra",
+    ).toBe(true);
+    expect(contiene(seguimiento, "}, [canEdit, corridaQueArma, vueltaDelSeguimiento]);")).toBe(true);
+    /* Descartar A MANO mientras se arman las tareas: su corrida termina sin aviso (ni «PROPUESTA_CAMBIO»,
+       ni «no propone cambios»). La edición que la pone en rojo: no darla por avisada al descartar. */
+    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
+    expect(contiene(descartar, "const corridaDescartada = tareasEnPantalla?.corrida ?? null;")).toBe(true);
+    expect(
+      contiene(descartar, "if (yaNoEstaGuardada && !reason && corridaDescartada) CORRIDAS_ANUNCIADAS.add(corridaDescartada);"),
+      "la corrida de una propuesta descartada a mano sigue avisando",
+    ).toBe(true);
     // Se sigue la corrida del MISMO GET que dio el estado, y solo el de la propuesta en pantalla.
     expect(contiene(CANVAS, 'const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;')).toBe(
       true,
@@ -614,18 +649,33 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(confirmacion, 'variant={resumen.borraAlgo ? "destructive" : "default"}')).toBe(true);
     expect(contiene(confirmacion, "{textoDeLaConfirmacion(resumen)}")).toBe(true);
     expect(confirmacion, "volvió el texto fijo que promete no borrar ninguna tarea").not.toContain("No se borra ninguna fase");
+    /* Revisión de E2a: la primera oración sale de `resumenDeLaConfirmacion` (fases y tareas por
+       separado, sin «: .»; se prueba en borrador-tareas.test.ts). La edición que la pone en rojo:
+       volver a armarla con `redactarResumenDeCambios`, que solo cuenta fases. */
+    expect(contiene(confirmacion, "{resumenDeLaConfirmacion(resumen)} {cierre}"), "la confirmación no cuenta las tareas").toBe(true);
+    expect(BARRA, "la confirmación volvió a contar solo las fases").not.toContain("redactarResumenDeCambios");
     expect(BARRA).toContain('aria-label="Propuesta de cambios del cronograma"');
     // Las tareas van debajo de la lista de fases.
     expect(BARRA.indexOf("<TareasDeLaPropuesta")).toBeGreaterThan(BARRA.indexOf("</ol>"));
     // Y el Canvas le pasa el estado de la propuesta en pantalla, y el botón pide el paso 2 sobre ella.
     expect(contiene(rama, "tareas={tareasDeLaBarra}")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: la acción se define UNA vez
+       (`armarLasTareas`) para la barra y la línea suelta, y solo existe con el permiso que el servidor
+       exige (`generate` en la primera pasada, `regenerate` después): sin él se ofrecía y el servidor
+       respondía 403. Sigue pidiendo el paso 2 sobre la propuesta, saltando el paso 1. La edición que
+       la pone en rojo: pedir fases de nuevo, u ofrecer el botón sin mirar el permiso. */
+    const armar = tramo(CANVAS, "const armarLasTareas =", ": undefined;");
     expect(
       contiene(
-        rama,
-        'onArmarTareas={() => void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", { saltarEstructura: true, })',
+        armar,
+        '(revision.borrador?.pedido === "primera" ? canGenerateTimeline : canRegenerateTimeline) ? () => void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", { saltarEstructura: true, })',
       ),
-      "«Armar las tareas» / «Volver a intentar» no piden el paso 2 sobre la propuesta (o vuelven a pedir fases)",
+      "«Armar las tareas» / «Volver a intentar» no piden el paso 2 sobre la propuesta, o se ofrecen sin permiso",
     ).toBe(true);
+    expect(contiene(rama, "onArmarTareas={armarLasTareas}")).toBe(true);
+    expect(contiene(tramo(rama, "<LineaDeLasTareas", "/>"), "onAccion={armarLasTareas}")).toBe(true);
+    expect(BARRA, "la barra exige la acción aunque no haya permiso").toMatch(/onArmarTareas\?: \(\) => void;/);
+    expect(LINEA).toMatch(/\{linea\.accion && onAccion && \(/);
     // El encabezado: con tareas no cuenta «57 cambios» mezclados.
     expect(contiene(CANVAS, '{revision.resumen.grupos.length > 0 ? "Revisar la propuesta"')).toBe(true);
   });
