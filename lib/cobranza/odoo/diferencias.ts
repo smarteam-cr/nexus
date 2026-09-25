@@ -3124,13 +3124,93 @@ function agruparPorPartner(
     }));
 }
 
+/** Lo que aporta UNA fila a la huella de grupo: `texto=monto`. */
+const piezaDeGrupo = (i: Pick<ItemInconsistencia, "texto" | "monto">) => `${i.texto}=${i.monto ?? ""}`;
+
 /**
  * La huella de una diferencia aceptada POR GRUPO (`DiferenciaOdooAceptada`): `texto=monto` de todas sus filas.
  *
  * ⚠ Desde el 2026-09-25 ni la pantalla ni el detector la usan: la marca es por fila (`MarcaDeFila`), con la huella de
  * los números de cada documento. Queda solo para el traspaso de la única marca de grupo que existía (las notas de
- * crédito), que compara cada nota contra lo que se marcó. Lleva nombres a propósito: es la que se guardó.
+ * crédito), que compara cada nota contra lo que se marcó (`decidirTraspasoDeGrupo`). Lleva nombres a propósito: es la
+ * que se guardó.
  */
 export function huellaDe(inc: Pick<Inconsistencia, "items">): string {
-  return inc.items.map((i) => `${i.texto}=${i.monto ?? ""}`).join("|");
+  return inc.items.map(piezaDeGrupo).join("|");
+}
+
+/** Qué hace el traspaso de una marca de GRUPO a marcas por fila (`decidirTraspasoDeGrupo`). */
+export interface TraspasoDeGrupo {
+  /** Las filas pendientes que siguen como se marcaron: una marca por documento, con sus números de hoy. */
+  aMarcar: DecisionDeMarcas["aMarcar"];
+  /**
+   * Las filas pendientes que no están en lo que se marcó: les cambió un número —o el nombre, que la huella de grupo sí
+   * lleva— o entraron después. No se marcan: siguen en la lista para que alguien las mire.
+   */
+  cambiaron: Array<{ clave: string; texto: string }>;
+  /** Las que alguien ya marcó «está bien así» con los números de hoy, fuera del traspaso: no se marcan dos veces. */
+  yaMarcadas: Array<{ clave: string; texto: string }>;
+  /**
+   * Las que ya recibieron su marca en un traspaso anterior, sigan marcadas o no. ⚠ Si alguien la deshizo después, no se
+   * vuelve a marcar: deshacer es la decisión de una persona, y un script corrido dos veces no la pisa.
+   */
+  yaTraspasadas: Array<{ clave: string; texto: string }>;
+  /** Lo que decía la marca de grupo (`texto=monto`) y hoy no coincide con ninguna fila de la línea: se resolvió o cambió. */
+  noEstan: string[];
+}
+
+/**
+ * El traspaso de una marca de GRUPO a marcas por fila (decisión de Elías, 2026-09-25): las 15 notas de crédito que se
+ * marcaron juntas pasan a 15 marcas, con el mismo motivo, la misma persona y la misma fecha
+ * (scripts/odoo-traspasar-marcas-de-notas.ts).
+ *
+ * ⭐ Cada fila se compara con lo que se MARCÓ (la huella de grupo guardada), no con lo que hay hoy: la que cambió desde
+ * entonces no se marca y se nombra; las demás pasan igual. Se marca con los números de hoy, que para esas filas son los
+ * de entonces. ⚠ Lo que la huella de grupo no guardaba —los estados de la factura que la nota parece anular— se toma de
+ * hoy: es lo único que el grupo no puede probar.
+ *
+ * `traspasadas`: los documentos que ya recibieron la marca del traspaso (mismo motivo, persona y fecha), vigente o
+ * deshecha. Es lo que hace que correrlo dos veces no escriba nada la segunda.
+ * `linea` undefined = la línea ya no está (todas las notas se aplicaron): no se marca nada.
+ */
+export function decidirTraspasoDeGrupo(
+  linea: Pick<DiferenciaOdoo, "codigo" | "items" | "marcadas"> | undefined,
+  huellaDelGrupo: string,
+  marcas: readonly MarcaDeFila[],
+  traspasadas: ReadonlySet<string>,
+): TraspasoDeGrupo {
+  const out: TraspasoDeGrupo = { aMarcar: [], cambiaron: [], yaMarcadas: [], yaTraspasadas: [], noEstan: [] };
+  /* Cada fila de hoy CONSUME su pieza de lo marcado: dos filas iguales no pasan por una sola. Entre barras, para que una
+     pieza no se confunda con el final de otra. ⚠ Un nombre con «|» parte su pieza en dos en `noEstan` (solo en lo que
+     se informa: la comparación busca la pieza entera). */
+  let resto = `|${huellaDelGrupo}|`;
+  const estabaMarcada = (item: ItemDiferencia): boolean => {
+    const pieza = `|${piezaDeGrupo(item)}|`;
+    const i = resto.indexOf(pieza);
+    if (i < 0) return false;
+    resto = `${resto.slice(0, i)}|${resto.slice(i + pieza.length)}`;
+    return true;
+  };
+  const traspasada = (item: ItemDiferencia) =>
+    item.fila.documentos.length > 0 && item.fila.documentos.every((d) => traspasadas.has(d.clave));
+  const nombrada = (item: ItemDiferencia) => ({ clave: item.fila.clave, texto: item.texto });
+
+  for (const { item } of linea?.marcadas ?? []) {
+    estabaMarcada(item);
+    (traspasada(item) ? out.yaTraspasadas : out.yaMarcadas).push(nombrada(item));
+  }
+  const indice = indiceDeMarcas(marcas);
+  for (const item of linea?.items ?? []) {
+    const estaba = estabaMarcada(item);
+    if (traspasada(item)) out.yaTraspasadas.push(nombrada(item));
+    else if (!estaba) out.cambiaron.push(nombrada(item));
+    else {
+      const documentos = item.fila.documentos.filter(
+        (d) => !traspasadas.has(d.clave) && !(linea && indice.vigente(linea.codigo, d.clave, d.huella)),
+      );
+      if (documentos.length) out.aMarcar.push({ fila: item.fila.clave, texto: item.texto, documentos });
+    }
+  }
+  out.noEstan = resto.split("|").filter(Boolean);
+  return out;
 }

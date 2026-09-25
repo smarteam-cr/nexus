@@ -17,6 +17,7 @@ import {
   coberturaDelCruce,
   cruzar,
   decidirMarcas,
+  decidirTraspasoDeGrupo,
   detectarDiferenciasOdoo,
   esDocumentoVivo,
   facturasDeVariasCuotas,
@@ -28,7 +29,9 @@ import {
   resumenDeDiferencias,
   textoDeLiberacion,
   textoDeMontos,
+  type TraspasoDeGrupo,
   type CobroParaCruzar,
+  type EstadoDelCruce,
   type DiferenciaOdoo,
   type DocumentoDelLibro,
   type ItemDiferencia,
@@ -2357,6 +2360,82 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     const e = lineaDe(detectarDiferenciasOdoo({ ...todas, facturas, marcas: otraVez }), "ODOO-SIN-CUENTA")!;
     expect(e.volvieron).toEqual([]);
     expect(e.items.map((i) => i.fila.clave)).not.toContain("cliente:90|USD");
+  });
+
+  /* ── ⭐ 2026-09-25 · EL TRASPASO DE LA MARCA DE GRUPO ────────────────────────────────────
+     La única marca de grupo que existía (15 notas de crédito) pasa a una marca por nota, con el mismo motivo, la misma
+     persona y la misma fecha, comparando cada nota con lo que se marcó (decisión de Elías). */
+  const otraNota = sinPagar({
+    id: "n900",
+    odooMoveId: 900,
+    numero: "NC/2026/0900",
+    cuentaId: null,
+    odooPartnerId: 96,
+    odooPartnerNombre: "NOTA SUELTA S.A.",
+    invoiceDate: "2026-05-04",
+    montoNeto: 250,
+    moveType: "out_refund",
+  });
+  const conDosNotas = { ...todas, facturas: [...todas.facturas, otraNota] };
+  const NOTAS = "ODOO-NOTA-SIN-APLICAR";
+  const deGrupo = { motivo: "Se han revisado de acuerdo a la conciliación de Odoo", marcadaPor: "egonzalez@smarteamcr.com", marcadaEn: "2026-09-25T17:36:33.000Z" };
+  /** Lo que escribe el script: una marca por documento, con la firma de la marca de grupo. */
+  const marcasDelTraspaso = (t: TraspasoDeGrupo): MarcaDeFila[] =>
+    t.aMarcar.flatMap((f) => f.documentos.map((d) => ({ id: `t ${d.clave}`, linea: NOTAS, fila: f.fila, documento: d.clave, huella: d.huella, ...deGrupo })));
+  const notasDe = (e: EstadoDelCruce) => lineaDe(detectarDiferenciasOdoo(e), NOTAS);
+
+  it("⭐ traspaso: cada nota que sigue como se marcó recibe su marca; la que cambió se queda en la lista y se nombra", () => {
+    const alMarcar = notasDe(conDosNotas)!;
+    expect(alMarcar.items.map((i) => i.fila.clave).sort()).toEqual(["f:n242", "f:n900"]);
+    const guardada = huellaDe(alMarcar);
+    /* Entre la marca de grupo y el traspaso, a la NC/2026/0900 le aplicaron una parte. */
+    const hoy = { ...conDosNotas, facturas: conDosNotas.facturas.map((f) => (f.id === "n900" ? { ...f, paymentState: "partial", montoResidual: 100 } : f)) };
+    const t = decidirTraspasoDeGrupo(notasDe(hoy), guardada, [], new Set());
+    expect(t.aMarcar.map((f) => [f.fila, f.documentos.map((d) => d.clave)])).toEqual([["f:n242", ["f:n242"]]]);
+    expect(t.aMarcar[0]!.documentos[0]!.huella, "con los números que tenía al marcarse").toBe(filaDe([alMarcar], NOTAS, "f:n242")!.fila.documentos[0]!.huella);
+    expect(t.cambiaron.map((c) => c.clave)).toEqual(["f:n900"]);
+    const la900 = filaDe([alMarcar], NOTAS, "f:n900")!;
+    expect(t.noEstan, "lo que decía cuando se marcó").toEqual([`${la900.texto}=${la900.monto}`]);
+    expect([t.yaMarcadas, t.yaTraspasadas]).toEqual([[], []]);
+    /* Escritas las marcas, la que no cambió sale de la lista con el motivo, la persona y la fecha del grupo. */
+    const despues = notasDe({ ...hoy, marcas: marcasDelTraspaso(t) })!;
+    expect(despues.items.map((i) => i.fila.clave)).toEqual(["f:n900"]);
+    expect(despues.marcadas.map((m) => [m.item.fila.clave, m.marcas[0]?.motivo, m.marcas[0]?.marcadaPor, m.marcas[0]?.marcadaEn])).toEqual([
+      ["f:n242", deGrupo.motivo, deGrupo.marcadaPor, deGrupo.marcadaEn],
+    ]);
+  });
+
+  it("⭐ traspaso: correrlo dos veces no escribe nada la segunda, y lo que alguien deshizo no se vuelve a marcar", () => {
+    const guardada = huellaDe(notasDe(conDosNotas)!);
+    const primera = decidirTraspasoDeGrupo(notasDe(conDosNotas), guardada, [], new Set());
+    expect(primera.aMarcar.map((f) => f.fila).sort()).toEqual(["f:n242", "f:n900"]);
+    const escritas = marcasDelTraspaso(primera);
+    const traspasadas = new Set(escritas.map((m) => m.documento));
+    const segunda = decidirTraspasoDeGrupo(notasDe({ ...conDosNotas, marcas: escritas }), guardada, escritas, traspasadas);
+    expect(segunda.aMarcar).toEqual([]);
+    expect(segunda.yaTraspasadas.map((f) => f.clave).sort()).toEqual(["f:n242", "f:n900"]);
+    expect(segunda.noEstan).toEqual([]);
+    /* Alguien deshizo la de la 0900: vuelve a la lista, y una tercera corrida no la pisa. */
+    const vigentes = escritas.filter((m) => m.documento !== "f:n900");
+    const tercera = decidirTraspasoDeGrupo(notasDe({ ...conDosNotas, marcas: vigentes }), guardada, vigentes, traspasadas);
+    expect(tercera.aMarcar).toEqual([]);
+    expect(tercera.yaTraspasadas.map((f) => f.clave).sort()).toEqual(["f:n242", "f:n900"]);
+  });
+
+  it("traspaso: lo marcado a mano no se marca dos veces, un nombre cambiado no pasa, y sin la línea no se marca nada", () => {
+    const alMarcar = notasDe(conDosNotas)!;
+    const guardada = huellaDe(alMarcar);
+    const aMano = marcasDe(NOTAS, filaDe([alMarcar], NOTAS, "f:n242")!, { id: "a mano", marcadaPor: "aarrieta@smarteamcr.com" });
+    const t = decidirTraspasoDeGrupo(notasDe({ ...conDosNotas, marcas: aMano }), guardada, aMano, new Set());
+    expect(t.yaMarcadas.map((f) => f.clave)).toEqual(["f:n242"]);
+    expect(t.aMarcar.map((f) => f.fila)).toEqual(["f:n900"]);
+    expect(t.noEstan).toEqual([]);
+    /* ⚠ La huella de grupo se guardó con nombres: si Odoo renombra al cliente, la nota no pasa y queda a la vista. */
+    const renombrado = { ...conDosNotas, facturas: conDosNotas.facturas.map((f) => (f.id === "n900" ? { ...f, odooPartnerNombre: "NOTA SUELTA S.R.L." } : f)) };
+    expect(decidirTraspasoDeGrupo(notasDe(renombrado), guardada, [], new Set()).cambiaron.map((c) => c.clave)).toEqual(["f:n900"]);
+    const sinLinea = decidirTraspasoDeGrupo(undefined, guardada, [], new Set());
+    expect(sinLinea.aMarcar).toEqual([]);
+    expect(sinLinea.noEstan).toEqual(alMarcar.items.map((i) => `${i.texto}=${i.monto}`));
   });
 });
 

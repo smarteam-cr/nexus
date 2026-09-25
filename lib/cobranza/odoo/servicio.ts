@@ -640,12 +640,24 @@ type MedidoDelCruce = {
 
 /**
  * Lo que «Lo que no cuadra» cruza, leído de la base. Aparte de `cargarDiferencias` para que una medición de solo
- * lectura pruebe la cobertura (`coberturaDelCruce`) con exactamente lo mismo que ve la pantalla.
+ * lectura pruebe la cobertura (`coberturaDelCruce`) con exactamente lo mismo que ve la pantalla, y para que los scripts
+ * de traspaso y reapertura (2026-09-25) decidan sobre las mismas filas que ve la pantalla.
+ *
+ * `sinMarcas`: SOLO para el simulacro de esos scripts, que tiene que poder correr antes de que exista la tabla de marcas
+ * (su SQL va antes del deploy, y el simulacro se corre para decidir). La pantalla nunca lo pasa: sin marcas, todo lo
+ * revisado volvería a la lista.
  */
-export async function cargarEstadoDelCruce(): Promise<{
+export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): Promise<{
   estado: EstadoDelCruce;
   medido: MedidoDelCruce;
 }> {
+  const leerMarcas = () =>
+    prisma.diferenciaOdooMarca.findMany({
+      where: { tipo: MARCA_BIEN_ASI, deshechaEn: null },
+      select: { id: true, linea: true, fila: true, documento: true, huella: true, motivo: true, marcadaPor: true, marcadaEn: true },
+      orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
+    });
+  const sinMarcas: Awaited<ReturnType<typeof leerMarcas>> = [];
   const [cobrosDb, facturasDb, cuentasDb, vinculosDb, marcasDb, liberadasDb, corridaOk, libro, servicios] = await Promise.all([
     prisma.cobro.findMany({
       select: {
@@ -705,11 +717,7 @@ export async function cargarEstadoDelCruce(): Promise<{
     /* ⭐ Las marcas «está bien así» por fila que nadie deshizo (2026-09-25). ⚠ La tabla es del SQL
        scripts/sql/2026-09-25-2-marcas-por-fila.sql, que va ANTES del deploy: sin ella esta pantalla da error.
        La marca de grupo (`DiferenciaOdooAceptada`) ya no se lee: la pantalla la dejó de usar ese día. */
-    prisma.diferenciaOdooMarca.findMany({
-      where: { tipo: MARCA_BIEN_ASI, deshechaEn: null },
-      select: { id: true, linea: true, fila: true, documento: true, huella: true, motivo: true, marcadaPor: true, marcadaEn: true },
-      orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
-    }),
+    opts.sinMarcas ? sinMarcas : leerMarcas(),
     /* Solo las que siguen abiertas: una resuelta no produce ninguna línea, y traerlas todas
        hacía crecer esta consulta para siempre sin que nada lo usara. La regla de qué es
        «pendiente» sigue viviendo entera en `liberacionesPendientes` —el módulo puro la prueba
