@@ -18,7 +18,9 @@
  * función que la pantalla y, si la huella no es la que vio el CSE, no escribe nada (409 PLAN_CAMBIO).
  * Si la propuesta guardada ya no es esa —otra corrida u otra versión—, 409 PROPUESTA_CAMBIO. Tocar
  * tareas pide la misma vara que generarlas (403 SIN_PERMISO). La auditoría, el evento del arranque y
- * el desenlace de la corrida van DESPUÉS, fuera de la transacción.
+ * el desenlace de la corrida van DESPUÉS, fuera de la transacción. E3: lo que dictó el chat pide la vara
+ * de esta ruta (no la de la IA), y sus eventos del watchdog se emiten acá, al aplicar, como los emite
+ * el PUT cuando el chat escribe directo (lib/timeline/eventos-de-la-propuesta.ts).
  *
  * Reemplaza a `proposal/apply-items` (que queda como lápida con un 409 «Nexus se actualizó») y, para
  * «Regenerar todo», a `detail/apply-all` (desde E2b, también una lápida 409 hasta E4).
@@ -47,6 +49,7 @@ import {
 } from "@/lib/timeline/escribir-estructura";
 import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
+import { aplicadosDelChat, eventosDelChatAplicado } from "@/lib/timeline/eventos-de-la-propuesta";
 
 /** El comienzo de la razón de la auditoría, según de dónde viene la propuesta. */
 function razonDeDonde(d: DeDondeViene): string {
@@ -191,6 +194,8 @@ export async function POST(
      «Regenerar» de una fase (pedido «regenerar») quedaba auditada como «Regenerar todo». */
   const deDonde = razonDeDonde(deDondeViene(r.borrador));
   const { creadas: tareasNuevas, borradas: tareasQueSeVan } = r.tareas;
+  // E3: cuántos de los aplicados dictó el chat.
+  const delChat = aplicadosDelChat(r.plan);
   /* E2c: las fases cuyas tareas se aplicaron sin recalcular («Aplicar de todos modos») quedan dichas.
      Defensivo: la auditoría es best-effort y un plan sin la lista no la tiene que tirar. */
   const forzadas = r.plan.forzadas ?? [];
@@ -230,6 +235,7 @@ export async function POST(
         reason:
           `${deDonde} ` +
           `aplicada: ${aplicadas} de ${total} ${total === 1 ? "cambio" : "cambios"}` +
+          (delChat > 0 ? ` (${delChat} del chat)` : "") +
           (fuera > 0 ? ` (${fuera} ${fuera === 1 ? "quedó fuera" : "quedaron fuera"})` : "") +
           deTareas +
           "." +
@@ -261,6 +267,20 @@ export async function POST(
               after: { anchorStartDate: anclaDespues, projectedEnd: projectedEnd(anclaDespues, snapPhases).label },
             },
           ],
+        );
+      }
+    }
+
+    /* E3 (D15): lo que dictó el chat emite sus eventos del watchdog al aplicar, con las acciones del
+       PUT (el camino que tomaba sin propuesta abierta). Lo de la IA sigue sin eventos por tarea. */
+    const delChatEventos = eventosDelChatAplicado(r.plan, r.vivo, r.fasesBorradas, r.fasesCreadas);
+    if (delChatEventos.length > 0) {
+      const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { clientId: true } });
+      if (proj) {
+        await emitTimelineEventsSafe(
+          prisma,
+          { projectId, clientId: proj.clientId, timelineId: tl.id, actorEmail: guard.user.email ?? null, source: "AI_ASSIST_APPLY" },
+          delChatEventos,
         );
       }
     }

@@ -10,14 +10,16 @@
  *     fase), y el viejo del handoff tampoco (su lector vive hasta E4);
  *   · la vuelta atrás deja los v1 «solo de fases» (los del handoff: E1 los lee bien) y limpia los
  *     que esperan o traen tareas, con la escritura condicionada de siempre (token + formato);
- *   · el listado y la inspección imprimen `origen` y `soloFase`.
+ *   · el listado y la inspección imprimen `origen` y `soloFase`;
+ *   · (E3 P1) la vuelta atrás a E2c (`--desde-e3`) limpia los v1 con algo de E3, y el listado dice
+ *     cuánto dictó el chat y cuántas casillas guarda.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { borradorDelHandoff, borradorVacio, FORMATO_BORRADOR, type Borrador, type Vivo } from "./borrador";
 import type { ProposalLike } from "./proposal-deltas";
-import { FORMATOS, FRENAN_EL_DEPLOY, esV1SoloDeFases, formatoDe } from "../../scripts/lib/propuestas-abiertas";
+import { FORMATOS, FRENAN_EL_DEPLOY, esV1SoloDeFases, formatoDe, traeAlgoDeE3 } from "../../scripts/lib/propuestas-abiertas";
 
 const RAIZ = process.cwd();
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
@@ -123,6 +125,48 @@ describe("scripts/propuestas-abiertas — la vuelta atrás deja los v1 solo de f
     expect(tramo).not.toContain("for (const f of v1s)");
     expect(tramo).toContain("pendingProposalRunId: f.pendingProposalRunId,");
     expect(tramo).toContain('pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR },');
+  });
+});
+
+describe("scripts/propuestas-abiertas — la vuelta atrás a E2c (`--desde-e3`)", () => {
+  it("⭐ cuenta los v1 con un tipo de E3, con casillas guardadas o con algo del chat; nada más", () => {
+    /* E2c lee `tarea-cambia` y `fase-se-va` como desconocidos (y bloquea), pero ignora `excluidos` y
+       `porChat` EN SILENCIO: una pantalla de E2c volvería a marcar lo desmarcado en otra computadora y
+       aplicaría lo del chat con la vara de la IA. La edición que la pone en rojo: mirar solo los tipos,
+       o limpiar también un v1 de E2c que no trae nada de E3 (se perdería una propuesta sin razón). */
+    expect(traeAlgoDeE3(DEL_HANDOFF)).toBe(false);
+    expect(traeAlgoDeE3(borradorVacio({ pedido: "regenerar", corrida: "run-1" }))).toBe(false);
+    expect(traeAlgoDeE3({ ...DEL_HANDOFF, excluidos: [] }), "casillas guardadas pero vacías").toBe(false);
+    expect(traeAlgoDeE3({ ...DEL_HANDOFF, excluidos: ["orden"] })).toBe(true);
+    expect(traeAlgoDeE3({ ...DEL_HANDOFF, cambios: [...DEL_HANDOFF.cambios, { tipo: "fase-se-va", clave: "fase:a:se-va" }] })).toBe(true);
+    expect(traeAlgoDeE3({ ...DEL_HANDOFF, cambios: [...DEL_HANDOFF.cambios, { tipo: "tarea-cambia", clave: "tarea:x:cambia" }] })).toBe(true);
+    expect(traeAlgoDeE3({ ...DEL_HANDOFF, cambios: [{ ...DEL_HANDOFF.cambios[0], porChat: true }] })).toBe(true);
+    expect(traeAlgoDeE3(VIEJA_DEL_HANDOFF), "lo que no es un v1").toBe(false);
+    // Y la vuelta atrás a E1 (`--rollback`) ya no deja uno del handoff que el chat tocó: E1 no lo lee.
+    expect(esV1SoloDeFases({ ...DEL_HANDOFF, cambios: [{ ...DEL_HANDOFF.cambios[0], porChat: true }] })).toBe(false);
+  });
+
+  it("⛔ con `--apply` limpia SOLO esos, respaldando antes y con la escritura condicionada de siempre", () => {
+    /* La edición que la pone en rojo: recorrer todos los v1, escribir sin el guard (`resolverApply` con
+       la tabla) o soltar el token o el formato del `where`. */
+    const src = leer("scripts/propuestas-abiertas.ts");
+    expect(src).toContain('const APPLY = ROLLBACK || DESDE_E3 ? resolverApply({ tablas: ["ProjectTimeline"] }) : false;');
+    const tramo = src.slice(src.indexOf("if (DESDE_E3) {"));
+    const filtro = tramo.indexOf("const deE3 = v1s.filter((f) => traeAlgoDeE3(f.pendingProposal));");
+    const bucle = tramo.indexOf("for (const f of deE3) {\n        if (!APPLY) continue;");
+    const escribe = tramo.indexOf("prisma.projectTimeline.updateMany(");
+    expect(filtro).toBeGreaterThan(-1);
+    expect(bucle).toBeGreaterThan(filtro);
+    expect(escribe).toBeGreaterThan(bucle);
+    expect(tramo).toContain("pendingProposalRunId: f.pendingProposalRunId,");
+    expect(tramo).toContain('pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR },');
+    // Y `--apply` solo, sin ninguna vuelta atrás, se sigue negando.
+    expect(src).toContain('if (process.argv.includes("--apply") && !ROLLBACK && !DESDE_E3) {');
+  });
+
+  it("el listado dice cuánto dictó el chat y cuántas casillas guarda cada v1", () => {
+    const src = leer("scripts/propuestas-abiertas.ts");
+    expect(src).toContain("del chat: ${delChat} · desmarcados guardados: ${b.excluidos?.length ?? 0}");
   });
 });
 

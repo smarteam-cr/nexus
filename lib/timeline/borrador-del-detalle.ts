@@ -498,6 +498,8 @@ interface FaseLeida {
   sessionCount: number | null;
   notes: string | null;
   activityType: string | null;
+  /** E3: el estado de la fase (`SELECT_DE_FASE` lo trae): una fase que se va choca si ya arrancó. */
+  status: string;
   tasks: Array<{
     id: string;
     title: string;
@@ -525,6 +527,8 @@ function vivoDeLaBase(anchorStartDate: Date | null, fases: readonly FaseLeida[])
       sessionCount: f.sessionCount,
       notes: f.notes,
       activityType: f.activityType ?? null,
+      // E3: el mismo dato que la pantalla y que aplicar (paridad: si faltara, la huella diferiría).
+      status: f.status,
       tareas: f.tasks.map(
         (t): TareaDelVivo => ({
           id: t.id,

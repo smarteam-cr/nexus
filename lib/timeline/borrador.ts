@@ -43,8 +43,8 @@
  *
  * ── E2a: «REGENERAR TODO» DEJA UN SOLO BORRADOR, CON FASES Y TAREAS ───────────
  * Nace el formato `borrador-v1` escrito de verdad (lo escriben /estructura y /analyze) y dos tipos
- * de cambio de TAREA: `tarea-nueva` y `tarea-se-va`. Nadie produce otros antes del chat (E3): una
- * tarea que cambia o se muda, o una fase que se va, se leen como DESCONOCIDOS y bloquean.
+ * de cambio de TAREA: `tarea-nueva` y `tarea-se-va`. Un tipo que esta versión no conoce (por ejemplo
+ * `tarea-se-muda`) se lee como DESCONOCIDO y bloquea.
  *   · El estado de las tareas no se guarda como máquina de estados: se DEDUCE de la corrida del
  *     paso 2 (`estadoDeLasTareas`). Aplicar se bloquea solo mientras la corrida está viva.
  *   · Las tareas de una fase valen si la fase, como quedaría, conserva el nombre y las semanas con
@@ -66,6 +66,19 @@
  * nunca en `tareas` (el estado se deduce de su corrida, igual que el de las tareas).
  * Desde P3 (el interruptor), sus tareas ya no quedan fuera «con» el cambio desmarcado: quedan en
  * espera, sin `dependeDe`, y aplicar se bloquea hasta que se recalculen, se desmarquen o se fuercen.
+ *
+ * ── E3: LO QUE DICTA EL CHAT ─────────────────────────────────────────────────
+ * Dos tipos más, que solo produce el chat:
+ *   · `tarea-cambia`: renombra, cambia de semana, de dueño o de tipo, o MUDA una tarea (`a.fase`) y
+ *     conserva su id, su estado y sus fechas. Una sola fila por tarea: mudarla y renombrarla es UN
+ *     cambio (aplicar solo la mitad dejaría estados a medias).
+ *   · `fase-se-va`: quita una fase. Lo que tiene avance, se cargó a mano, se creó o se editó después
+ *     del cambio (la foto por tarea) se queda, y la fase con ello (`ItemDelPlan.rescate`).
+ * `porChat` marca lo que dictó el chat (en los 8 tipos) y `retocada` una tarea nueva de la IA que el
+ * chat editó. Deciden el permiso (`necesitaPermisoDeIa`), el `source` con que nace o queda lo escrito
+ * y que el cierre de E2c no los mire. `excluidos` (las casillas guardadas) y `ajustadasPorElChat` (la
+ * forma que el chat le dio a una fase armada, D9) viajan en el JSON; el plan NUNCA lee `excluidos`:
+ * quien llama pasa `sin`.
  */
 import { huella as huellaDeTitulo, type Party, type TipoDeTarea } from "./assist-items"; // sin ciclo: assist-items no importa nada
 import { estaColgada } from "@/lib/agents/run-colgada"; // puro, client-safe
@@ -149,6 +162,9 @@ export interface FaseViva {
   /** Sus tareas, en su orden (semana y `order`). `undefined` = no se leyeron (el handoff, la foto
    *  de E1): una tarea que se va choca, que es la dirección segura. */
   tareas?: TareaDelVivo[];
+  /** E3: el estado de la fase (PENDING, IN_PROGRESS…). `undefined` = no se leyó: una fase que se va
+   *  choca. Lo tienen igual la pantalla y el servidor (si no, la huella difiere). */
+  status?: string;
 }
 
 /** El cronograma tal como está: el ancla (ISO o YYYY-MM-DD; se compara por día) y las fases en orden. */
@@ -166,14 +182,23 @@ export interface FaseNuevaPropuesta {
   activityType: string | null;
 }
 
-export interface CambioDeAncla {
+/**
+ * E3: lo que dictó el chat. Decide el permiso para aplicar (la vara de editar, no la de la IA), el
+ * `source` con que nace o queda lo escrito, que el cierre de E2c no lo mire y que las fusiones de la
+ * IA no lo borren. Ausente = de la IA (todo lo anterior a E3).
+ */
+interface DelChat {
+  porChat?: true;
+}
+
+export interface CambioDeAncla extends DelChat {
   tipo: "ancla";
   clave: "ancla";
   /** YYYY-MM-DD o null (el proyecto no tenía). */
   desde: string | null;
   a: string;
 }
-export interface CambioDeOrden {
+export interface CambioDeOrden extends DelChat {
   tipo: "orden";
   clave: "orden";
   /** El orden COMPLETO de las fases cuando se armó. Si hoy es otro (se reordenó, se sumó o se borró una), choca. */
@@ -182,7 +207,7 @@ export interface CambioDeOrden {
   a: string[];
   motivos?: string[];
 }
-export interface CambioFaseNueva {
+export interface CambioFaseNueva extends DelChat {
   tipo: "fase-nueva";
   clave: string;
   fase: FaseNuevaPropuesta;
@@ -191,7 +216,7 @@ export interface CambioFaseNueva {
   despuesDe: string | null;
   motivo?: string;
 }
-export interface CambioFaseCambia {
+export interface CambioFaseCambia extends DelChat {
   tipo: "fase-cambia";
   clave: string;
   faseId: string;
@@ -200,6 +225,29 @@ export interface CambioFaseCambia {
   campo: CampoDeFase;
   desde: ValorDeCampo;
   a: ValorDeCampo;
+  motivo?: string;
+}
+
+/** E3: cómo estaba una fase que se va cuando se armó el cambio (los 6 campos y su estado). */
+export interface FotoDeFase {
+  name: string;
+  durationWeeks: number;
+  startWeek: number | null;
+  sessionCount: number | null;
+  notes: string | null;
+  activityType: string | null;
+  status: string;
+}
+/**
+ * E3: una fase que se quita (solo la produce el chat). Lo que tiene avance o se cargó a mano, lo
+ * creado después y lo editado después (la foto por tarea) se queda, y la fase con ello. La fase
+ * entera choca si se editó cualquier campo suyo después, o si ya arrancó.
+ */
+export interface CambioFaseSeVa extends DelChat {
+  tipo: "fase-se-va";
+  clave: string;
+  faseId: string;
+  desde: FotoDeFase & { tareas: Array<{ id: string; foto: FotoDeTarea }> };
   motivo?: string;
 }
 
@@ -225,17 +273,19 @@ export interface ContenidoDeTareaNueva {
   fuga: { campo: "titulo" | "nota"; motivo: string; motivoDeLaNota?: string } | null;
 }
 /** Una tarea que se crea. No guarda `desde`: sería siempre la huella de su título (se calcula al evaluar). */
-export interface CambioTareaNueva {
+export interface CambioTareaNueva extends DelChat {
   tipo: "tarea-nueva";
   clave: string;
   /** Su fase: el id de una existente o la clave (`n:…`) de una fase nueva del mismo borrador. */
   fase: string;
   tarea: ContenidoDeTareaNueva;
   motivo?: string;
+  /** E3: una tarea nueva de la IA que el chat editó: nace MODIFIED y la aplica la vara de la IA. */
+  retocada?: true;
 }
 /** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto que LEYÓ
  *  quien lo produjo (E2b, D10): lo que alguien edite después, aunque sea mientras la IA arma, choca. */
-export interface CambioTareaSeVa {
+export interface CambioTareaSeVa extends DelChat {
   tipo: "tarea-se-va";
   clave: string;
   tareaId: string;
@@ -243,11 +293,42 @@ export interface CambioTareaSeVa {
   desde: FotoDeTarea;
   motivo?: string;
 }
-export type CambioDeTarea = CambioTareaNueva | CambioTareaSeVa;
-export type CambioDeEstructura = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia;
+/** E3: los campos de una tarea que el chat puede cambiar (el orden es el de las frases). */
+export type CampoDeTarea = "title" | "weekIndex" | "party" | "type";
+export const CAMPOS_DE_TAREA: readonly CampoDeTarea[] = ["weekIndex", "title", "party", "type"];
+/**
+ * E3: una tarea viva que cambia (solo la produce el chat). Renombrarla, cambiarle la semana, el dueño
+ * o el tipo, o mudarla (`a.fase`): conserva su id, su estado y sus fechas. Se comparan SOLO los campos
+ * de `a` (y la fase): lo que nadie pidió cambiar puede editarse a mano sin chocar.
+ */
+export interface CambioTareaCambia extends DelChat {
+  tipo: "tarea-cambia";
+  clave: string;
+  tareaId: string;
+  /** Donde estaba al crearse el cambio (el origen). */
+  faseId: string;
+  desde: FotoDeTarea;
+  /** `fase`: el id de una existente o la clave `n:…` de una fase nueva del mismo borrador. */
+  a: { title?: string; weekIndex?: number; party?: Party | null; type?: TipoDeTarea | null; fase?: string };
+  /** D17: la clave del cambio de duración con el que va (quitar o insertar una semana). Si ese cambio
+   *  queda fuera, esta tarea también. */
+  conCambio?: string;
+  motivo?: string;
+}
+export type CambioDeTarea = CambioTareaNueva | CambioTareaSeVa | CambioTareaCambia;
+export type CambioDeEstructura = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia | CambioFaseSeVa;
 export type Cambio = CambioDeEstructura | CambioDeTarea;
 
-export const esCambioDeTarea = (c: Cambio): c is CambioDeTarea => c.tipo === "tarea-nueva" || c.tipo === "tarea-se-va";
+export const esCambioDeTarea = (c: Cambio): c is CambioDeTarea =>
+  c.tipo === "tarea-nueva" || c.tipo === "tarea-se-va" || c.tipo === "tarea-cambia";
+
+/**
+ * E3: ¿aplicar este cambio pide la vara de la IA (`guardIaDelCronograma`)? Las tareas y las fases que
+ * se van, salvo que las haya dictado el chat: lo del chat pide la de editar el cronograma, como hoy
+ * el PUT del chat.
+ */
+export const necesitaPermisoDeIa = (c: Cambio): boolean =>
+  (esCambioDeTarea(c) || c.tipo === "fase-se-va") && !c.porChat;
 
 export type OrigenDelBorrador = "handoff" | "contexto";
 
@@ -337,6 +418,17 @@ export interface Borrador {
   soloFase?: string;
   /** E2c: el recálculo de las fases desfasadas (ausente = no hay). Metadata del servidor. */
   recalculo?: RecalculoDelBorrador;
+  /**
+   * E3: las casillas desmarcadas, guardadas en el servidor (las ve cualquier computadora). El plan
+   * NUNCA las lee: quien llama pasa `sin`. Ausente = nadie las guardó todavía.
+   */
+  excluidos?: string[];
+  /**
+   * E3 (D9): la forma de una fase ARMADA después de que el chat le cambió el nombre, las semanas o
+   * las sesiones. No pisa `tareasArmadasPara`: el cierre acepta cualquiera de las dos, así desmarcar
+   * el cambio del chat vuelve a la armada sin recalcular.
+   */
+  ajustadasPorElChat?: Record<string, FormaDeFase>;
 }
 
 /**
@@ -361,6 +453,10 @@ export const claveDeCampo = (faseId: string, campo: CampoDeFase): string => `fas
 /** Solo para CONVERTIR el formato viejo: un productor de v1 nunca deriva claves de posiciones. */
 export const claveDeNueva = (indice: number): string => `nueva:${indice}`;
 export const claveDeTareaQueSeVa = (tareaId: string): string => `tarea:${tareaId}:se-va`;
+/** E3: una sola fila por tarea que cambia (renombre, semana, dueño, tipo o mudanza). */
+export const claveDeTareaQueCambia = (tareaId: string): string => `tarea:${tareaId}:cambia`;
+/** E3: la fase que se va. «se-va» no es un campo, así que no choca con `claveDeCampo`. */
+export const claveDeFaseQueSeVa = (faseId: string): string => `fase:${faseId}:se-va`;
 /** El generador de claves por defecto. Las claves las genera solo el servidor; los tests inyectan uno. */
 export const claveAleatoria = (): string => globalThis.crypto.randomUUID();
 export const claveDeTareaNueva = (nuevaClave: () => string = claveAleatoria): string => `t:${nuevaClave()}`;
@@ -643,13 +739,22 @@ export function corridaDelVacio(json: unknown): string | null {
  *  el borrador vacío que espera sus tareas (ahí no hay nada que revisar todavía). */
 export const hayPropuestaParaRevisar = (json: unknown): boolean => json != null && !esVacioEsperandoTareas(json);
 
+/** Los tipos crudos que esta versión sabe leer y que piden la vara de la IA salvo que sean del chat. */
+const TIPOS_CON_PERMISO_DE_IA: readonly string[] = ["tarea-nueva", "tarea-se-va", "tarea-cambia", "fase-se-va"];
+
 /** ¿El v1 guardado trae algún cambio de tareas? Mira el tipo crudo (también uno que esta versión no
- *  conoce): decide el permiso de aplicar, y ante la duda cuenta como tocar tareas. */
+ *  conoce): decide el permiso de aplicar, y ante la duda cuenta como tocar tareas.
+ *  E3: cuentan los `tarea-*` y `fase-se-va` SIN `porChat === true` (lo del chat pide la vara de
+ *  editar, `necesitaPermisoDeIa`). Un `tarea-*` de un tipo que esta versión no conoce cuenta siempre. */
 export function traeCambiosDeTareas(json: unknown): boolean {
   return (
     esBorradorV1(json) &&
     Array.isArray(json.cambios) &&
-    json.cambios.some((c) => esObjeto(c) && typeof c.tipo === "string" && c.tipo.startsWith("tarea-"))
+    json.cambios.some((c) => {
+      if (!esObjeto(c) || typeof c.tipo !== "string") return false;
+      if (!c.tipo.startsWith("tarea-") && c.tipo !== "fase-se-va") return false;
+      return c.porChat !== true || !TIPOS_CON_PERMISO_DE_IA.includes(c.tipo);
+    })
   );
 }
 
@@ -713,26 +818,77 @@ function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
   return { title: v.title, weekIndex: v.weekIndex, notes, party, type, needsValidation: v.needsValidation, motivoPorValidar, fuga };
 }
 
-/** Un cambio del formato nuevo, validado. null = de un tipo o forma que esta versión no conoce. */
+/**
+ * E3: la foto de una fase que se va, estricta: los 6 campos con su tipo exacto y el estado. Una foto
+ * a medias no vale (el cambio queda desconocido y bloquea: la dirección segura).
+ */
+function leerFotoDeFase(v: unknown): FotoDeFase | null {
+  if (!esObjeto(v) || typeof v.name !== "string" || typeof v.durationWeeks !== "number" || typeof v.status !== "string") {
+    return null;
+  }
+  const num = (x: unknown) => (x === null ? null : typeof x === "number" ? x : undefined);
+  const txt = (x: unknown) => (x === null ? null : typeof x === "string" ? x : undefined);
+  const startWeek = num(v.startWeek);
+  const sessionCount = num(v.sessionCount);
+  const notes = txt(v.notes);
+  const activityType = txt(v.activityType);
+  if (startWeek === undefined || sessionCount === undefined || notes === undefined || activityType === undefined) return null;
+  return { name: v.name, durationWeeks: v.durationWeeks, startWeek, sessionCount, notes, activityType, status: v.status };
+}
+
+/** E3: el `a` de una tarea que cambia, estricto: al menos una clave, y cada una que venga, válida. */
+function leerCambioDeTarea(v: unknown): CambioTareaCambia["a"] | null {
+  if (!esObjeto(v)) return null;
+  const a: CambioTareaCambia["a"] = {};
+  if (v.title !== undefined) {
+    if (!esTitulo(v.title)) return null;
+    a.title = v.title;
+  }
+  if (v.weekIndex !== undefined) {
+    if (!esSemana(v.weekIndex)) return null;
+    a.weekIndex = v.weekIndex;
+  }
+  if (v.party !== undefined) {
+    const party = leerParty(v.party);
+    if (party === undefined) return null;
+    a.party = party;
+  }
+  if (v.type !== undefined) {
+    const type = leerTipoDeTarea(v.type);
+    if (type === undefined) return null;
+    a.type = type;
+  }
+  if (v.fase !== undefined) {
+    if (!esTextoEntre(v.fase, 1, 200)) return null;
+    a.fase = v.fase;
+  }
+  return Object.keys(a).length > 0 ? a : null;
+}
+
+/** Un cambio del formato nuevo, validado. null = de un tipo o forma que esta versión no conoce.
+ *  E3: `porChat` se lee en los 8 tipos y `retocada` en `tarea-nueva`: si no se leyeran, una fusión
+ *  que reescribe `cambios` desde el borrador leído los borraría. */
 function leerCambio(v: unknown): Cambio | null {
   if (!esObjeto(v) || typeof v.clave !== "string" || !v.clave) return null;
   const motivo = textoOpcional(v.motivo);
+  const conMotivo = motivo ? { motivo: motivo.v } : {};
+  const delChat = v.porChat === true ? { porChat: true as const } : {};
   switch (v.tipo) {
     case "ancla":
       if (v.clave !== "ancla" || typeof v.a !== "string" || !(v.desde === null || typeof v.desde === "string")) return null;
-      return { tipo: "ancla", clave: "ancla", desde: dia(v.desde), a: v.a.slice(0, 10) };
+      return { tipo: "ancla", clave: "ancla", desde: dia(v.desde), a: v.a.slice(0, 10), ...delChat };
     case "orden": {
       const ids = (x: unknown) => (Array.isArray(x) && x.every((s) => typeof s === "string") ? (x as string[]) : null);
       const desde = ids(v.desde);
       const a = ids(v.a);
       if (v.clave !== "orden" || !desde || !a) return null;
       const motivos = ids(v.motivos);
-      return { tipo: "orden", clave: "orden", desde, a, ...(motivos && motivos.length > 0 ? { motivos } : {}) };
+      return { tipo: "orden", clave: "orden", desde, a, ...(motivos && motivos.length > 0 ? { motivos } : {}), ...delChat };
     }
     case "fase-nueva": {
       const fase = leerFaseNueva(v.fase);
       if (!fase || !(v.despuesDe === null || typeof v.despuesDe === "string")) return null;
-      return { tipo: "fase-nueva", clave: v.clave, fase, despuesDe: v.despuesDe, ...(motivo ? { motivo: motivo.v } : {}) };
+      return { tipo: "fase-nueva", clave: v.clave, fase, despuesDe: v.despuesDe, ...conMotivo, ...delChat };
     }
     case "fase-cambia":
       if (typeof v.faseId !== "string" || typeof v.fase !== "string" || !esCampo(v.campo)) return null;
@@ -745,12 +901,34 @@ function leerCambio(v: unknown): Cambio | null {
         campo: v.campo,
         desde: v.desde,
         a: v.a,
-        ...(motivo ? { motivo: motivo.v } : {}),
+        ...conMotivo,
+        ...delChat,
       };
+    case "fase-se-va": {
+      if (!esTextoEntre(v.faseId, 1, 200) || !esObjeto(v.desde)) return null;
+      const foto = leerFotoDeFase(v.desde);
+      const crudas = v.desde.tareas;
+      if (!foto || !Array.isArray(crudas) || crudas.length > 2000) return null;
+      const tareas: CambioFaseSeVa["desde"]["tareas"] = [];
+      for (const t of crudas) {
+        const fotoDeLaTarea = esObjeto(t) ? leerFotoDeTarea(t.foto) : null;
+        if (!esObjeto(t) || !esTextoEntre(t.id, 1, 200) || !fotoDeLaTarea) return null;
+        tareas.push({ id: t.id, foto: fotoDeLaTarea });
+      }
+      return { tipo: "fase-se-va", clave: v.clave, faseId: v.faseId, desde: { ...foto, tareas }, ...conMotivo, ...delChat };
+    }
     case "tarea-nueva": {
       const tarea = leerContenidoDeTarea(v.tarea);
       if (typeof v.fase !== "string" || !v.fase || !tarea) return null;
-      return { tipo: "tarea-nueva", clave: v.clave, fase: v.fase, tarea, ...(motivo ? { motivo: motivo.v } : {}) };
+      return {
+        tipo: "tarea-nueva",
+        clave: v.clave,
+        fase: v.fase,
+        tarea,
+        ...conMotivo,
+        ...delChat,
+        ...(v.retocada === true ? { retocada: true as const } : {}),
+      };
     }
     case "tarea-se-va": {
       const desde = leerFotoDeTarea(v.desde);
@@ -761,7 +939,25 @@ function leerCambio(v: unknown): Cambio | null {
         tareaId: v.tareaId,
         faseId: v.faseId,
         desde,
-        ...(motivo ? { motivo: motivo.v } : {}),
+        ...conMotivo,
+        ...delChat,
+      };
+    }
+    case "tarea-cambia": {
+      const desde = leerFotoDeTarea(v.desde);
+      const a = leerCambioDeTarea(v.a);
+      if (typeof v.tareaId !== "string" || !v.tareaId || typeof v.faseId !== "string" || !v.faseId || !desde || !a) return null;
+      if (!(v.conCambio === undefined || esTextoEntre(v.conCambio, 1, 300))) return null;
+      return {
+        tipo: "tarea-cambia",
+        clave: v.clave,
+        tareaId: v.tareaId,
+        faseId: v.faseId,
+        desde,
+        a,
+        ...(typeof v.conCambio === "string" ? { conCambio: v.conCambio } : {}),
+        ...conMotivo,
+        ...delChat,
       };
     }
     default:
@@ -830,6 +1026,15 @@ const leerSoloFase = (v: unknown): string | null =>
   typeof v === "string" && v.length >= 1 && v.length <= 200 ? v : null;
 
 /**
+ * E3: las casillas guardadas: hasta 2000 claves de 1 a 300 caracteres. Mal formadas → ausentes, y NO
+ * cuentan en `desconocidos` (no son un cambio que se deje de aplicar: aplicar lee el `sin` del cuerpo).
+ */
+function leerExcluidos(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length > 2000 || !v.every((s) => esTextoEntre(s, 1, 300))) return null;
+  return [...(v as string[])];
+}
+
+/**
  * Lo guardado en `pendingProposal` como borrador, o null si no hay (o es la propuesta del
  * modificador, que trae tareas). El formato nuevo se lee tal cual; el viejo se convierte contra `base`.
  */
@@ -849,6 +1054,9 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
       : [];
     const soloFase = leerSoloFase(json.soloFase);
     const recalculo = leerRecalculo(json.recalculo);
+    const excluidos = leerExcluidos(json.excluidos);
+    // E3 (D9): con la misma validación que la forma armada; lo que no vale, no entra.
+    const ajustadas = esObjeto(json.ajustadasPorElChat) ? leerTareasArmadasPara(json.ajustadasPorElChat) : null;
     return {
       formato: FORMATO_BORRADOR,
       version: typeof json.version === "number" && Number.isInteger(json.version) && json.version >= 0 ? json.version : 0,
@@ -861,6 +1069,8 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
       tareasArmadasPara: leerTareasArmadasPara(json.tareasArmadasPara),
       ...(soloFase ? { soloFase } : {}),
       ...(recalculo ? { recalculo } : {}),
+      ...(excluidos ? { excluidos } : {}),
+      ...(ajustadas ? { ajustadasPorElChat: ajustadas } : {}),
     };
   }
   if (!esBorradorGuardado(json)) return null;
@@ -967,16 +1177,30 @@ export interface ItemDelPlan {
   dependeDe?: string;
   /** E2c: una tarea de una fase DESFASADA (`FaseDesfasada`): queda fuera hasta que se recalculen. */
   recalcula?: true;
+  /** E3: solo en una `fase-se-va` que aplica: las tareas vivas que se quedan (con avance, cargadas a
+   *  mano, creadas o editadas después), en el orden de lo vivo. Con alguna, la fase se queda. */
+  rescate?: string[];
 }
 
 export type Lugar = { tipo: "existente"; id: string } | { tipo: "nueva"; clave: string };
 
-/** Las tareas que se escriben al aplicar. */
+/** Las tareas que se escriben al aplicar. Lo que suma E3 es opcional: los fixtures de E2a compilan. */
 export interface EscriturasDeTareas {
   /** Los ids de las que se quitan, en el orden del cronograma vivo. */
   seVan: string[];
   /** Las que se crean, en el orden del borrador. */
-  nuevas: Array<{ clave: string; fase: Lugar; tarea: ContenidoDeTareaNueva }>;
+  nuevas: Array<{ clave: string; fase: Lugar; tarea: ContenidoDeTareaNueva; porChat?: true; retocada?: true }>;
+  /**
+   * E3: las vivas que cambian, en el orden del cronograma vivo. `campos` lleva solo lo que difiere de
+   * lo vivo (en una mudanza sin semana pedida, la semana viva: el escritor la acota al destino).
+   * `aFase` = null si se queda en su fase.
+   */
+  cambian?: Array<{
+    id: string;
+    desdeFase: string;
+    campos: { title?: string; weekIndex?: number; party?: Party | null; type?: TipoDeTarea | null };
+    aFase: Lugar | null;
+  }>;
 }
 
 export interface EscriturasDeEstructura {
@@ -984,9 +1208,13 @@ export interface EscriturasDeEstructura {
   ancla: string | null;
   /** Solo los campos que cambian, por fase. */
   fases: Array<{ id: string; campos: Partial<Record<CampoDeFase, ValorDeCampo>> }>;
-  nuevas: Array<{ clave: string; fase: FaseNuevaPropuesta }>;
-  /** El orden final: las existentes y las nuevas. El escritor toca solo las filas cuyo orden cambia. */
+  nuevas: Array<{ clave: string; fase: FaseNuevaPropuesta; porChat?: true }>;
+  /** El orden final: las existentes y las nuevas. El escritor toca solo las filas cuyo orden cambia.
+   *  E3: una fase que se va entera (`queda: false`) ya no está. */
   orden: Lugar[];
+  /** E3: las fases que se van. `borrar`: sus tareas pendientes que se van con ella; `queda`: se
+   *  quedan tareas (el rescate), y la fase con ellas. */
+  fasesQueSeVan?: Array<{ id: string; borrar: string[]; queda: boolean }>;
 }
 
 export interface PlanDeAplicacion {
@@ -1035,6 +1263,17 @@ const CHOQUE_ORDEN =
   "Cambiaste las fases a mano después de la propuesta (el orden, o sumaste o borraste una): el orden queda como lo dejaste.";
 const CHOQUE_ANCLA_DE_LA_NUEVA = "La fase después de la que iba ya no está: esta fase nueva queda fuera.";
 const choqueNombreRepetido = (nombre: string) => `Ya hay una fase «${nombre}» en el cronograma: no se crea otra.`;
+// ── E3: la fase que se va y la tarea que cambia ──
+const CHOQUE_SIN_TAREAS_DE_LA_FASE = "No se leyeron las tareas de esta fase: la fase queda como está.";
+const CHOQUE_FASE_EDITADA = "La cambiaste a mano después de la propuesta: la fase se queda.";
+const CHOQUE_FASE_EN_CURSO = "La fase ya arrancó: se queda.";
+const CHOQUE_FASE_TODO_PROTEGIDO = "Todas sus tareas tienen avance o las escribiste a mano: la fase se queda.";
+const CHOQUE_TAREA_AUSENTE = "Ya no está en el cronograma: este cambio queda fuera.";
+const CHOQUE_DESTINO_FUERA = "Su fase de destino queda fuera.";
+const choqueDestinoSeVa = (n: number) => `La fase de destino se quita con el cambio ${n}.`;
+const choqueConCambio = (n: number) => `Va con el cambio ${n}, que queda fuera.`;
+const choqueLaTareaSeQuita = (n: number) => `La tarea se quita con el cambio ${n}.`;
+const choqueSuFaseSeQuita = (n: number) => `Su fase se quita con el cambio ${n}.`;
 export const BLOQUEO_VERSION_NUEVA =
   "Esta propuesta tiene cambios que esta versión de Nexus no sabe aplicar: recarga la página.";
 /** El 409 del PUT con motivo mientras hay una propuesta abierta (timeline/route.ts): lo muestran la
@@ -1106,6 +1345,19 @@ function evaluar(c: CambioDeEstructura, vivo: Vivo, nuevas: ReadonlyMap<string, 
       if (hoy !== c.desde) return { estado: "choque", choque: CHOQUE_CAMPO };
       return { estado: "pendiente" };
     }
+    case "fase-se-va": {
+      /* E3 (D3): sin la fase, ya está. Sin sus tareas o su estado leídos no se sabe qué se llevaría:
+         choca. Cualquier campo editado después, o la fase ya arrancada: se queda. El rescate de sus
+         tareas va aparte (paso 4 del plan). */
+      const f = vivo.fases.find((x) => x.id === c.faseId);
+      if (!f) return { estado: "ya-esta" };
+      if (f.tareas === undefined || f.status === undefined) return { estado: "choque", choque: CHOQUE_SIN_TAREAS_DE_LA_FASE };
+      if (CAMPOS_POR_IMPACTO.some((campo) => valorDe(f, campo) !== c.desde[campo])) {
+        return { estado: "choque", choque: CHOQUE_FASE_EDITADA };
+      }
+      if (f.status !== "PENDING") return { estado: "choque", choque: CHOQUE_FASE_EN_CURSO };
+      return { estado: "pendiente" };
+    }
     default: {
       // Un tipo de estructura nuevo sin su `case` no compila (no se evalúa en silencio como otro).
       const _: never = c;
@@ -1158,6 +1410,44 @@ const mismaFoto = (a: FotoDeTarea, b: FotoDeTarea) =>
   a.type === b.type &&
   dia(a.inicioFijado) === dia(b.inicioFijado) &&
   dia(a.finFijado) === dia(b.finFijado);
+
+const valorDeTarea = (t: TareaDelVivo, campo: CampoDeTarea): string | number | null =>
+  campo === "title" ? t.title : campo === "weekIndex" ? t.weekIndex : campo === "party" ? (t.party ?? null) : (t.type ?? null);
+
+/** E3: la fase a la que se muda una tarea que cambia, o null si se queda en la suya. */
+const destinoDeLaCambia = (c: CambioTareaCambia): string | null =>
+  c.a.fase !== undefined && c.a.fase !== c.faseId ? c.a.fase : null;
+
+/**
+ * E3: la regla propia de una tarea viva que cambia (§2.3, paso 3b), sin el destino ni `conCambio` (los
+ * mira el plan: dependen del estado de otros cambios). Campo por campo de `a`: vivo = `a` → hecho;
+ * vivo = `desde` → pendiente; otro valor → la editaron a mano: choca. `isKept` NO frena: la
+ * actualización conserva el estado. Mudada a mano justo a su destino, con todo hecho: ya está.
+ */
+function evaluarCambia(c: CambioTareaCambia, ind: IndiceDelVivo): Evaluacion {
+  const fase = ind.fasePorId.get(c.faseId);
+  if (fase ? fase.tareas === undefined : !ind.conTareas) return { estado: "choque", choque: CHOQUE_SIN_TAREAS };
+  const viva = ind.tareaPorId.get(c.tareaId);
+  if (!viva) return { estado: "choque", choque: CHOQUE_TAREA_AUSENTE };
+  let pendientes = 0;
+  let editada = false;
+  for (const campo of CAMPOS_DE_TAREA) {
+    const pedido = c.a[campo];
+    if (pedido === undefined) continue;
+    const hoy = valorDeTarea(viva.tarea, campo);
+    if (hoy === pedido) continue;
+    if (hoy === c.desde[campo]) pendientes++;
+    else editada = true;
+  }
+  if (viva.faseId !== c.faseId) {
+    return c.a.fase === viva.faseId && !editada && pendientes === 0
+      ? { estado: "ya-esta" }
+      : { estado: "choque", choque: CHOQUE_TAREA_MUDADA };
+  }
+  if (editada) return { estado: "choque", choque: CHOQUE_TAREA_EDITADA };
+  if (pendientes === 0 && destinoDeLaCambia(c) === null) return { estado: "ya-esta" };
+  return { estado: "pendiente" };
+}
 
 /** La regla propia de una tarea que se va (§2.1, paso 3). null = pasa al estado base y al cierre. */
 function evaluarSeVa(c: CambioTareaSeVa, ind: IndiceDelVivo): Evaluacion | null {
@@ -1239,12 +1529,40 @@ const formaDe = (x: FormaProyectada): FormaDeFase => ({
   semanaCero: x.primera,
 });
 
-/** La fase de una tarea del borrador: el id de una existente o la clave `n:…` de una nueva. */
-export const faseDeLaTarea = (c: CambioDeTarea): string => (c.tipo === "tarea-nueva" ? c.fase : c.faseId);
+/** La fase de una tarea del borrador: el id de una existente o la clave `n:…` de una nueva. E3: la de
+ *  una tarea que cambia es la de DESTINO (su grupo en la barra), y si no se muda, la suya. */
+export const faseDeLaTarea = (c: CambioDeTarea): string =>
+  c.tipo === "tarea-nueva" ? c.fase : c.tipo === "tarea-cambia" ? (c.a.fase ?? c.faseId) : c.faseId;
 const llaveDeTarea = (titulo: string, semana: number) => `${huellaDeTitulo(titulo)}|${semana}`;
 
-/** El orden final: el cambio de orden (si se aplica) y las fases nuevas en su lugar. Es `buildPhaseOrder`. */
-function ordenFinal(vivo: Vivo, aplicadas: readonly Cambio[], nuevasPorClave: ReadonlyMap<string, CambioFaseNueva>): Lugar[] {
+/**
+ * El número de cada cambio en la barra: la estructura 1..k en su orden, y las tareas con el número de
+ * su grupo (k + 1…, uno por fase en el orden en que aparece). Es la numeración de `resumir`: el plan
+ * la usa para decir «el cambio N» en un choque.
+ */
+function numerosEnLaBarra(cambios: readonly Cambio[]): Map<string, number> {
+  const out = new Map<string, number>();
+  let k = 0;
+  for (const c of cambios) if (!esCambioDeTarea(c)) out.set(c.clave, ++k);
+  const grupos = new Map<string, number>();
+  for (const c of cambios) {
+    if (!esCambioDeTarea(c)) continue;
+    const fase = faseDeLaTarea(c);
+    if (!grupos.has(fase)) grupos.set(fase, k + grupos.size + 1);
+    out.set(c.clave, grupos.get(fase)!);
+  }
+  return out;
+}
+
+/** El orden final: el cambio de orden (si se aplica) y las fases nuevas en su lugar. Es `buildPhaseOrder`.
+ *  E3: las fases nuevas se insertan con `seVanEnteras` todavía en la lista (una puede ir detrás de
+ *  ellas), y DESPUÉS se sacan esas. */
+function ordenFinal(
+  vivo: Vivo,
+  aplicadas: readonly Cambio[],
+  nuevasPorClave: ReadonlyMap<string, CambioFaseNueva>,
+  seVanEnteras: ReadonlySet<string> = new Set(),
+): Lugar[] {
   const ids = vivo.fases.map((f) => f.id);
   const orden = aplicadas.find((c): c is CambioDeOrden => c.tipo === "orden");
   const lugares: Lugar[] = (orden ? ordenConCambio(ids, orden) : ids).map((id) => ({ tipo: "existente", id }));
@@ -1265,7 +1583,7 @@ function ordenFinal(vivo: Vivo, aplicadas: readonly Cambio[], nuevasPorClave: Re
     }
     lugares.splice(pos, 0, { tipo: "nueva", clave: n.clave });
   }
-  return lugares;
+  return seVanEnteras.size === 0 ? lugares : lugares.filter((l) => l.tipo === "nueva" || !seVanEnteras.has(l.id));
 }
 
 /** Lo que dice el cambio que quiere, para la huella. */
@@ -1285,6 +1603,10 @@ function destinoDe(c: Cambio): unknown {
     }
     case "tarea-se-va":
       return c.tareaId;
+    case "tarea-cambia":
+      return [c.tareaId, jsonCanonico(c.a), c.conCambio ?? null];
+    case "fase-se-va":
+      return c.faseId;
     default: {
       // Sin esto, un tipo nuevo sin su `case` metería `undefined` en la huella sin error de compilación.
       const _: never = c;
@@ -1316,17 +1638,25 @@ export function huellaDeTexto(texto: string): string {
  * La huella cubre número, clave, estado y destino de CADA cambio: un choque que apareció en el medio
  * (otra pestaña editó) cambia la lista, y aplicar otra lista es justo lo que no puede pasar.
  *
- * El orden de evaluación es determinista (E2a, §2.1):
- *   1. la ESTRUCTURA, como en E1;
+ * El orden de evaluación es determinista (E2a, §2.1; E3, §2.3):
+ *   1. la ESTRUCTURA, como en E1 (E3: y la fase que se va);
  *   2. cómo quedaría cada fase —nombre y semanas— con lo marcado y con todo lo que se puede marcar;
- *   3. las tareas que se van: su regla propia (avance, edición a mano, mudanza);
- *   4-5. las nuevas: una que ya está (misma huella de título y misma semana entre las que sobreviven
- *        en su fase, contando cuántas hay) no se escribe;
- *   6. el CIERRE: las tareas de una fase valen si la fase, como quedaría, conserva la forma con que
- *      se armaron (`tareasArmadasPara`: nombre, semanas y, si la armada los trae, sesiones y Semana 0).
+ *   3. las tareas VIVAS: las que se van (su regla propia: avance, edición a mano, mudanza) y, E3, las
+ *      que cambian (campo por campo, su destino y el cambio con el que van). Una tarea que cambia y
+ *      se quita a la vez choca: gana la que se va;
+ *   4. E3: el RESCATE de cada fase que se va: lo que tiene avance, se cargó a mano, se creó o se editó
+ *      después se queda, y la fase con ello. Si se queda todo, la fase choca;
+ *   5-6. las nuevas: una que ya está (misma huella de título y misma semana entre las que sobreviven
+ *        en su fase, contando cuántas hay) no se escribe. Una del chat en una fase nueva sigue a esa
+ *        fase (fuera, heredada; en choque, choca);
+ *   7. el CIERRE de las tareas de la IA (lo del chat no se armó para ninguna forma): valen si la fase,
+ *      como quedaría, conserva la forma con que se armaron (`tareasArmadasPara`: nombre, semanas y, si
+ *      la armada los trae, sesiones y Semana 0) o la que le dio el chat (`ajustadasPorElChat`, D9).
  *      Si no: la fase nueva desmarcada se lleva sus tareas (heredadas); una fase cuya diferencia no
  *      la explican las casillas del CSE (una edición a mano) choca; y si la explican, la fase está
- *      DESFASADA (E2c): sus tareas quedan fuera marcadas `recalcula`, salvo que el CSE la fuerce.
+ *      DESFASADA (E2c): sus tareas quedan fuera marcadas `recalcula`, salvo que el CSE la fuerce;
+ *   8. E3, defensivo: con una fase que se va, choca todo otro cambio marcado cuyo sujeto es ella
+ *      (una tarea que SALE de ella no: se muda antes de que se vaya).
  * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
  * se arman, no se aplica. `forzar` (E2c): las fases desfasadas cuyas tareas van tal cual
  * («Aplicar de todos modos»); sobre una fase que no está desfasada no hace nada.
@@ -1344,16 +1674,36 @@ export function planDeAplicacion(
   );
   const ind = indexar(vivo);
   const base = (c: Cambio): EstadoDelCambio => (fuera.has(c.clave) ? "excluido" : "aplica");
-  type Estado = { estado: EstadoDelCambio; choque?: string; dependeDe?: string; recalcula?: true };
+  type Estado = { estado: EstadoDelCambio; choque?: string; dependeDe?: string; recalcula?: true; rescate?: string[] };
   const desdeEvaluacion = (c: Cambio, ev: Evaluacion): Estado =>
     ev.estado === "choque"
       ? { estado: "choque", choque: ev.choque }
       : ev.estado === "ya-esta"
         ? { estado: "ya-esta" }
         : { estado: base(c) };
+  const choca = (texto: string): Estado => ({ estado: "choque", choque: texto });
   const estados: Array<Estado | undefined> = new Array(borrador.cambios.length);
+  // E3: «el cambio N» de un choque es el número de la barra; el estado de otro cambio, por su clave.
+  const numeros = numerosEnLaBarra(borrador.cambios);
+  const numeroDe = (clave: string): number => numeros.get(clave) ?? 0;
+  const indicePorClave = new Map<string, number>();
+  borrador.cambios.forEach((c, i) => {
+    if (!indicePorClave.has(c.clave)) indicePorClave.set(c.clave, i);
+  });
+  const estadoDeLaClave = (clave: string): Estado | undefined => {
+    const i = indicePorClave.get(clave);
+    return i === undefined ? undefined : estados[i];
+  };
+  /** E3: las fases que se van con su cambio marcado: id de la fase → clave del cambio. */
+  const fasesQueSeVanMarcadas = (): Map<string, string> => {
+    const out = new Map<string, string>();
+    borrador.cambios.forEach((c, i) => {
+      if (c.tipo === "fase-se-va" && estados[i]?.estado === "aplica") out.set(c.faseId, c.clave);
+    });
+    return out;
+  };
 
-  // 1) La estructura: `evaluar` de E1, sin cambios.
+  // 1) La estructura: `evaluar` de E1 (E3: con la fase que se va).
   borrador.cambios.forEach((c, i) => {
     if (!esCambioDeTarea(c)) estados[i] = desdeEvaluacion(c, evaluar(c, vivo, nuevas));
   });
@@ -1367,45 +1717,178 @@ export function planDeAplicacion(
     (c, i) => (c.tipo === "fase-nueva" || c.tipo === "orden") && !!estados[i] && sePuedeMarcar(estados[i]!.estado),
   );
 
-  // 3) Las tareas que se van.
+  // 3a) Las tareas que se van.
   borrador.cambios.forEach((c, i) => {
     if (c.tipo !== "tarea-se-va") return;
     const ev = evaluarSeVa(c, ind);
     estados[i] = ev ? desdeEvaluacion(c, ev) : { estado: base(c) };
   });
 
-  // 4) Las que sobreviven en cada fase: las vivas menos las que se van marcadas. Se cuentan por
+  /* 3b) E3: las tareas vivas que cambian. Después de su regla propia, el DESTINO: una fase viva que se
+     va con su cambio marcado, choca; una fase nueva desmarcada se la lleva (heredada), en choque la
+     deja fuera; una que no está, choca. Y el cambio con el que va (D17): desmarcado, heredada; en
+     choque, choca. */
+  const seVanEnElPaso1 = fasesQueSeVanMarcadas();
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "tarea-cambia") return;
+    const ev = evaluarCambia(c, ind);
+    if (ev.estado !== "pendiente") {
+      estados[i] = desdeEvaluacion(c, ev);
+      return;
+    }
+    const destino = destinoDeLaCambia(c);
+    if (destino !== null) {
+      if (ind.fasePorId.has(destino)) {
+        const seVa = seVanEnElPaso1.get(destino);
+        if (seVa !== undefined) {
+          estados[i] = choca(choqueDestinoSeVa(numeroDe(seVa)));
+          return;
+        }
+      } else if (nuevas.has(destino)) {
+        const e = estadoDeLaClave(destino);
+        if (e?.estado === "excluido") {
+          estados[i] = { estado: "excluido", dependeDe: destino };
+          return;
+        }
+        if (e?.estado !== "aplica") {
+          estados[i] = choca(CHOQUE_DESTINO_FUERA);
+          return;
+        }
+      } else {
+        estados[i] = choca(CHOQUE_FASE_BORRADA);
+        return;
+      }
+    }
+    if (c.conCambio !== undefined) {
+      const e = estadoDeLaClave(c.conCambio);
+      if (e?.estado === "excluido") {
+        estados[i] = { estado: "excluido", dependeDe: c.conCambio };
+        return;
+      }
+      if (e?.estado === "choque") {
+        estados[i] = choca(choqueConCambio(numeroDe(c.conCambio)));
+        return;
+      }
+    }
+    estados[i] = { estado: base(c) };
+  });
+
+  // 3c) E3: dos cambios de la misma tarea (se va y cambia): gana el que la quita, y el otro choca.
+  const seVaMarcadaDe = new Map<string, string>();
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo === "tarea-se-va" && estados[i]?.estado === "aplica") seVaMarcadaDe.set(c.tareaId, c.clave);
+  });
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "tarea-cambia" || !estados[i] || !sePuedeMarcar(estados[i]!.estado)) return;
+    const seVa = seVaMarcadaDe.get(c.tareaId);
+    if (seVa !== undefined) estados[i] = choca(choqueLaTareaSeQuita(numeroDe(seVa)));
+  });
+
+  // Las que cambian marcadas, por tarea, y las que SALEN de cada fase (se mudan a otra).
+  const cambiaMarcadaDe = new Map<string, CambioTareaCambia>();
+  const salenDe = new Map<string, Set<string>>();
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "tarea-cambia" || estados[i]?.estado !== "aplica") return;
+    cambiaMarcadaDe.set(c.tareaId, c);
+    if (destinoDeLaCambia(c) !== null) salenDe.set(c.faseId, (salenDe.get(c.faseId) ?? new Set<string>()).add(c.tareaId));
+  });
+
+  /* 4) E3 (D3): el RESCATE de cada fase que se va. Se queda lo que tiene avance o se cargó a mano
+     (`isKept`), lo creado después (no está en la foto) y lo editado después (su foto cambió); lo que
+     sale con una mudanza marcada no cuenta. Una que el chat iba a mudar a otra fase y cuya mudanza
+     quedó fuera (su destino desmarcado, por ejemplo) también se queda: se pidió conservarla, no
+     quitarla. Si entre lo que no sale se queda TODO, quitarla no haría nada: choca. Se calcula con el
+     estado FINAL de las mudanzas, y nada de lo que viene después toca una que sale: esto es final. */
+  const mudanzaQueNoSale = new Set<string>();
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo === "tarea-cambia" && destinoDeLaCambia(c) !== null && estados[i]?.estado !== "aplica") {
+      mudanzaQueNoSale.add(c.tareaId);
+    }
+  });
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "fase-se-va" || estados[i]?.estado !== "aplica") return;
+    const salen = salenDe.get(c.faseId);
+    const fotos = new Map(c.desde.tareas.map((t) => [t.id, t.foto]));
+    const quedan = (ind.fasePorId.get(c.faseId)?.tareas ?? []).filter((t) => !salen?.has(t.id));
+    const rescate = quedan.filter((t) => {
+      const foto = fotos.get(t.id);
+      return isKept(t) || !foto || !mismaFoto(fotoDeTarea(t), foto) || mudanzaQueNoSale.has(t.id);
+    });
+    if (quedan.length > 0 && rescate.length === quedan.length) {
+      estados[i] = choca(CHOQUE_FASE_TODO_PROTEGIDO);
+      return;
+    }
+    estados[i] = { estado: "aplica", rescate: rescate.map((t) => t.id) };
+  });
+  const fasesQueSeVan = fasesQueSeVanMarcadas();
+  /** Las tareas que se borran con su fase: las vivas menos el rescate y menos las que salen. */
+  const seBorranConSuFase = new Set<string>();
+  borrador.cambios.forEach((c, i) => {
+    const e = estados[i];
+    if (c.tipo !== "fase-se-va" || e?.estado !== "aplica") return;
+    const quedan = new Set(e.rescate ?? []);
+    const salen = salenDe.get(c.faseId);
+    for (const t of ind.fasePorId.get(c.faseId)?.tareas ?? []) {
+      if (!quedan.has(t.id) && !salen?.has(t.id)) seBorranConSuFase.add(t.id);
+    }
+  });
+
+  // 5) Las que sobreviven en cada fase: las vivas menos las que se van marcadas. Se cuentan por
   //    huella del título + semana (dos iguales en la misma semana son dos), con la semana ACOTADA a
   //    la duración final de su fase: al acortarla, el servidor las mueve a la última semana y ahí es
   //    donde una nueva igual sería un duplicado (revisión de E2a).
-  const seVanMarcadas = new Set<string>();
-  borrador.cambios.forEach((c, i) => {
-    if (c.tipo === "tarea-se-va" && estados[i]?.estado === "aplica") seVanMarcadas.add(c.tareaId);
-  });
+  //    E3: tampoco cuentan las que salen con una mudanza ni las que se borran con su fase; las que
+  //    llegan con una mudanza sí, y una que cambia cuenta con su título y su semana nuevos.
   const semanaFinal = (fase: string, semana: number): number => {
     const dur = marcada.get(fase)?.durationWeeks;
     return dur === undefined ? semana : acotarSemana(semana, dur);
   };
+  const lleganA = new Map<string, Array<{ title: string; semana: number }>>();
+  for (const c of cambiaMarcadaDe.values()) {
+    const destino = destinoDeLaCambia(c);
+    const viva = ind.tareaPorId.get(c.tareaId)?.tarea;
+    if (destino === null || !viva) continue;
+    lleganA.set(destino, [...(lleganA.get(destino) ?? []), { title: c.a.title ?? viva.title, semana: c.a.weekIndex ?? viva.weekIndex }]);
+  }
   const cuentas = new Map<string, Map<string, number>>();
   const cuentaDe = (fase: string): Map<string, number> => {
-    let cuenta = cuentas.get(fase);
-    if (cuenta) return cuenta;
-    cuenta = new Map();
-    for (const t of ind.fasePorId.get(fase)?.tareas ?? []) {
-      if (seVanMarcadas.has(t.id)) continue;
-      const k = llaveDeTarea(t.title, semanaFinal(fase, t.weekIndex));
+    const hecha = cuentas.get(fase);
+    if (hecha) return hecha;
+    const cuenta = new Map<string, number>();
+    const sumar = (titulo: string, semana: number) => {
+      const k = llaveDeTarea(titulo, semanaFinal(fase, semana));
       cuenta.set(k, (cuenta.get(k) ?? 0) + 1);
+    };
+    for (const t of ind.fasePorId.get(fase)?.tareas ?? []) {
+      if (seVaMarcadaDe.has(t.id) || seBorranConSuFase.has(t.id)) continue;
+      const cambia = cambiaMarcadaDe.get(t.id);
+      if (cambia && destinoDeLaCambia(cambia) !== null) continue; // sale de la fase
+      sumar(cambia?.a.title ?? t.title, cambia?.a.weekIndex ?? t.weekIndex);
     }
+    for (const l of lleganA.get(fase) ?? []) sumar(l.title, l.semana);
     cuentas.set(fase, cuenta);
     return cuenta;
   };
 
-  // 5) Las nuevas, en el orden del borrador: cada una que encuentra una igual la consume.
+  // 6) Las nuevas, en el orden del borrador: cada una que encuentra una igual la consume.
   borrador.cambios.forEach((c, i) => {
     if (c.tipo !== "tarea-nueva") return;
     if (!ind.fasePorId.has(c.fase) && !nuevas.has(c.fase)) {
       estados[i] = { estado: "choque", choque: CHOQUE_FASE_BORRADA };
       return;
+    }
+    /* E3: una del chat en una fase nueva no pasa por el cierre (no se armó para ninguna forma): sigue
+       a su fase. Desmarcada la fase, queda fuera con ella (heredada); en choque, choca. */
+    if (c.porChat && nuevas.has(c.fase)) {
+      const e = estadoDeLaClave(c.fase);
+      if (e?.estado === "excluido") {
+        estados[i] = { estado: "excluido", dependeDe: c.fase };
+        return;
+      }
+      if (e?.estado !== "aplica") {
+        estados[i] = choca(CHOQUE_DE_LA_FASE);
+        return;
+      }
     }
     const cuenta = cuentaDe(c.fase);
     const k = llaveDeTarea(c.tarea.title, semanaFinal(c.fase, c.tarea.weekIndex));
@@ -1418,7 +1901,7 @@ export function planDeAplicacion(
     estados[i] = { estado: base(c) };
   });
 
-  // 6) El cierre, por fase: solo toca tareas que se podrían aplicar.
+  // 7) El cierre, por fase: solo toca tareas de la IA que se podrían aplicar.
   const padreExcluido = (fase: string): string | undefined => {
     const j = borrador.cambios.findIndex(
       (c, i) =>
@@ -1464,41 +1947,66 @@ export function planDeAplicacion(
   };
   const forzadasEnElPlan = new Set<string>();
   borrador.cambios.forEach((c, i) => {
-    if (!esCambioDeTarea(c)) return;
+    // E3 (D4): lo del chat y las que cambian no entran al cierre: solo dependen de que exista su fase.
+    if ((c.tipo !== "tarea-nueva" && c.tipo !== "tarea-se-va") || c.porChat) return;
     const e = estados[i];
     if (!e || (e.estado !== "aplica" && e.estado !== "excluido")) return;
     const fase = faseDeLaTarea(c);
     const armada = borrador.tareasArmadasPara[fase];
-    // 6.1) Sin la forma armada no se sabe para qué estructura son.
+    // 7.1) Sin la forma armada no se sabe para qué estructura son.
     if (!armada) {
       estados[i] = { estado: "choque", choque: CHOQUE_DE_LA_FASE };
       return;
     }
-    // 6.2) La fase como quedaría es la armada: nada que cerrar.
+    /* 7.2) La fase como quedaría es la armada, o (E3, D9) la que le dio el chat: nada que cerrar. La
+       ajustada vive aparte, así desmarcar el cambio del chat vuelve a la armada sin recalcular. */
+    const ajustada = borrador.ajustadasPorElChat?.[fase];
+    const coincideAlguna = (x: FormaProyectada | undefined) => coincide(x, armada) || (!!ajustada && coincide(x, ajustada));
     const m = marcada.get(fase);
-    if (coincide(m, armada)) return;
-    // 6.3) Una fase nueva desmarcada: sus tareas se van con ella (heredadas), como antes de E2c.
+    if (coincideAlguna(m)) return;
+    // 7.3) Una fase nueva desmarcada: sus tareas se van con ella (heredadas), como antes de E2c.
     if (!m) {
-      const padre = coincide(entera.get(fase), armada) ? padreExcluido(fase) : undefined;
+      const padre = coincideAlguna(entera.get(fase)) ? padreExcluido(fase) : undefined;
       estados[i] = padre ? { estado: "excluido", dependeDe: padre } : { estado: "choque", choque: CHOQUE_DE_LA_FASE };
       return;
     }
-    // 6.4) Lo que no explican las casillas del CSE es una edición a mano: choca.
+    // 7.4) Lo que no explican las casillas del CSE es una edición a mano: choca.
     if (!alcanzable(fase, m, armada)) {
       estados[i] = { estado: "choque", choque: CHOQUE_DE_LA_FASE };
       return;
     }
-    // 6.5) «Aplicar de todos modos»: sus tareas quedan como las marcó el CSE, tal cual.
+    // 7.5) «Aplicar de todos modos»: sus tareas quedan como las marcó el CSE, tal cual.
     if (forzadasPedidas.has(fase)) {
       forzadasEnElPlan.add(fase);
       return;
     }
-    /* 6.6) DESFASADA (E2c P3, el interruptor): queda fuera marcada `recalcula`, SIN `dependeDe`. Ya no
+    /* 7.6) DESFASADA (E2c P3, el interruptor): queda fuera marcada `recalcula`, SIN `dependeDe`. Ya no
        «va con» el cambio que el CSE desmarcó: sus tareas se recalculan para la forma que queda, y
        mientras tanto la casilla sigue en manos del CSE (`seMarca`) y aplicar espera (el bloqueo de
        abajo). Hasta P1 quedaba heredada de ese cambio, con su «Va con el cambio N». */
     estados[i] = { estado: "excluido", recalcula: true };
   });
+
+  /* 8) E3, defensivo: con una fase que se va, choca todo otro cambio marcado cuyo sujeto es ella —un
+     cambio de un campo suyo, una tarea nueva, una que se va o una que cambia sin salir—. Lo que espera
+     un recálculo cuenta como marcado (D6): si no, una fase que se va quedaría «desfasada» y frenaría
+     el aplicar. Una tarea que SALE de ella no es su sujeto: se muda antes de que se borre. */
+  if (fasesQueSeVan.size > 0) {
+    borrador.cambios.forEach((c, i) => {
+      const e = estados[i];
+      if (!e || !(e.estado === "aplica" || (e.recalcula && !fuera.has(c.clave)))) return;
+      const sujeto =
+        c.tipo === "fase-cambia" || c.tipo === "tarea-se-va"
+          ? c.faseId
+          : c.tipo === "tarea-nueva"
+            ? c.fase
+            : c.tipo === "tarea-cambia" && destinoDeLaCambia(c) === null
+              ? c.faseId
+              : null;
+      const seVa = sujeto === null ? undefined : fasesQueSeVan.get(sujeto);
+      if (seVa !== undefined) estados[i] = choca(choqueSuFaseSeQuita(numeroDe(seVa)));
+    });
+  }
 
   const items: ItemDelPlan[] = borrador.cambios.map((cambio, i) => {
     const e = estados[i]!;
@@ -1509,6 +2017,7 @@ export function planDeAplicacion(
       ...(e.choque !== undefined ? { choque: e.choque } : {}),
       ...(e.dependeDe !== undefined ? { dependeDe: e.dependeDe } : {}),
       ...(e.recalcula ? { recalcula: true as const } : {}),
+      ...(e.rescate !== undefined ? { rescate: e.rescate } : {}),
     };
   });
 
@@ -1522,7 +2031,7 @@ export function planDeAplicacion(
     if (!fasesEnOrden.includes(fase)) fasesEnOrden.push(fase);
     if (it.recalcula && !fuera.has(it.cambio.clave)) enEspera.add(fase);
   }
-  // Solo llegan acá fases que quedan (6.3 saca las que no): el `flatMap` no tira dentro de la transacción.
+  // Solo llegan acá fases que quedan (7.3 saca las que no): el `flatMap` no tira dentro de la transacción.
   const conSuForma = (en: ReadonlySet<string>): FaseDesfasada[] =>
     fasesEnOrden.flatMap((fase) => {
       const m = marcada.get(fase);
@@ -1544,28 +2053,77 @@ export function planDeAplicacion(
   const seVanAplicadas = new Set(
     aplicadas.flatMap((c) => (c.tipo === "tarea-se-va" ? [c.tareaId] : [])),
   );
+  const lugarDe = (fase: string): Lugar =>
+    ind.fasePorId.has(fase) ? { tipo: "existente", id: fase } : { tipo: "nueva", clave: fase };
+  // E3: las que cambian y las fases que se van, de lo aplicado (en el orden del cronograma vivo).
+  const cambiaAplicada = new Map(
+    aplicadas.flatMap((c) => (c.tipo === "tarea-cambia" ? [[c.tareaId, c] as const] : [])),
+  );
+  const rescateDe = new Map(
+    items.flatMap((it) =>
+      it.estado === "aplica" && it.cambio.tipo === "fase-se-va" ? [[it.cambio.faseId, it.rescate ?? []] as const] : [],
+    ),
+  );
+  const fasesQueSeVanEscritas = vivo.fases.flatMap((f) => {
+    const rescate = rescateDe.get(f.id);
+    if (rescate === undefined) return [];
+    const quedan = new Set(rescate);
+    const borrar = (f.tareas ?? [])
+      .filter((t) => {
+        const cambia = cambiaAplicada.get(t.id);
+        return !quedan.has(t.id) && !(cambia && destinoDeLaCambia(cambia) !== null);
+      })
+      .map((t) => t.id);
+    return [{ id: f.id, borrar, queda: quedan.size > 0 }];
+  });
+  const seVanEnteras = new Set(fasesQueSeVanEscritas.filter((f) => !f.queda).map((f) => f.id));
+  type Cambian = NonNullable<EscriturasDeTareas["cambian"]>;
+  const cambian: Cambian = vivo.fases.flatMap((f) =>
+    (f.tareas ?? []).flatMap((t): Cambian => {
+      const c = cambiaAplicada.get(t.id);
+      if (!c) return [];
+      const campos: Cambian[number]["campos"] = {};
+      if (c.a.title !== undefined && c.a.title !== t.title) campos.title = c.a.title;
+      if (c.a.weekIndex !== undefined && c.a.weekIndex !== t.weekIndex) campos.weekIndex = c.a.weekIndex;
+      if (c.a.party !== undefined && c.a.party !== (t.party ?? null)) campos.party = c.a.party;
+      if (c.a.type !== undefined && c.a.type !== (t.type ?? null)) campos.type = c.a.type;
+      const destino = destinoDeLaCambia(c);
+      // Una mudanza lleva siempre su semana: la pedida o la viva (el escritor la acota al destino).
+      if (destino !== null && campos.weekIndex === undefined) campos.weekIndex = t.weekIndex;
+      return [{ id: t.id, desdeFase: c.faseId, campos, aFase: destino === null ? null : lugarDe(destino) }];
+    }),
+  );
   const escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas } = {
     ancla: ancla ? ancla.a : null,
     // En el orden del cronograma vivo: el mismo orden de escritura en la pantalla y en el servidor.
     fases: vivo.fases.filter((f) => porFase.has(f.id)).map((f) => ({ id: f.id, campos: porFase.get(f.id)! })),
     nuevas: aplicadas
       .filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva")
-      .map((c) => ({ clave: c.clave, fase: c.fase })),
-    orden: ordenFinal(vivo, aplicadas, nuevas),
+      .map((c) => ({ clave: c.clave, fase: c.fase, ...(c.porChat ? { porChat: true as const } : {}) })),
+    orden: ordenFinal(vivo, aplicadas, nuevas, seVanEnteras),
+    fasesQueSeVan: fasesQueSeVanEscritas,
     tareas: {
       seVan: vivo.fases.flatMap((f) => (f.tareas ?? []).filter((t) => seVanAplicadas.has(t.id)).map((t) => t.id)),
       nuevas: aplicadas
         .filter((c): c is CambioTareaNueva => c.tipo === "tarea-nueva")
         .map((c) => ({
           clave: c.clave,
-          fase: ind.fasePorId.has(c.fase) ? { tipo: "existente", id: c.fase } : { tipo: "nueva", clave: c.fase },
+          fase: lugarDe(c.fase),
           tarea: c.tarea,
+          ...(c.porChat ? { porChat: true as const } : {}),
+          ...(c.retocada ? { retocada: true as const } : {}),
         })),
+      cambian,
     },
   };
 
+  /* La huella: número, clave, estado y destino de cada cambio. E3: el rescate de una fase que se va
+     entra SOLO si existe, así las huellas de todo lo anterior no cambian (una pestaña abierta durante
+     el deploy sigue aplicando). */
   const huella = huellaDeTexto(
-    JSON.stringify(items.map((it) => [it.numero, it.cambio.clave, it.estado, destinoDe(it.cambio)])),
+    JSON.stringify(
+      items.map((it) => [it.numero, it.cambio.clave, it.estado, destinoDe(it.cambio), ...(it.rescate ? [it.rescate] : [])]),
+    ),
   );
   /* El bloqueo, en este orden: una versión nueva, las tareas «armando» y (E2c P3) las fases
      desfasadas sin forzar. Aplicar espera a que se recalculen; la salida está siempre a mano:
@@ -1661,6 +2219,10 @@ export interface TareaProyectada {
   status: string;
   source: string;
   needsValidation: boolean;
+  /** E3: una viva que cambia (renombre, semana, dueño, tipo o mudanza): ya con lo que cambia. */
+  cambia?: true;
+  /** E3: llega con una mudanza desde otra fase. */
+  llega?: true;
 }
 
 export interface FaseProyectada extends FaseNuevaPropuesta {
@@ -1755,8 +2317,9 @@ function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
     return { ...f, clave: l.id, id: l.id, marca: null, tareas: [] };
   });
 
-  /* Las tareas: las vivas que sobreviven (en su orden) y después las nuevas marcadas (en el orden
-     del borrador), todas acotadas a la duración final de su fase. */
+  /* Las tareas: las vivas que sobreviven (en su orden), después las que llegan con una mudanza (E3) y
+     al final las nuevas marcadas (en el orden del borrador), todas acotadas a la duración final de su
+     fase. Una viva que cambia se ve ya con lo que cambia. */
   const seVan = new Set(plan.escrituras.tareas.seVan);
   const nuevasPorFase = new Map<string, EscriturasDeTareas["nuevas"]>();
   for (const n of plan.escrituras.tareas.nuevas) {
@@ -1768,24 +2331,51 @@ function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
     const n = (f.tareas ?? []).filter((t) => seVan.has(t.id)).length;
     if (n > 0) seVanPorFase.set(f.id, n);
   }
+  // E3: lo que se borra con su fase, lo que cambia y lo que llega a cada fase.
+  const conSuFase = new Set((plan.escrituras.fasesQueSeVan ?? []).flatMap((f) => f.borrar));
+  const quedanEn = new Map((plan.escrituras.fasesQueSeVan ?? []).filter((f) => f.queda).map((f) => [f.id, f]));
+  const cambian = new Map((plan.escrituras.tareas.cambian ?? []).map((c) => [c.id, c]));
+  const claveDelLugar = (l: Lugar) => (l.tipo === "existente" ? l.id : l.clave);
+  const lleganA = new Map<string, TareaDelVivo[]>();
+  const tocadasEn = new Map<string, Set<string>>();
+  const tocar = (fase: string, tarea: string) => tocadasEn.set(fase, (tocadasEn.get(fase) ?? new Set<string>()).add(tarea));
+  for (const f of vivo.fases) {
+    for (const t of f.tareas ?? []) {
+      const c = cambian.get(t.id);
+      if (!c) continue;
+      tocar(c.desdeFase, t.id);
+      if (c.aFase === null) continue;
+      const destino = claveDelLugar(c.aFase);
+      tocar(destino, t.id);
+      lleganA.set(destino, [...(lleganA.get(destino) ?? []), t]);
+    }
+  }
+  const proyectada = (t: TareaDelVivo, duracion: number, llega: boolean): TareaProyectada => {
+    const c = cambian.get(t.id);
+    const campos = c?.campos ?? {};
+    return {
+      id: t.id,
+      clave: t.id,
+      title: campos.title ?? t.title,
+      weekIndex: acotarSemana(campos.weekIndex ?? t.weekIndex, duracion),
+      notes: t.notes ?? null,
+      party: campos.party !== undefined ? campos.party : (t.party ?? null),
+      type: campos.type !== undefined ? campos.type : (t.type ?? null),
+      status: t.status,
+      source: t.source,
+      needsValidation: c ? false : (t.needsValidation ?? false),
+      ...(c ? { cambia: true as const } : {}),
+      ...(llega ? { llega: true as const } : {}),
+    };
+  };
   for (const f of fases) {
     const vivas = f.id !== null ? (porId.get(f.id)?.tareas ?? []) : [];
     const agregadas = nuevasPorFase.get(f.clave) ?? [];
     f.tareas = [
       ...vivas
-        .filter((t) => !seVan.has(t.id))
-        .map((t) => ({
-          id: t.id,
-          clave: t.id,
-          title: t.title,
-          weekIndex: acotarSemana(t.weekIndex, f.durationWeeks),
-          notes: t.notes ?? null,
-          party: t.party ?? null,
-          type: t.type ?? null,
-          status: t.status,
-          source: t.source,
-          needsValidation: t.needsValidation ?? false,
-        })),
+        .filter((t) => !seVan.has(t.id) && !conSuFase.has(t.id) && !cambian.get(t.id)?.aFase)
+        .map((t) => proyectada(t, f.durationWeeks, false)),
+      ...(lleganA.get(f.clave) ?? []).map((t) => proyectada(t, f.durationWeeks, true)),
       ...agregadas.map((n) => ({
         id: null,
         clave: n.clave,
@@ -1799,8 +2389,13 @@ function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
         needsValidation: n.tarea.needsValidation,
       })),
     ];
-    if (f.id === null && agregadas.length > 0 && f.marca) {
-      f.marca = { ...f.marca, etiquetas: [...f.marca.etiquetas, etiquetaDeTareas("+", agregadas.length)] };
+    if (f.id === null && f.marca) {
+      const cambiaron = tocadasEn.get(f.clave)?.size ?? 0;
+      const extra = [
+        ...(agregadas.length > 0 ? [etiquetaDeTareas("+", agregadas.length)] : []),
+        ...(cambiaron > 0 ? [plural(cambiaron, "tarea cambia", "tareas cambian")] : []),
+      ];
+      if (extra.length > 0) f.marca = { ...f.marca, etiquetas: [...f.marca.etiquetas, ...extra] };
     }
   }
 
@@ -1830,6 +2425,14 @@ function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
     if (agregadas > 0) etiquetas.push(etiquetaDeTareas("+", agregadas));
     const quitadas = seVanPorFase.get(f.id) ?? 0;
     if (quitadas > 0) etiquetas.push(etiquetaDeTareas("−", quitadas));
+    // E3: las que cambian (o se mudan desde o hacia acá), y la fase que se iba y se queda con lo suyo.
+    const cambiaron = tocadasEn.get(f.id)?.size ?? 0;
+    if (cambiaron > 0) etiquetas.push(plural(cambiaron, "tarea cambia", "tareas cambian"));
+    const queda = quedanEn.get(f.id);
+    if (queda) {
+      const n = (actual.tareas ?? []).filter((t) => !queda.borrar.includes(t.id) && !cambian.get(t.id)?.aFase).length;
+      etiquetas.push(`se queda con ${plural(n, "tarea", "tareas")}`);
+    }
     if (etiquetas.length > 0) f.marca = { tono: "cambia", etiquetas };
   });
 
@@ -1918,14 +2521,21 @@ export interface ItemDeLaLista {
   motivo?: string;
   /** El ⚠ del choque, o «Ya está así.». */
   aviso?: string;
+  /** E3: una fase que se va y se queda con tareas: «Se queda con N tareas con avance, …». */
+  nota?: string;
 }
 
 /** Una tarea de la lista de la barra (un renglón dentro de su grupo). */
 export interface ItemDeTarea {
   clave: string;
+  /** E3: cómo la nombra el chat: la clave `t:` de una nueva, el id de una viva en las demás. */
+  ref: string;
   estado: EstadoDelCambio;
-  signo: "+" | "−";
+  /** «+» se crea, «−» se quita, «~» cambia en su fase, «→» se muda a esta fase (E3). */
+  signo: "+" | "−" | "~" | "→";
   titulo: string;
+  /** E3: qué le cambia («pasa a «Pruebas», S3», «renombrada a «Y»», «la hace el cliente»). */
+  cambio?: string;
   /** La semana dentro de su fase, contando desde 1 (S1 = la primera de la fase). */
   semana: number;
   /** El ⚠ del choque, o que ya está (o ya no está). */
@@ -1953,9 +2563,10 @@ export interface GrupoDeTareas {
   fase: string;
   /** Su nombre en la propuesta. */
   nombre: string;
-  /** Las que se crean y las que se quitan (sin contar las que ya están así). */
+  /** Las que se crean, las que se quitan y (E3) las que cambian o llegan (sin contar las que ya están así). */
   nuevas: number;
   seVan: number;
+  cambian: number;
   marcadas: number;
   aplicables: number;
   estado: "aplica" | "parcial" | "excluido" | "choque" | "ya-esta";
@@ -1965,6 +2576,18 @@ export interface GrupoDeTareas {
   desfasada: boolean;
   aviso?: string;
   tareas: ItemDeTarea[];
+}
+
+/** Las tareas que se escriben con lo marcado (la confirmación las cuenta). */
+export interface TareasDelResumen {
+  nuevas: number;
+  seVan: number;
+  /** E3: las vivas que cambian (se muden o no). */
+  cambian: number;
+  /** E3: las fases que se van: su nombre, cuántas tareas pendientes se van con ella y si se queda. */
+  fasesSeVan: Array<{ nombre: string; borradas: number; queda: boolean }>;
+  /** E3: las tareas que se borran con su fase (todas las fases que se van). */
+  conLaFase: number;
 }
 
 export interface ResumenDelBorrador {
@@ -1991,9 +2614,11 @@ export interface ResumenDelBorrador {
   /** Cuán distinto es lo MARCADO, que es lo que el botón va a escribir: decide la confirmación. */
   magnitudDeLoMarcado: MagnitudPropuesta;
   /** Las tareas que se escriben con lo marcado. */
-  tareas: { nuevas: number; seVan: number };
-  /** Hay alguna tarea que se va marcada: aplicar BORRA (se confirma). */
+  tareas: TareasDelResumen;
+  /** Hay alguna tarea que se va marcada, o (E3) una fase que se va: aplicar BORRA (se confirma). */
   borraAlgo: boolean;
+  /** E3: lo que se borra lo dictó el chat, o es una fase: la confirmación no dice «de la IA». */
+  borraDelChatOFases: boolean;
   /** Alguna tarea marcada nace en una fase nueva. */
   fasesNuevasConTareas: boolean;
   /** Las tareas de esta propuesta no llegaron («faltan» o «fallo»): se aplican solo las fases. */
@@ -2063,11 +2688,42 @@ function tituloDe(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseN
       return `Tarea nueva «${c.tarea.title}» · S${c.tarea.weekIndex + 1}`;
     case "tarea-se-va":
       return `Se quita la tarea «${c.desde.title}» · S${c.desde.weekIndex + 1}`;
+    case "fase-se-va":
+      return `Se quita la fase «${nombreDeFase(vivo, c.faseId, c.desde.name)}»`;
+    case "tarea-cambia":
+      return `«${c.desde.title}» · ${textoDelCambioDeTarea(c, vivo, nuevas)}`;
     default: {
       const _: never = c;
       return _;
     }
   }
+}
+
+const PARTY_EN_PALABRAS: Record<Party, string> = {
+  CLIENTE: "la hace el cliente",
+  SMARTEAM: "la hace el equipo",
+  AMBOS: "la hacen juntos",
+  DEV: "la hace desarrollo",
+};
+
+/**
+ * E3: qué le cambia a una tarea viva, en palabras del CSE: «pasa a «Pruebas», S3», «pasa a S2»,
+ * «renombrada a «Y»», «la hace el cliente», «pasa a sesión». La semana es la pedida o, en una
+ * mudanza sin semana, la que tenía.
+ */
+function textoDelCambioDeTarea(c: CambioTareaCambia, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseNueva>): string {
+  const partes: string[] = [];
+  const destino = destinoDeLaCambia(c);
+  if (destino !== null) {
+    const nombre = nuevas.get(destino)?.fase.name ?? nombreDeFase(vivo, destino, destino);
+    partes.push(`pasa a «${nombre}», S${(c.a.weekIndex ?? c.desde.weekIndex) + 1}`);
+  } else if (c.a.weekIndex !== undefined) {
+    partes.push(`pasa a S${c.a.weekIndex + 1}`);
+  }
+  if (c.a.title !== undefined) partes.push(`renombrada a «${c.a.title}»`);
+  if (c.a.party !== undefined) partes.push(c.a.party === null ? "sin dueño" : PARTY_EN_PALABRAS[c.a.party]);
+  if (c.a.type !== undefined) partes.push(c.a.type === "SESSION" ? "pasa a sesión" : c.a.type === "TASK" ? "pasa a tarea" : "sin tipo");
+  return partes.join(" · ");
 }
 
 /** El estado de un grupo de tareas, por lo que tiene marcado y lo que se puede marcar. */
@@ -2098,6 +2754,9 @@ function gruposDeTareas(
   const fasesNuevas = new Map(
     borrador.cambios.flatMap((c) => (c.tipo === "fase-nueva" ? [[c.clave, c.fase.name] as const] : [])),
   );
+  const nuevasPorClave = new Map(
+    borrador.cambios.flatMap((c) => (c.tipo === "fase-nueva" ? [[c.clave, c] as const] : [])),
+  );
   const indice = indexarTareasPorTitulo(
     vivo.fases.flatMap((f) =>
       f.tareas ? [{ phaseId: f.id, phaseName: f.name, current: f.tareas.map((t) => ({ title: t.title, status: t.status })) }] : [],
@@ -2113,10 +2772,14 @@ function gruposDeTareas(
           : it.estado === "ya-esta"
             ? c.tipo === "tarea-nueva"
               ? "Ya está: hay una igual en esa semana."
-              : "Ya no está en el cronograma."
+              : c.tipo === "tarea-cambia"
+                ? "Ya está así."
+                : "Ya no está en el cronograma."
             : undefined;
       const comun = {
         clave: c.clave,
+        // E3: cómo la nombra el chat (la clave `t:` de una nueva; el id de una viva).
+        ref: c.tipo === "tarea-nueva" ? c.clave : c.tareaId,
         estado: it.estado,
         ...(aviso ? { aviso } : {}),
         seMarca: (it.estado === "aplica" || it.estado === "excluido") && !heredada,
@@ -2124,6 +2787,16 @@ function gruposDeTareas(
       };
       if (c.tipo === "tarea-se-va") {
         return { ...comun, signo: "−" as const, titulo: c.desde.title, semana: c.desde.weekIndex + 1 };
+      }
+      if (c.tipo === "tarea-cambia") {
+        // E3: «→» si se muda a este grupo (el del destino), «~» si cambia en su fase.
+        return {
+          ...comun,
+          signo: destinoDeLaCambia(c) !== null ? ("→" as const) : ("~" as const),
+          titulo: c.desde.title,
+          semana: (c.a.weekIndex ?? c.desde.weekIndex) + 1,
+          cambio: textoDelCambioDeTarea(c, vivo, nuevasPorClave),
+        };
       }
       const repetida = avisoDeRepetida(c.tarea.title, c.fase, indice);
       return {
@@ -2159,6 +2832,7 @@ function gruposDeTareas(
         desfasada?.nombre ?? borrador.tareasArmadasPara[fase]?.nombre ?? vivas.get(fase)?.name ?? fasesNuevas.get(fase) ?? fase,
       nuevas: vivos.filter((it) => it.cambio.tipo === "tarea-nueva").length,
       seVan: vivos.filter((it) => it.cambio.tipo === "tarea-se-va").length,
+      cambian: vivos.filter((it) => it.cambio.tipo === "tarea-cambia").length,
       marcadas: its.filter((it) => it.estado === "aplica").length,
       aplicables: its.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
       estado: estadoDelGrupo(its),
@@ -2204,6 +2878,12 @@ export function resumir(
         : [];
     const motivo = c.tipo === "orden" ? c.motivos?.join(" · ") : c.tipo === "ancla" ? undefined : c.motivo;
     const aviso = it.estado === "choque" ? `⚠ ${it.choque}` : it.estado === "ya-esta" ? "Ya está así." : undefined;
+    // E3: una fase que se va y se queda con lo que no se puede quitar lo dice en su renglón.
+    const quedan = it.rescate?.length ?? 0;
+    const nota =
+      quedan > 0
+        ? `Se queda con ${plural(quedan, "tarea con avance, cargada o editada a mano", "tareas con avance, cargadas o editadas a mano")}.`
+        : undefined;
     return [
       {
         numero,
@@ -2213,6 +2893,7 @@ export function resumir(
         detalle,
         ...(motivo ? { motivo } : {}),
         ...(aviso ? { aviso } : {}),
+        ...(nota ? { nota } : {}),
       },
     ];
   });
@@ -2233,6 +2914,13 @@ export function resumir(
   const magnitud = magnitudDe(vivo, aplicables, cierreAntes, projectedEnd(entera.ancla, entera.fases));
   const magnitudDeLoMarcado = magnitudDe(vivo, plan.aplicadas, cierreAntes, cierreDespues);
   const escritas = plan.escrituras.tareas;
+  // E3: las fases que se van (con cuántas pendientes se van con ella) y lo que dictó el chat.
+  const fasesSeVan = (plan.escrituras.fasesQueSeVan ?? []).map((f) => ({
+    nombre: nombreDeFase(vivo, f.id, f.id),
+    borradas: f.borrar.length,
+    queda: f.queda,
+  }));
+  const borraDelChat = plan.aplicadas.some((c) => c.tipo === "tarea-se-va" && c.porChat);
 
   return {
     origen: borrador.origen,
@@ -2250,8 +2938,15 @@ export function resumir(
     corrimiento: describeEndShift(cierreAntes, cierreDespues),
     magnitud,
     magnitudDeLoMarcado,
-    tareas: { nuevas: escritas.nuevas.length, seVan: escritas.seVan.length },
-    borraAlgo: escritas.seVan.length > 0,
+    tareas: {
+      nuevas: escritas.nuevas.length,
+      seVan: escritas.seVan.length,
+      cambian: escritas.cambian?.length ?? 0,
+      fasesSeVan,
+      conLaFase: fasesSeVan.reduce((n, f) => n + f.borradas, 0),
+    },
+    borraAlgo: escritas.seVan.length > 0 || fasesSeVan.length > 0,
+    borraDelChatOFases: borraDelChat || fasesSeVan.length > 0,
     fasesNuevasConTareas: escritas.nuevas.some((n) => n.fase.tipo === "nueva"),
     faltanTareas: tareas === "faltan" || tareas === "fallo",
     estadoDeTareas: tareas,
@@ -2332,7 +3027,8 @@ export function pideConfirmacion(
  */
 export function tituloDeLaBarra(r: Pick<ResumenDelBorrador, "items" | "grupos" | "magnitud">): string {
   const fases = r.items.filter((it) => it.estado !== "ya-esta").length;
-  const tareas = r.grupos.reduce((n, g) => n + g.nuevas + g.seVan, 0);
+  // E3: también las que cambian o se mudan.
+  const tareas = r.grupos.reduce((n, g) => n + g.nuevas + g.seVan + (g.cambian ?? 0), 0);
   const otro = r.magnitud.esCronogramaNuevo ? "otro cronograma · " : "";
   if (tareas === 0) return `La IA propone ${otro}${plural(fases, "cambio", "cambios")}`;
   if (fases === 0) return `La IA propone ${otro}${plural(tareas, "cambio de tareas", "cambios de tareas")}`;
@@ -2341,8 +3037,19 @@ export function tituloDeLaBarra(r: Pick<ResumenDelBorrador, "items" | "grupos" |
 
 /** Lo que dice la confirmación de aplicar, después del resumen de lo marcado. */
 export function textoDeLaConfirmacion(
-  r: Pick<ResumenDelBorrador, "borraAlgo" | "faltanTareas" | "tareas" | "fasesNuevasConTareas">,
+  r: Pick<ResumenDelBorrador, "borraAlgo" | "faltanTareas" | "fasesNuevasConTareas"> & {
+    tareas: Pick<TareasDelResumen, "nuevas" | "seVan">;
+    borraDelChatOFases?: boolean;
+  },
 ): string {
+  if (r.borraAlgo && r.borraDelChatOFases) {
+    /* E3: lo que dictó el chat puede quitar una tarea pendiente que no es de la IA, y una fase se va
+       con sus pendientes: no se dice «de la IA». Lo protegido sigue sin tocarse. */
+    return (
+      "Solo se quitan tareas pendientes: lo que tiene avance o se cargó a mano no se toca. " +
+      "Después puedes seguir editando el cronograma a mano."
+    );
+  }
   if (r.borraAlgo) {
     /* Sin el número: cuántas se quitan ya lo dice la primera oración (`resumenDeLaConfirmacion`).
        Cierre de la revisión de E2a: la confirmación lo repetía dos veces seguidas. */
@@ -2366,14 +3073,30 @@ export function textoDeLaConfirmacion(
  * oración termina sin los dos puntos.
  */
 export function resumenDeLaConfirmacion(
-  r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado" | "tareas">,
+  r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado"> & {
+    tareas: Pick<TareasDelResumen, "nuevas" | "seVan"> & Partial<TareasDelResumen>;
+  },
 ): string {
   const frases = frasesDeCambios(r.magnitudDeLoMarcado);
-  const { nuevas, seVan } = r.tareas;
+  const { nuevas, seVan, cambian = 0, fasesSeVan = [] } = r.tareas;
   if (nuevas > 0) frases.push(`se ${nuevas === 1 ? "crea" : "crean"} ${plural(nuevas, "tarea", "tareas")}`);
   if (seVan > 0) {
     const verbo = seVan === 1 ? "quita" : "quitan";
     frases.push(nuevas > 0 ? `se ${verbo} ${seVan}` : `se ${verbo} ${plural(seVan, "tarea", "tareas")}`);
+  }
+  // E3: las que cambian y las fases que se van (con las pendientes que se llevan).
+  if (cambian > 0) frases.push(`${cambian === 1 ? "cambia" : "cambian"} ${plural(cambian, "tarea", "tareas")}`);
+  const pendientes = (n: number) => plural(n, "tarea pendiente", "tareas pendientes");
+  const enteras = fasesSeVan.filter((f) => !f.queda);
+  const conResto = fasesSeVan.filter((f) => f.queda);
+  if (enteras.length === 1) {
+    const f = enteras[0];
+    frases.push(`se quita la fase «${f.nombre}»${f.borradas > 0 ? ` con ${f.borradas === 1 ? "su" : "sus"} ${pendientes(f.borradas)}` : ""}`);
+  } else if (enteras.length > 1) {
+    frases.push(`se quitan ${enteras.length} fases con ${pendientes(enteras.reduce((n, f) => n + f.borradas, 0))}`);
+  }
+  for (const f of conResto) {
+    if (f.borradas > 0) frases.push(`de «${f.nombre}» se ${f.borradas === 1 ? "quita" : "quitan"} ${pendientes(f.borradas)}`);
   }
   const cuantos = r.marcadas === 1 ? "aplica el cambio marcado" : `aplican los ${r.marcadas} cambios marcados`;
   return `Se ${cuantos} de una sola vez${frases.length > 0 ? `: ${unirFrases(frases)}` : ""}.`;

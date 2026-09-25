@@ -17,14 +17,19 @@
  *      deshace también el paso 1 (409 PLAN_CAMBIO). Aplicar otra lista que la que vio es justo lo
  *      que no puede pasar.
  *   4. El permiso: tocar tareas pide la misma vara que generarlas (403 SIN_PERMISO). Desmarcando las
- *      tareas, se aplican solo los cambios de fases.
+ *      tareas, se aplican solo los cambios de fases. E3: lo que dictó el chat pide la vara de editar
+ *      (la de esta ruta), no la de la IA (`necesitaPermisoDeIa`).
  *   5. La estructura (`escribirEstructura`): arranque, campos de fase —acomodando las tareas de una
  *      fase que se acorta—, fases nuevas y orden. Nada que no cambie se toca.
  *   6. Las tareas (`escribirTareas`, lib/timeline/escribir-tareas.ts), DESPUÉS de la estructura: una
- *      tarea de una fase nueva necesita su id real. Solo crea y borra; nunca parchea la foto publicada.
- *   7. El cierre (o la reapertura) de cada fase existente que cambió de tareas (`recalcularCierreDeFase`).
- *   8. `lastEditedByHuman`: el cronograma cambió y el cliente todavía no lo ve («Subir al cliente»).
- *      Con tareas tocadas, además, el borrador de avance queda viejo (ids nuevos): se invalida.
+ *      tarea de una fase nueva necesita su id real. Crea, borra y (E3) actualiza las que cambian o se
+ *      mudan; nunca parchea la foto publicada.
+ *   7. E3: las fases que se van (`borrarFasesQueSeVan`), DESPUÉS de las tareas: lo que sale de ellas ya
+ *      se mudó. Se borran sus pendientes y, si no se queda nada, la fase.
+ *   8. El cierre (o la reapertura) de cada fase existente que cambió de tareas (`recalcularCierreDeFase`).
+ *   9. `lastEditedByHuman`: el cronograma cambió y el cliente todavía no lo ve («Subir al cliente»).
+ *      Con tareas creadas, borradas o mudadas, o fases borradas, además, el borrador de avance queda
+ *      viejo (ids que ya no están donde estaban): se invalida.
  * La auditoría y los eventos del watchdog van AFUERA, después: alargar la transacción no, y perder
  * un evento es aceptable (mismo criterio que el PUT).
  *
@@ -34,9 +39,9 @@
 import { Prisma, type TimelineActivityType } from "@prisma/client";
 import { ACTIVITY_TYPES } from "./validate";
 import {
-  esCambioDeTarea,
   leerBorrador,
   mensajeDeRecalculoAlAplicar,
+  necesitaPermisoDeIa,
   planDeAplicacion,
   versionDelBorrador,
   type Borrador,
@@ -52,6 +57,8 @@ import { escribirTareas, TareasQueNoCuadran, type FaseParaTareas, type Resultado
 /** Lo que el escritor usa del `tx`: tipado contra Prisma, para que un campo mal escrito no compile. */
 export type TxDeEstructura = Pick<Prisma.TransactionClient, "projectTimeline" | "timelinePhase" | "timelineTask">;
 
+/** E3: con `status` (una fase que se va choca si ya arrancó). La pantalla lo tiene igual (paridad):
+ *  si faltara en un lado, la huella diferiría y aplicar caería en PLAN_CAMBIO para siempre. */
 export const SELECT_DE_FASE = {
   id: true,
   name: true,
@@ -61,6 +68,7 @@ export const SELECT_DE_FASE = {
   sessionCount: true,
   notes: true,
   activityType: true,
+  status: true,
 } as const;
 
 /** Lo que se lee de cada tarea para planear: lo que viaja en el cable (sin fechas reales) y su `order`. */
@@ -197,12 +205,13 @@ export async function escribirEstructura(
      pisan. El orden queda DENSO (0..N-1), igual que la posición en pantalla, y solo se escribe la
      fila cuyo orden cambió de verdad. Las fases nuevas nacen VACÍAS: las tareas llegan con el
      paso 2 de «Regenerar todo» o con «Regenerar» de esa fase. */
-  const nuevas = new Map(escrituras.nuevas.map((n) => [n.clave, n.fase]));
+  const nuevas = new Map(escrituras.nuevas.map((n) => [n.clave, n]));
   const creadas: Array<{ clave: string; id: string }> = [];
   for (const [i, lugar] of escrituras.orden.entries()) {
     if (lugar.tipo === "nueva") {
-      const fase = nuevas.get(lugar.clave);
-      if (!fase) continue;
+      const nueva = nuevas.get(lugar.clave);
+      if (!nueva) continue;
+      const fase = nueva.fase;
       const creada = await tx.timelinePhase.create({
         data: {
           timelineId,
@@ -213,7 +222,8 @@ export async function escribirEstructura(
           sessionCount: fase.sessionCount,
           notes: fase.notes,
           activityType: tipoDeActividad(fase.activityType),
-          source: "AGENT", // propuesta por la IA, confirmada por una persona
+          // Propuesta por la IA y confirmada por una persona; E3: la que dictó el chat, como la crea el PUT.
+          source: nueva.porChat ? "HUMAN" : "AGENT",
         },
         select: { id: true },
       });
@@ -226,6 +236,34 @@ export async function escribirEstructura(
     }
   }
   return { avisos, creadas };
+}
+
+/**
+ * E3: las fases que se van, DESPUÉS de las tareas (lo que sale de ellas ya se mudó). Por fase: sus
+ * tareas pendientes que se van con ella, con la regla de siempre en el `where` (pendiente y no escrita
+ * a mano) y la cuenta exacta; y si no se queda nada, la fase, solo si ya no tiene tareas (⚠ el
+ * `onDelete: Cascade` se llevaría las que quedaran). Cualquier diferencia: no se aplica nada.
+ * A lo sumo DOS llamadas por fase. Devuelve los ids de las fases borradas.
+ */
+export async function borrarFasesQueSeVan(
+  tx: Pick<Prisma.TransactionClient, "timelinePhase" | "timelineTask">,
+  fasesQueSeVan: NonNullable<EscriturasDeEstructura["fasesQueSeVan"]>,
+): Promise<string[]> {
+  const borradas: string[] = [];
+  for (const f of fasesQueSeVan) {
+    if (f.borrar.length > 0) {
+      const tareas = await tx.timelineTask.deleteMany({
+        where: { id: { in: f.borrar }, phaseId: f.id, status: "PENDING", source: { not: "HUMAN" } },
+      });
+      if (tareas.count !== f.borrar.length) throw new ErrorAlAplicar("PLAN_CAMBIO", MENSAJE_PLAN_CAMBIO);
+    }
+    if (!f.queda) {
+      const fase = await tx.timelinePhase.deleteMany({ where: { id: f.id, tasks: { none: {} } } });
+      if (fase.count !== 1) throw new ErrorAlAplicar("PLAN_CAMBIO", MENSAJE_PLAN_CAMBIO);
+      borradas.push(f.id);
+    }
+  }
+  return borradas;
 }
 
 export interface PedidoDeAplicar {
@@ -261,9 +299,16 @@ export interface ResultadoDeAplicar {
   /** Para la auditoría y el evento del arranque, que van después de la transacción. */
   anclaAntes: string | null;
   fasesAntes: Array<{ durationWeeks: number; startWeek: number | null }>;
-  /** Tareas creadas + borradas. Con > 0, la pantalla encadena el re-chequeo del avance. */
+  /** E3: lo vivo que se leyó en la transacción (los eventos de lo que dictó el chat se arman con él). */
+  vivo: Vivo;
+  /** Tareas creadas + borradas + mudadas. Con > 0, la pantalla encadena el re-chequeo del avance. */
   tareasTocadas: number;
-  tareas: { creadas: number; borradas: number };
+  /** `borradas` cuenta también las que se van con su fase. E3: `cambiadas` (se muden o no) y `mudadas`. */
+  tareas: { creadas: number; borradas: number; cambiadas: number; mudadas: number };
+  /** E3: los ids de las fases que se borraron enteras. */
+  fasesBorradas: string[];
+  /** E3: las fases nuevas creadas (clave → id), para los eventos. */
+  fasesCreadas: Array<{ clave: string; id: string }>;
 }
 
 /**
@@ -363,6 +408,8 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
       notes: f.notes,
       activityType: f.activityType,
       tareas: f.tareas,
+      // E3: el estado de la fase (una que se va choca si ya arrancó). La pantalla lo tiene igual.
+      status: f.status,
     })),
   };
 
@@ -384,17 +431,23 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
   if (plan.aplicadas.length === 0) throw new ErrorAlAplicar("NADA_QUE_APLICAR", MENSAJE_NADA_QUE_APLICAR);
 
   // 5) El permiso: tocar tareas pide la vara de generarlas. Sin ella, se aplican solo las fases
-  //    desmarcando las tareas (el plan de arriba ya no las tendría entre las aplicadas).
-  if (!p.puedeTocarTareas && plan.aplicadas.some(esCambioDeTarea)) {
+  //    desmarcando las tareas (el plan de arriba ya no las tendría entre las aplicadas). E3: lo que
+  //    dictó el chat pide la vara de editar, la de esta ruta (`necesitaPermisoDeIa`).
+  if (!p.puedeTocarTareas && plan.aplicadas.some(necesitaPermisoDeIa)) {
     throw new ErrorAlAplicar("SIN_PERMISO", MENSAJE_SIN_PERMISO_TAREAS);
   }
 
-  // 6) La estructura.
+  /* 6) La estructura. Al acortar una fase no se mueven (ni cuentan en el aviso) las tareas que el mismo
+     aplicar borra, ni (E3) las que cambian de semana o se mudan: esas las acomoda su propia escritura. */
+  const cambian = plan.escrituras.tareas.cambian ?? [];
   const { avisos, creadas } = await escribirEstructura(tx, {
     timelineId: p.timelineId,
     fases,
     escrituras: plan.escrituras,
-    seVan: plan.escrituras.tareas.seVan,
+    seVan: [
+      ...plan.escrituras.tareas.seVan,
+      ...cambian.filter((c) => c.aFase !== null || c.campos.weekIndex !== undefined).map((c) => c.id),
+    ],
   });
 
   // 7) Las tareas, con los ids reales de las fases nuevas y la duración con que quedan las fases.
@@ -420,21 +473,33 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
     throw e;
   }
 
-  // 8) El cierre (o la reapertura) de cada fase existente que cambió de tareas.
-  for (const phaseId of tareas.fasesTocadas) {
+  // 7b) E3: las fases que se van, después de las tareas (lo que sale de ellas ya se mudó).
+  const fasesQueSeVan = plan.escrituras.fasesQueSeVan ?? [];
+  const fasesBorradas = await borrarFasesQueSeVan(tx, fasesQueSeVan);
+  const borradasConSuFase = fasesQueSeVan.reduce((n, f) => n + f.borrar.length, 0);
+
+  // 8) El cierre (o la reapertura) de cada fase existente que cambió de tareas (E3: y de una que se
+  //    iba y se queda con lo suyo, si perdió tareas).
+  const conCierre = new Set(tareas.fasesTocadas);
+  for (const f of fasesQueSeVan) if (f.queda && f.borrar.length > 0) conCierre.add(f.id);
+  for (const id of fasesBorradas) conCierre.delete(id);
+  for (const phaseId of tl.phases.map((f) => f.id).filter((id) => conCierre.has(id))) {
     await recalcularCierreDeFase(tx, phaseId, p.ahora, p.actorEmail);
   }
 
-  /* 9) El cronograma cambió y el cliente todavía no lo ve. Con tareas creadas o borradas, el
-     borrador de avance quedó viejo (ids que ya no están): se invalida. Las fases nuevas solas no lo
-     invalidan (igual que E1). La corrida que armó las tareas queda como su traza. */
-  const tareasTocadas = tareas.creadas + tareas.borradas;
+  /* 9) El cronograma cambió y el cliente todavía no lo ve. Con tareas creadas, borradas o mudadas, o
+     fases borradas, el borrador de avance quedó viejo (ids que ya no están donde estaban): se invalida.
+     Un renombre sin mudanza no lo invalida, ni las fases nuevas solas (igual que E1). La corrida que
+     armó las tareas queda como su traza, si alguna de las creadas es de la IA. */
+  const borradas = tareas.borradas + borradasConSuFase;
+  const tareasTocadas = tareas.creadas + borradas + tareas.mudadas;
+  const creadasPorLaIa = plan.escrituras.tareas.nuevas.some((n) => !n.porChat);
   await tx.projectTimeline.update({
     where: { id: p.timelineId },
     data: {
       lastEditedByHuman: p.ahora,
-      ...(tareasTocadas > 0 ? { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } : {}),
-      ...(tareas.creadas > 0 && borrador.tareas?.corrida ? { detailGeneratedByAgentRunId: borrador.tareas.corrida } : {}),
+      ...(tareasTocadas > 0 || fasesBorradas.length > 0 ? { pendingProgress: Prisma.DbNull, pendingProgressRunId: null } : {}),
+      ...(creadasPorLaIa && borrador.tareas?.corrida ? { detailGeneratedByAgentRunId: borrador.tareas.corrida } : {}),
     },
   });
 
@@ -444,7 +509,10 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
     avisos,
     anclaAntes,
     fasesAntes: fases.map((f) => ({ durationWeeks: f.durationWeeks, startWeek: f.startWeek })),
+    vivo,
     tareasTocadas,
-    tareas: { creadas: tareas.creadas, borradas: tareas.borradas },
+    tareas: { creadas: tareas.creadas, borradas, cambiadas: tareas.cambiadas, mudadas: tareas.mudadas },
+    fasesBorradas,
+    fasesCreadas: creadas,
   };
 }

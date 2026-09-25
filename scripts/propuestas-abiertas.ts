@@ -1,5 +1,5 @@
 /**
- * scripts/propuestas-abiertas.ts — LAS PROPUESTAS DEL CRONOGRAMA QUE ESTÁN ABIERTAS (E2a, E2b).
+ * scripts/propuestas-abiertas.ts — LAS PROPUESTAS DEL CRONOGRAMA QUE ESTÁN ABIERTAS (E2a, E2b, E3).
  *
  * Por qué existe: desde E2a, «Regenerar todo» deja UN borrador (`borrador-v1`) con fases y tareas en
  * `ProjectTimeline.pendingProposal`. Desde E2b también lo dejan el handoff (solo fases, sin tareas) y
@@ -10,7 +10,8 @@
  * Por cada propuesta abierta muestra el cliente, el proyecto, el `projectId`, el formato, el origen,
  * el token (`pendingProposalRunId`), quién y cuándo la abrió (de la corrida del token), los días que
  * lleva abierta y, en los v1, `soloFase`, el estado de las tareas y los cambios por tipo (la medida
- * de Wherex). Lo puro (formatos, qué frena, qué deja la vuelta atrás) vive en
+ * de Wherex). E3: también cuántos dictó el chat (`porChat`) y cuántas casillas desmarcadas guarda
+ * (`excluidos`). Lo puro (formatos, qué frena, qué deja la vuelta atrás) vive en
  * scripts/lib/propuestas-abiertas.ts.
  *
  * Formatos (cada propuesta cae en UNO):
@@ -35,8 +36,14 @@
  *                              «solo de fases», solo si sigue siendo el mismo que se leyó. Los v1 solo
  *                              de fases (sin tareas y sin ningún `tarea-*`, los del handoff) se
  *                              quedan: E1 los lee bien.
+ *   vuelta atrás a E2c, en seco:   npx tsx scripts/propuestas-abiertas.ts --desde-e3
+ *   vuelta atrás a E2c, de verdad: $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --desde-e3 --apply
+ *                            → cuenta (y con --apply respalda ProjectTimeline y deja en null) cada v1
+ *                              que trae algo de E3: un `tarea-cambia` o `fase-se-va`, casillas
+ *                              guardadas (`excluidos`) o algo dictado por el chat (`porChat`). E2c
+ *                              bloquea lo primero e ignora lo demás en silencio. Condicionada a lo leído.
  *
- * ⚠ Solo lee, salvo `--rollback --apply`. `--apply` sin `--rollback` no hace nada: se niega.
+ * ⚠ Solo lee, salvo `--rollback --apply` y `--desde-e3 --apply`. `--apply` solo no hace nada: se niega.
  */
 import { Prisma } from "@prisma/client";
 import { createScriptDb } from "./lib/db";
@@ -48,7 +55,15 @@ import {
   leerBorrador,
 } from "../lib/timeline/borrador";
 import { origenDePropuesta } from "../lib/timeline/proposal-deltas";
-import { FORMATOS, FRENAN_EL_DEPLOY, esV1SoloDeFases, formatoDe, type Formato } from "./lib/propuestas-abiertas";
+import {
+  FORMATOS,
+  FRENAN_EL_DEPLOY,
+  TIPOS_DE_E3,
+  esV1SoloDeFases,
+  formatoDe,
+  traeAlgoDeE3,
+  type Formato,
+} from "./lib/propuestas-abiertas";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -56,13 +71,18 @@ const fecha = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");
 
 async function main() {
   const ROLLBACK = process.argv.includes("--rollback");
+  const DESDE_E3 = process.argv.includes("--desde-e3");
   const ANTES_DEL_DEPLOY = process.argv.includes("--antes-del-deploy");
-  if (process.argv.includes("--apply") && !ROLLBACK) {
-    console.error("⛔ --apply solo va con --rollback: listar las propuestas no escribe nada.");
+  if (process.argv.includes("--apply") && !ROLLBACK && !DESDE_E3) {
+    console.error("⛔ --apply solo va con --rollback o --desde-e3: listar las propuestas no escribe nada.");
     process.exit(1);
   }
-  // El guard (y el respaldo de ProjectTimeline) corre solo en la vuelta atrás de verdad.
-  const APPLY = ROLLBACK ? resolverApply({ tablas: ["ProjectTimeline"] }) : false;
+  if (ROLLBACK && DESDE_E3) {
+    console.error("⛔ --rollback y --desde-e3 son dos vueltas atrás distintas: corre una sola.");
+    process.exit(1);
+  }
+  // El guard (y el respaldo de ProjectTimeline) corre solo en una vuelta atrás de verdad.
+  const APPLY = ROLLBACK || DESDE_E3 ? resolverApply({ tablas: ["ProjectTimeline"] }) : false;
 
   const { prisma, close } = createScriptDb();
   try {
@@ -139,6 +159,9 @@ async function main() {
             (b.tareas?.corrida ? ` (corrida ${b.tareas.corrida}: ${corrida ? corrida.status : "sin fila"})` : ""),
         );
         console.log(`   cambios: ${b.cambios.length} (${tipos})${b.desconocidos ? ` · ⚠ desconocidos: ${b.desconocidos}` : ""}`);
+        // E3: lo que dictó el chat y las casillas guardadas en el servidor.
+        const delChat = b.cambios.filter((c) => c.porChat).length;
+        console.log(`   del chat: ${delChat} · desmarcados guardados: ${b.excluidos?.length ?? 0}`);
       }
     }
 
@@ -183,6 +206,42 @@ async function main() {
       else if (aLimpiar.length > 0) {
         console.log("   DRY-RUN. Para limpiarlos (respalda ProjectTimeline antes):");
         console.log('   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --rollback --apply');
+      }
+    }
+
+    if (DESDE_E3) {
+      /* La vuelta atrás a E2c: los v1 con algo de E3. E2c lee los tipos de E3 como desconocidos (y
+         bloquea), e ignora `excluidos` y `porChat` en silencio. */
+      const deE3 = v1s.filter((f) => traeAlgoDeE3(f.pendingProposal));
+      console.log(`\n── Vuelta atrás a E2c: ${deE3.length} v1 con algo de E3 ${APPLY ? "a limpiar" : "que se limpiarían (en seco)"}`);
+      for (const f of deE3) {
+        const b = borradores.get(f.id);
+        const crudos = (f.pendingProposal as { cambios?: unknown[] } | null)?.cambios ?? [];
+        const deTipoE3 = crudos.filter((c) => TIPOS_DE_E3.includes(String((c as { tipo?: unknown } | null)?.tipo))).length;
+        console.log(
+          `   · ${f.projectId}: ${deTipoE3} de tipo E3 · ${b?.cambios.filter((c) => c.porChat).length ?? 0} del chat · ` +
+            `${b?.excluidos?.length ?? 0} desmarcados guardados`,
+        );
+      }
+      let limpios = 0;
+      for (const f of deE3) {
+        if (!APPLY) continue;
+        // Condicionada a lo que se leyó: si en el medio entró otra propuesta, no se pisa.
+        const r = await prisma.projectTimeline.updateMany({
+          where: {
+            id: f.id,
+            pendingProposalRunId: f.pendingProposalRunId,
+            pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR },
+          },
+          data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+        });
+        if (r.count === 1) limpios++;
+        else console.log(`   = ${f.projectId}: cambió desde que se leyó; no se toca.`);
+      }
+      if (APPLY) console.log(`   ${limpios} de ${deE3.length} limpiados.`);
+      else if (deE3.length > 0) {
+        console.log("   DRY-RUN. Para limpiarlos (respalda ProjectTimeline antes):");
+        console.log('   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --desde-e3 --apply');
       }
     }
   } finally {

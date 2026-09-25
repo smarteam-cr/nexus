@@ -20,6 +20,9 @@
  *   · (E2c) el RECÁLCULO de una fase desfasada por el camino entero (marcar, estructura, fusionar y
  *     aplicar), y «Aplicar de todos modos»: sus tareas tal cual, las que caían después en la última
  *     semana; sin forzar, una pestaña de antes no escribe nada (tampoco la limpieza del token).
+ *   · (E3) lo que dicta el chat: una tarea HECHA que se muda conserva su id y su estado; la fase que
+ *     se va con una protegida se queda, y vacía se borra de verdad (con `tasks: { none: {} }` contra el
+ *     Cascade real); AGENT pasa a MODIFIED; y «quitar una semana» en el tamaño de Wherex deja su tiempo.
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso).
  */
 import { describe, expect, it } from "vitest";
@@ -28,12 +31,16 @@ import type { Prisma } from "@prisma/client";
 import {
   borradorBase,
   claveDeCampo,
+  claveDeFaseQueSeVa,
+  claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   fotoDeTarea,
   leerBorrador,
   mensajeDeRecalculoAlAplicar,
   planDeAplicacion,
   type Borrador,
+  type CambioFaseSeVa,
+  type CambioTareaCambia,
   type CambioTareaNueva,
   type CambioTareaSeVa,
   type ContenidoDeTareaNueva,
@@ -182,6 +189,8 @@ async function vivoDeLaBase(timelineId: string): Promise<Vivo> {
           sessionCount: true,
           notes: true,
           activityType: true,
+          // E3: el estado de la fase, como la pantalla y como aplicar (paridad de la huella).
+          status: true,
           tasks: { orderBy: [{ weekIndex: "asc" }, { order: "asc" }] },
         },
       },
@@ -299,7 +308,7 @@ describe("aplicar el borrador CON tareas — DB real (E2a)", () => {
     const m = await mundoConTareas();
     const pedido = await pedidoDeLaPantalla(m.tl.id, m.v1);
     const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
-    expect(r.tareas).toEqual({ creadas: 2, borradas: 1 });
+    expect(r.tareas).toEqual({ creadas: 2, borradas: 1, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero
 
     expect(await prisma.timelineTask.findUnique({ where: { id: m.seVa.id } }), "no se quitó la que se iba").toBeNull();
     for (const id of [m.queda.id, m.humana.id, m.hecha.id]) {
@@ -417,7 +426,7 @@ describe("aplicar el borrador CON tareas — DB real (E2a)", () => {
     const t0 = Date.now();
     const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
     console.log(`[borrador-aplicar.int] Wherex: ${r.tareas.borradas} se van + ${r.tareas.creadas} nuevas en ${Date.now() - t0} ms`);
-    expect(r.tareas).toEqual({ creadas: 252, borradas: 252 });
+    expect(r.tareas).toEqual({ creadas: 252, borradas: 252, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero
     expect(await prisma.timelineTask.count({ where: { phase: { timelineId: tl.id } } })).toBe(252);
   });
 });
@@ -530,7 +539,7 @@ describe("«Regenerar» de una fase — DB real (E2b)", () => {
       actorEmail: "cse@smarteam.cr",
     };
     const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
-    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero
 
     expect(await fuera(), "se tocó una tarea de otra fase").toEqual(fueraAntes);
     const dePruebas = await prisma.timelineTask.findMany({ where: { phaseId: pruebas.id }, orderBy: { title: "asc" } });
@@ -651,7 +660,7 @@ describe("la fase desfasada — DB real (E2c)", () => {
     // 4. Aplicar con lo mismo desmarcado: ya no hay bloqueo y entran las recalculadas.
     const pedido = await pedidoConLoMarcado(m.tl.id, m.sin);
     const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
-    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero
     expect(r.plan.forzadas).toEqual([]);
     const pruebas = await prisma.timelinePhase.findUniqueOrThrow({ where: { id: m.c.id }, include: { tasks: true } });
     expect(pruebas.durationWeeks, "se aplicó el cambio de semanas desmarcado").toBe(3);
@@ -680,10 +689,175 @@ describe("la fase desfasada — DB real (E2c)", () => {
     // Forzada: sus tareas tal cual; la de la semana 6 cae en la 3, la última de las que quedan.
     const pedido = await pedidoConLoMarcado(m.tl.id, m.sin, [m.c.id]);
     const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
-    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero
     expect(r.plan.forzadas.map((f) => f.fase)).toEqual([m.c.id]);
     const pruebas = await prisma.timelinePhase.findUniqueOrThrow({ where: { id: m.c.id }, include: { tasks: true } });
     expect(pruebas.durationWeeks).toBe(3);
     expect(pruebas.tasks.map((t) => [t.title, t.weekIndex])).toEqual([["Pruebas de aceptación", 2]]);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E3: lo que dicta el chat ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Un proyecto con tres fases: «Diseño» con una tarea HECHA y una de la IA, «Pruebas» y «Cierre». */
+async function mundoDelChat() {
+  const cliente = await prisma.client.create({ data: { name: "Cliente del chat (test)" } });
+  const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación del chat (test)" } });
+  const tl = await prisma.projectTimeline.create({
+    data: { projectId: proyecto.id, anchorStartDate: new Date("2026-10-05T00:00:00.000Z") },
+  });
+  const crear = (name: string, order: number, durationWeeks: number) =>
+    prisma.timelinePhase.create({ data: { timelineId: tl.id, name, order, durationWeeks, source: "AGENT" } });
+  const diseno = await crear("Diseño", 0, 2);
+  const pruebas = await crear("Pruebas", 1, 3);
+  const cierre = await crear("Cierre", 2, 1);
+  const tarea = (phaseId: string, title: string, weekIndex: number, order: number, extra: Partial<Prisma.TimelineTaskUncheckedCreateInput> = {}) =>
+    prisma.timelineTask.create({ data: { phaseId, title, weekIndex, order, source: "AGENT", status: "PENDING", ...extra } });
+  const hecha = await tarea(diseno.id, "Mapear procesos", 1, 0, { status: "DONE", actualStart: new Date("2026-10-06T00:00:00.000Z") });
+  const deLaIa = await tarea(diseno.id, "Definir pipeline", 0, 0);
+  const enPruebas = await tarea(pruebas.id, "Probar flujos", 2, 0);
+  return { cliente, proyecto, tl, diseno, pruebas, cierre, hecha, deLaIa, enPruebas };
+}
+
+/** Guarda el v1 del chat y arma el pedido de la pantalla (la huella contra lo vivo de AHORA). */
+async function pedidoDelChat(timelineId: string, cambios: (vivo: Vivo) => Borrador["cambios"]): Promise<PedidoDeAplicar> {
+  const vivo = await vivoDeLaBase(timelineId);
+  const v1: Borrador = {
+    formato: "borrador-v1",
+    version: 1,
+    origen: "contexto",
+    observaciones: [],
+    cambios: cambios(vivo),
+    pedido: "regenerar",
+    tareas: { corrida: null, listas: true },
+    tareasArmadasPara: {},
+  };
+  await prisma.projectTimeline.update({
+    where: { id: timelineId },
+    data: { pendingProposal: v1 as unknown as Prisma.InputJsonValue, pendingProposalRunId: RUN },
+  });
+  return {
+    timelineId,
+    token: RUN,
+    guardado: v1,
+    foto: null,
+    sin: [],
+    huella: planDeAplicacion(vivo, leerBorrador(v1, vivo)!, [], { tareas: "listas" }).huella,
+    ahora: new Date(),
+    tareas: "listas",
+    puedeTocarTareas: false, // lo del chat pide la vara de editar, no la de la IA
+    actorEmail: "cse@smarteam.cr",
+  };
+}
+const tareaViva = (vivo: Vivo, id: string): TareaDelVivo => vivo.fases.flatMap((f) => f.tareas ?? []).find((t) => t.id === id)!;
+const faseQueSeVa = (vivo: Vivo, id: string): CambioFaseSeVa => {
+  const f = vivo.fases.find((x) => x.id === id)!;
+  return {
+    tipo: "fase-se-va",
+    clave: claveDeFaseQueSeVa(id),
+    faseId: id,
+    desde: {
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      startWeek: f.startWeek,
+      sessionCount: f.sessionCount,
+      notes: f.notes,
+      activityType: f.activityType,
+      status: f.status!,
+      tareas: (f.tareas ?? []).map((t) => ({ id: t.id, foto: fotoDeTarea(t) })),
+    },
+    porChat: true,
+  };
+};
+const cambiaLa = (vivo: Vivo, id: string, faseId: string, a: CambioTareaCambia["a"], extra: Partial<CambioTareaCambia> = {}): CambioTareaCambia => ({
+  tipo: "tarea-cambia",
+  clave: claveDeTareaQueCambia(id),
+  tareaId: id,
+  faseId,
+  desde: fotoDeTarea(tareaViva(vivo, id)),
+  a,
+  porChat: true,
+  ...extra,
+});
+
+describe("lo que dicta el chat — DB real (E3)", () => {
+  it("⭐ una tarea HECHA que se muda conserva su id, su estado y sus fechas reales; la de la IA que cambia pasa a MODIFIED", async () => {
+    /* D2. La edición que la pone en rojo: mudar recreando (borrar y crear: se pierde el estado, como
+       hoy el PUT del chat), o dejar AGENT una tarea que editó una persona. */
+    const m = await mundoDelChat();
+    const pedido = await pedidoDelChat(m.tl.id, (vivo) => [
+      cambiaLa(vivo, m.hecha.id, m.diseno.id, { fase: m.pruebas.id }),
+      cambiaLa(vivo, m.deLaIa.id, m.diseno.id, { title: "Definir el pipeline de ventas" }),
+    ]);
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 0, cambiadas: 2, mudadas: 1 });
+    const mudada = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.hecha.id } });
+    expect([mudada.phaseId, mudada.status, mudada.weekIndex, mudada.order]).toEqual([m.pruebas.id, "DONE", 1, 0]);
+    expect(mudada.actualStart?.toISOString()).toBe("2026-10-06T00:00:00.000Z");
+    const renombrada = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.deLaIa.id } });
+    expect([renombrada.title, renombrada.source, renombrada.phaseId]).toEqual(["Definir el pipeline de ventas", "MODIFIED", m.diseno.id]);
+    expect(await prisma.timelineTask.count({ where: { phase: { timelineId: m.tl.id } } }), "se recreó una tarea").toBe(3);
+  });
+
+  it("⭐ la fase que se va con una protegida se queda con ella; vacía, se borra de verdad (el Cascade no se lleva nada)", async () => {
+    /* D3. La edición que la pone en rojo: borrar la fase sin el `none` (el Cascade real se llevaría la
+       HECHA), o no borrar la que quedó vacía. */
+    const m = await mundoDelChat();
+    const pedido = await pedidoDelChat(m.tl.id, (vivo) => [faseQueSeVa(vivo, m.diseno.id), faseQueSeVa(vivo, m.cierre.id)]);
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    expect(r.fasesBorradas).toEqual([m.cierre.id]);
+    expect(r.tareas.borradas).toBe(1);
+    const fases = await prisma.timelinePhase.findMany({ where: { timelineId: m.tl.id }, orderBy: { order: "asc" }, include: { tasks: true } });
+    expect(fases.map((f) => [f.name, f.order, f.tasks.map((t) => t.title)])).toEqual([
+      ["Diseño", 0, ["Mapear procesos"]],
+      ["Pruebas", 1, ["Probar flujos"]],
+    ]);
+    // Sin su pendiente, lo que queda de «Diseño» está hecho: se cierra.
+    expect(fases[0].status).toBe("DONE");
+    const tl = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: m.tl.id }, select: { pendingProposal: true } });
+    expect(tl.pendingProposal).toBeNull();
+  });
+
+  it("⏱ tamaño Wherex: «quitar una semana» en las 12 fases (las tareas de las semanas siguientes se corren), y deja el tiempo", async () => {
+    /* Riesgo 6 de E3: una llamada por cada tarea que cambia. El chat corre las tareas de a una fase; esto
+       es el peor caso (las 12 a la vez, 168 tareas que se corren) y deja la medida en consola. No falla
+       por tiempo —la base local no es el pooler remoto—: prueba que la cuenta cierra dentro del techo. */
+    const cliente = await prisma.client.create({ data: { name: "Cliente grande del chat (test)" } });
+    const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación grande del chat (test)" } });
+    const tl = await prisma.projectTimeline.create({ data: { projectId: proyecto.id } });
+    const fases = [];
+    for (let i = 0; i < 12; i++) {
+      fases.push(await prisma.timelinePhase.create({ data: { timelineId: tl.id, name: `Fase ${i + 1}`, order: i, durationWeeks: 3, source: "AGENT" } }));
+    }
+    await prisma.timelineTask.createMany({
+      data: fases.flatMap((f) =>
+        Array.from({ length: 21 }, (_, k) => ({
+          phaseId: f.id,
+          title: `Tarea ${k + 1} de ${f.name}`,
+          weekIndex: k % 3,
+          order: Math.floor(k / 3),
+          source: "AGENT" as const,
+          status: "PENDING" as const,
+        })),
+      ),
+    });
+    const pedido = await pedidoDelChat(tl.id, (vivo) =>
+      vivo.fases.flatMap((f): Borrador["cambios"] => {
+        const duracion = claveDeCampo(f.id, "durationWeeks");
+        return [
+          { tipo: "fase-cambia", clave: duracion, faseId: f.id, fase: f.name, campo: "durationWeeks", desde: 3, a: 2, porChat: true },
+          ...(f.tareas ?? []).filter((t) => t.weekIndex > 0).map((t) => cambiaLa(vivo, t.id, f.id, { weekIndex: t.weekIndex - 1 }, { conCambio: duracion })),
+        ];
+      }),
+    );
+    const t0 = Date.now();
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    console.log(`[borrador-aplicar.int] Wherex, quitar una semana en 12 fases: ${r.tareas.cambiadas} tareas corridas en ${Date.now() - t0} ms`);
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 0, cambiadas: 168, mudadas: 0 });
+    expect(r.avisos, "el aviso contó tareas que se corren con su propio cambio").toEqual([]);
+    const porSemana = await prisma.timelineTask.groupBy({ by: ["weekIndex"], where: { phase: { timelineId: tl.id } }, _count: true });
+    expect(Object.fromEntries(porSemana.map((g) => [g.weekIndex, g._count]))).toEqual({ 0: 168, 1: 84 });
+  }, 60_000);
 });

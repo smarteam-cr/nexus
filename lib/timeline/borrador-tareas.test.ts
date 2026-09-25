@@ -741,8 +741,12 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
       ["−", 2, "Definir pipeline"],
       ["+", 1, "Mapear procesos de venta"],
     ]);
-    expect(r.tareas).toEqual({ nuevas: 4, seVan: 3 });
+    /* ⚠ ACTUALIZADA en E3 P1 (2026-09-25), con esta razón: la confirmación cuenta también las tareas que
+       cambian y las fases que se van con sus pendientes (`TareasDelResumen`). Sin tareas del chat, esos
+       tres campos valen cero: se piden en cero, no se sueltan. */
+    expect(r.tareas).toEqual({ nuevas: 4, seVan: 3, cambian: 0, fasesSeVan: [], conLaFase: 0 });
     expect(r.borraAlgo).toBe(true);
+    expect(r.borraDelChatOFases, "lo que se borra es de la IA: la confirmación dice «de la IA»").toBe(false);
     expect(r.fasesNuevasConTareas).toBe(true);
     expect(r.proyeccion.fases.map((f) => f.clave)).toEqual(proyectar(VIVO, BORRADOR, []).fases.map((f) => f.clave));
     expect(r.huella, "la huella usa la posición interna").toBe(planDeAplicacion(VIVO, BORRADOR).huella);
