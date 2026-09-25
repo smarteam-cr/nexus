@@ -73,14 +73,16 @@ import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
+  CHAT_CON_EL_VACIO_FALLIDO,
   desenlaceDelSeguimiento,
   esBorradorGuardado,
   esBorradorV1,
   esperaEnCurso,
-  esVacioEsperandoTareas,
+  estadoDelVacio,
   juntarObservaciones,
   leerBorrador,
   MENSAJE_PROPUESTA_ABIERTA,
+  observacionesDeLaFranja,
   observacionesParaElPaso2,
   textoDelChipDeEspera,
   traeCambiosDeFases,
@@ -485,6 +487,9 @@ export default function CronogramaCanvas({
      cuya corrida falló) la oferta no dice «Las fases quedaron decididas» (revisión de E2a). */
   const [ofertaConFases, setOfertaConFases] = useState(true);
   const [observacionesPaso1, setObservacionesPaso1] = useState<string[]>([]);
+  /* El token del borrador vacío cuya franja «La IA también notó» cerró el CSE: lo que guardó ese
+     borrador ya no se muestra (cerrar no lo borra del servidor). */
+  const [franjaCerradaPara, setFranjaCerradaPara] = useState<string | null>(null);
   // Pedido del panel "Qué hacer acá" de abrir un grupo de la lista. El nonce hace que re-clickear
   // el mismo CTA lo vuelva a abrir aunque el CSE lo haya cerrado a mano.
   const [focusGroup, setFocusGroup] = useState<{ key: string; nonce: number } | null>(null);
@@ -958,8 +963,11 @@ export default function CronogramaCanvas({
    * estado de sus tareas; `ok: false` si el GET falló, que NO es lo mismo que «no hay propuesta»
    * (revisión de E2a: el seguimiento de la corrida avisaba «no propone cambios» por un 5xx, y la
    * pantalla quedaba «armando» sin volver a mirar).
+   * `soloLeer`: lee la guardada SIN ponerla en pantalla. Lo usa el seguimiento con la vista previa del
+   * modificador abierta: pisarla tiraría el resultado de la IA, y sin leer nada el aviso de las tareas
+   * se perdía (cierre de la revisión de E2a).
    */
-  const traerPropuestaPendiente = async (): Promise<
+  const traerPropuestaPendiente = async (opts?: { soloLeer?: boolean }): Promise<
     { ok: true; propuesta: Proposal | null; tareas: TareasDelBorradorEnPantalla | null } | { ok: false }
   > => {
     try {
@@ -967,10 +975,12 @@ export default function CronogramaCanvas({
       if (!res.ok) return { ok: false };
       const data = await res.json();
       const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
-      proposalMeta.current = { deAssist: false, runId: (data.pendingProposalRunId as string | null) ?? null };
-      setProposal(nueva);
-      setTareasDelBorrador(tareasDelGet(data));
-      bumpGpsRefresh();
+      if (!opts?.soloLeer) {
+        proposalMeta.current = { deAssist: false, runId: (data.pendingProposalRunId as string | null) ?? null };
+        setProposal(nueva);
+        setTareasDelBorrador(tareasDelGet(data));
+        bumpGpsRefresh();
+      }
       return { ok: true, propuesta: nueva, tareas: tareasDelGet(data) };
     } catch {
       return { ok: false };
@@ -1463,6 +1473,14 @@ export default function CronogramaCanvas({
     tareasEnPantalla && armando !== null && (tareasEnPantalla.estado === "faltan" || tareasEnPantalla.estado === "fallo")
       ? "armando"
       : (tareasEnPantalla?.estado ?? null);
+  /* Lo que muestra la franja «La IA también notó»: lo del paso 1 de esta pantalla JUNTO con lo que
+     guardó el borrador vacío en pantalla. Cierre de la revisión de E2a: vivía solo en `useState`, y
+     al recargar con el vacío «armando» no se veía en ningún lado. */
+  const observacionesDeLaFranjaEnPantalla = observacionesDeLaFranja({
+    delPaso1: observacionesPaso1,
+    guardado: hayBorrador ? proposal : null,
+    cerradaLaDelGuardado: franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId,
+  });
   /* La foto, lo desmarcado, la vista y el lugar del scroll viven en el hook; lo que decide, en
      lib/timeline/borrador.ts. La identidad de la propuesta es su token (la corrida) + su contenido:
      con ella el hook RECUERDA la foto entre montajes (cambiar de canvas, «Chequear avance», recargar),
@@ -1663,6 +1681,10 @@ export default function CronogramaCanvas({
         token = proposalMeta.current.runId;
         version = versionDelBorrador(proposal);
       }
+      /* Sin propuesta en pantalla (después de descartar el vacío que falló, o de aplicar una sin sus
+         tareas): lo que muestra la franja viaja y nace dentro del borrador nuevo. Cierre de la revisión
+         de E2a: «Generar las tareas ahora» lo dejaba afuera, y al recargar se perdía. */
+      if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);
     } else {
       /* ⛔ UN BORRADOR POR PROYECTO: con una propuesta sin decidir (del handoff, o de otro «Regenerar
          todo»), primero esa. Pedir otra daría 409, y las tareas se armarían sobre fases que el CSE
@@ -1961,10 +1983,18 @@ export default function CronogramaCanvas({
        un paso 2 que nunca llegaba. Desde E1 el servidor además responde 409 (timeline/route.ts),
        pero la pantalla frena antes y dice por qué; el acuerdo sigue ahí para aplicarlo después.
        Con el borrador VACÍO que espera sus tareas no hay nada que decidir todavía: se dice que la IA
-       las está armando (revisión de E2a: mandaba a decidir una propuesta que no estaba). */
+       las está armando (revisión de E2a: mandaba a decidir una propuesta que no estaba). Y si su
+       corrida ya falló o quedó colgada, que hay que descartarlo: «espera» no tenía salida (cierre de
+       la revisión). */
     if (hayBorrador) {
+      const vacio = estadoDelVacio(proposal, estadoDeLasTareasEnPantalla);
       return {
-        fallo: esVacioEsperandoTareas(proposal) ? esperaEnCurso("la IA está armando las tareas") : CAMBIOS_DE_FASES_SIN_DECIDIR,
+        fallo:
+          vacio === "armando"
+            ? esperaEnCurso("la IA está armando las tareas")
+            : vacio === "fallo"
+              ? CHAT_CON_EL_VACIO_FALLIDO
+              : CAMBIOS_DE_FASES_SIN_DECIDIR,
         avisos: [],
       };
     }
@@ -2100,7 +2130,9 @@ export default function CronogramaCanvas({
        CSE ya igualó el cronograma a mano), la cadena de «Regenerar todo» sigue igual que al
        resolver la última sugerencia. */
     const origenDescartado = origenDePropuesta(proposal);
-    const observacionesDescartadas = proposal?.observaciones ?? [];
+    // Lo que el CSE ya cerró en la franja (la de este borrador vacío) no vuelve a aparecer al descartarlo.
+    const observacionesDescartadas =
+      franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId ? [] : (proposal?.observaciones ?? []);
     const modoDeLaCadena = pasoTareasRef.current;
     // E2a: el estado de las tareas de la que se descarta (null = no esperaba tareas), ANTES de limpiar.
     const tareasDescartadas = tareasEnPantalla?.estado ?? null;
@@ -2346,35 +2378,44 @@ export default function CronogramaCanvas({
      nada si la propuesta guardada ya no es la de esta corrida (se descartó o entró otra), la causa en
      palabras del CSE y nunca el código de la corrida, y un solo aviso cuando una corrida colgada pasa a
      «fallo». Si el GET falla no se sabe nada: se vuelve a mirar, sin avisar ni darla por avisada.
-     Solo con `canEdit`: la barra, la línea y la vista de la propuesta son de quien edita, y a quien
-     solo mira le alcanza el chip del encabezado. */
+     Los avisos, solo con `canEdit`: la barra, la línea y la vista de la propuesta son de quien edita.
+     Quien solo mira también la sigue, pero en silencio: al terminar se relee el cronograma y su chip
+     «Armando las tareas…» se apaga (cierre de la revisión de E2a: quedaba fijo hasta recargar). */
   const { phase: faseDelArmado, track } = useAgentRun(clientId);
   const siguiendoRef = useRef<string | null>(null);
   const [vueltaDelSeguimiento, setVueltaDelSeguimiento] = useState(0);
   const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;
+  const puedeEditarRef = useRef(canEdit);
   useEffect(() => {
-    if (!canEdit || !corridaQueArma || siguiendoRef.current === corridaQueArma) return;
+    puedeEditarRef.current = canEdit;
+  });
+  useEffect(() => {
+    if (!corridaQueArma || siguiendoRef.current === corridaQueArma) return;
     const corrida = corridaQueArma;
     siguiendoRef.current = corrida;
     void (async () => {
       const r = await track(corrida);
       siguiendoRef.current = null;
-      // La vista previa del modificador vive solo en memoria: nunca se pisa (la guardada llega al descartarla).
-      const deAssist = proposalMeta.current.deAssist;
-      const leida = deAssist ? null : await traerPropuestaPendiente();
-      const desenlace = leida
-        ? desenlaceDelSeguimiento({
-            corrida,
-            estado: r.status,
-            lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas } : null,
-            aviso: r.timelineSyncError,
-          })
-        : ({ que: "callar" } as const);
+      /* La vista previa del modificador vive solo en memoria: nunca se pisa (la guardada llega al
+         descartarla). Con ella en pantalla, la guardada se LEE sin ponerla: antes no se leía nada, el
+         desenlace callaba y daba la corrida por avisada (cierre de la revisión de E2a). */
+      const conVistaPrevia = proposalMeta.current.deAssist;
+      const leida = conVistaPrevia ? await traerPropuestaPendiente({ soloLeer: true }) : await traerPropuestaPendiente();
+      const desenlace = desenlaceDelSeguimiento({
+        corrida,
+        estado: r.status,
+        lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas } : null,
+        aviso: r.timelineSyncError,
+        conVistaPrevia,
+      });
       if (desenlace.que === "seguir") {
         // Sigue «armando» (~6 min sin terminar) o el GET falló: se relee y se vuelve a seguir.
         setVueltaDelSeguimiento((n) => n + 1);
         return;
       }
+      /* Quien solo mira: ya se releyó el cronograma (el chip dice lo de ahora). Los avisos son de quien
+         edita, con el permiso de AHORA: `useMe` puede llegar después de que empezó el seguimiento. */
+      if (!puedeEditarRef.current) return;
       /* Si el cronograma se desmontó y se volvió a montar a mitad de camino (cambiar de pieza), el
          seguimiento viejo y el nuevo terminan juntos: se avisa una sola vez por corrida. */
       if (CORRIDAS_ANUNCIADAS.has(corrida)) return;
@@ -2386,7 +2427,7 @@ export default function CronogramaCanvas({
       void notifyAgentDone({ group: "cronograma", ok: desenlace.ok, url: cronogramaUrl });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, corridaQueArma, vueltaDelSeguimiento]);
+  }, [corridaQueArma, vueltaDelSeguimiento]);
   /* Lo que ve la barra de las tareas: el estado del servidor (o «armando» mientras esta pantalla las
      pide), con la fase EN VIVO mientras se sigue. */
   const tareasDeLaBarra: TareasEnPantalla | null =
@@ -2916,8 +2957,10 @@ export default function CronogramaCanvas({
           pendingProgressDias: showProgressBanner ? diasSinConfirmar(pendingProgress, null, new Date()) : null,
           pendingParticularidades: showParticBanner ? (pendingParticularidades?.length ?? 0) : 0,
           pendingProposal: !!proposal,
-          // El borrador vacío que espera sus tareas: «La IA está armando las tareas», sin «Revisar».
-          armandoTareas: esVacioEsperandoTareas(proposal),
+          /* El borrador vacío que espera sus tareas: «La IA está armando las tareas», sin «Revisar»; o,
+             con su corrida muerta, que hay que descartarlo (cierre de la revisión de E2a). */
+          armandoTareas: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando",
+          tareasFallaron: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo",
           particularidades,
           sugerenciasDelEquipo: sugerencias.length,
           phases: ganttPhases,
@@ -2927,7 +2970,8 @@ export default function CronogramaCanvas({
       ),
     [
       ganttPhases, anchor, hydratedNow, summary, showProgressBanner, showParticBanner,
-      pendingParticularidades, proposal, detailConfirmedAt, hasAiDetail, particularidades, sugerencias,
+      pendingParticularidades, proposal, estadoDeLasTareasEnPantalla, detailConfirmedAt, hasAiDetail,
+      particularidades, sugerencias,
     ],
   );
 
@@ -4034,11 +4078,18 @@ export default function CronogramaCanvas({
               proponer): el aviso «los ves en «La IA también notó»» no puede quedar como una promesa
               rota. Se ve cuando esta pantalla ya no está pidiendo nada y no hay una barra que lo
               muestre: sin propuesta, o con el borrador vacío que espera sus tareas (no tiene barra;
-              revisión de E2a). Con barra, lo muestra ella. */}
-          {observacionesPaso1.length > 0 &&
+              revisión de E2a). Con barra, lo muestra ella. Lo del vacío sale de lo GUARDADO, así se ve
+              también al recargar (cierre de la revisión). */}
+          {observacionesDeLaFranjaEnPantalla.length > 0 &&
             armando === null &&
             (!hayBorrador || !revision.resumen) && (
-              <ObservacionesDelPaso1 observaciones={observacionesPaso1} onCerrar={() => setObservacionesPaso1([])} />
+              <ObservacionesDelPaso1
+                observaciones={observacionesDeLaFranjaEnPantalla}
+                onCerrar={() => {
+                  setObservacionesPaso1([]);
+                  setFranjaCerradaPara(hayBorrador ? proposalMeta.current.runId : null);
+                }}
+              />
             )}
           {/* ⭐ LA REVISIÓN DE LA PROPUESTA DE FASES (E1 del borrador, 2026-09-24): UNA barra fija
               arriba del Gantt, con UN botón que alterna «Ver como estaba antes» ↔ «Ver la propuesta»

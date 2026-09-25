@@ -272,10 +272,15 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     expect(textoDeLaConfirmacion(sinQuitar), "el confirm dejó de decir que no se borra nada — el modelo es ADITIVO").toContain(
       "No se borra ninguna fase ni ninguna tarea",
     );
+    /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía el número en
+       esta frase («Se quitan 2 tareas pendientes»), y la confirmación lo repetía: la primera oración
+       (`resumenDeLaConfirmacion`, que el diálogo pinta antes) ya dice cuántas. Sigue pidiendo que,
+       quitando tareas, diga que se quitan y que son pendientes de la IA. */
     expect(
       textoDeLaConfirmacion({ ...sinQuitar, borraAlgo: true, tareas: { nuevas: 3, seVan: 2 } }),
-      "quitando tareas, el confirm tiene que decir cuántas se quitan",
-    ).toContain("Se quitan 2 tareas pendientes");
+      "quitando tareas, el confirm tiene que decir que se quitan",
+    ).toContain("Solo se quitan tareas pendientes de la IA");
+    expect(tramo, "el confirm dejó de contar cuántas se quitan").toContain("{resumenDeLaConfirmacion(resumen)}");
     expect(
       tramo,
       'el confirm se pintó como destructivo: el rojo dice "esto borra" y acá no se borra nada',

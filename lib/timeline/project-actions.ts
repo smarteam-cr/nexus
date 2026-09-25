@@ -62,9 +62,12 @@ export interface ProjectActionsInput {
   pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
-  /** La propuesta guardada es el borrador VACÍO que espera sus tareas (`esVacioEsperandoTareas`):
+  /** La propuesta guardada es el borrador VACÍO que espera sus tareas (`estadoDelVacio` = «armando»):
    *  no hay nada que decidir todavía, la IA está armando las tareas. */
   armandoTareas?: boolean;
+  /** El mismo borrador VACÍO, con su corrida fallida o colgada (`estadoDelVacio` = «fallo»): nadie lo va
+   *  a llenar, se descarta o se vuelve a intentar. */
+  tareasFallaron?: boolean;
   /** Lo que reportó una PERSONA del equipo (needsValidation) y espera respuesta del CSE. */
   sugerenciasDelEquipo: number;
   // ── Estado del plan ──
@@ -135,6 +138,15 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
       title: "La IA está armando las tareas del cronograma",
       why: "Cuando termine, la propuesta aparece arriba del Gantt para revisarla.",
       cta: null,
+    });
+  } else if (i.pendingProposal && i.tareasFallaron) {
+    /* Cierre de la revisión de E2a: con la corrida muerta, «está armando» dejaba al CSE esperando algo
+       que no iba a llegar. La propuesta vacía se descarta (o se reintenta) arriba del Gantt. */
+    out.push({
+      id: "draft-proposal", group: "decidir", tone: "warn",
+      title: "No se pudieron armar las tareas del cronograma",
+      why: "Quedó una propuesta vacía: descártala o vuelve a intentar arriba del Gantt.",
+      cta: "Ver el cronograma",
     });
   } else if (i.pendingProposal) {
     out.push({

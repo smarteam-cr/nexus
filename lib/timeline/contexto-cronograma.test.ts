@@ -520,6 +520,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/escribir-estructura.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
+    /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega
+       tal cual al centro de corridas («Podés volver a lanzarla» se leía ahí). */
+    "lib/agents/run-colgada.ts",
     "components/canvas/TimelineAssistDialog.tsx",
     "components/canvas/TimelineGantt.tsx",
     "components/clients/FuentesManualesColumn.tsx",

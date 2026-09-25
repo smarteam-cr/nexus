@@ -42,7 +42,7 @@ import { partitionByValidation } from "./particularidad-state";
 import { actionsFromSignals } from "./project-actions-input";
 import type { ProjectAction } from "./project-actions";
 import { diasSinConfirmar, type BorradorFechable } from "./avance-sin-confirmar";
-import { esVacioEsperandoTareas } from "./borrador";
+import { corridaDelVacio, estadoDeLasTareas, estadoDelVacio } from "./borrador";
 
 export interface ProjectActionsRow {
   projectId: string;
@@ -127,15 +127,30 @@ export async function loadProjectActions(
   /* D-12: cuándo se generó cada borrador de avance. Los nuevos traen `generatedAt`; los
      anteriores al 2026-09-04 no, y su fecha sale de la corrida que los produjo. */
   const runIds = timelines.map((t) => t.pendingProgressRunId).filter((id): id is string => !!id);
-  const runs = runIds.length
-    ? await prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, createdAt: true } })
+  /* Cierre de la revisión de E2a: la corrida del borrador VACÍO que espera sus tareas, en la MISMA
+     consulta. Sin ella la bandeja decía «la IA está armando» también con la corrida muerta. */
+  const corridasDeVacios = timelines.map((t) => corridaDelVacio(t.pendingProposal)).filter((id): id is string => !!id);
+  const idsALeer = [...new Set([...runIds, ...corridasDeVacios])];
+  const runs = idsALeer.length
+    ? await prisma.agentRun.findMany({
+        where: { id: { in: idsALeer } },
+        select: { id: true, createdAt: true, status: true, updatedAt: true },
+      })
     : [];
   const fechaDeCorrida = new Map(runs.map((x) => [x.id, x.createdAt]));
+  const corridaPorId = new Map(runs.map((x) => [x.id, x]));
+  /** El borrador vacío de ese cronograma: «armando», «fallo» (la corrida murió) o null (no es ese). */
+  const vacioDe = (guardado: unknown) => {
+    const corrida = corridaDelVacio(guardado);
+    const tareas = corrida ? estadoDeLasTareas({ corrida, listas: false }, corridaPorId.get(corrida) ?? null, now) : null;
+    return estadoDelVacio(guardado, tareas);
+  };
 
   return rows.map((r) => {
     const tl = tlByProject.get(r.projectId);
     const { confirmadas, sugerencias } = partitionByValidation(tl?.particularidades ?? []);
     const phases = tl?.phases ?? [];
+    const vacio = vacioDe(tl?.pendingProposal ?? null);
 
     return {
       projectId: r.projectId,
@@ -163,8 +178,9 @@ export async function loadProjectActions(
             ? tl.pendingParticularidades.length
             : 0,
           pendingProposal: !!tl?.pendingProposal,
-          // El borrador vacío que espera sus tareas: la IA las está armando, no hay nada que decidir.
-          armandoTareas: esVacioEsperandoTareas(tl?.pendingProposal ?? null),
+          // El borrador vacío que espera sus tareas: la IA las está armando, o su corrida ya murió.
+          armandoTareas: vacio === "armando",
+          tareasFallaron: vacio === "fallo",
           particularidades: confirmadas,
           sugerenciasDelEquipo: sugerencias.length,
           phases,

@@ -45,8 +45,10 @@ import { ErrorAlAplicar } from "@/lib/timeline/escribir-estructura";
 import { FORMATO_BORRADOR, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
+  cierreDeLaCorridaVetada,
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
+  leerEstadoDelVacio,
   leerEstadoDeLasTareas,
   leerPedidoDeTareas,
   marcarTareasEnCurso,
@@ -60,7 +62,8 @@ import {
   vetoDelGuardado,
 } from "@/lib/timeline/borrador-del-detalle";
 import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
-import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { humanizeAgentError, MENSAJE_PRESUPUESTO_AGOTADO } from "@/lib/agents/anthropic-error";
+import { evaluarPresupuesto, PresupuestoDeIaAgotado } from "@/lib/ai/presupuesto";
 import { motivoDeLaRespuesta } from "@/lib/agents/run-error";
 import type { EstructuraHipotetica } from "@/lib/timeline/borrador";
 import { Prisma } from "@prisma/client";
@@ -342,7 +345,7 @@ describe("leerEstadoDeLasTareas — el estado se DEDUCE de la corrida", () => {
 
   it("⭐ armando con su fase; y los motivos del fallo, en tuteo", async () => {
     /* La edición que la pone en rojo: el motivo genérico de `parseRunError` (con voseo) en la línea
-       del CSE, o `MOTIVO_COLGADA` (también con voseo) para la corrida colgada.
+       del CSE, o `MOTIVO_COLGADA` (una oración entera, para el centro de corridas) para la corrida colgada.
        ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía que el error guardado
        llegara TAL CUAL («Se acabó el tiempo de la IA.»). Así llegaban también «CLAUDE_ERROR» y el
        «Prueba de nuevo» de `humanizeAgentError` al lado del botón «Volver a intentar». Ahora se
@@ -362,6 +365,28 @@ describe("leerEstadoDeLasTareas — el estado se DEDUCE de la corrida", () => {
     expect(await leerEstadoDeLasTareas(t)).toMatchObject({ estado: "fallo", motivo: MOTIVO_TAREAS_SIN_GUARDAR });
     db.agentRun.findUnique.mockResolvedValue(null);
     expect(await leerEstadoDeLasTareas(t)).toEqual({ estado: "fallo", fase: null, motivo: null });
+  });
+
+  it("⛔ el borrador VACÍO: «armando» solo con la corrida viva; muerta o fallida, «fallo» (lo lee el chat)", async () => {
+    /* Cierre de la revisión de E2a: el chat lo contaba con un filtro JSON de Prisma que nunca se corrió
+       contra la base (y si fallaba volvía en silencio al texto de «decidir»), y sin mirar la corrida
+       decía «espera» también con la corrida muerta. Ahora se evalúa en JS sobre el JSON leído. Las
+       ediciones que la ponen en rojo: dejar de mirar la corrida, o leer un vacío donde no lo hay. */
+    const vacio = v1({ tareas: { corrida: "run-v", listas: false } });
+    corrida("RUNNING", 2);
+    expect(await leerEstadoDelVacio(vacio)).toBe("armando");
+    corrida("RUNNING", 31);
+    expect(await leerEstadoDelVacio(vacio), "la corrida colgada sigue «armando»").toBe("fallo");
+    corrida("ERROR", 1, JSON.stringify({ error: "La IA está sobrecargada en este momento." }));
+    expect(await leerEstadoDelVacio(vacio), "la corrida fallida sigue «armando»").toBe("fallo");
+    db.agentRun.findUnique.mockResolvedValue(null);
+    expect(await leerEstadoDelVacio(vacio), "sin la fila de la corrida").toBe("fallo");
+    db.agentRun.findUnique.mockClear();
+    expect(await leerEstadoDelVacio(v1({ cambios: [TAREA_NUEVA], tareas: { corrida: "run-v", listas: false } }))).toBeNull();
+    expect(await leerEstadoDelVacio(v1({ tareas: { corrida: "run-v", listas: true } }))).toBeNull();
+    expect(await leerEstadoDelVacio(VIEJA)).toBeNull();
+    expect(await leerEstadoDelVacio(null)).toBeNull();
+    expect(db.agentRun.findUnique, "leyó una corrida sin un vacío").not.toHaveBeenCalled();
   });
 
   it("⛔ la causa del fallo nunca es un código ni el texto crudo: una frase corta, en tuteo y en minúscula", () => {
@@ -458,7 +483,14 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(iMarca, "la ruta no marca el borrador").toBeGreaterThan(iPre);
     expect(iMarca).toBeLessThan(iDetached);
     expect(ruta.slice(iMarca, iDetached)).toContain("corrida: pre.id");
-    expect(ruta.slice(iMarca, iDetached)).toContain("return await markDone(NextResponse.json(vetoDeLaMarca, { status: 409 }))");
+    /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía cerrar la
+       corrida con `markDone` (ERROR), y el centro de corridas anunciaba en rojo algo que no es un fallo
+       (encima del aviso del cronograma). Sigue pidiendo lo mismo de fondo: 409 y la corrida cerrada, con
+       el motivo escrito; ahora sin ruido (su conducta, en el `it` de abajo). */
+    const veto = ruta.slice(iMarca, iDetached);
+    expect(veto).toContain("await prisma.agentRun.update({ where: { id: pre.id }, data: cierreDeLaCorridaVetada(vetoDeLaMarca) })");
+    expect(veto).toContain("return NextResponse.json(vetoDeLaMarca, { status: 409 });");
+    expect(veto, "el veto vuelve a quedar en ERROR (el centro de corridas lo anuncia en rojo)").not.toContain("markDone(");
     // El paso 2 del borrador siempre va detached: el borrador sigue la corrida, no la conexión.
     expect(ruta).toMatch(/const runDetached = [^;]*\|\| pedidoDeTareas !== null;/);
   });
@@ -529,6 +561,46 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(motivoDeLaRespuesta({ error: "NO_TIMELINE" })).toBe("NO_TIMELINE");
     expect(motivoDeLaRespuesta({ error: "  ", message: "" })).toBeNull();
     expect(motivoDeLaRespuesta(null)).toBeNull();
+  });
+
+  it("⛔ perder la carrera de la marca no se anuncia como fallo: la corrida queda ARCHIVED, con el motivo en palabras", () => {
+    /* Cierre de la revisión de E2a: el veto de la marca (otra pestaña aplicó, descartó o volvió a pedir
+       entre prevalidar y marcar) dejaba la corrida en ERROR y el centro de corridas la anunciaba en
+       rojo, además del aviso informativo del cronograma. No se llamó a la IA ni se pagó nada. El feed
+       del centro de corridas solo lee PENDING, RUNNING, DONE y ERROR. La edición que la pone en rojo:
+       volver a cerrarla en ERROR, o guardar el código en vez del texto. */
+    for (const veto of [
+      vetoDelGuardado(VIEJA, "run-h", { token: null, version: null })!,
+      vetoDelGuardado(v1(), "run-otra", { token: "run-1", version: 5 })!,
+    ]) {
+      const cierre = cierreDeLaCorridaVetada(veto);
+      expect(cierre.status, "el centro de corridas lo anuncia en rojo").toBe("ARCHIVED");
+      const guardado = JSON.parse(cierre.output).error as string;
+      expect(guardado).toBe(veto.message);
+      expect(guardado, "la corrida guarda el código").not.toMatch(/^[A-Z_]+$/);
+    }
+    const feed = soloCodigo(leer("app/api/agent-runs/route.ts"));
+    expect(feed, "el centro de corridas empezó a leer las ARCHIVED: revisar esta guarda").not.toContain("ARCHIVED");
+  });
+
+  it("⛔ el tope diario de IA dice su causa, no «la IA no respondió bien»", () => {
+    /* Cierre de la revisión de E2a: `PresupuestoDeIaAgotado` tira dentro de `messages.stream`, caía en
+       el catch genérico («Error al ejecutar el agente») y la línea decía «la IA no respondió bien». Las
+       ediciones que la ponen en rojo: sacar el caso del catch de analyze, de `humanizeAgentError` o de
+       `causaDelFallo`. */
+    const tope = new PresupuestoDeIaAgotado(
+      evaluarPresupuesto("humano", 30, { humano: 25, automatico: 10, bloquea: true }),
+    );
+    expect(humanizeAgentError(tope)).toBe(MENSAJE_PRESUPUESTO_AGOTADO);
+    expect(causaDelFallo(MENSAJE_PRESUPUESTO_AGOTADO), "la línea no dice la causa").toBe(
+      "se agotó el presupuesto de IA del día: avísale a Elías",
+    );
+    expect(causaDelFallo(humanizeAgentError(tope))).not.toBe(causaDelFallo("Error al ejecutar el agente. Intenta de nuevo."));
+    const iCatch = ruta.indexOf('console.error("[analyze] Claude error:", e);');
+    expect(iCatch, "no encontré el catch de la llamada al modelo").toBeGreaterThan(-1);
+    const captura = ruta.slice(iCatch, ruta.indexOf("{ status: 500 }", iCatch));
+    expect(captura).toContain("const esTope = esPresupuestoAgotado(e);");
+    expect(captura).toMatch(/esTope\s*\?\s*humanizeAgentError\(e\)/);
   });
 
   it("⛔ la ruta no escribe el borrador: exactamente 4 accesos a projectTimeline, todos de antes", () => {
@@ -825,6 +897,29 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
     expect(db.projectTimeline.updateMany.mock.calls[0][0].data).toEqual({ pendingProposal: Prisma.DbNull, pendingProposalRunId: null });
     expect(db.agentRun.update, "el aviso de la IA se perdió con el borrador").toHaveBeenCalledTimes(1);
     expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toContain("La IA se cortó antes de terminar");
+  });
+
+  it("⛔ sin cambios, lo que notó el PASO 1 (guardado en el borrador vacío) no se borra en silencio con él", async () => {
+    /* Cierre de la revisión de E2a: el borrador vacío nace con lo que notó el paso 1; si el paso 2 volvía
+       sin cambios, la fusión lo borraba y el aviso de la corrida llevaba solo lo del paso 2. La edición
+       que la pone en rojo: volver a avisar solo `cambios.observaciones`. */
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false }, observaciones: ["Lo acordado de «Pruebas» no entró."] }));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const r = await fusionar({ analysisJson: { timelineDetail: { phases: [{ id: "f1", tasks: [] }] } } });
+    expect(r).toEqual({ estado: "sin-cambios", observaciones: ["Lo acordado de «Pruebas» no entró."] });
+    expect(db.projectTimeline.updateMany.mock.calls[0][0].data).toEqual({ pendingProposal: Prisma.DbNull, pendingProposalRunId: null });
+    expect(db.agentRun.update, "lo del paso 1 se borró con el borrador, sin aviso").toHaveBeenCalledTimes(1);
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe("Lo acordado de «Pruebas» no entró.");
+
+    // Con lo de los DOS pasos, el aviso lleva los dos (lo del paso 1 primero).
+    db.agentRun.update.mockClear();
+    db.projectTimeline.updateMany.mockClear();
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false }, observaciones: ["Del paso 1."] }));
+    const ambos = await fusionar({ cortado: true });
+    expect(ambos.estado).toBe("sin-cambios");
+    const aviso = JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError as string;
+    expect(aviso.startsWith("Del paso 1.")).toBe(true);
+    expect(aviso).toContain("La IA se cortó antes de terminar");
   });
 
   it("⛔ otra corrida, tareas ya listas o sin borrador: «perdido», sin escribir y con el aviso en la corrida", async () => {

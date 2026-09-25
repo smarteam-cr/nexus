@@ -75,8 +75,10 @@ export interface TimelineActionSignals {
   pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
-  /** La propuesta es el borrador vacío que espera sus tareas (`esVacioEsperandoTareas`, borrador.ts). */
+  /** La propuesta es el borrador vacío que espera sus tareas y la IA sigue (`estadoDelVacio`, borrador.ts). */
   armandoTareas?: boolean;
+  /** El mismo borrador vacío, con su corrida fallida o colgada (`estadoDelVacio` = «fallo»). */
+  tareasFallaron?: boolean;
   /** Confirmadas (needsValidation = false). */
   particularidades: ActionParticularidad[];
   /** Cuántas reportó una PERSONA del equipo y esperan respuesta (needsValidation = true). */
@@ -118,6 +120,7 @@ export function buildActionsInput(
     pendingParticularidades: s.pendingParticularidades,
     pendingProposal: s.pendingProposal,
     ...(s.armandoTareas ? { armandoTareas: true } : {}),
+    ...(s.tareasFallaron ? { tareasFallaron: true } : {}),
     sugerenciasDelEquipo: s.sugerenciasDelEquipo,
     anchorStartDate: anchor,
     detailConfirmedAt: s.detailConfirmedAt,

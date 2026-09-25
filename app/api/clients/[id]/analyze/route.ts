@@ -52,6 +52,7 @@ import { getSessionCategories } from "@/lib/cache/session-categories";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";
 import {
+  cierreDeLaCorridaVetada,
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
   leerPedidoDeTareas,
@@ -73,7 +74,7 @@ import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
-import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { esPresupuestoAgotado, humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { motivoDeLaRespuesta } from "@/lib/agents/run-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff/feeding";
@@ -2218,12 +2219,17 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     console.error("[analyze] Claude error:", e);
     const msg = e instanceof Error ? e.message : String(e);
     const isCredits = msg.includes("credit balance") || msg.includes("too low");
+    /* Cierre de la revisión de E2a: el tope diario de IA (`PresupuestoDeIaAgotado`, que tira dentro de
+       `messages.stream`) caía en el genérico y el CSE leía «la IA no respondió bien». Dice su causa. */
+    const esTope = esPresupuestoAgotado(e);
     return NextResponse.json(
       {
-        error: isCredits ? "NO_CREDITS" : "CLAUDE_ERROR",
+        error: isCredits ? "NO_CREDITS" : esTope ? "PRESUPUESTO_IA" : "CLAUDE_ERROR",
         message: isCredits
           ? "Sin créditos en la API de Anthropic. Recarga en console.anthropic.com → Billing."
-          : "Error al ejecutar el agente. Intenta de nuevo.",
+          : esTope
+            ? humanizeAgentError(e)
+            : "Error al ejecutar el agente. Intenta de nuevo.",
       },
       { status: 500 }
     );
@@ -2912,7 +2918,13 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
      CSE tenía enfrente, no se pisa nada y la corrida queda en ERROR con el motivo. */
   if (pedidoDeTareas) {
     const vetoDeLaMarca = await marcarTareasEnCurso({ timelineId: timelineDelBorrador!, pedido: pedidoDeTareas, corrida: pre.id });
-    if (vetoDeLaMarca) return await markDone(NextResponse.json(vetoDeLaMarca, { status: 409 }));
+    if (vetoDeLaMarca) {
+      /* Cierre de la revisión de E2a: perder la carrera de la marca no es un fallo (no se llamó a la IA
+         ni se pagó nada, y la pantalla ya lo dice con el 409). En ERROR, el centro de corridas lo
+         anunciaba en rojo además del aviso del cronograma: se cierra sin ruido, con el motivo escrito. */
+      await prisma.agentRun.update({ where: { id: pre.id }, data: cierreDeLaCorridaVetada(vetoDeLaMarca) }).catch(() => {});
+      return NextResponse.json(vetoDeLaMarca, { status: 409 });
+    }
   }
 
   if (runDetached) {

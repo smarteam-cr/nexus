@@ -33,11 +33,14 @@ import {
   borradorVacio,
   claveAleatoria,
   esBorradorV1,
+  esVacioEsperandoTareas,
   estadoDeLasTareas,
+  estadoDelVacio,
   estructuraHipotetica,
   leerBorrador,
   pedidoDelCronograma,
   versionDelBorrador,
+  type EstadoDelVacio,
   type EstadoDeLasTareas,
   type EstructuraHipotetica,
   type TareaDelVivo,
@@ -56,8 +59,8 @@ export interface EstadoDeLasTareasDelBorrador {
 }
 
 /* Los motivos van DESPUÉS de «No se pudieron armar las tareas: …» (`textoDeLaLineaDeTareas`): una
-   causa corta, en tuteo y en minúscula. Propios y no `MOTIVO_COLGADA` (run-colgada.ts), que tiene
-   voseo. */
+   causa corta, en tuteo y en minúscula. Propios y no `MOTIVO_COLGADA` (run-colgada.ts), que es una
+   oración entera para el centro de corridas. */
 export const MOTIVO_TAREAS_CORTADAS = "se cortó a mitad de camino, probablemente por un reinicio del servidor";
 export const MOTIVO_TAREAS_SIN_GUARDAR = "la IA terminó, pero no se pudieron guardar";
 
@@ -70,6 +73,8 @@ export const MOTIVO_TAREAS_SIN_GUARDAR = "la IA terminó, pero no se pudieron gu
  */
 export function causaDelFallo(guardado: string): string | null {
   const t = guardado.toLowerCase();
+  // Cierre de la revisión de E2a: el tope diario de IA decía «la IA no respondió bien».
+  if (/presupuesto/.test(t)) return "se agotó el presupuesto de IA del día: avísale a Elías";
   if (/no_credits|crédito|credit balance|billing/.test(t)) return "la cuenta de la IA no tiene créditos: avísale a Elías";
   if (/api key|authentication/.test(t)) return "hay un problema con la cuenta de la IA: avísale a Elías";
   if (/límite|rate limit/.test(t)) return "se pasó el límite de uso de la IA";
@@ -145,6 +150,18 @@ export async function leerEstadoDeLasTareas(
     fase: estado === "armando" ? (corrida?.currentPhase ?? null) : null,
     motivo: estado === "fallo" ? motivoDelFallo(corrida) : null,
   };
+}
+
+/**
+ * El borrador VACÍO que espera sus tareas, con el estado REAL de su corrida: «armando» mientras la IA
+ * sigue; «fallo» si falló o quedó colgada. null = no es ese borrador. Cierre de la revisión de E2a: el
+ * chat lo contaba con un filtro JSON de Prisma que, si la base no lo aceptaba, volvía en silencio al
+ * texto de «decidir la propuesta»; y sin mirar la corrida decía «espera» también con la corrida
+ * muerta. Se evalúa en JS sobre el JSON leído, con la misma regla que la pantalla (`estadoDelVacio`).
+ */
+export async function leerEstadoDelVacio(guardado: unknown, ahora: Date = new Date()): Promise<EstadoDelVacio | null> {
+  if (!esVacioEsperandoTareas(guardado)) return null;
+  return estadoDelVacio(guardado, (await leerEstadoDeLasTareas(guardado, ahora))?.estado ?? null);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -300,6 +317,17 @@ export async function marcarTareasEnCurso(i: {
   return escrita.count === 0 ? CAMBIO : null;
 }
 
+/**
+ * Cómo queda la corrida cuando la marca no entra (otra pestaña u otra persona aplicó, descartó o
+ * volvió a pedir entre prevalidar y marcar). Puro. Cierre de la revisión de E2a: no es un fallo —no se
+ * llamó a la IA ni se pagó nada, y la pantalla ya lo dice con el 409—, pero en ERROR el centro de
+ * corridas lo anunciaba en rojo encima del aviso del cronograma. ARCHIVED no entra al centro de
+ * corridas (como el «claim perdido» del watchdog de CS) y el motivo queda escrito, en palabras.
+ */
+export function cierreDeLaCorridaVetada(veto: VetoDelPedido): { status: "ARCHIVED"; output: string } {
+  return { status: "ARCHIVED", output: JSON.stringify({ error: veto.message }) };
+}
+
 /** Lo que se lee de cada tarea para el paso 2: lo del plan y «por validar» (las idénticas, R4b). */
 const SELECT_DE_TAREA_DEL_DETALLE = { ...SELECT_DE_TAREA, needsValidation: true } as const;
 const SELECT_DE_FASES_CON_TAREAS = {
@@ -443,7 +471,8 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
  *      desconocidos. La corrida lo dice (`timelineSyncError`) y no se escribe nada.
  *   3. Las tareas se calculan sobre la estructura que VIO el agente (`estructura`, en memoria).
  *   4. Sin ningún cambio en total, el borrador se borra (condicionado a token + versión); si la IA
- *      avisó algo (se cortó, fases que no reconoció), la corrida lo dice.
+ *      notó algo en cualquiera de los dos pasos (lo acordado que no entró, se cortó, fases que no
+ *      reconoció), la corrida lo dice.
  *   5. Si no, se guarda con `{ ...guardado, sus campos }`, condicionado a token + versión. Sin
  *      reintentos: mientras se arma, nadie más escribe el borrador; si no entra, se perdió.
  */
@@ -514,8 +543,13 @@ export async function fusionarDetalleEnElBorrador(i: {
       data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
     });
     if (borrado.count === 0) return perdido();
-    if (cambios.observaciones.length > 0) await avisarEnLaCorrida(i.corrida, i.analysisJson, cambios.observaciones.join(" "));
-    return { estado: "sin-cambios", observaciones: cambios.observaciones };
+    /* Lo que notó la IA en los DOS pasos (`fusionado.observaciones`: las del borrador, que trae lo del
+       paso 1, y las del paso 2). Cierre de la revisión de E2a: el aviso llevaba solo las del paso 2, y
+       lo del paso 1 se borraba con el borrador sin que nadie lo viera. */
+    if (fusionado.observaciones.length > 0) {
+      await avisarEnLaCorrida(i.corrida, i.analysisJson, fusionado.observaciones.join(" "));
+    }
+    return { estado: "sin-cambios", observaciones: fusionado.observaciones };
   }
 
   const guardado = tl.pendingProposal as Record<string, unknown>;

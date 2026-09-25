@@ -7,6 +7,7 @@
 import { test, expect } from "vitest";
 import { buildProjectActions, groupActions, splitBlocking, type ProjectActionsInput } from "./project-actions";
 import { DIAS_PARA_AVISAR, avanceSinConfirmarVencido, diasSinConfirmar, rotuloDeAvanceSinConfirmar } from "./avance-sin-confirmar";
+import { buildActionsInput, type TimelineActionSignals } from "./project-actions-input";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -134,8 +135,11 @@ test("mientras la IA arma las tareas (borrador vacío), la fila lo dice y no pid
   // Sin propuesta guardada, la marca sola no inventa una fila.
   expect(buildProjectActions({ ...sano, armandoTareas: true })).toEqual([]);
   // La bandeja la deduce del JSON guardado, y el cartel (widget y rail) deja de decir «sin decidir».
+  /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía que la bandeja
+     lo dedujera SOLO del JSON (`esVacioEsperandoTareas`), y así decía «está armando» también con la
+     corrida muerta. Ahora lee la corrida del vacío (`vacioDe`, su guarda en el test de abajo). */
   const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
-  expect(leer("lib/timeline/project-actions-loader.ts")).toContain("armandoTareas: esVacioEsperandoTareas(tl?.pendingProposal ?? null),");
+  expect(leer("lib/timeline/project-actions-loader.ts")).toContain('armandoTareas: vacio === "armando",');
   expect(leer("lib/timeline/project-actions-input.ts")).toContain("...(s.armandoTareas ? { armandoTareas: true } : {}),");
   expect(leer("app/api/projects/[projectId]/gps/route.ts")).toContain(
     "timelineProposalPending: hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null),",
@@ -143,6 +147,29 @@ test("mientras la IA arma las tareas (borrador vacío), la fila lo dice y no pid
   expect(leer("app/(shell)/clients/[id]/page.tsx")).toContain(
     "timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null)",
   );
+});
+
+// Cierre de la revisión de E2a: con la corrida del borrador vacío muerta (falló o quedó colgada), la
+// bandeja decía «La IA está armando las tareas» y el CSE esperaba algo que no iba a llegar. Las
+// ediciones que la ponen en rojo: ignorar `tareasFallaron`, o que la bandeja deje de leer la corrida.
+test("con la corrida del borrador vacío muerta, la fila dice que no se pudieron armar y que se descarta", () => {
+  const p = buildProjectActions({ ...sano, pendingProposal: true, tareasFallaron: true }).find((x) => x.id === "draft-proposal")!;
+  expect(p.title).toBe("No se pudieron armar las tareas del cronograma");
+  expect(p.why).toContain("descártala o vuelve a intentar");
+  expect(`${p.title} ${p.why}`, "manda a esperar algo que no va a llegar").not.toMatch(/está armando|cuando termine/i);
+  expect(p.cta).not.toBeNull();
+  expect(buildProjectActions({ ...sano, tareasFallaron: true }), "sin propuesta, la marca sola no inventa una fila").toEqual([]);
+  const senales: TimelineActionSignals = {
+    anchorStartDate: null, detailConfirmedAt: null, hasTasks: false, pendingProgress: false, pendingParticularidades: 0,
+    pendingProposal: true, tareasFallaron: true, particularidades: [], sugerenciasDelEquipo: 0, phases: [],
+  };
+  expect(buildActionsInput(senales, null, null).tareasFallaron, "el input no la deja pasar").toBe(true);
+  // La bandeja lee la corrida del vacío en la MISMA consulta de corridas, con el estado deducido de siempre.
+  const loader = fs.readFileSync(path.join(process.cwd(), "lib/timeline/project-actions-loader.ts"), "utf8");
+  expect(loader).toContain("const corridasDeVacios = timelines.map((t) => corridaDelVacio(t.pendingProposal))");
+  expect(loader).toContain("estadoDeLasTareas({ corrida, listas: false }, corridaPorId.get(corrida) ?? null, now)");
+  expect(loader).toContain('tareasFallaron: vacio === "fallo",');
+  expect(loader, "volvió a deducirlo solo del JSON").not.toContain("esVacioEsperandoTareas(");
 });
 
 test("riesgo del cliente y alcance excedido van a Atender", () => {

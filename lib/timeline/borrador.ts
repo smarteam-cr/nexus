@@ -508,6 +508,29 @@ export function esVacioEsperandoTareas(json: unknown): boolean {
   return esObjeto(json.tareas) && json.tareas.listas === false;
 }
 
+/** El borrador VACÍO que espera sus tareas, según su corrida. «fallo»: nadie las está armando (la
+ *  corrida falló o quedó colgada): se descarta o se vuelve a intentar. */
+export type EstadoDelVacio = "armando" | "fallo";
+
+/**
+ * ¿El borrador VACÍO espera a la IA, o su corrida ya no va a traer nada? Puro. Cierre de la revisión de
+ * E2a: `esVacioEsperandoTareas` solo mira el JSON, y con la corrida muerta la bandeja, el chat y «Qué
+ * hacer acá» decían «la IA está armando las tareas, espera» sin salida. `tareas` es el estado deducido
+ * de la corrida (`estadoDeLasTareas`); null = no se sabe, y se dice lo de antes («armando»), que es lo
+ * prudente: no se afirma un fallo que no se vio. null = no es el borrador vacío.
+ */
+export function estadoDelVacio(json: unknown, tareas: EstadoDeLasTareas | null): EstadoDelVacio | null {
+  if (!esVacioEsperandoTareas(json)) return null;
+  return tareas === "armando" || tareas === null ? "armando" : "fallo";
+}
+
+/** La corrida del borrador VACÍO que espera sus tareas (para leer varias de una vez), o null. */
+export function corridaDelVacio(json: unknown): string | null {
+  if (!esVacioEsperandoTareas(json)) return null;
+  const corrida = (json as { tareas: Record<string, unknown> }).tareas.corrida;
+  return typeof corrida === "string" && corrida.length > 0 ? corrida : null;
+}
+
 /** El cartel «El cronograma tiene una propuesta sin decidir» (widget y rail): hay una guardada y NO es
  *  el borrador vacío que espera sus tareas (ahí no hay nada que revisar todavía). */
 export const hayPropuestaParaRevisar = (json: unknown): boolean => json != null && !esVacioEsperandoTareas(json);
@@ -1914,10 +1937,11 @@ export function textoDeLaConfirmacion(
   r: Pick<ResumenDelBorrador, "borraAlgo" | "faltanTareas" | "tareas" | "fasesNuevasConTareas">,
 ): string {
   if (r.borraAlgo) {
-    const n = r.tareas.seVan;
+    /* Sin el número: cuántas se quitan ya lo dice la primera oración (`resumenDeLaConfirmacion`).
+       Cierre de la revisión de E2a: la confirmación lo repetía dos veces seguidas. */
     return (
-      `${n === 1 ? "Se quita 1 tarea pendiente" : `Se quitan ${n} tareas pendientes`} de la IA; lo que tiene avance o ` +
-      "escribiste a mano no se toca. Después puedes seguir editando el cronograma a mano."
+      "Solo se quitan tareas pendientes de la IA: lo que tiene avance o escribiste a mano no se toca. " +
+      "Después puedes seguir editando el cronograma a mano."
     );
   }
   if (r.faltanTareas) return "Se aplican solo los cambios de fases: las tareas de esta propuesta no llegaron.";
@@ -1950,6 +1974,16 @@ export function resumenDeLaConfirmacion(
 
 export const ACCION_ARMAR_TAREAS = "Armar las tareas";
 export const ACCION_VOLVER_A_INTENTAR = "Volver a intentar";
+
+/**
+ * ¿La lista trae algún cambio de fases que se pueda aplicar sin las tareas? Lo que se puede MARCAR
+ * (aplica o desmarcado), no un «ya está» ni un choque: es la misma cuenta que `aplicables`. Decide si
+ * la línea de las tareas promete «solo se aplican los cambios de fases». Cierre de la revisión de E2a:
+ * la barra contaba cualquier renglón, y con todo «ya está» o en choque lo prometía sin ninguno.
+ */
+export function hayCambiosDeFasesAplicables(items: ReadonlyArray<Pick<ItemDeLaLista, "estado">>): boolean {
+  return items.some((it) => it.estado === "aplica" || it.estado === "excluido");
+}
 
 /**
  * La línea de las tareas arriba del Gantt (dentro de la barra, o suelta si no hay barra). `fase` es
@@ -2056,8 +2090,34 @@ export function juntarObservaciones(delPaso1: readonly string[], deLaPropuesta: 
   return [...new Set([...delPaso1, ...deLaPropuesta].map((o) => o.trim()).filter((o) => o.length > 0))];
 }
 
+/**
+ * Lo que muestra la franja «La IA también notó» (sin barra que lo muestre: sin propuesta, o con el
+ * borrador VACÍO que espera sus tareas). Puro. Lo del paso 1 que guarda la pantalla, JUNTO con lo que
+ * guardó el borrador vacío en pantalla. Cierre de la revisión de E2a: vivía solo en la memoria de la
+ * pantalla, y al recargar con el vacío «armando» no se veía en ningún lado. `cerradaLaDelGuardado`: el
+ * CSE ya cerró la franja de ese borrador (lo guardado no se borra al cerrarla).
+ */
+export function observacionesDeLaFranja(i: {
+  delPaso1: readonly string[];
+  /** La propuesta guardada en pantalla, o null. */
+  guardado: unknown;
+  cerradaLaDelGuardado: boolean;
+}): string[] {
+  const guardadas =
+    !i.cerradaLaDelGuardado && esVacioEsperandoTareas(i.guardado) && Array.isArray((i.guardado as Record<string, unknown>).observaciones)
+      ? ((i.guardado as Record<string, unknown>).observaciones as unknown[]).filter((o): o is string => typeof o === "string")
+      : [];
+  return juntarObservaciones(i.delPaso1, guardadas);
+}
+
 export const AVISO_TAREAS_LISTAS = "Listas las tareas de la propuesta: revísala arriba del Gantt.";
+/** Las tareas llegaron con la vista previa del modificador en pantalla: la barra no se ve hasta descartarla. */
+export const AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA =
+  "Listas las tareas de la propuesta: descarta la vista previa para revisarla arriba del Gantt.";
 export const AVISO_DETALLE_SIN_CAMBIOS = "La IA terminó y no propone cambios del cronograma.";
+/** El chat no aplica con el borrador VACÍO cuya corrida falló: nadie va a traer nada, hay que sacarlo. */
+export const CHAT_CON_EL_VACIO_FALLIDO =
+  "No se pudieron armar las tareas del cronograma. Descarta la propuesta vacía arriba del Gantt y vuelve a aplicar: el acuerdo sigue acá.";
 
 /** Lo que dijo el GET del cronograma al releer la propuesta, después de seguir la corrida de sus tareas. */
 export interface LecturaTrasLaCorrida {
@@ -2096,12 +2156,17 @@ export function desenlaceDelSeguimiento(i: {
   lectura: LecturaTrasLaCorrida | null;
   /** Lo que dejó dicho la corrida al terminar sin tareas (`timelineSyncError`). */
   aviso?: string | null;
+  /** En pantalla está la vista previa del modificador: la guardada se LEYÓ sin ponerla (cierre de la
+   *  revisión de E2a: el seguimiento callaba y daba la corrida por avisada). */
+  conVistaPrevia?: boolean;
 }): DesenlaceDelSeguimiento {
   if (i.lectura === null) return { que: "seguir" };
   const t = i.lectura.tareas;
   if (t !== null && t.corrida === i.corrida) {
     if (t.estado === "armando") return { que: "seguir" };
-    if (t.estado === "listas") return { que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS };
+    if (t.estado === "listas") {
+      return { que: "avisar", ok: true, tono: "exito", texto: i.conVistaPrevia ? AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA : AVISO_TAREAS_LISTAS };
+    }
     if (t.estado === "fallo") {
       const texto = textoDeLaLineaDeTareas("fallo", null, t.motivo, false, false)?.texto ?? "No se pudieron armar las tareas.";
       return { que: "avisar", ok: false, tono: "error", texto };

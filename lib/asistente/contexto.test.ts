@@ -46,6 +46,7 @@ import {
   type ReunionElegida,
 } from "@/lib/contexto/material-cronograma";
 import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
+import { estadoDelVacio, FORMATO_BORRADOR } from "@/lib/timeline/borrador";
 
 /* La puerta del material, de mentira: la guarda «si falla, el chat sigue» la hace fallar. El resto
    de este archivo lee código, no llama a la puerta. */
@@ -463,10 +464,10 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(linea.length).toBeLessThan(420);
     /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía
        `lineaDeCambiosDeFasesSinDecidir(true)` a secas. Con el borrador VACÍO que espera sus tareas no
-       hay barra ni nada que decidir, así que la línea recibe si la IA está armando (abajo, su guarda). */
-    expect(src).toContain(
-      '...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, propuestasArmando > 0)] : [])',
-    );
+       hay barra ni nada que decidir, así que la línea recibe si la IA está armando (abajo, su guarda).
+       ⚠ Y otra vez en el cierre de la revisión, con esta razón: la línea ya no recibe «hay uno armando»
+       contado con un filtro JSON, sino el estado LEÍDO del vacío (`vacio`: «armando» o «fallo»). */
+    expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio)] : [])');
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
     const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");
     expect(handler).toContain('(detalle || "el editor rechazó el cambio").replace(/[\\s.]+$/, "")');
@@ -476,11 +477,17 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     /* Revisión de E2a: «Regenerar todo» sin cambios de fases deja un borrador sin cambios mientras la
        IA arma las tareas. El chat mandaba a «resolver esa propuesta en su barra (Aplicar o
        Descartar)», y esa barra no existe hasta que llegan las tareas. Las ediciones que la ponen en
-       rojo: ignorar `armandoTareas`, o dejar de contarlo en la base. */
-    const armando = lineaDeCambiosDeFasesSinDecidir(true, true);
+       rojo: ignorar `armandoTareas`, o dejar de contarlo en la base.
+       ⚠ REESCRITA en el cierre de la revisión de E2a (2026-09-25), con esta razón: prohibía
+       «Descartar», y la línea de arriba del Gantt SÍ lo tiene para el vacío (callarlo dejaba al CSE
+       esperando sin saber que podía salir). Y pedía el filtro JSON de Prisma, que nunca se corrió
+       contra la base y volvía en silencio al texto viejo si fallaba: el estado ahora se lee y se
+       evalúa en JS (su guarda, en el `it` de abajo). */
+    const armando = lineaDeCambiosDeFasesSinDecidir(true, "armando");
     expect(armando).toContain("LA IA ESTÁ ARMANDO LAS TAREAS");
     expect(armando).toContain("NINGÚN cambio que acuerdes se puede aplicar");
-    expect(armando, "manda a una barra que no existe").not.toMatch(/«Aplicar»|«Descartar»|en su barra/);
+    expect(armando, "manda a una barra que no existe").not.toMatch(/«Aplicar»|en su barra/);
+    expect(armando, "calla la salida que la línea sí tiene").toContain("«Descartar»");
     expect(armando.length).toBeLessThan(420);
     for (const conDetalleDeLaIA of [false, true]) {
       const l = lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez: false, cambiosDeFasesSinDecidir: true, armandoTareas: true });
@@ -488,16 +495,42 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
       expect(l, String(conDetalleDeLaIA)).not.toContain("se revisa la propuesta en su barra");
       expect(l.length).toBeLessThan(420);
     }
-    // El estado sale de la base: v1, sin cambios y con las tareas sin listas (la misma regla que
-    // `esVacioEsperandoTareas`), contado sin traer el JSON.
-    const iCuenta = src.indexOf('{ pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR } },');
-    expect(iCuenta, "el contexto dejó de contar el borrador vacío").toBeGreaterThan(-1);
-    const iFin = src.indexOf(".catch(() => 0),", iCuenta);
-    expect(iFin, "la cuenta del borrador vacío puede tirar el chat entero").toBeGreaterThan(iCuenta);
-    const cuenta = src.slice(iCuenta, iFin);
-    expect(cuenta).toContain('{ pendingProposal: { path: ["cambios"], equals: [] } },');
-    expect(cuenta).toContain('{ pendingProposal: { path: ["tareas", "listas"], equals: false } },');
-    expect(src).toContain("armandoTareas: propuestasArmando > 0,");
+  });
+
+  it("⛔ con el borrador VACÍO cuya corrida murió, el chat no manda a esperar: dice que se descarta", () => {
+    /* Cierre de la revisión de E2a: el estado salía solo del JSON (y contado con un filtro JSON de
+       Prisma con `.catch(() => 0)`), así que con la corrida fallida o colgada el chat decía «la IA está
+       armando, espera» sin salida, y si el filtro fallaba volvía en silencio a «decide la propuesta».
+       Las ediciones que la ponen en rojo: ignorar «fallo» en las líneas, que `estadoDelVacio` deje de
+       mirar la corrida, o volver a contarlo con el filtro JSON. */
+    const vacio = {
+      formato: FORMATO_BORRADOR, version: 0, origen: "contexto", observaciones: [], cambios: [],
+      pedido: "regenerar", tareas: { corrida: "run-v", listas: false }, tareasArmadasPara: {},
+    };
+    expect(estadoDelVacio(vacio, "armando")).toBe("armando");
+    expect(estadoDelVacio(vacio, "fallo"), "con la corrida muerta sigue diciendo «armando»").toBe("fallo");
+    expect(estadoDelVacio(vacio, null), "sin saber, no se afirma un fallo").toBe("armando");
+    expect(estadoDelVacio({ ...vacio, cambios: [{ tipo: "ancla" }] }, "fallo"), "no es el vacío").toBeNull();
+    const fallo = lineaDeCambiosDeFasesSinDecidir(true, "fallo");
+    expect(fallo).toContain("LA IA NO PUDO ARMAR LAS TAREAS");
+    expect(fallo).toContain("NINGÚN cambio que acuerdes se puede aplicar");
+    expect(fallo).toContain("«Descartar»");
+    expect(fallo, "manda a esperar algo que no va a llegar").not.toMatch(/esperar|ARMANDO/);
+    expect(fallo.length).toBeLessThan(420);
+    for (const conDetalleDeLaIA of [false, true]) {
+      const l = lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez: false, cambiosDeFasesSinDecidir: true, tareasFallaron: true });
+      expect(l, String(conDetalleDeLaIA)).toContain("la IA no pudo armar las tareas");
+      expect(l, String(conDetalleDeLaIA)).toContain("«Descartar»");
+      expect(l, String(conDetalleDeLaIA)).not.toContain("esperar");
+      expect(l.length).toBeLessThan(420);
+    }
+    // El estado se LEE y se evalúa en JS (`leerEstadoDelVacio`; su conducta, en borrador-rutas.test.ts).
+    const codigo = soloCodigo(src);
+    expect(codigo, "volvió el filtro JSON que nunca se corrió contra la base").not.toContain('path: ["cambios"]');
+    expect(codigo, "volvió la cuenta que falla en silencio").not.toContain(".catch(() => 0)");
+    expect(codigo).toContain("? await leerEstadoDelVacio(");
+    expect(codigo).toContain('armandoTareas: vacio === "armando",');
+    expect(codigo).toContain('tareasFallaron: vacio === "fallo",');
   });
 
   it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {

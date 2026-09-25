@@ -29,7 +29,14 @@ import {
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
 import { fraseDelPlazo, hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
-import { juntarObservaciones, observacionesParaElPaso2, textoDeLaLineaDeTareas } from "@/lib/timeline/borrador";
+import {
+  CHAT_CON_EL_VACIO_FALLIDO,
+  FORMATO_BORRADOR,
+  juntarObservaciones,
+  observacionesDeLaFranja,
+  observacionesParaElPaso2,
+  textoDeLaLineaDeTareas,
+} from "@/lib/timeline/borrador";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
 const h = vi.hoisted(() => {
@@ -825,13 +832,23 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
       '{armando !== null || tareasDelBorrador?.estado === "armando" ? "Armando la propuesta…" : "Genera las tareas"}',
     );
     // «Qué hacer acá» y el chat: el borrador vacío no es una propuesta por decidir.
-    expect(tramo("const projectActions = useMemo(", "summary,"), "«Qué hacer acá» manda a revisar lo que no está").toContain(
-      "armandoTareas: esVacioEsperandoTareas(proposal),",
+    /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía que el vacío
+       se dedujera SOLO del JSON (`esVacioEsperandoTareas(proposal)`), y así «Qué hacer acá» y el chat
+       decían «la IA está armando» también con la corrida muerta, sin salida. Ahora miran el estado de
+       sus tareas en pantalla (`estadoDelVacio`): «armando» espera, «fallo» manda a descartar. */
+    const acciones = tramo("const projectActions = useMemo(", "summary,");
+    expect(acciones, "«Qué hacer acá» manda a revisar lo que no está").toContain(
+      'armandoTareas: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando",',
+    );
+    expect(acciones, "«Qué hacer acá» manda a esperar una corrida muerta").toContain(
+      'tareasFallaron: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo",',
     );
     const chat = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
-    expect(chat, "el chat manda a decidir una propuesta que no está").toContain(
-      'fallo: esVacioEsperandoTareas(proposal) ? esperaEnCurso("la IA está armando las tareas") : CAMBIOS_DE_FASES_SIN_DECIDIR,',
+    expect(chat).toContain("const vacio = estadoDelVacio(proposal, estadoDeLasTareasEnPantalla);");
+    expect(chat, "el chat manda a decidir una propuesta que no está").toMatch(
+      /vacio === "armando"\s*\?\s*esperaEnCurso\("la IA está armando las tareas"\)\s*:\s*vacio === "fallo"\s*\?\s*CHAT_CON_EL_VACIO_FALLIDO\s*:\s*CAMBIOS_DE_FASES_SIN_DECIDIR/,
     );
+    expect(CHAT_CON_EL_VACIO_FALLIDO, "el chat no dice cómo salir del vacío que falló").toContain("Descarta la propuesta vacía");
   });
 
   it("E2a · mientras esta pantalla pide las tareas de la propuesta en pantalla, se tratan como «armando»", () => {
@@ -1086,8 +1103,51 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(descartar).toContain("setObservacionesPaso1((previas) => juntarObservaciones(previas, observacionesDescartadas));");
     expect(canvas.match(/setObservacionesPaso1\((observacionesDescartadas|observacionesDeLaPropuesta)\)/g), "volvió a reemplazar").toBeNull();
     // (3) La franja: sin barra que lo muestre (sin propuesta, o el borrador vacío), y con esta pantalla quieta.
-    expect(canvas).toMatch(/observacionesPaso1\.length > 0 &&\s*armando === null &&\s*\(!hayBorrador \|\| !revision\.resumen\) && \(/);
-    expect(canvas).toContain("<ObservacionesDelPaso1 observaciones={observacionesPaso1}");
+    /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: la franja mostraba
+       `observacionesPaso1` (un useState), y al recargar con el vacío «armando» lo notado no se veía en
+       ningún lado. Ahora muestra `observacionesDeLaFranjaEnPantalla`, que suma lo GUARDADO en el vacío
+       (su guarda, en el `it` de abajo). La condición de cuándo se ve es la misma. */
+    expect(canvas).toMatch(
+      /observacionesDeLaFranjaEnPantalla\.length > 0 &&\s*armando === null &&\s*\(!hayBorrador \|\| !revision\.resumen\) && \(/,
+    );
+    expect(canvas).toMatch(/<ObservacionesDelPaso1\s+observaciones=\{observacionesDeLaFranjaEnPantalla\}/);
+  });
+
+  it("⛔ lo que notó el paso 1 sobrevive a recargar con el vacío «armando» y viaja con «Generar las tareas ahora»", () => {
+    /* Cierre de la revisión de E2a. (a) La franja vivía en `useState`: al recargar mientras el vacío
+       seguía «armando», lo que notó el paso 1 (que el vacío SÍ guardó) no se veía en ningún lado. Ahora
+       sale también de lo guardado. (b) «Generar las tareas ahora» después del auto-descarte (token null)
+       mandaba el pedido sin observaciones: el vacío nuevo nacía sin ellas y recargar las perdía. Las
+       ediciones que la ponen en rojo: volver a leer solo el useState, ignorar lo guardado del vacío, o
+       no mandar la franja en la continuación sin propuesta. */
+    const vacio = {
+      formato: FORMATO_BORRADOR, version: 0, origen: "contexto", observaciones: ["Pruebas pasa a 3 semanas."],
+      cambios: [], pedido: "regenerar", tareas: { corrida: "run-v", listas: false }, tareasArmadasPara: {},
+    };
+    // (a) Recargar: la pantalla no tiene nada en memoria, lo guardado sí.
+    expect(observacionesDeLaFranja({ delPaso1: [], guardado: vacio, cerradaLaDelGuardado: false }), "recargar lo perdió").toEqual([
+      "Pruebas pasa a 3 semanas.",
+    ]);
+    expect(observacionesDeLaFranja({ delPaso1: ["Pruebas pasa a 3 semanas.", "B"], guardado: vacio, cerradaLaDelGuardado: false })).toEqual([
+      "Pruebas pasa a 3 semanas.",
+      "B",
+    ]);
+    expect(observacionesDeLaFranja({ delPaso1: [], guardado: vacio, cerradaLaDelGuardado: true }), "cerrarla no la cierra").toEqual([]);
+    // Con una propuesta que tiene barra, lo guardado lo muestra la barra: la franja no lo repite.
+    expect(observacionesDeLaFranja({ delPaso1: [], guardado: { ...vacio, cambios: [{ tipo: "ancla" }] }, cerradaLaDelGuardado: false })).toEqual([]);
+    const franja = tramo("const observacionesDeLaFranjaEnPantalla = observacionesDeLaFranja({", "});");
+    expect(franja).toContain("delPaso1: observacionesPaso1,");
+    expect(franja, "la franja no lee lo guardado").toContain("guardado: hayBorrador ? proposal : null,");
+    // Cerrar la franja del vacío vale también al descartarlo: lo guardado no vuelve a aparecer.
+    expect(tramo("const discardProposal = async (", "const aplicarBorrador = async ("), "cerrar la franja no dura").toMatch(
+      /franjaCerradaPara === proposalMeta\.current\.runId \? \[\] : \(proposal\?\.observaciones \?\? \[\]\)/,
+    );
+    // (b) La continuación sin propuesta en pantalla manda lo que muestra la franja.
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
+    expect(continuacion, "«Generar las tareas ahora» deja afuera lo que notó el paso 1").toContain(
+      "if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);",
+    );
   });
 
   it("E2a · el acordeón viejo de «Regenerar todo» ya no se monta ni se aplica desde el Canvas", () => {

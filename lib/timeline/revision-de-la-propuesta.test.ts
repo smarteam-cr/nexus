@@ -574,18 +574,43 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(seguimiento, "lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas } : null,")).toBe(
       true,
     );
-    const traer = tramo(CANVAS, "const traerPropuestaPendiente = async ()", "const anteLaPropuestaGuardada");
+    // (El marcador ya no cierra el paréntesis: desde el cierre de la revisión de E2a recibe `soloLeer`.)
+    const traer = tramo(CANVAS, "const traerPropuestaPendiente = async (", "const anteLaPropuestaGuardada");
     expect(contiene(traer, "if (!res.ok) return { ok: false };"), "un 5xx se lee como «no hay propuesta»").toBe(true);
     expect(contiene(traer, "} catch { return { ok: false }; }"), "un error de red se lee como «no hay propuesta»").toBe(true);
     // Nunca el código crudo de la corrida en el aviso: el texto sale del desenlace.
     expect(seguimiento, "el aviso volvió a leer el error crudo de la corrida").not.toMatch(/toast\.\w+\(r\.(error|timelineSyncError)/);
-    /* Solo quien edita sigue la corrida y recibe el aviso: la barra y la línea son suyas (a quien solo
-       mira le alcanza el chip). La edición que la pone en rojo: seguirla sin mirar `canEdit`. */
+    /* Solo quien edita recibe el aviso: la barra y la línea son suyas.
+       ⚠ REESCRITA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía que quien solo
+       mira NO siguiera la corrida («le alcanza el chip»), y su chip «Armando las tareas…» quedaba fijo
+       hasta recargar: nadie volvía a leer el cronograma. Ahora la sigue en silencio: al terminar se relee
+       (el chip se apaga) y el aviso sale solo con el permiso de editar, leído AL TERMINAR (`useMe` puede
+       llegar después). Las ediciones que la ponen en rojo: volver a cortar el seguimiento con `canEdit`,
+       o avisar antes de mirar el permiso. */
     expect(
-      contiene(seguimiento, "if (!canEdit || !corridaQueArma || siguiendoRef.current === corridaQueArma) return;"),
-      "quien solo mira sigue la corrida y recibe «revísala arriba del Gantt» sin barra",
+      contiene(seguimiento, "if (!corridaQueArma || siguiendoRef.current === corridaQueArma) return;"),
+      "quien solo mira no sigue la corrida: su chip queda «Armando las tareas…» hasta recargar",
     ).toBe(true);
-    expect(contiene(seguimiento, "}, [canEdit, corridaQueArma, vueltaDelSeguimiento]);")).toBe(true);
+    expect(seguimiento, "el seguimiento vuelve a cortarse para quien solo mira").not.toMatch(/if \(!canEdit \|\|/);
+    const iPermiso = seguimiento.indexOf("if (!puedeEditarRef.current) return;");
+    expect(iPermiso, "quien solo mira recibe «revísala arriba del Gantt» sin barra").toBeGreaterThan(
+      seguimiento.indexOf('if (desenlace.que === "seguir") {'),
+    );
+    expect(iPermiso, "se da por avisada antes de mirar el permiso").toBeLessThan(iYaAnunciada);
+    expect(contiene(CANVAS, "useEffect(() => { puedeEditarRef.current = canEdit; });")).toBe(true);
+    expect(contiene(seguimiento, "}, [corridaQueArma, vueltaDelSeguimiento]);")).toBe(true);
+    /* Con la vista previa del modificador en pantalla, la guardada se LEE sin ponerla (cierre de la
+       revisión de E2a: no se leía nada, el desenlace callaba y la corrida quedaba avisada sin aviso).
+       La edición que la pone en rojo: volver a no leer (`deAssist ? null`), o leerla pisando la vista
+       previa. */
+    expect(seguimiento, "con la vista previa abierta, el aviso de las tareas se pierde").not.toMatch(/\?\s*null\s*:\s*await traerPropuestaPendiente/);
+    expect(
+      contiene(seguimiento, "const leida = conVistaPrevia ? await traerPropuestaPendiente({ soloLeer: true }) : await traerPropuestaPendiente();"),
+    ).toBe(true);
+    expect(contiene(seguimiento, "conVistaPrevia,")).toBe(true);
+    const soloLeer = tramo(traer, "if (!opts?.soloLeer) {", "return { ok: true");
+    expect(contiene(soloLeer, "setProposal(nueva);"), "leer pisa la vista previa").toBe(true);
+    expect(traer.indexOf("setProposal("), "pone la guardada en pantalla aunque solo lea").toBeGreaterThan(traer.indexOf("if (!opts?.soloLeer) {"));
     /* Descartar A MANO mientras se arman las tareas: su corrida termina sin aviso (ni «PROPUESTA_CAMBIO»,
        ni «no propone cambios»). La edición que la pone en rojo: no darla por avisada al descartar. */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");

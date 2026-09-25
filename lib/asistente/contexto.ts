@@ -67,7 +67,8 @@ import { projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
-import { FORMATO_BORRADOR } from "@/lib/timeline/borrador";
+import type { EstadoDelVacio } from "@/lib/timeline/borrador";
+import { leerEstadoDelVacio } from "@/lib/timeline/borrador-del-detalle";
 /* ⭐ La ÚNICA puerta del chat al material del cronograma (ver la EXCEPCIÓN del header). Trae su
    propio presupuesto: los cargadores de los agentes siguen prohibidos acá (contexto.test.ts). */
 import { cargarMaterialParaElChat } from "@/lib/contexto/cargar";
@@ -223,9 +224,12 @@ export interface EstadoParaRehacerTodo {
   publicadoAlgunaVez: boolean;
   /** Hay cambios de fases guardados sin decidir (`pendingProposal`, del handoff o del paso 1). */
   cambiosDeFasesSinDecidir: boolean;
-  /** Lo guardado es el borrador VACÍO que espera sus tareas (`esVacioEsperandoTareas`): la IA las
+  /** Lo guardado es el borrador VACÍO que espera sus tareas (`estadoDelVacio` = «armando»): la IA las
    *  está armando y todavía no hay nada que decidir ni barra donde hacerlo. */
   armandoTareas?: boolean;
+  /** El mismo borrador VACÍO con su corrida fallida o colgada (`estadoDelVacio` = «fallo»): no va a
+   *  llegar nada, se descarta (o se vuelve a intentar) en la línea de arriba del Gantt. */
+  tareasFallaron?: boolean;
 }
 
 /**
@@ -247,6 +251,11 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   /* Los botones que existen (E1, 2026-09-24): la propuesta se revisa en SU barra, arriba del Gantt
      —se desmarca lo que no va y «Aplicar», o «Descartar»—. Ya no se acepta ni descarta uno por uno. */
   const revisar = "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)";
+  /* Cierre de la revisión de E2a: el borrador VACÍO cuya corrida murió no se llena solo. La línea de
+     arriba del Gantt tiene «Descartar» (y «Volver a intentar» con permiso). */
+  const vacioFallido =
+    "hay una propuesta vacía porque la IA no pudo armar las tareas: primero se saca con «Descartar» (o " +
+    "«Volver a intentar») arriba del Gantt";
   if (!e.conDetalleDeLaIA && e.publicadoAlgunaVez) {
     return (
       cabeza +
@@ -263,7 +272,9 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
       (e.cambiosDeFasesSinDecidir
         ? e.armandoTareas
           ? " Ahora la IA está armando las tareas: hay que esperar a que termine."
-          : ` Con una propuesta sin decidir, primero ${revisar} y después se genera.`
+          : e.tareasFallaron
+            ? ` Ahora ${vacioFallido}.`
+            : ` Con una propuesta sin decidir, primero ${revisar} y después se genera.`
         : "")
     );
   }
@@ -273,6 +284,13 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
       "el botón «Regenerar todo el cronograma», arriba del Gantt, pero hoy NO se ve: la IA está armando " +
       "las tareas. Hay que esperar a que termine. Solo lo ve quien puede editar el cronograma y tiene " +
       "permiso de regenerarlo con IA."
+    );
+  }
+  if (e.cambiosDeFasesSinDecidir && e.tareasFallaron) {
+    return (
+      cabeza +
+      `el botón «Regenerar todo el cronograma», arriba del Gantt, pero hoy NO se ve: ${vacioFallido}. ` +
+      "Solo lo ve quien puede editar el cronograma y tiene permiso de regenerarlo con IA."
     );
   }
   if (e.cambiosDeFasesSinDecidir) {
@@ -299,17 +317,27 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
  * E2a: la propuesta de «Regenerar todo» trae fases Y tareas, así que la línea ya no dice «cambios de
  * fases» (el nombre de la función se queda: lo citan las guardas).
  */
-export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, armandoTareas = false): string {
+export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVacio | null = null): string {
   if (!hay) return "";
   /* Revisión de E2a: el borrador VACÍO que espera sus tareas no tiene barra ni nada que decidir;
      decirle al modelo que «primero hay que resolver esa propuesta en su barra» era mandar al CSE a
-     un botón que no existe. Lo que sí es verdad: mientras la IA arma, nada de lo acordado se aplica. */
-  if (armandoTareas) {
+     un botón que no existe. Lo que sí es verdad: mientras la IA arma, nada de lo acordado se aplica.
+     Cierre de la revisión: la línea de arriba del Gantt sí tiene «Descartar» (callarlo dejaba al CSE
+     esperando sin saber que podía salir), y con la corrida muerta no hay nada que esperar. */
+  if (vacio === "armando") {
     return (
       "⏳ LA IA ESTÁ ARMANDO LAS TAREAS DEL CRONOGRAMA (arriba del Gantt dice «Armando las tareas…»). " +
       "Mientras tanto, NINGÚN cambio que acuerdes se puede aplicar: la pantalla lo frena. Si te piden un " +
-      "cambio, dilo ANTES de armar la lista: hay que esperar a que termine y revisar lo que proponga. " +
+      "cambio, dilo ANTES de armar la lista: hay que esperar a que termine (o «Descartar» en esa línea). " +
       "Puedes conversar el cambio y dejarlo para después."
+    );
+  }
+  if (vacio === "fallo") {
+    return (
+      "⚠ LA IA NO PUDO ARMAR LAS TAREAS DEL CRONOGRAMA y quedó una propuesta vacía arriba del Gantt. " +
+      "Mientras esté, NINGÚN cambio que acuerdes se puede aplicar: la pantalla lo frena. Si te piden un " +
+      "cambio, dilo ANTES de armar la lista: primero hay que sacarla con «Descartar» (o «Volver a " +
+      "intentar») en esa línea. Puedes conversar el cambio y dejarlo para después."
     );
   }
   return (
@@ -332,7 +360,7 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, armandoTareas = fa
 export async function contextoDeCronograma(projectId: string): Promise<ContextoDelAsistente> {
   /* Los `count` dicen SI hay algo en dos columnas Json sin traerlas (la foto publicada pesa lo que
      el cronograma entero): alimentan la línea «PARA REHACER TODO» (`lineaParaRehacerTodo`). */
-  const [timeline, publicaciones, propuestasPendientes, propuestasArmando] = await Promise.all([
+  const [timeline, publicaciones, propuestasPendientes] = await Promise.all([
     prisma.projectTimeline.findUnique({
       where: { projectId },
       select: {
@@ -367,25 +395,21 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     }),
     prisma.projectTimeline.count({ where: { projectId, publishedSnapshot: { not: Prisma.DbNull } } }),
     prisma.projectTimeline.count({ where: { projectId, pendingProposal: { not: Prisma.DbNull } } }),
-    /* El borrador VACÍO que espera sus tareas (`esVacioEsperandoTareas`, lib/timeline/borrador.ts),
-       contado sin traer el JSON: v1, sin cambios y con las tareas sin listas. Si la cuenta falla, el
-       chat sigue con la línea de siempre (la propuesta sin decidir): no se cae por esto. */
-    prisma.projectTimeline
-      .count({
-        where: {
-          projectId,
-          AND: [
-            { pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR } },
-            { pendingProposal: { path: ["cambios"], equals: [] } },
-            { pendingProposal: { path: ["tareas", "listas"], equals: false } },
-          ],
-        },
-      })
-      .catch(() => 0),
   ]);
   if (!timeline) {
     return { texto: "Este proyecto todavía no tiene cronograma.", cierreActual: null };
   }
+  /* El borrador VACÍO que espera sus tareas, y si su corrida sigue viva (`leerEstadoDelVacio`). Cierre
+     de la revisión de E2a: se contaba con un filtro JSON de Prisma que nunca se corrió contra la base y
+     que, si fallaba, volvía EN SILENCIO al texto de «decidir la propuesta». Ahora se lee el JSON (solo
+     si hay una propuesta) y se evalúa en JS, con la misma regla que la pantalla. */
+  const vacio =
+    propuestasPendientes > 0
+      ? await leerEstadoDelVacio(
+          (await prisma.projectTimeline.findUnique({ where: { projectId }, select: { pendingProposal: true } }))
+            ?.pendingProposal ?? null,
+        )
+      : null;
 
   const fin = projectedEnd(
     timeline.anchorStartDate ? timeline.anchorStartDate.toISOString() : null,
@@ -483,7 +507,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     conDetalleDeLaIA,
     publicadoAlgunaVez: publicaciones > 0,
     cambiosDeFasesSinDecidir: propuestasPendientes > 0,
-    armandoTareas: propuestasArmando > 0,
+    armandoTareas: vacio === "armando",
+    tareasFallaron: vacio === "fallo",
   });
 
   const fases = timeline.phases
@@ -511,7 +536,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `Cierre proyectado: ${cierre ?? "no se puede calcular sin fecha de arranque"}`,
     `Ancho de calendario: ${fin.spanWeeks} semanas`,
     ...(timeline.phases.length > 0 ? ["", paraRehacerTodo] : []),
-    ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, propuestasArmando > 0)] : []),
+    ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio)] : []),
     "",
     /* ⚠ Decía «REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)»: de
        cuando el chat emitía una instrucción que un segundo modelo ejecutaba. Desde el 2026-08-20

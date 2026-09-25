@@ -36,10 +36,11 @@
 /** Sin señales de vida por más de esto, la corrida se considera muerta. */
 export const MS_SIN_LATIDO_PARA_COLGADA = 30 * 60 * 1000;
 
-/** Lo que se le muestra a quien la lanzó. Dice QUÉ pasó y QUÉ hacer, no un código. */
+/** Lo que se le muestra a quien la lanzó. Dice QUÉ pasó y QUÉ hacer, no un código. En tuteo: lo
+ *  muestra el centro de corridas tal cual (revisión de E2a; está en la guarda de tuteo). */
 export const MOTIVO_COLGADA =
   "La corrida se interrumpió (probablemente un reinicio del servidor) y no dejó resultado. " +
-  "Podés volver a lanzarla.";
+  "Puedes volver a lanzarla.";
 
 /** Los dos estados que la UI pinta como "en curso". */
 export type EstadoEnCurso = "PENDING" | "RUNNING";

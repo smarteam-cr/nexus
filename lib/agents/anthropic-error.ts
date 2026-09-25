@@ -9,9 +9,19 @@
  * Sin dependencias: lee `status` + `message` del error (el SDK los expone).
  * En tuteo, como toda la app (revisión de E2a: lo leía el CSE en el toast del cronograma con voseo).
  */
+
+/** El tope diario de gasto en IA frenó la llamada (`PresupuestoDeIaAgotado`, lib/ai/presupuesto.ts).
+ *  Cierre de la revisión de E2a: caía en lo genérico y el CSE leía «la IA no respondió bien». */
+export const MENSAJE_PRESUPUESTO_AGOTADO = "Se agotó el presupuesto de IA del día. Avísale a Elías.";
+
+/** ¿Es el error del tope diario? Por el nombre y no por la clase: este archivo no tiene dependencias. */
+export const esPresupuestoAgotado = (e: unknown): boolean => e instanceof Error && e.name === "PresupuestoDeIaAgotado";
+
 export function humanizeAgentError(e: unknown): string {
   const status = (e as { status?: number } | null)?.status;
   const raw = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+
+  if (esPresupuestoAgotado(e)) return MENSAJE_PRESUPUESTO_AGOTADO;
 
   if (raw.includes("credit balance") || raw.includes("plans & billing")) {
     return "La cuenta de Anthropic no tiene créditos. Avísale a Elías para recargarla.";

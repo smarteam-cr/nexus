@@ -14,9 +14,12 @@
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   AVISO_DETALLE_SIN_CAMBIOS,
   AVISO_TAREAS_LISTAS,
+  AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA,
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
   borradorBase,
@@ -31,6 +34,7 @@ import {
   estructuraHipotetica,
   FORMATO_BORRADOR,
   fotoDeTarea,
+  hayCambiosDeFasesAplicables,
   leerBorrador,
   pedidoDelCronograma,
   pideConfirmacion,
@@ -60,6 +64,8 @@ import {
 } from "./borrador";
 import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
 import type { ProposalLike } from "./proposal-deltas";
+
+const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -684,10 +690,14 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     expect(tituloDeLaBarra(resumir(VIVO, v1([seVa(B1, "b")])))).toBe("La IA propone 1 cambio de tareas");
     expect(tituloDeLaBarra(resumir(VIVO, v1([DUR_C])))).toBe("La IA propone 1 cambio");
 
+    /* ⚠ ACTUALIZADA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía el número
+       («Se quitan 3 tareas pendientes…»), y la confirmación lo decía dos veces seguidas: la primera
+       oración (`resumenDeLaConfirmacion`) ya lo cuenta. Sigue pidiendo lo que protege: que diga que solo
+       se quitan pendientes de la IA y que lo que tiene avance o escribiste no se toca. */
     expect(textoDeLaConfirmacion(resumir(VIVO, BORRADOR))).toBe(
-      "Se quitan 3 tareas pendientes de la IA; lo que tiene avance o escribiste a mano no se toca. Después puedes seguir editando el cronograma a mano.",
+      "Solo se quitan tareas pendientes de la IA: lo que tiene avance o escribiste a mano no se toca. Después puedes seguir editando el cronograma a mano.",
     );
-    expect(textoDeLaConfirmacion(resumir(VIVO, v1([seVa(B1, "b")])))).toMatch(/^Se quita 1 tarea pendiente de la IA;/);
+    expect(textoDeLaConfirmacion(resumir(VIVO, v1([seVa(B1, "b")])))).toMatch(/^Solo se quitan tareas pendientes de la IA:/);
     expect(textoDeLaConfirmacion(resumir(VIVO, v1([DUR_C]), [], { tareas: "faltan" }))).toBe(
       "Se aplican solo los cambios de fases: las tareas de esta propuesta no llegaron.",
     );
@@ -750,6 +760,33 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     const sinFases = textoDeLaOfertaDeTareas(false);
     expect(`${sinFases.titulo} ${sinFases.detalle}`).not.toMatch(/fases/);
     expect(sinFases.titulo).toBe("No se pudieron armar las tareas.");
+  });
+
+  it("⛔ la confirmación no repite cuántas tareas se quitan", () => {
+    /* Cierre de la revisión de E2a: la primera oración decía «…se crean 4 tareas y se quitan 3.» y la
+       segunda repetía «Se quitan 3 tareas pendientes de la IA…». La edición que la pone en rojo: volver
+       a poner el número en la segunda oración. */
+    for (const b of [BORRADOR, v1([seVa(B1, "b")]), v1([seVa(B1, "b"), seVa(B2, "b")])]) {
+      const r = resumir(VIVO, b);
+      expect(r.borraAlgo).toBe(true);
+      const n = r.tareas.seVan;
+      expect(resumenDeLaConfirmacion(r), "la primera oración dejó de contarlas").toMatch(new RegExp(`se quitan? ${n}\\b`));
+      expect(textoDeLaConfirmacion(r), "la segunda oración vuelve a contar").not.toMatch(/\d/);
+    }
+  });
+
+  it("⛔ la barra promete «solo los cambios de fases» solo si hay alguno que se pueda aplicar", () => {
+    /* Cierre de la revisión de E2a: la barra pasaba `conCambiosDeFases={items.length > 0}`, así que con
+       todos los cambios de fases «ya está» o en choque la línea prometía «Si aplicas ahora, solo se
+       aplican los cambios de fases» sin ninguno aplicable. Las ediciones que la ponen en rojo: contar
+       cualquier renglón, o volver a pasar `items.length > 0`. */
+    expect(hayCambiosDeFasesAplicables([])).toBe(false);
+    expect(hayCambiosDeFasesAplicables([{ estado: "ya-esta" }, { estado: "choque" }]), "sin ninguno aplicable").toBe(false);
+    expect(hayCambiosDeFasesAplicables([{ estado: "ya-esta" }, { estado: "aplica" }])).toBe(true);
+    expect(hayCambiosDeFasesAplicables([{ estado: "excluido" }]), "desmarcado se puede volver a marcar").toBe(true);
+    const barra = leer("components/canvas/RevisionDeLaPropuesta.tsx");
+    expect(barra).toContain("conCambiosDeFases={hayCambiosDeFasesAplicables(items)}");
+    expect(barra, "volvió a contar cualquier renglón").not.toContain("conCambiosDeFases={items.length > 0}");
   });
 });
 
@@ -838,6 +875,25 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
     ).toMatchObject({ texto: "Pruebas no tiene sesiones." });
     expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso: "PROPUESTA_CAMBIO" })).toMatchObject({
       texto: AVISO_DETALLE_SIN_CAMBIOS,
+    });
+  });
+
+  it("⛔ con la vista previa del modificador abierta, las tareas listas se avisan igual (y dicen cómo verlas)", () => {
+    /* Cierre de la revisión de E2a: con la vista previa en pantalla el seguimiento no leía la guardada,
+       callaba y daba la corrida por avisada: no llegaba «Listas las tareas…» ni el aviso del sistema.
+       Ahora la lee sin ponerla (el cableado, en revision-de-la-propuesta.test.ts) y el aviso dice que hay
+       que descartar la vista previa para ver la barra. La edición que la pone en rojo: callar con la
+       vista previa, o mandar a revisar «arriba del Gantt» una barra que la vista previa tapa. */
+    const listas = desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: guardada("r1", "listas"), conVistaPrevia: true });
+    expect(listas, "con la vista previa abierta, el aviso se pierde").toMatchObject({ que: "avisar", ok: true, tono: "exito" });
+    expect(listas.que === "avisar" ? listas.texto : "").toBe(AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA);
+    expect(AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA).toContain("descarta la vista previa");
+    // Lo demás no cambia con la vista previa: un fallo se dice igual, y lo de otra corrida se calla.
+    expect(
+      desenlaceDelSeguimiento({ corrida: "r1", estado: "ERROR", lectura: guardada("r1", "fallo"), conVistaPrevia: true }),
+    ).toMatchObject({ que: "avisar", tono: "error" });
+    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: guardada("r2", "listas"), conVistaPrevia: true })).toEqual({
+      que: "callar",
     });
   });
 

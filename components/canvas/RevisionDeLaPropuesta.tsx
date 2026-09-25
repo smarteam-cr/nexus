@@ -31,6 +31,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import {
   fraseDelCierre,
+  hayCambiosDeFasesAplicables,
   LINEA_DEL_CLIENTE,
   pideConfirmacion,
   resumenDeLaConfirmacion,
@@ -171,7 +172,7 @@ export default function RevisionDeLaPropuesta({
             fase={lineaDeTareas.fase}
             motivo={lineaDeTareas.motivo}
             onAccion={onArmarTareas}
-            conCambiosDeFases={items.length > 0}
+            conCambiosDeFases={hayCambiosDeFasesAplicables(items)}
             trabajando={trabajando}
           />
         )}
