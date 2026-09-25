@@ -352,6 +352,61 @@ rechazó (la lista de rechazos dice cuál y por qué). ⛔ Nexus nunca escribe e
 y el lote antes de la carga); el respaldo de `pg_dump` del guard queda en `backups/`. Las facturas
 cargadas se reconocen por el servicio «Facturación importada del libro de Alex (moneda)».
 
+### Odoo › «Lo que no cuadra»: traspasar las marcas de las notas y reabrir las facturas cerradas sin motivo
+
+Una sola vez, con el deploy que trae «Está en Mercury» y «Está bien así» fila por fila (2026-09-25). Son dos decisiones
+de Elías: la marca de grupo de las **15 notas de crédito** pasa a una marca por nota, con el mismo motivo, persona y
+fecha; y las **4 facturas soltadas** que se cerraron con «Ya está anulada» sin motivo (Wherex cuotas 2 y 3, Honda Costa
+Rica cuota 5 y KAIZEN KAPITAL cuota 1, US$26.251) vuelven a pendientes. El porqué de cada regla está en
+`docs/odoo-decisiones.md`. ⛔ Ninguno de los dos toca Odoo ni un cobro.
+
+**El orden: SQL → deploy → scripts.**
+
+1. **SQL, desde una PC de desarrollo, ANTES del deploy.** Con el código nuevo, sin la tabla de marcas «Lo que no
+   cuadra» da error, y sin las columnas de la vía de cobro abrir una cuenta da error.
+   ```powershell
+   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql --schema prisma/schema.prisma
+   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-2-marcas-por-fila.sql --schema prisma/schema.prisma
+   Remove-Item Env:ALLOW_PROD_WRITE
+   ```
+   Cada archivo trae al final su consulta de verificación (solo lectura).
+2. **Deploy**, en el VPS: `bash scripts/deploy.sh`. ⚠ Desde aquí la pantalla ya no lee la marca de grupo: las 15 notas
+   vuelven a la lista hasta el paso 3. Córrelo enseguida.
+3. **Los dos scripts, desde una PC de desarrollo con el MISMO commit que quedó en producción** (`git pull` antes): el
+   script arma las filas con el motor de su checkout, y una marca solo vale si sus números son los que calcula la
+   pantalla. Cada uno, primero en simulacro —solo lee, con la conexión en solo lectura— y después con `--apply`:
+   ```powershell
+   npx tsx scripts/odoo-traspasar-marcas-de-notas.ts
+   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/odoo-traspasar-marcas-de-notas.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE
+
+   npx tsx scripts/odoo-reabrir-liberadas-sin-motivo.ts
+   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/odoo-reabrir-liberadas-sin-motivo.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE
+   ```
+
+**Qué tiene que decir el simulacro** (medido el 2026-09-25, en solo lectura):
+- Traspaso: «15 nota(s) a marcar», US$27.577,66 + ₡889, «0 cambiaron». Si alguna nota cambió desde que se marcó (se
+  aplicó en parte, Odoo renombró al cliente), esa **no** se marca: aparece en «Cambiaron…» y queda en la lista para que
+  alguien la mire. Las demás pasan igual.
+- Reapertura: «4 a reabrir», US$26.251, y que vuelven a «facturas soltadas sin número de documento». Si aparece otra
+  cerrada sin motivo, sale como «fuera de la decisión de Elías» y **no** se toca.
+
+**Por qué los scripts van después del deploy.** Los dos escriben en la tabla de marcas, así que necesitan el SQL. La
+reapertura, además, tiene que ir con la pantalla nueva: con la vieja, «Ya está anulada» no pide motivo y una factura
+reabierta se podía volver a cerrar igual que antes. El traspaso no depende del deploy, pero correrlo enseguida acorta el
+rato en que las 15 notas están en la lista.
+
+**Correrlos dos veces no escribe nada la segunda.** El traspaso reconoce sus marcas por el motivo, la persona y la fecha
+de la marca de grupo —estén vigentes o deshechas—, así que tampoco vuelve a marcar una nota que alguien deshizo. La
+reapertura toca solo las 4 decididas, por id, y una ya abierta no está cerrada.
+
+**Sin `pg_dump` en el PATH el guard aborta** antes de escribir (`SIN_RESPALDO=1` lo salta, a sabiendas). Con `--apply`
+cada script aborta también si falta la tabla de marcas.
+
+**Deshacer.** Una nota traspasada se deshace desde la pantalla: «Marcadas» › «Deshacer», que firma quién y cuándo. Una
+factura reabierta se vuelve a cerrar con «Ya está anulada», que ahora pide motivo. La marca de grupo sigue en
+`DiferenciaOdooAceptada`, como historia. Los respaldos quedan en `backups/<fecha>-<script>/`: el `pg_dump` del guard y
+un JSON con lo que había y lo que se escribió.
+
 ## Respaldo y restauración (Supabase)
 
 La base de Nexus es UNA Supabase Postgres (plan Pro) compartida por producción y las dos PCs
