@@ -14,6 +14,10 @@
  * cambios: no hay barra que lo traiga). Los textos salen de `textoDeLaLineaDeTareas`
  * (lib/timeline/borrador.ts), que los prueban los tests; acá solo se pintan. Tokens del tema SIEMPRE:
  * info = algo en curso, warn = algo que falta.
+ *
+ * E2b (2026-09-25): «ofrecer» — la propuesta ya se resolvió y sus tareas no llegaron: la línea suelta
+ * ofrece armarlas, con «Ahora no» (`onCerrar`). Reemplaza a la franja `PasoDeTareasPendiente`, que se
+ * borró con la cadena vieja. Info si se aplicaron fases (falta el siguiente paso), warn si no (falló).
  */
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
@@ -35,12 +39,14 @@ export default function LineaDeLasTareas({
   conCambiosDeFases = true,
   onAccion,
   onDescartar,
+  onCerrar,
   descartando = false,
   trabajando = false,
   suelta = false,
 }: {
-  /** «paso-1»: la revisión de fases y tiempos está corriendo (todavía no hay propuesta). */
-  estado: EstadoDeLasTareas | "paso-1" | null;
+  /** «paso-1»: la revisión de fases y tiempos está corriendo (todavía no hay propuesta).
+   *  «ofrecer»: ya no hay propuesta y sus tareas no llegaron (`pasoTrasResolver`). */
+  estado: EstadoDeLasTareas | "paso-1" | "ofrecer" | null;
   fase: string | null;
   motivo: string | null;
   /** El CSE eligió material para el paso 1: solo así se dice «Paso 1 de 2 · Revisando…». */
@@ -53,6 +59,8 @@ export default function LineaDeLasTareas({
   /** «Descartar», para el borrador SIN cambios (no tiene barra, y la barra es la que lo trae). Sin él,
    *  un borrador vacío que espera tareas no tenía salida hasta que la corrida terminara o se colgara. */
   onDescartar?: () => void;
+  /** «Ahora no», solo en «ofrecer»: esconde la oferta sin pedir nada. */
+  onCerrar?: () => void;
   /** El DELETE de «Descartar» está en curso. */
   descartando?: boolean;
   /** Aplicando, descartando o ya pidiendo: el botón no puede lanzar otra corrida. */
@@ -63,6 +71,8 @@ export default function LineaDeLasTareas({
   const linea = textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases);
   if (!linea) return null;
   const enCurso = estado === "paso-1" || estado === "armando";
+  // Info = algo en curso, o la oferta después de aplicar fases; warn = algo que falta o falló.
+  const info = enCurso || (estado === "ofrecer" && conCambiosDeFases);
   return (
     <div
       role="status"
@@ -70,7 +80,7 @@ export default function LineaDeLasTareas({
       className={cn(
         "flex flex-wrap items-center gap-x-2 gap-y-1",
         suelta && "rounded-xl border px-3 py-2",
-        suelta && (enCurso ? "border-info-line bg-info-surface" : "border-warn-line bg-warn-surface"),
+        suelta && (info ? "border-info-line bg-info-surface" : "border-warn-line bg-warn-surface"),
       )}
     >
       {enCurso && (
@@ -79,7 +89,7 @@ export default function LineaDeLasTareas({
           className="h-3 w-3 flex-shrink-0 animate-spin rounded-full border-2 border-info-line border-t-info-ink"
         />
       )}
-      <p className={cn("min-w-0 flex-1 text-xs", enCurso ? "text-info-ink" : "text-warn-ink")}>{linea.texto}</p>
+      <p className={cn("min-w-0 flex-1 text-xs", info ? "text-info-ink" : "text-warn-ink")}>{linea.texto}</p>
       {linea.accion && onAccion && (
         <Button size="xs" variant="secondary" onClick={onAccion} disabled={trabajando || descartando}>
           {linea.accion}
@@ -88,6 +98,11 @@ export default function LineaDeLasTareas({
       {onDescartar && (
         <Button size="xs" variant="secondary" onClick={onDescartar} disabled={trabajando || descartando}>
           {descartando ? "Descartando…" : "Descartar"}
+        </Button>
+      )}
+      {estado === "ofrecer" && onCerrar && (
+        <Button size="xs" variant="secondary" onClick={onCerrar} disabled={trabajando}>
+          Ahora no
         </Button>
       )}
     </div>

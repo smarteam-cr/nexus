@@ -2097,9 +2097,11 @@ export function hayCambiosDeFasesAplicables(items: ReadonlyArray<Pick<ItemDeLaLi
  * `conCambiosDeFases`: la propuesta trae cambios de fases que se pueden aplicar sin las tareas. Sin
  * ellos (el borrador que nace vacío cuando el paso 1 no propuso nada), «Si aplicas ahora, solo se
  * aplican los cambios de fases» es falso: no hay ninguno (revisión de E2a).
+ * «ofrecer» (E2b): ya no hay propuesta y sus tareas no llegaron; la línea ofrece armarlas
+ * (`textoDeLaOfertaDeTareas`). Con `conCambiosDeFases`, lo resuelto fue aplicar sus fases.
  */
 export function textoDeLaLineaDeTareas(
-  estado: EstadoDeLasTareas | "paso-1" | null,
+  estado: EstadoDeLasTareas | "paso-1" | "ofrecer" | null,
   fase: string | null,
   motivo: string | null,
   conMaterial: boolean,
@@ -2130,6 +2132,8 @@ export function textoDeLaLineaDeTareas(
         accion: ACCION_VOLVER_A_INTENTAR,
       };
     }
+    case "ofrecer":
+      return textoDeLaOfertaDeTareas(conCambiosDeFases);
     default:
       return null;
   }
@@ -2137,14 +2141,16 @@ export function textoDeLaLineaDeTareas(
 
 /**
  * La oferta de armar las tareas después de resolver una propuesta que no las trajo («faltan» o
- * «fallo»). Con cambios de fases, las fases quedaron decididas y falta el paso 2. Sin ellos (el
- * borrador vacío cuya corrida falló) no se decidió ninguna fase: afirmarlo era falso (revisión de
- * E2a). La pantalla la usa en `PasoDeTareasPendiente`.
+ * «fallo»), en la línea de las tareas (estado «ofrecer»). Con cambios de fases, se aplicaron y
+ * faltan sus tareas. Sin ellos (el borrador vacío cuya corrida falló, descartado) no se decidió
+ * ninguna fase: afirmarlo era falso (revisión de E2a). Cuándo se ofrece lo decide `pasoTrasResolver`.
+ * E2b: vivía en su propia franja (`PasoDeTareasPendiente`, título y detalle), que se borró con la
+ * cadena vieja. Menos texto: una oración y el botón.
  */
-export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { titulo: string; detalle: string } {
+export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { texto: string; accion: string } {
   return conCambiosDeFases
-    ? { titulo: "Las fases quedaron decididas.", detalle: "Falta el paso 2: las tareas sobre esta estructura." }
-    : { titulo: "No se pudieron armar las tareas.", detalle: "¿Volver a intentar?" };
+    ? { texto: "Se aplicaron las fases; faltan sus tareas.", accion: ACCION_ARMAR_TAREAS }
+    : { texto: "No se pudieron armar las tareas.", accion: ACCION_VOLVER_A_INTENTAR };
 }
 
 /**

@@ -7,7 +7,7 @@
  * La lógica vive en lib/timeline/borrador.ts (y sus tests); esto mira el cableado que solo existe en
  * los componentes: un solo botón que alterna sobre el MISMO Gantt, la barra fija sobre el Gantt
  * entero, la vista de la propuesta que nunca pasa por el guardado, «Subir al cliente» libre con
- * aviso, el aplicar que espera el guardado y la cadena al paso 2.
+ * aviso y el aplicar que espera el guardado (E2b: ya sin la cadena vieja al paso 2).
  *
  * ⚠ Cómo se mira (reescrito en la corrección de E1, 2026-09-24, con esta razón: varias guardas
  * exigían líneas enteras de código literal —un reformateo inofensivo las ponía en rojo por el motivo
@@ -263,8 +263,12 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
     expect(BARRA.match(/Estás viendo/g)?.length, "las oraciones de la vista volvieron a la barra").toBe(
       alternar.match(/Estás viendo/g)?.length,
     );
-    // Y «Descartar» también sigue con las tareas: eso se lee, no queda solo en un `title`.
-    expect(BARRA, "el paso 2 que sigue al descartar dejó de verse").toContain("Paso 1 de 2 · después, las tareas");
+    /* ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía la chapa «Paso 1 de 2 ·
+       después, las tareas», porque aplicar o descartar la propuesta de las reuniones seguía SOLO con
+       las tareas (la cadena vieja). La cadena se fue: nada sigue solo, y si las tareas no llegaron la
+       línea suelta las ofrece después. La edición que la pone en rojo: volver a pintar la chapa. */
+    expect(BARRA, "volvió la chapa de la cadena vieja").not.toContain("Paso 1 de 2");
+    expect(BARRA).not.toContain("después, las tareas");
     // La línea del cliente va junto al cierre, en UNA línea.
     expect(contiene(BARRA, '{cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>')).toBe(true);
   });
@@ -379,9 +383,12 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(rama, "cierreFijado={closeOverride || null}")).toBe(true);
   });
 
-  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + foto + versión, y sigue al paso 2", () => {
+  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + foto + versión, y ofrece las tareas que faltan", () => {
     /* La edición que la pone en rojo: aplicar sin esperar lo que está guardándose (el servidor
-       compararía contra otra foto), no mandar el token, o cortar la cadena al paso 2.
+       compararía contra otra foto), no mandar el token, o volver a pedir las tareas solo.
+       ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: pedía la cadena vieja al paso 2
+       (`pedirPropuestaDeDetalle(modoDeLaCadena, …)`), que se fue. Aplicar ya no pide nada solo: si las
+       tareas no llegaron, las ofrece (`setOfrecerTareas(true)`).
        ⚠ REESCRITA en E2a P5 (2026-09-25), con esta razón: el body suma la `version` del
        `borrador-v1` que ves. Sin ella, cuando el servidor reescribe el borrador en el medio (llegan
        las tareas), el aplicar caía en PLAN_CAMBIO, recargaba lo vivo —`load` no reemplaza la
@@ -405,7 +412,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(HOOK, "const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);")).toBe(true);
     expect(aplicar, "lee la revisión del render del clic, no la de ahora").toContain("revisionRef.current");
     expect(aplicar).toContain("pasoTrasResolver(");
-    expect(contiene(aplicar, "pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true })")).toBe(true);
+    expect(aplicar, "aplicar volvió a pedir las tareas solo").not.toContain("pedirPropuestaDeDetalle(");
+    expect(contiene(aplicar, 'if (siguiente === "ofrecer") {')).toBe(true);
+    expect(aplicar).toContain("setOfrecerTareas(true);");
     // Un 409 de «el plan cambió» recarga lo vivo (misma propuesta); otro trae la propuesta nueva.
     expect(contiene(aplicar, 'if (d?.error === "PLAN_CAMBIO") {')).toBe(true);
     expect(aplicar).not.toContain("apply-items");
@@ -660,16 +669,19 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(vista, "las tareas volvieron a salir del cronograma actual").not.toContain("tasks: (actual?.tasks ?? []).map(");
   });
 
-  it("⭐ la barra: el título cuenta fases y tareas, la línea de la corrida, la chapa vieja solo sin v1, y la confirmación de quitar", () => {
+  it("⭐ la barra: el título cuenta fases y tareas, la línea de la corrida, sin la chapa vieja, y la confirmación de quitar", () => {
     /* La edición que la pone en rojo: volver al título que cuenta solo «cambios», no pintar la línea
-       (o pintarla con las tareas listas), mostrar «Paso 1 de 2» sobre un v1 (sus tareas llegan a esta
-       misma propuesta), o volver al texto fijo de la confirmación, que promete no borrar ninguna tarea
-       justo cuando aplicar QUITA tareas. */
+       (o pintarla con las tareas listas), volver a la chapa «Paso 1 de 2», o volver al texto fijo de la
+       confirmación, que promete no borrar ninguna tarea justo cuando aplicar QUITA tareas.
+       ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía la chapa de la cadena vieja
+       (`encadenado && delContexto && !esV1`), que solo iba en una propuesta vieja de las reuniones. La
+       cadena se fue con su prop: la barra no sabe de `encadenado` ni pinta la chapa. */
     expect(contiene(BARRA, "{tituloDeLaBarra(resumen)}")).toBe(true);
     expect(contiene(BARRA, 'const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;')).toBe(true);
     expect(contiene(tramo(BARRA, "{lineaDeTareas && (", "/>"), "onAccion={onArmarTareas}")).toBe(true);
-    expect(contiene(BARRA, "{encadenado && delContexto && !esV1 && (")).toBe(true);
-    expect(contiene(BARRA, "const esV1 = tareas !== null;")).toBe(true);
+    expect(BARRA, "volvió la prop de la cadena vieja").not.toMatch(/\bencadenado\b/);
+    expect(BARRA).not.toContain("esV1");
+    expect(CANVAS, "el Canvas le vuelve a pasar la cadena a la barra").not.toContain("encadenado={");
     const confirmacion = tramo(BARRA, "<ConfirmDialog", "/>");
     expect(contiene(confirmacion, 'variant={resumen.borraAlgo ? "destructive" : "default"}')).toBe(true);
     expect(contiene(confirmacion, "{textoDeLaConfirmacion(resumen)}")).toBe(true);
@@ -698,7 +710,14 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
       "«Armar las tareas» / «Volver a intentar» no piden el paso 2 sobre la propuesta, o se ofrecen sin permiso",
     ).toBe(true);
     expect(contiene(rama, "onArmarTareas={armarLasTareas}")).toBe(true);
-    expect(contiene(tramo(rama, "<LineaDeLasTareas", "/>"), "onAccion={armarLasTareas}")).toBe(true);
+    /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la línea suelta suma el estado «ofrecer»
+       (sin propuesta: pide el paso 2 sin token). En los demás estados sigue siendo `armarLasTareas`. */
+    expect(
+      contiene(
+        tramo(rama, "<LineaDeLasTareas", "/>"),
+        'onAccion={ lineaSuelta.estado === "ofrecer" ? () => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true }) : armarLasTareas }',
+      ),
+    ).toBe(true);
     expect(BARRA, "la barra exige la acción aunque no haya permiso").toMatch(/onArmarTareas\?: \(\) => void;/);
     expect(LINEA).toMatch(/\{linea\.accion && onAccion && \(/);
     // El encabezado: con tareas no cuenta «57 cambios» mezclados.
@@ -743,18 +762,42 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
   });
 
   it("resolver una propuesta con tareas: su estado se lee ANTES de limpiarla y decide si se ofrecen", () => {
-    /* La edición que la pone en rojo: pasarle `tareas: null` a `pasoTrasResolver` (un v1 resuelto
-       seguiría la cadena vieja), o leer el estado después de limpiar (ya no está). */
+    /* La edición que la pone en rojo: pasarle `tareas: null` a `pasoTrasResolver` (un v1 resuelto no
+       ofrecería sus tareas), o leer el estado después de limpiar (ya no está).
+       ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la firma nueva de `pasoTrasResolver`. Cada
+       lado dice cómo resolvió (`como`) y pasa si traía cambios de fases y si era «Regenerar» de una
+       fase, leídos también ANTES de limpiar. Pasar el `como` del otro lado, o dejar de leer alguno, la
+       pone en rojo. */
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
-    const iLee = aplicar.indexOf("const tareasResueltas = tareasEnPantalla?.estado ?? null;");
-    expect(iLee).toBeGreaterThan(-1);
-    expect(iLee).toBeLessThan(aplicar.indexOf("setProposal(null)"));
-    expect(contiene(tramo(aplicar, "siguiente = pasoTrasResolver({", "});"), "tareas: tareasResueltas,")).toBe(true);
+    const limpiaA = aplicar.indexOf("setProposal(null)");
+    for (const lectura of [
+      "const tareasResueltas = tareasEnPantalla?.estado ?? null;",
+      "const conFasesLaResuelta = traeCambiosDeFases(proposal);",
+      "const soloFaseLaResuelta = !!revisionRef.current.borrador?.soloFase;",
+    ]) {
+      const i = aplicar.indexOf(lectura);
+      expect(i, lectura).toBeGreaterThan(-1);
+      expect(i, `${lectura} después de limpiar`).toBeLessThan(limpiaA);
+    }
+    const resolverA = tramo(aplicar, "siguiente = pasoTrasResolver({", "});");
+    for (const campo of ['como: "aplicar",', "tareas: tareasResueltas,", "conCambiosDeFases: conFasesLaResuelta,", "soloFase: soloFaseLaResuelta,"]) {
+      expect(contiene(resolverA, campo), campo).toBe(true);
+    }
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    const iLeeD = descartar.indexOf("const tareasDescartadas = tareasEnPantalla?.estado ?? null;");
-    expect(iLeeD).toBeGreaterThan(-1);
-    expect(iLeeD).toBeLessThan(descartar.indexOf("setProposal(null)"));
-    expect(contiene(tramo(descartar, "const siguiente = pasoTrasResolver({", "});"), "tareas: tareasDescartadas,")).toBe(true);
+    const limpiaD = descartar.indexOf("setProposal(null)");
+    for (const lectura of [
+      "const tareasDescartadas = tareasEnPantalla?.estado ?? null;",
+      "const conFasesLaDescartada = traeCambiosDeFases(proposal);",
+      "const soloFaseLaDescartada = !!revision.borrador?.soloFase;",
+    ]) {
+      const i = descartar.indexOf(lectura);
+      expect(i, lectura).toBeGreaterThan(-1);
+      expect(i, `${lectura} después de limpiar`).toBeLessThan(limpiaD);
+    }
+    const resolverD = tramo(descartar, "const siguiente = pasoTrasResolver({", "});");
+    for (const campo of ['como: "descartar",', "tareas: tareasDescartadas,", "conCambiosDeFases: conFasesLaDescartada,", "soloFase: soloFaseLaDescartada,"]) {
+      expect(contiene(resolverD, campo), campo).toBe(true);
+    }
   });
 
   it("aplicar con tareas encadena la reevaluación del avance; las fases solas, no", () => {

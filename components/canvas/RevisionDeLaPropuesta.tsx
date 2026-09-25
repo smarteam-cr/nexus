@@ -57,7 +57,6 @@ export default function RevisionDeLaPropuesta({
   onArmarTareas,
   tareas,
   enCurso,
-  encadenado,
   cierreFijado,
   barraRef,
 }: {
@@ -77,8 +76,6 @@ export default function RevisionDeLaPropuesta({
   tareas: TareasEnPantalla | null;
   /** Aplicando o descartando: los dos botones y las casillas se apagan hasta que termine. */
   enCurso: "aplicar" | "descartar" | null;
-  /** Esta pantalla sigue sola con las tareas al resolverla (paso 1 de 2 de «Regenerar todo»). */
-  encadenado: boolean;
   /** El cierre fijado a mano (Tanda K), YYYY-MM-DD, o null: aplicar no lo toca. */
   cierreFijado: string | null;
   barraRef: RefObject<HTMLDivElement | null>;
@@ -86,9 +83,9 @@ export default function RevisionDeLaPropuesta({
   const [confirmar, setConfirmar] = useState(false);
   const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, origen, observaciones } = resumen;
   const delContexto = origen === "contexto";
-  /* Un `borrador-v1` que espera tareas (E2a) trae su estado: ya no es la cadena vieja de dos pasos,
-     así que la chapa «Paso 1 de 2» no va (las tareas llegan a esta misma propuesta). */
-  const esV1 = tareas !== null;
+  /* E2b (2026-09-25): se fue la chapa «Paso 1 de 2 · después, las tareas» (y la prop `encadenado`).
+     Era de la cadena vieja de dos pasos, que ya no existe: aplicar o descartar nunca sigue solo con
+     las tareas (si no llegaron, la línea suelta las ofrece después). */
   const otroCronograma = magnitud.esCronogramaNuevo;
   const trabajando = enCurso !== null;
   const textoDelBoton = textoDeAplicar(marcadas, aplicables);
@@ -115,18 +112,8 @@ export default function RevisionDeLaPropuesta({
             qué propone y de dónde salió, cuánto se corre el cierre, y que el cliente no ve nada
             todavía. Lo demás se dice solo cuando hace falta: qué vista es y si se puede editar va en
             el `title` del botón que alterna (el texto del botón ya dice a cuál vas), que las tareas
-            no se tocan va en la confirmación, y el «Paso 1 de 2» es una etiqueta, no una oración. */}
+            no se tocan va en la confirmación. */}
         <div className="flex flex-wrap items-center gap-2">
-          {encadenado && delContexto && !esV1 && (
-            <span
-              className="rounded-full border border-info-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink"
-              title="Cuando apliques o descartes esta propuesta, sigo con las tareas."
-            >
-              {/* Visible, no solo en el `title`: «Descartar» también sigue con las tareas (la corrida más
-                  cara del cronograma), y eso no se puede enterar solo quien pasa el mouse. */}
-              Paso 1 de 2 · después, las tareas
-            </span>
-          )}
           <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
             {tituloDeLaBarra(resumen)}
           </span>

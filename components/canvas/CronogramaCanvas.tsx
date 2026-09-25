@@ -93,14 +93,12 @@ import {
 } from "@/lib/timeline/borrador";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
-  AVISO_DECIDE_PRIMERO,
   AVISO_PROPUESTA_PENDIENTE,
   CAMBIOS_DE_FASES_SIN_DECIDIR,
   pasoTrasEstructura,
   pasoTrasResolver,
   type RespuestaDeEstructura,
 } from "@/lib/timeline/propuesta-de-estructura";
-import PasoDeTareasPendiente from "./PasoDeTareasPendiente";
 import ObservacionesDelPaso1 from "./ObservacionesDelPaso1";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -301,11 +299,8 @@ const diaFijado = (s: string | null | undefined): string | null => (s ? s.slice(
 /** Las corridas de las tareas ya anunciadas en esta pestaña (vive lo que vive el módulo). */
 const CORRIDAS_ANUNCIADAS = new Set<string>();
 
-/** Una propuesta de las reuniones del formato VIEJO (anterior a E2a, abierta al deploy): la única que
- *  sigue la cadena de dos pasos al decidirla. Un `borrador-v1` de «Regenerar todo» también dice
- *  «contexto», pero trae sus tareas adentro: no encadena nada. */
-const esPropuestaViejaDeLasReuniones = (p: unknown): boolean =>
-  !!p && origenDePropuesta(p as { origen?: unknown }) === "contexto" && !esBorradorV1(p);
+/* E2b (2026-09-25): se fue `esPropuestaViejaDeLasReuniones` con la cadena vieja de dos pasos. Una
+   propuesta de las reuniones del formato de antes se aplica o se descarta como cualquier otra. */
 
 export default function CronogramaCanvas({
   projectId,
@@ -460,12 +455,10 @@ export default function CronogramaCanvas({
        paso 2 en vuelo (`paso: 2`). ⛔ Ya NO bloquea el Gantt ni el cambio de pieza: el resultado queda
        en el servidor, así que la espera se dice con un chip en el encabezado y una línea arriba del
        Gantt. Después del pedido, la corrida la sigue el borrador (`tareasDelBorrador`), no esto.
-     · `pasoTareasRef` — la cadena VIEJA (una propuesta de las reuniones del formato de antes, abierta
-       al deploy): con qué modo seguir al resolverla; null = esta pantalla no inició ninguna cadena.
-       Es un ref porque lo leen callbacks async; `encadenado` es su espejo para PINTAR (un ref leído
-       en el render no vuelve a pintar). E2b la borra.
-     · `ofrecerTareas` — el paso 2 se OFRECE, nunca se dispara solo para quien no lo pidió (la cadena
-       vieja no arrancó acá, o se aplicó una propuesta cuyas tareas no llegaron).
+     · `ofrecerTareas` — la línea suelta OFRECE armar las tareas, nunca se dispara sola: después de
+       aplicar una propuesta cuyas tareas no llegaron, o de descartar el borrador vacío cuya corrida
+       falló (`pasoTrasResolver`). E2b (2026-09-25) borró la cadena vieja de dos pasos
+       (`pasoTareasRef`, `encadenado`, `fijarPasoTareas`) y su franja `PasoDeTareasPendiente`.
      · `observacionesPaso1` — lo que notó el paso 1 cuando no dejó propuesta (la dice la franja
        «La IA también notó» mientras no haya una propuesta en pantalla). */
   const [armando, setArmando] = useState<{ paso: 1 | 2; modo: "primera" | "regen" } | null>(null);
@@ -476,15 +469,9 @@ export default function CronogramaCanvas({
      cartel salía aunque nadie eligiera nada. Sin material la línea dice algo neutro
      (`textoDeLaLineaDeTareas`, «paso-1»). */
   const [materialElegido, setMaterialElegido] = useState(false);
-  const pasoTareasRef = useRef<"primera" | "regen" | null>(null);
-  const [encadenado, setEncadenado] = useState(false);
-  const fijarPasoTareas = (m: "primera" | "regen" | null) => {
-    pasoTareasRef.current = m;
-    setEncadenado(m !== null);
-  };
   const [ofrecerTareas, setOfrecerTareas] = useState(false);
-  /* Lo que se resolvió antes de ofrecer el paso 2 traía cambios de fases. Sin ellos (el borrador vacío
-     cuya corrida falló) la oferta no dice «Las fases quedaron decididas» (revisión de E2a). */
+  /* Lo que se resolvió antes de ofrecer las tareas traía cambios de fases. Sin ellos (el borrador vacío
+     cuya corrida falló) la oferta no dice que se aplicaron fases (revisión de E2a). */
   const [ofertaConFases, setOfertaConFases] = useState(true);
   const [observacionesPaso1, setObservacionesPaso1] = useState<string[]>([]);
   /* El token del borrador vacío cuya franja «La IA también notó» cerró el CSE: lo que guardó ese
@@ -848,18 +835,9 @@ export default function CronogramaCanvas({
         /* El estado de las tareas de la GUARDADA, con su token: si en pantalla queda otra (la de arriba
            no se reemplaza), la pantalla no lo usa (`tareasEnPantalla` compara el token). */
         setTareasDelBorrador(tareasDelGet(data));
-        /* La cadena de «Regenerar todo» esperaba que se resolvieran los cambios de fases, y la
-           propuesta ya no está en el servidor (la resolvió otra persona, o la borró algo que no pasó
-           por acá): el paso 2 no puede quedar colgado, se OFRECE. Si en su lugar hay otra propuesta
-           (el handoff escribió la suya), la cadena se corta: esa no la pidió este «Regenerar todo». */
-        if (pasoTareasRef.current !== null && origenDePropuesta(data.pendingProposal) !== "contexto") {
-          pasoTareasRef.current = null;
-          setEncadenado(false);
-          if (!data.pendingProposal) {
-            setOfertaConFases(true);
-            setOfrecerTareas(true);
-          }
-        }
+        /* E2b (2026-09-25): `load` ya no ofrece las tareas. Lo hacía la cadena vieja de dos pasos
+           cuando su propuesta desaparecía sin pasar por esta pantalla; se fue con ella. Ofrecer lo
+           deciden solo aplicar y descartar (`pasoTrasResolver`), con lo que se resolvió enfrente. */
         // D.2 — borrador de avance: lo expone el GET. Pre-tildá las fases propuestas y, de las
         // tareas, SOLO las que el agente infirió hechas (done:true). El resto arranca Pendiente
         // y nada Suspendido — el CSE resuelve cada tarea (hecha/suspendida) antes de cerrar la fase.
@@ -1656,9 +1634,9 @@ export default function CronogramaCanvas({
      falló) crea la suya. La pantalla no espera la corrida: trae la propuesta «armando» y desde ahí la
      sigue el borrador (su línea y `useAgentRun`). Hasta E2a el paso 2 esperaba a que el CSE
      decidiera las fases, y su resultado vivía solo en memoria (un acordeón aparte).
-     ⛔ La continuación (`saltarEstructura`: «Armar las tareas», «Volver a intentar», la cadena vieja)
-     SIEMPRE salta el paso 1: si no, re-propondría fases en bucle. Y una falla del paso 1 nunca traba
-     al CSE: sigue con las tareas. */
+     ⛔ La continuación (`saltarEstructura`: «Armar las tareas», «Volver a intentar», la línea que
+     las ofrece) SIEMPRE salta el paso 1: si no, re-propondría fases en bucle. Y una falla del paso 1
+     nunca traba al CSE: sigue con las tareas. */
   const pedirPropuestaDeDetalle = async (
     modo: "primera" | "regen",
     opts?: { saltarEstructura?: boolean },
@@ -1675,26 +1653,24 @@ export default function CronogramaCanvas({
     let observacionesDelPaso1: string[] = [];
     if (opts?.saltarEstructura) {
       /* «Armar las tareas» / «Volver a intentar»: sobre la propuesta de la pantalla, cuyas tareas
-         faltan o fallaron. Sin un `borrador-v1` en pantalla (la cadena vieja, o después de aplicar
-         solo las fases), sobre ninguna. */
+         faltan o fallaron. Sin un `borrador-v1` en pantalla (la línea que las ofrece después de
+         aplicar o descartar), sobre ninguna. */
       if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {
         token = proposalMeta.current.runId;
         version = versionDelBorrador(proposal);
       }
       /* Sin propuesta en pantalla (después de descartar el vacío que falló, o de aplicar una sin sus
          tareas): lo que muestra la franja viaja y nace dentro del borrador nuevo. Cierre de la revisión
-         de E2a: «Generar las tareas ahora» lo dejaba afuera, y al recargar se perdía. */
+         de E2a: la oferta de armarlas lo dejaba afuera, y al recargar se perdía. */
       if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);
     } else {
       /* ⛔ UN BORRADOR POR PROYECTO: con una propuesta sin decidir (del handoff, o de otro «Regenerar
          todo»), primero esa. Pedir otra daría 409, y las tareas se armarían sobre fases que el CSE
-         todavía no aceptó ni descartó. Si es una de las reuniones del formato VIEJO (abierta al
-         deploy), su cadena sigue sola con las tareas al decidirla. */
+         todavía no aceptó ni descartó. E2b: el aviso es siempre el mismo, y nada sigue solo al
+         decidirla (se fue la cadena vieja). */
       if (hayBorrador) {
-        const laVieja = esPropuestaViejaDeLasReuniones(proposal);
-        if (laVieja) fijarPasoTareas(modo);
         document.getElementById("cronograma-propuesta")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        toast.info(laVieja ? AVISO_DECIDE_PRIMERO : AVISO_PROPUESTA_PENDIENTE);
+        toast.info(AVISO_PROPUESTA_PENDIENTE);
         return;
       }
       /* El paso 1 lee la BASE: primero tiene que estar ahí lo que el CSE editó, también lo que un
@@ -1736,16 +1712,10 @@ export default function CronogramaCanvas({
         /* 409: YA hay una propuesta sin decidir (del handoff, o de una revisión que se pidió en otra
            pestaña o la pidió otra persona). ⛔ NO se arma el detalle —la corrida más cara del
            cronograma— sobre fases que nadie decidió (revisión adversarial, 2026-09-24): se trae esa
-           propuesta a la pantalla y, si es una de las reuniones del formato viejo, las tareas siguen
-           solas al decidirla. */
-        const pendiente = await traerPropuestaPendiente();
+           propuesta a la pantalla y se dice que primero se decide. E2b: nada sigue solo al decidirla. */
+        await traerPropuestaPendiente();
         setArmando(null);
-        if (pendiente.ok && esPropuestaViejaDeLasReuniones(pendiente.propuesta)) {
-          fijarPasoTareas(modo);
-          toast.info(AVISO_DECIDE_PRIMERO);
-        } else {
-          toast.info(AVISO_PROPUESTA_PENDIENTE);
-        }
+        toast.info(AVISO_PROPUESTA_PENDIENTE);
         window.setTimeout(
           () => document.getElementById("cronograma-propuesta")?.scrollIntoView({ behavior: "smooth", block: "start" }),
           150,
@@ -2126,21 +2096,21 @@ export default function CronogramaCanvas({
   };
 
   const discardProposal = async (reason?: string) => {
-    /* Se leen ANTES de limpiar: si la que se va es la de las reuniones (el auto-descarte cuando el
-       CSE ya igualó el cronograma a mano), la cadena de «Regenerar todo» sigue igual que al
-       resolver la última sugerencia. */
+    /* Se leen ANTES de limpiar: de dónde salió (lo que notó la IA de las reuniones se junta en la
+       franja) y lo que decide si se ofrecen las tareas. */
     const origenDescartado = origenDePropuesta(proposal);
     // Lo que el CSE ya cerró en la franja (la de este borrador vacío) no vuelve a aparecer al descartarlo.
     const observacionesDescartadas =
       franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId ? [] : (proposal?.observaciones ?? []);
-    const modoDeLaCadena = pasoTareasRef.current;
     // E2a: el estado de las tareas de la que se descarta (null = no esperaba tareas), ANTES de limpiar.
     const tareasDescartadas = tareasEnPantalla?.estado ?? null;
     /* Revisión de E2a: la corrida que armaba sus tareas (su seguimiento sigue vivo: al terminar no
-       avisa nada de una propuesta que el CSE descartó a propósito) y si traía cambios de fases (sin
-       ellos, la oferta del paso 2 no dice «Las fases quedaron decididas»). */
+       avisa nada de una propuesta que el CSE descartó a propósito) y si traía cambios de fases (con
+       ellos, descartar no ofrece las tareas: el CSE rechazó esas fases). E2b: y si era «Regenerar» de
+       una fase (nunca se ofrece: «Volver a intentar» lanzaría una corrida de todas las fases). */
     const corridaDescartada = tareasEnPantalla?.corrida ?? null;
     const conFasesLaDescartada = traeCambiosDeFases(proposal);
+    const soloFaseLaDescartada = !!revision.borrador?.soloFase;
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
     // limpiarla en el server para que no reaparezca al recargar. El estado local se limpia pase
     // lo que pase.
@@ -2194,33 +2164,33 @@ export default function CronogramaCanvas({
     if (eraDelModificador) {
       /* Descartar la vista previa del modificador deja ver la propuesta GUARDADA, si hay: pudo entrar
          mientras la IA trabajaba (el 409 PROPUESTA_ABIERTA lo dice), y sin esto no aparecía hasta
-         recargar. Su cadena no es asunto de esta vista previa. */
+         recargar. */
       void refrescarPropuesta();
       return;
     }
     if (guardadaEsOtra) {
       /* La guardada ya no es la que se descartó (otra la reemplazó): no se borró nada, se trae la que
-         está y la cadena de la descartada no sigue. */
-      fijarPasoTareas(null);
+         está y no se ofrece nada por la descartada. */
       void traerPropuestaPendiente();
       return;
     }
     if (origenDescartado === "contexto") {
-      fijarPasoTareas(null);
-      const siguiente = pasoTrasResolver({
-        pendientes: 0,
-        origen: origenDescartado,
-        iniciadoAqui: modoDeLaCadena !== null,
-        tareas: tareasDescartadas,
-      });
       /* Se JUNTAN, no se reemplazan: el borrador vacío del paso 2 pudo nacer sin observaciones, y
          reemplazar borraba lo que notó el paso 1 (revisión de E2a). */
       setObservacionesPaso1((previas) => juntarObservaciones(previas, observacionesDescartadas));
-      if (siguiente === "auto" && modoDeLaCadena) void pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true });
-      else if (siguiente === "ofrecer") {
-        setOfertaConFases(conFasesLaDescartada);
-        setOfrecerTareas(true);
-      }
+    }
+    /* E2b (2026-09-25): descartar NUNCA pide las tareas solo (se fue la cadena vieja, que las pedía al
+       descartar la propuesta de las reuniones). Solo se OFRECEN tras descartar el borrador vacío cuya
+       corrida falló; nunca con cambios de fases (el CSE los rechazó) ni con «Regenerar» de una fase. */
+    const siguiente = pasoTrasResolver({
+      como: "descartar",
+      tareas: tareasDescartadas,
+      conCambiosDeFases: conFasesLaDescartada,
+      soloFase: soloFaseLaDescartada,
+    });
+    if (siguiente === "ofrecer") {
+      setOfertaConFases(conFasesLaDescartada);
+      setOfrecerTareas(true);
     }
   };
 
@@ -2232,13 +2202,14 @@ export default function CronogramaCanvas({
     // Con un descarte en curso, aplicar caería en el 409 de «la propuesta cambió».
     if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return;
     setAplicandoBorrador(true);
-    /* De dónde salió y qué notó la IA: se leen ANTES de limpiar la propuesta (después ya no está). */
-    const origenResuelto = origenDePropuesta(proposal);
+    /* Qué notó la IA y lo que decide si se ofrecen las tareas: se leen ANTES de limpiar la propuesta
+       (después ya no está). E2b: si traía fases y si era «Regenerar» de una fase. */
     const observacionesDeLaPropuesta = revisionRef.current.resumen.observaciones;
-    const modoDeLaCadena = pasoTareasRef.current;
+    const conFasesLaResuelta = traeCambiosDeFases(proposal);
+    const soloFaseLaResuelta = !!revisionRef.current.borrador?.soloFase;
     // E2a: el estado de sus tareas (null = no esperaba tareas), ANTES de limpiar la propuesta.
     const tareasResueltas = tareasEnPantalla?.estado ?? null;
-    let siguiente: "nada" | "auto" | "ofrecer" = "nada";
+    let siguiente: "nada" | "ofrecer" = "nada";
     try {
       /* Lo que editaste a mano tiene que estar en la base ANTES: el servidor compara contra ella. Si
          no se puede guardar, no se aplica (compararía contra otra cosa que la que ves). */
@@ -2273,7 +2244,6 @@ export default function CronogramaCanvas({
              la lista se recalcula contra la misma foto (lo nuevo aparece como choque). */
           await load();
         } else {
-          fijarPasoTareas(null);
           await traerPropuestaPendiente();
         }
         return;
@@ -2305,9 +2275,6 @@ export default function CronogramaCanvas({
       proposalMeta.current = { deAssist: false, runId: null };
       setProposal(null);
       setTareasDelBorrador(null);
-      /* La cadena se suelta ANTES de recargar: `load()` ofrece el paso 2 cuando encuentra una
-         cadena esperando y ninguna propuesta, y acá lo decide esta misma función. */
-      fijarPasoTareas(null);
       await load();
       bumpGpsRefresh();
       /* E2a: si se crearon o quitaron tareas, el avance se vuelve a evaluar con el cronograma nuevo
@@ -2326,27 +2293,22 @@ export default function CronogramaCanvas({
         setChainingProgress(false);
       }
       siguiente = pasoTrasResolver({
-        pendientes: typeof d.pendientes === "number" ? d.pendientes : 0,
-        origen: origenResuelto,
-        iniciadoAqui: modoDeLaCadena !== null,
+        como: "aplicar",
         tareas: tareasResueltas,
+        conCambiosDeFases: conFasesLaResuelta,
+        soloFase: soloFaseLaResuelta,
       });
     } catch {
       toast.error("Error de conexión al aplicar la propuesta.");
     } finally {
       setAplicandoBorrador(false);
     }
-    /* ⭐ EL PASO 2. Resuelta la propuesta de las reuniones: si el «Regenerar todo» lo apretó esta
-       pantalla, las tareas se piden solas sobre la estructura ya decidida — SALTANDO el paso 1 (si
-       no, volvería a proponer fases en bucle). Si no, se ofrece: nunca se dispara solo para quien no
-       lo pidió. */
-    if (siguiente === "auto" && modoDeLaCadena) {
+    /* Las tareas no llegaron: se OFRECEN en la línea de arriba del Gantt, nunca se piden solas. E2b
+       (2026-09-25): se fue la cadena vieja, que al aplicar la propuesta de las reuniones pedía sola el
+       paso 2 (una corrida pagada que nadie apretó). */
+    if (siguiente === "ofrecer") {
       setObservacionesPaso1((previas) => juntarObservaciones(previas, observacionesDeLaPropuesta));
-      void pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true });
-    } else if (siguiente === "ofrecer") {
-      // Lo aplicado traía fases (sin cambios marcados no se aplica nada): la oferta dice que se decidieron.
-      setObservacionesPaso1((previas) => juntarObservaciones(previas, observacionesDeLaPropuesta));
-      setOfertaConFases(true);
+      setOfertaConFases(conFasesLaResuelta);
       setOfrecerTareas(true);
     }
   };
@@ -2438,11 +2400,17 @@ export default function CronogramaCanvas({
           motivo: tareasEnPantalla.motivo,
         }
       : null;
+  /* ¿El cronograma ya tiene detalle de la IA? Decide qué pide «Regenerar todo» / «Generar cronograma»
+     y con qué permiso. E2b: se declara antes de la línea suelta, que lo usa para ofrecer las tareas. */
+  const hasAiDetail = phases.some((p) => p.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"));
   /* ── LA LÍNEA SUELTA (E2a P6): la misma línea de las tareas, arriba del Gantt, cuando no hay barra
      que la lleve: mientras corre el paso 1 (todavía no hay propuesta), mientras sale el pedido del
      paso 2 sin propuesta en pantalla, o con una propuesta SIN cambios todavía (la que el paso 2 crea
-     vacía y llena al terminar). Con la barra montada, la línea va adentro de ella. */
-  const lineaSuelta: { estado: EstadoDeLasTareas | "paso-1"; fase: string | null; motivo: string | null } | null =
+     vacía y llena al terminar). Con la barra montada, la línea va adentro de ella.
+     E2b (2026-09-25): también «ofrecer» — sin propuesta y sin nada en curso, después de aplicar una
+     propuesta cuyas tareas no llegaron o de descartar el vacío que falló (`ofrecerTareas`), y solo con
+     el permiso que el servidor va a exigir. Reemplaza a la franja de la cadena vieja. */
+  const lineaSuelta: { estado: EstadoDeLasTareas | "paso-1" | "ofrecer"; fase: string | null; motivo: string | null } | null =
     armando?.paso === 1
       ? { estado: "paso-1", fase: null, motivo: null }
       : hayBorrador && revision.resumen
@@ -2451,7 +2419,9 @@ export default function CronogramaCanvas({
           ? tareasDeLaBarra
           : armando?.paso === 2
             ? { estado: "armando", fase: null, motivo: null }
-            : null;
+            : !hayBorrador && armando === null && ofrecerTareas && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
+              ? { estado: "ofrecer", fase: null, motivo: null }
+              : null;
   /* «Armar las tareas» / «Volver a intentar» (en la barra y en la línea suelta): el paso 2 sobre la
      propuesta en pantalla, SALTANDO el paso 1. Solo con el permiso que el servidor va a exigir: la
      primera pasada pide `generate`; después, `regenerate`. Sin él la línea informa sin botón (revisión
@@ -2854,7 +2824,6 @@ export default function CronogramaCanvas({
     }
   };
 
-  const hasAiDetail = phases.some((p) => p.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"));
   const ganttPhases: GanttPhase[] = phases.map((p) => ({
     key: p._key,
     id: p.id,
@@ -4045,8 +4014,9 @@ export default function CronogramaCanvas({
         <div id="cronograma-gantt" className="space-y-4 scroll-mt-24">
           {/* Revisión de E2a: con una propuesta abierta no se ofrece (sus tareas ya se arman o ya llegaron:
               el enlace solo daba «hay una propuesta sin decidir»), y el texto dice lo mismo que el
-              `disabled`: mientras la IA arma, no vuelve a decir «Genera las tareas». */}
-          {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && (
+              `disabled`: mientras la IA arma, no vuelve a decir «Genera las tareas». E2b: ni con la
+              línea que ofrece las tareas (dos llamados a lo mismo). */}
+          {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <p className="text-xs leading-relaxed">
@@ -4062,17 +4032,6 @@ export default function CronogramaCanvas({
                 para detallarlo y consensuar el avance con el cliente.
               </p>
             </div>
-          )}
-          {/* El paso 2 de «Regenerar todo» cuando la cadena no arrancó en esta pantalla (recargó a
-              mitad de camino, o las sugerencias las resolvió otra persona), o cuando se aplicó una
-              propuesta cuyas tareas no llegaron (E2a): se ofrece, no se dispara. */}
-          {ofrecerTareas && canEdit && !proposal && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && (
-            <PasoDeTareasPendiente
-              trabajando={armando !== null}
-              conCambiosDeFases={ofertaConFases}
-              onGenerar={() => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })}
-              onCerrar={() => setOfrecerTareas(false)}
-            />
           )}
           {/* Lo que notó el paso 1 cuando no dejó propuesta (sin cambios, o lo acordado que no se pudo
               proponer): el aviso «los ves en «La IA también notó»» no puede quedar como una promesa
@@ -4103,15 +4062,22 @@ export default function CronogramaCanvas({
               que la lleve (ver `lineaSuelta`): «Paso 1 de 2 · Revisando…» solo con material elegido.
               Revisión de E2a: suelta, la propuesta no tiene cambios (ni de fases), así que no promete
               aplicar «solo los cambios de fases»; y con un borrador guardado trae «Descartar», que vive
-              en la barra (sin él, el borrador vacío que espera tareas no tenía salida). */}
+              en la barra (sin él, el borrador vacío que espera tareas no tenía salida).
+              E2b: «ofrecer» — sin propuesta, pide el paso 2 SALTANDO el paso 1 (si no, re-propondría
+              fases en bucle), dice si se aplicaron fases, y «Ahora no» la esconde. */}
           {canEdit && lineaSuelta && (
             <LineaDeLasTareas
               estado={lineaSuelta.estado}
               fase={lineaSuelta.fase}
               motivo={lineaSuelta.motivo}
               conMaterial={materialElegido}
-              conCambiosDeFases={false}
-              onAccion={armarLasTareas}
+              conCambiosDeFases={lineaSuelta.estado === "ofrecer" && ofertaConFases}
+              onAccion={
+                lineaSuelta.estado === "ofrecer"
+                  ? () => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })
+                  : armarLasTareas
+              }
+              onCerrar={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}
               onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}
               descartando={descartando}
               trabajando={armando !== null}
@@ -4130,7 +4096,6 @@ export default function CronogramaCanvas({
               tareas={tareasDeLaBarra}
               onArmarTareas={armarLasTareas}
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}
-              encadenado={encadenado}
               cierreFijado={closeOverride || null}
               barraRef={revision.barraRef}
             />

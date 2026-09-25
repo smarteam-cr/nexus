@@ -499,7 +499,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "components/canvas/CronogramaCanvas.tsx",
     "components/canvas/CronogramaContextSection.tsx",
     "components/canvas/ObservacionesDelPaso1.tsx",
-    "components/canvas/PasoDeTareasPendiente.tsx",
+    /* E2b P4 (2026-09-25): sale PasoDeTareasPendiente.tsx, que se borró con la cadena vieja. Su oferta
+       vive en LineaDeLasTareas.tsx (estado «ofrecer») y su texto en lib/timeline/borrador.ts: los dos
+       siguen en esta lista. */
     "components/canvas/PhaseRegenPanel.tsx",
     /* E1 del borrador (2026-09-24): la franja `ProposalGlobalStrip` se borró; su texto vive ahora en
        la barra de revisión. La guarda sigue mirando el mismo texto, en su archivo nuevo. */

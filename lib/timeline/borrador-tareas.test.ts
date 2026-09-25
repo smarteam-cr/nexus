@@ -828,10 +828,16 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
         "solo se aplican los cambios de fases",
       );
     }
-    expect(textoDeLaOfertaDeTareas(true).titulo).toBe("Las fases quedaron decididas.");
+    /* ⚠ REAPUNTADA en E2b P4 (2026-09-25), con esta razón: la oferta dejó su franja propia
+       (`PasoDeTareasPendiente`, título y detalle) y pasó a la línea de las tareas, estado «ofrecer»:
+       devuelve `{ texto, accion }` y la línea la pinta tal cual. Pide lo mismo: sin cambios de fases no
+       nombra fases, y con ellos dice lo que pasó (se aplicaron) sin afirmar que se decidieron. */
+    expect(textoDeLaOfertaDeTareas(true)).toEqual({ texto: "Se aplicaron las fases; faltan sus tareas.", accion: "Armar las tareas" });
     const sinFases = textoDeLaOfertaDeTareas(false);
-    expect(`${sinFases.titulo} ${sinFases.detalle}`).not.toMatch(/fases/);
-    expect(sinFases.titulo).toBe("No se pudieron armar las tareas.");
+    expect(sinFases.texto).not.toMatch(/fases/);
+    expect(sinFases).toEqual({ texto: "No se pudieron armar las tareas.", accion: "Volver a intentar" });
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true), "la línea no delega en la oferta").toEqual(textoDeLaOfertaDeTareas(true));
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, false)).toEqual(sinFases);
   });
 
   it("⛔ la confirmación no repite cuántas tareas se quitan", () => {
@@ -989,7 +995,8 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
 
   it("si lo que se resuelve traía cambios de fases (la oferta del paso 2 depende de eso)", () => {
     /* La edición que la pone en rojo: contar las tareas como fases (el borrador vacío o solo de tareas
-       ofrecería «Las fases quedaron decididas»), o dar por vacía una propuesta del formato viejo. */
+       diría que se aplicaron fases, y descartarlo no ofrecería las tareas), o dar por vacía una
+       propuesta del formato viejo. (E2b P4: la oferta pasó a la línea; el criterio es el mismo.) */
     const vacio = borradorVacio({ pedido: "regenerar", corrida: "r1" });
     expect(traeCambiosDeFases(vacio), "el borrador vacío trae fases").toBe(false);
     expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-se-va", clave: "tarea:x:se-va" }] })).toBe(false);

@@ -2,7 +2,7 @@
  * lib/timeline/propuesta-de-estructura.ts — EL ARMADOR DE LA PROPUESTA DE FASES Y TIEMPOS.
  * Puro y client-safe: sin Prisma. Lo usan la ruta `timeline/estructura` (paso 1 de «Regenerar
  * todo») y la pantalla (la máquina de pasos: qué hacer después de pedir la estructura y después
- * de resolver la última sugerencia).
+ * de aplicar o descartar la propuesta).
  *
  * ── POR QUÉ EXISTE (2026-09-23) ──────────────────────────────────────────────
  * «Regenerar todo» detallaba TAREAS sobre las fases de siempre: aunque una reunión elegida dijera
@@ -16,8 +16,8 @@
  * sobre la estructura decidida.
  * ⭐ Desde E2a (2026-09-25) la propuesta nace como `borrador-v1` y el paso 2 NO espera al CSE: arma
  * las tareas enseguida, sobre la estructura PROPUESTA, y las suma a ESA misma propuesta (fases y
- * tareas se revisan juntas en la barra). La cadena de dos pasos de arriba queda solo para una
- * propuesta vieja de las reuniones que siga abierta al deploy (E2b la borra).
+ * tareas se revisan juntas en la barra). E2b borró la cadena vieja de dos pasos: una propuesta vieja
+ * de las reuniones que siga abierta se aplica o se descarta como cualquier otra, y nada sigue solo.
  *
  * ── LO QUE EL MODELO NO PUEDE HACER, AUNQUE LO DIGA ─────────────────────────
  * El prompt (lib/agents/estructura-cronograma.ts) lo prohíbe y ESTE archivo lo hace cumplir: una
@@ -1049,9 +1049,9 @@ export const AVISO_ACORDADO_SIN_ENTRAR =
  *  arman tareas sobre una propuesta sin decidir. Lo dice también la ruta del paso 1 (estructura). */
 export const AVISO_PROPUESTA_PENDIENTE =
   "Hay una propuesta del cronograma sin decidir: resuélvela y vuelve a regenerar.";
-/** 409 con una propuesta de las REUNIONES pendiente (la dejó otra pestaña u otra persona). */
-export const AVISO_DECIDE_PRIMERO =
-  "Ya hay cambios de fases sugeridos por la IA sin decidir: decídelos y después sigo con las tareas.";
+/* E2b (2026-09-25): se fue `AVISO_DECIDE_PRIMERO` («…decídelos y después sigo con las tareas»). Era de
+   la cadena vieja de dos pasos, que ya no existe: con cualquier propuesta abierta se dice
+   `AVISO_PROPUESTA_PENDIENTE`, y nada sigue solo con las tareas al decidirla. */
 export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fases; sigo con las tareas.";
 /**
  * Por qué NINGÚN otro cambio con IA se aplica mientras haya cambios de fases sin decidir: el chat
@@ -1139,26 +1139,26 @@ export function errorDeLaRevisionDeFases(e: unknown): string {
 }
 
 /**
- * Qué hace la pantalla después de resolver sugerencias de estructura:
- *  · 'nada'     — quedan sugerencias, o la propuesta era la del handoff;
- *  · 'auto'     — era la de las reuniones, no queda ninguna y el «Regenerar todo» lo apretó ESTA
- *                 pantalla: sigue sola con las tareas (paso 2);
- *  · 'ofrecer'  — igual, pero la cadena no arrancó acá (recargó a mitad de camino, o las resolvió
- *                 otra persona): se ofrece el paso 2, nunca se dispara solo para quien no lo pidió.
- *
- * E2a: `tareas` es el estado de las tareas de la propuesta que se resolvió, leído ANTES de limpiarla
- * (null = no esperaba tareas: el formato viejo o el handoff). Un `borrador-v1` ya trae sus tareas
- * adentro, así que no hay cadena que seguir: si llegaron («listas») o se están armando, no queda
- * nada; si no llegaron («faltan» o «fallo»), se ofrece armarlas. Nunca «auto»: la corrida pagada no
- * se dispara sola después de aplicar solo las fases.
+ * Qué hace la pantalla después de aplicar o descartar la propuesta: «ofrecer» armar las tareas (una
+ * línea arriba del Gantt, con su botón) o «nada». Los datos se leen ANTES de limpiar la propuesta.
+ *  · `tareas` — el estado de sus tareas (null = no esperaba tareas: el handoff o el formato viejo);
+ *  · `conCambiosDeFases` — traía cambios de fases (`traeCambiosDeFases`);
+ *  · `soloFase` — era «Regenerar» de UNA fase.
+ * Se ofrece SOLO si las tareas no llegaron («faltan» o «fallo») y: se APLICÓ (quedaron las fases sin
+ * sus tareas), o se DESCARTÓ el borrador vacío cuya corrida falló (sin cambios de fases: no se
+ * decidió nada). Nunca después de descartar una propuesta con fases (el CSE las rechazó: armar
+ * tareas sobre lo vivo no es lo que pidió), ni con `soloFase` (su «Volver a intentar» lanzaría una
+ * corrida de TODAS las fases).
+ * E2b (2026-09-25): se fue «auto» —la cadena vieja de dos pasos, que seguía sola con las tareas al
+ * resolver la propuesta de las reuniones—. La corrida pagada nunca sale sola.
  */
 export function pasoTrasResolver(input: {
-  pendientes: number;
-  origen: "contexto" | "handoff";
-  iniciadoAqui: boolean;
+  como: "aplicar" | "descartar";
   tareas: EstadoDeLasTareas | null;
-}): "nada" | "auto" | "ofrecer" {
-  if (input.tareas !== null) return input.tareas === "faltan" || input.tareas === "fallo" ? "ofrecer" : "nada";
-  if (input.pendientes > 0 || input.origen !== "contexto") return "nada";
-  return input.iniciadoAqui ? "auto" : "ofrecer";
+  conCambiosDeFases: boolean;
+  soloFase: boolean;
+}): "nada" | "ofrecer" {
+  if (input.soloFase) return "nada";
+  if (input.tareas !== "faltan" && input.tareas !== "fallo") return "nada";
+  return input.como === "aplicar" || !input.conCambiosDeFases ? "ofrecer" : "nada";
 }

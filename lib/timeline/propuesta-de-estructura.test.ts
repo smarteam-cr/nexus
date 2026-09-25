@@ -14,7 +14,6 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   AVISO_ACORDADO_SIN_ENTRAR,
-  AVISO_DECIDE_PRIMERO,
   AVISO_FALLO_DE_ESTRUCTURA,
   AVISO_PROPUESTA_PENDIENTE,
   AVISO_SIN_CAMBIOS,
@@ -1356,29 +1355,47 @@ describe("la máquina de pasos de la pantalla", () => {
   });
 
   it("después de resolver sugerencias", () => {
-    /* ⚠ ACTUALIZADA en E2a P5 (2026-09-25), con esta razón: `pasoTrasResolver` recibe además el estado
-       de las tareas de la propuesta resuelta (`tareas`), que es obligatorio para que ningún llamador
-       lo olvide. Estos casos son la propuesta VIEJA (sin tareas que esperar: `tareas: null`) y piden
-       exactamente lo mismo que antes. */
-    expect(pasoTrasResolver({ pendientes: 1, origen: "contexto", iniciadoAqui: true, tareas: null })).toBe("nada");
-    expect(pasoTrasResolver({ pendientes: 0, origen: "handoff", iniciadoAqui: true, tareas: null })).toBe("nada");
-    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: true, tareas: null })).toBe("auto");
-    // Recargó a mitad de camino, o las resolvió otra persona: se ofrece, no se dispara.
-    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: false, tareas: null })).toBe("ofrecer");
+    /* ⚠ REESCRITA en E2b P4 (2026-09-25), con esta razón: se fue la cadena vieja de dos pasos (D6):
+       `pasoTrasResolver` ya no mira `pendientes`, `origen` ni `iniciadoAqui`, y se fue «auto» (seguía
+       solo con las tareas al resolver la propuesta de las reuniones). Ahora recibe cómo se resolvió
+       (`como`), el estado de sus tareas, si traía cambios de fases y si era «Regenerar» de una fase, y
+       solo OFRECE. La tabla entera: ofrece solo con tareas «faltan» o «fallo», sin `soloFase`, y al
+       aplicar, o al descartar sin cambios de fases (el vacío cuya corrida falló).
+       La edición que la pone en rojo: volver a «auto», ofrecer tras descartar una propuesta con fases,
+       ofrecer con `soloFase`, u ofrecer con las tareas listas, armándose o sin tareas que esperar. */
+    const ESTADOS = [null, "listas", "armando", "faltan", "fallo"] as const;
+    for (const como of ["aplicar", "descartar"] as const) {
+      for (const tareas of ESTADOS) {
+        for (const conCambiosDeFases of [true, false]) {
+          for (const soloFase of [true, false]) {
+            const esperado =
+              !soloFase && (tareas === "faltan" || tareas === "fallo") && (como === "aplicar" || !conCambiosDeFases)
+                ? "ofrecer"
+                : "nada";
+            expect(
+              pasoTrasResolver({ como, tareas, conCambiosDeFases, soloFase }),
+              `${como} · tareas ${tareas} · ${conCambiosDeFases ? "con" : "sin"} fases · ${soloFase ? "una fase" : "todo"}`,
+            ).toBe(esperado);
+          }
+        }
+      }
+    }
   });
 
   it("E2a · resuelta una propuesta con tareas, se ofrecen solo si no llegaron (nunca se disparan solas)", () => {
     /* Un `borrador-v1` trae sus tareas ADENTRO: si llegaron («listas») o se están armando, no queda
        paso 2 que seguir; si no llegaron («faltan» o «fallo») y se aplicaron solo las fases, se ofrece
-       armarlas. Nunca «auto»: la corrida pagada no sale sola, aunque la cadena la haya iniciado esta
-       pantalla. La edición que la pone en rojo: ignorar `tareas` (un v1 «listas» de las reuniones
-       volvería a disparar el paso 2 viejo sobre fases que ya traen sus tareas), u ofrecer con «listas». */
-    for (const iniciadoAqui of [true, false]) {
-      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "listas" })).toBe("nada");
-      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "armando" })).toBe("nada");
-      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "faltan" })).toBe("ofrecer");
-      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "fallo" })).toBe("ofrecer");
-    }
+       armarlas. Nunca se piden solas. La edición que la pone en rojo: ignorar `tareas`, u ofrecer con
+       «listas».
+       ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la firma nueva (`como`, `conCambiosDeFases`,
+       `soloFase`; se fueron `pendientes`, `origen` e `iniciadoAqui`, y con ellos «auto»). Los casos son
+       los mismos: aplicar un v1 con fases cuyas tareas llegaron, se arman, faltan o fallaron. */
+    const aplicado = (tareas: "listas" | "armando" | "faltan" | "fallo") =>
+      pasoTrasResolver({ como: "aplicar", tareas, conCambiosDeFases: true, soloFase: false });
+    expect(aplicado("listas")).toBe("nada");
+    expect(aplicado("armando")).toBe("nada");
+    expect(aplicado("faltan")).toBe("ofrecer");
+    expect(aplicado("fallo")).toBe("ofrecer");
   });
 
   it("#22 · el fallo del paso 1 se guarda como lo lee el CSE: la frase de la pantalla y la causa en tuteo", () => {
@@ -1398,7 +1415,8 @@ describe("la máquina de pasos de la pantalla", () => {
   });
 
   it("los avisos van en tuteo", () => {
-    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_DECIDE_PRIMERO, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR, CAMBIOS_DE_FASES_SIN_DECIDIR]) {
+    // (E2b P4: sale AVISO_DECIDE_PRIMERO, que se borró con la cadena vieja de dos pasos.)
+    for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR, CAMBIOS_DE_FASES_SIN_DECIDIR]) {
       expect(aviso).not.toMatch(/resolvélos|volvé|revisá|podés|decidís|ves vos/);
     }
   });
@@ -1408,9 +1426,8 @@ describe("la máquina de pasos de la pantalla", () => {
        pisa. Estos textos decían «cambios de fases sin decidir/revisar», que pasa a ser falso. La
        edición que la pone en rojo: volver a nombrar la propuesta abierta «cambios de fases» en uno
        de ellos, o que la ruta del paso 1 vuelva a su propia frase (dos fuentes que se separan).
-       AVISO_DECIDE_PRIMERO no entra: es de la cadena vieja (la propuesta de las reuniones, solo de
-       fases), que sigue hasta E2b. AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE tampoco: la del handoff
-       anterior sigue siendo solo de fases. */
+       AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE no entra: la del handoff anterior sigue siendo solo de
+       fases. (E2b P4: AVISO_DECIDE_PRIMERO, que tampoco entraba, se borró con la cadena vieja.) */
     for (const texto of [
       AVISO_PROPUESTA_PENDIENTE,
       CAMBIOS_DE_FASES_SIN_DECIDIR,

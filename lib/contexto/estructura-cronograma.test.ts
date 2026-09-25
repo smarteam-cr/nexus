@@ -28,7 +28,7 @@ import {
 } from "./estructura-cronograma";
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
-import { fraseDelPlazo, hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
+import { fraseDelPlazo, hayMaterialParaElPaso1, pasoTrasResolver } from "@/lib/timeline/propuesta-de-estructura";
 import {
   CHAT_CON_EL_VACIO_FALLIDO,
   FORMATO_BORRADOR,
@@ -36,6 +36,7 @@ import {
   observacionesDeLaFranja,
   observacionesParaElPaso2,
   textoDeLaLineaDeTareas,
+  textoDeLaOfertaDeTareas,
 } from "@/lib/timeline/borrador";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
@@ -709,16 +710,22 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   it("resolver la última sugerencia encadena el paso 2 y muestra las reubicaciones", () => {
     /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: `resolveProposalItems` (aceptar o
        descartar por ítem contra apply-items) se fue; la propuesta se resuelve entera con
-       `aplicarBorrador` (POST /timeline/borrador/aplicar). Lo que la guarda pide es lo mismo: la
-       cadena al paso 2 saltando el paso 1, los avisos de tareas corridas y el origen leído antes de
-       limpiar la propuesta. */
+       `aplicarBorrador` (POST /timeline/borrador/aplicar).
+       ⚠ REESCRITA en E2b P4 (2026-09-25), con esta razón: se fue la cadena vieja (D6). Aplicar ya NO
+       encadena el paso 2 (no llama a `pedirPropuestaDeDetalle`): si las tareas no llegaron, las OFRECE
+       en la línea de arriba del Gantt. Sigue pidiendo los avisos de tareas corridas y que lo que decide
+       la oferta se lea antes de limpiar la propuesta. La edición que la pone en rojo: volver a pedir
+       las tareas solo al aplicar, no ofrecerlas, o leer si traía fases después de limpiar. */
     const resolver = tramo("const aplicarBorrador = async (", "useEffect(");
     expect(resolver.length).toBeGreaterThan(500);
-    expect(resolver).toContain("pasoTrasResolver(");
-    expect(resolver, "la continuación no salta el paso 1").toContain("saltarEstructura: true");
+    expect(tramoDe(resolver, "siguiente = pasoTrasResolver({", "});"), "aplicar no le dice al núcleo cómo resolvió").toContain('como: "aplicar",');
+    expect(resolver, "aplicar volvió a encadenar el paso 2").not.toContain("pedirPropuestaDeDetalle(");
+    expect(resolver, "aplicar no ofrece las tareas que faltan").toContain("setOfrecerTareas(true);");
     expect(resolver, "el aviso de tareas corridas vuelve a perderse").toContain("d.avisos");
-    // El origen se lee ANTES de limpiar la propuesta: después ya no está.
-    expect(resolver.indexOf("origenDePropuesta(proposal)")).toBeLessThan(resolver.indexOf("setProposal(null)"));
+    // Si traía fases se lee ANTES de limpiar la propuesta: después ya no está.
+    const iFases = resolver.indexOf("traeCambiosDeFases(proposal)");
+    expect(iFases).toBeGreaterThan(-1);
+    expect(iFases).toBeLessThan(resolver.indexOf("setProposal(null)"));
   });
 
   it("siguen los dos flush del brief y los dos literales de las puertas", () => {
@@ -739,9 +746,14 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   });
 
   it("si la propuesta desaparece sin pasar por acá, `load()` ofrece el paso 2", () => {
+    /* ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía que `load()` ofreciera el paso
+       2 cuando la cadena vieja esperaba y su propuesta ya no estaba. La cadena se fue (D6): ofrecer lo
+       deciden solo aplicar y descartar, con lo que el CSE resolvió enfrente. La edición que la pone en
+       rojo: volver a ofrecer desde `load()`, o volver a mirar la cadena vieja ahí. */
     const load = tramo("const load = useCallback(", "}, [projectId]);");
-    expect(load).toContain('pasoTareasRef.current !== null && origenDePropuesta(data.pendingProposal) !== "contexto"');
-    expect(load).toContain("setOfrecerTareas(true)");
+    expect(load.length, "la guarda no está mirando `load`").toBeGreaterThan(1000);
+    expect(load, "`load()` volvió a ofrecer las tareas").not.toContain("setOfrecerTareas(");
+    expect(load).not.toContain("pasoTareasRef");
   });
 
   it("la espera del paso 1 NO bloquea (se dice en una línea), y la franja sabe de dónde salió la propuesta", () => {
@@ -765,8 +777,12 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
        pantalla encadena el paso 2. */
     expect(src).toContain("<RevisionDeLaPropuesta");
     expect(src).toContain("resumen={revision.resumen}");
-    expect(src).toContain("encadenado={encadenado}");
-    expect(src).toContain("<PasoDeTareasPendiente");
+    /* ⚠ REESCRITO AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía que la barra supiera si esta
+       pantalla encadena el paso 2 (`encadenado`) y la franja `PasoDeTareasPendiente`. Las dos eran de
+       la cadena vieja, que se fue (D6); la oferta vive en la línea suelta («ofrecer»). La edición que
+       la pone en rojo: volver a montar la franja, o volver a la cadena. */
+    expect(src, "volvió la franja de la cadena vieja").not.toContain("<PasoDeTareasPendiente");
+    expect(src.replace(/\s\/\/.*$/gm, ""), "volvió la cadena vieja").not.toMatch(/\bencadenado\b|fijarPasoTareas|pasoTareasRef/);
   });
 
   it("E2a · la línea suelta va donde va la barra, y mientras esta pantalla pide nada lanza otra corrida", () => {
@@ -789,7 +805,13 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     const apagado = 'disabled={armando !== null || tareasDelBorrador?.estado === "armando"}';
     expect(src.split(apagado).length - 1, "«Generar cronograma», «Regenerar todo» y «Genera las tareas»").toBe(3);
     expect(src).toContain("trabajando={armando !== null}");
-    expect(tramo("<PasoDeTareasPendiente", "/>")).toContain("trabajando={armando !== null}");
+    /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la oferta del paso 2 dejó su franja
+       (`PasoDeTareasPendiente`) y es un estado de la línea suelta, «ofrecer», que sale SOLO con esta
+       pantalla quieta (`armando === null`) y lleva el mismo `trabajando` de la línea. La edición que la
+       pone en rojo: ofrecer mientras esta pantalla ya pide algo. */
+    expect(lineaSuelta, "la oferta sale mientras esta pantalla pide algo").toMatch(
+      /!hayBorrador && armando === null && ofrecerTareas && \(hasAiDetail \? canRegenerateTimeline : canGenerateTimeline\)\s*\?\s*\{ estado: "ofrecer"/,
+    );
     // «Regenerar todo» dice siempre lo mismo: la espera ya se dice en el chip y la línea.
     expect(src).not.toContain("Generando propuesta…");
   });
@@ -806,25 +828,34 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
       "onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}",
     );
     expect(linea).toContain("descartando={descartando}");
-    expect(linea, "suelta promete aplicar «solo los cambios de fases» sin ninguno").toContain("conCambiosDeFases={false}");
+    /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la línea suelta suma «ofrecer», la oferta
+       después de resolver, que sí dice si se aplicaron fases. En los demás estados sigue sin cambios
+       de fases (no promete aplicar «solo los cambios de fases»). */
+    expect(linea, "suelta promete aplicar «solo los cambios de fases» sin ninguno").toContain(
+      'conCambiosDeFases={lineaSuelta.estado === "ofrecer" && ofertaConFases}',
+    );
     const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
     expect(componente, "la línea no pinta «Descartar»").toMatch(/\{onDescartar && \(\s*<Button[^>]*onClick=\{onDescartar\}/);
     expect(componente).toContain("textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases)");
-    // La oferta del paso 2 después de resolver una propuesta sin fases: neutra.
-    const oferta = soloCodigo(leer("components/canvas/PasoDeTareasPendiente.tsx"));
-    expect(oferta).toContain("textoDeLaOfertaDeTareas(conCambiosDeFases)");
-    expect(oferta, "volvió el texto fijo que afirma que se decidieron fases").not.toContain("quedaron decididas");
-    expect(tramo("<PasoDeTareasPendiente", "/>")).toContain("conCambiosDeFases={ofertaConFases}");
+    /* La oferta de las tareas después de resolver una propuesta sin fases: neutra.
+       ⚠ REAPUNTADA en E2b P4 (2026-09-25), con esta razón: leía `PasoDeTareasPendiente.tsx`, que se
+       borró; la oferta es el estado «ofrecer» de la línea y su texto sale de `textoDeLaOfertaDeTareas`. */
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, false)?.texto, "la oferta sin fases nombra fases").not.toMatch(/fases/);
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true)?.texto ?? "", "volvió el texto que afirma que se decidieron fases").not.toMatch(
+      /quedaron decididas/i,
+    );
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
     const iFases = descartar.indexOf("const conFasesLaDescartada = traeCambiosDeFases(proposal);");
     expect(iFases, "no se mira si la descartada traía fases").toBeGreaterThan(-1);
     expect(iFases).toBeLessThan(descartar.indexOf("setProposal(null)"));
-    expect(tramoDe(descartar, 'else if (siguiente === "ofrecer") {', "}")).toContain("setOfertaConFases(conFasesLaDescartada);");
+    expect(tramoDe(descartar, 'if (siguiente === "ofrecer") {', "}")).toContain("setOfertaConFases(conFasesLaDescartada);");
     // El chip: el mismo criterio que la línea (el texto lo prueba borrador-tareas.test.ts).
     const chip = tramo('{(armando !== null || tareasDelBorrador?.estado === "armando") && (', "</span>");
     expect(chip, "el chip no mira si hay material").toContain("{textoDelChipDeEspera(armando?.paso === 1, materialElegido)}");
     // El cartel ámbar: oculto con una propuesta abierta, y el texto con la MISMA condición que el `disabled`.
-    const iCartel = src.indexOf("{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && (");
+    /* (E2b P4: y oculto con la línea que ofrece las tareas: dos llamados a lo mismo. Su guarda propia,
+       en «E2b P4 · la oferta de las tareas…».) */
+    const iCartel = src.indexOf("{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (");
     expect(iCartel, "el cartel «Genera las tareas» se ofrece encima de la propuesta").toBeGreaterThan(-1);
     const cartel = src.slice(iCartel, src.indexOf("</p>", iCartel));
     expect(cartel).toContain('disabled={armando !== null || tareasDelBorrador?.estado === "armando"}');
@@ -869,18 +900,18 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   });
 
   it("el auto-descarte de una propuesta de las reuniones sigue la cadena SALTANDO el paso 1 (revisión del paso A2)", () => {
-    /* Sin `saltarEstructura`, el closure viejo todavía ve `proposal?.origen === "contexto"`, vuelve
-       con «Primero decide…» y la cadena queda colgada. La edición que la pone en rojo: quitar el
-       flag de la continuación de `discardProposal`, o leer el origen después de limpiar. */
+    /* ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía que descartar (a mano o solo)
+       la propuesta de las reuniones siguiera la cadena vieja pidiendo el paso 2. La cadena se fue (D6):
+       descartar NUNCA pide las tareas; a lo sumo las ofrece (solo el vacío cuya corrida falló, y lo
+       decide `pasoTrasResolver` con `como: "descartar"`). Sigue pidiendo que el origen se lea antes de
+       limpiar. La edición que la pone en rojo: volver a pedir las tareas al descartar. */
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
     expect(descartar.length).toBeGreaterThan(300);
     const iOrigen = descartar.indexOf("origenDePropuesta(proposal)");
     expect(iOrigen, "el origen no se lee").toBeGreaterThan(-1);
     expect(iOrigen, "el origen se lee después de limpiar la propuesta").toBeLessThan(descartar.indexOf("setProposal(null)"));
     expect(descartar).toContain("pasoTrasResolver(");
-    expect(descartar, "la continuación del auto-descarte no salta el paso 1").toMatch(
-      /pedirPropuestaDeDetalle\(modoDeLaCadena, \{ saltarEstructura: true \}\)/,
-    );
+    expect(descartar, "descartar volvió a pedir las tareas solo").not.toContain("pedirPropuestaDeDetalle(");
   });
 
   it("«Paso 1 de 2 · Revisando…» se dice solo con material elegido, no por un reloj (revisión del paso A2)", () => {
@@ -938,6 +969,51 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(hayMaterialParaElPaso1({ reuniones: 2, notas: 0, informe: informe([0, 4200]) })).toBe(true);
   });
 
+  it("E2b P4 · la oferta de las tareas: una línea en tuteo, nunca después de descartar fases ni con una fase sola", () => {
+    /* D6 (2026-09-25): se fue la cadena vieja de dos pasos (`fijarPasoTareas`, `encadenado`,
+       `PasoDeTareasPendiente`, `AVISO_DECIDE_PRIMERO`) y «ofrecer las tareas» pasó a ser un estado de la
+       línea suelta. Se ofrecen SOLO después de aplicar una propuesta cuyas tareas no llegaron, o de
+       descartar el borrador vacío cuya corrida falló; nunca con «Regenerar» de una fase.
+       Las ediciones que la ponen en rojo: ofrecer tras descartar una propuesta con fases, ofrecer con
+       `soloFase`, volver al texto que afirma que se decidieron fases, voseo, o volver a montar la franja. */
+    // (1) Los textos: una oración y el botón, en tuteo, sin afirmar que se decidieron fases.
+    for (const conFases of [true, false]) {
+      const o = textoDeLaLineaDeTareas("ofrecer", null, null, false, conFases);
+      expect(o, "la línea no ofrece").toEqual(textoDeLaOfertaDeTareas(conFases));
+      expect(o?.texto ?? "", "volvió «las fases quedaron decididas»").not.toMatch(/quedaron decididas/i);
+      expect(`${o?.texto} ${o?.accion}`, "voseo en la oferta").not.toMatch(/generá|armá|volvé|intentá|podés|querés|aplicá/i);
+      expect(o?.accion, "la oferta no tiene botón").toBeTruthy();
+    }
+    // (2) Cuándo: tras descartar una propuesta con fases, nunca; con una fase sola, nunca.
+    expect(pasoTrasResolver({ como: "descartar", tareas: "fallo", conCambiosDeFases: true, soloFase: false })).toBe("nada");
+    expect(pasoTrasResolver({ como: "descartar", tareas: "fallo", conCambiosDeFases: false, soloFase: false })).toBe("ofrecer");
+    expect(pasoTrasResolver({ como: "aplicar", tareas: "faltan", conCambiosDeFases: true, soloFase: true })).toBe("nada");
+    expect(pasoTrasResolver({ como: "descartar", tareas: "fallo", conCambiosDeFases: false, soloFase: true })).toBe("nada");
+    expect(pasoTrasResolver({ como: "aplicar", tareas: "faltan", conCambiosDeFases: true, soloFase: false })).toBe("ofrecer");
+    // (3) La pantalla: la franja vieja se fue, la línea dice «Ahora no», y el cartel ámbar no dobla la oferta.
+    expect(fs.existsSync(path.join(RAIZ, "components/canvas/PasoDeTareasPendiente.tsx")), "volvió la franja vieja").toBe(false);
+    expect(src, "volvió el aviso de la cadena vieja").not.toContain("AVISO_DECIDE_PRIMERO");
+    const linea = tramo("<LineaDeLasTareas", "/>");
+    expect(linea).toContain('onCerrar={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}');
+    expect(linea, "«ofrecer» no salta el paso 1").toContain(
+      'pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })',
+    );
+    const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
+    expect(componente, "la oferta no se puede cerrar").toMatch(/estado === "ofrecer" && onCerrar && \(\s*<Button[^>]*onClick=\{onCerrar\}[^>]*>\s*Ahora no/);
+    expect(src, "el cartel ámbar dobla la oferta").toContain(
+      "{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (",
+    );
+    // (4) Descartar lee si era de una fase y se lo dice al núcleo.
+    const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
+    const iSolo = descartar.indexOf("const soloFaseLaDescartada = !!revision.borrador?.soloFase;");
+    expect(iSolo, "descartar no mira si era de una fase").toBeGreaterThan(-1);
+    expect(iSolo).toBeLessThan(descartar.indexOf("setProposal(null)"));
+    const resolver = tramoDe(descartar, "const siguiente = pasoTrasResolver({", "});");
+    expect(resolver).toContain('como: "descartar",');
+    expect(resolver, "descartar no le dice al núcleo si traía fases").toContain("conCambiosDeFases: conFasesLaDescartada,");
+    expect(resolver, "descartar no le dice al núcleo si era de una fase").toContain("soloFase: soloFaseLaDescartada,");
+  });
+
   it("la pantalla lee lo acordado que no entró de la respuesta «sin-cambios» (revisión del paso A2)", () => {
     /* Sin esto el aviso diría «tus reuniones no piden cambios» junto a una observación que dice que
        sí los pidieron. La edición que la pone en rojo: dejar de pasar el campo a `pasoTrasEstructura`. */
@@ -979,7 +1055,11 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(iDecidir).toBeGreaterThan(-1);
     const rama = pedir.slice(iDecidir, pedir.indexOf("return;", iDecidir));
     expect(rama).toContain("traerPropuestaPendiente()");
-    expect(rama, "si es la de las reuniones, la cadena sigue al decidirla").toContain("fijarPasoTareas(modo)");
+    /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: pedía `fijarPasoTareas(modo)` (con una
+       propuesta vieja de las reuniones, la cadena seguía sola al decidirla). La cadena se fue: el aviso
+       es siempre `AVISO_PROPUESTA_PENDIENTE` y nada queda esperando. */
+    expect(rama, "volvió la cadena vieja").not.toContain("fijarPasoTareas");
+    expect(rama).toContain("toast.info(AVISO_PROPUESTA_PENDIENTE);");
     expect(pedir.indexOf("return;", iDecidir)).toBeLessThan(pedir.indexOf("/analyze"));
   });
 
@@ -1126,13 +1206,15 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(canvas).toMatch(/<ObservacionesDelPaso1\s+observaciones=\{observacionesDeLaFranjaEnPantalla\}/);
   });
 
-  it("⛔ lo que notó el paso 1 sobrevive a recargar con el vacío «armando» y viaja con «Generar las tareas ahora»", () => {
+  it("⛔ lo que notó el paso 1 sobrevive a recargar con el vacío «armando» y viaja con la oferta de las tareas", () => {
     /* Cierre de la revisión de E2a. (a) La franja vivía en `useState`: al recargar mientras el vacío
        seguía «armando», lo que notó el paso 1 (que el vacío SÍ guardó) no se veía en ningún lado. Ahora
        sale también de lo guardado. (b) «Generar las tareas ahora» después del auto-descarte (token null)
        mandaba el pedido sin observaciones: el vacío nuevo nacía sin ellas y recargar las perdía. Las
        ediciones que la ponen en rojo: volver a leer solo el useState, ignorar lo guardado del vacío, o
-       no mandar la franja en la continuación sin propuesta. */
+       no mandar la franja en la continuación sin propuesta.
+       (E2b P4, 2026-09-25: «Generar las tareas ahora» era el botón de la franja de la cadena vieja, que
+       se borró; hoy es el botón de la línea «ofrecer». Pide lo mismo.) */
     const vacio = {
       formato: FORMATO_BORRADOR, version: 0, origen: "contexto", observaciones: ["Pruebas pasa a 3 semanas."],
       cambios: [], pedido: "regenerar", tareas: { corrida: "run-v", listas: false }, tareasArmadasPara: {},
@@ -1158,7 +1240,7 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     // (b) La continuación sin propuesta en pantalla manda lo que muestra la franja.
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
     const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
-    expect(continuacion, "«Generar las tareas ahora» deja afuera lo que notó el paso 1").toContain(
+    expect(continuacion, "la oferta de las tareas deja afuera lo que notó el paso 1").toContain(
       "if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);",
     );
   });
