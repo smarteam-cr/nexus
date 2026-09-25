@@ -399,16 +399,18 @@ describe("la lista para el CFO", () => {
   });
 
   it("⚠ pero no avisa INFLADO cuando las gemelas no están en el balde", () => {
-    /* Antes lo decía siempre que existiera la línea de moneda, aunque sus facturas ya tuvieran cuenta. */
+    /* Antes lo decía siempre que existiera la línea de moneda, aunque sus facturas ya tuvieran cuenta.
+       ⚠ La de sin cuenta, por cobrar: desde el 2026-09-25 una línea sin filas pendientes no se muestra. */
     const lista = detectarDiferenciasOdoo({
       ...base,
       cobros: [],
       facturas: [
         factura({ id: "b", odooMoveId: 2, cuentaId: "cta1", montoNeto: 5000, moneda: "USD", odooPartnerId: 77 }),
         factura({ id: "c", odooMoveId: 3, cuentaId: "cta1", montoNeto: 5000, moneda: "CRC", odooPartnerId: 77 }),
-        factura({ id: "d", odooMoveId: 4, cuentaId: null, montoNeto: 10, moneda: "USD" }),
+        factura({ id: "d", odooMoveId: 4, cuentaId: null, montoNeto: 10, montoTotal: 11.3, montoResidual: 11.3, moneda: "USD", paymentState: "not_paid" }),
       ],
     });
+    expect(lista.find((i) => i.codigo === "ODOO-SIN-CUENTA")?.items).toHaveLength(1);
     expect(lista.find((i) => i.codigo === "ODOO-SIN-CUENTA")?.detalle).not.toMatch(/INFLADO/);
   });
 
@@ -1404,6 +1406,9 @@ describe("⭐ la moneda equivocada ya corregida y las notas de crédito sin apli
         publimark({ id: "p1", odooMoveId: 232, numero: "FAC/2026/0232", moneda: "USD", paymentState: "reversed" }),
         publimark({ id: "p2", odooMoveId: 233, numero: "FAC/2026/0233", moneda: "CRC", paymentState: "paid" }),
         publimark({ id: "p3", odooMoveId: 243, numero: "FAC/2026/0243", moneda: "USD", moveType: "out_refund", paymentState: "paid" }),
+        /* Una por cobrar de otro cliente sin cuenta, para que «sin cuenta» tenga una fila y se vea su texto: desde el
+           2026-09-25 una línea sin filas pendientes no se muestra. */
+        factura({ id: "otra", odooMoveId: 300, cuentaId: null, odooPartnerId: 76, paymentState: "not_paid", montoResidual: 2260 }),
       ],
     });
     const l = lista.find((i) => i.codigo === "ODOO-MONEDA-CORREGIDA");
@@ -1729,6 +1734,23 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       "ODOO-NOTA-SIN-APLICAR",
     ]);
     expect(resumenDeDiferencias(lista).documentos).toBe(new Set(lista.flatMap((x) => x.plata.map((p) => p.clave))).size);
+  });
+
+  it("⭐ marcar filas saca su plata de su línea y del encabezado, salvo lo que otra línea sigue mirando (TEC-AE 0200)", () => {
+    /* 2026-09-25: con algunas filas marcadas, la línea cuenta y suma lo que le queda. La 0200 sigue en el encabezado
+       porque la nota de crédito 0242 parece anularla, y esa línea no se marcó. */
+    const l = linea(lista, "ODOO-COBRADO-SIN-PAGAR")!;
+    const fila = (clave: string) => l.items.find((i) => i.fila.clave === clave)!;
+    const marcas = [...marcasDe(l.codigo, fila("f:f200")), ...marcasDe(l.codigo, fila("f:f272"))];
+    const despues = detectarDiferenciasOdoo({ ...estado, marcas });
+    const d = linea(despues, "ODOO-COBRADO-SIN-PAGAR")!;
+    expect(d.titulo, "5 cobros menos la 0200 (1) y la 0272 (abril y mayo)").toBe("2 cobros en Cobrado con su factura sin pagar en Odoo");
+    expect(d.items.map((i) => i.fila.clave)).toEqual(["f:f218", "f:f197"]);
+    expect(d.plata.map((p) => p.clave)).toEqual(["f:f218", "f:f197"]);
+    expect(d.montos).toEqual([{ moneda: "USD", monto: 3740 }]);
+    const usd = (ls: DiferenciaOdoo[]) => resumenDeDiferencias(ls).plata.find((m) => m.moneda === "USD")?.monto ?? 0;
+    expect(usd(lista) - usd(despues), "solo la 0272: la 0200 la sigue sumando su nota").toBeCloseTo(3240, 2);
+    expect(resumenDeDiferencias(despues).filas).toBe(resumenDeDiferencias(lista).filas - 2);
   });
 
   it("TEC-AE FAC/2026/0298 ya no se cae: el par aproximado con mayo se descarta y la factura vuelve a «sin cobro»", () => {
@@ -2106,7 +2128,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       /* Una fila marcada sigue siendo la casa de sus documentos. */
       expect(l.documentos, l.codigo).toEqual(a.documentos);
     }
-    expect(resumenDeDiferencias(despues)).toEqual({ abiertas: 0, plata: [], documentos: 0 });
+    expect(resumenDeDiferencias(despues)).toEqual({ abiertas: 0, filas: 0, plata: [], documentos: 0 });
     expect(coberturaDelCruce(conMarcas)).toEqual(coberturaDelCruce(todas));
   });
 
@@ -2232,6 +2254,109 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
   it("«Ya está anulada» guarda lo mismo que decía la fila de la factura soltada", () => {
     const l = todas.liberaciones.find((x) => x.id === "l-sn")!;
     expect(filaDe(detectarDiferenciasOdoo(todas), "ODOO-LIBERADAS-SIN-NUMERO", "l:l-sn")?.texto).toBe(textoDeLiberacion(l));
+  });
+
+  /* ── ⭐ 2026-09-25 · LO PENDIENTE SE QUEDA ─────────────────────────────────────────────
+     Cada línea muestra, cuenta y suma solo lo que le queda por resolver. Hasta ese día, con algunas filas marcadas, el
+     título, el monto, el encabezado y la pestaña seguían contando todas: solo una línea marcada entera dejaba de contar. */
+  const porMoneda = (ms: readonly { moneda: string; monto: number }[]) => {
+    const out = new Map<string, number>();
+    for (const m of ms) out.set(m.moneda, (out.get(m.moneda) ?? 0) + m.monto);
+    return out;
+  };
+  const clavesDePlata = (l: DiferenciaOdoo | undefined) => (l?.plata.map((p) => p.clave) ?? []).sort();
+
+  it("⭐ con ALGUNAS filas marcadas la línea se arma con lo pendiente: título, filas, monto, plata y encabezado", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-SIN-CUENTA", filaDe(antes, "ODOO-SIN-CUENTA", "cliente:90|USD")!);
+    const despues = detectarDiferenciasOdoo({ ...todas, marcas });
+    const a = lineaDe(antes, "ODOO-SIN-CUENTA")!;
+    const d = lineaDe(despues, "ODOO-SIN-CUENTA")!;
+    expect(a.titulo).toBe("3 facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados");
+    expect(d.titulo, "cuenta la que queda, no las tres").toMatch(/^1 facturas? por cobrar de clientes de Odoo/);
+    expect(d.items.map((i) => i.fila.clave)).toEqual(["cliente:90|CRC", "cuenta:sinv"]);
+    expect(d.montos, "los US$3.000 marcados ya no son de esta línea").toEqual([{ moneda: "CRC", monto: 50000 }]);
+    expect(d.detalle).toContain("Suman ₡50.000 sin IVA");
+    expect(clavesDePlata(d)).toEqual(["f:sc3"]);
+    expect(d.aceptada).toBe(false);
+    /* Lo marcado va aparte, con su propio título; y la línea sigue siendo la casa de todo. */
+    expect(d.tituloDeMarcadas).toBe("2 facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados");
+    expect([...d.documentos].sort()).toEqual([...a.documentos].sort());
+    /* El encabezado: una fila menos y US$3.000 menos. */
+    const [ra, rd] = [resumenDeDiferencias(antes), resumenDeDiferencias(despues)];
+    expect(rd.filas).toBe(ra.filas - 1);
+    expect(rd.abiertas).toBe(ra.abiertas);
+    expect((porMoneda(ra.plata).get("USD") ?? 0) - (porMoneda(rd.plata).get("USD") ?? 0)).toBeCloseTo(3000, 2);
+    expect(porMoneda(rd.plata).get("CRC")).toBe(porMoneda(ra.plata).get("CRC"));
+  });
+
+  it("⭐ en cada línea, lo que suma lo pendiente más lo que sumaba lo marcado es lo que sumaba la línea entera", () => {
+    /* Marcar la primera fila y marcar todas menos la primera parten la línea en dos: su plata y su monto se reparten sin
+       que sobre ni falte nada. Si una línea siguiera sumando todo con algo marcado, acá sumaría de más. */
+    const antes = detectarDiferenciasOdoo(todas);
+    const conDosOMas = antes.filter((l) => l.items.length >= 2);
+    expect(conDosOMas.length, "el estado de prueba tiene varias líneas con más de una fila").toBeGreaterThanOrEqual(5);
+    for (const l of conDosOMas) {
+      const [primera, ...resto] = l.items;
+      const sinLaPrimera = lineaDe(detectarDiferenciasOdoo({ ...todas, marcas: marcasDe(l.codigo, primera!) }), l.codigo)!;
+      const soloLaPrimera = lineaDe(detectarDiferenciasOdoo({ ...todas, marcas: resto.flatMap((i) => marcasDe(l.codigo, i)) }), l.codigo)!;
+      expect(sinLaPrimera.items.map((i) => i.fila.clave), l.codigo).toEqual(resto.map((i) => i.fila.clave));
+      expect(soloLaPrimera.items.map((i) => i.fila.clave), l.codigo).toEqual([primera!.fila.clave]);
+      expect([...clavesDePlata(sinLaPrimera), ...clavesDePlata(soloLaPrimera)].sort(), l.codigo).toEqual(clavesDePlata(l));
+      const suma = porMoneda([...sinLaPrimera.montos, ...soloLaPrimera.montos]);
+      const entera = porMoneda(l.montos);
+      expect([...suma.keys()].sort(), l.codigo).toEqual([...entera.keys()].sort());
+      for (const [moneda, monto] of entera) expect(suma.get(moneda), `${l.codigo} ${moneda}`).toBeCloseTo(monto, 2);
+      /* El título cuenta lo que se ve. */
+      expect(sinLaPrimera.titulo, l.codigo).not.toBe(l.titulo);
+    }
+  });
+
+  it("⭐ el número de la pestaña son las FILAS pendientes: baja de a una al marcar, en cualquier línea, y la cobertura no cambia", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const total = resumenDeDiferencias(antes).filas;
+    expect(total).toBe(antes.reduce((n, l) => n + l.items.length, 0));
+    expect(total, "más filas que líneas: contar líneas decía menos de lo que hay que mirar").toBeGreaterThan(antes.length);
+    const cobertura = coberturaDelCruce(todas);
+    for (const l of antes) {
+      const conMarca = { ...todas, marcas: marcasDe(l.codigo, l.items[0]!) };
+      const despues = detectarDiferenciasOdoo(conMarca);
+      expect(resumenDeDiferencias(despues).filas, l.codigo).toBe(total - 1);
+      expect(coberturaDelCruce(conMarca), l.codigo).toEqual(cobertura);
+    }
+  });
+
+  it("⭐ una línea sin filas pendientes no cuenta, no suma y queda solo en «Marcadas», con el título de lo marcado", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const notas = lineaDe(antes, "ODOO-NOTA-SIN-APLICAR")!;
+    const despues = detectarDiferenciasOdoo({ ...todas, marcas: notas.items.flatMap((i) => marcasDe(notas.codigo, i)) });
+    const d = lineaDe(despues, "ODOO-NOTA-SIN-APLICAR")!;
+    expect(d.aceptada).toBe(true);
+    expect(d.items).toEqual([]);
+    expect(d.montos).toEqual([]);
+    expect(d.plata).toEqual([]);
+    expect(d.tituloDeMarcadas).toBe(notas.titulo);
+    expect(despues[despues.length - 1]!.codigo, "va al final").toBe("ODOO-NOTA-SIN-APLICAR");
+    expect(resumenDeDiferencias(despues).abiertas).toBe(resumenDeDiferencias(antes).abiertas - 1);
+    expect(resumenDeDiferencias(despues).filas).toBe(resumenDeDiferencias(antes).filas - notas.items.length);
+  });
+
+  it("⭐ la fila que vuelve porque cambió un número está en `volvieron`, con la marca que tenía; la que llega nueva, no", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-SIN-CUENTA", filaDe(antes, "ODOO-SIN-CUENTA", "cliente:90|USD")!);
+    /* Corrió el sync: a la 0502 le entró un pago parcial, y el cliente tiene una factura nueva, la 0504. */
+    const nueva = sinPagar({ id: "sc4", odooMoveId: 504, numero: "FAC/2026/0504", cuentaId: null, odooPartnerId: 90, odooPartnerNombre: "SIN CUENTA S.A.", montoNeto: 300 });
+    const facturas = [...todas.facturas.map((f) => (f.id === "sc2" ? { ...f, paymentState: "partial", montoResidual: 1000 } : f)), nueva];
+    const d = lineaDe(detectarDiferenciasOdoo({ ...todas, facturas, marcas }), "ODOO-SIN-CUENTA")!;
+    expect(documentosDe(d.items.find((i) => i.fila.clave === "cliente:90|USD"))).toEqual(["f:sc2", "f:sc4"]);
+    expect(d.volvieron.map((v) => [v.item.fila.clave, v.marcas.map((m) => m.documento)])).toEqual([["cliente:90|USD", ["f:sc2"]]]);
+    expect(d.volvieron[0]?.marcas[0]?.motivo).toBe("Revisado con contabilidad");
+    expect(d.marcadas.flatMap((m) => documentosDe(m.item)), "la 0501 no cambió: sigue marcada").toEqual(["f:sc1"]);
+    /* Marcada otra vez con sus números nuevos, ya no «volvió». */
+    const otraVez = [...marcas, ...marcasDe("ODOO-SIN-CUENTA", d.items.find((i) => i.fila.clave === "cliente:90|USD")!, { id: "m2", marcadaEn: "2026-09-26T10:00:00.000Z" })];
+    const e = lineaDe(detectarDiferenciasOdoo({ ...todas, facturas, marcas: otraVez }), "ODOO-SIN-CUENTA")!;
+    expect(e.volvieron).toEqual([]);
+    expect(e.items.map((i) => i.fila.clave)).not.toContain("cliente:90|USD");
   });
 });
 
