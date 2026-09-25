@@ -16,6 +16,7 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { prisma } from "@/lib/db/prisma";
 import { ultimaCorrida } from "@/lib/cobranza/odoo/sync";
 import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servicio";
+import { resumenDeDiferencias } from "@/lib/cobranza/odoo/diferencias";
 import { pestanaDe } from "@/lib/cobranza/odoo/pestanas";
 import OdooClient from "@/components/cobranza/OdooClient";
 
@@ -38,9 +39,11 @@ export default async function OdooPage({ searchParams }: { searchParams: Promise
        no cuadra». Hasta el 2026-09-25 acá se contaban FICHAS vinculadas contra todas las cuentas: la pestaña
        decía 28 con 29 tarjetas, y las 8 cuentas de Mercury no se iban nunca. */
     contarEmparejado(),
-    /* El badge cuenta lo que falta RESOLVER: las marcadas «está bien así» siguen en la lista
-       para poder reabrirlas, pero no son trabajo pendiente. */
-    cargarDiferencias().then((d) => d.inconsistencias.filter((i) => !i.aceptada).length),
+    /* El badge cuenta lo que falta RESOLVER: FILAS pendientes, las mismas que «cosas por resolver»
+       (`resumenDeDiferencias`). Lo marcado «está bien así» sigue en la respuesta para poder deshacerlo, pero no
+       es trabajo pendiente. ⚠ Hasta el 2026-09-25 contaba líneas (15, con 107 filas por mirar). Es solo el
+       número con que abre: «Lo que no cuadra» lo actualiza al marcar, sin recargar. */
+    cargarDiferencias().then((d) => resumenDeDiferencias(d.inconsistencias).filas),
   ]);
 
   return (
