@@ -26,14 +26,23 @@
  * gana el último, y eso está bien: son independientes, no dependientes. Acá solo se declara la
  * dependencia DURA — la que convierte una operación en imposible si la otra no corre.
  */
-import type { Operacion } from "./operaciones";
+import type { OperacionDelChat } from "./operaciones";
+
+/**
+ * E3: las operaciones que van SOLAS en su acuerdo: aplicar la propuesta entera y descartarla. No se
+ * mezclan con otras (la línea ES la confirmación de lo que se va a escribir o a tirar), así que no
+ * dependen de nada ni nada depende de ellas.
+ */
+export function esOperacionSola(op: { op?: unknown }): boolean {
+  return op.op === "propuesta.aplicar" || op.op === "propuesta.descartar-entera";
+}
 
 /**
  * Para cada índice, los índices que TIENEN que aplicarse para que esa operación sea posible.
  * Vacío = independiente.
  */
 export function dependenciasDeOperaciones(
-  operaciones: readonly Operacion[],
+  operaciones: readonly OperacionDelChat[],
 ): Map<number, number[]> {
   const mapa = new Map<number, number[]>();
 
@@ -68,7 +77,7 @@ export function dependenciasDeOperaciones(
  * otra. Hoy la cadena es de un solo salto, pero el día que no lo sea esto no se rompe en silencio.
  */
 export function arrastreAlDesmarcar(
-  operaciones: readonly Operacion[],
+  operaciones: readonly OperacionDelChat[],
   desmarcadas: ReadonlySet<number>,
 ): Set<number> {
   const deps = dependenciasDeOperaciones(operaciones);

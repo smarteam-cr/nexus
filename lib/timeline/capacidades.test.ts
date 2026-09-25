@@ -18,6 +18,7 @@ import path from "node:path";
 import {
   REGLAS_DURAS_DEL_CRONOGRAMA,
   ADVERTENCIAS_DEL_CRONOGRAMA,
+  ADVERTENCIAS_SOBRE_LA_PROPUESTA,
   advertenciasParaLaInstruccion,
 } from "./capacidades";
 import { PROMPT_ASSIST_CRONOGRAMA } from "@/lib/agents/timeline-assist";
@@ -75,12 +76,35 @@ describe("las advertencias que el chat puede dar antes de proponer", () => {
   });
 
   it("cada advertencia dice la CONSECUENCIA, no solo que existe", () => {
-    for (const a of ADVERTENCIAS_DEL_CRONOGRAMA) {
+    for (const a of [...ADVERTENCIAS_DEL_CRONOGRAMA, ...ADVERTENCIAS_SOBRE_LA_PROPUESTA]) {
       expect(a.gatillo.length, "una advertencia sin gatillo no se dispara nunca").toBeGreaterThan(0);
       expect(
         a.aviso.length,
         `la advertencia de "${a.gatillo[0]}" es demasiado corta para decir que pasa`,
       ).toBeGreaterThan(60);
     }
+  });
+});
+
+describe("E3 · con una propuesta abierta, las consecuencias son otras", () => {
+  it("⭐ mover MUDA (conserva el estado), quitar una fase deja lo que tiene avance, y aplicar escribe la propuesta entera", () => {
+    /* La edición que la pone en rojo: usar las advertencias de siempre en modo propuesta (el chat diría
+       que mover una tarea pierde su estado, y con la propuesta abierta la conserva) o perder alguna de
+       las cuatro consecuencias de la propuesta. */
+    const avisos = (instr: string) => advertenciasParaLaInstruccion(instr, "propuesta").map((a) => a.aviso).join(" ");
+    expect(avisos("mueve la tarea de QA a otra fase")).toMatch(/conserva su estado/);
+    expect(avisos("mueve la tarea de QA a otra fase"), "dijo que la recrea").not.toMatch(/RECREA|pierde su estado/);
+    expect(avisos("quita la fase de Pruebas")).toMatch(/avance o se cargó a mano/);
+    expect(avisos("acorta Pruebas una semana")).toMatch(/cierre/);
+    expect(avisos("aplícala")).toMatch(/ENTERA/);
+    expect(avisos("cambia la fecha de arranque")).toMatch(/REDEFINE/);
+    // Sin modo, las de siempre.
+    expect(advertenciasParaLaInstruccion("mueve la tarea a otra fase").map((a) => a.aviso).join(" ")).toMatch(/RECREA/);
+    expect(advertenciasParaLaInstruccion("cambia el titulo de la primera tarea", "propuesta")).toEqual([]);
+  });
+
+  it("⛔ en tuteo: lo lee una persona tal cual", () => {
+    const voseo = /(?<!\p{L})(vos|tenés|podés|querés|hacé|mové|aplicá|quitá|revisá)(?!\p{L})/u;
+    for (const a of ADVERTENCIAS_SOBRE_LA_PROPUESTA) expect(a.aviso, a.aviso).not.toMatch(voseo);
   });
 });

@@ -58,6 +58,7 @@ import {
   MOTIVO_RECALCULO_SIN_TAREAS,
   MOTIVO_TAREAS_CORTADAS,
   prevalidarPedidoDeTareas,
+  VUELTAS_DE_LA_FUSION,
 } from "@/lib/timeline/borrador-del-detalle";
 import { Prisma } from "@prisma/client";
 
@@ -430,17 +431,86 @@ describe("5 · fusionarDetalleEnElBorrador con un recálculo — solo cambian su
     expect(escrito().recalculo.motivo).toBe(`${MOTIVO_RECALCULO_EDITADA} y ${MOTIVO_RECALCULO_SIN_TAREAS}`);
   });
 
-  it("⛔ otra corrida o la escritura que no entra: «perdido», sin escribir de más y con el aviso en la corrida", async () => {
-    /* La edición que la pone en rojo: fusionar sobre el recálculo de otra corrida, o reintentar. */
+  it("⛔ otra corrida: «perdido», sin escribir y con el aviso en la corrida", async () => {
+    /* La edición que la pone en rojo: fusionar sobre el recálculo de otra corrida. */
     db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
     expect(await fusionar({ guardado: guardadoCon({ recalculo: { ...RECALCULO, corrida: "run-otra" } }) })).toEqual({ estado: "perdido" });
     expect(db.projectTimeline.updateMany, "escribió un recálculo que no era el suyo").not.toHaveBeenCalled();
     expect(db.agentRun.update).toHaveBeenCalledTimes(1);
+  });
 
-    db.agentRun.update.mockClear();
+  /* ⚠ REESCRITA en E3 P2 (2026-09-25), con esta razón: el caso de «la escritura que no entra» decía
+     «perdido, sin reintentar». Desde E3 las casillas del CSE y la marca del chat escriben el borrador
+     mientras la IA recalcula (suben la versión): ahora la fusión vuelve a leer y a fusionar, y conserva lo
+     desmarcado y lo que dictó el chat. Con otra corrida en la relectura, sigue siendo «perdido».
+     La edición que la pone en rojo: volver a «perdido» sin releer, reemplazar las tareas del chat con las
+     recalculadas, o dejar la forma ajustada de una fase que se volvió a armar (D9). */
+  it("la escritura que no entra: vuelve a leer y reintenta, conservando lo desmarcado y lo del chat", async () => {
+    const estructura = await loQueVio();
+    const DEL_CHAT_EN_C = { ...nueva("t:chat-c", "c", "Revisión con el cliente", 0), porChat: true };
+    const base = {
+      id: "tl",
+      pendingProposalRunId: "run-1",
+      anchorStartDate: null,
+      closeDateOverride: null,
+      project: { tags: [] },
+      phases: fasesDB(3),
+    };
+    const fusionarConLecturas = async (...guardados: unknown[]) => {
+      db.projectTimeline.findUnique.mockReset();
+      for (const g of guardados) db.projectTimeline.findUnique.mockResolvedValueOnce({ ...base, pendingProposal: g });
+      return fusionarDetalleEnElBorrador({
+        timelineId: "tl",
+        corrida: "run-r",
+        estructura,
+        analysisJson: DEVUELTO,
+        huellas: null,
+        cortado: false,
+        nuevaClave: claves(),
+      });
+    };
+    const releido = guardadoCon({
+      version: 6,
+      recalculo: RECALCULO,
+      cambios: [...CAMBIOS.slice(0, 4), DEL_CHAT_EN_C, ...CAMBIOS.slice(4)],
+      excluidos: ["tarea:b1:se-va"],
+      chatAbiertoPara: ["h-1"],
+      ajustadasPorElChat: { c: { nombre: "Pruebas", semanas: 3 }, b: { nombre: "Diseño", semanas: 1 } },
+    });
+    db.projectTimeline.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    expect(await fusionarConLecturas(guardadoCon({ recalculo: RECALCULO }), releido)).toEqual({
+      estado: "recalculadas",
+      escritas: ["c"],
+      fallidas: [],
+    });
+    expect(db.projectTimeline.updateMany, "no volvió a intentar").toHaveBeenCalledTimes(2);
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[1];
+    expect(where.pendingProposal).toEqual({ path: ["version"], equals: 6 });
+    const b = data.pendingProposal;
+    expect(b.version).toBe(7);
+    expect(b.excluidos, "perdió lo desmarcado").toEqual(["tarea:b1:se-va"]);
+    expect(b.chatAbiertoPara).toEqual(["h-1"]);
+    expect(b.cambios.map((c: { clave: string }) => c.clave), "reemplazó la tarea que dictó el chat").toContain("t:chat-c");
+    expect(b.ajustadasPorElChat, "la fase recalculada conservó la forma del chat").toEqual({ b: { nombre: "Diseño", semanas: 1 } });
+    expect(b.recalculo).toBeNull();
+    expect(db.agentRun.update).not.toHaveBeenCalled();
+
+    // En la relectura el recálculo ya es de OTRA corrida: «perdido», sin volver a escribir.
+    db.projectTimeline.updateMany.mockReset();
     db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
-    expect(await fusionar()).toEqual({ estado: "perdido" });
-    expect(db.projectTimeline.updateMany, "reintentó").toHaveBeenCalledTimes(1);
+    expect(
+      await fusionarConLecturas(guardadoCon({ recalculo: RECALCULO }), guardadoCon({ version: 6, recalculo: { ...RECALCULO, corrida: "run-otra" } })),
+    ).toEqual({ estado: "perdido" });
+    expect(db.projectTimeline.updateMany, "escribió un recálculo que no era el suyo").toHaveBeenCalledTimes(1);
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(MOTIVO_RECALCULO_PERDIDO);
+
+    // Y si nunca entra, se rinde a las VUELTAS_DE_LA_FUSION, con el aviso del recálculo.
+    db.agentRun.update.mockReset();
+    db.projectTimeline.updateMany.mockReset();
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
+    const siempre = Array.from({ length: VUELTAS_DE_LA_FUSION }, () => guardadoCon({ recalculo: RECALCULO }));
+    expect(await fusionarConLecturas(...siempre)).toEqual({ estado: "perdido" });
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(VUELTAS_DE_LA_FUSION);
     expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(MOTIVO_RECALCULO_PERDIDO);
   });
 });

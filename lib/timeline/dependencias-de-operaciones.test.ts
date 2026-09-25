@@ -13,8 +13,9 @@ import { describe, it, expect } from "vitest";
 import {
   dependenciasDeOperaciones,
   arrastreAlDesmarcar,
+  esOperacionSola,
 } from "./dependencias-de-operaciones";
-import type { Operacion } from "./operaciones";
+import { OPERACIONES_DE_PROPUESTA, OPERACIONES_VALIDAS, type Operacion, type OperacionDelChat } from "./operaciones";
 
 /** El pedido real de Elías: una fase nueva con sus tres tareas. */
 const faseConTareas = (): Operacion[] => [
@@ -73,6 +74,15 @@ describe("la cascada al desmarcar", () => {
     expect(arrastreAlDesmarcar(faseConTareas(), new Set()).size).toBe(0);
   });
 
+  it("E3: una operación sobre la propuesta no depende de nada ni arrastra nada", () => {
+    const conPropuesta: OperacionDelChat[] = [
+      ...faseConTareas(),
+      { op: "propuesta.dejar-como-estaba", claves: ["fase:f2:durationWeeks"] },
+    ];
+    expect(dependenciasDeOperaciones(conPropuesta).get(4)).toEqual([]);
+    expect([...arrastreAlDesmarcar(conPropuesta, new Set([4]))]).toEqual([4]);
+  });
+
   it("⚠ y la cascada llega hasta el final aunque la cadena tenga dos saltos", () => {
     /* Hoy la cadena es de un salto. Esto congela que el día que no lo sea no falle en silencio:
        la fase B se crea con un ref, algo la nombra, y desmarcar A tiene que llevarse las dos. */
@@ -82,5 +92,17 @@ describe("la cascada al desmarcar", () => {
       { op: "tarea.mover-fase", taskId: "t1", phaseId: "a" },
     ];
     expect([...arrastreAlDesmarcar(cadena, new Set([0]))].sort()).toEqual([0, 1, 2]);
+  });
+});
+
+describe("E3 · lo que va SOLO en su acuerdo", () => {
+  it("⛔ aplicar y descartar la propuesta entera van solas; ninguna otra", () => {
+    /* La edición que la pone en rojo: sumar otra operación (el chat no podría acordarla junto con
+       nada más) o sacar una de las dos (se mezclaría «aplicar» con cambios que todavía no están en la
+       propuesta: la línea dejaría de ser la confirmación de lo que se escribe). */
+    const solas = [...OPERACIONES_VALIDAS, ...OPERACIONES_DE_PROPUESTA].filter((op) => esOperacionSola({ op }));
+    expect(solas).toEqual(["propuesta.aplicar", "propuesta.descartar-entera"]);
+    expect(esOperacionSola({})).toBe(false);
+    expect(esOperacionSola({ op: 42 })).toBe(false);
   });
 });

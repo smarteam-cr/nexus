@@ -15,11 +15,16 @@ import { describe, it, expect } from "vitest";
 import {
   aplicarOperaciones,
   describirOperaciones,
+  esOperacionDePropuesta,
+  MOTIVO_SIN_PROPUESTA_ABIERTA,
+  OPERACIONES_DE_PROPUESTA,
   OPERACIONES_VALIDAS,
+  type DescripcionDeLaPropuesta,
   type Operacion,
 } from "./operaciones";
 import { validateTimelinePayload } from "./validate";
 import type { FaseActual } from "./assist-items";
+import type { TareaDelVivo } from "./borrador";
 
 const tarea = (id: string, weekIndex: number, extra: Partial<FaseActual["tasks"][number]> = {}) => ({
   id,
@@ -843,5 +848,104 @@ describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
     );
     /* Y ninguna puede salir vacía o con un id crudo donde va un nombre. */
     for (const l of lineas) expect(l.length).toBeGreaterThan(15);
+  });
+});
+
+describe("E3 · las operaciones sobre la propuesta abierta", () => {
+  it("⛔ sin una propuesta abierta, el ejecutor de siempre las rechaza con su motivo (no «no es válida»)", () => {
+    /* La edición que la pone en rojo: aplicarlas contra el cronograma (no hay propuesta que editar) o
+       rechazarlas como si no fueran del vocabulario (el chat diría que no existe algo que sí existe). */
+    for (const op of OPERACIONES_DE_PROPUESTA) {
+      const { rechazadas, payload } = aplicarOperaciones(cronograma(), null, [{ op } as unknown as Operacion]);
+      expect(rechazadas.map((r) => r.motivo), op).toEqual([MOTIVO_SIN_PROPUESTA_ABIERTA]);
+      expect(payload.phases.every((p) => p.tasks === undefined), "tocó el cronograma").toBe(true);
+    }
+    expect(esOperacionDePropuesta({ op: "propuesta.aplicar" })).toBe(true);
+    expect(esOperacionDePropuesta({ op: "fase.borrar" })).toBe(false);
+    expect(esOperacionDePropuesta({})).toBe(false);
+  });
+
+  /** La propuesta como la ve el chat: «Sales Hub» a 5 semanas (hoy 4) y la fase nueva «Piloto». */
+  const viva = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
+    id,
+    title,
+    weekIndex,
+    notes: null,
+    party: null,
+    type: null,
+    status: "PENDING",
+    source: "AGENT",
+    inicioFijado: null,
+    finFijado: null,
+    ...extra,
+  });
+  const PROPUESTA: FaseActual[] = [
+    { id: "f2", name: "Sales Hub", durationWeeks: 5, startWeek: null, tasks: [tarea("t2", 0), tarea("t3", 3, { title: "Configurar el pipeline" })] },
+    { id: "n:piloto", name: "Piloto", durationWeeks: 2, startWeek: null, tasks: [tarea("t:1", 0, { title: "Piloto con 5 usuarios" })] },
+  ];
+  const conPropuesta: { propuesta: DescripcionDeLaPropuesta } = {
+    propuesta: {
+      vivo: {
+        ancla: null,
+        fases: [
+          {
+            id: "f2",
+            name: "Sales Hub",
+            durationWeeks: 4,
+            startWeek: null,
+            sessionCount: null,
+            notes: null,
+            activityType: null,
+            status: "PENDING",
+            tareas: [viva("t2", "tarea t2", 0), viva("t3", "Configurar pipeline", 3, { status: "DONE" })],
+          },
+        ],
+      },
+      tituloDeClave: (k) =>
+        k === "fase:f2:durationWeeks"
+          ? { numero: 1, titulo: "Sales Hub · 4 → 5 semanas" }
+          : k === "t:1"
+            ? { numero: 3, titulo: "Piloto con 5 usuarios", conElCambio: 2 }
+            : null,
+      confirmacion: "Se aplican los 3 cambios marcados de una sola vez.",
+    },
+  };
+
+  it("⭐ con la propuesta abierta, cada línea dice lo que pasa EN ELLA, y «(hoy: X)» si lo vivo difiere", () => {
+    /* La edición que la pone en rojo: decir «se recrea / pierde su estado» (con la propuesta la tarea se
+       muda), «se elimina» una tarea o una fase que solo sale de la propuesta, o callar lo que hoy es otra
+       cosa (el CSE aprobaría «de 5 a 6» sin saber que hoy son 4). */
+    const lineas = describirOperaciones(
+      PROPUESTA,
+      [
+        { op: "tarea.mover-fase", taskId: "t3", phaseId: "n:piloto" },
+        { op: "fase.borrar", phaseId: "f2" },
+        { op: "fase.borrar", phaseId: "n:piloto" },
+        { op: "tarea.borrar", taskId: "t:1" },
+        { op: "fase.duracion", phaseId: "f2", semanas: 6 },
+        { op: "tarea.renombrar", taskId: "t3", titulo: "Configurar el pipeline de ventas" },
+        { op: "propuesta.dejar-como-estaba", claves: ["fase:f2:durationWeeks"] },
+        { op: "propuesta.recuperar", claves: ["t:1"] },
+        { op: "propuesta.aplicar", version: 4, huella: "abc" },
+        { op: "propuesta.descartar-entera" },
+      ],
+      conPropuesta,
+    );
+    expect(lineas).toEqual([
+      "«Configurar el pipeline» se mueve de «Sales Hub» a «Piloto» — conserva su estado",
+      "Se quita la fase «Sales Hub» con su tarea pendiente; se queda 1 con avance o cargada a mano (y la fase con ella)",
+      "La fase nueva «Piloto» sale de la propuesta",
+      "La tarea nueva «Piloto con 5 usuarios» sale de la propuesta",
+      "«Sales Hub» pasa de 5 a 6 semanas (hoy: 4 semanas)",
+      "«Configurar el pipeline» pasa a llamarse «Configurar el pipeline de ventas» (hoy: «Configurar pipeline»)",
+      "Queda como está hoy: 1. «Sales Hub · 4 → 5 semanas»",
+      "Vuelve a la propuesta: 3. «Piloto con 5 usuarios» (con el cambio 2)",
+      "Aplicar la propuesta al cronograma: Se aplican los 3 cambios marcados de una sola vez.",
+      "Descartar la propuesta entera: el cronograma queda como está.",
+    ]);
+    // Sin la propuesta, las mismas operaciones de siempre dicen lo de siempre.
+    expect(describirOperaciones(cronograma(), [{ op: "tarea.mover-fase", taskId: "t3", phaseId: "f4" }])[0]).toContain(
+      "pierde su estado",
+    );
   });
 });

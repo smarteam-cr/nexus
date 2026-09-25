@@ -476,7 +476,8 @@ export function cierreDeLaCorridaVetada(veto: VetoDelPedido): { status: "ARCHIVE
 
 /** Lo que se lee de cada tarea para el paso 2: lo del plan y «por validar» (las idénticas, R4b). */
 const SELECT_DE_TAREA_DEL_DETALLE = { ...SELECT_DE_TAREA, needsValidation: true } as const;
-const SELECT_DE_FASES_CON_TAREAS = {
+/** Las fases con sus tareas, para `vivoDeLaBase`. E3: la usa también la ruta que edita la propuesta. */
+export const SELECT_DE_FASES_CON_TAREAS = {
   orderBy: { order: "asc" as const },
   select: {
     ...SELECT_DE_FASE,
@@ -490,7 +491,7 @@ const SELECT_DE_FASES_CON_TAREAS = {
 /** YYYY-MM-DD de una fecha fijada a mano, igual que la ve la pantalla en el cable (ISO → día). */
 const diaDe = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
-interface FaseLeida {
+export interface FaseLeida {
   id: string;
   name: string;
   durationWeeks: number;
@@ -515,8 +516,9 @@ interface FaseLeida {
   }>;
 }
 
-/** El cronograma de la base como lo ve el núcleo del borrador: fases en orden, CON sus tareas. */
-function vivoDeLaBase(anchorStartDate: Date | null, fases: readonly FaseLeida[]): Vivo {
+/** El cronograma de la base como lo ve el núcleo del borrador: fases en orden, CON sus tareas y el estado
+ *  de cada fase. E3: la ruta que edita la propuesta lo lee igual (paridad con aplicar y la pantalla). */
+export function vivoDeLaBase(anchorStartDate: Date | null, fases: readonly FaseLeida[]): Vivo {
   return {
     ancla: anchorStartDate?.toISOString() ?? null,
     fases: fases.map((f) => ({
@@ -663,6 +665,13 @@ export type ResultadoDeLaFusion =
   | { estado: "perdido" };
 
 /**
+ * E3: cuántas veces la fusión vuelve a leer y a fusionar cuando su escritura condicionada no entra.
+ * Desde E3 otros escriben el borrador mientras la IA arma (las casillas del CSE, la marca de que el chat
+ * se abrió): eso sube la versión y la escritura no entra, pero lo armado sigue siendo del mismo borrador.
+ */
+export const VUELTAS_DE_LA_FUSION = 3;
+
+/**
  * Deja un aviso en la salida de la corrida, MEZCLADO con lo que ya tenía (el GET [runId] lo expone
  * como `timelineSyncError`, igual que el handoff). Best-effort: la corrida ya terminó su trabajo.
  */
@@ -690,6 +699,31 @@ interface EntradaDeLaFusion {
   nuevaClave?: () => string;
 }
 
+/** Cómo termina UNA vuelta de la fusión: escrita, perdida (con su motivo) u otra vuelta (no entró). */
+type Vuelta =
+  | { que: "hecho"; resultado: ResultadoDeLaFusion }
+  | { que: "perdido"; motivo: string }
+  | { que: "otra-vuelta"; motivo: string };
+
+/**
+ * El JSON que escribe una fusión: lo guardado (conserva lo que la fusión no conoce: `excluidos`,
+ * `chatAbiertoPara`…) con sus campos. `ajustadasPorElChat` (E3, D9) va solo si queda alguna: una fase
+ * que se vuelve a armar pierde la suya.
+ */
+function conLaFusion(
+  guardado: Record<string, unknown>,
+  campos: Record<string, unknown>,
+  ajustadas: Borrador["ajustadasPorElChat"],
+): Prisma.InputJsonValue {
+  const { ajustadasPorElChat: _vieja, ...resto } = guardado;
+  void _vieja;
+  return {
+    ...resto,
+    ...campos,
+    ...(ajustadas && Object.keys(ajustadas).length > 0 ? { ajustadasPorElChat: ajustadas } : {}),
+  } as unknown as Prisma.InputJsonValue;
+}
+
 /**
  * Lo que armó el agente, fusionado en el borrador que esta corrida marcó. Va DESPUÉS de guardar la
  * salida de la corrida (si la fusión falla, lo armado queda en la corrida).
@@ -703,16 +737,29 @@ interface EntradaDeLaFusion {
  *   4. Sin ningún cambio en total, el borrador se borra (condicionado a token + versión); si la IA
  *      notó algo en cualquiera de los dos pasos (lo acordado que no entró, se cortó, fases que no
  *      reconoció), la corrida lo dice.
- *   5. Si no, se guarda con `{ ...guardado, sus campos }`, condicionado a token + versión. Sin
- *      reintentos: mientras se arma, nadie más escribe el borrador; si no entra, se perdió.
+ *   5. Si no, se guarda con `{ ...guardado, sus campos }`, condicionado a token + versión.
+ * E3: si la escritura no entra (las casillas o el chat escribieron el borrador en el medio), se vuelve a
+ * leer y a fusionar, hasta `VUELTAS_DE_LA_FUSION` veces: lo armado se pierde solo si el borrador dejó de
+ * ser el de esta corrida. Lo que dictó el chat y lo desmarcado se conservan.
  * E2c: si esta corrida es el RECÁLCULO del borrador guardado (`recalculo.corrida`), despacha a
  * `fusionarRecalculoEnElBorrador` ANTES del chequeo de las tareas (que ahí ya están «listas»).
  */
 export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise<ResultadoDeLaFusion> {
-  const perdido = async (): Promise<ResultadoDeLaFusion> => {
-    await avisarEnLaCorrida(i.corrida, i.analysisJson, MOTIVO_TAREAS_PERDIDAS);
-    return { estado: "perdido" };
-  };
+  let motivo = MOTIVO_TAREAS_PERDIDAS;
+  let eraRecalculo = false;
+  for (let vuelta = 0; vuelta < VUELTAS_DE_LA_FUSION; vuelta++) {
+    const r = await unaVueltaDeLaFusion(i, eraRecalculo);
+    if (r.que === "hecho") return r.resultado;
+    motivo = r.motivo;
+    eraRecalculo = motivo === MOTIVO_RECALCULO_PERDIDO;
+    if (r.que === "perdido") break;
+  }
+  await avisarEnLaCorrida(i.corrida, i.analysisJson, motivo);
+  return { estado: "perdido" };
+}
+
+/** UNA vuelta: leer, fusionar y escribir condicionado. `eraRecalculo`: la vuelta anterior era el recálculo. */
+async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean): Promise<Vuelta> {
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: i.timelineId },
     select: {
@@ -723,7 +770,8 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
       phases: SELECT_DE_FASES_CON_TAREAS,
     },
   });
-  if (!tl || !esBorradorV1(tl.pendingProposal)) return perdido();
+  const perdido = eraRecalculo ? MOTIVO_RECALCULO_PERDIDO : MOTIVO_TAREAS_PERDIDAS;
+  if (!tl || !esBorradorV1(tl.pendingProposal)) return { que: "perdido", motivo: perdido };
   const version = versionDelBorrador(tl.pendingProposal);
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
   const borrador = leerBorrador(tl.pendingProposal, vivo);
@@ -738,6 +786,7 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
     });
   }
   if (
+    eraRecalculo ||
     !borrador ||
     version === null ||
     (borrador.desconocidos ?? 0) > 0 ||
@@ -745,7 +794,7 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
     borrador.tareas.listas ||
     borrador.tareas.corrida !== i.corrida
   ) {
-    return perdido();
+    return { que: "perdido", motivo: perdido };
   }
 
   const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({
@@ -778,7 +827,7 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
       where: donde,
       data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
     });
-    if (borrado.count === 0) return perdido();
+    if (borrado.count === 0) return { que: "otra-vuelta", motivo: MOTIVO_TAREAS_PERDIDAS };
     /* Lo que notó la IA en los DOS pasos (`fusionado.observaciones`: las del borrador, que trae lo del
        paso 1, y las del paso 2). Cierre de la revisión de E2a: el aviso llevaba solo las del paso 2, y
        lo del paso 1 se borraba con el borrador sin que nadie lo viera.
@@ -787,35 +836,41 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
     if (fusionado.observaciones.length > 0) {
       await avisarEnLaCorrida(i.corrida, i.analysisJson, avisoSinCambiosParaLaCorrida(fusionado.observaciones));
     }
-    return { estado: "sin-cambios", observaciones: fusionado.observaciones };
+    return { que: "hecho", resultado: { estado: "sin-cambios", observaciones: fusionado.observaciones } };
   }
 
-  const guardado = tl.pendingProposal as Record<string, unknown>;
   const escrita = await prisma.projectTimeline.updateMany({
     where: donde,
     data: {
-      pendingProposal: {
-        ...guardado,
-        version: fusionado.version,
-        observaciones: fusionado.observaciones,
-        cambios: fusionado.cambios,
-        tareas: fusionado.tareas,
-        tareasArmadasPara: fusionado.tareasArmadasPara,
-      } as unknown as Prisma.InputJsonValue,
+      pendingProposal: conLaFusion(
+        tl.pendingProposal as Record<string, unknown>,
+        {
+          version: fusionado.version,
+          observaciones: fusionado.observaciones,
+          cambios: fusionado.cambios,
+          tareas: fusionado.tareas,
+          tareasArmadasPara: fusionado.tareasArmadasPara,
+        },
+        fusionado.ajustadasPorElChat,
+      ),
     },
   });
-  if (escrita.count === 0) return perdido();
+  if (escrita.count === 0) return { que: "otra-vuelta", motivo: MOTIVO_TAREAS_PERDIDAS };
   return {
-    estado: "listas",
-    nuevas: fusionado.cambios.filter((c) => c.tipo === "tarea-nueva").length,
-    seVan: fusionado.cambios.filter((c) => c.tipo === "tarea-se-va").length,
-    observaciones: cambios.observaciones,
+    que: "hecho",
+    resultado: {
+      estado: "listas",
+      nuevas: fusionado.cambios.filter((c) => c.tipo === "tarea-nueva" && !c.porChat).length,
+      seVan: fusionado.cambios.filter((c) => c.tipo === "tarea-se-va" && !c.porChat).length,
+      observaciones: cambios.observaciones,
+    },
   };
 }
 
 /**
- * E2c: lo que armó el RECÁLCULO, fusionado en el borrador. Solo cambian las tareas de las fases que se
- * pidieron (`recalculo.fases`), en su mismo lugar de la lista; lo demás no se toca. NUNCA borra.
+ * E2c: lo que armó el RECÁLCULO, fusionado en el borrador (una vuelta). Solo cambian las tareas de las
+ * fases que se pidieron (`recalculo.fases`), en su mismo lugar de la lista; lo demás no se toca. NUNCA
+ * borra.
  *   1. Perdido: sin versión, cambios desconocidos, las tareas que no están «listas» o el recálculo
  *      guardado es de otra corrida. La corrida lo dice y no se escribe nada.
  *   2. Una fase FALLA, conserva sus tareas y queda en `recalculo` con el motivo (D6, D11), si:
@@ -824,7 +879,8 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
  *   3. Las demás se ESCRIBEN: sus tareas con las reglas de siempre (`cambiosDeTareasDelDetalle`, con
  *      su alcance), y su forma armada. El tipo propuesto se ignora: es de estructura y se decidió en la
  *      primera fusión.
- *   4. Condicionada a token + la versión leída AHORA; si no entra, se perdió (sin reintentos).
+ *   4. Condicionada a token + la versión leída AHORA; si no entra, otra vuelta (E3: las casillas o el
+ *      chat escribieron en el medio), con lo que haya entonces.
  */
 async function fusionarRecalculoEnElBorrador(
   i: EntradaDeLaFusion,
@@ -836,11 +892,7 @@ async function fusionarRecalculoEnElBorrador(
     borrador: Borrador;
     tags: string[];
   },
-): Promise<ResultadoDeLaFusion> {
-  const perdido = async (): Promise<ResultadoDeLaFusion> => {
-    await avisarEnLaCorrida(i.corrida, i.analysisJson, MOTIVO_RECALCULO_PERDIDO);
-    return { estado: "perdido" };
-  };
+): Promise<Vuelta> {
   const { borrador, version, vivo } = leido;
   const recalculo = borrador.recalculo;
   if (
@@ -850,7 +902,7 @@ async function fusionarRecalculoEnElBorrador(
     !recalculo ||
     recalculo.corrida !== i.corrida
   ) {
-    return perdido();
+    return { que: "perdido", motivo: MOTIVO_RECALCULO_PERDIDO };
   }
 
   const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({
@@ -905,16 +957,19 @@ async function fusionarRecalculoEnElBorrador(
   const escrita = await prisma.projectTimeline.updateMany({
     where: { id: i.timelineId, pendingProposalRunId: leido.token, pendingProposal: { path: ["version"], equals: version } },
     data: {
-      pendingProposal: {
-        ...leido.guardado,
-        version: nuevo.version,
-        observaciones: nuevo.observaciones,
-        cambios: nuevo.cambios,
-        tareasArmadasPara: nuevo.tareasArmadasPara,
-        recalculo: nuevo.recalculo ?? null,
-      } as unknown as Prisma.InputJsonValue,
+      pendingProposal: conLaFusion(
+        leido.guardado,
+        {
+          version: nuevo.version,
+          observaciones: nuevo.observaciones,
+          cambios: nuevo.cambios,
+          tareasArmadasPara: nuevo.tareasArmadasPara,
+          recalculo: nuevo.recalculo ?? null,
+        },
+        nuevo.ajustadasPorElChat,
+      ),
     },
   });
-  if (escrita.count === 0) return perdido();
-  return { estado: "recalculadas", escritas, fallidas: fallidas.map((f) => f.id) };
+  if (escrita.count === 0) return { que: "otra-vuelta", motivo: MOTIVO_RECALCULO_PERDIDO };
+  return { que: "hecho", resultado: { estado: "recalculadas", escritas, fallidas: fallidas.map((f) => f.id) } };
 }

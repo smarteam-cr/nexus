@@ -59,6 +59,7 @@ import {
   MENSAJE_TAREAS_YA_LISTAS,
   MOTIVO_TAREAS_CORTADAS,
   MOTIVO_TAREAS_PERDIDAS,
+  VUELTAS_DE_LA_FUSION,
   MOTIVO_TAREAS_SIN_GUARDAR,
   prevalidarPedidoDeTareas,
   vetoDelGuardado,
@@ -1193,11 +1194,75 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
     expect(await fusionar({ estructura: DOS, analysisJson: detalle })).toMatchObject({ estado: "listas", nuevas: 2, seVan: 2 });
   });
 
-  it("si la escritura condicionada no entra (cambió en el medio): «perdido», sin reintentar", async () => {
+  /* ⚠ REESCRITA en E3 P2 (2026-09-25), con esta razón: decía «si la escritura condicionada no entra:
+     «perdido», sin reintentar». Desde E3 otros escriben el borrador mientras la IA arma (las casillas del
+     CSE y la marca de que el chat se abrió suben la versión), y perder lo armado por eso tiraba una
+     corrida pagada. Ahora vuelve a leer y a fusionar, y conserva lo desmarcado y lo que dictó el chat. Lo
+     protegido sigue: si el borrador dejó de ser el de esta corrida, «perdido» sin escribir.
+     La edición que la pone en rojo: volver a «perdido» sin releer, rearmar el JSON sin `...guardado` (se
+     perdería `excluidos`), o reescribir las tareas del chat con las de la IA. */
+  it("si la escritura condicionada no entra: vuelve a leer y reintenta, conservando lo desmarcado y lo del chat; con otra corrida, «perdido»", async () => {
+    const DEL_CHAT = {
+      tipo: "tarea-nueva",
+      clave: "t:del-chat",
+      fase: "f1",
+      tarea: { title: "Revisión conjunta", weekIndex: 1, notes: null, party: null, type: null, needsValidation: false, motivoPorValidar: null, fuga: null },
+      porChat: true,
+    };
+    const conCasillas = v1({
+      version: 6,
+      tareas: { corrida: "run-t", listas: false },
+      cambios: [DEL_CHAT],
+      excluidos: ["tarea:t-vieja:se-va"],
+      chatAbiertoPara: ["h-1"],
+      ajustadasPorElChat: { f1: { nombre: "Diseño", semanas: 2 }, "f-otra": { nombre: "Otra", semanas: 1 } },
+    });
+    const conLa = (guardado: unknown) => ({
+      pendingProposal: guardado,
+      pendingProposalRunId: "run-1",
+      anchorStartDate: null,
+      project: { tags: [] },
+      phases: [faseDB({ tasks: [tareaDB()] })],
+    });
+    db.projectTimeline.findUnique
+      .mockResolvedValueOnce(conLa(v1({ tareas: { corrida: "run-t", listas: false } })))
+      .mockResolvedValueOnce(conLa(conCasillas));
+    db.projectTimeline.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    expect(await fusionar()).toEqual({ estado: "listas", nuevas: 1, seVan: 1, observaciones: [] });
+    expect(db.projectTimeline.updateMany, "no volvió a intentar").toHaveBeenCalledTimes(2);
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[1];
+    expect(where.pendingProposal, "no se condicionó a la versión que volvió a leer").toEqual({ path: ["version"], equals: 6 });
+    const escrito = data.pendingProposal;
+    expect(escrito.version).toBe(7);
+    expect(escrito.excluidos, "perdió lo desmarcado").toEqual(["tarea:t-vieja:se-va"]);
+    expect(escrito.chatAbiertoPara).toEqual(["h-1"]);
+    expect(escrito.cambios.map((c: { clave: string }) => c.clave), "perdió lo que dictó el chat").toEqual([
+      "t:del-chat",
+      "tarea:t-vieja:se-va",
+      "t:clave-2", // la clave de la segunda vuelta: la primera se armó y no entró
+    ]);
+    // D9: la fase que se vuelve a armar pierde la forma que le dio el chat; las demás la conservan.
+    expect(escrito.ajustadasPorElChat).toEqual({ "f-otra": { nombre: "Otra", semanas: 1 } });
+    expect(db.agentRun.update, "una fusión que entra no deja aviso en la corrida").not.toHaveBeenCalled();
+
+    // En la segunda lectura el borrador ya es de OTRA corrida (se volvió a pedir): «perdido», sin escribir.
+    db.projectTimeline.findUnique.mockReset();
+    db.projectTimeline.updateMany.mockReset();
+    db.projectTimeline.findUnique
+      .mockResolvedValueOnce(conLa(v1({ tareas: { corrida: "run-t", listas: false } })))
+      .mockResolvedValueOnce(conLa(v1({ version: 6, tareas: { corrida: "run-otra", listas: false } })));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
+    expect(await fusionar()).toEqual({ estado: "perdido" });
+    expect(db.projectTimeline.updateMany, "escribió un borrador que ya no era el suyo").toHaveBeenCalledTimes(1);
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(MOTIVO_TAREAS_PERDIDAS);
+
+    // Y si nunca entra, se rinde a las VUELTAS_DE_LA_FUSION, con el aviso.
+    db.agentRun.update.mockReset();
+    db.projectTimeline.updateMany.mockReset();
     tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false } }));
     db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
     expect(await fusionar()).toEqual({ estado: "perdido" });
-    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(1);
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(VUELTAS_DE_LA_FUSION);
     expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(MOTIVO_TAREAS_PERDIDAS);
   });
 });

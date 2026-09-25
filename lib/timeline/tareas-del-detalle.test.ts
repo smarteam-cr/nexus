@@ -18,11 +18,14 @@ import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import {
   estructuraHipotetica,
   FORMATO_BORRADOR,
+  fotoDeTarea,
   planDeAplicacion,
   type Borrador,
   type CambioFaseCambia,
   type CambioFaseNueva,
+  type CambioTareaCambia,
   type CambioTareaNueva,
+  type CambioTareaSeVa,
   type FaseViva,
   type TareaDelVivo,
   type Vivo,
@@ -32,6 +35,8 @@ import {
   cambiosDeTareasDelDetalle,
   DETAIL_ACTIVITY_TYPES,
   fusionarDetalle,
+  fusionarRecalculo,
+  mezclarTareasDeFases,
   tareasPropuestasDelDetalle,
 } from "./tareas-del-detalle";
 
@@ -546,5 +551,85 @@ describe("6 · el alcance de «Regenerar» de una fase (E2b, `soloFases`)", () =
     const r = cambios(TODO, { soloFases: new Set(["c"]) });
     expect(fusionarDetalle({ ...BASE, soloFase: "c" }, r, "run-2").soloFase).toBe("c");
     expect("soloFase" in fusionarDetalle(BASE, r, "run-2")).toBe(false);
+  });
+});
+
+describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () => {
+  const DEL_CHAT_SE_VA: CambioTareaSeVa = {
+    tipo: "tarea-se-va",
+    clave: "tarea:b1:se-va",
+    tareaId: "b1",
+    faseId: "b",
+    desde: fotoDeTarea(B1),
+    porChat: true,
+  };
+  const DEL_CHAT_CAMBIA: CambioTareaCambia = {
+    tipo: "tarea-cambia",
+    clave: "tarea:c1:cambia",
+    tareaId: "c1",
+    faseId: "c",
+    desde: fotoDeTarea(C1),
+    a: { title: "Probar los flujos de venta" },
+    porChat: true,
+  };
+  const DEL_CHAT_NUEVA: CambioTareaNueva = {
+    tipo: "tarea-nueva",
+    clave: "t:del-chat",
+    fase: "c",
+    tarea: { title: "Revisión conjunta", weekIndex: 1, notes: null, party: null, type: null, needsValidation: false, motivoPorValidar: null, fuga: null },
+    porChat: true,
+  };
+  const DE_LA_IA_ANTES: CambioTareaNueva = { ...DEL_CHAT_NUEVA, clave: "t:ia-vieja", porChat: undefined };
+  const CON_CHAT: Borrador = {
+    ...BASE,
+    cambios: [...BASE.cambios, DE_LA_IA_ANTES, DEL_CHAT_SE_VA, DEL_CHAT_CAMBIA, DEL_CHAT_NUEVA],
+    excluidos: ["tarea:b2:se-va"],
+    ajustadasPorElChat: { c: { nombre: "Pruebas", semanas: 5 }, otra: { nombre: "Otra", semanas: 1 } },
+  };
+
+  it("⭐ la fusión conserva lo del chat, no reemplaza las tareas que tocó y borra la forma ajustada de lo que rearma", () => {
+    /* La edición que la pone en rojo: volver al `filter(!esCambioDeTarea)` (lo que dictó el chat se
+       perdería con cada fusión), reemplazar una tarea que el chat quita o cambia (dos cambios de la misma
+       tarea, con la misma clave), o dejar la forma ajustada de una fase que se volvió a armar (D9). */
+    const r = cambios(
+      salida([
+        { id: "b", tasks: [{ title: "Mapear procesos de venta" }] },
+        { id: "c", tasks: [{ title: "Pruebas de aceptación", weekIndex: 3 }] },
+      ]),
+      { borrador: CON_CHAT },
+    );
+    // R2: la IA no propone quitar lo que el chat quita (b1) o cambia (c1); sí lo que no tocó.
+    expect(r.tareas.filter((c) => c.tipo === "tarea-se-va").map((c) => (c as CambioTareaSeVa).tareaId)).toEqual(["b2", "c2"]);
+    const b = fusionarDetalle(CON_CHAT, r, "run-2");
+    const claves = b.cambios.map((c) => c.clave);
+    expect(claves.slice(0, 5), "lo del chat no quedó detrás de la estructura").toEqual([
+      "fase:c:durationWeeks",
+      PILOTO.clave,
+      "tarea:b1:se-va",
+      "tarea:c1:cambia",
+      "t:del-chat",
+    ]);
+    expect(claves, "sobrevivió una tarea de la IA de antes").not.toContain("t:ia-vieja");
+    expect(new Set(claves).size, "dos cambios con la misma clave").toBe(claves.length);
+    expect(b.excluidos).toEqual(["tarea:b2:se-va"]);
+    expect(b.ajustadasPorElChat, "la fase rearmada conservó la forma del chat").toEqual({ otra: { nombre: "Otra", semanas: 1 } });
+  });
+
+  it("el recálculo reemplaza solo las tareas de la IA de sus fases, y la fase recalculada pierde su forma ajustada", () => {
+    /* La edición que la pone en rojo: mezclar sin mirar `porChat` (el recálculo de «Pruebas» se llevaría
+       lo que el chat dictó en ella). */
+    const recalculadas: CambioTareaNueva[] = [{ ...DEL_CHAT_NUEVA, clave: "t:ia-nueva", porChat: undefined, tarea: { ...DEL_CHAT_NUEVA.tarea, title: "Pruebas guiadas" } }];
+    const mezcla = mezclarTareasDeFases(CON_CHAT.cambios, recalculadas, new Set(["c"]));
+    expect(mezcla.map((c) => c.clave)).toEqual([...BASE.cambios.map((c) => c.clave), "t:ia-nueva", "tarea:b1:se-va", "tarea:c1:cambia", "t:del-chat"]);
+    const b = fusionarRecalculo(CON_CHAT, {
+      tareas: recalculadas,
+      armadas: { c: { nombre: "Pruebas", semanas: 3 } },
+      escritas: ["c"],
+      fallidas: [],
+      motivo: null,
+      observaciones: [],
+    });
+    expect(b.ajustadasPorElChat).toEqual({ otra: { nombre: "Otra", semanas: 1 } });
+    expect(b.excluidos).toEqual(["tarea:b2:se-va"]);
   });
 });

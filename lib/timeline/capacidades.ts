@@ -51,6 +51,14 @@ export interface AdvertenciaDeCapacidad {
   aviso: string;
 }
 
+/** Cambiar el arranque: vale igual con o sin una propuesta abierta (las dos listas la comparten). */
+const ADVERTENCIA_DEL_ARRANQUE: AdvertenciaDeCapacidad = {
+  gatillo: ["fecha", "arranque", "arranca", "empieza", "inicio"],
+  aviso:
+    "Cambiar la fecha de arranque REDEFINE todas las fechas del cronograma, no solo la primera: " +
+    "las semanas de cada fase se cuentan desde ahí.",
+};
+
 /**
  * Lo que un pedido razonable produce y el CSE no espera. No son prohibiciones —el modificador
  * las hace igual— son CONSECUENCIAS que hoy se descubren después de aplicar.
@@ -73,12 +81,7 @@ export const ADVERTENCIAS_DEL_CRONOGRAMA: readonly AdvertenciaDeCapacidad[] = [
       "servidor la RESCATA y la deja igual, aunque la IA la haya sacado. Para borrarla de verdad, " +
       "pídelo explícitamente — y aun así te va a avisar.",
   },
-  {
-    gatillo: ["fecha", "arranque", "arranca", "empieza", "inicio"],
-    aviso:
-      "Cambiar la fecha de arranque REDEFINE todas las fechas del cronograma, no solo la primera: " +
-      "las semanas de cada fase se cuentan desde ahí.",
-  },
+  ADVERTENCIA_DEL_ARRANQUE,
   {
     gatillo: ["semana", "semanas", "alargar", "alargá", "acortar", "acortá", "duracion", "duración"],
     aviso:
@@ -88,17 +91,53 @@ export const ADVERTENCIAS_DEL_CRONOGRAMA: readonly AdvertenciaDeCapacidad[] = [
 ];
 
 /**
- * Las advertencias que aplican a una instrucción en lenguaje natural.
+ * E3: las consecuencias cuando lo que se pide edita la PROPUESTA abierta (no el cronograma). Cambian
+ * dos respecto de las de arriba: mover una tarea la MUDA (conserva su estado) y quitar una fase deja
+ * lo que tiene trabajo encima. Redactadas para una persona, en tuteo neutro, igual que las de arriba.
+ */
+export const ADVERTENCIAS_SOBRE_LA_PROPUESTA: readonly AdvertenciaDeCapacidad[] = [
+  {
+    gatillo: ["mover", "mové", "mueve", "pasar", "pasá", "cambiar de fase", "a otra fase"],
+    aviso:
+      "Con la propuesta abierta, mover una tarea a otra fase la MUDA: conserva su estado y las " +
+      "fechas que le hayas puesto. El cambio se ve en la propuesta hasta que la apliques.",
+  },
+  {
+    gatillo: ["borrar", "borrá", "eliminar", "eliminá", "sacar", "sacá", "quitar", "quitá"],
+    aviso:
+      "Quitar una fase en la propuesta deja lo que tiene avance o se cargó a mano, y la fase se " +
+      "queda con eso. Quitar una tarea solo quita las pendientes.",
+  },
+  {
+    gatillo: ["semana", "semanas", "alargar", "alargá", "acortar", "acortá", "duracion", "duración"],
+    aviso:
+      "Alargar o acortar una fase corre la fecha de cierre cuando apliques la propuesta, y sus " +
+      "tareas se acomodan a las semanas que quedan.",
+  },
+  {
+    gatillo: ["aplicala", "aplicar", "aplica la"],
+    aviso:
+      "Aplicar escribe la propuesta ENTERA en el cronograma, de una sola vez: todo lo marcado. Lo " +
+      "que dejaste como estaba se descarta con ella.",
+  },
+  ADVERTENCIA_DEL_ARRANQUE,
+];
+
+/**
+ * Las advertencias que aplican a una instrucción en lenguaje natural. `modo`: «vivo» (sin propuesta,
+ * lo que se acuerda se escribe en el cronograma) o «propuesta» (edita la propuesta abierta, E3).
  * Determinista y sin modelo: es un filtro por palabras, no una interpretación.
  */
 export function advertenciasParaLaInstruccion(
   instruccion: string,
+  modo: "vivo" | "propuesta" = "vivo",
 ): readonly AdvertenciaDeCapacidad[] {
   const texto = instruccion
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
-  return ADVERTENCIAS_DEL_CRONOGRAMA.filter((a) =>
+  const lista = modo === "propuesta" ? ADVERTENCIAS_SOBRE_LA_PROPUESTA : ADVERTENCIAS_DEL_CRONOGRAMA;
+  return lista.filter((a) =>
     a.gatillo.some((g) => texto.includes(g.normalize("NFD").replace(/[̀-ͯ]/g, ""))),
   );
 }

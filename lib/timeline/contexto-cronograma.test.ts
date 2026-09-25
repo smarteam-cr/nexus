@@ -530,6 +530,12 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* E2c P1 (2026-09-25): los textos del recálculo de las tareas (la línea, el grupo y la
        confirmación de «Aplicar de todos modos») llegan tal cual a la barra. */
     "lib/timeline/recalculo-de-tareas.ts",
+    /* E3 P2 (2026-09-25): lo que el chat escribe en la propuesta. Los rechazos y avisos llegan tal cual a
+       la línea del chat («⚠ No registré…») y al 422 de la ruta, y las líneas de la propuesta
+       (operaciones.ts) son la cajita que el CSE aprueba. */
+    "lib/timeline/operar-sobre-el-borrador.ts",
+    "lib/timeline/operaciones.ts",
+    "app/api/projects/[projectId]/timeline/borrador/operaciones/route.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega
@@ -578,6 +584,8 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "será", "serás", "verá", "verás", "estará", "podrá", "podrás", "tendrá", "tendrás", "habrá",
     "hará", "harás", "dirá", "quedará", "aplicará", "mostrará", "cambiará", "pasará",
     "llegará", "seguirá", "volverá", "sabrá", "deberá", "moverá", "correrá", "aparecerá",
+    // E3 P2: el chat habla en primera persona de lo que hizo («Dejé lo que editaste a mano…»).
+    "dejé",
   ]);
   const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
   const agudasQueNoSonTuteo = (linea: string) =>

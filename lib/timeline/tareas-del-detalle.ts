@@ -36,6 +36,12 @@
  * ── EL RECÁLCULO (E2c) ───────────────────────────────────────────────────────
  * Las tareas de una fase DESFASADA se recalculan y REEMPLAZAN a las suyas en el borrador, en el mismo
  * lugar de la lista (`mezclarTareasDeFases`); el resto del borrador no se toca (`fusionarRecalculo`).
+ *
+ * ── LO QUE DICTÓ EL CHAT (E3) ────────────────────────────────────────────────
+ * Las fusiones reemplazan solo las tareas de la IA: lo que dictó el chat (`porChat`) se conserva, detrás
+ * de la estructura. Una tarea viva que el chat quita o cambia no la vuelve a proponer la IA (R2): si no,
+ * habría dos cambios de la misma tarea. Y una fase que se vuelve a armar pierde la forma que le había
+ * dado el chat (`ajustadasPorElChat`, D9): sus tareas ya son de la forma nueva.
  */
 import {
   huellasDeFrontera,
@@ -196,6 +202,10 @@ export function cambiosDeTareasDelDetalle(i: {
   const conTipoEnElBorrador = new Set(
     i.borrador.cambios.flatMap((c) => (c.tipo === "fase-cambia" && c.campo === "activityType" ? [c.faseId] : [])),
   );
+  /** E3: las tareas vivas que el chat quita o cambia: la IA no las reemplaza (R2). */
+  const tocadasPorElChat = new Set(
+    i.borrador.cambios.flatMap((c) => ((c.tipo === "tarea-se-va" || c.tipo === "tarea-cambia") && c.porChat ? [c.tareaId] : [])),
+  );
 
   const tareas: CambioDeTarea[] = [];
   const tipos: CambioFaseCambia[] = [];
@@ -246,7 +256,10 @@ export function cambiosDeTareasDelDetalle(i: {
     const enLaFase = viva?.tareas ?? [];
     const actuales = enLaFase.filter((t) => vistas.has(t.id)); // siguen en la fase y el agente las vio
     const sinPropuesta = delAgente.length === 0; // R1
-    let reemplazables = sinPropuesta ? [] : actuales.filter((t) => !isKept(t)).map((t) => vistas.get(t.id)!);
+    // E3: una tarea que el chat quita o cambia no se reemplaza (tendría dos cambios con la misma clave).
+    let reemplazables = sinPropuesta
+      ? []
+      : actuales.filter((t) => !isKept(t) && !tocadasPorElChat.has(t.id)).map((t) => vistas.get(t.id)!);
 
     // R7: las fijas de la Semana 0.
     const fijas: ContenidoDeTareaNueva[] = [];
@@ -310,12 +323,30 @@ export function cambiosDeTareasDelDetalle(i: {
   return { tareas, tipos, tiposDeNuevas, tareasArmadasPara, observaciones };
 }
 
+/** E3 (D9): la forma que le dio el chat a cada fase, sin las que se vuelven a armar. undefined = ninguna. */
+function sinLasRearmadas(
+  ajustadas: Borrador["ajustadasPorElChat"],
+  rearmadas: Iterable<string>,
+): Borrador["ajustadasPorElChat"] {
+  if (!ajustadas) return undefined;
+  const fuera = new Set(rearmadas);
+  const quedan = Object.entries(ajustadas).filter(([fase]) => !fuera.has(fase));
+  return quedan.length > 0 ? Object.fromEntries(quedan) : undefined;
+}
+
+/** Lo que el borrador guarda de E3 y la fusión no toca (salvo las ajustadas de lo que se rearma). */
+function loDelChat(b: Borrador, rearmadas: Iterable<string>): Pick<Borrador, "excluidos" | "ajustadasPorElChat"> {
+  const ajustadas = sinLasRearmadas(b.ajustadasPorElChat, rearmadas);
+  return { ...(b.excluidos ? { excluidos: b.excluidos } : {}), ...(ajustadas ? { ajustadasPorElChat: ajustadas } : {}) };
+}
+
 /**
- * El borrador con las tareas del paso 2: su estructura (sin tareas viejas), el tipo propuesto de las
- * fases que no tenían y las tareas. Las tareas quedan `listas` con la corrida que las armó, y la
- * versión sube (toda escritura del JSON la sube). `soloFase` se conserva. No mezcla tareas de otras
- * fases: en E2b el borrador de una fase nace vacío. La mezcla por fase es `mezclarTareasDeFases`
- * (E2c, el recálculo), y «Regenerar» de una fase dentro de una propuesta abierta la reusa en E3.
+ * El borrador con las tareas del paso 2: su estructura (sin las tareas de la IA de antes), el tipo
+ * propuesto de las fases que no tenían y las tareas. Las tareas quedan `listas` con la corrida que las
+ * armó, y la versión sube (toda escritura del JSON la sube). `soloFase` se conserva. No mezcla tareas de
+ * otras fases: en E2b el borrador de una fase nace vacío. La mezcla por fase es `mezclarTareasDeFases`
+ * (E2c, el recálculo). E3: lo que dictó el chat se conserva, detrás de la estructura; las fases que se
+ * arman pierden su forma ajustada.
  */
 export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: string): Borrador {
   const estructura: Cambio[] = b.cambios
@@ -325,16 +356,18 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
         ? { ...c, fase: { ...c.fase, activityType: r.tiposDeNuevas[c.clave] } }
         : c,
     );
+  const delChat = b.cambios.filter((c) => esCambioDeTarea(c) && c.porChat);
   return {
     formato: b.formato,
     version: b.version + 1,
     origen: b.origen,
     observaciones: [...b.observaciones, ...r.observaciones.filter((o) => !b.observaciones.includes(o))],
-    cambios: [...estructura, ...r.tipos, ...r.tareas],
+    cambios: [...estructura, ...r.tipos, ...delChat, ...r.tareas],
     pedido: b.pedido,
     tareas: { corrida, listas: true },
     tareasArmadasPara: r.tareasArmadasPara,
     ...(b.soloFase ? { soloFase: b.soloFase } : {}),
+    ...loDelChat(b, Object.keys(r.tareasArmadasPara)),
   };
 }
 
@@ -342,7 +375,7 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
  * Las tareas de `fases` se reemplazan por `nuevas`, EN EL LUGAR de la primera original de cada fase
  * (el grupo conserva su número); sin originales, al final. Lo demás, intacto (E2c, D2). Una tarea de
  * `nuevas` cuya fase no está en `fases` no entra: el alcance lo dice `fases`, no lo que devolvió el
- * modelo.
+ * modelo. E3: solo se reemplazan las tareas de la IA; lo que dictó el chat (`porChat`) se queda.
  */
 export function mezclarTareasDeFases(
   cambios: readonly Cambio[],
@@ -358,7 +391,7 @@ export function mezclarTareasDeFases(
   const puestas = new Set<string>();
   const out: Cambio[] = [];
   for (const c of cambios) {
-    if (!esCambioDeTarea(c) || !fases.has(faseDeLaTarea(c))) {
+    if (!esCambioDeTarea(c) || c.porChat || !fases.has(faseDeLaTarea(c))) {
       out.push(c);
       continue;
     }
@@ -408,5 +441,6 @@ export function fusionarRecalculo(
     tareasArmadasPara: { ...b.tareasArmadasPara, ...armadas },
     ...(b.soloFase ? { soloFase: b.soloFase } : {}),
     ...(recalculo ? { recalculo } : {}),
+    ...loDelChat(b, escritas),
   };
 }

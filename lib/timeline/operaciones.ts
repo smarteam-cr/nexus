@@ -39,8 +39,23 @@
  * encontraron el 2026-08-20 (dos puertas, a las dos les faltaba el mismo guardia).
  */
 import type { FaseActual, PayloadProyectado, Party, TipoDeTarea } from "./assist-items";
+import type { Vivo } from "./borrador"; // solo el tipo: borrador.ts no importa este módulo
 import { resolverHandle } from "./handle-de-tarea";
 import { isKept } from "./regen-columnas";
+
+/**
+ * E3: lo que `describirOperaciones` necesita para decir las líneas de una PROPUESTA abierta. Con esto,
+ * `actuales` es la propuesta (ids = los de la barra) y cada línea dice lo que pasa en ella.
+ */
+export interface DescripcionDeLaPropuesta {
+  /** El cronograma de hoy (con tareas): «(hoy: X)» y lo que se queda al quitar una fase. */
+  vivo: Vivo;
+  /** El número y el título de un cambio de la barra, por su clave (null = no está). `conElCambio`:
+   *  vuelve con otro cambio (un heredado). */
+  tituloDeClave: (clave: string) => { numero: number; titulo: string; conElCambio?: number } | null;
+  /** Lo que dice la confirmación de aplicar (la de la barra). */
+  confirmacion: string;
+}
 
 /**
  * El vocabulario. ⛔ Es una lista CERRADA a propósito: lo que no está acá no se puede pedir, y el
@@ -110,6 +125,59 @@ const _laListaCubreLaUnion: Record<OpDeLaUnion, true> = Object.fromEntries(
   OPERACIONES_VALIDAS.map((o) => [o, true]),
 ) as Record<OpDeLaLista, true>;
 void _laListaCubreLaUnion;
+
+/**
+ * E3: lo que el chat pide sobre la PROPUESTA abierta del cronograma (no sobre el cronograma). Solo
+ * valen con una propuesta abierta: el ejecutor de acá las rechaza (`aplicarOperaciones`, `default`).
+ *   · `dejar-como-estaba` / `recuperar`: las casillas de la barra. El modelo nombra `cambios` (los
+ *     números de la barra) o `tareas` (una tarea suelta); la forma canónica, ya registrada, lleva
+ *     solo `claves`.
+ *   · `aplicar`: la forma canónica fija la `version` y la `huella` de la lista que se leyó.
+ *   · `descartar-entera`: la propuesta entera, no el campo «descartar» del acuerdo.
+ */
+export type OperacionDePropuesta =
+  | { op: "propuesta.dejar-como-estaba"; cambios?: string[]; tareas?: string[]; claves?: string[] }
+  | { op: "propuesta.recuperar"; cambios?: string[]; tareas?: string[]; claves?: string[] }
+  | { op: "propuesta.aplicar"; version?: number; huella?: string }
+  | { op: "propuesta.descartar-entera" };
+
+export const OPERACIONES_DE_PROPUESTA = [
+  "propuesta.dejar-como-estaba",
+  "propuesta.recuperar",
+  "propuesta.aplicar",
+  "propuesta.descartar-entera",
+] as const;
+
+/* Los dos sentidos, igual que arriba: una operación de la unión que falte en la lista no compila. */
+type OpDePropuestaDeLaUnion = OperacionDePropuesta["op"];
+type OpDePropuestaDeLaLista = (typeof OPERACIONES_DE_PROPUESTA)[number];
+const _laListaDePropuestaCubreLaUnion: Record<OpDePropuestaDeLaUnion, true> = Object.fromEntries(
+  OPERACIONES_DE_PROPUESTA.map((o) => [o, true]),
+) as Record<OpDePropuestaDeLaLista, true>;
+void _laListaDePropuestaCubreLaUnion;
+
+/** Todo lo que el chat del cronograma puede acordar: el vocabulario de siempre y el de la propuesta. */
+export type OperacionDelChat = Operacion | OperacionDePropuesta;
+
+/** ¿Es una operación sobre la propuesta abierta? Mira el `op` crudo (llega del modelo sin tipar). */
+export const esOperacionDePropuesta = (o: { op?: unknown }): o is OperacionDePropuesta =>
+  typeof o.op === "string" && (OPERACIONES_DE_PROPUESTA as readonly string[]).includes(o.op);
+
+/** El rechazo de un `propuesta.*` sin una propuesta abierta (el ejecutor de acá edita el cronograma). */
+export const MOTIVO_SIN_PROPUESTA_ABIERTA = "eso se puede solo con una propuesta abierta del cronograma";
+
+/** Dos o más tareas terminan en ese identificador: no se elige una (docblock de `buscarTarea`). */
+export const motivoDeTareaAmbigua = (cuantas: number): string =>
+  `hay ${cuantas} tareas que coinciden con ese identificador: hace falta el nombre exacto`;
+
+/** Por qué no se borra una tarea con trabajo humano encima (`tarea.borrar`, arriba y en la propuesta). */
+export function motivoDeTareaProtegida(t: { title: string; status?: string; source?: string }): string {
+  return (
+    `«${t.title}» tiene trabajo humano encima ` +
+    `(${t.source === "HUMAN" ? "la cargó una persona" : "está " + estadoLegible(t.status)})` +
+    `: el cronograma no la borra. Hay que hacerlo desde el Gantt, a mano.`
+  );
+}
 
 /**
  * ⛔ SE IMPORTAN DEL VALIDADOR, no se copian. Eran tres listas escritas a mano «espejo de» las de
@@ -253,9 +321,7 @@ export function aplicarOperaciones(
 
   /** Traduce el resultado de `buscarTarea` en el motivo del rechazo, con su número. */
   const motivoDeBusqueda = (hit: { ambigua: number } | null) =>
-    hit
-      ? `hay ${hit.ambigua} tareas que coinciden con ese identificador: hace falta el nombre exacto`
-      : "esa tarea no existe en el cronograma";
+    hit ? motivoDeTareaAmbigua(hit.ambigua) : "esa tarea no existe en el cronograma";
   const noEncontrada = (
     hit: ReturnType<typeof buscarTarea>,
   ): hit is { ambigua: number } | null => hit === null || "ambigua" in hit;
@@ -485,12 +551,7 @@ export function aplicarOperaciones(
          * humano en vez de borrarlo sin más.
          */
         if (isKept({ status: hit.tarea.status ?? "PENDING", source: hit.tarea.source })) {
-          rechazar(
-            operacion,
-            `«${hit.tarea.title}» tiene trabajo humano encima ` +
-              `(${hit.tarea.source === "HUMAN" ? "la cargó una persona" : "está " + estadoLegible(hit.tarea.status)})` +
-              `: el cronograma no la borra. Hay que hacerlo desde el Gantt, a mano.`,
-          );
+          rechazar(operacion, motivoDeTareaProtegida(hit.tarea));
           break;
         }
         hit.fase.tasks = hit.fase.tasks.filter((t) => t !== hit.tarea);
@@ -715,8 +776,14 @@ export function aplicarOperaciones(
       }
 
       default: {
-        /* Un `op` que no está en el vocabulario. Se rechaza con nombre — nunca se aproxima. */
-        rechazar(operacion, `«${(operacion as { op: string }).op}» no es una operación válida`);
+        /* Un `op` que no está en el vocabulario. Se rechaza con nombre — nunca se aproxima. E3: un
+           `propuesta.*` es del vocabulario, pero acá no hay propuesta que editar: se dice eso. */
+        rechazar(
+          operacion,
+          esOperacionDePropuesta(operacion as { op?: unknown })
+            ? MOTIVO_SIN_PROPUESTA_ABIERTA
+            : `«${(operacion as { op: string }).op}» no es una operación válida`,
+        );
       }
     }
   }
@@ -779,8 +846,17 @@ export function aplicarOperaciones(
  */
 export function describirOperaciones(
   actuales: readonly FaseActual[],
-  operaciones: readonly Operacion[],
+  operaciones: readonly OperacionDelChat[],
+  opts: { propuesta?: DescripcionDeLaPropuesta } = {},
 ): string[] {
+  /* E3: con una propuesta abierta, `actuales` es LA PROPUESTA (sus ids: el de la fase viva o `n:…`, y
+     el de la tarea viva o `t:…`) y lo que se lee es lo que pasa en ella. `vivo` dice «(hoy: X)». */
+  const propuesta = opts.propuesta ?? null;
+  const faseViva = (id: string) => propuesta?.vivo.fases.find((f) => f.id === id);
+  const tareaViva = (id: string) =>
+    propuesta?.vivo.fases.flatMap((f) => f.tareas ?? []).find((t) => t.id === id);
+  const hoy = (antes: unknown, vivo: unknown, texto: string) =>
+    propuesta && vivo !== undefined && vivo !== antes ? ` (hoy: ${texto})` : "";
   const fase = (id: string) => actuales.find((f) => f.id === id);
   /**
    * ⚠ Las fases que se CREAN en este mismo acuerdo no están en `actuales` —todavía no existen— así
@@ -809,13 +885,29 @@ export function describirOperaciones(
     if (r.tipo !== "una") return null;
     const hit = conId.find((x) => x.t.id === r.id)!;
     return {
+      id: hit.t.id,
       titulo: hit.t.title,
+      semana: hit.t.weekIndex,
+      duenio: hit.t.party ?? null,
+      tipo: hit.t.type ?? null,
       fase: hit.f.name,
       duracion: hit.f.durationWeeks,
       phaseId: hit.f.id,
     };
   };
   const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
+  /** «N. «título»» de cada clave de la barra (con «con el cambio N» si vuelve con otro). */
+  const listaDeClaves = (o: { claves?: string[]; cambios?: string[]; tareas?: string[] }, conPadre: boolean) => {
+    const claves = o.claves ?? [...(o.cambios ?? []), ...(o.tareas ?? [])];
+    return claves
+      .map((k) => {
+        const t = propuesta?.tituloDeClave(k) ?? null;
+        if (!t) return k;
+        const padre = conPadre && t.conElCambio !== undefined ? ` (con el cambio ${t.conElCambio})` : "";
+        return `${t.numero}. «${t.titulo}»${padre}`;
+      })
+      .join(" · ");
+  };
 
   /**
    * ⛔ LA DURACIÓN VIVA, y es una regresión que se cazó probando contra el modelo de verdad
@@ -832,7 +924,7 @@ export function describirOperaciones(
   const duracionViva = new Map<string, number>();
   for (const f of actuales) if (f.id) duracionViva.set(f.id, f.durationWeeks);
   const duracionDe = (phaseId: string) => duracionViva.get(phaseId) ?? fase(phaseId)?.durationWeeks;
-  const anotarDuracion = (o: Operacion) => {
+  const anotarDuracion = (o: OperacionDelChat) => {
     if (o.op === "fase.duracion") duracionViva.set(o.phaseId, o.semanas);
     else if (o.op === "fase.quitar-semana")
       duracionViva.set(o.phaseId, Math.max((duracionDe(o.phaseId) ?? 1) - 1, 1));
@@ -850,19 +942,43 @@ export function describirOperaciones(
         /* ⚠ Acortar mueve tareas, y el prompt manda acá el pedido más común («dejala en 3»). Sin
            el número, «pasa de 6 a 3 semanas» se lee como una fase que se encoge sola. */
         const caen = f?.tasks.filter((t) => t.weekIndex >= o.semanas).length ?? 0;
+        const viva = faseViva(o.phaseId);
         return (
           (antes === undefined
             ? `«${nombre(o.phaseId)}» pasa a durar ${sem(o.semanas)}`
             : `«${nombre(o.phaseId)}» pasa de ${antes} a ${sem(o.semanas)}`) +
+          hoy(antes, viva?.durationWeeks, sem(viva?.durationWeeks ?? 0)) +
           (caen > 0
             ? ` — ${caen} ${caen === 1 ? "tarea se corre" : "tareas se corren"} a la semana ${o.semanas}`
             : "")
         );
       }
-      case "fase.renombrar":
-        return `«${nombre(o.phaseId)}» pasa a llamarse «${o.nombre}»`;
+      case "fase.renombrar": {
+        const viva = faseViva(o.phaseId);
+        return `«${nombre(o.phaseId)}» pasa a llamarse «${o.nombre}»` + hoy(nombre(o.phaseId), viva?.name, `«${viva?.name}»`);
+      }
       case "fase.borrar": {
         const f = fase(o.phaseId);
+        if (propuesta) {
+          /* E3: con la propuesta abierta, quitar una fase existente deja lo que tiene avance o se cargó a
+             mano (y la fase con eso); una fase nueva solo sale de la propuesta. */
+          const viva = faseViva(o.phaseId);
+          if (!viva) return `La fase nueva «${nombre(o.phaseId)}» sale de la propuesta`;
+          const tareas = viva.tareas ?? [];
+          const quedan = tareas.filter((t) => isKept(t)).length;
+          const pendientes = tareas.length - quedan;
+          return (
+            `Se quita la fase «${viva.name}»` +
+            (tareas.length === 0
+              ? " (no tiene tareas)"
+              : ` con ${pendientes === 1 ? "su tarea pendiente" : `sus ${pendientes} tareas pendientes`}`) +
+            (quedan === 1
+              ? "; se queda 1 con avance o cargada a mano (y la fase con ella)"
+              : quedan > 1
+                ? `; se quedan ${quedan} con avance o cargadas a mano (y la fase con ellas)`
+                : "")
+          );
+        }
         const n = f?.tasks.length ?? 0;
         /* ⭐ EL CONTEO DE PROGRESO NO ES ADORNO. `fase.borrar` sí destruye tareas protegidas —el
            borrado de fases del PUT no consulta `isKept`— así que es la ÚNICA operación del
@@ -886,10 +1002,16 @@ export function describirOperaciones(
         return `Las tareas de «${nombre(o.phaseId)}» se reparten parejo entre sus semanas`;
       case "fase.mover":
         return `«${nombre(o.phaseId)}» se mueve al lugar ${o.posicion + 1}`;
-      case "fase.arranque-relativo":
-        return o.semana === null
-          ? `«${nombre(o.phaseId)}» arranca cuando termina la anterior`
-          : `«${nombre(o.phaseId)}» arranca en la semana ${o.semana + 1} del proyecto`;
+      case "fase.arranque-relativo": {
+        const viva = faseViva(o.phaseId);
+        const inicio = (s: number | null | undefined) => (s === null || s === undefined ? "tras la anterior" : `semana ${s + 1}`);
+        return (
+          (o.semana === null
+            ? `«${nombre(o.phaseId)}» arranca cuando termina la anterior`
+            : `«${nombre(o.phaseId)}» arranca en la semana ${o.semana + 1} del proyecto`) +
+          hoy(fase(o.phaseId)?.startWeek ?? null, viva ? viva.startWeek : undefined, inicio(viva?.startWeek))
+        );
+      }
       case "tarea.mover-semana": {
         const t = tarea(o.taskId);
         /* ⚠ El ejecutor ACOTA a la última semana de la fase, así que si el modelo pide la 5 en
@@ -899,7 +1021,11 @@ export function describirOperaciones(
            modelo, «a la última semana», y tumbaría el lote entero.) */
         const ultima = (t ? (duracionDe(t.phaseId) ?? t.duracion) : 0) - 1;
         const real = t && ultima >= 0 ? Math.min(Math.max(o.semana, 0), ultima) : o.semana;
-        return `«${t?.titulo ?? o.taskId}» se mueve a la semana ${real + 1} de su fase`;
+        const viva = t ? tareaViva(t.id) : undefined;
+        return (
+          `«${t?.titulo ?? o.taskId}» se mueve a la semana ${real + 1} de su fase` +
+          hoy(t?.semana, viva?.weekIndex, `semana ${(viva?.weekIndex ?? 0) + 1}`)
+        );
       }
       case "tarea.mover-fase": {
         const t = tarea(o.taskId);
@@ -907,11 +1033,14 @@ export function describirOperaciones(
         return (
           `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}»` +
           (typeof o.semana === "number" ? `, semana ${o.semana + 1}` : "") +
-          ` — se recrea ahí, así que pierde su estado`
+          /* E3: con la propuesta abierta la tarea se MUDA (conserva su id): no se recrea. */
+          (propuesta ? " — conserva su estado" : ` — se recrea ahí, así que pierde su estado`)
         );
       }
       case "tarea.borrar": {
         const t = tarea(o.taskId);
+        // E3: una tarea nueva de la propuesta no se elimina del cronograma: sale de la propuesta.
+        if (propuesta && t && !tareaViva(t.id)) return `La tarea nueva «${t.titulo}» sale de la propuesta`;
         return `Se elimina «${t?.titulo ?? o.taskId}» de «${t?.fase ?? "?"}»`;
       }
       case "fase.crear": {
@@ -953,12 +1082,17 @@ export function describirOperaciones(
           (corren > 0 ? ` — ${corren} ${corren === 1 ? "tarea corre" : "tareas corren"} una semana` : "")
         );
       }
-      case "fase.tipo":
+      case "fase.tipo": {
         /* ⚠ `o.tipo` puede llegar ausente: el `input_schema` solo exige `op`. Sin el `??`, esto
            tira un TypeError que revienta el turno ENTERO en el servidor y el CSE no ve ni el
            acuerdo ni el motivo — mucho peor que una línea que dice «(sin especificar)», que al
            menos se lee y se rechaza en el ejecutor. */
-        return `«${nombre(o.phaseId)}» pasa a ser de tipo ${String(o.tipo ?? "(sin especificar)").toLowerCase()}`;
+        const viva = faseViva(o.phaseId);
+        return (
+          `«${nombre(o.phaseId)}» pasa a ser de tipo ${String(o.tipo ?? "(sin especificar)").toLowerCase()}` +
+          hoy(fase(o.phaseId)?.activityType ?? null, viva ? viva.activityType : undefined, String(viva?.activityType ?? "sin tipo").toLowerCase())
+        );
+      }
       case "tarea.crear": {
         /* Misma razón que arriba: el ejecutor acota, así que la línea dice dónde cae. */
         const f = fase(o.phaseId);
@@ -972,18 +1106,39 @@ export function describirOperaciones(
       case "tarea.renombrar": {
         const t = tarea(o.taskId);
         /* Con el nombre ANTERIOR: renombrar sin decir qué se renombra es irrevisable. */
-        return `«${t?.titulo ?? o.taskId}» pasa a llamarse «${o.titulo}»`;
+        const viva = t ? tareaViva(t.id) : undefined;
+        return `«${t?.titulo ?? o.taskId}» pasa a llamarse «${o.titulo}»` + hoy(t?.titulo, viva?.title, `«${viva?.title}»`);
       }
       case "tarea.duenio": {
         const t = tarea(o.taskId);
-        return `«${t?.titulo ?? o.taskId}» pasa a hacerla ${String(o.duenio ?? "(sin especificar)").toLowerCase()}`;
+        const viva = t ? tareaViva(t.id) : undefined;
+        return (
+          `«${t?.titulo ?? o.taskId}» pasa a hacerla ${String(o.duenio ?? "(sin especificar)").toLowerCase()}` +
+          hoy(t?.duenio ?? null, viva ? (viva.party ?? null) : undefined, String(viva?.party ?? "sin dueño").toLowerCase())
+        );
       }
       case "tarea.tipo": {
         const t = tarea(o.taskId);
-        return `«${t?.titulo ?? o.taskId}» pasa a ser ${o.tipo === "SESSION" ? "una sesión" : "una tarea"}`;
+        const viva = t ? tareaViva(t.id) : undefined;
+        const comoTipo = (x: string | null | undefined) => (x === "SESSION" ? "una sesión" : "una tarea");
+        return (
+          `«${t?.titulo ?? o.taskId}» pasa a ser ${comoTipo(o.tipo)}` +
+          hoy(comoTipo(t?.tipo), viva ? comoTipo(viva.type) : undefined, comoTipo(viva?.type))
+        );
       }
       case "arranque":
         return `El proyecto pasa a arrancar el ${o.fecha}`;
+      // E3: lo que se pide sobre la propuesta abierta (las claves ya traducidas: la forma canónica).
+      case "propuesta.dejar-como-estaba":
+        return `Queda como está hoy: ${listaDeClaves(o, false)}`;
+      case "propuesta.recuperar":
+        return `Vuelve a la propuesta: ${listaDeClaves(o, true)}`;
+      case "propuesta.aplicar":
+        return propuesta?.confirmacion
+          ? `Aplicar la propuesta al cronograma: ${propuesta.confirmacion}`
+          : "Aplicar la propuesta al cronograma";
+      case "propuesta.descartar-entera":
+        return "Descartar la propuesta entera: el cronograma queda como está.";
       default:
         return `Operación desconocida: ${(o as { op: string }).op}`;
     }

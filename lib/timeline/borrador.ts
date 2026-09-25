@@ -2281,7 +2281,9 @@ export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> 
 const acotarSemana = (semana: number, duracion: number) => Math.min(semana, Math.max(duracion - 1, 0));
 const etiquetaDeTareas = (signo: "+" | "−", n: number) => `${signo}${plural(n, "tarea", "tareas")}`;
 
-function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
+/** La proyección de un plan ya calculado (E3: quien edita la propuesta mira el plan y la vista a la vez,
+ *  sin evaluarlo dos veces). */
+export function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
   const porId = new Map(vivo.fases.map((f) => [f.id, f]));
   const campos = new Map(plan.escrituras.fases.map((f) => [f.id, f.campos]));
   const nuevas = new Map(plan.escrituras.nuevas.map((n) => [n.clave, n.fase]));
@@ -3564,6 +3566,104 @@ export function marcarCambios(e: EstadoDeRevision, claves: readonly string[], in
     else sin.add(clave);
   }
   return { ...e, sin };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E3: LAS CASILLAS GUARDADAS Y LA APERTURA DEL CHAT (puro) ─────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Desde E3 lo desmarcado se guarda en el servidor (`excluidos` del JSON): lo ve cualquier computadora.
+// Lo escriben la barra y el chat por UNA ruta (POST /timeline/borrador/operaciones) y cada escritura
+// sube `version`. ⛔ El plan NUNCA lee `excluidos`: aplicar sigue leyendo el `sin` del cuerpo, así una
+// pestaña de antes no entra en un bucle de PLAN_CAMBIO.
+
+/** Los techos de lo desmarcado guardado (los mismos que `leerExcluidos`). */
+const MAX_EXCLUIDOS = 2000;
+const MAX_LARGO_DE_CLAVE = 300;
+/** Cuántas personas recuerda `chatAbiertoPara` (las más recientes). */
+const MAX_ABIERTO_PARA = 50;
+
+/** Una escritura de casillas: excluir (desmarcar) o incluir (marcar) unas claves. */
+export interface OperacionDeCasillas {
+  op: "excluir" | "incluir";
+  claves: string[];
+}
+
+/** Lo desmarcado guardado en un `borrador-v1`, o null si el campo falta (o no tiene forma válida). */
+export function excluidosDelGuardado(json: unknown): string[] | null {
+  if (!esBorradorV1(json) || !("excluidos" in json)) return null;
+  return leerExcluidos(json.excluidos);
+}
+
+/**
+ * Lo desmarcado, limpio: sin repetidos y con sus techos (2000 claves de 1 a 300 caracteres). Poda SOLO
+ * las claves `t:` y `n:` que ya no están (son aleatorias: nunca se repiten). Las demás se conservan aunque
+ * su cambio no esté hoy: `tarea:X:se-va` vuelve con un recálculo, y tiene que volver desmarcada.
+ */
+export function normalizarExcluidos(b: Pick<Borrador, "cambios">, claves: Iterable<string>): string[] {
+  const presentes = new Set(b.cambios.map((c) => c.clave));
+  const out: string[] = [];
+  const vistas = new Set<string>();
+  for (const k of claves) {
+    if (!esTextoEntre(k, 1, MAX_LARGO_DE_CLAVE) || vistas.has(k)) continue;
+    if ((k.startsWith("t:") || k.startsWith("n:")) && !presentes.has(k)) continue;
+    vistas.add(k);
+    out.push(k);
+  }
+  return out.slice(0, MAX_EXCLUIDOS);
+}
+
+/** Lo desmarcado después de unas casillas, en orden. Una clave que el borrador no tiene se ignora. */
+export function aplicarCasillas(
+  b: Pick<Borrador, "cambios">,
+  excluidos: readonly string[],
+  ops: readonly OperacionDeCasillas[],
+): string[] {
+  const conocidas = new Set(b.cambios.map((c) => c.clave));
+  const out = [...excluidos];
+  for (const op of ops) {
+    for (const clave of op.claves) {
+      if (!conocidas.has(clave)) continue;
+      const i = out.indexOf(clave);
+      if (op.op === "excluir" && i < 0) out.push(clave);
+      else if (op.op === "incluir" && i >= 0) out.splice(i, 1);
+    }
+  }
+  return out;
+}
+
+/** Lo desmarcado que ve la pantalla: lo del servidor con los clics que todavía no subieron encima. */
+export function superponerCasillas(servidor: Iterable<string>, pendientes: readonly OperacionDeCasillas[]): Set<string> {
+  const sin = new Set(servidor);
+  for (const op of pendientes) {
+    for (const clave of op.claves) {
+      if (op.op === "excluir") sin.add(clave);
+      else sin.delete(clave);
+    }
+  }
+  return sin;
+}
+
+/** La huella de una persona (su email, sin mayúsculas ni espacios): el JSON no guarda emails. */
+export const huellaDePersona = (email: string): string => huellaDeTexto(email.trim().toLowerCase());
+
+/** Las huellas de `chatAbiertoPara` (crudo, las últimas 50). Fuera del tipo `Borrador` y de la huella. */
+export function leerAbiertoPara(json: unknown): string[] {
+  if (!esBorradorV1(json) || !Array.isArray(json.chatAbiertoPara)) return [];
+  return json.chatAbiertoPara.filter((h): h is string => esTextoEntre(h, 1, 64)).slice(-MAX_ABIERTO_PARA);
+}
+
+/** ¿El chat ya se abrió solo para esta persona con este borrador? */
+export function abiertoPara(json: unknown, email: string | null | undefined): boolean {
+  if (!email || !email.trim()) return false;
+  return leerAbiertoPara(json).includes(huellaDePersona(email));
+}
+
+/** La lista de `chatAbiertoPara` con esta persona sumada (las últimas 50). */
+export function conAbiertoPara(json: unknown, email: string): string[] {
+  const h = huellaDePersona(email);
+  const lista = leerAbiertoPara(json).filter((x) => x !== h);
+  return [...lista, h].slice(-MAX_ABIERTO_PARA);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
