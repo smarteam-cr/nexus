@@ -261,6 +261,25 @@ describe("⛔ las marcas de «Lo que no cuadra» no se borran", () => {
       expect(src, `${s} no pasa por el guard`).toMatch(/resolverApply\(\{\s*tablas:/);
     }
   });
+
+  it("⛔ sin --apply los dos scripts no escriben: la conexión nace de solo lectura y cortan antes de la primera escritura", () => {
+    /* El simulacro se corre contra producción para decidir (docs/RUNBOOK.md › Cobranza). La edición que lo pone en rojo:
+       quitar el PGOPTIONS de solo lectura del simulacro, o mover el «if (!apply) return» debajo de lo que escribe (el
+       respaldo o la transacción), o sacarle su `return`. */
+    for (const s of ["odoo-traspasar-marcas-de-notas.ts", "odoo-reabrir-liberadas-sin-motivo.ts"]) {
+      const src = sinComentarios(readFileSync(join(DIR, "..", "..", "..", "scripts", s), "utf8"));
+      expect(src, `${s}: el simulacro no fija la conexión de solo lectura`).toMatch(
+        /if \(!QUIERE_ESCRIBIR\) \{\s*process\.env\.PGOPTIONS = [^;]*default_transaction_read_only=on/,
+      );
+      const corte = src.search(/if \(!apply\) \{[^}]*\breturn;\s*\}/);
+      expect(corte, `${s}: no corta sin --apply`).toBeGreaterThan(0);
+      for (const escritura of [/\bprisma\.\$transaction\(/, /(?<!function )\bguardarRespaldo\(/]) {
+        const donde = src.search(escritura);
+        expect(donde, `${s}: no encuentra ${escritura}`).toBeGreaterThan(0);
+        expect(donde, `${s}: ${escritura} va antes del corte sin --apply`).toBeGreaterThan(corte);
+      }
+    }
+  });
 });
 
 /**

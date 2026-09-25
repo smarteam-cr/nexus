@@ -36,6 +36,7 @@ import {
   type MontoDeOdoo,
   type PartnerOdoo,
 } from "./emparejado";
+import { cambiarViaCobroTx } from "../via-cobro";
 
 const FIX = JSON.parse(
   readFileSync(join(__dirname, "..", "__fixtures__", "odoo-emparejado.json"), "utf8"),
@@ -450,6 +451,54 @@ describe("⭐ el botón «Está en Mercury»", () => {
 
   it("«Deshacer» funciona aunque la cuenta tenga fichas: volver a Odoo nunca deja datos a medias", () => {
     expect(decidirMarcaDeMercury(cuenta("MERCURY", ["X"]), "ODOO").tipo).toBe("CAMBIA");
+  });
+});
+
+/**
+ * ── LA VÍA SE ESCRIBE POR UN SOLO CAMINO, Y SOLO SI CAMBIA ──────────────────────
+ * Los tres caminos que cambian la vía (el botón, la ficha de la cuenta y «Cuadrar cronograma») pasan por
+ * `cambiarViaCobroTx`. La ficha la mandaba en CADA guardado: si el chokepoint escribiera igual cuando la vía no cambia,
+ * guardar un correo borraría quién marcó la cuenta «Está en Mercury» y ensuciaría su bitácora.
+ * La edición que la pone en rojo: sacar el «si ya dice eso, no toca nada», o escribir la vía sin su firma o sin su
+ * línea en la bitácora.
+ */
+describe("⭐ la vía de cobro se firma solo cuando cambia de verdad (`cambiarViaCobroTx`)", () => {
+  /** Una transacción de mentira que anota lo que se escribiría. */
+  const txDePrueba = (viaCobro: string | null) => {
+    const escrituras: Array<{ tabla: string; data: Record<string, unknown> }> = [];
+    const anotar = (tabla: string) => async ({ data }: { data: Record<string, unknown> }) => {
+      escrituras.push({ tabla, data });
+      return { id: "c1" };
+    };
+    const tx = {
+      cuentaFinanciera: { findUnique: async () => (viaCobro === null ? null : { viaCobro }), update: anotar("cuenta") },
+      bitacoraCobro: { create: anotar("bitacora") },
+    };
+    return { tx: tx as never, escrituras };
+  };
+  const pedido = (nueva: "ODOO" | "MERCURY") => ({ cuentaId: "c1", nueva, actor: "ana@smarteamcr.com", motivo: "la cambió en la ficha de la cuenta." });
+
+  it("si ya dice eso, no escribe nada: ni la vía, ni la firma, ni la bitácora", async () => {
+    const { tx, escrituras } = txDePrueba("MERCURY");
+    expect(await cambiarViaCobroTx(tx, pedido("MERCURY"))).toEqual({ anterior: "MERCURY", cambio: false });
+    expect(escrituras).toEqual([]);
+  });
+
+  it("si cambia, escribe la vía con quién y cuándo, y deja la línea en la bitácora de la cuenta", async () => {
+    const { tx, escrituras } = txDePrueba("ODOO");
+    expect(await cambiarViaCobroTx(tx, pedido("MERCURY"))).toEqual({ anterior: "ODOO", cambio: true });
+    expect(escrituras.map((e) => e.tabla)).toEqual(["cuenta", "bitacora"]);
+    expect(escrituras[0]?.data).toMatchObject({ viaCobro: "MERCURY", viaCobroPor: "ana@smarteamcr.com" });
+    expect(escrituras[0]?.data.viaCobroEn).toBeInstanceOf(Date);
+    expect(escrituras[1]?.data.contenido).toBe(
+      "Vía de cobro cambiada de Odoo a Mercury por ana@smarteamcr.com: la cambió en la ficha de la cuenta.",
+    );
+  });
+
+  it("una cuenta que no existe no se escribe", async () => {
+    const { tx, escrituras } = txDePrueba(null);
+    await expect(cambiarViaCobroTx(tx, pedido("ODOO"))).rejects.toThrow();
+    expect(escrituras).toEqual([]);
   });
 });
 

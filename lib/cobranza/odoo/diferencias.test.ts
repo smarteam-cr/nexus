@@ -2089,6 +2089,16 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       expect(h1, `${que}: la fila ${clave} dejó de estar en ${codigo}`).toBeDefined();
       expect(h1, `${que}: la huella de ${clave} no cambió`).not.toBe(h0);
     }
+
+    /* ⚠ Solo el saldo: un segundo pago parcial deja el estado en «partial» y baja lo que falta pagar. Los casos de arriba
+       cambian el estado junto con el saldo, así que una huella sin el saldo pasaba igual en verde (revisión del
+       2026-09-25). La fila marcada con el saldo viejo tiene que volver. */
+    const parcial = conFactura(todas, "f298", { paymentState: "partial", montoResidual: 2000 });
+    const conMenosSaldo = conFactura(parcial, "f298", { montoResidual: 1500 });
+    const h2 = huellaDeLaFila(detectarDiferenciasOdoo(parcial), "ODOO-FACTURA-SIN-COBRO", "f:f298");
+    const h3 = huellaDeLaFila(detectarDiferenciasOdoo(conMenosSaldo), "ODOO-FACTURA-SIN-COBRO", "f:f298");
+    expect(h2, "la factura a medio pagar no está en «sin cobro»").toBeDefined();
+    expect(h3, "un segundo pago parcial no cambió la huella").not.toBe(h2);
   });
 
   it("⚠ lo que no es un número de la fila no la reabre: anotar el número con que ya se juntaba, pagar una exenta", () => {
