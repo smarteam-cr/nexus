@@ -209,6 +209,11 @@ export interface ContextoDelAsistente {
    */
   tokenDeLaPropuesta?: string;
   /**
+   * E3 P5: hay una propuesta abierta pero no se pudo leer (la lectura falló): no se sabe su token. El
+   * turno no suelta ni registra nada (lo congela) en vez de creer que no hay propuesta.
+   */
+  propuestaSinLeer?: true;
+  /**
    * E3 P4: la propuesta abierta, leída (`leerPropuestaParaElChat`), con los identificadores de las
    * tareas que vio el modelo (`handles`: ref → identificador).
    *
@@ -219,6 +224,8 @@ export interface ContextoDelAsistente {
   propuesta?: PropuestaParaElChat & {
     handles: Map<string, string>;
     recorte?: Pick<ContextoConPropuesta, "nivel" | "excede" | "medidas">;
+    /** E3 P5: el cierre fijado a mano (YYYY-MM-DD), o null: la línea de «aplicar» dice el cierre como la barra. */
+    cierreFijado?: string | null;
   };
 }
 
@@ -236,6 +243,8 @@ export interface EstadoParaRehacerTodo {
   /** El mismo borrador VACÍO con su corrida fallida o colgada (`estadoDelVacio` = «fallo»): no va a
    *  llegar nada, se descarta (o se vuelve a intentar) en la línea de arriba del Gantt. */
   tareasFallaron?: boolean;
+  /** E3 P5: la propuesta abierta se puede cambiar, aplicar y descartar desde el chat. */
+  propuestaDesdeElChat?: boolean;
 }
 
 /**
@@ -256,7 +265,10 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   const cabeza = "PARA REHACER TODO desde las reuniones y las notas elegidas: ";
   /* Los botones que existen (E1, 2026-09-24): la propuesta se revisa en SU barra, arriba del Gantt
      —se desmarca lo que no va y «Aplicar», o «Descartar»—. Ya no se acepta ni descarta uno por uno. */
-  const revisar = "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)";
+  /* E3 P5: con la propuesta editable, también se resuelve desde acá (el chat la aplica o la descarta). */
+  const revisar =
+    "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)" +
+    (e.propuestaDesdeElChat ? " (o me lo pides acá)" : "");
   /* Cierre de la revisión de E2a: el borrador VACÍO cuya corrida murió no se llena solo. La línea de
      arriba del Gantt tiene «Descartar» (y «Volver a intentar» con permiso). */
   const vacioFallido =
@@ -280,7 +292,9 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
           ? " Ahora la IA está armando las tareas: hay que esperar a que termine."
           : e.tareasFallaron
             ? ` Ahora ${vacioFallido}.`
-            : ` Con una propuesta sin decidir, primero ${revisar} y después se genera.`
+            : /* E3 P5: «y después se genera» pasó a «y se genera» para que «(o me lo pides acá)» entre
+                 en el largo de la línea. */
+              ` Con una propuesta sin decidir, primero ${revisar} y se genera.`
         : "")
     );
   }
@@ -366,10 +380,11 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
 /**
  * E3 P4: la línea de arriba del contexto con una propuesta abierta, o null si esa propuesta no se
  * muestra (el formato viejo, una versión nueva o el borrador vacío: el contexto de hoy, con su freno).
- * Editable: el chat todavía no la cambia, así que dice lo mismo que el freno de hoy.
+ * E3 P5: editable → "" (sin porqué: el formato dice que lo acordado EDITA la propuesta). Mientras la IA
+ * arma o recalcula, la línea del porqué (se lee, pero no se cambia).
  */
 function lineaDeLaPropuesta(porQue: PropuestaParaElChat["porQue"]): string | null {
-  if (porQue === null) return lineaDeCambiosDeFasesSinDecidir(true);
+  if (porQue === null) return "";
   if (porQue === "tareas-armando" || porQue === "recalculando") return lineaDeSoloLectura(porQue);
   return null;
 }
@@ -550,6 +565,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     cambiosDeFasesSinDecidir: propuestasPendientes > 0,
     armandoTareas: vacio === "armando",
     tareasFallaron: vacio === "fallo",
+    propuestaDesdeElChat: propuesta?.modo === "editable",
   });
 
   const fases = timeline.phases
@@ -598,10 +614,12 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
    * barra, con sus números (`armarContextoConPropuesta`), en vez del cronograma de hoy. También mientras
    * la IA arma o recalcula sus tareas: la propuesta se lee, aunque no se pueda cambiar. El formato
    * viejo, una versión nueva y el borrador vacío siguen con el contexto de hoy y su línea de freno.
-   * ⚠ `fases` sigue siendo el cronograma de HOY, y el chat todavía no edita la propuesta (`puedeEditar`
-   * en false: la línea de arriba dice que lo acordado no se aplica mientras esté abierta).
+   * ⚠ `fases` sigue siendo el cronograma de HOY: la propuesta viaja aparte (`propuesta`) y la usa el
+   * turno para editarla. E3 P5: con la propuesta editable el chat la EDITA (`puedeEditar`); mientras la
+   * IA arma o recalcula sus tareas, la lee sin poder cambiarla, con la línea del porqué.
    */
   const lineaConPropuesta = propuesta?.resumen ? lineaDeLaPropuesta(propuesta.porQue) : null;
+  const cierreFijado = timeline.closeDateOverride ? fmtFecha(timeline.closeDateOverride) : null;
   const armado =
     propuesta?.resumen && lineaConPropuesta !== null
       ? armarContextoConPropuesta(
@@ -609,10 +627,10 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
             proyecto: timeline.project.name,
             cliente: timeline.project.client.name,
             propuesta: { ...propuesta, resumen: propuesta.resumen },
-            cierreFijado: timeline.closeDateOverride ? fmtFecha(timeline.closeDateOverride) : null,
+            cierreFijado,
             paraRehacerTodo,
-            puedeEditar: false,
-            porQue: lineaConPropuesta,
+            puedeEditar: propuesta.modo === "editable",
+            porQue: lineaConPropuesta || null,
           },
           { techo: TECHO_DEL_PREFIJO_CHARS },
         )
@@ -624,11 +642,13 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   return {
     texto: armado?.texto ?? texto,
     cierreActual: cierre,
+    ...(propuestasPendientes > 0 && !propuesta ? { propuestaSinLeer: true as const } : {}),
     ...(propuesta
       ? {
           tokenDeLaPropuesta: propuesta.token,
           propuesta: {
             ...propuesta,
+            cierreFijado,
             handles: armado?.handles ?? new Map<string, string>(),
             ...(armado ? { recorte: { nivel: armado.nivel, excede: armado.excede, medidas: armado.medidas } } : {}),
           },

@@ -12,7 +12,7 @@
  *   4. el texto es determinista;
  *   5. una propuesta enorme se manda igual, entera, y avisa;
  *   6. `contextoDeCronograma` con una propuesta abierta: el texto es el de la propuesta, pero `fases`
- *      sigue siendo el cronograma de HOY y el chat todavía no la edita (P4 no cambia lo que hace).
+ *      sigue siendo el cronograma de HOY. E3 P5: editable, el chat la edita; en solo lectura, no.
  * Se imprime además la medida del peor caso realista contra el techo (no se fija: se mide).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
@@ -595,16 +595,36 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(ctx.texto).toContain("+Piloto con el equipo comercial [55555]");
   });
 
-  it("⛔ y el chat todavía NO edita la propuesta: la línea de arriba es la del freno", async () => {
-    /* P4 solo le muestra la propuesta; editarla llega en P5 (`puedeEditar`). Hasta entonces lo acordado
-       no se aplica con una propuesta abierta (la pantalla lo frena), y el modelo lo tiene que saber. La
-       edición que la pone en rojo: pasar `puedeEditar: true` en contexto.ts. */
+  it("⭐ E3 P5: con la propuesta editable, el chat la EDITA: la línea lo dice, con sus consecuencias", async () => {
+    /* ⚠ REESCRITA en E3 P5 (2026-09-25), con esta razón: decía «el chat todavía NO edita la propuesta» (P4
+       solo se la mostraba, con la línea del freno). Desde P5 lo acordado edita la propuesta: la línea de
+       arriba lo dice, van las consecuencias de editarla (mover conserva el estado…) y «PARA REHACER TODO»
+       ofrece resolverla desde el chat. Las ediciones que la ponen en rojo: volver a `puedeEditar: false`, o
+       dejar la línea del freno con la propuesta editable (el modelo no registraría nada). */
     montarLaBase(JSON.parse(JSON.stringify(borrador)));
     const ctx = await contextoDeCronograma("p1");
-    expect(ctx.texto).toContain("NINGÚN cambio que acuerdes se puede aplicar");
-    expect(ctx.texto).toContain("pero no lo registres");
+    expect(ctx.texto).toContain(LINEA_DE_LA_PROPUESTA_EDITABLE);
+    expect(ctx.texto, "con la propuesta editable volvió el freno").not.toContain("NINGÚN cambio que acuerdes se puede aplicar");
+    expect(ctx.texto).not.toContain("pero no lo registres");
+    expect(ctx.texto, "no se dicen las consecuencias de editarla").toContain("CONSECUENCIAS QUE HAY QUE DECIR ANTES");
+    expect(ctx.texto, "«PARA REHACER TODO» no ofrece resolverla desde el chat").toContain("(o me lo pides acá)");
+    expect(ctx.propuesta?.cierreFijado, "la línea de «aplicar» no conoce el cierre fijado").toBeNull();
+  });
+
+  it("⛔ E3 P5: mientras la IA arma las tareas, la propuesta se lee pero NO se edita", async () => {
+    /* La edición que la pone en rojo: pasar `puedeEditar: true` también en solo lectura (el modelo
+       registraría cambios que la ruta rechaza con 409). */
+    montarLaBase(JSON.parse(JSON.stringify({ ...borrador, tareas: { corrida: "run-armando", listas: false } })));
+    db.agentRun.findUnique.mockResolvedValue({ status: "RUNNING", updatedAt: new Date(), currentPhase: null, output: null });
+    const ctx = await contextoDeCronograma("p1");
+    expect(ctx.propuesta?.modo).toBe("solo-lectura");
+    expect(ctx.texto).toContain("PROPUESTA ABIERTA");
     expect(ctx.texto).not.toContain(LINEA_DE_LA_PROPUESTA_EDITABLE);
-    expect(ctx.texto, "sin permiso de editar no se prometen las consecuencias de editarla").not.toContain("la MUDA");
+    expect(ctx.texto).toContain("pero no lo registres");
+    expect(ctx.texto, "sin permiso de editar no se prometen las consecuencias de editarla").not.toContain(
+      "CONSECUENCIAS QUE HAY QUE DECIR ANTES",
+    );
+    expect(ctx.texto, "ofrece resolverla desde el chat mientras no se puede").not.toContain("(o me lo pides acá)");
   });
 
   it("el formato viejo sigue con el contexto de HOY y su freno, pero lleva el token", async () => {

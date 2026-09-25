@@ -412,21 +412,37 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
        de hace 100 ms todavía en la cola haría caer el aplicar en PROPUESTA_CAMBIO, o mandaría un `sin` que
        el servidor no tiene. Si no se pudo guardar, no se aplica. Sacarla o moverla después de leer la
        revisión la pone en rojo. El literal del body no cambia en P3. */
-    const iCasillas = aplicar.indexOf("if (await revisionRef.current.esperarCasillas()) return;");
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: aplicar devuelve su resultado (lo aplica también
+       el chat), así que la espera de las casillas ya no es `if (await …) return;` sino que devuelve el motivo.
+       Lo que se pide no cambia: espera después del guardado y antes de leer la revisión. */
+    const iCasillas = aplicar.indexOf("const sinCasillas = await revisionRef.current.esperarCasillas();");
     expect(iCasillas, "aplicar no espera lo marcado").toBeGreaterThan(iEspera);
+    expect(contiene(aplicar, "if (sinCasillas) return resultado(sinCasillas);"), "aplica aunque lo marcado no se guardó").toBe(true);
     expect(iCasillas, "aplicar lee la revisión antes de esperar lo marcado").toBeLessThan(
       aplicar.indexOf("const { resumen, sin, foto, forzadas } = revisionRef.current;"),
     );
     expect(iCasillas).toBeLessThan(aplicar.indexOf("await new Promise<void>((r) => window.setTimeout(r, 60));"));
     expect(iCasillas).toBeLessThan(iLimpia);
     /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan. Si el
-       recálculo falla, «Aplicar de todos modos» manda las fases forzadas (`forzar`), que viven en el hook. */
-    expect(
-      contiene(
-        aplicar,
-        "body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version, forzar: [...forzadas] })",
-      ),
-    ).toBe(true);
+       recálculo falla, «Aplicar de todos modos» manda las fases forzadas (`forzar`), que viven en el hook.
+       ⚠ REESCRITA en E3 P5 (2026-09-25), con esta razón: el chat aplica con la lista que se ACORDÓ (D7). Desde el
+       chat viajan la huella acordada, lo desmarcado del SERVIDOR (con lo que se calculó esa huella) y nada
+       forzado; desde la barra, lo mismo que antes. Las ediciones que la ponen en rojo: mandar desde el chat la
+       huella de la pantalla (aplicaría otra lista que la leída), forzar desde el chat, o dejar de mandar la
+       versión o la foto. */
+    const cuerpo = tramo(aplicar, "body: JSON.stringify({", "}),");
+    expect(contiene(cuerpo, "token: proposalMeta.current.runId,")).toBe(true);
+    expect(contiene(cuerpo, "sin: desdeElChat ? (excluidosDelGuardado(proposalRef.current) ?? [...sin]) : [...sin],")).toBe(true);
+    expect(contiene(cuerpo, "huella: opts?.acordada?.huella ?? resumen.huella,")).toBe(true);
+    expect(contiene(cuerpo, "foto,")).toBe(true);
+    expect(contiene(cuerpo, "version: revisionRef.current.version,")).toBe(true);
+    expect(contiene(cuerpo, "forzar: desdeElChat ? [] : [...forzadas],")).toBe(true);
+    /* E3 P5: desde el chat, la versión de la pantalla tiene que ser la acordada, DESPUÉS de esperar lo marcado
+       (si va atrás, se trae la guardada y se compara una vez más); si no, no se escribe nada. */
+    const iVersion = aplicar.indexOf("if (acordada === null || revisionRef.current.version !== acordada) return resultado(");
+    expect(iVersion, "el chat aplica una lista que no es la acordada").toBeGreaterThan(iCasillas);
+    expect(iVersion).toBeLessThan(iFetch);
+    expect(aplicar.indexOf("await traerPropuestaPendiente();"), "si la pantalla va atrás no se trae la guardada").toBeLessThan(iVersion);
     // Y la versión es la de lo que se VE: sale de la propuesta del hook, no de otra lectura.
     expect(contiene(HOOK, "const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);")).toBe(true);
     expect(aplicar, "lee la revisión del render del clic, no la de ahora").toContain("revisionRef.current");
@@ -438,7 +454,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(aplicar, 'if (d?.error === "PLAN_CAMBIO") {')).toBe(true);
     expect(aplicar).not.toContain("apply-items");
     // Con un descarte en curso no se aplica.
-    expect(contiene(aplicar, "if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return;")).toBe(true);
+    // (E3 P5: devuelve el motivo en vez de nada: el chat lo dice.)
+    expect(
+      contiene(aplicar, "if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return resultado(MOTIVO_SIN_APLICAR);"),
+    ).toBe(true);
   });
 
   it("⭐ descartar no corre dos veces: el ref frena el doble clic y el estado apaga los botones", () => {
@@ -446,7 +465,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
        cortaba la cadena y traía otra vez la propuesta) o no liberarlo si el DELETE falla. */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
     expect(descartar.length).toBeGreaterThan(800);
-    const iFreno = descartar.indexOf("if (descartandoRef.current) return;");
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: descartar devuelve cómo terminó (el chat da éxito
+       solo si el servidor la borró), así que el freno devuelve «fallo» en vez de nada. */
+    const iFreno = descartar.indexOf('if (descartandoRef.current) return "fallo";');
     expect(iFreno).toBeGreaterThan(-1);
     expect(iFreno).toBeLessThan(descartar.indexOf("/timeline/proposal`"));
     expect(contiene(descartar, "finally { descartandoRef.current = false; setDescartando(false); }")).toBe(true);
@@ -515,8 +536,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     const chat = tramo(CANVAS, "const aplicarOperacionesAcordadas = async (", "const applyProposal = async (");
     expect(contiene(chat, 'res.status === 409 && data?.code === "PROPUESTA_ABIERTA" ? await anteLaPropuestaGuardada()')).toBe(true);
     // Descartar la vista previa del modificador trae la guardada, si hay.
+    // (E3 P5: descartar devuelve cómo terminó: la vista previa en memoria cuenta como «descartada».)
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(contiene(tramo(descartar, "if (eraDelModificador) {", "return;"), "void refrescarPropuesta();")).toBe(true);
+    expect(contiene(tramo(descartar, "if (eraDelModificador) {", 'return "descartada";'), "void refrescarPropuesta();")).toBe(true);
   });
 
   it("con un borrador abierto se puede editar a mano: el autoguardado sigue, y el chat/«IA» siguen frenados", () => {
@@ -1023,8 +1045,11 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     expect(iLee).toBeGreaterThan(-1);
     expect(iBloqueo, "manda con un bloqueo").toBeGreaterThan(iLee);
     expect(iBloqueo).toBeLessThan(aplicar.indexOf("/timeline/borrador/aplicar"));
-    expect(contiene(tramo(aplicar, "if (resumen.bloqueo) {", "}"), "toast.info(resumen.bloqueo); return;")).toBe(true);
-    expect(contiene(aplicar, "forzar: [...forzadas] })")).toBe(true);
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: aplicar devuelve su resultado (también lo llama el
+       chat): el bloqueo se dice (toast en la barra, el motivo en el chat) y se vuelve sin mandar nada. Desde
+       el chat no se fuerza nada; desde la barra, las fases de «Aplicar de todos modos». */
+    expect(contiene(tramo(aplicar, "if (resumen.bloqueo) {", "}"), 'return decir(resumen.bloqueo, "info");')).toBe(true);
+    expect(contiene(aplicar, "forzar: desdeElChat ? [] : [...forzadas],")).toBe(true);
     const fin = tramo(aplicar, "} finally {", "}");
     expect(contiene(fin, "revisionRef.current.forzar([]);"), "la fuerza queda puesta tras un aplicar fallido").toBe(true);
   });
@@ -1033,7 +1058,16 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     /* Las ediciones que la ponen en rojo: sumar una marca fuera de `marcar`/`marcarVarios` (al traer la
        propuesta, al recargar), que el efecto de la espera dependa de otra cosa que `marcasDelCse` (un
        cambio del cronograma vivo lanzaría una corrida pagada), o armar la espera al montar. */
-    expect(HOOK.match(/setMarcasDelCse\(/g)?.length, "la marca se suma fuera de las casillas").toBe(2);
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: lo que el chat pasa a la propuesta también cuenta
+       como una marca (`contarMarcaDelChat`: puede dejar tareas desfasadas). Son tres vías, y la tercera la
+       llama SOLO el Canvas después de pasar algo a la propuesta (su guarda, abajo). */
+    expect(HOOK.match(/setMarcasDelCse\(/g)?.length, "la marca se suma fuera de las casillas y del chat").toBe(3);
+    expect(contiene(HOOK, "const contarMarcaDelChat = useCallback(() => setMarcasDelCse((n) => n + 1), []);")).toBe(true);
+    expect(CANVAS.match(/contarMarcaDelChat\(\)/g)?.length, "la marca del chat se suma fuera de «pasar a la propuesta»").toBe(1);
+    expect(
+      tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo ="),
+      "la marca del chat se suma antes de que la propuesta la adopte",
+    ).toMatch(/adoptarPropuesta\(d\);[\s\S]*revisionRef\.current\.contarMarcaDelChat\(\);/);
     const marcar = tramo(HOOK, "const marcar = useCallback(", "const forzar = useCallback(");
     expect(marcar.match(/setMarcasDelCse\(\(n\) => n \+ 1\);/g)?.length, "marcar y marcarVarios").toBe(2);
     expect(marcar.indexOf("const marcarVarios = useCallback(")).toBeGreaterThan(marcar.indexOf("setMarcasDelCse("));
@@ -1216,12 +1250,18 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
     const recalcular = tramo(CANVAS, "const pedirRecalculo = async (", "const recalc = useRecalculoDeLasTareas(");
     const continuacion = tramo(tramo(CANVAS, "const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase"), "if (opts?.saltarEstructura) {", "} else {");
-    for (const [nombre, src, lectura] of [
-      ["aplicar", aplicar, "const { resumen, sin, foto, forzadas } = revisionRef.current;"],
-      ["recalcular", recalcular, "const { sin, version, desfasadas } = revisionRef.current;"],
-      ["armar las tareas", continuacion, "version = revisionRef.current.version;"],
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: aplicar (que ahora también llama el chat) y el POST
+       que pasa lo acordado a la propuesta devuelven el motivo si lo marcado no se guardó, así que su espera es
+       `const sinCasillas = await …`. Los dos esperan y leen la versión DESPUÉS, como los demás. */
+    const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
+    for (const [nombre, src, espera, lectura] of [
+      ["aplicar", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "if (acordada === null || revisionRef.current.version !== acordada)"],
+      ["aplicar (la barra)", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "const { resumen, sin, foto, forzadas } = revisionRef.current;"],
+      ["pasar a la propuesta", pasar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "version: revisionRef.current.version ?? 0,"],
+      ["recalcular", recalcular, "if (await revisionRef.current.esperarCasillas()) return;", "const { sin, version, desfasadas } = revisionRef.current;"],
+      ["armar las tareas", continuacion, "if (await revisionRef.current.esperarCasillas()) return;", "version = revisionRef.current.version;"],
     ] as const) {
-      const iEspera = src.indexOf("if (await revisionRef.current.esperarCasillas()) return;");
+      const iEspera = src.indexOf(espera);
       expect(iEspera, `${nombre}: no espera lo marcado`).toBeGreaterThan(-1);
       expect(src.indexOf(lectura), `${nombre}: lee la versión antes de esperar lo marcado`).toBeGreaterThan(iEspera);
     }
@@ -1229,11 +1269,15 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     expect(contiene(tramo(CANVAS, "const armarLasTareas =", ": undefined;"), "saltarEstructura: true,")).toBe(true);
     /* Los lectores de la versión del borrador en el Canvas: los tres carriles, el POST de las casillas (la
        manda como informativa) y `traerPropuestaPendiente` (para que no baje). Uno nuevo pone esto en rojo:
-       ¿manda la versión? entonces espera las casillas. */
+       ¿manda la versión? entonces espera las casillas.
+       ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: suman tres, y los tres esperan las casillas (arriba):
+       aplicar desde el chat compara la versión acordada dos veces (antes y después de traer la guardada) y el
+       POST que pasa lo acordado a la propuesta la manda. La apertura del chat manda `revision.version` como
+       informativa (no escribe `excluidos` ni sube la versión) y no cuenta: no es un lector de `revisionRef`. */
     const lectores =
       (CANVAS.match(/revisionRef\.current\.version\b/g)?.length ?? 0) +
       (CANVAS.match(/const \{[^}]*\bversion\b[^}]*\} = revisionRef\.current/g)?.length ?? 0);
-    expect(lectores, "hay un lector nuevo de la versión: ¿espera las casillas?").toBe(5);
+    expect(lectores, "hay un lector nuevo de la versión: ¿espera las casillas?").toBe(8);
     expect(CANVAS, "la versión volvió a salir de la closure de un clic").not.toContain("versionDelBorrador(proposal)");
   });
 
@@ -1283,5 +1327,94 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     expect(contiene(BARRA, '{it.nota && <p className="text-xs text-fg-muted">{it.nota}</p>}')).toBe(true);
     // Las casillas siguen llegando por la misma prop (el hook decide si suben).
     expect(contiene(rama, "onMarcar={revision.marcar}")).toBe(true);
+  });
+});
+
+describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertura y el cajón", () => {
+  it("⭐ el botón del chat va por el despachador: sin propuesta los carriles de siempre, con una, a ella", () => {
+    /* Las ediciones que la ponen en rojo: volver a mandar todo acuerdo al PUT (lo acordado para la propuesta
+       escribiría el cronograma por debajo), o sumar un carril nuevo con el nombre de los viejos. */
+    expect(contiene(CANVAS, "onAplicar={atenderElAcuerdo}")).toBe(true);
+    const atender = tramo(CANVAS, "const atenderElAcuerdo =", "const tokenParaLaApertura");
+    expect(contiene(atender, "acuerdo.borrador == null")).toBe(true);
+    expect(contiene(atender, "aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)")).toBe(true);
+    expect(contiene(atender, ": pasarALaPropuesta(acuerdo);")).toBe(true);
+    // Ningún `aplicarOperaciones…(` nuevo: el del ejecutor y la llamada del despachador (antes, la del JSX).
+    expect(CANVAS.match(/aplicarOperaciones\w*\(/g)?.length, "apareció un carril nuevo con el nombre del PUT").toBe(2);
+    // Las dos funciones nuevas van fuera de todo tramo que miran otras guardas: detrás del recálculo.
+    expect(CANVAS.indexOf("const pasarALaPropuesta = async (")).toBeGreaterThan(CANVAS.indexOf("const recalculoDeLaBarra = recalculoEnPantalla("));
+  });
+
+  it("⛔ pasar a la propuesta frena ANTES del POST: el cronograma ocupado, esta pantalla pidiendo, el motivo", () => {
+    /* La edición que la pone en rojo: mandar lo acordado mientras la IA calcula (quedaría debajo de una
+       propuesta calculada sobre la versión de antes) o sin mirar para qué propuesta se acordó. */
+    const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
+    const iPost = pasar.indexOf("/timeline/borrador/operaciones");
+    expect(iPost).toBeGreaterThan(-1);
+    for (const freno of [
+      "if (ocupado.activo) { return { fallo: esperaEnCurso(ocupado.rotulo), avisos: [] }; }",
+      'if (armando !== null) { return { fallo: esperaEnCurso("armando la propuesta del cronograma"), avisos: [] }; }',
+      "if (aplicandoBorrador || descartandoRef.current) return falla(MOTIVO_SIN_APLICAR);",
+      "const motivo = motivoDelChat(acuerdo); if (motivo) return falla(motivo);",
+      "const sinGuardar = await esperarQueSeGuarde();",
+    ]) {
+      const i = sinEspacios(pasar).indexOf(sinEspacios(freno));
+      expect(i, `falta el freno: ${freno}`).toBeGreaterThan(-1);
+      expect(i, `el freno va después del POST: ${freno}`).toBeLessThan(sinEspacios(pasar).indexOf("/timeline/borrador/operaciones"));
+    }
+    expect(contiene(pasar, 'body: JSON.stringify({ token: acuerdo.borrador, version: revisionRef.current.version ?? 0, origen: "chat", operaciones: ops }),')).toBe(true);
+    // Aplicar va por el MISMO aplicar de la barra, con la lista acordada; el 422 dice qué línea.
+    expect(contiene(pasar, "return aplicarBorrador({ acordada: { version: ops[0]?.version, huella: ops[0]?.huella }, desdeElChat: true });")).toBe(true);
+    expect(contiene(pasar, "`#${r.indice + 1}: ${r.motivo}`")).toBe(true);
+    expect(contiene(pasar, 'if (revisionRef.current.vista === "antes") revisionRef.current.alternar();')).toBe(true);
+  });
+
+  it("⛔ descartar desde el chat da éxito SOLO si el servidor la borró («otra» no es éxito)", () => {
+    /* Hoy un 409 (la guardada ya era otra) se trataba como «ya no está guardada». La edición que la pone en
+       rojo: devolver éxito con «otra» o con un DELETE que falló. */
+    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
+    expect(contiene(descartar, 'const discardProposal = async (reason?: string): Promise<"descartada" | "otra" | "fallo"> => {')).toBe(true);
+    expect(contiene(tramo(descartar, "if (guardadaEsOtra) {", "}"), 'return "otra";')).toBe(true);
+    expect(contiene(descartar, 'return borrada ? "descartada" : "fallo";')).toBe(true);
+    expect(contiene(descartar, "borrada = res.ok;")).toBe(true);
+    const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
+    expect(contiene(pasar, 'if (r === "descartada") return { fallo: null, avisos: [], destino: "descarte" };')).toBe(true);
+    expect(contiene(pasar, 'return falla(r === "otra" ? MOTIVO_OTRA_PROPUESTA : MOTIVO_NO_SE_DESCARTO);')).toBe(true);
+  });
+
+  it("⭐ aplicar desde el chat: sin toasts ni diálogo (la línea fue la confirmación), y devuelve el resultado", () => {
+    const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    expect(contiene(aplicar, "const desdeElChat = !!opts?.desdeElChat;")).toBe(true);
+    expect(contiene(aplicar, "if (!desdeElChat) { toast.success(")).toBe(true);
+    expect(contiene(aplicar, "return final;")).toBe(true);
+    expect(contiene(aplicar, 'const motivo = desdeElChat ? d?.error === "PLAN_CAMBIO" ? MOTIVO_CRONOGRAMA_CAMBIO_DESDE_EL_ACUERDO')).toBe(true);
+  });
+
+  it("⭐ los motivos del botón del chat entran en el botón (≤ 60 caracteres)", () => {
+    const bloque = tramo(CANVAS, "const MOTIVOS_DEL_CHAT = {", "} as const;");
+    const motivos = [...bloque.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(motivos.length).toBe(6);
+    for (const m of motivos) expect(m.length, m).toBeLessThanOrEqual(60);
+  });
+
+  it("⭐ la apertura sola: una vez por persona (servidor y navegador), sin foco, y el cajón corre el cronograma", () => {
+    /* Las ediciones que la ponen en rojo: abrirlo sin preguntar la regla pura, mirar solo el navegador,
+       tomar el foco al abrirse solo, o correr el cronograma también sin propuesta (el cajón tapa a
+       propósito). */
+    const apertura = tramo(CANVAS, "const tokenParaLaApertura", "}, [tokenParaLaApertura");
+    expect(apertura).toContain("debeAbrirseElChat({");
+    expect(contiene(apertura, "puedeConversar: me?.permissions?.sections?.asistente?.read === true,")).toBe(true);
+    expect(contiene(apertura, "abiertoEnElServidor: abiertoPara(proposal, me?.email),")).toBe(true);
+    expect(contiene(apertura, "recordadoLocal: leerApertura(projectId, tokenParaLaApertura),")).toBe(true);
+    expect(contiene(apertura, 'anchoSuficiente: window.matchMedia("(min-width: 1280px)").matches,')).toBe(true);
+    expect(contiene(apertura, "conOtraCapa: !!selectedTask || !!document.querySelector('[aria-modal=\"true\"]'),")).toBe(true);
+    expect(contiene(apertura, 'origen: "apertura",')).toBe(true);
+    expect(apertura, "la apertura escribe lo desmarcado").not.toContain("excluir");
+    expect(contiene(CANVAS, "enfocarAlAbrir={!aperturaAutomatica}")).toBe(true);
+    expect(contiene(CANVAS, "setAperturaAutomatica(false); setChatAbierto((v) => !v);"), "abierto a mano no toma el foco").toBe(true);
+    expect(CANVAS.match(/xl:pr-\[400px\]/g)?.length).toBe(1);
+    expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>')).toBe(true);
+    expect(contiene(CANVAS, "motivoParaNoAplicar={motivoDelChat}")).toBe(true);
+    expect(contiene(CANVAS, "{ titulo: `Sobre la propuesta ${desdeDeLaPropuesta(deDondeViene(proposal))}` }")).toBe(true);
   });
 });

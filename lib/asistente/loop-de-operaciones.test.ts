@@ -75,10 +75,20 @@ describe("lo que se acuerda ya pasó por el editor", () => {
        lugar donde se arma, que es el que estaba condicionado a `esCronograma` y dejaba el libro de
        documentos permanentemente vacío — con la rama consumiéndolo igual, sin notarse. */
     const FUENTE_TURNO = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: el libro sale del ACUERDO pendiente
+       (`acuerdoPendienteDelHilo`, que también sabe para qué propuesta se acordó), y lo pendiente del
+       cronograma cae entero si la propuesta es otra (`caidaPorToken`). El libro se sigue llenando para las
+       dos piezas: lo que se protege es que no vuelva a depender de `esCronograma`. La edición que la pone
+       en rojo: condicionar el libro a la pieza, o la caída por la propuesta a los documentos. */
+    expect(FUENTE_TURNO, "el libro dejó de leer el acuerdo pendiente del hilo").toContain(
+      "const pend = acuerdoPendienteDelHilo(hilo.turnos);",
+    );
     expect(
       FUENTE_TURNO,
       "el libro de pendientes volvió a llenarse solo para el cronograma",
-    ).toContain("const pendientesCrudos = pendientesDelHilo(hilo.turnos);");
+    ).toContain("const pendientesCrudos = caidaPorToken !== null ? [] : (pend?.operaciones ?? []);");
+    const caida = FUENTE_TURNO.slice(FUENTE_TURNO.indexOf("const caidaPorToken ="), FUENTE_TURNO.indexOf("const congelado ="));
+    expect(caida, "la caída por la propuesta alcanza a los documentos").toMatch(/^const caidaPorToken =\s*esCronograma &&/);
   });
 
   it("⛔ y las líneas salen de lo ACEPTADO, no de lo que el modelo pidió", () => {

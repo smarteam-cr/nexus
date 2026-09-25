@@ -66,15 +66,31 @@ import {
 import { huellasDeFrontera, lineasConFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import type { LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 import { PIEZA_CRONOGRAMA } from "./piezas";
-import { describirOperaciones, type Operacion } from "@/lib/timeline/operaciones";
+import {
+  describirOperaciones,
+  esOperacionDePropuesta,
+  type Operacion,
+  type OperacionDelChat,
+} from "@/lib/timeline/operaciones";
 import { leerAcuerdo, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
 import {
+  acuerdoPendienteDelHilo,
   bloqueDePendientes,
   fusionarPendientes,
-  pendientesDelHilo,
   indiceDeEtiqueta,
   podarIrresolubles,
 } from "./acuerdo-vivo";
+import {
+  acuerdoSobreLaPropuesta,
+  AVISO_SIN_PROPUESTA_ABIERTA,
+  avisoDeCierre,
+  avisoDeSoloLectura,
+  describirSobreLaPropuesta,
+  libroSobreLaPropuesta,
+  lineaDeLoQueNoVa,
+  motivoDeCaidaPorToken,
+  RESUMEN_DEL_CIERRE,
+} from "./propuesta-del-chat";
 
 /**
  * ⚠ RE-EXPORTADO POR COMPATIBILIDAD. Los marcadores se mudaron a `acuerdo.ts` para cortar un
@@ -299,10 +315,10 @@ del mismo lote. Si no puedes, no des un número — di cuántos cambios tiene la
 di cuántas semanas se corre y que la fecha exacta se ve en el cronograma al aplicar. Un rango
 inventado es peor que un número menos — el CSE lo repite en una llamada y queda comprometido.
 
-⛔ Y NO PROMETAS UNA «VISTA PREVIA»: los cambios que emites como operaciones se escriben directo,
-en un instante. No hay un paso intermedio donde revisar y aceptar. Lo que se revisa es la lista
-numerada que la persona lee ANTES de apretar el botón — eso es todo el control que hay, y por eso
-lo que dices tiene que coincidir con ella.
+⛔ Y NO PROMETAS UNA VISTA PREVIA APARTE: lo que se revisa es la lista numerada, antes del botón. Sin
+propuesta abierta, el botón escribe directo en el cronograma. Con una propuesta abierta, pasa lo
+acordado a la PROPUESTA (arriba del Gantt), y el cronograma no cambia hasta que la persona la aplique
+entera. Por eso lo que dices tiene que coincidir con la lista.
 
 QUÉ SE PUEDE Y QUÉ NO
 El contexto te dice las reglas duras del editor y las consecuencias conocidas. Úsalas ANTES de
@@ -458,7 +474,23 @@ Si te piden rehacer todas las tareas, o revisar las fases y sus tiempos desde la
 notas, di lo que dice la línea «PARA REHACER TODO» del contexto: el botón que el CSE ve hoy, con su
 condición, o que hoy no hay ninguno. Ese botón lee el material con más espacio, primero propone los
 cambios de fases y tiempos (el CSE los revisa en una lista arriba del Gantt y aplica los que quiere) y
-después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.`;
+después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.
+
+⭐ CON UNA PROPUESTA ABIERTA (el contexto empieza con «PROPUESTA ABIERTA»)
+1. Tus operaciones editan la propuesta, no el cronograma. Usa los IDs de «LA PROPUESTA» ([n:…] = fase
+   nueva de la propuesta).
+2. Los números de «LOS CAMBIOS» son los de la barra y NO son P1, P2…: «deja el 3 como estaba» es
+   "propuesta.dejar-como-estaba" con "cambios": ["3"]. Para todo lo de una fase, lista sus números.
+3. Una tarea suelta va en "tareas", con su identificador o su título exacto.
+4. «Trae X del cronograma de hoy» es dejar como estaba el cambio que lo quita o lo cambia. «Vuelve a
+   ponerlo» es "propuesta.recuperar".
+5. «Aplícala» es "propuesta.aplicar", SOLA, sin nada pendiente ni pregunta abierta. Si hay algo
+   pendiente, dilo: primero se pasa a la propuesta.
+6. «Descártala» es "propuesta.descartar-entera", sola. Lo pendiente cae con ella.
+7. Si piden cambiar un dato que tiene ⚠ (lo editaron a mano), tu operación reemplaza esa edición: dilo.
+8. Lo que va en "titulo" y "nombre" lo ve el cliente al aplicar.
+9. Si el contexto dice que ahora no se puede cambiar la propuesta, no llames la herramienta: dilo y
+   pide que te lo repitan cuando termine.`;
 
 /**
  * Lo que solo aplica a los DOCUMENTOS (kickoff, diagnóstico, planificación, requerimiento
@@ -803,11 +835,19 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "tarea.duenio",
                 "tarea.tipo",
                 "arranque",
+                /* E3 P5: los de la propuesta abierta. ⛔ Van SIEMPRE en el enum (D16): la herramienta y
+                   el prompt son estáticos, así entrar o salir de una propuesta no rompe la caché. Si hay
+                   o no propuesta lo decide el turno, que rechaza lo que no corresponde. */
+                "propuesta.dejar-como-estaba",
+                "propuesta.recuperar",
+                "propuesta.aplicar",
+                "propuesta.descartar-entera",
               ],
               description:
                 "fase.duracion: cambia cuántas semanas dura (semanas). " +
                 "fase.renombrar: le cambia el nombre (nombre). " +
-                "fase.borrar: la elimina con sus tareas. " +
+                "fase.borrar: sin propuesta la elimina con sus tareas; con una propuesta abierta, lo que " +
+                "tiene avance o se cargó a mano se queda, y la fase con ello. " +
                 "fase.redistribuir: reparte sus tareas parejo entre sus semanas. " +
                 "fase.mover: la cambia de lugar en el orden (posicion, base 0). " +
                 "fase.arranque-relativo: en qué semana del proyecto arranca (semana, o null = " +
@@ -824,8 +864,9 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "CONFIGURACION, ADOPCION o SEGUIMIENTO). " +
                 "tarea.mover-semana: pasa UNA tarea a otra semana de su misma fase (taskId, " +
                 "semana base 0). " +
-                "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). ⚠ la recrea: " +
-                "pierde su estado y sus fechas propias, avísalo antes. " +
+                "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). Sin propuesta la recrea " +
+                "(pierde su estado y sus fechas propias: avísalo antes); con una propuesta abierta la " +
+                "muda y conserva su estado. " +
                 "tarea.borrar: elimina UNA tarea (taskId). ⚠ si tiene trabajo humano encima " +
                 "—hecha, en curso, o cargada a mano— se rechaza sola: no se puede borrar desde acá. " +
                 "tarea.crear: agrega una tarea NUEVA (phaseId, titulo, semana base 0, y opcional " +
@@ -833,7 +874,28 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "tarea.renombrar: le cambia el título (taskId, titulo). " +
                 "tarea.duenio: cambia quién la hace (taskId, duenio). " +
                 "tarea.tipo: la vuelve sesión o tarea (taskId, tipo). " +
-                "arranque: cambia la fecha de inicio del proyecto (fecha AAAA-MM-DD).",
+                "arranque: cambia la fecha de inicio del proyecto (fecha AAAA-MM-DD). " +
+                "Solo con una propuesta abierta: " +
+                "propuesta.dejar-como-estaba: deja como está hoy los cambios que nombres (cambios y/o " +
+                "tareas). " +
+                "propuesta.recuperar: los vuelve a la propuesta (cambios y/o tareas). " +
+                "propuesta.aplicar: aplica la propuesta entera al cronograma; va SOLA en el acuerdo. " +
+                "propuesta.descartar-entera: descarta la propuesta entera; va SOLA. " +
+                "⛔ propuesta.descartar-entera no es el campo \"descartar\" (ese suelta P1, P2…).",
+            },
+            cambios: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Para propuesta.dejar-como-estaba y propuesta.recuperar: los NÚMEROS de «LOS CAMBIOS» " +
+                "(los de la barra), como texto: [\"3\", \"5\"]. No son P1, P2…",
+            },
+            tareas: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Para propuesta.dejar-como-estaba y propuesta.recuperar: una tarea suelta de la lista, " +
+                "por su identificador (el de entre corchetes) o su título exacto.",
             },
             phaseId: {
               type: "string",
@@ -1014,9 +1076,39 @@ export async function correrTurno(
      cajita vieja se rotulaba «sigue abajo, en la propuesta vigente», afirmando que sus cambios
      viajaban en un acuerdo que no los contenía. La maquinaria era la misma; lo único propio de
      cada carril es cómo se poda lo que ya no se puede aplicar. */
-  const pendientesCrudos = pendientesDelHilo(hilo.turnos);
-  const podar = (ops: readonly unknown[]) =>
-    esCronograma
+  /* ── E3 P5: PARA QUÉ PROPUESTA SE ACORDÓ, Y QUÉ SE PUEDE HACER CON LA DE AHORA ──────────────────
+     `token`: el de la propuesta abierta del cronograma (de cualquier formato), o null sin propuesta.
+     `modo`: null sin propuesta; «editable» si el chat la puede cambiar; «solo-lectura» si no (formato
+     viejo, versión nueva, el vacío que espera tareas, o la IA armando o recalculando).
+       A · lo pendiente se acordó para OTRA propuesta (o para el cronograma de hoy y apareció una, o
+           para una que ya se resolvió): cae entero, con su motivo, y el libro arranca vacío;
+       B · solo lectura: lo acordado queda CONGELADO (sin podar ni fusionar: la propuesta no se puede
+           leer como para validarlo) y no se registra nada nuevo;
+       C · sin propuesta: como siempre (podar contra el cronograma de hoy y fusionar);
+       D · editable: lo acordado edita la PROPUESTA (`propuesta-del-chat.ts`). */
+  const token = esCronograma ? (ctx.tokenDeLaPropuesta ?? null) : null;
+  const propuesta = esCronograma ? (ctx.propuesta ?? null) : null;
+  const modo = propuesta?.modo ?? null;
+  /* Hay una propuesta pero no se pudo leer: no se sabe su token. No se suelta nada creyendo que no hay
+     propuesta; se congela, como en solo lectura. */
+  const sinLeer = esCronograma && ctx.propuestaSinLeer === true;
+  const pend = acuerdoPendienteDelHilo(hilo.turnos);
+  const caidaPorToken =
+    esCronograma && !sinLeer && pend && pend.operaciones.length > 0 && pend.borrador !== token
+      ? motivoDeCaidaPorToken(pend.borrador, token)
+      : null;
+  /* Solo lectura no registra NADA nuevo; lo pendiente queda congelado solo si no cayó por la propuesta
+     (si cayó, el libro ya está vacío y lo que se dice es la caída). */
+  const soloLectura = modo === "solo-lectura" || sinLeer;
+  const congelado = soloLectura && caidaPorToken === null;
+  const editable = modo === "editable" && !!propuesta?.resumen ? propuesta : null;
+  const pendientesCrudos = caidaPorToken !== null ? [] : (pend?.operaciones ?? []);
+  const podar = (ops: readonly unknown[]): { vivas: unknown[]; caidas: Array<{ operacion: unknown; motivo: string }> } =>
+    congelado
+      ? { vivas: [...ops], caidas: [] }
+      : editable
+        ? libroSobreLaPropuesta(editable, ops)
+        : esCronograma
       ? (() => {
           const r = podarIrresolubles(ops as Operacion[], paraTraducir);
           return { vivas: r.vivas as unknown[], caidas: r.caidas };
@@ -1031,23 +1123,35 @@ export async function correrTurno(
             caidas: prep.rechazadas.map((r) => ({ operacion: r.operacion as never, motivo: r.motivo })),
           };
         })();
+  /* E3 P5: con la propuesta editable, las líneas dicen lo que pasa EN LA PROPUESTA (con los números de
+     la barra): el mismo traductor para el bloque de pendientes y para la cajita. */
+  const describirEnLaPropuesta = editable ? describirSobreLaPropuesta(editable) : null;
   const describir = (ops: readonly unknown[]) =>
     ops.length === 0
       ? []
       : esCronograma
-        ? describirOperaciones(paraTraducir, ops as Operacion[])
+        ? describirEnLaPropuesta
+          ? describirEnLaPropuesta(ops as OperacionDelChat[])
+          : describirOperaciones(paraTraducir, ops as Operacion[])
         : describirOperacionesDeDocumento(ctx.secciones ?? [], ops as OperacionDeDocumento[]);
   const lineasCrudas = describir(pendientesCrudos);
   const libro = podar(pendientesCrudos);
   /* ⭐ Lo que se cayó SOLO —un pendiente que dejó de poder aplicarse porque alguien editó debajo de
      la conversación—. Lo calcula la APP después de que el modelo contestó, así que es la única
      categoría que se perdería en silencio si no viajara en el acuerdo. Vive acá arriba porque lo
-     usan las DOS ramas: la del documento lo calculaba y lo tiraba. */
+     usan las DOS ramas: la del documento lo calculaba y lo tiraba.
+     E3 P5: si lo pendiente era para otra propuesta, cae entero en UNA línea con su motivo. */
   const soltadas = libro.caidas.map((c) => {
     const i = pendientesCrudos.indexOf(c.operacion);
     const linea = i >= 0 ? lineasCrudas[i] : null;
     return `${linea ?? "Un cambio anterior"} — ya no se puede aplicar: ${c.motivo}`;
   });
+  /** Por qué cayó lo pendiente, para el aviso del acuerdo de cierre. */
+  const motivosDeLaCaida = libro.caidas.map((c) => c.motivo);
+  if (caidaPorToken !== null && pend) {
+    soltadas.push(lineaDeLoQueNoVa(pend.operaciones.length, caidaPorToken));
+    motivosDeLaCaida.push(caidaPorToken);
+  }
   /**
    * ⭐ UN SOLO TRADUCTOR PARA LOS DOS LECTORES (acuerdo-vivo.ts, `bloqueDePendientes`): la cajita
    * azul del CSE y el bloque de pendientes del modelo leen LAS MISMAS líneas, con el «⚠ revisa…» de
@@ -1056,8 +1160,14 @@ export async function correrTurno(
    * 2026-09-24). Sin material (sin huellas) las líneas salen tal cual.
    */
   const huellas = esCronograma && ctx.material?.interno.length ? huellasDeFrontera(ctx.material.interno) : null;
+  /* E3 P5: CONGELADO (solo lectura), lo pendiente se le cuenta al modelo con las líneas GUARDADAS —las
+     que leyó el CSE—: no hay contra qué volver a traducirlas mientras la propuesta no se puede leer. */
+  const lineasCongeladas =
+    congelado && pend && pend.lineas.length === pend.operaciones.length ? pend.lineas : null;
   const lineasParaLosDosLectores = (ops: readonly unknown[]) =>
-    esCronograma ? lineasConFrontera(describir(ops), ops as Operacion[], huellas) : describir(ops);
+    lineasCongeladas && ops === libro.vivas
+      ? [...lineasCongeladas]
+      : esCronograma ? lineasConFrontera(describir(ops), ops as Operacion[], huellas) : describir(ops);
   const lineasVivas = lineasParaLosDosLectores(libro.vivas);
 
   /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
@@ -1446,6 +1556,11 @@ export async function correrTurno(
         stopReason: msg.stop_reason,
       });
     }
+  } else if (soloLectura) {
+    /* E3 P5 · B — SOLO LECTURA: no se registra nada, y lo acordado antes queda como estaba (su botón lo
+       frena la pantalla con el porqué). Si el modelo emitió igual, se dice que no quedó registrado. Si lo
+       pendiente cayó por la propuesta, tampoco se registra lo nuevo: el acuerdo de cierre lo dice. */
+    if (opsNuevas.length > 0) respuesta = `${respuesta.trim()}\n\n${avisoDeSoloLectura(propuesta?.porQue ?? null)}`;
   } else {
     /**
      * ⭐ LA COMPOSICIÓN: lo pendiente que sigue en pie + lo que se acaba de acordar.
@@ -1453,8 +1568,40 @@ export async function correrTurno(
      * ⛔ Y LAS LÍNEAS SE RECALCULAN SOBRE EL CONJUNTO FUSIONADO, que es el que se va a ejecutar.
      * Calcularlas sobre `opsNuevas` mostraría MENOS de lo que se escribe: la persona aprobaría
      * cambios que no leyó, y ahí se cae la única garantía de todo el diseño.
+     *
+     * E3 P5 · D — con la propuesta EDITABLE, la composición la arma `acuerdoSobreLaPropuesta`: traduce
+     * lo que nombró el modelo (números de la barra, tareas, «aplícala»), deja solas las que van solas,
+     * fusiona con lo pendiente y valida EN SECO contra la propuesta, sin reintento. Lo que no registra
+     * lo dice. · C — sin propuesta, lo de siempre; lo que era sobre una propuesta no se registra.
      */
-    const fusion = fusionarPendientes(libro.vivas as Operacion[], opsNuevas, descartar);
+    const sobreLaPropuesta = editable
+      ? acuerdoSobreLaPropuesta({
+          propuesta: editable,
+          vivas: libro.vivas as OperacionDelChat[],
+          opsNuevas,
+          descartar,
+          preguntaAbierta,
+        })
+      : null;
+    const sinPropuestaDondeHacerlo = editable ? [] : opsNuevas.filter((o) => esOperacionDePropuesta(o));
+    const avisosDelTurno = [
+      ...(sobreLaPropuesta?.avisos ?? []),
+      ...(sinPropuestaDondeHacerlo.length > 0 ? [AVISO_SIN_PROPUESTA_ABIERTA] : []),
+    ];
+    if (avisosDelTurno.length > 0) respuesta = `${respuesta.trim()}\n\n${avisosDelTurno.join("\n\n")}`;
+    /* Lo pendiente que cae por lo que se pidió en ESTE turno (no a pedido del modelo): se dice. */
+    for (const c of sobreLaPropuesta?.caidas ?? []) {
+      const k = libro.vivas.indexOf(c.operacion);
+      soltadas.push(`${(k >= 0 ? lineasVivas[k] : null) ?? "Un cambio anterior"} — ${c.motivo}`);
+      motivosDeLaCaida.push(c.motivo);
+    }
+    const fusion =
+      sobreLaPropuesta ??
+      fusionarPendientes(
+        libro.vivas as OperacionDelChat[],
+        opsNuevas.filter((o) => !esOperacionDePropuesta(o)),
+        descartar,
+      );
     if (fusion.operaciones.length > 0) {
       /**
        * ⭐ SOLO SE MUESTRA LO QUE SE CAYÓ SOLO, NO LO QUE EL MODELO DESCARTÓ A PEDIDO.
@@ -1495,8 +1642,30 @@ export async function correrTurno(
         ...(preguntaAbierta ? { enEspera: true } : {}),
         ...(fusion.arrastradas.length > 0 ? { arrastradas: fusion.arrastradas } : {}),
         ...(soltadas.length > 0 ? { descartadas: soltadas } : {}),
+        /* E3 P5: SE SELLA para qué propuesta se acordó (null = para el cronograma de hoy). En el turno
+           siguiente, si la propuesta es otra, lo pendiente cae con su motivo; y la pantalla sabe si el
+           botón escribe el cronograma o pasa a la propuesta. */
+        borrador: token,
       };
     }
+  }
+
+  /**
+   * ⭐ E3 P5: EL ACUERDO DE CIERRE. Si lo pendiente cayó (la propuesta cambió, o el cronograma cambió
+   * debajo) y no hay nada nuevo que acordar, se escribe un acuerdo SIN operaciones que corta el libro:
+   * la caída se dice UNA vez, y el acuerdo de antes queda «ya no va» en vez de seguir con su botón.
+   * Va después de las dos ramas: también cubre los documentos y el caso de siempre en que todo lo
+   * pendiente se cae sin nada nuevo.
+   */
+  if (!acuerdo && soltadas.length > 0) {
+    acuerdo = {
+      resumen: RESUMEN_DEL_CIERRE,
+      operaciones: [],
+      descartadas: soltadas,
+      ...(esCronograma ? { borrador: token } : {}),
+    };
+    const motivo = [...new Set(motivosDeLaCaida)].join(" · ") || "el cronograma cambió";
+    respuesta = `${respuesta.trim()}\n\n${avisoDeCierre(motivo)}`;
   }
 
   /* Si el modelo cerró con la tool y sin texto, el panel igual tiene qué mostrar. */

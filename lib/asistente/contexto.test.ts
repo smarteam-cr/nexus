@@ -451,14 +451,27 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
       expect(l).toContain("«Descartar»");
     }
 
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: con la propuesta EDITABLE el chat la aplica o la
+       descarta, así que la línea suma «(o me lo pides acá)» donde manda a la barra. Solo ahí: con el formato
+       viejo o mientras la IA arma, el chat no la puede resolver. Las ediciones que la ponen en rojo: sacar la
+       cola, ponerla sin propuesta editable, o alargar la línea hasta comerse el techo. */
     for (const d of [false, true]) {
       for (const p of [false, true]) {
         for (const c of [false, true]) {
-          const l = linea(d, p, c);
-          expect(l.startsWith("PARA REHACER TODO"), "el prompt busca la línea por su comienzo").toBe(true);
-          expect(l.length, "la línea se come el techo del prefijo").toBeLessThan(420);
+          for (const chat of [false, true]) {
+            const l = lineaParaRehacerTodo({ conDetalleDeLaIA: d, publicadoAlgunaVez: p, cambiosDeFasesSinDecidir: c, propuestaDesdeElChat: chat });
+            expect(l.startsWith("PARA REHACER TODO"), "el prompt busca la línea por su comienzo").toBe(true);
+            expect(l.length, "la línea se come el techo del prefijo").toBeLessThan(420);
+            if (!chat) expect(l, "ofrece resolver desde el chat una propuesta que no puede").not.toContain("(o me lo pides acá)");
+          }
         }
       }
+    }
+    for (const d of [false, true]) {
+      const conChat = lineaParaRehacerTodo({ conDetalleDeLaIA: d, publicadoAlgunaVez: false, cambiosDeFasesSinDecidir: true, propuestaDesdeElChat: true });
+      expect(conChat, "con la propuesta editable no ofrece resolverla desde el chat").toContain(
+        "(«Aplicar» lo marcado, o «Descartar») (o me lo pides acá)",
+      );
     }
   });
 

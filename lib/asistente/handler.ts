@@ -29,6 +29,7 @@ import {
 import { correrTurno, MODELO_DEL_ASISTENTE } from "./turno";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "./acuerdo";
+import { textoDelDesenlaceDeLaPropuesta } from "./textos-del-acuerdo";
 import { estadosDeAcuerdo } from "./acuerdo-vivo";
 
 const piezaSchema = z.string().trim().min(1).max(60);
@@ -63,6 +64,9 @@ const bodySchema = z.union([
       /* ⚠ Qué carril aplicó. Por defecto `true` para no romper un cliente viejo: el carril lento
          —la instrucción en prosa que un segundo modelo relee— era el único que existía. */
       vistaPrevia: z.boolean().optional(),
+      /* E3 P5: a DÓNDE fue lo acordado: al cronograma, a la propuesta abierta (arriba del Gantt) o se
+         descartó la propuesta entera. Si falta, se deduce de `vistaPrevia` como antes. */
+      destino: z.enum(["cronograma", "propuesta", "descarte"]).optional(),
     }),
   }),
 ]);
@@ -155,7 +159,10 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
   if ("desenlace" in parsed.data) {
     const hilo = await hiloVivo(pedido);
     if (!hilo) return NextResponse.json({ hilo: null });
-    const { ok, detalle, vistaPrevia = true } = parsed.data.desenlace;
+    const { ok, detalle, destino } = parsed.data.desenlace;
+    // E3 P5: con `destino`, el carril lo dice él (al cronograma no hay vista previa); sin él, como antes.
+    const vistaPrevia = destino ? false : (parsed.data.desenlace.vistaPrevia ?? true);
+    const deLaPropuesta = ok ? textoDelDesenlaceDeLaPropuesta(destino, detalle) : null;
     /* ⚠ ESTO ES VOZ DEL ASISTENTE Y SE PERSISTE EN EL HILO: el modelo lo relee como contexto en
        cada turno siguiente. Cableado a «el cronograma», el chat de un kickoff aprendía de su
        propio historial que estaba editando un cronograma. Visto en pantalla el 2026-08-22.
@@ -176,7 +183,9 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
          eso, un apply fallido vaciaría el libro de pendientes y la persona perdería lo que
          justamente NO se escribió. */
       contenido: marcaDeDesenlace({ ok }) + "\n\n" + (ok
-        ? detalle
+        ? deLaPropuesta
+          ? deLaPropuesta
+          : detalle
           ? `⚠ Se aplicó, pero el editor hizo algo distinto con una parte:
 
 ${detalle}

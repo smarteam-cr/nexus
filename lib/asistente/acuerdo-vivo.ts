@@ -37,9 +37,9 @@
  */
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
-import type { Operacion } from "@/lib/timeline/operaciones";
+import type { Operacion, OperacionDelChat } from "@/lib/timeline/operaciones";
 import type { FaseActual } from "@/lib/timeline/assist-items";
-import { leerAcuerdo, leerDesenlace } from "./acuerdo";
+import { esAcuerdoDeCierre, leerAcuerdo, leerDesenlace } from "./acuerdo";
 
 /** Lo mínimo que el libro necesita de un turno guardado. */
 export interface TurnoDelLibro {
@@ -86,18 +86,40 @@ export function esTurnoDeDesenlace(t: TurnoDelLibro): boolean {
    un acuerdo depende de la pieza (fases y tareas en el cronograma, secciones en un documento). El
    tipo era el ÚNICO acople al cronograma — el cuerpo nunca miró qué operación era. */
 export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): unknown[] {
+  return acuerdoPendienteDelHilo(turnos)?.operaciones ?? [];
+}
+
+/** E3 P5: el acuerdo del que sale lo pendiente, con lo que el turno necesita para revalidarlo. */
+export interface AcuerdoPendiente {
+  /** Crudas, como en `pendientesDelHilo`. Vacío en un acuerdo de cierre. */
+  operaciones: unknown[];
+  /** El token de la propuesta para la que se acordó (null = para el cronograma de hoy). */
+  borrador: string | null;
+  /** Las líneas guardadas (las que leyó el CSE), o [] si el acuerdo no las trae. */
+  lineas: string[];
+}
+
+/**
+ * ⭐ E3 P5: EL ACUERDO QUE LLEVA LO PENDIENTE — el mismo recorrido que `pendientesDelHilo`, pero se
+ * detiene en el último acuerdo que trae el array `operaciones`, AUNQUE ESTÉ VACÍO: el acuerdo de
+ * cierre (`esAcuerdoDeCierre`) corta el libro. Sin eso, el recorrido pasaría de largo y resucitaría el
+ * acuerdo de antes, que ya se dijo que no va.
+ */
+export function acuerdoPendienteDelHilo(turnos: readonly TurnoDelLibro[]): AcuerdoPendiente | null {
   for (let i = turnos.length - 1; i >= 0; i--) {
     const t = turnos[i];
     if (esTurnoDeDesenlace(t)) {
       const { desenlace } = leerDesenlace(t.contenido);
-      if (desenlace?.ok ?? true) return [];
+      if (desenlace?.ok ?? true) return null;
       continue;
     }
     const { acuerdo } = leerAcuerdo(t.contenido);
     const ops = acuerdo?.operaciones;
-    if (Array.isArray(ops) && ops.length > 0) return ops;
+    if (Array.isArray(ops) && (ops.length > 0 || esAcuerdoDeCierre(acuerdo))) {
+      return { operaciones: ops, borrador: acuerdo?.borrador ?? null, lineas: acuerdo?.lineas ?? [] };
+    }
   }
-  return [];
+  return null;
 }
 
 /* ── EL ESTADO DE CADA CAJA ────────────────────────────────────────────────────────────────── */
@@ -109,7 +131,7 @@ export function pendientesDelHilo(turnos: readonly TurnoDelLibro[]): unknown[] {
  * texto: no puede quedar desincronizada porque se recalcula del mismo contenido. NO es la tabla de
  * estados que el diseño descarta — esa sería una segunda fuente de verdad.
  */
-export type EstadoDeAcuerdo = "vivo" | "en-espera" | "aplicado" | "retomado";
+export type EstadoDeAcuerdo = "vivo" | "en-espera" | "aplicado" | "retomado" | "soltado";
 
 /**
  * ⭐ EL BOTÓN SIGUE AL ESTADO, NO A LA POSICIÓN.
@@ -127,6 +149,10 @@ export type EstadoDeAcuerdo = "vivo" | "en-espera" | "aplicado" | "retomado";
  * ⛔ COMO MUCHO UNO PUEDE ESTAR "vivo", y eso no es una convención: dos botones vivos son dos
  * lotes que se solapan aplicados en el orden en que la persona clickee, sobre un vocabulario que
  * no es idempotente. Un `tarea.crear` aplicado dos veces son dos tareas.
+ *
+ * E3 P5: un acuerdo seguido de un ACUERDO DE CIERRE (sin desenlace en el medio) queda "soltado": lo
+ * que traía ya no va (la propuesta cambió, o el cronograma cambió debajo). El cierre mismo no es un
+ * acuerdo que se aplique: su estado es null (no lleva botón; su texto dice qué cayó y por qué).
  */
 export function estadosDeAcuerdo(
   turnos: readonly TurnoDelLibro[],
@@ -135,7 +161,7 @@ export function estadosDeAcuerdo(
   const tieneAcuerdo = acuerdos.map((a) => a !== null);
 
   return turnos.map((t, i) => {
-    if (!tieneAcuerdo[i]) return null;
+    if (!tieneAcuerdo[i] || esAcuerdoDeCierre(acuerdos[i])) return null;
     for (let j = i + 1; j < turnos.length; j++) {
       if (esTurnoDeDesenlace(turnos[j])) {
         const { desenlace } = leerDesenlace(turnos[j].contenido);
@@ -144,7 +170,7 @@ export function estadosDeAcuerdo(
            si más adelante hay otro acuerdo, es ése el que lo lleva. */
         continue;
       }
-      if (tieneAcuerdo[j]) return "retomado";
+      if (tieneAcuerdo[j]) return esAcuerdoDeCierre(acuerdos[j]) ? "soltado" : "retomado";
     }
     /**
      * ⭐ CON UNA PREGUNTA ABIERTA NO SE APLICA, y es la corrección de Elías (2026-08-21).
@@ -222,9 +248,9 @@ export function podarIrresolubles(
 
 /* ── LA FUSIÓN ─────────────────────────────────────────────────────────────────────────────── */
 
-export interface Fusion {
+export interface Fusion<O extends OperacionDelChat = Operacion> {
   /** El conjunto COMPLETO que se va a ejecutar: lo que sobrevivió de antes, más lo nuevo. */
-  operaciones: Operacion[];
+  operaciones: O[];
   /** Los índices (dentro de `operaciones`) que vienen de turnos anteriores. */
   arrastradas: number[];
   /** Los índices DENTRO DE `pendientes` que se soltaron, para poder decirlo. */
@@ -232,15 +258,19 @@ export interface Fusion {
 }
 
 /** Huella estable de una operación: las claves ordenadas, para que el orden del JSON no importe. */
-function huella(o: Operacion): string {
+function huella(o: OperacionDelChat): string {
   return JSON.stringify(
     Object.fromEntries(Object.entries(o as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))),
   );
 }
 
-/** «P2» / «p2» / «2» → 1. Cualquier otra cosa, `null`. */
-export function indiceDeEtiqueta(raw: unknown): number | null {
-  const m = /^\s*[pP]?\s*(\d+)\s*$/.exec(String(raw ?? ""));
+/**
+ * «P2» / «p2» / «2» → 1. Cualquier otra cosa, `null`.
+ * E3 P5: con `exigirP` (una propuesta abierta) solo vale con la P: ahí «3» es el número de un cambio de
+ * la barra, no el tercer pendiente, y leerlo como «P3» soltaría algo que nadie pidió soltar.
+ */
+export function indiceDeEtiqueta(raw: unknown, opts: { exigirP?: boolean } = {}): number | null {
+  const m = (opts.exigirP ? /^\s*[pP]\s*(\d+)\s*$/ : /^\s*[pP]?\s*(\d+)\s*$/).exec(String(raw ?? ""));
   if (!m) return null;
   const i = Number(m[1]) - 1;
   return Number.isInteger(i) && i >= 0 ? i : null;
@@ -250,8 +280,8 @@ export function indiceDeEtiqueta(raw: unknown): number | null {
  * Si una `fase.crear` que se arrastra usa el mismo `ref` que una nueva, el ejecutor rechaza el
  * duplicado y **muere el lote entero**. Se renombra la vieja y se reapunta a sus dependientes.
  */
-function reetiquetarRefs(pendientes: readonly Operacion[], nuevas: readonly Operacion[]): Operacion[] {
-  const refDe = (o: Operacion) => (o.op === "fase.crear" ? o.ref?.trim() : undefined);
+function reetiquetarRefs<O extends OperacionDelChat>(pendientes: readonly O[], nuevas: readonly O[]): O[] {
+  const refDe = (o: OperacionDelChat) => (o.op === "fase.crear" ? o.ref?.trim() : undefined);
   const refsNuevas = new Set(nuevas.map(refDe).filter((r): r is string => !!r));
   const usados = new Set([...refsNuevas, ...pendientes.map(refDe).filter((r): r is string => !!r)]);
 
@@ -268,12 +298,12 @@ function reetiquetarRefs(pendientes: readonly Operacion[], nuevas: readonly Oper
   if (renombres.size === 0) return [...pendientes];
 
   return pendientes.map((o) => {
-    const copia = { ...o } as Operacion & { ref?: string; phaseId?: string };
+    const copia = { ...o } as O & { ref?: string; phaseId?: string };
     if (copia.ref && renombres.has(copia.ref.trim())) copia.ref = renombres.get(copia.ref.trim());
     if (copia.phaseId && renombres.has(copia.phaseId.trim())) {
       copia.phaseId = renombres.get(copia.phaseId.trim());
     }
-    return copia as Operacion;
+    return copia as O;
   });
 }
 
@@ -290,13 +320,15 @@ function reetiquetarRefs(pendientes: readonly Operacion[], nuevas: readonly Oper
  * visible y recuperable; fallar en conservar, no.
  */
 export function fusionarPendientes(
-  pendientes: readonly Operacion[],
-  nuevas: readonly Operacion[],
+  pendientes: readonly OperacionDelChat[],
+  nuevas: readonly OperacionDelChat[],
   descartar: readonly unknown[] = [],
-): Fusion {
+  /* E3 P5: con una propuesta abierta, el descarte se pide SOLO con la P (ver `indiceDeEtiqueta`). */
+  opts: { exigirP?: boolean } = {},
+): Fusion<OperacionDelChat> {
   const pedidos = new Set<number>();
   for (const raw of descartar) {
-    const i = indiceDeEtiqueta(raw);
+    const i = indiceDeEtiqueta(raw, opts);
     if (i !== null && i < pendientes.length) pedidos.add(i);
   }
 

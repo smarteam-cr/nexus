@@ -38,7 +38,13 @@ import {
   endShiftFragment,
 } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
-import ChatDelAsistente, { ID_DEL_CAJON } from "@/components/asistente/ChatDelAsistente";
+import ChatDelAsistente, {
+  ID_DEL_CAJON,
+  type AcuerdoDelChat,
+  type ResultadoDeAplicar,
+} from "@/components/asistente/ChatDelAsistente";
+import { debeAbrirseElChat, leerApertura, recordarApertura } from "@/lib/timeline/apertura-del-chat";
+import { claseDeAcuerdo } from "@/lib/asistente/textos-del-acuerdo";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -75,6 +81,7 @@ import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
 import { leerRecalculoDelCable, recalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 import {
+  abiertoPara,
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   CHAT_CON_EL_VACIO_FALLIDO,
@@ -85,6 +92,7 @@ import {
   esBorradorV1,
   esperaEnCurso,
   estadoDelVacio,
+  excluidosDelGuardado,
   juntarObservaciones,
   leerBorrador,
   MENSAJE_PROPUESTA_ABIERTA,
@@ -102,6 +110,7 @@ import {
 import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
+  ACUERDO_PARA_EL_VIGENTE,
   AVISO_PROPUESTA_PENDIENTE,
   CAMBIOS_DE_FASES_SIN_DECIDIR,
   pasoTrasEstructura,
@@ -132,6 +141,22 @@ import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { diasSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
 import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
+
+/* ── E3 P5: LO QUE EL CRONOGRAMA LE CONTESTA AL CHAT (tuteo, cortos: se leen en el botón o en el hilo) ── */
+const MOTIVO_SIN_APLICAR = "Espera: la propuesta se está aplicando o descartando.";
+const MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO = "La propuesta cambió desde que lo acordamos: pídemelo de nuevo.";
+const MOTIVO_CRONOGRAMA_CAMBIO_DESDE_EL_ACUERDO = "El cronograma cambió desde que lo acordamos: pídemelo de nuevo.";
+const MOTIVO_OTRA_PROPUESTA = "Llegó otra propuesta del cronograma: revísala.";
+const MOTIVO_NO_SE_DESCARTO = "No se pudo descartar la propuesta: vuelve a intentar.";
+/** Los motivos del botón del chat (≤ 60 caracteres: van EN el botón). */
+const MOTIVOS_DEL_CHAT = {
+  vistaPrevia: "Descarta la vista previa de «Pedir cambio con IA»",
+  hayPropuesta: "Hay una propuesta abierta: pídemelo de nuevo",
+  cambio: "La propuesta cambió: pídemelo de nuevo",
+  enSuBarra: "Resuelve la propuesta en su barra",
+  armando: "Espera: la IA está armando las tareas",
+  recalcular: "Faltan recalcular tareas: mira la barra",
+} as const;
 
 interface TaskDraft {
   id?: string;
@@ -525,6 +550,8 @@ export default function CronogramaCanvas({
      `submitAssist` solo atiende los acuerdos viejos, guardados como instrucción de texto. Desde el
      2026-09-23 el chat lee también las reuniones y notas elegidas en «Contexto del cronograma». */
   const [chatAbierto, setChatAbierto] = useState(false);
+  /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
+  const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
@@ -1575,6 +1602,12 @@ export default function CronogramaCanvas({
   useEffect(() => {
     revisionRef.current = revision;
   });
+  /* E3 P5: la propuesta de AHORA, para leer lo desmarcado del servidor desde un callback async (el
+     aplicar del chat, después de esperar el guardado y las casillas). */
+  const proposalRef = useRef(proposal);
+  useEffect(() => {
+    proposalRef.current = proposal;
+  });
   /* E3 P3: al volver a la pestaña (o a la ventana), la propuesta se relee: lo que marcó otra computadora
      o lo que editó el chat sube la versión, y `refrescarPropuesta` la reemplaza solo si es más nueva.
      Mientras haya una propuesta guardada en pantalla; nunca con la vista previa del modificador. */
@@ -2060,7 +2093,9 @@ export default function CronogramaCanvas({
             ? esperaEnCurso("la IA está armando las tareas")
             : vacio === "fallo"
               ? CHAT_CON_EL_VACIO_FALLIDO
-              : CAMBIOS_DE_FASES_SIN_DECIDIR,
+              : /* E3 P5: se acordó para el cronograma de hoy y la propuesta llegó después: se pide de
+                   nuevo y va a la propuesta. */
+                ACUERDO_PARA_EL_VIGENTE,
         avisos: [],
       };
     }
@@ -2191,7 +2226,10 @@ export default function CronogramaCanvas({
     setApplying(false);
   };
 
-  const discardProposal = async (reason?: string) => {
+  /* E3 P5: devuelve cómo terminó: «descartada» (el servidor la borró, o era la vista previa en memoria),
+     «otra» (la guardada ya era otra: no se borró nada) o «fallo» (el DELETE no anduvo, o ya había uno en
+     curso). El chat da éxito SOLO con «descartada»; la barra no mira el resultado. */
+  const discardProposal = async (reason?: string): Promise<"descartada" | "otra" | "fallo"> => {
     /* Revisión de E2b: la oferta de las tareas es de lo que se resolvió ANTES. Resolver otra propuesta
        (la del handoff que la tapaba) la apaga: si no, volvía a aparecer después de este «Descartar».
        Si corresponde, `pasoTrasResolver` la vuelve a prender abajo. */
@@ -2221,10 +2259,11 @@ export default function CronogramaCanvas({
        responde 409 si es otra). */
     let guardadaEsOtra = false;
     let yaNoEstaGuardada = false;
+    let borrada = false;
     const eraDelModificador = proposalMeta.current.deAssist;
     if (!eraDelModificador) {
       // Un doble clic (o el descarte automático encima del manual): el primer DELETE sigue en curso.
-      if (descartandoRef.current) return;
+      if (descartandoRef.current) return "fallo";
       descartandoRef.current = true;
       setDescartando(true);
       try {
@@ -2236,6 +2275,7 @@ export default function CronogramaCanvas({
           body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
         });
         guardadaEsOtra = res.status === 409;
+        borrada = res.ok;
         /* Solo se olvida la foto si el servidor ya no tiene ESTA propuesta (borrada, o ya era
            otra). Si el DELETE falló, la propuesta sigue guardada: olvidar la foto haría que al
            recargar una edición a mano que chocaba pase a «aplica» (revisión de E1). */
@@ -2266,13 +2306,13 @@ export default function CronogramaCanvas({
          mientras la IA trabajaba (el 409 PROPUESTA_ABIERTA lo dice), y sin esto no aparecía hasta
          recargar. */
       void refrescarPropuesta();
-      return;
+      return "descartada";
     }
     if (guardadaEsOtra) {
       /* La guardada ya no es la que se descartó (otra la reemplazó): no se borró nada, se trae la que
          está y no se ofrece nada por la descartada. */
       void traerPropuestaPendiente();
-      return;
+      return "otra";
     }
     if (origenDescartado === "contexto") {
       /* Se JUNTAN, no se reemplazan: el borrador vacío del paso 2 pudo nacer sin observaciones, y
@@ -2292,15 +2332,36 @@ export default function CronogramaCanvas({
       setOfertaConFases(conFasesLaDescartada);
       setOfrecerTareas(true);
     }
+    return borrada ? "descartada" : "fallo";
   };
 
   // ── APLICAR LA PROPUESTA DE FASES (la del handoff, o la de las reuniones) ─────────────────────
   // Una sola vez y entera: lo marcado se escribe; lo desmarcado y lo que choca con una edición
   // posterior se descartan con ella. El servidor decide (POST /timeline/borrador/aplicar): recalcula
   // el plan en su transacción y, si no es la lista que ves, no escribe nada.
-  const aplicarBorrador = async () => {
+  /* E3 P5: también lo aplica el chat («aplícala»), con la lista que se ACORDÓ (`acordada`: su versión y
+     su huella). La línea del chat fue la confirmación: sin diálogo ni toasts, y el resultado vuelve al
+     chat (`{ fallo, avisos, destino }`). La barra lo sigue llamando sin nada (y con `void`). */
+  const aplicarBorrador = async (opts?: {
+    acordada?: { version?: number; huella?: string };
+    desdeElChat?: boolean;
+  }): Promise<ResultadoDeAplicar> => {
+    const desdeElChat = !!opts?.desdeElChat;
+    const resultado = (fallo: string | null, avisos: string[] = []): ResultadoDeAplicar => ({
+      fallo,
+      avisos,
+      destino: "cronograma",
+    });
+    /* Lo que la barra dice con un toast, el chat lo recibe como el motivo del fallo. */
+    const decir = (motivo: string, tono: "error" | "info" = "error"): ResultadoDeAplicar => {
+      if (!desdeElChat) {
+        if (tono === "info") toast.info(motivo);
+        else toast.error(motivo);
+      }
+      return resultado(motivo);
+    };
     // Con un descarte en curso, aplicar caería en el 409 de «la propuesta cambió».
-    if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return;
+    if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return resultado(MOTIVO_SIN_APLICAR);
     setAplicandoBorrador(true);
     // Revisión de E2b: la oferta de antes se apaga (ver `discardProposal`); `pasoTrasResolver` decide la de esta.
     setOfrecerTareas(false);
@@ -2312,28 +2373,37 @@ export default function CronogramaCanvas({
     // E2a: el estado de sus tareas (null = no esperaba tareas), ANTES de limpiar la propuesta.
     const tareasResueltas = tareasEnPantalla?.estado ?? null;
     let siguiente: "nada" | "ofrecer" = "nada";
+    let final = resultado(null);
     try {
       /* Lo que editaste a mano tiene que estar en la base ANTES: el servidor compara contra ella. Si
          no se puede guardar, no se aplica (compararía contra otra cosa que la que ves). */
       const sinGuardar = await esperarQueSeGuarde();
-      if (sinGuardar) {
-        toast.error(sinGuardar);
-        return;
-      }
+      if (sinGuardar) return decir(sinGuardar);
       /* E3: lo que marcaste también tiene que estar guardado: cada casilla sube la versión que viaja. Si
          no se pudo, ya se dijo y la lista volvió a lo del servidor: no se aplica algo que no viste. */
-      if (await revisionRef.current.esperarCasillas()) return;
+      const sinCasillas = await revisionRef.current.esperarCasillas();
+      if (sinCasillas) return resultado(sinCasillas);
+      /* E3 P5: desde el chat se aplica EXACTAMENTE la lista que se acordó (D7): la versión de la pantalla
+         tiene que ser la acordada. Si la pantalla va atrás (otra computadora marcó, o el chat editó), se
+         trae la guardada y se compara una vez más; si es otra, no se escribe nada. */
+      if (desdeElChat) {
+        const acordada = opts?.acordada?.version ?? null;
+        if (acordada !== null && (revisionRef.current.version ?? -1) < acordada) {
+          await traerPropuestaPendiente();
+          await new Promise<void>((r) => window.setTimeout(r, 60));
+        }
+        if (acordada === null || revisionRef.current.version !== acordada) return resultado(MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO);
+      }
       /* Lo ÚLTIMO de la revisión (el guardado de recién pudo mover lo vivo): la lista, la huella y
          la foto que viajan son las de este momento. Y el historial de deshacer se limpia antes: un
          «deshacer» a mitad del aplicar mandaría el cronograma de antes por encima del aplicado. */
       await new Promise<void>((r) => window.setTimeout(r, 60));
       const { resumen, sin, foto, forzadas } = revisionRef.current;
-      if (!resumen) return;
+      if (!resumen) return resultado(MOTIVO_SIN_APLICAR);
       /* E2c: con un bloqueo (tareas que se recalculan o se arman) no se manda nada: el servidor lo
          rechazaría igual. La pantalla ya lo dice; esto cubre un clic que llegó justo antes. */
       if (resumen.bloqueo) {
-        toast.info(resumen.bloqueo);
-        return;
+        return decir(resumen.bloqueo, "info");
       }
       clearScope(undoScope);
       const res = await fetch(`/api/projects/${projectId}/timeline/borrador/aplicar`, {
@@ -2345,12 +2415,27 @@ export default function CronogramaCanvas({
            reescribió en el medio (llegaron las tareas), responde 409 PROPUESTA_CAMBIO con la nueva,
            que se trae abajo: sin ella, un «Aplicar» caía una y otra vez en PLAN_CAMBIO (el `load` no
            reemplaza la propuesta de la pantalla).
-           `forzar` (E2c): las fases desfasadas de «Aplicar de todos modos»: sus tareas van tal cual. */
-        body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version, forzar: [...forzadas] }),
+           `forzar` (E2c): las fases desfasadas de «Aplicar de todos modos»: sus tareas van tal cual.
+           E3 P5: desde el chat, la huella ACORDADA (la lista que se leyó en la línea), lo desmarcado del
+           servidor (con lo que se calculó esa huella) y nada forzado: si el plan de ahora no es ese, la
+           ruta responde PLAN_CAMBIO y no escribe nada. */
+        body: JSON.stringify({
+          token: proposalMeta.current.runId,
+          sin: desdeElChat ? (excluidosDelGuardado(proposalRef.current) ?? [...sin]) : [...sin],
+          huella: opts?.acordada?.huella ?? resumen.huella,
+          foto,
+          version: revisionRef.current.version,
+          forzar: desdeElChat ? [] : [...forzadas],
+        }),
       });
       if (res.status === 409) {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.message ?? "La propuesta o el cronograma cambiaron mientras la revisabas: revisa la lista actualizada.");
+        const motivo = desdeElChat
+          ? d?.error === "PLAN_CAMBIO"
+            ? MOTIVO_CRONOGRAMA_CAMBIO_DESDE_EL_ACUERDO
+            : MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO
+          : (d?.message ?? "La propuesta o el cronograma cambiaron mientras la revisabas: revisa la lista actualizada.");
+        if (!desdeElChat) toast.error(motivo);
         if (d?.error === "PLAN_CAMBIO") {
           /* La misma propuesta, otro cronograma (otra pestaña u otra persona): se recarga lo vivo y
              la lista se recalcula contra la misma foto (lo nuevo aparece como choque). */
@@ -2358,12 +2443,11 @@ export default function CronogramaCanvas({
         } else {
           await traerPropuestaPendiente();
         }
-        return;
+        return resultado(motivo);
       }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        toast.error(d?.message ?? d?.error ?? "No se pudo aplicar la propuesta.");
-        return;
+        return decir(d?.message ?? d?.error ?? "No se pudo aplicar la propuesta.");
       }
       const d = (await res.json()) as {
         aplicadas: number;
@@ -2373,14 +2457,19 @@ export default function CronogramaCanvas({
         /** E2a: las tareas creadas + las quitadas. Con alguna, el avance se vuelve a evaluar. */
         tareasTocadas?: number;
       };
-      toast.success(
-        d.aplicadas === d.total
-          ? `Propuesta aplicada: ${plural(d.aplicadas, "cambio", "cambios")}.`
-          : `Se aplicaron ${d.aplicadas} de ${d.total} cambios; el resto quedó fuera.`,
-      );
-      /* Las tareas que se corrieron porque su fase se acortó: el CSE tiene que enterarse de que se
-         mudaron a la última semana. */
-      for (const aviso of Array.isArray(d.avisos) ? d.avisos : []) toast.info(aviso, { duration: 12000 });
+      const avisosDelAplicar: string[] = Array.isArray(d.avisos) ? d.avisos : [];
+      /* E3 P5: desde el chat no hay toasts: el desenlace del hilo lo dice (con los avisos). */
+      if (!desdeElChat) {
+        toast.success(
+          d.aplicadas === d.total
+            ? `Propuesta aplicada: ${plural(d.aplicadas, "cambio", "cambios")}.`
+            : `Se aplicaron ${d.aplicadas} de ${d.total} cambios; el resto quedó fuera.`,
+        );
+        /* Las tareas que se corrieron porque su fase se acortó: el CSE tiene que enterarse de que se
+           mudaron a la última semana. */
+        for (const aviso of avisosDelAplicar) toast.info(aviso, { duration: 12000 });
+      }
+      final = resultado(null, avisosDelAplicar);
       // La propuesta ya no existe: se vacía ANTES de recargar (el load la toma con `prev ?? …`), y
       // lo que se recordaba de ella (la foto, lo desmarcado) se olvida.
       revisionRef.current.olvidar();
@@ -2399,7 +2488,9 @@ export default function CronogramaCanvas({
           const pdata = await pres.json().catch(() => ({}));
           if (pres.ok && pdata?.status === "ok") {
             await load();
-            toast.success("Avance re-evaluado con el cronograma nuevo — confirma abajo.");
+            const avance = "Avance re-evaluado con el cronograma nuevo — confirma abajo.";
+            if (desdeElChat) final = resultado(null, [...final.avisos, avance]);
+            else toast.success(avance);
           }
         } catch { /* best-effort, mismo criterio que el camino viejo */ }
         setChainingProgress(false);
@@ -2411,7 +2502,7 @@ export default function CronogramaCanvas({
         soloFase: soloFaseLaResuelta,
       });
     } catch {
-      toast.error("Error de conexión al aplicar la propuesta.");
+      return decir("Error de conexión al aplicar la propuesta.");
     } finally {
       setAplicandoBorrador(false);
       /* E2c: la fuerza vale para ESTE aplicar. Uno fallido o con 409 no la deja puesta para el
@@ -2426,6 +2517,7 @@ export default function CronogramaCanvas({
       setOfertaConFases(conFasesLaResuelta);
       setOfrecerTareas(true);
     }
+    return final;
   };
 
   // Propuesta de fases donde TODO ya está así (stale: anterior al guard de no-op, o el CSE ya
@@ -2633,6 +2725,145 @@ export default function CronogramaCanvas({
     servidor: tareasEnPantalla?.recalculo ?? null,
     faseDeLaCorrida: faseDelArmado,
   });
+
+  /* ── E3 P5: EL CHAT CON UNA PROPUESTA ABIERTA ─────────────────────────────────────────────────────
+     Un acuerdo sin propuesta (`borrador` null) va por los dos carriles de siempre: el PUT directo
+     (`aplicarOperacionesAcordadas`) o, un acuerdo viejo de texto, el modificador. Uno acordado para una
+     propuesta va a ELLA (`pasarALaPropuesta`): la edita (POST /timeline/borrador/operaciones), la aplica
+     entera con la lista acordada (el mismo `aplicarBorrador` de la barra) o la descarta. */
+  const tareasArmandoEnPantalla =
+    estadoDeLasTareasEnPantalla === "armando" ||
+    tareasEnPantalla?.recalculo?.estado === "armando" ||
+    estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando";
+  /** Por qué el botón del chat no aplica ESTE acuerdo ahora (va en el botón: ≤ 60 caracteres), o null. */
+  const motivoDelChat = (a: AcuerdoDelChat): string | null => {
+    if (proposal && proposalMeta.current.deAssist) return MOTIVOS_DEL_CHAT.vistaPrevia;
+    const enSuBarra = hayBorrador && (!esBorradorV1(proposal) || (revision.borrador?.desconocidos ?? 0) > 0);
+    const token = a.borrador ?? null;
+    if (token === null) {
+      if (!hayBorrador) return null;
+      if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
+      if (tareasArmandoEnPantalla) return MOTIVOS_DEL_CHAT.armando;
+      return MOTIVOS_DEL_CHAT.hayPropuesta;
+    }
+    if (!hayBorrador || token !== proposalMeta.current.runId) return MOTIVOS_DEL_CHAT.cambio;
+    if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
+    if (tareasArmandoEnPantalla) return MOTIVOS_DEL_CHAT.armando;
+    if (claseDeAcuerdo(a) === "aplicar" && revision.resumen?.bloqueo) return MOTIVOS_DEL_CHAT.recalcular;
+    return null;
+  };
+  const pasarALaPropuesta = async (acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> => {
+    const falla = (fallo: string): ResultadoDeAplicar => ({ fallo, avisos: [], destino: "propuesta" });
+    /* 1 · Los frenos de los otros carriles: nada se escribe mientras el cronograma está ocupado o esta
+       pantalla pide una propuesta (la que llega se calculó sobre la versión de antes). */
+    if (ocupado.activo) {
+      return { fallo: esperaEnCurso(ocupado.rotulo), avisos: [] };
+    }
+    if (armando !== null) {
+      return { fallo: esperaEnCurso("armando la propuesta del cronograma"), avisos: [] };
+    }
+    // 2 · Ni con la propuesta aplicándose o descartándose desde la barra.
+    if (aplicandoBorrador || descartandoRef.current) return falla(MOTIVO_SIN_APLICAR);
+    // 3 · Para qué propuesta se acordó, y si ahora se puede tocar.
+    const motivo = motivoDelChat(acuerdo);
+    if (motivo) return falla(motivo);
+    const ops = (acuerdo.operaciones ?? []) as Array<{ op?: unknown; version?: number; huella?: string }>;
+    const clase = claseDeAcuerdo(acuerdo);
+    // 4 · «Aplícala»: la lista ACORDADA, por el mismo aplicar de la barra (sin diálogo: la línea lo fue).
+    if (clase === "aplicar") {
+      return aplicarBorrador({ acordada: { version: ops[0]?.version, huella: ops[0]?.huella }, desdeElChat: true });
+    }
+    // 5 · «Descártala»: éxito SOLO si el servidor la borró (con otra guardada no se borró nada).
+    if (clase === "descartar") {
+      const r = await discardProposal();
+      if (r === "descartada") return { fallo: null, avisos: [], destino: "descarte" };
+      return falla(r === "otra" ? MOTIVO_OTRA_PROPUESTA : MOTIVO_NO_SE_DESCARTO);
+    }
+    // 6 · Lo demás EDITA la propuesta: primero lo editado a mano y lo marcado (el `desde` es lo de ahora).
+    const sinGuardar = await esperarQueSeGuarde();
+    if (sinGuardar) return falla(sinGuardar);
+    const sinCasillas = await revisionRef.current.esperarCasillas();
+    if (sinCasillas) return falla(sinCasillas);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/borrador/operaciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: acuerdo.borrador, version: revisionRef.current.version ?? 0, origen: "chat", operaciones: ops }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 422 && Array.isArray(d?.rechazadas)) {
+        // El número es la línea que se leyó en la cajita (entre las que quedaron marcadas).
+        return falla(
+          (d.rechazadas as Array<{ indice: number; motivo: string }>).map((r) => `#${r.indice + 1}: ${r.motivo}`).join(" · "),
+        );
+      }
+      if (res.status === 409) {
+        await traerPropuestaPendiente();
+        return falla(d?.message ?? MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO);
+      }
+      if (!res.ok) return falla(d?.message ?? d?.error ?? "No se pudo pasar a la propuesta.");
+      adoptarPropuesta(d);
+      // La marca de E2c: sacar un cambio de fase desde el chat también puede dejar tareas desfasadas.
+      revisionRef.current.contarMarcaDelChat();
+      // Lo que se pasó se ve: la vista de la propuesta.
+      if (revisionRef.current.vista === "antes") revisionRef.current.alternar();
+      return { fallo: null, avisos: Array.isArray(d?.avisos) ? d.avisos : [], destino: "propuesta" };
+    } catch {
+      return falla("Error de conexión al pasar a la propuesta.");
+    }
+  };
+  /** El botón del chat: sin propuesta, los carriles de siempre; con una, a la propuesta. */
+  const atenderElAcuerdo = (acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> =>
+    acuerdo.borrador == null
+      ? Array.isArray(acuerdo.operaciones) && acuerdo.operaciones.length > 0
+        ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)
+        : submitAssist(acuerdo.instruccion ?? "", null)
+      : pasarALaPropuesta(acuerdo);
+
+  /* ── E3 P5: EL CHAT SE ABRE SOLO CON UNA PROPUESTA NUEVA ──────────────────────────────────────────
+     Una vez por persona y por propuesta (lo recuerdan el servidor y este navegador), sin tomar el foco,
+     en pantallas anchas y nunca encima de otra capa. Lo decide `debeAbrirseElChat` (puro). */
+  const tokenParaLaApertura = hayBorrador && !proposalMeta.current.deAssist ? proposalMeta.current.runId : null;
+  const aperturaVistaRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tokenParaLaApertura || aperturaVistaRef.current === tokenParaLaApertura) return;
+    const decision = debeAbrirseElChat({
+      puedeEditar: canEdit && phases.length > 0,
+      puedeConversar: me?.permissions?.sections?.asistente?.read === true,
+      hayBorrador,
+      deAssist: proposalMeta.current.deAssist,
+      token: tokenParaLaApertura,
+      conCambios: !!revision.resumen,
+      nadaQueDecidir: revision.nadaQueDecidir,
+      tareasArmando: tareasArmandoEnPantalla,
+      recalculando: tareasEnPantalla?.recalculo?.estado === "armando",
+      ocupado: ocupado.activo || armando !== null,
+      conOtraCapa: !!selectedTask || !!document.querySelector('[aria-modal="true"]'),
+      chatAbierto,
+      anchoSuficiente: window.matchMedia("(min-width: 1280px)").matches,
+      abiertoEnElServidor: abiertoPara(proposal, me?.email),
+      recordadoLocal: leerApertura(projectId, tokenParaLaApertura),
+    });
+    if (decision === "nada") return;
+    aperturaVistaRef.current = tokenParaLaApertura;
+    if (decision === "abrir") {
+      setChatAbierto(true);
+      setAperturaAutomatica(true);
+    }
+    recordarApertura(projectId, tokenParaLaApertura);
+    // De mejor esfuerzo: si no llega, este navegador igual lo recuerda.
+    void fetch(`/api/projects/${projectId}/timeline/borrador/operaciones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: tokenParaLaApertura,
+        version: revision.version ?? 0,
+        origen: "apertura",
+        operaciones: [{ op: "chat-abierto" }],
+      }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenParaLaApertura, canEdit, phases.length, me, revision.resumen, revision.nadaQueDecidir, tareasArmandoEnPantalla, ocupado.activo, armando, selectedTask, chatAbierto]);
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -3349,7 +3580,10 @@ export default function CronogramaCanvas({
   const validationMsg = phases.length > 0 ? validateLocal() : null;
 
   return (
-    <div className="relative">
+    /* E3 P5: con el chat abierto sobre una propuesta, el cronograma se corre (en pantallas anchas): el
+       cajón tapaba «Aplicar» y «Descartar» de la barra. Sin propuesta sigue tapando, a propósito
+       (ChatDelAsistente.tsx). */
+    <div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>
       {/* ⭐ EL CRONOGRAMA SE BLOQUEA MIENTRAS SE APLICA UN CAMBIO.
 
           Con las operaciones aplicar tarda ~1 ms más el viaje al servidor, así que la ventana es
@@ -3456,7 +3690,11 @@ export default function CronogramaCanvas({
               sobre un documento vacío no tiene qué modificar. */}
           {canEdit && phases.length > 0 && (
             <button
-              onClick={() => setChatAbierto((v) => !v)}
+              onClick={() => {
+                // E3 P5: abierto a mano, el cajón sí toma el foco.
+                setAperturaAutomatica(false);
+                setChatAbierto((v) => !v);
+              }}
               /* Sin esto, un lector de pantalla anuncia «Asistente, botón» idéntico abierto y
                  cerrado: la única señal del estado era el color. */
               aria-expanded={chatAbierto}
@@ -4558,11 +4796,16 @@ export default function CronogramaCanvas({
         /* ⭐ DOS CARRILES. Con operaciones se ejecuta acá mismo, en milisegundos. Sin ellas —un
            acuerdo viejo, guardado como instrucción de texto— cae al modificador de siempre, que
            tarda minutos. El carril lento no se retira: hace falta cuando hay que ESCRIBIR texto
-           nuevo, que ninguna operación puede hacer. */
-        onAplicar={(acuerdo) =>
-          Array.isArray(acuerdo.operaciones) && acuerdo.operaciones.length > 0
-            ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)
-            : submitAssist(acuerdo.instruccion ?? "", null)
+           nuevo, que ninguna operación puede hacer.
+           E3 P5: un acuerdo hecho para una propuesta va a ELLA (`atenderElAcuerdo`). */
+        onAplicar={atenderElAcuerdo}
+        motivoParaNoAplicar={motivoDelChat}
+        /* Abierto solo (llegó una propuesta): no se le roba el foco a quien estaba en otra cosa. */
+        enfocarAlAbrir={!aperturaAutomatica}
+        referencia={
+          canEdit && hayBorrador && revision.resumen
+            ? { titulo: `Sobre la propuesta ${desdeDeLaPropuesta(deDondeViene(proposal))}` }
+            : null
         }
       />
       </div>

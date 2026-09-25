@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
 import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO } from "./turno";
-import { OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
+import { OPERACIONES_DE_PROPUESTA, OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
 
 const FUENTE = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
 
@@ -81,10 +81,13 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
     expect(j, "el enum de operaciones desapareció de la tool").toBeGreaterThan(-1);
     const crudo = bloque.slice(j + "enum: [".length, bloque.indexOf("]", j));
     const enumDeLaTool = [...crudo.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: el vocabulario del chat suma las 4 operaciones
+       de la propuesta abierta (`OPERACIONES_DE_PROPUESTA`: dejar como estaba, recuperar, aplicarla,
+       descartarla). Van SIEMPRE en el enum (D16: la herramienta es estática para no romper la caché); si
+       hay propuesta lo decide el turno. La comparación sigue siendo en los dos sentidos, contra la unión. */
+    const VOCABULARIO: readonly string[] = [...OPERACIONES_VALIDAS, ...OPERACIONES_DE_PROPUESTA];
 
-    const desconocidas = enumDeLaTool.filter(
-      (o) => !(OPERACIONES_VALIDAS as readonly string[]).includes(o),
-    );
+    const desconocidas = enumDeLaTool.filter((o) => !VOCABULARIO.includes(o));
     expect(
       desconocidas,
       "La tool ofrece operaciones que el ejecutor no conoce. El chat acordaría algo que después " +
@@ -98,7 +101,7 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
 
        Si una operación se deja fuera a propósito, va acá con su motivo escrito. */
     const MUDAS_A_PROPOSITO: { op: string; porQue: string }[] = [];
-    const inalcanzables = (OPERACIONES_VALIDAS as readonly string[]).filter(
+    const inalcanzables = VOCABULARIO.filter(
       (o) => !enumDeLaTool.includes(o) && !MUDAS_A_PROPOSITO.some((m) => m.op === o),
     );
     expect(
@@ -180,6 +183,12 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     /* ⚠ SUMADO en E3 P4 (2026-09-25): con una propuesta abierta, el contexto del cronograma lo arma
        este archivo (la propuesta, la lista de la barra y sus leyendas): es el prefijo de cada turno. */
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto-del-cronograma.ts"), "utf8")),
+    /* ⚠ SUMADOS en E3 P5 (2026-09-25): con una propuesta abierta, lo que no se registró y por qué («⚠ No
+       registré…», los motivos de la traducción y los rechazos de `operarSobreElBorrador`), lo que cae con la
+       propuesta y los desenlaces de «pasar a la propuesta» quedan en el hilo, y el modelo los relee. */
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/propuesta-del-chat.ts"), "utf8")),
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/timeline/operar-sobre-el-borrador.ts"), "utf8")),
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/textos-del-acuerdo.ts"), "utf8")),
     /* ⚠ SUMADOS 2026-08-23: los `avisoDelChat` y los `brief` de las defs se interpolan al contexto
        —`firmaDeSeccion` los pega detrás de cada sección— así que también son texto que el modelo
        lee. Vivían fuera del alcance de esta guarda y ahí se había colado un «podés». */
@@ -345,11 +354,23 @@ describe("la regla de las fechas está en el prompt", () => {
       "const lineasVivas = lineasParaLosDosLectores(libro.vivas);",
     );
     expect(FUENTE, "el bloque de pendientes dejó de leer esas líneas").toContain("bloqueDePendientes(lineasVivas)");
-    const i = FUENTE.indexOf("const fusion = fusionarPendientes(");
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: la composición tiene dos fuentes —con la propuesta
+       editable la arma `acuerdoSobreLaPropuesta` (que fusiona y valida en seco contra la propuesta), sin
+       ella `fusionarPendientes`—, así que `fusion` ya no es solo la segunda. Lo que se protege no cambia: las
+       líneas de la cajita salen del traductor de los dos lectores sobre el conjunto que se va a ejecutar. */
+    const i = FUENTE.indexOf("const fusion =");
     expect(i, "se movió la rama del cronograma").toBeGreaterThan(-1);
     const rama = FUENTE.slice(i, FUENTE.indexOf("dependencias:", i));
+    expect(rama, "la composición sin propuesta dejó de fusionar lo pendiente").toContain("fusionarPendientes(");
+    expect(rama, "la composición con propuesta no sale de la validada").toContain("sobreLaPropuesta ??");
     expect(rama, "las líneas de la cajita salen de otro traductor").toContain(
       "lineas: lineasParaLosDosLectores(fusion.operaciones),",
+    );
+    /* Y con la propuesta editable, el traductor es el de la PROPUESTA (los números de la barra), para los
+       dos lectores. La edición que la pone en rojo: describir lo pendiente contra el cronograma de hoy. */
+    expect(FUENTE).toContain("const describirEnLaPropuesta = editable ? describirSobreLaPropuesta(editable) : null;");
+    expect(FUENTE.slice(FUENTE.indexOf("const describir = (ops"), FUENTE.indexOf("const lineasCrudas"))).toContain(
+      "describirEnLaPropuesta(ops as OperacionDelChat[])",
     );
   });
 
@@ -849,5 +870,84 @@ describe("los otros dos consumidores de contexto grande también cachean el pref
     const posCache = src.indexOf("cache_control");
     expect(src.lastIndexOf("sectionsBlock(input.sections)", posCache), "el documento tiene que estar en el prefijo").toBeGreaterThan(-1);
     expect(src.indexOf("Instrucción del usuario", posCache), "la instrucción no puede entrar al prefijo cacheado").toBeGreaterThan(posCache);
+  });
+});
+
+describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
+  it("⛔ SE SELLA para qué propuesta se acordó (también el acuerdo de cierre)", () => {
+    /* Sin el token, el turno siguiente no sabría si lo pendiente sigue valiendo, y la pantalla no sabría
+       si el botón escribe el cronograma o pasa a la propuesta. La edición que la pone en rojo: sacar
+       `borrador: token` del acuerdo del cronograma o del cierre. */
+    const iAcuerdo = FUENTE.indexOf("const fusion =");
+    const acuerdo = FUENTE.slice(iAcuerdo, FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {", iAcuerdo));
+    expect(acuerdo.length, "la guarda no está mirando el acuerdo").toBeGreaterThan(500);
+    expect(acuerdo).toContain("borrador: token,");
+    const cierre = FUENTE.slice(FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {"), FUENTE.indexOf("/* Si el modelo cerró con la tool"));
+    expect(cierre).toContain("operaciones: [],");
+    expect(cierre).toContain("descartadas: soltadas,");
+    expect(cierre).toContain("...(esCronograma ? { borrador: token } : {}),");
+    expect(cierre).toContain("avisoDeCierre(");
+  });
+
+  it("⛔ el acuerdo de cierre va DESPUÉS de las dos ramas: también cubre los documentos", () => {
+    /* La edición que la pone en rojo: escribirlo solo en la rama del cronograma (en un documento, todo lo
+       pendiente que se cae sin nada nuevo se seguiría perdiendo en silencio). */
+    const iCierre = FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {");
+    expect(iCierre).toBeGreaterThan(FUENTE.indexOf("} else if (soloLectura) {"));
+    expect(iCierre).toBeGreaterThan(FUENTE.indexOf("const opsDeDoc = ["));
+    expect(iCierre).toBeLessThan(FUENTE.indexOf("await agregarTurno(hilo.id, {"));
+  });
+
+  it("⛔ `await preguntarleAlModelo(` aparece exactamente DOS veces: sin reintento en el cronograma (D13)", () => {
+    /* El primer intento y el reintento de los documentos. La edición que la pone en rojo: sumar un reintento
+       en la rama del cronograma (lo que no pasa en seco se dice, no se vuelve a pedir). */
+    expect(FUENTE.match(/await preguntarleAlModelo\(/g)?.length).toBe(2);
+  });
+
+  it("⛔ la herramienta y el prompt son ESTÁTICOS (D16): el enum es un literal, sin ternario", () => {
+    /* Entrar o salir de una propuesta no puede cambiar lo que viaja en el prefijo: rompería la caché. La
+       edición que la pone en rojo: armar el enum o el prompt según haya propuesta. */
+    const i = FUENTE.indexOf("const TOOL_ACUERDO:");
+    const bloque = FUENTE.slice(i, FUENTE.indexOf('required: ["resumen"', i));
+    const j = bloque.indexOf("enum: [");
+    const crudo = bloque.slice(j, bloque.indexOf("]", j));
+    expect(crudo.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/\?|\.\.\.|propuesta\s*\?|ctx\./);
+    for (const op of OPERACIONES_DE_PROPUESTA) expect(crudo).toContain(`"${op}"`);
+    expect(bloque, "la tool no distingue el descarte de la propuesta del campo «descartar»").toContain(
+      '⛔ propuesta.descartar-entera no es el campo \\"descartar\\" (ese suelta P1, P2…).',
+    );
+    expect(bloque).toContain("cambios: {");
+    expect(bloque).toContain("tareas: {");
+    expect(FUENTE).toContain("{ type: \"text\", text: promptDelAsistente(esCronograma), cache_control: { type: \"ephemeral\" } },");
+  });
+
+  it("⭐ el prompt explica la propuesta abierta, con los números de la barra y lo que va solo", () => {
+    /* La edición que la pone en rojo: borrar el bloque, o volver a prometer que todo escribe directo. */
+    const i = FUENTE.indexOf("const COLA_DEL_CRONOGRAMA");
+    const cola = FUENTE.slice(i, FUENTE.indexOf("const COLA_DE_DOCUMENTO", i));
+    expect(cola).toContain("⭐ CON UNA PROPUESTA ABIERTA");
+    expect(cola).toContain('"propuesta.dejar-como-estaba" con "cambios": ["3"]');
+    expect(cola).toContain("NO son P1, P2");
+    expect(cola).toContain('«Aplícala» es "propuesta.aplicar", SOLA');
+    expect(cola).toContain('«Descártala» es "propuesta.descartar-entera", sola');
+    expect(cola).toContain("no llames la herramienta: dilo y");
+    expect(PROMPT).toContain("Con una propuesta abierta, pasa lo");
+    expect(PROMPT).not.toContain("se escriben directo,\nen un instante");
+  });
+
+  it("⛔ en solo lectura no se registra nada y lo pendiente queda congelado; sin propuesta, lo de ella no entra", () => {
+    /* Las ediciones que la ponen en rojo: armar un acuerdo en solo lectura, podar lo congelado contra el
+       cronograma de hoy, o registrar un «dejar como estaba» sin propuesta. */
+    const rama = FUENTE.slice(FUENTE.indexOf("} else if (soloLectura) {"), FUENTE.indexOf("} else {", FUENTE.indexOf("} else if (soloLectura) {")));
+    expect(rama.length, "la guarda no está mirando la rama de solo lectura").toBeGreaterThan(100);
+    expect(rama).toContain("avisoDeSoloLectura(");
+    expect(rama).not.toContain("acuerdo =");
+    /* Lo congelado es lo pendiente que no cayó; lo nuevo no se registra en ningún caso de solo lectura
+       (tampoco si lo pendiente cayó por la propuesta). */
+    expect(FUENTE).toContain('const soloLectura = modo === "solo-lectura" || sinLeer;');
+    expect(FUENTE).toContain("const congelado = soloLectura && caidaPorToken === null;");
+    expect(FUENTE).toContain("congelado\n      ? { vivas: [...ops], caidas: [] }");
+    expect(FUENTE).toContain("opsNuevas.filter((o) => !esOperacionDePropuesta(o)),");
+    expect(FUENTE).toContain("AVISO_SIN_PROPUESTA_ABIERTA");
   });
 });

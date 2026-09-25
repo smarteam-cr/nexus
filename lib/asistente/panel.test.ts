@@ -1072,3 +1072,59 @@ describe("⭐ una caja que ya no es accionable no repite todo su razonamiento", 
     ).toBeGreaterThan(-1);
   });
 });
+
+describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
+  it("⛔ abierto SOLO no toma el foco: salida temprana, y los dos focos siguen en su lugar", () => {
+    /* Cuando llega una propuesta el chat se abre solo: la persona estaba en otra cosa y robarle el foco la
+       haría tipear en el chat. La edición que la pone en rojo: sacar `!enfocarAlAbrir` de la salida, o
+       borrar uno de los dos focos (el de entrar y el de volver). */
+    expect(PANEL).toContain("enfocarAlAbrir = true,");
+    const i = PANEL.indexOf("if (!abierto || !enfocarAlAbrir) return;");
+    expect(i, "el foco se toma aunque el cajón se haya abierto solo").toBeGreaterThan(-1);
+    const efecto = PANEL.slice(i, PANEL.indexOf("}, [abierto]);", i));
+    expect(efecto.length, "la guarda no está mirando el efecto").toBeGreaterThan(80);
+    expect(efecto).toContain("composerRef.current?.focus()");
+    expect(efecto).toContain("previo?.focus?.()");
+  });
+
+  it("⛔ Escape ignora un campo editable FUERA del cajón", () => {
+    /* Con el chat abierto solo, el Escape de un campo del Gantt (el nombre de una fase) lo cerraba. La
+       edición que la pone en rojo: sacar la condición, o dejar de mirar si el campo es del cajón. */
+    const i = PANEL.indexOf("const onKey = (e: KeyboardEvent) => {");
+    const manejador = PANEL.slice(i, PANEL.indexOf("onClose();", i));
+    expect(manejador).toContain("!cajonRef.current?.contains(origen)");
+    expect(manejador).toContain("/^(INPUT|TEXTAREA|SELECT)$/.test(origen.tagName) || origen.isContentEditable");
+    expect(PANEL).toContain("ref={cajonRef}");
+  });
+
+  it("⛔ el acuerdo de cierre (sin operaciones) no tiene botón, y lo soltado se apaga sin su cuerpo", () => {
+    /* Las ediciones que la ponen en rojo: dar botón a un acuerdo sin nada que aplicar, o repetir el cuerpo
+       de un acuerdo que ya no va. */
+    expect(PANEL).toContain("{t.id !== idDelAcuerdoVivo || esAcuerdoDeCierre(t.acuerdo) ? null : onAplicar ? (");
+    expect(PANEL).toContain('t.estado === "soltado" ? null : t.estado === "retomado" ? null : (');
+    expect(PANEL).toContain('{t.estado === "soltado" || esAcuerdoDeCierre(t.acuerdo) ? " · ya no va" : null}');
+  });
+
+  it("⭐ con una propuesta, el botón, la espera y la caja resuelta lo dicen (y el motivo es por acuerdo)", () => {
+    /* «Aplicar al cronograma» sobre algo que va a la propuesta mentiría. La edición que la pone en rojo:
+       volver al texto fijo, o leer el motivo sin el acuerdo (el cronograma lo decide por propuesta). */
+    expect(PANEL).toContain("textoDelBoton(t.acuerdo, operacionesAceptadas(t.id, t.acuerdo).length) ??");
+    expect(PANEL).toContain('(textoMientrasAplica(t.acuerdo) ?? "Aplicando…")');
+    expect(PANEL).toContain('{textoDelAcuerdoAplicado(t.acuerdo) ?? "Aplicado. ¿Hay que cambiar algo más?"}');
+    expect(PANEL).toContain("!!motivoPara(t.acuerdo!) ||");
+    expect(PANEL).not.toContain("!!motivoParaNoAplicar ||");
+    // El desenlace dice a dónde fue.
+    expect(PANEL).toContain("const destino = destinoDelResultado ?? destinoDelAcuerdo(acuerdo);");
+    expect(PANEL).toContain("...(destino ? { destino } : {})");
+  });
+
+  it("⭐ la referencia reemplaza al subtítulo, y el estado vacío muestra lo que se le pide a una propuesta", () => {
+    expect(PANEL).toContain('{referencia?.titulo ?? "Conversa el cambio antes de generarlo"}');
+    const i = PANEL.indexOf("{referencia ? (");
+    expect(i, "el estado vacío no cambia con una propuesta").toBeGreaterThan(-1);
+    const ejemplos = PANEL.slice(i, PANEL.indexOf(") : (", i));
+    for (const e of ["«Deja el 2 como estaba»", "«Quita las tareas nuevas de Integraciones»", "«Aplica la propuesta»"]) {
+      expect(ejemplos).toContain(e);
+    }
+  });
+});

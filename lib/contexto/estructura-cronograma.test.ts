@@ -28,7 +28,12 @@ import {
 } from "./estructura-cronograma";
 import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronograma";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
-import { fraseDelPlazo, hayMaterialParaElPaso1, pasoTrasResolver } from "@/lib/timeline/propuesta-de-estructura";
+import {
+  ACUERDO_PARA_EL_VIGENTE,
+  fraseDelPlazo,
+  hayMaterialParaElPaso1,
+  pasoTrasResolver,
+} from "@/lib/timeline/propuesta-de-estructura";
 import {
   ACCION_AHORA_NO,
   CHAT_CON_EL_VACIO_FALLIDO,
@@ -936,9 +941,14 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     );
     const chat = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
     expect(chat).toContain("const vacio = estadoDelVacio(proposal, estadoDeLasTareasEnPantalla);");
+    /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: la tercera rama decía «primero decide la
+       propuesta» (`CAMBIOS_DE_FASES_SIN_DECIDIR`). Con E3 el chat pasa lo acordado a la propuesta: un
+       acuerdo hecho para el cronograma de hoy, con una propuesta que llegó después, se pide de nuevo y va a
+       ella (`ACUERDO_PARA_EL_VIGENTE`). Las dos primeras ramas no cambian. */
     expect(chat, "el chat manda a decidir una propuesta que no está").toMatch(
-      /vacio === "armando"\s*\?\s*esperaEnCurso\("la IA está armando las tareas"\)\s*:\s*vacio === "fallo"\s*\?\s*CHAT_CON_EL_VACIO_FALLIDO\s*:\s*CAMBIOS_DE_FASES_SIN_DECIDIR/,
+      /vacio === "armando"\s*\?\s*esperaEnCurso\("la IA está armando las tareas"\)\s*:\s*vacio === "fallo"\s*\?\s*CHAT_CON_EL_VACIO_FALLIDO\s*:\s*ACUERDO_PARA_EL_VIGENTE/,
     );
+    expect(ACUERDO_PARA_EL_VIGENTE, "no dice que lo pase a la propuesta").toContain("lo paso a la propuesta");
     expect(CHAT_CON_EL_VACIO_FALLIDO, "el chat no dice cómo salir del vacío que falló").toContain("Descarta la propuesta vacía");
   });
 

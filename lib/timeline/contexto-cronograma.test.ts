@@ -543,6 +543,13 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* E3 P4 (2026-09-25): el contexto del chat con una propuesta abierta. Lo lee el modelo y lo copia en
        lo que le contesta al CSE (sus leyendas, la línea de solo lectura, los avisos de recorte). */
     "lib/asistente/contexto-del-cronograma.ts",
+    /* E3 P5 (2026-09-25): el chat edita la propuesta. Lo que no registró y por qué, lo que cae con la
+       propuesta y los desenlaces llegan tal cual al hilo (propuesta-del-chat.ts, textos-del-acuerdo.ts);
+       el botón, la espera y la caja resuelta, al cajón (textos-del-acuerdo.ts); la apertura sola no tiene
+       textos pero decide qué se abre (apertura-del-chat.ts). */
+    "lib/asistente/propuesta-del-chat.ts",
+    "lib/asistente/textos-del-acuerdo.ts",
+    "lib/timeline/apertura-del-chat.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega
@@ -593,6 +600,8 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "llegará", "seguirá", "volverá", "sabrá", "deberá", "moverá", "correrá", "aparecerá",
     // E3 P2: el chat habla en primera persona de lo que hizo («Dejé lo que editaste a mano…»).
     "dejé",
+    // E3 P5: y de lo que no hizo («No registré…», «No encontré «X» entre las tareas que cambian»).
+    "registré", "encontré",
   ]);
   const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
   const agudasQueNoSonTuteo = (linea: string) =>

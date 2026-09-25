@@ -42,6 +42,14 @@ import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { arrastreDeDesmarcadas } from "@/lib/asistente/arrastre";
 import type { CambioAcordado } from "@/lib/asistente/turno";
+import { esAcuerdoDeCierre } from "@/lib/asistente/acuerdo";
+import {
+  destinoDelAcuerdo,
+  rotuloDelAcuerdoAplicado,
+  textoDelAcuerdoAplicado,
+  textoDelBoton,
+  textoMientrasAplica,
+} from "@/lib/asistente/textos-del-acuerdo";
 import { notaDeDescarte } from "@/lib/asistente/desenlace";
 import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import type { Operacion } from "@/lib/timeline/operaciones";
@@ -92,6 +100,12 @@ export interface ResultadoDeAplicar {
   fallo: string | null;
   /** Lo que el editor hizo DISTINTO de lo pedido (rescates, semanas acomodadas). */
   avisos: string[];
+  /**
+   * E3 P5: a dónde fue: al cronograma, a la propuesta abierta, o se descartó la propuesta entera. Lo
+   * escribe el desenlace del hilo («quedó en la propuesta», no «el cronograma ya quedó actualizado»).
+   * Sin él se deduce como antes.
+   */
+  destino?: "cronograma" | "propuesta" | "descarte";
 }
 
 interface Props {
@@ -125,8 +139,19 @@ interface Props {
    *
    * ⚠ Es un motivo, no un booleano: «no se puede» sin decir por qué manda a adivinar, y el caso
    * real —el editor del documento todavía no montó— se arregla solo en un segundo.
+   * E3 P5: también por acuerdo (el cronograma mira para qué propuesta se acordó cada uno).
    */
-  motivoParaNoAplicar?: string | null;
+  motivoParaNoAplicar?: string | null | ((acuerdo: AcuerdoDelChat) => string | null);
+  /**
+   * E3 P5: si el cajón toma el foco al abrirse. `false` cuando se abrió SOLO (llegó una propuesta): la
+   * persona estaba haciendo otra cosa y el foco no se le mueve. Por defecto, sí.
+   */
+  enfocarAlAbrir?: boolean;
+  /**
+   * E3 P5: de qué se habla («Sobre la propuesta desde «Regenerar todo»»). Reemplaza al subtítulo, y el
+   * estado vacío muestra ejemplos de lo que se le pide a una propuesta.
+   */
+  referencia?: { titulo: string } | null;
 }
 
 /** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
@@ -143,8 +168,14 @@ export default function ChatDelAsistente({
   onClose,
   onAplicar,
   motivoParaNoAplicar,
+  enfocarAlAbrir = true,
+  referencia = null,
 }: Props) {
   const hydrated = useHydrated();
+  /** Por qué no se aplica ESTE acuerdo ahora (E3 P5: puede depender del acuerdo). */
+  const motivoPara = (a: AcuerdoDelChat): string | null =>
+    typeof motivoParaNoAplicar === "function" ? motivoParaNoAplicar(a) : (motivoParaNoAplicar ?? null);
+  const cajonRef = useRef<HTMLElement | null>(null);
   const [turnos, setTurnos] = useState<TurnoVista[]>([]);
   const [cargando, setCargando] = useState(false);
   const [pensando, setPensando] = useState(false);
@@ -162,6 +193,8 @@ export default function ChatDelAsistente({
    */
   const [desmarcadas, setDesmarcadas] = useState<Record<string, Set<number>>>({});
   const [aplicando, setAplicando] = useState(false);
+  /* E3 P5: el acuerdo que se está aplicando: la espera dice «Pasando a la propuesta…» o «Aplicando…». */
+  const [aplicandoEste, setAplicandoEste] = useState<AcuerdoDelChat | null>(null);
   /**
    * ⭐ QUÉ LEYÓ DE VERDAD en el último turno del cronograma (2026-09-23): cuántas reuniones
    * elegidas, cuántas notas y si entraron las instrucciones. Viene con la respuesta del turno; el
@@ -236,6 +269,17 @@ export default function ChatDelAsistente({
          el CSE quería descartar una propuesta y encima perdía el hilo. Es el mismo criterio del
          z-index —el cajón vive DEBAJO de los modales— llevado al teclado. */
       if (document.querySelector('[aria-modal="true"]')) return;
+      /* E3 P5: ni si viene de un campo editable FUERA del cajón (el nombre de una fase, una fecha): ese
+         Escape es de ese campo. Con el chat abierto solo, alguien que estaba escribiendo en el Gantt
+         perdía el chat que se le acababa de abrir. */
+      const origen = e.target instanceof HTMLElement ? e.target : null;
+      if (
+        origen &&
+        !cajonRef.current?.contains(origen) &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(origen.tagName) || origen.isContentEditable)
+      ) {
+        return;
+      }
       onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -253,15 +297,20 @@ export default function ChatDelAsistente({
    *
    * ⚠ NO es una trampa de foco: el cajón no es modal y tabular al documento tiene que seguir
    * funcionando. Solo se pone el foco al abrir y se devuelve al cerrar.
+   *
+   * E3 P5: cuando se abre SOLO (llegó una propuesta), el foco no se toca (`enfocarAlAbrir` en false):
+   * la persona estaba en otra cosa, y robarle el foco le haría tipear en el chat.
    */
   useEffect(() => {
-    if (!abierto) return;
+    if (!abierto || !enfocarAlAbrir) return;
     const previo = document.activeElement as HTMLElement | null;
     const t = window.setTimeout(() => composerRef.current?.focus(), 0);
     return () => {
       window.clearTimeout(t);
       previo?.focus?.();
     };
+    // Solo al abrir: si deja de ser una apertura automática con el cajón abierto, no se le roba el foco.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto]);
 
   useEffect(() => {
@@ -412,11 +461,17 @@ export default function ChatDelAsistente({
   const sinNadaQueAplicar = (turnoId: string, acuerdo: AcuerdoDelChat): boolean =>
     !!acuerdo.operaciones && operacionesAceptadas(turnoId, acuerdo).length === 0;
 
-  async function anotarDesenlace(ok: boolean, detalle: string, vistaPrevia = true) {
+  async function anotarDesenlace(
+    ok: boolean,
+    detalle: string,
+    vistaPrevia = true,
+    /* E3 P5: a dónde fue (la propuesta, el cronograma o el descarte): el hilo lo dice así. */
+    destino?: ResultadoDeAplicar["destino"] | null,
+  ) {
     const r = await fetch(`${base}/asistente`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia } }),
+      body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia, ...(destino ? { destino } : {}) } }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.hilo?.turnos) return false;
@@ -431,9 +486,12 @@ export default function ChatDelAsistente({
   async function aplicar(acuerdo: AcuerdoDelChat, descartadas?: ReadonlySet<number>) {
     if (!onAplicar || aplicando) return;
     setAplicando(true);
+    setAplicandoEste(acuerdo);
     setError(null);
     try {
-      const { fallo, avisos } = await onAplicar(acuerdo);
+      const { fallo, avisos, destino: destinoDelResultado } = await onAplicar(acuerdo);
+      /* E3 P5: a dónde fue lo decide quien aplicó; si no lo dice, lo que pide el acuerdo. */
+      const destino = destinoDelResultado ?? destinoDelAcuerdo(acuerdo);
       if (fallo) {
         /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
            aparecía suelto al pie del documento, con el cajón ya cerrado. */
@@ -458,14 +516,20 @@ export default function ChatDelAsistente({
           true,
           [nota, avisos.join(" · ")].filter(Boolean).join(" "),
           !acuerdo.operaciones?.length,
+          destino,
         ).catch(() => false);
         /* ⛔ Si el desenlace NO se pudo escribir, hay que DECIRLO. El cambio ya entró, pero el
            botón sigue vivo en el último turno y el silencio invita a apretarlo otra vez — sobre
            operaciones que no son idempotentes. */
         if (!quedoEscrito) {
           setError(
-            `El cambio se aplicó al ${nombreDeLaPieza}, pero no se pudo dejar constancia en la ` +
-              "conversación. ⚠ No lo apliques de nuevo: se duplicaría. Recarga para ver el hilo.",
+            (destino === "propuesta"
+              ? "El cambio pasó a la propuesta"
+              : destino === "descarte"
+                ? "La propuesta se descartó"
+                : `El cambio se aplicó al ${nombreDeLaPieza}`) +
+              ", pero no se pudo dejar constancia en la conversación. ⚠ No lo apliques de nuevo: se " +
+              "duplicaría. Recarga para ver el hilo.",
           );
         }
         /* ⛔ EL PANEL NO SE CIERRA AL APLICAR, y es una decisión de Elías (2026-08-20).
@@ -480,6 +544,7 @@ export default function ChatDelAsistente({
       await anotarDesenlace(false, msg).catch(() => {});
     } finally {
       setAplicando(false);
+      setAplicandoEste(null);
     }
   }
 
@@ -487,6 +552,7 @@ export default function ChatDelAsistente({
 
   return createPortal(
     <aside
+      ref={cajonRef}
       id={ID_DEL_CAJON}
       className="fixed right-0 top-0 h-full z-[45] w-[400px] max-w-[92vw] bg-surface border-l border-line shadow-2xl flex flex-col"
       aria-label={`Asistente sobre ${piezaLabel}`}
@@ -494,7 +560,8 @@ export default function ChatDelAsistente({
       <header className="px-4 py-3 border-b border-line flex items-center justify-between shrink-0">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg truncate">Asistente · {piezaLabel}</h2>
-          <p className="text-xs text-fg-muted">Conversa el cambio antes de generarlo</p>
+          {/* E3 P5: con una propuesta abierta, de qué se habla (reemplaza al subtítulo). */}
+          <p className="text-xs text-fg-muted truncate">{referencia?.titulo ?? "Conversa el cambio antes de generarlo"}</p>
           {pieza === PIEZA_CRONOGRAMA && lectura ? (
             <p className={`text-[11px] ${lectura.error ? "text-warn-ink" : "text-fg-muted"}`}>
               {lineaDeLectura(lectura)}
@@ -532,11 +599,20 @@ export default function ChatDelAsistente({
         {!cargando && turnos.length === 0 && (
           <div className="text-sm text-fg-secondary space-y-2">
             <p>Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
-            <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
-              <li>«¿Qué pasa si alargo una fase dos semanas?»</li>
-              <li>«Hay fases duplicadas, ¿se pueden unir?»</li>
-              <li>«Quiero mover una tarea de fase — ¿pierdo algo?»</li>
-            </ol>
+            {/* E3 P5: con una propuesta abierta, lo que se le pide a ELLA. */}
+            {referencia ? (
+              <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
+                <li>«Deja el 2 como estaba»</li>
+                <li>«Quita las tareas nuevas de Integraciones»</li>
+                <li>«Aplica la propuesta»</li>
+              </ol>
+            ) : (
+              <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
+                <li>«¿Qué pasa si alargo una fase dos semanas?»</li>
+                <li>«Hay fases duplicadas, ¿se pueden unir?»</li>
+                <li>«Quiero mover una tarea de fase — ¿pierdo algo?»</li>
+              </ol>
+            )}
             <p className="text-xs text-fg-muted">
               Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar.
             </p>
@@ -593,9 +669,11 @@ export default function ChatDelAsistente({
               >
                 <p className="text-xs font-semibold text-info-ink">
                   Lo que se acordó
-                  {t.estado === "aplicado" ? " · ya aplicado" : null}
+                  {t.estado === "aplicado" ? rotuloDelAcuerdoAplicado(t.acuerdo) ?? " · ya aplicado" : null}
                   {t.estado === "retomado" ? " · sigue abajo, en la propuesta vigente" : null}
                   {t.estado === "en-espera" ? " · falta tu respuesta" : null}
+                  {/* E3 P5: lo que ya no va (la propuesta cambió, o el cronograma cambió debajo). */}
+                  {t.estado === "soltado" || esAcuerdoDeCierre(t.acuerdo) ? " · ya no va" : null}
                 </p>
                 {/**
                  * ⭐ UNA CAJA QUE YA NO ES ACCIONABLE NO REPITE TODO SU RAZONAMIENTO.
@@ -612,9 +690,10 @@ export default function ChatDelAsistente({
                  */}
                 {t.estado === "aplicado" ? (
                   <p className="text-sm text-fg-secondary mt-1">
-                    Aplicado. ¿Hay que cambiar algo más?
+                    {/* E3 P5: lo que fue a la propuesta lo dice así («Pasado a la propuesta…»). */}
+                    {textoDelAcuerdoAplicado(t.acuerdo) ?? "Aplicado. ¿Hay que cambiar algo más?"}
                   </p>
-                ) : t.estado === "retomado" ? null : (
+                ) : t.estado === "soltado" ? null : t.estado === "retomado" ? null : (
                   <>
                 {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
                     dos: son la misma frase escrita dos veces. */}
@@ -811,7 +890,8 @@ export default function ChatDelAsistente({
                   </p>
                 ) : null}
 
-                {t.id !== idDelAcuerdoVivo ? null : onAplicar ? (
+                {/* E3 P5: el acuerdo de cierre (sin operaciones) no lleva botón: no hay nada que aplicar. */}
+                {t.id !== idDelAcuerdoVivo || esAcuerdoDeCierre(t.acuerdo) ? null : onAplicar ? (
                   <button
                     onClick={() =>
                       void aplicar({
@@ -833,25 +913,27 @@ export default function ChatDelAsistente({
                        explica tarde. */
                     disabled={
                       aplicando ||
-                      !!motivoParaNoAplicar ||
+                      !!motivoPara(t.acuerdo!) ||
                       sinNadaQueAplicar(t.id, t.acuerdo!) ||
                       (!!t.acuerdo!.operaciones?.length && !t.acuerdo!.lineas?.length)
                     }
                     className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-60 transition-colors"
                   >
                     {aplicando
-                      ? "Aplicando…"
-                      : motivoParaNoAplicar
-                        ? motivoParaNoAplicar
+                      ? (textoMientrasAplica(t.acuerdo) ?? "Aplicando…")
+                      : motivoPara(t.acuerdo)
+                        ? motivoPara(t.acuerdo)
                       : sinNadaQueAplicar(t.id, t.acuerdo)
                         ? "No queda nada marcado"
-                        : t.acuerdo.operaciones
+                        : /* E3 P5: con una propuesta, «Pasar a la propuesta (N)», «Aplicar la propuesta…». */
+                          textoDelBoton(t.acuerdo, operacionesAceptadas(t.id, t.acuerdo).length) ??
+                          (t.acuerdo.operaciones
                           ? `Aplicar al ${nombreDeLaPieza}${
                               (desmarcadas[t.id]?.size ?? 0) > 0
                                 ? ` (${operacionesAceptadas(t.id, t.acuerdo).length})`
                                 : ""
                             }`
-                          : "Aplicar — vas a poder revisarlo antes de guardar"}
+                          : "Aplicar — vas a poder revisarlo antes de guardar")}
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
@@ -887,9 +969,11 @@ export default function ChatDelAsistente({
             enseña a desconfiar del único cartel que sí avisa una espera de verdad. */}
         {aplicando && (
           <p className="text-xs text-fg-muted">
-            {turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
-              ? `Aplicando los cambios al ${nombreDeLaPieza}…`
-              : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Puedes seguir mirando el documento mientras tanto."}
+            {/* E3 P5: lo que va a la propuesta lo dice así («Pasando a la propuesta…»). */}
+            {(aplicandoEste ? textoMientrasAplica(aplicandoEste) : null) ??
+              (turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
+                ? `Aplicando los cambios al ${nombreDeLaPieza}…`
+                : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Puedes seguir mirando el documento mientras tanto.")}
           </p>
         )}
         {error && (

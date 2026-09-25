@@ -15,10 +15,12 @@ import type { Operacion } from "@/lib/timeline/operaciones";
 import type { FaseActual } from "@/lib/timeline/assist-items";
 import { marcaDeAcuerdo, marcaDeDesenlace } from "./acuerdo";
 import {
+  acuerdoPendienteDelHilo,
   bloqueDePendientes,
   estadosDeAcuerdo,
   esTurnoDeDesenlace,
   fusionarPendientes,
+  indiceDeEtiqueta,
   pendientesDelHilo,
   podarIrresolubles,
   type TurnoDelLibro,
@@ -418,5 +420,69 @@ describe("⭐ el libro no sabe de qué pieza es", () => {
       { rol: "ASISTENTE" as const, contenido: `${marcaDeDesenlace({ ok: true })}Aplicado.`, shaDeContexto: null },
     ];
     expect(pendientesDelHilo(hilo)).toEqual([]);
+  });
+});
+
+describe("⭐ E3 P5: el acuerdo de CIERRE corta el libro, y lo de antes queda «ya no va»", () => {
+  /** El acuerdo de cierre: sin operaciones, con lo que ya no va. Lo escribe el turno cuando lo pendiente
+   *  cae (la propuesta cambió, o el cronograma cambió debajo) y no hay nada nuevo que acordar. */
+  const cierre = (token: string | null = "run-4"): TurnoDelLibro => ({
+    rol: "ASISTENTE",
+    contenido: `⚠ Lo que habíamos acordado ya no va.\n\n${marcaDeAcuerdo({
+      resumen: "Lo acordado ya no va.",
+      operaciones: [],
+      descartadas: ["Lo acordado antes (1 cambio) ya no va: llegó otra propuesta del cronograma"],
+      borrador: token,
+    })}`,
+    shaDeContexto: SHA,
+  });
+
+  it("⛔ el walker se DETIENE en el cierre: lo de antes no resucita", () => {
+    /* Sin esto, el turno siguiente volvería a encontrar el acuerdo viejo, volvería a soltarlo y volvería a
+       escribir el cierre: la caída se diría en cada turno. La edición que la pone en rojo: que el walker
+       pase de largo los acuerdos con `operaciones: []`. */
+    const hilo = [conAcuerdo([OP_A]), delCse("¿y ahora?"), cierre()];
+    expect(pendientesDelHilo(hilo)).toEqual([]);
+    expect(acuerdoPendienteDelHilo(hilo)).toEqual({ operaciones: [], borrador: "run-4", lineas: [] });
+  });
+
+  it("y un acuerdo vacío SIN lo que ya no va no es un cierre: no corta nada", () => {
+    const vacio: TurnoDelLibro = {
+      rol: "ASISTENTE",
+      contenido: `x\n\n${marcaDeAcuerdo({ resumen: "nada", operaciones: [] })}`,
+      shaDeContexto: SHA,
+    };
+    expect(pendientesDelHilo([conAcuerdo([OP_A]), vacio])).toEqual([OP_A]);
+  });
+
+  it("⭐ el acuerdo pendiente trae para qué propuesta se acordó (sin el campo, null)", () => {
+    const sellado: TurnoDelLibro = {
+      rol: "ASISTENTE",
+      contenido: `x\n\n${marcaDeAcuerdo({ resumen: "x", operaciones: [OP_A], lineas: ["l"], borrador: "run-4" })}`,
+      shaDeContexto: SHA,
+    };
+    expect(acuerdoPendienteDelHilo([sellado])).toEqual({ operaciones: [OP_A], borrador: "run-4", lineas: ["l"] });
+    expect(acuerdoPendienteDelHilo([conAcuerdo([OP_A])])?.borrador).toBeNull();
+    expect(acuerdoPendienteDelHilo([conAcuerdo([OP_A]), desenlace(true)])).toBeNull();
+  });
+
+  it("⭐ lo de antes queda SOLTADO, y el cierre no lleva botón (ni es el vivo)", () => {
+    /* La edición que la pone en rojo: dejar el acuerdo viejo «vivo» (su botón aplicaría algo que ya no va)
+       o darle un estado al cierre (el panel le pondría botón). */
+    expect(estadosDeAcuerdo([conAcuerdo([OP_A]), delCse("?"), cierre()])).toEqual(["soltado", null, null]);
+    // Con un desenlace OK en el medio, lo de antes ya estaba aplicado.
+    expect(estadosDeAcuerdo([conAcuerdo([OP_A]), desenlace(true), cierre()])).toEqual(["aplicado", null, null]);
+    // Y un acuerdo nuevo después del cierre es el vivo.
+    expect(estadosDeAcuerdo([conAcuerdo([OP_A]), cierre(), conAcuerdo([OP_B])])).toEqual(["soltado", null, "vivo"]);
+  });
+
+  it("⛔ con una propuesta abierta, el descarte se pide CON LA P", () => {
+    /* «3» es el número de un cambio de la barra, no el tercer pendiente. La edición que la pone en rojo:
+       leer «3» como «P3» con `exigirP`. */
+    expect(indiceDeEtiqueta("3")).toBe(2);
+    expect(indiceDeEtiqueta("3", { exigirP: true })).toBeNull();
+    expect(indiceDeEtiqueta("P3", { exigirP: true })).toBe(2);
+    expect(fusionarPendientes([OP_A, OP_B], [], ["1"], { exigirP: true }).operaciones).toEqual([OP_A, OP_B]);
+    expect(fusionarPendientes([OP_A, OP_B], [], ["p1"], { exigirP: true }).operaciones).toEqual([OP_B]);
   });
 });

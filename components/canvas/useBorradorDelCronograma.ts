@@ -202,8 +202,11 @@ export interface BorradorEnPantalla {
   marcarVarios: (claves: readonly string[], incluir: boolean) => void;
   /** La propuesta se resolvió (aplicada o descartada): se borra lo que se recordaba de ella. */
   olvidar: () => void;
-  /** E2c: cuántas casillas tocó el CSE (solo `marcar` y `marcarVarios`). Arranca la espera del recálculo. */
+  /** E2c: cuántas casillas tocó el CSE (solo `marcar` y `marcarVarios`). Arranca la espera del recálculo.
+   *  E3 P5: y lo que el chat pasó a la propuesta (`contarMarcaDelChat`). */
   marcasDelCse: number;
+  /** E3 P5: el chat pasó algo a la propuesta: cuenta como una marca (puede desfasar tareas). */
+  contarMarcaDelChat: () => void;
   /** E2c: las fases de «Aplicar de todos modos» (en memoria; nunca se recuerdan). */
   forzadas: readonly string[];
   /** E2c: fuerza esas fases (`[]` las suelta). */
@@ -426,6 +429,9 @@ export function useBorradorDelCronograma(entrada: {
     [tocar],
   );
   const forzar = useCallback((fases: readonly string[]) => setForzadas(fases.length > 0 ? [...fases] : SIN_FORZAR), []);
+  /* E3 P5: lo que el chat pasó a la propuesta cuenta como una marca (puede dejar tareas desfasadas: el
+     chat quitó un cambio de fase, o cambió la forma de una). Es la tercera y última vía de la marca. */
+  const contarMarcaDelChat = useCallback(() => setMarcasDelCse((n) => n + 1), []);
 
   return {
     borrador,
@@ -442,6 +448,7 @@ export function useBorradorDelCronograma(entrada: {
     marcarVarios,
     olvidar,
     marcasDelCse,
+    contarMarcaDelChat,
     forzadas,
     forzar,
     desfasadas,

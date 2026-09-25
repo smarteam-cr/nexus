@@ -1062,9 +1062,18 @@ export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fa
  * los dos caminos, y la misma idea le llega al modelo del chat en su contexto.
  * Desde E2a la propuesta puede traer también tareas: el texto dice «la propuesta del cronograma»;
  * el nombre de la constante se queda (lo citan las guardas de estructura-cronograma.test.ts).
+ * E3 P5: con una propuesta abierta, el chat pasa lo acordado a la propuesta: la frase lo ofrece.
  */
 export const CAMBIOS_DE_FASES_SIN_DECIDIR =
-  "Primero decide la propuesta del cronograma (arriba del Gantt): mientras esté sin decidir, no se aplica ningún otro cambio con IA.";
+  "Primero decide la propuesta del cronograma (arriba del Gantt), o pídele el cambio al chat: lo pasa a la propuesta.";
+
+/**
+ * E3 P5: un acuerdo del chat hecho para el cronograma de HOY, con una propuesta abierta que llegó
+ * después. Aplicarlo escribiría el cronograma por debajo de la propuesta (el PUT con motivo la borraba;
+ * desde E1 responde 409): se pide de nuevo, y esa vez va a la propuesta.
+ */
+export const ACUERDO_PARA_EL_VIGENTE =
+  "Hay una propuesta abierta y esto se acordó antes de que llegara: pídemelo de nuevo y lo paso a la propuesta.";
 
 /**
  * Qué hace la pantalla después de pedir la estructura (paso 1). Desde E2a el paso 2 sigue SIN

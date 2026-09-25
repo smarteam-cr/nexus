@@ -77,11 +77,30 @@ export interface CambioAcordado {
    */
   dependencias?: number[][];
   /**
+   * E3 P5: PARA QUÉ PROPUESTA DEL CRONOGRAMA SE ACORDÓ — su token (`pendingProposalRunId`), o null:
+   * sin propuesta abierta, lo acordado es para el cronograma de hoy. Si falta, cuenta como null.
+   *
+   * ⭐ Con él, lo pendiente sabe si sigue valiendo: si en el turno siguiente la propuesta es otra (o ya
+   * no hay, o apareció una), lo acordado cae con su motivo en vez de aplicarse sobre algo que el CSE
+   * no leyó. Y la pantalla sabe a qué carril va el botón: null → el cronograma; un token → la propuesta.
+   */
+  borrador?: string | null;
+  /**
    * ⚠ LEGACY. Los hilos anteriores al 2026-08-20 guardaron una instrucción en castellano que un
    * segundo modelo releía. Se conserva para que esas conversaciones sigan pintándose — no para
    * emitirla de nuevo.
    */
   instruccion?: string;
+}
+
+/**
+ * E3 P5: EL ACUERDO DE CIERRE — sin operaciones y con lo que ya no va (`descartadas`). Lo escribe el
+ * turno cuando lo pendiente cae (la propuesta cambió, o el cronograma cambió debajo) y no hay nada
+ * nuevo que acordar: corta el libro UNA vez, así la caída no se repite en cada turno siguiente. No
+ * lleva botón.
+ */
+export function esAcuerdoDeCierre(a: Pick<CambioAcordado, "operaciones" | "descartadas"> | null | undefined): boolean {
+  return !!a && Array.isArray(a.operaciones) && a.operaciones.length === 0 && (a.descartadas?.length ?? 0) > 0;
 }
 
 export const MARCA_DE_ACUERDO = "<<<ACUERDO>>>";
@@ -128,12 +147,15 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
        vuelta funcionaba para algo que el productor ya no emitía. Por eso ahora hay un test que
        arranca del shape REAL. */
     const ops = Array.isArray(crudo?.operaciones) ? crudo.operaciones : null;
-    if (crudo?.resumen && (ops?.length || crudo?.instruccion)) {
+    /* E3 P5: el acuerdo de cierre (`operaciones: []` con lo que ya no va) también se lee: es lo que
+       corta el libro. Sin `descartadas`, un acuerdo vacío sigue sin leerse (no pinta botón). */
+    const esCierre = !!ops && ops.length === 0 && Array.isArray(crudo?.descartadas) && crudo.descartadas.length > 0;
+    if (crudo?.resumen && (ops?.length || crudo?.instruccion || esCierre)) {
       return {
         texto,
         acuerdo: {
           resumen: crudo.resumen,
-          ...(ops?.length ? { operaciones: ops } : {}),
+          ...(ops?.length || esCierre ? { operaciones: ops ?? [] } : {}),
           /**
            * ⛔ LAS LÍNEAS SE DESCARTAN SI NO HAY UNA POR OPERACIÓN, y es la red de seguridad más
            * importante de todo el mecanismo.
@@ -153,6 +175,8 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
           ...(crudo.enEspera ? { enEspera: true } : {}),
           ...(crudo.arrastradas?.length ? { arrastradas: crudo.arrastradas } : {}),
           ...(crudo.descartadas?.length ? { descartadas: crudo.descartadas } : {}),
+          // E3 P5: el token de la propuesta para la que se acordó (si falta, cuenta como null).
+          ...(typeof crudo.borrador === "string" || crudo.borrador === null ? { borrador: crudo.borrador } : {}),
           ...(crudo.instruccion ? { instruccion: crudo.instruccion } : {}),
         },
       };
