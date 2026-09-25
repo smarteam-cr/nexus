@@ -1307,6 +1307,32 @@ export function textoDeLiberacion(l: Pick<LiberacionParaCruzar, "clienteNombre" 
 }
 
 /**
+ * Lo que «Ya está anulada» le suma al motivo de una factura soltada al cerrarla («Fue por Quickbooks · Resuelta: …»). La
+ * versión anterior lo sumaba solo cuando la API recibía una nota, y la pantalla nunca la mandaba: su presencia es la
+ * prueba de que el cierre tuvo un porqué. Lo escribe `anularLiberacionTx` (marcas.ts) y lo lee `soltadasCerradasSinMotivo`:
+ * una sola forma para las dos puntas.
+ */
+export const PREFIJO_DEL_CIERRE = "Resuelta: ";
+
+/**
+ * Las facturas soltadas que alguien cerró con «Ya está anulada» SIN decir por qué (decisión de Elías, 2026-09-25: se
+ * reabren, scripts/odoo-reabrir-liberadas-sin-motivo.ts).
+ *
+ * Sin motivo = cerrada, sin una marca «Ya está anulada» vigente para ella (que es donde queda el porqué desde ese día) y
+ * sin el «Resuelta: …» del cierre en su motivo. ⚠ Lo que ya traía el motivo es el porqué de SOLTARLA («Fue por
+ * Quickbooks», KAIZEN), no el de cerrarla: no cuenta. ⚠ Una marca deshecha tampoco: es de un cierre anterior.
+ *
+ * Genérica en la fila para que el script reciba de vuelta lo que leyó de la base, con todas sus columnas.
+ */
+export function soltadasCerradasSinMotivo<T extends { id: string; resueltaEn: Date | null; motivo: string | null }>(
+  soltadas: readonly T[],
+  marcasAnuladas: ReadonlyArray<{ documento: string; deshechaEn: Date | null }>,
+): T[] {
+  const conPorque = new Set(marcasAnuladas.filter((m) => m.deshechaEn === null).map((m) => m.documento));
+  return soltadas.filter((l) => l.resueltaEn !== null && !conPorque.has(`l:${l.id}`) && !(l.motivo ?? "").includes(PREFIJO_DEL_CIERRE));
+}
+
+/**
  * La de una factura sin impuesto, en «exentas»: la línea habla del IVA que falta, no del pago.
  * ⚠ Sin el estado de pago a propósito: con la huella de siempre, pagar una factura exenta ya confirmada la traería
  * de vuelta sin que nada de su impuesto haya cambiado.

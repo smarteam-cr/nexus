@@ -18,6 +18,7 @@
  * en la misma transacción, y el sync solo escribe la cuenta cuando cambia.
  */
 import "server-only";
+import type { FacturaLiberada } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { atribuirFacturasDelPartner } from "./atribucion";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
@@ -45,6 +46,7 @@ import {
   textoDeLiberacion,
   type DiferenciaOdoo,
   type EstadoDelCruce,
+  type LiberacionParaCruzar,
 } from "./diferencias";
 import {
   MARCA_ANULADA,
@@ -638,6 +640,26 @@ type MedidoDelCruce = {
   espejoAl: string | null;
 };
 
+/** Una factura soltada como la cruza el detector. */
+export function liberacionParaCruzar(l: FacturaLiberada): LiberacionParaCruzar {
+  return {
+    id: l.id,
+    cuentaId: l.cuentaId,
+    clienteNombre: l.clienteNombre,
+    numCuota: l.numCuota,
+    periodo: l.periodo,
+    monto: Number(l.monto),
+    moneda: l.moneda,
+    fechaEmision: l.fechaEmision ? l.fechaEmision.toISOString().slice(0, 10) : null,
+    referenciaExterna: l.referenciaExterna,
+    plataforma: l.plataforma,
+    decision: l.decision,
+    liberadaPor: l.liberadaPor,
+    liberadaEn: l.liberadaEn.toISOString().slice(0, 10),
+    resuelta: l.resueltaEn !== null,
+  };
+}
+
 /**
  * Lo que «Lo que no cuadra» cruza, leído de la base. Aparte de `cargarDiferencias` para que una medición de solo
  * lectura pruebe la cobertura (`coberturaDelCruce`) con exactamente lo mismo que ve la pantalla, y para que los scripts
@@ -772,22 +794,7 @@ export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): 
       paymentState: f.paymentState,
       state: f.state,
     })),
-    liberaciones: liberadasDb.map((l) => ({
-      id: l.id,
-      cuentaId: l.cuentaId,
-      clienteNombre: l.clienteNombre,
-      numCuota: l.numCuota,
-      periodo: l.periodo,
-      monto: Number(l.monto),
-      moneda: l.moneda,
-      fechaEmision: l.fechaEmision ? l.fechaEmision.toISOString().slice(0, 10) : null,
-      referenciaExterna: l.referenciaExterna,
-      plataforma: l.plataforma,
-      decision: l.decision,
-      liberadaPor: l.liberadaPor,
-      liberadaEn: l.liberadaEn.toISOString().slice(0, 10),
-      resuelta: l.resueltaEn !== null,
-    })),
+    liberaciones: liberadasDb.map(liberacionParaCruzar),
     cuentas: cuentasDb.map((c) => ({
       id: c.id,
       nombre: c.client.name,
