@@ -1146,3 +1146,45 @@ pantalla, «Deshacer» sigue dejando «Ya está anulada (sin motivo: …)», por
 **Qué la revertiría.** Que Elías decida dejar cerrada alguna de las 4: se saca su id de `DECIDIDAS` antes del
 `--apply`. Que aparezca otra marca de grupo (hoy no hay forma de crearla): el traspaso solo mira la de las notas y avisa
 cuántas otras hay; esa necesitaría su propia decisión.
+
+---
+
+## 2026-09-25 · La sección habla en tuteo, la guarda caza el voseo por su forma, y «Cómo funciona» explica lo que la lista no muestra
+
+**Qué se decidió.** Etapa 6 del plan de Elías:
+- **Tuteo en todos los textos de la sección**: los pasos, títulos, avisos y pies que arma diferencias.ts, «Emparejar»,
+  los rechazos del servidor que llegan tal cual al toast (servicio.ts y la evidencia de emparejado.ts) y el aviso de
+  numero-propuesta.ts, que vive en el módulo aunque se lee en Importar › Números. De paso, los pasos nombran el botón
+  que existe: «marcala resuelta» pasa a «márcala «Ya está anulada»», y «marcá la línea «está bien así»» pasa a «marca
+  esa fila «Está bien así»», porque desde la etapa 3 se marca fila por fila.
+- **Una guarda por la FORMA** (guardas.test.ts, con el detector en lib/ui/voseo.ts). Lee los textos con el AST de
+  TypeScript —cadenas, plantillas y JSX—: los comentarios no cuentan, ni `className`. De lib/cobranza/schema.ts, que
+  comparten todas las rutas de Cobranza, solo los esquemas de estas dos (`odoo*`, `codigoDeLinea`, `idDeBase`). El
+  detector es el de la guarda del cronograma (las agudas: «Revisá», «tenés») más **el pronombre pegado sin tilde**
+  («Marcala», «Decile», «pasale»): lo que tiene esa forma y no es voseo («totales», «internacionales», «permite»,
+  «update») va en una lista calibrada sobre todos los textos de app/, components/ y lib/.
+- **«Cómo funciona» suma cuatro bloques**: las cuentas en Mercury (el botón, la lista, «Deshacer», por qué no se marca
+  una cuenta con cliente de Odoo, QuickBooks por la ficha), «Está bien así» fila por fila (el motivo propuesto, que se
+  marca con los números que se ven, que vuelve sola si cambia un número y no un nombre, que vale solo en su línea,
+  «Marcadas»), cómo se cuenta lo pendiente, y lo que queda fuera por regla con su porqué: historia, exentas de años
+  anteriores, pagadas sin cuenta, el 13 % del IVA y lo recién facturado (la gracia de 15 días). El 13 % y los 15 días
+  salen de las constantes que aplican la regla, y una guarda pide que cada explicación siga ahí.
+
+**Por qué.** Medido el 2026-09-25 sobre el código: **98 palabras en voseo** en los textos que se leen —47 agudas
+(«Abrí» ×8, «confirmá» ×6, «Buscá» ×6…), 48 con el pronombre pegado («marcala» ×9, «pasale» ×5, «corregilo» ×3…) y
+3 «por vos»—; 86 en diferencias.ts, 6 en «Emparejar», 5 rechazos del servidor y 1 en numero-propuesta.ts. Con el
+detector de la guarda del cronograma, 47 de las 98 habrían pasado en verde: esa forma no lleva tilde. Y lo que queda
+fuera por regla solo se contaba en el texto de su línea, que desde la etapa 4 no se muestra si no le quedan filas
+pendientes: la única explicación que queda siempre es la de «Cómo funciona».
+
+⚠ «Cómo funciona» explica cada regla pero no dice cuántas cosas deja fuera hoy: ese número sigue viviendo solo en el
+texto de su línea, y se va con ella. Si hace falta verlo siempre, el detector tendría que devolver esos conteos.
+⚠ La guarda mira solo esta sección. Queda voseo en otros textos de Cobranza que no son de estas rutas: 5 mensajes de
+lib/cobranza/schema.ts («Indicá», «Contá», «Decí», «Escribí») y la carga del Excel (libro-alex*.ts, «anotá FAC/… en
+cada una»).
+⚠ La guarda del cronograma (lib/timeline/contexto-cronograma.test.ts) lleva su propia copia del detector y no se
+tocó: si adopta lib/ui/voseo.ts, caza también el pronombre pegado.
+
+**Qué la revertiría.** El tuteo, nada: es la regla del repo. El detector del pronombre pegado, que su lista de
+excepciones crezca más rápido que el voseo que caza: ahí conviene cambiar la forma por una lista de verbos. «Cómo
+funciona», que cambie una regla de la lista: la guarda obliga a cambiar el texto en el mismo commit.
