@@ -24,6 +24,7 @@ import { guardTimelineDetailApply } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { normalizeCuratedTasks, applyCuratedPhaseTasks } from "@/lib/timeline/apply-curated-phase";
+import { esBorradorV1, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 
 export async function POST(
   req: NextRequest,
@@ -58,6 +59,7 @@ export async function POST(
     where: { projectId },
     select: {
       id: true,
+      pendingProposal: true,
       phases: {
         select: {
           id: true,
@@ -72,6 +74,13 @@ export async function POST(
   });
   if (!tl) {
     return NextResponse.json({ error: "El proyecto no tiene cronograma" }, { status: 404 });
+  }
+  /* ⛔ E2a: con un borrador del cronograma abierto (el formato nuevo), las tareas de «Regenerar todo»
+     se revisan y se aplican EN él (POST /timeline/borrador/aplicar). Una pestaña vieja o una llamada
+     directa escribiría tareas por debajo y le cambiaría la lista al CSE que la está revisando. El
+     handoff viejo (otro formato) sigue como hoy. */
+  if (esBorradorV1(tl.pendingProposal)) {
+    return NextResponse.json({ code: "PROPUESTA_ABIERTA", message: MENSAJE_PROPUESTA_ABIERTA }, { status: 409 });
   }
 
   const phaseById = new Map(tl.phases.map((p) => [p.id, p]));

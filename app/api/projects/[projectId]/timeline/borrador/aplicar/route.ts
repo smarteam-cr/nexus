@@ -1,29 +1,34 @@
 /**
  * POST /api/projects/[projectId]/timeline/borrador/aplicar
  *
- * Aplica la propuesta de fases que el CSE revisó en la barra de arriba del Gantt (E1 del plan «una
- * sola propuesta del cronograma»). Resuelve la propuesta ENTERA: lo marcado se escribe, y lo
- * desmarcado y lo que choca con una edición posterior se descartan con ella.
+ * Aplica la propuesta del cronograma que el CSE revisó en la barra de arriba del Gantt: cambios de
+ * fases y, desde E2a, las tareas nuevas y las que se van de «Regenerar todo» / «Generar cronograma».
+ * Resuelve la propuesta ENTERA: lo marcado se escribe, y lo desmarcado y lo que choca con una
+ * edición posterior se descartan con ella.
  *
  *   { token: string | null,   ← `pendingProposalRunId` de la propuesta que el CSE tiene enfrente (obligatorio)
  *     sin: string[],          ← las claves que desmarcó (viven en la memoria de la pantalla)
  *     huella: string,         ← la del plan que vio (`planDeAplicacion`, lib/timeline/borrador.ts)
- *     foto?: { ancla, fases } } ← la foto contra la que la pantalla convirtió el formato viejo
+ *     foto?: { ancla, fases }, ← la foto contra la que la pantalla convirtió el formato viejo
+ *     version?: number | null } ← la versión del borrador que vio (sin ella, una pestaña vieja: como E1)
  *
  * ⭐ El que decide es el servidor: dentro de UNA transacción (lib/timeline/escribir-estructura.ts)
- * escribe primero el token condicionado, lee lo vivo, recalcula el plan con la MISMA función que la
- * pantalla y, si la huella no es la que vio el CSE, no escribe nada (409 PLAN_CAMBIO). Si la
- * propuesta guardada ya no es esa, 409 PROPUESTA_CAMBIO. La auditoría, el evento del arranque y el
- * desenlace de la corrida van DESPUÉS, fuera de la transacción.
+ * escribe primero el token condicionado, lee lo vivo (fases y tareas), recalcula el plan con la MISMA
+ * función que la pantalla y, si la huella no es la que vio el CSE, no escribe nada (409 PLAN_CAMBIO).
+ * Si la propuesta guardada ya no es esa —otra corrida u otra versión—, 409 PROPUESTA_CAMBIO. Tocar
+ * tareas pide la misma vara que generarlas (403 SIN_PERMISO). La auditoría, el evento del arranque y
+ * el desenlace de la corrida van DESPUÉS, fuera de la transacción.
  *
- * Reemplaza a `proposal/apply-items` (que queda como lápida con un 409 «Nexus se actualizó»).
+ * Reemplaza a `proposal/apply-items` (que queda como lápida con un 409 «Nexus se actualizó») y, para
+ * «Regenerar todo», a `detail/apply-all` (que se queda para pestañas viejas hasta E2b).
  * Guarded con guardTimelineEdit (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit } from "@/lib/auth/api-guards";
+import { guardTimelineEdit, guardIaDelCronograma } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { leerFoto } from "@/lib/timeline/borrador";
+import { esBorradorV1, leerFoto, traeCambiosDeTareas, versionDelBorrador } from "@/lib/timeline/borrador";
+import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
 import {
   aplicarBorradorEnTx,
   ErrorAlAplicar,
@@ -64,28 +69,62 @@ export async function POST(
   if (body.foto !== undefined && body.foto !== null && !foto) {
     return NextResponse.json({ error: "La foto del cronograma no tiene forma válida." }, { status: 400 });
   }
+  /* La versión del borrador que vio el CSE (E2a). Sin ella —una pestaña de antes—, como E1: decide
+     el token. */
+  if (
+    body.version !== undefined &&
+    body.version !== null &&
+    (typeof body.version !== "number" || !Number.isInteger(body.version))
+  ) {
+    return NextResponse.json({ error: "`version` tiene que ser la versión de la propuesta que revisaste." }, { status: 400 });
+  }
   const token = body.token === "" ? null : (body.token as string | null);
   const sin = body.sin as string[];
   const huella = body.huella;
+  const version = typeof body.version === "number" ? body.version : null;
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
     select: { id: true, pendingProposal: true, pendingProposalRunId: true },
   });
   if (!tl) return NextResponse.json({ error: "No hay cronograma" }, { status: 404 });
-  // Atajo legible antes de abrir la transacción: la que se revisó ya no es la guardada.
-  if (tl.pendingProposal === null || (tl.pendingProposalRunId ?? null) !== token) {
+  /* Atajo legible antes de abrir la transacción: la que se revisó ya no es la guardada. Con un
+     borrador-v1, también si el CSE vio otra VERSIÓN (se le fusionaron las tareas, o se le volvieron a
+     pedir): aplicar esa versión vieja es otra lista que la que tiene enfrente, y el 409 trae la nueva
+     (sin esto, la pantalla se quedaba con la vieja y cada «Aplicar» era otro 409 de PLAN_CAMBIO). */
+  const otraVersion =
+    version !== null && esBorradorV1(tl.pendingProposal) && versionDelBorrador(tl.pendingProposal) !== version;
+  if (tl.pendingProposal === null || (tl.pendingProposalRunId ?? null) !== token || otraVersion) {
     return NextResponse.json({ error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO }, { status: 409 });
   }
+
+  /* ANTES de la transacción (leen la base y no escriben): el estado de las tareas —se deduce de su
+     corrida; mientras se arman, el plan se bloquea— y si quien aplica puede tocarlas. La vara es la
+     de generarlas con IA (`guardIaDelCronograma`): el que no podía pedirlas tampoco las escribe.
+     Sin tareas en la propuesta, no se pregunta. */
+  const estadoDeTareas = await leerEstadoDeLasTareas(tl.pendingProposal);
+  const puedeTocarTareas = traeCambiosDeTareas(tl.pendingProposal) ? (await guardIaDelCronograma(tl.id)) === null : true;
 
   const ahora = new Date();
   let r: ResultadoDeAplicar;
   try {
     r = await prisma.$transaction(
-      (tx) => aplicarBorradorEnTx(tx, { timelineId: tl.id, token, guardado: tl.pendingProposal, foto, sin, huella, ahora }),
-      // El mismo techo que el PUT del cronograma (P2028 contra el pooler remoto). Plan §3.2: se
-      // mide con Wherex antes de bajarlo.
-      { maxWait: 10000, timeout: 30000 },
+      (tx) =>
+        aplicarBorradorEnTx(tx, {
+          timelineId: tl.id,
+          token,
+          guardado: tl.pendingProposal,
+          foto,
+          sin,
+          huella,
+          ahora,
+          tareas: estadoDeTareas?.estado ?? null,
+          puedeTocarTareas,
+          actorEmail: guard.user.email ?? null,
+        }),
+      /* El techo de apply-all (el camino que esto reemplaza para «Regenerar todo»): escribe también
+         las tareas. Riesgo P2028 en Wherex: se mide con borrador-aplicar.int.test.ts. */
+      { maxWait: 20000, timeout: 60000 },
     );
   } catch (e) {
     if (e instanceof ErrorAlAplicar) {
@@ -100,6 +139,27 @@ export async function POST(
   const fuera = total - aplicadas;
   const avisosDeReubicacion = r.avisos;
   const anclaAplicada = r.plan.aplicadas.some((c) => c.tipo === "ancla");
+  const tareasTocadas = r.tareasTocadas;
+  /* De dónde salió, para la razón: el pedido lo deduce el servidor UNA vez, al armar el borrador
+     (`pedidoDelCronograma`). El handoff y el formato viejo no lo tienen. */
+  const deDonde =
+    r.borrador.pedido === "regenerar"
+      ? "Propuesta de «Regenerar todo»"
+      : r.borrador.pedido === "primera"
+        ? "Propuesta de «Generar cronograma»"
+        : origen === "contexto"
+          ? "Propuesta de fases de las reuniones y notas elegidas"
+          : "Propuesta de fases del handoff";
+  const { creadas: tareasNuevas, borradas: tareasQueSeVan } = r.tareas;
+  const nuevasEnTexto = `${tareasNuevas} ${tareasNuevas === 1 ? "tarea nueva" : "tareas nuevas"}`;
+  const deTareas =
+    tareasNuevas > 0 && tareasQueSeVan > 0
+      ? `: ${nuevasEnTexto} y ${tareasQueSeVan} ${tareasQueSeVan === 1 ? "que se va" : "que se van"}`
+      : tareasNuevas > 0
+        ? `: ${nuevasEnTexto}`
+        : tareasQueSeVan > 0
+          ? `: ${tareasQueSeVan} ${tareasQueSeVan === 1 ? "tarea que se va" : "tareas que se van"}`
+          : "";
 
   // ── DESPUÉS de la transacción: auditoría y evento del arranque (best-effort) ──────────────────
   try {
@@ -124,9 +184,10 @@ export async function POST(
       data: {
         timelineId: tl.id,
         reason:
-          `${origen === "contexto" ? "Propuesta de fases de las reuniones y notas elegidas" : "Propuesta de fases del handoff"} ` +
+          `${deDonde} ` +
           `aplicada: ${aplicadas} de ${total} ${total === 1 ? "cambio" : "cambios"}` +
           (fuera > 0 ? ` (${fuera} ${fuera === 1 ? "quedó fuera" : "quedaron fuera"})` : "") +
+          deTareas +
           "." +
           (corrimiento ? ` ${corrimiento}` : ""),
         kind: "AI_ASSIST",
@@ -211,5 +272,8 @@ export async function POST(
     /* ⚠ Solo cuando hubo algo que correr: una clave siempre presente y casi siempre vacía es una que
        la pantalla aprende a ignorar. */
     ...(avisosDeReubicacion.length > 0 ? { avisos: avisosDeReubicacion } : {}),
+    /* Tareas creadas + borradas: con > 0, la pantalla encadena el re-chequeo del avance (el borrador
+       de avance se invalidó en la transacción). */
+    tareasTocadas,
   });
 }

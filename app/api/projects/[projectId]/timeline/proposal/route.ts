@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
 
 export async function DELETE(
   req: NextRequest,
@@ -29,7 +30,7 @@ export async function DELETE(
 
   const existing = await prisma.projectTimeline.findUnique({
     where: { projectId },
-    select: { id: true, pendingProposalRunId: true },
+    select: { id: true, pendingProposalRunId: true, pendingProposal: true },
   });
   if (!existing) {
     return NextResponse.json({ cleared: false, reason: "no_timeline" }, { status: 404 });
@@ -52,6 +53,14 @@ export async function DELETE(
     }
   }
   if (body?.reason === "auto-zero-deltas") {
+    /* ⛔ E2a: un borrador que ESPERA sus tareas («faltan» o «armando») está vacío todavía, pero se
+       va a llenar. El descarte automático de una pestaña de E1 lo borraría y la corrida pagada del
+       paso 2 se perdería: el servidor lo frena. La pestaña lo trata como «otra propuesta» y la
+       vuelve a traer. Un v1 vacío cuya corrida falló sí se descarta (no queda nada que esperar). */
+    const tareas = await leerEstadoDeLasTareas(existing.pendingProposal);
+    if (tareas?.estado === "faltan" || tareas?.estado === "armando") {
+      return NextResponse.json({ cleared: false, reason: "tareas_pendientes" }, { status: 409 });
+    }
     console.log(
       `[timeline] propuesta auto-descartada sin deltas visibles (project ${projectId}, run ${existing.pendingProposalRunId ?? "?"}).`,
     );

@@ -218,6 +218,26 @@ export async function applyCuratedPhaseTasks(
 
   await patchBaselinePhaseTasks(tx, timelineId, phaseId);
 
+  await recalcularCierreDeFase(tx, phaseId, now, actorEmail);
+
+  return { preservadasPorProgreso: preservadas.length };
+}
+
+/**
+ * El cierre o la reapertura automática de UNA fase según sus tareas, después de crear o borrar
+ * tareas: todas resueltas (hechas o suspendidas) → DONE; alguna abierta en una fase DONE →
+ * IN_PROGRESS. Una fase sin tareas no se toca. A lo sumo DOS llamadas: leer y, si cambia, escribir.
+ *
+ * Extraída de `applyCuratedPhaseTasks` (E2a, 2026-09-25) con la MISMA conducta, para que el aplicar
+ * del borrador (lib/timeline/escribir-estructura.ts) la use sin llevarse el resto: renumerar el
+ * `order` y parchear la foto publicada, que el borrador no hace a propósito.
+ */
+export async function recalcularCierreDeFase(
+  tx: Pick<Prisma.TransactionClient, "timelinePhase">,
+  phaseId: string,
+  now: Date,
+  actorEmail: string | null,
+): Promise<void> {
   const after = await tx.timelinePhase.findUnique({
     where: { id: phaseId },
     select: { status: true, actualStart: true, tasks: { select: { status: true } } },
@@ -234,6 +254,4 @@ export async function applyCuratedPhaseTasks(
       await tx.timelinePhase.update({ where: { id: phaseId }, data: { status: "IN_PROGRESS", ...meta } });
     }
   }
-
-  return { preservadasPorProgreso: preservadas.length };
 }

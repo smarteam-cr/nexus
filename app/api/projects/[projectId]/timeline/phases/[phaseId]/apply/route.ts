@@ -20,6 +20,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { normalizeCuratedTasks, applyCuratedPhaseTasks } from "@/lib/timeline/apply-curated-phase";
+import { esBorradorV1, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 
 export async function POST(
   req: NextRequest,
@@ -51,12 +52,18 @@ export async function POST(
       id: true,
       status: true,
       durationWeeks: true,
-      timeline: { select: { id: true } },
+      timeline: { select: { id: true, pendingProposal: true } },
       tasks: { select: { id: true, title: true, weekIndex: true, order: true, notes: true, party: true, type: true, source: true, status: true, actualStart: true } },
     },
   });
   if (!phase) {
     return NextResponse.json({ error: "La fase no existe en este proyecto" }, { status: 404 });
+  }
+  /* ⛔ E2a: con un borrador del cronograma abierto (el formato nuevo), un proyecto tiene UNA sola
+     propuesta. Una pestaña vieja o una llamada directa escribiría tareas por debajo de ella y le
+     cambiaría la lista al CSE que la está revisando. El handoff viejo (otro formato) sigue como hoy. */
+  if (esBorradorV1(phase.timeline.pendingProposal)) {
+    return NextResponse.json({ code: "PROPUESTA_ABIERTA", message: MENSAJE_PROPUESTA_ABIERTA }, { status: 409 });
   }
   const timelineId = phase.timeline.id;
   const existingIds = new Set(phase.tasks.map((t) => t.id));
