@@ -294,7 +294,7 @@ export function proponerEmparejados(
         odooPartnerId: p.odooPartnerId,
         nombre: p.nombre,
         via: "NOMBRE" as const,
-        evidencia: `Los nombres se parecen (${distintivas.join(", ")}). ⚠ Nexus guarda el nombre comercial y Odoo la razón social: revisalo.`,
+        evidencia: `Los nombres se parecen (${distintivas.join(", ")}). ⚠ Nexus guarda el nombre comercial y Odoo la razón social: revísalo.`,
       })),
     ];
 

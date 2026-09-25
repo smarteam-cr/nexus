@@ -93,7 +93,7 @@ const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoA
   MERCURY: {
     label: "Se arregla fuera de Odoo",
     chip: "text-cyan-600 bg-cyan-500/10 border-cyan-500/30",
-    pie: () => "Nexus no tiene copia de esa plataforma: hay que volver acá y marcarla resuelta a mano.",
+    pie: () => "Nexus no tiene copia de esa plataforma: hay que volver acá y marcarla «Ya está anulada» a mano.",
   },
   NEXUS: {
     label: "Se arregla en Nexus",

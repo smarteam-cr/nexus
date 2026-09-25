@@ -1834,10 +1834,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         donde: "NEXUS",
         atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
         pasos: [
-          "Andá a la pestaña «Emparejar» de esta misma pantalla.",
-          "Para cada cuenta, confirmá el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
+          "Ve a la pestaña «Emparejar» de esta misma pantalla.",
+          "Para cada cuenta, confirma el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
           "Si una cuenta factura por Mercury, márcala «Está en Mercury» en su tarjeta: sale de la lista y deja de contar como «falta emparejar».",
-          "Si un cliente de Odoo no es cliente nuestro, marcalo como ajeno para que deje de aparecer.",
+          "Si un cliente de Odoo no es cliente nuestro, márcalo como ajeno para que deje de aparecer.",
           "Al confirmar, las facturas de ese cliente pasan a su cuenta en el acto y sus cobros facturados empiezan a verificarse.",
         ],
         queSignificaAceptar:
@@ -1880,9 +1880,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       documentos: vivas.filter(gemelaEn(pares)).map((f) => `f:${f.id}`),
       donde: "ODOO",
       pasos: [
-        "Abrí en Odoo cada par de facturas de la lista de abajo (los números están en cada línea).",
-        "Mirá cuál de las dos salió en la moneda que no era. La pista: el importe idéntico en dólares y en colones no puede ser correcto con un tipo de cambio de ~500.",
-        "Anulá en Odoo la que está mal y, si hace falta, reemitila en la moneda correcta.",
+        "Abre en Odoo cada par de facturas de la lista de abajo (los números están en cada línea).",
+        "Mira cuál de las dos salió en la moneda que no era. La pista: el importe idéntico en dólares y en colones no puede ser correcto con un tipo de cambio de ~500.",
+        "Anula en Odoo la que está mal y, si hace falta, reemítela en la moneda correcta.",
       ],
       queSignificaAceptar:
         "Que estos pares en dos monedas son correctos y no hay nada que anular. La línea vuelve si aparece un par nuevo o cambia un monto.",
@@ -1913,10 +1913,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "Se muestran porque la factura revertida y su nota siguen en Odoo por ese importe en la moneda equivocada: un reporte de Odoo que sume esa moneda sin descontar las reversiones sale inflado en esa cifra.",
       montos: montosPorMoneda(corregidas.map((c) => ({ moneda: c.equivocada.moneda, monto: c.monto }))),
       donde: "ODOO",
-      pie: "No se cierra sola: la factura revertida y su nota quedan en Odoo. Cuando contabilidad lo confirme, marcala «está bien así».",
+      pie: "No se cierra sola: la factura revertida y su nota quedan en Odoo. Cuando contabilidad lo confirme, marca sus filas «Está bien así».",
       pasos: [
-        "Confirmá con contabilidad que cada nota de crédito quedó aplicada a su factura equivocada (Odoo ya da las dos como cerradas).",
-        "Si algún reporte de Odoo del año sale con estos importes, pedí que lo saquen sin las facturas revertidas.",
+        "Confirma con contabilidad que cada nota de crédito quedó aplicada a su factura equivocada (Odoo ya da las dos como cerradas).",
+        "Si algún reporte de Odoo del año sale con estos importes, pide que lo saquen sin las facturas revertidas.",
       ],
       queSignificaAceptar:
         "Que contabilidad ya lo confirmó y los reportes no las suman. La línea vuelve si aparece otra factura en la moneda equivocada.",
@@ -1966,7 +1966,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         documentos: notasAbiertas.map((n) => `f:${n.nota.id}`),
         donde: "ODOO",
         pasos: [
-          "Pasale la lista a contabilidad: cada nota se aplica en Odoo a la factura que anula (al lado dice cuál parece).",
+          "Pásale la lista a contabilidad: cada nota se aplica en Odoo a la factura que anula (al lado dice cuál parece).",
           "Si la factura sí se debe y la nota fue un error, que la anulen.",
           "⚠ No le cobres al cliente una factura de la lista sin mirar su nota primero.",
         ],
@@ -2019,8 +2019,8 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         documentos: montosReales.flatMap((d) => [`f:${d.facturaId}`, ...d.cobroIds.map((id) => `c:${id}`)]),
         donde: "NEXUS",
         pasos: [
-          "Abrí el cliente en Cobranza y compará su plan de pago contra la factura de Odoo (el número está en cada línea).",
-          "Si el descuento o el ajuste se aplicó al facturar y el plan quedó viejo, corregí el plan en Nexus.",
+          "Abre el cliente en Cobranza y compara su plan de pago contra la factura de Odoo (el número está en cada línea).",
+          "Si el descuento o el ajuste se aplicó al facturar y el plan quedó viejo, corrige el plan en Nexus.",
           "Si el plan estaba bien y la factura salió con otro monto, la corrección va del lado de Odoo.",
         ],
         queSignificaAceptar:
@@ -2055,7 +2055,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
   const casaDelPar = (g: ParDePago) => (g.origen === "JUNTADO" ? [`f:${g.factura.id}`, ...g.cobros.map((c) => `c:${c.id}`)] : []);
   const avisoDelPar = (g: ParDePago) =>
     g.origen === "VARIAS_CUOTAS"
-      ? " · ⚠ la factura cubre estas cuotas según la suma: confirmalo al anotarles el número"
+      ? " · ⚠ la factura cubre estas cuotas según la suma: confírmalo al anotarles el número"
       : g.origen === "MONTO"
         ? ` · ⚠ Nexus dice ${fmt(sumaDe(g.cobros), g.factura.moneda)} y la factura ${fmt(g.factura.montoNeto, g.factura.moneda)}: la diferencia va en la línea de montos distintos`
         : "";
@@ -2090,9 +2090,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         documentos: porCobrarPagadas.flatMap(casaDelPar),
         donde: "NEXUS",
         pasos: [
-          "Abrí el cronograma de la cuenta de cada fila.",
-          "Si entró la plata, registrá el pago con el comprobante y la fecha en que entró.",
-          "Si Odoo registró un pago que no es de esta factura, pedile a contabilidad que lo corrija en Odoo.",
+          "Abre el cronograma de la cuenta de cada fila.",
+          "Si entró la plata, registra el pago con el comprobante y la fecha en que entró.",
+          "Si Odoo registró un pago que no es de esta factura, pídele a contabilidad que lo corrija en Odoo.",
         ],
         queSignificaAceptar:
           "Que estos cobros siguen por cobrar aunque Odoo tenga su factura pagada. ⚠ Mientras tanto cuentan en la cartera vencida y abren alertas.",
@@ -2133,10 +2133,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         documentos: cobradasSinPagar.flatMap(casaDelPar),
         donde: "PREGUNTANDO",
         pasos: [
-          "Buscá en el banco el depósito de cada fila.",
-          "Si entró, pasale el comprobante a contabilidad para que registre el pago en Odoo, y anotá la referencia del depósito en el cobro.",
-          "Si no entró, sacalo de Cobrado desde el cronograma, con el motivo. Lo decide una persona: Nexus no lo saca solo.",
-          "Si la factura tiene una nota de crédito sin aplicar (está en su línea), mirala antes: puede que no se deba.",
+          "Busca en el banco el depósito de cada fila.",
+          "Si entró, pásale el comprobante a contabilidad para que registre el pago en Odoo, y anota la referencia del depósito en el cobro.",
+          "Si no entró, sácalo de Cobrado desde el cronograma, con el motivo. Lo decide una persona: Nexus no lo saca solo.",
+          "Si la factura tiene una nota de crédito sin aplicar (está en su línea), mírala antes: puede que no se deba.",
         ],
         queSignificaAceptar:
           "Que Nexus los da por cobrados aunque Odoo tenga su factura sin pagar. Solo tiene sentido si el depósito está verificado y contabilidad lo va a registrar.",
@@ -2166,14 +2166,14 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         severidad: "MEDIA",
         titulo: `${variasCuotas.length} facturas de Odoo cubren varias cuotas de Nexus`,
         detalle:
-          "Cada factura suma exactamente dos o tres cuotas de su cuenta que no tienen el número anotado, y no hay otra combinación que dé lo mismo. No es un monto distinto ni un cobro sin factura: falta anotar el número de la factura en cada una de esas cuotas, y con eso el cruce las junta sin adivinar. ⚠ La propuesta sale del monto: confirmala antes de anotar.",
+          "Cada factura suma exactamente dos o tres cuotas de su cuenta que no tienen el número anotado, y no hay otra combinación que dé lo mismo. No es un monto distinto ni un cobro sin factura: falta anotar el número de la factura en cada una de esas cuotas, y con eso el cruce las junta sin adivinar. ⚠ La propuesta sale del monto: confírmala antes de anotar.",
         montos: montosPorMoneda(variasCuotas.map((v) => ({ moneda: v.factura.moneda, monto: v.factura.montoNeto }))),
         documentos: variasCuotas.flatMap((v) => [`f:${v.factura.id}`, ...v.cobros.map((c) => `c:${c.id}`)]),
         donde: "NEXUS",
         pasos: [
-          "Abrí el cronograma de la cuenta de cada fila.",
-          "En cada cuota que nombra la fila, anotá el número de la factura («Agregar número»).",
-          "Si alguna cuota no es de esa factura, anotale la suya: el número que anota una persona manda sobre esta propuesta.",
+          "Abre el cronograma de la cuenta de cada fila.",
+          "En cada cuota que nombra la fila, anota el número de la factura («Agregar número»).",
+          "Si alguna cuota no es de esa factura, anótale la suya: el número que anota una persona manda sobre esta propuesta.",
         ],
         queSignificaAceptar:
           "Que esas cuotas se quedan sin número. La lista las va a seguir cruzando por monto, que es justo lo que confunde a las otras líneas.",
@@ -2239,13 +2239,13 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         plata,
         donde: "ODOO",
         pasos: [
-          "Buscá en Odoo si la factura existe a nombre de otra razón social. Si aparece, el problema es el emparejado: arreglalo en la pestaña «Emparejar».",
-          "Si no existe, hay que emitirla en Odoo. Si la fila dice que se anuló, confirmá si el cobro sigue vigente.",
-          "Si no correspondía facturarla, sacale la marca de facturado al cobro en Nexus.",
-          "Si el cobro está en Cobrado, entró plata sin un documento en Odoo: empezá por esos.",
+          "Busca en Odoo si la factura existe a nombre de otra razón social. Si aparece, el problema es el emparejado: arréglalo en la pestaña «Emparejar».",
+          "Si no existe, hay que emitirla en Odoo. Si la fila dice que se anuló, confirma si el cobro sigue vigente.",
+          "Si no correspondía facturarla, sácale la marca de facturado al cobro en Nexus.",
+          "Si el cobro está en Cobrado, entró plata sin un documento en Odoo: empieza por esos.",
         ],
         queSignificaAceptar:
-          "Que estos cobros pueden estar marcados facturados sin respaldo en Odoo. Solo tiene sentido si sabés que se facturaron por fuera del ERP.",
+          "Que estos cobros pueden estar marcados facturados sin respaldo en Odoo. Solo tiene sentido si sabes que se facturaron por fuera del ERP.",
         queHacer: "Verificar en Odoo si la factura existe; si no existe, emitirla o revertir la marca en Nexus.",
         resuelve: "COBRANZA",
         items: acusables
@@ -2263,9 +2263,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
                 (anulada
                   ? ` · tenía ${anulada.numero}, ${anulada.state === "cancel" ? "anulada" : "revertida"} en Odoo${
                       notaDe(anulada) ? ` con ${notaDe(anulada)?.numero}` : ""
-                    }: si la cuota ya no se debe, decidí qué pasa con ella`
+                    }: si la cuota ya no se debe, decide qué pasa con ella`
                   : cuentasEnMercury.has(c.cuentaId)
-                    ? " · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: buscala ahí antes de emitirla en Odoo"
+                    ? " · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: búscala ahí antes de emitirla en Odoo"
                     : ""),
               fila: filaDelCobro(c),
             };
@@ -2303,15 +2303,15 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         detalle:
           `Cuotas sin número anotado que el Excel de Alexander cubre con una factura de Mercury (cada fila dice cuál). Odoo no la va a tener nunca, así que no se acusan como «cobro sin factura»: falta anotar el número de Mercury en cada cuota. Suman ${textoDeMontos(montos)}.` +
           (porElMes
-            ? ` ⚠ En ${porElMes === 1 ? "una" : porElMes} la cuota se ata por el mes y el monto del Excel no es exactamente el de Nexus: decidí cuál vale antes de anotar.`
+            ? ` ⚠ En ${porElMes === 1 ? "una" : porElMes} la cuota se ata por el mes y el monto del Excel no es exactamente el de Nexus: decide cuál vale antes de anotar.`
             : ""),
         montos,
         documentos: enMercury.map((c) => `c:${c.id}`),
         donde: "NEXUS",
         pasos: [
-          "Abrí el cronograma de la cuenta de cada fila.",
-          "En cada cuota, anotá el número de Mercury que dice la fila, con Mercury como plataforma.",
-          "Si el monto del Excel no es el de la cuota, decidí cuál vale antes de anotar: Nexus guarda el neto.",
+          "Abre el cronograma de la cuenta de cada fila.",
+          "En cada cuota, anota el número de Mercury que dice la fila, con Mercury como plataforma.",
+          "Si el monto del Excel no es el de la cuota, decide cuál vale antes de anotar: Nexus guarda el neto.",
           "Si la cuenta factura todo por Mercury y todavía dice Odoo, cambia su vía de cobro: con «Está en Mercury» en la pestaña «Emparejar» si no tiene cliente de Odoo, o en la ficha de la cuenta.",
         ],
         queSignificaAceptar:
@@ -2408,10 +2408,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         plata,
         donde: "NEXUS",
         pasos: [
-          "Buscá en Odoo el número de cada fila (al lado dice qué pasa con ese documento).",
-          "Si el número está mal anotado, corregilo en el cronograma de la cuenta: «cambiar», al lado del número.",
-          "Si la factura se anuló, se revirtió o salió en otra moneda, el cobro necesita una factura vigente: emitila en Odoo y anotá su número en el cobro.",
-          "Si no correspondía facturar ese cobro, revertí su factura en Nexus.",
+          "Busca en Odoo el número de cada fila (al lado dice qué pasa con ese documento).",
+          "Si el número está mal anotado, corrígelo en el cronograma de la cuenta: «cambiar», al lado del número.",
+          "Si la factura se anuló, se revirtió o salió en otra moneda, el cobro necesita una factura vigente: emítela en Odoo y anota su número en el cobro.",
+          "Si no correspondía facturar ese cobro, revierte su factura en Nexus.",
         ],
         queSignificaAceptar:
           "Que estos cobros pueden seguir apuntando a un documento que no es una factura vigente. Casi nunca es lo correcto: o el número está mal, o falta la factura.",
@@ -2437,9 +2437,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         donde: "NEXUS",
         atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
         pasos: [
-          "Abrí en Odoo el documento de cada fila y fijate a qué razón social se le emitió.",
-          "Si es de otra empresa, el número está mal anotado: corregilo en el cronograma de la cuenta («cambiar», al lado del número).",
-          "Si es de esta misma empresa, su cliente de Odoo está emparejado con la cuenta equivocada: corregilo en la pestaña «Emparejar».",
+          "Abre en Odoo el documento de cada fila y fíjate a qué razón social se le emitió.",
+          "Si es de otra empresa, el número está mal anotado: corrígelo en el cronograma de la cuenta («cambiar», al lado del número).",
+          "Si es de esta misma empresa, su cliente de Odoo está emparejado con la cuenta equivocada: corrígelo en la pestaña «Emparejar».",
         ],
         queSignificaAceptar:
           "Que estos cobros pueden quedar apuntando a una factura emitida a otra cuenta. Solo tendría sentido si las dos cuentas fueran la misma empresa, y eso se arregla emparejando, no aceptando.",
@@ -2501,8 +2501,8 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         donde: "NEXUS",
         pasos: [
           "Si es de un servicio vigente, falta cargar ese servicio o su plan de pago en Cobranza.",
-          "Si el cliente está mal emparejado, la factura es de otro: arreglalo en «Emparejar».",
-          "Si es algo que Nexus no planifica, marcá la línea «está bien así».",
+          "Si el cliente está mal emparejado, la factura es de otro: arréglalo en «Emparejar».",
+          "Si es algo que Nexus no planifica, marca esa fila «Está bien así».",
         ],
         queSignificaAceptar:
           "Que estas facturas son de cosas que Nexus no planifica. La línea vuelve si aparece una factura nueva.",
@@ -2555,7 +2555,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         CENTAVOS(n.montoNeto) === CENTAVOS(muerta.montoNeto) &&
         n.invoiceDate >= muerta.invoiceDate,
     );
-    return `parece ser ${muerta.numero}, ya ${muerta.state === "cancel" ? "anulada" : "revertida"}${nota ? ` con ${nota.numero}` : ""}: si es esa, marcala resuelta`;
+    return `parece ser ${muerta.numero}, ya ${muerta.state === "cancel" ? "anulada" : "revertida"}${nota ? ` con ${nota.numero}` : ""}: si es esa, márcala «Ya está anulada»`;
   };
   /* La pista no entra en la huella, igual que en «cobro sin factura». */
   const filaDeLiberacion = (p: LiberacionPendiente): FilaDeDiferencia => filaDeUna(`l:${p.liberacion.id}`, huellaDeLiberacion(p.liberacion));
@@ -2618,9 +2618,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
            el ERP» se convierta en «Nexus pide y nadie hace». */
         donde: "ODOO",
         pasos: [
-          "Abrí Odoo y buscá cada documento por su número.",
-          "Las que dicen «anular»: cancelalas o borralas según lo que permita el estado del documento.",
-          "Las que dicen «revertir»: emitile una nota de crédito por el mismo monto y moneda.",
+          "Abre Odoo y busca cada documento por su número.",
+          "Las que dicen «anular»: cancélalas o bórralas según lo que permita el estado del documento.",
+          "Las que dicen «revertir»: emítele una nota de crédito por el mismo monto y moneda.",
           "Con la próxima copia de Odoo salen de esta lista solas. No hay que marcar nada acá.",
         ],
         queSignificaAceptar:
@@ -2650,17 +2650,17 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         /* ⚠ Sin esto hereda el pie genérico de ODOO, que promete que la línea se actualiza sola. */
         pie: "No hay número para verificarlas con la copia de Odoo: se cierran acá, a mano.",
         pasos: [
-          "Si la fila dice «parece ser», abrí ese documento en Odoo: si es el de la cuota y ya está revertido, marcala resuelta.",
-          "Si dice que el cliente no tiene facturas en Odoo, se emitió en Mercury o QuickBooks: anulala allá y marcala resuelta.",
-          "Si no dice nada, buscá el documento en Odoo por cliente, monto y fecha, anulalo o emitile la nota de crédito, y marcala resuelta.",
-          "Para que no vuelva a pasar: los cobros facturados sin número muestran «Agregar número» en el cronograma de la cuenta. Completalos antes de soltar otra factura.",
+          "Si la fila dice «parece ser», abre ese documento en Odoo: si es el de la cuota y ya está revertido, márcala «Ya está anulada».",
+          "Si dice que el cliente no tiene facturas en Odoo, se emitió en Mercury o QuickBooks: anúlala allá y márcala «Ya está anulada».",
+          "Si no dice nada, busca el documento en Odoo por cliente, monto y fecha, anúlalo o emítele la nota de crédito, y márcala «Ya está anulada».",
+          "Para que no vuelva a pasar: los cobros facturados sin número muestran «Agregar número» en el cronograma de la cuenta. Complétalos antes de soltar otra factura.",
         ],
         queSignificaAceptar:
           "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: no hay número que la copia de Odoo pueda seguir.",
         queHacer: "Ubicar el documento en Odoo por cliente y monto, anularlo, y marcar la liberación resuelta.",
         accionPorItem: {
           etiqueta: "Ya está anulada",
-          ayuda: "Marcala solo después de verlo anulado en Odoo. Sin número, nada lo verifica por vos.",
+          ayuda: "Márcala solo después de verlo anulado en Odoo. Sin número, nada lo verifica por ti.",
         },
         resuelve: "COBRANZA",
         items: enOdooSinNumero
@@ -2685,9 +2685,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         plata,
         donde: "MERCURY",
         pasos: [
-          "Entrá a la plataforma donde se emitió (Mercury o QuickBooks) y buscá el documento.",
-          "Anulalo o emitile la nota de crédito, según lo que se decidió al soltarlo.",
-          "Volvé acá y marcala resuelta: nada lo puede verificar por vos.",
+          "Entra a la plataforma donde se emitió (Mercury o QuickBooks) y busca el documento.",
+          "Anúlalo o emítele la nota de crédito, según lo que se decidió al soltarlo.",
+          "Vuelve acá y márcala «Ya está anulada»: nada lo puede verificar por ti.",
         ],
         queSignificaAceptar:
           "Que estos documentos se quedan como están. ⚠ Nadie los va a volver a mirar: Nexus no tiene copia de esas plataformas.",
@@ -2696,7 +2696,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
            resuelta en un botón que no existe. */
         accionPorItem: {
           etiqueta: "Ya está anulada",
-          ayuda: "Marcala solo después de verlo anulado en la plataforma. Nada lo verifica por vos.",
+          ayuda: "Márcala solo después de verlo anulado en la plataforma. Nada lo verifica por ti.",
         },
         resuelve: "COBRANZA",
         items: fueraDeOdoo
@@ -2760,8 +2760,8 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         pie: "Se actualiza sola con la próxima copia de Odoo, a medida que contabilidad concilie.",
         pasos: [
           recientesPago.length
-            ? `Pasale la lista a contabilidad para que concilie con el banco los pagos${periodoReciente}.`
-            : "Pasale la lista a contabilidad para que concilie esos pagos con el banco.",
+            ? `Pásale la lista a contabilidad para que concilie con el banco los pagos${periodoReciente}.`
+            : "Pásale la lista a contabilidad para que concilie esos pagos con el banco.",
           "Los de años anteriores no mueven la cobranza de hoy: que los concilie cuando cierre esos años.",
         ],
         queSignificaAceptar:
@@ -2794,7 +2794,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         montos: impuesto,
         donde: "PREGUNTANDO",
         pasos: [
-          "Pasale la lista al contador y confirmá cuáles son exenciones reales (cada fila dice si la cuenta es nacional o internacional).",
+          "Pásale la lista al contador y confirma cuáles son exenciones reales (cada fila dice si la cuenta es nacional o internacional).",
           "Si alguna debía llevar impuesto, hay que corregir la factura en Odoo.",
         ],
         queSignificaAceptar:
@@ -2861,7 +2861,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
            sale sola de esta línea. */
         atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
         pasos: [
-          "Por cada cuenta, mirá una factura real y confirmá en qué plataforma se emitió.",
+          "Por cada cuenta, mira una factura real y confirma en qué plataforma se emitió.",
           "Si factura por Mercury, márcala «Está en Mercury» en su tarjeta de la pestaña «Emparejar»: sale de esta línea y de la lista para emparejar. Si factura por otra plataforma, cambia la vía de cobro en la ficha de la cuenta.",
           "Al soltar una factura, el diálogo ya avisa de esta contradicción y lo que se elija ahí corrige la cuenta sola.",
         ],
@@ -2934,10 +2934,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         documentos: [],
         donde: "PREGUNTANDO",
         pasos: [
-          "Confirmá con quien vendió si la factura de cada fila es la misma venta que las cuotas o el servicio que nombra.",
-          "Si es la misma y hay un cobro de más, sacalo de Cobrado desde el cronograma, con el motivo, y anotá el número de la factura en las cuotas que quedan.",
+          "Confirma con quien vendió si la factura de cada fila es la misma venta que las cuotas o el servicio que nombra.",
+          "Si es la misma y hay un cobro de más, sácalo de Cobrado desde el cronograma, con el motivo, y anota el número de la factura en las cuotas que quedan.",
           "Si el servicio todavía no generó sus cobros, no los generes sin descontar la factura que ya está cargada.",
-          "Si son ventas distintas, marcá la línea «está bien así».",
+          "Si son ventas distintas, marca esa fila «Está bien así».",
         ],
         queSignificaAceptar:
           "Que son ventas distintas y cada una se cuenta una vez. La línea vuelve si aparece otra factura en la misma situación.",

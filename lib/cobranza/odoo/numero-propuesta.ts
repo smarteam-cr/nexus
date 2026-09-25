@@ -149,7 +149,7 @@ export function proponerNumeros(filas: readonly FilaLibro[], ctx: ContextoLibro,
           : res.tipo === "varias"
             ? "Hay varias cuentas que pueden ser esta: se decide en «Fila por fila»."
             : res.tipo === "una"
-              ? `La cuenta «${res.cuenta.nombre}» sale solo por las siglas: confirmala en «Fila por fila».`
+              ? `La cuenta «${res.cuenta.nombre}» sale solo por las siglas: confírmala en «Fila por fila».`
               : "No hay una cuenta de Nexus con este nombre.",
       );
       continue;
