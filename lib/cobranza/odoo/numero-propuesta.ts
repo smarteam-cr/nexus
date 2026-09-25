@@ -229,7 +229,7 @@ export function proponerNumeros(filas: readonly FilaLibro[], ctx: ContextoLibro,
       moneda: factura.moneda,
       enEspejo: true,
       cuotas: 1,
-      detalle: `No está en el libro: del espejo de Odoo (${factura.odooPartnerNombre}), a ${Math.round(distancia)} días de la fecha de emisión de la cuota`,
+      detalle: `No está en el libro: de la copia de Odoo (${factura.odooPartnerNombre}), a ${Math.round(distancia)} días de la fecha de emisión de la cuota`,
       patch: patchPara(cobro, factura.numero, factura.invoiceDate),
     });
   }

@@ -325,6 +325,21 @@ describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () =
     expect(hallados, "volvió el voseo a la sección (si una palabra es tuteo de verdad, súmala a su lista en lib/ui/voseo.ts)").toEqual([]);
   });
 
+  it("⛔ y sin la jerga de quien la programó: «sync» y «espejo» son la copia de Odoo", () => {
+    /* Revisión del 2026-09-25: «El sync puede espejar sin riesgo de atribuir mal», «Espejo actualizado el…», «facturas
+       espejadas». Quien abre la pantalla cada varias semanas no sabe qué es un sync ni un espejo; el resto de la
+       sección ya decía «la copia de Odoo». Solo las frases: los códigos («ESPEJO», «sin-espejo») no se leen. */
+    const JERGA = /\b(sync|espej(?:o|os|ar|ada|adas|ado|ados))\b/i;
+    const hallados: string[] = [];
+    for (const rel of DE_LA_SECCION) {
+      for (const { linea, texto } of textosDelFuente(leerDeLaRaiz(rel), rel)) {
+        if (/\s/.test(texto.trim()) && JERGA.test(texto)) hallados.push(`${rel}:${linea} «${texto.trim().slice(0, 80)}»`);
+      }
+    }
+    expect(hallados).toEqual([]);
+    expect(JERGA.test("El sync puede espejar"), "la guarda caza lo que había").toBe(true);
+  });
+
   it("y mira donde tiene que mirar (si no, la guarda de arriba es decorativa)", () => {
     /* Los textos salen de verdad de cada archivo, y de los esquemas llegan los de estas rutas y no los de otras. */
     const textos = (rel: string) => textosDelFuente(leerDeLaRaiz(rel), rel).map((t) => t.texto);
