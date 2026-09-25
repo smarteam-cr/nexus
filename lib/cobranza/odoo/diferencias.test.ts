@@ -29,10 +29,18 @@ import {
   type CobroParaCruzar,
   type DiferenciaOdoo,
   type DocumentoDelLibro,
+  type ItemDiferencia,
   type ServicioParaCruzar,
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
 } from "./diferencias";
+
+/**
+ * Las filas como las lee una persona, sin su nombre propio (`fila`): la identidad y la huella tienen sus propias
+ * pruebas, al final del archivo (2026-09-25).
+ */
+const comoSeLeen = (items: readonly ItemDiferencia[] | undefined) =>
+  items?.map(({ id, texto, monto, moneda, nota }) => ({ id, texto, monto, moneda, nota }));
 
 const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   id: "c1",
@@ -885,7 +893,9 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
     const sinCuenta = l.find((i) => i.codigo === "ODOO-SIN-CUENTA");
     expect(sinCuenta?.montoEnJuego).toBeNull();
     expect(sinCuenta?.detalle).toContain("1 cobro(s) facturados de cuentas sin emparejar");
-    expect(sinCuenta?.items).toEqual([{ texto: "Wherex — cuenta sin emparejar", nota: "1 cobro facturado sin verificar" }]);
+    expect(comoSeLeen(sinCuenta?.items)).toEqual([{ texto: "Wherex — cuenta sin emparejar", nota: "1 cobro facturado sin verificar" }]);
+    /* La fila es la cuenta, no su nombre. */
+    expect(sinCuenta?.items[0]?.fila.clave).toBe("cuenta:suelta");
   });
 
   it("uno facturado después del corte no genera línea: el espejo todavía no pudo verlo", () => {
@@ -1341,7 +1351,7 @@ describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => 
     }).find((i) => i.codigo === "ODOO-FACTURA-SIN-COBRO");
     expect(l?.montos).toEqual([{ moneda: "USD", monto: 570 }]);
     expect(l?.plata).toEqual([{ clave: "f:p", moneda: "USD", monto: 570 }]);
-    expect(l?.items).toEqual([
+    expect(comoSeLeen(l?.items)).toEqual([
       { texto: "INVERSIONES TURISTICAS MONTEVERDE SOCIEDAD ANONIMA — US$570", monto: 570, moneda: "USD", nota: "FAC/2026/0186 · 2026-08-15 · pagada en parte de US$1.140" },
     ]);
   });
@@ -1385,7 +1395,7 @@ describe("⭐ la moneda equivocada ya corregida y las notas de crédito sin apli
       ],
     });
     const l = lista.find((i) => i.codigo === "ODOO-MONEDA-CORREGIDA");
-    expect(l?.items).toEqual([
+    expect(comoSeLeen(l?.items)).toEqual([
       {
         texto: "PUBLIMARK SOCIEDAD ANONIMA — FAC/2026/0232 en dólares por US$11.541.250",
         monto: 11541250,
@@ -1393,6 +1403,8 @@ describe("⭐ la moneda equivocada ya corregida y las notas de crédito sin apli
         nota: "revertida con FAC/2026/0243 · la buena: FAC/2026/0233, en colones",
       },
     ]);
+    /* La fila junta tres documentos —la revertida, su nota y la buena— y la marca queda en cada uno. */
+    expect(l?.items[0]?.fila.documentos.map((d) => d.clave).sort()).toEqual(["f:p1", "f:p2", "f:p3"]);
     expect(l?.plata).toEqual([]);
     const sinCuenta = lista.find((i) => i.codigo === "ODOO-SIN-CUENTA");
     expect(sinCuenta?.detalle).not.toMatch(/nota\(s\) de crédito por/);
@@ -1444,7 +1456,7 @@ describe("⭐ facturas que cubren varias cuotas: se proponen, no se juntan", () 
   it("ALMOTEC: 3 × 2.300 contra 6.900 es una factura de 3 cuotas, no un monto distinto ni dos cobros sin factura", () => {
     const lista = detectarDiferenciasOdoo({ ...base, cobros: almotec, facturas: [f329] });
     const l = lista.find((i) => i.codigo === "ODOO-FACTURA-VARIAS-CUOTAS");
-    expect(l?.items).toEqual([
+    expect(comoSeLeen(l?.items)).toEqual([
       {
         texto: "ALMOTEC — FAC/2026/0329 por US$6.900",
         monto: 6900,
@@ -1452,6 +1464,9 @@ describe("⭐ facturas que cubren varias cuotas: se proponen, no se juntan", () 
         nota: "cubre 3 cuotas: 2026-06 US$2.300 + 2026-07 US$2.300 + 2026-08 US$2.300 · sin pagar",
       },
     ]);
+    /* La fila es la factura; sus tres cuotas van dentro de su huella: si se va una, la propuesta ya es otra. */
+    expect(l?.items[0]?.fila.documentos.map((d) => d.clave)).toEqual(["f:f329"]);
+    for (const c of almotec) expect(l?.items[0]?.fila.huella).toContain(`c:${c.id}=`);
     expect(l?.plata).toEqual([]);
     const codigos = lista.map((i) => i.codigo);
     expect(codigos).not.toContain("ODOO-MONTO");
@@ -1669,10 +1684,11 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     const l = linea(lista, "ODOO-POR-COBRAR-PAGADA");
     expect(l?.severidad).toBe("ALTA");
     expect(l?.donde).toBe("NEXUS");
-    expect(l?.items).toEqual([
+    expect(comoSeLeen(l?.items)).toEqual([
       { texto: "Global Supply S.A — FAC/2026/0323 por US$3.396", monto: 3396, moneda: "USD", nota: "2026-08 US$3.396 · por cobrar en Nexus · pagada en Odoo" },
       { texto: "APRECAP — FAC/2026/0326 por US$65", monto: 65, moneda: "USD", nota: "2026-09 US$65 · programado en Nexus · pagada sin conciliar con el banco en Odoo" },
     ]);
+    expect(l?.items.map((i) => i.fila.clave)).toEqual(["f:f323", "f:f326"]);
     expect(l?.plata).toEqual([
       { clave: "c:gs-ago", moneda: "USD", monto: 3396 },
       { clave: "c:aprecap-sep", moneda: "USD", monto: 65 },
@@ -1707,7 +1723,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(cruzar(estado.cobros, estado.facturas).montosDistintos.map((d) => [d.cobroId, d.facturaId]), "así se caía").toContainEqual(["tec-05", "f298"]);
     expect(linea(lista, "ODOO-FACTURA-VARIAS-CUOTAS")?.items.map((i) => i.texto)).toEqual(["TEC- AE — FAC/2026/0272 por US$3.240"]);
     const sinCobro = linea(lista, "ODOO-FACTURA-SIN-COBRO");
-    expect(sinCobro?.items).toContainEqual({ texto: `${tecNombre} — US$4.860`, monto: 4860, moneda: "USD", nota: "FAC/2026/0298 · 2026-06-15 · sin pagar" });
+    expect(comoSeLeen(sinCobro?.items)).toContainEqual({ texto: `${tecNombre} — US$4.860`, monto: 4860, moneda: "USD", nota: "FAC/2026/0298 · 2026-06-15 · sin pagar" });
     expect(sinCobro?.documentos).toContain("f:f298");
   });
 
@@ -1771,7 +1787,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     };
     const l = detectarDiferenciasOdoo(conMts);
     const sinPagarL = linea(l, "ODOO-COBRADO-SIN-PAGAR");
-    expect(sinPagarL?.items).toEqual([
+    expect(comoSeLeen(sinPagarL?.items)).toEqual([
       {
         texto: "MTS MULTISERVICIOS — FAC/2026/0280 por US$420",
         monto: 420,
@@ -1806,37 +1822,254 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(coberturaDelCruce(estado)).toEqual({ facturasSinCasa: [], facturasRepetidas: [], cobrosSinCasa: [], cobrosRepetidos: [] });
   });
 
+  /* Un estado con casi todas las líneas: lo usan la cobertura y los nombres propios de las filas. */
+  const deCuenta = (id: string) => ({ id, nombre: id.toUpperCase(), tipo: "NACIONAL", viaCobro: "ODOO" });
+  const mas = ["almotec", "ibero", "mts", "iva", "num", "lib"];
+  const todo = {
+    ...estado,
+    cuentas: [...cuentas, ...mas.map(deCuenta)],
+    cuentasVinculadas: new Set([...cuentas.map((c) => c.id), ...mas]),
+    cobros: [
+      ...estado.cobros,
+      ...["06", "07", "08"].map((m) => cobro({ id: `al-${m}`, cuentaId: "almotec", periodo: `2026-${m}`, fechaProgramada: `2026-${m}-15`, fechaEmision: `2026-${m}-10`, monto: 2300 })),
+      cobro({ id: "ib-150", cuentaId: "ibero", periodo: "2026-06", fechaProgramada: "2026-06-01", fechaEmision: "2026-06-01", monto: 150 }),
+      cobro({ id: "ib-may", cuentaId: "ibero", periodo: "2026-05", fechaProgramada: "2026-05-15", fechaEmision: "2026-05-10", monto: 3550 }),
+      cobro({ id: "ib-jun", cuentaId: "ibero", periodo: "2026-06", fechaProgramada: "2026-06-15", fechaEmision: "2026-06-10", monto: 3550 }),
+      cobro({ id: "mts-03", cuentaId: "mts", periodo: "2026-03", fechaProgramada: "2026-03-15", fechaEmision: "2026-03-15", monto: 420, estado: "COBRADO" }),
+      cobro({ id: "iva-08", cuentaId: "iva", periodo: "2026-08", fechaProgramada: "2026-08-10", fechaEmision: "2026-08-10", monto: 2655.5 }),
+      cobro({ id: "num-05", cuentaId: "num", periodo: "2026-05", fechaProgramada: "2026-05-15", fechaEmision: "2026-05-15", monto: 800, estado: "COBRADO", numeroFactura: "FAC/2026/0999" }),
+    ],
+    facturas: [
+      ...estado.facturas,
+      sinPagar({ id: "f329", odooMoveId: 329, numero: "FAC/2026/0329", cuentaId: "almotec", odooPartnerId: 40, invoiceDate: "2026-08-12", montoNeto: 6900 }),
+      sinPagar({ id: "f328", odooMoveId: 328, numero: "FAC/2026/0328", cuentaId: "ibero", odooPartnerId: 41, invoiceDate: "2026-07-10", montoNeto: 7100 }),
+      sinPagar({ id: "f280", odooMoveId: 280, numero: "FAC/2026/0280", cuentaId: "mts", odooPartnerId: 42, invoiceDate: "2026-03-20", montoNeto: 440 }),
+      sinPagar({ id: "f346", odooMoveId: 346, numero: "FAC/2026/0346", cuentaId: "iva", odooPartnerId: 43, invoiceDate: "2026-08-10", montoNeto: 2350 }),
+      sinPagar({ id: "f400", odooMoveId: 400, numero: "FAC/2026/0400", cuentaId: "lib", odooPartnerId: 44, invoiceDate: "2026-07-01", montoNeto: 1000 }),
+    ],
+    liberaciones: [liberada({ id: "l400", cuentaId: "lib", referenciaExterna: "FAC/2026/0400", monto: 1000 })],
+  };
+
   it("⭐ cobertura: toda factura por cobrar y todo cobro facturado terminan juntados o en una sola línea", () => {
-    const deCuenta = (id: string) => ({ id, nombre: id.toUpperCase(), tipo: "NACIONAL", viaCobro: "ODOO" });
-    const mas = ["almotec", "ibero", "mts", "iva", "num", "lib"];
-    const todo = {
-      ...estado,
-      cuentas: [...cuentas, ...mas.map(deCuenta)],
-      cuentasVinculadas: new Set([...cuentas.map((c) => c.id), ...mas]),
-      cobros: [
-        ...estado.cobros,
-        ...["06", "07", "08"].map((m) => cobro({ id: `al-${m}`, cuentaId: "almotec", periodo: `2026-${m}`, fechaProgramada: `2026-${m}-15`, fechaEmision: `2026-${m}-10`, monto: 2300 })),
-        cobro({ id: "ib-150", cuentaId: "ibero", periodo: "2026-06", fechaProgramada: "2026-06-01", fechaEmision: "2026-06-01", monto: 150 }),
-        cobro({ id: "ib-may", cuentaId: "ibero", periodo: "2026-05", fechaProgramada: "2026-05-15", fechaEmision: "2026-05-10", monto: 3550 }),
-        cobro({ id: "ib-jun", cuentaId: "ibero", periodo: "2026-06", fechaProgramada: "2026-06-15", fechaEmision: "2026-06-10", monto: 3550 }),
-        cobro({ id: "mts-03", cuentaId: "mts", periodo: "2026-03", fechaProgramada: "2026-03-15", fechaEmision: "2026-03-15", monto: 420, estado: "COBRADO" }),
-        cobro({ id: "iva-08", cuentaId: "iva", periodo: "2026-08", fechaProgramada: "2026-08-10", fechaEmision: "2026-08-10", monto: 2655.5 }),
-        cobro({ id: "num-05", cuentaId: "num", periodo: "2026-05", fechaProgramada: "2026-05-15", fechaEmision: "2026-05-15", monto: 800, estado: "COBRADO", numeroFactura: "FAC/2026/0999" }),
-      ],
-      facturas: [
-        ...estado.facturas,
-        sinPagar({ id: "f329", odooMoveId: 329, numero: "FAC/2026/0329", cuentaId: "almotec", odooPartnerId: 40, invoiceDate: "2026-08-12", montoNeto: 6900 }),
-        sinPagar({ id: "f328", odooMoveId: 328, numero: "FAC/2026/0328", cuentaId: "ibero", odooPartnerId: 41, invoiceDate: "2026-07-10", montoNeto: 7100 }),
-        sinPagar({ id: "f280", odooMoveId: 280, numero: "FAC/2026/0280", cuentaId: "mts", odooPartnerId: 42, invoiceDate: "2026-03-20", montoNeto: 440 }),
-        sinPagar({ id: "f346", odooMoveId: 346, numero: "FAC/2026/0346", cuentaId: "iva", odooPartnerId: 43, invoiceDate: "2026-08-10", montoNeto: 2350 }),
-        sinPagar({ id: "f400", odooMoveId: 400, numero: "FAC/2026/0400", cuentaId: "lib", odooPartnerId: 44, invoiceDate: "2026-07-01", montoNeto: 1000 }),
-      ],
-      liberaciones: [liberada({ id: "l400", cuentaId: "lib", referenciaExterna: "FAC/2026/0400", monto: 1000 })],
-    };
     expect(detectarDiferenciasOdoo(todo).map((l) => l.codigo)).toEqual(
       expect.arrayContaining(["ODOO-FACTURA-VARIAS-CUOTAS", "ODOO-MONTO", "ODOO-NUMERO-SIN-DOCUMENTO", "ODOO-LIBERADAS-PENDIENTES", "ODOO-COBRO-FACTURADO-EN-MERCURY"]),
     );
     expect(coberturaDelCruce(todo)).toEqual({ facturasSinCasa: [], facturasRepetidas: [], cobrosSinCasa: [], cobrosRepetidos: [] });
+  });
+
+  /* ── ⭐ 2026-09-25 · CADA FILA CON NOMBRE PROPIO ─────────────────────────────────────
+     Para marcar «está bien así» fila por fila, cada fila de cada línea necesita una clave estable —la factura, la nota, el
+     cobro, la cuenta, la factura soltada— y una huella de sus NÚMEROS. Medido ese día en producción: de 16 líneas, solo las
+     de facturas soltadas tenían id; en las otras la fila era texto, y la única huella era la del grupo entero, con los
+     nombres adentro. */
+  const LAS_VEINTE_LINEAS = [
+    "ODOO-SIN-CUENTA",
+    "ODOO-MONEDA",
+    "ODOO-MONEDA-CORREGIDA",
+    "ODOO-NOTA-SIN-APLICAR",
+    "ODOO-MONTO",
+    "ODOO-POR-COBRAR-PAGADA",
+    "ODOO-COBRADO-SIN-PAGAR",
+    "ODOO-FACTURA-VARIAS-CUOTAS",
+    "ODOO-COBRO-SIN-FACTURA",
+    "ODOO-COBRO-FACTURADO-EN-MERCURY",
+    "ODOO-NUMERO-SIN-DOCUMENTO",
+    "ODOO-NUMERO-DE-OTRO-CLIENTE",
+    "ODOO-FACTURA-SIN-COBRO",
+    "ODOO-LIBERADAS-PENDIENTES",
+    "ODOO-LIBERADAS-SIN-NUMERO",
+    "LIBERADAS-FUERA-DE-ODOO",
+    "ODOO-IN-PAYMENT",
+    "ODOO-EXENTAS",
+    "CUENTA-INTERNACIONAL-EN-ODOO",
+    "VENTA-CONTADA-DOS-VECES",
+  ];
+  /* Lo que le falta a `todo` para que salgan las veinte. */
+  const deOtraLinea = (id: string, nombre: string, tipo = "NACIONAL", viaCobro = "ODOO") => ({ id, nombre, tipo, viaCobro });
+  const todas = {
+    ...todo,
+    cuentas: [
+      ...todo.cuentas,
+      deOtraLinea("gem", "GEMELA"),
+      deOtraLinea("otro", "OTRO"),
+      deOtraLinea("sinv", "SIN VINCULO"),
+      deOtraLinea("intl", "INTERNACIONAL", "INTERNACIONAL"),
+      deOtraLinea("rs", "Real Shipping & Trade", "INTERNACIONAL", "MERCURY"),
+    ],
+    /* «sinv» e «intl» sin cliente de Odoo: sus cobros facturados no se pueden verificar. */
+    cuentasVinculadas: new Set([...todo.cuentasVinculadas, "gem", "otro"]),
+    cobros: [
+      ...todo.cobros,
+      cobro({ id: "sinv-07", cuentaId: "sinv", cuentaNombre: "SIN VINCULO", periodo: "2026-07", fechaProgramada: "2026-07-15", fechaEmision: "2026-07-15", monto: 900 }),
+      cobro({ id: "intl-07", cuentaId: "intl", cuentaNombre: "INTERNACIONAL", periodo: "2026-07", fechaProgramada: "2026-07-15", fechaEmision: "2026-07-15", monto: 700 }),
+      /* El número de una factura que Odoo le emitió a «gem». */
+      cobro({ id: "otro-06", cuentaId: "otro", cuentaNombre: "OTRO", periodo: "2026-06", fechaProgramada: "2026-06-15", fechaEmision: "2026-06-15", monto: 1234, estado: "COBRADO", numeroFactura: "FAC/2026/0500" }),
+      /* Real Shipping INV-9 contra sus cuotas 1 y 2 (2026-09-14). */
+      cobro({ id: "inv9", cuentaId: "rs", cuentaNombre: "Real Shipping & Trade", servicioId: "libro-rs", servicio: "Libro", periodo: "2026-01", fechaProgramada: "2026-01-15", fechaEmision: "2026-01-15", monto: 6000, estado: "COBRADO", numeroFactura: "INV-9" }),
+      ...[1, 2].map((n) =>
+        cobro({ id: `rs-${n}`, cuentaId: "rs", cuentaNombre: "Real Shipping & Trade", servicioId: "impl", servicio: "Real Shipping", periodo: "2026-07", fechaProgramada: "2026-07-15", fechaEmision: "2026-01-16", monto: 1500, estado: "COBRADO" }),
+      ),
+    ],
+    facturas: [
+      ...todo.facturas,
+      /* Sin cuenta: dos en dólares y una en colones del mismo cliente de Odoo. */
+      sinPagar({ id: "sc1", odooMoveId: 501, numero: "FAC/2026/0501", cuentaId: null, odooPartnerId: 90, odooPartnerNombre: "SIN CUENTA S.A.", montoNeto: 1000 }),
+      sinPagar({ id: "sc2", odooMoveId: 502, numero: "FAC/2026/0502", cuentaId: null, odooPartnerId: 90, odooPartnerNombre: "SIN CUENTA S.A.", montoNeto: 2000 }),
+      sinPagar({ id: "sc3", odooMoveId: 503, numero: "FAC/2026/0503", cuentaId: null, odooPartnerId: 90, odooPartnerNombre: "SIN CUENTA S.A.", moneda: "CRC", montoNeto: 50000 }),
+      /* El mismo importe en dos monedas. */
+      factura({ id: "gm1", odooMoveId: 510, numero: "FAC/2026/0510", cuentaId: "gem", odooPartnerId: 91, odooPartnerNombre: "GEMELA S.A.", montoNeto: 777 }),
+      factura({ id: "gm2", odooMoveId: 511, numero: "FAC/2026/0511", cuentaId: "gem", odooPartnerId: 91, odooPartnerNombre: "GEMELA S.A.", moneda: "CRC", montoNeto: 777 }),
+      factura({ id: "fo", odooMoveId: 500, numero: "FAC/2026/0500", cuentaId: "gem", odooPartnerId: 91, odooPartnerNombre: "GEMELA S.A.", invoiceDate: "2026-06-15", montoNeto: 5555 }),
+      /* La moneda equivocada ya corregida: revertida y su nota en dólares, la buena en colones. */
+      factura({ id: "pc1", odooMoveId: 520, numero: "FAC/2026/0520", cuentaId: null, odooPartnerId: 92, odooPartnerNombre: "CORREGIDA S.A.", montoNeto: 3000, paymentState: "reversed" }),
+      factura({ id: "pc2", odooMoveId: 521, numero: "NC/2026/0521", cuentaId: null, odooPartnerId: 92, odooPartnerNombre: "CORREGIDA S.A.", montoNeto: 3000, moveType: "out_refund" }),
+      factura({ id: "pc3", odooMoveId: 522, numero: "FAC/2026/0522", cuentaId: null, odooPartnerId: 92, odooPartnerNombre: "CORREGIDA S.A.", moneda: "CRC", montoNeto: 3000 }),
+      /* Un pago sin conciliar de un año viejo, y una exenta sin cuenta. */
+      factura({ id: "ip21", odooMoveId: 530, numero: "FAC/2021/0530", cuentaId: null, odooPartnerId: 93, odooPartnerNombre: "VIEJA S.A.", invoiceDate: "2021-05-01", montoNeto: 800, paymentState: "in_payment" }),
+      factura({ id: "ex1", odooMoveId: 540, numero: "FAC/2026/0540", cuentaId: null, odooPartnerId: 94, odooPartnerNombre: "EXENTA S.A.", invoiceDate: "2026-03-01", montoNeto: 400, montoTotal: 400, montoImpuesto: 0 }),
+    ],
+    liberaciones: [
+      ...todo.liberaciones,
+      liberada({ id: "l-sn", cuentaId: "lib", referenciaExterna: null }),
+      liberada({ id: "l-mer", cuentaId: "rs", clienteNombre: "Real Shipping & Trade", plataforma: "MERCURY", referenciaExterna: "INV-70", monto: 900 }),
+    ],
+  };
+  const lasFilas = (ls: readonly DiferenciaOdoo[]) =>
+    ls.flatMap((l) => l.items.map((i): [string, string] => [`${l.codigo} ${i.fila.clave}`, i.fila.huella])).sort(([a], [b]) => (a < b ? -1 : 1));
+  const huellaDeLaFila = (ls: readonly DiferenciaOdoo[], codigo: string, clave: string) =>
+    ls.find((l) => l.codigo === codigo)?.items.find((i) => i.fila.clave === clave)?.fila.huella;
+
+  it("⭐ toda fila de las veinte líneas tiene nombre propio: una clave única en su línea, documentos y la huella de sus números", () => {
+    const lista = detectarDiferenciasOdoo(todas);
+    expect(lista.map((l) => l.codigo).sort(), "el estado de prueba saca las veinte líneas").toEqual([...LAS_VEINTE_LINEAS].sort());
+    for (const l of lista) {
+      const claves = l.items.map((i) => i.fila.clave);
+      expect(new Set(claves).size, `${l.codigo}: claves repetidas ${claves.join(", ")}`).toBe(claves.length);
+      for (const i of l.items) {
+        const docs = i.fila.documentos.map((d) => d.clave);
+        expect(docs.length, `${l.codigo} ${i.fila.clave}: sin documentos`).toBeGreaterThan(0);
+        expect(new Set(docs).size, `${l.codigo} ${i.fila.clave}: documentos repetidos`).toBe(docs.length);
+        for (const d of i.fila.documentos) {
+          expect(d.clave, l.codigo).toMatch(/^(f|c|l|cuenta|venta):./);
+          expect(d.huella.length, `${l.codigo} ${d.clave}: huella vacía`).toBeGreaterThan(0);
+        }
+        /* Una fila de UNA cosa lleva su propia clave como documento; una que junta facturas, la del grupo. */
+        if (!/^(cliente|anio):/.test(i.fila.clave)) expect(docs, `${l.codigo} ${i.fila.clave}`).toEqual([i.fila.clave]);
+        expect(i.fila.huella).toBe(i.fila.documentos.map((d) => `${d.clave}=${d.huella}`).join(" ; "));
+      }
+    }
+  });
+
+  it("⭐ una fila que junta varias facturas lleva cada una como documento, con su propia huella", () => {
+    const lista = detectarDiferenciasOdoo(todas);
+    const docs = (codigo: string, clave: string) =>
+      lista.find((l) => l.codigo === codigo)?.items.find((i) => i.fila.clave === clave)?.fila.documentos.map((d) => d.clave);
+    expect(docs("ODOO-SIN-CUENTA", "cliente:90|USD")).toEqual(["f:sc1", "f:sc2"]);
+    expect(docs("ODOO-SIN-CUENTA", "cliente:90|CRC")).toEqual(["f:sc3"]);
+    expect(docs("ODOO-MONEDA", "cliente:91|77700")).toEqual(["f:gm1", "f:gm2"]);
+    expect(docs("ODOO-MONEDA-CORREGIDA", "cliente:92|300000|USD")).toEqual(["f:pc1", "f:pc2", "f:pc3"]);
+    expect(docs("ODOO-IN-PAYMENT", "anio:2021")).toEqual(["f:ip21"]);
+    expect(docs("ODOO-EXENTAS", "cliente:94|USD")).toEqual(["f:ex1"]);
+    /* La cuenta sin emparejar y la internacional: la fila es la cuenta. */
+    expect(docs("ODOO-SIN-CUENTA", "cuenta:sinv")).toEqual(["cuenta:sinv"]);
+    expect(docs("CUENTA-INTERNACIONAL-EN-ODOO", "cuenta:intl")).toEqual(["cuenta:intl"]);
+  });
+
+  it("⭐ la huella NO cambia si cambia un nombre: ni el del cliente de Odoo, ni el de la cuenta, ni el del servicio", () => {
+    const otro = (s: string) => `${s} (renombrado)`;
+    const renombrado = {
+      ...todas,
+      cuentas: todas.cuentas.map((c) => ({ ...c, nombre: otro(c.nombre) })),
+      cobros: todas.cobros.map((c) => ({ ...c, cuentaNombre: otro(c.cuentaNombre), servicio: otro(c.servicio) })),
+      facturas: todas.facturas.map((f) => ({ ...f, odooPartnerNombre: otro(f.odooPartnerNombre) })),
+      liberaciones: todas.liberaciones.map((l) => ({ ...l, clienteNombre: otro(l.clienteNombre), liberadaPor: otro(l.liberadaPor) })),
+      servicios: todas.servicios.map((s) => ({ ...s, descripcion: otro(s.descripcion) })),
+      libro: new Map([...todas.libro].map(([k, d]): [string, DocumentoDelLibro] => [k, { ...d, fuente: otro(d.fuente) }])),
+    };
+    const antes = detectarDiferenciasOdoo(todas);
+    const despues = detectarDiferenciasOdoo(renombrado);
+    /* Lo que se lee sí cambia —los nombres están en pantalla—, y la huella del grupo de hoy también: por eso no alcanza. */
+    expect(despues.flatMap((l) => l.items.map((i) => i.texto))).not.toEqual(antes.flatMap((l) => l.items.map((i) => i.texto)));
+    const sinCuenta = (ls: readonly DiferenciaOdoo[]) => ls.find((l) => l.codigo === "ODOO-SIN-CUENTA");
+    expect(huellaDe(sinCuenta(despues) ?? { items: [] })).not.toBe(huellaDe(sinCuenta(antes) ?? { items: [] }));
+    expect(lasFilas(despues)).toEqual(lasFilas(antes));
+  });
+
+  it("⭐ la huella SÍ cambia si cambia un número, y la fila sigue siendo la misma", () => {
+    type Estado = typeof todas;
+    const conFactura = (e: Estado, id: string, p: Partial<FacturaParaCruzar>): Estado => ({ ...e, facturas: e.facturas.map((f) => (f.id === id ? { ...f, ...p } : f)) });
+    const conCobro = (e: Estado, id: string, p: Partial<CobroParaCruzar>): Estado => ({ ...e, cobros: e.cobros.map((c) => (c.id === id ? { ...c, ...p } : c)) });
+    const conLiberacion = (e: Estado, id: string, p: Partial<LiberacionParaCruzar>): Estado => ({
+      ...e,
+      liberaciones: e.liberaciones.map((l) => (l.id === id ? { ...l, ...p } : l)),
+    });
+    const casos: Array<[string, string, string, (e: Estado) => Estado]> = [
+      ["lo que falta pagar de una factura sin cuenta", "ODOO-SIN-CUENTA", "cliente:90|USD", (e) => conFactura(e, "sc2", { paymentState: "partial", montoResidual: 1000 })],
+      [
+        "un cobro nuevo sin verificar de una cuenta sin emparejar",
+        "ODOO-SIN-CUENTA",
+        "cuenta:sinv",
+        (e) => ({ ...e, cobros: [...e.cobros, cobro({ id: "sinv-08", cuentaId: "sinv", cuentaNombre: "SIN VINCULO", periodo: "2026-08", fechaProgramada: "2026-08-15", fechaEmision: "2026-08-15", monto: 900 })] }),
+      ],
+      ["el estado de pago de una de las dos monedas", "ODOO-MONEDA", "cliente:91|77700", (e) => conFactura(e, "gm2", { paymentState: "not_paid", montoResidual: 877.01 })],
+      ["el estado de pago de la buena, en la moneda corregida", "ODOO-MONEDA-CORREGIDA", "cliente:92|300000|USD", (e) => conFactura(e, "pc3", { paymentState: "in_payment" })],
+      ["el saldo de una nota de crédito", "ODOO-NOTA-SIN-APLICAR", "f:n242", (e) => conFactura(e, "n242", { paymentState: "partial", montoResidual: 500 })],
+      ["el monto de la cuota de un monto distinto", "ODOO-MONTO", "f:f280", (e) => conCobro(e, "mts-03", { monto: 410 })],
+      ["el estado del cobro de un par por cobrar con la factura pagada", "ODOO-POR-COBRAR-PAGADA", "f:f323", (e) => conCobro(e, "gs-ago", { estado: "PROGRAMADO" })],
+      ["lo que falta pagar de la factura de un cobro cobrado", "ODOO-COBRADO-SIN-PAGAR", "f:f218", (e) => conFactura(e, "f218", { paymentState: "partial", montoResidual: 1000 })],
+      ["el estado de pago de una factura de varias cuotas", "ODOO-FACTURA-VARIAS-CUOTAS", "f:f329", (e) => conFactura(e, "f329", { paymentState: "partial", montoResidual: 3000 })],
+      ["el monto de un cobro sin factura", "ODOO-COBRO-SIN-FACTURA", "c:palomas-03", (e) => conCobro(e, "palomas-03", { monto: 560 })],
+      [
+        "el documento que el Excel da por Mercury",
+        "ODOO-COBRO-FACTURADO-EN-MERCURY",
+        "c:acccsa-01",
+        (e) => ({ ...e, libro: new Map([...e.libro].map(([k, d]): [string, DocumentoDelLibro] => [k, k === "acccsa-01" ? { ...d, total: 700 } : d])) }),
+      ],
+      ["el número anotado que Odoo no tiene", "ODOO-NUMERO-SIN-DOCUMENTO", "c:num-05", (e) => conCobro(e, "num-05", { numeroFactura: "FAC/2026/0998" })],
+      ["el monto del cobro con el número de otro cliente", "ODOO-NUMERO-DE-OTRO-CLIENTE", "c:otro-06", (e) => conCobro(e, "otro-06", { monto: 1300 })],
+      ["lo que falta pagar de una factura sin cobro", "ODOO-FACTURA-SIN-COBRO", "f:f298", (e) => conFactura(e, "f298", { paymentState: "partial", montoResidual: 2000 })],
+      ["el monto de una factura soltada", "ODOO-LIBERADAS-PENDIENTES", "l:l400", (e) => conLiberacion(e, "l400", { monto: 900 })],
+      ["el monto de una factura soltada sin número", "ODOO-LIBERADAS-SIN-NUMERO", "l:l-sn", (e) => conLiberacion(e, "l-sn", { monto: 2000 })],
+      ["lo que se pidió hacer con una soltada fuera de Odoo", "LIBERADAS-FUERA-DE-ODOO", "l:l-mer", (e) => conLiberacion(e, "l-mer", { decision: "REVERTIR" })],
+      ["el neto de un pago sin conciliar de un año viejo", "ODOO-IN-PAYMENT", "anio:2021", (e) => conFactura(e, "ip21", { montoNeto: 850 })],
+      ["el neto de una exenta", "ODOO-EXENTAS", "cliente:94|USD", (e) => conFactura(e, "ex1", { montoNeto: 450, montoTotal: 450 })],
+      [
+        "cuántos documentos tiene en Odoo una cuenta internacional",
+        "CUENTA-INTERNACIONAL-EN-ODOO",
+        "cuenta:intl",
+        (e) => ({ ...e, facturas: [...e.facturas, factura({ id: "fi", odooMoveId: 599, numero: "FAC/2020/0599", cuentaId: "intl", invoiceDate: "2020-01-10" })] }),
+      ],
+      ["el monto de una cuota en duda", "VENTA-CONTADA-DOS-VECES", "venta:rs|USD|INV-9", (e) => conCobro(e, "rs-1", { monto: 1400 })],
+    ];
+    expect(new Set(casos.map(([, codigo]) => codigo)), "un caso por cada línea").toEqual(new Set(LAS_VEINTE_LINEAS));
+    const antes = detectarDiferenciasOdoo(todas);
+    for (const [que, codigo, clave, cambiar] of casos) {
+      const h0 = huellaDeLaFila(antes, codigo, clave);
+      const h1 = huellaDeLaFila(detectarDiferenciasOdoo(cambiar(todas)), codigo, clave);
+      expect(h0, `${que}: la fila ${clave} no está en ${codigo}`).toBeDefined();
+      expect(h1, `${que}: la fila ${clave} dejó de estar en ${codigo}`).toBeDefined();
+      expect(h1, `${que}: la huella de ${clave} no cambió`).not.toBe(h0);
+    }
+  });
+
+  it("⚠ lo que no es un número de la fila no la reabre: anotar el número con que ya se juntaba, pagar una exenta", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    /* La cuota de MTS se juntaba por monto con la 0280: anotarle ese número no cambia nada de la fila. */
+    const conNumero = { ...todas, cobros: todas.cobros.map((c) => (c.id === "mts-03" ? { ...c, numeroFactura: "FAC/2026/0280" } : c)) };
+    expect(huellaDeLaFila(detectarDiferenciasOdoo(conNumero), "ODOO-MONTO", "f:f280")).toBe(huellaDeLaFila(antes, "ODOO-MONTO", "f:f280"));
+    /* «Exentas» habla del impuesto que falta: que se pague no cambia eso. */
+    const pagada = { ...todas, facturas: todas.facturas.map((f) => (f.id === "ex1" ? { ...f, paymentState: "in_payment" } : f)) };
+    expect(huellaDeLaFila(detectarDiferenciasOdoo(pagada), "ODOO-EXENTAS", "cliente:94|USD")).toBe(huellaDeLaFila(antes, "ODOO-EXENTAS", "cliente:94|USD"));
+  });
+
+  it("⛔ «facturas sin cobro» ya no corta en 60 filas: la 61 también se ve y se puede marcar", () => {
+    const muchas = Array.from({ length: 65 }, (_, i) =>
+      sinPagar({ id: `m${i}`, odooMoveId: 2000 + i, numero: `FAC/2026/${String(2000 + i)}`, cuentaId: "gem", odooPartnerId: 91, invoiceDate: "2026-06-01", montoNeto: 100 + i }),
+    );
+    const l = detectarDiferenciasOdoo({ ...todas, facturas: [...todas.facturas, ...muchas] }).find((x) => x.codigo === "ODOO-FACTURA-SIN-COBRO");
+    const nuestras = l?.items.filter((i) => i.fila.clave.startsWith("f:m")) ?? [];
+    expect(nuestras).toHaveLength(65);
+    expect(l?.titulo).toBe(`${l?.items.length} facturas de Odoo sin un cobro que las explique`);
   });
 });
 
@@ -1879,7 +2112,9 @@ describe("⭐ «Lo que no cuadra» muestra la misma venta contada dos veces", ()
     const l = detectarDiferenciasOdoo(estado).find((i) => i.codigo === "VENTA-CONTADA-DOS-VECES");
     expect(l?.titulo).toBe("2 ventas pueden estar contadas dos veces en su cuenta");
     expect(l?.donde).toBe("PREGUNTANDO");
-    expect(l?.items).toEqual([
+    /* La factura no está en Odoo: la nombra su número, anotado en los cobros de su cuenta. */
+    expect(l?.items.map((i) => i.fila.clave)).toEqual(["venta:rs|USD|INV-9", "venta:al|USD|INV-46"]);
+    expect(comoSeLeen(l?.items)).toEqual([
       {
         texto: "Real Shipping & Trade — INV-9 por US$6.000",
         monto: 3000,

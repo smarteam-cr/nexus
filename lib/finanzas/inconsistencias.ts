@@ -46,8 +46,8 @@ export interface EnlaceItem {
  */
 export interface ItemInconsistencia {
   /**
-   * Identidad de la fila, cuando la fila es una cosa que se puede cerrar de a una. La mayoría
-   * de los ítems son texto agrupado y no la necesitan.
+   * El id de la cosa que cierra la acción por fila de su línea (hoy, la factura soltada de «Ya está
+   * anulada»). No es la identidad de la fila: esa es `fila`.
    */
   id?: string;
   texto: string;
@@ -56,6 +56,54 @@ export interface ItemInconsistencia {
   /** Contexto secundario: fecha, estado, tipo de servicio. */
   nota?: string;
   enlaces?: EnlaceItem[];
+  /**
+   * El nombre propio de la fila: qué cosa es y con qué números se la vio. Sin esto una fila no se puede
+   * marcar de a una. El reporte de equilibrio no lo usa; «Lo que no cuadra» lo pone en TODAS sus filas.
+   */
+  fila?: IdentidadDeFila;
+}
+
+/**
+ * Una cosa que una fila nombra y que se marca de a una: una factura, una nota de crédito, un cobro, una cuenta,
+ * una factura soltada.
+ *
+ * ⚠ `huella` son sus NÚMEROS —monto, saldo, estado de pago, número de documento—, nunca un nombre. Si cambia un
+ * número, la marca que se le puso vence sola y la fila vuelve; si alguien renombra un cliente, no vuelve nada.
+ * Hasta el 2026-09-25 la única huella era la del grupo entero (`texto=monto` de todas sus filas): un cliente
+ * renombrado en Odoo reabría la línea completa, con todo lo ya revisado.
+ */
+export interface DocumentoDeFila<K extends string = string> {
+  /** Estable: no cambia si cambia un nombre. Quien arma la lista define sus prefijos. */
+  clave: K;
+  huella: string;
+}
+
+/**
+ * El nombre propio de una fila.
+ *
+ * Una fila de UNA cosa lleva un solo documento, con la misma clave que la fila, y su huella trae también los
+ * números de lo que la acompaña (los cobros de un par factura-cobro, la factura que una nota parece anular). Una
+ * fila que JUNTA varias facturas de un cliente lleva cada una con su huella: la marca queda en cada factura, y una
+ * factura nueva del mismo cliente trae la fila de vuelta sin traer las ya revisadas.
+ */
+export interface IdentidadDeFila<K extends string = string> {
+  /** Única dentro de su línea. Nunca un nombre: un id, o números. */
+  clave: string;
+  /** En orden de clave. Nunca vacío. */
+  documentos: DocumentoDeFila<K>[];
+  /** La de la fila entera: la de cada documento, en orden. Cambia si cambia la de cualquiera. */
+  huella: string;
+}
+
+/**
+ * Arma la identidad de una fila con sus documentos en un orden fijo.
+ *
+ * ⚠ Orden por comparación de códigos y no con `localeCompare`: la huella se va a guardar y comparar entre el
+ * servidor y otra corrida, y el orden de `localeCompare` depende de la configuración regional de la máquina.
+ */
+export function identidadDeFila<K extends string>(clave: string, documentos: readonly DocumentoDeFila<K>[]): IdentidadDeFila<K> {
+  const enOrden = [...documentos].sort((a, b) => (a.clave < b.clave ? -1 : a.clave > b.clave ? 1 : 0));
+  return { clave, documentos: enOrden, huella: enOrden.map((d) => `${d.clave}=${d.huella}`).join(" ; ") };
 }
 
 /** Envuelve textos pelados. Para lo que de verdad no tiene a dónde enlazar (meses, conceptos). */
