@@ -267,8 +267,9 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           </li>
           <li>
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
-            qué sistema se arregla y los pasos. Si una diferencia está bien así, se marca con el motivo y deja de
-            aparecer — pero vuelve sola si los números cambian.
+            qué sistema se arregla y los pasos. Si una fila está bien así, se marca con su motivo —de a una, o todas
+            las de la línea con el mismo— y pasa a «Marcadas», al final, con quién, cuándo y por qué, y con
+            «Deshacer». Vale solo en esa línea, y vuelve sola si sus números cambian.
           </li>
           <li>
             <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> El sync corre solo cada mañana,

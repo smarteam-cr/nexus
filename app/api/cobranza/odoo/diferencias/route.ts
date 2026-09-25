@@ -1,27 +1,35 @@
 /**
  * /api/cobranza/odoo/diferencias — la mesa de trabajo con el CFO.
- *   GET  → todo lo que no cuadra entre Nexus y Odoo, ordenado por plata.
- *   POST → «está bien así» (aceptar), volver a abrir una línea, o cerrar a mano una factura
- *          soltada que se emitió fuera de Odoo.
+ *   GET  → todo lo que no cuadra entre Nexus y Odoo, ordenado por plata, con lo ya marcado aparte y el motivo que se
+ *          le propone a quien mira.
+ *   POST → «está bien así» fila por fila (`marcar`) y su «Deshacer» (`deshacer-marcas`); cerrar a mano una factura
+ *          soltada que nada puede verificar (`resolver-liberacion`, «Ya está anulada») y su «Deshacer»
+ *          (`reabrir-liberacion`).
  *
- * Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN), el mismo gate que el resto del módulo.
+ * Acceso: leer, guardCobranzaAccess (ADMIN + SUPER_ADMIN), el mismo gate que el resto del módulo. ⚠ Todo lo que marca
+ * o deshace pide EDICIÓN (guardCobranzaEditor), igual que «Ya está anulada» desde el principio: saca cosas de la lista
+ * de alguien más. Medido el 2026-09-25: hoy todos los que ven Cobranza la editan, así que a nadie se le quita nada.
  *
- * ⚠ Aceptar guarda la HUELLA de los números, no solo la clave: si el monto cambia, la línea
- * vuelve sola. Una aceptación no puede convertirse en el lugar donde se esconde un problema
- * nuevo.
+ * ⚠ Marcar guarda la HUELLA de los números de cada documento, no solo la fila: si un número cambia, la fila vuelve
+ * sola. Una marca no puede convertirse en el lugar donde se esconde un problema nuevo.
+ * ⛔ La marca por grupo («Está bien así» y «Volver a abrir» de la línea entera, `DiferenciaOdooAceptada`) ya no existe
+ * acá desde el 2026-09-25. La tabla no se borra: su única marca pasa a marcas por fila con un script aparte.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCobranzaAccess, guardCobranzaEditor } from "@/lib/auth/api-guards";
 import {
   EmparejadoError,
-  aceptarDiferencia,
   cargarDiferencias,
-  reabrirDiferencia,
+  deshacerMarcas,
+  marcarFilas,
+  reabrirLiberacion,
   resolverLiberacion,
+  ultimosMotivos,
 } from "@/lib/cobranza/odoo/servicio";
 import {
-  odooDiferenciaAceptarSchema,
-  odooDiferenciaReabrirSchema,
+  odooDeshacerMarcasSchema,
+  odooMarcarFilasSchema,
+  odooReabrirLiberacionSchema,
   odooResolverLiberacionSchema,
 } from "@/lib/cobranza/schema";
 
@@ -30,12 +38,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const guard = await guardCobranzaAccess();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json(await cargarDiferencias());
+  const [diferencias, motivos] = await Promise.all([cargarDiferencias(), ultimosMotivos(guard.user.email)]);
+  return NextResponse.json({ ...diferencias, ultimosMotivos: motivos });
 }
 
+const invalido = (issues: ReadonlyArray<{ message: string }>) =>
+  NextResponse.json({ error: issues[0]?.message ?? "Input inválido" }, { status: 400 });
+
 export async function POST(req: NextRequest) {
-  const guard = await guardCobranzaAccess();
-  if (guard instanceof NextResponse) return guard;
+  const editor = await guardCobranzaEditor();
+  if (editor instanceof NextResponse) return editor;
 
   let raw: unknown;
   try {
@@ -43,28 +55,30 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+  const accion = (raw as { accion?: unknown })?.accion;
 
   try {
-    if ((raw as { accion?: unknown })?.accion === "aceptar") {
-      const p = odooDiferenciaAceptarSchema.safeParse(raw);
-      if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
-      await aceptarDiferencia(p.data, guard.user.email);
-      return NextResponse.json({ ok: true });
+    if (accion === "marcar") {
+      const p = odooMarcarFilasSchema.safeParse(raw);
+      if (!p.success) return invalido(p.error.issues);
+      return NextResponse.json(await marcarFilas(p.data, editor.user.email));
     }
-    /* ⚠ Cerrar una liberación exige EDICIÓN, no lectura. Aceptar una diferencia dice «esto está
-       bien»; esto dice «yo anulé una factura», sobre un sistema que Nexus no puede verificar. */
-    if ((raw as { accion?: unknown })?.accion === "resolver-liberacion") {
-      const editor = await guardCobranzaEditor();
-      if (editor instanceof NextResponse) return editor;
+    if (accion === "deshacer-marcas") {
+      const p = odooDeshacerMarcasSchema.safeParse(raw);
+      if (!p.success) return invalido(p.error.issues);
+      return NextResponse.json({ deshechas: await deshacerMarcas(p.data, editor.user.email) });
+    }
+    /* «Ya está anulada» dice «yo anulé una factura», sobre un sistema que Nexus no puede verificar: con motivo. */
+    if (accion === "resolver-liberacion") {
       const p = odooResolverLiberacionSchema.safeParse(raw);
-      if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
+      if (!p.success) return invalido(p.error.issues);
       await resolverLiberacion(p.data, editor.user.email);
       return NextResponse.json({ ok: true });
     }
-    if ((raw as { accion?: unknown })?.accion === "reabrir") {
-      const p = odooDiferenciaReabrirSchema.safeParse(raw);
-      if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
-      await reabrirDiferencia(p.data.clave);
+    if (accion === "reabrir-liberacion") {
+      const p = odooReabrirLiberacionSchema.safeParse(raw);
+      if (!p.success) return invalido(p.error.issues);
+      await reabrirLiberacion(p.data, editor.user.email);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Acción desconocida." }, { status: 400 });

@@ -4739,6 +4739,10 @@ model SyncOdooCorrida {
 /// un error — acá NO lo es: Odoo tiene 82 clientes y Nexus 49 cuentas, hay notas de crédito
 /// que no corrigen ningún cobro, y va a haber redondeos que alguien acepte. Sin esto, esas
 /// líneas vuelven en cada sesión y a la tercera nadie mira la lista.
+///
+/// ⚠ DESDE EL 2026-09-25 LA PANTALLA YA NO LA USA: la marca es por fila (`DiferenciaOdooMarca`). No se borra: su
+/// única fila (las 15 notas de crédito, marcadas por grupo) la lee el traspaso a marcas por fila, que compara cada
+/// nota contra esta huella.
 model DiferenciaOdooAceptada {
   id String @id @default(cuid())
 
@@ -4753,6 +4757,48 @@ model DiferenciaOdooAceptada {
 
   aceptadaPor String
   aceptadaEn  DateTime @default(now())
+}
+
+/// «Está bien así», fila por fila (2026-09-25), y el cierre a mano «Ya está anulada» de una factura soltada. Una fila
+/// de esta tabla = una marca sobre UN documento en UNA línea de Cobranza › Odoo › «Lo que no cuadra».
+/// SQL: scripts/sql/2026-09-25-2-marcas-por-fila.sql (⛔ nunca `db push`).
+///
+/// ⭐ Atada al documento y a sus NÚMEROS, nunca a un nombre: vale mientras el documento siga en esa línea con la misma
+/// `huella`. Si un número cambia, deja de valer sola y la fila vuelve; si Odoo renombra un cliente, no vuelve nada.
+/// Hasta ese día la única marca era la del grupo entero (`DiferenciaOdooAceptada`): una fila nueva reabría el grupo
+/// completo, con todo lo ya revisado.
+///
+/// ⛔ Nada se borra de acá. «Deshacer» firma `deshechaPor/En`: la historia de quién marcó y quién deshizo queda.
+/// La escriben SOLO las funciones de lib/cobranza/odoo/marcas.ts (lo vigila lib/cobranza/odoo/guardas.test.ts).
+model DiferenciaOdooMarca {
+  id String @id @default(cuid())
+
+  /// BIEN_ASI = «Está bien así». ANULADA = «Ya está anulada» de una factura soltada (acompaña a
+  /// `FacturaLiberada.resueltaEn`, que es lo que la cierra; esta fila es su motivo y su historia).
+  tipo String @default("BIEN_ASI")
+
+  /// El código de la línea donde se marcó (ODOO-NOTA-SIN-APLICAR…). ⚠ La marca vale SOLO ahí: la misma factura
+  /// en otra línea sigue a la vista.
+  linea     String
+  /// La clave de la fila donde se marcó. En una fila que junta varias facturas, cada factura lleva su marca con
+  /// la misma `fila`: una factura nueva del mismo cliente aparece sola, sin traer las ya revisadas.
+  fila      String
+  /// f: factura o nota de Odoo · c: cobro · l: factura soltada · cuenta: · venta: (lib/cobranza/odoo/diferencias.ts).
+  documento String
+  /// Los números del documento que la persona VIO al marcar. Si no coinciden con los de ese momento, no se marca.
+  huella    String @db.Text
+  /// Lo que decía la fila al marcarla: queda aunque la fila ya no exista.
+  texto     String @db.Text
+  motivo    String @db.Text
+
+  marcadaPor String
+  marcadaEn  DateTime @default(now())
+
+  deshechaPor String?
+  deshechaEn  DateTime?
+
+  @@index([deshechaEn])
+  @@index([documento])
 }
 
 /// Una página de la base de conocimiento del EQUIPO (`/documentacion`), al estilo de Notion:

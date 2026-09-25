@@ -137,13 +137,52 @@ export interface DiferenciaOdoo extends Inconsistencia {
    */
   documentos: string[];
   /**
-   * `true` = alguien la marcó «está bien así» y sus números no cambiaron desde entonces.
+   * Las filas que alguien marcó «está bien así» EN ESTA LÍNEA y cuyos números no cambiaron desde entonces, cada una con
+   * sus marcas (una por documento). Salen de `items`, que queda con lo pendiente.
    *
-   * ⚠ Sigue viniendo en la lista, marcada, en vez de desaparecer. Si se filtrara acá **no
-   * habría forma de volver a abrirla**: quedaría cerrada para siempre por un clic. Quien la
-   * consume decide dónde ponerla; quien la calcula no le esconde nada.
+   * ⚠ Vienen en la lista aparte en vez de desaparecer: la pantalla las muestra en «Marcadas», con quién, cuándo, por
+   * qué y «Deshacer». Si se filtraran acá no habría forma de deshacerlas: quedarían cerradas para siempre por un clic.
+   */
+  marcadas: FilaMarcada[];
+  /**
+   * `true` = TODAS sus filas están marcadas «está bien así» y sus números no cambiaron desde entonces.
+   *
+   * ⚠ Desde el 2026-09-25 la marca es por fila (`marcadas`); hasta ese día era por grupo, y una sola fila nueva
+   * reabría la línea entera con lo ya revisado. La línea sigue viniendo en la lista, con sus filas en `marcadas`.
    */
   aceptada: boolean;
+}
+
+/**
+ * Una marca «está bien así» sobre UN documento de una fila, en UNA línea, como la guarda la base
+ * (`DiferenciaOdooMarca`, solo las que nadie deshizo).
+ *
+ * ⭐ Vale mientras ese documento siga en ESA línea con la MISMA huella: si cambia un número, deja de valer sola y la
+ * fila vuelve a la lista; si Odoo renombra al cliente, no pasa nada, porque la huella no lleva nombres. En otra línea no
+ * vale: la misma factura puede estar bien en una y ser un problema en otra.
+ */
+export interface MarcaDeFila {
+  id: string;
+  /** El código de la línea donde se marcó. */
+  linea: string;
+  /** La clave de la fila donde se marcó (lo que la persona tenía delante). */
+  fila: string;
+  /** La clave del documento (`ClaveDeDocumento`). */
+  documento: string;
+  /** Los números del documento cuando se marcó. */
+  huella: string;
+  motivo: string;
+  marcadaPor: string;
+  /** ISO. */
+  marcadaEn: string;
+}
+
+/** Una fila que salió de la lista porque todos sus documentos tienen su marca vigente. */
+export interface FilaMarcada {
+  /** La fila con los números de hoy, que son los mismos que se marcaron. */
+  item: ItemDiferencia;
+  /** La marca vigente de cada documento de la fila, en el orden de sus documentos. */
+  marcas: MarcaDeFila[];
 }
 
 /* ── Lo que entra ───────────────────────────────────────────────────────────────── */
@@ -288,8 +327,14 @@ export interface EstadoDelCruce {
   cuentasVinculadas: ReadonlySet<string>;
   /** Día (`YYYY-MM-DD`) en que empezó la última copia BUENA de Odoo. null = nunca corrió bien. */
   ultimaCorridaOk: string | null;
-  /** Claves de diferencias que alguien ya marcó «está bien así», con su huella. */
-  aceptadas: ReadonlyMap<string, string>;
+  /**
+   * Las marcas «está bien así» por fila que nadie deshizo (`DiferenciaOdooMarca`, tipo BIEN_ASI). Vacío = ninguna.
+   *
+   * ⭐ Obligatorio a propósito, como `libro`: un cargador que se olvidara de pasarlas devolvería a la lista todo lo ya
+   * revisado sin que nada lo avise. ⚠ Reemplaza a `aceptadas` (la marca de grupo de `DiferenciaOdooAceptada`), que
+   * la pantalla dejó de usar el 2026-09-25.
+   */
+  marcas: readonly MarcaDeFila[];
 }
 
 /* ── El cruce ───────────────────────────────────────────────────────────────────── */
@@ -1224,6 +1269,14 @@ export function huellaDeLiberacion(
 }
 
 /**
+ * Lo que dice la fila de una factura soltada: el cliente y el monto. «Ya está anulada» lo guarda con su marca, para que
+ * se pueda leer qué se cerró aunque la fila ya no esté en la lista.
+ */
+export function textoDeLiberacion(l: Pick<LiberacionParaCruzar, "clienteNombre" | "monto" | "moneda">): string {
+  return `${l.clienteNombre} — ${fmt(l.monto, l.moneda)}`;
+}
+
+/**
  * La de una factura sin impuesto, en «exentas»: la línea habla del IVA que falta, no del pago.
  * ⚠ Sin el estado de pago a propósito: con la huella de siempre, pagar una factura exenta ya confirmada la traería
  * de vuelta sin que nada de su impuesto haya cambiado.
@@ -1255,9 +1308,111 @@ const huellaDeCobros = (cs: readonly CobroParaCruzar[]) =>
     .map((c) => `c:${c.id}=${huellaDeCobro(c)}`)
     .join(",");
 
+/* ── «Está bien así», fila por fila ─────────────────────────────────────────────── */
+
+/**
+ * Las marcas vigentes, para preguntar si un documento de una línea tiene la suya con los números de hoy.
+ *
+ * ⚠ Por línea Y documento: la misma factura marcada en una línea sigue a la vista en otra. Si un documento tiene varias
+ * marcas que valen (se marcó dos veces con los mismos números), manda la más reciente.
+ */
+export interface IndiceDeMarcas {
+  vigente(linea: string, documento: string, huella: string): MarcaDeFila | undefined;
+}
+
+export function indiceDeMarcas(marcas: readonly MarcaDeFila[]): IndiceDeMarcas {
+  const por = new Map<string, MarcaDeFila[]>();
+  /* Los códigos de línea no llevan espacios: «código documento» no se puede confundir con otra pareja. */
+  const clave = (linea: string, documento: string) => `${linea} ${documento}`;
+  for (const m of [...marcas].sort((a, b) => porCodigo(b.marcadaEn, a.marcadaEn) || porCodigo(b.id, a.id))) {
+    por.set(clave(m.linea, m.documento), [...(por.get(clave(m.linea, m.documento)) ?? []), m]);
+  }
+  return { vigente: (linea, documento, huella) => por.get(clave(linea, documento))?.find((m) => m.huella === huella) };
+}
+
+/**
+ * Parte las filas de una línea: las que tienen TODOS sus documentos marcados con sus números de hoy salen a
+ * `marcadas`; las demás quedan pendientes.
+ *
+ * ⚠ En una fila de un conjunto («dos monedas», «moneda corregida») basta un documento sin marca —uno nuevo, o uno cuyo
+ * número cambió— para que la fila entera vuelva: el conjunto se lee junto. Las filas que juntan facturas de un
+ * cliente no llegan acá mezcladas: se arman aparte, las marcadas por un lado y las pendientes por otro.
+ */
+function separarMarcadas(
+  codigo: string,
+  items: readonly ItemDiferencia[],
+  indice: IndiceDeMarcas,
+): { pendientes: ItemDiferencia[]; marcadas: FilaMarcada[] } {
+  const pendientes: ItemDiferencia[] = [];
+  const marcadas: FilaMarcada[] = [];
+  for (const item of items) {
+    const marcas = item.fila.documentos.map((d) => indice.vigente(codigo, d.clave, d.huella));
+    if (marcas.length > 0 && marcas.every((m): m is MarcaDeFila => m !== undefined)) marcadas.push({ item, marcas });
+    else pendientes.push(item);
+  }
+  return { pendientes, marcadas };
+}
+
+/** Una fila que alguien pidió marcar, con la huella que VIO en pantalla (`ItemDiferencia.fila.huella`). */
+export interface FilaPedida {
+  clave: string;
+  huella: string;
+}
+
+export interface DecisionDeMarcas {
+  /** Lo que se escribe: por fila, cada documento que todavía no tiene su marca vigente, con sus números de hoy. */
+  aMarcar: Array<{ fila: string; texto: string; documentos: DocumentoDeFila[] }>;
+  /** Las filas que cambiaron entre verlas y hacer clic, o que ya no están en la línea: no se marcan, y se avisa. */
+  cambiaron: Array<{ clave: string; texto: string | null }>;
+  /** Las que alguien ya había marcado con estos mismos números (otra pestaña, otro clic): no se marcan dos veces. */
+  yaMarcadas: string[];
+}
+
+/**
+ * Qué se marca de lo que alguien pidió, contra la línea de ESTE momento.
+ *
+ * ⭐ Una por una, con los números que la persona VIO: si una fila cambió entre verla y hacer clic —porque corrió el sync
+ * o alguien anotó un número—, esa no se marca y las demás sí. Hasta el 2026-09-25 «Está bien así» recalculaba la
+ * línea en el servidor y guardaba la huella de ese momento: con un sync en el medio se aceptaba otra cosa sin aviso.
+ *
+ * `linea` undefined = esa línea ya no está en la lista: no se marca nada.
+ */
+export function decidirMarcas(
+  linea: Pick<DiferenciaOdoo, "codigo" | "items" | "marcadas"> | undefined,
+  pedidas: readonly FilaPedida[],
+  marcas: readonly MarcaDeFila[],
+): DecisionDeMarcas {
+  const out: DecisionDeMarcas = { aMarcar: [], cambiaron: [], yaMarcadas: [] };
+  const indice = indiceDeMarcas(marcas);
+  const vistas = new Set<string>();
+  for (const p of pedidas) {
+    if (vistas.has(p.clave)) continue;
+    vistas.add(p.clave);
+    const pendiente = linea?.items.find((i) => i.fila.clave === p.clave);
+    if (linea && pendiente) {
+      if (pendiente.fila.huella !== p.huella) {
+        out.cambiaron.push({ clave: p.clave, texto: pendiente.texto });
+        continue;
+      }
+      out.aMarcar.push({
+        fila: p.clave,
+        texto: pendiente.texto,
+        /* En un conjunto que volvió porque entró un documento nuevo, los que ya tenían su marca no se marcan otra vez. */
+        documentos: pendiente.fila.documentos.filter((d) => !indice.vigente(linea.codigo, d.clave, d.huella)),
+      });
+      continue;
+    }
+    /* Ya marcada: por la huella y no por la clave, porque la fila marcada de un cliente lleva otra clave que la
+       pendiente (`|marcadas`), y sus documentos con sus números son los mismos. */
+    if (linea?.marcadas.some((m) => m.item.fila.huella === p.huella)) out.yaMarcadas.push(p.clave);
+    else out.cambiaron.push({ clave: p.clave, texto: null });
+  }
+  return out;
+}
+
 /* ── La lista ───────────────────────────────────────────────────────────────────── */
 
-type LineaNueva =Omit<DiferenciaOdoo, "aceptada" | "montoEnJuego" | "yaContadoEn" | "plata" | "documentos"> & {
+type LineaNueva = Omit<DiferenciaOdoo, "aceptada" | "marcadas" | "montoEnJuego" | "yaContadoEn" | "plata" | "documentos"> & {
   plata?: PlataDeLinea[];
   /** Sin esto, los `f:` y `c:` de `plata`. */
   documentos?: string[];
@@ -1290,15 +1445,38 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
   const cruce = cruzar(estado.cobros, estado.facturas);
   const anioRef = anioDeReferencia(estado);
 
-  /* ⚠ La huella se calcula SIEMPRE con `huellaDe`, sobre la línea ya armada. Tener una
-     segunda definición acá —aunque sea equivalente hoy— hace que la pantalla acepte con una
-     huella y el detector compare con otra: la aceptación no surte efecto nunca y nadie
-     entiende por qué. Ya pasó al escribir esto; lo cazó `diferencias.test.ts`. */
+  /* ⭐ Las marcas «está bien así» son por fila (2026-09-25): cada línea parte sus filas en pendientes y marcadas con la
+     MISMA huella que la pantalla le mostró a la persona (`ItemDiferencia.fila`), no con una segunda definición. Hasta
+     ese día la marca era del grupo entero, con `huellaDe`. */
+  const marcasVigentes = indiceDeMarcas(estado.marcas);
   const agregar = (inc: LineaNueva) => {
     const plata = inc.plata ?? [];
     const documentos = unicos(inc.documentos ?? plata.map((p) => p.clave).filter((k) => k.startsWith("f:") || k.startsWith("c:")));
-    const linea = { ...inc, plata, documentos, montoEnJuego: principal(inc.montos) };
-    out.push({ ...linea, aceptada: estado.aceptadas.get(inc.codigo) === huellaDe(linea) });
+    const { pendientes, marcadas } = separarMarcadas(inc.codigo, inc.items, marcasVigentes);
+    out.push({
+      ...inc,
+      items: pendientes,
+      marcadas,
+      plata,
+      documentos,
+      montoEnJuego: principal(inc.montos),
+      aceptada: pendientes.length === 0 && marcadas.length > 0,
+    });
+  };
+  /* En las filas que juntan facturas de un cliente la marca queda en CADA factura: las marcadas se agrupan aparte de las
+     pendientes, así una factura nueva del mismo cliente aparece sola, sin traer de vuelta las ya revisadas. */
+  const porClienteConMarcas = (
+    codigo: string,
+    facturas: readonly FacturaParaCruzar[],
+    montoDe: (f: FacturaParaCruzar) => number,
+    opciones: OpcionesPorCliente = {},
+  ): ItemDiferencia[] => {
+    const huella = opciones.huella ?? huellaDeFactura;
+    const marcada = (f: FacturaParaCruzar) => marcasVigentes.vigente(codigo, `f:${f.id}`, huella(f)) !== undefined;
+    return [
+      ...agruparPorPartner(facturas.filter((f) => !marcada(f)), montoDe, opciones),
+      ...agruparPorPartner(facturas.filter(marcada), montoDe, { ...opciones, sufijo: SUFIJO_DE_MARCADAS }),
+    ];
   };
 
   const vivas = estado.facturas.filter(esDocumentoVivo);
@@ -1538,7 +1716,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "Que estas facturas pueden quedar sin atribuir y esos cobros sin verificar. Casi nunca es lo correcto: lo que corresponde es emparejar.",
       queHacer: "Emparejar los clientes de Odoo con las cuentas de Nexus en /cobranza/odoo.",
       resuelve: "COBRANZA",
-      items: [...agruparPorPartner(porCobrarSinCuenta, netoPorCobrar), ...cuentasPorEmparejar(sinEmparejar)],
+      items: [...porClienteConMarcas("ODOO-SIN-CUENTA", porCobrarSinCuenta, netoPorCobrar), ...cuentasPorEmparejar(sinEmparejar)],
     });
   }
 
@@ -2212,7 +2390,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
     const pista = p.porQue === "sin-numero" ? pistaDeLiberacion(p.liberacion) : null;
     return {
       id: p.liberacion.id,
-      texto: `${p.liberacion.clienteNombre} — ${fmt(p.liberacion.monto, p.liberacion.moneda)}`,
+      texto: textoDeLiberacion(p.liberacion),
       monto: p.liberacion.monto,
       moneda: p.liberacion.moneda,
       nota:
@@ -2360,6 +2538,20 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return min === max ? `de ${min}` : `de ${min} a ${max}`;
     };
     const periodoReciente = anioRef === null ? "" : ` de ${anioRef - 1} y ${anioRef}`;
+    /* Una fila por año junta todas las facturas de ese año: cada una es un documento, con su marca. Las ya marcadas
+       van en otra fila del mismo año, así una factura nueva de un año viejo aparece sola. */
+    const marcadaEnPago = (f: FacturaParaCruzar) => marcasVigentes.vigente("ODOO-IN-PAYMENT", `f:${f.id}`, huellaDeFactura(f)) !== undefined;
+    const filasPorAnio = (fs: readonly FacturaParaCruzar[], sufijo = "") =>
+      [...new Set(fs.map((f) => anioDe(f.invoiceDate)))]
+        .sort((a, b) => b - a)
+        .map((anio): ItemDiferencia => {
+          const delAnio = fs.filter((f) => anioDe(f.invoiceDate) === anio);
+          return {
+            texto: `${anio} — ${delAnio.length} factura${delAnio.length === 1 ? "" : "s"}`,
+            nota: textoDeMontos(montosPorMoneda(delAnio.map((f) => ({ moneda: f.moneda, monto: f.montoNeto })))),
+            fila: filaDeFacturas(`anio:${anio}${sufijo}`, delAnio),
+          };
+        });
     agregar({
       codigo: "ODOO-IN-PAYMENT",
       severidad: "BAJA",
@@ -2390,18 +2582,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       queHacer: "Pasarle la lista a contabilidad para conciliar esos pagos con el banco.",
       resuelve: "COBRANZA",
       items: [
-        ...agruparPorPartner(recientesPago, (f) => f.montoNeto),
-        ...[...new Set(viejasPago.map((f) => anioDe(f.invoiceDate)))]
-          .sort((a, b) => b - a)
-          .map((anio): ItemDiferencia => {
-            const delAnio = viejasPago.filter((f) => anioDe(f.invoiceDate) === anio);
-            return {
-              texto: `${anio} — ${delAnio.length} factura${delAnio.length === 1 ? "" : "s"}`,
-              nota: textoDeMontos(montosPorMoneda(delAnio.map((f) => ({ moneda: f.moneda, monto: f.montoNeto })))),
-              /* Una fila por año junta todas las facturas de ese año: cada una es un documento. */
-              fila: filaDeFacturas(`anio:${anio}`, delAnio),
-            };
-          }),
+        ...porClienteConMarcas("ODOO-IN-PAYMENT", recientesPago, (f) => f.montoNeto),
+        ...filasPorAnio(viejasPago.filter((f) => !marcadaEnPago(f))),
+        ...filasPorAnio(viejasPago.filter(marcadaEnPago), SUFIJO_DE_MARCADAS),
       ],
     });
   }
@@ -2432,7 +2615,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "Que las exenciones están confirmadas por el contador. La línea vuelve si aparece una factura exenta nueva.",
       queHacer: "Confirmar con el contador cuáles son exenciones reales.",
       resuelve: "DIRECCION",
-      items: agruparPorPartner(exentasDelAnio, (f) => f.montoNeto, {
+      items: porClienteConMarcas("ODOO-EXENTAS", exentasDelAnio, (f) => f.montoNeto, {
         notaExtra: (fs) => {
           const tipo = fs[0]?.cuentaId ? tipoDeCuenta.get(fs[0].cuentaId) : undefined;
           return tipo === "INTERNACIONAL" ? "cuenta internacional" : tipo === "NACIONAL" ? "cuenta nacional" : "sin cuenta en Nexus";
@@ -2705,10 +2888,23 @@ function cuentasPorEmparejar(cobros: readonly CobroParaCruzar[]): ItemDiferencia
  * ⚠ Por el ID del cliente de Odoo, no por su nombre (2026-09-25). Hasta ese día agrupaba por nombre: dos clientes con
  * el mismo nombre compartían fila, y si Odoo renombraba uno, sus facturas cambiaban de fila.
  */
+interface OpcionesPorCliente {
+  notaExtra?: (fs: readonly FacturaParaCruzar[]) => string;
+  huella?: (f: FacturaParaCruzar) => string;
+  /** Lo que se le agrega a la clave de cada fila: las marcadas de un cliente van en otra fila que sus pendientes. */
+  sufijo?: string;
+}
+
+/**
+ * La clave de la fila con las facturas YA MARCADAS de un cliente, al lado de la de sus pendientes (`cliente:90|USD`):
+ * las dos pueden existir a la vez, y una clave tiene que ser única en su línea.
+ */
+const SUFIJO_DE_MARCADAS = "|marcadas";
+
 function agruparPorPartner(
   facturas: readonly FacturaParaCruzar[],
   montoDe: (f: FacturaParaCruzar) => number,
-  opciones: { notaExtra?: (fs: readonly FacturaParaCruzar[]) => string; huella?: (f: FacturaParaCruzar) => string } = {},
+  opciones: OpcionesPorCliente = {},
 ): ItemDiferencia[] {
   const g = new Map<string, { partner: number; nombre: string; monto: number; moneda: string; facturas: FacturaParaCruzar[] }>();
   for (const f of [...facturas].sort((a, b) => a.odooMoveId - b.odooMoveId)) {
@@ -2728,15 +2924,16 @@ function agruparPorPartner(
       monto: round2(v.monto),
       moneda: v.moneda,
       nota: `${v.facturas.length} factura${v.facturas.length === 1 ? "" : "s"}` + (opciones.notaExtra ? ` · ${opciones.notaExtra(v.facturas)}` : ""),
-      fila: filaDeFacturas(`cliente:${k}`, v.facturas, opciones.huella),
+      fila: filaDeFacturas(`cliente:${k}${opciones.sufijo ?? ""}`, v.facturas, opciones.huella),
     }));
 }
 
 /**
- * La huella de una diferencia aceptada. Se acepta ESA diferencia, no «este par para siempre»:
- * si los números cambian, la línea vuelve sola.
+ * La huella de una diferencia aceptada POR GRUPO (`DiferenciaOdooAceptada`): `texto=monto` de todas sus filas.
  *
- * ⚠ Una aceptación no puede convertirse en el lugar donde se esconde un problema nuevo.
+ * ⚠ Desde el 2026-09-25 ni la pantalla ni el detector la usan: la marca es por fila (`MarcaDeFila`), con la huella de
+ * los números de cada documento. Queda solo para el traspaso de la única marca de grupo que existía (las notas de
+ * crédito), que compara cada nota contra lo que se marcó. Lleva nombres a propósito: es la que se guardó.
  */
 export function huellaDe(inc: Pick<Inconsistencia, "items">): string {
   return inc.items.map((i) => `${i.texto}=${i.monto ?? ""}`).join("|");

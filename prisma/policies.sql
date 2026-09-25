@@ -263,6 +263,15 @@ CREATE POLICY deny_all_non_superuser ON "DiferenciaOdooAceptada"
   TO PUBLIC
   USING (false);
 
+-- Marcas «está bien así» fila por fila (2026-09-25, scripts/sql/2026-09-25-2-marcas-por-fila.sql). Llevan el texto
+-- de cada fila marcada: montos y nombres de clientes.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "DiferenciaOdooMarca";
+CREATE POLICY deny_all_non_superuser ON "DiferenciaOdooMarca"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 DROP POLICY IF EXISTS deny_all_non_superuser ON "EgresoMensual";
 CREATE POLICY deny_all_non_superuser ON "EgresoMensual"
   AS RESTRICTIVE

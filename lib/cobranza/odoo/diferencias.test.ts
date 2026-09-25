@@ -16,6 +16,7 @@ import {
   clasificarNumerosSinPar,
   coberturaDelCruce,
   cruzar,
+  decidirMarcas,
   detectarDiferenciasOdoo,
   esDocumentoVivo,
   facturasDeVariasCuotas,
@@ -25,11 +26,13 @@ import {
   montosPorMoneda,
   numeroVerificableEnOdoo,
   resumenDeDiferencias,
+  textoDeLiberacion,
   textoDeMontos,
   type CobroParaCruzar,
   type DiferenciaOdoo,
   type DocumentoDelLibro,
   type ItemDiferencia,
+  type MarcaDeFila,
   type ServicioParaCruzar,
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
@@ -41,6 +44,23 @@ import {
  */
 const comoSeLeen = (items: readonly ItemDiferencia[] | undefined) =>
   items?.map(({ id, texto, monto, moneda, nota }) => ({ id, texto, monto, moneda, nota }));
+
+/**
+ * «Está bien así» sobre una fila, como lo guarda la pantalla: una marca por documento, con los números que tiene la fila
+ * en ese momento (2026-09-25).
+ */
+const marcasDe = (linea: string, item: ItemDiferencia, p: Partial<MarcaDeFila> = {}): MarcaDeFila[] =>
+  item.fila.documentos.map((d) => ({
+    id: `m ${linea} ${d.clave}`,
+    linea,
+    fila: item.fila.clave,
+    documento: d.clave,
+    huella: d.huella,
+    motivo: "Revisado con contabilidad",
+    marcadaPor: "egonzalez@smarteamcr.com",
+    marcadaEn: "2026-09-25T17:36:00.000Z",
+    ...p,
+  }));
 
 const cobro = (p: Partial<CobroParaCruzar> = {}): CobroParaCruzar => ({
   id: "c1",
@@ -249,7 +269,7 @@ describe("la lista para el CFO", () => {
     cuentasTotales: 49,
     liberaciones: [],
     cuentas: [],
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
 
   it("⚠ NUNCA suma dólares con colones", () => {
@@ -299,33 +319,31 @@ describe("la lista para el CFO", () => {
     expect(lista[0]!.codigo).toBe("ODOO-MONEDA");
   });
 
-  it("⚠ una diferencia aceptada desaparece — pero vuelve si los números cambian", () => {
-    /* Se acepta ESA diferencia, no «este par para siempre». Una aceptación no puede ser el
-       lugar donde se esconde un problema nuevo. */
+  it("⚠ una fila marcada «está bien así» sale de la lista — pero vuelve sola si cambian sus números", () => {
+    /* Se marca ESA diferencia, no «este par para siempre». Una marca no puede ser el lugar donde se esconde un problema
+       nuevo. */
     const facturas = [
       factura({ id: "b", odooMoveId: 2, montoNeto: 5000, moneda: "USD", odooPartnerId: 77 }),
       factura({ id: "c", odooMoveId: 3, montoNeto: 5000, moneda: "CRC", odooPartnerId: 77 }),
     ];
     const antes = detectarDiferenciasOdoo({ ...base, cobros: [], facturas });
     const moneda = antes.find((i) => i.codigo === "ODOO-MONEDA")!;
+    const marcas = marcasDe("ODOO-MONEDA", moneda.items[0]!);
 
-    const conAceptada = detectarDiferenciasOdoo({
-      ...base,
-      cobros: [],
-      facturas,
-      aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
-    });
-    /* ⚠ NO desaparece: se marca. Si se filtrara, «volver a abrir» sería inalcanzable y la
-       línea quedaría cerrada para siempre por un clic. */
-    expect(conAceptada.find((i) => i.codigo === "ODOO-MONEDA")?.aceptada).toBe(true);
+    const conMarca = detectarDiferenciasOdoo({ ...base, cobros: [], facturas, marcas }).find((i) => i.codigo === "ODOO-MONEDA");
+    /* ⚠ NO desaparece: pasa a `marcadas`, con su marca. Si se filtrara, «Deshacer» sería inalcanzable y la fila
+       quedaría cerrada para siempre por un clic. */
+    expect(conMarca?.items).toEqual([]);
+    expect(conMarca?.marcadas.map((m) => m.item.fila.clave)).toEqual([moneda.items[0]!.fila.clave]);
+    expect(conMarca?.marcadas[0]?.marcas.map((m) => m.documento)).toEqual(["f:b", "f:c"]);
+    expect(conMarca?.aceptada, "todas sus filas marcadas").toBe(true);
 
-    const cambiada = detectarDiferenciasOdoo({
-      ...base,
-      cobros: [],
-      facturas: facturas.map((f) => ({ ...f, montoNeto: 9999 })),
-      aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
-    });
-    expect(cambiada.find((i) => i.codigo === "ODOO-MONEDA")?.aceptada).toBe(false);
+    const cambiada = detectarDiferenciasOdoo({ ...base, cobros: [], facturas: facturas.map((f) => ({ ...f, montoNeto: 9999 })), marcas }).find(
+      (i) => i.codigo === "ODOO-MONEDA",
+    );
+    expect(cambiada?.items).toHaveLength(1);
+    expect(cambiada?.marcadas).toEqual([]);
+    expect(cambiada?.aceptada).toBe(false);
   });
 
   it("los pagos sin conciliar con el banco se informan: no preguntan ni suman (2026-09-13)", () => {
@@ -407,7 +425,7 @@ describe("la lista para el CFO", () => {
     expect(lista.find((i) => i.codigo === "ODOO-MONEDA")?.yaContadoEn).toBeUndefined();
   });
 
-  it("las aceptadas van al FINAL, no compiten con lo que hay que resolver", () => {
+  it("una línea con todas sus filas marcadas va al FINAL, no compite con lo que hay que resolver", () => {
     const facturas = [
       factura({ id: "b", odooMoveId: 2, cuentaId: "cta1", montoNeto: 5000, moneda: "USD", odooPartnerId: 77 }),
       factura({ id: "c", odooMoveId: 3, cuentaId: "cta1", montoNeto: 5000, moneda: "CRC", odooPartnerId: 77 }),
@@ -415,17 +433,10 @@ describe("la lista para el CFO", () => {
     ];
     const antes = detectarDiferenciasOdoo({ ...base, cobros: [], facturas });
     const moneda = antes.find((i) => i.codigo === "ODOO-MONEDA")!;
-    expect(antes[0]!.codigo, "sin aceptar, la más cara va primero").toBe("ODOO-MONEDA");
+    expect(antes[0]!.codigo, "sin marcar, la más cara va primero").toBe("ODOO-MONEDA");
 
-    const despues = detectarDiferenciasOdoo({
-      ...base,
-      cobros: [],
-      facturas,
-      aceptadas: new Map([["ODOO-MONEDA", huellaDe(moneda)]]),
-    });
-    expect(despues[despues.length - 1]!.codigo, "aceptada, se va al final aunque sea la más cara").toBe(
-      "ODOO-MONEDA",
-    );
+    const despues = detectarDiferenciasOdoo({ ...base, cobros: [], facturas, marcas: moneda.items.flatMap((i) => marcasDe("ODOO-MONEDA", i)) });
+    expect(despues[despues.length - 1]!.codigo, "marcada entera, se va al final aunque sea la más cara").toBe("ODOO-MONEDA");
   });
 
   it("no inventa líneas cuando no hay nada que reportar", () => {
@@ -565,7 +576,7 @@ describe("⚠ la factura liberada no se cuenta dos veces", () => {
     cuentasSinVinculo: 0,
     cuentasTotales: 1,
     cuentas: [],
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
   /* Soltar una factura es, literalmente, quitarle su cobro: sin la exclusión aparecería como
      huérfana en ODOO-FACTURA-SIN-COBRO, además de en su propia línea. */
@@ -619,7 +630,7 @@ describe("el default que dice Odoo sobre cuentas que no facturan por Odoo", () =
     liberaciones: [],
     cuentasSinVinculo: 0,
     cuentasTotales: 2,
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
 
   it("las internacionales con viaCobro ODOO salen como línea propia, sin monto", () => {
@@ -706,7 +717,7 @@ describe("⚠⚠ las liberadas de Odoo sin número van en su propia línea", () 
     cuentasSinVinculo: 0,
     cuentasTotales: 1,
     cuentas: [],
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
 
   it("la sin número sale aparte, con acción por fila y su propio pie", () => {
@@ -766,7 +777,7 @@ describe("⭐ una sola regla de documento vivo", () => {
     cuentasTotales: 1,
     liberaciones: [],
     cuentas: [],
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
 
   it("vivo = factura emitida; la nota de crédito, la anulada y la revertida no", () => {
@@ -869,7 +880,7 @@ describe("⚠⚠ «cobro sin factura» solo acusa lo que se puede verificar", ()
     servicios: new Array<ServicioParaCruzar>(),
     /* ⇒ corte = 2026-08-18 (15 días de gracia). */
     ultimaCorridaOk: "2026-09-02" as string | null,
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
   const lineas = (cobros: CobroParaCruzar[], extra: Partial<typeof base> = {}) =>
     detectarDiferenciasOdoo({ ...base, ...extra, cobros });
@@ -1013,7 +1024,7 @@ describe("⭐ el cobro con número se aparea por ese número", () => {
       expect.objectContaining({ cobroId: "a", cobroIds: ["a", "b"], cuotas: 2, montoCobro: 4600, montoFactura: 6900, diferencia: 2300 }),
     ]);
 
-    const monto = detectarDiferenciasOdoo({ ...alDia, cobros: dos, facturas: [f329], liberaciones: [], cuentas: [], cuentasSinVinculo: 0, cuentasTotales: 1, aceptadas: new Map() })
+    const monto = detectarDiferenciasOdoo({ ...alDia, cobros: dos, facturas: [f329], liberaciones: [], cuentas: [], cuentasSinVinculo: 0, cuentasTotales: 1, marcas: [] })
       .find((i) => i.codigo === "ODOO-MONTO");
     expect(monto?.items).toHaveLength(1);
     expect(monto?.items[0]?.texto).toMatch(/ en 2 cuotas vs Odoo /);
@@ -1128,7 +1139,7 @@ describe("«Lo que no cuadra» con el número de la factura", () => {
     servicios: new Array<ServicioParaCruzar>(),
     /* ⇒ corte = 2026-08-18 (15 días de gracia). */
     ultimaCorridaOk: "2026-09-02" as string | null,
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
   const lista = (cobros: CobroParaCruzar[], facturas: FacturaParaCruzar[] = [], extra: Partial<typeof base> = {}) =>
     detectarDiferenciasOdoo({ ...base, ...extra, cobros, facturas });
@@ -1255,7 +1266,7 @@ describe("«Lo que no cuadra» con el número de la factura", () => {
  */
 describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => {
   const cuentas = [{ id: "cta1", nombre: "Selvatura", tipo: "NACIONAL", viaCobro: "ODOO" }];
-  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas, aceptadas: new Map<string, string>() };
+  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas, marcas: [] };
 
   it("el encabezado suma cada moneda aparte y cuenta una vez la factura que miran dos líneas", () => {
     const lista = detectarDiferenciasOdoo({
@@ -1275,12 +1286,13 @@ describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => 
     expect(resumen.documentos).toBe(3);
   });
 
-  it("una línea aceptada no suma al encabezado", () => {
+  it("una línea con todas sus filas marcadas no suma al encabezado", () => {
     const facturas = [factura({ id: "a", cuentaId: null, paymentState: "not_paid" })];
     const antes = detectarDiferenciasOdoo({ ...base, cobros: [], facturas });
     const sinCuenta = antes.find((i) => i.codigo === "ODOO-SIN-CUENTA");
     if (!sinCuenta) throw new Error("falta la línea sin cuenta");
-    const despues = detectarDiferenciasOdoo({ ...base, cobros: [], facturas, aceptadas: new Map([["ODOO-SIN-CUENTA", huellaDe(sinCuenta)]]) });
+    const marcas = sinCuenta.items.flatMap((i) => marcasDe("ODOO-SIN-CUENTA", i));
+    const despues = detectarDiferenciasOdoo({ ...base, cobros: [], facturas, marcas });
     expect(resumenDeDiferencias(antes).plata).toEqual([{ moneda: "USD", monto: 2000 }]);
     expect(resumenDeDiferencias(despues).plata).toEqual([]);
   });
@@ -1378,7 +1390,7 @@ describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => 
 });
 
 describe("⭐ la moneda equivocada ya corregida y las notas de crédito sin aplicar, cada una en su línea", () => {
-  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas: [], aceptadas: new Map<string, string>() };
+  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas: [], marcas: [] };
   const publimark = (p: Partial<FacturaParaCruzar>) =>
     factura({ odooPartnerId: 75, odooPartnerNombre: "PUBLIMARK SOCIEDAD ANONIMA", cuentaId: null, montoNeto: 11541250, montoTotal: 13041612.5, ...p });
 
@@ -1447,7 +1459,7 @@ describe("⭐ la moneda equivocada ya corregida y las notas de crédito sin apli
  */
 describe("⭐ facturas que cubren varias cuotas: se proponen, no se juntan", () => {
   const cuentas = [{ id: "cta1", nombre: "ALMOTEC", tipo: "NACIONAL", viaCobro: "ODOO" }];
-  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas, aceptadas: new Map<string, string>() };
+  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas, marcas: [] };
   const almotec = ["2026-06", "2026-07", "2026-08"].map((periodo, i) =>
     cobro({ id: `al${i + 1}`, cuentaNombre: "ALMOTEC", periodo, fechaProgramada: `${periodo}-15`, monto: 2300, fechaEmision: `${periodo}-10` }),
   );
@@ -1553,7 +1565,7 @@ describe("⭐ facturas que cubren varias cuotas: se proponen, no se juntan", () 
 });
 
 describe("montos distintos: el 13 % es el IVA y no se acusa", () => {
-  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas: [], aceptadas: new Map<string, string>() };
+  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, liberaciones: [], cuentas: [], marcas: [] };
 
   it("un cobro que difiere de su factura justo en el 13 % no sale (decisión de Alex del 12-sep)", () => {
     const lista = detectarDiferenciasOdoo({ ...base, cobros: [cobro({ monto: 2655.5 })], facturas: [factura({ montoNeto: 2350 })] });
@@ -1570,7 +1582,7 @@ describe("montos distintos: el 13 % es el IVA y no se acusa", () => {
 });
 
 describe("una factura soltada sin número dice lo que se encontró en Odoo", () => {
-  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, cuentas: [], aceptadas: new Map<string, string>() };
+  const base = { ...alDia, cuentasSinVinculo: 0, cuentasTotales: 1, cuentas: [], marcas: [] };
 
   it("Honda: parece la factura ya revertida; Kaizen: su cliente no tiene ninguna factura en Odoo", () => {
     const honda = liberada({ id: "h", cuentaId: "honda", clienteNombre: "Honda", monto: 500, referenciaExterna: null, fechaEmision: "2026-09-05", periodo: "2026-09" });
@@ -1613,7 +1625,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     cuentasTotales: cuentas.length,
     liberaciones: [],
     cuentas,
-    aceptadas: new Map<string, string>(),
+    marcas: [],
   };
   const sinPagar = (p: Partial<FacturaParaCruzar> & Pick<FacturaParaCruzar, "montoNeto">) => {
     const total = p.montoTotal ?? Math.round(p.montoNeto * 113) / 100;
@@ -2071,6 +2083,156 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(nuestras).toHaveLength(65);
     expect(l?.titulo).toBe(`${l?.items.length} facturas de Odoo sin un cobro que las explique`);
   });
+
+  /* ── ⭐ 2026-09-25 · «ESTÁ BIEN ASÍ», FILA POR FILA ─────────────────────────────────────
+     La marca es por fila, vale solo en su línea y está atada a los NÚMEROS de cada documento. Hasta ese día era del grupo
+     entero: una fila nueva o un número distinto reabría la línea completa, con todo lo ya revisado adentro. */
+  const lineaDe = (ls: readonly DiferenciaOdoo[], codigo: string) => ls.find((l) => l.codigo === codigo);
+  const filaDe = (ls: readonly DiferenciaOdoo[], codigo: string, clave: string) => lineaDe(ls, codigo)?.items.find((i) => i.fila.clave === clave);
+  const marcarTodo = (ls: readonly DiferenciaOdoo[]) => ls.flatMap((l) => l.items.flatMap((i) => marcasDe(l.codigo, i)));
+  const documentosDe = (i: ItemDiferencia | undefined) => i?.fila.documentos.map((d) => d.clave);
+
+  it("⭐ marcar todas las filas de las veinte líneas las pasa a «marcadas» sin perder ninguna, y la cobertura no cambia", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const conMarcas = { ...todas, marcas: marcarTodo(antes) };
+    const despues = detectarDiferenciasOdoo(conMarcas);
+    expect(despues.map((l) => l.codigo).sort(), "ninguna línea desaparece: sus marcas se tienen que poder deshacer").toEqual([...LAS_VEINTE_LINEAS].sort());
+    for (const l of despues) {
+      const a = lineaDe(antes, l.codigo)!;
+      expect(l.items, l.codigo).toEqual([]);
+      expect(l.aceptada, l.codigo).toBe(true);
+      expect(l.marcadas.map((m) => m.item.fila.huella).sort(), l.codigo).toEqual(a.items.map((i) => i.fila.huella).sort());
+      for (const m of l.marcadas) expect(m.marcas.map((x) => x.documento), l.codigo).toEqual(documentosDe(m.item));
+      /* Una fila marcada sigue siendo la casa de sus documentos. */
+      expect(l.documentos, l.codigo).toEqual(a.documentos);
+    }
+    expect(resumenDeDiferencias(despues)).toEqual({ abiertas: 0, plata: [], documentos: 0 });
+    expect(coberturaDelCruce(conMarcas)).toEqual(coberturaDelCruce(todas));
+  });
+
+  it("⚠ la marca vale solo en su línea: la misma marca con el código de otra línea no saca nada", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const nota = filaDe(antes, "ODOO-NOTA-SIN-APLICAR", "f:n242")!;
+    const enOtra = detectarDiferenciasOdoo({ ...todas, marcas: marcasDe("ODOO-FACTURA-SIN-COBRO", nota) });
+    expect(filaDe(enOtra, "ODOO-NOTA-SIN-APLICAR", "f:n242")).toBeDefined();
+    const enLaSuya = detectarDiferenciasOdoo({ ...todas, marcas: marcasDe("ODOO-NOTA-SIN-APLICAR", nota) });
+    expect(filaDe(enLaSuya, "ODOO-NOTA-SIN-APLICAR", "f:n242")).toBeUndefined();
+    expect(lineaDe(enLaSuya, "ODOO-NOTA-SIN-APLICAR")?.marcadas.map((m) => m.item.fila.clave)).toEqual(["f:n242"]);
+    /* Las demás notas siguen pendientes: marcar una no marca el grupo. */
+    expect(lineaDe(enLaSuya, "ODOO-NOTA-SIN-APLICAR")?.items.length).toBe((lineaDe(antes, "ODOO-NOTA-SIN-APLICAR")?.items.length ?? 0) - 1);
+  });
+
+  it("⭐ en una fila que junta facturas de un cliente la marca queda en cada factura: una nueva del mismo cliente aparece sola", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-SIN-CUENTA", filaDe(antes, "ODOO-SIN-CUENTA", "cliente:90|USD")!);
+    const nueva = sinPagar({ id: "sc4", odooMoveId: 504, numero: "FAC/2026/0504", cuentaId: null, odooPartnerId: 90, odooPartnerNombre: "SIN CUENTA S.A.", montoNeto: 300 });
+    const despues = detectarDiferenciasOdoo({ ...todas, facturas: [...todas.facturas, nueva], marcas });
+    const pendiente = filaDe(despues, "ODOO-SIN-CUENTA", "cliente:90|USD");
+    expect(documentosDe(pendiente), "solo la nueva, sin las ya revisadas").toEqual(["f:sc4"]);
+    expect(pendiente?.nota).toBe("1 factura");
+    const marcada = lineaDe(despues, "ODOO-SIN-CUENTA")?.marcadas.find((m) => m.item.fila.clave === "cliente:90|USD|marcadas");
+    expect(documentosDe(marcada?.item)).toEqual(["f:sc1", "f:sc2"]);
+    expect(marcada?.item.monto).toBe(3000);
+  });
+
+  it("⭐ si cambia un número de una factura agrupada, vuelve esa sola: las otras del cliente siguen marcadas", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-SIN-CUENTA", filaDe(antes, "ODOO-SIN-CUENTA", "cliente:90|USD")!);
+    const facturas = todas.facturas.map((f) => (f.id === "sc2" ? { ...f, paymentState: "partial", montoResidual: 1000 } : f));
+    const despues = detectarDiferenciasOdoo({ ...todas, facturas, marcas });
+    expect(documentosDe(filaDe(despues, "ODOO-SIN-CUENTA", "cliente:90|USD"))).toEqual(["f:sc2"]);
+    expect(lineaDe(despues, "ODOO-SIN-CUENTA")?.marcadas.flatMap((m) => documentosDe(m.item))).toEqual(["f:sc1"]);
+  });
+
+  it("los pagos sin conciliar de un año viejo: la marca queda en cada factura del año, y una nueva de ese año aparece sola", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-IN-PAYMENT", filaDe(antes, "ODOO-IN-PAYMENT", "anio:2021")!);
+    const otra = factura({
+      id: "ip21b",
+      odooMoveId: 531,
+      numero: "FAC/2021/0531",
+      cuentaId: null,
+      odooPartnerId: 95,
+      odooPartnerNombre: "OTRA VIEJA S.A.",
+      invoiceDate: "2021-08-01",
+      montoNeto: 90,
+      paymentState: "in_payment",
+    });
+    const despues = detectarDiferenciasOdoo({ ...todas, facturas: [...todas.facturas, otra], marcas });
+    expect(documentosDe(filaDe(despues, "ODOO-IN-PAYMENT", "anio:2021"))).toEqual(["f:ip21b"]);
+    expect(filaDe(despues, "ODOO-IN-PAYMENT", "anio:2021")?.texto).toBe("2021 — 1 factura");
+    expect(lineaDe(despues, "ODOO-IN-PAYMENT")?.marcadas.map((m) => m.item.fila.clave)).toEqual(["anio:2021|marcadas"]);
+  });
+
+  it("⚠ en un conjunto («dos monedas») basta que cambie un documento para que vuelva la fila entera: se lee junta", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-MONEDA", filaDe(antes, "ODOO-MONEDA", "cliente:91|77700")!);
+    const facturas = todas.facturas.map((f) => (f.id === "gm2" ? { ...f, paymentState: "not_paid", montoResidual: 877.01 } : f));
+    const despues = detectarDiferenciasOdoo({ ...todas, facturas, marcas });
+    expect(documentosDe(filaDe(despues, "ODOO-MONEDA", "cliente:91|77700"))).toEqual(["f:gm1", "f:gm2"]);
+    expect(lineaDe(despues, "ODOO-MONEDA")?.marcadas).toEqual([]);
+  });
+
+  it("⭐ renombrar un cliente de Odoo, una cuenta o una factura soltada no trae de vuelta nada marcado", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const otro = (s: string) => `${s} (renombrado)`;
+    const renombrado = {
+      ...todas,
+      cuentas: todas.cuentas.map((c) => ({ ...c, nombre: otro(c.nombre) })),
+      cobros: todas.cobros.map((c) => ({ ...c, cuentaNombre: otro(c.cuentaNombre), servicio: otro(c.servicio) })),
+      facturas: todas.facturas.map((f) => ({ ...f, odooPartnerNombre: otro(f.odooPartnerNombre) })),
+      liberaciones: todas.liberaciones.map((l) => ({ ...l, clienteNombre: otro(l.clienteNombre) })),
+      marcas: marcarTodo(antes),
+    };
+    for (const l of detectarDiferenciasOdoo(renombrado)) expect(l.items, l.codigo).toEqual([]);
+  });
+
+  it("⭐ decidirMarcas marca una por una con los números que se VIERON: la que cambió antes del clic no se marca y se avisa", () => {
+    const vistas = lineaDe(detectarDiferenciasOdoo(todas), "ODOO-SIN-CUENTA")!.items.map((i) => ({ clave: i.fila.clave, huella: i.fila.huella }));
+    /* Entre verla y hacer clic corrió el sync: a una factura del cliente 90 le entró un pago parcial. */
+    const facturas = todas.facturas.map((f) => (f.id === "sc2" ? { ...f, paymentState: "partial", montoResidual: 1000 } : f));
+    const ahora = lineaDe(detectarDiferenciasOdoo({ ...todas, facturas }), "ODOO-SIN-CUENTA");
+    const d = decidirMarcas(ahora, [...vistas, vistas[0]!], []);
+    expect(d.cambiaron).toEqual([{ clave: "cliente:90|USD", texto: filaDe(detectarDiferenciasOdoo({ ...todas, facturas }), "ODOO-SIN-CUENTA", "cliente:90|USD")?.texto }]);
+    expect(d.aMarcar.map((m) => m.fila).sort(), "las demás sí, y la repetida una sola vez").toEqual(
+      vistas.map((v) => v.clave).filter((c) => c !== "cliente:90|USD").sort(),
+    );
+    for (const m of d.aMarcar) expect(m.documentos.length, m.fila).toBeGreaterThan(0);
+    expect(d.yaMarcadas).toEqual([]);
+  });
+
+  it("decidirMarcas: lo ya marcado no se marca dos veces, lo que ya no está se avisa, y sin línea no se marca nada", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const fila = filaDe(antes, "ODOO-SIN-CUENTA", "cliente:90|USD")!;
+    const marcas = marcasDe("ODOO-SIN-CUENTA", fila);
+    const conMarca = lineaDe(detectarDiferenciasOdoo({ ...todas, marcas }), "ODOO-SIN-CUENTA");
+    const pedidas = [
+      { clave: fila.fila.clave, huella: fila.fila.huella },
+      { clave: "cliente:999|USD", huella: "x" },
+    ];
+    expect(decidirMarcas(conMarca, pedidas, marcas)).toEqual({
+      aMarcar: [],
+      cambiaron: [{ clave: "cliente:999|USD", texto: null }],
+      yaMarcadas: ["cliente:90|USD"],
+    });
+    expect(decidirMarcas(undefined, pedidas.slice(0, 1), []).cambiaron).toEqual([{ clave: "cliente:90|USD", texto: null }]);
+  });
+
+  it("decidirMarcas: en un conjunto que volvió por un documento nuevo, solo se marca el que no tenía su marca", () => {
+    const antes = detectarDiferenciasOdoo(todas);
+    const marcas = marcasDe("ODOO-MONEDA", filaDe(antes, "ODOO-MONEDA", "cliente:91|77700")!);
+    const tercera = factura({ id: "gm3", odooMoveId: 512, numero: "FAC/2026/0512", cuentaId: "gem", odooPartnerId: 91, odooPartnerNombre: "GEMELA S.A.", montoNeto: 777 });
+    const despues = detectarDiferenciasOdoo({ ...todas, facturas: [...todas.facturas, tercera], marcas });
+    const fila = filaDe(despues, "ODOO-MONEDA", "cliente:91|77700")!;
+    expect(documentosDe(fila), "el conjunto vuelve entero").toEqual(["f:gm1", "f:gm2", "f:gm3"]);
+    const d = decidirMarcas(lineaDe(despues, "ODOO-MONEDA"), [{ clave: fila.fila.clave, huella: fila.fila.huella }], marcas);
+    expect(d.aMarcar.map((m) => m.documentos.map((x) => x.clave))).toEqual([["f:gm3"]]);
+  });
+
+  it("«Ya está anulada» guarda lo mismo que decía la fila de la factura soltada", () => {
+    const l = todas.liberaciones.find((x) => x.id === "l-sn")!;
+    expect(filaDe(detectarDiferenciasOdoo(todas), "ODOO-LIBERADAS-SIN-NUMERO", "l:l-sn")?.texto).toBe(textoDeLiberacion(l));
+  });
 });
 
 /**
@@ -2102,7 +2264,7 @@ describe("⭐ «Lo que no cuadra» muestra la misma venta contada dos veces", ()
     cuentasTotales: 0,
     liberaciones: [],
     cuentas,
-    aceptadas: new Map<string, string>(),
+    marcas: [],
     facturas: [],
     cobros,
     servicios,
