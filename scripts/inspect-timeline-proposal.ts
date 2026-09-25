@@ -3,8 +3,9 @@
  * Inspecciona el cronograma de un proyecto + la propuesta pendiente de re-generación.
  * Sirve para verificar la invariante NO-destructiva: las fases de pendingProposal llevan
  * id (matchean a existentes) y NO traen `tasks` (→ el PUT preserva el detalle/progreso).
- * Con un borrador `borrador-v1` (E1/E2a: no tiene `phases`) imprime el formato, la versión, el
- * estado de las tareas y los cambios por tipo, y termina. Antes reventaba en `prop.phases`.
+ * Con un borrador `borrador-v1` (E1, E2a, E2b: no tiene `phases`) imprime el formato, la versión, el
+ * origen, `soloFase` («Regenerar» de una fase), el estado de las tareas y los cambios por tipo, y
+ * termina. Antes reventaba en `prop.phases`. Del formato viejo imprime también su origen.
  * Uso: npx tsx scripts/inspect-timeline-proposal.ts <projectId>
  */
 import { PrismaClient } from "@prisma/client";
@@ -12,6 +13,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { esBorradorV1, estadoDeLasTareas, leerBorrador } from "../lib/timeline/borrador";
+import { origenDePropuesta } from "../lib/timeline/proposal-deltas";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -63,7 +65,10 @@ async function main() {
       : null;
     const estado = estadoDeLasTareas(b.tareas, corrida);
     const porTipo = b.cambios.reduce<Record<string, number>>((acc, c) => { acc[c.tipo] = (acc[c.tipo] ?? 0) + 1; return acc; }, {});
-    console.log(`  formato: ${b.formato}  versión: ${b.version}  origen: ${b.origen}  pedido: ${b.pedido ?? "—"}`);
+    // «Regenerar» de una fase (E2b): su id y su nombre de hoy (o que ya no está).
+    const faseSola = b.soloFase ? tl.phases.find((p) => p.id === b.soloFase) : undefined;
+    const soloFase = b.soloFase ? `${b.soloFase} (${faseSola ? `«${faseSola.name}»` : "ya no está"})` : "—";
+    console.log(`  formato: ${b.formato}  versión: ${b.version}  origen: ${b.origen}  pedido: ${b.pedido ?? "—"}  soloFase: ${soloFase}`);
     console.log(`  pendingProposalRunId (token): ${tl.pendingProposalRunId ?? "—"}`);
     console.log(
       `  tareas: ${estado ?? "no espera tareas"}` +
@@ -79,6 +84,7 @@ async function main() {
     const withId = prop.phases.filter((p) => p.id).length;
     const withValidId = prop.phases.filter((p) => p.id && existingIds.has(p.id)).length;
     const withTasks = prop.phases.filter((p) => Array.isArray(p.tasks)).length;
+    console.log(`  formato: viejo  origen: ${origenDePropuesta(tl.pendingProposal as { origen?: unknown })}`);
     console.log(`  pendingProposalRunId: ${tl.pendingProposalRunId ?? "—"}`);
     console.log(`  anchorStartDate: ${prop.anchorStartDate ?? "null"}`);
     console.log(`  fases: ${prop.phases.length}  (con id: ${withId}, id válido existente: ${withValidId}, con clave tasks: ${withTasks})`);

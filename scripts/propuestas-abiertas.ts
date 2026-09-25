@@ -1,17 +1,20 @@
 /**
- * scripts/propuestas-abiertas.ts — LAS PROPUESTAS DEL CRONOGRAMA QUE ESTÁN ABIERTAS (E2a).
+ * scripts/propuestas-abiertas.ts — LAS PROPUESTAS DEL CRONOGRAMA QUE ESTÁN ABIERTAS (E2a, E2b).
  *
  * Por qué existe: desde E2a, «Regenerar todo» deja UN borrador (`borrador-v1`) con fases y tareas en
- * `ProjectTimeline.pendingProposal`, y el handoff sigue dejando el formato viejo (solo fases) hasta
- * E2b. Antes de desplegar hay que saber qué quedó abierto a mitad de un camino que el deploy cambia,
- * y si hay que volver atrás, limpiar los v1 que la versión anterior no sabe leer (plan §3.1).
+ * `ProjectTimeline.pendingProposal`. Desde E2b también lo dejan el handoff (solo fases, sin tareas) y
+ * «Regenerar» de una fase (`soloFase`). Antes de desplegar hay que saber qué quedó abierto a mitad de
+ * un camino que el deploy cambia, y si hay que volver atrás, limpiar los v1 que la versión anterior
+ * no sabe leer (plan §3.1).
  *
  * Por cada propuesta abierta muestra el cliente, el proyecto, el `projectId`, el formato, el origen,
  * el token (`pendingProposalRunId`), quién y cuándo la abrió (de la corrida del token), los días que
- * lleva abierta y, en los v1, el estado de las tareas y los cambios por tipo (la medida de Wherex).
+ * lleva abierta y, en los v1, `soloFase`, el estado de las tareas y los cambios por tipo (la medida
+ * de Wherex). Lo puro (formatos, qué frena, qué deja la vuelta atrás) vive en
+ * scripts/lib/propuestas-abiertas.ts.
  *
  * Formatos (cada propuesta cae en UNO):
- *   · v1               — `borrador-v1` (E1/E2a).
+ *   · v1               — `borrador-v1` (E1, E2a, E2b).
  *   · viejo-con-tasks  — formato viejo con `tasks` en alguna fase (la vista previa del modificador):
  *                        el borrador no la lee.
  *   · viejo-contexto   — formato viejo de las reuniones y notas (`origen: "contexto"`): espera el
@@ -22,13 +25,16 @@
  * Uso:
  *   listar (solo lectura):   npx tsx scripts/propuestas-abiertas.ts
  *   antes del deploy:        npx tsx scripts/propuestas-abiertas.ts --antes-del-deploy
- *                            → termina con código 1 si hay viejas de «contexto», viejas con `tasks`,
- *                              v1 o ilegibles (tienen que estar en 0 para desplegar E2a).
+ *                            → termina con código 1 si hay viejas de «contexto», viejas con `tasks`
+ *                              o ilegibles (tienen que estar en 0 para desplegar E2b). Los v1 y las
+ *                              viejas del handoff no frenan: E2b los lee.
  *   vuelta atrás, en seco:   npx tsx scripts/propuestas-abiertas.ts --rollback
  *   vuelta atrás, de verdad: $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --rollback --apply
  *                            → respalda ProjectTimeline con pg_dump (scripts/lib/guard.ts) y deja
- *                              cada v1 en null (`pendingProposal` y `pendingProposalRunId`), solo si
- *                              sigue siendo el mismo que se leyó.
+ *                              en null (`pendingProposal` y `pendingProposalRunId`) cada v1 que no es
+ *                              «solo de fases», solo si sigue siendo el mismo que se leyó. Los v1 solo
+ *                              de fases (sin tareas y sin ningún `tarea-*`, los del handoff) se
+ *                              quedan: E1 los lee bien.
  *
  * ⚠ Solo lee, salvo `--rollback --apply`. `--apply` sin `--rollback` no hace nada: se niega.
  */
@@ -37,28 +43,14 @@ import { createScriptDb } from "./lib/db";
 import { resolverApply } from "./lib/guard";
 import {
   FORMATO_BORRADOR,
-  esBorradorGuardado,
   esBorradorV1,
   estadoDeLasTareas,
   leerBorrador,
 } from "../lib/timeline/borrador";
 import { origenDePropuesta } from "../lib/timeline/proposal-deltas";
-
-type Formato = "v1" | "viejo-con-tasks" | "viejo-contexto" | "viejo-handoff" | "ilegible";
-const FORMATOS: readonly Formato[] = ["viejo-contexto", "viejo-handoff", "viejo-con-tasks", "v1", "ilegible"];
-/** Los que frenan el deploy de E2a (§9.8 de la especificación): solo el viejo del handoff puede quedar. */
-const FRENAN_EL_DEPLOY: readonly Formato[] = ["viejo-contexto", "viejo-con-tasks", "v1", "ilegible"];
+import { FORMATOS, FRENAN_EL_DEPLOY, esV1SoloDeFases, formatoDe, type Formato } from "./lib/propuestas-abiertas";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
-
-/** En qué formato está lo guardado. Puro. */
-function formatoDe(json: unknown): Formato {
-  if (esBorradorV1(json)) return "v1";
-  const fases = (json as { phases?: unknown } | null)?.phases;
-  if (!Array.isArray(fases)) return "ilegible";
-  if (!esBorradorGuardado(json)) return "viejo-con-tasks";
-  return origenDePropuesta(json as { origen?: unknown }) === "contexto" ? "viejo-contexto" : "viejo-handoff";
-}
 
 const fecha = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");
 
@@ -139,8 +131,11 @@ async function main() {
           return acc;
         }, {});
         const tipos = Object.entries(porTipo).map(([t, n]) => `${t}:${n}`).join("  ") || "—";
+        // «Regenerar» de una fase (E2b): su id, y su nombre cuando ya se armaron sus tareas.
+        const nombreDeLaFase = b.soloFase ? b.tareasArmadasPara[b.soloFase]?.nombre : undefined;
+        const soloFase = b.soloFase ? `${b.soloFase}${nombreDeLaFase ? ` («${nombreDeLaFase}»)` : ""}` : "—";
         console.log(
-          `   versión: ${b.version} · pedido: ${b.pedido ?? "—"} · tareas: ${estado ?? "no espera tareas"}` +
+          `   versión: ${b.version} · pedido: ${b.pedido ?? "—"} · soloFase: ${soloFase} · tareas: ${estado ?? "no espera tareas"}` +
             (b.tareas?.corrida ? ` (corrida ${b.tareas.corrida}: ${corrida ? corrida.status : "sin fila"})` : ""),
         );
         console.log(`   cambios: ${b.cambios.length} (${tipos})${b.desconocidos ? ` · ⚠ desconocidos: ${b.desconocidos}` : ""}`);
@@ -164,9 +159,13 @@ async function main() {
     }
 
     if (ROLLBACK) {
-      console.log(`\n── Vuelta atrás: ${v1s.length} v1 ${APPLY ? "a limpiar" : "que se limpiarían (en seco)"}`);
+      // Los v1 solo de fases (los del handoff) se quedan: E1 los lee bien (E2b, P8).
+      const aLimpiar = v1s.filter((f) => !esV1SoloDeFases(f.pendingProposal));
+      const quedan = v1s.length - aLimpiar.length;
+      console.log(`\n── Vuelta atrás: ${aLimpiar.length} v1 ${APPLY ? "a limpiar" : "que se limpiarían (en seco)"}`);
+      if (quedan > 0) console.log(`   ${quedan} v1 solo de fases se quedan: E1 los lee bien.`);
       let limpiados = 0;
-      for (const f of v1s) {
+      for (const f of aLimpiar) {
         if (!APPLY) continue;
         // Condicionada a lo que se leyó: si en el medio entró otra propuesta, no se pisa.
         const r = await prisma.projectTimeline.updateMany({
@@ -180,8 +179,8 @@ async function main() {
         if (r.count === 1) limpiados++;
         else console.log(`   = ${f.projectId}: cambió desde que se leyó; no se toca.`);
       }
-      if (APPLY) console.log(`   ${limpiados} de ${v1s.length} limpiados.`);
-      else if (v1s.length > 0) {
+      if (APPLY) console.log(`   ${limpiados} de ${aLimpiar.length} limpiados.`);
+      else if (aLimpiar.length > 0) {
         console.log("   DRY-RUN. Para limpiarlos (respalda ProjectTimeline antes):");
         console.log('   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --rollback --apply');
       }

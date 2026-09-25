@@ -13,6 +13,9 @@
  *   · (E2a) las tareas nuevas y las que se van en la MISMA transacción, con `createMany` por el
  *     adapter; la foto publicada queda byte a byte igual (el borrador nunca la parchea); una tarea
  *     creada después del borrador no se toca; y un caso del tamaño de Wherex deja su tiempo en consola.
+ *   · (E2b) «Regenerar» de UNA fase por el camino entero del servidor (marcar, estructura, fusionar
+ *     y aplicar): solo cambian las tareas de esa fase, aunque el modelo traiga otras, y la foto
+ *     publicada queda byte a byte igual.
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso).
  */
 import { describe, expect, it } from "vitest";
@@ -32,6 +35,7 @@ import {
   type Vivo,
 } from "./borrador";
 import { aplicarBorradorEnTx, ErrorAlAplicar, type PedidoDeAplicar } from "./escribir-estructura";
+import { estructuraParaElDetalle, fusionarDetalleEnElBorrador, marcarTareasEnCurso } from "./borrador-del-detalle";
 import { freezeBaseline } from "./baseline";
 import type { ProposalLike } from "./proposal-deltas";
 
@@ -403,5 +407,104 @@ describe("aplicar el borrador CON tareas — DB real (E2a)", () => {
     console.log(`[borrador-aplicar.int] Wherex: ${r.tareas.borradas} se van + ${r.tareas.creadas} nuevas en ${Date.now() - t0} ms`);
     expect(r.tareas).toEqual({ creadas: 252, borradas: 252 });
     expect(await prisma.timelineTask.count({ where: { phase: { timelineId: tl.id } } })).toBe(252);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E2b: «Regenerar» de UNA fase ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("«Regenerar» de una fase — DB real (E2b)", () => {
+  it("⭐ el camino entero (marcar, fusionar, aplicar) toca SOLO las tareas de esa fase, y la foto publicada queda byte a byte igual", async () => {
+    /* La edición que la pone en rojo: fusionar sin el alcance guardado (`soloFases` null en
+       fusionarDetalleEnElBorrador). Se irían las tareas de «Diseño» y entraría la que el modelo
+       trajo para esa fase, que nadie pidió regenerar. */
+    const cliente = await prisma.client.create({ data: { name: "Cliente de una fase (test)" } });
+    const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación de una fase (test)" } });
+    const tl = await prisma.projectTimeline.create({
+      data: { projectId: proyecto.id, anchorStartDate: new Date("2026-10-05T00:00:00.000Z") },
+    });
+    const crear = (name: string, order: number, durationWeeks: number) =>
+      prisma.timelinePhase.create({ data: { timelineId: tl.id, name, order, durationWeeks, source: "AGENT" } });
+    await crear("Kick-off", 0, 1);
+    const diseno = await crear("Diseño", 1, 2);
+    const pruebas = await crear("Pruebas", 2, 3);
+    const tarea = (phaseId: string, title: string, weekIndex: number, extra: Partial<Prisma.TimelineTaskUncheckedCreateInput> = {}) =>
+      prisma.timelineTask.create({ data: { phaseId, title, weekIndex, order: 0, source: "AGENT", status: "PENDING", ...extra } });
+    await tarea(diseno.id, "Mapear procesos", 0);
+    await tarea(diseno.id, "Diseñar reportes", 1);
+    const seVa = await tarea(pruebas.id, "Probar flujos", 0);
+    const humana = await tarea(pruebas.id, "Validar con el cliente", 1, { source: "HUMAN" });
+    const corrida = await prisma.agentRun.create({ data: { clientId: cliente.id, projectId: proyecto.id, status: "RUNNING" } });
+
+    const congelada = await freezeBaseline(proyecto.id, null);
+    expect(congelada.created).toBe(true);
+    const fotoAntes = await prisma.timelineBaseline.findFirstOrThrow({ where: { timelineId: tl.id, isActive: true } });
+    const fuera = () =>
+      prisma.timelineTask.findMany({
+        where: { phase: { timelineId: tl.id }, phaseId: { not: pruebas.id } },
+        orderBy: { id: "asc" },
+      });
+    const fueraAntes = await fuera();
+
+    // 1. La marca: sin propuesta abierta nace el vacío con `soloFase` (el alcance queda en el JSON).
+    expect(await marcarTareasEnCurso({ timelineId: tl.id, pedido: { token: null, version: null }, corrida: corrida.id, soloFase: pruebas.id })).toBeNull();
+    // 2. Lo que lee el agente, y 3. lo que armó: tareas para Diseño Y para Pruebas.
+    const supuesta = await estructuraParaElDetalle(tl.id, corrida.id);
+    expect(supuesta).not.toBeNull();
+    const detalle = {
+      timelineDetail: {
+        phases: [
+          { id: diseno.id, tasks: [{ title: "Rediseñar todo", weekIndex: 0 }] },
+          { id: pruebas.id, tasks: [{ title: "Pruebas de carga", weekIndex: 2 }] },
+        ],
+      },
+    };
+    const fusion = await fusionarDetalleEnElBorrador({
+      timelineId: tl.id,
+      corrida: corrida.id,
+      estructura: supuesta!.estructura,
+      analysisJson: detalle,
+      huellas: null,
+      cortado: false,
+    });
+    expect(fusion.estado).toBe("listas");
+    const guardado = (await prisma.projectTimeline.findUniqueOrThrow({ where: { id: tl.id }, select: { pendingProposal: true } }))
+      .pendingProposal as { soloFase?: string; cambios: Array<{ fase?: string; faseId?: string }> };
+    expect(guardado.soloFase).toBe(pruebas.id);
+    expect(guardado.cambios.map((c) => c.fase ?? c.faseId), "la propuesta trae cambios de otra fase").toEqual(
+      guardado.cambios.map(() => pruebas.id),
+    );
+
+    // 4. Aplicar, como la pantalla: la huella contra lo vivo de ahora y el token = la corrida.
+    const vivo = await vivoDeLaBase(tl.id);
+    const pedido: PedidoDeAplicar = {
+      timelineId: tl.id,
+      token: corrida.id,
+      guardado,
+      foto: null,
+      sin: [],
+      huella: planDeAplicacion(vivo, leerBorrador(guardado, vivo)!, [], { tareas: "listas" }).huella,
+      ahora: new Date(),
+      tareas: "listas",
+      puedeTocarTareas: true,
+      actorEmail: "cse@smarteam.cr",
+    };
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+
+    expect(await fuera(), "se tocó una tarea de otra fase").toEqual(fueraAntes);
+    const dePruebas = await prisma.timelineTask.findMany({ where: { phaseId: pruebas.id }, orderBy: { title: "asc" } });
+    expect(dePruebas.map((t) => [t.title, t.source])).toEqual([
+      ["Pruebas de carga", "AGENT"],
+      ["Validar con el cliente", "HUMAN"],
+    ]);
+    expect(dePruebas.find((t) => t.title === "Validar con el cliente")!.id).toBe(humana.id);
+    expect(await prisma.timelineTask.findUnique({ where: { id: seVa.id } })).toBeNull();
+    const tlDespues = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: tl.id }, select: { pendingProposal: true } });
+    expect(tlDespues.pendingProposal).toBeNull();
+    const fotoDespues = await prisma.timelineBaseline.findFirstOrThrow({ where: { timelineId: tl.id, isActive: true } });
+    expect(fotoDespues.id).toBe(fotoAntes.id);
+    expect(JSON.stringify(fotoDespues.snapshot)).toBe(JSON.stringify(fotoAntes.snapshot));
   });
 });
