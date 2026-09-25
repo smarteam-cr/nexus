@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidirRefrescoTrasHandoff, debeReemplazarPropuesta } from "./refresco-tras-handoff";
+import { decidirRefrescoTrasHandoff, debeReemplazarPropuesta, esLaMismaMasVieja } from "./refresco-tras-handoff";
 import { reconcileAgentProposal } from "./reconcile-proposal";
 import { borradorDelHandoff } from "./borrador";
 
@@ -121,5 +121,46 @@ describe("qué propuesta gana la pantalla", () => {
 
   it("si el servidor no trae propuesta, no se borra la que hay", () => {
     expect(debeReemplazarPropuesta({ ...base, runIdNuevo: null })).toBe(false);
+  });
+});
+
+/**
+ * E3 P3 (2026-09-25) — LA MISMA PROPUESTA, MÁS NUEVA. Desde E3 lo desmarcado se guarda en el servidor y
+ * cada casilla (y lo que edita el chat) sube la versión del `borrador-v1`. Al volver a la pestaña, lo que
+ * marcó otra computadora tiene que verse; y un GET que salió antes de una escritura nunca baja la versión.
+ */
+describe("E3 · la misma corrida: gana la versión mayor, y la de pantalla nunca baja", () => {
+  const base = { hayPropuesta: true, esDeAssist: false, runIdEnPantalla: "r1", runIdNuevo: "r1" };
+
+  it("⭐ la misma corrida con una versión MAYOR reemplaza; igual o menor, no", () => {
+    /* La edición que la pone en rojo: volver a comparar solo la corrida (lo que marcó otra computadora no
+       llegaría nunca: es el mismo token), o reemplazar con una igual o menor (parpadeo, o lo recién
+       desmarcado volvería a verse marcado). */
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 3, versionNueva: 4 })).toBe(true);
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 4, versionNueva: 4 })).toBe(false);
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 5, versionNueva: 4 })).toBe(false);
+    // Sin versiones que comparar (el formato viejo), la regla de antes: la misma corrida no se re-pisa.
+    expect(debeReemplazarPropuesta(base)).toBe(false);
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: 4 })).toBe(false);
+  });
+
+  it("⛔ la vista previa del modificador NUNCA se pisa, aunque llegue una versión mayor", () => {
+    expect(debeReemplazarPropuesta({ ...base, esDeAssist: true, versionEnPantalla: 1, versionNueva: 9 })).toBe(false);
+    expect(debeReemplazarPropuesta({ ...base, esDeAssist: true, runIdNuevo: "r2" })).toBe(false);
+  });
+
+  it("otra corrida gana siempre, sin mirar versiones (una propuesta nueva arranca en 0)", () => {
+    expect(debeReemplazarPropuesta({ ...base, runIdNuevo: "r2", versionEnPantalla: 7, versionNueva: 0 })).toBe(true);
+  });
+
+  it("⭐ `esLaMismaMasVieja`: solo la MISMA corrida con una versión menor que la de pantalla", () => {
+    /* `traerPropuestaPendiente` no pone lo que lee si es esto. La edición que la pone en rojo: comparar sin
+       la corrida (una propuesta nueva, versión 0, quedaría fuera), o dejar pasar una menor. */
+    expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r1", version: 4 })).toBe(true);
+    expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r1", version: 5 })).toBe(false);
+    expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r1", version: 6 })).toBe(false);
+    expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r2", version: 0 }), "una propuesta nueva quedó fuera").toBe(false);
+    expect(esLaMismaMasVieja({ runId: null, version: null }, { runId: "r1", version: 0 })).toBe(false);
+    expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r1", version: null })).toBe(false);
   });
 });

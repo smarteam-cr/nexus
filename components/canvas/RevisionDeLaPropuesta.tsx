@@ -30,6 +30,10 @@
  * permiso «Recalcular las tareas» / «Volver a intentar» (`onRecalcular`) y, si falló, «Aplicar de todos
  * modos» (`onForzar`), que SIEMPRE confirma con el mismo diálogo en otro modo. Aplicar espera mientras
  * haya fases desfasadas sin forzar (el bloqueo lo dice la línea, no dos veces).
+ *
+ * E3 P3 (2026-09-25): lo que se marca y desmarca se guarda en el servidor y se ve en cualquier
+ * computadora (lo hace el hook: la barra solo llama `onMarcar`). Una fase que se quita y se queda con lo
+ * que tiene avance lo dice debajo (`it.nota`).
  */
 import { useState, type RefObject } from "react";
 import { Button } from "@/components/ui/Button";
@@ -272,6 +276,8 @@ export default function RevisionDeLaPropuesta({
                   {it.aviso && (
                     <p className={cn("text-xs", it.estado === "choque" ? "text-warn-ink" : "text-success-ink")}>{it.aviso}</p>
                   )}
+                  {/* E3: una fase que se quita y se queda con lo que tiene avance o se cargó a mano. */}
+                  {it.nota && <p className="text-xs text-fg-muted">{it.nota}</p>}
                   {/* El motivo es interno (cita la reunión o la nota): nunca llega a la fase ni al cliente.
                       Hasta dos líneas, sin rótulo: el texto completo queda en el `title`. */}
                   {it.motivo && (

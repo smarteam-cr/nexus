@@ -70,6 +70,11 @@ export function decidirRefrescoTrasHandoff(e: EstadoDelCronograma): RefrescoTras
  * Por eso no alcanza con el `prev ?? nueva` que usa la carga completa: con esa regla, una segunda
  * regeneración dejaba en pantalla la propuesta VIEJA del handoff, que es peor que no mostrar nada
  * (el cartel dice que hay algo nuevo y el canvas muestra lo anterior, sin que nada lo delate).
+ *
+ * E3 P3 (2026-09-25): la MISMA corrida también se reemplaza si trae una versión mayor. Desde E3 lo
+ * desmarcado se guarda en el servidor y cada casilla sube la versión del `borrador-v1`: al volver a la
+ * pestaña, lo que marcó otra computadora tiene que verse. Una versión igual o menor no pisa nada (la
+ * versión en pantalla nunca baja).
  */
 export function debeReemplazarPropuesta(actual: {
   /** Si hay una propuesta en pantalla ahora. */
@@ -80,11 +85,33 @@ export function debeReemplazarPropuesta(actual: {
   runIdEnPantalla: string | null;
   /** La corrida de la propuesta que acaba de traer el servidor. */
   runIdNuevo: string | null;
+  /** E3: la versión del `borrador-v1` en pantalla (null: otro formato, o no se sabe). */
+  versionEnPantalla?: number | null;
+  /** E3: la versión de la que acaba de traer el servidor. */
+  versionNueva?: number | null;
 }): boolean {
   if (!actual.hayPropuesta) return true;
   // ⛔ Nunca arrancarle al CSE una vista previa del assist que tiene abierta.
   if (actual.esDeAssist) return false;
   // Del servidor contra el servidor: gana la corrida nueva. Sin runId nuevo no hay nada que traer.
   if (!actual.runIdNuevo) return false;
-  return actual.runIdNuevo !== actual.runIdEnPantalla;
+  if (actual.runIdNuevo !== actual.runIdEnPantalla) return true;
+  // E3: la misma corrida, solo si el servidor la reescribió después (otra computadora, el chat).
+  return versionMayor(actual.versionNueva, actual.versionEnPantalla);
+}
+
+const versionMayor = (nueva: number | null | undefined, enPantalla: number | null | undefined): boolean =>
+  typeof nueva === "number" && typeof enPantalla === "number" && nueva > enPantalla;
+
+/**
+ * E3 P3: ¿lo que acaba de leer el GET es la MISMA propuesta que la de pantalla, pero más vieja? Pasa
+ * cuando un GET salió antes de una escritura de las casillas y vuelve después de que la pantalla adoptó
+ * la respuesta de esa escritura: ponerla haría que la versión en pantalla BAJE (y lo desmarcado recién
+ * guardado volvería a verse marcado). Con otra corrida, o sin versiones que comparar, no es «más vieja».
+ */
+export function esLaMismaMasVieja(
+  enPantalla: { runId: string | null; version: number | null },
+  leida: { runId: string | null; version: number | null },
+): boolean {
+  return enPantalla.runId !== null && enPantalla.runId === leida.runId && versionMayor(enPantalla.version, leida.version);
 }

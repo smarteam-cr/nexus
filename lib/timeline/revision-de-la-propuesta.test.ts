@@ -406,6 +406,19 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(iEspera).toBeGreaterThan(-1);
     expect(iEspera).toBeLessThan(iLimpia);
     expect(iLimpia).toBeLessThan(iFetch);
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor y cada
+       casilla sube la versión que viaja. Aplicar espera también las casillas (`esperarCasillas`), después del
+       guardado y antes de la pausa que deja adoptar lo último (y de leer `sin` y `version`): sin eso, un clic
+       de hace 100 ms todavía en la cola haría caer el aplicar en PROPUESTA_CAMBIO, o mandaría un `sin` que
+       el servidor no tiene. Si no se pudo guardar, no se aplica. Sacarla o moverla después de leer la
+       revisión la pone en rojo. El literal del body no cambia en P3. */
+    const iCasillas = aplicar.indexOf("if (await revisionRef.current.esperarCasillas()) return;");
+    expect(iCasillas, "aplicar no espera lo marcado").toBeGreaterThan(iEspera);
+    expect(iCasillas, "aplicar lee la revisión antes de esperar lo marcado").toBeLessThan(
+      aplicar.indexOf("const { resumen, sin, foto, forzadas } = revisionRef.current;"),
+    );
+    expect(iCasillas).toBeLessThan(aplicar.indexOf("await new Promise<void>((r) => window.setTimeout(r, 60));"));
+    expect(iCasillas).toBeLessThan(iLimpia);
     /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan. Si el
        recálculo falla, «Aplicar de todos modos» manda las fases forzadas (`forzar`), que viven en el hook. */
     expect(
@@ -448,7 +461,14 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(tramo(CANVAS, "const revision = useBorradorDelCronograma({", "});"), "projectId,")).toBe(true);
     expect(contiene(HOOK, "const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);")).toBe(true);
     expect(contiene(HOOK, "actual = revisionPara(clave, vivo, clave ? recordado(projectId, clave) : null);")).toBe(true);
-    expect(HOOK).toMatch(/useEffect\(\(\) => \{[\s\S]*?recordarRevision\([\s\S]*?\}, \[projectId, actual\.clave, actual\.base, actual\.sin\]\);/);
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor, y lo
+       que se recuerda en el navegador es lo desmarcado EFECTIVO (`sin`: lo del servidor con lo pendiente
+       encima), no la memoria de la pantalla (`actual.sin`), así una vuelta atrás a E2c arranca con lo mismo
+       que se veía. Recordar `actual.sin` (lo de antes de E3), o dejar de recordar, la pone en rojo. */
+    expect(HOOK).toMatch(/useEffect\(\(\) => \{[\s\S]*?recordarRevision\([\s\S]*?\}, \[projectId, actual\.clave, actual\.base, sin\]\);/);
+    expect(contiene(tramo(HOOK, "if (!actual.clave || !actual.base) return;", "}, ["), "const recuerdo = { foto: actual.base, sin: [...sin] };")).toBe(
+      true,
+    );
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeGreaterThan(-1);
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeLessThan(aplicar.indexOf("setProposal(null)"));
@@ -692,7 +712,17 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        y con las que se van), o darle a una existente otra `key` (se remontaría al alternar). */
     const vista = tramo(CANVAS, "const ganttPorId = new Map(", "const marcasDeLaPropuesta");
     expect(contiene(vista, "const tasks: GanttTask[] = f.tareas.map((t) => {")).toBe(true);
-    expect(contiene(vista, "if (fila) return { ...fila, weekIndex: t.weekIndex };")).toBe(true);
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: una tarea que ya existe puede CAMBIAR (título,
+       semana, dueño, tipo) o MUDARSE de fase conservando su estado (`tarea-cambia`). Su fila se busca en
+       TODO el Gantt (la que se muda viene de otra fase: buscarla solo en la suya la pintaba como nueva, sin
+       su avance) y se ve con lo que propone. Buscarla solo en su fase, o pintarla con el título de hoy, la
+       pone en rojo. */
+    expect(
+      contiene(vista, "const filaPorId = new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t]));"),
+      "la fila de una tarea que se muda se busca solo en su fase",
+    ).toBe(true);
+    expect(contiene(vista, "if (fila) return { ...fila, title: t.title, weekIndex: t.weekIndex, party: t.party, type: t.type };")).toBe(true);
+    expect(vista, "la fila se volvió a buscar solo en la fase actual").not.toContain("(actual?.tasks ?? []).filter((t) => t.id).map(");
     expect(contiene(vista, "key: t.clave,")).toBe(true);
     expect(vista, "las tareas volvieron a salir del cronograma actual").not.toContain("tasks: (actual?.tasks ?? []).map(");
   });
@@ -792,9 +822,16 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan. Cada casilla
        del CSE suma una marca (arranca la espera del recálculo), y la lista de tareas recibe en qué está
        el recálculo para decirlo en cada grupo desfasado. */
-    expect(contiene(HOOK, "(claves: readonly string[], incluir: boolean) => { setRevision((r) => marcarCambios(r, claves, incluir));")).toBe(
-      true,
-    );
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor. Las dos
+       casillas pasan por `tocar`: con un `borrador-v1` y quien edita, a la cola que sube al servidor
+       (`cola.clic`, todas las claves en UN clic); si no, a la memoria de la pantalla con `marcarCambios`
+       (todas de una vez), como antes. Que el grupo marque clave por clave, o que la cola deje de usarse, la
+       pone en rojo. */
+    expect(contiene(HOOK, "(claves: readonly string[], incluir: boolean) => { tocar(claves, incluir);")).toBe(true);
+    const tocar = tramo(HOOK, "const tocar = useCallback(", "const marcar = useCallback(");
+    expect(contiene(tocar, "const cola = paraEnviarRef.current.compartidas ? colaDeAhora() : null;")).toBe(true);
+    expect(contiene(tocar, "if (cola) cola.clic(claves, incluir);")).toBe(true);
+    expect(contiene(tocar, "else setRevision((r) => marcarCambios(r, claves, incluir));")).toBe(true);
     expect(contiene(rama, "onMarcarVarios={revision.marcarVarios}")).toBe(true);
     expect(
       contiene(
@@ -817,13 +854,16 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan; si el recálculo
        falla, las fases forzadas («Aplicar de todos modos») entran al plan de la pantalla igual que al
        del servidor (si no, las huellas no coincidirían). */
-    expect(
-      contiene(HOOK, "borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas, forzar: forzadas }) : null"),
-    ).toBe(true);
-    expect(contiene(HOOK, "const proyeccion = resumen?.proyeccion ?? null;")).toBe(true);
-    expect(contiene(HOOK, "return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas, forzar: forzadas }));")).toBe(
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor. El plan
+       y la barra se calculan con lo desmarcado EFECTIVO (`sin`: lo del servidor con los clics pendientes
+       encima), no con la memoria de la pantalla (`actual.sin`): si no, lo que marcó otra computadora no se
+       vería. Volver a `actual.sin` la pone en rojo. */
+    expect(contiene(HOOK, "borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, sin, { tareas, forzar: forzadas }) : null")).toBe(
       true,
     );
+    expect(contiene(HOOK, "const proyeccion = resumen?.proyeccion ?? null;")).toBe(true);
+    expect(contiene(HOOK, "return debeDescartarseSolo(planDeAplicacion(vivo, borrador, sin, { tareas, forzar: forzadas }));")).toBe(true);
+    expect(HOOK, "el plan volvió a leer la memoria de la pantalla").not.toMatch(/(resumir|planDeAplicacion)\(vivo, borrador, actual\.sin/);
     // El núcleo que eso usa: vacío «armando» o «faltan» no se descarta; vacío «fallo», sí.
     const vacio = leerBorrador(borradorVacio({ pedido: "regenerar", corrida: "r1" }), VIVO_VACIO)!;
     expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "armando" }))).toBe(false);
@@ -1074,5 +1114,174 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     const grupo = tramo(TAREAS, "{desfase && (", "{desfase.texto}");
     expect(grupo).toContain("text-info-ink");
     expect(grupo).toContain("text-warn-ink");
+  });
+});
+
+/**
+ * E3 P3 (2026-09-25) — LAS CASILLAS COMPARTIDAS: lo desmarcado se guarda en el servidor (`excluidos`) y se
+ * ve en cualquier computadora. La cola (juntar, encadenar, revertir) es pura y se prueba en
+ * cola-de-casillas.test.ts; acá, el cableado del hook y del Canvas. Cada `it` nombra la edición que lo pone
+ * en rojo.
+ */
+describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
+  const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
+
+  it("⭐ el hook: con un v1 y quien edita, lo desmarcado es lo del servidor con lo pendiente encima", () => {
+    /* Las ediciones que la ponen en rojo: seguir leyendo la memoria de la pantalla con un v1 (lo que marcó
+       otra computadora no se vería), compartir sin `guardarCasillas` (quien solo mira mandaría POST que la
+       ruta rechaza), o no devolver `sin` y `esperarCasillas`. */
+    expect(contiene(HOOK, "const compartidas = esBorradorV1(propuesta) && !!entrada.guardarCasillas;")).toBe(true);
+    expect(
+      contiene(HOOK, "compartidas ? superponerCasillas(excluidosDelServidor ?? (servidorManda ? [] : actual.sin), pendientes) : actual.sin"),
+      "lo desmarcado no sale del servidor",
+    ).toBe(true);
+    expect(contiene(HOOK, "const excluidosDelServidor = useMemo(() => excluidosDelGuardado(propuesta), [propuesta]);")).toBe(true);
+    // Los clics pendientes son de ESTA propuesta: los de otra no se superponen.
+    expect(contiene(HOOK, "const pendientes = pendientesDe.clave === clave ? pendientesDe.ops : SIN_PENDIENTES.ops;")).toBe(true);
+    expect(contiene(HOOK, "vista: actual.vista, sin, esperarCasillas, foto: actual.base,")).toBe(true);
+    // La cola: una por propuesta; la de otra se suelta.
+    const cola = tramo(HOOK, "const colaDeAhora = useCallback(", "const esperarCasillas = useCallback(");
+    expect(contiene(cola, "if (colaRef.current?.clave === k) return colaRef.current.cola;")).toBe(true);
+    expect(cola.indexOf("colaRef.current?.cola.soltar();"), "la cola de otra propuesta sigue mandando").toBeGreaterThan(-1);
+    expect(contiene(cola, "return guardar ? guardar(ops, t)"), "los clics viajan con el token de otra propuesta").toBe(true);
+    // Esperar: si falló, corta con el motivo; si mandó, deja adoptar la versión nueva.
+    const esperar = tramo(HOOK, "const esperarCasillas = useCallback(", "}, []);");
+    expect(contiene(esperar, "const { motivo, mando } = await actualDeLaCola.cola.esperar();")).toBe(true);
+    expect(contiene(esperar, "if (motivo) return motivo;")).toBe(true);
+    expect(contiene(esperar, "if (mando) await unRespiro();")).toBe(true);
+  });
+
+  it("⭐ la migración única: sube lo recordado solo con `excluidos` AUSENTE, una vez por propuesta", () => {
+    /* Las ediciones que la ponen en rojo: migrar con `excluidos` presente (pisaría lo que decidió otra
+       computadora), migrar en cada render, o no migrar. La regla pura (`casillasAMigrar`) se prueba en
+       cola-de-casillas.test.ts. */
+    const migracion = tramo(HOOK, "if (!compartidas || !clave || migradaRef.current === clave) return;", "}, [");
+    expect(migracion.indexOf("migradaRef.current = clave;"), "se migra más de una vez").toBeGreaterThan(-1);
+    expect(contiene(migracion, "const migrar = casillasAMigrar(excluidosDelServidor, actual.sin);")).toBe(true);
+    expect(contiene(migracion, "cola.clic(migrar.claves, false);")).toBe(true);
+    // Y mientras el servidor no guardó nada, lo recordado sube delante de cada lote.
+    expect(
+      contiene(
+        HOOK,
+        "migracion: () => (servidorMandaRef.current === k ? null : casillasAMigrar(paraEnviarRef.current.excluidos, paraEnviarRef.current.local)),",
+      ),
+    ).toBe(true);
+  });
+
+  it("⭐ adoptarPropuesta: sin GET, la versión nunca baja, otro token trae la guardada y `proposalMeta` va pegado", () => {
+    /* Las ediciones que la ponen en rojo: pisar la vista previa del modificador, adoptar una versión menor
+       (lo recién desmarcado volvería a verse marcado), poner la propuesta de otro token, poner una propuesta
+       sin su token en `proposalMeta`, o hacer un GET (o `bumpGpsRefresh`) por cada casilla. */
+    const adoptar = tramo(CANVAS, "const adoptarPropuesta = (", "const guardarCasillas = async (");
+    expect(adoptar.length, "la guarda no está mirando la función").toBeGreaterThan(400);
+    const iAssist = adoptar.indexOf("if (proposalMeta.current.deAssist) return;");
+    expect(iAssist, "la respuesta pisa la vista previa del modificador").toBeGreaterThan(-1);
+    const iToken = adoptar.indexOf('if (typeof r.token !== "string" || r.token !== proposalMeta.current.runId) {');
+    expect(iToken).toBeGreaterThan(iAssist);
+    expect(contiene(tramo(adoptar, 'if (typeof r.token !== "string"', "}"), "void traerPropuestaPendiente(); return;")).toBe(true);
+    const actualizar = tramo(adoptar, "setProposal((p) => {", "});");
+    expect(contiene(actualizar, "if (p === null || enPantalla === null || version < enPantalla) return p;"), "la versión en pantalla baja").toBe(true);
+    const iMeta = actualizar.indexOf("proposalMeta.current = { ...proposalMeta.current, deAssist: false, runId: token };");
+    expect(iMeta, "la propuesta se pone sin su token").toBeGreaterThan(-1);
+    expect(iMeta).toBeLessThan(actualizar.indexOf("return r.propuesta as Proposal;"));
+    expect(
+      contiene(actualizar, "return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) } as Proposal;"),
+    ).toBe(true);
+    expect(adoptar, "cada casilla hace un GET").not.toContain("fetch(");
+    expect(adoptar).not.toContain("bumpGpsRefresh");
+  });
+
+  it("⭐ guardarCasillas: POST «casillas» con el token de los clics; un 409 trae la guardada y lo dice; solo quien edita", () => {
+    /* Las ediciones que la ponen en rojo: mandar el token de la pantalla en vez del de los clics, no adoptar
+       la respuesta, no traer la guardada ante un 409, callar la falla (la casilla volvería sin explicación), o
+       darle `guardarCasillas` a quien solo mira. */
+    const guardar = tramo(CANVAS, "const guardarCasillas = async (", "const revision = useBorradorDelCronograma({");
+    expect(contiene(guardar, "fetch(`/api/projects/${projectId}/timeline/borrador/operaciones`")).toBe(true);
+    expect(
+      contiene(guardar, 'body: JSON.stringify({ token, version: revisionRef.current.version ?? 0, origen: "casillas", operaciones: ops }),'),
+    ).toBe(true);
+    expect(contiene(guardar, "if (res.ok) { adoptarPropuesta(d); return { ok: true }; }"), "la respuesta no se adopta").toBe(true);
+    expect(contiene(tramo(guardar, "if (res.status === 409) {", "}"), "await traerPropuestaPendiente(); toast.info(motivo);")).toBe(true);
+    expect(guardar.match(/toast\.error\(motivo\)/g)?.length, "una falla del guardado queda muda").toBe(2);
+    expect(contiene(tramo(CANVAS, "const revision = useBorradorDelCronograma({", "});"), "guardarCasillas: canEdit ? guardarCasillas : undefined,")).toBe(
+      true,
+    );
+  });
+
+  it("⭐ esperarCasillas() va antes de leer la versión en los carriles que la mandan", () => {
+    /* Cada casilla sube la versión. Los carriles que la mandan (aplicar, recalcular, y «Armar las tareas» /
+       «Volver a intentar», que van por la continuación del paso 2) esperan las casillas y leen la versión de
+       DESPUÉS; si no se pudo guardar, no siguen. Las ediciones que la ponen en rojo: sacar una espera,
+       ponerla después de leer, o sumar un lector de la versión sin decidir si espera. */
+    const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    const recalcular = tramo(CANVAS, "const pedirRecalculo = async (", "const recalc = useRecalculoDeLasTareas(");
+    const continuacion = tramo(tramo(CANVAS, "const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase"), "if (opts?.saltarEstructura) {", "} else {");
+    for (const [nombre, src, lectura] of [
+      ["aplicar", aplicar, "const { resumen, sin, foto, forzadas } = revisionRef.current;"],
+      ["recalcular", recalcular, "const { sin, version, desfasadas } = revisionRef.current;"],
+      ["armar las tareas", continuacion, "version = revisionRef.current.version;"],
+    ] as const) {
+      const iEspera = src.indexOf("if (await revisionRef.current.esperarCasillas()) return;");
+      expect(iEspera, `${nombre}: no espera lo marcado`).toBeGreaterThan(-1);
+      expect(src.indexOf(lectura), `${nombre}: lee la versión antes de esperar lo marcado`).toBeGreaterThan(iEspera);
+    }
+    // «Armar las tareas» y «Volver a intentar» (la barra y la línea suelta) van por la continuación.
+    expect(contiene(tramo(CANVAS, "const armarLasTareas =", ": undefined;"), "saltarEstructura: true,")).toBe(true);
+    /* Los lectores de la versión del borrador en el Canvas: los tres carriles, el POST de las casillas (la
+       manda como informativa) y `traerPropuestaPendiente` (para que no baje). Uno nuevo pone esto en rojo:
+       ¿manda la versión? entonces espera las casillas. */
+    const lectores =
+      (CANVAS.match(/revisionRef\.current\.version\b/g)?.length ?? 0) +
+      (CANVAS.match(/const \{[^}]*\bversion\b[^}]*\} = revisionRef\.current/g)?.length ?? 0);
+    expect(lectores, "hay un lector nuevo de la versión: ¿espera las casillas?").toBe(5);
+    expect(CANVAS, "la versión volvió a salir de la closure de un clic").not.toContain("versionDelBorrador(proposal)");
+  });
+
+  it("⭐ al volver a la pestaña se relee la propuesta, y la versión en pantalla nunca baja", () => {
+    /* Las ediciones que la ponen en rojo: no escuchar la vuelta (lo que marcó otra computadora no se vería
+       hasta recargar), escucharla sin propuesta o con la vista previa del modificador, no soltar los
+       oyentes, comparar solo la corrida al refrescar, o poner una propuesta más vieja al traerla. */
+    const volver = tramo(CANVAS, "const alVolver = () => {", "}, [hayBorrador, refrescarPropuesta]);");
+    expect(CANVAS.indexOf("if (!hayBorrador) return;", CANVAS.indexOf("const alVolver = () => {") - 80), "escucha sin propuesta").toBeLessThan(
+      CANVAS.indexOf("const alVolver = () => {"),
+    );
+    expect(contiene(volver, 'if (document.visibilityState !== "visible" || proposalMeta.current.deAssist) return;')).toBe(true);
+    expect(contiene(volver, "void refrescarPropuesta();")).toBe(true);
+    expect(contiene(volver, 'document.addEventListener("visibilitychange", alVolver);')).toBe(true);
+    expect(contiene(volver, 'window.addEventListener("focus", alVolver);')).toBe(true);
+    expect(contiene(volver, 'document.removeEventListener("visibilitychange", alVolver);')).toBe(true);
+    expect(contiene(volver, 'window.removeEventListener("focus", alVolver);')).toBe(true);
+    const refrescar = tramo(CANVAS, "const refrescarPropuesta = useCallback(", "}, [projectId]);");
+    expect(contiene(refrescar, "versionEnPantalla: versionDelBorrador(prev), versionNueva: versionDelBorrador(nueva),")).toBe(true);
+    const traer = tramo(CANVAS, "const traerPropuestaPendiente = async (", "const anteLaPropuestaGuardada");
+    const iMasVieja = traer.indexOf("esLaMismaMasVieja(");
+    expect(iMasVieja, "traer la guardada puede bajar la versión").toBeGreaterThan(-1);
+    expect(contiene(traer, "if (!masVieja) {")).toBe(true);
+    expect(traer.indexOf("setProposal(nueva);")).toBeGreaterThan(traer.indexOf("if (!masVieja) {"));
+  });
+
+  it("⭐ el cronograma que se compara lleva el `status` de cada fase, igual que el del servidor", () => {
+    /* «Quitar una fase» choca si la fase ya arrancó: el plan lee `status`. Sin él en la pantalla, la huella
+       de la pantalla y la del servidor no coincidirían y aplicar caería en PLAN_CAMBIO para siempre. La
+       edición que la pone en rojo: sacarlo del `vivo` de la pantalla o del servidor. */
+    const vivo = tramo(CANVAS, "const vivo: Vivo = useMemo(", "[phases, anchor],");
+    expect(contiene(vivo, 'status: p.status ?? "PENDING",')).toBe(true);
+    expect(vivo.indexOf('status: p.status ?? "PENDING",'), "el status quedó en las tareas, no en la fase").toBeLessThan(vivo.indexOf("tareas: p.tasks"));
+    const servidor = soloCodigo(leer("lib/timeline/borrador-del-detalle.ts"));
+    expect(contiene(tramo(servidor, "export function vivoDeLaBase(", "\n}"), "status: f.status,")).toBe(true);
+  });
+
+  it("la lista pinta lo que cambia y lo que llega (con qué le cambia), y la barra la nota de una fase que se queda", () => {
+    /* Las ediciones que la ponen en rojo: pintar «~» o «→» como si se quitaran (warn), no decir qué le
+       cambia, no contar las que cambian en el grupo, o esconder la nota de la fase que se queda. */
+    expect(contiene(TAREAS, '"~": "text-info-ink",')).toBe(true);
+    expect(contiene(TAREAS, '"→": "text-info-ink",')).toBe(true);
+    expect(contiene(TAREAS, '<span className={cn("font-semibold", COLOR_DEL_SIGNO[t.signo])}>{t.signo}</span>')).toBe(true);
+    expect(contiene(TAREAS, '{t.cambio && <span className="text-fg-muted">{t.cambio}</span>}')).toBe(true);
+    expect(contiene(TAREAS, 'if (g.cambian > 0) partes.push(`${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`);')).toBe(true);
+    expect(contiene(TAREAS, "aria-label={`${ACCION_DEL_SIGNO[t.signo]} la tarea «${t.titulo}»`}")).toBe(true);
+    expect(contiene(BARRA, '{it.nota && <p className="text-xs text-fg-muted">{it.nota}</p>}')).toBe(true);
+    // Las casillas siguen llegando por la misma prop (el hook decide si suben).
+    expect(contiene(rama, "onMarcar={revision.marcar}")).toBe(true);
   });
 });

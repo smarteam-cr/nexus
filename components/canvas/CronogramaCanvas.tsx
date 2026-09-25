@@ -70,6 +70,7 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
+import type { ResultadoDeGuardarCasillas } from "@/lib/timeline/cola-de-casillas";
 import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
 import { leerRecalculoDelCable, recalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
@@ -93,6 +94,7 @@ import {
   traeCambiosDeFases,
   versionDelBorrador,
   type EstadoDeLasTareas,
+  type OperacionDeCasillas,
   type RecalculoEnElCable,
   type TareasDelBorrador,
   type Vivo,
@@ -115,6 +117,7 @@ import { Modal } from "@/components/ui/Modal";
 import {
   decidirRefrescoTrasHandoff,
   debeReemplazarPropuesta,
+  esLaMismaMasVieja,
 } from "@/lib/timeline/refresco-tras-handoff";
 /* E2a (2026-09-25): `AllPhasesRegenModal` ya no se monta. «Regenerar todo» deja UNA propuesta con
    fases y tareas que se revisa en la barra de arriba del Gantt (el archivo se borra en E2b). */
@@ -933,6 +936,9 @@ export default function CronogramaCanvas({
           esDeAssist: proposalMeta.current.deAssist,
           runIdEnPantalla: proposalMeta.current.runId,
           runIdNuevo,
+          // E3: la misma corrida con una versión mayor también (lo que marcó otra computadora).
+          versionEnPantalla: versionDelBorrador(prev),
+          versionNueva: versionDelBorrador(nueva),
         });
         if (!reemplaza) return prev;
         proposalMeta.current = { deAssist: false, runId: runIdNuevo, autoria: leerAutoria(data.autoriaDeLaPropuesta) };
@@ -964,13 +970,25 @@ export default function CronogramaCanvas({
       const data = await res.json();
       const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
       if (!opts?.soloLeer) {
-        proposalMeta.current = {
-          deAssist: false,
-          runId: (data.pendingProposalRunId as string | null) ?? null,
-          autoria: leerAutoria(data.autoriaDeLaPropuesta),
-        };
-        setProposal(nueva);
-        setTareasDelBorrador(tareasDelGet(data));
+        const runIdLeido = (data.pendingProposalRunId as string | null) ?? null;
+        /* E3: la versión en pantalla nunca baja. Un GET que salió antes de guardar unas casillas y volvió
+           después de adoptar su respuesta trae la MISMA propuesta, más vieja: ponerla volvería a marcar lo
+           recién desmarcado. */
+        const masVieja =
+          !proposalMeta.current.deAssist &&
+          esLaMismaMasVieja(
+            { runId: proposalMeta.current.runId, version: revisionRef.current.version },
+            { runId: runIdLeido, version: versionDelBorrador(nueva) },
+          );
+        if (!masVieja) {
+          proposalMeta.current = {
+            deAssist: false,
+            runId: runIdLeido,
+            autoria: leerAutoria(data.autoriaDeLaPropuesta),
+          };
+          setProposal(nueva);
+          setTareasDelBorrador(tareasDelGet(data));
+        }
         bumpGpsRefresh();
       }
       return { ok: true, propuesta: nueva, tareas: tareasDelGet(data) };
@@ -1434,6 +1452,9 @@ export default function CronogramaCanvas({
           sessionCount: p.sessionCount ?? null,
           notes: p.notes ?? null,
           activityType: p.activityType ?? null,
+          /* E3: el estado de la fase, igual que en el servidor (`vivoDeLaBase`): «quitar una fase» choca
+             si ya arrancó. Sin él acá, la huella de la pantalla y la del servidor no coincidirían. */
+          status: p.status ?? "PENDING",
           tareas: p.tasks
             .filter((t): t is TaskDraft & { id: string } => !!t.id)
             .map((t) => ({
@@ -1484,12 +1505,66 @@ export default function CronogramaCanvas({
      ⚠ El token se lee de `proposalMeta` en el render a propósito: TODO `setProposal` que pone una
      propuesta escribe `proposalMeta` antes (o en su mismo updater), así que el render que la muestra
      ya ve su token. La guarda de revision-de-la-propuesta.test.ts cuida esa invariante. */
+  /* ── E3 P3: LO DESMARCADO SE GUARDA EN EL SERVIDOR (lo ve cualquier computadora) ─────────────────
+     La respuesta de POST /timeline/borrador/operaciones se ADOPTA sin otro GET: con otro token (la
+     propuesta cambió) se trae la guardada; una versión menor que la de pantalla se ignora (la versión
+     nunca baja); si trae `propuesta` (el servidor tenía otra versión que la que se veía), se pone
+     entera; si no, solo la versión y lo desmarcado. ⛔ La vista previa del modificador nunca se pisa. */
+  const adoptarPropuesta = (r: { token?: unknown; version?: unknown; excluidos?: unknown; propuesta?: unknown }) => {
+    if (proposalMeta.current.deAssist) return;
+    if (typeof r.token !== "string" || r.token !== proposalMeta.current.runId) {
+      void traerPropuestaPendiente();
+      return;
+    }
+    const token = r.token;
+    const version = typeof r.version === "number" ? r.version : null;
+    if (version === null) return;
+    setProposal((p) => {
+      const enPantalla = versionDelBorrador(p);
+      if (p === null || enPantalla === null || version < enPantalla) return p;
+      proposalMeta.current = { ...proposalMeta.current, deAssist: false, runId: token };
+      if (r.propuesta && typeof r.propuesta === "object") return r.propuesta as Proposal;
+      return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) } as Proposal;
+    });
+  };
+  /* Las casillas de la barra (las junta y encadena el hook). Un 409 (se aplicó, se descartó o llegó otra
+     propuesta) trae la guardada y lo dice; cualquier otra falla también se dice. El hook revierte lo que
+     no subió: la lista vuelve a lo del servidor. */
+  const guardarCasillas = async (ops: OperacionDeCasillas[], token: string): Promise<ResultadoDeGuardarCasillas> => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/borrador/operaciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // `version` es informativa: si el servidor tiene otra, la respuesta trae la propuesta entera.
+        body: JSON.stringify({ token, version: revisionRef.current.version ?? 0, origen: "casillas", operaciones: ops }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        adoptarPropuesta(d);
+        return { ok: true };
+      }
+      const motivo: string = d?.message ?? d?.error ?? "No se pudo guardar lo que marcaste: vuelve a intentar.";
+      if (res.status === 409) {
+        await traerPropuestaPendiente();
+        toast.info(motivo);
+      } else {
+        toast.error(motivo);
+      }
+      return { ok: false, motivo };
+    } catch {
+      const motivo = "Error de conexión al guardar lo que marcaste: vuelve a intentar.";
+      toast.error(motivo);
+      return { ok: false, motivo };
+    }
+  };
   const revision = useBorradorDelCronograma({
     projectId,
     propuesta: hayBorrador ? proposal : null,
     token: hayBorrador ? proposalMeta.current.runId : null,
     vivo,
     tareas: estadoDeLasTareasEnPantalla,
+    // E3: solo quien edita guarda lo que marca (la misma vara que la ruta); quien mira no ve la barra.
+    guardarCasillas: canEdit ? guardarCasillas : undefined,
   });
   /* Solo quien edita ve la vista de la propuesta: la barra que la explica (y la alterna) es suya. Quien
      solo mira ve el cronograma actual, que es el que rige hasta que alguien aplique. */
@@ -1500,6 +1575,22 @@ export default function CronogramaCanvas({
   useEffect(() => {
     revisionRef.current = revision;
   });
+  /* E3 P3: al volver a la pestaña (o a la ventana), la propuesta se relee: lo que marcó otra computadora
+     o lo que editó el chat sube la versión, y `refrescarPropuesta` la reemplaza solo si es más nueva.
+     Mientras haya una propuesta guardada en pantalla; nunca con la vista previa del modificador. */
+  useEffect(() => {
+    if (!hayBorrador) return;
+    const alVolver = () => {
+      if (document.visibilityState !== "visible" || proposalMeta.current.deAssist) return;
+      void refrescarPropuesta();
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", alVolver);
+    return () => {
+      document.removeEventListener("visibilitychange", alVolver);
+      window.removeEventListener("focus", alVolver);
+    };
+  }, [hayBorrador, refrescarPropuesta]);
   /* Las fases actuales CON sus tareas — el diff del modificador es a nivel tarea. */
   const fasesActualesDelAssist: FaseDelAssist[] = useMemo(
     () =>
@@ -1674,8 +1765,11 @@ export default function CronogramaCanvas({
          faltan o fallaron. Sin un `borrador-v1` en pantalla (la línea que las ofrece después de
          aplicar o descartar), sobre ninguna. */
       if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {
+        /* E3: cada casilla sube la versión: primero que se guarde lo marcado (si no se pudo, ya se dijo),
+           y la versión es la de DESPUÉS (la del hook, no la de la closure del clic). */
+        if (await revisionRef.current.esperarCasillas()) return;
         token = proposalMeta.current.runId;
-        version = versionDelBorrador(proposal);
+        version = revisionRef.current.version;
       }
       /* Sin propuesta en pantalla (después de descartar el vacío que falló, o de aplicar una sin sus
          tareas): lo que muestra la franja viaja y nace dentro del borrador nuevo. Cierre de la revisión
@@ -2226,6 +2320,9 @@ export default function CronogramaCanvas({
         toast.error(sinGuardar);
         return;
       }
+      /* E3: lo que marcaste también tiene que estar guardado: cada casilla sube la versión que viaja. Si
+         no se pudo, ya se dijo y la lista volvió a lo del servidor: no se aplica algo que no viste. */
+      if (await revisionRef.current.esperarCasillas()) return;
       /* Lo ÚLTIMO de la revisión (el guardado de recién pudo mover lo vivo): la lista, la huella y
          la foto que viajan son las de este momento. Y el historial de deshacer se limpia antes: un
          «deshacer» a mitad del aplicar mandaría el cronograma de antes por encima del aplicado. */
@@ -2486,6 +2583,8 @@ export default function CronogramaCanvas({
       if (!automatico) toast.error(sinGuardar);
       return;
     }
+    // E3: cada casilla sube la versión: primero que se guarde lo marcado (y la pantalla adopte la versión).
+    if (await revisionRef.current.esperarCasillas()) return;
     // Lo de ESTE momento (el guardado pudo mover lo vivo): si ya no hay nada que recalcular, nada.
     const { sin, version, desfasadas } = revisionRef.current;
     if (desfasadas.length === 0 || descartandoRef.current || proposalMeta.current.runId !== token) return;
@@ -2963,12 +3062,15 @@ export default function CronogramaCanvas({
      ya existe reusa su fila (misma `key`); una nueva usa la clave de su cambio (`t:…`). Las semanas ya
      vienen acotadas a la duración final (el acotado vive en `proyectar`, igual que en el servidor). */
   const ganttPorId = new Map(ganttPhases.filter((g) => g.id).map((g) => [g.id as string, g]));
+  /* E3: la fila de una tarea que ya existe se busca en TODO el Gantt: una que se muda llega de otra fase
+     con su misma fila (su avance y su key), y una que cambia se ve con su título, semana, dueño y tipo
+     de la propuesta. */
+  const filaPorId = new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t]));
   const fasesDeLaPropuesta: GanttPhase[] = (revision.proyeccion?.fases ?? []).map((f) => {
     const actual = f.id ? ganttPorId.get(f.id) : undefined;
-    const filaPorId = new Map((actual?.tasks ?? []).filter((t) => t.id).map((t) => [t.id as string, t]));
     const tasks: GanttTask[] = f.tareas.map((t) => {
       const fila = t.id ? filaPorId.get(t.id) : undefined;
-      if (fila) return { ...fila, weekIndex: t.weekIndex };
+      if (fila) return { ...fila, title: t.title, weekIndex: t.weekIndex, party: t.party, type: t.type };
       return {
         key: t.clave,
         title: t.title,

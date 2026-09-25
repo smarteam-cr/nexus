@@ -702,7 +702,15 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
     expect(continuacion).toContain("if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {");
     expect(continuacion).toContain("token = proposalMeta.current.runId;");
-    expect(continuacion).toContain("version = versionDelBorrador(proposal);");
+    /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor y cada
+       casilla sube la versión. La continuación primero espera las casillas (`esperarCasillas`) y lee la
+       versión de DESPUÉS, la del hook (`revisionRef`): la de la closure del clic (`versionDelBorrador(
+       proposal)`) sería la de antes de guardarlas, y el paso 2 respondería 409. Leer la versión antes de
+       esperar, o volver a la de la closure, la pone en rojo. */
+    const iEspera = continuacion.indexOf("if (await revisionRef.current.esperarCasillas()) return;");
+    expect(iEspera, "la continuación manda la versión sin esperar lo marcado").toBeGreaterThan(-1);
+    expect(continuacion.indexOf("version = revisionRef.current.version;"), "lee la versión antes de esperar las casillas").toBeGreaterThan(iEspera);
+    expect(continuacion, "la versión volvió a salir de la closure del clic").not.toContain("versionDelBorrador(proposal)");
     const conToken = tramoDe(pedir, "if (paso.token) {", "} else {");
     expect(conToken).toContain("token = paso.token;");
     expect(conToken).toContain("version = 0;");

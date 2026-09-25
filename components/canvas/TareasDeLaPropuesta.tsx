@@ -21,22 +21,43 @@
  *     («recalculando…», «no se pudieron recalcular», «sigue después», «falta recalcularlas»).
  *   · Lo que choca con algo que editaste a mano lleva su ⚠ y no se puede marcar; lo que ya está así va
  *     tachado.
+ *   · E3 P3: una tarea que ya existe y CAMBIA (renombre, semana, dueño o tipo) va con «~», y una que se
+ *     MUDA a esta fase, con «→» en el grupo de su destino; en los dos, qué le cambia («pasa a «Pruebas»,
+ *     S3», «renombrada a «Y»»), en gris.
  *
  * Solo pinta: los grupos, los estados y los avisos salen de `resumir` (lib/timeline/borrador.ts).
- * Tokens del tema SIEMPRE (success = lo que se crea, warn = lo que se quita o choca).
+ * Tokens del tema SIEMPRE (success = lo que se crea, warn = lo que se quita o choca, info = lo que cambia
+ * o llega).
  */
 import { cn } from "@/lib/cn";
 import { plural } from "@/lib/timeline/weeks";
 import type { GrupoDeTareas, ItemDeTarea } from "@/lib/timeline/borrador";
 import { textoDelGrupoDesfasado, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 
-/** Lo que dice el grupo después del nombre: cuántas se crean y cuántas se quitan. */
+/** Lo que dice el grupo después del nombre: cuántas se crean, cuántas se quitan y (E3) cuántas cambian. */
 function cuentaDelGrupo(g: GrupoDeTareas): string {
   const partes: string[] = [];
   if (g.nuevas > 0) partes.push(plural(g.nuevas, "nueva", "nuevas"));
   if (g.seVan > 0) partes.push(`${g.seVan} ${g.seVan === 1 ? "se va" : "se van"}`);
+  if (g.cambian > 0) partes.push(`${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`);
   return partes.length > 0 ? partes.join(" · ") : "ya está así";
 }
+
+/** El color del signo: se crea (success), se quita (warn), cambia o llega (info). */
+const COLOR_DEL_SIGNO: Record<ItemDeTarea["signo"], string> = {
+  "+": "text-success-ink",
+  "−": "text-warn-ink",
+  "~": "text-info-ink",
+  "→": "text-info-ink",
+};
+
+/** Lo que dice la casilla de una tarea al lector de pantalla. */
+const ACCION_DEL_SIGNO: Record<ItemDeTarea["signo"], string> = {
+  "+": "Crear",
+  "−": "Quitar",
+  "~": "Cambiar",
+  "→": "Traer",
+};
 
 function tituloDeLaFuga(f: NonNullable<ItemDeTarea["fuga"]>): string {
   const nota = f.motivoDeLaNota ? ` La nota también ${f.motivoDeLaNota}.` : "";
@@ -66,7 +87,7 @@ function RenglonDeTarea({
         checked={seAplica || !!t.enEspera}
         disabled={trabajando || !t.seMarca}
         onChange={(e) => onMarcar(t.clave, e.target.checked)}
-        aria-label={`${t.signo === "+" ? "Crear" : "Quitar"} la tarea «${t.titulo}»`}
+        aria-label={`${ACCION_DEL_SIGNO[t.signo]} la tarea «${t.titulo}»`}
       />
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -77,9 +98,11 @@ function RenglonDeTarea({
               t.estado === "ya-esta" && "line-through",
             )}
           >
-            <span className={cn("font-semibold", t.signo === "+" ? "text-success-ink" : "text-warn-ink")}>{t.signo}</span>{" "}
+            <span className={cn("font-semibold", COLOR_DEL_SIGNO[t.signo])}>{t.signo}</span>{" "}
             S{t.semana} · {t.titulo}
           </span>
+          {/* E3: qué le cambia a una que ya existe («pasa a «Pruebas», S3», «renombrada a «Y»»). */}
+          {t.cambio && <span className="text-fg-muted">{t.cambio}</span>}
           {t.porValidar && (
             <span className="rounded border border-line bg-surface-muted px-1 py-px text-[10px] text-fg-muted" title={t.porValidar}>
               por validar

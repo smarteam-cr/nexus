@@ -536,6 +536,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/operar-sobre-el-borrador.ts",
     "lib/timeline/operaciones.ts",
     "app/api/projects/[projectId]/timeline/borrador/operaciones/route.ts",
+    /* E3 P3 (2026-09-25): las casillas compartidas. El motivo de un guardado que no entró llega tal cual al
+       que esperaba las casillas (aplicar, recalcular, armar las tareas). */
+    "lib/timeline/cola-de-casillas.ts",
+    "components/canvas/useBorradorDelCronograma.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega

@@ -9,7 +9,8 @@
  *   · la FOTO contra la que se convirtió el formato viejo: la del cronograma cuando llegó la
  *     propuesta. Lo que el CSE edite después choca y queda fuera; la foto viaja al aplicar para que
  *     el servidor arme el MISMO borrador;
- *   · lo DESMARCADO (en memoria de la pantalla: viaja como `sin`, nunca se guarda en el servidor);
+ *   · lo DESMARCADO (en memoria de la pantalla: viaja como `sin`; desde E3, en un `borrador-v1` se
+ *     guarda en el servidor, ver abajo);
  *   · la VISTA («Ver la propuesta» / «Ver como estaba antes») y el lugar del scroll al alternar:
  *     el mismo Gantt, sin desmontarse (las fases abiertas siguen abiertas), y la fila que se estaba
  *     mirando vuelve a quedar donde estaba, debajo de la barra fija.
@@ -37,14 +38,34 @@
  *     que arranca la espera del recálculo: nunca al abrir, al recargar ni por un cambio del cronograma;
  *   · `forzadas`: las fases de «Aplicar de todos modos», en memoria y nunca recordadas. Se vacían con
  *     otra propuesta.
+ *
+ * E3 P3 (2026-09-25): LO DESMARCADO SE VE EN CUALQUIER COMPUTADORA. Con un `borrador-v1` y
+ * `guardarCasillas` (quien edita), lo desmarcado es el `excluidos` del servidor con los clics que todavía
+ * no subieron encima (`superponerCasillas`). Cada casilla se ve al instante y va a una cola
+ * (lib/timeline/cola-de-casillas.ts): los clics se juntan 250 ms y salen en UN POST encadenado; si falla,
+ * vuelven a lo del servidor. `esperarCasillas()` manda ya lo encolado y espera: lo llama todo lo que
+ * manda la versión (aplicar, recalcular, armar las tareas), porque cada casilla la sube.
+ *   · Migración única: si el servidor todavía no guardó nada (`excluidos` ausente) y este navegador
+ *     recuerda algo desmarcado de antes de E3, eso sube como un «excluir».
+ *   · Lo que se recuerda en el navegador es lo desmarcado EFECTIVO: si se vuelve a E2c, la pantalla vieja
+ *     arranca con lo mismo que se veía.
+ * El formato viejo (y quien solo mira) sigue como en E1: lo desmarcado vive en la memoria de la pantalla.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
+import {
+  casillasAMigrar,
+  crearColaDeCasillas,
+  type ColaEnMarcha,
+  type ResultadoDeGuardarCasillas,
+} from "@/lib/timeline/cola-de-casillas";
 import {
   almacenEnMemoria,
   alternarVista,
   claveDeRevision,
   debeDescartarseSolo,
+  esBorradorV1,
+  excluidosDelGuardado,
   leerBorrador,
   marcarCambios,
   olvidarRevision,
@@ -54,12 +75,14 @@ import {
   resumir,
   revisionPara,
   REVISION_VACIA,
+  superponerCasillas,
   versionDelBorrador,
   type AlmacenDeFotos,
   type Borrador,
   type EstadoDeLasTareas,
   type EstadoDeRevision,
   type FaseDesfasada,
+  type OperacionDeCasillas,
   type Proyeccion,
   type RecuerdoDeLaRevision,
   type ResumenDelBorrador,
@@ -84,6 +107,11 @@ function localStorageSeguro(): AlmacenDeFotos | null {
 /** Ninguna fase forzada: una sola referencia, así vaciar lo que ya está vacío no cambia nada. */
 const SIN_FORZAR: readonly string[] = [];
 const SIN_DESFASADAS: FaseDesfasada[] = [];
+
+/** E3: los clics sin confirmar, atados a la propuesta a la que pertenecen (`clave`). */
+const SIN_PENDIENTES: { clave: string | null; ops: readonly OperacionDeCasillas[] } = { clave: null, ops: [] };
+/** Lo que se espera después de un POST para que la pantalla adopte la versión nueva (como `esperarQueSeGuarde`). */
+const unRespiro = () => new Promise<void>((r) => window.setTimeout(r, 60));
 
 const almacenes = (): AlmacenDeFotos[] => {
   const local = localStorageSeguro();
@@ -154,7 +182,12 @@ export interface BorradorEnPantalla {
   /** Cómo quedaría el cronograma con lo marcado: la vista «Ver la propuesta» (sale del resumen). */
   proyeccion: Proyeccion | null;
   vista: VistaDelBorrador;
+  /** Lo desmarcado que se VE (y viaja al aplicar). E3: en un `borrador-v1` que se edita, el `excluidos`
+   *  del servidor con los clics pendientes encima. */
   sin: ReadonlySet<string>;
+  /** E3: manda ya las casillas encoladas y espera a que se guarden (y la pantalla adopte la versión que
+   *  subieron). null = todo guardado; si no, el motivo (ya dicho al CSE): quien llama no sigue. */
+  esperarCasillas: () => Promise<string | null>;
   /** La foto que viaja al aplicar. */
   foto: Vivo | null;
   /** La versión del `borrador-v1` que se está viendo (viaja al aplicar), o null (formato viejo). */
@@ -197,12 +230,21 @@ export function useBorradorDelCronograma(entrada: {
   /** El estado de las tareas del borrador, como lo calculó el servidor (GET del cronograma), o null
    *  si no espera tareas. */
   tareas: EstadoDeLasTareas | null;
+  /** E3: guarda unas casillas en el servidor (POST /borrador/operaciones, origen «casillas») y adopta la
+   *  respuesta. `token`: el de la propuesta en la que se clicaron (si entró otra en el medio, la ruta
+   *  responde 409 y nada cae sobre la nueva). Sin él (quien solo mira), lo desmarcado queda en la memoria
+   *  de la pantalla, como en E1. */
+  guardarCasillas?: (ops: OperacionDeCasillas[], token: string) => Promise<ResultadoDeGuardarCasillas>;
 }): BorradorEnPantalla {
   const { projectId, propuesta, token, vivo, tareas } = entrada;
   const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);
   const [revision, setRevision] = useState<EstadoDeRevision>(REVISION_VACIA);
   const [marcasDelCse, setMarcasDelCse] = useState(0);
   const [forzadasGuardadas, setForzadas] = useState<readonly string[]>(SIN_FORZAR);
+  /* E3: los clics que todavía no confirmó el servidor (de ESTA propuesta), y desde cuándo manda el
+     servidor aunque no tenga `excluidos` (un POST ya entró: «ausente» es «nada desmarcado»). */
+  const [pendientesDe, setPendientesDe] = useState(SIN_PENDIENTES);
+  const [servidorMandaEn, setServidorMandaEn] = useState<string | null>(null);
   /* Una propuesta distinta: se ajusta el estado EN EL RENDER (el patrón de React para «cuando cambia
      una prop»), no en un efecto — un efecto pintaría primero la propuesta nueva con la foto vieja.
      La foto es la RECORDADA de esa misma propuesta, si la hay; si no, la de ahora. Las fases forzadas
@@ -216,12 +258,107 @@ export function useBorradorDelCronograma(entrada: {
     if (forzadasGuardadas !== SIN_FORZAR) setForzadas(SIN_FORZAR);
   }
 
-  // Se recuerda la foto y lo desmarcado de ESTA propuesta: el próximo montaje los encuentra.
+  /* ── E3: LAS CASILLAS COMPARTIDAS ─────────────────────────────────────────────────────────────
+     Solo con un `borrador-v1` y `guardarCasillas`. Lo que se ve es lo del servidor con lo pendiente
+     encima. Mientras el servidor no guardó nada (`excluidos` ausente y ningún POST entró todavía), «lo del
+     servidor» es lo que este navegador recordaba: la migración lo sube con el primer POST. */
+  const compartidas = esBorradorV1(propuesta) && !!entrada.guardarCasillas;
+  const pendientes = pendientesDe.clave === clave ? pendientesDe.ops : SIN_PENDIENTES.ops;
+  const servidorManda = servidorMandaEn !== null && servidorMandaEn === clave;
+  const excluidosDelServidor = useMemo(() => excluidosDelGuardado(propuesta), [propuesta]);
+  const sin: ReadonlySet<string> = useMemo(
+    () => (compartidas ? superponerCasillas(excluidosDelServidor ?? (servidorManda ? [] : actual.sin), pendientes) : actual.sin),
+    [compartidas, excluidosDelServidor, servidorManda, actual.sin, pendientes],
+  );
+
+  /* Se recuerda la foto y lo desmarcado de ESTA propuesta: el próximo montaje los encuentra. E3: lo
+     desmarcado EFECTIVO (lo que se ve): si se vuelve a E2c, la pantalla vieja arranca con lo mismo. */
   useEffect(() => {
     if (!actual.clave || !actual.base) return;
-    const recuerdo = { foto: actual.base, sin: [...actual.sin] };
+    const recuerdo = { foto: actual.base, sin: [...sin] };
     for (const a of almacenes()) recordarRevision(a, projectId, actual.clave, recuerdo);
-  }, [projectId, actual.clave, actual.base, actual.sin]);
+  }, [projectId, actual.clave, actual.base, sin]);
+
+  /* La cola (lib/timeline/cola-de-casillas.ts): UNA por propuesta, fuera del render (en su reloj de
+     250 ms y en su cadena de POST). Lo que necesita de ESTE render lo lee de `paraEnviarRef`. */
+  const colaRef = useRef<{ clave: string; cola: ColaEnMarcha } | null>(null);
+  const servidorMandaRef = useRef<string | null>(null);
+  const migradaRef = useRef<string | null>(null);
+  const paraEnviarRef = useRef({
+    clave,
+    token,
+    compartidas,
+    excluidos: excluidosDelServidor,
+    local: actual.sin,
+    guardar: entrada.guardarCasillas,
+  });
+  useEffect(() => {
+    paraEnviarRef.current = {
+      clave,
+      token,
+      compartidas,
+      excluidos: excluidosDelServidor,
+      local: actual.sin,
+      guardar: entrada.guardarCasillas,
+    };
+  });
+  /** La cola de la propuesta en pantalla (la crea la primera vez; la de otra propuesta se suelta). */
+  const colaDeAhora = useCallback((): ColaEnMarcha | null => {
+    const { clave: k, token: t } = paraEnviarRef.current;
+    if (!k || !t) return null;
+    if (colaRef.current?.clave === k) return colaRef.current.cola;
+    colaRef.current?.cola.soltar();
+    const cola = crearColaDeCasillas({
+      guardar: (ops) => {
+        const guardar = paraEnviarRef.current.guardar;
+        return guardar ? guardar(ops, t) : Promise.resolve({ ok: false as const, motivo: "Solo quien edita guarda lo que marca." });
+      },
+      alCambiar: (ops) => setPendientesDe({ clave: k, ops }),
+      alConfirmar: () => {
+        servidorMandaRef.current = k;
+        setServidorMandaEn(k);
+      },
+      // La migración única: mientras el servidor no guardó nada, lo recordado sube delante (repetido no cambia nada).
+      migracion: () => (servidorMandaRef.current === k ? null : casillasAMigrar(paraEnviarRef.current.excluidos, paraEnviarRef.current.local)),
+    });
+    colaRef.current = { clave: k, cola };
+    return cola;
+  }, []);
+  const esperarCasillas = useCallback(async (): Promise<string | null> => {
+    const k = paraEnviarRef.current.clave;
+    const actualDeLaCola = colaRef.current;
+    if (!k || !actualDeLaCola || actualDeLaCola.clave !== k) return null;
+    const { motivo, mando } = await actualDeLaCola.cola.esperar();
+    if (motivo) return motivo;
+    if (mando) await unRespiro(); // que la pantalla adopte la versión que subieron las casillas
+    return null;
+  }, []);
+  /* La migración única (una vez por propuesta y por montaje): solo con `excluidos` AUSENTE. Si el servidor
+     ya tiene el campo —aunque esté vacío—, otra computadora decidió y lo recordado acá no sube. */
+  useEffect(() => {
+    if (!compartidas || !clave || migradaRef.current === clave) return;
+    migradaRef.current = clave;
+    const migrar = casillasAMigrar(excluidosDelServidor, actual.sin);
+    const cola = migrar ? colaDeAhora() : null;
+    if (!migrar || !cola) return;
+    cola.clic(migrar.claves, false);
+    void cola.mandar();
+  }, [compartidas, clave, excluidosDelServidor, actual.sin, colaDeAhora]);
+  // Llegó otra propuesta (o ninguna): los clics de la anterior no salen ni caen sobre la nueva.
+  useEffect(() => {
+    if (colaRef.current && colaRef.current.clave !== clave) {
+      colaRef.current.cola.soltar();
+      colaRef.current = null;
+    }
+  }, [clave]);
+  // Al desmontar (cambiar de pieza) lo encolado sale igual: un clic no se pierde por irse rápido.
+  useEffect(
+    () => () => {
+      const cola = colaRef.current?.cola;
+      if (cola?.esperandoElReloj()) void cola.mandar();
+    },
+    [],
+  );
 
   const olvidar = useCallback(() => {
     for (const a of almacenes()) olvidarRevision(a, projectId);
@@ -234,8 +371,8 @@ export function useBorradorDelCronograma(entrada: {
   /* La barra solo con cambios: un v1 vacío (marcado «armando», todavía sin fases ni tareas) no monta
      una barra en blanco. La proyección sale del resumen: una evaluación del plan menos por render. */
   const resumen = useMemo(
-    () => (borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas, forzar: forzadas }) : null),
-    [vivo, borrador, actual.sin, tareas, forzadas],
+    () => (borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, sin, { tareas, forzar: forzadas }) : null),
+    [vivo, borrador, sin, tareas, forzadas],
   );
   const proyeccion = resumen?.proyeccion ?? null;
   /* «Nada que decidir» sale del PLAN aunque no haya cambios: `debeDescartarseSolo` sabe que uno
@@ -243,8 +380,8 @@ export function useBorradorDelCronograma(entrada: {
   const nadaQueDecidir = useMemo(() => {
     if (!borrador) return false;
     if (resumen) return debeDescartarseSolo(resumen);
-    return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas, forzar: forzadas }));
-  }, [borrador, resumen, vivo, actual.sin, tareas, forzadas]);
+    return debeDescartarseSolo(planDeAplicacion(vivo, borrador, sin, { tareas, forzar: forzadas }));
+  }, [borrador, resumen, vivo, sin, tareas, forzadas]);
   const desfasadas = resumen?.desfasadas ?? SIN_DESFASADAS;
   const clavePorDesfasadas = useMemo(() => claveDeDesfasadas(desfasadas), [desfasadas]);
   const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);
@@ -263,15 +400,31 @@ export function useBorradorDelCronograma(entrada: {
     if (a) restaurarAncla(contenedorRef.current, barraRef.current, a);
   }, [actual.vista]);
 
+  /* E3: con las casillas compartidas el clic va a la cola (se ve al instante y sube al servidor); si no,
+     queda en la memoria de la pantalla, como en E1. */
+  const tocar = useCallback(
+    (claves: readonly string[], incluir: boolean) => {
+      const cola = paraEnviarRef.current.compartidas ? colaDeAhora() : null;
+      if (cola) cola.clic(claves, incluir);
+      else setRevision((r) => marcarCambios(r, claves, incluir));
+    },
+    [colaDeAhora],
+  );
   /* Solo estas dos son casillas del CSE: cada una suma una marca (E2c: arranca la espera del recálculo). */
-  const marcar = useCallback((c: string, incluir: boolean) => {
-    setRevision((r) => marcarCambios(r, [c], incluir));
-    setMarcasDelCse((n) => n + 1);
-  }, []);
-  const marcarVarios = useCallback((claves: readonly string[], incluir: boolean) => {
-    setRevision((r) => marcarCambios(r, claves, incluir));
-    setMarcasDelCse((n) => n + 1);
-  }, []);
+  const marcar = useCallback(
+    (c: string, incluir: boolean) => {
+      tocar([c], incluir);
+      setMarcasDelCse((n) => n + 1);
+    },
+    [tocar],
+  );
+  const marcarVarios = useCallback(
+    (claves: readonly string[], incluir: boolean) => {
+      tocar(claves, incluir);
+      setMarcasDelCse((n) => n + 1);
+    },
+    [tocar],
+  );
   const forzar = useCallback((fases: readonly string[]) => setForzadas(fases.length > 0 ? [...fases] : SIN_FORZAR), []);
 
   return {
@@ -279,7 +432,8 @@ export function useBorradorDelCronograma(entrada: {
     resumen,
     proyeccion,
     vista: actual.vista,
-    sin: actual.sin,
+    sin,
+    esperarCasillas,
     foto: actual.base,
     version,
     nadaQueDecidir,
