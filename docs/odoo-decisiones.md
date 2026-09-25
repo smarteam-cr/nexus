@@ -1065,3 +1065,42 @@ marcas de la fila.
 **Qué la revertiría.** Que una marca por documento resulte demasiado fina para una línea —que alguien necesite decir
 «este cliente está bien así, con lo que venga»—: esa línea tendría que marcar por cliente, sabiendo que entonces una
 factura nueva ya no aparece sola.
+
+---
+
+## 2026-09-25 · Lo pendiente se queda: cada línea cuenta y suma solo lo que le queda, y la pestaña cuenta filas
+
+**Qué se decidió.** Etapa 4 del plan de Elías:
+- **Cada línea se arma con sus cosas pendientes** (`agregarConMarcas`, lib/cobranza/odoo/diferencias.ts): la misma
+  función arma la línea dos veces, con lo pendiente —título, cantidad, detalle, monto y plata: lo que se ve— y con lo
+  marcado —lo que va en «Marcadas», con su propio título (`tituloDeMarcadas`)—. Una cosa está marcada cuando todos sus
+  documentos tienen su marca con los números de hoy. ⚠ No alcanzaba con sacar las filas marcadas al final: en seis
+  líneas el monto no sale de las filas, en otras el título cuenta facturas o cobros y no filas, y en «notas sin aplicar»
+  la plata lleva la clave de la factura anulada.
+- **Una línea sin filas pendientes no es trabajo** (`aceptada`): no cuenta, no suma, va al final y la pantalla la
+  muestra solo en «Marcadas». Sigue en la respuesta del detector con todas sus casas (`documentos`): una fila marcada
+  sigue siendo la casa de sus documentos y la cobertura no cambia al marcar.
+- **La pestaña, «cosas por resolver» y «Cómo funciona» cuentan FILAS pendientes**, las de `resumenDeDiferencias().filas`.
+  La página abre con el número del servidor y «Lo que no cuadra» se lo pasa a OdooClient después de cada carga: marcar
+  una fila lo baja sin recargar. Hasta hoy contaban líneas y quedaban fijos hasta recargar la página entera.
+- **La fila que vuelve porque cambió un número se ve** (`volvieron`): en su línea dice que volvió, con la marca que
+  tenía, y en «Marcadas» aparece como «volvió porque cambió». Una factura que llega nueva no «volvió»: nunca se marcó.
+- **Lo que queda fuera por regla sigue fuera**, contado en el texto de su línea: historia, exentas de años anteriores,
+  pagadas y notas sin cuenta, diferencias de exactamente el 13 %, cobros facturados dentro de la gracia de 15 días.
+  Nunca son filas: no se marcan ni suman al número de la pestaña.
+
+**Por qué.** Medido en producción el 2026-09-25, en solo lectura (la tabla de marcas todavía no existe allá, así que se
+simuló el traspaso de las 15 notas de crédito): la pestaña decía **15** —líneas— y había **107** filas por mirar. Sin
+el traspaso son 122 filas en 16 líneas, porque vuelven las 15 notas. Por línea, con el traspaso: pagos sin conciliar 31,
+cuentas internacionales 14, sin cuenta 8, cobrado sin pagar 8, varias cuotas 8, sin cobro 8, venta contada dos veces 5,
+por cobrar pagada 5, falta el número de Mercury 5, montos distintos 4, exentas 4, cobro sin factura 3, moneda corregida 2,
+número sin documento 1, dos monedas 1; notas sin aplicar, 0 pendientes y 15 marcadas. El encabezado: US$100.001,64 +
+₡34.623.839,85 sobre 48 documentos. La cobertura sigue en 0/0/0/0, con y sin el traspaso.
+
+⚠ Una línea sin ninguna fila de entrada —«sin cuenta» cuando solo hay facturas pagadas o notas sin cuenta— ya no se
+muestra: no tiene nada que marcar, y como «pendiente» no se iría nunca. Lo que decía queda para «Cómo funciona».
+⚠ Los títulos con una sola cosa siguen diciendo «1 facturas» (ya pasaba); ahora sale más seguido. Va con los textos.
+
+**Qué la revertiría.** Que alguien necesite ver el total de la línea con lo ya revisado adentro —por ejemplo, para
+cuadrar contra un reporte de Odoo—: ahí la línea tendría que mostrar las dos cifras, la pendiente y la entera, sin
+volver a contar lo marcado en la pestaña.
