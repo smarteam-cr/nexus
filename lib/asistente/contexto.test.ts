@@ -271,6 +271,11 @@ describe("ningún dato de partner ni de costos cruza al asistente", () => {
 
 describe("el contexto del cronograma dice lo que el chat necesita para hablar de fechas", () => {
   const src = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto.ts"), "utf8");
+  /* ⚠ E3 P4 (2026-09-25): con una propuesta abierta, el texto del cronograma lo arma OTRO archivo
+     (contexto-del-cronograma.ts). Las guardas de las tareas (notas, handles, reparto) miran los dos: si
+     miraran solo contexto.ts, pintar las notas en el contexto con propuesta pasaría en verde. */
+  const srcDelCronograma = fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto-del-cronograma.ts"), "utf8");
+  const srcDeLosDos = `${src}\n${srcDelCronograma}`;
 
   it("⚠ trae el cierre proyectado: sin eso el chat no puede avisar que una fecha se mueve", () => {
     /* Decisión de Elías: «toda propuesta que mueva una fecha lo DICE. Y si no la mueve, también».
@@ -314,11 +319,22 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(src).toContain(
       "select: { id: true, title: true, weekIndex: true, status: true, source: true }",
     );
+    /* ⚠ E3 P4: `notes: true` sigue prohibido, ahora en los DOS archivos que arman el texto. */
     expect(
-      src.includes("notes: true"),
+      srcDeLosDos.includes("notes: true"),
       "el contexto del chat pasó a traer las NOTAS de las tareas: eso es contenido de negocio, " +
         "no la forma del cronograma — y el modificador ya las lee cuando le toca ejecutar",
     ).toBe(false);
+    /* ⚠ E3 P4: con una propuesta, las notas SÍ se leen —el plan las necesita para saber si alguien editó
+       una tarea que se va—, pero por UNA sola puerta: `leerPropuestaParaElChat` (lib/timeline). Ningún
+       archivo del asistente lee las tareas con la lectura de aplicar, que trae las notas; y el texto con
+       propuesta nunca las pinta (su prueba de conducta, en contexto-del-cronograma.test.ts). La edición
+       que la pone en rojo: leer `SELECT_DE_FASES_CON_TAREAS` o `vivoDeLaBase` desde lib/asistente. */
+    const conLaLecturaDeAplicar = archivosDelAsistente().filter((f) =>
+      /SELECT_DE_FASES_CON_TAREAS|SELECT_DE_TAREA\b|vivoDeLaBase/.test(soloCodigo(fs.readFileSync(path.join(RAIZ, f), "utf8"))),
+    );
+    expect(conLaLecturaDeAplicar).toEqual([]);
+    expect(src).toContain("leerPropuestaParaElChat(timeline.id)");
   });
 
   it("⛔ y las tareas se nombran por HANDLE, no por el cuid entero", () => {
@@ -329,17 +345,23 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
 
        La edición que la pone en rojo: interpolar `t.id` en vez de `handleDeTarea(t.id)`. */
     expect(src).toContain("handleDeTarea(t.id)");
+    /* ⚠ E3 P4: el id crudo tampoco en el contexto con propuesta, que nombra por `handlesSinChoque` (las
+       claves de las tareas nuevas son UUID: con 5 fijos chocarían). */
     expect(
-      /\$\{t\.id\}/.test(src),
+      /\$\{t\.id\}/.test(srcDeLosDos),
       "el contexto interpola el id crudo de una tarea: son 20 caracteres de más por tarea",
     ).toBe(false);
+    expect(srcDelCronograma).toContain("handlesSinChoque(");
   });
 
   it("⭐ y sí trae el reparto por semana, que es lo que deja pedir «sacá las vacías»", () => {
     /* Sin esto vuelve el caso exacto del 2026-08-20: el CSE ve cuatro semanas vacías en pantalla
-       y el asistente no. La edición que la pone en rojo: volver al total por fase. */
-    expect(src).toContain("semanas VACÍAS");
-    expect(src).toContain("porSemana");
+       y el asistente no. La edición que la pone en rojo: volver al total por fase.
+       ⚠ E3 P4: también en el contexto con propuesta (la proyección, por semana). */
+    for (const s of [src, srcDelCronograma]) {
+      expect(s).toContain("semanas VACÍAS");
+      expect(s).toContain("porSemana");
+    }
   });
 
   it("⭐ nombra el botón que rehace todo SEGÚN EL ESTADO del cronograma", () => {
@@ -464,6 +486,16 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(linea).toContain("«Regenerar» con fases y tareas");
     expect(linea, "la línea vuelve a hablar solo de fases").not.toMatch(/cambios de fases/i);
     expect(linea.length).toBeLessThan(420);
+    /* ⚠ REESCRITA en E3 P4 (2026-09-25), solo la cola, con esta razón: decía «Puedes conversar el cambio
+       y dejarlo para después», y el modelo lo leía como «regístralo igual»: armaba una lista con un botón
+       que no se podía apretar y que, cuando se resolvía la propuesta, estaba calculada sobre otro
+       cronograma. Las tres líneas de freno terminan igual. La edición que la pone en rojo: volver a la
+       cola vieja en cualquiera de las tres. */
+    for (const l of [linea, lineaDeCambiosDeFasesSinDecidir(true, "armando"), lineaDeCambiosDeFasesSinDecidir(true, "fallo")]) {
+      expect(l.endsWith("Puedes conversarlo, pero no lo registres: pídelo cuando se resuelva."), l).toBe(true);
+      expect(l).not.toContain("dejarlo para después");
+      expect(l.length).toBeLessThan(420);
+    }
     /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía
        `lineaDeCambiosDeFasesSinDecidir(true)` a secas. Con el borrador VACÍO que espera sus tareas no
        hay barra ni nada que decidir, así que la línea recibe si la IA está armando (abajo, su guarda).

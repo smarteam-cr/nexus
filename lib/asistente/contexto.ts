@@ -69,6 +69,15 @@ import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landi
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
 import type { EstadoDelVacio } from "@/lib/timeline/borrador";
 import { leerEstadoDelVacio } from "@/lib/timeline/borrador-del-detalle";
+/* E3 P4: con una propuesta abierta, el chat conversa sobre ELLA (la lee `leerPropuestaParaElChat`; el
+   texto lo arma `armarContextoConPropuesta`, puro). */
+import { leerPropuestaParaElChat, type PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
+import {
+  armarContextoConPropuesta,
+  lineaDeSoloLectura,
+  marcaDe,
+  type ContextoConPropuesta,
+} from "./contexto-del-cronograma";
 /* ⭐ La ÚNICA puerta del chat al material del cronograma (ver la EXCEPCIÓN del header). Trae su
    propio presupuesto: los cargadores de los agentes siguen prohibidos acá (contexto.test.ts). */
 import { cargarMaterialParaElChat } from "@/lib/contexto/cargar";
@@ -105,28 +114,8 @@ import {
  * se recorta primero es el CONTENIDO (bajar `TOPE_POR_SECCION_CHARS`), no la forma: el contenido
  * completo de la sección que importa ya se puede pedir aparte, por el chip.
  */
-/** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
-function estadoCorto(status: string): string {
-  if (status === "DONE") return "hecha";
-  if (status === "IN_PROGRESS") return "en curso";
-  if (status === "SUSPENDED") return "suspendida";
-  return status.toLowerCase();
-}
-
-/**
- * ⭐ LO QUE EL MODELO NECESITA PARA NO PROMETER UN BORRADO QUE SE VA A RECHAZAR.
- *
- * El ejecutor rechaza `tarea.borrar` sobre lo que `isKept` protege: estado distinto de pendiente
- * **o** `source === "HUMAN"`. El estado ya se mostraba; la procedencia no — así que una tarea
- * pendiente cargada a mano se le veía idéntica a una pendiente escrita por la IA, y el chat
- * proponía borrarla para que el ejecutor la rechazara después. Peor todavía: las tareas que crea
- * el propio chat nacen `HUMAN`, o sea que el chat no podía deshacer lo que acababa de hacer, y no
- * tenía cómo saberlo antes de intentarlo.
- */
-function marcaDe(t: { status: string; source: string | null }): string {
-  if (t.status && t.status !== "PENDING") return estadoCorto(t.status);
-  return t.source === "HUMAN" ? "cargada a mano" : "";
-}
+/* ⭐ `marcaDe` (el estado y «cargada a mano» de cada tarea) se mudó a contexto-del-cronograma.ts en E3
+   P4: la usan los dos contextos del cronograma, con y sin propuesta, y así dicen lo mismo. */
 
 /**
  * Cuánto contenido de UNA sección entra al contexto del chat de documentos.
@@ -214,6 +203,23 @@ export interface ContextoDelAsistente {
    * entraron, para marcar la frontera en las líneas del acuerdo: ⛔ no se renderizan ni viajan.
    */
   material?: { texto: string; lectura: LecturaDelMaterial; interno: readonly string[] };
+  /**
+   * E3 P4: el token (`pendingProposalRunId`) de la propuesta abierta del cronograma, siempre que haya
+   * una (de cualquier formato). Con él, lo acordado sabe para qué propuesta se acordó.
+   */
+  tokenDeLaPropuesta?: string;
+  /**
+   * E3 P4: la propuesta abierta, leída (`leerPropuestaParaElChat`), con los identificadores de las
+   * tareas que vio el modelo (`handles`: ref → identificador).
+   *
+   * ⚠ NO entra al prefijo (el texto ya la trae) y `fases` sigue siendo el cronograma de HOY: la
+   * propuesta la usa solo quien edita la propuesta desde el chat. `recorte`: cómo entró el texto en el
+   * techo, solo si el texto es el de la propuesta (lo imprime scripts/probar-asistente.ts).
+   */
+  propuesta?: PropuestaParaElChat & {
+    handles: Map<string, string>;
+    recorte?: Pick<ContextoConPropuesta, "nivel" | "excede" | "medidas">;
+  };
 }
 
 /** Lo que decide la línea «PARA REHACER TODO» — ver `lineaParaRehacerTodo`. */
@@ -310,6 +316,14 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
 }
 
 /**
+ * La cola de las tres líneas de freno. ⚠ E3 P4: decía «Puedes conversar el cambio y dejarlo para
+ * después», y el modelo lo leía como «regístralo igual»: armaba la lista numerada con un botón que no
+ * se podía apretar, y cuando se resolvía la propuesta ese acuerdo había quedado calculado sobre otro
+ * cronograma. Ahora se conversa, pero se registra recién cuando se resuelve.
+ */
+export const COLA_DEL_FRENO = "Puedes conversarlo, pero no lo registres: pídelo cuando se resuelva.";
+
+/**
  * ⛔ CON CAMBIOS DE FASES SIN DECIDIR, LO QUE ACUERDE EL CHAT NO SE APLICA (revisión adversarial,
  * 2026-09-24). La pantalla corta el «Aplicar» mientras haya una propuesta de fases pendiente (la del
  * handoff o la de la revisión de «Regenerar todo»): guardar con motivo la borraría. El modelo no lo
@@ -329,7 +343,7 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
       "⏳ LA IA ESTÁ ARMANDO LAS TAREAS DEL CRONOGRAMA (arriba del Gantt dice «Armando las tareas…»). " +
       "Mientras tanto, NINGÚN cambio que acuerdes se puede aplicar: la pantalla lo frena. Si te piden un " +
       "cambio, dilo ANTES de armar la lista: hay que esperar a que termine (o «Descartar» en esa línea). " +
-      "Puedes conversar el cambio y dejarlo para después."
+      COLA_DEL_FRENO
     );
   }
   if (vacio === "fallo") {
@@ -337,16 +351,27 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
       "⚠ LA IA NO PUDO ARMAR LAS TAREAS DEL CRONOGRAMA y quedó una propuesta vacía arriba del Gantt. " +
       "Mientras esté, NINGÚN cambio que acuerdes se puede aplicar: la pantalla lo frena. Si te piden un " +
       "cambio, dilo ANTES de armar la lista: primero hay que sacarla con «Descartar» (o «Volver a " +
-      "intentar») en esa línea. Puedes conversar el cambio y dejarlo para después."
+      `intentar») en esa línea. ${COLA_DEL_FRENO}`
     );
   }
   return (
     "⛔ HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR arriba del Gantt (del handoff, o de «Regenerar» " +
     "con fases y tareas). Mientras esté, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
-    "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que resolver esa propuesta en " +
-    "su barra (desmarcar lo que no va y «Aplicar», o «Descartar»). Puedes conversar el " +
-    "cambio y dejarlo para después."
+    /* E3 P4: «resolver esa propuesta» pasó a «resolverla» para que la cola nueva entre en el largo. */
+    "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que resolverla en " +
+    `su barra (desmarcar lo que no va y «Aplicar», o «Descartar»). ${COLA_DEL_FRENO}`
   );
+}
+
+/**
+ * E3 P4: la línea de arriba del contexto con una propuesta abierta, o null si esa propuesta no se
+ * muestra (el formato viejo, una versión nueva o el borrador vacío: el contexto de hoy, con su freno).
+ * Editable: el chat todavía no la cambia, así que dice lo mismo que el freno de hoy.
+ */
+function lineaDeLaPropuesta(porQue: PropuestaParaElChat["porQue"]): string | null {
+  if (porQue === null) return lineaDeCambiosDeFasesSinDecidir(true);
+  if (porQue === "tareas-armando" || porQue === "recalculando") return lineaDeSoloLectura(porQue);
+  return null;
 }
 
 /**
@@ -364,6 +389,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     prisma.projectTimeline.findUnique({
       where: { projectId },
       select: {
+        /* E3 P4: con él se lee la propuesta abierta (`leerPropuestaParaElChat`). */
+        id: true,
         anchorStartDate: true,
         closeDateOverride: true,
         project: { select: { name: true, client: { select: { name: true } } } },
@@ -403,6 +430,19 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
      de la revisión de E2a: se contaba con un filtro JSON de Prisma que nunca se corrió contra la base y
      que, si fallaba, volvía EN SILENCIO al texto de «decidir la propuesta». Ahora se lee el JSON (solo
      si hay una propuesta) y se evalúa en JS, con la misma regla que la pantalla. */
+  /* E3 P4: la propuesta abierta se lee en paralelo. ⚠ Si su lectura falla, el chat sigue con el
+     cronograma de hoy y la línea de freno (lo de antes de E3): conversar sin ver la propuesta es mejor
+     que un turno roto. */
+  const lecturaDeLaPropuesta: Promise<PropuestaParaElChat | null> =
+    propuestasPendientes > 0
+      ? leerPropuestaParaElChat(timeline.id).catch((e) => {
+          console.warn("[asistente] no se pudo leer la propuesta del cronograma", {
+            projectId,
+            error: e instanceof Error ? e.message : e,
+          });
+          return null;
+        })
+      : Promise.resolve(null);
   const vacio =
     propuestasPendientes > 0
       ? await leerEstadoDelVacio(
@@ -410,6 +450,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
             ?.pendingProposal ?? null,
         )
       : null;
+  const propuesta = await lecturaDeLaPropuesta;
 
   const fin = projectedEnd(
     timeline.anchorStartDate ? timeline.anchorStartDate.toISOString() : null,
@@ -552,9 +593,47 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     ADVERTENCIAS_DEL_CRONOGRAMA.map((a) => `- ${a.aviso}`).join("\n"),
   ].join("\n");
 
+  /**
+   * ⭐ E3 P4: CON UNA PROPUESTA ABIERTA, EL CHAT CONVERSA SOBRE ELLA — la propuesta y la lista de la
+   * barra, con sus números (`armarContextoConPropuesta`), en vez del cronograma de hoy. También mientras
+   * la IA arma o recalcula sus tareas: la propuesta se lee, aunque no se pueda cambiar. El formato
+   * viejo, una versión nueva y el borrador vacío siguen con el contexto de hoy y su línea de freno.
+   * ⚠ `fases` sigue siendo el cronograma de HOY, y el chat todavía no edita la propuesta (`puedeEditar`
+   * en false: la línea de arriba dice que lo acordado no se aplica mientras esté abierta).
+   */
+  const lineaConPropuesta = propuesta?.resumen ? lineaDeLaPropuesta(propuesta.porQue) : null;
+  const armado =
+    propuesta?.resumen && lineaConPropuesta !== null
+      ? armarContextoConPropuesta(
+          {
+            proyecto: timeline.project.name,
+            cliente: timeline.project.client.name,
+            propuesta: { ...propuesta, resumen: propuesta.resumen },
+            cierreFijado: timeline.closeDateOverride ? fmtFecha(timeline.closeDateOverride) : null,
+            paraRehacerTodo,
+            puedeEditar: false,
+            porQue: lineaConPropuesta,
+          },
+          { techo: TECHO_DEL_PREFIJO_CHARS },
+        )
+      : null;
+  if (armado?.excede) {
+    console.warn("[asistente] contexto sobre el techo", { projectId, largo: armado.texto.length, nivel: armado.nivel });
+  }
+
   return {
-    texto,
+    texto: armado?.texto ?? texto,
     cierreActual: cierre,
+    ...(propuesta
+      ? {
+          tokenDeLaPropuesta: propuesta.token,
+          propuesta: {
+            ...propuesta,
+            handles: armado?.handles ?? new Map<string, string>(),
+            ...(armado ? { recorte: { nivel: armado.nivel, excede: armado.excede, medidas: armado.medidas } } : {}),
+          },
+        }
+      : {}),
     fases: timeline.phases.map((f) => ({
       id: f.id,
       name: f.name,

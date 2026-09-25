@@ -238,8 +238,9 @@ const MAX_TOKENS_DE_RESPUESTA = 8_000;
  *
  * La cabeza —rol, idioma, formato, cómo conversa, la regla de avisar consecuencias— es común. Lo
  * que cambia es CÓMO se emite la propuesta y qué se puede pedir.
+ * E3 P4: exportado solo para medirlo (scripts/probar-asistente.ts, junto con `TOOL_ACUERDO`).
  */
-function promptDelAsistente(esCronograma: boolean): string {
+export function promptDelAsistente(esCronograma: boolean): string {
   return `Eres el asistente de Nexus, la app interna de Smarteam (consultora de HubSpot). Hablas con
 un CSE (Customer Success Engineer) sobre UN documento de UN proyecto.
 
@@ -742,7 +743,7 @@ const TOOL_ACUERDO_DE_DOCUMENTO: Anthropic.Messages.Tool = {
   },
 };
 
-const TOOL_ACUERDO: Anthropic.Messages.Tool = {
+export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
   name: "registrar_cambio_acordado",
   description:
     "Registra el cambio acordado como OPERACIONES sobre el cronograma. NO lo aplica: la persona " +

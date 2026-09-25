@@ -540,6 +540,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
        que esperaba las casillas (aplicar, recalcular, armar las tareas). */
     "lib/timeline/cola-de-casillas.ts",
     "components/canvas/useBorradorDelCronograma.ts",
+    /* E3 P4 (2026-09-25): el contexto del chat con una propuesta abierta. Lo lee el modelo y lo copia en
+       lo que le contesta al CSE (sus leyendas, la línea de solo lectura, los avisos de recorte). */
+    "lib/asistente/contexto-del-cronograma.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega

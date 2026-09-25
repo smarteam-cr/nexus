@@ -177,6 +177,9 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     /* ⚠ SUMADO 2026-09-23 (paso C): el bloque del MATERIAL DEL CRONOGRAMA —sus rótulos, el de las
        reuniones y el de las notas— viaja en el `system` de cada turno del chat del cronograma. */
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/contexto/material-cronograma.ts"), "utf8")),
+    /* ⚠ SUMADO en E3 P4 (2026-09-25): con una propuesta abierta, el contexto del cronograma lo arma
+       este archivo (la propuesta, la lista de la barra y sus leyendas): es el prefijo de cada turno. */
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/contexto-del-cronograma.ts"), "utf8")),
     /* ⚠ SUMADOS 2026-08-23: los `avisoDelChat` y los `brief` de las defs se interpolan al contexto
        —`firmaDeSeccion` los pega detrás de cada sección— así que también son texto que el modelo
        lee. Vivían fuera del alcance de esta guarda y ahí se había colado un «podés». */

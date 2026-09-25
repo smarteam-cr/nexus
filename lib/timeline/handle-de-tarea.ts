@@ -75,3 +75,33 @@ export function resolverHandle(
   if (coinciden.length === 0) return { tipo: "ninguna" };
   return { tipo: "ambigua", cuantas: coinciden.length };
 }
+
+/**
+ * E3 P4: los handles de un contexto con una PROPUESTA abierta, sin choques entre sí.
+ *
+ * Con una propuesta, las tareas que el chat nombra no son solo las vivas: también las nuevas, que se
+ * nombran por su clave (`t:` + un UUID). El final de un UUID es hexadecimal —16 símbolos por lugar y
+ * no 36—, así que con 5 caracteres dos nuevas chocan más seguido: con 250 claves, ~3 % de las veces.
+ * `resolverHandle` rechaza un handle ambiguo (bien), pero un handle que el contexto IMPRIME tiene que
+ * resolver siempre a su tarea: si no, el chat no podría nombrarla nunca.
+ *
+ * Cada ref arranca con los últimos `LARGO_DEL_HANDLE` caracteres y se alarga SOLO si otra ref termina
+ * igual (sin mayúsculas, como compara `resolverHandle`). Una ref que es el final de otra se nombra
+ * entera: `resolverHandle` gana por el id exacto. Las demás, las que no chocan, quedan como hoy.
+ */
+export function handlesSinChoque(refs: Iterable<string>): Map<string, string> {
+  const todas = [...new Set(refs)].filter((r) => r.trim().length > 0);
+  const minusculas = todas.map((r) => r.toLowerCase());
+  const handles = new Map<string, string>();
+  todas.forEach((ref, i) => {
+    const propia = minusculas[i];
+    let largo = Math.min(LARGO_DEL_HANDLE, ref.length);
+    while (largo < ref.length) {
+      const fin = propia.slice(-largo);
+      if (!minusculas.some((otra, j) => j !== i && otra.endsWith(fin))) break;
+      largo++;
+    }
+    handles.set(ref, ref.slice(-largo));
+  });
+  return handles;
+}
