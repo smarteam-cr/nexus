@@ -20,6 +20,7 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
+import { renderCronogramaParaAgentes } from "@/lib/contexto/cronograma-para-agentes";
 
 /**
  * Las secciones de la Entrega que sirven de REFERENCIA para el próximo proyecto del mismo
@@ -628,28 +629,10 @@ export async function loadTimelineContext(
   });
   if (!tl || tl.phases.length === 0) return "";
 
-  const header = withProgress
-    ? "CRONOGRAMA CON AVANCE CONFIRMADO (fases y tareas con su id y estado — usá esos ids EXACTOS para proponer avance; NO re-propongas lo que ya está DONE):"
-    : withIds
-    ? "CRONOGRAMA (fases en orden, cada una con su id — usá esos ids EXACTOS en tu output):"
-    : "CRONOGRAMA (fases en orden — contexto de solo lectura, NO lo reproduzcas como lista en tu output):";
-  const lines: string[] = [header];
-  tl.phases.forEach((p, i) => {
-    const bits = [`${i + 1}. ${p.name}`];
-    if (p.durationWeeks) bits.push(`${p.durationWeeks} sem`);
-    if (p.sessionCount) bits.push(`${p.sessionCount} sesiones`);
-    if (withIds) bits.push(`tipo: ${p.activityType ?? "(sin asignar)"}`);
-    if (withProgress) bits.push(`estado: ${p.status}`);
-    let line = bits.join(" · ");
-    if (withIds) line = `[id: ${p.id}] ${line}`;
-    if (p.notes?.trim()) line += ` — ${p.notes.trim()}`;
-    lines.push(line);
-    if (withProgress) {
-      for (const t of p.tasks) {
-        lines.push(`   - [tarea id: ${t.id}] (sem ${t.weekIndex + 1}, ${t.status}) ${t.title}`);
-      }
-    }
-  });
+  /* El encabezado y los renglones de fase (y de tarea, con avance) tienen UN dueño desde E2a: el
+     renderizador puro, que también lee la estructura SUPUESTA del borrador en el paso 2 de
+     «Regenerar todo». El golden de lib/contexto/cronograma-para-agentes.test.ts fija el texto. */
+  const lines: string[] = renderCronogramaParaAgentes(tl.phases, { includeIds: withIds, includeProgress: withProgress });
 
   // Bloque de desviaciones ya registradas, con su HUELLA. Es lo que permite que la instrucción
   // "no repitas lo ya registrado" sea cumplible: el agente ve el hecho y la clave con que quedó.

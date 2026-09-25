@@ -94,6 +94,10 @@ const CARGADORES_PESADOS = [
   "repartirEspacio",
   "bloqueDeReunionesDelCronograma",
   "bloqueDeNotasDelCronograma",
+  /* E2a P4: el renderizador del cronograma que leen los agentes (y el paso 2 de «Regenerar todo»,
+     sobre la estructura supuesta). Es la otra manera de armar el mismo texto que `loadTimelineContext`
+     sin pasar por él: el chat tiene su propio resumen del cronograma. */
+  "renderCronogramaParaAgentes",
 ];
 
 describe("el contexto del chat se mantiene liviano", () => {

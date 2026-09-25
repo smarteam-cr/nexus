@@ -51,6 +51,16 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
 import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";
+import {
+  estructuraParaElDetalle,
+  fusionarDetalleEnElBorrador,
+  leerPedidoDeTareas,
+  marcarTareasEnCurso,
+  prevalidarPedidoDeTareas,
+  type PedidoDeTareas,
+} from "@/lib/timeline/borrador-del-detalle";
+import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
+import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import {
@@ -145,6 +155,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     preview?: boolean;
     /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
     forzar?: boolean;
+    /** E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» completa el BORRADOR del cronograma
+     *  (lib/timeline/borrador-del-detalle.ts): el que el CSE tiene enfrente (`token` + `version`), o
+     *  uno nuevo si no había propuesta de fases (`token` null). Sin esto, el paso 2 de siempre. */
+    borrador?: { token: string | null; version: number | null };
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -154,6 +168,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let bodyProjectId: string | null = body?.projectId ?? null;
   const regeneratePhaseId: string | null =
     typeof body?.regeneratePhaseId === "string" && body.regeneratePhaseId ? body.regeneratePhaseId : null;
+  /* E2a: el paso 2 que completa el borrador. `pedidoDeTareas` se valida con el agente ya resuelto;
+     `timelineDelBorrador` lo fija la prevalidación y `sobreDelDetalle` es la estructura SUPUESTA
+     que lee el agente (y que la fusión usa tal cual, en memoria). Todas las escrituras del borrador
+     viven en lib/timeline/borrador-del-detalle.ts: esta ruta no escribe el borrador. */
+  let pedidoDeTareas: PedidoDeTareas | null = null;
+  let timelineDelBorrador: string | null = null;
+  let sobreDelDetalle: EstructuraSupuesta | null = null;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -387,6 +408,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // recolectar fuentes o llamar a Claude.
   // Por convención de id: el base O una variante por tipo (agent-timeline-detail--<tipo>).
   const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
+  /* E2a: el `borrador` solo lo usa el paso 2 de «Regenerar todo» (el detalle, todas las fases). Mal
+     formado, con «Regenerar» de una fase o con otro agente: 400, antes de crear nada. */
+  const pedidoLeido = leerPedidoDeTareas(body?.borrador);
+  if (pedidoLeido === "invalido" || (pedidoLeido !== null && (!isTimelineDetailAgent || regeneratePhaseId))) {
+    return NextResponse.json(
+      { error: "PEDIDO_INVALIDO", message: "El pedido de tareas del borrador no es válido: recarga la página y vuelve a intentar." },
+      { status: 400 },
+    );
+  }
+  pedidoDeTareas = pedidoLeido;
   if (isTimelineDetailAgent) {
     if (!bodyProjectId) {
       return NextResponse.json(
@@ -406,6 +437,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         },
         { status: 400 },
       );
+    }
+    /* E2a: el borrador que se va a completar, comprobado ANTES de crear la corrida (no se paga una
+       que no se va a guardar): el que el CSE tiene enfrente, o ninguno si no había propuesta. */
+    if (pedidoDeTareas) {
+      const vetoDelBorrador = await prevalidarPedidoDeTareas(tl.id, pedidoDeTareas);
+      if (vetoDelBorrador) return NextResponse.json(vetoDelBorrador, { status: 409 });
+      timelineDelBorrador = tl.id;
     }
     // D.1 regen por fase — validación mínima. La seguridad NO viene de bloquear proyectos publicados:
     // (a) el borrado scopeado preserva SIEMPRE las tareas DONE/iniciadas y las manuales, y
@@ -1901,6 +1939,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // huellas del material interno (el aviso de frontera de cada tarea propuesta, en los previews).
   let sesionesDelDetalle: string[] = [];
   let huellasDelDetalle: HuellasDeFrontera | null = null;
+  // E2a: si el modelo se cortó por `max_tokens`, la última fase del JSON reparado no genera cambios.
+  let detalleCortado = false;
   if (isTimelineDetailAgent && bodyProjectId) {
     // El pipelineKey del contexto sale del PROYECTO, no del agente: la columna del agente
     // es NULL por convención en las variantes X2 (el tipo viaja en su id), así que leerla
@@ -1909,10 +1949,19 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       where: { id: bodyProjectId },
       select: { hubspotPipelineId: true },
     });
-    const contexto = await cargarContextoDelDetalle(
-      bodyProjectId,
-      pipelineKeyDeProyecto(proyectoDelContexto?.hubspotPipelineId ?? null),
-    );
+    // E2a: el paso 2 del borrador lee la estructura SUPUESTA (la de la propuesta), no la de hoy. Si el
+    // borrador ya no es el que marcó esta corrida (se aplicó, se descartó o se volvió a pedir): 409,
+    // antes de pagar el modelo.
+    if (pedidoDeTareas) {
+      sobreDelDetalle = await estructuraParaElDetalle(timelineDelBorrador!, existingRunId);
+      if (!sobreDelDetalle) {
+        return NextResponse.json({ error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO }, { status: 409 });
+      }
+    }
+    const contexto = await cargarContextoDelDetalle(bodyProjectId, {
+      pipelineKey: pipelineKeyDeProyecto(proyectoDelContexto?.hubspotPipelineId ?? null),
+      sobre: sobreDelDetalle,
+    });
     userMessage = renderDetalleDeCronograma({
       instrucciones: contexto.instrucciones,
       fuentes: contexto.fuentes,
@@ -2065,6 +2114,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         });
 
     const stopReason = msg.stop_reason;
+    detalleCortado = isTimelineDetailAgent && stopReason === "max_tokens";
     const raw = (msg.content[0] as { type: string; text: string }).text.trim();
 
     // ── Logging diagnóstico para CARDS_AND_FLOWCHARTS ─────────────────────────
@@ -2282,6 +2332,25 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
        propuesta de TODAS (/timeline/detail/apply-all), que es el camino de la primera generación y el
        de "Regenerar todo el cronograma". El prompt ya pide todas las fases por default. */
     if (bodyProjectId) {
+      /* E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» no devuelve una vista previa: lo que
+         armó el agente se FUSIONA en el borrador (cambios de tareas que el CSE revisa arriba del Gantt),
+         sobre la estructura que vio. Va DESPUÉS de guardar la salida de la corrida: si la fusión falla,
+         lo armado queda en la corrida. Las dos ramas de abajo quedan para las pestañas viejas y para
+         «Regenerar» de una fase. */
+      if (pedidoDeTareas) {
+        const tareas = await fusionarDetalleEnElBorrador({
+          timelineId: timelineDelBorrador!,
+          corrida: run.id,
+          estructura: sobreDelDetalle!.estructura,
+          analysisJson,
+          huellas: huellasDelDetalle,
+          cortado: detalleCortado,
+        });
+        return NextResponse.json({
+          tareas,
+          run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
+        });
+      }
       if (regeneratePhaseId) {
         const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId, huellasDelDetalle);
         return NextResponse.json({
@@ -2819,7 +2888,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // cliente no sostenga la conexión → adiós "Error de conexión" a los 3 min). El cliente
   // trackea por polling al GET [runId]. Funciona desde CUALQUIER disparador (pop-up de
   // agentes, tarjeta, sub-paso) — NO depende del flag async del cliente.
-  const runDetached = body?.async === true || agent.outputType === "CARDS_AND_FLOWCHARTS";
+  // E2a: el paso 2 del borrador siempre va detached (1-4 min): el borrador sigue la corrida, no la conexión.
+  const runDetached = body?.async === true || agent.outputType === "CARDS_AND_FLOWCHARTS" || pedidoDeTareas !== null;
 
   /**
    * A quién cargarle el gasto de IA de esta corrida. Se envuelve acá —en los llamadores de
@@ -2835,6 +2905,14 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     triggeredByEmail: pre.triggeredByEmail,
     origen: "clients/analyze",
   };
+
+  /* E2a: con la corrida ya creada, el borrador queda «armando» (su estado se deduce de ESTA corrida:
+     si el proceso muere, pasa solo a «fallo»). Si en el medio entró otra propuesta o cambió la que el
+     CSE tenía enfrente, no se pisa nada y la corrida queda en ERROR con el motivo. */
+  if (pedidoDeTareas) {
+    const vetoDeLaMarca = await marcarTareasEnCurso({ timelineId: timelineDelBorrador!, pedido: pedidoDeTareas, corrida: pre.id });
+    if (vetoDeLaMarca) return await markDone(NextResponse.json(vetoDeLaMarca, { status: 409 }));
+  }
 
   if (runDetached) {
     void (async () => {

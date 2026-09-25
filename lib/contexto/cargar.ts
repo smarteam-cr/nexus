@@ -17,6 +17,7 @@ import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/s
 import { resolvePipeline, type ProjectPipelineKey } from "@/lib/projects/kind";
 import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
+import { renderCronogramaParaAgentes, type EstructuraSupuesta } from "./cronograma-para-agentes";
 import { fuentesDelAssist } from "./asistente-cronograma";
 import { calendarioDeEstructura, fuentesDeEstructura } from "./estructura-cronograma";
 import { claveConVozDeHandoffPropia } from "@/lib/timeline/semana-cero";
@@ -50,6 +51,12 @@ import {
   type ReunionElegida,
 } from "./material-cronograma";
 
+export interface OpcionesDelDetalle {
+  pipelineKey?: ProjectPipelineKey | null;
+  /** La estructura supuesta del borrador (E2a). null = el cronograma real. */
+  sobre?: EstructuraSupuesta | null;
+}
+
 /**
  * El contexto del Detalle de Cronograma (pieza "timeline"):
  *   · cronograma-actual      — las fases existentes CON ids (el agente referencia, no crea)
@@ -63,21 +70,28 @@ import {
  * Sin fechas en lo que el agente ESCRIBE: el sistema las calcula. Con material, cada reunión
  * llega con su fecha y el lugar del plan donde cayó, y el cargador del material arma además un
  * calendario de solo lectura para ubicarlas.
+ *
+ * `sobre` (E2a, el paso 2 de «Regenerar todo»): la estructura SUPUESTA del borrador. El agente lee
+ * esas fases —con las nuevas de la propuesta, por su clave `n:…`— con el mismo renderizador que el
+ * cronograma real, y el material se ubica en el calendario de ESA estructura. Sin `sobre`, lo de
+ * siempre.
  */
 export async function cargarContextoDelDetalle(
   projectId: string,
-  pipelineKey: ProjectPipelineKey | null = null,
+  { pipelineKey = null, sobre = null }: OpcionesDelDetalle = {},
 ): Promise<ContextoDeProyecto> {
   const [handoffCtx, timelineCtx, desarrolloCtx, canvasCronograma, mat] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: true }),
-    loadTimelineContext(projectId, { includeIds: true }),
+    sobre
+      ? Promise.resolve([...renderCronogramaParaAgentes(sobre.fases, { includeIds: true })].join("\n"))
+      : loadTimelineContext(projectId, { includeIds: true }),
     loadDesarrolloContext(projectId),
     prisma.projectCanvas.findFirst({
       where: { projectId, ...canvasOf("timeline") },
       select: { sections: true },
     }),
     // ÚLTIMO a propósito: el censo de handoff-al-cliente mide la distancia hasta el embudo.
-    cargarMaterialDelCronograma(projectId),
+    sobre ? cargarMaterialDelCronograma(projectId, { fases: sobre.foto }) : cargarMaterialDelCronograma(projectId),
   ]);
   return {
     projectId,

@@ -92,6 +92,18 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
         "materialInterno: mat.materialInterno",
       );
     }
+    /* E2a P4: el paso 2 de «Regenerar todo» lee la estructura SUPUESTA del borrador (`sobre`). El
+       agente ve ESAS fases y el material se ubica en el calendario de ESA estructura; sin `sobre`,
+       todo sigue como arriba. La edición que la pone en rojo: leer el cronograma real con `sobre`
+       (el agente armaría tareas para fases que no son las de la propuesta), o ubicar las reuniones
+       en el calendario de hoy (vería semanas que la propuesta ya movió). */
+    const detalle = tramoDe(src, "cargarContextoDelDetalle");
+    expect(detalle, "con `sobre`, el detalle dejó de leer la estructura supuesta").toContain(
+      "renderCronogramaParaAgentes(sobre.fases, { includeIds: true })",
+    );
+    expect(detalle, "con `sobre`, el material dejó de ubicarse en el calendario supuesto").toContain(
+      "cargarMaterialDelCronograma(projectId, { fases: sobre.foto })",
+    );
   });
 
   it("⭐ el revisor de fases de «Regenerar todo» carga el material con SU foto, y el handoff recién después", () => {

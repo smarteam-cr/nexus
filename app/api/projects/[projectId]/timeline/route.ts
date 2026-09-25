@@ -58,6 +58,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
 import { MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
+import { leerEstadoDeLasTareas, type EstadoDeLasTareasDelBorrador } from "@/lib/timeline/borrador-del-detalle";
 import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -177,6 +178,10 @@ interface TimelineResponse {
    *  muestra como vista previa aplicable. Se limpia al aplicar (PUT) o descartar (DELETE). */
   pendingProposal: PutBody | null;
   pendingProposalRunId: string | null;
+  /** E2a: el estado de las TAREAS del borrador (el paso 2 de «Regenerar todo»), deducido de su
+   *  corrida: «armando» (con la fase que reporta), «faltan», «fallo» (con su motivo) o «listas».
+   *  null = no hay un borrador que espere tareas. Solo se lee. */
+  tareasDelBorrador: EstadoDeLasTareasDelBorrador | null;
   // D.2 — borrador de avance (separado de pendingProposal; no es status real).
   pendingProgress: PendingProgress | null;
   pendingProgressRunId: string | null;
@@ -384,6 +389,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     kickoffSessionDate: kickoffDate?.toISOString() ?? null,
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,
+    tareasDelBorrador: await leerEstadoDeLasTareas(tl.pendingProposal),
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
     pendingProgressRunId: tl.pendingProgressRunId,
     pendingParticularidades: (tl.pendingParticularidades as PendingParticularidad[] | null) ?? null,

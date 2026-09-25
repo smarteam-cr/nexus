@@ -22,6 +22,8 @@ import type { NextRequest } from "next/server";
 const db = vi.hoisted(() => ({
   projectTimeline: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
   timelinePhase: { findFirst: vi.fn(), findMany: vi.fn() },
+  // E2a P4: la marca «armando» de un borrador nuevo lee de qué fuente son las tareas de hoy.
+  timelineTask: { findMany: vi.fn() },
   agentRun: { findUnique: vi.fn(), update: vi.fn() },
   timelineChange: { create: vi.fn() },
   project: { findUnique: vi.fn() },
@@ -42,10 +44,20 @@ import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline
 import { ErrorAlAplicar } from "@/lib/timeline/escribir-estructura";
 import { FORMATO_BORRADOR, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import {
+  estructuraParaElDetalle,
+  fusionarDetalleEnElBorrador,
   leerEstadoDeLasTareas,
+  leerPedidoDeTareas,
+  marcarTareasEnCurso,
+  MENSAJE_TAREAS_EN_CURSO,
+  MENSAJE_TAREAS_YA_LISTAS,
   MOTIVO_TAREAS_CORTADAS,
+  MOTIVO_TAREAS_PERDIDAS,
   MOTIVO_TAREAS_SIN_GUARDAR,
+  prevalidarPedidoDeTareas,
 } from "@/lib/timeline/borrador-del-detalle";
+import type { EstructuraHipotetica } from "@/lib/timeline/borrador";
+import { Prisma } from "@prisma/client";
 
 const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 /** Blanquea comentarios conservando saltos: NOMBRAR un problema para explicarlo no es causarlo. */
@@ -54,6 +66,7 @@ const soloCodigo = (src: string) =>
 
 const APLICAR = "app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts";
 const TIMELINE = "app/api/projects/[projectId]/timeline/route.ts";
+const ANALYZE = "app/api/clients/[id]/analyze/route.ts";
 
 describe("POST /timeline/borrador/aplicar", () => {
   const ruta = soloCodigo(leer(APLICAR));
@@ -359,5 +372,382 @@ describe("PUT /timeline con motivo, con una propuesta abierta", () => {
     // Y el 409 llega a la pantalla con el texto en `error` (lo que muestran la pantalla y el chat).
     expect(put).toContain('if (status === 409) {');
     expect(put).toContain('{ error: (err as Error).message, code: "PROPUESTA_ABIERTA" }, { status: 409 }');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── EL PASO 2 EN EL SERVIDOR (E2a P4): analyze completa el borrador ──────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a P4)", () => {
+  /* Escaneo del cableado de la ruta (3.400 líneas: montarla con Prisma cuesta más de lo que protege).
+     La conducta del helper va abajo, con la base falsa. */
+  const ruta = soloCodigo(leer(ANALYZE));
+
+  it("⛔ el pedido se valida y se prevalida ANTES de crear la corrida (no se paga una que no se guarda)", () => {
+    /* La edición que la pone en rojo: prevalidar después de `prisma.agentRun.create(` (o no prevalidar),
+       o aceptar `borrador` con «Regenerar» de una fase u otro agente. */
+    const iCrear = ruta.indexOf("prisma.agentRun.create(");
+    const iLeer = ruta.indexOf("leerPedidoDeTareas(body?.borrador)");
+    const iPrevalidar = ruta.indexOf("await prevalidarPedidoDeTareas(tl.id, pedidoDeTareas)");
+    expect(iCrear, "la ruta ya no crea corridas: revisar esta guarda").toBeGreaterThan(-1);
+    expect(iLeer, "la ruta no lee el pedido del borrador").toBeGreaterThan(-1);
+    expect(iPrevalidar, "la ruta no prevalida el pedido").toBeGreaterThan(-1);
+    expect(iLeer).toBeLessThan(iCrear);
+    expect(iPrevalidar, "se prevalida después de crear la corrida").toBeLessThan(iCrear);
+    expect(ruta.slice(iLeer, iLeer + 400)).toContain('(pedidoLeido !== null && (!isTimelineDetailAgent || regeneratePhaseId))');
+    expect(ruta.slice(iPrevalidar, iPrevalidar + 300)).toContain("return NextResponse.json(vetoDelBorrador, { status: 409 })");
+  });
+
+  it("⛔ la marca «armando» va entre la corrida creada y el trabajo detached; si no entra, 409 con la corrida cerrada", () => {
+    /* La edición que la pone en rojo: marcar antes de tener la corrida (el borrador apuntaría a nada),
+       o después de soltar el trabajo detached (la pantalla vería «faltan» mientras la IA ya corre). */
+    const iPre = ruta.indexOf("const pre = await prisma.agentRun.create(");
+    const iMarca = ruta.indexOf("await marcarTareasEnCurso(");
+    const iDetached = ruta.indexOf("if (runDetached) {");
+    expect(iPre).toBeGreaterThan(-1);
+    expect(iMarca, "la ruta no marca el borrador").toBeGreaterThan(iPre);
+    expect(iMarca).toBeLessThan(iDetached);
+    expect(ruta.slice(iMarca, iDetached)).toContain("corrida: pre.id");
+    expect(ruta.slice(iMarca, iDetached)).toContain("return await markDone(NextResponse.json(vetoDeLaMarca, { status: 409 }))");
+    // El paso 2 del borrador siempre va detached: el borrador sigue la corrida, no la conexión.
+    expect(ruta).toMatch(/const runDetached = [^;]*\|\| pedidoDeTareas !== null;/);
+  });
+
+  it("⭐ el agente lee la estructura SUPUESTA, y si el borrador ya no es el suyo: 409 antes del modelo", () => {
+    const rama = ruta.slice(ruta.indexOf("if (isTimelineDetailAgent && bodyProjectId) {"));
+    const tramo = rama.slice(0, rama.indexOf("\n  }"));
+    expect(tramo.length, "no encontré la rama del detalle").toBeGreaterThan(200);
+    const iEstructura = tramo.indexOf("sobreDelDetalle = await estructuraParaElDetalle(timelineDelBorrador!, existingRunId);");
+    const iCargar = tramo.indexOf("cargarContextoDelDetalle(bodyProjectId, {");
+    expect(iEstructura, "el paso 2 no lee la estructura supuesta").toBeGreaterThan(-1);
+    expect(iEstructura).toBeLessThan(iCargar);
+    expect(tramo.slice(iEstructura, iCargar)).toContain(
+      '{ error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO }, { status: 409 }',
+    );
+    expect(tramo.slice(iCargar)).toContain("sobre: sobreDelDetalle,");
+  });
+
+  it("⭐ la salida cortada por max_tokens se marca junto al stop_reason", () => {
+    /* [D5] Sin esto, la última fase del JSON reparado (a medias) reemplazaría las tareas de su fase.
+       La edición que la pone en rojo: no marcarla, o marcarla con otro criterio. */
+    const iStop = ruta.indexOf("const stopReason = msg.stop_reason;");
+    expect(iStop).toBeGreaterThan(-1);
+    expect(ruta.slice(iStop, iStop + 200)).toContain('detalleCortado = isTimelineDetailAgent && stopReason === "max_tokens";');
+  });
+
+  it("⛔ la fusión va DESPUÉS de guardar la corrida y ANTES de las vistas previas de siempre", () => {
+    /* La edición que la pone en rojo: fusionar antes de guardar la salida de la corrida (si la fusión
+       falla, lo armado se pierde), o dejar que un pedido del borrador caiga en la vista previa vieja. */
+    const iRun = ruta.indexOf("const run = existingRunId");
+    const iFusion = ruta.indexOf("fusionarDetalleEnElBorrador(");
+    const iPreview = ruta.indexOf("computeTimelineDetailPreview(bodyProjectId");
+    expect(iRun).toBeGreaterThan(-1);
+    expect(iFusion, "se fusiona antes de guardar la corrida").toBeGreaterThan(iRun);
+    expect(iFusion).toBeLessThan(iPreview);
+    const llamada = ruta.slice(iFusion, ruta.indexOf("});", iFusion));
+    expect(llamada).toContain("corrida: run.id,");
+    expect(llamada, "la fusión no usa la estructura que vio el agente").toContain("estructura: sobreDelDetalle!.estructura,");
+    expect(llamada).toContain("cortado: detalleCortado,");
+  });
+
+  it("⛔ la ruta no escribe el borrador: exactamente 4 accesos a projectTimeline, todos de antes", () => {
+    /* Todas las escrituras del borrador viven en lib/timeline/borrador-del-detalle.ts (probadas abajo
+       con la base falsa). Los 4 de hoy: el fail-fast, y la lectura, la escritura y el alta del
+       handoff. La edición que la pone en rojo: escribir el borrador (o cualquier otra cosa del
+       cronograma) en la ruta. `toBe`, no `>=`: una de más también es roja. */
+    expect(ruta.match(/prisma\.projectTimeline\./g) ?? []).toHaveLength(4);
+  });
+});
+
+describe("GET /timeline — el estado de las tareas del borrador viaja en el cable (E2a P4)", () => {
+  it("lo lee con la misma deducción que aplicar (solo lee)", () => {
+    /* La edición que la pone en rojo: sacarlo del GET (la pantalla no sabría que se están armando las
+       tareas al recargar) o calcularlo por otro camino. */
+    const ruta = soloCodigo(leer(TIMELINE));
+    const carga = ruta.slice(ruta.indexOf("async function loadTimeline("), ruta.indexOf("export async function GET("));
+    expect(carga.length, "no encontré loadTimeline").toBeGreaterThan(500);
+    expect(carga).toContain("tareasDelBorrador: await leerEstadoDeLasTareas(tl.pendingProposal),");
+  });
+});
+
+// ── La conducta del helper, con la base falsa ─────────────────────────────────
+
+/** Una fase de la base como la lee el helper (con sus tareas). */
+const faseDB = (extra: Record<string, unknown> = {}) => ({
+  id: "f1",
+  name: "Diseño",
+  order: 0,
+  durationWeeks: 2,
+  startWeek: null,
+  sessionCount: null,
+  notes: null,
+  activityType: "PLANIFICACION",
+  tasks: [] as unknown[],
+  ...extra,
+});
+const tareaDB = (extra: Record<string, unknown> = {}) => ({
+  id: "t-vieja",
+  title: "Mapear procesos viejos",
+  weekIndex: 0,
+  order: 0,
+  notes: null,
+  party: null,
+  type: null,
+  status: "PENDING",
+  source: "AGENT",
+  startDateOverride: null,
+  dueDateOverride: null,
+  needsValidation: false,
+  ...extra,
+});
+/** La estructura que VIO el agente: «Diseño» con 3 semanas (la propuesta la alargaba). */
+const ESTRUCTURA: EstructuraHipotetica = {
+  ancla: null,
+  fases: [
+    {
+      id: "f1",
+      name: "Diseño",
+      durationWeeks: 3,
+      startWeek: null,
+      sessionCount: null,
+      notes: null,
+      activityType: "PLANIFICACION",
+      existente: true,
+      tareas: [],
+    },
+  ],
+};
+const DETALLE = {
+  timelineDetail: { phases: [{ id: "f1", tasks: [{ title: "Diseñar el tablero", weekIndex: 2, party: "SMARTEAM" }] }] },
+};
+const claves = () => {
+  let n = 0;
+  return () => `clave-${++n}`;
+};
+
+describe("leerPedidoDeTareas — el `borrador` del body de /analyze", () => {
+  it("sin borrador: null; token null: un borrador nuevo; con token, la versión es obligatoria", () => {
+    expect(leerPedidoDeTareas(undefined)).toBeNull();
+    expect(leerPedidoDeTareas(null)).toBeNull();
+    expect(leerPedidoDeTareas({ token: null })).toEqual({ token: null, version: null });
+    expect(leerPedidoDeTareas({ token: null, version: 0 })).toEqual({ token: null, version: null });
+    expect(leerPedidoDeTareas({ token: "run-1", version: 5 })).toEqual({ token: "run-1", version: 5 });
+    for (const malo of [{ token: "run-1" }, { token: "run-1", version: "5" }, { token: "run-1", version: -1 }, { token: "" , version: 1 }, {}, "run-1", [1]]) {
+      expect(leerPedidoDeTareas(malo), JSON.stringify(malo)).toBe("invalido");
+    }
+  });
+});
+
+describe("prevalidarPedidoDeTareas — antes de pagar la corrida", () => {
+  const corrida = (status: string, minutos: number) =>
+    db.agentRun.findUnique.mockResolvedValue({ status, updatedAt: new Date(Date.now() - minutos * 60_000), currentPhase: null, output: null });
+
+  it("token null: solo sin ninguna propuesta abierta", async () => {
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: null, pendingProposalRunId: null });
+    expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null })).toBeNull();
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: VIEJA, pendingProposalRunId: "run-h" });
+    expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null })).toMatchObject({ error: "PROPUESTA_PENDIENTE" });
+  });
+
+  it("⛔ con token: la misma corrida y versión, y las tareas en «faltan» o «fallo»", async () => {
+    /* La edición que la pone en rojo: armar otra vez mientras se arman (dos corridas pagadas sobre el
+       mismo borrador) o sobre otra versión que la que vio el CSE. */
+    const pedido = { token: "run-1", version: 5 };
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: v1(), pendingProposalRunId: "run-1" });
+    expect(await prevalidarPedidoDeTareas("tl", pedido), "«faltan»").toBeNull();
+    expect(await prevalidarPedidoDeTareas("tl", { token: "run-1", version: 4 })).toMatchObject({ error: "PROPUESTA_CAMBIO" });
+    expect(await prevalidarPedidoDeTareas("tl", { token: "run-2", version: 5 })).toMatchObject({ error: "PROPUESTA_CAMBIO" });
+
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: v1({ tareas: { corrida: "run-t", listas: false } }),
+      pendingProposalRunId: "run-1",
+    });
+    corrida("RUNNING", 1);
+    expect(await prevalidarPedidoDeTareas("tl", pedido)).toEqual({ error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO });
+    corrida("ERROR", 1);
+    expect(await prevalidarPedidoDeTareas("tl", pedido), "«fallo»").toBeNull();
+
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: v1({ tareas: { corrida: "run-t", listas: true } }),
+      pendingProposalRunId: "run-1",
+    });
+    expect(await prevalidarPedidoDeTareas("tl", pedido)).toEqual({ error: "NO_SE_PUEDE", message: MENSAJE_TAREAS_YA_LISTAS });
+
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: v1({ cambios: [{ tipo: "tarea-se-muda", clave: "x" }] }),
+      pendingProposalRunId: "run-1",
+    });
+    expect(await prevalidarPedidoDeTareas("tl", pedido), "un cambio que esta versión no conoce").toMatchObject({ error: "NO_SE_PUEDE" });
+  });
+});
+
+describe("marcarTareasEnCurso — el borrador queda «armando» con la corrida", () => {
+  it("⛔ token null: nace un borrador vacío SOLO si no hay ninguna propuesta, y su token es la corrida", async () => {
+    /* La edición que la pone en rojo: escribir sin la condición `DbNull` (pisaría la propuesta que
+       entró en el medio) o deducir el pedido de otro lado. */
+    db.timelineTask.findMany.mockResolvedValue([{ source: "HUMAN" }, { source: "AGENT" }]);
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-t" })).toBeNull();
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[0];
+    expect(where).toEqual({ id: "tl", pendingProposal: { equals: Prisma.DbNull } });
+    expect(data.pendingProposalRunId).toBe("run-t");
+    expect(data.pendingProposal).toMatchObject({
+      formato: FORMATO_BORRADOR,
+      version: 0,
+      cambios: [],
+      pedido: "regenerar",
+      tareas: { corrida: "run-t", listas: false },
+    });
+
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-t" })).toMatchObject({
+      error: "PROPUESTA_PENDIENTE",
+    });
+  });
+
+  it("⛔ con token: condicionada a token + versión, versión + 1 y sin perder lo que el guardado traía", async () => {
+    /* [D16] Quien escribe parte del JSON guardado y solo pisa sus campos. La edición que la pone en
+       rojo: escribir sin la versión en el where, rearmar el JSON desde cero, o no subir la versión. */
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: v1({ cambios: [TAREA_NUEVA], extra: { de: "otra versión" } }),
+      pendingProposalRunId: "run-1",
+    });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 5 }, corrida: "run-t" })).toBeNull();
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[0];
+    expect(where).toEqual({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: { path: ["version"], equals: 5 } });
+    expect(data.pendingProposalRunId, "el token del borrador no cambia").toBeUndefined();
+    expect(data.pendingProposal).toEqual({
+      ...v1({ cambios: [TAREA_NUEVA], extra: { de: "otra versión" } }),
+      version: 6,
+      tareas: { corrida: "run-t", listas: false },
+    });
+
+    db.projectTimeline.updateMany.mockClear();
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 4 }, corrida: "run-t" })).toMatchObject({
+      error: "PROPUESTA_CAMBIO",
+    });
+    expect(db.projectTimeline.updateMany, "escribió sobre otra versión").not.toHaveBeenCalled();
+  });
+});
+
+describe("estructuraParaElDetalle — la estructura SUPUESTA que lee el agente", () => {
+  it("las fases de la propuesta (con las nuevas por su clave) y su foto; null si el borrador ya no es de esta corrida", async () => {
+    const nueva = {
+      tipo: "fase-nueva",
+      clave: "n:0a1b2c3d",
+      fase: { name: "Migración", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      despuesDe: "f1",
+    };
+    const guardado = v1({ cambios: [nueva], tareas: { corrida: "run-t", listas: false } });
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: guardado,
+      anchorStartDate: new Date("2026-09-07T00:00:00.000Z"),
+      closeDateOverride: null,
+      phases: [faseDB({ tasks: [tareaDB()] })],
+    });
+    const sobre = await estructuraParaElDetalle("tl", "run-t");
+    expect(sobre?.fases.map((f) => f.id)).toEqual(["f1", "n:0a1b2c3d"]);
+    expect(sobre?.foto.phases).toEqual([
+      { id: "f1", name: "Diseño", durationWeeks: 2, startWeek: null },
+      { id: "n:0a1b2c3d", name: "Migración", durationWeeks: 2, startWeek: null },
+    ]);
+    expect(sobre?.estructura.fases[1]).toMatchObject({ id: "n:0a1b2c3d", existente: false, tareas: [] });
+    // La marca de OTRA corrida (se volvió a pedir en el medio): el agente no corre sobre ella.
+    expect(await estructuraParaElDetalle("tl", "run-otra")).toBeNull();
+  });
+});
+
+describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO borrador", () => {
+  const tlConBorrador = (guardado: unknown, tareas: unknown[] = [tareaDB()]) =>
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: guardado,
+      pendingProposalRunId: "run-1",
+      anchorStartDate: null,
+      project: { tags: [] },
+      phases: [faseDB({ tasks: tareas })],
+    });
+  const fusionar = (extra: Record<string, unknown> = {}) =>
+    fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-t",
+      estructura: ESTRUCTURA,
+      analysisJson: DETALLE,
+      huellas: null,
+      cortado: false,
+      nuevaClave: claves(),
+      ...extra,
+    });
+
+  it("⭐ condicionada a token + versión, con la estructura que VIO el agente y sin perder lo guardado", async () => {
+    /* [D15] La estructura del mensaje se usa tal cual: la tarea de la semana 3 entra porque «Diseño»
+       tenía 3 semanas en la propuesta, aunque la base diga 2 (y el cierre del plan la saca si la
+       propuesta de semanas no se aplica). La edición que la pone en rojo: recalcular la estructura
+       al fusionar, escribir sin token o versión, o rearmar el JSON desde cero. */
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false }, extra: { de: "otra versión" } }));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    expect(await fusionar()).toEqual({ estado: "listas", nuevas: 1, seVan: 1, observaciones: [] });
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[0];
+    expect(where).toEqual({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: { path: ["version"], equals: 5 } });
+    const escrito = data.pendingProposal;
+    expect(escrito.extra, "perdió lo que el guardado traía").toEqual({ de: "otra versión" });
+    expect(escrito.version).toBe(6);
+    expect(escrito.tareas).toEqual({ corrida: "run-t", listas: true });
+    expect(escrito.tareasArmadasPara, "no usó la estructura que vio el agente").toEqual({ f1: { nombre: "Diseño", semanas: 3 } });
+    expect(escrito.cambios.map((c: { tipo: string }) => c.tipo)).toEqual(["tarea-se-va", "tarea-nueva"]);
+    expect(escrito.cambios[1].tarea).toMatchObject({ title: "Diseñar el tablero", weekIndex: 2 });
+    expect(escrito.desconocidos).toBeUndefined();
+    expect(db.agentRun.update, "una fusión que entra no deja aviso en la corrida").not.toHaveBeenCalled();
+  });
+
+  it("⛔ sin ningún cambio en total, el borrador se BORRA (condicionado a token + versión)", async () => {
+    /* Una fase quieta (sin tareas del agente) no genera nada: un borrador vacío «listo» no tiene nada
+       que revisar. La edición que la pone en rojo: guardar un borrador vacío, o borrar sin condición. */
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false } }));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const r = await fusionar({ analysisJson: { timelineDetail: { phases: [{ id: "f1", tasks: [] }] } } });
+    expect(r).toEqual({ estado: "sin-cambios", observaciones: [] });
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[0];
+    expect(where).toEqual({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: { path: ["version"], equals: 5 } });
+    expect(data).toEqual({ pendingProposal: Prisma.DbNull, pendingProposalRunId: null });
+    expect(db.agentRun.update, "sin nada que avisar, la corrida no se toca").not.toHaveBeenCalled();
+
+    // Salida cortada en su única fase: nada cambia, y el aviso de la IA no se pierde con el borrador.
+    db.projectTimeline.updateMany.mockClear();
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false } }));
+    const cortada = await fusionar({ cortado: true });
+    expect(cortada.estado).toBe("sin-cambios");
+    expect(db.projectTimeline.updateMany.mock.calls[0][0].data).toEqual({ pendingProposal: Prisma.DbNull, pendingProposalRunId: null });
+    expect(db.agentRun.update, "el aviso de la IA se perdió con el borrador").toHaveBeenCalledTimes(1);
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toContain("La IA se cortó antes de terminar");
+  });
+
+  it("⛔ otra corrida, tareas ya listas o sin borrador: «perdido», sin escribir y con el aviso en la corrida", async () => {
+    /* [D9] Mientras la IA armaba, la propuesta se aplicó, se descartó o se volvió a pedir. La edición
+       que la pone en rojo: fusionar igual (pisaría el borrador de otra corrida o uno ya revisado). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    for (const guardado of [
+      v1({ tareas: { corrida: "run-otra", listas: false } }),
+      v1({ tareas: { corrida: "run-t", listas: true } }),
+      null,
+    ]) {
+      db.agentRun.update.mockClear();
+      tlConBorrador(guardado);
+      expect(await fusionar(), JSON.stringify(guardado?.tareas ?? null)).toEqual({ estado: "perdido" });
+      expect(db.agentRun.update).toHaveBeenCalledTimes(1);
+      const [{ where, data }] = db.agentRun.update.mock.calls[0];
+      expect(where).toEqual({ id: "run-t" });
+      expect(JSON.parse(data.output)).toEqual({ ...DETALLE, timelineSyncError: MOTIVO_TAREAS_PERDIDAS });
+    }
+    expect(db.projectTimeline.updateMany, "escribió un borrador que ya no era el suyo").not.toHaveBeenCalled();
+  });
+
+  it("si la escritura condicionada no entra (cambió en el medio): «perdido», sin reintentar", async () => {
+    tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false } }));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
+    expect(await fusionar()).toEqual({ estado: "perdido" });
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(MOTIVO_TAREAS_PERDIDAS);
   });
 });
