@@ -38,7 +38,11 @@ import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
-import { ID_ESTRUCTURA_CRONOGRAMA, PROMPT_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
+import {
+  ID_ESTRUCTURA_CRONOGRAMA,
+  PROMPT_ESTRUCTURA_CRONOGRAMA,
+  VENTANA_DEL_PASO_1_EN_CURSO_MS,
+} from "@/lib/agents/estructura-cronograma";
 import { cargarContextoDeEstructura } from "@/lib/contexto/cargar";
 import {
   cierreActualDelPlan,
@@ -56,10 +60,6 @@ import {
   MENSAJE_ESTRUCTURA_EN_CURSO,
 } from "@/lib/timeline/propuesta-de-estructura";
 import { borradorBase, pedidoDelCronograma, type Vivo } from "@/lib/timeline/borrador";
-
-/** Un paso 1 de este proyecto que empezó hace menos que esto se considera en curso (el modelo tiene
- *  90 s de tope; una corrida que quedó RUNNING porque el proceso murió deja de frenar pasado esto). */
-const VENTANA_DEL_PASO_1_EN_CURSO_MS = 3 * 60_000;
 
 /** Cierra la corrida sin poder romper la respuesta que el CSE está esperando. */
 async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Record<string, unknown>): Promise<void> {

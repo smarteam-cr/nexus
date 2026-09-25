@@ -44,6 +44,7 @@ export default function LineaDeLasTareas({
   motivo,
   conMaterial = false,
   conCambiosDeFases = true,
+  deLaFase = null,
   onAccion,
   onDescartar,
   onSecundaria,
@@ -62,6 +63,8 @@ export default function LineaDeLasTareas({
   /** La propuesta trae cambios de fases que se aplican sin las tareas. Sin ellos (el borrador que nace
    *  vacío) no se promete «solo se aplican los cambios de fases». */
   conCambiosDeFases?: boolean;
+  /** Revisión de E2b: la fase de «Regenerar» de una fase, para que la espera diga cuál. */
+  deLaFase?: string | null;
   /** «Armar las tareas» / «Volver a intentar». Sin él (o sin permiso de generar), la línea solo informa. */
   onAccion?: () => void;
   /** «Descartar», para el borrador SIN cambios (no tiene barra, y la barra es la que lo trae). Sin él,
@@ -79,7 +82,7 @@ export default function LineaDeLasTareas({
   /** Sin barra alrededor: la línea lleva su propio recuadro. */
   suelta?: boolean;
 }) {
-  const deLasTareas = recalculo ? null : textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases);
+  const deLasTareas = recalculo ? null : textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases, deLaFase);
   // Con el recálculo, `onAccion` es «Recalcular las tareas»: sin él (sin permiso), la línea lo dice.
   const delRecalculo = recalculo ? textoDelRecalculo(recalculo, { puedePedir: !!onAccion }) : null;
   const linea = delRecalculo ?? deLasTareas;

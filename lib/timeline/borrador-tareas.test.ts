@@ -18,6 +18,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   AVISO_DETALLE_SIN_CAMBIOS,
+  avisoDelDetalleSinCambios,
+  avisoSinCambiosParaLaCorrida,
   AVISO_TAREAS_LISTAS,
   AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA,
   ACCION_AHORA_NO,
@@ -395,7 +397,9 @@ describe("2 · la tarea que se va: nunca lo que tiene avance ni lo que alguien e
     ]) {
       const it = estadoDe(planDeAplicacion(conTarea("b1", cambio), b), "tarea:b1:se-va");
       expect(it.estado, JSON.stringify(cambio)).toBe("choque");
-      expect(it.choque).toContain("La editaste a mano");
+      // ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25): el texto del ⚠ ya no dice «La editaste a mano
+      // después de la propuesta» (también choca lo editado mientras la IA armaba). Lo protegido no cambió.
+      expect(it.choque).toContain("Se editó a mano");
     }
   });
 
@@ -988,6 +992,33 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
     expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso: "PROPUESTA_CAMBIO" })).toMatchObject({
       texto: AVISO_DETALLE_SIN_CAMBIOS,
     });
+  });
+
+  it("⛔ sin cambios y con lo que notó: el toast dice el DESENLACE y cuántas, y lo notado va a la franja", () => {
+    /* Revisión de E2b. El aviso de la corrida era lo notado en los dos pasos, pegado, y reemplazaba a «La
+       IA terminó y no propone cambios»: el CSE nunca leía el desenlace, y lo del paso 1 salía otra vez (ya
+       estaba en el aviso del paso 1 y en la franja) en un toast de hasta 20 observaciones. Las ediciones
+       que la ponen en rojo: pintar lo notado en el toast, perder el desenlace, o no mandar lo notado a la
+       franja. */
+    const nada = { hayPropuesta: false, tareas: null };
+    const largo = "x".repeat(900);
+    const aviso = avisoSinCambiosParaLaCorrida(["Pruebas pasa a 3 semanas.", `La IA se cortó.\n  ${largo}`]);
+    const d = desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso });
+    expect(d).toEqual({
+      que: "avisar",
+      ok: true,
+      tono: "info",
+      texto: "La IA terminó y no propone cambios del cronograma; notó 2 cosas: las ves en «La IA también notó».",
+      observaciones: ["Pruebas pasa a 3 semanas.", `La IA se cortó. ${largo}`],
+    });
+    const texto = d.que === "avisar" ? d.texto : "";
+    expect(texto.startsWith("La IA terminó y no propone cambios"), "el toast no dice el desenlace").toBe(true);
+    expect(texto, "el toast pinta lo notado").not.toContain("Pruebas pasa");
+    expect(avisoDelDetalleSinCambios(1)).toBe("La IA terminó y no propone cambios del cronograma; notó 1 cosa: la ves en «La IA también notó».");
+    expect(avisoDelDetalleSinCambios(0)).toBe(AVISO_DETALLE_SIN_CAMBIOS);
+    // El motivo de una corrida perdida no es lo notado: se dice tal cual, sin franja.
+    const perdida = desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: nada, aviso: "Lo que armó no se guardó." });
+    expect(perdida).toEqual({ que: "avisar", ok: true, tono: "info", texto: "Lo que armó no se guardó." });
   });
 
   it("⛔ con la vista previa del modificador abierta, las tareas listas se avisan igual (y dicen cómo verlas)", () => {

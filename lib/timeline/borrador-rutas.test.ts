@@ -24,7 +24,8 @@ const db = vi.hoisted(() => ({
   timelinePhase: { findFirst: vi.fn(), findMany: vi.fn() },
   // E2a P4: la marca «armando» de un borrador nuevo lee de qué fuente son las tareas de hoy.
   timelineTask: { findMany: vi.fn() },
-  agentRun: { findUnique: vi.fn(), update: vi.fn() },
+  // Revisión de E2b: el pedido de tareas sin propuesta mira si corre un paso 1 del proyecto (`findFirst`).
+  agentRun: { findUnique: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   timelineChange: { create: vi.fn() },
   project: { findUnique: vi.fn() },
   $transaction: vi.fn(),
@@ -43,7 +44,7 @@ import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeli
 import { POST as aplicarFasePOST } from "@/app/api/projects/[projectId]/timeline/phases/[phaseId]/apply/route";
 import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline/detail/apply-all/route";
 import { ErrorAlAplicar, type ResultadoDeAplicar } from "@/lib/timeline/escribir-estructura";
-import { FORMATO_BORRADOR, leerBorrador } from "@/lib/timeline/borrador";
+import { AVISO_DETALLE_SIN_CAMBIOS, FORMATO_BORRADOR, leerAvisoSinCambios, leerBorrador } from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
   cierreDeLaCorridaVetada,
@@ -63,6 +64,8 @@ import {
   vetoDelGuardado,
 } from "@/lib/timeline/borrador-del-detalle";
 import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
+import { MENSAJE_ESTRUCTURA_EN_CURSO } from "@/lib/timeline/propuesta-de-estructura";
+import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import { humanizeAgentError, MENSAJE_PRESUPUESTO_AGOTADO } from "@/lib/agents/anthropic-error";
 import { evaluarPresupuesto, PresupuestoDeIaAgotado } from "@/lib/ai/presupuesto";
 import { motivoDeLaRespuesta } from "@/lib/agents/run-error";
@@ -851,6 +854,39 @@ describe("prevalidarPedidoDeTareas — antes de pagar la corrida", () => {
     expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null })).toMatchObject({ error: "PROPUESTA_PENDIENTE" });
   });
 
+  it("⛔ token null con un paso 1 del proyecto corriendo: 409 ESTRUCTURA_EN_CURSO, antes de pagar la corrida", async () => {
+    /* Revisión de E2b. «Regenerar» de una fase (y la oferta de las tareas) crea un borrador vacío. Si el
+       paso 1 corría en otra pestaña, el vacío entraba primero y el paso 1, ya pagado, respondía 409 sin
+       guardar su propuesta. La edición que la pone en rojo: no mirar el paso 1, o mirar otro agente, otro
+       proyecto, otro estado u otra ventana que la toma del paso 1. */
+    const ahora = new Date("2026-09-25T15:00:00.000Z");
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: null, pendingProposalRunId: null, projectId: "p1" });
+    db.agentRun.findFirst.mockResolvedValue({ id: "run-e" });
+    expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null }, ahora), "el vacío pisa al paso 1 en curso").toEqual({
+      error: "ESTRUCTURA_EN_CURSO",
+      message: MENSAJE_ESTRUCTURA_EN_CURSO,
+    });
+    expect(db.agentRun.findFirst).toHaveBeenCalledWith({
+      where: {
+        projectId: "p1",
+        agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+        status: "RUNNING",
+        createdAt: { gte: new Date(ahora.getTime() - VENTANA_DEL_PASO_1_EN_CURSO_MS) },
+      },
+      select: { id: true },
+    });
+    expect(VENTANA_DEL_PASO_1_EN_CURSO_MS, "la ventana dejó de ser la de la toma del paso 1").toBe(3 * 60_000);
+    // Sin paso 1 en curso, pasa.
+    db.agentRun.findFirst.mockResolvedValue(null);
+    expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null }, ahora)).toBeNull();
+    // Con token (las tareas de la propuesta que dejó un paso 1 ya terminado) no se mira.
+    db.agentRun.findFirst.mockClear();
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: v1(), pendingProposalRunId: "run-1", projectId: "p1" });
+    expect(await prevalidarPedidoDeTareas("tl", { token: "run-1", version: 5 }, ahora)).toBeNull();
+    expect(db.agentRun.findFirst).not.toHaveBeenCalled();
+    // La ruta lo pide ANTES de crear la corrida: el mismo `prevalidarPedidoDeTareas` (guarda de más abajo).
+  });
+
   it("⛔ con token: la misma corrida y versión, y las tareas en «faltan» o «fallo»", async () => {
     /* La edición que la pone en rojo: armar otra vez mientras se arman (dos corridas pagadas sobre el
        mismo borrador) o sobre otra versión que la que vio el CSE. */
@@ -1068,17 +1104,27 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
     expect(r).toEqual({ estado: "sin-cambios", observaciones: ["Lo acordado de «Pruebas» no entró."] });
     expect(db.projectTimeline.updateMany.mock.calls[0][0].data).toEqual({ pendingProposal: Prisma.DbNull, pendingProposalRunId: null });
     expect(db.agentRun.update, "lo del paso 1 se borró con el borrador, sin aviso").toHaveBeenCalledTimes(1);
-    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe("Lo acordado de «Pruebas» no entró.");
+    /* ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25), con esta razón: el aviso era lo notado, pegado,
+       y reemplazaba al desenlace en el toast. Ahora el desenlace va primero y lo notado, una por línea
+       (`avisoSinCambiosParaLaCorrida`). Lo protegido no cambió: lo del paso 1 sigue en el aviso. */
+    expect(JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError).toBe(
+      `${AVISO_DETALLE_SIN_CAMBIOS}\nLo acordado de «Pruebas» no entró.`,
+    );
 
-    // Con lo de los DOS pasos, el aviso lleva los dos (lo del paso 1 primero).
+    // Con lo de los DOS pasos, el aviso lleva los dos (lo del paso 1 primero), después del desenlace.
     db.agentRun.update.mockClear();
     db.projectTimeline.updateMany.mockClear();
     tlConBorrador(v1({ tareas: { corrida: "run-t", listas: false }, observaciones: ["Del paso 1."] }));
     const ambos = await fusionar({ cortado: true });
     expect(ambos.estado).toBe("sin-cambios");
     const aviso = JSON.parse(db.agentRun.update.mock.calls[0][0].data.output).timelineSyncError as string;
-    expect(aviso.startsWith("Del paso 1.")).toBe(true);
-    expect(aviso).toContain("La IA se cortó antes de terminar");
+    const [desenlace, delPaso1, delPaso2, ...resto] = aviso.split("\n");
+    expect(desenlace, "el aviso no empieza por el desenlace").toBe(AVISO_DETALLE_SIN_CAMBIOS);
+    expect(delPaso1).toBe("Del paso 1.");
+    expect(delPaso2).toContain("La IA se cortó antes de terminar");
+    expect(resto).toEqual([]);
+    // Y la pantalla lo lee entero: lo notado, sin el desenlace.
+    expect(leerAvisoSinCambios(aviso)).toEqual([delPaso1, delPaso2]);
   });
 
   it("⛔ otra corrida, tareas ya listas o sin borrador: «perdido», sin escribir y con el aviso en la corrida", async () => {

@@ -470,7 +470,8 @@ export default function CronogramaCanvas({
        (`pasoTareasRef`, `encadenado`, `fijarPasoTareas`) y su franja `PasoDeTareasPendiente`.
      · `observacionesPaso1` — lo que notó el paso 1 cuando no dejó propuesta (la dice la franja
        «La IA también notó» mientras no haya una propuesta en pantalla). */
-  const [armando, setArmando] = useState<{ paso: 1 | 2; modo: "primera" | "regen" } | null>(null);
+  /* `soloFase` (revisión de E2b): el pedido es «Regenerar» de ESA fase; la espera la nombra. */
+  const [armando, setArmando] = useState<{ paso: 1 | 2; modo: "primera" | "regen"; soloFase?: string } | null>(null);
   /* «Paso 1 de 2 · Revisando fases y tiempos…» se dice SOLO si el CSE eligió material que la
      revisión va a leer (revisión del paso A2, segunda vuelta). Lo informa el «Contexto del
      cronograma» (`onMaterial`, con `hayMaterialParaElPaso1`). Antes lo decidía un reloj de 1,2 s, y
@@ -1819,7 +1820,7 @@ export default function CronogramaCanvas({
       return;
     }
     setOfrecerTareas(false);
-    setArmando({ paso: 2, modo: "regen" });
+    setArmando({ paso: 2, modo: "regen", soloFase: phase.id });
     try {
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
@@ -2097,6 +2098,10 @@ export default function CronogramaCanvas({
   };
 
   const discardProposal = async (reason?: string) => {
+    /* Revisión de E2b: la oferta de las tareas es de lo que se resolvió ANTES. Resolver otra propuesta
+       (la del handoff que la tapaba) la apaga: si no, volvía a aparecer después de este «Descartar».
+       Si corresponde, `pasoTrasResolver` la vuelve a prender abajo. */
+    setOfrecerTareas(false);
     /* Se leen ANTES de limpiar: de dónde salió (lo que notó la IA de las reuniones se junta en la
        franja) y lo que decide si se ofrecen las tareas. */
     const origenDescartado = origenDePropuesta(proposal);
@@ -2203,6 +2208,8 @@ export default function CronogramaCanvas({
     // Con un descarte en curso, aplicar caería en el 409 de «la propuesta cambió».
     if (aplicandoBorrador || descartandoRef.current || !revisionRef.current.resumen) return;
     setAplicandoBorrador(true);
+    // Revisión de E2b: la oferta de antes se apaga (ver `discardProposal`); `pasoTrasResolver` decide la de esta.
+    setOfrecerTareas(false);
     /* Qué notó la IA y lo que decide si se ofrecen las tareas: se leen ANTES de limpiar la propuesta
        (después ya no está). E2b: si traía fases y si era «Regenerar» de una fase. */
     const observacionesDeLaPropuesta = revisionRef.current.resumen.observaciones;
@@ -2390,6 +2397,10 @@ export default function CronogramaCanvas({
         setVueltaDelSeguimiento((n) => n + 1);
         return;
       }
+      /* Revisión de E2b: lo que notó la IA en una corrida que terminó sin cambios va a la franja «La IA
+         también notó»; el toast solo dice el desenlace y cuántas. Se JUNTA con lo que ya muestra. */
+      const notadas = desenlace.que === "avisar" ? desenlace.observaciones : undefined;
+      if (notadas && notadas.length > 0) setObservacionesPaso1((previas) => juntarObservaciones(previas, notadas));
       /* Quien solo mira: ya se releyó el cronograma (el chip dice lo de ahora). Los avisos son de quien
          edita, con el permiso de AHORA: `useMe` puede llegar después de que empezó el seguimiento. */
       if (!puedeEditarRef.current) return;
@@ -2437,6 +2448,10 @@ export default function CronogramaCanvas({
             : !hayBorrador && armando === null && ofrecerTareas && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline)
               ? { estado: "ofrecer", fase: null, motivo: null }
               : null;
+  /* Revisión de E2b: la espera de «Regenerar» de una fase dice QUÉ fase (la línea y el chip). Mientras
+     sale el pedido, la del pedido; después, la que guardó el borrador vacío. El nombre, el de hoy. */
+  const idDeLaFaseQueSeArma = armando?.soloFase ?? revision.borrador?.soloFase ?? null;
+  const faseQueSeArma = idDeLaFaseQueSeArma ? (phases.find((p) => p.id === idDeLaFaseQueSeArma)?.name ?? null) : null;
   /* «Armar las tareas» / «Volver a intentar» (en la barra y en la línea suelta): el paso 2 sobre la
      propuesta en pantalla, SALTANDO el paso 1. Solo con el permiso que el servidor va a exigir: la
      primera pasada pide `generate`; después, `regenerate`. Sin él la línea informa sin botón (revisión
@@ -3362,7 +3377,7 @@ export default function CronogramaCanvas({
             <span className="flex items-center gap-1.5 text-xs font-medium text-info-ink">
               <span className="w-3 h-3 border-2 border-info-line border-t-info-ink rounded-full animate-spin" />
               {/* El mismo criterio que la línea: «Revisando fases y tiempos…» solo con material elegido. */}
-              {textoDelChipDeEspera(armando?.paso === 1, materialElegido)}
+              {textoDelChipDeEspera(armando?.paso === 1, materialElegido, faseQueSeArma)}
             </span>
           )}
           {/* La propuesta de estructura, en la MISMA fila que las demás acciones.
@@ -4158,6 +4173,7 @@ export default function CronogramaCanvas({
               motivo={lineaSuelta.motivo}
               conMaterial={materialElegido}
               conCambiosDeFases={lineaSuelta.estado === "ofrecer" && ofertaConFases}
+              deLaFase={faseQueSeArma}
               onAccion={
                 lineaSuelta.estado === "ofrecer"
                   ? () => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })

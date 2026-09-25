@@ -450,7 +450,12 @@ describe("5 · la fusión en el borrador", () => {
     const plan = planDeAplicacion(editado, fusionarDetalle(BASE, r, "run-2"), [], { tareas: "listas" });
     const item = plan.items.find((it) => it.cambio.clave === "tarea:b1:se-va")!;
     expect(item.estado).toBe("choque");
-    expect(item.choque).toBe("La editaste a mano después de la propuesta: queda como la dejaste.");
+    /* ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25), con esta razón: decía «La editaste a mano
+       después de la propuesta», y en este caso se editó mientras la IA armaba, cuando todavía no había
+       propuesta en pantalla. El ⚠ cuenta lo que pasó en los dos casos. La edición que la pone en rojo:
+       volver a un texto que ubique la edición «después de la propuesta». */
+    expect(item.choque).toBe("Se editó a mano después de que la IA la leyó: queda como está.");
+    expect(item.choque, "el ⚠ ubica la edición después de una propuesta que todavía no existía").not.toMatch(/después de la propuesta/);
     expect(plan.escrituras.tareas.seVan).toEqual(["b2"]);
   });
 

@@ -39,6 +39,26 @@ export type ResultadoDelHandoff =
   | { tipo: "aviso"; aviso: string }
   | { tipo: "propuesta" };
 
+/**
+ * Qué hace analyze con el resultado (puro). «sin-cronograma»: el proyecto nunca tuvo cronograma y
+ * analyze crea las fases. Los demás no crean nada, y el CSE se entera por `timelineSyncError` solo con
+ * un aviso (su handoff no guardó las sugerencias). Revisión de E2b: el reparto vivía en analyze sin
+ * ninguna guarda; cambiarlo callaba el aviso, o mandaba «sin-cambios» a crear un cronograma que ya existe.
+ */
+export function timelineSyncErrorDelHandoff(
+  r: ResultadoDelHandoff,
+): { crear: true } | { crear: false; timelineSyncError: string | null } {
+  switch (r.tipo) {
+    case "sin-cronograma":
+      return { crear: true };
+    case "aviso":
+      return { crear: false, timelineSyncError: r.aviso };
+    case "sin-cambios":
+    case "propuesta":
+      return { crear: false, timelineSyncError: null };
+  }
+}
+
 export async function guardarPropuestaDelHandoff(i: {
   projectId: string;
   corrida: string;

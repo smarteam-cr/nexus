@@ -92,6 +92,12 @@ import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
 /** Solo el slug del medidor y de la corrida. ⛔ No es el id de una fila de `Agent` (ver arriba). */
 export const ID_ESTRUCTURA_CRONOGRAMA = "agent-timeline-structure";
 
+/** Un paso 1 de un proyecto que empezó hace menos que esto se considera en curso (el modelo tiene 90 s
+ *  de tope; una corrida que quedó RUNNING porque el proceso murió deja de frenar pasado esto). La MISMA
+ *  ventana en la toma del paso 1 (timeline/estructura) y en el pedido de tareas sin propuesta
+ *  (`prevalidarPedidoDeTareas`, revisión de E2b). */
+export const VENTANA_DEL_PASO_1_EN_CURSO_MS = 3 * 60_000;
+
 export const PROMPT_ESTRUCTURA_CRONOGRAMA = `ROL: Revisas si las reuniones y las notas que ELIGIÓ el CSE (el consultor de Smarteam a cargo del proyecto), y sus instrucciones adicionales, obligan a cambiar las FASES o los TIEMPOS de un cronograma de implementación de HubSpot que ya está en marcha. NO propones tareas: las tareas de cada fase las arma otro paso después, sobre la estructura que el CSE acepte. Cada cambio que propongas lo decide el CSE uno por uno; nada se aplica solo.
 
 CUÁNDO PROPONER UN CAMBIO:

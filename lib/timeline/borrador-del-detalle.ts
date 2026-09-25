@@ -36,6 +36,7 @@ import { sanitizeTags } from "@/lib/tags/catalog";
 import type { HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
 import {
+  avisoSinCambiosParaLaCorrida,
   BLOQUEO_VERSION_NUEVA,
   borradorVacio,
   claveAleatoria,
@@ -63,7 +64,8 @@ import {
 } from "./borrador";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
 import { unirFrases } from "./magnitud-propuesta";
-import { AVISO_PROPUESTA_PENDIENTE } from "./propuesta-de-estructura";
+import { AVISO_PROPUESTA_PENDIENTE, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
+import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import {
   cambiosDeTareasDelDetalle,
   fusionarDetalle,
@@ -289,7 +291,8 @@ export type CodigoDelPedido =
   | "PROPUESTA_CAMBIO"
   | "TAREAS_EN_CURSO"
   | "NO_SE_PUEDE"
-  | "NADA_QUE_RECALCULAR";
+  | "NADA_QUE_RECALCULAR"
+  | "ESTRUCTURA_EN_CURSO";
 /** Por qué no se arman las tareas (409). `message` lo lee el CSE. */
 export interface VetoDelPedido {
   error: CodigoDelPedido;
@@ -316,6 +319,7 @@ const MOTIVOS_DEL_RECALCULO = [MOTIVO_RECALCULO_EDITADA, MOTIVO_RECALCULO_CORTAD
 
 const PENDIENTE: VetoDelPedido = { error: "PROPUESTA_PENDIENTE", message: AVISO_PROPUESTA_PENDIENTE };
 const CAMBIO: VetoDelPedido = { error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO };
+const ESTRUCTURA_EN_CURSO: VetoDelPedido = { error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO };
 
 /**
  * Lo que se comprueba del borrador guardado antes de tocarlo (puro): que sea el que el CSE tiene
@@ -342,6 +346,10 @@ export function vetoDelGuardado(
  * tareas en «faltan» o «fallo» (armarlas otra vez mientras se arman, o cuando ya están, no).
  * E2c: con `recalcular`, lo decide `desfasadasDelGuardado` (las tareas «listas», ningún recálculo en
  * curso y alguna fase desfasada con lo que el CSE desmarcó).
+ * Revisión de E2b: con token null, tampoco con un paso 1 de este proyecto en curso (otra pestaña u otra
+ * persona). El vacío de «Regenerar» de una fase entraba primero y el paso 1, ya pagado, respondía 409
+ * sin guardar su propuesta. La misma consulta y la misma ventana que la toma del paso 1, que ya veta el
+ * caso contrario (timeline/estructura).
  */
 export async function prevalidarPedidoDeTareas(
   timelineId: string,
@@ -354,11 +362,23 @@ export async function prevalidarPedidoDeTareas(
   }
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: timelineId },
-    select: { pendingProposal: true, pendingProposalRunId: true },
+    select: { pendingProposal: true, pendingProposalRunId: true, projectId: true },
   });
   if (!tl) return pedido.token === null ? null : CAMBIO;
   const veto = vetoDelGuardado(tl.pendingProposal, tl.pendingProposalRunId, pedido);
-  if (veto || pedido.token === null) return veto;
+  if (veto) return veto;
+  if (pedido.token === null) {
+    const pasoUnoEnCurso = await prisma.agentRun.findFirst({
+      where: {
+        projectId: tl.projectId,
+        agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+        status: "RUNNING",
+        createdAt: { gte: new Date(ahora.getTime() - VENTANA_DEL_PASO_1_EN_CURSO_MS) },
+      },
+      select: { id: true },
+    });
+    return pasoUnoEnCurso ? ESTRUCTURA_EN_CURSO : null;
+  }
   const estado = (await leerEstadoDeLasTareas(tl.pendingProposal, ahora))?.estado ?? null;
   if (estado === "faltan" || estado === "fallo") return null;
   if (estado === "armando") return { error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO };
@@ -757,9 +777,11 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
     if (borrado.count === 0) return perdido();
     /* Lo que notó la IA en los DOS pasos (`fusionado.observaciones`: las del borrador, que trae lo del
        paso 1, y las del paso 2). Cierre de la revisión de E2a: el aviso llevaba solo las del paso 2, y
-       lo del paso 1 se borraba con el borrador sin que nadie lo viera. */
+       lo del paso 1 se borraba con el borrador sin que nadie lo viera.
+       Revisión de E2b: con el desenlace en la primera línea y una observación por línea
+       (`avisoSinCambiosParaLaCorrida`). Pegadas, reemplazaban al desenlace en el toast. */
     if (fusionado.observaciones.length > 0) {
-      await avisarEnLaCorrida(i.corrida, i.analysisJson, fusionado.observaciones.join(" "));
+      await avisarEnLaCorrida(i.corrida, i.analysisJson, avisoSinCambiosParaLaCorrida(fusionado.observaciones));
     }
     return { estado: "sin-cambios", observaciones: fusionado.observaciones };
   }

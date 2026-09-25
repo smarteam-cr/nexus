@@ -1021,7 +1021,9 @@ const CHOQUE_CAMPO = "Lo cambiaste a mano después de la propuesta: queda como l
 const CHOQUE_SIN_TAREAS = "No se leyeron las tareas de esta fase: la tarea queda como está.";
 const CHOQUE_TAREA_MUDADA = "La moviste a otra fase después de la propuesta: queda donde la dejaste.";
 const CHOQUE_TAREA_CON_AVANCE = "La tarea ya tiene avance o la escribiste a mano: no se quita.";
-const CHOQUE_TAREA_EDITADA = "La editaste a mano después de la propuesta: queda como la dejaste.";
+/* Revisión de E2b: decía «La editaste a mano después de la propuesta». Con D10 el `desde` es lo que LEYÓ
+   la IA, así que también choca la que se editó mientras armaba, cuando todavía no había propuesta. */
+const CHOQUE_TAREA_EDITADA = "Se editó a mano después de que la IA la leyó: queda como está.";
 const CHOQUE_DE_LA_FASE =
   "Su fase cambió después de la propuesta (a mano, o con un cambio que choca): sus tareas quedan fuera.";
 export const BLOQUEO_TAREAS_EN_CURSO =
@@ -2402,6 +2404,8 @@ export function hayCambiosDeFasesAplicables(items: ReadonlyArray<Pick<ItemDeLaLi
  * (`textoDeLaOfertaDeTareas`). Con `conCambiosDeFases`, lo resuelto fue aplicar sus fases.
  * `secundaria` (E2c P3): el texto del único botón chico secundario de la línea; solo «ofrecer» lo
  * trae («Ahora no»). La línea del recálculo usa el mismo botón para «Aplicar de todos modos».
+ * `deLaFase` (revisión de E2b): el nombre de la fase de «Regenerar» de una fase, o null. Con él, la
+ * espera dice cuál: si no, se leía igual que «Regenerar todo».
  */
 export function textoDeLaLineaDeTareas(
   estado: EstadoDeLasTareas | "paso-1" | "ofrecer" | null,
@@ -2409,6 +2413,7 @@ export function textoDeLaLineaDeTareas(
   motivo: string | null,
   conMaterial: boolean,
   conCambiosDeFases = true,
+  deLaFase: string | null = null,
 ): { texto: string; accion: string | null; secundaria?: string | null } | null {
   const siAplicas = conCambiosDeFases ? " Si aplicas ahora, solo se aplican los cambios de fases." : "";
   switch (estado) {
@@ -2420,7 +2425,7 @@ export function textoDeLaLineaDeTareas(
         accion: null,
       };
     case "armando":
-      return { texto: `Armando las tareas… · ${fase?.trim() || "suele tardar uno o dos minutos"}`, accion: null };
+      return { texto: `${armandoLasTareas(deLaFase)} · ${fase?.trim() || "suele tardar uno o dos minutos"}`, accion: null };
     case "faltan":
       return {
         texto: conCambiosDeFases
@@ -2461,9 +2466,15 @@ export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { texto: st
  * fases y tiempos…» SOLO con material elegido: sin él, el paso 1 no revisa nada (vuelve «sin-material»).
  * Revisión de E2a: el chip lo decía siempre, y la línea de al lado decía otra cosa.
  */
-export function textoDelChipDeEspera(enElPaso1: boolean, conMaterial: boolean): string {
-  if (!enElPaso1) return "Armando las tareas…";
+export function textoDelChipDeEspera(enElPaso1: boolean, conMaterial: boolean, deLaFase: string | null = null): string {
+  if (!enElPaso1) return armandoLasTareas(deLaFase);
   return conMaterial ? "Revisando fases y tiempos…" : "Preparando la propuesta…";
+}
+
+/** «Armando las tareas…», o «Armando las tareas de «X»…» en «Regenerar» de una fase (revisión de E2b). */
+function armandoLasTareas(deLaFase: string | null): string {
+  const nombre = deLaFase?.trim();
+  return nombre ? `Armando las tareas de «${nombre}»…` : "Armando las tareas…";
 }
 
 /** ¿La propuesta guardada trae algún cambio de fases (o de fecha de arranque, u orden)? El handoff y el
@@ -2502,7 +2513,13 @@ export function observacionesParaElPaso2(obs: unknown): string[] {
  * prometer (revisión de E2a).
  */
 export function juntarObservaciones(delPaso1: readonly string[], deLaPropuesta: readonly string[]): string[] {
-  return [...new Set([...delPaso1, ...deLaPropuesta].map((o) => o.trim()).filter((o) => o.length > 0))];
+  return [...new Set([...delPaso1, ...deLaPropuesta].map(enUnaLinea).filter((o) => o.length > 0))];
+}
+
+/** Una observación en una sola línea (los espacios y saltos de adentro, uno solo): así viaja en el aviso
+ *  de la corrida y así se comparan al juntarlas. En la franja no cambia nada: el HTML ya los junta. */
+function enUnaLinea(o: string): string {
+  return o.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -2541,6 +2558,34 @@ export const AVISO_TAREAS_LISTAS = "Listas las tareas de la propuesta: revísala
 export const AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA =
   "Listas las tareas de la propuesta: descarta la vista previa para revisarla arriba del Gantt.";
 export const AVISO_DETALLE_SIN_CAMBIOS = "La IA terminó y no propone cambios del cronograma.";
+
+/**
+ * Lo que deja escrito en la corrida (`timelineSyncError`) el paso 2 que terminó sin cambios y notó algo:
+ * el desenlace en la primera línea y, debajo, una observación por línea. El texto completo queda en la
+ * corrida; la pantalla lo lee con `leerAvisoSinCambios`. Revisión de E2b: el aviso era lo notado en los
+ * dos pasos, pegado, y reemplazaba al desenlace: el CSE nunca leía que no había cambios, y lo del paso 1
+ * salía otra vez en un toast de hasta 20 observaciones.
+ */
+export function avisoSinCambiosParaLaCorrida(observaciones: readonly string[]): string {
+  return [AVISO_DETALLE_SIN_CAMBIOS, ...juntarObservaciones([], observaciones)].join("\n");
+}
+
+/** Lo notado de un aviso de `avisoSinCambiosParaLaCorrida`, o null si el aviso es otra cosa (el motivo
+ *  de una corrida perdida, o uno de antes de la revisión de E2b). Puro. */
+export function leerAvisoSinCambios(aviso: string | null | undefined): string[] | null {
+  if (typeof aviso !== "string") return null;
+  const [primera, ...resto] = aviso.trim().split("\n");
+  if (primera.trim() !== AVISO_DETALLE_SIN_CAMBIOS) return null;
+  return juntarObservaciones([], resto);
+}
+
+/** El toast del paso 2 que terminó sin cambios: SIEMPRE el desenlace y, a lo sumo, cuántas cosas notó.
+ *  Lo notado lo muestra la franja «La IA también notó», no el toast (D7: no se alargan los toasts). */
+export function avisoDelDetalleSinCambios(notadas: number): string {
+  if (notadas <= 0) return AVISO_DETALLE_SIN_CAMBIOS;
+  const cuantas = notadas === 1 ? "notó 1 cosa: la ves" : `notó ${notadas} cosas: las ves`;
+  return `La IA terminó y no propone cambios del cronograma; ${cuantas} en «La IA también notó».`;
+}
 /** El chat no aplica con el borrador VACÍO cuya corrida falló: nadie va a traer nada, hay que sacarlo. */
 export const CHAT_CON_EL_VACIO_FALLIDO =
   "No se pudieron armar las tareas del cronograma. Descarta la propuesta vacía arriba del Gantt y vuelve a aplicar: el acuerdo sigue acá.";
@@ -2591,7 +2636,15 @@ export type DesenlaceDelSeguimiento =
   | { que: "seguir" }
   /** La propuesta guardada ya no es la de esta corrida (se descartó o la reemplazó otra): nada que avisar. */
   | { que: "callar" }
-  | { que: "avisar"; ok: boolean; tono: "exito" | "info" | "error"; texto: string };
+  | {
+      que: "avisar";
+      ok: boolean;
+      tono: "exito" | "info" | "error";
+      texto: string;
+      /** Revisión de E2b: lo que notó la IA en una corrida que terminó sin cambios. Va a la franja «La IA
+       *  también notó», no al toast. Ausente = nada que sumar. */
+      observaciones?: string[];
+    };
 
 const pareceUnCodigo = (t: string) => /^[A-Z][A-Z0-9_]+$/.test(t);
 
@@ -2606,7 +2659,9 @@ const pareceUnCodigo = (t: string) => /^[A-Z][A-Z0-9_]+$/.test(t);
  *   · La guardada es OTRA: se refresca en silencio.
  *   · No hay ninguna: un ERROR es la corrida de una propuesta que se descartó (se calla); un DONE es
  *     el paso 2 que no encontró nada que cambiar y borró el borrador vacío, así que se dice lo que
- *     dejó la corrida (o que no propone cambios).
+ *     dejó la corrida (o que no propone cambios). Revisión de E2b: si dejó lo que notó
+ *     (`avisoSinCambiosParaLaCorrida`), el toast dice el desenlace y cuántas cosas, y lo notado sale
+ *     aparte (`observaciones`) para la franja.
  * El descarte hecho en ESTA pantalla lo calla quien descarta, antes de que la corrida termine.
  * E2c: si lo que se sigue es un RECÁLCULO (`recalculo`: los nombres de sus fases, tomados al empezar
  * a seguir), se mira su propio estado, no el de las tareas: sin esta rama terminaba mudo (las tareas
@@ -2652,6 +2707,18 @@ export function desenlaceDelSeguimiento(i: {
   }
   if (i.lectura.hayPropuesta || i.estado !== "DONE") return { que: "callar" };
   const aviso = i.aviso?.trim() ?? "";
+  /* Revisión de E2b: el paso 2 sin cambios que notó algo. El toast dice el desenlace y cuántas; lo
+     notado va a la franja. */
+  const notadas = leerAvisoSinCambios(aviso);
+  if (notadas) {
+    return {
+      que: "avisar",
+      ok: true,
+      tono: "info",
+      texto: avisoDelDetalleSinCambios(notadas.length),
+      ...(notadas.length > 0 ? { observaciones: notadas } : {}),
+    };
+  }
   return {
     que: "avisar",
     ok: true,

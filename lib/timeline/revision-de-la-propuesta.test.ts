@@ -604,6 +604,14 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(traer, "} catch { return { ok: false }; }"), "un error de red se lee como «no hay propuesta»").toBe(true);
     // Nunca el código crudo de la corrida en el aviso: el texto sale del desenlace.
     expect(seguimiento, "el aviso volvió a leer el error crudo de la corrida").not.toMatch(/toast\.\w+\(r\.(error|timelineSyncError)/);
+    /* Revisión de E2b: lo que notó una corrida que terminó sin cambios va a la franja «La IA también
+       notó» (el toast solo dice el desenlace y cuántas: lo prueba borrador-tareas.test.ts). La edición que
+       la pone en rojo: no sumarlo a la franja, o reemplazar lo que la franja ya mostraba. */
+    expect(contiene(seguimiento, 'const notadas = desenlace.que === "avisar" ? desenlace.observaciones : undefined;')).toBe(true);
+    expect(
+      contiene(seguimiento, "if (notadas && notadas.length > 0) setObservacionesPaso1((previas) => juntarObservaciones(previas, notadas));"),
+      "lo notado de una corrida sin cambios no llega a la franja",
+    ).toBe(true);
     /* Solo quien edita recibe el aviso: la barra y la línea son suyas.
        ⚠ REESCRITA en el cierre de la revisión de E2a (2026-09-25), con esta razón: pedía que quien solo
        mira NO siguiera la corrida («le alcanza el chip»), y su chip «Armando las tareas…» quedaba fijo

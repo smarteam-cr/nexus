@@ -38,6 +38,7 @@ import {
   observacionesParaElPaso2,
   textoDeLaLineaDeTareas,
   textoDeLaOfertaDeTareas,
+  textoDelChipDeEspera,
   tituloDeLoQueNoto,
 } from "@/lib/timeline/borrador";
 
@@ -633,14 +634,17 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
   });
 });
 
-describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", () => {
+describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse", () => {
   const src = soloCodigo(leer("components/canvas/CronogramaCanvas.tsx"));
   /* ⚠ Si falta un marcador, TIRA con su nombre (revisión de E1, 2026-09-24): antes devolvía "" sin
      el de inicio y, sin el de fin, `slice(i, -1)` leía hasta el final del archivo sin avisar, así que
      una negación sobre el tramo podía pasar mirando otra cosa.
      ⚠ ACTUALIZADOS en E2b P5a (2026-09-25), con esta razón: los 8 tramos de `pedirPropuestaDeDetalle`
      de este archivo terminaban en `const startRegenPreview`. Esa función se reemplazó en el MISMO lugar
-     por `pedirRegenerarFase`, así que el fin del tramo es el mismo punto con otro nombre. */
+     por `pedirRegenerarFase`, así que el fin del tramo es el mismo punto con otro nombre.
+     ⚠ RENOMBRADOS en la revisión de E2b (2026-09-25): este describe y tres `it` («aplicar no pide las
+     tareas…», «`load()` no ofrece las tareas», «descartar nunca pide las tareas…») decían la cadena vieja,
+     lo contrario de lo que prueban desde E2b P4. Al ponerse rojos, enunciaban la regla al revés. */
   const tramo = (desde: string, hasta: string) => tramoDe(src, desde, hasta);
 
   it("pedirPropuestaDeDetalle pide la estructura ANTES del detalle, salvo en la continuación", () => {
@@ -712,7 +716,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(pedir, "`armando` no se suelta al terminar el pedido").toMatch(/finally \{\s*setArmando\(null\);\s*\}/);
   });
 
-  it("resolver la última sugerencia encadena el paso 2 y muestra las reubicaciones", () => {
+  it("aplicar no pide las tareas: las ofrece si faltan, y muestra las reubicaciones", () => {
     /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: `resolveProposalItems` (aceptar o
        descartar por ítem contra apply-items) se fue; la propuesta se resuelve entera con
        `aplicarBorrador` (POST /timeline/borrador/aplicar).
@@ -766,7 +770,8 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(pedido, "volvió el pedido síncrono (el resultado moría con la pestaña)").toContain("async: true,");
     expect(pedido, "no pide una propuesta").toContain("borrador: { token: null, version: null },");
     expect(fase, "volvió la vista previa").not.toMatch(/\bpreview\b/);
-    expect(fase.indexOf('setArmando({ paso: 2, modo: "regen" });'), "la espera no se dice").toBeGreaterThan(iGuardado);
+    // ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25): la espera lleva la fase (`soloFase`) para nombrarla.
+    expect(fase.indexOf('setArmando({ paso: 2, modo: "regen", soloFase: phase.id });'), "la espera no se dice").toBeGreaterThan(iGuardado);
     expect(fase, "no trae la propuesta «armando»").toContain("if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();");
     expect(fase, "`armando` no se suelta al terminar el pedido").toMatch(/finally \{\s*setArmando\(null\);\s*\}/);
   });
@@ -782,7 +787,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(aplicar.slice(iGuarda, iGuarda + 200)).toContain("fallo:");
   });
 
-  it("si la propuesta desaparece sin pasar por acá, `load()` ofrece el paso 2", () => {
+  it("si la propuesta desaparece sin pasar por acá, `load()` no ofrece las tareas", () => {
     /* ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía que `load()` ofreciera el paso
        2 cuando la cadena vieja esperaba y su propuesta ya no estaba. La cadena se fue (D6): ofrecer lo
        deciden solo aplicar y descartar, con lo que el CSE resolvió enfrente. La edición que la pone en
@@ -873,7 +878,8 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     );
     const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
     expect(componente, "la línea no pinta «Descartar»").toMatch(/\{onDescartar && \(\s*<Button[^>]*onClick=\{onDescartar\}/);
-    expect(componente).toContain("textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases)");
+    // ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25): suma `deLaFase` (la espera de una fase dice cuál).
+    expect(componente).toContain("textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases, deLaFase)");
     /* La oferta de las tareas después de resolver una propuesta sin fases: neutra.
        ⚠ REAPUNTADA en E2b P4 (2026-09-25), con esta razón: leía `PasoDeTareasPendiente.tsx`, que se
        borró; la oferta es el estado «ofrecer» de la línea y su texto sale de `textoDeLaOfertaDeTareas`. */
@@ -885,10 +891,19 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     const iFases = descartar.indexOf("const conFasesLaDescartada = traeCambiosDeFases(proposal);");
     expect(iFases, "no se mira si la descartada traía fases").toBeGreaterThan(-1);
     expect(iFases).toBeLessThan(descartar.indexOf("setProposal(null)"));
-    expect(tramoDe(descartar, 'if (siguiente === "ofrecer") {', "}")).toContain("setOfertaConFases(conFasesLaDescartada);");
+    /* Revisión de E2b: y que la línea se ENCIENDA (D6 la promete tras descartar el vacío que falló). Solo
+       se pedía `setOfertaConFases`: sin `setOfrecerTareas(true)` el proyecto se quedaba sin «Volver a
+       intentar», en verde. Del lado de aplicar lo pide «aplicar no pide las tareas…». */
+    const ofrecerAlDescartar = tramoDe(descartar, 'if (siguiente === "ofrecer") {', "}");
+    expect(ofrecerAlDescartar).toContain("setOfertaConFases(conFasesLaDescartada);");
+    expect(ofrecerAlDescartar, "descartar el vacío que falló no ofrece «Volver a intentar»").toContain("setOfrecerTareas(true);");
     // El chip: el mismo criterio que la línea (el texto lo prueba borrador-tareas.test.ts).
     const chip = tramo('{(armando !== null || tareasDelBorrador?.estado === "armando") && (', "</span>");
-    expect(chip, "el chip no mira si hay material").toContain("{textoDelChipDeEspera(armando?.paso === 1, materialElegido)}");
+    /* ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25), con esta razón: el chip suma el nombre de la fase
+       de «Regenerar» de una fase (`faseQueSeArma`). El criterio del material no cambió. */
+    expect(chip, "el chip no mira si hay material").toContain(
+      "{textoDelChipDeEspera(armando?.paso === 1, materialElegido, faseQueSeArma)}",
+    );
     // El cartel ámbar: oculto con una propuesta abierta, y el texto con la MISMA condición que el `disabled`.
     /* (E2b P4: y oculto con la línea que ofrece las tareas: dos llamados a lo mismo. Su guarda propia,
        en «E2b P4 · la oferta de las tareas…».) */
@@ -939,7 +954,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(src).toContain('const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : tareasEnPantalla?.recalculo?.estado === "armando" ? tareasEnPantalla.recalculo.corrida : null;');
   });
 
-  it("el auto-descarte de una propuesta de las reuniones sigue la cadena SALTANDO el paso 1 (revisión del paso A2)", () => {
+  it("descartar nunca pide las tareas, ni a mano ni el auto-descarte (revisión del paso A2)", () => {
     /* ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía que descartar (a mano o solo)
        la propuesta de las reuniones siguiera la cadena vieja pidiendo el paso 2. La cadena se fue (D6):
        descartar NUNCA pide las tareas; a lo sumo las ofrece (solo el vacío cuya corrida falló, y lo
@@ -1062,6 +1077,55 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(resolver).toContain('como: "descartar",');
     expect(resolver, "descartar no le dice al núcleo si traía fases").toContain("conCambiosDeFases: conFasesLaDescartada,");
     expect(resolver, "descartar no le dice al núcleo si era de una fase").toContain("soloFase: soloFaseLaDescartada,");
+  });
+
+  it("revisión de E2b · aplicar o descartar OTRA propuesta apaga la oferta de antes", () => {
+    /* La oferta solo se prendía (y se apagaba al pedir, con «Regenerar» de una fase o con «Ahora no»).
+       Aplicabas una propuesta sin tareas, entraba la del handoff y la tapaba, la descartabas y volvía
+       «Se aplicaron las fases; faltan sus tareas.» justo después de un «Descartar». La edición que la
+       pone en rojo: no apagarla al entrar a `aplicarBorrador` o a `discardProposal`, o apagarla DESPUÉS de
+       que `pasoTrasResolver` la vuelve a prender. */
+    for (const [nombre, desde, hasta] of [
+      ["descartar", "const discardProposal = async (", "const aplicarBorrador = async ("],
+      ["aplicar", "const aplicarBorrador = async (", "useEffect("],
+    ] as const) {
+      const cuerpo = tramo(desde, hasta);
+      const iApaga = cuerpo.indexOf("setOfrecerTareas(false);");
+      expect(iApaga, `${nombre} deja prendida la oferta de antes`).toBeGreaterThan(-1);
+      expect(iApaga, `${nombre} la apaga después de decidir la suya`).toBeLessThan(cuerpo.indexOf("pasoTrasResolver({"));
+      expect(iApaga, `${nombre} la apaga después de limpiar la propuesta`).toBeLessThan(cuerpo.indexOf("setProposal(null)"));
+      expect(cuerpo.indexOf("setOfrecerTareas(true);"), `${nombre} no la vuelve a prender`).toBeGreaterThan(iApaga);
+    }
+  });
+
+  it("revisión de E2b · la espera de «Regenerar» de una fase dice QUÉ fase, en la línea y en el chip", () => {
+    /* E2b P5a borró «Generando la propuesta para «X»» y la espera decía lo mismo que «Regenerar todo»:
+       con el botón escondido (solo al pasar el mouse) no se sabía qué se regeneraba. La edición que la
+       pone en rojo: no pasar la fase (el pedido o el borrador vacío), o dejar de pintarla en la línea o en
+       el chip. */
+    expect(textoDeLaLineaDeTareas("armando", null, null, false, false, " Diseño ")?.texto).toBe(
+      "Armando las tareas de «Diseño»… · suele tardar uno o dos minutos",
+    );
+    expect(textoDeLaLineaDeTareas("armando", "Leyendo las reuniones…", null, false, false)?.texto).toBe(
+      "Armando las tareas… · Leyendo las reuniones…",
+    );
+    expect(textoDelChipDeEspera(false, false, "Diseño")).toBe("Armando las tareas de «Diseño»…");
+    expect(textoDelChipDeEspera(false, true)).toBe("Armando las tareas…");
+    expect(textoDelChipDeEspera(true, true, "Diseño"), "el paso 1 no es de una fase").toBe("Revisando fases y tiempos…");
+    // La pantalla: el pedido la guarda, y la línea y el chip la leen (del pedido, o del vacío guardado).
+    expect(tramo("const pedirRegenerarFase = async (", "const submitAssist")).toContain(
+      'setArmando({ paso: 2, modo: "regen", soloFase: phase.id });',
+    );
+    expect(src).toContain("const idDeLaFaseQueSeArma = armando?.soloFase ?? revision.borrador?.soloFase ?? null;");
+    expect(src).toContain(
+      "const faseQueSeArma = idDeLaFaseQueSeArma ? (phases.find((p) => p.id === idDeLaFaseQueSeArma)?.name ?? null) : null;",
+    );
+    expect(tramo("<LineaDeLasTareas", "/>"), "la línea no nombra la fase").toContain("deLaFase={faseQueSeArma}");
+    expect(src, "el chip no nombra la fase").toContain("textoDelChipDeEspera(armando?.paso === 1, materialElegido, faseQueSeArma)");
+    const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
+    expect(componente, "la línea recibe la fase y no la pinta").toContain(
+      "textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases, deLaFase)",
+    );
   });
 
   it("la pantalla lee lo acordado que no entró de la respuesta «sin-cambios» (revisión del paso A2)", () => {
@@ -1204,6 +1268,18 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(helper, "volvió el formato viejo").not.toContain("pendingProposal: { anchorStartDate");
     const analyze = soloCodigo(leer("app/api/clients/[id]/analyze/route.ts"));
     expect(analyze).toContain("await guardarPropuestaDelHandoff(");
+    /* Revisión de E2b: el resultado tiene que LLEGAR al CSE. Solo se pedía la llamada, y callar el aviso
+       (`return { timelineSyncError: null }`) o mandar «sin-cambios» a crear un cronograma que ya existe
+       quedaba en verde. El reparto es puro (`timelineSyncErrorDelHandoff`, su tabla en
+       borrador-del-handoff.test.ts); acá se pide que analyze lo use tal cual y ANTES de crear las fases. */
+    const iLlama = analyze.indexOf("await guardarPropuestaDelHandoff(");
+    const iReparto = analyze.indexOf("const reparto = timelineSyncErrorDelHandoff(delHandoff);");
+    const iLleva = analyze.indexOf("if (!reparto.crear) return { timelineSyncError: reparto.timelineSyncError };");
+    const iCrea = analyze.indexOf("prisma.projectTimeline.create(", iLlama);
+    expect(iReparto, "analyze no reparte el resultado con la función probada").toBeGreaterThan(iLlama);
+    expect(iLleva, "el aviso del handoff no llega al CSE, o «sin-cambios» crea las fases").toBeGreaterThan(iReparto);
+    expect(iCrea, "analyze crea las fases antes de repartir").toBeGreaterThan(iLleva);
+    expect(analyze, "analyze vuelve a repartir por su cuenta").not.toMatch(/delHandoff\.(tipo|aviso)/);
     expect(analyze, "analyze vuelve a decidir por su cuenta").not.toContain("propuestaPorDecidir(");
     expect(analyze, "analyze vuelve a emparejar por su cuenta").not.toContain("reconcileAgentProposal(");
   });
@@ -1285,6 +1361,18 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
       "B",
     ]);
     expect(observacionesDeLaFranja({ delPaso1: [], guardado: vacio, cerradaLaDelGuardado: true }), "cerrarla no la cierra").toEqual([]);
+    /* Revisión de E2b: y que «Entendido» ENCIENDA esa marca. La llamada de arriba le pasa `true` a mano:
+       sin el botón que la fija, lo guardado del vacío volvía a mostrar la franja, en verde. La edición que
+       la pone en rojo: sacar `setFranjaCerradaPara` del `onCerrar` de la franja. */
+    const franjaMontada = tramo("<ObservacionesDelPaso1", "/>");
+    expect(franjaMontada, "«Entendido» no vacía lo del paso 1").toContain("setObservacionesPaso1([]);");
+    expect(franjaMontada, "«Entendido» no cierra la franja del vacío: lo guardado la vuelve a mostrar").toContain(
+      "setFranjaCerradaPara(hayBorrador ? proposalMeta.current.runId : null);",
+    );
+    expect(
+      tramo("const observacionesDeLaFranjaEnPantalla = observacionesDeLaFranja({", "});"),
+      "la franja no lee la marca de «Entendido»",
+    ).toContain("cerradaLaDelGuardado: franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId,");
     // Con una propuesta que tiene barra, lo guardado lo muestra la barra: la franja no lo repite.
     expect(observacionesDeLaFranja({ delPaso1: [], guardado: { ...vacio, cambios: [{ tipo: "ancla" }] }, cerradaLaDelGuardado: false })).toEqual([]);
     const franja = tramo("const observacionesDeLaFranjaEnPantalla = observacionesDeLaFranja({", "});");

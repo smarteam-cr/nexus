@@ -15,7 +15,8 @@
  *     creada después del borrador no se toca; y un caso del tamaño de Wherex deja su tiempo en consola.
  *   · (E2b) «Regenerar» de UNA fase por el camino entero del servidor (marcar, estructura, fusionar
  *     y aplicar): solo cambian las tareas de esa fase, aunque el modelo traiga otras, y la foto
- *     publicada queda byte a byte igual.
+ *     publicada queda byte a byte igual. Y (revisión de E2b) su pedido no entra con un paso 1 del
+ *     proyecto corriendo: la consulta real.
  *   · (E2c) el RECÁLCULO de una fase desfasada por el camino entero (marcar, estructura, fusionar y
  *     aplicar), y «Aplicar de todos modos»: sus tareas tal cual, las que caían después en la última
  *     semana; sin forzar, una pestaña de antes no escribe nada (tampoco la limpieza del token).
@@ -40,7 +41,13 @@ import {
   type Vivo,
 } from "./borrador";
 import { aplicarBorradorEnTx, ErrorAlAplicar, type PedidoDeAplicar } from "./escribir-estructura";
-import { estructuraParaElDetalle, fusionarDetalleEnElBorrador, marcarTareasEnCurso } from "./borrador-del-detalle";
+import {
+  estructuraParaElDetalle,
+  fusionarDetalleEnElBorrador,
+  marcarTareasEnCurso,
+  prevalidarPedidoDeTareas,
+} from "./borrador-del-detalle";
+import { ID_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
 import { freezeBaseline } from "./baseline";
 import type { ProposalLike } from "./proposal-deltas";
 
@@ -420,6 +427,33 @@ describe("aplicar el borrador CON tareas — DB real (E2a)", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("«Regenerar» de una fase — DB real (E2b)", () => {
+  it("⛔ con un paso 1 del proyecto corriendo, el pedido sin propuesta no entra (la consulta real)", async () => {
+    /* Revisión de E2b: el vacío de «Regenerar» de una fase entraba mientras el paso 1 corría en otra
+       pestaña, y el paso 1, ya pagado, no podía guardar. La misma consulta que la toma del paso 1, contra
+       la base: uno de otro proyecto, uno terminado o uno fuera de la ventana no frenan. */
+    const cliente = await prisma.client.create({ data: { name: "Cliente del paso 1 en curso (test)" } });
+    const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación (test)" } });
+    const otro = await prisma.project.create({ data: { clientId: cliente.id, name: "Otro proyecto (test)" } });
+    const tl = await prisma.projectTimeline.create({ data: { projectId: proyecto.id } });
+    const pasoUno = (projectId: string, status: "RUNNING" | "DONE", haceMinutos = 0) =>
+      prisma.agentRun.create({
+        data: {
+          clientId: cliente.id,
+          projectId,
+          agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+          status,
+          createdAt: new Date(Date.now() - haceMinutos * 60_000),
+        },
+      });
+    const pedido = { token: null, version: null } as const;
+    await pasoUno(otro.id, "RUNNING");
+    await pasoUno(proyecto.id, "DONE");
+    await pasoUno(proyecto.id, "RUNNING", 4);
+    expect(await prevalidarPedidoDeTareas(tl.id, pedido), "frena por algo que no es un paso 1 en curso").toBeNull();
+    await pasoUno(proyecto.id, "RUNNING");
+    expect(await prevalidarPedidoDeTareas(tl.id, pedido)).toMatchObject({ error: "ESTRUCTURA_EN_CURSO" });
+  });
+
   it("⭐ el camino entero (marcar, fusionar, aplicar) toca SOLO las tareas de esa fase, y la foto publicada queda byte a byte igual", async () => {
     /* La edición que la pone en rojo: fusionar sin el alcance guardado (`soloFases` null en
        fusionarDetalleEnElBorrador). Se irían las tareas de «Diseño» y entraría la que el modelo

@@ -8,7 +8,7 @@ import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
-import { guardarPropuestaDelHandoff } from "@/lib/timeline/borrador-del-handoff";
+import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -3150,9 +3150,9 @@ async function persistTimelineFromAgentOutput(
         sessionCount: p.sessionCount, notes: p.notes,
       })),
     });
-    if (delHandoff.tipo !== "sin-cronograma") {
-      return { timelineSyncError: delHandoff.tipo === "aviso" ? delHandoff.aviso : null };
-    }
+    // El reparto (crear las fases, o el aviso para el CSE) es puro y tiene su tabla en borrador-del-handoff.test.ts.
+    const reparto = timelineSyncErrorDelHandoff(delHandoff);
+    if (!reparto.crear) return { timelineSyncError: reparto.timelineSyncError };
 
     /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe
        ser un Kick-off y si el agente no lo puso se antepone (estimado → needsValidation). Los

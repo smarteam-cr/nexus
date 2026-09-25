@@ -19,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 const sesiones = vi.hoisted(() => ({ getKickoffSessionDate: vi.fn() }));
 vi.mock("@/lib/sessions/project-sessions", () => sesiones);
 
-import { guardarPropuestaDelHandoff } from "./borrador-del-handoff";
+import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff, type ResultadoDelHandoff } from "./borrador-del-handoff";
 import { borradorVacio, FORMATO_BORRADOR, leerBorrador, type Borrador } from "./borrador";
 import {
   AVISO_OTRA_PROPUESTA_ENTRO,
@@ -199,5 +199,24 @@ describe("guardarPropuestaDelHandoff — una abierta con algo por decidir no se 
     db.projectTimeline.findUnique.mockResolvedValue(fila());
     db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
     expect(await guardar()).toEqual({ tipo: "aviso", aviso: AVISO_OTRA_PROPUESTA_ENTRO });
+  });
+});
+
+describe("timelineSyncErrorDelHandoff — lo que analyze hace con el resultado", () => {
+  it("⛔ la tabla de los 4 casos: solo «sin-cronograma» crea las fases, y solo el aviso llega al CSE", () => {
+    /* Revisión de E2b. El reparto vivía en analyze sin guarda: callar el aviso (el CSE no se entera de
+       que su handoff no guardó las sugerencias) o mandar «sin-cambios» a crear un cronograma que ya
+       existe (`projectId @unique`: un error de Prisma cada vez que regenera sin cambios) quedaba en
+       verde. Las ediciones que la ponen en rojo: cualquiera de esas dos, o crear con «propuesta». Que
+       analyze lo use tal cual lo vigila «#3 / #6» (lib/contexto/estructura-cronograma.test.ts). */
+    const tabla: Array<[ResultadoDelHandoff, ReturnType<typeof timelineSyncErrorDelHandoff>]> = [
+      [{ tipo: "sin-cronograma" }, { crear: true }],
+      [{ tipo: "sin-cambios" }, { crear: false, timelineSyncError: null }],
+      [{ tipo: "propuesta" }, { crear: false, timelineSyncError: null }],
+      [{ tipo: "aviso", aviso: AVISO_OTRA_PROPUESTA_ENTRO }, { crear: false, timelineSyncError: AVISO_OTRA_PROPUESTA_ENTRO }],
+    ];
+    for (const [resultado, esperado] of tabla) {
+      expect(timelineSyncErrorDelHandoff(resultado), resultado.tipo).toEqual(esperado);
+    }
   });
 });
