@@ -208,8 +208,15 @@ export function proponerEmparejados(
    * `yaVinculadas`: las cuentas que ya tienen algún cliente de Odoo. Siguen en la lista, pero solo vuelven
    * si hay una ficha libre con su cédula o su nombre exacto (`otraSociedad`). Sin la lista, todas se tratan
    * como sin vincular, que es como se proponía antes de la etapa 12.
+   *
+   * `partnersDescartados`: los clientes de Odoo que ya tienen dueño (vinculados a una cuenta) o que alguien
+   * marcó «no es cliente nuestro». No se proponen por monto (2026-09-25): el monto sale de TODAS las
+   * facturas del espejo, también las de clientes ya vinculados. Medido ese día: 5 de las 7 sugerencias por
+   * monto apuntaban a un cliente de Odoo de otra cuenta (KAIZEN→Pacuare, Plant→IIA…), salían sin nombre y
+   * «Es este» chocaba con el 409 de «ya está vinculado a otra cuenta». ⚠ La unicidad del monto se sigue
+   * midiendo sobre todas las facturas: que un cliente con dueño comparta la cifra la sigue haciendo dudosa.
    */
-  opts: { yaVinculadas?: ReadonlySet<string> } = {},
+  opts: { yaVinculadas?: ReadonlySet<string>; partnersDescartados?: ReadonlySet<number> } = {},
 ): PropuestaEmparejado[] {
   const porVat = new Map<string, PartnerOdoo[]>();
   for (const p of partners) {
@@ -266,6 +273,7 @@ export function proponerEmparejados(
       ? []
       : (porMonto.get(c.cuentaId) ?? [])
           .filter((k) => (reclamados.get(k.odooPartnerId) ?? c.cuentaId) === c.cuentaId)
+          .filter((k) => !opts.partnersDescartados?.has(k.odooPartnerId))
           .map((k) => ({ ...k, nombre: nombreDe.get(k.odooPartnerId) ?? "" }));
 
     const candidatos: Candidato[] = [
@@ -443,4 +451,105 @@ export function reatribuciones<F extends FacturaAtribuible>(
     out.push({ facturaId: f.id, odooMoveId: f.odooMoveId, numero: f.numero, anterior: f.cuentaId ?? null, nuevo });
   }
   return out;
+}
+
+/* ── 9. Quién queda por emparejar ───────────────────────────────────────────────── */
+
+/** Lo mínimo de una cuenta para saber si le falta su cliente de Odoo. */
+export interface CuentaParaContar {
+  id: string;
+  /** `CuentaFinanciera.viaCobro`: ODOO, MERCURY u OTRA (QuickBooks). */
+  viaCobro: string;
+}
+
+/**
+ * ⭐ LA regla de «por emparejar», una sola para todos los contadores (2026-09-25): la cuenta factura por
+ * Odoo y todavía no tiene ningún cliente de Odoo vinculado.
+ *
+ * ── POR QUÉ ──────────────────────────────────────────────────────────────────────
+ * Medido el 2026-09-25, la misma pregunta tenía tres respuestas: 29 tarjetas en «Emparejar», 28 en el
+ * número de la pestaña (contaba fichas de Odoo, no cuentas: JUDESUR tiene dos) y «Faltan emparejar 7 de
+ * 34» en «Lo que no cuadra» (solo nacionales). Y ninguna miraba la vía de cobro: las 8 cuentas que ya
+ * dicen Mercury estaban en la lista para siempre, porque nunca van a tener cliente de Odoo.
+ *
+ * ⚠ Una cuenta en Mercury o QuickBooks NO está por emparejar, aunque no tenga cliente de Odoo: no hay
+ * nada que buscarle. Si vuelve a Odoo («Deshacer», o la ficha de la cuenta), vuelve sola a la lista con
+ * lo que tenía: la regla no guarda nada aparte.
+ */
+export function quedaPorEmparejar(cuenta: CuentaParaContar, vinculadas: ReadonlySet<string>): boolean {
+  return cuenta.viaCobro === "ODOO" && !vinculadas.has(cuenta.id);
+}
+
+export interface ResumenDelEmparejado {
+  /** Todas las cuentas de Nexus. */
+  cuentas: number;
+  /** Con al menos un cliente de Odoo vinculado (cuentas distintas, no fichas). */
+  vinculadas: number;
+  /** `quedaPorEmparejar`: vía Odoo y sin cliente de Odoo. Es el número de la pestaña. */
+  porEmparejar: number;
+  /** Sin cliente de Odoo y con vía Mercury: no se emparejan. */
+  enMercury: number;
+  /** Sin cliente de Odoo y con vía QuickBooks: tampoco se emparejan. */
+  enOtra: number;
+  /** Las que se emparejan o ya se emparejaron: `vinculadas + porEmparejar`. El «de N» de «Faltan emparejar». */
+  deOdoo: number;
+}
+
+/**
+ * Los contadores del emparejado, todos de `quedaPorEmparejar`. Las cuatro partes suman el total: una
+ * cuenta vinculada cuenta como vinculada aunque su vía diga otra cosa, así nada se cuenta dos veces.
+ */
+export function resumenDelEmparejado(
+  cuentas: readonly CuentaParaContar[],
+  vinculadas: ReadonlySet<string>,
+): ResumenDelEmparejado {
+  const r = { cuentas: cuentas.length, vinculadas: 0, porEmparejar: 0, enMercury: 0, enOtra: 0, deOdoo: 0 };
+  for (const c of cuentas) {
+    if (vinculadas.has(c.id)) r.vinculadas++;
+    else if (quedaPorEmparejar(c, vinculadas)) r.porEmparejar++;
+    else if (c.viaCobro === "MERCURY") r.enMercury++;
+    else r.enOtra++;
+  }
+  r.deOdoo = r.vinculadas + r.porEmparejar;
+  return r;
+}
+
+/* ── 10. «Está en Mercury» ──────────────────────────────────────────────────────── */
+
+/** Lo que pide el botón: marcar la cuenta en Mercury, o deshacerlo (vuelve a Odoo). */
+export type PedidoDeVia = "MERCURY" | "ODOO";
+
+export type DecisionDeVia =
+  | { tipo: "CAMBIA"; anterior: string; nueva: PedidoDeVia }
+  /** Ya dice eso: no se escribe nada, así no se pisa quién la marcó ni se ensucia la bitácora. */
+  | { tipo: "YA_ESTABA" }
+  | { tipo: "RECHAZO"; motivo: string };
+
+/**
+ * Qué hace el botón «Está en Mercury» (y su «Deshacer») con una cuenta. Pura: el servicio la aplica
+ * adentro de la transacción que escribe.
+ *
+ * ⛔ No marca una cuenta que ya tiene un cliente de Odoo vinculado. Sus facturas vienen de Odoo, y en
+ * Mercury dejaría de ofrecerlas al marcar un cobro facturado y de revisar sus cobros sin plataforma
+ * anotada, sin que nada avise. Se explica en vez de hacerlo a medias: si de verdad factura solo por
+ * Mercury, primero se desvincula su cliente de Odoo (medido el 2026-09-25: ningún caso).
+ *
+ * «Deshacer» la devuelve a Odoo aunque tenga fichas: es la vía que el modelo supone para una cuenta
+ * con cliente de Odoo, y el resto de sus datos no se toca.
+ */
+export function decidirMarcaDeMercury(
+  cuenta: { nombre: string; viaCobro: string; fichasDeOdoo: readonly string[] },
+  pedido: PedidoDeVia,
+): DecisionDeVia {
+  if (cuenta.viaCobro === pedido) return { tipo: "YA_ESTABA" };
+  if (pedido === "MERCURY" && cuenta.fichasDeOdoo.length > 0) {
+    const fichas = cuenta.fichasDeOdoo.map((f) => `«${f}»`).join(", ");
+    return {
+      tipo: "RECHAZO",
+      motivo:
+        `«${cuenta.nombre}» ya tiene un cliente de Odoo vinculado (${fichas}): sus facturas vienen de Odoo y, marcada en Mercury, ` +
+        "Nexus dejaría de verificarlas. Si de verdad factura solo por Mercury, desvincula primero su cliente de Odoo en «Ya vinculadas».",
+    };
+  }
+  return { tipo: "CAMBIA", anterior: cuenta.viaCobro, nueva: pedido };
 }

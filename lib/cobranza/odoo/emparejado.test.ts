@@ -24,9 +24,12 @@ import {
   candidatosPorMonto,
   cedulaAAprender,
   claseDeCedula,
+  decidirMarcaDeMercury,
   normalizar,
   proponerEmparejados,
+  quedaPorEmparejar,
   reatribuciones,
+  resumenDelEmparejado,
   soloDigitos,
   type ClaseEmparejado,
   type CuentaNexus,
@@ -374,5 +377,103 @@ describe("⭐ a qué cuenta va cada factura", () => {
     const r = reatribuciones([f("f1", 38, "amvac")], [{ odooPartnerId: 38, cuentaId: null }]);
     expect(r).toEqual([{ facturaId: "f1", odooMoveId: 1, numero: "FAC/f1", anterior: "amvac", nuevo: null }]);
     expect(reatribuciones([f("f1", 38, "amvac")], []), "sin fila de vínculo, tampoco").toHaveLength(1);
+  });
+});
+
+/**
+ * ── ⭐ 2026-09-25 · «ESTÁ EN MERCURY» Y UNA SOLA REGLA PARA «POR EMPAREJAR» ────────────
+ * Medido ese día en producción: 56 cuentas (27 vinculadas; 7 nacionales y 14 internacionales con vía
+ * Odoo y sin cliente; 8 internacionales con vía Mercury). «Emparejar» mostraba 29 tarjetas, la pestaña
+ * decía 28 y «Lo que no cuadra» «7 de 34». Con la regla única: 21 por emparejar, 8 en Mercury.
+ */
+describe("⭐ quién queda por emparejar: una sola regla para todos los contadores", () => {
+  const cuentas = [
+    ...Array.from({ length: 27 }, (_, i) => ({ id: `vinc-${i}`, viaCobro: "ODOO" })),
+    ...Array.from({ length: 21 }, (_, i) => ({ id: `odoo-${i}`, viaCobro: "ODOO" })),
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `merc-${i}`, viaCobro: "MERCURY" })),
+  ];
+  const vinculadas = new Set(Array.from({ length: 27 }, (_, i) => `vinc-${i}`));
+
+  it("los números de producción del 2026-09-25: 27 de 56 vinculadas, 21 por emparejar, 8 en Mercury", () => {
+    expect(resumenDelEmparejado(cuentas, vinculadas)).toEqual({
+      cuentas: 56,
+      vinculadas: 27,
+      porEmparejar: 21,
+      enMercury: 8,
+      enOtra: 0,
+      deOdoo: 48,
+    });
+  });
+
+  it("⛔ una cuenta en Mercury o QuickBooks no está por emparejar, aunque no tenga cliente de Odoo", () => {
+    expect(quedaPorEmparejar({ id: "m", viaCobro: "MERCURY" }, new Set())).toBe(false);
+    expect(quedaPorEmparejar({ id: "q", viaCobro: "OTRA" }, new Set())).toBe(false);
+    expect(quedaPorEmparejar({ id: "o", viaCobro: "ODOO" }, new Set())).toBe(true);
+    expect(quedaPorEmparejar({ id: "o", viaCobro: "ODOO" }, new Set(["o"]))).toBe(false);
+  });
+
+  it("⭐ volver a Odoo la devuelve a la lista sin guardar nada aparte: la regla solo mira la vía", () => {
+    const marcada = cuentas.map((c) => (c.id === "odoo-0" ? { ...c, viaCobro: "MERCURY" } : c));
+    expect(resumenDelEmparejado(marcada, vinculadas)).toMatchObject({ porEmparejar: 20, enMercury: 9 });
+    const deshecha = marcada.map((c) => (c.id === "odoo-0" ? { ...c, viaCobro: "ODOO" } : c));
+    expect(resumenDelEmparejado(deshecha, vinculadas)).toEqual(resumenDelEmparejado(cuentas, vinculadas));
+  });
+
+  it("las partes suman el total: una vinculada cuenta como vinculada aunque su vía diga Mercury", () => {
+    const mixta = [{ id: "a", viaCobro: "MERCURY" }, { id: "b", viaCobro: "OTRA" }, { id: "c", viaCobro: "ODOO" }];
+    const r = resumenDelEmparejado(mixta, new Set(["a"]));
+    expect(r).toEqual({ cuentas: 3, vinculadas: 1, porEmparejar: 1, enMercury: 0, enOtra: 1, deOdoo: 2 });
+    expect(r.vinculadas + r.porEmparejar + r.enMercury + r.enOtra).toBe(r.cuentas);
+  });
+});
+
+describe("⭐ el botón «Está en Mercury»", () => {
+  const cuenta = (viaCobro: string, fichasDeOdoo: string[] = []) => ({ nombre: "Wherex", viaCobro, fichasDeOdoo });
+
+  it("marca una cuenta de Odoo sin cliente de Odoo, y «Deshacer» la devuelve a Odoo", () => {
+    expect(decidirMarcaDeMercury(cuenta("ODOO"), "MERCURY")).toEqual({ tipo: "CAMBIA", anterior: "ODOO", nueva: "MERCURY" });
+    expect(decidirMarcaDeMercury(cuenta("MERCURY"), "ODOO")).toEqual({ tipo: "CAMBIA", anterior: "MERCURY", nueva: "ODOO" });
+  });
+
+  it("⛔ no marca una cuenta que ya tiene cliente de Odoo, y dice por qué y qué hacer", () => {
+    const d = decidirMarcaDeMercury(cuenta("ODOO", ["WHEREX SPA"]), "MERCURY");
+    expect(d.tipo).toBe("RECHAZO");
+    if (d.tipo !== "RECHAZO") return;
+    expect(d.motivo).toContain("«WHEREX SPA»");
+    expect(d.motivo).toMatch(/desvincula primero/);
+  });
+
+  it("si ya dice eso, no cambia nada: no se pisa quién la marcó ni se ensucia la bitácora", () => {
+    expect(decidirMarcaDeMercury(cuenta("MERCURY"), "MERCURY")).toEqual({ tipo: "YA_ESTABA" });
+    expect(decidirMarcaDeMercury(cuenta("ODOO"), "ODOO")).toEqual({ tipo: "YA_ESTABA" });
+  });
+
+  it("«Deshacer» funciona aunque la cuenta tenga fichas: volver a Odoo nunca deja datos a medias", () => {
+    expect(decidirMarcaDeMercury(cuenta("MERCURY", ["X"]), "ODOO").tipo).toBe("CAMBIA");
+  });
+});
+
+describe("⭐ las sugerencias por monto no proponen clientes de Odoo que ya tienen dueño", () => {
+  /* Medido el 2026-09-25: KAIZEN KAPITAL → Pacuare (#74), ya vinculado a otra cuenta. La tarjeta salía sin
+     nombre y «Es este» chocaba con el 409 de «ya está vinculado a otra cuenta». */
+  const cuentas: CuentaNexus[] = [
+    { cuentaId: "kaizen", nombre: "KAIZEN KAPITAL", cedulaJuridica: null, montos: [{ monto: 900, moneda: "USD" }] },
+    { cuentaId: "amc", nombre: "AMC - Atlas Mining", cedulaJuridica: null, montos: [{ monto: 1200, moneda: "USD" }] },
+  ];
+  const partners: PartnerOdoo[] = [{ odooPartnerId: 33, nombre: "3-101-767810 SOCIEDAD ANONIMA", vat: null, customerRank: 1 }];
+  const montos: MontoDeOdoo[] = [
+    { odooPartnerId: 74, montoNeto: 900, moneda: "USD" },
+    { odooPartnerId: 33, montoNeto: 1200, moneda: "USD" },
+  ];
+
+  it("sin la lista de descartados se proponía el cliente ajeno, sin nombre", () => {
+    const antes = proponerEmparejados(cuentas, partners, montos);
+    expect(antes.find((p) => p.cuentaId === "kaizen")?.candidatos).toMatchObject([{ odooPartnerId: 74, nombre: "" }]);
+  });
+
+  it("⛔ con ella, el cliente con dueño sale y la cuenta queda sin candidato; el libre se sigue proponiendo", () => {
+    const r = proponerEmparejados(cuentas, partners, montos, { partnersDescartados: new Set([74]) });
+    expect(r.find((p) => p.cuentaId === "kaizen")).toMatchObject({ clase: "SIN_CANDIDATO", candidatos: [] });
+    expect(r.find((p) => p.cuentaId === "amc")).toMatchObject({ clase: "MONTO", candidatos: [{ odooPartnerId: 33 }] });
   });
 });
