@@ -41,8 +41,8 @@ import { POST as aplicarPOST } from "@/app/api/projects/[projectId]/timeline/bor
 import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeline/proposal/route";
 import { POST as aplicarFasePOST } from "@/app/api/projects/[projectId]/timeline/phases/[phaseId]/apply/route";
 import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline/detail/apply-all/route";
-import { ErrorAlAplicar } from "@/lib/timeline/escribir-estructura";
-import { FORMATO_BORRADOR, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
+import { ErrorAlAplicar, type ResultadoDeAplicar } from "@/lib/timeline/escribir-estructura";
+import { FORMATO_BORRADOR, leerBorrador, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
   cierreDeLaCorridaVetada,
@@ -248,6 +248,47 @@ describe("POST /timeline/borrador/aplicar — la versión que vio el CSE", () =>
     });
     await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h", version: 5 }), delProyecto);
     expect(guards.guardIaDelCronograma).toHaveBeenCalledWith("tl");
+  });
+});
+
+describe("POST /timeline/borrador/aplicar — de dónde viene, en la auditoría (E2b)", () => {
+  /** Aplica el borrador guardado `guardado` (la transacción falsa devuelve lo que aplicó) y lee la razón. */
+  async function razonAlAplicar(guardado: Record<string, unknown>): Promise<string> {
+    db.projectTimeline.findUnique
+      .mockResolvedValueOnce({ id: "tl", pendingProposal: guardado, pendingProposalRunId: "run-f" })
+      .mockResolvedValueOnce({ anchorStartDate: null });
+    db.timelinePhase.findMany.mockResolvedValue([]);
+    db.$transaction.mockResolvedValue({
+      borrador: leerBorrador(guardado, { ancla: null, fases: [] })!,
+      plan: { marcadas: 1, total: 1, aplicadas: [] },
+      avisos: [],
+      anclaAntes: null,
+      fasesAntes: [],
+      tareasTocadas: 1,
+      tareas: { creadas: 1, borradas: 0 },
+    } as unknown as ResultadoDeAplicar);
+    const res = await aplicarPOST(pedir({ token: "run-f", sin: [], huella: "h", version: 5 }), delProyecto);
+    expect(res.status).toBe(200);
+    const llamadas = db.timelineChange.create.mock.calls;
+    return llamadas[llamadas.length - 1][0].data.reason as string;
+  }
+  const listas = { cambios: [TAREA_NUEVA], tareas: { corrida: "run-f", listas: true } };
+
+  it("⛔ «Regenerar» de una fase no queda auditada como «Regenerar todo»", async () => {
+    /* La edición que la pone en rojo: volver a decidir por `pedido` (el de una fase es «regenerar»)
+       en vez de la clasificación única `deDondeViene`. */
+    const deUnaFase = await razonAlAplicar(v1({ ...listas, soloFase: "f1", tareasArmadasPara: { f1: { nombre: "Diseño", semanas: 2 } } }));
+    expect(deUnaFase).toMatch(/^Propuesta de «Regenerar» en «Diseño» aplicada: 1 de 1 cambio: 1 tarea nueva\./);
+    expect(await razonAlAplicar(v1(listas))).toMatch(/^Propuesta de «Regenerar todo» aplicada/);
+    expect(await razonAlAplicar(v1({ ...listas, pedido: "primera" }))).toMatch(/^Propuesta de «Generar cronograma» aplicada/);
+    expect(await razonAlAplicar(v1({ pedido: null, tareas: null }))).toMatch(/^Propuesta de fases de las reuniones y notas elegidas aplicada/);
+    expect(await razonAlAplicar(v1({ origen: "handoff", pedido: null, tareas: null }))).toMatch(/^Propuesta de fases del handoff aplicada/);
+  });
+
+  it("la razón sale de `deDondeViene(`, no de una cadena propia", () => {
+    const ruta = soloCodigo(leer(APLICAR));
+    expect(ruta).toContain("const deDonde = razonDeDonde(deDondeViene(r.borrador));");
+    expect(ruta, "la ruta vuelve a clasificar por su cuenta").not.toMatch(/r\.borrador\.pedido\s*===/);
   });
 });
 
@@ -460,7 +501,10 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
 
   it("⛔ el pedido se valida y se prevalida ANTES de crear la corrida (no se paga una que no se guarda)", () => {
     /* La edición que la pone en rojo: prevalidar después de `prisma.agentRun.create(` (o no prevalidar),
-       o aceptar `borrador` con «Regenerar» de una fase u otro agente. */
+       o aceptar `borrador` con otro agente, o con «Regenerar» de una fase DENTRO de un borrador abierto.
+       ⚠ ACTUALIZADA en E2b P3 (2026-09-25), con esta razón: rechazaba toda fase con `borrador`. Desde
+       E2b «Regenerar» de una fase es un borrador con token null (nace con `soloFase`); con token sigue
+       en 400 hasta E2c (el recálculo dentro de un borrador abierto). */
     const iCrear = ruta.indexOf("prisma.agentRun.create(");
     const iLeer = ruta.indexOf("leerPedidoDeTareas(body?.borrador)");
     const iPrevalidar = ruta.indexOf("await prevalidarPedidoDeTareas(tl.id, pedidoDeTareas)");
@@ -469,7 +513,9 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(iPrevalidar, "la ruta no prevalida el pedido").toBeGreaterThan(-1);
     expect(iLeer).toBeLessThan(iCrear);
     expect(iPrevalidar, "se prevalida después de crear la corrida").toBeLessThan(iCrear);
-    expect(ruta.slice(iLeer, iLeer + 400)).toContain('(pedidoLeido !== null && (!isTimelineDetailAgent || regeneratePhaseId))');
+    expect(ruta.slice(iLeer, iLeer + 400)).toContain(
+      "(pedidoLeido !== null && (!isTimelineDetailAgent || (regeneratePhaseId !== null && pedidoLeido.token !== null)))",
+    );
     expect(ruta.slice(iPrevalidar, iPrevalidar + 300)).toContain("return NextResponse.json(vetoDelBorrador, { status: 409 })");
   });
 
@@ -493,6 +539,19 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(veto, "el veto vuelve a quedar en ERROR (el centro de corridas lo anuncia en rojo)").not.toContain("markDone(");
     // El paso 2 del borrador siempre va detached: el borrador sigue la corrida, no la conexión.
     expect(ruta).toMatch(/const runDetached = [^;]*\|\| pedidoDeTareas !== null;/);
+  });
+
+  it("⛔ «Regenerar» de una fase (E2b): la marca guarda la fase en el borrador; la fusión no la toma del body", () => {
+    /* La edición que la pone en rojo: no pasarle la fase a la marca (el borrador nacería sin alcance y
+       la fusión armaría TODO el cronograma), o pasarle a la fusión la fase del body (el alcance tiene una
+       sola fuente: el JSON guardado). */
+    const iMarca = ruta.indexOf("await marcarTareasEnCurso(");
+    const marca = ruta.slice(iMarca, ruta.indexOf("});", iMarca));
+    expect(marca).toContain("soloFase: regeneratePhaseId,");
+    const iFusion = ruta.indexOf("fusionarDetalleEnElBorrador(");
+    const fusion = ruta.slice(iFusion, ruta.indexOf("});", iFusion));
+    expect(fusion.length, "no encontré la fusión").toBeGreaterThan(80);
+    expect(fusion, "la fusión toma el alcance del body").not.toMatch(/regeneratePhaseId|soloFase/);
   });
 
   it("⭐ el agente lee la estructura SUPUESTA, y si el borrador ya no es el suyo: 409 antes del modelo", () => {
@@ -656,7 +715,23 @@ const tareaDB = (extra: Record<string, unknown> = {}) => ({
   needsValidation: false,
   ...extra,
 });
-/** La estructura que VIO el agente: «Diseño» con 3 semanas (la propuesta la alargaba). */
+/** La tarea de `tareaDB()` como la LEYÓ el agente (la que viaja en la estructura). */
+const TAREA_VISTA = {
+  id: "t-vieja",
+  title: "Mapear procesos viejos",
+  weekIndex: 0,
+  notes: null,
+  party: null,
+  type: null,
+  status: "PENDING",
+  source: "AGENT",
+  inicioFijado: null,
+  finFijado: null,
+  needsValidation: false,
+};
+/** La estructura que VIO el agente: «Diseño» con 3 semanas (la propuesta la alargaba).
+ *  ⚠ ACTUALIZADA en E2b P3 (2026-09-25), con esta razón: traía `tareas: []`, y desde D10 solo se va
+ *  lo que el agente VIO; «Diseño» trae la tarea que el agente leyó, como en una corrida de verdad. */
 const ESTRUCTURA: EstructuraHipotetica = {
   ancla: null,
   fases: [
@@ -669,7 +744,7 @@ const ESTRUCTURA: EstructuraHipotetica = {
       notes: null,
       activityType: "PLANIFICACION",
       existente: true,
-      tareas: [],
+      tareas: [TAREA_VISTA],
     },
   ],
 };
@@ -809,6 +884,29 @@ describe("marcarTareasEnCurso — el borrador queda «armando» con la corrida",
     });
     expect(db.projectTimeline.updateMany, "escribió sobre otra versión").not.toHaveBeenCalled();
   });
+
+  it("⛔ «Regenerar» de una fase (E2b): el vacío nace con `soloFase`; sin fase, sin la clave; con token, se ignora", async () => {
+    /* La edición que la pone en rojo: no guardar la fase en el vacío (la fusión, que la lee de ahí,
+       armaría todo el cronograma), o sumársela a un borrador que ya existe. */
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-f", soloFase: "f1" })).toBeNull();
+    const [{ where, data }] = db.projectTimeline.updateMany.mock.calls[0];
+    expect(where).toEqual({ id: "tl", pendingProposal: { equals: Prisma.DbNull } });
+    expect(data.pendingProposal).toMatchObject({ origen: "contexto", pedido: "regenerar", cambios: [], soloFase: "f1" });
+    expect(data.pendingProposalRunId).toBe("run-f");
+
+    db.projectTimeline.updateMany.mockClear();
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-f", soloFase: null });
+    expect("soloFase" in db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal).toBe(false);
+
+    db.projectTimeline.updateMany.mockClear();
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: v1(), pendingProposalRunId: "run-1" });
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 5 }, corrida: "run-t", soloFase: "f1" });
+    expect("soloFase" in db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal, "le sumó alcance a un borrador abierto").toBe(
+      false,
+    );
+  });
 });
 
 describe("estructuraParaElDetalle — la estructura SUPUESTA que lee el agente", () => {
@@ -943,6 +1041,51 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
       expect(JSON.parse(data.output)).toEqual({ ...DETALLE, timelineSyncError: MOTIVO_TAREAS_PERDIDAS });
     }
     expect(db.projectTimeline.updateMany, "escribió un borrador que ya no era el suyo").not.toHaveBeenCalled();
+  });
+
+  it("⭐ «Regenerar» de una fase (E2b): con `soloFase` guardado, solo cambia esa fase aunque el modelo traiga otras", async () => {
+    /* La edición que la pone en rojo: fusionar sin el alcance del borrador guardado (se reemplazarían
+       las tareas de las fases que el CSE no pidió regenerar). */
+    const DOS: EstructuraHipotetica = {
+      ancla: null,
+      fases: [
+        ESTRUCTURA.fases[0],
+        { ...ESTRUCTURA.fases[0], id: "f2", name: "Pruebas", durationWeeks: 2, tareas: [{ ...TAREA_VISTA, id: "t-f2", title: "Probar lo viejo" }] },
+      ],
+    };
+    const detalle = {
+      timelineDetail: {
+        phases: [
+          { id: "f1", tasks: [{ title: "Diseñar el tablero", weekIndex: 2 }] },
+          { id: "f2", tasks: [{ title: "Probar el tablero", weekIndex: 1 }] },
+        ],
+      },
+    };
+    const conDosFases = (guardado: unknown) =>
+      db.projectTimeline.findUnique.mockResolvedValue({
+        pendingProposal: guardado,
+        pendingProposalRunId: "run-1",
+        anchorStartDate: null,
+        project: { tags: [] },
+        phases: [
+          faseDB({ tasks: [tareaDB()] }),
+          faseDB({ id: "f2", name: "Pruebas", order: 1, tasks: [tareaDB({ id: "t-f2", title: "Probar lo viejo" })] }),
+        ],
+      });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+
+    conDosFases(v1({ tareas: { corrida: "run-t", listas: false }, soloFase: "f2" }));
+    expect(await fusionar({ estructura: DOS, analysisJson: detalle })).toEqual({ estado: "listas", nuevas: 1, seVan: 1, observaciones: [] });
+    const escrito = db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal;
+    const fases = escrito.cambios.map((c: { fase?: string; faseId?: string }) => c.fase ?? c.faseId);
+    expect(fases, "cambió una fase que no se pidió").toEqual(["f2", "f2"]);
+    expect(escrito.tareasArmadasPara).toEqual({ f2: { nombre: "Pruebas", semanas: 2 } });
+    expect(escrito.soloFase).toBe("f2");
+
+    // Control: el mismo pedido sin `soloFase` guardado cambia las dos.
+    db.projectTimeline.updateMany.mockClear();
+    conDosFases(v1({ tareas: { corrida: "run-t", listas: false } }));
+    expect(await fusionar({ estructura: DOS, analysisJson: detalle })).toMatchObject({ estado: "listas", nuevas: 2, seVan: 2 });
   });
 
   it("si la escritura condicionada no entra (cambió en el medio): «perdido», sin reintentar", async () => {

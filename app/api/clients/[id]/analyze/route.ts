@@ -403,10 +403,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // recolectar fuentes o llamar a Claude.
   // Por convención de id: el base O una variante por tipo (agent-timeline-detail--<tipo>).
   const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
-  /* E2a: el `borrador` solo lo usa el paso 2 de «Regenerar todo» (el detalle, todas las fases). Mal
-     formado, con «Regenerar» de una fase o con otro agente: 400, antes de crear nada. */
+  /* E2a: el `borrador` lo usa el paso 2 de «Regenerar todo» (el detalle, todas las fases) y, desde
+     E2b, «Regenerar» de una fase, solo con token null (nace su borrador, con `soloFase`). Mal formado,
+     con otro agente, o una fase dentro de un borrador abierto (token; llega con E2c): 400, antes de
+     crear nada. */
   const pedidoLeido = leerPedidoDeTareas(body?.borrador);
-  if (pedidoLeido === "invalido" || (pedidoLeido !== null && (!isTimelineDetailAgent || regeneratePhaseId))) {
+  if (
+    pedidoLeido === "invalido" ||
+    (pedidoLeido !== null && (!isTimelineDetailAgent || (regeneratePhaseId !== null && pedidoLeido.token !== null)))
+  ) {
     return NextResponse.json(
       { error: "PEDIDO_INVALIDO", message: "El pedido de tareas del borrador no es válido: recarga la página y vuelve a intentar." },
       { status: 400 },
@@ -2910,7 +2915,12 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
      si el proceso muere, pasa solo a «fallo»). Si en el medio entró otra propuesta o cambió la que el
      CSE tenía enfrente, no se pisa nada y la corrida queda en ERROR con el motivo. */
   if (pedidoDeTareas) {
-    const vetoDeLaMarca = await marcarTareasEnCurso({ timelineId: timelineDelBorrador!, pedido: pedidoDeTareas, corrida: pre.id });
+    const vetoDeLaMarca = await marcarTareasEnCurso({
+      timelineId: timelineDelBorrador!,
+      pedido: pedidoDeTareas,
+      corrida: pre.id,
+      soloFase: regeneratePhaseId,
+    });
     if (vetoDeLaMarca) {
       /* Cierre de la revisión de E2a: perder la carrera de la marca no es un fallo (no se llamó a la IA
          ni se pagó nada, y la pantalla ya lo dice con el 409). En ERROR, el centro de corridas lo

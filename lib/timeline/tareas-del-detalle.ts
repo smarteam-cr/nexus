@@ -7,9 +7,11 @@
  *
  * ── LAS REGLAS (E2a, §2.5) ───────────────────────────────────────────────────
  *  R1. Una fase sin tareas DEL AGENTE no cambia (las fijas no cuentan): «el agente no propuso nada»
- *      no es «borra todo» (`repartoInicial`, regen-columnas.ts).
- *  R2. Con al menos una, se va cada viva que no tiene avance ni se escribió a mano (`isKept`), con su
- *      foto de AHORA como `desde`: una edición posterior la hace chocar.
+ *      no es «borra todo».
+ *  R2. Con al menos una, se va cada tarea que el agente VIO y sigue en su fase, sin avance ni escrita
+ *      a mano (`isKept`, mirado AHORA). Su `desde` es la versión que VIO el agente (E2b, D10; plan
+ *      §1.1): una edición hecha mientras la IA armaba choca y queda fuera, en vez de borrarse con
+ *      «Aplicar todo». Una creada o mudada mientras tanto no se toca.
  *  R3. Una `tarea-nueva` por cada tarea del agente, en la fase que vio (id real o `n:…`).
  *  R4. No se empareja por título para conservar ids. R4b: una que se iría y una propuesta IDÉNTICAS
  *      (huella del título, semana, notas, dueño, tipo y «por validar») no emiten nada: no se borra
@@ -18,11 +20,17 @@
  *  R6. El tipo de actividad: solo si la fase no tiene uno (el elegido a mano manda).
  *  R7. Las fijas de la Semana 0: una viva que coincide con una fija (o con su gemela) no se va, y
  *      las fijas que faltan entran como nuevas. Así no van y vuelven en cada regeneración.
- *  R8. `tareasArmadasPara` de TODAS las fases: el cierre del plan las usa si la fase cambia después.
+ *  R8. `tareasArmadasPara` de TODAS las fases del alcance: el cierre del plan las usa si la fase
+ *      cambia después.
  *  R9. Orden: fase por fase; primero las que se van (por semana y orden del vivo), después las nuevas
  *      (en el orden del agente, con las fijas al final).
  *  R10. Si el modelo se cortó (`max_tokens`), la última fase no genera nada y se avisa.
  *  R11. Se avisa de una fase nueva sin tareas y de las fases que el agente nombró y no existen.
+ *
+ * ── EL ALCANCE (E2b) ─────────────────────────────────────────────────────────
+ * «Regenerar» de una fase pasa `soloFases`: las demás fases se saltan enteras, antes de R8. Así R6
+ * (el tipo), R7 (las fijas de la Semana 0, solo si la pedida ES la del arranque) y R8 miran solo la
+ * fase pedida, aunque el modelo devuelva tareas para otras.
  */
 import {
   huellasDeFrontera,
@@ -157,8 +165,10 @@ const identicas = (viva: TareaDelVivo, nueva: ContenidoDeTareaNueva) =>
   (viva.needsValidation ?? false) === nueva.needsValidation;
 
 /**
- * Los cambios de tareas del paso 2, sobre la estructura que vio el agente y el vivo de AHORA (al
- * fusionar, con tareas). Ver las reglas R1-R11 arriba. `nuevaClave` genera los ids aleatorios de las
+ * Los cambios de tareas del paso 2, sobre la estructura que vio el agente (con las tareas que LEYÓ)
+ * y el vivo de AHORA (al fusionar, con tareas): el vivo dice qué sigue en la fase y qué tiene avance;
+ * el `desde` es lo que leyó el agente (R2). Ver las reglas R1-R11 arriba. `soloFases`: el alcance
+ * de «Regenerar» de una fase (null o ausente = todas). `nuevaClave` genera los ids aleatorios de las
  * claves (los tests inyectan uno determinista).
  */
 export function cambiosDeTareasDelDetalle(i: {
@@ -169,6 +179,7 @@ export function cambiosDeTareasDelDetalle(i: {
   tags: readonly string[];
   nuevaClave: () => string;
   idsDesconocidos: number;
+  soloFases?: ReadonlySet<string> | null;
 }): CambiosDelDetalle {
   const propuestaDe = new Map(i.propuestas.map((p) => [p.fase, p]));
   const vivas = new Map(i.vivo.fases.map((f) => [f.id, f]));
@@ -184,6 +195,8 @@ export function cambiosDeTareasDelDetalle(i: {
   const observaciones: string[] = [];
 
   for (const f of i.estructura.fases) {
+    // El alcance (E2b): una fase fuera de él no emite nada. `semanaCero` ya se eligió sobre todas.
+    if (i.soloFases && !i.soloFases.has(f.id)) continue;
     tareasArmadasPara[f.id] = { nombre: f.name, semanas: f.durationWeeks }; // R8
     const p = propuestaDe.get(f.id);
     if (p?.cortada) {
@@ -216,15 +229,22 @@ export function cambiosDeTareasDelDetalle(i: {
     }
     if (!f.existente && delAgente.length === 0) observaciones.push(`La IA no armó tareas para la fase nueva «${f.name}».`); // R11
 
-    const actuales = viva?.tareas ?? [];
+    /* R2 (E2b, D10): el `desde` es lo que LEYÓ el agente, no lo vivo al fusionar. Una tarea editada
+       mientras la IA armaba choca y queda fuera; iniciada o hecha, no se va (`isKept` de ahora);
+       creada o mudada a otra fase mientras tanto, no se toca. */
+    const vistas = new Map(f.tareas.map((t) => [t.id, t])); // lo que leyó el agente
+    const enLaFase = viva?.tareas ?? [];
+    const actuales = enLaFase.filter((t) => vistas.has(t.id)); // siguen en la fase y el agente las vio
     const sinPropuesta = delAgente.length === 0; // R1
-    let reemplazables = sinPropuesta ? [] : actuales.filter((t) => !isKept(t)); // R2
+    let reemplazables = sinPropuesta ? [] : actuales.filter((t) => !isKept(t)).map((t) => vistas.get(t.id)!);
 
     // R7: las fijas de la Semana 0.
     const fijas: ContenidoDeTareaNueva[] = [];
     if (semanaCero && semanaCero.id === f.id) {
+      /* Cuenta todo lo que se queda en la fase: lo que tiene avance y, también, lo que el agente no vio
+         (creada mientras la IA armaba). Si no, una fija creada en ese rato se volvería a proponer. */
       const base = [
-        ...actuales.filter(isKept).map((t) => t.title),
+        ...enLaFase.filter((t) => isKept(t) || !vistas.has(t.id)).map((t) => t.title),
         ...(sinPropuesta ? actuales.map((t) => t.title) : []),
         ...delAgente.map((t) => t.title),
       ];
@@ -283,7 +303,8 @@ export function cambiosDeTareasDelDetalle(i: {
 /**
  * El borrador con las tareas del paso 2: su estructura (sin tareas viejas), el tipo propuesto de las
  * fases que no tenían y las tareas. Las tareas quedan `listas` con la corrida que las armó, y la
- * versión sube (toda escritura del JSON la sube).
+ * versión sube (toda escritura del JSON la sube). `soloFase` se conserva. No mezcla tareas de otras
+ * fases: en E2b el borrador de una fase nace vacío (la mezcla llega con E2c).
  */
 export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: string): Borrador {
   const estructura: Cambio[] = b.cambios
@@ -302,5 +323,6 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
     pedido: b.pedido,
     tareas: { corrida, listas: true },
     tareasArmadasPara: r.tareasArmadasPara,
+    ...(b.soloFase ? { soloFase: b.soloFase } : {}),
   };
 }

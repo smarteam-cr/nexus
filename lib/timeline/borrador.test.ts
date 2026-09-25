@@ -15,16 +15,20 @@
  *   10-13. (Revisión de E1, 2026-09-24) «Aplicar todo» con un choque y la confirmación de otro
  *      cronograma; el cierre fijado a mano; la foto RECORDADA entre montajes (volver al canvas no
  *      convierte una edición a mano en «aplica»); y la propuesta abierta que el handoff no pisa.
+ *   14. (E2b) «Regenerar» de una fase (`soloFase`) y de dónde viene cada propuesta.
  */
 import { describe, expect, it } from "vitest";
 import {
   almacenEnMemoria,
   alternarVista,
   BLOQUEO_VERSION_NUEVA,
+  borradorVacio,
   claveDeLaFoto,
   claveDeRevision,
   convertirPropuestaVieja,
   debeDescartarseSolo,
+  deDondeViene,
+  desdeDeLaPropuesta,
   esBorradorGuardado,
   FORMATO_BORRADOR,
   fraseDelCierre,
@@ -721,5 +725,74 @@ describe("13 · el handoff no pisa una propuesta abierta con algo por decidir", 
     expect(
       propuestaPorDecidir({ anchorStartDate: "2026-10-05T00:00:00.000Z", phases: [A, B, C, D] }, conArranque),
     ).toBe(true);
+  });
+});
+
+describe("14 · E2b: «Regenerar» de una fase (`soloFase`) y de dónde viene cada propuesta", () => {
+  it("⭐ `soloFase` sobrevive a guardarse; ausente por defecto; inválido, se ignora", () => {
+    /* La edición que la pone en rojo: no leerlo (la fusión armaría TODO el cronograma sobre un pedido
+       de una fase), o leer cualquier cosa. */
+    const deUnaFase = borradorVacio({ pedido: "regenerar", corrida: "run-f", soloFase: "c" });
+    const guardado: unknown = JSON.parse(JSON.stringify(deUnaFase));
+    const leido = leerBorrador(guardado, VIVO)!;
+    expect(leido.soloFase).toBe("c");
+    expect(leido).toEqual(deUnaFase);
+
+    // Ausente por defecto: ni `undefined` guardado ni la clave.
+    for (const sin of [borradorVacio({ pedido: "regenerar", corrida: "run-f" }), borradorVacio({ pedido: "primera", corrida: "r", soloFase: null })]) {
+      expect("soloFase" in sin).toBe(false);
+      expect("soloFase" in leerBorrador(JSON.parse(JSON.stringify(sin)), VIVO)!).toBe(false);
+    }
+    expect("soloFase" in convertirPropuestaVieja(CONTEXTO, VIVO)).toBe(false);
+
+    // Un string de 1 a 200 caracteres; lo demás no es una fase.
+    expect(leerBorrador({ ...(guardado as object), soloFase: "x".repeat(200) }, VIVO)!.soloFase).toBe("x".repeat(200));
+    for (const malo of ["", "x".repeat(201), 7, null, {}, ["c"], true]) {
+      const b = leerBorrador({ ...(guardado as object), soloFase: malo }, VIVO)!;
+      expect("soloFase" in b, JSON.stringify(malo)?.slice(0, 20)).toBe(false);
+    }
+  });
+
+  it("⭐ la tabla de `deDondeViene` y `desdeDeLaPropuesta` (una sola clasificación)", () => {
+    /* La edición que la pone en rojo: clasificar por `pedido` antes que por `soloFase` («Regenerar» de
+       una fase quedaba como «Regenerar todo»), o tratar un v1 sin origen «contexto» como otra cosa que
+       el handoff. */
+    const v1 = (extra: Record<string, unknown>) => ({
+      formato: FORMATO_BORRADOR,
+      version: 1,
+      origen: "contexto",
+      observaciones: [],
+      cambios: [],
+      pedido: null,
+      tareas: null,
+      tareasArmadasPara: {},
+      ...extra,
+    });
+    const casos: Array<[string, unknown, string]> = [
+      ["el formato viejo del handoff (sin origen)", HANDOFF, "desde el handoff"],
+      ["el formato viejo de las reuniones", CONTEXTO, "desde el contexto del cronograma"],
+      ["un v1 del handoff", v1({ origen: "handoff" }), "desde el handoff"],
+      ["un v1 sin origen", v1({ origen: undefined }), "desde el handoff"],
+      ["«Generar cronograma»", v1({ pedido: "primera", tareas: { corrida: "r", listas: false } }), "desde «Generar cronograma»"],
+      ["«Regenerar todo»", v1({ pedido: "regenerar", tareas: { corrida: "r", listas: false } }), "desde «Regenerar todo»"],
+      ["el contexto del cronograma (sin pedido)", v1({}), "desde el contexto del cronograma"],
+      [
+        "«Regenerar» de una fase, con sus tareas armadas",
+        v1({ pedido: "regenerar", soloFase: "b", tareasArmadasPara: { b: { nombre: "Diseño", semanas: 2 } } }),
+        "desde «Regenerar» en «Diseño»",
+      ],
+      ["«Regenerar» de una fase, mientras la IA arma", v1({ pedido: "primera", soloFase: "b" }), "desde «Regenerar» de una fase"],
+      ["un `soloFase` inválido no es una fase", v1({ pedido: "regenerar", soloFase: "" }), "desde «Regenerar todo»"],
+    ];
+    for (const [nombre, json, texto] of casos) {
+      expect(desdeDeLaPropuesta(deDondeViene(json)), nombre).toBe(texto);
+      // Lo mismo sobre el borrador ya leído que sobre el JSON crudo.
+      const leido = leerBorrador(json, VIVO);
+      if (leido) expect(desdeDeLaPropuesta(deDondeViene(leido)), `${nombre} (leído)`).toBe(texto);
+    }
+    expect(deDondeViene(v1({ soloFase: "b", tareasArmadasPara: { b: { nombre: "Diseño", semanas: 2 } } }))).toEqual({
+      de: "regenerar-fase",
+      fase: "Diseño",
+    });
   });
 });

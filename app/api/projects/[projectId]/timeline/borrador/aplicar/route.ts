@@ -27,7 +27,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit, guardIaDelCronograma } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { esBorradorV1, leerFoto, traeCambiosDeTareas, versionDelBorrador } from "@/lib/timeline/borrador";
+import {
+  deDondeViene,
+  esBorradorV1,
+  leerFoto,
+  traeCambiosDeTareas,
+  versionDelBorrador,
+  type DeDondeViene,
+} from "@/lib/timeline/borrador";
 import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
 import {
   aplicarBorradorEnTx,
@@ -38,6 +45,27 @@ import {
 } from "@/lib/timeline/escribir-estructura";
 import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
+
+/** El comienzo de la razón de la auditoría, según de dónde viene la propuesta. */
+function razonDeDonde(d: DeDondeViene): string {
+  switch (d.de) {
+    case "regenerar-todo":
+      return "Propuesta de «Regenerar todo»";
+    case "generar":
+      return "Propuesta de «Generar cronograma»";
+    case "regenerar-fase":
+      return d.fase ? `Propuesta de «Regenerar» en «${d.fase}»` : "Propuesta de «Regenerar» de una fase";
+    case "reuniones":
+      return "Propuesta de fases de las reuniones y notas elegidas";
+    case "handoff":
+      return "Propuesta de fases del handoff";
+    default: {
+      // Un origen nuevo sin su razón no compila.
+      const _: never = d;
+      return _;
+    }
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -140,16 +168,9 @@ export async function POST(
   const avisosDeReubicacion = r.avisos;
   const anclaAplicada = r.plan.aplicadas.some((c) => c.tipo === "ancla");
   const tareasTocadas = r.tareasTocadas;
-  /* De dónde salió, para la razón: el pedido lo deduce el servidor UNA vez, al armar el borrador
-     (`pedidoDelCronograma`). El handoff y el formato viejo no lo tienen. */
-  const deDonde =
-    r.borrador.pedido === "regenerar"
-      ? "Propuesta de «Regenerar todo»"
-      : r.borrador.pedido === "primera"
-        ? "Propuesta de «Generar cronograma»"
-        : origen === "contexto"
-          ? "Propuesta de fases de las reuniones y notas elegidas"
-          : "Propuesta de fases del handoff";
+  /* De dónde salió, para la razón: la MISMA clasificación que la barra y los carteles (E2b). Sin ella,
+     «Regenerar» de una fase (pedido «regenerar») quedaba auditada como «Regenerar todo». */
+  const deDonde = razonDeDonde(deDondeViene(r.borrador));
   const { creadas: tareasNuevas, borradas: tareasQueSeVan } = r.tareas;
   const nuevasEnTexto = `${tareasNuevas} ${tareasNuevas === 1 ? "tarea nueva" : "tareas nuevas"}`;
   const deTareas =

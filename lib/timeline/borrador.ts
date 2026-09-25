@@ -53,6 +53,10 @@
  *     choca si alguien la editó (título, semana, notas, dueño, tipo o fechas fijadas) después.
  * El núcleo es puro: la pantalla y el servidor evalúan con la misma función y las mismas tareas
  * (solo lo que viaja en el cable, sin `order` ni fechas reales).
+ *
+ * ── E2b: «REGENERAR» DE UNA FASE ES EL MISMO BORRADOR, CON `soloFase` ─────────
+ * Mismo origen («contexto») y mismo camino que el paso 2 de «Regenerar todo»; `soloFase` acota las
+ * tareas a esa fase. De dónde viene una propuesta lo dice UNA sola clasificación (`deDondeViene`).
  */
 import { huella as huellaDeTitulo, type Party, type TipoDeTarea } from "./assist-items"; // sin ciclo: assist-items no importa nada
 import { estaColgada } from "@/lib/agents/run-colgada"; // puro, client-safe
@@ -220,7 +224,8 @@ export interface CambioTareaNueva {
   tarea: ContenidoDeTareaNueva;
   motivo?: string;
 }
-/** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto al fusionar. */
+/** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto que LEYÓ
+ *  quien lo produjo (E2b, D10): lo que alguien edite después, aunque sea mientras la IA arma, choca. */
 export interface CambioTareaSeVa {
   tipo: "tarea-se-va";
   clave: string;
@@ -263,6 +268,13 @@ export interface Borrador {
   tareas: TareasDelBorrador | null;
   /** Por fase (id real o `n:…`): el nombre y las semanas con que se armaron sus tareas. */
   tareasArmadasPara: Record<string, { nombre: string; semanas: number }>;
+  /**
+   * E2b: «Regenerar» de UNA fase (su id). Ausente = todo el cronograma. Sigue siendo origen
+   * «contexto» con el pedido de `pedidoDelCronograma`: no es un origen nuevo (una vuelta atrás lo
+   * leería como handoff). El alcance de la fusión sale SIEMPRE de acá, del JSON guardado, nunca
+   * del body del pedido.
+   */
+  soloFase?: string;
 }
 
 /**
@@ -494,8 +506,14 @@ export function borradorDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nue
 
 /** El borrador que marca «armando las tareas» cuando no había propuesta de fases (0 cambios de fases).
  *  `observaciones`: lo que notó el paso 1 sin proponer (lo acordado que no entró). Van en el borrador
- *  para que la barra las muestre y sobrevivan a recargar o a descartar (revisión de E2a). */
-export function borradorVacio(i: { pedido: PedidoDelBorrador; corrida: string; observaciones?: readonly string[] }): Borrador {
+ *  para que la barra las muestre y sobrevivan a recargar o a descartar (revisión de E2a).
+ *  `soloFase` (E2b): «Regenerar» de una fase; la clave va solo si viene. */
+export function borradorVacio(i: {
+  pedido: PedidoDelBorrador;
+  corrida: string;
+  observaciones?: readonly string[];
+  soloFase?: string | null;
+}): Borrador {
   return {
     formato: FORMATO_BORRADOR,
     version: 0,
@@ -505,6 +523,7 @@ export function borradorVacio(i: { pedido: PedidoDelBorrador; corrida: string; o
     pedido: i.pedido,
     tareas: { corrida: i.corrida, listas: false },
     tareasArmadasPara: {},
+    ...(i.soloFase ? { soloFase: i.soloFase } : {}),
   };
 }
 
@@ -704,6 +723,10 @@ function leerTareasArmadasPara(v: unknown): Borrador["tareasArmadasPara"] {
   return out;
 }
 
+/** El `soloFase` guardado (E2b): un string de 1 a 200 caracteres; si no, no hay (todo el cronograma). */
+const leerSoloFase = (v: unknown): string | null =>
+  typeof v === "string" && v.length >= 1 && v.length <= 200 ? v : null;
+
 /**
  * Lo guardado en `pendingProposal` como borrador, o null si no hay (o es la propuesta del
  * modificador, que trae tareas). El formato nuevo se lee tal cual; el viejo se convierte contra `base`.
@@ -722,6 +745,7 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
     const observaciones = Array.isArray(json.observaciones)
       ? json.observaciones.filter((o): o is string => typeof o === "string" && o.trim().length > 0)
       : [];
+    const soloFase = leerSoloFase(json.soloFase);
     return {
       formato: FORMATO_BORRADOR,
       version: typeof json.version === "number" && Number.isInteger(json.version) && json.version >= 0 ? json.version : 0,
@@ -732,10 +756,65 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
       pedido: json.pedido === "regenerar" || json.pedido === "primera" ? json.pedido : null,
       tareas: leerTareasDelBorrador(json.tareas),
       tareasArmadasPara: leerTareasArmadasPara(json.tareasArmadasPara),
+      ...(soloFase ? { soloFase } : {}),
     };
   }
   if (!esBorradorGuardado(json)) return null;
   return convertirPropuestaVieja(json as unknown as ProposalLike, base);
+}
+
+// ── DE DÓNDE VIENE: una sola clasificación (E2b, D8) ─────────────────────────
+
+/** De dónde salió la propuesta. La usan la barra, la auditoría de aplicar y los carteles. */
+export type DeDondeViene =
+  | { de: "handoff" }
+  | { de: "generar" }
+  | { de: "regenerar-todo" }
+  | { de: "regenerar-fase"; fase: string | null }
+  | { de: "reuniones" };
+
+/**
+ * De dónde viene lo guardado en `pendingProposal` (el JSON crudo o un `Borrador` ya leído). Puro.
+ *   · con `soloFase` → «Regenerar» de esa fase, con el nombre con que se armaron sus tareas (null
+ *     mientras la IA todavía las arma);
+ *   · un v1 que no es «contexto», o el formato viejo sin origen → el handoff;
+ *   · «contexto» con pedido «primera» → «Generar cronograma»; con «regenerar» → «Regenerar todo»;
+ *   · el resto de «contexto» → el contexto del cronograma (las reuniones y notas elegidas).
+ */
+export function deDondeViene(json: unknown): DeDondeViene {
+  if (!esObjeto(json)) return { de: "handoff" };
+  const v1 = json.formato === FORMATO_BORRADOR;
+  const soloFase = v1 ? leerSoloFase(json.soloFase) : null;
+  if (soloFase) {
+    const armada = esObjeto(json.tareasArmadasPara) ? json.tareasArmadasPara[soloFase] : undefined;
+    const nombre = esObjeto(armada) && typeof armada.nombre === "string" && armada.nombre.trim() ? armada.nombre.trim() : null;
+    return { de: "regenerar-fase", fase: nombre };
+  }
+  if (json.origen !== "contexto") return { de: "handoff" };
+  if (v1 && json.pedido === "primera") return { de: "generar" };
+  if (v1 && json.pedido === "regenerar") return { de: "regenerar-todo" };
+  return { de: "reuniones" };
+}
+
+/** «desde …»: de dónde viene la propuesta, en palabras del CSE (la barra, los carteles). */
+export function desdeDeLaPropuesta(d: DeDondeViene): string {
+  switch (d.de) {
+    case "handoff":
+      return "desde el handoff";
+    case "generar":
+      return "desde «Generar cronograma»";
+    case "regenerar-todo":
+      return "desde «Regenerar todo»";
+    case "regenerar-fase":
+      return d.fase ? `desde «Regenerar» en «${d.fase}»` : "desde «Regenerar» de una fase";
+    case "reuniones":
+      return "desde el contexto del cronograma";
+    default: {
+      // Un origen nuevo sin su texto no compila.
+      const _: never = d;
+      return _;
+    }
+  }
 }
 
 /**

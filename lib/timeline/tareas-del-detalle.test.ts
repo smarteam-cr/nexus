@@ -7,7 +7,8 @@
  * Lo que cuida (las reglas R1-R11 de lib/timeline/tareas-del-detalle.ts): qué se va y qué es nuevo,
  * que nada con avance ni escrito a mano se vaya, que las tareas se armen sobre la estructura que VIO
  * el agente (no la de ahora), las fijas de la Semana 0 sin vaivén, los pares idénticos, el tipo de
- * actividad solo-si-null, la salida cortada, y la fusión en el borrador.
+ * actividad solo-si-null, la salida cortada, y la fusión en el borrador. Desde E2b: el `desde` es lo
+ * que VIO el agente (D10) y el alcance de «Regenerar» de una fase (`soloFases`).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import fs from "node:fs";
@@ -109,25 +110,39 @@ const salida = (fases: Array<{ id: string; tasks: TareaCruda[]; activityType?: s
 let contador = 0;
 const nuevaClave = () => `id-${++contador}`;
 
-/** El recorrido entero: lo que devolvió el agente → los cambios de tareas. */
+/**
+ * El recorrido entero: lo que devolvió el agente → los cambios de tareas. `visto`: el cronograma que
+ * LEYÓ el agente (por defecto VIVO); `vivo`: el de AL FUSIONAR (por defecto, el mismo). Desde E2b
+ * (D10) no son lo mismo: el `desde` sale de lo visto y el vivo dice qué sigue en la fase.
+ */
 function cambios(
   analysisJson: unknown,
-  opciones: { vivo?: Vivo; tags?: string[]; cortado?: boolean; borrador?: Borrador; huellas?: ReturnType<typeof huellasDeFrontera> | null } = {},
+  opciones: {
+    vivo?: Vivo;
+    visto?: Vivo;
+    tags?: string[];
+    cortado?: boolean;
+    borrador?: Borrador;
+    huellas?: ReturnType<typeof huellasDeFrontera> | null;
+    soloFases?: ReadonlySet<string> | null;
+  } = {},
 ) {
+  const estructura = opciones.visto ? estructuraHipotetica(opciones.visto, opciones.borrador ?? BASE) : ESTRUCTURA;
   const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({
-    estructura: ESTRUCTURA,
+    estructura,
     analysisJson,
     huellas: opciones.huellas ?? null,
     cortado: opciones.cortado ?? false,
   });
   return cambiosDeTareasDelDetalle({
-    estructura: ESTRUCTURA,
+    estructura,
     vivo: opciones.vivo ?? VIVO,
     propuestas,
     borrador: opciones.borrador ?? BASE,
     tags: opciones.tags ?? [],
     nuevaClave,
     idsDesconocidos,
+    soloFases: opciones.soloFases,
   });
 }
 const resumen = (r: ReturnType<typeof cambios>, faseId?: string) =>
@@ -261,25 +276,51 @@ describe("3 · R7: las fijas de la Semana 0 no van y vuelven", () => {
 
   it("⭐ con propuesta y fijas ya cargadas (de la IA): las fijas vivas no se van ni se vuelven a proponer", () => {
     /* La edición que la pone en rojo: tratar las fijas vivas como cualquier reemplazable: se iban y
-       volvían en cada regeneración (con otro id), y el CSE revisaba 5 tareas que no cambiaron. */
+       volvían en cada regeneración (con otro id), y el CSE revisaba 5 tareas que no cambiaron.
+       ⚠ ACTUALIZADA en E2b P3 (2026-09-25), con esta razón: desde D10 solo se va lo que el agente VIO.
+       Las fijas estaban en el vivo pero no en la estructura, así que ya no eran reemplazables y la guarda
+       dejaba de probar R7. Ahora el agente las ve (`visto`), como pasa de verdad. */
     const conFijas: Vivo = {
       ...VIVO,
       fases: VIVO.fases.map((f) =>
         f.id === "a" ? { ...f, tareas: [...(f.tareas ?? []), ...FIJAS.map((t, i) => tarea(`f${i}`, t, 0, { party: "CLIENTE" }))] } : f,
       ),
     };
-    const r = cambios(salida([{ id: "a", tasks: [{ title: "Presentar el equipo" }] }]), { vivo: conFijas, tags: ["implementacion"] });
+    const r = cambios(salida([{ id: "a", tasks: [{ title: "Presentar el equipo" }] }]), {
+      vivo: conFijas,
+      visto: conFijas,
+      tags: ["implementacion"],
+    });
     expect(resumen(r, "a")).toEqual(["+Presentar el equipo@0"]);
   });
 
+  it("⛔ una fija creada mientras la IA armaba (el agente no la vio) no se vuelve a proponer", () => {
+    /* E2b P3. La edición que la pone en rojo: contar para R7 solo lo que vio el agente (se proponía
+       crear otra vez lo que alguien acababa de crear). */
+    const conUnaFijaNueva: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) =>
+        f.id === "a" ? { ...f, tareas: [...(f.tareas ?? []), tarea("nueva", FIJAS[0], 0, { source: "HUMAN" })] } : f,
+      ),
+    };
+    const r = cambios(salida([{ id: "a", tasks: [{ title: "Presentar el equipo" }] }]), { vivo: conUnaFijaNueva, tags: ["implementacion"] });
+    expect(resumen(r, "a")).toEqual(["+Presentar el equipo@0", ...FIJAS.slice(1).map((t) => `+${t}@0`)]);
+  });
+
   it("la gemela: una viva «desde cero» en un proyecto que pasó a re-implementación no se va ni se duplica", () => {
+    /* ⚠ ACTUALIZADA en E2b P3 (2026-09-25), con esta razón: la misma de arriba (D10); el agente ve la
+       gemela (`visto`), así sigue siendo una reemplazable que R7 conserva. */
     const conGemela: Vivo = {
       ...VIVO,
       fases: VIVO.fases.map((f) =>
         f.id === "a" ? { ...f, tareas: [...(f.tareas ?? []), tarea("g", "Proporcionar bases de datos a importar", 0)] } : f,
       ),
     };
-    const r = cambios(salida([{ id: "a", tasks: [{ title: "Presentar el equipo" }] }]), { vivo: conGemela, tags: ["reimplementacion"] });
+    const r = cambios(salida([{ id: "a", tasks: [{ title: "Presentar el equipo" }] }]), {
+      vivo: conGemela,
+      visto: conGemela,
+      tags: ["reimplementacion"],
+    });
     const a = resumen(r, "a");
     expect(a).not.toContain("-g");
     expect(a.some((x) => x.includes("Revisar y limpiar la base de datos existente"))).toBe(false);
@@ -379,16 +420,53 @@ describe("5 · la fusión en el borrador", () => {
     ]);
   });
 
-  it("⭐ las tareas se arman sobre la estructura que VIO el agente; el `desde` es la foto AL FUSIONAR", () => {
-    /* Mientras la IA armaba (1-4 min), el CSE editó una tarea: el `desde` se toma de lo vivo al
-       fusionar, así esa edición no choca con algo que el CSE no hizo después de ver la propuesta. */
+  it("⭐ D10 · el `desde` es lo que VIO el agente: una tarea editada mientras la IA armaba choca y queda fuera", () => {
+    /* ⚠ REESCRITA en E2b P3 (2026-09-25), con esta razón: pedía que el `desde` fuera la foto AL FUSIONAR.
+       El plan (§1.1) pide fijarlo «contra la misma foto que leyó quien lo produjo»: con la foto de al
+       fusionar, una edición hecha mientras la IA armaba (1-4 min) no chocaba y «Aplicar todo» la
+       borraba. E2b saca el bloqueo de la espera, así que editar en ese rato es lo normal.
+       La edición que la pone en rojo: volver a tomar el `desde` (o lo que se va) de `viva?.tareas`. */
     const editado: Vivo = {
       ...VIVO,
       fases: VIVO.fases.map((f) => (f.id === "b" ? { ...f, tareas: [{ ...B1, notes: "nota nueva" }, B2] } : f)),
     };
     const r = cambios(salida([{ id: "b", tasks: [{ title: "Mapear procesos de venta" }] }]), { vivo: editado });
     const seVaB1 = r.tareas.find((c) => c.tipo === "tarea-se-va" && c.tareaId === "b1")!;
-    expect(seVaB1.tipo === "tarea-se-va" && seVaB1.desde.notes).toBe("nota nueva");
+    expect(seVaB1.tipo === "tarea-se-va" && seVaB1.desde.notes, "el `desde` salió de lo vivo al fusionar").toBeNull();
+    // Contra lo vivo, esa tarea choca (queda como la dejó el CSE); la otra se va.
+    const plan = planDeAplicacion(editado, fusionarDetalle(BASE, r, "run-2"), [], { tareas: "listas" });
+    const item = plan.items.find((it) => it.cambio.clave === "tarea:b1:se-va")!;
+    expect(item.estado).toBe("choque");
+    expect(item.choque).toBe("La editaste a mano después de la propuesta: queda como la dejaste.");
+    expect(plan.escrituras.tareas.seVan).toEqual(["b2"]);
+  });
+
+  it("⛔ D10 · iniciada, creada o mudada mientras la IA armaba: no se va", () => {
+    /* E2b P3. Las ediciones que la ponen en rojo: mirar `isKept` en lo visto (una tarea iniciada en ese
+       rato se iría), tomar lo que se va de lo vivo (se iría una recién creada) o de lo visto sin mirar
+       si sigue en la fase (se iría una mudada). */
+    const json = salida([
+      { id: "b", tasks: [{ title: "Mapear procesos de venta" }] },
+      { id: "c", tasks: [{ title: "Pruebas de aceptación", weekIndex: 3 }] },
+    ]);
+    const B3 = tarea("b3", "Creada mientras la IA armaba", 1);
+    const conCambios: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) =>
+        f.id === "b"
+          ? { ...f, tareas: [{ ...B2, status: "IN_PROGRESS" }, B3] } // B2 iniciada, B3 creada, B1 se mudó a «Pruebas»
+          : f.id === "c"
+            ? { ...f, tareas: [C1, C2, B1] }
+            : f,
+      ),
+    };
+    const r = cambios(json, { vivo: conCambios });
+    expect(resumen(r, "b")).toEqual(["+Mapear procesos de venta@0"]);
+    expect(resumen(r, "c"), "la mudada se va desde su fase nueva (el agente no la vio ahí)").toEqual([
+      "-c2",
+      "-c1",
+      "+Pruebas de aceptación@3",
+    ]);
   });
 
   it("⛔ el vocabulario del tipo de actividad vive en UN lugar: analyze lo importa, no lo redeclara", () => {
@@ -399,5 +477,51 @@ describe("5 · la fusión en el borrador", () => {
     expect(analyze).toContain('import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";');
     expect(analyze).not.toMatch(/const DETAIL_ACTIVITY_TYPES\s*=/);
     expect(analyze).not.toMatch(/function activityTypePropuesto\(/);
+  });
+});
+
+describe("6 · el alcance de «Regenerar» de una fase (E2b, `soloFases`)", () => {
+  /* El modelo recibe el ALCANCE en el prompt, pero puede no respetarlo: lo que devuelva para otras
+     fases no entra. La edición que pone en rojo a todo el bloque: sacar el `continue` del alcance (o
+     ponerlo después de R8, R6 o R7). */
+  const TODO = salida([
+    { id: "a", activityType: "ADOPCION", tasks: [{ title: "Presentar el equipo" }] },
+    { id: "b", activityType: "PLANIFICACION", tasks: [{ title: "Mapear procesos de venta" }] },
+    { id: "c", activityType: "CONFIGURACION", tasks: [{ title: "Pruebas de aceptación", weekIndex: 3 }] },
+    { id: PILOTO.clave, activityType: "SEGUIMIENTO", tasks: [] },
+  ]);
+
+  it("⭐ otra fase no emite nada: ni tareas, ni tipo, ni avisos", () => {
+    const r = cambios(TODO, { soloFases: new Set(["c"]) });
+    expect(resumen(r)).toEqual(["-c2", "-c1", "+Pruebas de aceptación@3"]);
+    expect(r.observaciones, "avisó de una fase fuera del alcance").toEqual([]);
+    expect(r.tiposDeNuevas).toEqual({});
+  });
+
+  it("⭐ R6: el tipo solo en la fase pedida", () => {
+    expect(cambios(TODO, { soloFases: new Set(["c"]) }).tipos.map((t) => t.faseId)).toEqual(["c"]);
+    expect(cambios(TODO, { soloFases: new Set(["b"]) }).tipos.map((t) => t.faseId)).toEqual(["b"]);
+    // Sin alcance, las dos (control: el mismo JSON).
+    expect(cambios(TODO).tipos.map((t) => t.faseId)).toEqual(["b", "c"]);
+  });
+
+  it("⭐ R7: las fijas de la Semana 0 solo si la pedida ES la del arranque", () => {
+    const deOtra = cambios(TODO, { soloFases: new Set(["b"]), tags: ["implementacion"] });
+    expect(resumen(deOtra, "a"), "sembró la Semana 0 al regenerar otra fase").toEqual([]);
+    const delArranque = cambios(TODO, { soloFases: new Set(["a"]), tags: ["implementacion"] });
+    expect(resumen(delArranque, "a")).toHaveLength(6);
+    expect(resumen(delArranque).every((x) => resumen(delArranque, "a").includes(x))).toBe(true);
+  });
+
+  it("R8: `tareasArmadasPara` trae solo la fase pedida", () => {
+    expect(cambios(TODO, { soloFases: new Set(["c"]) }).tareasArmadasPara).toEqual({ c: { nombre: "Pruebas", semanas: 4 } });
+    // null o ausente = todo el cronograma, como siempre.
+    expect(Object.keys(cambios(TODO, { soloFases: null }).tareasArmadasPara)).toEqual(["a", "b", "c", PILOTO.clave]);
+  });
+
+  it("la fusión conserva `soloFase`; sin él, no aparece", () => {
+    const r = cambios(TODO, { soloFases: new Set(["c"]) });
+    expect(fusionarDetalle({ ...BASE, soloFase: "c" }, r, "run-2").soloFase).toBe("c");
+    expect("soloFase" in fusionarDetalle(BASE, r, "run-2")).toBe(false);
   });
 });

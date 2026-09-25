@@ -184,8 +184,10 @@ const MAX_LARGO_DE_OBSERVACION = 1000;
 
 /**
  * El `borrador` del body de /analyze, validado. Puro. undefined/null = no es un paso 2 del borrador
- * (pestañas viejas y «Regenerar» de una fase siguen como hoy). Con token, la versión es obligatoria:
- * sin ella no se sabe qué vio el CSE.
+ * (las pestañas viejas). Con token, la versión es obligatoria: sin ella no se sabe qué vio el CSE.
+ * «Regenerar» de una fase (E2b) también llega por acá, solo con token null: la fase viaja aparte
+ * (`regeneratePhaseId`), la marca la guarda en el borrador vacío (`soloFase`) y la fusión la lee de
+ * ahí. Con token y una fase, la ruta responde 400 (hasta E2c).
  * Con token null acepta `observaciones` (lo que notó el paso 1 sin proponer): el borrador vacío las
  * guarda, así la barra las muestra y sobreviven a recargar o a descartar (revisión de E2a). Con
  * token se ignoran: el borrador del paso 1 ya trae las suyas.
@@ -270,14 +272,17 @@ export async function prevalidarPedidoDeTareas(
  * Con la corrida ya creada, el borrador queda «armando» (su estado se deduce de ESTA corrida).
  *   · token null → nace un borrador vacío, solo si no hay ninguna propuesta (`DbNull`), y su token es
  *     la corrida. El pedido («regenerar» o «primera») sale de las tareas de hoy, con su única fuente,
- *     y lleva lo que notó el paso 1 (`observaciones` del pedido).
+ *     y lleva lo que notó el paso 1 (`observaciones` del pedido). Con `soloFase` («Regenerar» de una
+ *     fase, E2b), el vacío la guarda: de ahí la lee la fusión.
  *   · token → el guardado, con la corrida nueva y la versión + 1, condicionado a token + versión.
+ *     `soloFase` se ignora (el alcance es el del guardado).
  * null = marcado. Si la escritura no entra (otra pestaña, otra persona), no se pisa nada.
  */
 export async function marcarTareasEnCurso(i: {
   timelineId: string;
   pedido: PedidoDeTareas;
   corrida: string;
+  soloFase?: string | null;
 }): Promise<VetoDelPedido | null> {
   if (i.pedido.token === null) {
     const tareas = await prisma.timelineTask.findMany({
@@ -288,6 +293,7 @@ export async function marcarTareasEnCurso(i: {
       pedido: pedidoDelCronograma(tareas),
       corrida: i.corrida,
       observaciones: i.pedido.observaciones ?? [],
+      soloFase: i.soloFase,
     });
     const escrita = await prisma.projectTimeline.updateMany({
       where: { id: i.timelineId, pendingProposal: { equals: Prisma.DbNull } },
@@ -465,11 +471,13 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
 /**
  * Lo que armó el agente, fusionado en el borrador que esta corrida marcó. Va DESPUÉS de guardar la
  * salida de la corrida (si la fusión falla, lo armado queda en la corrida).
- *   1. Se lee el borrador, el cronograma CON tareas (el de ahora: lo editado mientras tanto se
- *      protege) y los tags del proyecto (las fijas de la Semana 0).
+ *   1. Se lee el borrador, el cronograma CON tareas (el de ahora: dice qué sigue en su fase y qué
+ *      tiene avance; el `desde` es lo que LEYÓ el agente, así lo editado mientras tanto choca y queda
+ *      fuera, E2b D10) y los tags del proyecto (las fijas de la Semana 0).
  *   2. Perdido: ya no hay un v1, la corrida que lo marcó es otra, las tareas ya están, o hay cambios
  *      desconocidos. La corrida lo dice (`timelineSyncError`) y no se escribe nada.
- *   3. Las tareas se calculan sobre la estructura que VIO el agente (`estructura`, en memoria).
+ *   3. Las tareas se calculan sobre la estructura que VIO el agente (`estructura`, en memoria), con el
+ *      alcance del borrador GUARDADO (`soloFase`), nunca el del body.
  *   4. Sin ningún cambio en total, el borrador se borra (condicionado a token + versión); si la IA
  *      notó algo en cualquiera de los dos pasos (lo acordado que no entró, se cortó, fases que no
  *      reconoció), la corrida lo dice.
@@ -521,6 +529,8 @@ export async function fusionarDetalleEnElBorrador(i: {
     huellas: i.huellas,
     cortado: i.cortado,
   });
+  // «Regenerar» de una fase (E2b): el alcance sale del JSON guardado, no del pedido.
+  const soloFases = borrador.soloFase ? new Set([borrador.soloFase]) : null;
   const cambios = cambiosDeTareasDelDetalle({
     estructura: i.estructura,
     vivo,
@@ -529,6 +539,7 @@ export async function fusionarDetalleEnElBorrador(i: {
     tags: sanitizeTags(tl.project?.tags ?? []),
     nuevaClave: i.nuevaClave ?? claveAleatoria,
     idsDesconocidos,
+    soloFases,
   });
   const fusionado = fusionarDetalle(borrador, cambios, i.corrida);
   const donde = {
