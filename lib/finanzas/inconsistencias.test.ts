@@ -6,7 +6,7 @@
  * apareciendo después de arreglado hace que nadie vuelva a mirar la lista.
  */
 import { describe, expect, it } from "vitest";
-import { detectarInconsistencias, resumirInconsistencias, type EstadoParaAuditar } from "./inconsistencias";
+import { detectarInconsistencias, identidadDeFila, resumirInconsistencias, type EstadoParaAuditar } from "./inconsistencias";
 
 /** Un estado LIMPIO: todo en cero. Cada caso enciende solo lo que quiere probar. */
 const limpio = (): EstadoParaAuditar => ({
@@ -374,5 +374,31 @@ describe("resumirInconsistencias", () => {
       porSeveridad: { ALTA: 0, MEDIA: 0, BAJA: 0 },
       paraDireccion: 0,
     });
+  });
+});
+
+/**
+ * El nombre propio de una fila (2026-09-25): «Lo que no cuadra» lo pone en todas sus filas para poder marcarlas de a una.
+ * Lo que tiene que sostener: la misma fila da la misma huella venga en el orden que venga, y cualquier documento que
+ * cambie la cambia.
+ */
+describe("identidadDeFila", () => {
+  const a = { clave: "f:a", huella: "FAC/2026/0001|USD|100000" };
+  const b = { clave: "f:b", huella: "FAC/2026/0002|USD|50000" };
+
+  it("ordena sus documentos por clave: el orden en que llegaron no cambia la huella", () => {
+    const x = identidadDeFila("cliente:10|USD", [b, a]);
+    expect(x.documentos.map((d) => d.clave)).toEqual(["f:a", "f:b"]);
+    expect(x.huella).toBe(identidadDeFila("cliente:10|USD", [a, b]).huella);
+  });
+
+  it("la huella cambia si cambia la de cualquier documento, o si entra uno nuevo", () => {
+    const base = identidadDeFila("cliente:10|USD", [a, b]).huella;
+    expect(identidadDeFila("cliente:10|USD", [a, { ...b, huella: "FAC/2026/0002|USD|40000" }]).huella).not.toBe(base);
+    expect(identidadDeFila("cliente:10|USD", [a, b, { clave: "f:c", huella: "x" }]).huella).not.toBe(base);
+  });
+
+  it("⛔ el reporte de equilibrio no la necesita: sus filas siguen siendo texto", () => {
+    expect(detectarInconsistencias({ ...limpio(), monedaInferida: ["Luz"] }).flatMap((i) => i.items)).toEqual([{ texto: "Luz" }]);
   });
 });
