@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  PREFIJO_DEL_CIERRE,
   clasificarNumerosSinPar,
   coberturaDelCruce,
   cruzar,
@@ -27,6 +28,7 @@ import {
   montosPorMoneda,
   numeroVerificableEnOdoo,
   resumenDeDiferencias,
+  soltadasCerradasSinMotivo,
   textoDeLiberacion,
   textoDeMontos,
   type TraspasoDeGrupo,
@@ -2362,9 +2364,10 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(e.items.map((i) => i.fila.clave)).not.toContain("cliente:90|USD");
   });
 
-  /* ── ⭐ 2026-09-25 · EL TRASPASO DE LA MARCA DE GRUPO ────────────────────────────────────
+  /* ── ⭐ 2026-09-25 · EL TRASPASO DE LA MARCA DE GRUPO, Y LAS SOLTADAS CERRADAS SIN MOTIVO ─────
      La única marca de grupo que existía (15 notas de crédito) pasa a una marca por nota, con el mismo motivo, la misma
-     persona y la misma fecha, comparando cada nota con lo que se marcó (decisión de Elías). */
+     persona y la misma fecha, comparando cada nota con lo que se marcó. Y las facturas soltadas que se cerraron con «Ya
+     está anulada» sin motivo se reabren (decisiones de Elías). */
   const otraNota = sinPagar({
     id: "n900",
     odooMoveId: 900,
@@ -2436,6 +2439,26 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     const sinLinea = decidirTraspasoDeGrupo(undefined, guardada, [], new Set());
     expect(sinLinea.aMarcar).toEqual([]);
     expect(sinLinea.noEstan).toEqual(alMarcar.items.map((i) => `${i.texto}=${i.monto}`));
+  });
+
+  it("⭐ las soltadas cerradas SIN motivo: ni «Resuelta: …» en su motivo ni una marca «Ya está anulada» vigente", () => {
+    const cerrada = new Date("2026-09-25T17:37:27.000Z");
+    const s = (id: string, p: { resueltaEn?: Date | null; motivo?: string | null } = {}) => ({ id, resueltaEn: cerrada, motivo: null, ...p });
+    const soltadas = [
+      s("abierta", { resueltaEn: null }),
+      s("sin-nada"),
+      /* El motivo de SOLTARLA no es el de cerrarla. */
+      s("kaizen", { motivo: "Fue por Quickbooks" }),
+      s("con-nota", { motivo: `Fue por Quickbooks · ${PREFIJO_DEL_CIERRE}ya se anuló en Odoo` }),
+      s("con-marca"),
+      /* Una marca deshecha es de un cierre anterior. */
+      s("marca-deshecha"),
+    ];
+    const marcas = [
+      { documento: "l:con-marca", deshechaEn: null },
+      { documento: "l:marca-deshecha", deshechaEn: new Date("2026-09-25T18:00:00.000Z") },
+    ];
+    expect(soltadasCerradasSinMotivo(soltadas, marcas).map((l) => l.id)).toEqual(["sin-nada", "kaizen", "marca-deshecha"]);
   });
 });
 

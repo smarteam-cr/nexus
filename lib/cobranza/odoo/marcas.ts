@@ -6,16 +6,17 @@
  * suyo.
  *
  * ── POR QUÉ ES UN ARCHIVO APARTE ─────────────────────────────────────────────────
- * Lo usa la pantalla (servicio.ts, `server-only`) y lo van a usar dos scripts de una sola vez que no pueden importar
- * un módulo `server-only`: el traspaso de la marca de grupo de las notas de crédito a marcas por fila, y la reapertura
- * de las facturas soltadas que se cerraron sin motivo (decisión de Elías, 2026-09-25). El mismo caso que atribucion.ts.
+ * Lo usa la pantalla (servicio.ts, `server-only`) y lo usan dos scripts de una sola vez, que escriben con estas mismas
+ * funciones: el traspaso de la marca de grupo de las notas de crédito a marcas por fila
+ * (scripts/odoo-traspasar-marcas-de-notas.ts) y la reapertura de las facturas soltadas que se cerraron sin motivo
+ * (scripts/odoo-reabrir-liberadas-sin-motivo.ts), decisión de Elías del 2026-09-25. El mismo caso que atribucion.ts.
  *
  * ⛔ Nada se borra de `DiferenciaOdooMarca`: «Deshacer» firma `deshechaPor/En` y la historia de quién marcó y quién
  * deshizo queda. ⛔ Nunca toca un cobro ni el espejo de Odoo. Las dos cosas las vigila guardas.test.ts.
  * ⚠ Recibe la transacción y la hora: lo que se marca en un clic lleva la misma hora, y se escribe todo junto o nada.
  */
 import type { Prisma } from "@prisma/client";
-import { huellaDeLiberacion, textoDeLiberacion, type LiberacionParaCruzar } from "./diferencias";
+import { PREFIJO_DEL_CIERRE, huellaDeLiberacion, textoDeLiberacion, type LiberacionParaCruzar } from "./diferencias";
 import type { DocumentoDeFila } from "@/lib/finanzas/inconsistencias";
 
 /** «Está bien así». */
@@ -93,7 +94,7 @@ export async function anularLiberacionTx(
   const l = input.liberacion;
   /* El motivo de la factura soltada ACUMULA: por qué se soltó y por qué se dio por cerrada son dos cosas distintas y
      las dos importan después. */
-  const motivo = [l.motivo, `Resuelta: ${input.nota}`].filter(Boolean).join(" · ");
+  const motivo = [l.motivo, `${PREFIJO_DEL_CIERRE}${input.nota}`].filter(Boolean).join(" · ");
   const cerrada = await tx.facturaLiberada.updateMany({
     where: { id: l.id, resueltaEn: null },
     data: { resueltaEn: input.en, resueltaPor: input.actor, motivo },
@@ -122,10 +123,15 @@ export async function anularLiberacionTx(
  * ⭐ Antes de abrirla se guarda quién y cuándo la había cerrado: su marca queda deshecha con la firma de quien la
  * reabre. Si se cerró antes de que existieran estas marcas (sin motivo), se escribe esa historia ahora, ya deshecha,
  * con el quién y el cuándo del cierre: no se pierde el rastro (decisión de Elías, 2026-09-25).
+ *
+ * `motivo` (opcional) = por qué se reabre, dicho entero. Lo pasa la reapertura de las facturas cerradas sin motivo
+ * (scripts/odoo-reabrir-liberadas-sin-motivo.ts): es el motivo de la historia que se escribe ahora —la marca no tenía
+ * ninguno— y lo que se suma al motivo de la factura soltada. Sin él, «Reabierta por <quién>», como en la pantalla.
+ * ⚠ A una marca que ya existía no se le cambia el motivo (solo se firma su «Deshacer»: lo vigila guardas.test.ts).
  */
 export async function reabrirLiberacionTx(
   tx: Prisma.TransactionClient,
-  input: { liberacionId: string; actor: string; en: Date },
+  input: { liberacionId: string; actor: string; en: Date; motivo?: string },
 ): Promise<"REABIERTA" | "YA_ESTABA_ABIERTA" | "NO_EXISTE"> {
   const l = await tx.facturaLiberada.findUnique({
     where: { id: input.liberacionId },
@@ -162,7 +168,7 @@ export async function reabrirLiberacionTx(
         documento,
         huella: huellaDeLiberacion(soltada),
         texto: textoDeLiberacion(soltada),
-        motivo: SIN_MOTIVO_GUARDADO,
+        motivo: input.motivo ?? SIN_MOTIVO_GUARDADO,
         marcadaPor: l.resueltaPor ?? "(sin firma)",
         marcadaEn: l.resueltaEn,
         deshechaPor: input.actor,
@@ -171,7 +177,7 @@ export async function reabrirLiberacionTx(
       select: { id: true },
     });
   }
-  const motivo = [l.motivo, `Reabierta por ${input.actor}`].filter(Boolean).join(" · ");
+  const motivo = [l.motivo, input.motivo ?? `Reabierta por ${input.actor}`].filter(Boolean).join(" · ");
   await tx.facturaLiberada.updateMany({
     where: { id: l.id },
     data: { resueltaEn: null, resueltaPor: null, motivo },

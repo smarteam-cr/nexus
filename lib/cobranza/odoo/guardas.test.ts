@@ -36,8 +36,8 @@ const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"))
  * que no puede importar un módulo `server-only`. Escribe UNA columna: lo vigila el bloque de abajo.
  *
  * `marcas.ts` entró el 2026-09-25 por lo mismo: las marcas «está bien así» fila por fila y el cierre
- * «Ya está anulada» los escribe la pantalla, y los van a escribir el traspaso de la marca de grupo
- * de las notas de crédito y la reapertura de las facturas cerradas sin motivo. Nunca borra una
+ * «Ya está anulada» los escribe la pantalla, y también el traspaso de la marca de grupo de las notas
+ * de crédito y la reapertura de las facturas cerradas sin motivo (scripts/odoo-*.ts). Nunca borra una
  * marca: lo vigila su bloque.
  */
 const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts", "atribucion.ts", "marcas.ts"];
@@ -246,6 +246,18 @@ describe("⛔ las marcas de «Lo que no cuadra» no se borran", () => {
       if (f === "marcas.ts") continue;
       expect(escriturasA(fuente(f), "diferenciaOdooMarca"), f).toEqual([]);
       expect(escriturasA(fuente(f), "facturaLiberada"), f).toEqual([]);
+    }
+  });
+
+  it("⛔ el traspaso de las notas y la reapertura también pasan por marcas.ts, detrás del guard, y la marca de grupo no se toca", () => {
+    /* Los dos scripts de una sola vez de la decisión de Elías (2026-09-25). La edición que lo pone en rojo: «arreglar»
+       una marca con un update a mano desde el script, o borrar la marca de grupo después de traspasarla. */
+    for (const s of ["odoo-traspasar-marcas-de-notas.ts", "odoo-reabrir-liberadas-sin-motivo.ts"]) {
+      const src = sinComentarios(readFileSync(join(DIR, "..", "..", "..", "scripts", s), "utf8"));
+      expect(escriturasA(src, "diferenciaOdooMarca"), s).toEqual([]);
+      expect(escriturasA(src, "facturaLiberada"), s).toEqual([]);
+      expect(escriturasA(src, "diferenciaOdooAceptada"), s).toEqual([]);
+      expect(src, `${s} no pasa por el guard`).toMatch(/resolverApply\(\{\s*tablas:/);
     }
   });
 });
