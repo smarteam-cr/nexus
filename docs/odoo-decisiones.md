@@ -1015,3 +1015,53 @@ documento no pasa de 206 caracteres, agrupar por id no separa ningún cliente, e
 **Qué la revertiría.** En «dos monedas» y «moneda corregida» la fila es un conjunto: si sale una de sus facturas y las
 otras siguen marcadas, la fila no vuelve, porque no entró nada nuevo. Si eso llegara a esconder algo, esas dos líneas
 pasan a ser filas de UNA cosa, con la huella del conjunto entero.
+
+---
+
+## 2026-09-25 · «Está bien así» se marca fila por fila, y ninguna marca se borra
+
+**Qué se decidió.** Etapa 3 del plan de Elías:
+- **Tabla nueva `DiferenciaOdooMarca`** (scripts/sql/2026-09-25-2-marcas-por-fila.sql): una fila = una marca sobre UN
+  documento en UNA línea, con la huella de sus números, el texto de la fila, motivo, quién, cuándo y, al deshacer,
+  `deshechaPor/En`. ⛔ Nada se borra: «Deshacer» firma. Solo la escribe lib/cobranza/odoo/marcas.ts —el quinto archivo
+  impuro del módulo, por lo mismo que atribucion.ts: lo comparten la pantalla y los scripts de traspaso y reapertura—, y
+  guardas.test.ts vigila que nunca borre una marca ni toque otra cosa que su cierre en una factura soltada.
+- **La marca es del documento, en su línea.** Una fila sale de la lista cuando TODOS sus documentos tienen su marca con
+  los números de hoy (`separarMarcadas`). En las filas que juntan facturas de un cliente (sin cuenta, pagos sin
+  conciliar, exentas; y los años viejos de pagos sin conciliar) las marcadas se agrupan aparte (`…|marcadas`): una
+  factura nueva del mismo cliente, o una cuyo número cambió, vuelve sola, sin traer las ya revisadas. En un conjunto
+  («dos monedas», «moneda corregida») un documento sin marca trae de vuelta la fila entera, porque se lee junta.
+- **Se marca con lo que se VIO** (`decidirMarcas`, puro): cada fila viaja con su huella; la que cambió entre verla y
+  hacer clic no se marca y se avisa, las demás sí. El botón de la línea marca una por una las filas que muestra.
+- **`aceptada` pasa a significar «todas sus filas marcadas»**, y las filas marcadas vienen en `marcadas`. La línea no
+  desaparece del detector: «Marcadas», fija al final de la pestaña, muestra cada fila con motivo, quién, cuándo y
+  «Deshacer», aunque su línea ya no tenga nada pendiente.
+- **La marca por grupo sale de la pantalla y de la API** («Está bien así» y «Volver a abrir» de la línea entera). El
+  detector ya no lee `DiferenciaOdooAceptada`; la tabla queda para el traspaso de su única marca (las 15 notas). ⚠ En
+  parte revierte la entrada anterior: la marca de grupo ya NO sigue valiendo en pantalla. Se eligió mostrar de más antes
+  que honrar una marca que ya no se puede deshacer: hasta que corra el traspaso, las 15 notas vuelven a la lista.
+- **«Ya está anulada» pide motivo** y deja una marca ANULADA en la misma tabla (lo que cierra la factura sigue siendo
+  `FacturaLiberada.resueltaEn`; la marca es su porqué). Las cerradas a mano se ven en «Marcadas» y se reabren con
+  «Deshacer» (`reabrirLiberacionTx`): si se cerró antes de que existieran las marcas, se escribe ahí quién y cuándo la
+  había cerrado, ya deshecha, con la firma de quien la reabre. Es lo que va a usar la reapertura de las 4 que Elías
+  decidió volver a abrir.
+- **El motivo que se propone** es el último que usó esa persona, y si nunca marcó, el último de cualquiera; uno para
+  «Está bien así» y otro para «Ya está anulada», que dicen cosas distintas. Mínimo 5 letras, como antes.
+- Marcar y deshacer piden **edición** de Cobranza (hoy, a nadie se le quita nada).
+
+**Por qué.** Medido en producción el 2026-09-25, en solo lectura y con la tabla nueva vacía: sin marcas, 16 líneas y
+125 filas pendientes (las 15 notas vuelven: US$113.324,30 + ₡40.038.332,85 sobre 62 documentos). Con las 15 marcas por
+fila que escribiría el traspaso —la huella de grupo guardada sigue IGUAL a la de hoy— la línea de notas queda marcada
+entera y el encabezado vuelve a US$102.451,64 + ₡40.037.443,85 sobre 51 documentos, lo mismo que se ve hoy. Marcando
+los 292 documentos, 0 filas pendientes, las 16 líneas siguen en la respuesta y la cobertura sigue en 0/0/0/0. La huella
+de fila más larga es de 5.758 caracteres (un año de pagos sin conciliar). Hay 4 facturas soltadas cerradas a mano,
+todas sin motivo: Honda cuota 5, Wherex cuotas 2 y 3, KAIZEN cuota 1.
+
+⚠ Todavía no (etapa 4): el título, el monto, el encabezado y el número de la pestaña de una línea con ALGUNAS filas
+marcadas siguen contando todas sus filas; solo una línea marcada entera deja de contar.
+⚠ Dos clics a la vez sobre la misma fila pueden dejar dos marcas iguales. No esconde nada: «Deshacer» deshace todas las
+marcas de la fila.
+
+**Qué la revertiría.** Que una marca por documento resulte demasiado fina para una línea —que alguien necesite decir
+«este cliente está bien así, con lo que venga»—: esa línea tendría que marcar por cliente, sabiendo que entonces una
+factura nueva ya no aparece sola.
