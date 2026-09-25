@@ -59,10 +59,10 @@ export default function TimelineProposalPendiente({
     return (
       <div className="px-6 py-2 flex items-center gap-2 flex-wrap border-b border-warn-line bg-warn-surface">
         <span className="text-xs font-medium text-warn-ink">
-          El cronograma tiene una propuesta sin revisar
+          El cronograma tiene una propuesta sin decidir
         </span>
         <span className="text-xs text-warn-ink/70">
-          · la IA sugirió cambios de fases que todavía no se aplicaron
+          · la IA propuso cambios del cronograma que todavía no se aplicaron
         </span>
         <span className="ml-auto" />
         {boton}
@@ -73,10 +73,10 @@ export default function TimelineProposalPendiente({
   return (
     <div className="rounded-xl border border-warn-line bg-warn-surface p-4 flex items-start gap-3">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-warn-ink">El cronograma tiene una propuesta sin revisar</p>
+        <p className="text-sm font-semibold text-warn-ink">El cronograma tiene una propuesta sin decidir</p>
         <p className="mt-1 text-xs text-warn-ink/80 leading-relaxed">
-          La IA propuso cambios de fases (del handoff o de las reuniones y notas elegidas); el
-          cronograma sigue como estaba hasta que alguien los revise y los acepte (o los descarte).
+          La IA propuso cambios del cronograma (del handoff o de «Regenerar todo»); el cliente sigue
+          viendo el cronograma actual hasta que alguien la aplique o la descarte.
         </p>
       </div>
       {boton}

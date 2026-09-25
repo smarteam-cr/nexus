@@ -383,7 +383,15 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     const virgen = linea(false, false, false);
     expect(virgen).toContain("«Generar cronograma»");
     expect(virgen).toContain("permiso de generar");
-    expect(virgen, "sin propuesta no hay nada que decidir antes").not.toContain("cambios de fases sin decidir");
+    /* ⚠ ACTUALIZADA en E2a P3 (2026-09-25), con esta razón: la propuesta de «Regenerar todo» trae
+       fases Y tareas, así que la línea dejó de decir «cambios de fases sin decidir» y dice «una
+       propuesta sin decidir». La negación vieja habría quedado en verde siempre (decorativa): se mira
+       la frase nueva, y abajo se pide que la de la propuesta pendiente la diga. */
+    expect(virgen, "sin propuesta no hay nada que decidir antes").not.toContain("una propuesta sin decidir");
+    expect(linea(false, false, true), "con propuesta, la línea dice que hay una sin decidir").toContain(
+      "una propuesta sin decidir",
+    );
+    expect(linea(true, false, true)).toContain("una propuesta sin decidir");
 
     const virgenConPropuesta = linea(false, false, true);
     expect(virgenConPropuesta).toContain("«Generar cronograma»");
@@ -442,6 +450,13 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(linea).not.toContain("aceptar o descartar");
     expect(linea).toContain("«Aplicar»");
     expect(linea).toContain("«Descartar»");
+    /* E2a P3 (2026-09-25): la propuesta de «Regenerar todo» trae fases Y tareas. La edición que la
+       pone en rojo: volver a decirle al modelo que lo abierto son solo «cambios de fases» (le haría
+       creer que las tareas se pueden tocar), o alargarla hasta comerse el techo del prefijo. */
+    expect(linea).toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
+    expect(linea).toContain("«Regenerar todo» con fases y tareas");
+    expect(linea, "la línea vuelve a hablar solo de fases").not.toMatch(/cambios de fases/i);
+    expect(linea.length).toBeLessThan(420);
     expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true)] : [])');
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
     const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");

@@ -110,6 +110,19 @@ test("lo que reporta el equipo técnico entra al panel", () => {
   expect(buildProjectActions(sano).map((x) => x.id)).not.toContain("sugerencias-equipo");
 });
 
+// E2a P3 (2026-09-25): la propuesta de «Regenerar todo» trae fases Y tareas, así que «Las tareas y
+// sus estados no se tocan» pasó a ser falso. Lo que sigue siendo verdad es que lo que tiene avance
+// o se escribió a mano no se toca. La edición que la pone en rojo: volver a prometer que las tareas
+// no se tocan, o a nombrarla como «cambios de estructura».
+test("la propuesta pendiente dice que trae cambios del cronograma y qué no se toca", () => {
+  const p = buildProjectActions({ ...sano, pendingProposal: true }).find((x) => x.id === "draft-proposal")!;
+  expect(p.title).toBe("La IA propone cambios del cronograma");
+  expect(p.why).toContain("«Regenerar todo»");
+  expect(p.why).toContain("lo que tiene avance o escribiste a mano no se toca");
+  expect(p.why, "volvió a prometer que las tareas no se tocan").not.toMatch(/tareas y sus estados no se tocan/i);
+  expect(p.cta).toBe("Revisar sugerencias");
+});
+
 test("riesgo del cliente y alcance excedido van a Atender", () => {
   const a = buildProjectActions({
     ...sano,

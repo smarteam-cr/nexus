@@ -35,7 +35,14 @@ import {
   revisarDireccionDelPlazo,
   type FaseParaEstructura,
 } from "./propuesta-de-estructura";
-import { buildPhaseOrder, computeProposalDeltas, reescribirPropuestaPendiente } from "./proposal-deltas";
+import {
+  AVISO_OTRA_PROPUESTA_ENTRO,
+  AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE,
+  AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
+  buildPhaseOrder,
+  computeProposalDeltas,
+  reescribirPropuestaPendiente,
+} from "./proposal-deltas";
 import { ACTIVITY_TYPES } from "./validate";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
@@ -1319,6 +1326,40 @@ describe("la máquina de pasos de la pantalla", () => {
     for (const aviso of [AVISO_FALLO_DE_ESTRUCTURA, AVISO_PROPUESTA_PENDIENTE, AVISO_DECIDE_PRIMERO, AVISO_SIN_CAMBIOS, AVISO_ACORDADO_SIN_ENTRAR, CAMBIOS_DE_FASES_SIN_DECIDIR]) {
       expect(aviso).not.toMatch(/resolvélos|volvé|revisá|podés|decidís|ves vos/);
     }
+  });
+
+  it("E2a · la propuesta abierta se nombra «del cronograma», no «de fases»: puede traer tareas", () => {
+    /* E2a P3 (2026-09-25): «Regenerar todo» deja UN borrador con fases y tareas, y el handoff no lo
+       pisa. Estos textos decían «cambios de fases sin decidir/revisar», que pasa a ser falso. La
+       edición que la pone en rojo: volver a nombrar la propuesta abierta «cambios de fases» en uno
+       de ellos, o que la ruta del paso 1 vuelva a su propia frase (dos fuentes que se separan).
+       AVISO_DECIDE_PRIMERO no entra: es de la cadena vieja (la propuesta de las reuniones, solo de
+       fases), que sigue hasta E2b. AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE tampoco: la del handoff
+       anterior sigue siendo solo de fases. */
+    for (const texto of [
+      AVISO_PROPUESTA_PENDIENTE,
+      CAMBIOS_DE_FASES_SIN_DECIDIR,
+      AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE,
+      AVISO_OTRA_PROPUESTA_ENTRO,
+    ]) {
+      expect(texto).toContain("propuesta del cronograma");
+      expect(texto, "volvió a decir que la propuesta abierta es solo de fases").not.toMatch(/cambios de fases/);
+      expect(texto).not.toMatch(/resolvé|volvé|decidí|podés/);
+    }
+    expect(AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE, "la del handoff anterior sigue siendo de fases").toContain(
+      "cambios de fases sugeridos por un handoff anterior",
+    );
+    const ruta = fs.readFileSync(
+      path.join(process.cwd(), "app/api/projects/[projectId]/timeline/estructura/route.ts"),
+      "utf8",
+    );
+    const i = ruta.indexOf("const PROPUESTA_PENDIENTE = {");
+    expect(i, "no encuentro el 409 del paso 1").toBeGreaterThan(-1);
+    const cuerpo = ruta.slice(i, ruta.indexOf("};", i));
+    expect(cuerpo).toContain('error: "PROPUESTA_PENDIENTE"');
+    expect(cuerpo, "el 409 del paso 1 dejó de decir la frase de la pantalla").toContain(
+      "message: AVISO_PROPUESTA_PENDIENTE",
+    );
   });
 });
 

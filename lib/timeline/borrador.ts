@@ -776,9 +776,10 @@ const choqueNombreRepetido = (nombre: string) => `Ya hay una fase «${nombre}» 
 export const BLOQUEO_VERSION_NUEVA =
   "Esta propuesta tiene cambios que esta versión de Nexus no sabe aplicar: recarga la página.";
 /** El 409 del PUT con motivo mientras hay una propuesta abierta (timeline/route.ts): lo muestran la
- *  pantalla y el chat tal cual, así que habla de la barra que el CSE tiene enfrente. */
+ *  pantalla y el chat tal cual, así que habla de la barra que el CSE tiene enfrente. Desde E2a la
+ *  propuesta puede traer también tareas: se nombra «del cronograma», no «de cambios de fases». */
 export const MENSAJE_PROPUESTA_ABIERTA =
-  "Hay una propuesta de cambios de fases sin decidir (arriba del Gantt): aplícala o descártala antes de guardar este cambio.";
+  "Hay una propuesta del cronograma sin decidir (arriba del Gantt): aplícala o descártala antes de guardar este cambio.";
 
 /** El orden resultante con el cambio de orden aplicado sobre `ids`: primero las que nombra, después el resto. */
 function ordenConCambio(ids: readonly string[], c: CambioDeOrden): string[] {
@@ -1843,7 +1844,7 @@ export const esperaEnCurso = (rotulo: string) =>
 export const LINEA_DEL_CLIENTE = "El cliente no ve estos cambios hasta que apliques.";
 /** «Subir al cliente» queda libre con una propuesta abierta, con este aviso (respuesta 4 de Elías). */
 export const AVISO_SUBIR_CON_PROPUESTA =
-  "Hay una propuesta de cambios de fases sin aplicar (arriba del Gantt): si subes ahora, el cliente ve el cronograma sin esos cambios.";
+  "Hay una propuesta del cronograma sin aplicar (arriba del Gantt): si subes ahora, el cliente ve el cronograma sin esos cambios.";
 /** El ÚNICO botón que alterna la vista: dice lo que vas a ver al apretarlo. */
 export const TEXTO_VER_ANTES = "Ver como estaba antes";
 export const TEXTO_VER_PROPUESTA = "Ver la propuesta";
@@ -1975,7 +1976,7 @@ export function fraseDelCierre(
  *  modificador: la propuesta guardada entró mientras la IA trabajaba (otra pantalla regeneró) y no
  *  hay barra que la muestre. Se dice qué hacer, sin tirar el resultado de la IA sin preguntar. */
 export const AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA =
-  "Mientras la IA trabajaba entró una propuesta de cambios de fases que nadie decidió todavía, y no se aplica nada encima de ella. Descarta esta vista previa para verla arriba del Gantt; cuando la resuelvas, vuelve a pedir el cambio.";
+  "Mientras la IA trabajaba entró una propuesta del cronograma que nadie decidió todavía, y no se aplica nada encima de ella. Descarta esta vista previa para verla arriba del Gantt; cuando la resuelvas, vuelve a pedir el cambio.";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── EL ESTADO DE LA REVISIÓN EN PANTALLA (puro, lo usa el hook) ──────────────

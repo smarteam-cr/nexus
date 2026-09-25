@@ -257,14 +257,14 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
       "tiene permiso de generarlo con IA, y se esconde mientras haya en pantalla una vista previa de " +
       "tareas sin decidir." +
       (e.cambiosDeFasesSinDecidir
-        ? ` Con cambios de fases sin decidir, primero ${revisar} y después se genera.`
+        ? ` Con una propuesta sin decidir, primero ${revisar} y después se genera.`
         : "")
     );
   }
   if (e.cambiosDeFasesSinDecidir) {
     return (
       cabeza +
-      "el botón «Regenerar todo el cronograma», arriba del Gantt, pero hoy NO se ve: hay cambios de fases " +
+      "el botón «Regenerar todo el cronograma», arriba del Gantt, pero hoy NO se ve: hay una propuesta " +
       `sin decidir. Primero ${revisar}, y después vuelve. Solo lo ve quien puede editar el cronograma y ` +
       "tiene permiso de regenerarlo con IA."
     );
@@ -282,14 +282,16 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
  * 2026-09-24). La pantalla corta el «Aplicar» mientras haya una propuesta de fases pendiente (la del
  * handoff o la de la revisión de «Regenerar todo»): guardar con motivo la borraría. El modelo no lo
  * sabía: armaba la lista numerada, el CSE la revisaba y «Aplicar» fallaba siempre. "" sin propuesta.
+ * E2a: la propuesta de «Regenerar todo» trae fases Y tareas, así que la línea ya no dice «cambios de
+ * fases» (el nombre de la función se queda: lo citan las guardas).
  */
 export function lineaDeCambiosDeFasesSinDecidir(hay: boolean): string {
   if (!hay) return "";
   return (
-    "⛔ HAY CAMBIOS DE FASES SIN DECIDIR arriba del Gantt (sugerencias del handoff o de la revisión de " +
-    "fases de «Regenerar todo»). Mientras estén, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
+    "⛔ HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR arriba del Gantt (del handoff, o de «Regenerar todo» " +
+    "con fases y tareas). Mientras esté, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
     "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que resolver esa propuesta en " +
-    "su barra, arriba del Gantt (desmarcar lo que no va y «Aplicar», o «Descartar»). Puedes conversar el " +
+    "su barra (desmarcar lo que no va y «Aplicar», o «Descartar»). Puedes conversar el " +
     "cambio y dejarlo para después."
   );
 }

@@ -109,14 +109,16 @@ export function origenDePropuesta(p: { origen?: unknown } | null | undefined): "
  * Una propuesta abierta con algo por decidir no se pisa, sea de las reuniones o de un handoff
  * anterior (respuesta 1 de Elías, 2026-09-24; analyze/route.ts): se queda la abierta y se avisa.
  */
+/* E2a: la propuesta de «Regenerar todo» (`origen: "contexto"`) puede traer también tareas, así que
+   ya no se nombra «cambios de fases». La del handoff anterior sigue siendo solo de fases hasta E2b. */
 export const AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE =
-  "tiene cambios de fases sugeridos desde las reuniones y notas elegidas, sin decidir, y el handoff no los pisa. " +
-  "Cuando se decidan, vuelve a generar el handoff para ver sus sugerencias de fases.";
+  "tiene una propuesta del cronograma sin decidir, y el handoff no la pisa. " +
+  "Cuando se decida, vuelve a generar el handoff para ver sus sugerencias de fases.";
 export const AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE =
   "tiene cambios de fases sugeridos por un handoff anterior, sin decidir, y el handoff nuevo no los pisa. " +
   "Cuando se decidan en el Cronograma, vuelve a generar el handoff para ver sus sugerencias de fases.";
 export const AVISO_OTRA_PROPUESTA_ENTRO =
-  "otra propuesta de cambios de fases entró mientras se generaba el handoff, y no se pisa. Cuando se decida, " +
+  "otra propuesta del cronograma entró mientras se generaba el handoff, y no se pisa. Cuando se decida, " +
   "vuelve a generar el handoff para ver sus sugerencias de fases.";
 
 export type PhaseField = "name" | "durationWeeks" | "startWeek" | "sessionCount" | "notes" | "activityType";

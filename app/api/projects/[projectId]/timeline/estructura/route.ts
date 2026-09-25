@@ -44,6 +44,7 @@ import {
 import { claveConVozDeHandoffPropia } from "@/lib/timeline/semana-cero";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import {
+  AVISO_PROPUESTA_PENDIENTE,
   construirPropuestaDeEstructura,
   errorDeLaRevisionDeFases,
   leerRespuestaDeEstructura,
@@ -56,9 +57,10 @@ async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Re
     .catch(() => {});
 }
 
+/* E2a: la propuesta abierta puede traer también tareas; la frase es la misma que ve la pantalla. */
 const PROPUESTA_PENDIENTE = {
   error: "PROPUESTA_PENDIENTE",
-  message: "Hay cambios de fases sin revisar: resuélvelos antes de que la IA vuelva a revisar las fases.",
+  message: AVISO_PROPUESTA_PENDIENTE,
 };
 
 export async function POST(

@@ -1021,9 +1021,10 @@ export const AVISO_SIN_CAMBIOS = "Tus reuniones, notas e instrucciones no piden 
  *  notó». Decir «no piden cambios» sería falso y contradiría a esa misma observación. */
 export const AVISO_ACORDADO_SIN_ENTRAR =
   "Tus reuniones, notas o instrucciones piden cambios de fases que no se pueden proponer solos: los ves en «La IA también notó» y decides tú.";
-/** 409 con la propuesta del HANDOFF pendiente: no se arman tareas sobre fases sin decidir. */
+/** 409 con una propuesta pendiente (del handoff, o de «Regenerar todo» con fases y tareas): no se
+ *  arman tareas sobre una propuesta sin decidir. Lo dice también la ruta del paso 1 (estructura). */
 export const AVISO_PROPUESTA_PENDIENTE =
-  "Hay cambios de fases sin revisar: resuélvelos y vuelve a regenerar para que la IA revise las fases.";
+  "Hay una propuesta del cronograma sin decidir: resuélvela y vuelve a regenerar.";
 /** 409 con una propuesta de las REUNIONES pendiente (la dejó otra pestaña u otra persona). */
 export const AVISO_DECIDE_PRIMERO =
   "Ya hay cambios de fases sugeridos por la IA sin decidir: decídelos y después sigo con las tareas.";
@@ -1034,9 +1035,11 @@ export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fa
  * en silencio; desde E1 ese PUT responde 409 PROPUESTA_ABIERTA (timeline/route.ts) y la pantalla
  * frena antes, con esta frase. Descartar lo que proponen borraba la guardada. Una sola frase para
  * los dos caminos, y la misma idea le llega al modelo del chat en su contexto.
+ * Desde E2a la propuesta puede traer también tareas: el texto dice «la propuesta del cronograma»;
+ * el nombre de la constante se queda (lo citan las guardas de estructura-cronograma.test.ts).
  */
 export const CAMBIOS_DE_FASES_SIN_DECIDIR =
-  "Primero decide los cambios de fases sugeridos (arriba del Gantt): mientras estén sin decidir, no se aplica ningún otro cambio con IA.";
+  "Primero decide la propuesta del cronograma (arriba del Gantt): mientras esté sin decidir, no se aplica ningún otro cambio con IA.";
 
 /**
  * Qué hace la pantalla después de pedir la estructura (paso 1):

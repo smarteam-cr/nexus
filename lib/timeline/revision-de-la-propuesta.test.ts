@@ -105,6 +105,24 @@ describe("los textos de la barra", () => {
     expect(AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA).toContain("Descarta esta vista previa");
     expect(AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA).toContain("vuelve a pedir el cambio");
   });
+
+  it("E2a · la propuesta abierta se nombra «del cronograma»: desde E2a trae también tareas", () => {
+    /* E2a P3 (2026-09-25): «Regenerar todo» deja UN borrador con fases y tareas, así que «propuesta
+       de cambios de fases» pasa a ser falso (y el cartel del proyecto decía «sugirió cambios de
+       fases»). Son verdad en los dos mundos: con la propuesta vieja, solo de fases, y con la nueva.
+       La edición que la pone en rojo: volver a nombrar la propuesta abierta «de cambios de fases» en
+       uno de estos textos, o en el cartel que ve el CSE fuera del cronograma. */
+    for (const texto of [MENSAJE_PROPUESTA_ABIERTA, AVISO_SUBIR_CON_PROPUESTA, AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA]) {
+      expect(texto).toContain("propuesta del cronograma");
+      expect(texto, "volvió a decir que la propuesta es solo de fases").not.toMatch(/cambios de fases/);
+    }
+    const cartel = soloCodigo(leer("components/projects/TimelineProposalPendiente.tsx"));
+    expect(cartel.length).toBeGreaterThan(1500);
+    expect(cartel.match(/El cronograma tiene una propuesta sin decidir/g)?.length, "las dos variantes").toBe(2);
+    expect(cartel).toContain("la IA propuso cambios del cronograma");
+    expect(cartel, "el cartel volvió a hablar solo de fases").not.toMatch(/cambios de fases/);
+    expect(cartel, "el cartel volvió a decir que se aceptan uno por uno").not.toContain("los acepte");
+  });
 });
 
 describe("la barra: UN botón que alterna, la línea fija, la lista con casillas y el cierre", () => {
