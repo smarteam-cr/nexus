@@ -978,3 +978,40 @@ en Mercury se sigue comparando con Odoo: manda lo que anotó la persona (hoy, 0 
 **Qué la revertiría.** Una cuenta que facture de verdad por Odoo y por Mercury a la vez sin anotar la plataforma
 en cada cobro: ahí una sola vía por cuenta no alcanza, y la marca tendría que bajar al servicio o al cobro
 (`Cobro.plataformaFactura` ya existe para eso). Hoy hay 0 cuentas con sociedades o cobros en dos plataformas.
+
+---
+
+## 2026-09-25 · Cada fila de «Lo que no cuadra» tiene nombre propio y la huella de sus números
+
+**Qué se decidió.** Etapa 2 del plan de Elías (marcar «está bien así» fila por fila), sin cambiar todavía nada de lo
+que se ve:
+- **Toda fila de las 20 líneas lleva `fila`** (`IdentidadDeFila`, lib/finanzas/inconsistencias.ts): una clave única
+  en su línea, sus documentos y una huella. Obligatoria en `ItemDiferencia`: una línea nueva sin ella no compila. El
+  reporte de equilibrio no la usa y no cambia.
+- **Las claves nunca son nombres**: `f:` factura o nota de crédito (`FacturaOdoo.id`), `c:` cobro, `l:` factura
+  soltada, `cuenta:` cuenta de Nexus, `venta:` la factura que solo existe como número anotado en cobros de Nexus
+  (cuenta|moneda|número). Las filas que juntan facturas: `cliente:<id de Odoo>|<moneda>`, `anio:<año>`.
+- **Dos formas de fila.** La de UNA cosa (una factura, una nota, un cobro, una cuenta, una soltada, un par
+  factura-cobros por su factura) lleva un solo documento, y su huella trae también los números de lo que la acompaña:
+  los cobros del par, la factura que la nota parece anular. La que JUNTA facturas de un cliente («sin cuenta», pagos
+  sin conciliar, exentas, «dos monedas», moneda corregida) lleva cada factura como documento con su propia huella:
+  ahí la marca va a quedar en cada factura, y una nueva del mismo cliente trae la fila de vuelta sola.
+- **La huella son números**: montos en centavos, saldo, estados, número de documento. Afuera a propósito: los nombres;
+  las fechas; el número y la plataforma anotados en un cobro, que deciden en qué fila cae y no qué dice (salvo en las
+  líneas que hablan del número); las pistas —la factura anulada, el aviso del Excel, los números de Mercury de una
+  cuenta internacional—, que ayudan a buscar y no son números de la fila; y en exentas, el estado de pago, porque la
+  línea habla del IVA que falta.
+- **Las filas por cliente se agrupan por el id del cliente de Odoo**, no por su nombre.
+- **Se va el tope de 60 filas** de «facturas sin cobro»: la 61 contaba en el título y no se podía ver ni marcar.
+- `huellaDe` (la del grupo entero) no cambia: la marca de grupo de las notas de crédito sigue valiendo hasta su
+  traspaso a marcas por fila.
+
+**Por qué.** Medido en producción el 2026-09-25, en solo lectura: 16 líneas y 125 filas (110 abiertas), y solo las
+de facturas soltadas tenían id. Con el código nuevo, sobre los mismos datos: **0 filas sin identidad**, 0 claves
+repetidas en su línea, 292 documentos (hasta 59 en una fila, la de pagos sin conciliar de un año), la huella de un
+documento no pasa de 206 caracteres, agrupar por id no separa ningún cliente, el encabezado sigue en US$102.451,64 +
+₡40.037.443,85 sobre 51 documentos, y la marca de las notas de crédito sigue valiendo.
+
+**Qué la revertiría.** En «dos monedas» y «moneda corregida» la fila es un conjunto: si sale una de sus facturas y las
+otras siguen marcadas, la fila no vuelve, porque no entró nada nuevo. Si eso llegara a esconder algo, esas dos líneas
+pasan a ser filas de UNA cosa, con la huella del conjunto entero.
