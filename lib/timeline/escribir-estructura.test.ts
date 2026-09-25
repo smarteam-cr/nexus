@@ -735,8 +735,9 @@ describe("aplicar el borrador CON tareas (E2a)", () => {
   });
 
   it("el cierre de la fase: quitar la última pendiente la cierra; sumar una a una fase cerrada la reabre", async () => {
-    /* `recalcularCierreDeFase` (extraída de apply-curated-phase.ts con la misma conducta). La edición
-       que la pone en rojo: no recalcular el cierre de las fases que cambiaron de tareas. */
+    /* `recalcularCierreDeFase` (extraída de apply-curated-phase.ts con la misma conducta; desde E2b
+       P5b vive en escribir-estructura.ts). La edición que la pone en rojo: no recalcular el cierre de
+       las fases que cambiaron de tareas. */
     const hechas = [tareaDB("t1", "c", "Probar flujos", 0, 0), tareaDB("t2", "c", "Pruebas con usuarios", 2, 0, { status: "DONE" })];
     const seVa: CambioTareaSeVa = {
       tipo: "tarea-se-va",
@@ -820,12 +821,23 @@ describe("lo que el escritor de tareas NO hace", () => {
     }
   });
 
-  it("y `applyCuratedPhaseTasks` sigue cerrando la fase con la misma función (una sola regla)", () => {
-    const src = leer("lib/timeline/apply-curated-phase.ts");
-    const i = src.indexOf("export async function applyCuratedPhaseTasks(");
-    const cuerpo = src.slice(i, src.indexOf("export async function recalcularCierreDeFase(", i));
-    expect(cuerpo.length).toBeGreaterThan(500);
-    expect(cuerpo).toContain("await recalcularCierreDeFase(tx, phaseId, now, actorEmail);");
-    expect(cuerpo, "el cierre volvió a copiarse adentro").not.toContain('status: "IN_PROGRESS"');
+  /* E2b P5b (2026-09-25): salió «y `applyCuratedPhaseTasks` sigue cerrando la fase con la misma
+     función». applyCuratedPhaseTasks se borró con apply-curated-phase.ts (la curación de dos
+     columnas), y `recalcularCierreDeFase` se mudó a escribir-estructura.ts, su único llamador: ya no
+     hay una segunda copia que vigilar. Su conducta la prueba «el cierre de la fase» de arriba. */
+
+  it("⭐ crea con la marca «por validar» de la tarea (no con un false fijo)", () => {
+    /* Traída de apply-curated-phase.test.ts (E2b P5b), que se borró: vigilaba lo mismo en el apply de
+       la curación. La marca del agente (la típica del tipo de fase, sin respaldo en ninguna fuente)
+       tiene que llegar hasta la tarea creada. La edición que la pone en rojo: crear todo como validado
+       o dejar de leer la marca de la tarea propuesta. */
+    const src = leer("lib/timeline/escribir-tareas.ts");
+    const i = src.indexOf("const data: Prisma.TimelineTaskCreateManyInput[] = destinos.map(");
+    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(0);
+    const alta = src.slice(i, src.indexOf("await tx.timelineTask.createMany(", i));
+    expect(alta.length, "el tramo del alta salió vacío").toBeGreaterThan(200);
+    expect(alta, "el aplicar volvió a crear todo como validado: la marca del agente se pierde").toContain(
+      "needsValidation: n.tarea.needsValidation === true",
+    );
   });
 });

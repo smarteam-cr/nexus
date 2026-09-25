@@ -63,26 +63,17 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
       "Heredó de apply-items el acomodo: si una fase se acorta, las tareas que quedaban más allá pasan " +
       "a la última semana que existe y el aviso vuelve en la respuesta (`avisos`).",
   },
-  {
-    archivo: "app/api/projects/[projectId]/timeline/detail/apply-all/route.ts",
-    protege:
-      "NO cambia la duración: la LEE para pasársela a `normalizeCuratedTasks`, que acota las " +
-      "tareas curadas contra ella. Va en el censo porque el archivo la nombra y la próxima " +
-      "persona tiene que ver por qué no es un riesgo.",
-  },
-  {
-    archivo: "lib/timeline/apply-curated-phase.ts",
-    protege:
-      "NO escribe la duración: sus dos `update` tocan solo el estado de la fase. La RECIBE como " +
-      "parámetro y `normalizeCuratedTasks` acota cada `weekIndex` contra ella (línea 64), así que " +
-      "es el escritor de tareas que más protegido está. Va en el censo porque nombra las dos " +
-      "cosas y la próxima persona tiene que ver por qué no es un riesgo.",
-  },
+  /* `detail/apply-all` y `lib/timeline/apply-curated-phase.ts` SALIERON del censo el 2026-09-25 (E2b
+     P5b), con la curación de dos columnas: apply-all quedó como lápida que responde 409 y no escribe
+     nada, y apply-curated-phase.ts se borró. Ninguno de los dos cambiaba la duración (la leían para
+     acotar las tareas curadas). Lo único que se salvó de ellos, el cierre de la fase
+     (`recalcularCierreDeFase`, que toca solo el estado), vive en escribir-estructura.ts, declarado
+     arriba. */
   {
     archivo: "scripts/fusionar-fases-cronograma.ts",
     protege:
       "Fusiona dos fases a mano. Ya acotaba: calcula `ultimaSemana = durationWeeks - 1` y mete " +
-      "ahí lo que no entra. Es el precedente del criterio que usan los otros tres.",
+      "ahí lo que no entra. Es el precedente del criterio que usan los otros dos.",
   },
 ];
 

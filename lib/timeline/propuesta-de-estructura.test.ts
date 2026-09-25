@@ -1348,10 +1348,18 @@ describe("la máquina de pasos de la pantalla", () => {
       token: null,
       aviso: AVISO_SIN_CAMBIOS,
     });
-    // El aviso apunta a donde el CSE lo ve: el acordeón del paso 2.
+    // El aviso apunta a donde el CSE lo ve: «La IA también notó».
     expect(AVISO_ACORDADO_SIN_ENTRAR).toContain("«La IA también notó»");
-    const modal = fs.readFileSync(path.join(process.cwd(), "components/canvas/AllPhasesRegenModal.tsx"), "utf8");
-    expect(modal).toContain("La IA también notó (no se aplica sola):");
+    /* ⚠ REAPUNTADA en E2b P5b (2026-09-25), con esta razón: leía la lista del acordeón de dos columnas
+       (AllPhasesRegenModal.tsx), que se borró. Lo que el aviso promete se ve en la franja
+       (ObservacionesDelPaso1.tsx), sin propuesta en pantalla, y en la barra de la propuesta
+       (RevisionDeLaPropuesta.tsx), plegado. La edición que la pone en rojo: sacar ese título de
+       cualquiera de las dos: el aviso quedaría prometiendo una lista que no está. Solo el código: el
+       texto en un comentario no se ve. */
+    for (const rel of ["components/canvas/ObservacionesDelPaso1.tsx", "components/canvas/RevisionDeLaPropuesta.tsx"]) {
+      const codigo = fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ");
+      expect(codigo, `${rel} dejó de mostrar «La IA también notó»`).toContain("La IA también notó");
+    }
   });
 
   it("después de resolver sugerencias", () => {

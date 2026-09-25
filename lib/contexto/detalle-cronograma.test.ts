@@ -237,8 +237,8 @@ describe("las piezas puras", () => {
 
   it("con brief: se le pide dejar en paz las fases que las instrucciones dan por resueltas", () => {
     /* El caso Wherex: las instrucciones decían "Service prácticamente finalizado" y el agente
-       igual le re-propuso sus 9 tareas de siempre. `tasks: []` es el "no la toques" que el modal
-       ya sabe leer (lib/timeline/regen-columnas: sin propuesta NUNCA se descarta nada). */
+       igual le re-propuso sus 9 tareas de siempre. `tasks: []` es el "no la toques" que el borrador
+       ya sabe leer (R1 de lib/timeline/tareas-del-detalle.ts: sin propuesta NUNCA se descarta nada). */
     const conBrief = nuevoTemplate({ ...BASE, instruccionesDoc: "Service ya está terminado.\n\n" });
     expect(conBrief).toContain("=== FASES QUE LAS INSTRUCCIONES DAN POR RESUELTAS ===");
     expect(conBrief).toContain('"tasks": []');

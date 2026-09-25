@@ -113,12 +113,20 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
     expect(tareasFijasDeSemanaCero(HUB, []).filter((t) => t.motivoPorValidar !== null)).toEqual([bd]);
     expect(tareasFijasDeSemanaCero(["implementacion"], []).every((t) => t.motivoPorValidar === null)).toBe(true);
 
-    const panel = fs
-      .readFileSync(path.join(process.cwd(), "components/canvas/PhaseRegenPanel.tsx"), "utf8")
+    /* ⚠ REAPUNTADA en E2b P5b (2026-09-25), con esta razón: miraba el panel de dos columnas
+       (PhaseRegenPanel.tsx), que se borró. La tarea de la propuesta lleva su motivo en el borrador y
+       `resumir` (lib/timeline/borrador.ts) lo pregunta con `motivoDePorValidar` para el renglón, que
+       lo muestra en el chip «por validar» de TareasDeLaPropuesta.tsx. La edición que la pone en rojo:
+       volver a un tooltip fijo, o que el renglón deje de preguntar el motivo de SU tarea. */
+    const borrador = fs.readFileSync(path.join(process.cwd(), "lib/timeline/borrador.ts"), "utf8");
+    expect(borrador, "el renglón dejó de preguntar el motivo de su tarea").toContain(
+      "porValidar: motivoDePorValidar(c.tarea)",
+    );
+    const renglon = fs
+      .readFileSync(path.join(process.cwd(), "components/canvas/TareasDeLaPropuesta.tsx"), "utf8")
       .replace(/\r\n/g, "\n");
-    expect(panel, "el tooltip del panel dejó de preguntar el motivo").toContain("title={motivoDePorValidar(item)}");
-    expect(panel, "el motivo de la propuesta no llega a la tarjeta").toContain("motivoPorValidar: t.motivoPorValidar ?? null,");
-    expect(panel, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
+    expect(renglon, "el chip «por validar» dejó de decir el motivo").toContain("title={t.porValidar}");
+    expect(renglon, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
   });
 
   it("⚠ la tarea que la IA propone CON EL TÍTULO de la de base de datos dice el motivo de la típica", () => {

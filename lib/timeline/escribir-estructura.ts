@@ -22,7 +22,7 @@
  *      fase que se acorta—, fases nuevas y orden. Nada que no cambie se toca.
  *   6. Las tareas (`escribirTareas`, lib/timeline/escribir-tareas.ts), DESPUÉS de la estructura: una
  *      tarea de una fase nueva necesita su id real. Solo crea y borra; nunca parchea la foto publicada.
- *   7. El cierre (o la reapertura) de cada fase existente que cambió de tareas.
+ *   7. El cierre (o la reapertura) de cada fase existente que cambió de tareas (`recalcularCierreDeFase`).
  *   8. `lastEditedByHuman`: el cronograma cambió y el cliente todavía no lo ve («Subir al cliente»).
  *      Con tareas tocadas, además, el borrador de avance queda viejo (ids nuevos): se invalida.
  * La auditoría y los eventos del watchdog van AFUERA, después: alargar la transacción no, y perder
@@ -47,7 +47,6 @@ import {
   type Vivo,
 } from "./borrador";
 import { escribirTareas, TareasQueNoCuadran, type FaseParaTareas, type ResultadoDeTareas } from "./escribir-tareas";
-import { recalcularCierreDeFase } from "./apply-curated-phase";
 
 /** Lo que el escritor usa del `tx`: tipado contra Prisma, para que un campo mal escrito no compile. */
 export type TxDeEstructura = Pick<Prisma.TransactionClient, "projectTimeline" | "timelinePhase" | "timelineTask">;
@@ -261,8 +260,42 @@ export interface ResultadoDeAplicar {
   tareas: { creadas: number; borradas: number };
 }
 
+/**
+ * El cierre o la reapertura automática de UNA fase según sus tareas, después de crear o borrar
+ * tareas: todas resueltas (hechas o suspendidas) → DONE; alguna abierta en una fase DONE →
+ * IN_PROGRESS. Una fase sin tareas no se toca. A lo sumo DOS llamadas: leer y, si cambia, escribir.
+ *
+ * Se extrajo de `applyCuratedPhaseTasks` (E2a, 2026-09-25) con la MISMA conducta, y se mudó acá en
+ * E2b P5b, cuando se borró lib/timeline/apply-curated-phase.ts con la curación de dos columnas: el
+ * aplicar del borrador quedó como su único llamador. Renumerar el `order` y parchear la foto
+ * publicada, que hacía aquel camino, se quedaron afuera a propósito.
+ */
+export async function recalcularCierreDeFase(
+  tx: Pick<Prisma.TransactionClient, "timelinePhase">,
+  phaseId: string,
+  now: Date,
+  actorEmail: string | null,
+): Promise<void> {
+  const after = await tx.timelinePhase.findUnique({
+    where: { id: phaseId },
+    select: { status: true, actualStart: true, tasks: { select: { status: true } } },
+  });
+  if (after && after.tasks.length > 0) {
+    const allResolved = after.tasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
+    const meta = { statusSource: "HUMAN" as const, statusChangedByEmail: actorEmail, statusChangedAt: now };
+    if (allResolved && after.status !== "DONE") {
+      await tx.timelinePhase.update({
+        where: { id: phaseId },
+        data: { status: "DONE", actualEnd: now, ...(after.actualStart ? {} : { actualStart: now }), ...meta },
+      });
+    } else if (!allResolved && after.status === "DONE") {
+      await tx.timelinePhase.update({ where: { id: phaseId }, data: { status: "IN_PROGRESS", ...meta } });
+    }
+  }
+}
+
 /** YYYY-MM-DD de una fecha fijada a mano, igual que la ve la pantalla en el cable (ISO → día). */
-const diaDe = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
+const diaDe =(d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
 /** El cuerpo de la transacción. Ver el orden arriba. */
 export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar): Promise<ResultadoDeAplicar> {

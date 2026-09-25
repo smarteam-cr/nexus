@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { isKept, repartoInicial, phaseHasChanges, fugaTrasEditar } from "./regen-columnas";
+import { isKept, fugaTrasEditar } from "./regen-columnas";
 import type { FugaDeTarea } from "@/lib/contexto/frontera-del-cronograma";
 
 const pendienteIA = { id: "a", status: "PENDING", source: "AGENT" };
@@ -23,46 +23,9 @@ describe("isKept — qué se preserva sí o sí", () => {
   });
 });
 
-describe("repartoInicial", () => {
-  it("con propuesta: las pendientes de la IA van a descartables, el resto se preserva", () => {
-    const { descartables, preservadas } = repartoInicial(
-      [pendienteIA, pendienteHumana, hecha, enCurso, suspendida],
-      3,
-    );
-    expect(descartables.map((t) => t.id)).toEqual(["a"]);
-    expect(preservadas.map((t) => t.id)).toEqual(["b", "c", "d", "e"]);
-  });
-
-  it("SIN propuesta: no se descarta NADA — la fase queda intacta", () => {
-    const { descartables, preservadas } = repartoInicial(
-      [pendienteIA, pendienteHumana, hecha],
-      0,
-    );
-    expect(descartables).toEqual([]);
-    expect(preservadas.map((t) => t.id)).toEqual(["a", "b", "c"]);
-  });
-
-  it("sin propuesta y todo pendiente-IA: igual se preserva (aplicar NO vacía la fase)", () => {
-    // El modo de falla que esto evita: el agente deja en paz una fase que las instrucciones
-    // dan por resuelta → sin esta regla, "Aplicar todo" borraba sus 9 tareas en silencio.
-    const actuales = [pendienteIA, { id: "f", status: "PENDING", source: "AGENT" }];
-    const { descartables, preservadas } = repartoInicial(actuales, 0);
-    expect(descartables).toEqual([]);
-    expect(preservadas).toHaveLength(2);
-  });
-
-  it("sin tareas actuales: ambas columnas vacías, con o sin propuesta", () => {
-    expect(repartoInicial([], 0)).toEqual({ descartables: [], preservadas: [] });
-    expect(repartoInicial([], 5)).toEqual({ descartables: [], preservadas: [] });
-  });
-});
-
-describe("phaseHasChanges", () => {
-  it("hay cambios ⇔ el agente propuso algo", () => {
-    expect(phaseHasChanges(0)).toBe(false);
-    expect(phaseHasChanges(1)).toBe(true);
-  });
-});
+/* E2b P5b (2026-09-25): salieron los tests de `repartoInicial` y `phaseHasChanges`, borradas en el
+   mismo commit con el modal de dos columnas que las usaba. Su regla («sin propuesta no se descarta
+   NADA») la prueba R1 en tareas-del-detalle.test.ts, sobre el borrador que la reemplazó. */
 
 describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23)", () => {
   const enTitulo: FugaDeTarea = { campo: "titulo", motivo: "trae una fecha" };
@@ -105,20 +68,24 @@ describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23
     expect(fugaTrasEditar(lasDos, { party: "CLIENTE" })).toBe(lasDos);
   });
 
-  it("la curación la acarrea de la propuesta, la limpia con esa regla y la muestra junto a la nota", () => {
-    /* El project `unit` solo corre lib/**: el componente se mira por su código. Sin estas piezas, la
-       ruta marca la fuga y la pantalla la tira (o la muestra para siempre, o nunca deja ver la nota
-       que el cliente va a leer). */
-    const panel = fs
-      .readFileSync(path.join(process.cwd(), "components/canvas/PhaseRegenPanel.tsx"), "utf8")
+  it("la propuesta la acarrea hasta su renglón y el chip dice qué campo cruza", () => {
+    /* ⚠ REAPUNTADA en E2b P5b (2026-09-25), con esta razón: miraba el panel de dos columnas
+       (PhaseRegenPanel.tsx), que se borró. La fuga viaja ahora en la tarea del borrador: `resumir`
+       (lib/timeline/borrador.ts) la pasa al renglón y TareasDeLaPropuesta.tsx pinta el chip con el
+       campo y, si cruzan los dos, la nota. Los asserts de EDITAR la tarea y de «Quitar nota» se
+       borraron: antes de aplicar ya no se edita (se marca o se desmarca, y se corrige en el Gantt);
+       `fugaTrasEditar` se queda con sus tests de arriba para cuando el chat edite tareas en E3.
+       El project `unit` solo corre lib/**: el componente se mira por su código. La edición que la
+       pone en rojo: que `resumir` deje de pasar la fuga, o que el chip deje de explicarla. */
+    const borrador = fs.readFileSync(path.join(process.cwd(), "lib/timeline/borrador.ts"), "utf8");
+    expect(borrador, "la propuesta dejó de llevar la fuga a su renglón").toContain("fuga: c.tarea.fuga");
+    const renglon = fs
+      .readFileSync(path.join(process.cwd(), "components/canvas/TareasDeLaPropuesta.tsx"), "utf8")
       .replace(/\r\n/g, "\n");
-    expect(panel, "el panel dejó de leer la fuga de la propuesta").toContain("fuga: t.fuga ?? null,");
-    expect(panel, "el panel dejó de limpiar la fuga con su regla").toContain("fuga: fugaTrasEditar(i.fuga, p)");
-    expect(panel, "el chip desapareció").toContain("⚠ revisa: texto interno");
-    expect(panel, "el chip del título dejó de decir que la nota también cruza").toContain(
-      "item.fuga.motivoDeLaNota ? ` La nota también ${item.fuga.motivoDeLaNota}",
+    expect(renglon, "el chip desapareció").toContain("{t.fuga && (");
+    expect(renglon, "el chip dejó de explicar la fuga").toContain("title={tituloDeLaFuga(t.fuga)}");
+    expect(renglon, "el chip del título dejó de decir que la nota también cruza").toContain(
+      "f.motivoDeLaNota ? ` La nota también ${f.motivoDeLaNota}.`",
     );
-    expect(panel, "la tarjeta dejó de mostrar la nota").toContain("title={item.notes}>{item.notes}</p>");
-    expect(panel, "la nota ya no se puede quitar").toContain("onClick={() => onPatch({ notes: null })}");
   });
 });

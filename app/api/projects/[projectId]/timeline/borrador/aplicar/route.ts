@@ -20,7 +20,7 @@
  * el desenlace de la corrida van DESPUÉS, fuera de la transacción.
  *
  * Reemplaza a `proposal/apply-items` (que queda como lápida con un 409 «Nexus se actualizó») y, para
- * «Regenerar todo», a `detail/apply-all` (que se queda para pestañas viejas hasta E2b).
+ * «Regenerar todo», a `detail/apply-all` (desde E2b, también una lápida 409 hasta E4).
  * Guarded con guardTimelineEdit (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";

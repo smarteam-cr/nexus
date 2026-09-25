@@ -118,8 +118,9 @@ export function huellasEnMovimiento(phases: readonly PhaseInput[]): Set<string> 
  * El `PUT /timeline` —que es quien realmente escribe— borraba por omisión sin mirar `status` ni
  * `source`, así que la promesa "no se pierde trabajo hecho" era cierta para UN camino, no para el
  * dato. Cualquier llamador nuevo del PUT (el asistente que viene, un script, un payload viejo de
- * una pestaña que quedó abierta) la reabría entera. Es el mismo defecto que ya se corrigió una vez
- * en `apply-curated-phase.ts`, donde la protección vivía solo en el cliente.
+ * una pestaña que quedó abierta) la reabría entera. Es el mismo defecto que ya se había corregido
+ * una vez en el apply de la curación de dos columnas (`apply-curated-phase.ts`, borrado en E2b),
+ * donde la protección vivía solo en el cliente.
  *
  * ── LA EXCEPCIÓN, Y POR QUÉ NO ES OPCIONAL ───────────────────────────────────
  * ⚠ Una tarea protegida SÍ se borra si su título viaja sin id en el body: eso no es un olvido, es

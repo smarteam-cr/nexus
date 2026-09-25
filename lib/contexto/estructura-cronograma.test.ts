@@ -1278,14 +1278,18 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
 
   it("E2a · el acordeón viejo de «Regenerar todo» ya no se monta ni se aplica desde el Canvas", () => {
     /* Su resultado vivía solo en memoria (cancelarlo tiraba una corrida pagada) y se aplicaba por
-       apply-all, fuera de la propuesta. El archivo sigue hasta E2b (lo lee propuesta-de-estructura.test).
-       La edición que la pone en rojo: volver a montarlo, o volver a aplicar por apply-all. */
+       apply-all, fuera de la propuesta. La edición que la pone en rojo: volver a montarlo, o volver a
+       aplicar por apply-all. */
     expect(canvas.length).toBeGreaterThan(100_000);
     expect(canvas).not.toContain("<AllPhasesRegenModal");
     expect(canvas).not.toMatch(/import[^;]*AllPhasesRegenModal/);
     expect(canvas).not.toContain("applyAllRegen");
     expect(canvas).not.toContain("detail/apply-all");
-    expect(fs.existsSync(path.join(RAIZ, "components/canvas/AllPhasesRegenModal.tsx"))).toBe(true);
+    /* ⚠ REESCRITA en E2b P5b (2026-09-25), con esta razón: pedía que el archivo SIGUIERA (lo leía
+       propuesta-de-estructura.test hasta E2b). Ahora se borró con su panel de dos columnas, y apply-all
+       es una lápida 409. La edición que la pone en rojo: volver a crear cualquiera de los dos. */
+    expect(fs.existsSync(path.join(RAIZ, "components/canvas/AllPhasesRegenModal.tsx")), "volvió el acordeón de dos columnas").toBe(false);
+    expect(fs.existsSync(path.join(RAIZ, "components/canvas/PhaseRegenPanel.tsx")), "volvió el panel de dos columnas").toBe(false);
     /* E2b P5a (2026-09-25): el modal de «Regenerar» de una fase corre la misma suerte. Su vista previa
        vivía en memoria y se aplicaba por /timeline/phases/…/apply (hoy una lápida 409), sin token ni
        versión. La edición que la pone en rojo: volver a crear el archivo, volver a aplicar por esa ruta

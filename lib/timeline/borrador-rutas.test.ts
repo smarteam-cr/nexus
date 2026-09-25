@@ -30,9 +30,10 @@ const db = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
+// E2b P5b: sale `guardTimelineDetailApply`. Lo pedía solo apply-all, que ahora es una lápida con
+// `guardTimelineEdit`: ninguna ruta de este archivo lo importa.
 const guards = vi.hoisted(() => ({
   guardTimelineEdit: vi.fn(),
-  guardTimelineDetailApply: vi.fn(),
   guardIaDelCronograma: vi.fn(),
 }));
 vi.mock("@/lib/auth/api-guards", () => guards);
@@ -42,7 +43,7 @@ import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeli
 import { POST as aplicarFasePOST } from "@/app/api/projects/[projectId]/timeline/phases/[phaseId]/apply/route";
 import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline/detail/apply-all/route";
 import { ErrorAlAplicar, type ResultadoDeAplicar } from "@/lib/timeline/escribir-estructura";
-import { FORMATO_BORRADOR, leerBorrador, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
+import { FORMATO_BORRADOR, leerBorrador } from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
   cierreDeLaCorridaVetada,
@@ -199,7 +200,6 @@ const VIEJA = { anchorStartDate: null, phases: [{ id: "f1", name: "Diseño", dur
 beforeEach(() => {
   vi.resetAllMocks();
   guards.guardTimelineEdit.mockResolvedValue({ user: { email: "cse@smarteam.cr" } });
-  guards.guardTimelineDetailApply.mockResolvedValue({ user: { email: "cse@smarteam.cr" } });
   guards.guardIaDelCronograma.mockResolvedValue(null);
 });
 
@@ -343,7 +343,11 @@ describe("phases/[phaseId]/apply y detail/apply-all — un solo borrador por pro
      de una fase deja una propuesta (con `soloFase`) que se aplica con /borrador/aplicar, y la ruta vieja
      queda como lápida hasta E4, para las pestañas de antes del deploy. Estos `it` pedían que respondiera
      409 PROPUESTA_ABIERTA con un v1 abierto y que aplicara con la propuesta vieja del handoff; ahora
-     responde siempre el 409 de la lápida. apply-all sigue igual hasta P5b. */
+     responde siempre el 409 de la lápida.
+     ⚠ REESCRITO en E2b P5b (2026-09-25), con esta razón: apply-all corre la misma suerte. Aplicaba el
+     acordeón de dos columnas de «Regenerar todo», que se borró; desde E2a esas tareas se revisan y se
+     aplican en la propuesta. Sus dos `it` (409 PROPUESTA_ABIERTA con un v1, y que aplicara con la vieja
+     del handoff) pasan a uno: la lápida, con la misma forma que la de phases/apply. */
   it("⛔ phases/apply es una lápida: 409 `{ code, message }` sin `error`, sin tocar la base, haya o no propuesta", async () => {
     /* `{ code, message }` y no `{ error }`: el Canvas viejo lee `data?.error ?? data?.message`, y con
        `error` el CSE leería un código. La edición que la pone en rojo: volver a aplicar o a leer la
@@ -365,29 +369,31 @@ describe("phases/[phaseId]/apply y detail/apply-all — un solo borrador por pro
     expect(db.timelineChange.create).not.toHaveBeenCalled();
   });
 
-  it("⛔ apply-all con un v1 abierto: 409 PROPUESTA_ABIERTA, sin abrir la transacción", async () => {
-    /* [D19] Una pestaña vieja o una llamada directa escribiría tareas por debajo del borrador que el
-       CSE está revisando. La edición que la pone en rojo: sacar el 409. */
-    db.projectTimeline.findUnique.mockResolvedValue({
-      id: "tl",
-      pendingProposal: v1(),
-      phases: [{ id: "f1", durationWeeks: 2, activityType: null, tasks: [] }],
-    });
-    const todo = await aplicarTodoPOST(pedir({ phases: [{ phaseId: "f1", tasks: [] }] }), delProyecto);
-    expect(todo.status).toBe(409);
-    expect(await todo.json()).toEqual({ code: "PROPUESTA_ABIERTA", message: MENSAJE_PROPUESTA_ABIERTA });
+  it("⛔ apply-all es una lápida: 409 `{ code, message }` sin `error`, sin tocar la base, haya o no propuesta", async () => {
+    /* Una pestaña de antes del deploy todavía puede mandar su acordeón: no se aplica nada y el CSE lee
+       la frase (el Canvas viejo lee `data?.error ?? data?.message`). La edición que la pone en rojo:
+       volver a aplicar o a leer la base, responder con `error`, o dejar de pedir el permiso. */
+    for (const guardada of [v1(), VIEJA, null]) {
+      db.projectTimeline.findUnique.mockResolvedValue({
+        id: "tl",
+        pendingProposal: guardada,
+        phases: [{ id: "f1", durationWeeks: 2, activityType: null, tasks: [] }],
+      });
+      const todo = await aplicarTodoPOST(pedir({ phases: [{ phaseId: "f1", tasks: [] }] }), delProyecto);
+      expect(todo.status).toBe(409);
+      const cuerpo = await todo.json();
+      expect(cuerpo, "el Canvas viejo mostraría un código").not.toHaveProperty("error");
+      expect(cuerpo).toEqual({
+        code: "NEXUS_ACTUALIZADO",
+        message: "Nexus se actualizó: recarga la página y vuelve a «Regenerar todo». No se aplicó nada.",
+      });
+    }
+    expect(guards.guardTimelineEdit, "la lápida dejó de pedir el permiso").toHaveBeenCalledTimes(3);
+    expect(db.projectTimeline.findUnique, "la lápida lee la base").not.toHaveBeenCalled();
     expect(db.$transaction).not.toHaveBeenCalled();
-  });
-
-  it("apply-all con la propuesta vieja del handoff (otro formato) sigue como hoy", async () => {
-    db.$transaction.mockResolvedValue(undefined);
-    db.projectTimeline.findUnique.mockResolvedValue({
-      id: "tl",
-      pendingProposal: VIEJA,
-      phases: [{ id: "f1", durationWeeks: 2, activityType: null, tasks: [] }],
-    });
-    expect((await aplicarTodoPOST(pedir({ phases: [{ phaseId: "f1", tasks: [] }] }), delProyecto)).status).toBe(200);
-    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.projectTimeline.update).not.toHaveBeenCalled();
+    expect(db.timelinePhase.findMany).not.toHaveBeenCalled();
+    expect(db.timelineChange.create).not.toHaveBeenCalled();
   });
 });
 

@@ -34,7 +34,7 @@ const SIN_HANDOFF_CONFIRMADO =
  * pedía marcar CADA tarea «por validar»: con reuniones enfrente, eso marcaba también las que salían
  * de lo que el cliente acordó. Acá solo se marcan las típicas, las que ninguna fuente respalda — y
  * esa marca ahora llega hasta la tarea creada (`needsValidation`, ver
- * lib/timeline/apply-curated-phase.ts), así que la promesa es real.
+ * lib/timeline/escribir-tareas.ts), así que la promesa es real.
  */
 export const SIN_HANDOFF_CON_MATERIAL =
   '(Sin handoff confirmado. Arma las tareas con las reuniones y las notas del CSE que vienen más abajo; solo donde no digan nada, propón las tareas típicas del tipo de fase y marca ESAS con "porValidar": true. Títulos limpios, sin marcadores.)';
@@ -218,8 +218,8 @@ Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada
      que supuso el plan. Sin esto el agente les re-proponía sus tareas estándar: visto en Wherex
      — las instrucciones decían "Service prácticamente finalizado, no requirió capacitaciones" y
      la corrida devolvió igual las 9 tareas de siempre para esa fase. `tasks: []` es el "no la
-     toques" que el modal ya sabe leer: preserva las tareas actuales enteras (el reparto vive en
-     lib/timeline/regen-columnas.ts, donde `sin propuesta` NUNCA descarta nada).
+     toques" que el borrador ya sabe leer: preserva las tareas actuales enteras (R1 de
+     lib/timeline/tareas-del-detalle.ts: una fase sin tareas del agente NUNCA descarta nada).
      Solo se emite con brief o con material — sin ninguno de los dos el bloque sería ruido. Con
      material va la variante que nombra también las reuniones y las notas; sin material, el texto
      de siempre (golden «con brief»). */

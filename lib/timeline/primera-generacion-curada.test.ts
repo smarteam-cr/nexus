@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { elegirFaseDeSemanaCero } from "./semana-cero-tareas";
+import { FORMATO_BORRADOR, planDeAplicacion, type Borrador, type Cambio, type Vivo } from "./borrador";
+import { DEFAULT_MATRIX } from "@/lib/auth/permissions/defaults";
 
 /**
  * lib/timeline/primera-generacion-curada.test.ts — LA PRIMERA GENERACIÓN TAMBIÉN SE REVISA.
@@ -26,6 +28,12 @@ import { elegirFaseDeSemanaCero } from "./semana-cero-tareas";
  *     la decisión de Elías 2026-09-23). Sin el escalón por cronograma vacío, esos roles verían la
  *     propuesta y no podrían aplicarla — les habríamos sacado la capacidad de crear el cronograma
  *     sin decirlo en ningún lado.
+ *
+ * ⚠ E2b P5b (2026-09-25): la curación de dos columnas se borró. Las dos puertas y «Regenerar» de una
+ * fase dejan UNA propuesta que se revisa en la barra de arriba del Gantt (se marca o se desmarca) y se
+ * aplica con POST /timeline/borrador/aplicar; apply-all quedó como lápida. Las tres cosas de arriba se
+ * vigilan ahora en ese camino: las fijas y el tipo en el borrador del detalle (R7 y R6), y el permiso
+ * en `guardIaDelCronograma`.
  */
 
 const RAIZ = process.cwd();
@@ -41,7 +49,9 @@ const RUTA_AGENTE = "app/api/clients/[id]/analyze/route.ts";
 // E2b P5a: las fijas de la Semana 0 (R7) y el tipo de actividad (R6) viven en el borrador del detalle.
 const RUTA_DETALLE = "lib/timeline/tareas-del-detalle.ts";
 const RUTA_FUSION = "lib/timeline/borrador-del-detalle.ts";
-const RUTA_APPLY = "app/api/projects/[projectId]/timeline/detail/apply-all/route.ts";
+// E2b P5b: aplicar es el del borrador. apply-all (el aplicar del acordeón de dos columnas) es una lápida.
+const RUTA_APPLY = "app/api/projects/[projectId]/timeline/borrador/aplicar/route.ts";
+const ESCRITOR = "lib/timeline/escribir-estructura.ts";
 const GUARDS = "lib/auth/api-guards.ts";
 
 describe("⛔ el agente de detalle no escribe ni una tarea", () => {
@@ -112,42 +122,94 @@ describe("⛔ lo que el camino viejo hacía y la curación tuvo que aprender", (
     expect(src, "analyze volvió a proponer el tipo por su cuenta").not.toContain("activityTypePropuesto(");
   });
 
-  it("⚠ el apply escribe el tipo SOLO si la fase no tiene uno", () => {
+  it("⚠ aplicar escribe el tipo SOLO si la fase sigue sin uno (R6 lo propone con `desde: null`)", () => {
     /* Solo-si-null es lo que impide que una regeneración le pise al CSE el tipo que eligió a mano.
-       Sacar la condición no rompe nada visible: el Gantt sigue teniendo colores — otros. */
-    const apply = soloCodigo(RUTA_APPLY);
-    expect(apply).toContain("timelinePhase.update(");
-    expect(apply, "el apply pasó a pisar el tipo elegido a mano").toMatch(
-      /if \(activityType && phase\.activityType === null\)/,
-    );
+       Sacar la condición no rompe nada visible: el Gantt sigue teniendo colores — otros.
+       ⚠ REAPUNTADA en E2b P5b (2026-09-25), con esta razón: miraba apply-all
+       (`if (activityType && phase.activityType === null)`), que quedó como lápida. El tipo lo propone
+       R6 como un cambio de la fase con `desde: null`, y aplicar compara ese `desde` con lo vivo: si el
+       CSE eligió un tipo mientras tanto, choca y queda como lo dejó. La edición que la pone en rojo:
+       que R6 lo proponga con otro `desde`, o que aplicar deje de comparar el `desde` de un campo. */
+    const detalle = soloCodigo(RUTA_DETALLE);
+    const i = detalle.indexOf("if (p?.tipoPropuesto) {");
+    expect(i, "se movió el ancla de R6: revisa esta guarda").toBeGreaterThan(-1);
+    const r6 = detalle.slice(i, detalle.indexOf("if (!f.existente && delAgente.length === 0)", i));
+    expect(r6.length, "el tramo de R6 salió vacío").toBeGreaterThan(100);
+    expect(r6).toContain('campo: "activityType",');
+    expect(r6, "R6 dejó de proponer el tipo contra una fase SIN tipo").toContain("desde: null,");
+
+    const tipo: Cambio = {
+      tipo: "fase-cambia",
+      clave: "fase:f1:activityType",
+      faseId: "f1",
+      fase: "Kick-off",
+      campo: "activityType",
+      desde: null,
+      a: "ADOPCION",
+    };
+    const borrador: Borrador = {
+      formato: FORMATO_BORRADOR,
+      version: 1,
+      origen: "contexto",
+      observaciones: [],
+      cambios: [tipo],
+      pedido: "regenerar",
+      tareas: null,
+      tareasArmadasPara: {},
+    };
+    const vivo = (activityType: string | null): Vivo => ({
+      ancla: null,
+      fases: [{ id: "f1", name: "Kick-off", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType }],
+    });
+    expect(planDeAplicacion(vivo(null), borrador).items[0].estado).toBe("aplica");
+    const aMano = planDeAplicacion(vivo("CONFIGURACION"), borrador);
+    expect(aMano.items[0].estado, "aplicar pisaría el tipo elegido a mano").toBe("choque");
+    expect(aMano.marcadas).toBe(0);
   });
 
   it("y la trazabilidad de la corrida sobrevive al cambio de escritor", () => {
-    expect(soloCodigo(RUTA_APPLY)).toContain("detailGeneratedByAgentRunId");
+    /* ⚠ REAPUNTADA en E2b P5b (2026-09-25), con esta razón: miraba apply-all, que quedó como lápida. La
+       escribe el aplicar del borrador, con la corrida que armó las tareas. La edición que la pone en
+       rojo: dejar de escribir la columna al aplicar tareas nuevas. */
+    expect(soloCodigo(ESCRITOR)).toContain("detailGeneratedByAgentRunId: borrador.tareas.corrida");
   });
 });
 
-describe("⛔ el escalón de permiso cuelga de que el cronograma esté VACÍO", () => {
+describe("⛔ el escalón de permiso cuelga de que el cronograma todavía no tenga tareas de la IA", () => {
+  /* ⚠ REESCRITO en E2b P5b (2026-09-25), con esta razón: miraba `guardTimelineDetailApply` y apply-all.
+     apply-all quedó como lápida y ese guard, sin llamador (código muerto hasta E4). Aplicar las tareas
+     de la propuesta pide `guardIaDelCronograma`, la MISMA vara que pedirlas: con tareas de la IA,
+     `regenerateTimeline`; sin ellas (la primera vez), `cronograma.generate`, que Ventas y Marketing
+     tienen. */
   const guards = soloCodigo(GUARDS);
 
-  it("con tareas pide la vara del regen; vacío, la del apply por fase", () => {
-    const i = guards.indexOf("export async function guardTimelineDetailApply");
-    expect(i, "se movió el ancla: revisá esta guarda").toBeGreaterThan(0);
-    const tramo = guards.slice(i, guards.indexOf("export async function guardTimelineFullRegen", i));
+  it("con tareas de la IA pide la vara del regen; la primera vez, la de generar", () => {
+    /* La edición que la pone en rojo: pedir la vara del regen también la primera vez. */
+    const i = guards.indexOf("export async function guardIaDelCronograma(");
+    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(0);
+    const tramo = guards.slice(i, guards.indexOf("export async function", i + 10));
     expect(tramo.length, "el tramo salió vacío — la guarda no mira nada").toBeGreaterThan(200);
-    expect(tramo, "el escalón dejó de depender del cronograma vacío").toMatch(
-      /cronogramaVacio \? "editTimeline" : "regenerateTimeline"/,
+    expect(tramo, "se perdió la medición de si ya hay tareas de la IA").toMatch(/timelineTask\.count\(/);
+    const iVirgen = tramo.indexOf("} else {");
+    expect(iVirgen, "se perdió la rama de la primera vez").toBeGreaterThan(-1);
+    expect(tramo.slice(0, iVirgen)).toContain('guardCapability("regenerateTimeline")');
+    expect(tramo.slice(iVirgen), "la primera vez dejó de pedir la vara de generar").toContain(
+      'guardPermission("cronograma", "generate")',
     );
-    expect(tramo, "se perdió la medición de si hay tareas").toMatch(/timelineTask\.count\(/);
+    // Y esa vara es la que tienen Ventas y Marketing, que generan pero no regeneran.
+    for (const rol of ["VENTAS", "MARKETING"] as const) {
+      expect(DEFAULT_MATRIX[rol].sections.cronograma.generate, `${rol} perdió «generar»`).toBe(true);
+    }
   });
 
-  it("⚠ y el apply completo usa ESE guard, no el de vara fija", () => {
+  it("⚠ y aplicar las tareas usa ESE guard, no el de vara fija", () => {
     /* Si vuelve `guardTimelineFullRegen`, Ventas y Marketing dejan de poder crear el cronograma — y el síntoma
-       es un 403 en el botón «Crear las tareas», que se lee como «se rompió el permiso», no como
+       es un 403 al aplicar la propuesta, que se lee como «se rompió el permiso», no como
        «alguien cambió el guard». */
     const apply = soloCodigo(RUTA_APPLY);
-    expect(apply).toContain("guardTimelineDetailApply(projectId)");
+    expect(apply).toContain("(await guardIaDelCronograma(tl.id)) === null");
     expect(apply, "volvió la vara fija del regen completo").not.toContain("guardTimelineFullRegen");
+    expect(apply, "aplicar pide la vara del regen por su cuenta").not.toContain('guardCapability("regenerateTimeline")');
   });
 });
 

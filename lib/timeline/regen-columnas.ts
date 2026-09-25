@@ -1,12 +1,16 @@
 /**
  * lib/timeline/regen-columnas.ts
  *
- * El reparto inicial de las DOS COLUMNAS del modal de curación (regen de una fase o de todo
- * el cronograma). Puro y en `lib/` a propósito: el project `unit` de vitest solo incluye
- * `lib/**`, así que un test al lado del componente NO correría.
+ * Nació para el reparto inicial de las DOS COLUMNAS del modal de curación (regen de una fase o de
+ * todo el cronograma). Ese modal se borró en E2b (2026-09-25): «Regenerar» deja UNA propuesta que se
+ * revisa en la barra de arriba del Gantt. Se fueron con él `repartoInicial` y `phaseHasChanges`; su
+ * regla («el agente no propuso nada» NO es «borra todo») vive en R1 de lib/timeline/tareas-del-detalle.ts.
  *
- * Tipado estructural (no importa nada de components/): `RegenCurrentTask` de
- * PhaseRegenPanel.tsx satisface `TareaActualParaReparto` sin acoplar lib → components.
+ * Quedan dos piezas puras:
+ *  · `isKept`, la regla ÚNICA de «esto no se toca», que usan el borrador, el detalle, las operaciones
+ *    del chat y el rescate del avance;
+ *  · `fugaTrasEditar`, que E3 necesita cuando el chat edite tareas propuestas.
+ * El nombre del archivo se queda para no mover cuatro importadores por un rótulo.
  */
 
 export interface TareaActualParaReparto {
@@ -15,43 +19,12 @@ export interface TareaActualParaReparto {
 }
 
 /**
- * Se PRESERVA automáticamente (columna derecha, ya pre-aceptada): lo que tiene progreso
- * humano encima — iniciada/hecha/suspendida (≠ PENDING) o cargada a mano (HUMAN). El resto
- * (PENDING + AGENT/MODIFIED) es material que el agente puede reemplazar.
+ * Lo que NO se reemplaza: lo que tiene progreso humano encima —iniciada, hecha o suspendida
+ * (≠ PENDING)— o lo cargado a mano (HUMAN). El resto (PENDING + AGENT/MODIFIED) es material que el
+ * agente puede reemplazar.
  */
 export const isKept = (t: TareaActualParaReparto): boolean =>
   t.status !== "PENDING" || t.source === "HUMAN";
-
-/**
- * Cómo se reparten las tareas ACTUALES entre las dos columnas al abrir el panel.
- *
- * ⚠ LA REGLA QUE IMPORTA: "el agente no propuso nada para esta fase" NO significa "borrá
- * todo lo que hay". Sin propuesta, las tareas actuales se preservan ENTERAS (derecha) y la
- * izquierda queda vacía — si no, aplicar borraría la fase completa en silencio.
- *
- * No es teórico: desde que el agente aprende a dejar en paz las fases que las instrucciones
- * del CSE dan por resueltas (ej. "Service ya está terminado"), `cantidadPropuesta === 0` pasó
- * de ser un borde raro a ser el camino esperado para esas fases.
- */
-export function repartoInicial<T extends TareaActualParaReparto>(
-  actuales: T[],
-  cantidadPropuesta: number,
-): { descartables: T[]; preservadas: T[] } {
-  if (cantidadPropuesta === 0) return { descartables: [], preservadas: actuales };
-  return {
-    descartables: actuales.filter((t) => !isKept(t)),
-    preservadas: actuales.filter(isKept),
-  };
-}
-
-/**
- * ¿Esta fase tiene algo que revisar? Con `repartoInicial`, sin propuesta no se toca nada —
- * así que "hay cambios" ⇔ el agente propuso algo. Lo usa el acordeón para decidir qué fase
- * abre expandida y cuál arranca colapsada con el badge "sin cambios".
- */
-export function phaseHasChanges(cantidadPropuesta: number): boolean {
-  return cantidadPropuesta > 0;
-}
 
 /**
  * La marca de FUGA de una tarea propuesta después de que el CSE la edita en la curación
