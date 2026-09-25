@@ -15,7 +15,7 @@ import { can } from "@/lib/auth/permissions/engine";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { prisma } from "@/lib/db/prisma";
 import { ultimaCorrida } from "@/lib/cobranza/odoo/sync";
-import { cargarDiferencias } from "@/lib/cobranza/odoo/servicio";
+import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servicio";
 import { pestanaDe } from "@/lib/cobranza/odoo/pestanas";
 import OdooClient from "@/components/cobranza/OdooClient";
 
@@ -31,12 +31,13 @@ export default async function OdooPage({ searchParams }: { searchParams: Promise
      botón a quien va a chocar con un 403. */
   const puedeEditar = await can(ctx.teamMember, "cobranza", "write");
 
-  const [corrida, facturas, cuentasVinculadas, cuentas, diferencias] = await Promise.all([
+  const [corrida, facturas, emparejado, diferencias] = await Promise.all([
     ultimaCorrida(),
     prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
-    /* Solo fichas de Odoo: la tabla guarda también las sociedades de Mercury y QuickBooks (etapa 12). */
-    prisma.odooPartnerVinculo.count({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } } }),
-    prisma.cuentaFinanciera.count(),
+    /* ⭐ La regla única de «por emparejar» (vía Odoo y sin cliente de Odoo), la misma de la lista y de «Lo que
+       no cuadra». Hasta el 2026-09-25 acá se contaban FICHAS vinculadas contra todas las cuentas: la pestaña
+       decía 28 con 29 tarjetas, y las 8 cuentas de Mercury no se iban nunca. */
+    contarEmparejado(),
     /* El badge cuenta lo que falta RESOLVER: las marcadas «está bien así» siguen en la lista
        para poder reabrirlas, pero no son trabajo pendiente. */
     cargarDiferencias().then((d) => d.inconsistencias.filter((i) => !i.aceptada).length),
@@ -50,7 +51,15 @@ export default async function OdooPage({ searchParams }: { searchParams: Promise
       />
       <OdooClient
         corrida={corrida}
-        conteos={{ facturas, cuentasVinculadas, cuentas, diferencias }}
+        conteos={{
+          facturas,
+          cuentas: emparejado.cuentas,
+          cuentasVinculadas: emparejado.vinculadas,
+          porEmparejar: emparejado.porEmparejar,
+          enMercury: emparejado.enMercury,
+          enOtra: emparejado.enOtra,
+          diferencias,
+        }}
         /* ⚠ /integrations/odoo es SOLO SUPER_ADMIN. Mostrarle el enlace a un ADMIN sería un
            callejón sin salida: hace clic y el gate lo rebota a /clients, que se lee como un
            error de la app y no como una restricción. */

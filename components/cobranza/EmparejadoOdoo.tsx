@@ -14,11 +14,19 @@
  * ⚠ Y toda propuesta muestra SU EVIDENCIA. La señal de monto acierta 8 de 9: sin ver por qué
  * se propuso, la persona no puede hacer otra cosa que aceptar todo — y el error que se cuela
  * cuelga las facturas de un cliente de la cuenta de otro.
+ *
+ * ── «ESTÁ EN MERCURY» (2026-09-25) ──────────────────────────────────────────────
+ * Una cuenta que factura por Mercury no tiene nada que buscar en Odoo, y hasta ese día seguía en la lista
+ * para siempre: 8 que ya decían Mercury y 14 internacionales con la vía de Odoo por defecto. El botón de cada
+ * tarjeta cambia la VÍA DE COBRO de la cuenta —una sola verdad en todo Cobranza, decisión de Elías— y la lista
+ * «En Mercury» dice quién y cuándo, con «Deshacer». La lista y todos los contadores salen de la misma regla
+ * (`quedaPorEmparejar`): vía Odoo y sin cliente de Odoo.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, EmptyState, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { fmtFecha } from "./format";
 
 type Via = "CEDULA" | "MONTO" | "NOMBRE" | "MANUAL";
 type Clase = "CEDULA" | "NOMBRE_EXACTO" | "MONTO" | "DUDOSA" | "SIN_CANDIDATO" | "INEMPAREJABLE";
@@ -53,18 +61,36 @@ interface PartnerOdoo {
   vat: string | null;
   customerRank: number;
 }
+/** Una cuenta sin cliente de Odoo que factura por Mercury o QuickBooks (`CuentaFueraDeOdoo` del servicio). */
+interface CuentaFueraDeOdoo {
+  cuentaId: string;
+  nombre: string;
+  via: string;
+  marcadaPor: string | null;
+  marcadaEn: string | null;
+  origen: "IMPORTACION" | "ALTA";
+  altaEn: string;
+}
+/** Los contadores que la página comparte con la pestaña y con «Cómo funciona». */
+export interface ConteosDelEmparejado {
+  cuentas: number;
+  cuentasVinculadas: number;
+  porEmparejar: number;
+  enMercury: number;
+  enOtra: number;
+}
 interface Estado {
   propuestas: Propuesta[];
   vinculos: Vinculo[];
   partners: PartnerOdoo[];
-  conteos: {
-    cuentas: number;
-    cuentasVinculadas: number;
+  conteos: ConteosDelEmparejado & {
+    deOdoo: number;
     partners: number;
     partnersVinculados: number;
     partnersIgnorados: number;
     facturasLeidas: number;
   };
+  fueraDeOdoo: CuentaFueraDeOdoo[];
   errorOdoo: string | null;
 }
 
@@ -103,7 +129,23 @@ const VIA_LABEL: Record<string, string> = {
   MANUAL: "a mano",
 };
 
-export default function EmparejadoOdoo() {
+/** Quién dejó la cuenta en esa vía, o de dónde venía si nadie la firmó. */
+function origenDeLaVia(c: CuentaFueraDeOdoo): string {
+  if (c.marcadaPor) return `Marcada por ${c.marcadaPor} el ${fmtFecha(c.marcadaEn)}`;
+  return c.origen === "IMPORTACION"
+    ? "Venía así de la importación, sin firma"
+    : `Venía así desde el alta de la cuenta (${fmtFecha(c.altaEn)}), sin firma`;
+}
+
+export default function EmparejadoOdoo({
+  puedeEditar,
+  onConteos,
+}: {
+  /** `cobranza.write`: «Está en Mercury» y «Deshacer» cambian la vía de cobro de la cuenta. Sin él no se dibujan. */
+  puedeEditar: boolean;
+  /** Después de cada carga: el número de la pestaña baja al marcar sin recargar la página. */
+  onConteos?: (c: ConteosDelEmparejado) => void;
+}) {
   const toast = useToast();
   const [estado, setEstado] = useState<Estado | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -141,6 +183,12 @@ export default function EmparejadoOdoo() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    if (!estado || !onConteos) return;
+    const { cuentas, cuentasVinculadas, porEmparejar, enMercury, enOtra } = estado.conteos;
+    onConteos({ cuentas, cuentasVinculadas, porEmparejar, enMercury, enOtra });
+  }, [estado, onConteos]);
 
   const accion = useCallback(
     async (body: Record<string, unknown>, clave: string, exito: string) => {
@@ -203,6 +251,18 @@ export default function EmparejadoOdoo() {
   const vinculados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.cuentaId), [estado]);
   const sinUsar = useMemo(() => (estado?.vinculos ?? []).filter((v) => !v.cuentaId && !v.ignorado), [estado]);
   const ignorados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.ignorado), [estado]);
+  const enMercury = useMemo(() => (estado?.fueraDeOdoo ?? []).filter((c) => c.via === "MERCURY"), [estado]);
+  const enQuickBooks = useMemo(() => (estado?.fueraDeOdoo ?? []).filter((c) => c.via !== "MERCURY"), [estado]);
+
+  /* «Está en Mercury» y «Deshacer»: la misma acción del servidor, con la vía que se pide. */
+  const marcarVia = (cuentaId: string, nombre: string, via: "MERCURY" | "ODOO") =>
+    accion(
+      { accion: "via", cuentaId, via },
+      `v${cuentaId}`,
+      via === "MERCURY"
+        ? `${nombre} quedó en Mercury: salió de la lista y su vía de cobro es Mercury en todo Cobranza.`
+        : `${nombre} vuelve a la lista para emparejar: su vía de cobro es Odoo otra vez.`,
+    );
 
   if (cargando && !estado) {
     return (
@@ -236,6 +296,9 @@ export default function EmparejadoOdoo() {
         <span className="text-fg">
           <strong className="text-lg tabular-nums">{conteos.cuentasVinculadas}</strong>
           <span className="text-fg-muted"> de {conteos.cuentas} cuentas vinculadas</span>
+          {/* Las que no se emparejan porque facturan por otra vía: sin esto «27 de 56» parecía trabajo pendiente. */}
+          {conteos.enMercury > 0 && <span className="text-fg-muted"> · {conteos.enMercury} en Mercury</span>}
+          {conteos.enOtra > 0 && <span className="text-fg-muted"> · {conteos.enOtra} en QuickBooks</span>}
         </span>
         <span className="text-fg-muted">
           {conteos.partners} clientes en Odoo · {conteos.partnersIgnorados} marcados como ajenos
@@ -251,7 +314,7 @@ export default function EmparejadoOdoo() {
       {pendientes.length === 0 ? (
         <EmptyState
           title="No queda ninguna cuenta por vincular"
-          description="Todas las cuentas de Nexus tienen su cliente de Odoo. El sync puede espejar sin riesgo de atribuir mal."
+          description="Todas las cuentas que facturan por Odoo tienen su cliente de Odoo. El sync puede espejar sin riesgo de atribuir mal."
         />
       ) : (
         <div className="space-y-2">
@@ -268,6 +331,14 @@ export default function EmparejadoOdoo() {
                   p.cuentaId,
                   `${p.cuentaNombre} quedó vinculada.`,
                 )
+              }
+              mercury={
+                puedeEditar
+                  ? {
+                      ocupado: ocupado === `v${p.cuentaId}`,
+                      onMarcar: () => void marcarVia(p.cuentaId, p.cuentaNombre, "MERCURY"),
+                    }
+                  : undefined
               }
             />
           ))}
@@ -302,8 +373,69 @@ export default function EmparejadoOdoo() {
                   `Otra ficha de Odoo sumada a ${p.cuentaNombre}.`,
                 )
               }
+              /* ⛔ Ya tiene cliente de Odoo: el servidor no la marca en Mercury (`decidirMarcaDeMercury`) y el
+                 rechazo explica por qué y qué hacer. El mensaje vive en un solo lugar, el servidor. */
+              mercury={
+                puedeEditar
+                  ? {
+                      ocupado: ocupado === `v${p.cuentaId}`,
+                      onMarcar: () => void marcarVia(p.cuentaId, p.cuentaNombre, "MERCURY"),
+                      titulo:
+                        "Ya tiene un cliente de Odoo vinculado: Nexus no la marca en Mercury sin que antes desvincules ese cliente en «Ya vinculadas».",
+                    }
+                  : undefined
+              }
             />
           ))}
+        </div>
+      )}
+
+      {/* ⭐ Visible, no plegada: es la otra mitad de la lista. Una cuenta que salió de «Emparejar» tiene que poder
+          encontrarse, con quién la sacó y cuándo, y volver con un clic. */}
+      {(enMercury.length > 0 || enQuickBooks.length > 0) && (
+        <div className="rounded-lg border border-line bg-surface">
+          <div className="px-4 py-2.5">
+            <h3 className="text-sm font-medium text-fg">En Mercury ({enMercury.length})</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              Facturan por Mercury, no por Odoo: no se emparejan y Nexus no les busca facturas en Odoo. «Deshacer»
+              devuelve su vía de cobro a Odoo y la cuenta vuelve a la lista para emparejar, con todo lo que tenía.
+            </p>
+          </div>
+          {enMercury.length > 0 && (
+            <div className="border-t border-line px-4 py-1">
+              {enMercury.map((c) => (
+                <div
+                  key={c.cuentaId}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 last:border-0"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={c.nombre}>
+                    {c.nombre}
+                  </span>
+                  <span className="text-xs text-fg-muted">{origenDeLaVia(c)}</span>
+                  {puedeEditar && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={ocupado === `v${c.cuentaId}`}
+                      onClick={() => void marcarVia(c.cuentaId, c.nombre, "ODOO")}
+                      title="Su vía de cobro vuelve a Odoo y la cuenta vuelve a la lista para emparejar."
+                    >
+                      {ocupado === `v${c.cuentaId}` ? "Guardando…" : "Deshacer"}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* QuickBooks no tiene botón: se elige en la ficha de la cuenta. Se nombran para que ninguna cuenta
+              desaparezca de la pantalla sin decir por qué. */}
+          {enQuickBooks.length > 0 && (
+            <p className="border-t border-line px-4 py-2 text-xs text-fg-muted">
+              {enQuickBooks.length === 1 ? "Una cuenta factura" : `${enQuickBooks.length} cuentas facturan`} por
+              QuickBooks y tampoco se emparejan: {enQuickBooks.map((c) => c.nombre).join(", ")}. Su vía de cobro se
+              cambia en la ficha de la cuenta.
+            </p>
+          )}
         </div>
       )}
 
@@ -424,12 +556,18 @@ function FilaCuenta({
   buscando,
   onBuscar,
   onConfirmar,
+  mercury,
 }: {
   propuesta: Propuesta;
   ocupado: boolean;
   buscando: boolean;
   onBuscar: () => void;
   onConfirmar: (odooPartnerId: number, via: Via) => void;
+  /**
+   * «Está en Mercury». undefined = sin permiso de edición, no se dibuja. `titulo` reemplaza la explicación del
+   * botón (la tarjeta de una cuenta que ya tiene cliente de Odoo avisa que se va a rechazar).
+   */
+  mercury?: { ocupado: boolean; onMarcar: () => void; titulo?: string };
 }) {
   const meta = CLASE_META[propuesta.clase];
   const principal = propuesta.candidatos[0];
@@ -444,9 +582,25 @@ function FilaCuenta({
             Ya tiene un cliente de Odoo
           </span>
         )}
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={onBuscar}>
-          {buscando ? "Cerrar" : "Buscar en Odoo"}
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          {mercury && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={mercury.ocupado || ocupado}
+              onClick={mercury.onMarcar}
+              title={
+                mercury.titulo ??
+                "Factura por Mercury, no por Odoo: su vía de cobro pasa a Mercury en todo Cobranza y sale de esta lista. Se deshace desde «En Mercury»."
+              }
+            >
+              {mercury.ocupado ? "Guardando…" : "Está en Mercury"}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onBuscar}>
+            {buscando ? "Cerrar" : "Buscar en Odoo"}
+          </Button>
+        </div>
       </div>
 
       {meta.nota && <p className="mt-1 text-xs text-fg-muted">{meta.nota}</p>}

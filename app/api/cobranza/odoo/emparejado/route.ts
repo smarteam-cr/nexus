@@ -2,9 +2,10 @@
  * /api/cobranza/odoo/emparejado — decir qué cliente de Odoo es qué cuenta de Nexus.
  *   GET            → propuestas + vínculos ya hechos + conteos. Consulta el ERP.
  *   GET ?q=texto   → buscador sobre los partners ya conocidos. NO consulta el ERP.
- *   POST           → confirmar | ignorar | desvincular.
+ *   POST           → confirmar | ignorar | desvincular | via («Está en Mercury» y su «Deshacer»).
  *
- * Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN) — el mismo gate que el resto del módulo.
+ * Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN) — el mismo gate que el resto del módulo. `via` pide
+ * además EDICIÓN (guardCobranzaEditor): cambia la vía de cobro de la cuenta en todo Cobranza.
  *
  * ⚠ El GET sin `q` lee 82 clientes y 347 facturas de Odoo, así que tarda un par de segundos.
  * Es a propósito: la señal de monto necesita los montos facturados, y cachearlos sería
@@ -15,17 +16,18 @@
  * estados y fechas siguen siendo solo del sync. La respuesta dice cuántas cambiaron.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCobranzaAccess } from "@/lib/auth/api-guards";
+import { guardCobranzaAccess, guardCobranzaEditor } from "@/lib/auth/api-guards";
 import {
   EmparejadoError,
   buscarEnOdoo,
   cargarEmparejado,
   confirmarVinculo,
-  cuentasSinVinculo,
   desvincularPartner,
   ignorarPartner,
+  marcarViaDesdeEmparejado,
 } from "@/lib/cobranza/odoo/servicio";
 import {
+  odooCuentaViaSchema,
   odooVinculoConfirmarSchema,
   odooVinculoDesvincularSchema,
   odooVinculoIgnorarSchema,
@@ -43,8 +45,7 @@ export async function GET(req: NextRequest) {
   /* ⚠ Solo `?refrescar=1` toca el ERP. La carga normal sale del espejo y del catálogo
      guardados: consultar Odoo en cada render fue lo que provocó el bloqueo del 2026-09-02. */
   const refrescar = req.nextUrl.searchParams.get("refrescar") === "1";
-  const [estado, sinVinculo] = await Promise.all([cargarEmparejado({ refrescar }), cuentasSinVinculo()]);
-  return NextResponse.json({ ...estado, cuentasSinVinculo: sinVinculo });
+  return NextResponse.json(await cargarEmparejado({ refrescar }));
 }
 
 export async function POST(req: NextRequest) {
@@ -77,6 +78,16 @@ export async function POST(req: NextRequest) {
       const p = odooVinculoDesvincularSchema.safeParse(raw);
       if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
       return NextResponse.json({ ok: true, ...(await desvincularPartner(p.data, actor)) });
+    }
+    /* ⚠ «Está en Mercury» exige EDICIÓN, no lectura: cambia la vía de cobro de la cuenta en todo Cobranza
+       (su ficha, la plataforma al soltar una factura, las facturas que se ofrecen al marcar facturado).
+       Medido el 2026-09-25: solo ADMIN y SUPER_ADMIN ven Cobranza, y los dos pueden editarla. */
+    if (accion === "via") {
+      const editor = await guardCobranzaEditor();
+      if (editor instanceof NextResponse) return editor;
+      const p = odooCuentaViaSchema.safeParse(raw);
+      if (!p.success) return NextResponse.json({ error: p.error.issues[0]?.message ?? "Input inválido" }, { status: 400 });
+      return NextResponse.json({ ok: true, ...(await marcarViaDesdeEmparejado(p.data, editor.user.email)) });
     }
     return NextResponse.json({ error: "Acción desconocida." }, { status: 400 });
   } catch (e) {

@@ -5,7 +5,9 @@
  * las funciones puras de `emparejado.ts`, que son las que deciden. Server-only.
  *
  * ── QUÉ ESCRIBE Y QUÉ NO ─────────────────────────────────────────────────────────
- * Escribe el catálogo de partners y los vínculos que una persona confirma. De `FacturaOdoo`
+ * Escribe el catálogo de partners y los vínculos que una persona confirma. Desde el 2026-09-25, también
+ * la vía de cobro de una cuenta («Está en Mercury»), y solo por su chokepoint (`cambiarViaCobroTx`,
+ * lib/cobranza/via-cobro.ts), que firma y deja la línea en la bitácora de la cuenta. De `FacturaOdoo`
  * escribe **una sola cosa**: la cuenta de las facturas del cliente que se vincula o desvincula,
  * y solo a través de `atribucion.ts`. Montos, estados y fechas siguen siendo del sync. Los
  * montos de Odoo se leen acá solo para PROPONER emparejamientos y se descartan.
@@ -24,13 +26,17 @@ import { textoOdoo } from "./espejo";
 import {
   buscarPartners,
   cedulaAAprender,
+  decidirMarcaDeMercury,
   proponerEmparejados,
-  soloDigitos,
+  quedaPorEmparejar,
+  resumenDelEmparejado,
   type CuentaNexus,
   type MontoDeOdoo,
   type PartnerOdoo,
   type PropuestaEmparejado,
+  type ResumenDelEmparejado,
 } from "./emparejado";
+import { cambiarViaCobroTx } from "../via-cobro";
 import {
   contarDocumentos,
   detectarDiferenciasOdoo,
@@ -42,7 +48,7 @@ import {
 import { documentosDelUltimoLibro, leerServiciosDeVenta } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
-import type { OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
+import type { OdooCuentaVia, OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
 
 export class EmparejadoError extends Error {
   readonly status: number;
@@ -75,18 +81,43 @@ export interface VinculoGuardado {
   confirmadoEn: string | null;
 }
 
+/**
+ * Una cuenta sin cliente de Odoo que factura por otra plataforma: la lista «En Mercury» de Emparejar
+ * (2026-09-25). Sale de la vía de cobro, no de una marca aparte.
+ */
+export interface CuentaFueraDeOdoo {
+  cuentaId: string;
+  nombre: string;
+  /** MERCURY u OTRA (QuickBooks). */
+  via: string;
+  /** Quién la dejó en esa vía y cuándo (`viaCobroPor/En`). null = venía así, sin firma. */
+  marcadaPor: string | null;
+  marcadaEn: string | null;
+  /** Sin firma, de dónde venía: la cuenta nació del importador (`fuente = sheet`) o de un alta. */
+  origen: "IMPORTACION" | "ALTA";
+  /** Día del alta de la cuenta (`YYYY-MM-DD`). */
+  altaEn: string;
+}
+
 export interface EstadoEmparejado {
   propuestas: PropuestaEmparejado[];
   vinculos: VinculoGuardado[];
   partners: PartnerOdoo[];
+  /** ⭐ De `resumenDelEmparejado`: la misma regla que la pestaña, «Cómo funciona» y «Lo que no cuadra». */
   conteos: {
     cuentas: number;
     cuentasVinculadas: number;
+    porEmparejar: number;
+    enMercury: number;
+    enOtra: number;
+    deOdoo: number;
     partners: number;
     partnersVinculados: number;
     partnersIgnorados: number;
     facturasLeidas: number;
   };
+  /** Las cuentas sin cliente de Odoo que facturan por Mercury o QuickBooks, con quién las dejó ahí. */
+  fueraDeOdoo: CuentaFueraDeOdoo[];
   /**
    * ⚠ No null cuando Odoo no contestó. La pantalla sigue sirviendo con lo que hay guardado
    * —el trabajo hecho no se pierde porque el ERP esté caído— pero **lo dice**, en vez de
@@ -119,7 +150,15 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       /* ⚠ La MONEDA viaja con el monto: sin ella el emparejado proponía un cliente cuya
          factura en colones coincidía en número con un cobro en dólares. */
       cobros: { select: { monto: true, moneda: true } },
+      /* «Está en Mercury» (2026-09-25): la vía decide si la cuenta se empareja, y la firma sale en la
+         lista «En Mercury». ⚠ `viaCobroPor/En` son del SQL 2026-09-25-1, que va antes del deploy. */
+      viaCobro: true,
+      viaCobroPor: true,
+      viaCobroEn: true,
+      fuente: true,
+      createdAt: true,
     },
+    orderBy: { client: { name: "asc" } },
   });
 
   let partnersOdoo: PartnerOdoo[] = [];
@@ -196,14 +235,19 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
   }
 
   const yaVinculado = new Set(guardados.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
-  const partnersLibres = new Set(guardados.filter((v) => v.cuentaId || v.ignorado).map((v) => v.odooPartnerId));
+  /* Los clientes de Odoo que ya tienen decisión: vinculados a una cuenta o marcados ajenos. */
+  const partnersDecididos = new Set(guardados.filter((v) => v.cuentaId || v.ignorado).map((v) => v.odooPartnerId));
 
   /* ⭐ Etapa 12 (H10): las cuentas ya vinculadas SIGUEN en la lista. Hasta el 2026-09-13 salían apenas
      tenían su primer cliente de Odoo, y la segunda ficha de la misma empresa —otra sociedad, o la misma
      cargada dos veces con la cédula tipeada distinta— quedaba inalcanzable, con sus facturas sin dueño.
      Vuelven solo con cédula o nombre exacto (`proponerEmparejados`), y sin montos: su plata ya la
-     explica su primer cliente, y contarla haría pasar por única una cifra que no lo es. */
-  const cuentas: CuentaNexus[] = cuentasDb.map((c) => ({
+     explica su primer cliente, y contarla haría pasar por única una cifra que no lo es.
+     ⭐ 2026-09-25: las que no tienen cliente de Odoo entran solo si `quedaPorEmparejar` (vía Odoo). Una
+     cuenta en Mercury o QuickBooks no tiene nada que buscar en Odoo: ni tarjeta, ni candidatos, y sus
+     montos no cuentan para la unicidad de la señal de monto. */
+  const seProponen = cuentasDb.filter((c) => yaVinculado.has(c.id) || quedaPorEmparejar(c, yaVinculado));
+  const cuentas: CuentaNexus[] = seProponen.map((c) => ({
     cuentaId: c.id,
     nombre: c.client.name,
     cedulaJuridica: c.cedulaJuridica,
@@ -213,11 +257,16 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
   }));
 
   /* Un partner ya vinculado o ya marcado «no es cliente nuestro» no vuelve a proponerse:
-     de otro modo la lista no baja nunca y a la tercera sesión nadie la mira. */
-  const candidateables = partnersOdoo.filter((p) => !partnersLibres.has(p.odooPartnerId));
+     de otro modo la lista no baja nunca y a la tercera sesión nadie la mira. ⚠ Tampoco por monto
+     (`partnersDescartados`): el monto sale de todas las facturas del espejo, también las suyas. */
+  const candidateables = partnersOdoo.filter((p) => !partnersDecididos.has(p.odooPartnerId));
+  const resumen = resumenDelEmparejado(cuentasDb, yaVinculado);
 
   return {
-    propuestas: proponerEmparejados(cuentas, candidateables, montosOdoo, { yaVinculadas: yaVinculado }),
+    propuestas: proponerEmparejados(cuentas, candidateables, montosOdoo, {
+      yaVinculadas: yaVinculado,
+      partnersDescartados: partnersDecididos,
+    }),
     vinculos: guardados.map((v) => ({
       odooPartnerId: v.odooPartnerId,
       odooPartnerNombre: v.odooPartnerNombre,
@@ -231,15 +280,49 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
     })),
     partners: partnersOdoo,
     conteos: {
-      cuentas: cuentasDb.length,
-      cuentasVinculadas: yaVinculado.size,
+      cuentas: resumen.cuentas,
+      cuentasVinculadas: resumen.vinculadas,
+      porEmparejar: resumen.porEmparejar,
+      enMercury: resumen.enMercury,
+      enOtra: resumen.enOtra,
+      deOdoo: resumen.deOdoo,
       partners: partnersOdoo.length,
       partnersVinculados: guardados.filter((v) => v.cuentaId).length,
       partnersIgnorados: guardados.filter((v) => v.ignorado).length,
       facturasLeidas,
     },
+    /* Las que la regla deja fuera: sin cliente de Odoo y con otra vía. Son exactamente `enMercury + enOtra`. */
+    fueraDeOdoo: cuentasDb
+      .filter((c) => !yaVinculado.has(c.id) && !quedaPorEmparejar(c, yaVinculado))
+      .map((c) => ({
+        cuentaId: c.id,
+        nombre: c.client.name,
+        via: c.viaCobro,
+        marcadaPor: c.viaCobroPor,
+        marcadaEn: c.viaCobroEn?.toISOString() ?? null,
+        origen: c.fuente === "sheet" ? ("IMPORTACION" as const) : ("ALTA" as const),
+        altaEn: c.createdAt.toISOString().slice(0, 10),
+      })),
     errorOdoo,
   };
+}
+
+/**
+ * Los contadores del emparejado para la página, sin traer propuestas: la pestaña, la pestaña con que abre y
+ * «Cómo funciona». La regla es `resumenDelEmparejado`, la misma de `cargarEmparejado` y «Lo que no cuadra».
+ *
+ * ⚠ Hasta el 2026-09-25 la página contaba FICHAS vinculadas (28, JUDESUR tiene dos) contra todas las
+ * cuentas (56): la pestaña decía 28 con 29 tarjetas en la lista.
+ */
+export async function contarEmparejado(): Promise<ResumenDelEmparejado> {
+  const [cuentas, vinculos] = await Promise.all([
+    prisma.cuentaFinanciera.findMany({ select: { id: true, viaCobro: true } }),
+    prisma.odooPartnerVinculo.findMany({
+      where: { cuentaId: { not: null }, odooPartnerId: { not: null } },
+      select: { cuentaId: true },
+    }),
+  ]);
+  return resumenDelEmparejado(cuentas, new Set(vinculos.flatMap((v) => (v.cuentaId ? [v.cuentaId] : []))));
 }
 
 /**
@@ -417,19 +500,48 @@ export async function desvincularPartner(
   return { facturasDesatribuidas: cambios.length };
 }
 
-/** Para la pantalla: qué cuentas de Nexus todavía no tienen partner. */
-export async function cuentasSinVinculo(): Promise<Array<{ cuentaId: string; nombre: string; cedula: string | null }>> {
-  const [cuentas, vinculos] = await Promise.all([
-    prisma.cuentaFinanciera.findMany({
-      select: { id: true, cedulaJuridica: true, client: { select: { name: true } } },
-      orderBy: { client: { name: "asc" } },
-    }),
-    prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } }, select: { cuentaId: true } }),
-  ]);
-  const tomadas = new Set(vinculos.map((v) => v.cuentaId!));
-  return cuentas
-    .filter((c) => !tomadas.has(c.id))
-    .map((c) => ({ cuentaId: c.id, nombre: c.client.name, cedula: soloDigitos(c.cedulaJuridica) || null }));
+/**
+ * «Está en Mercury» y su «Deshacer», desde Emparejar (2026-09-25). Cambia la vía de cobro de la cuenta en
+ * TODO Cobranza —Elías: «una sola verdad»— por el chokepoint `cambiarViaCobroTx`, que firma y deja la línea
+ * en la bitácora de la cuenta. La regla de qué se puede es `decidirMarcaDeMercury` (pura).
+ *
+ * ⛔ Nada de Odoo: ni vínculos, ni facturas, ni «ajeno». La cuenta sale de «Emparejar» porque la regla
+ * `quedaPorEmparejar` mira la vía, y «Deshacer» la devuelve con todo lo que tenía, porque no se guardó
+ * nada aparte. Se lee y se escribe en la misma transacción: si alguien la vinculó en otra pestaña entre el
+ * clic y la escritura, el rechazo lo ve.
+ */
+export async function marcarViaDesdeEmparejado(
+  input: OdooCuentaVia,
+  actor: string,
+): Promise<{ cambio: boolean; via: OdooCuentaVia["via"]; nombre: string }> {
+  return prisma.$transaction(async (tx) => {
+    const cuenta = await tx.cuentaFinanciera.findUnique({
+      where: { id: input.cuentaId },
+      select: {
+        viaCobro: true,
+        client: { select: { name: true } },
+        vinculosOdoo: { where: { odooPartnerId: { not: null } }, select: { odooPartnerNombre: true } },
+      },
+    });
+    if (!cuenta) throw new EmparejadoError("Esa cuenta no existe.", 404);
+    const nombre = cuenta.client.name;
+    const decision = decidirMarcaDeMercury(
+      { nombre, viaCobro: cuenta.viaCobro, fichasDeOdoo: cuenta.vinculosOdoo.map((v) => v.odooPartnerNombre) },
+      input.via,
+    );
+    if (decision.tipo === "RECHAZO") throw new EmparejadoError(decision.motivo, 409);
+    if (decision.tipo === "YA_ESTABA") return { cambio: false, via: input.via, nombre };
+    await cambiarViaCobroTx(tx, {
+      cuentaId: input.cuentaId,
+      nueva: input.via,
+      actor,
+      motivo:
+        input.via === "MERCURY"
+          ? "la marcó «Está en Mercury» en Cobranza › Odoo › Emparejar."
+          : "deshizo «Está en Mercury» en Cobranza › Odoo › Emparejar; la cuenta vuelve a la lista para emparejar.",
+    });
+    return { cambio: true, via: input.via, nombre };
+  });
 }
 
 /* ── 4. La mesa de trabajo con el CFO ───────────────────────────────────────────── */
@@ -465,7 +577,9 @@ type MedidoDelCruce = {
   facturas: number;
   /** Notas de crédito y documentos anulados o revertidos: «364 facturas» eran 296 facturas y 68 de estos. */
   otrosDocumentos: number;
+  /** `resumenDelEmparejado().porEmparejar`: vía Odoo y sin cliente de Odoo. El mismo número que la pestaña. */
   cuentasSinVinculo: number;
+  /** `resumenDelEmparejado().deOdoo`: las que facturan por Odoo (vinculadas + por emparejar). */
   cuentasTotales: number;
   /** Día de la última copia buena de Odoo (`YYYY-MM-DD`): el pie de las líneas de Odoo lo dice. */
   espejoAl: string | null;
@@ -549,12 +663,13 @@ export async function cargarEstadoDelCruce(): Promise<{
     leerServiciosDeVenta(),
   ]);
   const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
-  /* ⚠ Solo las cuentas nacionales que facturan por Odoo: son las únicas que se pueden emparejar. Medido el
-     2026-09-13, el «falta emparejar 24 de 51» contaba cuentas de Mercury y cuentas internacionales sin ninguna
-     factura en Odoo, que nunca se van a emparejar; esas tienen su propia línea. */
-  const emparejables = cuentasDb.filter((c) => c.viaCobro === "ODOO" && c.tipo !== "INTERNACIONAL");
-  const cuentasTotales = emparejables.length;
-  const cuentasSinVinculo = emparejables.filter((c) => !cuentasVinculadas.has(c.id)).length;
+  /* ⭐ «Falta emparejar N de M» sale de `resumenDelEmparejado`, la misma regla que la pestaña «Emparejar»
+     (2026-09-25): por emparejar = vía Odoo y sin cliente de Odoo; M = las que facturan por Odoo. Hasta ese día
+     contaba solo las nacionales («7 de 34») mientras la pestaña decía 28: tres números para una pregunta. Las
+     internacionales con vía Odoo SÍ cuentan: salen marcándolas «Está en Mercury», que es lo que les falta. */
+  const resumenEmparejado = resumenDelEmparejado(cuentasDb, cuentasVinculadas);
+  const cuentasTotales = resumenEmparejado.deOdoo;
+  const cuentasSinVinculo = resumenEmparejado.porEmparejar;
   const espejoAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
 
   const estado: EstadoDelCruce = {

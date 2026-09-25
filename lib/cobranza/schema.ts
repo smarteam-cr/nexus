@@ -973,6 +973,17 @@ export const odooVinculoDesvincularSchema = z.object({ odooPartnerId: odooPartne
 export type OdooVinculoDesvincular = z.infer<typeof odooVinculoDesvincularSchema>;
 
 /**
+ * «Está en Mercury» (via: MERCURY) y su «Deshacer» (via: ODOO), desde Emparejar (2026-09-25). Cambia la
+ * vía de cobro de la cuenta en todo Cobranza, por `cambiarViaCobroTx`. QuickBooks no tiene botón: se
+ * elige en la ficha de la cuenta.
+ */
+export const odooCuentaViaSchema = z.object({
+  cuentaId: idDeBase,
+  via: z.enum(["MERCURY", "ODOO"]),
+});
+export type OdooCuentaVia = z.infer<typeof odooCuentaViaSchema>;
+
+/**
  * Etapa 12: una sociedad que le factura a una cuenta por FUERA de Odoo (Mercury o QuickBooks). Las de Odoo no
  * se agregan acá: se vinculan en el emparejado, con su ficha.
  * ⚠ La cédula es opcional y NO es única: una misma cédula factura con varios nombres.

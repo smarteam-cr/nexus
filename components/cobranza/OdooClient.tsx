@@ -40,7 +40,20 @@ interface CorridaDelEspejo {
   vencido: boolean;
 }
 
-type Conteos = { facturas: number; cuentasVinculadas: number; cuentas: number; diferencias: number };
+/**
+ * Los contadores del emparejado, todos de `resumenDelEmparejado` (lib/cobranza/odoo/emparejado.ts): la pestaña,
+ * la pestaña con que abre y «Cómo funciona» cuentan lo mismo que la lista. Viven en estado porque «Emparejar»
+ * los devuelve después de cada cambio: marcar «Está en Mercury» baja el número de la pestaña sin recargar.
+ */
+type ConteosEmparejado = {
+  cuentas: number;
+  cuentasVinculadas: number;
+  /** Vía Odoo y sin cliente de Odoo: el número de la pestaña. */
+  porEmparejar: number;
+  enMercury: number;
+  enOtra: number;
+};
+type Conteos = ConteosEmparejado & { facturas: number; diferencias: number };
 
 export default function OdooClient({
   corrida,
@@ -63,9 +76,19 @@ export default function OdooClient({
 }) {
   const [tab, setTab] = useState<Pestana>(
     /* Arranca donde está el trabajo: si falta emparejar, esa es la pestaña. Si ya está todo
-       emparejado, lo que queda es resolver diferencias. Un enlace que pide una pestaña manda. */
-    pestanaInicial ?? (conteos.cuentasVinculadas < conteos.cuentas ? "emparejar" : "no-cuadra"),
+       emparejado, lo que queda es resolver diferencias. Un enlace que pide una pestaña manda.
+       ⚠ Con la regla única: hasta el 2026-09-25 comparaba vinculadas contra TODAS las cuentas, y como las
+       de Mercury nunca se vinculan, abría en «Emparejar» para siempre. */
+    pestanaInicial ?? (conteos.porEmparejar > 0 ? "emparejar" : "no-cuadra"),
   );
+  const [emparejado, setEmparejado] = useState<ConteosEmparejado>(() => ({
+    cuentas: conteos.cuentas,
+    cuentasVinculadas: conteos.cuentasVinculadas,
+    porEmparejar: conteos.porEmparejar,
+    enMercury: conteos.enMercury,
+    enOtra: conteos.enOtra,
+  }));
+  const vivos: Conteos = { ...conteos, ...emparejado };
 
   return (
     <div className="space-y-4">
@@ -79,7 +102,7 @@ export default function OdooClient({
           {
             key: "emparejar",
             label: "Emparejar",
-            count: conteos.cuentas - conteos.cuentasVinculadas,
+            count: vivos.porEmparejar,
             title: "Decirle a Nexus qué cliente de Odoo corresponde a cada cuenta",
           },
           {
@@ -102,8 +125,8 @@ export default function OdooClient({
         </p>
       )}
 
-      {tab === "que-es" && <QueEs conteos={conteos} />}
-      {tab === "emparejar" && <EmparejadoOdoo />}
+      {tab === "que-es" && <QueEs conteos={vivos} />}
+      {tab === "emparejar" && <EmparejadoOdoo puedeEditar={puedeEditar} onConteos={setEmparejado} />}
       {tab === "no-cuadra" && (
         <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} />
       )}
@@ -235,11 +258,12 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         <h2 className="text-base font-semibold text-fg">Cómo se usa</h2>
         <ol className="mt-2 space-y-2 text-sm text-fg-secondary">
           <li>
-            <strong className="text-fg">1. Emparejar, una sola vez.</strong> Decile a Nexus qué cliente de Odoo
+            <strong className="text-fg">1. Emparejar, una sola vez.</strong> Dile a Nexus qué cliente de Odoo
             corresponde a cada cuenta. Hace falta porque Nexus guarda el nombre comercial («Iberorutas») y Odoo la
             razón social («Servicios San Mateo y Santa Elena del Sur S.A.»), y no se parecen. Al confirmar, las
             facturas de ese cliente pasan a la cuenta en el momento, y se guarda la cédula para que la próxima vez
-            se sostenga solo.
+            se sostenga solo. Si una cuenta factura por Mercury, márcala «Está en Mercury» en su tarjeta: su vía de
+            cobro pasa a Mercury en todo Cobranza, sale de la lista y queda en «En Mercury», donde se puede deshacer.
           </li>
           <li>
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
@@ -303,12 +327,22 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           n={conteos.cuentasVinculadas}
           de={conteos.cuentas}
           etiqueta="cuentas emparejadas"
-          pie="Las que faltan no pueden mostrar sus facturas."
+          pie={pieDelEmparejado(conteos)}
         />
         <Dato n={conteos.diferencias} etiqueta="cosas por resolver" pie="Ordenadas por la plata que mueven." />
       </div>
     </div>
   );
+}
+
+/** El pie del dato de «Cómo funciona»: cuántas faltan y cuántas no se emparejan porque facturan por otra vía. */
+function pieDelEmparejado(c: ConteosEmparejado): string {
+  const partes = [
+    c.porEmparejar > 0 ? `Faltan ${c.porEmparejar}: no pueden mostrar sus facturas.` : "No falta ninguna por emparejar.",
+  ];
+  if (c.enMercury > 0) partes.push(`${c.enMercury} facturan por Mercury y no se emparejan.`);
+  if (c.enOtra > 0) partes.push(`${c.enOtra} facturan por QuickBooks y tampoco.`);
+  return partes.join(" ");
 }
 
 function Estado({
