@@ -18,14 +18,25 @@
  * aunque esa corrida hubiera fallado, y no decía nada cuando el sync directamente dejó de correr.
  * Así pasaron diez días. Ahora distingue la última corrida de la última BUENA, y cuando la copia
  * es más vieja que `espejoVencido()` (la misma regla que INV31) se pone en rojo.
+ *
+ * ── «CÓMO FUNCIONA» TAMBIÉN DICE LO QUE LA LISTA NO MUESTRA (2026-09-25) ────────
+ * Lo que queda fuera por regla (historia, exentas de años anteriores, pagadas sin cuenta, el IVA, lo recién
+ * facturado) se cuenta en el texto de su línea, pero una línea sin filas pendientes no se muestra, y con ella se va
+ * la cuenta. La explicación que queda siempre es la de esta pestaña. Lo vigila guardas.test.ts.
  */
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Tabs } from "@/components/ui";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 // ⚠ Viven en un módulo neutral: la página (servidor) también las lee, y de un "use client" no podría.
 import type { Pestana } from "@/lib/cobranza/odoo/pestanas";
+/* «Cómo funciona» dice las reglas con los mismos números que las aplican: si la gracia o el IVA cambian allá, el
+   texto cambia solo. */
+import { DIAS_DE_GRACIA_DEL_ESPEJO } from "@/lib/cobranza/odoo/diferencias";
+import { IVA_COSTA_RICA } from "@/lib/cobranza/montos";
+
+const IVA_EN_PORCENTAJE = Math.round((IVA_COSTA_RICA - 1) * 100);
 
 interface CorridaDelEspejo {
   iniciadaEn: string;
@@ -254,6 +265,10 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             </li>
             <li>· Nunca convierte moneda: si el cobro está en dólares y la factura en colones, muestra las dos.</li>
             <li>· No reemplaza el plan de pago. Odoo no sabe en cuántas cuotas se le cobra a cada cliente; eso vive acá.</li>
+            <li>
+              · Marcar una fila «Está bien así» no toca el cobro ni Odoo: solo la saca de la lista. Y «Está en
+              Mercury» cambia la vía de cobro de la cuenta en Nexus, no en Odoo.
+            </li>
           </ul>
         </div>
       </div>
@@ -266,15 +281,13 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             corresponde a cada cuenta. Hace falta porque Nexus guarda el nombre comercial («Iberorutas») y Odoo la
             razón social («Servicios San Mateo y Santa Elena del Sur S.A.»), y no se parecen. Al confirmar, las
             facturas de ese cliente pasan a la cuenta en el momento, y se guarda la cédula para que la próxima vez
-            se sostenga solo. Si una cuenta factura por Mercury, márcala «Está en Mercury» en su tarjeta: su vía de
-            cobro pasa a Mercury en todo Cobranza, sale de la lista y queda en «En Mercury», donde se puede deshacer.
+            se sostenga solo. Queda por emparejar toda cuenta que factura por Odoo y todavía no tiene su cliente de
+            Odoo: ese es el número de la pestaña. Las que facturan por Mercury o QuickBooks no cuentan.
           </li>
           <li>
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
-            qué sistema se arregla y los pasos. Si una fila está bien así, se marca con su motivo —de a una, o todas
-            las de la línea con el mismo— y pasa a «Marcadas», al final, con quién, cuándo y por qué, y con
-            «Deshacer». Vale solo en esa línea, y vuelve sola si sus números cambian. Cada línea cuenta y suma solo
-            lo que le queda pendiente, y la que se queda sin filas desaparece.
+            qué sistema se arregla y los pasos. Lo que ya revisaste y está bien así se marca fila por fila, con su
+            motivo.
           </li>
           <li>
             <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> El sync corre solo cada mañana,
@@ -283,6 +296,123 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           </li>
         </ol>
       </div>
+
+      {/* ⭐ 2026-09-25: lo que cambió en esta pantalla ese día, explicado para quien la abre cada varias semanas. Cada
+          bloque responde una pregunta que aparece siempre: «¿dónde quedó esta cuenta?», «¿dónde quedó lo que
+          marqué?», «¿por qué este número no es el de la semana pasada?» y «¿por qué esta factura no está?». */}
+      <Bloque titulo="Las cuentas que facturan por Mercury">
+        <li>
+          · En su tarjeta de «Emparejar», <strong className="text-fg">«Está en Mercury»</strong> pasa su vía de cobro
+          a Mercury en todo Cobranza, también en su ficha, con tu nombre y la fecha. La cuenta sale de la lista y del
+          número de la pestaña en el momento.
+        </li>
+        <li>
+          · Desde ahí Nexus no le busca cliente en Odoo, no le ofrece facturas de Odoo al marcar un cobro como
+          facturado y no compara sus cobros con Odoo. Lo que no depende de Odoo sigue: «falta anotar el número de
+          Mercury» y «venta contada dos veces».
+        </li>
+        <li>
+          · La lista <strong className="text-fg">«En Mercury»</strong>, debajo de las tarjetas, dice quién marcó cada
+          cuenta y cuándo. Las que ya decían Mercury desde la importación o desde su alta aparecen «sin firma», para que
+          alguien las confirme o las deshaga.
+        </li>
+        <li>
+          · <strong className="text-fg">«Deshacer»</strong> devuelve la vía a Odoo, y la cuenta vuelve a «Emparejar»
+          con todo lo que tenía. Sirve también el día que una cuenta pase a facturar por Odoo.
+        </li>
+        <li>
+          · No se marca una cuenta que ya tiene su cliente de Odoo: sus facturas vienen de Odoo. Primero se desvincula
+          ese cliente en «Ya vinculadas».
+        </li>
+        <li>· QuickBooks no tiene botón: se elige en la ficha de la cuenta, y la cuenta también sale de «Emparejar».</li>
+      </Bloque>
+
+      <Bloque titulo="«Está bien así», fila por fila">
+        <li>
+          · Cada fila de «Lo que no cuadra» tiene su «Está bien así», con motivo, y te propone el último motivo que
+          usaste. El botón de la línea marca una por una las filas que ves, con el mismo motivo.
+        </li>
+        <li>
+          · Se marca con los números que ves. Si una fila cambió antes de tu clic —por ejemplo, porque llegó una copia
+          nueva de Odoo—, esa no se marca y te avisa; las demás sí.
+        </li>
+        <li>
+          · <strong className="text-fg">Vuelve sola si cambia uno de sus números</strong>: un monto, un saldo, un
+          estado o el número del documento. Vuelve a su línea diciendo que volvió y con qué marca. Que Odoo cambie el
+          nombre de un cliente no trae nada de vuelta.
+        </li>
+        <li>
+          · Vale solo en esa línea: si el mismo documento aparece en otra, ahí sigue a la vista. En las filas que juntan
+          varias facturas de un cliente, la marca queda en cada factura, así que una factura nueva de ese cliente
+          aparece sola, sin traer las ya revisadas.
+        </li>
+        <li>
+          · <strong className="text-fg">«Marcadas»</strong>, al final de la pestaña, muestra todo lo marcado con su
+          motivo, quién y cuándo, y «Deshacer». Sigue ahí aunque la línea se quede sin filas. Deshacer también queda
+          anotado: ninguna marca se borra.
+        </li>
+        <li>
+          · «Ya está anulada», en las facturas soltadas que ninguna copia puede verificar, también pide motivo y también
+          se deshace desde «Marcadas».
+        </li>
+        <li>· Marcar «Está bien así» o «Está en Mercury», y deshacerlos, piden permiso para editar Cobranza.</li>
+      </Bloque>
+
+      <Bloque titulo="Cómo se cuenta lo pendiente">
+        <li>
+          · Cada línea muestra, cuenta y suma solo sus filas pendientes. Si se queda sin ninguna, sale de la lista; lo
+          que tenía marcado sigue en «Marcadas».
+        </li>
+        <li>
+          · El número de la pestaña y «cosas por resolver» cuentan{" "}
+          <strong className="text-fg">filas pendientes</strong>, no líneas, y bajan apenas marcas una, sin recargar
+          la página.
+        </li>
+        <li>
+          · Lo que corriges en Nexus sale la próxima vez que abres la pestaña. Lo que se corrige en Odoo sale con la
+          próxima copia de Odoo.
+        </li>
+        <li>
+          · La suma de arriba va por moneda y sin IVA, y cuenta cada documento una sola vez aunque lo miren varias
+          líneas.
+        </li>
+        <li>· «Ocultar» solo pliega la lista de una línea en tu pantalla: no saca filas ni cambia ningún número.</li>
+      </Bloque>
+
+      {/* ⚠ Estas reglas viven en lib/cobranza/odoo/diferencias.ts. Si una cambia allá, cambia acá: la guarda de
+          «Cómo funciona» en guardas.test.ts pide que cada una siga nombrada. */}
+      <Bloque
+        titulo="Lo que queda fuera por regla, y por qué"
+        intro="Hay cosas que no van a cuadrar nunca y no son un problema. No son filas: no se marcan ni cuentan en la pestaña. La línea donde caerían dice cuántas dejó fuera."
+      >
+        <li>
+          · <strong className="text-fg">Historia.</strong> Facturas ya pagadas de antes del primer cobro que Nexus
+          tiene de su cuenta, o de años anteriores si la cuenta no tiene cobros. Son de antes de que Nexus planificara
+          la cuenta: no hay cobro que las explique ni plata que cobrar. ⚠ Una factura que Odoo sigue dando por cobrar
+          nunca es historia, sea del año que sea.
+        </li>
+        <li>
+          · <strong className="text-fg">Exentas de años anteriores.</strong> Solo se revisan las facturas sin impuesto
+          del año de la última copia de Odoo. Las de antes eran casi todas historia ya pagada, y la pregunta que importa
+          —si al cliente le faltó el IVA— es sobre lo que se está cobrando ahora.
+        </li>
+        <li>
+          · <strong className="text-fg">Pagadas sin cuenta.</strong> Facturas ya pagadas de clientes de Odoo que no
+          están emparejados, y también sus notas de crédito y los documentos anulados. No son plata por cobrar. Al
+          emparejar el cliente pasan a su cuenta y se cruzan como las demás. Un cliente sin emparejar que solo tiene de
+          estas no aparece en «Lo que no cuadra».
+        </li>
+        <li>
+          · <strong className="text-fg">Diferencias de exactamente el {IVA_EN_PORCENTAJE} %.</strong> Es el IVA:
+          Nexus guarda los cobros sin IVA, y si la factura dice lo mismo con IVA (o al revés) no falta plata. Lo decidió
+          Alex.
+        </li>
+        <li>
+          · <strong className="text-fg">Lo recién facturado.</strong> Un
+          cobro marcado facturado en los {DIAS_DE_GRACIA_DEL_ESPEJO} días antes de la última copia buena de Odoo, o
+          después, todavía puede no estar en la copia. Si pasado ese plazo sigue sin factura, recién ahí se acusa.
+        </li>
+      </Bloque>
 
       {/* ⚠ Esta tabla existe porque la pantalla muestra «pagada, falta conciliar» en cada
           cobro y nunca decía qué significa. El vocabulario es de Odoo, no del negocio, y
@@ -341,6 +471,17 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           pie="Las filas pendientes de «Lo que no cuadra», ordenadas por la plata que mueven. Lo marcado «está bien así» no cuenta."
         />
       </div>
+    </div>
+  );
+}
+
+/** Un bloque de «Cómo funciona»: un título, una frase opcional y una lista de puntos. */
+function Bloque({ titulo, intro, children }: { titulo: string; intro?: string; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-5">
+      <h2 className="text-base font-semibold text-fg">{titulo}</h2>
+      {intro && <p className="mt-1 text-sm text-fg-secondary">{intro}</p>}
+      <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">{children}</ul>
     </div>
   );
 }

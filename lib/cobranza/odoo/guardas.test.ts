@@ -350,3 +350,50 @@ describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () =
     }
   });
 });
+
+/**
+ * ── «CÓMO FUNCIONA» EXPLICA LO QUE LA LISTA NO MUESTRA ─────────────────────────
+ * Pedido de Elías (2026-09-25): lo que queda fuera por regla —historia, exentas de años anteriores, pagadas sin cuenta,
+ * las diferencias del IVA— sigue fuera, contado en el texto de su línea y explicado en «Cómo funciona». La línea puede
+ * no estar (sin filas pendientes no se muestra), así que la explicación que queda siempre es esa. Y las reglas del día
+ * —«Está en Mercury», la marca por fila, «Marcadas», que una fila vuelve sola, cómo se cuentan los pendientes— son las
+ * preguntas de quien abre la pantalla cada varias semanas.
+ * La edición que la pone en rojo: sacar una de esas explicaciones, o escribir a mano el 13 % o los 15 días en vez de
+ * usar las constantes que aplican la regla.
+ */
+describe("«Cómo funciona» explica las reglas de la lista", () => {
+  const rel = "components/cobranza/OdooClient.tsx";
+  const fuenteDeLaPantalla = readFileSync(join(DIR, "..", "..", "..", rel), "utf8");
+  const texto = textosDelFuente(fuenteDeLaPantalla, rel)
+    .map((t) => t.texto)
+    .join(" ")
+    .replace(/\s+/g, " ");
+
+  it("nombra lo que queda fuera por regla, cada cosa con su porqué", () => {
+    for (const regla of ["Historia.", "Exentas de años anteriores.", "Pagadas sin cuenta.", "Diferencias de exactamente el", "Lo recién facturado."]) {
+      expect(texto, regla).toContain(regla);
+    }
+    expect(texto).toContain("No son filas: no se marcan ni cuentan en la pestaña.");
+    expect(sinComentarios(fuenteDeLaPantalla), "el IVA y la gracia salen de las constantes que aplican la regla").toMatch(
+      /exactamente el \{IVA_EN_PORCENTAJE\} %[\s\S]*\{DIAS_DE_GRACIA_DEL_ESPEJO\} días antes de la última copia buena/,
+    );
+  });
+
+  it("y explica «Está en Mercury», la marca por fila, «Marcadas» y cómo se cuentan los pendientes", () => {
+    for (const frase of [
+      "«Está en Mercury»",
+      "«En Mercury»",
+      "con todo lo que tenía",
+      "No se marca una cuenta que ya tiene su cliente de Odoo",
+      "El botón de la línea marca una por una las filas que ves",
+      "Vuelve sola si cambia uno de sus números",
+      "Vale solo en esa línea",
+      "«Marcadas»",
+      "ninguna marca se borra",
+      "filas pendientes",
+      "sin recargar la página",
+    ]) {
+      expect(texto, frase).toContain(frase);
+    }
+  });
+});
