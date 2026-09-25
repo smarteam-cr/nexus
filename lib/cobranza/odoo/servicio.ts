@@ -39,16 +39,34 @@ import {
 import { cambiarViaCobroTx } from "../via-cobro";
 import {
   contarDocumentos,
+  decidirMarcas,
   detectarDiferenciasOdoo,
-  huellaDe,
   numeroVerificableEnOdoo,
+  textoDeLiberacion,
   type DiferenciaOdoo,
   type EstadoDelCruce,
 } from "./diferencias";
+import {
+  MARCA_ANULADA,
+  MARCA_BIEN_ASI,
+  anularLiberacionTx,
+  deshacerMarcasTx,
+  marcarFilasTx,
+  reabrirLiberacionTx,
+} from "./marcas";
 import { documentosDelUltimoLibro, leerServiciosDeVenta } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { ultimaCorridaOk } from "./sync";
-import type { OdooCuentaVia, OdooVinculoConfirmar, OdooVinculoDesvincular, OdooVinculoIgnorar } from "../schema";
+import type {
+  OdooCuentaVia,
+  OdooDeshacerMarcas,
+  OdooMarcarFilas,
+  OdooReabrirLiberacion,
+  OdooResolverLiberacion,
+  OdooVinculoConfirmar,
+  OdooVinculoDesvincular,
+  OdooVinculoIgnorar,
+} from "../schema";
 
 export class EmparejadoError extends Error {
   readonly status: number;
@@ -555,20 +573,55 @@ export async function marcarViaDesdeEmparejado(
  */
 export async function cargarDiferencias(): Promise<{
   inconsistencias: DiferenciaOdoo[];
-  aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: string }>;
+  /** Las facturas soltadas que alguien cerró con «Ya está anulada»: van en «Marcadas», con «Deshacer». */
+  anuladas: AnuladaAMano[];
   medido: MedidoDelCruce;
 }> {
-  const { estado, aceptadas, medido } = await cargarEstadoDelCruce();
-  return {
-    inconsistencias: detectarDiferenciasOdoo(estado),
-    aceptadas: aceptadas.map((a) => ({
-      clave: a.clave,
-      motivo: a.motivo,
-      aceptadaPor: a.aceptadaPor,
-      aceptadaEn: a.aceptadaEn.toISOString(),
-    })),
-    medido,
-  };
+  const [{ estado, medido }, anuladas] = await Promise.all([cargarEstadoDelCruce(), cargarAnuladasAMano()]);
+  return { inconsistencias: detectarDiferenciasOdoo(estado), anuladas, medido };
+}
+
+/**
+ * Una factura soltada cerrada a mano con «Ya está anulada». Ya no está en ninguna línea —lo que la cierra es
+ * `FacturaLiberada.resueltaEn`—, así que «Marcadas» la muestra aparte, con su motivo y «Deshacer».
+ */
+export interface AnuladaAMano {
+  liberacionId: string;
+  /** Lo que decía su fila: el cliente y el monto. */
+  texto: string;
+  /** El número de documento y la cuota. */
+  nota: string;
+  /** null = se cerró antes de que «Ya está anulada» pidiera motivo. */
+  motivo: string | null;
+  por: string | null;
+  /** ISO. */
+  en: string;
+}
+
+async function cargarAnuladasAMano(): Promise<AnuladaAMano[]> {
+  const [cerradas, marcas] = await Promise.all([
+    prisma.facturaLiberada.findMany({
+      where: { resueltaEn: { not: null } },
+      select: { id: true, clienteNombre: true, numCuota: true, monto: true, moneda: true, referenciaExterna: true, resueltaEn: true, resueltaPor: true },
+      orderBy: [{ resueltaEn: "desc" }, { id: "asc" }],
+    }),
+    prisma.diferenciaOdooMarca.findMany({
+      where: { tipo: MARCA_ANULADA, deshechaEn: null },
+      select: { documento: true, motivo: true },
+      orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
+    }),
+  ]);
+  /* La más reciente por documento: es la del último cierre. */
+  const motivoDe = new Map<string, string>();
+  for (const m of marcas) if (!motivoDe.has(m.documento)) motivoDe.set(m.documento, m.motivo);
+  return cerradas.map((l) => ({
+    liberacionId: l.id,
+    texto: textoDeLiberacion({ clienteNombre: l.clienteNombre, monto: Number(l.monto), moneda: l.moneda }),
+    nota: `${l.referenciaExterna ?? "sin número"} · cuota ${l.numCuota ?? "?"}`,
+    motivo: motivoDe.get(`l:${l.id}`) ?? null,
+    por: l.resueltaPor,
+    en: (l.resueltaEn ?? new Date(0)).toISOString(),
+  }));
 }
 
 type MedidoDelCruce = {
@@ -591,10 +644,9 @@ type MedidoDelCruce = {
  */
 export async function cargarEstadoDelCruce(): Promise<{
   estado: EstadoDelCruce;
-  aceptadas: Array<{ clave: string; motivo: string; aceptadaPor: string; aceptadaEn: Date }>;
   medido: MedidoDelCruce;
 }> {
-  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, aceptadasDb, liberadasDb, corridaOk, libro, servicios] = await Promise.all([
+  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, marcasDb, liberadasDb, corridaOk, libro, servicios] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -650,7 +702,14 @@ export async function cargarEstadoDelCruce(): Promise<{
     /* Las CUENTAS vinculadas, no los vínculos: una cuenta con dos razones sociales en Odoo
        contaba dos veces y el «faltan emparejar» salía más chico que la verdad. */
     prisma.odooPartnerVinculo.findMany({ where: { cuentaId: { not: null }, odooPartnerId: { not: null } }, select: { cuentaId: true } }),
-    prisma.diferenciaOdooAceptada.findMany({ orderBy: { aceptadaEn: "desc" } }),
+    /* ⭐ Las marcas «está bien así» por fila que nadie deshizo (2026-09-25). ⚠ La tabla es del SQL
+       scripts/sql/2026-09-25-2-marcas-por-fila.sql, que va ANTES del deploy: sin ella esta pantalla da error.
+       La marca de grupo (`DiferenciaOdooAceptada`) ya no se lee: la pantalla la dejó de usar ese día. */
+    prisma.diferenciaOdooMarca.findMany({
+      where: { tipo: MARCA_BIEN_ASI, deshechaEn: null },
+      select: { id: true, linea: true, fila: true, documento: true, huella: true, motivo: true, marcadaPor: true, marcadaEn: true },
+      orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
+    }),
     /* Solo las que siguen abiertas: una resuelta no produce ninguna línea, y traerlas todas
        hacía crecer esta consulta para siempre sin que nada lo usara. La regla de qué es
        «pendiente» sigue viviendo entera en `liberacionesPendientes` —el módulo puro la prueba
@@ -733,13 +792,12 @@ export async function cargarEstadoDelCruce(): Promise<{
     cuentasTotales,
     cuentasVinculadas,
     ultimaCorridaOk: espejoAl,
-    aceptadas: new Map(aceptadasDb.map((a) => [a.clave, a.huella])),
+    marcas: marcasDb.map((m) => ({ ...m, marcadaEn: m.marcadaEn.toISOString() })),
   };
   const documentos = contarDocumentos(facturasDb);
 
   return {
     estado,
-    aceptadas: aceptadasDb,
     medido: {
       cobros: cobrosDb.length,
       facturas: documentos.facturas,
@@ -766,14 +824,26 @@ export async function cargarEstadoDelCruce(): Promise<{
  *
  * «Con número» es `numeroVerificableEnOdoo`, la misma regla que decide si se cierra sola: un número
  * de transferencia (666471587) no lo va a ver nunca el sync, así que cuenta como sin número.
+ *
+ * ⚠ Desde el 2026-09-25 pide MOTIVO (`nota`, obligatoria) y deja su marca: se ve en «Marcadas» con quién, cuándo y
+ * por qué, y se deshace (`reabrirLiberacion`). Hasta ese día la pantalla no lo pedía: 4 facturas se cerraron sin
+ * que nadie pudiera saber después por qué, ni volver a abrirlas.
  */
-export async function resolverLiberacion(
-  input: { liberacionId: string; nota?: string },
-  actor: string,
-): Promise<void> {
+export async function resolverLiberacion(input: OdooResolverLiberacion, actor: string): Promise<void> {
   const l = await prisma.facturaLiberada.findUnique({
     where: { id: input.liberacionId },
-    select: { plataforma: true, resueltaEn: true, motivo: true, referenciaExterna: true },
+    select: {
+      id: true,
+      plataforma: true,
+      resueltaEn: true,
+      motivo: true,
+      referenciaExterna: true,
+      clienteNombre: true,
+      monto: true,
+      moneda: true,
+      decision: true,
+      numCuota: true,
+    },
   });
   if (!l) throw new EmparejadoError("Esa liberación ya no existe.", 404);
   if (l.plataforma === "ODOO" && numeroVerificableEnOdoo(l.referenciaExterna)) {
@@ -784,39 +854,76 @@ export async function resolverLiberacion(
   }
   if (l.resueltaEn) throw new EmparejadoError("Esa liberación ya estaba resuelta.", 409);
 
-  await prisma.facturaLiberada.update({
-    where: { id: input.liberacionId },
-    data: {
-      resueltaEn: new Date(),
-      resueltaPor: actor,
-      /* La nota se ACUMULA sobre el motivo original en vez de pisarlo: por qué se soltó y por
-         qué se dio por cerrada son dos cosas distintas y las dos importan después. */
-      motivo: input.nota ? [l.motivo, `Resuelta: ${input.nota}`].filter(Boolean).join(" · ") : l.motivo,
-    },
-  });
+  const cerrada = await prisma.$transaction((tx) =>
+    anularLiberacionTx(tx, {
+      liberacion: { ...l, monto: Number(l.monto) },
+      linea: input.linea,
+      nota: input.nota,
+      actor,
+      en: new Date(),
+    }),
+  );
+  if (!cerrada) throw new EmparejadoError("Esa liberación ya estaba resuelta: recarga la lista.", 409);
 }
 
 /**
- * «Está bien así». ⚠ Se guarda la HUELLA de los números aceptados, no solo la clave: si el
- * monto cambia, la línea vuelve sola. Una aceptación no puede convertirse en el lugar donde
- * se esconde un problema nuevo.
+ * «Deshacer» de «Ya está anulada»: la factura soltada vuelve a la lista. Antes de abrirla se guarda quién y cuándo la
+ * había cerrado, con la firma de quien la reabre (`reabrirLiberacionTx`).
  */
-export async function aceptarDiferencia(
-  input: { clave: string; motivo: string },
-  actor: string,
-): Promise<void> {
-  const { inconsistencias } = await cargarDiferencias();
-  const inc = inconsistencias.find((i) => i.codigo === input.clave);
-  if (!inc) throw new EmparejadoError("Esa diferencia ya no está en la lista.", 404);
-  await prisma.diferenciaOdooAceptada.upsert({
-    where: { clave: input.clave },
-    create: { clave: input.clave, motivo: input.motivo, huella: huellaDe(inc), aceptadaPor: actor },
-    update: { motivo: input.motivo, huella: huellaDe(inc), aceptadaPor: actor, aceptadaEn: new Date() },
-  });
+export async function reabrirLiberacion(input: OdooReabrirLiberacion, actor: string): Promise<void> {
+  const r = await prisma.$transaction((tx) => reabrirLiberacionTx(tx, { liberacionId: input.liberacionId, actor, en: new Date() }));
+  if (r === "NO_EXISTE") throw new EmparejadoError("Esa factura soltada ya no existe.", 404);
+  if (r === "YA_ESTABA_ABIERTA") throw new EmparejadoError("Esa factura ya estaba en la lista: recarga la página.", 409);
 }
 
-export async function reabrirDiferencia(clave: string): Promise<void> {
-  await prisma.diferenciaOdooAceptada.deleteMany({ where: { clave } });
+/**
+ * «Está bien así» sobre una o varias filas de UNA línea, con el mismo motivo (2026-09-25).
+ *
+ * ⭐ Se compara cada fila con los números que la persona VIO (`decidirMarcas`): la que cambió antes del clic —corrió el
+ * sync, alguien anotó un número— no se marca, y se devuelve para avisar; las demás sí. Hasta ese día «Está bien así»
+ * era por grupo y guardaba la huella que recalculaba el servidor al hacer clic: con un sync en el medio se aceptaba
+ * otra cosa sin aviso.
+ *
+ * ⛔ No toca ningún cobro ni nada de Odoo: solo saca la fila de la lista.
+ */
+export async function marcarFilas(
+  input: OdooMarcarFilas,
+  actor: string,
+): Promise<{ marcadas: number; cambiaron: Array<{ clave: string; texto: string | null }>; yaMarcadas: number }> {
+  const { estado } = await cargarEstadoDelCruce();
+  const linea = detectarDiferenciasOdoo(estado).find((l) => l.codigo === input.linea);
+  const d = decidirMarcas(linea, input.filas, estado.marcas);
+  if (d.aMarcar.length) {
+    await prisma.$transaction((tx) =>
+      marcarFilasTx(tx, { linea: input.linea, motivo: input.motivo, actor, en: new Date(), filas: d.aMarcar }),
+    );
+  }
+  return { marcadas: d.aMarcar.length, cambiaron: d.cambiaron, yaMarcadas: d.yaMarcadas.length };
+}
+
+/** «Deshacer» de «Está bien así»: la fila vuelve a la lista. No borra la marca: la firma quien la deshace. */
+export async function deshacerMarcas(input: OdooDeshacerMarcas, actor: string): Promise<number> {
+  const n = await prisma.$transaction((tx) => deshacerMarcasTx(tx, { ids: input.ids, actor, en: new Date() }));
+  if (n === 0) throw new EmparejadoError("Esa marca ya estaba deshecha: recarga la lista.", 409);
+  return n;
+}
+
+/**
+ * El motivo que se le propone a esta persona al marcar: el último que usó, y si nunca marcó nada, el último que usó
+ * alguien. Uno para «Está bien así» y otro para «Ya está anulada», que dicen cosas distintas.
+ */
+export async function ultimosMotivos(actor: string): Promise<{ bienAsi: string | null; anulada: string | null }> {
+  const ultimo = async (tipo: string) => {
+    const buscar = (marcadaPor?: string) =>
+      prisma.diferenciaOdooMarca.findFirst({
+        where: { tipo, deshechaEn: null, ...(marcadaPor ? { marcadaPor } : {}) },
+        orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
+        select: { motivo: true },
+      });
+    return ((await buscar(actor)) ?? (await buscar()))?.motivo ?? null;
+  };
+  const [bienAsi, anulada] = await Promise.all([ultimo(MARCA_BIEN_ASI), ultimo(MARCA_ANULADA)]);
+  return { bienAsi, anulada };
 }
 
 /* ── 5. Elegir la factura al marcar facturado ───────────────────────────────────── */

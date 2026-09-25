@@ -25,7 +25,7 @@ const archivos = readdirSync(DIR).filter((f) => f.endsWith(".ts") && !f.endsWith
 const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"));
 
 /**
- * Los CUATRO archivos que tienen permitido tocar el mundo: uno habla HTTP y tres hablan con la
+ * Los CINCO archivos que tienen permitido tocar el mundo: uno habla HTTP y cuatro hablan con la
  * base. Todo lo demás decide, y por eso se puede probar.
  *
  * ⚠ La lista se afirma abajo, así que un archivo impuro nuevo no entra sin que alguien lo
@@ -34,12 +34,18 @@ const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"))
  * `atribucion.ts` entró el 2026-09-12: vincular un cliente atribuye sus facturas en el acto, y
  * esa escritura la comparten la pantalla (servicio.ts, `server-only`) y un script de una sola vez
  * que no puede importar un módulo `server-only`. Escribe UNA columna: lo vigila el bloque de abajo.
+ *
+ * `marcas.ts` entró el 2026-09-25 por lo mismo: las marcas «está bien así» fila por fila y el cierre
+ * «Ya está anulada» los escribe la pantalla, y los van a escribir el traspaso de la marca de grupo
+ * de las notas de crédito y la reapertura de las facturas cerradas sin motivo. Nunca borra una
+ * marca: lo vigila su bloque.
  */
-const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts", "atribucion.ts"];
+const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts", "atribucion.ts", "marcas.ts"];
 const puros = archivos.filter((f) => !IMPUROS.includes(f));
+const TOCAN_LA_BASE = ["servicio.ts", "sync.ts", "atribucion.ts", "marcas.ts"];
 
 describe("la frontera entre decidir y tocar el mundo", () => {
-  it("sigue habiendo exactamente cuatro archivos impuros", () => {
+  it("sigue habiendo exactamente cinco archivos impuros", () => {
     expect(archivos.filter((f) => IMPUROS.includes(f)).sort()).toEqual([...IMPUROS].sort());
     expect(puros.length).toBeGreaterThanOrEqual(3);
   });
@@ -54,9 +60,9 @@ describe("la frontera entre decidir y tocar el mundo", () => {
     }
   });
 
-  it("⛔ solo servicio.ts, sync.ts y atribucion.ts tocan la base", () => {
+  it("⛔ solo servicio.ts, sync.ts, atribucion.ts y marcas.ts tocan la base", () => {
     for (const f of archivos) {
-      if (f === "servicio.ts" || f === "sync.ts" || f === "atribucion.ts") continue;
+      if (TOCAN_LA_BASE.includes(f)) continue;
       expect(fuente(f), `${f} importa la base`).not.toMatch(/@prisma\/client|from\s+["']@\/lib\/db/);
     }
   });
@@ -201,5 +207,45 @@ describe("⚠ el sync escribe la evidencia del tipo de cambio aunque no haya del
     const datos = src.slice(desde, src.indexOf("};", desde));
     expect(datos).toMatch(/montoTotalSigned:\s*f\.montoTotalSigned/);
     expect(datos).toMatch(/montoMonedaCompania:\s*f\.montoMonedaCompania/);
+  });
+});
+
+/**
+ * ── ⛔ UNA MARCA NO SE BORRA, Y MARCAR NO TOCA NADA MÁS ──────────────────────────
+ * Elías (2026-09-25): cada marca de «Lo que no cuadra» dice quién, cuándo y por qué, se ve y se deshace, y deshacer
+ * queda registrado. Hasta ese día «Volver a abrir» borraba la marca del grupo sin dejar rastro. Y marcar solo saca una
+ * fila de la lista: nunca cambia un cobro ni nada del espejo de Odoo (esas dos las cuidan los bloques de arriba).
+ */
+describe("⛔ las marcas de «Lo que no cuadra» no se borran", () => {
+  const clavesDeData = (e: string) =>
+    (e.match(/data:\s*\{([^{}]*)\}/)?.[1] ?? "")
+      .split(",")
+      .map((s) => s.split(":")[0]?.trim())
+      .filter(Boolean);
+
+  it("marcas.ts solo crea marcas y firma su «Deshacer»: nunca las borra ni les cambia el motivo", () => {
+    const escrituras = escriturasA(fuente("marcas.ts"), "diferenciaOdooMarca");
+    expect(escrituras.length).toBeGreaterThan(0);
+    for (const e of escrituras) {
+      expect(e, "nunca borra").toMatch(/^\.diferenciaOdooMarca\.(create|createMany|updateMany)\(/);
+      if (e.startsWith(".diferenciaOdooMarca.updateMany(")) expect(clavesDeData(e), e).toEqual(["deshechaPor", "deshechaEn"]);
+    }
+  });
+
+  it("de una factura soltada, marcas.ts solo escribe su cierre: cuándo, quién y el motivo", () => {
+    const escrituras = escriturasA(fuente("marcas.ts"), "facturaLiberada");
+    expect(escrituras.length).toBeGreaterThan(0);
+    for (const e of escrituras) {
+      expect(e, "nunca crea ni borra una factura soltada").toMatch(/^\.facturaLiberada\.(update|updateMany)\(/);
+      expect(clavesDeData(e).sort(), e).toEqual(["motivo", "resueltaEn", "resueltaPor"]);
+    }
+  });
+
+  it("nadie más del módulo escribe una marca ni cierra una factura soltada: pasan por marcas.ts", () => {
+    for (const f of archivos) {
+      if (f === "marcas.ts") continue;
+      expect(escriturasA(fuente(f), "diferenciaOdooMarca"), f).toEqual([]);
+      expect(escriturasA(fuente(f), "facturaLiberada"), f).toEqual([]);
+    }
   });
 });

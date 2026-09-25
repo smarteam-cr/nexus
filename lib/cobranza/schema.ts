@@ -1015,29 +1015,57 @@ export const libroAplicarSchema = z.object({
   anotaciones: z.array(z.string().min(1).max(200)).max(1000),
 });
 
-/**
- * «Está bien así» sobre una línea de la lista de diferencias con Odoo.
- *
- * ⚠ El motivo es OBLIGATORIO y de al menos 5 caracteres. Una aceptación sin razón escrita es
- * indistinguible de un clic para sacarse la línea de encima, y a los tres meses nadie sabe si
- * la diferencia estaba bien o si alguien la escondió.
- */
-export const odooDiferenciaAceptarSchema = z.object({
-  clave: z.string().trim().min(3).max(64),
-  motivo: z.string().trim().min(5, "Escribí por qué esta diferencia está bien así").max(1000),
-});
-export type OdooDiferenciaAceptar = z.infer<typeof odooDiferenciaAceptarSchema>;
+/** El código de una línea de «Lo que no cuadra» (ODOO-NOTA-SIN-APLICAR…): letras, números y guiones. */
+const codigoDeLinea = z
+  .string()
+  .trim()
+  .regex(/^[A-Z0-9-]{3,64}$/, "Línea inválida");
 
-export const odooDiferenciaReabrirSchema = z.object({ clave: z.string().trim().min(3).max(64) });
+/**
+ * «Está bien así» sobre una o varias filas de UNA línea de la lista de diferencias con Odoo, con el mismo motivo
+ * (2026-09-25). Cada fila viaja con la huella que la persona VIO: si cambió antes del clic, esa no se marca y se avisa.
+ * Reemplaza a la marca por grupo, que la pantalla dejó de usar ese día.
+ *
+ * ⚠ El motivo es OBLIGATORIO y de al menos 5 caracteres. Una marca sin razón escrita es indistinguible de un clic para
+ * sacarse la fila de encima, y a los tres meses nadie sabe si estaba bien o si alguien la escondió.
+ */
+export const odooMarcarFilasSchema = z.object({
+  linea: codigoDeLinea,
+  motivo: z.string().trim().min(5, "Escribe por qué está bien así (al menos 5 letras)").max(1000),
+  filas: z
+    .array(
+      z.object({
+        clave: z.string().min(1).max(300),
+        /* Una fila que junta todas las facturas de un año puede llevar decenas de documentos, cada uno con sus números. */
+        huella: z.string().min(1).max(200_000),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+export type OdooMarcarFilas = z.infer<typeof odooMarcarFilasSchema>;
+
+/** «Deshacer» de «Está bien así»: las marcas de una fila (una por documento). No se borran: se firman. */
+export const odooDeshacerMarcasSchema = z.object({ ids: z.array(idDeBase).min(1).max(500) });
+export type OdooDeshacerMarcas = z.infer<typeof odooDeshacerMarcasSchema>;
 
 /**
  * Cerrar a mano una factura soltada que se emitió fuera de Odoo. ⚠ Es una AFIRMACIÓN sobre un
  * sistema que Nexus no puede ver: nada la verifica, así que queda con nombre y fecha.
+ *
+ * ⚠ Desde el 2026-09-25 pide MOTIVO: hasta ese día era opcional y la pantalla nunca lo pedía, y 4 facturas quedaron
+ * cerradas sin que se pudiera saber por qué. `linea` es la línea donde se cerró, que queda con su marca.
  */
 export const odooResolverLiberacionSchema = z.object({
   liberacionId: idDeBase,
-  nota: z.string().trim().max(500).optional(),
+  linea: codigoDeLinea,
+  nota: z.string().trim().min(5, "Escribe cómo se anuló (al menos 5 letras)").max(500),
 });
+export type OdooResolverLiberacion = z.infer<typeof odooResolverLiberacionSchema>;
+
+/** «Deshacer» de «Ya está anulada»: la factura soltada vuelve a la lista, y queda quién la reabrió. */
+export const odooReabrirLiberacionSchema = z.object({ liberacionId: idDeBase });
+export type OdooReabrirLiberacion = z.infer<typeof odooReabrirLiberacionSchema>;
 
 /* ── Soltar facturas al recuadrar el acuerdo ─────────────────────────────────
  *
