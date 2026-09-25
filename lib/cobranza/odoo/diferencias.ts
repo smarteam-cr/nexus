@@ -881,8 +881,8 @@ export interface CobrosSinFacturaClasificados {
   /** Facturados después del corte: la copia todavía no pudo verlos. */
   recientes: CobroParaCruzar[];
   /**
-   * Sin plataforma anotada, en una cuenta que dice facturar por Odoo, y el Excel de Alexander los cubre con una
-   * factura de Mercury: la copia de Odoo no la va a tener nunca. Van a ODOO-COBRO-FACTURADO-EN-MERCURY.
+   * Sin plataforma anotada, en una cuenta que factura por Odoo o por Mercury, y el Excel de Alexander los cubre
+   * con una factura de Mercury: la copia de Odoo no la va a tener nunca. Van a ODOO-COBRO-FACTURADO-EN-MERCURY.
    */
   enMercurySegunElExcel: CobroParaCruzar[];
   /** Hasta qué día se verifica. null = la copia nunca corrió bien y no se verifica nada. */
@@ -909,7 +909,8 @@ export interface CobrosSinFacturaClasificados {
  *
  * ⭐ Y sin plataforma anotada, antes que la de la cuenta, lo que dice el Excel de Alexander (`estado.libro`): una
  * cuota que el Excel cubre con una factura de Mercury no se acusa de no tener factura en Odoo (ACCCSA, 2026-09-14).
- * Una plataforma que anotó una persona manda sobre el Excel.
+ * Una plataforma que anotó una persona manda sobre el Excel. Desde el 2026-09-25 eso vale también en las cuentas
+ * que facturan por Mercury: les sigue faltando anotar el número, y marcarlas «Está en Mercury» no puede borrarlo.
  */
 export function clasificarCobrosSinFactura(
   cobrosSolos: readonly CobroParaCruzar[],
@@ -922,12 +923,20 @@ export function clasificarCobrosSinFactura(
   for (const c of cobrosSolos) {
     const facturadoEl = c.fechaEmision ?? (c.estado === "COBRADO" ? c.fechaProgramada : null);
     if (!facturadoEl) continue;
-    /* Una cuenta que no está en la lista tampoco se acusa: no se sabe por dónde factura. */
-    if ((c.plataformaFactura ?? viaDe.get(c.cuentaId)) !== "ODOO") continue;
-    if (c.plataformaFactura === null && estado.libro.get(c.id)?.plataforma === "MERCURY") {
+    const plataforma = c.plataformaFactura ?? viaDe.get(c.cuentaId);
+    /* ⭐ Antes que la plataforma: «falta anotar el número de Mercury» no depende de Odoo, así que mira también
+       las cuentas que facturan por Mercury (2026-09-25). Hasta ese día solo miraba las que dicen Odoo, y marcar
+       una cuenta «Está en Mercury» le borraba esas filas sin que nadie hubiera anotado nada. */
+    if (
+      c.plataformaFactura === null &&
+      (plataforma === "ODOO" || plataforma === "MERCURY") &&
+      estado.libro.get(c.id)?.plataforma === "MERCURY"
+    ) {
       out.enMercurySegunElExcel.push(c);
       continue;
     }
+    /* Una cuenta que no está en la lista tampoco se acusa: no se sabe por dónde factura. */
+    if (plataforma !== "ODOO") continue;
     if (!estado.cuentasVinculadas.has(c.cuentaId)) out.sinEmparejar.push(c);
     else if (corte === null || facturadoEl > corte) out.recientes.push(c);
     else out.acusables.push(c);
@@ -1395,6 +1404,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       pasos: [
         "Andá a la pestaña «Emparejar» de esta misma pantalla.",
         "Para cada cuenta, confirmá el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
+        "Si una cuenta factura por Mercury, márcala «Está en Mercury» en su tarjeta: sale de la lista y deja de contar como «falta emparejar».",
         "Si un cliente de Odoo no es cliente nuestro, marcalo como ajeno para que deje de aparecer.",
         "Al confirmar, las facturas de ese cliente pasan a su cuenta en el acto y sus cobros facturados empiezan a verificarse.",
       ],
@@ -1795,8 +1805,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       codigo: "ODOO-COBRO-FACTURADO-EN-MERCURY",
       severidad: "MEDIA",
       titulo: `${enMercury.length} cobros que el Excel de Alexander da facturados por Mercury no tienen el número anotado`,
+      /* ⚠ Desde el 2026-09-25 entran también las cuentas que ya facturan por Mercury: el número falta igual. */
       detalle:
-        `Son de cuentas que dicen facturar por Odoo, pero el Excel de Alexander los cubre con una factura de Mercury (cada fila dice cuál). Odoo no la va a tener nunca, así que no se acusan como «cobro sin factura»: falta anotar el número de Mercury en cada cuota. Suman ${textoDeMontos(montos)}.` +
+        `Cuotas sin número anotado que el Excel de Alexander cubre con una factura de Mercury (cada fila dice cuál). Odoo no la va a tener nunca, así que no se acusan como «cobro sin factura»: falta anotar el número de Mercury en cada cuota. Suman ${textoDeMontos(montos)}.` +
         (porElMes
           ? ` ⚠ En ${porElMes === 1 ? "una" : porElMes} la cuota se ata por el mes y el monto del Excel no es exactamente el de Nexus: decidí cuál vale antes de anotar.`
           : ""),
@@ -1807,7 +1818,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "Abrí el cronograma de la cuenta de cada fila.",
         "En cada cuota, anotá el número de Mercury que dice la fila, con Mercury como plataforma.",
         "Si el monto del Excel no es el de la cuota, decidí cuál vale antes de anotar: Nexus guarda el neto.",
-        "Si la cuenta factura todo por Mercury, corregí su vía de cobro en la ficha.",
+        "Si la cuenta factura todo por Mercury y todavía dice Odoo, cambia su vía de cobro: con «Está en Mercury» en la pestaña «Emparejar» si no tiene cliente de Odoo, o en la ficha de la cuenta.",
       ],
       queSignificaAceptar:
         "Que estas cuotas se quedan sin el número de su factura de Mercury. No se acusan como «sin factura», pero nada las puede verificar.",
@@ -2295,9 +2306,12 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
           ? ` Sus ${sinEmparejarDudosas.length} cobro(s) facturados no se pueden verificar contra Odoo y se cuentan acá, no como clientes por emparejar.`
           : ""),
       donde: "PREGUNTANDO",
+      /* ⭐ 2026-09-25: «Está en Mercury» corrige la vía desde la tarjeta de la cuenta en «Emparejar», y la cuenta
+         sale sola de esta línea. */
+      atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
       pasos: [
         "Por cada cuenta, mirá una factura real y confirmá en qué plataforma se emitió.",
-        "Corregí la vía de cobro en la ficha de la cuenta.",
+        "Si factura por Mercury, márcala «Está en Mercury» en su tarjeta de la pestaña «Emparejar»: sale de esta línea y de la lista para emparejar. Si factura por otra plataforma, cambia la vía de cobro en la ficha de la cuenta.",
         "Al soltar una factura, el diálogo ya avisa de esta contradicción y lo que se elija ahí corrige la cuenta sola.",
       ],
       queSignificaAceptar:

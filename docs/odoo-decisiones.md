@@ -928,3 +928,53 @@ había huecos: con la cobertura rota (sin anotar ninguna factura sin casa), toda
 
 **Qué la revertiría.** Que las propuestas por monto resulten equivocadas en la mayoría de los casos que se confirman:
 ahí el estado de pago vuelve a mirarse solo en los pares juntados y la propuesta avisa en su propia línea.
+
+---
+
+## 2026-09-25 · «Está en Mercury» es la vía de cobro de la cuenta, y «por emparejar» tiene una sola regla
+
+**Qué se decidió.** Decisión de Elías, con su porqué:
+- **«Está en Mercury» = `CuentaFinanciera.viaCobro = MERCURY`**, una sola verdad en todo Cobranza. No hay marca
+  aparte: una marca «en Mercury» al lado de una vía que dice Odoo serían dos verdades que se contradicen. «Deshacer»
+  la devuelve a ODOO, y la cuenta vuelve sola a «Emparejar» con todo lo que tenía, porque no se guardó nada aparte
+  (Elías: «es posible que en el futuro algunas cuentas se migren a Odoo»).
+- **Quién y cuándo** se guardan en la cuenta (`viaCobroPor/En`, scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql)
+  más una línea en su bitácora. Los tres caminos que cambian la vía —el botón, la ficha de la cuenta
+  (`updateCuenta`) y «Cuadrar cronograma»— pasan por un solo chokepoint (`cambiarViaCobroTx`,
+  lib/cobranza/via-cobro.ts) que escribe **solo si la vía cambia de verdad**: la ficha la manda en cada guardado, y
+  guardar un correo no puede borrar quién marcó la cuenta.
+- **Regla única de «por emparejar»** (`quedaPorEmparejar`): la cuenta factura por Odoo y no tiene ningún cliente de
+  Odoo vinculado. La pestaña, el resumen de arriba («27 de 56 vinculadas · 8 en Mercury»), «Cómo funciona», la
+  pestaña con que abre la página y «Falta emparejar N de M» de «Lo que no cuadra» salen de `resumenDelEmparejado`.
+- El botón **no marca una cuenta que ya tiene cliente de Odoo** y dice por qué: sus facturas vienen de Odoo, y en
+  Mercury dejaría de ofrecerlas al marcar facturado y de revisar sus cobros sin plataforma anotada, sin avisar.
+- **Las 8 cuentas que ya decían Mercury salen solas** de «Emparejar» y aparecen en «En Mercury» sin firma: «venía
+  así de la importación» (5, `fuente = sheet`) o «desde el alta de la cuenta» (3, creadas fuera del importador).
+  ⚠ Elías dijo «venía de la importación» para las 8; 3 no nacieron del importador, y decirlo sería inventar.
+- **«Falta anotar el número de Mercury» mira también las cuentas de Mercury.** No depende de Odoo, y hasta hoy solo
+  miraba las que dicen Odoo: marcar una cuenta le habría borrado esas filas sin que nadie anotara nada.
+- **Las sugerencias por monto no proponen clientes de Odoo que ya tienen dueño** (vinculados o ajenos), y no se
+  calculan para cuentas en Mercury: sus montos tampoco cuentan para la unicidad.
+- Marcar y deshacer piden **edición** de Cobranza, igual que «Ya está anulada». Hoy solo ADMIN y SUPER_ADMIN ven
+  Cobranza y los dos editan: a nadie se le quita nada.
+
+**Por qué.** Medido en producción el 2026-09-25, en solo lectura: la misma pregunta tenía tres respuestas —29
+tarjetas, 28 en la pestaña (contaba fichas: JUDESUR tiene dos) y «7 de 34» en «Lo que no cuadra» (solo
+nacionales)— y ninguna miraba la vía: las 8 cuentas de Mercury no se iban nunca y la página abría en «Emparejar»
+para siempre. Y 5 de las 7 sugerencias por monto apuntaban a un cliente de Odoo de otra cuenta (KAIZEN→Pacuare,
+Ferretería Noelito→ACCCSA, ALFA+→Desarrollos Culturales, Plant→IIA, Alliance RH→IIA): salían sin nombre y «Es
+este» chocaba con el 409.
+
+Con el código nuevo sobre esos mismos datos: **21 tarjetas** (7 nacionales y las 14 internacionales que dicen
+Odoo), 1 sugerencia por monto (AMC), «27 de 56 vinculadas · 8 en Mercury», «Falta emparejar 21 de 48». «Lo que no
+cuadra» suma una fila en «falta anotar el número de Mercury» (Multiquimica INV-55, cuenta de Mercury). Si se
+marcan las 14 internacionales: 7 tarjetas, «7 de 34», y la línea «cuentas internacionales dicen facturar por
+Odoo» (14 filas) desaparece sola.
+
+⚠ No todo lo internacional es Mercury: KAIZEN se soltó con «Fue por Quickbooks». Esa va por la ficha (QuickBooks);
+con la regla única sale igual de «Emparejar» y se nombra aparte. ⚠ Un cobro con «Odoo» anotado a mano en una cuenta
+en Mercury se sigue comparando con Odoo: manda lo que anotó la persona (hoy, 0 casos).
+
+**Qué la revertiría.** Una cuenta que facture de verdad por Odoo y por Mercury a la vez sin anotar la plataforma
+en cada cobro: ahí una sola vía por cuenta no alcanza, y la marca tendría que bajar al servicio o al cobro
+(`Cobro.plataformaFactura` ya existe para eso). Hoy hay 0 cuentas con sociedades o cobros en dos plataformas.
