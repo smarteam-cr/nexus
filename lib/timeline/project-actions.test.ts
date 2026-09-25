@@ -123,6 +123,28 @@ test("la propuesta pendiente dice que trae cambios del cronograma y qué no se t
   expect(p.cta).toBe("Revisar sugerencias");
 });
 
+// Revisión de E2a: el borrador VACÍO que espera sus tareas no tiene barra ni nada que aplicar. La fila
+// decía «La IA propone cambios… la aplicas (o la descartas)» con «Revisar sugerencias». La edición que
+// la pone en rojo: ignorar `armandoTareas`, o volver a ofrecer un botón que lleva a nada que revisar.
+test("mientras la IA arma las tareas (borrador vacío), la fila lo dice y no pide decidir nada", () => {
+  const p = buildProjectActions({ ...sano, pendingProposal: true, armandoTareas: true }).find((x) => x.id === "draft-proposal")!;
+  expect(p.title).toBe("La IA está armando las tareas del cronograma");
+  expect(p.cta, "ofrece revisar algo que todavía no existe").toBeNull();
+  expect(`${p.title} ${p.why}`).not.toMatch(/propone|desmarcas|aplicas|descartas/);
+  // Sin propuesta guardada, la marca sola no inventa una fila.
+  expect(buildProjectActions({ ...sano, armandoTareas: true })).toEqual([]);
+  // La bandeja la deduce del JSON guardado, y el cartel (widget y rail) deja de decir «sin decidir».
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+  expect(leer("lib/timeline/project-actions-loader.ts")).toContain("armandoTareas: esVacioEsperandoTareas(tl?.pendingProposal ?? null),");
+  expect(leer("lib/timeline/project-actions-input.ts")).toContain("...(s.armandoTareas ? { armandoTareas: true } : {}),");
+  expect(leer("app/api/projects/[projectId]/gps/route.ts")).toContain(
+    "timelineProposalPending: hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null),",
+  );
+  expect(leer("app/(shell)/clients/[id]/page.tsx")).toContain(
+    "timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null)",
+  );
+});
+
 test("riesgo del cliente y alcance excedido van a Atender", () => {
   const a = buildProjectActions({
     ...sano,

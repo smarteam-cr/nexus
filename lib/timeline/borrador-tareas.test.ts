@@ -23,6 +23,7 @@ import {
   claveDeTareaQueSeVa,
   debeDescartarseSolo,
   esBorradorV1,
+  esVacioEsperandoTareas,
   estadoDeLasTareas,
   estructuraHipotetica,
   FORMATO_BORRADOR,
@@ -33,9 +34,11 @@ import {
   planDeAplicacion,
   propuestaPorDecidir,
   proyectar,
+  resumenDeLaConfirmacion,
   resumir,
   textoDeLaConfirmacion,
   textoDeLaLineaDeTareas,
+  textoDeLaOfertaDeTareas,
   tituloDeLaBarra,
   traeCambiosDeTareas,
   versionDelBorrador,
@@ -378,6 +381,28 @@ describe("3 · la tarea nueva que ya está: huella del título + semana, contand
     expect(planDeAplicacion(VIVO, dos).items.map((it) => it.estado)).toEqual(["ya-esta", "aplica"]);
   });
 
+  it("⭐ al ACORTAR la fase, una que sobrevive se cuenta en la semana donde va a quedar (la última)", () => {
+    /* Revisión de E2a: la sobreviviente se contaba en su semana de hoy (la 3) y la nueva igual (armada
+       sobre la fase ya acortada, en la 2) aplicaba; al aplicar, el servidor mueve la sobreviviente a la
+       semana 2 y crea la nueva ahí: dos iguales en la misma semana. La edición que la pone en rojo:
+       contar la sobreviviente con su semana viva, sin acotarla a la duración final de su fase. */
+    const conAvance = tarea("c9", "Capacitación", 2, { status: "IN_PROGRESS" });
+    const vivo = conFase("c", (f) => ({ ...f, tareas: [...(f.tareas ?? []), conAvance] }));
+    const acorta: CambioFaseCambia = { ...DUR_C, desde: 3, a: 2 };
+    const b = v1([acorta, nueva("t:1", "c", "Capacitación", 1)], {
+      tareasArmadasPara: { ...ARMADAS, c: { nombre: "Pruebas", semanas: 2 } },
+    });
+    const plan = planDeAplicacion(vivo, b);
+    expect(estadoDe(plan, "fase:c:durationWeeks").estado).toBe("aplica");
+    expect(estadoDe(plan, "t:1").estado, "se crea un duplicado en la última semana").toBe("ya-esta");
+    expect(plan.escrituras.tareas.nuevas).toEqual([]);
+    // Lo que muestra «Ver la propuesta»: una sola «Capacitación», en la última semana.
+    const pruebas = proyectar(vivo, b).fases.find((f) => f.id === "c")!;
+    expect(pruebas.tareas.filter((t) => t.title === "Capacitación").map((t) => t.weekIndex)).toEqual([1]);
+    // Sin acortar (el CSE desmarca el cambio de semanas), la sobreviviente sigue en su semana: no es la misma.
+    expect(estadoDe(planDeAplicacion(vivo, b, ["fase:c:durationWeeks"]), "t:1").estado).not.toBe("ya-esta");
+  });
+
   it("una nueva cuya fase ya no está choca; una en una fase nueva del borrador, no", () => {
     const b = v1([PILOTO, nueva("t:1", "zz", "Algo", 0), nueva("t:2", PILOTO.clave, "Algo", 0)], {
       tareasArmadasPara: { ...ARMADAS, zz: { nombre: "Borrada", semanas: 1 } },
@@ -511,6 +536,21 @@ describe("5 · la huella, el bloqueo, el descarte automático y la propuesta que
     // El vivo del handoff no trae tareas: una que se va es algo por decidir.
     const sinTareas = sinLasTareas(VIVO);
     expect(propuestaPorDecidir(JSON.parse(JSON.stringify(v1([seVa(B1, "b")]))), sinTareas)).toBe(true);
+  });
+
+  it("⭐ el borrador vacío que espera tareas no es «una propuesta por decidir» (y guarda lo que notó el paso 1)", () => {
+    /* Revisión de E2a: el chat, «Qué hacer acá» y el cartel lo trataban como una propuesta que decidir
+       en una barra que no existe. La edición que la pone en rojo: contar como vacío uno con cambios, o
+       uno con las tareas ya listas. */
+    const vacio = JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-3" })));
+    expect(esVacioEsperandoTareas(vacio)).toBe(true);
+    expect(esVacioEsperandoTareas(JSON.parse(JSON.stringify(v1([DUR_C], { tareas: { corrida: "run-3", listas: false } }))))).toBe(false);
+    expect(esVacioEsperandoTareas(JSON.parse(JSON.stringify(v1([], { tareas: { corrida: "run-3", listas: true } }))))).toBe(false);
+    expect(esVacioEsperandoTareas({ anchorStartDate: null, phases: [] }), "el formato viejo").toBe(false);
+    expect(esVacioEsperandoTareas(null)).toBe(false);
+    // Lo que notó el paso 1 viaja en el borrador vacío (así lo muestra la barra y sobrevive a recargar).
+    const conNotas = borradorVacio({ pedido: "primera", corrida: "run-4", observaciones: ["Pruebas pasa a 3 semanas: no se pudo proponer."] });
+    expect(leerBorrador(JSON.parse(JSON.stringify(conNotas)), VIVO)?.observaciones).toEqual(["Pruebas pasa a 3 semanas: no se pudo proponer."]);
   });
 
   it("⭐ claveDeRevision de un v1: el mismo token con otra versión es la misma revisión (lo desmarcado sobrevive)", () => {
@@ -664,5 +704,46 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
       accion: "Volver a intentar",
     });
     expect(textoDeLaLineaDeTareas("listas", null, null, true)).toBeNull();
+  });
+
+  it("⭐ la primera oración de la confirmación cuenta fases y tareas por separado, y nunca queda «: .»", () => {
+    /* Revisión de E2a: se armaba solo con las frases de fases, así que una propuesta solo de tareas
+       decía «Se aplican los 2 cambios marcados de una sola vez: .» y las tareas que se crean no se
+       nombraban en ningún lado. La edición que la pone en rojo: volver a armarla solo con
+       `redactarResumenDeCambios`, o dejar los dos puntos sin frase. */
+    const soloSeVan = resumenDeLaConfirmacion(resumir(VIVO, v1([seVa(B1, "b"), seVa(B2, "b")])));
+    expect(soloSeVan).toBe("Se aplican los 2 cambios marcados de una sola vez: se quitan 2 tareas.");
+    expect(resumenDeLaConfirmacion(resumir(VIVO, v1([seVa(B1, "b")])))).toBe(
+      "Se aplica el cambio marcado de una sola vez: se quita 1 tarea.",
+    );
+    expect(resumenDeLaConfirmacion(resumir(VIVO, BORRADOR))).toBe(
+      "Se aplican los 9 cambios marcados de una sola vez: 1 fase cambia de duración, se suma 1 fase nueva, se crean 4 tareas y se quitan 3.",
+    );
+    // Un cambio que ninguna frase nombra (las notas de una fase): la oración cierra sin los dos puntos.
+    const notas: CambioFaseCambia = { tipo: "fase-cambia", clave: "fase:b:notes", faseId: "b", fase: "Diseño", campo: "notes", desde: null, a: "Con ventas" };
+    expect(resumenDeLaConfirmacion(resumir(VIVO, v1([notas])))).toBe("Se aplica el cambio marcado de una sola vez.");
+    for (const b of [v1([seVa(B1, "b")]), v1([notas]), BORRADOR]) {
+      expect(resumenDeLaConfirmacion(resumir(VIVO, b))).not.toMatch(/:\s*\./);
+    }
+  });
+
+  it("⭐ sin cambios de fases, la línea no promete aplicar «solo los cambios de fases» y la oferta no dice que se decidieron", () => {
+    /* Revisión de E2a: el borrador que nace vacío (el paso 1 no propuso nada) decía «Si aplicas ahora,
+       solo se aplican los cambios de fases» sin ninguno que aplicar, y tras su fallo se ofrecía «Las
+       fases quedaron decididas» sin que se hubiera propuesto ninguna. La edición que la pone en rojo:
+       ignorar `conCambiosDeFases`, o volver a la frase fija de la oferta. */
+    const fallo = textoDeLaLineaDeTareas("fallo", null, "la IA está sobrecargada", false, false);
+    expect(fallo).toEqual({ texto: "No se pudieron armar las tareas: la IA está sobrecargada.", accion: "Volver a intentar" });
+    expect(textoDeLaLineaDeTareas("faltan", null, null, false, false)?.texto).toBe("Faltan las tareas de esta propuesta.");
+    for (const estado of ["faltan", "fallo"] as const) {
+      expect(textoDeLaLineaDeTareas(estado, null, null, false, false)?.texto, estado).not.toContain("cambios de fases");
+      expect(textoDeLaLineaDeTareas(estado, null, null, false)?.texto, `${estado} (con fases)`).toContain(
+        "solo se aplican los cambios de fases",
+      );
+    }
+    expect(textoDeLaOfertaDeTareas(true).titulo).toBe("Las fases quedaron decididas.");
+    const sinFases = textoDeLaOfertaDeTareas(false);
+    expect(`${sinFases.titulo} ${sinFases.detalle}`).not.toMatch(/fases/);
+    expect(sinFases.titulo).toBe("No se pudieron armar las tareas.");
   });
 });

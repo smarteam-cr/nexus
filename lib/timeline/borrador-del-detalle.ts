@@ -55,10 +55,34 @@ export interface EstadoDeLasTareasDelBorrador {
   motivo: string | null;
 }
 
-/** Propio y no `MOTIVO_COLGADA` (run-colgada.ts), que tiene voseo. */
-export const MOTIVO_TAREAS_CORTADAS =
-  "Se cortó mientras armaba las tareas (probablemente un reinicio del servidor).";
-export const MOTIVO_TAREAS_SIN_GUARDAR = "No se pudieron guardar las tareas.";
+/* Los motivos van DESPUÉS de «No se pudieron armar las tareas: …» (`textoDeLaLineaDeTareas`): una
+   causa corta, en tuteo y en minúscula. Propios y no `MOTIVO_COLGADA` (run-colgada.ts), que tiene
+   voseo. */
+export const MOTIVO_TAREAS_CORTADAS = "se cortó a mitad de camino, probablemente por un reinicio del servidor";
+export const MOTIVO_TAREAS_SIN_GUARDAR = "la IA terminó, pero no se pudieron guardar";
+
+/**
+ * Lo que dejó escrito la corrida, traducido a la causa que lee el CSE. Revisión de E2a: se mostraba
+ * tal cual, y lo guardado puede ser un código en MAYÚSCULAS («CLAUDE_ERROR», de las corridas de
+ * antes del arreglo de `markDone`), el texto de la ruta o el de `humanizeAgentError` (con «Prueba de
+ * nuevo» al lado del botón «Volver a intentar»). Se traduce como `errorDeLaRevisionDeFases` hace
+ * con el paso 1; nunca pasa el texto crudo. null = no se sabe (la línea dice lo genérico).
+ */
+export function causaDelFallo(guardado: string): string | null {
+  const t = guardado.toLowerCase();
+  if (/no_credits|crédito|credit balance|billing/.test(t)) return "la cuenta de la IA no tiene créditos: avísale a Elías";
+  if (/api key|authentication/.test(t)) return "hay un problema con la cuenta de la IA: avísale a Elías";
+  if (/límite|rate limit/.test(t)) return "se pasó el límite de uso de la IA";
+  if (/sobrecargada|overloaded/.test(t)) return "la IA está sobrecargada";
+  if (/cortada|max_tokens/.test(t)) return "la respuesta de la IA quedó cortada";
+  if (/tardó demasiado|timeout|timed out|conexión/.test(t)) return "la IA tardó demasiado o se cortó la conexión";
+  if (/inválid|ilegible|invalid/.test(t)) return "la IA devolvió una respuesta que no se pudo leer";
+  if (/propuesta_cambio|propuesta_pendiente|la propuesta cambió|propuesta del cronograma sin decidir/.test(t)) {
+    return "la propuesta cambió mientras se armaban";
+  }
+  if (/claude_error|agent_error|error al ejecutar el agente|no pudo completar/.test(t)) return "la IA no respondió bien";
+  return null;
+}
 
 /** Lo que se lee de la corrida del paso 2. */
 export interface CorridaDeLasTareas {
@@ -70,8 +94,8 @@ export interface CorridaDeLasTareas {
 
 /**
  * Por qué fallaron las tareas, según la corrida (ya se sabe que el estado es «fallo»). Puro.
- *   · ERROR → el error humanizado que dejó `markError` (el único lector de ese contrato es
- *     `parseRunError`). Su texto genérico tiene voseo: sin un error propio, null;
+ *   · ERROR → lo que dejaron `markError` o `markDone` (el único lector de ese contrato es
+ *     `parseRunError`), traducido a una causa corta (`causaDelFallo`). Sin un error propio, null;
  *   · todavía PENDING/RUNNING → está colgada (si no, el estado sería «armando»);
  *   · DONE → terminó y no se fusionó;
  *   · sin fila, o ARCHIVED → null.
@@ -80,8 +104,8 @@ export function motivoDelFallo(corrida: CorridaDeLasTareas | null): string | nul
   if (!corrida) return null;
   switch (corrida.status) {
     case "ERROR": {
-      const motivo = parseRunError(corrida.output);
-      return motivo === parseRunError(null) ? null : motivo;
+      const guardado = parseRunError(corrida.output);
+      return guardado === parseRunError(null) ? null : causaDelFallo(guardado);
     }
     case "PENDING":
     case "RUNNING":
@@ -132,22 +156,34 @@ export async function leerEstadoDeLasTareas(
 export interface PedidoDeTareas {
   token: string | null;
   version: number | null;
+  /** Solo con token null: lo que notó el paso 1 sin proponer. Nace dentro del borrador vacío. */
+  observaciones?: string[];
 }
 
 const esVersion = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+/** Techos de las observaciones del paso 1 que viajan en el pedido (el paso 1 devuelve pocas y cortas). */
+const MAX_OBSERVACIONES_DEL_PEDIDO = 20;
+const MAX_LARGO_DE_OBSERVACION = 1000;
 
 /**
  * El `borrador` del body de /analyze, validado. Puro. undefined/null = no es un paso 2 del borrador
  * (pestañas viejas y «Regenerar» de una fase siguen como hoy). Con token, la versión es obligatoria:
  * sin ella no se sabe qué vio el CSE.
+ * Con token null acepta `observaciones` (lo que notó el paso 1 sin proponer): el borrador vacío las
+ * guarda, así la barra las muestra y sobreviven a recargar o a descartar (revisión de E2a). Con
+ * token se ignoran: el borrador del paso 1 ya trae las suyas.
  */
 export function leerPedidoDeTareas(raw: unknown): PedidoDeTareas | null | "invalido" {
   if (raw === undefined || raw === null) return null;
   if (typeof raw !== "object" || Array.isArray(raw)) return "invalido";
-  const { token, version } = raw as Record<string, unknown>;
+  const { token, version, observaciones } = raw as Record<string, unknown>;
   if (token === null) {
     if (version !== undefined && version !== null && !esVersion(version)) return "invalido";
-    return { token: null, version: null };
+    if (observaciones === undefined || observaciones === null) return { token: null, version: null };
+    if (!Array.isArray(observaciones) || observaciones.length > MAX_OBSERVACIONES_DEL_PEDIDO) return "invalido";
+    if (!observaciones.every((o) => typeof o === "string" && o.length <= MAX_LARGO_DE_OBSERVACION)) return "invalido";
+    const limpias = [...new Set((observaciones as string[]).map((o) => o.trim()).filter((o) => o.length > 0))];
+    return limpias.length > 0 ? { token: null, version: null, observaciones: limpias } : { token: null, version: null };
   }
   if (typeof token !== "string" || token.length === 0 || token.length > 200) return "invalido";
   if (!esVersion(version)) return "invalido";
@@ -216,7 +252,8 @@ export async function prevalidarPedidoDeTareas(
 /**
  * Con la corrida ya creada, el borrador queda «armando» (su estado se deduce de ESTA corrida).
  *   · token null → nace un borrador vacío, solo si no hay ninguna propuesta (`DbNull`), y su token es
- *     la corrida. El pedido («regenerar» o «primera») sale de las tareas de hoy, con su única fuente.
+ *     la corrida. El pedido («regenerar» o «primera») sale de las tareas de hoy, con su única fuente,
+ *     y lleva lo que notó el paso 1 (`observaciones` del pedido).
  *   · token → el guardado, con la corrida nueva y la versión + 1, condicionado a token + versión.
  * null = marcado. Si la escritura no entra (otra pestaña, otra persona), no se pisa nada.
  */
@@ -230,7 +267,11 @@ export async function marcarTareasEnCurso(i: {
       where: { phase: { timelineId: i.timelineId } },
       select: { source: true },
     });
-    const vacio = borradorVacio({ pedido: pedidoDelCronograma(tareas), corrida: i.corrida });
+    const vacio = borradorVacio({
+      pedido: pedidoDelCronograma(tareas),
+      corrida: i.corrida,
+      observaciones: i.pedido.observaciones ?? [],
+    });
     const escrita = await prisma.projectTimeline.updateMany({
       where: { id: i.timelineId, pendingProposal: { equals: Prisma.DbNull } },
       data: { pendingProposal: vacio as unknown as Prisma.InputJsonValue, pendingProposalRunId: i.corrida },

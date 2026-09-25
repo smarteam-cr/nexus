@@ -62,6 +62,9 @@ export interface ProjectActionsInput {
   pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
+  /** La propuesta guardada es el borrador VACÍO que espera sus tareas (`esVacioEsperandoTareas`):
+   *  no hay nada que decidir todavía, la IA está armando las tareas. */
+  armandoTareas?: boolean;
   /** Lo que reportó una PERSONA del equipo (needsValidation) y espera respuesta del CSE. */
   sugerenciasDelEquipo: number;
   // ── Estado del plan ──
@@ -124,7 +127,16 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
       cta: "Revisar particularidades",
     });
   }
-  if (i.pendingProposal) {
+  if (i.pendingProposal && i.armandoTareas) {
+    /* Revisión de E2a: el borrador vacío que espera sus tareas no es una propuesta que decidir (no
+       hay barra ni nada que aplicar): la fila informa y no lleva a ningún lado. */
+    out.push({
+      id: "draft-proposal", group: "decidir", tone: "info",
+      title: "La IA está armando las tareas del cronograma",
+      why: "Cuando termine, la propuesta aparece arriba del Gantt para revisarla.",
+      cta: null,
+    });
+  } else if (i.pendingProposal) {
     out.push({
       id: "draft-proposal", group: "decidir", tone: "info",
       title: "La IA propone cambios del cronograma",

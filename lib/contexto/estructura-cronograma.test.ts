@@ -424,7 +424,8 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     expect(iModelo, "no se encontró la llamada al modelo").toBeGreaterThan(-1);
     const iSinMaterial = src.indexOf('estado: "sin-material"');
     expect(iSinMaterial).toBeGreaterThan(-1);
-    expect(iSinMaterial).toBeLessThan(src.indexOf("prisma.agentRun.create("));
+    /* (Revisión de E2a: la corrida se crea DENTRO de la toma atómica, con `tx`; lo protegido no cambió.) */
+    expect(iSinMaterial).toBeLessThan(src.indexOf("tx.agentRun.create("));
     /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: pedía
        `!tieneMaterialDelCronograma(contexto.fuentes)`; las «Instrucciones adicionales» solas ahora
        también se revisan (`hayQueRevisarLasFases`). Sin nada que revisar, sigue sin pagar. */
@@ -434,13 +435,18 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
   });
 
   it("la corrida se crea antes del modelo, sin agente, con quién y con qué reuniones", () => {
-    const iRun = src.indexOf("prisma.agentRun.create(");
+    /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: buscaba
+       `prisma.agentRun.create(` con `triggeredByEmail: await triggeredByEmail()` adentro. La corrida
+       se crea ahora dentro de la toma atómica (`tx.agentRun.create(`), y quién la pidió se lee UNA vez
+       antes de abrir la transacción (no se espera nada lento con la fila bloqueada). */
+    const iRun = src.indexOf("tx.agentRun.create(");
     expect(iRun).toBeGreaterThan(-1);
     expect(iRun).toBeLessThan(iModelo);
     const alta = src.slice(iRun, src.indexOf("});", iRun));
     expect(alta).toContain("agentId: null");
     expect(alta).toContain("agentSlug: ID_ESTRUCTURA_CRONOGRAMA");
-    expect(alta).toContain("triggeredByEmail: await triggeredByEmail()");
+    expect(alta).toContain("triggeredByEmail: quien");
+    expect(src.slice(0, src.indexOf("prisma.$transaction("))).toContain("const quien = await triggeredByEmail();");
     expect(alta).toContain("sourceSessionIds: contexto.sesionesUsadas");
   });
 
@@ -500,7 +506,7 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     const i409 = src.indexOf("tl.pendingProposal !== null");
     expect(i409, "no se encontró el 409").toBeGreaterThan(-1);
     expect(i409, "el 409 volvió a ir antes del chequeo del material").toBeGreaterThan(iSinMaterial);
-    expect(i409, "el 409 tiene que ir antes de la corrida y del modelo").toBeLessThan(src.indexOf("prisma.agentRun.create("));
+    expect(i409, "el 409 tiene que ir antes de la corrida y del modelo").toBeLessThan(src.indexOf("tx.agentRun.create("));
   });
 
   it("lee la respuesta con `leerRespuestaDeEstructura`, no de la primera a la última llave (revisión del paso A3)", () => {
@@ -532,30 +538,59 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     /* El paso 1 ya no bloquea la pantalla: otra pestaña (u otra persona) puede pedirlo mientras corre
        uno, y serían dos corridas pagadas para UNA propuesta. La edición que la pone en rojo: sacar el
        chequeo, moverlo después de crear la corrida (o del modelo), mirar otro agente o todas las
-       corridas vivas del proyecto, o medir la ventana con un segundo reloj. */
-    const iEnCurso = src.indexOf('error: "ESTRUCTURA_EN_CURSO"');
-    expect(iEnCurso, "no hay 409 de paso 1 en curso").toBeGreaterThan(-1);
-    const iRun = src.indexOf("prisma.agentRun.create(");
-    expect(iEnCurso, "el 409 tiene que ir antes de crear la corrida").toBeLessThan(iRun);
-    expect(iEnCurso).toBeLessThan(iModelo);
-    // Después del 409 de la propuesta pendiente (sin material no hay nada que frenar).
-    expect(iEnCurso).toBeGreaterThan(src.indexOf("tl.pendingProposal !== null"));
-    const iBusca = src.indexOf("prisma.agentRun.findFirst(");
+       corridas vivas del proyecto, o medir la ventana con un segundo reloj.
+       ⚠ REESCRITA en la revisión de E2a (2026-09-25), con esta razón: pedía
+       `const x = await prisma.agentRun.findFirst(…); if (x) { return …409 }` ANTES de
+       `prisma.agentRun.create(`. Eran dos idas a la base: dos pedidos juntos pasaban los dos. Ahora
+       la búsqueda y el alta van en la toma atómica (`tx`), la búsqueda veta con "en-curso" y el 409
+       sale apenas termina la toma, antes del modelo. Lo protegido no cambió. */
+    const iToma = src.indexOf("const toma = await prisma.$transaction(async (tx) => {");
+    expect(iToma, "no hay toma atómica del paso 1").toBeGreaterThan(-1);
+    const toma = src.slice(iToma, src.indexOf("const run = toma;", iToma));
+    const iBusca = toma.indexOf("tx.agentRun.findFirst(");
+    const iVeto = toma.indexOf('if (pasoEnCurso) return "en-curso" as const;');
+    const iRun = toma.indexOf("tx.agentRun.create(");
     expect(iBusca, "no busca la corrida en curso").toBeGreaterThan(-1);
-    expect(iBusca).toBeLessThan(iEnCurso);
-    const busca = src.slice(iBusca, src.indexOf("});", iBusca));
+    expect(iVeto, "la corrida en curso se busca pero no frena").toBeGreaterThan(iBusca);
+    expect(iRun, "el veto tiene que ir antes de crear la corrida").toBeGreaterThan(iVeto);
+    const busca = toma.slice(iBusca, toma.indexOf("});", iBusca));
     expect(busca).toContain("projectId,");
     expect(busca, "mira otro agente: frenaría por cualquier corrida del proyecto").toContain(
       "agentSlug: ID_ESTRUCTURA_CRONOGRAMA",
     );
     expect(busca).toContain('status: "RUNNING"');
     expect(busca, "la ventana se mide con otro reloj").toMatch(/createdAt: \{ gte: new Date\(ahora - /);
-    // Y lo que encuentra es lo que responde el 409 (no un chequeo que no frena nada).
-    expect(src, "la corrida en curso se busca pero no frena").toMatch(
-      /const (\w+) = await prisma\.agentRun\.findFirst\([\s\S]*?\);\s*if \(\1\) \{\s*return NextResponse\.json\(\{ error: "ESTRUCTURA_EN_CURSO"/,
-    );
+    // Y el veto es lo que responde el 409, antes del modelo.
+    const iEnCurso = src.indexOf('error: "ESTRUCTURA_EN_CURSO"');
+    expect(iEnCurso, "no hay 409 de paso 1 en curso").toBeGreaterThan(iToma);
+    expect(iEnCurso).toBeLessThan(iModelo);
+    expect(src.slice(iEnCurso - 120, iEnCurso)).toContain('if (toma === "en-curso") {');
+    // Después del 409 de la propuesta pendiente (sin material no hay nada que frenar).
+    expect(iToma).toBeGreaterThan(src.indexOf("tl.pendingProposal !== null"));
+    expect(src, "quedó una búsqueda o un alta fuera de la toma").not.toMatch(/prisma\.agentRun\.(findFirst|create)\(/);
     // Sigue habiendo UN solo reloj en la ruta (la guarda de arriba lo cuenta).
     expect(src.match(/Date\.now\(\)/g) ?? []).toHaveLength(1);
+  });
+
+  it("⛔ la toma del paso 1 es ATÓMICA: fila bloqueada, propuesta RELEÍDA y corrida creada en la misma transacción", () => {
+    /* Revisión de E2a: la propuesta se miraba en la lectura de arriba (vieja: entre ella y el modelo
+       se carga el contexto, segundos) y buscar la corrida en curso y crear la nuestra eran dos idas a
+       la base. Dos pedidos juntos, o uno que entraba justo cuando otro terminaba, pagaban el modelo
+       dos veces. Las ediciones que la ponen en rojo: sacar el `FOR UPDATE`, no releer la propuesta
+       adentro, o crear la corrida fuera de la transacción. */
+    const iToma = src.indexOf("const toma = await prisma.$transaction(async (tx) => {");
+    expect(iToma).toBeGreaterThan(-1);
+    const toma = src.slice(iToma, src.indexOf("const run = toma;", iToma));
+    const iBloqueo = toma.indexOf('FROM "ProjectTimeline" WHERE "id" = ${tl.id} FOR UPDATE');
+    const iRelee = toma.indexOf('if (!fila || fila.conPropuesta) return "propuesta-pendiente" as const;');
+    expect(iBloqueo, "la toma no bloquea la fila del cronograma").toBeGreaterThan(-1);
+    expect(toma.slice(0, iBloqueo)).toContain('SELECT ("pendingProposal" IS NOT NULL) AS "conPropuesta"');
+    expect(iRelee, "la toma no relee la propuesta").toBeGreaterThan(iBloqueo);
+    expect(toma.indexOf("tx.agentRun.findFirst(")).toBeGreaterThan(iRelee);
+    expect(toma.indexOf("tx.agentRun.create(")).toBeGreaterThan(iRelee);
+    expect(src.slice(src.indexOf("const run = toma;") - 300)).toContain(
+      'if (toma === "propuesta-pendiente") return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });',
+    );
   });
 
   it("E2a · la propuesta nace como `borrador-v1` DENTRO de la escritura condicionada, y es lo que responde", () => {

@@ -115,6 +115,7 @@ function baseFalsa(
   );
   const llamadas: string[] = [];
   const wheres: unknown[] = [];
+  const reubicaciones: unknown[] = [];
   const borrados: unknown[] = [];
   const editados: Array<Record<string, unknown>> = [];
   let secuencia = 0;
@@ -213,10 +214,15 @@ function baseFalsa(
       },
     },
     timelineTask: {
-      updateMany: async (args: { where: { phaseId: string; weekIndex: { gte: number } }; data: { weekIndex: number } }) => {
+      updateMany: async (args: {
+        where: { phaseId: string; weekIndex: { gte: number }; id?: { notIn: string[] } };
+        data: { weekIndex: number };
+      }) => {
         llamadas.push(`tareas:${args.where.phaseId}`);
+        reubicaciones.push(args.where);
         let count = 0;
         for (const t of estado.tareas) {
+          if (args.where.id?.notIn.includes(t.id)) continue; // E2a (revisión): las que el aplicar borra no se mueven
           if (t.phaseId === args.where.phaseId && t.weekIndex >= args.where.weekIndex.gte) {
             t.weekIndex = args.data.weekIndex;
             count++;
@@ -272,7 +278,7 @@ function baseFalsa(
       },
     },
   };
-  return { tx: tx as unknown as TxDeEstructura, estado, llamadas, wheres, borrados, editados };
+  return { tx: tx as unknown as TxDeEstructura, estado, llamadas, wheres, reubicaciones, borrados, editados };
 }
 
 const FASES = [fase("a", "Kick-off", 0, 1), fase("b", "Diseño", 1, 2), fase("c", "Pruebas", 2, 3), fase("d", "Cierre", 3, 1)];
@@ -763,6 +769,36 @@ describe("aplicar el borrador CON tareas (E2a)", () => {
     const db2 = baseFalsa({ ancla: null, fases: cerrada, tareas: soloHechas, propuesta: sumar, token: "run-estructura" });
     await aplicarBorradorEnTx(db2.tx, pedidoConTareas(sumar, { fases: FASES, tareas: soloHechas }));
     expect(db2.estado.fases.find((f) => f.id === "c")!.status).toBe("IN_PROGRESS");
+  });
+
+  it("⛔ al acortar una fase, el aviso cuenta SOLO las tareas que quedan: las que el mismo aplicar borra no se mueven", async () => {
+    /* Revisión de E2a: la estructura corre antes que las tareas y movía también las que se iban, así
+       que el aviso decía «2 tareas… se movieron» cuando una ya no existía. La edición que la pone en
+       rojo: no pasarle `seVan` a la estructura, o sacar el `notIn` de la reubicación. */
+    const tareas = [...TAREAS, tareaDB("t4", "c", "Pruebas finales", 2, 1)];
+    const t2 = tareas.find((t) => t.id === "t2")!;
+    const acorta: Borrador = {
+      formato: FORMATO_BORRADOR,
+      version: 2,
+      origen: "contexto",
+      observaciones: [],
+      cambios: [
+        { tipo: "fase-cambia", clave: "fase:c:durationWeeks", faseId: "c", fase: "Pruebas", campo: "durationWeeks", desde: 3, a: 2 },
+        { tipo: "tarea-se-va", clave: claveDeTareaQueSeVa("t2"), tareaId: "t2", faseId: "c", desde: fotoDeTarea(tareaDelVivo(t2)) },
+      ],
+      pedido: "regenerar",
+      tareas: { corrida: "run-tareas", listas: true },
+      tareasArmadasPara: { c: { nombre: "Pruebas", semanas: 2 } },
+    };
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas, propuesta: acorta, token: "run-estructura" });
+    const r = await aplicarBorradorEnTx(db.tx, pedidoConTareas(acorta, { fases: FASES, tareas }));
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 1 });
+    expect(db.reubicaciones).toEqual([{ phaseId: "c", weekIndex: { gte: 2 }, id: { notIn: ["t2"] } }]);
+    expect(r.avisos, "el aviso contó una tarea que el mismo aplicar borró").toEqual([
+      "«Pruebas» pasó a 2 semanas y 1 tarea quedaba más allá: se movió a la última semana.",
+    ]);
+    expect(db.estado.tareas.find((t) => t.id === "t4")!.weekIndex).toBe(1);
+    expect(db.estado.tareas.some((t) => t.id === "t2")).toBe(false);
   });
 });
 

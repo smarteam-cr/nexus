@@ -184,10 +184,10 @@ export function evaluarMagnitud(c: ConteoDeLaPropuesta): MagnitudPropuesta {
   };
 }
 
-/** Une frases con comas y «y» antes de la última. Local a propósito: el de publish-diff
+/** Une frases con comas y «y» antes de la última. Aparte del de publish-diff a propósito: ese
  *  capitaliza y agrega punto para su propio caso (precargar un textarea), y acá el fragmento
- *  va embebido en una oración más larga. */
-function unirFrases(frases: string[]): string {
+ *  va embebido en una oración más larga (también la de la confirmación del borrador). */
+export function unirFrases(frases: string[]): string {
   if (frases.length === 0) return "";
   if (frases.length === 1) return frases[0];
   return `${frases.slice(0, -1).join(", ")} y ${frases[frases.length - 1]}`;
@@ -198,6 +198,12 @@ function unirFrases(frases: string[]): string {
  * el confirm de «Reemplazar todo» pone antes de que alguien apriete.
  */
 export function redactarResumenDeCambios(m: MagnitudPropuesta): string {
+  return unirFrases(frasesDeCambios(m));
+}
+
+/** Las frases de `redactarResumenDeCambios`, sin unir: la confirmación del borrador les suma las de
+ *  las tareas y las une una sola vez (lib/timeline/borrador.ts, `resumenDeLaConfirmacion`). */
+export function frasesDeCambios(m: MagnitudPropuesta): string[] {
   const frases: string[] = [];
   if (m.fasesRenombradas > 0) {
     frases.push(`${plural(m.fasesRenombradas, "fase cambia", "fases cambian")} de nombre`);
@@ -211,5 +217,5 @@ export function redactarResumenDeCambios(m: MagnitudPropuesta): string {
   }
   if (m.reordena) frases.push("se reordenan las fases");
   if (m.mueveArranque) frases.push("se mueve la fecha de arranque");
-  return unirFrases(frases);
+  return frases;
 }

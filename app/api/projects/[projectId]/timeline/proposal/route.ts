@@ -55,11 +55,14 @@ export async function DELETE(
   if (body?.reason === "auto-zero-deltas") {
     /* ⛔ E2a: un borrador que ESPERA sus tareas («faltan» o «armando») está vacío todavía, pero se
        va a llenar. El descarte automático de una pestaña de E1 lo borraría y la corrida pagada del
-       paso 2 se perdería: el servidor lo frena. La pestaña lo trata como «otra propuesta» y la
-       vuelve a traer. Un v1 vacío cuya corrida falló sí se descarta (no queda nada que esperar). */
+       paso 2 se perdería: el servidor lo frena. Un v1 vacío cuya corrida falló sí se descarta (no
+       queda nada que esperar).
+       ⛔ 423 y NO 409 (revisión de E2a): la pestaña de E1 trata todo 409 como «otra propuesta» y la
+       vuelve a traer; con el mismo v1 vacío en pantalla, su efecto mandaba otro DELETE, en bucle
+       durante toda la corrida. Con 423 la suelta en memoria y no la vuelve a pedir; acá no se escribe. */
     const tareas = await leerEstadoDeLasTareas(existing.pendingProposal);
     if (tareas?.estado === "faltan" || tareas?.estado === "armando") {
-      return NextResponse.json({ cleared: false, reason: "tareas_pendientes" }, { status: 409 });
+      return NextResponse.json({ cleared: false, reason: "tareas_pendientes" }, { status: 423 });
     }
     console.log(
       `[timeline] propuesta auto-descartada sin deltas visibles (project ${projectId}, run ${existing.pendingProposalRunId ?? "?"}).`,

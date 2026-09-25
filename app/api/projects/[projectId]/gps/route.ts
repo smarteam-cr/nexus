@@ -23,6 +23,7 @@ import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
+import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -517,7 +518,8 @@ export const GET = withProjectAccess(async (
       actorEmail: project.altaActorEmail,
       intentos: project.altaIntentos,
     },
-    timelineProposalPending: project.timeline?.pendingProposal != null,
+    // El borrador vacío que espera sus tareas no es una propuesta que revisar (revisión de E2a).
+    timelineProposalPending: hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null),
   });
 }));
 

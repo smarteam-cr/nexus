@@ -12,6 +12,7 @@ import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
+import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 
 /**
  * Los canvases del proyecto inicial, CON su señal de contenido. La señal viaja desde el
@@ -145,7 +146,8 @@ export default async function ClientPage({
   };
   const visibleProjects = projects
     .filter((p) => esProyectoNavegable(p, paraFiltro))
-    .map(({ timeline, ...p }) => ({ ...p, timelineProposalPending: timeline?.pendingProposal != null }));
+    // El borrador vacío que espera sus tareas no es una propuesta que revisar (revisión de E2a).
+    .map(({ timeline, ...p }) => ({ ...p, timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null) }));
 
   // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
   const strategyRef = await ensureStrategyProject(id);

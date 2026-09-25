@@ -74,6 +74,7 @@ import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { motivoDeLaRespuesta } from "@/lib/agents/run-error";
 import { autoClassifyOrphanSessions } from "@/lib/projects/analyze-participants";
 import { computeHandoffReadiness, projectHasEraEngagements } from "@/lib/handoff/feeding";
 import { isSalesPresence } from "@/lib/handoff/sales-presence";
@@ -2861,9 +2862,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     let output: string | undefined;
     if (res.status >= 400) {
       try {
-        const body = (await res.clone().json()) as { error?: unknown; message?: unknown };
-        const motivo = typeof body?.error === "string" ? body.error : body?.message;
-        if (typeof motivo === "string" && motivo.trim()) output = JSON.stringify({ error: motivo });
+        // El TEXTO antes que el código (revisión de E2a): el CSE leía «CLAUDE_ERROR» en el toast.
+        const motivo = motivoDeLaRespuesta(await res.clone().json());
+        if (motivo) output = JSON.stringify({ error: motivo });
       } catch {
         /* respuesta sin JSON legible: queda el genérico de parseRunError */
       }

@@ -75,6 +75,8 @@ export interface TimelineActionSignals {
   pendingProgressDias?: number | null;
   pendingParticularidades: number;
   pendingProposal: boolean;
+  /** La propuesta es el borrador vacío que espera sus tareas (`esVacioEsperandoTareas`, borrador.ts). */
+  armandoTareas?: boolean;
   /** Confirmadas (needsValidation = false). */
   particularidades: ActionParticularidad[];
   /** Cuántas reportó una PERSONA del equipo y esperan respuesta (needsValidation = true). */
@@ -115,6 +117,7 @@ export function buildActionsInput(
     pendingProgressDias: s.pendingProgressDias ?? null,
     pendingParticularidades: s.pendingParticularidades,
     pendingProposal: s.pendingProposal,
+    ...(s.armandoTareas ? { armandoTareas: true } : {}),
     sugerenciasDelEquipo: s.sugerenciasDelEquipo,
     anchorStartDate: anchor,
     detailConfirmedAt: s.detailConfirmedAt,

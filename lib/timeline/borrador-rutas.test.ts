@@ -44,18 +44,24 @@ import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline
 import { ErrorAlAplicar } from "@/lib/timeline/escribir-estructura";
 import { FORMATO_BORRADOR, MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import {
+  causaDelFallo,
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
   leerEstadoDeLasTareas,
   leerPedidoDeTareas,
   marcarTareasEnCurso,
+  MENSAJE_SIN_TAREAS_QUE_ARMAR,
   MENSAJE_TAREAS_EN_CURSO,
   MENSAJE_TAREAS_YA_LISTAS,
   MOTIVO_TAREAS_CORTADAS,
   MOTIVO_TAREAS_PERDIDAS,
   MOTIVO_TAREAS_SIN_GUARDAR,
   prevalidarPedidoDeTareas,
+  vetoDelGuardado,
 } from "@/lib/timeline/borrador-del-detalle";
+import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
+import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { motivoDeLaRespuesta } from "@/lib/agents/run-error";
 import type { EstructuraHipotetica } from "@/lib/timeline/borrador";
 import { Prisma } from "@prisma/client";
 
@@ -252,15 +258,19 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
     });
   };
 
-  it("⛔ «faltan» o «armando» + auto-zero-deltas → 409 tareas_pendientes, sin escribir", async () => {
+  it("⛔ «faltan» o «armando» + auto-zero-deltas → 423 tareas_pendientes (nunca 409), sin escribir", async () => {
     /* [D1] Una pestaña de E1 ve un v1 vacío y lo descarta sola: se perdía la corrida pagada del paso
-       2. La edición que la pone en rojo: sacar el freno, o frenarlo solo en uno de los dos estados. */
+       2. La edición que la pone en rojo: sacar el freno, o frenarlo solo en uno de los dos estados.
+       ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía 409. La pestaña de E1
+       trata todo 409 como «otra propuesta» y vuelve a traer la guardada: con el mismo v1 vacío, su
+       efecto mandaba otro DELETE, en bucle durante toda la corrida. Con 423 la suelta en memoria.
+       Volver a 409 también la pone en rojo. */
     db.projectTimeline.updateMany.mockResolvedValue({ count: 1 }); // si llegara a borrar, borraría
     for (const tareas of [{ corrida: null, listas: false }, { corrida: "run-t", listas: false }]) {
       db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1({ tareas }) });
       conCorrida("RUNNING", 1);
       const res = await descartarDELETE(pedir({ reason: "auto-zero-deltas", runId: "run-1" }), delProyecto);
-      expect(res.status, JSON.stringify(tareas)).toBe(409);
+      expect(res.status, `${JSON.stringify(tareas)}: un 409 hace que la pestaña de E1 lo vuelva a traer`).toBe(423);
       expect(await res.json()).toEqual({ cleared: false, reason: "tareas_pendientes" });
     }
     expect(db.projectTimeline.updateMany).not.toHaveBeenCalled();
@@ -332,20 +342,59 @@ describe("leerEstadoDeLasTareas — el estado se DEDUCE de la corrida", () => {
 
   it("⭐ armando con su fase; y los motivos del fallo, en tuteo", async () => {
     /* La edición que la pone en rojo: el motivo genérico de `parseRunError` (con voseo) en la línea
-       del CSE, o `MOTIVO_COLGADA` (también con voseo) para la corrida colgada. */
+       del CSE, o `MOTIVO_COLGADA` (también con voseo) para la corrida colgada.
+       ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía que el error guardado
+       llegara TAL CUAL («Se acabó el tiempo de la IA.»). Así llegaban también «CLAUDE_ERROR» y el
+       «Prueba de nuevo» de `humanizeAgentError` al lado del botón «Volver a intentar». Ahora se
+       traduce a una causa corta (`causaDelFallo`) y lo que no se reconoce queda en lo genérico. */
     const t = v1({ tareas: { corrida: "run-t", listas: false } });
     corrida("RUNNING", 2, null, "Armando «Diseño»");
     expect(await leerEstadoDeLasTareas(t)).toEqual({ estado: "armando", fase: "Armando «Diseño»", motivo: null });
     corrida("RUNNING", 31);
     expect(await leerEstadoDeLasTareas(t)).toEqual({ estado: "fallo", fase: null, motivo: MOTIVO_TAREAS_CORTADAS });
-    corrida("ERROR", 1, JSON.stringify({ error: "Se acabó el tiempo de la IA." }));
-    expect(await leerEstadoDeLasTareas(t)).toMatchObject({ estado: "fallo", motivo: "Se acabó el tiempo de la IA." });
+    corrida("ERROR", 1, JSON.stringify({ error: "La IA tardó demasiado o se cortó la conexión. Prueba de nuevo." }));
+    expect(await leerEstadoDeLasTareas(t)).toMatchObject({ estado: "fallo", motivo: "la IA tardó demasiado o se cortó la conexión" });
+    corrida("ERROR", 1, JSON.stringify({ error: "Algo que nadie tradujo." }));
+    expect(await leerEstadoDeLasTareas(t), "el texto crudo llegó a la línea").toMatchObject({ estado: "fallo", motivo: null });
     corrida("ERROR", 1, "no es JSON");
     expect(await leerEstadoDeLasTareas(t), "el motivo genérico tiene voseo").toMatchObject({ estado: "fallo", motivo: null });
     corrida("DONE", 1);
     expect(await leerEstadoDeLasTareas(t)).toMatchObject({ estado: "fallo", motivo: MOTIVO_TAREAS_SIN_GUARDAR });
     db.agentRun.findUnique.mockResolvedValue(null);
     expect(await leerEstadoDeLasTareas(t)).toEqual({ estado: "fallo", fase: null, motivo: null });
+  });
+
+  it("⛔ la causa del fallo nunca es un código ni el texto crudo: una frase corta, en tuteo y en minúscula", () => {
+    /* Revisión de E2a: la línea decía «No se pudieron armar las tareas: CLAUDE_ERROR» y, con el texto
+       de `humanizeAgentError`, mezclaba «Probá de nuevo» con el botón «Volver a intentar». La
+       edición que la pone en rojo: devolver lo guardado tal cual, o una causa que arranque en
+       mayúscula o repita «de nuevo». */
+    const guardados = [
+      "CLAUDE_ERROR",
+      "NO_CREDITS",
+      "PROPUESTA_CAMBIO",
+      "PROPUESTA_PENDIENTE",
+      "Error al ejecutar el agente. Intenta de nuevo.",
+      "Sin créditos en la API de Anthropic. Recarga en console.anthropic.com → Billing.",
+      MENSAJE_PROPUESTA_CAMBIO,
+      ...[
+        Object.assign(new Error("overloaded_error"), { status: 529 }),
+        Object.assign(new Error("rate limit"), { status: 429 }),
+        new Error("Request timed out."),
+        new Error("Your credit balance is too low"),
+        Object.assign(new Error("invalid x-api-key"), { status: 401 }),
+        Object.assign(new Error("max_tokens"), { status: 400 }),
+        new Error("algo raro"),
+      ].map(humanizeAgentError),
+    ];
+    for (const g of guardados) {
+      const causa = causaDelFallo(g);
+      expect(causa, `«${g}» no se tradujo`).not.toBeNull();
+      expect(causa, g).not.toBe(g);
+      expect(causa!, g).not.toMatch(/[A-Z]{3,}_|de nuevo|Probá|avisá/);
+      expect(causa![0], `«${causa}» arranca en mayúscula`).toBe(causa![0].toLowerCase());
+    }
+    expect(causaDelFallo("Algo que nadie tradujo."), "lo que no se reconoce queda en lo genérico").toBeNull();
   });
 });
 
@@ -451,6 +500,37 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(llamada).toContain("cortado: detalleCortado,");
   });
 
+  it("⛔ la corrida de un 409 del paso 2 no guarda un código en MAYÚSCULAS como error", () => {
+    /* Revisión de E2a: `markDone` guardaba `body.error` antes que `body.message`, así que la corrida
+       del paso 2 quedaba con «PROPUESTA_CAMBIO» o «CLAUDE_ERROR», y el CSE lo leía tal cual en el
+       toast, en el centro de corridas y en la línea de las tareas. La edición que la pone en rojo:
+       volver a preferir el código en `markDone` (o en `motivoDeLaRespuesta`). */
+    const iMark = ruta.indexOf("const markDone = async (res: NextResponse) => {");
+    expect(iMark, "no encontré markDone").toBeGreaterThan(-1);
+    const mark = ruta.slice(iMark, ruta.indexOf("const markError", iMark));
+    expect(mark).toContain("const motivo = motivoDeLaRespuesta(await res.clone().json());");
+    expect(mark, "markDone volvió a elegir el código por su cuenta").not.toMatch(/body\??\.error/);
+    // Lo que responde el paso 2 cuando no sigue: los vetos, el 409 dentro de la corrida y el 500 del modelo.
+    const pedido = { token: "run-1", version: 5 };
+    const cuerpos: unknown[] = [
+      vetoDelGuardado(VIEJA, "run-h", { token: null, version: null }),
+      vetoDelGuardado(v1(), "run-otra", pedido),
+      { error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO },
+      { error: "NO_SE_PUEDE", message: MENSAJE_SIN_TAREAS_QUE_ARMAR },
+      { error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO },
+      { error: "CLAUDE_ERROR", message: "Error al ejecutar el agente. Intenta de nuevo." },
+    ];
+    for (const c of cuerpos) {
+      const guardado = motivoDeLaRespuesta(c);
+      expect(guardado, JSON.stringify(c)).not.toBeNull();
+      expect(guardado, `la corrida guarda el código de ${JSON.stringify(c)}`).not.toMatch(/^[A-Z_]+$/);
+    }
+    // Sin texto, el código es mejor que nada; sin nada, null (queda el genérico).
+    expect(motivoDeLaRespuesta({ error: "NO_TIMELINE" })).toBe("NO_TIMELINE");
+    expect(motivoDeLaRespuesta({ error: "  ", message: "" })).toBeNull();
+    expect(motivoDeLaRespuesta(null)).toBeNull();
+  });
+
   it("⛔ la ruta no escribe el borrador: exactamente 4 accesos a projectTimeline, todos de antes", () => {
     /* Todas las escrituras del borrador viven en lib/timeline/borrador-del-detalle.ts (probadas abajo
        con la base falsa). Los 4 de hoy: el fail-fast, y la lectura, la escritura y el alta del
@@ -537,6 +617,22 @@ describe("leerPedidoDeTareas — el `borrador` del body de /analyze", () => {
       expect(leerPedidoDeTareas(malo), JSON.stringify(malo)).toBe("invalido");
     }
   });
+
+  it("⭐ token null: acepta lo que notó el paso 1 (limpio y con techo); con token, lo ignora", () => {
+    /* Revisión de E2a: lo que notó el paso 1 vivía solo en la memoria de la pantalla y se perdía al
+       recargar o al descartar el borrador vacío. La edición que la pone en rojo: no leerlas, o
+       aceptar cualquier cosa (no son un canal para meter texto sin techo en la propuesta). */
+    expect(leerPedidoDeTareas({ token: null, observaciones: [" Pruebas pasa a 3 semanas. ", "", "Pruebas pasa a 3 semanas."] })).toEqual({
+      token: null,
+      version: null,
+      observaciones: ["Pruebas pasa a 3 semanas."],
+    });
+    expect(leerPedidoDeTareas({ token: null, observaciones: [] })).toEqual({ token: null, version: null });
+    expect(leerPedidoDeTareas({ token: "run-1", version: 5, observaciones: ["x"] })).toEqual({ token: "run-1", version: 5 });
+    for (const observaciones of ["texto", [1], ["x".repeat(1001)], Array.from({ length: 21 }, (_, i) => `o${i}`)]) {
+      expect(leerPedidoDeTareas({ token: null, observaciones }), JSON.stringify(observaciones).slice(0, 40)).toBe("invalido");
+    }
+  });
 });
 
 describe("prevalidarPedidoDeTareas — antes de pagar la corrida", () => {
@@ -599,6 +695,14 @@ describe("marcarTareasEnCurso — el borrador queda «armando» con la corrida",
       pedido: "regenerar",
       tareas: { corrida: "run-t", listas: false },
     });
+
+    expect(data.pendingProposal.observaciones).toEqual([]);
+
+    // Lo que notó el paso 1 nace dentro del borrador vacío (revisión de E2a).
+    db.projectTimeline.updateMany.mockClear();
+    const notas = ["Pruebas pasa a 3 semanas: no se pudo proponer."];
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null, observaciones: notas }, corrida: "run-t" });
+    expect(db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal.observaciones, "se perdió lo que notó el paso 1").toEqual(notas);
 
     db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
     expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-t" })).toMatchObject({

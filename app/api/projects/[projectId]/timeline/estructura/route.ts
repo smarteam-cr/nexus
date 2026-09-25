@@ -133,44 +133,60 @@ export async function POST(
   // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
   if (tl.pendingProposal !== null) return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
 
-  /* E2a: el paso 1 ya no bloquea la pantalla, así que otra pestaña (u otra persona) puede pedirlo
-     mientras corre uno: dos corridas pagadas para UNA propuesta (la segunda chocaría en el
-     `updateMany`). Con uno de este proyecto empezado hace menos de 3 minutos, no se paga otro. Con el
-     MISMO reloj que el calendario y el armador (`ahora`). */
-  const pasoEnCurso = await prisma.agentRun.findFirst({
-    where: {
-      projectId,
-      agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
-      status: "RUNNING",
-      createdAt: { gte: new Date(ahora - VENTANA_DEL_PASO_1_EN_CURSO_MS) },
-    },
-    select: { id: true },
-  });
-  if (pasoEnCurso) {
-    return NextResponse.json({ error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO }, { status: 409 });
-  }
-
   const userMessage = renderEstructuraDelCronograma({
     instrucciones: contexto.instrucciones,
     fuentes: contexto.fuentes,
   });
+  const quien = await triggeredByEmail();
 
-  /* La corrida se crea ANTES del modelo: si Claude falla, queda el registro del intento.
+  /* ⛔ LA TOMA DEL PASO 1, ATÓMICA (revisión de E2a). El paso 1 ya no bloquea la pantalla, así que
+     otra pestaña (u otra persona) puede pedirlo mientras corre uno: dos corridas pagadas para UNA
+     propuesta (la segunda chocaría en el `updateMany`). Dos agujeros tenía el chequeo:
+       · la lectura de arriba es VIEJA: entre ella y acá se cargó el contexto (segundos), y otra
+         pestaña pudo dejar su propuesta y cerrar su corrida;
+       · buscar la corrida en curso y crear la nuestra eran dos idas a la base: dos pedidos juntos
+         pasaban los dos.
+     Ahora, en UNA transacción con la fila del cronograma bloqueada (`FOR UPDATE`, el mismo molde
+     que lib/kickoff/assign-horario.ts): se relee si hay propuesta, se busca un paso 1 de este
+     proyecto empezado hace menos de 3 minutos (con el MISMO reloj que el calendario y el armador,
+     `ahora`) y recién ahí se crea la corrida. El segundo pedido espera al primero y ya lo ve.
+     La corrida se crea ANTES del modelo: si Claude falla, queda el registro del intento.
      `agentId: null` porque este revisor NO tiene fila en `Agent` (ver lib/agents/estructura-cronograma.ts). */
-  const run = await prisma.agentRun.create({
-    data: {
-      agentId: null,
-      agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
-      clientId: guard.clientId,
-      projectId,
-      status: "RUNNING",
-      stepLabel: "Fases y tiempos desde el Contexto del cronograma",
-      // Trazabilidad: qué reuniones elegidas le llegaron.
-      sourceSessionIds: contexto.sesionesUsadas ?? [],
-      triggeredByEmail: await triggeredByEmail(),
-    },
-    select: { id: true },
-  });
+  const toma = await prisma.$transaction(async (tx) => {
+    const [fila] = await tx.$queryRaw<Array<{ conPropuesta: boolean }>>`
+      SELECT ("pendingProposal" IS NOT NULL) AS "conPropuesta" FROM "ProjectTimeline" WHERE "id" = ${tl.id} FOR UPDATE
+    `;
+    if (!fila || fila.conPropuesta) return "propuesta-pendiente" as const;
+    const pasoEnCurso = await tx.agentRun.findFirst({
+      where: {
+        projectId,
+        agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+        status: "RUNNING",
+        createdAt: { gte: new Date(ahora - VENTANA_DEL_PASO_1_EN_CURSO_MS) },
+      },
+      select: { id: true },
+    });
+    if (pasoEnCurso) return "en-curso" as const;
+    return tx.agentRun.create({
+      data: {
+        agentId: null,
+        agentSlug: ID_ESTRUCTURA_CRONOGRAMA,
+        clientId: guard.clientId,
+        projectId,
+        status: "RUNNING",
+        stepLabel: "Fases y tiempos desde el Contexto del cronograma",
+        // Trazabilidad: qué reuniones elegidas le llegaron.
+        sourceSessionIds: contexto.sesionesUsadas ?? [],
+        triggeredByEmail: quien,
+      },
+      select: { id: true },
+    });
+  }, { maxWait: 5000, timeout: 10000 });
+  if (toma === "propuesta-pendiente") return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
+  if (toma === "en-curso") {
+    return NextResponse.json({ error: "ESTRUCTURA_EN_CURSO", message: MENSAJE_ESTRUCTURA_EN_CURSO }, { status: 409 });
+  }
+  const run = toma;
 
   let crudo: unknown;
   try {
@@ -182,7 +198,7 @@ export async function POST(
         agentRunId: run.id,
         clientId: guard.clientId,
         projectId,
-        triggeredByEmail: await triggeredByEmail(),
+        triggeredByEmail: quien,
         origen: "timeline/estructura",
       },
       () =>

@@ -510,6 +510,16 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "components/canvas/TareasDeLaPropuesta.tsx",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",
+    /* Revisión de E2a (2026-09-25): los textos del servidor que el CSE lee TAL CUAL también. El 409
+       del paso 2 y el motivo de la línea (borrador-del-detalle.ts), las observaciones de la barra
+       (tareas-del-detalle.ts) y el error de aplicar (escribir-estructura.ts) salen en un toast o en la
+       barra sin pasar por ningún componente; y el error de una corrida (anthropic-error.ts, y el
+       genérico de run-error.ts) llega al toast del cronograma y al centro de corridas. */
+    "lib/timeline/borrador-del-detalle.ts",
+    "lib/timeline/tareas-del-detalle.ts",
+    "lib/timeline/escribir-estructura.ts",
+    "lib/agents/anthropic-error.ts",
+    "lib/agents/run-error.ts",
     "components/canvas/TimelineAssistDialog.tsx",
     "components/canvas/TimelineGantt.tsx",
     "components/clients/FuentesManualesColumn.tsx",

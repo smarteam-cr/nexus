@@ -129,13 +129,21 @@ function tipoDeActividad(v: unknown): TimelineActivityType | null {
 
 /**
  * Escribe la estructura que dice el plan. Recibe las fases TAL COMO SE LEYERON en esta misma
- * transacción (con su `order`), para escribir solo lo que cambia.
+ * transacción (con su `order`), para escribir solo lo que cambia. `seVan`: las tareas que el mismo
+ * aplicar borra después (`escribirTareas`): no se mueven al acortar su fase ni cuentan en el aviso
+ * (revisión de E2a: el aviso decía «se movieron» de tareas que ya no existían).
  */
 export async function escribirEstructura(
   tx: TxDeEstructura,
-  entrada: { timelineId: string; fases: readonly FaseEnLaBase[]; escrituras: EscriturasDeEstructura },
+  entrada: {
+    timelineId: string;
+    fases: readonly FaseEnLaBase[];
+    escrituras: EscriturasDeEstructura;
+    seVan?: readonly string[];
+  },
 ): Promise<{ avisos: string[]; creadas: Array<{ clave: string; id: string }> }> {
   const { timelineId, fases, escrituras } = entrada;
+  const seVan = [...(entrada.seVan ?? [])];
   const porId = new Map(fases.map((f) => [f.id, f]));
   const avisos: string[] = [];
 
@@ -168,7 +176,11 @@ export async function escribirEstructura(
     const nuevaDuracion = data.durationWeeks;
     if (typeof nuevaDuracion === "number" && nuevaDuracion < antes.durationWeeks) {
       const reubicadas = await tx.timelineTask.updateMany({
-        where: { phaseId: id, weekIndex: { gte: nuevaDuracion } },
+        where: {
+          phaseId: id,
+          weekIndex: { gte: nuevaDuracion },
+          ...(seVan.length > 0 ? { id: { notIn: seVan } } : {}),
+        },
         data: { weekIndex: nuevaDuracion - 1 },
       });
       if (reubicadas.count > 0) {
@@ -332,7 +344,12 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
   }
 
   // 6) La estructura.
-  const { avisos, creadas } = await escribirEstructura(tx, { timelineId: p.timelineId, fases, escrituras: plan.escrituras });
+  const { avisos, creadas } = await escribirEstructura(tx, {
+    timelineId: p.timelineId,
+    fases,
+    escrituras: plan.escrituras,
+    seVan: plan.escrituras.tareas.seVan,
+  });
 
   // 7) Las tareas, con los ids reales de las fases nuevas y la duración con que quedan las fases.
   const duracionNueva = new Map(

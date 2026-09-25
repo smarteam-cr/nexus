@@ -78,7 +78,7 @@ import {
   projectedEnd,
   type ProjectedEnd,
 } from "./weeks";
-import { evaluarMagnitud, type MagnitudPropuesta } from "./magnitud-propuesta";
+import { evaluarMagnitud, frasesDeCambios, unirFrases, type MagnitudPropuesta } from "./magnitud-propuesta";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LOS TIPOS ────────────────────────────────────────────────────────────────
@@ -465,13 +465,15 @@ export function borradorBase(i: {
   };
 }
 
-/** El borrador que marca «armando las tareas» cuando no había propuesta de fases (0 cambios de fases). */
-export function borradorVacio(i: { pedido: PedidoDelBorrador; corrida: string }): Borrador {
+/** El borrador que marca «armando las tareas» cuando no había propuesta de fases (0 cambios de fases).
+ *  `observaciones`: lo que notó el paso 1 sin proponer (lo acordado que no entró). Van en el borrador
+ *  para que la barra las muestre y sobrevivan a recargar o a descartar (revisión de E2a). */
+export function borradorVacio(i: { pedido: PedidoDelBorrador; corrida: string; observaciones?: readonly string[] }): Borrador {
   return {
     formato: FORMATO_BORRADOR,
     version: 0,
     origen: "contexto",
-    observaciones: [],
+    observaciones: [...(i.observaciones ?? [])],
     cambios: [],
     pedido: i.pedido,
     tareas: { corrida: i.corrida, listas: false },
@@ -493,6 +495,22 @@ export function esBorradorV1(json: unknown): json is Record<string, unknown> {
 export function versionDelBorrador(json: unknown): number | null {
   return esBorradorV1(json) && typeof json.version === "number" ? json.version : null;
 }
+
+/**
+ * ¿Lo guardado es un borrador VACÍO que espera sus tareas? Es el que nace cuando el paso 1 no propuso
+ * cambios de fases (`borradorVacio`): todavía no hay nada que decidir ni barra donde hacerlo. El chat,
+ * «Qué hacer acá» y el cartel dicen que la IA está armando las tareas, no que hay una propuesta por
+ * decidir (revisión de E2a). Mira el JSON crudo: no necesita leer la corrida.
+ * ⚠ El handoff igual no lo pisa (`propuestaPorDecidir`): la corrida pagada se perdería.
+ */
+export function esVacioEsperandoTareas(json: unknown): boolean {
+  if (!esBorradorV1(json) || !Array.isArray(json.cambios) || json.cambios.length > 0) return false;
+  return esObjeto(json.tareas) && json.tareas.listas === false;
+}
+
+/** El cartel «El cronograma tiene una propuesta sin decidir» (widget y rail): hay una guardada y NO es
+ *  el borrador vacío que espera sus tareas (ahí no hay nada que revisar todavía). */
+export const hayPropuestaParaRevisar = (json: unknown): boolean => json != null && !esVacioEsperandoTareas(json);
 
 /** ¿El v1 guardado trae algún cambio de tareas? Mira el tipo crudo (también uno que esta versión no
  *  conoce): decide el permiso de aplicar, y ante la duda cuenta como tocar tareas. */
@@ -1060,11 +1078,17 @@ export function planDeAplicacion(
   });
 
   // 4) Las que sobreviven en cada fase: las vivas menos las que se van marcadas. Se cuentan por
-  //    huella del título + semana (dos iguales en la misma semana son dos).
+  //    huella del título + semana (dos iguales en la misma semana son dos), con la semana ACOTADA a
+  //    la duración final de su fase: al acortarla, el servidor las mueve a la última semana y ahí es
+  //    donde una nueva igual sería un duplicado (revisión de E2a).
   const seVanMarcadas = new Set<string>();
   borrador.cambios.forEach((c, i) => {
     if (c.tipo === "tarea-se-va" && estados[i]?.estado === "aplica") seVanMarcadas.add(c.tareaId);
   });
+  const semanaFinal = (fase: string, semana: number): number => {
+    const dur = marcada.get(fase)?.durationWeeks;
+    return dur === undefined ? semana : acotarSemana(semana, dur);
+  };
   const cuentas = new Map<string, Map<string, number>>();
   const cuentaDe = (fase: string): Map<string, number> => {
     let cuenta = cuentas.get(fase);
@@ -1072,7 +1096,7 @@ export function planDeAplicacion(
     cuenta = new Map();
     for (const t of ind.fasePorId.get(fase)?.tareas ?? []) {
       if (seVanMarcadas.has(t.id)) continue;
-      const k = llaveDeTarea(t.title, t.weekIndex);
+      const k = llaveDeTarea(t.title, semanaFinal(fase, t.weekIndex));
       cuenta.set(k, (cuenta.get(k) ?? 0) + 1);
     }
     cuentas.set(fase, cuenta);
@@ -1087,7 +1111,7 @@ export function planDeAplicacion(
       return;
     }
     const cuenta = cuentaDe(c.fase);
-    const k = llaveDeTarea(c.tarea.title, c.tarea.weekIndex);
+    const k = llaveDeTarea(c.tarea.title, semanaFinal(c.fase, c.tarea.weekIndex));
     const hay = cuenta.get(k) ?? 0;
     if (hay > 0) {
       cuenta.set(k, hay - 1);
@@ -1903,19 +1927,45 @@ export function textoDeLaConfirmacion(
   );
 }
 
+/**
+ * La PRIMERA oración de la confirmación de aplicar: cuántos cambios van y cuáles, con las fases y las
+ * tareas contadas por separado («…: se suman 2 fases nuevas, se crean 34 tareas y se quitan 9.»).
+ * Revisión de E2a: se armaba solo con las frases de fases, así que una propuesta solo de tareas decía
+ * «de una sola vez: .» y las tareas que se crean no aparecían en ningún lado. Sin ninguna frase, la
+ * oración termina sin los dos puntos.
+ */
+export function resumenDeLaConfirmacion(
+  r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado" | "tareas">,
+): string {
+  const frases = frasesDeCambios(r.magnitudDeLoMarcado);
+  const { nuevas, seVan } = r.tareas;
+  if (nuevas > 0) frases.push(`se ${nuevas === 1 ? "crea" : "crean"} ${plural(nuevas, "tarea", "tareas")}`);
+  if (seVan > 0) {
+    const verbo = seVan === 1 ? "quita" : "quitan";
+    frases.push(nuevas > 0 ? `se ${verbo} ${seVan}` : `se ${verbo} ${plural(seVan, "tarea", "tareas")}`);
+  }
+  const cuantos = r.marcadas === 1 ? "aplica el cambio marcado" : `aplican los ${r.marcadas} cambios marcados`;
+  return `Se ${cuantos} de una sola vez${frases.length > 0 ? `: ${unirFrases(frases)}` : ""}.`;
+}
+
 export const ACCION_ARMAR_TAREAS = "Armar las tareas";
 export const ACCION_VOLVER_A_INTENTAR = "Volver a intentar";
 
 /**
  * La línea de las tareas arriba del Gantt (dentro de la barra, o suelta si no hay barra). `fase` es
  * la fase de la corrida («Leyendo las reuniones…»); `motivo`, por qué falló. null = no hay línea.
+ * `conCambiosDeFases`: la propuesta trae cambios de fases que se pueden aplicar sin las tareas. Sin
+ * ellos (el borrador que nace vacío cuando el paso 1 no propuso nada), «Si aplicas ahora, solo se
+ * aplican los cambios de fases» es falso: no hay ninguno (revisión de E2a).
  */
 export function textoDeLaLineaDeTareas(
   estado: EstadoDeLasTareas | "paso-1" | null,
   fase: string | null,
   motivo: string | null,
   conMaterial: boolean,
+  conCambiosDeFases = true,
 ): { texto: string; accion: string | null } | null {
+  const siAplicas = conCambiosDeFases ? " Si aplicas ahora, solo se aplican los cambios de fases." : "";
   switch (estado) {
     case "paso-1":
       return {
@@ -1928,19 +1978,33 @@ export function textoDeLaLineaDeTareas(
       return { texto: `Armando las tareas… · ${fase?.trim() || "suele tardar uno o dos minutos"}`, accion: null };
     case "faltan":
       return {
-        texto: "Faltan las tareas de esta propuesta: si aplicas ahora, solo se aplican los cambios de fases.",
+        texto: conCambiosDeFases
+          ? "Faltan las tareas de esta propuesta: si aplicas ahora, solo se aplican los cambios de fases."
+          : "Faltan las tareas de esta propuesta.",
         accion: ACCION_ARMAR_TAREAS,
       };
     case "fallo": {
       const m = motivo?.trim().replace(/[.\s]+$/, "");
       return {
-        texto: `No se pudieron armar las tareas${m ? `: ${m}` : ""}. Si aplicas ahora, solo se aplican los cambios de fases.`,
+        texto: `No se pudieron armar las tareas${m ? `: ${m}` : ""}.${siAplicas}`,
         accion: ACCION_VOLVER_A_INTENTAR,
       };
     }
     default:
       return null;
   }
+}
+
+/**
+ * La oferta de armar las tareas después de resolver una propuesta que no las trajo («faltan» o
+ * «fallo»). Con cambios de fases, las fases quedaron decididas y falta el paso 2. Sin ellos (el
+ * borrador vacío cuya corrida falló) no se decidió ninguna fase: afirmarlo era falso (revisión de
+ * E2a). La pantalla la usa en `PasoDeTareasPendiente`.
+ */
+export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { titulo: string; detalle: string } {
+  return conCambiosDeFases
+    ? { titulo: "Las fases quedaron decididas.", detalle: "Falta el paso 2: las tareas sobre esta estructura." }
+    : { titulo: "No se pudieron armar las tareas.", detalle: "¿Volver a intentar?" };
 }
 
 /**

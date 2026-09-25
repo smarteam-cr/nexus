@@ -42,6 +42,7 @@ import { partitionByValidation } from "./particularidad-state";
 import { actionsFromSignals } from "./project-actions-input";
 import type { ProjectAction } from "./project-actions";
 import { diasSinConfirmar, type BorradorFechable } from "./avance-sin-confirmar";
+import { esVacioEsperandoTareas } from "./borrador";
 
 export interface ProjectActionsRow {
   projectId: string;
@@ -162,6 +163,8 @@ export async function loadProjectActions(
             ? tl.pendingParticularidades.length
             : 0,
           pendingProposal: !!tl?.pendingProposal,
+          // El borrador vacío que espera sus tareas: la IA las está armando, no hay nada que decidir.
+          armandoTareas: esVacioEsperandoTareas(tl?.pendingProposal ?? null),
           particularidades: confirmadas,
           sugerenciasDelEquipo: sugerencias.length,
           phases,

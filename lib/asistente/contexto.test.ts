@@ -461,10 +461,43 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(linea).toContain("«Regenerar todo» con fases y tareas");
     expect(linea, "la línea vuelve a hablar solo de fases").not.toMatch(/cambios de fases/i);
     expect(linea.length).toBeLessThan(420);
-    expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true)] : [])');
+    /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía
+       `lineaDeCambiosDeFasesSinDecidir(true)` a secas. Con el borrador VACÍO que espera sus tareas no
+       hay barra ni nada que decidir, así que la línea recibe si la IA está armando (abajo, su guarda). */
+    expect(src).toContain(
+      '...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, propuestasArmando > 0)] : [])',
+    );
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
     const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");
     expect(handler).toContain('(detalle || "el editor rechazó el cambio").replace(/[\\s.]+$/, "")');
+  });
+
+  it("⛔ con el borrador VACÍO que espera sus tareas, el chat dice que la IA las está armando, no que hay algo que decidir", () => {
+    /* Revisión de E2a: «Regenerar todo» sin cambios de fases deja un borrador sin cambios mientras la
+       IA arma las tareas. El chat mandaba a «resolver esa propuesta en su barra (Aplicar o
+       Descartar)», y esa barra no existe hasta que llegan las tareas. Las ediciones que la ponen en
+       rojo: ignorar `armandoTareas`, o dejar de contarlo en la base. */
+    const armando = lineaDeCambiosDeFasesSinDecidir(true, true);
+    expect(armando).toContain("LA IA ESTÁ ARMANDO LAS TAREAS");
+    expect(armando).toContain("NINGÚN cambio que acuerdes se puede aplicar");
+    expect(armando, "manda a una barra que no existe").not.toMatch(/«Aplicar»|«Descartar»|en su barra/);
+    expect(armando.length).toBeLessThan(420);
+    for (const conDetalleDeLaIA of [false, true]) {
+      const l = lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez: false, cambiosDeFasesSinDecidir: true, armandoTareas: true });
+      expect(l, String(conDetalleDeLaIA)).toContain("la IA está armando las tareas");
+      expect(l, String(conDetalleDeLaIA)).not.toContain("se revisa la propuesta en su barra");
+      expect(l.length).toBeLessThan(420);
+    }
+    // El estado sale de la base: v1, sin cambios y con las tareas sin listas (la misma regla que
+    // `esVacioEsperandoTareas`), contado sin traer el JSON.
+    const iCuenta = src.indexOf('{ pendingProposal: { path: ["formato"], equals: FORMATO_BORRADOR } },');
+    expect(iCuenta, "el contexto dejó de contar el borrador vacío").toBeGreaterThan(-1);
+    const iFin = src.indexOf(".catch(() => 0),", iCuenta);
+    expect(iFin, "la cuenta del borrador vacío puede tirar el chat entero").toBeGreaterThan(iCuenta);
+    const cuenta = src.slice(iCuenta, iFin);
+    expect(cuenta).toContain('{ pendingProposal: { path: ["cambios"], equals: [] } },');
+    expect(cuenta).toContain('{ pendingProposal: { path: ["tareas", "listas"], equals: false } },');
+    expect(src).toContain("armandoTareas: propuestasArmando > 0,");
   });
 
   it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {
