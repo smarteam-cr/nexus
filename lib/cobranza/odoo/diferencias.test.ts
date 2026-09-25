@@ -1739,6 +1739,18 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(linea(l, "ODOO-COBRO-SIN-FACTURA")?.items.filter((i) => i.texto.startsWith("ACCCSA"))).toHaveLength(2);
   });
 
+  /* ⭐ 2026-09-25: «falta anotar el número de Mercury» no depende de Odoo. Hasta ese día solo miraba las cuentas que
+     dicen Odoo, y marcar una cuenta «Está en Mercury» le borraba esas filas sin que nadie hubiera anotado nada. */
+  it("⭐ una cuenta marcada «Está en Mercury» sigue pidiendo el número de Mercury; la quinta cuota ya no se acusa", () => {
+    const conVia = (via: string) => ({ ...estado, cuentas: cuentas.map((c) => (c.id === "acccsa" ? { ...c, viaCobro: via } : c)) });
+    const enMercury = detectarDiferenciasOdoo(conVia("MERCURY"));
+    expect(linea(enMercury, "ODOO-COBRO-FACTURADO-EN-MERCURY")?.items).toEqual(linea(lista, "ODOO-COBRO-FACTURADO-EN-MERCURY")?.items);
+    /* Sin documento en el Excel, la cuota de mayo de una cuenta de Mercury no tiene nada que verificar en Odoo. */
+    expect(linea(enMercury, "ODOO-COBRO-SIN-FACTURA")?.items.filter((i) => i.texto.startsWith("ACCCSA"))).toEqual([]);
+    /* QuickBooks sigue afuera: el Excel diciendo Mercury ahí es otra contradicción, no un número que falta. */
+    expect(linea(detectarDiferenciasOdoo(conVia("OTRA")), "ODOO-COBRO-FACTURADO-EN-MERCURY")).toBeUndefined();
+  });
+
   it("Hotel Alta Las Palomas: la fila dice que su factura se revirtió, aunque la cuota se marcó facturada meses después", () => {
     const fila = linea(lista, "ODOO-COBRO-SIN-FACTURA")?.items.find((i) => i.texto.startsWith("Hotel Alta Las Palomas"));
     expect(fila?.nota).toBe(
