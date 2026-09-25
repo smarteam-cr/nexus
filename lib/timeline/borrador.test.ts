@@ -100,7 +100,9 @@ const CONTEXTO: ProposalLike = {
   ],
 };
 
-type FaseComparable = Omit<FaseViva, "id">;
+/* Sin `tareas` (E2a, 2026-09-25): la fase viva trae sus tareas guardadas y la proyectada las que
+   quedarían, con otra forma; la paridad con apply-items compara solo la ESTRUCTURA, como siempre. */
+type FaseComparable = Omit<FaseViva, "id" | "tareas">;
 const comparable = (x: FaseComparable): FaseComparable => ({
   name: x.name,
   durationWeeks: x.durationWeeks,

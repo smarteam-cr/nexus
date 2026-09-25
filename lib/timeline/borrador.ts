@@ -39,7 +39,25 @@
  *     así que una diferencia es una edición humana posterior y no se revierte.
  * Por eso la conversión aplicada entera da lo mismo que `apply-items` salvo en esos dos casos, y
  * los dos son a propósito (lib/timeline/borrador.test.ts, «paridad»).
+ *
+ * ── E2a: «REGENERAR TODO» DEJA UN SOLO BORRADOR, CON FASES Y TAREAS ───────────
+ * Nace el formato `borrador-v1` escrito de verdad (lo escriben /estructura y /analyze) y dos tipos
+ * de cambio de TAREA: `tarea-nueva` y `tarea-se-va`. Nadie produce otros antes del chat (E3): una
+ * tarea que cambia o se muda, o una fase que se va, se leen como DESCONOCIDOS y bloquean.
+ *   · El estado de las tareas no se guarda como máquina de estados: se DEDUCE de la corrida del
+ *     paso 2 (`estadoDeLasTareas`). Aplicar se bloquea solo mientras la corrida está viva.
+ *   · Las tareas de una fase valen si la fase, como quedaría, conserva el nombre y las semanas con
+ *     que se armaron (`tareasArmadasPara`): es el cierre de dependencias del plan (§2.1, paso 6).
+ *   · Lo que tiene avance o se escribió a mano (`isKept`) nunca se quita, y una tarea que se va
+ *     choca si alguien la editó (título, semana, notas, dueño, tipo o fechas fijadas) después.
+ * El núcleo es puro: la pantalla y el servidor evalúan con la misma función y las mismas tareas
+ * (solo lo que viaja en el cable, sin `order` ni fechas reales).
  */
+import { huella as huellaDeTitulo, type Party, type TipoDeTarea } from "./assist-items"; // sin ciclo: assist-items no importa nada
+import { estaColgada } from "@/lib/agents/run-colgada"; // puro, client-safe
+import { isKept } from "./regen-columnas";
+import { motivoDePorValidar } from "./semana-cero-tareas";
+import { avisoDeRepetida, indexarTareasPorTitulo, type AvisoRepetida } from "./tarea-repetida";
 import {
   computeProposalDeltas,
   describeChange,
@@ -81,6 +99,30 @@ export const CAMPOS_POR_IMPACTO: readonly CampoDeFase[] = [
   "name",
 ];
 
+/**
+ * Una tarea GUARDADA, con solo lo que viaja en el cable (GET del cronograma): la pantalla y el
+ * servidor la evalúan igual. Sin `order` (reordenar no es editar) ni fechas reales.
+ */
+export interface TareaDelVivo {
+  id: string;
+  title: string;
+  weekIndex: number;
+  notes: string | null;
+  party: Party | null;
+  type: TipoDeTarea | null;
+  status: string;
+  source: string;
+  /** `startDateOverride` / `dueDateOverride`, YYYY-MM-DD: una fecha fijada a mano es una edición. */
+  inicioFijado: string | null;
+  finFijado: string | null;
+  /**
+   * Opcional: solo lo usa la fusión del paso 2 para no borrar y recrear una tarea idéntica (R4b,
+   * lib/timeline/tareas-del-detalle.ts). No entra en la foto de la tarea ni en el plan. Sin él, se
+   * toma como `false`.
+   */
+  needsValidation?: boolean;
+}
+
 /** Una fase del cronograma vivo (o de la foto `base`), en su orden. */
 export interface FaseViva {
   id: string;
@@ -90,6 +132,9 @@ export interface FaseViva {
   sessionCount: number | null;
   notes: string | null;
   activityType: string | null;
+  /** Sus tareas, en su orden (semana y `order`). `undefined` = no se leyeron (el handoff, la foto
+   *  de E1): una tarea que se va choca, que es la dirección segura. */
+  tareas?: TareaDelVivo[];
 }
 
 /** El cronograma tal como está: el ancla (ISO o YYYY-MM-DD; se compara por día) y las fases en orden. */
@@ -143,9 +188,62 @@ export interface CambioFaseCambia {
   a: ValorDeCampo;
   motivo?: string;
 }
-export type Cambio = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia;
+
+/** Cómo estaba una tarea que se va cuando se armó el cambio: si hoy es otra cosa, alguien la editó. */
+export interface FotoDeTarea {
+  title: string;
+  weekIndex: number;
+  notes: string | null;
+  party: Party | null;
+  type: TipoDeTarea | null;
+  inicioFijado: string | null;
+  finFijado: string | null;
+}
+/** Lo que se crea. `fuga`: el título o la nota cruzan la frontera del material interno (solo avisa). */
+export interface ContenidoDeTareaNueva {
+  title: string;
+  weekIndex: number;
+  notes: string | null;
+  party: Party | null;
+  type: TipoDeTarea | null;
+  needsValidation: boolean;
+  motivoPorValidar: string | null;
+  fuga: { campo: "titulo" | "nota"; motivo: string; motivoDeLaNota?: string } | null;
+}
+/** Una tarea que se crea. No guarda `desde`: sería siempre la huella de su título (se calcula al evaluar). */
+export interface CambioTareaNueva {
+  tipo: "tarea-nueva";
+  clave: string;
+  /** Su fase: el id de una existente o la clave (`n:…`) de una fase nueva del mismo borrador. */
+  fase: string;
+  tarea: ContenidoDeTareaNueva;
+  motivo?: string;
+}
+/** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto al fusionar. */
+export interface CambioTareaSeVa {
+  tipo: "tarea-se-va";
+  clave: string;
+  tareaId: string;
+  faseId: string;
+  desde: FotoDeTarea;
+  motivo?: string;
+}
+export type CambioDeTarea = CambioTareaNueva | CambioTareaSeVa;
+export type CambioDeEstructura = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia;
+export type Cambio = CambioDeEstructura | CambioDeTarea;
+
+export const esCambioDeTarea = (c: Cambio): c is CambioDeTarea => c.tipo === "tarea-nueva" || c.tipo === "tarea-se-va";
 
 export type OrigenDelBorrador = "handoff" | "contexto";
+
+/** Quién pidió el borrador: «Regenerar todo» (ya había tareas de la IA) o «Generar cronograma». */
+export type PedidoDelBorrador = "regenerar" | "primera";
+/** La corrida del paso 2 que arma (o armó) las tareas, y si ya se fusionaron. */
+export interface TareasDelBorrador {
+  corrida: string | null;
+  listas: boolean;
+}
+export type EstadoDeLasTareas = "listas" | "faltan" | "armando" | "fallo";
 
 export interface Borrador {
   formato: typeof FORMATO_BORRADOR;
@@ -155,12 +253,59 @@ export interface Borrador {
   /** Lo que la IA notó y no se aplica solo (interno). */
   observaciones: string[];
   cambios: Cambio[];
-  /** Solo al LEER un `borrador-v1`: cuántos cambios son de un tipo que esta versión no sabe aplicar. */
+  /** Solo al LEER un `borrador-v1`: cuántos cambios son de un tipo que esta versión no sabe aplicar.
+   *  Nunca se guarda. */
   desconocidos?: number;
+  /** El formato viejo y el handoff: null. */
+  pedido: PedidoDelBorrador | null;
+  /** null = no espera tareas (el handoff, el formato viejo). */
+  tareas: TareasDelBorrador | null;
+  /** Por fase (id real o `n:…`): el nombre y las semanas con que se armaron sus tareas. */
+  tareasArmadasPara: Record<string, { nombre: string; semanas: number }>;
+}
+
+/**
+ * El estado de las tareas de un borrador, DEDUCIDO de su corrida (no se guarda): «armando» mientras
+ * la corrida está viva (PENDING o RUNNING y no colgada, con el umbral único de `estaColgada`),
+ * «fallo» si murió, falló o terminó sin fusionar, «faltan» si nunca arrancó. null = no espera tareas.
+ */
+export function estadoDeLasTareas(
+  t: TareasDelBorrador | null,
+  corrida: { status: string; updatedAt: Date } | null,
+  ahora: Date = new Date(),
+): EstadoDeLasTareas | null {
+  if (t === null) return null;
+  if (t.listas) return "listas";
+  if (t.corrida === null) return "faltan";
+  if (corrida === null) return "fallo"; // la fila de la corrida no está
+  if ((corrida.status === "PENDING" || corrida.status === "RUNNING") && !estaColgada(corrida, ahora)) return "armando";
+  return "fallo"; // ERROR, DONE sin fusionar, ARCHIVED o colgada
 }
 
 export const claveDeCampo = (faseId: string, campo: CampoDeFase): string => `fase:${faseId}:${campo}`;
+/** Solo para CONVERTIR el formato viejo: un productor de v1 nunca deriva claves de posiciones. */
 export const claveDeNueva = (indice: number): string => `nueva:${indice}`;
+export const claveDeTareaQueSeVa = (tareaId: string): string => `tarea:${tareaId}:se-va`;
+/** El generador de claves por defecto. Las claves las genera solo el servidor; los tests inyectan uno. */
+export const claveAleatoria = (): string => globalThis.crypto.randomUUID();
+export const claveDeTareaNueva = (nuevaClave: () => string = claveAleatoria): string => `t:${nuevaClave()}`;
+
+/** `n:` + 8 hex de un id aleatorio, única dentro del borrador (si choca, se genera otra). */
+export function claveDeFaseNueva(nuevaClave: () => string, usadas: Set<string>): string {
+  for (let intento = 0; intento < 100; intento++) {
+    const hex = nuevaClave().replace(/-/g, "").slice(0, 8);
+    const clave = `n:${hex}`;
+    if (hex && !usadas.has(clave)) {
+      usadas.add(clave);
+      return clave;
+    }
+  }
+  // Solo con un generador roto (un test): aun así, nunca dos claves iguales.
+  let n = usadas.size;
+  while (usadas.has(`n:${n}`)) n++;
+  usadas.add(`n:${n}`);
+  return `n:${n}`;
+}
 
 const esObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const dia = (s: string | null | undefined): string | null => (s ? s.slice(0, 10) : null);
@@ -281,7 +426,82 @@ export function convertirPropuestaVieja(p: ProposalLike, base: Vivo): Borrador {
     origen,
     observaciones,
     cambios: [...(ancla ? [ancla] : []), ...(orden ? [orden] : []), ...resto],
+    pedido: null,
+    tareas: null,
+    tareasArmadasPara: {},
   };
+}
+
+/**
+ * El borrador que deja el paso 1 de «Regenerar todo» / «Generar cronograma» (POST /estructura): la
+ * propuesta de fases convertida, con las claves de las fases nuevas en el formato de un productor
+ * (`n:…`, nunca derivadas de posiciones) y esperando las tareas del paso 2.
+ */
+export function borradorBase(i: {
+  propuesta: ProposalLike;
+  vivo: Vivo;
+  pedido: PedidoDelBorrador;
+  nuevaClave?: () => string;
+}): Borrador {
+  const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
+  const usadas = new Set<string>();
+  const remapeo = new Map<string, string>();
+  for (const c of viejo.cambios) {
+    if (c.tipo === "fase-nueva") remapeo.set(c.clave, claveDeFaseNueva(i.nuevaClave ?? claveAleatoria, usadas));
+  }
+  const cambios: Cambio[] = viejo.cambios.map((c) =>
+    c.tipo === "fase-nueva"
+      ? { ...c, clave: remapeo.get(c.clave) ?? c.clave, despuesDe: c.despuesDe === null ? null : remapeo.get(c.despuesDe) ?? c.despuesDe }
+      : c,
+  );
+  return {
+    ...viejo,
+    version: 0,
+    origen: "contexto",
+    cambios,
+    pedido: i.pedido,
+    tareas: { corrida: null, listas: false },
+    tareasArmadasPara: {},
+  };
+}
+
+/** El borrador que marca «armando las tareas» cuando no había propuesta de fases (0 cambios de fases). */
+export function borradorVacio(i: { pedido: PedidoDelBorrador; corrida: string }): Borrador {
+  return {
+    formato: FORMATO_BORRADOR,
+    version: 0,
+    origen: "contexto",
+    observaciones: [],
+    cambios: [],
+    pedido: i.pedido,
+    tareas: { corrida: i.corrida, listas: false },
+    tareasArmadasPara: {},
+  };
+}
+
+/** «regenerar» si el cronograma ya tiene tareas de la IA; si no, «primera». La ÚNICA fuente del pedido. */
+export function pedidoDelCronograma(tareas: ReadonlyArray<{ source: string | null | undefined }>): PedidoDelBorrador {
+  return tareas.some((t) => t.source === "AGENT" || t.source === "MODIFIED") ? "regenerar" : "primera";
+}
+
+/** ¿Lo guardado es el formato nuevo? */
+export function esBorradorV1(json: unknown): json is Record<string, unknown> {
+  return esObjeto(json) && json.formato === FORMATO_BORRADOR;
+}
+
+/** La versión de un `borrador-v1` guardado, o null (el formato viejo no la tiene). */
+export function versionDelBorrador(json: unknown): number | null {
+  return esBorradorV1(json) && typeof json.version === "number" ? json.version : null;
+}
+
+/** ¿El v1 guardado trae algún cambio de tareas? Mira el tipo crudo (también uno que esta versión no
+ *  conoce): decide el permiso de aplicar, y ante la duda cuenta como tocar tareas. */
+export function traeCambiosDeTareas(json: unknown): boolean {
+  return (
+    esBorradorV1(json) &&
+    Array.isArray(json.cambios) &&
+    json.cambios.some((c) => esObjeto(c) && typeof c.tipo === "string" && c.tipo.startsWith("tarea-"))
+  );
 }
 
 const esValor = (v: unknown): v is ValorDeCampo => v === null || typeof v === "string" || typeof v === "number";
@@ -300,6 +520,48 @@ function leerFaseNueva(v: unknown): FaseNuevaPropuesta | null {
     notes: txt(v.notes),
     activityType: txt(v.activityType),
   };
+}
+
+const PARTIES: readonly Party[] = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"];
+const TIPOS_DE_TAREA: readonly TipoDeTarea[] = ["SESSION", "TASK"];
+/** undefined = forma inválida (distinto de null, que es «sin valor»). */
+const leerParty = (v: unknown): Party | null | undefined =>
+  v === null ? null : typeof v === "string" && (PARTIES as readonly string[]).includes(v) ? (v as Party) : undefined;
+const leerTipoDeTarea = (v: unknown): TipoDeTarea | null | undefined =>
+  v === null ? null : typeof v === "string" && (TIPOS_DE_TAREA as readonly string[]).includes(v) ? (v as TipoDeTarea) : undefined;
+const leerTextoONulo = (v: unknown): string | null | undefined => (v === null ? null : typeof v === "string" ? v : undefined);
+const esSemana = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+const esTitulo = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+
+function leerFotoDeTarea(v: unknown): FotoDeTarea | null {
+  if (!esObjeto(v) || !esTitulo(v.title) || !esSemana(v.weekIndex)) return null;
+  const notes = leerTextoONulo(v.notes);
+  const party = leerParty(v.party);
+  const type = leerTipoDeTarea(v.type);
+  const inicio = leerTextoONulo(v.inicioFijado);
+  const fin = leerTextoONulo(v.finFijado);
+  if (notes === undefined || party === undefined || type === undefined || inicio === undefined || fin === undefined) return null;
+  return { title: v.title, weekIndex: v.weekIndex, notes, party, type, inicioFijado: dia(inicio), finFijado: dia(fin) };
+}
+
+function leerFuga(v: unknown): ContenidoDeTareaNueva["fuga"] | undefined {
+  if (v === null) return null;
+  if (!esObjeto(v) || (v.campo !== "titulo" && v.campo !== "nota") || typeof v.motivo !== "string") return undefined;
+  if (!(v.motivoDeLaNota === undefined || typeof v.motivoDeLaNota === "string")) return undefined;
+  return { campo: v.campo, motivo: v.motivo, ...(typeof v.motivoDeLaNota === "string" ? { motivoDeLaNota: v.motivoDeLaNota } : {}) };
+}
+
+function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
+  if (!esObjeto(v) || !esTitulo(v.title) || !esSemana(v.weekIndex) || typeof v.needsValidation !== "boolean") return null;
+  const notes = leerTextoONulo(v.notes);
+  const party = leerParty(v.party);
+  const type = leerTipoDeTarea(v.type);
+  const motivoPorValidar = leerTextoONulo(v.motivoPorValidar);
+  const fuga = leerFuga(v.fuga);
+  if (notes === undefined || party === undefined || type === undefined || motivoPorValidar === undefined || fuga === undefined) {
+    return null;
+  }
+  return { title: v.title, weekIndex: v.weekIndex, notes, party, type, needsValidation: v.needsValidation, motivoPorValidar, fuga };
 }
 
 /** Un cambio del formato nuevo, validado. null = de un tipo o forma que esta versión no conoce. */
@@ -336,9 +598,42 @@ function leerCambio(v: unknown): Cambio | null {
         a: v.a,
         ...(motivo ? { motivo: motivo.v } : {}),
       };
+    case "tarea-nueva": {
+      const tarea = leerContenidoDeTarea(v.tarea);
+      if (typeof v.fase !== "string" || !v.fase || !tarea) return null;
+      return { tipo: "tarea-nueva", clave: v.clave, fase: v.fase, tarea, ...(motivo ? { motivo: motivo.v } : {}) };
+    }
+    case "tarea-se-va": {
+      const desde = leerFotoDeTarea(v.desde);
+      if (typeof v.tareaId !== "string" || !v.tareaId || typeof v.faseId !== "string" || !v.faseId || !desde) return null;
+      return {
+        tipo: "tarea-se-va",
+        clave: v.clave,
+        tareaId: v.tareaId,
+        faseId: v.faseId,
+        desde,
+        ...(motivo ? { motivo: motivo.v } : {}),
+      };
+    }
     default:
       return null;
   }
+}
+
+function leerTareasDelBorrador(v: unknown): TareasDelBorrador | null {
+  if (!esObjeto(v) || !(v.corrida === null || typeof v.corrida === "string") || typeof v.listas !== "boolean") return null;
+  return { corrida: v.corrida, listas: v.listas };
+}
+
+function leerTareasArmadasPara(v: unknown): Borrador["tareasArmadasPara"] {
+  const out: Borrador["tareasArmadasPara"] = {};
+  if (!esObjeto(v)) return out;
+  for (const [fase, x] of Object.entries(v)) {
+    if (!esObjeto(x) || typeof x.nombre !== "string") continue;
+    if (typeof x.semanas !== "number" || !Number.isInteger(x.semanas) || x.semanas < 1) continue;
+    out[fase] = { nombre: x.nombre, semanas: x.semanas };
+  }
+  return out;
 }
 
 /**
@@ -366,6 +661,9 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
       observaciones,
       cambios,
       ...(desconocidos > 0 ? { desconocidos } : {}),
+      pedido: json.pedido === "regenerar" || json.pedido === "primera" ? json.pedido : null,
+      tareas: leerTareasDelBorrador(json.tareas),
+      tareasArmadasPara: leerTareasArmadasPara(json.tareasArmadasPara),
     };
   }
   if (!esBorradorGuardado(json)) return null;
@@ -413,9 +711,20 @@ export interface ItemDelPlan {
   estado: EstadoDelCambio;
   /** Por qué choca, en palabras del CSE. Solo en `choque`. */
   choque?: string;
+  /** Solo en una tarea `excluido` HEREDADO: la clave del cambio de fase excluido del que depende.
+   *  No se marca sola: vuelve cuando se marca ese cambio. */
+  dependeDe?: string;
 }
 
 export type Lugar = { tipo: "existente"; id: string } | { tipo: "nueva"; clave: string };
+
+/** Las tareas que se escriben al aplicar. */
+export interface EscriturasDeTareas {
+  /** Los ids de las que se quitan, en el orden del cronograma vivo. */
+  seVan: string[];
+  /** Las que se crean, en el orden del borrador. */
+  nuevas: Array<{ clave: string; fase: Lugar; tarea: ContenidoDeTareaNueva }>;
+}
 
 export interface EscriturasDeEstructura {
   /** YYYY-MM-DD a escribir, o null = no se toca el arranque. */
@@ -439,12 +748,24 @@ export interface PlanDeAplicacion {
   total: number;
   choques: number;
   huella: string;
-  escrituras: EscriturasDeEstructura;
-  /** Si no se puede aplicar entero, por qué (un borrador de una versión más nueva). null = se puede. */
+  /** La estructura (sin cambios desde E1) y las tareas. */
+  escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas };
+  /** Si no se puede aplicar entero, por qué (un borrador de una versión más nueva, o las tareas
+   *  todavía armándose). null = se puede. */
   bloqueo: string | null;
+  /** El que recibió el plan (lo deduce quien llama, de la corrida): null = no espera tareas. */
+  estadoDeTareas: EstadoDeLasTareas | null;
 }
 
 const CHOQUE_CAMPO = "Lo cambiaste a mano después de la propuesta: queda como lo dejaste.";
+const CHOQUE_SIN_TAREAS = "No se leyeron las tareas de esta fase: la tarea queda como está.";
+const CHOQUE_TAREA_MUDADA = "La moviste a otra fase después de la propuesta: queda donde la dejaste.";
+const CHOQUE_TAREA_CON_AVANCE = "La tarea ya tiene avance o la escribiste a mano: no se quita.";
+const CHOQUE_TAREA_EDITADA = "La editaste a mano después de la propuesta: queda como la dejaste.";
+const CHOQUE_DE_LA_FASE =
+  "Su fase cambió después de la propuesta (a mano, o con un cambio que choca): sus tareas quedan fuera.";
+export const BLOQUEO_TAREAS_EN_CURSO =
+  "La IA todavía está armando las tareas de esta propuesta: espera a que termine para aplicar.";
 const CHOQUE_FASE_BORRADA = "La fase ya no está en el cronograma: este cambio queda fuera.";
 const CHOQUE_ANCLA_FIJADA = "La fecha de arranque ya la fijaste a mano: queda como está.";
 const CHOQUE_ANCLA_CAMBIADA = "Cambiaste la fecha de arranque después de la propuesta: queda como la dejaste.";
@@ -485,7 +806,7 @@ function idDeAnclaje(c: CambioFaseNueva, nuevas: ReadonlyMap<string, CambioFaseN
 
 type Evaluacion = { estado: "pendiente" } | { estado: "ya-esta" } | { estado: "choque"; choque: string };
 
-function evaluar(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseNueva>): Evaluacion {
+function evaluar(c: CambioDeEstructura, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseNueva>): Evaluacion {
   switch (c.tipo) {
     case "ancla": {
       const hoy = dia(vivo.ancla);
@@ -522,8 +843,98 @@ function evaluar(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseNu
       if (hoy !== c.desde) return { estado: "choque", choque: CHOQUE_CAMPO };
       return { estado: "pendiente" };
     }
+    default: {
+      // Un tipo de estructura nuevo sin su `case` no compila (no se evalúa en silencio como otro).
+      const _: never = c;
+      return _;
+    }
   }
 }
+
+// ── Las tareas en el plan ────────────────────────────────────────────────────
+
+/** El índice de lo vivo: nada de `find` lineal (Wherex ronda las 300 tareas). */
+interface IndiceDelVivo {
+  fasePorId: Map<string, FaseViva>;
+  tareaPorId: Map<string, { tarea: TareaDelVivo; faseId: string }>;
+  /** ¿El vivo trae las tareas? Si no, una tarea que se va no se puede evaluar. */
+  conTareas: boolean;
+}
+
+function indexar(vivo: Vivo): IndiceDelVivo {
+  const fasePorId = new Map<string, FaseViva>();
+  const tareaPorId = new Map<string, { tarea: TareaDelVivo; faseId: string }>();
+  let conTareas = false;
+  for (const f of vivo.fases) {
+    fasePorId.set(f.id, f);
+    if (!f.tareas) continue;
+    conTareas = true;
+    for (const t of f.tareas) tareaPorId.set(t.id, { tarea: t, faseId: f.id });
+  }
+  return { fasePorId, tareaPorId, conTareas };
+}
+
+/** La foto de una tarea viva: lo que se compara con el `desde` de la que se va. */
+export function fotoDeTarea(t: TareaDelVivo): FotoDeTarea {
+  return {
+    title: t.title,
+    weekIndex: t.weekIndex,
+    notes: t.notes ?? null,
+    party: t.party ?? null,
+    type: t.type ?? null,
+    inicioFijado: dia(t.inicioFijado),
+    finFijado: dia(t.finFijado),
+  };
+}
+
+const mismaFoto = (a: FotoDeTarea, b: FotoDeTarea) =>
+  a.title === b.title &&
+  a.weekIndex === b.weekIndex &&
+  a.notes === b.notes &&
+  a.party === b.party &&
+  a.type === b.type &&
+  dia(a.inicioFijado) === dia(b.inicioFijado) &&
+  dia(a.finFijado) === dia(b.finFijado);
+
+/** La regla propia de una tarea que se va (§2.1, paso 3). null = pasa al estado base y al cierre. */
+function evaluarSeVa(c: CambioTareaSeVa, ind: IndiceDelVivo): Evaluacion | null {
+  const fase = ind.fasePorId.get(c.faseId);
+  if (fase ? fase.tareas === undefined : !ind.conTareas) return { estado: "choque", choque: CHOQUE_SIN_TAREAS };
+  const viva = ind.tareaPorId.get(c.tareaId);
+  if (!viva) return { estado: "ya-esta" };
+  if (viva.faseId !== c.faseId) return { estado: "choque", choque: CHOQUE_TAREA_MUDADA };
+  if (isKept(viva.tarea)) return { estado: "choque", choque: CHOQUE_TAREA_CON_AVANCE };
+  if (!mismaFoto(fotoDeTarea(viva.tarea), c.desde)) return { estado: "choque", choque: CHOQUE_TAREA_EDITADA };
+  return null;
+}
+
+/** Nombre y semanas de cada fase (id o `n:…`) con los cambios de estructura que cumplen `incluye`. */
+function fasesProyectadas(
+  vivo: Vivo,
+  cambios: readonly Cambio[],
+  estados: ReadonlyArray<{ estado: EstadoDelCambio } | undefined>,
+  incluye: (e: EstadoDelCambio) => boolean,
+): Map<string, { name: string; durationWeeks: number }> {
+  const out = new Map(vivo.fases.map((f) => [f.id, { name: f.name, durationWeeks: f.durationWeeks }]));
+  cambios.forEach((c, i) => {
+    const e = estados[i];
+    if (!e || !incluye(e.estado)) return;
+    if (c.tipo === "fase-nueva") out.set(c.clave, { name: c.fase.name, durationWeeks: c.fase.durationWeeks });
+    else if (c.tipo === "fase-cambia") {
+      const f = out.get(c.faseId);
+      if (!f) return;
+      if (c.campo === "name") f.name = String(c.a);
+      else if (c.campo === "durationWeeks") f.durationWeeks = Number(c.a);
+    }
+  });
+  return out;
+}
+
+const coincide = (x: { name: string; durationWeeks: number } | undefined, armada: { nombre: string; semanas: number }) =>
+  !!x && normalizarNombre(x.name) === normalizarNombre(armada.nombre) && x.durationWeeks === armada.semanas;
+
+const faseDeLaTarea = (c: CambioDeTarea): string => (c.tipo === "tarea-nueva" ? c.fase : c.faseId);
+const llaveDeTarea = (titulo: string, semana: number) => `${huellaDeTitulo(titulo)}|${semana}`;
 
 /** El orden final: el cambio de orden (si se aplica) y las fases nuevas en su lugar. Es `buildPhaseOrder`. */
 function ordenFinal(vivo: Vivo, aplicadas: readonly Cambio[], nuevasPorClave: ReadonlyMap<string, CambioFaseNueva>): Lugar[] {
@@ -561,6 +972,17 @@ function destinoDe(c: Cambio): unknown {
       return [c.fase, c.despuesDe];
     case "fase-cambia":
       return c.a;
+    case "tarea-nueva": {
+      const t = c.tarea;
+      return [c.fase, t.title, t.weekIndex, t.notes, t.party, t.type, t.needsValidation];
+    }
+    case "tarea-se-va":
+      return c.tareaId;
+    default: {
+      // Sin esto, un tipo nuevo sin su `case` metería `undefined` en la huella sin error de compilación.
+      const _: never = c;
+      return _;
+    }
   }
 }
 
@@ -586,17 +1008,128 @@ export function huellaDeTexto(texto: string): string {
  * para escribir: si su huella no es la que vio el CSE, no escribe nada (409 PLAN_CAMBIO).
  * La huella cubre número, clave, estado y destino de CADA cambio: un choque que apareció en el medio
  * (otra pestaña editó) cambia la lista, y aplicar otra lista es justo lo que no puede pasar.
+ *
+ * El orden de evaluación es determinista (E2a, §2.1):
+ *   1. la ESTRUCTURA, como en E1;
+ *   2. cómo quedaría cada fase —nombre y semanas— con lo marcado y con todo lo que se puede marcar;
+ *   3. las tareas que se van: su regla propia (avance, edición a mano, mudanza);
+ *   4-5. las nuevas: una que ya está (misma huella de título y misma semana entre las que sobreviven
+ *        en su fase, contando cuántas hay) no se escribe;
+ *   6. el CIERRE: las tareas de una fase valen si la fase, como quedaría, conserva el nombre y las
+ *      semanas con que se armaron (`tareasArmadasPara`). Si no, quedan fuera con su padre (heredado)
+ *      o chocan. Un hijo heredado no se marca solo: vuelve cuando se marca el padre.
+ * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
+ * se arman, no se aplica.
  */
-export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = []): PlanDeAplicacion {
+export function planDeAplicacion(
+  vivo: Vivo,
+  borrador: Borrador,
+  sin: Iterable<string> = [],
+  { tareas = null }: { tareas?: EstadoDeLasTareas | null } = {},
+): PlanDeAplicacion {
   const fuera = new Set(sin);
   const nuevas = new Map(
     borrador.cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
   );
+  const ind = indexar(vivo);
+  const base = (c: Cambio): EstadoDelCambio => (fuera.has(c.clave) ? "excluido" : "aplica");
+  type Estado = { estado: EstadoDelCambio; choque?: string; dependeDe?: string };
+  const desdeEvaluacion = (c: Cambio, ev: Evaluacion): Estado =>
+    ev.estado === "choque"
+      ? { estado: "choque", choque: ev.choque }
+      : ev.estado === "ya-esta"
+        ? { estado: "ya-esta" }
+        : { estado: base(c) };
+  const estados: Array<Estado | undefined> = new Array(borrador.cambios.length);
+
+  // 1) La estructura: `evaluar` de E1, sin cambios.
+  borrador.cambios.forEach((c, i) => {
+    if (!esCambioDeTarea(c)) estados[i] = desdeEvaluacion(c, evaluar(c, vivo, nuevas));
+  });
+
+  // 2) Cómo quedaría cada fase, para el cierre (sin llamar a otro plan).
+  const marcada = fasesProyectadas(vivo, borrador.cambios, estados, (e) => e === "aplica");
+  const entera = fasesProyectadas(vivo, borrador.cambios, estados, (e) => e === "aplica" || e === "excluido");
+
+  // 3) Las tareas que se van.
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "tarea-se-va") return;
+    const ev = evaluarSeVa(c, ind);
+    estados[i] = ev ? desdeEvaluacion(c, ev) : { estado: base(c) };
+  });
+
+  // 4) Las que sobreviven en cada fase: las vivas menos las que se van marcadas. Se cuentan por
+  //    huella del título + semana (dos iguales en la misma semana son dos).
+  const seVanMarcadas = new Set<string>();
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo === "tarea-se-va" && estados[i]?.estado === "aplica") seVanMarcadas.add(c.tareaId);
+  });
+  const cuentas = new Map<string, Map<string, number>>();
+  const cuentaDe = (fase: string): Map<string, number> => {
+    let cuenta = cuentas.get(fase);
+    if (cuenta) return cuenta;
+    cuenta = new Map();
+    for (const t of ind.fasePorId.get(fase)?.tareas ?? []) {
+      if (seVanMarcadas.has(t.id)) continue;
+      const k = llaveDeTarea(t.title, t.weekIndex);
+      cuenta.set(k, (cuenta.get(k) ?? 0) + 1);
+    }
+    cuentas.set(fase, cuenta);
+    return cuenta;
+  };
+
+  // 5) Las nuevas, en el orden del borrador: cada una que encuentra una igual la consume.
+  borrador.cambios.forEach((c, i) => {
+    if (c.tipo !== "tarea-nueva") return;
+    if (!ind.fasePorId.has(c.fase) && !nuevas.has(c.fase)) {
+      estados[i] = { estado: "choque", choque: CHOQUE_FASE_BORRADA };
+      return;
+    }
+    const cuenta = cuentaDe(c.fase);
+    const k = llaveDeTarea(c.tarea.title, c.tarea.weekIndex);
+    const hay = cuenta.get(k) ?? 0;
+    if (hay > 0) {
+      cuenta.set(k, hay - 1);
+      estados[i] = { estado: "ya-esta" };
+      return;
+    }
+    estados[i] = { estado: base(c) };
+  });
+
+  // 6) El cierre, por fase: solo toca tareas que se podrían aplicar.
+  const padreExcluido = (fase: string): string | undefined => {
+    const j = borrador.cambios.findIndex(
+      (c, i) =>
+        estados[i]?.estado === "excluido" &&
+        ((c.tipo === "fase-nueva" && c.clave === fase) ||
+          (c.tipo === "fase-cambia" && c.faseId === fase && (c.campo === "name" || c.campo === "durationWeeks"))),
+    );
+    return j >= 0 ? borrador.cambios[j].clave : undefined;
+  };
+  borrador.cambios.forEach((c, i) => {
+    if (!esCambioDeTarea(c)) return;
+    const e = estados[i];
+    if (!e || (e.estado !== "aplica" && e.estado !== "excluido")) return;
+    const fase = faseDeLaTarea(c);
+    const armada = borrador.tareasArmadasPara[fase];
+    if (!armada) {
+      estados[i] = { estado: "choque", choque: CHOQUE_DE_LA_FASE };
+      return;
+    }
+    if (coincide(marcada.get(fase), armada)) return;
+    const padre = coincide(entera.get(fase), armada) ? padreExcluido(fase) : undefined;
+    estados[i] = padre ? { estado: "excluido", dependeDe: padre } : { estado: "choque", choque: CHOQUE_DE_LA_FASE };
+  });
+
   const items: ItemDelPlan[] = borrador.cambios.map((cambio, i) => {
-    const ev = evaluar(cambio, vivo, nuevas);
-    if (ev.estado === "choque") return { numero: i + 1, cambio, estado: "choque", choque: ev.choque };
-    if (ev.estado === "ya-esta") return { numero: i + 1, cambio, estado: "ya-esta" };
-    return { numero: i + 1, cambio, estado: fuera.has(cambio.clave) ? "excluido" : "aplica" };
+    const e = estados[i]!;
+    return {
+      numero: i + 1,
+      cambio,
+      estado: e.estado,
+      ...(e.choque !== undefined ? { choque: e.choque } : {}),
+      ...(e.dependeDe !== undefined ? { dependeDe: e.dependeDe } : {}),
+    };
   });
   const aplicadas = items.filter((it) => it.estado === "aplica").map((it) => it.cambio);
 
@@ -608,7 +1141,10 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
     porFase.set(c.faseId, campos);
   }
   const ancla = aplicadas.find((c): c is CambioDeAncla => c.tipo === "ancla");
-  const escrituras: EscriturasDeEstructura = {
+  const seVanAplicadas = new Set(
+    aplicadas.flatMap((c) => (c.tipo === "tarea-se-va" ? [c.tareaId] : [])),
+  );
+  const escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas } = {
     ancla: ancla ? ancla.a : null,
     // En el orden del cronograma vivo: el mismo orden de escritura en la pantalla y en el servidor.
     fases: vivo.fases.filter((f) => porFase.has(f.id)).map((f) => ({ id: f.id, campos: porFase.get(f.id)! })),
@@ -616,6 +1152,16 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
       .filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva")
       .map((c) => ({ clave: c.clave, fase: c.fase })),
     orden: ordenFinal(vivo, aplicadas, nuevas),
+    tareas: {
+      seVan: vivo.fases.flatMap((f) => (f.tareas ?? []).filter((t) => seVanAplicadas.has(t.id)).map((t) => t.id)),
+      nuevas: aplicadas
+        .filter((c): c is CambioTareaNueva => c.tipo === "tarea-nueva")
+        .map((c) => ({
+          clave: c.clave,
+          fase: ind.fasePorId.has(c.fase) ? { tipo: "existente", id: c.fase } : { tipo: "nueva", clave: c.fase },
+          tarea: c.tarea,
+        })),
+    },
   };
 
   const huella = huellaDeTexto(
@@ -630,7 +1176,13 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
     choques: items.filter((it) => it.estado === "choque").length,
     huella,
     escrituras,
-    bloqueo: borrador.desconocidos && borrador.desconocidos > 0 ? BLOQUEO_VERSION_NUEVA : null,
+    bloqueo:
+      borrador.desconocidos && borrador.desconocidos > 0
+        ? BLOQUEO_VERSION_NUEVA
+        : tareas === "armando"
+          ? BLOQUEO_TAREAS_EN_CURSO
+          : null,
+    estadoDeTareas: tareas,
   };
 }
 
@@ -638,12 +1190,22 @@ export function planDeAplicacion(vivo: Vivo, borrador: Borrador, sin: Iterable<s
  * «Un borrador con 0 cambios vivos se descarta solo» (Canvas, desde la Tanda M): si TODO lo que
  * propone ya está así (una propuesta vieja, o el CSE igualó el cronograma a mano), no hay nada que
  * decidir. ⚠ Un choque NO cuenta como «ya está»: el CSE tiene que ver el ⚠ y descartarlo él.
+ * ⚠ Y uno que ESPERA tareas («faltan» o «armando») tampoco: vacío todavía, pero se va a llenar. Uno
+ * vacío cuya corrida falló sí (no queda nada que esperar).
+ * Acepta el plan o el resumen: el resumen lista la estructura en `items` y las tareas en `grupos`.
  */
 export function debeDescartarseSolo(plan: {
   bloqueo: string | null;
   items: ReadonlyArray<{ estado: EstadoDelCambio }>;
+  estadoDeTareas?: EstadoDeLasTareas | null;
+  grupos?: ReadonlyArray<{ estado: string }>;
 }): boolean {
-  return plan.bloqueo === null && plan.items.every((it) => it.estado === "ya-esta");
+  if (plan.estadoDeTareas === "faltan" || plan.estadoDeTareas === "armando") return false;
+  return (
+    plan.bloqueo === null &&
+    plan.items.every((it) => it.estado === "ya-esta") &&
+    (plan.grupos ?? []).every((g) => g.estado === "ya-esta")
+  );
 }
 
 /**
@@ -655,10 +1217,13 @@ export function debeDescartarseSolo(plan: {
  * Una que ya no tiene nada que decidir (todo ya está así) no frena: reemplazarla no pierde nada, y
  * la pantalla igual la descartaría sola. Se convierte contra LO VIVO: el handoff no tiene la foto de
  * la pantalla, y para saber si queda algo por decidir alcanza con lo de hoy.
+ * ⚠ Un v1 que ESPERA tareas (`tareas` sin `listas`) está por decidir sin leer la corrida: si el
+ * handoff lo pisara a mitad del paso 2, la corrida pagada se perdería.
  */
 export function propuestaPorDecidir(guardado: unknown, vivo: Vivo): boolean {
   const borrador = leerBorrador(guardado, vivo);
   if (!borrador) return false;
+  if (borrador.tareas !== null && !borrador.tareas.listas) return true;
   return !debeDescartarseSolo(planDeAplicacion(vivo, borrador));
 }
 
@@ -672,11 +1237,31 @@ export interface MarcaDeFase {
   etiquetas: string[];
 }
 
+/** Una tarea de la vista «Ver la propuesta»: una viva que sobrevive, o una nueva marcada. */
+export interface TareaProyectada {
+  /** El id de la tarea viva, o null si es nueva. */
+  id: string | null;
+  /** El id de la viva, o la clave del cambio `tarea-nueva` (`t:…`): lo que identifica la fila. */
+  clave: string;
+  title: string;
+  /** Acotada a la duración final de la fase: donde la deja el servidor al aplicar. */
+  weekIndex: number;
+  notes: string | null;
+  party: Party | null;
+  type: TipoDeTarea | null;
+  status: string;
+  source: string;
+  needsValidation: boolean;
+}
+
 export interface FaseProyectada extends FaseNuevaPropuesta {
-  /** El id de la fase existente, o la clave de la nueva (`nueva:<i>`): lo que identifica la fila. */
+  /** El id de la fase existente, o la clave de la nueva (`nueva:<i>` o `n:…`): lo que identifica la fila. */
   clave: string;
   id: string | null;
   marca: MarcaDeFase | null;
+  /** Las vivas que sobreviven (acotadas a la duración final) más las nuevas marcadas. Una fase
+   *  existente cuyo vivo no trajo tareas lleva solo las nuevas. */
+  tareas: TareaProyectada[];
 }
 
 export interface Proyeccion {
@@ -715,11 +1300,17 @@ function etiquetaDeDuracion(desde: number, a: number): string {
  * El cronograma como quedaría aplicando lo marcado: la vista «Ver la propuesta». Es SOLO LECTURA:
  * nunca pasa por el estado editable de la pantalla ni por su guardado. Sale de las MISMAS
  * escrituras que el servidor va a hacer, así la vista no puede prometer otra cosa.
- * Las tareas de una fase que se acorta caen en su última semana (la pantalla lo hace al pintar, y
- * el servidor, al escribir).
+ * Las tareas de una fase que se acorta caen en su última semana (el acotado vive acá desde E2a, y
+ * el servidor hace lo mismo al escribir).
  */
 export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = []): Proyeccion {
-  const plan = planDeAplicacion(vivo, borrador, sin);
+  return proyectarConPlan(vivo, planDeAplicacion(vivo, borrador, sin));
+}
+
+const acotarSemana = (semana: number, duracion: number) => Math.min(semana, Math.max(duracion - 1, 0));
+const etiquetaDeTareas = (signo: "+" | "−", n: number) => `${signo}${plural(n, "tarea", "tareas")}`;
+
+function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion {
   const porId = new Map(vivo.fases.map((f) => [f.id, f]));
   const campos = new Map(plan.escrituras.fases.map((f) => [f.id, f.campos]));
   const nuevas = new Map(plan.escrituras.nuevas.map((n) => [n.clave, n.fase]));
@@ -730,7 +1321,7 @@ export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> 
   const fases: FaseProyectada[] = plan.escrituras.orden.map((l) => {
     if (l.tipo === "nueva") {
       const f = nuevas.get(l.clave)!;
-      return { ...f, clave: l.clave, id: null, marca: { tono: "nueva", etiquetas: ["nueva"] } };
+      return { ...f, clave: l.clave, id: null, marca: { tono: "nueva", etiquetas: ["nueva"] }, tareas: [] };
     }
     const actual = porId.get(l.id)!;
     const cambios = campos.get(l.id) ?? {};
@@ -752,8 +1343,57 @@ export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> 
       else if (campo === "notes") f.notes = v === null ? null : String(v);
       else f.activityType = v === null ? null : String(v);
     }
-    return { ...f, clave: l.id, id: l.id, marca: null };
+    return { ...f, clave: l.id, id: l.id, marca: null, tareas: [] };
   });
+
+  /* Las tareas: las vivas que sobreviven (en su orden) y después las nuevas marcadas (en el orden
+     del borrador), todas acotadas a la duración final de su fase. */
+  const seVan = new Set(plan.escrituras.tareas.seVan);
+  const nuevasPorFase = new Map<string, EscriturasDeTareas["nuevas"]>();
+  for (const n of plan.escrituras.tareas.nuevas) {
+    const clave = n.fase.tipo === "existente" ? n.fase.id : n.fase.clave;
+    nuevasPorFase.set(clave, [...(nuevasPorFase.get(clave) ?? []), n]);
+  }
+  const seVanPorFase = new Map<string, number>();
+  for (const f of vivo.fases) {
+    const n = (f.tareas ?? []).filter((t) => seVan.has(t.id)).length;
+    if (n > 0) seVanPorFase.set(f.id, n);
+  }
+  for (const f of fases) {
+    const vivas = f.id !== null ? (porId.get(f.id)?.tareas ?? []) : [];
+    const agregadas = nuevasPorFase.get(f.clave) ?? [];
+    f.tareas = [
+      ...vivas
+        .filter((t) => !seVan.has(t.id))
+        .map((t) => ({
+          id: t.id,
+          clave: t.id,
+          title: t.title,
+          weekIndex: acotarSemana(t.weekIndex, f.durationWeeks),
+          notes: t.notes ?? null,
+          party: t.party ?? null,
+          type: t.type ?? null,
+          status: t.status,
+          source: t.source,
+          needsValidation: t.needsValidation ?? false,
+        })),
+      ...agregadas.map((n) => ({
+        id: null,
+        clave: n.clave,
+        title: n.tarea.title,
+        weekIndex: acotarSemana(n.tarea.weekIndex, f.durationWeeks),
+        notes: n.tarea.notes,
+        party: n.tarea.party,
+        type: n.tarea.type,
+        status: "PENDING",
+        source: "AGENT",
+        needsValidation: n.tarea.needsValidation,
+      })),
+    ];
+    if (f.id === null && agregadas.length > 0 && f.marca) {
+      f.marca = { ...f.marca, etiquetas: [...f.marca.etiquetas, etiquetaDeTareas("+", agregadas.length)] };
+    }
+  }
 
   // Las etiquetas del inicio necesitan las dos grillas: dónde arranca hoy y dónde arrancaría.
   const rangosHoy = computePhaseRanges(vivo.fases);
@@ -777,10 +1417,56 @@ export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> 
       else etiquetas.push("tipo");
     }
     if (movidas.has(f.id)) etiquetas.push("movida");
+    const agregadas = nuevasPorFase.get(f.id)?.length ?? 0;
+    if (agregadas > 0) etiquetas.push(etiquetaDeTareas("+", agregadas));
+    const quitadas = seVanPorFase.get(f.id) ?? 0;
+    if (quitadas > 0) etiquetas.push(etiquetaDeTareas("−", quitadas));
     if (etiquetas.length > 0) f.marca = { tono: "cambia", etiquetas };
   });
 
   return { ancla: plan.escrituras.ancla ?? dia(vivo.ancla), fases };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── LA ESTRUCTURA QUE VE EL PASO 2 ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Una fase como la ve el agente de tareas: la de la propuesta, con su id (real o `n:…`). */
+export interface FaseHipotetica extends FaseNuevaPropuesta {
+  /** El id real, o la clave `n:…` de una fase nueva del borrador. */
+  id: string;
+  existente: boolean;
+  /** Las vivas; en una fase nueva, []. */
+  tareas: TareaDelVivo[];
+}
+export interface EstructuraHipotetica {
+  ancla: string | null;
+  fases: FaseHipotetica[];
+}
+
+/**
+ * La estructura sobre la que el paso 2 arma las tareas: el borrador SIN sus cambios de tareas,
+ * proyectado con todo lo que no choca y sin mirar lo que desmarcó el CSE (eso vive en su pantalla).
+ * Lo que el CSE desmarque después lo resuelve el cierre del plan con `tareasArmadasPara`.
+ */
+export function estructuraHipotetica(vivo: Vivo, borrador: Borrador): EstructuraHipotetica {
+  const soloEstructura: Borrador = { ...borrador, cambios: borrador.cambios.filter((c) => !esCambioDeTarea(c)) };
+  const p = proyectar(vivo, soloEstructura, []);
+  const porId = new Map(vivo.fases.map((f) => [f.id, f]));
+  return {
+    ancla: p.ancla,
+    fases: p.fases.map((f) => ({
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      startWeek: f.startWeek,
+      sessionCount: f.sessionCount,
+      notes: f.notes,
+      activityType: f.activityType,
+      id: f.clave,
+      existente: f.id !== null,
+      tareas: f.id !== null ? [...(porId.get(f.id)?.tareas ?? [])] : [],
+    })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -801,10 +1487,55 @@ export interface ItemDeLaLista {
   aviso?: string;
 }
 
+/** Una tarea de la lista de la barra (un renglón dentro de su grupo). */
+export interface ItemDeTarea {
+  clave: string;
+  estado: EstadoDelCambio;
+  signo: "+" | "−";
+  titulo: string;
+  /** La semana dentro de su fase, contando desde 1 (S1 = la primera de la fase). */
+  semana: number;
+  /** El ⚠ del choque, o que ya está (o ya no está). */
+  aviso?: string;
+  /** La casilla se puede tocar: aplica o la desmarcó el CSE. Una que quedó fuera con su cambio de
+   *  fase (heredada) no: vuelve cuando se marca ese cambio. */
+  seMarca: boolean;
+  /** Por qué está «por validar» (el tooltip), si lo está. */
+  porValidar?: string;
+  /** El título o la nota cruzan la frontera del material interno. */
+  fuga?: { campo: "titulo" | "nota"; motivo: string; motivoDeLaNota?: string };
+  /** Ya existe una igual en OTRA fase (la más avanzada, si hay varias). */
+  repetida?: AvisoRepetida;
+}
+
+/** Las tareas de UNA fase, en un solo renglón de la lista (con su casilla de grupo). */
+export interface GrupoDeTareas {
+  /** Sigue a los cambios de estructura: k + i + 1. */
+  numero: number;
+  /** La fase: el id de una existente o la clave `n:…` de una nueva. */
+  fase: string;
+  /** Su nombre en la propuesta. */
+  nombre: string;
+  /** Las que se crean y las que se quitan (sin contar las que ya están así). */
+  nuevas: number;
+  seVan: number;
+  marcadas: number;
+  aplicables: number;
+  estado: "aplica" | "parcial" | "excluido" | "choque" | "ya-esta";
+  /** El número (en la lista) del cambio de fase con el que quedaron fuera sus tareas, o null. */
+  dependeDe: number | null;
+  aviso?: string;
+  tareas: ItemDeTarea[];
+}
+
 export interface ResumenDelBorrador {
   origen: OrigenDelBorrador;
   observaciones: string[];
+  /** Solo la estructura, numerada 1..k (las tareas van en `grupos`). La huella usa la posición interna. */
   items: ItemDeLaLista[];
+  /** Las tareas, un grupo por fase, en el orden de la propuesta. */
+  grupos: GrupoDeTareas[];
+  /** Todo lo marcado (estructura y tareas). */
   marcadas: number;
   /** Lo que se puede marcar: `marcadas === aplicables` es «Aplicar todo», con choques o sin ellos. */
   aplicables: number;
@@ -820,6 +1551,17 @@ export interface ResumenDelBorrador {
   magnitud: MagnitudPropuesta;
   /** Cuán distinto es lo MARCADO, que es lo que el botón va a escribir: decide la confirmación. */
   magnitudDeLoMarcado: MagnitudPropuesta;
+  /** Las tareas que se escriben con lo marcado. */
+  tareas: { nuevas: number; seVan: number };
+  /** Hay alguna tarea que se va marcada: aplicar BORRA (se confirma). */
+  borraAlgo: boolean;
+  /** Alguna tarea marcada nace en una fase nueva. */
+  fasesNuevasConTareas: boolean;
+  /** Las tareas de esta propuesta no llegaron («faltan» o «fallo»): se aplican solo las fases. */
+  faltanTareas: boolean;
+  estadoDeTareas: EstadoDeLasTareas | null;
+  /** Cómo quedaría con lo marcado: la vista «Ver la propuesta» (una evaluación menos por render). */
+  proyeccion: Proyeccion;
 }
 
 function nombreDeFase(vivo: Vivo, id: string, respaldo: string): string {
@@ -874,22 +1616,132 @@ function tituloDe(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseN
             : describeChange({ field: c.campo, from: c.desde, to: c.a }, { inicioActual });
       return `${nombre} · ${texto}`;
     }
+    case "tarea-nueva":
+      return `Tarea nueva «${c.tarea.title}» · S${c.tarea.weekIndex + 1}`;
+    case "tarea-se-va":
+      return `Se quita la tarea «${c.desde.title}» · S${c.desde.weekIndex + 1}`;
+    default: {
+      const _: never = c;
+      return _;
+    }
   }
+}
+
+/** El estado de un grupo de tareas, por lo que tiene marcado y lo que se puede marcar. */
+function estadoDelGrupo(its: readonly ItemDelPlan[]): GrupoDeTareas["estado"] {
+  const marcadas = its.filter((it) => it.estado === "aplica").length;
+  const aplicables = its.filter((it) => it.estado === "aplica" || it.estado === "excluido").length;
+  if (aplicables === 0) return its.some((it) => it.estado === "choque") ? "choque" : "ya-esta";
+  return marcadas === aplicables ? "aplica" : marcadas === 0 ? "excluido" : "parcial";
+}
+
+/** Los grupos de tareas: uno por fase, en el orden en que aparece cada fase en la propuesta. */
+function gruposDeTareas(
+  vivo: Vivo,
+  borrador: Borrador,
+  plan: PlanDeAplicacion,
+  numeroEnLaLista: ReadonlyMap<string, number>,
+  k: number,
+): GrupoDeTareas[] {
+  const porFase = new Map<string, ItemDelPlan[]>();
+  for (const it of plan.items) {
+    if (!esCambioDeTarea(it.cambio)) continue;
+    const fase = faseDeLaTarea(it.cambio);
+    porFase.set(fase, [...(porFase.get(fase) ?? []), it]);
+  }
+  const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
+  const fasesNuevas = new Map(
+    borrador.cambios.flatMap((c) => (c.tipo === "fase-nueva" ? [[c.clave, c.fase.name] as const] : [])),
+  );
+  const indice = indexarTareasPorTitulo(
+    vivo.fases.flatMap((f) =>
+      f.tareas ? [{ phaseId: f.id, phaseName: f.name, current: f.tareas.map((t) => ({ title: t.title, status: t.status })) }] : [],
+    ),
+  );
+  return [...porFase.entries()].map(([fase, its], i) => {
+    const tareas: ItemDeTarea[] = its.map((it) => {
+      const c = it.cambio as CambioDeTarea;
+      const heredada = it.dependeDe !== undefined;
+      const aviso =
+        it.estado === "choque"
+          ? `⚠ ${it.choque}`
+          : it.estado === "ya-esta"
+            ? c.tipo === "tarea-nueva"
+              ? "Ya está: hay una igual en esa semana."
+              : "Ya no está en el cronograma."
+            : undefined;
+      const comun = {
+        clave: c.clave,
+        estado: it.estado,
+        ...(aviso ? { aviso } : {}),
+        seMarca: (it.estado === "aplica" || it.estado === "excluido") && !heredada,
+      };
+      if (c.tipo === "tarea-se-va") {
+        return { ...comun, signo: "−" as const, titulo: c.desde.title, semana: c.desde.weekIndex + 1 };
+      }
+      const repetida = avisoDeRepetida(c.tarea.title, c.fase, indice);
+      return {
+        ...comun,
+        signo: "+" as const,
+        titulo: c.tarea.title,
+        semana: c.tarea.weekIndex + 1,
+        ...(c.tarea.needsValidation ? { porValidar: motivoDePorValidar(c.tarea) } : {}),
+        ...(c.tarea.fuga ? { fuga: c.tarea.fuga } : {}),
+        ...(repetida ? { repetida } : {}),
+      };
+    });
+    const choques = its.filter((it) => it.estado === "choque");
+    const heredada = its.find((it) => it.dependeDe !== undefined);
+    const dependeDe = heredada?.dependeDe !== undefined ? (numeroEnLaLista.get(heredada.dependeDe) ?? null) : null;
+    const vivos = its.filter((it) => it.estado !== "ya-esta");
+    const textos = new Set(choques.map((it) => it.choque));
+    const aviso =
+      choques.length > 0
+        ? choques.length === vivos.length && textos.size === 1
+          ? `⚠ ${choques[0].choque}`
+          : `⚠ ${choques.length === 1 ? "1 queda fuera" : `${choques.length} quedan fuera`}`
+        : dependeDe !== null
+          ? `Va con el cambio ${dependeDe}: si lo marcas, vuelven sus tareas.`
+          : undefined;
+    return {
+      numero: k + i + 1,
+      fase,
+      nombre: borrador.tareasArmadasPara[fase]?.nombre ?? vivas.get(fase)?.name ?? fasesNuevas.get(fase) ?? fase,
+      nuevas: vivos.filter((it) => it.cambio.tipo === "tarea-nueva").length,
+      seVan: vivos.filter((it) => it.cambio.tipo === "tarea-se-va").length,
+      marcadas: its.filter((it) => it.estado === "aplica").length,
+      aplicables: its.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
+      estado: estadoDelGrupo(its),
+      dependeDe,
+      ...(aviso ? { aviso } : {}),
+      tareas,
+    };
+  });
 }
 
 /**
  * Lo que pinta la barra de revisión, con lo marcado (`sin` = lo desmarcado). La magnitud mide la
  * propuesta ENTERA —todo lo que se puede aplicar—, igual que la franja de antes: es la que decide
  * si «Aplicar todo» pide confirmación.
+ * Desde E2a: la estructura se numera 1..k en `items` y las tareas van en `grupos` (k+1…), uno por fase.
  */
-export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = []): ResumenDelBorrador {
+export function resumir(
+  vivo: Vivo,
+  borrador: Borrador,
+  sin: Iterable<string> = [],
+  { tareas = null }: { tareas?: EstadoDeLasTareas | null } = {},
+): ResumenDelBorrador {
   const sinLista = [...sin];
-  const plan = planDeAplicacion(vivo, borrador, sinLista);
+  const plan = planDeAplicacion(vivo, borrador, sinLista, { tareas });
   const nuevas = new Map(
     borrador.cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
   );
-  const items: ItemDeLaLista[] = plan.items.map((it) => {
+  const numeroEnLaLista = new Map<string, number>();
+  const items: ItemDeLaLista[] = plan.items.flatMap((it) => {
     const c = it.cambio;
+    if (esCambioDeTarea(c)) return [];
+    const numero = numeroEnLaLista.size + 1;
+    numeroEnLaLista.set(c.clave, numero);
     const detalle =
       c.tipo === "fase-cambia" && (c.campo === "notes" || c.campo === "activityType" || c.campo === "name")
         ? filasDeDetalle([{ field: c.campo, from: c.desde, to: c.a }]).map((f) => ({
@@ -900,18 +1752,21 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
         : [];
     const motivo = c.tipo === "orden" ? c.motivos?.join(" · ") : c.tipo === "ancla" ? undefined : c.motivo;
     const aviso = it.estado === "choque" ? `⚠ ${it.choque}` : it.estado === "ya-esta" ? "Ya está así." : undefined;
-    return {
-      numero: it.numero,
-      clave: c.clave,
-      estado: it.estado,
-      titulo: tituloDe(c, vivo, nuevas),
-      detalle,
-      ...(motivo ? { motivo } : {}),
-      ...(aviso ? { aviso } : {}),
-    };
+    return [
+      {
+        numero,
+        clave: c.clave,
+        estado: it.estado,
+        titulo: tituloDe(c, vivo, nuevas),
+        detalle,
+        ...(motivo ? { motivo } : {}),
+        ...(aviso ? { aviso } : {}),
+      },
+    ];
   });
+  const grupos = gruposDeTareas(vivo, borrador, plan, numeroEnLaLista, items.length);
 
-  const proyeccion = proyectar(vivo, borrador, sinLista);
+  const proyeccion = proyectarConPlan(vivo, plan);
   const cierreAntes = projectedEnd(vivo.ancla, vivo.fases);
   const cierreDespues = projectedEnd(proyeccion.ancla, proyeccion.fases);
 
@@ -925,11 +1780,13 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
   const entera = proyectar(vivo, borrador, []);
   const magnitud = magnitudDe(vivo, aplicables, cierreAntes, projectedEnd(entera.ancla, entera.fases));
   const magnitudDeLoMarcado = magnitudDe(vivo, plan.aplicadas, cierreAntes, cierreDespues);
+  const escritas = plan.escrituras.tareas;
 
   return {
     origen: borrador.origen,
     observaciones: borrador.observaciones,
     items,
+    grupos,
     marcadas: plan.marcadas,
     aplicables: plan.aplicables,
     total: plan.total,
@@ -941,6 +1798,12 @@ export function resumir(vivo: Vivo, borrador: Borrador, sin: Iterable<string> = 
     corrimiento: describeEndShift(cierreAntes, cierreDespues),
     magnitud,
     magnitudDeLoMarcado,
+    tareas: { nuevas: escritas.nuevas.length, seVan: escritas.seVan.length },
+    borraAlgo: escritas.seVan.length > 0,
+    fasesNuevasConTareas: escritas.nuevas.some((n) => n.fase.tipo === "nueva"),
+    faltanTareas: tareas === "faltan" || tareas === "fallo",
+    estadoDeTareas: tareas,
+    proyeccion,
   };
 }
 
@@ -1000,8 +1863,83 @@ export function textoDeAplicar(marcadas: number, aplicables: number): string {
  * otro cronograma, marcado entero o no: la confirmación cuida lo que se escribe, no la cantidad de
  * casillas. Con un choque o una nota desmarcada, lo demás sigue siendo otro plan.
  */
-export function pideConfirmacion(r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado">): boolean {
-  return r.marcadas > 0 && r.magnitudDeLoMarcado.esCronogramaNuevo;
+export function pideConfirmacion(
+  r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado" | "borraAlgo" | "faltanTareas">,
+): boolean {
+  /* E2a: también cuando aplicar QUITA tareas (una sola alcanza) o cuando las tareas no llegaron y
+     se aplican solo las fases: las dos cosas cambian lo que el CSE cree que va a pasar. */
+  return r.marcadas > 0 && (r.magnitudDeLoMarcado.esCronogramaNuevo || r.borraAlgo || r.faltanTareas);
+}
+
+/**
+ * El título de la barra: «La IA propone 3 cambios de fases y 41 de tareas», solo tareas, o el de E1
+ * cuando no hay tareas. Cuenta lo que todavía difiere de lo vivo (sin lo que ya está así).
+ */
+export function tituloDeLaBarra(r: Pick<ResumenDelBorrador, "items" | "grupos" | "magnitud">): string {
+  const fases = r.items.filter((it) => it.estado !== "ya-esta").length;
+  const tareas = r.grupos.reduce((n, g) => n + g.nuevas + g.seVan, 0);
+  const otro = r.magnitud.esCronogramaNuevo ? "otro cronograma · " : "";
+  if (tareas === 0) return `La IA propone ${otro}${plural(fases, "cambio", "cambios")}`;
+  if (fases === 0) return `La IA propone ${otro}${plural(tareas, "cambio de tareas", "cambios de tareas")}`;
+  return `La IA propone ${otro}${plural(fases, "cambio de fases", "cambios de fases")} y ${tareas} de tareas`;
+}
+
+/** Lo que dice la confirmación de aplicar, después del resumen de lo marcado. */
+export function textoDeLaConfirmacion(
+  r: Pick<ResumenDelBorrador, "borraAlgo" | "faltanTareas" | "tareas" | "fasesNuevasConTareas">,
+): string {
+  if (r.borraAlgo) {
+    const n = r.tareas.seVan;
+    return (
+      `${n === 1 ? "Se quita 1 tarea pendiente" : `Se quitan ${n} tareas pendientes`} de la IA; lo que tiene avance o ` +
+      "escribiste a mano no se toca. Después puedes seguir editando el cronograma a mano."
+    );
+  }
+  if (r.faltanTareas) return "Se aplican solo los cambios de fases: las tareas de esta propuesta no llegaron.";
+  return (
+    "No se borra ninguna fase ni ninguna tarea: las tareas y sus estados quedan como están, y las fases nuevas " +
+    `nacen ${r.fasesNuevasConTareas ? "con sus tareas" : "vacías"}. Después puedes seguir editando el cronograma a mano.`
+  );
+}
+
+export const ACCION_ARMAR_TAREAS = "Armar las tareas";
+export const ACCION_VOLVER_A_INTENTAR = "Volver a intentar";
+
+/**
+ * La línea de las tareas arriba del Gantt (dentro de la barra, o suelta si no hay barra). `fase` es
+ * la fase de la corrida («Leyendo las reuniones…»); `motivo`, por qué falló. null = no hay línea.
+ */
+export function textoDeLaLineaDeTareas(
+  estado: EstadoDeLasTareas | "paso-1" | null,
+  fase: string | null,
+  motivo: string | null,
+  conMaterial: boolean,
+): { texto: string; accion: string | null } | null {
+  switch (estado) {
+    case "paso-1":
+      return {
+        texto: conMaterial
+          ? "Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…"
+          : "Preparando la propuesta del cronograma…",
+        accion: null,
+      };
+    case "armando":
+      return { texto: `Armando las tareas… · ${fase?.trim() || "suele tardar uno o dos minutos"}`, accion: null };
+    case "faltan":
+      return {
+        texto: "Faltan las tareas de esta propuesta: si aplicas ahora, solo se aplican los cambios de fases.",
+        accion: ACCION_ARMAR_TAREAS,
+      };
+    case "fallo": {
+      const m = motivo?.trim().replace(/[.\s]+$/, "");
+      return {
+        texto: `No se pudieron armar las tareas${m ? `: ${m}` : ""}. Si aplicas ahora, solo se aplican los cambios de fases.`,
+        accion: ACCION_VOLVER_A_INTENTAR,
+      };
+    }
+    default:
+      return null;
+  }
 }
 
 /**
@@ -1071,6 +2009,9 @@ export const REVISION_VACIA: EstadoDeRevision = { clave: null, base: null, sin: 
  */
 export function claveDeRevision(json: unknown, token: string | null): string | null {
   if (!esBorradorGuardado(json)) return null;
+  /* E2a: un v1 trae su `desde` y sube `version` en cada escritura (la marca y la fusión de las
+     tareas). Su identidad es el TOKEN: lo desmarcado sobrevive a que lleguen las tareas. */
+  if (esBorradorV1(json)) return `${token ?? ""}|v1`;
   return `${token ?? ""}|${huellaDeTexto(jsonCanonico(json))}`;
 }
 

@@ -50,6 +50,7 @@ import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
+import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import {
@@ -3227,14 +3228,8 @@ async function persistTimelineFromAgentOutput(
 }
 
 // ── D.1: persistencia del DETALLE del cronograma ──────────────────────────────
-
-const DETAIL_ACTIVITY_TYPES = [
-  "EXPLORACION",
-  "PLANIFICACION",
-  "CONFIGURACION",
-  "ADOPCION",
-  "SEGUIMIENTO",
-] as const;
+// `DETAIL_ACTIVITY_TYPES` y `activityTypePropuesto` viven en lib/timeline/tareas-del-detalle.ts (E2a):
+// el paso 2 que arma el borrador usa el mismo vocabulario cerrado que estos previews.
 
 /** Lo que el agente propone para UNA fase, calculado SIN escribir: sus tareas y —solo cuando la
  *  fase todavía no tiene tipo— el tipo de actividad. Las dos cosas viajan al modal de curación y
@@ -3244,14 +3239,6 @@ export interface DetailPreviewPhase {
   tasks: ComputedDetailTask[];
   /** activityType propuesto, o null si la fase ya tiene uno (nunca se pisa lo elegido a mano). */
   activityType: string | null;
-}
-
-/** El tipo de actividad que propone el agente, validado contra el vocabulario cerrado. */
-function activityTypePropuesto(raw: Record<string, unknown> | undefined): string | null {
-  return typeof raw?.activityType === "string" &&
-    (DETAIL_ACTIVITY_TYPES as readonly string[]).includes(raw.activityType as string)
-    ? (raw.activityType as string)
-    : null;
 }
 
 /**
