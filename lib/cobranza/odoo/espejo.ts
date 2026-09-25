@@ -297,7 +297,7 @@ export function proponerSemaforo(
       return {
         ...base,
         divergencia: null,
-        nota: `Odoo devolvió un estado de pago que este espejo no conoce («${paymentState}»). No se toca el cobro.`,
+        nota: `Odoo devolvió un estado de pago que Nexus no conoce («${paymentState}»). No se toca el cobro.`,
       };
   }
 }

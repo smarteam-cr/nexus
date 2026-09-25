@@ -293,8 +293,8 @@ export default function EmparejadoOdoo({
             {/* ⚠ Antes decía que las propuestas por monto necesitaban el ERP. Ya no: salen del
                 espejo de facturas, que sigue siendo válido con Odoo caído. Lo único que no se
                 puede es traer clientes NUEVOS de Odoo. */}
-            Todo lo de abajo sigue sirviendo — sale del espejo de facturas y del catálogo ya
-            guardados. Lo único que no se pudo es traer clientes nuevos del ERP.
+            Todo lo de abajo sigue sirviendo: sale de la copia de las facturas y de la lista de clientes ya
+            guardadas. Lo único que no se pudo es traer clientes nuevos de Odoo.
           </span>
         </Alert>
       )}
@@ -311,7 +311,7 @@ export default function EmparejadoOdoo({
           {conteos.partners} clientes en Odoo · {conteos.partnersIgnorados} marcados como ajenos
         </span>
         {conteos.facturasLeidas > 0 && (
-          <span className="text-fg-muted">{conteos.facturasLeidas} facturas del espejo para proponer</span>
+          <span className="text-fg-muted">{conteos.facturasLeidas} facturas de la copia de Odoo para proponer</span>
         )}
         <Button variant="secondary" size="sm" className="ml-auto" onClick={() => void cargar(true)} disabled={cargando}>
           {cargando ? "Consultando…" : "Actualizar lista desde Odoo"}
@@ -321,7 +321,7 @@ export default function EmparejadoOdoo({
       {pendientes.length === 0 ? (
         <EmptyState
           title="No queda ninguna cuenta por vincular"
-          description="Todas las cuentas que facturan por Odoo tienen su cliente de Odoo. El sync puede espejar sin riesgo de atribuir mal."
+          description="Todas las cuentas que facturan por Odoo tienen su cliente de Odoo. Cada factura que llega de Odoo cae en su cuenta."
         />
       ) : (
         <div className="space-y-2">

@@ -153,7 +153,7 @@ export default function OdooClient({
       {/* Si nunca corrió, el enlace igual sirve: ahí se ve la conexión y las banderas. */}
       {!corrida && puedeVerCorridas && (
         <p className="text-xs text-fg-muted">
-          El sync no corrió todavía.{" "}
+          Nexus todavía no copió nada de Odoo.{" "}
           <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
             Ver el estado de la conexión →
           </Link>
@@ -207,15 +207,15 @@ function EstadoDelEspejo({
       >
         <p className="font-semibold">
           {corrida.ultimaOkEn
-            ? `⚠ El espejo está viejo: la última corrida buena es del ${utc(corrida.ultimaOkEn)} (${hace(corrida.horasDesdeLaUltimaBuena)}).`
-            : "⚠ El espejo nunca tuvo una corrida buena."}
+            ? `⚠ La copia de Odoo está vieja: la última buena es del ${utc(corrida.ultimaOkEn)} (${hace(corrida.horasDesdeLaUltimaBuena)}).`
+            : "⚠ Ninguna copia de Odoo salió bien todavía."}
         </p>
         <p>
           Lo facturado en Odoo después no está acá: ni al lado de los cobros ni en «Lo que no cuadra».{" "}
           {queFallo ??
             (sinTerminar
               ? `Hay una corrida sin terminar desde el ${utc(corrida.iniciadaEn)}.`
-              : "El sync no volvió a correr desde entonces.")}
+              : "No se volvió a copiar desde entonces.")}
         </p>
         {enlace && <p>{enlace}</p>}
       </div>
@@ -226,7 +226,7 @@ function EstadoDelEspejo({
     <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
       {corrida.ultimaOkEn && (
         <span>
-          Espejo actualizado el {utc(corrida.ultimaOkEn)} · {facturas} facturas
+          Copia de Odoo del {utc(corrida.ultimaOkEn)} · {facturas} facturas
         </span>
       )}
       {queFallo && <span className="text-danger-ink">· ⚠ {queFallo}</span>}
@@ -257,7 +257,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           reunión de dirección.
         </p>
         <p className="mt-2 text-sm text-fg-secondary">
-          Ahora Nexus lee Odoo una vez por día —cuando el sync está encendido en el servidor— y pone las facturas
+          Ahora Nexus lee Odoo una vez por día —cuando la copia automática está encendida en el servidor— y pone las facturas
           reales al lado de los cobros de las cuentas emparejadas. Lo que no coincide aparece en una lista, con su
           monto y con quién lo puede cerrar.
         </p>
@@ -312,7 +312,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             motivo.
           </li>
           <li>
-            <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> El sync corre solo cada mañana,
+            <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> La copia de Odoo se hace sola cada mañana,
             desde las 6. La línea de arriba de estas pestañas dice de cuándo es la última corrida buena; si falla o
             deja de correr, se pone en rojo. Mientras esté en rojo, lo facturado después no está acá.
           </li>
@@ -480,7 +480,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Dato n={conteos.facturas} etiqueta="facturas espejadas" pie="Solo lectura desde Odoo." />
+        <Dato n={conteos.facturas} etiqueta="facturas copiadas de Odoo" pie="Solo lectura desde Odoo." />
         <Dato
           n={conteos.cuentasVinculadas}
           de={conteos.cuentas}
