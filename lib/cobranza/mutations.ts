@@ -31,6 +31,7 @@ import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { resolverSociedad, type DecisionDeSociedad } from "./sociedades";
+import { cambiarViaCobroTx } from "./via-cobro";
 import { mensajeReferenciaYaEsCobro, normalizarReferenciaExterna } from "./ingresos-no-venta";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
@@ -134,12 +135,23 @@ export async function updateCuenta(
 ) {
   // Cambio manual de estadoCuenta → triple columna de curaduría (idioma health override).
   const tocaEstado = data.estadoCuenta !== undefined;
-  return prisma.cuentaFinanciera.update({
-    where: { id: cuentaId },
-    data: {
-      ...data,
-      ...(tocaEstado ? { estadoActualizadoPor: byEmail, estadoActualizadoEn: new Date() } : {}),
-    },
+  /* ⚠ La vía de cobro va por su chokepoint y no con el resto: la ficha la manda en CADA guardado
+     (CuentaDrawer), y escribirla tal cual pisaba quién la había marcado «Está en Mercury» cada vez que
+     alguien corregía un correo. */
+  const { viaCobro, ...resto } = data;
+  return prisma.$transaction(async (tx) => {
+    const cuenta = await tx.cuentaFinanciera.update({
+      where: { id: cuentaId },
+      data: {
+        ...resto,
+        ...(tocaEstado ? { estadoActualizadoPor: byEmail, estadoActualizadoEn: new Date() } : {}),
+      },
+      select: { id: true },
+    });
+    if (viaCobro !== undefined) {
+      await cambiarViaCobroTx(tx, { cuentaId, nueva: viaCobro, actor: byEmail, motivo: "la cambió en la ficha de la cuenta." });
+    }
+    return cuenta;
   });
 }
 
@@ -1210,18 +1222,15 @@ export async function liberarYRegenerar(
       await tx.cobro.deleteMany({ where: { id: { in: rec.toDelete } } });
     }
 
-    if (corregirVia && cuenta) {
-      await tx.cuentaFinanciera.update({
-        where: { id: previo.servicio.cuentaId },
-        data: { viaCobro: corregirVia },
-      });
-      await tx.bitacoraCobro.create({
-        data: {
-          cuentaId: previo.servicio.cuentaId,
-          tipo: "ACTUALIZACION_IA",
-          contenido: `Vía de cobro corregida de ${cuenta.viaCobro} a ${corregirVia}: es donde ${byEmail} confirmó que viven las facturas de este servicio.`,
-          usuarioEmail: byEmail,
-        },
+    /* Por el chokepoint de la vía: firma quién y cuándo, y la línea de la bitácora sale igual que en la
+       ficha y en «Está en Mercury». Relee la vía adentro de la transacción: si otra pestaña ya la cambió,
+       no escribe nada. */
+    if (corregirVia) {
+      await cambiarViaCobroTx(tx, {
+        cuentaId: previo.servicio.cuentaId,
+        nueva: corregirVia,
+        actor: byEmail,
+        motivo: "al cuadrar el cronograma confirmó que ahí viven las facturas de este servicio.",
       });
     }
 

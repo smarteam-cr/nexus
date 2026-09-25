@@ -1,0 +1,44 @@
+-- 2026-09-25 · Etapa 1 · «Está en Mercury»: la vía de cobro de la cuenta queda firmada
+--
+-- ── POR QUÉ ────────────────────────────────────────────────────────────────────────
+-- Cobranza › Odoo › «Emparejar» listaba las 56 cuentas sin mirar por dónde facturan, y las 8 que ya
+-- dicen Mercury seguían ahí para siempre. Elías decidió (2026-09-25) que «Está en Mercury» ES la vía de
+-- cobro de la cuenta (`viaCobro = MERCURY`), una sola verdad en todo Cobranza, y que «Deshacer» la
+-- devuelve a Odoo. Lo que faltaba es saber QUIÉN y CUÁNDO la cambió: hoy la ficha de la cuenta la pisa
+-- sin firma en cada guardado y «Cuadrar cronograma» solo deja una línea en la bitácora.
+--
+-- Qué agrega, en `CuentaFinanciera` y nullable (ninguna cuenta vieja cambia):
+--   · `viaCobroPor`  el correo de quien cambió la vía por última vez.
+--   · `viaCobroEn`   cuándo.
+-- Las escribe SOLO `cambiarViaCobroTx` (lib/cobranza/via-cobro.ts), y solo cuando la vía cambia de
+-- verdad: guardar la ficha por otra cosa no borra quién la marcó. Los tres caminos que la cambian —el
+-- botón «Está en Mercury», la ficha de la cuenta y «Cuadrar cronograma»— pasan por ahí y dejan además
+-- una línea en la bitácora de la cuenta.
+--
+-- ⚠ Sin relleno a propósito. Las 8 cuentas que ya dicen Mercury vienen de la importación o del alta,
+-- sin firma, y así se muestran («venía así de la importación» o «desde el alta»). Inventarles un autor
+-- sería mentir.
+-- Medido el 2026-09-25: 0 líneas de bitácora «Vía de cobro corregida», o sea que ninguna tiene un
+-- cambio anterior que se pueda recuperar.
+--
+-- Sin tabla nueva: `prisma/policies.sql` no cambia.
+--
+-- ⚠⚠ VA ANTES QUE EL DEPLOY. Prisma lee TODAS las columnas del modelo cuando una consulta no dice
+-- cuáles, y la ficha de la cuenta (`getCuentaDetail`), el alta de cuentas y el importador leen así: con
+-- el código nuevo y sin estas columnas, abrir una cuenta da error. Al revés no pasa nada: el código
+-- viejo no nombra estas columnas y sigue andando con ellas puestas.
+--
+-- Aditivo e idempotente: se puede correr dos veces, y si se corta a mitad se vuelve a correr.
+--
+-- Aplicar con:  ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql --schema prisma/schema.prisma
+-- Después:      npx prisma generate   (NUNCA db push)
+
+ALTER TABLE "CuentaFinanciera" ADD COLUMN IF NOT EXISTS "viaCobroPor" TEXT;
+ALTER TABLE "CuentaFinanciera" ADD COLUMN IF NOT EXISTS "viaCobroEn" TIMESTAMP(3);
+
+-- ── Verificación (solo lectura, correr aparte) ─────────────────────────────────────
+-- Esperado hoy: 56 | 8 | 0 (las 8 de Mercury sin firma hasta que alguien las confirme o las deshaga).
+--   SELECT COUNT(*)                                          AS cuentas,
+--          COUNT(*) FILTER (WHERE "viaCobro" = 'MERCURY')    AS en_mercury,
+--          COUNT(*) FILTER (WHERE "viaCobroPor" IS NOT NULL) AS firmadas
+--     FROM "CuentaFinanciera";
