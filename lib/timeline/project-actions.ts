@@ -1,4 +1,5 @@
 import { avanceSinConfirmarVencido } from "./avance-sin-confirmar";
+import { fraseDeAutoria, type AutoriaDeLaPropuesta } from "./autoria-de-la-propuesta";
 /**
  * lib/timeline/project-actions.ts
  *
@@ -68,6 +69,8 @@ export interface ProjectActionsInput {
   /** El mismo borrador VACÍO, con su corrida fallida o colgada (`estadoDelVacio` = «fallo»): nadie lo va
    *  a llenar, se descarta o se vuelve a intentar. */
   tareasFallaron?: boolean;
+  /** E2b P7: de dónde viene la propuesta, quién la dejó y cuándo. Sin ella, el texto genérico. */
+  pendingProposalAutoria?: AutoriaDeLaPropuesta | null;
   /** Lo que reportó una PERSONA del equipo (needsValidation) y espera respuesta del CSE. */
   sugerenciasDelEquipo: number;
   // ── Estado del plan ──
@@ -96,6 +99,7 @@ export interface ProjectActionsInput {
 }
 
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
+const conMayuscula = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * Devuelve las acciones ordenadas: primero lo que espera una decisión (destraba el resto), al final
@@ -149,10 +153,14 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
       cta: "Ver el cronograma",
     });
   } else if (i.pendingProposal) {
+    /* E2b P7: con la autoría, la primera oración dice de dónde viene, quién la dejó y cuándo. */
+    const origen = i.pendingProposalAutoria
+      ? conMayuscula(fraseDeAutoria(i.pendingProposalAutoria))
+      : "Salieron del handoff o de «Regenerar»";
     out.push({
       id: "draft-proposal", group: "decidir", tone: "info",
       title: "La IA propone cambios del cronograma",
-      why: "Salieron del handoff o de «Regenerar». La revisas arriba del Gantt, desmarcas lo que no va y la aplicas (o la descartas); lo que tiene avance o escribiste a mano no se toca.",
+      why: `${origen}. La revisas arriba del Gantt, desmarcas lo que no va y la aplicas (o la descartas); lo que tiene avance o escribiste a mano no se toca.`,
       cta: "Revisar sugerencias",
     });
   }

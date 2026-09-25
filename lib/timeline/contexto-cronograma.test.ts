@@ -521,6 +521,12 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/borrador-del-detalle.ts",
     "lib/timeline/tareas-del-detalle.ts",
     "lib/timeline/escribir-estructura.ts",
+    /* E2b P7 (2026-09-25): los tres archivos nuevos del cronograma. El aviso del handoff
+       (borrador-del-handoff.ts) y la frase de quién y cuándo (autoria-de-la-propuesta.ts, que arma
+       leer-autoria.ts) llegan tal cual al toast, la barra, el cartel y «Qué hacer acá». */
+    "lib/timeline/borrador-del-handoff.ts",
+    "lib/timeline/autoria-de-la-propuesta.ts",
+    "lib/timeline/leer-autoria.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega

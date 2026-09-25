@@ -1,6 +1,7 @@
 "use client";
 
 import { useMe } from "@/hooks/useMe";
+import { fraseDeAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 
 /**
  * components/projects/TimelineProposalPendiente.tsx — EL CARTEL de la propuesta de
@@ -21,6 +22,10 @@ import { useMe } from "@/hooks/useMe";
  * Sin lógica de mutex compartida (a diferencia de AltaTrabada): esto es un aviso de
  * SOLO LECTURA, no dispara ninguna escritura — no hay carrera que evitar entre las
  * dos instancias.
+ *
+ * ── QUIÉN Y CUÁNDO (E2b P7, 2026-09-25) ──────────────────────────────────────
+ * Con `autoria`, el cartel dice de dónde viene, quién la dejó y cuándo (`fraseDeAutoria`).
+ * Sin ella, el compacto no lleva segunda frase y el completo no dice el origen: nada inventado.
  */
 
 export interface TimelineProposalPendienteProps {
@@ -30,6 +35,8 @@ export interface TimelineProposalPendienteProps {
   pending: boolean;
   /** `compacto` en el rail (una línea); `completo` en el widget del proyecto. */
   variante?: "compacto" | "completo";
+  /** De dónde viene, quién la dejó y cuándo. Ausente o null = no se dice. */
+  autoria?: AutoriaDeLaPropuesta | null;
 }
 
 export default function TimelineProposalPendiente({
@@ -37,6 +44,7 @@ export default function TimelineProposalPendiente({
   clientId,
   pending,
   variante = "completo",
+  autoria = null,
 }: TimelineProposalPendienteProps) {
   const me = useMe();
   // Misma capability que ya gatea "Revisar N cambios" dentro de CronogramaCanvas — un
@@ -61,9 +69,7 @@ export default function TimelineProposalPendiente({
         <span className="text-xs font-medium text-warn-ink">
           El cronograma tiene una propuesta sin decidir
         </span>
-        <span className="text-xs text-warn-ink/70">
-          · la IA propuso cambios del cronograma que todavía no se aplicaron
-        </span>
+        {autoria && <span className="text-xs text-warn-ink/70">· {fraseDeAutoria(autoria)}</span>}
         <span className="ml-auto" />
         {boton}
       </div>
@@ -75,8 +81,8 @@ export default function TimelineProposalPendiente({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-warn-ink">El cronograma tiene una propuesta sin decidir</p>
         <p className="mt-1 text-xs text-warn-ink/80 leading-relaxed">
-          La IA propuso cambios del cronograma (del handoff o de «Regenerar»); el cliente sigue
-          viendo el cronograma actual hasta que alguien la aplique o la descarte.
+          La IA propuso cambios del cronograma{autoria ? ` (${fraseDeAutoria(autoria)})` : ""}; el
+          cliente sigue viendo el cronograma actual hasta que alguien la aplique o la descarte.
         </p>
       </div>
       {boton}

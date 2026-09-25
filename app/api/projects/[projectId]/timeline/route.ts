@@ -59,6 +59,8 @@ import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/ti
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
 import { MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
 import { leerEstadoDeLasTareas, type EstadoDeLasTareasDelBorrador } from "@/lib/timeline/borrador-del-detalle";
+import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
+import type { AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -182,6 +184,9 @@ interface TimelineResponse {
    *  corrida: «armando» (con la fase que reporta), «faltan», «fallo» (con su motivo) o «listas».
    *  null = no hay un borrador que espere tareas. Solo se lee. */
   tareasDelBorrador: EstadoDeLasTareasDelBorrador | null;
+  /** E2b P7: de dónde viene la propuesta guardada, quién la dejó y cuándo (la corrida del token).
+   *  null = no hay propuesta. La barra lo dice en su línea de origen. */
+  autoriaDeLaPropuesta: AutoriaDeLaPropuesta | null;
   // D.2 — borrador de avance (separado de pendingProposal; no es status real).
   pendingProgress: PendingProgress | null;
   pendingProgressRunId: string | null;
@@ -390,6 +395,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     pendingProposal: (tl.pendingProposal as PutBody | null) ?? null,
     pendingProposalRunId: tl.pendingProposalRunId,
     tareasDelBorrador: await leerEstadoDeLasTareas(tl.pendingProposal),
+    autoriaDeLaPropuesta:
+      (await leerAutoriaDeLasPropuestas([{ token: tl.pendingProposalRunId, guardado: tl.pendingProposal }]))[0] ?? null,
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
     pendingProgressRunId: tl.pendingProgressRunId,
     pendingParticularidades: (tl.pendingParticularidades as PendingParticularidad[] | null) ?? null,

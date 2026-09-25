@@ -126,6 +126,31 @@ test("la propuesta pendiente dice que trae cambios del cronograma y qué no se t
   expect(p.cta).toBe("Revisar sugerencias");
 });
 
+// E2b P7 (2026-09-25): con la autoría (del GET del cronograma), la fila dice de dónde viene la
+// propuesta, quién la dejó y cuándo, con la misma frase que la barra y el cartel. Sin autoría sigue el
+// genérico. La edición que la pone en rojo: ignorar `pendingProposalAutoria`, armar otra frase, o
+// perder la segunda oración (qué no se toca).
+test("con autoría, la propuesta pendiente dice de dónde viene, quién la dejó y cuándo", () => {
+  const autoria = { desde: "desde «Regenerar todo»", quien: "Ana López", cuando: "2026-09-24T15:00:00.000Z" };
+  const p = buildProjectActions({ ...sano, pendingProposal: true, pendingProposalAutoria: autoria }).find(
+    (x) => x.id === "draft-proposal",
+  )!;
+  expect(p.why.startsWith("Desde «Regenerar todo» · la dejó Ana López el 24 sep. ")).toBe(true);
+  expect(p.why).toContain("La revisas arriba del Gantt");
+  expect(p.why).toContain("lo que tiene avance o escribiste a mano no se toca");
+  expect(p.why, "con autoría no repite el origen genérico").not.toContain("Salieron del handoff");
+  const sinAutoria = buildProjectActions({ ...sano, pendingProposal: true, pendingProposalAutoria: null }).find(
+    (x) => x.id === "draft-proposal",
+  )!;
+  expect(sinAutoria.why.startsWith("Salieron del handoff o de «Regenerar». La revisas arriba del Gantt")).toBe(true);
+  // El input la deja pasar tal cual desde las señales del Canvas.
+  const senales: TimelineActionSignals = {
+    anchorStartDate: null, detailConfirmedAt: null, hasTasks: false, pendingProgress: false, pendingParticularidades: 0,
+    pendingProposal: true, pendingProposalAutoria: autoria, particularidades: [], sugerenciasDelEquipo: 0, phases: [],
+  };
+  expect(buildActionsInput(senales, null, null).pendingProposalAutoria).toEqual(autoria);
+});
+
 // Revisión de E2a: el borrador VACÍO que espera sus tareas no tiene barra ni nada que aplicar. La fila
 // decía «La IA propone cambios… la aplicas (o la descartas)» con «Revisar sugerencias». La edición que
 // la pone en rojo: ignorar `armandoTareas`, o volver a ofrecer un botón que lleva a nada que revisar.

@@ -17,6 +17,7 @@ import StageBadge from "@/components/lifecycle/StageBadge";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import { altaEnCurso, parseEstadoDeAlta } from "@/lib/projects/alta";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
+import { leerAutoria } from "@/lib/timeline/autoria-de-la-propuesta";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 
 
@@ -145,6 +146,9 @@ interface GPSData {
   /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
    *  cronograma sin revisar. Ausente en respuestas cacheadas viejas = no se pinta. */
   timelineProposalPending?: boolean;
+  /** E2b P7: de dónde viene, quién la dejó y cuándo. Se valida con `leerAutoria` (puede venir de
+   *  una respuesta cacheada vieja, sin el campo). */
+  timelineProposalAutoria?: unknown;
   /**
    * El resumen citado del proyecto, con su veredicto de frescura YA resuelto en el servidor.
    * `null` = todavía no se generó (se pinta el CTA); ausente = respuesta cacheada vieja, y el
@@ -593,6 +597,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             projectId={projectId}
             clientId={clientId}
             pending
+            autoria={leerAutoria(data.timelineProposalAutoria)}
           />
         </div>
       )}

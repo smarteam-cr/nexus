@@ -12,6 +12,7 @@ import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
+import type { AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
   SENTINEL_SERVICE_TYPE,
   hechosDeProyecto,
@@ -50,6 +51,8 @@ interface ProjectSummary {
   /** Tanda M — `ProjectTimeline.pendingProposal != null`: el handoff dejó cambios de
    *  cronograma sin revisar. Alimenta TimelineProposalPendiente. */
   timelineProposalPending?: boolean;
+  /** E2b P7: de dónde viene esa propuesta, quién la dejó y cuándo. null = no se dice. */
+  timelineProposalAutoria?: AutoriaDeLaPropuesta | null;
 }
 
 /**
@@ -590,6 +593,7 @@ function ProjectSection({
           projectId={activeProject.id}
           clientId={clientId}
           pending={activeProject.timelineProposalPending ?? false}
+          autoria={activeProject.timelineProposalAutoria ?? null}
         />
       )}
 

@@ -29,6 +29,7 @@ import { summarizeDuplicates } from "./particularidad-identity";
 import { esCompromisoPendiente } from "./particularidad-to-task";
 import { computePhaseRanges, overduePlannedEnd, isOverdueByDate } from "./weeks";
 import { esAbierta } from "./particularidad-state";
+import type { AutoriaDeLaPropuesta } from "./autoria-de-la-propuesta";
 
 /** Lo mínimo de una tarea para resolver atrasos y pendientes del cliente. */
 export interface ActionTask {
@@ -79,6 +80,8 @@ export interface TimelineActionSignals {
   armandoTareas?: boolean;
   /** El mismo borrador vacío, con su corrida fallida o colgada (`estadoDelVacio` = «fallo»). */
   tareasFallaron?: boolean;
+  /** E2b P7: de dónde viene la propuesta, quién la dejó y cuándo (lo trae el GET del cronograma). */
+  pendingProposalAutoria?: AutoriaDeLaPropuesta | null;
   /** Confirmadas (needsValidation = false). */
   particularidades: ActionParticularidad[];
   /** Cuántas reportó una PERSONA del equipo y esperan respuesta (needsValidation = true). */
@@ -121,6 +124,7 @@ export function buildActionsInput(
     pendingProposal: s.pendingProposal,
     ...(s.armandoTareas ? { armandoTareas: true } : {}),
     ...(s.tareasFallaron ? { tareasFallaron: true } : {}),
+    ...(s.pendingProposalAutoria ? { pendingProposalAutoria: s.pendingProposalAutoria } : {}),
     sugerenciasDelEquipo: s.sugerenciasDelEquipo,
     anchorStartDate: anchor,
     detailConfirmedAt: s.detailConfirmedAt,

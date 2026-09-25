@@ -132,7 +132,11 @@ describe("los textos de la barra", () => {
     const cartel = soloCodigo(leer("components/projects/TimelineProposalPendiente.tsx"));
     expect(cartel.length).toBeGreaterThan(1500);
     expect(cartel.match(/El cronograma tiene una propuesta sin decidir/g)?.length, "las dos variantes").toBe(2);
-    expect(cartel).toContain("la IA propuso cambios del cronograma");
+    /* ⚠ ACTUALIZADA en E2b P7 (2026-09-25), con esta razón: pedía «la IA propuso cambios del
+       cronograma», la segunda oración del compacto. Esa oración se fue: ahora dice de dónde viene, quién
+       la dejó y cuándo (`fraseDeAutoria`, en autoria-de-la-propuesta.test.ts). El completo sigue diciendo
+       «La IA propuso cambios del cronograma». */
+    expect(cartel).toContain("propuso cambios del cronograma");
     expect(cartel, "el cartel volvió a hablar solo de fases").not.toMatch(/cambios de fases/);
     expect(cartel, "el cartel volvió a decir que se aceptan uno por uno").not.toContain("los acepte");
   });
@@ -466,6 +470,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
         "proposalMeta.current =",
       );
     }
+    /* E2b P7 (2026-09-25): la autoría (quién y cuándo) viaja en el MISMO `proposalMeta` y se lee en el
+       render igual que el token: por esta misma invariante, nunca se pinta la de otra propuesta. La
+       edición que la pone en rojo: guardarla en un estado aparte, o leerla sin propuesta en pantalla. */
+    expect(contiene(CANVAS, "const autoriaEnPantalla = proposal ? (proposalMeta.current.autoria ?? null) : null;")).toBe(true);
   });
 
   it("⭐ un 409 PROPUESTA_ABIERTA del PUT no deja un callejón: se trae la guardada o se dice qué hacer", () => {
@@ -684,7 +692,13 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(BARRA, '<span className="text-xs text-fg-muted">{desde}</span>'), "la barra no dice de dónde viene").toBe(true);
     expect(BARRA, "volvió el texto fijo del origen").not.toContain("desde el último handoff");
     expect(BARRA).not.toContain("delContexto");
-    expect(contiene(rama, "desde={desdeDeLaPropuesta(deDondeViene(proposal))}"), "el Canvas no le dice a la barra de dónde viene").toBe(true);
+    /* ⚠ ACTUALIZADA en E2b P7 (2026-09-25), con esta razón: con la autoría del GET, la barra dice
+       también quién la dejó y cuándo (`fraseDeAutoria`, que parte de la misma clasificación). Sin
+       autoría (la vista previa del modificador, o el paso 1 recién guardado) sigue `deDondeViene`. */
+    expect(
+      contiene(rama, "desde={autoriaEnPantalla ? fraseDeAutoria(autoriaEnPantalla) : desdeDeLaPropuesta(deDondeViene(proposal))}"),
+      "el Canvas no le dice a la barra de dónde viene",
+    ).toBe(true);
     expect(contiene(BARRA, 'const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;')).toBe(true);
     expect(contiene(tramo(BARRA, "{lineaDeTareas && (", "/>"), "onAccion={onArmarTareas}")).toBe(true);
     expect(BARRA, "volvió la prop de la cadena vieja").not.toMatch(/\bencadenado\b/);

@@ -13,6 +13,7 @@ import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
+import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 
 /**
  * Los canvases del proyecto inicial, CON su señal de contenido. La señal viaja desde el
@@ -126,7 +127,8 @@ export default async function ClientPage({
         altaIntentos: true,
         // Tanda M — si el handoff dejó una propuesta de cronograma sin revisar. Mismo
         // criterio que el alta: va en el mismo row para no pagar una query por proyecto.
-        timeline: { select: { pendingProposal: true } },
+        // E2b P7: y la corrida que la dejó, para decir quién y cuándo.
+        timeline: { select: { pendingProposal: true, pendingProposalRunId: true } },
       },
     }),
     prisma.hubspotAccount.findFirst({
@@ -144,10 +146,27 @@ export default async function ClientPage({
     hubspotCompanyId: empresa.hubspotCompanyId,
     tieneHubspotAccount: !!hubspotAccount,
   };
-  const visibleProjects = projects
+  const navegables = projects
     .filter((p) => esProyectoNavegable(p, paraFiltro))
     // El borrador vacío que espera sus tareas no es una propuesta que revisar (revisión de E2a).
-    .map(({ timeline, ...p }) => ({ ...p, timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null) }));
+    .map(({ timeline, ...p }) => ({
+      fila: { ...p, timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null) },
+      timeline,
+    }));
+  /* E2b P7: quién dejó la propuesta y cuándo, en UNA lectura en lote y solo de las filas que la
+     muestran (sin ninguna, no hay consulta). */
+  const conPropuesta = navegables.filter(({ fila }) => fila.timelineProposalPending);
+  const autorias = await leerAutoriaDeLasPropuestas(
+    conPropuesta.map(({ timeline }) => ({
+      token: timeline?.pendingProposalRunId ?? null,
+      guardado: timeline?.pendingProposal ?? null,
+    })),
+  );
+  const autoriaPorProyecto = new Map(conPropuesta.map(({ fila }, i) => [fila.id, autorias[i]]));
+  const visibleProjects = navegables.map(({ fila }) => ({
+    ...fila,
+    timelineProposalAutoria: autoriaPorProyecto.get(fila.id) ?? null,
+  }));
 
   // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
   const strategyRef = await ensureStrategyProject(id);

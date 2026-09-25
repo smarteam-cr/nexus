@@ -94,6 +94,7 @@ import {
   type TareasDelBorrador,
   type Vivo,
 } from "@/lib/timeline/borrador";
+import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
   AVISO_PROPUESTA_PENDIENTE,
@@ -824,7 +825,11 @@ export default function CronogramaCanvas({
         // No pisa una propuesta de assist en curso (prev tiene prioridad).
         setProposal((prev) => {
           if (prev) return prev;
-          proposalMeta.current = { deAssist: false, runId: data.pendingProposalRunId ?? null };
+          proposalMeta.current = {
+            deAssist: false,
+            runId: data.pendingProposalRunId ?? null,
+            autoria: leerAutoria(data.autoriaDeLaPropuesta),
+          };
           return data.pendingProposal ? (data.pendingProposal as Proposal) : null;
         });
         /* El estado de las tareas de la GUARDADA, con su token: si en pantalla queda otra (la de arriba
@@ -889,8 +894,10 @@ export default function CronogramaCanvas({
      se lee dentro de callbacks async: no pinta nada, y como estado obligaría a meterlo en las deps
      de `load` —que tiene `[projectId]`— para no leerlo viejo.
      Hace falta porque `proposal` es UN estado compartido por dos orígenes muy distintos: la del
-     assist vive solo en memoria (pisarla la destruye) y la del handoff está persistida. */
-  const proposalMeta = useRef<{ deAssist: boolean; runId: string | null }>({
+     assist vive solo en memoria (pisarla la destruye) y la del handoff está persistida.
+     E2b P7: `autoria` (de dónde, quién y cuándo) la trae el GET, y solo la escriben los tres sitios
+     que ponen la guardada; cualquier otra asignación la deja afuera, así que nunca queda la de otra. */
+  const proposalMeta = useRef<{ deAssist: boolean; runId: string | null; autoria?: AutoriaDeLaPropuesta | null }>({
     deAssist: false,
     runId: null,
   });
@@ -920,7 +927,7 @@ export default function CronogramaCanvas({
           runIdNuevo,
         });
         if (!reemplaza) return prev;
-        proposalMeta.current = { deAssist: false, runId: runIdNuevo };
+        proposalMeta.current = { deAssist: false, runId: runIdNuevo, autoria: leerAutoria(data.autoriaDeLaPropuesta) };
         return nueva;
       });
       setTareasDelBorrador(tareasDelGet(data));
@@ -949,7 +956,11 @@ export default function CronogramaCanvas({
       const data = await res.json();
       const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
       if (!opts?.soloLeer) {
-        proposalMeta.current = { deAssist: false, runId: (data.pendingProposalRunId as string | null) ?? null };
+        proposalMeta.current = {
+          deAssist: false,
+          runId: (data.pendingProposalRunId as string | null) ?? null,
+          autoria: leerAutoria(data.autoriaDeLaPropuesta),
+        };
         setProposal(nueva);
         setTareasDelBorrador(tareasDelGet(data));
         bumpGpsRefresh();
@@ -1438,6 +1449,10 @@ export default function CronogramaCanvas({
      no reemplaza la de la pantalla, y el GET pudo traer el de otra. */
   const tareasEnPantalla: TareasDelBorradorEnPantalla | null =
     hayBorrador && tareasDelBorrador && tareasDelBorrador.token === proposalMeta.current.runId ? tareasDelBorrador : null;
+  /* E2b P7: de dónde viene la propuesta EN PANTALLA, quién la dejó y cuándo. Viaja con su token en
+     `proposalMeta` (misma invariante: todo `setProposal` lo escribe). null = no se sabe, y la barra
+     dice solo de dónde viene. */
+  const autoriaEnPantalla = proposal ? (proposalMeta.current.autoria ?? null) : null;
   /* E2a P6: mientras ESTA pantalla pide las tareas de la propuesta en pantalla (el pedido del paso 2
      en vuelo), sus tareas ya se están pidiendo: se ven y se tratan como «armando» aunque el servidor
      todavía diga «faltan» o «fallo». Sin esto, en ese segundo la barra ofrecía «Armar las tareas»
@@ -2911,6 +2926,7 @@ export default function CronogramaCanvas({
              con su corrida muerta, que hay que descartarlo (cierre de la revisión de E2a). */
           armandoTareas: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando",
           tareasFallaron: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo",
+          pendingProposalAutoria: autoriaEnPantalla,
           particularidades,
           sugerenciasDelEquipo: sugerencias.length,
           phases: ganttPhases,
@@ -2921,7 +2937,7 @@ export default function CronogramaCanvas({
     [
       ganttPhases, anchor, hydratedNow, summary, showProgressBanner, showParticBanner,
       pendingParticularidades, proposal, estadoDeLasTareasEnPantalla, detailConfirmedAt, hasAiDetail,
-      particularidades, sugerencias,
+      particularidades, sugerencias, autoriaEnPantalla,
     ],
   );
 
@@ -4074,7 +4090,7 @@ export default function CronogramaCanvas({
               onMarcarVarios={revision.marcarVarios}
               onAplicar={() => void aplicarBorrador()}
               onDescartar={() => void discardProposal()}
-              desde={desdeDeLaPropuesta(deDondeViene(proposal))}
+              desde={autoriaEnPantalla ? fraseDeAutoria(autoriaEnPantalla) : desdeDeLaPropuesta(deDondeViene(proposal))}
               tareas={tareasDeLaBarra}
               onArmarTareas={armarLasTareas}
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}

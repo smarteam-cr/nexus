@@ -24,6 +24,7 @@ import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessi
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
+import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 
 // Sesiones del cliente (Google Meet + Fireflies legacy) → próxima futura y última
 // pasada, a nivel proyecto y POR FRENTE (Ventas / CSE).
@@ -140,8 +141,9 @@ export const GET = withProjectAccess(async (
       altaActorEmail: true,
       altaIntentos: true,
       createdAt: true,
-      // Tanda M — si el handoff dejó una propuesta de cronograma sin revisar.
-      timeline: { select: { pendingProposal: true } },
+      // Tanda M — si el handoff dejó una propuesta de cronograma sin revisar. E2b P7: y la corrida
+      // que la dejó, para decir quién y cuándo.
+      timeline: { select: { pendingProposal: true, pendingProposalRunId: true } },
     },
   });
 
@@ -482,6 +484,13 @@ export const GET = withProjectAccess(async (
   const pendingItemsCompat = openItems.map(toCompat);
   const historyItems = historyRows.map(toCompat);
 
+  /* E2b P7: de dónde viene la propuesta, quién la dejó y cuándo. Solo si el cartel se pinta. */
+  const [timelineProposalAutoria] = hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null)
+    ? await leerAutoriaDeLasPropuestas([
+        { token: project.timeline?.pendingProposalRunId ?? null, guardado: project.timeline?.pendingProposal ?? null },
+      ])
+    : [null];
+
   return NextResponse.json({
     // Campos legacy (compatibilidad hacia atrás con el UI actual)
     nextSessionDate: nextSession.date,
@@ -520,6 +529,7 @@ export const GET = withProjectAccess(async (
     },
     // El borrador vacío que espera sus tareas no es una propuesta que revisar (revisión de E2a).
     timelineProposalPending: hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null),
+    timelineProposalAutoria: timelineProposalAutoria ?? null,
   });
 }));
 
