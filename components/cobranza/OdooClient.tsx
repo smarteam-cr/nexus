@@ -88,7 +88,11 @@ export default function OdooClient({
     enMercury: conteos.enMercury,
     enOtra: conteos.enOtra,
   }));
-  const vivos: Conteos = { ...conteos, ...emparejado };
+  /* ⭐ Las filas pendientes de «Lo que no cuadra»: arranca con las del servidor y «Lo que no cuadra» las actualiza
+     después de cada carga, así marcar una fila baja el número de la pestaña y el de «Cómo funciona» sin recargar.
+     Hasta el 2026-09-25 contaba LÍNEAS y quedaba fijo hasta recargar la página entera. */
+  const [diferencias, setDiferencias] = useState(conteos.diferencias);
+  const vivos: Conteos = { ...conteos, ...emparejado, diferencias };
 
   return (
     <div className="space-y-4">
@@ -108,7 +112,7 @@ export default function OdooClient({
           {
             key: "no-cuadra",
             label: "Lo que no cuadra",
-            count: conteos.diferencias,
+            count: vivos.diferencias,
             title: "Diferencias entre lo que Nexus planificó y lo que Odoo facturó",
           },
         ]}
@@ -128,7 +132,7 @@ export default function OdooClient({
       {tab === "que-es" && <QueEs conteos={vivos} />}
       {tab === "emparejar" && <EmparejadoOdoo puedeEditar={puedeEditar} onConteos={setEmparejado} />}
       {tab === "no-cuadra" && (
-        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} />
+        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} onPendientes={setDiferencias} />
       )}
     </div>
   );
@@ -269,7 +273,8 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
             qué sistema se arregla y los pasos. Si una fila está bien así, se marca con su motivo —de a una, o todas
             las de la línea con el mismo— y pasa a «Marcadas», al final, con quién, cuándo y por qué, y con
-            «Deshacer». Vale solo en esa línea, y vuelve sola si sus números cambian.
+            «Deshacer». Vale solo en esa línea, y vuelve sola si sus números cambian. Cada línea cuenta y suma solo
+            lo que le queda pendiente, y la que se queda sin filas desaparece.
           </li>
           <li>
             <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> El sync corre solo cada mañana,
@@ -330,7 +335,11 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           etiqueta="cuentas emparejadas"
           pie={pieDelEmparejado(conteos)}
         />
-        <Dato n={conteos.diferencias} etiqueta="cosas por resolver" pie="Ordenadas por la plata que mueven." />
+        <Dato
+          n={conteos.diferencias}
+          etiqueta="cosas por resolver"
+          pie="Las filas pendientes de «Lo que no cuadra», ordenadas por la plata que mueven. Lo marcado «está bien así» no cuenta."
+        />
       </div>
     </div>
   );

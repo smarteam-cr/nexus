@@ -23,6 +23,11 @@
  * mismo motivo. Se propone el último motivo usado. Lo marcado sale de su línea y queda en «Marcadas», al final, con
  * quién, cuándo, por qué y «Deshacer». Hasta ese día la marca era de la línea entera: una fila nueva la reabría con
  * todo lo ya revisado adentro, y «Volver a abrir» la borraba sin dejar rastro. Marcar y deshacer piden edición.
+ *
+ * ── LO PENDIENTE SE QUEDA (2026-09-25) ──────────────────────────────────────────
+ * Cada línea muestra, cuenta y suma solo sus filas pendientes (el detector la arma así), y una sin filas pendientes
+ * no está entre las abiertas. «Cosas por resolver» y el número de la pestaña son FILAS pendientes, del mismo
+ * `resumenDeDiferencias`, y bajan al marcar sin recargar la página: esta pestaña se lo avisa a OdooClient.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, EmptyState, Input, Spinner } from "@/components/ui";
@@ -33,8 +38,9 @@ import {
   textoDeMontos,
   type DiferenciaOdoo,
   type DondeSeArregla,
-  type FilaMarcada,
+  type FilaQueVolvio,
   type ItemDiferencia,
+  type MarcaDeFila,
 } from "@/lib/cobranza/odoo/diferencias";
 import { fmtFecha } from "./format";
 
@@ -108,12 +114,19 @@ const SEV: Record<string, string> = {
 };
 
 const filas = (n: number) => (n === 1 ? "1 fila" : `${n} filas`);
+const enLineas = (n: number) => (n === 1 ? "1 línea" : `${n} líneas`);
 
 export default function DiferenciasOdoo({
   onIrAEmparejar,
+  onPendientes,
   puedeEditar = true,
 }: {
   onIrAEmparejar?: () => void;
+  /**
+   * Las filas pendientes, cada vez que la lista se carga o se recarga (después de marcar o deshacer). OdooClient las
+   * usa para el número de la pestaña y «Cómo funciona», que hasta el 2026-09-25 quedaban fijos hasta recargar.
+   */
+  onPendientes?: (filas: number) => void;
   /**
    * `cobranza.write`. Apagado, la lista se lee igual pero no se ofrecen los controles que
    * escriben: «Está bien así», «Ya está anulada» y sus «Deshacer».
@@ -235,9 +248,17 @@ export default function DiferenciasOdoo({
      (`resumenDeDiferencias`, con sus pruebas). Hasta el 2026-09-13 decía «121 693 746» sumando colones
      con dólares y contaba dos veces ₡26 millones. */
   const resumen = useMemo(() => resumenDeDiferencias(data?.inconsistencias ?? []), [data]);
-  /* Una línea con todas sus filas marcadas no es trabajo pendiente: sus filas están en «Marcadas». */
-  const abiertas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => !i.aceptada), [data]);
-  const conMarcadas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => i.marcadas.length > 0), [data]);
+  /* Una línea sin filas pendientes no es trabajo: sus filas están en «Marcadas». */
+  const abiertas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => i.items.length > 0), [data]);
+  /* En «Marcadas» también las que tienen filas que volvieron porque cambió un número: se dice por qué volvieron. */
+  const conMarcadas = useMemo(
+    () => (data?.inconsistencias ?? []).filter((i) => i.marcadas.length > 0 || i.volvieron.length > 0),
+    [data],
+  );
+  /* ⭐ El número de la pestaña sale de acá después de cada carga: marcar una fila lo baja sin recargar la página. */
+  useEffect(() => {
+    if (data) onPendientes?.(resumen.filas);
+  }, [data, resumen.filas, onPendientes]);
   /* «Ya contado en» con el título de la otra línea: el código (ODOO-SIN-CUENTA) no lo entiende nadie. */
   const tituloDe = useMemo(
     () => new Map((data?.inconsistencias ?? []).map((i) => [i.codigo, i.titulo] as const)),
@@ -257,12 +278,13 @@ export default function DiferenciasOdoo({
     <div className="space-y-4">
       <div className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <p className="text-fg">
-          {abiertas.length === 0 ? (
+          {/* ⚠ FILAS, no líneas (2026-09-25): una línea con una fila pendiente no pesa lo mismo que una con treinta. */}
+          {resumen.filas === 0 ? (
             "Nexus y Odoo cuadran."
           ) : (
             <>
-              <strong className="text-lg tabular-nums">{abiertas.length}</strong> cosas por resolver, las
-              más urgentes primero.
+              <strong className="text-lg tabular-nums">{resumen.filas}</strong> cosas por resolver en{" "}
+              {enLineas(resumen.abiertas)}, las más urgentes primero.
             </>
           )}
         </p>
@@ -366,6 +388,9 @@ function Linea({
   const donde = DONDE[inc.donde];
   const n = inc.items.length;
   const claveDelGrupo = `grupo ${inc.codigo}`;
+  /* Las filas que alguien ya había marcado y volvieron porque cambió un número: la fila lo dice, para que no parezca
+     que la marca se perdió. */
+  const volvio = new Map(inc.volvieron.map((v) => [v.item.fila.clave, v] as const));
   const cerrarSi = (ok: boolean) => {
     if (ok) setEditando(null);
   };
@@ -459,6 +484,7 @@ function Linea({
               const clave = it.fila.clave;
               const claveDeFila = `fila ${inc.codigo} ${clave}`;
               const enEdicion = editando && editando.tipo !== "grupo" && editando.clave === clave ? editando.tipo : null;
+              const regreso = volvio.get(clave);
               return (
                 <div key={clave} className="border-b border-line px-3 py-1.5 last:border-0">
                   <div className="flex items-start gap-3">
@@ -467,6 +493,7 @@ function Linea({
                         {it.texto}
                       </div>
                       {it.nota && <div className="truncate text-xs text-fg-muted">{it.nota}</div>}
+                      {regreso && <div className="text-xs text-warn-ink">{textoDeRegreso(regreso)}</div>}
                     </div>
                     {/* Sin moneda no se muestra el número: el texto de la fila ya lo dice con palabras. */}
                     {it.monto !== undefined && it.moneda && (
@@ -599,13 +626,19 @@ function FormularioDeMotivo({
 /* ── Lo marcado, a la vista y con «Deshacer» ──────────────────────────────────────── */
 
 /** Las marcas de una fila, por acto: mismo motivo, misma persona, mismo día. Casi siempre es uno solo. */
-function actosDe(f: FilaMarcada): Array<{ motivo: string; por: string; en: string }> {
+function actosDe(f: { marcas: readonly MarcaDeFila[] }): Array<{ motivo: string; por: string; en: string }> {
   const vistos = new Map<string, { motivo: string; por: string; en: string }>();
   for (const m of f.marcas) {
     const k = [m.motivo, m.marcadaPor, m.marcadaEn.slice(0, 10)].join("\n");
     if (!vistos.has(k)) vistos.set(k, { motivo: m.motivo, por: m.marcadaPor, en: m.marcadaEn });
   }
   return [...vistos.values()];
+}
+
+/** Qué dice una fila que volvió: quién la había marcado, cuándo y por qué, y que cambió un número desde entonces. */
+function textoDeRegreso(v: FilaQueVolvio): string {
+  const actos = actosDe(v).map((a) => `«${a.motivo}», ${a.por}, ${fmtFecha(a.en)}`);
+  return `Volvió porque cambió un número desde que se marcó${actos.length ? ` (${actos.join("; ")})` : ""}.`;
 }
 
 function Marcadas({
@@ -624,21 +657,46 @@ function Marcadas({
   onReabrir: (liberacionId: string, clave: string) => void;
 }) {
   const total = lineas.reduce((a, l) => a + l.marcadas.length, 0) + anuladas.length;
+  const volvieron = lineas.reduce((a, l) => a + l.volvieron.length, 0);
   return (
     <div className="rounded-lg border border-line bg-surface">
       <div className="px-4 py-3">
-        <h3 className="text-sm font-semibold text-fg">Marcadas ({filas(total)})</h3>
+        <h3 className="text-sm font-semibold text-fg">
+          Marcadas ({filas(total)})
+          {volvieron > 0 && (
+            <span className="font-normal text-warn-ink"> · {volvieron === 1 ? "1 volvió" : `${volvieron} volvieron`} porque cambió</span>
+          )}
+        </h3>
         <p className="mt-0.5 text-xs text-fg-muted">
           Lo que alguien revisó y dijo que está bien así, o que ya se anuló. Sale de su línea mientras sus números no
-          cambien: si cambian, vuelve sola. «Deshacer» lo devuelve a la lista y queda anotado quién lo hizo.
+          cambien: si cambian, vuelve sola y aquí se dice que volvió. «Deshacer» lo devuelve a la lista y queda anotado
+          quién lo hizo.
         </p>
       </div>
 
       {lineas.map((l) => (
         <div key={l.codigo} className="border-t border-line px-4 py-2">
+          {/* El título contado sobre lo marcado: el de la línea cuenta lo que le queda pendiente. */}
           <p className="text-xs font-medium text-fg-secondary">
-            {l.titulo} <span className="font-normal text-fg-muted">· {filas(l.marcadas.length)}</span>
+            {l.tituloDeMarcadas ?? l.titulo}
+            {l.marcadas.length > 0 && <span className="font-normal text-fg-muted"> · {filas(l.marcadas.length)}</span>}
           </p>
+          {/* ⭐ Las que volvieron: están otra vez arriba, en su línea. Acá se dice por qué, con la marca que tenían. */}
+          {l.volvieron.map((v) => (
+            <div key={`volvio ${v.item.fila.clave}`} className="border-b border-line py-1.5">
+              <div className="truncate text-sm text-fg-secondary" title={v.item.texto}>
+                {v.item.texto}
+              </div>
+              <div className="text-xs text-warn-ink">
+                Volvió porque cambió un número desde que se marcó: está otra vez en su línea, arriba.
+              </div>
+              {actosDe(v).map((a) => (
+                <div key={[a.motivo, a.por, a.en].join("\n")} className="text-xs text-fg-muted">
+                  Estaba marcada: «{a.motivo}» · {a.por} · {fmtFecha(a.en)}
+                </div>
+              ))}
+            </div>
+          ))}
           <div className="mt-1 max-h-80 overflow-y-auto">
             {l.marcadas.map((f) => {
               const clave = `deshacer ${l.codigo} ${f.item.fila.clave}`;
