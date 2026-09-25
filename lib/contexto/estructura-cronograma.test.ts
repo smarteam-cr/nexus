@@ -37,6 +37,7 @@ import {
   observacionesParaElPaso2,
   textoDeLaLineaDeTareas,
   textoDeLaOfertaDeTareas,
+  tituloDeLoQueNoto,
 } from "@/lib/timeline/borrador";
 
 // ── El cargador se prueba LLAMÁNDOLO (mismo molde que cargar-material.test.ts) ──────────────
@@ -1218,6 +1219,13 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(sinToken, "lo que notó el paso 1 no viaja en el pedido").toContain(
       "observacionesDelPaso1 = observacionesParaElPaso2(estructura.observaciones);",
     );
+    /* ⚠ AMPLIADA en E2b P6 (2026-09-25), con esta razón: y en la rama sin token la pantalla lo CONSERVA.
+       Si el paso 2 vuelve sin cambios, el servidor borra el borrador vacío y lo guardado se va con él:
+       lo que notó el paso 1 sigue en la franja solo por esto. La edición que la pone en rojo: sacar
+       `setObservacionesPaso1(observacionesDelPaso1)` de esa rama. */
+    expect(sinToken, "si el paso 2 vuelve sin cambios, lo que notó el paso 1 desaparece").toMatch(
+      /observacionesDelPaso1 = observacionesParaElPaso2\(estructura\.observaciones\);\s*setObservacionesPaso1\(observacionesDelPaso1\);/,
+    );
     // (2) Descartar el borrador vacío (sin observaciones) conserva lo que notó el paso 1.
     expect(juntarObservaciones(["Pruebas pasa a 3 semanas."], []), "descartar un v1 vacío borró lo del paso 1").toEqual([
       "Pruebas pasa a 3 semanas.",
@@ -1274,6 +1282,29 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(continuacion, "la oferta de las tareas deja afuera lo que notó el paso 1").toContain(
       "if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);",
     );
+  });
+
+  it("E2b P6 · la franja y la barra titulan lo que notó la IA con la MISMA función, y la franja no dice «Solo lo ves tú»", () => {
+    /* La franja decía «La IA también notó (al revisar las fases y los tiempos)» y la barra «La IA también
+       notó N cosas que no se aplican solas»: lo mismo, con dos nombres. Y «Solo lo ves tú» era falso: el
+       borrador vacío las guarda y las ve cualquiera del equipo. Las ediciones que la ponen en rojo: volver
+       a escribir el título a mano en cualquiera de las dos, devolver la nota, o pintar «Entendido» sin
+       `onCerrar`. */
+    expect(tituloDeLoQueNoto(1)).toBe("La IA también notó 1 cosa que no se aplica sola");
+    expect(tituloDeLoQueNoto(3)).toBe("La IA también notó 3 cosas que no se aplican solas");
+    const franja = soloCodigo(leer("components/canvas/ObservacionesDelPaso1.tsx"));
+    const barra = soloCodigo(leer("components/canvas/RevisionDeLaPropuesta.tsx"));
+    for (const [nombre, codigo] of [
+      ["franja", franja],
+      ["barra", barra],
+    ] as const) {
+      expect(codigo, `la ${nombre} no usa el título común`).toContain("{tituloDeLoQueNoto(observaciones.length)}");
+      expect(codigo, `la ${nombre} volvió a escribir el título a mano`).not.toContain("La IA también notó");
+    }
+    expect(franja, "volvió la nota «Solo lo ves tú»").not.toMatch(/solo lo ves t[úu]/i);
+    // «Entendido» solo con quien cierra.
+    expect(franja).toContain("onCerrar?: () => void;");
+    expect(franja, "«Entendido» sin nadie que cierre").toMatch(/\{onCerrar && \(\s*<button/);
   });
 
   it("E2a · el acordeón viejo de «Regenerar todo» ya no se monta ni se aplica desde el Canvas", () => {

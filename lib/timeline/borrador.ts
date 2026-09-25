@@ -2222,6 +2222,17 @@ export function observacionesDeLaFranja(i: {
   return juntarObservaciones(i.delPaso1, guardadas);
 }
 
+/**
+ * El título de lo que notó la IA y no aplica sola: el MISMO en la franja (ObservacionesDelPaso1, sin
+ * barra) y en la barra de la propuesta (RevisionDeLaPropuesta). E2b P6: la franja decía otra cosa, y
+ * lo que es lo mismo se lee igual en los dos lugares.
+ */
+export function tituloDeLoQueNoto(n: number): string {
+  return n === 1
+    ? "La IA también notó 1 cosa que no se aplica sola"
+    : `La IA también notó ${n} cosas que no se aplican solas`;
+}
+
 export const AVISO_TAREAS_LISTAS = "Listas las tareas de la propuesta: revísala arriba del Gantt.";
 /** Las tareas llegaron con la vista previa del modificador en pantalla: la barra no se ve hasta descartarla. */
 export const AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA =

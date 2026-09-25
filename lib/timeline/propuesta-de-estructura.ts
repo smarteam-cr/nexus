@@ -1041,8 +1041,9 @@ export function hayMaterialParaElPaso1(input: {
 
 export const AVISO_SIN_CAMBIOS = "Tus reuniones, notas e instrucciones no piden cambios de fases ni de tiempos.";
 /** Sin propuesta, pero con cambios ACORDADOS que el armador no pudo proponer (por el nombre o por el
- *  calendario): quedaron en las observaciones, que el acordeón del paso 2 muestra en «La IA también
- *  notó». Decir «no piden cambios» sería falso y contradiría a esa misma observación. */
+ *  calendario): quedaron en las observaciones, que se ven en «La IA también notó» (la franja sin
+ *  barra, ObservacionesDelPaso1, o la barra de la propuesta). Decir «no piden cambios» sería falso y
+ *  contradiría a esa misma observación. */
 export const AVISO_ACORDADO_SIN_ENTRAR =
   "Tus reuniones, notas o instrucciones piden cambios de fases que no se pueden proponer solos: los ves en «La IA también notó» y decides tú.";
 /** 409 con una propuesta pendiente (del handoff, o de «Regenerar todo» con fases y tareas): no se

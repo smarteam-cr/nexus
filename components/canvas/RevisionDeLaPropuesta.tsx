@@ -40,6 +40,7 @@ import {
   textoDeAplicar,
   textoDeLaConfirmacion,
   tituloDeLaBarra,
+  tituloDeLoQueNoto,
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
@@ -269,9 +270,7 @@ export default function RevisionDeLaPropuesta({
         {observaciones.length > 0 && (
           <details className="border-t border-line pt-1.5 text-xs">
             <summary className="cursor-pointer font-semibold text-fg-secondary">
-              {observaciones.length === 1
-                ? "La IA también notó 1 cosa que no se aplica sola"
-                : `La IA también notó ${observaciones.length} cosas que no se aplican solas`}
+              {tituloDeLoQueNoto(observaciones.length)}
             </summary>
             <ul className="mt-1 text-fg-muted space-y-0.5">
               {observaciones.map((o, i) => (

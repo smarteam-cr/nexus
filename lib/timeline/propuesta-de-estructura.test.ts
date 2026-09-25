@@ -43,6 +43,7 @@ import {
   computeProposalDeltas,
   reescribirPropuestaPendiente,
 } from "./proposal-deltas";
+import { tituloDeLoQueNoto } from "./borrador";
 import { ACTIVITY_TYPES } from "./validate";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { PESO_DE_LAS_FUENTES } from "@/lib/contexto/material-cronograma";
@@ -1355,10 +1356,15 @@ describe("la máquina de pasos de la pantalla", () => {
        (ObservacionesDelPaso1.tsx), sin propuesta en pantalla, y en la barra de la propuesta
        (RevisionDeLaPropuesta.tsx), plegado. La edición que la pone en rojo: sacar ese título de
        cualquiera de las dos: el aviso quedaría prometiendo una lista que no está. Solo el código: el
-       texto en un comentario no se ve. */
+       texto en un comentario no se ve.
+       ⚠ REAPUNTADA otra vez en E2b P6 (2026-09-25), con esta razón: el título ya no se escribe en cada
+       archivo; sale de `tituloDeLoQueNoto` (borrador.ts), el mismo en los dos lugares. Se pide que la
+       función diga «La IA también notó» y que los dos la pinten. La edición que la pone en rojo: sacar
+       el título de cualquiera de las dos, o cambiar el texto de la función. */
+    for (const n of [1, 4]) expect(tituloDeLoQueNoto(n), "el título dejó de decir «La IA también notó»").toContain("La IA también notó");
     for (const rel of ["components/canvas/ObservacionesDelPaso1.tsx", "components/canvas/RevisionDeLaPropuesta.tsx"]) {
       const codigo = fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, " ");
-      expect(codigo, `${rel} dejó de mostrar «La IA también notó»`).toContain("La IA también notó");
+      expect(codigo, `${rel} dejó de mostrar «La IA también notó»`).toContain("{tituloDeLoQueNoto(observaciones.length)}");
     }
   });
 
