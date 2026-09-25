@@ -26,12 +26,20 @@ import ts from "typescript";
 import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
+  borradorVacio,
+  debeDescartarseSolo,
+  leerBorrador,
   LINEA_DEL_CLIENTE,
+  marcarCambios,
   MENSAJE_PROPUESTA_ABIERTA,
+  planDeAplicacion,
+  REVISION_VACIA,
   TEXTO_VER_ANTES,
   TEXTO_VER_PROPUESTA,
   textoDeAplicar,
+  type Vivo,
 } from "./borrador";
+import { RAW_NEUTRAL_RE } from "../ui/raw-neutral.mjs";
 
 const RUTA_CANVAS = "components/canvas/CronogramaCanvas.tsx";
 const RUTA_BARRA = "components/canvas/RevisionDeLaPropuesta.tsx";
@@ -49,6 +57,11 @@ const CANVAS = soloCodigo(leer(RUTA_CANVAS));
 const BARRA = soloCodigo(leer(RUTA_BARRA));
 const GANTT = soloCodigo(leer("components/canvas/TimelineGantt.tsx"));
 const HOOK = soloCodigo(leer("components/canvas/useBorradorDelCronograma.ts"));
+// E2a P5: las tareas de la propuesta (la lista agrupada por fase y la línea de la corrida).
+const RUTA_TAREAS = "components/canvas/TareasDeLaPropuesta.tsx";
+const RUTA_LINEA = "components/canvas/LineaDeLasTareas.tsx";
+const TAREAS = soloCodigo(leer(RUTA_TAREAS));
+const LINEA = soloCodigo(leer(RUTA_LINEA));
 
 /** El código entre dos marcadores. TIRA si falta alguno: nunca un tramo vacío ni hasta el final. */
 const tramo = (src: string, desde: string, hasta: string) => {
@@ -366,9 +379,14 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(rama, "cierreFijado={closeOverride || null}")).toBe(true);
   });
 
-  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + foto, y sigue al paso 2", () => {
+  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + foto + versión, y sigue al paso 2", () => {
     /* La edición que la pone en rojo: aplicar sin esperar lo que está guardándose (el servidor
-       compararía contra otra foto), no mandar el token, o cortar la cadena al paso 2. */
+       compararía contra otra foto), no mandar el token, o cortar la cadena al paso 2.
+       ⚠ REESCRITA en E2a P5 (2026-09-25), con esta razón: el body suma la `version` del
+       `borrador-v1` que ves. Sin ella, cuando el servidor reescribe el borrador en el medio (llegan
+       las tareas), el aplicar caía en PLAN_CAMBIO, recargaba lo vivo —`load` no reemplaza la
+       propuesta de la pantalla— y volvía a caer: el bucle de 409. Con ella, la ruta responde
+       PROPUESTA_CAMBIO y la pantalla trae la nueva. Aplicar sin versión la pone en rojo. */
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
     expect(aplicar.length).toBeGreaterThan(1500);
     const iEspera = aplicar.indexOf("await esperarQueSeGuarde()");
@@ -378,8 +396,13 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(iEspera).toBeLessThan(iLimpia);
     expect(iLimpia).toBeLessThan(iFetch);
     expect(
-      contiene(aplicar, "body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto })"),
+      contiene(
+        aplicar,
+        "body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version })",
+      ),
     ).toBe(true);
+    // Y la versión es la de lo que se VE: sale de la propuesta del hook, no de otra lectura.
+    expect(contiene(HOOK, "const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);")).toBe(true);
     expect(aplicar, "lee la revisión del render del clic, no la de ahora").toContain("revisionRef.current");
     expect(aplicar).toContain("pasoTrasResolver(");
     expect(contiene(aplicar, "pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true })")).toBe(true);
@@ -492,5 +515,205 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(CANVAS, "const propuestaDelAssist = proposal && !hayBorrador ? proposal : null;")).toBe(true);
     expect(tramo(CANVAS, "const diffSummary = (() => {", "})();")).toContain("const proposal = propuestaDelAssist;");
     expect(contiene(CANVAS, "const hayBorrador = !!proposal && esBorradorGuardado(proposal);")).toBe(true);
+  });
+});
+
+/**
+ * ── E2a P5 · LA PANTALLA REVISA TAREAS (2026-09-25) ──────────────────────────────────────────────
+ * «Regenerar todo» deja UNA propuesta con fases y tareas. La pantalla la revisa en la misma barra:
+ * las tareas agrupadas por fase, la línea de la corrida que las arma, la corrida seguida con
+ * `useAgentRun` y un solo aviso. Inerte hasta P6 (nadie escribe todavía un `borrador-v1`): lo que
+ * se mira acá es el cableado. Cada `it` nombra la edición que lo pone en rojo.
+ */
+describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
+  const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
+  const VIVO_VACIO: Vivo = { ancla: null, fases: [] };
+
+  it("⭐ la corrida que arma las tareas se SIGUE con `track(`, y el aviso del sistema sale solo de ese seguimiento", () => {
+    /* [A23] `track` marca la corrida como anunciada en el centro de corridas: el aviso del cronograma
+       es el del seguimiento. La edición que la pone en rojo: volver a llamar a `notifyAgentDone` en
+       otro lado (el error de «Generar cronograma», el aplicar del acordeón viejo), dejar de seguir la
+       corrida, o seguirla sin releer la propuesta al terminar. */
+    const seguimiento = tramo(CANVAS, "const { phase: faseDelArmado, track } = useAgentRun(clientId);", "const tareasDeLaBarra");
+    expect(seguimiento.length).toBeGreaterThan(600);
+    expect(seguimiento).toContain("await track(corrida)");
+    expect(seguimiento.indexOf("await traerPropuestaPendiente()"), "al terminar no se relee la propuesta").toBeGreaterThan(
+      seguimiento.indexOf("await track(corrida)"),
+    );
+    expect(seguimiento.match(/notifyAgentDone\(/g)?.length, "el seguimiento no avisa al terminar").toBe(1);
+    expect(
+      CANVAS.match(/notifyAgentDone\(/g)?.length,
+      "hay un aviso del sistema del cronograma FUERA del seguimiento: la misma corrida se anuncia dos veces",
+    ).toBe(1);
+    // Remontado a mitad de camino (cambiar de pieza y volver), el seguimiento viejo y el nuevo avisan UNA vez.
+    const iYaAnunciada = seguimiento.indexOf("if (CORRIDAS_ANUNCIADAS.has(corrida)) return;");
+    expect(iYaAnunciada, "dos seguimientos de la misma corrida avisan dos veces").toBeGreaterThan(-1);
+    expect(iYaAnunciada).toBeLessThan(seguimiento.indexOf("notifyAgentDone("));
+    expect(iYaAnunciada, "sin releer la propuesta, el cronograma remontado queda «armando»").toBeGreaterThan(
+      seguimiento.indexOf("await traerPropuestaPendiente()"),
+    );
+    // ~6 min sin terminar: se relee y se vuelve a seguir (no queda «armando» para siempre).
+    expect(contiene(seguimiento, 'if (r.status === "TIMEOUT") {')).toBe(true);
+    expect(contiene(seguimiento, "setVueltaDelSeguimiento((n) => n + 1);")).toBe(true);
+    // Se sigue la corrida del MISMO GET que dio el estado, y solo el de la propuesta en pantalla.
+    expect(contiene(CANVAS, 'const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;')).toBe(
+      true,
+    );
+    expect(
+      contiene(
+        CANVAS,
+        "hayBorrador && tareasDelBorrador && tareasDelBorrador.token === proposalMeta.current.runId ? tareasDelBorrador : null;",
+      ),
+      "el estado de las tareas de OTRA propuesta se pinta sobre la de la pantalla",
+    ).toBe(true);
+    // Los tres lectores del GET lo leen.
+    expect(CANVAS.match(/setTareasDelBorrador\(tareasDelGet\(data\)\);/g)?.length, "load, refrescarPropuesta y traerPropuestaPendiente").toBe(
+      3,
+    );
+  });
+
+  it("⭐ el cronograma que se compara lleva sus TAREAS, con las fechas fijadas a mano [D7]", () => {
+    /* Sin las tareas, un «se quita» no ve la tarea viva y choca siempre; sin las fechas fijadas, una
+       tarea que alguien fijó a mano después de la propuesta se borraría como si nadie la hubiera tocado.
+       La edición que la pone en rojo: sacar las tareas del `vivo`, o dejar las fechas en null. */
+    const vivo = tramo(CANVAS, "const vivo: Vivo = useMemo(", "[phases, anchor],");
+    expect(vivo.length).toBeGreaterThan(400);
+    expect(contiene(vivo, "tareas: p.tasks")).toBe(true);
+    expect(contiene(vivo, ".filter((t): t is TaskDraft & { id: string } => !!t.id)"), "una tarea sin guardar no existe para la base").toBe(true);
+    expect(contiene(vivo, "inicioFijado: diaFijado(t.startDateOverride),")).toBe(true);
+    expect(contiene(vivo, "finFijado: diaFijado(t.dueDateOverride),")).toBe(true);
+    expect(contiene(vivo, "status: t.status,")).toBe(true);
+    expect(contiene(vivo, 'source: t.source ?? "AGENT",')).toBe(true);
+  });
+
+  it("⭐ en «Ver la propuesta» se ven las tareas nuevas, y una que ya existe es la MISMA fila (misma key)", () => {
+    /* La edición que la pone en rojo: volver a pintar las tareas del cronograma actual (sin las nuevas
+       y con las que se van), o darle a una existente otra `key` (se remontaría al alternar). */
+    const vista = tramo(CANVAS, "const ganttPorId = new Map(", "const marcasDeLaPropuesta");
+    expect(contiene(vista, "const tasks: GanttTask[] = f.tareas.map((t) => {")).toBe(true);
+    expect(contiene(vista, "if (fila) return { ...fila, weekIndex: t.weekIndex };")).toBe(true);
+    expect(contiene(vista, "key: t.clave,")).toBe(true);
+    expect(vista, "las tareas volvieron a salir del cronograma actual").not.toContain("tasks: (actual?.tasks ?? []).map(");
+  });
+
+  it("⭐ la barra: el título cuenta fases y tareas, la línea de la corrida, la chapa vieja solo sin v1, y la confirmación de quitar", () => {
+    /* La edición que la pone en rojo: volver al título que cuenta solo «cambios», no pintar la línea
+       (o pintarla con las tareas listas), mostrar «Paso 1 de 2» sobre un v1 (sus tareas llegan a esta
+       misma propuesta), o volver al texto fijo de la confirmación, que promete no borrar ninguna tarea
+       justo cuando aplicar QUITA tareas. */
+    expect(contiene(BARRA, "{tituloDeLaBarra(resumen)}")).toBe(true);
+    expect(contiene(BARRA, 'const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;')).toBe(true);
+    expect(contiene(tramo(BARRA, "{lineaDeTareas && (", "/>"), "onAccion={onArmarTareas}")).toBe(true);
+    expect(contiene(BARRA, "{encadenado && delContexto && !esV1 && (")).toBe(true);
+    expect(contiene(BARRA, "const esV1 = tareas !== null;")).toBe(true);
+    const confirmacion = tramo(BARRA, "<ConfirmDialog", "/>");
+    expect(contiene(confirmacion, 'variant={resumen.borraAlgo ? "destructive" : "default"}')).toBe(true);
+    expect(contiene(confirmacion, "{textoDeLaConfirmacion(resumen)}")).toBe(true);
+    expect(confirmacion, "volvió el texto fijo que promete no borrar ninguna tarea").not.toContain("No se borra ninguna fase");
+    expect(BARRA).toContain('aria-label="Propuesta de cambios del cronograma"');
+    // Las tareas van debajo de la lista de fases.
+    expect(BARRA.indexOf("<TareasDeLaPropuesta")).toBeGreaterThan(BARRA.indexOf("</ol>"));
+    // Y el Canvas le pasa el estado de la propuesta en pantalla, y el botón pide el paso 2 sobre ella.
+    expect(contiene(rama, "tareas={tareasDeLaBarra}")).toBe(true);
+    expect(
+      contiene(
+        rama,
+        'onArmarTareas={() => void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", { saltarEstructura: true, })',
+      ),
+      "«Armar las tareas» / «Volver a intentar» no piden el paso 2 sobre la propuesta (o vuelven a pedir fases)",
+    ).toBe(true);
+    // El encabezado: con tareas no cuenta «57 cambios» mezclados.
+    expect(contiene(CANVAS, '{revision.resumen.grupos.length > 0 ? "Revisar la propuesta"')).toBe(true);
+  });
+
+  it("la casilla de un grupo marca o desmarca TODAS sus tareas marcables de una vez (`marcarCambios`)", () => {
+    /* La edición que la pone en rojo: que el grupo marque solo la primera, que marque también las que
+       chocan o quedaron fuera con su cambio de fase, o que el hook no le pase la función a la barra. */
+    const e = { ...REVISION_VACIA, clave: "tok|v1" };
+    const sinDos = marcarCambios(e, ["t:a", "t:b"], false);
+    expect([...sinDos.sin].sort()).toEqual(["t:a", "t:b"]);
+    expect([...marcarCambios(sinDos, ["t:a", "t:b"], true).sin]).toEqual([]);
+    expect(marcarCambios(e, [], false), "sin claves no hay estado nuevo que recordar").toBe(e);
+    expect(contiene(HOOK, "(claves: readonly string[], incluir: boolean) => setRevision((r) => marcarCambios(r, claves, incluir)),")).toBe(
+      true,
+    );
+    expect(contiene(rama, "onMarcarVarios={revision.marcarVarios}")).toBe(true);
+    expect(
+      contiene(BARRA, "<TareasDeLaPropuesta grupos={grupos} onMarcar={onMarcar} onMarcarVarios={onMarcarVarios} trabajando={trabajando} />"),
+    ).toBe(true);
+    expect(TAREAS.length).toBeGreaterThan(2000);
+    expect(contiene(TAREAS, "const marcables = g.tareas.filter((t) => t.seMarca);")).toBe(true);
+    expect(contiene(TAREAS, "onMarcarVarios( marcables.map((t) => t.clave), e.target.checked, )")).toBe(true);
+    expect(contiene(TAREAS, "disabled={trabajando || !t.seMarca}")).toBe(true);
+    expect(contiene(TAREAS, "disabled={trabajando || marcables.length === 0}")).toBe(true);
+  });
+
+  it("⭐ el hook: sin cambios no hay barra, pero «nada que decidir» sale igual del plan [D11]", () => {
+    /* Un v1 recién marcado «armando» no tiene cambios todavía: la barra no se monta vacía, pero el
+       descarte automático tiene que saber que ESPERA tareas (no se descarta) y que uno vacío cuya
+       corrida falló sí. La edición que la pone en rojo: volver a `resumen ? … : false` (el vacío en
+       «fallo» quedaría para siempre), o calcular la barra sin cambios. */
+    expect(contiene(HOOK, "borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas }) : null")).toBe(true);
+    expect(contiene(HOOK, "const proyeccion = resumen?.proyeccion ?? null;")).toBe(true);
+    expect(contiene(HOOK, "return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas }));")).toBe(true);
+    // El núcleo que eso usa: vacío «armando» o «faltan» no se descarta; vacío «fallo», sí.
+    const vacio = leerBorrador(borradorVacio({ pedido: "regenerar", corrida: "r1" }), VIVO_VACIO)!;
+    expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "armando" }))).toBe(false);
+    expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "faltan" }))).toBe(false);
+    expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "fallo" }))).toBe(true);
+  });
+
+  it("resolver una propuesta con tareas: su estado se lee ANTES de limpiarla y decide si se ofrecen", () => {
+    /* La edición que la pone en rojo: pasarle `tareas: null` a `pasoTrasResolver` (un v1 resuelto
+       seguiría la cadena vieja), o leer el estado después de limpiar (ya no está). */
+    const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    const iLee = aplicar.indexOf("const tareasResueltas = tareasEnPantalla?.estado ?? null;");
+    expect(iLee).toBeGreaterThan(-1);
+    expect(iLee).toBeLessThan(aplicar.indexOf("setProposal(null)"));
+    expect(contiene(tramo(aplicar, "siguiente = pasoTrasResolver({", "});"), "tareas: tareasResueltas,")).toBe(true);
+    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
+    const iLeeD = descartar.indexOf("const tareasDescartadas = tareasEnPantalla?.estado ?? null;");
+    expect(iLeeD).toBeGreaterThan(-1);
+    expect(iLeeD).toBeLessThan(descartar.indexOf("setProposal(null)"));
+    expect(contiene(tramo(descartar, "const siguiente = pasoTrasResolver({", "});"), "tareas: tareasDescartadas,")).toBe(true);
+  });
+
+  it("aplicar con tareas encadena la reevaluación del avance; las fases solas, no", () => {
+    /* Lo que hacía el camino viejo de «Regenerar todo» al aplicar (apply-all). La edición que la pone
+       en rojo: sacar la reevaluación, o pedirla siempre (una propuesta solo de fases no la necesita). */
+    const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    const i = aplicar.indexOf('if (typeof d.tareasTocadas === "number" && d.tareasTocadas > 0) {');
+    expect(i).toBeGreaterThan(-1);
+    const bloque = aplicar.slice(i, aplicar.indexOf("siguiente = pasoTrasResolver(", i));
+    expect(bloque.length).toBeGreaterThan(200);
+    expect(bloque).toContain("/timeline/progress");
+    expect(bloque).toContain("setChainingProgress(true)");
+    expect(bloque).toContain("setChainingProgress(false)");
+    expect(i, "reevalúa antes de recargar lo aplicado").toBeGreaterThan(aplicar.indexOf("await load();"));
+  });
+
+  it("con una propuesta abierta, «Regenerar» de una fase no se ofrece (un borrador por proyecto)", () => {
+    /* La edición que la pone en rojo: volver a ofrecerlo con la propuesta abierta (su aplicar
+       escribiría tareas debajo de ella; el servidor lo frena con 409, pero después de pagar la corrida). */
+    expect(rama).toMatch(/onRegeneratePhase=\{\s*hasAiDetail && canRegenerateTimeline && !verPropuesta && !hayBorrador\s*\?/);
+  });
+
+  it("los componentes nuevos de las tareas: solo tokens del tema (info = en curso, success = se crea, warn = se quita o choca)", () => {
+    /* El ratchet de grises (lib/ui/token-vocab.test.ts) no mira los colores de familia; esto sí. La
+       edición que la pone en rojo: un color crudo de Tailwind (gris, blanco, o de familia) en uno de
+       los dos componentes. */
+    const CRUDO = /\b(bg|text|border|ring)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
+    for (const [rel, src] of [
+      [RUTA_TAREAS, TAREAS],
+      [RUTA_LINEA, LINEA],
+    ] as const) {
+      expect(src.length, `${rel}: la guarda no está mirando nada`).toBeGreaterThan(1000);
+      expect(src, `${rel}: color crudo de familia`).not.toMatch(CRUDO);
+      expect(src, `${rel}: gris, blanco o negro crudo`).not.toMatch(new RegExp(RAW_NEUTRAL_RE));
+    }
+    expect(LINEA).toContain("text-info-ink");
+    expect(LINEA).toContain("text-warn-ink");
+    expect(TAREAS).toContain("text-success-ink");
+    expect(TAREAS).toContain("text-warn-ink");
   });
 });

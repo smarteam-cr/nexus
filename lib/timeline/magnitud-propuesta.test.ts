@@ -10,6 +10,7 @@ import {
 } from "./magnitud-propuesta";
 import type { CurrentPhaseLike, ProposalLike } from "./proposal-deltas";
 import { totalWeeks } from "./weeks";
+import { textoDeLaConfirmacion, tituloDeLaBarra } from "./borrador";
 
 /**
  * lib/timeline/magnitud-propuesta.test.ts — EL UMBRAL, COMO TABLA.
@@ -257,13 +258,31 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
        cronograma—, así que el botón del diálogo dice lo mismo que el de la barra (`textoDeAplicar`). */
     expect(tramo, "el botón perdió su etiqueta").toContain("confirmLabel={textoDelBoton}");
     expect(src).toContain("const textoDelBoton = textoDeAplicar(marcadas, aplicables);");
-    expect(tramo, "el confirm dejó de decir que no se borra nada — el modelo es ADITIVO").toContain(
+    /* ⚠ REESCRITA en E2a P5 (2026-09-25), con esta razón: desde E2a la propuesta de «Regenerar todo»
+       puede QUITAR tareas pendientes de la IA, y la frase fija «No se borra ninguna fase ni ninguna
+       tarea» pasaba a mentir justo en ese caso. La confirmación dice ahora lo que sale del núcleo
+       (`textoDeLaConfirmacion`, lib/timeline/borrador.ts), y el rojo va SOLO cuando se quitan tareas.
+       La guarda sigue pidiendo lo mismo para lo que no borra: que diga «no se borra nada» y que no se
+       pinte de rojo. La edición que la pone en rojo: volver a una frase fija, sacar el «no se borra»
+       del núcleo para el caso que no quita nada, o pintar de rojo sin quitar tareas. */
+    expect(tramo, "el confirm dejó de decir lo que pasa: la frase no sale del núcleo").toContain(
+      "{textoDeLaConfirmacion(resumen)}",
+    );
+    const sinQuitar = { borraAlgo: false, faltanTareas: false, tareas: { nuevas: 3, seVan: 0 }, fasesNuevasConTareas: false };
+    expect(textoDeLaConfirmacion(sinQuitar), "el confirm dejó de decir que no se borra nada — el modelo es ADITIVO").toContain(
       "No se borra ninguna fase ni ninguna tarea",
     );
+    expect(
+      textoDeLaConfirmacion({ ...sinQuitar, borraAlgo: true, tareas: { nuevas: 3, seVan: 2 } }),
+      "quitando tareas, el confirm tiene que decir cuántas se quitan",
+    ).toContain("Se quitan 2 tareas pendientes");
     expect(
       tramo,
       'el confirm se pintó como destructivo: el rojo dice "esto borra" y acá no se borra nada',
     ).not.toContain('variant="destructive"');
+    expect(tramo, "el rojo tiene que depender de que aplicar QUITE tareas").toContain(
+      'variant={resumen.borraAlgo ? "destructive" : "default"}',
+    );
     /* Y el botón de la barra tiene que ABRIR el confirm en el caso masivo, no aplicar de una.
        ⚠ REESCRITA en la corrección de E1 (2026-09-24), con esta razón: la condición era
        `otroCronograma && todo`, y con un solo choque (el CSE editó un campo: justo el caso de E1) o
@@ -278,8 +297,18 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
 
   it("un cambio CHICO no cambia nada de lo que ya existía", () => {
     /* El caso chico se ve como siempre: tratamiento neutro (NO ámbar) y aplicar sin confirmación.
-       Lo que la guarda fija es que el caso chico NO use el tratamiento de advertencia. */
-    expect(src).toContain("La IA propone ${plural(total");
+       Lo que la guarda fija es que el caso chico NO use el tratamiento de advertencia.
+       ⚠ REAPUNTADA en E2a P5 (2026-09-25), con esta razón: el título salió del componente a
+       `tituloDeLaBarra` (lib/timeline/borrador.ts), que cuenta también las tareas («3 cambios de
+       fases y 41 de tareas»). Se pide lo mismo de antes: que la barra lo pinte y que el caso chico
+       diga «La IA propone N cambios», sin «otro cronograma». */
+    expect(src).toContain("{tituloDeLaBarra(resumen)}");
+    const chico = {
+      items: [{ estado: "aplica" as const }, { estado: "excluido" as const }],
+      grupos: [],
+      magnitud: { esCronogramaNuevo: false },
+    } as unknown as Parameters<typeof tituloDeLaBarra>[0];
+    expect(tituloDeLaBarra(chico)).toBe("La IA propone 2 cambios");
     expect(src).toContain("border-info-line bg-info-surface");
     expect(src, "el caso chico pasó a pintarse como advertencia").toContain(
       'otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"',

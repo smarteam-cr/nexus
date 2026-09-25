@@ -504,6 +504,12 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* E1 del borrador (2026-09-24): la franja `ProposalGlobalStrip` se borró; su texto vive ahora en
        la barra de revisión. La guarda sigue mirando el mismo texto, en su archivo nuevo. */
     "components/canvas/RevisionDeLaPropuesta.tsx",
+    /* E2a P5 (2026-09-25): las tareas de la propuesta (la lista por fase y la línea de la corrida que
+       las arma) y el núcleo que les da los textos (el título de la barra, la línea, la confirmación de
+       quitar tareas, los choques): todo lo lee el CSE tal cual. */
+    "components/canvas/TareasDeLaPropuesta.tsx",
+    "components/canvas/LineaDeLasTareas.tsx",
+    "lib/timeline/borrador.ts",
     "components/canvas/TimelineAssistDialog.tsx",
     "components/canvas/TimelineGantt.tsx",
     "components/clients/FuentesManualesColumn.tsx",

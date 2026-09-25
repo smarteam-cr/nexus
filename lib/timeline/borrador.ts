@@ -2041,9 +2041,21 @@ export function alternarVista(e: EstadoDeRevision): EstadoDeRevision {
 }
 
 export function marcarCambio(e: EstadoDeRevision, clave: string, incluir: boolean): EstadoDeRevision {
+  return marcarCambios(e, [clave], incluir);
+}
+
+/**
+ * Marca o desmarca VARIOS cambios de una vez: la casilla de un grupo de tareas (todas las de una
+ * fase). Un solo estado nuevo, no N: lo desmarcado se recuerda una vez, y la lista no pinta un
+ * estado a medias. Sin claves, devuelve el mismo estado (nada que recordar).
+ */
+export function marcarCambios(e: EstadoDeRevision, claves: readonly string[], incluir: boolean): EstadoDeRevision {
+  if (claves.length === 0) return e;
   const sin = new Set(e.sin);
-  if (incluir) sin.delete(clave);
-  else sin.add(clave);
+  for (const clave of claves) {
+    if (incluir) sin.delete(clave);
+    else sin.add(clave);
+  }
   return { ...e, sin };
 }
 

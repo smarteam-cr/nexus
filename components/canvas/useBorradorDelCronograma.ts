@@ -22,6 +22,14 @@
  * `localStorage` (recargar o volver otro día). Otro navegador toma una foto nueva: el límite del
  * formato viejo, que resuelve E2 guardando el `desde` al crear la propuesta.
  * Una propuesta distinta (otro token u otro contenido) arranca con su propia foto.
+ *
+ * E2a (2026-09-25): un `borrador-v1` trae su `desde` y sube `version` cada vez que el servidor lo
+ * reescribe (la marca «armando» y la fusión de las tareas). Su identidad es el TOKEN
+ * (`claveDeRevision`): lo desmarcado sobrevive a que lleguen las tareas, y sigue recordándose en
+ * `localStorage` como en E1 (hasta E3 no viaja entre computadoras). La `version` que se ve viaja al
+ * aplicar: si el servidor tiene otra, responde 409 y no se aplica algo distinto de lo que viste.
+ * El estado de las tareas («armando», «faltan», «fallo», «listas») lo calcula el servidor y entra
+ * acá como `tareas`: bloquea el aplicar mientras se arman y decide la confirmación.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -30,16 +38,18 @@ import {
   claveDeRevision,
   debeDescartarseSolo,
   leerBorrador,
-  marcarCambio,
+  marcarCambios,
   olvidarRevision,
-  proyectar,
+  planDeAplicacion,
   recordarRevision,
   recuerdoDeLaRevision,
   resumir,
   revisionPara,
   REVISION_VACIA,
+  versionDelBorrador,
   type AlmacenDeFotos,
   type Borrador,
+  type EstadoDeLasTareas,
   type EstadoDeRevision,
   type Proyeccion,
   type RecuerdoDeLaRevision,
@@ -125,17 +135,25 @@ function restaurarAncla(contenedor: HTMLElement | null, barra: HTMLElement | nul
 export interface BorradorEnPantalla {
   /** El borrador leído (formato viejo convertido contra la foto, o el nuevo), o null. */
   borrador: Borrador | null;
+  /** Lo que pinta la barra. null también con un borrador SIN cambios (un v1 recién marcado
+   *  «armando»): la barra no se monta vacía. */
   resumen: ResumenDelBorrador | null;
-  /** Cómo quedaría el cronograma con lo marcado: la vista «Ver la propuesta». */
+  /** Cómo quedaría el cronograma con lo marcado: la vista «Ver la propuesta» (sale del resumen). */
   proyeccion: Proyeccion | null;
   vista: VistaDelBorrador;
   sin: ReadonlySet<string>;
   /** La foto que viaja al aplicar. */
   foto: Vivo | null;
-  /** Todo lo que propone ya está así: no hay nada que decidir (se descarta sola). */
+  /** La versión del `borrador-v1` que se está viendo (viaja al aplicar), o null (formato viejo). */
+  version: number | null;
+  /** Todo lo que propone ya está así: no hay nada que decidir (se descarta sola). Sale del plan
+   *  aunque el borrador no tenga cambios: uno vacío cuya corrida falló se descarta, uno que espera
+   *  tareas no. */
   nadaQueDecidir: boolean;
   alternar: () => void;
   marcar: (clave: string, incluir: boolean) => void;
+  /** La casilla de un grupo de tareas: marca o desmarca todas las claves de una vez. */
+  marcarVarios: (claves: readonly string[], incluir: boolean) => void;
   /** La propuesta se resolvió (aplicada o descartada): se borra lo que se recordaba de ella. */
   olvidar: () => void;
   /** Envuelve la barra fija, la lista y el Gantt: con él se mide y se restaura el lugar del scroll,
@@ -151,10 +169,13 @@ export function useBorradorDelCronograma(entrada: {
   propuesta: unknown;
   /** La corrida que dejó la propuesta (`pendingProposalRunId`): parte de su identidad. */
   token: string | null;
-  /** El cronograma de la pantalla (solo fases guardadas), memoizado por quien llama. */
+  /** El cronograma de la pantalla (solo fases y tareas guardadas), memoizado por quien llama. */
   vivo: Vivo;
+  /** El estado de las tareas del borrador, como lo calculó el servidor (GET del cronograma), o null
+   *  si no espera tareas. */
+  tareas: EstadoDeLasTareas | null;
 }): BorradorEnPantalla {
-  const { projectId, propuesta, token, vivo } = entrada;
+  const { projectId, propuesta, token, vivo, tareas } = entrada;
   const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);
   const [revision, setRevision] = useState<EstadoDeRevision>(REVISION_VACIA);
   /* Una propuesta distinta: se ajusta el estado EN EL RENDER (el patrón de React para «cuando cambia
@@ -181,11 +202,21 @@ export function useBorradorDelCronograma(entrada: {
     () => (actual.base ? leerBorrador(propuesta, actual.base) : null),
     [propuesta, actual.base],
   );
-  const resumen = useMemo(() => (borrador ? resumir(vivo, borrador, actual.sin) : null), [vivo, borrador, actual.sin]);
-  const proyeccion = useMemo(
-    () => (borrador ? proyectar(vivo, borrador, actual.sin) : null),
-    [vivo, borrador, actual.sin],
+  /* La barra solo con cambios: un v1 vacío (marcado «armando», todavía sin fases ni tareas) no monta
+     una barra en blanco. La proyección sale del resumen: una evaluación del plan menos por render. */
+  const resumen = useMemo(
+    () => (borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas }) : null),
+    [vivo, borrador, actual.sin, tareas],
   );
+  const proyeccion = resumen?.proyeccion ?? null;
+  /* «Nada que decidir» sale del PLAN aunque no haya cambios: `debeDescartarseSolo` sabe que uno
+     vacío que espera tareas («faltan», «armando») no se descarta, y uno vacío cuya corrida falló sí. */
+  const nadaQueDecidir = useMemo(() => {
+    if (!borrador) return false;
+    if (resumen) return debeDescartarseSolo(resumen);
+    return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas }));
+  }, [borrador, resumen, vivo, actual.sin, tareas]);
+  const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);
 
   const contenedorRef = useRef<HTMLDivElement | null>(null);
   const barraRef = useRef<HTMLDivElement | null>(null);
@@ -201,7 +232,11 @@ export function useBorradorDelCronograma(entrada: {
     if (a) restaurarAncla(contenedorRef.current, barraRef.current, a);
   }, [actual.vista]);
 
-  const marcar = useCallback((c: string, incluir: boolean) => setRevision((r) => marcarCambio(r, c, incluir)), []);
+  const marcar = useCallback((c: string, incluir: boolean) => setRevision((r) => marcarCambios(r, [c], incluir)), []);
+  const marcarVarios = useCallback(
+    (claves: readonly string[], incluir: boolean) => setRevision((r) => marcarCambios(r, claves, incluir)),
+    [],
+  );
 
   return {
     borrador,
@@ -210,9 +245,11 @@ export function useBorradorDelCronograma(entrada: {
     vista: actual.vista,
     sin: actual.sin,
     foto: actual.base,
-    nadaQueDecidir: resumen ? debeDescartarseSolo(resumen) : false,
+    version,
+    nadaQueDecidir,
     alternar,
     marcar,
+    marcarVarios,
     olvidar,
     contenedorRef,
     barraRef,

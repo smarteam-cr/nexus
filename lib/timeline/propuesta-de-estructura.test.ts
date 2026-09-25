@@ -1299,11 +1299,29 @@ describe("la máquina de pasos de la pantalla", () => {
   });
 
   it("después de resolver sugerencias", () => {
-    expect(pasoTrasResolver({ pendientes: 1, origen: "contexto", iniciadoAqui: true })).toBe("nada");
-    expect(pasoTrasResolver({ pendientes: 0, origen: "handoff", iniciadoAqui: true })).toBe("nada");
-    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: true })).toBe("auto");
+    /* ⚠ ACTUALIZADA en E2a P5 (2026-09-25), con esta razón: `pasoTrasResolver` recibe además el estado
+       de las tareas de la propuesta resuelta (`tareas`), que es obligatorio para que ningún llamador
+       lo olvide. Estos casos son la propuesta VIEJA (sin tareas que esperar: `tareas: null`) y piden
+       exactamente lo mismo que antes. */
+    expect(pasoTrasResolver({ pendientes: 1, origen: "contexto", iniciadoAqui: true, tareas: null })).toBe("nada");
+    expect(pasoTrasResolver({ pendientes: 0, origen: "handoff", iniciadoAqui: true, tareas: null })).toBe("nada");
+    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: true, tareas: null })).toBe("auto");
     // Recargó a mitad de camino, o las resolvió otra persona: se ofrece, no se dispara.
-    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: false })).toBe("ofrecer");
+    expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui: false, tareas: null })).toBe("ofrecer");
+  });
+
+  it("E2a · resuelta una propuesta con tareas, se ofrecen solo si no llegaron (nunca se disparan solas)", () => {
+    /* Un `borrador-v1` trae sus tareas ADENTRO: si llegaron («listas») o se están armando, no queda
+       paso 2 que seguir; si no llegaron («faltan» o «fallo») y se aplicaron solo las fases, se ofrece
+       armarlas. Nunca «auto»: la corrida pagada no sale sola, aunque la cadena la haya iniciado esta
+       pantalla. La edición que la pone en rojo: ignorar `tareas` (un v1 «listas» de las reuniones
+       volvería a disparar el paso 2 viejo sobre fases que ya traen sus tareas), u ofrecer con «listas». */
+    for (const iniciadoAqui of [true, false]) {
+      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "listas" })).toBe("nada");
+      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "armando" })).toBe("nada");
+      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "faltan" })).toBe("ofrecer");
+      expect(pasoTrasResolver({ pendientes: 0, origen: "contexto", iniciadoAqui, tareas: "fallo" })).toBe("ofrecer");
+    }
   });
 
   it("#22 · el fallo del paso 1 se guarda como lo lee el CSE: la frase de la pantalla y la causa en tuteo", () => {

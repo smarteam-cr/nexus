@@ -68,6 +68,7 @@ import { computePhaseRanges } from "./weeks";
 import { isDevIntegrationPhaseName } from "./phase-names";
 import { sanitizeTaskTitle } from "./compute-detail-tasks";
 import { elegirFaseDeSemanaCero } from "./semana-cero-tareas";
+import type { EstadoDeLasTareas } from "./borrador";
 import {
   computeProposalDeltas,
   type CurrentPhaseLike,
@@ -1109,12 +1110,20 @@ export function errorDeLaRevisionDeFases(e: unknown): string {
  *                 pantalla: sigue sola con las tareas (paso 2);
  *  · 'ofrecer'  — igual, pero la cadena no arrancó acá (recargó a mitad de camino, o las resolvió
  *                 otra persona): se ofrece el paso 2, nunca se dispara solo para quien no lo pidió.
+ *
+ * E2a: `tareas` es el estado de las tareas de la propuesta que se resolvió, leído ANTES de limpiarla
+ * (null = no esperaba tareas: el formato viejo o el handoff). Un `borrador-v1` ya trae sus tareas
+ * adentro, así que no hay cadena que seguir: si llegaron («listas») o se están armando, no queda
+ * nada; si no llegaron («faltan» o «fallo»), se ofrece armarlas. Nunca «auto»: la corrida pagada no
+ * se dispara sola después de aplicar solo las fases.
  */
 export function pasoTrasResolver(input: {
   pendientes: number;
   origen: "contexto" | "handoff";
   iniciadoAqui: boolean;
+  tareas: EstadoDeLasTareas | null;
 }): "nada" | "auto" | "ofrecer" {
+  if (input.tareas !== null) return input.tareas === "faltan" || input.tareas === "fallo" ? "ofrecer" : "nada";
   if (input.pendientes > 0 || input.origen !== "contexto") return "nada";
   return input.iniciadoAqui ? "auto" : "ofrecer";
 }

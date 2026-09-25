@@ -42,6 +42,7 @@ import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
+import { useAgentRun } from "@/hooks/useAgentRun";
 import CronogramaContextSection from "./CronogramaContextSection";
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus, type GanttParticularidad, PARTY_META, PARTICULARIDAD_KIND_META, effParty } from "./TimelineGantt";
 import ParticularidadEditModal, { type ParticularidadPatch } from "./ParticularidadEditModal";
@@ -68,12 +69,17 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
+import type { TareasEnPantalla } from "./LineaDeLasTareas";
 import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   esBorradorGuardado,
+  esBorradorV1,
   esperaEnCurso,
+  leerBorrador,
   MENSAJE_PROPUESTA_ABIERTA,
+  type EstadoDeLasTareas,
+  type TareasDelBorrador,
   type Vivo,
 } from "@/lib/timeline/borrador";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
@@ -241,6 +247,49 @@ interface PendingParticularidadDraft {
   sourceQuote: string | null;
   phaseId: string | null;
 }
+
+/* ── LAS TAREAS DE LA PROPUESTA (E2a del borrador, 2026-09-25) ───────────────────────────────
+   «Regenerar todo» deja UN `borrador-v1` con fases y tareas; las tareas las arma una corrida aparte.
+   Su estado («armando», «faltan», «fallo», «listas») NO se guarda: lo calcula el servidor en el GET
+   del cronograma, de la corrida. Acá viaja junto con el token y la corrida del MISMO GET: así el
+   estado nunca se lee contra otra propuesta, y se sabe qué corrida seguir. */
+interface TareasDelBorradorEnPantalla extends TareasEnPantalla {
+  /** El token (`pendingProposalRunId`) de la propuesta a la que corresponde el estado. */
+  token: string | null;
+  /** La corrida que arma (o armó) las tareas. */
+  corrida: string | null;
+}
+
+const ESTADOS_DE_TAREAS: readonly EstadoDeLasTareas[] = ["listas", "faltan", "armando", "fallo"];
+const VIVO_VACIO: Vivo = { ancla: null, fases: [] };
+
+/** Las tareas que espera el `borrador-v1` guardado (su corrida y si ya llegaron), o null. */
+function tareasDelGuardado(json: unknown): TareasDelBorrador | null {
+  return esBorradorV1(json) ? (leerBorrador(json, VIVO_VACIO)?.tareas ?? null) : null;
+}
+
+/** Lo que el GET del cronograma dice de las tareas de la propuesta guardada, o null si no espera. */
+function tareasDelGet(data: {
+  tareasDelBorrador?: unknown;
+  pendingProposal?: unknown;
+  pendingProposalRunId?: unknown;
+}): TareasDelBorradorEnPantalla | null {
+  const t = data.tareasDelBorrador as { estado?: unknown; fase?: unknown; motivo?: unknown } | null | undefined;
+  if (!t || !ESTADOS_DE_TAREAS.includes(t.estado as EstadoDeLasTareas)) return null;
+  return {
+    estado: t.estado as EstadoDeLasTareas,
+    fase: typeof t.fase === "string" ? t.fase : null,
+    motivo: typeof t.motivo === "string" ? t.motivo : null,
+    token: typeof data.pendingProposalRunId === "string" ? data.pendingProposalRunId : null,
+    corrida: tareasDelGuardado(data.pendingProposal)?.corrida ?? null,
+  };
+}
+
+/** Un día YYYY-MM-DD de una fecha fijada a mano (ISO), o null. */
+const diaFijado = (s: string | null | undefined): string | null => (s ? s.slice(0, 10) : null);
+
+/** Las corridas de las tareas ya anunciadas en esta pestaña (vive lo que vive el módulo). */
+const CORRIDAS_ANUNCIADAS = new Set<string>();
 
 export default function CronogramaCanvas({
   projectId,
@@ -470,6 +519,9 @@ export default function CronogramaCanvas({
   }, [selectedTask, phases]);
   const [assisting, setAssisting] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  /* E2a: el estado de las tareas de la propuesta guardada, del GET (lo leen `load`,
+     `traerPropuestaPendiente` y `refrescarPropuesta`). null = no espera tareas. */
+  const [tareasDelBorrador, setTareasDelBorrador] = useState<TareasDelBorradorEnPantalla | null>(null);
   const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
   /* Aplicando la propuesta de fases (POST /timeline/borrador/aplicar). Bloquea como `applying`: el
@@ -793,6 +845,9 @@ export default function CronogramaCanvas({
           proposalMeta.current = { deAssist: false, runId: data.pendingProposalRunId ?? null };
           return data.pendingProposal ? (data.pendingProposal as Proposal) : null;
         });
+        /* El estado de las tareas de la GUARDADA, con su token: si en pantalla queda otra (la de arriba
+           no se reemplaza), la pantalla no lo usa (`tareasEnPantalla` compara el token). */
+        setTareasDelBorrador(tareasDelGet(data));
         /* La cadena de «Regenerar todo» esperaba que se resolvieran los cambios de fases, y la
            propuesta ya no está en el servidor (la resolvió otra persona, o la borró algo que no pasó
            por acá): el paso 2 no puede quedar colgado, se OFRECE. Si en su lugar hay otra propuesta
@@ -827,6 +882,7 @@ export default function CronogramaCanvas({
         setPhases([]);
         setAnchor("");
         setKickoffDate("");
+        setTareasDelBorrador(null);
         setPendingProgress(null);
         setPendingParticularidades(null);
         setPublishedAt(null);
@@ -891,6 +947,7 @@ export default function CronogramaCanvas({
         proposalMeta.current = { deAssist: false, runId: runIdNuevo };
         return nueva;
       });
+      setTareasDelBorrador(tareasDelGet(data));
     } catch {
       /* refresco oportunista: el cartel del widget ya avisa que hay algo sin revisar */
     }
@@ -909,6 +966,7 @@ export default function CronogramaCanvas({
       const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
       proposalMeta.current = { deAssist: false, runId: (data.pendingProposalRunId as string | null) ?? null };
       setProposal(nueva);
+      setTareasDelBorrador(tareasDelGet(data));
       bumpGpsRefresh();
       return nueva;
     } catch {
@@ -1353,8 +1411,11 @@ export default function CronogramaCanvas({
   // con su banner y su vista previa de siempre.
   const hayBorrador = !!proposal && esBorradorGuardado(proposal);
   /* El cronograma de la pantalla en la forma del núcleo del borrador: solo lo GUARDADO (una fase
-     sin id todavía no existe para la base). Memoizado: de él cuelgan la lista, los choques y la
-     vista de la propuesta. */
+     o una tarea sin id todavía no existe para la base). Memoizado: de él cuelgan la lista, los
+     choques y la vista de la propuesta.
+     E2a: con sus TAREAS, con lo mismo que viaja en el cable. Las fechas fijadas a mano entran en la
+     foto de la tarea: una tarea que se va y que alguien fijó después de la propuesta choca, no se
+     borra (lib/timeline/borrador.ts, CHOQUE_TAREA_EDITADA). */
   const vivo: Vivo = useMemo(
     () => ({
       ancla: anchor || null,
@@ -1368,10 +1429,29 @@ export default function CronogramaCanvas({
           sessionCount: p.sessionCount ?? null,
           notes: p.notes ?? null,
           activityType: p.activityType ?? null,
+          tareas: p.tasks
+            .filter((t): t is TaskDraft & { id: string } => !!t.id)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              weekIndex: t.weekIndex,
+              notes: t.notes ?? null,
+              party: t.party ?? null,
+              type: t.type ?? null,
+              status: t.status,
+              source: t.source ?? "AGENT",
+              inicioFijado: diaFijado(t.startDateOverride),
+              finFijado: diaFijado(t.dueDateOverride),
+              needsValidation: t.needsValidation,
+            })),
         })),
     }),
     [phases, anchor],
   );
+  /* El estado de las tareas solo vale para la propuesta que está EN PANTALLA (mismo token): `load`
+     no reemplaza la de la pantalla, y el GET pudo traer el de otra. */
+  const tareasEnPantalla: TareasDelBorradorEnPantalla | null =
+    hayBorrador && tareasDelBorrador && tareasDelBorrador.token === proposalMeta.current.runId ? tareasDelBorrador : null;
   /* La foto, lo desmarcado, la vista y el lugar del scroll viven en el hook; lo que decide, en
      lib/timeline/borrador.ts. La identidad de la propuesta es su token (la corrida) + su contenido:
      con ella el hook RECUERDA la foto entre montajes (cambiar de canvas, «Chequear avance», recargar),
@@ -1384,6 +1464,7 @@ export default function CronogramaCanvas({
     propuesta: hayBorrador ? proposal : null,
     token: hayBorrador ? proposalMeta.current.runId : null,
     vivo,
+    tareas: tareasEnPantalla?.estado ?? null,
   });
   /* Solo quien edita ve la vista de la propuesta: la barra que la explica (y la alterna) es suya. Quien
      solo mira ve el cronograma actual, que es el que rige hasta que alguien aplique. */
@@ -1650,10 +1731,10 @@ export default function CronogramaCanvas({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = data?.message ?? data?.error ?? "No se pudo armar la propuesta de tareas.";
-        if (modo === "primera") {
-          setError(msg);
-          void notifyAgentDone({ group: "cronograma", ok: false, url: cronogramaUrl });
-        } else toast.error(msg);
+        /* Sin aviso del sistema acá (E2a): la corrida la anuncia el centro de corridas, y el aviso
+           del cronograma sale solo del seguimiento de la corrida de las tareas (un solo aviso). */
+        if (modo === "primera") setError(msg);
+        else toast.error(msg);
       } else {
         const fases = Array.isArray(data?.previewPhases) ? data.previewPhases : [];
         setAllRegenRunId(typeof data?.run?.id === "string" ? data.run.id : null);
@@ -1774,7 +1855,6 @@ export default function CronogramaCanvas({
             ? `Tareas creadas — ${data?.phasesApplied ?? payload.length} fases.`
             : `Cronograma actualizado — ${data?.phasesApplied ?? payload.length} fases.`,
         );
-        if (allRegenModo === "primera") void notifyAgentDone({ group: "cronograma", ok: true, url: cronogramaUrl });
         /* El servidor conservó tareas con progreso que el payload no traía. En el camino feliz
            esto nunca aparece; si aparece, algo llegó incompleto y el CSE tiene que saber que
            el cronograma no quedó exactamente como lo curó (no se perdió nada — se rescató). */
@@ -2030,6 +2110,8 @@ export default function CronogramaCanvas({
     const origenDescartado = origenDePropuesta(proposal);
     const observacionesDescartadas = proposal?.observaciones ?? [];
     const modoDeLaCadena = pasoTareasRef.current;
+    // E2a: el estado de las tareas de la que se descarta (null = no esperaba tareas), ANTES de limpiar.
+    const tareasDescartadas = tareasEnPantalla?.estado ?? null;
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
     // limpiarla en el server para que no reaparezca al recargar. El estado local se limpia pase
     // lo que pase.
@@ -2070,6 +2152,7 @@ export default function CronogramaCanvas({
     }
     proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
+    if (!eraDelModificador) setTareasDelBorrador(null);
     setAssistWarnings([]);
     setAssistDescartados(new Set());
     setAssistRevision(false);
@@ -2097,6 +2180,7 @@ export default function CronogramaCanvas({
         pendientes: 0,
         origen: origenDescartado,
         iniciadoAqui: modoDeLaCadena !== null,
+        tareas: tareasDescartadas,
       });
       setObservacionesPaso1(observacionesDescartadas);
       if (siguiente === "auto" && modoDeLaCadena) void pedirPropuestaDeDetalle(modoDeLaCadena, { saltarEstructura: true });
@@ -2116,6 +2200,8 @@ export default function CronogramaCanvas({
     const origenResuelto = origenDePropuesta(proposal);
     const observacionesDeLaPropuesta = revisionRef.current.resumen.observaciones;
     const modoDeLaCadena = pasoTareasRef.current;
+    // E2a: el estado de sus tareas (null = no esperaba tareas), ANTES de limpiar la propuesta.
+    const tareasResueltas = tareasEnPantalla?.estado ?? null;
     let siguiente: "nada" | "auto" | "ofrecer" = "nada";
     try {
       /* Lo que editaste a mano tiene que estar en la base ANTES: el servidor compara contra ella. Si
@@ -2136,8 +2222,12 @@ export default function CronogramaCanvas({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         /* `token`: la propuesta que tienes ENFRENTE. Si la guardada es otra (el handoff la reemplazó,
-           o se resolvió en otra pestaña), la ruta no aplica nada y responde 409. */
-        body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto }),
+           o se resolvió en otra pestaña), la ruta no aplica nada y responde 409.
+           `version` (E2a): la del `borrador-v1` que ves (null en el formato viejo). Si el servidor lo
+           reescribió en el medio (llegaron las tareas), responde 409 PROPUESTA_CAMBIO con la nueva,
+           que se trae abajo: sin ella, un «Aplicar» caía una y otra vez en PLAN_CAMBIO (el `load` no
+           reemplaza la propuesta de la pantalla). */
+        body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version }),
       });
       if (res.status === 409) {
         const d = await res.json().catch(() => ({}));
@@ -2157,7 +2247,14 @@ export default function CronogramaCanvas({
         toast.error(d?.message ?? d?.error ?? "No se pudo aplicar la propuesta.");
         return;
       }
-      const d = (await res.json()) as { aplicadas: number; total: number; pendientes?: number; avisos?: string[] };
+      const d = (await res.json()) as {
+        aplicadas: number;
+        total: number;
+        pendientes?: number;
+        avisos?: string[];
+        /** E2a: las tareas creadas + las quitadas. Con alguna, el avance se vuelve a evaluar. */
+        tareasTocadas?: number;
+      };
       toast.success(
         d.aplicadas === d.total
           ? `Propuesta aplicada: ${plural(d.aplicadas, "cambio", "cambios")}.`
@@ -2171,15 +2268,32 @@ export default function CronogramaCanvas({
       revisionRef.current.olvidar();
       proposalMeta.current = { deAssist: false, runId: null };
       setProposal(null);
+      setTareasDelBorrador(null);
       /* La cadena se suelta ANTES de recargar: `load()` ofrece el paso 2 cuando encuentra una
          cadena esperando y ninguna propuesta, y acá lo decide esta misma función. */
       fijarPasoTareas(null);
       await load();
       bumpGpsRefresh();
+      /* E2a: si se crearon o quitaron tareas, el avance se vuelve a evaluar con el cronograma nuevo
+         (lo mismo que hacía el camino viejo de «Regenerar todo» al aplicar). Best-effort: si falla,
+         el cronograma ya quedó aplicado. Las fases nuevas solas no lo piden. */
+      if (typeof d.tareasTocadas === "number" && d.tareasTocadas > 0) {
+        setChainingProgress(true);
+        try {
+          const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
+          const pdata = await pres.json().catch(() => ({}));
+          if (pres.ok && pdata?.status === "ok") {
+            await load();
+            toast.success("Avance re-evaluado con el cronograma nuevo — confirma abajo.");
+          }
+        } catch { /* best-effort, mismo criterio que el camino viejo */ }
+        setChainingProgress(false);
+      }
       siguiente = pasoTrasResolver({
         pendientes: typeof d.pendientes === "number" ? d.pendientes : 0,
         origen: origenResuelto,
         iniciadoAqui: modoDeLaCadena !== null,
+        tareas: tareasResueltas,
       });
     } catch {
       toast.error("Error de conexión al aplicar la propuesta.");
@@ -2211,6 +2325,54 @@ export default function CronogramaCanvas({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hayBorrador, revision.nadaQueDecidir, loading, dirty, saving]);
+
+  /* ── EL SEGUIMIENTO DE LA CORRIDA QUE ARMA LAS TAREAS (E2a del borrador, 2026-09-25) ────────────
+     Con la propuesta EN PANTALLA «armando», se sigue su corrida con `useAgentRun`: consulta cada 3 s
+     y trae la fase que reporta, que pinta la línea de la barra. Al terminar se trae la propuesta
+     guardada (con sus tareas, o ninguna si no propuso nada) y se avisa UNA sola vez: `track` marca la
+     corrida como anunciada en el centro de corridas, así que el aviso es este. Recargar o volver a
+     entrar a mitad de camino no lanza otra corrida: el GET trae «armando» y se sigue la misma.
+     ⛔ El aviso del sistema del cronograma (`notifyAgentDone`) sale SOLO de acá: dos avisos por la
+     misma corrida enseñan a ignorarlos. */
+  const { phase: faseDelArmado, track } = useAgentRun(clientId);
+  const siguiendoRef = useRef<string | null>(null);
+  const [vueltaDelSeguimiento, setVueltaDelSeguimiento] = useState(0);
+  const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;
+  useEffect(() => {
+    if (!corridaQueArma || siguiendoRef.current === corridaQueArma) return;
+    const corrida = corridaQueArma;
+    siguiendoRef.current = corrida;
+    void (async () => {
+      const r = await track(corrida);
+      siguiendoRef.current = null;
+      // La vista previa del modificador vive solo en memoria: nunca se pisa (la guardada llega al descartarla).
+      const guardada = proposalMeta.current.deAssist ? null : await traerPropuestaPendiente();
+      if (r.status === "TIMEOUT") {
+        // ~6 min sin terminar: la propuesta se releyó y, si sigue «armando», se vuelve a seguir.
+        setVueltaDelSeguimiento((n) => n + 1);
+        return;
+      }
+      /* Si el cronograma se desmontó y se volvió a montar a mitad de camino (cambiar de pieza), el
+         seguimiento viejo y el nuevo terminan juntos: se avisa una sola vez por corrida. */
+      if (CORRIDAS_ANUNCIADAS.has(corrida)) return;
+      CORRIDAS_ANUNCIADAS.add(corrida);
+      const ok = r.status === "DONE";
+      const tareas = tareasDelGuardado(guardada);
+      if (!ok) toast.error(r.error ?? "No se pudieron armar las tareas.");
+      else if (tareas?.corrida === corrida && tareas.listas) toast.success("Listas las tareas de la propuesta: revísala arriba del Gantt.");
+      else toast.info(r.timelineSyncError ?? "La IA terminó y no propone cambios del cronograma.");
+      void notifyAgentDone({ group: "cronograma", ok, url: cronogramaUrl });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [corridaQueArma, vueltaDelSeguimiento]);
+  /* Lo que ve la barra de las tareas: el estado del servidor, con la fase EN VIVO mientras se sigue. */
+  const tareasDeLaBarra: TareasEnPantalla | null = tareasEnPantalla
+    ? {
+        estado: tareasEnPantalla.estado,
+        fase: faseDelArmado ?? tareasEnPantalla.fase,
+        motivo: tareasEnPantalla.motivo,
+      }
+    : null;
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -2634,14 +2796,35 @@ export default function CronogramaCanvas({
   }));
 
   /* ── LA VISTA «VER LA PROPUESTA» ─────────────────────────────────────────────
-     Las fases como quedarían (`proyectar`, lib/timeline/borrador.ts) con las tareas y el avance de
-     siempre, por id: la propuesta de fases nunca toca tareas. La `key` de una fase existente es la
-     MISMA que en el cronograma actual —así las fases abiertas siguen abiertas al alternar— y una
-     fase nueva usa su clave (`nueva:<i>`). Una tarea que queda más allá de una fase acortada se
-     pinta en su última semana, que es donde la deja el servidor al aplicar. */
+     Las fases como quedarían (`proyectar`, lib/timeline/borrador.ts) con sus tareas: las que
+     sobreviven (con su avance de siempre, por id) y, desde E2a, las nuevas marcadas. La `key` de una
+     fase existente es la MISMA que en el cronograma actual —así las fases abiertas siguen abiertas al
+     alternar— y una fase nueva usa su clave (`nueva:<i>` o `n:…`). Lo mismo con las tareas: una que
+     ya existe reusa su fila (misma `key`); una nueva usa la clave de su cambio (`t:…`). Las semanas ya
+     vienen acotadas a la duración final (el acotado vive en `proyectar`, igual que en el servidor). */
   const ganttPorId = new Map(ganttPhases.filter((g) => g.id).map((g) => [g.id as string, g]));
   const fasesDeLaPropuesta: GanttPhase[] = (revision.proyeccion?.fases ?? []).map((f) => {
     const actual = f.id ? ganttPorId.get(f.id) : undefined;
+    const filaPorId = new Map((actual?.tasks ?? []).filter((t) => t.id).map((t) => [t.id as string, t]));
+    const tasks: GanttTask[] = f.tareas.map((t) => {
+      const fila = t.id ? filaPorId.get(t.id) : undefined;
+      if (fila) return { ...fila, weekIndex: t.weekIndex };
+      return {
+        key: t.clave,
+        title: t.title,
+        weekIndex: t.weekIndex,
+        status: "PENDING",
+        notes: t.notes,
+        needsValidation: t.needsValidation,
+        source: "AGENT",
+        party: t.party,
+        type: t.type,
+      };
+    });
+    // Una tarea recién escrita que el autoguardado todavía no mandó (sin id) también se ve.
+    for (const t of actual?.tasks ?? []) {
+      if (!t.id) tasks.push({ ...t, weekIndex: Math.min(t.weekIndex, Math.max(f.durationWeeks - 1, 0)) });
+    }
     return {
       key: actual?.key ?? f.clave,
       id: f.id ?? undefined,
@@ -2654,10 +2837,7 @@ export default function CronogramaCanvas({
       activityType: f.activityType,
       status: actual?.status ?? "PENDING",
       needsValidation: actual?.needsValidation,
-      tasks: (actual?.tasks ?? []).map((t) => ({
-        ...t,
-        weekIndex: Math.min(t.weekIndex, Math.max(f.durationWeeks - 1, 0)),
-      })),
+      tasks,
     };
   });
   const marcasDeLaPropuesta = new Map(
@@ -3045,14 +3225,17 @@ export default function CronogramaCanvas({
                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
               }
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover transition-colors"
-              title="La IA propuso cambios de fases: se revisan arriba del Gantt, antes de aplicarlos"
+              title="La IA propuso cambios del cronograma: se revisan arriba del Gantt, antes de aplicarlos"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
               {/* Con un cambio masivo, "Revisar 11 cambios" subestima lo que hay abajo: no son
-                  once ajustes, es otro plan. El texto cambia; la CONDICIÓN del botón, no. */}
-              {revision.resumen.magnitud.esCronogramaNuevo
-                ? "Revisar el cronograma nuevo"
-                : `Revisar ${revision.resumen.total} ${revision.resumen.total === 1 ? "cambio" : "cambios"}`}
+                  once ajustes, es otro plan. El texto cambia; la CONDICIÓN del botón, no.
+                  E2a: con tareas, «Revisar 57 cambios» mezclaría fases y tareas: se revisa «la propuesta». */}
+              {revision.resumen.grupos.length > 0
+                ? "Revisar la propuesta"
+                : revision.resumen.magnitud.esCronogramaNuevo
+                  ? "Revisar el cronograma nuevo"
+                  : `Revisar ${revision.resumen.total} ${revision.resumen.total === 1 ? "cambio" : "cambios"}`}
             </button>
           )}
           {/* CTA bi-estado (#2): sin tareas (y nunca publicado) → "Generar cronograma" (crea las
@@ -3809,8 +3992,15 @@ export default function CronogramaCanvas({
               vista={revision.vista}
               onAlternar={revision.alternar}
               onMarcar={revision.marcar}
+              onMarcarVarios={revision.marcarVarios}
               onAplicar={() => void aplicarBorrador()}
               onDescartar={() => void discardProposal()}
+              tareas={tareasDeLaBarra}
+              onArmarTareas={() =>
+                void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", {
+                  saltarEstructura: true,
+                })
+              }
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}
               encadenado={encadenado}
               cierreFijado={closeOverride || null}
@@ -3852,7 +4042,9 @@ export default function CronogramaCanvas({
               // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
               // regenerar (cronograma.regenerate). El server además exige sin-publicar / sin-avance.
               // En la vista de la propuesta, no: esa fila todavía no existe como se ve.
-              hasAiDetail && canRegenerateTimeline && !verPropuesta
+              // E2a: con una propuesta abierta, tampoco: hay UN borrador por proyecto, y lo que
+              // «Regenerar» aplicara a esa fase quedaría debajo de la propuesta (el servidor responde 409).
+              hasAiDetail && canRegenerateTimeline && !verPropuesta && !hayBorrador
                 ? (phase) => void startRegenPreview(phase)
                 : undefined
             }

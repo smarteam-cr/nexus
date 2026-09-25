@@ -18,12 +18,17 @@
  * Solo pinta: la lista, los estados, el cierre y la magnitud salen de `resumir`
  * (lib/timeline/borrador.ts) y el estado de la pantalla, de `useBorradorDelCronograma`.
  * Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo, warn = lo que choca).
+ *
+ * E2a (2026-09-25): la propuesta de «Regenerar todo» trae también TAREAS (las que se crean y las
+ * pendientes de la IA que se quitan). Van debajo de la lista de fases, agrupadas por fase
+ * (`TareasDeLaPropuesta`), y la barra suma una segunda línea con el estado de la corrida que las arma
+ * (`LineaDeLasTareas`): «Armando las tareas…», o «Faltan…» / «No se pudieron armar…» con el botón
+ * para pedirlas. Si aplicar QUITA tareas, se confirma y el diálogo lo dice.
  */
 import { useState, type RefObject } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
-import { plural } from "@/lib/timeline/weeks";
 import { redactarResumenDeCambios } from "@/lib/timeline/magnitud-propuesta";
 import {
   fraseDelCierre,
@@ -32,17 +37,24 @@ import {
   TEXTO_VER_ANTES,
   TEXTO_VER_PROPUESTA,
   textoDeAplicar,
+  textoDeLaConfirmacion,
+  tituloDeLaBarra,
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
+import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
+import TareasDeLaPropuesta from "./TareasDeLaPropuesta";
 
 export default function RevisionDeLaPropuesta({
   resumen,
   vista,
   onAlternar,
   onMarcar,
+  onMarcarVarios,
   onAplicar,
   onDescartar,
+  onArmarTareas,
+  tareas,
   enCurso,
   encadenado,
   cierreFijado,
@@ -52,8 +64,15 @@ export default function RevisionDeLaPropuesta({
   vista: VistaDelBorrador;
   onAlternar: () => void;
   onMarcar: (clave: string, incluir: boolean) => void;
+  /** La casilla de un grupo de tareas: todas las de una fase de una vez. */
+  onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   onAplicar: () => void;
   onDescartar: () => void;
+  /** «Armar las tareas» / «Volver a intentar»: pide el paso 2 sobre ESTA propuesta. */
+  onArmarTareas: () => void;
+  /** El estado de las tareas de la propuesta (lo calcula el servidor), o null si no espera tareas
+   *  (el handoff y el formato viejo). */
+  tareas: TareasEnPantalla | null;
   /** Aplicando o descartando: los dos botones y las casillas se apagan hasta que termine. */
   enCurso: "aplicar" | "descartar" | null;
   /** Esta pantalla sigue sola con las tareas al resolverla (paso 1 de 2 de «Regenerar todo»). */
@@ -63,13 +82,17 @@ export default function RevisionDeLaPropuesta({
   barraRef: RefObject<HTMLDivElement | null>;
 }) {
   const [confirmar, setConfirmar] = useState(false);
-  const { items, marcadas, aplicables, total, choques, magnitud, bloqueo, origen, observaciones } = resumen;
+  const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, origen, observaciones } = resumen;
   const delContexto = origen === "contexto";
+  /* Un `borrador-v1` que espera tareas (E2a) trae su estado: ya no es la cadena vieja de dos pasos,
+     así que la chapa «Paso 1 de 2» no va (las tareas llegan a esta misma propuesta). */
+  const esV1 = tareas !== null;
   const otroCronograma = magnitud.esCronogramaNuevo;
   const trabajando = enCurso !== null;
   const textoDelBoton = textoDeAplicar(marcadas, aplicables);
   const pedirAplicar = () => (pideConfirmacion(resumen) ? setConfirmar(true) : onAplicar());
   const cierre = fraseDelCierre(resumen, cierreFijado);
+  const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;
 
   return (
     <>
@@ -79,7 +102,7 @@ export default function RevisionDeLaPropuesta({
         id="cronograma-propuesta"
         ref={barraRef}
         role="region"
-        aria-label="Propuesta de cambios de fases"
+        aria-label="Propuesta de cambios del cronograma"
         className={cn(
           "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 space-y-1 shadow-sm",
           /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
@@ -92,7 +115,7 @@ export default function RevisionDeLaPropuesta({
             el `title` del botón que alterna (el texto del botón ya dice a cuál vas), que las tareas
             no se tocan va en la confirmación, y el «Paso 1 de 2» es una etiqueta, no una oración. */}
         <div className="flex flex-wrap items-center gap-2">
-          {encadenado && delContexto && (
+          {encadenado && delContexto && !esV1 && (
             <span
               className="rounded-full border border-info-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink"
               title="Cuando apliques o descartes esta propuesta, sigo con las tareas."
@@ -103,9 +126,7 @@ export default function RevisionDeLaPropuesta({
             </span>
           )}
           <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
-            {otroCronograma
-              ? `La IA propone otro cronograma · ${plural(total, "cambio", "cambios")}`
-              : `La IA propone ${plural(total, "cambio", "cambios")}`}
+            {tituloDeLaBarra(resumen)}
           </span>
           {/* El origen, sin afirmar de qué: «las reuniones y notas que elegiste» mentía cuando lo único
               que había eran las instrucciones adicionales. */}
@@ -141,6 +162,17 @@ export default function RevisionDeLaPropuesta({
             </Button>
           </div>
         </div>
+        {/* La segunda línea: en qué están las tareas de esta propuesta (armándose, faltan o fallaron).
+            Con las tareas listas, o sin tareas que esperar, no hay línea. */}
+        {lineaDeTareas && (
+          <LineaDeLasTareas
+            estado={lineaDeTareas.estado}
+            fase={lineaDeTareas.fase}
+            motivo={lineaDeTareas.motivo}
+            onAccion={onArmarTareas}
+            trabajando={trabajando}
+          />
+        )}
         <p className="text-xs text-fg-secondary">
           {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
         </p>
@@ -161,7 +193,11 @@ export default function RevisionDeLaPropuesta({
                 <li key={m}>· {m}</li>
               ))}
             </ul>
-            <p className="text-xs text-fg-muted">Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están.</p>
+            <p className="text-xs text-fg-muted">
+              {resumen.borraAlgo
+                ? "Aplicar quita solo las tareas que se nombran acá; lo que tiene avance o escribiste a mano no se toca."
+                : "Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están."}
+            </p>
           </div>
         )}
 
@@ -232,6 +268,9 @@ export default function RevisionDeLaPropuesta({
           })}
         </ol>
 
+        {/* Las tareas, un renglón por fase (siguen la numeración de arriba), plegadas. */}
+        <TareasDeLaPropuesta grupos={grupos} onMarcar={onMarcar} onMarcarVarios={onMarcarVarios} trabajando={trabajando} />
+
         {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. Plegado: son
             notas para quien quiera leerlas, no parte de lo que se aplica (y con 5 ocupaban más que la
             propuesta). */}
@@ -251,12 +290,14 @@ export default function RevisionDeLaPropuesta({
         )}
       </section>
 
-      {/* Cuando lo MARCADO es otro cronograma (`pideConfirmacion`), marcado entero o no: para un ajuste
-          chico, confirmar sería la fricción que enseña a apretar sin leer.
-          ⚠ variant="default": el rojo prometería un borrado que no ocurre. */}
+      {/* Cuando lo MARCADO es otro cronograma, cuando QUITA tareas o cuando las tareas no llegaron
+          (`pideConfirmacion`), marcado entero o no: para un ajuste chico, confirmar sería la fricción
+          que enseña a apretar sin leer.
+          ⚠ El rojo («destructive») SOLO si aplicar quita tareas: sin eso prometería un borrado que no
+          ocurre. */}
       <ConfirmDialog
         open={confirmar}
-        variant="default"
+        variant={resumen.borraAlgo ? "destructive" : "default"}
         title="¿Aplicar el cronograma que propone la IA?"
         confirmLabel={textoDelBoton}
         loading={enCurso === "aplicar"}
@@ -271,10 +312,7 @@ export default function RevisionDeLaPropuesta({
               Se {marcadas === 1 ? "aplica el cambio marcado" : `aplican los ${marcadas} cambios marcados`} de una sola
               vez: {redactarResumenDeCambios(resumen.magnitudDeLoMarcado)}. {cierre}
             </span>
-            <span className="block mt-2">
-              No se borra ninguna fase ni ninguna tarea: las tareas y sus estados quedan como están, y las fases nuevas
-              nacen vacías. Después puedes seguir editando el cronograma a mano.
-            </span>
+            <span className="block mt-2">{textoDeLaConfirmacion(resumen)}</span>
           </>
         }
       />
