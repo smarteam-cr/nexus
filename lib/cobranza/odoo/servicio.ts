@@ -417,12 +417,12 @@ export async function confirmarVinculo(
   if (!cuenta) throw new EmparejadoError("Esa cuenta no existe.", 404);
 
   const partner = await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } });
-  if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista. Actualizá desde Odoo primero.", 404);
+  if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista. Actualiza la lista desde Odoo primero.", 404);
 
   /* ⛔ Un partner no puede tener dos dueños: el `@unique` de la base lo impide, pero acá se
      explica en vez de reventar con un error de Postgres. */
   if (partner.cuentaId && partner.cuentaId !== input.cuentaId) {
-    throw new EmparejadoError("Ese cliente de Odoo ya está vinculado a otra cuenta. Desvinculalo primero.", 409);
+    throw new EmparejadoError("Ese cliente de Odoo ya está vinculado a otra cuenta. Desvincúlalo primero.", 409);
   }
 
   /* Las cédulas de las OTRAS fichas de la cuenta: con ellas, una segunda cédula deja de ser un conflicto
@@ -480,7 +480,7 @@ export async function ignorarPartner(input: OdooVinculoIgnorar, actor: string): 
   const partner = await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } });
   if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista.", 404);
   if (partner.cuentaId && input.ignorado) {
-    throw new EmparejadoError("Ese cliente ya está vinculado a una cuenta. Desvinculalo antes de ignorarlo.", 409);
+    throw new EmparejadoError("Ese cliente ya está vinculado a una cuenta. Desvincúlalo antes de ignorarlo.", 409);
   }
   await prisma.odooPartnerVinculo.update({
     where: { odooPartnerId: input.odooPartnerId },
@@ -506,7 +506,7 @@ export async function desvincularPartner(
   const facturados = await prisma.cobro.count({ where: { sociedadFacturadaId: partner.id } });
   if (facturados > 0) {
     throw new EmparejadoError(
-      `${facturados} cobro(s) dicen que se le facturaron a «${partner.odooPartnerNombre}». Cambiales la sociedad en el cronograma de la cuenta antes de desvincularla.`,
+      `${facturados} cobro(s) dicen que se le facturaron a «${partner.odooPartnerNombre}». Cámbiales la sociedad en el cronograma de la cuenta antes de desvincularla.`,
       409,
     );
   }

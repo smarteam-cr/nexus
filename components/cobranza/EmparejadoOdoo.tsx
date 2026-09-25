@@ -105,7 +105,7 @@ const CLASE_META: Record<Clase, { label: string; chip: string; orden: number; no
     label: "Por monto",
     chip: "text-sky-600 bg-sky-500/10 border-sky-500/30",
     orden: 2,
-    nota: "Acierta 8 de cada 9. Mirá la evidencia antes de confirmar.",
+    nota: "Acierta 8 de cada 9. Mira la evidencia antes de confirmar.",
   },
   DUDOSA: {
     label: "Nombre parecido",
@@ -118,7 +118,7 @@ const CLASE_META: Record<Clase, { label: string; chip: string; orden: number; no
     label: "Nombre sin señal",
     chip: "text-fg-muted bg-surface-muted border-line",
     orden: 5,
-    nota: "El nombre de la cuenta es demasiado corto para comparar. Buscalo a mano.",
+    nota: "El nombre de la cuenta es demasiado corto para comparar. Búscalo a mano.",
   },
 };
 
@@ -271,7 +271,7 @@ export default function EmparejadoOdoo({
       </div>
     );
   }
-  if (!estado) return <EmptyState title="No se pudo cargar" description="Probá de nuevo en un momento." />;
+  if (!estado) return <EmptyState title="No se pudo cargar" description="Prueba de nuevo en un momento." />;
 
   const { conteos } = estado;
 
@@ -355,8 +355,8 @@ export default function EmparejadoOdoo({
             </h3>
             <p className="text-xs text-fg-muted">
               Una ficha libre con la misma cédula o el mismo nombre que una cuenta que ya tiene su cliente de Odoo. Si
-              es otra sociedad de la misma empresa, o la misma empresa cargada dos veces en Odoo, vinculala también:
-              sus facturas pasan a esa cuenta. Si es una ficha vacía, marcala «No es cliente nuestro» más abajo.
+              es otra sociedad de la misma empresa, o la misma empresa cargada dos veces en Odoo, vincúlala también:
+              sus facturas pasan a esa cuenta. Si es una ficha vacía, márcala «No es cliente nuestro» más abajo.
             </p>
           </div>
           {otrasFichas.map((p) => (
@@ -443,7 +443,7 @@ export default function EmparejadoOdoo({
         titulo={`Clientes de Odoo sin usar (${sinUsar.length})`}
         abierta={verSinUsar}
         onToggle={() => setVerSinUsar((v) => !v)}
-        nota="Odoo tiene más clientes que Nexus cuentas, y la diferencia es historia, no un hueco. Marcá acá los que no son clientes nuestros para que dejen de aparecer."
+        nota="Odoo tiene más clientes que Nexus cuentas, y la diferencia es historia, no un hueco. Marca acá los que no son clientes nuestros para que dejen de aparecer."
       >
         {sinUsar.map((v) => (
           <div key={v.odooPartnerId} className="flex items-center gap-3 border-b border-line py-2 last:border-0">

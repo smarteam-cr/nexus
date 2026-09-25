@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { formasDeVoseo, textosDelFuente } from "@/lib/ui/voseo";
 
 const DIR = __dirname;
 
@@ -258,6 +259,94 @@ describe("⛔ las marcas de «Lo que no cuadra» no se borran", () => {
       expect(escriturasA(src, "facturaLiberada"), s).toEqual([]);
       expect(escriturasA(src, "diferenciaOdooAceptada"), s).toEqual([]);
       expect(src, `${s} no pasa por el guard`).toMatch(/resolverApply\(\{\s*tablas:/);
+    }
+  });
+});
+
+/**
+ * ── ⛔ LA SECCIÓN HABLA EN TUTEO, NUNCA EN VOSEO ────────────────────────────────
+ * Regla del repo. Hasta el 2026-09-25 la sección tenía unas 100 palabras en voseo: casi todas en los pasos de «Lo que
+ * no cuadra» («Andá», «Abrí», «Buscá», «Marcala», «por vos»), 6 en «Emparejar» y 5 mensajes de error del servidor que
+ * llegan tal cual al toast. Casi la mitad eran del pronombre pegado («pasale», «corregilo»), que no lleva tilde: por
+ * eso el detector (lib/ui/voseo.ts) mira también esa forma, además de la de las agudas.
+ * Mira los TEXTOS —cadenas, plantillas y JSX, con el AST—: un comentario que cita el voseo no cuenta.
+ * La edición que la pone en rojo: volver a escribir cualquiera de esas formas en un texto de la sección.
+ */
+describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () => {
+  const RAIZ = join(DIR, "..", "..", "..");
+  const leerDeLaRaiz = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
+  /* Las tres pestañas, la página, las dos rutas y todo el módulo: los pasos, títulos y avisos los arma diferencias.ts,
+     las evidencias emparejado.ts y los rechazos servicio.ts. La vía firmada (via-cobro.ts) escribe la bitácora. */
+  const DE_LA_SECCION = [
+    "components/cobranza/OdooClient.tsx",
+    "components/cobranza/EmparejadoOdoo.tsx",
+    "components/cobranza/DiferenciasOdoo.tsx",
+    "app/(shell)/cobranza/odoo/page.tsx",
+    "app/api/cobranza/odoo/diferencias/route.ts",
+    "app/api/cobranza/odoo/emparejado/route.ts",
+    "lib/cobranza/via-cobro.ts",
+    ...archivos.map((f) => `lib/cobranza/odoo/${f}`),
+  ];
+  /* lib/cobranza/schema.ts lo comparten todas las rutas de Cobranza: acá cuentan solo los esquemas de estas dos, cuyo
+     primer mensaje de error la ruta devuelve tal cual. */
+  const ESQUEMA_DE_ESTAS_RUTAS = (nombre: string) => nombre.startsWith("odoo") || nombre === "codigoDeLinea" || nombre === "idDeBase";
+  const textosDeLosEsquemas = () =>
+    textosDelFuente(leerDeLaRaiz("lib/cobranza/schema.ts"), "lib/cobranza/schema.ts", { soloDeclaraciones: ESQUEMA_DE_ESTAS_RUTAS });
+
+  it("ni una forma de voseo en los textos que se leen", () => {
+    const hallados: string[] = [];
+    for (const rel of DE_LA_SECCION) {
+      for (const { linea, texto } of textosDelFuente(leerDeLaRaiz(rel), rel)) {
+        for (const w of formasDeVoseo(texto)) hallados.push(`${rel}:${linea} «${w}»`);
+      }
+    }
+    for (const { linea, texto } of textosDeLosEsquemas()) {
+      for (const w of formasDeVoseo(texto)) hallados.push(`lib/cobranza/schema.ts:${linea} «${w}»`);
+    }
+    expect(hallados, "volvió el voseo a la sección (si una palabra es tuteo de verdad, súmala a su lista en lib/ui/voseo.ts)").toEqual([]);
+  });
+
+  it("y mira donde tiene que mirar (si no, la guarda de arriba es decorativa)", () => {
+    /* Los textos salen de verdad de cada archivo, y de los esquemas llegan los de estas rutas y no los de otras. */
+    const textos = (rel: string) => textosDelFuente(leerDeLaRaiz(rel), rel).map((t) => t.texto);
+    expect(textos("components/cobranza/EmparejadoOdoo.tsx")).toContain("Está en Mercury");
+    expect(textos("lib/cobranza/odoo/diferencias.ts")).toContain("Ve a la pestaña «Emparejar» de esta misma pantalla.");
+    const esquemas = textosDeLosEsquemas().map((t) => t.texto);
+    expect(esquemas).toContain("Escribe por qué está bien así (al menos 5 letras)");
+    expect(esquemas).toContain("Escribe cómo se anuló (al menos 5 letras)");
+    expect(esquemas, "el filtro dejó entrar los esquemas de otra ruta").not.toContain("Escribí el nombre como sale en la factura");
+    /* Y el comentario no cuenta: el de arriba de este bloque cita el voseo y no es un texto. */
+    expect(textosDelFuente("/* Andá y marcala */ const x = 1;", "x.ts")).toEqual([]);
+  });
+
+  it("el detector caza el voseo que tenía la sección, y deja pasar el tuteo que lo reemplazó", () => {
+    for (const texto of [
+      // Las agudas
+      "Andá a la pestaña «Emparejar»", "Abrí en Odoo cada par", "Buscá en el banco el depósito", "confirmá el cliente",
+      "Si entró la plata, registrá el pago", "decidí qué pasa con ella", "Solo si sabés que se facturaron",
+      "Probá de nuevo en un momento.", "Actualizá desde Odoo primero.", "Volvé acá", "revertí su factura",
+      // El pronombre pegado, sin tilde
+      "Marcala solo después", "Buscalo a mano.", "Pasale la lista", "corregilo en el cronograma", "fijate a qué razón social",
+      "anotale la suya", "Desvinculalo primero.", "Cambiales la sociedad", "vinculala también", "Decile a Nexus",
+      "confirmalo al anotarles el número", "cancelalas o borralas", "Completalos antes",
+      // Y el que no tiene forma
+      "nada lo verifica por vos",
+    ]) {
+      expect(formasDeVoseo(texto), texto).not.toEqual([]);
+    }
+    for (const texto of [
+      "Ve a la pestaña «Emparejar»", "Abre en Odoo cada par", "Busca en el banco el depósito", "confirma el cliente",
+      "Si entró la plata, registra el pago", "decide qué pasa con ella", "Solo si sabes que se facturaron",
+      "Prueba de nuevo en un momento.", "Actualiza la lista desde Odoo primero.", "Vuelve acá", "revierte su factura",
+      "Márcala solo después", "Búscalo a mano.", "Pásale la lista", "corrígelo en el cronograma", "fíjate a qué razón social",
+      "anótale la suya", "Desvincúlalo primero.", "Cámbiales la sociedad", "vincúlala también", "Dile a Nexus",
+      "confírmalo al anotarles el número", "cancélalas o bórralas", "Complétalos antes", "nada lo verifica por ti",
+      // Lo que tiene la forma y no es voseo
+      "Mientras esté en rojo", "no hay otra combinación que dé lo mismo", "su gemela exacta en colones",
+      "3 cuentas internacionales", "los totales de Odoo", "Faltan emparejar 7 de 34", "¿Qué más está pendiente? Así quedará",
+      "paymentState", "SOS",
+    ]) {
+      expect(formasDeVoseo(texto), texto).toEqual([]);
     }
   });
 });

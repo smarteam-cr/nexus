@@ -1605,7 +1605,7 @@ describe("una factura soltada sin número dice lo que se encontró en Odoo", () 
       (i) => i.codigo === "ODOO-LIBERADAS-SIN-NUMERO",
     );
     const notaDe = (id: string) => l?.items.find((i) => i.id === id)?.nota ?? "";
-    expect(notaDe("h")).toContain("parece ser FAC/2026/0340, ya revertida con NC/2026/0018: si es esa, marcala resuelta");
+    expect(notaDe("h")).toContain("parece ser FAC/2026/0340, ya revertida con NC/2026/0018: si es esa, márcala «Ya está anulada»");
     expect(notaDe("k")).toContain("este cliente no tiene ninguna factura en Odoo");
   });
 });
@@ -1727,7 +1727,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
          ni dice que abril y mayo están cobradas. */
       [
         "TEC- AE — FAC/2026/0272 por US$3.240",
-        "2026-04 US$1.620 + 2026-05 US$1.620 · cobrado en Nexus · sin pagar en Odoo · ⚠ la factura cubre estas cuotas según la suma: confirmalo al anotarles el número",
+        "2026-04 US$1.620 + 2026-05 US$1.620 · cobrado en Nexus · sin pagar en Odoo · ⚠ la factura cubre estas cuotas según la suma: confírmalo al anotarles el número",
       ],
       ["TEC- AE — FAC/2026/0200 por US$1.620", "2026-03 US$1.620 · cobrado en Nexus · sin pagar en Odoo"],
       ["Transportes Juanva — FAC/2026/0197 por US$500", "2026-01 US$500 · cobrado en Nexus · sin pagar en Odoo"],
@@ -1783,7 +1783,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     ]);
     const acusadas = linea(lista, "ODOO-COBRO-SIN-FACTURA")?.items.filter((i) => i.texto.startsWith("ACCCSA"));
     expect(acusadas?.map((i) => i.nota)).toEqual([
-      "2026-05 · programado 2026-05-15 · cobrado · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: buscala ahí antes de emitirla en Odoo",
+      "2026-05 · programado 2026-05-15 · cobrado · ⚠ el Excel de Alexander da otras cuotas de esta cuenta facturadas por Mercury: búscala ahí antes de emitirla en Odoo",
     ]);
   });
 
@@ -1809,7 +1809,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
   it("Hotel Alta Las Palomas: la fila dice que su factura se revirtió, aunque la cuota se marcó facturada meses después", () => {
     const fila = linea(lista, "ODOO-COBRO-SIN-FACTURA")?.items.find((i) => i.texto.startsWith("Hotel Alta Las Palomas"));
     expect(fila?.nota).toBe(
-      "2026-03 · programado 2026-03-15 · por cobrar · tenía FAC/2026/0225, revertida en Odoo con NC/2026/0019: si la cuota ya no se debe, decidí qué pasa con ella",
+      "2026-03 · programado 2026-03-15 · por cobrar · tenía FAC/2026/0225, revertida en Odoo con NC/2026/0019: si la cuota ya no se debe, decide qué pasa con ella",
     );
   });
 
