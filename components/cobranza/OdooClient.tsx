@@ -25,15 +25,16 @@
  * la cuenta. La explicación que queda siempre es la de esta pestaña. Lo vigila guardas.test.ts.
  */
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Tabs } from "@/components/ui";
+import { fetchJson } from "@/lib/api/fetch-json";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 // ⚠ Viven en un módulo neutral: la página (servidor) también las lee, y de un "use client" no podría.
 import type { Pestana } from "@/lib/cobranza/odoo/pestanas";
 /* «Cómo funciona» dice las reglas con los mismos números que las aplican: si la gracia o el IVA cambian allá, el
    texto cambia solo. */
-import { DIAS_DE_GRACIA_DEL_ESPEJO } from "@/lib/cobranza/odoo/diferencias";
+import { DIAS_DE_GRACIA_DEL_ESPEJO, resumenDeDiferencias, type DiferenciaOdoo } from "@/lib/cobranza/odoo/diferencias";
 import { IVA_COSTA_RICA } from "@/lib/cobranza/montos";
 
 const IVA_EN_PORCENTAJE = Math.round((IVA_COSTA_RICA - 1) * 100);
@@ -103,6 +104,25 @@ export default function OdooClient({
      después de cada carga, así marcar una fila baja el número de la pestaña y el de «Cómo funciona» sin recargar.
      Hasta el 2026-09-25 contaba LÍNEAS y quedaba fijo hasta recargar la página entera. */
   const [diferencias, setDiferencias] = useState(conteos.diferencias);
+  /* La vuelta del último número de «Lo que no cuadra»: un recuento que termina después de que la pestaña ya dio uno más
+     nuevo (se marcó una fila en el medio) no lo pisa con uno viejo. */
+  const vueltaDeDiferencias = useRef(0);
+  const alContarDiferencias = useCallback((filas: number) => {
+    vueltaDeDiferencias.current += 1;
+    setDiferencias(filas);
+  }, []);
+  /* ⚠ «Emparejar» también mueve «Lo que no cuadra»: «Está en Mercury» saca a la cuenta de «cuentas internacionales…»
+     y vincular un cliente de Odoo saca sus facturas de «sin cuenta». Hasta la revisión del 2026-09-25 el número de esa
+     pestaña y el de «Cómo funciona» quedaban viejos hasta abrirla. Se recuenta en segundo plano, con el mismo cálculo
+     que la pestaña; si falla, el número se corrige solo al abrirla. */
+  const recontarDiferencias = useCallback(() => {
+    const vuelta = ++vueltaDeDiferencias.current;
+    void fetchJson<{ inconsistencias: DiferenciaOdoo[] }>("/api/cobranza/odoo/diferencias")
+      .then((r) => {
+        if (vueltaDeDiferencias.current === vuelta) setDiferencias(resumenDeDiferencias(r.inconsistencias).filas);
+      })
+      .catch(() => undefined);
+  }, []);
   const vivos: Conteos = { ...conteos, ...emparejado, diferencias };
 
   return (
@@ -141,9 +161,11 @@ export default function OdooClient({
       )}
 
       {tab === "que-es" && <QueEs conteos={vivos} />}
-      {tab === "emparejar" && <EmparejadoOdoo puedeEditar={puedeEditar} onConteos={setEmparejado} />}
+      {tab === "emparejar" && (
+        <EmparejadoOdoo puedeEditar={puedeEditar} onConteos={setEmparejado} onCambio={recontarDiferencias} />
+      )}
       {tab === "no-cuadra" && (
-        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} onPendientes={setDiferencias} />
+        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} onPendientes={alContarDiferencias} />
       )}
     </div>
   );

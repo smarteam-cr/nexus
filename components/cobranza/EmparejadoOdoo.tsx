@@ -140,11 +140,17 @@ function origenDeLaVia(c: CuentaFueraDeOdoo): string {
 export default function EmparejadoOdoo({
   puedeEditar,
   onConteos,
+  onCambio,
 }: {
   /** `cobranza.write`: «Está en Mercury» y «Deshacer» cambian la vía de cobro de la cuenta. Sin él no se dibujan. */
   puedeEditar: boolean;
   /** Después de cada carga: el número de la pestaña baja al marcar sin recargar la página. */
   onConteos?: (c: ConteosDelEmparejado) => void;
+  /**
+   * Después de cada cambio que se guardó (vincular, desvincular, «Está en Mercury», «Deshacer»…). Emparejar también
+   * mueve «Lo que no cuadra»: con esto OdooClient recuenta sus filas pendientes y su número no queda viejo.
+   */
+  onCambio?: () => void;
 }) {
   const toast = useToast();
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -231,13 +237,14 @@ export default function EmparejadoOdoo({
         setBuscandoPara(null);
         setSumandoA(null);
         await cargar();
+        onCambio?.();
       } catch (e) {
         toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
       } finally {
         setOcupado(null);
       }
     },
-    [cargar, toast],
+    [cargar, toast, onCambio],
   );
 
   const ordenadas = useMemo(
