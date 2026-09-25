@@ -62,6 +62,13 @@ export const FASES_RESUELTAS_CON_MATERIAL =
 export const EXCEPCION_DE_LA_FASE_A_REGENERAR =
   " Esta fase la pidió regenerar el CSE: detalla sus tareas aunque las instrucciones, una reunión o una nota la den por resuelta (la regla de las fases resueltas no vale para ella). Lo que ya se hizo va como tarea, igual que lo que falta.";
 
+/**
+ * La misma excepción, en plural (E2c): el recálculo de varias fases desfasadas en UNA corrida. Con
+ * una sola fase va la de arriba, byte a byte.
+ */
+export const EXCEPCION_DE_LAS_FASES_A_REGENERAR =
+  " Estas fases las pidió regenerar el CSE: detalla sus tareas aunque las instrucciones, una reunión o una nota las den por resueltas (la regla de las fases resueltas no vale para ellas). Lo que ya se hizo va como tarea, igual que lo que falta.";
+
 /** Las fuentes del «Contexto del cronograma» que cuentan como MATERIAL (el calendario no: solo ubica). */
 const FUENTES_DE_MATERIAL = ["reuniones-del-cronograma", "notas-del-cronograma"] as const;
 
@@ -176,8 +183,11 @@ export interface InsumosDelDetalle {
   encabezado: EncabezadoDelDetalle;
   fuentes: FuenteDeContexto[];
   clasificacion: ClasificacionDelDetalle;
-  /** Si viene, la corrida se acota a esa fase (regen quirúrgica de X del cronograma). */
-  regenerarFaseId?: string | null;
+  /**
+   * Si viene, la corrida se acota a esas fases: «Regenerar» de una fase (un id) o el recálculo de las
+   * fases desfasadas (E2c, uno o varios). Con un solo id, el texto es byte a byte el de siempre.
+   */
+  regenerarFaseIds?: readonly string[] | null;
 }
 
 /**
@@ -229,16 +239,23 @@ Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada
     msg += FASES_RESUELTAS_POR_INSTRUCCIONES;
   }
 
-  // Regen por fase: acotá la salida a la fase target (las demás van con tasks:[]) — baja el
-  // costo/latencia y el riesgo de truncación. La persistencia igual filtra por onlyPhaseId.
-  if (i.regenerarFaseId) {
-    msg += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetalla ÚNICAMENTE las tareas de la fase id="${i.regenerarFaseId}". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en la fase indicada.`;
+  // Regen por fase: acota la salida a las fases target (las demás van con tasks:[]) — baja el
+  // costo/latencia y el riesgo de truncación. La persistencia igual filtra por el alcance guardado.
+  const ids = [...new Set(i.regenerarFaseIds ?? [])].filter((id) => id.length > 0);
+  if (ids.length === 1) {
+    msg += `\n\n=== ALCANCE: REGENERAR UNA SOLA FASE ===\nDetalla ÚNICAMENTE las tareas de la fase id="${ids[0]}". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en la fase indicada.`;
     /* ⛔ La regla de las fases resueltas NO vale para la fase que el CSE pidió regenerar (revisión
        adversarial, 2026-09-24). Con material o instrucciones va siempre la válvula de arriba, y si una
        reunión daba por cerrada ESTA fase, el modelo recibía dos órdenes contrarias: devolvía
        `tasks: []` y el CSE pagaba una corrida para ver «Sin tareas». Pedirla es lo más reciente que
        dijo el CSE, y lo que pide el CSE manda. */
     if (hayMaterial || i.instrucciones) msg += EXCEPCION_DE_LA_FASE_A_REGENERAR;
+  } else if (ids.length > 1) {
+    /* E2c: el recálculo de varias fases desfasadas va en UNA corrida. El mismo alcance en plural, y la
+       misma excepción (en plural) por la misma razón. */
+    const lista = ids.map((id) => `id="${id}"`).join(", ");
+    msg += `\n\n=== ALCANCE: REGENERAR SOLO ALGUNAS FASES ===\nDetalla ÚNICAMENTE las tareas de las fases ${lista}. Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en las fases indicadas.`;
+    if (hayMaterial || i.instrucciones) msg += EXCEPCION_DE_LAS_FASES_A_REGENERAR;
   }
   return msg;
 }

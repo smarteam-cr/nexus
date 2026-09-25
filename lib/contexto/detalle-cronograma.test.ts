@@ -10,6 +10,7 @@ import {
   FASES_RESUELTAS_CON_MATERIAL,
   FASES_RESUELTAS_POR_INSTRUCCIONES,
   EXCEPCION_DE_LA_FASE_A_REGENERAR,
+  EXCEPCION_DE_LAS_FASES_A_REGENERAR,
   type ClasificacionDelDetalle,
   type EncabezadoDelDetalle,
 } from "./detalle-cronograma";
@@ -99,7 +100,9 @@ function nuevoTemplate(i: Parameters<typeof viejoTemplate>[0]): string {
       llevaMigracion: i.hasMigration,
       llevaDesarrollo: i.hasTechnical,
     } satisfies ClasificacionDelDetalle,
-    regenerarFaseId: i.regeneratePhaseId ?? null,
+    /* ⚠ E2c P1 (2026-09-25): `regenerarFaseId` pasó a `regenerarFaseIds` (el recálculo pide varias
+       fases en UNA corrida). Con un solo id el texto es el de siempre: el golden sigue byte a byte. */
+    regenerarFaseIds: i.regeneratePhaseId ? [i.regeneratePhaseId] : null,
   });
 }
 
@@ -149,6 +152,7 @@ describe("#14 · «Regenerar» una fase que el material da por resuelta: igual s
      Si una reunión daba por cerrada X, el modelo recibía dos órdenes contrarias y devolvía
      `tasks: []`: el CSE pagaba una corrida y veía «Sin tareas». La edición que la pone en rojo: sacar
      la excepción del alcance, o emitirla sin la válvula (ruido sin material). */
+  // (E2c P1: `regenerarFaseIds`, con un solo id; el texto esperado no cambia.)
   const conMaterial = (regenerarFaseId: string | null, instrucciones = "") =>
     renderDetalleDeCronograma({
       instrucciones,
@@ -160,7 +164,7 @@ describe("#14 · «Regenerar» una fase que el material da por resuelta: igual s
         notasCtx: "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nLa capacitación ya se dio.",
       }),
       clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
-      regenerarFaseId,
+      regenerarFaseIds: regenerarFaseId ? [regenerarFaseId] : null,
     });
 
   it("con material y regenerando una fase, esa fase queda fuera de la válvula", () => {
@@ -176,11 +180,55 @@ describe("#14 · «Regenerar» una fase que el material da por resuelta: igual s
       encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
       fuentes: fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "" }),
       clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
-      regenerarFaseId: "f2",
+      regenerarFaseIds: ["f2"],
     });
     expect(soloBrief).toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
     expect(conMaterial(null)).not.toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
     // El golden «regen de una sola fase» (sin brief ni material) sigue sin la excepción: byte-idéntico.
+  });
+});
+
+describe("E2c · el recálculo de VARIAS fases desfasadas en una sola corrida", () => {
+  /* El recálculo pide todas las fases desfasadas en UNA corrida: el alcance va en plural. Con un solo
+     id tiene que ser el texto de siempre, byte a byte (el golden de arriba). La edición que la pone en
+     rojo: usar el plural también con un solo id, o emitir la excepción sin material ni instrucciones. */
+  const render = (ids: readonly string[] | null, o: { instrucciones?: string; notas?: string } = {}) =>
+    renderDetalleDeCronograma({
+      instrucciones: o.instrucciones ?? "",
+      encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
+      fuentes: fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "", notasCtx: o.notas }),
+      clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
+      regenerarFaseIds: ids,
+    });
+  const PLURAL =
+    '\n\n=== ALCANCE: REGENERAR SOLO ALGUNAS FASES ===\nDetalla ÚNICAMENTE las tareas de las fases id="A", id="B". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en las fases indicadas.';
+  const NOTAS = "=== NOTAS DEL CSE PARA EL CRONOGRAMA (pegadas a mano — material INTERNO) ===\nLa capacitación ya se dio.";
+
+  it("⭐ con dos ids va el alcance en plural, con los ids en orden", () => {
+    const msg = render(["A", "B"]);
+    expect(msg.endsWith(PLURAL), "el alcance en plural no es el de la spec").toBe(true);
+    expect(msg).not.toContain("REGENERAR UNA SOLA FASE");
+    expect(msg).not.toContain(EXCEPCION_DE_LAS_FASES_A_REGENERAR);
+  });
+
+  it("⭐ con un solo id, el texto de siempre (nunca el plural)", () => {
+    const uno = render(["A"]);
+    expect(uno).not.toContain("REGENERAR SOLO ALGUNAS FASES");
+    expect(uno.endsWith('Detalla ÚNICAMENTE las tareas de la fase id="A". Para TODAS las demás fases del input, inclúyelas en el JSON con su id EXACTO pero con "tasks": [] — no las toques. Concentra todo el detalle en la fase indicada.')).toBe(true);
+    // Sin ids (null o []) no hay alcance.
+    expect(render(null)).not.toContain("=== ALCANCE");
+    expect(render([])).toBe(render(null));
+  });
+
+  it("la excepción en plural va solo con material o instrucciones, después del alcance", () => {
+    for (const o of [{ notas: NOTAS }, { instrucciones: "=== INSTRUCCIONES DEL CSE ===\nx\n\n" }]) {
+      const msg = render(["A", "B"], o);
+      expect(msg.endsWith(PLURAL + EXCEPCION_DE_LAS_FASES_A_REGENERAR), JSON.stringify(o)).toBe(true);
+      expect(msg).not.toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
+    }
+    expect(EXCEPCION_DE_LAS_FASES_A_REGENERAR).toBe(
+      " Estas fases las pidió regenerar el CSE: detalla sus tareas aunque las instrucciones, una reunión o una nota las den por resueltas (la regla de las fases resueltas no vale para ellas). Lo que ya se hizo va como tarea, igual que lo que falta.",
+    );
   });
 });
 
@@ -344,7 +392,7 @@ describe("⭐ con material, el mensaje no se contradice con las reuniones", () =
         calendarioCtx: over.calendarioCtx,
       }),
       clasificacion: { esReimplementacion: i.isReimpl, llevaMigracion: i.hasMigration, llevaDesarrollo: i.hasTechnical },
-      regenerarFaseId: i.regeneratePhaseId ?? null,
+      regenerarFaseIds: i.regeneratePhaseId ? [i.regeneratePhaseId] : null, // E2c P1: un id, el texto de siempre
     });
   }
 

@@ -1979,7 +1979,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         classificationLabel: classificationLabel || null,
       },
       clasificacion: clasificacionDeTags(sanitizeTags(dealProject?.tags ?? [])),
-      regenerarFaseId: regeneratePhaseId ?? null,
+      regenerarFaseIds: regeneratePhaseId ? [regeneratePhaseId] : null,
     });
     sesionesDelDetalle = contexto.sesionesUsadas ?? [];
     huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);

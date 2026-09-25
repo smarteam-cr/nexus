@@ -527,6 +527,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/borrador-del-handoff.ts",
     "lib/timeline/autoria-de-la-propuesta.ts",
     "lib/timeline/leer-autoria.ts",
+    /* E2c P1 (2026-09-25): los textos del recálculo de las tareas (la línea, el grupo y la
+       confirmación de «Aplicar de todos modos») llegan tal cual a la barra. */
+    "lib/timeline/recalculo-de-tareas.ts",
     "lib/agents/anthropic-error.ts",
     "lib/agents/run-error.ts",
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega

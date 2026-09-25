@@ -31,6 +31,10 @@
  * «Regenerar» de una fase pasa `soloFases`: las demás fases se saltan enteras, antes de R8. Así R6
  * (el tipo), R7 (las fijas de la Semana 0, solo si la pedida ES la del arranque) y R8 miran solo la
  * fase pedida, aunque el modelo devuelva tareas para otras.
+ *
+ * ── EL RECÁLCULO (E2c) ───────────────────────────────────────────────────────
+ * Las tareas de una fase DESFASADA se recalculan y REEMPLAZAN a las suyas en el borrador, en el mismo
+ * lugar de la lista (`mezclarTareasDeFases`); el resto del borrador no se toca (`fusionarRecalculo`).
  */
 import {
   huellasDeFrontera,
@@ -44,6 +48,7 @@ import {
   claveDeTareaNueva,
   claveDeTareaQueSeVa,
   esCambioDeTarea,
+  faseDeLaTarea,
   fotoDeTarea,
   type Borrador,
   type Cambio,
@@ -51,6 +56,8 @@ import {
   type CambioFaseCambia,
   type ContenidoDeTareaNueva,
   type EstructuraHipotetica,
+  type FormaDeFase,
+  type RecalculoDelBorrador,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
@@ -135,7 +142,7 @@ export interface CambiosDelDetalle {
   tipos: CambioFaseCambia[];
   /** El tipo propuesto para las fases nuevas del borrador que no tenían, por clave. */
   tiposDeNuevas: Record<string, string>;
-  tareasArmadasPara: Record<string, { nombre: string; semanas: number }>;
+  tareasArmadasPara: Record<string, FormaDeFase>;
   observaciones: string[];
 }
 
@@ -191,7 +198,7 @@ export function cambiosDeTareasDelDetalle(i: {
   const tareas: CambioDeTarea[] = [];
   const tipos: CambioFaseCambia[] = [];
   const tiposDeNuevas: Record<string, string> = {};
-  const tareasArmadasPara: Record<string, { nombre: string; semanas: number }> = {};
+  const tareasArmadasPara: Record<string, FormaDeFase> = {};
   const observaciones: string[] = [];
 
   for (const f of i.estructura.fases) {
@@ -304,7 +311,8 @@ export function cambiosDeTareasDelDetalle(i: {
  * El borrador con las tareas del paso 2: su estructura (sin tareas viejas), el tipo propuesto de las
  * fases que no tenían y las tareas. Las tareas quedan `listas` con la corrida que las armó, y la
  * versión sube (toda escritura del JSON la sube). `soloFase` se conserva. No mezcla tareas de otras
- * fases: en E2b el borrador de una fase nace vacío (la mezcla llega con E2c).
+ * fases: en E2b el borrador de una fase nace vacío. La mezcla por fase es `mezclarTareasDeFases`
+ * (E2c, el recálculo), y «Regenerar» de una fase dentro de una propuesta abierta la reusa en E3.
  */
 export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: string): Borrador {
   const estructura: Cambio[] = b.cambios
@@ -324,5 +332,78 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
     tareas: { corrida, listas: true },
     tareasArmadasPara: r.tareasArmadasPara,
     ...(b.soloFase ? { soloFase: b.soloFase } : {}),
+  };
+}
+
+/**
+ * Las tareas de `fases` se reemplazan por `nuevas`, EN EL LUGAR de la primera original de cada fase
+ * (el grupo conserva su número); sin originales, al final. Lo demás, intacto (E2c, D2). Una tarea de
+ * `nuevas` cuya fase no está en `fases` no entra: el alcance lo dice `fases`, no lo que devolvió el
+ * modelo.
+ */
+export function mezclarTareasDeFases(
+  cambios: readonly Cambio[],
+  nuevas: readonly CambioDeTarea[],
+  fases: ReadonlySet<string>,
+): Cambio[] {
+  const nuevasPorFase = new Map<string, CambioDeTarea[]>();
+  for (const n of nuevas) {
+    const fase = faseDeLaTarea(n);
+    if (!fases.has(fase)) continue;
+    nuevasPorFase.set(fase, [...(nuevasPorFase.get(fase) ?? []), n]);
+  }
+  const puestas = new Set<string>();
+  const out: Cambio[] = [];
+  for (const c of cambios) {
+    if (!esCambioDeTarea(c) || !fases.has(faseDeLaTarea(c))) {
+      out.push(c);
+      continue;
+    }
+    const fase = faseDeLaTarea(c);
+    if (puestas.has(fase)) continue; // una original más de una fase ya reemplazada
+    puestas.add(fase);
+    out.push(...(nuevasPorFase.get(fase) ?? []));
+  }
+  // Las fases sin originales van al final, en el orden en que llegaron sus tareas.
+  for (const [fase, deLaFase] of nuevasPorFase) {
+    if (!puestas.has(fase)) out.push(...deLaFase);
+  }
+  return out;
+}
+
+/**
+ * El borrador con las tareas RECALCULADAS de las fases desfasadas (E2c). Solo las fases `escritas`
+ * cambian sus tareas y su forma armada; las `fallidas` conservan las suyas y quedan en `recalculo`
+ * con su motivo (sin fallidas, el recálculo termina y se va). La versión sube. No toca la estructura,
+ * `tareas` (sigue en la corrida original y `listas`), `pedido`, `origen` ni `soloFase`.
+ */
+export function fusionarRecalculo(
+  b: Borrador,
+  r: {
+    tareas: readonly CambioDeTarea[];
+    armadas: Record<string, FormaDeFase>;
+    escritas: readonly string[];
+    fallidas: ReadonlyArray<{ id: string; nombre: string }>;
+    motivo: string | null;
+    observaciones: readonly string[];
+  },
+): Borrador {
+  const escritas = new Set(r.escritas);
+  const armadas = Object.fromEntries(Object.entries(r.armadas).filter(([fase]) => escritas.has(fase)));
+  const recalculo: RecalculoDelBorrador | null =
+    r.fallidas.length > 0 && b.recalculo
+      ? { ...b.recalculo, fases: r.fallidas.map((f) => ({ id: f.id, nombre: f.nombre })), motivo: r.motivo }
+      : null;
+  return {
+    formato: b.formato,
+    version: b.version + 1,
+    origen: b.origen,
+    observaciones: [...new Set([...b.observaciones, ...r.observaciones])],
+    cambios: mezclarTareasDeFases(b.cambios, r.tareas, escritas),
+    pedido: b.pedido,
+    tareas: b.tareas,
+    tareasArmadasPara: { ...b.tareasArmadasPara, ...armadas },
+    ...(b.soloFase ? { soloFase: b.soloFase } : {}),
+    ...(recalculo ? { recalculo } : {}),
   };
 }
