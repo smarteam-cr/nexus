@@ -341,7 +341,7 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
     );
   }
   return (
-    "⛔ HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR arriba del Gantt (del handoff, o de «Regenerar todo» " +
+    "⛔ HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR arriba del Gantt (del handoff, o de «Regenerar» " +
     "con fases y tareas). Mientras esté, NINGÚN cambio que acuerdes se puede aplicar: la pantalla " +
     "lo frena. Si te piden un cambio, dilo ANTES de armar la lista: primero hay que resolver esa propuesta en " +
     "su barra (desmarcar lo que no va y «Aplicar», o «Descartar»). Puedes conversar el " +

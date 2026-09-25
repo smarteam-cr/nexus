@@ -431,21 +431,40 @@ describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle
     );
   });
 
-  it("⭐ los DOS previews marcan las fugas de las tareas del agente, antes de sumar las fijas", () => {
-    for (const nombre of ["computeTimelineDetailPreview", "computeTimelineDetailPreviewAllPhases"]) {
-      const i = codigo.indexOf(`async function ${nombre}(`);
-      expect(i, `no encontré ${nombre}`).toBeGreaterThan(0);
-      const cuerpo = codigo.slice(i, codigo.indexOf("\n}", i));
-      const marca = cuerpo.indexOf("marcarFugas(");
-      expect(marca, `${nombre} dejó de marcar las fugas`).toBeGreaterThan(-1);
-      expect(cuerpo, `${nombre} dejó de recibir las huellas`).toContain("huellas: HuellasDeFrontera | null");
-      expect(marca, `${nombre}: las fijas de la Semana 0 son texto nuestro, no se marcan`).toBeLessThan(
-        cuerpo.indexOf("fijasDeSemanaCeroParaPreview("),
-      );
-    }
-    expect(codigo).toContain(
-      "computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId, huellasDelDetalle)",
+  it("⭐ las tareas del agente se marcan con sus fugas ANTES de sumar las fijas de la Semana 0", () => {
+    /* ⚠ REAPUNTADA en E2b P5a (2026-09-25), con esta razón: miraba las DOS vistas previas de analyze
+       (`computeTimelineDetailPreview` y `…AllPhases`), que se borraron. Desde E2a lo que armó el agente
+       entra al borrador por lib/timeline/tareas-del-detalle.ts: `tareasPropuestasDelDetalle` marca las
+       fugas de las tareas del agente, y las fijas de la Semana 0 se suman después, en R7, sin marca
+       (son texto nuestro, no del modelo). La edición que la pone en rojo: dejar de marcar las fugas,
+       dejar de recibir las huellas, marcar las fijas, o que analyze deje de pasarle las huellas. */
+    const detalle = fs
+      .readFileSync(path.join(process.cwd(), "lib/timeline/tareas-del-detalle.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    const iPropuestas = detalle.indexOf("export function tareasPropuestasDelDetalle(");
+    expect(iPropuestas, "no encontré tareasPropuestasDelDetalle").toBeGreaterThan(0);
+    // Hasta el cierre del CUERPO: la firma también empieza una línea con `}` (`}): {…`).
+    const propuestas = detalle.slice(iPropuestas, detalle.indexOf("\n}\n", iPropuestas));
+    expect(propuestas.length, "la guarda no está mirando el cuerpo").toBeGreaterThan(800);
+    expect(propuestas, "dejó de recibir las huellas").toContain("huellas: HuellasDeFrontera | null;");
+    expect(propuestas, "las tareas del agente dejaron de marcar sus fugas").toMatch(
+      /const delAgente: ComputedDetailTask\[\] = marcarFugas\(\s*computeDetailTasksForPhase\(/,
     );
-    expect(codigo).toContain("computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson, huellasDelDetalle)");
+    expect(propuestas, "las fijas no se marcan: se suman después").not.toContain("tareasFijasDeSemanaCero(");
+    const iCambios = detalle.indexOf("export function cambiosDeTareasDelDetalle(");
+    expect(iCambios, "no encontré cambiosDeTareasDelDetalle").toBeGreaterThan(iPropuestas);
+    const cambios = detalle.slice(iCambios, detalle.indexOf("\n}\n", iCambios));
+    const iFijas = cambios.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base)) {");
+    expect(iFijas, "R7 dejó de sumar las fijas").toBeGreaterThan(-1);
+    expect(cambios.slice(iFijas, cambios.indexOf("});", iFijas)), "una fija salió marcada como fuga").toContain("fuga: null,");
+    expect(cambios, "las fijas dejaron de ir después de las del agente").toContain(
+      "const nuevas: Array<ContenidoDeTareaNueva | null> = [...delAgente.map(contenidoDelAgente), ...fijas];",
+    );
+    // Y analyze le pasa las huellas del material que leyó el agente a la fusión.
+    const iFusion = codigo.indexOf("fusionarDetalleEnElBorrador({");
+    expect(iFusion, "analyze ya no fusiona el detalle").toBeGreaterThan(-1);
+    expect(codigo.slice(iFusion, codigo.indexOf("});", iFusion))).toContain("huellas: huellasDelDetalle,");
+    expect(codigo, "volvió una vista previa del detalle").not.toMatch(/computeTimelineDetailPreview|fijasDeSemanaCeroParaPreview/);
   });
 });

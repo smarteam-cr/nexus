@@ -469,12 +469,14 @@ describe("5 · la fusión en el borrador", () => {
     ]);
   });
 
-  it("⛔ el vocabulario del tipo de actividad vive en UN lugar: analyze lo importa, no lo redeclara", () => {
+  it("⛔ el vocabulario del tipo de actividad vive en UN lugar: analyze no lo redeclara", () => {
     /* La edición que la pone en rojo: volver a declarar la lista en la ruta (dos vocabularios que
-       divergen en silencio entre el preview viejo y el borrador). */
+       divergen en silencio entre la ruta y el borrador).
+       ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía también que analyze IMPORTARA
+       `activityTypePropuesto`. Lo usaban solo las vistas previas, que se borraron: el tipo lo propone
+       el borrador (R6), acá mismo. Lo que sigue valiendo es que la ruta no tenga un vocabulario propio. */
     const analyze = fs.readFileSync(path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"), "utf8");
     expect(analyze.length, "la guarda no está mirando la ruta").toBeGreaterThan(50_000);
-    expect(analyze).toContain('import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";');
     expect(analyze).not.toMatch(/const DETAIL_ACTIVITY_TYPES\s*=/);
     expect(analyze).not.toMatch(/function activityTypePropuesto\(/);
   });

@@ -54,6 +54,7 @@ export default function RevisionDeLaPropuesta({
   onMarcarVarios,
   onAplicar,
   onDescartar,
+  desde,
   onArmarTareas,
   tareas,
   enCurso,
@@ -68,6 +69,10 @@ export default function RevisionDeLaPropuesta({
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   onAplicar: () => void;
   onDescartar: () => void;
+  /** De dónde salió la propuesta, en palabras («desde el handoff», «desde «Regenerar» en «X»»…).
+   *  E2b: lo arma quien la usa con `desdeDeLaPropuesta(deDondeViene(…))`; antes la barra solo
+   *  distinguía «contexto» de «el último handoff», que ya era falso para una de una fase. */
+  desde: string;
   /** «Armar las tareas» / «Volver a intentar»: pide el paso 2 sobre ESTA propuesta. Sin él (quien no
    *  tiene permiso de generar o regenerar el cronograma), la línea informa sin botón. */
   onArmarTareas?: () => void;
@@ -81,8 +86,7 @@ export default function RevisionDeLaPropuesta({
   barraRef: RefObject<HTMLDivElement | null>;
 }) {
   const [confirmar, setConfirmar] = useState(false);
-  const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, origen, observaciones } = resumen;
-  const delContexto = origen === "contexto";
+  const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, observaciones } = resumen;
   /* E2b (2026-09-25): se fue la chapa «Paso 1 de 2 · después, las tareas» (y la prop `encadenado`).
      Era de la cadena vieja de dos pasos, que ya no existe: aplicar o descartar nunca sigue solo con
      las tareas (si no llegaron, la línea suelta las ofrece después). */
@@ -119,9 +123,7 @@ export default function RevisionDeLaPropuesta({
           </span>
           {/* El origen, sin afirmar de qué: «las reuniones y notas que elegiste» mentía cuando lo único
               que había eran las instrucciones adicionales. */}
-          <span className="text-xs text-fg-muted">
-            {delContexto ? "desde el contexto del cronograma" : "desde el último handoff"}
-          </span>
+          <span className="text-xs text-fg-muted">{desde}</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* UN botón, con el texto de lo que vas a ver al apretarlo. Sin `aria-pressed`: con un
                 texto que cambia, el lector anunciaría «Ver la propuesta, presionado». */}

@@ -339,14 +339,35 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
 });
 
 describe("phases/[phaseId]/apply y detail/apply-all — un solo borrador por proyecto", () => {
-  it("⛔ con un v1 abierto: 409 PROPUESTA_ABIERTA, sin abrir la transacción", async () => {
-    /* [D19] Una pestaña vieja o una llamada directa escribiría tareas por debajo del borrador que el
-       CSE está revisando. La edición que la pone en rojo: sacar el 409 de cualquiera de las dos. */
-    db.timelinePhase.findFirst.mockResolvedValue({ id: "f1", status: "PENDING", durationWeeks: 2, timeline: { id: "tl", pendingProposal: v1() }, tasks: [] });
-    const fase = await aplicarFasePOST(pedir({ tasks: [] }), deLaFase);
-    expect(fase.status).toBe(409);
-    expect(await fase.json()).toEqual({ code: "PROPUESTA_ABIERTA", message: MENSAJE_PROPUESTA_ABIERTA });
+  /* ⚠ REESCRITO en E2b P5a (2026-09-25), con esta razón: phases/apply ya no aplica nada. «Regenerar»
+     de una fase deja una propuesta (con `soloFase`) que se aplica con /borrador/aplicar, y la ruta vieja
+     queda como lápida hasta E4, para las pestañas de antes del deploy. Estos `it` pedían que respondiera
+     409 PROPUESTA_ABIERTA con un v1 abierto y que aplicara con la propuesta vieja del handoff; ahora
+     responde siempre el 409 de la lápida. apply-all sigue igual hasta P5b. */
+  it("⛔ phases/apply es una lápida: 409 `{ code, message }` sin `error`, sin tocar la base, haya o no propuesta", async () => {
+    /* `{ code, message }` y no `{ error }`: el Canvas viejo lee `data?.error ?? data?.message`, y con
+       `error` el CSE leería un código. La edición que la pone en rojo: volver a aplicar o a leer la
+       base, responder con `error`, o dejar de pedir el permiso. */
+    for (const guardada of [v1(), VIEJA, null]) {
+      db.timelinePhase.findFirst.mockResolvedValue({ id: "f1", status: "PENDING", durationWeeks: 2, timeline: { id: "tl", pendingProposal: guardada }, tasks: [] });
+      const fase = await aplicarFasePOST(pedir({ tasks: [] }), deLaFase);
+      expect(fase.status).toBe(409);
+      const cuerpo = await fase.json();
+      expect(cuerpo.code).toBe("NEXUS_ACTUALIZADO");
+      expect(cuerpo, "el Canvas viejo mostraría un código").not.toHaveProperty("error");
+      expect(cuerpo.message).toMatch(/^Nexus se actualizó: recarga la página/);
+      expect(cuerpo.message).toContain("No se aplicó nada.");
+    }
+    expect(guards.guardTimelineEdit, "la lápida dejó de pedir el permiso").toHaveBeenCalledTimes(3);
+    expect(db.timelinePhase.findFirst, "la lápida lee la base").not.toHaveBeenCalled();
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.projectTimeline.update).not.toHaveBeenCalled();
+    expect(db.timelineChange.create).not.toHaveBeenCalled();
+  });
 
+  it("⛔ apply-all con un v1 abierto: 409 PROPUESTA_ABIERTA, sin abrir la transacción", async () => {
+    /* [D19] Una pestaña vieja o una llamada directa escribiría tareas por debajo del borrador que el
+       CSE está revisando. La edición que la pone en rojo: sacar el 409. */
     db.projectTimeline.findUnique.mockResolvedValue({
       id: "tl",
       pendingProposal: v1(),
@@ -358,17 +379,15 @@ describe("phases/[phaseId]/apply y detail/apply-all — un solo borrador por pro
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it("con la propuesta vieja del handoff (otro formato) siguen como hoy", async () => {
+  it("apply-all con la propuesta vieja del handoff (otro formato) sigue como hoy", async () => {
     db.$transaction.mockResolvedValue(undefined);
-    db.timelinePhase.findFirst.mockResolvedValue({ id: "f1", status: "PENDING", durationWeeks: 2, timeline: { id: "tl", pendingProposal: VIEJA }, tasks: [] });
-    expect((await aplicarFasePOST(pedir({ tasks: [] }), deLaFase)).status).toBe(200);
     db.projectTimeline.findUnique.mockResolvedValue({
       id: "tl",
       pendingProposal: VIEJA,
       phases: [{ id: "f1", durationWeeks: 2, activityType: null, tasks: [] }],
     });
     expect((await aplicarTodoPOST(pedir({ phases: [{ phaseId: "f1", tasks: [] }] }), delProyecto)).status).toBe(200);
-    expect(db.$transaction).toHaveBeenCalledTimes(2);
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -519,6 +538,24 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(ruta.slice(iPrevalidar, iPrevalidar + 300)).toContain("return NextResponse.json(vetoDelBorrador, { status: 409 })");
   });
 
+  it("⛔ E2b P5a · lápida: el agente de detalle sin `borrador` responde 409 ANTES de crear la corrida", () => {
+    /* Una pestaña de antes del deploy (la vista previa de «Regenerar» de una fase, o el paso 2 viejo)
+       pagaría una corrida cuya salida ya no se puede aplicar. `{ error, message }`: sus lectores
+       muestran `message` primero. La edición que la pone en rojo: sacar la lápida, ponerla después de
+       crear la corrida, o hacerla solo para «Regenerar» de una fase. */
+    const iLapida = ruta.indexOf("if (isTimelineDetailAgent && pedidoLeido === null) {");
+    expect(iLapida, "no encontré la lápida").toBeGreaterThan(-1);
+    for (const crear of ["const run = existingRunId", "const pre = await prisma.agentRun.create("]) {
+      const i = ruta.indexOf(crear);
+      expect(i, crear).toBeGreaterThan(-1);
+      expect(iLapida, `la lápida va después de «${crear}»`).toBeLessThan(i);
+    }
+    expect(iLapida, "la lápida va después de crear una corrida").toBeLessThan(ruta.indexOf("prisma.agentRun.create("));
+    const lapida = ruta.slice(iLapida, ruta.indexOf("{ status: 409 }", iLapida) + 20);
+    expect(lapida.length).toBeLessThan(400);
+    expect(lapida).toContain('error: "NEXUS_ACTUALIZADO", message: "Nexus se actualizó: recarga la página y vuelve a pedirlo."');
+  });
+
   it("⛔ la marca «armando» va entre la corrida creada y el trabajo detached; si no entra, 409 con la corrida cerrada", () => {
     /* La edición que la pone en rojo: marcar antes de tener la corrida (el borrador apuntaría a nada),
        o después de soltar el trabajo detached (la pantalla vería «faltan» mientras la IA ya corre). */
@@ -576,15 +613,27 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(ruta.slice(iStop, iStop + 200)).toContain('detalleCortado = isTimelineDetailAgent && stopReason === "max_tokens";');
   });
 
-  it("⛔ la fusión va DESPUÉS de guardar la corrida y ANTES de las vistas previas de siempre", () => {
+  it("⛔ la fusión va DESPUÉS de guardar la corrida, y es la ÚNICA salida del detalle: `{ tareas, run }`", () => {
     /* La edición que la pone en rojo: fusionar antes de guardar la salida de la corrida (si la fusión
-       falla, lo armado se pierde), o dejar que un pedido del borrador caiga en la vista previa vieja. */
+       falla, lo armado se pierde), o que la rama del detalle vuelva a tener otra salida.
+       ⚠ REESCRITA en E2b P5a (2026-09-25), con esta razón: pedía que la fusión fuera ANTES de las dos
+       vistas previas en memoria (`computeTimelineDetailPreview`, de una fase, y la de todas), que
+       quedaban para las pestañas viejas y para «Regenerar» de una fase. Se borraron: una fase también
+       entra al borrador, y un pedido sin `borrador` ni llega (la lápida de abajo). Volver a sumar una
+       vista previa la pone en rojo. */
     const iRun = ruta.indexOf("const run = existingRunId");
     const iFusion = ruta.indexOf("fusionarDetalleEnElBorrador(");
-    const iPreview = ruta.indexOf("computeTimelineDetailPreview(bodyProjectId");
     expect(iRun).toBeGreaterThan(-1);
     expect(iFusion, "se fusiona antes de guardar la corrida").toBeGreaterThan(iRun);
-    expect(iFusion).toBeLessThan(iPreview);
+    const iRama = ruta.lastIndexOf("if (isTimelineDetailAgent) {", iFusion);
+    const rama = ruta.slice(iRama, ruta.indexOf("updateCanvasAsync", iRama));
+    expect(rama.length, "no encontré la rama del detalle").toBeGreaterThan(300);
+    expect(rama.match(/return NextResponse\.json\(/g) ?? [], "la rama del detalle tiene otra salida").toHaveLength(1);
+    expect(rama).toMatch(/return NextResponse\.json\(\{\s*tareas,\s*run: \{/);
+    expect(rama, "volvió una vista previa").not.toMatch(/preview/i);
+    expect(ruta, "volvió una vista previa del detalle").not.toMatch(
+      /computeTimelineDetailPreview|previewTasks|previewPhases|fijasDeSemanaCeroParaPreview/,
+    );
     const llamada = ruta.slice(iFusion, ruta.indexOf("});", iFusion));
     expect(llamada).toContain("corrida: run.id,");
     expect(llamada, "la fusión no usa la estructura que vio el agente").toContain("estructura: sobreDelDetalle!.estructura,");

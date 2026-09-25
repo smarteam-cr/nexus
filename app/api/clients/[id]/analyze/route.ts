@@ -34,7 +34,7 @@ import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
-import { huellasDeFrontera, marcarFugas, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
+import { huellasDeFrontera, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
@@ -42,8 +42,6 @@ import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
-import { computeDetailTasksForPhase, type ComputedDetailTask } from "@/lib/timeline/compute-detail-tasks";
-import { activityTypePropuesto } from "@/lib/timeline/tareas-del-detalle";
 import {
   cierreDeLaCorridaVetada,
   estructuraParaElDetalle,
@@ -89,7 +87,6 @@ import {
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
-import { tareasFijasDeSemanaCero, elegirFaseDeSemanaCero } from "@/lib/timeline/semana-cero-tareas";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -145,14 +142,15 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     projectId?: string;
     async?: boolean; // A2: si true → run en background + polling (agentes pesados)
     regeneratePhaseId?: string; // D.1 regen por fase: rehace SOLO esta fase del cronograma (agente de detalle)
-    /** Vestigial: el agente de detalle SIEMPRE devuelve propuesta, con o sin esta bandera.
-     *  Se acepta para no romper un cliente viejo que la siga mandando. */
+    /** Vestigial: la mandaba la vista previa de «Regenerar» de una fase, que se fue en E2b. Nadie la
+     *  lee: un pedido del agente de detalle sin `borrador` responde 409 «Nexus se actualizó». */
     preview?: boolean;
     /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
     forzar?: boolean;
     /** E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» completa el BORRADOR del cronograma
      *  (lib/timeline/borrador-del-detalle.ts): el que el CSE tiene enfrente (`token` + `version`), o
-     *  uno nuevo si no había propuesta de fases (`token` null). Sin esto, el paso 2 de siempre. */
+     *  uno nuevo si no había propuesta de fases (`token` null). Desde E2b también «Regenerar» de una
+     *  fase (`token` null). El agente de detalle sin esto responde 409: es una pestaña de antes. */
     borrador?: { token: string | null; version: number | null };
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
@@ -417,6 +415,16 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       { status: 400 },
     );
   }
+  /* ⛔ LÁPIDA (E2b, 2026-09-25): el agente de detalle SOLO arma tareas dentro de un borrador. Sin
+     `borrador` es una pestaña de antes del deploy (la vista previa de «Regenerar» de una fase, o el
+     paso 2 viejo): se corta ANTES de crear la corrida, así no paga una salida que ya no se puede
+     aplicar. `{ error, message }`: esos lectores muestran `message` primero. */
+  if (isTimelineDetailAgent && pedidoLeido === null) {
+    return NextResponse.json(
+      { error: "NEXUS_ACTUALIZADO", message: "Nexus se actualizó: recarga la página y vuelve a pedirlo." },
+      { status: 409 },
+    );
+  }
   pedidoDeTareas = pedidoLeido;
   if (isTimelineDetailAgent) {
     if (!bodyProjectId) {
@@ -445,10 +453,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       if (vetoDelBorrador) return NextResponse.json(vetoDelBorrador, { status: 409 });
       timelineDelBorrador = tl.id;
     }
-    // D.1 regen por fase — validación mínima. La seguridad NO viene de bloquear proyectos publicados:
-    // (a) el borrado scopeado preserva SIEMPRE las tareas DONE/iniciadas y las manuales, y
-    // (b) tras regenerar se PARCHEA el baseline activo de esa fase (patchBaselinePhaseTasks) para que
-    // el portafolio D.3 no reporte falso scope-creep ni pierda atrasos.
+    // «Regenerar» de una fase: la fase tiene que ser de este cronograma. La protección no está acá: la
+    // propuesta nace con `soloFase`, y aplicarla (/timeline/borrador/aplicar) no toca lo que tiene
+    // avance ni lo escrito a mano. E2b: ya no se parchea la foto publicada.
     if (regeneratePhaseId) {
       const phase = await prisma.timelinePhase.findFirst({
         where: { id: regeneratePhaseId, timelineId: tl.id },
@@ -2321,59 +2328,29 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       });
   }
 
-  // ── 12a'. D.1: persistir detalle del cronograma y cortar ────────────────────
-  // El output del agente de detalle no es cards/blocks: se persiste sobre
-  // ProjectTimeline/TimelineTask y se responde acá — no debe pasar por
-  // updateCanvasAsync ni por el path de cards.
+  // ── 12a'. D.1: el detalle del cronograma entra al borrador y se corta ────────
+  // El output del agente de detalle no es cards/blocks: se fusiona en la propuesta
+  // guardada y se responde acá — no debe pasar por updateCanvasAsync ni por el
+  // path de cards.
   if (isTimelineDetailAgent) {
-    /* ⛔ EL AGENTE DE DETALLE NUNCA ESCRIBE TAREAS. Devuelve una PROPUESTA y se resuelve por el
-       circuito de curación, que es el que preserva el progreso humano (lib/timeline/apply-curated-phase).
-       Hasta el 2026-08-16 la PRIMERA generación era la excepción: escribía directo con createMany, sin
-       revisión — la única de todo el cronograma que entraba sin que nadie la mirara, y encima la que
-       más filas crea. Ahora las dos puertas son la misma.
-       No depende de que el cliente mande `preview: true`: la rama que persistía se BORRÓ, así que un
-       POST armado a mano tampoco puede saltearse la curación.
-       Con regeneratePhaseId → propuesta de UNA fase (/timeline/phases/[phaseId]/apply). Sin él →
-       propuesta de TODAS (/timeline/detail/apply-all), que es el camino de la primera generación y el
-       de "Regenerar todo el cronograma". El prompt ya pide todas las fases por default. */
-    if (bodyProjectId) {
-      /* E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» no devuelve una vista previa: lo que
-         armó el agente se FUSIONA en el borrador (cambios de tareas que el CSE revisa arriba del Gantt),
-         sobre la estructura que vio. Va DESPUÉS de guardar la salida de la corrida: si la fusión falla,
-         lo armado queda en la corrida. Las dos ramas de abajo quedan para las pestañas viejas y para
-         «Regenerar» de una fase. */
-      if (pedidoDeTareas) {
-        const tareas = await fusionarDetalleEnElBorrador({
-          timelineId: timelineDelBorrador!,
-          corrida: run.id,
-          estructura: sobreDelDetalle!.estructura,
-          analysisJson,
-          huellas: huellasDelDetalle,
-          cortado: detalleCortado,
-        });
-        return NextResponse.json({
-          tareas,
-          run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
-        });
-      }
-      if (regeneratePhaseId) {
-        const previewTasks = await computeTimelineDetailPreview(bodyProjectId, analysisJson, regeneratePhaseId, huellasDelDetalle);
-        return NextResponse.json({
-          previewTasks,
-          run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
-        });
-      }
-      const previewPhases = await computeTimelineDetailPreviewAllPhases(bodyProjectId, analysisJson, huellasDelDetalle);
-      return NextResponse.json({
-        previewPhases,
-        run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
-      });
-    }
-    /* Sin proyecto no hay cronograma que detallar: el agente corrió, su output queda en AgentRun
-       y no hay nada que proponer. Antes acá caía la escritura directa. */
+    /* ⛔ EL AGENTE DE DETALLE NUNCA ESCRIBE TAREAS. Lo que armó se FUSIONA en el borrador del
+       cronograma: cambios de tareas que el CSE revisa arriba del Gantt y aplica con
+       /timeline/borrador/aplicar, que preserva lo que tiene avance y lo escrito a mano. Hasta el
+       2026-08-16 la PRIMERA generación escribía directo con createMany, sin que nadie la mirara.
+       Va DESPUÉS de guardar la salida de la corrida: si la fusión falla, lo armado queda en la corrida.
+       E2b (2026-09-25): es la única salida. Las dos vistas previas en memoria (la de una fase y la de
+       todas) se fueron, y un pedido sin `borrador` ni llega acá (la lápida 409 de arriba). El alcance
+       de «Regenerar» de una fase lo lee la fusión del borrador GUARDADO (`soloFase`), no del body. */
+    const tareas = await fusionarDetalleEnElBorrador({
+      timelineId: timelineDelBorrador!,
+      corrida: run.id,
+      estructura: sobreDelDetalle!.estructura,
+      analysisJson,
+      huellas: huellasDelDetalle,
+      cortado: detalleCortado,
+    });
     return NextResponse.json({
-      previewPhases: [],
-      reason: "no_project",
+      tareas,
       run: { id: run.id, createdAt: run.createdAt, status: run.status, step: run.step, stepLabel: run.stepLabel, agent: { name: agent.name } },
     });
   }
@@ -3240,155 +3217,10 @@ async function persistTimelineFromAgentOutput(
   }
 }
 
-// ── D.1: persistencia del DETALLE del cronograma ──────────────────────────────
-// `DETAIL_ACTIVITY_TYPES` y `activityTypePropuesto` viven en lib/timeline/tareas-del-detalle.ts (E2a):
-// el paso 2 que arma el borrador usa el mismo vocabulario cerrado que estos previews.
-
-/** Lo que el agente propone para UNA fase, calculado SIN escribir: sus tareas y —solo cuando la
- *  fase todavía no tiene tipo— el tipo de actividad. Las dos cosas viajan al modal de curación y
- *  vuelven por el apply. El preview NO escribe nada: ésa es toda la gracia. */
-export interface DetailPreviewPhase {
-  phaseId: string;
-  tasks: ComputedDetailTask[];
-  /** activityType propuesto, o null si la fase ya tiene uno (nunca se pisa lo elegido a mano). */
-  activityType: string | null;
-}
-
-/**
- * Las cinco tareas fijas de la «Semana 0», calculadas SIN escribir para que entren a la CURACIÓN.
- *
- * ⚠ Se sembraban dentro del camino que PERSISTE. Cuando la primera generación pasó a resolverse
- * por curación (2026-08-16) ese camino dejó de correr, y sin esto las cinco desaparecían sin que
- * nada avisara: no falla un test ni el build — simplemente el proyecto arranca sin pedirle al
- * cliente los accesos ni la base de datos, y eso se descubre en la reunión de kickoff.
- *
- * Deduplica contra lo que la fase YA tiene (y contra la gemela de la de base de datos), así que
- * sobre un cronograma que ya las llevaba devuelve [] en vez de repetirlas.
- */
-async function fijasDeSemanaCeroParaPreview(
-  projectId: string,
-  kickoffPhaseId: string,
-  propuestasEnSemana0: number,
-): Promise<ComputedDetailTask[]> {
-  const [proj, existentes] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } }),
-    prisma.timelineTask.findMany({
-      where: { phaseId: kickoffPhaseId },
-      select: { title: true, weekIndex: true },
-    }),
-  ]);
-  const yaEnSemana0 = existentes.filter((t) => t.weekIndex === 0).length;
-  return tareasFijasDeSemanaCero(
-    sanitizeTags(proj?.tags ?? []),
-    existentes.map((t) => t.title),
-    yaEnSemana0 + propuestasEnSemana0,
-  );
-}
-
-/**
- * PREVIEW del detalle por fase: computa las tareas propuestas para UNA fase (mismo criterio que
- * el apply) SIN escribir nada. Lo usa el modal de curación del regen por fase. Devuelve [] si la
- * fase no existe o el agente no propuso tareas para ella.
- *
- * Si la fase regenerada ES la «Semana 0», se le suman las tareas fijas — con el mismo dedup que
- * el camino de todas las fases, así que sobre una Semana 0 que ya las tiene no agrega nada.
- *
- * Las tareas del AGENTE salen marcadas con `fuga` (`marcarFugas`, contra las huellas del material
- * que leyó): la curación avisa si un título o una nota cruzan la frontera. Las fijas de la Semana 0
- * se suman después y no se marcan — son texto nuestro, no del modelo. Sin material, `huellas` no
- * está activa y ninguna sale marcada.
- */
-async function computeTimelineDetailPreview(
-  projectId: string,
-  analysisJson: unknown,
-  phaseId: string,
-  huellas: HuellasDeFrontera | null,
-): Promise<ComputedDetailTask[]> {
-  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
-  if (!Array.isArray(detailRaw)) return [];
-  const phases = await prisma.timelinePhase.findMany({
-    where: { timeline: { projectId } },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true, order: true, durationWeeks: true, activityType: true },
-  });
-  const phase = phases.find((p) => p.id === phaseId);
-  if (!phase) return [];
-  const raw = detailRaw.find(
-    (r) => r && typeof r === "object" && (r as Record<string, unknown>).id === phaseId,
-  ) as Record<string, unknown> | undefined;
-  const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
-  const tasks: ComputedDetailTask[] = marcarFugas(
-    computeDetailTasksForPhase(
-      phase.name,
-      phase.durationWeeks,
-      phase.activityType ?? activityTypePropuesto(raw),
-      tasksRaw,
-    ),
-    huellas ?? huellasDeFrontera([]),
-  );
-  const kickoff = elegirFaseDeSemanaCero(phases);
-  if (kickoff && kickoff.id === phaseId) {
-    tasks.push(
-      ...(await fijasDeSemanaCeroParaPreview(projectId, phaseId, tasks.filter((t) => t.weekIndex === 0).length)),
-    );
-  }
-  return tasks;
-}
-
-/**
- * PREVIEW del detalle para TODAS las fases: una entrada por fase EXISTENTE (orden real del
- * timeline, no el del JSON del agente) — las fases sin propuesta vuelven con tasks:[] para que el
- * CSE también las vea en el acordeón («sin cambios»). SIN escribir nada.
- *
- * Es el camino de la PRIMERA generación (desde 2026-08-16) y el de «Regenerar todo el
- * cronograma». Por eso acarrea dos cosas que antes solo sabía hacer el camino que escribía: las
- * tareas fijas de la Semana 0 y el tipo de actividad propuesto por fase. Las del agente salen
- * marcadas con `fuga`, igual que en el preview de una fase.
- */
-async function computeTimelineDetailPreviewAllPhases(
-  projectId: string,
-  analysisJson: unknown,
-  huellas: HuellasDeFrontera | null,
-): Promise<DetailPreviewPhase[]> {
-  const detailRaw = (analysisJson as { timelineDetail?: { phases?: unknown } } | null)?.timelineDetail?.phases;
-  const detailArr = Array.isArray(detailRaw) ? detailRaw : [];
-  const byId = new Map(
-    detailArr
-      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
-      .map((r) => [r.id as string, r]),
-  );
-  const phases = await prisma.timelinePhase.findMany({
-    where: { timeline: { projectId } },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true, order: true, durationWeeks: true, activityType: true },
-  });
-  const kickoff = elegirFaseDeSemanaCero(phases);
-  const out: DetailPreviewPhase[] = [];
-  for (const phase of phases) {
-    const raw = byId.get(phase.id);
-    const tasksRaw = Array.isArray(raw?.tasks) ? (raw!.tasks as unknown[]) : [];
-    const propuesto = activityTypePropuesto(raw);
-    const tasks: ComputedDetailTask[] = marcarFugas(
-      computeDetailTasksForPhase(
-        phase.name,
-        phase.durationWeeks,
-        phase.activityType ?? propuesto,
-        tasksRaw,
-      ),
-      huellas ?? huellasDeFrontera([]),
-    );
-    if (kickoff && kickoff.id === phase.id) {
-      tasks.push(
-        ...(await fijasDeSemanaCeroParaPreview(projectId, phase.id, tasks.filter((t) => t.weekIndex === 0).length)),
-      );
-    }
-    out.push({
-      phaseId: phase.id,
-      tasks,
-      // Solo-si-null: el tipo elegido a mano por el CSE manda sobre el que propone el modelo.
-      activityType: phase.activityType === null ? propuesto : null,
-    });
-  }
-  return out;
-}
+// ── D.1: el DETALLE del cronograma ─────────────────────────────────────────────
+// E2b (2026-09-25): se fueron las dos vistas previas en memoria (`computeTimelineDetailPreview`, de
+// una fase, y `computeTimelineDetailPreviewAllPhases`, de todas) con `fijasDeSemanaCeroParaPreview`.
+// Lo que armó el agente entra al borrador (lib/timeline/borrador-del-detalle.ts). Ahí viven las fugas,
+// las fijas de la Semana 0 (R7), el tipo de actividad (R6) y su vocabulario
+// (lib/timeline/tareas-del-detalle.ts).
 

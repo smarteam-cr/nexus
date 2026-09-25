@@ -75,7 +75,7 @@ export default function TimelineProposalPendiente({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-warn-ink">El cronograma tiene una propuesta sin decidir</p>
         <p className="mt-1 text-xs text-warn-ink/80 leading-relaxed">
-          La IA propuso cambios del cronograma (del handoff o de «Regenerar todo»); el cliente sigue
+          La IA propuso cambios del cronograma (del handoff o de «Regenerar»); el cliente sigue
           viendo el cronograma actual hasta que alguien la aplique o la descarte.
         </p>
       </div>

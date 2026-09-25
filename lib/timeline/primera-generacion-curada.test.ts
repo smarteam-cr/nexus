@@ -38,6 +38,9 @@ function soloCodigo(rel: string): string {
 }
 
 const RUTA_AGENTE = "app/api/clients/[id]/analyze/route.ts";
+// E2b P5a: las fijas de la Semana 0 (R7) y el tipo de actividad (R6) viven en el borrador del detalle.
+const RUTA_DETALLE = "lib/timeline/tareas-del-detalle.ts";
+const RUTA_FUSION = "lib/timeline/borrador-del-detalle.ts";
 const RUTA_APPLY = "app/api/projects/[projectId]/timeline/detail/apply-all/route.ts";
 const GUARDS = "lib/auth/api-guards.ts";
 
@@ -65,27 +68,48 @@ describe("⛔ el agente de detalle no escribe ni una tarea", () => {
     const tramo = src.slice(i, src.indexOf("updateCanvasAsync", i));
     expect(tramo.length, "el tramo salió vacío — la guarda no está mirando nada").toBeGreaterThan(300);
     expect(tramo, "la propuesta volvió a depender de una bandera del cliente").not.toContain("previewOnly");
-    expect(tramo).toContain("computeTimelineDetailPreviewAllPhases(");
+    /* ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía la vista previa de todas las fases
+       (`computeTimelineDetailPreviewAllPhases`), que se borró con la de una fase. Lo que armó el agente
+       entra al borrador: la salida del detalle es la fusión. Sacarla (o volver a una vista previa que
+       la pantalla aplique por su cuenta) la pone en rojo. */
+    expect(tramo).toContain("fusionarDetalleEnElBorrador(");
+    expect(tramo, "volvió una vista previa del detalle").not.toContain("computeTimelineDetailPreview");
   });
 });
 
 describe("⛔ lo que el camino viejo hacía y la curación tuvo que aprender", () => {
   const src = soloCodigo(RUTA_AGENTE);
 
-  it("⭐ los DOS previews siembran las tareas fijas de la Semana 0", () => {
-    /* Dos call sites: el de una fase y el de todas. Con uno solo, la primera generación (que usa
-       el de todas) o el regen de la Semana 0 se quedarían sin las cinco, en silencio. */
-    /* `await` y no el nombre pelado: sin eso la DECLARACIÓN de la función cuenta como una
-       llamada y la guarda pasa en verde con un solo preview sembrando. Lo cazó ella misma. */
-    const llamadas = src.match(/await fijasDeSemanaCeroParaPreview\(/g) ?? [];
-    expect(llamadas.length, "un preview dejó de sembrar las tareas fijas").toBe(2);
+  it("⭐ el borrador siembra las tareas fijas de la Semana 0 (R7), con una fase o con todas", () => {
+    /* ⚠ REAPUNTADA en E2b P5a (2026-09-25), con esta razón: contaba las DOS llamadas de las vistas
+       previas de analyze (`fijasDeSemanaCeroParaPreview`, la de una fase y la de todas), que se
+       borraron. La garantía vive en R7 de lib/timeline/tareas-del-detalle.ts, el único camino de las
+       dos puertas y de «Regenerar» de una fase (el alcance deja pasar la fase del arranque; su
+       conducta, en tareas-del-detalle.test.ts). La edición que la pone en rojo: sacar la siembra, no
+       elegir la fase del arranque, o dejar de pasarle los tags del proyecto a la fusión. */
+    const detalle = soloCodigo(RUTA_DETALLE);
+    expect(detalle).toContain("const semanaCero = elegirFaseDeSemanaCero(");
+    const iR7 = detalle.indexOf("if (semanaCero && semanaCero.id === f.id) {");
+    expect(iR7, "R7 dejó de mirar la fase del arranque").toBeGreaterThan(-1);
+    expect(detalle.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base)) {", iR7), "R7 dejó de sembrar las fijas").toBeGreaterThan(iR7);
+    expect(soloCodigo(RUTA_FUSION), "la fusión dejó de pasar los tags (sin ellos no hay fijas)").toContain(
+      "tags: sanitizeTags(tl.project?.tags ?? []),",
+    );
+    expect(src, "volvió la siembra de la vista previa vieja").not.toContain("fijasDeSemanaCeroParaPreview");
   });
 
-  it("y el preview acarrea el activityType propuesto", () => {
-    expect(src).toContain("activityTypePropuesto(");
-    expect(src, "el preview dejó de devolver el tipo de actividad").toMatch(
-      /activityType:\s*phase\.activityType === null \? propuesto : null/,
+  it("y el borrador propone el tipo de actividad solo si la fase no tiene uno (R6)", () => {
+    /* ⚠ REAPUNTADA en E2b P5a (2026-09-25), con esta razón: miraba la vista previa de todas las fases
+       de analyze (`activityType: phase.activityType === null ? propuesto : null`), que se borró. El tipo
+       ahora lo propone R6 de lib/timeline/tareas-del-detalle.ts, con la misma regla: solo si la fase no
+       tiene uno (el elegido a mano manda). La edición que la pone en rojo: dejar de proponerlo, o
+       proponerlo sobre un tipo elegido a mano. */
+    const detalle = soloCodigo(RUTA_DETALLE);
+    expect(detalle).toContain("const tipoPropuesto = activityTypePropuesto(raw);");
+    expect(detalle, "R6 pasó a pisar el tipo elegido a mano").toMatch(
+      /if \(viva && viva\.activityType === null && !conTipoEnElBorrador\.has\(f\.id\)\) \{/,
     );
+    expect(src, "analyze volvió a proponer el tipo por su cuenta").not.toContain("activityTypePropuesto(");
   });
 
   it("⚠ el apply escribe el tipo SOLO si la fase no tiene uno", () => {

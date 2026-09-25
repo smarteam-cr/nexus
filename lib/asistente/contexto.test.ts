@@ -459,7 +459,9 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        pone en rojo: volver a decirle al modelo que lo abierto son solo «cambios de fases» (le haría
        creer que las tareas se pueden tocar), o alargarla hasta comerse el techo del prefijo. */
     expect(linea).toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
-    expect(linea).toContain("«Regenerar todo» con fases y tareas");
+    /* ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía «Regenerar todo». Desde E2b también
+       «Regenerar» de UNA fase deja una propuesta con tareas, así que la línea nombra a los dos. */
+    expect(linea).toContain("«Regenerar» con fases y tareas");
     expect(linea, "la línea vuelve a hablar solo de fases").not.toMatch(/cambios de fases/i);
     expect(linea.length).toBeLessThan(420);
     /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: pedía

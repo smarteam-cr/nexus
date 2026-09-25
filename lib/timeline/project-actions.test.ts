@@ -118,7 +118,9 @@ test("lo que reporta el equipo técnico entra al panel", () => {
 test("la propuesta pendiente dice que trae cambios del cronograma y qué no se toca", () => {
   const p = buildProjectActions({ ...sano, pendingProposal: true }).find((x) => x.id === "draft-proposal")!;
   expect(p.title).toBe("La IA propone cambios del cronograma");
-  expect(p.why).toContain("«Regenerar todo»");
+  // ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía «Regenerar todo». Desde E2b también
+  // «Regenerar» de UNA fase deja una propuesta, así que el texto nombra a los dos.
+  expect(p.why).toContain("«Regenerar»");
   expect(p.why).toContain("lo que tiene avance o escribiste a mano no se toca");
   expect(p.why, "volvió a prometer que las tareas no se tocan").not.toMatch(/tareas y sus estados no se tocan/i);
   expect(p.cta).toBe("Revisar sugerencias");

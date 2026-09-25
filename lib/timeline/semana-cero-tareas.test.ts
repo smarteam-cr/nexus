@@ -166,24 +166,35 @@ describe("⛔ el dedup mira la GEMELA, no solo el título propio", () => {
   });
 });
 
-describe("⭐ y la ruta USA el helper — si no, el refactor es decorativo", () => {
+describe("⭐ y el detalle USA el helper — si no, el refactor es decorativo", () => {
+  const leerCodigo = (rel: string) =>
+    fs
+      .readFileSync(path.join(process.cwd(), rel), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
   const RUTA = "app/api/clients/[id]/analyze/route.ts";
-  const src = fs
-    .readFileSync(path.join(process.cwd(), RUTA), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/^\s*\/\/.*$/gm, " ");
+  const src = leerCodigo(RUTA);
+  /* ⚠ REAPUNTADA en E2b P5a (2026-09-25), con esta razón: pedía que analyze llamara al helper. Lo
+     llamaban solo sus dos vistas previas, que se borraron. Las fijas de la Semana 0 las siembra el
+     borrador del detalle (R7 de lib/timeline/tareas-del-detalle.ts), el único camino de las dos puertas
+     y de «Regenerar» de una fase. La edición que la pone en rojo: dejar de llamarlo ahí. */
+  const DETALLE = "lib/timeline/tareas-del-detalle.ts";
+  const detalle = leerCodigo(DETALLE);
 
   it("lo llama", () => {
-    expect(src).toContain("tareasFijasDeSemanaCero(");
+    expect(detalle).toContain("tareasFijasDeSemanaCero(");
   });
 
   it("⚠ y NO quedó una copia de la lista adentro de la ruta", () => {
     /* La regresión plausible: pegar de nuevo el array «por comodidad» y dejar el helper huérfano.
        Ahí vuelven a existir dos verdades y la que tiene tests deja de ser la que corre. */
-    expect(src, "volvió una copia de la lista adentro de la ruta").not.toContain(
-      "Proporcionar bases de datos a importar",
-    );
-    expect(src, "volvió la rama de tipo adentro de la ruta").not.toContain("esReimplementacion(tagsDelProyecto)");
+    for (const [rel, codigo] of [
+      [RUTA, src],
+      [DETALLE, detalle],
+    ]) {
+      expect(codigo, `volvió una copia de la lista en ${rel}`).not.toContain("Proporcionar bases de datos a importar");
+      expect(codigo, `volvió la rama de tipo en ${rel}`).not.toContain("esReimplementacion(tagsDelProyecto)");
+    }
   });
 });
 

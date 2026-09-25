@@ -152,7 +152,7 @@ export function buildProjectActions(i: ProjectActionsInput): ProjectAction[] {
     out.push({
       id: "draft-proposal", group: "decidir", tone: "info",
       title: "La IA propone cambios del cronograma",
-      why: "Salieron del handoff o de «Regenerar todo». La revisas arriba del Gantt, desmarcas lo que no va y la aplicas (o la descartas); lo que tiene avance o escribiste a mano no se toca.",
+      why: "Salieron del handoff o de «Regenerar». La revisas arriba del Gantt, desmarcas lo que no va y la aplicas (o la descartas); lo que tiene avance o escribiste a mano no se toca.",
       cta: "Revisar sugerencias",
     });
   }

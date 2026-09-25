@@ -27,12 +27,12 @@
  * ⚠ `needsValidation` NO se pinta acá (desde c29efc3b): la fila amber y el badge
  * «Por validar» se reemplazaron por la procedencia IA/CSE. La marca sigue en la
  * base —y desde 2026-09-23 la escriben también las tareas «por validar» que se
- * aplican desde la curación—: cuenta en la firmeza del baseline al publicar
+ * aplican desde la propuesta—: cuenta en la firmeza del baseline al publicar
  * (lib/timeline/baseline.ts; con más de la mitad marcadas queda WEAK y el portafolio
  * atenúa su alarma de alcance) y se limpia al editar el contenido de la tarea.
- * «Confirmar detalle» no la limpia. Donde el CSE la ve es en la curación
- * (PhaseRegenPanel), antes de aplicar. La marca nunca cruza al cliente (columna
- * excluida del mapper externo).
+ * «Confirmar detalle» no la limpia. Donde el CSE la ve es en la propuesta de arriba
+ * del Gantt (TareasDeLaPropuesta), antes de aplicar; desde E2b también en «Regenerar»
+ * de una fase. La marca nunca cruza al cliente (columna excluida del mapper externo).
  */
 
 import { useState, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";

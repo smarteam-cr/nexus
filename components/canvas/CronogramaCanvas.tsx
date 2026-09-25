@@ -20,9 +20,10 @@
  *
  * Generación inicial del detalle: agente "agent-timeline-detail" vía
  * POST /api/clients/[clientId]/analyze. Confirmación (gate de la vista
- * cliente): POST/DELETE /timeline/confirm-detail. Regeneración: el modal de
- * curación (por fase o "Regenerar todo el cronograma") — nunca un borrado previo:
- * el apply preserva las tareas con progreso, incluso si el payload las omite.
+ * cliente): POST/DELETE /timeline/confirm-detail. Regeneración («Regenerar todo»
+ * o «Regenerar» de una fase): deja UNA propuesta guardada que se revisa arriba del
+ * Gantt (lib/timeline/borrador.ts) — aplicar nunca toca lo que tiene avance ni lo
+ * escrito a mano.
  *
  * Render INTERNO (tema oscuro del panel de canvas), no el design system del Kickoff.
  */
@@ -74,6 +75,8 @@ import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   CHAT_CON_EL_VACIO_FALLIDO,
+  deDondeViene,
+  desdeDeLaPropuesta,
   desenlaceDelSeguimiento,
   esBorradorGuardado,
   esBorradorV1,
@@ -103,8 +106,8 @@ import ObservacionesDelPaso1 from "./ObservacionesDelPaso1";
 import { targetFor, ANCHORS } from "@/lib/timeline/project-action-targets";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
-import { PhaseRegenModal, type RegenProposedTask, type RegenCurrentTask, type FinalTask } from "./PhaseRegenModal";
-import { indexarTareasPorTitulo, avisoDeRepetida } from "@/lib/timeline/tarea-repetida";
+/* E2b (2026-09-25): se fue `PhaseRegenModal` (la curación de dos columnas de «Regenerar» de una fase).
+   Esa propuesta se revisa en la barra de arriba del Gantt, como las demás. */
 import {
   decidirRefrescoTrasHandoff,
   debeReemplazarPropuesta,
@@ -437,11 +440,9 @@ export default function CronogramaCanvas({
   // Confirmación de "Confirmar detalle" cuando se dispara desde el panel: el CTA ejecuta, pero
   // hacer que las tareas crucen al cliente merece un "¿seguro?" de por medio.
   const [confirmDetailOpen, setConfirmDetailOpen] = useState(false);
-  // Regen por fase → modal de curación: la fase en juego, la propuesta del preview, y los flags.
-  const [regenPhase, setRegenPhase] = useState<GanttPhase | null>(null);
-  const [regenPreview, setRegenPreview] = useState<RegenProposedTask[] | null>(null);
-  const [regenLoading, setRegenLoading] = useState(false);
-  const [regenApplying, setRegenApplying] = useState(false);
+  /* E2b (2026-09-25): se fueron `regenPhase`, `regenPreview`, `regenLoading` y `regenApplying`.
+     «Regenerar» de una fase ya no arma una vista previa en memoria: deja una propuesta guardada, y
+     su espera es `armando`, como la de «Regenerar todo». */
   /* E2a (2026-09-25): se fueron `allRegenPreview`, `allRegenModo`, `allRegenRunId`, `allRegenLoading`
      y `allRegenApplying`. El resultado de «Regenerar todo» ya no vive en la memoria de la pantalla
      (un acordeón aparte, aplicado con apply-all): queda en el servidor, en la MISMA propuesta que las
@@ -589,16 +590,10 @@ export default function CronogramaCanvas({
          su resultado vivía solo en la memoria de la pantalla (cambiar de pieza lo tiraba, y lo que el
          CSE tipeara en el medio lo pisaba el acordeón). Ahora queda en el servidor, en la propuesta:
          lo editado después de la propuesta CHOCA y queda fuera (el núcleo del borrador), y la espera
-         la dicen el chip del encabezado y la línea de arriba del Gantt (`armando`). */
-      regenLoading && regenPhase
-        ? /* «Regenerar» de UNA fase: su espera también va en la franja, no en una ventana encima
-             (2026-09-24). Antes era un modal propio; bloqueaba igual, pero tapaba el cronograma. */
-          {
-            activo: true,
-            rotulo: `Generando la propuesta para «${regenPhase.name}»`,
-            detalle: "El agente está revisando esa fase.",
-          }
-        : chainingProgress
+         la dicen el chip del encabezado y la línea de arriba del Gantt.
+         E2b (2026-09-25): «Regenerar» de UNA fase tampoco. Su resultado ya no es una vista previa en
+         memoria: es una propuesta guardada, con la misma espera y la misma protección. */
+      chainingProgress
           ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
           : applying
             ? {
@@ -1785,63 +1780,47 @@ export default function CronogramaCanvas({
     }
   };
 
-  // Regen POR FASE → modal de curación (D.1). Paso 1 PREVIEW: el agente de detalle genera la propuesta
-  // (con el handoff + el canvas Desarrollo) SIN persistir; abre el modal viejo↔nuevo.
-  const startRegenPreview = async (phase: GanttPhase) => {
+  /* ── «REGENERAR» DE UNA FASE (E2b del borrador, 2026-09-25) ─────────────────────────────────────
+     El mismo camino que el paso 2 de «Regenerar todo»: POST /analyze DETACHED con `borrador` sin token,
+     que nace como una propuesta vacía con `soloFase` y se llena con las tareas de ESA fase. Se revisa en
+     la barra de arriba del Gantt y se aplica con /borrador/aplicar. El alcance lo decide el servidor con
+     lo que guardó, no este pedido. Hasta E2b era una vista previa en memoria (un modal de dos columnas
+     aplicado por /timeline/phases/…/apply, sin token ni versión).
+     ⛔ Primero se espera el guardado: si un cambio de nombre o de semanas de la fase llega a la base
+     después de que la IA la leyó, todas sus tareas chocan. */
+  const pedirRegenerarFase = async (phase: GanttPhase) => {
     await flushDocBrief();
-    if (!phase.id) return;
-    setRegenPhase(phase);
-    setRegenPreview(null);
-    setRegenLoading(true);
+    if (!phase.id || proposal || armando !== null || ocupado.activo) return;
+    const sinGuardar = await esperarQueSeGuarde();
+    if (sinGuardar) {
+      toast.error(sinGuardar);
+      return;
+    }
+    setOfrecerTareas(false);
+    setArmando({ paso: 2, modo: "regen" });
     try {
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stage: 1, step: 0, stepLabel: "Regenerar fase", sectionLabel: "Regenerar fase",
-          agentId: "agent-timeline-detail", projectId, regeneratePhaseId: phase.id, preview: true,
+          agentId: "agent-timeline-detail", projectId, regeneratePhaseId: phase.id, async: true,
+          borrador: { token: null, version: null },
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.message ?? data?.error ?? "No se pudo generar la propuesta.");
-        setRegenPhase(null);
+      if (res.ok || res.status === 409) {
+        // La propuesta quedó «armando» (o ya había otra): se trae, y el seguimiento la toma.
+        if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();
+        if (!res.ok) toast.info(data?.message ?? AVISO_PROPUESTA_PENDIENTE);
       } else {
-        setRegenPreview(Array.isArray(data?.previewTasks) ? data.previewTasks : []);
+        toast.error(data?.message ?? data?.error ?? "No se pudo pedir la propuesta de esa fase.");
       }
     } catch {
-      toast.error("Error de conexión al generar la propuesta.");
-      setRegenPhase(null);
+      toast.error("Error de conexión al pedir la propuesta de esa fase.");
+    } finally {
+      setArmando(null);
     }
-    setRegenLoading(false);
-  };
-
-  // Paso 2 APLICAR: el set curado (columna derecha del modal) reemplaza la fase — status por tarea +
-  // parche de baseline (server-side).
-  const applyPhaseRegen = async (finalTasks: FinalTask[]) => {
-    const phase = regenPhase;
-    if (!phase?.id) return;
-    setRegenApplying(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline/phases/${phase.id}/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tasks: finalTasks, reason: `Regeneración curada de «${phase.name}»` }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error ?? data?.message ?? "No se pudo aplicar la fase.");
-      } else {
-        await load();
-        clearScope(undoScope);
-        toast.success(`Fase «${phase.name}» actualizada.`);
-        setRegenPhase(null);
-        setRegenPreview(null);
-      }
-    } catch {
-      toast.error("Error de conexión al aplicar la fase.");
-    }
-    setRegenApplying(false);
   };
 
 
@@ -2426,9 +2405,11 @@ export default function CronogramaCanvas({
      propuesta en pantalla, SALTANDO el paso 1. Solo con el permiso que el servidor va a exigir: la
      primera pasada pide `generate`; después, `regenerate`. Sin él la línea informa sin botón (revisión
      de E2a: se ofrecía y el servidor respondía 403, mientras que la oferta equivalente y «Regenerar
-     todo» ya se ocultaban). */
+     todo» ya se ocultaban).
+     E2b: nunca sobre «Regenerar» de una fase. Tomaría el token de ESA propuesta y armaría las tareas de
+     todo el cronograma (una corrida pagada que nadie pidió): sin botón, la línea solo informa. */
   const armarLasTareas =
-    (revision.borrador?.pedido === "primera" ? canGenerateTimeline : canRegenerateTimeline)
+    !revision.borrador?.soloFase && (revision.borrador?.pedido === "primera" ? canGenerateTimeline : canRegenerateTimeline)
       ? () =>
           void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", {
             saltarEstructura: true,
@@ -4093,6 +4074,7 @@ export default function CronogramaCanvas({
               onMarcarVarios={revision.marcarVarios}
               onAplicar={() => void aplicarBorrador()}
               onDescartar={() => void discardProposal()}
+              desde={desdeDeLaPropuesta(deDondeViene(proposal))}
               tareas={tareasDeLaBarra}
               onArmarTareas={armarLasTareas}
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}
@@ -4133,12 +4115,12 @@ export default function CronogramaCanvas({
             }
             onRegeneratePhase={
               // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
-              // regenerar (cronograma.regenerate). El server además exige sin-publicar / sin-avance.
-              // En la vista de la propuesta, no: esa fila todavía no existe como se ve.
-              // E2a: con una propuesta abierta, tampoco: hay UN borrador por proyecto, y lo que
-              // «Regenerar» aplicara a esa fase quedaría debajo de la propuesta (el servidor responde 409).
-              hasAiDetail && canRegenerateTimeline && !verPropuesta && !hayBorrador
-                ? (phase) => void startRegenPreview(phase)
+              // regenerar (cronograma.regenerate).
+              // Con una propuesta en pantalla, no: hay UN borrador por proyecto (el servidor responde
+              // 409). Sin propuesta tampoco hay vista de la propuesta. E2b: ni mientras esta pantalla
+              // ya pide algo (`armando`): sería una segunda corrida pagada.
+              hasAiDetail && canRegenerateTimeline && !proposal && armando === null
+                ? (phase) => void pedirRegenerarFase(phase)
                 : undefined
             }
             onOpenTask={(pk, tk) => setSelectedTask({ phaseKey: pk, taskKey: tk })}
@@ -4235,42 +4217,10 @@ export default function CronogramaCanvas({
         onCancel={() => setConfirmDetailOpen(false)}
       />
 
-      {/* Regen POR FASE → modal de curación viejo↔nuevo. Paso 1: la espera del preview la dice la
-          franja de `ocupado`, arriba del cronograma (ya no una ventana encima). */}
-      {/* Paso 2: el modal de dos columnas (actuales vs propuesta) para definir cómo queda la fase. */}
-      {regenPhase && regenPreview && (() => {
-        const src = phases.find((p) => p.id === regenPhase.id);
-        const current: RegenCurrentTask[] = (src?.tasks ?? [])
-          .filter((t) => t.id)
-          .map((t) => ({
-            id: t.id as string, title: t.title, weekIndex: t.weekIndex,
-            party: t.party ?? null, type: t.type ?? null, status: t.status,
-            source: t.source ?? null, notes: t.notes ?? null,
-          }));
-        /* El regen POR FASE solo conoce su fase, así que el índice cross-fase se arma acá —
-           es el único punto con todas las fases a la vista. Sin esto, el aviso de "esta tarea
-           ya existe en otra fase" andaría en "Regenerar todo" y no acá. */
-        const indice = indexarTareasPorTitulo(
-          phases.filter((p) => p.id).map((p) => ({
-            phaseId: p.id as string,
-            phaseName: p.name,
-            current: (p.tasks ?? []).filter((t) => t.id).map((t) => ({ title: t.title, status: t.status })),
-          })),
-        );
-        return (
-          <PhaseRegenModal
-            open
-            phaseName={regenPhase.name}
-            durationWeeks={regenPhase.durationWeeks}
-            current={current}
-            proposed={regenPreview}
-            applying={regenApplying}
-            avisoRepetida={(titulo) => avisoDeRepetida(titulo, regenPhase.id ?? "", indice)}
-            onCancel={() => { setRegenPhase(null); setRegenPreview(null); }}
-            onApply={applyPhaseRegen}
-          />
-        );
-      })()}
+      {/* E2b (2026-09-25): «Regenerar» de una fase abría acá su modal de dos columnas
+          (`PhaseRegenModal`), armado en memoria con la vista previa. Ahora deja una propuesta
+          guardada que se revisa en la barra de arriba del Gantt; el aviso de «esta tarea ya existe en
+          otra fase» sale del núcleo del borrador (`resumir`). */}
 
       {/* Tanda N — "Regenerar todo el cronograma" abría acá su acordeón de dos columnas
           (`AllPhasesRegenModal`), armado en memoria con el resultado del paso 2. Desde E2a

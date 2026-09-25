@@ -306,9 +306,15 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
         `«${estado}» dejó de bloquear el cronograma`,
       ).toBe(true);
     }
-    /* El «Regenerar» de UNA fase entró al estado único el 2026-09-24, cuando su ventana de espera se
-       fue (ver la guarda de abajo): sin esta rama la espera no bloquearía ni se diría. */
-    expect(/\bregenLoading && regenPhase\s*\?/.test(bloque), "«Regenerar» de una fase dejó de bloquear").toBe(true);
+    /* ⚠ REESCRITA AL REVÉS en E2b P5a (2026-09-25), con esta razón: pedía la rama
+       `regenLoading && regenPhase ?` (el «Regenerar» de UNA fase bloqueaba mientras esperaba su vista
+       previa en memoria). Ahora esa espera es `armando`, la misma de «Regenerar todo»: deja una
+       propuesta guardada, lo editado en el medio choca y queda fuera, y la espera la dicen el chip y la
+       línea de arriba del Gantt. Ninguna espera de la IA bloquea. La edición que la pone en rojo: volver
+       a bloquear el cronograma mientras se arma una propuesta (de una fase o de todas). */
+    expect(bloque.length, "la guarda no está mirando el estado de ocupado").toBeGreaterThan(300);
+    expect(/\barmando\b/.test(bloque), "la espera de una propuesta volvió a bloquear el cronograma").toBe(false);
+    expect(bloque, "volvió la espera vieja de «Regenerar» de una fase").not.toMatch(/\bregen(Loading|Phase)\b/);
   });
 
   it("⭐ las esperas de la IA NO abren una ventana encima: el aviso va arriba del cronograma", () => {

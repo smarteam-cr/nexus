@@ -427,7 +427,8 @@ test("las instrucciones tipeadas viajan al generar: el flush del paso 0 (auditor
      await flushDocBrief() de cualquiera de las DOS que quedan.
      ⚠ Eran tres. Desde 2026-08-16 la primera generación y «Regenerar todo el cronograma» son la
      MISMA función (pedirPropuestaDeDetalle): las dos piden una propuesta que el CSE cura, así que
-     comparten un solo flush. La otra es startRegenPreview (el regen por fase). Bajar este número
+     comparten un solo flush. La otra es pedirRegenerarFase (el regen por fase; hasta E2b,
+     startRegenPreview). Bajar este número
      sin ese motivo escrito sería tapar que una corrida perdió las instrucciones del CSE. */
   const src = fs.readFileSync(
     path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),

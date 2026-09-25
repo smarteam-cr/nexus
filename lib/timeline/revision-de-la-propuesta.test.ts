@@ -677,6 +677,14 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        (`encadenado && delContexto && !esV1`), que solo iba en una propuesta vieja de las reuniones. La
        cadena se fue con su prop: la barra no sabe de `encadenado` ni pinta la chapa. */
     expect(contiene(BARRA, "{tituloDeLaBarra(resumen)}")).toBe(true);
+    /* E2b P5a (2026-09-25): de dónde viene lo dice `desde`, con UNA clasificación (`deDondeViene`, que
+       se prueba en borrador.test.ts). La barra decía «desde el último handoff» para todo lo que no era
+       «contexto»: ya era falso con la regla del handoff, y lo sería para «Regenerar» de una fase. La
+       edición que la pone en rojo: volver al texto fijo, o que el Canvas arme `desde` por su cuenta. */
+    expect(contiene(BARRA, '<span className="text-xs text-fg-muted">{desde}</span>'), "la barra no dice de dónde viene").toBe(true);
+    expect(BARRA, "volvió el texto fijo del origen").not.toContain("desde el último handoff");
+    expect(BARRA).not.toContain("delContexto");
+    expect(contiene(rama, "desde={desdeDeLaPropuesta(deDondeViene(proposal))}"), "el Canvas no le dice a la barra de dónde viene").toBe(true);
     expect(contiene(BARRA, 'const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;')).toBe(true);
     expect(contiene(tramo(BARRA, "{lineaDeTareas && (", "/>"), "onAccion={onArmarTareas}")).toBe(true);
     expect(BARRA, "volvió la prop de la cadena vieja").not.toMatch(/\bencadenado\b/);
@@ -710,6 +718,14 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
       "«Armar las tareas» / «Volver a intentar» no piden el paso 2 sobre la propuesta, o se ofrecen sin permiso",
     ).toBe(true);
     expect(contiene(rama, "onArmarTareas={armarLasTareas}")).toBe(true);
+    /* E2b P5a (2026-09-25): con «Regenerar» de una fase en pantalla (`soloFase`) no hay «Armar las
+       tareas» ni «Volver a intentar», ni en la barra ni en la línea (las dos usan `armarLasTareas`). Si
+       no, tomaría el token de ESA propuesta y armaría las tareas de todo el cronograma: una corrida
+       pagada que nadie pidió. La edición que la pone en rojo: sacar la condición de `soloFase`. */
+    expect(
+      contiene(armar, 'const armarLasTareas = !revision.borrador?.soloFase && (revision.borrador?.pedido === "primera"'),
+      "«Volver a intentar» de una fase arma las tareas de todo el cronograma",
+    ).toBe(true);
     /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la línea suelta suma el estado «ofrecer»
        (sin propuesta: pide el paso 2 sin token). En los demás estados sigue siendo `armarLasTareas`. */
     expect(
@@ -816,8 +832,19 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
 
   it("con una propuesta abierta, «Regenerar» de una fase no se ofrece (un borrador por proyecto)", () => {
     /* La edición que la pone en rojo: volver a ofrecerlo con la propuesta abierta (su aplicar
-       escribiría tareas debajo de ella; el servidor lo frena con 409, pero después de pagar la corrida). */
-    expect(rama).toMatch(/onRegeneratePhase=\{\s*hasAiDetail && canRegenerateTimeline && !verPropuesta && !hayBorrador\s*\?/);
+       escribiría tareas debajo de ella; el servidor lo frena con 409, pero después de pagar la corrida).
+       ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía `!verPropuesta && !hayBorrador` y
+       abría el modal viejo (`startRegenPreview`). Ahora pide `pedirRegenerarFase` (una propuesta más),
+       frena con CUALQUIER propuesta en pantalla (`!proposal`, que ya implica `!verPropuesta`) y
+       mientras esta pantalla ya pide algo (`armando === null`: si no, sería una segunda corrida pagada).
+       Ofrecerlo con una propuesta en pantalla o mientras se pide otra la pone en rojo. */
+    expect(
+      contiene(
+        rama,
+        "onRegeneratePhase={ hasAiDetail && canRegenerateTimeline && !proposal && armando === null ? (phase) => void pedirRegenerarFase(phase) : undefined }",
+      ),
+      "«Regenerar» de una fase se ofrece con una propuesta en pantalla o mientras esta pantalla ya pide algo",
+    ).toBe(true);
   });
 
   it("los componentes nuevos de las tareas: solo tokens del tema (info = en curso, success = se crea, warn = se quita o choca)", () => {

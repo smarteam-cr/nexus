@@ -635,13 +635,16 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   const src = soloCodigo(leer("components/canvas/CronogramaCanvas.tsx"));
   /* ⚠ Si falta un marcador, TIRA con su nombre (revisión de E1, 2026-09-24): antes devolvía "" sin
      el de inicio y, sin el de fin, `slice(i, -1)` leía hasta el final del archivo sin avisar, así que
-     una negación sobre el tramo podía pasar mirando otra cosa. */
+     una negación sobre el tramo podía pasar mirando otra cosa.
+     ⚠ ACTUALIZADOS en E2b P5a (2026-09-25), con esta razón: los 8 tramos de `pedirPropuestaDeDetalle`
+     de este archivo terminaban en `const startRegenPreview`. Esa función se reemplazó en el MISMO lugar
+     por `pedirRegenerarFase`, así que el fin del tramo es el mismo punto con otro nombre. */
   const tramo = (desde: string, hasta: string) => tramoDe(src, desde, hasta);
 
   it("pedirPropuestaDeDetalle pide la estructura ANTES del detalle, salvo en la continuación", () => {
     /* La edición que la pone en rojo: que la continuación no salte el paso 1 (re-propondría fases
        en bucle), o que el detalle salga antes de revisar la estructura. */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     expect(pedir.length).toBeGreaterThan(1000);
     const iEstructura = pedir.indexOf("/timeline/estructura");
     const iAnalyze = pedir.indexOf("/analyze");
@@ -689,7 +692,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
        enseguida, con su token en `proposalMeta`), o null. La edición que la pone en rojo: mandar el
        token de otra propuesta (o de la vista previa del modificador), una versión que no es la que se
        ve, o mostrar la propuesta del paso 1 sin su token. */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
     expect(continuacion).toContain("if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {");
     expect(continuacion).toContain("token = proposalMeta.current.runId;");
@@ -732,6 +735,34 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(leer("components/canvas/CronogramaCanvas.tsx").match(/await flushDocBrief\(\);/g)?.length).toBe(2);
     expect(src).toContain('pedirPropuestaDeDetalle("primera")');
     expect(src).toContain('pedirPropuestaDeDetalle("regen")');
+  });
+
+  it("E2b P5a · «Regenerar» de una fase deja una propuesta como las demás: espera el guardado y va detached", () => {
+    /* Hasta E2b pedía una vista previa SÍNCRONA (`preview: true`) sin esperar el autoguardado, y la
+       curaba en un modal. Ahora pide lo mismo que el paso 2 de «Regenerar todo»: una propuesta sin
+       token que nace con `soloFase`, detached. El guardado se espera ANTES: si un cambio de nombre o
+       de semanas de la fase llega a la base después de que la IA la leyó, todas sus tareas chocan.
+       Las ediciones que la ponen en rojo: volver al pedido síncrono con `preview: true`, no esperar el
+       guardado (o esperarlo después del pedido), no mandar el borrador, pedir con una propuesta en
+       pantalla o mientras esta pantalla ya pide algo, o no soltar `armando`. */
+    const fase = tramo("const pedirRegenerarFase = async (", "const submitAssist = async (");
+    expect(fase.length, "la guarda no está mirando la función").toBeGreaterThan(800);
+    const iFlush = fase.indexOf("await flushDocBrief();");
+    const iFreno = fase.indexOf("if (!phase.id || proposal || armando !== null");
+    const iGuardado = fase.indexOf("await esperarQueSeGuarde()");
+    const iPedido = fase.indexOf("/analyze");
+    expect(iFlush, "no manda las instrucciones tipeadas").toBeGreaterThan(-1);
+    expect(iFreno, "pide con una propuesta en pantalla o mientras esta pantalla ya pide algo").toBeGreaterThan(iFlush);
+    expect(iGuardado, "no espera el guardado").toBeGreaterThan(iFreno);
+    expect(iPedido, "pide antes de esperar el guardado").toBeGreaterThan(iGuardado);
+    const pedido = fase.slice(iPedido, fase.indexOf("});", iPedido));
+    expect(pedido).toContain("regeneratePhaseId: phase.id,");
+    expect(pedido, "volvió el pedido síncrono (el resultado moría con la pestaña)").toContain("async: true,");
+    expect(pedido, "no pide una propuesta").toContain("borrador: { token: null, version: null },");
+    expect(fase, "volvió la vista previa").not.toMatch(/\bpreview\b/);
+    expect(fase.indexOf('setArmando({ paso: 2, modo: "regen" });'), "la espera no se dice").toBeGreaterThan(iGuardado);
+    expect(fase, "no trae la propuesta «armando»").toContain("if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();");
+    expect(fase, "`armando` no se suelta al terminar el pedido").toMatch(/finally \{\s*setArmando\(null\);\s*\}/);
   });
 
   it("⛔ el chat no aplica con cambios de fases sin decidir (el PUT borraría la propuesta)", () => {
@@ -923,7 +954,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
        lo mismo —sin material, ni el cartel ni el rótulo— con la condición verdadera. La edición que
        la pone en rojo: mostrar el cartel o el rótulo sin mirar `materialElegido`, o no conectar el
        aviso de la sección. */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     expect(pedir, "volvió el reloj: el cartel no depende de lo elegido").not.toMatch(/setTimeout\([^)]*Paso1/);
     /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió que el aviso no salga en una ventana
        encima («que no esté en un modal o pop-up») sino en el cronograma. Antes había DOS lugares que
@@ -1017,7 +1048,7 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   it("la pantalla lee lo acordado que no entró de la respuesta «sin-cambios» (revisión del paso A2)", () => {
     /* Sin esto el aviso diría «tus reuniones no piden cambios» junto a una observación que dice que
        sí los pidieron. La edición que la pone en rojo: dejar de pasar el campo a `pasoTrasEstructura`. */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     expect(pedir).toContain("acordadoSinEntrar: d?.acordadoSinEntrar");
   });
 });
@@ -1033,7 +1064,7 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   it("#1 · el paso 1 espera el autoguardado EN VUELO (y lo que quedó sin mandar) antes de leer la base", () => {
     /* La edición que la pone en rojo: volver a `if (dirty && !saving) await autoSave();` (con un PUT
        en curso no esperaba nada), o que `autoSave` deje de devolver el guardado en vuelo. */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const iEspera = pedir.indexOf("await esperarQueSeGuarde()");
     expect(iEspera, "el paso 1 no espera el guardado").toBeGreaterThan(-1);
     expect(iEspera).toBeLessThan(pedir.indexOf("/timeline/estructura"));
@@ -1050,7 +1081,7 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
 
   it("#8 · un 409 del paso 1 NO arma el detalle pago: trae la propuesta y espera a que se decida", () => {
     /* La edición que la pone en rojo: seguir hasta `/analyze` en la rama «decidir». */
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const iDecidir = pedir.indexOf('if (paso.paso === "decidir") {');
     expect(iDecidir).toBeGreaterThan(-1);
     const rama = pedir.slice(iDecidir, pedir.indexOf("return;", iDecidir));
@@ -1182,7 +1213,7 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(leerPedidoDeTareas({ token: null, version: null, observaciones: muchas }), "la ruta rechazaría el pedido entero").not.toBe(
       "invalido",
     );
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const sinToken = tramoDe(pedir, "if (paso.token) {", "if (paso.aviso)");
     expect(sinToken, "lo que notó el paso 1 no viaja en el pedido").toContain(
       "observacionesDelPaso1 = observacionesParaElPaso2(estructura.observaciones);",
@@ -1238,7 +1269,7 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
       /franjaCerradaPara === proposalMeta\.current\.runId \? \[\] : \(proposal\?\.observaciones \?\? \[\]\)/,
     );
     // (b) La continuación sin propuesta en pantalla manda lo que muestra la franja.
-    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
+    const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
     expect(continuacion, "la oferta de las tareas deja afuera lo que notó el paso 1").toContain(
       "if (token === null) observacionesDelPaso1 = observacionesParaElPaso2(observacionesDeLaFranjaEnPantalla);",
@@ -1255,6 +1286,14 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(canvas).not.toContain("applyAllRegen");
     expect(canvas).not.toContain("detail/apply-all");
     expect(fs.existsSync(path.join(RAIZ, "components/canvas/AllPhasesRegenModal.tsx"))).toBe(true);
+    /* E2b P5a (2026-09-25): el modal de «Regenerar» de una fase corre la misma suerte. Su vista previa
+       vivía en memoria y se aplicaba por /timeline/phases/…/apply (hoy una lápida 409), sin token ni
+       versión. La edición que la pone en rojo: volver a crear el archivo, volver a aplicar por esa ruta
+       o volver a guardar la vista previa en la pantalla. */
+    expect(fs.existsSync(path.join(RAIZ, "components/canvas/PhaseRegenModal.tsx")), "volvió el modal de una fase").toBe(false);
+    expect(canvas, "el Canvas vuelve a aplicar una fase por su ruta vieja").not.toContain("/timeline/phases/");
+    expect(canvas).not.toContain("applyPhaseRegen");
+    expect(canvas).not.toContain("regenPreview");
   });
 
   it("#22 · la corrida fallida guarda la frase de la pantalla, no el crudo del SDK", () => {
