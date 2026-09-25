@@ -10,7 +10,8 @@
  *     sin: string[],          ← las claves que desmarcó (viven en la memoria de la pantalla)
  *     huella: string,         ← la del plan que vio (`planDeAplicacion`, lib/timeline/borrador.ts)
  *     foto?: { ancla, fases }, ← la foto contra la que la pantalla convirtió el formato viejo
- *     version?: number | null } ← la versión del borrador que vio (sin ella, una pestaña vieja: como E1)
+ *     version?: number | null, ← la versión del borrador que vio (sin ella, una pestaña vieja: como E1)
+ *     forzar?: string[] }     ← E2c: las fases desfasadas que aplica sin recalcular («Aplicar de todos modos»)
  *
  * ⭐ El que decide es el servidor: dentro de UNA transacción (lib/timeline/escribir-estructura.ts)
  * escribe primero el token condicionado, lee lo vivo (fases y tareas), recalcula el plan con la MISMA
@@ -31,11 +32,12 @@ import {
   deDondeViene,
   esBorradorV1,
   leerFoto,
+  nombresEnTexto,
   traeCambiosDeTareas,
   versionDelBorrador,
   type DeDondeViene,
 } from "@/lib/timeline/borrador";
-import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
+import { leerEstadoDeLasTareas, MENSAJE_TAREAS_EN_CURSO } from "@/lib/timeline/borrador-del-detalle";
 import {
   aplicarBorradorEnTx,
   ErrorAlAplicar,
@@ -106,10 +108,21 @@ export async function POST(
   ) {
     return NextResponse.json({ error: "`version` tiene que ser la versión de la propuesta que revisaste." }, { status: 400 });
   }
+  /* E2c: las fases desfasadas que el CSE fuerza («Aplicar de todos modos»), con techo. Ausente (una
+     pestaña de antes) = ninguna. */
+  const forzarValido =
+    body.forzar === undefined ||
+    (Array.isArray(body.forzar) &&
+      body.forzar.length <= 200 &&
+      body.forzar.every((f) => typeof f === "string" && f.length >= 1 && f.length <= 200));
+  if (!forzarValido) {
+    return NextResponse.json({ error: "`forzar` tiene que ser la lista de fases que aplicas sin recalcular." }, { status: 400 });
+  }
   const token = body.token === "" ? null : (body.token as string | null);
   const sin = body.sin as string[];
   const huella = body.huella;
   const version = typeof body.version === "number" ? body.version : null;
+  const forzar = (body.forzar ?? []) as string[];
 
   const tl = await prisma.projectTimeline.findUnique({
     where: { projectId },
@@ -131,6 +144,11 @@ export async function POST(
      de generarlas con IA (`guardIaDelCronograma`): el que no podía pedirlas tampoco las escribe.
      Sin tareas en la propuesta, no se pregunta. */
   const estadoDeTareas = await leerEstadoDeLasTareas(tl.pendingProposal);
+  /* E2c: forzar mientras el recálculo corre aplicaría tareas armadas para otra forma cuando las
+     buenas están por llegar: 409, sin abrir la transacción. */
+  if (forzar.length > 0 && estadoDeTareas?.recalculo?.estado === "armando") {
+    return NextResponse.json({ error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO }, { status: 409 });
+  }
   const puedeTocarTareas = traeCambiosDeTareas(tl.pendingProposal) ? (await guardIaDelCronograma(tl.id)) === null : true;
 
   const ahora = new Date();
@@ -149,6 +167,7 @@ export async function POST(
           tareas: estadoDeTareas?.estado ?? null,
           puedeTocarTareas,
           actorEmail: guard.user.email ?? null,
+          forzar,
         }),
       /* El techo de apply-all (el camino que esto reemplaza para «Regenerar todo»): escribe también
          las tareas. Riesgo P2028 en Wherex: se mide con borrador-aplicar.int.test.ts. */
@@ -172,6 +191,10 @@ export async function POST(
      «Regenerar» de una fase (pedido «regenerar») quedaba auditada como «Regenerar todo». */
   const deDonde = razonDeDonde(deDondeViene(r.borrador));
   const { creadas: tareasNuevas, borradas: tareasQueSeVan } = r.tareas;
+  /* E2c: las fases cuyas tareas se aplicaron sin recalcular («Aplicar de todos modos») quedan dichas.
+     Defensivo: la auditoría es best-effort y un plan sin la lista no la tiene que tirar. */
+  const forzadas = r.plan.forzadas ?? [];
+  const sinRecalcular = forzadas.length > 0 ? ` Sin recalcular: ${nombresEnTexto(forzadas.map((f) => f.nombre))}.` : "";
   const nuevasEnTexto = `${tareasNuevas} ${tareasNuevas === 1 ? "tarea nueva" : "tareas nuevas"}`;
   const deTareas =
     tareasNuevas > 0 && tareasQueSeVan > 0
@@ -210,6 +233,7 @@ export async function POST(
           (fuera > 0 ? ` (${fuera} ${fuera === 1 ? "quedó fuera" : "quedaron fuera"})` : "") +
           deTareas +
           "." +
+          sinRecalcular +
           (corrimiento ? ` ${corrimiento}` : ""),
         kind: "AI_ASSIST",
         instruction: null,

@@ -21,6 +21,13 @@
  *      y la corrida lo dice.
  * Todas las escrituras de `projectTimeline` del paso 2 viven acá: la ruta no escribe el borrador
  * (lo vigila borrador-rutas.test.ts). Nada toca tareas del cronograma: eso es solo al aplicar.
+ *
+ * E2c P2: el RECÁLCULO de las tareas de las fases desfasadas va por el mismo camino, con
+ * `recalcular: { sin }` en el pedido (todo lo que el CSE desmarcó). El servidor calcula él mismo qué
+ * fases están desfasadas (`desfasadasDelGuardado`), la marca va en `recalculo` y NUNCA en `tareas`
+ * (que sigue en su corrida original, «listas»), el agente lee la estructura con lo desmarcado y la
+ * fusión reemplaza solo las tareas de esas fases (`fusionarRecalculoEnElBorrador`). La ruta despacha
+ * sin saber cuál de los dos es: lo dice el JSON guardado.
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -33,22 +40,36 @@ import {
   borradorVacio,
   claveAleatoria,
   esBorradorV1,
+  esCambioDeTarea,
   esVacioEsperandoTareas,
   estadoDeLasTareas,
   estadoDelVacio,
   estructuraHipotetica,
+  formaEnLaEstructura,
   leerBorrador,
+  mismaForma,
   pedidoDelCronograma,
+  planDeAplicacion,
   versionDelBorrador,
+  type Borrador,
   type EstadoDelVacio,
   type EstadoDeLasTareas,
   type EstructuraHipotetica,
+  type FaseDesfasada,
+  type RecalculoDelBorrador,
+  type RecalculoEnElCable,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
+import { unirFrases } from "./magnitud-propuesta";
 import { AVISO_PROPUESTA_PENDIENTE } from "./propuesta-de-estructura";
-import { cambiosDeTareasDelDetalle, fusionarDetalle, tareasPropuestasDelDetalle } from "./tareas-del-detalle";
+import {
+  cambiosDeTareasDelDetalle,
+  fusionarDetalle,
+  fusionarRecalculo,
+  tareasPropuestasDelDetalle,
+} from "./tareas-del-detalle";
 
 export interface EstadoDeLasTareasDelBorrador {
   estado: EstadoDeLasTareas;
@@ -56,6 +77,11 @@ export interface EstadoDeLasTareasDelBorrador {
   fase: string | null;
   /** Solo en «fallo»: por qué, en palabras del CSE. null = no se sabe (la pantalla dice lo genérico). */
   motivo: string | null;
+  /**
+   * E2c: el recálculo de las fases desfasadas, con su estado deducido de SU corrida. Ausente = no hay.
+   * Viaja en el GET dentro de `tareasDelBorrador` (la ruta no cambia).
+   */
+  recalculo?: RecalculoEnElCable | null;
 }
 
 /* Los motivos van DESPUÉS de «No se pudieron armar las tareas: …» (`textoDeLaLineaDeTareas`): una
@@ -123,9 +149,31 @@ export function motivoDelFallo(corrida: CorridaDeLasTareas | null): string | nul
 }
 
 /**
+ * El recálculo guardado, con su estado DEDUCIDO de su corrida (E2c, D6): la misma regla que las tareas
+ * (`estadoDeLasTareas` con `listas: false`). «armando» mientras vive; «fallo» si murió, se colgó o
+ * terminó sin fusionar entero. El motivo guardado (un fallo parcial) va antes que el de la corrida.
+ */
+async function recalculoConSuEstado(r: RecalculoDelBorrador, ahora: Date): Promise<RecalculoEnElCable> {
+  const corrida = await prisma.agentRun.findUnique({
+    where: { id: r.corrida },
+    select: { status: true, updatedAt: true, currentPhase: true, output: true },
+  });
+  const estado = estadoDeLasTareas({ corrida: r.corrida, listas: false }, corrida, ahora) === "armando" ? "armando" : "fallo";
+  return {
+    estado,
+    corrida: r.corrida,
+    fases: r.fases.map((f) => f.id),
+    nombres: r.fases.map((f) => f.nombre),
+    fase: estado === "armando" ? (corrida?.currentPhase ?? null) : null,
+    motivo: estado === "fallo" ? (r.motivo ?? motivoDelFallo(corrida)) : null,
+  };
+}
+
+/**
  * El estado de las tareas del borrador guardado en `pendingProposal`. null = no es un `borrador-v1`
  * o no espera tareas (el handoff, el formato viejo). Solo lee la corrida cuando hace falta: con las
- * tareas listas, o sin corrida, la respuesta sale del JSON.
+ * tareas listas, o sin corrida, la respuesta sale del JSON. E2c: con un `recalculo` guardado suma su
+ * estado (lee SU corrida); sin él, la clave no está.
  */
 export async function leerEstadoDeLasTareas(
   guardado: unknown,
@@ -133,11 +181,13 @@ export async function leerEstadoDeLasTareas(
 ): Promise<EstadoDeLasTareasDelBorrador | null> {
   if (!esBorradorV1(guardado)) return null;
   // La base no importa para un v1: solo se usa para convertir el formato viejo.
-  const tareas = leerBorrador(guardado, { ancla: null, fases: [] })?.tareas ?? null;
+  const leido = leerBorrador(guardado, { ancla: null, fases: [] });
+  const tareas = leido?.tareas ?? null;
   if (tareas === null) return null;
+  const conRecalculo = leido?.recalculo ? { recalculo: await recalculoConSuEstado(leido.recalculo, ahora) } : {};
   if (tareas.listas || tareas.corrida === null) {
     const estado = estadoDeLasTareas(tareas, null, ahora);
-    return estado === null ? null : { estado, fase: null, motivo: null };
+    return estado === null ? null : { estado, fase: null, motivo: null, ...conRecalculo };
   }
   const corrida = await prisma.agentRun.findUnique({
     where: { id: tareas.corrida },
@@ -149,6 +199,7 @@ export async function leerEstadoDeLasTareas(
     estado,
     fase: estado === "armando" ? (corrida?.currentPhase ?? null) : null,
     motivo: estado === "fallo" ? motivoDelFallo(corrida) : null,
+    ...conRecalculo,
   };
 }
 
@@ -175,28 +226,50 @@ export interface PedidoDeTareas {
   version: number | null;
   /** Solo con token null: lo que notó el paso 1 sin proponer. Nace dentro del borrador vacío. */
   observaciones?: string[];
+  /**
+   * E2c: recalcular las tareas de las fases desfasadas del borrador abierto (solo con token). `sin`
+   * es TODO lo que el CSE desmarcó (las casillas viven en su pantalla hasta E3): con eso el servidor
+   * calcula él mismo qué fases están desfasadas.
+   */
+  recalcular?: { sin: string[] };
 }
 
 const esVersion = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 /** Techos de las observaciones del paso 1 que viajan en el pedido (el paso 1 devuelve pocas y cortas). */
 const MAX_OBSERVACIONES_DEL_PEDIDO = 20;
 const MAX_LARGO_DE_OBSERVACION = 1000;
+/** Techos de lo desmarcado que viaja con el recálculo (los mismos que `recalculo.sin` al leerlo). */
+const MAX_CLAVES_DEL_RECALCULO = 2000;
+const MAX_LARGO_DE_CLAVE = 300;
+
+/** El `recalcular` del pedido: `{ sin }` con sus techos. null = no vale. */
+function leerRecalcular(v: unknown): { sin: string[] } | null {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const { sin } = v as Record<string, unknown>;
+  if (!Array.isArray(sin) || sin.length > MAX_CLAVES_DEL_RECALCULO) return null;
+  if (!sin.every((k) => typeof k === "string" && k.length >= 1 && k.length <= MAX_LARGO_DE_CLAVE)) return null;
+  return { sin: [...(sin as string[])] };
+}
 
 /**
  * El `borrador` del body de /analyze, validado. Puro. undefined/null = no es un paso 2 del borrador
  * (las pestañas viejas). Con token, la versión es obligatoria: sin ella no se sabe qué vio el CSE.
  * «Regenerar» de una fase (E2b) también llega por acá, solo con token null: la fase viaja aparte
  * (`regeneratePhaseId`), la marca la guarda en el borrador vacío (`soloFase`) y la fusión la lee de
- * ahí. Con token y una fase, la ruta responde 400 (hasta E2c).
+ * ahí. Con token y una fase, la ruta responde 400 (hasta E3).
  * Con token null acepta `observaciones` (lo que notó el paso 1 sin proponer): el borrador vacío las
  * guarda, así la barra las muestra y sobreviven a recargar o a descartar (revisión de E2a). Con
  * token se ignoran: el borrador del paso 1 ya trae las suyas.
+ * E2c: `recalcular` solo con token (se recalcula dentro de un borrador abierto); con token null, o
+ * pasado de sus techos, el pedido no vale.
  */
 export function leerPedidoDeTareas(raw: unknown): PedidoDeTareas | null | "invalido" {
   if (raw === undefined || raw === null) return null;
   if (typeof raw !== "object" || Array.isArray(raw)) return "invalido";
-  const { token, version, observaciones } = raw as Record<string, unknown>;
+  const { token, version, observaciones, recalcular } = raw as Record<string, unknown>;
+  const conRecalcular = recalcular !== undefined && recalcular !== null;
   if (token === null) {
+    if (conRecalcular) return "invalido";
     if (version !== undefined && version !== null && !esVersion(version)) return "invalido";
     if (observaciones === undefined || observaciones === null) return { token: null, version: null };
     if (!Array.isArray(observaciones) || observaciones.length > MAX_OBSERVACIONES_DEL_PEDIDO) return "invalido";
@@ -206,10 +279,17 @@ export function leerPedidoDeTareas(raw: unknown): PedidoDeTareas | null | "inval
   }
   if (typeof token !== "string" || token.length === 0 || token.length > 200) return "invalido";
   if (!esVersion(version)) return "invalido";
-  return { token, version };
+  if (!conRecalcular) return { token, version };
+  const leido = leerRecalcular(recalcular);
+  return leido ? { token, version, recalcular: leido } : "invalido";
 }
 
-export type CodigoDelPedido = "PROPUESTA_PENDIENTE" | "PROPUESTA_CAMBIO" | "TAREAS_EN_CURSO" | "NO_SE_PUEDE";
+export type CodigoDelPedido =
+  | "PROPUESTA_PENDIENTE"
+  | "PROPUESTA_CAMBIO"
+  | "TAREAS_EN_CURSO"
+  | "NO_SE_PUEDE"
+  | "NADA_QUE_RECALCULAR";
 /** Por qué no se arman las tareas (409). `message` lo lee el CSE. */
 export interface VetoDelPedido {
   error: CodigoDelPedido;
@@ -222,6 +302,17 @@ export const MENSAJE_SIN_TAREAS_QUE_ARMAR =
   "Esta propuesta no espera tareas: aplícala o descártala, y después vuelve a regenerar.";
 export const MOTIVO_TAREAS_PERDIDAS =
   "Mientras la IA armaba las tareas, la propuesta se aplicó, se descartó o se volvió a pedir: lo que armó no se guardó.";
+/* E2c: el recálculo. Con uno en curso, el 409 reusa `MENSAJE_TAREAS_EN_CURSO`. */
+export const MENSAJE_NADA_QUE_RECALCULAR = "No hay tareas que recalcular con lo que marcaste.";
+export const MOTIVO_RECALCULO_PERDIDO =
+  "Mientras la IA recalculaba las tareas, la propuesta cambió: lo que armó no se guardó.";
+/* Por qué una fase del recálculo no se escribe y conserva sus tareas (van después de «No se pudieron
+   recalcular las tareas de «X»: …», `textoDelFalloDelRecalculo`). En este orden: el primero que vale
+   es el de la fase. */
+export const MOTIVO_RECALCULO_EDITADA = "se editó a mano mientras se recalculaban";
+export const MOTIVO_RECALCULO_CORTADO = "la respuesta de la IA quedó cortada";
+export const MOTIVO_RECALCULO_SIN_TAREAS = "la IA no devolvió sus tareas";
+const MOTIVOS_DEL_RECALCULO = [MOTIVO_RECALCULO_EDITADA, MOTIVO_RECALCULO_CORTADO, MOTIVO_RECALCULO_SIN_TAREAS];
 
 const PENDIENTE: VetoDelPedido = { error: "PROPUESTA_PENDIENTE", message: AVISO_PROPUESTA_PENDIENTE };
 const CAMBIO: VetoDelPedido = { error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO };
@@ -249,12 +340,18 @@ export function vetoDelGuardado(
  * ANTES de crear la corrida (no se paga una que no se va a guardar). Con token null no puede haber
  * ninguna propuesta abierta. Con token: la misma corrida y versión, sin cambios desconocidos, y las
  * tareas en «faltan» o «fallo» (armarlas otra vez mientras se arman, o cuando ya están, no).
+ * E2c: con `recalcular`, lo decide `desfasadasDelGuardado` (las tareas «listas», ningún recálculo en
+ * curso y alguna fase desfasada con lo que el CSE desmarcó).
  */
 export async function prevalidarPedidoDeTareas(
   timelineId: string,
   pedido: PedidoDeTareas,
   ahora: Date = new Date(),
 ): Promise<VetoDelPedido | null> {
+  if (pedido.recalcular) {
+    const r = await desfasadasDelGuardado(timelineId, pedido, pedido.recalcular.sin, ahora);
+    return "error" in r ? r : null;
+  }
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: timelineId },
     select: { pendingProposal: true, pendingProposalRunId: true },
@@ -276,6 +373,9 @@ export async function prevalidarPedidoDeTareas(
  *     fase, E2b), el vacío la guarda: de ahí la lee la fusión.
  *   · token → el guardado, con la corrida nueva y la versión + 1, condicionado a token + versión.
  *     `soloFase` se ignora (el alcance es el del guardado).
+ *   · E2c, token + `recalcular` → vuelve a calcular las desfasadas (`desfasadasDelGuardado`) y guarda
+ *     `recalculo` = { la corrida, esas fases, las claves de ESTRUCTURA de lo desmarcado }, con la
+ *     versión + 1 y la misma condición. `tareas` NO se toca (D5: un fallo se leería como «faltan todas»).
  * null = marcado. Si la escritura no entra (otra pestaña, otra persona), no se pisa nada.
  */
 export async function marcarTareasEnCurso(i: {
@@ -283,7 +383,27 @@ export async function marcarTareasEnCurso(i: {
   pedido: PedidoDeTareas;
   corrida: string;
   soloFase?: string | null;
+  ahora?: Date;
 }): Promise<VetoDelPedido | null> {
+  if (i.pedido.recalcular) {
+    const r = await desfasadasDelGuardado(i.timelineId, i.pedido, i.pedido.recalcular.sin, i.ahora ?? new Date());
+    if ("error" in r) return r;
+    const version = i.pedido.version as number;
+    // Solo lo desmarcado de la ESTRUCTURA: con eso se rehace la estructura que va a ver el agente.
+    const deEstructura = new Set(r.borrador.cambios.filter((c) => !esCambioDeTarea(c)).map((c) => c.clave));
+    const recalculo: RecalculoDelBorrador = {
+      corrida: i.corrida,
+      fases: r.desfasadas.map(({ fase, nombre }) => ({ id: fase, nombre })),
+      sin: [...new Set(i.pedido.recalcular.sin.filter((k) => deEstructura.has(k)))],
+    };
+    const escrita = await prisma.projectTimeline.updateMany({
+      where: { id: i.timelineId, pendingProposalRunId: i.pedido.token, pendingProposal: { path: ["version"], equals: version } },
+      data: {
+        pendingProposal: { ...r.guardado, version: version + 1, recalculo } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return escrita.count === 0 ? CAMBIO : null;
+  }
   if (i.pedido.token === null) {
     const tareas = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: i.timelineId } },
@@ -404,10 +524,84 @@ function vivoDeLaBase(anchorStartDate: Date | null, fases: readonly FaseLeida[])
   };
 }
 
+/** Lo que se recalcula: el JSON guardado (se escribe con `{ ...guardado, … }`), su lectura y las fases. */
+interface LoQueSeRecalcula {
+  guardado: Record<string, unknown>;
+  borrador: Borrador;
+  desfasadas: FaseDesfasada[];
+}
+
+/**
+ * E2c: las fases desfasadas del borrador GUARDADO con lo que el CSE desmarcó (`sin`), o por qué no se
+ * recalcula. La usan la prevalidación y la marca: las dos deciden con lo mismo.
+ *   1. El borrador que el CSE tiene enfrente (`vetoDelGuardado`: su corrida, su versión, sin cambios
+ *      desconocidos).
+ *   2. Las tareas «listas»: sin ellas no hay nada armado que recalcular.
+ *   3. Ningún recálculo «armando» (se deduce de SU corrida): dos corridas pagadas sobre lo mismo, no.
+ *   4. Alguna desfasada, con el MISMO plan que la pantalla sobre lo vivo de ahora (con tareas).
+ */
+async function desfasadasDelGuardado(
+  timelineId: string,
+  pedido: PedidoDeTareas,
+  sin: readonly string[],
+  ahora: Date,
+): Promise<VetoDelPedido | LoQueSeRecalcula> {
+  const tl = await prisma.projectTimeline.findUnique({
+    where: { id: timelineId },
+    select: {
+      pendingProposal: true,
+      pendingProposalRunId: true,
+      anchorStartDate: true,
+      phases: SELECT_DE_FASES_CON_TAREAS,
+    },
+  });
+  if (!tl) return CAMBIO;
+  const veto = vetoDelGuardado(tl.pendingProposal, tl.pendingProposalRunId, pedido);
+  if (veto) return veto;
+  const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
+  const borrador = leerBorrador(tl.pendingProposal, vivo);
+  if (!borrador || !esBorradorV1(tl.pendingProposal)) return CAMBIO;
+  if (!borrador.tareas?.listas) return { error: "NO_SE_PUEDE", message: MENSAJE_SIN_TAREAS_QUE_ARMAR };
+  if (borrador.recalculo && (await recalculoConSuEstado(borrador.recalculo, ahora)).estado === "armando") {
+    return { error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO };
+  }
+  const { desfasadas } = planDeAplicacion(vivo, borrador, sin, { tareas: "listas" });
+  if (desfasadas.length === 0) return { error: "NADA_QUE_RECALCULAR", message: MENSAJE_NADA_QUE_RECALCULAR };
+  return { guardado: tl.pendingProposal, borrador, desfasadas };
+}
+
+/** La estructura supuesta como la lee el agente: sus fases para el texto, su foto y el alcance. */
+function supuestaDe(
+  estructura: EstructuraHipotetica,
+  closeDateOverride: Date | null,
+  soloFases: string[] | null,
+): EstructuraSupuesta {
+  return {
+    fases: estructura.fases.map((f) => ({
+      id: f.id,
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      sessionCount: f.sessionCount,
+      notes: f.notes,
+      activityType: f.activityType,
+    })),
+    foto: {
+      anchorStartDate: estructura.ancla,
+      closeDateOverride,
+      phases: estructura.fases.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek: f.startWeek })),
+    },
+    estructura,
+    ...(soloFases && soloFases.length > 0 ? { soloFases } : {}),
+  };
+}
+
 /**
  * La estructura SUPUESTA del borrador, para el mensaje del agente (y, en memoria, para la fusión):
  * todo lo que no choca, sin mirar lo que desmarcó el CSE. null = el borrador ya no es el que esta
  * corrida marcó (se aplicó, se descartó o se volvió a pedir): la ruta responde 409 ANTES del modelo.
+ * El alcance del prompt (`soloFases`) sale SIEMPRE del JSON guardado (E2b D3): `soloFase` o, en un
+ * recálculo (E2c), sus fases. El recálculo ve la estructura CON lo desmarcado (`recalculo.sin`): la
+ * que va a quedar.
  */
 export async function estructuraParaElDetalle(
   timelineId: string,
@@ -427,29 +621,21 @@ export async function estructuraParaElDetalle(
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
   const borrador = leerBorrador(tl.pendingProposal, vivo);
   if (!borrador || (borrador.desconocidos ?? 0) > 0) return null;
+  // E2c: esta corrida es el recálculo del borrador (las tareas ya están «listas», de otra corrida).
+  if (borrador.recalculo?.corrida === corrida) {
+    if (!borrador.tareas?.listas) return null;
+    const r = borrador.recalculo;
+    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id));
+  }
   if (borrador.tareas === null || borrador.tareas.listas || borrador.tareas.corrida !== corrida) return null;
-  const estructura = estructuraHipotetica(vivo, borrador);
-  return {
-    fases: estructura.fases.map((f) => ({
-      id: f.id,
-      name: f.name,
-      durationWeeks: f.durationWeeks,
-      sessionCount: f.sessionCount,
-      notes: f.notes,
-      activityType: f.activityType,
-    })),
-    foto: {
-      anchorStartDate: estructura.ancla,
-      closeDateOverride: tl.closeDateOverride,
-      phases: estructura.fases.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek: f.startWeek })),
-    },
-    estructura,
-  };
+  return supuestaDe(estructuraHipotetica(vivo, borrador), tl.closeDateOverride, borrador.soloFase ? [borrador.soloFase] : null);
 }
 
 export type ResultadoDeLaFusion =
   | { estado: "listas"; nuevas: number; seVan: number; observaciones: string[] }
   | { estado: "sin-cambios"; observaciones: string[] }
+  /** E2c: el recálculo. `fallidas` conservan sus tareas y quedan en `recalculo` con su motivo. */
+  | { estado: "recalculadas"; escritas: string[]; fallidas: string[] }
   | { estado: "perdido" };
 
 /**
@@ -468,6 +654,18 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
   }
 }
 
+/** Lo que la ruta le pasa a la fusión: la corrida, lo que vio el agente y lo que devolvió. */
+interface EntradaDeLaFusion {
+  timelineId: string;
+  corrida: string;
+  estructura: EstructuraHipotetica;
+  analysisJson: unknown;
+  huellas: HuellasDeFrontera | null;
+  cortado: boolean;
+  /** Los tests inyectan uno determinista. */
+  nuevaClave?: () => string;
+}
+
 /**
  * Lo que armó el agente, fusionado en el borrador que esta corrida marcó. Va DESPUÉS de guardar la
  * salida de la corrida (si la fusión falla, lo armado queda en la corrida).
@@ -483,17 +681,10 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
  *      reconoció), la corrida lo dice.
  *   5. Si no, se guarda con `{ ...guardado, sus campos }`, condicionado a token + versión. Sin
  *      reintentos: mientras se arma, nadie más escribe el borrador; si no entra, se perdió.
+ * E2c: si esta corrida es el RECÁLCULO del borrador guardado (`recalculo.corrida`), despacha a
+ * `fusionarRecalculoEnElBorrador` ANTES del chequeo de las tareas (que ahí ya están «listas»).
  */
-export async function fusionarDetalleEnElBorrador(i: {
-  timelineId: string;
-  corrida: string;
-  estructura: EstructuraHipotetica;
-  analysisJson: unknown;
-  huellas: HuellasDeFrontera | null;
-  cortado: boolean;
-  /** Los tests inyectan uno determinista. */
-  nuevaClave?: () => string;
-}): Promise<ResultadoDeLaFusion> {
+export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise<ResultadoDeLaFusion> {
   const perdido = async (): Promise<ResultadoDeLaFusion> => {
     await avisarEnLaCorrida(i.corrida, i.analysisJson, MOTIVO_TAREAS_PERDIDAS);
     return { estado: "perdido" };
@@ -512,6 +703,16 @@ export async function fusionarDetalleEnElBorrador(i: {
   const version = versionDelBorrador(tl.pendingProposal);
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
   const borrador = leerBorrador(tl.pendingProposal, vivo);
+  if (borrador?.recalculo?.corrida === i.corrida) {
+    return fusionarRecalculoEnElBorrador(i, {
+      guardado: tl.pendingProposal,
+      token: tl.pendingProposalRunId,
+      version,
+      vivo,
+      borrador,
+      tags: sanitizeTags(tl.project?.tags ?? []),
+    });
+  }
   if (
     !borrador ||
     version === null ||
@@ -584,4 +785,110 @@ export async function fusionarDetalleEnElBorrador(i: {
     seVan: fusionado.cambios.filter((c) => c.tipo === "tarea-se-va").length,
     observaciones: cambios.observaciones,
   };
+}
+
+/**
+ * E2c: lo que armó el RECÁLCULO, fusionado en el borrador. Solo cambian las tareas de las fases que se
+ * pidieron (`recalculo.fases`), en su mismo lugar de la lista; lo demás no se toca. NUNCA borra.
+ *   1. Perdido: sin versión, cambios desconocidos, las tareas que no están «listas» o el recálculo
+ *      guardado es de otra corrida. La corrida lo dice y no se escribe nada.
+ *   2. Una fase FALLA, conserva sus tareas y queda en `recalculo` con el motivo (D6, D11), si:
+ *      su forma ya no es la que vio el agente (se editó a mano mientras corría: lo vivo de ahora con lo
+ *      desmarcado al pedirlo), la salida se cortó en ella, o el agente no le devolvió tareas.
+ *   3. Las demás se ESCRIBEN: sus tareas con las reglas de siempre (`cambiosDeTareasDelDetalle`, con
+ *      su alcance), y su forma armada. El tipo propuesto se ignora: es de estructura y se decidió en la
+ *      primera fusión.
+ *   4. Condicionada a token + la versión leída AHORA; si no entra, se perdió (sin reintentos).
+ */
+async function fusionarRecalculoEnElBorrador(
+  i: EntradaDeLaFusion,
+  leido: {
+    guardado: Record<string, unknown>;
+    token: string | null;
+    version: number | null;
+    vivo: Vivo;
+    borrador: Borrador;
+    tags: string[];
+  },
+): Promise<ResultadoDeLaFusion> {
+  const perdido = async (): Promise<ResultadoDeLaFusion> => {
+    await avisarEnLaCorrida(i.corrida, i.analysisJson, MOTIVO_RECALCULO_PERDIDO);
+    return { estado: "perdido" };
+  };
+  const { borrador, version, vivo } = leido;
+  const recalculo = borrador.recalculo;
+  if (
+    version === null ||
+    (borrador.desconocidos ?? 0) > 0 ||
+    !borrador.tareas?.listas ||
+    !recalculo ||
+    recalculo.corrida !== i.corrida
+  ) {
+    return perdido();
+  }
+
+  const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({
+    estructura: i.estructura,
+    analysisJson: i.analysisJson,
+    huellas: i.huellas,
+    cortado: i.cortado,
+  });
+  const propuestaDe = new Map(propuestas.map((p) => [p.fase, p]));
+  // La estructura de AHORA con lo que el CSE había desmarcado al pedirlo: si la fase cambió, no calza.
+  const ahora = estructuraHipotetica(vivo, borrador, recalculo.sin);
+  const motivoDe = (fase: string): string | null => {
+    if (!mismaForma(formaEnLaEstructura(i.estructura, fase), formaEnLaEstructura(ahora, fase))) return MOTIVO_RECALCULO_EDITADA;
+    const p = propuestaDe.get(fase);
+    if (p?.cortada) return MOTIVO_RECALCULO_CORTADO;
+    if (!p || p.delAgente.length === 0) return MOTIVO_RECALCULO_SIN_TAREAS;
+    return null;
+  };
+  const escritas: string[] = [];
+  const fallidas: Array<{ id: string; nombre: string }> = [];
+  const motivos = new Set<string>();
+  for (const f of recalculo.fases) {
+    const motivo = motivoDe(f.id);
+    if (motivo === null) {
+      escritas.push(f.id);
+    } else {
+      fallidas.push(f);
+      motivos.add(motivo);
+    }
+  }
+
+  const cambios = cambiosDeTareasDelDetalle({
+    estructura: i.estructura,
+    vivo,
+    propuestas,
+    borrador,
+    tags: leido.tags,
+    nuevaClave: i.nuevaClave ?? claveAleatoria,
+    idsDesconocidos,
+    soloFases: new Set(escritas),
+  });
+  const nuevo = fusionarRecalculo(borrador, {
+    tareas: cambios.tareas,
+    armadas: cambios.tareasArmadasPara,
+    escritas,
+    fallidas,
+    // Un solo motivo por recálculo: con varios, todos, en el orden de arriba.
+    motivo: motivos.size > 0 ? unirFrases(MOTIVOS_DEL_RECALCULO.filter((m) => motivos.has(m))) : null,
+    observaciones: cambios.observaciones,
+  });
+
+  const escrita = await prisma.projectTimeline.updateMany({
+    where: { id: i.timelineId, pendingProposalRunId: leido.token, pendingProposal: { path: ["version"], equals: version } },
+    data: {
+      pendingProposal: {
+        ...leido.guardado,
+        version: nuevo.version,
+        observaciones: nuevo.observaciones,
+        cambios: nuevo.cambios,
+        tareasArmadasPara: nuevo.tareasArmadasPara,
+        recalculo: nuevo.recalculo ?? null,
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  if (escrita.count === 0) return perdido();
+  return { estado: "recalculadas", escritas, fallidas: fallidas.map((f) => f.id) };
 }

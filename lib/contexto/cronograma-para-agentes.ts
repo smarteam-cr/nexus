@@ -39,6 +39,11 @@ export interface EstructuraSupuesta {
   fases: FaseParaAgentes[];
   foto: FotoDelCronograma;
   estructura: EstructuraHipotetica;
+  /**
+   * El alcance del prompt: las fases que se piden (ausente = todas). Sale SIEMPRE del borrador
+   * guardado: `soloFase` («Regenerar» de una fase, E2b) o las fases del recálculo (E2c).
+   */
+  soloFases?: string[];
 }
 
 /** El encabezado y los renglones de fase (y de tarea, con avance). `includeProgress` implica ids. */

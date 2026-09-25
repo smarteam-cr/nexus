@@ -246,6 +246,11 @@ export interface PedidoDeAplicar {
   puedeTocarTareas: boolean;
   /** Quien aplica: firma el cierre o la reapertura de una fase. */
   actorEmail: string | null;
+  /**
+   * E2c: las fases desfasadas que el CSE fuerza («Aplicar de todos modos»): sus tareas van tal cual.
+   * Ausente (una pestaña de antes, los llamadores de siempre) = ninguna.
+   */
+  forzar?: readonly string[];
 }
 
 export interface ResultadoDeAplicar {
@@ -363,7 +368,7 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
   // 3) El plan: el mismo borrador que armó la pantalla (con su foto) y la misma función.
   const borrador = leerBorrador(p.guardado, p.foto ?? vivo);
   if (!borrador) throw new ErrorAlAplicar("PROPUESTA_CAMBIO", MENSAJE_PROPUESTA_CAMBIO);
-  const plan = planDeAplicacion(vivo, borrador, p.sin, { tareas: p.tareas });
+  const plan = planDeAplicacion(vivo, borrador, p.sin, { tareas: p.tareas, forzar: p.forzar });
   if (plan.bloqueo) throw new ErrorAlAplicar("NO_SE_PUEDE", plan.bloqueo);
 
   // 4) La huella: otra lista que la que vio el CSE → nada (el throw deshace el token).

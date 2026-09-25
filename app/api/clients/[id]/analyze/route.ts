@@ -150,8 +150,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     /** E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» completa el BORRADOR del cronograma
      *  (lib/timeline/borrador-del-detalle.ts): el que el CSE tiene enfrente (`token` + `version`), o
      *  uno nuevo si no había propuesta de fases (`token` null). Desde E2b también «Regenerar» de una
-     *  fase (`token` null). El agente de detalle sin esto responde 409: es una pestaña de antes. */
-    borrador?: { token: string | null; version: number | null };
+     *  fase (`token` null). El agente de detalle sin esto responde 409: es una pestaña de antes.
+     *  E2c: con `recalcular` (solo con token), recalcula las tareas de las fases desfasadas. */
+    borrador?: { token: string | null; version: number | null; recalcular?: { sin: string[] } };
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -403,7 +404,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
   /* E2a: el `borrador` lo usa el paso 2 de «Regenerar todo» (el detalle, todas las fases) y, desde
      E2b, «Regenerar» de una fase, solo con token null (nace su borrador, con `soloFase`). Mal formado,
-     con otro agente, o una fase dentro de un borrador abierto (token; llega con E2c): 400, antes de
+     con otro agente, o una fase dentro de un borrador abierto (token; llega con E3): 400, antes de
      crear nada. */
   const pedidoLeido = leerPedidoDeTareas(body?.borrador);
   if (
@@ -1979,7 +1980,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         classificationLabel: classificationLabel || null,
       },
       clasificacion: clasificacionDeTags(sanitizeTags(dealProject?.tags ?? [])),
-      regenerarFaseIds: regeneratePhaseId ? [regeneratePhaseId] : null,
+      regenerarFaseIds: sobreDelDetalle?.soloFases ?? null,
     });
     sesionesDelDetalle = contexto.sesionesUsadas ?? [];
     huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);
