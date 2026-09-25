@@ -1104,3 +1104,45 @@ muestra: no tiene nada que marcar, y como «pendiente» no se iría nunca. Lo qu
 **Qué la revertiría.** Que alguien necesite ver el total de la línea con lo ya revisado adentro —por ejemplo, para
 cuadrar contra un reporte de Odoo—: ahí la línea tendría que mostrar las dos cifras, la pendiente y la entera, sin
 volver a contar lo marcado en la pestaña.
+
+---
+
+## 2026-09-25 · Las marcas de antes: las 15 notas pasan nota por nota y las 4 facturas cerradas sin motivo se reabren
+
+**Qué se decidió.** Etapa 5 del plan de Elías: dos scripts de una sola vez, con simulacro por defecto, que escriben solo
+con `--apply` + `ALLOW_PROD_WRITE=1` detrás del guard (pg_dump y un JSON con lo que había). Van después del SQL y del
+deploy (docs/RUNBOOK.md › Cobranza).
+- **Traspaso** (scripts/odoo-traspasar-marcas-de-notas.ts): la marca de grupo de «notas de crédito sin aplicar» pasa a
+  una marca por nota con `marcarFilasTx`, con el mismo motivo, persona y fecha. **Cada nota se compara con lo que se
+  MARCÓ** (`decidirTraspasoDeGrupo`): con la pieza `texto=monto` que guardó la huella de grupo, no con lo de hoy. La que
+  cambió no se marca y se nombra; las demás pasan igual. No depende del sync: la huella guardada no la toca nadie. La
+  marca de grupo no se borra: queda como historia.
+- **Reapertura** (scripts/odoo-reabrir-liberadas-sin-motivo.ts): con `reabrirLiberacionTx`, la misma de «Deshacer».
+  Antes de limpiar el cierre deja una marca «Ya está anulada» con quién y cuándo se cerró, ya deshecha con la firma de
+  egonzalez, y el motivo «Reabierta por Elías el 2026-09-25: se cerró sin motivo», que también se suma al motivo de la
+  factura soltada. Solo las 4 decididas, **por id**: otra cerrada sin motivo (`soltadasCerradasSinMotivo`) se lista y no
+  se toca.
+- **«Sin motivo»** = cerrada, sin marca «Ya está anulada» vigente y sin el «Resuelta: …» del cierre en su motivo
+  (`PREFIJO_DEL_CIERRE`, el mismo texto que escribe `anularLiberacionTx`). El motivo que ya traía es el de SOLTARLA
+  («Fue por Quickbooks», KAIZEN): no cuenta.
+- **Idempotentes.** El traspaso reconoce sus marcas por motivo, persona y fecha, vigentes o deshechas: correrlo dos veces
+  no escribe nada, y no vuelve a marcar lo que alguien deshizo. Una reabierta ya no está cerrada.
+- **El simulacro no puede escribir**: la conexión nace con `default_transaction_read_only` (PGOPTIONS). Corre antes del
+  SQL gracias a `cargarEstadoDelCruce({ sinMarcas })`, que la pantalla nunca pasa.
+
+**Por qué.** Medido en producción el 2026-09-25, en solo lectura y sin la tabla de marcas: la marca de grupo cubre **15
+notas**, US$27.577,66 + ₡889, y las 15 siguen iguales (0 cambiaron). Hay **4 facturas soltadas** cerradas a mano, las 4
+sin motivo y las 4 decididas: KAIZEN KAPITAL cuota 1 (US$21.501), Wherex cuotas 2 y 3 (US$2.125 cada una) y Honda Costa
+Rica cuota 5 (US$500), US$26.251, cerradas por egonzalez entre las 11:37 y las 11:38 (hora de Costa Rica). Reabiertas,
+las 4 vuelven a «facturas soltadas sin número de documento», con «Ya está anulada».
+
+⚠ La huella de grupo se guardó con nombres: si Odoo renombra al cliente de una nota antes del traspaso, esa nota no pasa
+y queda en la lista. Se prefirió mostrar de más a marcar algo que no se puede probar igual.
+⚠ Lo que la huella de grupo no guardaba —los estados de la factura que la nota parece anular— se toma de hoy.
+⚠ La reapertura va DESPUÉS del deploy: con la pantalla vieja, una reabierta se podía volver a cerrar sin motivo.
+⚠ El motivo de la historia escrita en la reapertura es el porqué de reabrirla (lo pidió Elías con ese texto); desde la
+pantalla, «Deshacer» sigue dejando «Ya está anulada (sin motivo: …)», porque ahí no se pide uno.
+
+**Qué la revertiría.** Que Elías decida dejar cerrada alguna de las 4: se saca su id de `DECIDIDAS` antes del
+`--apply`. Que aparezca otra marca de grupo (hoy no hay forma de crearla): el traspaso solo mira la de las notas y avisa
+cuántas otras hay; esa necesitaría su propia decisión.
