@@ -429,13 +429,16 @@ test("las instrucciones tipeadas viajan al generar: el flush del paso 0 (auditor
      MISMA función (pedirPropuestaDeDetalle): las dos piden una propuesta que el CSE cura, así que
      comparten un solo flush. La otra es pedirRegenerarFase (el regen por fase; hasta E2b,
      startRegenPreview). Bajar este número
-     sin ese motivo escrito sería tapar que una corrida perdió las instrucciones del CSE. */
+     sin ese motivo escrito sería tapar que una corrida perdió las instrucciones del CSE.
+     ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+     tareas fuera: se recalculan, y ese pedido al agente (`pedirRecalculo`) también manda antes las
+     instrucciones tipeadas. Son tres: las dos de siempre y el recálculo. */
   const src = fs.readFileSync(
     path.join(process.cwd(), "components/canvas/CronogramaCanvas.tsx"),
     "utf8",
   );
   expect(src, "desapareció el flush del brief").toContain("flushDocBrief");
-  expect(src.match(/await flushDocBrief\(\);/g)?.length, "una de las dos corridas del detalle perdió el flush").toBe(2);
+  expect(src.match(/await flushDocBrief\(\);/g)?.length, "una de las tres corridas del detalle perdió el flush").toBe(3);
 });
 
 test("la caja de instrucciones se pinta y solo guarda lo que una persona tipeó", () => {

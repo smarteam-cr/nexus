@@ -16,6 +16,9 @@
  *   · (E2b) «Regenerar» de UNA fase por el camino entero del servidor (marcar, estructura, fusionar
  *     y aplicar): solo cambian las tareas de esa fase, aunque el modelo traiga otras, y la foto
  *     publicada queda byte a byte igual.
+ *   · (E2c) el RECÁLCULO de una fase desfasada por el camino entero (marcar, estructura, fusionar y
+ *     aplicar), y «Aplicar de todos modos»: sus tareas tal cual, las que caían después en la última
+ *     semana; sin forzar, una pestaña de antes no escribe nada (tampoco la limpieza del token).
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso).
  */
 import { describe, expect, it } from "vitest";
@@ -23,9 +26,11 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import {
   borradorBase,
+  claveDeCampo,
   claveDeTareaQueSeVa,
   fotoDeTarea,
   leerBorrador,
+  mensajeDeRecalculoAlAplicar,
   planDeAplicacion,
   type Borrador,
   type CambioTareaNueva,
@@ -506,5 +511,145 @@ describe("«Regenerar» de una fase — DB real (E2b)", () => {
     const fotoDespues = await prisma.timelineBaseline.findFirstOrThrow({ where: { timelineId: tl.id, isActive: true } });
     expect(fotoDespues.id).toBe(fotoAntes.id);
     expect(JSON.stringify(fotoDespues.snapshot)).toBe(JSON.stringify(fotoAntes.snapshot));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E2c: la fase desfasada, recalculada o forzada ────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Un proyecto cuya propuesta alarga «Pruebas» de 3 a 6 semanas, con sus tareas armadas para 6: se va
+ * «Probar flujos» y entra «Pruebas de aceptación» en la semana 6. El CSE desmarca el cambio de
+ * semanas: «Pruebas» sigue en 3 y sus tareas quedaron DESFASADAS.
+ */
+async function mundoDesfasado() {
+  const cliente = await prisma.client.create({ data: { name: "Cliente desfasado (test)" } });
+  const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación desfasada (test)" } });
+  const tl = await prisma.projectTimeline.create({
+    data: { projectId: proyecto.id, anchorStartDate: new Date("2026-10-05T00:00:00.000Z") },
+  });
+  const crear = (name: string, order: number, durationWeeks: number) =>
+    prisma.timelinePhase.create({ data: { timelineId: tl.id, name, order, durationWeeks, source: "AGENT" } });
+  await crear("Kick-off", 0, 1);
+  await crear("Diseño", 1, 2);
+  const c = await crear("Pruebas", 2, 3);
+  const seVa = await prisma.timelineTask.create({
+    data: { phaseId: c.id, title: "Probar flujos", weekIndex: 0, order: 0, source: "AGENT", status: "PENDING" },
+  });
+  const corrida = await prisma.agentRun.create({ data: { clientId: cliente.id, projectId: proyecto.id, status: "DONE" } });
+  const vivo = await vivoDeLaBase(tl.id);
+  const tareaDeSeVa = vivo.fases.find((f) => f.id === c.id)!.tareas!.find((t) => t.id === seVa.id)!;
+  const claveDur = claveDeCampo(c.id, "durationWeeks");
+  const v1: Borrador = {
+    formato: "borrador-v1",
+    version: 3,
+    origen: "contexto",
+    observaciones: [],
+    cambios: [
+      { tipo: "fase-cambia", clave: claveDur, faseId: c.id, fase: "Pruebas", campo: "durationWeeks", desde: 3, a: 6 },
+      { tipo: "tarea-se-va", clave: claveDeTareaQueSeVa(seVa.id), tareaId: seVa.id, faseId: c.id, desde: fotoDeTarea(tareaDeSeVa) },
+      { tipo: "tarea-nueva", clave: "t:aceptacion", fase: c.id, tarea: contenido("Pruebas de aceptación", 5) },
+    ],
+    pedido: "regenerar",
+    tareas: { corrida: corrida.id, listas: true },
+    tareasArmadasPara: { [c.id]: { nombre: "Pruebas", semanas: 6, sesiones: null, semanaCero: false } },
+  };
+  await prisma.projectTimeline.update({
+    where: { id: tl.id },
+    data: { pendingProposal: v1 as unknown as Prisma.InputJsonValue, pendingProposalRunId: RUN },
+  });
+  return { cliente, proyecto, tl, c, seVa, sin: [claveDur] };
+}
+
+/** El pedido de la pantalla con lo desmarcado (y lo forzado): la huella contra lo vivo y lo guardado de AHORA. */
+async function pedidoConLoMarcado(timelineId: string, sin: string[], forzar: string[] = []): Promise<PedidoDeAplicar> {
+  const vivo = await vivoDeLaBase(timelineId);
+  const { pendingProposal } = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: timelineId }, select: { pendingProposal: true } });
+  return {
+    timelineId,
+    token: RUN,
+    guardado: pendingProposal,
+    foto: null,
+    sin,
+    huella: planDeAplicacion(vivo, leerBorrador(pendingProposal, vivo)!, sin, { tareas: "listas", forzar }).huella,
+    ahora: new Date(),
+    tareas: "listas",
+    puedeTocarTareas: true,
+    actorEmail: "cse@smarteam.cr",
+    forzar,
+  };
+}
+
+describe("la fase desfasada — DB real (E2c)", () => {
+  it("⭐ recalculada por el camino entero (marcar, estructura, fusionar) y aplicada: sus tareas son las de la forma que queda", async () => {
+    /* La edición que la pone en rojo: que el agente vea la estructura sin lo desmarcado (armaría otra
+       vez para 6 semanas), o que la fusión del recálculo no reemplace las tareas de la fase (el aplicar
+       seguiría bloqueado, o escribiría las armadas para 6). */
+    const m = await mundoDesfasado();
+    const corrida = await prisma.agentRun.create({ data: { clientId: m.cliente.id, projectId: m.proyecto.id, status: "RUNNING" } });
+    // Con la fase desfasada, aplicar espera.
+    const antes = await pedidoConLoMarcado(m.tl.id, m.sin);
+    const vivo = await vivoDeLaBase(m.tl.id);
+    expect(planDeAplicacion(vivo, leerBorrador(antes.guardado, vivo)!, m.sin, { tareas: "listas" }).bloqueoPorDesfasadas).toBe(true);
+
+    // 1. La marca: el recálculo va en `recalculo`, nunca en `tareas`.
+    expect(
+      await marcarTareasEnCurso({ timelineId: m.tl.id, pedido: { token: RUN, version: 3, recalcular: { sin: m.sin } }, corrida: corrida.id }),
+    ).toBeNull();
+    // 2. Lo que lee el agente: «Pruebas» con sus 3 semanas, y solo esa fase.
+    const supuesta = await estructuraParaElDetalle(m.tl.id, corrida.id);
+    expect(supuesta).not.toBeNull();
+    expect(supuesta!.estructura.fases.find((f) => f.id === m.c.id)!.durationWeeks, "el agente vio la forma armada, no la que queda").toBe(3);
+    expect(supuesta!.soloFases).toEqual([m.c.id]);
+    // 3. Lo que armó, fusionado: reemplaza las tareas de «Pruebas».
+    const fusion = await fusionarDetalleEnElBorrador({
+      timelineId: m.tl.id,
+      corrida: corrida.id,
+      estructura: supuesta!.estructura,
+      analysisJson: { timelineDetail: { phases: [{ id: m.c.id, tasks: [{ title: "Pruebas cortas", weekIndex: 2 }] }] } },
+      huellas: null,
+      cortado: false,
+    });
+    expect(fusion).toEqual({ estado: "recalculadas", escritas: [m.c.id], fallidas: [] });
+    await prisma.agentRun.update({ where: { id: corrida.id }, data: { status: "DONE" } });
+
+    // 4. Aplicar con lo mismo desmarcado: ya no hay bloqueo y entran las recalculadas.
+    const pedido = await pedidoConLoMarcado(m.tl.id, m.sin);
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+    expect(r.plan.forzadas).toEqual([]);
+    const pruebas = await prisma.timelinePhase.findUniqueOrThrow({ where: { id: m.c.id }, include: { tasks: true } });
+    expect(pruebas.durationWeeks, "se aplicó el cambio de semanas desmarcado").toBe(3);
+    expect(pruebas.tasks.map((t) => [t.title, t.weekIndex])).toEqual([["Pruebas cortas", 2]]);
+    const tl = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: m.tl.id }, select: { pendingProposal: true } });
+    expect(tl.pendingProposal).toBeNull();
+  });
+
+  it("⭐ «Aplicar de todos modos»: sus tareas tal cual, las que caían después en la ÚLTIMA semana; sin forzar, nada se escribe", async () => {
+    /* Las ediciones que la ponen en rojo: aplicar tareas desfasadas sin forzar (una pestaña de antes),
+       dejar escrita la limpieza del token con el rechazo, o no acotar la semana de las forzadas. */
+    const m = await mundoDesfasado();
+    // Una pestaña de antes (sin `forzar`): NO_SE_PUEDE con «recarga la página», y el throw deshace el token.
+    const viejo = await pedidoConLoMarcado(m.tl.id, m.sin);
+    const error = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, viejo), TECHO).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ErrorAlAplicar);
+    expect(error).toMatchObject({ codigo: "NO_SE_PUEDE", message: mensajeDeRecalculoAlAplicar(["Pruebas"]) });
+    const sigue = await prisma.projectTimeline.findUniqueOrThrow({
+      where: { id: m.tl.id },
+      select: { pendingProposal: true, pendingProposalRunId: true },
+    });
+    expect(sigue.pendingProposalRunId, "se escribió la limpieza del token").toBe(RUN);
+    expect(sigue.pendingProposal).not.toBeNull();
+    expect(await prisma.timelineTask.findUnique({ where: { id: m.seVa.id } }), "se aplicó una tarea desfasada").not.toBeNull();
+
+    // Forzada: sus tareas tal cual; la de la semana 6 cae en la 3, la última de las que quedan.
+    const pedido = await pedidoConLoMarcado(m.tl.id, m.sin, [m.c.id]);
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    expect(r.tareas).toEqual({ creadas: 1, borradas: 1 });
+    expect(r.plan.forzadas.map((f) => f.fase)).toEqual([m.c.id]);
+    const pruebas = await prisma.timelinePhase.findUniqueOrThrow({ where: { id: m.c.id }, include: { tasks: true } });
+    expect(pruebas.durationWeeks).toBe(3);
+    expect(pruebas.tasks.map((t) => [t.title, t.weekIndex])).toEqual([["Pruebas de aceptación", 2]]);
   });
 });

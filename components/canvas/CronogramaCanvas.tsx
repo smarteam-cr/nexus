@@ -70,6 +70,8 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
+import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
+import { leerRecalculoDelCable, recalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
@@ -91,6 +93,7 @@ import {
   traeCambiosDeFases,
   versionDelBorrador,
   type EstadoDeLasTareas,
+  type RecalculoEnElCable,
   type TareasDelBorrador,
   type Vivo,
 } from "@/lib/timeline/borrador";
@@ -270,6 +273,9 @@ interface TareasDelBorradorEnPantalla extends TareasEnPantalla {
   token: string | null;
   /** La corrida que arma (o armó) las tareas. */
   corrida: string | null;
+  /** E2c: el recálculo de las tareas de las fases desfasadas (su estado lo deduce el servidor de SU
+   *  corrida), o null/ausente si no hay. */
+  recalculo?: RecalculoEnElCable | null;
 }
 
 const ESTADOS_DE_TAREAS: readonly EstadoDeLasTareas[] = ["listas", "faltan", "armando", "fallo"];
@@ -286,7 +292,7 @@ function tareasDelGet(data: {
   pendingProposal?: unknown;
   pendingProposalRunId?: unknown;
 }): TareasDelBorradorEnPantalla | null {
-  const t = data.tareasDelBorrador as { estado?: unknown; fase?: unknown; motivo?: unknown } | null | undefined;
+  const t = data.tareasDelBorrador as { estado?: unknown; fase?: unknown; motivo?: unknown; recalculo?: unknown } | null | undefined;
   if (!t || !ESTADOS_DE_TAREAS.includes(t.estado as EstadoDeLasTareas)) return null;
   return {
     estado: t.estado as EstadoDeLasTareas,
@@ -294,6 +300,7 @@ function tareasDelGet(data: {
     motivo: typeof t.motivo === "string" ? t.motivo : null,
     token: typeof data.pendingProposalRunId === "string" ? data.pendingProposalRunId : null,
     corrida: tareasDelGuardado(data.pendingProposal)?.corrida ?? null,
+    recalculo: leerRecalculoDelCable(t.recalculo),
   };
 }
 
@@ -2216,8 +2223,14 @@ export default function CronogramaCanvas({
          la foto que viajan son las de este momento. Y el historial de deshacer se limpia antes: un
          «deshacer» a mitad del aplicar mandaría el cronograma de antes por encima del aplicado. */
       await new Promise<void>((r) => window.setTimeout(r, 60));
-      const { resumen, sin, foto } = revisionRef.current;
+      const { resumen, sin, foto, forzadas } = revisionRef.current;
       if (!resumen) return;
+      /* E2c: con un bloqueo (tareas que se recalculan o se arman) no se manda nada: el servidor lo
+         rechazaría igual. La pantalla ya lo dice; esto cubre un clic que llegó justo antes. */
+      if (resumen.bloqueo) {
+        toast.info(resumen.bloqueo);
+        return;
+      }
       clearScope(undoScope);
       const res = await fetch(`/api/projects/${projectId}/timeline/borrador/aplicar`, {
         method: "POST",
@@ -2227,8 +2240,9 @@ export default function CronogramaCanvas({
            `version` (E2a): la del `borrador-v1` que ves (null en el formato viejo). Si el servidor lo
            reescribió en el medio (llegaron las tareas), responde 409 PROPUESTA_CAMBIO con la nueva,
            que se trae abajo: sin ella, un «Aplicar» caía una y otra vez en PLAN_CAMBIO (el `load` no
-           reemplaza la propuesta de la pantalla). */
-        body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version }),
+           reemplaza la propuesta de la pantalla).
+           `forzar` (E2c): las fases desfasadas de «Aplicar de todos modos»: sus tareas van tal cual. */
+        body: JSON.stringify({ token: proposalMeta.current.runId, sin: [...sin], huella: resumen.huella, foto, version: revisionRef.current.version, forzar: [...forzadas] }),
       });
       if (res.status === 409) {
         const d = await res.json().catch(() => ({}));
@@ -2296,6 +2310,9 @@ export default function CronogramaCanvas({
       toast.error("Error de conexión al aplicar la propuesta.");
     } finally {
       setAplicandoBorrador(false);
+      /* E2c: la fuerza vale para ESTE aplicar. Uno fallido o con 409 no la deja puesta para el
+         siguiente (crítica de datos #10.4). */
+      revisionRef.current.forzar([]);
     }
     /* Las tareas no llegaron: se OFRECEN en la línea de arriba del Gantt, nunca se piden solas. E2b
        (2026-09-25): se fue la cadena vieja, que al aplicar la propuesta de las reuniones pedía sola el
@@ -2340,7 +2357,8 @@ export default function CronogramaCanvas({
   const { phase: faseDelArmado, track } = useAgentRun(clientId);
   const siguiendoRef = useRef<string | null>(null);
   const [vueltaDelSeguimiento, setVueltaDelSeguimiento] = useState(0);
-  const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;
+  /* E2c: también la del RECÁLCULO de las fases desfasadas (del mismo GET), con la del armado primero. */
+  const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : tareasEnPantalla?.recalculo?.estado === "armando" ? tareasEnPantalla.recalculo.corrida : null;
   const puedeEditarRef = useRef(canEdit);
   useEffect(() => {
     puedeEditarRef.current = canEdit;
@@ -2349,6 +2367,8 @@ export default function CronogramaCanvas({
     if (!corridaQueArma || siguiendoRef.current === corridaQueArma) return;
     const corrida = corridaQueArma;
     siguiendoRef.current = corrida;
+    /* E2c: si es un recálculo, sus fases se nombran con lo de AHORA (al terminar ya no está en el GET). */
+    const recalcula = tareasEnPantalla?.recalculo?.corrida === corrida ? tareasEnPantalla.recalculo.nombres : null;
     void (async () => {
       const r = await track(corrida);
       siguiendoRef.current = null;
@@ -2360,9 +2380,10 @@ export default function CronogramaCanvas({
       const desenlace = desenlaceDelSeguimiento({
         corrida,
         estado: r.status,
-        lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas } : null,
+        lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas, recalculo: leida.tareas?.recalculo ?? null } : null,
         aviso: r.timelineSyncError,
         conVistaPrevia,
+        recalculo: recalcula,
       });
       if (desenlace.que === "seguir") {
         // Sigue «armando» (~6 min sin terminar) o el GET falló: se relee y se vuelve a seguir.
@@ -2422,14 +2443,82 @@ export default function CronogramaCanvas({
      de E2a: se ofrecía y el servidor respondía 403, mientras que la oferta equivalente y «Regenerar
      todo» ya se ocultaban).
      E2b: nunca sobre «Regenerar» de una fase. Tomaría el token de ESA propuesta y armaría las tareas de
-     todo el cronograma (una corrida pagada que nadie pidió): sin botón, la línea solo informa. */
+     todo el cronograma (una corrida pagada que nadie pidió): sin botón, la línea solo informa.
+     E2c: la vara es UNA constante (`puedeArmarTareas`), la misma que pide recalcular las tareas. */
+  const puedeArmarTareas = revision.borrador?.pedido === "primera" ? canGenerateTimeline : canRegenerateTimeline;
   const armarLasTareas =
-    !revision.borrador?.soloFase && (revision.borrador?.pedido === "primera" ? canGenerateTimeline : canRegenerateTimeline)
+    !revision.borrador?.soloFase && puedeArmarTareas
       ? () =>
           void pedirPropuestaDeDetalle(revision.borrador?.pedido === "primera" ? "primera" : "regen", {
             saltarEstructura: true,
           })
       : undefined;
+
+  /* ── EL RECÁLCULO DE LAS TAREAS DE LAS FASES DESFASADAS (E2c P3, 2026-09-25) ─────────────────────
+     Si el CSE quita un cambio de fase, las tareas de esa fase se armaron para otra forma: se recalculan
+     solas, en UNA corrida para todas, 4 s después de la última casilla (`useRecalculoDeLasTareas`). El
+     pedido es el paso 2 sobre ESTA propuesta con `recalcular: { sin }` (todo lo desmarcado): qué fases
+     recalcular lo calcula el servidor. Mientras corre no se traba nada; aplicar espera.
+     ⛔ No usa `pedirPropuestaDeDetalle` ni `armando`: `armando` frena el chat y «Generar», y su «Volver
+     a intentar» arma TODAS las fases. `automatico`: lo lanzó la espera (sin avisos, salvo un error). */
+  const pedirRecalculo = async (automatico: boolean) => {
+    await flushDocBrief();
+    const token = proposalMeta.current.runId;
+    if (proposalMeta.current.deAssist || !revisionRef.current.borrador || descartandoRef.current) return;
+    // El servidor compara contra la base: primero tiene que estar ahí lo que editaste.
+    const sinGuardar = await esperarQueSeGuarde();
+    if (sinGuardar) {
+      if (!automatico) toast.error(sinGuardar);
+      return;
+    }
+    // Lo de ESTE momento (el guardado pudo mover lo vivo): si ya no hay nada que recalcular, nada.
+    const { sin, version, desfasadas } = revisionRef.current;
+    if (desfasadas.length === 0 || descartandoRef.current || proposalMeta.current.runId !== token) return;
+    try {
+      const res = await fetch(`/api/clients/${clientId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: 1, step: 0, stepLabel: "Recalcular tareas", sectionLabel: "Recalcular tareas",
+          agentId: "agent-timeline-detail", projectId, async: true,
+          borrador: { token, version, recalcular: { sin: [...sin] } },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // La propuesta quedó con su recálculo «armando»: se trae, y el seguimiento lo toma.
+        await traerPropuestaPendiente();
+        return;
+      }
+      if (res.status === 409) {
+        // Lo vivo cambió en la base: la pantalla veía otra cosa que recalcular.
+        if (data?.error === "NADA_QUE_RECALCULAR") await load();
+        await traerPropuestaPendiente();
+        if (!automatico && data?.error !== "TAREAS_EN_CURSO" && data?.error !== "NADA_QUE_RECALCULAR") {
+          toast.info(data?.message ?? AVISO_PROPUESTA_PENDIENTE);
+        }
+        return;
+      }
+      toast.error(data?.message ?? "No se pudieron recalcular las tareas.");
+    } catch {
+      toast.error("Error de conexión al recalcular las tareas.");
+    }
+  };
+  const recalc = useRecalculoDeLasTareas({
+    marcasDelCse: revision.marcasDelCse,
+    claveDeDesfasadas: revision.claveDeDesfasadas,
+    puedePedir: canEdit && puedeArmarTareas,
+    puedeLanzar:
+      canEdit && hayBorrador && !proposalMeta.current.deAssist && armando === null && !aplicandoBorrador && !descartando &&
+      tareasEnPantalla?.estado === "listas" && tareasEnPantalla.recalculo?.estado !== "armando",
+    lanzar: (automatico) => pedirRecalculo(automatico),
+  });
+  const recalculoDeLaBarra = recalculoEnPantalla({
+    desfasadas: revision.desfasadas,
+    esperando: recalc.esperando,
+    servidor: tareasEnPantalla?.recalculo ?? null,
+    faseDeLaCorrida: faseDelArmado,
+  });
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -4074,7 +4163,7 @@ export default function CronogramaCanvas({
                   ? () => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })
                   : armarLasTareas
               }
-              onCerrar={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}
+              onSecundaria={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}
               onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}
               descartando={descartando}
               trabajando={armando !== null}
@@ -4093,6 +4182,9 @@ export default function CronogramaCanvas({
               desde={autoriaEnPantalla ? fraseDeAutoria(autoriaEnPantalla) : desdeDeLaPropuesta(deDondeViene(proposal))}
               tareas={tareasDeLaBarra}
               onArmarTareas={armarLasTareas}
+              recalculo={recalculoDeLaBarra}
+              onRecalcular={canEdit && puedeArmarTareas ? recalc.lanzarYa : undefined}
+              onForzar={canEdit && puedeArmarTareas ? revision.forzar : undefined}
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}
               cierreFijado={closeOverride || null}
               barraRef={revision.barraRef}

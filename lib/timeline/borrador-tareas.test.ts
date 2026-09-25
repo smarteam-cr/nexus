@@ -20,8 +20,10 @@ import {
   AVISO_DETALLE_SIN_CAMBIOS,
   AVISO_TAREAS_LISTAS,
   AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA,
+  ACCION_AHORA_NO,
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
+  bloqueoPorDesfasadas,
   borradorBase,
   borradorDelHandoff,
   borradorVacio,
@@ -505,17 +507,35 @@ describe("4 · el CIERRE: las tareas valen si su fase conserva el nombre y las s
       return [it.estado, it.dependeDe ?? null];
     });
 
-  it("⭐ excluir el cambio de semanas → sus tareas quedan fuera CON él; volver a marcarlo → vuelven", () => {
+  it("⭐ excluir el cambio de semanas → sus tareas esperan su recálculo (sin `dependeDe`) y aplicar espera; volver a marcarlo → aplican", () => {
+    /* ⚠ REESCRITA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan. Pedía que quedaran fuera CON el cambio (heredadas, con su
+       `dependeDe` y sin casilla); ahora quedan «excluido» marcadas `recalcula`, SIN `dependeDe` (la
+       casilla sigue en manos del CSE), y aplicar se bloquea con `bloqueoPorDesfasadas` hasta que se
+       recalculen o el CSE las desmarque. Las ediciones que la ponen en rojo: bloquear sin desfasadas
+       (con todo marcado, o con sus tareas desmarcadas), o volver a dejarlas heredadas. */
     expect(tareasDeC(planDeAplicacion(VIVO, BORRADOR))).toEqual([
       ["aplica", null],
       ["aplica", null],
     ]);
-    const sinPadre = planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks"]);
+    expect(planDeAplicacion(VIVO, BORRADOR, [], { tareas: "listas" }).bloqueo, "bloquea sin desfasadas").toBeNull();
+    const sinPadre = planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks"], { tareas: "listas" });
     expect(tareasDeC(sinPadre)).toEqual([
-      ["excluido", "fase:c:durationWeeks"],
-      ["excluido", "fase:c:durationWeeks"],
+      ["excluido", null],
+      ["excluido", null],
     ]);
-    // Heredadas: no se escriben, pero se pueden marcar (cuentan en «Aplicar todo»).
+    for (const k of ["tarea:c1:se-va", "t:c-1"]) expect(estadoDe(sinPadre, k).recalcula, k).toBe(true);
+    expect(sinPadre.bloqueo).toBe(bloqueoPorDesfasadas(["Pruebas"]));
+    expect(sinPadre.bloqueo).toContain("«Pruebas»");
+    expect(sinPadre.bloqueoPorDesfasadas).toBe(true);
+    // Las tareas «armando» mandan: ese es el bloqueo que se dice.
+    const armando = planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks"], { tareas: "armando" });
+    expect([armando.bloqueo, armando.bloqueoPorDesfasadas]).toEqual([BLOQUEO_TAREAS_EN_CURSO, false]);
+    // Con sus tareas desmarcadas no hay nada que esperar: se aplica sin ellas.
+    const sinSusTareas = planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks", "tarea:c1:se-va", "t:c-1"], { tareas: "listas" });
+    expect(sinSusTareas.bloqueo, "bloquea con sus tareas desmarcadas").toBeNull();
+    expect(sinSusTareas.bloqueoPorDesfasadas).toBe(false);
+    // En espera: no se escriben, pero se pueden marcar (cuentan en «Aplicar todo»).
     expect(sinPadre.escrituras.tareas.seVan).toEqual(["b1", "b2"]);
     expect(sinPadre.aplicables).toBe(planDeAplicacion(VIVO, BORRADOR).aplicables);
     // Desmarcar la hija y marcar al padre: la hija queda fuera por ella, no por el padre.
@@ -723,11 +743,19 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     expect(r.proyeccion.fases.map((f) => f.clave)).toEqual(proyectar(VIVO, BORRADOR, []).fases.map((f) => f.clave));
     expect(r.huella, "la huella usa la posición interna").toBe(planDeAplicacion(VIVO, BORRADOR).huella);
 
-    // Desmarcar el cambio de semanas: el grupo de «Pruebas» va con él y no se marca solo.
+    /* Desmarcar el cambio de semanas: el grupo de «Pruebas» queda DESFASADO, con sus tareas en espera.
+       ⚠ REESCRITA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan. Pedía el grupo heredado («Va con el cambio 1…», `dependeDe` 1) y sus
+       tareas sin casilla; ahora sus tareas tienen casilla (`seMarca`) y se pintan marcadas mientras
+       esperan (`enEspera`), sin «Va con el cambio…». Las ediciones que la ponen en rojo: dejar las
+       tareas sin casilla, o volver a colgarlas del cambio. */
     const sinPadre = resumir(VIVO, BORRADOR, ["fase:c:durationWeeks"], { tareas: "listas" });
     const c = sinPadre.grupos.find((g) => g.fase === "c")!;
-    expect([c.estado, c.dependeDe, c.aviso]).toEqual(["excluido", 1, "Va con el cambio 1: si lo marcas, vuelven sus tareas."]);
-    expect(c.tareas.every((t) => !t.seMarca)).toBe(true);
+    expect([c.estado, c.dependeDe, c.aviso, c.desfasada]).toEqual(["excluido", null, undefined, true]);
+    expect(c.tareas.length).toBe(2);
+    expect(c.tareas.every((t) => t.seMarca && t.enEspera === true), "las tareas en espera quedaron sin casilla").toBe(true);
+    expect(sinPadre.grupos.some((g) => (g.aviso ?? "").startsWith("Va con el cambio")), "volvió «Va con el cambio…»").toBe(false);
+    expect(sinPadre.bloqueoPorDesfasadas).toBe(true);
     // Desmarcar una sola tarea: el grupo queda a medias.
     expect(resumir(VIVO, BORRADOR, ["tarea:b1:se-va"]).grupos[0].estado).toBe("parcial");
   });
@@ -836,8 +864,14 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     const sinFases = textoDeLaOfertaDeTareas(false);
     expect(sinFases.texto).not.toMatch(/fases/);
     expect(sinFases).toEqual({ texto: "No se pudieron armar las tareas.", accion: "Volver a intentar" });
-    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true), "la línea no delega en la oferta").toEqual(textoDeLaOfertaDeTareas(true));
-    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, false)).toEqual(sinFases);
+    /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: la línea tiene UN botón chico secundario
+       cuyo texto sale de la línea (`secundaria`); en «ofrecer» es «Ahora no». Lo demás es la oferta. */
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true), "la línea no delega en la oferta").toEqual({
+      ...textoDeLaOfertaDeTareas(true),
+      secundaria: ACCION_AHORA_NO,
+    });
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, false)).toEqual({ ...sinFases, secundaria: "Ahora no" });
+    expect(textoDeLaLineaDeTareas("faltan", null, null, false)?.secundaria, "otra línea con botón secundario").toBeUndefined();
   });
 
   it("⛔ la confirmación no repite cuántas tareas se quitan", () => {

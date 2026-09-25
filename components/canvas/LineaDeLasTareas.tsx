@@ -16,12 +16,19 @@
  * info = algo en curso, warn = algo que falta.
  *
  * E2b (2026-09-25): «ofrecer» — la propuesta ya se resolvió y sus tareas no llegaron: la línea suelta
- * ofrece armarlas, con «Ahora no» (`onCerrar`). Reemplaza a la franja `PasoDeTareasPendiente`, que se
- * borró con la cadena vieja. Info si se aplicaron fases (falta el siguiente paso), warn si no (falló).
+ * ofrece armarlas, con «Ahora no». Reemplaza a la franja `PasoDeTareasPendiente`, que se borró con la
+ * cadena vieja. Info si se aplicaron fases (falta el siguiente paso), warn si no (falló).
+ *
+ * E2c P3 (2026-09-25): también es la línea del RECÁLCULO de las tareas de las fases desfasadas
+ * (`recalculo`): «Recalculando las tareas de «X»…», «no calzan con lo que marcaste» o «No se pudieron
+ * recalcular…». Sus textos salen de `textoDelRecalculo` (lib/timeline/recalculo-de-tareas.ts). UN solo
+ * botón chico secundario (`onSecundaria`), con el texto que da la línea: «Ahora no» en «ofrecer»,
+ * «Aplicar de todos modos» cuando el recálculo falló.
  */
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { textoDeLaLineaDeTareas, type EstadoDeLasTareas } from "@/lib/timeline/borrador";
+import { textoDelRecalculo, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 
 /** Lo que la pantalla sabe de las tareas de la propuesta: el estado que calculó el servidor, la fase
  *  que reporta la corrida («armando») y por qué falló («fallo»). */
@@ -39,7 +46,8 @@ export default function LineaDeLasTareas({
   conCambiosDeFases = true,
   onAccion,
   onDescartar,
-  onCerrar,
+  onSecundaria,
+  recalculo = null,
   descartando = false,
   trabajando = false,
   suelta = false,
@@ -59,8 +67,11 @@ export default function LineaDeLasTareas({
   /** «Descartar», para el borrador SIN cambios (no tiene barra, y la barra es la que lo trae). Sin él,
    *  un borrador vacío que espera tareas no tenía salida hasta que la corrida terminara o se colgara. */
   onDescartar?: () => void;
-  /** «Ahora no», solo en «ofrecer»: esconde la oferta sin pedir nada. */
-  onCerrar?: () => void;
+  /** El botón chico secundario, con el texto que da la línea (`secundaria`): «Ahora no» en «ofrecer»
+   *  (esconde la oferta sin pedir nada), «Aplicar de todos modos» si el recálculo falló. */
+  onSecundaria?: () => void;
+  /** E2c: el recálculo de las fases desfasadas. Con él, la línea es la suya (`estado` no cuenta). */
+  recalculo?: RecalculoEnPantalla | null;
   /** El DELETE de «Descartar» está en curso. */
   descartando?: boolean;
   /** Aplicando, descartando o ya pidiendo: el botón no puede lanzar otra corrida. */
@@ -68,11 +79,14 @@ export default function LineaDeLasTareas({
   /** Sin barra alrededor: la línea lleva su propio recuadro. */
   suelta?: boolean;
 }) {
-  const linea = textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases);
+  const deLasTareas = recalculo ? null : textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases);
+  // Con el recálculo, `onAccion` es «Recalcular las tareas»: sin él (sin permiso), la línea lo dice.
+  const delRecalculo = recalculo ? textoDelRecalculo(recalculo, { puedePedir: !!onAccion }) : null;
+  const linea = delRecalculo ?? deLasTareas;
   if (!linea) return null;
-  const enCurso = estado === "paso-1" || estado === "armando";
+  const enCurso = delRecalculo ? delRecalculo.enCurso : estado === "paso-1" || estado === "armando";
   // Info = algo en curso, o la oferta después de aplicar fases; warn = algo que falta o falló.
-  const info = enCurso || (estado === "ofrecer" && conCambiosDeFases);
+  const info = enCurso || (!recalculo && estado === "ofrecer" && conCambiosDeFases);
   return (
     <div
       role="status"
@@ -100,9 +114,9 @@ export default function LineaDeLasTareas({
           {descartando ? "Descartando…" : "Descartar"}
         </Button>
       )}
-      {estado === "ofrecer" && onCerrar && (
-        <Button size="xs" variant="secondary" onClick={onCerrar} disabled={trabajando}>
-          Ahora no
+      {linea.secundaria && onSecundaria && (
+        <Button size="xs" variant="secondary" onClick={onSecundaria} disabled={trabajando}>
+          {linea.secundaria}
         </Button>
       )}
     </div>

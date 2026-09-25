@@ -36,6 +36,7 @@ import {
   FORMATO_BORRADOR,
   fotoDeTarea,
   leerBorrador,
+  mensajeDeRecalculoAlAplicar,
   planDeAplicacion,
   proyectar,
   type Borrador,
@@ -732,6 +733,41 @@ describe("aplicar el borrador CON tareas (E2a)", () => {
     const intento = aplicarBorradorEnTx(db.tx, pedidoConTareas(v1, { fases: FASES, tareas: TAREAS }, { tareas: "armando" }));
     await expect(intento).rejects.toMatchObject({ codigo: "NO_SE_PUEDE", message: BLOQUEO_TAREAS_EN_CURSO });
     expect(db.llamadas).toEqual(["token", "leer"]);
+  });
+
+  it("⛔ E2c P3 · una pestaña de antes con una fase DESFASADA: NO_SE_PUEDE con «recarga la página», y nada se escribe; forzada, aplica", async () => {
+    /* Quitar un cambio de fase ya no deja sus tareas fuera: se recalculan, y aplicar espera. Solo una
+       pestaña de antes (que no sabe recalcular ni forzar) manda tareas desfasadas: se le dice que
+       recargue (crítica de alcance #16), no el bloqueo de la pantalla nueva («recalcúlalas»), que ella no
+       puede cumplir. Las ediciones que la ponen en rojo: aplicar las tareas armadas para otra forma
+       (sin bloqueo), o devolverle el bloqueo de la pantalla nueva. */
+    const t2 = TAREAS.find((t) => t.id === "t2")!;
+    const acorta: Borrador = {
+      formato: FORMATO_BORRADOR,
+      version: 2,
+      origen: "contexto",
+      observaciones: [],
+      cambios: [
+        { tipo: "fase-cambia", clave: "fase:c:durationWeeks", faseId: "c", fase: "Pruebas", campo: "durationWeeks", desde: 3, a: 2 },
+        { tipo: "tarea-se-va", clave: claveDeTareaQueSeVa("t2"), tareaId: "t2", faseId: "c", desde: fotoDeTarea(tareaDelVivo(t2)) },
+      ],
+      pedido: "regenerar",
+      tareas: { corrida: "run-tareas", listas: true },
+      tareasArmadasPara: { c: { nombre: "Pruebas", semanas: 2 } },
+    };
+    // El CSE desmarcó el cambio de semanas: «Pruebas» sigue en 3 y su tarea se armó para 2.
+    const sin = ["fase:c:durationWeeks"];
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: acorta, token: "run-estructura" });
+    const intento = aplicarBorradorEnTx(db.tx, pedidoConTareas(acorta, { fases: FASES, tareas: TAREAS }, { sin }));
+    await expect(intento).rejects.toMatchObject({ codigo: "NO_SE_PUEDE", message: mensajeDeRecalculoAlAplicar(["Pruebas"]) });
+    expect(db.llamadas, "escribió algo con tareas desfasadas").toEqual(["token", "leer"]);
+    // «Aplicar de todos modos» (la pantalla nueva, tras un recálculo fallido): la fase forzada aplica tal cual.
+    const vivo = vivoDe(FASES, null, TAREAS);
+    const huella = planDeAplicacion(vivo, leerBorrador(acorta, vivo)!, sin, { tareas: "listas", forzar: ["c"] }).huella;
+    const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: acorta, token: "run-estructura" });
+    const r = await aplicarBorradorEnTx(db2.tx, pedidoConTareas(acorta, { fases: FASES, tareas: TAREAS }, { sin, huella, forzar: ["c"] }));
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 1 });
+    expect(r.plan.forzadas.map((f) => f.fase)).toEqual(["c"]);
   });
 
   it("el cierre de la fase: quitar la última pendiente la cierra; sumar una a una fase cerrada la reabre", async () => {

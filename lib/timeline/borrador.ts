@@ -64,8 +64,8 @@
  * diferencia la explican las casillas del CSE (no una edición a mano), la fase está DESFASADA: sus
  * tareas se recalculan en vez de quedar fuera con su cambio. La marca del recálculo va en `recalculo`,
  * nunca en `tareas` (el estado se deduce de su corrida, igual que el de las tareas).
- * P1 es inerte: el cierre da los mismos estados, el mismo `dependeDe` y la misma huella que antes con
- * los borradores de hoy, y no bloquea. El bloqueo por desfasadas lo prende P3.
+ * Desde P3 (el interruptor), sus tareas ya no quedan fuera «con» el cambio desmarcado: quedan en
+ * espera, sin `dependeDe`, y aplicar se bloquea hasta que se recalculen, se desmarquen o se fuercen.
  */
 import { huella as huellaDeTitulo, type Party, type TipoDeTarea } from "./assist-items"; // sin ciclo: assist-items no importa nada
 import { estaColgada } from "@/lib/agents/run-colgada"; // puro, client-safe
@@ -1003,8 +1003,8 @@ export interface PlanDeAplicacion {
   huella: string;
   /** La estructura (sin cambios desde E1) y las tareas. */
   escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas };
-  /** Si no se puede aplicar entero, por qué (un borrador de una versión más nueva, o las tareas
-   *  todavía armándose). null = se puede. */
+  /** Si no se puede aplicar entero, por qué (un borrador de una versión más nueva, las tareas
+   *  todavía armándose o, E2c, fases desfasadas sin recalcular). null = se puede. */
   bloqueo: string | null;
   /** El que recibió el plan (lo deduce quien llama, de la corrida): null = no espera tareas. */
   estadoDeTareas: EstadoDeLasTareas | null;
@@ -1013,7 +1013,7 @@ export interface PlanDeAplicacion {
   desfasadas: FaseDesfasada[];
   /** E2c: las desfasadas que el CSE fuerza («Aplicar de todos modos»): sus tareas van tal cual. */
   forzadas: FaseDesfasada[];
-  /** E2c: el bloqueo es el de las desfasadas. Siempre false hasta que P3 lo prenda. */
+  /** E2c: el bloqueo que manda es el de las desfasadas (no el de una versión nueva ni el de las tareas «armando»). */
   bloqueoPorDesfasadas: boolean;
 }
 
@@ -1491,14 +1491,11 @@ export function planDeAplicacion(
       forzadasEnElPlan.add(fase);
       return;
     }
-    /* 6.6) DESFASADA. P1 (inerte): con un cambio de fase excluido del que depende, lo mismo que
-       antes (excluido y heredado, con su `dependeDe`) más la marca `recalcula`. Con los borradores de
-       hoy, «alcanzable» es «calza con la entera y tiene padre», así que estados, `dependeDe` y huella
-       no cambian. Sin padre solo se llega con una forma armada que trae la Semana 0 o las sesiones, o
-       armada por un recálculo (P3): queda fuera, marcada `recalcula`, sin `dependeDe`. P3 quita el
-       `dependeDe` de todas y prende el bloqueo. */
-    const padre = padreExcluido(fase);
-    estados[i] = padre ? { estado: "excluido", dependeDe: padre, recalcula: true } : { estado: "excluido", recalcula: true };
+    /* 6.6) DESFASADA (E2c P3, el interruptor): queda fuera marcada `recalcula`, SIN `dependeDe`. Ya no
+       «va con» el cambio que el CSE desmarcó: sus tareas se recalculan para la forma que queda, y
+       mientras tanto la casilla sigue en manos del CSE (`seMarca`) y aplicar espera (el bloqueo de
+       abajo). Hasta P1 quedaba heredada de ese cambio, con su «Va con el cambio N». */
+    estados[i] = { estado: "excluido", recalcula: true };
   });
 
   const items: ItemDelPlan[] = borrador.cambios.map((cambio, i) => {
@@ -1568,6 +1565,17 @@ export function planDeAplicacion(
   const huella = huellaDeTexto(
     JSON.stringify(items.map((it) => [it.numero, it.cambio.clave, it.estado, destinoDe(it.cambio)])),
   );
+  /* El bloqueo, en este orden: una versión nueva, las tareas «armando» y (E2c P3) las fases
+     desfasadas sin forzar. Aplicar espera a que se recalculen; la salida está siempre a mano:
+     desmarcar sus tareas, o «Aplicar de todos modos» si el recálculo falló. `bloqueoPorDesfasadas`
+     dice que el bloqueo que manda es ese (la barra lo dice en la línea del recálculo, no dos veces). */
+  const bloqueoPrevio =
+    borrador.desconocidos && borrador.desconocidos > 0
+      ? BLOQUEO_VERSION_NUEVA
+      : tareas === "armando"
+        ? BLOQUEO_TAREAS_EN_CURSO
+        : null;
+  const porDesfasadas = bloqueoPrevio === null && desfasadas.length > 0;
   return {
     items,
     aplicadas,
@@ -1577,17 +1585,11 @@ export function planDeAplicacion(
     choques: items.filter((it) => it.estado === "choque").length,
     huella,
     escrituras,
-    bloqueo:
-      borrador.desconocidos && borrador.desconocidos > 0
-        ? BLOQUEO_VERSION_NUEVA
-        : tareas === "armando"
-          ? BLOQUEO_TAREAS_EN_CURSO
-          : null,
+    bloqueo: porDesfasadas ? bloqueoPorDesfasadas(desfasadas.map((d) => d.nombre)) : bloqueoPrevio,
     estadoDeTareas: tareas,
     desfasadas,
     forzadas,
-    // P1 inerte: las desfasadas todavía no bloquean (lo prende P3, detrás de las tareas «armando»).
-    bloqueoPorDesfasadas: false,
+    bloqueoPorDesfasadas: porDesfasadas,
   };
 }
 
@@ -1926,8 +1928,9 @@ export interface ItemDeTarea {
   semana: number;
   /** El ⚠ del choque, o que ya está (o ya no está). */
   aviso?: string;
-  /** La casilla se puede tocar: aplica o la desmarcó el CSE. Una que quedó fuera con su cambio de
-   *  fase (heredada) no: vuelve cuando se marca ese cambio. */
+  /** La casilla se puede tocar: aplica o la desmarcó el CSE. Una que quedó fuera con su fase nueva
+   *  desmarcada (heredada) no: vuelve cuando se marca esa fase. Una en espera de recalcularse (E2c)
+   *  sí: el CSE puede desmarcarla para aplicar sin ella. */
   seMarca: boolean;
   /** Por qué está «por validar» (el tooltip), si lo está. */
   porValidar?: string;
@@ -2376,6 +2379,8 @@ export function resumenDeLaConfirmacion(
 
 export const ACCION_ARMAR_TAREAS = "Armar las tareas";
 export const ACCION_VOLVER_A_INTENTAR = "Volver a intentar";
+/** El botón chico que esconde la oferta de las tareas sin pedir nada. */
+export const ACCION_AHORA_NO = "Ahora no";
 
 /**
  * ¿La lista trae algún cambio de fases que se pueda aplicar sin las tareas? Lo que se puede MARCAR
@@ -2395,6 +2400,8 @@ export function hayCambiosDeFasesAplicables(items: ReadonlyArray<Pick<ItemDeLaLi
  * aplican los cambios de fases» es falso: no hay ninguno (revisión de E2a).
  * «ofrecer» (E2b): ya no hay propuesta y sus tareas no llegaron; la línea ofrece armarlas
  * (`textoDeLaOfertaDeTareas`). Con `conCambiosDeFases`, lo resuelto fue aplicar sus fases.
+ * `secundaria` (E2c P3): el texto del único botón chico secundario de la línea; solo «ofrecer» lo
+ * trae («Ahora no»). La línea del recálculo usa el mismo botón para «Aplicar de todos modos».
  */
 export function textoDeLaLineaDeTareas(
   estado: EstadoDeLasTareas | "paso-1" | "ofrecer" | null,
@@ -2402,7 +2409,7 @@ export function textoDeLaLineaDeTareas(
   motivo: string | null,
   conMaterial: boolean,
   conCambiosDeFases = true,
-): { texto: string; accion: string | null } | null {
+): { texto: string; accion: string | null; secundaria?: string | null } | null {
   const siAplicas = conCambiosDeFases ? " Si aplicas ahora, solo se aplican los cambios de fases." : "";
   switch (estado) {
     case "paso-1":
@@ -2429,7 +2436,7 @@ export function textoDeLaLineaDeTareas(
       };
     }
     case "ofrecer":
-      return textoDeLaOfertaDeTareas(conCambiosDeFases);
+      return { ...textoDeLaOfertaDeTareas(conCambiosDeFases), secundaria: ACCION_AHORA_NO };
     default:
       return null;
   }
@@ -2551,7 +2558,7 @@ export function nombresEnTexto(nombres: readonly string[]): string {
   return `${citados[0]} y ${plural(citados.length - 1, "fase más", "fases más")}`;
 }
 
-/** El bloqueo de aplicar mientras haya fases desfasadas sin forzar (lo prende P3). */
+/** El bloqueo de aplicar mientras haya fases desfasadas sin forzar. */
 export const bloqueoPorDesfasadas = (nombres: readonly string[]): string =>
   `Las tareas de ${nombresEnTexto(nombres)} no calzan con lo que marcaste: recalcúlalas o desmárcalas para aplicar sin ellas.`;
 

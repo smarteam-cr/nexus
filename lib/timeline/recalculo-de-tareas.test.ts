@@ -7,8 +7,8 @@
  * Si el CSE quita un cambio de fase, las tareas de esa fase quedaron armadas para otra forma: la fase
  * está desfasada y sus tareas se recalculan. Lo que cuida (spec de E2c, §2 y §5 P1):
  *   1. la lectura: la forma armada con sesiones y Semana 0, y el `recalculo` guardado;
- *   2. P1 es INERTE: con los borradores de hoy, el cierre da los mismos estados, el mismo `dependeDe`,
- *      la misma huella y ningún bloqueo;
+ *   2. P3 es el INTERRUPTOR: sus tareas esperan el recálculo (sin `dependeDe`, con su casilla) y
+ *      aplicar espera; la huella no cambia de fórmula (hasta P3, P1 era inerte);
  *   3. qué fase está desfasada (y qué es una edición a mano, que sigue chocando);
  *   4. «Aplicar de todos modos» (`forzar`);
  *   5. la estructura supuesta con lo desmarcado y la forma de una fase en ella;
@@ -240,17 +240,22 @@ describe("1 · la lectura: la forma armada y el recálculo guardado", () => {
   });
 });
 
-describe("2 · P1 es INERTE: los borradores de hoy dan lo mismo que antes de E2c", () => {
-  it("⭐ con el cambio de semanas de «Pruebas» desmarcado: excluidas CON él, marcadas `recalcula`, sin bloqueo y la huella de hoy", () => {
-    /* La edición que la pone en rojo: quitar el `dependeDe` o prender el bloqueo en P1 (eso es P3, el
-       interruptor), o que `recalcula` entre en la huella (la pantalla y el servidor de hoy dejarían de
-       coincidir). La huella de abajo es la que da el borrador.ts de HEAD (78f45ca6) con esta entrada. */
+describe("2 · P3, el interruptor: las tareas de la fase desfasada esperan su recálculo, y aplicar espera", () => {
+  it("⭐ con el cambio de semanas de «Pruebas» desmarcado: en espera SIN `dependeDe`, marcadas `recalcula`, con bloqueo y la huella de siempre", () => {
+    /* ⚠ REESCRITA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan. En P1 (inerte) pedía el `dependeDe` del cambio y ningún bloqueo; P3
+       quita el `dependeDe` (la casilla sigue en manos del CSE) y prende el bloqueo, detrás del de las
+       tareas «armando». Las ediciones que la ponen en rojo: dejar el `dependeDe` (sin casilla), no
+       bloquear (se aplicarían sin recalcular), o que `recalcula` entre en la huella. La huella es la de
+       HEAD 78f45ca6 con esta entrada: el estado de cada cambio no cambió, solo su `dependeDe`, que la
+       huella no cubre. */
     const plan = planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks"], { tareas: "listas" });
     for (const k of TAREAS_DE_C) {
-      expect(estadoDe(plan, k), k).toMatchObject({ estado: "excluido", dependeDe: "fase:c:durationWeeks", recalcula: true });
+      expect(estadoDe(plan, k), k).toMatchObject({ estado: "excluido", recalcula: true });
+      expect(estadoDe(plan, k).dependeDe, `${k} sigue colgada del cambio`).toBeUndefined();
     }
-    expect(plan.bloqueo).toBeNull();
-    expect(plan.bloqueoPorDesfasadas).toBe(false);
+    expect(plan.bloqueo).toBe(bloqueoPorDesfasadas(["Pruebas"]));
+    expect(plan.bloqueoPorDesfasadas).toBe(true);
     expect(plan.huella, "la huella cambió").toBe("17069a204d3e48");
     expect(plan.desfasadas).toEqual([
       {
@@ -267,12 +272,21 @@ describe("2 · P1 es INERTE: los borradores de hoy dan lo mismo que antes de E2c
     expect(planDeAplicacion(VIVO, BORRADOR, [], { tareas: "listas" }).desfasadas).toEqual([]);
   });
 
-  it("ninguna combinación de casillas bloquea en P1", () => {
+  it("solo bloquea una fase desfasada: ninguna otra casilla, ni todas juntas", () => {
+    /* ⚠ REESCRITA en E2c P3 (2026-09-25), con esta razón: la misma de arriba. Pedía que ninguna
+       combinación bloqueara (P1 inerte); ahora bloquea solo el cambio de semanas de «Pruebas», que la
+       deja desfasada. La edición que la pone en rojo: bloquear sin desfasadas. */
     const claves = BORRADOR.cambios.map((c) => c.clave);
     for (const k of claves) {
-      expect(planDeAplicacion(VIVO, BORRADOR, [k], { tareas: "listas" }).bloqueo, k).toBeNull();
+      const plan = planDeAplicacion(VIVO, BORRADOR, [k], { tareas: "listas" });
+      expect([plan.bloqueo, plan.bloqueoPorDesfasadas], k).toEqual(
+        k === "fase:c:durationWeeks" ? [bloqueoPorDesfasadas(["Pruebas"]), true] : [null, false],
+      );
     }
+    // Todo desmarcado (también las tareas de «Pruebas»): nada que recalcular.
     expect(planDeAplicacion(VIVO, BORRADOR, claves, { tareas: "listas" }).bloqueo).toBeNull();
+    // Forzada, tampoco.
+    expect(planDeAplicacion(VIVO, BORRADOR, ["fase:c:durationWeeks"], { tareas: "listas", forzar: ["c"] }).bloqueo).toBeNull();
   });
 });
 
@@ -809,7 +823,8 @@ describe("10 · lo que se ve: la línea, el grupo, los textos y el resumen", () 
     ]);
     expect(r.grupos.filter((g) => g.fase !== "c").every((g) => !g.desfasada && g.tareas.every((t) => !t.enEspera))).toBe(true);
     expect(r.desfasadas.map((d) => d.fase)).toEqual(["c"]);
-    expect([r.forzadas, r.bloqueoPorDesfasadas]).toEqual([[], false]);
+    // ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: la de «2 · P3»: con una desfasada, aplicar espera.
+    expect([r.forzadas, r.bloqueoPorDesfasadas]).toEqual([[], true]);
 
     const NOMBRE_C: CambioFaseCambia = { ...DUR_C, clave: "fase:c:name", campo: "name", desde: "Pruebas", a: "Pruebas finales" };
     const b = v1([NOMBRE_C, seVa(C1, "c"), nueva("t:c-1", "c", "Pruebas de aceptación", 2)], {

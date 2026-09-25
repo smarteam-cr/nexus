@@ -30,6 +30,7 @@ import { FRONTERA_DEL_MATERIAL, type FotoDelCronograma } from "./material-cronog
 import { PIEZAS_CON_CONTEXTO_NOMBRADO } from "./tipos";
 import { fraseDelPlazo, hayMaterialParaElPaso1, pasoTrasResolver } from "@/lib/timeline/propuesta-de-estructura";
 import {
+  ACCION_AHORA_NO,
   CHAT_CON_EL_VACIO_FALLIDO,
   FORMATO_BORRADOR,
   juntarObservaciones,
@@ -733,7 +734,11 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
   });
 
   it("siguen los dos flush del brief y los dos literales de las puertas", () => {
-    expect(leer("components/canvas/CronogramaCanvas.tsx").match(/await flushDocBrief\(\);/g)?.length).toBe(2);
+    /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan, y ese pedido al agente (`pedirRecalculo`) también manda antes las
+       instrucciones tipeadas. Son tres: las dos puertas de siempre y el recálculo. */
+    expect(leer("components/canvas/CronogramaCanvas.tsx").match(/await flushDocBrief\(\);/g)?.length).toBe(3);
+    expect(tramo("const pedirRecalculo = async (", "const recalc = useRecalculoDeLasTareas(")).toContain("await flushDocBrief();");
     expect(src).toContain('pedirPropuestaDeDetalle("primera")');
     expect(src).toContain('pedirPropuestaDeDetalle("regen")');
   });
@@ -927,8 +932,11 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     expect(tramo("const tareasDeLaBarra: TareasEnPantalla | null =", ": null;")).toContain(
       "estado: estadoDeLasTareasEnPantalla,",
     );
-    // El seguimiento sigue mirando el estado del SERVIDOR (la corrida real), no el derivado.
-    expect(src).toContain('const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : null;');
+    /* El seguimiento sigue mirando el estado del SERVIDOR (la corrida real), no el derivado.
+       ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan, en una corrida que también se sigue (la del recálculo, del mismo
+       GET). La del armado de las tareas va primero. */
+    expect(src).toContain('const corridaQueArma = tareasEnPantalla?.estado === "armando" ? tareasEnPantalla.corrida : tareasEnPantalla?.recalculo?.estado === "armando" ? tareasEnPantalla.recalculo.corrida : null;');
   });
 
   it("el auto-descarte de una propuesta de las reuniones sigue la cadena SALTANDO el paso 1 (revisión del paso A2)", () => {
@@ -1011,7 +1019,9 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     // (1) Los textos: una oración y el botón, en tuteo, sin afirmar que se decidieron fases.
     for (const conFases of [true, false]) {
       const o = textoDeLaLineaDeTareas("ofrecer", null, null, false, conFases);
-      expect(o, "la línea no ofrece").toEqual(textoDeLaOfertaDeTareas(conFases));
+      /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: el botón chico de la línea se generalizó
+         (`onSecundaria`) y su texto sale de la línea: en «ofrecer», «Ahora no». */
+      expect(o, "la línea no ofrece").toEqual({ ...textoDeLaOfertaDeTareas(conFases), secundaria: ACCION_AHORA_NO });
       expect(o?.texto ?? "", "volvió «las fases quedaron decididas»").not.toMatch(/quedaron decididas/i);
       expect(`${o?.texto} ${o?.accion}`, "voseo en la oferta").not.toMatch(/generá|armá|volvé|intentá|podés|querés|aplicá/i);
       expect(o?.accion, "la oferta no tiene botón").toBeTruthy();
@@ -1025,13 +1035,21 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
     // (3) La pantalla: la franja vieja se fue, la línea dice «Ahora no», y el cartel ámbar no dobla la oferta.
     expect(fs.existsSync(path.join(RAIZ, "components/canvas/PasoDeTareasPendiente.tsx")), "volvió la franja vieja").toBe(false);
     expect(src, "volvió el aviso de la cadena vieja").not.toContain("AVISO_DECIDE_PRIMERO");
+    /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: la línea tiene UN solo botón chico
+       secundario (`onSecundaria`), que en «ofrecer» es «Ahora no» y en el recálculo «Aplicar de todos
+       modos»; su texto sale de la línea (`secundaria`), no del componente. Sacar el botón, o volver a
+       un segundo botón chico propio de «ofrecer», la pone en rojo. */
     const linea = tramo("<LineaDeLasTareas", "/>");
-    expect(linea).toContain('onCerrar={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}');
+    expect(linea).toContain('onSecundaria={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}');
     expect(linea, "«ofrecer» no salta el paso 1").toContain(
       'pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { saltarEstructura: true })',
     );
     const componente = soloCodigo(leer("components/canvas/LineaDeLasTareas.tsx"));
-    expect(componente, "la oferta no se puede cerrar").toMatch(/estado === "ofrecer" && onCerrar && \(\s*<Button[^>]*onClick=\{onCerrar\}[^>]*>\s*Ahora no/);
+    expect(componente, "la oferta no se puede cerrar").toMatch(
+      /\{linea\.secundaria && onSecundaria && \(\s*<Button[^>]*onClick=\{onSecundaria\}[^>]*>\s*\{linea\.secundaria\}/,
+    );
+    expect(componente, "volvió el «Ahora no» propio de la oferta").not.toContain("onCerrar");
+    expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true)?.secundaria).toBe("Ahora no");
     expect(src, "el cartel ámbar dobla la oferta").toContain(
       "{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (",
     );

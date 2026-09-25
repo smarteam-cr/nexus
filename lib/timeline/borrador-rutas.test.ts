@@ -1026,7 +1026,10 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
     expect(escrito.extra, "perdió lo que el guardado traía").toEqual({ de: "otra versión" });
     expect(escrito.version).toBe(6);
     expect(escrito.tareas).toEqual({ corrida: "run-t", listas: true });
-    expect(escrito.tareasArmadasPara, "no usó la estructura que vio el agente").toEqual({ f1: { nombre: "Diseño", semanas: 3 } });
+    // ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan (R8 guarda la forma completa).
+    expect(escrito.tareasArmadasPara, "no usó la estructura que vio el agente").toEqual({
+      f1: { nombre: "Diseño", semanas: 3, sesiones: null, semanaCero: true },
+    });
     expect(escrito.cambios.map((c: { tipo: string }) => c.tipo)).toEqual(["tarea-se-va", "tarea-nueva"]);
     expect(escrito.cambios[1].tarea).toMatchObject({ title: "Diseñar el tablero", weekIndex: 2 });
     expect(escrito.desconocidos).toBeUndefined();
@@ -1134,7 +1137,8 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
     const escrito = db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal;
     const fases = escrito.cambios.map((c: { fase?: string; faseId?: string }) => c.fase ?? c.faseId);
     expect(fases, "cambió una fase que no se pidió").toEqual(["f2", "f2"]);
-    expect(escrito.tareasArmadasPara).toEqual({ f2: { nombre: "Pruebas", semanas: 2 } });
+    // ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan (R8 guarda la forma completa).
+    expect(escrito.tareasArmadasPara).toEqual({ f2: { nombre: "Pruebas", semanas: 2, sesiones: null, semanaCero: false } });
     expect(escrito.soloFase).toBe("f2");
 
     // Control: el mismo pedido sin `soloFase` guardado cambia las dos.

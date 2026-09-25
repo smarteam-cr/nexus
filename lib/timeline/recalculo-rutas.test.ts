@@ -1,6 +1,6 @@
 /**
  * lib/timeline/recalculo-rutas.test.ts — E2c P2: EL SERVIDOR del recálculo de las tareas de las fases
- * desfasadas. Inerte: nadie manda todavía `recalcular` ni `forzar` (lo prende P3, con la pantalla).
+ * desfasadas. Lo escribió P2 inerte; desde P3 la pantalla manda `recalcular` y `forzar`.
  *
  * Correr: `npx vitest run lib/timeline/recalculo-rutas.test.ts --project unit`.
  *
@@ -383,7 +383,8 @@ describe("5 · fusionarDetalleEnElBorrador con un recálculo — solo cambian su
     expect(b.cambios[4].tarea).toMatchObject({ title: "Probar con el cliente", weekIndex: 2 });
     expect(b.cambios.slice(0, 3), "tocó las tareas de otra fase").toEqual(CAMBIOS.slice(0, 3));
     expect(b.tareas, "pisó `tareas`: la corrida chica quedaría como la que armó todo").toEqual({ corrida: "run-2", listas: true });
-    expect(b.tareasArmadasPara).toEqual({ ...ARMADAS, c: { nombre: "Pruebas", semanas: 3 } });
+    // ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan (R8 guarda la forma completa).
+    expect(b.tareasArmadasPara).toEqual({ ...ARMADAS, c: { nombre: "Pruebas", semanas: 3, sesiones: null, semanaCero: false } });
     expect(b.recalculo, "el recálculo entero no se cerró").toBeNull();
     expect(b.version).toBe(6);
     expect(b.pedido).toBe("regenerar");

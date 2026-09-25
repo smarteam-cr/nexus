@@ -30,8 +30,16 @@
  * aplicar: si el servidor tiene otra, responde 409 y no se aplica algo distinto de lo que viste.
  * El estado de las tareas («armando», «faltan», «fallo», «listas») lo calcula el servidor y entra
  * acá como `tareas`: bloquea el aplicar mientras se arman y decide la confirmación.
+ *
+ * E2c P3 (2026-09-25): si el CSE quita un cambio de fase, las tareas de esa fase quedan DESFASADAS y
+ * se recalculan solas (`useRecalculoDeLasTareas`). Acá viven dos cosas de la pantalla:
+ *   · `marcasDelCse`: cuenta SOLO las casillas que toca el CSE (`marcar`, `marcarVarios`). Es lo único
+ *     que arranca la espera del recálculo: nunca al abrir, al recargar ni por un cambio del cronograma;
+ *   · `forzadas`: las fases de «Aplicar de todos modos», en memoria y nunca recordadas. Se vacían con
+ *     otra propuesta.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
 import {
   almacenEnMemoria,
   alternarVista,
@@ -51,6 +59,7 @@ import {
   type Borrador,
   type EstadoDeLasTareas,
   type EstadoDeRevision,
+  type FaseDesfasada,
   type Proyeccion,
   type RecuerdoDeLaRevision,
   type ResumenDelBorrador,
@@ -71,6 +80,10 @@ function localStorageSeguro(): AlmacenDeFotos | null {
     return null; // acceder a `localStorage` tira en algunos navegadores con el sitio bloqueado
   }
 }
+
+/** Ninguna fase forzada: una sola referencia, así vaciar lo que ya está vacío no cambia nada. */
+const SIN_FORZAR: readonly string[] = [];
+const SIN_DESFASADAS: FaseDesfasada[] = [];
 
 const almacenes = (): AlmacenDeFotos[] => {
   const local = localStorageSeguro();
@@ -156,6 +169,16 @@ export interface BorradorEnPantalla {
   marcarVarios: (claves: readonly string[], incluir: boolean) => void;
   /** La propuesta se resolvió (aplicada o descartada): se borra lo que se recordaba de ella. */
   olvidar: () => void;
+  /** E2c: cuántas casillas tocó el CSE (solo `marcar` y `marcarVarios`). Arranca la espera del recálculo. */
+  marcasDelCse: number;
+  /** E2c: las fases de «Aplicar de todos modos» (en memoria; nunca se recuerdan). */
+  forzadas: readonly string[];
+  /** E2c: fuerza esas fases (`[]` las suelta). */
+  forzar: (fases: readonly string[]) => void;
+  /** E2c: las fases desfasadas con lo marcado. */
+  desfasadas: FaseDesfasada[];
+  /** E2c: su identidad (`claveDeDesfasadas`): si no cambia, no hay nada nuevo que recalcular. */
+  claveDeDesfasadas: string;
   /** Envuelve la barra fija, la lista y el Gantt: con él se mide y se restaura el lugar del scroll,
    *  y es el bloque dentro del que la barra queda fija. */
   contenedorRef: RefObject<HTMLDivElement | null>;
@@ -178,13 +201,19 @@ export function useBorradorDelCronograma(entrada: {
   const { projectId, propuesta, token, vivo, tareas } = entrada;
   const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);
   const [revision, setRevision] = useState<EstadoDeRevision>(REVISION_VACIA);
+  const [marcasDelCse, setMarcasDelCse] = useState(0);
+  const [forzadasGuardadas, setForzadas] = useState<readonly string[]>(SIN_FORZAR);
   /* Una propuesta distinta: se ajusta el estado EN EL RENDER (el patrón de React para «cuando cambia
      una prop»), no en un efecto — un efecto pintaría primero la propuesta nueva con la foto vieja.
-     La foto es la RECORDADA de esa misma propuesta, si la hay; si no, la de ahora. */
+     La foto es la RECORDADA de esa misma propuesta, si la hay; si no, la de ahora. Las fases forzadas
+     eran de la otra propuesta: se sueltan (E2c). */
   let actual = revision;
+  let forzadas = forzadasGuardadas;
   if (revision.clave !== clave) {
     actual = revisionPara(clave, vivo, clave ? recordado(projectId, clave) : null);
     setRevision(actual);
+    forzadas = SIN_FORZAR;
+    if (forzadasGuardadas !== SIN_FORZAR) setForzadas(SIN_FORZAR);
   }
 
   // Se recuerda la foto y lo desmarcado de ESTA propuesta: el próximo montaje los encuentra.
@@ -205,8 +234,8 @@ export function useBorradorDelCronograma(entrada: {
   /* La barra solo con cambios: un v1 vacío (marcado «armando», todavía sin fases ni tareas) no monta
      una barra en blanco. La proyección sale del resumen: una evaluación del plan menos por render. */
   const resumen = useMemo(
-    () => (borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas }) : null),
-    [vivo, borrador, actual.sin, tareas],
+    () => (borrador && borrador.cambios.length > 0 ? resumir(vivo, borrador, actual.sin, { tareas, forzar: forzadas }) : null),
+    [vivo, borrador, actual.sin, tareas, forzadas],
   );
   const proyeccion = resumen?.proyeccion ?? null;
   /* «Nada que decidir» sale del PLAN aunque no haya cambios: `debeDescartarseSolo` sabe que uno
@@ -214,8 +243,10 @@ export function useBorradorDelCronograma(entrada: {
   const nadaQueDecidir = useMemo(() => {
     if (!borrador) return false;
     if (resumen) return debeDescartarseSolo(resumen);
-    return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas }));
-  }, [borrador, resumen, vivo, actual.sin, tareas]);
+    return debeDescartarseSolo(planDeAplicacion(vivo, borrador, actual.sin, { tareas, forzar: forzadas }));
+  }, [borrador, resumen, vivo, actual.sin, tareas, forzadas]);
+  const desfasadas = resumen?.desfasadas ?? SIN_DESFASADAS;
+  const clavePorDesfasadas = useMemo(() => claveDeDesfasadas(desfasadas), [desfasadas]);
   const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);
 
   const contenedorRef = useRef<HTMLDivElement | null>(null);
@@ -232,11 +263,16 @@ export function useBorradorDelCronograma(entrada: {
     if (a) restaurarAncla(contenedorRef.current, barraRef.current, a);
   }, [actual.vista]);
 
-  const marcar = useCallback((c: string, incluir: boolean) => setRevision((r) => marcarCambios(r, [c], incluir)), []);
-  const marcarVarios = useCallback(
-    (claves: readonly string[], incluir: boolean) => setRevision((r) => marcarCambios(r, claves, incluir)),
-    [],
-  );
+  /* Solo estas dos son casillas del CSE: cada una suma una marca (E2c: arranca la espera del recálculo). */
+  const marcar = useCallback((c: string, incluir: boolean) => {
+    setRevision((r) => marcarCambios(r, [c], incluir));
+    setMarcasDelCse((n) => n + 1);
+  }, []);
+  const marcarVarios = useCallback((claves: readonly string[], incluir: boolean) => {
+    setRevision((r) => marcarCambios(r, claves, incluir));
+    setMarcasDelCse((n) => n + 1);
+  }, []);
+  const forzar = useCallback((fases: readonly string[]) => setForzadas(fases.length > 0 ? [...fases] : SIN_FORZAR), []);
 
   return {
     borrador,
@@ -251,6 +287,11 @@ export function useBorradorDelCronograma(entrada: {
     marcar,
     marcarVarios,
     olvidar,
+    marcasDelCse,
+    forzadas,
+    forzar,
+    desfasadas,
+    claveDeDesfasadas: clavePorDesfasadas,
     contenedorRef,
     barraRef,
   };

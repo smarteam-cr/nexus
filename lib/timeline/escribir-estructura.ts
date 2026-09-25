@@ -36,6 +36,7 @@ import { ACTIVITY_TYPES } from "./validate";
 import {
   esCambioDeTarea,
   leerBorrador,
+  mensajeDeRecalculoAlAplicar,
   planDeAplicacion,
   versionDelBorrador,
   type Borrador,
@@ -369,7 +370,14 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
   const borrador = leerBorrador(p.guardado, p.foto ?? vivo);
   if (!borrador) throw new ErrorAlAplicar("PROPUESTA_CAMBIO", MENSAJE_PROPUESTA_CAMBIO);
   const plan = planDeAplicacion(vivo, borrador, p.sin, { tareas: p.tareas, forzar: p.forzar });
-  if (plan.bloqueo) throw new ErrorAlAplicar("NO_SE_PUEDE", plan.bloqueo);
+  /* E2c P3: con fases desfasadas sin forzar, solo llega acá una pestaña de antes (la de ahora no
+     manda nada con bloqueo): no sabe recalcular, así que se le dice que recargue. */
+  if (plan.bloqueo) {
+    throw new ErrorAlAplicar(
+      "NO_SE_PUEDE",
+      plan.bloqueoPorDesfasadas ? mensajeDeRecalculoAlAplicar(plan.desfasadas.map((d) => d.nombre)) : plan.bloqueo,
+    );
+  }
 
   // 4) La huella: otra lista que la que vio el CSE → nada (el throw deshace el token).
   if (plan.huella !== p.huella) throw new ErrorAlAplicar("PLAN_CAMBIO", MENSAJE_PLAN_CAMBIO);

@@ -13,8 +13,12 @@
  *
  *   · La casilla del grupo marca o desmarca de una vez las que se pueden marcar (`onMarcarVarios`); si
  *     hay algunas sí y otras no, queda a medias (indeterminada).
- *   · Las tareas de una fase cuyo cambio desmarcaste (sus semanas o su nombre) quedan fuera CON él:
- *     no se marcan solas, vuelven cuando marcas ese cambio («Va con el cambio N»).
+ *   · Las tareas de una fase NUEVA que desmarcaste quedan fuera CON ella: no se marcan solas, vuelven
+ *     cuando la marcas («Va con el cambio N»).
+ *   · E2c P3: las de una fase cuyo cambio desmarcaste (sus semanas, su nombre, sus sesiones) quedaron
+ *     armadas para otra forma: la fase está DESFASADA y sus tareas se recalculan solas. Mientras tanto
+ *     se ven marcadas (`enEspera`) y se pueden desmarcar, y el grupo dice en qué está el recálculo
+ *     («recalculando…», «no se pudieron recalcular», «sigue después», «falta recalcularlas»).
  *   · Lo que choca con algo que editaste a mano lleva su ⚠ y no se puede marcar; lo que ya está así va
  *     tachado.
  *
@@ -24,6 +28,7 @@
 import { cn } from "@/lib/cn";
 import { plural } from "@/lib/timeline/weeks";
 import type { GrupoDeTareas, ItemDeTarea } from "@/lib/timeline/borrador";
+import { textoDelGrupoDesfasado, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 
 /** Lo que dice el grupo después del nombre: cuántas se crean y cuántas se quitan. */
 function cuentaDelGrupo(g: GrupoDeTareas): string {
@@ -51,12 +56,14 @@ function RenglonDeTarea({
   trabajando: boolean;
 }) {
   const seAplica = t.estado === "aplica";
+  // E2c: en espera de recalcularse se ve marcada (su estado es «excluido» hasta que lleguen las nuevas).
+  const seVeMarcada = seAplica || !!t.enEspera;
   return (
     <li className="flex items-start gap-1.5">
       <input
         type="checkbox"
         className="mt-0.5 h-3 w-3 flex-shrink-0 accent-brand"
-        checked={seAplica}
+        checked={seAplica || !!t.enEspera}
         disabled={trabajando || !t.seMarca}
         onChange={(e) => onMarcar(t.clave, e.target.checked)}
         aria-label={`${t.signo === "+" ? "Crear" : "Quitar"} la tarea «${t.titulo}»`}
@@ -66,7 +73,7 @@ function RenglonDeTarea({
           <span
             className={cn(
               "break-words",
-              seAplica ? "text-fg" : "text-fg-muted",
+              seVeMarcada ? "text-fg" : "text-fg-muted",
               t.estado === "ya-esta" && "line-through",
             )}
           >
@@ -113,19 +120,25 @@ function GrupoDeLaLista({
   onMarcar,
   onMarcarVarios,
   trabajando,
+  recalculo,
 }: {
   g: GrupoDeTareas;
   onMarcar: (clave: string, incluir: boolean) => void;
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   trabajando: boolean;
+  recalculo: RecalculoEnPantalla | null;
 }) {
   // La casilla del grupo cuenta solo las que se pueden marcar: un choque o una heredada no se tocan.
+  // E2c: una en espera de recalcularse cuenta como marcada (así se ve).
   const marcables = g.tareas.filter((t) => t.seMarca);
-  const marcadas = marcables.filter((t) => t.estado === "aplica").length;
+  const marcadas = marcables.filter((t) => t.estado === "aplica" || t.enEspera).length;
   const todas = marcables.length > 0 && marcadas === marcables.length;
   const aMedias = marcadas > 0 && marcadas < marcables.length;
   const heredado = g.dependeDe !== null;
   const avisoEsChoque = !!g.aviso && g.aviso.startsWith("⚠");
+  const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo) : null;
+  // El nombre no se apaga en una desfasada: sus tareas siguen marcadas, esperando.
+  const apagado = (g.estado === "excluido" || g.estado === "choque") && !g.desfasada;
   return (
     <li className="flex items-start gap-2">
       <span className="w-6 flex-shrink-0 pt-0.5 text-right text-xs font-semibold tabular-nums text-fg-muted">{g.numero}.</span>
@@ -148,12 +161,25 @@ function GrupoDeLaLista({
       />
       <details className="min-w-0 flex-1 text-xs">
         <summary className="cursor-pointer">
-          <span className={cn("font-semibold", g.estado === "excluido" || g.estado === "choque" ? "text-fg-muted" : "text-fg")}>
+          <span className={cn("font-semibold", apagado ? "text-fg-muted" : "text-fg")}>
             Tareas de «{g.nombre}»
           </span>
           <span className="text-fg-secondary"> · {cuentaDelGrupo(g)}</span>
           {g.aviso && (
             <span className={avisoEsChoque ? "text-warn-ink" : "text-fg-muted"}> · {g.aviso}</span>
+          )}
+          {/* E2c: en qué está el recálculo de ESTA fase. Info con el spinner mientras corre; warn si falta o falló. */}
+          {desfase && (
+            <span className={desfase.enCurso ? "text-info-ink" : "text-warn-ink"}>
+              {" · "}
+              {desfase.enCurso && (
+                <span
+                  aria-hidden="true"
+                  className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-info-line border-t-info-ink align-middle"
+                />
+              )}
+              {desfase.texto}
+            </span>
           )}
         </summary>
         <ul className="mt-1 space-y-1 rounded border border-line bg-surface px-2 py-1.5">
@@ -171,18 +197,29 @@ export default function TareasDeLaPropuesta({
   onMarcar,
   onMarcarVarios,
   trabajando,
+  recalculo = null,
 }: {
   grupos: readonly GrupoDeTareas[];
   onMarcar: (clave: string, incluir: boolean) => void;
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
-  /** Aplicando o descartando: las casillas se apagan hasta que termine. */
+  /** Aplicando o descartando: las casillas se apagan hasta que termine. Mientras se recalcula, no:
+   *  el CSE siempre puede desmarcar las tareas en espera (E2c). */
   trabajando: boolean;
+  /** E2c: en qué está el recálculo de las fases desfasadas (lo dice cada grupo desfasado). */
+  recalculo?: RecalculoEnPantalla | null;
 }) {
   if (grupos.length === 0) return null;
   return (
     <ol aria-label="Tareas propuestas" className="max-h-80 overflow-y-auto space-y-1.5 border-t border-line pt-1.5 pr-1">
       {grupos.map((g) => (
-        <GrupoDeLaLista key={g.fase} g={g} onMarcar={onMarcar} onMarcarVarios={onMarcarVarios} trabajando={trabajando} />
+        <GrupoDeLaLista
+          key={g.fase}
+          g={g}
+          onMarcar={onMarcar}
+          onMarcarVarios={onMarcarVarios}
+          trabajando={trabajando}
+          recalculo={recalculo}
+        />
       ))}
     </ol>
   );

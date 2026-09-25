@@ -24,11 +24,18 @@
  * (`TareasDeLaPropuesta`), y la barra suma una segunda línea con el estado de la corrida que las arma
  * (`LineaDeLasTareas`): «Armando las tareas…», o «Faltan…» / «No se pudieron armar…» con el botón
  * para pedirlas. Si aplicar QUITA tareas, se confirma y el diálogo lo dice.
+ *
+ * E2c P3 (2026-09-25): si el CSE quita un cambio de fase, las tareas de esa fase se recalculan solas.
+ * La barra suma la línea del RECÁLCULO (`recalculo`), debajo de la de las tareas: en qué está, y con
+ * permiso «Recalcular las tareas» / «Volver a intentar» (`onRecalcular`) y, si falló, «Aplicar de todos
+ * modos» (`onForzar`), que SIEMPRE confirma con el mismo diálogo en otro modo. Aplicar espera mientras
+ * haya fases desfasadas sin forzar (el bloqueo lo dice la línea, no dos veces).
  */
 import { useState, type RefObject } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
+import { ACCION_APLICAR_DE_TODOS_MODOS, textoDeAplicarDeTodosModos, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 import {
   fraseDelCierre,
   hayCambiosDeFasesAplicables,
@@ -58,6 +65,9 @@ export default function RevisionDeLaPropuesta({
   desde,
   onArmarTareas,
   tareas,
+  recalculo = null,
+  onRecalcular,
+  onForzar,
   enCurso,
   cierreFijado,
   barraRef,
@@ -80,13 +90,22 @@ export default function RevisionDeLaPropuesta({
   /** El estado de las tareas de la propuesta (lo calcula el servidor), o null si no espera tareas
    *  (el handoff y el formato viejo). */
   tareas: TareasEnPantalla | null;
+  /** E2c: el recálculo de las tareas de las fases desfasadas (qué se ve), o null si no hay ninguna. */
+  recalculo?: RecalculoEnPantalla | null;
+  /** E2c: «Recalcular las tareas» / «Volver a intentar». Sin él (sin permiso), la línea informa y dice
+   *  la salida que sí hay: desmarcarlas. */
+  onRecalcular?: () => void;
+  /** E2c: fuerza esas fases desfasadas («Aplicar de todos modos»); `[]` las suelta. */
+  onForzar?: (fases: readonly string[]) => void;
   /** Aplicando o descartando: los dos botones y las casillas se apagan hasta que termine. */
   enCurso: "aplicar" | "descartar" | null;
   /** El cierre fijado a mano (Tanda K), YYYY-MM-DD, o null: aplicar no lo toca. */
   cierreFijado: string | null;
   barraRef: RefObject<HTMLDivElement | null>;
 }) {
-  const [confirmar, setConfirmar] = useState(false);
+  /* UN solo diálogo, en dos modos: «aplicar» (lo de siempre) y «forzar» («Aplicar de todos modos», que
+     aplica tareas armadas para otra forma de la fase: siempre confirma). */
+  const [confirmar, setConfirmar] = useState<null | "aplicar" | "forzar">(null);
   const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, observaciones } = resumen;
   /* E2b (2026-09-25): se fue la chapa «Paso 1 de 2 · después, las tareas» (y la prop `encadenado`).
      Era de la cadena vieja de dos pasos, que ya no existe: aplicar o descartar nunca sigue solo con
@@ -94,7 +113,8 @@ export default function RevisionDeLaPropuesta({
   const otroCronograma = magnitud.esCronogramaNuevo;
   const trabajando = enCurso !== null;
   const textoDelBoton = textoDeAplicar(marcadas, aplicables);
-  const pedirAplicar = () => (pideConfirmacion(resumen) ? setConfirmar(true) : onAplicar());
+  const pedirAplicar = () => (pideConfirmacion(resumen) ? setConfirmar("aplicar") : onAplicar());
+  const forzando = confirmar === "forzar";
   const cierre = fraseDelCierre(resumen, cierreFijado);
   const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;
 
@@ -145,7 +165,7 @@ export default function RevisionDeLaPropuesta({
               variant="primary"
               onClick={pedirAplicar}
               disabled={trabajando || marcadas === 0 || bloqueo !== null}
-              title={marcadas === 0 ? "No hay ningún cambio marcado: si no quieres ninguno, descarta la propuesta" : undefined}
+              title={bloqueo ?? (marcadas === 0 ? "No hay ningún cambio marcado: si no quieres ninguno, descarta la propuesta" : undefined)}
             >
               {enCurso === "aplicar" ? "Aplicando…" : textoDelBoton}
             </Button>
@@ -166,6 +186,26 @@ export default function RevisionDeLaPropuesta({
             trabajando={trabajando}
           />
         )}
+        {/* E2c: la línea del recálculo de las fases desfasadas. ⛔ Nunca con `onArmarTareas`: armaría las
+            tareas de TODAS las fases. «Aplicar de todos modos» fuerza las que fallaron y confirma. */}
+        {recalculo && (
+          <LineaDeLasTareas
+            estado={null}
+            fase={null}
+            motivo={null}
+            recalculo={recalculo}
+            onAccion={onRecalcular}
+            onSecundaria={
+              onForzar && recalculo.que === "fallo"
+                ? () => {
+                    onForzar(recalculo.fases.map((f) => f.id));
+                    setConfirmar("forzar");
+                  }
+                : undefined
+            }
+            trabajando={trabajando}
+          />
+        )}
         <p className="text-xs text-fg-secondary">
           {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
         </p>
@@ -174,7 +214,8 @@ export default function RevisionDeLaPropuesta({
       {/* ── LA LISTA: numerada, con casillas, lo que la IA notó y el aviso de «otro cronograma».
           No es fija: una lista larga no puede tapar el Gantt. ── */}
       <section aria-label="Cambios propuestos" className="rounded-xl border border-line bg-surface px-3 py-2 space-y-2">
-        {bloqueo && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
+        {/* El de las desfasadas ya lo dice la línea del recálculo: no dos veces. Los demás, sí. */}
+        {bloqueo && !(recalculo && resumen.bloqueoPorDesfasadas) && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
 
         {/* EL AVISO (Tanda J): una propuesta que rehace el plan no puede llegar disfrazada de N
             cambios sueltos. Corto a propósito: los motivos son la parte que se lee. */}
@@ -262,7 +303,13 @@ export default function RevisionDeLaPropuesta({
         </ol>
 
         {/* Las tareas, un renglón por fase (siguen la numeración de arriba), plegadas. */}
-        <TareasDeLaPropuesta grupos={grupos} onMarcar={onMarcar} onMarcarVarios={onMarcarVarios} trabajando={trabajando} />
+        <TareasDeLaPropuesta
+          grupos={grupos}
+          onMarcar={onMarcar}
+          onMarcarVarios={onMarcarVarios}
+          trabajando={trabajando}
+          recalculo={recalculo}
+        />
 
         {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. Plegado: son
             notas para quien quiera leerlas, no parte de lo que se aplica (y con 5 ocupaban más que la
@@ -285,16 +332,21 @@ export default function RevisionDeLaPropuesta({
           (`pideConfirmacion`), marcado entero o no: para un ajuste chico, confirmar sería la fricción
           que enseña a apretar sin leer.
           ⚠ El rojo («destructive») SOLO si aplicar quita tareas: sin eso prometería un borrado que no
-          ocurre. */}
+          ocurre.
+          E2c: el MISMO diálogo confirma «Aplicar de todos modos» (modo «forzar»): dice qué pasa con las
+          tareas de cada fase forzada. Cancelar suelta las fases forzadas. */}
       <ConfirmDialog
-        open={confirmar}
+        open={confirmar !== null}
         variant={resumen.borraAlgo ? "destructive" : "default"}
-        title="¿Aplicar el cronograma que propone la IA?"
-        confirmLabel={textoDelBoton}
+        title={forzando ? "¿Aplicar sin recalcular?" : "¿Aplicar el cronograma que propone la IA?"}
+        confirmLabel={forzando ? ACCION_APLICAR_DE_TODOS_MODOS : textoDelBoton}
         loading={enCurso === "aplicar"}
-        onCancel={() => setConfirmar(false)}
+        onCancel={() => {
+          if (forzando) onForzar?.([]);
+          setConfirmar(null);
+        }}
         onConfirm={() => {
-          setConfirmar(false);
+          setConfirmar(null);
           onAplicar();
         }}
         description={
@@ -304,6 +356,12 @@ export default function RevisionDeLaPropuesta({
             <span className="block">
               {resumenDeLaConfirmacion(resumen)} {cierre}
             </span>
+            {forzando &&
+              textoDeAplicarDeTodosModos(resumen.forzadas).map((renglon) => (
+                <span key={renglon} className="block mt-2">
+                  {renglon}
+                </span>
+              ))}
             <span className="block mt-2">{textoDeLaConfirmacion(resumen)}</span>
           </>
         }

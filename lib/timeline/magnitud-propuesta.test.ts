@@ -256,7 +256,11 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     /* ⚠ REAPUNTADA en la corrección de E1 (2026-09-24), con esta razón: la confirmación ya no es solo
        de «Aplicar todo» —también la pide «Aplicar N de M» cuando lo marcado sigue siendo otro
        cronograma—, así que el botón del diálogo dice lo mismo que el de la barra (`textoDeAplicar`). */
-    expect(tramo, "el botón perdió su etiqueta").toContain("confirmLabel={textoDelBoton}");
+    /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus
+       tareas fuera: se recalculan, y si el recálculo falla, «Aplicar de todos modos» confirma con el
+       MISMO diálogo en otro modo («forzar»). En el modo de siempre el botón sigue diciendo lo mismo que
+       el de la barra. */
+    expect(tramo, "el botón perdió su etiqueta").toContain("confirmLabel={forzando ? ACCION_APLICAR_DE_TODOS_MODOS : textoDelBoton}");
     expect(src).toContain("const textoDelBoton = textoDeAplicar(marcadas, aplicables);");
     /* ⚠ REESCRITA en E2a P5 (2026-09-25), con esta razón: desde E2a la propuesta de «Regenerar todo»
        puede QUITAR tareas pendientes de la IA, y la frase fija «No se borra ninguna fase ni ninguna
@@ -293,9 +297,12 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
        `otroCronograma && todo`, y con un solo choque (el CSE editó un campo: justo el caso de E1) o
        una nota desmarcada, `todo` era falso y un cronograma prácticamente nuevo se aplicaba con un
        clic. Ahora decide `pideConfirmacion(resumen)`: lo MARCADO es otro cronograma, marcado entero o
-       no (sus casos, en borrador.test.ts). */
+       no (sus casos, en borrador.test.ts).
+       ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: el diálogo tiene dos modos («aplicar» y
+       «forzar», el de «Aplicar de todos modos» tras un recálculo fallido); el botón de la barra abre el
+       de siempre. */
     expect(src, "el botón grande dejó de pedir confirmación en el caso masivo").toContain(
-      "pideConfirmacion(resumen) ? setConfirmar(true) : onAplicar()",
+      'pideConfirmacion(resumen) ? setConfirmar("aplicar") : onAplicar()',
     );
     expect(src, "la confirmación volvió a depender de que esté todo marcado").not.toMatch(/&&\s*todo\s*\?/);
   });

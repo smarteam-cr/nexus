@@ -219,11 +219,24 @@ describe("1 · qué se va y qué es nuevo", () => {
     const r = cambios(salida([]));
     expect(r.tareas).toEqual([]);
     expect(r.observaciones).toEqual(["La IA no armó tareas para la fase nueva «Piloto»."]);
+    /* ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan. Para saber
+       cuándo una fase quedó desfasada, R8 guarda la forma COMPLETA con que se armaron sus tareas: también
+       las sesiones y si es la primera (la de la Semana 0). La edición que la pone en rojo: volver a
+       guardar solo nombre y semanas (quitar una fase nueva que iba primera dejaría a la que pasa a ser
+       primera sin sus tareas del arranque, y un cambio de sesiones quitado no se notaría). */
     expect(r.tareasArmadasPara).toEqual({
-      a: { nombre: "Kick-off", semanas: 1 },
-      b: { nombre: "Diseño", semanas: 2 },
-      c: { nombre: "Pruebas", semanas: 4 },
-      [PILOTO.clave]: { nombre: "Piloto", semanas: 2 },
+      a: { nombre: "Kick-off", semanas: 1, sesiones: null, semanaCero: true },
+      b: { nombre: "Diseño", semanas: 2, sesiones: null, semanaCero: false },
+      c: { nombre: "Pruebas", semanas: 4, sesiones: null, semanaCero: false },
+      [PILOTO.clave]: { nombre: "Piloto", semanas: 2, sesiones: null, semanaCero: false },
+    });
+    // Las sesiones salen de la estructura que vio el agente.
+    const conSesiones: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "b" ? { ...f, sessionCount: 3 } : f)) };
+    expect(cambios(salida([]), { visto: conSesiones, vivo: conSesiones }).tareasArmadasPara.b).toEqual({
+      nombre: "Diseño",
+      semanas: 2,
+      sesiones: 3,
+      semanaCero: false,
     });
   });
 });
@@ -516,7 +529,10 @@ describe("6 · el alcance de «Regenerar» de una fase (E2b, `soloFases`)", () =
   });
 
   it("R8: `tareasArmadasPara` trae solo la fase pedida", () => {
-    expect(cambios(TODO, { soloFases: new Set(["c"]) }).tareasArmadasPara).toEqual({ c: { nombre: "Pruebas", semanas: 4 } });
+    // ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan (R8 guarda la forma completa).
+    expect(cambios(TODO, { soloFases: new Set(["c"]) }).tareasArmadasPara).toEqual({
+      c: { nombre: "Pruebas", semanas: 4, sesiones: null, semanaCero: false },
+    });
     // null o ausente = todo el cronograma, como siempre.
     expect(Object.keys(cambios(TODO, { soloFases: null }).tareasArmadasPara)).toEqual(["a", "b", "c", PILOTO.clave]);
   });

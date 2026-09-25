@@ -21,7 +21,8 @@
  *  R7. Las fijas de la Semana 0: una viva que coincide con una fija (o con su gemela) no se va, y
  *      las fijas que faltan entran como nuevas. Así no van y vuelven en cada regeneración.
  *  R8. `tareasArmadasPara` de TODAS las fases del alcance: el cierre del plan las usa si la fase
- *      cambia después.
+ *      cambia después. Desde E2c P3 es la forma completa (`formaEnLaEstructura`): también las
+ *      sesiones y si la fase es la primera, la de la Semana 0.
  *  R9. Orden: fase por fase; primero las que se van (por semana y orden del vivo), después las nuevas
  *      (en el orden del agente, con las fijas al final).
  *  R10. Si el modelo se cortó (`max_tokens`), la última fase no genera nada y se avisa.
@@ -49,6 +50,7 @@ import {
   claveDeTareaQueSeVa,
   esCambioDeTarea,
   faseDeLaTarea,
+  formaEnLaEstructura,
   fotoDeTarea,
   type Borrador,
   type Cambio,
@@ -204,7 +206,8 @@ export function cambiosDeTareasDelDetalle(i: {
   for (const f of i.estructura.fases) {
     // El alcance (E2b): una fase fuera de él no emite nada. `semanaCero` ya se eligió sobre todas.
     if (i.soloFases && !i.soloFases.has(f.id)) continue;
-    tareasArmadasPara[f.id] = { nombre: f.name, semanas: f.durationWeeks }; // R8
+    // R8. La forma COMPLETA (E2c P3): nombre, semanas, sesiones y si es la primera (la de la Semana 0).
+    tareasArmadasPara[f.id] = formaEnLaEstructura(i.estructura, f.id)!;
     const p = propuestaDe.get(f.id);
     if (p?.cortada) {
       // R10
