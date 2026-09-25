@@ -44,11 +44,15 @@ export default function DatePickerField({
   placeholder = "Elegir fecha",
   /** Resalta el campo cuando el valor es un override manual (vs. derivado). */
   manual = false,
+  /** Solo para mostrar: se ve IGUAL que el editable y no abre el calendario (p. ej. el cierre en la
+   *  vista «Ver la propuesta» del cronograma, que antes salía con otra forma). */
+  readOnly = false,
 }: {
   value: string;
   onChange: (ymd: string) => void;
   placeholder?: string;
   manual?: boolean;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -67,16 +71,19 @@ export default function DatePickerField({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!readOnly) setOpen((o) => !o);
+        }}
+        disabled={readOnly}
         className={`flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors hover:border-line ${
           manual ? "text-fg-secondary bg-surface-hover border-line" : "text-fg-muted bg-surface-muted border-line"
-        }`}
+        }${readOnly ? " pointer-events-none" : ""}`}
       >
         <CalendarIcon />
         {selected ? fmtLabel(selected) : placeholder}
       </button>
 
-      {open && (
+      {open && !readOnly && (
         <div className="absolute left-0 top-full mt-1.5 z-[65] rounded-xl border border-line bg-surface shadow-xl p-2">
           <DayPicker
             mode="single"

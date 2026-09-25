@@ -81,24 +81,50 @@ export default function RevisionDeLaPropuesta({
         role="region"
         aria-label="Propuesta de cambios de fases"
         className={cn(
-          "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 space-y-1.5 shadow-sm",
+          "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 space-y-1 shadow-sm",
           /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
           otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
         )}
       >
+        {/* ⭐ MENOS TEXTO (Elías, 2026-09-24: «creo que hay mucho texto»). La barra dice tres cosas:
+            qué propone y de dónde salió, cuánto se corre el cierre, y que el cliente no ve nada
+            todavía. Lo demás se dice solo cuando hace falta: qué vista es y si se puede editar va en
+            el `title` del botón que alterna (el texto del botón ya dice a cuál vas), que las tareas
+            no se tocan va en la confirmación, y el «Paso 1 de 2» es una etiqueta, no una oración. */}
         <div className="flex flex-wrap items-center gap-2">
+          {encadenado && delContexto && (
+            <span
+              className="rounded-full border border-info-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink"
+              title="Cuando apliques o descartes esta propuesta, sigo con las tareas."
+            >
+              {/* Visible, no solo en el `title`: «Descartar» también sigue con las tareas (la corrida más
+                  cara del cronograma), y eso no se puede enterar solo quien pasa el mouse. */}
+              Paso 1 de 2 · después, las tareas
+            </span>
+          )}
           <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
             {otroCronograma
-              ? `La IA propone otro cronograma — ${plural(total, "cambio", "cambios")}`
-              : `La IA propone ${plural(total, "cambio de fases", "cambios de fases")}`}
+              ? `La IA propone otro cronograma · ${plural(total, "cambio", "cambios")}`
+              : `La IA propone ${plural(total, "cambio", "cambios")}`}
           </span>
+          {/* El origen, sin afirmar de qué: «las reuniones y notas que elegiste» mentía cuando lo único
+              que había eran las instrucciones adicionales. */}
           <span className="text-xs text-fg-muted">
-            {delContexto ? "de las reuniones y notas que elegiste" : "del último handoff"} · las tareas y sus estados no se tocan
+            {delContexto ? "desde el contexto del cronograma" : "desde el último handoff"}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* UN botón, con el texto de lo que vas a ver al apretarlo. Sin `aria-pressed`: con un
                 texto que cambia, el lector anunciaría «Ver la propuesta, presionado». */}
-            <Button size="sm" variant="secondary" onClick={onAlternar}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onAlternar}
+              title={
+                vista === "propuesta"
+                  ? "Estás viendo la propuesta, solo para leer: las filas marcadas son las que cambian."
+                  : "Estás viendo el cronograma actual y puedes editarlo. Si cambias algo que la propuesta también cambia, ese cambio queda fuera (⚠)."
+              }
+            >
               {vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}
             </Button>
             <Button
@@ -115,56 +141,34 @@ export default function RevisionDeLaPropuesta({
             </Button>
           </div>
         </div>
-        <p className="text-xs text-fg-secondary">{cierre}</p>
-        <p className="text-xs font-semibold text-fg">{LINEA_DEL_CLIENTE}</p>
-        {vista === "antes" ? (
-          <p className="text-xs text-fg-muted">
-            Estás viendo el cronograma actual y puedes seguir editándolo. Si cambias algo que la propuesta también
-            cambia, ese cambio queda fuera (⚠).
-          </p>
-        ) : (
-          <p className="text-xs text-fg-muted">
-            Estás viendo la propuesta, solo para leer: las filas marcadas son las que cambian.
-          </p>
-        )}
+        <p className="text-xs text-fg-secondary">
+          {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
+        </p>
       </div>
 
       {/* ── LA LISTA: numerada, con casillas, lo que la IA notó y el aviso de «otro cronograma».
           No es fija: una lista larga no puede tapar el Gantt. ── */}
       <section aria-label="Cambios propuestos" className="rounded-xl border border-line bg-surface px-3 py-2 space-y-2">
-        {encadenado && delContexto && (
-          <p className="text-xs font-semibold text-info-ink">
-            Paso 1 de 2 · Aplica o descarta la propuesta y después armo las tareas.
-          </p>
-        )}
         {bloqueo && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
 
         {/* EL AVISO (Tanda J): una propuesta que rehace el plan no puede llegar disfrazada de N
-            cambios sueltos. */}
+            cambios sueltos. Corto a propósito: los motivos son la parte que se lee. */}
         {otroCronograma && (
           <div className="space-y-1 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
-            <p className="text-xs text-fg-secondary leading-relaxed">
-              La diferencia es tanta que esto es prácticamente un cronograma nuevo:{" "}
-              {delContexto
-                ? "salió de las reuniones y notas que elegiste."
-                : "salió de un handoff con más contexto que el que armó el cronograma actual."}
-            </p>
+            <p className="text-xs font-semibold text-fg-secondary">Es prácticamente un cronograma nuevo:</p>
             <ul className="text-xs text-fg-secondary space-y-0.5">
               {magnitud.motivos.map((m) => (
                 <li key={m}>· {m}</li>
               ))}
             </ul>
-            <p className="text-xs text-fg-muted leading-relaxed">
-              Aplicar no borra nada: las fases que la IA no volvió a nombrar quedan como están, y las tareas y sus
-              estados no se tocan.
-            </p>
+            <p className="text-xs text-fg-muted">Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están.</p>
           </div>
         )}
 
         {choques > 0 && (
           <p className="text-xs text-warn-ink">
-            ⚠ {choques === 1 ? "1 cambio choca" : `${choques} cambios chocan`} con lo que editaste a mano después de la
-            propuesta: {choques === 1 ? "queda fuera" : "quedan fuera"} y lo tuyo no se toca.
+            ⚠ {choques === 1 ? "1 cambio choca" : `${choques} cambios chocan`} con lo que editaste a mano:{" "}
+            {choques === 1 ? "queda fuera" : "quedan fuera"}.
           </p>
         )}
 
@@ -198,10 +202,11 @@ export default function RevisionDeLaPropuesta({
                   {it.aviso && (
                     <p className={cn("text-xs", it.estado === "choque" ? "text-warn-ink" : "text-success-ink")}>{it.aviso}</p>
                   )}
-                  {/* El motivo es interno (cita la reunión o la nota): nunca llega a la fase ni al cliente. */}
+                  {/* El motivo es interno (cita la reunión o la nota): nunca llega a la fase ni al cliente.
+                      Hasta dos líneas, sin rótulo: el texto completo queda en el `title`. */}
                   {it.motivo && (
-                    <p className="text-xs text-fg-muted leading-relaxed">
-                      <span className="font-semibold text-fg-secondary">Por qué (solo lo ves tú):</span> {it.motivo}
+                    <p className="text-xs text-fg-muted line-clamp-2" title={it.motivo}>
+                      {it.motivo}
                     </p>
                   )}
                   {it.detalle.length > 0 && (
@@ -227,16 +232,22 @@ export default function RevisionDeLaPropuesta({
           })}
         </ol>
 
-        {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. */}
+        {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. Plegado: son
+            notas para quien quiera leerlas, no parte de lo que se aplica (y con 5 ocupaban más que la
+            propuesta). */}
         {observaciones.length > 0 && (
-          <div className="space-y-0.5 border-t border-line pt-1.5">
-            <p className="text-xs font-semibold text-fg-secondary">La IA también notó (no se aplica sola):</p>
-            <ul className="text-xs text-fg-muted space-y-0.5">
+          <details className="border-t border-line pt-1.5 text-xs">
+            <summary className="cursor-pointer font-semibold text-fg-secondary">
+              {observaciones.length === 1
+                ? "La IA también notó 1 cosa que no se aplica sola"
+                : `La IA también notó ${observaciones.length} cosas que no se aplican solas`}
+            </summary>
+            <ul className="mt-1 text-fg-muted space-y-0.5">
               {observaciones.map((o, i) => (
                 <li key={i}>· {o}</li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
       </section>
 

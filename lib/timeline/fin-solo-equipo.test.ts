@@ -144,11 +144,13 @@ describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada
     ["cierre", /const cierre = useMemo\(\(\) => projectedEnd\(anchor, phases\), \[anchor, phases\]\);/],
     /* «índice de la propuesta» SALIÓ el 2026-09-24 (E1 del borrador del cronograma): el Gantt ya no
        indexa la propuesta —las marcas le llegan calculadas en `marcas` desde `proyectar`—, así que
-       no hay nada que memoizar. La guarda de abajo impide que el cálculo vuelva al Gantt. */
-    ["contadores", /const \{ tasksTotal, tasksDone, delayWeeks \} = useMemo\([\s\S]*?\[phases, particularidades\],\s*\);/],
+       no hay nada que memoizar. La guarda de abajo impide que el cálculo vuelva al Gantt.
+       «contadores» también SALIÓ el 2026-09-24: solo alimentaban la línea «Semana N de M · X de Y
+       tareas completadas · …», que Elías pidió sacar del Gantt interno («sobra»). La guarda de más
+       abajo impide que la línea vuelva. */
   ];
 
-  it("las cuatro derivaciones están en useMemo con sus deps exactas", () => {
+  it("las tres derivaciones están en useMemo con sus deps exactas", () => {
     /* La edición que lo pone en rojo: volver a `const ranges = computePhaseRanges(phases)` «porque es
        más simple» — o dejar el memo y sacarle una dep (`[phases]` en el cierre: el ancla cambia y el
        cierre que se pinta es el viejo). */
@@ -176,5 +178,18 @@ describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada
     ]) {
       expect(src, `${pelada} se recalcula en cada render`).not.toContain(pelada);
     }
+  });
+
+  it("⛔ el Gantt interno no vuelve a pintar la línea «Semana N de M · X de Y tareas completadas · …»", () => {
+    /* Elías, 2026-09-24: «creo que el texto … sobra». La semana ya la dice el chip de hoy, el avance
+       las fases y el atraso las desviaciones. La vista del CLIENTE (TimelineSection) la conserva: allá
+       no hay nada más que la diga. La edición que la pone en rojo: volver a importar el redactor en
+       el Gantt interno. */
+    const gantt = sinComentarios(leer("components/canvas/TimelineGantt.tsx"));
+    expect(gantt.length, "la guarda no está mirando el Gantt").toBeGreaterThan(20000);
+    expect(gantt, "volvió la línea de estado al Gantt interno").not.toContain("clientStatusLine");
+    expect(sinComentarios(leer("components/canvas/TimelineSection.tsx")), "el cliente perdió su línea de estado").toContain(
+      "clientStatusLine(",
+    );
   });
 });

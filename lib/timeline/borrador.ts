@@ -969,8 +969,15 @@ function magnitudDe(
 // ── LOS TEXTOS DE LA BARRA (acá y no en el componente: los prueban los tests) ─
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** La línea fija de la barra: lo que pasa con el cliente mientras la propuesta espera. */
-export const LINEA_DEL_CLIENTE = "El cliente sigue viendo el cronograma actual hasta que apliques.";
+/** El chat no aplica mientras el cronograma espera a la IA o aplica otra cosa (2026-09-24): lo que
+ *  escribiera en ese rato quedaría debajo de una propuesta calculada sobre la versión anterior. El
+ *  acuerdo sigue en el chat para aplicarlo después. `rotulo` es el de la franja de espera. */
+export const esperaEnCurso = (rotulo: string) =>
+  `El cronograma está ocupado (${rotulo}). Espera a que termine y vuelve a aplicar: el acuerdo sigue acá.`;
+
+/** La línea fija de la barra: lo que pasa con el cliente mientras la propuesta espera. Corta a
+ *  propósito (2026-09-24, «hay mucho texto»): va en la misma línea que el cierre. */
+export const LINEA_DEL_CLIENTE = "El cliente no ve estos cambios hasta que apliques.";
 /** «Subir al cliente» queda libre con una propuesta abierta, con este aviso (respuesta 4 de Elías). */
 export const AVISO_SUBIR_CON_PROPUESTA =
   "Hay una propuesta de cambios de fases sin aplicar (arriba del Gantt): si subes ahora, el cliente ve el cronograma sin esos cambios.";

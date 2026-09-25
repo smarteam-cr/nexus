@@ -631,11 +631,12 @@ describe("G12 · la pantalla: la cadena al paso 2, y lo que no puede perderse", 
        aviso de la sección. */
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const startRegenPreview");
     expect(pedir, "volvió el reloj: el cartel no depende de lo elegido").not.toMatch(/setTimeout\([^)]*Paso1/);
-    // Los DOS lugares que dicen «Paso 1 de 2» dependen de `materialElegido`.
-    // (2026-09-24: el texto suma «e instrucciones»: las instrucciones solas también se revisan.)
-    const iModal = src.indexOf("Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…");
-    expect(iModal).toBeGreaterThan(-1);
-    expect(src.slice(Math.max(0, iModal - 500), iModal)).toContain("revisandoEstructura && materialElegido && (");
+    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió que el aviso no salga en una ventana
+       encima («que no esté en un modal o pop-up») sino en el cronograma. Antes había DOS lugares que
+       decían «Paso 1 de 2» —la franja de `ocupado` y una ventana con el mismo texto—; la ventana se
+       fue y queda UNO, que sigue dependiendo de `materialElegido`. Que la ventana no vuelva lo cuida
+       la guarda «las esperas de la IA no abren una ventana encima» (lib/asistente/panel.test.ts). */
+    expect(src, "volvió la ventana del paso 1").not.toContain("revisandoEstructura && materialElegido && (");
     const ocupado = tramo("const ocupado", "activo: false");
     expect(ocupado).toMatch(/revisandoEstructura\s*\?\s*materialElegido\s*\?\s*\{\s*activo: true,\s*rotulo: "Paso 1 de 2/);
     // La sección lo avisa con lo que ya sabe, y la pantalla lo escucha.

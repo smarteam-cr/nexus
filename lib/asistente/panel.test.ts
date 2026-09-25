@@ -256,7 +256,11 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
     expect(i, "se fue el velo: el cronograma acepta clicks a mitad de la escritura").toBeGreaterThan(
       -1,
     );
-    const velo = CANVAS.slice(i, i + 1800);
+    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: el tramo era un largo fijo (1.800) y la barrita que
+       corre pasó ADENTRO del aviso, más abajo. Ahora el tramo termina donde termina el velo: en la
+       región viva que va después. */
+    const velo = CANVAS.slice(i, CANVAS.indexOf('role="status"', i));
+    expect(velo.length, "la guarda no está mirando el velo").toBeGreaterThan(500);
     expect(velo, "la guarda dejó de mirar el velo").toContain("aria-busy");
     expect(velo).toContain("skeleton-shimmer");
   });
@@ -298,6 +302,82 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
         `«${estado}» dejó de bloquear el cronograma`,
       ).toBe(true);
     }
+    /* El «Regenerar» de UNA fase entró al estado único el 2026-09-24, cuando su ventana de espera se
+       fue (ver la guarda de abajo): sin esta rama la espera no bloquearía ni se diría. */
+    expect(/\bregenLoading && regenPhase\s*\?/.test(bloque), "«Regenerar» de una fase dejó de bloquear").toBe(true);
+  });
+
+  it("⭐ las esperas de la IA NO abren una ventana encima: el aviso va arriba del cronograma", () => {
+    /* Elías, 2026-09-24: «¿puedes hacer que ese mensaje aparezca en el gantt? Que no esté en un
+       modal o pop-up». El paso 1 y el paso 2 de «Regenerar todo» y el «Regenerar» de una fase
+       abrían una ventana encima CON EL MISMO TEXTO que la franja de `ocupado`, y tapaban el lugar
+       donde después aparece la propuesta. La edición que la pone en rojo: volver a abrir un <Modal>
+       para una de esas esperas, o devolver el aviso al centro de la pantalla. */
+    /* Por la FORMA, no por el texto (revisión del 2026-09-24: la versión anterior solo cazaba la
+       condición exacta de antes, y `{regenLoading && regenPhase && (<Modal …` —el orden que usa la
+       rama nueva de `ocupado`— pasaba en verde). Ninguna ventana del cronograma puede depender de un
+       estado de espera, ni ser una ventana que no se cierra (`onClose={() => {}}`). */
+    const ventanas = [...CANVAS.matchAll(/<Modal\b/g)].map((m) => m.index!);
+    expect(ventanas.length, "la guarda no encontró ninguna ventana que revisar").toBeGreaterThan(0);
+    for (const i of ventanas) {
+      const antes = CANVAS.slice(Math.max(0, i - 400), i);
+      /* La apertura de la ventana: sus props llegan hasta el primer `>` que cierra la etiqueta, pero
+         el `=>` de un `onClose` también tiene `>`; alcanza con mirar los 300 caracteres de sus props. */
+      const apertura = CANVAS.slice(i, i + 300);
+      expect(apertura, "la guarda no está mirando las props de la ventana").toContain("onClose");
+      expect(antes, "volvió una ventana para una espera de la IA").not.toMatch(
+        /\b(revisandoEstructura|allRegenLoading|regenLoading|generating|assisting)\b/,
+      );
+      expect(apertura, "volvió una ventana de espera que no se puede cerrar").not.toContain("onClose={() => {}}");
+    }
+    const i = CANVAS.indexOf("{ocupado.activo && (");
+    expect(i, "se fue el velo").toBeGreaterThan(-1);
+    // El velo termina donde empieza la región viva (sr-only): ese texto también nombra el rótulo, y
+    // si el tramo se la comiera, el aviso VISIBLE podría dejar de decir qué pasa en verde.
+    const velo = CANVAS.slice(i, CANVAS.indexOf('role="status"', i));
+    expect(velo.length, "la guarda no está mirando el velo").toBeGreaterThan(500);
+    expect(velo, "el tramo del velo se comió la región viva").not.toContain("sr-only");
+    const iCartel = velo.indexOf("ref={carteldeBloqueoRef}");
+    expect(iCartel, "el aviso perdió el foco (o se fue)").toBeGreaterThan(-1);
+    const cartel = velo.slice(iCartel);
+    expect(cartel, "el aviso dejó de ir arriba, pegado al cronograma").toMatch(/\bsticky top-2\b/);
+    expect(cartel, "el aviso volvió al centro de la pantalla").not.toContain("top-[38vh]");
+    expect(cartel, "el aviso visible dejó de decir qué pasa").toContain("{ocupado.rotulo}…");
+    expect(cartel, "la barrita que corre dejó de ir adentro del aviso (afuera la tapa)").toContain("skeleton-shimmer");
+  });
+
+  it("⛔ sin la ventana, NADA escribe el cronograma mientras la IA calcula, ni se sale de él", () => {
+    /* Revisión del 2026-09-24. La ventana de espera tapaba la página entera, y eso hacía dos cosas
+       que ningún test decía: (1) el chat —su cajón está encima del velo, a propósito— no podía
+       aplicar en medio de una espera; (2) no se podía cambiar de pieza, lo que desmonta el
+       cronograma y tira la propuesta que se estaba armando (ya pagada). Sin la ventana, las dos
+       cosas tienen que estar escritas. La edición que la pone en rojo: sacar el freno de
+       `ocupado.activo` de un carril del chat, o dejar de avisarle al panel. */
+    for (const [carril, fin] of [
+      ["const submitAssist = async (", "setAssisting(true);"],
+      ["const aplicarOperacionesAcordadas = async (", "aplicarOperaciones("],
+    ] as const) {
+      const a = CANVAS.indexOf(carril);
+      expect(a, `no encuentro ${carril}`).toBeGreaterThan(-1);
+      const cuerpo = CANVAS.slice(a, CANVAS.indexOf(fin, a));
+      expect(cuerpo.length, "la guarda no está mirando el carril").toBeGreaterThan(80);
+      expect(cuerpo, `${carril} escribe aunque la IA esté calculando`).toMatch(
+        /if \(ocupado\.activo\) \{\s*return \{ fallo: esperaEnCurso\(ocupado\.rotulo\)/,
+      );
+    }
+    // El cronograma le avisa al panel, y el navegador pregunta antes de cerrar o recargar.
+    expect(CANVAS, "el cronograma dejó de avisar que está ocupado").toContain("onOcupado?.(ocupado.activo);");
+    expect(CANVAS, "cerrar la pestaña a mitad de una espera ya no pregunta").toContain(
+      'window.addEventListener("beforeunload"',
+    );
+    const PANEL_DEL_PROYECTO = soloCodigo(
+      fs.readFileSync(path.join(RAIZ, "components/clients/ProjectCanvasPanel.tsx"), "utf8"),
+    );
+    expect(PANEL_DEL_PROYECTO, "el panel dejó de escuchar al cronograma").toContain("onOcupado={setCronogramaOcupado}");
+    const cambiar = PANEL_DEL_PROYECTO.slice(PANEL_DEL_PROYECTO.indexOf("const switchCanvas = useCallback("));
+    expect(cambiar.slice(0, 200), "se puede cambiar de pieza con el cronograma ocupado").toContain(
+      "if (cronogramaOcupado) return;",
+    );
   });
 
   it("⛔ y el HEADER también — la fuga que hacía parecer que no bloqueaba", () => {

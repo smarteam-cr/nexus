@@ -48,9 +48,14 @@ const CalendarIcon = () => (
 export default function AnchorDatePicker({
   value,
   onChange,
+  readOnly = false,
 }: {
   value: string;
   onChange: (ymd: string) => void;
+  /** Solo para mostrar (la vista «Ver la propuesta»): se ve IGUAL que el editable y no abre el
+   *  calendario. Antes esa vista no mostraba el arranque, y el encabezado cambiaba de forma al
+   *  alternar (Elías, 2026-09-24). */
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -69,13 +74,16 @@ export default function AnchorDatePicker({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!readOnly) setOpen((o) => !o);
+        }}
+        disabled={readOnly}
         title="Fecha de arranque del cronograma (se guarda con «Guardar cronograma»)"
-        className={
+        className={`${
           value
             ? "flex items-center gap-2 text-[11px] font-semibold text-gray-300 bg-gray-800/60 border border-gray-700 rounded-lg px-2.5 py-1 transition-colors hover:border-gray-600"
             : "flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors hover:bg-amber-500/20"
-        }
+        }${readOnly ? " pointer-events-none" : ""}`}
       >
         <CalendarIcon />
         {selected ? (
@@ -84,11 +92,11 @@ export default function AnchorDatePicker({
             {fmtLabel(selected)}
           </>
         ) : (
-          "Fijá la fecha de arranque para ver fechas reales"
+          "Fija la fecha de arranque para ver fechas reales"
         )}
       </button>
 
-      {open && (
+      {open && !readOnly && (
         <div className="absolute left-0 top-full mt-1.5 z-50 rounded-xl border border-gray-700 bg-gray-900 shadow-xl p-2">
           <DayPicker
             mode="single"

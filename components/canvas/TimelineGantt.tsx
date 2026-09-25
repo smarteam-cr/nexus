@@ -76,7 +76,6 @@ import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import type { MarcaDeFase } from "@/lib/timeline/borrador";
-import { clientStatusLine } from "@/lib/timeline/client-status";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
@@ -476,22 +475,8 @@ export default function TimelineGantt({
   const curInRange = curWeek !== null && curWeek >= 0 && curWeek < total;
   const editable = !readOnly && !!onUpdateTask;
 
-  // Estado en una línea, con el MISMO helper que redacta el del cliente. Antes acá decía
-  // "cronograma finalizado" apenas se acababa el calendario, aunque quedaran tareas abiertas:
-  // el helper exige que estén TODAS resueltas y si no dice "En cierre · quedan N".
-  const { tasksTotal, tasksDone, delayWeeks } = useMemo(
-    () => ({
-      tasksTotal: phases.reduce((n, p) => n + p.tasks.length, 0),
-      tasksDone: phases.reduce(
-        (n, p) => n + p.tasks.filter((t) => t.status === "DONE" || t.status === "SUSPENDED").length,
-        0,
-      ),
-      delayWeeks: summarizeParticularidades(particularidades ?? []).totalWeeks,
-    }),
-    [phases, particularidades],
-  );
-  // `curWeek` cambia al hidratar: la línea de estado se arma afuera del memo (es barata).
-  const statusLine = clientStatusLine({ curWeek, totalWeeks: total, tasksDone, tasksTotal, delayWeeks });
+  /* La línea de estado («Semana N de M · X de Y tareas completadas · …») y sus contadores se
+     fueron el 2026-09-24 (Elías: «sobra»). El cliente la sigue viendo en TimelineSection. */
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -711,17 +696,19 @@ export default function TimelineGantt({
             )}
           </span>
         )}
-        {/* Cómo va esto, en una línea: semana, tareas y si vamos al día. Es lo primero que el CSE
-            necesita para orientarse, y hasta ahora había que deducirlo mirando el Gantt entero. */}
-        {statusLine && (
-          <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
-            {statusLine}
-          </span>
-        )}
-        {onSetAnchor && (
+        {/* ⛔ SIN la línea «Semana 19 de 21 · 46 de 112 tareas completadas · 22 semanas más de lo
+            previsto» (Elías, 2026-09-24: «sobra»). La semana ya la dice el chip de hoy, el avance
+            lo dicen las fases y el atraso las desviaciones: repetirlo en una línea más era ruido.
+            El cliente la sigue viendo en SU cronograma (TimelineSection), que no tiene el resto. */}
+        {/* El arranque se ve IGUAL en las dos vistas: editable en la del cronograma actual, solo
+            para mostrar en «Ver la propuesta» (antes esa vista no lo mostraba y el encabezado
+            cambiaba de forma al alternar — Elías, 2026-09-24). */}
+        {onSetAnchor ? (
           <span id="cronograma-arranque" className="scroll-mt-24">
             <AnchorDatePicker value={anchor ?? ""} onChange={onSetAnchor} />
           </span>
+        ) : (
+          anchor && <AnchorDatePicker value={anchor} onChange={() => {}} readOnly />
         )}
 
         {/* CIERRE PROYECTADO / FIJADO (Tanda J + K) — arranque + span, la misma fórmula que dibuja
@@ -766,10 +753,17 @@ export default function TimelineGantt({
             )}
           </div>
         ) : (
+          /* Solo para mostrar, con el MISMO chip que el editable: mismo ícono, misma forma y el
+             mismo texto (la fecha fijada a mano, o «Cierre proyectado: …»). Antes era un rótulo de
+             otro estilo y el encabezado cambiaba de forma al alternar a «Ver la propuesta». */
           cierreVisible.label && (
-            <span className="text-xs font-semibold text-fg-secondary bg-surface-hover/60 border border-line/50 rounded-lg px-3 py-1.5">
-              Cierre proyectado: {cierreVisible.label}
-            </span>
+            <DatePickerField
+              value={closeOverride ?? ""}
+              onChange={() => {}}
+              placeholder={cierre.label ? `Cierre proyectado: ${cierre.label}` : "Fijar fecha de cierre"}
+              manual={cierreVisible.isOverride}
+              readOnly
+            />
           )
         )}
 

@@ -72,6 +72,7 @@ import {
   AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   esBorradorGuardado,
+  esperaEnCurso,
   MENSAJE_PROPUESTA_ABIERTA,
   type Vivo,
 } from "@/lib/timeline/borrador";
@@ -241,7 +242,19 @@ interface PendingParticularidadDraft {
   phaseId: string | null;
 }
 
-export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { projectId: string; clientId: string; headerSlot?: HTMLElement | null }) {
+export default function CronogramaCanvas({
+  projectId,
+  clientId,
+  headerSlot,
+  onOcupado,
+}: {
+  projectId: string;
+  clientId: string;
+  headerSlot?: HTMLElement | null;
+  /** Avisa al panel cuando el cronograma espera a la IA o aplica algo: el panel no deja cambiar de
+   *  pieza en ese rato (desmontar el cronograma tiraría la propuesta que se está armando). */
+  onOcupado?: (ocupado: boolean) => void;
+}) {
   const toast = useToast();
   const { pushUndo, clearScope } = useUndo();
   const undoScope = `cronograma:${projectId}`;
@@ -538,6 +551,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
             rotulo: "Armando la propuesta del cronograma",
             detalle: "El agente está revisando todas las fases.",
           }
+        : regenLoading && regenPhase
+        ? /* «Regenerar» de UNA fase: su espera también va en la franja, no en una ventana encima
+             (2026-09-24). Antes era un modal propio; bloqueaba igual, pero tapaba el cronograma. */
+          {
+            activo: true,
+            rotulo: `Generando la propuesta para «${regenPhase.name}»`,
+            detalle: "El agente está revisando esa fase.",
+          }
         : chainingProgress
           ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
           : applying
@@ -585,6 +606,27 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
       headerSlot.inert = false;
     };
   }, [headerSlot, ocupado.activo]);
+
+  /**
+   * ⛔ Y NO SE SALE DEL CRONOGRAMA A MITAD DE UNA ESPERA (2026-09-24). Hasta que el aviso pasó a
+   * vivir en el cronograma (Elías: «que no esté en un modal o pop-up»), las esperas de «Regenerar
+   * todo» y de «Regenerar» una fase eran una ventana que tapaba la página entera. Sin ella, cambiar
+   * de pieza o cerrar la pestaña desmonta el cronograma y la propuesta que se estaba armando —ya
+   * pagada— se pierde: la vista previa no se guarda en ningún lado. El panel desactiva el selector
+   * de piezas (`onOcupado`) y el navegador pregunta antes de cerrar o recargar.
+   */
+  useEffect(() => {
+    onOcupado?.(ocupado.activo);
+    if (!ocupado.activo) return;
+    const alSalir = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", alSalir);
+    return () => {
+      window.removeEventListener("beforeunload", alSalir);
+      onOcupado?.(false);
+    };
+  }, [ocupado.activo, onOcupado]);
 
   /**
    * El foco entra al cartel de bloqueo y vuelve de donde vino.
@@ -1773,6 +1815,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
   ): Promise<{ fallo: string | null; avisos: string[] }> => {
     if (instruction.trim().length < 4 || assisting)
       return { fallo: "El pedido es muy corto o ya hay uno en curso.", avisos: [] };
+    /* ⛔ Tampoco mientras la IA arma otra propuesta: correrían dos agentes a la vez y el segundo
+       pisaría en pantalla al primero (ver `aplicarOperacionesAcordadas`). */
+    if (ocupado.activo) {
+      return { fallo: esperaEnCurso(ocupado.rotulo), avisos: [] };
+    }
     /* ⛔ CON CAMBIOS DE FASES SIN DECIDIR, EL MODIFICADOR TAMPOCO (revisión adversarial,
        2026-09-24). La guarda vivía solo en el carril rápido del chat. Este camino —«IA» de una fase
        y el acuerdo viejo del chat— reemplazaba en memoria la propuesta de las reuniones por la suya:
@@ -1854,6 +1901,14 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
        pero la pantalla frena antes y dice por qué; el acuerdo sigue ahí para aplicarlo después. */
     if (hayBorrador) {
       return { fallo: CAMBIOS_DE_FASES_SIN_DECIDIR, avisos: [] };
+    }
+    /* ⛔ NI MIENTRAS LA IA CALCULA (2026-09-24). El chat queda usable durante una espera —su cajón
+       está encima del velo, a propósito—, pero escribir en ese rato es el riesgo exacto por el que
+       el cronograma se bloquea: la propuesta que llega después se calculó sobre la versión anterior,
+       y como la foto se toma al recibirla, lo que escribió el chat no aparecería como choque y
+       «Aplicar todo» lo revertiría. Antes lo frenaba una ventana que tapaba la página; ya no está. */
+    if (ocupado.activo) {
+      return { fallo: esperaEnCurso(ocupado.rotulo), avisos: [] };
     }
     const { payload, avisos, rechazadas } = aplicarOperaciones(
       fasesActualesDelAssist,
@@ -2859,7 +2914,7 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           el aviso de qué pasó. */}
       {ocupado.activo && (
         <div
-          className="absolute inset-0 z-[44] flex items-start justify-center cursor-wait"
+          className="absolute inset-0 z-[44] cursor-wait"
           /* ⛔ SIN `aria-live` ACÁ: `aria-busy` significa literalmente «no anuncies todavía, sigo
              actualizando», así que suprimía la región viva que tenía al lado. Y como el nodo se
              DESMONTA al terminar —nunca pasa a `aria-busy=false`— el anuncio retenido no se
@@ -2871,14 +2926,13 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
               blanco DEL TEMA —nunca un gris crudo, que rompe el modo oscuro— y el blur remata
               que lo de abajo no se puede leer ni tocar. */}
           <div className="absolute inset-0 rounded-2xl bg-surface/85 backdrop-blur-[2px]" />
-          <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl overflow-hidden">
-            {/* El padre fija la altura en `h-1`: es una barra de 4 px que recorre el ancho,
-                no un rectángulo relleno esperando contenido. */}
-            <div className="skeleton-shimmer h-full w-full" /> {/* slab-ok */}
-          </div>
-          {/* ⚠ El loader va `sticky` y no centrado a secas: el cronograma mide varias pantallas,
-              así que un centro absoluto queda fuera de la vista en cuanto la persona scrollea —
-              y un bloqueo cuyo cartel no se ve se lee como la pantalla colgada. */}
+          {/* ⭐ EL AVISO VA ARRIBA DEL CRONOGRAMA, NO FLOTANDO (Elías, 2026-09-24: «que no esté en
+              un modal o pop-up»). Es una franja en el borde de arriba del cronograma, así que se lee
+              como parte de él: «esto está pasando acá».
+              ⚠ Va `sticky`: el cronograma mide varias pantallas y un aviso fijo en su borde de
+              arriba quedaría fuera de la vista apenas la persona scrollea — un bloqueo cuyo aviso
+              no se ve se lee como la pantalla colgada. La barrita que corre va ADENTRO del aviso,
+              en su borde de abajo: afuera la tapaba el propio aviso. */}
           {/* ⚠ EL CARTEL TOMA EL FOCO, y no es un detalle: los botones que ENCIENDEN el bloqueo
               viven dentro del subárbol que se vuelve inerte. Cuando el elemento enfocado pasa a
               inerte, el navegador lo desenfoca y el foco cae a `body` — o sea que apretar
@@ -2887,12 +2941,17 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
           <div
             ref={carteldeBloqueoRef}
             tabIndex={-1}
-            className="sticky top-[38vh] flex flex-col items-center gap-4 px-6 text-center focus:outline-none"
+            className="sticky top-2 m-2 flex items-center gap-3 overflow-hidden rounded-xl border border-info-line bg-info-surface px-4 py-3 shadow-sm focus:outline-none"
           >
-            <span className="w-16 h-16 border-[5px] border-brand/25 border-t-brand rounded-full animate-spin" />
-            <div>
-              <p className="text-base font-semibold text-fg">{ocupado.rotulo}…</p>
-              <p className="text-sm text-fg-muted mt-1">{ocupado.detalle}</p>
+            <span className="w-5 h-5 flex-shrink-0 border-2 border-brand/25 border-t-brand rounded-full animate-spin" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg">{ocupado.rotulo}…</p>
+              <p className="text-xs text-fg-muted">{ocupado.detalle}</p>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-0.5">
+              {/* El padre fija la altura en `h-0.5`: es una barra de 2 px que recorre el ancho,
+                  no un rectángulo relleno esperando contenido. */}
+              <div className="skeleton-shimmer h-full w-full" /> {/* slab-ok */}
             </div>
           </div>
         </div>
@@ -3891,15 +3950,8 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         onCancel={() => setConfirmDetailOpen(false)}
       />
 
-      {/* Regen POR FASE → modal de curación viejo↔nuevo. Paso 1: loading del preview. */}
-      {regenPhase && regenLoading && (
-        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
-          <div className="flex items-center gap-3 py-1">
-            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
-            <p className="text-sm text-fg">Generando la propuesta para «{regenPhase.name}»…</p>
-          </div>
-        </Modal>
-      )}
+      {/* Regen POR FASE → modal de curación viejo↔nuevo. Paso 1: la espera del preview la dice la
+          franja de `ocupado`, arriba del cronograma (ya no una ventana encima). */}
       {/* Paso 2: el modal de dos columnas (actuales vs propuesta) para definir cómo queda la fase. */}
       {regenPhase && regenPreview && (() => {
         const src = phases.find((p) => p.id === regenPhase.id);
@@ -3935,25 +3987,11 @@ export default function CronogramaCanvas({ projectId, clientId, headerSlot }: { 
         );
       })()}
 
-      {/* Tanda N — "Regenerar todo el cronograma": mismo patrón de dos pasos, generalizado. */}
-      {allRegenLoading && (
-        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
-          <div className="flex items-center gap-3 py-1">
-            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
-            <p className="text-sm text-fg">Generando la propuesta para todo el cronograma…</p>
-          </div>
-        </Modal>
-      )}
-      {/* Paso 1 de «Regenerar todo» con material: la revisión de fases y tiempos. Sin material
-          elegido el cartel no aparece, tarde lo que tarde la ruta en volver. */}
-      {revisandoEstructura && materialElegido && (
-        <Modal open onClose={() => {}} size="sm" closeOnBackdrop={false} closeOnEscape={false}>
-          <div className="flex items-center gap-3 py-1">
-            <span className="w-4 h-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin flex-shrink-0" />
-            <p className="text-sm text-fg">Paso 1 de 2 · Revisando fases y tiempos con tus reuniones, notas e instrucciones…</p>
-          </div>
-        </Modal>
-      )}
+      {/* Tanda N — "Regenerar todo el cronograma": mismo patrón de dos pasos, generalizado.
+          ⛔ Las esperas del paso 1 y del paso 2 NO abren una ventana encima (Elías, 2026-09-24:
+          «que no esté en un modal o pop-up»): las dice la franja de `ocupado`, arriba del
+          cronograma. Antes salían las dos cosas a la vez —la franja y una ventana con el mismo
+          texto—, y la ventana tapaba justo el lugar donde después aparece la propuesta. */}
       {allRegenPreview && (() => {
         const merged: AllPhasesRegenPhase[] = allRegenPreview
           .map((pv) => {

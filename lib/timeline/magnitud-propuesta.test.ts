@@ -236,7 +236,12 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
     expect(src, "la barra dejó de decir cuánto se mueve la fecha de fin").toContain(
       "const cierre = fraseDelCierre(resumen, cierreFijado);",
     );
-    expect(src).toContain('<p className="text-xs text-fg-secondary">{cierre}</p>');
+    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió menos texto y la línea del cliente se
+       sumó a la MISMA línea que el cierre. Se sigue pidiendo lo mismo: que la barra fija pinte el
+       cierre (ahora seguido de la línea del cliente, en un solo <p>). */
+    expect(src.replace(/\s+/g, " ")).toContain(
+      '<p className="text-xs text-fg-secondary"> {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>',
+    );
   });
 
   it("el botón grande abre confirmación y el confirm dice la verdad sobre lo que pasa", () => {

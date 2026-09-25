@@ -230,8 +230,15 @@ export default function ProjectCanvasPanel({
   // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
   // pieza le faltan sus pasos previos.
   const piezasConContenido = pieceRows.filter((r) => r.state === "generada").map((r) => r.slug);
+  /* ⛔ MIENTRAS EL CRONOGRAMA ESPERA A LA IA, NO SE CAMBIA DE PIEZA (2026-09-24). Las esperas de
+     «Regenerar todo» y de «Regenerar» una fase eran una ventana que tapaba toda la página; Elías
+     pidió el aviso en el cronograma y no encima, así que el resto de la pantalla quedó libre.
+     Cambiar de pieza desmonta el cronograma, y la propuesta que se estaba armando —ya pagada— se
+     pierde: la vista previa no se guarda en ningún lado. El cronograma avisa con `onOcupado`. */
+  const [cronogramaOcupado, setCronogramaOcupado] = useState(false);
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
+    if (cronogramaOcupado) return;
     // Clickear el canvas que YA está activo colgaba la pantalla: `setActiveCanvasId`
     // hace bail-out con el mismo valor, pero `setLoading(true)` sí re-renderiza, y el
     // efecto que apaga el loading no vuelve a correr porque ninguna de sus deps cambió
@@ -248,7 +255,7 @@ export default function ProjectCanvasPanel({
       url.searchParams.set("canvas", canvasId);
     }
     router.replace(url.pathname + url.search, { scroll: false });
-  }, [canvases, router, activeCanvasId]);
+  }, [canvases, router, activeCanvasId, cronogramaOcupado]);
 
   // `canvasFromUrl` en un ref (no en las deps de `refetchCanvases`): `switchCanvas`
   // reescribe el `?canvas=` en cada click de tab, así que si el callback dependiera
@@ -590,7 +597,9 @@ export default function ProjectCanvasPanel({
             <div className="relative" ref={canvasDropdownRef}>
               <button
                 onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
-                className="flex items-center gap-2 text-xl font-bold text-white hover:text-gray-300 transition-colors"
+                disabled={cronogramaOcupado}
+                title={cronogramaOcupado ? "Espera a que la IA termine en el cronograma para cambiar de pieza." : undefined}
+                className="flex items-center gap-2 text-xl font-bold text-white hover:text-gray-300 transition-colors disabled:cursor-wait disabled:opacity-60"
               >
                 {activeCanvas?.name ?? (canvases.length === 0 ? "Sin piezas" : "Resumen del servicio")}
                 <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -950,7 +959,13 @@ export default function ProjectCanvasPanel({
       {activeSlug === "timeline" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
         <CanvasBoundary label="el Cronograma">
-          <CronogramaCanvas key={`cronograma-${agentNonce}`} projectId={projectId} clientId={clientId} headerSlot={canvasHeaderSlot} />
+          <CronogramaCanvas
+            key={`cronograma-${agentNonce}`}
+            projectId={projectId}
+            clientId={clientId}
+            headerSlot={canvasHeaderSlot}
+            onOcupado={setCronogramaOcupado}
+          />
         </CanvasBoundary>
       )}
 

@@ -95,7 +95,10 @@ describe("los textos de la barra", () => {
   });
 
   it("la línea fija y los avisos dicen lo que pasa con el cliente y qué hacer, en tuteo", () => {
-    expect(LINEA_DEL_CLIENTE).toBe("El cliente sigue viendo el cronograma actual hasta que apliques.");
+    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió menos texto en la barra y la línea va
+       ahora junto al cierre, así que se acortó. Sigue diciendo lo mismo: nada llega al cliente hasta
+       aplicar. */
+    expect(LINEA_DEL_CLIENTE).toBe("El cliente no ve estos cambios hasta que apliques.");
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("sin aplicar");
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("si subes ahora");
     expect([TEXTO_VER_ANTES, TEXTO_VER_PROPUESTA]).toEqual(["Ver como estaba antes", "Ver la propuesta"]);
@@ -203,6 +206,37 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
     expect(BARRA).toContain("bg-info-surface");
     expect(BARRA).toContain("text-warn-ink");
   });
+
+  it("⭐ la barra dice poco: el motivo sin rótulo, lo que notó la IA plegado, y el origen sin inventar", () => {
+    /* Elías, 2026-09-24: «¿puedes simplificar un poco la interfaz? Creo que hay mucho texto». La barra
+       fija dice qué propone, cuánto se corre el cierre y que el cliente no ve nada todavía; qué vista
+       es y si se puede editar va en el `title` del botón que alterna; lo que la IA notó y no aplica
+       sola va plegado. Y el origen no puede afirmar «las reuniones y notas que elegiste» cuando lo
+       único que había eran las instrucciones adicionales (pasó en la prueba de Wherex).
+       La edición que la pone en rojo: volver a pintar el rótulo «Por qué (solo lo ves tú)», desplegar
+       las observaciones, devolver las oraciones de la vista a la barra, o la frase del origen. */
+    expect(BARRA.length).toBeGreaterThan(2000);
+    expect(BARRA, "volvió el rótulo largo del motivo").not.toContain("Por qué (solo lo ves tú)");
+    expect(BARRA, "el origen volvió a afirmar reuniones y notas").not.toContain("de las reuniones y notas que elegiste");
+    const notas = tramo(BARRA, "{observaciones.length > 0 && (", "</details>");
+    expect(notas.length, "la guarda no está mirando lo que notó la IA").toBeGreaterThan(200);
+    expect(notas, "lo que notó la IA dejó de ir plegado").toContain("<details");
+    expect(notas).toContain("<summary");
+    expect(notas, "lo que notó la IA se despliega solo").not.toMatch(/<details[^>]*\bopen\b/);
+    // Qué vista es y si se puede editar: en el `title` del botón que alterna, no en oraciones de la barra.
+    const alternar = tramo(BARRA, "onClick={onAlternar}", "</Button>");
+    expect(alternar, "el botón que alterna perdió su explicación").toContain("title={");
+    expect(alternar).toContain("Estás viendo la propuesta, solo para leer");
+    expect(alternar).toContain("Estás viendo el cronograma actual y puedes editarlo");
+    // TODAS las veces que la barra dice «Estás viendo» están en ese botón: ninguna volvió a un <p>.
+    expect(BARRA.match(/Estás viendo/g)?.length, "las oraciones de la vista volvieron a la barra").toBe(
+      alternar.match(/Estás viendo/g)?.length,
+    );
+    // Y «Descartar» también sigue con las tareas: eso se lee, no queda solo en un `title`.
+    expect(BARRA, "el paso 2 que sigue al descartar dejó de verse").toContain("Paso 1 de 2 · después, las tareas");
+    // La línea del cliente va junto al cierre, en UNA línea.
+    expect(contiene(BARRA, '{cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>')).toBe(true);
+  });
 });
 
 describe("el Gantt pinta las marcas de la vista «Ver la propuesta»", () => {
@@ -223,6 +257,28 @@ describe("el Gantt pinta las marcas de la vista «Ver la propuesta»", () => {
     expect(etiquetas.length).toBeGreaterThan(100);
     expect(contiene(etiquetas, "{marca.etiquetas.map((e) => (")).toBe(true);
     expect(contiene(etiquetas, "{e}")).toBe(true);
+  });
+
+  it("⭐ el arranque y el cierre se ven IGUAL en las dos vistas (el mismo chip, solo para mostrar)", () => {
+    /* Elías, 2026-09-24: «los CTAs de cierre proyectado y arranque se ven distintos en la propuesta
+       que en el vigente». En «Ver la propuesta» el arranque no aparecía y el cierre era un rótulo de
+       otro estilo: el encabezado cambiaba de forma al alternar. Ahora es el MISMO componente con
+       `readOnly`, que no abre el calendario. La edición que la pone en rojo: volver a un rótulo propio
+       en la rama de solo lectura, o dejar de mostrar el arranque en la propuesta. */
+    const arranque = tramo(GANTT, "{onSetAnchor ? (", "{onSetCloseOverride ? (");
+    expect(arranque.length).toBeGreaterThan(100);
+    expect(contiene(arranque, "<AnchorDatePicker value={anchor} onChange={() => {}} readOnly />")).toBe(true);
+    const cierreSoloLectura = tramo(GANTT, "cierreVisible.label && (", "{onSetAnchor && kickoffDate");
+    expect(cierreSoloLectura.length).toBeGreaterThan(100);
+    expect(cierreSoloLectura, "el cierre de la propuesta dejó de ser el mismo chip").toContain("<DatePickerField");
+    expect(cierreSoloLectura).toContain("readOnly");
+    expect(cierreSoloLectura, "volvió el rótulo de otro estilo").not.toContain("Cierre proyectado: {cierreVisible.label}");
+    // Y el modo solo-lectura de verdad no abre el calendario, en los dos componentes.
+    for (const rel of ["components/canvas/AnchorDatePicker.tsx", "components/ui/DatePickerField.tsx"]) {
+      const comp = soloCodigo(leer(rel));
+      expect(contiene(comp, "{open && !readOnly && ("), `${rel} abre el calendario en solo lectura`).toBe(true);
+      expect(contiene(comp, "disabled={readOnly}"), `${rel} se puede apretar en solo lectura`).toBe(true);
+    }
   });
 });
 
