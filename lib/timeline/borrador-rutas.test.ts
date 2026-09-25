@@ -603,12 +603,15 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(captura).toMatch(/esTope\s*\?\s*humanizeAgentError\(e\)/);
   });
 
-  it("⛔ la ruta no escribe el borrador: exactamente 4 accesos a projectTimeline, todos de antes", () => {
+  it("⛔ la ruta no escribe el borrador: exactamente 2 accesos a projectTimeline, todos de antes", () => {
     /* Todas las escrituras del borrador viven en lib/timeline/borrador-del-detalle.ts (probadas abajo
-       con la base falsa). Los 4 de hoy: el fail-fast, y la lectura, la escritura y el alta del
-       handoff. La edición que la pone en rojo: escribir el borrador (o cualquier otra cosa del
-       cronograma) en la ruta. `toBe`, no `>=`: una de más también es roja. */
-    expect(ruta.match(/prisma\.projectTimeline\./g) ?? []).toHaveLength(4);
+       con la base falsa) y, las del handoff, en lib/timeline/borrador-del-handoff.ts. Los 2 de hoy:
+       el fail-fast y el alta del cronograma que nunca existió (la rama del handoff que crea las fases).
+       La edición que la pone en rojo: escribir el borrador (o cualquier otra cosa del cronograma) en
+       la ruta. `toBe`, no `>=`: una de más también es roja.
+       ⚠ REESCRITA en E2b P2 (2026-09-25), con esta razón: eran 4; la lectura y la escritura de la
+       propuesta del handoff se mudaron al helper, que se prueba llamándolo. */
+    expect(ruta.match(/prisma\.projectTimeline\./g) ?? []).toHaveLength(2);
   });
 });
 

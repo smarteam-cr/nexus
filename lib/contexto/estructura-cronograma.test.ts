@@ -1046,23 +1046,36 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
        escritura siga condicionada a lo que se leyó (el comportamiento de `propuestaPorDecidir` se
        prueba en lib/timeline/borrador.test.ts).
        La edición que la pone en rojo: volver a proteger solo la de las reuniones, sacar la pregunta,
-       o volver al `update` plano de `pendingProposal`. */
-    const analyze = soloCodigo(leer("app/api/clients/[id]/analyze/route.ts"));
-    const iNoOp = analyze.indexOf("if (reconciled.isNoOp) {");
-    const iPregunta = analyze.indexOf("propuestaPorDecidir(existing.pendingProposal,");
-    const iEscritura = analyze.indexOf("pendingProposal: { anchorStartDate: reconciled.anchorStartDate");
-    expect(iNoOp).toBeGreaterThan(-1);
-    expect(iPregunta, "no pregunta si la propuesta abierta tiene algo por decidir").toBeGreaterThan(iNoOp);
-    expect(iPregunta).toBeLessThan(iEscritura);
-    const antesDeEscribir = analyze.slice(iNoOp, iEscritura);
+       o volver al `update` plano de `pendingProposal`.
+       ⚠ REESCRITA en E2b P2 (2026-09-25), con esta razón: el handoff escribe un `borrador-v1` y la
+       rama «ya hay cronograma» se mudó de analyze a lib/timeline/borrador-del-handoff.ts (su conducta
+       se prueba llamándola, en borrador-del-handoff.test.ts). Pide lo mismo, en el helper: armar el
+       borrador, no escribir si no hay nada aplicable, preguntar ANTES de escribir, los dos avisos y la
+       escritura condicionada; y que analyze delegue y ya no decida por su cuenta. Se pone en rojo
+       además si vuelve el formato viejo. */
+    const helper = soloCodigo(leer("lib/timeline/borrador-del-handoff.ts"));
+    const iArma = helper.indexOf("borradorDelHandoff(");
+    const iSinCambios = helper.indexOf("if (!borrador)");
+    const iPregunta = helper.indexOf("propuestaPorDecidir(existing.pendingProposal,");
+    const iEscritura = helper.indexOf("pendingProposal: borrador as unknown as Prisma.InputJsonValue");
+    expect(iArma, "el handoff no arma el borrador v1").toBeGreaterThan(-1);
+    expect(iSinCambios, "un handoff sin nada aplicable escribiría").toBeGreaterThan(iArma);
+    expect(iPregunta, "no pregunta si la propuesta abierta tiene algo por decidir").toBeGreaterThan(iSinCambios);
+    expect(iEscritura, "no escribe el borrador v1").toBeGreaterThan(iPregunta);
+    const antesDeEscribir = helper.slice(iSinCambios, iEscritura);
     expect(antesDeEscribir.length).toBeGreaterThan(300);
     expect(antesDeEscribir, "volvió a proteger solo la de las reuniones").not.toMatch(
       /if \(origenDePropuesta\([^)]*\) === "contexto"\) \{/,
     );
     expect(antesDeEscribir).toContain("AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE");
     expect(antesDeEscribir).toContain("AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE");
-    const escritura = analyze.slice(analyze.lastIndexOf("prisma.projectTimeline.", iEscritura), iEscritura);
+    const escritura = helper.slice(helper.lastIndexOf("prisma.projectTimeline.", iEscritura), iEscritura);
     expect(escritura, "la escritura no está condicionada a lo que se leyó").toContain("updateMany(");
+    expect(helper, "volvió el formato viejo").not.toContain("pendingProposal: { anchorStartDate");
+    const analyze = soloCodigo(leer("app/api/clients/[id]/analyze/route.ts"));
+    expect(analyze).toContain("await guardarPropuestaDelHandoff(");
+    expect(analyze, "analyze vuelve a decidir por su cuenta").not.toContain("propuestaPorDecidir(");
+    expect(analyze, "analyze vuelve a emparejar por su cuenta").not.toContain("reconcileAgentProposal(");
   });
 
   it("#21 · lo que notó el paso 1 se ve aunque el paso 2 falle o vuelva vacío, y descartar no lo borra", async () => {

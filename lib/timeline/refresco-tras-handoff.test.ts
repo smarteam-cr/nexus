@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decidirRefrescoTrasHandoff, debeReemplazarPropuesta } from "./refresco-tras-handoff";
 import { reconcileAgentProposal } from "./reconcile-proposal";
+import { borradorDelHandoff } from "./borrador";
 
 /**
  * lib/timeline/refresco-tras-handoff.test.ts — EL AVISO NO PUEDE QUEDAR HUÉRFANO.
@@ -82,6 +83,11 @@ describe("⭐ cuando el servidor guarda propuesta, el cliente la va a buscar", (
     expect(r.isNoOp, "el servidor no guardaría propuesta: el fixture no representa el caso").toBe(
       false,
     );
+    // E2b: el servidor guarda solo si el borrador del handoff tiene algo aplicable (lib/timeline/borrador-del-handoff.ts).
+    expect(
+      borradorDelHandoff({ propuesta: r, vivo: { ancla: null, fases: existentes } }),
+      "el servidor no guardaría propuesta: el fixture no representa el caso",
+    ).not.toBeNull();
 
     // Y con ESAS mismas fases en pantalla, el cliente tiene que ir a buscarla.
     expect(

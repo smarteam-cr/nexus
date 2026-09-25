@@ -89,8 +89,13 @@ export function reconcileAgentProposal(
   resolvedAnchorISO: string | null,
 ): ReconcileResult {
   const norm = (s: string) => s.trim().toLowerCase();
-  const byName = new Map<string, ExistingPhaseForReconcile>();
-  for (const ph of existingPhases) if (!byName.has(norm(ph.name))) byName.set(norm(ph.name), ph);
+  // TODAS las existentes con cada nombre, en su orden (Wherex tiene dos fases que se llaman igual).
+  const byName = new Map<string, ExistingPhaseForReconcile[]>();
+  for (const ph of existingPhases) {
+    const lista = byName.get(norm(ph.name));
+    if (lista) lista.push(ph);
+    else byName.set(norm(ph.name), [ph]);
+  }
   const consumed = new Set<string>();
 
   // 1a) PRIMERA pasada: SOLO nombre exacto normalizado, sobre TODAS las propuestas, antes de
@@ -100,13 +105,24 @@ export function reconcileAgentProposal(
   //     ADELANTE iba a matchear por nombre exacto — esa, al encontrar su match ya consumido,
   //     se caía a fase nueva (duplicado) mientras la existente quedaba renombrada a la fase
   //     equivocada. Bug real, más grave que un duplicado: pisa una fase con progreso.
+  //     E2b (D9): cada propuesta toma la PRIMERA existente SIN CONSUMIR con su nombre. Antes tomaba
+  //     siempre la primera, y dos propuestas con el mismo nombre salían con el MISMO id (claves
+  //     repetidas en el borrador). Una propuesta cuyo nombre ya salió antes en la propuesta y que no
+  //     encuentra existente libre se IGNORA: como fase nueva chocaría siempre con la del mismo nombre
+  //     y frenaría todo lo que viene después; por posición renombraría otra fase a un nombre repetido.
   const matchByIndex = new Map<number, ExistingPhaseForReconcile>();
+  const repetidas = new Set<number>();
+  const vistos = new Set<string>();
   proposedPhases.forEach((p, i) => {
-    const m = byName.get(norm(p.name));
+    const k = norm(p.name);
+    const m = byName.get(k)?.find((e) => !consumed.has(e.id));
     if (m) {
       matchByIndex.set(i, m);
       consumed.add(m.id);
+    } else if (vistos.has(k)) {
+      repetidas.add(i);
     }
+    vistos.add(k);
   });
 
   // 1b) SEGUNDA pasada: posición, contra "la próxima existente TODAVÍA SIN CONSUMIR" — no el
@@ -114,7 +130,7 @@ export function reconcileAgentProposal(
   //     el resto. Es lo que hace que un renombre (por parecido que sea el nombre nuevo) conserve
   //     el id, las tareas y el progreso de la fase que ya estaba, en vez de duplicarla.
   proposedPhases.forEach((p, i) => {
-    if (matchByIndex.has(i)) return;
+    if (matchByIndex.has(i) || repetidas.has(i)) return;
     const positional = existingPhases.find((e) => !consumed.has(e.id));
     if (positional) {
       matchByIndex.set(i, positional);
@@ -125,14 +141,17 @@ export function reconcileAgentProposal(
   const phases: ReconciledPhase[] = [];
 
   // 1d) Construir el resultado con los matches ya resueltos. Las matcheadas llevan su id + el
-  //     activityType existente (mejora el preview; no-op al aplicar).
+  //     activityType existente (mejora el preview; no-op al aplicar). Las repetidas no entran, y el
+  //     `order` corre sin huecos.
+  let order = 0;
   proposedPhases.forEach((p, i) => {
+    if (repetidas.has(i)) return;
     const match = matchByIndex.get(i);
     if (match) {
       phases.push({
         id: match.id,
         name: p.name,
-        order: i,
+        order: order++,
         durationWeeks: p.durationWeeks,
         startWeek: p.startWeek,
         sessionCount: p.sessionCount,
@@ -142,7 +161,7 @@ export function reconcileAgentProposal(
     } else {
       phases.push({
         name: p.name,
-        order: i,
+        order: order++,
         durationWeeks: p.durationWeeks,
         startWeek: p.startWeek,
         sessionCount: p.sessionCount,

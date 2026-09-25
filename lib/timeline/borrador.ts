@@ -31,7 +31,8 @@
  * recargar usan la MISMA foto. Si no, una edición a mano hecha durante la revisión pasaba de ⚠ a
  * «aplica» con solo volver a entrar, y «Aplicar todo» la revertía. Lo que queda: otro navegador u
  * otra computadora toman una foto nueva. Es el límite del formato viejo y se resuelve en E2 (el
- * formato nuevo guarda el `desde` al crearse).
+ * formato nuevo guarda el `desde` al crearse). Desde E2b el handoff también escribe el formato nuevo
+ * (`borradorDelHandoff`): la foto queda solo para las propuestas viejas que siguen abiertas.
  * Dos cosas del handoff sí se saben sin foto, por cómo lo arma analyze (reconcile-proposal.ts):
  *   · la FECHA DE ARRANQUE solo la propone cuando el proyecto no tenía (`existente ?? kickoff`): su
  *     `desde` es siempre null, y una fecha que hoy puso una persona choca;
@@ -432,6 +433,21 @@ export function convertirPropuestaVieja(p: ProposalLike, base: Vivo): Borrador {
   };
 }
 
+/** Las fases nuevas de la conversión (`nueva:<i>`) pasan a claves de productor (`n:…`, nunca
+ *  derivadas de posiciones), y el `despuesDe` las sigue. La comparten los dos productores de abajo. */
+function conClavesDeProductor(cambios: readonly Cambio[], nuevaClave: () => string): Cambio[] {
+  const usadas = new Set<string>();
+  const remapeo = new Map<string, string>();
+  for (const c of cambios) {
+    if (c.tipo === "fase-nueva") remapeo.set(c.clave, claveDeFaseNueva(nuevaClave, usadas));
+  }
+  return cambios.map((c) =>
+    c.tipo === "fase-nueva"
+      ? { ...c, clave: remapeo.get(c.clave) ?? c.clave, despuesDe: c.despuesDe === null ? null : remapeo.get(c.despuesDe) ?? c.despuesDe }
+      : c,
+  );
+}
+
 /**
  * El borrador que deja el paso 1 de «Regenerar todo» / «Generar cronograma» (POST /estructura): la
  * propuesta de fases convertida, con las claves de las fases nuevas en el formato de un productor
@@ -444,25 +460,36 @@ export function borradorBase(i: {
   nuevaClave?: () => string;
 }): Borrador {
   const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
-  const usadas = new Set<string>();
-  const remapeo = new Map<string, string>();
-  for (const c of viejo.cambios) {
-    if (c.tipo === "fase-nueva") remapeo.set(c.clave, claveDeFaseNueva(i.nuevaClave ?? claveAleatoria, usadas));
-  }
-  const cambios: Cambio[] = viejo.cambios.map((c) =>
-    c.tipo === "fase-nueva"
-      ? { ...c, clave: remapeo.get(c.clave) ?? c.clave, despuesDe: c.despuesDe === null ? null : remapeo.get(c.despuesDe) ?? c.despuesDe }
-      : c,
-  );
   return {
     ...viejo,
     version: 0,
     origen: "contexto",
-    cambios,
+    cambios: conClavesDeProductor(viejo.cambios, i.nuevaClave ?? claveAleatoria),
     pedido: i.pedido,
     tareas: { corrida: null, listas: false },
     tareasArmadasPara: {},
   };
+}
+
+/**
+ * El borrador que deja el HANDOFF (E2b), o null si no hay nada que se pueda aplicar: un productor sin
+ * cambios nunca escribe. Solo fases y no espera tareas (`tareas: null`). La conversión es exacta para
+ * este productor (arriba, las dos inferencias) y el `desde` queda fijado contra `vivo`, lo que leyó el
+ * servidor: los choques son los mismos en cualquier computadora. `propuesta` nunca trae `origen`.
+ * No es `borradorBase` con otro origen: aquél siempre devuelve un borrador que espera tareas.
+ */
+export function borradorDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nuevaClave?: () => string }): Borrador | null {
+  const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
+  const b: Borrador = {
+    ...viejo,
+    version: 0,
+    origen: "handoff",
+    cambios: conClavesDeProductor(viejo.cambios, i.nuevaClave ?? claveAleatoria),
+    pedido: null,
+    tareas: null,
+    tareasArmadasPara: {},
+  };
+  return planDeAplicacion(i.vivo, b).aplicables > 0 ? b : null;
 }
 
 /** El borrador que marca «armando las tareas» cuando no había propuesta de fases (0 cambios de fases).
@@ -1258,7 +1285,7 @@ export function debeDescartarseSolo(plan: {
 
 /**
  * ¿La propuesta guardada todavía tiene algo que decidir? La usa el handoff antes de dejar la suya
- * (analyze/route.ts): **una propuesta abierta no se pisa, sea del handoff o de las reuniones** —se
+ * (lib/timeline/borrador-del-handoff.ts): **una propuesta abierta no se pisa, sea del handoff o de las reuniones** —se
  * queda la abierta y se avisa a quien regeneró (respuesta 1 de Elías, 2026-09-24)—. Pisarla a mitad
  * de la revisión le cambiaba la lista al CSE, le hacía perder lo desmarcado y la foto, y su
  * «Aplicar» terminaba en un 409.

@@ -10,6 +10,7 @@ import {
   type AgentProposedPhase,
 } from "./reconcile-proposal";
 import { computeProposalDeltas, type CurrentPhaseLike } from "./proposal-deltas";
+import { borradorDelHandoff } from "./borrador";
 
 const ph = (over: Partial<ExistingPhaseForReconcile> & { id: string; name: string }): ExistingPhaseForReconcile => ({
   durationWeeks: 2,
@@ -184,6 +185,63 @@ describe("reconcileAgentProposal", () => {
     });
   });
 
+  /* ── E2b (D9): UN NOMBRE REPETIDO NO REPITE IDS NI DEJA FASES IMPOSIBLES ─────────────────
+     Con el handoff escribiendo un borrador v1, un id repetido quedaba GUARDADO: dos cambios con la
+     misma clave y un orden con el id dos veces. La edición que los pone en rojo: volver a emparejar
+     siempre con la primera existente del nombre, o dejar la repetida sin pareja como fase nueva o
+     por posición. */
+  describe("D9 · nombres repetidos", () => {
+    const sinRepetir = (ids: Array<string | undefined>) => {
+      const reales = ids.filter((id): id is string => !!id);
+      expect(new Set(reales).size, `ids repetidos: ${reales.join(", ")}`).toBe(reales.length);
+    };
+
+    test("Wherex: dos existentes con el mismo nombre y la misma propuesta → cada una toma la suya, no-op", () => {
+      const existing = [ph({ id: "a1", name: "Implementación" }), ph({ id: "b", name: "Diseño" }), ph({ id: "a2", name: "Implementación" })];
+      const r = reconcileAgentProposal(
+        [prop({ name: "Implementación" }), prop({ name: "Diseño" }), prop({ name: "Implementación" })],
+        existing,
+        null,
+        null,
+      );
+      expect(r.phases.map((p) => p.id)).toEqual(["a1", "b", "a2"]);
+      sinRepetir(r.phases.map((p) => p.id));
+      expect(r.isNoOp).toBe(true);
+    });
+
+    test("una sola existente y la propuesta la repite → la repetida se ignora: ni fase nueva ni renombre", () => {
+      const r = reconcileAgentProposal([prop({ name: "Kickoff" }), prop({ name: "Kickoff" })], [ph({ id: "k", name: "Kickoff" })], null, null);
+      expect(r.phases.map((p) => [p.id, p.name, p.order])).toEqual([["k", "Kickoff", 0]]);
+      expect(r.isNoOp).toBe(true);
+      // Con otra existente libre, la repetida tampoco la renombra por posición.
+      const otra = reconcileAgentProposal(
+        [prop({ name: "Kickoff" }), prop({ name: "Kickoff" }), prop({ name: "Cierre" })],
+        [ph({ id: "k", name: "Kickoff" }), ph({ id: "z", name: "Cierre" })],
+        null,
+        null,
+      );
+      expect(otra.phases.map((p) => [p.id, p.name, p.order])).toEqual([
+        ["k", "Kickoff", 0],
+        ["z", "Cierre", 1],
+      ]);
+      sinRepetir(otra.phases.map((p) => p.id));
+      expect(otra.isNoOp).toBe(true);
+    });
+
+    test("dos fases NUEVAS con el mismo nombre → entra una sola", () => {
+      const r = reconcileAgentProposal(
+        [prop({ name: "Kickoff" }), prop({ name: "Piloto" }), prop({ name: "Piloto" })],
+        [ph({ id: "k", name: "Kickoff" })],
+        null,
+        null,
+      );
+      expect(r.phases.map((p) => [p.id, p.name, p.order])).toEqual([
+        ["k", "Kickoff", 0],
+        [undefined, "Piloto", 1],
+      ]);
+    });
+  });
+
   // ── El test que cierra el hueco de verdad: todo caso NO-op según reconcileAgentProposal
   // tiene que producir >=1 delta real en computeProposalDeltas (la MISMA función que usa el
   // frontend para decidir si hay algo que mostrar). Si algún escenario lo rompe, se ve acá.
@@ -236,6 +294,11 @@ describe("reconcileAgentProposal", () => {
           c.existingAnchorISO,
         );
         expect(deltas.length, `${c.nombre}: reconcileAgentProposal dijo que HAY cambio, pero computeProposalDeltas no ve ningún delta — el CSE no vería nada`).toBeGreaterThan(0);
+        // E2b: y el handoff lo escribe (un borrador con algo aplicable contra lo que leyó).
+        expect(
+          borradorDelHandoff({ propuesta: r, vivo: { ancla: c.existingAnchorISO, fases: c.existing } }),
+          `${c.nombre}: hay cambio, pero el handoff no dejaría propuesta`,
+        ).not.toBeNull();
       });
     }
   });

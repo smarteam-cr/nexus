@@ -8,14 +8,7 @@ import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
-import { reconcileAgentProposal } from "@/lib/timeline/reconcile-proposal";
-import {
-  AVISO_OTRA_PROPUESTA_ENTRO,
-  AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE,
-  AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
-  origenDePropuesta,
-} from "@/lib/timeline/proposal-deltas";
-import { propuestaPorDecidir } from "@/lib/timeline/borrador";
+import { guardarPropuestaDelHandoff } from "@/lib/timeline/borrador-del-handoff";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -3156,102 +3149,21 @@ async function persistTimelineFromAgentOutput(
 
     if (validPhases.length === 0) return { timelineSyncError: null };
 
-    // Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas).
-    // En vez de descartar la propuesta nueva, se reconcilia contra las fases actuales y
-    // se guarda como `pendingProposal` (shape del PUT) para que el canvas la muestre como
-    // vista previa aplicable. Reconciliación: cada fase propuesta toma el id de la fase
-    // existente que matchea (por nombre normalizado; si no, por posición) → al aplicar, el
-    // PUT la ACTUALIZA en vez de recrear. Se OMITE `tasks` en TODAS las fases → el PUT no
-    // toca las tareas (preserva detalle y estados). Las fases existentes no matcheadas se
-    // re-emiten idénticas (modo aditivo: el re-run nunca borra fases con progreso).
-    const existing = await prisma.projectTimeline.findUnique({
-      where: { projectId: bodyProjectId },
-      select: {
-        anchorStartDate: true,
-        pendingProposal: true,
-        pendingProposalRunId: true,
-        phases: {
-          orderBy: { order: "asc" },
-          select: { id: true, name: true, durationWeeks: true, startWeek: true, sessionCount: true, notes: true, activityType: true },
-        },
-      },
+    /* Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas): lo que propone
+       el agente queda como PROPUESTA (`borrador-v1`, E2b), que el CSE revisa en la barra arriba del
+       Gantt. Todo eso —emparejar con las fases de hoy, no pisar una abierta con algo por decidir
+       (respuesta 1 de Elías) y la escritura condicionada— vive en lib/timeline/borrador-del-handoff.ts,
+       probado llamándolo. «sin-cronograma» = el proyecto nunca lo tuvo: sigue abajo, que lo crea. */
+    const delHandoff = await guardarPropuestaDelHandoff({
+      projectId: bodyProjectId,
+      corrida: agentRunId,
+      fases: validPhases.map((p) => ({
+        name: p.name, durationWeeks: p.durationWeeks, startWeek: p.startWeek,
+        sessionCount: p.sessionCount, notes: p.notes,
+      })),
     });
-    if (existing) {
-      // Si el anchor sigue vacío, derivarlo de la sesión de kickoff (la propuesta lo
-      // lleva → al aplicarla, el PUT lo persiste). Si ya está, se conserva (no se pisa).
-      // Este fallback SÍ pega a la base (getKickoffSessionDate) — por eso vive acá y no
-      // dentro de reconcileAgentProposal, que es pura.
-      const existingAnchorISO = existing.anchorStartDate?.toISOString() ?? null;
-      const resolvedAnchorISO =
-        existingAnchorISO ?? (await getKickoffSessionDate(bodyProjectId))?.toISOString() ?? null;
-
-      const reconciled = reconcileAgentProposal(
-        validPhases.map((p) => ({
-          name: p.name, durationWeeks: p.durationWeeks, startWeek: p.startWeek,
-          sessionCount: p.sessionCount, notes: p.notes,
-        })),
-        existing.phases,
-        existingAnchorISO,
-        resolvedAnchorISO,
-      );
-
-      // Regenerar el handoff para refrescar CONTEXTO no debe generar ruido en el cronograma:
-      // antes TODA regeneración dejaba una "propuesta pendiente" aunque fuera idéntica a lo
-      // existente, y el CSE tenía que descartarla a mano.
-      if (reconciled.isNoOp) {
-        console.log(
-          `[analyze] propuesta de cronograma idéntica a lo existente — no se guarda (project ${bodyProjectId}, run ${agentRunId}).`,
-        );
-        return { timelineSyncError: null };
-      }
-
-      /* ⛔ UNA PROPUESTA ABIERTA NO SE PISA, SEA DE DONDE SEA (respuesta 1 de Elías, 2026-09-24:
-         «se queda la abierta y se avisa a quien regeneró»). Primero se protegió solo la de las
-         reuniones (`origen: "contexto"`, revisión adversarial del mismo día); la del handoff se seguía
-         reemplazando, y con la barra de revisión de E1 eso le cambiaba la lista a quien la estaba
-         revisando: perdía lo desmarcado y la foto, su «Aplicar» caía en un 409, y las ediciones a
-         mano que hizo durante la revisión dejaban de chocar y «Aplicar todo» las revertía.
-         Ahora se queda la abierta —del handoff anterior o de las reuniones— y quien regeneró se
-         entera por el aviso de siempre (`timelineSyncError`). Solo se reemplaza una que ya no tiene
-         nada que decidir (todo ya está así): no se pierde nada. La escritura sigue condicionada a lo
-         que se leyó: si en el medio entró otra, no se pisa. */
-      if (
-        existing.pendingProposal !== null &&
-        propuestaPorDecidir(existing.pendingProposal, { ancla: existingAnchorISO, fases: existing.phases })
-      ) {
-        const origenAbierta = origenDePropuesta(existing.pendingProposal as { origen?: unknown } | null);
-        console.log(
-          `[analyze] pendingProposal del handoff NO guardada: hay una propuesta de fases (${origenAbierta}) sin decidir (project ${bodyProjectId}, run ${agentRunId}).`,
-        );
-        return {
-          timelineSyncError:
-            origenAbierta === "contexto"
-              ? AVISO_PROPUESTA_DE_LAS_REUNIONES_PENDIENTE
-              : AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
-        };
-      }
-      const escrita = await prisma.projectTimeline.updateMany({
-        where: {
-          projectId: bodyProjectId,
-          ...(existing.pendingProposal === null
-            ? { pendingProposal: { equals: Prisma.DbNull } }
-            : { pendingProposalRunId: existing.pendingProposalRunId }),
-        },
-        data: {
-          pendingProposal: { anchorStartDate: reconciled.anchorStartDate, phases: reconciled.phases } as unknown as Prisma.InputJsonValue,
-          pendingProposalRunId: agentRunId,
-        },
-      });
-      if (escrita.count === 0) {
-        console.log(
-          `[analyze] pendingProposal del handoff NO guardada: otra propuesta entró mientras se generaba (project ${bodyProjectId}, run ${agentRunId}).`,
-        );
-        return { timelineSyncError: AVISO_OTRA_PROPUESTA_ENTRO };
-      }
-      console.log(
-        `[analyze] ✓ pendingProposal guardada (${reconciled.phases.length} fases; ${validPhases.length} propuestas por el agente) para project ${bodyProjectId} (run ${agentRunId}).`,
-      );
-      return { timelineSyncError: null };
+    if (delHandoff.tipo !== "sin-cronograma") {
+      return { timelineSyncError: delHandoff.tipo === "aviso" ? delHandoff.aviso : null };
     }
 
     /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe

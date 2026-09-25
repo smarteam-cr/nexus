@@ -23,9 +23,11 @@ import {
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
   borradorBase,
+  borradorDelHandoff,
   borradorVacio,
   claveDeRevision,
   claveDeTareaQueSeVa,
+  convertirPropuestaVieja,
   debeDescartarseSolo,
   desenlaceDelSeguimiento,
   esBorradorV1,
@@ -291,6 +293,76 @@ describe("1 · el formato v1 con tareas: se lee igual, y lo que no se conoce blo
     expect(b).toMatchObject({ origen: "contexto", version: 0, pedido: "regenerar", tareas: { corrida: null, listas: false } });
     expect(b.tareasArmadasPara).toEqual({});
     expect(JSON.stringify(b)).not.toContain("nueva:");
+  });
+});
+
+describe("E2b · borradorDelHandoff: el handoff deja un v1 de fases, con el `desde` de lo que leyó", () => {
+  /* El vivo del handoff: lo que lee el servidor, sin tareas. La propuesta viene de reconcileAgentProposal
+     (sin `origen`): Kick-off igual, dos fases nuevas, Diseño pasa a 3 semanas. */
+  const VIVO_HANDOFF = sinLasTareas(VIVO);
+  const propuesta: ProposalLike = {
+    anchorStartDate: "2026-10-05T00:00:00.000Z",
+    phases: [
+      { id: "a", name: "Kick-off", durationWeeks: 1, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      { name: "Uno", durationWeeks: 1, startWeek: null, sessionCount: null, notes: null },
+      { name: "Dos", durationWeeks: 1, startWeek: null, sessionCount: null, notes: null },
+      { id: "b", name: "Diseño", durationWeeks: 3, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      { id: "c", name: "Pruebas", durationWeeks: 3, startWeek: null, sessionCount: null, notes: null, activityType: null },
+    ],
+  };
+  const claves = () => {
+    const ids = ["aaaaaaaa-1111", "aaaaaaaa-2222", "bbbbbbbb-3333"];
+    return () => ids.shift()!;
+  };
+
+  it("⭐ claves `n:` únicas (nunca de posiciones), el `despuesDe` las sigue, y no espera tareas", () => {
+    /* La edición que la pone en rojo: guardar las claves `nueva:<i>` de la conversión, o reusar
+       `borradorBase` (el v1 del handoff quedaría «esperando tareas» y frenaría todo). */
+    const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
+    const nuevas = b.cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva");
+    expect(nuevas.map((c) => [c.clave, c.despuesDe])).toEqual([
+      ["n:aaaaaaaa", "a"],
+      ["n:bbbbbbbb", "n:aaaaaaaa"],
+    ]);
+    expect(b).toMatchObject({ formato: FORMATO_BORRADOR, origen: "handoff", version: 0, pedido: null, tareas: null });
+    expect(b.tareasArmadasPara).toEqual({});
+    expect(JSON.stringify(b)).not.toContain("nueva:");
+  });
+
+  it("⭐ el `desde` es el vivo que se le pasó (el orden completo, el campo de la fase)", () => {
+    /* La edición que la pone en rojo: fijar el `desde` contra otra cosa que lo leído (una edición
+       posterior dejaría de chocar y «Aplicar todo» la revertiría). */
+    const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
+    expect(b.cambios.find((c): c is CambioFaseCambia => c.tipo === "fase-cambia")).toMatchObject({ faseId: "b", desde: 2, a: 3 });
+    const reorden = borradorDelHandoff({
+      propuesta: { anchorStartDate: "2026-10-05T00:00:00.000Z", phases: [propuesta.phases[4], propuesta.phases[0], propuesta.phases[3]] },
+      vivo: VIVO_HANDOFF,
+    })!;
+    expect(reorden.cambios.find((c) => c.tipo === "orden")).toMatchObject({ desde: ["a", "b", "c"], a: ["c", "a", "b"] });
+  });
+
+  it("⭐ ida y vuelta por leerBorrador: se lee igual, sin desconocidos (así lo leen E1 y E2a)", () => {
+    const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
+    const leido = leerBorrador(JSON.parse(JSON.stringify(b)), { ancla: null, fases: [] })!;
+    expect(leido).toEqual(b);
+    expect(leido.desconocidos).toBeUndefined();
+    expect(planDeAplicacion(VIVO_HANDOFF, leido).huella).toBe(planDeAplicacion(VIVO_HANDOFF, b).huella);
+  });
+
+  it("⭐ aplicado entero da lo mismo que la conversión del formato viejo (solo cambian las claves)", () => {
+    /* La edición que la pone en rojo: que el productor cambie QUÉ se propone al pasar al formato nuevo. */
+    const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
+    const sinClave = (p: ReturnType<typeof proyectar>) => ({ ...p, fases: p.fases.map((f) => ({ ...f, clave: f.id ?? "nueva" })) });
+    expect(sinClave(proyectar(VIVO_HANDOFF, b))).toEqual(sinClave(proyectar(VIVO_HANDOFF, convertirPropuestaVieja(propuesta, VIVO_HANDOFF))));
+  });
+
+  it("⛔ null si no hay nada que se pueda aplicar: lo mismo que hay, o solo algo que choca", () => {
+    /* La edición que la pone en rojo: devolver un borrador sin nada aplicable (el handoff dejaría una
+       propuesta que no se puede aplicar, o una fase imposible que frena lo que viene después). */
+    const igual: ProposalLike = { anchorStartDate: "2026-10-05T00:00:00.000Z", phases: VIVO_HANDOFF.fases.map((f) => ({ ...f })) };
+    expect(borradorDelHandoff({ propuesta: igual, vivo: VIVO_HANDOFF })).toBeNull();
+    const repetida: ProposalLike = { ...igual, phases: [...igual.phases, { name: "Diseño", durationWeeks: 2 }] };
+    expect(borradorDelHandoff({ propuesta: repetida, vivo: VIVO_HANDOFF }), "una fase nueva con un nombre que ya existe choca").toBeNull();
   });
 });
 
