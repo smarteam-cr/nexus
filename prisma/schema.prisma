@@ -2873,6 +2873,11 @@ model CuentaFinanciera {
 
   tipo                     CobranzaTipoCuenta   @default(NACIONAL)
   viaCobro                 CobranzaViaCobro     @default(ODOO)
+  // Quién/cuándo cambió `viaCobro` por última vez (2026-09-25, «Está en Mercury»). Las escribe SOLO
+  // `cambiarViaCobroTx` (lib/cobranza/via-cobro.ts) y solo si la vía cambia de verdad. null = la vía
+  // viene así de la importación o del alta, sin firma. SQL: scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql
+  viaCobroPor              String?
+  viaCobroEn               DateTime?
   moneda                   CobranzaMoneda       @default(CRC)
   // DEPRECATED — reemplazado por creditoDias (Tanda B, 2026-07). Nunca alimentó
   // ningún cálculo del motor (0 lectores en engine.ts). Se mantiene escribible

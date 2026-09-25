@@ -53,6 +53,12 @@ interface GenerateResult {
 interface CuentaForm {
   tipo: string;
   viaCobro: string;
+  /**
+   * La vía con que se abrió el formulario. ⚠ La vía se manda SOLO si la persona la cambió (2026-09-25): si
+   * «Está en Mercury» o «Cuadrar cronograma» la cambiaron con la ficha abierta, guardar un correo mandaba la
+   * vía vieja y la pisaba, con la firma de quien guardó.
+   */
+  viaCobroInicial: string;
   moneda: string;
   diaCobroAncla: string;
   creditoDias: string;
@@ -69,6 +75,7 @@ function formFrom(c: CuentaDetailDTO): CuentaForm {
   return {
     tipo: c.tipo,
     viaCobro: c.viaCobro,
+    viaCobroInicial: c.viaCobro,
     moneda: c.moneda,
     diaCobroAncla: c.diaCobroAncla != null ? String(c.diaCobroAncla) : "",
     creditoDias: c.creditoDias != null ? String(c.creditoDias) : "",
@@ -178,7 +185,7 @@ export default function CuentaDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipo: form.tipo,
-          viaCobro: form.viaCobro,
+          ...(form.viaCobro !== form.viaCobroInicial ? { viaCobro: form.viaCobro } : {}),
           moneda: form.moneda,
           diaCobroAncla: form.diaCobroAncla.trim() ? Number(form.diaCobroAncla) : null,
           creditoDias: form.creditoDias.trim() ? Number(form.creditoDias) : null,
