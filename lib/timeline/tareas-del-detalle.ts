@@ -45,6 +45,8 @@
  * dado el chat (`ajustadasPorElChat`, D9): sus tareas ya son de la forma nueva.
  * Revisión de los arreglos: la IA no ve lo que se conserva y vuelve a proponer la misma tarea; la nueva suya que
  * repite una conservada (misma fase y huella del título) no entra (`sinLasQueRepitenLoDelChat`): se creaban las dos.
+ * Revisión antes del push: en otra semana solo sin ambigüedad (una sesión semanal no pierde la S1), con el título
+ * completo, y una viva que el chat renombró, mudó o quitó se reconoce también como la vio el agente.
  */
 import {
   huellasDeFrontera,
@@ -73,7 +75,6 @@ import {
   type Vivo,
 } from "./borrador";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "./compute-detail-tasks";
-import { fingerprintFromTitle } from "./particularidad-identity";
 import { isKept } from "./regen-columnas";
 import { elegirFaseDeSemanaCero, tareasFijasDeSemanaCero } from "./semana-cero-tareas";
 import { plural } from "./weeks";
@@ -345,48 +346,97 @@ function sinLasRearmadas(
  */
 const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat || (c.tipo === "tarea-nueva" && !!c.retocada));
 
-/** La tarea que un cambio conservado DEJA en su fase (fase de destino, título y semana resultantes). */
-function tareaQueDeja(c: CambioDeTarea): { fase: string; huella: string; semana: number } | null {
-  if (c.tipo === "tarea-nueva") return { fase: c.fase, huella: fingerprintFromTitle(c.tarea.title), semana: c.tarea.weekIndex };
-  if (c.tipo === "tarea-cambia") {
-    return { fase: faseDeLaTarea(c), huella: fingerprintFromTitle(c.a.title ?? c.desde.title), semana: c.a.weekIndex ?? c.desde.weekIndex };
+/**
+ * La huella del título COMPLETO: sin mayúsculas, tildes ni signos, como `fingerprintFromTitle`, pero SIN su
+ * corte a 60 caracteres (revisión antes del push). Con el corte, «Configurar las propiedades personalizadas del
+ * objeto Negocios para ventas» y «… para postventa» eran la misma tarea.
+ */
+function huellaCompleta(titulo: string): string {
+  return titulo
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Una tarea como la puede repetir el agente: su fase, la huella completa de su título y su semana. */
+interface FirmaDeTarea {
+  fase: string;
+  huella: string;
+  semana: number;
+}
+
+/**
+ * Lo que el agente puede volver a proponer de un cambio que la fusión conserva (`loTocoElChat`), y si se lo
+ * reconoce también en OTRA semana (revisión antes del push):
+ *  · una tarea nueva de la IA que el chat retocó: la que DEJA (fase, título y semana). En otra semana, sí;
+ *  · una tarea nueva que AGREGÓ el chat (`porChat`): la que deja, y solo en su MISMA semana. No es algo que el
+ *    agente repita: la suya con el mismo título en otra semana es otra (la S1 de una sesión semanal);
+ *  · una tarea VIVA que el chat cambió o quitó: el agente arma desde lo vivo (`estructuraHipotetica` descarta los
+ *    cambios de tareas), así que la repite como la VIO: el título, la fase y la semana de antes (`desde`,
+ *    `faseId`). La que cambió se reconoce además por lo que deja (título y fase de destino).
+ */
+function loQueRepetiriaElAgente(c: CambioDeTarea): { firmas: FirmaDeTarea[]; enOtraSemana: boolean } {
+  if (c.tipo === "tarea-nueva") {
+    return { firmas: [{ fase: c.fase, huella: huellaCompleta(c.tarea.title), semana: c.tarea.weekIndex }], enOtraSemana: !c.porChat };
   }
-  return null; // una que se va no deja nada en la fase
+  const comoLaVio: FirmaDeTarea = { fase: c.faseId, huella: huellaCompleta(c.desde.title), semana: c.desde.weekIndex };
+  if (c.tipo === "tarea-se-va") return { firmas: [comoLaVio], enOtraSemana: true };
+  const comoQueda: FirmaDeTarea = {
+    fase: faseDeLaTarea(c),
+    huella: huellaCompleta(c.a.title ?? c.desde.title),
+    semana: c.a.weekIndex ?? c.desde.weekIndex,
+  };
+  return { firmas: [comoLaVio, comoQueda], enOtraSemana: true };
 }
 
 /**
  * Revisión de los arreglos: las tareas nuevas del agente, sin las que REPITEN lo que la fusión conserva del chat
  * (`loTocoElChat`: una tarea nueva de la IA retocada, algo que dictó el chat). El agente arma la fase desde lo
  * vivo, no ve esas tareas y vuelve a proponer la misma: sin esto quedaban las dos en «aplica», sin «Ya está» ni
- * ⚠, y «Aplicar todo» creaba las dos. Se reconoce por la MISMA fase y la huella del título
- * (`fingerprintFromTitle`), y cada conservada se lleva UNA sola del agente (primero la de su misma semana): una
- * sesión que se repite cada semana no pierde las demás.
+ * ⚠, y «Aplicar todo» creaba las dos. Se reconoce por la MISMA fase y la huella del título completo
+ * (`huellaCompleta`), y cada conservada se lleva UNA sola del agente.
+ * Revisión antes del push: se llevaba la PRIMERA con esa huella en cualquier semana, y con una sesión que se repite
+ * cada semana sacaba una legítima (el chat agrega la S4: se perdía la S1). Ahora, primero la de la MISMA semana; en
+ * otra semana, solo si no hay dudas (la fase tiene UNA sola del agente con esa huella) y nunca por lo que agregó el
+ * chat. Si hay varias y ninguna es de su semana, no se saca ninguna: un duplicado a la vista se desmarca; una
+ * tarea perdida no se ve. Y una viva que el chat renombró, mudó o quitó se reconoce también como la vio el agente
+ * (`loQueRepetiriaElAgente`).
  */
 function sinLasQueRepitenLoDelChat(nuevas: readonly CambioDeTarea[], conservadas: readonly Cambio[]): CambioDeTarea[] {
-  const dejan = conservadas.flatMap((c) => {
-    const t = loTocoElChat(c) ? tareaQueDeja(c as CambioDeTarea) : null;
-    return t && t.huella ? [t] : [];
+  const repetibles = conservadas.flatMap((c) => {
+    if (!loTocoElChat(c)) return [];
+    const r = loQueRepetiriaElAgente(c as CambioDeTarea);
+    const firmas = r.firmas.filter((f) => f.huella !== "");
+    return firmas.length > 0 ? [{ firmas, enOtraSemana: r.enOtraSemana }] : [];
   });
-  if (dejan.length === 0) return [...nuevas];
+  if (repetibles.length === 0) return [...nuevas];
+  const delAgente = nuevas.map((n) => (n.tipo === "tarea-nueva" ? { fase: n.fase, huella: huellaCompleta(n.tarea.title), semana: n.tarea.weekIndex } : null));
+  /** Todas las del agente con la fase y la huella de la firma (también las que ya salieron: cuentan para la duda). */
+  const conLaHuella = (f: FirmaDeTarea) =>
+    delAgente.flatMap((n, j) => (n !== null && n.fase === f.fase && n.huella === f.huella ? [j] : []));
   const fuera = new Set<number>();
-  const buscar = (t: (typeof dejan)[number], conSemana: boolean) =>
-    nuevas.findIndex(
-      (n, j) =>
-        !fuera.has(j) &&
-        n.tipo === "tarea-nueva" &&
-        n.fase === t.fase &&
-        fingerprintFromTitle(n.tarea.title) === t.huella &&
-        (!conSemana || n.tarea.weekIndex === t.semana),
-    );
-  const sinPareja: typeof dejan = [];
-  for (const t of dejan) {
-    const j = buscar(t, true);
-    if (j >= 0) fuera.add(j);
-    else sinPareja.push(t);
+  const sinPareja: typeof repetibles = [];
+  // 1. La de la MISMA semana.
+  for (const r of repetibles) {
+    let j: number | undefined;
+    for (const f of r.firmas) {
+      j = conLaHuella(f).find((k) => !fuera.has(k) && delAgente[k]!.semana === f.semana);
+      if (j !== undefined) break;
+    }
+    if (j !== undefined) fuera.add(j);
+    else if (r.enOtraSemana) sinPareja.push(r);
   }
-  for (const t of sinPareja) {
-    const j = buscar(t, false);
-    if (j >= 0) fuera.add(j);
+  // 2. En otra semana, solo sin ambigüedad: UNA sola del agente con esa huella en la fase.
+  for (const r of sinPareja) {
+    for (const f of r.firmas) {
+      const unica = conLaHuella(f);
+      if (unica.length === 1 && !fuera.has(unica[0])) {
+        fuera.add(unica[0]);
+        break;
+      }
+    }
   }
   return nuevas.filter((_, j) => !fuera.has(j));
 }

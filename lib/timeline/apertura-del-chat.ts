@@ -22,6 +22,10 @@
  * en curso en el Gantt (el botón apretado, o un clic o una tecla ahí en los últimos `VENTANA_DEL_GESTO_MS`). Y
  * lo pasajero (un gesto, un campo, una capa) se vuelve a decidir UNA vez cuando termina (`seVuelveADecidir`), en
  * vez de quedar en «nada» para siempre; con la pantalla angosta queda solo el punto.
+ *
+ * Revisión antes del push: el campo que pierde el foco no reintenta en el acto (el `focusout` llega a mitad del
+ * clic): se espera a que termine el gesto en todo el documento (`faltaParaReintentarPorElCampo`). Y «💬 Asistente»
+ * no cierra un cajón que se abrió solo en ese mismo clic (`abiertoTrasTocarElChat`).
  */
 
 /**
@@ -132,7 +136,8 @@ export function motivoParaPosponer(
 
 /**
  * ¿Se vuelve a decidir UNA vez cuando lo que la frenó termina? Lo pasajero sí: el gesto (se suelta el botón y
- * pasa la ventana sin actividad), el campo (pierde el foco) y la capa (se cierra). La pantalla angosta no: queda
+ * pasa la ventana sin actividad), el campo (pierde el foco y termina el clic que se lo sacó, `EsperaDeUnCampo`) y
+ * la capa (se cierra). La pantalla angosta no: queda
  * el punto en el 💬 (abrir el cajón al agrandar la ventana correría todo en un momento cualquiera).
  */
 export function seVuelveADecidir(m: MotivoDePosposicion): boolean {
@@ -162,6 +167,51 @@ export function faltaParaQueTermineElGesto(g: GestoEnElGantt, ahora: number): nu
   if (g.apretado) return null;
   if (g.ultimaActividad === null) return 0;
   return Math.max(0, VENTANA_DEL_GESTO_MS - (ahora - g.ultimaActividad));
+}
+
+/**
+ * Revisión antes del push: la espera de lo que pospuso por «escribiendo». El `focusout` llega en el POINTERDOWN del
+ * clic que saca el foco, antes del click: reintentar ahí abría el cajón a mitad del clic (si el clic era en
+ * «💬 Asistente», su click lo volvía a cerrar; si era en otro control, el cajón corría 400 px lo que se estaba
+ * tocando). Ahora perder el foco no reintenta: se espera a que termine el gesto en TODO el documento (se suelta el
+ * botón y pasan `VENTANA_DEL_GESTO_MS` sin otro pointerdown; si el foco salió con el teclado, esos 2 s). Otro
+ * pointerdown en el medio vuelve a esperar a que se suelte.
+ */
+export interface EsperaDeUnCampo {
+  /** El campo ya perdió el foco. */
+  focoAfuera: boolean;
+  /** El gesto en el DOCUMENTO (no solo en el Gantt): el botón apretado y lo último (apretar, soltar o el foco). */
+  gesto: GestoEnElGantt;
+}
+
+/** Lo que se anota mientras se espera: el pointerdown y el pointerup del documento, y el `focusout` del campo. */
+export type EventoDeLaEspera = "apretar" | "soltar" | "foco-afuera";
+
+export const ESPERA_DE_UN_CAMPO: EsperaDeUnCampo = { focoAfuera: false, gesto: { apretado: false, ultimaActividad: null } };
+
+export function anotarEnLaEspera(e: EsperaDeUnCampo, evento: EventoDeLaEspera, ahora: number): EsperaDeUnCampo {
+  const apretado = evento === "apretar" ? true : evento === "soltar" ? false : e.gesto.apretado;
+  return { focoAfuera: e.focoAfuera || evento === "foco-afuera", gesto: { apretado, ultimaActividad: ahora } };
+}
+
+/**
+ * Cuánto falta para volver a decidir: null mientras el campo tenga el foco o el botón siga apretado (lo despierta
+ * el soltar), 0 si ya terminó, y si no los ms que faltan (`faltaParaQueTermineElGesto` sobre el gesto del documento).
+ */
+export function faltaParaReintentarPorElCampo(e: EsperaDeUnCampo, ahora: number): number | null {
+  if (!e.focoAfuera) return null;
+  return faltaParaQueTermineElGesto(e.gesto, ahora);
+}
+
+/**
+ * Revisión antes del push: cómo queda el cajón al tocar «💬 Asistente». Alterna, salvo que se haya abierto SOLO en
+ * medio de ESTE clic (la apertura automática llegó después de su pointerdown): entonces queda abierto. Si no, el
+ * clic que la persona hizo para abrirlo lo cerraba (abierto solo a mitad del clic, cerrado por el click).
+ * `apretadoEn`: el pointerdown de este clic (null con el teclado); `abiertoSoloEn`: la última apertura automática.
+ */
+export function abiertoTrasTocarElChat(e: { abierto: boolean; apretadoEn: number | null; abiertoSoloEn: number | null }): boolean {
+  if (!e.abierto) return true;
+  return e.apretadoEn !== null && e.abiertoSoloEn !== null && e.abiertoSoloEn >= e.apretadoEn;
 }
 
 /** Lo que el cronograma hace con una decisión (revisión de E3, #26: el cableado, corrido por su tabla). */

@@ -9,11 +9,15 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  abiertoTrasTocarElChat,
   accionesDeLaApertura,
+  anotarEnLaEspera,
   claveDeLaApertura,
   debeAbrirseElChat,
   esCampoDeEscritura,
+  ESPERA_DE_UN_CAMPO,
   faltaParaQueTermineElGesto,
+  faltaParaReintentarPorElCampo,
   gestoEnCurso,
   leerApertura,
   motivoParaPosponer,
@@ -24,6 +28,7 @@ import {
   type AlmacenDeLaApertura,
   type DecisionDeApertura,
   type EntradaDeLaApertura,
+  type EventoDeLaEspera,
   type MotivoDePosposicion,
 } from "./apertura-del-chat";
 
@@ -179,6 +184,54 @@ describe("⭐ cuándo se abre solo", () => {
     const g = { apretado: false, ultimaActividad: T - 2000 };
     expect(faltaParaQueTermineElGesto(g, T)).toBe(0);
     expect(gestoEnCurso(g, T)).toBe(false);
+  });
+
+  it("⛔ revisión antes del push · se pospuso por escribir: el reintento espera a que termine el clic que sacó el foco", () => {
+    /* El `focusout` llega en el pointerdown del clic que saca el foco, ANTES del click. Reintentar ahí abría el cajón
+       a mitad del clic: si el clic era en «💬 Asistente», su click lo volvía a cerrar (y la apertura ya constaba como
+       hecha). La edición que la pone en rojo: reintentar con el foco afuera sin mirar el gesto del documento (el
+       botón todavía apretado, o la ventana después de soltarlo), o no volver a esperar con otro pointerdown. */
+    const T = 1_000_000;
+    const tras = (pasos: Array<[EventoDeLaEspera, number]>) =>
+      pasos.reduce((e, [evento, t]) => anotarEnLaEspera(e, evento, t), ESPERA_DE_UN_CAMPO);
+    const clicQueSacaElFoco: Array<[EventoDeLaEspera, number]> = [
+      ["apretar", T],
+      ["foco-afuera", T],
+    ];
+    const filas: Array<[string, Array<[EventoDeLaEspera, number]>, number, number | null]> = [
+      ["el campo sigue con el foco", [], T + 60_000, null],
+      ["un clic que no le saca el foco al campo", [["apretar", T], ["soltar", T + 50]], T + 60_000, null],
+      ["el foco salió con un clic y el botón sigue apretado (el pointerdown del 💬): esperar", clicQueSacaElFoco, T + 60_000, null],
+      ["se soltó: faltan los 2 s", [...clicQueSacaElFoco, ["soltar", T + 100]], T + 100, VENTANA_DEL_GESTO_MS],
+      ["se soltó hace 1,9 s: todavía no", [...clicQueSacaElFoco, ["soltar", T + 100]], T + 2000, 100],
+      ["se soltó hace 2 s: se vuelve a decidir", [...clicQueSacaElFoco, ["soltar", T + 100]], T + 2100, 0],
+      ["otro pointerdown en la ventana: vuelve a esperar a que se suelte", [...clicQueSacaElFoco, ["soltar", T + 100], ["apretar", T + 1500]], T + 2100, null],
+      ["y al soltarlo, 2 s desde ahí", [...clicQueSacaElFoco, ["soltar", T + 100], ["apretar", T + 1500], ["soltar", T + 1600]], T + 2100, 1500],
+      ["el foco salió con el teclado: 2 s sin pointerdown", [["foco-afuera", T]], T + 1999, 1],
+      ["el foco salió con el teclado y pasaron los 2 s", [["foco-afuera", T]], T + 2000, 0],
+    ];
+    for (const [nombre, pasos, ahora, falta] of filas) {
+      expect(faltaParaReintentarPorElCampo(tras(pasos), ahora), nombre).toBe(falta);
+    }
+    // Cuando termina, el reintento decide como si la propuesta acabara de quedar lista: sin campo ni gesto, abre.
+    expect(con({ pospuesta: true, reintento: true })).toBe("abrir");
+  });
+
+  it("⛔ revisión antes del push · «💬 Asistente» no cierra un cajón que se abrió solo en ese mismo clic", () => {
+    /* La apertura automática podía llegar entre el pointerdown del 💬 y su click (el botón va por portal, fuera del
+       Gantt): el click alternaba y lo cerraba. La edición que la pone en rojo: volver a alternar siempre, o dejarlo
+       abierto también cuando se abrió solo ANTES del clic (el 💬 tiene que poder cerrarlo), o con el teclado. */
+    const T = 1_000_000;
+    const filas: Array<[string, Parameters<typeof abiertoTrasTocarElChat>[0], boolean]> = [
+      ["cerrado: lo abre", { abierto: false, apretadoEn: T, abiertoSoloEn: null }, true],
+      ["cerrado, con el teclado: lo abre", { abierto: false, apretadoEn: null, abiertoSoloEn: T - 5000 }, true],
+      ["abierto a mano: lo cierra", { abierto: true, apretadoEn: T, abiertoSoloEn: null }, false],
+      ["se abrió solo ANTES del clic: lo cierra", { abierto: true, apretadoEn: T, abiertoSoloEn: T - 1 }, false],
+      ["se abrió solo en medio de ESTE clic: queda abierto", { abierto: true, apretadoEn: T, abiertoSoloEn: T + 3 }, true],
+      ["en el mismo milisegundo del pointerdown: queda abierto", { abierto: true, apretadoEn: T, abiertoSoloEn: T }, true],
+      ["con el teclado (sin pointerdown): lo cierra", { abierto: true, apretadoEn: null, abiertoSoloEn: T }, false],
+    ];
+    for (const [nombre, e, abierto] of filas) expect(abiertoTrasTocarElChat(e), nombre).toBe(abierto);
   });
 
   it("⛔ revisión de E3 (#17, #12) · ni con «Regenerar» de una sola fase ni sobre una propuesta que el chat no puede editar", () => {

@@ -678,10 +678,13 @@ describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () 
       fase,
       tarea: { ...DE_LA_IA_ANTES.tarea, title, weekIndex },
     });
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: «t:ia-flujos» le daba al agente el título NUEVO
+       («Probar los flujos de venta»), que solo conoce el chat. El agente arma desde lo vivo y repite el título VIVO
+       («Probar flujos»): con esa entrada la guarda quedaba en verde y el duplicado real pasaba. */
     const recalculadas = [
       delAgente("t:ia-taller-otra-vez", "Taller de requerimientos.", 1), // la misma, con un punto de más
       delAgente("t:ia-revision", "Revisión conjunta", 1), // la que dictó el chat
-      delAgente("t:ia-flujos", "Probar los flujos de venta", 2), // la viva que el chat renombró
+      delAgente("t:ia-flujos", "Probar flujos", 2), // la viva que el chat renombró, como la VIO el agente
       delAgente("t:ia-guiadas", "Pruebas guiadas", 2),
       delAgente("t:ia-en-otra-fase", "Taller de requerimientos", 1, "b"), // otra fase: no es la misma
     ];
@@ -713,5 +716,107 @@ describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () 
     expect(titulos.filter((t) => t === "Taller de requerimientos"), "el paso 2 dejó dos «Taller de requerimientos»").toHaveLength(1);
     expect(titulos).toContain("Pruebas de aceptación");
     expect(b.cambios.find((c) => c.clave === TALLER.clave)).toEqual(TALLER);
+  });
+
+  /** Una tarea nueva (de la IA, salvo `extra`) en «Pruebas» o en la fase que se diga. */
+  const nueva = (clave: string, title: string, weekIndex: number, extra: Partial<CambioTareaNueva> = {}): CambioTareaNueva => ({
+    ...DE_LA_IA_ANTES,
+    clave,
+    tarea: { ...DE_LA_IA_ANTES.tarea, title, weekIndex },
+    ...extra,
+  });
+  const claves = (cs: ReadonlyArray<{ clave: string }>) => cs.map((c) => c.clave);
+  const delAgenteEn = (cs: ReadonlyArray<{ clave: string }>) => claves(cs).filter((k) => k.startsWith("t:ag-"));
+
+  it("⛔ revisión antes del push · el filtro no saca una tarea legítima: una sesión semanal conserva sus semanas", () => {
+    /* El filtro se llevaba la PRIMERA del agente con el mismo título en CUALQUIER semana, y con una sesión que se
+       repite cada semana sacaba una que no era duplicado, sin aviso. Las ediciones que la ponen en rojo: volver a
+       emparejar en otra semana sin mirar si hay varias (A y B pierden la S1), aplicarlo a lo que AGREGÓ el chat
+       (A pierde la S1), o volver a la huella cortada a 60 caracteres (se va la de postventa). */
+    const semanales = [1, 2, 3].map((s) => nueva(`t:ag-s${s}`, "Sesión de seguimiento", s));
+
+    // (A) El chat AGREGA la S4 a una fase con S1–S3 de la IA; el recálculo devuelve S1–S3: no se va ninguna.
+    const a = mezclarTareasDeFases([...BASE.cambios, nueva("t:chat-s4", "Sesión de seguimiento", 4, { porChat: true })], semanales, new Set(["c"]));
+    expect(delAgenteEn(a), "(A) el chat agregó la S4 y el recálculo perdió la S1").toEqual(["t:ag-s1", "t:ag-s2", "t:ag-s3"]);
+    expect(claves(a)).toContain("t:chat-s4");
+    // Lo que agregó el chat sí se reconoce en su MISMA semana (la S2 del agente repite la S2 del chat).
+    const a2 = mezclarTareasDeFases([...BASE.cambios, nueva("t:chat-s2", "Sesión de seguimiento", 2, { porChat: true })], semanales, new Set(["c"]));
+    expect(delAgenteEn(a2)).toEqual(["t:ag-s1", "t:ag-s3"]);
+    // Y en otra semana no, aunque el agente tenga UNA sola con ese título: el chat la agregó, el agente no la repite.
+    const a3 = mezclarTareasDeFases(
+      [...BASE.cambios, nueva("t:chat-cierre", "Sesión de cierre", 4, { porChat: true })],
+      [nueva("t:ag-cierre", "Sesión de cierre", 2)],
+      new Set(["c"]),
+    );
+    expect(delAgenteEn(a3), "lo que agregó el chat se llevó una del agente de otra semana").toEqual(["t:ag-cierre"]);
+
+    // (B) El chat pasó una retocada de la S2 a la S5: tres del agente con ese título y ninguna en la S5 → no se saca ninguna.
+    const b = mezclarTareasDeFases([...BASE.cambios, nueva("t:ret-s5", "Sesión de seguimiento", 5, { retocada: true })], semanales, new Set(["c"]));
+    expect(delAgenteEn(b), "(B) la retocada pasó a la S5 y el recálculo perdió la S1").toEqual(["t:ag-s1", "t:ag-s2", "t:ag-s3"]);
+    expect(claves(b)).toContain("t:ret-s5");
+    // Sin dudas (UNA sola del agente con ese título en la fase), la retocada que cambió de semana sí se la lleva.
+    const sinDudas = mezclarTareasDeFases(
+      [...BASE.cambios, nueva("t:ret-taller", "Taller de cierre", 3, { retocada: true })],
+      [nueva("t:ag-taller", "Taller de cierre", 1), nueva("t:ag-guiadas", "Pruebas guiadas", 1)],
+      new Set(["c"]),
+    );
+    expect(delAgenteEn(sinDudas), "la retocada que cambió de semana quedó repetida").toEqual(["t:ag-guiadas"]);
+
+    // El título COMPLETO: dos largos que comparten los primeros 60 caracteres no son la misma tarea.
+    const VENTAS = "Configurar las propiedades personalizadas del objeto Negocios para ventas";
+    const POSTVENTA = "Configurar las propiedades personalizadas del objeto Negocios para postventa";
+    const largas = mezclarTareasDeFases(
+      [...BASE.cambios, nueva("t:ret-ventas", VENTAS, 1, { retocada: true })],
+      [nueva("t:ag-postventa", POSTVENTA, 1), nueva("t:ag-ventas", VENTAS, 2)],
+      new Set(["c"]),
+    );
+    expect(delAgenteEn(largas), "se fue la de postventa por compartir el comienzo del título").toEqual(["t:ag-postventa"]);
+  });
+
+  it("⛔ revisión antes del push · la viva que el chat renombró, mudó o quitó: el agente la repite como la VIO y no entra", () => {
+    /* El agente arma desde lo vivo (`estructuraHipotetica` descarta los cambios de tareas): ve «Probar flujos» en
+       «Pruebas», S2, aunque el chat la haya renombrado o mudado, y ve «Mapear procesos» aunque el chat la quite.
+       Como el chat la tocó, no es reemplazable y lo que el agente repite entra como «+ tarea nueva». El filtro
+       comparaba solo con el título y la fase de DESTINO: «Aplicar todo» dejaba la renombrada y otra con el nombre
+       viejo, o borraba la quitada y la volvía a crear. La edición que la pone en rojo: comparar solo con lo que
+       DEJA el cambio (sin lo que vio el agente: `desde` y la fase de origen). */
+    // Renombrada: el paso 2 entero, desde lo que devolvió el agente.
+    const conRenombre: Borrador = { ...BASE, cambios: [...BASE.cambios, DEL_CHAT_CAMBIA] };
+    const r = cambios(
+      salida([{ id: "c", tasks: [{ title: "Probar flujos", weekIndex: 2 }, { title: "Pruebas guiadas", weekIndex: 2 }] }]),
+      { borrador: conRenombre },
+    );
+    expect(resumen(r, "c"), "la precondición: lo que el agente repite entra como nueva").toContain("+Probar flujos@2");
+    const b = fusionarDetalle(conRenombre, r, "run-2");
+    const titulosEnC = b.cambios.flatMap((c) => (c.tipo === "tarea-nueva" && c.fase === "c" ? [c.tarea.title] : []));
+    expect(titulosEnC, "quedó la renombrada y otra con el nombre viejo").not.toContain("Probar flujos");
+    expect(titulosEnC).toContain("Pruebas guiadas");
+    expect(b.cambios.find((c) => c.clave === DEL_CHAT_CAMBIA.clave)).toEqual(DEL_CHAT_CAMBIA);
+    // En otra semana también, sin dudas (UNA sola «Probar flujos» del agente en la fase).
+    const otraSemana = mezclarTareasDeFases([...BASE.cambios, DEL_CHAT_CAMBIA], [nueva("t:ag-flujos-s1", "Probar flujos", 1)], new Set(["c"]));
+    expect(delAgenteEn(otraSemana), "la renombrada volvió con el nombre viejo en otra semana").toEqual([]);
+
+    // Mudada de «Pruebas» a «Diseño», y se recalcula «Pruebas».
+    const MUDADA: CambioTareaCambia = { ...DEL_CHAT_CAMBIA, clave: "tarea:c1:cambia-fase", a: { fase: "b" } };
+    const mudada = mezclarTareasDeFases(
+      [...BASE.cambios, MUDADA],
+      [nueva("t:ag-flujos", "Probar flujos", 2), nueva("t:ag-guiadas", "Pruebas guiadas", 2)],
+      new Set(["c"]),
+    );
+    expect(delAgenteEn(mudada), "la mudada volvió a su fase de origen").toEqual(["t:ag-guiadas"]);
+    expect(claves(mudada)).toContain(MUDADA.clave);
+
+    // Quitada por el chat: el paso 2 no la vuelve a proponer.
+    const conQuitada: Borrador = { ...BASE, cambios: [...BASE.cambios, DEL_CHAT_SE_VA] };
+    const rq = cambios(
+      salida([{ id: "b", tasks: [{ title: "Mapear procesos", weekIndex: 0 }, { title: "Definir pipeline de ventas", weekIndex: 1 }] }]),
+      { borrador: conQuitada },
+    );
+    expect(resumen(rq, "b"), "la precondición: lo que el agente repite entra como nueva").toContain("+Mapear procesos@0");
+    const bq = fusionarDetalle(conQuitada, rq, "run-2");
+    const titulosEnB = bq.cambios.flatMap((c) => (c.tipo === "tarea-nueva" && c.fase === "b" ? [c.tarea.title] : []));
+    expect(titulosEnB, "el chat la quitó y la IA la volvió a proponer").not.toContain("Mapear procesos");
+    expect(titulosEnB).toContain("Definir pipeline de ventas");
+    expect(bq.cambios.find((c) => c.clave === DEL_CHAT_SE_VA.clave)).toEqual(DEL_CHAT_SE_VA);
   });
 });

@@ -1,10 +1,11 @@
 /**
  * lib/timeline/validate.ts
  *
- * Validador del payload de cronograma (fases + tareas anidadas) — compartido
- * por el PUT /timeline (edición humana) y el POST /timeline/assist (propuesta
- * de la IA, que emite EXACTAMENTE este mismo shape para que aplicar la
- * propuesta sea un PUT normal). Server-side only.
+ * Validador del payload de cronograma (fases + tareas anidadas) del PUT
+ * /timeline: la edición humana y lo que acordó el chat, que la pantalla arma con
+ * EXACTAMENTE este mismo shape (el aplicador de operaciones) para que aplicarlo
+ * sea un PUT normal. «Pedir cambio con IA» (POST /timeline/assist) se retiró en
+ * E4. Server-side only.
  */
 import type { TimelineActivityType } from "@prisma/client";
 

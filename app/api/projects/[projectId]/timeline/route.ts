@@ -47,8 +47,10 @@ import type {
   TimelineTaskType,
 } from "@prisma/client";
 
-// Validador + tipos del body compartidos con POST /timeline/assist (la IA
-// emite exactamente este shape para que aplicar su propuesta sea un PUT normal).
+// Validador + tipos del body del PUT. Lo que acuerda el chat del cronograma lo arma
+// la pantalla con este mismo shape (el aplicador de operaciones de CronogramaCanvas)
+// y lo manda por este PUT: aplicarlo es un PUT normal. «Pedir cambio con IA» (su
+// ruta propia) se retiró en E4.
 import { validateTimelinePayload, type PutBody } from "@/lib/timeline/validate";
 import { huellasEnMovimiento, idsBorrablesPorOmision } from "@/lib/timeline/rescate-progreso";
 import { partitionByValidation } from "@/lib/timeline/particularidad-state";

@@ -1628,7 +1628,10 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(contiene(apertura, 'origen: "apertura",')).toBe(true);
     expect(apertura, "la apertura escribe lo desmarcado").not.toContain("excluir");
     expect(contiene(CANVAS, "enfocarAlAbrir={!aperturaAutomatica}")).toBe(true);
-    expect(contiene(CANVAS, "setAperturaAutomatica(false); setChatAbierto((v) => !v);"), "abierto a mano no toma el foco").toBe(true);
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: el 💬 ya no alterna a ciegas (`(v) => !v`): no cierra
+       un cajón que se abrió solo en medio de su clic (`abiertoTrasTocarElChat`, su tabla en apertura-del-chat.test.ts).
+       Abierto a mano sigue sin ser automático (toma el foco). */
+    expect(contiene(CANVAS, "onClick={(e) => { setAperturaAutomatica(false);"), "abierto a mano no toma el foco").toBe(true);
     expect(CANVAS.match(/xl:pr-\[400px\]/g)?.length).toBe(1);
     expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>')).toBe(true);
     expect(contiene(CANVAS, "motivoParaNoAplicar={motivoDelChat}")).toBe(true);
@@ -1651,7 +1654,12 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
        sobre el Gantt o si ya se pospuso, o no dejar el punto al posponer. */
     const apertura = tramo(CANVAS, "const tokenParaLaApertura", "}, [tokenParaLaApertura");
     expect(contiene(apertura, "const acciones = accionesDeLaApertura(decision);")).toBe(true);
-    expect(contiene(apertura, "if (acciones.abrir) { setChatAbierto(true); setAperturaAutomatica(acciones.automatica); }")).toBe(true);
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: abrirse solo anota cuándo (`abiertoSoloEnRef`), para
+       que el clic en el 💬 que estaba en curso no lo cierre (su guarda, abajo). */
+    expect(
+      contiene(apertura, "if (acciones.abrir) { setChatAbierto(true); setAperturaAutomatica(acciones.automatica); abiertoSoloEnRef.current = Date.now(); }"),
+      "abrirse solo dejó de anotar cuándo (el clic en curso en el 💬 lo cerraría)",
+    ).toBe(true);
     expect(apertura.match(/setChatAbierto\(/g)?.length, "el efecto abre el cajón por otro camino").toBe(1);
     expect(contiene(apertura, "if (!acciones.decidida) return; aperturaVistaRef.current = tokenParaLaApertura;")).toBe(true);
     expect(contiene(apertura, "if (!acciones.recordar) return; recordarApertura(projectId, tokenParaLaApertura);")).toBe(true);
@@ -1694,7 +1702,14 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     }
     // El punto del 💬: solo para ESTA propuesta y con el chat cerrado; abrirlo a mano lo apaga.
     expect(contiene(CANVAS, "{puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (")).toBe(true);
-    expect(contiene(CANVAS, "setAperturaAutomatica(false); setChatAbierto((v) => !v); setPuntoDelChat(null);")).toBe(true);
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: el 💬 ya no alterna con `(v) => !v` (ver arriba);
+       sigue apagando el punto. */
+    expect(
+      contiene(
+        CANVAS,
+        "setChatAbierto((v) => abiertoTrasTocarElChat({ abierto: v, apretadoEn, abiertoSoloEn })); setPuntoDelChat(null);",
+      ),
+    ).toBe(true);
     expect(contiene(tramo(CANVAS, "const abrirElChatDesdeUnaFase = useCallback(", "}, []);"), "setPuntoDelChat(null);")).toBe(true);
   });
 
@@ -1719,10 +1734,49 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     const espera = tramo(CANVAS, "}, [tokenParaLaApertura", "}, [pospuestaDeLaApertura, selectedTask]);");
     expect(contiene(espera, "if (!p || !seVuelveADecidir(p.motivo) || p.motivo === \"capa\") return;")).toBe(true);
     expect(contiene(espera, "setReintentoDeLaApertura(p.token);")).toBe(true);
-    expect(contiene(espera, 'document.addEventListener("focusout", reintentar);')).toBe(true);
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: el `focusout` ya no reintenta en el acto (llega a
+       mitad del clic); anota y se espera a que termine el gesto en el documento (su guarda, abajo). */
+    expect(contiene(espera, 'document.addEventListener("focusout", alPerderElFoco);')).toBe(true);
     expect(contiene(espera, "const falta = faltaParaQueTermineElGesto(gestoDelGanttRef.current, Date.now());")).toBe(true);
     expect(contiene(espera, "alCambiarElGestoRef.current = esperar;")).toBe(true);
     expect(contiene(espera, "const libre = () => !selectedTask && !document.querySelector('[aria-modal=\"true\"]');")).toBe(true);
     expect(espera).toContain("new MutationObserver(");
+  });
+
+  it("⛔ revisión antes del push · el campo que pierde el foco espera a que termine el clic, y el 💬 no cierra lo que se abrió en su clic", () => {
+    /* Se pospuso con el foco en un campo (las instrucciones del cronograma) y la persona aprieta «💬 Asistente»: el
+       `focusout` llega en el pointerdown, el reintento abría el cajón a mitad del clic y el click del 💬 lo cerraba.
+       Las reglas son puras (sus tablas, en apertura-del-chat.test.ts); esto mira el cableado. Las ediciones que la
+       ponen en rojo: volver a reintentar en el `focusout`, no escuchar el pointerdown y el pointerup del DOCUMENTO
+       (el 💬 va por portal, fuera del Gantt), o que el 💬 vuelva a alternar a ciegas. */
+    const espera = tramo(CANVAS, "}, [tokenParaLaApertura", "}, [pospuestaDeLaApertura, selectedTask]);");
+    const delCampo = tramo(espera, 'if (p.motivo === "escribiendo") {', "let espera: ReturnType<typeof setTimeout> | undefined;");
+    expect(delCampo, "el campo que pierde el foco volvió a reintentar en el acto").not.toMatch(/addEventListener\("focusout",\s*reintentar\)/);
+    expect(contiene(delCampo, "const falta = faltaParaReintentarPorElCampo(espera, Date.now());"), "el campo dejó de esperar el fin del gesto").toBe(true);
+    expect(contiene(delCampo, "if (falta === 0) reintentar(); else reloj = setTimeout(mirar, falta);")).toBe(true);
+    expect(contiene(delCampo, "espera = anotarEnLaEspera(espera, evento, Date.now()); mirar();")).toBe(true);
+    for (const escucha of [
+      'document.addEventListener("focusout", alPerderElFoco);',
+      'document.addEventListener("pointerdown", alApretar, true);',
+      'document.addEventListener("pointerup", alSoltar, true);',
+      'document.addEventListener("pointercancel", alSoltar, true);',
+      'const alPerderElFoco = anotar("foco-afuera");',
+      'const alApretar = anotar("apretar");',
+      'const alSoltar = anotar("soltar");',
+      "clearTimeout(reloj);",
+    ]) {
+      expect(contiene(delCampo, escucha), escucha).toBe(true);
+    }
+
+    // El 💬: anota su pointerdown y no cierra un cajón que se abrió solo después de él.
+    const boton = tramo(CANVAS, "{canEdit && phases.length > 0 && (", "💬 Asistente");
+    expect(contiene(boton, "onPointerDown={() => { apretadoDelChatRef.current = Date.now(); }}"), "el 💬 dejó de anotar su pointerdown").toBe(true);
+    expect(contiene(boton, "const apretadoEn = e.detail > 0 ? apretadoDelChatRef.current : null;")).toBe(true);
+    expect(contiene(boton, "const abiertoSoloEn = abiertoSoloEnRef.current;")).toBe(true);
+    expect(
+      contiene(boton, "setChatAbierto((v) => abiertoTrasTocarElChat({ abierto: v, apretadoEn, abiertoSoloEn }));"),
+      "el 💬 cierra un cajón que se abrió solo en su clic",
+    ).toBe(true);
+    expect(sinEspacios(boton), "el 💬 volvió a alternar a ciegas").not.toContain(sinEspacios("setChatAbierto((v) => !v)"));
   });
 });

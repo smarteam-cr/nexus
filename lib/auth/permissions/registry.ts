@@ -19,7 +19,9 @@
 import type { ActionDef, PermissionMap, SectionDef } from "./types";
 
 // Labels de acciones repetidas (generación de artefactos con IA). enforced:true
-// desde PERM-F5: las gatean resolveArtifactGate (analyze) y timeline/assist.
+// desde PERM-F5: las gatean resolveArtifactGate (analyze) y, en el cronograma,
+// guardIaDelCronograma (lib/auth/api-guards.ts: la estructura y aplicar las tareas
+// de la IA). timeline/assist, que las gateaba antes, se retiró en E4.
 // OJO: `as const satisfies` (no anotación directa) para que `key` quede como
 // literal — la anotación ensancharía a string y rompería ActionKeyOf/PermissionCell.
 const GENERATE = { key: "generate", label: "Generar con IA (primera vez)", enforced: true } as const satisfies ActionDef;

@@ -452,7 +452,8 @@ describe("⭐ con material, el mensaje no se contradice con las reuniones", () =
  * ── LA RUTA: lo que el detalle NO recibe y lo que la corrida registra ───────────────────────────
  */
 describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle", () => {
-  const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"), "utf8");
+  // El fin de línea normalizado: los cortes de abajo buscan "\n" (un checkout con autocrlf trae "\r\n").
+  const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"), "utf8").replace(/\r\n/g, "\n");
   const codigo = ruta.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
 
   it("⭐ PRIORIDAD DEL CANVAS no va al detalle (su mensaje no trae ningún «CANVAS DEL PROYECTO»)", () => {
@@ -486,8 +487,12 @@ describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle
        fugas de las tareas del agente, y las fijas de la Semana 0 se suman después, en R7, sin marca
        (son texto nuestro, no del modelo). La edición que la pone en rojo: dejar de marcar las fugas,
        dejar de recibir las huellas, marcar las fijas, o que analyze deje de pasarle las huellas. */
+    /* ⚠ ACTUALIZADA antes del push (2026-09-26), con esta razón: el cuerpo se corta con "\n}\n", y en un
+       checkout de Windows con core.autocrlf=true el archivo llega con "\r\n": el corte no aparecía y la guarda
+       fallaba (o miraba de más). Se normaliza el fin de línea al leer. */
     const detalle = fs
       .readFileSync(path.join(process.cwd(), "lib/timeline/tareas-del-detalle.ts"), "utf8")
+      .replace(/\r\n/g, "\n")
       .replace(/\/\*[\s\S]*?\*\//g, " ")
       .replace(/^\s*\/\/.*$/gm, " ");
     const iPropuestas = detalle.indexOf("export function tareasPropuestasDelDetalle(");

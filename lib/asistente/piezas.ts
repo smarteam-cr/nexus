@@ -16,7 +16,11 @@
  */
 import { DOC } from "@/lib/canvas/assist-de-documento";
 
-/** El cronograma no está en `DOC`: su modificador es otro (`/timeline/assist`). */
+/**
+ * El cronograma no está en `DOC`: lo que acuerda el chat son operaciones que aplica la pantalla (el aplicador de
+ * CronogramaCanvas, por el PUT del cronograma) o que pasan a la propuesta (`/timeline/borrador/operaciones`).
+ * «Pedir cambio con IA», su modificador de antes, se retiró en E4.
+ */
 export const PIEZA_CRONOGRAMA = "timeline";
 
 /** La propuesta comercial. El slug es el de su pieza en el registro (`lib/pieces/registry.ts`). */

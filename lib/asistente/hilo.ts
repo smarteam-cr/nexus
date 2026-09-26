@@ -6,9 +6,11 @@
  * y, cuando hay acuerdo, EMITE UNA INSTRUCCIÓN. Este módulo guarda esa conversación: el hilo y
  * sus turnos. Nada más.
  *
- * ⛔ EL CHAT NO ESCRIBE EL DOCUMENTO. Aplicar un cambio sigue pasando por el editor de siempre
- * (`/timeline/assist`, `/canvas-assist`), con su vista previa y su aceptación por ítem. El
- * permiso vive en el botón, no en la conversación — un catálogo de herramientas que escriben
+ * ⛔ EL CHAT NO ESCRIBE EL DOCUMENTO. Aplicar un cambio pasa por el editor de cada documento: en
+ * los documentos, `/canvas-assist`, con su vista previa y su aceptación por ítem; en el
+ * cronograma, el aplicador de operaciones de la pantalla, por el PUT del cronograma, o la ruta de
+ * operaciones de la propuesta (`/timeline/borrador/operaciones`). «Pedir cambio con IA» se retiró
+ * en E4. El permiso vive en el botón, no en la conversación — un catálogo de herramientas que escriben
  * sería el modo de falla de `artifact-gate` multiplicado. La guarda de al lado
  * (`hilo.test.ts`) hace cumplir que ningún archivo de `lib/asistente/**` escriba en las tablas
  * del documento.

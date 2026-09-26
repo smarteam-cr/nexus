@@ -43,10 +43,14 @@ import ChatDelAsistente, {
 } from "@/components/asistente/ChatDelAsistente";
 import { ChatDeSeccionDisponible, ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import {
+  abiertoTrasTocarElChat,
   accionesDeLaApertura,
+  anotarEnLaEspera,
   debeAbrirseElChat,
   esCampoDeEscritura,
+  ESPERA_DE_UN_CAMPO,
   faltaParaQueTermineElGesto,
+  faltaParaReintentarPorElCampo,
   gestoEnCurso,
   leerApertura,
   motivoParaPosponer,
@@ -54,6 +58,7 @@ import {
   referenciaDelChat,
   seVuelveADecidir,
   type EntradaDeLaApertura,
+  type EventoDeLaEspera,
   type GestoEnElGantt,
   type MotivoDePosposicion,
 } from "@/lib/timeline/apertura-del-chat";
@@ -499,6 +504,10 @@ export default function CronogramaCanvas({
   const [chatAbierto, setChatAbierto] = useState(false);
   /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
   const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
+  /* Revisión antes del push: cuándo se abrió solo por última vez y cuándo se apretó el 💬 (`Date.now()`). Si se
+     abrió solo en medio del clic en el 💬, ese clic no lo cierra (`abiertoTrasTocarElChat`). Refs: no pintan. */
+  const abiertoSoloEnRef = useRef<number | null>(null);
+  const apretadoDelChatRef = useRef<number | null>(null);
   /* Revisión de E3 (#17): la propuesta llegó mientras la persona estaba en otra cosa (escribiendo, en medio de
      un gesto en el Gantt…): el chat no se abrió, y el 💬 lleva un punto hasta que lo abra. El token de ESA
      propuesta: con otra, el punto se apaga solo. */
@@ -2700,6 +2709,7 @@ export default function CronogramaCanvas({
     if (acciones.abrir) {
       setChatAbierto(true);
       setAperturaAutomatica(acciones.automatica);
+      abiertoSoloEnRef.current = Date.now();
     }
     if (!acciones.recordar) return;
     recordarApertura(projectId, tokenParaLaApertura);
@@ -2721,7 +2731,10 @@ export default function CronogramaCanvas({
      la decisión UNA vez (si otra cosa la frena, se pospone de nuevo por eso y se espera eso). La pantalla angosta
      no se espera (`seVuelveADecidir`): queda el punto en el 💬.
      · El gesto: se suelta el botón y pasa `VENTANA_DEL_GESTO_MS` sin clics ni teclas en el Gantt.
-     · El campo: pierde el foco (`focusout`). */
+     · El campo: pierde el foco (`focusout`) y termina el gesto en TODO el documento (revisión antes del push: el
+       `focusout` llega en el pointerdown del clic que saca el foco; reintentar ahí abría el cajón a mitad del clic,
+       y si el clic era en el 💬, su click lo cerraba). Se espera al soltar más la ventana, y otro pointerdown en el
+       medio vuelve a esperar (`faltaParaReintentarPorElCampo`). */
   useEffect(() => {
     const p = pospuestaDeLaApertura;
     if (!p || !seVuelveADecidir(p.motivo) || p.motivo === "capa") return;
@@ -2732,8 +2745,33 @@ export default function CronogramaCanvas({
       setReintentoDeLaApertura(p.token);
     };
     if (p.motivo === "escribiendo") {
-      document.addEventListener("focusout", reintentar);
-      return () => document.removeEventListener("focusout", reintentar);
+      let espera = ESPERA_DE_UN_CAMPO;
+      let reloj: ReturnType<typeof setTimeout> | undefined;
+      const mirar = () => {
+        clearTimeout(reloj);
+        const falta = faltaParaReintentarPorElCampo(espera, Date.now());
+        if (falta === null) return; // el campo sigue con el foco, o el botón sigue apretado: lo despierta el soltar
+        if (falta === 0) reintentar();
+        else reloj = setTimeout(mirar, falta);
+      };
+      const anotar = (evento: EventoDeLaEspera) => () => {
+        espera = anotarEnLaEspera(espera, evento, Date.now());
+        mirar();
+      };
+      const alPerderElFoco = anotar("foco-afuera");
+      const alApretar = anotar("apretar");
+      const alSoltar = anotar("soltar");
+      document.addEventListener("focusout", alPerderElFoco);
+      document.addEventListener("pointerdown", alApretar, true);
+      document.addEventListener("pointerup", alSoltar, true);
+      document.addEventListener("pointercancel", alSoltar, true);
+      return () => {
+        clearTimeout(reloj);
+        document.removeEventListener("focusout", alPerderElFoco);
+        document.removeEventListener("pointerdown", alApretar, true);
+        document.removeEventListener("pointerup", alSoltar, true);
+        document.removeEventListener("pointercancel", alSoltar, true);
+      };
     }
     let espera: ReturnType<typeof setTimeout> | undefined;
     const esperar = () => {
@@ -3499,10 +3537,19 @@ export default function CronogramaCanvas({
               sobre un documento vacío no tiene qué modificar. */}
           {canEdit && phases.length > 0 && (
             <button
-              onClick={() => {
+              onPointerDown={() => {
+                apretadoDelChatRef.current = Date.now();
+              }}
+              onClick={(e) => {
                 // E3 P5: abierto a mano, el cajón sí toma el foco.
                 setAperturaAutomatica(false);
-                setChatAbierto((v) => !v);
+                /* Revisión antes del push: alterna, salvo que se haya abierto SOLO en medio de este clic (el botón va
+                   por portal, fuera del Gantt, y la apertura automática podía llegar entre su pointerdown y su click):
+                   ese clic era para abrirlo, no lo cierra. Con el teclado (`detail` 0) no hay pointerdown: alterna. */
+                const apretadoEn = e.detail > 0 ? apretadoDelChatRef.current : null;
+                apretadoDelChatRef.current = null;
+                const abiertoSoloEn = abiertoSoloEnRef.current;
+                setChatAbierto((v) => abiertoTrasTocarElChat({ abierto: v, apretadoEn, abiertoSoloEn }));
                 setPuntoDelChat(null);
               }}
               /* Sin esto, un lector de pantalla anuncia «Asistente, botón» idéntico abierto y
