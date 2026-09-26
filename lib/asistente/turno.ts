@@ -91,15 +91,7 @@ import {
   motivoDeCaidaPorToken,
   RESUMEN_DEL_CIERRE,
 } from "./propuesta-del-chat";
-import {
-  avisoDeNotasQueNoLeyo,
-  bloqueDeLaFase,
-  faseDelChip,
-  nombreDeLaFase,
-  notaDeHoy,
-  notasQueNoLeyo,
-  refsDelLote,
-} from "./fase-senalada";
+import { bloqueDeLaFase, faseDelChip, nombreDeLaFase, notaDeHoy, notasDelLote } from "./fase-senalada";
 import { notasDeLasFases } from "@/lib/timeline/propuesta-para-el-chat";
 
 /**
@@ -1626,23 +1618,26 @@ export async function correrTurno(
      */
     /* E4 P1: una `fase.nota` sobre una nota que el modelo no leyó entera (no es la de la fase que se
        señaló con «IA», o no entra entera) no se registra, y se dice. Va ANTES que todo lo demás, en los
-       dos modos que registran: en el de la propuesta, antes de la prueba en seco. */
+       dos modos que registran: en el de la propuesta, antes de la prueba en seco.
+       Revisión de E4 (#11): la decisión es una función pura (`notasDelLote`); su conducta, en
+       fase-senalada.test.ts y, con el turno entero, en propuesta-del-chat.test.ts. */
     const propuestaDeLasNotas = ctx.propuesta?.borrador ?? null;
-    const noLeidas = notasQueNoLeyo(opsNuevas as ReadonlyArray<{ op?: unknown; phaseId?: unknown }>, {
+    const lasNotas = notasDelLote(opsNuevas, {
       senalada: faseDelChip(seccionReferida),
       notaDeHoy: (id) => notaDeHoy(id, { notas, propuesta: propuestaDeLasNotas }),
       notaViva: (id) => (notas.has(id) ? (notas.get(id) ?? null) : undefined),
       nombre: (id) => nombreDeLaFase(id, { fases: ctx.fases ?? [], propuesta: propuestaDeLasNotas }),
-      refsDelLote: refsDelLote(opsNuevas as ReadonlyArray<{ op?: unknown; ref?: unknown }>),
     });
-    const fueraPorLaNota = new Set(noLeidas.map((x) => x.indice));
-    const opsQueSeRegistran = opsNuevas.filter((_, k) => !fueraPorLaNota.has(k));
-    const avisoDeLasNotas = avisoDeNotasQueNoLeyo(noLeidas);
+    const opsQueSeRegistran = lasNotas.registran;
+    const avisoDeLasNotas = lasNotas.aviso;
     const sobreLaPropuesta = editable
       ? acuerdoSobreLaPropuesta({
           propuesta: editable,
           vivas: libro.vivas as OperacionDelChat[],
           opsNuevas: opsQueSeRegistran,
+          /* Revisión de E4 (#6): «aplicar» y «descartar la propuesta» van solas según lo que EMITIÓ el
+             modelo, no según lo que quedó después de sacar las notas que no leyó. */
+          emitidas: opsNuevas.length,
           descartar,
           preguntaAbierta,
         })

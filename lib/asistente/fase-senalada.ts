@@ -155,3 +155,19 @@ export function avisoDeNotasQueNoLeyo(fuera: ReadonlyArray<{ motivo: string }>):
   const cuantos = fuera.length === 1 ? "1 cambio de nota" : `${fuera.length} cambios de nota`;
   return `⚠ No registré ${cuantos}: ${[...new Set(fuera.map((x) => x.motivo))].join(" · ")}.`;
 }
+
+/**
+ * ⛔ Revisión de E4 (#11): LO QUE SE REGISTRA DEL LOTE QUE EMITIÓ EL MODELO. Saca las `fase.nota` cuya
+ * nota no leyó entera (`notasQueNoLeyo`, con los `ref` del mismo lote) y dice por qué. turno.ts registra
+ * SOLO `registran`: con la propuesta, eso va a la prueba en seco; sin ella, a `fusionarPendientes`.
+ * El orden del lote se conserva.
+ */
+export function notasDelLote<T>(
+  opsNuevas: readonly T[],
+  i: Omit<Parameters<typeof notasQueNoLeyo>[1], "refsDelLote">,
+): { registran: T[]; aviso: string | null } {
+  const lote = opsNuevas as ReadonlyArray<{ op?: unknown; phaseId?: unknown; ref?: unknown }>;
+  const noLeidas = notasQueNoLeyo(lote, { ...i, refsDelLote: refsDelLote(lote) });
+  const fuera = new Set(noLeidas.map((x) => x.indice));
+  return { registran: opsNuevas.filter((_, k) => !fuera.has(k)), aviso: avisoDeNotasQueNoLeyo(noLeidas) };
+}

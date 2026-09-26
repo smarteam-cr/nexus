@@ -505,8 +505,15 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        y dejarlo para después», y el modelo lo leía como «regístralo igual»: armaba una lista con un botón
        que no se podía apretar y que, cuando se resolvía la propuesta, estaba calculada sobre otro
        cronograma. Las tres líneas de freno terminan igual. La edición que la pone en rojo: volver a la
-       cola vieja en cualquiera de las tres. */
-    for (const l of [linea, lineaDeCambiosDeFasesSinDecidir(true, "armando"), lineaDeCambiosDeFasesSinDecidir(true, "fallo")]) {
+       cola vieja en cualquiera de las tres.
+       ⚠ ACTUALIZADA en la revisión de E4 (#5b), con esta razón: hay una cuarta línea de freno, la de lo que
+       no se sabe leer (su guarda, abajo). Termina igual y respeta el mismo largo. */
+    for (const l of [
+      linea,
+      lineaDeCambiosDeFasesSinDecidir(true, "armando"),
+      lineaDeCambiosDeFasesSinDecidir(true, "fallo"),
+      lineaDeCambiosDeFasesSinDecidir(true, null, true),
+    ]) {
       expect(l.endsWith("Puedes conversarlo, pero no lo registres: pídelo cuando se resuelva."), l).toBe(true);
       expect(l).not.toContain("dejarlo para después");
       expect(l.length).toBeLessThan(420);
@@ -515,8 +522,10 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        `lineaDeCambiosDeFasesSinDecidir(true)` a secas. Con el borrador VACÍO que espera sus tareas no
        hay barra ni nada que decidir, así que la línea recibe si la IA está armando (abajo, su guarda).
        ⚠ Y otra vez en el cierre de la revisión, con esta razón: la línea ya no recibe «hay uno armando»
-       contado con un filtro JSON, sino el estado LEÍDO del vacío (`vacio`: «armando» o «fallo»). */
-    expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio)] : [])');
+       contado con un filtro JSON, sino el estado LEÍDO del vacío (`vacio`: «armando» o «fallo»).
+       ⚠ Y otra vez en la revisión de E4 (#5b), con esta razón: también recibe si lo guardado no se sabe
+       leer (`ilegible`), que tiene su propia línea (su conducta, en contexto-del-cronograma.test.ts). */
+    expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio, ilegible)] : [])');
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
     /* ⚠ ACTUALIZADA en la revisión de E3 (#11), con esta razón: el texto del desenlace salió del manejador a
        `textoDelDesenlace` (puro, lib/asistente/textos-del-acuerdo.ts), así que se CORRE en vez de buscar su
@@ -589,6 +598,29 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(codigo).toContain("? await leerEstadoDelVacio(");
     expect(codigo).toContain('armandoTareas: vacio === "armando",');
     expect(codigo).toContain('tareasFallaron: vacio === "fallo",');
+  });
+
+  it("⛔ revisión de E4 (#5b): con algo que no se sabe leer, las dos líneas mandan SOLO a «Descartarla»", () => {
+    /* La pantalla no monta barra para lo que no es un v1: solo la línea con «Descartarla». Las ediciones
+       que la ponen en rojo: ignorar `ilegible` en el freno o `propuestaIlegible` en «PARA REHACER TODO»
+       (el modelo mandaría a desmarcar y «Aplicar» en una barra que no existe), o alargarlas hasta comerse
+       el techo del prefijo. */
+    const freno = lineaDeCambiosDeFasesSinDecidir(true, null, true);
+    expect(freno.startsWith("⛔ HAY UNA PROPUESTA GUARDADA QUE NEXUS NO SABE LEER arriba del Gantt")).toBe(true);
+    expect(freno).toContain("NINGÚN cambio que acuerdes se puede aplicar");
+    expect(freno).toContain("«Descartarla»");
+    expect(freno, "manda a una barra que no existe").not.toMatch(/«Aplicar»|su barra/);
+    expect(freno.length).toBeLessThan(420);
+    expect(lineaDeCambiosDeFasesSinDecidir(false, null, true)).toBe("");
+    for (const conDetalleDeLaIA of [false, true]) {
+      for (const publicadoAlgunaVez of [false, true]) {
+        const l = lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez, cambiosDeFasesSinDecidir: true, propuestaIlegible: true });
+        const caso = JSON.stringify({ conDetalleDeLaIA, publicadoAlgunaVez });
+        expect(l, caso).not.toMatch(/«Aplicar»|su barra/);
+        if (!(publicadoAlgunaVez && !conDetalleDeLaIA)) expect(l, caso).toContain("«Descartarla»");
+        expect(l.length).toBeLessThan(420);
+      }
+    }
   });
 
   it("⛔ el encabezado de las reglas ya no promete un modificador que ejecuta la instrucción", () => {

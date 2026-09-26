@@ -477,7 +477,11 @@ export interface AcuerdoSobreLaPropuesta {
 export function acuerdoSobreLaPropuesta(i: {
   propuesta: PropuestaEnElTurno;
   vivas: readonly OperacionDelChat[];
+  /** Lo que se registra de lo que emitió el modelo (sin las notas que no leyó: `notasDelLote`). */
   opsNuevas: readonly unknown[];
+  /** Revisión de E4 (#6): cuántas operaciones EMITIÓ el modelo, antes de cualquier filtro. «Aplicar» y
+   *  «descartar la propuesta» van solas contra ESTE número: una nota que no se registró no las deja solas. */
+  emitidas: number;
   descartar: readonly unknown[];
   preguntaAbierta: boolean;
 }): AcuerdoSobreLaPropuesta {
@@ -501,8 +505,9 @@ export function acuerdoSobreLaPropuesta(i: {
   const solas = canonicas.filter((c) => esOperacionSola(c.op));
   const otras = canonicas.filter((c) => !esOperacionSola(c.op)).map((c) => c.op);
   if (solas.length > 0) {
-    // Mezclada con cualquier otra cosa que emitió el modelo (aunque esa otra no se haya podido traducir).
-    if (solas.length > 1 || i.opsNuevas.length > 1) {
+    // Mezclada con cualquier otra cosa que emitió el modelo (aunque esa otra no se haya podido traducir, o
+    // no se registre porque era una nota que no leyó entera: revisión de E4, #6).
+    if (solas.length > 1 || Math.max(i.emitidas, i.opsNuevas.length) > 1) {
       for (const s of solas) avisos.push(rechazoNoVaSola(NOMBRE_DE_LA_SOLA[s.op.op] ?? s.op.op));
     } else {
       const sola = solas[0].op;

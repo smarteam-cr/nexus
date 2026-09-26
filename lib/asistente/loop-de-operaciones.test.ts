@@ -199,24 +199,40 @@ describe("el contenido completo de la sección del chip", () => {
 
   it("⛔ E4 P1: una nota que el modelo no leyó entera se saca ANTES de registrar, en los dos modos", () => {
     /* Sin propuesta, lo que se registra sale de `fusionarPendientes`; con la propuesta editable, de
-       `acuerdoSobreLaPropuesta` (la prueba en seco). Las dos reciben lo que dejó `notasQueNoLeyo`, nunca
-       `opsNuevas` crudo. La edición que la pone en rojo: registrar sin la guarda (pasarles `opsNuevas`). */
+       `acuerdoSobreLaPropuesta` (la prueba en seco). Las dos reciben lo que dejó el filtro de las notas,
+       nunca `opsNuevas` crudo. La edición que la pone en rojo: registrar sin la guarda (pasarles `opsNuevas`).
+       ⚠ REESCRITA en la revisión de E4 (#6 y #11), con estas razones:
+         · #11: era DECORATIVA. Buscaba `notasQueNoLeyo(` y arrancaba a mirar DESPUÉS de la línea de
+           `const opsQueSeRegistran =`, así que `const opsQueSeRegistran = opsNuevas;` o un Set vacío
+           seguían en verde. La decisión pasó a una función pura (`notasDelLote`) y su conducta se prueba
+           por tabla (fase-senalada.test.ts) y con el turno entero (propuesta-del-chat.test.ts). Acá queda
+           el cableado, ahora mirando también la línea que arma lo que se registra.
+         · #6: pedía que `acuerdoSobreLaPropuesta` recibiera SOLO lo filtrado. Así, «aplicar» mezclado con
+           una nota que no se leyó quedaba sola y se registraba. Ahora recibe además cuántas emitió el
+           modelo (`emitidas: opsNuevas.length`), el único `opsNuevas` permitido después del filtro. */
+    const plano = (s: string) => s.replace(/\r\n/g, "\n").replace(/\s+/g, " ");
     const i = TURNO.indexOf("} else if (soloLectura) {");
-    const rama = TURNO.slice(TURNO.indexOf("} else {", i), TURNO.indexOf("⭐ E3 P5: EL ACUERDO DE CIERRE"));
+    const rama = plano(TURNO.slice(TURNO.indexOf("} else {", i), TURNO.indexOf("⭐ E3 P5: EL ACUERDO DE CIERRE")));
     expect(rama.length, "la guarda no está mirando nada").toBeGreaterThan(500);
-    const iGuarda = rama.indexOf("notasQueNoLeyo(");
+    const iGuarda = rama.indexOf("const lasNotas = notasDelLote(opsNuevas, {");
     expect(iGuarda, "el turno dejó de mirar si leyó la nota").toBeGreaterThan(-1);
-    const iSeco = rama.indexOf("acuerdoSobreLaPropuesta({");
-    const iFusion = rama.indexOf("fusionarPendientes(");
-    expect(iGuarda).toBeLessThan(iSeco);
-    expect(iGuarda).toBeLessThan(iFusion);
-    expect(rama.slice(iSeco, rama.indexOf("})", iSeco))).toContain("opsNuevas: opsQueSeRegistran");
+    const iArma = rama.indexOf("const opsQueSeRegistran = lasNotas.registran;", iGuarda);
+    expect(iArma, "lo que se registra dejó de salir del filtro de las notas").toBeGreaterThan(iGuarda);
+    expect(rama.indexOf("const avisoDeLasNotas = lasNotas.aviso;", iGuarda), "lo que no se registra se tiene que decir").toBeGreaterThan(
+      iGuarda,
+    );
+    const iSeco = rama.indexOf("acuerdoSobreLaPropuesta({", iArma);
+    const iFusion = rama.indexOf("fusionarPendientes(", iArma);
+    expect(iSeco, "la prueba en seco quedó antes del filtro").toBeGreaterThan(iArma);
+    expect(iFusion, "la fusión quedó antes del filtro").toBeGreaterThan(iArma);
+    const seco = rama.slice(iSeco, rama.indexOf("})", iSeco));
+    expect(seco).toContain("opsNuevas: opsQueSeRegistran,");
+    expect(seco, "«va sola» dejó de decidirse sobre lo que emitió el modelo (#6)").toContain("emitidas: opsNuevas.length,");
     expect(rama.slice(iFusion, rama.indexOf(");", iFusion))).toContain("opsQueSeRegistran.filter(");
-    const iDespues = rama.indexOf("\n", rama.indexOf("const opsQueSeRegistran ="));
-    expect(iDespues, "cambió cómo se arma lo que se registra").toBeGreaterThan(iGuarda);
-    // (`opsNuevas:` es el nombre del parámetro de `acuerdoSobreLaPropuesta`, no la variable.)
-    expect(rama.slice(iDespues), "algo se registra con lo que emitió el modelo, sin la guarda").not.toMatch(/\bopsNuevas\b(?!:)/);
-    expect(rama, "lo que no se registra se tiene que decir").toContain("avisoDeNotasQueNoLeyo(noLeidas)");
+    /* Después de armar lo que se registra, `opsNuevas` solo aparece como nombre del parámetro y en la cuenta
+       de lo emitido. */
+    const despues = rama.slice(iArma + "const opsQueSeRegistran = lasNotas.registran;".length).replace("emitidas: opsNuevas.length,", "");
+    expect(despues, "algo se registra con lo que emitió el modelo, sin la guarda").not.toMatch(/\bopsNuevas\b(?!:)/);
   });
 
   it("⭐ los ítems se numeran desde 0 — el mismo número que va en `posicion`", () => {

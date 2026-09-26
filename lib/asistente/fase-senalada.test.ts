@@ -15,6 +15,7 @@ import {
   faseDelChip,
   nombreDeLaFase,
   notaDeHoy,
+  notasDelLote,
   notasQueNoLeyo,
   refsDelLote,
 } from "./fase-senalada";
@@ -172,5 +173,58 @@ describe("⛔ `notasQueNoLeyo`: lo que no leyó entero no se registra", () => {
     expect(avisoDeNotasQueNoLeyo([])).toBeNull();
     expect(avisoDeNotasQueNoLeyo([{ motivo: "a" }, { motivo: "a" }])).toBe("⚠ No registré 2 cambios de nota: a.");
     expect(avisoDeNotasQueNoLeyo([{ motivo: "b" }])).toBe("⚠ No registré 1 cambio de nota: b.");
+  });
+});
+
+describe("⛔ revisión de E4 (#11): `notasDelLote` decide qué se registra del lote, por conducta", () => {
+  /* Antes la decisión vivía suelta en turno.ts y su guarda miraba nombres y posiciones del fuente: con
+     `const opsQueSeRegistran = opsNuevas;` o `const fueraPorLaNota = new Set()` seguía verde. Ahora es una
+     función pura que turno.ts usa tal cual. Las ediciones que la ponen en rojo: no filtrar (`registran`
+     = el lote), filtrar de más, perder el orden, o callar el aviso. */
+  const nota = (phaseId: string) => ({ op: "fase.nota", phaseId, nota: "Otra nota." });
+  const crear = { op: "fase.crear", nombre: "Cierre", semanas: 1, ref: "cierre" };
+  const renombrar = { op: "fase.renombrar", phaseId: "f3", nombre: "Otra" };
+  const leido = (senalada: string | null, propuesta: { cambios: Cambio[] } | null = null) => ({
+    senalada,
+    notaDeHoy: (id: string) => notaDeHoy(id, { notas: NOTAS, propuesta }),
+    notaViva: (id: string) => (NOTAS.has(id) ? (NOTAS.get(id) ?? null) : undefined),
+    nombre: (id: string) => nombreDeLaFase(id, { fases: FASES, propuesta }),
+  });
+  const NO_LEYO = (fase: string) => `no leí entera la nota de «${fase}»: toca «IA» en esa fase y pídemelo de nuevo`;
+
+  const CASOS: Array<{ caso: string; lote: object[]; senalada: string | null; registran: object[]; aviso: string | null }> = [
+    { caso: "lote vacío", lote: [], senalada: null, registran: [], aviso: null },
+    { caso: "sin notas: pasa entero", lote: [renombrar], senalada: null, registran: [renombrar], aviso: null },
+    { caso: "la nota de la señalada", lote: [nota("f2")], senalada: "f2", registran: [nota("f2")], aviso: null },
+    {
+      caso: "la nota de otra CON nota sale, lo demás queda en su orden",
+      lote: [renombrar, nota("f3"), nota("f2")],
+      senalada: "f2",
+      registran: [renombrar, nota("f2")],
+      aviso: `⚠ No registré 1 cambio de nota: ${NO_LEYO("Integraciones")}.`,
+    },
+    { caso: "una fase SIN nota: no hay nada que perder", lote: [nota("f1")], senalada: null, registran: [nota("f1")], aviso: null },
+    { caso: "la fase que crea el mismo lote (`ref`)", lote: [crear, nota("cierre")], senalada: null, registran: [crear, nota("cierre")], aviso: null },
+    {
+      caso: "sin chip, ninguna nota con texto",
+      lote: [nota("f2"), nota("f3")],
+      senalada: null,
+      registran: [],
+      aviso: `⚠ No registré 2 cambios de nota: ${NO_LEYO("Sales Hub")} · ${NO_LEYO("Integraciones")}.`,
+    },
+  ];
+  for (const c of CASOS) {
+    it(c.caso, () => {
+      const r = notasDelLote(c.lote, leido(c.senalada));
+      expect(r.registran, "lo que se registra").toEqual(c.registran);
+      expect(r.aviso, "lo que se dice").toBe(c.aviso);
+    });
+  }
+
+  it("la nota que trae la propuesta cuenta como la de hoy", () => {
+    // «Piloto» es nueva en la propuesta y trae nota: sin señalarla, no se registra.
+    const r = notasDelLote([nota("n:piloto")], leido(null, PROPUESTA));
+    expect(r.registran).toEqual([]);
+    expect(r.aviso).toBe(`⚠ No registré 1 cambio de nota: ${NO_LEYO("Piloto")}.`);
   });
 });

@@ -274,8 +274,17 @@ describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra
 describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
   const P = enElTurno();
   const dejar = { op: "propuesta.dejar-como-estaba" as const, claves: [N_PILOTO] };
+  /* Revisión de E4 (#6): `emitidas` es lo que emitió el modelo; sin decirlo, lo mismo que `opsNuevas`. */
   const acordar = (i: Partial<Parameters<typeof acuerdoSobreLaPropuesta>[0]>) =>
-    acuerdoSobreLaPropuesta({ propuesta: P, vivas: [], opsNuevas: [], descartar: [], preguntaAbierta: false, ...i });
+    acuerdoSobreLaPropuesta({
+      propuesta: P,
+      vivas: [],
+      opsNuevas: [],
+      descartar: [],
+      preguntaAbierta: false,
+      ...i,
+      emitidas: i.emitidas ?? (i.opsNuevas ?? []).length,
+    });
 
   it("⭐ «aplícala» sin nada pendiente: sola, con la versión y la huella de este turno", () => {
     const r = acordar({ opsNuevas: [{ op: "propuesta.aplicar" }] });
@@ -297,7 +306,7 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
     expect(mezclada.operaciones).toEqual([{ op: "propuesta.dejar-como-estaba", claves: ["fase:fc:durationWeeks"] }]);
     expect(mezclada.avisos).toEqual(["⚠ No registré «aplicar la propuesta»: va sola, en un pedido aparte."]);
     const nada = enElTurno({ excluidos: BORRADOR.cambios.map((c) => c.clave) });
-    expect(acuerdoSobreLaPropuesta({ propuesta: nada, vivas: [], opsNuevas: [{ op: "propuesta.aplicar" }], descartar: [], preguntaAbierta: false }).avisos[0]).toContain(
+    expect(acuerdoSobreLaPropuesta({ propuesta: nada, vivas: [], opsNuevas: [{ op: "propuesta.aplicar" }], emitidas: 1, descartar: [], preguntaAbierta: false }).avisos[0]).toContain(
       "no queda nada marcado",
     );
   });
@@ -313,7 +322,7 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
     };
     const p = enElTurno({ borrador: b, excluidos: ["fase:fb:durationWeeks"] });
     expect(p.resumen!.bloqueo, "la guarda no está mirando un bloqueo").toBeTruthy();
-    const r = acuerdoSobreLaPropuesta({ propuesta: p, vivas: [], opsNuevas: [{ op: "propuesta.aplicar" }], descartar: [], preguntaAbierta: false });
+    const r = acuerdoSobreLaPropuesta({ propuesta: p, vivas: [], opsNuevas: [{ op: "propuesta.aplicar" }], emitidas: 1, descartar: [], preguntaAbierta: false });
     expect(r.operaciones).toEqual([]);
     expect(r.avisos[0]).toBe(`⚠ No registré «aplicar la propuesta»: ${p.resumen!.bloqueo}`);
   });
@@ -666,6 +675,75 @@ describe("⭐ correrTurno con una propuesta abierta", () => {
       null,
       "en-espera",
     ]);
+  });
+
+  // ── Revisión de E4 (#6, #11): la nota de una fase, con el turno entero ──
+  /** El cronograma de hoy con nota en «Diseño» y en «Pruebas» (como 385 de las 390 fases de la cartera). */
+  const VIVO_CON_NOTAS: Vivo = {
+    ...VIVO,
+    fases: VIVO.fases.map((f) =>
+      f.id === "fb"
+        ? { ...f, notes: "Diseñamos el pipeline con el equipo comercial." }
+        : f.id === "fc"
+          ? { ...f, notes: "Probamos los flujos con datos reales." }
+          : f,
+    ),
+  };
+  const opsDe = (r: { acuerdo: { operaciones?: unknown[] } | null }) =>
+    (r.acuerdo?.operaciones ?? []) as Array<{ op?: string; phaseId?: string }>;
+
+  it("⛔ una nota que el modelo NO leyó entera no se registra aunque la emita: el acuerdo no la trae y se dice (#11)", async () => {
+    /* El chip señala «Diseño»; el modelo reescribe también la nota de «Pruebas», que no leyó. Las ediciones
+       que la ponen en rojo: registrar lo emitido sin el filtro (`const opsQueSeRegistran = opsNuevas;` en
+       turno.ts), o que el filtro no saque nada (`const fuera = new Set<number>();` en `notasDelLote`). */
+    falsos.ctx = contexto(enElTurno({ vivo: VIVO_CON_NOTAS }));
+    contesta("Cambio las dos notas.", {
+      resumen: "Dos notas",
+      operaciones: [
+        { op: "fase.nota", phaseId: "fc", nota: "Probamos todo." },
+        { op: "fase.nota", phaseId: "fb", nota: "Diseñamos el pipeline y lo validamos." },
+      ],
+    });
+    const r = await correrTurno(hiloCon([]), "cambia la nota de Diseño y la de Pruebas", { key: "fase:fb" });
+    const notas = opsDe(r).filter((o) => o.op === "fase.nota");
+    expect(notas.map((o) => o.phaseId), "se registró una nota que el modelo no leyó").toEqual(["fb"]);
+    expect(r.respuesta).toContain("⚠ No registré 1 cambio de nota: no leí entera la nota de «Pruebas»");
+  });
+
+  it("⭐ con el chip de una fase, el modelo recibe su nota entera en ESE turno (#11)", async () => {
+    /* La edición que la pone en rojo: armar el bloque sin la fase señalada (`bloqueDeLaFase({ referida:
+       undefined, … })` en turno.ts): el modelo nunca lee la nota, y la reescribiría a ciegas. */
+    falsos.ctx = contexto(enElTurno({ vivo: VIVO_CON_NOTAS }));
+    contesta("¿Qué le cambio?");
+    await correrTurno(hiloCon([]), "mejora esta nota", { key: "fase:fb" });
+    const alModelo = JSON.stringify(falsos.crear.mock.calls[0][0].messages);
+    expect(alModelo, "el modelo no recibió el bloque de la fase señalada").toContain(
+      "[LA FASE QUE SEÑALÓ CON «IA»: «Diseño» [fb]. Su nota de hoy, la que lee el cliente:]",
+    );
+    expect(alModelo).toContain("Diseñamos el pipeline con el equipo comercial.");
+    expect(alModelo, "le llegó la nota de una fase que no se señaló").not.toContain("Probamos los flujos con datos reales.");
+  });
+
+  it("⛔ «aplícala» o «descártala» junto a una nota que no leyó: no se registra, van solas (#6)", async () => {
+    /* «Aplicar» y «descartar la propuesta» van solas según lo que EMITIÓ el modelo. Antes se decidía sobre el
+       lote ya sin la nota: quedaba sola y se registraba, y el CSE aplicaba la propuesta sin el cambio que pidió
+       junto. La edición que la pone en rojo: decidirlo sobre lo filtrado (`emitidas: opsQueSeRegistran.length`
+       en turno.ts, o mirar solo `i.opsNuevas.length` en `acuerdoSobreLaPropuesta`). */
+    for (const [op, nombre] of [
+      ["propuesta.aplicar", "aplicar la propuesta"],
+      ["propuesta.descartar-entera", "descartar la propuesta"],
+    ] as const) {
+      falsos.turnos.length = 0;
+      falsos.ctx = contexto(enElTurno({ vivo: VIVO_CON_NOTAS }));
+      contesta("Cambio la nota y listo.", {
+        resumen: "Nota y propuesta",
+        operaciones: [{ op: "fase.nota", phaseId: "fc", nota: "Probamos todo." }, { op }],
+      });
+      const r = await correrTurno(hiloCon([]), "cambia la nota de Pruebas y resuelve la propuesta");
+      expect(opsDe(r).map((o) => o.op), `se registró «${nombre}» mezclada con una nota`).not.toContain(op);
+      expect(r.respuesta).toContain(`⚠ No registré «${nombre}»: va sola, en un pedido aparte.`);
+      expect(r.respuesta).toContain("⚠ No registré 1 cambio de nota: no leí entera la nota de «Pruebas»");
+    }
   });
 
   // ── Revisión de E3 (#28): la propuesta no se pudo leer ──

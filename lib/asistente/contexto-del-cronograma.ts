@@ -68,7 +68,8 @@ const LINEA_SIN_PERMISO =
 
 /**
  * Por qué no se puede cambiar la propuesta mientras la IA trabaja sobre ella. Los otros casos de solo
- * lectura (una ilegible, una versión nueva, el borrador vacío) usan el contexto de hoy con su línea.
+ * lectura (una ilegible, una versión nueva, el borrador vacío) usan el contexto de hoy con su línea
+ * (`lineaDeCambiosDeFasesSinDecidir`, contexto.ts; la ilegible solo manda a «Descartarla»).
  */
 export function lineaDeSoloLectura(porQue: "tareas-armando" | "recalculando"): string {
   const que = porQue === "tareas-armando" ? "ARMANDO LAS TAREAS DE ESTA PROPUESTA" : "RECALCULANDO TAREAS DE ESTA PROPUESTA";

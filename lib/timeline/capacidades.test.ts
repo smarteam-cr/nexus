@@ -88,6 +88,25 @@ describe("las advertencias que el chat puede dar antes de proponer", () => {
     expect(advertenciasParaLaInstruccion("cambia el titulo de la primera tarea")).toEqual([]);
   });
 
+  it("⛔ revisión de E4 (#7): borrar dice lo que hace el CHAT, no lo que hacía «Pedir cambio con IA»", () => {
+    /* Decía que el servidor «RESCATA» una tarea con avance y que para borrarla «de verdad» se pidiera
+       explícitamente, y las reglas duras decían «quítala igual». Eso valía solo en el modificador,
+       retirado en E4: el chat rechaza borrar una tarea protegida, y `fase.borrar` sin propuesta borra la
+       fase con sus tareas hechas. El modelo lo leía bajo «CONSECUENCIAS QUE HAY QUE DECIR ANTES» y le
+       prometía al CSE algo que el chat no hace. Las ediciones que la ponen en rojo: volver al texto del
+       rescate, o a «quítala igual» en las reglas duras. */
+    const avisos = (instr: string) => advertenciasParaLaInstruccion(instr).map((a) => a.aviso).join(" ");
+    for (const pedido of ["quita la tarea de QA", "borra la fase de Pruebas"]) {
+      const a = avisos(pedido);
+      expect(a, `${pedido}: promete un rescate que el chat no hace`).not.toMatch(/RESCATA|explícitamente/);
+      expect(a, pedido).toContain("no se borra desde el chat: se borra a mano en el Gantt");
+      expect(a, `${pedido}: calla que quitar una fase borra lo hecho`).toContain("también las hechas, y se confirma dos veces");
+      expect(a, pedido).toContain("con una propuesta abierta, lo que tiene avance se queda");
+    }
+    expect(REGLAS_DURAS_DEL_CRONOGRAMA, "las reglas duras piden quitar lo protegido").not.toContain("quítala igual");
+    expect(REGLAS_DURAS_DEL_CRONOGRAMA).toContain("Tampoco se quitan desde el chat aunque la instrucción lo pida");
+  });
+
   it("cada advertencia dice la CONSECUENCIA, no solo que existe", () => {
     for (const a of [...ADVERTENCIAS_DEL_CRONOGRAMA, ...ADVERTENCIAS_SOBRE_LA_PROPUESTA]) {
       expect(a.gatillo.length, "una advertencia sin gatillo no se dispara nunca").toBeGreaterThan(0);

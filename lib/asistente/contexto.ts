@@ -246,6 +246,9 @@ export interface EstadoParaRehacerTodo {
   tareasFallaron?: boolean;
   /** E3 P5: la propuesta abierta se puede cambiar, aplicar y descartar desde el chat. */
   propuestaDesdeElChat?: boolean;
+  /** Revisión de E4 (#5b): lo guardado no es un v1 (`porQue: "ilegible"`). La pantalla no monta barra:
+   *  solo una línea con «Descartarla». */
+  propuestaIlegible?: boolean;
 }
 
 /**
@@ -268,9 +271,11 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   /* Los botones que existen (E1, 2026-09-24): la propuesta se revisa en SU barra, arriba del Gantt
      —se desmarca lo que no va y «Aplicar», o «Descartar»—. Ya no se acepta ni descarta uno por uno. */
   /* E3 P5: con la propuesta editable, también se resuelve desde acá (el chat la aplica o la descarta). */
-  const revisar =
-    "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)" +
-    (e.propuestaDesdeElChat ? " (o me lo pides acá)" : "");
+  /* Revisión de E4 (#5b): lo que no es un v1 no tiene barra ni «Aplicar», solo «Descartarla». */
+  const revisar = e.propuestaIlegible
+    ? "se saca con «Descartarla» la propuesta guardada que Nexus no sabe leer (arriba del Gantt)"
+    : "se revisa la propuesta en su barra («Aplicar» lo marcado, o «Descartar»)" +
+      (e.propuestaDesdeElChat ? " (o me lo pides acá)" : "");
   /* Cierre de la revisión de E2a: el borrador VACÍO cuya corrida murió no se llena solo. La línea de
      arriba del Gantt tiene «Descartar» (y «Volver a intentar» con permiso). */
   const vacioFallido =
@@ -344,9 +349,22 @@ export const COLA_DEL_FRENO = "Puedes conversarlo, pero no lo registres: pídelo
  * sabía: armaba la lista numerada, el CSE la revisaba y «Aplicar» fallaba siempre. "" sin propuesta.
  * E2a: la propuesta de «Regenerar todo» trae fases Y tareas, así que la línea ya no dice «cambios de
  * fases» (el nombre de la función se queda: lo citan las guardas).
+ * Revisión de E4 (#5b): `ilegible` = lo guardado no es un v1. La pantalla solo muestra una línea con
+ * «Descartarla», sin barra ni «Aplicar»: la línea genérica mandaba al CSE a botones que no existen.
  */
-export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVacio | null = null): string {
+export function lineaDeCambiosDeFasesSinDecidir(
+  hay: boolean,
+  vacio: EstadoDelVacio | null = null,
+  ilegible = false,
+): string {
   if (!hay) return "";
+  if (ilegible) {
+    return (
+      "⛔ HAY UNA PROPUESTA GUARDADA QUE NEXUS NO SABE LEER arriba del Gantt: NINGÚN cambio que acuerdes " +
+      "se puede aplicar hasta que se saque con «Descartarla» en esa línea (la pantalla lo frena). Si te " +
+      `piden un cambio, dilo ANTES de armar la lista. ${COLA_DEL_FRENO}`
+    );
+  }
   /* Revisión de E2a: el borrador VACÍO que espera sus tareas no tiene barra ni nada que decidir;
      decirle al modelo que «primero hay que resolver esa propuesta en su barra» era mandar al CSE a
      un botón que no existe. Lo que sí es verdad: mientras la IA arma, nada de lo acordado se aplica.
@@ -379,7 +397,8 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
 
 /**
  * E3 P4: la línea de arriba del contexto con una propuesta abierta, o null si esa propuesta no se
- * muestra (una ilegible, una versión nueva o el borrador vacío: el contexto de hoy, con su freno).
+ * muestra (una ilegible, una versión nueva o el borrador vacío: el contexto de hoy, con su freno; la
+ * ilegible, con el suyo propio desde la revisión de E4).
  * E3 P5: editable → "" (sin porqué: el formato dice que lo acordado EDITA la propuesta). Mientras la IA
  * arma o recalcula, la línea del porqué (se lee, pero no se cambia).
  */
@@ -560,6 +579,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   const conDetalleDeLaIA = timeline.phases.some((f) =>
     f.tasks.some((t) => t.source === "AGENT" || t.source === "MODIFIED"),
   );
+  /* Revisión de E4 (#5b): lo que no es un v1 solo se descarta; las dos líneas lo dicen así. */
+  const ilegible = propuesta?.porQue === "ilegible";
   const paraRehacerTodo = lineaParaRehacerTodo({
     conDetalleDeLaIA,
     publicadoAlgunaVez: publicaciones > 0,
@@ -567,6 +588,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     armandoTareas: vacio === "armando",
     tareasFallaron: vacio === "fallo",
     propuestaDesdeElChat: propuesta?.modo === "editable",
+    propuestaIlegible: ilegible,
   });
 
   const fases = timeline.phases
@@ -594,7 +616,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `Cierre proyectado: ${cierre ?? "no se puede calcular sin fecha de arranque"}`,
     `Ancho de calendario: ${fin.spanWeeks} semanas`,
     ...(timeline.phases.length > 0 ? ["", paraRehacerTodo] : []),
-    ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio)] : []),
+    ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio, ilegible)] : []),
     "",
     /* ⚠ Decía «REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)»: de
        cuando el chat emitía una instrucción que un segundo modelo ejecutaba. Desde el 2026-08-20

@@ -634,15 +634,29 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(ctx.texto, "ofrece resolverla desde el chat mientras no se puede").not.toContain("(o me lo pides acá)");
   });
 
-  it("una ilegible (lo que no es un v1) sigue con el contexto de HOY y su freno, pero lleva el token", async () => {
+  it("una ilegible (lo que no es un v1) sigue con el contexto de HOY, con su propio freno: solo «Descartarla»", async () => {
     /* ⚠ E4 (2026-09): era «el formato viejo», que ya no se lee: ahora es «ilegible» (se descarta arriba
-       del Gantt). El chat no la puede leer con los números de la barra. La edición que la pone en rojo:
-       mostrar la propuesta en solo lectura para lo que no se sabe leer. */
+       del Gantt). El chat no la puede leer con los números de la barra.
+       ⚠ REESCRITA en la revisión de E4 (#5b, #9, #13), con esta razón: pedía el freno GENÉRICO («HAY UNA
+       PROPUESTA DEL CRONOGRAMA SIN DECIDIR»), que manda a «desmarcar y «Aplicar»» en su barra. Con algo
+       ilegible la pantalla solo muestra una línea con «Descartarla»: el modelo le indicaba al CSE botones que
+       no existen. Las ediciones que la ponen en rojo: mostrar la propuesta en solo lectura para lo que no se
+       sabe leer, volver al freno genérico, o dejar «PARA REHACER TODO» mandando a la barra. */
     montarLaBase({ phases: [{ id: "fa", name: "Kickoff", durationWeeks: 2 }] });
     const ctx = await contextoDeCronograma("p1");
     expect(ctx.texto).toContain("EL CRONOGRAMA HOY");
     expect(ctx.texto).not.toContain("PROPUESTA ABIERTA");
-    expect(ctx.texto).toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
+    expect(ctx.texto, "el freno no dice que lo guardado no se sabe leer").toContain(
+      "⛔ HAY UNA PROPUESTA GUARDADA QUE NEXUS NO SABE LEER arriba del Gantt",
+    );
+    expect(ctx.texto).toContain("hasta que se saque con «Descartarla» en esa línea");
+    expect(ctx.texto, "volvió el freno genérico").not.toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
+    expect(ctx.texto, "manda a «Aplicar», que con algo ilegible no existe").not.toContain("«Aplicar»");
+    expect(ctx.texto, "manda a una barra que con algo ilegible no existe").not.toContain("su barra");
+    // «PARA REHACER TODO» también: primero se saca con «Descartarla».
+    const rehacer = ctx.texto.split("\n").find((l) => l.startsWith("PARA REHACER TODO")) ?? "";
+    expect(rehacer, "la guarda no encuentra la línea «PARA REHACER TODO»").not.toBe("");
+    expect(rehacer).toContain("«Descartarla»");
     expect(ctx.tokenDeLaPropuesta).toBe("run-4");
     expect(ctx.propuesta?.modo).toBe("solo-lectura");
     expect(ctx.propuesta?.porQue).toBe("ilegible");

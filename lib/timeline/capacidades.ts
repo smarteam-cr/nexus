@@ -24,7 +24,8 @@
  * INTERPOLA de acá en vez de transcribirlas, y hay una guarda que lo hace cumplir
  * (capacidades.test.ts). E4 (2026-09): el prompt del modificador («Pedir cambio con IA»), que también
  * las interpolaba, se retiró con él; el texto no se recortó (recortarlo cambia lo que lee el modelo y
- * se mide antes con `probar-asistente`).
+ * se mide antes con `probar-asistente`). Revisión de E4 (#7): lo que decía de BORRAR sí se reescribió,
+ * porque le prometía al CSE un rescate que el chat no hace (falta medirlo con `probar-asistente`).
  */
 
 /**
@@ -37,7 +38,7 @@
  */
 export const REGLAS_DURAS_DEL_CRONOGRAMA = `- Conserva los ids EXACTOS de las fases y tareas que siguen existiendo (las edites o no). Elementos NUEVOS van sin id. Para BORRAR algo, simplemente omítelo del resultado.
 - Si mueves una tarea a OTRA fase: en la fase destino va SIN id (es nueva ahí) y en la fase origen desaparece.
-- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Si la instrucción pide explícitamente quitar una de ellas, quítala igual — el servidor avisa.
+- Cada tarea trae "status" y "source". Las que NO están en PENDING (DONE, IN_PROGRESS, SUSPENDED) o tienen source HUMAN ya tienen trabajo real encima: consérvalas SIEMPRE con su id, aunque la instrucción reorganice la fase. NO las omitas: omitir es borrar. Tampoco se quitan desde el chat aunque la instrucción lo pida: se quitan a mano en el Gantt.
 - weekIndex es 0-indexed y RELATIVO a su fase; siempre < durationWeeks de esa fase. order: reasigna secuencial (0,1,2…) dentro de cada semana.
 - Puedes cambiar duraciones, nombres, orden de fases, tipos y la fecha de arranque SOLO si la instrucción lo pide o es consecuencia necesaria (p.ej. agregar una semana de tareas a una fase de 1 semana → durationWeeks 2).
 - activityType ∈ EXPLORACION|PLANIFICACION|CONFIGURACION|ADOPCION|SEGUIMIENTO o null.
@@ -79,10 +80,14 @@ export const ADVERTENCIAS_DEL_CRONOGRAMA: readonly AdvertenciaDeCapacidad[] = [
   },
   {
     gatillo: ["borrar", "borrá", "eliminar", "eliminá", "sacar", "sacá", "quitar", "quitá"],
+    /* Revisión de E4 (#7): decía que el servidor «RESCATA» la tarea y que se pidiera «explícitamente» para
+       borrarla. Eso valía solo en «Pedir cambio con IA» (retirado): el chat rechaza borrar una tarea
+       protegida (`motivoDeTareaProtegida`, operaciones.ts) y `fase.borrar` sin propuesta borra todo. */
     aviso:
-      "Si la tarea tiene trabajo encima (hecha, en curso, suspendida, o la escribiste tú), el " +
-      "servidor la RESCATA y la deja igual, aunque la IA la haya sacado. Para borrarla de verdad, " +
-      "pídelo explícitamente — y aun así te va a avisar.",
+      "Una tarea con avance (hecha, en curso o suspendida) o cargada a mano no se borra desde el chat: " +
+      "se borra a mano en el Gantt. Quitar una fase sin propuesta abierta la borra con TODAS sus " +
+      "tareas, también las hechas, y se confirma dos veces; con una propuesta abierta, lo que tiene " +
+      "avance se queda.",
   },
   ADVERTENCIA_DEL_ARRANQUE,
   {
